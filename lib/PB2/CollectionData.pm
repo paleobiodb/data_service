@@ -19,7 +19,8 @@ use PB2::CommonData qw(generateAttribution);
 use PB2::ReferenceData qw(format_reference);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX
+	         %IDP VALID_IDENTIFIER);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -143,9 +144,9 @@ sub initialize {
 	{ output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	    "A unique identifier for the collection.  For now, these are positive integers,",
 	    "but this might change and should B<not be relied on>.",
-	{ output => 'record_type', value => 'collection', com_name => 'typ', com_value => 'col', 
+	{ output => 'record_type', com_name => 'typ', value => $IDP{COL}, 
 	  dwc_value => 'Occurrence' },
-	    "type of this object: 'col' for a collection",
+	    "type of this object: C<$IDP{COL}> for a collection",
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
 	{ output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng', data_type => 'dec' },
@@ -174,7 +175,8 @@ sub initialize {
 	{ set => 'reference_no', from => '*', code => \&set_collection_refs },
 	{ output => 'reference_no', com_name => 'rid', text_join => ', ' },
 	    "The identifier(s) of the references from which this data was entered.  For",
-	    "now these are positive integers, but this could change and should B<not be relied on>.");
+	    "now these are positive integers, but this could change and should B<not be relied on>.",
+	{ set => '*', code => \&process_coll_com, if_vocab => 'com' });
     
     my @bin_levels;
     
@@ -410,21 +412,6 @@ sub initialize {
 	{ output => 'research_group', com_name => 'rgp' },
 	    "The research group(s), if any, associated with this collection.");
     
-    $ds->define_block('taxon_record' =>
-      { output => 'taxon_name', com_name => 'tna' },
-	  "The scientific name of the taxon",
-      { output => 'taxon_rank', com_name => 'trn' },
-	  "The taxonomic rank",
-      { output => 'taxon_no', com_name => 'tid' },
-	  "A unique identifier for the taxon.  These are currently positive integers,",
-	  "but this could change and should B<not be relied on>.",
-      { output => 'ident_name', com_name => 'idn', dedup => 'taxon_name' },
-	  "The name under which the occurrence was actually identified",
-      { output => 'ident_rank', com_name => 'idr', dedup => 'taxon_rank' },
-	  "The taxonomic rank as actually identified",
-      { output => 'ident_no', com_name => 'iid', dedup => 'taxon_no' },
-	  "A unique identifier for the taxonomic name.");
-    
     $ds->define_block( '1.2:colls:rem' =>
       { set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
       { output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
@@ -434,7 +421,7 @@ sub initialize {
     
     $ds->define_block('1.2:colls:strata' =>
 	{ select => ['cs.name', 'cs.rank', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
-	{ output => 'record_type', com_name => 'typ', value => 'stratum', com_value => 'str' },
+	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
 	{ output => 'name', com_name => 'nam' },
 	    "The name of the stratum",
@@ -463,8 +450,8 @@ sub initialize {
 	  "The identifier of the containing level-3 cluster, if any",
       { output => 'bin_id_4', com_name => 'lv4' },
 	  "The identifier of the containing level-4 cluster, if any",
-      { output => 'record_type', com_name => 'typ', value => 'clu' },
-	  "The type of this object: 'clu' for a collection cluster",
+      { output => 'record_type', com_name => 'typ', value => $IDP{CLU} },
+	  "The type of this object: C<$IDP{CLU}> for a collection cluster",
       { output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	  "The number of collections in this cluster",
       { output => 'n_occs', com_name => 'noc', data_type => 'pos' },
@@ -587,13 +574,13 @@ sub initialize {
 	    "collection's age range");
     
     $ds->define_ruleset('1.2:main_selector' =>
-	{ param => 'clust_id', valid => POS_VALUE, list => ',' },
+	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
 	    "You may specify one or more cluster ids, separated by commas.",
 	{ param => 'taxon_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
-	{ param => 'taxon_id', valid => POS_VALUE, list => ','},
-	    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier.",
+	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID'), list => ','},
+	    "Return only records associated with the specified taxonomic name(s), specified by identifier.",
 	    "You may specify multiple identifiers, separated by commas.",
 	{ param => 'taxon_actual', valid => FLAG_VALUE },
 	    "If this parameter is specified, then only records that were actually identified with the",
@@ -604,12 +591,12 @@ sub initialize {
 	    "You may specify multiple names, separated by commas.  You may append one or more exclusions",
 	    "to any name, using the C<^> character.  For example, C<Osteichthyes^Tetrapoda> would select",
 	    "the fish excluding the tetrapods.",
-	{ param => 'base_id', valid => POS_VALUE, list => ',' },
+	{ param => 'base_id', valid => VALID_IDENTIFIER('TID'), list => ',' },
 	    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier, I<including subtaxa>.",
 	    "You may specify multiple identifiers, separated by commas.",
 	    "Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
 	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id'] },
-	{ param => 'exclude_id', valid => POS_VALUE, list => ','},
+	{ param => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ','},
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names, specified by numeric identifier.",
 	{ param => 'ident', valid => $ds->valid_set('1.2:colls:ident_select'), default => 'latest' },
 	    "If more than one taxonomic identification is recorded for some or all of the selected occurrences,",
@@ -688,11 +675,11 @@ sub initialize {
 	    "if C<timerule> is set to C<buffer> or is allowed to default to that value.");
     
     $ds->define_ruleset('1.2:colls:specifier' =>
-	{ param => 'id', valid => POS_VALUE, alias => 'coll_id' },
+	{ param => 'id', valid => VALID_IDENTIFIER('COL'), alias => 'coll_id' },
 	    "The identifier of the collection you wish to retrieve (REQUIRED)");
     
     $ds->define_ruleset('1.2:colls:selector' =>
-	{ param => 'id', valid => INT_VALUE, list => ',', alias => 'coll_id' },
+	{ param => 'id', valid => VALID_IDENTIFIER('COL'), list => ',', alias => 'coll_id' },
 	    "A comma-separated list of collection identifiers.");
     
     $ds->define_ruleset('1.2:colls:display' =>
@@ -1917,14 +1904,14 @@ sub generateMainFilters {
 		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
 		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
 	    
-	    ($early_age, $late_age, $scale_no, $level) = $dbh->selectrow_array($sql);
+	    ($early_age, $late_age) = $dbh->selectrow_array($sql);
 	}
 	
 	else
 	{
 	    my $quoted_name = $dbh->quote($interval_name);
 	    
-	    my $sql = "SELECT early_age, late_age, interval_no, scale_no
+	    my $sql = "SELECT early_age, late_age, interval_no, scale_no, scale_level
 		   FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
 		   WHERE interval_name like $quoted_name ORDER BY scale_no";
 	
@@ -2712,6 +2699,32 @@ sub prune_field_list {
     }
     
     my $a = 1;	# we can stop here when debugging
+}
+
+
+sub process_coll_com {
+    
+    my ($request, $record) = @_;
+    
+    foreach my $f ( qw(collection_no) )
+    {
+	$record->{$f} = "$IDP{COL}$record->{$f}" if defined $record->{$f};
+    }
+    
+    foreach my $f ( qw(interval_no) )
+    {
+	$record->{$f} = "$IDP{INT}$record->{$f}" if defined $record->{$f};
+    }
+    
+    if ( ref $record->{reference_no} eq 'ARRAY' )
+    {
+	map { $_ = "$IDP{REF}$_" } @{$record->{reference_no}};
+    }
+    
+    elsif ( defined $record->{reference_no} )
+    {
+	$record->{reference_no} = "$IDP{REF}$record->{reference_no}";
+    }
 }
 
 

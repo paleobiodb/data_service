@@ -21,6 +21,7 @@ use Try::Tiny;
 use Moo::Role;
 
 
+
 sub generate_diversity_table {
 
     my ($self, $sth, $options) = @_;
@@ -855,15 +856,7 @@ sub get_upper_taxa {
     # genus.  If the option 'app' was specified, include the first-and-last
     # appearance info.
     
-    my @fields = ('DATA', 'family_no');
-
-    foreach my $f ( $request->select_list )
-    {
-	next if $f =~ qr{\.modified|\.enterer_no|\.modifier_no};
-	$f = 'CRMOD' if $f =~ qr{\.created$};
-	$f = '' if $f =~ qr{\.authorizer_no$};
-	push @fields, $f;
-    }
+    my @fields = ('DATA', 'family_no', $request->select_list_for_taxonomy);
     
     my $taxa_list;
     

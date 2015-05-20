@@ -12,6 +12,8 @@ package PB2::ReferenceData;
 
 use HTTP::Validate qw(:validators);
 
+use TableDefs qw($REF_SUMMARY %IDP VALID_IDENTIFIER);
+
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
 use Moo::Role;
@@ -28,14 +30,17 @@ sub initialize {
     # Start by defining an output map.
     
     $ds->define_output_map('1.2:refs:output_map' =>
-	{ value => 'comments' },
-	    "Include any additional comments associated with this reference",
+	{ value => 'counts', maps_to => '1.2:refs:counts' },
+	    "Include the number of taxa, opinions, occurrences, and collections",
+	    "derived from this reference that have been entered into the database.",
 	{ value => 'formatted' },
 	    "If this option is specified, show the formatted reference instead of",
 	    "the individual fields.",
 	{ value => 'both' },
 	    "If this option is specified, show both the formatted reference and",
 	    "the individual fields",
+	{ value => 'comments' },
+	    "Include any additional comments associated with this reference",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
@@ -48,14 +53,14 @@ sub initialize {
     $ds->define_set('1.2:refs:reftype' =>
 	{ value => 'auth (A)' },
 	    "This reference gives the original source for a taxonomic name",
-	{ value => 'class (C)' },
+	{ value => 'classify (C)' },
 	    "This reference reference is the source for a classification opinion",
-	{ value => 'unused (U)' },
+	{ value => 'unselected (U)' },
 	    "This reference is the source for an opinion that is not used for",
 	    "classification because of its date of publication and/or basis",
 	{ value => 'occ (O)' },
 	    "This reference is the source for a fossil occurrence",
-	{ value => 'primary (P)' },
+	{ value => 'coll (P)' },
 	    "This reference is indicated to be the primary source for a fossil collection",
 	{ value => 'secondary (S)' },
 	    "This reference is an additional source for a fossil collection",
@@ -76,18 +81,26 @@ sub initialize {
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
       { set => 'formatted', from => '*', code => \&format_reference },
-      { set => 'ref_type', from => '*', code => \&set_reference_type },
+      { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
       { output => 'reference_no', com_name => 'oid' }, 
 	  "Numeric identifier for this document reference in the database",
-      { output => 'record_type', com_name => 'typ', com_value => 'ref', value => 'reference' },
-	  "The type of this object: 'ref' for a document reference",
+      { output => 'record_type', com_name => 'typ', value => $IDP{REF} },
+	  "The type of this object: C<$IDP{REF}> for a document reference.",
       { output => 'ref_type', com_name => 'rtp' },
 	  "The role(s) played by this reference in the database.  This field will only appear",
 	  "in the result of queries for occurrence, collection, or taxonomic referenes.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
-      { output => 'associated_records', com_name => 'rct' },
-	  "The number of records (occurrences, taxa, etc. depending upon which URL path you used) associated with this reference",
+	{ output => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
+	    "The number of taxa associated with this reference",
+	{ output => 'n_class', com_name => 'ncl', if_block => 'counts' },
+	    "The number of classification opinions associated with this reference",
+	{ output => 'n_opinions', com_name => 'nop', if_block => 'counts' },
+	    "The number of opinions in total associated with this reference",
+	{ output => 'n_occs', com_name => 'noc', if_block => 'counts' },
+	    "The number of occurrences associated with this reference",
+	{ output => 'n_colls', com_name => 'nco', if_block => 'counts' },
+	    "The number of collections for which this is the primary reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
 	  "Formatted reference",
       { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', not_block => 'formatted' },
@@ -123,7 +136,12 @@ sub initialize {
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi' },
 	  "The DOI for this document, if known",
       { output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', if_block => 'comments' },
-	  "Additional comments about this reference, if any");
+	  "Additional comments about this reference, if any",
+      { set => '*', code => \&process_ref_com, if_vocab => 'com' });
+    
+    $ds->define_block('1.2:refs:counts' =>
+	{ select => ['rs.n_taxa', 'rs.n_class', 'rs.n_opinions', 'rs.n_occs', 'rs.n_colls'], 
+	  tables => 'rs' });
     
     # Then blocks for other classes to use when including one or more
     # references into other output.
@@ -195,11 +213,11 @@ sub initialize {
 	{ ignore => 'level' });
     
     $ds->define_ruleset('1.2:refs:specifier' => 
-	{ param => 'id', valid => POS_VALUE, alias => 'ref_id' },
+	{ param => 'id', valid => VALID_IDENTIFIER('REF'), alias => 'ref_id' },
 	    "A unique number identifying the reference to be selected");
     
     $ds->define_ruleset('1.2:refs:selector' =>
-	{ param => 'id', valid => POS_VALUE, alias => 'ref_id', list => ',' },
+	{ param => 'id', valid => VALID_IDENTIFIER('REF'), alias => 'ref_id', list => ',' },
 	    "A list of one or more reference identifiers, separated by commas.  You can",
 	    "use this parameter to get information about a specific list of references,",
 	    "or to filter a known list against other criteria.");
@@ -574,6 +592,9 @@ sub generate_join_list {
 
     my ($self, $tables_hash) = @_;
     
+    return "	JOIN $REF_SUMMARY as rs using on rs.reference_no = r.reference_no\n"
+	if $tables_hash->{rs};
+    
     return '';
 }
 
@@ -728,7 +749,7 @@ sub set_reference_type {
     
     my ($request, $record) = @_;
     
-    my $ref_type = $record->{ref_type};
+    my $ref_type = $record->{ref_type} || '';
     my @types;
     
     if ( $ref_type =~ qr{A} )
@@ -738,12 +759,12 @@ sub set_reference_type {
     
     if ( $ref_type =~ qr{C} )
     {
-	push @types, 'class';
+	push @types, 'classify';
     }
     
     if ( $ref_type =~ qr{U} )
     {
-	push @types, 'unused';
+	push @types, 'unselected';
     }
     
     if ( $ref_type =~ qr{O} )
@@ -753,17 +774,26 @@ sub set_reference_type {
     
     if ( $ref_type =~ qr{P} )
     {
-	push @types, 'prim';
+	push @types, 'coll';
     }
     
-    elsif ( $ref_type =~ qr{C} )
+    elsif ( $ref_type =~ qr{S} )
     {
-	push @types, 'coll';
+	push @types, 'secondary';
     }
     
     push @types, 'ref' unless @types;
     
     return join(',', @types);
 }
+
+
+sub process_ref_com {
+    
+    my ($request, $record) = @_;
+    
+    $record->{reference_no} = "$IDP{REF}$record->{reference_no}" if defined $record->{reference_no};
+}
+
 
 1;

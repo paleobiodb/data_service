@@ -8,6 +8,8 @@ package TableDefs;
 
 use strict;
 
+use Carp qw(croak);
+
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS
@@ -15,12 +17,12 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS
 		      $DIV_MATRIX $DIV_GLOBAL $PVL_MATRIX $PVL_GLOBAL
-		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF
+		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $REF_SUMMARY
 		      $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
 		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
 		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS
-		      $IDIGBIO);
+		      $IDIGBIO %IDP VALID_IDENTIFIER);
 
 # classic tables
 
@@ -52,7 +54,7 @@ our $BIN_KEY = "999999";
 our $OCC_MATRIX = "occ_matrix";
 our $OCC_EXTRA = "occ_extra";
 our $OCC_TAXON = "occ_taxon";
-our $OCC_REF = "occ_ref";
+our $REF_SUMMARY = "ref_summary";
 
 our $OCC_BUFFER_MAP = 'occ_buffer_map';
 our $OCC_MAJOR_MAP = 'occ_major_map';
@@ -86,5 +88,96 @@ our $PVL_GLOBAL = 'pvl_global';
 # iDigBio external info table
 
 our $IDIGBIO = 'idigbio';
+
+# List the identifier prefixes:
+
+our %IDP = ( URN => 'urn:paleobiodb.org:',
+	     TID => 'txn|var',
+	     TXN => 'txn',
+	     VAR => 'var',
+	     OPN => 'opn',
+	     REF => 'ref',
+	     OCC => 'occ',
+	     COL => 'col',
+	     INT => 'int',
+	     SCL => 'scl',
+	     CLU => 'clu' );
+
+# VALID_IDENT ( type )
+# 
+# Return a closure which will validate identifiers of the given type.
+# Acceptable values are any positive integer <n>, optionally preceded by the
+# type, optionally preceded by the common URN prefix.  So, for example, each
+# of the following are equivalent for specifying taxon number 23021:
+# 
+# 23021, txn23021, urn:paleobiodb.org:txn23021
+
+sub VALID_IDENTIFIER {
+    
+    my ($type) = @_;
+    
+    croak "VALID_IDENTIFIER requires a parameter indicating the identifier type" unless $type;
+    
+    return sub { return valid_identifier(shift, shift, $type) };
+}
+
+
+# Construct the regular expressions to validate the various identifier types.
+
+our %IDRE;
+
+my $key_expr = '';
+
+foreach my $key ( keys %IDP )
+{
+    next if $key eq 'URN';
+    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? (?: $IDP{$key} ) )? ( [0]+ | [1-9][0-9]* ) $ }xsi;
+    $key_expr .= '|' if $key_expr;
+    $key_expr .= $IDP{$key};
+}
+
+$IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? (?: $key_expr ) )? ( [0]+ | [1-9][0-9]* ) $ }xsi;
+
+
+# valid_ident ( value, context, type )
+# 
+# Validator subroutine for paleobiodb.org identifiers.
+
+sub valid_identifier {
+
+    my ($value, $context, $type) = @_;
+    
+    if ( $value =~ $IDRE{$type} )
+    {
+	return { value => $1 };
+    }
+    
+    if ( $value =~ qr{ ^ urn: }xsi )
+    {
+	if ( $value =~ qr{ ^ $IDP{URN} (.*) }xsi )
+	{
+	    return { error => "the value of {param} must be '$IDP{URN}$IDP{$type}' " .
+		     "followed by a nonnegative integer (was '$value')" };
+	}
+	
+	else
+	{
+	    return { error => "the value of {param} must be a valid local identifier " .
+		     "or must start with the prefix '$IDP{URN}' (was {value})" };
+	}
+    }
+    
+    if ( $type eq 'ANY' )
+    {
+	return { error => "the value of {param} must be a nonnegative integer, optionally prefixed with an identifier type" };
+    }
+    
+    else
+    {
+	return { error => "the value of {param} must be a nonnegative integer, optionally prefixed with '$IDP{$type}'" };
+    }
+}
+
+
 
 1;

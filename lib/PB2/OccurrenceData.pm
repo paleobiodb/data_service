@@ -17,7 +17,7 @@ package PB2::OccurrenceData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX %IDP VALID_IDENTIFIER);
 
 use TaxonDefs qw(%RANK_STRING);
 
@@ -49,12 +49,21 @@ sub initialize {
 	    "The individual components of the taxonomic identification of the occurrence.",
 	    "These values correspond to the value of C<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
-	{ value => 'taxo', maps_to => '1.2:occs:taxo' },
-	    "Additional information about the taxonomic classification of the occurence",
+	{ value => 'class', maps_to => '1.2:occs:taxo' },
+	    "The taxonomic classification of the occurence: phylum, class, order, family,",
+	    "genus.",
+	{ value => 'classext', maps_to => '1.2:occs:taxo' },
+	    "Like C<class>, but also includes the relevant taxon identifiers.",
 	{ value => 'phylo', maps_to => '1.2:occs:taxo', undocumented => 1 },
 	{ value => 'genus', maps_to => '1.2:occs:genus' },
-	    "The genus (if known) and subgenus (if any) corresponding to each occurrence.",
-	    "This is a subset of the information provided by C<phylo>.",
+	    "The genus corresponding to each occurrence, if the occurrence has been",
+	    "identified to the genus level.  This block is redundant if C<class> or",
+	    "C<classext> are used.",
+	{ value => 'subgenus', maps_to => '1.2:occs:genus' },
+	    "The genus corresponding to each occurrence, plus the subgenus if any.",
+	    "This can be added to C<class> or C<classext> in order to display",
+	    "subgenera, or used instead of C<genus> to display both the genus",
+	    "and the subgenus if any.",
 	{ value => 'plant', maps_to => '1.2:occs:plant' },
 	    "The plant organ(s), if any, associated with this occurrence.  These fields",
 	    "will be empty unless the occurrence is a plant fossil.",
@@ -113,14 +122,16 @@ sub initialize {
 		     'o.early_age', 'o.late_age', 'o.reference_no'],
 	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
+	{ set => '*', code => \&process_occ_com, if_vocab => 'com' },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
-	{ output => 'record_type', value => 'occurrence', com_name => 'typ', com_value => 'occ', 
-	  dwc_value => 'Occurrence' },
-	    "The type of this object: C<occ> for an occurrence in the compact vocabulary,",
-	    "C<occurrence> in the PBDB vocabulary.",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{OCC}, dwc_value => 'Occurrence' },
+	    "The type of this object: C<$IDP{OCC}> for an occurrence.",
 	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
-	    "If this occurrence was reidentified, a positive integer that uniquely identifies the reidentification",
+	    "If this occurrence was reidentified, a unique identifier for the reidentification.",
+	    "This value is a key for the reidentification table, and is probably useful only",
+	    "for debugging purposes.  It does, at least, indicate that this was not the original",
+	    "identification of the occurrence.",
 	{ output => 'obsolete', com_name => 'obs', value => 1, not_field => 'latest_ident' },
 	    "The value of this field will be true if this occurrence was later reidentified.",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
@@ -190,48 +201,56 @@ sub initialize {
 	{ output => 'species_reso', com_name => 'rss' },
 	    "The resolution of the species name, i.e. C<cf.> or C<n. sp.>");
     
-    $ds->define_block('1.2:occs:genus' =>
-	{ select => ['o.genus_name', 'o.subgenus_name',
-		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
-	  tables => ['t', 'pl'] },
-	{ output => 'subgenus', com_name => 'sgl' },
-	    "The name of the genus in which this occurrence is classified",
-	{ output => 'subgenus_no', com_name => 'sgn' },
-	    "The identifier of the genus in which this occurrence is classified",
-	{ output => 'genus', com_name => 'gnl' },
-	    "The name of the genus in which this occurrence is classified",
-	{ output => 'genus_no', com_name => 'gnn' },
-	    "The identifier of the genus in which this occurrence is classified");
-    
     $ds->define_block('1.2:occs:taxo' =>
 	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
 		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
 		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
 	  tables => ['ph', 't', 'pl'] },
-	{ output => 'subgenus', com_name => 'sgl', not_block => '1.2:occs:genus' },
-	    "The name of the genus in which this occurrence is classified",
-	{ output => 'subgenus_no', com_name => 'sgn', not_block => '1.2:occs:genus' },
-	    "The identifier of the genus in which this occurrence is classified",
-	{ output => 'genus', com_name => 'gnl', not_block => '1.2:occs:genus' },
-	    "The name of the genus in which this occurrence is classified",
-	{ output => 'genus_no', com_name => 'gnn', not_block => '1.2:occs:genus' },
-	    "The identifier of the genus in which this occurrence is classified",
-	{ output => 'family', com_name => 'fml' },
-	    "The name of the family in which this occurrence is classified",
-	{ output => 'family_no', com_name => 'fmn' },
-	    "The identifier of the family in which this occurrence is classified",
-	{ output => 'order', com_name => 'odl' },
-	    "The name of the order in which this occurrence is classified",
-	{ output => 'order_no', com_name => 'odn' },
-	    "The identifier of the order in which this occurrence is classified",
-	{ output => 'class', com_name => 'cll' },
-	    "The name of the class in which this occurrence is classified",
-	{ output => 'class_no', com_name => 'cln' },
-	    "The identifier of the class in which this occurrence is classified",
 	{ output => 'phylum', com_name => 'phl' },
-	    "The name of the phylum in which this occurrence is classified",
-	{ output => 'phylum_no', com_name => 'phn' },
-	    "The identifier of the phylum in which this occurrence is classified");
+	    "The name of the phylum in which this occurrence is classified.",
+	{ output => 'phylum_no', com_name => 'phn', if_block => 'classext' },
+	    "The identifier of the phylum in which this occurrence is classified.",
+	    "This is only included with the block C<classext>.",
+	{ output => 'class', com_name => 'cll' },
+	    "The name of the class in which this occurrence is classified.",
+	{ output => 'class_no', com_name => 'cln', if_block => 'classext' },
+	    "The identifier of the class in which this occurrence is classified.",
+	    "This is only included with the block C<classext>.",
+	{ output => 'order', com_name => 'odl' },
+	    "The name of the order in which this occurrence is classified.",
+	{ output => 'order_no', com_name => 'odn', if_block => 'classext' },
+	    "The identifier of the order in which this occurrence is classified.",
+	    "This is only included with the block C<classext>.",
+	{ output => 'family', com_name => 'fml' },
+	    "The name of the family in which this occurrence is classified.",
+	{ output => 'family_no', com_name => 'fmn', if_block => 'classext' },
+	    "The identifier of the family in which this occurrence is classified.",
+	    "This is only included with the block C<classext>.",
+	{ output => 'genus', com_name => 'gnl' },
+	    "The name of the genus in which this occurrence is classified.",
+	    "If the block C<subgenus> is specified, this will include the subgenus",
+	    "name if any.",
+	{ output => 'genus_no', com_name => 'gnn', if_block => 'classext' },
+	    "The identifier of the genus in which this occurrence is classified",
+	{ output => 'subgenus_no', com_name => 'sgn', if_block => 'classext', dedup => 'genus_no' },
+	    "The identifier of the subgenus in which this occurrence is classified,",
+	    "if any.",
+	{ set => '*', code => \&process_occ_subgenus, if_block => 'subgenus' });
+    
+    $ds->define_block('1.2:occs:genus' =>
+	{ select => ['pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
+	  tables => ['t', 'pl'] },
+	{ output => 'genus', com_name => 'gnl', not_block => 'class,classext' },
+	    "The name of the genus in which this occurrence is classified.",
+	    "If the block C<subgenus> is specified, this will include the subgenus",
+	    "name if any.",
+	{ output => 'genus_no', com_name => 'gnn', not_block => 'class,classext' },
+	    "The identifier of the genus in which this occurrence is classified",
+	{ output => 'subgenus_no', com_name => 'sgn', not_block => 'class,classext' },
+	    "The identifier of the genus in which this occurrence is classified,",
+	    "if any.",
+	{ set => '*', code => \&process_occ_subgenus, if_block => 'subgenus', 
+	  not_block => 'class,classext' });
     
     $ds->define_block('1.2:occs:plant' =>
 	{ select => ['o.plant_organ', 'o.plant_organ2'] },
@@ -492,13 +511,13 @@ sub initialize {
 	{ value => 'modified.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.2:occs:specifier' =>
-	{ param => 'id', valid => POS_VALUE, alias => 'occ_id' },
+	{ param => 'id', valid => VALID_IDENTIFIER('OCC'), alias => 'occ_id' },
 	    "The identifier of the occurrence you wish to retrieve (REQUIRED)");
     
     $ds->define_ruleset('1.2:occs:selector' =>
-	{ param => 'id', valid => POS_VALUE, list => ',', alias => 'occ_id' },
+	{ param => 'id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'occ_id' },
 	    "A comma-separated list of occurrence identifiers.",
-	{ param => 'coll_id', valid => POS_VALUE, list => ',' },
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
 	    "A comma-separated list of collection identifiers.  All occurrences associated with",
 	    "the specified collections are returned, provided they satisfy the other parameters",
 	    "given with this request.");
@@ -1569,6 +1588,8 @@ sub refs {
     
     $self->substitute_select( mt => 'r', cd => 'r' );
     
+    $self->delete_output_field('n_opinions');
+    
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
@@ -1615,8 +1636,9 @@ sub refs {
     my $outer_join_list = $self->PB2::ReferenceData::generate_join_list($self->tables_hash);
     
     $self->{main_sql} = "
-	SELECT $calc $fields, count(distinct occurrence_no) as reference_rank, 1 as is_occ
-	FROM (SELECT o.reference_no, o.occurrence_no
+	SELECT $calc $fields, count(distinct occurrence_no) as n_occs,
+		count(distinct taxon_no) as n_taxa, 'O' as ref_type
+	FROM (SELECT o.reference_no, o.occurrence_no, o.taxon_no
 	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 		$inner_join_list
             WHERE $filter_string) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
@@ -2151,5 +2173,52 @@ sub process_basic_record {
     }
 }
 
+
+sub process_occ_subgenus {
+    
+    my ($request, $record) = @_;
+    
+    if ( $record->{subgenus} )
+    {
+	$record->{genus} = $record->{subgenus};
+    }
+}
+
+
+sub process_occ_com {
+    
+    my ($request, $record) = @_;
+    
+    foreach my $f ( qw(orig_no identified_no accepted_no phylum_no
+		       class_no order_no family_no genus_no subgenus_no) )
+    {
+	$record->{$f} = "$IDP{TXN}$record->{$f}" if defined $record->{$f};
+    }
+    
+    foreach my $f ( qw(interval_no) )
+    {
+	$record->{$f} = "$IDP{INT}$record->{$f}" if defined $record->{$f};
+    }
+    
+    foreach my $f ( qw(occurrence_no) )
+    {
+	$record->{$f} = "$IDP{OCC}$record->{$f}" if defined $record->{$f};
+    }
+    
+    foreach my $f ( qw(collection_no) )
+    {
+	$record->{$f} = "$IDP{COL}$record->{$f}" if defined $record->{$f};
+    }
+    
+    if ( ref $record->{reference_no} eq 'ARRAY' )
+    {
+	map { $_ = "$IDP{REF}$_" } @{$record->{reference_no}};
+    }
+    
+    elsif ( defined $record->{reference_no} )
+    {
+	$record->{reference_no} = "$IDP{REF}$record->{reference_no}";
+    }
+}
 
 1;

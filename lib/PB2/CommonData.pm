@@ -10,6 +10,7 @@ use strict;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
+use TableDefs qw(%IDP);
 
 use parent 'Exporter';
 
@@ -18,6 +19,12 @@ our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference
 use Moo::Role;
 
 our (%PERSON_NAME);
+
+our ($COMMON_OPT_RE) = qr{ ^ ( taxa_ | ops_ | refs_ | occs_ | colls_ )?
+			     ( created_before | created_after | 
+			       modified_before | modified_after |
+			       authorized_by | entered_by | modified_by |
+			       authent_by | touched_by ) $ }xs;
 
 
 # Initialization
@@ -65,6 +72,56 @@ sub initialize {
 	{ param => 'modified_after', valid => \&datetime_value, alias => 'modified_since' },
 	    "Select only records that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
     
+    $ds->define_ruleset('1.2:common:select_taxa_crmod' =>
+	{ param => 'taxa_created_before', valid => \&datetime_value },
+	    "Select only records associated with taxa that were created before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'taxa_created_after', valid => \&datetime_value, alias => 'taxa_created_since' },
+	    "Select only records associated with taxa that were created on or after the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'taxa_modified_before', valid => \&datetime_value },
+	    "Select only records associated with taxa that were last modified before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'taxa_modified_after', valid => \&datetime_value, alias => 'taxa_modified_since' },
+	    "Select only records associated with taxa that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
+    
+    $ds->define_ruleset('1.2:common:select_ops_crmod' =>
+	{ param => 'ops_created_before', valid => \&datetime_value },
+	    "Select only records associated with taxa that were created before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'ops_created_after', valid => \&datetime_value, alias => 'ops_created_since' },
+	    "Select only records associated with taxa that were created on or after the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'ops_modified_before', valid => \&datetime_value },
+	    "Select only records associated with taxa that were last modified before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'ops_modified_after', valid => \&datetime_value, alias => 'ops_modified_since' },
+	    "Select only records associated with taxa that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
+    
+    $ds->define_ruleset('1.2:common:select_refs_crmod' =>
+	{ param => 'refs_created_before', valid => \&datetime_value },
+	    "Select only records associated with references that were created before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'refs_created_after', valid => \&datetime_value, alias => 'refs_created_since' },
+	    "Select only records associated with references that were created on or after the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'refs_modified_before', valid => \&datetime_value },
+	    "Select only records associated with references that were last modified before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'refs_modified_after', valid => \&datetime_value, alias => 'refs_modified_since' },
+	    "Select only records associated with references that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
+    
+    $ds->define_ruleset('1.2:common:select_occs_crmod' =>
+	{ param => 'occs_created_before', valid => \&datetime_value },
+	    "Select only records associated with occurrences that were created before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'occs_created_after', valid => \&datetime_value, alias => 'occs_created_since' },
+	    "Select only records associated with occurrences that were created on or after the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'occs_modified_before', valid => \&datetime_value },
+	    "Select only records associated with occurrences that were last modified before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'occs_modified_after', valid => \&datetime_value, alias => 'occs_modified_since' },
+	    "Select only records associated with occurrences that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
+    
+    $ds->define_ruleset('1.2:common:select_colls_crmod' =>
+	{ param => 'colls_created_before', valid => \&datetime_value },
+	    "Select only records associated with collections that were created before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'colls_created_after', valid => \&datetime_value, alias => 'colls_created_since' },
+	    "Select only records associated with collections that were created on or after the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'colls_modified_before', valid => \&datetime_value },
+	    "Select only records associated with collections that were last modified before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'colls_modified_after', valid => \&datetime_value, alias => 'colls_modified_since' },
+	    "Select only records associated with collections that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
+    
     $ds->define_block('1.2:common:crmod' =>
 	{ select => ['$cd.created', '$cd.modified'], tables => '$cd' },
 	{ output => 'created', com_name => 'dcr' },
@@ -80,12 +137,100 @@ sub initialize {
 	    "Select only records that were entered by the specified person,",
 	    "indicated by name or identifier",
 	{ param => 'modified_by', valid => ANY_VALUE, list => ',' },
-	    "Select only records that were authorized by the specified person,",
+	    "Select only records that were modified by the specified person,",
 	    "indicated by name or identifier",
 	{ param => 'touched_by', valid => ANY_VALUE, list => ',' },
 	    "Select only records that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier",
+	{ param => 'authent_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records that were authorized or entered by the specified",
 	    "the specified person, indicated by name or identifier");
     
+    $ds->define_ruleset('1.2:common:select_taxa_ent' =>
+	{ param => 'taxa_authorized_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'taxa_entered_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were entered by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'taxa_modified_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were modified by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'taxa_touched_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier",
+	{ param => 'taxa_authent_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were authorized or entered by the specified",
+	    "the specified person, indicated by name or identifier");
+    
+    $ds->define_ruleset('1.2:common:select_ops_ent' =>
+	{ param => 'ops_authorized_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'ops_entered_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were entered by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'ops_modified_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were modified by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'ops_touched_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier",
+	{ param => 'ops_authent_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with taxa that were authorized or entered by the specified",
+	    "the specified person, indicated by name or identifier");
+    
+    $ds->define_ruleset('1.2:common:select_refs_ent' =>
+	{ param => 'refs_authorized_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with references that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'refs_entered_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with references that were entered by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'refs_modified_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with references that were modified by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'refs_touched_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with references that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier",
+	{ param => 'refs_authent_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with references that were authorized or entered by the specified",
+	    "the specified person, indicated by name or identifier");
+    
+    $ds->define_ruleset('1.2:common:select_occs_ent' =>
+	{ param => 'occs_authorized_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'occs_entered_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were entered by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'occs_modified_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were modified by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'occs_touched_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier",
+	{ param => 'occs_authent_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were authorized or entered by the specified",
+	    "the specified person, indicated by name or identifier");
+    
+    $ds->define_ruleset('1.2:common:select_colls_ent' =>
+	{ param => 'colls_authorized_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with collections that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'colls_entered_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with collections that were entered by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'colls_modified_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with collections that were modified by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'colls_touched_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with collections that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier",
+	{ param => 'colls_authent_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with collections that were authorized or entered by the specified",
+	    "the specified person, indicated by name or identifier");
+        
     $ds->define_block('1.2:common:ent' =>
 	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
 	{ output => 'authorizer_no', com_name => 'ati', if_block => 'ent,entname' },
@@ -99,7 +244,7 @@ sub initialize {
 	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
 	{ set => 'authorizer', from => 'authorizer_no', lookup => \%PERSON_NAME, default => 'unknown' },
 	{ set => 'enterer', from => 'enterer_no', lookup => \%PERSON_NAME, default => 'unknown' },
-	{ set => 'modifier', from => 'modifier_no', lookup => \%PERSON_NAME, default => 'unknown' },
+	{ set => 'modifier', from => 'modifier_no', lookup => \%PERSON_NAME },
 	{ output => 'authorizer', com_name => 'ath' },
 	    "The name of the person who authorized the entry of this record",
 	{ output => 'enterer', com_name => 'ent' },
@@ -354,5 +499,6 @@ sub generateAttribution {
     
     return;
 }
+
 
 1;

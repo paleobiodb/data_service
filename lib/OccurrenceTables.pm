@@ -14,7 +14,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF
+use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $REF_SUMMARY
 		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		 $INTERVAL_DATA $SCALE_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
@@ -25,7 +25,7 @@ our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildOccInter
 our $OCC_MATRIX_WORK = "omn";
 our $OCC_EXTRA_WORK = "oen";
 our $OCC_TAXON_WORK = "otn";
-our $OCC_REF_WORK = "orn";
+our $REF_SUMMARY_WORK = "orn";
 
 
 # buildOccurrenceTables ( dbh )
@@ -227,10 +227,20 @@ sub buildTaxonSummaryTable {
     
     $options ||= {};
     
-    logMessage(2, "    summarizing by taxonomic concept...");
+    # First make sure that the scale_map table has field 'scale_level' instead
+    # of just 'level'.
+    
+    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE $SCALE_MAP"); 
+    
+    unless ( $table_definition =~ /`scale_level`/ )
+    {
+	$dbh->do("ALTER TABLE $SCALE_MAP change column `level` `scale_level` smallint unsigned not null");
+    }
     
     # Then create working tables which will become the new taxon summary
     # table and reference summary table.
+        
+    logMessage(2, "    summarizing by taxonomic concept...");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $OCC_TAXON_WORK");
     $result = $dbh->do("CREATE TABLE $OCC_TAXON_WORK (
@@ -408,15 +418,18 @@ sub buildReferenceSummaryTable {
     
     logMessage(2, "    summarizing by reference_no...");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_REF_WORK");
-    $result = $dbh->do("CREATE TABLE $OCC_REF_WORK (
+    $result = $dbh->do("DROP TABLE IF EXISTS $REF_SUMMARY_WORK");
+    $result = $dbh->do("CREATE TABLE $REF_SUMMARY_WORK (
 				reference_no int unsigned primary key,
+				n_taxa int unsigned not null,
+				n_class int unsigned not null,
+				n_opinions int unsigned not null,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
 				early_age decimal(9,5),
 				late_age decimal(9,5)) ENGINE=MyISAM");
     
-    $sql = "	INSERT INTO $OCC_REF_WORK (reference_no, n_occs, n_colls,
+    $sql = "	INSERT INTO $REF_SUMMARY_WORK (reference_no, n_occs, n_colls,
 			early_age, late_age)
 		SELECT m.reference_no, count(*), count(distinct collection_no),
 			max(ei.early_age), min(li.late_age)
@@ -428,21 +441,25 @@ sub buildReferenceSummaryTable {
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "      $count references");
+    logMessage(2, "      $count references with occurrences");
+    
+    $sql = "	INSERT IGNORE INTO $REF_SUMMARY_WORK (reference_no)
+		SELECT reference_no FROM refs";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      $count references without occurrences");
     
     # Then index the reference summary table by numbers of collections and
     # occurrences, so that we can quickly query for the most heavily used ones.
     
     logMessage(2, "    indexing the summary table...");
     
-    $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (n_occs)");
-    $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (n_colls)");
-    $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (early_age)");
-    $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (late_age)");
+    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (early_age, late_age)");
     
     # Now swap in the new table.
     
-    activateTables($dbh, $OCC_REF_WORK => $OCC_REF);
+    activateTables($dbh, $REF_SUMMARY_WORK => $REF_SUMMARY);
     
     my $a = 1;		# we can stop here when debugging.
 }

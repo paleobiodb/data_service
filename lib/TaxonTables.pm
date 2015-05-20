@@ -14,7 +14,8 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS);
+use TableDefs qw($REF_SUMMARY);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS $RANK_MAP);
 use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
@@ -192,6 +193,7 @@ our $CLASSIFY_AUX = "class_aux";
 our $ADJUST_AUX = "adjust_aux";
 our $SPECIES_AUX = "species_aux";
 our $INTS_AUX = "ints_aux";
+our $REF_SUMMARY_AUX = "rs_aux";
 
 our $TAXON_EXCEPT = "taxon_exceptions";
 
@@ -735,7 +737,7 @@ sub buildTaxonTables {
     
     # First, determine which tables will be computed.
     
-    my @steps = split(//, $steps || 'AabcdefghEi');
+    my @steps = split(//, $steps || 'AabcdefghERi');
     $step_control->{$_} = 1 foreach @steps;
     
     $TREE_WORK = 'taxon_trees' unless $step_control->{a};
@@ -803,6 +805,10 @@ sub buildTaxonTables {
     # And then the ecotaph table which holds ecology and taphonomy attributes.
     
     computeEcotaphTable($dbh, $tree_table) if $step_control->{E};
+    
+    # Add appropriate counts to the reference summary table
+    
+    updateRefSummary($dbh, $tree_table) if $step_control->{R};
     
     # Finally, activate the new tables we have just computed by renaming them
     # over the previous ones.
@@ -1056,6 +1062,8 @@ sub buildOpinionCache {
     $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (child_spelling_no)");
     $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (parent_no)");
     $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (parent_spelling_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (pubyr)");
+    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (author)");
     
     # Now, we remove any backup table that might have been left in place, and
     # swap in the new table using an atomic rename operation
@@ -1070,6 +1078,18 @@ sub buildOpinionCache {
     # ...and remove the backup
     
     $result = $dbh->do("DROP TABLE ${OPINION_CACHE}_bak");
+    
+    # Add columns 'child_orig_no' and 'parent_orig_no' to opinions table unless they are already
+    # there.
+    
+    my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
+    my ($table, $def) = $dbh->selectrow_array("SHOW CREATE TABLE $ops_table");
+    
+    unless ( $def =~ qr{`child_orig_no`} )
+    {
+	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `child_orig_no` int unsigned not null AFTER `pubyr`");
+	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `parent_orig_no` int unsigned not null AFTER `child_orig_no`");
+    }
     
     my $a = 1;		# we can stop here when debugging
 }
@@ -4155,6 +4175,7 @@ sub computeAttrsTable {
 				image_no int unsigned,
 				author varchar(80),
 				pubyr varchar(4),
+				modyr varchar(4),
 				is_changed boolean,
 				attribution varchar(80),
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
@@ -4572,7 +4593,7 @@ sub computeAttrsTable {
 			v.late_occ = sv.late_occ,
 			v.not_trace = sv.not_trace");
     
-    # Now we can set the 'pubyr', 'is_changed' and 'attribution' fields, which are not
+    # Now we can set the 'pubyr', 'modyr', 'is_changed' and 'attribution' fields, which are not
     # inherited. 
     
     logMessage(2, "    setting author, pubyr, is_changed");
@@ -4582,8 +4603,10 @@ sub computeAttrsTable {
 			join (SELECT orig_no, group_concat(spelling_reason) as reason
 			      FROM $NAME_WORK GROUP BY orig_no) as r using (orig_no)
 			join $NAME_WORK as n on n.taxon_no = t.orig_no
+			join $NAME_WORK as n2 on n2.taxon_no = t.spelling_no
 		SET v.author = n.author,
 		    v.pubyr = n.pubyr,
+		    v.modyr = n2.pubyr,
 		    v.is_changed = if(r.reason regexp 'rank|recombination', 1, 0)");
     
     logMessage(2, "    setting attribution");
@@ -4669,7 +4692,7 @@ sub computeEcotaphTable {
 		INSERT IGNORE INTO $ECOTAPH_WORK
 		SELECT t.synonym_no, e.*
 		FROM $ECOTAPH_BASE as e JOIN $AUTH_TABLE as a using (taxon_no)
-			JOIN $tree_table as t using (orig_no)");
+			JOIN $TREE_WORK as t using (orig_no)");
     
     my $count = $result + 0;
     
@@ -4755,7 +4778,7 @@ sub computeEcotaphTable {
     
     $result = $dbh->do("
 		INSERT IGNORE INTO $ECOTAPH_WORK (orig_no)
-		SELECT orig_no FROM $tree_table");
+		SELECT orig_no FROM $TREE_WORK");
     
     # Then create two SQL fragments.  The first is used to generate the ecotaph information for a
     # child taxon by coalescing the information for itself and its parent.  The second is used to
@@ -4798,7 +4821,7 @@ sub computeEcotaphTable {
     
     # Prepare an SQL statement that can be executed once for each tree level.
     
-    $sql = "	UPDATE $ECOTAPH_WORK as e JOIN $tree_table as t using (orig_no)
+    $sql = "	UPDATE $ECOTAPH_WORK as e JOIN $TREE_WORK as t using (orig_no)
 			JOIN $ECOTAPH_WORK as ep on ep.orig_no = t.senpar_no
 		SET $coalesce_sql
 		WHERE t.depth = ? and t.synonym_no = t.orig_no";
@@ -4821,7 +4844,7 @@ sub computeEcotaphTable {
     
     logMessage(2, "    copying attributes to junior synonyms...");
     
-    $sql = "	UPDATE $ECOTAPH_WORK as e JOIN $tree_table as t using (orig_no)
+    $sql = "	UPDATE $ECOTAPH_WORK as e JOIN $TREE_WORK as t using (orig_no)
 			JOIN $ECOTAPH_WORK as es on es.orig_no = t.synonym_no
 		SET $copy_sql
 		WHERE t.orig_no <> t.synonym_no";
@@ -4832,7 +4855,64 @@ sub computeEcotaphTable {
 }
 
 
-our $RANK_MAP = 'rank_map';
+# updateRefSummary ( dbh, tree_table )
+# 
+# Update the reference summary table to count the number of taxa and opinions associated with each
+# reference.
+
+sub updateRefSummary {
+    
+    my ($dbh, $tree_table) = @_;
+    
+    my $AUTH_TABLE = $TAXON_TABLE{$tree_table}{authorities};
+    my $OP_CACHE = $TAXON_TABLE{$tree_table}{opcache};
+    
+    # We start by creating a working table to hold the counts.
+    
+    my ($sql, $result);
+    
+    $dbh->do("DROP TABLE IF EXISTS $REF_SUMMARY_AUX");
+    
+    $dbh->do("CREATE TABLE $REF_SUMMARY_AUX (
+			reference_no int unsigned primary key,
+			n_taxa int unsigned not null,
+			n_class int unsigned not null,
+			n_opinions int unsigned not null) Engine=MyISAM");
+    
+    # Then fill in the counts.
+    
+    $sql = "	INSERT INTO $REF_SUMMARY_AUX (reference_no, n_taxa, n_class, n_opinions)
+		SELECT reference_no, count(distinct orig_no) as n_taxa,
+			count(distinct class_no) as n_class,
+			count(distinct opinion_no) as n_opinions
+		FROM (
+		SELECT reference_no, orig_no, null as opinion_no, null as class_no
+		FROM $AUTH_TABLE WHERE reference_no > 0
+		UNION SELECT reference_no, orig_no, null as opinion_no, null as class_no
+		FROM $OCC_MATRIX WHERE reference_no > 0
+		UNION SELECT reference_no, orig_no, opinion_no, null as class_no
+		FROM $OP_CACHE WHERE reference_no > 0
+		UNION SELECT o.reference_no, t.orig_no, opinion_no, opinion_no as class_no
+		FROM $tree_table as t JOIN $OP_CACHE as o using (opinion_no)
+		WHERE o.reference_no > 0
+		) as base GROUP BY reference_no";
+    
+    $result = $dbh->do($sql);
+    
+    # Then copy those counts into the ref_summary table.
+    
+    $sql = "	UPDATE $REF_SUMMARY as rs JOIN $REF_SUMMARY_AUX as rsa using (reference_no)
+		SET rs.n_taxa = rsa.n_taxa,
+		    rs.n_opinions = rsa.n_opinions,
+		    rs.n_class = rsa.n_class";
+    
+    $result = $dbh->do($sql);
+    
+    # Then remove the auxiliary table.
+    
+    
+}
+
 
 sub createRankMap {
 
@@ -4915,6 +4995,7 @@ sub activateNewTaxonomyTables {
 	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_AUX");
 	$result = $dbh->do("DROP TABLE IF EXISTS $SPECIES_AUX");
 	$result = $dbh->do("DROP TABLE IF EXISTS $INTS_AUX");
+	$result = $dbh->do("DROP TABLE IF EXISTS $REF_SUMMARY_AUX");
     }
     
     my $a = 1;		# we can stop here when debugging

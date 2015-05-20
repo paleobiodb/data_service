@@ -371,7 +371,7 @@ use PB2::PersonData;
 			title => 'Single taxon',
 			usage => [ "taxa/single.json?id=69296&show=attr",
 				   "taxa/single.txt?name=Dascillidae" ],
-			method => 'get',
+			method => 'get_taxon',
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:output_map' },
@@ -383,7 +383,7 @@ use PB2::PersonData;
 			title => 'Lists of taxa',
 			usage => [ "taxa/list.txt?id=69296&rel=all_children&show=ref",
 				   "taxa/list.json?name=Dascillidae&rel=all_parents" ],
-			method => 'list',
+			method => 'list_taxa',
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:output_map' },
@@ -396,7 +396,7 @@ use PB2::PersonData;
 			title => 'Bibliographic references for taxa',
 			usage => [ "taxa/refs.ris?base_name=Felidae&textresult" ],
 			method => 'list',
-			arg => 'refs',
+			method => 'taxa_refs',
 			allow_format => '+ris',
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
@@ -404,11 +404,25 @@ use PB2::PersonData;
 	"You can pass identical filtering parameters to L<node:taxa/list> and to L<node:taxa/refs>,",
 	"which will give you both a list of taxonomic names and a list of the associated references.");
     
+    $ds2->define_node({ path => 'taxa/byref',
+			place => 3,
+			title => 'Taxa grouped by bibliographic reference',
+			usage => [ "taxa/byref.txt?base_name=Felidae" ],
+			method => 'taxa_byref',
+			arg => 'reftaxa',
+			output => '1.2:taxa:reftaxa',
+			optional_output => '1.2:taxa:output_map' },
+	"This path returns information about taxonomic names, grouped according to the bibliographic",
+	"reference in which they are mentioned.  You can use this operation in conjunction with",
+	"L<node:taxa/refs> to show, for each reference, all of the taxa entered from it.  You",
+	"can also use this to list all of the taxa entered from particular references selected",
+	"by identifier.");
+    
     $ds2->define_node({ path => 'taxa/opinions',
 			place => 3,
-			title => 'Taxonomic opinions',
+			title => 'Opinions about taxa',
 			usage => [ "taxa/opinions.json?base_name=Felidae" ],
-			method => 'list',
+			method => 'taxa_opinions',
 			arg => 'opinions',
 			output => '1.2:opinions:basic',
 			optional_output => '1.2:opinions:output_map' },
@@ -468,9 +482,47 @@ use PB2::PersonData;
 			output => '1.2:taxa:imagedata',
 			method => 'list_images' });
     
+    # Opinions
     
-# Time scales and intervals.  These paths are used to fetch information about
-# geological time scales and time intervals known to the database.
+    $ds2->define_node({ path => 'opinions',
+			place => 2,
+			title => 'Taxonomic opinions',
+			role => 'PB2::TaxonData',
+			output => '1.2:opinions:basic' },
+	"The taxonomic hierarchy in our database is computed algorithmically based on a",
+	"constantly growing set of taxonomic opinions.  These opinions are considered in",
+	"order by publication year and basis, yielding a 'consensus taxonomy' based on",
+	"the latest research.");
+    
+    $ds2->define_node({ path => 'opinions/single',
+			place => 1,
+			title => 'Single opinion',
+			usage => [ "opinions/single.json?id=1000&show=entname" ],
+			method => 'get_opinion',
+			optional_output => '1.2:opinions:output_map' },
+	"This path returns information about a single taxonomic opinion selected",
+	"by identifier.");
+    
+    $ds2->define_node({ path => 'opinions/list',
+			place => 2,
+			title =>'Lists of opinions',
+			usage => [ "opinions/list.json?created_since=7d",
+				   "opinions/list.json?author=Osborn" ],
+			method => 'list_opinions',
+			optional_output => '1.2:opinions:output_map' },
+	"This path returns information about multiple taxonomic opinions, selected according to",
+	"criteria other than taxon name.  This path could be used to query for all of the opinions",
+	"attributed to a particular author, or to show all of the recently entered opinions.");
+    
+    $ds2->list_node({ path => 'taxa/opinions',
+		      place => 3,
+		      list => 'other',
+		      title => 'Opinions about taxa',
+		      usage => [ "taxa/opinions.json?base_name=Felidae" ] },
+	"This path returns information about taxonomic opinions, selected by taxon name.");
+    
+    # Time scales and intervals.  These paths are used to fetch information about
+    # geological time scales and time intervals known to the database.
 
     $ds2->define_node({ path => 'intervals',
 			place => 3,

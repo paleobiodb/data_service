@@ -11,7 +11,7 @@
 package Taxonomy;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
-use TableDefs qw($INTERVAL_MAP);
+use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $COLL_MATRIX %IDP);
 use Carp qw(carp croak);
 use Try::Tiny;
 
@@ -93,53 +93,134 @@ my (%STD_OPTION) = ( fields => 1,
 		     offset => 1,
 		     return => 1 );
 
-my (%TAXON_OPTION) = ( min_rank => 1, max_rank => 1, 
-			rank => 1,
-			exact => 1,
-			extant => 1, 
-			depth => 1,
-			status => 1, 
-			min_created => 1,
-			max_created => 1,
-			min_modified =>1,
-			max_modified => 1,
-			no_synonyms => 1,
-			all_variants => 1,
-		        exclude => 1);
+my (%TAXON_OPTION) = ( rank => 1,
+		       min_rank => 1,
+		       max_rank => 1,
+		       min_ma => 1, 
+		       max_ma => 1,
+		       exact => 1,
+		       extant => 1, 
+		       depth => 1,
+		       status => 1, 
+		       reference_no => 1,
+		       imm_children => 1,
+		       all_variants => 1,
+		       exclude => 1,
+		       min_pubyr => 1,
+		       max_pubyr => 1,
+		       min_modyr => 1, 
+		       max_modyr => 1,
+		       created_after => 1,
+		       created_before => 1,
+		       modified_after =>1,
+		       modified_before => 1,
+		       authorized_by => 1,
+		       entered_by => 1,
+		       modified_by => 1,
+		       authent_by => 1,
+		       touched_by => 1, );
 
-my (%REF_OPTION) = ( select => 1,
-		     list_opinions => 1,
-		     list_reftaxa => 1,
-		     min_ref_created => 1,
-		     max_ref_created => 1,
-		     min_ref_modified => 1,
-		     max_ref_modified => 1,
-		     reference_no => 1,
-		     min_pubyr => 1,
-		     max_pubyr => 1,
-		     author => 1,
-		     reftitle => 1,
-		     pubtitle => 1,
-		     language => 1 );
+my (%ASSOC_OPTION) = ( select => 1,
+		       reference_no => 1,
+		       opinion_no => 1,
+		       record_type => 1,
+		       record_order => 1 );
 
-my (%OP_OPTION) = ( op_status => 1,
-		    min_op_created => 1,
-		    max_op_created => 1,
-		    min_op_modified =>1,
-		    max_op_modified => 1,
-		    min_pubyr => 1,
-		    max_pubyr => 1,
-		    author => 1 );
+my (%OP_OPTION) = ( op_author => 1,
+		    op_min_pubyr => 1,
+		    op_max_pubyr => 1,
+		    op_created_after => 1,
+		    op_created_before => 1,
+		    op_modified_after =>1,
+		    op_modified_before => 1,
+		    op_authorized_by => 1,
+		    op_entered_by => 1,
+		    op_modified_by => 1,
+		    op_authent_by => 1,
+		    op_touched_by => 1 );
 
-my $VALID_TAXON_ID = qr{^[0-9]+$};
-my $VALID_REF_ID = qr{^[0-9]+$};
+my (%REF_OPTION) = ( ref_author => 1,
+		     ref_min_pubyr => 1,
+		     ref_max_pubyr => 1,
+		     ref_title => 1,
+		     ref_pubtitle => 1,
+		     ref_language => 1,
+		     ref_created_after => 1,
+		     ref_created_before => 1,
+		     ref_modified_after =>1,
+		     ref_modified_before => 1,
+		     ref_authorized_by => 1,
+		     ref_entered_by => 1,
+		     ref_modified_by => 1,
+		     ref_authent_by => 1,
+		     ref_touched_by => 1 );
+
+my (%COMMON_OPTION) = ( created_after => 1,
+			created_before => 1,
+			modified_after =>1,
+			modified_before => 1,
+			authorized_by => 1,
+			entered_by => 1,
+			modified_by => 1,
+			authent_by => 1,
+			touched_by => 1,
+			op_created_after => 1,
+			op_created_before => 1,
+			op_modified_after =>1,
+			op_modified_before => 1,
+			op_authorized_by => 1,
+			op_entered_by => 1,
+			op_modified_by => 1,
+			op_authent_by => 1,
+			op_touched_by => 1,
+			ref_created_after => 1,
+			ref_created_before => 1,
+			ref_modified_after =>1,
+			ref_modified_before => 1,
+			ref_authorized_by => 1,
+			ref_entered_by => 1,
+			ref_modified_by => 1,
+			ref_authent_by => 1,
+			ref_touched_by => 1 );
+
+my (%REF_SELECT_VALUE) = ( all => 1,
+			   auth => 1,
+			   class => 1,
+			   taxonomy => 1,
+			   opinions => 1,
+			   occs => 1,
+			   colls => 1 );
+
+my (%OP_SELECT_VALUE) = ( class => 1,
+			  taxonomy => 1,
+			  all => 1,
+			  valid => 1,
+			  senior => 1,
+			  junior => 1,
+			  invalid => 1 );
+
+my (%RECORD_TYPE_VALUE) = ( opinions => 1,
+			    refs => 1,
+			    taxa => 1 );
+
+my (%RECORD_BLESS) = ( taxa => 'PBDB::Taxon',
+		       refs => 'PBDB::Reference',
+		       opinions => 'PBDB::Opinion' );
+
+my $VALID_TAXON_ID = qr{ ^ (?: $IDP{TXN} | $IDP{VAR} )? ( [0-9]+ ) $ }xsi;
+my $VALID_OPINION_ID = qr{ ^ (?: $IDP{OPN} )? ( [0-9]+ ) $ }xsi;
+my $VALID_REF_ID = qr{ ^ (?: $IDP{REF} )? ( [0-9]+ ) $ }xsi;
+my $VALID_PERSON_ID = qr{ ^ (?: $IDP{PER} )? ( [0-9]+ ) $ }xsi;
+
 
 # Type codes for opinions and references
 
 my $TYPE_AUTH = "'A'";
 my $TYPE_CLASS = "'C'";
 my $TYPE_UNUSED = "'U'";
-
+my $TYPE_OCC = "'O'";
+my $TYPE_PRIMARY = "'P'";
+my $TYPE_SUPPRESSED = "'X'";
 
 =head3 last_sql
 
@@ -289,52 +370,43 @@ sub list_taxa_simple {
     
     my ($sql, $result_list);
     
+    my $tables = { };
+    my $auth_expr;
+    
     if ( $options->{exact} )
     {
-	my $tables = { has_a => 1, use_a => 1 };
-	my $fieldspec = $options->{fields} || 'SIMPLE';
-	my @fields = $taxonomy->generate_fields($fieldspec, $tables);
-	my $fields = join ', ', @fields;
-	
-	my @filters = "a.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	my $filters = join( q{ and }, @filters);
-	
-	my $other_joins = $taxonomy->taxon_joins('t', $tables);
-	
-	my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
-	my $TREE_TABLE = $taxonomy->{TREE_TABLE};
-    
-	$sql = "SELECT $fields
-		FROM $AUTH_TABLE as a JOIN $TREE_TABLE as t using (orig_no)
-			$other_joins
-		WHERE $filters
-		ORDER BY t.lft\n";
+	$tables->{use_a} = 1;
+	$auth_expr = "a.taxon_no = base.taxon_no";
     }
     
     else
     {
-	my $tables = { };
-	my $fieldspec = $options->{fields} || 'SIMPLE';
-	my @fields = $taxonomy->generate_fields($fieldspec, $tables);
-	push @fields, "base.taxon_no as base_no";
-	my $fields = join ', ', @fields;
-	
-	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	my $filters = join( q{ and }, @filters);
-	
-	my $other_joins = $taxonomy->taxon_joins('t', $tables);
-	
-	my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
-	my $TREE_TABLE = $taxonomy->{TREE_TABLE};
-    
-	$sql = "SELECT $fields
-		FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
-			$other_joins
-		WHERE $filters
-		ORDER BY t.lft\n";
+	$auth_expr = "a.taxon_no = t.spelling_no";
     }
+    
+    my $fieldspec = $options->{fields} || 'SIMPLE';
+    my @fields = $taxonomy->generate_fields($fieldspec, $tables);
+    
+    push @fields, "base.taxon_no as base_no" unless $options->{exact};
+    
+    my $fields = join ', ', @fields;
+    
+    my @filters = "base.taxon_no in ($base_string)";
+    push @filters, $taxonomy->taxon_filters($options, $tables);
+    my $filters = join( q{ and }, @filters);
+    
+    my $other_joins = $taxonomy->taxon_joins('t', $tables);
+    
+    my $auth_table = $taxonomy->{AUTH_TABLE};
+    my $tree_table = $taxonomy->{TREE_TABLE};
+    
+    $sql = "
+	SELECT $fields
+	FROM $auth_table as base JOIN $tree_table as t using (orig_no)
+		JOIN $auth_table as a on $auth_expr
+		$other_joins
+	WHERE $filters
+	ORDER BY t.lft\n";
     
     # Save this statement and execute it.
     
@@ -352,9 +424,9 @@ sub list_taxa_simple {
     
     if ( ref $result_list eq 'ARRAY' )
     {
-	# Bless each result object into class 'Taxon'.
+	# Bless each result object into class 'PBDB::Taxon'.
 	
-	bless($_, 'Taxon') foreach @$result_list;
+	bless($_, 'PBDB::Taxon') foreach @$result_list;
 	
 	# Also set the exclusion flags properly.
 	
@@ -440,12 +512,13 @@ sub list_subtree {
     
     my $other_joins = $taxonomy->taxon_joins('t', $tables);
     
-    my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
-    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+    my $auth_table = $taxonomy->{AUTH_TABLE};
+    my $tree_table = $taxonomy->{TREE_TABLE};
     
     my $sql =  "SELECT $fields
-		FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
-			JOIN $TREE_TABLE as t on t.lft between tb.lft and tb.rgt
+		FROM $auth_table as base JOIN $tree_table as tb using (orig_no)
+			JOIN $tree_table as t on t.lft between tb.lft and tb.rgt
+			JOIN $auth_table as a on a.taxon_no = t.spelling_no
 			$other_joins
 		WHERE $filters
 		ORDER BY t.lft\n";
@@ -462,12 +535,12 @@ sub list_subtree {
 	die $_ if $_;
     };
     
-    # If we got some results, then bless each object into class 'Taxon', set the result count, and
-    # return the list or listref.
+    # If we got some results, then bless each object into class 'PBDB::Taxon',
+    # set the result count, and return the list or listref.
     
     if ( ref $result_list eq 'ARRAY' )
     {
-	bless($_, 'Taxon') foreach @$result_list;
+	bless($_, 'PBDB::Taxon') foreach @$result_list;
 	
 	$taxonomy->{sql_rowcount} = scalar(@$result_list);
 	
@@ -530,7 +603,7 @@ List the senior synonym of the parent of each specified taxon
 =item children
 
 List the taxa immediately contained within each specified taxon and all its synonyms.  If the
-option 'no_synonyms' is also specified, then list only immediate children of the specified taxa,
+option 'imm_children' is also specified, then list only immediate children of the specified taxa,
 and not children of their synonyms.
 
 If some of the base taxa are marked as excluded, then children of those taxa will not be returned.
@@ -538,7 +611,7 @@ If some of the base taxa are marked as excluded, then children of those taxa wil
 =item all_children
 
 List all taxa contained within the any of the specified taxa or their synonyms.  If the option
-'no_synonyms' is also specified, then list only children of the specified taxa, and not children
+'imm_children' is also specified, then list only children of the specified taxa, and not children
 of their synonyms.
 
 If some of the base taxa are marked as excluded, then children of those taxa will not be returned.
@@ -578,10 +651,16 @@ sub list_taxa {
     croak "list_taxa: second argument must be a valid relationship\n"
 	unless defined $rel;
     
-    unless ( $rel eq 'all_taxa' || 
-	     ($base_string = $taxonomy->generate_id_string($base_nos)) )
+    unless ( $rel eq 'all_taxa' )
     {
-	return $return_type eq 'listref' ? [] : ();
+	my $ignore_exclude = ($rel =~ /^exact|^current|^accepted|^senior/);
+	
+	$base_string = $taxonomy->generate_id_string($base_nos, $ignore_exclude);
+	
+	unless ( $base_string )
+	{
+	    return $return_type eq 'listref' ? [] : ();
+	}
     }
     
     foreach my $key ( keys %$options )
@@ -590,21 +669,24 @@ sub list_taxa {
 	    unless $STD_OPTION{$key} || $TAXON_OPTION{$key};
     }
     
-    my $tables = {};
+    my $tables = { };
     my $group_expr = 't.orig_no';
+    my $auth_expr = 'a.taxon_no = t.spelling_no';
     
     $rel = 'current' if $rel eq 'self';
     
     if ( $options->{all_variants} || $rel eq 'variants' )
     {
-	$tables->{all_a} = 1; $tables->{use_a} = 1;
+	$tables->{use_a} = 1;
 	$rel = 'variants' if $rel eq 'exact' || $rel eq 'current';
 	$group_expr = 'a.taxon_no';
+	$auth_expr = 'a.orig_no = t.orig_no';
     }
     
     elsif ( $rel eq 'exact' )
     {
-	$tables->{has_a} = 1; $tables->{use_a} = 1;
+	$tables->{use_a} = 1;
+	$auth_expr = 'a.taxon_no = base.taxon_no';
     }
     
     my $fieldspec = $options->{fields} || 'SIMPLE';
@@ -615,31 +697,19 @@ sub list_taxa {
     my $order_expr = $taxonomy->taxon_order($options, $tables);
     my $limit_expr = $taxonomy->simple_limit($options);
     
-    my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
-    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+    my $auth_table = $taxonomy->{AUTH_TABLE};
+    my $tree_table = $taxonomy->{TREE_TABLE};
+    
+    my $copy_exclusions;
     
     my $sql;
     
-    if ( $rel eq 'exact' )
+    if ( $rel eq 'exact' || $rel eq 'current' || $rel eq 'variants' )
     {
-	my $fields = join ', ', @fields;
+	$copy_exclusions = 1;
 	
-	my @filters = "a.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	my $filters = join( q{ and }, @filters);
-	
-	my $other_joins = $taxonomy->taxon_joins('t', $tables);
-	
-	$sql = "SELECT $count_expr $fields
-		FROM $AUTH_TABLE as a JOIN $TREE_TABLE as t using (orig_no)
-			$other_joins
-		WHERE $filters
-		GROUP BY a.taxon_no $order_expr $limit_expr\n";
-    }
-    
-    elsif ( $rel eq 'current' )
-    {
-	push @fields, 'base.taxon_no as base_no';
+	push @fields, 'base.taxon_no as base_no' if $rel ne 'exact';
+	push @fields, 'if(a.taxon_no = t.spelling_no, 1, 0) as is_current' if $rel eq 'variants';
 	my $fields = join ', ', @fields;
 	
 	my @filters = "base.taxon_no in ($base_string)";
@@ -648,29 +718,11 @@ sub list_taxa {
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
 	
-	$sql = "SELECT $count_expr $fields
-		FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
-			$other_joins
-		WHERE $filters
-		GROUP BY t.orig_no $order_expr $limit_expr\n";
-    }
-    
-    elsif ( $rel eq 'variants' )
-    {
-	push @fields, 'base.taxon_no as base_no';
-	push @fields, 'if(a.taxon_no = t.spelling_no, 1, 0) as is_current';
-	my $fields = join ', ', @fields;
-	
-	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	my $filters = join( q{ and }, @filters);
-	
-	my $other_joins = $taxonomy->taxon_joins('t', $tables);
-	
-	$order_expr ||= 'ORDER BY base_no, is_current desc';
+	$order_expr ||= 'ORDER BY base_no, is_current desc' if $rel eq 'variants';
 	
 	$sql = "SELECT $count_expr $fields
-		FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
+		FROM $auth_table as base JOIN $tree_table as t using (orig_no)
+			JOIN $auth_table as a on $auth_expr
 			$other_joins
 		WHERE $filters
 		GROUP BY a.taxon_no $order_expr $limit_expr\n";
@@ -678,6 +730,8 @@ sub list_taxa {
     
     elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' )
     {
+	$copy_exclusions = 1 if $rel eq 'accepted' || $rel eq 'senior';
+	
 	push @fields, 'base.taxon_no as base_no';
 	my $fields = join ', ', @fields;
 	
@@ -690,8 +744,9 @@ sub list_taxa {
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
 	
 	$sql = "SELECT $count_expr $fields
-		FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
-			JOIN $TREE_TABLE as t on t.orig_no = tb.$rel_field
+		FROM $auth_table as base JOIN $tree_table as tb using (orig_no)
+			JOIN $tree_table as t on t.orig_no = tb.$rel_field
+			JOIN $auth_table as a on $auth_expr
 			$other_joins
 		WHERE $filters
 		GROUP BY $group_expr $order_expr $limit_expr\n";
@@ -713,7 +768,7 @@ sub list_taxa {
 	    $sel_field = 'synonym_no';
 	}
 	
-	elsif ( $options->{no_synonyms} )
+	elsif ( $options->{imm_children} )
 	{
 	    $rel_field = 'parent_no';
 	    $sel_field = 'orig_no';
@@ -736,9 +791,9 @@ sub list_taxa {
 	$order_expr ||= 'ORDER BY t.lft';
 	
 	$sql = "SELECT $count_expr $fields
-		FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
-			JOIN $TREE_TABLE as t on t.$rel_field = tb.$sel_field
-
+		FROM $auth_table as base JOIN $tree_table as tb using (orig_no)
+			JOIN $tree_table as t on t.$rel_field = tb.$sel_field
+			JOIN $auth_table as a on $auth_expr
 			$other_joins
 		WHERE $filters
 		GROUP BY $group_expr $order_expr $limit_expr\n";
@@ -751,15 +806,15 @@ sub list_taxa {
 	
 	my ($joins);
 	
-	if ( $options->{no_synonyms} )
+	if ( $options->{imm_children} )
 	{
-	    $joins = "JOIN $TREE_TABLE as t on t.lft between tb.lft and tb.rgt";
+	    $joins = "JOIN $tree_table as t on t.lft between tb.lft and tb.rgt";
 	}
 	
 	else
 	{
-	    $joins = "JOIN $TREE_TABLE as tb2 on tb2.orig_no = tb.synonym_no
-		JOIN $TREE_TABLE as t on t.lft between tb2.lft and tb2.rgt";
+	    $joins = "JOIN $tree_table as tb2 on tb2.orig_no = tb.synonym_no
+		JOIN $tree_table as t on t.lft between tb2.lft and tb2.rgt";
 	}
 	
 	my @filters = "base.taxon_no in ($base_string)";
@@ -772,8 +827,9 @@ sub list_taxa {
 	$order_expr ||= 'ORDER BY t.lft';
 	
 	$sql = "SELECT $count_expr $fields
-		FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
+		FROM $auth_table as base JOIN $tree_table as tb using (orig_no)
 			$joins
+			JOIN $auth_table as a on $auth_expr
 			$other_joins
 		WHERE $filters
 		GROUP BY $group_expr $order_expr $limit_expr\n";
@@ -803,7 +859,8 @@ sub list_taxa {
 	$order_expr ||= 'ORDER BY t.lft';
 	
 	$sql = "SELECT $count_expr $fields
-		FROM ancestry_temp as s JOIN $TREE_TABLE as t using (orig_no)
+		FROM ancestry_temp as s JOIN $tree_table as t using (orig_no)
+			JOIN $auth_table as a on $auth_expr
 			$other_joins
 		WHERE $filters
 		GROUP BY t.orig_no $order_expr $limit_expr\n";
@@ -829,7 +886,8 @@ sub list_taxa {
 	$order_expr ||= 'ORDER BY t.lft';
 	
 	$sql = "SELECT $count_expr $fields
-		FROM $TREE_TABLE as t $other_joins
+		FROM $tree_table as t $other_joins
+			JOIN $auth_table as a on $auth_expr
 		WHERE $filters
 		GROUP BY t.orig_no $order_expr $limit_expr\n";
     }
@@ -849,7 +907,8 @@ sub list_taxa {
 	$order_expr ||= 'ORDER BY if(t.lft > 0, 0, 1), t.lft';
 	
 	$sql = "SELECT $count_expr $fields
-		FROM $TREE_TABLE as t $joins
+		FROM $tree_table as t $joins
+			JOIN $auth_table as a on $auth_expr
 		WHERE $filters
 		GROUP BY $group_expr $order_expr $limit_expr\n";
     }
@@ -861,85 +920,93 @@ sub list_taxa {
     
     # Now execute the query and return the result.
     
-    $taxonomy->{sql_string} = $sql;
-    
-    if ( $return_type eq 'list' or $return_type eq 'listref' )
-    {
-	my $result_list;
-	
-	try {
-	    $result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
-	}
-	
-	catch {
-	    die $_ if $_;
-	};
-	
-	if ( ref $result_list eq 'ARRAY' )
-	{
-	    bless($_, 'Taxon') foreach @$result_list;
-	    
-	    $taxonomy->copy_exclusions($result_list, $base_nos)
-		if ref $base_nos eq 'ARRAY' && ref $base_nos->[0];
-	    
-	    $taxonomy->{sql_rowcount} = scalar(@$result_list);
-	    return $result_list if $return_type eq 'listref';
-	    return @$result_list;
-	}
-	
-	else
-	{
-	    $taxonomy->{sql_rowcount} = 0;
-	    return [] if $return_type eq 'listref';
-	    return;
-	}
-    }
-    
-    elsif ( $return_type eq 'id' )
-    {
-	my $result_list;
-	
-	try {
-	    $result_list = $taxonomy->{dbh}->selectcol_arrayref($sql);
-	}
-	
-	catch {
-	    die $_ if $_;
-	};
-	
-	if ( ref $result_list eq 'ARRAY' )
-	{
-	    $taxonomy->{sql_rowcount} = @$result_list;
-	    return @$result_list;
-	}
-	
-	else
-	{
-	    $taxonomy->{sql_rowcount} = 0;
-	    return;
-	}
-    }
-    
-    elsif ( $return_type eq 'stmt' )
-    {
-	my $stmt;
-	
-	try {
-	    $stmt = $taxonomy->{dbh}->prepare($sql);
-	    $stmt->execute();
-	    
-	    ($taxonomy->{sql_rowcount}) = $taxonomy->{dbh}->selectrow_array("SELECT FOUND_ROWS()")
-		if $options->{count};
-	};
-	
-	return $stmt;
-    }
-    
-    else
-    {
-	croak "list_taxa: invalid return type '$return_type'\n";
-    }
+    return $taxonomy->execute_query($sql, { record_type => 'taxa',
+					    return_type => $return_type,
+					    count => $options->{count},
+					    base_nos => $base_nos,
+					    copy_exclusions => $copy_exclusions } );
 }
+
+    
+#     $taxonomy->{sql_string} = $sql;
+    
+#     if ( $return_type eq 'list' or $return_type eq 'listref' )
+#     {
+# 	my $result_list;
+	
+# 	try {
+# 	    $result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
+# 	}
+	
+# 	catch {
+# 	    die $_ if $_;
+# 	};
+	
+# 	if ( ref $result_list eq 'ARRAY' )
+# 	{
+# 	    bless($_, 'PBDB::Taxon') foreach @$result_list;
+	    
+# 	    $taxonomy->copy_exclusions($result_list, $base_nos)
+# 		if ref $base_nos eq 'ARRAY' && ref $base_nos->[0];
+	    
+# 	    $taxonomy->{sql_rowcount} = scalar(@$result_list);
+# 	    return $result_list if $return_type eq 'listref';
+# 	    return @$result_list;
+# 	}
+	
+# 	else
+# 	{
+# 	    $taxonomy->{sql_rowcount} = 0;
+# 	    return [] if $return_type eq 'listref';
+# 	    return;
+# 	}
+#     }
+    
+#     elsif ( $return_type eq 'id' )
+#     {
+# 	my $result_list;
+	
+# 	try {
+# 	    $result_list = $taxonomy->{dbh}->selectcol_arrayref($sql);
+# 	}
+	
+# 	catch {
+# 	    die $_ if $_;
+# 	};
+	
+# 	if ( ref $result_list eq 'ARRAY' )
+# 	{
+# 	    $taxonomy->{sql_rowcount} = @$result_list;
+# 	    return @$result_list;
+# 	}
+	
+# 	else
+# 	{
+# 	    $taxonomy->{sql_rowcount} = 0;
+# 	    return;
+# 	}
+#     }
+    
+#     elsif ( $return_type eq 'stmt' )
+#     {
+# 	my $stmt;
+	
+# 	try {
+# 	    $stmt = $taxonomy->{dbh}->prepare($sql);
+# 	    $stmt->execute();
+	    
+# 	    ($taxonomy->{sql_rowcount}) = $taxonomy->{dbh}->selectrow_array("SELECT FOUND_ROWS()")
+# 		if $options->{count};
+# 	};
+	
+# 	return $stmt;
+#     }
+    
+#     else
+#     {
+# 	croak "list_taxa: invalid return type '$return_type'\n";
+#     }
+# }
 
 
 # find_common_taxa ( base_string, rel, options )
@@ -1103,7 +1170,16 @@ sub find_common_taxa {
 }
 
 
-sub list_refs {
+# list_associated ( rel, base_nos, options )
+# 
+# List records associated with the specified taxa.  The option 'record_type' specifies which
+# records to return, and can take any of the following values:
+# 
+# opinions	list opinions associated with the specified taxa
+# refs		list references associated with the specified taxa
+# taxa		list the specified taxa, grouped by reference and ref_type 
+
+sub list_associated {
     
     my ($taxonomy, $rel, $base_nos, $options) = @_;
     
@@ -1116,82 +1192,86 @@ sub list_refs {
 	if defined $options && ref $options ne 'HASH';
     $options ||= {};
     
+    my $record_type = $options->{record_type};
     my $return_type = lc $options->{return} || 'list';
     my $base_string;
+    my $has_common_opt;
     
-    croak "list_refs: second argument must be a valid relationship\n"
+    croak "list_associated: second argument must be a valid relationship\n"
 	unless defined $rel;
     
+    croak "list_associated: bad value '$record_type' for 'record_type'\n"
+	unless $RECORD_TYPE_VALUE{$record_type};
+    
     unless ( $rel eq 'all_taxa' || 
-	     ($base_string = $taxonomy->generate_id_string($base_nos, 'exclude')) )
+	     ($base_string = $taxonomy->generate_id_string($base_nos)) )
     {
 	return $return_type eq 'listref' ? [] : ();
     }
     
     foreach my $key ( keys %$options )
     {
-	croak "list_refs: invalid option '$key'\n"
-	    unless $STD_OPTION{$key} || $TAXON_OPTION{$key} || $REF_OPTION{$key} || $OP_OPTION{$key};
+	croak "list_associated: invalid option '$key'\n"
+	    unless $STD_OPTION{$key} || $TAXON_OPTION{$key} || $ASSOC_OPTION{$key} ||
+		$OP_OPTION{$key} || $REF_OPTION{$key};
     }
     
-    my $tables = { };
+    my $inner_tables = { };
     
     my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
     my $limit_expr = $taxonomy->simple_limit($options);
     
-    my $raw_select = $options->{select} ? lc $options->{select} : 'both';
-    my $select = '';
+    my @select = ref $options->{select} eq 'ARRAY' ? @{$options->{select}}
+	       : $options->{select}		   ? split(qr{\s*,\s*}, $options->{select})
+						   : 'taxonomy';
     
-    croak "list_refs: conflicting options 'list_reftaxa' and 'list_opinions'\n"
-	if $options->{list_reftaxa} && $options->{list_opinions};
+    my %select;
     
-    if ( $options->{list_opinions} )
+    if ( $record_type eq 'opinions' )
     {
-	if ( $raw_select eq 'authority' )
+	foreach my $s (@select)
 	{
-	    croak "list_refs: select => '$raw_select' is not compatible with option 'list_opinions'";
+	    next unless $s;
+	    croak "list_associated: invalid value '$s' for 'select'" unless $OP_SELECT_VALUE{$s};
+	    
+	    if ( $s eq 'class' || $s eq 'taxonomy' )
+	    {
+		$select{ops_class} = 1;
+	    }
+	    
+	    else
+	    {
+		$select{ops_all} = 1;
+	    }
 	}
-	
-	elsif ( $raw_select eq 'classification' || $raw_select eq 'both' )
-	{
-	    $select = 'ops_class';
-	}
-	
-	elsif ( $raw_select eq 'opinions' || $raw_select eq 'all' )
-	{
-	    $select = 'ops_all';
-	}
-	
-	else
-	{
-	    croak "list_refs: invalid value '$raw_select' for option 'select'";
-	}
-    }
-    
-    elsif ( $options->{list_reftaxa} )
-    {
-	$select = $raw_select eq 'authority'		? 'taxa_auth'
-		: $raw_select eq 'classification'	? 'taxa_class'
-		: $raw_select eq 'both'			? 'taxa_both'
-		: $raw_select eq 'opinions'		? 'taxa_ops'
-		: $raw_select eq 'all'			? 'taxa_all'
-							: '';
-	
-	croak "list_refs: invalid value '$raw_select' for option 'select'"
-	    unless $select;
     }
     
     else
     {
-	$select = $raw_select eq 'authority'		? 'refs_auth'
-		: $raw_select eq 'classification'	? 'refs_class'
-		: $raw_select eq 'both'			? 'refs_both'
-		: $raw_select eq 'opinions'		? 'refs_ops'
-		: $raw_select eq 'all'			? 'refs_all'
-							: '';
-	
-	croak "list_refs: invalid value '$raw_select' for option 'select'"
-	    unless $select;
+	foreach my $s (@select)
+	{
+	    next unless $s;
+	    croak "list_associated: invalid value '$s' for 'select'" unless $REF_SELECT_VALUE{$s};
+	    
+	    if ( $s eq 'all' )
+	    {
+		$select{refs_auth} = 1;
+		$select{refs_opinions} = 1;
+		$select{refs_occs} = 1;
+		$select{refs_colls} = 1;
+	    }
+	    
+	    elsif ( $s eq 'taxonomy' )
+	    {
+		$select{refs_auth} = 1;
+		$select{refs_class} = 1;
+	    }
+	    
+	    else
+	    {
+		$select{"refs_$s"} = 1;
+	    }
+	}
     }
     
     my $dbh = $taxonomy->{dbh};
@@ -1199,78 +1279,69 @@ sub list_refs {
     my $auth_table = $taxonomy->{AUTH_TABLE};
     my $tree_table = $taxonomy->{TREE_TABLE};
     my $op_cache = $taxonomy->{OP_CACHE};
+    my $op_table = $taxonomy->{OP_TABLE};
     
-    my $taxon_field = 't.orig_no';
+    $rel = 'current' if $rel eq 'self';
     
-    $rel = 'current' if $rel eq 'self`';
+    my $auth_expr = 'a.taxon_no = t.spelling_no';
     
     if ( $options->{all_variants} )
     {
-	$tables->{all_a} = 1;
+	$inner_tables->{use_a} = 1;
 	$rel = 'variants' if $rel eq 'exact' || $rel eq 'current';
-	$taxon_field = 'a.taxon_no';
+	$auth_expr = 'a.orig_no = t.orig_no';
     }
     
-    elsif ( $rel eq 'exact' || $rel eq 'variants' )
+    elsif ( $rel eq 'exact' )
     {
-	$taxon_field = 'a.taxon_no';
+	$inner_tables->{use_a} = 1;
+	$auth_expr = 'a.taxon_no = base.taxon_no';
     }
     
     # Set filter clauses based on the specified options
     
-    my $inner_joins = '';
-    my $filter_expr = '';
+    my $taxon_joins = '';
+    my $other_joins = '';
+    my $inner_filters = '';
     
-    if ( $rel eq 'exact' )
+    if ( $rel eq 'exact' || $rel eq 'current' || $rel eq 'variants' || $rel eq 'self' )
     {
-	$tables->{has_a} = 1;
-	my @filters = "a.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	$filter_expr = join( q{ and }, @filters);
+	my @filters = "base.taxon_no in ($base_string)" unless $rel eq 'exact';
+	push @filters, $taxonomy->taxon_filters($options, $inner_tables);
+	push @filters, $taxonomy->ref_filters($options, $inner_tables);
+	push @filters, $taxonomy->opinion_filters($options, $inner_tables)
+	    if $record_type eq 'opinions';
+	$inner_filters = join( q{ and }, @filters);
 	
-	$inner_joins = "$auth_table as a JOIN $tree_table as t using (orig_no)\n";
-	$inner_joins .= $taxonomy->taxon_joins('t', $tables);
-    }
-    
-    elsif ( $rel eq 'current' )
-    {
-	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	$filter_expr = join( q{ and }, @filters);
-	
-	$inner_joins = "$auth_table as base JOIN $tree_table as t using (orig_no)\n";
-	$inner_joins .= $taxonomy->taxon_joins('t', $tables);
-    }
-    
-    elsif ( $rel eq 'variants' )
-    {
-	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	$filter_expr = join( q{ and }, @filters);
-	
-	$inner_joins = "$auth_table as base JOIN $tree_table as t using (orig_no)\n";
-	$inner_joins .= $taxonomy->taxon_joins('t', $tables);
+	$taxon_joins = "$auth_table as base JOIN $tree_table as t using (orig_no)\n";
+	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
     }
     
     elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' )
     {
 	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	$filter_expr = join( q{ and }, @filters);
+	push @filters, $taxonomy->taxon_filters($options, $inner_tables);
+	push @filters, $taxonomy->ref_filters($options, $inner_tables);
+	push @filters, $taxonomy->opinion_filters($options, $inner_tables)
+	    if $record_type eq 'opinions';
+	$inner_filters = join( q{ and }, @filters);
 	
 	my $rel_field = $rel eq 'senior' ? 'synonym_no' : $rel . '_no';
 	
-	$inner_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
+	$taxon_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
 		JOIN $tree_table as t on t.orig_no = tb.$rel_field\n";
-	#$inner_joins .= $taxonomy->auth_join($options);
-	$inner_joins .= $taxonomy->taxon_joins('t', $tables);
+	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
     }
     
     elsif ( $rel eq 'synonyms' || $rel eq 'children' )
     {
 	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	$filter_expr = join( q{ and }, @filters);
+	push @filters, $taxonomy->taxon_filters($options, $inner_tables);
+	push @filters, $taxonomy->exclusion_filters($base_nos);
+	push @filters, $taxonomy->ref_filters($options, $inner_tables);
+	push @filters, $taxonomy->opinion_filters($options, $inner_tables)
+	    if $record_type eq 'opinions';
+	$inner_filters = join( q{ and }, @filters);
 	
 	my ($sel_field, $rel_field);
 	
@@ -1282,7 +1353,7 @@ sub list_refs {
 	    $sel_field = 'synonym_no';
 	}
 	
-	elsif ( $options->{immediate} )
+	elsif ( $options->{imm_children} )
 	{
 	    $rel_field = 'parent_no';
 	    $sel_field = 'orig_no';
@@ -1294,33 +1365,35 @@ sub list_refs {
 	    $sel_field = 'synonym_no';
 	}
 	
-	$inner_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
+	$taxon_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
 		JOIN $tree_table as t on t.$rel_field = tb.$sel_field\n";
-	#$inner_joins .= $taxonomy->auth_join($options);
-	$inner_joins .= $taxonomy->taxon_joins('t', $tables);
+	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
     }
     
     elsif ( $rel eq 'all_children' )
     {
 	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	$filter_expr = join( q{ and }, @filters);
+	push @filters, $taxonomy->taxon_filters($options, $inner_tables);
+	push @filters, $taxonomy->exclusion_filters($base_nos);
+	push @filters, $taxonomy->ref_filters($options, $inner_tables);
+	push @filters, $taxonomy->opinion_filters($options, $inner_tables)
+	    if $record_type eq 'opinions';
+	$inner_filters = join( q{ and }, @filters);
 	
-	if ( $options->{immediate} )
+	if ( $options->{imm_children} )
 	{
-	    $inner_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
+	    $taxon_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
 		JOIN $tree_table as t on t.lft between tb.lft and tb.rgt\n";
 	}
 	
 	else
 	{
-	    $inner_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
+	    $taxon_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
 		JOIN $tree_table as tb2 on tb2.orig_no = tb.synonym_no
 		JOIN $tree_table as t on t.lft between tb2.lft and tb2.rgt\n";
 	}
 	
-	#$inner_joins .= $taxonomy->auth_join($options);
-	$inner_joins .= $taxonomy->taxon_joins('t', $tables);
+	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
     }
     
     elsif ( $rel eq 'all_parents' )
@@ -1333,408 +1406,413 @@ sub list_refs {
 	
 	# Now use this temporary table to do the actual query.
 	
-	my @filters = $taxonomy->taxon_filters($options, $tables);
+	my @filters = $taxonomy->taxon_filters($options, $inner_tables);
+	push @filters, $taxonomy->ref_filters($options, $inner_tables);
+	push @filters, $taxonomy->opinion_filters($options, $inner_tables)
+	    if $record_type eq 'opinions';
 	push @filters, "1=1" unless @filters;
-	$filter_expr = join( q{ and }, @filters);
+	$inner_filters = join( q{ and }, @filters);
 	
-	$inner_joins = "ancestry_temp as base JOIN $tree_table as t using (orig_no)\n";
-	#$inner_joins .= $taxonomy->auth_join($options);
-	$inner_joins .= $taxonomy->taxon_joins('t', $tables);
+	$taxon_joins = "ancestry_temp as base JOIN $tree_table as t using (orig_no)\n";
+	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
+    }
+    
+    elsif ( $rel eq 'all_taxa' && $record_type eq 'opinions' )
+    {
+	my @filters = $taxonomy->opinion_filters($options, $inner_tables);
+	push @filters, $taxonomy->ref_filters($options, $inner_tables);
+	push @filters, "t.lft > 0";
+	$inner_filters = join( q{ and }, @filters);
+	
+	$other_joins = $taxonomy->opinion_joins('o', $inner_tables);
+	$other_joins .= $taxonomy->ref_joins('r', $inner_tables);
+    }
+    
+    elsif ( $rel eq 'all_taxa' )
+    {
+	my @filters = $taxonomy->ref_filters($options, $inner_tables);
+	push @filters, "1=1" unless @filters;
+	$inner_filters = join( q{ and }, @filters);
+	
+	$other_joins = $taxonomy->ref_joins('r', $inner_tables);
     }
     
     else
     {
-	croak "list_refs: invalid relationship '$rel'\n";
+	croak "invalid relationship '$rel'\n";
     }
     
-    # Now we put the query together depending upon which type of references
-    # are being selected.  We start with the "inner query" which retrieves the
-    # necessary set of reference_no values along with some columns that
-    # indicate what type of reference each one corresponds to.  Below, we will
-    # wrap that in an "outer query" which actually retrieves the necessary information.
-    
-    my $inner_query = '';
-    
-    if ( $select eq 'refs_auth'	)
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'a');
-	
-	$inner_query = "
-		SELECT a.reference_no, $TYPE_AUTH as ref_type, 0 as opinion_no
-		FROM $inner_joins
-			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refno_filter
-		GROUP BY reference_no, a.taxon_no";
-    }
-    
-    elsif ( $select eq 'taxa_auth' )
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'a');
-	
-	$inner_query = "
-		SELECT a.reference_no, $TYPE_AUTH as ref_type, a.taxon_no, t.orig_no, t.lft,
-			a.taxon_name, 0 as opinion_no
-		FROM $inner_joins
-			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refno_filter
-		GROUP BY a.taxon_no";
-    }
-    
-    elsif ( $select eq 'refs_class' )
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'o');
-	
-	$inner_query = "
-		SELECT o.reference_no, $TYPE_CLASS as ref_type, o.opinion_no
-		FROM $inner_joins
-			JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refno_filter
-		GROUP BY o.reference_no, t.orig_no";
-    }
-    
-    elsif ( $select eq 'taxa_class' )
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'o');
-	
-	$inner_query = "
-		SELECT o.reference_no, $TYPE_CLASS as ref_type, t.orig_no, t.lft, t.spelling_no as taxon_no,
-			t.name as taxon_name, child.taxon_no as child_no, child.taxon_name as child_name,
-			o.opinion_no
-		FROM $inner_joins
-			JOIN $op_cache as o on o.opinion_no = t.opinion_no
-			JOIN $auth_table as child on child.taxon_no = o.child_spelling_no
-		WHERE $filter_expr $refno_filter
-	        GROUP BY t.orig_no";
-    }
-    
-    elsif ( $select eq 'ops_class' )
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'o');
-	
-	$inner_query = "
-		SELECT o.opinion_no, $TYPE_CLASS as opinion_type, t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name
-		FROM $inner_joins
-			JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refno_filter
-		GROUP BY o.opinion_no";
-    }
-    
-    elsif ( $select eq 'refs_ops' )
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'o');
-	
-	$inner_query = "
-		SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type,
-			o.opinion_no
-		FROM $inner_joins
-			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
-		WHERE $filter_expr $refno_filter
-		GROUP BY o.reference_no, t.orig_no";
-    }
-    
-    elsif ( $select eq 'taxa_ops' )
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'o');
-	
-	$inner_query = "
-		SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type,
-			o.opinion_no, t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name,
-			child.taxon_no as child_no, child.taxon_name as child_name
-		FROM $inner_joins
-			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
-			JOIN $auth_table as child on child.taxon_no = o.child_spelling_no
-		WHERE $filter_expr $refno_filter
-		GROUP BY o.opinion_no
-		ORDER BY o.reference_no, t.lft";
-    }
-    
-    elsif ( $select eq 'ops_all' )
-    {
-	my $refno_filter = $taxonomy->refno_filter($options, 'o');
-	
-	$inner_query = "
-		SELECT o.opinion_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as opinion_type,
-			t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name
-		FROM $inner_joins
-			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
-		WHERE $filter_expr $refno_filter
-		GROUP BY o.opinion_no";
-    }
-    
-    elsif ( $select eq 'refs_both' )
-    {
-	croak "due to a limitation of the database, you cannot use select => 'both' with rel => 'all_parents"
-	    if $rel eq 'all_parents';
-	
-	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
-	
-	$inner_query = "
-		(SELECT a.reference_no, $TYPE_AUTH as ref_type, 0 as opinion_no
-		FROM $inner_joins
-			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refa_filter
-		GROUP BY a.reference_no, a.taxon_no)
-		UNION ALL
-		(SELECT o.reference_no, $TYPE_CLASS as ref_type, o.opinion_no
-		FROM $inner_joins
-			JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refo_filter
-		GROUP BY o.reference_no, t.orig_no)";
-    }
-    
-    elsif ( $select eq 'taxa_both' )
-    {
-	croak "due to a limitation of the database, you cannot use select => 'both' with rel => 'all_parents"
-	    if $rel eq 'all_parents';
-	
-	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
-	
-	$inner_query = "
-		(SELECT a.reference_no, $TYPE_AUTH as ref_type, a.taxon_no, t.orig_no, t.lft, a.taxon_name,
-			null as child_no, null as child_name, 0 as opinion_no
-		FROM $inner_joins
-		WHERE $filter_expr $refa_filter
-		GROUP BY a.taxon_no)
-		UNION
-		(SELECT o.reference_no, $TYPE_CLASS as ref_type, t.spelling_no as taxon_no, t.orig_no, t.lft, t.name as taxon_name,
-			child.taxon_no as child_no, child.taxon_name as child_name, o.opinion_no
-		FROM $inner_joins
-			JOIN $op_cache as o on o.opinion_no = t.opinion_no
-			JOIN $auth_table as child on child.taxon_no = o.child_spelling_no
-		WHERE $filter_expr $refo_filter
-		GROUP BY t.orig_no)";
-    }
-    
-    elsif ( $select eq 'refs_all' )
-    {
-	croak "due to a limitation of the database, you cannot use select => 'all' with rel => 'all_parents"
-	    if $rel eq 'all_parents';
-	
-	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
-	
-	$inner_query = "
-		(SELECT a.reference_no, $TYPE_AUTH as ref_type, 0 as opinion_no
-		FROM $inner_joins
-			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refa_filter
-		GROUP BY a.reference_no, a.taxon_no)
-		UNION ALL
-		(SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type, o.opinion_no
-		FROM $inner_joins
-			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
-		WHERE $filter_expr $refo_filter
-		GROUP BY o.reference_no, t.orig_no)";
-    }
-    
-    elsif ( $select eq 'taxa_all' )
-    {
-	croak "due to a limitation of the database, you cannot use select => 'all' with rel => 'all_parents"
-	    if $rel eq 'all_parents';
-	
-	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
-	
-	$inner_query = "
-		(SELECT a.reference_no, $TYPE_AUTH as ref_type, a.taxon_no, t.orig_no, t.lft, a.taxon_name,
-			null as child_no, null as child_name, 0 as opinion_no
-		FROM $inner_joins
-			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
-		WHERE $filter_expr $refa_filter
-		GROUP BY a.taxon_no)
-		UNION
-		(SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type,
-			 t.spelling_no as taxon_no, t.orig_no, t.lft, t.name as taxon_name,
-			child.taxon_no as child_no, child.taxon_name as child_name, o.opinion_no
-		FROM $inner_joins
-			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
-			JOIN $auth_table as child on child.taxon_no = o.child_spelling_no
-		WHERE $filter_expr $refo_filter
-		GROUP BY o.opinion_no)";
-    }
-    
-    else
-    {
-	croak "list_refs: unrecognized value '$raw_select' for option 'select'";
-    }
-    
-    # Now construct the full query using what we constructed above as a subquery.
+    # Now we put the query together depending upon what data type was chosen
+    # and also depending upon the value of the 'select' option.  We start with
+    # the "inner query" which retrieves the necessary set of reference_no or
+    # opinion_no values along with some columns that indicate what type of
+    # reference or what type of opinion each one represents.  This may consist
+    # either of a single SQL statement or a union of multiple ones.  Below, we
+    # will wrap that in an "outer query" which retrieves the rest of the
+    # information necessary to make up the result records.
     
     my $sql;
     
-    if ( $options->{list_reftaxa} )
-    {
-	my $outer_tables = {};
-	
-	my $fieldspec = $options->{fields} || 'REF_TAXA';	
-	my @fields = $taxonomy->generate_fields($fieldspec, $outer_tables);
-	my $query_fields = join ', ', @fields;
-	
-	if ( $fieldspec eq 'REF_TAXA' )
-	{
-	    my $order_expr = $taxonomy->reftaxa_order($options);
-	    
-	    $sql = "
-		SELECT $count_expr * FROM ($inner_query) as base
-		$order_expr $limit_expr";
-	}
-	
-	else
-	{
-	    $outer_tables->{has_a} = 1;
-	    
-	    my $order_expr = $taxonomy->taxon_order($options, $outer_tables) || "ORDER BY base.reference_no, base.lft";
-	    my $other_joins = $taxonomy->taxon_joins('t', $tables);
-	    
-	    $query_fields .= ", base.ref_type" unless $query_fields =~ qr{base\.ref_type};
-	    $query_fields .= ", base.opinion_no" unless $query_fields =~ qr{base\.opinion_no};
-	    
-	    $sql = "
-		SELECT $count_expr $query_fields
-		FROM ($inner_query) as base
-			LEFT JOIN $tree_table as t using (orig_no)
-			LEFT JOIN $auth_table as a using (taxon_no)
-		$other_joins
-		$order_expr";
-	}
-    }
+    # If we were asked to return opinions, construct the query and then execute it.
     
-    elsif ( $options->{list_opinions} )
+    if ( $record_type eq 'opinions' )
     {
-	my $outer_tables = {};
+	$inner_filters .= ' and o.opinion_no = t.opinion_no' if $rel eq 'all_taxa' && ! $select{ops_all};
+	$inner_filters .= $taxonomy->refno_filter($options, 'o');
+	
+	my $type = $select{ops_all}
+	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, if(o.suppress, $TYPE_SUPPRESSED, $TYPE_UNUSED))"
+	    : $TYPE_CLASS;
+	
+	my $join_condition = $select{ops_all}
+	    ? 'o.opinion_no = t.opinion_no or o.orig_no = t.orig_no'
+	    : 'o.opinion_no = t.opinion_no';
+	
+	my $query_core = $rel eq 'all_taxa'
+	    ? "$op_cache as o
+			JOIN $op_table as oo using (opinion_no)
+			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
+			JOIN $tree_table as t on t.orig_no = o.orig_no
+			JOIN $refs_table as r on r.reference_no = o.reference_no
+			$other_joins"
+	    : "$taxon_joins
+			JOIN $op_cache as o on $join_condition
+			JOIN $op_table as oo on oo.opinion_no = o.opinion_no
+			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
+			JOIN $refs_table as r on r.reference_no = o.reference_no";
+		
+	my $inner_query =
+	       "SELECT o.opinion_no, o.child_spelling_no as taxon_no, $type as opinion_type, t.orig_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY o.opinion_no";
+	
+	my $outer_tables = { };
 	
 	my $fieldspec = $options->{fields} || 'OP_DATA';	
 	my @fields = $taxonomy->generate_fields($fieldspec, $outer_tables);
 	my $query_fields = join ', ', @fields;
 	
-	my @op_filters = $taxonomy->opinion_filters($options, $outer_tables);
-	my $outer_filters = @op_filters ? 'WHERE ' . join(' and ', @op_filters) : '';
 	my $order_expr = $taxonomy->opinion_order($options, $outer_tables);
+	
+	unless ( $order_expr )
+	{
+	    if ( defined $options->{record_order} && $options->{record_order} eq 'byref' )
+	    {
+		$order_expr = "ORDER BY o.reference_no, ac.taxon_name";
+	    }
+	    
+	    else
+	    {
+		$order_expr = "ORDER BY t.lft, if(base.opinion_type='C',0,1), o.pubyr";
+	    }
+	}
+	
 	my $outer_joins = $taxonomy->opinion_joins('o', $outer_tables);
 	
 	$query_fields = 'base.opinion_no' if $return_type eq 'id';
 	
-	$sql = "
-	SELECT $count_expr $query_fields
-	FROM ($inner_query) as base STRAIGHT_JOIN $op_cache as o on o.opinion_no = base.opinion_no
-		LEFT JOIN $auth_table as ac on ac.taxon_no = o.child_spelling_no
-		LEFT JOIN $auth_table as ap on ap.taxon_no = o.parent_spelling_no
-	$outer_joins
-	$outer_filters
-	GROUP BY opinion_no $order_expr $limit_expr";
+	$sql = "SELECT $count_expr $query_fields
+		FROM ($inner_query) as base STRAIGHT_JOIN $op_cache as o on o.opinion_no = base.opinion_no
+			JOIN $tree_table as t on t.orig_no = base.orig_no
+			LEFT JOIN $auth_table as ac on ac.taxon_no = o.child_spelling_no
+			LEFT JOIN $auth_table as ap on ap.taxon_no = o.parent_spelling_no
+		$outer_joins
+		GROUP BY opinion_no $order_expr $limit_expr";
+	
+	return $taxonomy->execute_query( $sql, { record_type => $record_type,
+						 return_type => $return_type,
+						 count => $options->{count} } );
     }
     
-    else  # list_refs
-    {
-	my $outer_tables = {};
+    # If we get to this point in the code, then we were asked to return either references or taxa.
+    # We may need more than one query, depending upon the value of the 'select' parameter.  So we
+    # build all of the relevant queries and then UNION them together.  For all values of rel other
+    # than 'all_taxa', we construct the inner query based on the value of $taxon_joins computed
+    # above.
+    
+    my @inner_query;
 	
-	my $fieldspec = $options->{fields} || 'REF_DATA';	
+    if ( $select{refs_auth} )
+    {
+	$inner_filters .= $taxonomy->refno_filter($options, 'a');
+	
+	my $query_core = $rel eq 'all_taxa'
+	    ? "$refs_table as r
+			JOIN $auth_table as a using (reference_no)
+			JOIN $tree_table as t using (orig_no)
+			$other_joins"
+	    : "$taxon_joins
+			JOIN $auth_table as a on $auth_expr
+			JOIN $refs_table as r on r.reference_no = a.reference_no";
+	
+	push @inner_query,
+	       "SELECT a.reference_no, a.taxon_no, $TYPE_AUTH as ref_type, t.orig_no,
+			null as unclass_no, null as class_no,
+			null as occurrence_no, null as collection_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY reference_no, a.taxon_no";
+    }
+	
+    if ( $select{refs_class} || $select{refs_opinions} )
+    {
+	$inner_filters .= $taxonomy->refno_filter($options, 'o');
+	
+	my $type = $select{refs_opinions}
+	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED)"
+	    : $TYPE_CLASS;
+	
+	my $join_condition = $select{refs_opinions}
+	    ? 'o.opinion_no = t.opinion_no or o.orig_no = t.orig_no'
+	    : 'o.opinion_no = t.opinion_no';
+	
+	my $query_core = $rel eq 'all_taxa'
+	    ? "$refs_table as r
+			JOIN $op_cache as o using (reference_no)
+			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
+			JOIN $tree_table as t on t.orig_no = o.orig_no"
+	    : "$taxon_joins
+			JOIN $op_cache as o on $join_condition
+			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
+			JOIN $refs_table as r on r.reference_no = o.reference_no";
+	
+	push @inner_query,
+	       "SELECT o.reference_no, o.child_spelling_no as taxon_no, $type as ref_type, t.orig_no,
+			max(if(o.opinion_no = t.opinion_no, null, o.opinion_no)) as unclass_no,
+			max(if(o.opinion_no = t.opinion_no, o.opinion_no, null)) as class_no,
+			null as occurrence_no, null as collection_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY o.reference_no, t.orig_no, ref_type";
+    }
+    
+    if ( $select{refs_occs} )
+    {
+	$inner_filters .= $taxonomy->refno_filter($options, 'm');
+	
+	my $query_core = $rel eq 'all_taxa'
+	    ? "$refs_table as r
+			JOIN $OCC_MATRIX as m using (reference_no)
+			JOIN $tree_table as t using (orig_no)
+			JOIN $auth_table as a on a.taxon_no = m.taxon_no"
+	    : " $taxon_joins
+			JOIN $OCC_MATRIX as m on m.orig_no = t.orig_no
+			JOIN $auth_table as a on a.taxon_no = m.taxon_no
+			JOIN $refs_table as r on r.reference_no = m.reference_no";
+	
+	push @inner_query,
+	       "SELECT m.reference_no, m.taxon_no, $TYPE_OCC as ref_type, t.orig_no,
+			null as unclass_no, null as class_no, max(m.occurrence_no), null as collection_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY m.reference_no, m.taxon_no";
+    }
+    
+    if ( $select{refs_colls} && $record_type ne 'taxa' )
+    {
+	$inner_filters .= $taxonomy->refno_filter($options, 'c');
+	
+	my $query_core = $rel eq 'all_taxa'
+	    ? "$refs_table as r
+			JOIN $COLL_MATRIX as c using (reference_no)"
+	    : " $taxon_joins
+			JOIN $OCC_MATRIX as m on m.orig_no = t.orig_no
+			JOIN $COLL_MATRIX as c using (collection_no)
+			JOIN $refs_table as r on r.reference_no = c.reference_no";	
+	
+	push @inner_query,
+	       "SELECT c.reference_no, null as taxon_no, $TYPE_PRIMARY as ref_type, null as orig_no,
+			null as unclass_no, null as class_no, null as occurrence_no, max(m.collection_no)
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY c.reference_no, m.taxon_no";
+    }
+    
+    # Now construct the full query using what we constructed above as a subquery.
+    
+    my $inner_query = join("\nUNION ", @inner_query);
+    
+    if ( $record_type eq 'taxa' )
+    {
+	my $outer_tables = { };
+	
+	my $fieldspec = $options->{fields} || 'REFTAXA_DATA';	
 	my @fields = $taxonomy->generate_fields($fieldspec, $outer_tables);
 	my $query_fields = join ', ', @fields;
 	
-	if ( $return_type eq 'id' )
-	{
-	    $query_fields = 'base.reference_no';
-	}
+	# If $rel is 'all_taxa', then the ref_filters have already been applied to the inner
+	# query.  Otherewise, we apply them to the outer query.
 	
-	else
-	{
-	    $query_fields .= ", group_concat(distinct ref_type) as ref_type, count(*) as taxon_count";
-	    $query_fields .= ", base.opinion_no" unless $query_fields =~ qr{base\.opinion_no};
-	}
+	my @outer_filters;
 	
-	my @ref_filters = $taxonomy->ref_filters($options, $outer_tables);
-	my $ref_filters = @ref_filters ? 'WHERE ' . join(' and ', @ref_filters) : '';
+	push @outer_filters, $taxonomy->ref_filters($options, $outer_tables)
+	    unless $rel eq 'all_taxa';
+	push @outer_filters, "1=1" unless @outer_filters;
+	my $outer_filters = join q{ and }, @outer_filters;
+	
+	croak "list_associated: the option { return => 'id' } is not compatible with 'list_reftaxa'\n"
+	    if $return_type eq 'id';
+	
+	my $order_expr = $taxonomy->taxon_order($options, $outer_tables) || "ORDER BY base.reference_no, a.taxon_name";
+	my $outer_joins = $taxonomy->taxon_joins('t', $outer_tables);
+	$outer_joins .= $taxonomy->ref_joins('r', $outer_tables);
+	
+	$sql = "SELECT $count_expr $query_fields
+		FROM ($inner_query) as base
+			LEFT JOIN $tree_table as t using (orig_no)
+			LEFT JOIN $auth_table as a using (taxon_no)
+			$outer_joins
+		WHERE $outer_filters
+		GROUP BY base.reference_no, base.taxon_no $order_expr $limit_expr";
+	
+	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
+						 return_type => $return_type,
+						 count => $options->{count} } );
+    }
+    
+    else	# record_type eq 'refs'
+    {
+	my $outer_tables = { };
+	
+	my $fieldspec = $options->{fields} || 'REF_DATA';
+	my @fields = $taxonomy->generate_fields($fieldspec, $outer_tables);
+	push @fields, "group_concat(distinct ref_type) as ref_type";
+	my $query_fields = join ', ', @fields;
+	
+	$query_fields = 'base.reference_no' if $return_type eq 'id';
+	
+	# If $rel is 'all_taxa', then the ref_filters have already been applied to the inner
+	# query.  Otherewise, we apply them to the outer query.
+	
+	my @outer_filters;
+	
+	push @outer_filters, $taxonomy->ref_filters($options, $outer_tables)
+	    unless $rel eq 'all_taxa';
+	push @outer_filters, "1=1" unless @outer_filters;
+	my $outer_filters = join q{ and }, @outer_filters;
+	
 	my $order_expr = $taxonomy->ref_order($options, $outer_tables);
 	my $outer_joins = $taxonomy->ref_joins('r', $outer_tables);
 	
-	$sql = "
-	SELECT $count_expr $query_fields
-	FROM ($inner_query) as base STRAIGHT_JOIN refs as r on r.reference_no = base.reference_no
-	$outer_joins
-	$ref_filters
-	GROUP BY reference_no $order_expr $limit_expr";
+	$sql = "SELECT $count_expr $query_fields
+		FROM ($inner_query) as base
+			STRAIGHT_JOIN refs as r on r.reference_no = base.reference_no
+		$outer_joins
+		WHERE $outer_filters
+		GROUP BY reference_no $order_expr $limit_expr";
+	
+	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
+						 return_type => $return_type,
+						 count => $options->{count} } );
     }
+}
+
     
-    # Then execute the query!!!  If we are asked to return a
-    # statement handle, do so.
+sub execute_query {
+    
+    my ($taxonomy, $sql, $params) = @_;
+    
+    my $dbh = $taxonomy->{dbh};
+    my $return_type = $params->{return_type};
+    my $record_type = $params->{record_type};
+    my ($result_list, $sth);
     
     $taxonomy->{sql_string} = $sql;
     
-    if ( $return_type eq 'list' || $return_type eq 'listref' )
+    if ( $taxonomy->{test_mode} )
     {
-	my $result_list;
-	
-	try {
-	    $result_list = $dbh->selectall_arrayref($sql, { Slice => {} });
-	    
-	    ($taxonomy->{sql_rowcount}) = $dbh->selectrow_array("SELECT FOUND_ROWS()")
-		if $options->{count};
-	    
-	    return $return_type eq 'listref' ? $result_list : @$result_list;
-	}
-	    
-	catch {
-	    die $_ if $_;
-	};
-	
-	if ( ref $result_list eq 'ARRAY' )
+	print STDERR "$sql\n\n";
+	return;
+    }
+    
+    try
+    {
+	if ( $return_type eq 'list' || $return_type eq 'listref' )
 	{
-	    return $result_list if $return_type eq 'listref';
-	    return @$result_list;
+	    $result_list = $dbh->selectall_arrayref($sql, { Slice => {} });
+	}
+	
+	elsif ( $return_type eq 'id' )
+	{
+	    $result_list = $dbh->selectcol_arrayref($sql);
+	}
+	
+	elsif ( $return_type eq 'stmt' )
+	{
+	    $sth = $dbh->prepare($sql);
+	    $sth->execute();
 	}
 	
 	else
 	{
-	    return [] if $return_type eq 'listref';
-	    return;
+	    croak "invalid value '$return_type' for 'return_type'\n";
 	}
+	
+	($taxonomy->{sql_rowcount}) = $dbh->selectrow_array("SELECT FOUND_ROWS()")
+	    if $params->{count};
+    }
+    
+    catch
+    {
+	die $_ if $_;
+    };
+    
+    if ( $return_type eq 'list' || $return_type eq 'listref' )
+    {
+	$return_type ||= [];
+	
+	my $package = $RECORD_BLESS{$record_type};
+	
+	map { bless $_, $package } @$result_list;
+	
+	if ( $params->{base_nos} && ref $params->{base_nos} eq 'ARRAY' &&
+	     ref $params->{base_nos}[0] && $params->{copy_exclusions} )
+	{
+	    $taxonomy->copy_exclusions($result_list, $params->{base_nos});
+	}
+	
+	return $result_list if $return_type eq 'listref';
+	return @$result_list;
     }
     
     elsif ( $return_type eq 'id' )
     {
-	my $result_list;
-	
-	try {
-	    $result_list = $taxonomy->{dbh}->selectcol_arrayref($sql);
-	}
-	
-	catch {
-	    die $_ if $_;
-	};
-	
-	if ( ref $result_list eq 'ARRAY' )
-	{
-	    $taxonomy->{sql_rowcount} = @$result_list;
-	    return @$result_list;
-	}
-	
-	else
-	{
-	    $taxonomy->{sql_rowcount} = 0;
-	    return;
-	}
+	$result_list ||= [];
+	return @$result_list;
     }
     
     elsif ( $return_type eq 'stmt' )
     {
-	my $sth;
-	
-	try {
-	    $sth = $dbh->prepare($sql);
-	    $sth->execute();
-	    
-	    ($taxonomy->{sql_rowcount}) = $taxonomy->{dbh}->selectrow_array("SELECT FOUND_ROWS()")
-		if $options->{count};
-	} catch {
-	    die $_ if $_;
-	};
-	
 	return $sth;
     }
     
     else
     {
-	croak "list_refs: invalid return type '$return_type'\n";
+	croak "invalid return type '$return_type'\n";
     }
+}
+
+
+sub taxa_opinions {
+
+    my ($taxonomy, $rel, $base_nos, $options) = @_;
+    
+    $options ||= {};
+    $options->{record_type} = 'opinions';
+    
+    return $taxonomy->list_associated($rel, $base_nos, $options);
+}
+
+
+sub taxa_refs {
+    
+    my ($taxonomy, $rel, $base_nos, $options) = @_;
+    
+    $options ||= {};
+    $options->{record_type} = 'refs';
+    
+    return $taxonomy->list_associated($rel, $base_nos, $options);
 }
 
 
@@ -1743,21 +1821,174 @@ sub refs_taxa {
     my ($taxonomy, $rel, $base_nos, $options) = @_;
     
     $options ||= {};
-    $options->{list_reftaxa} = 1;
+    $options->{record_type} = 'taxa';
     
-    return $taxonomy->list_refs($rel, $base_nos, $options);
+    return $taxonomy->list_associated($rel, $base_nos, $options);
+}
+
+
+sub refs_ops {
+    
+    my ($taxonomy, $rel, $base_nos, $options) = @_;
+    
+    $options ||= {};
+    $options->{record_type} = 'opinions';
+    $options->{record_order} = 'byref';
+    
+    return $taxonomy->list_associated($rel, $base_nos, $options);
 }
 
 
 sub list_opinions {
-
-    my ($taxonomy, $rel, $base_nos, $options) = @_;
+    
+    my ($taxonomy, $opinion_nos, $options) = @_;
     
     $options ||= {};
-    $options->{list_opinions} = 1;
+    $options->{record_type} = 'opinions';
+    $options->{opinion_no} = $opinion_nos;
     
-    return $taxonomy->list_refs($rel, $base_nos, $options);
+    return $taxonomy->list_associated('all_taxa', undef, $options);
 }
+    
+    
+#     # First check the arguments.
+    
+#     $taxonomy->clear_warnings;
+#     $taxonomy->clear_sql;
+    
+#     croak "list_opinions: second argument must be a hashref if given"
+# 	if defined $options && ref $options ne 'HASH';
+#     $options ||= {};
+    
+#     my $return_type = lc $options->{return} || 'list';
+#     my $base_string = $taxonomy->generate_opinion_id_string($opinion_nos);
+#     my $has_common_opt;
+    
+#     foreach my $key ( keys %$options )
+#     {
+# 	croak "list_taxa: invalid option '$key'\n"
+# 	    unless $STD_OPTION{$key} || $OP_OPTION{$key} || $COMMON_OPTION{$key};
+	
+# 	$has_common_opt = 1 if $COMMON_OPTION{$key};
+#     }
+    
+#     my $tables = { };
+#     my $fieldspec = $options->{fields} || 'OP_DATA';
+#     $fieldspec = 'ID' if $return_type eq 'id';
+#     my @fields = $taxonomy->generate_fields($fieldspec, $tables);
+#     my $query_fields = join ', ', @fields;
+#     $query_fields =~ s/base.opinion_type/if(o.opinion_no = t.opinion_no, 'C', 'U') as opinion_type/;
+    
+#     my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+#     my $order_expr = $taxonomy->opinion_order($options, $tables) || 'ORDER BY pubyr desc, author asc';
+#     my $limit_expr = $taxonomy->simple_limit($options);
+    
+#     my $op_cache = $taxonomy->{OP_CACHE};
+#     my $op_table = $taxonomy->{OP_TABLE};
+#     my $auth_table = $taxonomy->{AUTH_TABLE};
+#     my $tree_table = $taxonomy->{TREE_TABLE};
+    
+#     my @filters;
+#     push @filters, "o.opinion_no in ($base_string)" if $base_string;
+#     push @filters, $taxonomy->opinion_filters($options, $tables);
+#     push @filters, $taxonomy->common_filters('oo', 'op', $options) if $has_common_opt;
+#     my $filters = join( q{ and }, @filters);
+    
+#     my $other_joins = $taxonomy->opinion_joins('o', $tables);
+    
+#     my $sql =  "SELECT $count_expr $query_fields
+# 		FROM $op_cache as o
+# 			JOIN $tree_table as t on t.orig_no = o.orig_no
+# 			LEFT JOIN $auth_table as ac on ac.taxon_no = o.child_spelling_no
+# 			LEFT JOIN $auth_table as ap on ap.taxon_no = o.parent_spelling_no
+# 			$other_joins
+# 		WHERE $filters
+# 		GROUP BY opinion_no $order_expr $limit_expr";
+    
+#     # Then execute the query!!!  If we are asked to return a
+#     # statement handle, do so.
+    
+#     my $dbh = $taxonomy->{dbh};
+    
+#     $taxonomy->{sql_string} = $sql;
+    
+#     if ( $return_type eq 'list' || $return_type eq 'listref' )
+#     {
+# 	my $result_list;
+	
+# 	try {
+# 	    $result_list = $dbh->selectall_arrayref($sql, { Slice => {} });
+	    
+# 	    ($taxonomy->{sql_rowcount}) = $dbh->selectrow_array("SELECT FOUND_ROWS()")
+# 		if $options->{count};
+	    
+# 	    return $return_type eq 'listref' ? $result_list : @$result_list;
+# 	}
+	    
+# 	catch {
+# 	    die $_ if $_;
+# 	};
+	
+# 	if ( ref $result_list eq 'ARRAY' )
+# 	{
+# 	    return $result_list if $return_type eq 'listref';
+# 	    return @$result_list;
+# 	}
+	
+# 	else
+# 	{
+# 	    return [] if $return_type eq 'listref';
+# 	    return;
+# 	}
+#     }
+    
+#     elsif ( $return_type eq 'id' )
+#     {
+# 	my $result_list;
+	
+# 	try {
+# 	    $result_list = $taxonomy->{dbh}->selectcol_arrayref($sql);
+# 	}
+	
+# 	catch {
+# 	    die $_ if $_;
+# 	};
+	
+# 	if ( ref $result_list eq 'ARRAY' )
+# 	{
+# 	    $taxonomy->{sql_rowcount} = @$result_list;
+# 	    return @$result_list;
+# 	}
+	
+# 	else
+# 	{
+# 	    $taxonomy->{sql_rowcount} = 0;
+# 	    return;
+# 	}
+#     }
+    
+#     elsif ( $return_type eq 'stmt' )
+#     {
+# 	my $sth;
+	
+# 	try {
+# 	    $sth = $dbh->prepare($sql);
+# 	    $sth->execute();
+	    
+# 	    ($taxonomy->{sql_rowcount}) = $taxonomy->{dbh}->selectrow_array("SELECT FOUND_ROWS()")
+# 		if $options->{count};
+# 	} catch {
+# 	    die $_ if $_;
+# 	};
+	
+# 	return $sth;
+#     }
+    
+#     else
+#     {
+# 	croak "list_opinions: invalid return type '$return_type'\n";
+#     }
+# }
 
 
 sub resolve_names {
@@ -1994,7 +2225,7 @@ sub resolve_names {
 	    
 	    foreach my $r ( @$this_result )
 	    {
-		bless $r, 'Taxon';
+		bless $r, 'PBDB::Taxon';
 		$r->{exclude} = 1 if $exclude;
 		push @result, $return_type eq 'id' ? $r->{orig_no} : $r;
 	    }
@@ -2289,22 +2520,22 @@ sub generate_id_string {
     # If $base is a reference to a Taxon object, return its taxon_no value (if given) or its
     # orig_no value.  But ignore it if the exclude flag is set, unless $ignore_exclude is given.
     
-    if ( ref $base eq 'Taxon' )
+    if ( ref $base eq 'PBDB::Taxon' )
     {
 	my $base_no = $base->{taxon_no} || $base->{orig_no};
 	
 	if ( $base_no && $base_no =~ $VALID_TAXON_ID && ( $ignore_exclude || ! $base->{exclude} ) )
 	{
-	    push @ids, $base_no;
+	    push @ids, $1;
 	}
     }
     
     # If $base is a reference to a TaxonSet object, return a string consisting of all keys that
     # are valid taxon identifiers.
     
-    elsif ( ref $base eq 'TaxonSet' )
+    elsif ( ref $base eq 'PBDB::TaxonSet' )
     {
-	push @ids, grep { $_ =~ $VALID_TAXON_ID } keys %$base;
+	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_TAXON_ID } keys %$base;
     }
     
     # If $base is a reference to an array, then check all of the elements.  Collect up all valid
@@ -2314,15 +2545,16 @@ sub generate_id_string {
     {
 	foreach my $t ( @$base )
 	{
-	    if ( ref $t eq 'Taxon' )
+	    if ( ref $t eq 'PBDB::Taxon' )
 	    {
 		my $base_no = $t->{taxon_no} || $t->{orig_no};
-		push @ids, $base_no if $base_no && $base_no =~ $VALID_TAXON_ID;
+		push @ids, $1 if $base_no && $base_no =~ $VALID_TAXON_ID && 
+			( $ignore_exclude || ! $t->{exclude} );
 	    }
 	    
 	    elsif ( ! ref $t )
 	    {
-		push @ids, grep { $_ =~ $VALID_TAXON_ID } split(qr{\s*,\s*}, $t);
+		push @ids, grep { $_ } map { $1 if $_ =~ $VALID_TAXON_ID } split(qr{\s*,\s*}, $t);
 	    }
 	    
 	    else
@@ -2341,7 +2573,80 @@ sub generate_id_string {
     
     else
     {
-	push @ids, grep { $_ =~ $VALID_TAXON_ID } split(qr{\s*,\s*}, $base);
+	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_TAXON_ID } split(qr{\s*,\s*}, $base);
+    }
+    
+    # Now return the list of taxon identifiers, joined with commas.  If no identifiers were found,
+    # return the empty string.
+    
+    return join(q{,}, @ids);
+}
+
+
+
+# generate_opinion_id_string ( base )
+# 
+# This routine is called internally by &list_opinions.  It decodes the base argument that was
+# passed to the query method, and returns a string of opinion identifiers.
+
+sub generate_opinion_id_string {
+    
+    my ($taxonomy, $base) = @_;
+    
+    my @ids;
+    
+    # If $base is a reference to a Taxon object, return its taxon_no value (if given) or its
+    # orig_no value.  But ignore it if the exclude flag is set, unless $ignore_exclude is given.
+    
+    if ( ref $base eq 'PBDB::Opinion' )
+    {
+	my $base_no = $base->{opinion_no};
+	push @ids, $1 if $base_no && $base_no =~ $VALID_OPINION_ID;
+    }
+    
+    # If $base is a reference to an OpinionSet object, return a string consisting of all
+    # keys that are valid taxon identifiers.
+    
+    elsif ( ref $base eq 'PBDB::OpinionSet' )
+    {
+	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_OPINION_ID } keys %$base;
+    }
+    
+    # If $base is a reference to an array, then check all of the elements.  Collect up all valid
+    # taxon identifiers that are found, along with the identifiers from all Taxon objects.
+    
+    elsif ( ref $base eq 'ARRAY' )
+    {
+	foreach my $r ( @$base )
+	{
+	    if ( ref $r eq 'PBDB::Opinion' )
+	    {
+		my $base_no = $r->{opinion_no};
+		push @ids, $1 if $base_no && $base_no =~ $VALID_OPINION_ID;
+	    }
+	    
+	    elsif ( ! ref $r )
+	    {
+		push @ids, grep { $_ } map { $1 if $_ =~ $VALID_OPINION_ID } split(qr{\s*,\s*}, $r);
+	    }
+	    
+	    else
+	    {
+		croak "taxonomy: invalid opinion identifier '$r'\n";
+	    }
+	}
+    }
+    
+    # Any other kind of reference (i.e. a code reference) will generate an error.
+    
+    elsif ( ref $base )
+    {
+	croak "taxonomy: invalid opinion identifier '$base'\n";
+    }
+    
+    else
+    {
+	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_OPINION_ID } split(qr{\s*,\s*}, $base);
     }
     
     # Now return the list of taxon identifiers, joined with commas.  If no identifiers were found,
@@ -2363,30 +2668,30 @@ sub generate_ref_id_string {
     
     my @ids;
     
-    if ( ref $base eq 'Reference' )
+    if ( ref $base eq 'PBDB::Reference' )
     {
 	my $ref_no = $base->{reference_no};
-	push @ids, $ref_no if $ref_no && $ref_no =~ $VALID_REF_ID;
+	push @ids, $1 if $ref_no && $ref_no =~ $VALID_REF_ID;
     }
     
-    elsif ( ref $base eq 'ReferenceSet' )
+    elsif ( ref $base eq 'PBDB::ReferenceSet' )
     {
-	push @ids, grep { $_ =~ $VALID_REF_ID } keys %$base;
+	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_REF_ID } keys %$base;
     }
     
     elsif ( ref $base eq 'ARRAY' )
     {
 	foreach my $r ( @$base )
 	{
-	    if ( ref $r eq 'Reference' )
+	    if ( ref $r eq 'PBDB::Reference' )
 	    {
 		my $ref_no = $base->{reference_no};
-		push @ids, $ref_no if $ref_no && $ref_no =~ $VALID_REF_ID;
+		push @ids, $1 if $ref_no && $ref_no =~ $VALID_REF_ID;
 	    }
 	    
 	    elsif ( ! ref $r )
 	    {
-		push @ids, push @ids, grep { $_ =~ $VALID_REF_ID } split(qr{\s*,\s*}, $r);
+		push @ids, grep { $_ } map { $1 if $_ =~ $VALID_REF_ID } split(qr{\s*,\s*}, $r);
 	    }
 	}
     }
@@ -2398,7 +2703,7 @@ sub generate_ref_id_string {
     
     else
     {
-	push @ids, grep { $_ =~ $VALID_REF_ID } split(qr{\s*,\s*}, $base);
+	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_REF_ID } split(qr{\s*,\s*}, $base);
     }
     
     # Now return the list of reference identifiers, joined with commas.  If no identifiers were
@@ -2421,13 +2726,13 @@ sub exclusion_filters {
     # The only way this can happen is for the $base argument to be either a Taxon object or an
     # array of one or more of them.
     
-    return unless ref $base eq 'ARRAY' or ref $base eq 'Taxon';
+    return unless ref $base eq 'ARRAY' or ref $base eq 'PBDB::Taxon';
     
     my @filters;
     
     foreach my $t ( ref $base eq 'ARRAY' ? @$base : $base )
     {
-	next unless ref $t eq 'Taxon';
+	next unless ref $t eq 'PBDB::Taxon';
 	next unless $t->{exclude};
 	next unless $t->{lft} && $t->{rgt};
 	
@@ -2457,7 +2762,7 @@ sub copy_exclusions {
     # The only way this can happen is for the $base argument to be either a Taxon object or an
     # array of one or more of them.
     
-    return unless ref $base eq 'ARRAY' or ref $base eq 'Taxon';
+    return unless ref $base eq 'ARRAY' or ref $base eq 'PBDB::Taxon';
     
     my %exclude;
     
@@ -2465,7 +2770,7 @@ sub copy_exclusions {
     
     foreach my $t ( ref $base eq 'ARRAY' ? @$base : $base )
     {
-	$exclude{$t->{orig_no}} = 1 if ref $t eq 'Taxon' && $t->{orig_no} && $t->{exclude};
+	$exclude{$t->{orig_no}} = 1 if ref $t eq 'PBDB::Taxon' && $t->{orig_no} && $t->{exclude};
     }
     
     # Then go through the result list and apply these exclusions.
@@ -2518,11 +2823,11 @@ sub generate_fields {
 	    push @result, $n;
 	}
 	
-	# Note that the following shortcut implies at most three different
+	# Note that the following shortcut implies at most five different
 	# tables for any particular field specifier.  I can't see that this
 	# will be a problem.
 	
-	@{$tables_hash}{@{$FIELD_TABLES{$f}}} = (1, 1, 1) if ref $FIELD_TABLES{$f};
+	@{$tables_hash}{@{$FIELD_TABLES{$f}}} = (1, 1, 1, 1, 1) if ref $FIELD_TABLES{$f};
     }
     
     croak "taxonomy: no valid fields specified\n" unless @result;
@@ -2544,7 +2849,9 @@ my (%OP_STATUS_FILTER) = ( valid => "in ('belongs to', 'subjective synonym of', 
 			   junior => "in ('subjective synonym of', 'objective synonym of', 'replaced by')",
 			   invalid => "not in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
 			   any => 'is not null',
-			   all => 'is not null');
+			   all => 'is not null',
+			   opinions => 'is not null',
+			   class => 'is not null');
 
 sub taxon_filters {
     
@@ -2656,37 +2963,61 @@ sub taxon_filters {
 	}
     }
     
-    if ( $options->{min_created} )
+    if ( $options->{max_ma} || $options->{min_ma} )
     {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{min_created});
+	$tables_ref->{v} = 1;
 	
-	push @filters, "a.created >= $date";
+	if ( $options->{max_ma} =~ qr{^ (?: [0-9][0-9.]* | \.[0-9][0-9]* ) $}xs )
+	{
+	    my $max_ma = $options->{max_ma} + 0;
+	    
+	    push @filters, "v.last_late_age < $max_ma";
+	}
+	
+	elsif ( defined $options->{max_ma} && $options->{max_ma} ne '' )
+	{
+	    croak "bad value '$options->{max_ma}' for option 'max_ma'\n";
+	}
+	
+	if ( $options->{min_ma} =~ qr{^ (?: [0-9][0-9.]* | \.[0-9][0-9]* ) $}xs )
+	{
+	    my $min_ma = $options->{min_ma} + 0;
+	    
+	    push @filters, "v.first_early_age > $min_ma";
+	}
+	
+	elsif ( defined $options->{min_ma} && $options->{min_ma} ne '' )
+	{
+	    croak "bad value '$options->{min_ma}' for option 'min_ma'\n";
+	}	
     }
     
-    if ( $options->{max_created} )
+    if ( $options->{min_pubyr} || $options->{max_pubyr} )
     {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{max_created});
+	$tables_ref->{v} = 1;
 	
-	push @filters, "a.created < $date";
+	if ( $options->{min_pubyr} =~ qr{ ^ [0-9]+ $ }xs )
+	{
+	    push @filters, "v.pubyr >= '$options->{min_pubyr}'";
+	}
+	
+	elsif ( defined $options->{min_pubyr} && $options->{min_pubyr} ne '' )
+	{
+	    croak "bad value '$options->{min_pubyr}' for option 'min_pubyr'\n";
+	}
+	
+	if ( $options->{max_pubyr} =~ qr{ ^ [0-9]+ $ }xs )
+	{
+	    push @filters, "v.pubyr <= '$options->{max_pubyr}'";
+	}
+	
+	elsif ( defined $options->{max_pubyr} && $options->{max_pubyr} ne '' )
+	{
+	    croak "bad value '$options->{max_pubyr}' for option 'max_pubyr'\n";
+	}
     }
     
-    if ( $options->{min_modified} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{min_modified});
-	
-	push @filters, "a.modified >= $date";
-    }
-    
-    if ( $options->{max_modified} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{max_modified});
-	
-	push @filters, "a.modified < $date";
-    }
+    push @filters, $taxonomy->common_filters('a', 'taxa', $options);
     
     return @filters;
 }
@@ -2745,37 +3076,7 @@ sub ref_filters {
 	push @filters, "r.pubtitle like $pubtitle";
     }
     
-    if ( $options->{min_ref_created} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{min_ref_created});
-	
-	push @filters, "r.created >= $date";
-    }
-    
-    if ( $options->{max_ref_created} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{max_ref_created});
-	
-	push @filters, "r.created < $date";
-    }
-    
-    if ( $options->{min_ref_modified} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{min_ref_modified});
-	
-	push @filters, "r.modified >= $date";
-    }
-    
-    if ( $options->{max_ref_modified} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{max_ref_modified});
-	
-	push @filters, "r.modified < $date";
-    }
+    push @filters, $taxonomy->common_filters('r', 'refs', $options);
     
     return @filters;
 }
@@ -2788,9 +3089,21 @@ sub opinion_filters {
     my @filters;
     my $dbh = $taxonomy->{dbh};
     
-    if ( $options->{op_status} )
+    my @stuff = caller;
+    my $caller = $stuff[3];
+    print STDERR "caller: $caller\n";
+    
+    if ( defined $options->{opinion_no} && $options->{opinion_no} ne 'all_opinions' )
     {
-	my $filter = $OP_STATUS_FILTER{$options->{op_status}};
+	my $opinion_ids = $taxonomy->generate_opinion_id_string($options->{opinion_no}) || '-1';
+	push @filters, "o.opinion_no in ($opinion_ids)" if $opinion_ids;
+    }
+    
+    my ($select) = ref $options->{select} eq 'ARRAY' ? @{$options->{select}} : $options->{select};
+    
+    if ( $select )
+    {
+	my $filter = $OP_STATUS_FILTER{$select};
 	
 	if ( defined $filter )
 	{
@@ -2828,49 +3141,202 @@ sub opinion_filters {
 	}
     }
     
-    if ( $options->{author} )
-    {
-	my $author = $dbh->quote($options->{author});
-	push @filters, "o.author like $author";
-    }
+    # if ( $options->{author} )
+    # {
+    # 	my $author = $dbh->quote($options->{author});
+    # 	push @filters, "o.author like $author";
+    # }
     
-    if ( $options->{min_op_created} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{min_op_created});
-	
-	push @filters, "oo.created >= $date";
-	$tables_ref->{oo} = 1;
-    }
-    
-    if ( $options->{max_op_created} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{max_op_created});
-	
-	push @filters, "oo.created < $date";
-	$tables_ref->{oo} = 1;
-    }
-    
-    if ( $options->{min_op_modified} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{min_op_modified});
-	
-	push @filters, "oo.modified >= $date";
-	$tables_ref->{oo} = 1;
-    }
-    
-    if ( $options->{max_op_modified} )
-    {
-	my $dbh = $taxonomy->{dbh};
-	my $date = $dbh->quote($options->{max_op_modified});
-	
-	push @filters, "oo.modified < $date";
-	$tables_ref->{oo} = 1;
-    }
+    push @filters, $taxonomy->common_filters('oo', 'ops', $options);
     
     return @filters;
+}
+
+
+sub common_filters {
+
+    my ($taxonomy, $t, $opt_type, $options, $tables) = @_;
+    
+    my @filters;
+    my $dbh = $taxonomy->{dbh};
+    
+    # Go through all of the options passed to this Taxonomy request.
+    
+    foreach my $key ( keys %$options )
+    {
+	# Check to see if any of them is a common option which matches the
+	# given $opt_type.
+	
+	next unless $COMMON_OPTION{$key};
+	
+	my $value = $options->{$key};
+	
+	if ( $key =~ qr{^ref} )
+	{
+	    next unless $opt_type eq 'refs';
+	}
+	
+	elsif ( $key =~ qr{^op} )
+	{
+	    next unless $opt_type eq 'ops';
+	}
+	
+	else
+	{
+	    next unless $opt_type eq 'taxa';
+	}
+	
+	# If so, then create the appropriate SQL filter expression and add it
+	# to the list.
+	
+	if ( $key =~ qr{created_after$} )
+	{
+	    my $date = $dbh->quote($value);
+	    push @filters, "$t.created >= $date";
+	}
+	
+	elsif ( $key =~ qr{created_before$} )
+	{
+	    my $date = $dbh->quote($value);
+	    push @filters, "$t.created < $date";
+	}
+	
+	elsif ( $key =~ qr{modified_after$} )
+	{
+	    my $date = $dbh->quote($value);
+	    push @filters, "$t.modified >= $date";
+	}
+	
+	elsif ( $key =~ qr{modified_before$} )
+	{
+	    my $date = $dbh->quote($value);
+	    push @filters, "$t.modified < $date";
+	}
+	
+	elsif ( $key =~ qr{authorized_by$} )
+	{
+	    my $list = $taxonomy->person_id_list($value);
+	    push @filters, "$t.authorizer_no in ($list)" if $list;
+	}
+	
+	elsif ( $key =~ qr{entered_by$} )
+	{
+	    my $list = $taxonomy->person_id_list($value);
+	    push @filters, "$t.enterer_no in ($list)" if $list;
+	}
+	
+	elsif ( $key =~ qr{authent_by$} )
+	{
+	    my $list = $taxonomy->person_id_list($value);
+	    push @filters, "($t.authorizer_no in ($list) or $t.enterer_no in ($list))" if $list;
+	}
+	
+	elsif ( $key =~ qr{modified_by$} )
+	{
+	    my $list = $taxonomy->person_id_list($value);
+	    push @filters, "$t.modifier_no in ($list)" if $list;
+	    push @filters, "$t.modifier_no <> $t.enterer_no" if $value eq '*';
+	}
+	
+	elsif ( $key =~ qr{touched_by$} )
+	{
+	    my $list = $taxonomy->person_id_list($value);
+	    push @filters, 
+		"($t.authorizer_no in ($list) or $t.enterer_no in ($list) or $t.modifier_no in ($list))"
+		    if $list;
+	}
+	
+	# elsif ( $key =~ qr{min_pubyr$|max_pubyr$} )
+	# {
+	#     my $comp = $key =~ qr{min} ? '>=' : '<=';
+	#     my $year = $dbh->quote($value);
+	    
+	#     if ( $opt_type eq 'taxa' )
+	#     {
+	# 	push @filters, "v.pubyr $comp $year";
+	# 	$tables->{v} = 1;
+	#     }
+	    
+	#     elsif ( $opt_type eq 'op' )
+	#     {
+	# 	push @filters, "o.pubyr $comp $year";
+	#     }
+	    
+	#     elsif ( $opt_type eq 'ref' )
+	#     {
+	# 	push @filters, "r.pubyr $comp $year";
+	#     }
+	# }
+	
+	else
+	{
+	    croak "taxonomy: bad common option '$key'\n";
+	}
+    }
+    
+    # Now return the list of filters (possibly empty).
+    
+    return @filters;
+}
+
+
+sub person_id_list {
+    
+    my ($taxonomy, $value) = @_;
+    
+    return unless $value;
+    
+    my @plist = ref $value eq 'ARRAY' ? @$value : split qr{\s*,\s*}, $value;
+    my @ids;
+    my $dbh = $taxonomy->{dbh};
+    
+    foreach my $p (@plist)
+    {
+	next unless $p && $p ne '*';
+	
+	if ( $p =~ $VALID_PERSON_ID )
+	{
+	    push @ids, $p;
+	}
+	
+	else
+	{
+	    my $quoted = $dbh->quote("$p%");
+	    my $values = $dbh->selectcol_arrayref("
+		SELECT person_no, name FROM person
+		WHERE name like $quoted or reversed_name like $quoted", { Columns => [1, 2] });
+	    
+	    if ( defined $values && @$values < 3 && $values->[0] =~ $VALID_PERSON_ID )
+	    {
+		push @ids, $values->[0];
+	    }
+	    
+	    elsif ( defined $values )
+	    {
+		my @ambiguous;
+		
+		while ( @$values )
+		{
+		    shift @$values;
+		    push @ambiguous, "'" . shift(@$values) . "'";
+		}
+		
+		my $list = join(', ', @ambiguous);
+		$taxonomy->add_warning("Ambiguous name: '$p' could match any of the following names: $list");
+	    }
+	    
+	    else
+	    {
+		$taxonomy->add_warning("Unknown name: '$p' is not a name known to this database");
+	    }
+	}
+    }
+    
+    # If no identifiers were found, return the empty list.  Otherwise, join
+    # the identifiers together into a single string and return that.
+    
+    return unless @ids;
+    return join(q{,}, @ids);
 }
 
 
@@ -3089,7 +3555,7 @@ sub taxon_order {
 	elsif ( $options->{list_reftaxa} &&
 		( $order eq 'reference_no' || $order eq 'reference_no.asc' || $order eq 'reference_no.desc' ) )
 	{
-	    push @clauses, $order eq 'reference_nodesc' ? "base.reference_no desc" : "base.reference_no";
+	    push @clauses, $order eq 'reference_no.desc' ? "base.reference_no desc" : "base.reference_no";
 	}
 	
 	else
@@ -3230,7 +3696,7 @@ sub reftaxa_order {
     
     my ($taxonomy, $options) = @_;
     
-    return 'ORDER BY reference_no, lft' unless $options->{order};
+    return 'ORDER BY base.reference_no, t.lft' unless $options->{order};
     
     my (@elements, @clauses);
     
@@ -3250,37 +3716,37 @@ sub reftaxa_order {
 	
     	if ( $order eq 'hierarchy' or $order eq 'hierarchy.asc' )
 	{
-	    push @clauses, "lft asc";
+	    push @clauses, "t.lft asc";
 	}
 	
 	elsif ( $order eq 'hierarchy.desc' )
 	{
-	    push @clauses, "lft desc";
+	    push @clauses, "t.lft desc";
 	}
 	
 	elsif ( $order eq 'reference_no' or $order eq 'reference_no.asc' or $order eq 'reference_no.desc' )
 	{
-	    push @clauses, "reference_no";
+	    push @clauses, "base.reference_no";
 	}
 	
 	elsif ( $order eq 'type' or $order eq 'type.asc' )
 	{
-	    push @clauses, "type asc";
+	    push @clauses, "base.ref_type asc";
 	}
 	
 	elsif ( $order eq 'type.desc' )
 	{
-	    push @clauses, "type desc";
+	    push @clauses, "base.ref_type desc";
 	}
 	
 	elsif ( $order eq 'name' or $order eq 'name.asc' )
 	{
-	    push @clauses, "name asc";
+	    push @clauses, "t.name asc";
 	}
 	
 	elsif ( $order eq 'name.desc' )
 	{
-	    push @clauses, "name desc";
+	    push @clauses, "t.name desc";
 	}
 	
 	else
@@ -3298,7 +3764,7 @@ sub opinion_order {
     
     my ($taxonomy, $options, $tables_hash) = @_;
     
-    return 'ORDER BY o.pubyr' unless $options->{order};
+    return '' unless $options->{order};
     
     my (@elements, @clauses);
     
@@ -3336,6 +3802,16 @@ sub opinion_order {
 	    push @clauses, "o.pubyr desc";
 	}
 	
+	elsif ( $order eq 'id' or $order eq 'id.asc' )
+	{
+	    push @clauses, "o.opinion_no asc";
+	}
+	
+	elsif ( $order eq 'id.desc' )
+	{
+	    push @clauses, "o.opinion_no desc";
+	}
+	
 	elsif ( $order eq 'status' or $order eq 'status.asc' )
 	{
 	    push @clauses, "o.status asc";
@@ -3348,12 +3824,12 @@ sub opinion_order {
 	
 	elsif ( $order eq 'hierarchy' or $order eq 'hierarchy.asc' )
 	{
-	    push @clauses, "base.lft asc";
+	    push @clauses, "t.lft asc";
 	}
 	
 	elsif ( $order eq 'hierarchy.desc' )
 	{
-	    push @clauses, "base.lft desc";
+	    push @clauses, "t.lft desc";
 	}
 	
 	elsif ( $order eq 'name' || $order eq 'name.asc' )
@@ -3490,16 +3966,6 @@ sub taxon_joins {
 		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe4 on ebe4.orig_no = e.diet_basis_no\n"
 	if $tables_hash->{ebe};
     
-    if ( $tables_hash->{all_a} )
-    {
-	$joins .= "\tJOIN $taxonomy->{AUTH_TABLE} as a on a.orig_no = $mt.orig_no\n";
-    }
-    
-    elsif ( ! $tables_hash->{has_a} )
-    {
-	$joins .= "\tJOIN $taxonomy->{AUTH_TABLE} as a on a.taxon_no = $mt.spelling_no\n";
-    }
-    
     $joins .= "\t\tLEFT JOIN $taxonomy->{REFS_TABLE} as r on r.reference_no = a.reference_no\n"
 	if $tables_hash->{r};
     
@@ -3531,25 +3997,27 @@ sub opinion_joins {
     
     $joins .= "\t\tJOIN $taxonomy->{OP_TABLE} as oo on oo.opinion_no = $mt.opinion_no\n"
 	if $tables_hash->{oo};
+    $joins .= "\t\tJOIN $taxonomy->{TREE_TABLE} as pt on pt.orig_no = $mt.parent_no\n"
+	if $tables_hash->{pt};
     
     return $joins;
 }
 
 
-sub auth_join {
+# sub auth_join {
     
-    my ($taxonomy, $options) = @_;
+#     my ($taxonomy, $options) = @_;
     
-    if ( $options->{all_variants} )
-    {
-	return "\t\tJOIN $taxonomy->{AUTH_TABLE} as a on a.orig_no = t.orig_no\n";
-    }
+#     if ( $options->{all_variants} )
+#     {
+# 	return "\t\tJOIN $taxonomy->{AUTH_TABLE} as a on a.orig_no = t.orig_no\n";
+#     }
     
-    else
-    {
-	return "\t\tJOIN $taxonomy->{AUTH_TABLE} as a on a.taxon_no = t.spelling_no\n";
-    }
-}
+#     else
+#     {
+# 	return "\t\tJOIN $taxonomy->{AUTH_TABLE} as a on a.taxon_no = t.spelling_no\n";
+#     }
+# }
 
 
 sub order_result_list {
@@ -3675,17 +4143,37 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				    't.lft', 't.status', 't.accepted_no', 't.parent_no', 't.senpar_no',
 				    'a.common_name', 'a.reference_no', 'vt.name as accepted_name', 
 				    'v.n_occs', 'v.is_extant'],
+		      REFTAXA_DATA => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
+				       'base.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
+				       'max(base.class_no) as class_no',
+				       'max(base.unclass_no) as unclass_no',
+				       'max(base.occurrence_no) as occurrence_no',
+				       'max(base.collection_no) as collection_no',
+				       't.lft', 't.status', 't.accepted_no',
+				       't.parent_no', 't.senpar_no', 'vt.name as accepted_name', 
+				       'v.n_occs', 'v.is_extant'],
+		      REFTAXA_SIMPLE => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
+					 'base.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
+					 'max(base.class_no) as class_no',
+					 'max(base.unclass_no) as unclass_no',
+					 'max(base.occurrence_no) as occurrence_no',
+					 'max(base.collection_no) as collection_no'],
 		      REF_DATA => ['r.reference_no', 'r.author1init as r_ai1', 'r.author1last as r_al1', 
 				   'r.author2init as r_ai2', 'r.author2last as r_al2', 'r.otherauthors as r_oa', 
 				   'r.pubyr as r_pubyr', 'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
 				   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 				   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 				   'r.language as r_language', 'r.doi as r_doi'],
-		      REF_TAXA => ['base.reference_no', 'base.taxon_no', 'base.orig_no', 'base.taxon_name'],
-		      OP_DATA => ['o.opinion_no', 'base.opinion_type', 'o.orig_no', 'base.taxon_name', 
-				  'o.child_spelling_no', 'o.parent_spelling_no', 'oo.basis',
+		      REF_COUNTS => ['count(distinct taxon_no) as n_taxa',
+				     'count(distinct class_no) as n_class',
+				     'count(distinct unclass_no) as n_unclass',
+				     'count(distinct occurrence_no) as n_occs',
+				     'count(distinct collection_no) as n_colls'],
+		      OP_DATA => ['o.opinion_no', 'base.opinion_type', 't.orig_no', 't.name as taxon_name', 
+				  'o.child_spelling_no', 'o.parent_no', 'o.parent_spelling_no', 'oo.basis',
 				  'o.ri', 'o.pubyr', 'o.author', 'o.status', 'o.spelling_reason', 'o.reference_no',
-				  'o.suppress', 'ac.taxon_name as child_name', 'ap.taxon_name as parent_name'],
+				  'o.suppress', 'ac.taxon_name as child_name', 'cast(ac.taxon_rank as integer) as taxon_rank',
+				  'ap.taxon_name as parent_name', 'pt.spelling_no as parent_current_no'],
 		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
 				 't.lft', 't.rgt', 't.senpar_no'],
 		      AUTH_SEARCH => ['s.taxon_no', 's.orig_no', 'a.taxon_name', 'a.taxon_rank',
@@ -3705,11 +4193,12 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      SENPAR => ['pt.name as senpar_name', 'pt.rank as senpar_rank'],
 		      IMMPAR => ['ipt.name as immpar_name', 'ipt.rank as immpar_rank'],
 		      SIZE => ['v.taxon_size', 'v.extant_size', 'v.n_occs'],
-		      PHYLO => ['ph.kingdom_no', 'ph.kingdom', 'ph.phylum_no', 'ph.phylum', 
+		      CLASS => ['ph.kingdom_no', 'ph.kingdom', 'ph.phylum_no', 'ph.phylum', 
 				'ph.class_no', 'ph.class', 'ph.order_no', 'ph.order', 
 				'ph.family_no', 'ph.family'],
-		      COUNTS => ['pc.phylum_count', 'pc.class_count', 'pc.order_count', 
-				 'pc.family_count', 'pc.genus_count', 'pc.species_count'],
+		      GENUS => ['pl.genus_no', 'pl.genus', 'pl.subgenus_no', 'pl.subgenus'],
+		      COUNTS => ['pc.order_count as n_orders', 'pc.family_count as n_families',
+				 'pc.genus_count as n_genera', 'pc.species_count as n_species'],
 		      TAPH => ['e.composition', 'e.thickness', 'e.architecture', 'e.skeletal_reinforcement as reinforcement',
 			       'e.taphonomy_basis_no', 'ebt.name as taphonomy_basis_name'],
 		      ECOSPACE => ['e.taxon_environment as environment', 'e.motility', 'e.life_habit', 'e.diet',
@@ -3727,23 +4216,25 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      image_no => ['v.image_no'],
 		    );
 
-our (%FIELD_TABLES) = ( DATA => ['v', 'a', 'vt',],
-			AUTH_DATA => ['v', 'a', 'vt'],
-			OP_DATA => ['o', 'oo', 'ac', 'ap'],
+our (%FIELD_TABLES) = ( DATA => ['v', 'vt',],
+			AUTH_DATA => ['v', 'vt'],
+			REFTAXA_DATA => ['v', 'vt'],
 			REF_DATA => ['r'],
+			OP_DATA => ['o', 'oo', 'pt'],
+			REF_COUNTS => ['refcounts'],
 			APP => ['v','app'], 
 			ATTR => ['v'],
 			SIZE => ['v'],
-			PHYLO => ['ph'],
+			CLASS => ['ph'],
+			GENUS => ['pl'],
+			SUBGENUS => ['pl'],
 			COUNTS => ['pc'],
 			TAPH => ['e', 'ebt'],
 			ECOSPACE => ['e', 'ebe'],
 			SENPAR => ['pt'],
 			IMMPAR => ['ipt'],
-			CRMOD => ['a'],
 			REF_CRMOD => ['r'],
 			OP_CRMOD => ['oo'],
-			AUTHENT => ['a'],
 			REF_AUTHENT => ['r'],
 			OP_AUTHENT => ['oo'],
 			family_no => ['ph'],

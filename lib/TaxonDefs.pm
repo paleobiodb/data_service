@@ -15,7 +15,7 @@ our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING
 		      %ATTRS_TABLE %INTS_TABLE %SEARCH_TABLE
 		      %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
 		      $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE
-		      @ECOTAPH_FIELD_DEFS);
+		      @ECOTAPH_FIELD_DEFS $RANK_MAP);
 
 our (@TREE_TABLE_LIST) = ('taxon_trees');
 
@@ -47,7 +47,7 @@ $TAXON_TABLE{taxon_trees} = {
 
 our $CLASSIC_TREE_CACHE = "taxa_tree_cache";
 our $CLASSIC_LIST_CACHE = "taxa_list_cache";
-
+our $RANK_MAP = "rank_map";
 
 # This rank hierarchy has not changed from paleobiodb classic, and probably will not change in the future.
 

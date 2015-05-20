@@ -237,7 +237,18 @@ sub selectPics {
 	SELECT t.orig_no, pqn.uid, 1
 	FROM $tree_table as t JOIN $PHYLOPIC_NAMES as pqn on t.name = pqn.taxon_name";
     
-    my $result = $dbh->do($sql);
+    my $result;
+    
+    eval {
+	$result = $dbh->do($sql);
+    };
+    
+    if ( $@ && $@ =~ /Illegal mix of collations/ )
+    {
+	$dbh->do("ALTER TABLE $PHYLOPIC_CHOICE modify column taxon_name varchar(80) collate utf8_general_ci");
+	
+	$result = $dbh->do($sql);
+    }
     
     logMessage(2, "      added $result records");
     
