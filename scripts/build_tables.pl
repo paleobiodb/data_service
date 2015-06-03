@@ -179,7 +179,54 @@ if ( $taxon_tables )
 
 if ( $old_taxon_tables )
 {
-    buildTaxaCacheTables($dbh, 'taxon_trees');
+    # First make sure that nothing else is updating the taxa_tree_cache table
+    # while we work.
+    
+    my $count = 0;
+    
+    while (1)
+    {
+	my ($mutex, $created) = $dbh->selectrow_array("SELECT * FROM tc_mutex");
+	
+	if ( defined $mutex )
+	{
+	    if ( ++$count > 6 )
+	    {
+		logMessage(1, "Could not acquire mutex: aborting taxa_tree_cache rebuild");
+		exit;
+	    }
+	    
+	    else
+	    {
+		logMessage(2, "   tc_mutex is locked...");
+		sleep(10);
+	    }
+	}
+	
+	else
+	{
+	    $dbh->do("INSERT INTO tc_mutex (mutex_id,created) VALUES (999999,NOW())");
+	    logMessage(1, "Acquired lock on tc_mutex");
+	    last;
+	}
+    }
+    
+    # Then update the cache tables.
+    
+    eval {
+	buildTaxaCacheTables($dbh, 'taxon_trees');
+    };
+    
+    my $error = $@;
+    
+    $dbh->do("DELETE FROM tc_mutex");
+    
+    if ( $error )
+    {
+	logMessage(1, "An error occurred during taxa_tree_cache rebuild: $@");
+    }
+    
+    logMessage(1, "Released lock on tc_mutex");
 }
 
 

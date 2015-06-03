@@ -22,7 +22,7 @@ use TableDefs qw($OCC_MATRIX $OCC_TAXON);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig computeGenSp rebuildAttrsTable);
+our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig computeGenSp rebuildAttrsTable fixOpinionCache);
 
 
 =head1 NAME
@@ -1125,7 +1125,9 @@ sub populateOpinionCache {
     # child and parent.  The authorities table is the canonical source of that
     # information, not the opinions table.
     
-    $result = $dbh->do("INSERT INTO $table_name
+    $result = $dbh->do("INSERT INTO $table_name (opinion_no, orig_no, child_spelling_no,
+						  parent_no, parent_spelling_no, ri, pubyr,
+						  status, spelling_reason, reference_no, suppress)
 		SELECT o.opinion_no, a1.orig_no,
 			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
 			a2.orig_no,
@@ -1150,6 +1152,55 @@ sub populateOpinionCache {
 				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
 		$filter_clause
 		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
+    
+    return;
+}
+
+
+# fixOpinionCache ( dbh, table_name, tree_table, opinion_no )
+# 
+# Update a single entry in the opinion cache.
+
+sub fixOpinionCache {
+    
+    my ($dbh, $table_name, $tree_table, $opinion_no) = @_;
+    
+    my ($result);
+    
+    croak "bad opinion_no: $opinion_no\n" unless $opinion_no =~ qr{ ^ [0-9]+ $ }xsi;
+    
+    # This query is adapated from the old getMostRecentClassification()
+    # routine, from TaxonInfo.pm line 2003.  We have to join with authorities
+    # twice to look up the original combination (taxonomic concept id) of both
+    # child and parent.  The authorities table is the canonical source of that
+    # information, not the opinions table.
+    
+    $result = $dbh->do("REPLACE INTO $table_name (opinion_no, orig_no, child_spelling_no,
+						  parent_no, parent_spelling_no, ri, pubyr,
+						  status, spelling_reason, reference_no, suppress)
+		SELECT o.opinion_no, a1.orig_no,
+			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
+			a2.orig_no,
+			if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no),
+			IF ((o.basis != '' AND o.basis IS NOT NULL), CASE o.basis
+ 			WHEN 'second hand' THEN 1
+			WHEN 'stated without evidence' THEN 2
+			WHEN 'implied' THEN 2
+			WHEN 'stated with evidence' THEN 3 END,
+			IF(r.reference_no = 6930, 0, CASE r.basis
+				WHEN 'second hand' THEN 1
+				WHEN 'stated without evidence' THEN 2
+				WHEN 'stated with evidence' THEN 3
+				ELSE 2 END)) AS ri,
+			if(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr,
+			o.status, o.spelling_reason, o.reference_no, null
+		FROM $TAXON_TABLE{$tree_table}{opinions} as o
+			LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r using (reference_no)
+			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1
+				on a1.taxon_no = if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no)
+			LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as a2
+				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
+		WHERE opinion_no = $opinion_no");
     
     return;
 }
