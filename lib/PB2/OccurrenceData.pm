@@ -516,11 +516,7 @@ sub initialize {
     
     $ds->define_ruleset('1.2:occs:selector' =>
 	{ param => 'id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'occ_id' },
-	    "A comma-separated list of occurrence identifiers.",
-	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
-	    "A comma-separated list of collection identifiers.  All occurrences associated with",
-	    "the specified collections are returned, provided they satisfy the other parameters",
-	    "given with this request.");
+	    "A comma-separated list of occurrence identifiers.");
     
     $ds->define_ruleset('1.2:occs:display' =>
 	"You can use the following parameters to select what information you wish to retrieve,",

@@ -577,6 +577,10 @@ sub initialize {
 	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
 	    "You may specify one or more cluster ids, separated by commas.",
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
+	    "A comma-separated list of collection identifiers.  All records associated with",
+	    "the specified collections are returned, provided they satisfy the other parameters",
+	    "given with this request.",
 	{ param => 'taxon_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
 	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID'), list => ','},
@@ -1454,6 +1458,10 @@ sub generateMainFilters {
 	    $tables_ref->{non_summary} = 1;
 	}
     }
+    
+    # Check for parameter 'coll_id'
+    
+    my $coll_id = 
     
     # Check for parameters 'taxon_name', 'base_name', 'taxon_id', 'base_id',
     # 'exclude_name', 'exclude_id'
