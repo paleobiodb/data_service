@@ -65,7 +65,7 @@ my $t1 = { 'nam' => $TEST_NAME_1,
 	   "cll" => "Insecta",
 	   "odl" => "Coleoptera",
 	   "fml" => "Dascillidae",
-	   "oid" => '!nonzero',
+	   "oid" => '!id{txn}',
 	   "ext" => '!nonzero',
 	   "fea" => '!nonzero',
 	   "fla" => '!nonzero',
@@ -75,7 +75,7 @@ my $t1 = { 'nam' => $TEST_NAME_1,
 	   "exs" => '!nonzero'};
 	   
 my $t1t = { 'taxon_name' => $TEST_NAME_1,
-	    'record_type' => "taxon",
+	    'record_type' => "txn",
 	    'taxon_rank' => 'family',
 	    'common_name' => "soft bodied plant beetle",
 	    'attribution' => "Guerin-Meneville 1843",
@@ -87,38 +87,15 @@ my $t1t = { 'taxon_name' => $TEST_NAME_1,
 	    "family" => "Dascillidae",
 	    'taxon_no' => '!nonzero',
 	    'orig_no' => '!nonzero',
-	    'senpar_no' => '!nonzero',
+	    'parent_no' => '!nonzero',
 	    'reference_no' => '!nonzero',
-	    'is_extant' => '!nonzero',
-	    "firstapp_ea" => '!nonzero',
-	    "firstapp_la" => '!nonzero',
-	    "lastapp_ea" => '!nonzero',
-	    "lastapp_la" => '!numeric',
+	    'is_extant' => '!nonempty',
+	    "first_max_ma" => '!nonzero',
+	    "first_min_ma" => '!nonzero',
+	    "last_max_ma" => '!nonzero',
+	    "last_min_ma" => '!numeric',
 	    "taxon_size" =>'!nonzero',
 	    "extant_size" => '!nonzero' };
-
-# Then the fields and values to expect as a result of the 'datainfo' parameter.
-
-my $ss = { "data_provider" => 1,
-	   "data_source" => 1,
-	   "data_license" => 1,
-	   "license_url" => 1,
-	   "documentation_url" => $T->make_url("/data1.2/taxa/single_doc.html"),
-	   "data_url" => $T->make_url("/data1.2/taxa/single.json?name=$t1->{nam}&show=attr,app,size,phylo&datainfo"),
-	   "access_time" => 1,
-	   "title" => 1 };
-
-my $sst = { "Data Provider" => 1,
-	    "Data Source" => 1,
-	    "Data License" => 1,
-	    "License URL" => 1,
-	    "Documentation URL" => $T->make_url("/data1.2/taxa/single_doc.html"),
-	    "Data URL" => $T->make_url("/data1.2/taxa/single.txt?name=$t1->{nam}&show=attr,app,size,phylo&datainfo"),
-	    "Access Time" => 1,
-	    "Title" => 1 };
-
-my $ssp = { "name" => $TEST_NAME_1,
-	    "show" => "attr,app,size,phylo" };
 
 my $LIMIT_1 = 5;
 my $OFFSET_1 = 4;
@@ -132,7 +109,7 @@ my ($taxon_id, $parent_id);
 
 subtest 'single json by name' => sub {
     
-    my $single_json = $T->fetch_url("/data1.2/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,phylo",
+    my $single_json = $T->fetch_url("/data1.2/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,phylo,common",
 				    "single json request OK");
     
     unless ( $single_json )
@@ -167,7 +144,7 @@ subtest 'single json by name' => sub {
 
 subtest 'single txt by name' => sub {
     
-    my $single_txt = $T->fetch_url("/data1.2/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo",
+    my $single_txt = $T->fetch_url("/data1.2/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo,common",
 				   "single txt request OK");
     
     unless ( $single_txt )
@@ -389,10 +366,11 @@ subtest 'list all parents' => sub {
     
     return if $found{NO_RECORDS};
     
-    ok($found{Eukaryota} && $found{Metazoa} && $found{Vertebrata} &&
-       $found{Therapsida} && $found{$TEST_NAME_3P} && $found{$TEST_NAME_4P} &&
-       $found{$TEST_NAME_3} && $found{$TEST_NAME_4},
-       "list parents found a sample of records");
+    foreach my $name ('Eucarya', 'Metazoa', 'Vertebrata', 'Therapsida',
+		      $TEST_NAME_3P, $TEST_NAME_4P, $TEST_NAME_3, $TEST_NAME_4)
+    {
+	ok($found{$name}, "list parents found '$name'");
+    }
 };
 
 

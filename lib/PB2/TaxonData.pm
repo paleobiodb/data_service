@@ -1,4 +1,4 @@
-#
+s'
 # TaxonData
 # 
 # A class that returns information from the PaleoDB database about a single
@@ -106,8 +106,12 @@ sub initialize {
 	    "accepted as most correct.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN}, dwc_value => 'Taxon' },
 	    "The type of this object: C<$IDP{TXN}> for an occurrence.",
-	{ output => 'exclude', com_name => 'exc' },
-	    "This field will have a true value if the taxon represents an excluded group within another taxon.",
+	{ output => 'flag', com_name => 'flg' },
+	    "This field will be empty for most records.  In a record representing an excluded",
+	    "group inside another taxon, the field will contain C<E>.  In a result set whose",
+	    "records are arranged hierarchically, those records whose parents are not in the set",
+	    "will have the value C<B> in this field.  This flag marks the base(s) of the reported",
+	    "portions of the taxonomic hierarchy.",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
@@ -141,13 +145,13 @@ sub initialize {
 	  com_name => 'acn', dedup => 'taxon_name' },
 	    "If this name is either a junior synonym or an invalid name, the accepted name",
 	    "that should be used in its place.",
-	{ output => 'senpar_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
+	{ output => 'senpar_no', pbdb_name => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
 	    "This field and those following are only available if the classification of",
 	    "this taxon is known to the database.",
 	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'senpar_name', if_block => 'parent,immparent' },
 	    "The name of the parent taxon, or of its senior synonym if there is one.",
-	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'ipn',
+	{ output => 'immpar_no', dwc_name => 'parentNameUsageID', com_name => 'ipn',
 	  pbdb_name => 'immpar_no', if_block => 'immparent', dedup => 'senpar_no' },
 	    "The identifier of the immediate parent taxon, even if it is a junior synonym.",
 	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
@@ -158,6 +162,77 @@ sub initialize {
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
 	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
 	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of fossil occurrences in this database that are identified",
+	    "as belonging to this taxon or any of its subtaxa.");
+    
+    $ds->define_block('1.2:taxa:reftaxa' =>
+	{ select => ['REFTAXA_DATA'] },
+	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
+	{ set => '*', code => \&process_com, if_vocab => 'com' },
+	{ set => 'ref_type', from => '*', code => \&PB2::ReferenceData::set_reference_type, 
+	  if_vocab => 'pbdb' },
+	{ output => 'reference_no', com_name => 'rid' },
+	    "The identifier of a reference in which this taxonomic name was listed.",
+	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'tid' },
+	    "A unique identifier for this taxonomic name",
+	{ output => 'taxon_no', com_name => 'vid', not_field => 'no_variant' },
+	    "A unique identifier for the variant of this taxonomic name that was actually",
+	    "mentioned in the reference.",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN}, dwc_value => 'Taxon' },
+	    "The type of this object: C<$IDP{TXN}> for an occurrence.",
+	{ output => 'ref_type', com_name => 'rtp' },
+	    "The treatment of this name in the indicated reference.  Values will be one or",
+	    "more of the following, as a comma-separated list:",
+	    $ds->document_set('1.2:refs:reftype'),
+	{ set => 'taxon_rank', if_vocab => 'com', lookup => \%TAXON_RANK },
+	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
+	    "The rank of this taxon as mentioned in the reference, ranging from subspecies up to kingdom",
+	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
+	    "The taxonomic name actually mentioned in the reference.",
+	{ output => 'attribution', if_block => 'attr', 
+	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
+	    "The attribution (author and year) of this taxonomic name",
+	{ output => 'pubyr', if_block => 'attr', 
+	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
+	    "The year in which this name was published",
+	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
+	    "The common (vernacular) name of this taxon, if any",
+	{ output => 'status', com_name => 'sta', if_block => 'full' },
+	    "The taxonomic status of this name",
+	{ set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, if_vocab => 'dwc', 
+	  if_block => 'full' },
+	{ output => 'tax_status', dwc_name => 'taxonomicStatus', if_vocab => 'dwc', if_block => 'full' },
+	    "The taxonomic status of this name, in the Darwin Core vocabulary.",
+	    "This field only appears if that vocabulary is selected.",
+	{ set => 'nom_status', from => 'status', lookup => \%NOMENCLATURAL_STATUS, if_vocab => 'dwc',
+	  if_block => 'full' },
+	{ output => 'nom_status', dwc_name => 'nomenclaturalStatus', if_vocab => 'dwc', if_block => 'full' },
+	    "The nomenclatural status of this name, in the Darwin Core vocabulary.",
+	    "This field only appears if that vocabulary is selected.",
+	{ output => 'accepted_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'accepted_no', 
+	  com_name => 'acc', dedup => 'orig_no' },
+	    "If this name is either a junior synonym or an invalid name, the identifier",
+	    "of the accepted name to be used in its place.",
+	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
+	  com_name => 'acn', dedup => 'taxon_name' },
+	    "If this name is either a junior synonym or an invalid name, the accepted name",
+	    "that should be used in its place.",
+	{ output => 'senpar_no', pbdb_name => 'parent_no',
+	  dwc_name => 'parentNameUsageID', com_name => 'par', if_block => 'full' }, 
+	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
+	    "This field and those following are only available if the classification of",
+	    "this taxon is known to the database.",
+	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'parent_name', if_block => 'parent,immparent' },
+	    "The name of the parent taxon, or of its senior synonym if there is one.",
+	{ output => 'parent_no', pbdb_name => 'immpar_no', dwc_name => 'parentNameUsageID', 
+	  com_name => 'ipn', if_block => 'full,immparent', dedup => 'senpar_no' },
+	    "The identifier of the immediate parent taxon, even if it is a junior synonym.",
+	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
+	  if_block => 'immparent', dedup => 'senpar_name' },
+	    "The name of the immediate parent taxon, even if it is a junior synonym.",
+	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant', if_block => 'full' },
+	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
+	{ output => 'n_occs', com_name => 'noc', if_block => 'full' },
 	    "The number of fossil occurrences in this database that are identified",
 	    "as belonging to this taxon or any of its subtaxa.");
     
@@ -335,70 +410,6 @@ sub initialize {
     	    "If this value is non-zero, you can use it to construct image URLs",
 	    "using L<taxa/thumb|node:taxa/thumb> and L<taxa/icon|node:taxa/icon>.");
     
-    $ds->define_block('1.2:taxa:reftaxa' =>
-	{ select => ['REFTAXA_DATA'] },
-	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
-	{ set => '*', code => \&process_com, if_vocab => 'com' },
-	{ output => 'reference_no', com_name => 'rid' },
-	    "The identifier of a reference in which this taxonomic name was listed.",
-	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'tid' },
-	    "A unique identifier for this taxonomic name",
-	{ output => 'taxon_no', com_name => 'vid', not_field => 'no_variant' },
-	    "A unique identifier for the variant of this taxonomic name that was actually",
-	    "mentioned in the reference.",
-	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN}, dwc_value => 'Taxon' },
-	    "The type of this object: C<$IDP{TXN}> for an occurrence.",
-	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
-	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
-	    "The rank of this taxon as mentioned in the reference, ranging from subspecies up to kingdom",
-	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
-	    "The taxonomic name actually mentioned in the reference.",
-	{ output => 'attribution', if_block => 'attr', 
-	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
-	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'pubyr', if_block => 'attr', 
-	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
-	    "The year in which this name was published",
-	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
-	    "The common (vernacular) name of this taxon, if any",
-	{ output => 'status', com_name => 'sta', if_block => 'full' },
-	    "The taxonomic status of this name",
-	{ set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, if_vocab => 'dwc', 
-	  if_block => 'full' },
-	{ output => 'tax_status', dwc_name => 'taxonomicStatus', if_vocab => 'dwc', if_block => 'full' },
-	    "The taxonomic status of this name, in the Darwin Core vocabulary.",
-	    "This field only appears if that vocabulary is selected.",
-	{ set => 'nom_status', from => 'status', lookup => \%NOMENCLATURAL_STATUS, if_vocab => 'dwc',
-	  if_block => 'full' },
-	{ output => 'nom_status', dwc_name => 'nomenclaturalStatus', if_vocab => 'dwc', if_block => 'full' },
-	    "The nomenclatural status of this name, in the Darwin Core vocabulary.",
-	    "This field only appears if that vocabulary is selected.",
-	{ output => 'accepted_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'accepted_no', 
-	  com_name => 'acc', dedup => 'orig_no' },
-	    "If this name is either a junior synonym or an invalid name, the identifier",
-	    "of the accepted name to be used in its place.",
-	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
-	  com_name => 'acn', dedup => 'taxon_name' },
-	    "If this name is either a junior synonym or an invalid name, the accepted name",
-	    "that should be used in its place.",
-	{ output => 'senpar_no', dwc_name => 'parentNameUsageID', com_name => 'par', if_block => 'full' }, 
-	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
-	    "This field and those following are only available if the classification of",
-	    "this taxon is known to the database.",
-	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'senpar_name', if_block => 'parent,immparent' },
-	    "The name of the parent taxon, or of its senior synonym if there is one.",
-	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'ipn', if_block => 'full',
-	  pbdb_name => 'immpar_no', if_block => 'immparent', dedup => 'senpar_no' },
-	    "The identifier of the immediate parent taxon, even if it is a junior synonym.",
-	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
-	  if_block => 'immparent', dedup => 'senpar_name' },
-	    "The name of the immediate parent taxon, even if it is a junior synonym.",
-	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant', if_block => 'full' },
-	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
-	{ output => 'n_occs', com_name => 'noc', if_block => 'full' },
-	    "The number of fossil occurrences in this database that are identified",
-	    "as belonging to this taxon or any of its subtaxa.");
-    
     $ds->define_block('1.2:taxa:auto' =>
 	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this taxonomic name",
@@ -538,10 +549,11 @@ sub initialize {
 	    "classification opinion, B<U> for an opinion which was not selected",
 	    "as a classification opinion.",
 	{ set => 'opinion_type', lookup => \%pbdb_opinion_code, if_vocab => 'pbdb' },
-	{ output => 'author', com_name => 'att' },
-	    "The author(s) of this opinion.",
-	{ output => 'pubyr', com_name => 'pby' },
-	    "The year in which the opinion was published.",
+	{ output => 'reference_no', com_name => 'rid' },
+	    "The identifier of the reference from which this opinion was entered.",
+	{ output => 'taxon_rank', com_name => 'rnk' },
+	    "The rank to which this opinion assigns the taxonomic name that is the subject of",
+	    "this opinion.",
 	{ output => 'taxon_name', com_name => 'nam' },
 	    "The taxonomic name that is the subject of this opinion.",
 	{ output => 'orig_no', com_name => 'tid' },
@@ -551,9 +563,6 @@ sub initialize {
 	    "if different from the currently accepted one.",
 	{ output => 'child_spelling_no', com_name => 'vid', not_field => 'no_variant' },
 	    "The identifier of the particular variant that is the subject of this opinion.",
-	{ output => 'taxon_rank', com_name => 'rnk' },
-	    "The rank to which this opinion assigns the taxonomic name that is the subject of",
-	    "this opinion.",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ output => 'status', com_name => 'sta' },
 	    "The taxonomic status of this name, as expressed by this opinion.",
@@ -563,13 +572,17 @@ sub initialize {
 	    "in the opinion, not necessarily the currently accepted variant.",
 	{ output => 'parent_no', com_name => 'par' },
 	    "The identifier of the parent taxonomic name.",
-	{ output => 'parent_spelling_no', com_name => 'pva' },
+	{ output => 'parent_spelling_no', com_name => 'pva', dedup => 'parent_current_no' },
 	    "The identifier of the variant of the parent name that was given in the opinion,",
 	    "if this is different from the currently accepted variant of that name.",
 	{ output => 'spelling_reason', com_name => 'spl' },
 	    "An indication of why this name was given.",
 	{ output => 'basis', com_name => 'bas', if_block => 'basis' },
-	    "The basis of the opinion, see above for a list.");
+	    "The basis of the opinion, see above for a list.",
+	{ output => 'author', com_name => 'att' },
+	    "The author(s) of this opinion.",
+	{ output => 'pubyr', com_name => 'pby' },
+	    "The year in which the opinion was published.");
     
     # Finally, we define some rulesets to specify the parameters accepted by
     # the operations defined in this class.
@@ -610,10 +623,12 @@ sub initialize {
 	    "Select all taxa contained within the specified taxon or taxa and within all",
 	    "synonymous taxa.  This selects an entire subtree of the taxonomic hierarchy.",
 	{ value => 'parent' },
-	    "Select the taxa immediately containing the specified taxon or taxa.",
-	{ value => 'senpar' },
-	    "Select the senior synonyms of the taxa immediately containing the",
-	    "specified taxon or taxa.",
+	    "Select the taxa immediately containing the specified taxon or taxa.  If an",
+	    "immediate parent taxon is a junior synonym, the corresponding senior synonym",
+	    "will be returned.",
+	{ value => 'immpar' },
+	    "Select the taxa immediately containing the specified taxon or taxa,",
+	    "even if they are junior synonyms.",
 	{ value => 'all_parents' },
 	    "Select all taxa that contain the specfied taxon or taxa.  The senior",
 	    "synonym of each name will be returned.",
@@ -648,6 +663,27 @@ sub initialize {
 	{ value => 'invalid' },
 	    "Select only taxonomically invalid names, e.g. nomina dubia");
     
+    $ds->define_set('1.2:opinions:status' =>
+	{ value => 'all' },
+	    "Select all opinions, regardless of what they state about their subject taxon.",
+	    "This is the default.",
+	{ value => 'valid' },
+	    "Select only opinions which assert that their subject taxon is a valid",
+	    "name.  These opinions state one of the following about their subject taxon:",
+	    "'belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by'.",
+	{ value => 'senior' },
+	    "Select only opinions which assert that their subject taxon is a valid",
+	    "name and not a junior synonym.  These opinions state 'belongs to' about their subject taxon.",
+	{ value => 'junior' },
+	    "Select only opinions which assert that their subject taxon is a junior synonym.",
+	    "These opinions state one of the following about their subject taxon:",
+	    "'subjective synonym of', 'objective synonym of', 'replaced by'.",
+	{ value => 'invalid' },
+	    "Select only opinions which assert that their subject taxon is an invalid name.",
+	    "These opinions state one of the following about their subjec taxon:",
+	    "'nomen dubium', 'nomen nudum', 'nomen vanum', 'nomen oblitum', 'invalid subgroup of',",
+	    "'misspelling of'.");
+    
     $ds->define_set('1.2:taxa:refselect' =>
 	{ value => 'auth' },
 	    "Select the references associated with the authority records for these taxa.",
@@ -668,22 +704,11 @@ sub initialize {
     
     $ds->define_set('1.2:taxa:opselect' =>
 	{ value => 'class' },
-	    "Select only the classification opinions for these taxa.  This is the default.",
+	    "Select only opinions that have been selected as classification opinions.  This is the default",
+	    "for L<taxa/opinions|node:taxa/opinions>.",
 	{ value => 'all' },
-	    "Select all opinions for these taxa, including those that are not used",
-	    "as classification opinions.",
-	{ value => 'valid' },
-	    "Select all opinions that classify these taxa as valid names, whether",
-	    "or not they are used as classification opinions.",
-	{ value => 'senior' },
-	    "Select all opinions that classify these taxa as 'belongs to',",
-	    "whether or not they are used as classification opinions.",
-	{ value => 'junior' },
-	    "Select all opinions that classify these taxa as junior synonyms,",
-	    "whether or not they are used as classification opinions.",
-	{ value => 'invalid' },
-	    "Select all opinions that classify these taxa as invalid names,",
-	    "whether or not they are used as classification opinions.");
+	    "Select all matching opinions, including those that are not used",
+	    "as classification opinions.  This is the default for L<opinions/list|node:opinions/list>.");
     
     $ds->define_set('1.2:taxa:variants' =>
 	{ value => 'current' },
@@ -732,6 +757,11 @@ sub initialize {
 	    "Results are ordered alphabetically by taxon name.",
 	{ value => 'name.asc', undocumented => 1 },
     	{ value => 'name.desc', undocumented => 1 },
+	{ value => 'ref' },
+	    "Results are ordered by reference id, so that taxa entered from the same",
+	    "reference are listed together.",
+	{ value => 'ref.asc', undocumented => 1 },
+	{ value => 'ref.desc', undocumented => 1 },
 	{ value => 'firstapp' },
 	    "Results are ordered chronologically by first appearance, oldest to youngest unless you add C<.asc>",
 	{ value => 'firstapp.asc', undocumented => 1 },
@@ -798,6 +828,11 @@ sub initialize {
 	    "Results are ordered alphabetically by taxon name.",
 	{ value => 'name.asc', undocumented => 1 },
     	{ value => 'name.desc', undocumented => 1 },
+	{ value => 'ref' },
+	    "Results are ordered by reference id, so that opinions entered from the same",
+	    "reference are listed together.",
+	{ value => 'ref.asc', undocumented => 1 },
+	{ value => 'ref.desc', undocumented => 1 },
 	{ value => 'pubyr' },
 	    "Results are ordered by the year in which the opinion was published,",
 	    "newest first unless you add '.asc'",
@@ -823,25 +858,28 @@ sub initialize {
 	{ value => 'modified.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.2:taxa:selector' =>
-	"The following parameters are used to select the base set of taxonomic names to return.",
-	"If you wish to download the entire taxonomy, use C<rel=all_taxa> and see also the",
-	"L<limit|node:special#limit> parameter.",
 	{ param => 'name', valid => \&PB2::TaxonData::validNameSpec, 
-	  alias => 'taxon_name' },
+	  alias => 'taxon_name', key => 'taxon_name' },
 	    "Select the all taxa matching each of the specified name(s).",
 	    "To specify more than one, separate them by commas.",
-	    "The C<%> character may be used as a wildcard.",
+	    "The C<%> character may be used as a wildcard, however only",
+	    "one match will be returned for each name.",
+	{ param => 'match_name', valid => \&PB2::TaxonData::validNameSpec },
+	    "Selects all valid matching taxa.  This is useful mainly if you",
+	    "include a wildcard character in the name.  Allowed wildcards are",
+	    "C<%> and C<.>, and both will match any number of characters.",
 	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Selects the most closely matching valid taxon or taxa, plus",
-	    "all subtaxa.  You can specify more than one name, separated by",
+	    "all synonyms and subtaxa.  You can specify more than one name, separated by",
 	    "commas.  This is a shortcut, equivalent to specifying C<name>",
 	    "and C<rel=all_children>.",
-	{ param => 'id', valid => VALID_IDENTIFIER('TID'), list => ',', bad_value => '-1' },
+	{ param => 'id', valid => VALID_IDENTIFIER('TID'), list => ',', 
+	  bad_value => '-1', alias => 'taxon_id', key => 'taxon_id' },
 	    "Selects the taxa corresponding to the specified identifier(s).",
 	    "You may specify more than one, separated by commas.",
 	{ param => 'base_id', valid => VALID_IDENTIFIER('TID'), list => ',', bad_value => '-1' },
 	    "Selects the most closely matching valid taxon or taxa, plus",
-	    "all subtaxa.  You can specify more than one identifier, separated",
+	    "all synonyms and subtaxa.  You can specify more than one identifier, separated",
 	    "by commas.  This is a shortcut, equivalent to specifying C<name> and",
 	    "C<rel=all_children>.",
 	{ optional => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ',' },
@@ -851,7 +889,11 @@ sub initialize {
 	    "C<rel=all_children>, or C<rel=subtree>.  If you are using C<base_name>,",
 	    "you can also exclude subtaxa by name using the C<^> symbol, as in \"dinosauria ^aves\"",
 	    "or \"osteichthyes ^tetrapoda\".",
-	{ param => 'all_taxa', valid => FLAG_VALUE },
+	{ param => 'immediate', valid => FLAG_VALUE },
+	    "If you specify this parameter along with C<base_name> or C<base_id>,",
+	    "then only children of the specified taxa are listed, and not the",
+	    "children of synonyms.",
+	{ param => 'all_records', valid => FLAG_VALUE },
 	    "Selects all taxa from the database.  This is equivalent to specifying",
 	    "the parameter C<rel> with the value C<all_taxa>.  Be careful when using this, since",
 	    "the full result set if you don't specify any other parameters can exceed",
@@ -859,8 +901,52 @@ sub initialize {
 	">The following parameters indicate which related taxonomic names to return:",
 	{ optional => 'rel', valid => '1.2:taxa:rel' },
 	    "Indicates which taxa are to be selected.  Accepted values include:",
-	{ optional => 'status', valid => '1.2:taxa:status', default => 'all' },
-	    "Return only names that have the specified status.  The default is C<all>.",
+	{ optional => 'taxon_status', valid => '1.2:taxa:status', default => 'all', alias => 'status' },
+	    "Selects only names that have the specified status.  The default is C<all>.",
+	    "Accepted values include:");
+    
+    $ds->define_ruleset('1.2:taxa:aux_selector' =>
+	{ param => 'taxon_name', valid => \&PB2::TaxonData::validNameSpec, alias => 'name' },
+	    "Selects records associated directly with taxa matching each of the specified name(s).",
+	    "To specify more than one, separate them by commas.",
+	    "The C<%> character may be used as a wildcard, however only one",
+	    "match will be returned for each name.",
+	{ param => 'match_name', valid => \&PB2::TaxonData::validNameSpec },
+	    "Selects records associated with all matching taxa.  This is useful mainly if you",
+	    "include a wildcard character in the name.  Allowed wildcards are",
+	    "C<%> and C<.>, and both will match any number of characters.",
+	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
+	    "Selects records associated with the named taxon or taxa, plus",
+	    "all subtaxa.  You can specify more than one name, separated by",
+	    "commas.",
+	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID'), list => ',', bad_value => '-1', alias => 'id' },
+	    "Selects records associated directly with the taxa corresponding",
+	    "to the specified identifier(s).",
+	    "You may specify more than one, separated by commas.",
+	{ param => 'base_id', valid => VALID_IDENTIFIER('TID'), list => ',', bad_value => '-1' },
+	    "Selects records associated with the identified taxa, plus",
+	    "all subtaxa.  You can specify more than one identifier, separated",
+	    "by commas.  This is a shortcut, equivalent to specifying C<taxon_id> and",
+	    "C<rel=all_children>.",
+	{ optional => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ',' },
+	    "Excludes the taxonomic subtree(s) corresponding to the taxon or taxa",
+	    "specified.  If you are using C<base_name>, you can alternatively",
+	    "exclude subtaxa by name using the C<^> symbol, as in \"dinosauria ^aves\"",
+	    "or \"osteichthyes ^tetrapoda\".",
+	{ param => 'immediate', valid => FLAG_VALUE },
+	    "If you specify this parameter along with C<base_name> or C<base_id>,",
+	    "then only immediate children of the specified taxa are considered, and not the",
+	    "children of synonyms.  This parameter does not need any value.",
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Selects records associated with all taxa from the database.  Be careful",
+	    "when using this, since the full result set for opinions can exceed 150",
+	    "megabytes and the full result set for references can exceed 40.  This",
+	    "parameter does not need any value.",
+	">The following parameters indicate which related taxonomic names to return:",
+	{ param => 'rel', valid => '1.2:taxa:rel' },
+	    "Indicates which taxa are to be selected.  Accepted values include:",
+	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
+	    "Selects only records associated with taxa that have the specified status.  The default is C<all>.",
 	    "Accepted values include:");
     
     $ds->define_ruleset('1.2:taxa:filter' => 
@@ -885,54 +971,15 @@ sub initialize {
 	{ optional => 'interval', valid => ANY_VALUE },
 	    "Return only taxa which were extant during the specified time interval",
 	    "or intervals, given by name.  You may give more than one interval name, separated either",
-	    "by hyphens or commas.  No matter how many intervals you specify, the selected",
-	    "taxa will be those that were extant at any time between the oldest and youngest",
-	    "specified interval, inclusive.  In other words, this is equivalent to using ",
-	    "the parameters C<max_ma> and C<min_ma> and providing the maximum and minimum",
-	    "of the boundary ages of the given intervals.",
+	    "by hyphens or commas.  The selected time range will stretch from the beginning of",
+	    "the oldest specified interval to the end of the youngest specified, with no gaps.",
 	{ optional => 'interval_id', valid => ANY_VALUE },
 	    "Return only taxa which were extant during the specified time interval",
 	    "or intervals, given by identifier.  These are evaluated based on the",
 	    "same rules as the parameter C<interval>.",
 	{ optional => 'depth', valid => POS_VALUE },
-	    "Return only taxa no more than the specified number of levels above or",
-	     "below the base taxa in the hierarchy");
-    
-    $ds->define_ruleset('1.2:taxa:aux_selector' =>
-	{ param => 'taxon_name', valid => \&PB2::TaxonData::validNameSpec },
-	    "Selects records associated directly with taxa matching each of the specified name(s).",
-	    "To specify more than one, separate them by commas.",
-	    "The C<%> character may be used as a wildcard.",
-	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
-	    "Selects records associated with the named taxon or taxa, plus",
-	    "all subtaxa.  You can specify more than one name, separated by",
-	    "commas.  This is a shortcut, equivalent to specifying C<name>",
-	    "and C<rel=all_children>.",
-	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID'), list => ',', bad_value => '-1' },
-	    "Selects records associated directly with the taxa corresponding",
-	    "to the specified identifier(s).",
-	    "You may specify more than one, separated by commas.",
-	{ param => 'base_id', valid => VALID_IDENTIFIER('TID'), list => ',', bad_value => '-1' },
-	    "Selects records associated with the identified taxa, plus",
-	    "all subtaxa.  You can specify more than one identifier, separated",
-	    "by commas.  This is a shortcut, equivalent to specifying C<taxon_id> and",
-	    "C<rel=all_children>.",
-	{ optional => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ',' },
-	    "Excludes the taxonomic subtree(s) corresponding to the taxon or taxa",
-	    "specified.  If you are using C<base_name>, you can alternatively",
-	    "exclude subtaxa by name using the C<^> symbol, as in \"dinosauria ^aves\"",
-	    "or \"osteichthyes ^tetrapoda\".",
-	{ param => 'all_taxa', valid => FLAG_VALUE },
-	    "Selects records associated with all taxa from the database.  Be careful",
-	    "when using this, since the full result set for opinions can exceed 150",
-	    "megabytes and the full result set for references can exceed 40.  This",
-	    "parameter does not need any value.",
-	">The following parameters indicate which related taxonomic names to return:",
-	{ param => 'rel', valid => '1.2:taxa:rel' },
-	    "Indicates which taxa are to be selected.  Accepted values include:",
-	{ param => 'status', valid => '1.2:taxa:status', default => 'all' },
-	    "Return only records associated with taxa that have the specified status.  The default is C<all>.",
-	    "Accepted values include:");
+	    "Return only taxa no more than the specified number of levels below or",
+	     "above the base taxon or taxa in the hierarchy");
     
     $ds->define_ruleset('1.2:taxa:summary_selector' => 
 	{ optional => 'rank', valid => '1.2:taxa:summary_rank', alias => 'summary_rank',
@@ -949,6 +996,35 @@ sub initialize {
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:");
     
+    $ds->define_ruleset('1.2:opinions:filter' =>
+	{ optional => 'op_status', valid => '1.2:opinions:status' },
+	    "You can use this parameter to specify which kinds of opinions to select.",
+	    "Accepted values include:",
+	{ param => 'op_author', valid => ANY_VALUE },
+	    "Not implemented yet, but will be soon.",
+	    # "Selects only opinions attributed to the specified author.  This database",
+	    # "only stores last names and first initials.  Examples: 'Smith', 'A. Smith', 'A. Johns%'.",
+	    # "You may specify more than one name, separated by 'and', which will select names",
+	    # "attributed to both authors together regardless of author order.",
+	    # "You may specify more than one name and/or name pair, separated by commas.  In",
+	    # "this case, all opinions that match any of these will be selected.",
+	{ param => 'op_published_after', valid => POS_VALUE, alias => 'pubyr_before' },
+	    "Selects only opinions published during or after the indicated year.",
+	{ param => 'op_published_before', valid => POS_VALUE, alias => 'pubyr_after' },
+	    "Selects only opinions published during or before the indicated year.",
+	{ param => 'op_published', valid => ANY_VALUE, alias => 'op_pubyr' },
+	    "Selects only opinions published during the indicated year or range of years.");
+    
+    $ds->define_ruleset('1.2:opinions:display' => 
+	"The following parameter indicates which information should be returned about each resulting name:",
+	{ optional => 'SPECIAL(show)', valid => '1.2:opinions:output_map', list => ','},
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each taxon.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	{ optional => 'order', valid => '1.2:opinions:order', split => ',' },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:");
+    
     $ds->define_ruleset('1.2:taxa:single' => 
 	{ require => '1.2:taxa:specifier',
 	  error => "you must specify either 'name' or 'id'" },
@@ -957,18 +1033,49 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:taxa:list' => 
+	"The following parameters are used to select the base set of taxonomic names to return.",
+	"If you wish to download the entire taxonomy, use C<all_records> and see also the",
+	"L<limit|node:special#limit> parameter.",
 	{ require => '1.2:taxa:selector',
-	  error => "you must specify one of 'name', 'id', 'base_name', 'base_id', or 'all_taxa'" },
+	  error => "you must specify one of 'name', 'id', 'base_name', 'base_id', 'match_name', or 'all_records'" },
+	{ optional => 'variant', valid => '1.2:taxa:variants' },
+	    "This parameter specifies whether to select just the current variant",
+	    "of each matching taxonomic name (the default) or all variants.  The",
+	    "accepted values include:",
 	{ allow => '1.2:taxa:filter' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
+	{ allow => '1.2:common:select_taxa_crmod' },
+	{ allow => '1.2:common:select_taxa_ent' },
+	">You can also specify any of the following parameters:",
 	{ allow => '1.2:taxa:display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
+    $ds->define_ruleset('1.2:taxa:opinions' =>
+	">You can use the following parameters if you wish to select opinions associated",
+	"with a specified list of taxa.  Only the records which also match the other",
+	"parameters that you specify will be returned.",
+	{ require => '1.2:taxa:aux_selector',
+	  error => "you must specify one of 'name', 'id', 'base_name', 'base_id', 'match_name', or 'all_records'" },
+	{ allow => '1.2:taxa:filter' },
+	{ allow => '1.2:common:select_taxa_crmod' },
+	{ allow => '1.2:common:select_taxa_ent' },
+	">>You can also specify any of the following parameters:",
+	{ optional => 'select', valid => '1.2:taxa:opselect' },
+	    "You can use this parameter to retrieve all opinions, or only the classification opinions.",
+	    "Accepted values include:",
+	{ allow => '1.2:opinions:filter' },
+	{ allow => '1.2:common:select_ops_crmod' },
+	{ allow => '1.2:common:select_ops_ent' },
+	{ allow => '1.2:refs:filter' },
+	{ allow => '1.2:opinions:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.",
+	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
+	"the name of the primary author.");
+    
     $ds->define_ruleset('1.2:taxa:refs' =>
-	">You can use the following parameters if you wish to retrieve the references associated",
-	"with a specified list of taxa.",
+	">You can use the following parameters to retrieve the references associated",
+	"with a specified list of taxa:",
 	"Only the records which also match the other parameters that you specify will be returned.",
 	{ require => '1.2:taxa:aux_selector' },
 	{ optional => 'variant', valid => '1.2:taxa:variants' },
@@ -983,9 +1090,9 @@ sub initialize {
 	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
 	{ allow => '1.2:refs:filter' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	{ allow => '1.2:refs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
@@ -993,21 +1100,25 @@ sub initialize {
 	"the name of the primary author.");
     
     $ds->define_ruleset('1.2:taxa:byref' =>
+	">You can use the following parameters to retrieve the references associated",
+	"with a specified list of taxa:",
 	{ require => '1.2:taxa:aux_selector' },
 	{ optional => 'variant', valid => '1.2:taxa:variants' },
-	    "You can use this parameter to specify which variants of the matching taxonomic name(s) to retrieve.",
-	    "The accepted values include:",
+	    "This parameter is relevant only when retrieving authority references.",
+	    "It specifies whether to retrieve the reference for just the current variant",
+	    "of each matching taxonomic name (the default) or for all variants.  The",
+	    "accepted values include:",
 	{ allow => '1.2:taxa:filter' },
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
-	">You can also specify any of the following parameters:",
+	">>You can also specify any of the following parameters:",
 	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	{ allow => '1.2:refs:filter' },
-	{ allow => '1.2:refs:display' },
+	{ allow => '1.2:taxa:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
@@ -1021,67 +1132,31 @@ sub initialize {
 	{ param => 'id', valid => VALID_IDENTIFIER('OPN'), list => ',', bad_value => '-1',
 	  alias => 'opinion_id' },
 	    "Selects the opinions corresponding to the specified identifier(s).",
-	    "You may provide more than one, separated by commas.");
+	    "You may provide more than one, separated by commas.",
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Selects all opinions entered in the database.  This parameter does not",
+	    "need a value.  Be careful when using this parameter, since the result",
+	    "may total more than 50 megabytes.");
     
-    $ds->define_ruleset('1.2:opinions:aux_selector' =>
-	{ param => 'opinion_id', valid => VALID_IDENTIFIER('OPN'), list => ',', bad_value => '-1' },
-	    "Selects the opinions corresponding to the specified identifier(s).",
-	    "You may provide more than one, separated by commas.");
+    # $ds->define_ruleset('1.2:opinions:aux_selector' =>
+    # 	{ param => 'opinion_id', valid => VALID_IDENTIFIER('OPN'), list => ',', bad_value => '-1' },
+    # 	    "Selects the opinions corresponding to the specified identifier(s).",
+    # 	    "You may provide more than one, separated by commas.");
     
-    $ds->define_ruleset('1.2:opinions:filter' =>
-	{ param => 'published_after', valid => POS_VALUE, alias => 'pubyr_before' },
-	    "Selects only opinions published during or after the indicated year.",
-	{ param => 'published_before', valid => POS_VALUE, alias => 'pubyr_after' },
-	    "Selects only opinions published during or before the indicated year.",
-	{ param => 'published', valid => ANY_VALUE, alias => 'pubyr' },
-	    "Selects only opinions published during the indicated year or range of years.");
-    
-    $ds->define_ruleset('1.2:opinions:display' => 
-	"The following parameter indicates which information should be returned about each resulting name:",
-	{ optional => 'SPECIAL(show)', valid => '1.2:opinions:output_map', list => ','},
-	    "This parameter is used to select additional information to be returned",
-	    "along with the basic record for each taxon.  Its value should be",
-	    "one or more of the following, separated by commas:",
-	{ optional => 'order', valid => '1.2:opinions:order', split => ',' },
-	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:");
-    
-    $ds->define_ruleset('1.2:taxa:opinions' =>
-	">You can use the following parameters if you wish to select opinions associated",
-	"with a specified list of taxa.  Only the records which also match the other",
-	"parameters that you specify will be returned.",
-	{ require => '1.2:taxa:aux_selector' },
-	{ allow => '1.2:taxa:filter' },
-	{ allow => '1.2:common:select_taxa_crmod' },
-	{ allow => '1.2:common:select_taxa_ent' },
-	">You can also specify any of the following parameters:",
-	{ optional => 'select', valid => '1.2:taxa:opselect' },
-	    "You can use this parameter to specify which kinds of opinions to retrieve.",
-	    "The accepted values include:",
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ allow => '1.2:opinions:aux_selector' },
-	{ allow => '1.2:opinions:filter' },
-	{ allow => '1.2:opinions:display' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request.",
-	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
-	"the name of the primary author.");
-    
-    $ds->define_ruleset('1.2:taxa:match' =>
-	{ param => 'name', valid => \&PB2::TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
-	    "A valid taxonomic name, or a common abbreviation such as 'T. rex'.",
-	    "The name may include the wildcard characters % and _.",
-	{ optional => 'rank', valid => \&PB2::TaxonData::validRankSpec },
-	    "Return only taxonomic names at the specified rank, e.g. <genus>.",
-	{ optional => 'extant', valid => BOOLEAN_VALUE },
-	    "Return only extant or non-extant taxa.",
-	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
-	{ param => 'status', valid => '1.2:taxa:status', default => 'all' },
-	    "Return only names that have the specified status.  Accepted values include:",
-	{ allow => '1.2:taxa:display' }, 
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request.");
+    # $ds->define_ruleset('1.2:taxa:match' =>
+    # 	{ param => 'name', valid => \&PB2::TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
+    # 	    "A valid taxonomic name, or a common abbreviation such as 'T. rex'.",
+    # 	    "The name may include the wildcard characters % and _.",
+    # 	{ optional => 'rank', valid => \&PB2::TaxonData::validRankSpec },
+    # 	    "Return only taxonomic names at the specified rank, e.g. <genus>.",
+    # 	{ optional => 'extant', valid => BOOLEAN_VALUE },
+    # 	    "Return only extant or non-extant taxa.",
+    # 	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
+    # 	{ param => 'status', valid => '1.2:taxa:status', default => 'all' },
+    # 	    "Return only names that have the specified status.  Accepted values include:",
+    # 	{ allow => '1.2:taxa:display' }, 
+    # 	{ allow => '1.2:special_params' },
+    # 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:taxa:auto' =>
 	{ param => 'name', valid => ANY_VALUE, alias => 'taxon_name' },
@@ -1129,13 +1204,10 @@ sub initialize {
     $ds->define_ruleset('1.2:opinions:list' =>
 	{ allow => '1.2:opinions:selector' },
 	{ allow => '1.2:opinions:filter' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ allow => '1.2:common:select_refs_crmod' },
-	{ allow => '1.2:common:select_refs_ent' },
+	{ allow => '1.2:common:select_ops_crmod' },
+	{ allow => '1.2:common:select_ops_ent' },
 	{ require_any => ['1.2:opinions:selector', '1.2:opinions:filter', 
-			  '1.2:common:select_crmod', '1.2:common:select_ent',
-			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
+			  '1.2:common:select_ops_crmod', '1.2:common:select_ops_ent'] },
 	{ allow => '1.2:opinions:display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
@@ -1169,35 +1241,35 @@ sub initialize {
 
 sub get_taxon {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
-    my $taxon_no;
+    my ($taxon_no);
     
     # First determine the fields necessary to show the requested info.
     
-    my $options = $self->generate_query_fields( 'taxa', { } );
+    my $options = $request->generate_query_options('taxa');
     
-    # Then figure out which taxon we are looking for.  If we have a taxon_no,
+    # Then figure out which taxon we are looking for.  If we were given a taxon_no,
     # we can use that.
     
     my $not_found_msg = '';
     
-    if ( $taxon_no = $self->clean_param('id') )
+    if ( $taxon_no = $request->clean_param('id') )
     {    
-	$not_found_msg = "Taxon number $taxon_no was not found in the database";
+	die $request->exception(400, "Invalid taxon id '$taxon_no'")
+	    unless defined $taxon_no && $taxon_no > 0;
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
     
-    elsif ( my $taxon_name = $self->clean_param('name') )
+    elsif ( my $taxon_name = $request->clean_param('name') )
     {
-	$not_found_msg = "Taxon '$taxon_name' was not found in the database";
 	my $name_select = { return => 'id' };
 	#my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
-	if ( my $rank = $self->clean_param('rank') )
+	if ( my $rank = $request->clean_param('rank') )
 	{
 	    $name_select->{rank} = $rank;
 	    $not_found_msg .= " at rank '$rank'";
@@ -1205,38 +1277,40 @@ sub get_taxon {
 	
 	($taxon_no) = $taxonomy->resolve_names($taxon_name, $name_select);
 	
-	#($taxon_no) = $self->get_taxa_by_name($valid->value('name'), $name_select);
+	die $request->exception(404, "Taxon '$taxon_name' was not found in the database")
+	    unless defined $taxon_no && $taxon_no > 0;
     }
     
-    # If we haven't found a record, the result set will be empty.
-    
-    unless ( defined $taxon_no and $taxon_no > 0 )
-    {
-	return;
-    }
-    
-    # Next, fetch the requested info about the taxon.
+    # Now attempt to fetch the record for the specified taxon.
     
     my ($r);
     
     try {
 	($r) = $taxonomy->list_taxa_simple($taxon_no, $options);
-   }
+    }
     
-    catch {
-	print STDERR $taxonomy->last_sql . "\n\n" if $self->debug;
-	die $_;
-    };
+    catch { die $_ }
     
-    $self->single_result($r);
-    $self->{main_sql} = $taxonomy->last_sql;
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
+    finally { print STDERR $taxonomy->last_sql . "\n\n" if $request->debug };
+    
+    # Return a 404 error if we did not find anything.
+    
+    unless ( $r )
+    {
+	die $request->exception(404, "Unknown taxon id '$taxon_no'")
+	    unless ref $r;
+    }
+    
+    # Otherwise, register this result and add any requested auxiliary info.
+    
+    $request->single_result($r);
+    $request->{main_sql} = $taxonomy->last_sql;
     
     return unless ref $r;
     
     # If we were asked for 'nav' info, add the necessary fields.
     
-    if ( $self->has_block('nav') )
+    if ( $request->has_block('nav') )
     {
 	# First get taxon records for all of the relevant supertaxa.
 	
@@ -1324,8 +1398,6 @@ sub get_taxon {
 	    [ $taxonomy->list_taxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => $data } ) ];
     }
     
-    $self->delete_output_field('exclude');
-    
     return 1;
 }
 
@@ -1342,12 +1414,12 @@ sub get_opinion {
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # First figure out which opinion we are looking for.  If none was
-    # specified (this shouldn't happen), then we use an invalid opinion_no to
-    # select no records.
+    # specified (this shouldn't happen), then we return a 400 error.
     
-    my $opinion_no = $request->clean_param('id') || return;
+    my $opinion_no = $request->clean_param('id') or
+	die $request->exception(400, "No opinion id was specified");
     
-    my $options = $request->generate_query_fields( 'opinions', { } );
+    my $options = $request->generate_query_options('opinions');
     
     # Next fetch the requested info about the opinion.
     
@@ -1358,13 +1430,18 @@ sub get_opinion {
     }
     
     catch {
-	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
 	die $_;
+    }
+	
+    finally {
+	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
     };
     
-    $request->single_result($r) if $r;
+    die $request->exception(404, "Unknown opinion id '$opinion_no'")
+	unless ref $r;
+    
+    $request->single_result($r);
     $request->{main_sql} = $taxonomy->last_sql;
-    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
 }
 
 
@@ -1381,17 +1458,13 @@ sub list_taxa {
     my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
-    # First, figure what field sare necessary to show the requested info.
+    # First, figure what fields are necessary to show the requested info.
     
-    my $options = $request->generate_query_fields( 'taxa', { } );
+    my $options = $request->generate_query_options('taxa');
     
     # Figure out the set of taxa we are being asked for.
     
     my ($rel, $base) = $request->generate_query_base($taxonomy);
-    
-    # Then generate the rest of the query options using the request parameters.
-    
-    $request->generate_query_options( 'taxa', $options );
     
     # For relationships that could return a long list of taxa, we ask for a
     # DBI statement handle.  For these operations, we remove the 'exclude'
@@ -1403,20 +1476,11 @@ sub list_taxa {
 	$request->delete_output_field('exclude');
     }
     
-    # Otherwise, we ask for a list of taxon records.  For certain operations,
-    # we leave the 'exclude' field in place so that excluded taxa can be
-    # marked.  Otherwise, we remove it.
-    
-    elsif ( $rel eq 'self' || $rel eq 'exact' || $rel eq 'current' ||
-	    $rel eq 'accepted' || $rel eq 'senior' )
-    {
-	$options->{return} = 'list';
-    }
+    # Otherwise, we ask for a list of taxon records.
     
     else
     {
 	$options->{return} = 'list';
-	$request->delete_output_field('exclude');
     }
     
     # Now execute the query.
@@ -1437,13 +1501,119 @@ sub list_taxa {
     }
     
     catch {
-	print STDERR $request->last_sql . "\n\n" if $request->debug;
 	die $_;
+    }
+	
+    finally {
+	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
     };
     
     $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
     $request->{main_sql} = $taxonomy->last_sql;
-    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+}
+
+
+sub list_associated {
+
+    my ($request, $arg) = @_;
+    
+    my $dbh = $request->get_connection;
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    # First, figure out the set of taxa we are being asked for.
+    
+    my ($rel, $base) = $request->generate_query_base($taxonomy);
+    
+    # Then, determine the fields and options depending upon the type of
+    # associated records we will be listing.
+    
+    my $options = $request->generate_query_options($arg);
+    
+    my @ref_filters = $request->generate_ref_filters;
+    $options->{extra_filters} = \@ref_filters if @ref_filters;
+    
+    # For relationships that could return a long list of opinions, we ask for a
+    # DBI statement handle.
+    
+    if ( $rel eq 'all_children' || $rel eq 'all_taxa' )
+    {
+	$options->{return} = 'stmt';
+    }
+    
+    # Otherwise, we ask for a list of opinion records.
+    
+    else
+    {
+	$options->{return} = 'list';
+    }
+    
+    # Now execute the query.
+    
+    try {
+	my @result = $taxonomy->list_associated($rel, $base, $options);
+	my @warnings = $taxonomy->list_warnings;
+	
+	if ( $options->{return} eq 'stmt' )
+	{
+	    $request->sth_result($result[0]) if $result[0];
+	}
+	
+	else
+	{
+	    $request->list_result(\@result);
+	}
+    }
+    
+    catch {
+	die $_;
+    }
+	
+    finally {
+	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+    };
+    
+    $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
+    $request->{main_sql} = $taxonomy->last_sql;
+}
+
+
+sub list_opinions {
+    
+    my ($request) = @_;
+    
+    my $dbh = $request->get_connection;
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    my @opinion_nos = $request->safe_param_list('id');
+    
+    my $options = $request->generate_query_options('opinions');
+    my $base;
+    
+    if ( @opinion_nos )
+    {
+	$base = \@opinion_nos;
+    }
+    
+    else
+    {
+	$base = 'all_records';
+    }
+    
+    $options->{return} = 'stmt';
+    
+    # Next, fetch the list of opinion records.
+    
+    my $sth;
+    
+    try {
+	$sth = $taxonomy->list_opinions($base, $options);
+	$request->sth_result($sth);
+	$request->set_result_count($taxonomy->last_rowcount);
+    }
+    
+    catch { die $_ }
+    
+    finally { print STDERR $taxonomy->last_sql . "\n\n" if $request->debug };
 }
 
 
@@ -1457,11 +1627,6 @@ sub taxa_byref {
 
 }
 
-
-sub taxa_opinions {
-
-
-}
 
 # taxa_refs
 # 
@@ -1619,20 +1784,20 @@ sub taxa_opinions {
 
 sub match {
     
-    my ($self) = @_;
+    my ($request) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # Make sure we have at least one valid name.
     
-    my $name_list = $self->clean_param('name');
+    my $name_list = $request->clean_param('name');
     
     return unless $name_list;
     
     # Figure out the proper query options.
     
-    my $options = $self->generate_query_options();
+    my $options = $request->generate_query_options();
     
     # Get the list of matches.
     
@@ -1641,11 +1806,11 @@ sub match {
     my $sql = $taxonomy->last_sql;
     my @warnings = $taxonomy->list_warnings;
     
-    $self->add_warning(@warnings) if @warnings;
+    $request->add_warning(@warnings) if @warnings;
     
     print STDERR "$sql\n\n" if $sql;
     
-    $self->list_result(@name_matches);
+    $request->list_result(@name_matches);
 }
 
 
@@ -1691,40 +1856,6 @@ sub match {
 # }
 
 
-sub list_opinions {
-    
-    my ($request) = @_;
-    
-    my $dbh = $request->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
-    
-    my @opinion_nos = $request->clean_param_list('id');
-    
-    # return unless grep { $_ > 0 } @opinion_nos;
-    
-    my $options = $request->generate_query_options('opinions');
-    
-    $options->{return} = 'stmt';
-    
-    # Next, fetch the list of opinion records.
-    
-    my $sth;
-    
-    try {
-	$sth = $taxonomy->list_opinions(\@opinion_nos, $options);
-	$request->sth_result($sth);
-	$request->set_result_count($taxonomy->last_rowcount);
-    }
-    
-    catch {
-	print STDERR $taxonomy->last_sql . "\n\n";
-	die $_;
-    };
-    
-    print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-}
-
-
 # list_refs ( )
 # 
 # Query the database for basic info about all references associated with taxa
@@ -1732,28 +1863,28 @@ sub list_opinions {
 
 # sub list_refs {
 
-#     my ($self) = @_;
+#     my ($request) = @_;
     
-#     my $dbh = $self->get_connection;
+#     my $dbh = $request->get_connection;
 #     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
 #     # First, figure out what info we need to provide
     
-#     my $options = $self->generate_query_options('ref');
+#     my $options = $request->generate_query_options('ref');
     
-#     my $rel = $self->clean_param('rel') || 'self';
+#     my $rel = $request->clean_param('rel') || 'self';
     
 #     # If the parameter 'name' was given, then fetch all matching taxa.  Order
 #     # them in descending order by size.
     
 #     my @taxon_list;
     
-#     if ( $self->clean_param('name') )
+#     if ( $request->clean_param('name') )
 #     {
-# 	my $name = $self->clean_param('name');
+# 	my $name = $request->clean_param('name');
 # 	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
-# 	@taxon_list = $self->get_taxa_by_name($name, $name_select);
+# 	@taxon_list = $request->get_taxa_by_name($name, $name_select);
 # 	return unless @taxon_list;
 #     }
     
@@ -1762,34 +1893,34 @@ sub list_opinions {
 #     # If a name was given and the relationship is 'self' (or not specified,
 #     # being the default) then just return the list of matches.
     
-#     if ( $self->clean_param('name') and $rel eq 'self' )
+#     if ( $request->clean_param('name') and $rel eq 'self' )
 #     {
 # 	my @result = $taxonomy->getTaxonReferences('self', \@taxon_list, $options);
-# 	$self->{main_result} = \@result;
-# 	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
-# 	$self->{result_count} = scalar(@result);
+# 	$request->{main_result} = \@result;
+# 	$request->{main_sql} = $TaxonomyOld::SQL_STRING;
+# 	$request->{result_count} = scalar(@result);
 #     }
     
 #     # If a name was given and some other relationship was specified, use the
 #     # first matching name.
     
-#     elsif ( $self->clean_param('name') )
+#     elsif ( $request->clean_param('name') )
 #     {
 # 	$options->{return} = 'stmt';
 # 	my $id = $taxon_list[0];
-# 	my $rel = $self->clean_param('rel') || 'self';
+# 	my $rel = $request->clean_param('rel') || 'self';
 	
-# 	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id, $options);
-# 	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
-# 	$self->sql_count_rows;
+# 	($request->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id, $options);
+# 	$request->{main_sql} = $TaxonomyOld::SQL_STRING;
+# 	$request->sql_count_rows;
 #     }
     
 #     # Otherwise, we just call getTaxa with a list of ids. 
     
-#     elsif ( $self->clean_param('id') )
+#     elsif ( $request->clean_param('id') )
 #     {
 # 	$options->{return} = 'stmt';
-# 	my $id_list = $self->clean_param('id');
+# 	my $id_list = $request->clean_param('id');
 	
 #     }
     
@@ -1808,10 +1939,10 @@ our ($NAME_SQL) = '';
 
 sub get_taxa_by_name {
 
-    my ($self, $names, $options) = @_;
+    my ($request, $names, $options) = @_;
     
     $options ||= {};
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # We start with some common query clauses, depending on the options.
     
@@ -1943,7 +2074,7 @@ sub get_taxa_by_name {
 		
 		if ( $prefix =~ qr{ ^ \s* ([a-zA-Z][a-zA-Z%]+) \s* $ }xs )
 		{
-		    $range = $self->get_taxon_range($1, $range);  
+		    $range = $request->get_taxon_range($1, $range);  
 		}
 		
 		else
@@ -2014,7 +2145,7 @@ sub get_taxa_by_name {
 		ORDER BY $current_clause v.taxon_size desc
 		$limit_string";
 	
-	print STDERR $NAME_SQL . "\n\n" if $self->debug;
+	print STDERR $NAME_SQL . "\n\n" if $request->debug;
 	
 	my $records;
 	
@@ -2037,9 +2168,9 @@ sub get_taxa_by_name {
 
 sub get_taxon_range {
     
-    my ($self, $name, $range) = @_;
+    my ($request, $name, $range) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my $range_filter = $range ? "and $range" : "";
     
     my $sql = "
@@ -2068,7 +2199,7 @@ sub generate_query_fields {
     
     if ( $operation eq 'refs' )
     {
-	push @fields, 'REF_COUNTS' if $request->has_block('counts');
+	push @fields, 'REF_COUNTS' if $request->has_block('subcounts');
     }
     
     $options->{fields} = \@fields;
@@ -2084,7 +2215,26 @@ sub generate_query_fields {
 
 sub generate_query_options {
     
-    my ($request, $operation, $options) = @_;
+    my ($request, $record_type) = @_;
+    
+    # Start with an empty hash
+    
+    my $options = { };
+    
+    # Figure out which fields we need
+    
+    my @fields = $request->select_list_for_taxonomy($record_type);
+    
+    if ( $record_type eq 'refs' )
+    {
+	push @fields, 'REF_COUNTS' if $request->has_block('subcounts');
+    }
+    
+    $options->{fields} = \@fields;
+    
+    $options->{record_type} = $record_type if $record_type;
+    
+    # Handle some basic options
     
     my $limit = $request->result_limit;
     my $offset = $request->result_offset(1);
@@ -2095,7 +2245,7 @@ sub generate_query_options {
     
     my $extant = $request->clean_param('extant');
     my $rank = $request->clean_param('rank');
-    my $status = $request->clean_param('status');
+    my $status = $request->clean_param('taxon_status');
     my @select = $request->clean_param_list('select');
     
     $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
@@ -2114,7 +2264,7 @@ sub generate_query_options {
     # If the user specified 'interval' or 'interval_id', then figure out the
     # corresponding max_ma and min_ma values.
     
-    my ($int_max_ma, $int_min_ma) = $request->check_interval_params();
+    my ($int_max_ma, $int_min_ma) = $request->process_interval_params();
     
     # Check if the user specified these directly.  If so, they will override.
     
@@ -2141,44 +2291,48 @@ sub generate_query_options {
     
     # Now check for author & publication date
     
-    if ( $operation eq 'opinions' )
+    my $op_status = $request->clean_param('op_status');
+    my $max_pubyr = $request->clean_param('op_published_before');
+    my $min_pubyr = $request->clean_param('op_published_after');
+    my $pubyr = $request->clean_param('op_published');
+    my $author = $request->clean_param('op_author');
+    
+    if ( $op_status )
     {
-	my $max_pubyr = $request->clean_param('published_before');
-	my $min_pubyr = $request->clean_param('published_after');
-	my $pubyr = $request->clean_param('published');
-	my $author = $request->clean_param('author');
+	$options->{op_status} = $op_status;
+	print STDERR "OP STATUS: $op_status\n";
+    }
+    
+    if ( $pubyr =~ qr{ ^ ( \d\d\d\d ) (?: \s* - \s* ( \d+ ) )? $ }xs )
+    {
+	$min_pubyr = $1;
+	$max_pubyr = $2 || $1;
 	
-	if ( $pubyr =~ qr{ ^ ( \d\d\d\d ) (?: \s* - \s* ( \d+ ) )? $ }xs )
+	if ( length($max_pubyr) < 4 )
 	{
-	    $min_pubyr = $1;
-	    $max_pubyr = $2 || $1;
-	    
-	    if ( length($max_pubyr) < 4 )
-	    {
-		$max_pubyr = substr($min_pubyr, 0, 4 - length($max_pubyr)) . $max_pubyr;
-	    }
+	    $max_pubyr = substr($min_pubyr, 0, 4 - length($max_pubyr)) . $max_pubyr;
 	}
-	
-	elsif ( $pubyr )
-	{
-	    die "400 the parameter 'published' must be a year or range of years (was '$pubyr')\n";
-	}
-	
-	if ( $max_pubyr )
-	{
-	    $options->{op_max_pubyr} = $max_pubyr;
-	}
-	
-	if ( $min_pubyr )
-	{
-	    $options->{op_min_pubyr} = $min_pubyr;
-	}
-	
-	if ( $author )
-	{
-	    my @authors = split qr{\s*,\s*}, $author;
-	    $options->{op_author} = \@authors;
-	}
+    }
+    
+    elsif ( $pubyr )
+    {
+	die "400 the parameter 'published' must be a year or range of years (was '$pubyr')\n";
+    }
+    
+    if ( $max_pubyr )
+    {
+	$options->{op_max_pubyr} = $max_pubyr;
+    }
+    
+    if ( $min_pubyr )
+    {
+	$options->{op_min_pubyr} = $min_pubyr;
+    }
+    
+    if ( $author )
+    {
+	my @authors = split qr{\s*,\s*}, $author;
+	$options->{op_author} = \@authors;
     }
     
     # Check for created, modified, authorized_by, etc.
@@ -2187,33 +2341,37 @@ sub generate_query_options {
     
     foreach my $key ( @params )
     {
-	my $value = $request->clean_param($key);
-	next unless $value ne '';
+	next unless $key =~ $PB2::CommonData::COMMON_OPT_RE;
 	
-	if ( $key =~ $CommonData::COMMON_OPT_RE )
+	my $prefix = $1 // '';
+	my $selector = $2;
+	
+	my $value = $request->clean_param($key);
+	next unless defined $value && $value ne '';    
+	
+	if ( !$prefix)
 	{
-	    if ( $1 eq '' )
-	    {
-		if ( $operation eq 'opinions' )
-		{
-		    $options->{"ops_$2"} = $value;
-		}
-		
-		elsif ( $operation eq 'refs' )
-		{
-		    $options->{"refs_$2"} = $value;
-		}
-		
-		else
-		{
-		    $options->{$2} = $value;
-		}
-	    }
-	    
-	    else
-	    {
-		$options->{$key} = $value;
-	    }
+	    die $request->exception(400, "Invalid option '$key'");
+	}
+	
+	elsif ( $prefix eq 'op_' )
+	{
+	    $options->{"op_$selector"} = $value;
+	}
+	
+	elsif ( $prefix eq 'ref_' )
+	{
+	    $options->{"ref_$selector"} = $value;
+	}
+	
+	elsif ( $prefix eq 'taxon_' )
+	{
+	    $options->{$selector} = $value;
+	}
+	
+	else
+	{
+	    $options->{$key} = $value;
 	}
     }
     
@@ -2236,7 +2394,7 @@ sub generate_query_options {
 	# The following options default to ascending.
 	
 	if ( $term eq 'hierarchy' || $term eq 'pubyr' || $term eq 'created' || $term eq 'modified' || $term eq 'name' ||
-	     $term eq 'author' || $term eq 'pubyr' )
+	     $term eq 'author' || $term eq 'pubyr' || $term eq 'ref' )
 	{
 	    $dir ||= 'asc';
 	}
@@ -2305,17 +2463,19 @@ sub select_list_for_taxonomy {
 					      : 'AUTHENT';
 	}
 	
-	elsif ( $f =~ qr{^r\.reference_no} )
+	# The following will only happen if the block 1.2:refs:basic is included.
+	
+	elsif ( $f =~ qr{^r[.]author1last} )
 	{
 	    push @fields, 'REF_DATA';
 	}
 	
-	elsif ( $f =~ qr{^rs\.n_taxa} || $f eq 'COUNTS' )
+	elsif ( $f =~ qr{^rs[.]n_taxa} || $f eq 'COUNTS' )
 	{
 	    push @fields, 'REF_COUNTS' if $operation eq 'refs';
 	}
 	
-	elsif ( $f !~ qr{^\$cd\.|^r\.|^rs\.} )
+	elsif ( $f !~ qr{^\$cd\.|^r[.]|^rs[.]} )
 	{
 	    push @fields, $f;
 	}
@@ -2334,53 +2494,81 @@ sub generate_query_base {
     
     my ($request, $taxonomy) = @_;
     
-    # First see which parameters were given.
+    # $$$$ check to make sure 'genus %' syntax works.
     
-    my $name_list = $request->clean_param('name');
-    my $id_list = $request->clean_param('id');
+    my ($taxon_names, @taxon_ids, $rel);
     my $specified_rel = $request->clean_param('rel');
-    my $rel;
+    my $resolve_options = {};
     
-    if ( my $base_name = $request->clean_param('base_name') )
+    if ( $taxon_names = $request->clean_param('base_name') )
     {
-	$name_list = $base_name;
 	$rel = $specified_rel || 'all_children';
     }
     
-    elsif ( my $base_id = $request->clean_param('base_id') )
+    elsif ( $taxon_names = $request->clean_param('match_name') )
     {
-	$id_list = $base_id;
+	$rel = $specified_rel || 'exact';
+	$resolve_options->{all_names} = 1;
+    }
+    
+    elsif ( $taxon_names = $request->clean_param('taxon_name') )
+    {
+	$rel = $specified_rel || 'exact';
+    }
+    
+    elsif ( @taxon_ids = $request->safe_param_list('base_id') )
+    {
 	$rel = $specified_rel || 'all_children';
+    }
+    
+    elsif ( @taxon_ids = $request->safe_param_list('taxon_id') )
+    {
+	$rel = $specified_rel || 'exact';
+    }
+    
+    elsif ( $request->clean_param('all_records') )
+    {
+	$rel = 'all_taxa';
     }
     
     else
     {
-	$rel = $specified_rel || 'current';
+	die "400 No taxa specified.\n";
     }
-    
     
     # If we are listing by name (as opposed to id) then go through each name and
     # find the largest matching taxon.
     
-    if ( $name_list )
+    if ( $taxon_names )
     {
-	my @names = ref $name_list eq 'ARRAY' ? @$name_list : $name_list;
-	my (@taxa, @warnings);
-	
-	foreach my $name (@names)
-	{
-	    push @taxa, $taxonomy->resolve_names($name);
-	    push @warnings, $taxonomy->list_warnings;
-	}
-	
+	my @taxa = $taxonomy->resolve_names($taxon_names, $resolve_options);
+
+	my @warnings = $taxonomy->list_warnings;	
 	$request->add_warning(@warnings) if @warnings;
-	return unless @taxa;
-	$id_list = \@taxa;
+	
+	return $rel, \@taxa;
     }
     
-    # Return the relationship and base taxa.
-    
-    return ($rel, $id_list);
+    else
+    {
+	my @taxa = $taxonomy->list_taxa('exact', \@taxon_ids);
+	
+	my %bad_nos = map { $_ => 1 } grep { $_ && $_ ne '-1' } @taxon_ids;
+	
+	foreach my $t ( @taxa )
+	{
+	    delete $bad_nos{$t->{base_no}};
+	    delete $bad_nos{$t->{taxon_no}};
+	    delete $bad_nos{$t->{orig_no}};
+	}
+	
+	foreach my $t ( keys %bad_nos )
+	{
+	    $request->add_warning("Unknown taxon '$t'");
+	}
+	
+	return $rel, \@taxa;
+    }
 }
 
 
@@ -2390,12 +2578,12 @@ sub generate_query_base {
 
 sub auto {
     
-    my ($self) = @_;
+    my ($request) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
-    my $partial = $self->clean_param('name');
+    my $partial = $request->clean_param('name');
     
     my $search_table = $taxonomy->{SEARCH_TABLE};
     my $names_table = $taxonomy->{NAMES_TABLE};
@@ -2409,8 +2597,8 @@ sub auto {
     
     # Construct and execute an SQL statement.
     
-    my $limit = $self->sql_limit_clause(1);
-    my $calc = $self->sql_count_clause;
+    my $limit = $request->sql_limit_clause(1);
+    my $calc = $request->sql_count_clause;
     
     my $result_field = $DB_FIELD{accepted_no} ? 's.accepted_no' : 's.synonym_no';
     my $match_field = $DB_FIELD{orig_no} ? 's.taxon_no' : 's.match_no';
@@ -2461,12 +2649,12 @@ sub auto {
 	        WHERE taxon_name like $name ORDER BY n_occs desc $limit";
     }
     
-    $self->{main_sql} = $sql;
+    $request->{main_sql} = $sql;
     
-    print STDERR $sql . "\n\n" if $self->debug;
+    print STDERR $sql . "\n\n" if $request->debug;
     
-    $self->{main_sth} = $dbh->prepare($sql);
-    $self->{main_sth}->execute();
+    $request->{main_sth} = $dbh->prepare($sql);
+    $request->{main_sth}->execute();
 }
 
 
@@ -2477,33 +2665,33 @@ sub auto {
 
 sub get_image {
     
-    my ($self, $type) = @_;
+    my ($request, $type) = @_;
     
     $type ||= '';
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my ($sql, $result);
     
     croak "invalid type '$type' for get_image"
 	unless $type eq 'icon' || $type eq 'thumb';
     
-    my $image_no = $self->clean_param('id');
-    my $format = $self->output_format;
+    my $image_no = $request->clean_param('id');
+    my $format = $request->output_format;
     
     # If the output format is 'png', then query for the image.  If found,
-    # return it in $self->{main_data}.  Otherwise, we throw a 404 error.
+    # return it in $request->{main_data}.  Otherwise, we throw a 404 error.
     
     if ( $format eq 'png' )
     {
-	$self->{main_sql} = "
+	$request->{main_sql} = "
 		SELECT $type FROM $PHYLOPICS as p
 		WHERE image_no = $image_no";
 	
-	print STDERR "$self->{main_sql}\n\n" if $self->debug;
+	print STDERR "$request->{main_sql}\n\n" if $request->debug;
 	
-	($self->{main_data}) = $dbh->selectrow_array($self->{main_sql});
+	($request->{main_data}) = $dbh->selectrow_array($request->{main_sql});
 	
-	return if $self->{main_data};
+	return if $request->{main_data};
 	die "404 Image not found\n";	# otherwise
     }
     
@@ -2514,15 +2702,15 @@ sub get_image {
     
     else
     {
-	my $fields = $self->select_string();
+	my $fields = $request->select_string();
 	
-	$self->{main_sql} = "
+	$request->{main_sql} = "
 		SELECT $fields FROM $PHYLOPICS
 		WHERE image_no = $image_no";
 	
-	print STDERR "$self->{main_sql}\n\n" if $self->debug;
+	print STDERR "$request->{main_sql}\n\n" if $request->debug;
 	
-	$self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+	$request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
 	
 	return;
     }
@@ -2535,9 +2723,9 @@ sub get_image {
 
 sub list_images {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
     my ($sql, $result);
     
@@ -2548,41 +2736,41 @@ sub list_images {
     
     my @taxon_list;
     
-    if ( my $name = $self->clean_param('name') )
+    if ( my $name = $request->clean_param('name') )
     {
 	my $name_select = { spelling => 'exact', return => 'id' };
 	
-	@taxon_list = $self->get_taxa_by_name($name, $name_select);
+	@taxon_list = $request->get_taxa_by_name($name, $name_select);
 	return unless @taxon_list;
     }
     
     else
     {
-	@taxon_list = $self->clean_param_list('id');
+	@taxon_list = $request->clean_param_list('id');
     }
     
     # Now add any other filters that were specified by the parameters.
     
-    if ( $self->clean_param('rel') eq 'all_children' )
+    if ( $request->clean_param('rel') eq 'all_children' )
     {
 	push @filters, '';
     }
     
-    if ( my $depth = $self->clean_param('depth') )
+    if ( my $depth = $request->clean_param('depth') )
     {
 	push @filters, '';
     }
     
     # Construct a query. $$$
     
-    my $fields = $self->select_string();
+    my $fields = $request->select_string();
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $fields FROM $PHYLOPICS as p JOIN $PHYLOPIC_NAMES as n using (uid)
 		JOIN authorities as a using (taxon_name) #etc
 	WHERE image_no = image_no";
 	
-	$self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+	$request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
 	
 	return;
     
@@ -2600,11 +2788,11 @@ sub list_images {
 
 sub generate_filters {
 
-    my ($self, $tables_ref) = @_;
+    my ($request, $tables_ref) = @_;
     
     my @filters;
     
-    my $extant = $self->clean_param('extant');
+    my $extant = $request->clean_param('extant');
     
     if ( defined $extant && $extant ne '' )
     {
@@ -2612,8 +2800,8 @@ sub generate_filters {
 	$tables_ref->{at} = 1;
     }
     
-    my @taxon_ranks = $self->clean_param_list('taxon_rank');
-    my $rank_list = $self->generate_rank_list(@taxon_ranks) if @taxon_ranks;
+    my @taxon_ranks = $request->clean_param_list('taxon_rank');
+    my $rank_list = $request->generate_rank_list(@taxon_ranks) if @taxon_ranks;
     
     if ( defined $rank_list )
     {
@@ -2630,7 +2818,7 @@ sub generate_filters {
 
 sub generate_summary_expr {
     
-    my ($self, $summary_rank, $o, $t, $i) = @_;
+    my ($request, $summary_rank, $o, $t, $i) = @_;
     
     if ( $summary_rank eq 'exact' )
     {
@@ -2675,11 +2863,11 @@ sub generate_summary_expr {
 
 sub generate_order_clause {
 
-    my ($self, $tables, $options) = @_;
+    my ($request, $tables, $options) = @_;
     
     $options ||= {};
     
-    my @terms = $self->clean_param_list('order');
+    my @terms = $request->clean_param_list('order');
     my @exprs;
     
     foreach my $term (@terms)
@@ -2878,7 +3066,7 @@ sub validRankSpec {
 
 sub processResultSet {
     
-    my ($self, $rowlist) = @_;
+    my ($request, $rowlist) = @_;
     
     # Run through the parent list and note when we reach the last
     # kingdom-level taxon.  Any entries before that point are dropped 
@@ -2973,6 +3161,25 @@ sub process_pbdb {
     
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
+    
+    if ( $record->{exclude} )
+    {
+	$record->{flag} = 'E';
+    }
+    
+    elsif ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
+    {
+	$record->{flag} = 'B';
+    }
+    
+    if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
+	 $record->{orig_no} eq $record->{taxon_no} )
+    {
+	if ( $record->{attribution} =~ qr{ ^ [(] (.*) [)] $ }xs )
+	{
+	    $record->{attribution} = $1;
+	}
+    }
 }
 
 
@@ -2986,19 +3193,19 @@ sub process_com {
     $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{child_spelling_no} &&
 	$record->{orig_no} eq $record->{child_spelling_no};    
     
-    foreach my $f ( qw(orig_no child_no parent_no senpar_no accepted_no base_no) )
+    foreach my $f ( qw(orig_no child_no immpar_no senpar_no accepted_no base_no) )
     {
-	$record->{$f} = "$IDP{TXN}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{TXN}:$record->{$f}" if defined $record->{$f};
     }
     
     foreach my $f ( qw(taxon_no child_spelling_no parent_spelling_no parent_current_no) )
     {
-	$record->{$f} = "$IDP{VAR}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{VAR}:$record->{$f}" if defined $record->{$f};
     }
     
     foreach my $f ( qw(opinion_no) )
     {
-	$record->{$f} = "$IDP{OPN}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{OPN}:$record->{$f}" if defined $record->{$f};
     }
     
     if ( ref $record->{reference_no} eq 'ARRAY' )
@@ -3008,7 +3215,7 @@ sub process_com {
     
     elsif ( defined $record->{reference_no} )
     {
-	$record->{reference_no} = "$IDP{REF}$record->{reference_no}";
+	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
     }
     
     $record->{n_orders} = undef if defined $record->{n_orders} && 
@@ -3022,6 +3229,25 @@ sub process_com {
     
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
+    
+    if ( $record->{exclude} )
+    {
+	$record->{flag} = 'E';
+    }
+    
+    elsif ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
+    {
+	$record->{flag} = 'B';
+    }
+    
+    if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
+	 $record->{orig_no} eq $record->{taxon_no} )
+    {
+	if ( $record->{attribution} =~ qr{ ^ [(] (.*) [)] $ }xs )
+	{
+	    $record->{attribution} = $1;
+	}
+    }
 }
 
 

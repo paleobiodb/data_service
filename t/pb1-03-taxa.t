@@ -31,7 +31,7 @@ my $TEST_NAME_2 = 'Dascilloidea';
 
 my $TEST_NAME_3 = 'Felidae';
 my $TEST_NAME_3a = 'Felinae';
-my $TEST_NAME_3b = 'Pantherinae';
+my $TEST_NAME_3b = 'Machairodontinae';
 my $TEST_NAME_3c = 'Felis catus';
 my $TEST_NAME_3P = 'Aeluroidea';
 
@@ -87,8 +87,7 @@ my $t1t = { 'taxon_name' => $TEST_NAME_1,
 	    "order" => "Coleoptera",
 	    "family" => "Dascillidae" };
 
-my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1, 'parent_no' => 1, 'senior_no' => 1,
-		'reference_no' => 1, 'is_extant' => 1,
+my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1, 'parent_no' => 1, 'reference_no' => 1, 'is_extant' => 1,
 		"firstapp_ea" => 1, "firstapp_la" => 1, "lastapp_ea" => 1,
 		"lastapp_la" => 1, "size" =>1, "extant_size" => 1 };
 
@@ -409,7 +408,8 @@ subtest 'list children' => sub {
     
     return if $found{NO_RECORDS};
     
-    ok($found{$TEST_NAME_3a} && $found{$TEST_NAME_3b}, "list children found a sample of records");
+    ok($found{$TEST_NAME_3a}, "list children found '$TEST_NAME_3a'");
+    ok($found{$TEST_NAME_3b}, "list children found '$TEST_NAME_3b'");
     $num_children = scalar(keys %found);
 };
 
@@ -423,7 +423,8 @@ subtest 'list all children' => sub {
     
     return if $found{NO_RECORDS};
     
-    ok($found{$TEST_NAME_3c} && $found{$TEST_NAME_3b}, "list all children found a sample of records");
+    ok($found{$TEST_NAME_3c}, "list all children found '$TEST_NAME_3c'");
+    ok($found{$TEST_NAME_3b}, "list all children found '$TEST_NAME_3b'");
     $num_all_children = scalar(keys %found);
 };
 
@@ -453,10 +454,11 @@ subtest 'list all parents' => sub {
     
     return if $found{NO_RECORDS};
     
-    ok($found{Eukaryota} && $found{Metazoa} && $found{Vertebrata} &&
-       $found{Therapsida} && $found{$TEST_NAME_3P} && $found{$TEST_NAME_4P} &&
-       $found{$TEST_NAME_3} && $found{$TEST_NAME_4},
-       "list parents found a sample of records");
+    foreach my $name ('Eucarya', 'Metazoa', 'Vertebrata', 'Therapsida',
+		      $TEST_NAME_3P, $TEST_NAME_4P, $TEST_NAME_3, $TEST_NAME_4)
+    {
+	ok($found{$name}, "list parents found '$name'");
+    }
 };
 
 
@@ -477,22 +479,22 @@ subtest 'list common ancestor' => sub {
 
 subtest 'list status' => sub {
 
-    my $all_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=all",
+    my $all_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=all&limit=100000",
 				 "list status all request OK") || return;
     
     my $all_count = $T->extract_records($all_resp, "list status all extract records") || return;
     
-    my $valid_resp = $T->fetch_url("data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=valid",
+    my $valid_resp = $T->fetch_url("data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=valid&limit=100000",
 				   "list status valid request OK") || return;
     
     my $valid_count = $T->extract_records($valid_resp, "list status valid extract records") || return;
     
-    my $invalid_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=invalid",
+    my $invalid_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=invalid&limit=100000",
 				     "list status invalid request OK") || return;
     
     my $invalid_count = $T->extract_records($invalid_resp, "list status invalid extract records") || return;
     
-    my $senior_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=senior",
+    my $senior_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=senior&limit=100000",
 				    "list status senior request OK") || return;
     
     my $senior_count = $T->extract_records($senior_resp, "list status senior extract records") || return;

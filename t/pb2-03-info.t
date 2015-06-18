@@ -55,7 +55,7 @@ my $t1 = { 'nam' => $TEST_NAME_1,
 my $t1_num = { 'oid' => 1 };
 
 my $t1t = { 'taxon_name' => $TEST_NAME_1,
-	    'record_type' => "taxon",
+	    'record_type' => "txn",
 	  };
 
 my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1 };
@@ -103,7 +103,6 @@ my $params = { "name" => $TEST_NAME_1,
 
 my $paramsl = { "base_name" => $TEST_NAME_1,
 		"show" => "attr,app,size,phylo",
-		"status" => "all",
 		"limit" => $LIMIT_1 };
 
 my $rcs = { "elapsed_time" => qr{\d[.]\d}xs,

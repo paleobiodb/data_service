@@ -1329,7 +1329,7 @@ sub createWorkingTables {
 				trad_no int unsigned not null,
 				synonym_no int unsigned not null,
 				accepted_no int unsigned not null,
-				parent_no int unsigned not null,
+				immpar_no int unsigned not null,
 				senpar_no int unsigned not null,
 				opinion_no int unsigned not null,
 				ints_no int unsigned not null,
@@ -1692,8 +1692,8 @@ sub expandToJuniors {
 		INSERT IGNORE INTO $TREE_WORK (orig_no, taxon_name, taxon_rank, spelling_no)
 		SELECT m.orig_no, m.taxon_name, m.taxon_rank, m.spelling_no
 		FROM $TREE_WORK as t
-			JOIN $opinion_cache as o ON o.parent_no = t.orig_no
-				and o.status != 'belongs to' and o.orig_no <> o.parent_no
+			JOIN $opinion_cache as o ON o.immpar_no = t.orig_no
+				and o.status != 'belongs to' and o.orig_no <> o.immpar_no
 			STRAIGHT_JOIN $tree_table as m ON m.opinion_no = o.opinion_no");
 	
 	last if $result == 0;
@@ -1717,7 +1717,7 @@ sub expandToChildren {
     my $result = $dbh->do("
 		INSERT IGNORE INTO $TREE_WORK
 		SELECT m.* FROM $tree_table m JOIN $TREE_WORK t
-			ON m.parent_no = t.orig_no");
+			ON m.immpar_no = t.orig_no");
     
     logMessage(1, "adding children: $result concepts");
 }
@@ -1962,7 +1962,7 @@ sub expandToSeniors {
 		SELECT m.orig_no, m.spelling_no, m.synonym_no
 		FROM $CLASSIFY_AUX c
 			JOIN $OPINION_CACHE o USING (opinion_no)
-			STRAIGHT_JOIN $tree_table m ON o.parent_no = m.orig_no
+			STRAIGHT_JOIN $tree_table m ON o.immpar_no = m.orig_no
 				and o.status != 'belongs to'");
 	
 	# Then the old synonyms (using $tree_table)
@@ -1973,7 +1973,7 @@ sub expandToSeniors {
 		FROM $TREE_WORK t 
 			JOIN $tree_table m USING (orig_no)
 			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
-			JOIN $tree_table m2 ON o.parent_no = m2.orig_no
+			JOIN $tree_table m2 ON o.immpar_no = m2.orig_no
 				and o.status != 'belongs to'");
 	
 	# Then expand $CLASSIFY_AUX with corresponding rows for every concept
@@ -1981,7 +1981,7 @@ sub expandToSeniors {
 	
 	$result = $dbh->do("
 		INSERT IGNORE INTO $CLASSIFY_AUX
-		SELECT m.orig_no, m.opinion_no, m.parent_no, o.ri, o.pubyr, o.status
+		SELECT m.orig_no, m.opinion_no, m.immpar_no, o.ri, o.pubyr, o.status
 		FROM $TREE_WORK t JOIN $tree_table m USING (orig_no)
 			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
 			LEFT JOIN $CLASSIFY_AUX c ON c.orig_no = t.orig_no
@@ -2034,7 +2034,7 @@ sub linkSynonyms {
 
 # computeHierarchy ( dbh )
 # 
-# Fill in the opinion_no, status, parent_no and senpar_no fields of
+# Fill in the opinion_no, status, immpar_no and senpar_no fields of
 # $TREE_WORK.  This determines the classification of each taxonomic concept
 # represented in $TREE_WORK, and thus determines the Hierarchy relation.
 # 
@@ -2049,7 +2049,7 @@ sub linkSynonyms {
 # concept.
 # 
 # After this is done, we must check for cycles using the same procedure as
-# computeSynonymy().  Only then can we set the parent_no field of $TREE_WORK.
+# computeSynonymy().  Only then can we set the immpar_no and senpar_no fields of $TREE_WORK.
 # Finally, we set opinion_no for each row of $TREE_WORK, based on the modified
 # set of classification opinions.
 
@@ -2247,23 +2247,23 @@ sub computeHierarchy {
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (opinion_no)");
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (status)");
     
-    # Now we can set parent_no.  All concepts in a synonym group will share
+    # Now we can set immpar_no.  All concepts in a synonym group will share
     # the same parent, so we need to join a second copy of $TREE_WORK to look
-    # up the senior synonym number.  In other words, the parent_no value for
+    # up the senior synonym number.  In other words, the immpar_no value for
     # any taxon will point to the parent of its most senior synonym.
     
-    logMessage(2, "    setting parent_no");
+    logMessage(2, "    setting immpar_no");
     
     $result = $dbh->do("
 		UPDATE $TREE_WORK as t JOIN $TREE_WORK as t2 ON t2.orig_no = t.synonym_no
 		    JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
-		SET t.parent_no = o.parent_no");
+		SET t.immpar_no = o.parent_no");
     
-    # Once we have set parent_no for all concepts, we can efficiently index it.
+    # Once we have set immpar_no for all concepts, we can efficiently index it.
      
-    logMessage(2, "    indexing parent_no");
+    logMessage(2, "    indexing immpar_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parent_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (immpar_no)");
     
     # Then we can set and index senpar_no, which points to the senior synonym
     # of the parent taxon.
@@ -2271,7 +2271,7 @@ sub computeHierarchy {
     logMessage(2, "    setting senpar_no");
     
     $result = $dbh->do("
-		UPDATE $TREE_WORK as t JOIN $TREE_WORK as t2 ON t2.orig_no = t.parent_no
+		UPDATE $TREE_WORK as t JOIN $TREE_WORK as t2 ON t2.orig_no = t.immpar_no
 		SET t.senpar_no = t2.synonym_no");
     
     logMessage(2, "    indexing senpar_no");
@@ -2533,9 +2533,8 @@ sub adjustHierarchicalNames {
 		       concat(t1.name, ' (',
 		              trim(trailing ')' from substring_index(t.name,'(',-1)), ')')
 		FROM $TREE_WORK as t
-			JOIN $TREE_WORK as p1 on p1.orig_no = t.parent_no
-			JOIN $TREE_WORK as t1 on t1.orig_no = p1.synonym_no 
-				and p1.rank = 5
+			JOIN $TREE_WORK as t1 on t1.orig_no = t.senpar_no 
+				and t1.rank = 5
 		WHERE t.rank = 4 and t.orig_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
@@ -2568,11 +2567,11 @@ sub adjustHierarchicalNames {
 				 trim(substring(t.name, locate(') ', t.name)+2)),
 				 trim(substring(t.name, locate(' ', t.name)+1))))
 		FROM $TREE_WORK as t
-			LEFT JOIN $TREE_WORK as p1 on p1.orig_no = t.parent_no
+			LEFT JOIN $TREE_WORK as p1 on p1.orig_no = t.immpar_no
 			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = p1.synonym_no 
-			LEFT JOIN $TREE_WORK as p2 on p2.orig_no = p1.parent_no
+			LEFT JOIN $TREE_WORK as p2 on p2.orig_no = p1.immpar_no
 			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = p2.synonym_no
-			LEFT JOIN $TREE_WORK as p3 on p3.orig_no = p2.parent_no
+			LEFT JOIN $TREE_WORK as p3 on p3.orig_no = p2.immpar_no
 			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = p3.synonym_no
 		WHERE t.rank in (2, 3) and t.orig_no = t.synonym_no and
 			(p1.rank in (4,5) or p2.rank in (4,5) or p3.rank in (4,5))";
@@ -2647,8 +2646,8 @@ sub computeTreeSequence {
     
     foreach my $child_no (keys %$nodes)
     {
-	my $parent_no = $nodes->{$child_no}{imm_parent};
-	push @{$nodes->{$parent_no}{children}}, $child_no if $parent_no > 0;
+	my $immpar_no = $nodes->{$child_no}{imm_parent};
+	push @{$nodes->{$immpar_no}{children}}, $child_no if $immpar_no > 0;
     }
     
     # Now we create the "main" tree, starting with taxon 28595 'Life' at the
@@ -2851,10 +2850,10 @@ sub treePerturbation {
     my ($max_seq) = $dbh->selectrow_array("SELECT max(lft) from $tree_table");
     
     my $moved_taxa = $dbh->prepare("
-		SELECT t.orig_no, t.parent_no, m.parent_no, m2.lft, m.lft
+		SELECT t.orig_no, t.immpar_no, m.immpar_no, m2.lft, m.lft
 		FROM $TREE_WORK as t LEFT JOIN $tree_table as m USING (orig_no)
-			LEFT JOIN $tree_table as m2 ON m2.orig_no = t.parent_no
-		WHERE t.parent_no != m.parent_no
+			LEFT JOIN $tree_table as m2 ON m2.orig_no = t.immpar_no
+		WHERE t.immpar_no != m.immpar_no
 		ORDER BY m.lft DESC");
     
     $moved_taxa->execute();
@@ -2910,7 +2909,7 @@ sub updateTreeTable {
     my $result;
     
     # The first thing to do is to determine which rows have a changed
-    # parent_no value.  Each one will require an adjustment to the tree
+    # immpar_no value.  Each one will require an adjustment to the tree
     # sequence.  We have to do this now, before we copy the rows from
     # $TREE_WORK over the corresponding rows from $tree_table below.
     
@@ -2920,10 +2919,12 @@ sub updateTreeTable {
     # children (we have already eliminated cycles, so if this is going to
     # happen then the child must be moving as well).
     
+    # $$$ are we using the proper parent field? immpar_no or senpar_no?
+
     my $moved_taxa = $dbh->prepare("
-		SELECT t.orig_no, t.parent_no
+		SELECT t.orig_no, t.immpar_no
 		FROM $TREE_WORK as t LEFT JOIN $tree_table as m USING (orig_no)
-		WHERE t.parent_no != m.parent_no
+		WHERE t.immpar_no != m.immpar_no
 		ORDER BY m.lft DESC");
     
     $moved_taxa->execute();
@@ -3920,101 +3921,101 @@ sub computeSearchTable {
     
     logMessage(2, "      found $count names");
     
-    # Now comes the really tricky part.  For the purposes of "loose matching"
-    # we also want to list each species under any genera and subgenera
-    # synonymous with the actual genus and/or subgenus.  Note that the genus
-    # under which a species is placed in the hierarchy may not be in accord
-    # with its listed name!
-    # 
-    # In order to do this efficiently, we first need to create an auxiliary
-    # table associating each species and subspecies with a genus/subgenus.
+    # # Now comes the really tricky part.  For the purposes of "loose matching"
+    # # we also want to list each species under any genera and subgenera
+    # # synonymous with the actual genus and/or subgenus.  Note that the genus
+    # # under which a species is placed in the hierarchy may not be in accord
+    # # with its listed name!
+    # # 
+    # # In order to do this efficiently, we first need to create an auxiliary
+    # # table associating each species and subspecies with a genus/subgenus.
     
-    logMessage(2, "    adding species with synonym genera...");
-    $DB::single = 1;
-    $result = $dbh->do("DROP TABLE IF EXISTS $SPECIES_AUX");
-    $result = $dbh->do("CREATE TABLE $SPECIES_AUX
-			       (genus varchar(80) not null,
-				taxon_name varchar(80) not null,
-				taxon_no int unsigned not null,
-				orig_no int unsigned not null,
-				unique key (taxon_name, genus)) ENGINE=MYISAM");
+    # logMessage(2, "    adding species with synonym genera...");
+    # $DB::single = 1;
+    # $result = $dbh->do("DROP TABLE IF EXISTS $SPECIES_AUX");
+    # $result = $dbh->do("CREATE TABLE $SPECIES_AUX
+    # 			       (genus varchar(80) not null,
+    # 				taxon_name varchar(80) not null,
+    # 				taxon_no int unsigned not null,
+    # 				orig_no int unsigned not null,
+    # 				unique key (taxon_name, genus)) ENGINE=MYISAM");
     
-    # Now for each species and subspecies, create an entry corresponding to each
-    # genus that is synonymous to its current genus.  The result_no will be the
-    # current senior synonym of the species/subspecies.
+    # # Now for each species and subspecies, create an entry corresponding to each
+    # # genus that is synonymous to its current genus.  The result_no will be the
+    # # current senior synonym of the species/subspecies.
     
-    $SQL_STRING = "
-		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
-		SELECT a.taxon_no, a.orig_no,
-			ifnull(s1.name, ifnull(s2.name, s3.name)),
-			if(a.taxon_name like '%(%',
-			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
-			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
-		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
-			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no and t.status = 'belongs to'
-			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no and t1.status = 'belongs to'
-			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.parent_no and t2.status = 'belongs to'
-			LEFT JOIN $TREE_WORK as s1 on s1.orig_no = t1.synonym_no and s1.orig_no <> t1.orig_no and s1.rank = 5
-			LEFT JOIN $TREE_WORK as s2 on s2.orig_no = t2.synonym_no and s2.orig_no <> t2.orig_no and s2.rank = 5
-			LEFT JOIN $TREE_WORK as s3 on s3.orig_no = t3.synonym_no and s3.orig_no <> t3.orig_no and s3.rank = 5
-		WHERE a.taxon_rank in ('species', 'subspecies') and
-			(s1.orig_no is not null or
-			 s2.orig_no is not null or
-			 s3.orig_no is not null)";
+    # $SQL_STRING = "
+    # 		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
+    # 		SELECT a.taxon_no, a.orig_no,
+    # 			ifnull(s1.name, ifnull(s2.name, s3.name)),
+    # 			if(a.taxon_name like '%(%',
+    # 			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
+    # 			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
+    # 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
+    # 			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.immpar_no and t.status = 'belongs to'
+    # 			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.immpar_no and t1.status = 'belongs to'
+    # 			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.immpar_no and t2.status = 'belongs to'
+    # 			LEFT JOIN $TREE_WORK as s1 on s1.orig_no = t1.synonym_no and s1.orig_no <> t1.orig_no and s1.rank = 5
+    # 			LEFT JOIN $TREE_WORK as s2 on s2.orig_no = t2.synonym_no and s2.orig_no <> t2.orig_no and s2.rank = 5
+    # 			LEFT JOIN $TREE_WORK as s3 on s3.orig_no = t3.synonym_no and s3.orig_no <> t3.orig_no and s3.rank = 5
+    # 		WHERE a.taxon_rank in ('species', 'subspecies') and
+    # 			(s1.orig_no is not null or
+    # 			 s2.orig_no is not null or
+    # 			 s3.orig_no is not null)";
     
-    $result = $dbh->do($SQL_STRING);
+    # $result = $dbh->do($SQL_STRING);
     
-    # Then do the same for each subgenus that is synonymous to its current
-    # subgenus (if any).
+    # # Then do the same for each subgenus that is synonymous to its current
+    # # subgenus (if any).
     
-    $SQL_STRING = "
-		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
-		SELECT a.taxon_no, a.orig_no,
-			ifnull(trim(trailing ')' from substring_index(s1.name,'(',-1)),
-			       trim(trailing ')' from substring_index(s2.name,'(',-1))),
-			if(a.taxon_name like '%(%',
-			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
-			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
-		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
-			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no and t.status = 'belongs to'
-			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no and t1.status = 'belongs to'
-			LEFT JOIN $TREE_WORK as s1 on s1.orig_no = t1.synonym_no and s1.orig_no <> t1.orig_no and s1.rank = 4
-			LEFT JOIN $TREE_WORK as s2 on s2.orig_no = t2.synonym_no and s2.orig_no <> t2.orig_no and s2.rank = 4
-		WHERE a.taxon_rank in ('species', 'subspecies') and
-			(s1.orig_no is not null or
-			 s2.orig_no is not null)";
+    # $SQL_STRING = "
+    # 		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
+    # 		SELECT a.taxon_no, a.orig_no,
+    # 			ifnull(trim(trailing ')' from substring_index(s1.name,'(',-1)),
+    # 			       trim(trailing ')' from substring_index(s2.name,'(',-1))),
+    # 			if(a.taxon_name like '%(%',
+    # 			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
+    # 			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
+    # 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
+    # 			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.immpar_no and t.status = 'belongs to'
+    # 			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.immpar_no and t1.status = 'belongs to'
+    # 			LEFT JOIN $TREE_WORK as s1 on s1.orig_no = t1.synonym_no and s1.orig_no <> t1.orig_no and s1.rank = 4
+    # 			LEFT JOIN $TREE_WORK as s2 on s2.orig_no = t2.synonym_no and s2.orig_no <> t2.orig_no and s2.rank = 4
+    # 		WHERE a.taxon_rank in ('species', 'subspecies') and
+    # 			(s1.orig_no is not null or
+    # 			 s2.orig_no is not null)";
     
-    $result = $dbh->do($SQL_STRING);
+    # $result = $dbh->do($SQL_STRING);
     
-    # Now that we have this auxiliary table, we can add additional "inexact"
-    # entries to be used for loose matching.  This way, a loose search on a
-    # species name will hit if the specified genus is synonymous to the actual
-    # current genus.
+    # # Now that we have this auxiliary table, we can add additional "inexact"
+    # # entries to be used for loose matching.  This way, a loose search on a
+    # # species name will hit if the specified genus is synonymous to the actual
+    # # current genus.
     
-    # First delete all entries that match anything in $SEARCH_WORK, because we
-    # only want to do loose matching where there isn't already an exact match.
+    # # First delete all entries that match anything in $SEARCH_WORK, because we
+    # # only want to do loose matching where there isn't already an exact match.
     
-    $SQL_STRING = "
-	DELETE $SPECIES_AUX
-	FROM $SPECIES_AUX JOIN $SEARCH_WORK
-		on $SPECIES_AUX.genus = $SEARCH_WORK.genus and
-		   $SPECIES_AUX.taxon_name = $SEARCH_WORK.taxon_name";
+    # $SQL_STRING = "
+    # 	DELETE $SPECIES_AUX
+    # 	FROM $SPECIES_AUX JOIN $SEARCH_WORK
+    # 		on $SPECIES_AUX.genus = $SEARCH_WORK.genus and
+    # 		   $SPECIES_AUX.taxon_name = $SEARCH_WORK.taxon_name";
     
-    $result = $dbh->do($SQL_STRING);
+    # $result = $dbh->do($SQL_STRING);
     
-    # Then generate new entries in $SEARCH_WORK.
+    # # Then generate new entries in $SEARCH_WORK.
     
-    $SQL_STRING = "
-	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 accepted_no, is_current, is_exact)
-	SELECT sx.genus, sx.taxon_name, a.taxon_rank, sx.taxon_no, sx.orig_no,
-	       t.accepted_no, (t.spelling_no = sx.taxon_no), 0
-	FROM $SPECIES_AUX as sx JOIN $auth_table as a on a.taxon_no = sx.taxon_no
-		JOIN $TREE_WORK as t on sx.orig_no = t.orig_no";
+    # $SQL_STRING = "
+    # 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+    # 					 accepted_no, is_current, is_exact)
+    # 	SELECT sx.genus, sx.taxon_name, a.taxon_rank, sx.taxon_no, sx.orig_no,
+    # 	       t.accepted_no, (t.spelling_no = sx.taxon_no), 0
+    # 	FROM $SPECIES_AUX as sx JOIN $auth_table as a on a.taxon_no = sx.taxon_no
+    # 		JOIN $TREE_WORK as t on sx.orig_no = t.orig_no";
     
-    $count = $dbh->do($SQL_STRING);
+    # $count = $dbh->do($SQL_STRING);
     
-    logMessage(2, "      found $count implied names");
+    # logMessage(2, "      found $count implied names");
     
     # Next, we add all of the common names.  Each of these gets a 'language'
     # value, to distinguish them from latin names.
@@ -4369,7 +4370,7 @@ sub computeAttrsTable {
 	
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN
-		(SELECT t.parent_no,
+		(SELECT t.immpar_no,
 			if(sum(v.is_extant) > 0, 1, pv.is_extant) as is_extant,
 			coalesce(sum(v.is_extant), 0) as extant_children,
 			count(v.orig_no) as distinct_children,
@@ -4382,9 +4383,9 @@ sub computeAttrsTable {
 					max(v.max_body_mass), pv.max_body_mass) as max_body_mass,
 			if(max(v.not_trace) > 0, 1, pv.not_trace) as not_trace
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no 
+			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.immpar_no 
 		 WHERE t.depth = $child_depth and v.is_senior
-		 GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
+		 GROUP BY t.immpar_no) as nv on v.orig_no = nv.immpar_no
 		SET     v.is_extant = nv.is_extant,
 			v.extant_children = nv.extant_children,
 			v.distinct_children = nv.distinct_children,
@@ -5370,8 +5371,8 @@ sub check {
     my ($bad_parent) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
 		FROM $tree_table as t LEFT JOIN $tree_table as t2
-			ON t.parent_no = t2.orig_no
-		WHERE t.parent_no != 0 and t2.orig_no is null");
+			ON t.immpar_no = t2.orig_no
+		WHERE t.immpar_no != 0 and t2.orig_no is null");
     
     if ( $bad_parent > 0 )
     {
@@ -5383,7 +5384,7 @@ sub check {
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
 		FROM $tree_table as t LEFT JOIN $tree_table as t2
-			ON t.parent_no = t2.orig_no
+			ON t.immpar_no = t2.orig_no
 		WHERE t2.orig_no is null");
 	    
 	    logMessage(1, "        " . join(', ', @$list));
@@ -5421,7 +5422,7 @@ sub check {
     
     my ($bad_seq) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
-		FROM $tree_table as t join $tree_table as p on p.orig_no = t.parent_no
+		FROM $tree_table as t join $tree_table as p on p.orig_no = t.immpar_no
 		WHERE (t.lft < p.lft or t.lft > p.rgt)");
     
     if ( $bad_seq > 0 )
@@ -5433,7 +5434,7 @@ sub check {
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
-		FROM $tree_table as t join $tree_table as p on p.orig_no = t.parent_no
+		FROM $tree_table as t join $tree_table as p on p.orig_no = t.immpar_no
 		WHERE (t.lft < p.lft or t.lft > p.rgt)");
 	    
 	    logMessage(1, "        " . join(', ', @$list));
@@ -5593,7 +5594,7 @@ sub clearHierarchy {
     
     my ($dbh) = @_;
     
-    $dbh->do("UPDATE $TREE_WORK SET opinion_no = 0, parent_no = 0");
+    $dbh->do("UPDATE $TREE_WORK SET opinion_no = 0, immpar_no = 0, senpar_no = 0");
 }
 
 

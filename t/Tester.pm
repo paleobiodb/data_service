@@ -580,6 +580,13 @@ sub check_field {
 	cmp_ok( $check->{$key}, '>', 0, $vmsg ) || return;
     }
     
+    elsif ( $value->{$key} =~ qr{ ^ !id (?: [{] (\w+) [}] )? $ }xs )
+    {
+	my $prefix = $1 || '\w+';
+	my $label = $1 || 'paleobiodb';
+	ok( $check->{$key} =~ qr{ ^ $prefix [:] ( \d+ ) $ }xs, "$vmsg is a valid $label id" ) || return;
+    }
+    
     # elsif ( looks_like_number($value->{$key}) )
     # {
     # 	cmp_ok( $check->{$key}, '==', $value->{$key}, $vmsg ) || return;

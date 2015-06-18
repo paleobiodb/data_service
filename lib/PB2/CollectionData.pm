@@ -30,7 +30,7 @@ use Moo::Role;
 no warnings 'numeric';
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2::IntervalData);
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
@@ -81,13 +81,9 @@ sub initialize {
     # returned about collections.
     
     $ds->define_output_map('1.2:colls:basic_map' =>
-	{ value => 'bin', maps_to => '1.2:colls:bin' },
-	    "The list of geographic clusters to which the collection belongs.",
         { value => 'attr', maps_to => '1.2:colls:attr' },
 	    "The attribution of the collection: the author name(s) from",
 	    "the primary reference, and the year of publication.",
-        { value => 'ref', maps_to => '1.2:refs:primary' },
-	    "The primary reference for the collection, as formatted text.",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the collection",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
@@ -114,14 +110,26 @@ sub initialize {
 	    "Information about the collection methods used",
         { value => 'rem', maps_to => '1.2:colls:rem' },
 	    "Any additional remarks that were entered about the collection.",
+	{ value => 'bin', maps_to => '1.2:colls:bin' },
+	    "The list of geographic clusters to which the collection belongs.",
 	{ value => 'resgroup', maps_to => '1.2:colls:group' },
 	    "The research group(s), if any, associated with this collection.",
+        { value => 'ref', maps_to => '1.2:refs:primary' },
+	    "The primary reference for the collection, as formatted text.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the collection record");
+	    "The C<created> and C<modified> timestamps for the collection record",
+	">I<The following will return all of the information available about",
+	"the collection itself, as opposed to its context.  If any more such information",
+	"is added to this data service, this function will be adjusted accordingly.",
+	"You can therefore include it in published URLs, knowing that it will always provide",
+	"all of the available information about the collection(s) of interest.>",
+	{ value => 'full', maps_to => '1.2:colls:full_info' },
+	    "Includes all of the information from the following blocks: B<attr>, B<loc>,",
+	    "B<paleoloc>, B<prot>, B<stratext>, B<lithext>, B<geo>, B<methods>, B<rem>.");
     
     # Then a second block for geographic summary clusters.
     
@@ -142,10 +150,11 @@ sub initialize {
 		     'c.reference_no', 'group_concat(distinct sr.reference_no) as reference_nos'], 
 	  tables => ['cc', 'ei', 'li', 'sr'] },
 	{ output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
-	    "A unique identifier for the collection.  For now, these are positive integers,",
-	    "but this might change and should B<not be relied on>.",
+	    "A unique identifier for the collection.  This will be a string if the result",
+	    "format is JSON.  For backward compatibility, all identifiers in text format",
+	    "results will continue to be integers.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{COL}, 
-	  dwc_value => 'Occurrence' },
+	  dwc_value => 'collection' },
 	    "type of this object: C<$IDP{COL}> for a collection",
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
@@ -157,9 +166,9 @@ sub initialize {
 	    "An arbitrary name which identifies the collection, not necessarily unique",
 	{ output => 'collection_subset', com_name => 'nm2' },
 	    "If the collection is a part of another one, this field specifies which part",
-	{ output => 'attribution', dwc_name => 'recordedBy', com_name => 'att', if_block => 'attr' },
+	{ output => 'attribution', dwc_name => 'recordedBy', com_name => 'att', if_block => '1.2:colls:attr' },
 	    "The attribution (author and year) of the collection",
-	{ output => 'pubyr', com_name => 'pby', if_block => 'attr', data_type => 'pos' },
+	{ output => 'pubyr', com_name => 'pby', if_block => '1.2:colls:attr', data_type => 'pos' },
 	    "The year in which the collection was published",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences in the collection",
@@ -228,7 +237,7 @@ sub initialize {
 	    "The precision of the collection coordinates.  Follow the above",
 	    "link for a list of the code values.",
 	{ set => 'prc', from => '*', code => \&generateBasisCode, if_vocab => 'com' },
-	{ output => 'prc', pbdb_name => 'I<n/a>', com_name => 'prc' },
+	{ output => 'prc', pbdb_name => 'I<n/a>', com_name => 'prc', if_vocab => 'com' },
 	    "A two-letter code indicating the basis and precision of the geographic coordinates.",
 	    "This field is reported instead of C<latlng_basis> and C<latlng_precision> in",
 	    "responses that use the compact vocabulary.  Follow the above link for a list of the code values.",
@@ -343,23 +352,23 @@ sub initialize {
 	{ output => 'lithology1', com_name => 'lt1' },
 	    "The first lithology described for the collection site; the database can",
 	    "represent up to two different lithologies per collection",
-	{ output => 'lithadj', pbdb_name => 'lithadj1', com_name => 'la1', if_block => 'lithext' },
+	{ output => 'lithadj', pbdb_name => 'lithadj1', com_name => 'la1', if_block => '1.2:colls:lithext' },
 	    "Adjective(s) describing the first lithology",
 	{ output => 'lithification', pbdb_name => 'lithification1', com_name => 'lf1' },
 	    "Lithification state of the first lithology described for the site",
 	{ output => 'minor_lithology', pbdb_name => 'minor_lithology1', com_name => 'lm1' },
 	    "Minor lithology associated with the first lithology described for the site",
-	{ output => 'fossilsfrom1', com_name => 'ff1', if_block => 'lithext' },
+	{ output => 'fossilsfrom1', com_name => 'ff1', if_block => '1.2:colls:lithext' },
 	    "Whether or not fossils were taken from the first described lithology",
 	{ output => 'lithology2', com_name => 'lt2' },
 	    "The second lithology described for the collection site, if any",
-	{ output => 'lithadj2', com_name => 'la2', if_block => 'lithext' },
+	{ output => 'lithadj2', com_name => 'la2', if_block => '1.2:colls:lithext' },
 	    "Adjective(s) describing the second lithology, if any",
 	{ output => 'lithification2', com_name => 'lf2' },
 	    "Lithification state of the second lithology described for the site.  See above for values.",
 	{ output => 'minor_lithology2', com_name => 'lm2' },
 	    "Minor lithology associated with the second lithology described for the site, if any",
-	{ output => 'fossilsfrom2', com_name => 'ff2', if_block => 'lithext' },
+	{ output => 'fossilsfrom2', com_name => 'ff2', if_block => '1.2:colls:lithext' },
 	    "Whether or not fossils were taken from the second described lithology");
     
     $ds->define_block('1.2:colls:lithext' =>
@@ -413,9 +422,20 @@ sub initialize {
 	    "The research group(s), if any, associated with this collection.");
     
     $ds->define_block( '1.2:colls:rem' =>
-      { set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
-      { output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
-	  "Any additional remarks that were entered about the collection");
+	{ set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
+	{ output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
+	    "Any additional remarks that were entered about the collection");
+    
+    $ds->define_block( '1.2:colls:full_info' =>
+	{ include => '1.2:colls:attr' },
+	{ include => '1.2:colls:loc' },
+	{ include => '1.2:colls:paleoloc' },
+	{ include => '1.2:colls:prot' },
+	{ include => '1.2:colls:stratext' },
+	{ include => '1.2:colls:lithext' },
+	{ include => '1.2:colls:geo' },
+	{ include => '1.2:colls:methods' },
+	{ include => '1.2:colls:rem' });
     
     # Then define an output block for displaying stratigraphic results
     
@@ -531,31 +551,6 @@ sub initialize {
 	{ value => 'all' },
 	    "Select all matching identifications of each selected occurrence, each as a separate record");
     
-    $ds->define_set('1.2:colls:timerule' =>
-	{ value => 'contain' },
-	    "Select only records whose temporal locality is strictly contained in the specified time range.",
-	    "This is the most r-estrictive rule.  For diversity output, this rule guarantees that each occurrence",
-	    "will fall into at most one temporal bin, but many occurrences will be ignored because their temporal",
-	    "locality is too wide to fall into any of the bins.",
-	{ value => 'major' },
-	    "Select only records for which at least 50% of the temporal locality range falls within the specified",
-	    "time range.",
-	    "For diversity output, this rule also guarantees that each occurrence will fall into at most one",
-	    "temporal bin.  Many occurrences will be ignored because their temporal locality is more than twice",
-	    "as wide as any of the overlapping bins, but fewer will be ignored than with the C<contain> rule.",
-	{ value => 'buffer' },
-	    "Select only records whose temporal locality overlaps the specified time range and also falls",
-	    "completely within a 'buffer zone' around this range.  This buffer varies by period, and has been",
-	    "set so that occurrences that are dated to the epoch level will be considered to match all of the",
-	    "corresponding stages.  You can override the buffer size using the parameters C<earlybuffer> and",
-	    "C<latebuffer>.  For diversity output, some occurrences will be counted as falling into more",
-	    "than one bin.  Some occurrences will still be ignored, but fewer than with the above rules.",
-	    "This is the B<default> timerule unless you specifically select one.",
-	{ value => 'overlap' },
-	    "Select only records whose temporal locality overlaps the specified time range by any amount.",
-	    "This is the most permissive rule.  For diversity output, every occurrence will be counted.",
-	    "Many will be counted as falling into more than one bin.");
-
     $ds->define_set('1.2:colls:pgmodel' =>
 	{ value => 'scotese' },
 	    "Use the paleogeographic model defined by L<C. R. Scotese|http://scotese.com/> (2002), which is the",
@@ -574,34 +569,47 @@ sub initialize {
 	    "collection's age range");
     
     $ds->define_ruleset('1.2:main_selector' =>
-	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
-	    "Return only records associated with the specified geographic clusters.",
-	    "You may specify one or more cluster ids, separated by commas.",
 	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
 	    "A comma-separated list of collection identifiers.  All records associated with",
 	    "the specified collections are returned, provided they satisfy the other parameters",
 	    "given with this request.",
-	{ param => 'taxon_name', valid => \&PB2::TaxonData::validNameSpec },
-	    "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
-	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID'), list => ','},
-	    "Return only records associated with the specified taxonomic name(s), specified by identifier.",
-	    "You may specify multiple identifiers, separated by commas.",
-	{ param => 'taxon_actual', valid => FLAG_VALUE },
-	    "If this parameter is specified, then only records that were actually identified with the",
-	    "specified taxonomic name and not those which match due to synonymy",
-	    "or other correspondences between taxa.  This is a flag parameter, which does not need any value.",
+	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
+	    "Return only records associated with the specified geographic clusters.",
+	    "You may specify one or more cluster ids, separated by commas.",
 	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
-	    "Return only records associated with the specified taxonomic name(s), I<including subtaxa>.",
-	    "You may specify multiple names, separated by commas.  You may append one or more exclusions",
+	    "Return only records associated with the specified taxonomic name(s),",
+	    "I<including all subtaxa and synonyms>.  You may specify multiple names, separated",
+	    "by commas.  You may append one or more exclusions",
 	    "to any name, using the C<^> character.  For example, C<Osteichthyes^Tetrapoda> would select",
 	    "the fish excluding the tetrapods.",
+	{ param => 'taxon_name', valid => \&PB2::TaxonData::validNameSpec },
+	    "Return only records associated with the specified taxonomic name(s),",
+	    "I<including any synonyms>.",
+	    "You may specify multiple names, separated by commas.  Names may",
+	    "include wildcards, but if more than one name matches then only the",
+	    "one with the largest number of occurrences in the database will be used.",
+	{ param => 'match_name', valid => \&PB2::TaxonData::validNameSpec },
+	    "Return only records associated with the specified taxonomic name(s).",
+	    "You may specify multiple names, separated by commas.  Names may include",
+	    "wildcards, and occurrences associated with all matching names will",
+	    "be returned.  Synonyms will be ignored.  This is a syntactic rather",
+	    "than a taxonomic match.",
+	{ param => 'immediate', valid => FLAG_VALUE },
+	    "You may specify this parameter along with C<base_name>, C<base_id>, or C<taxon_name>.",
+	    "If you do, then synonyms of the specified name(s) will",
+	    "be ignored.  No value is necessary for this parameter, just include the parameter name.",
 	{ param => 'base_id', valid => VALID_IDENTIFIER('TID'), list => ',' },
-	    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier, I<including subtaxa>.",
-	    "You may specify multiple identifiers, separated by commas.",
-	    "Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
+	    "Return only records associated with the specified taxa,",
+	    "I<including subtaxa and synonyms>.  You may specify multiple taxon identifiers,",
+	    "separated by commas.  Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
+	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID'), list => ','},
+	    "Return only records associated with the specified taxa, not including",
+	    "subtaxa or synonyms.  You may specify multiple taxon identifiers, separated by commas.",
 	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id'] },
 	{ param => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ','},
-	    "Exclude any records whose associated taxonomic name is a child of the given name or names, specified by numeric identifier.",
+	    "Exclude any records whose associated taxonomic name is a child of the given name or names,",
+	    "specified by numeric identifier.  This is an alternative to the use of the C<^> character",
+	    "in names.",
 	{ param => 'ident', valid => $ds->valid_set('1.2:colls:ident_select'), default => 'latest' },
 	    "If more than one taxonomic identification is recorded for some or all of the selected occurrences,",
 	    "this parameter specifies which are to be returned.  Values include:",
@@ -651,40 +659,34 @@ sub initialize {
 	{ param => 'member', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic member(s).  You may",
 	    "specify more than one, separated by commas.",
-	{ param => 'min_ma', valid => DECI_VALUE(0) },
-	    "Return only records whose temporal locality is at least this old, specified in Ma.",
-	{ param => 'max_ma', valid => DECI_VALUE(0) },
-	    "Return only records whose temporal locality is at most this old, specified in Ma.",
-	{ param => 'interval_id', valid => POS_ZERO_VALUE },
-	    "Return only records whose temporal locality falls within the given geologic time interval,",
-	    "specified by numeric identifier.",
-	{ param => 'interval', valid => ANY_VALUE },
-	    "Return only records whose temporal locality falls within the named geologic time interval.",
-	{ at_most_one => ['interval_id', 'interval', 'min_ma'] },
-	{ at_most_one => ['interval_id', 'interval', 'max_ma'] },
-	{ optional => 'timerule', valid => '1.2:colls:timerule' },
-	    "Resolve temporal locality according to the specified rule, as listed below.  For lists of",
-	    "occurrences or collections, this rule is applied to determine which records to select if",
-	    "you specify an age range using any of the parameters listed immediately above.",
-	    "For diversity output, this rule is applied to",
-	    "place each occurrence into one or more temporal bins, or to ignore the occcurrence if it",
-	    "does not match any of the bins.  The available rules are:",
-	{ optional => 'timebuffer', valid => POS_VALUE },
-	    "Override the default buffer period for the beginning of the time range when resolving",
-	    "temporal locality.  The value must be given in millions of years.  This parameter",
-	    "is only relevant if C<timerule> is set to C<buffer> or is allowed to default to that value.",
-	{ optional => 'latebuffer', valid => POS_VALUE },
-	    "Override the default buffer period for the end of the time range when resolving temporal",
-	    "locality.  The value must be given in millions of years.  This parameter is only relevant",
-	    "if C<timerule> is set to C<buffer> or is allowed to default to that value.");
+	# { param => 'min_ma', valid => DECI_VALUE(0) },
+	#     "Return only records whose temporal locality is at least this old, specified in Ma.",
+	# { param => 'max_ma', valid => DECI_VALUE(0) },
+	#     "Return only records whose temporal locality is at most this old, specified in Ma.",
+	# { param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',' },
+	#     "Return only records whose temporal locality falls within the given geologic time",
+	#     "interval or intervals, specified by numeric identifier.  If you specify more",
+	#     "than one interval, the time range used will be the contiguous period from the",
+	#     "beginning of the earliest to the end of the latest specified interval.",
+	# { param => 'interval', valid => ANY_VALUE },
+	#     "Return only records whose temporal locality falls within the named geologic time",
+	#     "interval or intervals, specified by name.  If you specify more than one interval,",
+	#     "the time range used will be the contiguous period from the beginning of the",
+	#     "earliest to the end of the latest specified interval.",
+	# { at_most_one => ['interval_id', 'interval', 'min_ma'] },
+	# { at_most_one => ['interval_id', 'interval', 'max_ma'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:timerule_selector' });
     
     $ds->define_ruleset('1.2:colls:specifier' =>
-	{ param => 'id', valid => VALID_IDENTIFIER('COL'), alias => 'coll_id' },
-	    "The identifier of the collection you wish to retrieve (REQUIRED)");
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), alias => 'id' },
+	    "The identifier of the collection you wish to retrieve (REQUIRED).  You",
+	    "may instead use the parameter name C<id>.");
     
     $ds->define_ruleset('1.2:colls:selector' =>
-	{ param => 'id', valid => VALID_IDENTIFIER('COL'), list => ',', alias => 'coll_id' },
-	    "A comma-separated list of collection identifiers.");
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "This parameter needs no value.  If included, all records will be selected.");
     
     $ds->define_ruleset('1.2:colls:display' =>
 	"You can use the following parameter to request additional information about each",
@@ -699,7 +701,7 @@ sub initialize {
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
 	    $ds->document_set('1.2:colls:order'),
-	    "If no order is specified, results are sorted by collection identifier.",
+	    "If no order is specified, results are returned as they appear in the C<collections> table.",
 	{ ignore => 'level' });
     
     $ds->define_ruleset('1.2:colls:single' => 
@@ -711,37 +713,42 @@ sub initialize {
         "^You can also use any of the L<special parameters|node:special> with this request");
 
     $ds->define_ruleset('1.2:colls:list' => 
-	"You can use the following parameter if you wish to retrieve information about",
-	"a known list of collections, or to filter a known list against other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
+	"You can use the following parameter if you wish to retrieve the entire set of",
+	"collection records stored in this database.  Please use this with care, since the",
+	"result set will contain more than 100,000 records and will be at least 20 megabytes in size.",
+	"You may also specify any of the parameters listed below.",
     	{ allow => '1.2:colls:selector' },
         ">>The following parameters can be used to query for collections by a variety of criteria.",
 	"Except as noted below, you may use these in any combination.",
 	"These parameters can all be used to select either occurrences, collections, or associated references.",
+	"You can use the paramter C<coll_id> in conjunction with other parameters to filter",
+	"a known list of collections against other criteria.",
    	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_colls_crmod' },
+	{ allow => '1.2:common:select_colls_ent' },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
 	">>You can also specify any of the following parameters:",
     	{ allow => '1.2:colls:display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:colls:refs' =>
-	"You can use the following parameters if you wish to retrieve the references associated",
-	"with a known list of collections, or to filter a known list against",
-	"other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
+	"You can use the following parameters if you wish to retrieve all of the references",
+	"with collections entered into the database.",
 	{ allow => '1.2:colls:selector' },
         ">>The following parameters can be used to retrieve the references associated with occurrences",
 	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
 	"These parameters can all be used to select either occurrences, collections, or associated references.",
 	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_colls_crmod' },
+	{ allow => '1.2:common:select_colls_ent' },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
 	">>You can also specify any of the following parameters:",
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:refs:display' },
@@ -797,13 +804,15 @@ sub initialize {
 	    $ds->document_set('1.2:colls:summary_map'),);
     
     $ds->define_ruleset('1.2:colls:summary' => 
-	"The following parameter selects from one of the available clustering levels:",
+	"The following required parameter selects from the available clustering levels:",
 	{ param => 'level', valid => POS_VALUE, default => 1 },
 	    "Return records from the specified cluster level.  You can find out which",
-	    "levels are available by means of the L<config|node:config> URL path.",
+	    "levels are available by means of the L<config|node:config> URL path. (REQUIRED)",
 	">>You can use the following parameters to query for summary clusters by",
 	"a variety of criteria.  Except as noted below, you may use these in any combination.",
     	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
 	">>You can use the following parameter if you wish to retrieve information about",
 	"the summary clusters which contain a specified collection or collections.",
 	"Only the records which match the other parameters that you specify will be returned.",
@@ -827,35 +836,40 @@ sub max_bin_level {
 
 sub get {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Make sure we have a valid id number.
     
-    my $id = $self->clean_param('id');
+    my $id = $request->clean_param('coll_id');
     
-    die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
+    die "400 Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $self->substitute_select( mt => 'c', cd => 'cc' );
+    $request->substitute_select( mt => 'c', cd => 'cc' );
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
-    $self->adjustCoordinates(\$fields);
-    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->adjustCoordinates(\$fields);
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $self->tables_hash);
+    my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
     
     # Generate the main query.
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $fields
 	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
@@ -863,9 +877,11 @@ sub get {
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
     
-    $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    die "404 Not found\n" unless $request->{main_record};
 }
 
 
@@ -878,43 +894,61 @@ sub get {
 
 sub list {
 
-    my ($self, $arg) = @_;
+    my ($request, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my $tables = $self->tables_hash;
+    my $tables = $request->tables_hash;
     
-    my @filters = $self->generateMainFilters('list', 'c', $tables);
-    push @filters, $self->generateCollFilters($tables);
-    push @filters, $self->generate_crmod_filters('cc', $tables);
-    push @filters, $self->generate_ent_filters('cc', $tables);
+    my @filters = $request->generateMainFilters('list', 'c', $tables);
+    push @filters, $request->generateCollFilters($tables);
+    push @filters, $request->generate_common_filters( { coll => 'cc', bare => 'cc' }, $tables );
+    # push @filters, $request->generate_crmod_filters('cc', $tables);
+    # push @filters, $request->generate_ent_filters('cc', $tables);
+    
+    # Do a final check to make sure that all records are only returned if
+    # 'all_records' was specified.
+    
+    if ( @filters == 0 )
+    {
+	die "400 You must specify 'all_records' if you want to retrieve the entire set of records.\n"
+	    unless $request->clean_param('all_records');
+    }
+    
+    # Until we provide for authenticated data service access, we had better
+    # restrict results to publicly accessible records.
     
     push @filters, "c.access_level = 0";
     
     my $filter_string = join(' and ', @filters);
     
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
+    
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->sql_limit_clause(1);
+    my $limit = $request->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->sql_count_clause;
+    my $calc = $request->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $self->substitute_select( mt => 'c', cd => 'cc' );
+    $request->substitute_select( mt => 'c', cd => 'cc' );
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
-    $self->adjustCoordinates(\$fields);
-    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->adjustCoordinates(\$fields);
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
     
     if ( $tables->{tf} )
     {
@@ -923,13 +957,13 @@ sub list {
     
     # Determine the order in which the results should be returned.
     
-    my $order_clause = $self->generate_order_clause($tables, { at => 'c', cd => 'cc' }) || 'c.collection_no';
+    my $order_clause = $request->generate_order_clause($tables, { at => 'c', cd => 'cc' }) || 'NULL';
     
     # Determine if any extra tables need to be joined in.
     
-    my $base_joins = $self->generateJoinList('c', $self->tables_hash);
+    my $base_joins = $request->generateJoinList('c', $request->tables_hash);
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
@@ -939,16 +973,16 @@ sub list {
 	ORDER BY $order_clause
 	$limit";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query and the secondary query.
     
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
     
     # If we were asked to get the count, then do so
     
-    $self->sql_count_rows;
+    $request->sql_count_rows;
 }
 
 
@@ -959,105 +993,6 @@ sub list {
 
 sub summary {
     
-    my ($self) = @_;
-    
-    # Get a database handle by which we can make queries.
-    
-    my $dbh = $self->get_connection;
-    my $tables = $self->tables_hash;
-    
-    # Figure out which bin level we are being asked for.  The default is 1.    
-
-    my $bin_level = $self->clean_param('level') || 1;
-    
-    # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
-    
-    my @filters = $self->generateMainFilters('summary', 's', $tables);
-    push @filters, $self->generateCollFilters($tables);
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $self->sql_limit_clause(1);
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $self->sql_count_clause;
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    $self->substitute_select( mt => 's' );
-    
-    my $fields = $self->select_string;
-    
-    $self->adjustCoordinates(\$fields);
-    
-    if ( $tables->{tf} )
-    {
-	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
-	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
-    }
-    
-    my $summary_joins = '';
-    
-    $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
-	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} || $tables->{tf};
-    
-    $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
-    
-    $summary_joins .= $self->generateJoinList('s', $tables);
-    
-    # if ( $self->{select_tables}{o} )
-    # {
-    # 	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
-    # 	$fields =~ s/s.n_occs/count(distinct o.occurrence_no) as n_occs/;
-    # }
-    
-    # elsif ( $self->{select_tables}{c} )
-    # {
-    # 	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
-    # 	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
-    # }
-    
-    push @filters, "s.access_level = 0", "s.bin_level = $bin_level";
-    
-    my $filter_string = join(' and ', @filters);
-    
-    $self->{main_sql} = "
-		SELECT $calc $fields
-		FROM $COLL_BINS as s $summary_joins
-		WHERE $filter_string
-		GROUP BY s.bin_id
-		ORDER BY s.bin_id $limit";
-    
-    # Then prepare and execute the query..
-    
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
-    
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
-    
-    # Get the result count, if we were asked to do so.
-    
-    $self->sql_count_rows;
-    
-    return 1;
-}
-
-
-# prevtaxa ( )
-# 
-# This operation queries for the most-occurring taxa found in the geographic
-# clusters matching the specified parameters.
-
-# $$$$ MUST ADD: alternate query for when summary bins don't work,
-# i.e. 'formation' or 'authorizer'
-# 
-# $$$$ MUST ADD: global query
-
-sub prevtaxa {
-
     my ($request) = @_;
     
     # Get a database handle by which we can make queries.
@@ -1066,7 +1001,7 @@ sub prevtaxa {
     my $tables = $request->tables_hash;
     
     # Figure out which bin level we are being asked for.  The default is 1.    
-    
+
     my $bin_level = $request->clean_param('level') || 1;
     
     # Construct a list of filter expressions that must be added to the query
@@ -1074,6 +1009,11 @@ sub prevtaxa {
     
     my @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generateCollFilters($tables);
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -1092,14 +1032,32 @@ sub prevtaxa {
     
     $request->adjustCoordinates(\$fields);
     
+    if ( $tables->{tf} )
+    {
+	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
+	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
+    }
+    
     my $summary_joins = '';
     
     $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
-	if $tables->{c} || $tables->{cc} || $tables->{o} || $tables->{oc} || $tables->{pc};
+	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} || $tables->{tf};
     
     $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
     
-    my $other_joins .= $request->generateJoinList('s', $tables);
+    $summary_joins .= $request->generateJoinList('s', $tables);
+    
+    # if ( $request->{select_tables}{o} )
+    # {
+    # 	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
+    # 	$fields =~ s/s.n_occs/count(distinct o.occurrence_no) as n_occs/;
+    # }
+    
+    # elsif ( $request->{select_tables}{c} )
+    # {
+    # 	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
+    # 	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
+    # }
     
     push @filters, "s.access_level = 0", "s.bin_level = $bin_level";
     
@@ -1108,13 +1066,11 @@ sub prevtaxa {
     $request->{main_sql} = "
 		SELECT $calc $fields
 		FROM $COLL_BINS as s $summary_joins
-			JOIN $PVL_MATRIX as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
-			$other_joins
 		WHERE $filter_string
-		GROUP BY ds.orig_no
-		ORDER BY n_occs desc $limit";
+		GROUP BY s.bin_id
+		ORDER BY s.bin_id $limit";
     
-    # Then prepare and execute the query.
+    # Then prepare and execute the query..
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
@@ -1129,6 +1085,94 @@ sub prevtaxa {
 }
 
 
+# prevtaxa ( )
+# 
+# This operation queries for the most-occurring taxa found in the geographic
+# clusters matching the specified parameters.
+
+# $$$$ MUST ADD: alternate query for when summary bins don't work,
+# i.e. 'formation' or 'authorizer'
+# 
+# $$$$ MUST ADD: global query
+
+# sub prevtaxa {
+
+#     my ($request) = @_;
+    
+#     # Get a database handle by which we can make queries.
+    
+#     my $dbh = $request->get_connection;
+#     my $tables = $request->tables_hash;
+    
+#     # Figure out which bin level we are being asked for.  The default is 1.    
+    
+#     my $bin_level = $request->clean_param('level') || 1;
+    
+#     # Construct a list of filter expressions that must be added to the query
+#     # in order to select the proper result set.
+    
+#     my @filters = $request->generateMainFilters('summary', 's', $tables);
+#     push @filters, $request->generateCollFilters($tables);
+    
+#     # If the 'strict' parameter was given, make sure we haven't generated any
+#     # warnings. 
+    
+#     $request->strict_check;
+    
+#     # If a query limit has been specified, modify the query accordingly.
+    
+#     my $limit = $request->sql_limit_clause(1);
+    
+#     # If we were asked to count rows, modify the query accordingly
+    
+#     my $calc = $request->sql_count_clause;
+    
+#     # Determine which fields and tables are needed to display the requested
+#     # information.
+    
+#     $request->substitute_select( mt => 's' );
+    
+#     my $fields = $request->select_string;
+    
+#     $request->adjustCoordinates(\$fields);
+    
+#     my $summary_joins = '';
+    
+#     $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
+# 	if $tables->{c} || $tables->{cc} || $tables->{o} || $tables->{oc} || $tables->{pc};
+    
+#     $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
+    
+#     my $other_joins .= $request->generateJoinList('s', $tables);
+    
+#     push @filters, "s.access_level = 0", "s.bin_level = $bin_level";
+    
+#     my $filter_string = join(' and ', @filters);
+    
+#     $request->{main_sql} = "
+# 		SELECT $calc $fields
+# 		FROM $COLL_BINS as s $summary_joins
+# 			JOIN $PVL_MATRIX as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
+# 			$other_joins
+# 		WHERE $filter_string
+# 		GROUP BY ds.orig_no
+# 		ORDER BY n_occs desc $limit";
+    
+#     # Then prepare and execute the query.
+    
+#     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+    
+#     $request->{main_sth} = $dbh->prepare($request->{main_sql});
+#     $request->{main_sth}->execute();
+    
+#     # Get the result count, if we were asked to do so.
+    
+#     $request->sql_count_rows;
+    
+#     return 1;
+# }
+
+
 # refs ( )
 # 
 # Query the database for the references associated with occurrences satisfying
@@ -1136,21 +1180,22 @@ sub prevtaxa {
 
 sub refs {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my $inner_tables = {};
     
-    my @filters = $self->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $self->generateCollFilters($inner_tables);
-    push @filters, $self->generate_crmod_filters('cc', $inner_tables);
-    push @filters, $self->generate_ent_filters('cc', $inner_tables);
+    my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
+    push @filters, $request->generateCollFilters($inner_tables);
+    push @filters, $request->generate_common_filters( { coll => 'cc' }, $inner_tables );
+    # push @filters, $request->generate_crmod_filters('cc', $inner_tables);
+    # push @filters, $request->generate_ent_filters('cc', $inner_tables);
     
     push @filters, "c.access_level = 0";
     
@@ -1158,7 +1203,10 @@ sub refs {
     
     # Construct another set of filter expressions to act on the references.
     
-    my @ref_filters = $self->PB2::ReferenceData::generate_filters($self->tables_hash);
+    my $outer_tables = $request->tables_hash;
+    
+    my @ref_filters = $request->PB2::ReferenceData::generate_filters($outer_tables);
+    push @ref_filters, $request->generate_common_filters( { ref => 'r' }, $outer_tables );
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -1166,30 +1214,35 @@ sub refs {
     # Figure out the order in which we should return the references.  If none
     # is selected by the options, sort by rank descending.
     
-    my $order = PB2::ReferenceData::generate_order_clause($self, { rank_table => 's' }) ||
+    my $order = PB2::ReferenceData::generate_order_clause($request, { rank_table => 's' }) ||
 	"r.author1last, r.author1init";
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->sql_limit_clause(1);
+    my $limit = $request->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->sql_count_clause;
+    my $calc = $request->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $self->substitute_select( mt => 'r', cd => 'r' );
+    $request->substitute_select( mt => 'r', cd => 'r' );
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
-    $self->adjustCoordinates(\$fields);
+    $request->adjustCoordinates(\$fields);
     
-    my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->PB2::ReferenceData::generate_join_list($self->tables_hash);
+    my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+    my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($outer_tables);
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank, is_primary, 1 as is_coll
 	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
 	    FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
@@ -1202,16 +1255,16 @@ sub refs {
 	ORDER BY $order
 	$limit";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query.
     
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
     
     # If we were asked to get the count, then do so
     
-    $self->sql_count_rows;
+    $request->sql_count_rows;
 }
 
 
@@ -1222,42 +1275,47 @@ sub refs {
 
 sub strata {
     
-    my ($self, $arg) = @_;
+    my ($request, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    $self->substitute_select( mt => 'cs' );
+    $request->substitute_select( mt => 'cs' );
     
-    my $tables = $self->tables_hash;
+    my $tables = $request->tables_hash;
     
-    my @filters = $self->generateMainFilters('list', 'cs', $tables);
-    push @filters, $self->generateStrataFilters($tables, $arg);
+    my @filters = $request->generateMainFilters('list', 'cs', $tables);
+    push @filters, $request->generateStrataFilters($tables, $arg);
     push @filters, "1=1" unless @filters;
     
     my $filter_string = join(' and ', @filters);
     
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
+    
     # Modify the query according to the common parameters.
     
-    my $limit = $self->sql_limit_clause(1);
-    my $calc = $self->sql_count_clause;
+    my $limit = $request->sql_limit_clause(1);
+    my $calc = $request->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
-    #$self->adjustCoordinates(\$fields);
+    #$request->adjustCoordinates(\$fields);
     
     # Determine if any extra tables need to be joined in.
     
-    my $base_joins = $self->generateJoinList('cs', $tables);
+    my $base_joins = $request->generateJoinList('cs', $tables);
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_strata as cs
 		$base_joins
@@ -1266,16 +1324,16 @@ sub strata {
 	ORDER BY cs.name
 	$limit";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query and the secondary query.
     
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
     
     # If we were asked to get the count, then do so
     
-    $self->sql_count_rows;
+    $request->sql_count_rows;
 }
 
 
@@ -1285,7 +1343,7 @@ sub strata {
 
 sub fixTimeOutput {
     
-    my ($self, $record) = @_;
+    my ($request, $record) = @_;
     
     no warnings 'uninitialized';
     
@@ -1309,26 +1367,10 @@ sub fixTimeOutput {
 
 sub generateCollFilters {
 
-    my ($self, $tables_ref) = @_;
+    my ($request, $tables_ref) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my @filters;
-    
-    # Check for parameter 'id', If the parameter was given but no value was
-    # found, then add a clause that will generate an empty result set.
-    
-    my $id = $self->clean_param('id');
-    
-    if ( ref $id eq 'ARRAY' and @$id )
-    {
-	my $id_list = join(',', @$id);
-	push @filters, "c.collection_no in ($id_list)";
-    }
-    
-    elsif ( defined $id && $id ne '' )
-    {
-	push @filters, "c.collection_no = $id";
-    }
     
     # If our tables include the occurrence matrix, we must check the 'ident'
     # parameter. 
@@ -1336,7 +1378,7 @@ sub generateCollFilters {
     if ( ($tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc}) &&
          ! $tables_ref->{ds} )
     {
-	my $ident = $self->clean_param('ident');
+	my $ident = $request->clean_param('ident');
 	
 	if ( $ident eq 'orig' )
 	{
@@ -1366,14 +1408,14 @@ sub generateCollFilters {
 
 sub generateStrataFilters {
 
-    my ($self, $tables_ref, $is_auto) = @_;
+    my ($request, $tables_ref, $is_auto) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my @filters;
     
     # Check for parameter 'name'.
     
-    if ( my $name = $self->clean_param('name') )
+    if ( my $name = $request->clean_param('name') )
     {
 	$name .= '%' if defined $is_auto && $is_auto eq 'auto';
 	my $quoted = $dbh->quote($name);
@@ -1382,7 +1424,7 @@ sub generateStrataFilters {
     
     # Check for parameter 'rank'.
     
-    if ( my $rank = $self->clean_param('rank') )
+    if ( my $rank = $request->clean_param('rank') )
     {
 	my $quoted = $dbh->quote($rank);
 	push @filters, "cs.rank = $quoted";
@@ -1405,31 +1447,48 @@ sub generateStrataFilters {
 
 sub generateMainFilters {
 
-    my ($self, $op, $mt, $tables_ref) = @_;
+    my ($request, $op, $mt, $tables_ref) = @_;
     
-    my $dbh = $self->get_connection;
-    my $taxonomy = $self->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
+    my $dbh = $request->get_connection;
+    my $taxonomy = $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
     # Check for parameter 'clust_id'
     
-    my $clust_id = $self->clean_param('clust_id');
-    
-    if ( ref $clust_id eq 'ARRAY' )
+    if ( my @clusters = $request->safe_param_list('clust_id') )
     {
-	# If there aren't any bins, include a filter that will return no
-	# results. 
+	my $id_list = $request->check_values($dbh, \@clusters, 'bin_id', 'coll_bins', 
+					     "Unknown summary cluster '%'");
 	
-	if ( $MAX_BIN_LEVEL == 0 )
-	{
-	    push @filters, "c.collection_no = 0";
-	}
+	# my $id_list = join(q{,}, @clusters);
+	# my %id_hash = map { $_ => 1 } @clusters;
 	
-	elsif ( $op eq 'summary' )
+	# # Check for invalid identifiers.
+	
+	# unless ( $id_list eq '-1' )
+	# {
+	#     my $check_result = $dbh->selectcol_arrayref("
+	# 	SELECT bin_id FROM coll_bins WHERE bin_id in ($id_list)");
+	    
+	#     foreach my $id ( @$check_result )
+	#     {
+	# 	delete $id_hash{$id};
+	#     }
+	    
+	#     foreach my $id ( keys %id_hash )
+	#     {
+	# 	$request->add_warning("Unknown collection '$id'");
+	#     }
+	    
+	#     my $id_list = join(q{,}, @$check_result) || '-1';
+	# }
+	
+	# If there aren't any bins, or no valid cluster ids were specified,
+	# include a filter that will return no results.
+	
+	if ( $op eq 'summary' )
 	{
-	    my @clusters = grep { $_ > 0 } @$clust_id;
-	    my $list = join(q{,}, @clusters);
-	    push @filters, "s.bin_id in ($list)";
+	    push @filters, "s.bin_id in ($id_list)";
 	}
 	
 	else
@@ -1437,7 +1496,7 @@ sub generateMainFilters {
 	    my %clusters;
 	    my @clust_filters;
 	    
-	    foreach my $cl (@$clust_id)
+	    foreach my $cl (@clusters)
 	    {
 		my $cl1 = substr($cl, 0, 1);
 		push @{$clusters{$cl1}}, $cl if $cl1 =~ /[0-9]/;
@@ -1453,69 +1512,179 @@ sub generateMainFilters {
 	    # If no valid filter was generated, then add one that will return
 	    # 0 results.
 	    
-	    push @clust_filters, "c.collection_no = 0" unless @clust_filters;
-	    push @filters, @clust_filters;
+	    if ( @clusters == 0 || $MAX_BIN_LEVEL == 0 )
+	    {
+		push @filters, "c.collection_no = -1";
+	    }
+	    
+	    else
+	    {
+		push @filters, @clust_filters;
+	    }
+	    
 	    $tables_ref->{non_summary} = 1;
 	}
     }
     
     # Check for parameter 'coll_id'
     
-    my $coll_id = 
+    # Check for parameter 'coll_id', If the parameter was given but no value was
+    # found, then add a clause that will generate an empty result set.
     
-    # Check for parameters 'taxon_name', 'base_name', 'taxon_id', 'base_id',
-    # 'exclude_name', 'exclude_id'
+    if ( my @colls = $request->safe_param_list('coll_id') )
+    {
+	my $id_list = $request->check_values($dbh, \@colls, 'collection_no', 'collections', 
+					     "Unknown collection '%'");
+	
+	# If there aren't any bins, or no valid cluster ids were specified,
+	# include a filter that will return no results.
+	
+	if ( $op eq 'summary' )
+	{
+	    $tables_ref->{non_summary} = 1;
+	    $tables_ref->{cm} = 1;
+	    push @filters, "cm.collection_no in ($id_list)";
+	}
+	
+	else
+	{
+	    push @filters, "c.collection_no in ($id_list)";
+	    $tables_ref->{non_summary} = 1;
+	}
+    }
     
-    my $taxon_name = $self->clean_param('taxon_name') || $self->clean_param('base_name');
-    my @taxon_nos = $self->clean_param_list('taxon_id') || $self->clean_param_list('base_id');
-    my @exclude_nos = $self->clean_param_list('exclude_id');
-    my (@include_taxa, @exclude_taxa);
+    # Check for parameters 'base_name', 'taxon_name', 'match_name',
+    # 'base_id', 'taxon_id'
     
-    # First get the relevant taxon records for all included taxa
+    my ($taxon_name, @taxon_nos, $value, @values);
+    my (@include_taxa, @exclude_taxa, $no_synonyms, $all_children, $do_match);
+    
+    if ( $value = $request->clean_param('base_name') )
+    {
+	$taxon_name = $value;
+	$all_children = 1;
+	$no_synonyms = $request->clean_param('immediate');
+    }
+    
+    elsif ( $value = $request->clean_param('match_name') )
+    {
+	$taxon_name = $value;
+	$do_match = 1;
+	$no_synonyms = 1;
+    }
+    
+    elsif ( $value = $request->clean_param('taxon_name') )
+    {
+	$taxon_name = $value;
+	$no_synonyms = $request->clean_param('immediate');
+    }
+    
+    elsif ( @values = $request->safe_param_list('base_id') )
+    {
+	@taxon_nos = @values;
+	$no_synonyms = $request->clean_param('immediate');
+    }
+    
+    elsif ( @values = $request->safe_param_list('taxon_id') )
+    {
+	@taxon_nos = @values;
+	$no_synonyms = $request->clean_param('immediate');
+    }
+    
+    # If a name was specified, we start by resolving it.  The resolution is
+    # slightly different for 'match_name' than for the others.
     
     if ( $taxon_name )
     {
-	my @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
+	# If we are doing a syntactic match, get all matching names and ignore exclusions.
 	
-	# Now add these to the proper list.
-	
-	foreach my $t (@taxa)
+	if ( $do_match )
 	{
-	    if ( $t->{exclude} )
+	    my @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE', all_names => 1 });
+	    
+	    @include_taxa = grep { ! $_->{exclude} } @taxa;
+	}
+	
+	# Otherwise, we get the best match for each given name (generally the
+	# one with the most occurrences in the database).  We will need to
+	# collect included and excluded names separately.
+	
+	else
+	{
+	    my @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
+	    
+	    @include_taxa = grep { ! $_->{exclude} } @taxa;
+	    @exclude_taxa = grep { $_->{exclude} } @taxa;
+	    
+	    # If 'exact' was specified, then we just use the names as specified.  But if we are
+	    # going to be looking at the whole subtree, we also need to exclude junior synonyms
+	    # explicitly.  This is because junior synonyms are linked into the tree as if they
+	    # were children.
+	    
+	    if ( $no_synonyms )
 	    {
-		push @exclude_taxa, $t;
+		if ( $all_children )
+		{
+		    push @exclude_taxa, $taxonomy->list_taxa('juniors', \@include_taxa, { fields => 'RANGE' });
+		}
 	    }
+	    
+	    # Otherwise, we need to consider all synonyms.  If we are looking at the whole
+	    # subtree, it is sufficient to just take the senior synonyms.
+	    
+	    elsif ( $all_children )
+	    {
+		@include_taxa = $taxonomy->list_taxa('senior', \@include_taxa, { fields => 'RANGE' });
+		@exclude_taxa = $taxonomy->list_taxa('senior', \@exclude_taxa, { fields => 'RANGE' }) if @exclude_taxa;
+	    }
+	    
+	    # Otherwise, we want all synonyms of the included taxa.  We can ignore exclusions.
 	    
 	    else
 	    {
-		push @include_taxa, $t;
+		@include_taxa = $taxonomy->list_taxa('synonyms', \@include_taxa, { fields => 'RANGE' });
 	    }
 	}
     }
     
     elsif ( @taxon_nos )
     {
-	@include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos, { fields => 'RANGE' });
+	if ( $no_synonyms )
+	{
+	    @include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos, { fields => 'RANGE' });
+	}
+	
+	elsif ( $all_children )
+	{
+	    @include_taxa = $taxonomy->list_taxa('senior', \@taxon_nos, { fields => 'RANGE' });
+	}
+	
+	else
+	{
+	    @include_taxa = $taxonomy->list_taxa('synonyms', \@taxon_nos, { fields => 'RANGE' });
+	}
     }
     
     # Then get the records for excluded taxa.  But only if there are any
     # included taxa in the first place.
     
-    if ( @exclude_nos && @include_taxa )
+    if ( @include_taxa )
     {
-	my @taxa = $taxonomy->list_taxa('exact', \@exclude_nos, { fields => 'RANGE' });
-	push @exclude_taxa, @taxa;
+	if ( my @exclude_nos = $request->clean_param_list('exclude_id') )
+	{
+	    push @exclude_taxa, $taxonomy->list_taxa('exact', \@exclude_nos, { fields => 'RANGE' });
+	}
     }
     
     # Then construct the necessary filters for included taxa
     
-    if ( @include_taxa and ($self->clean_param('base_name') or $self->clean_param('base_id')) )
+    if ( @include_taxa && $all_children )
     {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
-	$self->{my_base_taxa} = \@include_taxa;
+	$request->{my_base_taxa} = \@include_taxa;
     }
     
     elsif ( @include_taxa )
@@ -1525,7 +1694,7 @@ sub generateMainFilters {
 	$tables_ref->{o} = 1 unless $tables_ref->{ds};
 	$tables_ref->{non_geo_filter} = 1;
 	$tables_ref->{non_summary} = 1;
-	$self->{my_taxa} = \@include_taxa;
+	$request->{my_taxa} = \@include_taxa;
     }
     
     # If a name was given and no matching taxa were found, we need to query by
@@ -1535,7 +1704,7 @@ sub generateMainFilters {
     elsif ( $taxon_name )
     {
 	my @warnings = $taxonomy->list_warnings;
-	$self->add_warning(@warnings);
+	$request->add_warning(@warnings);
 	
 	if ( $op eq 'prevalence' || $op eq 'diversity' )
 	{
@@ -1632,8 +1801,8 @@ sub generateMainFilters {
     # If a number was given but it does not exist in the hierarchy, add a
     # filter that will guarantee no results.
     
-    elsif ( $self->param_given('base_name') || $self->param_given('base_id') ||
-	    $self->param_given('taxon_name') || $self->param_given('taxon_id') )
+    elsif ( $request->param_given('base_name') || $request->param_given('base_id') ||
+	    $request->param_given('taxon_name') || $request->param_given('taxon_id') )
     {
 	push @filters, "o.orig_no = -1";
 	$tables_ref->{non_summary} = 1;
@@ -1645,13 +1814,13 @@ sub generateMainFilters {
     if ( @exclude_taxa && @include_taxa )
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
-	$self->{my_excluded_taxa} = \@exclude_taxa;
+	$request->{my_excluded_taxa} = \@exclude_taxa;
 	$tables_ref->{tf} = 1;
     }
     
     # Check for parameters 'continent', 'country'
     
-    if ( my @ccs = $self->clean_param_list('country') )
+    if ( my @ccs = $request->clean_param_list('country') )
     {
 	if ( $ccs[0] eq '_' )
 	{
@@ -1665,7 +1834,7 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    if ( my @continents = $self->clean_param_list('continent') )
+    if ( my @continents = $request->clean_param_list('continent') )
     {
 	if ( $continents[0] eq '_' )
 	{
@@ -1682,10 +1851,10 @@ sub generateMainFilters {
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
     
-    my $x1 = $self->clean_param('lngmin');
-    my $x2 = $self->clean_param('lngmax');
-    my $y1 = $self->clean_param('latmin');
-    my $y2 = $self->clean_param('latmax');
+    my $x1 = $request->clean_param('lngmin');
+    my $x2 = $request->clean_param('lngmax');
+    my $y1 = $request->clean_param('latmin');
+    my $y2 = $request->clean_param('latmax');
     
     if ( $x1 ne '' && $x2 ne '' && ! ( $x1 == -180 && $x2 == 180 ) )
     {
@@ -1745,17 +1914,17 @@ sub generateMainFilters {
 	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
     }
     
-    if ( my $loc = $self->clean_param('loc') )
+    if ( my $loc = $request->clean_param('loc') )
     {
 	push @filters, "contains(geomfromtext($loc), $mt.loc)";
     }
     
     # Check for parameter 'plate'
     
-    if ( $self->clean_param('plate') )
+    if ( $request->clean_param('plate') )
     {
-	my $plate_list = join(q{,}, $self->clean_param_list('plate'));
-	my ($primary_model) = $self->clean_param_list('pgm');
+	my $plate_list = join(q{,}, $request->clean_param_list('plate'));
+	my ($primary_model) = $request->clean_param_list('pgm');
 	$primary_model //= 'gplates';
 	
 	if ( $plate_list && $primary_model eq 'scotese' )
@@ -1774,10 +1943,10 @@ sub generateMainFilters {
     
     # Check for parameters 'p_lngmin', 'p_lngmax', 'p_latmin', 'p_latmax', 'p_loc',
     
-    # my $px1 = $self->clean_param('lngmin');
-    # my $px2 = $self->clean_param('lngmax');
-    # my $py1 = $self->clean_param('latmin');
-    # my $py2 = $self->clean_param('latmax');
+    # my $px1 = $request->clean_param('lngmin');
+    # my $px2 = $request->clean_param('lngmax');
+    # my $py1 = $request->clean_param('latmin');
+    # my $py2 = $request->clean_param('latmax');
     
     # if ( defined $px1 && defined $px2 )
     # {
@@ -1837,14 +2006,14 @@ sub generateMainFilters {
     # 	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
     # }
     
-    # if ( $self->{clean_params}{loc} )
+    # if ( $request->{clean_params}{loc} )
     # {
-    # 	push @filters, "contains(geomfromtext($self->{clean_params}{loc}), $mt.loc)";
+    # 	push @filters, "contains(geomfromtext($request->{clean_params}{loc}), $mt.loc)";
     # }
     
     # Check for parameters 'formation', 'stratgroup', 'member'
     
-    if ( my @formations = $self->clean_param_list('formation') )
+    if ( my @formations = $request->clean_param_list('formation') )
     {
 	foreach my $f (@formations)
 	{
@@ -1858,7 +2027,7 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    if ( my @stratgroups = $self->clean_param_list('stratgroup') )
+    if ( my @stratgroups = $request->clean_param_list('stratgroup') )
     {
 	foreach my $f (@stratgroups)
 	{
@@ -1872,7 +2041,7 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    if ( my @members = $self->clean_param_list('member') )
+    if ( my @members = $request->clean_param_list('member') )
     {
 	foreach my $f (@members)
 	{
@@ -1889,127 +2058,106 @@ sub generateMainFilters {
     # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
     # If no time rule was given, it defaults to 'buffer'.
     
-    my $time_rule = $self->clean_param('timerule') || 'buffer';
-    my $summary_interval = 0;
-    my ($early_age, $late_age, $early_bound, $late_bound);
-    my $interval_no = $self->clean_param('interval_id') + 0;
-    my $interval_name = $self->clean_param('interval');
-    my $earlybuffer = $self->clean_param('earlybuffer');
-    my $latebuffer = $self->clean_param('latebuffer');
+    my $time_rule = $request->clean_param('timerule') || 'buffer';
+    # my $summary_interval = 0;
+    # my ($early_age, $late_age, $early_bound, $late_bound);
+    # my $interval_no = $request->clean_param('interval_id') + 0;
+    # my $interval_name = $request->clean_param('interval');
+    # my $earlybuffer = $request->clean_param('earlybuffer');
+    # my $latebuffer = $request->clean_param('latebuffer');
     
-    # If an interval was specified, use that.
+    # Check for interval parameters.
     
-    if ( $interval_no || $interval_name )
+    my ($early_age, $late_age, $early_interval_no, $late_interval_no) = $request->process_interval_params;
+    
+    my $early_bound = $early_age;
+    my $late_bound = $late_age;
+    my $buffer;
+    
+    if ( $early_age )
     {
-	my ($scale_no, $level);
-	
-	# First figure out the parameters of the specified interval
-	
-	if ( $interval_no )
-	{
-	    my $sql = "
-		SELECT early_age, late_age, scale_no, scale_level
-		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
-		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
-	    
-	    ($early_age, $late_age) = $dbh->selectrow_array($sql);
-	}
-	
-	else
-	{
-	    my $quoted_name = $dbh->quote($interval_name);
-	    
-	    my $sql = "SELECT early_age, late_age, interval_no, scale_no, scale_level
-		   FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
-		   WHERE interval_name like $quoted_name ORDER BY scale_no";
-	
-	    ($early_age, $late_age, $interval_no, $scale_no) = $dbh->selectrow_array($sql);
-	}
-	
-	my $buffer = $early_age > 66 ? 12 : 5;
+	$buffer = $early_age > 66 ? 12 : 5;
 	$early_bound = $early_age + $buffer;
 	$late_bound = $late_age - $buffer;
-	
-	# If the requestor wants to override the time bounds, do that.
-	
-	if ( $earlybuffer )
-	{
-	    $early_bound = $early_age + $earlybuffer;
-	}
-	
-	if ( $latebuffer )
-	{
-	    $late_bound = $late_age - $latebuffer;
-	    $late_bound = 0 if $late_bound < 0;
-	}
-	
-	# If we are querying for summary clusters, we can use the cluster
-	# table row corresponding to that interval number.  Unless we are
-	# using the 'overlap' rule, in which case we need the unrestricted
-	# cluster table row (the one for interval_no = 0).
-	
-	if ( ($op eq 'summary' || $op eq 'prevalence') and $time_rule ne 'overlap' )
-	{
-	    $summary_interval = $interval_no;
-	}
+    }
+    
+    my $summary_interval = 0;
+    
+    # If the requestor wants to override the time bounds, do that.
+    
+    if ( my $earlybuffer = $request->clean_param('earlybuffer') )
+    {
+	$early_bound = $early_age + $earlybuffer;
+    }
+    
+    if ( my $latebuffer = $request->clean_param('latebuffer') )
+    {
+	$late_bound = $late_age - $latebuffer;
+	$late_bound = 0 if $late_bound < 0;
+    }
+    
+    # If $late_bound is less than zero, correct it to zero.
+    
+    $late_bound = 0 if defined $late_bound && $late_bound < 0;
+    
+    # If we are querying for summary clusters, and only one interval was
+    # specified, we can use the cluster table row corresponding to that
+    # interval number.  But only if timerule is the default value of 'buffer'.
+    # Otherwise, we need the unrestricted cluster table row (the one for
+    # interval_no = 0) plus additional filters.
+    
+    if ( ($op eq 'summary' || $op eq 'prevalence') && $time_rule eq 'buffer' &&
+	 ($early_interval_no && $late_interval_no && $early_interval_no == $late_interval_no) )
+    {
+	push @filters, "s.interval_no = $summary_interval";
     }
     
     # Otherwise, if a range of years was specified, use that.
     
-    else
-    {
-	my $max_ma = $self->clean_param('max_ma');
-	my $min_ma = $self->clean_param('min_ma');
+    # else
+    # {
+    # 	my $max_ma = $request->clean_param('max_ma');
+    # 	my $min_ma = $request->clean_param('min_ma');
 	
-	if ( $max_ma && $min_ma )
-	{
-	    my $range = $max_ma - $min_ma;
-	    my $buffer = $range * 0.5;
+    # 	if ( $max_ma && $min_ma )
+    # 	{
+    # 	    my $range = $max_ma - $min_ma;
+    # 	    my $buffer = $range * 0.5;
 	    
-	    $early_age = $max_ma + 0;
-	    $early_bound = defined $earlybuffer ? 
-		$early_age + $earlybuffer :
-		    $early_age + $buffer;
+    # 	    $early_age = $max_ma + 0;
+    # 	    $early_bound = defined $earlybuffer ? 
+    # 		$early_age + $earlybuffer :
+    # 		    $early_age + $buffer;
 	
-	    $late_age = $max_ma + 0;
-	    $late_bound = defined $latebuffer ?
-		$late_age - $latebuffer :
-		    $late_age - $buffer;
+    # 	    $late_age = $max_ma + 0;
+    # 	    $late_bound = defined $latebuffer ?
+    # 		$late_age - $latebuffer :
+    # 		    $late_age - $buffer;
 	
-	    $late_bound = 0 if $late_bound < 0;
-	}
+    # 	    $late_bound = 0 if $late_bound < 0;
+    # 	}
 	
-	# Otherwise, handle either a min or max filter alone.
+    # 	# Otherwise, handle either a min or max filter alone.
 	
-	elsif ( $max_ma )
-	{
-	    $early_age = $max_ma + 0;
-	    $early_bound = $early_age;
-	}
+    # 	elsif ( $max_ma )
+    # 	{
+    # 	    $early_age = $max_ma + 0;
+    # 	    $early_bound = $early_age;
+    # 	}
 	
-	if ( $max_ma )
-	{
-	    $late_age = $min_ma + 0;
-	    $late_bound = $late_age;
-	}
-    }
-    
-    # Now, if we are summarizing then add the appropriate interval filter.  If
-    # $summary_interval is not an integer (i.e. the client didn't specify a
-    # valid interval), use -1 instead which will cause the result set to be empty.
-    
-    if ( $op eq 'summary' || $op eq 'prevalence' )
-    {
-	$summary_interval = '-1' unless defined $summary_interval && $summary_interval =~ qr{^[0-9]+$};
-	push @filters, "s.interval_no = $summary_interval";
-    }
+    # 	if ( $max_ma )
+    # 	{
+    # 	    $late_age = $min_ma + 0;
+    # 	    $late_bound = $late_age;
+    # 	}
+    # }
     
     # Then, if a time filter was specified and we need one, apply it.  If we
     # are were given a summary interval and no non-geographic filters were
     # specified, then we don't need one because the necessary filtering has
     # already been done by selecting the appropriate interval_no in the summary table.
     
-    if ( defined $early_age or defined $late_age )
+    elsif ( $early_age || $late_age )
     {
 	unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer') or
 	         $tables_ref->{ds} or $op eq 'prevalence' )
@@ -2045,6 +2193,16 @@ sub generateMainFilters {
 		}
 	    }
 	    
+	    elsif ( $time_rule eq 'major' )
+	    {
+		my $ea = ($early_age + 0 || 5000);
+		my $la = $late_age + 0;
+		
+		push @filters, "if($mt.late_age >= $la,
+			if($mt.early_age <= $ea, $mt.early_age - $mt.late_age, $ea - $mt.late_age),
+			if($mt.early_age > $ea, $ea - $la, $mt.early_age - $la)) / ($mt.early_age - $mt.late_age) >= 0.5"
+	    }
+	    
 	    else # $time_rule eq 'buffer'
 	    {
 		if ( defined $late_age and defined $early_age and 
@@ -2071,8 +2229,8 @@ sub generateMainFilters {
 	    }
 	}
 	
-	$self->{early_age} = $early_age;
-	$self->{late_age} = $late_age;
+	$request->{early_age} = $early_age;
+	$request->{late_age} = $late_age;
 	$tables_ref->{non_summary} = 1;
     }
     
@@ -2088,10 +2246,10 @@ sub generateMainFilters {
 
 sub adjustCoordinates {
 
-    my ($self, $fields_ref) = @_;
+    my ($request, $fields_ref) = @_;
     
-    my $x1 = $self->clean_param('lngmin');
-    my $x2 = $self->clean_param('lngmax');
+    my $x1 = $request->clean_param('lngmin');
+    my $x2 = $request->clean_param('lngmax');
     
     return unless $x1 || $x2;
     
@@ -2261,12 +2419,12 @@ sub generatePrevalenceFilters {
 
 sub selectPaleoModel {
     
-    my ($self, $fields_ref, $tables_ref) = @_;
+    my ($request, $fields_ref, $tables_ref) = @_;
     
     # Go through each specified paleogeographicmodel and construct a list of the necessary
     # fields.  If no models were specified, use 'gplates' as the default.
     
-    my @models = $self->clean_param_list('pgm');
+    my @models = $request->clean_param_list('pgm');
     
     @models = 'gplates' unless @models;
     
@@ -2288,7 +2446,7 @@ sub selectPaleoModel {
 	{
 	    push @fields, "cc.paleolng as $lng_field", "cc.paleolat as $lat_field";
 	    push @fields, "cc.plate as $plate_field" unless $plate_version_shown{'scotese'};
-	    push @fields, "'scotese' as $model_field" if @models > 1;
+	    push @fields, "'scotese' as $model_field";
 	    $tables_ref->{cc} = 1;
 	    $plate_version_shown{'scotese'} = 1;
 	}
@@ -2297,7 +2455,7 @@ sub selectPaleoModel {
 	{
 	    push @fields, "pc.mid_lng as $lng_field", "pc.mid_lat as $lat_field";
 	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
-	    push @fields, "'gp_mid' as $model_field" if @models > 1;
+	    push @fields, "'gp_mid' as $model_field";
 	    $tables_ref->{pc} = 1;
 	    $plate_version_shown{'gplates'} = 1;
 	}
@@ -2306,7 +2464,7 @@ sub selectPaleoModel {
 	{
 	    push @fields, "pc.early_lng as $lng_field", "pc.early_lat as $lat_field";
 	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
-	    push @fields, "'gp_early' as $model_field" if @models > 1;
+	    push @fields, "'gp_early' as $model_field";
 	    $tables_ref->{pc} = 1;
 	    $plate_version_shown{'gplates'} = 1;
 	}
@@ -2315,7 +2473,7 @@ sub selectPaleoModel {
 	{
 	    push @fields, "pc.late_lng as $lng_field", "pc.late_lat as $lat_field";
 	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
-	    push @fields, "'gp_late' as $model_field" if @models > 1;
+	    push @fields, "'gp_late' as $model_field";
 	    $tables_ref->{pc} = 1;
 	    $plate_version_shown{'gplates'} = 1;
 	}
@@ -2326,6 +2484,18 @@ sub selectPaleoModel {
     my $paleofields = join(", ", @fields);
     
     $$fields_ref =~ s/PALEOCOORDS/$paleofields/;
+    
+    # Delete unnecessary output fields.
+    
+    foreach my $i (2..4)
+    {
+	next if $i <= $model_no;
+	
+	$request->delete_output_field("paleomodel$i");
+	$request->delete_output_field("paleolng$i");
+	$request->delete_output_field("paleolat$i");
+	$request->delete_output_field("geoplate$i");
+    }
 }
 
 
@@ -2336,12 +2506,12 @@ sub selectPaleoModel {
 
 sub adjustPCIntervals {
     
-    my ($self, @stringrefs) = @_;
+    my ($request, @stringrefs) = @_;
     
     # Each of the subsequent arguments are references to strings to be
     # altered.
     
-    my $selector = $self->clean_param('pcis');
+    my $selector = $request->clean_param('pcis');
     
     if ( $selector eq 'start' )
     {
@@ -2370,14 +2540,14 @@ sub adjustPCIntervals {
 
 sub generate_order_clause {
     
-    my ($self, $tables, $options) = @_;
+    my ($request, $tables, $options) = @_;
     
     $options ||= {};
     my $at = $options->{at} || 'c';
     my $bt = $options->{bt} || 'cc';
     my $tt = $options->{tt};
     
-    my $order = $self->clean_param('order');
+    my $order = $request->clean_param('order');
     my @terms = ref $order eq 'ARRAY' ? @$order : $order;
     my @exprs;
     
@@ -2447,7 +2617,7 @@ sub generate_order_clause {
 	
 	elsif ( $term eq 'plate' )
 	{
-	    my ($pgm) = $self->clean_param_list('pgm');
+	    my ($pgm) = $request->clean_param_list('pgm');
 	    $pgm //= 'gplates';
 	    
 	    if ( $pgm eq 'scotese' )
@@ -2493,7 +2663,7 @@ sub generate_order_clause {
 
 sub generateJoinList {
 
-    my ($self, $mt, $tables) = @_;
+    my ($request, $mt, $tables) = @_;
     
     my $join_list = '';
     
@@ -2514,6 +2684,8 @@ sub generateJoinList {
 	if $tables->{oc};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t} || $tables->{tf};
+    $join_list .= "JOIN coll_map as cm using (bin_id)\n"
+	if $tables->{cm};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
 	if $tables->{pc};
     $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
@@ -2550,7 +2722,7 @@ sub generateJoinList {
 
 sub set_collection_refs {
     
-    my ($self, $record) = @_;
+    my ($request, $record) = @_;
     
     my @refs; @refs = split qr{,}, $record->{reference_nos} if $record->{reference_nos};
     
@@ -2574,7 +2746,7 @@ sub set_collection_refs {
 
 sub process_methods {
     
-    my ($self, $record) = @_;
+    my ($request, $record) = @_;
     
     if ( $record->{collection_size} && $record->{collection_size_unit} )
     {
@@ -2610,7 +2782,7 @@ our %PREC_CODE =
 
 sub generateBasisCode {
 
-    my ($self, $record) = @_;
+    my ($request, $record) = @_;
     
     return $BASIS_CODE{$record->{llb}||''} . $PREC_CODE{$record->{llp}||''};
 }
@@ -2676,16 +2848,16 @@ sub continent_error {
 
 sub prune_field_list {
     
-    my ($self) = @_;
+    my ($request) = @_;
     
-    my $field_list = $self->output_field_list;
+    my $field_list = $request->output_field_list;
     
     # If the '1.2:colls:paleoloc' block is selected, then trim any unused
     # fields.
     
-    if ( $self->block_selected('1.2:colls:paleoloc') )
+    if ( $request->block_selected('1.2:colls:paleoloc') )
     {
-	my (@pgmodels) = $self->clean_param_list('pgm');
+	my (@pgmodels) = $request->clean_param_list('pgm');
 	my $model_count = scalar(@pgmodels) || 1;
 	
 	my @good_fields;
@@ -2716,22 +2888,22 @@ sub process_coll_com {
     
     foreach my $f ( qw(collection_no) )
     {
-	$record->{$f} = "$IDP{COL}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{COL}:$record->{$f}" if defined $record->{$f};
     }
     
     foreach my $f ( qw(interval_no) )
     {
-	$record->{$f} = "$IDP{INT}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{INT}:$record->{$f}" if defined $record->{$f};
     }
     
     if ( ref $record->{reference_no} eq 'ARRAY' )
     {
-	map { $_ = "$IDP{REF}$_" } @{$record->{reference_no}};
+	map { $_ = "$IDP{REF}:$_" } @{$record->{reference_no}};
     }
     
     elsif ( defined $record->{reference_no} )
     {
-	$record->{reference_no} = "$IDP{REF}$record->{reference_no}";
+	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
     }
 }
 

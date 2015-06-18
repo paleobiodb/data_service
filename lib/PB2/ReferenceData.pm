@@ -223,15 +223,25 @@ sub initialize {
 	    "or to filter a known list against other criteria.");
     
     $ds->define_ruleset('1.2:refs:filter' =>
-    	{ param => 'author', valid => MATCH_VALUE('.*\w.*') },
+    	{ param => 'ref_author', valid => MATCH_VALUE('.*\w.*') },
     	    "Select only references for which any of the authors matches the specified name",
-    	{ param => 'primary', valid => MATCH_VALUE('.*\w.*') },
+    	{ param => 'ref_primary', valid => MATCH_VALUE('.*\w.*') },
     	    "Select only references for which the primary author matches the specified name",
-    	{ param => 'year', valid => MATCH_VALUE('(?:(?:\d{4})\s*(?:-\s*\d{4})?|\d{4}\s*)'),
-    	  error => "the value of {param} must a range of years, with either bound optional ('2010-' is okay); found {value}" },
-    	    "Select only references published in the specified year",
-    	{ param => 'pubtitle', valid => ANY_VALUE },
-    	    "Select only references that involve the specified publication");
+	{ param => 'ref_published_after', valid => POS_VALUE, alias => 'pubyr_before' },
+	    "Selects only references published during or after the indicated year.",
+	{ param => 'ref_published_before', valid => POS_VALUE, alias => 'pubyr_after' },
+	    "Selects only references published during or before the indicated year.",
+	{ param => 'ref_published', valid => ANY_VALUE, alias => 'pubyr' },
+	    "Selects only references published during the indicated year or range of years.",
+    	# { param => 'year', valid => MATCH_VALUE('(?:(?:\d{4})\s*(?:-\s*\d{4})?|\d{4}\s*)'),
+    	#   error => "the value of {param} must be a range of years, with either bound optional ('2010-' is okay); found {value}" },
+    	#     "Select only references published in the specified year",
+	{ param => 'ref_title', valid => ANY_VALUE },
+	    "Select only references whose title matches the specified value.  You can",
+	    "use C<%> and C<_> as wildcards.",
+    	{ param => 'pub_title', valid => ANY_VALUE },
+    	    "Select only references that involve the specified publication.  You can",
+	    "use C<%> and C<_> as wildcards.");
     
     $ds->define_ruleset('1.2:refs:single' => 
     	{ require => '1.2:refs:specifier' },
@@ -243,10 +253,10 @@ sub initialize {
 	"You B<must> include at least one of the following parameters:",
     	{ allow => '1.2:refs:selector' },
 	{ allow => '1.2:refs:filter' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	{ require_any => ['1.2:refs:selector', '1.2:refs:filter', 
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
 	"You can also specify any of the following parameters:",
     	{ allow => '1.2:refs:display' },
 	{ optional => 'order', valid => '1.2:refs:order', split => ',', no_set_doc => 1 },
@@ -317,9 +327,8 @@ sub list {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generate_filters();
-    push @filters, $self->generate_crmod_filters('r');
-    push @filters, $self->generate_ent_filters('r');
+    my @filters = $self->generate_ref_filters();
+    push @filters, $self->generate_common_filters( { ref => 'r', bare => 'r' } );
     
     my $filter_string = join(' and ', @filters);
     
@@ -370,37 +379,24 @@ sub list {
 }
 
 
-# generate_filters ( )
+# generate_ref_filters ( )
 # 
 # Generate the necessary filter clauses to reflect the query parameters.
 
-sub generate_filters {
+sub generate_ref_filters {
     
     my ($self, $tables_hash) = @_;
     
     my $dbh = $self->get_connection;
     my @filters;
     
-    if ( my $ids = $self->clean_param('id') )
+    if ( my @ids = $self->safe_param_list('id') )
     {
-	if ( ref $ids eq 'ARRAY' )
-	{
-	    my $id_string = join(',', @$ids);
-	    push @filters, "r.reference_no in ($id_string)";
-	}
-	
-	elsif ( ref $ids )
-	{
-	    push @filters, "r.reference_no = 0";
-	}
-	
-	else
-	{
-	    push @filters, "r.reference_no = $ids";
-	}
+	my $id_string = join(',', @ids);
+	push @filters, "r.reference_no in ($id_string)";
     }
     
-    if ( my $year = $self->clean_param('year') )
+    if ( my $year = $self->clean_param('ref_published') )
     {
 	if ( $year =~ /(\d+)\s*-/ )
 	{
@@ -418,26 +414,26 @@ sub generate_filters {
 	}
     }
     
-    if ( my $authorname = $self->clean_param('author') )
+    if ( my $authorname = $self->clean_param('ref_author') )
     {
 	push @filters, $self->generate_auth_filter($authorname, 'author');
     }
     
-    if ( my $authorname = $self->clean_param('primary') )
+    if ( my $authorname = $self->clean_param('ref_primary') )
     {
 	push @filters, $self->generate_auth_filter($authorname, 'primary');
     }
     
-    if ( my $title = $self->clean_param('title') )
+    if ( my $reftitle = $self->clean_param('ref_title') )
     {
-	my $quoted = $dbh->quote("%$title%");
+	my $quoted = $dbh->quote($reftitle);
 	
 	push @filters, "r.reftitle like $quoted";
     }
     
-    if ( my $pubtitle = $self->clean_param('pubtitle') )
+    if ( my $pubtitle = $self->clean_param('pub_title') )
     {
-	my $quoted = $dbh->quote("%$pubtitle%");
+	my $quoted = $dbh->quote($pubtitle);
 	
 	push @filters, "r.pubtitle like $quoted";
     }
@@ -792,7 +788,7 @@ sub process_ref_com {
     
     my ($request, $record) = @_;
     
-    $record->{reference_no} = "$IDP{REF}$record->{reference_no}" if defined $record->{reference_no};
+    $record->{reference_no} = "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};
 }
 
 

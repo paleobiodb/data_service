@@ -118,6 +118,15 @@ use PB2::PersonData;
 			default_save_filename => 'pbdb_data',
 			title => 'Documentation' });
     
+    # If a default_limit value was defined in the configuration file, get that
+    # now so that we can use it to derive limits for certain nodes.
+    
+    my $base_limit = $ds2->node_attr('/', 'default_limit');
+    my $taxa_limit = $base_limit ? $base_limit * 5 : undef;
+    $taxa_limit = 20000 if defined $taxa_limit && $taxa_limit < 20000;
+    my $ref_limit = $base_limit ? $base_limit * 5 : undef;
+    $ref_limit = 10000 if defined $ref_limit && $ref_limit < 10000;
+    
     # Configuration. This path is used by clients who need to configure themselves
     # based on parameters supplied by the data service.
     
@@ -221,7 +230,7 @@ use PB2::PersonData;
 			output => '1.2:taxa:basic',
 			optional_output => '1.2:occs:taxa_opt',
 			summary => '1.2:occs:taxa_summary',
-			default_limit => 20000,
+			default_limit => $taxa_limit,
 			title => 'Taxonomy of fossil occurrences', },
 	"This operation tabulates the taxonomic hierarchy of a selected set of fossil occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
@@ -384,6 +393,7 @@ use PB2::PersonData;
 			usage => [ "taxa/list.txt?id=69296&rel=all_children&show=ref",
 				   "taxa/list.json?name=Dascillidae&rel=all_parents" ],
 			method => 'list_taxa',
+			default_limit => $taxa_limit,
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:output_map' },
@@ -395,8 +405,9 @@ use PB2::PersonData;
 			place => 3,
 			title => 'Bibliographic references for taxa',
 			usage => [ "taxa/refs.ris?base_name=Felidae&textresult" ],
-			method => 'list',
-			method => 'taxa_refs',
+			method => 'list_associated',
+			arg => 'refs',
+			default_limit => $ref_limit,
 			allow_format => '+ris',
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
@@ -408,8 +419,8 @@ use PB2::PersonData;
 			place => 3,
 			title => 'Taxa grouped by bibliographic reference',
 			usage => [ "taxa/byref.txt?base_name=Felidae" ],
-			method => 'taxa_byref',
-			arg => 'reftaxa',
+			method => 'list_associated',
+			arg => 'taxa',
 			output => '1.2:taxa:reftaxa',
 			optional_output => '1.2:taxa:output_map' },
 	"This path returns information about taxonomic names, grouped according to the bibliographic",
@@ -422,7 +433,8 @@ use PB2::PersonData;
 			place => 3,
 			title => 'Opinions about taxa',
 			usage => [ "taxa/opinions.json?base_name=Felidae" ],
-			method => 'taxa_opinions',
+			method => 'list_associated',
+			default_limit => $ref_limit,
 			arg => 'opinions',
 			output => '1.2:opinions:basic',
 			optional_output => '1.2:opinions:output_map' },
@@ -435,8 +447,8 @@ use PB2::PersonData;
 		      path => 'occs/taxa',
 		      place => 4 });
     
-    $ds2->define_node({ path => 'taxa/match',
-			method => 'match' });
+    # $ds2->define_node({ path => 'taxa/match',
+    # 			method => 'match' });
     
     $ds2->define_node({ path => 'taxa/auto',
 			place => 5,
@@ -509,6 +521,7 @@ use PB2::PersonData;
 			usage => [ "opinions/list.json?created_since=7d",
 				   "opinions/list.json?author=Osborn" ],
 			method => 'list_opinions',
+			default_limit => $ref_limit,
 			optional_output => '1.2:opinions:output_map' },
 	"This path returns information about multiple taxonomic opinions, selected according to",
 	"criteria other than taxon name.  This path could be used to query for all of the opinions",
@@ -528,6 +541,7 @@ use PB2::PersonData;
 			place => 3,
 			role => 'PB2::IntervalData',
 			output => '1.2:intervals:basic',
+			default_limit => undef,
 			title => 'Geological time intervals and time scales' },
 	"The database lists almost every geologic time interval in current use, including the",
 	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
@@ -559,6 +573,7 @@ use PB2::PersonData;
     $ds2->define_node({ path => 'scales',
 			role => 'PB2::IntervalData',
 			output => '1.2:scales:basic',
+			default_limit => undef,
 			title => 'Geological time scales' });
     
     $ds2->define_node({ path => 'scales/single',
@@ -583,6 +598,7 @@ use PB2::PersonData;
 			place => 0,
 			title => 'Database contributors',
 			role => 'PB2::PersonData',
+			default_limit => undef,
 			output => '1.2:people:basic' });
     
     $ds2->define_node({ path => 'people/single', 
@@ -599,6 +615,7 @@ use PB2::PersonData;
 			title => 'Bibliographic references',
 			role => 'PB2::ReferenceData',
 			allow_format => '+ris',
+			default_limit => $ref_limit,
 			output => '1.2:refs:basic',
 		        optional_output => '1.2:refs:output_map' },
 	"Each fossil occurrence, fossil collection and taxonomic name in the database is",

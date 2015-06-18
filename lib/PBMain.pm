@@ -24,6 +24,15 @@ any qr{.*} => sub {
 	params->{save} = "no";
     }
     
+    if ( request->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
+    {
+	my $newpath = "$1/single.$3";
+	my $id = $2;
+	
+	params->{id} = $id;
+	forward($newpath);
+    }
+    
     return Web::DataService->handle_request(request);
 };
 

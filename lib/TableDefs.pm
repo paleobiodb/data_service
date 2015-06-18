@@ -91,7 +91,7 @@ our $IDIGBIO = 'idigbio';
 
 # List the identifier prefixes:
 
-our %IDP = ( URN => 'urn:paleobiodb.org:',
+our %IDP = ( URN => 'urn:lsid:paleobiodb.org:',
 	     TID => 'txn|var',
 	     TXN => 'txn',
 	     VAR => 'var',
@@ -131,12 +131,12 @@ my $key_expr = '';
 foreach my $key ( keys %IDP )
 {
     next if $key eq 'URN';
-    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? (?: $IDP{$key} ) )? ( [0]+ | [1-9][0-9]* ) $ }xsi;
+    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? (?: $IDP{$key} ) [:]? )? ( [0]+ | [1-9][0-9]* ) $ }xsi;
     $key_expr .= '|' if $key_expr;
     $key_expr .= $IDP{$key};
 }
 
-$IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? (?: $key_expr ) )? ( [0]+ | [1-9][0-9]* ) $ }xsi;
+$IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? (?: $key_expr ) [:]? )? ( [0]+ | [1-9][0-9]* ) $ }xsi;
 
 
 # valid_ident ( value, context, type )
@@ -147,35 +147,32 @@ sub valid_identifier {
 
     my ($value, $context, $type) = @_;
     
+    # If the value matches the regular expression corresponding to the
+    # specified type, then return the integer identifier extracted from it.
+    # The rest of the value can be safely ignored.
+    
     if ( $value =~ $IDRE{$type} )
     {
 	return { value => $1 };
     }
     
-    if ( $value =~ qr{ ^ urn: }xsi )
-    {
-	if ( $value =~ qr{ ^ $IDP{URN} (.*) }xsi )
-	{
-	    return { error => "the value of {param} must be '$IDP{URN}$IDP{$type}' " .
-		     "followed by a nonnegative integer (was '$value')" };
-	}
-	
-	else
-	{
-	    return { error => "the value of {param} must be a valid local identifier " .
-		     "or must start with the prefix '$IDP{URN}' (was {value})" };
-	}
-    }
+    # Otherwise, attempt to provide a useful error message.
+    
+    my $msg;
     
     if ( $type eq 'ANY' )
     {
-	return { error => "the value of {param} must be a nonnegative integer, optionally prefixed with an identifier type" };
+	$msg = "each value of {param} must be a nonnegative integer, " .
+	    "optionally prefixed with '$IDP{URN}xxx' where xxx is a valid identifier type (was {value})";
     }
     
     else
     {
-	return { error => "the value of {param} must be a nonnegative integer, optionally prefixed with '$IDP{$type}'" };
+	$msg = "each value of {param} must be a nonnegative integer, " .
+	    "optionally prefixed with '$IDP{$type}' or '$IDP{URN}$IDP{$type}' (was {value})";
     }
+    
+    return { error => $msg };
 }
 
 

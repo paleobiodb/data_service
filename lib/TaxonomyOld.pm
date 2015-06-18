@@ -42,7 +42,7 @@ our (%KINGDOM_ALIAS) = ( 'metazoa' => 'Metazoa', 'animalia' => 'Metazoa', 'iczn'
 
 our ($SQL_STRING);
 
-our ($HAS_SENPAR);
+our ($IMMPAR_FIELD, $SENPAR_FIELD);
 
 # These need to be synchronized with TaxonTrees.pm, or else moved to a
 # separate file that both modules include.
@@ -335,7 +335,7 @@ sub new {
     
     # Check for the existence of fields that may have changed.
     
-    check_senpar($dbh, $table_name) unless defined $HAS_SENPAR;
+    check_senpar($dbh, $table_name) unless defined $SENPAR_FIELD;
     
     my $self = { dbh => $dbh, 
 		 tree_table => $table_name,
@@ -383,7 +383,7 @@ our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2
 # The "link" fields are returned additionally if we are asked for 'link'.
 # They describe how a taxon is linked to others in the tree.
 
-our ($LINK_FIELDS) = ", t.spelling_no, t.synonym_no, t.parent_no, t.parsen_no";
+our ($LINK_FIELDS) = ", t.spelling_no, t.synonym_no, t.IMMPAR, t.SENPAR";
 
 # The "orig" fields are returned additionally if we are asked for 'orig'.
 # They specify the original name and rank of a taxon.
@@ -487,7 +487,7 @@ sub check_senpar {
     
     my ($dbh, $table_name) = @_;
     
-    my $senpar_no;
+    my ($senpar_no, $immpar_no);
     
     eval {
 	($senpar_no) = $dbh->selectrow_array("SELECT senpar_no FROM $table_name WHERE senpar_no > 0 LIMIT 1");
@@ -495,14 +495,31 @@ sub check_senpar {
     
     if ( $senpar_no )
     {
-	$HAS_SENPAR = 1;
-	$LINK_FIELDS =~ s/parsen_no/senpar_no/;
+	$SENPAR_FIELD = 'senpar_no';
+	$LINK_FIELDS =~ s/SENPAR/senpar_no as parsen_no/;
     }
     
     else
     {
-	$HAS_SENPAR = 0;
+	$SENPAR_FIELD = 'parsen_no';
+	$LINK_FIELDS =~ s/SENPAR/parsen_no/;
     }
+    
+    eval {
+	($immpar_no) = $dbh->selectrow_array("SELECT immpar_no FROM $table_name WHERE immpar_no > 0 LIMIT 1");
+    };
+    
+    if ( $immpar_no )
+    {
+	$IMMPAR_FIELD = 'immpar_no';
+	$LINK_FIELDS =~ s/IMMPAR/immpar_no as parent_no/;
+    }
+    
+    else
+    {
+	$IMMPAR_FIELD = 'parent_no';
+	$LINK_FIELDS =~ s/IMMPAR/parent_no/;
+    }   
 }
 
 
@@ -550,7 +567,7 @@ in which the taxon was first published, along with the publication information.
 
 =item link
 
-Includes the fields 'spelling_no', 'synonym_no', and 'parent_no', which
+Includes the fields 'spelling_no', 'synonym_no', and 'immpar_no', which
 indicate how the taxon is related to the rest of this taxonomic hierarchy.
 
 =item orig
@@ -2676,9 +2693,9 @@ sub getRelatedTaxon {
     elsif ( $rel eq 'parent' )
     {
 	my $t_join = $options->{senior} ? 
-	    "JOIN $tree_table as t3 on t3.orig_no = t2.parent_no
+	    "JOIN $tree_table as t3 on t3.orig_no = t2.$IMMPAR_FIELD
 	     JOIN $tree_table as t on t.orig_no = t3.synonym_no" :
-		"JOIN $tree_table as t on t.orig_no = t2.parent_no";
+		"JOIN $tree_table as t on t.orig_no = t2.$IMMPAR_FIELD";
 	
 	$SQL_STRING = "
 		SELECT $query_fields
@@ -2793,7 +2810,7 @@ sub getRelatedTaxonId {
 		WHERE a2.taxon_no = ?";
     }
     
-    # Parameters synonym_no and parent_no require an extra join on $tree_table
+    # Parameters synonym_no and immpar_no require an extra join on $tree_table
     # to look up the spelling_no.
     
     elsif ( $rel eq 'synonym' or $rel eq 'parent' )
@@ -3745,9 +3762,9 @@ sub getTaxa {
     elsif ( $rel eq 'parents' )
     {
 	my $parent_join = $options->{senior} ?
-	    "JOIN $tree_table as t3 on t3.orig_no = t2.parent_no
+	    "JOIN $tree_table as t3 on t3.orig_no = t2.immpar_no
 	     JOIN $tree_table as t on t.orig_no = t3.synonym_no" :
-		 "JOIN $tree_table as t on t.orig_no = t2.parent_no";
+		 "JOIN $tree_table as t on t.orig_no = t2.immpar_no";
 
 	$SQL_STRING = "
 		SELECT $count_expr $query_fields
@@ -4249,9 +4266,9 @@ sub getTaxaIds {
 	    
 	    elsif ( $f eq 'parent' )
 	    {
-		$create_string .= "parent_no int unsigned not null,\n";
+		$create_string .= "immpar_no int unsigned not null,\n";
 		$select_string .= ",ti3.${select}_no";
-		$extra_joins .= " JOIN $tree_table as ti3 on ti3.orig_no = t.parent_no"
+		$extra_joins .= " JOIN $tree_table as ti3 on ti3.orig_no = t.immpar_no"
 		    unless $extra_joins =~ / as t3 /;
 	    }
 	    
@@ -4455,9 +4472,9 @@ sub getTaxaIds {
 	    unless $order_expr;
 	
 	my $parent_join = $options->{senior} ?
-	    "JOIN $tree_table as t3 on t3.orig_no = t2.parent_no
+	    "JOIN $tree_table as t3 on t3.orig_no = t2.immpar_no
 	     JOIN $tree_table as t on t.orig_no = t3.synonym_no" :
-		 "JOIN $tree_table as t on t.orig_no = t2.parent_no";
+		 "JOIN $tree_table as t on t.orig_no = t2.immpar_no";
 	
 	$select_string = "a.taxon_no" unless $select_string;
 	
@@ -6489,13 +6506,13 @@ sub generateExtraJoins {
     {
 	if ( $options->{senior} )
 	{
-	    $extra_joins .= "LEFT JOIN $tree_table as pt2 on pt2.orig_no = t.parent_no\n";
+	    $extra_joins .= "LEFT JOIN $tree_table as pt2 on pt2.orig_no = t.immpar_no\n";
 	    $extra_joins .= "LEFT JOIN $tree_table as pt on pt.orig_no = pt2.synonym_no\n";
 	}
 	
 	else
 	{
-	    $extra_joins .= "LEFT JOIN $tree_table as pt on pt.orig_no = t.parent_no\n";
+	    $extra_joins .= "LEFT JOIN $tree_table as pt on pt.orig_no = t.immpar_no\n";
 	}
 	
 	$extra_joins .= "LEFT JOIN $auth_table as pa on pa.taxon_no = pt.${select}_no\n";

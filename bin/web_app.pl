@@ -20,7 +20,7 @@ use Web::DataService;
 
 BEGIN {
 
-    Web::DataService->VERSION(0.252);
+    Web::DataService->VERSION(0.26);
 
     if ( defined $ARGV[0] and ( lc $ARGV[0] eq 'get' or lc $ARGV[0] eq 'show' ) )
     {

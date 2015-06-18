@@ -30,7 +30,7 @@ $dbh->do("DROP PROCEDURE IF EXISTS taxoninfo");
 $dbh->do("CREATE PROCEDURE taxoninfo (t int unsigned )
 	BEGIN
 		SELECT a.taxon_no, t.orig_no, a.taxon_name, a.taxon_rank, status, t.synonym_no,
-		       t.parent_no, opinion_no
+		       t.senpar_no, opinion_no
 		FROM authorities as a JOIN taxon_trees as t on a.taxon_no = t.spelling_no
 			JOIN authorities as a2 on a2.orig_no = t.orig_no
 			LEFT JOIN opinions USING (opinion_no)
@@ -41,7 +41,7 @@ $dbh->do("DROP PROCEDURE IF EXISTS exactinfo");
 $dbh->do("CREATE PROCEDURE exactinfo (t int unsigned )
 	BEGIN
 		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, t.synonym_no,
-		       t.parent_no, opinion_no
+		       t.senpar_no, opinion_no
 		FROM authorities JOIN taxon_trees as t using (orig_no)
 			LEFT JOIN opinions USING (opinion_no)
 		WHERE taxon_no = t;
@@ -51,7 +51,7 @@ $dbh->do("DROP PROCEDURE IF EXISTS taxonrange");
 $dbh->do("CREATE PROCEDURE taxonrange (t int unsigned )
 	BEGIN
 		SELECT taxon_no, orig_no, taxon_name, taxon_rank, t.lft, t.rgt, t.synonym_no,
-		       t.parent_no
+		       t.senpar_no
 		FROM authorities JOIN taxon_trees as t using (orig_no)
 			LEFT JOIN opinions USING (opinion_no)
 		WHERE taxon_no = t;
@@ -62,13 +62,13 @@ $dbh->do("CREATE PROCEDURE nameinfo (t varchar(80))
 	BEGIN
 		IF instr(t, ' ') > 0 THEN
 		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, t.synonym_no,
-		       t.parent_no, opinion_no
+		       t.senpar_no, opinion_no
 		FROM authorities JOIN taxon_trees as t using (orig_no)
 			LEFT JOIN opinions using (opinion_no)
 		WHERE taxon_name like t and taxon_rank in ('subgenus', 'species', 'subspecies');
 		ELSE
 		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, t.synonym_no,
-		       t.parent_no, opinion_no
+		       t.senpar_no, opinion_no
 		FROM authorities JOIN taxon_trees as t using (orig_no)
 			LEFT JOIN opinions using (opinion_no)
 		WHERE taxon_name like t and taxon_rank not in ('subgenus', 'species', 'subspecies');
@@ -80,13 +80,13 @@ $dbh->do("CREATE PROCEDURE namerange (t varchar(80))
 	BEGIN
 		IF instr(t, ' ') > 0 THEN
 		SELECT taxon_no, orig_no, taxon_name, taxon_rank, t.lft, t.rgt, t.synonym_no,
-		       t.parent_no
+		       t.senpar_no
 		FROM authorities JOIN taxon_trees as t using (orig_no)
 			LEFT JOIN opinions using (opinion_no)
 		WHERE taxon_name like t and taxon_rank in ('subgenus', 'species', 'subspecies');
 		ELSE
 		SELECT taxon_no, orig_no, taxon_name, taxon_rank, t.lft, t.rgt, t.synonym_no,
-		       t.parent_no
+		       t.senpar_no
 		FROM authorities JOIN taxon_trees as t using (orig_no)
 			LEFT JOIN opinions using (opinion_no)
 		WHERE taxon_name like t and taxon_rank not in ('subgenus', 'species', 'subspecies');
@@ -97,7 +97,7 @@ $dbh->do("DROP PROCEDURE IF EXISTS tninfo");
 $dbh->do("CREATE PROCEDURE tninfo (t int unsigned )
 	BEGIN
 		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, 
-		       tn.parent_no, opinion_no
+		       tn.senpar_no, opinion_no
 		FROM authorities JOIN tn USING (orig_no)
 			LEFT JOIN opinions USING (opinion_no)
 		WHERE taxon_no = t;
@@ -222,9 +222,9 @@ $dbh->do("CREATE PROCEDURE compute_ancestry (auth_table varchar(80), tree_table 
 		EXECUTE seed_table;
 		# Now iterate adding parents to the table until no more are to
 		# be found.
-		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT parent_no, 0 ',
+		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT senpar_no, 0 ',
 				     'FROM ancestry_scratch as s JOIN ', tree_table, ' using (orig_no) ',
-				     'WHERE parent_no > 0');
+				     'WHERE senpar_no > 0');
 		PREPARE compute_parents	FROM \@stmt2;
 		SET \@cnt = 1;
 		SET \@bound = 1;
@@ -248,10 +248,10 @@ $dbh->do("CREATE PROCEDURE compute_ancestry (auth_table varchar(80), tree_table 
 # 		SET \@gen = 1;
 # 		SET \@cnt = s + 1;
 # 		WHILE \@cnt > s DO
-# 			INSERT IGNORE INTO ancestry_aux select t.parent_no, \@gen+1
+# 			INSERT IGNORE INTO ancestry_aux select t.senpar_no, \@gen+1
 # 				FROM ancestry_aux as s JOIN taxon_trees as t using (orig_no)
 # 					JOIN authorities as a on a.taxon_no = t.spelling_no
-# 				WHERE t.parent_no > 0 and a.taxon_rank <> 'kingdom' and gen = \@gen;
+# 				WHERE t.senpar_no > 0 and a.taxon_rank <> 'kingdom' and gen = \@gen;
 # 			SET \@cnt = ROW_COUNT();
 # 			SET \@gen = \@gen + 1;
 # 		END WHILE;
@@ -274,9 +274,9 @@ $dbh->do("CREATE PROCEDURE compute_ancestry (auth_table varchar(80), tree_table 
 # 				     ' using (orig_no) INTO \@depth');
 # 		PREPARE compute_depth FROM \@stmt1;
 # 		EXECUTE compute_depth;
-# 		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_aux SELECT t.parent_no ',
+# 		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_aux SELECT t.senpar_no ',
 # 				     'FROM ancestry_aux as s JOIN ', tree_table, ' as t using (orig_no) ',
-# 				     'WHERE t.parent_no > 0 and depth = ?');
+# 				     'WHERE t.senpar_no > 0 and depth = ?');
 # 		PREPARE compute_parents	FROM \@stmt2;
 # 		SET \@cnt = 1;
 # 		WHILE \@cnt > 0 DO

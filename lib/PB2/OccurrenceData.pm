@@ -36,7 +36,7 @@ our (@REQUIRES_ROLE) = qw(PB2::DiversityData PB2::CommonData PB2::ReferenceData 
 
 sub initialize {
     
-    my ($self, $ds) = @_;
+    my ($class, $ds) = @_;
     
     # We start by defining an output map for this class.
     
@@ -45,10 +45,6 @@ sub initialize {
 	#     "The attribution of the occurrence: the author name(s) from",
 	#     "the primary reference, and the year of publication.  If no reference",
 	#     "is recorded for this occurrence, the reference for its collection is used.",
-	{ value => 'ident', maps_to => '1.2:occs:ident' },
-	    "The individual components of the taxonomic identification of the occurrence.",
-	    "These values correspond to the value of C<identified_name> in the basic record,",
-	    "and so this additional section will rarely be needed.",
 	{ value => 'class', maps_to => '1.2:occs:taxo' },
 	    "The taxonomic classification of the occurence: phylum, class, order, family,",
 	    "genus.",
@@ -64,10 +60,16 @@ sub initialize {
 	    "This can be added to C<class> or C<classext> in order to display",
 	    "subgenera, or used instead of C<genus> to display both the genus",
 	    "and the subgenus if any.",
+	{ value => 'ident', maps_to => '1.2:occs:ident' },
+	    "The individual components of the taxonomic identification of the occurrence.",
+	    "These values correspond to the value of C<identified_name> in the basic record,",
+	    "and so this additional section will rarely be needed.",
 	{ value => 'plant', maps_to => '1.2:occs:plant' },
 	    "The plant organ(s), if any, associated with this occurrence.  These fields",
 	    "will be empty unless the occurrence is a plant fossil.",
-	{ value => 'coords', maps_to => '1.2:occs:geo' },
+	{ value => 'abund', maps_to => '1.2:occs:abund' },
+	    "Information about the abundance of this occurrence in the collection",
+	{ value => 'coords', maps_to => '1.2:occs:coords' },
 	     "The latitude and longitude of this occurrence",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the occurrence",
@@ -89,8 +91,6 @@ sub initialize {
 	{ value => 'lithext', maps_to => '1.2:colls:lithext' },
 	    "Detailed information about the lithological context of the occurrence.",
 	    "This includes all of the information from C<lith> plus extra fields.",
-	{ value => 'abund', maps_to => '1.2:occs:abund' },
-	    "Information about the abundance of this occurrence in the collection",
 	{ value => 'geo', maps_to => '1.2:colls:geo' },
 	    "Information about the geological context of the occurrence",
         { value => 'rem', maps_to => '1.2:colls:rem' },
@@ -106,7 +106,16 @@ sub initialize {
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the occurrence record");
+	    "The C<created> and C<modified> timestamps for the occurrence record",
+	">I<The following will return all of the information available about",
+	"the occurrence itself, as opposed to its context.  If any more such information",
+	"is added to this data service, this function will be adjusted accordingly.",
+	"You can therefore include it in published URLs, knowing that it will always provide",
+	"all of the available information about the collection(s) of interest.>",
+	{ value => 'full', maps_to => '1.2:occs:full_info' },
+	    "Includes all of the information from the following blocks: B<class>, B<plant>,",
+	    "B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
+	    "B<geo>, B<methods>, B<rem>.");
     
     # Then define those blocks which are not already defined in
     # CollectionData.pm 
@@ -260,7 +269,7 @@ sub initialize {
 	{ output => 'plant_organ2', com_name => 'pl2' },
 	    "An additional plant organ, if any, associated with this occurrence.");
     
-    $ds->define_block('1.2:occs:geo' =>
+    $ds->define_block('1.2:occs:coords' =>
 	{ select => ['c.lat', 'c.lng'], tables => 'c' },
         { output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng' },
 	    "The longitude at which the occurrence was found (in degrees)",
@@ -273,6 +282,20 @@ sub initialize {
 	    "The abundance of this occurrence within its containing collection",
 	{ output => 'abund_unit', com_name => 'abu' },
 	    "The unit in which this abundance is expressed");
+    
+    $ds->define_block( '1.2:occs:full_info' =>
+	{ include => '1.2:occs:class' },
+	{ include => '1.2:occs:plant' },
+	{ include => '1.2:occs:abund' },
+	{ include => '1.2:occs:coords' },
+	{ include => '1.2:colls:loc' },
+	{ include => '1.2:colls:paleoloc' },
+	{ include => '1.2:colls:prot' },
+	{ include => '1.2:colls:stratext' },
+	{ include => '1.2:colls:lithext' },
+	{ include => '1.2:colls:geo' },
+	{ include => '1.2:colls:methods' },
+	{ include => '1.2:colls:rem' });
     
     # The following block specifies the output for diversity matrices.
     
@@ -405,7 +428,12 @@ sub initialize {
     $ds->define_block('1.2:occs:taxa_summary' =>
 	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
 	    "The number of occurrences that were scanned in the process of",
-	    "computing this taxonomic tree.");
+	    "computing this taxonomic tree.",
+	{ output => 'missing_taxon', com_name => 'mtx' },
+	    "The number of occurrences skipped because the taxonomic hierarchy",
+	    "in this database is incomplete.  For example, some genera have not",
+	    "been placed in their proper family, so occurrences in these genera",
+	    "will be skipped if you are counting families.");
     
     $ds->define_block('1.2:occs:prevalence' =>
 	{ output => 'orig_no', com_name => 'oid', pbdb_name => 'taxon_no' },
@@ -511,11 +539,14 @@ sub initialize {
 	{ value => 'modified.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.2:occs:specifier' =>
-	{ param => 'id', valid => VALID_IDENTIFIER('OCC'), alias => 'occ_id' },
-	    "The identifier of the occurrence you wish to retrieve (REQUIRED)");
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), alias => 'id' },
+	    "The identifier of the occurrence you wish to retrieve (REQUIRED).",
+	    "You may instead use the parameter name C<id>.");
     
     $ds->define_ruleset('1.2:occs:selector' =>
-	{ param => 'id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'occ_id' },
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "This parameter needs no value.  If included, all records will be selected.",
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
 	    "A comma-separated list of occurrence identifiers.");
     
     $ds->define_ruleset('1.2:occs:display' =>
@@ -551,10 +582,12 @@ sub initialize {
 	"Except as noted below, you may use these in any combination.",
 	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
 	{ allow => '1.2:occs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -584,10 +617,12 @@ sub initialize {
 	"some occurrences may be skipped when tabulating diversity because they are imprecisely",
 	"characterized temporally or taxonomically.",
 	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -601,13 +636,12 @@ sub initialize {
 	"some occurrences may be skipped when tabulating diversity because they are imprecisely",
 	"characterized temporally or taxonomically.",
 	{ allow => '1.2:main_selector' },
-	#{ allow => '1.2:common:select_crmod' },
-	#{ allow => '1.2:common:select_ent' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
 	#{ require_any => ['1.2:main_selector',
 	#		  '1.2:common:select_crmod', '1.2:common:select_ent'] },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
-
     
     $ds->define_ruleset('1.2:occs:taxa_params' =>
 	{ param => 'count', valid => '1.2:occs:div_count' },
@@ -631,10 +665,12 @@ sub initialize {
 	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
 	"the exact list of occurrences used to compute this phylogeny.",
 	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
 	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -647,10 +683,12 @@ sub initialize {
 	">>You can use the following parameters to query for summary clusters by",
 	"a variety of criteria.  Except as noted below, you may use these in any combination.",
     	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 
@@ -665,16 +703,17 @@ sub initialize {
 	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
 	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
 	"You can also specify any of the following parameters:",
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:refs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
-
 }
 
 
@@ -685,49 +724,54 @@ sub initialize {
 
 sub get {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Make sure we have a valid id number.
     
-    my $id = $self->clean_param('id');
+    my $id = $request->clean_param('occ_id');
     
-    die "Bad identifier '$id'" unless $id and $id =~ /^\d+$/;
+    die "400 Bad identifier '$id'\n" unless $id and $id =~ /^\d+$/;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $self->substitute_select( mt => 'o', cd => 'oc' );
+    $request->substitute_select( mt => 'o', cd => 'oc' );
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
-    $self->adjustCoordinates(\$fields);
-    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->adjustCoordinates(\$fields);
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $self->tables_hash);
+    my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
     
     # Generate the main query.
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE o.occurrence_no = $id and c.access_level = 0
 	GROUP BY o.occurrence_no";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
-    $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
     
-    # Abort if we couldn't retrieve the record.
+    # Return an error response if we couldn't retrieve the record.
     
-    return unless $self->{main_record};
-        
+    die "404 Not found\n" unless $request->{main_record};
+    
     return 1;
 }
 
@@ -741,61 +785,79 @@ sub get {
 
 sub list {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
-    my $tables = $self->tables_hash;
+    my $dbh = $request->get_connection;
+    my $tables = $request->tables_hash;
     
-    $self->substitute_select( mt => 'o', cd => 'oc' );
+    $request->substitute_select( mt => 'o', cd => 'oc' );
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = PB2::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
-    push @filters, PB2::OccurrenceData::generateOccFilters($self, $tables);
-    push @filters, PB2::CommonData::generate_crmod_filters($self, 'o', $tables);
-    push @filters, PB2::CommonData::generate_ent_filters($self, 'o', $tables);
+    my @filters = $request->generateMainFilters('list', 'c', $tables);
+    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
+    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
+    
+    # Do a final check to make sure that all records are only returned if
+    # 'all_records' was specified.
+    
+    if ( @filters == 0 )
+    {
+	die "400 You must specify 'all_records' if you want to retrieve the entire set of records.\n"
+	    unless $request->clean_param('all_records');
+    }
+    
+    # Until we provide for authenticated data service access, we had better
+    # restrict results to publicly accessible records.
     
     push @filters, "c.access_level = 0";
     
     my $filter_string = join(' and ', @filters);
     
-    $self->add_table('oc');
+    $request->add_table('oc');
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->sql_limit_clause(1);
+    my $limit = $request->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->sql_count_clause;
+    my $calc = $request->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    #$self->add_output_block('1.2:occs:unknown_taxon') if $tables->{unknown_taxon};
+    #$request->add_output_block('1.2:occs:unknown_taxon') if $tables->{unknown_taxon};
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
-    $self->adjustCoordinates(\$fields);
-    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->adjustCoordinates(\$fields);
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
         
     # Determine the order in which the results should be returned.
     
     my $tt = $tables->{tv} ? 'ts' : 't';
     
-    my $order_clause = $self->PB2::CollectionData::generate_order_clause($tables, { at => 'c', cd => 'cc', tt => $tt }) || 'o.occurrence_no';
+    my $order_clause = $request->PB2::CollectionData::generate_order_clause($tables, { at => 'c', cd => 'cc', tt => $tt }) || 'o.occurrence_no';
     
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
     
-    my $join_list = $self->generateJoinList('c', $tables);
+    my $join_list = $request->generateJoinList('c', $tables);
     
     my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
@@ -804,16 +866,16 @@ sub list {
 	ORDER BY $order_clause
 	$limit";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query.
     
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
     
     # If we were asked to get the count, then do so
     
-    $self->sql_count_rows;
+    $request->sql_count_rows;
 }
 
 
@@ -824,25 +886,21 @@ sub list {
 
 sub diversity {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
-    my $tables = $self->tables_hash;
-    
-    # Make sure that we have already loaded the interval data.
-    
-    PB2::IntervalData->read_interval_data($dbh);
+    my $dbh = $request->get_connection;
+    my $tables = $request->tables_hash;
     
     # Set up the diversity-computation options
     
     my $options = {};
     
-    $options->{timerule} = $self->clean_param('timerule') || 'buffer';
-    $options->{timebuffer} = $self->clean_param('timebuffer');
+    $options->{timerule} = $request->clean_param('timerule') || 'buffer';
+    $options->{timebuffer} = $request->clean_param('timebuffer');
     
-    my $reso_param = $self->clean_param('reso');
+    my $reso_param = $request->clean_param('reso');
     
     my %level_map = ( stage => 5, epoch => 4, period => 3 );
     
@@ -851,10 +909,11 @@ sub diversity {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = PB2::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
-    push @filters, PB2::OccurrenceData::generateOccFilters($self, $tables);
-    push @filters, PB2::CommonData::generate_crmod_filters($self, 'o', $tables);
-    push @filters, PB2::CommonData::generate_ent_filters($self, 'o', $tables);
+    my @filters = $request->generateMainFilters('list', 'c', $tables);
+    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
+    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
     push @filters, "c.access_level = 0";
     
@@ -874,15 +933,15 @@ sub diversity {
     my @fields = ('o.occurrence_no', 'tv.orig_no', 'tv.rank', 'im.cx_int_no as interval_no, o.early_age, o.late_age',
 		  'ei.interval_name as early_name', 'li.interval_name as late_name', 'o.genus_name');
     
-    if ( $self->clean_param('recent') )
+    if ( $request->clean_param('recent') )
     {
 	$tables->{v} = 1;
 	push @fields, 'v.is_extant';
 	$options->{use_recent} = 1;
     }
     
-    my $count_what = $self->clean_param('count') || 'genera';
-    $count_what = 'genera_plus' if $self->clean_param('subgenera');
+    my $count_what = $request->clean_param('count') || 'genera';
+    $count_what = 'genera_plus' if $request->clean_param('subgenera');
     
     my $count_rank;
     
@@ -923,32 +982,37 @@ sub diversity {
     
     my $fields = join(', ', @fields);
     
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
+    
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
     
-    my $join_list = $self->generateJoinList('c', $tables);
+    my $join_list = $request->generateJoinList('c', $tables);
     
     my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 		$join_list
         WHERE $filter_string
 	GROUP BY o.occurrence_no $extra_group";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query.
     
-    my $sth = $dbh->prepare($self->{main_sql});
+    my $sth = $dbh->prepare($request->{main_sql});
     $sth->execute();
     
     # Now fetch all of the rows, and process them into a diversity matrix.
     
-    my $result = $self->generate_diversity_table($sth, $options);
+    my $result = $request->generate_diversity_table($sth, $options);
     
-    $self->list_result($result);
+    $request->list_result($result);
 }
 
 
@@ -1077,6 +1141,11 @@ sub quickdiv {
 	$age_join = "join interval_data as i using (interval_no)";
     }
     
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
+    
     # Now generate the appropriate SQL expression based on what we are trying
     # to count.
     
@@ -1193,7 +1262,8 @@ sub taxa {
     
     # Determine the necessary set of query fields.
     
-    my @fields = ('o.occurrence_no', 'tv.rank', 'tv.ints_no', 'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
+    my @fields = ('o.occurrence_no', 'tv.rank', 'tv.ints_no', 'ph.phylum', 'ph.phylum_no', 
+		  'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
     
     if ( $request->has_block('occapp') )
     {
@@ -1307,14 +1377,20 @@ sub taxa {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = PB2::CollectionData::generateMainFilters($request, 'list', 'c', $tables);
-    push @filters, PB2::OccurrenceData::generateOccFilters($request, $tables);
-    push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
-    push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
+    my @filters = $request->generateMainFilters('list', 'c', $tables);
+    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
+    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
     push @filters, "c.access_level = 0", "o.orig_no <> 0";
     
     my $filter_string = join(' and ', @filters);
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
     
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
@@ -1336,6 +1412,10 @@ sub taxa {
     
     my $sth = $dbh->prepare($request->{main_sql});
     $sth->execute();
+    
+    # Remove unnecessary output fields.
+    
+    $request->delete_output_field('exclude');
     
     # Now fetch all of the rows, and process them into a phylogenetic tree.
     # If the set of occurrences was generated from a base taxon, then we can
@@ -1421,6 +1501,11 @@ sub prevalence {
 	$interval_no ||= 751;
 	push @filters, "p.interval_no = $interval_no";
 	
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings. 
+	
+	$request->strict_check;
+    
 	# Then generate the required SQL statement.
 	
 	my $filter_string = join(' and ', @filters);
@@ -1466,8 +1551,9 @@ sub prevalence {
     $tables = { };
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
-    push @filters, $request->generate_crmod_filters('o', $tables);
-    push @filters, $request->generate_ent_filters('o', $tables);
+    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    # push @filters, $request->generate_crmod_filters('o', $tables);
+    # push @filters, $request->generate_ent_filters('o', $tables);
     
     #$request->add_table('oc');
     
@@ -1485,8 +1571,9 @@ sub prevalence {
 	$tables = { };
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
-	push @filters, $request->generate_crmod_filters('o', $tables);
-	push @filters, $request->generate_ent_filters('o', $tables);
+	push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+	# push @filters, $request->generate_crmod_filters('o', $tables);
+	# push @filters, $request->generate_ent_filters('o', $tables);
 	
 	my $fields = "ph.phylum_no, ph.class_no, ph.order_no, count(*) as n_occs";
 	
@@ -1497,6 +1584,11 @@ sub prevalence {
 	# @filters = grep { $_ !~ qr{^s.interval_no} } @filters;
 	
 	my $filter_string = join(' and ', @filters);
+	
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings. 
+	
+	$request->strict_check;
 	
 	# Determine which extra tables, if any, must be joined to the query.  Then
 	# construct the query.
@@ -1530,6 +1622,13 @@ sub prevalence {
     
     else
     {
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings. 
+	
+	$request->strict_check;
+	
+	# Construct and execute the necessary SQL statement.
+	
 	push @filters, "s.access_level = 0";
 	my $filter_string = join(' and ', @filters);
 	
@@ -1576,25 +1675,26 @@ sub generate_prevalence_joins {
 
 sub refs {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
-    $self->substitute_select( mt => 'r', cd => 'r' );
+    $request->substitute_select( mt => 'r', cd => 'r' );
     
-    $self->delete_output_field('n_opinions');
+    $request->delete_output_field('n_opinions');
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my $inner_tables = {};
     
-    my @filters = PB2::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
-    push @filters, PB2::CommonData::generate_crmod_filters($self, 'o');
-    push @filters, PB2::CommonData::generate_ent_filters($self, 'o');
-    push @filters, $self->generateOccFilters($inner_tables);
+    my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
+    push @filters, $request->generate_common_filters( { ref => 'r', occ => 'o' } );
+    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
+    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
+    push @filters, $request->generateOccFilters($inner_tables);
     
     push @filters, "c.access_level = 0";
     
@@ -1602,7 +1702,7 @@ sub refs {
     
     # Construct another set of filter expressions to act on the references.
     
-    my @ref_filters = PB2::ReferenceData::generate_filters($self, $self->tables_hash);
+    my @ref_filters = PB2::ReferenceData::generate_filters($request, $request->tables_hash);
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -1610,28 +1710,33 @@ sub refs {
     # Figure out the order in which we should return the references.  If none
     # is selected by the options, sort by rank descending.
     
-    my $order = $self->PB2::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
+    my $order = $request->PB2::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
 	"r.author1last, r.author1init";
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->sql_limit_clause(1);
+    my $limit = $request->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->sql_count_clause;
+    my $calc = $request->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
-    $self->adjustCoordinates(\$fields);
+    $request->adjustCoordinates(\$fields);
     
-    my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->PB2::ReferenceData::generate_join_list($self->tables_hash);
+    my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+    my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($request->tables_hash);
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $calc $fields, count(distinct occurrence_no) as n_occs,
 		count(distinct taxon_no) as n_taxa, 'O' as ref_type
 	FROM (SELECT o.reference_no, o.occurrence_no, o.taxon_no
@@ -1643,16 +1748,16 @@ sub refs {
 	GROUP BY r.reference_no ORDER BY $order
 	$limit";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query.
     
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
     
     # If we were asked to get the count, then do so
     
-    $self->sql_count_rows;
+    $request->sql_count_rows;
 }
 
 
@@ -1667,41 +1772,20 @@ sub refs {
 
 sub generateOccFilters {
 
-    my ($self, $tables_ref) = @_;
+    my ($request, $tables_ref) = @_;
     
-    my $dbh = $self->{dbh};
+    my $dbh = $request->{dbh};
     my @filters;
     
-    # Check for parameter 'id'
+    # Check for parameter 'occ_id'
     
-    if ( ref $self->{clean_params}{id} eq 'ARRAY' and
-	 @{$self->{clean_params}{id}} )
+    if ( my @occs = $request->safe_param_list('occ_id') )
     {
-	my $id_list = join(',', @{$self->{clean_params}{id}});
+	my $id_list = $request->check_values($dbh, \@occs, 'occurrence_no', 'occurrences', 
+					     "Unknown occurrence '%'");
+	
 	push @filters, "o.occurrence_no in ($id_list)";
 	$tables_ref->{o} = 1;
-	$tables_ref->{non_summary} = 1;
-    }
-    
-    elsif ( $self->{clean_params}{id} )
-    {
-	push @filters, "o.occurrence_no = $self->{clean_params}{id}";
-	$tables_ref->{non_summary} = 1;
-    }
-    
-    # Check for parameter 'coll_id'
-    
-    if ( ref $self->{clean_params}{coll_id} eq 'ARRAY' and
-	 @{$self->{clean_params}{coll_id}} )
-    {
-	my $id_list = join(',', @{$self->{clean_params}{coll_id}});
-	push @filters, "o.collection_no in ($id_list)";
-	$tables_ref->{non_summary} = 1;
-    }
-    
-    elsif ( $self->{clean_params}{coll_id} )
-    {
-	push @filters, "o.collection_no = $self->{clean_params}{coll_id}";
 	$tables_ref->{non_summary} = 1;
     }
     
@@ -1709,7 +1793,7 @@ sub generateOccFilters {
     # specifies which identifications should be returned.  The default is
     # 'latest'.
     
-    my $ident = $self->clean_param('ident');
+    my $ident = $request->clean_param('ident');
     
     if ( $ident eq 'orig' )
     {
@@ -1745,31 +1829,36 @@ sub generateOccFilters {
 
 sub generateQuickDivFilters {
 
-    my ($self, $mt, $tables_ref) = @_;
+    my ($request, $mt, $tables_ref) = @_;
     
-    my $dbh = $self->get_connection;
-    my $taxonomy = $self->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
+    my $dbh = $request->get_connection;
+    my $taxonomy = $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
     # First check for parameters 'formation', 'stratgroup', 'member'.  If any
     # of these are specified, we abort.
     
-    return () if $self->clean_param('formation') || $self->clean_param('stratgroup') || $self->clean_param('member');
+    return () if $request->clean_param('formation') || $request->clean_param('stratgroup') || $request->clean_param('member');
     
     # Same with 'plate'.
     
-    return () if $self->clean_param('plate');
+    return () if $request->clean_param('plate');
     
     # Same with the date or authorizer parameters.
     
-    return () if $self->clean_param('authorized_by') || $self->clean_param('entered_by') || $self->clean_param('modified_by');
-    return () if $self->clean_param('created_before') || $self->clean_param('created_after');
-    return () if $self->clean_param('modified_before') || $self->clean_param('modified_after');
+    return () if $request->clean_param('authorized_by') || $request->clean_param('entered_by') || $request->clean_param('modified_by');
+    return () if $request->clean_param('created_before') || $request->clean_param('created_after');
+    return () if $request->clean_param('modified_before') || $request->clean_param('modified_after');
+    
+    # Same with coll_id or clusts_id
+    
+    return () if $request->param_given('coll_id');
+    return () if $request->param_given('clust_id');
     
     # Then check for geographic parameters, including 'clust_id', 'continent',
     # 'country', 'latmin', 'latmax, 'lngmin', 'lngmax', 'loc'
     
-    my $clust_id = $self->clean_param('clust_id');
+    my $clust_id = $request->clean_param('clust_id');
     
     if ( ref $clust_id eq 'ARRAY' && @$clust_id )
     {
@@ -1779,24 +1868,24 @@ sub generateQuickDivFilters {
 	push @filters, "$mt.bin_id in ($list)";
     }
     
-    if ( my @ccs = $self->clean_param_list('country') )
+    if ( my @ccs = $request->clean_param_list('country') )
     {
 	my $cc_list = "'" . join("','", @ccs) . "'";
 	push @filters, "bl.cc in ($cc_list)";
 	$tables_ref->{bl} = 1;
     }
     
-    if ( my @continents = $self->clean_param_list('continent') )
+    if ( my @continents = $request->clean_param_list('continent') )
     {
 	my $cont_list = "'" . join("','", @continents) . "'";
 	push @filters, "bl.continent in ($cont_list)";
 	$tables_ref->{bl} = 1;
     }
     
-    my $x1 = $self->clean_param('lngmin');
-    my $x2 = $self->clean_param('lngmax');
-    my $y1 = $self->clean_param('latmin');
-    my $y2 = $self->clean_param('latmax');
+    my $x1 = $request->clean_param('lngmin');
+    my $x2 = $request->clean_param('lngmax');
+    my $y1 = $request->clean_param('latmin');
+    my $y2 = $request->clean_param('latmax');
     
     if ( $x1 ne '' && $x2 ne '' && ! ( $x1 == -180 && $x2 == 180 ) )
     {
@@ -1859,7 +1948,7 @@ sub generateQuickDivFilters {
 	$tables_ref->{bl} = 1;
     }
     
-    if ( my $loc = $self->clean_param('loc') )
+    if ( my $loc = $request->clean_param('loc') )
     {
 	push @filters, "contains(geomfromtext($loc), bl.loc)";
 	$tables_ref->{bl} = 1;
@@ -1872,9 +1961,9 @@ sub generateQuickDivFilters {
     
     # Now check for taxonomic filters.
     
-    my $taxon_name = $self->clean_param('taxon_name') || $self->clean_param('base_name');
-    my @taxon_nos = $self->clean_param_list('taxon_id') || $self->clean_param_list('base_id');
-    my @exclude_nos = $self->clean_param_list('exclude_id');
+    my $taxon_name = $request->clean_param('taxon_name') || $request->clean_param('base_name');
+    my @taxon_nos = $request->clean_param_list('taxon_id') || $request->clean_param_list('base_id');
+    my @exclude_nos = $request->clean_param_list('exclude_id');
     my (@include_taxa, @exclude_taxa);
     my $bad_taxa;
     
@@ -1923,7 +2012,7 @@ sub generateQuickDivFilters {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
-	$self->{my_base_taxa} = \@include_taxa;
+	$request->{my_base_taxa} = \@include_taxa;
     }
     
     # If a bad taxon name or id was given, add a filter that will exclude
@@ -1936,7 +2025,7 @@ sub generateQuickDivFilters {
 	$tables_ref->{t} = 1;
 	
 	my @warnings = $taxonomy->list_warnings;
-	$self->add_warning(@warnings);
+	$request->add_warning(@warnings);
     }
     
     # Now add filters for excluded taxa.  But only if there is at least one
@@ -1945,7 +2034,7 @@ sub generateQuickDivFilters {
     if ( @exclude_taxa && @include_taxa )
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
-	$self->{my_excluded_taxa} = \@exclude_taxa;
+	$request->{my_excluded_taxa} = \@exclude_taxa;
 	$tables_ref->{t} = 1;
     }
     
@@ -1963,7 +2052,7 @@ sub generateQuickDivFilters {
 
 sub generateJoinList {
 
-    my ($self, $mt, $tables, $summary_join_field) = @_;
+    my ($request, $mt, $tables, $summary_join_field) = @_;
     
     my $join_list = '';
     
@@ -2023,7 +2112,7 @@ sub generateJoinList {
 
 sub generateQuickDivJoins {
 
-    my ($self, $mt, $tables) = @_;
+    my ($request, $mt, $tables) = @_;
     
     my $join_list = '';
     
@@ -2188,32 +2277,32 @@ sub process_occ_com {
     foreach my $f ( qw(orig_no identified_no accepted_no phylum_no
 		       class_no order_no family_no genus_no subgenus_no) )
     {
-	$record->{$f} = "$IDP{TXN}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{TXN}:$record->{$f}" if defined $record->{$f};
     }
     
     foreach my $f ( qw(interval_no) )
     {
-	$record->{$f} = "$IDP{INT}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{INT}:$record->{$f}" if defined $record->{$f};
     }
     
     foreach my $f ( qw(occurrence_no) )
     {
-	$record->{$f} = "$IDP{OCC}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{OCC}:$record->{$f}" if defined $record->{$f};
     }
     
     foreach my $f ( qw(collection_no) )
     {
-	$record->{$f} = "$IDP{COL}$record->{$f}" if defined $record->{$f};
+	$record->{$f} = "$IDP{COL}:$record->{$f}" if defined $record->{$f};
     }
     
     if ( ref $record->{reference_no} eq 'ARRAY' )
     {
-	map { $_ = "$IDP{REF}$_" } @{$record->{reference_no}};
+	map { $_ = "$IDP{REF}:$_" } @{$record->{reference_no}};
     }
     
     elsif ( defined $record->{reference_no} )
     {
-	$record->{reference_no} = "$IDP{REF}$record->{reference_no}";
+	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
     }
 }
 

@@ -46,7 +46,6 @@ sub generate_diversity_table {
     
     # Declare variables to be used in this process.
     
-    my $intervals = $PB2::IntervalData::INTERVAL_DATA{$scale_no};
     my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
     my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
     
@@ -460,7 +459,9 @@ sub generate_taxon_table_ints {
     
     # Initialize the variables necessary for enumerating the phylogeny.
     
-    my (%base_taxa, $total_count);
+    my (%base_taxa);
+    my $total_count = 0;
+    my $missing_count = 0;
     
     %taxon_node = ();				# visible to called subroutines
     %uns_counter = ();				# visible to called subroutines
@@ -477,25 +478,47 @@ sub generate_taxon_table_ints {
 	
 	my $rank = $r->{rank};
 	
+	# Occurrences with ints_no = 0 cannot be properly displayed, since we
+	# have no idea where in the taxonomic hierarchy they are supposed to
+	# be.  So count them and otherwise ignore them.
+	
+	unless ( $r->{ints_no} )
+	{
+	    $missing_count++;
+	    next OCCURRENCE;
+	}
+	
 	# Then create any taxon nodes that don't already exist, and increment
 	# the occurrence counts at all levels.
 	
-	my $class_no = $r->{class_no} || uns_identifier(17);
-	$base_taxa{$class_no} = 1;
+	my $base_no = $r->{class_no} || $r->{phylum_no} || uns_identifier(17);
+	$base_taxa{$base_no} = 1;
 	
-	my $class_node = $taxon_node{$class_no} //= { taxon_rank => 17, n_occs => 0, 
-						      taxon_name => $r->{class} };
+	unless ( $taxon_node{$base_no} )
+	{
+	    if ( $r->{class_no} )
+	    {
+		$taxon_node{$base_no} = { taxon_rank => 17, n_occs => 0, taxon_name => $r->{class}, is_base => 1 };
+	    }
+	    
+	    else
+	    {
+		$taxon_node{$base_no} = { taxon_rank => 20, n_occs => 0, taxon_name => $r->{phylum}, is_base => 1 };
+	    }
+	}
+	
+	my $base_node = $taxon_node{$base_no};
 	
 	no warnings 'numeric';
 	
 	if ( $rank <= 13 )
 	{
-	    my $order_no = $r->{order_no} || $class_node->{uns} || ($class_node->{uns} = uns_identifier(13));
+	    my $order_no = $r->{order_no} || $base_node->{uns} || ($base_node->{uns} = uns_identifier(13));
 	    my $order_node = $taxon_node{$order_no} //= { taxon_rank => 13, n_occs => 0, 
 							  taxon_name => $r->{order} };
 	    
 	    $order_node->{is_uns} = 1 unless $order_no > 0;
-	    $class_node->{chld}{$order_no} = 1;
+	    $base_node->{chld}{$order_no} = 1;
 	    
 	    if ( $count_rank <= 9 && $rank <= 9 )
 	    {
@@ -556,7 +579,7 @@ sub generate_taxon_table_ints {
 	
 	else
 	{
-	    $class_node->{n_occs}++;
+	    $base_node->{n_occs}++;
 	}
     }
     
@@ -571,16 +594,17 @@ sub generate_taxon_table_ints {
     
     my $check_count = 0;
     
-    foreach my $class_no ( keys %base_taxa )
+    foreach my $base_no ( keys %base_taxa )
     {
-	$request->count_taxa($class_no);
-	$check_count += $taxon_node{$class_no}{n_occs};
+	$request->count_taxa($base_no);
+	$check_count += $taxon_node{$base_no}{n_occs};
     }
     
     unless ( $total_count == $check_count )
     {
-	my $deficit = $total_count - $check_count;
-	$request->add_warning("Something went wrong.  $deficit occurrences were missed.");
+	my $deficit = $total_count - $check_count - $missing_count;
+	$request->add_warning("Something went wrong.  $deficit occurrences were missed.")
+	    if $deficit;
     }
     
     # Now traverse the tree again and produce the appropriate output.  If
@@ -595,16 +619,21 @@ sub generate_taxon_table_ints {
 	# If the root of the tree has only one child, skip down until we get
 	# to a node with more than one child.
 	
-	while ( keys %{$taxon_node{$base_no}{chld}} == 1 )
-	{
-	    ($base_no) = keys %{$taxon_node{$base_no}{chld}};
-	}
+	# while ( keys %{$taxon_node{$base_no}{chld}} == 1 )
+	# {
+	#     ($base_no) = keys %{$taxon_node{$base_no}{chld}};
+	# }
 	
 	# Then output the result records for this base taxon and all of its
 	# subtaxa.
 	
 	$request->add_result_records($base_no, 0);
     }
+    
+    # Now add a summary record.
+    
+    $request->summary_data({ total_count => $total_count,
+			     missing_taxon => $missing_count });
 }
 
 
@@ -652,6 +681,7 @@ sub generate_taxon_table_full {
     foreach my $base_no ( keys %base_taxa )
     {
 	$request->get_upper_taxa($base_no);
+	$taxon_node{$base_no}{is_base} = 1;
     }
     
     # Then go through the occurrences one by one, putting together a tree
@@ -756,9 +786,9 @@ sub generate_taxon_table_full {
     
     my (@sorted_classes) = sort { ($taxon_node{$a}{taxon_name} // '~') cmp ($taxon_node{$b}{taxon_name} // '~') } keys %base_taxa;
     
-    foreach my $class_no ( @sorted_classes )
+    foreach my $base_no ( @sorted_classes )
     {
-	$request->add_result_records($class_no, 0);
+	$request->add_result_records($base_no, 0);
     }
     
     # Now add a summary record.
@@ -1171,8 +1201,18 @@ sub add_result_records {
     # part of the taxonomic hierarchy.  So generate a "NONE_SPECIFIED" name
     # appropriate to the taxon rank.
     
-    $node->{taxon_name} = $uns_name{$rank || 0}
-	unless $node->{taxon_name} && $node->{taxon_name} ne '~';
+    unless ( $node->{orig_no} )
+    {
+	$node->{taxon_name} = $uns_name{$rank || 0};
+	#unless $node->{taxon_name} && $node->{taxon_name} ne '~';
+	$node->{orig_no} = $taxon_no;
+    }
+    
+    # Make this node conform to the hierarchy we are generating, by overriding
+    # the parent_no value if it exists.  We want to make sure that people can
+    # link up the generated records to each other.
+    
+    $node->{senpar_no} = $parent_no if $parent_no;
     
     # If the 'family_no' field is set, or if the rank is 9, then we have found
     # a family.

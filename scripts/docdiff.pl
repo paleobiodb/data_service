@@ -9,87 +9,203 @@ use strict;
 
 use Getopt::Std;
 use LWP::UserAgent;
-use Text::CSV_XS;
-use JSON;
+use Storable;
 
 use Algorithm::Diff;
 
+use feature 'say';
 
-my @QUEUE;
-my %FOUND_PATH = ( '/' => 1 );
-
-
-
-my $t = MyAgent->new();
+my $SEPARATOR = "================";
 
 
-my $NEW_BASE = shift @ARGV;
-my $OLD_BASE = shift @ARGV;
+# Parse command-line options
 
-# $$$ options
+my %options;
 
-die "You must specify both a 'new' and an 'old' root.\n" unless $NEW_BASE && $OLD_BASE;
+getopts('s:pd', \%options);
 
-scan_doc();
 
-print_message("DONE.\n");
+# The option -s indicates that we should scan the indicated service starting
+# with the base path indicated by the option value.  The data should be stored
+# to the indicated filename.
+
+if ( $options{s} )
+{
+    my $base = $options{s};
+    my $filename = shift @ARGV;
+    
+    my $instance = ScanInstance->new($base);
+    my $agent = MyAgent->new();
+    
+    $instance->scan_doc($agent);
+    
+    if ( $filename )
+    {
+	store($instance, $filename);
+	exit;
+    }
+    
+    else
+    {
+	die "No data will be stored, because no filename was specified.\n";
+    }
+}
+
+
+# The option -p indicates that we should print out all of the documentation
+# pages.  The filename from which to read the data is taken from the first argument.
+
+elsif ( $options{p} )
+{
+    my $filename = shift @ARGV;
+    
+    die "No filename was specified.\n" unless $filename;
+    
+    my $instance;
+    
+    eval {
+	$instance = retrieve($filename);
+    };
+    
+    if ( $@ )
+    {
+	die "Cannot retrieve data from $filename: $!\n";
+    }
+    
+    unless ( ref $instance eq 'ScanInstance' )
+    {
+	die "Cannot retrieve data from $filename: unknown error\n";
+    }
+    
+    print_content($instance);
+    exit;
+}
+
+
+# The option -d indicates that we should diff two setes of documentation
+# pages.  There should be two arguments, giving the two filenames from which
+# to read.
+
+elsif ( $options{d} )
+{
+    my $newfilename = shift @ARGV;
+    my $oldfilename = shift @ARGV;
+    
+    die "You must specify two filenames with -d.\n"
+	unless defined $oldfilename && $oldfilename ne '';
+    
+    my ($new_instance, $old_instance);
+    
+    eval {
+	$new_instance = retrieve($newfilename);
+    };
+    
+    if ( $@ )
+    {
+	die "Cannot retrieve data from $newfilename: $!\n";
+    }
+    
+    unless ( ref $new_instance eq 'ScanInstance' )
+    {
+	die "Cannot retrieve data from $newfilename: unknown error\n";
+    }
+    
+    eval {
+	$old_instance = retrieve($oldfilename);
+    };
+    
+    if ( $@ )
+    {
+	die "Cannot retrieve data from $oldfilename: $!\n";
+    }
+
+    unless ( ref $old_instance eq 'ScanInstance' )
+    {
+	die "Cannot retrieve data from $oldfilename: unknown error\n";
+    }
+    
+    diff_content($new_instance, $old_instance);
+}
+
+
+# Otherwise, we have an error.
+
+else
+{
+    die "Please specify either -s, -d, or -p.\n";
+}
+
 exit;
 
 
-sub scan_doc {
-
-    push @QUEUE, { path => '/' };
+sub print_message {
     
-    while ( @QUEUE )
+    my ($message) = @_;
+    
+    print "\n$message\n";
+}
+
+
+sub print_with_flag {
+    
+    my ($content, $flag) = @_;
+    
+    my @lines = split(qr{\n}, $content);
+    say "$flag $_" foreach @lines;
+}
+
+
+sub print_content {
+
+    my ($instance) = @_;
+
+    foreach my $path ( $instance->path_list )
     {
-	my $node = shift @QUEUE;
+	my $node = $instance->path_node($path);
 	
-	my $path = $node->{path};
+	print_message($SEPARATOR);
+	print_message("DOC PATH: $path");
 	
-	if ( $path eq '/' )
+	print "\n";
+	print $node->{content};
+	print "\n";
+    }
+}
+
+
+sub diff_content {
+    
+    my ($new_instance, $old_instance) = @_;
+    
+    # Collect all of the keys together and sort them.
+    
+    my %keys;
+    
+    $keys{$_} = 1 for $new_instance->path_list;
+    $keys{$_} = 1 for $old_instance->path_list;
+    
+    foreach my $path ( sort keys %keys )
+    {
+	print_message($SEPARATOR);
+	
+	my $new_node = $new_instance->path_node($path);
+	my $old_node = $old_instance->path_node($path);
+	
+	if ( $new_node && $old_node )
 	{
-	    $path = '/index.pod';
+	    print_diff($new_node, $old_node);
 	}
 	
-	elsif ( $path =~ qr{ (.*) / $ }xs )
+	elsif ( $new_node )
 	{
-	    $path = $1 . '_doc.pod';
+	    print_message("NEW +++ PATH: $path");
+	    print_with_flag($new_node->{content}, '+');
 	}
 	
-	else
+	elsif ( $old_node )
 	{
-	    $path .= '_doc.pod';
-	}
-	
-	my $new_path = $NEW_BASE . $path;
-	my $old_path = $OLD_BASE . $path;
-	
-	my $new_response = $t->fetch_url($new_path);
-	my $old_response = $t->fetch_url($old_path);
-	
-	my ($new_content, $old_content);
-	
-	$new_content = $new_response->content if $new_response;
-	$old_content = $old_response->content if $old_response;
-	
-	process_content($new_content) if $new_content;
-	process_content($old_content) if $old_content;
-	
-	print_message("================");
-	
-	if ( $new_content && $old_content )
-	{
-	    print_diff($path, $new_content, $old_content);
-	}
-	
-	elsif ( $new_content )
-	{
-	    print_new($path, $new_content);
-	}
-	
-	elsif ( $old_content )
-	{
-	    print_message("OLD --- PATH: $path");
+	    print_mesasge("OLD --- PATH: $path");
+	    print_with_flag($old_node->{content}, '-');
 	}
 	
 	else
@@ -98,11 +214,251 @@ sub scan_doc {
 	}
     }
 }
+
+sub print_diff {
+
+    my ($new_node, $old_node) = @_;
+    
+    # $new_content =~ s{$new_base}{BASE}gs;
+    # $old_content =~ s{$old_base}{BASE}gs;
+    
+    # $new_content =~ s{ ^ =for \s+ wds_nav (.*) }{=for wds_nav ...}xm;
+    # $old_content =~ s{ ^ =for \s+ wds_nav (.*) }{=for wds_nav ...}xm;
+    
+    my $path = $new_node->{path};
+    
+    my @new_seq = split(/\n/, $new_node->{content});
+    my @old_seq = split(/\n/, $old_node->{content});
+    
+    my $diff = Algorithm::Diff->new(\@new_seq, \@old_seq);
+    
+    $diff->Base(1);
+    
+    my $output = '';
+    my $pluses = 0;
+    my $minuses = 0;
+    
+    while ( $diff->Next() )
+    {
+    	my @items1 = $diff->Items(1);
+    	my @items2 = $diff->Items(2);
+	
+    	if ( $diff->Same() )
+    	{
+    	    $output .= "  $_\n" for @items1;
+    	}
+	
+    	elsif ( ! @items2 )
+    	{
+    	    $output .= "+ $_\n" for @items1;
+    	    $pluses += scalar(@items1);
+    	}
+	
+    	elsif ( ! @items1 )
+    	{
+    	    $output .= "- $_\n" for @items2;
+    	    $minuses += scalar(@items2);
+    	}
+	
+    	else
+    	{
+    	    $output .= "+ $_\n" for @items1;
+    	    $pluses += scalar(@items1);
+    	    $output .= "- $_\n" for @items2;
+    	    $minuses += scalar(@items2);
+    	}
+    }
+    
+    if ( $pluses + $minuses )
+    {
+    	my $adjp = int(sqrt($pluses));
+    	my $adjm = int(sqrt($minuses));
+    	my $diffs = $pluses + $minuses;
+	
+    	my $pmstring = '';
+    	$pmstring .= '+' x $adjp;
+    	$pmstring .= '-' x $adjm;
+	
+    	print_message("DIFF !!! PATH: $path   $diffs $pmstring\n");
+	
+    	print $output;
+    }
+    
+    else
+    {
+    	print_message("SAME ___ PATH $path");
+    }
+}
+
+
+package ScanInstance;
+
+use Carp qw(croak);
+
+sub new {
+    
+    my ($class, $base) = @_;
+    
+    croak "You must specify a base as the first argument" unless defined $base && $base ne '';
+    
+    my $instance = { base => $base,
+		     queue => [],
+		     path_info => {} };
+    
+    bless $instance, $class;
+    
+    return $instance;
+}
+
+
+sub add_path {
+    
+    my ($instance, $path) = @_;
+    
+    $path =~ s{ \# .* $ }{}xs;
+    $path =~ s{ _doc [.] (pod|html) $ }{}xs;
+    
+    return if defined $instance->{path_info}{$path};
+    
+    $instance->{path_info}{$path} = { path => $path };
+    push @{$instance->{queue}}, $path;
+    
+    return 1;
+}
+
+
+sub next_path {
+
+    my ($instance) = @_;
+    
+    return shift @{$instance->{queue}};
+}
+
+
+sub set_content {
+    
+    my ($instance, $path, $content) = @_;
+    
+    my $base = $instance->{base};
+    
+    $content =~ s{$base}{BASE}gs;
+    $content =~ s{ ^ =for \s+ wds_nav (.*) }{=for wds_nav ...}xm;
+    
+    $instance->{path_info}{$path}{content} = $content;
+}
+
+
+sub path_list {
+    
+    my ($instance) = @_;
+    
+    return sort keys %{$instance->{path_info}};
+}
+
+
+sub path_node {
+    
+    my ($instance, $path) = @_;
+    
+    if ( $instance->{path_info}{$path} && $instance->{path_info}{$path}{content} )
+    {
+	return $instance->{path_info}{$path};
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+sub scan_doc {
+    
+    my ($instance, $agent) = @_;
+    
+    my $base = $instance->{base};
+    
+    $instance->add_path('/');
+    
+    while ( my $path = $instance->next_path )
+    {
+	my $realpath;
+	
+	if ( $path eq '/' )
+	{
+	    $realpath = '/index.pod';
+	}
+	
+	elsif ( $path =~ qr{ (.*) / $ }xs )
+	{
+	    $realpath = $1 . '_doc.pod';
+	}
+	
+	else
+	{
+	    $realpath = $path . '_doc.pod';
+	}
+	
+	my $response = $agent->fetch_url($base . $realpath);
+	
+	if ( $response )
+	{
+	    my $content = $response->content;
+	    
+	    $instance->set_content($path, $content);
+	    $instance->process_content($path, $content);
+	}
+    }
+}
+	
+	
+	
+# 	my $new_path = $NEW_BASE . $path;
+# 	my $old_path = $OLD_BASE . $path;
+	
+# 	my $new_response = $t->fetch_url($new_path);
+# 	my $old_response = $t->fetch_url($old_path);
+	
+# 	my ($new_content, $old_content);
+	
+# 	$new_content = $new_response->content if $new_response;
+# 	$old_content = $old_response->content if $old_response;
+	
+# 	process_content($new_content) if $new_content;
+# 	process_content($old_content) if $old_content;
+	
+# 	print_message("================");
+	
+# 	if ( $new_content && $old_content )
+# 	{
+# 	    print_diff($path, $new_content, $old_content);
+# 	}
+	
+# 	elsif ( $new_content )
+# 	{
+# 	    print_new($path, $new_content);
+# 	}
+	
+# 	elsif ( $old_content )
+# 	{
+# 	    print_message("OLD --- PATH: $path");
+# 	}
+	
+# 	else
+# 	{
+# 	    print_message("BAD xxx PATH: $path");
+# 	}
+#     }
+# }
     
 
 sub process_content {
     
-    my ($content) = @_;
+    my ($instance, $docpath, $content) = @_;
+    
+    $docpath =~ s{[^/]+$}{};
+    
+    my $base = $instance->{base};
     
     while ( $content =~ qr{L<}s )
     {
@@ -155,112 +511,28 @@ sub process_content {
 	    
 	    $url =~ s{_doc$}{};
 	    
-	    if ( $url =~ qr{ ^ / ( [^/]+ ) (.*) }xs )
+	    if ( $url =~ qr{ ^ \w+ : // }xs )
 	    {
-		next unless $1 eq $NEW_BASE || $1 eq $OLD_BASE;
-		
+		# ignore external urls
+	    }
+	    
+	    elsif ( $url =~ qr{ ^ / ( [^/]+ ) (.*) }xs )
+	    {
+		next unless $1 eq $base;
 		my $path = $2;
 		
-		if ( $path && ! $FOUND_PATH{$path} )
-		{
-		    $FOUND_PATH{$path} = 1;
-		    push @QUEUE, { path => $path };
-		}
+		$path = '/' unless defined $path && $path ne '';
+		
+		$instance->add_path($path);
+	    }
+	    
+	    elsif ( $url =~ qr{ ^ [^/] }xs && $docpath ne '/' )
+	    {
+		$instance->add_path($docpath . $url);
 	    }
 	}
     }
 }
-
-
-sub print_message {
-    
-    my ($message) = @_;
-    
-    print "\n$message\n";
-}
-
-
-sub print_diff {
-    
-    my ($path, $new_content, $old_content) = @_;
-    
-    $new_content =~ s{$NEW_BASE}{BASE}gs;
-    $old_content =~ s{$OLD_BASE}{BASE}gs;
-    
-    $new_content =~ s{ ^ =for \s+ wds_nav (.*) }{=for wds_nav ...}xm;
-    $old_content =~ s{ ^ =for \s+ wds_nav (.*) }{=for wds_nav ...}xm;
-    
-    my @new_seq = split(/\n/, $new_content);
-    my @old_seq = split(/\n/, $old_content);
-    
-    my $diff = Algorithm::Diff->new(\@new_seq, \@old_seq);
-    
-    $diff->Base(1);
-    
-    my $output = '';
-    my $pluses = 0;
-    my $minuses = 0;
-    
-    while ( $diff->Next() )
-    {
-	my @items1 = $diff->Items(1);
-	my @items2 = $diff->Items(2);
-	
-	if ( $diff->Same() )
-	{
-	    $output .= "  $_\n" for @items1;
-	}
-	
-	elsif ( ! @items2 )
-	{
-	    $output .= "+ $_\n" for @items1;
-	    $pluses += scalar(@items1);
-	}
-	
-	elsif ( ! @items1 )
-	{
-	    $output .= "- $_\n" for @items2;
-	    $minuses += scalar(@items2);
-	}
-	
-	else
-	{
-	    $output .= "+ $_\n" for @items1;
-	    $pluses += scalar(@items1);
-	    $output .= "- $_\n" for @items2;
-	    $minuses += scalar(@items2);
-	}
-    }
-    
-    if ( $pluses + $minuses )
-    {
-	my $adjp = int(sqrt($pluses));
-	my $adjm = int(sqrt($minuses));
-	my $diffs = $pluses + $minuses;
-	
-	my $pmstring = '';
-	$pmstring .= '+' x $adjp;
-	$pmstring .= '-' x $adjm;
-	
-	print_message("DIFF !!! PATH: $path   $diffs $pmstring\n");
-	
-	print $output;
-    }
-    
-    else
-    {
-	print_message("SAME ___ PATH $path");
-    }
-}
-
-
-sub print_new {
-    
-    my ($path, $content) = @_;
-    
-    print_message("NEW +++ PATH: $path");
-}
-
 
 
 package MyAgent;
@@ -275,8 +547,8 @@ sub new {
     $server ||= $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
     
     my $instance = { ua => $ua,
-		     csv => Text::CSV_XS->new(),
-		     json => JSON->new(),
+		     # csv => Text::CSV_XS->new(),
+		     # json => JSON->new(),
 		     server => $server,
 		     base_url => "http://$server" };
     
