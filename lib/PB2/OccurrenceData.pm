@@ -1089,57 +1089,59 @@ sub quickdiv {
     
     # Now check for parameters 'interval', 'interval_id', 'min_ma', 'max_ma'.
     
-    my $interval_no = $request->clean_param('interval_id');
-    my $interval_name = $request->clean_param('interval');
-    my $min_ma = $request->clean_param('min_ma');
-    my $max_ma = $request->clean_param('max_ma');
-    my $age_clause = ''; my $age_join = '';
+    my ($max_ma, $min_ma, $early_interval_no, $late_interval_no) = $request->process_interval_params;
     
-    if ( $interval_no )
-    {
-	my $no = $interval_no + 0;
-	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_no = $no";
-	
-	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
-	
-	unless ( $max_ma )
-	{
-	    $max_ma = 0;
-	    $min_ma = 0;
-	    $request->add_warning("unknown interval id '$interval_no'");
-	}
-	
-	$age_clause = "and i.early_age <= $max_ma and i.late_age >= $min_ma";
-	$age_join = "join interval_data as i using (interval_no)";
-    }
+    # my @interval_nos = $request->safe_param_list('interval_id');
+    # my $interval_name = $request->clean_param('interval');
+    # my $min_ma = $request->clean_param('min_ma');
+    # my $max_ma = $request->clean_param('max_ma');
+    # my $age_clause = ''; my $age_join = '';
     
-    elsif ( $interval_name )
-    {
-	my $name = $dbh->quote($interval_name);
-	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name like $name";
+    # if ( @interval_nos )
+    # {
+    # 	my $no = $interval_no + 0;
+    # 	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_no = $no";
 	
-	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+    # 	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
 	
-	unless ( $max_ma )
-	{
-	    $max_ma = 0;
-	    $min_ma = 0;
-	    $request->add_warning("unknown interval '$interval_name'");
-	}
+    # 	unless ( $max_ma )
+    # 	{
+    # 	    $max_ma = 0;
+    # 	    $min_ma = 0;
+    # 	    $request->add_warning("unknown interval id '$interval_no'");
+    # 	}
 	
-	$age_clause = "and i.early_age <= $max_ma and i.late_age >= $min_ma";
-	$age_join = "join interval_data as i using (interval_no)";
-    }
+    # 	$age_clause = "and i.early_age <= $max_ma and i.late_age >= $min_ma";
+    # 	$age_join = "join interval_data as i using (interval_no)";
+    # }
     
-    elsif ( $min_ma || $max_ma )
-    {
-	$max_ma += 0;
-	$min_ma += 0;
+    # elsif ( $interval_name )
+    # {
+    # 	my $name = $dbh->quote($interval_name);
+    # 	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name like $name";
 	
-	$age_clause .= "and i.early_age <= $max_ma " if $max_ma > 0;
-	$age_clause .= "and i.late_age >= $min_ma" if $min_ma > 0;
-	$age_join = "join interval_data as i using (interval_no)";
-    }
+    # 	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+	
+    # 	unless ( $max_ma )
+    # 	{
+    # 	    $max_ma = 0;
+    # 	    $min_ma = 0;
+    # 	    $request->add_warning("unknown interval '$interval_name'");
+    # 	}
+	
+    # 	$age_clause = "and i.early_age <= $max_ma and i.late_age >= $min_ma";
+    # 	$age_join = "join interval_data as i using (interval_no)";
+    # }
+    
+    # elsif ( $min_ma || $max_ma )
+    # {
+    # 	$max_ma += 0;
+    # 	$min_ma += 0;
+	
+    # 	$age_clause .= "and i.early_age <= $max_ma " if $max_ma > 0;
+    # 	$age_clause .= "and i.late_age >= $min_ma" if $min_ma > 0;
+    # 	$age_join = "join interval_data as i using (interval_no)";
+    # }
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -1149,6 +1151,8 @@ sub quickdiv {
     # Now generate the appropriate SQL expression based on what we are trying
     # to count.
     
+    my $age_clause = ''; my $age_join = '';
+    
     my $main_table = $tables->{use_global} ? $DIV_GLOBAL : $DIV_MATRIX;
     my $other_joins = $request->generateQuickDivJoins('d', $tables, $taxonomy);
     
@@ -1157,7 +1161,7 @@ sub quickdiv {
 	$sql = "SELECT d.interval_no, count(distinct d.genus_no) as sampled_in_bin, sum(d.n_occs) as n_occs
 		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
 			$other_joins
-		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso $age_clause
+		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso
 		GROUP BY interval_no";
 
 		$request->add_warning("The option 'genera_plus' is not supported with '/occs/quickdiv'.  If you want to promote subgenera to genera, use the operation '/occs/diversity' instead.") if $count_what eq 'genera_plus';
@@ -1189,11 +1193,15 @@ sub quickdiv {
 	return $request->list_result();
     }
     
+    my $age_limit = '';
+    $age_limit .= " and early_age <= $max_ma" if defined $max_ma && $max_ma > 0;
+    $age_limit .= " and late_age >= $min_ma" if defined $min_ma && $min_ma > 0;
+    
     my $outer_sql = "
 		SELECT interval_no, interval_name, early_age, late_age, d.sampled_in_bin, d.n_occs
 		FROM $INTERVAL_DATA JOIN $SCALE_MAP as sm using (interval_no)
 		    LEFT JOIN ($sql) as d using (interval_no)
-		WHERE sm.scale_no = $scale_id and sm.scale_level = $reso
+		WHERE sm.scale_no = $scale_id and sm.scale_level = $reso $age_limit
 		ORDER BY early_age";
     
     print STDERR "$outer_sql\n\n" if $request->debug;
@@ -1854,7 +1862,7 @@ sub generateQuickDivFilters {
     # Same with coll_id or clusts_id
     
     return () if $request->param_given('coll_id');
-    return () if $request->param_given('clust_id');
+    # return () if $request->param_given('clust_id');
     
     # Then check for geographic parameters, including 'clust_id', 'continent',
     # 'country', 'latmin', 'latmax, 'lngmin', 'lngmax', 'loc'
