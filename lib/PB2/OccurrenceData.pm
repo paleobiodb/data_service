@@ -1474,7 +1474,7 @@ sub prevalence {
 	# Add an interval filter if one was specified.
 	
 	my $interval_name = $request->clean_param('interval');
-	my $interval_no;
+	my $interval_string;
 	
 	if ( $interval_name )
 	{
@@ -1484,22 +1484,23 @@ sub prevalence {
 		SELECT interval_no FROM $INTERVAL_DATA
 		WHERE interval_name like $quoted";
 	    
-	    ($interval_no) = $dbh->selectrow_array($sql);
+	    ($interval_string) = $dbh->selectrow_array($sql);
 	    
-	    unless ( $interval_no )
+	    unless ( $interval_string )
 	    {
-		$interval_no = -1;
+		$interval_string = -1;
 		$request->add_warning("unknown interval '$interval_name'");
 	    }
 	}
 	
 	else
 	{
-	    $interval_no = $request->clean_param('interval_id');
+	    my @interval_nos = $request->safe_param_list('interval_id');
+	    $interval_string = join(',', @interval_nos);
 	}
 	
-	$interval_no ||= 751;
-	push @filters, "p.interval_no = $interval_no";
+	$interval_string ||= '751';
+	push @filters, "p.interval_no in ($interval_string)";
 	
 	# If the 'strict' parameter was given, make sure we haven't generated any
 	# warnings. 

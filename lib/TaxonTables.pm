@@ -5122,13 +5122,13 @@ sub buildTaxaCacheTables {
 	
 	$result = $dbh->do("
 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT t.parent_no, l.child_no
+		SELECT t.immpar_no, l.child_no
 		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
 		WHERE t.depth = $depth");
 	
 	$result = $dbh->do("
 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT t.parent_no, t.orig_no
+		SELECT t.immpar_no, t.orig_no
 		FROM $tree_table as t
 		WHERE t.depth = $depth");
     }
