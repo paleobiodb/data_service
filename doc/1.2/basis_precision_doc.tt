@@ -1,0 +1,110 @@
+=head2 DESCRIPTION
+
+This page describes the codes used the fields C<latlng_basis>, C<latlng_precision>, and C<prc>.
+These fields are included if you specify C<show=loc> when listing L<collections|node:colls>.
+
+=head2 PBDB VOCABULARY
+
+If the C<loc> block is included, responses in the L<pbdb vocabulary|node:formats#pbdb> will include
+the fields C<latlng_basis> and C<latlng_precision>.  If not empty, the contents of each field
+will be one of the following codes:
+
+=head3 latlng_basis
+
+=over
+
+=item *
+
+stated in text
+
+=item *
+
+based on nearby landmark
+
+=item *
+
+based on political unit
+
+=item *
+
+estimated from map
+
+=item *
+
+unpublished field data
+
+=back
+
+=head3 latlng_precision
+
+=over
+
+=item *
+
+degrees
+
+=item *
+
+minutes
+
+=item *
+
+seconds
+
+=item *
+
+a digit from 1-8, representing decimal degrees of precision
+
+=back
+
+=head2 COMPACT VOCABULARY
+
+If the C<loc> block is included, responses in the L<compact vocabulary|node:formats#com> will include
+the field C<prc>.  If not empty, the contents of this field will be a two letter code.  The first letter
+represents the basis, as follows:
+
+=over
+
+=item T
+
+stated in text
+
+=item L
+
+based on nearby landmark
+
+=item P
+
+based on political unit
+
+=item M
+
+estimated from map
+
+=item U
+
+unpublished field data
+
+=back
+
+The second letter represents the precision, as follows:
+
+=over
+
+=item D
+
+degrees
+
+=item M
+
+minutes
+
+=item S
+
+seconds
+
+=item 1-8
+
+decimal degrees of precision
+
+=back
