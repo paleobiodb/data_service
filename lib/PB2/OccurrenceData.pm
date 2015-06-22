@@ -559,7 +559,10 @@ sub initialize {
     
     $ds->define_ruleset('1.2:occs:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
-	    "This parameter needs no value.  If included, all records will be selected.",
+	    "This parameter needs no value.",
+	    "By default all records are always included whenever any other parameter is specified. In order to obtain all", 
+	    "occurrence records, with no selection parameter specified, all_records must be supplied. Note that specifing",
+	    "all_records with no other parameter can result in a large download (> 100 Mb).",
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
 	    "A comma-separated list of occurrence identifiers.");
     
