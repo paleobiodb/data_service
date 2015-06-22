@@ -110,8 +110,7 @@ sub initialize {
     
     $ds->define_ruleset('1.2:config' =>
 	"The following URL parameters are accepted for this path:",
-	{ param => 'show', valid => $ds->valid_set('1.2:config:get_map'),
-	  list => q{,} },
+	{ param => 'show', valid => '1.2:config:get_map', list => ',' },
 	    "The value of this parameter selects which information to return:",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|/data1.1/special_doc.html> with this request.");

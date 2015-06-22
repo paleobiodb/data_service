@@ -233,11 +233,11 @@
     MACRO FORMAT_SECTION INCLUDE FORMAT_SECTION;
     
     BLOCK FORMATS;
-        SET options = { };
+ 	SET options = { };
         IF opt_extended; options.extended = 1; END;
 	IF opt_all; options.all = 1; END;
 	IF request.node_path == '/'; options.all = 1; END;
-        SET format_doc = request.request.document_formats(options);
+        SET format_doc = request.document_formats(options);
   	IF format_doc.match('^MSG_'); sub_message(format_doc);
 	ELSE; format_doc;
         END;
@@ -277,7 +277,7 @@
         IF opt_extended; options.extended = 1; END;
 	IF opt_all; options.all = 1; END;
 	IF request.node_path == '/'; options.all = 1; END;
-        SET vocab_doc = request.request.document_vocabs(options);
+        SET vocab_doc = request.document_vocabs(options);
   	IF vocab_doc.match('^MSG_'); sub_message(vocab_doc);
 	ELSIF vocab_doc; vocab_doc;
 	ELSE; sub_message("MSG_VOCAB_NONE_ALLOWED");

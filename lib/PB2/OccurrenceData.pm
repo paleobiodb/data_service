@@ -41,10 +41,6 @@ sub initialize {
     # We start by defining an output map for this class.
     
     $ds->define_output_map('1.2:occs:basic_map' =>
-        # { value => 'attr', maps_to => '1.2:colls:attr' },
-	#     "The attribution of the occurrence: the author name(s) from",
-	#     "the primary reference, and the year of publication.  If no reference",
-	#     "is recorded for this occurrence, the reference for its collection is used.",
 	{ value => 'class', maps_to => '1.2:occs:taxo' },
 	    "The taxonomic classification of the occurence: phylum, class, order, family,",
 	    "genus.",
@@ -69,6 +65,16 @@ sub initialize {
 	    "will be empty unless the occurrence is a plant fossil.",
 	{ value => 'abund', maps_to => '1.2:occs:abund' },
 	    "Information about the abundance of this occurrence in the collection",
+	{ value => 'ecospace', maps_to => '1.2:taxa:ecospace' },
+	    "Information about ecological space that this organism occupies or occupied.",
+	    "This has only been filled in for a relatively few taxa.  Here is a",
+	    "L<list of values|node:taxa/ecotaph_values>.",
+	{ value => 'taphonomy', maps_to => '1.2:taxa:taphonomy' },
+	    "Information about the taphonomy of this organism.  Here is a",
+	    "L<list of values|node:taxa/ecotaph_values>.",
+	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
+	    "Annotates the output block C<ecospace>, indicating at which",
+	    "taxonomic level each piece of information was entered.",
 	{ value => 'coords', maps_to => '1.2:occs:coords' },
 	     "The latitude and longitude of this occurrence",
         { value => 'loc', maps_to => '1.2:colls:loc' },
@@ -78,9 +84,6 @@ sub initialize {
 	    "evaluated according to the model specified by the parameter C<pgm>.",
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indication of whether the occurrence is located on protected land.",
-        { value => 'time', maps_to => '1.2:colls:time' },
-	    "This block is obsolete, and is included only for compatibility reasons.",
-	    "It does not include any fields in the response.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the occurrence.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -91,6 +94,8 @@ sub initialize {
 	{ value => 'lithext', maps_to => '1.2:colls:lithext' },
 	    "Detailed information about the lithological context of the occurrence.",
 	    "This includes all of the information from C<lith> plus extra fields.",
+	{ value => 'methods', maps_to => '1.2:colls:methods' },
+	    "Information about the collection methods used",
 	{ value => 'geo', maps_to => '1.2:colls:geo' },
 	    "Information about the geological context of the occurrence",
         { value => 'rem', maps_to => '1.2:colls:rem' },
@@ -128,8 +133,8 @@ sub initialize {
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
 		     'o.species_name', 'o.species_reso',
-		     'o.early_age', 'o.late_age', 'o.reference_no'],
-	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li'] },
+		     'o.early_age', 'o.late_age', 'o.reference_no', 'r.pubyr'],
+	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li', 'r'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ set => '*', code => \&process_occ_com, if_vocab => 'com' },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
@@ -141,8 +146,10 @@ sub initialize {
 	    "This value is a key for the reidentification table, and is probably useful only",
 	    "for debugging purposes.  It does, at least, indicate that this was not the original",
 	    "identification of the occurrence.",
-	{ output => 'obsolete', com_name => 'obs', value => 1, not_field => 'latest_ident' },
-	    "The value of this field will be true if this occurrence was later reidentified.",
+	{ output => 'flags', com_name => 'flg' },
+	    "This field will be empty for most records.  A record representing an identification",
+	    "that has been superceded by a more recent identification will have the letter C<R>",
+	    "in this field.",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
 	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', dedup => 'accepted_name' },
@@ -189,8 +196,10 @@ sub initialize {
 	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
 	# { set => 'reference_no', append => 1 },
+	{ output => 'pubyr', com_name => 'pby', data_type => 'str' },
+	    "The year of publication of the reference from which this data was entered",
 	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
-	    "The identifier(s) of the references from which this data was entered");
+	    "The identifier of the reference from which this data was entered");
     
     $ds->define_block('1.2:occs:ident' =>
 	{ select => ['o.genus_name', 'o.genus_reso',
@@ -285,6 +294,7 @@ sub initialize {
     
     $ds->define_block( '1.2:occs:full_info' =>
 	{ include => '1.2:occs:class' },
+	{ include => '1.2:occs:subgenus' },
 	{ include => '1.2:occs:plant' },
 	{ include => '1.2:occs:abund' },
 	{ include => '1.2:occs:coords' },
@@ -676,12 +686,12 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:prevalence' =>
-	">>You can use the following parameter to select how detailed you wish the result to be:",
-	{ optional => 'detail', valid => POS_VALUE },
-	    "Accepted values for this parameter are 1, 2, and 3.  Higher numbers differentiate",
-	    "the results more finely, displaying lower-level taxa.",
-	">>You can use the following parameters to query for summary clusters by",
-	"a variety of criteria.  Except as noted below, you may use these in any combination.",
+	# ">>You can use the following parameter to select how detailed you wish the result to be:",
+	# { optional => 'detail', valid => POS_VALUE },
+	#     "Accepted values for this parameter are 1, 2, and 3.  Higher numbers differentiate",
+	#     "the results more finely, displaying lower-level taxa.",
+	">>The parameters accepted by this operation are the same as those accepted by",
+	"L<node:occs/list>.  Except as noted, you can use them in any combination.",
     	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
@@ -741,7 +751,24 @@ sub get {
     
     $request->substitute_select( mt => 'o', cd => 'oc' );
     
-    my $fields = $request->select_string;
+    my @raw_fields = $request->select_list;
+    my @fields;
+    
+    foreach my $f ( @raw_fields )
+    {
+	if ( ref $Taxonomy::FIELD_LIST{$f} eq 'ARRAY' )
+	{
+	    push @fields, @{$Taxonomy::FIELD_LIST{$f}};
+	    $request->add_table($_) foreach (@{$Taxonomy::FIELD_TABLES{$f}});
+	}
+	
+	else
+	{
+	    push @fields, $f;
+	}
+    }
+    
+    my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
     $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
@@ -839,7 +866,41 @@ sub list {
     
     #$request->add_output_block('1.2:occs:unknown_taxon') if $tables->{unknown_taxon};
     
-    my $fields = $request->select_string;
+    my @raw_fields = $request->select_list;
+    my @fields;
+    # my %taxa_block;
+    
+    foreach my $f ( @raw_fields )
+    {
+	if ( ref $Taxonomy::FIELD_LIST{$f} eq 'ARRAY' )
+	{
+	    # $taxa_block{$f} = 1;
+	    push @fields, @{$Taxonomy::FIELD_LIST{$f}};
+	    foreach my $t (@{$Taxonomy::FIELD_TABLES{$f}})
+	    {
+		$request->add_table($t);
+	    }
+	}
+	
+	else
+	{
+	    push @fields, $f;
+	}
+    }
+    
+    # if ( $taxa_block{ECOSPACE} && $taxa_block{ETBASIS} )
+    # {
+    # 	push @fields, @{$Taxonomy::FIELD_LIST{ECOBASIS}};
+    # 	$request->add_table($_) foreach @{$Taxonomy::FIELD_TABLES{ECOBASIS}};
+    # }
+    
+    # if ( $taxa_block{TAPH} && $taxa_block{ETBASIS} )
+    # {
+    # 	push @fields, @{$Taxonomy::FIELD_LIST{TAPHBASIS}};
+    # 	$request->add_table($_) foreach @{$Taxonomy::FIELD_TABLES{TAPHBASIS}};
+    # }
+    
+    my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
     $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
@@ -2082,7 +2143,7 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
 	if $tables->{t};
     $join_list .= "LEFT JOIN taxon_trees as tv on tv.orig_no = t.accepted_no\n"
-	if $tables->{tv};
+	if $tables->{tv} || $tables->{e};
     $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = $t.orig_no\n"
 	if $tables->{pl};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = $t.ints_no\n"
@@ -2114,6 +2175,11 @@ sub generateJoinList {
 	if $tables->{li};
     $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
 	if $tables->{ccmap};
+    
+    $join_list .= "\t\tLEFT JOIN taxon_ecotaph as e on e.orig_no = tv.orig_no\n"
+	if $tables->{e};
+    $join_list .= "\t\tLEFT JOIN taxon_etbasis as etb on etb.orig_no = tv.orig_no\n"
+	if $tables->{etb};
     
     return $join_list;
 }
@@ -2153,6 +2219,10 @@ sub process_basic_record {
     my ($request, $record) = @_;
     
     no warnings 'uninitialized';
+    
+    # Set the flags as appropriate.
+    
+    $record->{flags} = "R" unless $record->{latest_ident};
     
     # Construct the 'identified_name' field using the '_name' and '_reso'
     # fields from the occurrence record.  Also build 'taxon_name' using just
@@ -2279,40 +2349,80 @@ sub process_occ_subgenus {
 }
 
 
+my %ID_TYPE = ( orig_no => $IDP{TXN},
+		identified_no => $IDP{TXN},
+		accepted_no => $IDP{TXN},
+		phylum_no => $IDP{TXN},
+		class_no => $IDP{TXN},
+		order_no => $IDP{TXN},
+		family_no => $IDP{TXN},
+		genus_no => $IDP{TXN},
+		synonym_no => $IDP{TXN},
+		subgenus_no => $IDP{TXN},
+		taxon_no => $IDP{TXN},
+		spelling_no => $IDP{VAR},
+		interval_no => $IDP{INT},
+		occurrence_no => $IDP{OCC},
+		collection_no => $IDP{COL},
+		reid_no => $IDP{REI},
+		reference_no => $IDP{REF} );
+
+
 sub process_occ_com {
     
     my ($request, $record) = @_;
     
-    foreach my $f ( qw(orig_no identified_no accepted_no phylum_no
-		       class_no order_no family_no genus_no subgenus_no) )
+    # Alter all object identifiers from the numeric values stored in the
+    # database to the text form reported externally.
+    
+    foreach my $f ( qw(taxon_no orig_no identified_no accepted_no phylum_no
+		       class_no order_no family_no genus_no subgenus_no
+		       interval_no occurrence_no collection_no
+		       reid_no reference_no) )
     {
-	$record->{$f} = "$IDP{TXN}:$record->{$f}" if defined $record->{$f};
+	if ( defined $record->{$f} )
+	{
+	    if ( ref $record->{$f} eq 'ARRAY' )
+	    {
+		map { $_ = "$ID_TYPE{$f}:$_" } @{$record->{reference_no}};
+	    }
+	    
+	    elsif ( $record->{$f} > 0 )
+	    {
+		$record->{$f} = "$ID_TYPE{$f}:$record->{$f}";
+	    }
+	}
     }
     
-    foreach my $f ( qw(interval_no) )
-    {
-	$record->{$f} = "$IDP{INT}:$record->{$f}" if defined $record->{$f};
-    }
+    # foreach my $f ( qw(interval_no) )
+    # {
+    # 	$record->{$f} = "$IDP{INT}:$record->{$f}" if defined $record->{$f};
+    # }
     
-    foreach my $f ( qw(occurrence_no) )
-    {
-	$record->{$f} = "$IDP{OCC}:$record->{$f}" if defined $record->{$f};
-    }
+    # foreach my $f ( qw(occurrence_no) )
+    # {
+    # 	$record->{$f} = "$IDP{OCC}:$record->{$f}" if defined $record->{$f};
+    # }
     
-    foreach my $f ( qw(collection_no) )
-    {
-	$record->{$f} = "$IDP{COL}:$record->{$f}" if defined $record->{$f};
-    }
+    # foreach my $f ( qw(collection_no) )
+    # {
+    # 	$record->{$f} = "$IDP{COL}:$record->{$f}" if defined $record->{$f};
+    # }
     
-    if ( ref $record->{reference_no} eq 'ARRAY' )
-    {
-	map { $_ = "$IDP{REF}:$_" } @{$record->{reference_no}};
-    }
+    # foreach my $f ( qw(reid_no) )
+    # {
+    # 	$record->{$f} = "$IDP{REI}:$record->{$f}" if defined $record->{$f};
+    # }
     
-    elsif ( defined $record->{reference_no} )
-    {
-	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
-    }
+    # if ( ref $record->{reference_no} eq 'ARRAY' )
+    # {
+    # 	map { $_ = "$IDP{REF}:$_" } @{$record->{reference_no}};
+    # }
+    
+    # elsif ( defined $record->{reference_no} )
+    # {
+    # 	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
+    # }
 }
 
 1;

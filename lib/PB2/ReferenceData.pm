@@ -53,16 +53,16 @@ sub initialize {
     $ds->define_set('1.2:refs:reftype' =>
 	{ value => 'auth (A)' },
 	    "This reference gives the original source for a taxonomic name",
-	{ value => 'classify (C)' },
+	{ value => 'class (C)' },
 	    "This reference reference is the source for a classification opinion",
-	{ value => 'unselected (U)' },
+	{ value => 'unsel (U)' },
 	    "This reference is the source for an opinion that is not used for",
 	    "classification because of its date of publication and/or basis",
 	{ value => 'occ (O)' },
 	    "This reference is the source for a fossil occurrence",
 	{ value => 'coll (P)' },
 	    "This reference is indicated to be the primary source for a fossil collection",
-	{ value => 'secondary (S)' },
+	{ value => 'sec (S)' },
 	    "This reference is an additional source for a fossil collection",
 	{ value => 'ref (R)' },
 	    "This reference has an unknown role in the database");
@@ -755,12 +755,12 @@ sub set_reference_type {
     
     if ( $ref_type =~ qr{C} )
     {
-	push @types, 'classify';
+	push @types, 'class';
     }
     
     if ( $ref_type =~ qr{U} )
     {
-	push @types, 'unselected';
+	push @types, 'unsel';
     }
     
     if ( $ref_type =~ qr{O} )
@@ -773,9 +773,9 @@ sub set_reference_type {
 	push @types, 'coll';
     }
     
-    elsif ( $ref_type =~ qr{S} )
+    elsif ( $ref_type =~ qr{S} && $ref_type !~ qr{O} )
     {
-	push @types, 'secondary';
+	push @types, 'sec';
     }
     
     push @types, 'ref' unless @types;

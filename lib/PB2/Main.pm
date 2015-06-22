@@ -24,7 +24,7 @@ use PB2::PersonData;
     our ($ds2) = Web::DataService->new(
 	{ name => '1.2',
 	  title => 'PBDB Data Service',
-	  version => 'a2',
+	  version => 'b1',
 	  features => 'standard',
 	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
@@ -256,6 +256,8 @@ use PB2::PersonData;
 	"This path returns a list of the most prevalent taxa (according to number of occurrences)",
 	"from among the selected set of fossil occurrences.  These taxa will be phyla and/or classes,",
 	"depending upon the size of the list and the requested number of entries.",
+	"Major taxa that are roughly at the level of classes may be included even if they are not",
+	"not formally ranked at that level.",
 	"Unlike most of the operations of this data service, the parameter C<limit> is",
 	"significant in determining the elements of the result.  A",
 	"larger limit will tend to show classes instead of phyla.");

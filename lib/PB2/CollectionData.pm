@@ -153,8 +153,8 @@ sub initialize {
 	    "A unique identifier for the collection.  This will be a string if the result",
 	    "format is JSON.  For backward compatibility, all identifiers in text format",
 	    "results will continue to be integers.",
-	{ output => 'record_type', com_name => 'typ', value => $IDP{COL}, 
-	  dwc_value => 'collection' },
+	{ output => 'record_type', com_name => 'typ', value => $IDP{COL},
+	  dwc_value => 'Occurrence' },
 	    "type of this object: C<$IDP{COL}> for a collection",
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
@@ -685,6 +685,8 @@ sub initialize {
 	    "may instead use the parameter name C<id>.");
     
     $ds->define_ruleset('1.2:colls:selector' =>
+	{ param => 'id', valid => VALID_IDENTIFIER('COL'), key => 'coll_id'},
+	    "!",
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "This parameter needs no value.  If included, all records will be selected.");
     
@@ -703,6 +705,16 @@ sub initialize {
 	    $ds->document_set('1.2:colls:order'),
 	    "If no order is specified, results are returned as they appear in the C<collections> table.",
 	{ ignore => 'level' });
+        
+    $ds->define_ruleset('1.2:summary_display' =>
+	"You can use the following parameter to request additional information about each",
+	"retrieved cluster:",
+	{ param => 'show', list => q{,},
+	  valid => $ds->valid_set('1.2:colls:summary_map') },
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each cluster.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	    $ds->document_set('1.2:colls:summary_map'),);
     
     $ds->define_ruleset('1.2:colls:single' => 
 	"The following required parameter selects a record to retrieve:",
@@ -732,6 +744,28 @@ sub initialize {
 			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
 	">>You can also specify any of the following parameters:",
     	{ allow => '1.2:colls:display' },
+    	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:colls:summary' => 
+	"The following required parameter selects from the available clustering levels:",
+	{ param => 'level', valid => POS_VALUE, default => 1 },
+	    "Return records from the specified cluster level.  You can find out which",
+	    "levels are available by means of the L<config|node:config> URL path. (REQUIRED)",
+	">>You can use the following parameters to query for summary clusters by",
+	"a variety of criteria.  Except as noted below, you may use these in any combination.",
+    	{ allow => '1.2:colls:selector' },
+    	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_colls_crmod' },
+	{ allow => '1.2:common:select_colls_ent' },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
+	">>You can use the following parameter if you wish to retrieve information about",
+	"the summary clusters which contain a specified collection or collections.",
+	"Only the records which match the other parameters that you specify will be returned.",
+    	{ allow => '1.2:summary_display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -792,34 +826,6 @@ sub initialize {
 	{ require => '1.2:strata:selector' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
-    
-    $ds->define_ruleset('1.2:summary_display' =>
-	"You can use the following parameter to request additional information about each",
-	"retrieved cluster:",
-	{ param => 'show', list => q{,},
-	  valid => $ds->valid_set('1.2:colls:summary_map') },
-	    "This parameter is used to select additional information to be returned",
-	    "along with the basic record for each cluster.  Its value should be",
-	    "one or more of the following, separated by commas:",
-	    $ds->document_set('1.2:colls:summary_map'),);
-    
-    $ds->define_ruleset('1.2:colls:summary' => 
-	"The following required parameter selects from the available clustering levels:",
-	{ param => 'level', valid => POS_VALUE, default => 1 },
-	    "Return records from the specified cluster level.  You can find out which",
-	    "levels are available by means of the L<config|node:config> URL path. (REQUIRED)",
-	">>You can use the following parameters to query for summary clusters by",
-	"a variety of criteria.  Except as noted below, you may use these in any combination.",
-    	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
-	">>You can use the following parameter if you wish to retrieve information about",
-	"the summary clusters which contain a specified collection or collections.",
-	"Only the records which match the other parameters that you specify will be returned.",
-    	{ allow => '1.2:colls:selector' },
-    	{ allow => '1.2:summary_display' },
-    	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request");
 }
 
 

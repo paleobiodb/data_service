@@ -1,4 +1,4 @@
-s'
+# 
 # TaxonData
 # 
 # A class that returns information from the PaleoDB database about a single
@@ -106,11 +106,11 @@ sub initialize {
 	    "accepted as most correct.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN}, dwc_value => 'Taxon' },
 	    "The type of this object: C<$IDP{TXN}> for an occurrence.",
-	{ output => 'flag', com_name => 'flg' },
+	{ output => 'flags', com_name => 'flg' },
 	    "This field will be empty for most records.  In a record representing an excluded",
-	    "group inside another taxon, the field will contain C<E>.  In a result set whose",
+	    "group inside another taxon, the field will contain the letter C<E>.  In a result set whose",
 	    "records are arranged hierarchically, those records whose parents are not in the set",
-	    "will have the value C<B> in this field.  This flag marks the base(s) of the reported",
+	    "will have the letter C<B> in this field.  This marks the base(s) of the reported",
 	    "portions of the taxonomic hierarchy.",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
@@ -122,7 +122,7 @@ sub initialize {
 	{ output => 'attribution', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'pubyr', if_block => 'attr', 
+	{ output => 'pubyr', if_block => 'attr', data_type => 'str',
 	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
 	    "The year in which this name was published",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
@@ -192,7 +192,7 @@ sub initialize {
 	{ output => 'attribution', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'pubyr', if_block => 'attr', 
+	{ output => 'pubyr', if_block => 'attr', data_type => 'str',
 	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
 	    "The year in which this name was published",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
@@ -457,16 +457,18 @@ sub initialize {
 	{ output => 'motility_basis', com_name => 'jmc',
 	  if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
 	    "Specifies the taxon for which the motility information was set.",
-	    "For L<JSON|node:formats/json> responses, the fields 'jmb' and 'jmn'",
-	    "give the taxon identifier and taxon name respectively, while for",
-	    "L<text|node:formats/text> responses, the field 'motility_basis'",
-	    "provides both.  These fields are only included if the C<ecospace> output",
-	    "block is also included.  Similar annotation fields are included",
-	    "for the following, if the C<etbasis> output block is included.",
-	{ output => 'motility_basis_no', com_name => 'jmb',
-	  if_block => 'etbasis', if_format => 'json' },
-	{ output => 'motility_basis_name', com_name => 'jmn',
-	  if_block => 'etbasis', if_format => 'json' },
+	    "The taphonomy and ecospace information are inherited from parent",
+	    "taxa unless specific values are set.",
+	    # "For L<JSON|node:formats/json> responses, the fields 'jmb' and 'jmn'",
+	    # "give the taxon identifier and taxon name respectively, while for",
+	    # "L<text|node:formats/text> responses, the field 'motility_basis'",
+	    # "provides both.  These fields are only included if the C<ecospace> output",
+	    # "block is also included.  Similar annotation fields are included",
+	    # "for the following, if the C<etbasis> output block is included.",
+	# { output => 'motility_basis_no', com_name => 'jmb',
+	#   if_block => 'etbasisext', if_format => 'json' },
+	# { output => 'motility_basis', com_name => 'jmn',
+	#   if_block => 'etbasis', if_format => 'json' },
 	{ output => 'life_habit', com_name => 'jlh' },
 	    "The general life mode and locality of this organism.",
 	{ output => 'life_habit_basis', com_name => 'jhc',
@@ -474,10 +476,10 @@ sub initialize {
 	    "Specifies the taxon for which the life habit information was set.",
 	    "See B<motility_basis> above.  These fields are only included if the",
 	    "C<ecospace> block is also included.",
-	{ output => 'life_habit_basis_no', com_name => 'jhb',
-	  if_block => 'etbasis', if_format => 'json' },
-	{ output => 'life_habit_basis_name', com_name => 'jhn',
-	  if_block => 'etbasis', if_format => 'json' },
+	# { output => 'life_habit_basis_no', com_name => 'jhb',
+	#   if_block => 'etbasisext', if_format => 'json' },
+	# { output => 'life_habit_basis', com_name => 'jhn',
+	#   if_block => 'etbasis', if_format => 'json' },
 	{ output => 'diet', com_name => 'jdt' },
 	    "The general diet or feeding mode of this organism.",
 	{ output => 'diet_basis', com_name => 'jdc',
@@ -485,13 +487,14 @@ sub initialize {
 	    "Specifies the taxon for which the diet information was set.",
 	    "See B<motility_basis> above.  These fields are only included if the",
 	    "C<ecospace> block is also included.",
-	{ output => 'diet_basis_no', com_name => 'jdb',
-	  if_block => 'etbasis', if_format => 'json' },
-	{ output => 'diet_basis_name', com_name => 'jdn',
-	  if_block => 'etbasis', if_format => 'json' });
+	# { output => 'diet_basis_no', com_name => 'jdb',
+	#   if_block => 'etbasisext', if_format => 'json' },
+	# { output => 'diet_basis', com_name => 'jdn',
+	#   if_block => 'etbasis', if_format => 'json' }
+	);
     
     $ds->define_block('1.2:taxa:taphonomy' =>
-	{ select => 'TAPH' },
+	{ select => 'TAPHONOMY' },
 	{ output => 'composition', com_name => 'jco' },
 	    "The composition of the skeletal parts of this organism.",
 	{ output => 'architecture', com_name => 'jsa' },
@@ -505,20 +508,24 @@ sub initialize {
 	    "Specifies the taxon for which the taphonomy information was set.",
 	    "See B<motility_basis> above.  These fields are only included if the",
 	    "C<taphonomy> block is also included.",
-	{ output => 'taphonomy_basis_no', com_name => 'jtb',
-	  if_block => 'etbasis', if_format => 'json' },
-	{ output => 'taphonomy_basis_name', com_name => 'jtn',
-	  if_block => 'etbasis', if_format => 'json' });
+	# { output => 'taphonomy_basis_no', com_name => 'jtb', if_field => 'taphonomy_basis_no', 
+	#   if_block => 'etbasisext', if_format => 'json' },
+	# { output => 'taphonomy_basis', com_name => 'jtn',
+	#   if_block => 'etbasis', if_format => 'json' }
+	);
     
     $ds->define_block('1.2:taxa:etbasis' =>
+	{ select => 'TAPHBASIS', if_block => '1.2:taxa:taphonomy' },
+	{ select => 'ECOBASIS', if_block => '1.2:taxa:ecospace' },
 	# { output => 'environment_basis_no', com_name => 'jnb',
 	#   if_block => 'etbasis', if_format => 'json' },
 	#     "Specifies the taxon for which the ",
-	# { output => 'environment_basis_name', com_name => 'jnn',
+	# { output => 'environment_basis', com_name => 'jnn',
 	#   if_block => 'etbasis', if_format => 'json' },
 	# { output => 'environment_basis', com_name => 'jnc',
 	#   if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
-	{ set => '*', code => \&consolidate_basis, if_format => ['txt', 'csv', 'tsv'] });
+	#{ set => '*', code => \&PB2::TaxonData::consolidate_basis, if_format => ['txt', 'csv', 'tsv'] }
+	);
     
     # Now define output blocks for opinions
     
@@ -581,7 +588,7 @@ sub initialize {
 	    "The basis of the opinion, see above for a list.",
 	{ output => 'author', com_name => 'att' },
 	    "The author(s) of this opinion.",
-	{ output => 'pubyr', com_name => 'pby' },
+	{ output => 'pubyr', com_name => 'pby', data_type => 'str' },
 	    "The year in which the opinion was published.");
     
     # Finally, we define some rulesets to specify the parameters accepted by
@@ -3303,7 +3310,7 @@ sub interpretStatusCode {
 
 # consolidate_basis ( record )
 # 
-# Generate consolidated 'basis' values from the '_basis_no' and '_basis_name'
+# Generate consolidated 'basis' values from the '_basis_no' and '_basis'
 # fields.
 
 sub consolidate_basis {
@@ -3313,7 +3320,7 @@ sub consolidate_basis {
     foreach my $f ( qw(motility life_habit diet taphonomy) )
     {
 	my $basis_no = $record->{"${f}_basis_no"};
-	my $basis_name = $record->{"${f}_basis_name"};
+	my $basis_name = $record->{"${f}_basis"};
 	
 	$record->{"${f}_basis"} = "$basis_name ($basis_no)" if $basis_no;
     }

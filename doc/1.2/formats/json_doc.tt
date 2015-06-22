@@ -28,67 +28,67 @@ not match any records.
 
 =item C<records_found>
 
-This field will be present if the parameter L<count|/data1.1/common> was specified.  Its
+This field will be present if the parameter L<count|node:special> was specified.  Its
 value will be the number of records matched by the main query.
 
 =item C<records_returned>
 
-This field will be present if the paramter L<count|/data1.1/common> was specified.  Its
+This field will be present if the paramter L<count|node:special> was specified.  Its
 value will be the number of records actually returned.  This may be less than
 the total number of records found, because the size of the result set is
-limited by default to 500.  You can override this using the L<limit|/data1.1/common>
+limited by default to 500.  You can override this using the L<limit|node:special>
 parameter.
 
 =item C<record_offset>
 
-This field will be present if the parameter L<count|/data1.1/common> was specified, and if
-the parameter L<offset|/data1.1/common> was specified with a value greater than zero.  The
+This field will be present if the parameter L<count|node:special> was specified, and if
+the parameter L<offset|node:special> was specified with a value greater than zero.  The
 value in the second column will be the number of records that were skipped at the beginning
 of the result set.
 
 =item C<data_source>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+This field will be present if the parameter L<showsource|node:special> was specified.
 Its value will be the name of this data source.
 
 =item C<data_source_url>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+This field will be present if the parameter L<showsource|node:special> was specified.
 Its value will be the base URL for this data source.
 
 =item C<data_license>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+This field will be present if the parameter L<showsource|node:special> was specified.
 Its value will be the license under which this data is provided.
 
 =item C<data_license_url>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+This field will be present if the parameter L<showsource|node:special> was specified.
 Its value will be a URL from which the terms of the license may be fetched.
 
 =item C<documentation_url>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+This field will be present if the parameter L<showsource|node:special> was specified.
 Its value will be a URL that provides documentation about the URL path
 used to fetch this data.  This URL will document both the parameters and the response fields.
 This information may be helpful in guiding the later interpretation of this data.
 
 =item C<data_url>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+This field will be present if the parameter L<showsource|node:special> was specified.
 Its value will be the actual URL that was used to fetch this data.
 If this dataset is saved to disk, the included field will allow someone to later repeat this query.
 
 =item C<access_time>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+This field will be present if the parameter L<showsource|node:special> was specified.
 Its value will be the date and time time (GMT) at which this data
 was accessed.  If this dataset is saved to disk, the included field will enable it to be
 compared with other datasets on the basis of access time.
 
 =item C<parameters>
 
-This field will be present if the parameter L<showsource|/data1.1/common> was specified.  Its
+This field will be present if the parameter L<showsource|node:special> was specified.  Its
 value will be an object whose fields represent the parameters and values that were used to 
 generate this result.  If this dataset is saved to disk, the parameter information may be 
 helpful in documenting how the data was selected, what it includes, and what it does not include.

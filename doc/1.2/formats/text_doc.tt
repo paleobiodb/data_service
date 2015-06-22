@@ -39,12 +39,12 @@ You may choose from any of the following three suffixes:
 
 Generate a download file in comma-separated text format.  Most browsers will save this
 file directly to disk; if you would rather see it immediately in a browser tab, then either use
-the suffix C<.txt> instead or include the parameter L<textresult|/data1.1/common>.
+the suffix C<.txt> instead or include the parameter L<textresult|node:special>.
 
 =item C<.tsv>
 
 Generate a download file in tab-separated text format.  If you wish to see the result in
-a browser tab instead, include the parameter L<textresult|/data1.1/common>.
+a browser tab instead, include the parameter L<textresult|node:special>.
 
 =item C<.txt>
 
@@ -88,69 +88,69 @@ The initial part of the file may contain some or all of the following lines:
 
 =item C<Data Source:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.
+This line will be present if the parameter L<showsource|node:special> was specified.
 The value in the second column will be the name of this data source.
 
 =item C<Data Source URL:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.
+This line will be present if the parameter L<showsource|node:special> was specified.
 The value in the second column will be the base URL for this data source.
 
 =item C<Data License:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.
+This line will be present if the parameter L<showsource|node:special> was specified.
 The value in the second column will be the license under which this data is provided.
 
 =item C<Data License URL:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.
+This line will be present if the parameter L<showsource|node:special> was specified.
 The value in the second column will be a URL from which the terms of the license
 may be fetched.
 
 =item C<Documentation URL:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.
+This line will be present if the parameter L<showsource|node:special> was specified.
 The value in the second column will be a URL that provides documentation about the URL path
 used to fetch this data.  This URL will document both the parameters and the response fields.
 This information may be helpful in guiding the later interpretation of this data.
 
 =item C<Data URL:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.
+This line will be present if the parameter L<showsource|node:special> was specified.
 The value in the second column will be the actual URL that was used to fetch this data.
 If this dataset is saved to disk, the included line will allow someone to later repeat this query.
 
 =item C<Access Time:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.
+This line will be present if the parameter L<showsource|node:special> was specified.
 The value in the second column will be the date and time time (GMT) at which this data
 was accessed.  If this dataset is saved to disk, the included line will enable it to be
 compared with other datasets on the basis of access time.
 
 =item C<Parameters:>
 
-This line will be present if the parameter L<showsource|/data1.1/common> was specified.  It will
+This line will be present if the parameter L<showsource|node:special> was specified.  It will
 be followed by one line per parameter, giving the parameter name and value(s) used to generate this 
 result.  If this dataset is saved to disk, the parameter information may be helpful in documenting how
 the data was selected, what it includes, and what it does not include.
 
 =item C<Records Found:>
 
-This line will be present if the parameter L<count|/data1.1/common> was specified.  The 
+This line will be present if the parameter L<count|node:special> was specified.  The 
 value in the second column will be the number of records that matched the main query.
 
 =item C<Records Returned:>
 
-This line will be present if the paramter L<count|/data1.1/common> was specified.  The value
+This line will be present if the paramter L<count|node:special> was specified.  The value
 in the second column will be the number of records actually returned.  This may be less than
 the total number of records found, because the size of the result set is
-limited by default to 500.  You can override this using the L<limit|/data1.1/common>
+limited by default to 500.  You can override this using the L<limit|node:special>
 parameter.
 
 =item C<Record Offset:>
 
-This line will be present if the parameter L<count|/data1.1/common> was specified, and if
-the parameter L<offset|/data1.1/common> was specified with a value greater than zero.  The
+This line will be present if the parameter L<count|node:special> was specified, and if
+the parameter L<offset|node:special> was specified with a value greater than zero.  The
 value in the second column will be the number of records that were skipped at the beginning
 of the result set.
 
@@ -166,7 +166,7 @@ before the data header line.  It serves to mark off the supplementary header mat
 
 =item I<data header>
 
-Unless the parameter L<noheader|/data1.1/common> was specified, a data header line will always precede
+Unless the parameter L<noheader|node:special> was specified, a data header line will always precede
 the first data line.  This header line will contain the name of each column.
 
 =back

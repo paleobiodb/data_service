@@ -67,6 +67,7 @@ sub new {
 		 SEARCH_TABLE => $t->{search},
 	         ATTRS_TABLE => $t->{attrs},
 		 ECOTAPH_TABLE => $t->{ecotaph},
+		 ETBASIS_TABLE => $t->{etbasis},
 		 INTS_TABLE => $t->{ints},
 		 LOWER_TABLE => $t->{lower},
 		 COUNTS_TABLE => $t->{counts},
@@ -2859,8 +2860,8 @@ sub generate_fields {
 	}
 	
 	# Note that the following shortcut implies at most five different
-	# tables for any particular field specifier.  I can't see that this
-	# will be a problem.
+	# tables for any particular field specifier.  This can be changed if
+	# necessary.
 	
 	@{$tables_hash}{@{$FIELD_TABLES{$f}}} = (1, 1, 1, 1, 1) if ref $FIELD_TABLES{$f};
     }
@@ -4003,7 +4004,7 @@ sub taxon_joins {
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as ipt on ipt.orig_no = $mt.immpar_no\n"
 	if $tables_hash->{ipt};
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as vt on vt.orig_no = $mt.accepted_no\n"
-	if $tables_hash->{vt};
+	if $tables_hash->{vt} || $tables_hash->{e};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ATTRS_TABLE} as v on v.orig_no = $mt.orig_no\n"
 	if $tables_hash->{v};
     $joins .= "\t\tLEFT JOIN $INTERVAL_MAP as app on app.early_age = v.first_early_age
@@ -4011,15 +4012,10 @@ sub taxon_joins {
 	if $tables_hash->{app};
     $joins .= "\t\tLEFT JOIN $taxonomy->{NAMES_TABLE} as n on n.taxon_no = $mt.spelling_no\n"
 	if $tables_hash->{n};
-    $joins .= "\t\tLEFT JOIN $taxonomy->{ECOTAPH_TABLE} as e on e.orig_no = $mt.orig_no\n"
+    $joins .= "\t\tLEFT JOIN $taxonomy->{ECOTAPH_TABLE} as e on e.orig_no = vt.orig_no\n"
 	if $tables_hash->{e};
-    $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as ebt on ebt.orig_no = e.taphonomy_basis_no\n"
-	if $tables_hash->{ebt};
-    $joins .= "		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe1 on ebe1.orig_no = e.environment_basis_no
-		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe2 on ebe2.orig_no = e.motility_basis_no
-		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe3 on ebe3.orig_no = e.life_habit_basis_no
-		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe4 on ebe4.orig_no = e.diet_basis_no\n"
-	if $tables_hash->{ebe};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{ETBASIS_TABLE} as etb on etb.orig_no = vt.orig_no\n"
+	if $tables_hash->{etb};
     
     $joins .= "\t\tLEFT JOIN $taxonomy->{REFS_TABLE} as r on r.reference_no = a.reference_no\n"
 	if $tables_hash->{r};
@@ -4257,13 +4253,14 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      GENUS => ['pl.genus_no', 'pl.genus', 'pl.subgenus_no', 'pl.subgenus'],
 		      COUNTS => ['pc.order_count as n_orders', 'pc.family_count as n_families',
 				 'pc.genus_count as n_genera', 'pc.species_count as n_species'],
-		      TAPH => ['e.composition', 'e.thickness', 'e.architecture', 'e.skeletal_reinforcement as reinforcement',
-			       'e.taphonomy_basis_no', 'ebt.name as taphonomy_basis_name'],
-		      ECOSPACE => ['e.taxon_environment as environment', 'e.motility', 'e.life_habit', 'e.diet',
-				   'e.environment_basis_no', 'ebe1.name as environment_basis_name',
-				   'e.motility_basis_no', 'ebe2.name as motility_basis_name',
-				   'e.life_habit_basis_no', 'ebe3.name as life_habit_basis_name',
-				   'e.diet_basis_no', 'ebe4.name as diet_basis_name'],
+		      TAPHONOMY => ['e.composition', 'e.thickness', 'e.architecture',
+				    'e.skeletal_reinforcement as reinforcement'],
+		      TAPHBASIS => ['etb.taphonomy_basis', 'etb.taphonomy_basis_no'],
+		      ECOSPACE => ['e.taxon_environment as environment', 'e.motility', 'e.life_habit', 'e.diet'],
+		      ECOBASIS => ['etb.environment_basis', 'etb.motility_basis',
+				   'etb.life_habit_basis', 'etb.diet_basis',
+				   'etb.environment_basis_no', 'etb.motility_basis_no',
+				   'etb.life_habit_basis_no', 'etb.diet_basis_no'],
 		      CRMOD => ['a.created', 'a.modified'],
 		      REF_CRMOD => ['r.created', 'r.modified'],
 		      OP_CRMOD => ['oo.created', 'oo.modified'],
@@ -4287,8 +4284,10 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'vt',],
 			GENUS => ['pl'],
 			SUBGENUS => ['pl'],
 			COUNTS => ['pc'],
-			TAPH => ['e', 'ebt'],
-			ECOSPACE => ['e', 'ebe'],
+			TAPHONOMY => ['e'],
+			ECOSPACE => ['e'],
+			TAPHBASIS => ['etb'],
+			ECOBASIS => ['etb'],
 			SENPAR => ['pt'],
 			IMMPAR => ['ipt'],
 			REF_CRMOD => ['r'],

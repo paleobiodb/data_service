@@ -34,6 +34,7 @@ $TAXON_TABLE{taxon_trees} = {
     lower => 'taxon_lower',
     counts => 'taxon_counts',
     ecotaph => 'taxon_ecotaph',
+    etbasis => 'taxon_etbasis',
     images => 'taxon_pics',
     
     authorities => 'authorities',

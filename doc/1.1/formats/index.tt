@@ -27,7 +27,11 @@ Processing of data by a custom R module (available soon).
 Each format has a default vocabulary in which its data is expressed.  The
 available formats and vocabularies are discussed below.
 
-<% FORMATS %>
+=head2 FORMATS
 
-<% VOCABULARIES %>
+<% FORMATS (opt_all=1, opt_extended=1) %>
+
+=head2 VOCABULARIES
+
+<% VOCABS (opt_all=1, opt_extended=1) %>
 

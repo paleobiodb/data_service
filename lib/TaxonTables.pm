@@ -181,6 +181,7 @@ our $OPINION_WORK = "opn";
 our $TREE_CACHE_WORK = "ttcn";
 our $LIST_CACHE_WORK = "tlcn";
 our $ECOTAPH_WORK = "ectn";
+our $ETBASIS_WORK = "etbn";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -1041,7 +1042,7 @@ sub buildOpinionCache {
 			   parent_spelling_no int unsigned not null,
 			   ri int not null,
 			   pubyr varchar(4),
-			   status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
+			   status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum','root'),
 			   spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
 			   reference_no int unsigned not null,
 			   author varchar(80),
@@ -2239,8 +2240,9 @@ sub computeHierarchy {
     
     logMessage(2, "    setting opinion_no and status");
     
-    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $CLASSIFY_AUX as c USING (orig_no)
-			SET t.opinion_no = c.opinion_no, t.status = c.status");
+    $result = $dbh->do("UPDATE $TREE_WORK as t join $CLASSIFY_AUX as c using (orig_no)
+				LEFT JOIN $TAXON_EXCEPT as ex using (orig_no)
+			SET t.opinion_no = c.opinion_no, t.status = coalesce(ex.status, c.status)");
     
     logMessage(2, "    indexing opinion_no and status");
     
@@ -3278,6 +3280,7 @@ sub computeClassification {
 				orig_no int unsigned not null,
 				name varchar(80),
 				rank tinyint not null,
+				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum','root'),
 				primary key (orig_no)) ENGINE=MYISAM");
     
     # We first compute an auxiliary table to help in the computation.  We
@@ -4699,6 +4702,22 @@ sub computeEcotaphTable {
     
     logMessage(2, "    added $count base rows");
     
+    # Also create a work file for the basis names.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $ETBASIS_WORK");
+    $result = $dbh->do("CREATE TABLE $ETBASIS_WORK
+			       (orig_no int unsigned primary key not null,
+				taphonomy_basis_no int unsigned not null,
+				taphonomy_basis varchar(80),
+				environment_basis_no int unsigned not null,
+				environment_basis varchar(80),
+				motility_basis_no int unsigned not null,
+				motility_basis varchar(80),
+				life_habit_basis_no int unsigned not null,
+				life_habit_basis varchar(80),
+				diet_basis_no int unsigned not null,
+				diet_basis varchar(80)) Engine=MyISAM");
+    
     # Combine some of the columns together into new ones, and then drop the superfluous columns.
     
     logMessage(2, "    combining columns...");
@@ -4852,6 +4871,25 @@ sub computeEcotaphTable {
     
     $result = $dbh->do($sql);
     
+    # Then fill in the name fields in ETBASIS.
+    
+    logMessage(2, "    setting basis names...");
+    
+    $sql = "    INSERT INTO $ETBASIS_WORK
+		SELECT e.orig_no, e.taphonomy_basis_no, ebt.name,
+			e.environment_basis_no, ebe1.name,
+			e.motility_basis_no, ebe2.name,
+			e.life_habit_basis_no, ebe3.name,
+			e.diet_basis_no, ebe4.name
+		FROM $ECOTAPH_WORK as e
+			LEFT JOIN $TREE_WORK as ebt on ebt.orig_no = e.taphonomy_basis_no
+			LEFT JOIN $TREE_WORK as ebe1 on ebe1.orig_no = e.environment_basis_no
+			LEFT JOIN $TREE_WORK as ebe2 on ebe2.orig_no = e.motility_basis_no
+			LEFT JOIN $TREE_WORK as ebe3 on ebe3.orig_no = e.life_habit_basis_no
+			LEFT JOIN $TREE_WORK as ebe4 on ebe4.orig_no = e.diet_basis_no";
+    
+    $result = $dbh->do($sql);
+    
     my $a = 1;	# we can stop here when debugging.
 }
 
@@ -4978,6 +5016,7 @@ sub activateNewTaxonomyTables {
 			 $NAME_WORK => $TAXON_TABLE{$tree_table}{names},
 			 $ATTRS_WORK => $TAXON_TABLE{$tree_table}{attrs},
 			 $ECOTAPH_WORK => $TAXON_TABLE{$tree_table}{ecotaph},
+			 $ETBASIS_WORK => $TAXON_TABLE{$tree_table}{etbasis},
 			 $INTS_WORK => $TAXON_TABLE{$tree_table}{ints},
 			 $LOWER_WORK => $TAXON_TABLE{$tree_table}{lower},
 			 $COUNTS_WORK => $TAXON_TABLE{$tree_table}{counts});
