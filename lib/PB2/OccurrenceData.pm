@@ -60,6 +60,9 @@ sub initialize {
 	    "The individual components of the taxonomic identification of the occurrence.",
 	    "These values correspond to the value of C<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
+	{ value => 'img', maps_to => '1.2:taxa:img' },
+	    "The identifier of the image (if any) associated with this taxon.",
+	    "These images are sourced from L<phylopic.org>.",
 	{ value => 'plant', maps_to => '1.2:occs:plant' },
 	    "The plant organ(s), if any, associated with this occurrence.  These fields",
 	    "will be empty unless the occurrence is a plant fossil.",
@@ -433,7 +436,8 @@ sub initialize {
 	    "The age of first and last appearance of each taxon from the set",
 	    "of occurrences being analyzed (not the absolute first and last",
 	    "occurrence ages).",
-	@PB2::TaxonData::BASIC_MAP);
+	@PB2::TaxonData::BASIC_1,
+	@PB2::TaxonData::BASIC_2);
     
     $ds->define_block('1.2:occs:taxa_summary' =>
 	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },

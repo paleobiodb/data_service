@@ -385,7 +385,7 @@ use PB2::PersonData;
 			method => 'get_taxon',
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
-			optional_output => '1.2:taxa:output_map' },
+			optional_output => '1.2:taxa:single_output_map' },
 	"This path returns information about a single taxonomic name, identified either",
 	"by name or by identifier.");
     
@@ -398,7 +398,7 @@ use PB2::PersonData;
 			default_limit => $taxa_limit,
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
-			optional_output => '1.2:taxa:output_map' },
+			optional_output => '1.2:taxa:mult_output_map' },
 	"This path returns information about multiple taxonomic names, selected according to",
 	"the criteria you specify.  This path could be used to query for all of the children",
 	"or parents of a given taxon, among other operations.");
@@ -424,7 +424,7 @@ use PB2::PersonData;
 			method => 'list_associated',
 			arg => 'taxa',
 			output => '1.2:taxa:reftaxa',
-			optional_output => '1.2:taxa:output_map' },
+			optional_output => '1.2:taxa:mult_output_map' },
 	"This path returns information about taxonomic names, grouped according to the bibliographic",
 	"reference in which they are mentioned.  You can use this operation in conjunction with",
 	"L<node:taxa/refs> to show, for each reference, all of the taxa entered from it.  You",

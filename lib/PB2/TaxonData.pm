@@ -27,7 +27,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData PB2::IntervalData);
 
 our (%DB_FIELD);
 
-our (@BASIC_MAP);
+our (@BASIC_1, @BASIC_2);
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -39,7 +39,7 @@ sub initialize {
     # First define an output map to specify which output blocks are going to
     # be used to generate output from the operations defined in this class.
     
-    @BASIC_MAP = (
+    @BASIC_1 = (
 	{ value => 'app', maps_to => '1.2:taxa:app' },
 	    "The age of first and last appearance of this taxon from the occurrences",
 	    "recorded in this database.",
@@ -73,10 +73,9 @@ sub initialize {
 	    "L<list of values|node:taxa/ecotaph_values>.",
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
-	    "taxonomic level each piece of information was entered.",
-	{ value => 'nav', maps_to => '1.2:taxa:nav' },
-	    "Additional information for the PBDB Navigator taxon browser.",
-	    "This block should only be selected if the output format is C<json>.",
+	    "taxonomic level each piece of information was entered.");
+    
+    @BASIC_2 = (
 	{ value => 'img', maps_to => '1.2:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
 	    "These images are sourced from L<phylopic.org>.",
@@ -87,10 +86,20 @@ sub initialize {
         { value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the collection record");
     
-    $ds->define_output_map('1.2:taxa:output_map' =>
+    $ds->define_output_map('1.2:taxa:single_output_map' =>
 	{ value => 'attr', maps_to => '1.2:taxa:attr' },
 	    "The attribution of this taxon (author and year)",
-	@BASIC_MAP);
+	@BASIC_1,
+	{ value => 'nav', maps_to => '1.2:taxa:nav' },
+	    "Additional information for the PBDB Navigator taxon browser.",
+	    "This block should only be selected if the output format is C<json>.", 
+	@BASIC_2);
+    
+    $ds->define_output_map('1.2:taxa:mult_output_map' =>
+	{ value => 'attr', maps_to => '1.2:taxa:attr' },
+	    "The attribution of this taxon (author and year)",
+	@BASIC_1,
+	@BASIC_2);
     
     # Now define all of the output blocks that were not defined elsewhere.
     
@@ -993,9 +1002,16 @@ sub initialize {
 	  default => 'ident' },
 	    "Summarize the results by grouping them as follows:");
     
+    $ds->define_ruleset('1.2:taxa:single_display' =>
+	"The following parameter indicates which information should be returned about each resulting name:",
+	{ optional => 'SPECIAL(show)', valid => '1.2:taxa:single_output_map', list => ','},
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each taxon.  Its value should be",
+	    "one or more of the following, separated by commas:");
+    
     $ds->define_ruleset('1.2:taxa:display' => 
 	"The following parameter indicates which information should be returned about each resulting name:",
-	{ optional => 'show', valid => '1.2:taxa:output_map', list => ','},
+	{ optional => 'SPECIAL(show)', valid => '1.2:taxa:mult_output_map', list => ','},
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each taxon.  Its value should be",
 	    "one or more of the following, separated by commas:",
@@ -1035,7 +1051,7 @@ sub initialize {
     $ds->define_ruleset('1.2:taxa:single' => 
 	{ require => '1.2:taxa:specifier',
 	  error => "you must specify either 'name' or 'id'" },
-	{ allow => '1.2:taxa:display' }, 
+	{ allow => '1.2:taxa:single_display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
