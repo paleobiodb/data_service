@@ -12,8 +12,9 @@ package PB2::IntervalData;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
-use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA
-	         %IDP VALID_IDENTIFIER);
+use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA);
+use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
+
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
@@ -145,6 +146,8 @@ sub initialize {
 	    "Return the interval corresponding to the specified identifier. (REQUIRED)");
     
     $ds->define_ruleset('1.2:intervals:selector' => 
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "List all intervals known to the database.",
 	{ param => 'scale_id', valid => [VALID_IDENTIFIER('SCL'), ENUM_VALUE('all')], 
 	  list => ',', alias => 'scale',
 	  errmsg => "the value of {param} should be a list of scale identifiers or 'all'" },
@@ -160,12 +163,12 @@ sub initialize {
 	    "Return only intervals that are at least this old",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
 	    "Return only intervals that are at most this old",
-	{ optional => 'order', valid => ENUM_VALUE('older', 'younger'), default => 'younger' },
+	{ optional => 'order', valid => ENUM_VALUE('age', 'age.asc', 'age.desc', 'name', 'name.asc', 'name.desc'), default => 'age' },
 	    "Return the intervals in order starting as specified.  Possible values include ",
-	    "C<older>, C<younger>.  Defaults to C<younger>.");
+	    "C<age>, C<name>.  Defaults to C<age>.");
     
     $ds->define_ruleset('1.2:intervals:list' => 
-	{ allow => '1.2:intervals:selector' },
+	{ require => '1.2:intervals:selector' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 
@@ -375,9 +378,35 @@ sub list {
     
     my $order = $request->clean_param('order');
     
-    my $order_expr = defined $order && $order eq 'younger' ?
-	"ORDER BY sm.scale_no, sm.scale_level, i.late_age" :
-	    "ORDER BY sm.scale_no, sm.scale_level, i.early_age desc";
+    my $order_expr = '';
+    
+    if ( defined $order )
+    {
+	if ( $order eq 'age' || $order eq 'age.asc' )
+	{
+	    $order_expr = "ORDER BY i.early_age";
+	}
+	
+	elsif ( $order eq 'age.desc' )
+	{
+	    $order_expr = "ORDER BY i.early_age desc";
+	}
+	
+	elsif ( $order eq 'name' || $order eq 'name.asc' )
+	{
+	    $order_expr = "ORDER BY i.interval_name";
+	}
+	
+	elsif ( $order eq 'name.desc' )
+	{
+	    $order_expr = "ORDER BY i.interval_name desc";
+	}
+	
+	else
+	{
+	    die $request->exception(400, "unknown value '$order' for parameter 'order'");
+	}
+    }
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -954,15 +983,18 @@ sub process_int_com {
     
     foreach my $f ( qw(interval_no parent_no) )
     {
-	$record->{$f} = "$IDP{INT}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('INT', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = "$IDP{INT}:$record->{$f}" if defined $record->{$f};
     }
     
     foreach my $f ( qw(scale_no) )
     {
-	$record->{$f} = "scl$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('SCL', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = "scl$record->{$f}" if defined $record->{$f};
     }
     
-    $record->{reference_no} = "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};
+    $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) 
+	if defined $record->{reference_no};
 }
 
 1;

@@ -17,7 +17,8 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS);
-use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES %IDP VALID_IDENTIFIER);
+use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
+use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
 
 use Moo::Role;
@@ -608,9 +609,12 @@ sub initialize {
 	  alias => 'taxon_name' },
 	    "Return information about the most fundamental taxonomic name matching this string.",
 	    "The C<%> and C<_> characters may be used as wildcards.",
-	{ param => 'id', valid => VALID_IDENTIFIER('TID'), 
-	  alias => 'taxon_id', bad_value => '-1' },
+	{ param => 'id', valid => VALID_IDENTIFIER('TID'), alias => 'taxon_id' },
 	    "Return information about the taxonomic name corresponding to this identifier.",
+	{ optional => 'exact', valid => FLAG_VALUE },
+	    "If this parameter is specified, then the particular taxonomic name variant",
+	    "identified by the C<name> or C<id> will be returned, even if this is not",
+	    "the currently accepted variant of the name",
 	{ at_most_one => ['name', 'id'] },
 	    "You may not specify both C<name> and C<id> in the same query.");
     
@@ -1117,6 +1121,13 @@ sub initialize {
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
 	{ allow => '1.2:refs:display' },
+	{ optional => 'order', valid => '1.2:refs:order', split => ',', no_set_doc => 1 },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	    $ds->document_set('1.2:refs:order'),
+	    ">If no order is specified, the results are sorted alphabetically according to",
+	    "the name of the primary author, unless C<all_records> is specified in which",
+	    "case they are returned by default in the order they occur in the database.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
@@ -1274,6 +1285,8 @@ sub get_taxon {
     
     my $options = $request->generate_query_options('taxa');
     
+    $options->{exact} = 1 if $request->clean_param('exact');
+    
     # Then figure out which taxon we are looking for.  If we were given a taxon_no,
     # we can use that.
     
@@ -1283,6 +1296,10 @@ sub get_taxon {
     {    
 	die $request->exception(400, "Invalid taxon id '$taxon_no'")
 	    unless defined $taxon_no && $taxon_no > 0;
+	
+	my $raw_id = $request->{raw_params}{id} || $request->{raw_params}{taxon_id};
+	
+	$options->{exact} = 1 if defined $raw_id && $raw_id =~ qr{^$IDP{VAR}};
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
@@ -1290,7 +1307,7 @@ sub get_taxon {
     elsif ( my $taxon_name = $request->clean_param('name') )
     {
 	my $name_select = { return => 'id' };
-	#my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
+	$name_select->{exact} = 1 if $request->clean_param('exact');
 	
 	if ( my $rank = $request->clean_param('rank') )
 	{
@@ -1339,79 +1356,79 @@ sub get_taxon {
 	
 	if ( $r->{kingdom_no} )
 	{
-	    $r->{kingdom_txn} = $taxonomy->get_taxon($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{kingdom_txn} = $taxonomy->list_taxa_simple($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{phylum_no} )
 	{
-	    $r->{phylum_txn} = $taxonomy->get_taxon($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{phylum_txn} = $taxonomy->list_taxa_simple($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{class_no} )
 	{
-	    $r->{class_txn} = $taxonomy->get_taxon($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{class_txn} = $taxonomy->list_taxa_simple($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{order_no} )
 	{
-	    $r->{order_txn} = $taxonomy->get_taxon($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{order_txn} = $taxonomy->list_taxa_simple($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{family_no} )
 	{
-	    $r->{family_txn} = $taxonomy->get_taxon($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{family_txn} = $taxonomy->list_taxa_simple($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{parsen_no} || $r->{parent_no} )
 	{
 	    my $parent_no = $r->{parsen_no} || $r->{parent_no};
-	    $r->{parent_txn} = $taxonomy->get_taxon($parent_no, { fields => ['SIMPLE','SIZE'] });
+	    $r->{parent_txn} = $taxonomy->list_taxa_simple($parent_no, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	# Then add the various lists of subtaxa.
 	
 	my $data = ['SIMPLE','SIZE','APP'];
 	
-	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
+	unless ( $r->{phylum_no} or (defined $r->{taxon_rank} && $r->{taxon_rank} <= 20) )
 	{
 	    $r->{phylum_list} = [ $taxonomy->list_taxa($taxon_no, 'all_children',
 						     { limit => 10, order => 'size.desc', rank => 20, fields => $data } ) ];
 	}
 	
-	unless ( $r->{class_no} or $r->{rank} <= 17 )
+	unless ( $r->{class_no} or $r->{taxon_rank} <= 17 )
 	{
 	    $r->{class_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => 'size.desc', rank => 17, fields => $data } ) ];
 	}
 	
-	unless ( $r->{order_no} or $r->{rank} <= 13 )
+	unless ( $r->{order_no} or $r->{taxon_rank} <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
 	    $r->{order_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => $order, rank => 13, fields => $data } ) ];
 	}
 	
-	unless ( $r->{family_no} or $r->{rank} <= 9 )
+	unless ( $r->{family_no} or $r->{taxon_rank} <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
 	    $r->{family_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						     { limit => 10, order => $order, rank => 9, fields => $data } ) ];
 	}
 	
-	if ( $r->{rank} > 5 )
+	if ( $r->{taxon_rank} > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
 	    $r->{genus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						    { limit => 10, order => $order, rank => 5, fields => $data } ) ];
 	}
 	
-	if ( $r->{rank} == 5 )
+	if ( $r->{taxon_rank} == 5 )
 	{
 	    $r->{subgenus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 4, fields => $data } ) ];
 	}
 	
-	if ( $r->{rank} == 5 or $r->{rank} == 4 )
+	if ( $r->{taxon_rank} == 5 or $r->{taxon_rank} == 4 )
 	{
 	    $r->{species_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 3, fields => $data } ) ];
@@ -1623,6 +1640,7 @@ sub list_opinions {
     }
     
     $options->{return} = 'stmt';
+    $options->{select} ||= 'all';
     
     # Next, fetch the list of opinion records.
     
@@ -2283,6 +2301,10 @@ sub generate_query_options {
     {
 	$options->{select} = \@select;
     }
+    
+    # Handle variant=all
+    
+    $options->{all_variants} = 1 if $request->clean_param('variant') eq 'all';
     
     # If the user specified 'interval' or 'interval_id', then figure out the
     # corresponding max_ma and min_ma values.
@@ -3210,35 +3232,41 @@ sub process_com {
     
     my ($request, $record) = @_;
     
-    $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{taxon_no} &&
-	$record->{orig_no} eq $record->{taxon_no};
+    $record->{no_variant} = 1 if defined $record->{spelling_no} && defined $record->{taxon_no} &&
+	$record->{spelling_no} eq $record->{taxon_no};
+    
+    $record->{no_variant} = 1 unless defined $record->{spelling_no};
     
     $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{child_spelling_no} &&
 	$record->{orig_no} eq $record->{child_spelling_no};    
     
     foreach my $f ( qw(orig_no child_no immpar_no senpar_no accepted_no base_no) )
     {
-	$record->{$f} = "$IDP{TXN}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('TXN', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{TXN}:$record->{$f}" : '';
     }
     
     foreach my $f ( qw(taxon_no child_spelling_no parent_spelling_no parent_current_no) )
     {
-	$record->{$f} = "$IDP{VAR}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('VAR', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{VAR}:$record->{$f}" : '';
     }
     
     foreach my $f ( qw(opinion_no) )
     {
-	$record->{$f} = "$IDP{OPN}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('OPN', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{OPN}:$record->{$f}" : '';
     }
     
     if ( ref $record->{reference_no} eq 'ARRAY' )
     {
-	map { $_ = "rid$_" } @{$record->{reference_no}};
+	map { $_ = generate_identifier('REF', $_) } @{$record->{reference_no}};
     }
     
     elsif ( defined $record->{reference_no} )
     {
-	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
+	$record->{reference_no} = generate_identifier('REF', $record->{reference_no});
+	# $record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
     }
     
     $record->{n_orders} = undef if defined $record->{n_orders} && 

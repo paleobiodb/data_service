@@ -635,7 +635,7 @@ use PB2::PersonData;
     $ds2->define_node({ path => 'refs/list',
 			place => 2,
 			title => 'Lists of bibliographic references',
-			usage => "refs/list.txt?author=Sepkoski",
+			usage => "refs/list.txt?ref_author=Sepkoski",
 			method => 'list' },
 	"This path returns information about lists of bibliographic references,",
 	"selected according to the parameters you provide");
