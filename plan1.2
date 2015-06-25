@@ -24,22 +24,24 @@ Needed for data1.2 to be finished
  - add image id to occs output					(DONE, NT)
  - BUG taxa/single: show=nav					(DONE, NT)
  - BUG taxa/opinions: crashes on taxon_name=...			(DONE, NT)
- - BUG taxa/byref.txt?base_name=Felidae				(NOT A BUG)
-	missing "accepted_no":
-	"41409","233947","224054","txn","unselected","species","Felis bengalensis","","Prionailurus bengalensis"
+ - BUG taxa/byref.txt?base_name=Felidae	"Felis bengalensis"	(NOT A BUG)
  - add 'exact' parameter to taxa/single				(DONE, NT)
    - also 'var:nnnn' gives exact result
  - taxon output properly includes 'vid' field for variants.	(DONE, NT)
  - add all_records to:						(DONE, NT)
-   - refs/list							done
-   - intervals/list						done
-   - strata/list						done
-   - colls/refs							done
-   - occs/prevalence						done
- - fix interval params for occs/prevalence			(***)
+   - refs/list							  done
+   - intervals/list						  done
+   - strata/list						  done
+   - colls/refs							  done
+   - occs/prevalence						  done
+ - add all_records to occs/taxa					(**)
+ - taxa/list should take var: vs. txn: into account		(**)
+ - fix doc for occs/taxa param: reso				(***)
+ - occs/taxa doesn't show flags without base_name		(**)
+ - fix interval params for occs/prevalence			(**)
    - should work same as for occs/list
  - BUG colls/refs and occs/refs both crash			(DONE, NT)
- - colls/summary needs checking for parameter grouping,		(***)
+ - colls/summary needs checking for parameter grouping,		(**)
    all_records, min_ma and max_ma
  - add occs/summary with occ_modified_since, etc.		(*)
  - change 'obsolete' to 'flag' in occurrence output		(DONE, NT)
@@ -53,6 +55,7 @@ Needed for data1.2 to be finished
  - fix n/a in com vocabulary (latlng_precision)			(*)
  - add taxon_name and taxon_id params to taxa/thumb, taxa/icon  (*)
  - make show=counts work with refs/list				(DONE, NT)
+ - add mammal orders to global prevalence table			(**)
  - tests!!!
 
 Optional, will probably put off until after initial release

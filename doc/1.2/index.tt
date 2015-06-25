@@ -32,7 +32,7 @@ this service.
 
 =over
 
-=item L<Specifying taxonomic names|node:names>
+=item L<Specifying taxonomic names|node:taxonomic_names>
 
 The data service accepts taxonomic names in a variety of modes, and there are modifiers that you
 can add in order to precisely specify which taxa you are interested in.

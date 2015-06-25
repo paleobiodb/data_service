@@ -213,7 +213,7 @@ my (%RECORD_BLESS) = ( taxa => 'PBDB::Taxon',
 my (%TAXON_FIELD_MAP) = ( accepted => 'accepted_no',
 			  senior => 'synonym_no',
 			  parent => 'senpar_no',
-			  immpar => 'immpar_no' );
+			  immparent => 'immpar_no' );
 
 my $VALID_TAXON_ID = qr{ ^ (?: $IDP{TXN} | $IDP{VAR} )? ( [0-9]+ ) $ }xsi;
 my $VALID_OPINION_ID = qr{ ^ (?: $IDP{OPN} )? ( [0-9]+ ) $ }xsi;
@@ -605,7 +605,7 @@ List the currently accepted taxon corresponding to each specified taxon
 List the parent taxon of each specified taxon.  This is equivalent to the
 senior synonym of the immediate parent taxon.
 
-=item immpar
+=item immparent
 
 List the immediate parent of each specified taxon.
 
@@ -738,7 +738,7 @@ sub list_taxa {
 		GROUP BY a.taxon_no $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'immpar' )
+    elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'immparent' )
     {
 	$copy_exclusions = 1 if $rel eq 'accepted' || $rel eq 'senior';
 	
