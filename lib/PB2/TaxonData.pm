@@ -2599,9 +2599,8 @@ sub generate_query_base {
 	
 	foreach my $t ( @taxa )
 	{
-	    delete $bad_nos{$t->{base_no}};
-	    delete $bad_nos{$t->{taxon_no}};
-	    delete $bad_nos{$t->{orig_no}};
+	    delete $bad_nos{$t->{taxon_no}} if $t->{taxon_no};
+	    delete $bad_nos{$t->{orig_no}} if $t->{orig_no};
 	}
 	
 	foreach my $t ( keys %bad_nos )
@@ -3206,12 +3205,17 @@ sub process_pbdb {
     
     if ( $record->{exclude} )
     {
-	$record->{flag} = 'E';
+	$record->{flags} = 'E';
     }
     
-    elsif ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
+    if ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
     {
-	$record->{flag} = 'B';
+	$record->{flags} = 'B';
+    }
+    
+    elsif ( $record->{is_base} )
+    {
+	$record->{flags} = 'B';
     }
     
     if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
@@ -3280,12 +3284,12 @@ sub process_com {
     
     if ( $record->{exclude} )
     {
-	$record->{flag} = 'E';
+	$record->{flags} = 'E';
     }
     
     elsif ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
     {
-	$record->{flag} = 'B';
+	$record->{flags} = 'B';
     }
     
     if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&

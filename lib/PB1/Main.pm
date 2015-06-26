@@ -115,6 +115,7 @@ use PB1::PersonData;
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
 			default_save_filename => 'pbdb_data',
+			default_limit => 500,
 			title => 'Documentation' });
     
     # Configuration. This path is used by clients who need to configure themselves
