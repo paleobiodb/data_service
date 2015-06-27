@@ -203,9 +203,9 @@ use PB2::PersonData;
 	"occurrences, we suggest that you use the L<occs/list|node:occs/list> operation",
 	"instead and apply your procedure directly to the returned list of occurrences.",
 	">The field names returned by this operation are derived from the following source:",
-	"M. Foote. The Evolution of Morphological Diversity.",
-	"I<Annual Review of Ecology and Systematics>, Vol. 28 (1997)",
-	"pp. 129-152. L<http://www.jstor.org/stable/2952489>.");
+	    "M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
+	    "I<Paleobiology>, Vol. 26(4). 2000.",
+	    "pp. 74-102. L<http://www.jstor.org/stable/1571654>.");
     
     $ds2->define_node({ path => 'occs/quickdiv',
 			place => 6,

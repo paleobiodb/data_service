@@ -20,7 +20,7 @@ use Moo::Role;
 
 our (%PERSON_NAME);
 
-our ($COMMON_OPT_RE) = qr{ ^ ( taxon_ | op_ | ref_ | occ_ | coll_ )?
+our ($COMMON_OPT_RE) = qr{ ^ (?: ( taxon | op | ref | occ | coll ) _ )?
 			     ( created_before | created_after | 
 			       modified_before | modified_after |
 			       authorized_by | entered_by | modified_by |

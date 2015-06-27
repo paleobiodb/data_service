@@ -245,7 +245,7 @@ sub selectPics {
     
     if ( $@ && $@ =~ /Illegal mix of collations/ )
     {
-	$dbh->do("ALTER TABLE $PHYLOPIC_CHOICE modify column taxon_name varchar(80) collate utf8_general_ci");
+	$dbh->do("ALTER TABLE $PHYLOPIC_NAMES modify column taxon_name varchar(80) collate utf8_general_ci");
 	
 	$result = $dbh->do($sql);
     }

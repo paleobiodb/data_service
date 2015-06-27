@@ -34,10 +34,15 @@ Needed for data1.2 to be finished
    - strata/list						  done
    - colls/refs							  done
    - occs/prevalence						  done
+ - add genus field to show=class for taxa			(***)
+ - take created_before, modified_before out of base params	(DONE, NT)
+ - add negation to authorized_by... (also out of base params)	(*)
+ - match_name should not return species unless % given for	(***)
+   genus
  - add all_records to occs/taxa					(**)
  - taxa/list should take var: vs. txn: into account		(**)
  - fix doc for occs/taxa param: reso				(***)
- - occs/taxa doesn't show flags without base_name		(**)
+ - BUG occs/taxa doesn't show flags without base_name		(DONE, NT)
  - fix interval params for occs/prevalence			(**)
    - should work same as for occs/list
  - BUG colls/refs and occs/refs both crash			(DONE, NT)
@@ -55,7 +60,7 @@ Needed for data1.2 to be finished
  - fix n/a in com vocabulary (latlng_precision)			(*)
  - add taxon_name and taxon_id params to taxa/thumb, taxa/icon  (*)
  - make show=counts work with refs/list				(DONE, NT)
- - add mammal orders to global prevalence table			(**)
+ - make sure mammal orders are reported easily in Navigator	(**)
  - tests!!!
 
 Optional, will probably put off until after initial release
