@@ -203,9 +203,9 @@ use PB2::PersonData;
 	"occurrences, we suggest that you use the L<occs/list|node:occs/list> operation",
 	"instead and apply your procedure directly to the returned list of occurrences.",
 	">The field names returned by this operation are derived from the following source:",
-	"M. Foote. The Evolution of Morphological Diversity.",
-	"I<Annual Review of Ecology and Systematics>, Vol. 28 (1997)",
-	"pp. 129-152. L<http://www.jstor.org/stable/2952489>.");
+	    "M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
+	    "I<Paleobiology>, Vol. 26(4). 2000.",
+	    "pp. 74-102. L<http://www.jstor.org/stable/1571654>.");
     
     $ds2->define_node({ path => 'occs/quickdiv',
 			place => 6,
@@ -385,7 +385,7 @@ use PB2::PersonData;
 			method => 'get_taxon',
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
-			optional_output => '1.2:taxa:output_map' },
+			optional_output => '1.2:taxa:single_output_map' },
 	"This path returns information about a single taxonomic name, identified either",
 	"by name or by identifier.");
     
@@ -398,13 +398,13 @@ use PB2::PersonData;
 			default_limit => $taxa_limit,
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
-			optional_output => '1.2:taxa:output_map' },
+			optional_output => '1.2:taxa:mult_output_map' },
 	"This path returns information about multiple taxonomic names, selected according to",
 	"the criteria you specify.  This path could be used to query for all of the children",
 	"or parents of a given taxon, among other operations.");
     
     $ds2->define_node({ path => 'taxa/refs',
-			place => 3,
+			place => 7,
 			title => 'Bibliographic references for taxa',
 			usage => [ "taxa/refs.ris?base_name=Felidae&textresult" ],
 			method => 'list_associated',
@@ -418,13 +418,13 @@ use PB2::PersonData;
 	"which will give you both a list of taxonomic names and a list of the associated references.");
     
     $ds2->define_node({ path => 'taxa/byref',
-			place => 3,
+			place => 8,
 			title => 'Taxa grouped by bibliographic reference',
 			usage => [ "taxa/byref.txt?base_name=Felidae" ],
 			method => 'list_associated',
 			arg => 'taxa',
 			output => '1.2:taxa:reftaxa',
-			optional_output => '1.2:taxa:output_map' },
+			optional_output => '1.2:taxa:mult_output_map' },
 	"This path returns information about taxonomic names, grouped according to the bibliographic",
 	"reference in which they are mentioned.  You can use this operation in conjunction with",
 	"L<node:taxa/refs> to show, for each reference, all of the taxa entered from it.  You",
@@ -453,7 +453,7 @@ use PB2::PersonData;
     # 			method => 'match' });
     
     $ds2->define_node({ path => 'taxa/auto',
-			place => 5,
+			place => 10,
 			method => 'auto',
 			title => 'Auto-completion for taxonomic names',
 			usage => [ "taxa/auto.json?name=h. sap&limit=10",
@@ -464,7 +464,7 @@ use PB2::PersonData;
 	"You can use it for auto-completion of taxonomic names in a client application.");
     
     $ds2->define_node({ path => 'taxa/thumb',
-			place => 7,
+			place => 11,
 			title => 'Thumbnail images of lifeforms',
 			usage => [ 'taxa/thumb.png?id=910',
 				   'html:<img src="/data1.1/taxa/thumb.png?id=910">' ],
@@ -478,7 +478,7 @@ use PB2::PersonData;
 	"name query.");
     
     $ds2->define_node({ path => 'taxa/icon',
-			place => 7,
+			place => 11,
 			title => 'Icon images of lifeforms',
 			usage => [ 'taxa/icon.png?id=910', 
 				   'html:<img src="/data1.1/taxa/icon.png?id=910">' ],
@@ -635,7 +635,7 @@ use PB2::PersonData;
     $ds2->define_node({ path => 'refs/list',
 			place => 2,
 			title => 'Lists of bibliographic references',
-			usage => "refs/list.txt?author=Sepkoski",
+			usage => "refs/list.txt?ref_author=Sepkoski",
 			method => 'list' },
 	"This path returns information about lists of bibliographic references,",
 	"selected according to the parameters you provide");

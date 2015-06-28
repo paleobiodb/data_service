@@ -426,6 +426,7 @@ sub buildReferenceSummaryTable {
 				n_opinions int unsigned not null,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
+				n_prim int unsigned not null,
 				early_age decimal(9,5),
 				late_age decimal(9,5)) ENGINE=MyISAM");
     
@@ -449,6 +450,17 @@ sub buildReferenceSummaryTable {
     $count = $dbh->do($sql);
     
     logMessage(2, "      $count references without occurrences");
+    
+    # Count primary references from collections.
+    
+    logMessage(2, "    counting primary references...");
+    
+    $sql = "	UPDATE $REF_SUMMARY_WORK as rs join
+		       (SELECT reference_no, count(*) as count from $COLL_MATRIX
+			GROUP BY reference_no) as m using (reference_no)
+		SET rs.n_prim = m.count";
+    
+    $result = $dbh->do($sql);
     
     # Then index the reference summary table by numbers of collections and
     # occurrences, so that we can quickly query for the most heavily used ones.

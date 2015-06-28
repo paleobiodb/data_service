@@ -1101,6 +1101,11 @@ sub count_taxa {
     $node->{n_families} = 0 if $request->{my_count_rank} <= 9;
     $node->{n_genera} = 0 if $request->{my_count_rank} <= 5;
     $node->{n_species} = 0 if $request->{my_count_rank} <= 3;
+    delete $node->{base_no};
+    
+    # Mark nodes whose parent doesn't appear in the result set.
+    
+    $node->{is_root} = 1 if defined $node->{senpar_no} && ! exists $taxon_node{$node->{senpar_no}};
     
     # Recurse through the taxonomic hierarchy represented by the 'chld'
     # field.

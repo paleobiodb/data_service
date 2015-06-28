@@ -17,7 +17,8 @@ package PB2::OccurrenceData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX %IDP VALID_IDENTIFIER);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
+use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use TaxonDefs qw(%RANK_STRING);
 
@@ -60,6 +61,9 @@ sub initialize {
 	    "The individual components of the taxonomic identification of the occurrence.",
 	    "These values correspond to the value of C<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
+	{ value => 'img', maps_to => '1.2:taxa:img' },
+	    "The identifier of the image (if any) associated with this taxon.",
+	    "These images are sourced from L<phylopic.org>.",
 	{ value => 'plant', maps_to => '1.2:occs:plant' },
 	    "The plant organ(s), if any, associated with this occurrence.  These fields",
 	    "will be empty unless the occurrence is a plant fossil.",
@@ -186,10 +190,10 @@ sub initialize {
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
-	    "The specific geologic time range associated with this collection (not necessarily a",
+	    "The specific geologic time range associated with this occurrence (not necessarily a",
 	    "standard interval), or the interval that begins the range if C<late_interval> is also given",
 	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
-	    "The interval that ends the specific geologic time range associated with this collection,",
+	    "The interval that ends the specific geologic time range associated with this occurrence,",
 	    "if different from the value of C<early_interval>",
 	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
@@ -324,9 +328,9 @@ sub initialize {
 	    "either species, genera, families, or orders,",
 	    "depending upon the value you provided for the parameter C<count>.",
 	    "The terminology for this field and the next three comes from:",
-	    "M. Foote. The Evolution of Morphological Diversity.",
-	    "I<Annual Review of Ecology and Systematics>, Vol. 28 (1997)",
-	    "pp. 129-152. L<http://www.jstor.org/stable/2952489>.",
+	    "M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
+	    "I<Paleobiology>, Vol. 26(4). 2000.",
+	    "pp. 74-102. L<http://www.jstor.org/stable/1571654>.",
 	{ output => 'extinctions', pbdb_name =>'X_bL', com_name => 'xbl' },
 	    "The number of distinct taxa whose last known occurrence lies in this interval,",
 	    "and whose range crosses the bottom boundary of the interval.",
@@ -433,7 +437,8 @@ sub initialize {
 	    "The age of first and last appearance of each taxon from the set",
 	    "of occurrences being analyzed (not the absolute first and last",
 	    "occurrence ages).",
-	@PB2::TaxonData::BASIC_MAP);
+	@PB2::TaxonData::BASIC_1,
+	@PB2::TaxonData::BASIC_2);
     
     $ds->define_block('1.2:occs:taxa_summary' =>
 	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
@@ -555,10 +560,10 @@ sub initialize {
     
     $ds->define_ruleset('1.2:occs:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
-	    "This parameter needs no value.",
-	    "By default all records are always included whenever any other parameter is specified. In order to obtain all", 
-	    "occurrence records, with no selection parameter specified, all_records must be supplied. Note that specifing",
-	    "all_records with no other parameter can result in a large download (> 100 Mb).",
+	    "List all occurrence records known to the database, subject",
+	    "to any other parameters you may specify.  This parameter needs",
+	    "no value.  Please note that specifying this parameter alone will",
+	    "result in a download of over 100 MB of data.",
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
 	    "A comma-separated list of occurrence identifiers.");
     
@@ -599,8 +604,7 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
 	{ allow => '1.2:occs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -682,11 +686,14 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector'] },
 	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:prev_selector' =>
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Show the prevalence of taxa across all of the occurrences in the database");
     
     $ds->define_ruleset('1.2:occs:prevalence' =>
 	# ">>You can use the following parameter to select how detailed you wish the result to be:",
@@ -695,12 +702,14 @@ sub initialize {
 	#     "the results more finely, displaying lower-level taxa.",
 	">>The parameters accepted by this operation are the same as those accepted by",
 	"L<node:occs/list>.  Except as noted, you can use them in any combination.",
+	{ allow => '1.2:occs:prev_selector' },
     	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+	{ require_any => ['1.2:occs:prev_selector',
+			  '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -1775,7 +1784,7 @@ sub refs {
     
     # Construct another set of filter expressions to act on the references.
     
-    my @ref_filters = PB2::ReferenceData::generate_filters($request, $request->tables_hash);
+    my @ref_filters = $request->generate_ref_filters($request->tables_hash);
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -2352,23 +2361,23 @@ sub process_occ_subgenus {
 }
 
 
-my %ID_TYPE = ( orig_no => $IDP{TXN},
-		identified_no => $IDP{TXN},
-		accepted_no => $IDP{TXN},
-		phylum_no => $IDP{TXN},
-		class_no => $IDP{TXN},
-		order_no => $IDP{TXN},
-		family_no => $IDP{TXN},
-		genus_no => $IDP{TXN},
-		synonym_no => $IDP{TXN},
-		subgenus_no => $IDP{TXN},
-		taxon_no => $IDP{TXN},
-		spelling_no => $IDP{VAR},
-		interval_no => $IDP{INT},
-		occurrence_no => $IDP{OCC},
-		collection_no => $IDP{COL},
-		reid_no => $IDP{REI},
-		reference_no => $IDP{REF} );
+my %ID_TYPE = ( orig_no => 'TXN',
+		identified_no => 'TXN',
+		accepted_no => 'TXN',
+		phylum_no => 'TXN',
+		class_no => 'TXN',
+		order_no => 'TXN',
+		family_no => 'TXN',
+		genus_no => 'TXN',
+		synonym_no => 'TXN',
+		subgenus_no => 'TXN',
+		taxon_no => 'TXN',
+		spelling_no => 'VAR',
+		interval_no => 'INT',
+		occurrence_no => 'OCC',
+		collection_no => 'COL',
+		reid_no => 'REI',
+		reference_no => 'REF' );
 
 
 sub process_occ_com {
@@ -2378,23 +2387,24 @@ sub process_occ_com {
     # Alter all object identifiers from the numeric values stored in the
     # database to the text form reported externally.
     
-    foreach my $f ( qw(taxon_no orig_no identified_no accepted_no phylum_no
+    foreach my $f ( qw(orig_no taxon_no accepted_no phylum_no
 		       class_no order_no family_no genus_no subgenus_no
 		       interval_no occurrence_no collection_no
 		       reid_no reference_no) )
     {
-	if ( defined $record->{$f} )
-	{
-	    if ( ref $record->{$f} eq 'ARRAY' )
-	    {
-		map { $_ = "$ID_TYPE{$f}:$_" } @{$record->{reference_no}};
-	    }
-	    
-	    elsif ( $record->{$f} > 0 )
-	    {
-		$record->{$f} = "$ID_TYPE{$f}:$record->{$f}";
-	    }
-	}
+	$record->{$f} = generate_identifier($ID_TYPE{$f}, $record->{$f})
+	    if defined $record->{$f};
+    }
+    
+    if ( defined $record->{identified_no} && defined $record->{spelling_no} &&
+	 $record->{identified_no} ne $record->{spelling_no} )
+    {
+	$record->{identified_no} = generate_identifier('VAR', $record->{identified_no});
+    }
+    
+    else
+    {
+	$record->{identified_no} = generate_identifier('TXN', $record->{identified_no});
     }
     
     # foreach my $f ( qw(interval_no) )

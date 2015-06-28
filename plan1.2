@@ -1,0 +1,79 @@
+
+
+Needed for data1.2 to be finished
+---------------------------------
+
+ - complete transition to text id prefixes			(DONE, NT)
+ - make sure opinions have ref #s, opinion type, rank		(DONE, NT)
+ - add show=subcounts to taxon output, including occs/taxa	(DONE, NT)
+ - add show=genus to taxon output, including occs/taxa		(DONE, NT)
+ - test show=parent, immpar					(DONE, NT)
+ - finish taxa routes						(DONE, NT)
+   - opinions/single						(DONE, NT)
+   - opinions/list						(DONE, NT)
+      - all_records => not just classification ops 		(DONE, NT)
+   - taxa/opinions						(DONE, NT)
+   - taxa/refs							(DONE, NT)
+   - taxa/byref							(DONE, NT)
+ - add coll_id parameter to main_selector			(DONE, NT)
+   - make this work with diversity and quickdiv			(DONE, NT)
+   - make this work with colls/refs and colls/summary		(DONE, NT)
+ - interval filter accepts ranges				(DONE, NT)
+ - test occs/taxa without base_name				(DONE, NT)
+ - change taxon_acutal to exact					(DONE, NT)
+ - add image id to occs output					(DONE, NT)
+ - BUG taxa/single: show=nav					(DONE, NT)
+ - BUG taxa/opinions: crashes on taxon_name=...			(DONE, NT)
+ - BUG taxa/byref.txt?base_name=Felidae	"Felis bengalensis"	(NOT A BUG)
+ - add 'exact' parameter to taxa/single				(DONE, NT)
+   - also 'var:nnnn' gives exact result
+ - taxon output properly includes 'vid' field for variants.	(DONE, NT)
+ - add all_records to:						(DONE, NT)
+   - refs/list							  done
+   - intervals/list						  done
+   - strata/list						  done
+   - colls/refs							  done
+   - occs/prevalence						  done
+ - add genus field to show=class for taxa			(***)
+ - take created_before, modified_before out of base params	(DONE, NT)
+ - add negation to authorized_by... (also out of base params)	(*)
+ - match_name should not return species unless % given for	(***)
+   genus
+ - add all_records to occs/taxa					(**)
+ - taxa/list should take var: vs. txn: into account		(**)
+ - fix doc for occs/taxa param: reso				(***)
+ - BUG occs/taxa doesn't show flags without base_name		(DONE, NT)
+ - fix interval params for occs/prevalence			(**)
+   - should work same as for occs/list
+ - BUG colls/refs and occs/refs both crash			(DONE, NT)
+ - colls/summary needs checking for parameter grouping,		(**)
+   all_records, min_ma and max_ma
+ - add occs/summary with occ_modified_since, etc.		(*)
+ - change 'obsolete' to 'flag' in occurrence output		(DONE, NT)
+ - fix output of object ids of 0: should be empty, not "txn:0"	(DONE, NT)
+ - review documentation
+   - add a changelog
+   - clarify reid documentation
+   - clarify appearance dates computation
+   - make sure we have doc pages for reso, status, taxon-rank, etc.
+ - add ecotaph info to occurrences output			(DONE, NT)
+ - fix n/a in com vocabulary (latlng_precision)			(*)
+ - add taxon_name and taxon_id params to taxa/thumb, taxa/icon  (*)
+ - make show=counts work with refs/list				(DONE, NT)
+ - make sure mammal orders are reported easily in Navigator	(**)
+ - tests!!!
+
+Optional, will probably put off until after initial release
+-----------------------------------------------------------
+
+ - add option to lump occs by genus
+ - add option to bin occs by time period
+ - add option to search by state or county
+ - test prevalence
+
+
+
+
+NT = needs testing
+
+

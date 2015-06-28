@@ -17,7 +17,8 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS);
-use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES %IDP VALID_IDENTIFIER);
+use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
+use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
 
 use Moo::Role;
@@ -27,7 +28,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData PB2::IntervalData);
 
 our (%DB_FIELD);
 
-our (@BASIC_MAP);
+our (@BASIC_1, @BASIC_2);
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -39,7 +40,7 @@ sub initialize {
     # First define an output map to specify which output blocks are going to
     # be used to generate output from the operations defined in this class.
     
-    @BASIC_MAP = (
+    @BASIC_1 = (
 	{ value => 'app', maps_to => '1.2:taxa:app' },
 	    "The age of first and last appearance of this taxon from the occurrences",
 	    "recorded in this database.",
@@ -73,10 +74,9 @@ sub initialize {
 	    "L<list of values|node:taxa/ecotaph_values>.",
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
-	    "taxonomic level each piece of information was entered.",
-	{ value => 'nav', maps_to => '1.2:taxa:nav' },
-	    "Additional information for the PBDB Navigator taxon browser.",
-	    "This block should only be selected if the output format is C<json>.",
+	    "taxonomic level each piece of information was entered.");
+    
+    @BASIC_2 = (
 	{ value => 'img', maps_to => '1.2:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
 	    "These images are sourced from L<phylopic.org>.",
@@ -87,10 +87,20 @@ sub initialize {
         { value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the collection record");
     
-    $ds->define_output_map('1.2:taxa:output_map' =>
+    $ds->define_output_map('1.2:taxa:single_output_map' =>
 	{ value => 'attr', maps_to => '1.2:taxa:attr' },
 	    "The attribution of this taxon (author and year)",
-	@BASIC_MAP);
+	@BASIC_1,
+	{ value => 'nav', maps_to => '1.2:taxa:nav' },
+	    "Additional information for the PBDB Navigator taxon browser.",
+	    "This block should only be selected if the output format is C<json>.", 
+	@BASIC_2);
+    
+    $ds->define_output_map('1.2:taxa:mult_output_map' =>
+	{ value => 'attr', maps_to => '1.2:taxa:attr' },
+	    "The attribution of this taxon (author and year)",
+	@BASIC_1,
+	@BASIC_2);
     
     # Now define all of the output blocks that were not defined elsewhere.
     
@@ -149,7 +159,7 @@ sub initialize {
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
 	    "This field and those following are only available if the classification of",
 	    "this taxon is known to the database.",
-	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'senpar_name', if_block => 'parent,immparent' },
+	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'parent_name', if_block => 'parent,immparent' },
 	    "The name of the parent taxon, or of its senior synonym if there is one.",
 	{ output => 'immpar_no', dwc_name => 'parentNameUsageID', com_name => 'ipn',
 	  pbdb_name => 'immpar_no', if_block => 'immparent', dedup => 'senpar_no' },
@@ -232,7 +242,7 @@ sub initialize {
 	    "The name of the immediate parent taxon, even if it is a junior synonym.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant', if_block => 'full' },
 	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
-	{ output => 'n_occs', com_name => 'noc', if_block => 'full' },
+	{ output => 'n_occs', com_name => 'noc', if_block => 'full,size,subcounts' },
 	    "The number of fossil occurrences in this database that are identified",
 	    "as belonging to this taxon or any of its subtaxa.");
     
@@ -247,9 +257,6 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:size' =>
 	{ select => 'SIZE' },
-	{ output => 'n_occs', com_name => 'noc' },
-	    "The number of occurrences in the database that are identified as being contained within",
-	    "this taxon",
 	{ output => 'taxon_size', com_name => 'siz' },
 	    "The total number of taxa in the database that are contained within this taxon, including itself",
 	{ output => 'extant_size', com_name => 'exs' },
@@ -257,39 +264,39 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:app' =>
 	{ select => 'APP' },
-	{ output => 'firstapp_ea', name => 'first_max_ma', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
+	{ output => 'firstapp_ea', name => 'firstapp_max_ma', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
 	  if_block => 'app' },
 	    "The early age bound for the first appearance of this taxon in the database",
-	{ output => 'firstapp_la', name => 'first_min_ma', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
+	{ output => 'firstapp_la', name => 'firstapp_min_ma', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
 	  if_block => 'app' }, 
 	    "The late age bound for the first appearance of this taxon in the database",
-	{ output => 'lastapp_ea', name => 'last_max_ma', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
+	{ output => 'lastapp_ea', name => 'lastapp_max_ma', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
 	  if_block => 'app' },
 	    "The early age bound for the last appearance of this taxon in the database",
-	{ output => 'lastapp_la', name => 'last_min_ma', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
+	{ output => 'lastapp_la', name => 'lastapp_min_ma', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
 	  if_block => 'app' }, 
 	    "The late age bound for the last appearance of this taxon in the database",
-	{ output => 'early_interval', com_name => 'eal' },
+	{ output => 'early_interval', com_name => 'tei' },
 	    "The name of the interval in which this taxon first appears, or the start of its range.",
-	{ output => 'late_interval', com_name => 'lal', dedup => 'early_interval' },
+	{ output => 'late_interval', com_name => 'tli', dedup => 'early_interval' },
 	    "The name of the interval in which this taxon last appears, if different from C<early_interval>.");
     
     $ds->define_block('1.2:taxa:occapp' =>
 	{ output => 'firstocc_ea', name => 'firstocc_max_ma', com_name => 'foa', dwc_name => 'firstAppearanceEarlyAge' },
 	    "The early age bound for the first appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'firstocc_la', name => 'first_min_ma', com_name => 'fpa', dwc_name => 'firstAppearanceLateAge' }, 
+	{ output => 'firstocc_la', name => 'firstocc_min_ma', com_name => 'fpa', dwc_name => 'firstAppearanceLateAge' }, 
 	    "The late age bound for the first appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'lastocc_ea', name => 'last_max_ma', com_name => 'loa', dwc_name => 'lastAppearanceEarlyAge' },
+	{ output => 'lastocc_ea', name => 'lastocc_max_ma', com_name => 'loa', dwc_name => 'lastAppearanceEarlyAge' },
 	    "The early age bound for the last appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'lastocc_la', name => 'last_min_ma', com_name => 'lpa', dwc_name => 'lastAppearanceLateAge' }, 
+	{ output => 'lastocc_la', name => 'lastocc_min_ma', com_name => 'lpa', dwc_name => 'lastAppearanceLateAge' }, 
 	    "The late age bound for the last appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'occ_early_interval', com_name => 'eol' },
+	{ output => 'occ_early_interval', com_name => 'oei' },
 	    "The name of the interval in which this taxon first appears, or the start of its range.",
-	{ output => 'occ_late_interval', com_name => 'lol', dedup => 'early_interval' },
+	{ output => 'occ_late_interval', com_name => 'oli', dedup => 'early_interval' },
 	    "The name of the interval in which this taxon last appears, if different from C<early_interval>.");
     
     $ds->define_block('1.2:taxa:subtaxon' =>
@@ -599,9 +606,12 @@ sub initialize {
 	  alias => 'taxon_name' },
 	    "Return information about the most fundamental taxonomic name matching this string.",
 	    "The C<%> and C<_> characters may be used as wildcards.",
-	{ param => 'id', valid => VALID_IDENTIFIER('TID'), 
-	  alias => 'taxon_id', bad_value => '-1' },
+	{ param => 'id', valid => VALID_IDENTIFIER('TID'), alias => 'taxon_id' },
 	    "Return information about the taxonomic name corresponding to this identifier.",
+	{ optional => 'exact', valid => FLAG_VALUE },
+	    "If this parameter is specified, then the particular taxonomic name variant",
+	    "identified by the C<name> or C<id> will be returned, even if this is not",
+	    "the currently accepted variant of the name",
 	{ at_most_one => ['name', 'id'] },
 	    "You may not specify both C<name> and C<id> in the same query.");
     
@@ -633,7 +643,7 @@ sub initialize {
 	    "Select the taxa immediately containing the specified taxon or taxa.  If an",
 	    "immediate parent taxon is a junior synonym, the corresponding senior synonym",
 	    "will be returned.",
-	{ value => 'immpar' },
+	{ value => 'immparent' },
 	    "Select the taxa immediately containing the specified taxon or taxa,",
 	    "even if they are junior synonyms.",
 	{ value => 'all_parents' },
@@ -993,9 +1003,16 @@ sub initialize {
 	  default => 'ident' },
 	    "Summarize the results by grouping them as follows:");
     
+    $ds->define_ruleset('1.2:taxa:single_display' =>
+	"The following parameter indicates which information should be returned about each resulting name:",
+	{ optional => 'SPECIAL(show)', valid => '1.2:taxa:single_output_map', list => ','},
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each taxon.  Its value should be",
+	    "one or more of the following, separated by commas:");
+    
     $ds->define_ruleset('1.2:taxa:display' => 
 	"The following parameter indicates which information should be returned about each resulting name:",
-	{ optional => 'show', valid => '1.2:taxa:output_map', list => ','},
+	{ optional => 'SPECIAL(show)', valid => '1.2:taxa:mult_output_map', list => ','},
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each taxon.  Its value should be",
 	    "one or more of the following, separated by commas:",
@@ -1035,7 +1052,7 @@ sub initialize {
     $ds->define_ruleset('1.2:taxa:single' => 
 	{ require => '1.2:taxa:specifier',
 	  error => "you must specify either 'name' or 'id'" },
-	{ allow => '1.2:taxa:display' }, 
+	{ allow => '1.2:taxa:single_display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
@@ -1098,9 +1115,16 @@ sub initialize {
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
-	{ allow => '1.2:common:select_refs_crmod' },
-	{ allow => '1.2:common:select_refs_ent' },
+	# { allow => '1.2:common:select_refs_crmod' },
+	# { allow => '1.2:common:select_refs_ent' },
 	{ allow => '1.2:refs:display' },
+	{ optional => 'order', valid => '1.2:refs:order', split => ',', no_set_doc => 1 },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	    $ds->document_set('1.2:refs:order'),
+	    ">If no order is specified, the results are sorted alphabetically according to",
+	    "the name of the primary author, unless C<all_records> is specified in which",
+	    "case they are returned by default in the order they occur in the database.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
@@ -1258,6 +1282,8 @@ sub get_taxon {
     
     my $options = $request->generate_query_options('taxa');
     
+    $options->{exact} = 1 if $request->clean_param('exact');
+    
     # Then figure out which taxon we are looking for.  If we were given a taxon_no,
     # we can use that.
     
@@ -1267,6 +1293,10 @@ sub get_taxon {
     {    
 	die $request->exception(400, "Invalid taxon id '$taxon_no'")
 	    unless defined $taxon_no && $taxon_no > 0;
+	
+	my $raw_id = $request->{raw_params}{id} || $request->{raw_params}{taxon_id};
+	
+	$options->{exact} = 1 if defined $raw_id && $raw_id =~ qr{^$IDP{VAR}};
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
@@ -1274,7 +1304,7 @@ sub get_taxon {
     elsif ( my $taxon_name = $request->clean_param('name') )
     {
 	my $name_select = { return => 'id' };
-	#my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
+	$name_select->{exact} = 1 if $request->clean_param('exact');
 	
 	if ( my $rank = $request->clean_param('rank') )
 	{
@@ -1323,79 +1353,79 @@ sub get_taxon {
 	
 	if ( $r->{kingdom_no} )
 	{
-	    $r->{kingdom_txn} = $taxonomy->get_taxon($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{kingdom_txn} = $taxonomy->list_taxa_simple($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{phylum_no} )
 	{
-	    $r->{phylum_txn} = $taxonomy->get_taxon($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{phylum_txn} = $taxonomy->list_taxa_simple($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{class_no} )
 	{
-	    $r->{class_txn} = $taxonomy->get_taxon($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{class_txn} = $taxonomy->list_taxa_simple($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{order_no} )
 	{
-	    $r->{order_txn} = $taxonomy->get_taxon($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{order_txn} = $taxonomy->list_taxa_simple($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{family_no} )
 	{
-	    $r->{family_txn} = $taxonomy->get_taxon($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
+	    $r->{family_txn} = $taxonomy->list_taxa_simple($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{parsen_no} || $r->{parent_no} )
 	{
 	    my $parent_no = $r->{parsen_no} || $r->{parent_no};
-	    $r->{parent_txn} = $taxonomy->get_taxon($parent_no, { fields => ['SIMPLE','SIZE'] });
+	    $r->{parent_txn} = $taxonomy->list_taxa_simple($parent_no, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	# Then add the various lists of subtaxa.
 	
 	my $data = ['SIMPLE','SIZE','APP'];
 	
-	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
+	unless ( $r->{phylum_no} or (defined $r->{taxon_rank} && $r->{taxon_rank} <= 20) )
 	{
 	    $r->{phylum_list} = [ $taxonomy->list_taxa($taxon_no, 'all_children',
 						     { limit => 10, order => 'size.desc', rank => 20, fields => $data } ) ];
 	}
 	
-	unless ( $r->{class_no} or $r->{rank} <= 17 )
+	unless ( $r->{class_no} or $r->{taxon_rank} <= 17 )
 	{
 	    $r->{class_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => 'size.desc', rank => 17, fields => $data } ) ];
 	}
 	
-	unless ( $r->{order_no} or $r->{rank} <= 13 )
+	unless ( $r->{order_no} or $r->{taxon_rank} <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
 	    $r->{order_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => $order, rank => 13, fields => $data } ) ];
 	}
 	
-	unless ( $r->{family_no} or $r->{rank} <= 9 )
+	unless ( $r->{family_no} or $r->{taxon_rank} <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
 	    $r->{family_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						     { limit => 10, order => $order, rank => 9, fields => $data } ) ];
 	}
 	
-	if ( $r->{rank} > 5 )
+	if ( $r->{taxon_rank} > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
 	    $r->{genus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						    { limit => 10, order => $order, rank => 5, fields => $data } ) ];
 	}
 	
-	if ( $r->{rank} == 5 )
+	if ( $r->{taxon_rank} == 5 )
 	{
 	    $r->{subgenus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 4, fields => $data } ) ];
 	}
 	
-	if ( $r->{rank} == 5 or $r->{rank} == 4 )
+	if ( $r->{taxon_rank} == 5 or $r->{taxon_rank} == 4 )
 	{
 	    $r->{species_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 3, fields => $data } ) ];
@@ -1607,6 +1637,7 @@ sub list_opinions {
     }
     
     $options->{return} = 'stmt';
+    $options->{select} ||= 'all';
     
     # Next, fetch the list of opinion records.
     
@@ -2268,6 +2299,10 @@ sub generate_query_options {
 	$options->{select} = \@select;
     }
     
+    # Handle variant=all
+    
+    $options->{all_variants} = 1 if $request->clean_param('variant') eq 'all';
+    
     # If the user specified 'interval' or 'interval_id', then figure out the
     # corresponding max_ma and min_ma values.
     
@@ -2564,9 +2599,8 @@ sub generate_query_base {
 	
 	foreach my $t ( @taxa )
 	{
-	    delete $bad_nos{$t->{base_no}};
-	    delete $bad_nos{$t->{taxon_no}};
-	    delete $bad_nos{$t->{orig_no}};
+	    delete $bad_nos{$t->{taxon_no}} if $t->{taxon_no};
+	    delete $bad_nos{$t->{orig_no}} if $t->{orig_no};
 	}
 	
 	foreach my $t ( keys %bad_nos )
@@ -3171,12 +3205,17 @@ sub process_pbdb {
     
     if ( $record->{exclude} )
     {
-	$record->{flag} = 'E';
+	$record->{flags} = 'E';
     }
     
-    elsif ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
+    if ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
     {
-	$record->{flag} = 'B';
+	$record->{flags} = 'B';
+    }
+    
+    elsif ( $record->{is_base} )
+    {
+	$record->{flags} = 'B';
     }
     
     if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
@@ -3194,35 +3233,41 @@ sub process_com {
     
     my ($request, $record) = @_;
     
-    $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{taxon_no} &&
-	$record->{orig_no} eq $record->{taxon_no};
+    $record->{no_variant} = 1 if defined $record->{spelling_no} && defined $record->{taxon_no} &&
+	$record->{spelling_no} eq $record->{taxon_no};
+    
+    $record->{no_variant} = 1 unless defined $record->{spelling_no};
     
     $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{child_spelling_no} &&
 	$record->{orig_no} eq $record->{child_spelling_no};    
     
     foreach my $f ( qw(orig_no child_no immpar_no senpar_no accepted_no base_no) )
     {
-	$record->{$f} = "$IDP{TXN}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('TXN', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{TXN}:$record->{$f}" : '';
     }
     
     foreach my $f ( qw(taxon_no child_spelling_no parent_spelling_no parent_current_no) )
     {
-	$record->{$f} = "$IDP{VAR}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('VAR', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{VAR}:$record->{$f}" : '';
     }
     
     foreach my $f ( qw(opinion_no) )
     {
-	$record->{$f} = "$IDP{OPN}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('OPN', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{OPN}:$record->{$f}" : '';
     }
     
     if ( ref $record->{reference_no} eq 'ARRAY' )
     {
-	map { $_ = "rid$_" } @{$record->{reference_no}};
+	map { $_ = generate_identifier('REF', $_) } @{$record->{reference_no}};
     }
     
     elsif ( defined $record->{reference_no} )
     {
-	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
+	$record->{reference_no} = generate_identifier('REF', $record->{reference_no});
+	# $record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
     }
     
     $record->{n_orders} = undef if defined $record->{n_orders} && 
@@ -3239,12 +3284,12 @@ sub process_com {
     
     if ( $record->{exclude} )
     {
-	$record->{flag} = 'E';
+	$record->{flags} = 'E';
     }
     
     elsif ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
     {
-	$record->{flag} = 'B';
+	$record->{flags} = 'B';
     }
     
     if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&

@@ -3,7 +3,7 @@ A.pod_link { color: #0000F0; text-decoration: none; font-weight: bold; }
 
 .pod_verbatim { border-width: 1; border-style: solid; background-color: #F5F5F5; border-color: #AAAAAA; margin-left: 10px; padding: 6px; }
 
-.pod_heading { color: #00A0A0; }
+.pod_heading { color: #00A0A0; margin-top: 25px }
 
 DT.pod_term, TD.field_name, TD.pod_term { color: #A00000; font-weight: bold; }
 

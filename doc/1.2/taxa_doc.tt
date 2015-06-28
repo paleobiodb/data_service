@@ -6,7 +6,7 @@ either by name, by unique identifier, or by their relationship to
 another name.  For example, it is easy to query for all of the subtaxa
 or supertaxa of a given taxon.
 
-Follow this link for more information on L<the use of taxonomic names in this data service|node:names>.
+Follow this link for more information on L<the use of taxonomic names in this data service|node:taxonomic_names>.
 
 =head2 SYNOPSIS
 

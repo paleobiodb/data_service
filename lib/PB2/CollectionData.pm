@@ -19,8 +19,8 @@ use PB2::CommonData qw(generateAttribution);
 use PB2::ReferenceData qw(format_reference);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX
-	         %IDP VALID_IDENTIFIER);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
+use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -744,8 +744,7 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
 #	">>You can also specify any of the following parameters:",
     	{ allow => '1.2:colls:display' },
     	{ allow => '1.2:special_params' },
@@ -764,8 +763,7 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
 	">>You can use the following parameter if you wish to retrieve information about",
 	"the summary clusters which contain a specified collection or collections.",
 	"Only the records which match the other parameters that you specify will be returned.",
@@ -785,8 +783,7 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
 	">>You can also specify any of the following parameters:",
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:refs:display' },
@@ -802,16 +799,17 @@ sub initialize {
     	{ allow => '1.2:special_params' });
     
     $ds->define_ruleset('1.2:strata:selector' =>
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Return all stratum names known to the database.",
 	{ param => 'name', valid => ANY_VALUE },
-	    "A full or partial name.  You can use % and _ as wildcards, but the query",
-	    "will be very slow if you put a wildcard at the beginning",
+	    "A full or partial name.  You can use % and _ as wildcards.",
 	{ optional => 'rank', valid => ENUM_VALUE('formation','group','member') },
 	    "Return only strata of the specified rank: formation, group or member",
 	{ param => 'lngmin', valid => DECI_VALUE },
 	{ param => 'lngmax', valid => DECI_VALUE },
 	{ param => 'latmin', valid => DECI_VALUE },
 	{ param => 'latmax', valid => DECI_VALUE },
-	    "Return only strata associated with some occurrence whose geographic location falls within the given bounding box.",
+	    "Return only strata associated with at least one occurrence whose geographic location falls within the given bounding box.",
 	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
 	    "two adjacent bounding boxes if the range crosses the antimeridian.",
 	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
@@ -918,6 +916,7 @@ sub list {
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateCollFilters($tables);
     push @filters, $request->generate_common_filters( { coll => 'cc', bare => 'cc' }, $tables );
+    push @filters, '1=1' if $request->clean_param('all_records');
     # push @filters, $request->generate_crmod_filters('cc', $tables);
     # push @filters, $request->generate_ent_filters('cc', $tables);
     
@@ -1215,7 +1214,7 @@ sub refs {
     
     my $outer_tables = $request->tables_hash;
     
-    my @ref_filters = $request->PB2::ReferenceData::generate_filters($outer_tables);
+    my @ref_filters = $request->generate_ref_filters($outer_tables);
     push @ref_filters, $request->generate_common_filters( { ref => 'r' }, $outer_tables );
     push @ref_filters, "1=1" unless @ref_filters;
     
@@ -1253,7 +1252,7 @@ sub refs {
     my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($outer_tables);
     
     $request->{main_sql} = "
-	SELECT $calc $fields, s.reference_rank, is_primary, 1 as is_coll
+	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
 	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
 	    FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
 		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
@@ -2898,23 +2897,18 @@ sub process_coll_com {
     
     foreach my $f ( qw(collection_no) )
     {
-	$record->{$f} = "$IDP{COL}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('COL', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{COL}:$record->{$f}" : '';
     }
     
     foreach my $f ( qw(interval_no) )
     {
-	$record->{$f} = "$IDP{INT}:$record->{$f}" if defined $record->{$f};
+	$record->{$f} = generate_identifier('INT', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{INT}:$record->{$f}" : '';
     }
     
-    if ( ref $record->{reference_no} eq 'ARRAY' )
-    {
-	map { $_ = "$IDP{REF}:$_" } @{$record->{reference_no}};
-    }
-    
-    elsif ( defined $record->{reference_no} )
-    {
-	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
-    }
+    $record->{reference_no} = generate_identifier('REF', $record->{reference_no})
+	if defined $record->{reference_no};
 }
 
 

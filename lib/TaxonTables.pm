@@ -1092,6 +1092,19 @@ sub buildOpinionCache {
 	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `parent_orig_no` int unsigned not null AFTER `child_orig_no`");
     }
     
+    # Also add a key 'created' to the opinions table, unless it already exists.
+    
+    my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
+    
+    my ($result) = $dbh->selectrow_array("SHOW KEYS FROM $ops_table WHERE key_name like 'created'");
+    
+    unless ( $result )
+    {
+	logMessage(2, "      adding index 'created' to opinions table...");
+	
+	$dbh->do("ALTER TABLE $ops_table ADD KEY (created)");
+    }
+    
     my $a = 1;		# we can stop here when debugging
 }
 

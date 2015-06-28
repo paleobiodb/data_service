@@ -12,7 +12,8 @@ package PB2::ReferenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($REF_SUMMARY %IDP VALID_IDENTIFIER);
+use TableDefs qw($REF_SUMMARY);
+use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
@@ -52,20 +53,20 @@ sub initialize {
     
     $ds->define_set('1.2:refs:reftype' =>
 	{ value => 'auth (A)' },
-	    "This reference gives the original source for a taxonomic name",
+	    "This reference gives the authority for a taxonomic name",
 	{ value => 'class (C)' },
-	    "This reference reference is the source for a classification opinion",
-	{ value => 'unsel (U)' },
-	    "This reference is the source for an opinion that is not used for",
+	    "This reference is the source for a classification opinion",
+	{ value => 'unclass (U)' },
+	    "This reference is the source for an opinion that is not selected for",
 	    "classification because of its date of publication and/or basis",
 	{ value => 'occ (O)' },
 	    "This reference is the source for a fossil occurrence",
-	{ value => 'coll (P)' },
+	{ value => 'prim (P)' },
 	    "This reference is indicated to be the primary source for a fossil collection",
 	{ value => 'sec (S)' },
 	    "This reference is an additional source for a fossil collection",
 	{ value => 'ref (R)' },
-	    "This reference has an unknown role in the database");
+	    "This reference has an unknown or unspecified role in the database");
     
     # Then some output blocks:
     
@@ -88,15 +89,15 @@ sub initialize {
 	  "The type of this object: C<$IDP{REF}> for a document reference.",
       { output => 'ref_type', com_name => 'rtp' },
 	  "The role(s) played by this reference in the database.  This field will only appear",
-	  "in the result of queries for occurrence, collection, or taxonomic referenes.",
+	  "in the result of queries for occurrence, collection, or taxonomic references.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
 	{ output => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
 	    "The number of taxa associated with this reference",
 	{ output => 'n_class', com_name => 'ncl', if_block => 'counts' },
 	    "The number of classification opinions associated with this reference",
-	{ output => 'n_opinions', com_name => 'nop', if_block => 'counts' },
-	    "The number of opinions in total associated with this reference",
+	{ output => 'n_unclass', com_name => 'nuc', if_block => 'counts' },
+	    "The number of opinions not selected for classification associated with this reference",
 	{ output => 'n_occs', com_name => 'noc', if_block => 'counts' },
 	    "The number of occurrences associated with this reference",
 	{ output => 'n_colls', com_name => 'nco', if_block => 'counts' },
@@ -113,7 +114,7 @@ sub initialize {
 	  "Last name of the second author",
       { output => 'r_oa', com_name => 'oau', pbdb_name => 'otherauthors', not_block => 'formatted' },
 	  "The names of the remaining authors",
-      { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', not_block => 'formatted' },
+      { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', not_block => 'formatted', data_type => 'str' },
 	  "The year in which the document was published",
       { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', not_block => 'formatted' },
 	  "The title of the document",
@@ -121,13 +122,13 @@ sub initialize {
 	  "The title of the publication in which the document appears",
       { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', not_block => 'formatted' },
 	  "Names of the editors, if any",
-      { output => 'r_pubvol', com_name => 'vol', pbdb_name => 'pubvol', not_block => 'formatted' },
+      { output => 'r_pubvol', com_name => 'vol', pbdb_name => 'pubvol', not_block => 'formatted', data_type => 'str' },
 	  "The volume number, if any",
-      { output => 'r_pubno', com_name => 'num', pbdb_name => 'pubno', not_block => 'formatted' },
+      { output => 'r_pubno', com_name => 'num', pbdb_name => 'pubno', not_block => 'formatted', data_type => 'str' },
 	  "The series number within the volume, if any",
-      { output => 'r_fp', com_name => 'pgf', pbdb_name => 'firstpage', not_block => 'formatted' },
+      { output => 'r_fp', com_name => 'pgf', pbdb_name => 'firstpage', not_block => 'formatted', data_type => 'str' },
 	  "First page number",
-      { output => 'r_lp', com_name => 'pgl', pbdb_name => 'lastpage', not_block => 'formatted' },
+      { output => 'r_lp', com_name => 'pgl', pbdb_name => 'lastpage', not_block => 'formatted', data_type => 'str' },
 	  "Last page number",
       { output => 'r_pubtype', com_name => 'pty', pbdb_name => 'publication_type', not_block => 'formatted' },
 	  "Publication type",
@@ -141,7 +142,8 @@ sub initialize {
     
     $ds->define_block('1.2:refs:counts' =>
 	{ select => ['rs.n_taxa', 'rs.n_class', 'rs.n_opinions', 'rs.n_occs', 'rs.n_colls'], 
-	  tables => 'rs' });
+	  tables => 'rs' },
+	{ set => '*', code => \&adjust_ref_counts });
     
     # Then blocks for other classes to use when including one or more
     # references into other output.
@@ -180,10 +182,10 @@ sub initialize {
 	    "Results are ordered alphabetically by the name of the primary author (last, first)",
 	{ value => 'author.asc', undocumented => 1 },
 	{ value => 'author.desc', undocumented => 1 },
-	{ value => 'year' },
+	{ value => 'pubyr' },
 	    "Results are ordered by the year of publication",
-	{ value => 'year.asc', undocumented => 1 },
-	{ value => 'year.desc', undocumented => 1 },
+	{ value => 'pubyr.asc', undocumented => 1 },
+	{ value => 'pubyr.desc', undocumented => 1 },
 	{ value => 'pubtitle' },
 	    "Results are ordered alphabetically by the title of the publication",
 	{ value => 'pubtitle.asc', undocumented => 1 },
@@ -217,6 +219,8 @@ sub initialize {
 	    "A unique number identifying the reference to be selected");
     
     $ds->define_ruleset('1.2:refs:selector' =>
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "List all bibliographic references known to the database.",
 	{ param => 'id', valid => VALID_IDENTIFIER('REF'), alias => 'ref_id', list => ',' },
 	    "A list of one or more reference identifiers, separated by commas.  You can",
 	    "use this parameter to get information about a specific list of references,",
@@ -250,25 +254,26 @@ sub initialize {
     	"^You can also use any of the L<special parameters|node:special>");
     
     $ds->define_ruleset('1.2:refs:list' =>
-	"You B<must> include at least one of the following parameters:",
+	"You must include at least one of the following parameters:",
     	{ allow => '1.2:refs:selector' },
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
-	{ require_any => ['1.2:refs:selector', '1.2:refs:filter', 
-			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
-	"You can also specify any of the following parameters:",
+	{ require_any => ['1.2:refs:selector', '1.2:refs:filter'] },
+	">>You can also specify any of the following parameters:",
     	{ allow => '1.2:refs:display' },
 	{ optional => 'order', valid => '1.2:refs:order', split => ',', no_set_doc => 1 },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
 	    $ds->document_set('1.2:refs:order'),
 	    ">If no order is specified, the results are sorted alphabetically according to",
-	    "the name of the primary author.",
+	    "the name of the primary author, unless C<all_records> is specified in which",
+	    "case they are returned by default in the order they occur in the database.",
     	{ allow => '1.2:special_params' },
     	"^You can also use any of the L<special parameters|node:special>",
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
-	"the name of the primary author.");
+	"the name of the primary author, unless C<all_records> is specified in which case",
+	"the records are returned in the order in which they occur in the database.");
 }
 
 
@@ -279,36 +284,36 @@ sub initialize {
 
 sub get {
     
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Make sure we have a valid id number.
     
-    my $id = $self->clean_param('id');
+    my $id = $request->clean_param('id');
     
     die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $self->substitute_select( cd => 'r' );
+    $request->substitute_select( cd => 'r' );
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
     
     # Generate the main query.
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $fields
 	FROM refs as r
         WHERE r.reference_no = $id
 	GROUP BY r.reference_no";
     
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
-    $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
 }
 
 
@@ -318,17 +323,20 @@ sub get {
 
 sub list {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
 
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generate_ref_filters();
-    push @filters, $self->generate_common_filters( { ref => 'r', bare => 'r' } );
+    my $all_records = $request->clean_param('all_records');
+    
+    my @filters = $request->generate_ref_filters();
+    push @filters, $request->generate_common_filters( { ref => 'r', bare => 'r' } );
+    push @filters, '1=1' if $all_records;
     
     my $filter_string = join(' and ', @filters);
     
@@ -336,26 +344,32 @@ sub list {
     # specified, sort by the name of the primary author first and the
     # publication year second.
     
-    my $order = $self->generate_order_clause() || 'r.author1last, r.author1init';
+    my $order = $request->generate_order_clause();
+    
+    unless ( $order )
+    {
+	$order = $all_records ? 'NULL' : 'r.author1last, r.author1init';
+    }
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->sql_limit_clause(1);
+    my $limit = $request->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->sql_count_clause;
+    my $calc = $request->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $self->substitute_select( cd => 'r' );
+    $request->substitute_select( cd => 'r' );
     
-    my $fields = $self->select_string;
+    my $fields = $request->select_string;
+    my $tables = $request->tables_hash;
     
-    my $join_list = $self->generate_join_list();
+    my $join_list = $request->generate_join_list($tables);
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM refs as r
 		$join_list
@@ -364,16 +378,16 @@ sub list {
 	ORDER BY $order
 	$limit";
     
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
     # Then prepare and execute the main query.
     
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
     
     # If we were asked to get the count, then do so
     
-    $self->sql_count_rows;
+    $request->sql_count_rows;
     
     return 1;
 }
@@ -385,18 +399,18 @@ sub list {
 
 sub generate_ref_filters {
     
-    my ($self, $tables_hash) = @_;
+    my ($request, $tables_hash) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my @filters;
     
-    if ( my @ids = $self->safe_param_list('id') )
+    if ( my @ids = $request->safe_param_list('id') )
     {
 	my $id_string = join(',', @ids);
 	push @filters, "r.reference_no in ($id_string)";
     }
     
-    if ( my $year = $self->clean_param('ref_published') )
+    if ( my $year = $request->clean_param('ref_published') )
     {
 	if ( $year =~ /(\d+)\s*-/ )
 	{
@@ -414,24 +428,24 @@ sub generate_ref_filters {
 	}
     }
     
-    if ( my $authorname = $self->clean_param('ref_author') )
+    if ( my $authorname = $request->clean_param('ref_author') )
     {
-	push @filters, $self->generate_auth_filter($authorname, 'author');
+	push @filters, $request->generate_auth_filter($authorname, 'author');
     }
     
-    if ( my $authorname = $self->clean_param('ref_primary') )
+    if ( my $authorname = $request->clean_param('ref_primary') )
     {
-	push @filters, $self->generate_auth_filter($authorname, 'primary');
+	push @filters, $request->generate_auth_filter($authorname, 'primary');
     }
     
-    if ( my $reftitle = $self->clean_param('ref_title') )
+    if ( my $reftitle = $request->clean_param('ref_title') )
     {
 	my $quoted = $dbh->quote($reftitle);
 	
 	push @filters, "r.reftitle like $quoted";
     }
     
-    if ( my $pubtitle = $self->clean_param('pub_title') )
+    if ( my $pubtitle = $request->clean_param('pub_title') )
     {
 	my $quoted = $dbh->quote($pubtitle);
 	
@@ -444,11 +458,11 @@ sub generate_ref_filters {
 
 sub generate_auth_filter {
 
-    my ($self, $authorname, $selector) = @_;
+    my ($request, $authorname, $selector) = @_;
     
     my ($firstname, $lastname, $initpat, $lastpat, $fullpat);
     my @authfilters;
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     if ( $authorname =~ /(.*)[.] +(.*)/ )
     {
@@ -510,11 +524,11 @@ sub generate_auth_filter {
 
 sub generate_order_clause {
     
-    my ($self, $options) = @_;
+    my ($request, $options) = @_;
     
     $options ||= {};
     
-    my $order = $self->clean_param('order');
+    my $order = $request->clean_param('order');
     my @terms = ref $order eq 'ARRAY' ? @$order : $order;
     my @exprs;
     
@@ -536,7 +550,7 @@ sub generate_order_clause {
 	    push @exprs, "r.author1last $dir, r.author1init $dir";
 	}
 	
-	elsif ( $term eq 'year' )
+	elsif ( $term eq 'pubyr' )
 	{
 	    push @exprs, "r.pubyr $dir";
 	}
@@ -586,9 +600,9 @@ sub generate_order_clause {
 
 sub generate_join_list {
 
-    my ($self, $tables_hash) = @_;
+    my ($request, $tables_hash) = @_;
     
-    return "	JOIN $REF_SUMMARY as rs using on rs.reference_no = r.reference_no\n"
+    return "	JOIN $REF_SUMMARY as rs on rs.reference_no = r.reference_no\n"
 	if $tables_hash->{rs};
     
     return '';
@@ -748,32 +762,38 @@ sub set_reference_type {
     my $ref_type = $record->{ref_type} || '';
     my @types;
     
-    if ( $ref_type =~ qr{A} )
+    if ( $ref_type =~ qr{A} || $record->{n_taxa} )
     {
 	push @types, 'auth';
     }
     
-    if ( $ref_type =~ qr{C} )
+    if ( $ref_type =~ qr{C} || $record->{n_class} )
     {
 	push @types, 'class';
     }
     
-    if ( $ref_type =~ qr{U} )
+    if ( $ref_type =~ qr{U} || $record->{n_unclass} )
     {
 	push @types, 'unsel';
     }
     
-    if ( $ref_type =~ qr{O} )
+    if ( $ref_type =~ qr{O} || $record->{n_occs} )
     {
 	push @types, 'occ';
     }
     
-    if ( $ref_type =~ qr{P} )
+    if ( $ref_type =~ qr{P} || $record->{n_colls} || $record->{n_prim} )
     {
-	push @types, 'coll';
+	push @types, 'prim';
     }
     
     elsif ( $ref_type =~ qr{S} && $ref_type !~ qr{O} )
+    {
+	push @types, 'sec';
+    }
+    
+    if ( defined $record->{n_colls} && defined $record->{n_prim} && 
+	 $record->{n_colls} > $record->{n_prim} )
     {
 	push @types, 'sec';
     }
@@ -788,8 +808,26 @@ sub process_ref_com {
     
     my ($request, $record) = @_;
     
-    $record->{reference_no} = "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};
+    $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) if defined $record->{reference_no};
+    # "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};
 }
 
+
+sub adjust_ref_counts {
+
+    my ($request, $record) = @_;
+    
+    return unless defined $record->{n_class};
+    
+    if ( defined $record->{n_opinions} && ! defined $record->{n_unclass} )
+    {
+	$record->{n_unclass} = $record->{n_opinions} - $record->{n_class};
+    }
+    
+    elsif ( defined $record->{n_unclass} && ! defined $record->{n_opinions} )
+    {
+	$record->{n_opinions} = $record->{n_class} + $record->{n_unclass};
+    }
+}
 
 1;
