@@ -547,7 +547,7 @@ use PB2::PersonData;
 			title => 'Geological time intervals and time scales' },
 	"The database lists almost every geologic time interval in current use, including the",
 	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
-	"(L<v-1|http://www.stratigraphy.org/index.php/ics-chart-timescale>).");
+	"(L<2013-01|http://www.stratigraphy.org/ICSchart/ChronostratChart2013-01.jpg>).");
     
     $ds2->define_node({ path => 'intervals/single',
 			place => 1,

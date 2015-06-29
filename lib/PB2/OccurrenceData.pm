@@ -42,12 +42,12 @@ sub initialize {
     # We start by defining an output map for this class.
     
     $ds->define_output_map('1.2:occs:basic_map' =>
-	{ value => 'class', maps_to => '1.2:occs:taxo' },
+	{ value => 'class', maps_to => '1.2:occs:class' },
 	    "The taxonomic classification of the occurence: phylum, class, order, family,",
 	    "genus.",
-	{ value => 'classext', maps_to => '1.2:occs:taxo' },
+	{ value => 'classext', maps_to => '1.2:occs:class' },
 	    "Like C<class>, but also includes the relevant taxon identifiers.",
-	{ value => 'phylo', maps_to => '1.2:occs:taxo', undocumented => 1 },
+	{ value => 'phylo', maps_to => '1.2:occs:class', undocumented => 1 },
 	{ value => 'genus', maps_to => '1.2:occs:genus' },
 	    "The genus corresponding to each occurrence, if the occurrence has been",
 	    "identified to the genus level.  This block is redundant if C<class> or",
@@ -223,7 +223,7 @@ sub initialize {
 	{ output => 'species_reso', com_name => 'rss' },
 	    "The resolution of the species name, i.e. C<cf.> or C<n. sp.>");
     
-    $ds->define_block('1.2:occs:taxo' =>
+    $ds->define_block('1.2:occs:class' =>
 	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
 		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
 		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
@@ -2364,6 +2364,7 @@ sub process_occ_subgenus {
 my %ID_TYPE = ( orig_no => 'TXN',
 		identified_no => 'TXN',
 		accepted_no => 'TXN',
+		kingdom_no => 'TXN',
 		phylum_no => 'TXN',
 		class_no => 'TXN',
 		order_no => 'TXN',

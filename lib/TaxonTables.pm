@@ -3748,8 +3748,8 @@ sub computeClassification {
     
     $SQL_STRING = "
 		INSERT INTO $LOWER_WORK (orig_no, rank, genus_no, genus)
-		SELECT t.orig_no, t.rank, t.orig_no, t.name
-		FROM $TREE_WORK as t
+		SELECT t.orig_no, t.rank, t1.orig_no, t1.name
+		FROM $TREE_WORK as t LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.synonym_no
 		WHERE t.rank = 5";
     
     $result = $dbh->do($SQL_STRING);

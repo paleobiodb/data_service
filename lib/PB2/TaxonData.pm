@@ -55,10 +55,12 @@ sub initialize {
 	    "its senior synonym will be displayed.", 
 	{ value => 'size', maps_to => '1.2:taxa:size' },
 	    "The number of subtaxa appearing in this database, including the taxon itself.",
-	{ value => 'class', maps_to => '1.2:taxa:phylo' },
-	    "The classification of this taxon: kingdom, phylum, class, order, family.",
+	{ value => 'class', maps_to => '1.2:taxa:class' },
+	    "The classification of this taxon: phylum, class, order, family, genus.",
 	    "This information is also included in the C<nav> block, so do not specify both at once.",
-	{ value => 'phylo', maps_to => '1.2:taxa:phylo', undocumented => 1 },
+	{ value => 'classext', maps_to => '1.2:taxa:class' },
+	    "Like C<class>, but also includes the relevant taxon identifiers.",
+	{ value => 'phylo', maps_to => '1.2:taxa:class', undocumented => 1 },
 	{ value => 'genus', maps_to => '1.2:taxa:genus', undocumented => 1 },
 	    "The genus into which this taxon is classified, if its rank is genus or below.",
 	{ value => 'subgenus', maps_to => '1.2:taxa:genus', undocumented => 1 },
@@ -77,6 +79,8 @@ sub initialize {
 	    "taxonomic level each piece of information was entered.");
     
     @BASIC_2 = (
+	{ value => 'seq', maps_to => '1.2:taxa:seq' },
+	    "The sequence numbers that mark this taxon's position in the tree.",
 	{ value => 'img', maps_to => '1.2:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
 	    "These images are sourced from L<phylopic.org>.",
@@ -310,18 +314,43 @@ sub initialize {
 	{ output => 'extant_size', com_name => 'exs' },
 	{ output => 'firstapp_ea', com_name => 'fea' });
     
-    $ds->define_block('1.2:taxa:phylo' =>
-	{ select => 'CLASS' },
-	{ output => 'kingdom', com_name => 'kgl' },
-	    "The name of the kingdom in which this taxon occurs",
+    $ds->define_block('1.2:taxa:class' =>
+	{ select => [ 'CLASS', 'GENUS' ] },
+	#{ output => 'kingdom', com_name => 'kgl' },
+	#    "The name of the kingdom in which this taxon occurs",
 	{ output => 'phylum', com_name => 'phl' },
-	    "The name of the phylum in which this taxon occurs",
+	    "The name of the phylum in which this taxon is classified",
+	{ output => 'phylum_no', com_name => 'phn', if_block => 'classext' },
+	    "The identifier of the phylum in which this taxon is classified.",
+	    "This is only included with the block C<classext>.",
 	{ output => 'class', com_name => 'cll' },
-	    "The name of the class in which this taxon occurs",
+	    "The name of the class in which this taxon is classified",
+	{ output => 'class_no', com_name => 'cln', if_block => 'classext' },
+	    "The identifier of the class in which this taxon is classified.",
+	    "This is only included with the block C<classext>.",
 	{ output => 'order', com_name => 'odl' },
-	    "The name of the order in which this taxon occurs",
+	    "The name of the order in which this taxon is classified",
+	{ output => 'order_no', com_name => 'odn', if_block => 'classext' },
+	    "The identifier of the order in which this occurrence is classified.",
+	    "This is only included with the block C<classext>.",
 	{ output => 'family', com_name => 'fml' },
-	    "The name of the family in which this taxon occurs");
+	    "The name of the family in which this taxon is classified",
+	{ output => 'family_no', com_name => 'fmn', if_block => 'classext' },
+	    "The identifier of the family in which this occurrence is classified.",
+	    "This is only included with the block C<classext>.",
+	{ output => 'genus', com_name => 'gnl' },
+	    "The name of the genus in which this taxon is classified.  A genus may",
+	    "be listed as occurring in a different genus if it is a junior synonym; a species may",
+	    "be listed as occurring in a different genus than its name would",
+	    "indicate if its genus is synonymized but no synonymy opinion has",
+	    "been entered for the species.",
+	{ output => 'genus_no', com_name => 'gnn', if_block => 'classext' },
+	    "The identifier of the genus in which this occurrence is classified.",
+	    "This is only included with the block C<classext>.",
+	{ output => 'subgenus_no', com_name => 'sgn', if_block => 'classext', dedup => 'genus_no' },
+	    "The identifier of the subgenus in which this occurrence is classified,",
+	    "if any.  This is only included with the block C<classext>.",
+	{ set => '*', code => \&process_subgenus, if_block => 'subgenus' });
     
     $ds->define_block('1.2:taxa:genus' =>
 	{ select => 'GENUS' },
@@ -533,6 +562,16 @@ sub initialize {
 	#   if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
 	#{ set => '*', code => \&PB2::TaxonData::consolidate_basis, if_format => ['txt', 'csv', 'tsv'] }
 	);
+    
+    $ds->define_block('1.2:taxa:seq' =>
+	{ output => 'lft', com_name => 'lsq' },
+	    "This number gives the taxon's position in a preorder traversal of the taxonomic tree.",
+	{ output => 'rgt', com_name => 'rsq' },
+	    "This number greater than or equal to the maximum of the sequence numbers of all of",
+	    "this taxon's subtaxa, and less than the sequence of any succeeding taxon in the sequence.",
+	    "You can use this, along with C<lft>, to determine subtaxon relationships.  If the pair",
+	    "C<lft,rgt> for taxon <A> is bracketed by the pair C<lft,rgt> for taxon <B>, then C<A> is",
+	    "a subtaxon of C<B>.");
     
     # Now define output blocks for opinions
     
@@ -3241,7 +3280,9 @@ sub process_com {
     $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{child_spelling_no} &&
 	$record->{orig_no} eq $record->{child_spelling_no};    
     
-    foreach my $f ( qw(orig_no child_no immpar_no senpar_no accepted_no base_no) )
+    foreach my $f ( qw(orig_no child_no immpar_no senpar_no accepted_no base_no
+		       kingdom_no phylum_no class_no order_no family_no genus_no
+		       subgenus_no) )
     {
 	$record->{$f} = generate_identifier('TXN', $record->{$f}) if defined $record->{$f};
 	# $record->{$f} = $record->{$f} ? "$IDP{TXN}:$record->{$f}" : '';
