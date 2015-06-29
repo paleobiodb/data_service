@@ -235,7 +235,7 @@ use PB2::PersonData;
 	"This operation tabulates the taxonomic hierarchy of a selected set of fossil occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
 	"valid for the L<occs/list|node:occs/list> operation documented above.  You can generate",
-	"reqests to both perations with identical parameters, which will give you both a list of",
+	"requests to both operations with identical parameters, which will give you both a list of",
 	"occurrences and a summary tabulation by taxon.");
     
     $ds2->extended_doc({ path => 'occs/taxa' },
@@ -467,7 +467,7 @@ use PB2::PersonData;
 			place => 11,
 			title => 'Thumbnail images of lifeforms',
 			usage => [ 'taxa/thumb.png?id=910',
-				   'html:<img src="/data1.1/taxa/thumb.png?id=910">' ],
+				   'html:<img src="/data1.2/taxa/thumb.png?id=910">' ],
 			method => 'get_image',
 			arg => 'thumb',
 			allow_format => '+png',
@@ -481,7 +481,7 @@ use PB2::PersonData;
 			place => 11,
 			title => 'Icon images of lifeforms',
 			usage => [ 'taxa/icon.png?id=910', 
-				   'html:<img src="/data1.1/taxa/icon.png?id=910">' ],
+				   'html:<img src="/data1.2/taxa/icon.png?id=910">' ],
 			method => 'get_image',
 			arg => 'icon',
 			allow_format => '+png',
@@ -547,7 +547,7 @@ use PB2::PersonData;
 			title => 'Geological time intervals and time scales' },
 	"The database lists almost every geologic time interval in current use, including the",
 	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
-	"(L<v2013-1|http://www.stratigraphy.org/index.php/ics-chart-timescale>).");
+	"(L<v-1|http://www.stratigraphy.org/index.php/ics-chart-timescale>).");
     
     $ds2->define_node({ path => 'intervals/single',
 			place => 1,

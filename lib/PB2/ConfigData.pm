@@ -113,7 +113,7 @@ sub initialize {
 	{ param => 'show', valid => '1.2:config:get_map', list => ',' },
 	    "The value of this parameter selects which information to return:",
 	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|/data1.1/special_doc.html> with this request.");
+	"^You can also use any of the L<special parameters|/data1.2/special_doc.html> with this request.");
     
     # Now gather the information that will be reported by this module.  It
     # won't change, so for the sake of efficiency we get it once at startup.
