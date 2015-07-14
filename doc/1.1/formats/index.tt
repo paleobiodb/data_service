@@ -1,0 +1,37 @@
+
+=head2 DESCRIPTION
+
+This data service is capable of returning its results in a variety of formats.  This capability
+provides great flexibility, allowing such diverse activities as:
+
+=over
+
+=item *
+
+Support for client applications written in Javascript
+
+=item *
+
+Export of data to other databases using the Darwin Core standard
+
+=item *
+
+Downloads of data in text format for use in research projects
+
+=item *
+
+Processing of data by a custom R module (available soon).
+
+=back
+
+Each format has a default vocabulary in which its data is expressed.  The
+available formats and vocabularies are discussed below.
+
+=head2 FORMATS
+
+<% FORMATS (opt_all=1, opt_extended=1) %>
+
+=head2 VOCABULARIES
+
+<% VOCABS (opt_all=1, opt_extended=1) %>
+

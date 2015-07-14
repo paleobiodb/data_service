@@ -1,0 +1,25 @@
+This version of the data service is B<obsolete>, and has been discontinued.  If you have
+an old application that absolutely needs this version in order to work, please e-mail
+L<admin@paleobiodb.org|mailto:admin@paleobiodb.org>.
+
+The following versions of this service are currently available for use:
+
+=over
+
+=item L<version 1.1|/data1.1/>
+
+This is the B<stable> version of the service, and should be used for production applications.
+
+=item L<version 1.2|/data1.2/>
+
+This is the B<development> version of the service, and may change without warning as new features are added.
+
+=back
+
+=head2 DESCRIPTION
+
+The function of this data service is to provide programmatic access to the
+information stored in the Paleobiology Database. Our goal is to make the
+entire database accessible by means of this service, so that anyone can write
+client software that interacts with it.
+

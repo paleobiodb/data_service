@@ -1,0 +1,9 @@
+=head2 DESCRIPTION
+
+Almost every piece of data stored in the Paleobiology Database has an associated
+bibliographic reference, indicating the source from which it was originally entered.
+The URL paths described here provide access to these references.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>

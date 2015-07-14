@@ -1,0 +1,240 @@
+
+=head2 DESCRIPTION
+
+This page describes the text response formats in detail.
+
+=head2 SYNOPSIS
+
+This service can produce responses in two different text formats: tab-separated and comma-separated.  Both
+of these formats use the classic PBDB field names by default, which means that you can do the same things
+with them that you have been able to do with PBDB download files.  The main differences are these:
+
+=over
+
+=item *
+
+The responses may include some new fields which were not present in the PBDB Classic downloads.
+
+=item *
+
+The columns may not appear in the same order as in the old download files.
+
+=item *
+
+Depending upon the parameters you supply, some optional header material may be included.
+
+=item *
+
+The text is encoded in UTF-8, rather than ISO-8859-1 as was the case with PBDB Classic.
+
+=back
+
+You may choose from any of the following three suffixes:
+
+=over
+
+=for pp_table_header Suffix | Description
+
+=item C<.csv>
+
+Generate a download file in comma-separated text format.  Most browsers will save this
+file directly to disk; if you would rather see it immediately in a browser tab, then either use
+the suffix C<.txt> instead or include the parameter L<textresult|node:special>.
+
+=item C<.tsv>
+
+Generate a download file in tab-separated text format.  If you wish to see the result in
+a browser tab instead, include the parameter L<textresult|node:special>.
+
+=item C<.txt>
+
+Display the results in a browser tab in comma-separated text format.
+You will then be able to save this file to disk using the "Save Page As..." 
+menu item in your browser, which will produce the same result
+as if you had used the C<csv> suffix.
+
+=back
+
+Note that you should only use the C<textresult> parameter or C<.txt>
+suffix if your result set is of small to moderate size.  If you try to
+display a large result set directly in a browser tab, it may take a
+long time to render and use up an enormous amount of memory.
+
+In addition, you may choose to include one or more of the following URL parameters:
+
+=over
+
+=for pp_table_header Parameter* | Description
+
+=item noheader
+
+If this parameter is specified, then no header material at all will be included.  The first line of the file
+will be the first data record, if any.  If no data records were found, the file will be empty.  This parameter
+doesn't need any value.
+
+=item linebreak
+
+If this parameter is given a value of C<cr>, then each line will be terminated by a single carriage return
+character instead of the standard carriage return/line feed sequence.
+
+=back
+
+The body of the response consists of a series of lines containing comma-separated or tab-separated values.
+The initial part of the file may contain some or all of the following lines:
+
+=over
+
+=for pp_table_header Label | Description
+
+=item C<Data Source:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.
+The value in the second column will be the name of this data source.
+
+=item C<Data Source URL:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.
+The value in the second column will be the base URL for this data source.
+
+=item C<Data License:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.
+The value in the second column will be the license under which this data is provided.
+
+=item C<Data License URL:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.
+The value in the second column will be a URL from which the terms of the license
+may be fetched.
+
+=item C<Documentation URL:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.
+The value in the second column will be a URL that provides documentation about the URL path
+used to fetch this data.  This URL will document both the parameters and the response fields.
+This information may be helpful in guiding the later interpretation of this data.
+
+=item C<Data URL:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.
+The value in the second column will be the actual URL that was used to fetch this data.
+If this dataset is saved to disk, the included line will allow someone to later repeat this query.
+
+=item C<Access Time:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.
+The value in the second column will be the date and time time (GMT) at which this data
+was accessed.  If this dataset is saved to disk, the included line will enable it to be
+compared with other datasets on the basis of access time.
+
+=item C<Parameters:>
+
+This line will be present if the parameter L<showsource|node:special> was specified.  It will
+be followed by one line per parameter, giving the parameter name and value(s) used to generate this 
+result.  If this dataset is saved to disk, the parameter information may be helpful in documenting how
+the data was selected, what it includes, and what it does not include.
+
+=item C<Records Found:>
+
+This line will be present if the parameter L<count|node:special> was specified.  The 
+value in the second column will be the number of records that matched the main query.
+
+=item C<Records Returned:>
+
+This line will be present if the paramter L<count|node:special> was specified.  The value
+in the second column will be the number of records actually returned.  This may be less than
+the total number of records found, because the size of the result set is
+limited by default to 500.  You can override this using the L<limit|node:special>
+parameter.
+
+=item C<Record Offset:>
+
+This line will be present if the parameter L<count|node:special> was specified, and if
+the parameter L<offset|node:special> was specified with a value greater than zero.  The
+value in the second column will be the number of records that were skipped at the beginning
+of the result set.
+
+=item C<Warning:>
+
+One or more of these lines will be present if any warnings were generated during the execution
+of the query.  The warning message(s) will appear in the second column.
+
+=item C<Records:>
+
+If any of the lines mentioned so far in this table appear in the output, this line will appear immediately
+before the data header line.  It serves to mark off the supplementary header material from the data.
+
+=item I<data header>
+
+Unless the parameter L<noheader|node:special> was specified, a data header line will always precede
+the first data line.  This header line will contain the name of each column.
+
+=back
+
+The data records will follow this header material, one record per line until the end of the file.
+
+For example, the following URL will produce the following output, looking very similar to a PBDB Classic download:
+
+=over
+
+=item *
+
+L</data1.1/occs/list.txt?base_name=Dascillidae&limit=5>
+
+=back
+
+    "occurrence_no","record_type","collection_no","taxon_name","taxon_rank","taxon_no","actual_name","actual_taxon_no","early_age","late_age","reference_no"
+    "1054041","occurrence","128550","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054042","occurrence","128551","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054043","occurrence","128552","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054044","occurrence","130412","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054045","occurrence","128551","Dascillus relictus","","241266","Dascillus relictus","241266","15.97","11.608","16579"
+
+By contrast, the following URL includes some additional header information, terminated by a "Records:" line.
+
+=over
+
+=item *
+
+L</data1.1/occs/list.txt?base_name=Dascillidae&showsource&count&limit=5>
+
+=back
+
+    "Data Source:","The Paleobiology Database"
+    "Data Source URL:","http://paleobiodb.org/"
+    "Data License:","Creative Commons CC-BY"
+    "Data License URL:","http://creativecommons.org/licenses/by/4.0/"
+    "Documentation URL:","http://paleobiodb.org/data1.1/occs/list_doc.html"
+    "Data URL:","http://paleobiodb.org/data1.1/occs/list.txt?base_name=Dascillidae&showsource&count&limit=5"
+    "Access Time:","Sun 2014-02-02 04:04:29 GMT"
+    "Parameters:"
+    "","base_name","Dascillidae"
+    "","limit","5"
+    "Records Found:","16"
+    "Records Returned:","5"
+    "Records:"
+    "occurrence_no","record_type","collection_no","taxon_name","taxon_rank","taxon_no","actual_name","actual_taxon_no","early_age","late_age","reference_no"
+    "1054041","occurrence","128550","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054042","occurrence","128551","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054043","occurrence","128552","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054044","occurrence","130412","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054045","occurrence","128551","Dascillus relictus","","241266","Dascillus relictus","241266","15.97","11.608","16579"
+
+This output includes several header lines, terminated by the "Records:" line.  Following that is the data header, and then the data records.
+
+Lastly, the following URL generates just the data records with no header information at all:
+
+=over
+
+=item *
+
+L</data1.1/occs/list.txt?base_name=Dascillidae&noheader&limit=5>
+
+=back
+
+    "1054041","occurrence","128550","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054042","occurrence","128551","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054043","occurrence","128552","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054044","occurrence","130412","Dascillus shandongianus","","241265","Dascillus shandongianus","241265","15.97","11.608","16579"
+    "1054045","occurrence","128551","Dascillus relictus","","241266","Dascillus relictus","241266","15.97","11.608","16579"
+

@@ -1,0 +1,35 @@
+
+=head2 DESCRIPTION
+
+This data service is capable of returning its results in a variety of formats.  This capability
+provides great flexibility, allowing such diverse activities as:
+
+=over
+
+=item *
+
+Support for client applications written in Javascript
+
+=item *
+
+Downloads of data in text format for use in research projects
+
+=item *
+
+Processing of data by a custom R module
+
+=back
+
+For each query that you make on this data service, you select the format in which you want the
+result to be returned by adding a suffix to the URL path.  Each format has a default vocabulary in
+which its data is expressed, but you can select a vocabulary explicitly by using the special
+parameter L<vocab|node:special#vocab>.  The available formats and vocabularies are as follows.
+
+=head2 FORMATS
+
+<% FORMATS (opt_all=1, opt_extended=1) %>
+
+=head2 VOCABULARIES
+
+<% VOCABS (opt_all=1, opt_extended=1) %>
+
