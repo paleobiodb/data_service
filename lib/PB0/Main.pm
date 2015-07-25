@@ -20,8 +20,7 @@ package PBData;
 	  features => 'standard',
 	  special_params => 'standard',
 	  path_prefix => 'data1.0/',
-	  doc_template_dir => 'doc/1.0',
-	  output_template_dir => 'pages/1.0' });
+	  doc_template_dir => 'doc/1.0' });
     
     
     # We define the basic formats, just in case somebody asks for JSON.
