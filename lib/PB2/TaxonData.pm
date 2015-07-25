@@ -110,6 +110,7 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:basic' =>
 	{ select => ['DATA'] },
+	{ set => '*', code => \&process_difference },
 	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
 	{ set => '*', code => \&process_com, if_vocab => 'com' },
 	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'oid' },
@@ -190,6 +191,7 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:reftaxa' =>
 	{ select => ['REFTAXA_DATA'] },
+	{ set => '*', code => \&process_difference },
 	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
 	{ set => '*', code => \&process_com, if_vocab => 'com' },
 	{ set => 'ref_type', from => '*', code => \&PB2::ReferenceData::set_reference_type, 
@@ -3243,8 +3245,6 @@ sub process_pbdb {
 	}
     }
     
-    process_difference($request, $record);
-    
     $record->{is_extant} = ! defined $record->{is_extant} ? ''
 			 : $record->{is_extant} eq '1'    ? 'extant'
 			 : $record->{is_extant} eq '0'    ? 'extinct'
@@ -3277,7 +3277,8 @@ sub process_pbdb {
 	$record->{flags} = 'B';
     }
     
-    if ( defined $record->{spelling_no} && $record->{taxon_no} ne $record->{spelling_no} )
+    if ( defined $record->{spelling_no} && defined $record->{taxon_no} &&
+	 $record->{taxon_no} ne $record->{spelling_no} )
     {
 	$record->{flags} .= 'V';
     }
@@ -3296,8 +3297,6 @@ sub process_com {
 	    $record->{attribution} = $1;
 	}
     }
-    
-    process_difference($request, $record);
     
     $record->{no_variant} = 1 if defined $record->{spelling_no} && defined $record->{taxon_no} &&
 	$record->{spelling_no} eq $record->{taxon_no};
