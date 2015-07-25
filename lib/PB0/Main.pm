@@ -63,7 +63,7 @@ package PBData;
     
     $ds0->define_node({ path => '/', 
 			public_access => 1,
-			error_template => '',
+			# error_template => '',
 			allow_format => 'json,csv,tsv,txt',
 			title => 'Documentation' });
     
