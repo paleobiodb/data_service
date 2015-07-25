@@ -3368,7 +3368,8 @@ sub process_difference {
     # If the orig_no and accepted_no are different, then the name is either
     # invalid or a junior synonym.  So we use the status as the reason.
     
-    if ( $record->{orig_no} ne $record->{accepted_no} )
+    if ( defined $record->{orig_no} && defined $record->{accepted_no} &&
+	 $record->{orig_no} ne $record->{accepted_no} )
     {
 	$record->{difference} = $record->{status};
     }
