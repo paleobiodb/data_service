@@ -61,3 +61,13 @@ TR.resp_head { color: #00A0A0; text-align: center; }
     width: 100%;
 }
 
+.error_banner {
+    color: white;
+    background-color: #702000;
+    display: table;
+    width: 100%;
+}
+
+.error_heading { color: #702000; margin-top: 25px }
+
+A.error_link { color: #0000F0; text-decoration: none; font-weight: bold; }

@@ -286,7 +286,7 @@ sub initialize {
     $ds->define_ruleset('1.1:occs:display' =>
 	"You can use the following parameters to select what information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
-	{ param => 'show', list => q{,},
+	{ optional => 'SPECIAL(show)', list => q{,},
 	  valid => $ds->valid_set('1.1:occs:basic_map') },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
@@ -304,7 +304,7 @@ sub initialize {
     	{ require => '1.1:occs:specifier', 
 	  error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" },
 	">>You may also use the following parameter to specify what information you wish to retrieve:",
-    	{ param => 'SPECIAL(show)', valid => '1.1:occs:basic_map' },
+    	{ optional => 'SPECIAL(show)', valid => '1.1:occs:basic_map' },
     	{ allow => '1.1:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     

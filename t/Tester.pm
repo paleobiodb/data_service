@@ -115,25 +115,123 @@ sub fetch_url {
     
     if ( defined $response && $response->is_success )
     {
+	$tester->extract_errwarn($response, 1);
 	return $response;
     }
     
     # Otherwise, fail with the appropriate error message.
     
-    else
+    elsif ( defined $response )
     {
 	fail($message);
-	if ( defined $response )
-	{
-	    my $status = $response->status_line;
-	    diag("request was: $url") if $url;
-	    diag("status was: $status") if $status;
-	}
-	else
-	{
-	    diag("no response or bad response");
-	}
+	my $status = $response->status_line;
+	diag("request was: $url") if $url;
+	diag("status was: $status") if $status;
+	$tester->extract_errwarn($response, 1);
 	return;
+    }
+    
+    else
+    {
+	diag("no response or bad response");
+	return;
+    }
+}
+
+
+# extract_errwarn ( response, diag )
+# 
+# Extract the error and/or warning messages from $response.  If $diag is true,
+# then output them using diag().  In either case, set keys __WARNINGS and/or
+# __ERRORS in the $response object.
+
+sub extract_errwarn {
+    
+    my ($tester, $response, $diag) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $body = $response->content;
+    my (@errors, @warnings);
+    
+    if ( $body =~ qr< ^ [{] >xs )
+    {
+	my $json = $tester->{json}->decode( $body );
+	
+	if ( ref $json->{errors} eq 'ARRAY' )
+	{
+	    @errors = @{$json->{errors}};
+	}
+	
+	if ( ref $json->{warnings} eq 'ARRAY' )
+	{
+	    @warnings = @{$json->{warnings}};
+	}
+    }
+    
+    elsif ( $body =~ qr{ ^ [<] }xs )
+    {
+	my @lines = split qr{[\r\n]+}, $body;
+	my $section = 'errors';
+	
+	foreach my $line (@lines)
+	{
+	    if ( $line =~ qr{ <li> (.*?) </li> }xs )
+	    {
+		if ( $section eq 'errors' )
+		{
+		    push @errors, $1;
+		}
+		
+		elsif ( $section eq 'warnings' )
+		{
+		    push @warnings, $1;
+		}
+	    }
+	    
+	    elsif ( $line =~ qr{ <h.>Warnings }xs )
+	    {
+		$section = 'warnings';
+	    }
+	}
+	
+    }
+    
+    else	# assume text format response
+    {
+	my @lines = split qr{[\r\n]+}, $body;
+	
+	foreach my $line (@lines)
+	{
+	    if ( $line =~ qr{ ^ "Warning:" , " (.*?) " }xs )
+	    {
+		push @warnings, $1;
+	    }
+	    
+	    elsif ( $line =~ qr{ ^ Warning: \t ( [^\t]+ ) }xs )
+	    {
+		push @warnings, $1;
+	    }
+	}
+    }
+    
+    $response->{__ERRORS} = \@errors if @errors;
+    $response->{__WARNINGS} = \@warnings if @warnings;
+    
+    if ( $diag && @errors )
+    {
+	foreach my $w ( @errors )
+	{
+	    diag("ERROR: $w");
+	}
+    }
+    
+    if ( $diag && @warnings )
+    {
+	foreach my $w ( @warnings )
+	{
+	    diag("WARNING: $w");
+	}
     }
 }
 
@@ -161,6 +259,7 @@ sub fetch_nocheck {
     
     if ( $response )
     {
+	$tester->extract_errwarn($response);
 	return $response;
     }
     
@@ -201,7 +300,7 @@ sub extract_records {
     
     unless ( ref $response )
     {
-	fail($message);
+	fail("$message extract records");
 	diag("empty response");
 	return;
     }
@@ -539,81 +638,134 @@ sub found_all {
 }
 
 
-# check_field ( check_hash, value_hash, key, message )
+# check_field ( value, check, key, message )
 # 
-# Make sure that $check_hash contains the given key, and that the key matches
-# the one contained in $value_hash.  If the value in $value_hash is a regexp
-# then it is matched against $check_hash.  If it is a scalar, it is compared
+# Make sure that $value matches $check.  If the value of $check is a regexp
+# then it is matched against $value.  If it is a scalar, it is compared
 # either numerically or stringwise as appropriate.  If it is '!' then the
-# field is only checked for existence.
+# appropriate special check is run (see code below).
 
 sub check_field {
     
-    my ($tester, $check, $value, $key, $message) = @_;
+    my ($tester, $value, $check, $message) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    ok( defined $check->{$key} && $check->{$key} ne '', "$message '$key' nonempty" ) or return;
-    
-    return 1 if $value->{$key} eq '!' || $value->{$key} eq '!nonempty';
-    
-    my $vmsg = "$message value '$key'";
-    
-    if ( ref $value->{$key} eq 'Regexp' )
+    if ( ref $check eq 'Regexp' )
     {
-    	like( $check->{$key}, $value->{$key}, $vmsg ) || return;
+    	like( $value, $check, "$message matches regexp" ) || return;
     }
     
-    elsif ( ref $value->{$key} )
+    elsif ( ref $check )
     {
-    	cmp_ok( ref $check->{$key}, 'eq', ref $value->{$key}, $vmsg ) || return;
+    	cmp_ok( ref $check, 'eq', ref $value, "$message ref is " . ref $check ) || return;
     }
     
-    elsif ( $value->{$key} eq '!numeric' )
+    elsif ( $check eq '!notfound' )
     {
-	ok( looks_like_number($check->{$key}), "$vmsg is numeric" ) || return;
+	ok( !defined $value, "$message does not have a value" );
     }
     
-    elsif ( $value->{$key} eq '!nonzero' )
+    elsif ( $check eq '!numeric' )
     {
-	ok( looks_like_number($check->{$key}), "$vmsg is numeric" ) || return;
-	cmp_ok( $check->{$key}, '>', 0, $vmsg ) || return;
+	ok( looks_like_number($value), "$message is numeric" ) || return;
     }
     
-    elsif ( $value->{$key} =~ qr{ ^ !id (?: [{] (\w+) [}] )? $ }xs )
+    elsif ( $check eq '!nonzero' )
+    {
+	ok( looks_like_number($value), "$message is numeric" ) || return;
+	cmp_ok( $value, '!=', 0, "$message is nonzero" ) || return;
+    }
+    
+    elsif ( $check eq '!pos_num' )
+    {
+	ok( looks_like_number($value), "$message is numeric" ) || return;
+	cmp_ok( $value, '>', 0, "$message is positive" ) || return;
+    }
+    
+    elsif ( $check =~ qr{ ^ !id (?: [{] (\w+) [}] )? $ }xs )
     {
 	my $prefix = $1 || '\w+';
 	my $label = $1 || 'paleobiodb';
-	ok( $check->{$key} =~ qr{ ^ $prefix [:] ( \d+ ) $ }xs, "$vmsg is a valid $label id" ) || return;
+	ok( $value =~ qr{ ^ $prefix [:] ( \d+ ) $ }xs, "$message is a valid $label id" ) || return;
     }
-    
-    # elsif ( looks_like_number($value->{$key}) )
-    # {
-    # 	cmp_ok( $check->{$key}, '==', $value->{$key}, $vmsg ) || return;
-    # }
     
     else
     {
-    	cmp_ok( $check->{$key}, 'eq', $value->{$key}, $vmsg ) || return;
+    	cmp_ok( $value, 'eq', $check, $message ) || return;
     }
     
     return 1;
 }
 
 
-# check_fields ( check_hash, value_hash, message )
+# check_array ( check_array, value_array, message )
 # 
-# Call check_field once for each key in %$value_hash.
+# Call check_field once for each entry in @$value_array
+
+sub check_array {
+
+    my ($tester, $value, $check, $message) = @_;
+    
+    foreach my $i (0..$#$value)
+    {
+	$tester->check_field($value->[$i], $check, "$message #$i") || return;
+    }
+    
+    return 1;
+}
+
+
+# check_fields ( value_hash, check_hash, message )
+# 
+# Call check_field once for each key in %$check_hash.
 
 sub check_fields {
     
-    my ($tester, $check, $value, $message) = @_;
+    my ($tester, $value, $check, $message) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    foreach my $key ( keys %$value )
+ KEY:
+    foreach my $key ( keys %$check )
     {
-	$tester->check_field($check, $value, $key, $message);
+	if ( defined $check->{$key} && $check->{$key} ne '' && $check->{$key} ne '!notfound' )
+	{
+	    ok( defined $value->{$key} && $value->{$key} ne '', "$message '$key' nonempty" ) or next KEY;
+	}
+	
+	next KEY if $check->{$key} eq "!nonempty";
+	
+	if ( $check->{$key} eq '!notfound' )
+	{
+	    ok( !exists $value->{$key}, "$message '$key' not found" );
+	}
+	
+	elsif ( ref $check->{$key} eq 'ARRAY' )
+	{
+	    ok( ref $value->{$key} eq 'ARRAY', "$message '$key' is array" ) || next KEY;
+	    ok( @{$value->{$key}}, "$message '$key' is nonempty" ) || next KEY;
+	    
+	    if ( defined $check->{$key}[0] )
+	    {
+		$tester->check_array( $value->{$key}, $check->{$key}[0], "$message '$key'" );
+	    }
+	}
+	
+	elsif ( ref $check->{$key} eq 'HASH' )
+	{
+	    ok( ref $value->{$key} eq 'HASH', "$message '$key' is hash" ) || next KEY;
+	    
+	    if ( keys %{$check->{$key}} )
+	    {
+		$tester->check_fields($value->{$key}, $check->{$key}, "$message '$key'");
+	    }
+	}
+	
+	else
+	{
+	    $tester->check_field($value->{$key}, $check->{$key}, "$message '$key'");
+	}
     }
 }
 

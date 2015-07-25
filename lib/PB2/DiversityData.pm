@@ -1497,7 +1497,7 @@ sub generate_prevalence {
 	my $subkey = $rank eq '17' ? 'order' : 'class';
 	
 	next unless ref $list[$i]{$subkey} eq 'HASH';
-	next unless $rank eq '20';
+	next unless $rank eq '20' || $length <= 3;
 	
 	my @subs = keys %{$list[$i]{$subkey}};
 	my $count = 0;
@@ -1527,7 +1527,7 @@ sub generate_prevalence {
 	}
 	
 	next ELEMENT unless $count > 0;
-	next ELEMENT if $count > $deficit + 1;
+	next ELEMENT if $count > $deficit + 1 && $deficit < 5;
 	
 	push @subelements, $list[$i]{$subkey}{$_} foreach @subs;
 	splice(@list, $i, 1);

@@ -1836,29 +1836,23 @@ sub resolve_names {
     
     # Generate a template query that will be able to find a name.
     
-    my ($tables, $sql_base, $sql_order);
+    my $tables = {};
+    my @fields = $taxonomy->generate_fields($options->{fields} || 'NEW_SEARCH', $tables);
+    my @filters = $taxonomy->taxon_filters($options, $tables);
     
-    if ( 1 )
-    {
-	$tables = {};
-	my @fields = $taxonomy->generate_fields($options->{fields} || 'NEW_SEARCH', $tables);
-        my @filters = $taxonomy->taxon_filters($options, $tables);
-	
-	my $fields = join q{, }, @fields;
-	my $filters = @filters ? join( ' and ', @filters ) . ' and ' : '';
-	my $joins = $taxonomy->taxon_joins('t', $tables);
-	
-	$sql_base = "
+    my $fields = join q{, }, @fields;
+    my $joins = $taxonomy->taxon_joins('t', $tables);
+    
+    my $sql_base = "
 	SELECT $fields
 	FROM taxon_search as s join taxon_trees as t using (orig_no)
 		join taxon_attrs as v using (orig_no)
 		join authorities as a using (taxon_no)
-	WHERE $filters\n";
+	WHERE ";
 	
-	$sql_order = "GROUP BY s.taxon_no ORDER BY s.is_current desc, s.is_exact desc, v.n_occs desc\n";
-    }
+    my $sql_order = "GROUP BY s.taxon_no ORDER BY v.n_occs desc, s.is_current desc, s.is_exact desc ";
     
-    my $sql_limit = $options->{all_names} ? "LIMIT 500" : "LIMIT 1";
+    my $sql_limit = $options->{all_names} ? "LIMIT 1000" : "LIMIT 1";
     
     # Then split the argument into a list of distinct names to interpret.
     
@@ -1982,38 +1976,49 @@ sub resolve_names {
 	    my $species = $3;
 	    $species .= " $4" if $4;
 	    
-	    my @clauses;
+	    my @clauses = @filters;
 	    
 	    unless ( $n =~ /[A-Za-z][A-Za-z]/ )
 	    {
-		$taxonomy->add_warning('W_BAD_NAME', "the name '$n' is not valid, it must have at least two consecutive letters");
+		$taxonomy->add_warning('W_BAD_NAME', "The name '$n' is not valid, it must have at least two consecutive letters");
 		next NAME;
 	    }
 	    
 	    if ( $species eq '%' )
 	    {
 		my $quoted = $dbh->quote($subgenus || $main);
-		push @clauses, "(s.taxon_name like $quoted and s.taxon_rank = 'genus' or s.genus like $quoted)";
+		push @clauses, "s.genus like $quoted and s.taxon_rank < 4";
 	    }
 	    
 	    elsif ( $species )
 	    {
-		my $quoted = $dbh->quote($species);
-		push @clauses, "s.taxon_name like $quoted";
-		
-		$quoted = $dbh->quote($subgenus || $main);
-		push @clauses, "genus like $quoted";
+		my $quoted = $dbh->quote($subgenus || $main);
+		my $q_species = $dbh->quote($species);
+		push @clauses, "s.genus like $quoted and s.taxon_name like $q_species and s.taxon_rank < 4";
+	    }
+	    
+	    elsif ( $subgenus eq '%' )
+	    {
+		my $quoted = $dbh->quote($main);
+		push @clauses, "s.genus like $quoted and s.taxon_rank = 4";
+	    }
+	    
+	    elsif ( $subgenus )
+	    {
+		my $quoted = $dbh->quote($main);
+		my $q_sub = $dbh->quote($subgenus);
+		push @clauses, "s.genus like $quoted and s.taxon_name like $q_sub and s.taxon_rank = 4";
 	    }
 	    
 	    else
 	    {
 		my $quoted = $dbh->quote($subgenus || $main);
-		push @clauses, "s.taxon_name like $quoted";
+		push @clauses, "s.taxon_name like $quoted and s.taxon_rank > 4";
 	    }
 	    
 	    push @clauses, "($range_clause)" if $range_clause;
 	    
-	    my $sql = $sql_base . join(' and ', @clauses) . $sql_order . $sql_limit;
+	    my $sql = $sql_base . join(' and ', @clauses) . "\n" . $sql_order . " " . $sql_limit;
 	    
 	    $taxonomy->{sql_string} = $sql;
 	    
@@ -2033,7 +2038,7 @@ sub resolve_names {
 	    
 	    unless ( ref $this_result eq 'ARRAY' && @$this_result )
 	    {
-		$taxonomy->add_warning('W_BAD_NAME', "the name '$n' did not match any taxon");
+		$taxonomy->add_warning('W_BAD_NAME', "The name '$n' did not match any record in the taxonomy table");
 	    }
 	}
     }
@@ -2064,7 +2069,7 @@ sub lex_namestring {
 	# Otherwise, grab everything up to the first comma.  This will be
 	# taken to represent a taxonomic name possibly followed by exclusions.
 	
-	elsif ( $source_string =~ qr{ ^ ( [^,]+ ) (.*) }xs )
+	if ( $source_string =~ qr{ ^ ( [^,]+ ) (.*) }xs )
 	{
 	    $source_string = $2;
 	    my $name_group = $1;
@@ -2082,35 +2087,40 @@ sub lex_namestring {
 		# If the main name contains any invalid characters, just abort
 		# the whole name group.
 		
-		if ( $main_name =~ qr{ [^\w\s()%.:-] }xs )
+		if ( $main_name =~ qr{ [^a-zA-Z\s()%._:-] }xs )
 		{
-		    $taxonomy->add_warning('W_BAD_NAME', "invalid taxon name '$main_name'");
+		    $taxonomy->add_warning('W_BAD_NAME', "Taxon name '$main_name' contains one or more invalid characters.");
 		    next LEXEME;
 		}
 		
-		# If the name includes a ':', split off the first component as
-		# an element that must be resolved first.  Repeat until there
-		# are no such prefixes left.
+		# If the name includes a ':', split off the first component as a Selector prefix.
+		# This will be looked up first, and used to resolve any ambiguities in the
+		# remaining part of the name.  Repeat until there are no such prefixes left.
 		
 		my $prefix = '';
 		
 		while ( $main_name =~ qr{ ( [^:]+ ) : [:\s]* (.*) }xs )
 		{
 		    $main_name = $2;
-		    my $base_name = $1;
+		    my $selector = $1;
 		    
-		    # Remove any final whitespace, change all '.' to '%',
-		    # condense all repeated wildcards and spaces.
+		    # Selector prefixes must consist of Roman letters only.  But they may have
+		    # trailing whitespace and/or trailing wildcards, which is ignored.
 		    
-		    $base_name =~ s/\s+$//;
-		    $base_name =~ s/[.]/%/g;
-		    $base_name =~ s/%+/%/g;
-		    $base_name =~ s/\s+/ /g;
+		    $selector =~ s/\s+$//g;
+		    $selector =~ s/[%_.]+$//;
+		    
+		    if ( $selector =~ qr{ [^a-zA-Z] }xs || length($selector) < 3 )
+		    {
+			$taxonomy->add_warning('W_BAD_NAME', "Invalid selector '$selector', must " .
+				"contain only Roman letters a-z and must have at least 3 letters.");
+			next LEXEME;
+		    }
 		    
 		    # Keep track of the prefix so far, because each prefix
 		    # will need to be looked up before the main name is.
 		    
-		    $prefix .= "$base_name:";
+		    $prefix .= "$selector:";
 		    
 		    $prefixes{$prefix} = 1;
 		}
@@ -2147,7 +2157,7 @@ sub lex_namestring {
 		
 		if ( $exclude_name =~ qr{ [^\w%.] }xs )
 		{
-		    $taxonomy->add_warning('W_BAD_NAME', "invalid taxon name '$exclude_name'");
+		    $taxonomy->add_warning('W_BAD_NAME', "Taxon name '$exclude_name' contains invalid characters");
 		    next EXCLUSION;
 		}
 		
@@ -2179,7 +2189,7 @@ sub lex_namestring {
 	
 	else
 	{
-	    $taxonomy->add_warning('W_BAD_NAME', "invalid taxon name '$source_string'");
+	    $taxonomy->add_warning('W_BAD_NAME', "Invalid taxon name '$source_string'");
 	}
     }
     
@@ -2222,20 +2232,22 @@ sub lookup_base {
 	$range_clause = "and ($prefix_base)";
     }
     
-    # Count the number of letters (not punctuation or spaces).  This uses a
-    # very obscure quirk of Perl syntax to evaluate the =~ in scalar but not
-    # boolean context.
+    # Count the number of Roman letters (not punctuation or spaces) in the
+    # name.  This uses a very obscure quirk of Perl syntax to evaluate the =~
+    # in scalar but not boolean context.  Note that taxonomic names, by
+    # definition, are required to be composed of Roman letters only, so we
+    # need not consider other alphabets or diacritical marks.
     
-    my $letter_count = () = $base_name =~ m/\w/g;
+    my $letter_count = () = $base_name =~ m/[a-zA-Z]/g;
     
-    # If the base name doesn't contain any wildcards, and contains at least 2
+    # If the base name doesn't contain any wildcards, and contains at least 3
     # letters, see if we can find an exactly coresponding taxonomic name.  If
     # we can find at least one, pick the one with the most subtaxa and we're
     # done.
     
-    unless ( $base_name =~ qr{ [%_] } && $letter_count >= 2 )
+    unless ( $base_name =~ qr{ [%_] } && $letter_count >= 3 )
     {
-	my $quoted = $dbh->quote($base_name);
+	my $quoted = $dbh->quote("$base_name%");
 	
 	# Note that we use 'like' so that that differences in case and
 	# accent marks will be ignored.
@@ -2244,9 +2256,9 @@ sub lookup_base {
 		SELECT orig_no, lft, rgt, (taxon_rank + 0) as taxon_rank
 		FROM taxon_search as s JOIN taxon_trees as t using (orig_no)
 			JOIN taxon_attrs as v using (orig_no)
-		WHERE taxon_name like $quoted and taxon_rank >= 4 $range_clause
+		WHERE taxon_name like $quoted and taxon_rank > 5 $range_clause
 		GROUP BY orig_no
-		ORDER BY s.is_current desc, v.taxon_size desc LIMIT 1";
+		ORDER BY v.taxon_size desc LIMIT 1";
 	
 	my $result = $dbh->selectrow_hashref($sql);
 	
@@ -2264,7 +2276,7 @@ sub lookup_base {
     
     unless ( $letter_count >= 3 )
     {
-	$taxonomy->add_warning('W_BAD_NAME', "base name '$base_name:' must be at least 3 characters");
+	$taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' must be at least 3 characters");
 	return;
     }
     
@@ -2282,12 +2294,12 @@ sub lookup_base {
     {
 	if ( @$ranges > 200 )
 	{
-	    $taxonomy->add_warning('W_BAD_NAME', "base name '$base_name:' is not specific enough");
+	    $taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' is not specific enough");
 	}
 	
 	else
 	{
-	    $taxonomy->add_warning('W_BAD_NAME', "base name '$base_name:' does not match any taxon");
+	    $taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' does not match any record in the taxonomy table");
 	}
 	
 	return;
@@ -3749,6 +3761,8 @@ sub taxon_joins {
 	if $tables_hash->{app};
     $joins .= "\t\tLEFT JOIN $taxonomy->{NAMES_TABLE} as n on n.taxon_no = $mt.spelling_no\n"
 	if $tables_hash->{n};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{NAMES_TABLE} as nn on nn.taxon_no = a.taxon_no\n"
+	if $tables_hash->{nn};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ECOTAPH_TABLE} as e on e.orig_no = vt.orig_no\n"
 	if $tables_hash->{e};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ETBASIS_TABLE} as etb on etb.orig_no = vt.orig_no\n"
@@ -3928,12 +3942,14 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
 			       't.rank as taxon_rank', 't.lft', 't.rgt', 't.status', 't.accepted_no',
 			       't.immpar_no', 't.senpar_no', 'a.common_name', 'a.reference_no',
-			       'vt.name as accepted_name', 'v.n_occs', 'v.is_extant'],
+			       'vt.name as accepted_name', 'vt.rank as accepted_rank',
+			       'v.n_occs', 'v.is_extant'],
 		      AUTH_DATA => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 't.spelling_no',
 				    '(a.taxon_rank + 0) as taxon_rank',
 				    't.lft', 't.rgt', 't.status', 't.accepted_no', 't.immpar_no', 't.senpar_no',
 				    'a.common_name', 'a.reference_no', 'vt.name as accepted_name', 
-				    'v.n_occs', 'v.is_extant'],
+				    'nn.spelling_reason', 'n.spelling_reason as accepted_reason',
+				    'vt.rank as accepted_rank', 'v.n_occs', 'v.is_extant'],
 		      REFTAXA_DATA => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
 				       'base.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
 				       'max(base.class_no) as class_no',
@@ -4008,8 +4024,8 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      image_no => ['v.image_no'],
 		    );
 
-our (%FIELD_TABLES) = ( DATA => ['v', 'vt',],
-			AUTH_DATA => ['v', 'vt'],
+our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
+			AUTH_DATA => ['v', 'vt', 'n', 'nn'],
 			REFTAXA_DATA => ['v', 'vt'],
 			REF_DATA => ['r'],
 			OP_DATA => ['o', 'oo', 'pt'],

@@ -499,6 +499,10 @@ basic output.
 
 =item *
 
+The field C<status> has been replaced by C<difference>.
+
+=item *
+
 The field C<parent_no> now lists the senior synonym of the parent taxon.  If you want to know the immediate
 parent taxon, include the output block B<immparent> to get the field C<immpar_no>.
 

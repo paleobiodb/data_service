@@ -119,13 +119,16 @@ sub initialize {
 	    "of this taxonomic name.  By default, this is the variant currently",
 	    "accepted as most correct.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN}, dwc_value => 'Taxon' },
-	    "The type of this object: C<$IDP{TXN}> for an occurrence.",
+	    "The type of this object: C<$IDP{TXN}> for a taxon.",
 	{ output => 'flags', com_name => 'flg' },
 	    "This field will be empty for most records.  In a record representing an excluded",
 	    "group inside another taxon, the field will contain the letter C<E>.  In a result set whose",
 	    "records are arranged hierarchically, those records whose parents are not in the set",
 	    "will have the letter C<B> in this field.  This marks the base(s) of the reported",
-	    "portions of the taxonomic hierarchy.",
+	    "portions of the taxonomic hierarchy.  In a record representing a name variant",
+	    "that is not the one currently accepted, the field will contain C<V>.  This",
+	    "last is suppressed in the compact vocabulary, because one can simply check",
+	    "for the presence of C<vid> instead.",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
@@ -136,29 +139,35 @@ sub initialize {
 	{ output => 'attribution', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'pubyr', if_block => 'attr', data_type => 'str',
-	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
-	    "The year in which this name was published",
+	# { output => 'pubyr', if_block => 'attr', data_type => 'str',
+	#  dwc_name => 'namePublishedInYear', com_name => 'pby' },
+	#    "The year in which this name was published",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
 	    "The common (vernacular) name of this taxon, if any",
-	{ output => 'status', com_name => 'sta' },
-	    "The taxonomic status of this name",
-	{ set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, if_vocab => 'dwc' },
-	{ output => 'tax_status', dwc_name => 'taxonomicStatus', if_vocab => 'dwc' },
-	    "The taxonomic status of this name, in the Darwin Core vocabulary.",
-	    "This field only appears if that vocabulary is selected.",
-	{ set => 'nom_status', from => 'status', lookup => \%NOMENCLATURAL_STATUS, if_vocab => 'dwc' },
-	{ output => 'nom_status', dwc_name => 'nomenclaturalStatus', if_vocab => 'dwc' },
-	    "The nomenclatural status of this name, in the Darwin Core vocabulary.",
-	    "This field only appears if that vocabulary is selected.",
+	{ output => 'difference', com_name => 'tdf' },
+	    "If this name is either a junior synonym or is invalid for some reason,",
+	    "this field gives the reason.  The fields C<accepted_no>",
+	    "and C<accepted_name> then specify the name that should be used instead.",
+	# { output => 'status', com_name => 'sta' },
+	#     "The taxonomic status of this name",
+	# { set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, if_vocab => 'dwc' },
+	# { output => 'tax_status', dwc_name => 'taxonomicStatus', if_vocab => 'dwc' },
+	#     "The taxonomic status of this name, in the Darwin Core vocabulary.",
+	#     "This field only appears if that vocabulary is selected.",
+	# { set => 'nom_status', from => 'status', lookup => \%NOMENCLATURAL_STATUS, if_vocab => 'dwc' },
+	# { output => 'nom_status', dwc_name => 'nomenclaturalStatus', if_vocab => 'dwc' },
+	#     "The nomenclatural status of this name, in the Darwin Core vocabulary.",
+	#     "This field only appears if that vocabulary is selected.",
 	{ output => 'accepted_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'accepted_no', 
-	  com_name => 'acc', dedup => 'orig_no' },
-	    "If this name is either a junior synonym or an invalid name, the identifier",
-	    "of the accepted name to be used in its place.",
+	  com_name => 'acc' },
+	    "If this field is not empty, it gives the identifier of the name that should",
+	    "be used in place of this one.",
+	# { output => 'accepted_rank', com_name => 'acr', dedup => 'taxon_rank' },
+	#     "If this field is not empty, it gives the rank of the name that should",
+	#     "be used in place of this one.",
 	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
 	  com_name => 'acn', dedup => 'taxon_name' },
-	    "If this name is either a junior synonym or an invalid name, the accepted name",
-	    "that should be used in its place.",
+	    "If this field is not empty, it gives the name that should be used in place of this one.",
 	{ output => 'senpar_no', pbdb_name => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
 	    "This field and those following are only available if the classification of",
@@ -206,9 +215,9 @@ sub initialize {
 	{ output => 'attribution', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'pubyr', if_block => 'attr', data_type => 'str',
-	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
-	    "The year in which this name was published",
+	# { output => 'pubyr', if_block => 'attr', data_type => 'str',
+	#   dwc_name => 'namePublishedInYear', com_name => 'pby' },
+	#     "The year in which this name was published",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
 	    "The common (vernacular) name of this taxon, if any",
 	{ output => 'status', com_name => 'sta', if_block => 'full' },
@@ -3225,6 +3234,17 @@ sub process_pbdb {
     
     my ($request, $record) = @_;
     
+    if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
+	 $record->{orig_no} eq $record->{taxon_no} )
+    {
+	if ( $record->{attribution} =~ qr{ ^ [(] (.*) [)] $ }xs )
+	{
+	    $record->{attribution} = $1;
+	}
+    }
+    
+    process_difference($request, $record);
+    
     $record->{is_extant} = ! defined $record->{is_extant} ? ''
 			 : $record->{is_extant} eq '1'    ? 'extant'
 			 : $record->{is_extant} eq '0'    ? 'extinct'
@@ -3257,6 +3277,17 @@ sub process_pbdb {
 	$record->{flags} = 'B';
     }
     
+    if ( defined $record->{spelling_no} && $record->{taxon_no} ne $record->{spelling_no} )
+    {
+	$record->{flags} .= 'V';
+    }
+}
+
+
+sub process_com {
+    
+    my ($request, $record) = @_;
+    
     if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
 	 $record->{orig_no} eq $record->{taxon_no} )
     {
@@ -3265,12 +3296,8 @@ sub process_pbdb {
 	    $record->{attribution} = $1;
 	}
     }
-}
-
-
-sub process_com {
     
-    my ($request, $record) = @_;
+    process_difference($request, $record);
     
     $record->{no_variant} = 1 if defined $record->{spelling_no} && defined $record->{taxon_no} &&
 	$record->{spelling_no} eq $record->{taxon_no};
@@ -3332,14 +3359,60 @@ sub process_com {
     {
 	$record->{flags} = 'B';
     }
+}
+
+
+sub process_difference {
     
-    if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
-	 $record->{orig_no} eq $record->{taxon_no} )
+    my ($request, $record) = @_;
+    
+    # If the orig_no and accepted_no are different, then the name is either
+    # invalid or a junior synonym.  So we use the status as the reason.
+    
+    if ( $record->{orig_no} ne $record->{accepted_no} )
     {
-	if ( $record->{attribution} =~ qr{ ^ [(] (.*) [)] $ }xs )
+	$record->{difference} = $record->{status};
+    }
+    
+    # If  the accepted name is a different variant of the same
+    # orig_no, it takes a bit more work to figure out the reason.
+    
+    elsif ( defined $record->{spelling_no} && $record->{taxon_no} ne $record->{spelling_no} )
+    {
+	if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
+	     $record->{spelling_reason} && $record->{spelling_reason} eq 'recombination' )
 	{
-	    $record->{attribution} = $1;
+	    $record->{difference} = 'recombination';
 	}
+	
+	elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'reassignment' ||
+		$record->{spelling_reason} && $record->{spelling_reason} eq 'reassignment' )
+	{
+	    $record->{difference} = 'reassignment';
+	}
+	
+	elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
+		! ($record->{spelling_reason} && $record->{spelling_reason} eq 'correction' ) )
+	{
+	    $record->{difference} = 'correction';
+	}
+	
+	elsif ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
+	{
+	    $record->{difference} = 'misspelling';
+	}
+	
+	else
+	{
+	    $record->{difference} = 'variant';
+	}
+    }
+    
+    # Otherwise, the name is fine and we can drop the accepted_no field.
+    
+    else
+    {
+	delete $record->{accepted_no};
     }
 }
 

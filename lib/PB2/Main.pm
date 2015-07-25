@@ -29,7 +29,8 @@ use PB2::PersonData;
 	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
 	  ruleset_prefix => '1.2:',
-	  doc_template_dir => 'doc/1.2' });
+	  doc_template_dir => 'doc/1.2',
+	  output_template_dir => 'pages/1.2' });
     
     
     # We then define the vocabularies that will be used to label the data
@@ -96,6 +97,10 @@ use PB2::PersonData;
 	    "loaded into spreadsheets or other analysis tools.  The field names are",
 	    "taken from the PBDB Classic interface, for compatibility with existing",
 	    "tools and analytical procedures.",
+	{ name => 'html', content_type => 'text/html', doc_node => 'formats/html', title => 'HTML',
+	  module => 'Template', disabled => 1 },
+	    "The HTML format returns formatted web pages describing the selected",
+	    "object or objects from the database.",
 	{ name => 'ris', content_type => 'application/x-research-info-systems',
 	  doc_node => 'formats/ris', title => 'RIS', disposition => 'attachment',
 	  encode_as_text => 1, default_vocab => '', module => 'RISFormat'},
@@ -383,7 +388,7 @@ use PB2::PersonData;
 			usage => [ "taxa/single.json?id=69296&show=attr",
 				   "taxa/single.txt?name=Dascillidae" ],
 			method => 'get_taxon',
-			allow_format => '+xml',
+			allow_format => '+xml,+html',
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:single_output_map' },
 	"This path returns information about a single taxonomic name, identified either",

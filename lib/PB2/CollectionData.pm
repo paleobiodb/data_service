@@ -23,6 +23,7 @@ use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS 
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
 
+use Try::Tiny;
 use Carp qw(carp croak);
 
 use Moo::Role;
@@ -1567,6 +1568,7 @@ sub generateMainFilters {
     
     my ($taxon_name, @taxon_nos, $value, @values);
     my (@include_taxa, @exclude_taxa, $no_synonyms, $all_children, $do_match);
+    my (@taxon_warnings);
     
     if ( $value = $request->clean_param('base_name') )
     {
@@ -1609,7 +1611,18 @@ sub generateMainFilters {
 	
 	if ( $do_match )
 	{
-	    my @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE', all_names => 1 });
+	    my @taxa;
+	    
+	    try {
+		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE', all_names => 1 });
+	    }
+	    
+	    catch {
+		print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+		die $_;
+	    };
+	    
+	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
 	    @include_taxa = grep { ! $_->{exclude} } @taxa;
 	}
@@ -1620,7 +1633,18 @@ sub generateMainFilters {
 	
 	else
 	{
-	    my @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
+	    my @taxa;
+	    
+	    try {
+		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
+	    }
+	    
+	    catch {
+		print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+		die $_;
+	    };
+	    
+	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
 	    @include_taxa = grep { ! $_->{exclude} } @taxa;
 	    @exclude_taxa = grep { $_->{exclude} } @taxa;
@@ -1712,19 +1736,29 @@ sub generateMainFilters {
     
     elsif ( $taxon_name )
     {
-	my @warnings = $taxonomy->list_warnings;
-	$request->add_warning(@warnings);
-	
 	if ( $op eq 'prevalence' || $op eq 'diversity' )
 	{
+	    $request->add_warning(@taxon_warnings) if @taxon_warnings;
 	    return "t.lft = -1";
 	}
 	
 	my @exact_genera;
 	my @name_clauses;
 	
-	foreach my $name (ref $taxon_name eq 'ARRAY' ? @$taxon_name : $taxon_name)
+	my @raw_names = ref $taxon_name eq 'ARRAY' ? @$taxon_name : split qr{\s*,\s*}, $taxon_name;
+	
+	foreach my $name ( @raw_names )
 	{
+	    # Ignore any name with a selector
+	    
+	    next if $name =~ qr{:};
+	    
+	    # Remove exclusions
+	    
+	    $name =~ s{ \^ .* }{}xs;
+	    
+	    # Then test for syntax and add the corresponding filters.
+	    
 	    if ( $name =~ qr{ ^\s*([A-Za-z_.%]+)(?:\s+\(([A-Za-z_.%]+)\))?(?:\s+([A-Za-z_.%]+))?(?:\s+([A-Za-z_.%]+))? }xs )
 	    {
 		my @name_filters;
@@ -1826,6 +1860,10 @@ sub generateMainFilters {
 	$request->{my_excluded_taxa} = \@exclude_taxa;
 	$tables_ref->{tf} = 1;
     }
+    
+    # If any warnings occurreed, pass them on.
+    
+    $request->add_warning(@taxon_warnings) if @taxon_warnings;
     
     # Check for parameters 'continent', 'country'
     

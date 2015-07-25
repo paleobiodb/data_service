@@ -1,8 +1,8 @@
-This version of the data service is B<obsolete>, and has been discontinued.  If you have
+This version of the data service is B<obsolete> and has been discontinued.  If you have
 an old application that absolutely needs this version in order to work, please e-mail
 L<admin@paleobiodb.org|mailto:admin@paleobiodb.org>.
 
-The following versions of this service are currently available for use:
+There is currently one version of the data service available, and another one coming soon:
 
 =over
 
@@ -12,7 +12,7 @@ This is the B<stable> version of the service, and should be used for production 
 
 =item L<version 1.2|/data1.2/>
 
-This is the B<development> version of the service, and may change without warning as new features are added.
+This is the B<development> version of the service, which is currently undergoing user testing.
 
 =back
 

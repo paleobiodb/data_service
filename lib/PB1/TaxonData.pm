@@ -719,50 +719,58 @@ sub get {
 	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
 	{
 	    $r->{phylum_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						     { limit => 10, order => 'size.desc', rank => 20, fields => ['size', 'app'] } ) ];
+						     { status => 'senior', limit => 10, order => 'size.desc', 
+						       rank => 20, fields => ['size', 'app'] } ) ];
 	}
 	
 	unless ( $r->{class_no} or $r->{rank} <= 17 )
 	{
 	    $r->{class_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						    { limit => 10, order => 'size.desc', rank => 17, fields => ['size', 'app'] } ) ];
+						    { status => 'senior', limit => 10, order => 'size.desc', 
+						      rank => 17, fields => ['size', 'app'] } ) ];
 	}
 	
 	unless ( $r->{order_no} or $r->{rank} <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
 	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						    { limit => 10, order => $order, rank => 13, fields => ['size', 'app'] } ) ];
+						    { status => 'senior', limit => 10, order => $order, 
+						      rank => 13, fields => ['size', 'app'] } ) ];
 	}
 	
 	unless ( $r->{family_no} or $r->{rank} <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
 	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						     { limit => 10, order => $order, rank => 9, fields => ['size', 'app'] } ) ];
+						     { status => 'senior', limit => 10, order => $order, 
+						       rank => 9, fields => ['size', 'app'] } ) ];
 	}
 	
 	if ( $r->{rank} > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
 	    $r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						    { limit => 10, order => $order, rank => 5, fields => ['size', 'app'] } ) ];
+						    { status => 'senior', limit => 10, order => $order, 
+						      rank => 5, fields => ['size', 'app'] } ) ];
 	}
 	
 	if ( $r->{rank} == 5 )
 	{
 	    $r->{subgenus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						       { limit => 10, order => 'size.desc', rank => 4, fields => ['size', 'app'] } ) ];
+						       { status => 'senior', limit => 10, order => 'size.desc', 
+							 rank => 4, fields => ['size', 'app'] } ) ];
 	}
 	
 	if ( $r->{rank} == 5 or $r->{rank} == 4 )
 	{
 	    $r->{species_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						       { limit => 10, order => 'size.desc', rank => 3, fields => ['size', 'app'] } ) ];
+						       { status => 'senior', limit => 10, order => 'size.desc', 
+							 rank => 3, fields => ['size', 'app'] } ) ];
 	}
 	
 	$r->{children} = 
-	    [ $taxonomy->getTaxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => ['size', 'app'] } ) ];
+	    [ $taxonomy->getTaxa('children', $taxon_no, { status => 'senior', limit => 10, order => 'size.desc', 
+							  fields => ['size', 'app'] } ) ];
     }
     
     return 1;

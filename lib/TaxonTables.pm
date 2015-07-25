@@ -15,7 +15,8 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TableDefs qw($REF_SUMMARY);
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS $RANK_MAP);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS $RANK_MAP
+	         $ALL_STATUS $VALID_STATUS $VARIANT_STATUS $JUNIOR_STATUS);
 use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
@@ -24,7 +25,7 @@ use TableDefs qw($OCC_MATRIX $OCC_TAXON);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig computeGenSp rebuildAttrsTable);
+our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig computeGenSp rebuildAttrsTable fixOpinionCache);
 
 
 =head1 NAME
@@ -207,8 +208,6 @@ our $QUEUE_TABLE = "taxon_queue";
 our (@TREE_ERRORS);
 my ($REPORT_THRESHOLD) = 20;
 
-our ($SYNONYM_STATUS) = "'subjective synonym of', 'objective synonym of', 'misspelling of', 'replaced by'";
-our ($VALID_STATUS) = "'belongs to', 'subjective synonym of', 'objective synonym of', 'misspelling of', 'replaced by'";
 
 # This is used for proper signal handling
 
@@ -1042,7 +1041,7 @@ sub buildOpinionCache {
 			   parent_spelling_no int unsigned not null,
 			   ri int not null,
 			   pubyr varchar(4),
-			   status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum','root'),
+			   status enum($ALL_STATUS),
 			   spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
 			   reference_no int unsigned not null,
 			   author varchar(80),
@@ -1211,6 +1210,55 @@ sub populateOpinionCache {
 }
 
 
+# fixOpinionCache ( dbh, table_name, tree_table, opinion_no )
+# 
+# Update a single entry in the opinion cache.
+
+sub fixOpinionCache {
+    
+    my ($dbh, $table_name, $tree_table, $opinion_no) = @_;
+    
+    my ($result);
+    
+    croak "bad opinion_no: $opinion_no\n" unless $opinion_no =~ qr{ ^ [0-9]+ $ }xsi;
+    
+    # This query is adapated from the old getMostRecentClassification()
+    # routine, from TaxonInfo.pm line 2003.  We have to join with authorities
+    # twice to look up the original combination (taxonomic concept id) of both
+    # child and parent.  The authorities table is the canonical source of that
+    # information, not the opinions table.
+    
+    $result = $dbh->do("REPLACE INTO $table_name (opinion_no, orig_no, child_spelling_no,
+						  parent_no, parent_spelling_no, ri, pubyr,
+						  status, spelling_reason, reference_no, suppress)
+		SELECT o.opinion_no, a1.orig_no,
+			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
+			a2.orig_no,
+			if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no),
+			IF ((o.basis != '' AND o.basis IS NOT NULL), CASE o.basis
+ 			WHEN 'second hand' THEN 1
+			WHEN 'stated without evidence' THEN 2
+			WHEN 'implied' THEN 2
+			WHEN 'stated with evidence' THEN 3 END,
+			IF(r.reference_no = 6930, 0, CASE r.basis
+				WHEN 'second hand' THEN 1
+				WHEN 'stated without evidence' THEN 2
+				WHEN 'stated with evidence' THEN 3
+				ELSE 2 END)) AS ri,
+			if(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr,
+			o.status, o.spelling_reason, o.reference_no, null
+		FROM $TAXON_TABLE{$tree_table}{opinions} as o
+			LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r using (reference_no)
+			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1
+				on a1.taxon_no = if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no)
+			LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as a2
+				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
+		WHERE opinion_no = $opinion_no");
+    
+    return;
+}
+
+
 # getOpinionConcepts ( dbh, tree_table, opinion_list )
 # 
 # Given a list of changed opinions, return the union of the set of concepts
@@ -1338,7 +1386,7 @@ sub createWorkingTables {
 				rank tinyint not null,
 				trad_rank tinyint not null,
 				ints_rank tinyint not null,
-				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
+				status enum($ALL_STATUS),
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
 				synonym_no int unsigned not null,
@@ -1369,16 +1417,17 @@ sub createWorkingTables {
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK ADD PRIMARY KEY (orig_no)");
     
-    # Create a table to store the spelling information for each taxonomic
-    # name. 
+    # If there isn't a 'taxon_exceptions' table, create one.
     
-    # $result = $dbh->do("DROP TABLE IF EXISTS $NAME_WORK");
-    # $result = $dbh->do("CREATE TABLE $NAME_WORK
-    # 			       (taxon_no int unsigned not null,
-    # 				orig_no int unsigned not null,
-    # 				spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
-    # 				opinion_no int unsigned not null,
-    # 				PRIMARY KEY (taxon_no)) ENGINE=MYISAM");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_EXCEPT (
+				orig_no int unsigned not null,
+				name varchar(80),
+				rank tinyint null,
+				ints_rank tinyint null,
+				status enum($ALL_STATUS),
+				primary key (orig_no)) ENGINE=MYISAM");
+    
+    my $a = 1;	# we can stop here when debugging
     
     return;
 }
@@ -1445,7 +1494,7 @@ sub computeSpelling {
     $result = $dbh->do("
 		INSERT IGNORE INTO $SPELLING_AUX
 		SELECT o.orig_no, o.child_spelling_no, o.opinion_no,
-		       if(o.spelling_reason = 'misspelling' or m.spelling_no is not null,
+		       if(o.spelling_reason = 'misspelling' or m.spelling_no is not null or o.status = 'misspelling of',
 			  true, false)
 		FROM $opinion_cache as o JOIN $TREE_WORK USING (orig_no)
 			LEFT JOIN $MISSPELLING_AUX as m on o.child_spelling_no = m.spelling_no
@@ -1585,17 +1634,19 @@ sub computeSpelling {
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (trad_no)");
     
-    # We then copy the selected name and rank into $TREE_TABLE.  We use the
-    # traditional rank instead of the currently accepted one, because 'unranked clade'
-    # isn't really very useful.
+    # We then copy the selected name and rank into $TREE_TABLE.  The table $TAXON_EXCEPT can
+    # override this.
     
     logMessage(2, "    setting name and rank");
     
-    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on a.taxon_no = t.spelling_no
+    $result = $dbh->do("UPDATE $TREE_WORK as t join $auth_table as a on a.taxon_no = t.spelling_no
 			SET t.name = a.taxon_name, t.rank = a.taxon_rank");
     
+    $result = $dbh->do("UPDATE $TREE_WORK as t join $TAXON_EXCEPT as ex using (orig_no)
+			SET t.rank = ex.rank WHERE ex.rank is not null");
+    
     $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on a.taxon_no = t.trad_no
-			SET t.trad_rank = a.taxon_rank");
+			SET t.trad_rank = if(t.rank <> 25, t.rank, a.taxon_rank)");
     
     logMessage(2, "    indexing by name");
     
@@ -1792,18 +1843,18 @@ sub computeSynonymy {
 			    parent_no int unsigned not null,
 			    ri int unsigned not null,
 			    pubyr varchar(4),
-			    status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
+			    status enum($ALL_STATUS),
 			    UNIQUE KEY (orig_no)) ENGINE=MYISAM");
     
-    # We ignore any opinions where orig_no and parent_no are identical,
-    # because those are irrelevant to the synonymy relation (they might simply
-    # indicate variant spellings, for example).
+    # We ignore any opinions where orig_no and parent_no are identical, because those are
+    # irrelevant to the synonymy relation (they might simply indicate variant spellings, for
+    # example).  We also ignore opinions whose status is 'misspelling of' for the same reason.
     
     $result = $dbh->do("INSERT IGNORE INTO $CLASSIFY_AUX
 			SELECT o.orig_no, o.opinion_no, o.parent_no,
 			    o.ri, o.pubyr, o.status
 			FROM $OPINION_CACHE o JOIN $TREE_WORK USING (orig_no)
-			WHERE o.orig_no != o.parent_no
+			WHERE o.orig_no != o.parent_no and o.status not in ($VARIANT_STATUS)
 			ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
     # Now we download just those classification opinions which indicate
@@ -1814,7 +1865,7 @@ sub computeSynonymy {
     my $synonym_opinions = $dbh->prepare("
 		SELECT orig_no, parent_no, opinion_no, ri, pubyr
 		FROM $CLASSIFY_AUX
-		WHERE status in ($VALID_STATUS) AND parent_no != 0");
+		WHERE status in ($JUNIOR_STATUS) AND parent_no != 0");
     
     $synonym_opinions->execute();
     
@@ -1897,7 +1948,7 @@ sub computeSynonymy {
 	$synonym_opinions = $dbh->prepare("
 		SELECT orig_no, parent_no, ri, pubyr, opinion_no
 		FROM $CLASSIFY_AUX
-		WHERE status != 'belongs to' and parent_no != 0
+		WHERE status in ($JUNIOR_STATUS) and parent_no != 0
 			and orig_no in ($check_taxa)");
 	
 	$synonym_opinions->execute();
@@ -1935,7 +1986,7 @@ sub computeSynonymy {
     
     $result = $dbh->do("
 	UPDATE $TREE_WORK as t LEFT JOIN $CLASSIFY_AUX as b using (orig_no)
-	SET t.synonym_no = if(b.status in ($SYNONYM_STATUS) and b.parent_no > 0, b.parent_no, orig_no)");
+	SET t.synonym_no = if(b.status in ($JUNIOR_STATUS) and b.parent_no > 0, b.parent_no, orig_no)");
     
     logMessage(2, "    indexing synonym_no");
     
@@ -2078,8 +2129,8 @@ sub computeHierarchy {
     my $OPINION_CACHE = $TAXON_TABLE{$tree_table}{opcache};
     
     # We already have the $CLASSIFY_AUX relation, but we need to adjust it by
-    # grouping together all of the opinions for each senior synonym and its
-    # immediate juniors and re-selecting the classification opinion for each
+    # grouping together all of the opinions for each senior synonym with those of
+    # its juniors and re-selecting the classification opinion for each
     # group.  Note that the junior synonyms already have their classification
     # opinion selected from computeSynonymy() above.
     
@@ -2092,7 +2143,7 @@ sub computeHierarchy {
 				 primary key (junior_no),
 				 key (senior_no)) ENGINE=MYISAM");
     
-    # We consider all junior synonyms of genera and above, but only subjective
+    # We consider all junior synonyms of genera and above, subjective
     # and objective synonyms and replaced taxa.  We leave out nomina dubia,
     # nomina vana, nomina nuda, nomina oblita, and invalid subgroups, because
     # an opinion on any of those shouldn't affect the senior taxon.
@@ -2101,7 +2152,7 @@ sub computeHierarchy {
 			SELECT c.orig_no, c.parent_no
 			FROM $CLASSIFY_AUX as c JOIN $TREE_WORK as t on t.orig_no = c.orig_no
 				JOIN $TREE_WORK as t2 on t2.orig_no = c.parent_no
-			WHERE c.status in ($SYNONYM_STATUS) and t.rank >= 5 and t2.rank >= 5");
+			WHERE c.status in ($JUNIOR_STATUS) and t.rank >= 5 and t2.rank >= 5");
     
     # Next, we add entries for all of the senior synonyms, because of course
     # their own opinions are considered as well.
@@ -2254,8 +2305,10 @@ sub computeHierarchy {
     logMessage(2, "    setting opinion_no and status");
     
     $result = $dbh->do("UPDATE $TREE_WORK as t join $CLASSIFY_AUX as c using (orig_no)
-				LEFT JOIN $TAXON_EXCEPT as ex using (orig_no)
-			SET t.opinion_no = c.opinion_no, t.status = coalesce(ex.status, c.status)");
+			SET t.opinion_no = c.opinion_no, t.status = c.status");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t join $TAXON_EXCEPT as ex using (orig_no)
+			SET t.status = ex.status WHERE ex.status is not null");
     
     logMessage(2, "    indexing opinion_no and status");
     
@@ -2486,33 +2539,6 @@ sub breakCycles {
 }
 
 
-# linkParents ( dbh, tree_table )
-# 
-# Update the parent_no field of $TREE_WORK to include parents which are not
-# themselves represented in $TREE_WORK.  This is not needed currently, but
-# might be in the future if we decide that parent_no should point to senior
-# synonyms (so I'm going to keep it in the code).
-
-sub linkParents {
-    
-    my ($dbh, $tree_table) = @_;
-    
-    my $result;
-    
-    # Set parent_no when the parent is not represented in $TREE_WORK.
-    
-    $result = $dbh->do("
-		UPDATE $TREE_WORK t
-		    JOIN $TREE_WORK t2 ON t2.orig_no = t.synonym_no
-		    JOIN $TAXON_TABLE{$tree_table}{opcache} o ON o.opinion_no = t2.opinion_no
-		    JOIN $tree_table m ON m.orig_no = o.parent_no
-		SET t.parent_no = m.synonym_no
-		WHERE t.parent_no = 0 and o.parent_no != 0");
-    
-    return;
-}
-
-
 # adjustHierarchicalNames ( dbh )
 # 
 # Update the taxonomic names stored in $TREE_WORK so that species, subspecies
@@ -2639,7 +2665,7 @@ sub computeTreeSequence {
     
     my $fetch_hierarchy = $dbh->prepare("
 	SELECT t.orig_no, t.rank, c.parent_no,
-	       if(c.status in ($SYNONYM_STATUS), 1, 0) as is_junior
+	       if(t.orig_no <> t.synonym_no, 1, 0) as is_junior
 	FROM $TREE_WORK as t JOIN $CLASSIFY_AUX as c using (orig_no)
 	ORDER BY t.name");
     
@@ -3287,15 +3313,6 @@ sub computeClassification {
     
     # $result = $dbh->do($SQL_STRING);
     
-    # If there isn't an 'taxon_exceptions' table, create one.
-    
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_EXCEPT (
-				orig_no int unsigned not null,
-				name varchar(80),
-				rank tinyint not null,
-				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum','root'),
-				primary key (orig_no)) ENGINE=MYISAM");
-    
     # We first compute an auxiliary table to help in the computation.  We
     # insert a row for each non-junior taxonomic concept above genus level,
     # listing the current name and rank, as well as tree depth and parent
@@ -3420,15 +3437,15 @@ sub computeClassification {
 		SELECT k.orig_no, k.current_rank,
 			if(k.common_name <> '', k.common_name, p.common_name),
 			if(k.current_rank = 23 or (k.current_rank = 22 and ifnull(p.kingdom_no, 1) = 1), k.orig_no, p.kingdom_no) as nk,
-			if(k.current_rank in (20,21) or ex.rank = 20 or (k.current_rank = 19 and p.phylum_no is null) or 
+			if(k.current_rank in (20,21) or ex.ints_rank = 20 or (k.current_rank = 19 and p.phylum_no is null) or 
 				k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), 
 				k.orig_no, p.phylum_no) as np,
-			if(k.current_rank = 17 or ex.rank = 17 or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), 
+			if(k.current_rank = 17 or ex.ints_rank = 17 or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), 
 				k.orig_no, p.class_no) as nc,
-			if(k.current_rank = 13 or ex.rank = 13 or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0) or
+			if(k.current_rank = 13 or ex.ints_rank = 13 or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0) or
 				(p.order_no is null and k.was_order >= 5 and k.not_order < (k.was_order * 2)),
 				k.orig_no, p.order_no) as no,
-			if(k.current_rank = 9 or (k.taxon_name like '%idae' and p.kingdom_no <> $plantae_no), 
+			if(k.current_rank = 9 or ex.ints_rank = 9 or (k.taxon_name like '%idae' and p.kingdom_no <> $plantae_no), 
 				k.orig_no, p.family_no) as nf
 		FROM $INTS_AUX as k JOIN $INTS_WORK as p on p.ints_no = k.senpar_no
 			LEFT JOIN $INTS_AUX as xp on xp.orig_no = p.phylum_no
@@ -3616,12 +3633,16 @@ sub computeClassification {
     
     logMessage(2, "    computing subtaxon counts");
     
-    # Start by initializing the counts.
+    # Start by initializing the counts.  We generate records only for senior synonyms.  All of
+    # the count fields are allowed to default to 0.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $COUNTS_WORK");
     $result = $dbh->do("CREATE TABLE $COUNTS_WORK
 			       (orig_no int unsigned,
 				imm_count int unsigned not null,
+				imm_invalid_count int unsigned not null,
+				imm_junior_count int unsigned not null,
+				junior_count int unsigned not null,
 				is_phylum tinyint unsigned not null,
 				phylum_count int unsigned not null,
 				is_class tinyint unsigned not null,
@@ -3636,16 +3657,17 @@ sub computeClassification {
 				species_count int unsigned not null,
 				primary key (orig_no)) ENGINE=MYISAM");
     
-    $SQL_STRING = "INSERT INTO $COUNTS_WORK
-		   SELECT synonym_no, 0, 
-			rank=20, 0, 
-			rank=17, 0, 
-			rank=13, 0, 
-			rank=9, 0,
-			rank=5, 0, 
-			rank=3, 0
-		   FROM $TREE_WORK
-		   WHERE synonym_no = orig_no";
+    $SQL_STRING = "INSERT INTO $COUNTS_WORK (orig_no, is_phylum, is_class, is_order,
+					     is_family, is_genus, is_species)
+		   SELECT t.orig_no,
+			t.rank=20,
+			t.rank=17,
+			t.rank=13,
+			t.rank=9,
+			t.rank=5,
+			t.rank=3
+		   FROM $TREE_WORK as t
+		   WHERE t.synonym_no = t.orig_no";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -3656,21 +3678,23 @@ sub computeClassification {
     {
 	logMessage(2, "      computing tree level $depth...") if $depth % 10 == 0;
 	
+	# First add up all of the subcounts for the child taxa.  These are counted for all valid
+	# children including junior synonyms, but not for invalid taxa (those for which synonym_no
+	# <> accepted_no).
+	
 	$SQL_STRING = "
 		UPDATE $COUNTS_WORK as c JOIN
 		(SELECT t.senpar_no,
-			count(*) as imm_count,
-			sum(c.is_species) + sum(c.species_count) as species_count,
-			sum(c.is_genus) + sum(c.genus_count) as genus_count,
-			sum(c.is_family) + sum(c.family_count) as family_count,
-			sum(c.is_order) + sum(c.order_count) as order_count,
-			sum(c.is_class) + sum(c.class_count) as class_count,
-			sum(c.is_phylum) + sum(c.phylum_count) as phylum_count
+			sum(c.species_count) as species_count,
+			sum(c.genus_count) as genus_count,
+			sum(c.family_count) as family_count,
+			sum(c.order_count) as order_count,
+			sum(c.class_count) as class_count,
+			sum(c.phylum_count) as phylum_count
 		 FROM $COUNTS_WORK as c JOIN $TREE_WORK as t using (orig_no)
-		 WHERE t.depth = $depth
+		 WHERE t.depth = $depth and t.senpar_no > 0 and t.synonym_no = t.accepted_no
 		 GROUP BY t.senpar_no) as nc on c.orig_no = nc.senpar_no
-		SET c.imm_count = nc.imm_count,
-		    c.species_count = nc.species_count,
+		SET c.species_count = nc.species_count,
 		    c.genus_count = nc.genus_count,
 		    c.family_count = nc.family_count,
 		    c.class_count = nc.class_count,
@@ -3679,24 +3703,37 @@ sub computeClassification {
 	
 	$result = $dbh->do($SQL_STRING);
 	
-	# $SQL_STRING = "
-	# 	UPDATE $TREE_WORK as t JOIN $COUNTS_WORK as c using (orig_no)
-	# 		LEFT JOIN $INTS_AUX as k using (orig_no)
-	# 	SET t.rank = case
-	# 			when k.aux_rank = 20 and c.phylum_count = 0 then 20
-	# 			when k.aux_rank = 17 and c.class_count = 0 then 17
-	# 			when k.aux_rank = 13 and c.order_count = 0 then 13
-	# 			when k.aux_rank = 9 and c.family_count = 0 then 9
-	# 			else 25
-	# 		     end,
-	# 	    c.is_phylum = if(k.aux_rank = 20 and c.phylum_count = 0, 1, 0),
-	# 	    c.is_class = if(k.aux_rank = 17 and c.class_count = 0, 1, 0),
-	# 	    c.is_order = if(k.aux_rank = 13 and c.order_count = 0, 1, 0),
-	# 	    c.is_family = if(k.aux_rank = 9 and c.family_count = 0, 1, 0)
-	# 	WHERE t.rank = 25 and t.depth = $depth - 1";
+	# The child taxa themselves are only counted if they are valid senior synonyms
+	# (accepted_no = orig_no, equivalent to status = 'belongs to').
 	
-	# $result = $dbh->do($SQL_STRING);
+	$SQL_STRING = "
+		UPDATE $COUNTS_WORK as c JOIN
+		(SELECT t.senpar_no,
+			count(*) as imm_count,
+			sum(c.is_species) as imm_species,
+			sum(c.is_genus) as imm_genera,
+			sum(c.is_family) as imm_families,
+			sum(c.is_order) as imm_orders,
+			sum(c.is_class) as imm_classes,
+			sum(c.is_phylum) as imm_phyla
+		 FROM $COUNTS_WORK as c JOIN $TREE_WORK as t using (orig_no)
+		 WHERE t.depth = $depth and t.senpar_no > 0 and t.accepted_no = t.orig_no
+		 GROUP BY t.senpar_no) as nc on c.orig_no = nc.senpar_no
+		SET c.imm_count = nc.imm_count,
+		    c.species_count = c.species_count + nc.imm_species,
+		    c.genus_count = c.genus_count + nc.imm_genera,
+		    c.family_count = c.family_count + nc.imm_families,
+		    c.class_count = c.class_count + nc.imm_classes,
+		    c.order_count = c.order_count + nc.imm_orders,
+		    c.phylum_count = c.phylum_count + nc.imm_phyla";
+	
+	$result = $dbh->do($SQL_STRING);
     }
+    
+    # Now we can fill in the fields 'imm_invalid_count' and 'imm_junior_count', counting the
+    # invalid taxa and junior synonyms according to senpar_no.
+    
+    # $$$ add later
     
     # Now that we have the counts we can go back and fill in the field
     # 'major_no' by going through $INTS_WORK from top to bottom and filling in

@@ -20,7 +20,8 @@ package PBData;
 	  features => 'standard',
 	  special_params => 'standard',
 	  path_prefix => 'data1.0/',
-	  doc_template_dir => 'doc/1.0' });
+	  doc_template_dir => 'doc/1.0',
+	  output_template_dir => 'pages/1.0' });
     
     
     # We define the basic formats, just in case somebody asks for JSON.
@@ -63,7 +64,7 @@ package PBData;
     
     $ds0->define_node({ path => '/', 
 			public_access => 1,
-			doc_default_op_template => 'operation.tt',
+			error_template => '',
 			allow_format => 'json,csv,tsv,txt',
 			title => 'Documentation' });
     

@@ -14,6 +14,7 @@ our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING
 		      %AUTH_TABLE %OPINION_TABLE %OPINION_CACHE %REFS_TABLE
 		      %ATTRS_TABLE %INTS_TABLE %SEARCH_TABLE
 		      %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
+		      $ALL_STATUS $VALID_STATUS $INVALID_STATUS $JUNIOR_STATUS $VARIANT_STATUS
 		      $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE
 		      @ECOTAPH_FIELD_DEFS $RANK_MAP);
 
@@ -69,6 +70,14 @@ our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom'
 		       14 => 'superorder', 13 => 'order', 12 => 'suborder', 11 => 'infraorder',
 		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 
 		       6 => 'subtribe', 5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies');
+
+# The status codes and various subsets
+
+our ($ALL_STATUS) = "'belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum','root'";
+our ($VARIANT_STATUS) = "'misspelling of'";
+our ($INVALID_STATUS) = "'nomen dubium','nomen nudum','nomen oblitum','nomen vanum','invalid subgroup of'";
+our ($JUNIOR_STATUS) = "'subjective synonym of','objective synonym of','replaced by'";
+our ($VALID_STATUS) = "'belongs to','subjective synonym of','objective synonym of','replaced by','root'";
 
 
 # These maps translate the paleobiodb status codes into the attributes needed by Darwin Core.

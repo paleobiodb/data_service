@@ -52,4 +52,30 @@ hook after_error_render => sub {
 };
 
 
+# Define a base page that will respond to the route '/data/' with a
+# documentation page describing the various data service versions.
+
+package PBBase;
+
+{
+    my ($dsb) = Web::DataService->new(
+	{ name => 'base',
+	  title => 'PBDB Data Service',
+	  version => '',
+	  features => 'standard',
+	  special_params => 'standard',
+	  path_prefix => 'data/',
+	  doc_template_dir => 'doc/1.0' });
+
+    $dsb->define_node({ path => '/', 
+			public_access => 1,
+			doc_template => 'base.tt',
+			title => 'Documentation' });
+    
+    $dsb->define_node({ path => 'css',
+			file_dir => 'css' });
+    
+    $dsb->define_node({ path => 'images',
+			file_dir => 'images' });
+}
 

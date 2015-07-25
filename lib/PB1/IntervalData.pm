@@ -226,21 +226,20 @@ sub list {
     
     my @filters;
     
-    my $scale = $request->clean_param('scale');
     my @scale_ids = $request->clean_param_list('scale_id');
     
-    if ( defined $scale && $scale eq 'all' )
-    {
-	push @filters, "sm.scale_level is not null";
-    }
-    
-    elsif ( @scale_ids )
+    if ( @scale_ids )
     {
 	my $filter_string = join(',', @scale_ids);
 	
 	if ( $filter_string !~ /all/ )
 	{
 	    push @filters, "sm.scale_no in ($filter_string)";
+	}
+	
+	else
+	{
+	    push @filters, "sm.scale_no is not null";
 	}
     }
     
@@ -256,6 +255,16 @@ sub list {
 	push @filters, "i.early_age <= $max_ma" if $max_ma > 0;
     }
     
+    my @interval_ids = $request->clean_param_list('id');
+    
+    if ( @interval_ids )
+    {
+	my $filter_string = join(',', @interval_ids);
+	$filter_string = '-1' unless $filter_string;
+	
+	push @filters, "i.interval_no in ($filter_string)";
+    }
+    
     push @filters, "1=1" unless @filters;
     
     # Get the results in the specified order
@@ -263,8 +272,8 @@ sub list {
     my $order = $request->clean_param('order');
     
     my $order_expr = defined $order && $order eq 'younger' ?
-	"ORDER BY sm.scale_no, sm.scale_level, i.late_age" :
-	    "ORDER BY sm.scale_no, sm.scale_level, i.early_age desc";
+	"ORDER BY i.late_age, sm.scale_no, sm.scale_level" :
+	    "ORDER BY i.early_age desc, sm.scale_no, sm.scale_level";
     
     # Determine which fields and tables are needed to display the requested
     # information.

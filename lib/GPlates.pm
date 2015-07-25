@@ -3,6 +3,12 @@
 # 
 #   GPlates.pm
 # 
+# This module is responsible for updating the paleocoordinates of collections
+# in the Paleobiology Database, by querying the GPlates service at
+# caltech.edu.
+# 
+# Author: Michael McClennen
+# 
 
 package GPlates;
 
@@ -19,15 +25,19 @@ use LWP::UserAgent;
 
 use TableDefs qw($PALEOCOORDS $GEOPLATES $COLLECTIONS $COLL_MATRIX $INTERVAL_DATA);
 use ConsoleLog qw(initMessages logMessage);
+use CoreFunction qw(loadConfig configData);
 
 
 our ($GEOPLATES_WORK) = 'gpn';
-our ($PALEO_AUX) = 'pc_aux';
 
-our ($RETRY_LIMIT) = 3;
-our ($RETRY_INTERVAL) = 5;
-our ($FAIL_LIMIT) = 3;
+our ($DEFAULT_RETRY_LIMIT) = 3;
+our ($DEFAULT_RETRY_INTERVAL) = 5;
+our ($DEFAULT_FAIL_LIMIT) = 3;
 
+our ($DEFAULT_MAX_FEATURES) = 35;	# This value can be adjusted if necessary; it ensures
+                                        # that the length of each request URL won't exceed the
+                                        # server's limit.  Since we don't actually know what that
+                                        # limit is, we are conservative.
 
 # updatePaleocoords ( dbh, options )
 # 
@@ -40,35 +50,52 @@ sub updatePaleocoords {
     
     $options ||= {};
     
-    # We start by creating a control object to manage this process.
+    # We start by loading the relevant configuration settings from the
+    # paleobiology database configuratio nfile.
     
-    my $self = { dbh => $dbh,
-		 new_coords => {},
-		 source_points => {},
-		 update_count => 0,
-		 debug => $options->{debug},
-		 fail_count => 0,
-		 debug_count => 0,
-		 max_age_bound => undef,
-		 min_age_bound => undef,
-	       };
+    loadConfig();
     
-    bless $self, 'GPlates';
+    my $gplates_uri = configData('gplates_uri');
+    my $config_max_age = configData('gplates_max_age');
+    my $retry_limit = configData('gplates_retry_limit') || $DEFAULT_RETRY_LIMIT;
+    my $retry_interval = configData('gplates_retry_interval') || $DEFAULT_RETRY_INTERVAL;
+    my $fail_limit = configData('gplates_fail_limit') || $DEFAULT_FAIL_LIMIT;
+    my $max_features = configData('gplates_feature_limit') || $DEFAULT_MAX_FEATURES;
     
-    # Then process the other options.
+    die "You must specify the GPlates URI in the configuration file, as 'gplates_uri'\n"
+	unless $gplates_uri;
+    
+    # Then process any command-line options.
     
     my $min_age = $options->{min_age} + 0 if defined $options->{min_age} && $options->{min_age} > 0;
     my $max_age = $options->{max_age} + 0 if defined $options->{max_age} && $options->{max_age} > 0;
     
     $min_age ||= 0;
-    $max_age ||= 4000;
+    $max_age ||= $config_max_age;
     
-    $self->{min_age_bound} = $min_age;
-    $self->{max_age_bound} = $max_age;
+    die "You must specify the GPlates maximum age in the configuration file as 'gplates_max_age', or on the command line.\n"
+	unless $max_age;
+    
+    # We then create a control object to manage this process.
+    
+    my $self = { dbh => $dbh,
+		 source_points => {},
+		 update_count => 0,
+		 debug => $options->{debug},
+		 fail_count => 0,
+		 debug_count => 0,
+		 min_age_bound => $min_age,
+		 max_age_bound => $max_age,
+		 service_uri => $gplates_uri,
+		 retry_limit => $retry_limit,
+		 retry_interval => $retry_interval,
+		 fail_limit => $fail_limit,
+		 max_features => $max_features,
+	       };
+    
+    bless $self, 'GPlates';
     
     my ($sql, $result, $count, @filters);
-    
-    $DB::single = 1;
     
     # We start by making sure that we have the proper tables.
     
@@ -155,7 +182,7 @@ sub updatePaleocoords {
     $count += $dbh->do($sql);
     
     $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-		SET p.mid_age = null, p.mid_lng = null, p.late_lng = null,
+		SET p.mid_age = null, p.mid_lng = null, p.mid_lat = null,
 		    p.update_time = now()
 		WHERE round((c.early_age + c.late_age)/2,0) <> p.mid_age and
 		      (round((c.early_age + c.late_age)/2,0) between $min_age and $max_age or 
@@ -166,126 +193,49 @@ sub updatePaleocoords {
     logMessage(2, "    cleared $count entries whose ages did not correspond to their collections")
 	if defined $count && $count > 0;
     
-    # $sql =     "INSERT INTO $PALEO_AUX
-    # 		SELECT collection_no
-    # 		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
-    # 		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0 and
-    # 		      (c.lat <> p.present_lat or c.lng <> p.present_lng or 
-    # 		       p.present_lat is null or p.present_lng is null or
-    # 		       round(c.early_age,0) <> p.early_age or round(c.late_age,0) <> p.late_age)
-    # 		       $age_filter";
-    
-    # print STDERR $sql . "\n\n" if $self->{debug};
-    
-    # $count = $dbh->do($sql);
-    
-    # logMessage(2, "    found $count collections to recompute") if $count > 0;
-    
-    # $sql =     "REPLACE INTO $PALEOCOORDS (collection_no, present_lng, present_lat, early_age, mid_age, late_age)
-    # 		SELECT collection_no, c.lng, c.lat, 
-    # 		       round(c.early_age,0), round((c.early_age + c.late_age)/2,0),
-    # 		       round(c.late_age,0)
-    # 		FROM $PALEO_AUX JOIN $COLL_MATRIX as c using (collection_no)";
-    
-    # $count = $dbh->do($sql);
-    
-    # If any age fields are not up-to-date, update them and clear the
-    # corresponding coordinates.
-    
-    # $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-    #  		SET p.early_age = round(c.early_age,0), early_lat = null, early_lng = null
-    # 		WHERE round(c.early_age,0) <> p.early_age";
-    
-    # $count = $dbh->do($sql);
-    
-    # logMessage(2, "    updated $count early ages") if $count > 0;
-    
-    # $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-    #  		SET p.mid_age = round((c.early_age + c.late_age)/2,0), mid_lat = null, mid_lng = null
-    # 		WHERE round((c.early_age + c.late_age)/2,0) <> p.mid_age";
-    
-    # $count = $dbh->do($sql);
-    
-    # logMessage(2, "    updated $count mid ages") if $count > 0;
-    
-    # $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-    #  		SET p.late_age = round(c.late_age,0), late_lat = null, late_lng = null
-    # 		WHERE round(c.late_age,0) <> p.late_age";
-    
-    # $count = $dbh->do($sql);
-    
-    # logMessage(2, "    updated $count late ages") if $count > 0;
-    
-    # Next, we need to query for all records in $PALEOCOORDS that have missing
-    # entries (including the ones just added).
-    
-    # $sql =     "SELECT p.collection_no, p.present_lng, p.present_lat,
-    # 		       p.early_age, p.mid_age, p.late_age,
-    # 		       early_lng, mid_lng, late_lng
-    # 		FROM $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-    # 		WHERE early_lng is null or mid_lng is null or late_lng is null
-    # 		$age_filter";
-    
-    # If age limits were specified, then construct an SQL filter for them.
-    
-    my @age_filter = ();
-    push @age_filter, "c.early_age >= $min_age" if defined $min_age;
-    push @age_filter, "c.late_age <= $max_age" if defined $max_age;
-    
-    my $age_filter = '';
-    $age_filter = ' and ' . join(' and ', @age_filter) if @age_filter;
-    
     # Now query for all collections whose paleocoordinates need updating.
     
     logMessage(2, "    looking for collections whose palecoordinates need updating...");
     
     $sql =     "SELECT collection_no, c.lng as present_lng, c.lat as present_lat,
-		       round(c.early_age,0) as early_age,
-		       round((c.early_age + c.late_age)/2,0) as mid_age,
-		       round(c.late_age,0) as late_age
+		       'early' as selector, round(c.early_age,0) as age
     		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
-    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0 and
-    		      (c.lat <> p.present_lat or c.lng <> p.present_lng or 
-    		       p.present_lat is null or p.present_lng is null or
-		       p.early_lng is null or p.mid_lng is null or p.late_lng is null or
-    		       round(c.early_age,0) <> p.early_age or round(c.late_age,0) <> p.late_age or
-		       round((c.early_age + c.late_age)/2,0) <> p.mid_age)
-    		       $age_filter";
+    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
+			and round(c.early_age,0) between $min_age and $max_age
+			and (p.early_age is null or p.early_lng is null or p.early_lat is null)";
     
-    print STDERR $sql . "\n\n" if $self->{debug};
+    my $early_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
     
-    my $sth = $dbh->prepare($sql);
+    $sql =     "SELECT collection_no, c.lng as present_lng, c.lat as present_lat,
+		       'mid' as selector, round((c.early_age + c.late_age)/2,0) as age
+    		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
+    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
+			and round((c.early_age + c.late_age)/2,0) between $min_age and $max_age
+			and (p.mid_age is null or p.mid_lng is null or p.mid_lat is null)";
     
-    $sth->execute();
+    my $mid_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    $sql =     "SELECT collection_no, c.lng as present_lng, c.lat as present_lat,
+		       'late' as selector, round(c.late_age,0) as age
+    		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
+    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
+			and round(c.late_age,0) between $min_age and $max_age
+			and (p.late_age is null or p.late_lng is null or p.late_lat is null)";
+    
+    my $late_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
     
     $count = 0;
     
-    while ( my $record = $sth->fetchrow_hashref )
+    foreach my $record ( @$early_updates, @$mid_updates, @$late_updates )
     {
-	my $coll_no = $record->{collection_no};
+	my $collection_no = $record->{collection_no};
 	my $lng = $record->{present_lng};
 	my $lat = $record->{present_lat};
-	my $early_age = $record->{early_age};
-	my $mid_age = $record->{mid_age};
-	my $late_age = $record->{late_age};
+	my $selector = $record->{selector};
+	my $age = $record->{age};
 	
-	if ( defined $early_age and $early_age >= $min_age and $early_age <= $max_age )
-	{
-	    push @{$self->{source_points}{$early_age}}, [$coll_no, 'early', $lng, $lat];
-	    $count++;
-	}
-	
-	if ( defined $mid_age and $mid_age >= $min_age and $mid_age <= $max_age )
-	{
-	    push @{$self->{source_points}{$mid_age}}, [$coll_no, 'mid', $lng, $lat];
-	    $count++;
-	}
-	
-	if ( defined $late_age and $late_age >= $min_age and $late_age <= $max_age )
-	{
-	    push @{$self->{source_points}{$late_age}}, [$coll_no, 'late', $lng, $lat];
-	    $count++;
-	}
+	push @{$self->{source_points}{$age}}, [$collection_no, $selector, $lng, $lat];
+	$count++;
     }
     
     logMessage(2, "    found $count entries to update");
@@ -298,13 +248,14 @@ sub updatePaleocoords {
     # Then we must step through the keys of $self->{source_points} one by one.
     # These keys are ages (in Ma), and we need to generate a GPlates rotation
     # query for each separate age.  In order to identify each point, we create
-    # a decimal number using the collection_no field in conjunction with "0"
-    # for "early", "1" for "mid" and "2" for "late" ages.
+    # a feature name using the collection_no field in conjunction with the
+    # selector value of 'early', 'mid' or 'late' to identify which
+    # paleocoordinate age we are computing.
     
     my $ua = LWP::UserAgent->new();
     $ua->agent("Paleobiology Database Updater/0.1");
     
-    my %age_code = ( 'early' => 0, 'mid' => 1, 'late' => 2 );
+    $DB::single = 1;
     
  AGE:
     foreach my $age (sort { $a <=> $b } keys %{$self->{source_points}})
@@ -315,43 +266,62 @@ sub updatePaleocoords {
 	next AGE if defined $self->{min_age_bound} && $age < $self->{min_age_bound};
 	next AGE if defined $self->{max_age_bound} && $age > $self->{max_age_bound};
 	
-	# Construct an HTTP request body.
+	# Grab the set of points that need to be rotated to this age.
 	
-	my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
-	$request_json .= "\"features\": [";
-	my $comma = '';
-	my $count = 0;
+	my @points = @{$self->{source_points}{$age}};
 	
-	foreach my $point ( @{$self->{source_points}{$age}} )
+	# Now create as many requests as are necessary to rotate all of these
+	# points. 
+	
+	while ( @points )
 	{
-	    my ($coll_no, $which, $lng, $lat) = @$point;
-	    my $oid = $age_code{$which} . ".$coll_no";
+	    # Start with the basic parameters, ending with the preamble for a
+	    # feature collection.
 	    
-	    next unless $lng ne '' && $lat ne '';	# skip any point with null coordinates.
+	    my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
+	    $request_json .= "\"features\": [";
+	    my $comma = '';
+	    my @oid_list;
 	    
-	    $request_json .= $comma; $comma = ",";
-	    $request_json .= $self->generateFeature($lng, $lat, $oid);
-	    $count++;
-	}
-	
-	$request_json .= "]}";
-	
-	# Now if we have at least one point to rotate then fire off the
-	# request and process the answer (if any)
-	
-	next AGE unless $count;
-	
-	logMessage(2, "    rotating $count points to $age Ma");
-	
-	$self->makeGPlatesRequest($ua, \$request_json, $age);
-	
-	# If we have gotten too many server failures in a row, then abort this
-	# run.
-	
-	if ( $self->{fail_count} >= $FAIL_LIMIT )
-	{
-	    logMessage(2, "    ABORTING RUN DUE TO REPEATED QUERY FAILURE");
-	    last;
+	    # Add one feature for each point, up to the limit for a single request.
+	    
+	FEATURE:
+	    while ( my $point = shift @points )
+	    {
+		my ($coll_no, $selector, $lng, $lat) = @$point;
+		my $oid = "$selector.$coll_no";
+		
+		next unless $lng ne '' && $lat ne '';	# skip any point with null coordinates.
+		
+		$request_json .= $comma; $comma = ",";
+		$request_json .= $self->generateFeature($lng, $lat, $oid);
+		push @oid_list, $oid;
+		
+		last FEATURE if @oid_list >= $self->{max_features};
+	    }
+	    
+	    $request_json .= "]}";
+	    
+	    # Now if we have at least one point to rotate then fire off the
+	    # request and process the answer (if any)
+	    
+	    my $count = scalar(@oid_list);
+	    my $oid_string = join(',', @oid_list);
+	    
+	    next AGE unless $count;
+	    
+	    logMessage(2, "    rotating $count points to $age Ma ($oid_string)");
+	    
+	    $self->makeGPlatesRequest($ua, \$request_json, $age);
+	    
+	    # If we have gotten too many server failures in a row, then abort this
+	    # run.
+	    
+	    if ( $self->{fail_count} >= $self->{fail_limit} )
+	    {
+		logMessage(2, "    ABORTING RUN DUE TO REPEATED QUERY FAILURE");
+		last;
+	    }
 	}
     }
     
@@ -411,7 +381,7 @@ sub generateFeature {
     my ($self, $lng, $lat, $oid) = @_;
     
     my $output = "{\"type\": \"Feature\",";
-    $output .= "\"geometry\": {\"type\": \"Point\", \"coordinates\": [$lat, $lng]},";
+    $output .= "\"geometry\": {\"type\": \"Point\", \"coordinates\": [$lng, $lat]},";
     $output .= "\"properties\": {\"name\": \"$oid\", \"feature_type\": \"gpml:UnclassifiedFeature\", ";
     $output .= "\"begin_age\": \"4000.0\", \"end_age\": \"0.0\"}";
     $output .= "}";
@@ -427,14 +397,15 @@ sub makeGPlatesRequest {
     # Generate a GPlates request.  The actual request is wrapped inside a
     # while loop so that we can retry it if something goes wrong.
     
-    my $uri = "http://gplates.gps.caltech.edu:8080/reconstruct_feature_collection/";
+    my $uri = $self->{service_uri};
+    
     my @headers = ( 'Content-Type' => 'application/x-www-form-urlencoded',
 		    'Content-Length' => length($$request_ref) );
     
     my $req = HTTP::Request->new(POST => $uri, \@headers, $$request_ref);
     my ($resp, $content_ref);
-    my $retry_count = $RETRY_LIMIT;
-    my $retry_interval = $RETRY_INTERVAL;
+    my $retry_count = $self->{retry_limit};
+    my $retry_interval = $self->{retry_interval};
     
  RETRY:
     while ( $retry_count )
@@ -465,7 +436,7 @@ sub makeGPlatesRequest {
 	    $retry_count--;
 	    logMessage(2, "      SERVER CLOSED CONNECTION, RETRYING...") if $retry_count > 0;
 	    sleep($retry_interval);
-	    $retry_interval += $RETRY_INTERVAL;
+	    $retry_interval *= 2;
 	    next RETRY;
 	}
 	
@@ -497,6 +468,9 @@ sub makeGPlatesRequest {
 }
 
 
+my %is_selector = ( 'early' => 1, 'mid' => 1, 'late' => 1 );
+
+
 sub processResponse {
     
     my ($self, $age, $content_ref) = @_;
@@ -525,7 +499,7 @@ sub processResponse {
 	my $key = $feature->{properties}{NAME};
 	my ($selector, $collection_no) = split(qr{\.}, $key);
 	
-	unless ( defined $selector && $selector =~ qr{^[0-2]$} && defined $collection_no && $collection_no > 0 )
+	unless ( defined $selector && $is_selector{$selector} && defined $collection_no && $collection_no > 0 )
 	{
 	    push @bad_list, $key;
 	    next POINT;
@@ -543,24 +517,6 @@ sub processResponse {
 	my $plate_id = $feature->{properties}{PLATE_ID};
 	
 	$self->updateOneEntry($collection_no, $selector, $age, $lng, $lat, $plate_id);
-	
-	# If this is the first request, and the response includes age
-	# bounds, use them.
-	
-	# unless ( $self->{bounds_checked} )
-	# {
-	#     if ( defined $feature->{properties}{FROMAGE} )
-	#     {
-	# 	$self->{max_age_bound} = $feature->{properties}{FROMAGE};
-	# 	logMessage(2, "      max age bound reported as $self->{max_age_bound}") if $self->{debug};
-	#     }
-	#     if ( defined $feature->{properties}{TOAGE} )
-	#     {
-	# 	$self->{min_age_bound} = $feature->{properties}{TOAGE};
-	# 	logMessage(2, "      min age bound reported as $self->{min_age_bound}") if $self->{debug};
-	#     }
-	#     $self->{bounds_checked} = 1;
-	# }
     }
     
     if ( @bad_list )
@@ -582,17 +538,17 @@ sub updateOneEntry {
     
     $self->{add_row_sth}->execute($collection_no);
     
-    if ( $selector eq '0' )
+    if ( $selector eq 'early' )
     {
 	$self->{early_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
     }
     
-    elsif ( $selector eq '1' )
+    elsif ( $selector eq 'mid' )
     {
 	$self->{mid_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
     }
     
-    elsif ( $selector eq '2' )
+    elsif ( $selector eq 'late' )
     {
 	$self->{late_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
     }
@@ -739,3 +695,150 @@ sub readPlateData {
 }
 
 1;
+
+
+=head1 NAME
+
+GPlates - set paleocoordinates for collections in the Paleobiology Database
+
+=head1 SYNOPSIS
+
+    use GPlates qw(ensureTables updatePaleocoords readPlateData);
+    
+    updatePaleocoords($dbh, $options);
+
+=head1 DESCRIPTION
+
+GPlates computes paleocoordinates by making requests to the GPlates server at
+http://gplates.gps.caltech.edu/.  The particular service URL is read from the
+paleobiodb configuration file (typically "config.yml") as indicated below.
+These paleocoordinates are determined based on the present location of the
+collection (longitude and latitude) in conjunction with the beginning, middle
+and end points of the collection's stated age range.
+
+In the default mode of operation, any collections which have been added to the
+database or have had their location or age range modified will have their
+paleocoordinates updated.  This behavior may be modified by specifying one or
+more of the options indicated below.
+
+=head1 CONFIGURATION
+
+The following configuration directives are read from the application
+configuration file (typically "config.yml"):
+
+=over
+
+=item gplates_uri
+
+The value of this directive should be the URL of the GPlates service for
+computing paleocoordinates.  This module is designed to work with the
+service which at the time of this writing is associated with the URL
+"http://gplates.gps.caltech.edu/reconstruct_feature_collection/".
+
+If this directive is not found in the configuration file, a fatal error will
+result. 
+
+=item gplates_max_age
+
+The value of this directive should be the maximum age for which the GPlates
+service will return valid results.  Any collection age range points (early,
+middle and/or end) exceeding this threshold will not have paleocoordinates
+computed for them.
+
+This directive must be either specified in the configuration file or via the
+command line (if the script "gplates_update.pl" is used) or else a fatal error
+will result.
+
+=item gplates_retry_limit
+
+The value of this directive should be the number of times to retry a request
+to the GPlates server if the request times out.  If not specified, it defaults
+to 3.  A request that returns an HTTP error code will not be retried.
+
+=item gplates_retry_interval
+
+The value of this directive should be the number of seconds to wait before
+retrying a timed-out request.  This interval will be doubled before each
+successive try is made.  If not specified, it defaults to 5.
+
+=item gplates_fail_limit
+
+The value of this directive should be the number of request failures that are
+tolerated before the update process is aborted.  If not specified, it defaults
+to 3.
+
+=item gplates_feature_limit
+
+The value of this directive should be the maximum number of features (points) to be included in a
+single request to the GPlates service.  If not specified, it defaults to 35.  This is necessary
+because the service does not work properly if too many points are included in one request.  As
+many requests as necessary will be made so as to update all paleocoordinates that need updating.
+
+=back
+
+=head1 SUBROUTINES
+
+The following subroutines are exported on request:
+
+=head2 updatePaleocoords ( $dbh, $options )
+
+This subroutine updates paleocoordinates in the database, making calls to the
+GPlates server in order to obtain the proper values.  The default mode of
+operation is to update the coordinates for all collections with a valid
+latitude and longitude whose age range is less than the specified maximum age.
+All collections will get three sets of palecoordinates, corresponding to the
+beginning, middle and end of their age range.  However, age points that fall
+outside of the specified age range (see L</max_age> and L</min_age> below) will
+not be updated.
+
+The first argument to this subroutine must be a valid DBI database handle.
+The second, if given, must be a hash of option values.  Valid options include:
+
+=over
+
+=item update_all
+
+If this option is given a true value, then all coordinates within the
+specified age range will be recomputed.
+
+=item clear_all
+
+If this option is given a true value, then all coordinates within the
+specified age range will be cleared.  No further action will be taken.
+
+=item min_age
+
+This option specifies the minimum end of the age range to update (in millions
+of years ago, or "Ma").  If not given, it defaults to 0.
+
+=item max_age
+
+This option specifies the maximum end of hte age range to update (in millions
+of years ago, or "Ma").  If not given, it defaults to the value of the
+configuration directive L</gplates_max_age>.  If this directive is not found
+in the configuration file, a fatal error will be thrown.
+
+=back
+
+=head2 ensureTables ( $dbh, $force )
+
+This subroutine makes sure that the tables used to hold paleocoordinates exist
+in the database.  The first argument must be a valid DBI database handle.
+
+If the second argument is true, then the existing tables (if any) will be
+dropped and empty ones recreated in their place.  This will, of course, delete
+all paleocoordinate information.  A subsequent call to L</updatePaleocoords>
+and much traffic to the GPlates server will be required in order to
+reconstitute this information.
+
+=head2 readPlateData ( $dbh )
+
+This subroutine will read lines of text from standard input and use them to
+populate the table $GEOPLATES (see TableDefs.pm).
+
+The input must be either a geojson feature collection whose features have the
+properties C<PLATE_ID> and C<NAME>, or a sequence of plain text lines
+containing a 3-digit plate ID followed by an alphanumeric plate abbreviation
+followed by a plate description.  These three must be separated by whitespace
+and the plate description must start with an alphabetic character.
+

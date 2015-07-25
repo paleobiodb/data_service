@@ -1252,7 +1252,7 @@ sub generateStrataFilters {
     
     if ( my $name = $self->clean_param('name') )
     {
-	$name .= '%' if $is_auto eq 'auto';
+	$name .= '%' if defined $is_auto && $is_auto eq 'auto';
 	my $quoted = $dbh->quote($name);
 	push @filters, "cs.name like $quoted";
     }

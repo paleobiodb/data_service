@@ -23,7 +23,7 @@
 # 
 
 use open ':std', ':encoding(utf8)';
-use Test::Most tests => 6;
+use Test::Most tests => 7;
 
 use LWP::UserAgent;
 use JSON;
@@ -237,6 +237,29 @@ subtest 'config.tsv' => sub {
 };
 
 
+# Check the 'vocab' parameter
+
+subtest 'vocab' => sub {
+
+    my $config_pbdb = $T->fetch_url("/data1.1/config.json?show=clusters&vocab=pbdb", 'config pbdb');
+    my $config_com = $T->fetch_url("/data1.1/config.txt?show=clusters&vocab=com", 'config com');
+    
+    unless ( $config_pbdb && $config_com )
+    {
+	diag("skipping remainder of this subtest");
+	return;
+    }
+    
+    my ($r) = $T->extract_records($config_pbdb, 'config vocab');
+    
+    ok( exists $r->{config_section}, 'vocab set to pbdb' );
+    
+    ($r) = $T->extract_records($config_com, 'config com');
+    
+    ok( exists $r->{cfg}, 'vocab set to com' );
+};
+
+
 # Now test the bad media type response.
 
 subtest 'config.foo' => sub {
@@ -257,7 +280,7 @@ subtest 'config.foo' => sub {
 
 subtest 'config.json bad show' => sub {
 
-    my $config_json = $T->fetch_url("/data1.1/config.json?show=foo", "config.json bad show");
+    my $config_json = $T->fetch_nocheck("/data1.1/config.json?show=foo", "config.json bad show");
     
     unless ( $config_json )
     {

@@ -131,9 +131,9 @@ sub initialize {
     
     $ds->define_block('1.2:occs:basic' =>
 	{ select => ['o.occurrence_no', 'o.reid_no', 'o.latest_ident', 'o.collection_no', 'o.taxon_no as identified_no',
-		     't.rank as identified_rank', 't.status as taxonomic_reason', 't.spelling_no',
+		     't.rank as identified_rank', 't.status as taxon_status', 't.orig_no', 't.spelling_no', 't.accepted_no',
 		     'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
-		     'tv.spelling_no as accepted_no', 'tv.name as accepted_name', 'tv.rank as accepted_rank',
+		     'tv.spelling_no as accepted_spelling', 'tv.name as accepted_name', 'tv.rank as accepted_rank',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
 		     'o.species_name', 'o.species_reso',
@@ -156,37 +156,37 @@ sub initialize {
 	    "in this field.",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
-	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', dedup => 'accepted_name' },
+	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa' },
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_name>.",
-	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', dedup => 'accepted_rank' },
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr' },
 	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_rank>.",
 	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
-	{ output => 'identified_no', com_name => 'iid', dedup => 'accepted_no' },
+	{ output => 'identified_no', com_name => 'iid' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
 	    "we have no further information about the classification of this occurrence.  In some cases,",
 	    "the genus has been entered into the taxonomic hierarchy but not the species.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_no>.",
-	{ output => 'taxonomic_reason', com_name => 'idu' },
+	{ output => 'difference', com_name => 'tdf' },
 	    "If the identified name is different from the accepted name, this field gives",
 	    "the reason why.  This field will be present if, for example, the identified name",
 	    "is a junior synonym or nomen dubium, or if the species has been recombined, or",
 	    "if the identification is misspelled.",
-	{ output => 'accepted_name', com_name => 'tna', if_field => 'identified_no' },
+	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
-	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'identified_no' },
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
 	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
 	    "of this database.",
 	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
-	{ output => 'accepted_no', com_name => 'tid', if_field => 'identified_no' },
+	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
@@ -2288,65 +2288,110 @@ sub process_basic_record {
 	$record->{identified_rank} = $record->{accepted_rank};
     }
     
-    # If the 'taxonomic_reason' value is 'belongs to', this is the common case
-    # and there is no need to report it.  If 'taxon_name' is different from
-    # 'accepted_name', then substitute 'spelling_reason'.  If the current
-    # variant of the name has a spelling reason of 'recombination', then
-    # use that.  Otherwise just clear the field.
+    # If the 'taxon_name' and 'accepted_name' fields are different, then
+    # create a 'difference' field.  This may contain one or more relevant reasons.
+    # If there is no accepted name, then the taxon was not entered at all.
     
-    if ( $record->{taxonomic_reason} && $record->{taxonomic_reason} eq 'belongs to' )
+    if ( ! $record->{accepted_name} )
     {
-	if ( $record->{taxon_name} && $record->{accepted_name} &&
-	     $record->{taxon_name} ne $record->{accepted_name} )
+	if ( ! $record->{accepted_no} )
 	{
-	    my $len = length($record->{accepted_name});
-	    
-	    if ( $record->{accepted_name} eq substr($record->{taxon_name}, 0, $len) )
-	    {
-		$record->{taxonomic_reason} = 'taxon not fully entered';
-	    }
-	    
-	    else
-	    {
-		$record->{taxonomic_reason} = $record->{spelling_reason};
-		
-		if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' )
-		{
-		    $record->{taxonomic_reason} = 'recombination';
-		}
-		
-		elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
-			$record->{taxonomic_reason} ne 'correction' )
-		{
-		    $record->{taxonomic_reason} = 'correction';
-		}
-		
-		elsif ( $record->{taxonomic_reason} eq 'original spelling' &&
-			$record->{identified_no} eq $record->{spelling_no} )
-		{
-		    $record->{taxonomic_reason} = '';
-		}
-		
-		elsif ( $record->{identified_rank} && $record->{identified_rank} ne $record->{accepted_rank} )
-		{
-		    $record->{taxonomic_reason} ||= 'taxon not fully entered';
-		}
-	    }
+	    $record->{difference} = 'taxon not entered';
 	}
 	
 	else
 	{
-	    $record->{taxonomic_reason} = '';
+	    $record->{difference} = 'error';
 	}
     }
     
-    # If we don't have a value for 'taxonomic_reason' at all, then use 'taxon not
-    # entered'.
+    # If the accepted name exists and is different from the identified name,
+    # there will be one or more reasons why.
     
-    elsif ( ! $record->{identified_no} )
+    elsif ( $record->{taxon_name} && $record->{accepted_name} &&
+	    $record->{taxon_name} ne $record->{accepted_name} )
     {
-	$record->{taxonomic_reason} = 'taxon not entered';
+	my @reasons;
+	
+	# my $len = length($record->{accepted_name});
+	
+	# if ( $record->{accepted_name} eq substr($record->{taxon_name}, 0, $len) &&
+	#      $record->{identified_rank} < 5 )
+	# {
+	#     $record->{taxonomic_reason} = 'taxon not fully entered';
+	# }
+	
+	# If the species was not entered then report that as the primary difference.
+	
+	if ( defined $record->{identified_rank} && $record->{identified_rank} < 4 &&
+	     defined $record->{accepted_rank} && $record->{accepted_rank} >= 4 &&
+	     ( $record->{taxon_status} eq 'belongs to' || 
+	       $record->{taxon_status} eq 'subjective synonym of' ||
+	       $record->{taxon_status} eq 'objective synonym of' ||
+	       $record->{taxon_status} eq 'replaced by' ||
+	       $record->{taxon_status} eq '' ) )
+	{
+	    push @reasons, $record->{taxon_status} if $record->{taxon_status} ne 'belongs to' &&
+		$record->{taxon_status} ne '';
+	    push @reasons, 'species not entered';
+	}
+	
+	# Otherwise, if the orig_no and accepted_no are the same, then the two
+	# names are variants.  So try to figure out why they differ.  If we
+	# can't find anything else, just report 'variant'.
+	
+	elsif ( $record->{orig_no} && $record->{accepted_no} && 
+	     $record->{orig_no} ne $record->{accepted_no} )
+	{
+	    if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
+	         $record->{spelling_reason} && $record->{spelling_reason} eq 'recombination' )
+	    {
+		push @reasons, 'recombination';
+	    }
+	    
+	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'reassignment' ||
+		    $record->{spelling_reason} && $record->{spelling_reason} eq 'reassignment' )
+	    {
+		push @reasons, 'reassignment';
+	    }
+	    
+	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
+		    $record->{spelling_reason} ne 'correction' )
+	    {
+		push @reasons, 'correction';
+	    }
+	    
+	    else
+	    {
+		push @reasons, 'variant';
+	    }
+	}
+	
+	# Otherwise, we report the taxonomic status of the identified name as
+	# the difference.
+	
+	else
+	{
+	    push @reasons, $record->{taxon_status};
+	}
+	
+	# If the identified name is a misspelling, report that right away in 
+	# front of any other differences there might be.
+	
+	if ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
+	{
+	    unshift @reasons, 'misspelling';
+	}
+	
+	# Now join all of the reasons together.
+	
+	$record->{difference} = join(q{, }, @reasons);
     }
+    
+    # Otherwise, the accepted name and identified name are the same so there
+    # is no difference.
+    
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -2384,6 +2429,20 @@ my %ID_TYPE = ( orig_no => 'TXN',
 sub process_occ_com {
     
     my ($request, $record) = @_;
+    
+    # Remove duplicate fields.
+    
+    delete $record->{identified_no} if $record->{identified_no} && $record->{accepted_spelling} &&
+	$record->{identified_no} eq $record->{accepted_spelling};
+    
+    delete $record->{identified_no} if $record->{taxon_name} && $record->{accepted_name} &&
+	$record->{taxon_name} eq $record->{accepted_name};
+    
+    delete $record->{identified_name} if $record->{identified_name} && $record->{accepted_name} &&
+	$record->{identified_name} eq $record->{accepted_name};
+    
+    delete $record->{identified_rank} if $record->{identified_rank} && $record->{accepted_rank} &&
+	$record->{identified_rank} eq $record->{accepted_rank};
     
     # Alter all object identifiers from the numeric values stored in the
     # database to the text form reported externally.
