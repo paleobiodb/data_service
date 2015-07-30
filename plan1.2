@@ -39,7 +39,7 @@ Needed for data1.2 to be finished
  - add negation to authorized_by... (also out of base params)	(*)
  - match_name should not return species unless % given for	(DONE, NT)
    genus
- - add taxonomic_reason to taxon output, just like for occs     (**)
+ - add taxonomic_reason to taxon output, just like for occs     (DONE, NT)
  - add all_records to occs/taxa					(**)
  - taxa/list should take var: vs. txn: into account		(**)
  - fix doc for occs/taxa param: reso				(***)
@@ -47,6 +47,8 @@ Needed for data1.2 to be finished
  - fix interval params for occs/prevalence			(**)
    - should work same as for occs/list
  - BUG colls/refs and occs/refs both crash			(DONE, NT)
+ - BUG occs/taxa reports txn:ERROR instead of txn:UFnnn, etc.   (DONE, NT)
+ - report something reasonable when fetching taxon UFnnn.       (**)
  - colls/summary needs checking for parameter grouping,		(**)
    all_records, min_ma and max_ma
  - add occs/summary with occ_modified_since, etc.		(*)
@@ -61,7 +63,7 @@ Needed for data1.2 to be finished
  - fix n/a in com vocabulary (latlng_precision)			(*)
  - add taxon_name and taxon_id params to taxa/thumb, taxa/icon  (*)
  - make show=counts work with refs/list				(DONE, NT)
- - make sure mammal orders are reported easily in Navigator	(**)
+ - make sure mammal orders are reported easily in Navigator	(DONE, NT)
  - tests!!!
 
 Optional, will probably put off until after initial release

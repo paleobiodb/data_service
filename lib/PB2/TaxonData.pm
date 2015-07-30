@@ -131,6 +131,7 @@ sub initialize {
 	    "last is suppressed in the compact vocabulary, because one can simply check",
 	    "for the presence of C<vid> instead.",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
+	{ set => 'accepted_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
@@ -161,14 +162,21 @@ sub initialize {
 	#     "This field only appears if that vocabulary is selected.",
 	{ output => 'accepted_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'accepted_no', 
 	  com_name => 'acc' },
-	    "If this field is not empty, it gives the identifier of the name that should",
-	    "be used in place of this one.",
-	# { output => 'accepted_rank', com_name => 'acr', dedup => 'taxon_rank' },
-	#     "If this field is not empty, it gives the rank of the name that should",
-	#     "be used in place of this one.",
+	    "If this name is either a junior synonym or an invalid name, this field gives",
+	    "the identifier of the accepted name to be used in its place.  Otherwise, its value",
+	    "will be the same as C<orig_no>.  In the compact vocabulary, this field",
+	    "will be omitted in that case.",
+	{ output => 'accepted_rank', com_name => 'acr' },
+	    "If C<accepted_no> is different from C<orig_no>, this field",
+	    "gives the rank of the accepted name.  Otherwise, its value will",
+	    "be the same as C<taxon_rank>.  In the compact voabulary, this field",
+	    "will be omitted in that case.",
 	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
-	  com_name => 'acn', dedup => 'taxon_name' },
-	    "If this field is not empty, it gives the name that should be used in place of this one.",
+	  com_name => 'acn' },
+	    "If C<accepted_no> is different from C<orig_no>, this field gives the",
+	    "accepted name.  Otherwise, its value will be",
+	    "the same as C<taxon_name>.  In the compact vocabulary, this field",
+	    "will be omitted in that case.",
 	{ output => 'senpar_no', pbdb_name => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
 	    "This field and those following are only available if the classification of",
@@ -210,6 +218,7 @@ sub initialize {
 	    "more of the following, as a comma-separated list:",
 	    $ds->document_set('1.2:refs:reftype'),
 	{ set => 'taxon_rank', if_vocab => 'com', lookup => \%TAXON_RANK },
+	{ set => 'accepted_rank', if_vocab => 'pbdb', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
 	    "The rank of this taxon as mentioned in the reference, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
@@ -222,8 +231,10 @@ sub initialize {
 	#     "The year in which this name was published",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
 	    "The common (vernacular) name of this taxon, if any",
-	{ output => 'status', com_name => 'sta', if_block => 'full' },
-	    "The taxonomic status of this name",
+	{ output => 'difference', com_name => 'tdf' },
+	    "If this name is either a junior synonym or is invalid for some reason,",
+	    "this field gives the reason.  The fields C<accepted_no>",
+	    "and C<accepted_name> then specify the name that should be used instead.",
 	{ set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, if_vocab => 'dwc', 
 	  if_block => 'full' },
 	{ output => 'tax_status', dwc_name => 'taxonomicStatus', if_vocab => 'dwc', if_block => 'full' },
@@ -235,13 +246,22 @@ sub initialize {
 	    "The nomenclatural status of this name, in the Darwin Core vocabulary.",
 	    "This field only appears if that vocabulary is selected.",
 	{ output => 'accepted_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'accepted_no', 
-	  com_name => 'acc', dedup => 'orig_no' },
-	    "If this name is either a junior synonym or an invalid name, the identifier",
-	    "of the accepted name to be used in its place.",
+	  com_name => 'acc' },
+	    "If this name is either a junior synonym or an invalid name, this field gives",
+	    "the identifier of the accepted name to be used in its place.  Otherwise, its value",
+	    "will be the same as C<orig_no>.  In the compact vocabulary, this field",
+	    "will be omitted in that case.",
+	{ output => 'accepted_rank', com_name => 'acr' },
+	    "If C<accepted_no> is different from C<orig_no>, this field",
+	    "gives the rank of the accepted name.  Otherwise, its value will",
+	    "be the same as C<taxon_rank>.  In the compact voabulary, this field",
+	    "will be omitted in that case.",
 	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
-	  com_name => 'acn', dedup => 'taxon_name' },
-	    "If this name is either a junior synonym or an invalid name, the accepted name",
-	    "that should be used in its place.",
+	  com_name => 'acn' },
+	    "If C<accepted_no> is different from C<orig_no>, this field gives the",
+	    "accepted name.  Otherwise, its value will be",
+	    "the same as C<taxon_name>.  In the compact vocabulary, this field",
+	    "will be omitted in that case.",
 	{ output => 'senpar_no', pbdb_name => 'parent_no',
 	  dwc_name => 'parentNameUsageID', com_name => 'par', if_block => 'full' }, 
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
@@ -3289,6 +3309,16 @@ sub process_com {
     
     my ($request, $record) = @_;
     
+    # Deduplicate accepted_no and accepted name, only for 'com' vocabulary
+    
+    if ( defined $record->{accepted_no} && defined $record->{orig_no} &&
+	 $record->{accepted_no} eq $record->{orig_no} )
+    {
+	delete $record->{accepted_no};
+	delete $record->{accepted_rank};
+	delete $record->{accepted_name};
+    }
+    
     if ( defined $record->{attribution} && defined $record->{taxon_no} && defined $record->{orig_no} &&
 	 $record->{orig_no} eq $record->{taxon_no} )
     {
@@ -3406,13 +3436,6 @@ sub process_difference {
 	{
 	    $record->{difference} = 'variant';
 	}
-    }
-    
-    # Otherwise, the name is fine and we can drop the accepted_no field.
-    
-    else
-    {
-	delete $record->{accepted_no};
     }
 }
 
