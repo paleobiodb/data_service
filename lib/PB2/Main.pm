@@ -173,8 +173,8 @@ use PB2::PersonData;
     
     $ds2->define_node({ path => 'occs/list',
 			place => 2,
-			usage => [ "/occs/list.txt?base_name=Cetacea&interval=Miocene&show=loc,phylo",
-				   "/occs/list.json?base_name=Cetacea&interval=Miocene&show=loc,phylo" ],
+			usage => [ "/occs/list.txt?base_name=Cetacea&interval=Miocene&show=loc,class",
+				   "/occs/list.json?base_name=Cetacea&interval=Miocene&show=loc,class" ],
 			method => 'list',
 			post_configure_hook => 'prune_field_list',
 			output => '1.2:occs:basic',
