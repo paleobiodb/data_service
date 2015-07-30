@@ -139,6 +139,11 @@ sub generate_identifier {
 	return '';
     }
     
+    elsif ( defined $value && $value =~ qr{^U[A-Z]\d+$} )
+    {
+	return "$IDP{$type}:$value";
+    }
+    
     elsif ( defined $value )
     {
 	return "$IDP{$type}:ERROR";
