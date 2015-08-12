@@ -26,6 +26,8 @@ my $T = Tester->new();
 my $TEST_NAME_1 = 'Dascillidae';
 my $TEST_NAME_2 = 'Dascilloidea';
 
+my $TEST_NO_1 = '69296';
+
 my $TEST_NAME_3 = 'Felidae';
 my $TEST_NAME_3a = 'Felinae';
 my $TEST_NAME_3b = 'Pantherinae';
@@ -59,8 +61,7 @@ my $t1 = { 'nam' => $TEST_NAME_1,
 	   'rnk' => 9,
 	   'nm2' => "soft bodied plant beetle",
 	   'att' => "Guerin-Meneville 1843",
-	   'sta' => "belongs to",
-	   "kgl" => "Metazoa",
+	   #'sta' => "belongs to",
 	   "phl" => "Arthropoda",
 	   "cll" => "Insecta",
 	   "odl" => "Coleoptera",
@@ -79,8 +80,10 @@ my $t1t = { 'taxon_name' => $TEST_NAME_1,
 	    'taxon_rank' => 'family',
 	    'common_name' => "soft bodied plant beetle",
 	    'attribution' => "Guerin-Meneville 1843",
-	    'status' => "belongs to",
-	    "kingdom" => "Metazoa",
+	    'difference' => "",
+	    'accepted_no' => $TEST_NO_1,
+	    'accepted_rank' => 'family',
+	    'accepted_name' => $TEST_NAME_1,
 	    "phylum" => "Arthropoda",
 	    "class" => "Insecta",
 	    "order" => "Coleoptera",
@@ -90,10 +93,10 @@ my $t1t = { 'taxon_name' => $TEST_NAME_1,
 	    'parent_no' => '!nonzero',
 	    'reference_no' => '!nonzero',
 	    'is_extant' => '!nonempty',
-	    "first_max_ma" => '!nonzero',
-	    "first_min_ma" => '!nonzero',
-	    "last_max_ma" => '!nonzero',
-	    "last_min_ma" => '!numeric',
+	    "firstapp_max_ma" => '!nonzero',
+	    "firstapp_min_ma" => '!nonzero',
+	    "lastapp_max_ma" => '!nonzero',
+	    "lastapp_min_ma" => '!numeric',
 	    "taxon_size" =>'!nonzero',
 	    "extant_size" => '!nonzero' };
 
@@ -109,7 +112,7 @@ my ($taxon_id, $parent_id);
 
 subtest 'single json by name' => sub {
     
-    my $single_json = $T->fetch_url("/data1.2/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,phylo,common",
+    my $single_json = $T->fetch_url("/data1.2/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,class,common",
 				    "single json request OK");
     
     unless ( $single_json )
@@ -144,7 +147,7 @@ subtest 'single json by name' => sub {
 
 subtest 'single txt by name' => sub {
     
-    my $single_txt = $T->fetch_url("/data1.2/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo,common",
+    my $single_txt = $T->fetch_url("/data1.2/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,class,common",
 				   "single txt request OK");
     
     unless ( $single_txt )
@@ -420,10 +423,10 @@ subtest 'list status' => sub {
     cmp_ok($all_count, '>', $senior_count, "senior count is less than total count");
     cmp_ok($all_count, '==', $valid_count + $invalid_count, "valid + invalid = all");
     
-    my %status = $T->scan_records($all_resp, 'sta', 'list status all scan status codes');
+    my %diff = $T->scan_records($all_resp, 'tdf', 'list status all scan diff codes');
     
-    ok($status{'belongs to'} && $status{'subjective synonym of'} &&
-       $status{'nomen dubium'}, 'list status all returns a selection of status codes');
+    ok($diff{'subjective synonym of'} && $diff{'nomen dubium'}, 
+       'list status all returns a selection of status codes');
 };
 
 
@@ -438,11 +441,11 @@ subtest 'list status 2' => sub {
 	return;
     }
     
-    my %status = $T->scan_records($invalid_resp, 'sta', 'list status 2 invalid scan status codes');
+    my %diff = $T->scan_records($invalid_resp, 'tdf', 'list status 2 invalid scan diff codes');
     
-    ok($status{'nomen dubium'} && $status{'nomen nudum'}, 
+    ok($diff{'nomen dubium'} && $diff{'nomen nudum'}, 
        'list status 2 returns invalid status codes');
-    ok(!$status{'belongs to'} && !$status{'subjective synonym of'} && !$status{'objective synonym of'},
+    ok(!$diff{'subjective synonym of'} && !$diff{'objective synonym of'},
        'list status 2 does not return valid status codes');
 };
 

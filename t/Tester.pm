@@ -17,6 +17,7 @@ use Test::More;
 use namespace::clean;
 
 our ($TEST_NO_REPORT) = 1;
+our ($LAST_URL);
 
 # new ( server_name )
 # 
@@ -104,6 +105,8 @@ sub fetch_url {
     # Create the full URL and execute a 'GET' request on the server being tested.
     
     my $url = $tester->make_url($path_and_args);
+    
+    $LAST_URL = $url;
     
     my $response;
     
@@ -247,9 +250,9 @@ sub fetch_nocheck {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $url = $tester->{base_url};
-    $url .= '/' unless $path_and_args =~ qr{^/};
-    $url .= $path_and_args;
+    my $url = $tester->make_url($path_and_args);
+    
+    $LAST_URL = $url;
     
     my $response;
     

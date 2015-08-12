@@ -282,7 +282,7 @@ subtest 'refs json' => sub {
 
 subtest 'refs txt' => sub {
     
-    my $refs_txt = $T->fetch_url("/data1.1/occs/refs.txt?base_name=$BASE_NAME_1&interval=$INTERVAL_1&year=1879",
+    my $refs_txt = $T->fetch_url("/data1.1/occs/refs.txt?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
 				  "refs txt request OK");
     
     unless ( $refs_txt )
