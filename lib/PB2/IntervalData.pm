@@ -611,7 +611,7 @@ sub process_interval_params {
     
     elsif ( my $interval_name_value = $request->clean_param('interval') )
     {
-	foreach my $name ( split qr{[\s,-]+}, $interval_name_value )
+	foreach my $name ( split qr{\s*[,-]+\s*}, $interval_name_value )
 	{
 	    next unless defined $name && $name =~ qr{\S};
 	    

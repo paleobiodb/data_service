@@ -83,13 +83,13 @@ unless ( ok($EAG1 && $LAG1, "found ages for test interval '$INT1'") )
 }
 
 my $OCC1j = {
-    oid => $OID1,
+    oid => "occ:$OID1",
     typ => "occ",
-    cid => $CID1,
+    cid => "col:$CID1",
     idn => $IDN1,
     tna => $TNA1,
     rnk => 3,
-    tid => $OTX1,
+    tid => "txn:$OTX1",
     oei => $INT1 };
 
 if ( $EAG1 && $LAG1 )

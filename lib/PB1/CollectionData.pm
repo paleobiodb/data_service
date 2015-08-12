@@ -1748,11 +1748,15 @@ sub generateMainFilters {
 	{
 	    my $sql = "
 		SELECT early_age, late_age, scale_no, scale_level, early_bound, late_bound
-		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
-			JOIN $INTERVAL_BUFFER using (interval_no)
+		FROM $INTERVAL_DATA LEFT JOIN $SCALE_MAP using (interval_no)
+			LEFT JOIN $INTERVAL_BUFFER using (interval_no)
 		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
 	    
 	    ($early_age, $late_age, $scale_no, $level, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
+	    
+	    # If the interval was not found, signal an error.
+	    
+	    die "400 Unknown interval id $interval_no\n" unless defined $early_age;
 	}
 	
 	else
@@ -1760,11 +1764,27 @@ sub generateMainFilters {
 	    my $quoted_name = $dbh->quote($interval_name);
 	    
 	    my $sql = "SELECT early_age, late_age, interval_no, scale_no, early_bound, late_bound
-		   FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
-			JOIN $INTERVAL_BUFFER using (interval_no)
+		   FROM $INTERVAL_DATA LEFT JOIN $SCALE_MAP using (interval_no)
+			LEFT JOIN $INTERVAL_BUFFER using (interval_no)
 		   WHERE interval_name like $quoted_name ORDER BY scale_no";
 	
 	    ($early_age, $late_age, $interval_no, $scale_no, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
+	    
+	    # If the interval was not found, signal an error.
+	    
+	    die "400 Unknown interval '$interval_name'\n" unless defined $early_age;
+	}
+	
+	# If no early and late bounds are found, generate them by default.
+	
+	unless ( defined $early_bound )
+	{
+	    $early_bound = $early_age + ( $early_age > 65 ? 12 : 5 );
+	}
+	
+	unless ( defined $late_bound )
+	{
+	    $late_bound = $late_age - ( $late_age > 65 ? 12 : 5 );
 	}
 	
 	# If the requestor wants to override the time bounds, do that.
