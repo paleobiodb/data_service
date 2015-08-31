@@ -362,6 +362,11 @@ sub generate_common_filters {
 	    push @filters, "$t.modified < $quoted";
 	}
 	
+	elsif ( $option eq 'authent_by' )
+	{
+	    push @filters, $request->ent_filter($t, 'authent', $value);
+	}
+	
 	elsif ( $option eq 'authorized_by' )
 	{
 	    push @filters, $request->ent_filter($t, 'authorizer_no', $value);
@@ -529,6 +534,11 @@ sub ent_filter {
     if ( $param eq 'touched' )
     {
 	return "($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list) or $tn.modifier_no in ($id_list))";
+    }
+    
+    elsif ( $param eq 'authent' )
+    {
+	return "($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list))";
     }
     
     else

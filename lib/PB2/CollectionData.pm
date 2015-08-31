@@ -35,7 +35,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
-    
+
 
 # initialize ( )
 # 
@@ -440,7 +440,7 @@ sub initialize {
     
     # Then define an output block for displaying stratigraphic results
     
-    $ds->define_block('1.2:colls:strata' =>
+    $ds->define_block('1.2:strata:basic' =>
 	{ select => ['cs.name', 'cs.rank', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
@@ -455,6 +455,32 @@ sub initialize {
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of fossil occurrences in the database that are associated with this stratum.",
 	    "The above note about geographic area selection also applies.");
+    
+    $ds->define_block('1.2:strata:occs' =>
+	{ select => ['count(distinct cc.collection_no) as n_colls',
+		     'count(*) as n_occs', 'cc.geological_group as `group`',
+		     'cc.formation', 'cc.member', 'min(c.early_age) as early_age',
+		     'min(c.late_age) as late_age'],
+	  tables => [ 'cc' ] },
+	{ output => 'record_type', com_name => 'typ', value => 'str' },
+	    "The type of this record: 'str' for a stratum",
+	{ output => 'group', com_name => 'sgr' },
+	    "The name of the group in which occurrences were found",
+	{ output => 'formation', com_name => 'sfm' },
+	    "The name of the formation in which occurences were found",
+	{ output => 'member', com_name => 'smb' },
+	    "The name of the member in which occurrences were found",
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	    "The early bound of the geologic time range associated with the selected occurrences (in Ma)",
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	    "The late bound of the geologic time range associated with the selected occurrences (in Ma)",
+	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
+	    "The number of fossil collections in the database from this",
+	    "stratum that contain occurrences from the selected set and",
+	    "are listed as being part of this stratum",
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
+	    "The number of fossil occurrences in the database that are",
+	    "listed as being part of this stratum");
     
     # And a block for basic geographic summary cluster info
     
@@ -615,8 +641,8 @@ sub initialize {
 	    "If more than one taxonomic identification is recorded for some or all of the selected occurrences,",
 	    "this parameter specifies which are to be returned.  Values include:",
 	    $ds->document_set('1.2:colls:ident_select'),
-	{ param => 'lngmin', valid => DECI_VALUE },
-	{ param => 'lngmax', valid => DECI_VALUE },
+	{ param => 'lngmin', valid => COORD_VALUE('lng') },
+	{ param => 'lngmax', valid => COORD_VALUE('lng') },
 	    "Return only records whose present longitude falls within the given bounds.",
 	    "If you specify one of these parameters then you must specify both.",
 	    "If you provide bounds outside of the range -180\N{U+00B0} to 180\N{U+00B0}, they will be",
@@ -624,9 +650,9 @@ sub initialize {
 	    "the query will be processed as if you had said C<lngmin=-90 & lngmax=0 >.  In this",
 	    "case, all longitude values in the query result will be adjusted to fall within the actual",
 	    "numeric range you specified.",
-	{ param => 'latmin', valid => DECI_VALUE },
+	{ param => 'latmin', valid => COORD_VALUE('lat') },
 	    "Return only records whose present latitude is at least the given value.",
-	{ param => 'latmax', valid => DECI_VALUE },
+	{ param => 'latmax', valid => COORD_VALUE('lat') },
 	    "Return only records whose present latitude is at most the given value.",
 	{ together => ['lngmin', 'lngmax'],
 	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
@@ -651,18 +677,23 @@ sub initialize {
 	    "Return only records whose geographic location falls within the specified continent or continents.",
 	    "The value of this parameter should be a comma-separated list of ",
 	    "L<continent codes|op:config.txt?show=continents>.",
+	{ param => 'strat', valid => ANY_VALUE, list => ',' },
+	    "Return only records that fall within the named geological stratum or strata.  You",
+	    "may specify more than one, separated by commas.  Names may include the standard",
+	    "SQL wildcards C<%> and C<_>, and may be followed by any of",
+	    "'fm', 'gp', 'mbr'.  If none of these suffixes is given, then all matching",
+	    "stratigraphic names will be selected.  Note that this parameter is resolved through",
+	    "string matching only.  Stratigraphic nomenclature is not currently standardized in",
+	    "the database.",
 	{ param => 'formation', valid => ANY_VALUE, list => ',' },
-	    "Return only records that fall within the named stratigraphic formation(s). You may",
-	    "specify more than one, separated by commas. Note that this involves string matching only.", 
-	    "Stratigraphic nomenclature is not currently standardized in the database.",
+	    "Return only records that fall within the named stratigraphic formation(s).",
+	    "This parameter is deprecated; use C<strata> instead.",
 	{ param => 'stratgroup', valid => ANY_VALUE, list => ',' },
-	    "Return only records that fall within the named stratigraphic group(s). You may",
-	    "specify more than one, separated by commas. Note that this involves string matching only.", 
-	    "Stratigraphic nomenclature is not currently standardized in the database.",
+	    "Return only records that fall within the named stratigraphic group(s).",
+	    "This parameter is deprecated; use C<strata> instead.",
 	{ param => 'member', valid => ANY_VALUE, list => ',' },
-	    "Return only records that fall within the named stratigraphic member(s). You may",
-	    "specify more than one, separated by commas. Note that this involves string matching only.", 
-	    "Stratigraphic nomenclature is not currently standardized in the database.",
+	    "Return only records that fall within the named stratigraphic member(s).",
+	    "This parameter is deprecated; use C<strata> instead.",
 	# { param => 'min_ma', valid => DECI_VALUE(0) },
 	#     "Return only records whose temporal locality is at least this old, specified in Ma.",
 	# { param => 'max_ma', valid => DECI_VALUE(0) },
@@ -802,7 +833,7 @@ sub initialize {
     $ds->define_ruleset('1.2:strata:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "Return all stratum names known to the database.",
-	{ param => 'name', valid => ANY_VALUE },
+	{ param => 'name', valid => ANY_VALUE, list => ',' },
 	    "A full or partial name.  You can use % and _ as wildcards.",
 	{ optional => 'rank', valid => ENUM_VALUE('formation','group','member') },
 	    "Return only strata of the specified rank: formation, group or member",
@@ -1278,12 +1309,12 @@ sub refs {
 }
 
 
-# strata ( arg )
+# list_strata ( arg )
 # 
 # Query the database for geological strata.  If the arg is 'auto', then treat
 # this query as an auto-completion request.
 
-sub strata {
+sub list_strata {
     
     my ($request, $arg) = @_;
     
@@ -1425,12 +1456,17 @@ sub generateStrataFilters {
     
     # Check for parameter 'name'.
     
-    if ( my $name = $request->clean_param('name') )
+    if ( my @names = $request->clean_param_list('name') )
     {
-	$name .= '%' if defined $is_auto && $is_auto eq 'auto';
-	my $quoted = $dbh->quote($name);
-	push @filters, "cs.name like $quoted";
+	push @filters, $request->generate_stratname_filter('cs', \@names);
     }
+    
+    # if ( my $name = $request->clean_param('name') )
+    # {
+    # 	$name .= '%' if defined $is_auto && $is_auto eq 'auto';
+    # 	my $quoted = $dbh->quote($name);
+    # 	push @filters, "cs.name like $quoted";
+    # }
     
     # Check for parameter 'rank'.
     
@@ -1443,6 +1479,93 @@ sub generateStrataFilters {
     return @filters;
 }
 
+
+sub generate_stratname_filter {
+    
+    my ($request, $mt, $names_ref) = @_;
+    
+    my $dbh = $request->get_connection;
+    my (@unqualified, @clauses);
+    my $negate;
+    
+    if ( $names_ref->[0] =~ qr{ ^ ! (.*) }xs )
+    {
+	$negate = 1; $names_ref->[0] = $1;
+    }
+    
+    foreach my $name ( @$names_ref )
+    {
+	$name =~ s/^\s+//;
+	$name =~ s/\s+$//;
+	$name =~ s/\s+/ /g;
+	
+	next unless defined $name && $name ne '';
+	
+	if ( $name =~ qr{ ^ (.*?) \s+ (fm|mbr|gp) $ }xsi )
+	{
+	    $name = $1;
+	    my $rank = $2;
+	    
+	    unless ( $name =~ qr{[a-z]}xi )
+	    {
+		$request->add_warning("bad value '$name' for parameter 'strat', must contain at least one letter");
+		next;
+	    }
+	    
+	    my $quoted = $dbh->quote($name);
+	    
+	    if ( lc $rank eq 'fm' )
+	    {
+		push @clauses, "(cs.name like $quoted and cs.rank = 'formation')";
+	    }
+	    
+	    elsif ( lc $rank eq 'mbr' )
+	    {
+		push @clauses, "(cs.name like $quoted and cs.rank = 'member')";
+	    }
+	    
+	    else # ( lc $rank eq 'gp' )
+	    {
+		push @clauses, "(cs.name like $quoted and cs.rank = 'group')";
+	    }
+	}
+	
+	elsif ( $name =~ qr{[%_]}xs )
+	{
+	    unless ( $name =~ qr{[a-z]}xi )
+	    {
+		$request->add_warning("bad value '$name' for parameter 'strat', must contain at least one letter");
+		next;
+	    }
+	    
+	    my $quoted = $dbh->quote($name);
+	    push @clauses, "(cs.name like $quoted)";
+	}
+	
+	else
+	{
+	    push @unqualified, $dbh->quote($name);
+	}
+    }
+    
+    if ( @unqualified )
+    {
+	push @clauses, "cs.name in (" . join(',', @unqualified) . ")";
+    }
+    
+    # If no valid values were found, then add a clause that will select nothing.
+    
+    unless ( @clauses )
+    {
+	push @clauses, "cs.name = '--'";
+    }
+    
+    my $clause = '(' . join( ' or ', @clauses ) . ')';
+    $clause = "not " . $clause if $negate;
+    
+    return $clause;
+}
+    
 
 # generateMainFilters ( op, mt, tables_ref )
 # 
@@ -1903,13 +2026,17 @@ sub generateMainFilters {
     my $y1 = $request->clean_param('latmin');
     my $y2 = $request->clean_param('latmax');
     
+    # If longitude bounds were specified, create a bounding box using them.
+    
     if ( $x1 ne '' && $x2 ne '' && ! ( $x1 == -180 && $x2 == 180 ) )
     {
-	$y1 //= -90.0;
-	$y2 //= 90.0;
+	# If no latitude bounds were specified, set them to -90, 90.
 	
-	# If the longitude coordinates do not fall between -180 and 180, adjust
-	# them so that they do.
+	$y1 = -90.0 unless defined $y1 && $y1 ne '';
+	$y2 = 90.0 unless defined $y2 && $y2 ne '';
+	
+	# If the longitude coordinates do not fall between -180 and 180,
+	# adjust them so that they do.
 	
 	if ( $x1 < -180.0 )
 	{
@@ -1934,8 +2061,12 @@ sub generateMainFilters {
 	# If $x1 < $x2, then we query on a single bounding box defined by
 	# those coordinates.
 	
-	if ( $x1 < $x2 )
+	if ( $x1 <= $x2 )
 	{
+	    $request->add_warning("The values of 'lngmin' and 'lngmax' are equal, " .
+				  "so only records with that exact longitude will be selected")
+		if $x1 == $x2;
+	    
 	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
 	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
 	}
@@ -1952,14 +2083,33 @@ sub generateMainFilters {
 	}
     }
     
+    # If only latitude bounds were specified then create a bounding box
+    # with longitude ranging from -180 to 180.
+    
     elsif ( $y1 ne '' || $y2 ne '' && ! ( $y1 == -90 && $y2 == 90 ) )
     {
-	$y1 //= -90;
-	$y2 //= 90;
+	# If one of the bounds was not specified, set it to -90 or 90.
+	
+	$y1 = -90.0 unless defined $y1 && $y1 ne '';
+	$y2 = 90.0 unless defined $y2 && $y2 ne '';
 	
 	my $polygon = "'POLYGON((-180.0 $y1,180.0 $y1,180.0 $y2,-180.0 $y2,-180.0 $y1))'";
 	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
     }
+    
+    # If the latitude bounds are such as to select no records, then add a warning.
+    
+    if ( defined $y1 && defined $y2 && $y1 >= 90.0 && $y2 >= 90.0 )
+    {
+	$request->add_warning("The latitude bounds lie beyond +90 degrees, so no records will be selected");
+    }
+    
+    elsif ( defined $y2 && defined $y2 && $y1 <= -90.0 && $y2 <= -90.0 )
+    {
+	$request->add_warning("The latitude bounds lie beyond -90 degrees, so no records will be selected");
+    }
+    
+    # If 'loc' was specified, use that geometry.
     
     if ( my $loc = $request->clean_param('loc') )
     {
@@ -2099,6 +2249,15 @@ sub generateMainFilters {
 	my $quoted = $dbh->quote($pattern);
 	push @filters, "cc.member rlike $quoted";
 	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
+    }
+    
+    # Check for parameter 'strat'.
+    
+    if ( my @strata = $request->clean_param_list('strat') )
+    {
+	push @filters, $request->generate_stratname_filter('cs', \@strata);
+	$tables_ref->{cs} = 1;
 	$tables_ref->{non_summary} = 1;
     }
     
@@ -2704,6 +2863,69 @@ sub generate_order_clause {
 }
 
 
+# generate_strata_order_clause ( options )
+# 
+# Return the order clause for the list of strata, or the empty string if
+# none was selected.
+
+sub generate_strata_order_clause {
+    
+    my ($request, $tables, $options) = @_;
+    
+    $options ||= {};
+    my $at = $options->{at} || 'c';
+    my $bt = $options->{bt} || 'cc';
+    my $tt = $options->{tt};
+    
+    my @terms = $request->clean_param_list('order');
+    my @exprs;
+    
+    # Now generate the corresponding expression for each term.
+    
+    foreach my $term ( @terms )
+    {
+	my $dir = '';
+	next unless $term;
+	
+	if ( $term =~ /^(\w+)[.](asc|desc)$/ )
+	{
+	    $term = $1;
+	    $dir = $2;
+	}
+	
+	if ( $term eq 'max_ma' )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "c.early_age $dir";
+	}
+	
+	elsif ( $term eq 'min_ma' )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "c.late_age $dir";
+	}
+	
+	elsif ( $term eq 'name' )
+	{
+	    push @exprs, "coalesce(cc.geological_group, cc.formation, cc.member) $dir, cc.formation $dir, cc.member $dir"
+	}
+	
+	elsif ( $term eq 'n_occs' )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "n_occs $dir";
+	}
+	
+	else
+	{
+	    die "400 bad value for parameter 'order' (was '$term')\n";
+	}
+    }
+    
+    return join(', ', @exprs);
+}
+
+
 # generateJoinList ( tables )
 # 
 # Generate the actual join string indicated by the table hash.
@@ -2721,7 +2943,7 @@ sub generateJoinList {
     # Some tables imply others.
     
     $tables->{o} = 1 if ($tables->{t} || $tables->{tf} || $tables->{oc}) && ! $tables->{ds};
-    $tables->{c} = 1 if $tables->{o} || $tables->{pc};
+    $tables->{c} = 1 if $tables->{o} || $tables->{pc} || $tables->{cs};
     
     # Create the necessary join expressions.
     
@@ -2733,6 +2955,8 @@ sub generateJoinList {
 	if $tables->{t} || $tables->{tf};
     $join_list .= "JOIN coll_map as cm using (bin_id)\n"
 	if $tables->{cm};
+    $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
+	if $tables->{cs};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
 	if $tables->{pc};
     $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
@@ -2947,6 +3171,63 @@ sub process_coll_com {
     
     $record->{reference_no} = generate_identifier('REF', $record->{reference_no})
 	if defined $record->{reference_no};
+}
+
+
+# validate latitude and longitude values
+
+sub COORD_VALUE {
+    
+    my ($dir) = @_;
+    
+    croak "COORD_VALUE argument must be 'lat' or 'lng'" unless
+	defined $dir && ($dir eq 'lat' || $dir eq 'lng');
+    
+    return sub { return coord_value(shift, shift, $dir) };
+}
+
+
+sub coord_value {
+    
+    my ($value, $context, $dir) = @_;
+   
+    # The value may be a decimal number, optionally preceded by a sign.
+    
+    if ( $value =~ qr{ ^ [+-]? (?: \d+\.\d* | \d*\.\d+ | \d+ )$}xs )
+    {
+	return { value => $value + 0 };
+    }
+    
+    # The value may also be a non-negative decimal number followed by one of E, W,
+    # N, or S.  This suffix must correspond with the value of $dir.
+    
+    elsif ( $dir eq 'lat' && $value =~ qr{ ^ ( \d+.\d* | \d*\.\d+ | \d+ ) ( [nNsS] ) $ }xs )
+    {
+	if ( lc $2 eq 'n' ) {
+	    return { value => 0 + $value };
+	} else {
+	    return { value => 0 - $value };
+	}
+    }
+    
+    elsif ( $dir eq 'lng' && $value =~ qr{ ^ ( \d+.\d* | \d*\.\d+ | \d+ ) ( [eEwW] ) $ }xs )
+    {
+	if ( lc $2 eq 'e' ) {
+	    return { value => 0 + $value };
+	} else {
+	    return { value => 0 - $value };
+	}
+    }
+    
+    # Otherwise, the value is bad.
+    
+    else
+    {
+	my $suffix = $dir eq 'lat' ? "an unsigned decimal number followed by 'N' or 'S'"
+	    : "an unsigned decimal number followed by 'E' or 'W'";
+	
+	return { error => "bad value '$value' for {param}: must be a decimal number with optional sign or $suffix" };
+    }
 }
 
 

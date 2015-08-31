@@ -266,6 +266,17 @@ use PB2::PersonData;
 	"significant in determining the elements of the result.  A",
 	"larger limit will tend to show classes instead of phyla.");
     
+    $ds2->define_node({ path => 'occs/strata',
+			place => 9,
+			usage => [ "/occs/strata.json?base_name=Cetacea&interval=Miocene&textresult" ],
+			method => 'strata',
+			output => '1.2:strata:occs',
+			title => 'Stratigraphy of fossil occurrences' },
+	"This operation returns information about the geological strata in which fossil occurrences",
+	"were found.  You can pass identical filtering parameters to L<occs/list|node:occs/list> and",
+	"L<occs/strata|node:occs/strata> which will give you both a list of occurrences and a summary",
+	"by stratum.");
+    
     $ds2->define_node({ path => 'occs/refs',
 			place => 10,
 			usage => [ "/occs/refs.ris?base_name=Cetacea&interval=Miocene&textresult" ],
@@ -350,8 +361,8 @@ use PB2::PersonData;
 			place => 1,
 			title => 'Lists of geological strata',
 			usage => [ "strata/list.txt?lngmin=0&lngmax=15&latmin=0&latmax=15&rank=formation" ],
-			method => 'strata',
-			output => '1.2:colls:strata' },
+			method => 'list_strata',
+			output => '1.2:strata:basic' },
 	"This path returns information about geological strata selected by name, rank,",
 	"and/or geographic location.");
     
@@ -359,9 +370,9 @@ use PB2::PersonData;
 			place => 2,
 			title => 'Auto-completion for geological strata',
 			usage => [ "strata/auto.json?name=aba&limit=10" ],
-			method => 'strata',
+			method => 'list_strata',
 			arg => 'auto',
-			output => '1.2:colls:strata' },
+			output => '1.2:strata:basic' },
 	"This path returns a list of geological strata from the database that match the given",
 	"prefix or partial name.  This can be used to implement auto-completion for strata names,",
 	"and can be limited by geographic location if desired.");

@@ -142,8 +142,13 @@ sub initialize {
     # operations defined here.
     
     $ds->define_ruleset('1.2:intervals:specifier' =>
-	{ param => 'id', valid => VALID_IDENTIFIER('INT') },
-	    "Return the interval corresponding to the specified identifier. (REQUIRED)");
+	"You must specify one of the following parameters:",
+	{ param => 'id', valid => VALID_IDENTIFIER('INT'), alias => 'interval_id' },
+	    "Return the interval corresponding to the specified identifier.",
+	{ param => 'name' },
+	    "Return the interval with the specified name.",
+	{ at_most_one => ['id', 'name'],
+	  errmsg => "You may not specify both 'name' and 'id' in the same query." });
     
     $ds->define_ruleset('1.2:intervals:selector' => 
 	{ param => 'all_records', valid => FLAG_VALUE },
@@ -157,8 +162,12 @@ sub initialize {
 	{ param => 'scale_level', valid => POS_VALUE, list => ',', alias => 'level' },
 	    "Return intervals from the specified scale level(s).  The value of this",
 	    "parameter can be one or more level numbers separated by commas.",
-	{ param => 'id', valid => VALID_IDENTIFIER('INT'), list => ',' },
+	{ param => 'id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'interval_id' },
 	    "Return intervals that have the specified identifiers",
+	{ param => 'name', list => ',' },
+	    "Return intervals that have the specified names",
+	{ at_most_one => ['id', 'name'],
+	  errmsg => "You may not specify both 'name' and 'id' in the same query." },
 	{ param => 'min_ma', valid => DECI_VALUE(0) },
 	    "Return only intervals that are at least this old",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
@@ -350,7 +359,29 @@ sub list {
     
     if ( $request->param_given('id') )
     {
-	push @ids, 0 unless @ids;
+	push @ids, -1 unless @ids;
+	my $id_string = join(',', @ids);
+	push @filters, "i.interval_no in ($id_string)";
+    }
+    
+    elsif ( my @names = $request->clean_param_list('name') )
+    {
+	my @ids;
+	
+	foreach my $name (@names)
+	{
+	    if ( $INAME{lc $name} )
+	    {
+		push @ids, $INAME{lc $name}{interval_no};
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("The interval '$name' is not known to the database");
+	    }
+	}
+	
+	push @ids, -1 unless @ids;
 	my $id_string = join(',', @ids);
 	push @filters, "i.interval_no in ($id_string)";
     }

@@ -122,9 +122,14 @@ sub initialize {
 	"You can therefore include it in published URLs, knowing that it will always provide",
 	"all of the available information about the collection(s) of interest.>",
 	{ value => 'full', maps_to => '1.2:occs:full_info' },
-	    "Includes all of the information from the following blocks: B<class>, B<plant>,",
+	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
+	    "includes the following blocks: B<class>, B<plant>,",
 	    "B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
-	    "B<geo>, B<methods>, B<rem>.");
+	    "B<geo>, B<methods>, B<rem>.  This does not include output blocks containing",
+	    "metadata or data from associated records, but you may also include those",
+	    "blocks explicitly.  If we subsequently add new data fields to this record",
+	    "then B<full> will include those as well.  So if you are publishing a URL,",
+	    "it might be a good idea to include this.");
     
     # Then define those blocks which are not already defined in
     # CollectionData.pm 
@@ -734,6 +739,58 @@ sub initialize {
 	"You can also specify any of the following parameters:",
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:refs:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_set('1.2:strata:order' =>
+	{ value => 'name' },
+	    "Results are ordered by the name of the formation, sorted alphabetically.",
+	{ value => 'name.asc', undocumented => 1 },
+	{ value => 'name.desc', undocumented => 1 },
+	{ value => 'max_ma' },
+	    "Results are ordered chronologically by early age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'max_ma.asc', undocumented => 1 },
+	{ value => 'max_ma.desc', undocumented => 1 },
+	{ value => 'min_ma' },
+	    "Results are ordered chronologically by late age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'min_ma.asc', undocumented => 1 },
+	{ value => 'min_ma.desc', undocumented => 1 },
+	{ value => 'n_occs' },
+	    "Results are ordered by the number of occurrences, in descending order unless you add C<.asc>",
+	{ value => 'n_occs.asc', undocumented => 1 },
+	{ value => 'n_occs.desc', undocumented => 1 });
+    
+    $ds->define_ruleset('1.2:strata:display' =>
+	"You can use the following parameters to specify the order in which you wish to get the records:",
+	# { optional => 'show', list => q{,}, valid => '1.2:occs:basic_map' },
+	#     "This parameter is used to select additional information to be returned",
+	#     "along with the basic record for each occurrence.  Its value should be",
+	#     "one or more of the following, separated by commas:",
+	{ optional => 'order', valid => '1.2:strata:order', split => ',', no_set_doc => 1 },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	    $ds->document_set('1.2:strata:order'),
+	    "If no order is specified, results are sorted alphabetically by name.",
+	{ ignore => 'level' });
+    
+    $ds->define_ruleset('1.2:occs:strata' =>
+	"You can use the following parameters if you wish to retrieve the geological strata associated",
+	"with a known list of occurrences or collections, or to filter a known list against",
+	"other criteria such as location or time.",
+	"Only the records which match the other parameters that you specify will be returned.",
+	{ allow => '1.2:occs:selector' },
+        ">>The following parameters can be used to retrieve the references associated with occurrences",
+	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
+	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	{ allow => '1.2:strata:display' },
+	"You can also specify any of the following parameters:",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 }
@@ -1843,6 +1900,88 @@ sub refs {
 }
 
 
+# strata ( )
+# 
+# Query the database for the strata associated with occurrences satisfying
+# the conditions specified by the parameters.
+
+sub strata {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    
+    $request->substitute_select( mt => 'r', cd => 'r' );
+    
+    $request->delete_output_field('n_opinions');
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my $inner_tables = { cc => 1 };
+    
+    my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
+    push @filters, $request->generate_common_filters( { occ => 'o' } );
+    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
+    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
+    push @filters, $request->generateOccFilters($inner_tables);
+    
+    push @filters, "c.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # Figure out the order in which we should return the strata.  If none
+    # is selected by the options, sort by name ascending.
+    
+    my $order_clause = $request->PB2::CollectionData::generate_strata_order_clause({ rank_table => 's' }) ||
+	"coalesce(cc.geological_group, cc.formation, cc.member), cc.formation, cc.member";
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. 
+    
+    $request->strict_check;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = $request->select_string;
+    
+    $request->adjustCoordinates(\$fields);
+    
+    my $join_list = $request->generateJoinList('c', $inner_tables);
+    
+    $request->{main_sql} = "
+	SELECT $calc $fields
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+		$join_list
+        WHERE $filter_string
+	GROUP BY cc.geological_group, cc.formation, cc.member
+	ORDER BY $order_clause
+	$limit";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    # Then prepare and execute the main query.
+    
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $request->sql_count_rows;
+}
+
+
 # generateOccFilters ( tables_ref )
 # 
 # Generate a list of filter clauses that will be used to compute the
@@ -2152,6 +2291,8 @@ sub generateJoinList {
 	if $tables->{cc};
     $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
+    $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
+	if $tables->{cs};
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
 	if $tables->{t};
     $join_list .= "LEFT JOIN taxon_trees as tv on tv.orig_no = t.accepted_no\n"

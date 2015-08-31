@@ -89,8 +89,17 @@ sub initialize {
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the collection record");
-    
+	    "The C<created> and C<modified> timestamps for the collection record",
+	{ value => 'full', maps_to => '1.2:taxa:full_info' },
+	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
+	    "includes the following blocks: B<attr>, B<app>, B<common>, B<parent>",
+	    "B<size>, B<class>, B<ecospace>, B<taphonomy>, B<etbasis>.",
+	    "This does not include output blocks containing",
+	    "metadata or data from associated records, but you may also include those",
+	    "blocks explicitly.  If we subsequently add new data fields to this record",
+	    "then B<full> will include those as well.  So if you are publishing a URL,",
+	    "it might be a good idea to include this.");
+     
     $ds->define_output_map('1.2:taxa:single_output_map' =>
 	{ value => 'attr', maps_to => '1.2:taxa:attr' },
 	    "The attribution of this taxon (author and year)",
@@ -603,6 +612,17 @@ sub initialize {
 	    "You can use this, along with C<lft>, to determine subtaxon relationships.  If the pair",
 	    "C<lft,rgt> for taxon <A> is bracketed by the pair C<lft,rgt> for taxon <B>, then C<A> is",
 	    "a subtaxon of C<B>.");
+    
+    $ds->define_block( '1.2:taxa:full_info' =>
+	{ include => '1.2:occs:attr' },
+	{ include => '1.2:occs:app' },
+	{ include => '1.2:occs:common' },
+	{ include => '1.2:occs:parent' },
+	{ include => '1.2:occs:size' },
+	{ include => '1.2:colls:class' },
+	{ include => '1.2:colls:ecospace' },
+	{ include => '1.2:colls:taphonomy' },
+	{ include => '1.2:colls:etbasis' });
     
     # Now define output blocks for opinions
     
@@ -1185,8 +1205,8 @@ sub initialize {
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
-	# { allow => '1.2:common:select_refs_crmod' },
-	# { allow => '1.2:common:select_refs_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	{ allow => '1.2:refs:display' },
 	{ optional => 'order', valid => '1.2:refs:order', split => ',', no_set_doc => 1 },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
@@ -2466,17 +2486,17 @@ sub generate_query_options {
 	    die $request->exception(400, "Invalid option '$key'");
 	}
 	
-	elsif ( $prefix eq 'op_' )
+	elsif ( $prefix eq 'op' )
 	{
 	    $options->{"op_$selector"} = $value;
 	}
 	
-	elsif ( $prefix eq 'ref_' )
+	elsif ( $prefix eq 'ref' )
 	{
 	    $options->{"ref_$selector"} = $value;
 	}
 	
-	elsif ( $prefix eq 'taxon_' )
+	elsif ( $prefix eq 'taxon' )
 	{
 	    $options->{$selector} = $value;
 	}

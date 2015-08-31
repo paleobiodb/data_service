@@ -648,7 +648,14 @@ sub buildStrataTables {
 		maybe boolean not null,
 		collection_no int unsigned not null,
 		n_occs int unsigned not null,
+		cc char(2),
+		lat decimal(9,6),
+		lng decimal(9,6),
+		g_plate_no smallint unsigned not null,
+		s_plate_no smallint unsigned not null,
 		loc geometry not null) Engine=MyISAM");
+    
+    $DB::single = 1;
     
     # Fill it from the collections and coll_matrix tables.
     
@@ -656,8 +663,10 @@ sub buildStrataTables {
     
     my ($sql, $result, $count);
     
-    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
-		SELECT formation, 'formation', collection_no, n_occs, loc
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, 
+			cc, lat, lng, g_plate_no, s_plate_no, loc)
+		SELECT formation, 'formation', collection_no, c.n_occs, c.cc, c.lat, c.lng,
+			c.g_plate_no, c.s_plate_no, c.loc
 		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE formation <> ''";
     
@@ -665,8 +674,10 @@ sub buildStrataTables {
     
     logMessage(2, "      $result formations");
     
-    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
-		SELECT geological_group, 'group', collection_no, n_occs, loc
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
+			cc, lat, lng, g_plate_no, s_plate_no, loc)
+		SELECT geological_group, 'group', collection_no, c.n_occs, c.cc, c.lat, c.lng,
+			c.g_plate_no, c.s_plate_no, c.loc
 		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE geological_group <> ''";
     
@@ -674,8 +685,10 @@ sub buildStrataTables {
     
     logMessage(2, "      $result groups");
     
-    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
-		SELECT member, 'member', collection_no, n_occs, loc
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
+			cc, lat, lng, g_plate_no, s_plate_no, loc)
+		SELECT member, 'member', collection_no, c.n_occs, c.cc, c.lat, c.lng,
+			c.g_plate_no, c.s_plate_no, c.loc
 		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE member <> ''";
     
@@ -765,7 +778,7 @@ sub buildStrataTables {
     
     $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD SPATIAL INDEX (loc)");
     
-    #activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA);
+    # activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA);
 }
 
 
