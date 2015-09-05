@@ -35,7 +35,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
-
+our (%ENVALUE);
 
 # initialize ( )
 # 
@@ -595,6 +595,42 @@ sub initialize {
 	    "Use the GPlates model, calculating the rotations at the late end of each",
 	    "collection's age range");
     
+    $ds->define_set('1.2:colls:environment' =>
+	{ value => 'terr' },
+	    "Any terrestrial environment",
+	{ value => 'marine' },
+	    "Any marine environment",
+	{ value => 'carbonate' },
+	    "Carbonate environment",
+	{ value => 'silici' },
+	    "Siliciclastic environment",
+	{ value => 'unknown' },
+	    "Unknown or indeterminate environment");
+    
+    $ds->define_set('1.2:colls:envzone' => 
+	{ value => 'lacust' },
+	    "Lacustrine zone",
+	{ value => 'fluvial' },
+	    "Fluvial zone",
+	{ value => 'karst' },
+	    "Karst zone",
+	{ value => 'terrother' },
+	    "Other terrestrial zone",
+	{ value => 'marginal' },
+	    "Marginal marine zone",
+	{ value => 'reef' },
+	    "Reef zone",
+	{ value => 'stshallow' },
+	    "Shallow subtidal zone",
+	{ value => 'stdeep' },
+	    "Deep subtidal zone",
+	{ value => 'offshore' },
+	    "Offshore zone",
+	{ value => 'slope' },
+	    "Slope/basin zone",
+	{ value => 'marindet'
+	    "Marine indeterminate zone");
+	
     $ds->define_ruleset('1.2:main_selector' =>
 	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
 	    "A comma-separated list of collection identifiers.  All records associated with",
@@ -660,20 +696,29 @@ sub initialize {
 	    "Return only records whose present location (longitude and latitude) falls within",
 	    "the specified shape, which must be given in L<WKT|https://en.wikipedia.org/wiki/Well-known_text> format",
 	    "with the coordinates being longitude and latitude values.",
-	{ param => 'plate', valid => POS_VALUE, list => "," },
-	    "Return only records located on the specified geological plate(s), according",
-	    "to the primary paleogeographic model specified by the parameter C<pgm>.  The value of",
-	    "this parameter may be a comma-separated list of numeric plate identifiers.",
+	{ param => 'plate', valid => ANY_VALUE },
+	    "Return only records located on the specified geological plate(s).  If the value",
+	    "of this parameter starts with 'G', then these will be interpreted as plate numbers",
+	    "from the GPlates model.  If the value starts with 'S', then these will be",
+	    "interpreted as plate numbers from the Scotese model.  Otherwise, they will",
+	    "be interpreted according to the value of the parameter C<pgm>.  If the",
+	    "value continues with C<^>, then all records located on the specified plates",
+	    "are instead B<excluded>.  The remainder of the value must be a",
+	    "list of plate numbers.",
 	{ optional => 'pgm', valid => $ds->valid_set('1.2:colls:pgmodel'), list => "," },
 	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
 	    "You may specify one or more from the following list, separated by commas.",
 	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
 	    $ds->document_set('1.2:colls:pgmodel'),
-	{ param => 'country', valid => \&valid_country, list => ',', alias => 'cc', bad_value => '_' },
-	    "Return only records whose geographic location falls within the specified country or countries.",
+	{ param => 'cc', valid => \&valid_cc, list => qr{[\s,]+}, alias => 'country', bad_value => '_' },
+	    "Return only records whose location falls within the specified geographic regions.",
 	    "The value of this parameter should be one or more",
-	    "L<two-character country codes|http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2> as a comma-separated list.",
-	{ param => 'continent', valid => \&valid_continent, list => ',', bad_value => '_' },
+	    "L<two-character country codes|http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2> and/or ",
+	    "L<three-character continent codes|op:config.txt?show=continents> as a comma-separated list.",
+	    "If the symbol C<^> appears in the parameter value, then records falling into regions",
+	    "listed thereafter are B<excluded>.  Examples:",
+	    ">    NOA,SOA      EUR,^UK,IE    ^ATA",
+	{ param => 'continent', valid => \&valid_continent, list => qr{[\s,]+}, bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified continent or continents.",
 	    "The value of this parameter should be a comma-separated list of ",
 	    "L<continent codes|op:config.txt?show=continents>.",
@@ -684,16 +729,30 @@ sub initialize {
 	    "'fm', 'gp', 'mbr'.  If none of these suffixes is given, then all matching",
 	    "stratigraphic names will be selected.  Note that this parameter is resolved through",
 	    "string matching only.  Stratigraphic nomenclature is not currently standardized in",
-	    "the database.",
+	    "the database, so misspellings may occur.", 
+	    ">This parameter replaces the parameters C<formation>, C<stratgroup>, and C<member",
+	    "which are now deprecated.",
 	{ param => 'formation', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic formation(s).",
-	    "This parameter is deprecated; use C<strata> instead.",
+	    "This parameter is deprecated; use C<strat> instead.",
 	{ param => 'stratgroup', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic group(s).",
-	    "This parameter is deprecated; use C<strata> instead.",
+	    "This parameter is deprecated; use C<strat> instead.",
 	{ param => 'member', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic member(s).",
-	    "This parameter is deprecated; use C<strata> instead.",
+	    "This parameter is deprecated; use C<strat> instead.",
+	{ param => 'envtype', valid => $ds->valid_set('1.2:colls:environment'), list => qr{[\s,]+} },
+	    "Return only records recorded as belonging to one of the specified environments.",
+	    "If the parameter value starts with C<^> then records belonging to the specified",
+	    "environments will be B<excluded> instead.",
+	    "You may specify one or more of the following values, as a comma-separated list:",
+	{ param => 'envzone' valid => $ds->valid_set('1.2:colls:envzone'), list => qr{[\s,]+} },
+	    "Return only records recorded as belonging to one of the specified environmental",
+	    "zones.  You can use this either alone or in conjunction with the parameter",
+	    "C<envtype> to precisely select the records you want.  If the parameter",
+	    "value starts with C<^> then records belonging to the specified zones will",
+	    "be B<excluded> instead.  You may specify",
+	    "one or more of the following values, as a comma-separated list:",
 	# { param => 'min_ma', valid => DECI_VALUE(0) },
 	#     "Return only records whose temporal locality is at least this old, specified in Ma.",
 	# { param => 'max_ma', valid => DECI_VALUE(0) },
@@ -947,7 +1006,7 @@ sub list {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateCollFilters($tables);
-    push @filters, $request->generate_common_filters( { coll => 'cc', bare => 'cc' }, $tables );
+    push @filters, $request->generate_common_filters( { colls => 'cc', bare => 'cc' }, $tables );
     push @filters, '1=1' if $request->clean_param('all_records');
     # push @filters, $request->generate_crmod_filters('cc', $tables);
     # push @filters, $request->generate_ent_filters('cc', $tables);
@@ -1234,7 +1293,7 @@ sub refs {
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generateCollFilters($inner_tables);
-    push @filters, $request->generate_common_filters( { coll => 'cc' }, $inner_tables );
+    push @filters, $request->generate_common_filters( { colls => 'cc' }, $inner_tables );
     # push @filters, $request->generate_crmod_filters('cc', $inner_tables);
     # push @filters, $request->generate_ent_filters('cc', $inner_tables);
     
@@ -1247,7 +1306,7 @@ sub refs {
     my $outer_tables = $request->tables_hash;
     
     my @ref_filters = $request->generate_ref_filters($outer_tables);
-    push @ref_filters, $request->generate_common_filters( { ref => 'r' }, $outer_tables );
+    push @ref_filters, $request->generate_common_filters( { refs => 'r' }, $outer_tables );
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -1988,36 +2047,85 @@ sub generateMainFilters {
     
     $request->add_warning(@taxon_warnings) if @taxon_warnings;
     
-    # Check for parameters 'continent', 'country'
+    # Check for parameter 'cc'
     
-    if ( my @ccs = $request->clean_param_list('country') )
+    if ( my @ccs = $request->clean_param_list('cc') )
     {
+	push @ccs, $request->clean_param_list('continent');
+	
 	if ( $ccs[0] eq '_' )
 	{
-	    push @filters, "c.collection_no = 0";
+	    push @filters, "c.collection_no = -1";
 	}
 	else
 	{
-	    my $cc_list = "'" . join("','", @ccs) . "'";
-	    push @filters, "c.cc in ($cc_list)";
+	    my (@cc2, @cc3, @cc2x, @cc3x, $exclude);
+	    
+	    foreach my $value (@ccs)
+	    {
+		if ( $value =~ qr{ ^ \^ (.*) }xs )
+		{
+		    $exclude = 1;
+		    $value = $1;
+		}
+		
+		if ( length($value) == 2 && $exclude ) {
+		    push @cc2x, $value;
+		} elsif ( length($value) == 2 ) {
+		    push @cc2, $value;
+		} elsif ( $exclude ) {
+		    push @cc3x, $value;
+		} else {
+		    push @cc3, $value;
+		}
+	    }
+	    
+	    my @cc_filters;
+	    
+	    if ( @cc2 )
+	    {
+		push @cc_filters, "c.cc in ('" . join("','", @cc2) . "')";
+	    }
+	    
+	    if ( @cc3 )
+	    {
+		push @cc_filters, "ccmap.continent in ('" . join("','", @cc3) . "')";
+		$tables_ref->{ccmap} = 1;
+	    }
+	    
+	    my $cc_string = '(' . join(' or ', @cc_filters) . ')';
+	    
+	    push @filters, $cc_string if $cc_string ne '()';
+	    
+	    if ( @cc2x )
+	    {
+		push @filters, "c.cc not in ('" . join("','", @cc2x) . "')";
+	    }
+	    
+	    if ( @cc3x )
+	    {
+		push @filters, "ccmap.continent not in ('" . join("','", @cc3x) . "')";
+		$tables_ref->{ccmap} = 1;
+	    }
 	}
+	
 	$tables_ref->{non_summary} = 1;
     }
     
-    if ( my @continents = $request->clean_param_list('continent') )
-    {
-	if ( $continents[0] eq '_' )
-	{
-	    push @filters, "c.collection_no = 0";
-	}
-	else
-	{
-	    my $cont_list = "'" . join("','", @continents) . "'";
-	    push @filters, "ccmap.continent in ($cont_list)";
-	    $tables_ref->{ccmap} = 1;
-	}
-	$tables_ref->{non_summary} = 1;
-    }
+    # if ( my @continents = $request->clean_param_list('continent') )
+    # {
+    # 	if ( $continents[0] eq '_' )
+    # 	{
+    # 	    push @filters, "c.collection_no = 0";
+    # 	}
+    # 	else
+    # 	{
+    # 	    my $cont_list = "'" . join("','", @continents) . "'";
+    # 	    push @filters, "ccmap.continent in ($cont_list)";
+    # 	    $tables_ref->{ccmap} = 1;
+    # 	}
+    # 	$tables_ref->{non_summary} = 1;
+    # }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
     
@@ -2118,25 +2226,102 @@ sub generateMainFilters {
     
     # Check for parameter 'plate'
     
-    if ( $request->clean_param('plate') )
+    my $plate_param = $request->clean_param('plate');
+    my @pgm = $request->clean_param_list('pgm');
+    
+    if ( $plate_param && $plate_param ne '' )
     {
-	my $plate_list = join(q{,}, $request->clean_param_list('plate'));
-	my ($primary_model) = $request->clean_param_list('pgm');
-	$primary_model //= 'gplates';
+	my ($model, $exclude);
 	
-	if ( $plate_list && $primary_model eq 'scotese' )
+	if ( $plate_param =~ qr{ ^ \s* ( [gs] )? \^ (.*) $ }xsi )
 	{
-	    push @filters, "cc.plate in ($plate_list)";
-	    $tables_ref->{cc} = 1;
+	    $exclude = 1;
+	    $plate_param = ($1 // '') . $2;
 	}
 	
-	elsif ( $plate_list )
+	if ( $plate_param =~ qr{ ^ ( [gs] ) (.*) }xsi )
 	{
-	    push @filters, "pc.plate_no in ($plate_list)";
-	    $tables_ref->{pc} = 1;
+	    $model = uc $1;
+	    $plate_param = $2;
 	}
+	
+	elsif ( $plate_param =~ qr{ ^ [^0-9] }xs )
+	{
+	    die "400 Bad value '$plate_param' for parameter 'plate' - must start wtih 'G', 'S', or a plate number\n";
+	}
+	
+	elsif ( @pgm && $pgm[0] eq 'scotese' )
+	{
+	    $model = 'S';
+	}
+	
+	else
+	{
+	    $model = 'G';
+	}
+	
+	my @raw_ids = split qr{[\s,]+}, $plate_param;
+	my @plate_ids;
+	
+	foreach my $id ( @raw_ids )
+	{
+	    next unless defined $id && $id ne '';
+	    
+	    if ( $id =~ qr{ ^ [0-9]+ $ }xs )
+	    {
+		push @plate_ids, $id;
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("Bad value '$id' for 'plate': must be a positive integer");
+	    }
+	}
+	
+	my $not = $exclude ? 'not ' : '';
+	
+	unless (@plate_ids)
+	{
+	    push @plate_ids, -1;
+	    $not = '';
+	}
+	
+	my $plate_list = join(',', @plate_ids);
+	
+	if ( $model eq 'S' )
+	{
+	    push @filters, "c.s_plate_no ${not}in ($plate_list)";
+	}
+	
+	else
+	{
+	    push @filters, "c.g_plate_no ${not}in ($plate_list)";
+	}
+	
 	$tables_ref->{non_summary} = 1;
     }
+    
+    # Check for parameters 'envtype', 'envzone'
+    
+    my @envtype = $request->clean_param_list('envtype');
+    my @envzone = $request->clean_param_list('envzone');
+    
+    my $eexclude;
+    my $zexclude;
+    
+    if ( $enviros[0] =~ qr{ ^ \^ (.*) } )
+    {
+	$enviros[0] = $1;
+	$eexclude = 1;
+    }
+    
+    if ( $envzones[0] =~ qr{ ^ \^ (.*) } )
+    {
+	$envzones[0] = $1;
+	$zexclude = 1;
+    }    
+    
+    foreach my $e ( @enviros, @envzones )
     
     # Check for parameters 'p_lngmin', 'p_lngmax', 'p_latmin', 'p_latmax', 'p_loc',
     
@@ -2264,7 +2449,7 @@ sub generateMainFilters {
     # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
     # If no time rule was given, it defaults to 'buffer'.
     
-    my $time_rule = $request->clean_param('timerule') || 'buffer';
+    my $time_rule = $request->clean_param('timerule') || 'major';
     # my $summary_interval = 0;
     # my ($early_age, $late_age, $early_bound, $late_bound);
     # my $interval_no = $request->clean_param('interval_id') + 0;
@@ -2532,7 +2717,7 @@ sub generatePrevalenceFilters {
 	    defined $y1 && $y1 ne '' && $y1 != -90 ||
 		defined $y2 && $y2 ne '' && $y2 != 90;
     
-    return () if $request->clean_param('clust_id') || $request->clean_param('country') ||
+    return () if $request->clean_param('clust_id') || $request->clean_param('cc') ||
 	$request->clean_param('continent') || $request->clean_param('loc') ||
 	    $request->clean_param('plate') || $request->clean_param('formation') ||
 		$request->clean_param('stratgroup') || $request->clean_param('member') || 
@@ -3059,26 +3244,30 @@ sub generateBasisCode {
 }
 
 
-# valid_country ( )
+# valid_cc ( )
 # 
-# Validate values for the 'country' parameter.
+# Validate values for the 'cc' parameter.  These must be either ISO-3166-1 codes or continent
+# codes from our database.  Values may start with ^, indicating exclusion.
 
-my $country_error = "bad value {value} for {param}: must be a country code from ISO-3166-1 alpha-2";
+my $country_error = "bad value {value} for {param}: must be a country code from ISO-3166-1 alpha-2 or a 3-letter continent code";
 
-sub valid_country {
+sub valid_cc {
     
     my ($value, $context) = @_;
     
     # Start with a simple syntactic check.
     
     return { error => $country_error }
-	unless $value =~ /^[a-zA-Z]{2}$/;
+	unless $value =~ qr{ ^ ( \^? ) ( [a-z]{2,3} ) $ }xsi;
+    
+    my $exclude = $1 // '';
+    my $code = $2;
     
     # Then check it against the database.
     
-    my $valid = exists $COUNTRY_NAME{uc $value};
+    my $valid = exists $COUNTRY_NAME{uc $code} || $CONTINENT_NAME{uc $code};
     
-    return $valid ? { value => uc $value }
+    return $valid ? { value => $exclude . uc $code }
 		  : { error => $country_error };
 }
 
@@ -3109,6 +3298,38 @@ sub continent_error {
     my $list = "'" . join("', '", keys %CONTINENT_NAME) . "'";
     return "bad value {value} for {param}, must be one of: $list";
 }
+
+
+# Set up the hashes that are used to evaluate the parameters 'environment' and
+# 'envzone'. 
+
+$ENVALUE{terr} = {'terrestrial indet.' => 1, 'fluvial indet.' => 1, 'alluvial fan' => 1, 'channel lag' => 1, 'coarse channel fill' => 1, 'fine channel fill' => 1, '"channel"' => 1, 'wet floodplain' => 1, 'dry floodplain' => 1, '"floodplain"' => 1, 'crevasse splay' => 1, 'levee' => 1, 'mire/swamp' => 1, 'fluvial-lacustrine indet.' => 1, 'delta plain' => 1, 'fluvial-deltaic indet.' => 1, 'lacustrine - large' => 1, 'lacustrine - small' => 1, 'pond' => 1, 'crater lake' => 1, 'lacustrine delta plain' => 1, 'lacustrine interdistributary bay' => 1, 'lacustrine delta front' => 1, 'lacustrine prodelta' => 1, 'lacustrine deltaic indet.' => 1, 'lacustrine indet.' => 1, 'dune' => 1, 'interdune' => 1, 'loess' => 1, 'eolian indet.' => 1, 'cave' => 1, 'fissure fill' => 1, 'sinkhole' => 1, 'karst indet.' => 1, 'tar' => 1, 'mire/swamp' => 1, 'spring' => 1, 'glacial' => 1};
+
+$ENVALUE{carbonate} = {'carbonate indet.' => 1, 'peritidal' => 1, 'shallow subtidal indet.' => 1, 'open shallow subtidal' => 1, 'lagoonal/restricted shallow subtidal' => 1, 'sand shoal' => 1, 'reef => 1, buildup or bioherm' => 1, 'perireef or subreef' => 1, 'intrashelf/intraplatform reef' => 1, 'platform/shelf-margin reef' => 1, 'slope/ramp reef' => 1, 'basin reef' => 1, 'deep subtidal ramp' => 1, 'deep subtidal shelf' => 1, 'deep subtidal indet.' => 1, 'offshore ramp' => 1, 'offshore shelf' => 1, 'offshore indet.' => 1, 'slope' => 1, 'basinal (carbonate)' => 1, 'basinal (siliceous)' => 1 };
+
+$ENVALUE{silici} = {'marginal marine indet.' => 1, 'coastal indet.' => 1, 'estuary/bay' => 1, 'lagoonal' => 1, 'paralic indet.' => 1, 'delta plain' => 1, 'interdistributary bay' => 1, 'delta front' => 1, 'prodelta' => 1, 'deltaic indet.' => 1, 'foreshore' => 1, 'shoreface' => 1, 'transition zone/lower shoreface' => 1, 'offshore' => 1, 'coastal indet.' => 1, 'submarine fan' => 1, 'basinal (siliciclastic)' => 1, 'basinal (siliceous)' => 1, 'basinal (carbonate)' => 1, 'deep-water indet.' => 1 };
+
+$ENVALUE{lacust} = {'lacustrine - large' => 1, 'lacustrine - small' => 1, 'pond' => 1, 'crater lake' => 1, 'lacustrine delta plain' => 1, 'lacustrine interdistributary bay' => 1, 'lacustrine delta front' => 1, 'lacustrine prodelta' => 1, 'lacustrine deltaic indet.' => 1, 'lacustrine indet.' => 1 };
+
+$ENVALUE{fluvial} = {'fluvial indet.' => 1, 'alluvial fan' => 1, 'channel lag' => 1, 'coarse channel fill' => 1, 'fine channel fill' => 1, '"channel"' => 1, 'wet floodplain' => 1, 'dry floodplain' => 1, '"floodplain"' => 1, 'crevasse splay' => 1, 'levee' => 1, 'mire/swamp' => 1, 'fluvial-lacustrine indet.' => 1, 'delta plain' => 1, 'fluvial-deltaic indet.' => 1 };
+
+$ENVALUE{karst} = {'cave' => 1, 'fissure fill' => 1, 'sinkhole' => 1, 'karst indet.' => 1 };
+
+$ENVALUE{terrother} = {'dune' => 1, 'interdune' => 1, 'loess' => 1, 'eolian indet.' => 1, 'tar' => 1, 'spring' => 1, 'glacial' => 1 };
+
+$ENVALUE{marginal} = {'marginal marine indet.' => 1, 'peritidal' => 1, 'lagoonal/restricted shallow subtidal' => 1, 'estuary/bay' => 1, 'lagoonal' => 1, 'paralic indet.' => 1, 'delta plain' => 1, 'interdistributary bay' => 1 };
+
+$ENVALUE{reef} = {'reef => 1,  buildup or bioherm' => 1, 'perireef or subreef' => 1, 'intrashelf/intraplatform reef' => 1, 'platform/shelf-margin reef' => 1, 'slope/ramp reef' => 1, 'basin reef' => 1 };
+
+$ENVALUE{stshallow} = {'shallow subtidal indet.' => 1, 'open shallow subtidal' => 1, 'delta front' => 1, 'foreshore' => 1, 'shoreface' => 1, 'sand shoal' => 1 }
+
+$ENVALUE{stdeep} = {'transition zone/lower shoreface' => 1, 'deep subtidal ramp' => 1, 'deep subtidal shelf' => 1, 'deep subtidal indet.' => 1 };
+
+$ENVALUE{offshore} = {'offshore ramp' => 1, 'offshore shelf' => 1, 'offshore indet.' => 1, 'prodelta' => 1, 'offshore' => 1 };
+
+$ENVALUE{slope} = {'slope' => 1, 'basinal (carbonate)' => 1, 'basinal (siliceous)' => 1, 'submarine fan' => 1, 'basinal (siliciclastic)' => 1, 'basinal (siliceous)' => 1, 'basinal (carbonate)' => 1, 'deep-water indet.' => 1 };
+
+$ENVALUE{marindet} = {'marine indet.' => 1, 'carbonate indet.' => 1, 'coastal indet.' => 1, 'deltaic indet.' => 1 };
 
 
 # prune_field_list ( )

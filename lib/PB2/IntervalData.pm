@@ -125,6 +125,7 @@ sub initialize {
 	    "For diversity output, this rule also guarantees that each occurrence will fall into at most one",
 	    "temporal bin.  Many occurrences will be ignored because their temporal locality is more than twice",
 	    "as wide as any of the overlapping bins, but fewer will be ignored than with the C<contain> rule.",
+	    "This is the B<default> timerule unles syou specifically select one.",
 	{ value => 'buffer' },
 	    "Select only records whose temporal locality overlaps the specified time range and also falls",
 	    "completely within a 'buffer zone' around this range.  This buffer varies by period, and has been",
@@ -268,11 +269,24 @@ sub get {
     
     my $dbh = $request->get_connection;
     
-    # Make sure we have a valid id number.
+    # Make sure we have a valid id number or a name.
     
     my $id = $request->clean_param('id');
+    my $name = $request->clean_param('name');
+    my $filter;
     
-    die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
+    die "Bad identifier '$id'" unless (defined $id and $id =~ /^\d+$/ || defined $name && $name ne '');
+    
+    if ( $name )
+    {
+	my $quoted = $dbh->quote($name);
+	$filter = "interval_name = $quoted";
+    }
+    
+    else
+    {
+	$filter = "interval_no = $id";
+    }
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -291,12 +305,16 @@ sub get {
 	SELECT $fields
 	FROM $INTERVAL_DATA as i LEFT JOIN $SCALE_MAP as sm using (interval_no)
 		$join_list
-        WHERE i.interval_no = $id
+        WHERE $filter
 	GROUP BY i.interval_no";
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+    
+    # Unless we found a record, return 404.
+    
+    die "404 No such interval was found\n" unless ref $request->{main_record};
     
     # If we were asked to get the count, then do so
     

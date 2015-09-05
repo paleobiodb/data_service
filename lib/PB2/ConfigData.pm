@@ -176,6 +176,8 @@ sub get {
     	splice(@result, 0, $offset);
     }
     
+    print STDERR "CONFIG REQUEST" . "\n\n" if $request->debug;
+    
     $request->list_result(@result);
 }
 

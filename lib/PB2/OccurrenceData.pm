@@ -895,7 +895,7 @@ sub list {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables);
-    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -1027,7 +1027,7 @@ sub diversity {
     
     my $options = {};
     
-    $options->{timerule} = $request->clean_param('timerule') || 'buffer';
+    $options->{timerule} = $request->clean_param('timerule') || 'major';
     $options->{timebuffer} = $request->clean_param('timebuffer');
     
     my $reso_param = $request->clean_param('reso');
@@ -1041,7 +1041,7 @@ sub diversity {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables);
-    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -1517,7 +1517,7 @@ sub taxa {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables);
-    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -1690,7 +1690,7 @@ sub prevalence {
     $tables = { };
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
-    push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, $request->generate_crmod_filters('o', $tables);
     # push @filters, $request->generate_ent_filters('o', $tables);
     
@@ -1710,7 +1710,7 @@ sub prevalence {
 	$tables = { };
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
-	push @filters, $request->generate_common_filters( { occ => 'o', bare => 'o' } );
+	push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
 	# push @filters, $request->generate_crmod_filters('o', $tables);
 	# push @filters, $request->generate_ent_filters('o', $tables);
 	
@@ -1830,7 +1830,7 @@ sub refs {
     my $inner_tables = {};
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { ref => 'r', occ => 'o' } );
+    push @filters, $request->generate_common_filters( { refs => 'r', occs => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
     push @filters, $request->generateOccFilters($inner_tables);
@@ -1923,7 +1923,7 @@ sub strata {
     my $inner_tables = { cc => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { occ => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
     push @filters, $request->generateOccFilters($inner_tables);
@@ -2089,7 +2089,7 @@ sub generateQuickDivFilters {
 	push @filters, "$mt.bin_id in ($list)";
     }
     
-    if ( my @ccs = $request->clean_param_list('country') )
+    if ( my @ccs = $request->clean_param_list('cc') ) # $$$
     {
 	my $cc_list = "'" . join("','", @ccs) . "'";
 	push @filters, "bl.cc in ($cc_list)";

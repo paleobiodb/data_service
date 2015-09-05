@@ -335,7 +335,7 @@ sub list {
     my $all_records = $request->clean_param('all_records');
     
     my @filters = $request->generate_ref_filters();
-    push @filters, $request->generate_common_filters( { ref => 'r', bare => 'r' } );
+    push @filters, $request->generate_common_filters( { refs => 'r', bare => 'r' } );
     push @filters, '1=1' if $all_records;
     
     my $filter_string = join(' and ', @filters);

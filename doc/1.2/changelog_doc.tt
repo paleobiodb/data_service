@@ -8,9 +8,9 @@ If you are developing an application, script, R module, or other client that int
 with this data service, you can use this page to adjust the URLs that you use to interact
 with the data service.
 
-=head2 CHANGES IN VERSION 1.2 b1
+=head2 CHANGES IN VERSION 1.2 b2
 
-This section tracks the changes to version 1.2 (b1), from the base of
+This section tracks the changes to version 1.2 (b2), from the base of
 version 1.1 (6).
 
 This is the "beta-test" version of data service 1.2.  Be aware that
