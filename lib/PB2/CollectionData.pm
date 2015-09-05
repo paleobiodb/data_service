@@ -2309,19 +2309,22 @@ sub generateMainFilters {
     my $eexclude;
     my $zexclude;
     
-    if ( $enviros[0] =~ qr{ ^ \^ (.*) } )
+    if ( $envtype[0] =~ qr{ ^ \^ (.*) } )
     {
-	$enviros[0] = $1;
+	$envtype[0] = $1;
 	$eexclude = 1;
     }
     
-    if ( $envzones[0] =~ qr{ ^ \^ (.*) } )
+    if ( $envzone[0] =~ qr{ ^ \^ (.*) } )
     {
-	$envzones[0] = $1;
+	$envzone[0] = $1;
 	$zexclude = 1;
     }    
     
-    foreach my $e ( @enviros, @envzones )
+    foreach my $e ( @envtype )
+    {
+	
+    }
     
     # Check for parameters 'p_lngmin', 'p_lngmax', 'p_latmin', 'p_latmax', 'p_loc',
     
