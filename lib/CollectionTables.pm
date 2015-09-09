@@ -85,6 +85,16 @@ sub buildCollectionTables {
     
     logMessage(1, "Building collection tables");
     
+    logMessage(2, "    copying enumerations from collections table...");
+    
+    my (@create) = $dbh->selectrow_array("SHOW CREATE TABLE `collections`");
+    
+    my ($env_enum) = $create[1] =~ qr{ `environment` \s+ ( enum [(] .*? [)] ) \s+ DEFAULT \s+ NULL }xmi;
+    
+    $env_enum ||= 'varchar(30)';
+    
+    logMessage(2, "    creating collection matrix...");
+    
     $dbh->do("DROP TABLE IF EXISTS $COLL_MATRIX_WORK");
     
     $dbh->do("CREATE TABLE $COLL_MATRIX_WORK (
@@ -102,6 +112,7 @@ sub buildCollectionTables {
 		late_age decimal(9,5),
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
+		environment $env_enum default null,
 		n_occs int unsigned not null,
 		reference_no int unsigned not null,
 		access_level tinyint unsigned not null) Engine=MYISAM");
@@ -110,12 +121,13 @@ sub buildCollectionTables {
     
     $sql = "	INSERT INTO $COLL_MATRIX_WORK
 		       (collection_no, lng, lat, loc, cc,
-			early_int_no, late_int_no,
+			early_int_no, late_int_no, environment,
 			reference_no, access_level)
 		SELECT c.collection_no, c.lng, c.lat,
 			if(c.lng is null or c.lat is null, point(1000.0, 1000.0), point(c.lng, c.lat)), 
 			map.cc,
 			c.max_interval_no, if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no),
+			c.environment,
 			c.reference_no,
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
@@ -181,26 +193,6 @@ sub buildCollectionTables {
 	$result = $dbh->do("
 		UPDATE $COLL_MATRIX_WORK as m JOIN $COLL_LOC as cl using (collection_no)
 		SET m.protected = cl.protected");
-	
-	# $dbh->do("DROP TABLE IF EXISTS protected_aux");
-	
-	# $dbh->do("CREATE TABLE protected_aux (
-	# 	collection_no int unsigned not null primary key,
-	# 	category varchar(255)) Engine=MyISAM");
-	
-	# $sql = "INSERT INTO protected_aux
-	#     SELECT collection_no, group_concat(category)
-	#     FROM coll_matrix as m join protected_land as p on st_within(m.loc, p.shape)
-	#     GROUP BY collection_no";
-	
-	# $result = $dbh->do($sql);
-	
-	# logMessage(2, "      setting protection attribute...");
-	
-	# $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN protected_aux as p using (collection_no)
-	#     SET m.protected = p.category";
-    
-	# $result = $dbh->do($sql);
     }
     
     else
@@ -301,6 +293,12 @@ sub buildCollectionTables {
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_age)");
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_age)");
+    
+    logMessage(2, "    indexing by environment...");
+    
+    $result = $dbh->do("UPDATE $COLL_MATRIX_WORK SET environment = null
+			WHERE environment = ''");
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (environment)");
     
     # We then create summary table for each binning level, counting the
     # number of collections and occurrences in each bin and computing the

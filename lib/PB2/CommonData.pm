@@ -80,51 +80,51 @@ sub initialize {
     $ds->define_ruleset('1.2:common:select_taxa_crmod' =>
 	{ param => 'taxa_created_before', valid => \&datetime_value },
 	    "Select only records associated with taxa that were created before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'taxa_created_after', valid => \&datetime_value, alias => 'taxon_created_since' },
+	{ param => 'taxa_created_after', valid => \&datetime_value, alias => 'taxa_created_since' },
 	    "Select only records associated with taxa that were created on or after the specified L<date or date/time|/data1.2/datetime>.",
 	{ param => 'taxa_modified_before', valid => \&datetime_value },
 	    "Select only records associated with taxa that were last modified before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'taxa_modified_after', valid => \&datetime_value, alias => 'taxon_modified_since' },
+	{ param => 'taxa_modified_after', valid => \&datetime_value, alias => 'taxa_modified_since' },
 	    "Select only records associated with taxa that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
     
     $ds->define_ruleset('1.2:common:select_ops_crmod' =>
 	{ param => 'ops_created_before', valid => \&datetime_value },
 	    "Select only records associated with taxa that were created before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'ops_created_after', valid => \&datetime_value, alias => 'op_created_since' },
+	{ param => 'ops_created_after', valid => \&datetime_value, alias => 'ops_created_since' },
 	    "Select only records associated with taxa that were created on or after the specified L<date or date/time|/data1.2/datetime>.",
 	{ param => 'ops_modified_before', valid => \&datetime_value },
 	    "Select only records associated with taxa that were last modified before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'ops_modified_after', valid => \&datetime_value, alias => 'op_modified_since' },
+	{ param => 'ops_modified_after', valid => \&datetime_value, alias => 'ops_modified_since' },
 	    "Select only records associated with taxa that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
     
     $ds->define_ruleset('1.2:common:select_refs_crmod' =>
 	{ param => 'refs_created_before', valid => \&datetime_value },
 	    "Select only records associated with references that were created before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'refs_created_after', valid => \&datetime_value, alias => 'ref_created_since' },
+	{ param => 'refs_created_after', valid => \&datetime_value, alias => 'refs_created_since' },
 	    "Select only records associated with references that were created on or after the specified L<date or date/time|/data1.2/datetime>.",
 	{ param => 'refs_modified_before', valid => \&datetime_value },
 	    "Select only records associated with references that were last modified before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'refs_modified_after', valid => \&datetime_value, alias => 'ref_modified_since' },
+	{ param => 'refs_modified_after', valid => \&datetime_value, alias => 'refs_modified_since' },
 	    "Select only records associated with references that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
     
     $ds->define_ruleset('1.2:common:select_occs_crmod' =>
 	{ param => 'occs_created_before', valid => \&datetime_value },
 	    "Select only records associated with occurrences that were created before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'occs_created_after', valid => \&datetime_value, alias => 'occ_created_since' },
+	{ param => 'occs_created_after', valid => \&datetime_value, alias => 'occs_created_since' },
 	    "Select only records associated with occurrences that were created on or after the specified L<date or date/time|/data1.2/datetime>.",
 	{ param => 'occs_modified_before', valid => \&datetime_value },
 	    "Select only records associated with occurrences that were last modified before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'occs_modified_after', valid => \&datetime_value, alias => 'occ_modified_since' },
+	{ param => 'occs_modified_after', valid => \&datetime_value, alias => 'occs_modified_since' },
 	    "Select only records associated with occurrences that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
     
     $ds->define_ruleset('1.2:common:select_colls_crmod' =>
 	{ param => 'colls_created_before', valid => \&datetime_value },
 	    "Select only records associated with collections that were created before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'colls_created_after', valid => \&datetime_value, alias => 'coll_created_since' },
+	{ param => 'colls_created_after', valid => \&datetime_value, alias => 'colls_created_since' },
 	    "Select only records associated with collections that were created on or after the specified L<date or date/time|/data1.2/datetime>.",
 	{ param => 'colls_modified_before', valid => \&datetime_value },
 	    "Select only records associated with collections that were last modified before the specified L<date or date/time|/data1.2/datetime>.",
-	{ param => 'colls_modified_after', valid => \&datetime_value, alias => 'coll_modified_since' },
+	{ param => 'colls_modified_after', valid => \&datetime_value, alias => 'colls_modified_since' },
 	    "Select only records associated with collections that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
     
     $ds->define_block('1.2:common:crmod' =>
