@@ -264,7 +264,7 @@ sub initialize {
 	{ output => 'subgenus_no', com_name => 'sgn', if_block => 'classext', dedup => 'genus_no' },
 	    "The identifier of the subgenus in which this occurrence is classified,",
 	    "if any.",
-	{ set => '*', code => \&process_occ_subgenus, if_block => 'subgenus' });
+	{ set => '*', code => \&process_occ_subgenus });
     
     $ds->define_block('1.2:occs:genus' =>
 	{ select => ['pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
@@ -273,13 +273,12 @@ sub initialize {
 	    "The name of the genus in which this occurrence is classified.",
 	    "If the block C<subgenus> is specified, this will include the subgenus",
 	    "name if any.",
-	{ output => 'genus_no', com_name => 'gnn', not_block => 'class,classext' },
-	    "The identifier of the genus in which this occurrence is classified",
-	{ output => 'subgenus_no', com_name => 'sgn', not_block => 'class,classext' },
-	    "The identifier of the genus in which this occurrence is classified,",
-	    "if any.",
-	{ set => '*', code => \&process_occ_subgenus, if_block => 'subgenus', 
-	  not_block => 'class,classext' });
+	# { output => 'genus_no', com_name => 'gnn', not_block => 'class,classext' },
+	#     "The identifier of the genus in which this occurrence is classified",
+	# { output => 'subgenus_no', com_name => 'sgn', not_block => 'class,classext' },
+	#     "The identifier of the genus in which this occurrence is classified,",
+	#     "if any.",
+	{ set => '*', code => \&process_occ_subgenus, not_block => 'class,classext' });
     
     $ds->define_block('1.2:occs:plant' =>
 	{ select => ['o.plant_organ', 'o.plant_organ2'] },
@@ -305,7 +304,6 @@ sub initialize {
     
     $ds->define_block( '1.2:occs:full_info' =>
 	{ include => '1.2:occs:class' },
-	{ include => '1.2:occs:subgenus' },
 	{ include => '1.2:occs:plant' },
 	{ include => '1.2:occs:abund' },
 	{ include => '1.2:occs:coords' },
