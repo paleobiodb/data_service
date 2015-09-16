@@ -2096,6 +2096,80 @@ sub generateMainFilters {
     
     $request->add_warning(@taxon_warnings) if @taxon_warnings;
     
+    # Check for parameter 'pres'
+    
+    my @pres = $request->clean_param_list('pres');
+    
+    if ( @pres )
+    {
+	my (%pres);
+	
+	foreach my $v (@pres)
+	{
+	    $pres{$v} = 1 if $v && $v ne '';
+	}
+	
+	if ( %pres && ! $pres{all} )
+	{
+	    $tables_ref->{v} = 1;
+	    
+	    my @keys = keys %pres;
+	    
+	    if ( @keys == 1 )
+	    {
+		if ( $keys[0] eq 'regular' )
+		{
+		    push @filters, "v.not_trace and v.not_form";
+		}
+		
+		elsif ( $keys[0] eq 'form' )
+		{
+		    push @filters, "not(v.not_form)";
+		}
+		
+		elsif ( $keys[0] eq 'ichno' )
+		{
+		    push @filters, "not(v.not_trace)";
+		}
+		
+		else
+		{
+		    push @filters, "t.orig_no = -1";
+		    die "400 bad value '$keys[0]' for option 'pres'\n";
+		}
+	    }
+	    
+	    elsif ( @keys == 2 )
+	    {
+		if ( $pres{form} && $pres{ichno} )
+		{
+		    push @filters, "not(v.not_trace and v.not_form)";
+		}
+		
+		elsif ( $pres{form} && $pres{regular} )
+		{
+		    push @filters, "(v.not_trace or not(v.not_form))";
+		}
+		
+		elsif ( $pres{ichno} && $pres{regular} )
+		{
+		    push @filters, "(v.not_form or not(v.not_trace))";
+		}
+		
+		else
+		{
+		    croak "bad value '$keys[0]', '$keys[1]' for option 'pres'\n";
+		}
+	    }
+	    
+	    else
+	    {
+		# No filter to add in this case, since @keys must be at least
+		# 3 and so all 3 classes of taxa are selected.
+	    }
+	}
+    }
+    
     # Check for parameter 'cc'
     
     if ( my @ccs = $request->clean_param_list('cc') )
