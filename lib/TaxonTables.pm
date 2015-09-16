@@ -4220,6 +4220,7 @@ sub computeAttrsTable {
 				max_body_mass float,
 				precise_age boolean,
 				not_trace boolean,
+				not_form boolean,
 				first_early_age decimal(9,5),
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
@@ -4241,12 +4242,13 @@ sub computeAttrsTable {
     
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
-			 extant_size, taxon_size, n_colls, n_occs, not_trace)
+			 extant_size, taxon_size, n_colls, n_occs, not_trace, not_form)
 		SELECT a.orig_no,
 			if(t.accepted_no = t.synonym_no, 1, 0) as is_valid,
 			if(t.synonym_no = t.orig_no, 1, 0) as is_senior,
 			sum(if(a.extant = 'yes', 1, if(a.extant = 'no', 0, null))) as is_extant,
-			0, 0, 0, 0, 0, 0, a.preservation <> 'trace' or a.preservation is null
+			0, 0, 0, 0, 0, 0, a.preservation <> 'trace' or a.preservation is null,
+			a.form_taxon <> 'yes' or a.form_taxon is null
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 		GROUP BY a.orig_no";
     
@@ -4434,7 +4436,8 @@ sub computeAttrsTable {
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
 					max(v.max_body_mass), pv.max_body_mass) as max_body_mass,
-			if(max(v.not_trace) > 0, 1, pv.not_trace) as not_trace
+			if(max(v.not_trace) > 0, 1, pv.not_trace) as not_trace,
+			if(max(v.not_form) > 0, 1, pv.not_form) as not_form
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.immpar_no 
 		 WHERE t.depth = $child_depth and v.is_senior
@@ -4447,7 +4450,8 @@ sub computeAttrsTable {
 			v.taxon_size = nv.taxon_size,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.not_trace = nv.not_trace";
+			v.not_trace = nv.not_trace,
+			v.not_form = nv.not_form";
 	
 	$result = $dbh->do($sql);
 	
@@ -4464,7 +4468,8 @@ sub computeAttrsTable {
 			sum(v.n_occs) as n_occs,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
-			max(v.not_trace) as not_trace
+			max(v.not_trace) as not_trace,
+			max(v.not_form) as not_form
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and v.is_valid
 		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
@@ -4476,7 +4481,8 @@ sub computeAttrsTable {
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.not_trace = nv.not_trace";
+			v.not_trace = nv.not_trace,
+			v.not_form = nv.not_form";
 	
 	$result = $dbh->do($sql);
 	
@@ -4645,7 +4651,8 @@ sub computeAttrsTable {
 			v.precise_age = sv.precise_age,
 			v.early_occ = sv.early_occ,
 			v.late_occ = sv.late_occ,
-			v.not_trace = sv.not_trace");
+			v.not_trace = sv.not_trace,
+			v.not_form = sv.not_form");
     
     # Now we can set the 'pubyr', 'modyr', 'is_changed' and 'attribution' fields, which are not
     # inherited. 

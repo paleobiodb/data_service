@@ -104,6 +104,7 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       extant => 1, 
 		       depth => 1,
 		       status => 1, 
+		       pres => 1,
 		       reference_no => 1,
 		       imm_children => 1,
 		       all_variants => 1,
@@ -2739,6 +2740,78 @@ sub taxon_filters {
 	# Add the specified filter.
 	
 	push @filters, "t.rank in ($rank_string)";
+    }
+    
+    if ( ref $options->{pres} eq 'HASH' && ! $options->{pres}{all} )
+    {
+	my @keys = keys %{$options->{pres}};
+	
+	if ( @keys == 1 )
+	{
+	    $tables_ref->{v} = 1;
+	    
+	    if ( $keys[0] eq 'regular' )
+	    {
+		push @filters, "v.not_trace and v.not_form";
+	    }
+	    
+	    elsif ( $keys[0] eq 'form' )
+	    {
+		push @filters, "not(v.not_form)";
+	    }
+	    
+	    elsif ( $keys[0] eq 'ichno' )
+	    {
+		push @filters, "not(v.not_trace)";
+	    }
+	    
+	    else
+	    {
+		push @filters, "a.taxon_no = -1";
+		croak "bad value '$keys[0]' for option 'pres'\n";
+	    }
+	}
+	
+	elsif ( @keys == 2 )
+	{
+	    $tables_ref->{v} = 1;
+	    
+	    if ( $options->{pres}{form} && $options->{pres}{ichno} )
+	    {
+		push @filters, "not(v.not_trace and v.not_form)";
+	    }
+	    
+	    elsif ( $options->{pres}{form} && $options->{pres}{regular} )
+	    {
+		push @filters, "(v.not_trace or not(v.not_form))";
+	    }
+	    
+	    elsif ( $options->{pres}{ichno} && $options->{pres}{regular} )
+	    {
+		push @filters, "(v.not_form or not(v.not_trace))";
+	    }
+	    
+	    else
+	    {
+		croak "bad value '$keys[0]', '$keys[1]' for option 'pres'\n";
+	    }
+	}
+	
+	else
+	{
+	    unless ( $options->{pres}{form} && $options->{pres}{ichno} && $options->{pres}{regular} )
+	    {
+		croak "bad value '$keys[0]', '$keys[1]', '$keys[2]' for option 'pres'\n";
+	    }
+	    
+	    # No filter to add in this case, since all classes of taxa are
+	    # selected.
+	}
+    }
+    
+    elsif ( defined $options->{pres} )
+    {
+	croak "bad value '$options->{pres}' for option 'pres': must be a hashref\n";
     }
     
     if ( defined $options->{extant} && $options->{extant} ne '' )

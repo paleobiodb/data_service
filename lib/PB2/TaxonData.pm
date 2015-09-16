@@ -791,6 +791,16 @@ sub initialize {
 	    "'nomen dubium', 'nomen nudum', 'nomen vanum', 'nomen oblitum', 'invalid subgroup of',",
 	    "'misspelling of'.");
     
+    $ds->define_set('1.2:taxa:preservation' =>
+	{ value => 'regular' },
+	    "Select regular taxa",
+	{ value => 'form' },
+	    "Select form taxa",
+	{ value => 'ichno' },
+	    "Select ichnotaxa",
+	{ value => 'all' },
+	    "Select all taxa");
+    
     $ds->define_set('1.2:taxa:refselect' =>
 	{ value => 'auth' },
 	    "Select the references associated with the authority records for these taxa.",
@@ -1008,6 +1018,11 @@ sub initialize {
 	">The following parameters indicate which related taxonomic names to return:",
 	{ optional => 'rel', valid => '1.2:taxa:rel' },
 	    "Indicates which taxa are to be selected.  Accepted values include:",
+	{ param => 'pres', valid => $ds->valid_set('1.2:taxa:preservation'), split => qr{[\s,]+} },
+	    "This parameter indicates whether to select",
+	    "ichnotaxa, form taxa, or regular taxa.  The default is C<all>, which will select",
+	    "all taxa that meet the other specified criteria.  You can specify one or more",
+	    "of the following values as a list:",
 	{ optional => 'taxon_status', valid => '1.2:taxa:status', default => 'all', alias => 'status' },
 	    "Selects only names that have the specified status.  The default is C<all>.",
 	    "Accepted values include:");
@@ -2374,6 +2389,7 @@ sub generate_query_options {
     my $extant = $request->clean_param('extant');
     my $rank = $request->clean_param('rank');
     my $status = $request->clean_param('taxon_status');
+    my @pres = $request->clean_param_list('pres');
     my @select = $request->clean_param_list('select');
     
     $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
@@ -2387,6 +2403,44 @@ sub generate_query_options {
     if ( @select )
     {
 	$options->{select} = \@select;
+    }
+    
+    if ( @pres )
+    {
+	my $pres_options = {};
+	
+	foreach my $v ( @pres )
+	{
+	    if ( $v eq 'regular' )
+	    {
+		$pres_options->{regular} = 1;
+	    }
+	    
+	    elsif ( $v eq 'form' )
+	    {
+		$pres_options->{form} = 1;
+	    }
+	    
+	    elsif ( $v eq 'ichno' )
+	    {
+		$pres_options->{ichno} = 1;
+	    }
+	    
+	    elsif ( $v eq 'all' )
+	    {
+		$pres_options->{all} = 1;
+	    }
+	    
+	    else
+	    {
+		die "400 Bad value '$v' for option 'pres': must be one of 'regular', 'form', 'ichno', 'all'\n";
+	    }
+	}
+	
+	if ( %$pres_options && ! $pres_options->{all} )
+	{
+	    $options->{pres} = $pres_options;
+	}
     }
     
     # Handle variant=all
