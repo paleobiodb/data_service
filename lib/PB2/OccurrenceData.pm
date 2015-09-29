@@ -23,6 +23,7 @@ use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use TaxonDefs qw(%RANK_STRING);
 
 use Carp qw(carp croak);
+use Try::Tiny;
 
 use Moo::Role;
 
@@ -696,6 +697,24 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
+    $ds->define_ruleset('1.2:occs:ttest' =>
+	"The following parameters specify what to count and at what taxonomic resolution:",
+	{ allow => '1.2:occs:taxa_params' }, 
+        ">>The following parameters select which occurrences to analyze.",
+	"Except as noted below, you may use these in any combination.",
+	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
+	"the exact list of occurrences used to compute this phylogeny.",
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:taxa:occ_filter' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector'] },
+	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
     $ds->define_ruleset('1.2:occs:prev_selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "Show the prevalence of taxa across all of the occurrences in the database");
@@ -732,15 +751,69 @@ sub initialize {
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:taxa:occ_filter' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
 	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
 	"You can also specify any of the following parameters:",
+	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
+	    "You can use this parameter to specify which kinds of references to retrieve.",
+	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:refs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:byref' =>
+	"You can use the following parameters if you wish to retrieve the references associated",
+	"with a known list of occurrences or collections, or to filter a known list against",
+	"other criteria such as location or time.",
+	"Only the records which match the other parameters that you specify will be returned.",
+	{ allow => '1.2:occs:selector' },
+        ">>The following parameters can be used to retrieve the references associated with occurrences",
+	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
+	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:taxa:occ_filter' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	"You can also specify any of the following parameters:",
+	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
+	    "You can use this parameter to specify which kinds of references to retrieve.",
+	    "The value of this attribute can be one or more of the following, separated by commas:",
+	{ allow => '1.2:refs:filter' },
+	{ allow => '1.2:taxa:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:opinions' =>
+	{ allow => '1.2:occs:selector' },
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:taxa:occ_filter' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	"You can also specify any of the following parameters:",
+	{ optional => 'select', valid => '1.2:taxa:opselect', list => ',' },
+	    "You can use this parameter to retrieve all opinions, or only the classification opinions.",
+	    "Accepted values include:",
+	{ allow => '1.2:opinions:filter' },
+	{ allow => '1.2:common:select_ops_crmod' },
+	{ allow => '1.2:common:select_ops_ent' },
+	{ allow => '1.2:refs:filter' },
+	{ allow => '1.2:opinions:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.",
+	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
+	"the name of the primary author.");
     
     $ds->define_set('1.2:strata:order' =>
 	{ value => 'name' },
@@ -1812,9 +1885,9 @@ sub generate_prevalence_joins {
 # Query the database for the references associated with occurrences satisfying
 # the conditions specified by the parameters.
 
-sub refs {
+sub list_associated {
 
-    my ($request) = @_;
+    my ($request, $record_type) = @_;
     
     # Get a database handle by which we can make queries.
     
@@ -1822,7 +1895,21 @@ sub refs {
     
     $request->substitute_select( mt => 'r', cd => 'r' );
     
-    $request->delete_output_field('n_opinions');
+    # $request->delete_output_field('n_opinions');
+    
+    # First figure out if we just want occurrence/collection references, or if
+    # we also want taxonomy references.
+    
+    my @select = $request->clean_param_list('select');
+    my ($use_taxonomy, $use_colls);
+    
+    foreach my $s ( @select )
+    {
+	$use_taxonomy = 1 if $s ne 'occs' || $s ne 'colls';
+	$use_colls = 1 if $s eq 'colls';
+    }
+    
+    $use_taxonomy = 1 if $record_type eq 'taxa' || $record_type eq 'opinions';
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -1830,7 +1917,7 @@ sub refs {
     my $inner_tables = {};
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { refs => 'r', occs => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
     push @filters, $request->generateOccFilters($inner_tables);
@@ -1842,6 +1929,7 @@ sub refs {
     # Construct another set of filter expressions to act on the references.
     
     my @ref_filters = $request->generate_ref_filters($request->tables_hash);
+    push @ref_filters, $request->generate_common_filters( { refs => 'r', occs => 'ignore' } );
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -1856,6 +1944,72 @@ sub refs {
     # warnings. 
     
     $request->strict_check;
+    
+    # If we do want taxonomy references, we must constuct a temporary table of
+    # occurrences and pass that to Taxonomy::list_associated.
+    
+    if ( $use_taxonomy )
+    {
+	$dbh->do("DROP TABLE IF EXISTS occ_list");
+	$dbh->do("CREATE TEMPORARY TABLE occ_list (
+			occurrence_no int unsigned not null primary key,
+			taxon_no int unsigned not null,
+			orig_no int unsigned not null ) engine=memory");
+	
+	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+	
+	my $sql = "
+		INSERT IGNORE INTO occ_list
+		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $OCC_MATRIX as o
+			JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+	
+	$dbh->do($sql);
+	
+	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	
+	# Then generate a set of query options based on the request parameters.
+	# This routine will only take into account parameters relevant to
+	# selecting taxa.
+	
+	my $options = PB2::TaxonData::generate_query_options($request, $record_type);
+	
+	# We need to remove the options 'min_ma' and 'max_ma' if they were
+	# specified, because these overlap with the parameters of the same name
+	# used to select occurrences and have already been taken care of above.
+	
+	delete $options->{min_ma};
+	delete $options->{max_ma};
+	
+	# Indicate that we want a DBI statement handle in return, and that we will
+	# be using the table 'occ_list'.
+	
+	$options->{return} = 'stmt';
+	$options->{table} = 'occ_list';
+	
+	try {
+	    my ($result) = $taxonomy->list_associated('occs', $request->{my_base_taxa}, $options);
+	    my @warnings = $taxonomy->list_warnings;
+	    
+	    $request->sth_result($result) if $result;
+	    $request->add_warning(@warnings) if @warnings;
+	}
+	
+	catch {
+	    die $_;
+	}
+	
+	finally {
+	    $dbh->do("DROP TABLE IF EXISTS occ_list");
+	    print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+	};
+	
+	$request->set_result_count($taxonomy->last_rowcount) if $options->{count};
+	return;
+    }
+    
+    # Otherwise, we can construct a query ourselves.
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -1877,7 +2031,7 @@ sub refs {
     
     $request->{main_sql} = "
 	SELECT $calc $fields, count(distinct occurrence_no) as n_occs,
-		count(distinct taxon_no) as n_taxa, 'O' as ref_type
+		count(distinct taxon_no) as n_reftaxa, 'O' as ref_type
 	FROM (SELECT o.reference_no, o.occurrence_no, o.taxon_no
 	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 		$inner_join_list
@@ -1897,6 +2051,94 @@ sub refs {
     # If we were asked to get the count, then do so
     
     $request->sql_count_rows;
+}
+
+
+sub taxa_test {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    
+    # Then generate a table of occurrences that match the query parameters.
+    # Only take into account parameters that are relevant for selecting
+    # occurrences.
+    
+    $request->substitute_select( mt => 'r', cd => 'r' );
+    
+    my $inner_tables = {};
+    
+    my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
+    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
+    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
+    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
+    push @filters, $request->generateOccFilters($inner_tables);
+    
+    push @filters, "c.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    $dbh->do("DROP TABLE IF EXISTS occ_list");
+    $dbh->do("CREATE TEMPORARY TABLE occ_list (
+		occurrence_no int unsigned not null primary key,
+		taxon_no int unsigned not null,
+		orig_no int unsigned not null ) engine=memory");
+    
+    my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+    
+    my $sqlA = "INSERT IGNORE INTO occ_list
+		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $OCC_MATRIX as o
+			JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+    
+    $dbh->do($sqlA);
+    
+    # Then use this table of occurrences to generate a list of matching
+    # taxa. Start by creating a taxonomy object.
+    
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    # Then generate a set of query options based on the request parameters.
+    # This routine will only take into account parameters relevant to
+    # selecting taxa.
+    
+    my $options = PB2::TaxonData::generate_query_options($request, 'taxa');
+    
+    # We need to remove the options 'min_ma' and 'max_ma' if they were
+    # specified, because these overlap with the parameters of the same name
+    # used to select occurrences and have already been taken care of above.
+    
+    delete $options->{min_ma};
+    delete $options->{max_ma};
+    
+    # Indicate that we want a DBI statement handle in return, and that we will
+    # be using the table 'occ_list'.
+    
+    $options->{return} = 'stmt';
+    $options->{table} = 'occ_list';
+    
+    try {
+	my ($result) = $taxonomy->list_taxa('occs', $request->{my_base_taxa}, $options);
+	my @warnings = $taxonomy->list_warnings;
+	
+	$request->sth_result($result) if $result;
+	$request->add_warning(@warnings) if @warnings;
+    }
+    
+    catch {
+	die $_;
+    }
+    
+    finally {
+	$dbh->do("DROP TABLE IF EXISTS occ_list");
+	print STDERR $sqlA . "\n\n" . $taxonomy->last_sql . "\n\n" if $request->debug;
+    };
+    
+    $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
+    $request->{main_sql} = $sqlA . "\n\n" . $taxonomy->last_sql;
 }
 
 
@@ -2233,7 +2475,7 @@ sub generateQuickDivFilters {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
-	$request->{my_base_taxa} = \@include_taxa;
+	$request->{my_base_taxa} = [ @include_taxa, @exclude_taxa ];
     }
     
     # If a bad taxon name or id was given, add a filter that will exclude

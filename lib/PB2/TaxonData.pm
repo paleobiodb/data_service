@@ -638,7 +638,7 @@ sub initialize {
 	{ value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the opinion record");
     
-    our (%pbdb_opinion_code) = ( 'C' => 'classify', 'U' => 'unselected', 'X' => 'suppressed' );
+    our (%pbdb_opinion_code) = ( 'C' => 'class', 'U' => 'unsel', 'X' => 'suppressed' );
     
     $ds->define_block('1.2:opinions:basic' =>
 	{ select => [ 'OP_DATA' ] },
@@ -809,7 +809,7 @@ sub initialize {
 	{ value => 'taxonomy' },
 	    "Select the references associated with both the authority records and the classification",
 	    "opinions for these taxa.  This is the default.",
-	{ value => 'opinions' },
+	{ value => 'ops' },
 	    "Select the references associated with all opinions on these taxa, including",
 	    "those not used for classification.",
 	{ value => 'occs' },
@@ -862,6 +862,19 @@ sub initialize {
 	    "Group occurrences together if they are identified as belonging to the same phylum",
 	{ value => 'kingdom' },
 	    "Group occurrences together if they are identified as belonging to the same kingdom");
+    
+    $ds->define_set('1.2:taxa:occ_names' =>
+	{ value => 'ident' },
+	    "Return the taxonomic name with which each occurrence was actually identified",
+	{ value => 'accepted' },
+	    "Return the accepted taxonomic name corresponding to each identification",
+	{ value => 'higher' },
+	    "Return the accepted taxonomic name corresponding to each identification,",
+	    "along with all higher taxa.",
+	{ value => 'ident,higher' },
+	    "Return the taxonomic name corresponding to each identification",
+	{ value => 'accepted,higher' },
+	    "Same as C<higher>");
     
     $ds->define_set('1.2:taxa:order' =>
 	{ value => 'hierarchy' },
@@ -1018,7 +1031,7 @@ sub initialize {
 	">The following parameters indicate which related taxonomic names to return:",
 	{ optional => 'rel', valid => '1.2:taxa:rel' },
 	    "Indicates which taxa are to be selected.  Accepted values include:",
-	{ param => 'pres', valid => $ds->valid_set('1.2:taxa:preservation'), split => qr{[\s,]+} },
+	{ optional => 'pres', valid => '1.2:taxa:preservation', split => qr{[\s,]+} },
 	    "This parameter indicates whether to select",
 	    "ichnotaxa, form taxa, or regular taxa.  The default is C<all>, which will select",
 	    "all taxa that meet the other specified criteria.  You can specify one or more",
@@ -1102,6 +1115,20 @@ sub initialize {
 	{ optional => 'depth', valid => POS_VALUE },
 	    "Return only taxa no more than the specified number of levels below or",
 	     "above the base taxon or taxa in the hierarchy");
+    
+    $ds->define_ruleset('1.2:taxa:occ_filter' =>
+	"The following parameters further filter the list of return values:",
+	{ optional => 'rank', valid => \&PB2::TaxonData::validRankSpec },
+	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
+	{ optional => 'extant', valid => BOOLEAN_VALUE },
+	    "Return only extant or non-extant taxa.",
+	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
+	{ optional => 'occname', valid => '1.2:taxa:occ_names' },
+	    "This parameter specifies which of the taxonomic names associated",
+	    "with occurrences should be considered.  The default is C<accepted>.");
+	# { optional => 'depth', valid => POS_VALUE },
+	#     "Return only taxa no more than the specified number of levels below or",
+	#      "above the base taxon or taxa in the hierarchy");
     
     $ds->define_ruleset('1.2:taxa:summary_selector' => 
 	{ optional => 'rank', valid => '1.2:taxa:summary_rank', alias => 'summary_rank',
@@ -1414,7 +1441,7 @@ sub get_taxon {
 	if ( my $rank = $request->clean_param('rank') )
 	{
 	    $name_select->{rank} = $rank;
-	    $not_found_msg .= " at rank '$rank'";
+	    $not_found_msg .= " at specified rank";
 	}
 	
 	($taxon_no) = $taxonomy->resolve_names($taxon_name, $name_select);
@@ -1742,7 +1769,7 @@ sub list_opinions {
     }
     
     $options->{return} = 'stmt';
-    $options->{select} ||= 'all';
+    $options->{assoc_type} ||= 'all';
     
     # Next, fetch the list of opinion records.
     
@@ -2386,23 +2413,31 @@ sub generate_query_options {
     $options->{offset} = $offset if $offset;
     $options->{count} = 1 if $request->display_counts;
     
-    my $extant = $request->clean_param('extant');
-    my $rank = $request->clean_param('rank');
     my $status = $request->clean_param('taxon_status');
     my @pres = $request->clean_param_list('pres');
     my @select = $request->clean_param_list('select');
     
-    $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
     $options->{status} = $status if $status ne '';
     
-    if ( $rank )
+    if ( my $extant = $request->clean_param('extant' ) )
+    {
+	$options->{extant} = $extant;
+    }
+    
+    if ( my $rank = $request->clean_param('rank') )
     {
 	$options->{rank} = $rank;
     }
     
+    if ( my $occ_name = $request->clean_param('occname') )
+    {
+	$options->{exact} = 1 if $occ_name =~ qr{ident};
+	$options->{higher} = 1 if $occ_name =~ qr{higher};
+    }
+    
     if ( @select )
     {
-	$options->{select} = \@select;
+	$options->{assoc_type} = \@select;
     }
     
     if ( @pres )
@@ -2656,7 +2691,7 @@ sub select_list_for_taxonomy {
 	    push @fields, 'REF_DATA';
 	}
 	
-	elsif ( $f =~ qr{^rs[.]n_taxa} || $f eq 'COUNTS' )
+	elsif ( $f =~ qr{^rs[.]n_reftaxa} || $f eq 'COUNTS' )
 	{
 	    push @fields, 'REF_COUNTS' if $operation eq 'refs';
 	}
@@ -2962,203 +2997,6 @@ sub list_images {
 }
 
 
-# SQL generation auxiliary routines
-# ---------------------------------
-
-# generate_filters ( tables_ref )
-# 
-# Generate a list of filters that will be used to compute the appropriate
-# result set.  Any additional tables that are needed will be indicated in
-# $tables_ref.
-
-sub generate_filters {
-
-    my ($request, $tables_ref) = @_;
-    
-    my @filters;
-    
-    my $extant = $request->clean_param('extant');
-    
-    if ( defined $extant && $extant ne '' )
-    {
-	push @filters, "at.is_extant = $extant";
-	$tables_ref->{at} = 1;
-    }
-    
-    my @taxon_ranks = $request->clean_param_list('taxon_rank');
-    my $rank_list = $request->generate_rank_list(@taxon_ranks) if @taxon_ranks;
-    
-    if ( defined $rank_list )
-    {
-	push @filters, "t.rank in ($rank_list)";
-    }
-    
-    return @filters;
-}
-
-
-# generate_summary_expr ( summary_rank, occs_table, tree_table, ints_table )
-# 
-# Generate an expression to compute the appropriate summary level.
-
-sub generate_summary_expr {
-    
-    my ($request, $summary_rank, $o, $t, $i) = @_;
-    
-    if ( $summary_rank eq 'exact' )
-    {
-	return "concat_ws(' ', $o.genus_name, $o.genus_reso, if($o.subgenus_name <> '', concat('(', concat_ws(' ', $o.subgenus_name, $o.subgenus_reso), ')'), null), $o.species_name, $o.species_reso)";
-    }
-    
-    elsif ( $summary_rank eq 'ident' )
-    {
-	return "concat_ws(' ', $o.genus_name, if($o.subgenus_name <> '', concat('(', $o.subgenus_name, ')'), null), $o.species_name)";
-    }
-    
-    elsif ( $summary_rank eq 'taxon' )
-    {
-	return "$o.orig_no";
-    }
-    
-    elsif ( $summary_rank eq 'synonym' )
-    {
-	return "$t.synonym_no";
-    }
-    
-    elsif ( $summary_rank eq 'species' )
-    {
-	return "ifnull($t.species_no, 0)";
-    }
-    
-    elsif ( $summary_rank eq 'genus' )
-    {
-	return "ifnull($t.genus_no, 0)";
-    }
-    
-    else
-    {
-	return "ifnull($i.${summary_rank}_no, 0)";
-    }
-}
-
-
-# generate_order_clause ( rank_table )
-# 
-# Generate an SQL order expression for the result set.
-
-sub generate_order_clause {
-
-    my ($request, $tables, $options) = @_;
-    
-    $options ||= {};
-    
-    my @terms = $request->clean_param_list('order');
-    my @exprs;
-    
-    foreach my $term (@terms)
-    {
-	my $dir = '';
-	next unless $term;
-	
-	if ( $term =~ /^(\w+)[.](asc|desc)$/ )
-	{
-	    $term = $1;
-	    $dir = $2;
-	}
-	
-	if ( $term eq 'hierarchy' )
-	{
-	    push @exprs, "t.lft $dir";
-	}
-	
-	elsif ( $term eq 'name' )
-	{
-	    push @exprs, "taxon_name $dir";
-	}
-	
-	elsif ( $term eq 'pubyr' )
-	{
-	    push @exprs, "a.pubyr $dir";
-	}
-	
-	elsif ( $term eq 'created' )
-	{
-	    push @exprs, "a.created $dir";
-	}
-	
-	elsif ( $term eq 'modified' )
-	{
-	    push @exprs, "a.modified $dir";
-	}
-	
-	elsif ( $term eq 'firstapp' )
-	{
-	    $dir ||= 'desc';
-	    push @exprs, "at.first_early_age $dir";
-	    $tables->{at} = 1;
-	}
-	
-	elsif ( $term eq 'lastapp' )
-	{
-	    $dir ||= 'desc';
-	    push @exprs, "at.last_late_age $dir";
-	    $tables->{at} = 1;
-	}
-	
-	elsif ( $term eq 'agespan' )
-	{
-	    push @exprs, "(at.first_early_age - at.last_late_age) $dir",
-	    $tables->{at} = 1;
-	}
-	
-	elsif ( $term eq 'size' )
-	{
-	    $dir ||= 'desc';
-	    push @exprs, "at.taxon_size $dir";
-	    $tables->{at} = 1;
-	}
-	
-	elsif ( $term eq 'extant_size' )
-	{
-	    $dir ||= 'desc';
-	    push @exprs, "at.extant_size $dir";
-	    $tables->{at} = 1;
-	}
-	
-	elsif ( $term eq 'extant' )
-	{
-	    push @exprs, "at.is_extant $dir";
-	    $tables->{at} = 1;
-	}
-	
-	elsif ( $term eq 'n_occs' )
-	{
-	    $dir ||= 'desc';
-	    push @exprs, "at.n_occs $dir";
-	    $tables->{at} = 1;
-	}
-	
-	elsif ( $term eq 'rank' )
-	{
-	    my $rank_table = $options->{rank_table};
-	    
-	    die "400 You cannot select the order option 'rank' with this request"
-		unless $rank_table;
-	    
-	    $dir ||= 'desc';
-	    push @exprs, "associated_records $dir";
-	}
-	
-	else
-	{
-	    die "400 unrecognized order option '$term'";
-	}
-    }
-    
-    return join(', ', @exprs);
-}
-
-
 # Utility routines
 # ----------------
 
@@ -3196,52 +3034,114 @@ sub validRankSpec {
     my ($value, $context) = @_;
     
     my @selectors = split qr{\s*,\s*}, $value;
+    my @rank_errors;
+    my @errors;
     my @ranks;
     
     foreach my $s (@selectors)
     {
 	next unless $s;		# skip any blank entries
 	
-	if ( $s =~ qr{ ^ ( \w+ ) (?: \s*-\s* ( \w+ ) )? $ }x )
+	if ( $s =~ qr{ ^ \s* ( above_ | below_ | min_ | max_ )? ( \w+ ) \s* $ }xsi )
 	{
-	    my $rank = ($1 > 0 || $1 eq '0') ? $1 + 0 : $TAXON_RANK{$1};
-	    
-	    return { error => "invalid taxonomic rank '$1'" }
-		unless defined $rank && $rank ne '';
-	    
-	    if ( $2 )
+	    if ( $TAXON_RANK{$2} )
 	    {
-		my $rank_max = ($2 > 0 || $2 eq '0') ? $2 + 0 : $TAXON_RANK{$2};
-		
-		return { error => "invalid taxonomic rank '$2'" }
-		    unless defined $rank_max && $rank_max ne '';
-		
-		if ( $rank_max < $rank )
-		{
-		    my $temp = $rank_max; $rank_max = $rank; $rank = $temp;
-		}
-		
-		foreach my $r ( $rank .. $rank_max )
-		{
-		    push @ranks, $r;
-		}
+		push @ranks, lc($1 // '') . $TAXON_RANK{$2};
 	    }
 	    
 	    else
 	    {
-		push @ranks, $rank;
+		push @rank_errors, $2;
 	    }
+	}
+	
+	elsif ( $s =~ qr{ ^ \s* ( [^-]+ ) \s* - \s* ( .+ ) \s* $ }xsi )
+	{
+	    my $bottom = $1;
+	    my $top = $2;
+	    my $range = '';
+	    
+	    if ( $bottom =~ qr{ ^ ( above_ | below_ | min_ | max_ )? ( \w+ ) $ }xsi )
+	    {
+		my $prefix = $1;
+		
+		if ( $TAXON_RANK{$2} )
+		{
+		    $bottom = lc($1 || 'min_') . $TAXON_RANK{$2};
+		}
+		
+		else
+		{
+		    push @rank_errors, $2;
+		}
+		
+		push @errors, "invalid use of '$prefix'" if defined $prefix &&
+		    $prefix =~ qr{ ^below | ^max }xsi;
+	    }
+	    
+	    else
+	    {
+		push @rank_errors, $bottom;
+	    }
+	    
+	    if ( $top =~ qr{ ^ ( above_ | below_ | min_ | max_ )? ( \w+ ) $ }xsi )
+	    {
+		my $prefix = $1;
+		
+		if ( $TAXON_RANK{$2} )
+		{
+		    $top = lc($1 || 'max_') . $TAXON_RANK{$2};
+		}
+		
+		else
+		{
+		    push @rank_errors, $2;
+		}
+		
+		push @errors, "invalid use of '$prefix'" if defined $prefix &&
+		    $prefix =~ qr{ ^above | ^min }xsi;
+	    }
+	    
+	    else
+	    {
+		push @rank_errors, $top;
+	    }
+	    
+	    push @ranks, "$bottom-$top";
+	}
+	
+	else
+	{
+	    push @rank_errors, $s;
 	}
     }
     
-    if ( @ranks == 0 )
+    # If any errors were detected, return the appropriate result.
+    
+    if ( @rank_errors )
     {
-	return { value => '' };
+	my $errstr = join( q{', '}, @rank_errors );
+	push @errors, "invalid taxonomic rank '$errstr'";
     }
+    
+    if ( @errors )
+    {
+	my $errstr = join( q{; }, @errors );
+	return { error => $errstr };
+    }
+    
+    # If we have at least one selected rank, return the list of ranks.
+    
+    if ( @ranks )
+    {
+	return { value => \@ranks };
+    }
+    
+    # Otherwise, return a result that will select nothing.
     
     else
     {
-	return { value => \@ranks };
+	return { value => [ 0 ] };
     }
 }
 
@@ -3356,6 +3256,8 @@ sub process_pbdb {
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
     
+    no warnings 'uninitialized';
+    
     if ( $record->{exclude} )
     {
 	$record->{flags} = 'E';
@@ -3375,6 +3277,11 @@ sub process_pbdb {
 	 $record->{taxon_no} ne $record->{spelling_no} )
     {
 	$record->{flags} .= 'V';
+    }
+    
+    if ( $record->{is_ident} && $record->{orig_no} ne $record->{accepted_no} )
+    {
+	$record->{flags} .= 'I';
     }
 }
 
@@ -3410,7 +3317,7 @@ sub process_com {
     $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{child_spelling_no} &&
 	$record->{orig_no} eq $record->{child_spelling_no};    
     
-    foreach my $f ( qw(orig_no child_no immpar_no senpar_no accepted_no base_no
+    foreach my $f ( qw(orig_no child_no parent_no immpar_no senpar_no accepted_no base_no
 		       kingdom_no phylum_no class_no order_no family_no genus_no
 		       subgenus_no) )
     {
@@ -3453,6 +3360,8 @@ sub process_com {
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
     
+    no warnings 'uninitialized';
+    
     if ( $record->{exclude} )
     {
 	$record->{flags} = 'E';
@@ -3461,6 +3370,16 @@ sub process_com {
     elsif ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
     {
 	$record->{flags} = 'B';
+    }
+    
+    elsif ( $record->{is_base} )
+    {
+	$record->{flags} = 'B';
+    }
+    
+    if ( $record->{is_ident} && $record->{orig_no} ne $record->{accepted_no} )
+    {
+	$record->{flags} .= 'I';
     }
 }
 

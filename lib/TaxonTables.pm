@@ -1385,7 +1385,8 @@ sub createWorkingTables {
 				imp boolean not null,
 				rank tinyint not null,
 				trad_rank tinyint not null,
-				ints_rank tinyint not null,
+				min_rank decimal(3,1) not null,
+				max_rank decimal(3,1) not null,
 				status enum($ALL_STATUS),
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
@@ -1646,7 +1647,7 @@ sub computeSpelling {
 			SET t.rank = ex.rank WHERE ex.rank is not null");
     
     $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on a.taxon_no = t.trad_no
-			SET t.trad_rank = if(t.rank <> 25, t.rank, a.taxon_rank)");
+			SET t.trad_rank = if(t.rank <> 25, t.rank, cast(a.taxon_rank as int))");
     
     logMessage(2, "    indexing by name");
     
@@ -3336,7 +3337,7 @@ sub computeClassification {
 		UPDATE $INTS_AUX as k JOIN
 		       (SELECT a.orig_no, count(*) as c, min(if(a.pubyr<>'', a.pubyr, 9999)) as pubyr
 			FROM $auth_table as a JOIN $opinion_cache as o on a.taxon_no = o.child_spelling_no
-			WHERE taxon_rank = 'phylum'
+			WHERE taxon_rank = 'phylum' and o.pubyr >= 1940
 			GROUP BY a.orig_no) as op using (orig_no)
 		SET k.was_phylum = op.c, k.not_phylum = 0, k.phylum_yr = op.pubyr";
     
@@ -3346,7 +3347,7 @@ sub computeClassification {
 		UPDATE $INTS_AUX as k JOIN
 		       (SELECT a.orig_no, count(*) as c
 			FROM $auth_table as a join $opinion_cache as o on a.taxon_no = o.child_spelling_no
-			WHERE taxon_rank <> 'phylum' and taxon_name <> 'Chordata'
+			WHERE taxon_rank <> 'phylum' and taxon_name <> 'Chordata' and o.pubyr >= 1940
 			GROUP BY a.orig_no) as op using (orig_no)
 		SET k.not_phylum = op.c WHERE k.not_phylum is not null";
     
@@ -3358,7 +3359,7 @@ sub computeClassification {
 		UPDATE $INTS_AUX as k JOIN
 		       (SELECT a.orig_no, count(*) as c, min(if(a.pubyr<>'', a.pubyr, 9999)) as pubyr
 			FROM $auth_table as a JOIN $opinion_cache as o on a.taxon_no = o.child_spelling_no
-			WHERE taxon_rank = 'class'
+			WHERE taxon_rank = 'class' and o.pubyr >= 1940
 			GROUP BY a.orig_no) as op using (orig_no)
 		SET k.was_class = op.c, k.not_class = 0, k.class_yr = op.pubyr";
     
@@ -3368,7 +3369,7 @@ sub computeClassification {
 		UPDATE $INTS_AUX as k JOIN
 		       (SELECT a.orig_no, count(*) as c
 			FROM $auth_table as a join $opinion_cache as o on a.taxon_no = o.child_spelling_no
-			WHERE taxon_rank <> 'class'
+			WHERE taxon_rank <> 'class' and o.pubyr >= 1940
 			GROUP BY a.orig_no) as op using (orig_no)
 		SET k.not_class = op.c WHERE k.not_class is not null";
     
@@ -3380,7 +3381,7 @@ sub computeClassification {
 		UPDATE $INTS_AUX as k JOIN
 		       (SELECT a.orig_no, count(*) as c, min(if(a.pubyr<>'', a.pubyr, 9999)) as pubyr
 			FROM $auth_table as a JOIN $opinion_cache as o on a.taxon_no = o.child_spelling_no
-			WHERE taxon_rank = 'order'
+			WHERE taxon_rank = 'order' and o.pubyr >= 1940
 			GROUP BY a.orig_no) as op using (orig_no)
 		SET k.was_order = op.c, k.not_order = 0, k.order_yr = op.pubyr";
     
@@ -3390,7 +3391,7 @@ sub computeClassification {
 		UPDATE $INTS_AUX as k JOIN
 		       (SELECT a.orig_no, count(*) as c
 			FROM $auth_table as a join $opinion_cache as o on a.taxon_no = o.child_spelling_no
-			WHERE taxon_rank <> 'order'
+			WHERE taxon_rank <> 'order' and o.pubyr >= 1940
 			GROUP BY a.orig_no) as op using (orig_no)
 		SET k.not_order = op.c WHERE k.not_order is not null";
     
@@ -3477,17 +3478,17 @@ sub computeClassification {
 	# Figure out approximately where each taxon sits in the hierarchy,
 	# using the classifications we have just worked out.
 	
-	$SQL_STRING = "
-		UPDATE $INTS_WORK as i JOIN $TREE_WORK as t on i.ints_no = t.orig_no
-				JOIN $INTS_WORK as p on p.ints_no = t.senpar_no
-		SET t.ints_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
-				  if(ifnull(i.phylum_no, 0) <> ifnull(p.phylum_no, 0), 20,
-				  if(ifnull(i.class_no, 0) <> ifnull(p.class_no, 0), 17,
-				  if(ifnull(i.order_no, 0) <> ifnull(p.order_no, 0), 13,
-				  if(ifnull(i.family_no,0) <> ifnull(p.family_no, 0), 9, 0)))))
-		WHERE t.depth = $depth";
+	# $SQL_STRING = "
+	# 	UPDATE $INTS_WORK as i JOIN $TREE_WORK as t on i.ints_no = t.orig_no
+	# 			JOIN $INTS_WORK as p on p.ints_no = t.senpar_no
+	# 	SET t.ints_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
+	# 			  if(ifnull(i.phylum_no, 0) <> ifnull(p.phylum_no, 0), 20,
+	# 			  if(ifnull(i.class_no, 0) <> ifnull(p.class_no, 0), 17,
+	# 			  if(ifnull(i.order_no, 0) <> ifnull(p.order_no, 0), 13,
+	# 			  if(ifnull(i.family_no,0) <> ifnull(p.family_no, 0), 9, 0)))))
+	# 	WHERE t.depth = $depth";
 	
-	$result = $dbh->do($SQL_STRING);
+	# $result = $dbh->do($SQL_STRING);
     }
     
     # Then link this table up to the main table.  We start by setting
@@ -3643,6 +3644,8 @@ sub computeClassification {
 				imm_invalid_count int unsigned not null,
 				imm_junior_count int unsigned not null,
 				junior_count int unsigned not null,
+				is_kingdom tinyint unsigned not null,
+				kingdom_count int unsigned not null,
 				is_phylum tinyint unsigned not null,
 				phylum_count int unsigned not null,
 				is_class tinyint unsigned not null,
@@ -3657,9 +3660,10 @@ sub computeClassification {
 				species_count int unsigned not null,
 				primary key (orig_no)) ENGINE=MYISAM");
     
-    $SQL_STRING = "INSERT INTO $COUNTS_WORK (orig_no, is_phylum, is_class, is_order,
-					     is_family, is_genus, is_species)
+    $SQL_STRING = "INSERT INTO $COUNTS_WORK (orig_no, is_kingdom, is_phylum, is_class,
+					     is_order, is_family, is_genus, is_species)
 		   SELECT t.orig_no,
+			t.rank in (22,23),
 			t.rank=20,
 			t.rank=17,
 			t.rank=13,
@@ -3690,7 +3694,8 @@ sub computeClassification {
 			sum(c.family_count) as family_count,
 			sum(c.order_count) as order_count,
 			sum(c.class_count) as class_count,
-			sum(c.phylum_count) as phylum_count
+			sum(c.phylum_count) as phylum_count,
+			sum(c.kingdom_count) as kingdom_count
 		 FROM $COUNTS_WORK as c JOIN $TREE_WORK as t using (orig_no)
 		 WHERE t.depth = $depth and t.senpar_no > 0 and t.synonym_no = t.accepted_no
 		 GROUP BY t.senpar_no) as nc on c.orig_no = nc.senpar_no
@@ -3699,7 +3704,8 @@ sub computeClassification {
 		    c.family_count = nc.family_count,
 		    c.class_count = nc.class_count,
 		    c.order_count = nc.order_count,
-		    c.phylum_count = nc.phylum_count";
+		    c.phylum_count = nc.phylum_count,
+		    c.kingdom_count = nc.kingdom_count";
 	
 	$result = $dbh->do($SQL_STRING);
 	
@@ -3715,7 +3721,8 @@ sub computeClassification {
 			sum(c.is_family) as imm_families,
 			sum(c.is_order) as imm_orders,
 			sum(c.is_class) as imm_classes,
-			sum(c.is_phylum) as imm_phyla
+			sum(c.is_phylum) as imm_phyla,
+			sum(c.is_kingdom) as imm_kingdoms
 		 FROM $COUNTS_WORK as c JOIN $TREE_WORK as t using (orig_no)
 		 WHERE t.depth = $depth and t.senpar_no > 0 and t.accepted_no = t.orig_no
 		 GROUP BY t.senpar_no) as nc on c.orig_no = nc.senpar_no
@@ -3725,7 +3732,8 @@ sub computeClassification {
 		    c.family_count = c.family_count + nc.imm_families,
 		    c.class_count = c.class_count + nc.imm_classes,
 		    c.order_count = c.order_count + nc.imm_orders,
-		    c.phylum_count = c.phylum_count + nc.imm_phyla";
+		    c.phylum_count = c.phylum_count + nc.imm_phyla,
+		    c.kingdom_count = c.kingdom_count + nc.imm_kingdoms";
 	
 	$result = $dbh->do($SQL_STRING);
     }
@@ -3853,6 +3861,48 @@ sub computeClassification {
     
     $dbh->do("ALTER TABLE $LOWER_WORK add key (genus_no)");
     $dbh->do("ALTER TABLE $LOWER_WORK add key (subgenus_no)");
+    
+    # Setting bounds for ranked and unranked clades, so that we can properly select ranges of ranks.
+    
+    logMessage(2, "    setting bounds for ranked and unranked clades...");
+    
+    # All ranked clades have exact bounds.
+    
+    $SQL_STRING = "
+	UPDATE $TREE_WORK as t
+	SET min_rank = rank, max_rank = rank
+	WHERE rank <> 25";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    # Compute the upper rank bound for unranked clades, based upon whether they occur lower in the
+    # hierarchy than some family, order, class, etc.
+    
+    $SQL_STRING = "
+	UPDATE $TREE_WORK as t JOIN $INTS_WORK as i on i.ints_no = t.orig_no
+	SET t.max_rank = if(family_no is not null, if(family_no <> i.ints_no, 8.9, 9),
+			 if(order_no is not null, if(order_no <> i.ints_no, 12.9, 13),
+			 if(class_no is not null, if(class_no <> i.ints_no, 16.9, 17),
+			 if(phylum_no is not null, if(phylum_no <> i.ints_no, 19.9, 20),
+			 if(kingdom_no is not null, if(kingdom_no <> i.ints_no, 22.9, 23),
+			 25)))))
+	WHERE t.rank = 25";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    # Compute the lower rank bound for unranked clades, based upon whether they contain at least
+    # one family, order, class, etc.
+    
+    $SQL_STRING = "
+	UPDATE $TREE_WORK as t JOIN $COUNTS_WORK as c using (orig_no)
+	SET t.min_rank = if(kingdom_count > 0, 23.1,
+			 if(phylum_count > 0, 20.1,
+			 if(class_count > 0, 17.1,
+			 if(order_count > 0, 13.1,
+			 if(family_count > 0, 9.1, 5.1)))))
+	WHERE t.rank = 25";
+    
+    $result = $dbh->do($SQL_STRING);
     
     my $a = 1;		# we can stop here when debugging.
 }

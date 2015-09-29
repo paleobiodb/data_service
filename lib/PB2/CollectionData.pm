@@ -1948,7 +1948,7 @@ sub generateMainFilters {
 	push @filters, "($taxon_filters)";
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
-	$request->{my_base_taxa} = \@include_taxa;
+	$request->{my_base_taxa} = [ @include_taxa, @exclude_taxa ];
     }
     
     elsif ( @include_taxa )
@@ -1958,7 +1958,7 @@ sub generateMainFilters {
 	$tables_ref->{o} = 1 unless $tables_ref->{ds};
 	$tables_ref->{non_geo_filter} = 1;
 	$tables_ref->{non_summary} = 1;
-	$request->{my_taxa} = \@include_taxa;
+	$request->{my_taxa} = [ @include_taxa, @exclude_taxa ];
     }
     
     # If a name was given and no matching taxa were found, we need to query by
@@ -2172,10 +2172,11 @@ sub generateMainFilters {
     
     # Check for parameter 'cc'
     
-    if ( my @ccs = $request->clean_param_list('cc') )
+    my @ccs = $request->clean_param_list('cc');
+    push @ccs, $request->clean_param_list('continent');
+    
+    if ( @ccs )
     {
-	push @ccs, $request->clean_param_list('continent');
-	
 	if ( $ccs[0] eq '_' )
 	{
 	    push @filters, "c.collection_no = -1";

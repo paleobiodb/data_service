@@ -250,6 +250,15 @@ use PB2::PersonData;
 	"appear within the selected set of occurrences.  The parent taxon identifier is also reported",
 	"for each taxon, so that you are able to organize the result records into their proper hierarchy.");
     
+    $ds2->define_node({ path => 'occs/ttest',
+			place => 3,
+			method => 'taxa_test',
+			output => '1.2:taxa:basic',
+			optional_output => '1.2:occs:taxa_opt',
+			default_limit => $taxa_limit,
+			title => 'Taxonomy test list' },
+	"Test taxonomy routines");
+    
     $ds2->define_node({ path => 'occs/prevalence',
 			place => 8,
 			usage => [ "/occs/prevalence.json?continent=noa&interval=mesozoic&limit=10" ],
@@ -280,15 +289,41 @@ use PB2::PersonData;
     $ds2->define_node({ path => 'occs/refs',
 			place => 10,
 			usage => [ "/occs/refs.ris?base_name=Cetacea&interval=Miocene&textresult" ],
-			method => 'refs',
+			title => 'Bibliographic references for fossil occurrences',
+			method => 'list_associated',
+			arg => 'refs',
 			allow_format => '+ris,-xml',
 			output => '1.2:refs:basic',
-			optional_output => '1.2:refs:output_map',
-			title => 'Bibliographic references for fossil occurrences' },
+			optional_output => '1.2:refs:output_map' },
 	"This operation returns information about the bibliographic references associated with fossil occurrences.",
 	"You can pass identical filtering parameters to L<occs/list|node:occs/list> and to L<occs/refs|node:occs/refs>,",
 	"which will give you both a list of occurrences and a list of the associated references.");
-        
+    
+    $ds2->define_node({ path => 'occs/byref',
+			place => 11,
+			usage => [ "/occs/byref.txt?base_name=Cetacea&interval=Miocene&textresult" ],
+			title => 'Taxa associated with fossil occurrences grouped by bibliographic reference',
+			method => 'list_associated',
+			arg => 'taxa',
+			output => '1.2:taxa:reftaxa',
+			optional_output => '1.2:taxa:mult_output_map' },
+	"This operation returns information about taxonomic names associated with fossil occurrences,",
+	"grouped according to the bibliographic",
+	"reference in which they are mentioned.  You can use this operation in conjunction with",
+	"L<node:occs/refs> to show, for each reference, all of the taxa entered from it that",
+	"are associated with at least one occurrence from the selected set.");
+    
+    $ds2->define_node({ path => 'occs/opinions',
+			place => 11,
+			usage => [ "/occs/opinions.txt?base_name=Cetacea&interval=Miocene&textresult" ],
+			title => 'Opinions for fossil occurrences',
+			method => 'list_associated',
+			arg => 'opinions',
+			default_limit => $ref_limit,
+			output => '1.2:opinions:basic',
+			optional_output => '1.2:opinions:output_map' },
+	"This operation returns information about taxonomic opinions associated with fossil occurrences.",
+	"You can use this to retrieve just the opinions relevant to any selected set of occurrences.");
     # Collections.  These paths are used to fetch information about fossil
     # collections known to the database.
     
@@ -414,7 +449,7 @@ use PB2::PersonData;
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:mult_output_map' },
-	"This path returns information about multiple taxonomic names, selected according to",
+	"This operation returns information about multiple taxonomic names, selected according to",
 	"the criteria you specify.  This path could be used to query for all of the children",
 	"or parents of a given taxon, among other operations.");
     
@@ -428,7 +463,7 @@ use PB2::PersonData;
 			allow_format => '+ris',
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
-	"This path returns information about the bibliographic references associated with taxonomic names.",
+	"This operation returns information about the bibliographic references associated with taxonomic names.",
 	"You can pass identical filtering parameters to L<node:taxa/list> and to L<node:taxa/refs>,",
 	"which will give you both a list of taxonomic names and a list of the associated references.");
     
@@ -440,7 +475,7 @@ use PB2::PersonData;
 			arg => 'taxa',
 			output => '1.2:taxa:reftaxa',
 			optional_output => '1.2:taxa:mult_output_map' },
-	"This path returns information about taxonomic names, grouped according to the bibliographic",
+	"This operation returns information about taxonomic names, grouped according to the bibliographic",
 	"reference in which they are mentioned.  You can use this operation in conjunction with",
 	"L<node:taxa/refs> to show, for each reference, all of the taxa entered from it.  You",
 	"can also use this to list all of the taxa entered from particular references selected",

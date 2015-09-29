@@ -92,15 +92,15 @@ sub initialize {
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
-	{ output => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
+	{ output => 'n_reftaxa', name => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
 	    "The number of taxa associated with this reference",
-	{ output => 'n_class', com_name => 'ncl', if_block => 'counts' },
+	{ output => 'n_refclass', name => 'n_class', com_name => 'ncl', if_block => 'counts' },
 	    "The number of classification opinions associated with this reference",
-	{ output => 'n_unclass', com_name => 'nuc', if_block => 'counts' },
+	{ output => 'n_refunclass', name => 'n_unclass', com_name => 'nuc', if_block => 'counts' },
 	    "The number of opinions not selected for classification associated with this reference",
-	{ output => 'n_occs', com_name => 'noc', if_block => 'counts' },
+	{ output => 'n_refoccs', name => 'n_occs', com_name => 'noc', if_block => 'counts' },
 	    "The number of occurrences associated with this reference",
-	{ output => 'n_colls', com_name => 'nco', if_block => 'counts' },
+	{ output => 'n_refcolls', name => 'n_colls', com_name => 'nco', if_block => 'counts' },
 	    "The number of collections for which this is the primary reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
 	  "Formatted reference",
@@ -762,27 +762,27 @@ sub set_reference_type {
     my $ref_type = $record->{ref_type} || '';
     my @types;
     
-    if ( $ref_type =~ qr{A} || $record->{n_taxa} )
+    if ( $ref_type =~ qr{A} )
     {
-	push @types, 'auth';
+	push @types, 'auth' || $record->{n_reftaxa};
     }
     
-    if ( $ref_type =~ qr{C} || $record->{n_class} )
+    if ( $ref_type =~ qr{C} || $record->{n_refclass} )
     {
 	push @types, 'class';
     }
     
-    if ( $ref_type =~ qr{U} || $record->{n_unclass} )
+    if ( $ref_type =~ qr{U} || $record->{n_refunclass} )
     {
 	push @types, 'unsel';
     }
     
-    if ( $ref_type =~ qr{O} || $record->{n_occs} )
+    if ( $ref_type =~ qr{O} || $record->{n_refoccs} )
     {
 	push @types, 'occ';
     }
     
-    if ( $ref_type =~ qr{P} || $record->{n_colls} || $record->{n_prim} )
+    if ( $ref_type =~ qr{P} || $record->{n_refcolls} )
     {
 	push @types, 'prim';
     }
@@ -792,11 +792,11 @@ sub set_reference_type {
 	push @types, 'sec';
     }
     
-    if ( defined $record->{n_colls} && defined $record->{n_prim} && 
-	 $record->{n_colls} > $record->{n_prim} )
-    {
-	push @types, 'sec';
-    }
+    # if ( defined $record->{n_refcolls} && defined $record->{n_refprim} && 
+    # 	 $record->{n_refcolls} > $record->{n_refprim} )
+    # {
+    # 	push @types, 'sec';
+    # }
     
     push @types, 'ref' unless @types;
     

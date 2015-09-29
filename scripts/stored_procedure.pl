@@ -3,10 +3,12 @@
 use lib "../cgi-bin";
 use lib "cgi-bin";
 use DBConnection;
+use Term::ReadPassword;
 
 
 $Constants::DB_USER = 'root';
-$Constants::DB_PASSWD = $ARGV[0];
+$Constants::DB_PASSWD = read_password('password: ');
+
 
 my $dbh = DBConnection::connect();
 
@@ -235,6 +237,37 @@ $dbh->do("CREATE PROCEDURE compute_ancestry (auth_table varchar(80), tree_table 
 		END WHILE;
 	END");
 
+
+$dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry_2");
+$dbh->do("CREATE PROCEDURE compute_ancestry_2 (tree_table varchar(80), orig_table varchar(80))
+	BEGIN
+		# Clear the scratch table
+		DELETE FROM ancestry_scratch;
+		# Insert the specified taxon numbers
+		SET \@stmt1 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT orig_no, 1 FROM ',
+				     orig_table);
+		PREPARE seed_table FROM \@stmt1;
+		EXECUTE seed_table;
+		# Now iterate adding parents to the table until no more are to
+		# be found.  At each step, apply the condition specified as an
+		# argument to this function.
+		# IF cond is not null and cond <> '' THEN
+		# 	SET cond = CONCAT(' and ', cond);
+		# ELSE
+		# 	SET cond = '';
+		# END IF;
+		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT senpar_no, 0 ',
+				     'FROM ancestry_scratch as s JOIN ', tree_table, ' using (orig_no) ',
+				     'WHERE senpar_no > 0');
+		PREPARE compute_parents FROM \@stmt2;
+		SET \@cnt = 1;
+		SET \@bound = 1;
+		WHILE \@cnt > 0 AND \@bound < 100 DO
+			EXECUTE compute_parents;
+			SET \@cnt = ROW_COUNT();
+			SET \@bound = \@bound + 1;
+		END WHILE;
+	END");
 
 
 # $dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry");
