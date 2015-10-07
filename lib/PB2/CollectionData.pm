@@ -448,13 +448,15 @@ sub initialize {
     # Then define an output block for displaying stratigraphic results
     
     $ds->define_block('1.2:strata:basic' =>
-	{ select => ['cs.name', 'cs.rank', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
+	{ select => ['cs.grp', 'cs.formation', 'cs.member', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
-	{ output => 'name', com_name => 'nam' },
-	    "The name of the stratum",
-	{ output => 'rank', com_name => 'rnk' },
-	    "The rank of the stratum: formation, group or member",
+	{ output => 'grp', com_name => 'sgr', pbdb_name => 'group' },
+	    "The stratigraphic group associated with this stratum, if any.",
+	{ output => 'formation', com_name => 'sfm' },
+	    "The stratigraphic formation associated with this stratum, if any.",
+	{ output => 'member', com_name => 'smb' },
+	    "The stratigraphic member associated with this stratum, if any.",
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	    "The number of fossil collections in the database that are associated with this stratum.",
 	    "Note that if your search is limited to a particular geographic area, then",
@@ -464,11 +466,10 @@ sub initialize {
 	    "The above note about geographic area selection also applies.");
     
     $ds->define_block('1.2:strata:occs' =>
-	{ select => ['count(distinct cc.collection_no) as n_colls',
-		     'count(*) as n_occs', 'cc.geological_group as `group`',
-		     'cc.formation', 'cc.member', 'min(c.early_age) as early_age',
-		     'min(c.late_age) as late_age'],
-	  tables => [ 'cc' ] },
+	{ select => ['count(distinct cs.collection_no) as n_colls',
+		     'count(*) as n_occs', 'cs.grp', 'cs.formation', 'cs.member',
+		     'min(c.early_age) as early_age', 'min(c.late_age) as late_age'],
+	  tables => [ 'cs' ] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
 	{ output => 'group', com_name => 'sgr' },
@@ -488,6 +489,25 @@ sub initialize {
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of fossil occurrences in the database that are",
 	    "listed as being part of this stratum");
+    
+    $ds->define_block('1.2:strata:coords' =>
+	{ select => [ 'min(cs.lat) as lat_min', 'min(cs.lng) as lng_min',
+		      'max(cs.lat) as lat_max', 'max(cs.lng) as lng_max' ], 
+	  tables => 'cs' },
+	{ output => 'lng_min', com_name => 'lx1' },
+	    "The minimum longitude for selected occurrences in this stratum",
+	{ output => 'lng_max', com_name => 'lx2' },
+	    "The maximum longitude for selected occurrences in this stratum",
+	{ output => 'lat_min', com_name => 'ly1' },
+	    "The minimum latitude for selected occurrences in this stratum",
+	{ output => 'lat_max', com_name => 'ly2' },
+	    "The maximum latitude for selected occurrences in this stratum");
+    
+    $ds->define_block('1.2:strata:plates' =>
+	{ tables => 'cs' },
+	{ output => 'geoplate', com_name => 'gpl' },
+	    "The identifier(s) of the geological plate(s) on which the selected",
+	    "occurrences in this stratum lie.");
     
     # And a block for basic geographic summary cluster info
     
@@ -1426,7 +1446,7 @@ sub list_strata {
     
     my ($request, $arg) = @_;
     
-    # Get a database handle by which we can make queries.
+    # Get a database handle by which we can make queries. $$$
     
     my $dbh = $request->get_connection;
     

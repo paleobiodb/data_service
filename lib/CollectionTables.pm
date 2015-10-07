@@ -634,15 +634,25 @@ sub buildStrataTables {
     my ($dbh, $options) = @_;
     
     $options ||= {};
-    my $coll_matrix = $COLL_MATRIX;
+    
+    # Check for the existence of working tables.
+    
+    my ($coll_matrix, $cmw_count);
+    
+    eval {
+	($cmw_count) = $dbh->selectrow_array("SELECT count(*) FROM $COLL_MATRIX_WORK");
+    };
+    
+    $coll_matrix = $cmw_count ? $COLL_MATRIX_WORK : $COLL_MATRIX;
     
     # Create a new working table.
     
     $dbh->do("DROP TABLE IF EXISTS $COLL_STRATA_WORK");
     
     $dbh->do("CREATE TABLE $COLL_STRATA_WORK (
-		name varchar(255) not null,
-		rank enum('formation', 'group', 'member') not null,
+		grp varchar(255) not null,
+		formation varchar(255) not null,
+		member varchar(255) not null,
 		maybe boolean not null,
 		collection_no int unsigned not null,
 		n_occs int unsigned not null,
@@ -661,112 +671,173 @@ sub buildStrataTables {
     
     my ($sql, $result, $count);
     
-    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, 
-			cc, lat, lng, g_plate_no, s_plate_no, loc)
-		SELECT formation, 'formation', collection_no, c.n_occs, c.cc, c.lat, c.lng,
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (grp, formation, member, collection_no,
+			n_occs, cc, lat, lng, g_plate_no, s_plate_no, loc)
+		SELECT cc.geological_group, cc.formation, cc.member, collection_no,
+			c.n_occs, c.cc, c.lat, c.lng,
 			c.g_plate_no, c.s_plate_no, c.loc
-		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
-		WHERE formation <> ''";
+		FROM $coll_matrix as c JOIN collections as cc using (collection_no)";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      $result formations");
+    logMessage(2, "      $result collections");
     
-    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
-			cc, lat, lng, g_plate_no, s_plate_no, loc)
-		SELECT geological_group, 'group', collection_no, c.n_occs, c.cc, c.lat, c.lng,
-			c.g_plate_no, c.s_plate_no, c.loc
-		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
-		WHERE geological_group <> ''";
+    # $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
+    # 			cc, lat, lng, g_plate_no, s_plate_no, loc)
+    # 		SELECT geological_group, 'grp', collection_no, c.n_occs, c.cc, c.lat, c.lng,
+    # 			c.g_plate_no, c.s_plate_no, c.loc
+    # 		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
+    # 		WHERE geological_group <> ''";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      $result groups");
+    # logMessage(2, "      $result groups");
     
-    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
-			cc, lat, lng, g_plate_no, s_plate_no, loc)
-		SELECT member, 'member', collection_no, c.n_occs, c.cc, c.lat, c.lng,
-			c.g_plate_no, c.s_plate_no, c.loc
-		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
-		WHERE member <> ''";
+    # $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
+    # 			cc, lat, lng, g_plate_no, s_plate_no, loc)
+    # 		SELECT member, 'member', collection_no, c.n_occs, c.cc, c.lat, c.lng,
+    # 			c.g_plate_no, c.s_plate_no, c.loc
+    # 		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
+    # 		WHERE member <> ''";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      $result members");
+    # logMessage(2, "      $result members");
     
     logMessage(2, "    cleaning stratum names...");
     
+    # $sql = "    UPDATE $COLL_STRATA_WORK
+    # 		SET name = replace(name, '\"', '')";
+    
+    # $result = $dbh->do($sql);
+    
+    # logMessage(2, "      removed $result quote-marks");
+    
+    # Remove redundant suffixes
+    
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET name = replace(name, '\"', '')";
+		SET member = left(member, length(member)-3)
+		WHERE member like '\%Mb.'";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      removed $result quote-marks");
+    logMessage(2, "      removed $result final 'Mb.'");
     
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET name = left(name, length(name)-3)
-		WHERE name like '\%Fm.' or name like '\%Mb.'";
+		SET formation = left(formation, length(formation)-3)
+		WHERE formation like '\%Fm.'";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      removed $result final 'Fm./Mb.'");
+    logMessage(2, "      removed $result final 'Fm.'");
     
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET name = left(name, length(name)-9)
-		WHERE name like '\%Formation'";
+		SET formation = left(formation, length(formation)-9)
+		WHERE formation like '\%Formation'";
     
     $result = $dbh->do($sql);
     
     logMessage(2, "      removed $result final 'Formation'");
     
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET name = left(name, length(name)-5)
-		WHERE name like '\%Group'";
+		SET grp = left(grp, length(grp)-5)
+		WHERE grp like '\%Group'";
     
     $result = $dbh->do($sql);
     
     logMessage(2, "      removed $result final 'Group'");
     
+    # Then remove question marks and set the 'maybe' field to true for those
+    # records.
+    
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET name = substring(name, 2), maybe = true
-		WHERE name like '?%'";
+		SET member = substring(member, 2), maybe = true
+		WHERE member like '?%'";
     
     $result = $dbh->do($sql);
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET formation = substring(formation, 2), maybe = true
+		WHERE formation like '?%'";
+    
+    $result += $dbh->do($sql);
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET grp = substring(grp, 2), maybe = true
+		WHERE grp like '?%'";
+    
+    $result += $dbh->do($sql);
     
     logMessage(2, "      removed $result initial question-marks");
     
     $sql = "	UPDATE $COLL_STRATA_WORK
-		SET name = left(name, length(name)-1), maybe = true
-		WHERE name like '%?'";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "      removed $result final question-marks");
-    
-    $sql = "	UPDATE $COLL_STRATA_WORK
-		SET name = replace(name, '(?)', ''), maybe = true
-		WHERE name like '%(?)%'";
+		SET member = left(member, length(member)-1), maybe = true
+		WHERE member like '%?'";
     
     $result = $dbh->do($sql);
     
     $sql = "	UPDATE $COLL_STRATA_WORK
-		SET name = replace(name, '?', ''), maybe = true
-		WHERE name like '%?%'";
+		SET formation = left(formation, length(formation)-1), maybe = true
+		WHERE formation like '%?'";
     
     $result += $dbh->do($sql);
     
-    logMessage(2, "      removed $result middle question-marks");
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET grp = left(grp, length(grp)-1), maybe = true
+		WHERE grp like '%?'";
+    
+    $result += $dbh->do($sql);
     
     $sql = "	UPDATE $COLL_STRATA_WORK
-		SET name = trim(name)";
+		SET member = left(member, length(member)-3), maybe = true
+		WHERE member like '%(?)'";
+    
+    $result += $dbh->do($sql);
+    
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET formation = left(formation, length(formation)-3), maybe = true
+		WHERE formation like '%(?)'";
+    
+    $result += $dbh->do($sql);
+    
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET grp = left(grp, length(grp)-3), maybe = true
+		WHERE grp like '%(?)'";
+    
+    $result += $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final question-marks");
+    
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET name = replace(name, '(?)', ''), maybe = true
+    # 		WHERE name like '%(?)%'";
+    
+    # $result = $dbh->do($sql);
+    
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET name = replace(name, '?', ''), maybe = true
+    # 		WHERE name like '%?%'";
+    
+    # $result += $dbh->do($sql);
+    
+    # logMessage(2, "      removed $result middle question-marks");
+    
+    # Trim empty spaces at beginning and end.
+    
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET member = trim(member),
+		    formation = trim(formation),
+		    grp = trim(grp)";
     
     $result = $dbh->do($sql);
     
     logMessage(2, "    trimmed $result names");
     
-    logMessage(2, "    indexing by name...");
+    logMessage(2, "    indexing by member, formation, and group...");
     
-    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (name)");
+    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (member)");
+    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (formation)");
+    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (grp)");
     
     logMessage(2, "    indexing by collection_no...");
     
