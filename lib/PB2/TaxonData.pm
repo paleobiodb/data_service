@@ -50,9 +50,13 @@ sub initialize {
 	    "If the classification of this taxon has been entered into the database,",
 	    "the name of the parent taxon, or its senior synonym if there is one.",
 	{ value => 'immparent', maps_to => '1.2:taxa:immpar' },
-	    "You can use this isntead of C<parent> if you wish to know the immediate",
+	    "You can use this instead of C<parent> if you wish to know the immediate",
 	    "parent taxon.  If the immediate parent is a junior synonym, both it and",
 	    "its senior synonym will be displayed.", 
+	{ value => 'acconly' },
+	    "Only return accepted names, and suppress the fields C<difference>,",
+	    "C<accepted_name>, C<accepted_rank>, and C<accepted_no>, because they",
+	    "are only relevant for non-accepted names.",
 	{ value => 'size', maps_to => '1.2:taxa:size' },
 	    "The number of subtaxa appearing in this database, including the taxon itself.",
 	{ value => 'class', maps_to => '1.2:taxa:class' },
@@ -155,7 +159,7 @@ sub initialize {
 	#    "The year in which this name was published",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
 	    "The common (vernacular) name of this taxon, if any",
-	{ output => 'difference', com_name => 'tdf' },
+	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If this name is either a junior synonym or is invalid for some reason,",
 	    "this field gives the reason.  The fields C<accepted_no>",
 	    "and C<accepted_name> then specify the name that should be used instead.",
@@ -170,18 +174,18 @@ sub initialize {
 	#     "The nomenclatural status of this name, in the Darwin Core vocabulary.",
 	#     "This field only appears if that vocabulary is selected.",
 	{ output => 'accepted_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'accepted_no', 
-	  com_name => 'acc' },
+	  com_name => 'acc', not_block => 'acconly' },
 	    "If this name is either a junior synonym or an invalid name, this field gives",
 	    "the identifier of the accepted name to be used in its place.  Otherwise, its value",
 	    "will be the same as C<orig_no>.  In the compact vocabulary, this field",
 	    "will be omitted in that case.",
-	{ output => 'accepted_rank', com_name => 'acr' },
+	{ output => 'accepted_rank', com_name => 'acr', not_block => 'accconly' },
 	    "If C<accepted_no> is different from C<orig_no>, this field",
 	    "gives the rank of the accepted name.  Otherwise, its value will",
 	    "be the same as C<taxon_rank>.  In the compact voabulary, this field",
 	    "will be omitted in that case.",
 	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
-	  com_name => 'acn' },
+	  com_name => 'acn', not_block => 'acconly' },
 	    "If C<accepted_no> is different from C<orig_no>, this field gives the",
 	    "accepted name.  Otherwise, its value will be",
 	    "the same as C<taxon_name>.  In the compact vocabulary, this field",
@@ -763,7 +767,7 @@ sub initialize {
 	    "is the default.",
 	{ value => 'valid' },
 	    "Select only taxonomically valid names",
-	{ value => 'senior' },
+	{ value => 'accepted' },
 	    "Select only taxonomically valid names that are not junior synonyms",
 	{ value => 'junior' },
 	    "Select only taxonomically valid names that are junior synonyms",
@@ -833,46 +837,61 @@ sub initialize {
 	{ value => 'all' },
 	    "Select the references associated with all variants of each taxonomic name");
     
-    $ds->define_set('1.2:taxa:summary_rank' =>
-	{ value => 'ident' },
-	    "Group occurrences together by their taxonomic identification, ignoring modifiers.",
-	    "This is the default.",
-	{ value => 'exact' },
-	    "Group occurrences together by their exact taxonomic identification, including",
-	    "modifiers such as 'sensu lato' or 'n. sp.'.",
-	">If you choose any of the following values, then all occurrences whose identified",
-	"taxon has not been entered into this database will be skipped.",
-	{ value => 'taxon' },
-	    "Group occurrences together if they are identified as belonging to the same taxon,",
-	    "ignoring synonymy.",
-	{ value => 'synonym' },
-	    "Group occurrences together if they are identified as belonging to synonymous taxa.",
-	    "All of the following options also take synonymy into account.",
+    $ds->define_set('1.2:taxa:resolution' =>
 	{ value => 'species' },
-	    "Group occurrences together if they are identified as belonging to the same species",
+	    "Select only occurrences which are identified as a species.",
 	{ value => 'genus' },
-	    "Group occurrences together if they are identified as belonging to the same genus",
+	    "Select only occurrences which are identified as a genus or species.",
 	{ value => 'family' },
-	    "Group occurrences together if they are identified as belonging to the same family",
-	{ value => 'order' },
-	    "Group occurrences together if they are identified as belonging to the same order",
-	{ value => 'class' },
-	    "Group occurrences together if they are identified as belonging to the same class",
-	{ value => 'phylum' },
-	    "Group occurrences together if they are identified as belonging to the same phylum",
-	{ value => 'kingdom' },
-	    "Group occurrences together if they are identified as belonging to the same kingdom");
+	    "Select only occurrences which are identified as a family, genus or species.",
+	{ value => 'lump_genus' },
+	    "Select only occurrences identified as a genus or species, and also",
+	    "coalesce all occurrences of the same genus in a given collection.",
+	{ value => 'lump_gensub' },
+	    "Select only occurrences identified as a genus or species, and also",
+	    "coalesce all occurrences of the same genus/subgenus in a given collection.");
     
-    $ds->define_set('1.2:taxa:occ_names' =>
+    # $ds->define_set('1.2:taxa:summary_rank' =>
+    # 	{ value => 'ident' },
+    # 	    "Group occurrences together by their taxonomic identification, ignoring modifiers.",
+    # 	    "This is the default.",
+    # 	{ value => 'exact' },
+    # 	    "Group occurrences together by their exact taxonomic identification, including",
+    # 	    "modifiers such as 'sensu lato' or 'n. sp.'.",
+    # 	">If you choose any of the following values, then all occurrences whose identified",
+    # 	"taxon has not been entered into this database will be skipped.",
+    # 	{ value => 'taxon' },
+    # 	    "Group occurrences together if they are identified as belonging to the same taxon,",
+    # 	    "ignoring synonymy.",
+    # 	{ value => 'synonym' },
+    # 	    "Group occurrences together if they are identified as belonging to synonymous taxa.",
+    # 	    "All of the following options also take synonymy into account.",
+    # 	{ value => 'species' },
+    # 	    "Group occurrences together if they are identified as belonging to the same species",
+    # 	{ value => 'genus' },
+    # 	    "Group occurrences together if they are identified as belonging to the same genus",
+    # 	{ value => 'family' },
+    # 	    "Group occurrences together if they are identified as belonging to the same family",
+    # 	{ value => 'order' },
+    # 	    "Group occurrences together if they are identified as belonging to the same order",
+    # 	{ value => 'class' },
+    # 	    "Group occurrences together if they are identified as belonging to the same class",
+    # 	{ value => 'phylum' },
+    # 	    "Group occurrences together if they are identified as belonging to the same phylum",
+    # 	{ value => 'kingdom' },
+    # 	    "Group occurrences together if they are identified as belonging to the same kingdom");
+    
+    $ds->define_set('1.2:taxa:usetaxon' =>
 	{ value => 'ident' },
-	    "Return the taxonomic name with which each occurrence was actually identified",
+	    "Use the taxonomic name with which each occurrence was actually identified",
 	{ value => 'accepted' },
-	    "Return the accepted taxonomic name corresponding to each identification",
+	    "Use the accepted taxonomic name corresponding to each identification",
 	{ value => 'higher' },
-	    "Return the accepted taxonomic name corresponding to each identification,",
-	    "along with all higher taxa.",
+	    "Use the accepted taxonomic name corresponding to each identification,",
+	    "along with all higher taxa up to the base taxon name.",
 	{ value => 'ident,higher' },
-	    "Return the taxonomic name corresponding to each identification",
+	    "Use the taxonomic name with which each occurrence was actually identified,",
+	    "along with all higher taxa up to the base taxon name.",
 	{ value => 'accepted,higher' },
 	    "Same as C<higher>");
     
@@ -1118,22 +1137,25 @@ sub initialize {
     
     $ds->define_ruleset('1.2:taxa:occ_filter' =>
 	"The following parameters further filter the list of return values:",
+	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
+	    "Selects only records associated with taxa that have the specified status.  The default is C<all>.",
+	    "Accepted values include:",
 	{ optional => 'rank', valid => \&PB2::TaxonData::validRankSpec },
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
 	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
-	{ optional => 'occname', valid => '1.2:taxa:occ_names' },
+	{ optional => 'usetaxon', valid => '1.2:taxa:usetaxon' },
 	    "This parameter specifies which of the taxonomic names associated",
-	    "with occurrences should be considered.  The default is C<accepted>.");
+	    "with occurrences should be considered.  The default is C<identified>.");
 	# { optional => 'depth', valid => POS_VALUE },
 	#     "Return only taxa no more than the specified number of levels below or",
 	#      "above the base taxon or taxa in the hierarchy");
     
-    $ds->define_ruleset('1.2:taxa:summary_selector' => 
-	{ optional => 'rank', valid => '1.2:taxa:summary_rank', alias => 'summary_rank',
-	  default => 'ident' },
-	    "Summarize the results by grouping them as follows:");
+    # $ds->define_ruleset('1.2:taxa:summary_selector' => 
+    # 	{ optional => 'rank', valid => '1.2:taxa:summary_rank', alias => 'summary_rank',
+    # 	  default => 'ident' },
+    # 	    "Summarize the results by grouping them as follows:");
     
     $ds->define_ruleset('1.2:taxa:single_display' =>
 	"The following parameter indicates which information should be returned about each resulting name:",
@@ -2429,7 +2451,7 @@ sub generate_query_options {
 	$options->{rank} = $rank;
     }
     
-    if ( my $occ_name = $request->clean_param('occname') )
+    if ( my $occ_name = $request->clean_param('usetaxon') )
     {
 	$options->{exact} = 1 if $occ_name =~ qr{ident};
 	$options->{higher} = 1 if $occ_name =~ qr{higher};
@@ -2575,24 +2597,24 @@ sub generate_query_options {
 	    die $request->exception(400, "Invalid option '$key'");
 	}
 	
-	elsif ( $prefix eq 'op' )
+	elsif ( $prefix eq 'ops' )
 	{
 	    $options->{"op_$selector"} = $value;
 	}
 	
-	elsif ( $prefix eq 'ref' )
+	elsif ( $prefix eq 'refs' )
 	{
 	    $options->{"ref_$selector"} = $value;
 	}
 	
-	elsif ( $prefix eq 'taxon' )
+	elsif ( $prefix eq 'taxa' )
 	{
 	    $options->{$selector} = $value;
 	}
 	
 	else
 	{
-	    $options->{$key} = $value;
+	    # ignore 'occs' and 'colls' if found
 	}
     }
     
@@ -2614,16 +2636,17 @@ sub generate_query_options {
 	
 	# The following options default to ascending.
 	
-	if ( $term eq 'hierarchy' || $term eq 'pubyr' || $term eq 'created' || $term eq 'modified' || $term eq 'name' ||
-	     $term eq 'author' || $term eq 'pubyr' || $term eq 'ref' )
+	if ( $term eq 'hierarchy' || $term eq 'name' ||
+	     $term eq 'author' || $term eq 'ref' )
 	{
 	    $dir ||= 'asc';
 	}
 	
 	# The following options default to descending.
 	
-	elsif ( $term eq 'firstapp' || $term eq 'lastapp' || $term eq 'agespan' || $term eq 'basis' ||
-		$term eq 'size' || $term eq 'extant_size' || $term eq 'n_occs' || $term eq 'extant' )
+	elsif ( $term eq 'pubyr' || $term eq 'firstapp' || $term eq 'lastapp' || $term eq 'agespan' || $term eq 'basis' ||
+		$term eq 'size' || $term eq 'extant_size' || $term eq 'n_occs' || $term eq 'extant' ||
+		$term eq 'created' || $term eq 'modified' )
 	{
 	    $dir ||= 'desc';
 	}

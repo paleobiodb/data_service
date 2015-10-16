@@ -251,7 +251,8 @@ use PB2::PersonData;
 	"for each taxon, so that you are able to organize the result records into their proper hierarchy.");
     
     $ds2->define_node({ path => 'occs/ttest',
-			place => 3,
+			place => 0,
+			undocumented => 1,
 			method => 'taxa_test',
 			output => '1.2:taxa:basic',
 			optional_output => '1.2:occs:taxa_opt',
@@ -280,6 +281,7 @@ use PB2::PersonData;
 			usage => [ "/occs/strata.json?base_name=Cetacea&interval=Miocene&textresult" ],
 			method => 'strata',
 			output => '1.2:strata:occs',
+			optional_output => '1.2:strata:basic_map',
 			title => 'Stratigraphy of fossil occurrences' },
 	"This operation returns information about the geological strata in which fossil occurrences",
 	"were found.  You can pass identical filtering parameters to L<occs/list|node:occs/list> and",
@@ -397,7 +399,8 @@ use PB2::PersonData;
 			title => 'Lists of geological strata',
 			usage => [ "strata/list.txt?lngmin=0&lngmax=15&latmin=0&latmax=15&rank=formation" ],
 			method => 'list_strata',
-			output => '1.2:strata:basic' },
+			output => '1.2:strata:basic',
+			optional_output => '1.2:strata:basic_map' },
 	"This path returns information about geological strata selected by name, rank,",
 	"and/or geographic location.");
     

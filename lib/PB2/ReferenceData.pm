@@ -186,6 +186,10 @@ sub initialize {
 	    "Results are ordered by the year of publication",
 	{ value => 'pubyr.asc', undocumented => 1 },
 	{ value => 'pubyr.desc', undocumented => 1 },
+	{ value => 'reftitle' },
+	    "Results are ordered alphabetically by the title of the publication",
+	{ value => 'reftitle.asc', undocumented => 1 },
+	{ value => 'reftitle.desc', undocumented => 1 },
 	{ value => 'pubtitle' },
 	    "Results are ordered alphabetically by the title of the publication",
 	{ value => 'pubtitle.asc', undocumented => 1 },
@@ -555,6 +559,11 @@ sub generate_order_clause {
 	    push @exprs, "r.pubyr $dir";
 	}
 	
+	elsif ( $term eq 'reftitle' )
+	{
+	    push @exprs, "r.reftitle $dir",
+	}
+	
 	elsif ( $term eq 'pubtitle' )
 	{
 	    push @exprs, "r.pubtitle $dir",
@@ -586,7 +595,7 @@ sub generate_order_clause {
 	
 	else
 	{
-	    die "400 bad value for parameter 'order': must be one of 'year', 'author', 'id', rank' with optional suffix '.asc' or '.desc' (was '$term')\n";
+	    die "400 bad value for parameter 'order': must be a valid order expression with optional suffix '.asc' or '.desc' (was '$term')\n";
 	}
     }
     

@@ -380,7 +380,7 @@ sub initialize {
     # Then define an output block for displaying stratigraphic results
     
     $ds->define_block('1.1:colls:strata' =>
-	{ select => ['cs.name', 'cs.rank', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
+	{ select => ['count(*) as n_colls', 'sum(n_occs) as n_occs'] },
 	{ output => 'record_type', com_name => 'typ', value => 'stratum', com_value => 'str' },
 	    "The type of this record: 'str' for a stratum",
 	{ output => 'name', com_name => 'nam' },
@@ -1118,10 +1118,13 @@ sub strata {
     my $tables = $self->tables_hash;
     
     my @filters = $self->generateMainFilters('list', 'cs', $tables);
-    push @filters, $self->generateStrataFilters($tables, $arg);
     push @filters, "1=1" unless @filters;
     
-    my $filter_string = join(' and ', @filters);
+    my @outer_filters = $self->generateStrataFilters($tables, $arg);
+    push @outer_filters, "1=1" unless @outer_filters;
+    
+    my $inner_filters = join(' and ', @filters);
+    my $outer_filters = join(' and ', @outer_filters);
     
     # Modify the query according to the common parameters.
     
@@ -1140,12 +1143,26 @@ sub strata {
     my $base_joins = $self->generateJoinList('cs', $tables);
     
     $self->{main_sql} = "
-	SELECT $calc $fields
+	SELECT * FROM
+	((SELECT $calc $fields, cs.grp as name, 'group' as rank
 	FROM coll_strata as cs
 		$base_joins
-        WHERE $filter_string
-	GROUP BY cs.name, cs.rank
-	ORDER BY cs.name
+        WHERE $inner_filters and cs.grp <> ''
+	GROUP BY cs.grp)
+	UNION
+	(SELECT $calc $fields, cs.formation as name, 'formation' as rank
+	FROM coll_strata as cs
+		$base_joins
+        WHERE $inner_filters and cs.formation <> ''
+	GROUP BY cs.formation)
+	UNION
+	(SELECT $calc $fields, cs.member as name, 'member' as rank
+	FROM coll_strata as cs
+		$base_joins
+        WHERE $inner_filters and cs.member <> ''
+	GROUP BY cs.member)) as strata
+	WHERE $outer_filters
+	ORDER BY name
 	$limit";
     
     print STDERR "$self->{main_sql}\n\n" if $self->debug;
@@ -1254,7 +1271,7 @@ sub generateStrataFilters {
     {
 	$name .= '%' if defined $is_auto && $is_auto eq 'auto';
 	my $quoted = $dbh->quote($name);
-	push @filters, "cs.name like $quoted";
+	push @filters, "name like $quoted";
     }
     
     # Check for parameter 'rank'.
@@ -1262,7 +1279,7 @@ sub generateStrataFilters {
     if ( my $rank = $self->clean_param('rank') )
     {
 	my $quoted = $dbh->quote($rank);
-	push @filters, "cs.rank = $quoted";
+	push @filters, "rank = $quoted";
     }
     
     return @filters;

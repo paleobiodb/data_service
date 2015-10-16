@@ -202,14 +202,10 @@ my (%OP_SELECT_VALUE) = ( class => 1,
 			  taxonomy => 1,
 			  all => 1,
 			  valid => 1,
+			  accepted => 1,
 			  senior => 1,
 			  junior => 1,
 			  invalid => 1 );
-
-my (%OCC_NAMES_VALUE) = ( identified => 1,
-			  accepted => 1,
-			  both => 1,
-			  higher => 1 );
 
 my (%RECORD_TYPE_VALUE) = ( opinions => 1,
 			    refs => 1,
@@ -1627,7 +1623,7 @@ sub list_associated {
     
     if ( $select{refs_occs} )
     {
-	my @occs_filters = @inner_filters;
+	my @occs_filters = grep { $_ !~ qr{^t.accepted_no = t.(synonym_no|orig_no)$} } @inner_filters;
 	push @occs_filters, $taxonomy->refno_filter($options, 'm');
 	push @occs_filters, $taxonomy->extra_filters($options);
 	
@@ -1672,10 +1668,9 @@ sub list_associated {
     
     if ( $select{refs_colls} && $record_type ne 'taxa' )
     {
-	my @colls_filters = $taxonomy->ref_filters($options, {});
+	my @colls_filters = grep { $_ !~ qr{^t.accepted_no = t.(synonym_no|orig_no)$} } @inner_filters;
 	push @colls_filters, $taxonomy->refno_filter($options, 'c');
 	push @colls_filters, $taxonomy->extra_filters($options);
-	push @colls_filters, '1=1' unless @colls_filters;
 	
 	my $inner_filters = join(q{ and }, @colls_filters);
 	
@@ -1692,6 +1687,7 @@ sub list_associated {
 	    $query_core = "$occs_table as list
 			JOIN $OCC_MATRIX as m using (occurrence_no)
 			JOIN $COLL_MATRIX as c using (collection_no)
+			JOIN $tree_table as t on t.orig_no = m.orig_no
 			JOIN $refs_table as r on r.reference_no = c.reference_no";
 	}
 	else
@@ -1739,7 +1735,7 @@ sub list_associated {
 	croak "list_associated: the option { return => 'id' } is not compatible with 'list_reftaxa'\n"
 	    if $return_type eq 'id';
 	
-	my $order_expr = $taxonomy->taxon_order($options, $outer_tables) || "ORDER BY r.author1last, r.author1init, r.author2last, r.author2init, a.taxon_name";
+	my $order_expr = $taxonomy->taxon_order($options, $outer_tables) || "ORDER BY r.author1last, r.author1init, r.author2last, r.author2init, r.reference_no, a.taxon_name";
 	my $outer_joins = $taxonomy->taxon_joins('t', $outer_tables);
 	$outer_joins .= $taxonomy->ref_joins('r', $outer_tables);
 	
@@ -1781,7 +1777,7 @@ sub list_associated {
 	
 	my $order_expr = $taxonomy->ref_order($options, $outer_tables);
 	
-	$order_expr ||= 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init' unless $rel eq 'all_taxa';
+	$order_expr ||= 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init, r.reference_no' unless $rel eq 'all_taxa';
 	$order_expr ||= 'ORDER BY NULL';
 	
 	my $outer_joins = $taxonomy->ref_joins('r', $outer_tables);
@@ -2955,6 +2951,7 @@ sub generate_fields {
 
 
 my (%STATUS_FILTER) = ( valid => "t.accepted_no = t.synonym_no",
+			accepted => "t.accepted_no = t.orig_no",
 			senior => "t.accepted_no = t.orig_no",
 			junior => "t.accepted_no = t.synonym_no and t.orig_no <> t.synonym_no",
 			invalid => "t.accepted_no <> t.synonym_no",
@@ -4155,12 +4152,12 @@ sub opinion_order {
 	
 	elsif ( $order eq 'pubyr' or $order eq 'pubyr.desc' )
 	{
-	    push @clauses, "o.pubyr asc";
+	    push @clauses, "o.pubyr desc";
 	}
 	
 	elsif ( $order eq 'pubyr.asc' )
 	{
-	    push @clauses, "o.pubyr desc";
+	    push @clauses, "o.pubyr asc";
 	}
 	
 	elsif ( $order eq 'id' or $order eq 'id.asc' )
@@ -4612,6 +4609,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				     "if(s.is_exact, a.taxon_name, if(s.genus <> '', " .
 				     "concat(s.genus, ' ', s.taxon_name), s.taxon_name)) as taxon_name",
 				     't.lft', 't.rgt', 't.senpar_no'],
+		      RANK => ['t.min_rank', 't.max_rank'],
 		      RANGE => ['t.orig_no', 't.rank as taxon_rank', 't.lft', 't.rgt'],
 		      LINK => ['t.synonym_no', 't.accepted_no', 't.immpar_no', 't.senpar_no'],
 		      APP => ['v.first_early_age as firstapp_ea', 

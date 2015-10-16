@@ -31,7 +31,7 @@ use Moo::Role;
 no warnings 'numeric';
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2::IntervalData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2::IntervalData PB2::TaxonData);
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
@@ -134,7 +134,7 @@ sub initialize {
 	    "Includes all of the information from the following blocks: B<attr>, B<loc>,",
 	    "B<paleoloc>, B<prot>, B<stratext>, B<lithext>, B<geo>, B<methods>, B<rem>.");
     
-    # Then a second block for geographic summary clusters.
+    # Then a second map for geographic summary clusters.
     
     $ds->define_output_map('1.2:colls:summary_map' =>
         { value => 'ext', maps_to => '1.2:colls:ext' },
@@ -143,6 +143,16 @@ sub initialize {
 	  # This block is defined in our parent class, CollectionData.pm
 	    "Additional information about the temporal range of the",
 	    "cluster.");
+    
+    # Then a map for geological strata.
+    
+    $ds->define_output_map('1.2:strata:basic_map' =>
+	{ value => 'coords', maps_to => '1.2:strata:coords' },
+	    "The geographic bounds (latitude and longitude) of the selected",
+	    "occurrences in each stratum",
+	{ value => 'plates', maps_to => '1.2:strata:plates' },
+	    "The identifier(s) of the geological plate(s) on which the selected",
+	    "occurrences in each strataum are located");
     
     # Then define the output blocks which these mention.
     
@@ -184,6 +194,7 @@ sub initialize {
 	    "The early bound of the geologic time range associated with this collection (in Ma)",
 	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The late bound of the geologic time range associated with this collection (in Ma)",
+	{ set => '*', code => \&fixTimeOutput },
 	{ set => 'reference_no', from => '*', code => \&set_collection_refs },
 	{ output => 'reference_no', com_name => 'rid', text_join => ', ' },
 	    "The identifier(s) of the references from which this data was entered.  For",
@@ -448,7 +459,8 @@ sub initialize {
     # Then define an output block for displaying stratigraphic results
     
     $ds->define_block('1.2:strata:basic' =>
-	{ select => ['cs.grp', 'cs.formation', 'cs.member', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
+	{ select => ['max(c.early_age) as max_ma', 'min(c.late_age) as min_ma',
+		     'count(*) as n_colls', 'sum(cs.n_occs) as n_occs'] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
 	{ output => 'grp', com_name => 'sgr', pbdb_name => 'group' },
@@ -457,6 +469,13 @@ sub initialize {
 	    "The stratigraphic formation associated with this stratum, if any.",
 	{ output => 'member', com_name => 'smb' },
 	    "The stratigraphic member associated with this stratum, if any.",
+        { output => 'max_ma', com_name => 'eag' },
+	    "The early bound of the geologic time range associated with the selected",
+	    "occurrences (in Ma)",
+	{ output => 'min_ma', com_name => 'lag' },
+	    "The late bound of the geologic time range associated with the selected",
+	    "occurrences (in Ma)",
+	{ set => '*', code => \&fixTimeOutput },
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	    "The number of fossil collections in the database that are associated with this stratum.",
 	    "Note that if your search is limited to a particular geographic area, then",
@@ -466,22 +485,23 @@ sub initialize {
 	    "The above note about geographic area selection also applies.");
     
     $ds->define_block('1.2:strata:occs' =>
-	{ select => ['count(distinct cs.collection_no) as n_colls',
+	{ select => ['count(distinct c.collection_no) as n_colls',
 		     'count(*) as n_occs', 'cs.grp', 'cs.formation', 'cs.member',
-		     'min(c.early_age) as early_age', 'min(c.late_age) as late_age'],
+		     'min(c.early_age) as max_ma', 'min(c.late_age) as min_ma'],
 	  tables => [ 'cs' ] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
-	{ output => 'group', com_name => 'sgr' },
+	{ output => 'grp', com_name => 'sgr', pbdb_name => 'group' },
 	    "The name of the group in which occurrences were found",
 	{ output => 'formation', com_name => 'sfm' },
 	    "The name of the formation in which occurences were found",
 	{ output => 'member', com_name => 'smb' },
 	    "The name of the member in which occurrences were found",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'max_ma', com_name => 'eag' },
 	    "The early bound of the geologic time range associated with the selected occurrences (in Ma)",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'min_ma', com_name => 'lag' },
 	    "The late bound of the geologic time range associated with the selected occurrences (in Ma)",
+	{ set => '*', code => \&fixTimeOutput },
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	    "The number of fossil collections in the database from this",
 	    "stratum that contain occurrences from the selected set and",
@@ -491,20 +511,19 @@ sub initialize {
 	    "listed as being part of this stratum");
     
     $ds->define_block('1.2:strata:coords' =>
-	{ select => [ 'min(cs.lat) as lat_min', 'min(cs.lng) as lng_min',
-		      'max(cs.lat) as lat_max', 'max(cs.lng) as lng_max' ], 
-	  tables => 'cs' },
-	{ output => 'lng_min', com_name => 'lx1' },
+	{ select => [ 'min(c.lat) as min_lat', 'min(c.lng) as min_lng',
+		      'max(c.lat) as max_lat', 'max(c.lng) as max_lng' ] },
+	{ output => 'min_lng', com_name => 'lx1' },
 	    "The minimum longitude for selected occurrences in this stratum",
-	{ output => 'lng_max', com_name => 'lx2' },
+	{ output => 'max_lng', com_name => 'lx2' },
 	    "The maximum longitude for selected occurrences in this stratum",
-	{ output => 'lat_min', com_name => 'ly1' },
+	{ output => 'min_lat', com_name => 'ly1' },
 	    "The minimum latitude for selected occurrences in this stratum",
-	{ output => 'lat_max', com_name => 'ly2' },
+	{ output => 'max_lat', com_name => 'ly2' },
 	    "The maximum latitude for selected occurrences in this stratum");
     
     $ds->define_block('1.2:strata:plates' =>
-	{ tables => 'cs' },
+	{ select => [ 'group_concat(distinct c.g_plate_no) as geoplate' ] },
 	{ output => 'geoplate', com_name => 'gpl' },
 	    "The identifier(s) of the geological plate(s) on which the selected",
 	    "occurrences in this stratum lie.");
@@ -539,13 +558,13 @@ sub initialize {
     
     $ds->define_block( '1.2:colls:ext' =>
       { select => ['s.lng_min', 'lng_max', 's.lat_min', 's.lat_max', 's.std_dev'] },
-      { output => 'lng_min', com_name => 'lx1', data_type => 'dec' },
+      { output => 'lng_min', com_name => 'lx1', pbdb_name => 'min_lng', data_type => 'dec' },
 	  "The mimimum longitude for collections in this cluster",
-      { output => 'lng_max', com_name => 'lx2', data_type => 'dec' },
+      { output => 'lng_max', com_name => 'lx2', pbdb_name => 'max_lng', data_type => 'dec' },
 	  "The maximum longitude for collections in this cluster",
-      { output => 'lat_min', com_name => 'ly1', data_type => 'dec' },
+      { output => 'lat_min', com_name => 'ly1', pbdb_name => 'min_lat', data_type => 'dec' },
 	  "The mimimum latitude for collections in this cluster",
-      { output => 'lat_max', com_name => 'ly2', data_type => 'dec' },
+      { output => 'lat_max', com_name => 'ly2', pbdb_name => 'max_lat', data_type => 'dec' },
 	  "The maximum latitude for collections in this cluster",
       { output => 'std_dev', com_name => 'std', data_type => 'dec' },
 	  "The standard deviation of the coordinates in this cluster");
@@ -724,6 +743,10 @@ sub initialize {
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names,",
 	    "specified by numeric identifier.  This is an alternative to the use of the C<^> character",
 	    "in names.",
+	{ param => 'taxonres', valid => $ds->valid_set('1.2:taxa:resolution') },
+	    "Select only occurrences that are identified to the specified taxonomic",
+	    "resolution, and possibly lump together occurrences of the same genus or",
+	    "family.  Accepted values are:",
 	{ param => 'ident', valid => $ds->valid_set('1.2:colls:ident_select'), default => 'latest' },
 	    "If more than one taxonomic identification is recorded for some or all of the selected occurrences,",
 	    "this parameter specifies which are to be returned.  Values include:",
@@ -981,6 +1004,12 @@ sub initialize {
     
     $ds->define_ruleset('1.2:strata:list' =>
 	{ require => '1.2:strata:selector' },
+	{ optional => 'show', list => q{,},
+	  valid => $ds->valid_set('1.2:strata:basic_map') },
+	    "Selects additional information to be returned",
+	    "along with the basic record for each stratum.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	    $ds->document_set('1.2:strata:basic_map'),
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
@@ -1456,12 +1485,35 @@ sub list_strata {
     $request->substitute_select( mt => 'cs' );
     
     my $tables = $request->tables_hash;
+    my $group_expr = "cs.grp, cs.formation, cs.member";
+    my $strata_fields = "cs.grp, cs.formation, cs.member";
     
-    my @filters = $request->generateMainFilters('list', 'cs', $tables);
-    push @filters, $request->generateStrataFilters($tables, $arg);
+    my $rank = $request->clean_param('rank');
+    
+    my @filters = $request->generateMainFilters('list', 'c', $tables);
+    # push @filters, $request->generateStrataFilters($tables, $arg);
+    
+    if ( my @names = $request->clean_param_list('name') )
+    {
+	push @filters, $request->generate_stratname_filter('cs', \@names, $rank);
+    }
+    
     push @filters, "1=1" unless @filters;
     
     my $filter_string = join(' and ', @filters);
+    
+    
+    if ( defined $rank && $rank eq 'group' )
+    {
+	$group_expr = "cs.grp";
+	$strata_fields = "cs.grp, '' as formation, '' as member";
+    }
+    
+    elsif ( defined $rank && $rank eq 'formation' )
+    {
+	$group_expr = "cs.grp, cs.formation";
+	$strata_fields = "cs.grp, cs.formation, '' as member";
+    }
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -1485,12 +1537,12 @@ sub list_strata {
     my $base_joins = $request->generateJoinList('cs', $tables);
     
     $request->{main_sql} = "
-	SELECT $calc $fields
-	FROM coll_strata as cs
+	SELECT $calc $fields, $strata_fields
+	FROM coll_strata as cs JOIN coll_matrix as c using (collection_no)
 		$base_joins
         WHERE $filter_string
-	GROUP BY cs.name, cs.rank
-	ORDER BY cs.name
+	GROUP BY $group_expr
+	ORDER BY $group_expr
 	$limit";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
@@ -1520,6 +1572,10 @@ sub fixTimeOutput {
 	if defined $record->{early_age};
     $record->{late_age} =~ s{ (?: [.] 0+ $ | ( [.] \d* [1-9] ) 0+ $ ) }{$1}sxe
 	if defined $record->{late_age};
+    $record->{max_ma} =~ s{ (?: [.] 0+ $ | ( [.] \d* [1-9] ) 0+ $ ) }{$1}sxe
+	if defined $record->{max_ma};
+    $record->{min_ma} =~ s{ (?: [.] 0+ $ | ( [.] \d* [1-9] ) 0+ $ ) }{$1}sxe
+	if defined $record->{min_ma};
 }
 
 
@@ -1610,7 +1666,7 @@ sub generateStrataFilters {
 
 sub generate_stratname_filter {
     
-    my ($request, $mt, $names_ref) = @_;
+    my ($request, $mt, $names_ref, $rank) = @_;
     
     my $dbh = $request->get_connection;
     my (@unqualified, @clauses);
@@ -1644,17 +1700,17 @@ sub generate_stratname_filter {
 	    
 	    if ( lc $rank eq 'fm' )
 	    {
-		push @clauses, "(cs.name like $quoted and cs.rank = 'formation')";
+		push @clauses, "cs.formation like $quoted";
 	    }
 	    
 	    elsif ( lc $rank eq 'mbr' )
 	    {
-		push @clauses, "(cs.name like $quoted and cs.rank = 'member')";
+		push @clauses, "cs.member like $quoted";
 	    }
 	    
 	    else # ( lc $rank eq 'gp' )
 	    {
-		push @clauses, "(cs.name like $quoted and cs.rank = 'group')";
+		push @clauses, "cs.grp like $quoted";
 	    }
 	}
 	
@@ -1667,7 +1723,28 @@ sub generate_stratname_filter {
 	    }
 	    
 	    my $quoted = $dbh->quote($name);
-	    push @clauses, "(cs.name like $quoted)";
+	    
+	    if ( defined $rank && $rank eq 'group' )
+	    {
+		push @clauses, "cs.grp like $quoted";
+	    }
+	    
+	    elsif ( defined $rank && $rank eq 'formation' )
+	    {
+		push @clauses, "cs.formation like $quoted";
+	    }
+	    
+	    elsif ( defined $rank && $rank eq 'member' )
+	    {
+		push @clauses, "cs.member like $quoted";
+	    }
+	    
+	    else
+	    {
+		push @clauses, "cs.grp like $quoted";
+		push @clauses, "cs.formation like $quoted";
+		push @clauses, "cs.member like $quoted";
+	    }
 	}
 	
 	else
@@ -1678,14 +1755,36 @@ sub generate_stratname_filter {
     
     if ( @unqualified )
     {
-	push @clauses, "cs.name in (" . join(',', @unqualified) . ")";
+	my $quoted = join(',', @unqualified);
+	
+	if ( defined $rank && $rank eq 'group' )
+	{
+	    push @clauses, "cs.grp in ($quoted)";
+	}
+	
+	elsif ( defined $rank && $rank eq 'formation' )
+	{
+	    push @clauses, "cs.formation in ($quoted)";
+	}
+	
+	elsif ( defined $rank && $rank eq 'member' )
+	{
+	    push @clauses, "cs.member in ($quoted)";
+	}
+	
+	else
+	{
+	    push @clauses, "cs.grp in ($quoted)";
+	    push @clauses, "cs.formation in ($quoted)";
+	    push @clauses, "cs.member in ($quoted)";
+	}
     }
     
     # If no valid values were found, then add a clause that will select nothing.
     
     unless ( @clauses )
     {
-	push @clauses, "cs.name = '--'";
+	push @clauses, "cs.formation = '!NOTHING!'";
     }
     
     my $clause = '(' . join( ' or ', @clauses ) . ')';
@@ -1818,7 +1917,7 @@ sub generateMainFilters {
     # 'base_id', 'taxon_id'
     
     my ($taxon_name, @taxon_nos, $value, @values);
-    my (@include_taxa, @exclude_taxa, $no_synonyms, $all_children, $do_match);
+    my (@include_taxa, @exclude_taxa, $no_synonyms, $all_children, $do_match, $ident_used);
     my (@taxon_warnings);
     
     if ( $value = $request->clean_param('base_name') )
@@ -1983,7 +2082,8 @@ sub generateMainFilters {
     
     # If a name was given and no matching taxa were found, we need to query by
     # genus_name/species_name instead.  But if the operation is "prevalence"
-    # or "diversity" then just abort with a warning.
+    # or "diversity" then just abort with a warning.  We call this the
+    # "identification branch".
     
     elsif ( $taxon_name )
     {
@@ -1992,6 +2092,8 @@ sub generateMainFilters {
 	    $request->add_warning(@taxon_warnings) if @taxon_warnings;
 	    return "t.lft = -1";
 	}
+	
+	$ident_used = 1;
 	
 	my @exact_genera;
 	my @name_clauses;
@@ -2115,6 +2217,32 @@ sub generateMainFilters {
     # If any warnings occurreed, pass them on.
     
     $request->add_warning(@taxon_warnings) if @taxon_warnings;
+    
+    # Check for parameter 'taxonres'.  But not if we took the "identification
+    # branch" because in that case it has already been handled.
+    
+    my $taxonres = $request->clean_param('taxonres');
+    
+    if ( $taxonres && ! $ident_used )
+    {
+	if ( $taxonres eq 'species' )
+	{
+	    push @filters, "tv.rank <= 3";
+	    $tables_ref->{tv} = 1;
+	}
+	
+	elsif ( $taxonres eq 'genus' || $taxonres eq 'lump_genus' || $taxonres eq 'lump_gensub' )
+	{
+	    push @filters, "tv.rank <= 5";
+	    $tables_ref->{tv} = 1;
+	}
+	
+	elsif ( $taxonres eq 'family' || $taxonres eq 'lump_family' )
+	{
+	    push @filters, "(tv.rank <= 9 or ph.family_no is not null)";
+	    $tables_ref->{ph} = 1;
+	}
+    }
     
     # Check for parameter 'pres'
     
@@ -3379,7 +3507,7 @@ sub generate_strata_order_clause {
 	
 	elsif ( $term eq 'name' )
 	{
-	    push @exprs, "coalesce(cc.geological_group, cc.formation, cc.member) $dir, cc.formation $dir, cc.member $dir"
+	    push @exprs, "coalesce(cs.grp, cs.formation, cs.member) $dir, cs.formation $dir, cs.member $dir"
 	}
 	
 	elsif ( $term eq 'n_occs' )
@@ -3416,6 +3544,7 @@ sub generateJoinList {
     
     $tables->{o} = 1 if ($tables->{t} || $tables->{tf} || $tables->{oc}) && ! $tables->{ds};
     $tables->{c} = 1 if $tables->{o} || $tables->{pc} || $tables->{cs};
+    $tables->{t} = 1 if $tables->{ph} || $tables->{pl};
     
     # Create the necessary join expressions.
     
@@ -3425,6 +3554,10 @@ sub generateJoinList {
 	if $tables->{oc};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t} || $tables->{tf};
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
+	if $tables->{pl};
+    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
+	if $tables->{ph};
     $join_list .= "JOIN coll_map as cm using (bin_id)\n"
 	if $tables->{cm};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"

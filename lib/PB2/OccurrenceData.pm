@@ -16,7 +16,8 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL
+		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
@@ -58,8 +59,11 @@ sub initialize {
 	    "This can be added to C<class> or C<classext> in order to display",
 	    "subgenera, or used instead of C<genus> to display both the genus",
 	    "and the subgenus if any.",
+	{ value => 'acconly' },
+	    "Suppress the exact taxonomic identification of each occurrence,",
+	    "and show only the accepted name.",
 	{ value => 'ident', maps_to => '1.2:occs:ident' },
-	    "The individual components of the taxonomic identification of the occurrence.",
+	    "Show the individual components of the taxonomic identification of the occurrence.",
 	    "These values correspond to the value of C<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
 	{ value => 'img', maps_to => '1.2:taxa:img' },
@@ -164,23 +168,23 @@ sub initialize {
 	    "in this field.",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
-	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa' },
+	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', not_block => 'acconly' },
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_name>.",
-	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr' },
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', not_block => 'acconly' },
 	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_rank>.",
-	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
-	{ output => 'identified_no', com_name => 'iid' },
+	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', not_block => 'acconly' },
+	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
 	    "we have no further information about the classification of this occurrence.  In some cases,",
 	    "the genus has been entered into the taxonomic hierarchy but not the species.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_no>.",
-	{ output => 'difference', com_name => 'tdf' },
+	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If the identified name is different from the accepted name, this field gives",
 	    "the reason why.  This field will be present if, for example, the identified name",
 	    "is a junior synonym or nomen dubium, or if the species has been recombined, or",
@@ -313,6 +317,8 @@ sub initialize {
 	{ include => '1.2:colls:prot' },
 	{ include => '1.2:colls:stratext' },
 	{ include => '1.2:colls:lithext' },
+	{ include => '1.2:taxa:ecospace' },
+	{ include => '1.2:taxa:taphonomy' },
 	{ include => '1.2:colls:geo' },
 	{ include => '1.2:colls:methods' },
 	{ include => '1.2:colls:rem' });
@@ -626,7 +632,7 @@ sub initialize {
 	    "If this parameter is specified, then taxa that are known to be extant",
 	    "are considered to range through to the present, regardless of the age",
 	    "of their last known fossil occurrence.",
-	{ param => 'reso', valid => '1.2:occs:div_reso' },
+	{ param => 'timeres', valid => '1.2:occs:div_reso', alias => 'reso' },
 	    "This parameter specifies the temporal resolution at which to count.  If not",
 	    "specified, it defaults to C<stage>.  Accepted values are:");
     
@@ -672,17 +678,14 @@ sub initialize {
 	    "specified, it defaults to C<genera>.  The accepted values are:",
 	{ param => 'subgenera', valid => FLAG_VALUE },
 	    "You can use this parameter as a shortcut, equivalent to specifying",
-	    "C<count=genera_plus>.  Just include its name, no value is needed.",
-	{ param => 'full', valid => BOOLEAN_VALUE },
-	    "!If you specify this parameter, a complete taxonomic subtree will",
-	    "be reported instead of just the classes, orders, families, etc.",
-	{ param => 'reso', valid => ANY_VALUE },
-	    "This parameter specifies the temporal resolution at which to count.  If not",
-	    "specified, it defaults to C<families>.  Accepted values are:");
+	    "C<count=genera_plus>.  Just include its name, no value is needed.");
+	# { param => 'taxonres', valid => ANY_VALUE },
+	#     "This parameter specifies the taxonomic resolution at which to count.  If not",
+	#     "specified, it defaults to C<all>.  Accepted values are:");
     
     $ds->define_ruleset('1.2:occs:taxa' =>
 	"The following parameters specify what to count and at what taxonomic resolution:",
-	{ allow => '1.2:occs:taxa_params' }, 
+	# { allow => '1.2:occs:taxa_params' }, 
         ">>The following parameters select which occurrences to analyze.",
 	"Except as noted below, you may use these in any combination.",
 	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
@@ -692,7 +695,14 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	">>The following parameters select which taxa to report:",
+	{ allow => '1.2:taxa:occ_filter' },
+	{ allow => '1.2:common:select_taxa_crmod' },
+	{ allow => '1.2:common:select_taxa_ent' },
 	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector'] },
+	{ optional => 'order', valid => ANY_VALUE },
+	    "This parameter is currently nonfunctional.  It will eventually allow you",
+	    "to to set the order in which the taxa are returned.",
 	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -754,6 +764,8 @@ sub initialize {
 	{ allow => '1.2:taxa:occ_filter' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
 	"You can also specify any of the following parameters:",
@@ -834,11 +846,12 @@ sub initialize {
 	{ value => 'n_occs.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.2:strata:display' =>
-	"You can use the following parameters to specify the order in which you wish to get the records:",
-	# { optional => 'show', list => q{,}, valid => '1.2:occs:basic_map' },
-	#     "This parameter is used to select additional information to be returned",
-	#     "along with the basic record for each occurrence.  Its value should be",
-	#     "one or more of the following, separated by commas:",
+	"You can use the following parameters to select what information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
+	{ optional => 'show', list => q{,}, valid => '1.2:strata:basic_map' },
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each occurrence.  Its value should be",
+	    "one or more of the following, separated by commas:",
 	{ optional => 'order', valid => '1.2:strata:order', split => ',', no_set_doc => 1 },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
@@ -1003,6 +1016,10 @@ sub list {
     
     my $calc = $request->sql_count_clause;
     
+    # By default, we group by occurrence_no.
+    
+    my $group_expr = "o.occurrence_no";
+    
     # Determine which fields and tables are needed to display the requested
     # information.
     
@@ -1030,6 +1047,39 @@ sub list {
 	}
     }
     
+    # If all identifications were selected, we will need to group by reid_no
+    # as well as occurrence_no.
+    
+    if ( $tables->{group_by_reid} )
+    {
+	$group_expr .= ', o.reid_no';
+    }
+    
+    # If we were requested to lump by genus, we need to modify the query
+    # accordingly. 
+    
+    my $taxonres = $request->clean_param('taxonres');
+    
+    if ( $taxonres =~ qr{^lump} )
+    {
+	$request->delete_output_field('identified_name');
+	$request->delete_output_field('identified_rank');
+	$request->delete_output_field('identified_no');
+	$request->delete_output_field('difference');
+	
+	if ( $taxonres eq 'lump_gensub' )
+	{
+	    $group_expr = "o.collection_no, pl.genus_no, pl.subgenus_no";
+	    $tables->{lump} = 'subgenus';
+	}
+	
+	else
+	{
+	    $group_expr = "o.collection_no, pl.genus_no";
+	    $tables->{lump} = 'genus';
+	}
+    }
+    
     # if ( $taxa_block{ECOSPACE} && $taxa_block{ETBASIS} )
     # {
     # 	push @fields, @{$Taxonomy::FIELD_LIST{ECOBASIS}};
@@ -1041,6 +1091,8 @@ sub list {
     # 	push @fields, @{$Taxonomy::FIELD_LIST{TAPHBASIS}};
     # 	$request->add_table($_) foreach @{$Taxonomy::FIELD_TABLES{TAPHBASIS}};
     # }
+    
+    # Now generate the field list.
     
     my $fields = join(', ', @fields);
     
@@ -1058,14 +1110,12 @@ sub list {
     
     my $join_list = $request->generateJoinList('c', $tables);
     
-    my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
-    
     $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
-	GROUP BY o.occurrence_no $extra_group
+	GROUP BY $group_expr
 	ORDER BY $order_clause
 	$limit";
     
@@ -1460,12 +1510,11 @@ sub taxa {
     
     $tables->{ph} = 1;
     $tables->{t} = 1;
-    $tables->{tv} = 1;
     $tables->{pl} = 1;
     
     # Set up the phylogeny-computation options
     
-    my $resolution = $request->clean_param('reso') || 'genera';
+    my $resolution = $request->clean_param('reso') || 'species';
     my $count_what = $request->clean_param('count') || 'species';
     
     $request->{my_promote} = $request->clean_param('subgenera');
@@ -1473,8 +1522,26 @@ sub taxa {
     
     # Determine the necessary set of query fields.
     
-    my @fields = ('o.occurrence_no', 'tv.rank', 'tv.ints_no', 'ph.phylum', 'ph.phylum_no', 
-		  'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
+    my @fields;
+    
+    my $taxon_status = $request->clean_param('taxon_status');
+    
+    if ( $taxon_status && ($taxon_status eq 'accepted' || $taxon_status eq 'senior'))
+    {
+	$tables->{tv} = 1;
+	@fields = ('o.occurrence_no', 'tv.rank', 'tv.name as ident_name', 'tv.ints_no', 'ph.phylum', 'ph.phylum_no', 
+		   'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
+    }
+    
+    else
+    {
+	$tables->{tv} = 1;
+	@fields = ('o.occurrence_no', 't.rank', 't.name as ident_name', 't.orig_no', 't.ints_no', 'ph.phylum', 'ph.phylum_no',
+		   'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
+    }
+    
+    # If we were asked for the block 'occapp', then we need age ranges for the
+    # individual occurrences.
     
     if ( $request->has_block('occapp') )
     {
@@ -1957,15 +2024,27 @@ sub list_associated {
 			orig_no int unsigned not null ) engine=memory");
 	
 	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+	my $sql;
 	
-	my $sql = "
+	try {
+	    $sql = "
 		INSERT IGNORE INTO occ_list
 		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $OCC_MATRIX as o
 			JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	
-	$dbh->do($sql);
+	    $dbh->do($sql);
+	}
+	
+	catch {
+	    $dbh->do("DROP TEMPORARY TABLE IF EXISTS occ_list");
+	    die $_;
+	}
+	
+	finally {
+	    print STDERR $sql . "\n\n" if $request->debug;
+	};
 	
 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
@@ -2162,7 +2241,7 @@ sub strata {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my $inner_tables = { cc => 1 };
+    my $inner_tables = { };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { occs => 'o' } );
@@ -2178,7 +2257,7 @@ sub strata {
     # is selected by the options, sort by name ascending.
     
     my $order_clause = $request->PB2::CollectionData::generate_strata_order_clause({ rank_table => 's' }) ||
-	"coalesce(cc.geological_group, cc.formation, cc.member), cc.formation, cc.member";
+	"coalesce(cs.grp, cs.formation, cs.member), cs.formation, cs.member";
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -2200,14 +2279,17 @@ sub strata {
     
     $request->adjustCoordinates(\$fields);
     
+    delete $inner_tables->{cs};
+    
     my $join_list = $request->generateJoinList('c', $inner_tables);
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+		JOIN $COLL_STRATA as cs using (collection_no)
 		$join_list
         WHERE $filter_string
-	GROUP BY cc.geological_group, cc.formation, cc.member
+	GROUP BY cs.grp, cs.formation, cs.member
 	ORDER BY $order_clause
 	$limit";
     
@@ -2515,7 +2597,7 @@ sub generateQuickDivFilters {
 
 sub generateJoinList {
 
-    my ($request, $mt, $tables, $summary_join_field) = @_;
+    my ($request, $mt, $tables) = @_;
     
     my $join_list = '';
     
@@ -2535,8 +2617,25 @@ sub generateJoinList {
 	if $tables->{oc};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
-    $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
-	if $tables->{t};
+    
+    if ( $tables->{lump} )
+    {
+	delete $tables->{pl};
+	$join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = o.orig_no\n";
+	
+	if ( $tables->{lump} eq 'subgenus' )	{
+	    $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = coalesce(pl.subgenus_no, pl.genus_no)\n";
+	} else {
+	    $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = pl.genus_no\n";
+	}
+    }
+    
+    else
+    {
+	$join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
+	    if $tables->{t};
+    }
+    
     $join_list .= "LEFT JOIN taxon_trees as tv on tv.orig_no = t.accepted_no\n"
 	if $tables->{tv} || $tables->{e};
     $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = $t.orig_no\n"
@@ -2724,7 +2823,7 @@ sub process_basic_record {
 	# can't find anything else, just report 'variant'.
 	
 	elsif ( $record->{orig_no} && $record->{accepted_no} && 
-	     $record->{orig_no} ne $record->{accepted_no} )
+	     $record->{orig_no} eq $record->{accepted_no} )
 	{
 	    if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
 	         $record->{spelling_reason} && $record->{spelling_reason} eq 'recombination' )

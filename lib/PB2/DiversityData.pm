@@ -17,6 +17,7 @@ use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use TableDefs qw($INTERVAL_MAP);
 use Taxonomy;
 use Try::Tiny;
+use Carp qw(croak confess);
 
 use Moo::Role;
 
@@ -607,6 +608,10 @@ sub generate_taxon_table_ints {
 	    if $deficit;
     }
     
+    # If filtering options were specified, deal with them now.
+    
+    my $options = $request->generate_occs_taxa_options;
+    
     # Now traverse the tree again and produce the appropriate output.  If
     # there is more than one base taxon (class), then output them in sorted
     # order as separate trees.
@@ -627,7 +632,7 @@ sub generate_taxon_table_ints {
 	# Then output the result records for this base taxon and all of its
 	# subtaxa.
 	
-	$request->add_result_records($base_no, 0);
+	$request->add_result_records($options, $base_no, 0);
     }
     
     # Now add a summary record.
@@ -708,58 +713,124 @@ sub generate_taxon_table_full {
 	    $added_taxa{$higher_no} = 1;
 	}
 	
+	$request->track_time($higher_node, $r) if $track_time;
+	
 	if ( $rank <= 5 && $count_rank <= 5 )
 	{
-	    my ($genus_no, $genus_name);
-	    if ( $promote && $r->{subgenus_no} )
+	    my ($genus_no, $genus_name, $genus_node, $subgenus_no, $subgenus_name, $subgenus_node);
+	    
+	    if ( $r->{genus_no} )
 	    {
-		$genus_no = $r->{subgenus_no};
-		$genus_name = $r->{subgenus} || '~';
-	    }
-	    else
-	    {
-		$genus_no = $r->{genus_no} || uns_identifier(5);
+		$genus_no = $r->{genus_no};
 		$genus_name = $r->{genus} || '~';
 	    }
-	    my $genus_node = $taxon_node{$genus_no};
 	    
-	    unless ( $genus_node )
+	    elsif ( $rank == 5 )
 	    {
-		$genus_node = $taxon_node{$genus_no} = { taxon_rank => 5, n_occs => 0,
-							 taxon_name => $genus_name };
-		$added_taxa{$genus_no} = 1 if $reso_rank <= 5;
+		$genus_no = $r->{orig_no};
+		$genus_name = $r->{ident_name} || '~';
 	    }
 	    
-	    $higher_node->{chld}{$genus_no} = 1;
+	    if ( $genus_no )
+	    {
+		$genus_node = $taxon_node{$genus_no};
+		
+		unless ( $genus_node )
+		{
+		    $genus_node = $taxon_node{$genus_no} = { taxon_rank => 5, n_occs => 0,
+							     taxon_name => $genus_name };
+		    $added_taxa{$genus_no} = 1 if $reso_rank <= 5;
+		}
+		
+		$higher_node->{chld}{$genus_no} = 1;
+		$request->track_time($genus_node, $r) if $track_time;
+	    }
+	    
+	    if ( $rank <= 4 && $count_rank <= 4 && $genus_no )
+	    {
+		if ( $r->{subgenus_no} )
+		{
+		    $subgenus_no = $r->{subgenus_no};
+		    $subgenus_name = $r->{subgenus} || '~';
+		}
+		
+		elsif ( $rank == 4 )
+		{
+		    $subgenus_no = $r->{orig_no};
+		    $subgenus_name = $r->{ident_name} || '~';
+		}
+		
+		if ( $subgenus_no )
+		{
+		    $subgenus_node = $taxon_node{$subgenus_no};
+		    
+		    unless ( $subgenus_node )
+		    {
+			$subgenus_node = $taxon_node{$subgenus_no} = { taxon_rank => 4, n_occs => 0,
+								       taxon_name => $subgenus_name };
+			$added_taxa{$genus_no} = 1 if $reso_rank <= 4;
+		    }
+		    
+		    $genus_node->{chld}{$subgenus_no} = 1;
+		    $request->track_time($subgenus_node, $r) if $track_time;
+		}
+	    }
 	    
 	    if ( $count_rank <= 3 && $rank <= 3 )
 	    {
-		my $species_no = $r->{species_no} || uns_identifier(3);
-		my $species_node = $taxon_node{$species_no};
+		my ($species_no, $species_name);
 		
-		unless ( $species_node )
+		if ( $r->{species_no} )
 		{
-		    $species_node = $taxon_node{$species_no} = { taxon_rank => 3, n_occs => 0,
-								 taxon_name => $r->{species} || '~' };
-		    $added_taxa{$species_no} = 1 if $reso_rank <= 3;
+		    $species_no = $r->{species_no};
+		    $species_name = $r->{species} || '~';
 		}
 		
-		$species_node->{n_occs}++;
-		$genus_node->{chld}{$species_no} = 1;
-		$request->track_time($species_node, $r) if $track_time;
+		else
+		{
+		    $species_no = $r->{orig_no};
+		    $species_name = $r->{ident_name} || '~';
+		}
+		
+		if ( $species_no )
+		{
+		    my $species_node = $taxon_node{$species_no};
+		    
+		    unless ( $species_node )
+		    {
+			$species_node = $taxon_node{$species_no} = { taxon_rank => 3, n_occs => 0,
+								     taxon_name => $species_name };
+			$added_taxa{$species_no} = 1 if $reso_rank <= 3;
+		    }
+		    
+		    $species_node->{n_occs}++;
+		    
+		    if ( $subgenus_node )
+		    {
+			$subgenus_node->{chld}{$species_no} = 1;
+		    }
+		    
+		    elsif ( $genus_node )
+		    {
+			$genus_node->{chld}{$species_no} = 1;
+		    }
+		    
+		    $request->track_time($species_node, $r) if $track_time;
+		}
+		
+		$subgenus_node->{n_occs}++ if $subgenus_node;
+		$genus_node->{n_occs}++ if $genus_node;
 	    }
 	    
 	    else
 	    {
-		$genus_node->{n_occs}++;
-		$request->track_time($genus_node, $r) if $track_time;
+		$genus_node->{n_occs}++ if $genus_node;
 	    }
 	}
 	
 	else
 	{
 	    $higher_node->{n_occs}++;
-	    $request->track_time($higher_node, $r) if $track_time;
 	}
     }
     
@@ -780,7 +851,11 @@ sub generate_taxon_table_full {
     # If we were asked to track time ranges of taxa, then load the
     # corresponding interval names.
     
-    $request->get_interval_info(\%taxon_node);
+    # $request->get_interval_info(\%taxon_node);
+    
+    # If filtering options were specified, deal with them now.
+    
+    my $options = $request->generate_occs_taxa_options;
     
     # Now traverse the tree again and produce the appropriate output.
     
@@ -788,7 +863,7 @@ sub generate_taxon_table_full {
     
     foreach my $base_no ( @sorted_classes )
     {
-	$request->add_result_records($base_no, 0);
+	$request->add_result_records($options, $base_no, 0);
     }
     
     # Now add a summary record.
@@ -886,7 +961,7 @@ sub get_upper_taxa {
     # genus.  If the option 'app' was specified, include the first-and-last
     # appearance info.
     
-    my @fields = ('DATA', 'family_no', $request->select_list_for_taxonomy);
+    my @fields = ('DATA', 'RANK', 'family_no', $request->select_list_for_taxonomy);
     
     my $taxa_list;
     
@@ -953,13 +1028,17 @@ sub get_taxon_info {
     # include the first-and-last appearance info.
     
     my @fields = ('DATA', 'family_no');
-
+    
     foreach my $f ( $request->select_list )
     {
 	next if $f =~ qr{\.modified};
 	$f = 'CRMOD' if $f =~ qr{\.created$};
 	push @fields, $f;
     }
+    
+    my @ranks = $request->clean_param_list('rank');
+    
+    push @fields, 'RANK' if @ranks;
     
     my @ids;
     
@@ -1184,9 +1263,86 @@ sub sum_subtaxa {
 }
 
 
+sub generate_occs_taxa_options {
+    
+    my ($request) = @_;
+    
+    my $options = { };
+    
+    if ( my $extant = $request->clean_param('extant') )
+    {
+	$options->{extant} = $extant;
+    }
+    
+    my @ranks = $request->clean_param_list('rank');
+    
+    if ( @ranks )
+    {
+	my (@min_rank, @max_rank, %sel_rank);
+	
+        foreach my $rank ( @ranks )
+	{
+	    if ( $rank =~ qr{ ^ (min_|above_) ([^-]+) - (max_|below_) (.*) $ }xs )
+	    {
+		my $min = $1 eq 'min_' ? $2 : $2 + 0.1;
+		my $max = $3 eq 'max_' ? $3 : $3 - 0.1;
+		
+		push @min_rank, $min;
+		push @max_rank, $max;
+	    }
+	    
+	    elsif ( $rank =~ qr{ ^ (max_|below_) (.*) }xs )
+	    {
+		my $max = $1 eq 'max_' ? $2 : $2 - 0.1;
+		push @max_rank, $max;
+	    }
+	    
+	    elsif ( $rank =~ qr{ ^ (min_|above_) (.*) }xs )
+	    {
+		my $min = $1 eq 'min_' ? $2 : $2 + 0.1;
+		push @min_rank, $min;
+	    }
+	    
+	    else
+	    {
+		$sel_rank{$rank} = 1;
+		push @min_rank, $rank;
+	    }
+	}
+	
+	$options->{sel_rank} = \%sel_rank;
+	
+	foreach my $min (@min_rank)
+	{
+	    if ( !defined $options->{min_rank} || $min < $options->{min_rank} )
+	    {
+		$options->{min_rank} = $min;
+	    }
+	}
+	
+	foreach my $max (@max_rank)
+	{
+	    if ( !defined $options->{max_rank} || $max > $options->{max_rank} )
+	    {
+		$options->{max_rank} = $max;
+	    }
+	}
+    }
+    
+    if ( my $status = $request->clean_param('taxon_status') )
+    {
+	$options->{status} = $status;
+    }
+    
+    return $options;
+}
+
+
 sub add_result_records {
     
-    my ($request, $taxon_no, $parent_no, $family_ok) = @_;
+    my ($request, $options, $taxon_no, $parent_no, $family_ok) = @_;
+    
+    confess "bad options" unless $options;
     
     no warnings 'uninitialized';
     
@@ -1201,6 +1357,13 @@ sub add_result_records {
     
     my $rank = $node->{taxon_rank};
     return if $rank < $request->{my_reso_rank};
+    
+    # Skip any taxon that falls below the minimum specified rank.
+    
+    if ( $options->{min_rank} )
+    {
+	return if $node->{max_rank} < $options->{min_rank};
+    }
     
     # If this taxon node does not have a name, then it represents a missing
     # part of the taxonomic hierarchy.  So generate a "NONE_SPECIFIED" name
@@ -1246,15 +1409,23 @@ sub add_result_records {
 	$node->{n_species} = $node->{n_species};
     }
     
-    # Add this taxon to the result list.
+    # Add this taxon to the result list, but only if it meets all of the criteria.
     
-    $request->add_result($node);
+    if ( $request->check_record($node, $options) )
+    {
+	$request->add_result($node);
+    }
     
     # If this is a "leaf taxon" according to the specified resolution level,
     # then stop here.  Otherwise, recurse to the children of this taxon.
     
     return if $rank == $request->{my_reso_rank};
     
+    if ( $options->{min_rank} )
+    {
+	return if $node->{max_rank} == $options->{min_rank};
+    }
+   
     my @children = keys %{$node->{chld}};
     my @deferred;
     
@@ -1281,7 +1452,7 @@ sub add_result_records {
 	
 	# Recursively generate the child records.
 	
-	$request->add_result_records($child_no, $taxon_no, $family_ok);
+	$request->add_result_records($options, $child_no, $taxon_no, $family_ok);
     }
     
     # If we have any deferred nodes, then create a new "unspecified family"
@@ -1311,10 +1482,78 @@ sub add_result_records {
 	# set the 'family_ok' flag so that we won't get another "unspecified
 	# family" node under this one.
 	
-	$request->add_result_records($uns_no, $taxon_no, 1);
-
+	$request->add_result_records($options, $uns_no, $taxon_no, 1);
+	
 	my $a = 1;	# we can stop here when debugging
     }
+}
+
+
+sub check_record {
+    
+    my ($request, $node, $options) = @_;
+    
+    if ( my $status = $options->{status} )
+    {
+	if ( $status eq 'accepted' || $status eq 'senior' )
+	{
+	    return unless !defined $node->{status} || $node->{status} eq 'belongs to';
+	}
+	
+	elsif ( $status eq 'valid' )
+	{
+	    return unless !defined $node->{status} || 
+		$node->{status} eq 'belongs to' ||
+		$node->{status} eq 'subjective synonym of' ||
+		    $node->{status} eq 'objective synonym of' ||
+			$node->{status} eq 'replaced by';
+	}
+	
+	elsif ( $status eq 'junior' )
+	{
+	    return unless defined $node->{status};
+	    return unless $node->{status} eq 'subjective synonym of' ||
+		$node->{status} eq 'objective synonym of' ||
+		    $node->{status} eq 'replaced by';
+	}
+	
+	elsif ( $status eq 'invalid' )
+	{
+	    return unless defined $node->{status};
+	    return if $node->{status} eq 'belongs to' ||
+		$node->{status} eq 'subjective synonym of' ||
+		    $node->{status} eq 'objective synonym of' ||
+			$node->{status} eq 'replaced by';
+	}
+    }
+    
+    unless ( ref $options eq 'HASH' && $options->{sel_rank} && $options->{sel_rank}{$node->{taxon_rank}} )
+    {
+	if ( $options->{max_rank} && defined $node->{min_rank} )
+	{
+	    return unless $node->{min_rank} <= $options->{max_rank};
+	}
+	
+	elsif ( ref $options->{sel_rank} eq 'HASH' )
+	{
+	    return;
+	}
+    }
+    
+    if ( defined $options->{extant} )
+    {
+	if ( $options->{extant} )
+	{
+	    return unless $node->{is_extant};
+	}
+	
+	else
+	{
+	    return if $node->{is_extant};
+	}
+    }
+    
+    return 1;
 }
 
 
