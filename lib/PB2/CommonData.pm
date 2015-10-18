@@ -137,7 +137,7 @@ sub initialize {
     $ds->define_ruleset('1.2:common:select_ent' =>
 	{ param => 'authorized_by', valid => ANY_VALUE, list => ',' },
 	    "Select only records that were authorized by the specified person,",
-	    "indicated by name or identifier",
+	    "indicated by name or identifier<",
 	{ param => 'entered_by', valid => ANY_VALUE, list => ',' },
 	    "Select only records that were entered by the specified person,",
 	    "indicated by name or identifier",
@@ -482,6 +482,15 @@ sub ent_filter {
     my $dbh = $request->get_connection;
     my @values = ref $person_value eq 'ARRAY' ? @$person_value : $person_value;
     my @ids;
+    my $exclude = '';
+    
+    # If the first value starts with '^', generate an exclusion filter.
+    
+    if ( $values[0] =~ qr{^\^\s*(.*)} )
+    {
+	$values[0] = $1;
+	$exclude = 'not ';
+    }
     
     # Go through each of the names in the list.  Any names we find get looked
     # up in the database.
@@ -500,12 +509,12 @@ sub ent_filter {
 		SELECT person_no, name FROM person
 		WHERE name like $quoted or reversed_name like $quoted", { Columns => [1, 2] });
 	    
-	    if ( defined $values && @$values < 3 )
+	    if ( defined $values && @$values < 3 && defined $values->[0] && $values->[0] ne '' )
 	    {
 		push @ids, $values->[0];
 	    }
 	    
-	    elsif ( defined $values )
+	    elsif ( defined $values && defined $values->[0] && $values->[0] ne '' )
 	    {
 		my @ambiguous;
 		
@@ -531,21 +540,22 @@ sub ent_filter {
     # proper response because the client clearly wanted to filter by identifier.
     
     my $id_list = join(',', @ids);
+    
     return "$tn.authorizer_no = 0" unless $id_list;
     
     if ( $param eq 'touched' )
     {
-	return "($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list) or $tn.modifier_no in ($id_list))";
+	return "$exclude($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list) or $tn.modifier_no in ($id_list))";
     }
     
     elsif ( $param eq 'authent' )
     {
-	return "($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list))";
+	return "$exclude($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list))";
     }
     
     else
     {
-	return "$tn.$param in ($id_list)";
+	return "$tn.$param ${exclude}in ($id_list)";
     }
 }
 

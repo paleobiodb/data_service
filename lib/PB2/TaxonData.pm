@@ -80,7 +80,9 @@ sub initialize {
 	    "L<list of values|node:taxa/ecotaph_values>.",
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
-	    "taxonomic level each piece of information was entered.");
+	    "taxonomic level each piece of information was entered.",
+	{ value => 'pres', maps_to => '1.2:taxa:pres' },
+	    "Indicates whether this is a regular taxon, an ichnotaxon, or a form taxon.");
     
     @BASIC_2 = (
 	{ value => 'seq', maps_to => '1.2:taxa:seq' },
@@ -102,7 +104,7 @@ sub initialize {
 	    "metadata or data from associated records, but you may also include those",
 	    "blocks explicitly.  If we subsequently add new data fields to this record",
 	    "then B<full> will include those as well.  So if you are publishing a URL,",
-	    "it might be a good idea to include this.");
+	    "it might be a good idea to include C<show=full>.");
      
     $ds->define_output_map('1.2:taxa:single_output_map' =>
 	{ value => 'attr', maps_to => '1.2:taxa:attr' },
@@ -607,6 +609,13 @@ sub initialize {
 	#{ set => '*', code => \&PB2::TaxonData::consolidate_basis, if_format => ['txt', 'csv', 'tsv'] }
 	);
     
+    $ds->define_block('1.2:taxa:pres' =>
+	{ select => 'PRES' },
+	{ output => 'preservation', com_name => 'prs' },
+	    "Indicates whether this is an C<ichnotaxon> or a C<form taxon>.",
+	    "if blank, then this is a regular taxon.  In the compact vocabulary,",
+	    "the values are C<I> and C<F>.");
+    
     $ds->define_block('1.2:taxa:seq' =>
 	{ output => 'lft', com_name => 'lsq' },
 	    "This number gives the taxon's position in a preorder traversal of the taxonomic tree.",
@@ -618,15 +627,16 @@ sub initialize {
 	    "a subtaxon of C<B>.");
     
     $ds->define_block( '1.2:taxa:full_info' =>
-	{ include => '1.2:occs:attr' },
-	{ include => '1.2:occs:app' },
-	{ include => '1.2:occs:common' },
-	{ include => '1.2:occs:parent' },
-	{ include => '1.2:occs:size' },
-	{ include => '1.2:colls:class' },
-	{ include => '1.2:colls:ecospace' },
-	{ include => '1.2:colls:taphonomy' },
-	{ include => '1.2:colls:etbasis' });
+	{ include => '1.2:taxa:attr' },
+	{ include => '1.2:taxa:app' },
+	{ include => '1.2:taxa:common' },
+	{ include => '1.2:taxa:parent' },
+	{ include => '1.2:taxa:size' },
+	{ include => '1.2:taxa:class' },
+	{ include => '1.2:taxa:ecospace' },
+	{ include => '1.2:taxa:taphonomy' },
+	{ include => '1.2:taxa:etbasis' },
+	{ include => '1.2:taxa:pres' });
     
     # Now define output blocks for opinions
     
@@ -1099,6 +1109,11 @@ sub initialize {
 	">The following parameters indicate which related taxonomic names to return:",
 	{ param => 'rel', valid => '1.2:taxa:rel' },
 	    "Indicates which taxa are to be selected.  Accepted values include:",
+	{ optional => 'pres', valid => '1.2:taxa:preservation', split => qr{[\s,]+} },
+	    "This parameter indicates whether to select",
+	    "ichnotaxa, form taxa, or regular taxa.  The default is C<all>, which will select",
+	    "all taxa that meet the other specified criteria.  You can specify one or more",
+	    "of the following values as a list:",
 	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
 	    "Selects only records associated with taxa that have the specified status.  The default is C<all>.",
 	    "Accepted values include:");
@@ -3279,6 +3294,16 @@ sub process_pbdb {
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
     
+    if ( $record->{is_trace} )
+    {
+	$record->{preservation} = 'ichnotaxon';
+    }
+    
+    elsif ( $record->{is_form} )
+    {
+	$record->{preservation} = 'form taxon';
+    }
+    
     no warnings 'uninitialized';
     
     if ( $record->{exclude} )
@@ -3382,6 +3407,16 @@ sub process_com {
     
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
+    
+    if ( $record->{is_trace} )
+    {
+	$record->{preservation} = 'I';
+    }
+    
+    elsif ( $record->{is_form} )
+    {
+	$record->{preservation} = 'F';
+    }
     
     no warnings 'uninitialized';
     

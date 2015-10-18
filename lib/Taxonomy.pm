@@ -3580,34 +3580,34 @@ sub common_filters {
 	
 	elsif ( $key =~ qr{authorized_by$} )
 	{
-	    my $list = $taxonomy->person_id_list($value);
-	    push @filters, "$t.authorizer_no in ($list)" if $list;
+	    my ($list, $exclude) = $taxonomy->person_id_list($value);
+	    push @filters, "$t.authorizer_no ${exclude}in ($list)" if $list;
 	}
 	
 	elsif ( $key =~ qr{entered_by$} )
 	{
-	    my $list = $taxonomy->person_id_list($value);
-	    push @filters, "$t.enterer_no in ($list)" if $list;
+	    my ($list, $exclude) = $taxonomy->person_id_list($value);
+	    push @filters, "$t.enterer_no ${exclude}in ($list)" if $list;
 	}
 	
 	elsif ( $key =~ qr{authent_by$} )
 	{
-	    my $list = $taxonomy->person_id_list($value);
-	    push @filters, "($t.authorizer_no in ($list) or $t.enterer_no in ($list))" if $list;
+	    my ($list, $exclude) = $taxonomy->person_id_list($value);
+	    push @filters, "($t.authorizer_no ${exclude}in ($list) or $t.enterer_no in ($list))" if $list;
 	}
 	
 	elsif ( $key =~ qr{modified_by$} )
 	{
-	    my $list = $taxonomy->person_id_list($value);
-	    push @filters, "$t.modifier_no in ($list)" if $list;
+	    my ($list, $exclude) = $taxonomy->person_id_list($value);
+	    push @filters, "$t.modifier_no ${exclude}in ($list)" if $list;
 	    push @filters, "$t.modifier_no <> $t.enterer_no" if $value eq '*';
 	}
 	
 	elsif ( $key =~ qr{touched_by$} )
 	{
-	    my $list = $taxonomy->person_id_list($value);
+	    my ($list, $exclude) = $taxonomy->person_id_list($value);
 	    push @filters, 
-		"($t.authorizer_no in ($list) or $t.enterer_no in ($list) or $t.modifier_no in ($list))"
+		"$exclude($t.authorizer_no in ($list) or $t.enterer_no in ($list) or $t.modifier_no in ($list))"
 		    if $list;
 	}
 	
@@ -3653,7 +3653,16 @@ sub person_id_list {
     
     my @plist = ref $value eq 'ARRAY' ? @$value : split qr{\s*,\s*}, $value;
     my @ids;
+    my $exclude = '';
     my $dbh = $taxonomy->{dbh};
+    
+    # If the first value starts with ^, generate an exclusion filter.
+    
+    if ( $plist[0] =~ qr{^\^\s*(.*)} )
+    {
+	$plist[0] = $1;
+	$exclude = 'not ';
+    }    
     
     foreach my $p (@plist)
     {
@@ -3701,7 +3710,7 @@ sub person_id_list {
     # the identifiers together into a single string and return that.
     
     return unless @ids;
-    return join(q{,}, @ids);
+    return (join(q{,}, @ids), $exclude);
 }
 
 
@@ -4575,8 +4584,9 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				       'max(base.unclass_no) as unclass_no',
 				       'max(base.occurrence_no) as occurrence_no',
 				       'max(base.collection_no) as collection_no',
-				       't.lft', 't.status', 't.accepted_no',
+				       't.lft', 't.status', 't.spelling_no', 't.accepted_no',
 				       't.immpar_no', 't.senpar_no', 'vt.name as accepted_name', 
+				       'nn.spelling_reason', 'n.spelling_reason as accepted_reason',
 				       'vt.rank as accepted_rank',
 				       'v.n_occs', 'v.is_extant'],
 		      REFTAXA_SIMPLE => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
@@ -4635,6 +4645,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				   'etb.life_habit_basis', 'etb.diet_basis',
 				   'etb.environment_basis_no', 'etb.motility_basis_no',
 				   'etb.life_habit_basis_no', 'etb.diet_basis_no'],
+		      PRES => ['not(v.not_trace) as is_trace', 'not(v.not_form) as is_form'],
 		      CRMOD => ['a.created', 'a.modified'],
 		      REF_CRMOD => ['r.created', 'r.modified'],
 		      OP_CRMOD => ['oo.created', 'oo.modified'],
@@ -4647,7 +4658,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 
 our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
 			AUTH_DATA => ['v', 'vt', 'n', 'nn'],
-			REFTAXA_DATA => ['v', 'vt'],
+			REFTAXA_DATA => ['v', 'vt', 'n', 'nn'],
 			REF_DATA => ['r'],
 			OP_DATA => ['o', 'oo', 'pt'],
 			REF_COUNTS => ['refcounts'],
@@ -4662,6 +4673,7 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
 			ECOSPACE => ['e'],
 			TAPHBASIS => ['etb'],
 			ECOBASIS => ['etb'],
+			PRES => ['v'],
 			SENPAR => ['pt'],
 			IMMPAR => ['ipt'],
 			REF_CRMOD => ['r'],

@@ -208,7 +208,7 @@ sub emit_record {
     
     # The following fields are common to all types:
     
-    $output .= $class->emit_line('ID', "paleobiodb:ref:$refno");
+    $output .= $class->emit_line('ID', "ref:$refno");
     
     $output .= $class->ris_author_line('AU', $record->{r_al1}, $record->{r_ai1})
 	if $record->{r_al1};
@@ -250,6 +250,8 @@ sub emit_record {
     $output .= $class->emit_line('N1', $record->{r_comments}) if defined $record->{r_comments} and $record->{r_comments} ne '';
     $output .= $class->emit_line('LA', $record->{r_language}) if defined $record->{r_language} and $record->{r_language} ne '';
     $output .= $class->emit_line('DO', $record->{r_doi}) if defined $record->{r_doi} and $record->{r_doi} ne '';
+    
+    $output .= $class->emit_line('N1', "type = $record->{ref_type}") if defined $record->{ref_type} && $record->{ref_type} ne '';
     
     $output .= $class->emit_line('ER');
     

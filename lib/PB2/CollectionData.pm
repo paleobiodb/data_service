@@ -460,7 +460,9 @@ sub initialize {
     
     $ds->define_block('1.2:strata:basic' =>
 	{ select => ['max(c.early_age) as max_ma', 'min(c.late_age) as min_ma',
-		     'count(*) as n_colls', 'sum(cs.n_occs) as n_occs'] },
+		     'count(*) as n_colls', 'sum(cs.n_occs) as n_occs', 
+		     'group_concat(distinct cs.cc) as cc_list',
+		     'group_concat(distinct cs.lithology) as lithology']},
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
 	{ output => 'grp', com_name => 'sgr', pbdb_name => 'group' },
@@ -469,6 +471,8 @@ sub initialize {
 	    "The stratigraphic formation associated with this stratum, if any.",
 	{ output => 'member', com_name => 'smb' },
 	    "The stratigraphic member associated with this stratum, if any.",
+	{ output => 'lithology', com_name => 'lth' },
+	    "The litholog(ies) recorded for this stratum in the database, if any.",
         { output => 'max_ma', com_name => 'eag' },
 	    "The early bound of the geologic time range associated with the selected",
 	    "occurrences (in Ma)",
@@ -476,6 +480,8 @@ sub initialize {
 	    "The late bound of the geologic time range associated with the selected",
 	    "occurrences (in Ma)",
 	{ set => '*', code => \&fixTimeOutput },
+	{ output => 'cc_list', com_name => 'cc2' },
+	    "A comma-separated list of the country codes in which this stratum is found",
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	    "The number of fossil collections in the database that are associated with this stratum.",
 	    "Note that if your search is limited to a particular geographic area, then",
@@ -487,7 +493,9 @@ sub initialize {
     $ds->define_block('1.2:strata:occs' =>
 	{ select => ['count(distinct c.collection_no) as n_colls',
 		     'count(*) as n_occs', 'cs.grp', 'cs.formation', 'cs.member',
-		     'min(c.early_age) as max_ma', 'min(c.late_age) as min_ma'],
+		     'min(c.early_age) as max_ma', 'min(c.late_age) as min_ma',
+		     'group_concat(distinct cs.cc) as cc_list',
+		     'group_concat(distinct cs.lithology) as lithology'],
 	  tables => [ 'cs' ] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
@@ -497,11 +505,15 @@ sub initialize {
 	    "The name of the formation in which occurences were found",
 	{ output => 'member', com_name => 'smb' },
 	    "The name of the member in which occurrences were found",
+	{ output => 'lithology', com_name => 'lth' },
+	    "The litholog(ies) recorded for this stratum in the database, if any.",
 	{ output => 'max_ma', com_name => 'eag' },
 	    "The early bound of the geologic time range associated with the selected occurrences (in Ma)",
 	{ output => 'min_ma', com_name => 'lag' },
 	    "The late bound of the geologic time range associated with the selected occurrences (in Ma)",
 	{ set => '*', code => \&fixTimeOutput },
+	{ output => 'cc_list', com_name => 'cc2' },
+	    "A comma-separated list of the country codes in which this stratum is found",
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	    "The number of fossil collections in the database from this",
 	    "stratum that contain occurrences from the selected set and",
@@ -1155,7 +1167,7 @@ sub list {
     
     # Determine the order in which the results should be returned.
     
-    my $order_clause = $request->generate_order_clause($tables, { at => 'c', cd => 'cc' }) || 'NULL';
+    my $order_clause = $request->generate_order_clause($tables, { at => 'c', bt => 'c' }) || 'NULL';
     
     # Determine if any extra tables need to be joined in.
     
@@ -2268,16 +2280,19 @@ sub generateMainFilters {
 		if ( $keys[0] eq 'regular' )
 		{
 		    push @filters, "v.not_trace and v.not_form";
+		    $tables_ref->{v} = 1;
 		}
 		
 		elsif ( $keys[0] eq 'form' )
 		{
 		    push @filters, "not(v.not_form)";
+		    $tables_ref->{v} = 1;
 		}
 		
 		elsif ( $keys[0] eq 'ichno' )
 		{
 		    push @filters, "not(v.not_trace)";
+		    $tables_ref->{v} = 1;
 		}
 		
 		else
@@ -3351,7 +3366,7 @@ sub generate_order_clause {
     $options ||= {};
     my $at = $options->{at} || 'c';
     my $bt = $options->{bt} || 'cc';
-    my $tt = $options->{tt};
+    my $tt = $options->{tt} || 't';
     
     my $order = $request->clean_param('order');
     my @terms = ref $order eq 'ARRAY' ? @$order : $order;
@@ -3428,14 +3443,14 @@ sub generate_order_clause {
 	    
 	    if ( $pgm eq 'scotese' )
 	    {
-		push @exprs, "cc.plate $dir";
-		$tables->{cc} = 1;
+		push @exprs, "c.s_plate_no $dir";
+		# $tables->{cc} = 1;
 	    }
 	    
 	    else
 	    {
-		push @exprs, "pc.plate_no $dir";
-		$tables->{pc} = 1;
+		push @exprs, "c.g_plate_no $dir";
+		# $tables->{pc} = 1;
 	    }
 	}
 	
@@ -3553,7 +3568,9 @@ sub generateJoinList {
     $join_list .= "JOIN occurrences as oc using (occurrence_no)\n"
 	if $tables->{oc};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
-	if $tables->{t} || $tables->{tf};
+	if $tables->{t} || $tables->{tf} || $tables->{v};
+    $join_list .= "JOIN taxon_attrs as v using (orig_no)\n"
+	if $tables->{v};
     $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
 	if $tables->{pl};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"

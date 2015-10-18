@@ -84,6 +84,9 @@ sub initialize {
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
 	    "taxonomic level each piece of information was entered.",
+	{ value => 'pres', maps_to => '1.2:taxa:pres' },
+	    "Indicates whether the identification of this occurrence is a regular",
+	    "taxon, a form taxon, or an ichnotaxon.",
 	{ value => 'coords', maps_to => '1.2:occs:coords' },
 	     "The latitude and longitude of this occurrence",
         { value => 'loc', maps_to => '1.2:colls:loc' },
@@ -319,6 +322,7 @@ sub initialize {
 	{ include => '1.2:colls:lithext' },
 	{ include => '1.2:taxa:ecospace' },
 	{ include => '1.2:taxa:taphonomy' },
+	{ include => '1.2:taxa:pres' },
 	{ include => '1.2:colls:geo' },
 	{ include => '1.2:colls:methods' },
 	{ include => '1.2:colls:rem' });
@@ -1103,7 +1107,7 @@ sub list {
     
     my $tt = $tables->{tv} ? 'ts' : 't';
     
-    my $order_clause = $request->PB2::CollectionData::generate_order_clause($tables, { at => 'c', cd => 'cc', tt => $tt }) || 'o.occurrence_no';
+    my $order_clause = $request->PB2::CollectionData::generate_order_clause($tables, { at => 'c', bt => 'o', tt => $tt }) || 'o.occurrence_no';
     
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
@@ -2718,6 +2722,18 @@ sub process_basic_record {
     
     $record->{flags} = "R" unless $record->{latest_ident};
     
+    # Set the 'preservation' field.
+    
+    if ( $record->{is_trace} )
+    {
+	$record->{preservation} = 'ichnotaxon';
+    }
+    
+    elsif ( $record->{is_form} )
+    {
+	$record->{preservation} = 'form taxon';
+    }
+    
     # Construct the 'identified_name' field using the '_name' and '_reso'
     # fields from the occurrence record.  Also build 'taxon_name' using just
     # the '_name' fields.
@@ -2978,6 +2994,11 @@ sub process_occ_com {
     # {
     # 	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
     # }
+    
+    if ( defined $record->{preservation} )
+    {
+	$record->{preservation} = uc substr($record->{preservation}, 0, 1);
+    }
 }
 
 1;

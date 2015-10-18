@@ -654,6 +654,7 @@ sub buildStrataTables {
 		formation varchar(255) not null,
 		member varchar(255) not null,
 		maybe boolean not null,
+		lithology varchar(255),
 		collection_no int unsigned not null,
 		n_occs int unsigned not null,
 		cc char(2),
@@ -671,12 +672,16 @@ sub buildStrataTables {
     
     my ($sql, $result, $count);
     
-    $sql = "	INSERT INTO $COLL_STRATA_WORK (grp, formation, member, collection_no,
-			n_occs, cc, lat, lng, g_plate_no, s_plate_no, loc)
-		SELECT cc.geological_group, cc.formation, cc.member, collection_no,
-			c.n_occs, c.cc, c.lat, c.lng,
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (grp, formation, member, lithology,
+			collection_no, n_occs, cc, lat, lng, g_plate_no, s_plate_no, loc)
+		SELECT cc.geological_group, cc.formation, cc.member, 
+			if(lithology1 <> '' and lithology2 <> '' and lithology1 <> lithology2,
+			  concat(lithology1,'/',lithology2),
+			    if(lithology1 <> '' and lithology1 <> 'not reported', lithology1, null)),
+			collection_no, c.n_occs, c.cc, c.lat, c.lng,
 			c.g_plate_no, c.s_plate_no, c.loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)";
+		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		WHERE c.access_level = 0";
     
     $result = $dbh->do($sql);
     
