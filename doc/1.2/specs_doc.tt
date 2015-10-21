@@ -1,0 +1,15 @@
+
+=head2 DESCRIPTION
+
+The URL paths described in this section provide access to information about the
+fossil specimens represented in the Paleobiology Database.  These
+specimens may be selected by a variety of criteria including: name,
+location, age, enterer, and taxonomic identification.
+
+Follow this link for more information on L<the use of taxonomic names in this data service|node:taxonomic_names>.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+<% NODELIST(opt_usage=1) %>
