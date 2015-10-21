@@ -779,6 +779,8 @@ sub initialize {
 	    "Select only taxonomically valid names",
 	{ value => 'accepted' },
 	    "Select only taxonomically valid names that are not junior synonyms",
+	{ value => 'senior' },
+	    "! an alias for 'accepted",
 	{ value => 'junior' },
 	    "Select only taxonomically valid names that are junior synonyms",
 	{ value => 'invalid' },

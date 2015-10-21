@@ -1,6 +1,6 @@
 This is the B<development> version of the data service.  It is now undergoing user testing, and
 the URL paths, parameters and response fields may change as a result of user feedback.
-Our target for freezing this version is September, 2015, and at that point it
+Our target for freezing this version is November, 2015, and at that point it
 will become the preferred version to use for production applications.
 
 Watch this space for updates.  For the time being, if you are

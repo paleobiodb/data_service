@@ -14,6 +14,7 @@ use PB2::IntervalData;
 use PB2::TaxonData;
 use PB2::CollectionData;
 use PB2::OccurrenceData;
+use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
@@ -326,6 +327,7 @@ use PB2::PersonData;
 			optional_output => '1.2:opinions:output_map' },
 	"This operation returns information about taxonomic opinions associated with fossil occurrences.",
 	"You can use this to retrieve just the opinions relevant to any selected set of occurrences.");
+    
     # Collections.  These paths are used to fetch information about fossil
     # collections known to the database.
     
@@ -391,8 +393,8 @@ use PB2::PersonData;
 			place => 4,
 			title => 'Geological strata',
 			role => 'PB2::CollectionData' },
-	"Every fossil collection in the database is categorized by the formation",
-	"from which it was collected, and many by group and member.");
+	"Most of the fossil collections in the database are categorized by the formation",
+	"from which each was collected, and many by group and member.");
     
     $ds2->define_node({ path => 'strata/list',
 			place => 1,
@@ -414,6 +416,48 @@ use PB2::PersonData;
 	"This path returns a list of geological strata from the database that match the given",
 	"prefix or partial name.  This can be used to implement auto-completion for strata names,",
 	"and can be limited by geographic location if desired.");
+    
+    # Specimens and measurements.  These operations are used to fetch
+    # information about specimens and associated measurements.
+    
+    $ds2->define_node({ path => 'specs',
+			place => 1,
+			title => 'Specimens and measurements',
+			role => 'PB2::SpecimenData' },
+	"Many of the fossil occurrences in the database are based on specimens that can",
+	"be examined and measured.  There are also specimens entered into the database",
+	"for which no information was available as to the location and context in which",
+	"they were found.");
+    
+    $ds2->define_node({ path => 'specs/single',
+			place => 1,
+			title => 'Single specimen',
+			usage => [ "specs/single.json?id=1027&show=class,ecospace" ],
+			method => 'get_specimen',
+			output => '1.2:specs:basic',
+			optional_output => '1.2:specs:basic_map' },
+	"This path returns information about a single fossil specimen, identified either",
+	"by name or by identifier.");
+    
+    $ds2->define_node({ path => 'specs/list',
+			place => 2,
+			title => 'Lists of specimens',
+			usage => [ "specs/list.txt?base_name=stegosauria" ],
+			method => 'list_specimens',
+			output => '1.2:specs:basic',
+			optional_output => '1.2:specs:basic_map' },
+	"This path returns information about multiple specimens, selected according to the parameters you provide.",
+	"Depending upon which output blocks you select, the response will contain some",
+	"fields describing the specimens and some describing the occurrences and collections (if any)",
+	"with which they are associated.");
+    
+    $ds2->define_node({ path => 'specs/measurements',
+			place => 3,
+			title => 'Measurements of specimens',
+			method => 'list_measurements',
+			output => '1.2:measure:basic'},
+	"This path returns information about the measurements associated with selected",
+	"specimens.");
     
     # Taxa.  These paths are used to fetch information about biological taxa known
     # to the database.
@@ -557,8 +601,8 @@ use PB2::PersonData;
 			role => 'PB2::TaxonData',
 			output => '1.2:opinions:basic' },
 	"The taxonomic hierarchy in our database is computed algorithmically based on a",
-	"constantly growing set of taxonomic opinions.  These opinions are considered in",
-	"order by publication year and basis, yielding a 'consensus taxonomy' based on",
+	"constantly growing set of taxonomic opinions.  These opinions are ranked",
+	"by publication year and basis, yielding a 'consensus taxonomy' based on",
 	"the latest research.");
     
     $ds2->define_node({ path => 'opinions/single',
@@ -673,7 +717,7 @@ use PB2::PersonData;
 			default_limit => $ref_limit,
 			output => '1.2:refs:basic',
 		        optional_output => '1.2:refs:output_map' },
-	"Each fossil occurrence, fossil collection and taxonomic name in the database is",
+	"Each fossil occurrence, collection, specimen, taxonomic name, and opinion in the database is",
 	"associated with one or more bibliographic references, identifying the source from",
 	"which this information was entered.");
     

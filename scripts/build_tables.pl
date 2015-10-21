@@ -22,6 +22,7 @@ use IntervalTables qw(loadIntervalData
 		      buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables);
 use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
+use SpecimenTables qw(buildSpecimenTables);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
@@ -35,7 +36,7 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydqspfAM', \%options);
+getopts('tT:OmR:bcKUuIivrydqspfAMS', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -77,6 +78,7 @@ my $occurrence_int_maps = $options{M};
 my $occurrence_reso = $options{R};
 my $diversity_tables = $options{d};
 my $prevalence_tables = $options{q};
+my $specimen_tables = $options{S};
 
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
@@ -261,6 +263,11 @@ if ( $taxon_pics )
 if ( $strata_tables )
 {
     buildStrataTables($dbh);
+}
+
+if ( $specimen_tables )
+{
+    buildSpecimenTables($dbh);
 }
 
 

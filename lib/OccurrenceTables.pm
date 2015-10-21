@@ -3,6 +3,9 @@
 # 
 #   OccurrenceTables.pm
 # 
+# Build the tables needed by the data service for satisfying queries about
+# occurrences.
+
 
 package OccurrenceTables;
 
@@ -14,7 +17,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $REF_SUMMARY
+use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_TAXON $REF_SUMMARY
 		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		 $INTERVAL_DATA $SCALE_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
@@ -24,7 +27,6 @@ our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildDiversit
 		      buildOccIntervalMaps);
 		      
 our $OCC_MATRIX_WORK = "omn";
-our $OCC_EXTRA_WORK = "oen";
 our $OCC_TAXON_WORK = "otn";
 our $REF_SUMMARY_WORK = "orn";
 
@@ -74,17 +76,7 @@ sub buildOccurrenceTables {
 				modified timestamp null,
 				primary key (occurrence_no, reid_no)) ENGINE=MyISAM");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_EXTRA_WORK");
-    $result = $dbh->do("CREATE TABLE $OCC_EXTRA_WORK (
-				occurrence_no int unsigned not null,
-				reid_no int unsigned not null,
-				abund_value varchar(255),
-				abund_unit varchar(255),
-				comments text,
-				primary key (occurrence_no, reid_no)) ENGINE=MyISAM");
-    
-    # Add one row for every occurrence in the database, to both $OCC_MATRIX
-    # and $OCC_EXTRA.
+    # Add one row for every occurrence in the database.
     
     logMessage(2, "    inserting occurrences...");
     
@@ -107,17 +99,9 @@ sub buildOccurrenceTables {
     
     $count = $dbh->do($sql);
     
-    $sql = "	INSERT INTO $OCC_EXTRA_WORK
-		       (occurrence_no, reid_no, comments, abund_value, abund_unit)
-		SELECT o.occurrence_no, 0, o.comments, o.abund_value, o.abund_unit
-		FROM occurrences as o";
-    
-    $extra = $dbh->do($sql);
-    
     logMessage(2, "      $count occurrences");
     
-    # Then add one row for every reidentification in the database, to both
-    # $OCC_MATRIX and $OCC_EXTRA
+    # Then add one row for every reidentification in the database.
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
@@ -136,13 +120,6 @@ sub buildOccurrenceTables {
 			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
-    
-    $sql = "	INSERT INTO $OCC_EXTRA_WORK
-		       (occurrence_no, reid_no, comments)
-		SELECT re.occurrence_no, re.reid_no, re.comments
-		FROM reidentifications as re";
-    
-    $extra = $dbh->do($sql);
     
     logMessage(2, "      $count re-identifications");
     
@@ -203,8 +180,7 @@ sub buildOccurrenceTables {
     
     # Then activate the new tables.
     
-    activateTables($dbh, $OCC_MATRIX_WORK => $OCC_MATRIX,
-			 $OCC_EXTRA_WORK => $OCC_EXTRA);
+    activateTables($dbh, $OCC_MATRIX_WORK => $OCC_MATRIX);
     
     # Create tables summarizing the occurrences by taxon and reference.
     
@@ -251,14 +227,6 @@ sub updateOccurrenceMatrix {
     
     $count = $dbh->do($sql);
     
-    $sql = "	REPLACE INTO $OCC_EXTRA
-		       (occurrence_no, reid_no, comments, abund_value, abund_unit)
-		SELECT o.occurrence_no, 0, o.comments, o.abund_value, o.abund_unit
-		FROM occurrences as o
-		WHERE occurrence_no = $occurrence_no";
-    
-    $extra = $dbh->do($sql);
-    
     # Then replace any reidentifications
     
     $sql = "	REPLACE INTO $OCC_MATRIX
@@ -279,14 +247,6 @@ sub updateOccurrenceMatrix {
 		WHERE occurrence_no = $occurrence_no and reid_no > 0";
     
     $count = $dbh->do($sql);
-    
-    $sql = "	INSERT INTO $OCC_EXTRA
-		       (occurrence_no, reid_no, comments)
-		SELECT re.occurrence_no, re.reid_no, re.comments
-		FROM reidentifications as re
-		WHERE occurrence_no = $occurrence_no and reid_no > 0";
-    
-    $extra = $dbh->do($sql);
     
     # Now make sure that superceded identifications are marked
 

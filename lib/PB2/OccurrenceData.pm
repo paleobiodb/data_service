@@ -133,7 +133,7 @@ sub initialize {
 	"all of the available information about the collection(s) of interest.>",
 	{ value => 'full', maps_to => '1.2:occs:full_info' },
 	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: B<class>, B<plant>,",
+	    "includes the following blocks: B<class>, B<plant>, B<ecospace>, B<taphonomy>,",
 	    "B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
 	    "B<geo>, B<methods>, B<rem>.  This does not include output blocks containing",
 	    "metadata or data from associated records, but you may also include those",
@@ -601,7 +601,12 @@ sub initialize {
 	"The following parameter selects a record to retrieve:",
     	{ require => '1.2:occs:specifier', 
 	  error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" },
-	">>You may also use the following parameter to specify what information you wish to retrieve:",
+	">>You may also use the following parameters to specify what information you wish to retrieve:",
+	{ optional => 'pgm', valid => $ds->valid_set('1.2:colls:pgmodel'), list => "," },
+	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
+	    "You may specify one or more from the following list, separated by commas.",
+	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
+	    $ds->document_set('1.2:colls:pgmodel'),
     	{ optional => 'SPECIAL(show)', valid => '1.2:occs:basic_map' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -2734,6 +2739,34 @@ sub process_basic_record {
 	$record->{preservation} = 'form taxon';
     }
     
+    # Generate the identified name from the occurrence fields.
+    
+    $request->process_identification();
+    
+    # Now generate the 'difference' field if the accepted name and identified
+    # name are different.
+    
+    $request->process_difference();
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+sub process_occ_subgenus {
+    
+    my ($request, $record) = @_;
+    
+    if ( $record->{subgenus} )
+    {
+	$record->{genus} = $record->{subgenus};
+    }
+}
+
+
+sub process_identification {
+    
+    my ($request, $record) = @_;
+    
     # Construct the 'identified_name' field using the '_name' and '_reso'
     # fields from the occurrence record.  Also build 'taxon_name' using just
     # the '_name' fields.
@@ -2785,6 +2818,14 @@ sub process_basic_record {
     {
 	$record->{identified_rank} = $record->{accepted_rank};
     }
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+sub process_difference {
+    
+    my ($request, $record) = @_;
     
     # If the 'taxon_name' and 'accepted_name' fields are different, then
     # create a 'difference' field.  This may contain one or more relevant reasons.
@@ -2866,11 +2907,28 @@ sub process_basic_record {
 	}
 	
 	# Otherwise, we report the taxonomic status of the identified name as
-	# the difference.
+	# the difference.  If this record is a specimen record, then we may
+	# have to override this.
 	
 	else
 	{
-	    push @reasons, $record->{taxon_status};
+	    if ( $record->{taxon_status} && $record->{taxon_status} eq 'belongs to' )
+	    {
+		if ( $record->{specimen_no} )
+		{
+		    push @reasons, 'specimen and occurrence identified differently'
+		}
+		
+		else
+		{
+		    push @reasons, 'error';
+		}
+	    }
+	    
+	    else
+	    {	    
+		push @reasons, $record->{taxon_status};
+	    }
 	}
 	
 	# If the identified name is a misspelling, report that right away in 
@@ -2893,17 +2951,6 @@ sub process_basic_record {
 }
 
 
-sub process_occ_subgenus {
-    
-    my ($request, $record) = @_;
-    
-    if ( $record->{subgenus} )
-    {
-	$record->{genus} = $record->{subgenus};
-    }
-}
-
-
 my %ID_TYPE = ( orig_no => 'TXN',
 		identified_no => 'TXN',
 		accepted_no => 'TXN',
@@ -2919,6 +2966,7 @@ my %ID_TYPE = ( orig_no => 'TXN',
 		spelling_no => 'VAR',
 		interval_no => 'INT',
 		occurrence_no => 'OCC',
+		specimen_no => 'SPM',
 		collection_no => 'COL',
 		reid_no => 'REI',
 		reference_no => 'REF' );
@@ -2947,7 +2995,7 @@ sub process_occ_com {
     
     foreach my $f ( qw(orig_no taxon_no accepted_no phylum_no
 		       class_no order_no family_no genus_no subgenus_no
-		       interval_no occurrence_no collection_no
+		       interval_no specimen_no occurrence_no collection_no
 		       reid_no reference_no) )
     {
 	$record->{$f} = generate_identifier($ID_TYPE{$f}, $record->{$f})

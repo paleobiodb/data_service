@@ -523,7 +523,7 @@ sub buildCollectionTables {
     # Finally, we swap in the new tables for the old ones.
     
     activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS,
-		         $COLL_STRATA_WORK => $COLL_STRATA, $COLL_INTS_WORK => $COLL_INTS);
+		         $COLL_INTS_WORK => $COLL_INTS);
     
     $dbh->do("DROP TABLE IF EXISTS protected_aux");
     
@@ -852,7 +852,7 @@ sub buildStrataTables {
     
     $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD SPATIAL INDEX (loc)");
     
-    # activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA);
+    activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA);
 }
 
 

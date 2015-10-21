@@ -20,7 +20,7 @@ use Moo::Role;
 
 our (%PERSON_NAME);
 
-our ($COMMON_OPT_RE) = qr{ ^ (?: ( taxa | ops | refs | occs | colls ) _ )?
+our ($COMMON_OPT_RE) = qr{ ^ (?: ( taxa | ops | refs | occs | specs | colls ) _ )?
 			     ( created_before | created_after | 
 			       modified_before | modified_after |
 			       authorized_by | entered_by | modified_by |
@@ -115,6 +115,16 @@ sub initialize {
 	{ param => 'occs_modified_before', valid => \&datetime_value },
 	    "Select only records associated with occurrences that were last modified before the specified L<date or date/time|/data1.2/datetime>.",
 	{ param => 'occs_modified_after', valid => \&datetime_value, alias => 'occs_modified_since' },
+	    "Select only records associated with occurrences that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
+    
+    $ds->define_ruleset('1.2:common:select_specs_crmod' =>
+	{ param => 'specs_created_before', valid => \&datetime_value },
+	    "Select only records associated with occurrences that were created before the specified L<date or date/time|/data1.2/datetime>.",
+	{ param => 'specs_created_after', valid => \&datetime_value, alias => 'specs_created_since' },
+	    "Select only records associated with occurrences that were created on or after the specified L<date or date/time|/data1.2/datetime>.",
+	{ param => 'specs_modified_before', valid => \&datetime_value },
+	    "Select only records associated with occurrences that were last modified before the specified L<date or date/time|/data1.2/datetime>.",
+	{ param => 'specs_modified_after', valid => \&datetime_value, alias => 'specs_modified_since' },
 	    "Select only records associated with occurrences that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
     
     $ds->define_ruleset('1.2:common:select_colls_crmod' =>
@@ -216,6 +226,23 @@ sub initialize {
 	    "Select only records associated with occurrences that were either authorized, entered or modified by",
 	    "the specified person, indicated by name or identifier",
 	{ param => 'occs_authent_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were authorized or entered by the specified",
+	    "the specified person, indicated by name or identifier");
+    
+    $ds->define_ruleset('1.2:common:select_specs_ent' =>
+	{ param => 'specs_authorized_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'specs_entered_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were entered by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'specs_modified_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were modified by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'specs_touched_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records associated with occurrences that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier",
+	{ param => 'specs_authent_by', valid => ANY_VALUE, list => ',' },
 	    "Select only records associated with occurrences that were authorized or entered by the specified",
 	    "the specified person, indicated by name or identifier");
     
