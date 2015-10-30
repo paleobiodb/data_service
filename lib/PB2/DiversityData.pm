@@ -446,7 +446,7 @@ my %uns_prefix = ( 3 => 'US', 5 => 'UG', 9 => 'UF', 13 => 'UO', 17 => 'UC',
 
 sub generate_taxon_table_ints {
 
-    my ($request, $sth) = @_;
+    my ($request, $sth, $taxon_status) = @_;
     
     my $dbh = $request->get_connection;
     
@@ -644,7 +644,7 @@ sub generate_taxon_table_ints {
 
 sub generate_taxon_table_full {
 
-    my ($request, $sth, $base_taxa) = @_;
+    my ($request, $sth, $taxon_status, $base_taxa) = @_;
     
     my $dbh = $request->get_connection;
     
@@ -1029,12 +1029,14 @@ sub get_taxon_info {
     
     my @fields = ('DATA', 'family_no');
     
-    foreach my $f ( $request->select_list )
-    {
-	next if $f =~ qr{\.modified};
-	$f = 'CRMOD' if $f =~ qr{\.created$};
-	push @fields, $f;
-    }
+    push @fields, $request->select_list_for_taxonomy('taxa');
+    
+    # foreach my $f ( $request->select_list )
+    # {
+    # 	next if $f =~ qr{\.modified};
+    # 	$f = 'CRMOD' if $f =~ qr{\.created$};
+    # 	push @fields, $f;
+    # }
     
     my @ranks = $request->clean_param_list('rank');
     

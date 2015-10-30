@@ -137,7 +137,7 @@ my $r1t = { reference_no => $REF_ID_1,
 	  };
 
 my $r1r = "TY  - JOUR
-ID  - paleobiodb:ref:38149
+ID  - ref:38149
 AU  - Adams,A.L.
 PY  - 1879///
 TI  - On remains of Mastodon and other Vertebrata of the Miocene beds of the Maltese islands
@@ -146,6 +146,7 @@ VL  - 35
 SP  - 517
 EP  - 531
 LA  - English
+N1  - type = occ
 ER  - ";
 
 my $TAXON_NAME_1 = 'Balaenoptera rostrata';

@@ -65,15 +65,21 @@ my $t1 = { 'nam' => $TEST_NAME_1,
 	   'nm2' => "soft bodied plant beetle",
 	   'att' => "Guerin-Meneville 1843",
 	   'sta' => "belongs to",
-	   "kgl" => "Metazoa",
+	   "kgl" => "Metazoa|Animalia",
 	   "phl" => "Arthropoda",
 	   "cll" => "Insecta",
 	   "odl" => "Coleoptera",
-	   "fml" => "Dascillidae" };
-	   
-my $t1_num = { 'oid' => 1, 'gid' => 1, 'par' => 1, 'ext' => 1,
-	       'fea' => 1, 'fla' => 1, 'lea' => 1, 'lla' => 1,
-	       'siz' => 1, 'exs' => 1 };
+	   "fml" => "Dascillidae",
+	   'oid' => '!nonzero', 
+	   'gid' => '!nonzero', 
+	   'par' => '!nonzero',
+	   'ext' => '!nonzero',
+	   'fea' => '!nonzero', 
+	   'fla' => '!nonzero', 
+	   'lea' => '!nonzero',
+	   'lla' => '!nonzero',
+	   'siz' => '!nonzero', 
+	   'exs' => '!nonzero' };
 
 my $t1t = { 'taxon_name' => $TEST_NAME_1,
 	    'record_type' => "taxon",
@@ -81,20 +87,27 @@ my $t1t = { 'taxon_name' => $TEST_NAME_1,
 	    'common_name' => "soft bodied plant beetle",
 	    'attribution' => "Guerin-Meneville 1843",
 	    'status' => "belongs to",
-	    "kingdom" => "Metazoa",
+	    "kingdom" => "Metazoa|Animalia",
 	    "phylum" => "Arthropoda",
 	    "class" => "Insecta",
 	    "order" => "Coleoptera",
-	    "family" => "Dascillidae" };
-
-my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1, 'parent_no' => 1, 'reference_no' => 1, 'is_extant' => 1,
-		"firstapp_ea" => 1, "firstapp_la" => 1, "lastapp_ea" => 1,
-		"lastapp_la" => 1, "size" =>1, "extant_size" => 1 };
+	    "family" => "Dascillidae",
+	    'taxon_no' => '!nonzero', 
+	    'orig_no' => '!nonzero', 
+	    'parent_no' => '!nonzero', 
+	    'reference_no' => '!nonzero', 
+	    'is_extant' => '!nonzero',
+	    "firstapp_ea" => '!nonzero', 
+	    "firstapp_la" => '!nonzero', 
+	    "lastapp_ea" => '!nonzero',
+	    "lastapp_la" => '!nonzero',
+	    "size" => '!nonzero',
+	    "extant_size" => '!nonzero' };
 
 my $t1n = { 'prl' => 'Dascilloidea',
 	    'prr' => 'superfamily',
-	    'kgn' => '2',
-	    'kgl' => 'Metazoa',
+	    'kgn' => '2|67091',
+	    'kgl' => 'Metazoa|Animalia',
 	    'phn' => '18891',
 	    'phl' => 'Arthropoda',
 	    'phc' => '0',
@@ -106,20 +119,26 @@ my $t1n = { 'prl' => 'Dascilloidea',
 	    'odc' => '0',
 	    'fmn' => '69296',
 	    'fml' => 'Dascillidae',
-	    'fmc' => 0 };
-
-my $t1n_num = { 'gnc' => 1 };
-
-my $t1n_list = { 'chl' => 1, 'gns' => 1 };
+	    'fmc' => '0',
+	    'gnc' => '!nonzero',
+	    'chl' => '!array',
+	    'gns' => '!array' };
 
 my $t8n = { 'prl' => 'Opisthokonta',
 	    'prr' => 'unranked clade',
-	    'kgn' => '2',
-	    'kgl' => 'Metazoa' };
-
-my $t8n_num = { 'phc' => 1, 'clc' => 1, 'odc' => 1, 'fmc' => 1, 'gnc' => 1 };
-
-my $t8n_list = { 'chl' => 1, 'phs' => 1, 'cls' => 1, 'ods' => 1, 'fms' => 1, 'gns' => 1 };
+	    'kgn' => '2|67091',
+	    'kgl' => 'Metazoa|Animalia',
+	    'phc' => '!nonzero', 
+	    'clc' => '!nonzero',
+	    'odc' => '!nonzero',
+	    'fmc' => '!nonzero',
+	    'gnc' => '!nonzero',
+	    'chl' => '!array',
+	    'phs' => '!array',
+	    'cls' => '!array',
+	    'ods' => '!array',
+	    'fms' => '!array',
+	    'gns' => '!array' };
 
 # Then the fields and values to expect as a result of the 'showsource' parameter.
 
@@ -204,16 +223,18 @@ subtest 'single json by name' => sub {
     
     # Check the data fields
     
-    foreach my $key ( keys %$t1 )
-    {
-	next unless ok( defined $r->{$key}, "single json has field '$key'" );
-	is( $r->{$key}, $t1->{$key}, "single json field value '$key'" );
-    }
+    $T->check_fields($r, $t1, "single json");
     
-    foreach my $key ( keys %$t1_num )
-    {
-	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
-    }
+    # foreach my $key ( keys %$t1 )
+    # {
+    # 	next unless ok( defined $r->{$key}, "single json has field '$key'" );
+    # 	is( $r->{$key}, $t1->{$key}, "single json field value '$key'" );
+    # }
+    
+    # foreach my $key ( keys %$t1_num )
+    # {
+    # 	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
+    # }
 };
 
 
@@ -231,22 +252,24 @@ subtest 'single json nav' => sub {
     }
     
     my ($r) = $T->extract_records($single_json, "single json nav extract records");
+
+    $T->check_fields($r, $t1n, "single json nav");
     
-    foreach my $key ( keys %$t1n )
-    {
-	next unless ok( defined $r->{$key}, "single json nav has field '$key'" );
-	is( $r->{$key}, $t1n->{$key}, "single json field value '$key'" );
-    }
+    # foreach my $key ( keys %$t1n )
+    # {
+    # 	next unless ok( defined $r->{$key}, "single json nav has field '$key'" );
+    # 	is( $r->{$key}, $t1n->{$key}, "single json field value '$key'" );
+    # }
     
-    foreach my $key ( keys %$t1n_num )
-    {
-	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
-    }
+    # foreach my $key ( keys %$t1n_num )
+    # {
+    # 	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
+    # }
     
-    foreach my $key ( keys %$t1n_list )
-    {
-	ok( ref $r->{$key} eq 'ARRAY' && $r->{$key}[0]{oid}, "single json nav has sublist '$key'");
-    }
+    # foreach my $key ( keys %$t1n_list )
+    # {
+    # 	ok( ref $r->{$key} eq 'ARRAY' && $r->{$key}[0]{oid}, "single json nav has sublist '$key'");
+    # }
     
     diag("checking taxon '$TEST_NAME_8'");
     
@@ -255,21 +278,23 @@ subtest 'single json nav' => sub {
     
     ($r) = $T->extract_records($higher_json, "single json nav extract records");
     
-    foreach my $key ( keys %$t8n )
-    {
-	next unless ok( defined $r->{$key}, "single json nav has field '$key'" );
-	is( $r->{$key}, $t8n->{$key}, "single json field value '$key'" );
-    }
+    $T->check_fields($r, $t8n, "single json nav 8");
     
-    foreach my $key ( keys %$t8n_list )
-    {
-	ok( ref $r->{$key} eq 'ARRAY' && $r->{$key}[0]{oid}, "single json nav has sublist '$key'");
-    }
+    # foreach my $key ( keys %$t8n )
+    # {
+    # 	next unless ok( defined $r->{$key}, "single json nav has field '$key'" );
+    # 	is( $r->{$key}, $t8n->{$key}, "single json field value '$key'" );
+    # }
     
-    foreach my $key ( keys %$t8n_num )
-    {
-	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
-    }
+    # foreach my $key ( keys %$t8n_list )
+    # {
+    # 	ok( ref $r->{$key} eq 'ARRAY' && $r->{$key}[0]{oid}, "single json nav has sublist '$key'");
+    # }
+    
+    # foreach my $key ( keys %$t8n_num )
+    # {
+    # 	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
+    # }
 };
 
 
@@ -315,16 +340,18 @@ subtest 'single txt by name' => sub {
     
     # Check the data fields
     
-    foreach my $key ( keys %$t1t )
-    {
-	ok( defined $r->{$key}, "single txt has field '$key'" ) &&
-	    is( $r->{$key}, $t1t->{$key}, "single txt field value '$key'" );
-    }
+    $T->check_fields($r, $t1t, "single txt");
     
-    foreach my $key ( keys %$t1t_num )
-    {
-	ok( defined $r->{$key} && $r->{$key} > 0, "single txt has numeric value for '$key'" );
-    }
+    # foreach my $key ( keys %$t1t )
+    # {
+    # 	ok( defined $r->{$key}, "single txt has field '$key'" ) &&
+    # 	    is( $r->{$key}, $t1t->{$key}, "single txt field value '$key'" );
+    # }
+    
+    # foreach my $key ( keys %$t1t_num )
+    # {
+    # 	ok( defined $r->{$key} && $r->{$key} > 0, "single txt has numeric value for '$key'" );
+    # }
 };
 
 
@@ -454,11 +481,14 @@ subtest 'list all parents' => sub {
     
     return if $found{NO_RECORDS};
     
-    foreach my $name ('Eucarya', 'Metazoa', 'Vertebrata', 'Therapsida',
+    foreach my $name ('Vertebrata', 'Therapsida',
 		      $TEST_NAME_3P, $TEST_NAME_4P, $TEST_NAME_3, $TEST_NAME_4)
     {
 	ok($found{$name}, "list parents found '$name'");
     }
+    
+    ok($found{'Eucarya'} || $found{'Eukaryota'}, "list parents found 'Eucarya' or 'Eukaryota'");
+    ok($found{'Metazoa'} || $found{'Animalia'}, "list parents found 'Metazoa' or 'Animalia'");
 };
 
 

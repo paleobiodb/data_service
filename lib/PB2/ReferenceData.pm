@@ -14,6 +14,7 @@ use HTTP::Validate qw(:validators);
 
 use TableDefs qw($REF_SUMMARY);
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
+use PB2::CommonData qw(generateAttribution);
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
@@ -175,6 +176,13 @@ sub initialize {
 	com_name => 'ref', text_join => '|||' },
 	  "All references associated with this record (as formatted text)");
     
+    $ds->define_block('1.2:refs:attr' =>
+        { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
+	  	     'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr'],
+          tables => ['r'] },
+        { set => 'ref_author', from => '*', code => \&format_authors },
+	{ set => 'ref_pubyr', from => 'r_pubyr' });
+    
     # Then rulesets.
     
     $ds->define_set('1.2:refs:order' =>
@@ -219,37 +227,79 @@ sub initialize {
 	{ ignore => 'level' });
     
     $ds->define_ruleset('1.2:refs:specifier' => 
-	{ param => 'id', valid => VALID_IDENTIFIER('REF'), alias => 'ref_id' },
+	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id' },
 	    "A unique number identifying the reference to be selected");
     
     $ds->define_ruleset('1.2:refs:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "List all bibliographic references known to the database.",
-	{ param => 'id', valid => VALID_IDENTIFIER('REF'), alias => 'ref_id', list => ',' },
+	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id', list => ',', bad_value => '_' },
 	    "A list of one or more reference identifiers, separated by commas.  You can",
 	    "use this parameter to get information about a specific list of references,",
 	    "or to filter a known list against other criteria.");
     
+    my $no_auth = "invalid author name {value}, must contain at least one letter";
+    my $no_letter = "the value of {param} must contain at least one letter (was {value})";
+    
     $ds->define_ruleset('1.2:refs:filter' =>
-    	{ param => 'ref_author', valid => MATCH_VALUE('.*\w.*') },
-    	    "Select only references for which any of the authors matches the specified name",
-    	{ param => 'ref_primary', valid => MATCH_VALUE('.*\w.*') },
+    	{ param => 'ref_author', valid => MATCH_VALUE('.*\p{L}.*'), list => ',', 
+	  bad_value => '_', errmsg => $no_auth },
+    	    "Select only references for which any of the authors matches the specified",
+	    "name or names.",
+	    "You can specify names in any of the following patterns:",
+	    "=over","=item Smith","=item J. Smith", "=item Smith and Jones", "=back",
+	    "The last form selects only references where both names are listed as authors, in any order.",
+	    "You can use C<%> and C<_> as wildcards, but each name must contain at least one letter.",
+	    "You can include more than one name, separated by commas.",
+    	{ param => 'ref_primary', valid => MATCH_VALUE('.*\p{L}.*'), list => ',',
+	  bad_value => '_', errmsg => $no_auth },
     	    "Select only references for which the primary author matches the specified name",
-	{ param => 'ref_published_after', valid => POS_VALUE, alias => 'pubyr_before' },
-	    "Selects only references published during or after the indicated year.",
-	{ param => 'ref_published_before', valid => POS_VALUE, alias => 'pubyr_after' },
-	    "Selects only references published during or before the indicated year.",
-	{ param => 'ref_published', valid => ANY_VALUE, alias => 'pubyr' },
+	    "or names (see C<ref_author> above).  If you give a name like 'Smith and Jones', then references",
+	    "are selected only if Smith is the primary author and Jones is also an author.",
+	{ param => 'ref_pubyr', valid => \&valid_pubyr, alias => 'pubyr' },
 	    "Selects only references published during the indicated year or range of years.",
-    	# { param => 'year', valid => MATCH_VALUE('(?:(?:\d{4})\s*(?:-\s*\d{4})?|\d{4}\s*)'),
-    	#   error => "the value of {param} must be a range of years, with either bound optional ('2010-' is okay); found {value}" },
-    	#     "Select only references published in the specified year",
-	{ param => 'ref_title', valid => ANY_VALUE },
-	    "Select only references whose title matches the specified value.  You can",
-	    "use C<%> and C<_> as wildcards.",
-    	{ param => 'pub_title', valid => ANY_VALUE },
-    	    "Select only references that involve the specified publication.  You can",
-	    "use C<%> and C<_> as wildcards.");
+	    "The parameter value must match one of the following patterns:",
+	    "=over","=item 2000","=item 1990-2000", "=item 1990-", "=item -2000", "=back",
+	{ param => 'ref_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references whose title matches the specified word or words.  You can",
+	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+    	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references from publications whose title matches the specified",
+	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.");
+    
+    $ds->define_ruleset('1.2:refs:aux_selector' =>
+	{ param => 'ref_id', valid =>  VALID_IDENTIFIER('REF'), list => ',',
+	  bad_value => '_' },
+	    "Select only records entered from one of a specified list of references,",
+	    "indicated by reference identifier.  You can enter more than one identifier,",
+	    "as a comma-separated list.",
+    	{ param => 'ref_author', valid => MATCH_VALUE('.*\p{L}.*'), list => ',', 
+	  bad_value => '_', errmsg => $no_auth },
+    	    "Select only records entered from references for which any of the authors",
+	    "matches the specified name or names.",
+	    "You can specify names in any of the following patterns:",
+	    "=over","=item Smith","=item J. Smith", "=item J. Smith and S. Jones", "=back",
+	    "The last form selects only references where both names are listed as authors, in any order.",
+	    "You can use C<%> and C<_> as wildcards, but each name must contain at least one letter.",
+	    "You can include multiple names or name pairs, separated by commas.  In that",
+	    "case, records matching any of them will be selected.",
+    	{ param => 'ref_primary', valid => MATCH_VALUE('.*\p{L}.*'), list => ',', 
+	  bad_value => '_', errmsg => $no_auth },
+     	    "Select only records entered from references for which the primary author matches the specified name",
+	    "or names (see F<ref_author> above).  If you give a name like C<Smith and Jones>, then references",
+	    "are selected only if Smith is the primary author and Jones is also an author.",
+	    "You can include multiple names or name pairs, separated by commas.  In that case,",
+	    "records matching any of them will be selected.",
+	{ optional => 'ref_pubyr', valid => \&valid_pubyr, alias => 'pubyr' },
+	    "Selects only records entered from references published during the indicated year or range of years.",
+	    "The parameter value must match one of the following patterns:",
+	    "=over","=item 2000","=item 1990-2000", "=item 1990-", "=item -2000", "=back",
+	{ param => 'ref_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only records entered from references whose title matches the specified word or words.  You can",
+	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+    	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only records entered from references in publications whose title matches the specified",
+	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.");
     
     $ds->define_ruleset('1.2:refs:single' => 
     	{ require => '1.2:refs:specifier' },
@@ -339,6 +389,7 @@ sub list {
     my $all_records = $request->clean_param('all_records');
     
     my @filters = $request->generate_ref_filters();
+    push @filters, $request->generate_refno_filter('r');
     push @filters, $request->generate_common_filters( { refs => 'r', bare => 'r' } );
     push @filters, '1=1' if $all_records;
     
@@ -408,67 +459,169 @@ sub generate_ref_filters {
     my $dbh = $request->get_connection;
     my @filters;
     
-    if ( my @ids = $request->safe_param_list('id') )
+    if ( my $year = $request->clean_param('ref_pubyr') )
     {
-	my $id_string = join(',', @ids);
-	push @filters, "r.reference_no in ($id_string)";
-    }
-    
-    if ( my $year = $request->clean_param('ref_published') )
-    {
-	if ( $year =~ /(\d+)\s*-/ )
-	{
-	    push @filters, "r.pubyr >= $1";
-	}
-	
-	if ( $year =~ /-\s*(\d+)/ )
+	if ( $year =~ qr{ ^ (?: max_ | \s* - \s* ) (\d\d\d\d) $ }xs )
 	{
 	    push @filters, "r.pubyr <= $1";
 	}
 	
-	if ( $year =~ /^(\d+)$/ )
+	elsif ( $year =~ qr{ ^ min_ (\d\d\d\d) $ }xs )
 	{
-	    push @filters, "r.pubyr = $1";
+	    push @filters, "r.pubyr >= $1";
 	}
+	
+	elsif ( $year =~ qr{ ^ (\d\d\d\d) \s* - \s* (\d\d\d\d)? $ }xs )
+	{
+	    if ( defined $2 && $2 ne '' ) {
+		push @filters, "r.pubyr between $1 and $2";
+	    } else {
+		push @filters, "r.pubyr >= $1";
+	    }
+	}
+	
+	elsif ( $year =~ qr{ ^ \d+ $ }xs )
+	{
+	    push @filters, "r.pubyr = $year";
+	}
+	
+	else
+	{
+	    die "400 invalid value '$year' for parameter 'ref_pubyr'\n";
+	}
+	
+	$tables_hash->{r} = 1;
     }
     
     if ( my $authorname = $request->clean_param('ref_author') )
     {
 	push @filters, $request->generate_auth_filter($authorname, 'author');
+	$tables_hash->{r} = 1;
     }
     
     if ( my $authorname = $request->clean_param('ref_primary') )
     {
 	push @filters, $request->generate_auth_filter($authorname, 'primary');
+	$tables_hash->{r} = 1;
     }
     
     if ( my $reftitle = $request->clean_param('ref_title') )
     {
+	$reftitle =~ s/%/.*/g;
+	$reftitle =~ s/_/./g;
+	$reftitle =~ s/\s+/\\s+/g;
+	
 	my $quoted = $dbh->quote($reftitle);
 	
-	push @filters, "r.reftitle like $quoted";
+	push @filters, "coalesce(r.reftitle, r.pubtitle) rlike $quoted";
+	$tables_hash->{r} = 1;
     }
     
     if ( my $pubtitle = $request->clean_param('pub_title') )
     {
+	$pubtitle =~ s/%/.*/g;
+	$pubtitle =~ s/_/.*/g;
+	$pubtitle =~ s/\s+/\\s+/g;
+	
 	my $quoted = $dbh->quote($pubtitle);
 	
-	push @filters, "r.pubtitle like $quoted";
+	push @filters, "r.pubtitle rlike $quoted";
+	$tables_hash->{r} = 1;
     }
     
     return @filters;
 }
 
 
+sub generate_refno_filter {
+    
+    my ($request, $mt) = @_;
+    
+    # If the parameter 'ref_id' was specified, return the appropriate filter.
+    # If the value '_' is found, that means that all specified values were
+    # invalid.  In that case, return a filter that will select no records.
+    
+    my @refno_list = $request->clean_param_list('ref_id');
+    
+    if ( @refno_list )
+    {
+	my $refno_str = join(',', @refno_list);
+	$refno_str = '-1' if $refno_str eq '' or $refno_str eq '_';
+	
+	return "$mt.reference_no in ($refno_str)";
+    }
+    
+    return;	# otherwise, return no filter at all
+}
+
+
+# generate_auth_filter ( name, selector )
+# 
+# Generate a filter for the specified author name(s).  The selector must be
+# either 'author' or 'primary'; in the latter case, only the first author will
+# be matched.
+
 sub generate_auth_filter {
 
     my ($request, $authorname, $selector) = @_;
     
-    my ($firstname, $lastname, $initpat, $lastpat, $fullpat);
     my @authfilters;
     my $dbh = $request->get_connection;
     
-    if ( $authorname =~ /(.*)[.] +(.*)/ )
+    my @authnames = ref $authorname eq 'ARRAY' ? @$authorname : $authorname;
+    
+    # First check for the "bad value".  If this is found, then one of the
+    # given values were valid.  In this case, we return a filter which will
+    # select nothing.
+    
+    return "r.reference_no in (-1)" if @authnames == 0 || $authnames[0] eq '_';
+    
+    # Then go through each name one by one.
+    
+    foreach my $name (@authnames)
+    {   
+	if ( $name =~ qr{ ^ (.+?) \s+ and (?: \s+ (.*) | $ ) }xsi )
+	{
+	    push @authfilters, $request->generate_two_auth_filter($dbh, $1, $2, $selector);
+	}
+	
+	else
+	{
+	    push @authfilters, $request->generate_one_auth_filter($dbh, $name, $selector);
+	}
+    }
+    
+    # If we don't have any filters at this point, it is because none of the
+    # names were validly formed.  So add a filter that will select nothing.
+    
+    push @authfilters, "r.reference_no in (-1)" unless @authfilters;
+    
+    return '(' . join(' or ', @authfilters) . ')';
+}
+
+
+# generate_one_auth_filter ( name, selector )
+# 
+# Generate a filter for a single author name.  If the selector is 'primary',
+# then it must match the author1 fields.  If it is 'secondary' then it must
+# match the author2 or otherauthor fields.  Otherwise, it may match any of the
+# author fields.
+
+sub generate_one_auth_filter {
+    
+    my ($request, $dbh, $name, $selector) = @_;
+    
+    # First check to make sure that the name contains at least one letter.
+    
+    unless ( $name =~ qr{ \p{L} }xs )
+    {
+	$request->add_warning("invalid author name '$name', must contain at least one letter");
+	return;
+    }
+    
+    my ($firstname, $lastname, $initpat, $lastpat, $fullpat, @authfilters);
+	
+    if ( $name =~ /(.*)[.] +(.*)/ )
     {
 	$firstname = $1;
 	$lastname = $2;
@@ -476,7 +629,7 @@ sub generate_auth_filter {
     
     else
     {
-	$lastname = $authorname;
+	$lastname = $name;
     }
     
     $lastname =~ s/%/[^,]*/g;
@@ -488,7 +641,7 @@ sub generate_auth_filter {
     {
 	$initpat = "^$firstname";
 	$initpat =~ s/\./[.]/g;
-	    
+	
 	$fullpat = "$firstname\[.][^,]* $lastname(,|\$)";
     }
     
@@ -503,19 +656,88 @@ sub generate_auth_filter {
     
     if ( $initpat )
     {
-	push @authfilters, "r.author1init rlike $initquote and r.author1last rlike $lastquote";
+	push @authfilters, "r.author1init rlike $initquote and r.author1last rlike $lastquote" unless $selector eq 'secondary';
 	push @authfilters, "r.author2init rlike $initquote and r.author2last rlike $lastquote" unless $selector eq 'primary';
 	push @authfilters, "r.otherauthors rlike $fullquote" unless $selector eq 'primary';
     }
     
     else
     {
-	push @authfilters, "r.author1last rlike $lastquote";
+	push @authfilters, "r.author1last rlike $lastquote" unless $selector eq 'secondary';
 	push @authfilters, "r.author2last rlike $lastquote" unless $selector eq 'primary';
 	push @authfilters, "r.otherauthors rlike $fullquote" unless $selector eq 'primary';
     }
     
-    return '(' . join(' or ', @authfilters) . ')';
+    return @authfilters;
+}
+
+
+# generate_two_auth_filter ( name, selector )
+# 
+# Generate a filter for a name such as "Smith and Jones".  If the selector is
+# 'primary', then the first author name must match the first of the two names.
+# An error is thrown if more than two names are given.
+
+sub generate_two_auth_filter {
+    
+    my ($request, $dbh, $name1, $name2, $selector) = @_;
+    
+    my (@filters1, @filters2);
+    
+    # First check to make sure that there isn't more than one 'and' in the
+    # name.  We used a non-greedy match to find the first one above, so we
+    # only need to check the second name.
+    
+    if ( $name2 =~ qr{ \s+ and (?: \s+ | $ ) }xsi )
+    {
+	$request->add_warning("invalid author selector '$name1 and $name2', only one 'and' is permitted");
+	return;
+    }
+    
+    elsif ( $name1 !~ qr{ \p{L} }xs || $name2 !~ qr{ \p{L} }xs )
+    {
+	$request->add_warning("invalid author selector '$name1 and $name2', each name must contain at least one letter");
+	return;
+    }
+    
+    # Now construct the appropiate expression.  If the selector is 'primary',
+    # then the first name must be the primary author.
+    
+    if ( $selector eq 'primary' )
+    {
+	@filters1 = $request->generate_one_auth_filter($dbh, $name1, 'primary');
+	@filters2 = $request->generate_one_auth_filter($dbh, $name2, 'secondary');
+    }
+    
+    else
+    {
+	@filters1 = $request->generate_one_auth_filter($dbh, $name1, 'author');
+	@filters2 = $request->generate_one_auth_filter($dbh, $name2, 'author');
+    }
+    
+    my ($expr1, $expr2);
+    
+    if ( @filters1 == 1 )
+    {
+	$expr1 = $filters1[0];
+    }
+    
+    else
+    {
+	$expr1 = '(' . join(' or ', @filters1) . ')';
+    }
+    
+    if ( @filters2 == 1 )
+    {
+	$expr2 = $filters2[0];
+    }
+    
+    else
+    {
+	$expr2 = '(' . join(' or ', @filters2) . ')';
+    }
+    
+    return "($expr1 and $expr2)";
 }
 
 
@@ -759,6 +981,42 @@ sub format_reference {
 }
 
 
+# format_authors ( )
+# 
+# Generate an attribution string for the primary reference associated with
+# the given record.  This relies on the fields "r_al1", "r_al2", "r_ao".  This
+# string does not include the publication year.
+
+sub format_authors {
+
+    my ($request, $record) = @_;
+    
+    my $auth1 = $record->{r_al1} || '';
+    my $auth2 = $record->{r_al2} || '';
+    my $auth3 = $record->{r_ao} || '';
+    
+    $auth1 =~ s/( Jr)|( III)|( II)//;
+    $auth1 =~ s/\.$//;
+    $auth1 =~ s/,$//;
+    $auth2 =~ s/( Jr)|( III)|( II)//;
+    $auth2 =~ s/\.$//;
+    $auth2 =~ s/,$//;
+    
+    my $attr_string = $auth1;
+    
+    if ( $auth3 ne '' or $auth2 =~ /et al/ )
+    {
+	$attr_string .= " et al.";
+    }
+    elsif ( $auth2 ne '' )
+    {
+	$attr_string .= " and $auth2";
+    }
+    
+    return $attr_string;
+}
+
+
 # set_reference_type ( )
 # 
 # Set the ref_type field for a reference record.  This is based on fields
@@ -771,7 +1029,7 @@ sub set_reference_type {
     my $ref_type = $record->{ref_type} || '';
     my @types;
     
-    if ( $ref_type =~ qr{A} )
+    if ( $ref_type =~ qr{A} && ! $record->{not_auth} )
     {
 	push @types, 'auth' || $record->{n_reftaxa};
     }
@@ -836,6 +1094,37 @@ sub adjust_ref_counts {
     elsif ( defined $record->{n_unclass} && ! defined $record->{n_opinions} )
     {
 	$record->{n_opinions} = $record->{n_class} + $record->{n_unclass};
+    }
+}
+
+
+# valid_pubyr ( )
+# 
+# Validate the value of the 'ref_pubyr' parameter.  If it is valid, return a
+# cleaned value.  Otherwise, return an error record with an appropriate
+# message.
+# 
+# Accepted values are: a 4-digit year, a range of 4-digit years, or a 4-digit
+# year prefixed by 'max_' or 'min_'.
+
+sub valid_pubyr {
+    
+    my ($value, $context) = @_;
+    
+    if ( $value =~ qr{ ^ (?: max_ | min_ | \s* - \s* ) \d\d\d\d $ }xs )
+    {
+	return;
+    }
+    
+    elsif ( $value =~ qr{ ^ (\d\d\d\d) \s* - \s* (\d\d\d\d)? $ }xs )
+    {
+	my $top = $2 // '';
+	return "$1 - $top";
+    }
+    
+    else
+    {
+	return { errmsg => "the value of {param} must be a 4-digit year or a range of years (was {value})" };
     }
 }
 

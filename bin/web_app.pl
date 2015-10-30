@@ -33,6 +33,8 @@ BEGIN {
     
     Web::DataService->set_mode('debug') if Dancer::config->{ds_debug} or
 	    (defined $ARGV[0] and lc $ARGV[0] eq 'debug');
+    
+    $Web::DataService::ONE_PROCESS = 1 if defined $ARGV[1] and lc $ARGV[1] eq 'oneproc';
 }
 
 use PB0::Main;

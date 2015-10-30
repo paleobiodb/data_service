@@ -686,11 +686,34 @@ sub check_field {
 	cmp_ok( $value, '>', 0, "$message is positive" ) || return;
     }
     
+    elsif ( $check eq '!array' )
+    {
+	ok( ref $value eq 'ARRAY', "$message is arrayref" ) || return;
+    }
+    
     elsif ( $check =~ qr{ ^ !id (?: [{] (\w+) [}] )? $ }xs )
     {
 	my $prefix = $1 || '\w+';
 	my $label = $1 || 'paleobiodb';
 	ok( $value =~ qr{ ^ $prefix [:] ( \d+ ) $ }xs, "$message is a valid $label id" ) || return;
+    }
+    
+    elsif ( $check =~ qr{ \| }xs )
+    {
+	my @possible = split( qr{\|}, $check );
+	my $ok;
+	
+	foreach my $p (@possible)
+	{
+	    $ok = 1 if $value eq $p;
+	}
+	
+	unless ( ok( $ok, $message ) )
+	{
+	    diag("     got: '$value'");
+	    diag("expected: '$check'");
+	    return;
+	}
     }
     
     else

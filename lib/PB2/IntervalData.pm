@@ -116,7 +116,7 @@ sub initialize {
     $ds->define_set('1.2:timerules' =>
 	{ value => 'contain' },
 	    "Select only records whose temporal locality is strictly contained in the specified time range.",
-	    "This is the most r-estrictive rule.  For diversity output, this rule guarantees that each occurrence",
+	    "This is the most restrictive rule.  For diversity output, this rule guarantees that each occurrence",
 	    "will fall into at most one temporal bin, but many occurrences will be ignored because their temporal",
 	    "locality is too wide to fall into any of the bins.",
 	{ value => 'major' },

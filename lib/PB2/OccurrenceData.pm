@@ -44,27 +44,36 @@ sub initialize {
     # We start by defining an output map for this class.
     
     $ds->define_output_map('1.2:occs:basic_map' =>
+	{ value => 'full', maps_to => '1.2:occs:full_info' },
+	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
+	    "includes the following blocks: B<attr>, B<class>, B<plant>, B<ecospace>, B<taphonomy>,",
+	    "B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
+	    "B<geo>, B<methods>, B<rem>, B<refattr>.  If we subsequently add new data fields to this record",
+	    "then B<full> will include those as well.  So if you are publishing a URL,",
+	    "it might be a good idea to include C<show=full>.",
+	{ value => 'acconly' },
+	    "Suppress the exact taxonomic identification of each occurrence,",
+	    "and show only the accepted name.",
+	{ value => 'attr', maps_to => '1.2:occs:attr' },
+	    "The attribution (author and year) of the accepted name for this occurrence.",
 	{ value => 'class', maps_to => '1.2:occs:class' },
 	    "The taxonomic classification of the occurence: phylum, class, order, family,",
 	    "genus.",
 	{ value => 'classext', maps_to => '1.2:occs:class' },
-	    "Like C<class>, but also includes the relevant taxon identifiers.",
+	    "Like F<class>, but also includes the relevant taxon identifiers.",
 	{ value => 'phylo', maps_to => '1.2:occs:class', undocumented => 1 },
 	{ value => 'genus', maps_to => '1.2:occs:genus' },
 	    "The genus corresponding to each occurrence, if the occurrence has been",
-	    "identified to the genus level.  This block is redundant if C<class> or",
-	    "C<classext> are used.",
+	    "identified to the genus level.  This block is redundant if F<class> or",
+	    "F<classext> are used.",
 	{ value => 'subgenus', maps_to => '1.2:occs:genus' },
 	    "The genus corresponding to each occurrence, plus the subgenus if any.",
-	    "This can be added to C<class> or C<classext> in order to display",
-	    "subgenera, or used instead of C<genus> to display both the genus",
+	    "This can be added to F<class> or F<classext> in order to display",
+	    "subgenera, or used instead of F<genus> to display both the genus",
 	    "and the subgenus if any.",
-	{ value => 'acconly' },
-	    "Suppress the exact taxonomic identification of each occurrence,",
-	    "and show only the accepted name.",
 	{ value => 'ident', maps_to => '1.2:occs:ident' },
 	    "Show the individual components of the taxonomic identification of the occurrence.",
-	    "These values correspond to the value of C<identified_name> in the basic record,",
+	    "These values correspond to the value of F<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
 	{ value => 'img', maps_to => '1.2:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
@@ -82,7 +91,7 @@ sub initialize {
 	    "Information about the taphonomy of this organism.  Here is a",
 	    "L<list of values|node:taxa/ecotaph_values>.",
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
-	    "Annotates the output block C<ecospace>, indicating at which",
+	    "Annotates the output block F<ecospace>, indicating at which",
 	    "taxonomic level each piece of information was entered.",
 	{ value => 'pres', maps_to => '1.2:taxa:pres' },
 	    "Indicates whether the identification of this occurrence is a regular",
@@ -93,31 +102,35 @@ sub initialize {
 	    "Additional information about the geographic locality of the occurrence",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
 	    "Information about the paleogeographic locality of the occurrence,",
-	    "evaluated according to the model specified by the parameter C<pgm>.",
+	    "evaluated according to the model specified by the parameter F<pgm>.",
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indication of whether the occurrence is located on protected land.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the occurrence.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
 	    "Detailed information about the stratigraphic context of the occurrence.",
-	    "This includes all of the information from C<strat> plus extra fields.",
+	    "This includes all of the information from F<strat> plus extra fields.",
 	{ value => 'lith', maps_to => '1.2:colls:lith' },
 	    "Basic information about the lithological context of the occurrence.",
 	{ value => 'lithext', maps_to => '1.2:colls:lithext' },
 	    "Detailed information about the lithological context of the occurrence.",
-	    "This includes all of the information from C<lith> plus extra fields.",
+	    "This includes all of the information from F<lith> plus extra fields.",
 	{ value => 'methods', maps_to => '1.2:colls:methods' },
 	    "Information about the collection methods used",
 	{ value => 'env', maps_to => '1.2:colls:env' },
 	    "The paleoenvironment associated with this collection.",
 	{ value => 'geo', maps_to => '1.2:colls:geo' },
-	    "Information about the geological context of the occurrence (includes C<env>).",
+	    "Information about the geological context of the occurrence (includes F<env>).",
         { value => 'rem', maps_to => '1.2:colls:rem' },
 	    "Any additional remarks that were entered about the containing collection.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
-	    "The primary reference for the occurrence, as formatted text.",
+	    "The reference from which the occurrence was entered, as formatted text.",
 	    "If no reference is recorded for this occurrence, the primary reference for its",
-	    "collection is returned.",
+	    "associated collection is returned.",
+        { value => 'refattr', maps_to => '1.2:refs:attr' },
+	    "The author(s) and year of publication of the reference from which the occurrence",
+	    "was entered.  If no reference is recorded for this occurrence, the information",
+	    "from the primary reference for its associated collection is returned.",
 	{ value => 'resgroup', maps_to => '1.2:colls:group' },
 	    "The research group(s), if any, associated with the occurrence's collection.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
@@ -125,21 +138,7 @@ sub initialize {
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the occurrence record",
-	">I<The following will return all of the information available about",
-	"the occurrence itself, as opposed to its context.  If any more such information",
-	"is added to this data service, this function will be adjusted accordingly.",
-	"You can therefore include it in published URLs, knowing that it will always provide",
-	"all of the available information about the collection(s) of interest.>",
-	{ value => 'full', maps_to => '1.2:occs:full_info' },
-	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: B<class>, B<plant>, B<ecospace>, B<taphonomy>,",
-	    "B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
-	    "B<geo>, B<methods>, B<rem>.  This does not include output blocks containing",
-	    "metadata or data from associated records, but you may also include those",
-	    "blocks explicitly.  If we subsequently add new data fields to this record",
-	    "then B<full> will include those as well.  So if you are publishing a URL,",
-	    "it might be a good idea to include this.");
+	    "The C<created> and C<modified> timestamps for the occurrence record");
     
     # Then define those blocks which are not already defined in
     # CollectionData.pm 
@@ -174,11 +173,11 @@ sub initialize {
 	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', not_block => 'acconly' },
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
-	    "to the value of C<accepted_name>.",
+	    "to the value of F<accepted_name>.",
 	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', not_block => 'acconly' },
 	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
-	    "to the value of C<accepted_rank>.",
+	    "to the value of F<accepted_rank>.",
 	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', not_block => 'acconly' },
 	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
@@ -186,7 +185,7 @@ sub initialize {
 	    "we have no further information about the classification of this occurrence.  In some cases,",
 	    "the genus has been entered into the taxonomic hierarchy but not the species.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
-	    "to the value of C<accepted_no>.",
+	    "to the value of F<accepted_no>.",
 	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If the identified name is different from the accepted name, this field gives",
 	    "the reason why.  This field will be present if, for example, the identified name",
@@ -195,6 +194,9 @@ sub initialize {
 	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
+	{ output => 'attribution', if_block => '1.2:occs:attr', 
+	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
+	    "The attribution (author and year) of the accepted name",
 	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
@@ -206,19 +208,23 @@ sub initialize {
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with this occurrence (not necessarily a",
-	    "standard interval), or the interval that begins the range if C<late_interval> is also given",
+	    "standard interval), or the interval that begins the range if F<late_interval> is also given",
 	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	    "The interval that ends the specific geologic time range associated with this occurrence,",
-	    "if different from the value of C<early_interval>",
+	    "if different from the value of F<early_interval>",
 	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
-	# { set => 'reference_no', append => 1 },
-	{ output => 'pubyr', com_name => 'pby', data_type => 'str' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	    "The author(s) of the reference from which this data was entered.",
+	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
 	    "The year of publication of the reference from which this data was entered",
-	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
+	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier of the reference from which this data was entered");
+    
+    $ds->define_block('1.2:occs:attr' =>
+	{ select => ['v.attribution', 'v.pubyr'], tables => 'v' });
     
     $ds->define_block('1.2:occs:ident' =>
 	{ select => ['o.genus_name', 'o.genus_reso',
@@ -247,25 +253,25 @@ sub initialize {
 	    "The name of the phylum in which this occurrence is classified.",
 	{ output => 'phylum_no', com_name => 'phn', if_block => 'classext' },
 	    "The identifier of the phylum in which this occurrence is classified.",
-	    "This is only included with the block C<classext>.",
+	    "This is only included with the block F<classext>.",
 	{ output => 'class', com_name => 'cll' },
 	    "The name of the class in which this occurrence is classified.",
 	{ output => 'class_no', com_name => 'cln', if_block => 'classext' },
 	    "The identifier of the class in which this occurrence is classified.",
-	    "This is only included with the block C<classext>.",
+	    "This is only included with the block F<classext>.",
 	{ output => 'order', com_name => 'odl' },
 	    "The name of the order in which this occurrence is classified.",
 	{ output => 'order_no', com_name => 'odn', if_block => 'classext' },
 	    "The identifier of the order in which this occurrence is classified.",
-	    "This is only included with the block C<classext>.",
+	    "This is only included with the block F<classext>.",
 	{ output => 'family', com_name => 'fml' },
 	    "The name of the family in which this occurrence is classified.",
 	{ output => 'family_no', com_name => 'fmn', if_block => 'classext' },
 	    "The identifier of the family in which this occurrence is classified.",
-	    "This is only included with the block C<classext>.",
+	    "This is only included with the block F<classext>.",
 	{ output => 'genus', com_name => 'gnl' },
 	    "The name of the genus in which this occurrence is classified.",
-	    "If the block C<subgenus> is specified, this will include the subgenus",
+	    "If the block F<subgenus> is specified, this will include the subgenus",
 	    "name if any.",
 	{ output => 'genus_no', com_name => 'gnn', if_block => 'classext' },
 	    "The identifier of the genus in which this occurrence is classified",
@@ -279,7 +285,7 @@ sub initialize {
 	  tables => ['t', 'pl'] },
 	{ output => 'genus', com_name => 'gnl', not_block => 'class,classext' },
 	    "The name of the genus in which this occurrence is classified.",
-	    "If the block C<subgenus> is specified, this will include the subgenus",
+	    "If the block F<subgenus> is specified, this will include the subgenus",
 	    "name if any.",
 	# { output => 'genus_no', com_name => 'gnn', not_block => 'class,classext' },
 	#     "The identifier of the genus in which this occurrence is classified",
@@ -311,6 +317,7 @@ sub initialize {
 	    "The unit in which this abundance is expressed");
     
     $ds->define_block( '1.2:occs:full_info' =>
+	{ include => '1.2:occs:attr' },
 	{ include => '1.2:occs:class' },
 	{ include => '1.2:occs:plant' },
 	{ include => '1.2:occs:abund' },
@@ -325,7 +332,8 @@ sub initialize {
 	{ include => '1.2:taxa:pres' },
 	{ include => '1.2:colls:geo' },
 	{ include => '1.2:colls:methods' },
-	{ include => '1.2:colls:rem' });
+	{ include => '1.2:colls:rem' },
+	{ include => '1.2:refs:attr' });
     
     # The following block specifies the output for diversity matrices.
     
@@ -342,7 +350,7 @@ sub initialize {
 	    "The number of distinct taxa whose first known occurrence lies in this interval,",
 	    "and whose range crosses the top boundary of the interval:",
 	    "either species, genera, families, or orders,",
-	    "depending upon the value you provided for the parameter C<count>.",
+	    "depending upon the value you provided for the parameter F<count>.",
 	    "The terminology for this field and the next three comes from:",
 	    "M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
 	    "I<Paleobiology>, Vol. 26(4). 2000.",
@@ -374,7 +382,7 @@ sub initialize {
 	{ output => 'bin_count', pbdb_name => 'bin_total', com_name => 'tbn' },
 	    "The sum of occurrence counts in all of the bins.  This value may be larger than",
 	    "the number of occurrences scanned, since some may be counted in multiple",
-	    "bins (see C<timerule>).  This value might also be smaller",
+	    "bins (see F<timerule>).  This value might also be smaller",
 	    "than the number of occurrences scanned, since some occurrences may",
 	    "not have a temporal locality that is precise enough to put in any bin.",
 	{ output => 'imprecise_time', com_name => 'itm' },
@@ -405,7 +413,7 @@ sub initialize {
 	{ output => 'sampled_in_bin', com_name => 'dsb' },
 	    "The number of distinct taxa found in this interval.  By default,",
 	    "distinct genera are counted.  You can override this using the",
-	    "parameter C<count>.",
+	    "parameter F<count>.",
 	{ output => 'n_occs', com_name => 'noc' },
 	    "The total number of occurrences that are resolved to this interval");
     
@@ -447,14 +455,13 @@ sub initialize {
 	    "set of fossil occurrences being analyzed");
     
     $ds->define_output_map('1.2:occs:taxa_opt' =>
-	{ value => 'attr', maps_to => '1.2:taxa:attr' },
-	    "The attribution of each taxon (author and year)",
+	@PB2::TaxonData::BASIC_1,
 	{ value => 'occapp', maps_to => '1.2:taxa:occapp' },
 	    "The age of first and last appearance of each taxon from the set",
 	    "of occurrences being analyzed (not the absolute first and last",
 	    "occurrence ages).",
-	@PB2::TaxonData::BASIC_1,
-	@PB2::TaxonData::BASIC_2);
+	@PB2::TaxonData::BASIC_2,
+	@PB2::TaxonData::BASIC_3);
     
     $ds->define_block('1.2:occs:taxa_summary' =>
 	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
@@ -572,7 +579,7 @@ sub initialize {
     $ds->define_ruleset('1.2:occs:specifier' =>
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), alias => 'id' },
 	    "The identifier of the occurrence you wish to retrieve (REQUIRED).",
-	    "You may instead use the parameter name C<id>.");
+	    "You may instead use the parameter name F<id>.");
     
     $ds->define_ruleset('1.2:occs:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
@@ -581,18 +588,22 @@ sub initialize {
 	    "no value.  Please note that specifying this parameter alone will",
 	    "result in a download of over 100 MB of data.",
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
-	    "A comma-separated list of occurrence identifiers.");
+	    "A comma-separated list of occurrence identifiers.  You may instead",
+	    "use the parameter name F<id>.");
+    
+    $ds->define_ruleset('1.2:occs:id' =>
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
+	    "A comma-separated list of occurrence identifiers.  You may instead",
+	    "use the parameter name F<id>.");
     
     $ds->define_ruleset('1.2:occs:display' =>
-	"You can use the following parameters to select what information you wish to retrieve,",
-	"and the order in which you wish to get the records:",
 	{ optional => 'show', list => q{,}, valid => '1.2:occs:basic_map' },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
 	    "one or more of the following, separated by commas:",
 	{ optional => 'order', valid => '1.2:occs:order', split => ',', no_set_doc => 1 },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	    "separated by commas, and each value may be appended with F<.asc> or F<.desc>.  Accepted values are:",
 	    $ds->document_set('1.2:occs:order'),
 	    "If no order is specified, results are sorted by occurrence identifier.",
 	{ ignore => 'level' });
@@ -617,18 +628,81 @@ sub initialize {
 	"other criteria such as location or time.",
 	"Only the records which match the other parameters that you specify will be returned.",
 	{ allow => '1.2:occs:selector' },
-        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+        ">>The following parameters can be used to select occurrences by a variety of criteria.",
 	"Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
+	"These same parameters can all be used to select either occurrences, collections,",
+	"or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
+	{ allow => '1.2:refs:aux_selector' },
+	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', 
+			  '1.2:ma_selector', '1.2:refs:aux_selector', 
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	">>The following parameters can be used to further filter the result list.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
 	{ allow => '1.2:occs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:taxa' =>
+	"You can use the following parameter if you wish to retrieve the taxonomy",
+	"of a known list of occurrences.",
+	{ allow => '1.2:occs:id' },
+       ">>The following parameters can be used to select occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.",
+	"These same parameters can all be used to select either occurrences, collections,",
+	"or associated strata, references, or taxa.",
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:refs:aux_selector' },
+	{ require_any => ['1.2:occs:id', '1.2:main_selector', '1.2:interval_selector',
+			  '1.2:ma_selector', '1.2:refs:aux_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	">>The following parameters can be used to select which taxa to report:",
+	{ allow => '1.2:taxa:occ_aux_filter' },
+	{ allow => '1.2:common:select_taxa_crmod' },
+	{ allow => '1.2:common:select_taxa_ent' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
+	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each taxon.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	{ optional => 'order', valid => ANY_VALUE },
+	    "This parameter is currently nonfunctional.  It will eventually allow you",
+	    "to to set the order in which the taxa are returned.",
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    # $ds->define_ruleset('1.2:occs:ttest' =>
+    # 	# "The following parameters specify what to count and at what
+    # 	# taxonomic resolution:", { allow => '1.2:occs:taxa_params' },
+    #     ">>The following parameters select which occurrences to analyze.",
+    # 	"Except as noted below, you may use these in any combination.",
+    # 	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
+    # 	"the exact list of occurrences used to compute this phylogeny.",
+    # 	{ allow => '1.2:main_selector' },
+    # 	{ allow => '1.2:interval_selector' },
+    # 	{ allow => '1.2:ma_selector' },
+    # 	{ allow => '1.2:taxa:occ_filter' },
+    # 	{ allow => '1.2:common:select_occs_crmod' },
+    # 	{ allow => '1.2:common:select_occs_ent' },
+    # 	{ allow => '1.2:common:select_taxa_crmod' },
+    # 	{ allow => '1.2:common:select_taxa_ent' },
+    # 	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector',
+    # 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
+    # 			  '1.2:common:select_taxa_crmod', '1.2:common:select_taxa_ent'] },
+    # 	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
+    # 	{ allow => '1.2:special_params' },
+    # 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:div_params' =>
 	{ param => 'count', valid => '1.2:occs:div_count' },
@@ -641,9 +715,10 @@ sub initialize {
 	    "If this parameter is specified, then taxa that are known to be extant",
 	    "are considered to range through to the present, regardless of the age",
 	    "of their last known fossil occurrence.",
-	{ param => 'timeres', valid => '1.2:occs:div_reso', alias => 'reso' },
+	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso' },
 	    "This parameter specifies the temporal resolution at which to count.  If not",
-	    "specified, it defaults to C<stage>.  Accepted values are:");
+	    "specified, it defaults to C<stage>.  You can also use the parameter name",
+	    "F<reso>.  Accepted values are:");
     
     $ds->define_ruleset('1.2:occs:diversity' =>
 	"The following parameters specify what to count and at what temporal resolution:",
@@ -678,59 +753,6 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	#{ require_any => ['1.2:main_selector',
 	#		  '1.2:common:select_crmod', '1.2:common:select_ent'] },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request");
-    
-    $ds->define_ruleset('1.2:occs:taxa_params' =>
-	{ param => 'count', valid => '1.2:occs:div_count' },
-	    "This parameter specifies the taxonomic level at which to count.  If not",
-	    "specified, it defaults to C<genera>.  The accepted values are:",
-	{ param => 'subgenera', valid => FLAG_VALUE },
-	    "You can use this parameter as a shortcut, equivalent to specifying",
-	    "C<count=genera_plus>.  Just include its name, no value is needed.");
-	# { param => 'taxonres', valid => ANY_VALUE },
-	#     "This parameter specifies the taxonomic resolution at which to count.  If not",
-	#     "specified, it defaults to C<all>.  Accepted values are:");
-    
-    $ds->define_ruleset('1.2:occs:taxa' =>
-	"The following parameters specify what to count and at what taxonomic resolution:",
-	# { allow => '1.2:occs:taxa_params' }, 
-        ">>The following parameters select which occurrences to analyze.",
-	"Except as noted below, you may use these in any combination.",
-	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
-	"the exact list of occurrences used to compute this phylogeny.",
-	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
-	{ allow => '1.2:common:select_occs_crmod' },
-	{ allow => '1.2:common:select_occs_ent' },
-	">>The following parameters select which taxa to report:",
-	{ allow => '1.2:taxa:occ_filter' },
-	{ allow => '1.2:common:select_taxa_crmod' },
-	{ allow => '1.2:common:select_taxa_ent' },
-	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector'] },
-	{ optional => 'order', valid => ANY_VALUE },
-	    "This parameter is currently nonfunctional.  It will eventually allow you",
-	    "to to set the order in which the taxa are returned.",
-	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request");
-    
-    $ds->define_ruleset('1.2:occs:ttest' =>
-	"The following parameters specify what to count and at what taxonomic resolution:",
-	{ allow => '1.2:occs:taxa_params' }, 
-        ">>The following parameters select which occurrences to analyze.",
-	"Except as noted below, you may use these in any combination.",
-	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
-	"the exact list of occurrences used to compute this phylogeny.",
-	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
-	{ allow => '1.2:taxa:occ_filter' },
-	{ allow => '1.2:common:select_occs_crmod' },
-	{ allow => '1.2:common:select_occs_ent' },
-	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:main_selector'] },
-	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -770,13 +792,14 @@ sub initialize {
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
-	{ allow => '1.2:taxa:occ_filter' },
+	{ allow => '1.2:taxa:occ_aux_filter' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
 	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
+			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
 	"You can also specify any of the following parameters:",
 	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
@@ -786,7 +809,7 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    $ds->define_ruleset('1.2:occs:byref' =>
+    $ds->define_ruleset('1.2:occs:taxabyref' =>
 	"You can use the following parameters if you wish to retrieve the references associated",
 	"with a known list of occurrences or collections, or to filter a known list against",
 	"other criteria such as location or time.",
@@ -798,11 +821,14 @@ sub initialize {
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
-	{ allow => '1.2:taxa:occ_filter' },
+	{ allow => '1.2:taxa:occ_aux_filter' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
+			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
 	"You can also specify any of the following parameters:",
 	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
@@ -817,11 +843,14 @@ sub initialize {
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
-	{ allow => '1.2:taxa:occ_filter' },
+	{ allow => '1.2:taxa:occ_aux_filter' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_taxa_crmod' },
+	{ allow => '1.2:common:select_taxa_ent' },
 	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
+			  '1.2:common:select_taxa_crmod', '1.2:common:select_taxa_ent'] },
 	"You can also specify any of the following parameters:",
 	{ optional => 'select', valid => '1.2:taxa:opselect', list => ',' },
 	    "You can use this parameter to retrieve all opinions, or only the classification opinions.",
@@ -869,23 +898,25 @@ sub initialize {
 	{ ignore => 'level' });
     
     $ds->define_ruleset('1.2:occs:strata' =>
-	"You can use the following parameters if you wish to retrieve the geological strata associated",
-	"with a known list of occurrences or collections, or to filter a known list against",
-	"other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
-	{ allow => '1.2:occs:selector' },
-        ">>The following parameters can be used to retrieve the references associated with occurrences",
-	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
+	"You can use the following parameter if you wish to retrieve the stratigraphy",
+	"of a known list of occurrences.",
+	{ allow => '1.2:occs:id' },
+	">>The following parameters can be used to select occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.",
+	"These same parameters can all be used to select either occurrences, collections,",
+	"or associated strata, references, or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+	{ allow => '1.2:refs:aux_selector' },
+	{ require_any => ['1.2:occs:id', '1.2:main_selector', '1.2:interval_selector',
+			  '1.2:ma_selector', '1.2:refs:aux_selector',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	">>The following parameters can be used to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
 	{ allow => '1.2:strata:display' },
-	"You can also specify any of the following parameters:",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 }
@@ -983,13 +1014,15 @@ sub list {
     my $dbh = $request->get_connection;
     my $tables = $request->tables_hash;
     
-    $request->substitute_select( mt => 'o', cd => 'oc' );
+    $request->substitute_select( mt => 'o', cd => 'o' );
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generate_ref_filters($tables);
+    push @filters, $request->generate_refno_filter('o');
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
@@ -1067,7 +1100,7 @@ sub list {
     # If we were requested to lump by genus, we need to modify the query
     # accordingly. 
     
-    my $taxonres = $request->clean_param('taxonres');
+    my $taxonres = $request->clean_param('taxon_res');
     
     if ( $taxonres =~ qr{^lump} )
     {
@@ -1162,7 +1195,7 @@ sub diversity {
     $options->{timerule} = $request->clean_param('timerule') || 'major';
     $options->{timebuffer} = $request->clean_param('timebuffer');
     
-    my $reso_param = $request->clean_param('reso');
+    my $reso_param = $request->clean_param('time_reso');
     
     my %level_map = ( stage => 5, epoch => 4, period => 3 );
     
@@ -1320,7 +1353,7 @@ sub quickdiv {
     my $filter_expr = join(' and ', @filters);
     
     my $scale_id = $request->clean_param('scale_id') || 1;
-    my $reso = $request->clean_param('reso');
+    my $reso = $request->clean_param('time_reso');
     
     # If no value was given for 'reso', use the maximum level of the selected scale.
     
@@ -1519,6 +1552,7 @@ sub taxa {
     
     $tables->{ph} = 1;
     $tables->{t} = 1;
+    $tables->{tv} = 1;
     $tables->{pl} = 1;
     
     # Set up the phylogeny-computation options
@@ -1531,23 +1565,18 @@ sub taxa {
     
     # Determine the necessary set of query fields.
     
-    my @fields;
+    my @fields = ('o.occurrence_no', 't.orig_no', 
+		  'tv.rank', 'tv.name as ident_name', 
+		  'tv.ints_no', 'ph.phylum', 'ph.phylum_no', 
+		  'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
+    
+    # my @fields = ('o.occurrence_no', 't.taxon_no', 't.orig_no', 
+    # 		  't.rank as taxon_rank', 't.name as taxon_name', 
+    # 		  't.accepted_no', 'tv.rank as accepted_rank', 'tv.name as accepted_name',
+    # 		  'tv.ints_no', 'ph.phylum', 'ph.phylum_no', 
+    # 		  'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
     
     my $taxon_status = $request->clean_param('taxon_status');
-    
-    if ( $taxon_status && ($taxon_status eq 'accepted' || $taxon_status eq 'senior'))
-    {
-	$tables->{tv} = 1;
-	@fields = ('o.occurrence_no', 'tv.rank', 'tv.name as ident_name', 'tv.ints_no', 'ph.phylum', 'ph.phylum_no', 
-		   'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
-    }
-    
-    else
-    {
-	$tables->{tv} = 1;
-	@fields = ('o.occurrence_no', 't.rank', 't.name as ident_name', 't.orig_no', 't.ints_no', 'ph.phylum', 'ph.phylum_no',
-		   'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
-    }
     
     # If we were asked for the block 'occapp', then we need age ranges for the
     # individual occurrences.
@@ -1711,12 +1740,12 @@ sub taxa {
     
     if ( ref $request->{my_base_taxa} eq 'ARRAY' && @{$request->{my_base_taxa}} )
     {
-	$request->generate_taxon_table_full($sth, $request->{my_base_taxa});
+	$request->generate_taxon_table_full($sth, $taxon_status, $request->{my_base_taxa});
     }
     
     else
     {
-	$request->generate_taxon_table_ints($sth);
+	$request->generate_taxon_table_ints($sth, $taxon_status);
     }
 }
 
@@ -1839,6 +1868,7 @@ sub prevalence {
     $tables = { };
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
+    push @filters, $request->generateOccFilters($tables);
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, $request->generate_crmod_filters('o', $tables);
     # push @filters, $request->generate_ent_filters('o', $tables);
@@ -1859,6 +1889,7 @@ sub prevalence {
 	$tables = { };
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
+	push @filters, $request->generateOccFilters($tables);
 	push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
 	# push @filters, $request->generate_crmod_filters('o', $tables);
 	# push @filters, $request->generate_ent_filters('o', $tables);
@@ -1994,8 +2025,6 @@ sub list_associated {
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
-    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
-    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
     push @filters, $request->generateOccFilters($inner_tables);
     
     push @filters, "c.access_level = 0";
@@ -2366,6 +2395,15 @@ sub generateOccFilters {
 	push @filters, "o.latest_ident = true";
     }
     
+    # Check for parameter 'ref_id'.
+    
+    if ( my @reflist = $request->clean_param_list('ref_id') )
+    {
+	my $refstring = join(',', @reflist);
+	push @filters, "o.reference_no in ($refstring)";
+	$tables_ref->{non_summary} = 1;
+    }
+    
     return @filters;
 }
 
@@ -2408,6 +2446,10 @@ sub generateQuickDivFilters {
     
     return () if $request->param_given('coll_id');
     # return () if $request->param_given('clust_id');
+    
+    # Same with ref_id
+    
+    return () if $request->param_given('ref_id');
     
     # Then check for geographic parameters, including 'clust_id', 'continent',
     # 'country', 'latmin', 'latmax, 'lngmin', 'lngmax', 'loc'
@@ -2741,12 +2783,12 @@ sub process_basic_record {
     
     # Generate the identified name from the occurrence fields.
     
-    $request->process_identification();
+    $request->process_identification($record);
     
     # Now generate the 'difference' field if the accepted name and identified
     # name are different.
     
-    $request->process_difference();
+    $request->process_difference($record);
     
     my $a = 1;	# we can stop here when debugging
 }

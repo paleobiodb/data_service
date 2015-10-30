@@ -5,7 +5,7 @@ A.pod_link { color: #0000F0; text-decoration: none; font-weight: bold; }
 
 .pod_heading { color: #00A0A0; margin-top: 25px }
 
-DT.pod_term, TD.field_name, TD.pod_term { color: #A00000; font-weight: bold; }
+DT.pod_term, TD.field_name, TD.pod_term, SPAN.pod_term { color: #A00000; font-weight: bold; }
 
 DT.pod_term2, TD.pod_term2 { color: #CC8080; font-weight: bold; }
 

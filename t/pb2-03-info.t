@@ -68,8 +68,8 @@ my $OP3 = "/data1.2/taxa/refs";
 
 my $LIMIT_1 = "5";
 
-my $ARG1 = "name=$TEST_NAME_1&show=attr,app,size,phylo&rowcount&datainfo";
-my $ARG2 = "base_name=$TEST_NAME_1&show=attr,app,size,phylo&rowcount&datainfo&limit=$LIMIT_1";
+my $ARG1 = "name=$TEST_NAME_1&show=attr,app,size,class&rowcount&datainfo";
+my $ARG2 = "base_name=$TEST_NAME_1&show=attr,app,size,class&rowcount&datainfo&limit=$LIMIT_1";
 my $ARG3 = "base_name=$TEST_NAME_1&rowcount&datainfo&limit=$LIMIT_1";
 
 my $info = { "data_provider" => $SERVICE_TITLE,
@@ -98,11 +98,11 @@ my $infost = { "Documentation URL" => $T->make_url("${OP1}_doc.html"),
 my $infolt = { "Documentation URL" => $T->make_url("${OP2}_doc.html"),
 	       "Data URL" => $T->make_url("${OP2}.txt?$ARG2") };
 
-my $params = { "name" => $TEST_NAME_1,
-	       "show" => "attr,app,size,phylo" };
+my $params = { "taxon_name" => $TEST_NAME_1,
+	       "show" => "attr,app,size,class" };
 
 my $paramsl = { "base_name" => $TEST_NAME_1,
-		"show" => "attr,app,size,phylo",
+		"show" => "attr,app,size,class",
 		"limit" => $LIMIT_1 };
 
 my $rcs = { "elapsed_time" => qr{\d[.]\d}xs,

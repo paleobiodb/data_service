@@ -369,11 +369,14 @@ subtest 'list all parents' => sub {
     
     return if $found{NO_RECORDS};
     
-    foreach my $name ('Eucarya', 'Metazoa', 'Vertebrata', 'Therapsida',
+    foreach my $name ('Vertebrata', 'Therapsida',
 		      $TEST_NAME_3P, $TEST_NAME_4P, $TEST_NAME_3, $TEST_NAME_4)
     {
 	ok($found{$name}, "list parents found '$name'");
     }
+    
+    ok($found{'Eucarya'} || $found{'Eukaryota'}, "list parents found 'Eucarya' or 'Eukaryota'");
+    ok($found{'Metazoa'} || $found{'Animalia'}, "list parents found 'Metazoa' or 'Animalia'");
 };
 
 

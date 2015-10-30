@@ -116,6 +116,7 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       max_pubyr => 1,
 		       min_modyr => 1, 
 		       max_modyr => 1,
+		       reference_no => 1,
 		       created_after => 1,
 		       created_before => 1,
 		       modified_after =>1,
@@ -406,6 +407,7 @@ sub list_taxa_simple {
     
     my @filters = "base.taxon_no in ($base_string)";
     push @filters, $taxonomy->taxon_filters($options, $tables);
+    push @filters, $taxonomy->refno_filter($options, 'a');
     my $filters = join( q{ and }, @filters);
     
     my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -521,6 +523,7 @@ sub list_subtree {
     my @filters = "base.taxon_no in ($base_string)";
     push @filters, $taxonomy->taxon_filters($options, $tables);
     push @filters, $taxonomy->exclusion_filters($base_nos);
+    push @filters, $taxonomy->refno_filter($options, 'a');
     my $filters = @filters ? join ' and ', @filters : '1=1';
     
     my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -728,6 +731,7 @@ sub list_taxa {
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -754,6 +758,7 @@ sub list_taxa {
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -804,6 +809,8 @@ sub list_taxa {
 	push @filters, "t.lft > tb.lft and t.lft <= tb.rgt" if $rel eq 'juniors';
 	push @filters, "tb.lft > t.lft and tb.lft <= t.rgt" if $rel eq 'seniors';
 	
+	push @filters, $taxonomy->refno_filter($options, 'a');
+	
 	my $filters = join( q{ and }, @filters);
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -841,6 +848,7 @@ sub list_taxa {
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
 	push @filters, $taxonomy->exclusion_filters($base_nos);
+	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -872,6 +880,7 @@ sub list_taxa {
 	#$fields =~ s{t\.senpar_no}{t.immpar_no};
 	
 	my @filters = $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	$filters ||= '1=1';
 	
@@ -900,6 +909,7 @@ sub list_taxa {
 	
 	my @filters = "t.orig_no in ($common_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -917,19 +927,18 @@ sub list_taxa {
     {
 	my $fields = join ', ', @fields;
 	
-	my $joins;
-	
 	my @filters = $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->refno_filter($options, 'a');
 	push @filters, '1=1' unless @filters;
 	my $filters = join( q{ and }, @filters);
 	
-	my $joins = $taxonomy->taxon_joins('t', $tables);
+	my $other_joins = $taxonomy->taxon_joins('t', $tables);
 	
 	$order_expr ||= 'ORDER BY if(t.lft > 0, 0, 1), t.lft';
 	
 	$sql = "SELECT $count_expr $fields
-		FROM $tree_table as t $joins
-			JOIN $auth_table as a on $auth_expr
+		FROM $tree_table as t JOIN $auth_table as a on $auth_expr
+			$other_joins
 		WHERE $filters
 		GROUP BY $group_expr $order_expr $limit_expr\n";
     }
@@ -1187,12 +1196,24 @@ sub list_associated {
 	return $return_type eq 'listref' ? [] : () unless $rel eq 'occs';
     }
     
+    # Check the options.  If an option for selecting references is present,
+    # then we need to enabled 'all_variants' so that the particular variant
+    # named in each reference is shown regardless of whether or not it is the
+    # currently accepted one.
+    
     foreach my $key ( keys %$options )
     {
 	croak "list_associated: invalid option '$key'\n"
 	    unless $STD_OPTION{$key} || $TAXON_OPTION{$key} || $ASSOC_OPTION{$key} ||
 		$OP_OPTION{$key} || $REF_OPTION{$key};
     }
+    
+    if ( $options->{reference_no} )
+    {
+	$options->{all_variants} = 1;
+    }
+    
+    # Set up the query.
     
     my $inner_tables = { };
     
@@ -1426,6 +1447,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->exclusion_filters($base_nos);
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables);
+	push @inner_filters, "1=1" unless @inner_filters;
 	
 	$taxon_joins = "taxa_list as list JOIN $tree_table as t using (orig_no)\n";
 	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
@@ -1539,7 +1561,9 @@ sub list_associated {
     
     $dbh->do("DROP TABLE IF EXISTS ref_collect");
     
-    $dbh->do("CREATE TABLE ref_collect (
+    my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+    
+    $dbh->do("CREATE $temp TABLE ref_collect (
 		reference_no int unsigned not null,
 		ref_type varchar(10),
 		taxon_no int unsigned null,
@@ -1606,6 +1630,28 @@ sub list_associated {
 	    : "$taxon_joins
 			JOIN $op_cache as o on $join_condition
 			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
+			JOIN $refs_table as r on r.reference_no = o.reference_no";
+	
+	$sql = "INSERT IGNORE INTO ref_collect
+		SELECT o.reference_no, $type as ref_type, o.child_spelling_no as taxon_no, t.orig_no,
+			max(if(o.opinion_no = t.opinion_no, null, o.opinion_no)) as unclass_no,
+			max(if(o.opinion_no = t.opinion_no, o.opinion_no, null)) as class_no,
+			null as occurrence_no, null as collection_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY o.reference_no, o.opinion_no";
+       
+	$dbh->do($sql);
+	push @sql_strings, $sql;
+	
+	my $query_core_2 = $rel eq 'all_taxa'
+	    ? "$refs_table as r
+			JOIN $op_cache as o using (reference_no)
+			JOIN $auth_table as a on a.orig_no = o.orig_no and a.reference_no = o.reference_no
+			JOIN $tree_table as t on t.orig_no = o.orig_no"
+	    : "$taxon_joins
+			JOIN $op_cache as o on $join_condition
+			JOIN $auth_table as a on a.orig_no = o.orig_no and a.reference_no = o.reference_no
 			JOIN $refs_table as r on r.reference_no = o.reference_no";
 	
 	$sql = "INSERT IGNORE INTO ref_collect
@@ -1746,7 +1792,7 @@ sub list_associated {
 			LEFT JOIN $auth_table as a using (taxon_no)
 			$outer_joins
 		WHERE $outer_filters
-		GROUP BY base.reference_no, base.taxon_no $order_expr $limit_expr";
+		GROUP BY base.reference_no, a.taxon_no $order_expr $limit_expr";
 	
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
 						 return_type => $return_type,
@@ -1827,7 +1873,9 @@ sub generate_taxa_list {
     
     $dbh->do("DROP TABLE IF EXISTS taxa_list");
     
-    $dbh->do("CREATE TEMPORARY TABLE taxa_list (
+    my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+    
+    $dbh->do("CREATE $temp TABLE taxa_list (
 		taxon_no int unsigned not null,
 		orig_no int unsigned not null,
 		n_occs int unsigned not null,
@@ -4579,7 +4627,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				    'nn.spelling_reason', 'n.spelling_reason as accepted_reason',
 				    'vt.rank as accepted_rank', 'v.n_occs', 'v.is_extant'],
 		      REFTAXA_DATA => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
-				       'base.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
+				       'a.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
 				       'max(base.class_no) as class_no',
 				       'max(base.unclass_no) as unclass_no',
 				       'max(base.occurrence_no) as occurrence_no',

@@ -55,8 +55,8 @@ sub initialize {
 		      'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		      'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
 		      'o.species_name', 'o.species_reso',
-		      'o.early_age', 'o.late_age', 'sp.reference_no', 'r.pubyr'],
-	  tables => [ 'o', 't', 'nm', 'ns', 'tv', 'ei', 'li', 'o', 'r' ] },
+		      'o.early_age', 'o.late_age', 'sp.reference_no'],
+	  tables => [ 'o', 't', 'nm', 'ns', 'tv', 'ei', 'li', 'o' ] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ set => '*', code => \&PB2::OccurrenceData::process_occ_com, if_vocab => 'com' },
 	{ output => 'specimen_no', com_name => 'oid' },
@@ -112,6 +112,8 @@ sub initialize {
 	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
+	{ output => 'attribution', if_block => 'attr', dwc_name => 'scientificNameAuthorship', com_name => 'att' },
+	    "The attribution (author and year) of the accepted taxonomic name",
 	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
@@ -125,15 +127,29 @@ sub initialize {
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
-	
-	{ output => 'pubyr', com_name => 'pby', data_type => 'str' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	    "The attribution of the specimen: the author name(s) from",
+	    "the specimen reference, and the year of publication.",
+	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
 	    "The year of publication of the reference from which this data was entered",
-	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
+	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier of the reference from which this data was entered");
     
     # Then the optional output map for specimens.
     
     $ds->define_output_map('1.2:specs:basic_map' =>
+	{ value => 'full', maps_to => '1.2:specs:full_info' },
+	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
+	    "includes the following blocks: B<attr>, B<class>, B<plant>, B<ecospace>, B<taphonomy>",
+	    "B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
+	    "B<geo>, B<methods>, B<rem>, B<refattr>.  If we subsequently add new data fields to the",
+	    "specimen record, then B<full> will include those as well.  So if you are publishing a URL,",
+	    "it might be a good idea to include C<show=full>.",
+	{ value => 'acconly' },
+	    "Suppress the exact taxonomic identification of each specimen,",
+	    "and show only the accepted name.",
+	{ value => 'attr', maps_to => '1.2:occs:attr' },
+	    "The attribution (author and year) of the accepted name for this specimen.",
 	{ value => 'class', maps_to => '1.2:occs:class' },
 	    "The taxonomic classification of the specimen: phylum, class, order, family,",
 	    "genus.",
@@ -198,9 +214,13 @@ sub initialize {
         { value => 'rem', maps_to => '1.2:colls:rem' },
 	    "Any additional remarks that were entered about the associated collection.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
-	    "The primary reference for the specimen, as formatted text.",
+	    "The reference from which the specimen data was entered, as formatted text.",
 	    "If no reference is recorded for this specimen, the primary reference for its",
-	    "associated occurrence or collection is returned.",
+	    "associated occurrence or collection is returned instead.",
+        { value => 'refattr', maps_to => '1.2:refs:attr' },
+	    "The author(s) and year of publication of the reference from which this data",
+	    "was entered.  If no reference is recorded for this specimen, the information from",
+	    "the associated occurrence or collection reference is returned instead.",
 	{ value => 'resgroup', maps_to => '1.2:colls:group' },
 	    "The research group(s), if any, associated with the associated collection.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
@@ -208,21 +228,7 @@ sub initialize {
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the occurrence record",
-	">I<The following will return all of the information available about",
-	"the occurrence itself, as opposed to its context.  If any more such information",
-	"is added to this data service, this function will be adjusted accordingly.",
-	"You can therefore include it in published URLs, knowing that it will always provide",
-	"all of the available information about the collection(s) of interest.>",
-	{ value => 'full', maps_to => '1.2:occs:full_info' },
-	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: B<class>, B<plant>, B<ecospace>, B<taphonomy>",
-	    "B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
-	    "B<geo>, B<methods>, B<rem>.  This does not include output blocks containing",
-	    "metadata or data from associated records, but you may also include those",
-	    "blocks explicitly.  If we subsequently add new data fields to this record",
-	    "then B<full> will include those as well.  So if you are publishing a URL,",
-	    "it might be a good idea to include this.");
+	    "The C<created> and C<modified> timestamps for the specimen record");
     
     # Output blocks for measurements
     
@@ -230,12 +236,12 @@ sub initialize {
 	{ select => [ 'ms.measurement_no', 'ms.specimen_no', 'sp.specimens_measured as n_measured',
 		      'ms.position', 'ms.measurement_type as measurement', 'ms.average',
 		      'ms.min', 'ms.max' ] },
+	{ output => 'specimen_no', com_name => 'sid' },
+	    "The identifier of the specimen with which this measurement is associated",
 	{ output => 'measurement_no', com_name => 'oid' },
 	    "The unique identifier of this measurement in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{MEA} },
 	    "The type of this object: C<$IDP{MEA}> for a measurement.",
-	{ output => 'specimen_no', com_name => 'sid' },
-	    "The identifier of the specimen with which this measurement is associated",
 	{ output => 'n_measured', com_name => 'smn' },
 	    "The number of items measured",
 	{ output => 'position', com_name => 'mpo' },
@@ -248,6 +254,25 @@ sub initialize {
 	    "The minimum measured value, if recorded",
 	{ output => 'max', com_name => 'mvu' },
 	    "The maximum measured value, if recorded");
+    
+    $ds->define_block( '1.2:specs:full_info' =>
+	{ include => '1.2:occs:attr' },
+	{ include => '1.2:occs:class' },
+	{ include => '1.2:occs:plant' },
+	{ include => '1.2:taxa:ecospace' },
+	{ include => '1.2:taxa:taphonomy' },
+	{ include => '1.2:occs:abund' },
+	{ include => '1.2:occs:coords' },
+	{ include => '1.2:colls:loc' },
+	{ include => '1.2:colls:paleoloc' },
+	{ include => '1.2:colls:prot' },
+	{ include => '1.2:colls:stratext' },
+	{ include => '1.2:colls:lithext' },
+	{ include => '1.2:taxa:pres' },
+	{ include => '1.2:colls:geo' },
+	{ include => '1.2:colls:methods' },
+	{ include => '1.2:colls:rem' },
+	{ include => '1.2:refs:attr' });
     
     # Rulesets for the various operations defined by this package
     
@@ -269,7 +294,7 @@ sub initialize {
     $ds->define_ruleset('1.2:specs:display' =>
 	"You can use the following parameters to select what information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
-	{ optional => 'show', list => q{,}, valid => '1.2:occs:basic_map' },
+	{ optional => 'show', list => q{,}, valid => '1.2:specs:basic_map' },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
 	    "one or more of the following, separated by commas:",
@@ -290,7 +315,7 @@ sub initialize {
 	    "You may specify one or more from the following list, separated by commas.",
 	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
 	    $ds->document_set('1.2:colls:pgmodel'),
-    	{ optional => 'SPECIAL(show)', valid => '1.2:occs:basic_map' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:specs:basic_map' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -308,7 +333,9 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_specs_crmod' },
 	{ allow => '1.2:common:select_specs_ent' },
-	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
+	{ allow => '1.2:refs:aux_selector' },
+	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent', '1.2:refs:aux_selector'] },
 	{ allow => '1.2:specs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -327,8 +354,9 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_specs_crmod' },
 	{ allow => '1.2:common:select_specs_ent' },
-	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
-	{ allow => '1.2:specs:display' },
+	{ allow => '1.2:refs:aux_selector' },
+	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent', '1.2:refs:aux_selector'] },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -516,7 +544,7 @@ sub list_specimens {
     # If we were requested to lump by genus, we need to modify the query
     # accordingly.
     
-    my $taxonres = $request->clean_param('taxonres');
+    # my $taxonres = $request->clean_param('taxon_res');
     
     # Now generate the field list.
     

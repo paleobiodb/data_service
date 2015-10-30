@@ -15,9 +15,6 @@ package PB2::CollectionData;
 
 use HTTP::Validate qw(:validators);
 
-use PB2::CommonData qw(generateAttribution);
-use PB2::ReferenceData qw(format_reference);
-
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
@@ -82,9 +79,13 @@ sub initialize {
     # returned about collections.
     
     $ds->define_output_map('1.2:colls:basic_map' =>
-        { value => 'attr', maps_to => '1.2:colls:attr' },
-	    "The attribution of the collection: the author name(s) from",
-	    "the primary reference, and the year of publication.",
+	{ value => 'full', maps_to => '1.2:colls:full_info' },
+	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
+	    "includes the following blocks: B<attr>, B<loc>,",
+	    "B<paleoloc>, B<prot>, B<stratext>, B<lithext>, B<geo>, B<methods>, B<rem>, B<refattr>.",
+	    "If we later add new data fields to the collection records, these will be included",
+	    "by this block.  Therefore, if you are publishing a URL, it might be a good idea",
+	    "to include C<show=full>.",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the collection",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
@@ -119,20 +120,16 @@ sub initialize {
 	    "The research group(s), if any, associated with this collection.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
 	    "The primary reference for the collection, as formatted text.",
+        { value => 'refattr', maps_to => '1.2:refs:attr' },
+	    "The author(s) and year of publication of the primary reference for the collection.",
+	{ value => 'secref', maps_to => '1.2:colls:secref' },
+	    "Include the identifiers of the secondary references for the collection.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the collection record",
-	">I<The following will return all of the information available about",
-	"the collection itself, as opposed to its context.  If any more such information",
-	"is added to this data service, this function will be adjusted accordingly.",
-	"You can therefore include it in published URLs, knowing that it will always provide",
-	"all of the available information about the collection(s) of interest.>",
-	{ value => 'full', maps_to => '1.2:colls:full_info' },
-	    "Includes all of the information from the following blocks: B<attr>, B<loc>,",
-	    "B<paleoloc>, B<prot>, B<stratext>, B<lithext>, B<geo>, B<methods>, B<rem>.");
+	    "The C<created> and C<modified> timestamps for the collection record");
     
     # Then a second map for geographic summary clusters.
     
@@ -150,9 +147,12 @@ sub initialize {
 	{ value => 'coords', maps_to => '1.2:strata:coords' },
 	    "The geographic bounds (latitude and longitude) of the selected",
 	    "occurrences in each stratum",
-	{ value => 'plates', maps_to => '1.2:strata:plates' },
+	{ value => 'gplates', maps_to => '1.2:strata:gplates' },
 	    "The identifier(s) of the geological plate(s) on which the selected",
-	    "occurrences in each strataum are located");
+	    "occurrences in each strataum are located, from the GPlates model",
+	{ value => 'splates', maps_to => '1.2:strata:splates' },
+	    "The identifier(s) of the geological plate(s) on which the selected",
+	    "occurrences in each strataum are located, from the Scotese model");
     
     # Then define the output blocks which these mention.
     
@@ -160,8 +160,8 @@ sub initialize {
 	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
 		     'c.lat', 'c.lng', 'c.n_occs', 'c.early_age', 'c.late_age',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
-		     'c.reference_no', 'group_concat(distinct sr.reference_no) as reference_nos'], 
-	  tables => ['cc', 'ei', 'li', 'sr'] },
+		     'c.reference_no'], 
+	  tables => ['cc', 'ei', 'li', 'sr', 'r'] },
 	{ output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	    "A unique identifier for the collection.  This will be a string if the result",
 	    "format is JSON.  For backward compatibility, all identifiers in text format",
@@ -179,10 +179,6 @@ sub initialize {
 	    "An arbitrary name which identifies the collection, not necessarily unique",
 	{ output => 'collection_subset', com_name => 'nm2' },
 	    "If the collection is a part of another one, this field specifies which part",
-	{ output => 'attribution', dwc_name => 'recordedBy', com_name => 'att', if_block => '1.2:colls:attr' },
-	    "The attribution (author and year) of the collection",
-	{ output => 'pubyr', com_name => 'pby', if_block => '1.2:colls:attr', data_type => 'pos' },
-	    "The year in which the collection was published",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences in the collection",
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
@@ -194,11 +190,18 @@ sub initialize {
 	    "The early bound of the geologic time range associated with this collection (in Ma)",
 	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The late bound of the geologic time range associated with this collection (in Ma)",
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	    "The attribution (author and year) of the collection",
+	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
+	    "The year in which the collection was published",
 	{ set => '*', code => \&fixTimeOutput },
-	{ set => 'reference_no', from => '*', code => \&set_collection_refs },
-	{ output => 'reference_no', com_name => 'rid', text_join => ', ' },
-	    "The identifier(s) of the references from which this data was entered.  For",
-	    "now these are positive integers, but this could change and should B<not be relied on>.",
+	# { set => 'reference_no', from => '*', code => \&set_collection_refs, if_block => 'secref' },
+	{ output => 'reference_no', com_name => 'rid' },
+	    "The identifier of the primary reference from which this data was entered.",
+	{ output => 'reference_nos', com_name => 'rfs', if_block => '1.2:colls:secref' },
+	    "A list of identifiers of all of the references associated with this collection.",
+	    "In general, these include the primary reference plus any other references from which",
+	    "occurrences were entered.",
 	{ set => '*', code => \&process_coll_com, if_vocab => 'com' });
     
     my @bin_levels;
@@ -210,28 +213,7 @@ sub initialize {
     }
     
     $ds->define_block('1.2:colls:bin' => @bin_levels);
-    
-    $ds->define_block('1.2:colls:attr' =>
-        { select => ['r.author1init as a_ai1', 'r.author1last as a_al1', 'r.author2init as a_ai2', 
-	  	     'r.author2last as a_al2', 'r.otherauthors as a_oa', 'r.pubyr as a_pubyr'],
-          tables => ['r'] },
-        { set => 'attribution', from => '*', code => \&generateAttribution },
-        { set => 'pubyr', from => 'a_pubyr' });
-    
-    $ds->define_block('1.2:colls:ref' =>
-      { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
-		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
-		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
-		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
-		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
-		   'r.language as r_language', 'r.doi as r_doi'],
-	tables => ['r'] },
-      { set => 'ref_list', from => '*', code => \&generateReference },
-      #{ set => 'ref_list', append => 1, from_each => 'sec_refs', code => \&generateReference },
-      #{ set => 'ref_list', join => "\n\n", if_format => 'txt,tsv,csv,xml' },
-      { output => 'ref_list', pbdb_name => 'primary_reference', dwc_name => 'associatedReferences', com_name => 'ref' },
-	  "The primary reference associated with the collection (as formatted text)");
-    
+        
     $ds->define_block('1.2:colls:loc' =>
 	{ select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale', 'cc.geogcomments',
 		     'cc.latlng_basis', 'cc.latlng_precision', 'cc.altitude_value', 'cc.altitude_unit'],
@@ -391,7 +373,7 @@ sub initialize {
 	{ include => '1.2:colls:lith' });
     
     $ds->define_block('1.2:colls:env' =>
-	{ select => [ qw(c.environment) ] },
+	{ select => [ qw(cc.environment) ], tables => 'cc' },
 	{ output => 'environment', com_name => 'env', not_block => '1.2:colls:geo' },
 	    "The paleoenvironment associated with the collection site");
     
@@ -440,13 +422,16 @@ sub initialize {
 	{ output => 'research_group', com_name => 'rgp' },
 	    "The research group(s), if any, associated with this collection.");
     
-    $ds->define_block( '1.2:colls:rem' =>
+    $ds->define_block('1.2:colls:rem' =>
 	{ set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
 	{ output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
 	    "Any additional remarks that were entered about the collection");
     
+    $ds->define_block('1.2:colls:secref' =>
+	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) as reference_nos'] });
+    
     $ds->define_block( '1.2:colls:full_info' =>
-	{ include => '1.2:colls:attr' },
+	{ include => '1.2:refs:attr' },
 	{ include => '1.2:colls:loc' },
 	{ include => '1.2:colls:paleoloc' },
 	{ include => '1.2:colls:prot' },
@@ -534,11 +519,17 @@ sub initialize {
 	{ output => 'max_lat', com_name => 'ly2' },
 	    "The maximum latitude for selected occurrences in this stratum");
     
-    $ds->define_block('1.2:strata:plates' =>
-	{ select => [ 'group_concat(distinct c.g_plate_no) as geoplate' ] },
-	{ output => 'geoplate', com_name => 'gpl' },
+    $ds->define_block('1.2:strata:gplates' =>
+	{ select => [ 'group_concat(distinct c.g_plate_no) as gplate_no' ] },
+	{ output => 'gplate_no', com_name => 'gpl' },
 	    "The identifier(s) of the geological plate(s) on which the selected",
-	    "occurrences in this stratum lie.");
+	    "occurrences in this stratum lie, from the GPlates model.");
+    
+    $ds->define_block('1.2:strata:splates' =>
+	{ select => [ 'group_concat(distinct c.s_plate_no) as splate_no' ] },
+	{ output => 'splate_no', com_name => 'scp' },
+	    "The identifier(s) of the geological plate(s) on which the selected",
+	    "occurrences in this stratum lie, from the Scotese model.");
     
     # And a block for basic geographic summary cluster info
     
@@ -624,17 +615,6 @@ sub initialize {
 	    "most recent first unless you add C<.asc>",
 	{ value => 'modified.asc', undocumented => 1 },
 	{ value => 'modified.desc', undocumented => 1 });
-    
-    $ds->define_set('1.2:colls:ident_select' =>
-	{ value => 'latest' },
-	    "Select the most recently published identification of each selected occurrence,",
-	    "as long as it matches the other specified criteria.  This is the B<default> unless",
-	    "you specify otherwise.",
-	{ value => 'orig' },
-	    "Select the originally published identification of each selected occurence,",
-	    "as long as it matches the other specified criteria.",
-	{ value => 'all' },
-	    "Select all matching identifications of each selected occurrence, each as a separate record");
     
     $ds->define_set('1.2:colls:pgmodel' =>
 	{ value => 'scotese' },
@@ -740,34 +720,22 @@ sub initialize {
 	    "be returned.  Synonyms will be ignored.  This is a syntactic rather",
 	    "than a taxonomic match.",
 	{ param => 'immediate', valid => FLAG_VALUE },
-	    "You may specify this parameter along with C<base_name>, C<base_id>, or C<taxon_name>.",
+	    "You may specify this parameter along with F<base_name>, F<base_id>, or F<taxon_name>.",
 	    "If you do, then synonyms of the specified name(s) will",
 	    "be ignored.  No value is necessary for this parameter, just include the parameter name.",
 	{ param => 'base_id', valid => VALID_IDENTIFIER('TID'), list => ',' },
 	    "Return only records associated with the specified taxa,",
-	    "I<including subtaxa and synonyms>.  You may specify multiple taxon identifiers,",
-	    "separated by commas.  Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
+	    "I<including all subtaxa and synonyms>.  You may specify multiple taxon identifiers,",
+	    "separated by commas.  Note that you may specify at most one of F<taxon_name>,",
+	    "F<taxon_id>, F<base_name>, F<base_id>.",
 	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID'), list => ','},
 	    "Return only records associated with the specified taxa, not including",
 	    "subtaxa or synonyms.  You may specify multiple taxon identifiers, separated by commas.",
 	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id'] },
 	{ param => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ','},
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names,",
-	    "specified by numeric identifier.  This is an alternative to the use of the C<^> character",
+	    "specified by taxib identifier.  This is an alternative to the use of the C<^> character",
 	    "in names.",
-	{ param => 'taxonres', valid => $ds->valid_set('1.2:taxa:resolution') },
-	    "Select only occurrences that are identified to the specified taxonomic",
-	    "resolution, and possibly lump together occurrences of the same genus or",
-	    "family.  Accepted values are:",
-	{ param => 'ident', valid => $ds->valid_set('1.2:colls:ident_select'), default => 'latest' },
-	    "If more than one taxonomic identification is recorded for some or all of the selected occurrences,",
-	    "this parameter specifies which are to be returned.  Values include:",
-	    $ds->document_set('1.2:colls:ident_select'),
-	{ param => 'pres', valid => $ds->valid_set('1.2:taxa:preservation'), split => qr{[\s,]+} },
-	    "This parameter indicates whether to select occurrences that are identified as",
-	    "ichnotaxa, form taxa, or regular taxa.  The default is C<all>, which will select",
-	    "all taxa that meet the other specified criteria.  You can specify one or more",
-	    "of the following values as a list:",
 	{ param => 'lngmin', valid => COORD_VALUE('lng') },
 	{ param => 'lngmax', valid => COORD_VALUE('lng') },
 	    "Return only records whose present longitude falls within the given bounds.",
@@ -775,8 +743,8 @@ sub initialize {
 	    "If you provide bounds outside of the range -180\N{U+00B0} to 180\N{U+00B0}, they will be",
 	    "wrapped into the proper range.  For example, if you specify C<lngmin=270 & lngmax=360>,",
 	    "the query will be processed as if you had said C<lngmin=-90 & lngmax=0 >.  In this",
-	    "case, all longitude values in the query result will be adjusted to fall within the actual",
-	    "numeric range you specified.",
+	    "case, I<all longitude values in the query result will be adjusted to fall within the actual",
+	    "numeric range you specified.>",
 	{ param => 'latmin', valid => COORD_VALUE('lat') },
 	    "Return only records whose present latitude is at least the given value.",
 	{ param => 'latmax', valid => COORD_VALUE('lat') },
@@ -801,18 +769,22 @@ sub initialize {
 	    "You may specify one or more from the following list, separated by commas.",
 	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
 	    $ds->document_set('1.2:colls:pgmodel'),
-	{ param => 'cc', valid => \&valid_cc, list => qr{[\s,]+}, alias => 'country', bad_value => '_' },
+	{ param => 'cc', valid => \&valid_cc, list => qr{[\s,]}, alias => 'country', bad_value => '_' },
 	    "Return only records whose location falls within the specified geographic regions.",
 	    "The value of this parameter should be one or more",
 	    "L<two-character country codes|http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2> and/or ",
 	    "L<three-character continent codes|op:config.txt?show=continents> as a comma-separated list.",
-	    "If the symbol C<^> appears in the parameter value, then records falling into regions",
-	    "listed thereafter are B<excluded>.  Examples:",
-	    ">    NOA,SOA      EUR,^UK,IE    ^ATA",
+	    "If the parameter value starts with C<^>, then records falling into these regions are excluded",
+	    "instead of included.  If any of the codes starts with C<->, then subsequent country codes are",
+	    "subtracted from the filter.  For example:", "=over",
+	    "=item ATA,AU", "Select occurrences from Antarctica and Australia",
+	    "=item NOA,SOA,-AR,BO", "Select occurrences from North and South America, but not Argentina or Bolivia",
+	    "=item ^EUR,-IS", "Exclude occurrences from Europe, except those from Iceland", "=back",
 	{ param => 'continent', valid => \&valid_continent, list => qr{[\s,]+}, bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified continent or continents.",
 	    "The value of this parameter should be a comma-separated list of ",
-	    "L<continent codes|op:config.txt?show=continents>.",
+	    "L<continent codes|op:config.txt?show=continents>.  This parameter is deprecated;",
+	    "use F<cc> instead.",
 	{ param => 'strat', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named geological stratum or strata.  You",
 	    "may specify more than one, separated by commas.  Names may include the standard",
@@ -821,24 +793,23 @@ sub initialize {
 	    "stratigraphic names will be selected.  Note that this parameter is resolved through",
 	    "string matching only.  Stratigraphic nomenclature is not currently standardized in",
 	    "the database, so misspellings may occur.", 
-	    ">This parameter replaces the parameters C<formation>, C<stratgroup>, and C<member>",
-	    "which are now deprecated.",
 	{ param => 'formation', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic formation(s).",
-	    "This parameter is deprecated; use C<strat> instead.",
+	    "This parameter is deprecated; use F<strat> instead.",
 	{ param => 'stratgroup', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic group(s).",
-	    "This parameter is deprecated; use C<strat> instead.",
+	    "This parameter is deprecated; use F<strat> instead.",
 	{ param => 'member', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic member(s).",
-	    "This parameter is deprecated; use C<strat> instead.",
-	{ param => 'envtype', valid => ANY_VALUE, list => qr{ [\s,]+ | [\s,]* (?= [*^] ) }x },
+	    "This parameter is deprecated; use F<strat> instead.",
+	{ param => 'envtype', valid => ANY_VALUE, list => ',' },
 	    "Return only records recorded as belonging to any of the specified environments",
 	    "and/or environmental zones.  If the parameter value string starts with C<^> then",
 	    "matching records will be B<excluded> instead.",
-	    "If the symbol C<^> occurs elsewhere in the value string, then all subsequent",
-	    "values will be subtracted from the filter.  Examples: C<terr ^fluvial lacustrine> or",
-	    "C<slope ^carbonate>.  You may specify one or more of the following values:",
+	    "If the symbol C<-> occurs at the beginning of any environment code, then all subsequent",
+	    "values will be subtracted from the filter.  Examples: C<terr -fluvial lacustrine> or",
+	    "C<^slope -carbonate>.  You may specify one or more of the following values,",
+	    "as a comma-separated list:", 
 	    $ds->document_set('1.2:colls:envtype'),
 	# { param => 'envtype', valid => ANY_VALUE, list => qr{ [\s,]+ | [\s,]* (?= [*^] ) }x },
 	#     "Return only records recorded as belonging to any of the specified environments.",
@@ -876,6 +847,10 @@ sub initialize {
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:timerule_selector' });
+
+	# { param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',', bad_value => '_' },
+	#     "Return only records which were entered from one or more particular bibliographic",
+	#     "references, specified by reference identifier.");
     
     $ds->define_ruleset('1.2:colls:specifier' =>
 	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), alias => 'id' },
@@ -1633,6 +1608,15 @@ sub generateCollFilters {
 	}
     }
     
+    # Check for a 'ref_id' parameter.
+    
+    if ( my @reflist = $request->clean_param_list('ref_id') )
+    {
+	my $refstring = join(',', @reflist);
+	push @filters, "c.reference_no in ($refstring)";
+	$tables_ref->{c} = 1;
+    }
+    
     return @filters;
 }
 
@@ -2233,7 +2217,7 @@ sub generateMainFilters {
     # Check for parameter 'taxonres'.  But not if we took the "identification
     # branch" because in that case it has already been handled.
     
-    my $taxonres = $request->clean_param('taxonres');
+    my $taxonres = $request->clean_param('taxon_res');
     
     if ( $taxonres && ! $ident_used )
     {
@@ -2344,55 +2328,87 @@ sub generateMainFilters {
 	{
 	    push @filters, "c.collection_no = -1";
 	}
+	
 	else
 	{
-	    my (@cc2, @cc3, @cc2x, @cc3x, $exclude);
+	    my (@cc2, @cc3, @cc2x, @cc3x, @cc2s, $invert, $exclude);
+	    
+	    if ( $ccs[0] =~ qr{ ^ \^ (.*) }xs )
+	    {
+		$ccs[0] = $1;
+		$invert = 1;
+	    }
 	    
 	    foreach my $value (@ccs)
 	    {
-		if ( $value =~ qr{ ^ \^ (.*) }xs )
-		{
-		    $exclude = 1;
-		    $value = $1;
-		}
+	    	if ( $value =~ qr{ ^ - (.*) }xs )
+	    	{
+	    	    $exclude = 1;
+	    	    $value = $1;
+	    	}
 		
-		if ( length($value) == 2 && $exclude ) {
-		    push @cc2x, $value;
-		} elsif ( length($value) == 2 ) {
-		    push @cc2, $value;
-		} elsif ( $exclude ) {
-		    push @cc3x, $value;
-		} else {
-		    push @cc3, $value;
-		}
+		next unless $value;
+		
+		# We can have both included and excluded countries.
+		
+	    	if ( length($value) == 2 )
+	    	{
+	    	    if ( $exclude ) {
+	    		push @cc2x, $value;
+	    	    } else {
+	    		push @cc2, $value;
+	    	    }
+	    	}
+		
+		# However, if we have at least one included continent then we
+		# ignore any continental exclusions.
+		
+	    	else
+	    	{
+		    if ( $exclude ) {
+	    		$request->add_warning("ignoring exclusion of continent '$value'");
+	    	    } else {
+	    		push @cc3, $value;
+	    	    }
+	    	}
 	    }
 	    
-	    my @cc_filters;
+	    my (@cc_filters, @disjoint_filters, $disjunction);
 	    
 	    if ( @cc2 )
 	    {
-		push @cc_filters, "c.cc in ('" . join("','", @cc2) . "')";
+	    	push @disjoint_filters, "c.cc in ('" . join("','", @cc2) . "')";
 	    }
 	    
 	    if ( @cc3 )
 	    {
-		push @cc_filters, "ccmap.continent in ('" . join("','", @cc3) . "')";
-		$tables_ref->{ccmap} = 1;
+	    	push @disjoint_filters, "ccmap.continent in ('" . join("','", @cc3) . "')";
+	    	$tables_ref->{ccmap} = 1;
 	    }
 	    
-	    my $cc_string = '(' . join(' or ', @cc_filters) . ')';
+	    if ( @disjoint_filters > 1 )
+	    {
+		push @cc_filters, '(' . join(' or ', @disjoint_filters) . ')';
+	    }
 	    
-	    push @filters, $cc_string if $cc_string ne '()';
+	    elsif ( @disjoint_filters == 1 )
+	    {
+		push @cc_filters, $disjoint_filters[0];
+	    }
 	    
 	    if ( @cc2x )
 	    {
-		push @filters, "c.cc not in ('" . join("','", @cc2x) . "')";
+	     	push @cc_filters, "c.cc not in ('" . join("','", @cc2x) . "')";
 	    }
 	    
-	    if ( @cc3x )
+	    if ( $invert )
 	    {
-		push @filters, "ccmap.continent not in ('" . join("','", @cc3x) . "')";
-		$tables_ref->{ccmap} = 1;
+		push @filters, 'not( ' . join(' and ', @cc_filters), ')';
+	    }
+	    
+	    else
+	    {
+		push @filters, @cc_filters;
 	    }
 	}
 	
@@ -2588,10 +2604,9 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    # Check for parameters 'envtype', 'envzone'
+    # Check for parameter 'envtype'
     
     my @envtype = $request->clean_param_list('envtype');
-    # my @envzone = $request->clean_param_list('envzone');
     
     my (%env_values, %exc_values, $et_invert, $et_exclude, $et_unknown);
     
@@ -2605,11 +2620,13 @@ sub generateMainFilters {
     {
 	$e = lc $e;
 	
-	if ( $e =~ qr{ ^ \^ (.*) }xs )
+	if ( $e =~ qr{ ^ - (.*) }xs )
 	{
 	    $e = $1;
 	    $et_exclude = 1;
 	}
+	
+	next unless $e;
 	
 	if ( $ETVALUE{$e} )
 	{
@@ -3833,6 +3850,18 @@ sub process_coll_com {
     
     $record->{reference_no} = generate_identifier('REF', $record->{reference_no})
 	if defined $record->{reference_no};
+    
+    if ( defined $record->{reference_nos} )
+    {
+	my @list = split(',', $record->{reference_nos});
+	
+	foreach my $f (@list)
+	{
+	    $f = generate_identifier('REF', $f);
+	}
+	
+	$record->{reference_nos} = \@list;
+    }
 }
 
 
