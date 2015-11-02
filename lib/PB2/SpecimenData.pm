@@ -112,7 +112,7 @@ sub initialize {
 	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
-	{ output => 'attribution', if_block => 'attr', dwc_name => 'scientificNameAuthorship', com_name => 'att' },
+	{ output => 'accepted_attr', if_block => 'attr', dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of the accepted taxonomic name",
 	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
@@ -544,7 +544,7 @@ sub list_specimens {
     # If we were requested to lump by genus, we need to modify the query
     # accordingly.
     
-    # my $taxonres = $request->clean_param('taxon_res');
+    # my $taxonres = $request->clean_param('taxon_reso');
     
     # Now generate the field list.
     

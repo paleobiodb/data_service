@@ -11,7 +11,7 @@
 package Taxonomy;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
-use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $COLL_MATRIX %IDP);
+use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX %IDP);
 use Carp qw(carp croak);
 use Try::Tiny;
 
@@ -127,13 +127,12 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       authent_by => 1,
 		       touched_by => 1, );
 
-my (%ASSOC_OPTION) = ( assoc_type => 1,
-		       reference_no => 1,
+my (%ASSOC_OPTION) = ( reference_no => 1,
 		       opinion_no => 1,
 		       extra_filters => 1,
 		       record_order => 1 );
 
-my (%OP_OPTION) = ( op_status => 1,
+my (%OP_OPTION) = ( op_type => 1,
 		    op_author => 1,
 		    op_min_pubyr => 1,
 		    op_max_pubyr => 1,
@@ -147,7 +146,8 @@ my (%OP_OPTION) = ( op_status => 1,
 		    op_authent_by => 1,
 		    op_touched_by => 1 );
 
-my (%REF_OPTION) = ( ref_author => 1,
+my (%REF_OPTION) = ( ref_type => 1, 
+		     ref_author => 1,
 		     ref_min_pubyr => 1,
 		     ref_max_pubyr => 1,
 		     ref_title => 1,
@@ -196,12 +196,13 @@ my (%REF_SELECT_VALUE) = ( all => 1,
 			   class => 1,
 			   taxonomy => 1,
 			   ops => 1,
+			   specs => 1,
 			   occs => 1,
 			   colls => 1 );
 
-my (%OP_SELECT_VALUE) = ( class => 1,
+my (%OP_SELECT_VALUE) = ( all => 1,
+			  class => 1,
 			  taxonomy => 1,
-			  all => 1,
 			  valid => 1,
 			  accepted => 1,
 			  senior => 1,
@@ -231,8 +232,9 @@ my $VALID_PERSON_ID = qr{ ^ (?: $IDP{PER} )? ( [0-9]+ ) $ }xsi;
 
 my $TYPE_AUTH = "'A'";
 my $TYPE_CLASS = "'C'";
-my $TYPE_UNUSED = "'U'";
+my $TYPE_UNSEL = "'U'";
 my $TYPE_OCC = "'O'";
+my $TYPE_SPEC = "'S'";
 my $TYPE_PRIMARY = "'P'";
 my $TYPE_SUPPRESSED = "'X'";
 
@@ -1220,33 +1222,31 @@ sub list_associated {
     my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
     my $limit_expr = $taxonomy->simple_limit($options);
     
-    my @select = ref $options->{assoc_type} eq 'ARRAY' ? @{$options->{assoc_type}}
-	       : $options->{assoc_type}		   ? split(qr{\s*,\s*}, $options->{assoc_type})
-						   : 'taxonomy';
-    
     my %select;
     
     if ( $record_type eq 'opinions' )
     {
-	foreach my $s (@select)
+	my $type = $options->{op_type} || 'class';
+	
+	croak "list_associated: invalid value '$type' for 'op_type'" unless $OP_SELECT_VALUE{$type};
+	
+	if ( $type eq 'class' || $type eq 'taxonomy' )
 	{
-	    next unless $s;
-	    croak "list_associated: invalid value '$s' for 'select'" unless $OP_SELECT_VALUE{$s};
-	    
-	    if ( $s eq 'class' || $s eq 'taxonomy' )
-	    {
-		$select{ops_class} = 1;
-	    }
-	    
-	    else
-	    {
-		$select{ops_all} = 1;
-	    }
+	    $select{ops_class} = 1;
+	}
+	
+	else
+	{
+	    $select{ops_all} = 1;
 	}
     }
     
     else
     {
+	my @select = ref $options->{ref_type} eq 'ARRAY' ? @{$options->{ref_type}}
+	           : $options->{ref_type}		 ? split(qr{\s*,\s*}, $options->{ref_type})
+							 : 'taxonomy';
+	
 	foreach my $s (@select)
 	{
 	    next unless $s;
@@ -1257,6 +1257,7 @@ sub list_associated {
 		$select{refs_auth} = 1;
 		$select{refs_ops} = 1;
 		$select{refs_occs} = 1;
+		$select{refs_specs} = 1;
 		$select{refs_colls} = 1;
 	    }
 	    
@@ -1478,7 +1479,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->extra_filters($options);
 	
 	my $type = $select{ops_all} || $rel eq 'all_taxa'
-	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, if(o.suppress, $TYPE_SUPPRESSED, $TYPE_UNUSED))"
+	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, if(o.suppress, $TYPE_SUPPRESSED, $TYPE_UNSEL))"
 	    : $TYPE_CLASS;
 	
 	my $join_condition = $select{ops_all} && $rel ne 'all_taxa'
@@ -1568,12 +1569,14 @@ sub list_associated {
 		ref_type varchar(10),
 		taxon_no int unsigned null,
 		orig_no int unsigned null,
+		auth_no int unsigned null,
 		unclass_no int unsigned null,
 		class_no int unsigned null,
 		occurrence_no int unsigned null,
+		specimen_no int unsigned null,
 		collection_no int unsigned null,
-		UNIQUE KEY (reference_no, ref_type, taxon_no, orig_no,
-			unclass_no, class_no, occurrence_no, collection_no)) engine=memory");
+		UNIQUE KEY (reference_no, ref_type, taxon_no, orig_no, unclass_no, class_no, 
+			occurrence_no, specimen_no, collection_no)) engine=memory");
     
     my ($sql);
     
@@ -1596,8 +1599,8 @@ sub list_associated {
 	
 	$sql = "INSERT IGNORE INTO ref_collect
 		SELECT a.reference_no, $TYPE_AUTH as ref_type, a.taxon_no, t.orig_no,
-			null as unclass_no, null as class_no,
-			null as occurrence_no, null as collection_no
+			a.taxon_no as auth_no, null as unclass_no, null as class_no,
+			null as occurrence_no, null as specimen_no, null as collection_no
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY a.reference_no, a.taxon_no";
@@ -1615,7 +1618,7 @@ sub list_associated {
 	my $inner_filters = join(q{ and }, @ops_filters);
 	
 	my $type = $select{refs_ops}
-	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED)"
+	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNSEL)"
 	    : $TYPE_CLASS;
 	
 	my $join_condition = $select{refs_ops}
@@ -1634,9 +1637,10 @@ sub list_associated {
 	
 	$sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, $type as ref_type, o.child_spelling_no as taxon_no, t.orig_no,
+			null as auth_no, 
 			max(if(o.opinion_no = t.opinion_no, null, o.opinion_no)) as unclass_no,
 			max(if(o.opinion_no = t.opinion_no, o.opinion_no, null)) as class_no,
-			null as occurrence_no, null as collection_no
+			null as occurrence_no, null as specimen_no, null as collection_no
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY o.reference_no, o.opinion_no";
@@ -1656,9 +1660,10 @@ sub list_associated {
 	
 	$sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, $type as ref_type, o.child_spelling_no as taxon_no, t.orig_no,
+			null as auth_no,
 			max(if(o.opinion_no = t.opinion_no, null, o.opinion_no)) as unclass_no,
 			max(if(o.opinion_no = t.opinion_no, o.opinion_no, null)) as class_no,
-			null as occurrence_no, null as collection_no
+			null as occurrence_no, null as specimen_no, null as collection_no
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY o.reference_no, o.opinion_no";
@@ -1702,12 +1707,60 @@ sub list_associated {
 	}
 	
 	$sql = "INSERT IGNORE INTO ref_collect
-		SELECT m.reference_no, $TYPE_OCC as ref_type, m.taxon_no, t.orig_no,
-			null as unclass_no, null as class_no, m.occurrence_no, null as collection_no
+		SELECT m.reference_no, $TYPE_OCC as ref_type, m.taxon_no, t.orig_no, null as auth_no,
+			null as unclass_no, null as class_no, m.occurrence_no, 
+			null as specimen_no, null as collection_no
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY m.reference_no, m.occurrence_no";
        
+	$dbh->do($sql);
+	push @sql_strings, $sql;
+    }
+    
+    if ( $select{refs_specs} )
+    {
+	my @occs_filters = grep { $_ !~ qr{^t.accepted_no = t.(synonym_no|orig_no)$} } @inner_filters;
+	push @occs_filters, $taxonomy->refno_filter($options, 'm');
+	push @occs_filters, $taxonomy->extra_filters($options);
+	
+	my $inner_filters = join(q{ and }, @occs_filters);
+	
+	my $query_core;
+	
+	if ( $rel eq 'all_taxa' )
+	{
+	    $query_core = "$refs_table as r
+			JOIN $SPEC_MATRIX as ss using (reference_no)
+			JOIN $tree_table as t using (orig_no)
+			JOIN $auth_table as a on a.taxon_no = m.taxon_no"
+	}
+	elsif ( $rel eq 'occs' )
+	{
+	    my $occs_table = $options->{table};
+	    $query_core = "$occs_table as list
+			JOIN $OCC_MATRIX as m using (occurrence_no)
+			JOIN $SPEC_MATRIX as ss using (occurrence_no)
+			JOIN $tree_table as t on t.orig_no = m.orig_no
+			JOIN $auth_table as a on a.taxon_no = m.taxon_no
+			JOIN $refs_table as r on r.reference_no = m.reference_no";
+	}
+	else
+	{
+	    $query_core = " $taxon_joins
+			JOIN $SPEC_MATRIX as ss on ss.orig_no = t.orig_no
+			JOIN $auth_table as a on a.taxon_no = ss.taxon_no
+			JOIN $refs_table as r on r.reference_no = ss.reference_no";
+	}
+	
+	$sql = "INSERT IGNORE INTO ref_collect
+		SELECT ss.reference_no, $TYPE_SPEC as ref_type, ss.taxon_no, t.orig_no, null as auth_no,
+			null as unclass_no, null as class_no, null as occurrence_no, 
+			ss.specimen_no, null as collection_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY ss.reference_no, ss.specimen_no";
+	
 	$dbh->do($sql);
 	push @sql_strings, $sql;
     }
@@ -1746,7 +1799,8 @@ sub list_associated {
 	
 	$sql = "INSERT IGNORE INTO ref_collect
 		SELECT c.reference_no, $TYPE_PRIMARY as ref_type, null as taxon_no, null as orig_no,
-			null as unclass_no, null as class_no, null as occurrence_no, c.collection_no
+			null as auth_no, null as unclass_no, null as class_no,
+			null as occurrence_no, null as specimen_no, c.collection_no
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY c.reference_no, c.collection_no";
@@ -1797,6 +1851,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
+						 drop_table => 'ref_collect',
 						 count => $options->{count} } );
     }
     
@@ -1837,6 +1892,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
+						 drop_table => 'ref_collect',
 						 count => $options->{count} } );
     }
 }
@@ -3006,14 +3062,15 @@ my (%STATUS_FILTER) = ( valid => "t.accepted_no = t.synonym_no",
 		        any => '1=1',
 		        all => '1=1');
 
-my (%OP_STATUS_FILTER) = ( valid => "in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
-			   senior => "in ('belongs to')",
-			   junior => "in ('subjective synonym of', 'objective synonym of', 'replaced by')",
-			   invalid => "not in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
-			   any => 'is not null',
-			   all => 'is not null',
-			   opinions => 'is not null',
-			   class => 'is not null');
+my (%OP_TYPE_FILTER) = ( valid => "in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
+			 accepted => "in ('belongs to')",
+			 senior => "in ('belongs to')",
+			 junior => "in ('subjective synonym of', 'objective synonym of', 'replaced by')",
+			 invalid => "not in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
+			 any => 'is not null',
+			 all => 'is not null',
+			 opinions => 'is not null',
+			 class => 'is not null');
 
 sub taxon_filters {
     
@@ -3143,17 +3200,17 @@ sub taxon_filters {
 	    
 	    if ( $keys[0] eq 'regular' )
 	    {
-		push @filters, "v.not_trace and v.not_form";
+		push @filters, "not(v.is_trace or v.is_form)";
 	    }
 	    
 	    elsif ( $keys[0] eq 'form' )
 	    {
-		push @filters, "not(v.not_form)";
+		push @filters, "v.is_form";
 	    }
 	    
 	    elsif ( $keys[0] eq 'ichno' )
 	    {
-		push @filters, "not(v.not_trace)";
+		push @filters, "v.is_trace";
 	    }
 	    
 	    else
@@ -3169,17 +3226,17 @@ sub taxon_filters {
 	    
 	    if ( $options->{pres}{form} && $options->{pres}{ichno} )
 	    {
-		push @filters, "not(v.not_trace and v.not_form)";
+		push @filters, "(v.is_trace or v.is_form)";
 	    }
 	    
 	    elsif ( $options->{pres}{form} && $options->{pres}{regular} )
 	    {
-		push @filters, "(v.not_trace or not(v.not_form))";
+		push @filters, "(v.is_form or not(v.is_trace))";
 	    }
 	    
 	    elsif ( $options->{pres}{ichno} && $options->{pres}{regular} )
 	    {
-		push @filters, "(v.not_form or not(v.not_trace))";
+		push @filters, "(v.is_trace or not(v.is_form))";
 	    }
 	    
 	    else
@@ -3513,9 +3570,9 @@ sub opinion_filters {
 	push @filters, "o.opinion_no in ($opinion_ids)" if $opinion_ids;
     }
     
-    if ( $options->{op_status} )
+    if ( $options->{op_type} )
     {
-	my $filter = $OP_STATUS_FILTER{$options->{op_status}};
+	my $filter = $OP_TYPE_FILTER{$options->{op_type}};
 	
 	if ( defined $filter )
 	{
@@ -3584,6 +3641,8 @@ sub common_filters {
 	
 	my $value = $options->{$key};
 	
+	next unless defined $value && $value ne '';
+	
 	if ( $key =~ qr{^ref} )
 	{
 	    next unless $opt_type eq 'refs';
@@ -3629,34 +3688,60 @@ sub common_filters {
 	elsif ( $key =~ qr{authorized_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    push @filters, "$t.authorizer_no ${exclude}in ($list)" if $list;
+	    if ( $list ) {
+		push @filters, "$t.authorizer_no ${exclude}in ($list)";
+	    } else {
+		push @filters, "t.orig_no in (-1)";
+	    }
 	}
 	
 	elsif ( $key =~ qr{entered_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    push @filters, "$t.enterer_no ${exclude}in ($list)" if $list;
+	    if ( $list ) {
+		push @filters, "$t.enterer_no ${exclude}in ($list)";
+	    } else {
+		push @filters, "t.orig_no in (-1)";
+	    }
 	}
 	
 	elsif ( $key =~ qr{authent_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    push @filters, "($t.authorizer_no ${exclude}in ($list) or $t.enterer_no in ($list))" if $list;
+	    if ( $list ) {
+		push @filters, "$exclude($t.authorizer_no in ($list) or $t.enterer_no in ($list))";
+	    } else {
+		push @filters, "t.orig_no in (-1)";
+	    }
 	}
 	
 	elsif ( $key =~ qr{modified_by$} )
 	{
-	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    push @filters, "$t.modifier_no ${exclude}in ($list)" if $list;
-	    push @filters, "$t.modifier_no <> $t.enterer_no" if $value eq '*';
+	    if ( $value eq '*' )
+	    {
+		push @filters, "$t.modifier_no <> $t.enterer_no" if $value eq '*';
+	    }
+	    
+	    else
+	    {
+		my ($list, $exclude) = $taxonomy->person_id_list($value);
+		if ( $list ) {
+		    push @filters, "$t.modifier_no ${exclude}in ($list)";
+		} else {
+		    push @filters, "t.orig_no in (-1)";
+		}
+	    }
 	}
 	
 	elsif ( $key =~ qr{touched_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    push @filters, 
-		"$exclude($t.authorizer_no in ($list) or $t.enterer_no in ($list) or $t.modifier_no in ($list))"
-		    if $list;
+	    if ( $list ) {
+		push @filters, 
+		"$exclude($t.authorizer_no in ($list) or $t.enterer_no in ($list) or $t.modifier_no in ($list))";
+	    } else {
+		push @filters, "t.orig_no in (-1)";
+	    }
 	}
 	
 	# elsif ( $key =~ qr{min_pubyr$|max_pubyr$} )
@@ -3704,13 +3789,13 @@ sub person_id_list {
     my $exclude = '';
     my $dbh = $taxonomy->{dbh};
     
-    # If the first value starts with ^, generate an exclusion filter.
+    # If the first value starts with !, generate an exclusion filter.
     
-    if ( $plist[0] =~ qr{^\^\s*(.*)} )
+    if ( $plist[0] =~ qr{ ^ ! \s* (.*) }xs )
     {
 	$plist[0] = $1;
 	$exclude = 'not ';
-    }    
+    }
     
     foreach my $p (@plist)
     {
@@ -3733,7 +3818,7 @@ sub person_id_list {
 		push @ids, $values->[0];
 	    }
 	    
-	    elsif ( defined $values )
+	    elsif ( defined $values && @$values )
 	    {
 		my @ambiguous;
 		
@@ -3744,12 +3829,14 @@ sub person_id_list {
 		}
 		
 		my $list = join(', ', @ambiguous);
-		$taxonomy->add_warning("Ambiguous name: '$p' could match any of the following names: $list");
+		$taxonomy->add_warning('W_AMBIGUOUS_PERSON', 
+				       "Ambiguous name: '$p' could match any of the following names: $list");
 	    }
 	    
 	    else
 	    {
-		$taxonomy->add_warning("Unknown name: '$p' is not a name known to this database");
+		$taxonomy->add_warning('W_UNKNOWN_PERSON',
+				       "Unknown name: '$p' is not a name known to this database");
 	    }
 	}
     }
@@ -4416,6 +4503,10 @@ sub opinion_joins {
 	if $tables_hash->{oo};
     $joins .= "\t\tJOIN $taxonomy->{TREE_TABLE} as pt on pt.orig_no = $mt.parent_no\n"
 	if $tables_hash->{pt};
+    $joins .= "\t\tJOIN $taxonomy->{ATTRS_TABLE} as cv on cv.orig_no = $mt.orig_no\n"
+	if $tables_hash->{cv};
+    $joins .= "\t\tJOIN $taxonomy->{ATTRS_TABLE} as pv on pv.orig_no = $mt.parent_no\n"
+	if $tables_hash->{pv};
     
     return $joins;
 }
@@ -4650,9 +4741,11 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 				   'r.language as r_language', 'r.doi as r_doi'],
 		      REF_COUNTS => ['count(distinct taxon_no) as n_reftaxa',
+				     'count(distinct auth_no) as n_refauth',
 				     'count(distinct class_no) as n_refclass',
 				     'count(distinct unclass_no) as n_refunclass',
 				     'count(distinct occurrence_no) as n_refoccs',
+				     'count(distinct specimen_no) as n_refspecs',
 				     'count(distinct collection_no) as n_refcolls'],
 		      OP_DATA => ['o.opinion_no', 'base.opinion_type', 't.orig_no', 't.name as taxon_name', 
 				  'o.child_spelling_no', 'o.parent_no', 'o.parent_spelling_no', 'oo.basis',
@@ -4676,6 +4769,8 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 			      'v.last_late_age as lastapp_la' ],
 			#      'app.early_interval', 'app.late_interval'],
 		      ATTR => ['v.pubyr', 'v.attribution'],
+		      OP_ATTR => ['cv.pubyr as taxon_pubyr', 'cv.attribution as taxon_attr', 
+				  'pv.pubyr as parent_pubyr', 'pv.attribution as parent_attr'],
 		      SENPAR => ['pt.name as senpar_name', 'pt.rank as senpar_rank'],
 		      IMMPAR => ['ipt.name as immpar_name', 'ipt.rank as immpar_rank'],
 		      SIZE => ['v.taxon_size', 'v.extant_size', 'v.n_occs'],
@@ -4693,7 +4788,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				   'etb.life_habit_basis', 'etb.diet_basis',
 				   'etb.environment_basis_no', 'etb.motility_basis_no',
 				   'etb.life_habit_basis_no', 'etb.diet_basis_no'],
-		      PRES => ['not(v.not_trace) as is_trace', 'not(v.not_form) as is_form'],
+		      PRES => ['v.is_trace', 'v.is_form'],
 		      CRMOD => ['a.created', 'a.modified'],
 		      REF_CRMOD => ['r.created', 'r.modified'],
 		      OP_CRMOD => ['oo.created', 'oo.modified'],
@@ -4712,6 +4807,7 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
 			REF_COUNTS => ['refcounts'],
 			APP => ['v','app'], 
 			ATTR => ['v'],
+			OP_ATTR => ['cv', 'pv'],
 			SIZE => ['v'],
 			CLASS => ['ph'],
 			GENUS => ['pl'],

@@ -16,7 +16,7 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
@@ -194,7 +194,7 @@ sub initialize {
 	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
-	{ output => 'attribution', if_block => '1.2:occs:attr', 
+	{ output => 'accepted_attr', if_block => '1.2:occs:attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of the accepted name",
 	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
@@ -433,7 +433,7 @@ sub initialize {
 	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
 	{ output => 'taxon_name', com_name => 'nam' },
 	    "The name of the taxon represented by this record",
-	{ output => 'attribution', if_block => 'attr', com_name => 'att' },
+	{ output => 'taxon_attr', if_block => 'attr', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
 	{ output => 'n_orders', com_name => 'odc' },
 	    "The number of orders from within this taxon that appear in the set of",
@@ -801,7 +801,7 @@ sub initialize {
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
 			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
 	"You can also specify any of the following parameters:",
-	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', list => ',', alias => 'select' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
@@ -830,7 +830,7 @@ sub initialize {
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
 			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
 	"You can also specify any of the following parameters:",
-	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', list => ',', alias => 'select' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
@@ -852,9 +852,9 @@ sub initialize {
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
 			  '1.2:common:select_taxa_crmod', '1.2:common:select_taxa_ent'] },
 	"You can also specify any of the following parameters:",
-	{ optional => 'select', valid => '1.2:taxa:opselect', list => ',' },
-	    "You can use this parameter to retrieve all opinions, or only the classification opinions.",
-	    "Accepted values include:",
+	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select' },
+	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
+	    "or only certain types of opinions.  Accepted values include:",
 	{ allow => '1.2:opinions:filter' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
@@ -1100,7 +1100,7 @@ sub list {
     # If we were requested to lump by genus, we need to modify the query
     # accordingly. 
     
-    my $taxonres = $request->clean_param('taxon_res');
+    my $taxonres = $request->clean_param('taxon_reso');
     
     if ( $taxonres =~ qr{^lump} )
     {
@@ -2007,13 +2007,13 @@ sub list_associated {
     # First figure out if we just want occurrence/collection references, or if
     # we also want taxonomy references.
     
-    my @select = $request->clean_param_list('select');
-    my ($use_taxonomy, $use_colls);
+    my @select = $request->clean_param_list('ref_type');
+    my ($sql, $use_taxonomy, %select);
     
     foreach my $s ( @select )
     {
-	$use_taxonomy = 1 if $s ne 'occs' || $s ne 'colls';
-	$use_colls = 1 if $s eq 'colls';
+	$use_taxonomy = 1 if $s ne 'occs' && $s ne 'colls' && $s ne 'specs';
+	$select{$s} = 1;
     }
     
     $use_taxonomy = 1 if $record_type eq 'taxa' || $record_type eq 'opinions';
@@ -2062,7 +2062,6 @@ sub list_associated {
 			orig_no int unsigned not null ) engine=memory");
 	
 	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
-	my $sql;
 	
 	try {
 	    $sql = "
@@ -2128,6 +2127,10 @@ sub list_associated {
     
     # Otherwise, we can construct a query ourselves.
     
+    $request->delete_output_field('n_auth');
+    $request->delete_output_field('n_class');
+    $request->delete_output_field('n_unclass');
+    
     # If a query limit has been specified, modify the query accordingly.
     
     my $limit = $request->sql_limit_clause(1);
@@ -2146,24 +2149,93 @@ sub list_associated {
     my $inner_join_list = $request->generateJoinList('c', $inner_tables);
     my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($request->tables_hash);
     
+    $dbh->do("DROP TABLE IF EXISTS ref_collect");
+    
+    my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+    
+    $dbh->do("CREATE $temp TABLE ref_collect (
+		reference_no int unsigned not null,
+		ref_type varchar(10),
+		taxon_no int unsigned null,
+		occurrence_no int unsigned null,
+		specimen_no int unsigned null,
+		collection_no int unsigned null,
+		UNIQUE KEY (reference_no, ref_type, occurrence_no, specimen_no, collection_no)) engine=memory");
+    
+    if ( $select{occs} )
+    {
+	$sql = "INSERT IGNORE INTO ref_collect
+		SELECT o.reference_no, 'O' as ref_type, o.taxon_no, o.occurrence_no, 
+			null as specimen_no, null as collection_no
+		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	$dbh->do($sql);
+    }
+    
+    if ( $select{colls} )
+    {
+	$sql = "INSERT IGNORE INTO ref_collect
+		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
+			null as occurrence_no, null as specimen_no, c.collection_no
+		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	$dbh->do($sql);
+    }
+    
+    if ( $select{specs} )
+    {
+	$sql = "INSERT IGNORE INTO ref_collect
+		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, null as occurrence_no,
+			ss.specimen_no, null as collection_no
+		FROM $SPEC_MATRIX as ss JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	$dbh->do($sql);
+    }
+    
     $request->{main_sql} = "
-	SELECT $calc $fields, count(distinct occurrence_no) as n_occs,
-		count(distinct taxon_no) as n_reftaxa, 'O' as ref_type
-	FROM (SELECT o.reference_no, o.occurrence_no, o.taxon_no
-	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		$inner_join_list
-            WHERE $filter_string) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
-	$outer_join_list
+	SELECT $calc $fields, group_concat(distinct ref_type) as ref_type,
+		count(distinct taxon_no) as n_reftaxa, 
+		count(distinct occurrence_no) as n_refoccs,
+		count(distinct specimen_no) as n_refspecs,
+		count(distinct collection_no) as n_refcolls
+	FROM ref_collect as base
+		LEFT JOIN refs as r using (reference_no)
+		$outer_join_list
 	WHERE $ref_filter_string
-	GROUP BY r.reference_no ORDER BY $order
-	$limit";
+	GROUP BY base.reference_no ORDER BY $order $limit";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query.
     
-    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
+    try 
+    {
+	$request->{main_sth} = $dbh->prepare($request->{main_sql});
+	$request->{main_sth}->execute();
+    }
+	
+    catch
+    {
+	die $_;
+    }
+	
+    finally
+    {
+	$dbh->do("DROP TABLE IF EXISTS ref_collect");
+    };
     
     # If we were asked to get the count, then do so
     
@@ -2767,7 +2839,7 @@ sub process_basic_record {
     
     # Set the flags as appropriate.
     
-    $record->{flags} = "R" unless $record->{latest_ident};
+    $record->{flags} = "O" unless $record->{latest_ident};
     
     # Set the 'preservation' field.
     
@@ -2906,14 +2978,15 @@ sub process_difference {
 	
 	if ( defined $record->{identified_rank} && $record->{identified_rank} < 4 &&
 	     defined $record->{accepted_rank} && $record->{accepted_rank} >= 4 &&
+	     defined $record->{taxon_status} &&
 	     ( $record->{taxon_status} eq 'belongs to' || 
 	       $record->{taxon_status} eq 'subjective synonym of' ||
 	       $record->{taxon_status} eq 'objective synonym of' ||
 	       $record->{taxon_status} eq 'replaced by' ||
 	       $record->{taxon_status} eq '' ) )
 	{
-	    push @reasons, $record->{taxon_status} if $record->{taxon_status} ne 'belongs to' &&
-		$record->{taxon_status} ne '';
+	    push @reasons, $record->{taxon_status} if defined $record->{taxon_status} &&
+		$record->{taxon_status} ne 'belongs to' && $record->{taxon_status} ne '';
 	    push @reasons, 'species not entered';
 	}
 	
@@ -2927,24 +3000,24 @@ sub process_difference {
 	    if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
 	         $record->{spelling_reason} && $record->{spelling_reason} eq 'recombination' )
 	    {
-		push @reasons, 'recombination';
+		push @reasons, 'recombined as';
 	    }
 	    
 	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'reassignment' ||
 		    $record->{spelling_reason} && $record->{spelling_reason} eq 'reassignment' )
 	    {
-		push @reasons, 'reassignment';
+		push @reasons, 'reassigned as';
 	    }
 	    
 	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
 		    $record->{spelling_reason} ne 'correction' )
 	    {
-		push @reasons, 'correction';
+		push @reasons, 'corrected to';
 	    }
 	    
 	    else
 	    {
-		push @reasons, 'variant';
+		push @reasons, 'obsolete variant of';
 	    }
 	}
 	
@@ -2978,7 +3051,7 @@ sub process_difference {
 	
 	if ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
 	{
-	    unshift @reasons, 'misspelling';
+	    unshift @reasons, 'misspelling of';
 	}
 	
 	# Now join all of the reasons together.

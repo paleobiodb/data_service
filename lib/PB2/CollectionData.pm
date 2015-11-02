@@ -734,7 +734,7 @@ sub initialize {
 	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id'] },
 	{ param => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ','},
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names,",
-	    "specified by taxib identifier.  This is an alternative to the use of the C<^> character",
+	    "specified by taxon identifier.  This is an alternative to the use of the C<^> character",
 	    "in names.",
 	{ param => 'lngmin', valid => COORD_VALUE('lng') },
 	{ param => 'lngmax', valid => COORD_VALUE('lng') },
@@ -757,29 +757,29 @@ sub initialize {
 	    "with the coordinates being longitude and latitude values.",
 	{ param => 'plate', valid => ANY_VALUE },
 	    "Return only records located on the specified geological plate(s).  If the value",
-	    "of this parameter starts with 'G', then these will be interpreted as plate numbers",
-	    "from the GPlates model.  If the value starts with 'S', then these will be",
+	    "of this parameter starts with C<!>, then all records on the specified plates",
+	    "are instead excluded.  If the value of this parameter continues with C<G>,",
+	    "then the values will be interpreted as plate numbers",
+	    "from the GPlates model.  If C<S>, then they will be",
 	    "interpreted as plate numbers from the Scotese model.  Otherwise, they will",
-	    "be interpreted according to the value of the parameter C<pgm>.  If the",
-	    "value continues with C<^>, then all records located on the specified plates",
-	    "are instead B<excluded>.  The remainder of the value must be a",
-	    "list of plate numbers.",
-	{ optional => 'pgm', valid => $ds->valid_set('1.2:colls:pgmodel'), list => "," },
+	    "be interpreted according to the value of the parameter C<pgm>.",
+	    "The remainder of the value must be a list of plate numbers.",
+	{ optional => 'pgm', valid => $ds->valid_set('1.2:colls:pgmodel'), list => ',' },
 	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
 	    "You may specify one or more from the following list, separated by commas.",
 	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
 	    $ds->document_set('1.2:colls:pgmodel'),
-	{ param => 'cc', valid => \&valid_cc, list => qr{[\s,]}, alias => 'country', bad_value => '_' },
+	{ param => 'cc', valid => \&valid_cc, list => ',', alias => 'country', bad_value => '_' },
 	    "Return only records whose location falls within the specified geographic regions.",
 	    "The value of this parameter should be one or more",
 	    "L<two-character country codes|http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2> and/or ",
 	    "L<three-character continent codes|op:config.txt?show=continents> as a comma-separated list.",
-	    "If the parameter value starts with C<^>, then records falling into these regions are excluded",
-	    "instead of included.  If any of the codes starts with C<->, then subsequent country codes are",
+	    "If the parameter value starts with C<!>, then records falling into these regions are excluded",
+	    "instead of included.  Any country codes starting with C<^> are",
 	    "subtracted from the filter.  For example:", "=over",
 	    "=item ATA,AU", "Select occurrences from Antarctica and Australia",
-	    "=item NOA,SOA,-AR,BO", "Select occurrences from North and South America, but not Argentina or Bolivia",
-	    "=item ^EUR,-IS", "Exclude occurrences from Europe, except those from Iceland", "=back",
+	    "=item NOA,SOA,^AR,^BO", "Select occurrences from North and South America, but not Argentina or Bolivia",
+	    "=item !EUR,^IS", "Exclude occurrences from Europe, except those from Iceland", "=back",
 	{ param => 'continent', valid => \&valid_continent, list => qr{[\s,]+}, bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified continent or continents.",
 	    "The value of this parameter should be a comma-separated list of ",
@@ -914,8 +914,16 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
-#	">>You can also specify any of the following parameters:",
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:refs:aux_selector' },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
+			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
+	">>The following parameters can be used to further filter the result list.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
     	{ allow => '1.2:colls:display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -1091,7 +1099,7 @@ sub list {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateCollFilters($tables);
-    push @filters, $request->generate_common_filters( { colls => 'cc', bare => 'cc' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'cc' }, $tables );
     push @filters, '1=1' if $request->clean_param('all_records');
     # push @filters, $request->generate_crmod_filters('cc', $tables);
     # push @filters, $request->generate_ent_filters('cc', $tables);
@@ -2217,7 +2225,7 @@ sub generateMainFilters {
     # Check for parameter 'taxonres'.  But not if we took the "identification
     # branch" because in that case it has already been handled.
     
-    my $taxonres = $request->clean_param('taxon_res');
+    my $taxonres = $request->clean_param('taxon_reso');
     
     if ( $taxonres && ! $ident_used )
     {
@@ -2236,6 +2244,7 @@ sub generateMainFilters {
 	elsif ( $taxonres eq 'family' || $taxonres eq 'lump_family' )
 	{
 	    push @filters, "(tv.rank <= 9 or ph.family_no is not null)";
+	    $tables_ref->{tv} = 1;
 	    $tables_ref->{ph} = 1;
 	}
     }
@@ -2263,19 +2272,19 @@ sub generateMainFilters {
 	    {
 		if ( $keys[0] eq 'regular' )
 		{
-		    push @filters, "v.not_trace and v.not_form";
+		    push @filters, "not(v.is_trace or v.is_form)";
 		    $tables_ref->{v} = 1;
 		}
 		
 		elsif ( $keys[0] eq 'form' )
 		{
-		    push @filters, "not(v.not_form)";
+		    push @filters, "v.is_form";
 		    $tables_ref->{v} = 1;
 		}
 		
 		elsif ( $keys[0] eq 'ichno' )
 		{
-		    push @filters, "not(v.not_trace)";
+		    push @filters, "v.is_trace";
 		    $tables_ref->{v} = 1;
 		}
 		
@@ -2290,17 +2299,17 @@ sub generateMainFilters {
 	    {
 		if ( $pres{form} && $pres{ichno} )
 		{
-		    push @filters, "not(v.not_trace and v.not_form)";
+		    push @filters, "(v.is_form or v.is_trace)";
 		}
 		
 		elsif ( $pres{form} && $pres{regular} )
 		{
-		    push @filters, "(v.not_trace or not(v.not_form))";
+		    push @filters, "(v.is_form or not(v.is_trace))";
 		}
 		
 		elsif ( $pres{ichno} && $pres{regular} )
 		{
-		    push @filters, "(v.not_form or not(v.not_trace))";
+		    push @filters, "(v.is_trace or not(v.is_form))";
 		}
 		
 		else
@@ -2331,9 +2340,9 @@ sub generateMainFilters {
 	
 	else
 	{
-	    my (@cc2, @cc3, @cc2x, @cc3x, @cc2s, $invert, $exclude);
+	    my (@cc2, @cc3, @cc2x, $invert);
 	    
-	    if ( $ccs[0] =~ qr{ ^ \^ (.*) }xs )
+	    if ( $ccs[0] =~ qr{ ^ ! (.*) }xs )
 	    {
 		$ccs[0] = $1;
 		$invert = 1;
@@ -2341,36 +2350,27 @@ sub generateMainFilters {
 	    
 	    foreach my $value (@ccs)
 	    {
-	    	if ( $value =~ qr{ ^ - (.*) }xs )
-	    	{
-	    	    $exclude = 1;
-	    	    $value = $1;
-	    	}
-		
 		next unless $value;
 		
-		# We can have both included and excluded countries.
-		
-	    	if ( length($value) == 2 )
+	    	if ( $value =~ qr{ ^ \^ (\w\w) }xs )
 	    	{
-	    	    if ( $exclude ) {
-	    		push @cc2x, $value;
-	    	    } else {
-	    		push @cc2, $value;
-	    	    }
+		    push @cc2x, $1;
 	    	}
 		
-		# However, if we have at least one included continent then we
-		# ignore any continental exclusions.
+		elsif ( $value =~ qr{ ^ \w\w $ }xs )
+		{
+		    push @cc2, $value;
+		}
 		
-	    	else
-	    	{
-		    if ( $exclude ) {
-	    		$request->add_warning("ignoring exclusion of continent '$value'");
-	    	    } else {
-	    		push @cc3, $value;
-	    	    }
-	    	}
+		elsif ( $value =~ qr{ ^ \w\w\w $ }xs )
+		{
+		    push @cc3, $value;
+		}
+		
+		else
+		{
+		    $request->add_warning("bad value '$value' for parameter 'cc'");
+		}
 	    }
 	    
 	    my (@cc_filters, @disjoint_filters, $disjunction);
@@ -2403,7 +2403,7 @@ sub generateMainFilters {
 	    
 	    if ( $invert )
 	    {
-		push @filters, 'not( ' . join(' and ', @cc_filters), ')';
+		push @filters, 'not( ' . join(' and ', @cc_filters) . ')';
 	    }
 	    
 	    else
@@ -2610,7 +2610,7 @@ sub generateMainFilters {
     
     my (%env_values, %exc_values, $et_invert, $et_exclude, $et_unknown);
     
-    if ( @envtype && $envtype[0] =~ qr{ ^ \^ (.*) }xs )
+    if ( @envtype && $envtype[0] =~ qr{ ^ ! (.*) }xs )
     {
 	$envtype[0] = $1;
 	$et_invert = 1;
@@ -2620,7 +2620,9 @@ sub generateMainFilters {
     {
 	$e = lc $e;
 	
-	if ( $e =~ qr{ ^ - (.*) }xs )
+	my $et_exclude;
+	
+	if ( $e =~ qr{ ^ \^ (.*) }xs )
 	{
 	    $e = $1;
 	    $et_exclude = 1;
@@ -2741,22 +2743,26 @@ sub generateMainFilters {
 	
 	if ( $et_invert && $et_unknown )
 	{
-	    push @filters, "c.environment not in ($env_list)";
+	    push @filters, "cc.environment not in ($env_list)";
+	    $tables_ref->{cc} = 1;
 	}
 	
 	elsif ( $et_invert )
 	{
-	    push @filters, "(c.environment not in ($env_list) or c.environment is null)";
+	    push @filters, "(cc.environment not in ($env_list) or cc.environment is null)";
+	    $tables_ref->{cc} = 1;
 	}
 	
 	elsif ( $et_unknown )
 	{
-	    push @filters, "(c.environment in ($env_list) or c.environment is null)";
+	    push @filters, "(cc.environment in ($env_list) or cc.environment is null)";
+	    $tables_ref->{cc} = 1;
 	}
 	
 	else
 	{
-	    push @filters, "c.environment in ($env_list)";
+	    push @filters, "cc.environment in ($env_list)";
+	    $tables_ref->{cc} = 1;
 	}
 	
 	# $tables_ref->{cc} = 1;
@@ -3576,7 +3582,9 @@ sub generateJoinList {
     
     $tables->{o} = 1 if ($tables->{t} || $tables->{tf} || $tables->{oc}) && ! $tables->{ds};
     $tables->{c} = 1 if $tables->{o} || $tables->{pc} || $tables->{cs};
-    $tables->{t} = 1 if $tables->{ph} || $tables->{pl};
+    $tables->{t} = 1 if $tables->{ph} || $tables->{pl} || $tables->{tv};
+    
+    my $t = $tables->{tv} ? 'tv' : 't';
     
     # Create the necessary join expressions.
     
@@ -3586,11 +3594,13 @@ sub generateJoinList {
 	if $tables->{oc};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t} || $tables->{tf} || $tables->{v};
-    $join_list .= "JOIN taxon_attrs as v using (orig_no)\n"
+    $join_list .= "JOIN taxon_trees as tv on tv.orig_no = t.accepted_no\n"
+	if $tables->{tv};
+    $join_list .= "JOIN taxon_attrs as v on v.orig_no = $t.orig_no\n"
 	if $tables->{v};
-    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = $t.orig_no\n"
 	if $tables->{pl};
-    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
+    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = $t.ints_no\n"
 	if $tables->{ph};
     $join_list .= "JOIN coll_map as cm using (bin_id)\n"
 	if $tables->{cm};
@@ -3712,7 +3722,7 @@ sub valid_cc {
     # Start with a simple syntactic check.
     
     return { error => $country_error }
-	unless $value =~ qr{ ^ ( \^? ) ( [a-z]{2,3} ) $ }xsi;
+	unless $value =~ qr{ ^ ( [!^]? ) ( [a-z]{2,3} ) $ }xsi;
     
     my $exclude = $1 // '';
     my $code = $2;

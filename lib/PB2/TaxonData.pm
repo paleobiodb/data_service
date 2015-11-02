@@ -157,7 +157,7 @@ sub initialize {
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
 	    "The scientific name of this taxon",
-	{ output => 'attribution', if_block => 'attr', 
+	{ output => 'taxon_attr', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common,full' },
@@ -172,7 +172,7 @@ sub initialize {
 	    "the identifier of the accepted name to be used in its place.  Otherwise, its value",
 	    "will be the same as C<orig_no>.  In the compact vocabulary, this field",
 	    "will be omitted in that case.",
-	{ output => 'accepted_rank', com_name => 'acr', not_block => 'accconly' },
+	{ output => 'accepted_rank', com_name => 'acr', not_block => 'acconly' },
 	    "If C<accepted_no> is different from C<orig_no>, this field",
 	    "gives the rank of the accepted name.  Otherwise, its value will",
 	    "be the same as C<taxon_rank>.  In the compact voabulary, this field",
@@ -243,7 +243,7 @@ sub initialize {
 	    "The rank of this taxon as mentioned in the reference, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
 	    "The taxonomic name actually mentioned in the reference.",
-	{ output => 'attribution', if_block => 'attr', 
+	{ output => 'taxon_attr', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common,full' },
@@ -647,6 +647,8 @@ sub initialize {
 	{ value => 'full', maps_to => '1.2:opinions:full_info' },
 	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
 	    "includes the following blocks: B<basis>, B<refattr>.",
+	{ value => 'attr', maps_to => '1.2:opinions:attr' },
+	    "The attribution of the taxonomic names mentioned in this opinion, by author and year.",
 	{ value => 'basis' },
 	    "The basis of the opinion, which will be one of the following:",
 	    "=over", "=item stated with evidence", "=item stated without evidence",
@@ -684,6 +686,9 @@ sub initialize {
 	    "this opinion.",
 	{ output => 'taxon_name', com_name => 'nam' },
 	    "The taxonomic name that is the subject of this opinion.",
+	{ output => 'taxon_attr', com_name => 'att', if_block => 'attr' },
+	    "The attribution (author and year) of the taxonomic name that is the subject",
+	    "of this opinion.",
 	{ output => 'orig_no', com_name => 'tid' },
 	    "The identifier of the taxonomic name that is the subject of this opinion.",
 	{ output => 'child_name', dedup => 'taxon_name', com_name => 'cnm' },
@@ -698,6 +703,8 @@ sub initialize {
 	    "The taxonomic name under which the subject is being placed (the \"parent\" taxonomic name).",
 	    "Note that the value of this field is the particular variant of the name that was given",
 	    "in the opinion, not necessarily the currently accepted variant.",
+	{ output => 'parent_attr', com_name => 'atp', if_block => 'attr' },
+	    "The attribution (author and year) of the parent taxonomic name.",
 	{ output => 'parent_no', com_name => 'par' },
 	    "The identifier of the parent taxonomic name.",
 	{ output => 'parent_spelling_no', com_name => 'pva', dedup => 'parent_current_no' },
@@ -707,8 +714,10 @@ sub initialize {
 	    "An indication of why this name was given.",
 	{ output => 'basis', com_name => 'bas', if_block => 'basis,full' },
 	    "The basis of the opinion, see above for a list.",
-	{ output => 'attribution', com_name => 'att' },
-	    "The attribution of the opinion, author and year.",
+	{ output => 'author', com_name => 'oat' },
+	    "The author of the opinion.",
+	{ output => 'pubyr', com_name => 'opy' },
+	    "The year in which the opinion was published.",
 	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
 	    "The author(s) of the reference from which this opinion was entered.  Note that",
 	    "the author of the opinion itself may be different if the reference is a secondary source.",
@@ -720,6 +729,9 @@ sub initialize {
     
     $ds->define_block('1.2:opinions:full_info' =>
 	{ include => '1.2:refs:attr' });
+    
+    $ds->define_block('1.2:opinions:attr' =>
+	{ select => [ 'OP_ATTR' ] });
     
     # Finally, we define some rulesets to specify the parameters accepted by
     # the operations defined in this class.
@@ -807,16 +819,21 @@ sub initialize {
 	{ value => 'invalid' },
 	    "Select only taxonomically invalid names, e.g. nomina dubia");
     
-    $ds->define_set('1.2:opinions:status' =>
+    $ds->define_set('1.2:opinions:select' =>
+	{ value => 'class' },
+	    "Return just the classification opinions for the selected set of taxa.",
+	    "This is the default.  If you wish to select only certain kinds of classification",
+	    "opinions, you can add the parameter C<taxon_status>.",
 	{ value => 'all' },
-	    "Select all opinions, regardless of what they state about their subject taxon.",
-	    "This is the default.",
+	    "Return all opinions about the selected set of taxa, regardless of",
+	    "what they state about their subject taxon, and including all of the opinions that",
+	    "were not selected as classification opinions.",
 	{ value => 'valid' },
-	    "Select only opinions which assert that their subject taxon is a valid",
+	    "Return only opinions which assert that their subject taxon is a valid",
 	    "name.  These opinions state one of the following about their subject taxon:",
 	    "'belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by'.",
 	{ value => 'accepted' },
-	    "Select only opinions which assert that their subject taxon is a valid",
+	    "Return only opinions which assert that their subject taxon is a valid",
 	    "name and not a junior synonym.  These opinions state 'belongs to' about their subject taxon.",
 	{ value => 'junior' },
 	    "Select only opinions which assert that their subject taxon is a junior synonym.",
@@ -840,29 +857,34 @@ sub initialize {
     
     $ds->define_set('1.2:taxa:refselect' =>
 	{ value => 'auth' },
-	    "Select the references associated with the authority records for these taxa.",
+	    "Return the references which provide the authority for the selected taxa.",
 	{ value => 'class' },
-	    "Select the references associated with the classification opinions for these taxa",
+	    "Return the references which provide the classification opinions for the selected taxa",
 	{ value => 'taxonomy' },
-	    "Select the references associated with both the authority records and the classification",
-	    "opinions for these taxa.  This is the default.",
+	    "Return both the authority references and the classification references for",
+	    "the selected taxa.  This is the default.",
 	{ value => 'ops' },
-	    "Select the references associated with all opinions on these taxa, including",
+	    "Return the references providing all of the entered opinions about the selected taxa, including",
 	    "those not used for classification.",
 	{ value => 'occs' },
-	    "Select the references associated with occurrences of these taxa.",
+	    "Return the references from which the selected occurrences, or all occurrences",
+	    "of the selected taxa, were entered.",
+	{ value => 'specs' },
+	    "Return the references from which the selected specimens, or all specimens associated",
+	    "with the selected occurrences, or all specimens of the selected taxa, were entered.",
 	{ value => 'colls' },
-	    "Select the references associated with collections that contain occurrences of these taxa.",
+	    "Return the primary references of all collections containing the selected occurrences,",
+	    "or occurrences of the selected taxa.",
 	{ value => 'all' },
-	    "Select all of the above.");
+	    "Return all of the above.");
     
-    $ds->define_set('1.2:taxa:opselect' =>
-	{ value => 'class' },
-	    "Select only opinions that have been selected as classification opinions.  This is the default",
-	    "for L<taxa/opinions|node:taxa/opinions>.",
-	{ value => 'all' },
-	    "Select all matching opinions, including those that are not used",
-	    "as classification opinions.  This is the default for L<opinions/list|node:opinions/list>.");
+    # $ds->define_set('1.2:taxa:opselect' =>
+    # 	{ value => 'class' },
+    # 	    "Select only opinions that have been selected as classification opinions.  This is the default",
+    # 	    "for L<taxa/opinions|node:taxa/opinions>.",
+    # 	{ value => 'all' },
+    # 	    "Select all matching opinions, including those that are not used",
+    # 	    "as classification opinions.  This is the default for L<opinions/list|node:opinions/list>.");
     
     $ds->define_set('1.2:taxa:variants' =>
 	{ value => 'current' },
@@ -1077,7 +1099,7 @@ sub initialize {
 	    "ichnotaxa, form taxa, or regular taxa.  The default is C<all>, which will select",
 	    "all taxa that meet the other specified criteria.  You can specify one or more",
 	    "of the following values as a list:",
-	{ optional => 'taxon_status', valid => '1.2:taxa:status', default => 'all', alias => 'status' },
+	{ optional => 'taxon_status', valid => '1.2:taxa:status', alias => 'status' },
 	    "Selects only names that have the specified status.  The default is C<all>.",
 	    "Accepted values include:",
 	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',' },
@@ -1192,6 +1214,11 @@ sub initialize {
 	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
 	    "Selects only records associated with taxa that have the specified status.",
 	    "The default is C<all>.  Accepted values include:",
+	{ param => 'pres', valid => '1.2:taxa:preservation', list => ',' },
+	    "This parameter indicates whether to select records associated with taxa that are identified as",
+	    "ichnotaxa, form taxa, or regular taxa.  The default is C<all>, which will select",
+	    "all records that meet the other specified criteria.  You can specify one or more",
+	    "of the following values as a list:",
 	{ optional => 'rank', valid => \&PB2::TaxonData::validRankSpec },
 	    "Return only records associated with taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'depth', valid => POS_VALUE },
@@ -1224,9 +1251,9 @@ sub initialize {
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:");
     
     $ds->define_ruleset('1.2:opinions:filter' =>
-	{ optional => 'op_status', valid => '1.2:opinions:status' },
-	    "You can use this parameter to specify which kinds of opinions to select.",
-	    "Accepted values include:",
+	# { optional => 'op_status', valid => '1.2:opinions:status' },
+	#     "You can use this parameter to specify which kinds of opinions to select.",
+	#     "Accepted values include:",
 	{ param => 'op_author', valid => ANY_VALUE },
 	    "Not implemented yet, but will be soon.",
 	    # "Selects only opinions attributed to the specified author.  This database",
@@ -1235,11 +1262,7 @@ sub initialize {
 	    # "attributed to both authors together regardless of author order.",
 	    # "You may specify more than one name and/or name pair, separated by commas.  In",
 	    # "this case, all opinions that match any of these will be selected.",
-	{ param => 'op_published_after', valid => POS_VALUE, alias => 'pubyr_before' },
-	    "Selects only opinions published during or after the indicated year.",
-	{ param => 'op_published_before', valid => POS_VALUE, alias => 'pubyr_after' },
-	    "Selects only opinions published during or before the indicated year.",
-	{ param => 'op_published', valid => ANY_VALUE, alias => 'op_pubyr' },
+	{ param => 'op_pubyr', valid => ANY_VALUE },
 	    "Selects only opinions published during the indicated year or range of years.");
     
     $ds->define_ruleset('1.2:opinions:display' => 
@@ -1283,13 +1306,16 @@ sub initialize {
 	"parameters that you specify will be returned.",
 	{ require => '1.2:taxa:aux_selector',
 	  error => "you must specify one of 'name', 'id', 'base_name', 'base_id', 'match_name', or 'all_records'" },
+	{ optional => 'variant', valid => '1.2:taxa:variants' },
+	    "! This parameter is not useful for opinions, but is included for consistency",
+	    "with 1.2:taxa:list and 1.2:taxa:refs.",
 	{ allow => '1.2:taxa:filter' },
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
 	">>You can also specify any of the following parameters:",
-	{ optional => 'select', valid => '1.2:taxa:opselect' },
-	    "You can use this parameter to retrieve all opinions, or only the classification opinions.",
-	    "Accepted values include:",
+	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select' },
+	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
+	    "or only certain kinds of opinions.  Accepted values include:",
 	{ allow => '1.2:opinions:filter' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
@@ -1314,7 +1340,7 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
 	">You can also specify any of the following parameters:",
-	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', alias => 'select', list => ',' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
@@ -1346,7 +1372,7 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
 	">>You can also specify any of the following parameters:",
-	{ optional => 'select', valid => '1.2:taxa:refselect', list => ',' },
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', list => ',', alias => 'select' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:common:select_refs_crmod' },
@@ -1442,6 +1468,9 @@ sub initialize {
 	{ allow => '1.2:common:select_ops_ent' },
 	{ require_any => ['1.2:opinions:selector', '1.2:opinions:filter', 
 			  '1.2:common:select_ops_crmod', '1.2:common:select_ops_ent'] },
+	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select' },
+	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
+	    "or only certain kinds of opinions.  Accepted values include:",
 	{ allow => '1.2:opinions:display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
@@ -1729,6 +1758,8 @@ sub list_taxa {
 	my @result = $taxonomy->list_taxa($rel, $base, $options);
 	my @warnings = $taxonomy->list_warnings;
 	
+	$request->add_warning(@warnings) if @warnings;
+	
 	if ( $options->{return} eq 'stmt' )
 	{
 	    $request->sth_result($result[0]) if $result[0];
@@ -1793,6 +1824,8 @@ sub list_associated {
 	my @result = $taxonomy->list_associated($rel, $base, $options);
 	my @warnings = $taxonomy->list_warnings;
 	
+	$request->add_warning(@warnings) if @warnings;
+	
 	if ( $options->{return} eq 'stmt' )
 	{
 	    $request->sth_result($result[0]) if $result[0];
@@ -1848,6 +1881,10 @@ sub list_opinions {
     
     try {
 	$sth = $taxonomy->list_opinions($base, $options);
+	
+	my @warnings = $taxonomy->list_warnings;
+	$request->add_warning(@warnings) if @warnings;
+	
 	$request->sth_result($sth);
 	$request->set_result_count($taxonomy->last_rowcount);
     }
@@ -2440,7 +2477,7 @@ sub generate_query_fields {
     
     if ( $operation eq 'refs' )
     {
-	push @fields, 'REF_COUNTS' if $request->has_block('subcounts');
+	push @fields, 'REF_COUNTS' if $request->has_block('counts');
     }
     
     $options->{fields} = \@fields;
@@ -2468,7 +2505,7 @@ sub generate_query_options {
     
     if ( $record_type eq 'refs' )
     {
-	push @fields, 'REF_COUNTS' if $request->has_block('subcounts');
+	push @fields, 'REF_COUNTS' if $request->has_block('counts');
     }
     
     $options->{fields} = \@fields;
@@ -2486,7 +2523,21 @@ sub generate_query_options {
     
     my $status = $request->clean_param('taxon_status');
     my @pres = $request->clean_param_list('pres');
-    my @select = $request->clean_param_list('select');
+    
+    if ( $request->has_block('acconly') )
+    {
+	die "400 you cannot specify 'taxon_status=$status' and 'show=acconly' in the same request.\n"
+	    if defined $status && $status ne '' && $status ne 'accepted';
+	$status = 'accepted';
+    }
+    
+    elsif ( $status eq 'accepted' )
+    {
+	$request->delete_output_field('difference');
+	$request->delete_output_field('accepted_no');
+	$request->delete_output_field('accepted_rank');
+	$request->delete_output_field('accepted_name');
+    }
     
     $options->{status} = $status if $status ne '';
     
@@ -2506,9 +2557,14 @@ sub generate_query_options {
     # 	$options->{higher} = 1 if $occ_name =~ qr{higher};
     # }
     
-    if ( @select )
+    if ( my @select = $request->clean_param_list('ref_type') )
     {
-	$options->{assoc_type} = \@select;
+	$options->{ref_type} = \@select;
+    }
+    
+    if ( my $select = $request->clean_param('op_type') )
+    {
+	$options->{op_type} = $select;
     }
     
     if ( @pres )
@@ -2583,17 +2639,17 @@ sub generate_query_options {
     
     # Now check for author & publication date
     
-    my $op_status = $request->clean_param('op_status');
-    my $max_pubyr = $request->clean_param('op_published_before');
-    my $min_pubyr = $request->clean_param('op_published_after');
-    my $pubyr = $request->clean_param('op_published');
+    # my $op_status = $request->clean_param('op_status');
+    my $pubyr = $request->clean_param('op_pubyr');
     my $author = $request->clean_param('op_author');
     
-    if ( $op_status )
-    {
-	$options->{op_status} = $op_status;
-	print STDERR "OP STATUS: $op_status\n";
-    }
+    # if ( $op_status )
+    # {
+    # 	$options->{op_status} = $op_status;
+    # 	print STDERR "OP STATUS: $op_status\n";
+    # }
+    
+    my ($min_pubyr, $max_pubyr);
     
     if ( $pubyr =~ qr{ ^ ( \d\d\d\d ) (?: \s* - \s* ( \d+ ) )? $ }xs )
     {
@@ -3534,29 +3590,29 @@ sub process_difference {
 	if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
 	     $record->{spelling_reason} && $record->{spelling_reason} eq 'recombination' )
 	{
-	    $record->{difference} = 'recombination';
+	    $record->{difference} = 'recombined as';
 	}
 	
 	elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'reassignment' ||
 		$record->{spelling_reason} && $record->{spelling_reason} eq 'reassignment' )
 	{
-	    $record->{difference} = 'reassignment';
+	    $record->{difference} = 'reassigned as';
 	}
 	
 	elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
 		! ($record->{spelling_reason} && $record->{spelling_reason} eq 'correction' ) )
 	{
-	    $record->{difference} = 'correction';
+	    $record->{difference} = 'corrected to';
 	}
 	
 	elsif ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
 	{
-	    $record->{difference} = 'misspelling';
+	    $record->{difference} = 'misspelling of';
 	}
 	
 	else
 	{
-	    $record->{difference} = 'variant';
+	    $record->{difference} = 'obsolete variant of';
 	}
     }
     

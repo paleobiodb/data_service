@@ -94,13 +94,17 @@ sub initialize {
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
 	{ output => 'n_reftaxa', name => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
-	    "The number of taxa associated with this reference",
+	    "The number of distinct taxa associated with this reference",
+	{ output => 'n_refauth', name => 'n_auth', com_name => 'nau', if_block => 'counts' },
+	    "The number of taxa for which this reference gives the authority",
 	{ output => 'n_refclass', name => 'n_class', com_name => 'ncl', if_block => 'counts' },
-	    "The number of classification opinions associated with this reference",
+	    "The number of classification opinions entered from this reference",
 	{ output => 'n_refunclass', name => 'n_unclass', com_name => 'nuc', if_block => 'counts' },
-	    "The number of opinions not selected for classification associated with this reference",
+	    "The number of opinions not selected for classification entered from this reference",
 	{ output => 'n_refoccs', name => 'n_occs', com_name => 'noc', if_block => 'counts' },
-	    "The number of occurrences associated with this reference",
+	    "The number of occurrences entered from this reference",
+	{ output => 'n_refspecs', name => 'n_specs', com_name => 'nsp', if_block => 'counts' },
+	    "The number of specimens entered from this reference",
 	{ output => 'n_refcolls', name => 'n_colls', com_name => 'nco', if_block => 'counts' },
 	    "The number of collections for which this is the primary reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
@@ -843,7 +847,7 @@ sub generate_join_list {
 # format_reference ( )
 # 
 # Generate a reference string for the given record.  This relies on the
-# fields "r_al1", "r_ai1", "r_al2", "r_ai2", "r_ao", "r_pubyr", "r_reftitle",
+# fields "r_al1", "r_ai1", "r_al2", "r_ai2", "r_oa", "r_pubyr", "r_reftitle",
 # "r_pubtitle", "r_pubvol", "r_pubno".
 # 
 
@@ -876,7 +880,7 @@ sub format_reference {
     $auth2 .= ' ' if $ai2 ne '' && $al2 ne '';
     $auth2 .= $al2;
     
-    my $auth3 = $row->{r_ao} || '';
+    my $auth3 = $row->{r_oa} || '';
     
     $auth3 =~ s/\.//g;
     $auth3 =~ s/\b(\w)\b/$1./g;
@@ -984,7 +988,7 @@ sub format_reference {
 # format_authors ( )
 # 
 # Generate an attribution string for the primary reference associated with
-# the given record.  This relies on the fields "r_al1", "r_al2", "r_ao".  This
+# the given record.  This relies on the fields "r_al1", "r_al2", "r_oa".  This
 # string does not include the publication year.
 
 sub format_authors {
@@ -993,7 +997,7 @@ sub format_authors {
     
     my $auth1 = $record->{r_al1} || '';
     my $auth2 = $record->{r_al2} || '';
-    my $auth3 = $record->{r_ao} || '';
+    my $auth3 = $record->{r_oa} || '';
     
     $auth1 =~ s/( Jr)|( III)|( II)//;
     $auth1 =~ s/\.$//;
@@ -1049,14 +1053,14 @@ sub set_reference_type {
 	push @types, 'occ';
     }
     
+    if ( $ref_type =~ qr{S} || $record->{n_refspecs} )
+    {
+	push @types, 'spec';
+    }
+    
     if ( $ref_type =~ qr{P} || $record->{n_refcolls} )
     {
 	push @types, 'prim';
-    }
-    
-    elsif ( $ref_type =~ qr{S} && $ref_type !~ qr{O} )
-    {
-	push @types, 'sec';
     }
     
     # if ( defined $record->{n_refcolls} && defined $record->{n_refprim} && 
@@ -1111,7 +1115,7 @@ sub valid_pubyr {
     
     my ($value, $context) = @_;
     
-    if ( $value =~ qr{ ^ (?: max_ | min_ | \s* - \s* ) \d\d\d\d $ }xs )
+    if ( $value =~ qr{ ^ (?: max_ | min_ | \s* - \s* )? \d\d\d\d $ }xs )
     {
 	return;
     }

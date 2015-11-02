@@ -41,6 +41,11 @@ can add in order to precisely specify which taxa you are interested in.
 
 You can retrieve records based on when they were modified and/or created.
 
+=item L<Bibliographic references|node:bibliographic_refs>
+
+Each piece of data entered into the database is linked to the bibliographic
+reference from which it was entered.
+
 =item L<Basis and precision of coordinates|node:basis_precision>
 
 The basis and precision of geographic locations is specified by a set of code values.

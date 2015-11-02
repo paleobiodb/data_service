@@ -4260,6 +4260,8 @@ sub computeAttrsTable {
 				is_valid boolean,
 				is_senior boolean,
 				is_extant boolean,
+				is_trace boolean,
+				is_form boolean,
 				extant_children smallint,
 				distinct_children smallint,
 				extant_size int unsigned,
@@ -4269,8 +4271,6 @@ sub computeAttrsTable {
 				min_body_mass float,
 				max_body_mass float,
 				precise_age boolean,
-				not_trace boolean,
-				not_form boolean,
 				first_early_age decimal(9,5),
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
@@ -4292,13 +4292,13 @@ sub computeAttrsTable {
     
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
-			 extant_size, taxon_size, n_colls, n_occs, not_trace, not_form)
+			 extant_size, taxon_size, n_colls, n_occs, is_trace, is_form)
 		SELECT a.orig_no,
 			if(t.accepted_no = t.synonym_no, 1, 0) as is_valid,
 			if(t.synonym_no = t.orig_no, 1, 0) as is_senior,
 			sum(if(a.extant = 'yes', 1, if(a.extant = 'no', 0, null))) as is_extant,
-			0, 0, 0, 0, 0, 0, a.preservation <> 'trace' or a.preservation is null,
-			a.form_taxon <> 'yes' or a.form_taxon is null
+			0, 0, 0, 0, 0, 0, if(a.preservation = 'trace', 1, 0),
+			if(a.form_taxon = 'yes', 1, 0)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 		GROUP BY a.orig_no";
     
@@ -4486,8 +4486,8 @@ sub computeAttrsTable {
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
 					max(v.max_body_mass), pv.max_body_mass) as max_body_mass,
-			if(max(v.not_trace) > 0, 1, pv.not_trace) as not_trace,
-			if(max(v.not_form) > 0, 1, pv.not_form) as not_form
+			if(min(v.is_trace) > 0, 1, pv.is_trace) as is_trace,
+			if(min(v.is_form) > 0, 1, pv.is_form) as is_form
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.immpar_no 
 		 WHERE t.depth = $child_depth and v.is_senior
@@ -4500,8 +4500,8 @@ sub computeAttrsTable {
 			v.taxon_size = nv.taxon_size,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.not_trace = nv.not_trace,
-			v.not_form = nv.not_form";
+			v.is_trace = nv.is_trace,
+			v.is_form = nv.is_form";
 	
 	$result = $dbh->do($sql);
 	
@@ -4518,8 +4518,8 @@ sub computeAttrsTable {
 			sum(v.n_occs) as n_occs,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
-			max(v.not_trace) as not_trace,
-			max(v.not_form) as not_form
+			min(v.is_trace) as is_trace,
+			min(v.is_form) as is_form
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and v.is_valid
 		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
@@ -4531,8 +4531,8 @@ sub computeAttrsTable {
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.not_trace = nv.not_trace,
-			v.not_form = nv.not_form";
+			v.is_trace = nv.is_trace,
+			v.is_form = nv.is_form";
 	
 	$result = $dbh->do($sql);
 	
@@ -4542,7 +4542,7 @@ sub computeAttrsTable {
 	
 	$sql = "SELECT t.orig_no, t.synonym_no, t.senpar_no, t.depth, v.taxon_size,
 		       v.first_early_age, v.first_late_age, v.last_early_age, v.last_late_age,
-		       v.early_occ, v.late_occ, v.precise_age, v.not_trace
+		       v.early_occ, v.late_occ, v.precise_age, v.is_trace
 		FROM $ATTRS_WORK as v join $TREE_WORK as t using (orig_no)
 		WHERE t.depth in ($depth, $child_depth)";
 	
@@ -4553,8 +4553,15 @@ sub computeAttrsTable {
 	
 	my %coalesce;
 	
+	# Go through the taxa one by one.
+	
 	foreach my $row (@$rows)
 	{
+	    # Any taxon that is a trace taxon is considered not to have a precise age.  This will
+	    # make sure that their ages do not propagate.
+	    
+	    $row->{precise_age} = 0 if $row->{is_trace};
+	    
 	    # First, determine which entry each row should be coalesced into.
 	    
 	    my $orig_no = $row->{depth} == $depth ? $row->{synonym_no} : $row->{senpar_no};
@@ -4701,8 +4708,8 @@ sub computeAttrsTable {
 			v.precise_age = sv.precise_age,
 			v.early_occ = sv.early_occ,
 			v.late_occ = sv.late_occ,
-			v.not_trace = sv.not_trace,
-			v.not_form = sv.not_form");
+			v.is_trace = sv.is_trace,
+			v.is_form = sv.is_form");
     
     # Now we can set the 'pubyr', 'modyr', 'is_changed' and 'attribution' fields, which are not
     # inherited. 

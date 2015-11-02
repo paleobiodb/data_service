@@ -511,9 +511,9 @@ sub ent_filter {
     my @ids;
     my $exclude = '';
     
-    # If the first value starts with '^', generate an exclusion filter.
+    # If the first value starts with '!', generate an exclusion filter.
     
-    if ( $values[0] =~ qr{^\^\s*(.*)} )
+    if ( $values[0] =~ qr{ ^ ! \s* (.*) }xs )
     {
 	$values[0] = $1;
 	$exclude = 'not ';

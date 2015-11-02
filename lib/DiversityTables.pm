@@ -70,7 +70,7 @@ sub buildDiversityTables {
 		PRIMARY KEY (bin_id, interval_no, ints_no, genus_no)) Engine=MyISAM");
     
     $sql = "INSERT INTO $DIV_MATRIX_WORK (bin_id, interval_no, ints_no, genus_no, n_occs, not_trace)
-		SELECT SQL_NO_CACHE c.bin_id_${MBL}, m.interval_no, ta.ints_no, pl.genus_no, 1, not_trace
+		SELECT SQL_NO_CACHE c.bin_id_${MBL}, m.interval_no, ta.ints_no, pl.genus_no, 1, not(is_trace)
 		FROM occ_matrix as o JOIN $OCC_BUFFER_MAP as m using (early_age, late_age)
 			JOIN coll_matrix as c using (collection_no)
 			JOIN $TREE_TABLE as t using (orig_no)
@@ -97,7 +97,7 @@ sub buildDiversityTables {
 		PRIMARY KEY (interval_no, ints_no, genus_no)) Engine=MyISAM");
     
     $sql = "INSERT INTO $DIV_GLOBAL_WORK (interval_no, ints_no, genus_no, n_occs, not_trace)
-		SELECT SQL_NO_CACHE m.interval_no, ta.ints_no, pl.genus_no, 1, not_trace
+		SELECT SQL_NO_CACHE m.interval_no, ta.ints_no, pl.genus_no, 1, not(is_trace)
 		FROM occ_matrix as o JOIN $OCC_BUFFER_MAP as m using (early_age, late_age)
 			JOIN coll_matrix as c using (collection_no)
 			JOIN $TREE_TABLE as t using (orig_no)
