@@ -11,7 +11,7 @@ This is the B<stable> version of the service, and should be used for production 
 
 This is the B<development> version of the data service.  It is now undergoing user testing, and
 the URL paths, parameters and response fields may change as a result of user feedback.
-Our target for freezing this version is September, 2015, and at that point it
+Our target for freezing this version is December, 2015, and at that point it
 will become the preferred version to use for production applications.
 
 Watch this space for updates.  You can also view the L<change log|/data1.2/changelog/>

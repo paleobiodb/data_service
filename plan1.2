@@ -7,9 +7,9 @@ Needed for data1.2 to be finished
  - taxa/byrefs does not respect rank filter
  - rank filter should show properly in datainfo parameter list
  - occurrence references should respect rank filter
- - double exclusion allowed for 'cc' parameter
- - add exclusion to 'strata' parameter
- - fix "show accepted names only"
+ - double exclusion allowed for 'cc' parameter			(DONE, NT)
+ - add exclusion to 'strata' parameter				(DONE, NT)
+ - fix "show accepted names only"				(DONE, NT)
 
  - complete transition to text id prefixes			(DONE, NT)
  - make sure opinions have ref #s, opinion type, rank		(DONE, NT)
@@ -44,12 +44,13 @@ Needed for data1.2 to be finished
    - occs/prevalence						  done
  - add genus field to show=class for taxa			(DONE, NT)
  - take created_before, modified_before out of base params	(DONE, NT)
- - add negation to authorized_by... (also out of base params)	(*)
+ - add negation to authorized_by... (also out of base params)	(DONE, NT)
  - match_name should not return species unless % given for	(DONE, NT)
    genus
  - add taxonomic_reason to taxon output, just like for occs     (DONE, NT)
  - add all_records to occs/taxa					(**)
- - taxa/list should take var: vs. txn: into account		(**)
+ - taxa/list should take var: vs. txn: into account		(DONE, NT)
+ - occs/taxa should not include UFxx taxa unless asked to	(**)
  - fix doc for occs/taxa param: reso				(DONE)
  - BUG occs/taxa doesn't show flags without base_name		(DONE, NT)
  - fix interval params for occs/prevalence			(**)
@@ -68,7 +69,7 @@ Needed for data1.2 to be finished
    - clarify appearance dates computation
    - make sure we have doc pages for reso, status, taxon-rank, etc.
  - add ecotaph info to occurrences output			(DONE, NT)
- - fix n/a in com vocabulary (latlng_precision)			(*)
+ - fix n/a in com vocabulary (latlng_precision)			(DONE, NT)
  - add taxon_name and taxon_id params to taxa/thumb, taxa/icon  (*)
  - make show=counts work with refs/list				(DONE, NT)
  - make sure mammal orders are reported easily in Navigator	(DONE, NT)

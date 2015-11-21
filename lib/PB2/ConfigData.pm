@@ -91,9 +91,9 @@ sub initialize {
     $ds->define_block('1.2:config:countries' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'cou', if_field => 'name' },
 	    "The configuration section: 'cnt' for countries",
-	{ output => 'name', name => 'country_name', com_name => 'nam' },
+	{ output => 'name', pbdb_name => 'country_name', com_name => 'nam' },
 	    "Country name",
-	{ output => 'cc', name => 'country_code', com_name => 'cod' },
+	{ output => 'cc', pbdb_name => 'country_code', com_name => 'cod' },
 	    "The code used to indicate this continent when selecting fossil occurrences by country.",
 	    "These are the standard ISO-3166-1 country codes.",
 	{ output => 'continent', com_name => 'con' },

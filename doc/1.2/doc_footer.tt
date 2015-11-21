@@ -1,6 +1,8 @@
 
 =for html <p>&nbsp;</p>
+
 =for html <div class="banner" id="bottom"><h2 id="contact">CONTACT</h2></div>
+
 =for pod =head2 CONTACT
 
 This service is provided by the L<Paleobiology Database|http://paleobiodb.org/>, 

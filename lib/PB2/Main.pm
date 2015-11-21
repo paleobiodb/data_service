@@ -25,7 +25,7 @@ use PB2::PersonData;
     our ($ds2) = Web::DataService->new(
 	{ name => '1.2',
 	  title => 'PBDB Data Service',
-	  version => 'b1',
+	  version => 'b2',
 	  features => 'standard',
 	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
@@ -764,21 +764,46 @@ use PB2::PersonData;
     
     # The following paths are used for miscellaneous documentation
     
+    $ds2->define_node({ path => 'general',
+			title => 'General documentation',
+			doc_default_template => 'default.tt' },
+	"This page lists general documentation about how to use the data service.");
+    
+    $ds2->define_node({ path => 'general/taxon_names',
+			title => 'Specifying taxonomic names',
+		        place => 1 },
+	"The data service accepts taxonomic names using several different parameters,",
+	"and there are modifiers that you can add in order to precisely specify",
+	"which taxa you are interested in.");
+    
+    $ds2->define_node({ path => 'general/datetime',
+		      title => 'Specifying dates and times',
+		      place => 2 },
+	"You can retrieve records based on when they were modified and/or created.");
+    
+    $ds2->define_node({ path => 'general/references',
+			title => 'Bibliographic references',
+			place => 3 },
+	"Each piece of data entered into the database is linked to the bibliographic reference from which it was entered.");
+    
+    $ds2->define_node({ path => 'general/basis_precision',
+			title => 'Basis and precision of coordinates',
+			place => 4 },
+	"The basis and precision of geographic locations is specified by a set of code values.");
+    
     $ds2->define_node({ path => 'special',
 			ruleset => '1.2:special_params',
 			title => 'Special parameters' });
     
-    $ds2->define_node({ path => 'datetime',
-			title => 'Selecting records by date and time' });
-    
-    $ds2->define_node({ path => 'names',
-			title => 'Selecting records by taxonomic name' });
-    
-    $ds2->define_node({ path => 'basis_precision',
-			title => 'Basis and precision of coordinates' });
-    
     $ds2->define_node({ path => 'formats',
-			title => 'Formats and Vocabularies' });
+			title => 'Output formats and Vocabularies' },
+	"You can get the results of query operations in a variety of formats, and with the",
+	"field names expressed in any of the available vocabularies.");
+    
+    $ds2->list_node({ path => 'formats',
+		      list => 'general',
+		      place => 5,
+		      title => 'Formats and Vocabularies' });
     
     $ds2->define_node({ path => 'formats/json',
 			title => 'JSON format' });

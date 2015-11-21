@@ -5,7 +5,7 @@ opinions stored in the Paleobiology Database.  Opinions can be selected
 by taxon name, by unique identifier, author, publication year, and many
 other attributes.
 
-Follow this link for more information on L<the use of taxonomic names in this data service|node:names>.
+Follow this link for more information on L<the use of taxonomic names in this data service|node:general/taxon_names>.
 
 =head2 SYNOPSIS
 

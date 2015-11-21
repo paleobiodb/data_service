@@ -360,7 +360,7 @@ sub generate_common_filters {
 	my $prefix = $1 || 'bare';
 	my $option = $2;
 	
-	next if defined $prefix && $select_table->{$prefix} eq 'ignore';
+	next if defined $prefix && defined $select_table->{$prefix} && $select_table->{$prefix} eq 'ignore';
 	
 	my $value = $request->clean_param($key);
 	next unless defined $value && $value ne '';    

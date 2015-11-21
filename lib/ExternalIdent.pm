@@ -32,7 +32,7 @@ our %IDP = ( URN => 'urn:lsid:paleobiodb.org:',
 	     MEA => 'mea',
 	     COL => 'col',
 	     INT => 'int',
-	     SCL => 'scl',
+	     TSC => 'tsc',
 	     CLU => 'clu' );
 
 our %IDRE;
@@ -52,8 +52,8 @@ sub VALID_IDENTIFIER {
     my ($type) = @_;
     
     croak "VALID_IDENTIFIER requires a parameter indicating the identifier type" unless $type;
-    croak "No validator is defined for $type" unless ref $IDVALID{$type} eq 'CODE';
-
+    croak "No validator is defined for '$type'" unless ref $IDVALID{$type} eq 'CODE';
+    
     return $IDVALID{$type};
     # return sub { return valid_identifier(shift, shift, $type) };
 }
@@ -68,13 +68,13 @@ my $key_expr = '';
 foreach my $key ( keys %IDP )
 {
     next if $key eq 'URN';
-    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? (?: $IDP{$key} ) [:]? )? ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
+    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? ( $IDP{$key} ) [:]? )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
     $IDVALID{$key} = sub { return valid_identifier(shift, shift, $key) };
     $key_expr .= '|' if $key_expr;
     $key_expr .= $IDP{$key};
 }
 
-$IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? (?: $key_expr ) [:]? )? ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
+$IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? ( $key_expr ) [:]? )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
 $IDVALID{ANY} = sub { return valid_identifier(shift, shift, 'ANY') };
 
 # valid_ident ( value, context, type )
@@ -91,9 +91,10 @@ sub valid_identifier {
     
     if ( $value =~ $IDRE{$type} )
     {
-	my $value = ($1 eq 'ERROR') ? -1 : $1;
+	my $type = $1;
+	my $num = ($2 eq 'ERROR') ? -1 : $2;
 	
-	return { value => $value };
+	return { value => PBDB::ExtIdent->new($type, $num) };
     }
     
     # Otherwise, attempt to provide a useful error message.
@@ -155,6 +156,34 @@ sub generate_identifier {
     {
 	return;
     }
+}
+
+
+package PBDB::ExtIdent;
+use overload '""' => \&stringify, fallback => 1;
+
+use Carp qw(croak);
+
+sub new {
+    
+    my ($class, $type, $num) = @_;
+    
+    croak "bad call to new: missing arguments\n" unless defined $num && $num >= 0;
+    
+    $type = lc ($type // 'unk');
+    
+    my $new = { type => $type, num => $num };
+    
+    $new->{taxon_no} = $num if $type eq 'var' || $type eq 'txn';
+    
+    return bless $new, $class;
+}
+
+sub stringify {
+    
+    my ($id) = @_;
+    
+    return $id->{num};
 }
 
 1;

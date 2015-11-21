@@ -371,7 +371,7 @@ sub list_taxa_simple {
     my $return_type = lc $options->{return} || 'list';
     my $base_string;
     
-    unless ( $base_string = $taxonomy->generate_id_string($base_nos, 'ignore_exclude') )
+    unless ( $base_string = $taxonomy->generate_id_string($base_nos, 'ignore_exclude', $options->{exact}) )
     {
 	return $return_type eq 'listref' ? [] : ();
     }
@@ -497,17 +497,17 @@ sub list_subtree {
     $taxonomy->clear_warnings;
     $taxonomy->clear_sql;
     
-    my $return_type = lc $options->{return} || 'list';
-    my $base_string;
-    
-    unless ( $base_string = $taxonomy->generate_id_string($base_nos) )
-    {
-	return $return_type eq 'listref' ? [] : ();
-    }
-    
     croak "list_subtree: second argument must be a hashref if given"
 	if defined $options && ref $options ne 'HASH';
     $options ||= {};
+    
+    my $return_type = lc $options->{return} || 'list';
+    my $base_string;
+    
+    unless ( $base_string = $taxonomy->generate_id_string($base_nos, 0, $options->{exact} ) )
+    {
+	return $return_type eq 'listref' ? [] : ();
+    }
     
     foreach my $key ( keys %$options )
     {
@@ -673,8 +673,9 @@ sub list_taxa {
     unless ( $rel eq 'all_taxa' )
     {
 	my $ignore_exclude = ($rel =~ /^exact|^current|^accepted|^senior/);
+	my $exact = ($rel eq 'exact' || $options->{exact});
 	
-	$base_string = $taxonomy->generate_id_string($base_nos, $ignore_exclude);
+	$base_string = $taxonomy->generate_id_string($base_nos, $ignore_exclude, $exact);
 	
 	unless ( $base_string || $rel eq 'occs' )
 	{
@@ -2693,7 +2694,7 @@ sub lookup_base {
 
 sub generate_id_string {
     
-    my ($taxonomy, $base, $ignore_exclude) = @_;
+    my ($taxonomy, $base, $ignore_exclude, $exact) = @_;
     
     my @ids;
     
@@ -2710,6 +2711,38 @@ sub generate_id_string {
 	}
     }
     
+    # If $base is a reference to an external identifier object, then use is
+    # taxon_no value.  If the type is 'txn', then this is supposed to
+    # represent the current spelling of the taxonomic concept associated with
+    # the taxon_no value.  So if the $exact flag is true (meaning that we are
+    # being asked to query for the exact name) then look up the current
+    # spelling and use that.  Otherwise, the type will be 'var', which
+    # indicates the exact name identified by this taxon_no.  Or else we don't
+    # care because the 'exact' flag was not given.  So we can simply return
+    # this number, and let the calling routine decide what to do with it.
+    
+    elsif ( ref $base eq 'PBDB::ExtIdent' )
+    {
+	if ( $base->{type} eq 'txn' && $exact )
+	{
+	    my $dbh = $taxonomy->{dbh};
+	    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+	    my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
+	    my $num = $base->{taxon_no} // '0';
+	    
+	    my ($taxon_no) = $dbh->selectrow_array("
+		SELECT spelling_no FROM $TREE_TABLE as t JOIN $AUTH_TABLE as a using (orig_no)
+		WHERE taxon_no in ($num)");
+	    
+	    push @ids, $taxon_no if $taxon_no;
+	}
+	
+	elsif ( $base->{taxon_no} )
+	{
+	    push @ids, $base->{taxon_no};
+	}
+    }
+    
     # If $base is a reference to a TaxonSet object, return a string consisting of all keys that
     # are valid taxon identifiers.
     
@@ -2723,6 +2756,8 @@ sub generate_id_string {
     
     elsif ( ref $base eq 'ARRAY' )
     {
+	my ($dbh, $TREE_TABLE, $AUTH_TABLE);
+	
 	foreach my $t ( @$base )
 	{
 	    if ( ref $t eq 'PBDB::Taxon' )
@@ -2732,6 +2767,28 @@ sub generate_id_string {
 			( $ignore_exclude || ! $t->{exclude} );
 	    }
 	    
+	    elsif ( ref $t eq 'PBDB::ExtIdent' )
+	    {
+		if ( $t->{type} eq 'txn' && $exact )
+		{
+		    $dbh //= $taxonomy->{dbh};
+		    $TREE_TABLE //= $taxonomy->{TREE_TABLE};
+		    $AUTH_TABLE //= $taxonomy->{AUTH_TABLE};
+		    my $num = $t->{taxon_no} // '0';
+		    
+		    my ($taxon_no) = $dbh->selectrow_array("
+		SELECT spelling_no FROM $TREE_TABLE as t JOIN $AUTH_TABLE as a using (orig_no)
+		WHERE taxon_no in ($num)");
+		    
+		    push @ids, $taxon_no if $taxon_no;
+		}
+		
+		elsif ( $t->{taxon_no} )
+		{
+		    push @ids, $t->{taxon_no};
+		}
+	    }
+    
 	    elsif ( ! ref $t )
 	    {
 		push @ids, grep { $_ } map { $1 if $_ =~ $VALID_TAXON_ID } split(qr{\s*,\s*}, $t);

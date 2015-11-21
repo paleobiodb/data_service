@@ -202,7 +202,7 @@ sub initialize {
 	    "The year of publication of the reference from which this name was entered.  Note that",
 	    "the publication year of the name itself may be different if the reference is a secondary source.",
 	{ output => 'reference_no', com_name => 'rid' },
-	    "A list of identifiers indicating the source document(s) from which this name was entered.",
+	    "The identifier of the reference from which this name was entered.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
 	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
 	{ output => 'n_occs', com_name => 'noc' },
@@ -286,7 +286,7 @@ sub initialize {
 	    "this taxon is known to the database.",
 	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'parent_name', if_block => 'parent,immparent' },
 	    "The name of the parent taxon, or of its senior synonym if there is one.",
-	{ output => 'parent_no', pbdb_name => 'immpar_no', dwc_name => 'parentNameUsageID', 
+	{ output => 'immpar_no', pbdb_name => 'immpar_no', dwc_name => 'parentNameUsageID', 
 	  com_name => 'ipn', if_block => 'full,immparent', dedup => 'senpar_no' },
 	    "The identifier of the immediate parent taxon, even if it is a junior synonym.",
 	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
@@ -362,7 +362,7 @@ sub initialize {
 	{ output => 'accepted_no', com_name => 'acc', dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
 	{ output => 'taxon_size', com_name => 'siz' },
 	{ output => 'extant_size', com_name => 'exs' },
-	{ output => 'firstapp_ea', com_name => 'fea' });
+	{ output => 'firstapp_ea', pbdb_name => 'firstapp_max_ma', com_name => 'fea' });
     
     $ds->define_block('1.2:taxa:class' =>
 	{ select => [ 'CLASS', 'GENUS' ] },
@@ -515,7 +515,7 @@ sub initialize {
 	{ select => [ 'image_no', 'uid', 'modified', 'credit', 'license' ] },
 	{ output => 'image_no', com_name => 'oid' },
 	    "A unique identifier for this image, generated locally by this database",
-	{ output => 'type', value => 'image', com_name => 'typ', com_value => 'img' },
+	{ output => 'record_type', value => 'image', com_name => 'typ', com_value => 'img' },
 	    "The type of this record: 'img' for an image",
 	{ output => 'taxon_no', com_name => 'tid' },
 	    "The identifier of the taxon with which this image is associated.  This",

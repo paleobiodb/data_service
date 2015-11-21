@@ -1,6 +1,6 @@
 This is the B<development> version of the data service.  It is now undergoing user testing, and
 the URL paths, parameters and response fields may change as a result of user feedback.
-Our target for freezing this version is November, 2015, and at that point it
+Our target for freezing this version is December, 2015, and at that point it
 will become the preferred version to use for production applications.
 
 Watch this space for updates.  For the time being, if you are
@@ -30,33 +30,7 @@ allow access to protected data, addition of new data, and modification of existi
 The following links will take you to additional pages that provide information about how to use
 this service.
 
-=over
-
-=item L<Specifying taxonomic names|node:taxonomic_names>
-
-The data service accepts taxonomic names in a variety of modes, and there are modifiers that you
-can add in order to precisely specify which taxa you are interested in.
-
-=item L<Specifying dates and times|node:datetime>
-
-You can retrieve records based on when they were modified and/or created.
-
-=item L<Bibliographic references|node:bibliographic_refs>
-
-Each piece of data entered into the database is linked to the bibliographic
-reference from which it was entered.
-
-=item L<Basis and precision of coordinates|node:basis_precision>
-
-The basis and precision of geographic locations is specified by a set of code values.
-
-=item L<Output formats and vocabularies|node:formats>
-
-You can get the results of query operations in a variety of formats, and with the field names
-expressed in any of the available vocabularies.
-
-
-=back
+<% NODELIST(opt_list='general') %>
 
 =head2 USAGE
 

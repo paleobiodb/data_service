@@ -299,7 +299,7 @@
         # IF block_done.trail; RETURN; ELSE; SET block_done.trail = 1; END;
 	SET navtrail = "";
         FOREACH item IN request.list_navtrail(main_doc_label);
-	    IF navtrail; SET navtrail = "$navtrail E<GT> $item";
+	    IF navtrail; SET navtrail = "$navtrail E<gt> $item";
 	    ELSE; SET navtrail = item; END;
         END;
         "\n=for wds_nav =head3 $main_doc_prefix$navtrail\n";

@@ -134,11 +134,11 @@ The following additional documentation pages have been added:
 
 =item *
 
-L<Specifying taxonomic names|node:taxonomic_names>
+L<Specifying taxonomic names|node:general/taxon_names>
 
 =item *
 
-L<Basis and precision of coordinates|node:basis_precision>
+L<Basis and precision of coordinates|node:general/basis_precision>
 
 =back
 
