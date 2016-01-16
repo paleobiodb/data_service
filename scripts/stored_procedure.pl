@@ -3,12 +3,12 @@
 use lib "../cgi-bin";
 use lib "cgi-bin";
 use DBConnection;
-# use Term::ReadPassword;
+use Term::ReadPassword;
 
 
 $Constants::DB_USER = 'root';
-# $Constants::DB_PASSWD = read_password('password: ');
-$Constants::DB_PASSWD = 'paleo';
+$Constants::DB_PASSWD = read_password('password: ');
+# $Constants::DB_PASSWD = 'paleo';
 
 my $dbh = DBConnection::connect();
 
