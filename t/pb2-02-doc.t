@@ -151,8 +151,8 @@ subtest '/taxa/ html documentation checks' => sub {
     
     ok( $content_html =~ qr{<title>.*PBDB[^<]*</title>}m, 'html title' );
     ok( $content_html =~ qr{<h1 id="title">.*PBDB[^<]*</h1>}m, 'html header' );
-    ok( $content_html =~ qr{<a name="DESCRIPTION">}m, 'html description section' );
-    ok( $content_html =~ qr{<a name="SYNOPSIS">}m, 'html synopsis section' );
+    ok( $content_html =~ qr{<h2 class="pod_heading">DESCRIPTION</h2>}m, 'html description section' );
+    ok( $content_html =~ qr{<h2 class="pod_heading">SYNOPSIS</h2>}m, 'html synopsis section' );
     ok( $content_html =~ qr{CONTACT</h2>}m, 'html footer' );
 };
 
@@ -167,10 +167,10 @@ subtest '/taxa/ pod documentation checks' => sub {
     }
     
     ok( $content_pod =~ qr{^=for wds_title .*PBDB}m, 'pod title' );
-    ok( $content_pod =~ qr{^=for wds_nav .*PBDB}m, 'pod nav' );
+    ok( $content_pod =~ qr{^=head3 L<PBDB}m, 'pod nav' );
     ok( $content_pod =~ qr{^=head2 DESCRIPTION}m, 'pod description section' );
     ok( $content_pod =~ qr{^=head2 SYNOPSIS}m, 'pod synopsis section' );
-    ok( $content_pod =~ qr{^=for pod =head2 CONTACT}m, 'pod footer' );
+    ok( $content_pod =~ qr{^=head2 CONTACT}m, 'pod footer' );
 };
 
 
@@ -195,7 +195,7 @@ subtest '/taxa/single html documentation checks' => sub {
     
     foreach my $line ( split( qr{[\n\r]+}, $cs_html ) )
     {
-	if ( $line =~ qr{^<h2 class="pod_heading"><a name="([^"]+)">} )
+	if ( $line =~ qr{^<h2 \s+ class="pod_heading" \s+ id="([^"]+)">}x )
 	{
 	    $section = $1;
 	}
@@ -229,7 +229,7 @@ subtest '/taxa/single html documentation checks' => sub {
 	
 	elsif ( $section eq 'RESPONSE' )
 	{
-	    $response_a = 1 if $line =~ qr{<a name="block:basic">basic</a>};
+	    $response_a = 1 if $line =~ qr{<td class="pod_def">basic</td>};
 	    $response_b = 1 if $line =~ qr{<td class="pod_def">crmod</td>};
 	}
 	

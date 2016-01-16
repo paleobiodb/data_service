@@ -2788,9 +2788,9 @@ sub generate_id_string {
 	    push @ids, $taxon_no if $taxon_no;
 	}
 	
-	elsif ( $base->{taxon_no} )
+	elsif ( $base->{num} )
 	{
-	    push @ids, $base->{taxon_no};
+	    push @ids, $base->{num};
 	}
     }
     
@@ -4876,7 +4876,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 			      'v.last_early_age as lastapp_ea',
 			      'v.last_late_age as lastapp_la' ],
 			#      'app.early_interval', 'app.late_interval'],
-		      ATTR => ['v.pubyr', 'v.attribution'],
+		      ATTR => ['v.pubyr', 'v.attribution as taxon_attr'],
 		      OP_ATTR => ['cv.pubyr as taxon_pubyr', 'cv.attribution as taxon_attr', 
 				  'pv.pubyr as parent_pubyr', 'pv.attribution as parent_attr'],
 		      SENPAR => ['pt.name as senpar_name', 'pt.rank as senpar_rank'],
