@@ -3041,8 +3041,8 @@ sub generateMainFilters {
 	    
 	    elsif ( $time_rule eq 'major' )
 	    {
-		my $ea = ($early_age + 0 || 5000);
-		my $la = $late_age + 0;
+		my $ea = $early_age ? $early_age + 0 : 5000;
+		my $la = $late_age ? $late_age + 0 : 0;
 		
 		push @filters, "if($mt.late_age >= $la,
 			if($mt.early_age <= $ea, $mt.early_age - $mt.late_age, $ea - $mt.late_age),

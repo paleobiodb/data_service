@@ -2887,6 +2887,11 @@ sub generate_query_base {
 	$rel = $specified_rel || 'exact';
     }
     
+    elsif ( $specified_rel eq 'all_taxa' )
+    {
+	return 'all_taxa';
+    }
+    
     elsif ( $request->clean_param_list('ref_id') )
     {
 	return 'all_taxa';

@@ -1,7 +1,13 @@
 
 =for html <p>&nbsp;</p>
+
 =for html <div class="banner" id="bottom"><h2 id="contact">CONTACT</h2></div>
-=for pod =head2 CONTACT
+
+=for wds_pod on
+
+=head2 CONTACT
+
+=for wds_pod off
 
 This service is provided by the L<Paleobiology Database|http://paleobiodb.org/>, 
 hosted by the L<Department of Geoscience|http://geoscience.wisc.edu/geoscience/>

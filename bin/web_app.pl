@@ -22,7 +22,7 @@ use Web::DataService;
 
 BEGIN {
 
-    Web::DataService->VERSION(0.26);
+    Web::DataService->VERSION(0.3);
     
     # If we were given a command-line argument, figure out what to do with it.
     

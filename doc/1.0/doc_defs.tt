@@ -297,7 +297,7 @@
 	    IF navtrail; SET navtrail = "$navtrail E<GT> $item";
 	    ELSE; SET navtrail = item; END;
         END;
-        "\n=for wds_nav =head3 $main_doc_prefix$navtrail\n";
+        "\n=begin wds_nav\n\n=head3 $main_doc_prefix$navtrail\n\n=end wds_nav\n\n";
     END;
     
     MACRO NAVTRAIL INCLUDE NAVTRAIL;

@@ -1469,44 +1469,97 @@ sub list_associated {
     # will wrap that in an "outer query" which retrieves the rest of the
     # information necessary to make up the result records.
     
-    my $sql;
+    my ($sql);
     
     # If we were asked to return opinions, construct the query and then execute it.
     
     if ( $record_type eq 'opinions' )
     {
+	$dbh->do("DROP TABLE IF EXISTS op_collect");
+	
+	my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+	my $engine = $rel eq 'all_taxa' ? 'engine=myisam' : 'engine=memory';
+	
+	$dbh->do("CREATE $temp TABLE op_collect (
+		opinion_no int unsigned not null,
+		opinion_type char(1) not null,
+		taxon_no int unsigned not null,
+		orig_no int unsigned not null,
+		UNIQUE KEY (opinion_no)) $engine");
+	
 	push @inner_filters, 'o.opinion_no = t.opinion_no' if $rel eq 'all_taxa' && ! $select{ops_all};
 	push @inner_filters, $taxonomy->refno_filter($options, 'o');
 	push @inner_filters, $taxonomy->extra_filters($options);
 	
-	my $type = $select{ops_all} || $rel eq 'all_taxa'
+	my $type = $select{ops_all}
 	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, if(o.suppress, $TYPE_SUPPRESSED, $TYPE_UNSEL))"
 	    : $TYPE_CLASS;
 	
-	my $join_condition = $select{ops_all} && $rel ne 'all_taxa'
-	    ? 'o.opinion_no = t.opinion_no or o.orig_no = t.orig_no'
-	    : 'o.opinion_no = t.opinion_no';
+	my $inner_filters = join q{ and }, @inner_filters;
 	
-	my $query_core = $rel eq 'all_taxa'
-	    ? "$op_cache as o
+	# If the relationship is 'all_taxa', then we just go through the
+	# entire opinion cache because that is the most efficient procedure.
+	
+	if ( $rel eq 'all_taxa' )
+	{
+	    my $query_core = "$op_cache as o
 			JOIN $op_table as oo using (opinion_no)
 			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
 			JOIN $tree_table as t on t.orig_no = o.orig_no
 			JOIN $refs_table as r on r.reference_no = o.reference_no
-			$other_joins"
-	    : "$taxon_joins
-			JOIN $op_cache as o on $join_condition
-			JOIN $op_table as oo ignore key (created,modified) on oo.opinion_no = o.opinion_no
-			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
-			JOIN $refs_table as r on r.reference_no = o.reference_no";
-		
-	my $inner_filters = join q{ and }, @inner_filters;
-	
-	my $inner_query =
-	       "SELECT o.opinion_no, o.child_spelling_no as taxon_no, $type as opinion_type, t.orig_no, o.reference_no
+			$other_joins";
+	    
+	    $sql = "INSERT IGNORE INTO op_collect
+		SELECT o.opinion_no, $type as opinion_type, o.child_spelling_no as taxon_no, t.orig_no
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY o.opinion_no";
+	    
+	    $dbh->do($sql);
+	    push @sql_strings, $sql;
+	}
+	
+	# Otherwise, we select the relevant taxa and grab the corresponding classification opinions.
+	
+	else
+	{
+	    my $query_core = "$taxon_joins
+			JOIN $op_cache as o on o.opinion_no = t.opinion_no
+			JOIN $op_table as oo ignore key (created,modified) on oo.opinion_no = t.opinion_no
+			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no";
+	    
+	    $sql = "INSERT IGNORE INTO op_collect
+		SELECT o.opinion_no, $type as opinion_type, o.child_spelling_no as taxon_no, t.orig_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY o.opinion_no";
+	    
+	    $dbh->do($sql);
+	    push @sql_strings, $sql;
+	}
+	
+	# If we were asked for all opinions but not all taxa, we then re-select the relevant taxa and grab all of the
+	# non-classification opinions too.  We need to do it this way because otherwise this query would require a join
+	# condition disjunction on two separate indexes (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no) which the
+	# query optimizer cannot handle (both MySQL and Mariadb punt and try to compare every possible row which results
+	# in a hideously inefficient query).
+	
+	if ( $select{ops_all} && $rel ne 'all_taxa' )
+	{
+	    my $query_core = "$taxon_joins
+			JOIN $op_cache as o on o.orig_no = t.orig_no
+			JOIN $op_table as oo ignore key (created,modified) on oo.opinion_no = t.opinion_no
+			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no";
+	    
+	    $sql = "INSERT IGNORE INTO op_collect
+		SELECT o.opinion_no, $type as opinion_type, o.child_spelling_no as taxon_no, t.orig_no
+		FROM $query_core
+		WHERE $inner_filters
+		GROUP BY o.opinion_no";
+	    
+	    $dbh->do($sql);
+	    push @sql_strings, $sql;
+	}
 	
 	my $outer_tables = { };
 	
@@ -1539,11 +1592,11 @@ sub list_associated {
 	$query_fields = 'base.opinion_no' if $return_type eq 'id';
 	
 	$sql = "SELECT $count_expr $query_fields
-		FROM ($inner_query) as base STRAIGHT_JOIN $op_cache as o on o.opinion_no = base.opinion_no
+		FROM op_collect as base JOIN $op_cache as o using (opinion_no)
 			JOIN $tree_table as t on t.orig_no = base.orig_no
 			LEFT JOIN $auth_table as ac on ac.taxon_no = o.child_spelling_no
 			LEFT JOIN $auth_table as ap on ap.taxon_no = o.parent_spelling_no
-			LEFT JOIN refs as r on r.reference_no = base.reference_no
+			LEFT JOIN refs as r on r.reference_no = o.reference_no
 		$outer_joins
 		GROUP BY opinion_no $order_expr $limit_expr";
 	
@@ -1578,8 +1631,6 @@ sub list_associated {
 		collection_no int unsigned null,
 		UNIQUE KEY (reference_no, ref_type, taxon_no, orig_no, unclass_no, class_no, 
 			occurrence_no, specimen_no, collection_no)) engine=memory");
-    
-    my ($sql);
     
     if ( $select{refs_auth} )
     {

@@ -9,11 +9,19 @@
 use strict;
 
 use Dancer qw(:syntax);
+use PBLogger;
+
+
+my $logger = PBLogger->new;
 
 
 # A single route is all we need in order to handle all requests.
 
 any qr{.*} => sub {
+    
+    my $r = request;
+    
+    $logger->log_request($r) if $logger;
     
     if ( exists params->{noheader} )
     {
@@ -24,7 +32,7 @@ any qr{.*} => sub {
 	params->{save} = "no";
     }
     
-    if ( request->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
+    if ( $r->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
     {
 	my $newpath = "$1/single.$3";
 	my $id = $2;
@@ -33,7 +41,7 @@ any qr{.*} => sub {
 	forward($newpath);
     }
     
-    return Web::DataService->handle_request(request);
+    return Web::DataService->handle_request($r);
 };
 
 

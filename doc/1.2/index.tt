@@ -42,15 +42,29 @@ documentation for the various L<output formats|node:formats>.
 
 For example, consider the following URL:
 
-    /data1.2/taxa/single.json?name=Dascillidae&show=attr
+    <% request.base_url %>data1.2/taxa/single.json?name=Dascillidae&show=attr
 
 An HTTP GET request using this URL would return information about the taxon Dascillidae (soft-bodied plant beetles). The components of this URL are as follows:
 
 =over 4
 
-=item /data1.2/taxa/single
+=item <% request.base_url %>
 
-The URL path indicates the operation to be carried out. For a GET
+The initial part of the URL specifies the server to be contacted,
+and the protocol (http or https) to be used in the transaction.
+
+=item data1.2/
+
+The first component of the URL path indicates which data service you
+wish to use.  There are multiple L<data service versions|/data/>
+available from this server, and you need to specify which one you are
+talking to.  The advantage of this approach is that you can store URLs
+that use a particular version of the data service, and they will continue
+to be valid even as we add new versions.
+
+=item taxa/single
+
+The rest of the URL path indicates the operation to be carried out. For a GET
 request, it specifies the class of information to be retrieved.
 
 =item json

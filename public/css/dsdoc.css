@@ -27,7 +27,7 @@ TABLE.pod_list TD { border-width: 1; border-style: solid; border-color: #AAAAAA;
 
 UL.pod_list, OL.pod_list, DL.pod_list { }
 
-LI.pod_def { }
+LI.pod_def { margin-bottom: 10px; }
 
 TABLE.pod_list2 { border-width: 0; }
 
@@ -35,7 +35,7 @@ TABLE.pod_list2 TD { border-width: 0; padding: 3px; vertical-align: top; }
 
 UL.pod_list2, OL.pod_list2, DL.pod_list2 { }
 
-LI.pod_def2 { }
+LI.pod_def2 { margin-bottom: 10px; }
 
 .pod_S { white-space: pre; }
 

@@ -30,7 +30,8 @@ use PB2::PersonData;
 	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
 	  ruleset_prefix => '1.2:',
-	  doc_template_dir => 'doc/1.2' });
+	  doc_template_dir => 'doc/1.2',
+	  doc_compile_dir => 'doc/ttc-1.2' });
     
     
     # We then define the vocabularies that will be used to label the data

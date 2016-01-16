@@ -432,7 +432,7 @@ sub generate_diversity_table {
 
 # The following variables are visible to all of the subroutines in the
 # remainder of this file.  This is done to reduce the number of parameters
-# that must be passed to &count_subtaxa and &add_result_record.
+# that must be passed to &count_subtaxa and &add_result_records.
 
 my (%taxon_node, %uns_counter, %lower_taxon_nos);
 
@@ -832,6 +832,8 @@ sub generate_taxon_table_full {
 	{
 	    $higher_node->{n_occs}++;
 	}
+	
+	my $a = 1;	# we can stop here when debugging
     }
     
     # Fetch the full taxonomic information for all of the taxa added above.
@@ -1342,13 +1344,29 @@ sub generate_occs_taxa_options {
 
 sub add_result_records {
     
-    my ($request, $options, $taxon_no, $parent_no, $family_ok) = @_;
+    my ($request, $options, $taxon_no, $parent_no, $family_ok, $recursion_count) = @_;
     
-    confess "bad options" unless $options;
+    $options ||= { };
     
     no warnings 'uninitialized';
     
     my $node = $taxon_node{$taxon_no};
+    
+    # If we have seen this node already, ignore it.  This is necessary because
+    # we would otherwise get runaway recursion.
+    
+    return if $taxon_node{$taxon_no}{seen};
+    
+    $taxon_node{$taxon_no}{seen} = 1;
+    
+    # Do an additional check for runaway recursion.
+    
+    if ( defined $recursion_count && $recursion_count >= 200 )
+    {
+	die "Runaway recursion!\n";
+    }
+    
+    $recursion_count++;
     
     # Skip any taxon for which no occurrences have been recorded.  This will
     # only happen with the full hierarchy.
@@ -1454,7 +1472,7 @@ sub add_result_records {
 	
 	# Recursively generate the child records.
 	
-	$request->add_result_records($options, $child_no, $taxon_no, $family_ok);
+	$request->add_result_records($options, $child_no, $taxon_no, $family_ok, $recursion_count);
     }
     
     # If we have any deferred nodes, then create a new "unspecified family"
@@ -1484,7 +1502,7 @@ sub add_result_records {
 	# set the 'family_ok' flag so that we won't get another "unspecified
 	# family" node under this one.
 	
-	$request->add_result_records($options, $uns_no, $taxon_no, 1);
+	$request->add_result_records($options, $uns_no, $taxon_no, 1, $recursion_count);
 	
 	my $a = 1;	# we can stop here when debugging
     }
