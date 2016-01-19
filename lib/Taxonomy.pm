@@ -2834,9 +2834,9 @@ sub generate_id_string {
 		    push @ids, $taxon_no if $taxon_no;
 		}
 		
-		elsif ( $t->{taxon_no} )
+		elsif ( $t->{num} )
 		{
-		    push @ids, $t->{taxon_no};
+		    push @ids, $t->{num};
 		}
 	    }
     

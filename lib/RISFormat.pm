@@ -130,6 +130,16 @@ sub emit_footer {
 }
 
 
+# emit_empty ( request )
+# 
+# Just return the empty string.
+
+sub emit_empty {
+
+    return '';
+}
+
+
 # emit_record (request, record, field_list)
 # 
 # Return a series of text lines expressing the given record as a reference
