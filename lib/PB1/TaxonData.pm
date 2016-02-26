@@ -1067,7 +1067,7 @@ sub get_taxa_by_name {
     
     if ( $options->{return} eq 'range' )
     {
-	$fields = "t.name, t.lft, t.rgt";
+	$fields = "t.name, t.lft, t.rgt, t.orig_no";
     }
     
     elsif ( $options->{return} eq 'id' )
@@ -1418,6 +1418,13 @@ sub auto {
 	        FROM $search_table as s JOIN $attrs_table as v on v.orig_no = $result_field
 			JOIN $names_table as n on n.taxon_no = $match_field
 	        WHERE taxon_name like $name ORDER BY n_occs desc $limit";
+    }
+    
+    # Otherwise, return an empty result.
+    
+    else
+    {
+	return;
     }
     
     $self->{main_sql} = $sql;

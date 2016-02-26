@@ -2928,7 +2928,8 @@ sub generateMainFilters {
     {
 	$buffer = $early_age > 66 ? 12 : 5;
 	$early_bound = $early_age + $buffer;
-	$late_bound = $late_age - $buffer;
+	$late_bound = $late_age || 0;
+	$late_bound -= $buffer if $late_bound >= $buffer;
     }
     
     my $summary_interval = 0;

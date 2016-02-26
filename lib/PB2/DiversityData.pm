@@ -1289,7 +1289,7 @@ sub generate_occs_taxa_options {
 	    if ( $rank =~ qr{ ^ (min_|above_) ([^-]+) - (max_|below_) (.*) $ }xs )
 	    {
 		my $min = $1 eq 'min_' ? $2 : $2 + 0.1;
-		my $max = $3 eq 'max_' ? $3 : $3 - 0.1;
+		my $max = $3 eq 'max_' ? $4 : $4 - 0.1;
 		
 		push @min_rank, $min;
 		push @max_rank, $max;

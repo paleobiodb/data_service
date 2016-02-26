@@ -3056,7 +3056,7 @@ sub process_difference {
 	
 	# Now join all of the reasons together.
 	
-	$record->{difference} = join(q{, }, @reasons);
+	$record->{difference} = join(q{, }, grep { defined $_ && $_ ne '' } @reasons);
     }
     
     # Otherwise, the accepted name and identified name are the same so there

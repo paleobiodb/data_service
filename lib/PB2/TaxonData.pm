@@ -3647,7 +3647,7 @@ sub process_ages {
     {
 	if ( $record->{$field} )
 	{
-	    $record->{$field} =~ s{ (?: [.] 0+ $ | ( [.] \d* [1-9] ) 0+ $ ) }{$1}sxe
+	    $record->{$field} =~ s{ (?: [.] 0+ $ | ( [.] \d* [1-9] ) 0+ $ ) }{$1 // ''}sxe
 	}
     }
     
