@@ -1949,6 +1949,7 @@ sub generateMainFilters {
     elsif ( @values = $request->safe_param_list('base_id') )
     {
 	@taxon_nos = @values;
+	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
     }
     
