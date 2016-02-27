@@ -12,7 +12,7 @@
 # /data1.1/occs/refs.json
 # /data1.1/occs/taxa.txt
 
-use Test::Most tests => 8;
+use Test::Most tests => 9;
 
 use JSON;
 use Text::CSV_XS;
@@ -103,6 +103,9 @@ my $COLL_OCC_COUNT = 5;
 
 my $BASE_NAME_1 = 'Cetacea';
 my $INTERVAL_1a = 'Miocene';
+
+my $TAXON_NAME_B = 'Canis';
+my $TAXON_ID_B = '41198';
 
 my $REF_ID_1 = '38149';
 
@@ -247,6 +250,43 @@ subtest 'list json 2' => sub {
     my (@r) = $T->extract_records($list_json, 'list json', { no_records_ok => 1 } );
     
     cmp_ok( scalar(@r), '==', 100, 'list json returned correct number of results' );
+};
+
+
+subtest 'list other taxon params' => sub {
+    
+    my $list_occs = $T->fetch_url("/data1.1/occs/list.json?taxon_name=$TAXON_NAME_B&limit=5",
+				  "list taxon_name request OK");
+    
+    if ( $list_occs )
+    {
+	my (@r) = $T->extract_records($list_occs, 'list taxon_name' );
+	
+	cmp_ok( scalar(@r), '>=', 1, 'list taxon_name returned at least one record' );
+	cmp_ok( $r[0]{tid}, 'eq', $TAXON_ID_B, 'list taxon_name returned proper tid' );
+    }
+    
+    $list_occs = $T->fetch_url("/data1.1/occs/list.json?taxon_id=$TAXON_ID_B&limit=5",
+			       "list taxon_id request OK");
+    
+    if ( $list_occs )
+    {
+	my (@r) = $T->extract_records($list_occs, 'list taxon_id' );
+	
+	cmp_ok( scalar(@r), '>=', 1, 'list taxon_id returned at least one record' );
+	cmp_ok( $r[0]{tid}, 'eq', $TAXON_ID_B, "list taxon_id returned proper 'tid'" );
+    }
+    
+    $list_occs = $T->fetch_url("/data1.1/occs/list.json?base_id=$TAXON_ID_B&limit=5",
+			       "list base_id request OK");
+    
+    if ( $list_occs )
+    {
+	my (@r) = $T->extract_records($list_occs, 'list base_id' );
+	
+	cmp_ok( scalar(@r), '>=', 1, 'list base_id returned at least one record' );
+	ok( defined $r[0]{tna} && $r[0]{tna} =~ qr{^Canis}, "list base_id returned proper record with proper 'tna'" );
+    }    
 };
 
 

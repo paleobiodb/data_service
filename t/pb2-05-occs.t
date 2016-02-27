@@ -8,7 +8,7 @@
 
 use lib 'lib';
 
-use Test::Most tests => 3;
+use Test::Most tests => 4;
 
 use JSON;
 use Text::CSV_XS;
@@ -100,7 +100,7 @@ if ( $EAG1 && $LAG1 )
 
 my $OCC1t = {
     occurrence_no => $OID1,
-    record_type => "occurrence",
+    record_type => "occ",
     collection_no => $CID1,
     identified_name => $IDN1,
     identified_rank => 'species',
@@ -109,7 +109,6 @@ my $OCC1t = {
     accepted_rank => 'species',
     accepted_no => $OTX1,
     early_interval => $INT1,
-    late_interval => $INT1,
     reference_no => qr{^\d+$} };
 
 if ( $EAG1 && $LAG1 )
@@ -157,16 +156,32 @@ subtest 'single json by id' => sub {
     
     # Check the json response in detail
     
-    my ($response, $r);
+    my (@r) = $T->extract_records($single_json, 'single json by id' );
     
-    eval {
-	$response = decode_json( $single_json->content );
-	$r = $response->{records}[0];
-    };
+    ok( ref $r[0] eq 'HASH', 'single json content decoded') or return;
     
-    ok( ref $r eq 'HASH' && keys %$r, 'single json content decoded') or return;
+    $T->check_fields($r[0], $OCC1j, 'single occ json');
+};
+
+
+subtest 'single text by id' => sub {
     
-    $T->check_fields($r, $OCC1j, 'single occ');
+    my $single_txt = $T->fetch_url("/data1.2/occs/single.txt?id=$OID1&show=phylo",
+				    "single txt request OK");
+    
+    unless ( $single_txt )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+
+    # Check the txt response in detail
+    
+    my (@r) = $T->extract_records($single_txt, 'single txt by id' );
+    
+    ok( ref $r[0] eq 'HASH', 'single txt content decoded') or return;
+    
+    $T->check_fields($r[0], $OCC1t, 'single occ txt');
 };
 
 
