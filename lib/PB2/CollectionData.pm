@@ -2528,7 +2528,7 @@ sub generateMainFilters {
     if ( my $loc = $request->clean_param('loc') )
     {
 	die "400 the value of parameter 'loc' is too large\n"
-	    if length($loc) > 2000;
+	    if length($loc) > 5000;
 	my $quoted = $dbh->quote($loc);
 	push @filters, "contains(geomfromtext($quoted), $mt.loc)";
     }
