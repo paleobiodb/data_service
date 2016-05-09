@@ -15,12 +15,12 @@ use Carp qw(croak);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(VALID_IDENTIFIER generate_identifier %IDP);
+our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier %IDP);
 
 
 # List the identifier prefixes:
 
-our %IDP = ( URN => 'urn:lsid:paleobiodb.org:',
+our %IDP = ( URN => '(?:urn:lsid:)?paleobiodb.org:',
 	     TID => 'txn|var',
 	     TXN => 'txn',
 	     VAR => 'var',
@@ -33,7 +33,9 @@ our %IDP = ( URN => 'urn:lsid:paleobiodb.org:',
 	     COL => 'col',
 	     INT => 'int',
 	     TSC => 'tsc',
-	     CLU => 'clu' );
+	     CLU => 'clu',
+	     IMG => 'img',
+	     PRS => 'prs' );
 
 our %IDRE;
 our %IDVALID;
@@ -68,14 +70,16 @@ my $key_expr = '';
 foreach my $key ( keys %IDP )
 {
     next if $key eq 'URN';
-    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? ( $IDP{$key} ) [:]? )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
+    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? ( $IDP{$key} ) [:] )? ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
     $IDVALID{$key} = sub { return valid_identifier(shift, shift, $key) };
     $key_expr .= '|' if $key_expr;
     $key_expr .= $IDP{$key};
 }
 
-$IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? ( $key_expr ) [:]? )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
+$IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? ( $key_expr ) [:] )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
 $IDVALID{ANY} = sub { return valid_identifier(shift, shift, 'ANY') };
+
+$IDRE{LOOSE} = qr{ ^  (?: (?: $IDP{URN} )? ( \w+ ) [:] )? ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
 
 # valid_ident ( value, context, type )
 # 
@@ -97,23 +101,67 @@ sub valid_identifier {
 	return { value => PBDB::ExtIdent->new($type, $num) };
     }
     
-    # Otherwise, attempt to provide a useful error message.
+    # Otherwise, attempt to provide a useful error message.  If the value
+    # contains a comma, note that we only accept a single identifier.  Any
+    # parameter rule that requires more than one should use "list => ','"
+    # which will split out the values before this function is ever called.
     
-    my $msg;
+    my $msg; my $insert = '';
     
-    if ( $type eq 'ANY' )
+    $insert = ", optionally prefixed by 'paleobiodb.org:'" if $value =~ /paleobiodb|pbdb/;
+    
+    if ( $value =~ /,/ )
     {
-	$msg = "each value of {param} must be a nonnegative integer, " .
-	    "optionally prefixed with '$IDP{URN}xxx' where xxx is a valid identifier type (was {value})";
+	$msg = "the value of {param} must be a single identifier";
+    }
+    
+    elsif ( $value =~ $IDRE{LOOSE} )
+    {
+	$msg = "the value of {param} must be an identifier of type $IDP{$type}$insert (type '$1' is not allowed with this operation)";
+    }
+    
+    elsif ( $type eq 'ANY' )
+    {
+	$msg = "each value of {param} must be either a valid identifier of the form 'type:nnnn' " .
+	    "where nnnn is an integer$insert, or a nonnegative integer (was {value})";
+    }
+    
+    elsif ( $IDP{$type} =~ qr{(\w+)[|](\w+)} )
+    {
+	$msg = "each value of {param} must be either a valid identifier of the form '$1:nnnn' or " .
+	   "'$2:nnnn' where nnnn is an integer$insert, or a nonnegative integer (was {value})";
     }
     
     else
     {
-	$msg = "each value of {param} must be a nonnegative integer, " .
-	    "optionally prefixed with '$IDP{$type}' or '$IDP{URN}$IDP{$type}' (was {value})";
+	$msg = "each value of {param} must be either a valid identifier or a nonnegative integer (was {value})";
     }
     
     return { error => $msg };
+}
+
+
+# extract_identifier ( type, value )
+# 
+# If the parameter $value contains a valid identifier of the specified type, extract and return
+# the numeric id.  Otherwise, return undefined.
+
+sub extract_identifier {
+
+    my ($type, $value) = @_;
+    
+    if ( $value =~ $IDRE{$type} )
+    {
+	my $type = $1;
+	my $num = ($2 eq 'ERROR') ? -1 : $2;
+	
+	return PBDB::ExtIdent->new($type, $num);
+    }
+    
+    else
+    {
+	return;
+    }
 }
 
 
@@ -184,6 +232,22 @@ sub stringify {
     my ($id) = @_;
     
     return $id->{num};
+}
+
+
+sub regenerate {
+    
+    my ($id) = @_;
+    
+    if ( $id->{type} eq 'unk' )
+    {
+	return $id->{num};
+    }
+    
+    else
+    {
+	return "$id->{type}:$id->{num}";
+    }
 }
 
 1;

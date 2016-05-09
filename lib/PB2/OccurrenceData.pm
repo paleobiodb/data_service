@@ -834,7 +834,8 @@ sub initialize {
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
-	{ allow => '1.2:taxa:display' },
+	{ allow => '1.2:taxa:show' },
+	{ allow => '1.2:taxa:order' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     

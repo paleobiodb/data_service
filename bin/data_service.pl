@@ -28,6 +28,12 @@ unless ( $ACCESS_LOG =~ qr{/} )
     $ACCESS_LOG = "logs/$ACCESS_LOG";
 }
 
+my $pid_file;
+
+open($pid_file, ">", "logs/starman.pid");
+print $pid_file $$;
+close $pid_file;
+
 exec('/opt/local/bin/starman', 
      '--listen', ":$PORT", '--workers', $WORKERS, '--access-log', $ACCESS_LOG, 
      'bin/web_app.pl')

@@ -22,20 +22,18 @@
 # tests.
 # 
 
-use open ':std', ':encoding(utf8)';
-use Test::Most tests => 6;
+use strict;
 
-use LWP::UserAgent;
-use JSON;
+use open ':std', ':encoding(utf8)';
+use Test::Most tests => 8;
 
 use lib 't';
 use Tester;
 
-no warnings 'uninitialized';
 
 # We start by creating a Tester instance that we will use for the subsequent tests:
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.2' });
 
 
 # We first test the 'json' format.  We include in this test:
@@ -58,7 +56,7 @@ subtest 'config.json' => sub {
 
     bail_on_fail;
     
-    my $config_json = $T->fetch_url("/data1.2/config.json?show=all&rowcount", "config.json fetch");
+    my $config_json = $T->fetch_url("/config.json?show=all&rowcount", "config.json fetch");
     
     restore_fail;
     
@@ -112,7 +110,7 @@ subtest 'config.json' => sub {
 
 subtest 'config.txt' => sub {
 
-    my $config_txt = $T->fetch_url("/data1.2/config.txt?show=all&rowcount", "config.txt fetch");
+    my $config_txt = $T->fetch_url("/config.txt?show=all&rowcount", "config.txt fetch");
     
     unless ( $config_txt )
     {
@@ -134,7 +132,7 @@ subtest 'config.txt' => sub {
     
     foreach my $r ( @records )
     {
-	$section{$r->{config_section}} = 1;
+	$section{$r->{config_section}} = 1 if $r->{config_section};
 	$rank{$r->{taxonomic_rank}} = $r->{rank_code} if $r->{taxonomic_rank};
     }
     
@@ -153,7 +151,7 @@ subtest 'config.txt' => sub {
 
 subtest 'config.csv' => sub {
     
-    my $config_csv = $T->fetch_url("/data1.2/config.csv?show=all&rowcount", "config.csv fetch");
+    my $config_csv = $T->fetch_url("/config.csv?show=all&rowcount", "config.csv fetch");
     
     unless ( $config_csv )
     {
@@ -175,7 +173,7 @@ subtest 'config.csv' => sub {
     
     foreach my $r ( @records )
     {
-	$section{$r->{config_section}} = 1;
+	$section{$r->{config_section}} = 1 if $r->{config_section};
 	$rank{$r->{taxonomic_rank}} = $r->{rank_code} if $r->{taxonomic_rank};
     }
     
@@ -194,7 +192,7 @@ subtest 'config.csv' => sub {
 
 subtest 'config.tsv' => sub {
     
-    my $config_tsv = $T->fetch_url("/data1.2/config.tsv?show=all&rowcount", "config.tsv fetch");
+    my $config_tsv = $T->fetch_url("/config.tsv?show=all&rowcount", "config.tsv fetch");
     
     unless ( $config_tsv )
     {
@@ -216,7 +214,7 @@ subtest 'config.tsv' => sub {
     
     foreach my $r ( @records )
     {
-	$section{$r->{config_section}} = 1;
+	$section{$r->{config_section}} = 1 if $r->{config_section};
 	$rank{$r->{taxonomic_rank}} = $r->{rank_code} if $r->{taxonomic_rank};
     }
     
@@ -237,7 +235,7 @@ subtest 'config.tsv' => sub {
 
 subtest 'config.foo' => sub {
     
-    my $config_bad = $T->fetch_nocheck("/data1.2/config.foo?show=all&rowcount", "config.foo fetch");
+    my $config_bad = $T->fetch_nocheck("/config.foo?show=all&rowcount", "config.foo fetch");
     
     unless ( $config_bad )
     {
@@ -253,7 +251,7 @@ subtest 'config.foo' => sub {
 
 subtest 'config.json bad show' => sub {
 
-    my $config_json = $T->fetch_url("/data1.2/config.json?show=foo", "config.json bad show");
+    my $config_json = $T->fetch_nocheck("/config.json?show=foo", "config.json bad show");
     
     unless ( $config_json )
     {
@@ -280,5 +278,105 @@ subtest 'config.json bad show' => sub {
 	return;
     }
     
-    ok( $warnings[0] =~ qr{bad value 'foo'}, 'config.json missing show bad value' );
+    ok( $T->check_messages( \@warnings, qr{bad value 'foo'}i ), 'found bad value warning');
+    ok( $T->check_messages( \@warnings, qr{output blocks.*specified}i ), 'found no output blocks warning');
+};
+
+
+# Now give some deliberately bad queries, to check that the error responses
+# match what they are supposed to.
+
+subtest 'error response 404' => sub {
+
+    my $m404 = $T->fetch_nocheck("/taxa/single.json?name=not_a_taxon_name", 'not found json');
+    
+    unless ( $m404 )
+    {
+	diag("skipping remainder of this subtest");
+	return;	
+    }
+    
+    is( $m404->code, '404', 'not found json has code 404' );
+    is( $m404->header("Content-Type"), 'application/json; charset=utf-8', 
+	'not found json has proper content type' );
+    
+    my $json_404 = $T->decode_json_response($m404, 'not found json');
+    my $message;
+    
+    is( $json_404->{status_code}, '404', "not found json has 'status code' of 404" );
+    
+    if( ref $json_404->{errors} eq 'ARRAY' && @{$json_404->{errors}} == 1 )
+    {
+	$message = $json_404->{errors}[0];
+	like( $message, qr{not found}, "not found json error contains 'not found'" );
+	like( $message, qr{not_a_taxon_name}, "not found json error contains argument" );
+    }
+    
+    else
+    {
+	fail('not found json has one error');
+    }
+    
+    my $m404a = $T->fetch_nocheck("/taxa/single.txt?name=not_a_taxon_name", 'not found txt');
+    
+    is( $m404a->code, '404', 'not found txt has code 404' );
+    is( $m404a->header("Content-Type"), 'text/html; charset=utf-8', 
+	'not found txt has proper content type' );
+    
+    my $body = $m404a->content;
+    
+    like( $body, qr{404}i, "not found txt respose contains '404'" );
+    like( $body, qr{not found}, "not found txt response contains 'not found'" );
+    like( $body, qr{not_a_taxon_name}, "not found txt response contains argument" );
+    like( $body, qr{$message}, "not found txt response contains same message as json" ) if $message;
+};
+
+
+subtest 'error response 400' => sub {
+
+    my $m400 = $T->fetch_nocheck("/taxa/single.json?foo=bar", 'bad param json');
+    
+    unless ( $m400 )
+    {
+	diag("skipping remainder of this subtest");
+	return;	
+    }
+    
+    is( $m400->code, '400', 'bad param json has code 400' );
+    is( $m400->header("Content-Type"), 'application/json; charset=utf-8', 
+	'bad param json has proper content type' );
+    
+    my $json_400 = $T->decode_json_response($m400, 'bad param json');
+    my @messages;
+    
+    is( $json_400->{status_code}, '400', "bad param json has 'status code' of 400" );
+    
+    if( ref $json_400->{errors} eq 'ARRAY' && @{$json_400->{errors}} == 2 )
+    {
+	@messages = @{$json_400->{errors}};
+	like( $messages[0], qr{parameter 'foo'}, "bad param json has bad parameter error" );
+	like( $messages[1], qr{'name'.*'id'|'id'.*'name'}, "bad param json says proper params" );
+    }
+    
+    else
+    {
+	fail('bad param json has two errors');
+    }
+    
+    my $m400a = $T->fetch_nocheck("/taxa/single.txt?foo=bar", 'bad param txt');
+    
+    is( $m400a->code, '400', 'bad param txt has code 400' );
+    is( $m400a->header("Content-Type"), 'text/html; charset=utf-8', 
+	'bad param txt has proper content type' );
+    
+    my $body = $m400a->content;
+    
+    like( $body, qr{400}i, "bad param txt respose contains '400'" );
+    like( $body, qr{parameter 'foo'}i, "bad param txt response contains 'bad param'" );
+    like( $body, qr{'name'.*'id'|'id'.*'name'}, "bad param txt response says proper params" );
+    
+    foreach my $m (@messages)
+    {
+	ok( $body =~ qr{$m}, "bad param txt response contains message '$m'" );
+    }
 };

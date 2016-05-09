@@ -108,7 +108,7 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       pres => 1,
 		       higher => 1,
 		       reference_no => 1,
-		       imm_children => 1,
+		       immediate => 1,
 		       all_variants => 1,
 		       occ_name => 1,
 		       exclude => 1,
@@ -126,6 +126,9 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       modified_by => 1,
 		       authent_by => 1,
 		       touched_by => 1, );
+
+my (%RESOLVE_OPTION) = ( all_names => 1,
+			 common => 1 );
 
 my (%ASSOC_OPTION) = ( reference_no => 1,
 		       opinion_no => 1,
@@ -217,11 +220,6 @@ my (%RECORD_BLESS) = ( taxa => 'PBDB::Taxon',
 		       refs => 'PBDB::Reference',
 		       opinions => 'PBDB::Opinion' );
 
-my (%TAXON_FIELD_MAP) = ( accepted => 'accepted_no',
-			  senior => 'synonym_no',
-			  parent => 'senpar_no',
-			  immparent => 'immpar_no' );
-
 my $VALID_TAXON_ID = qr{ ^ (?: $IDP{TXN} | $IDP{VAR} )? ( [0-9]+ ) $ }xsi;
 my $VALID_OPINION_ID = qr{ ^ (?: $IDP{OPN} )? ( [0-9]+ ) $ }xsi;
 my $VALID_REF_ID = qr{ ^ (?: $IDP{REF} )? ( [0-9]+ ) $ }xsi;
@@ -282,7 +280,7 @@ sub clear_sql {
     
     my ($taxonomy) = @_;
     
-    delete $taxonomy->{sql_string};
+    $taxonomy->{sql_string} = '';
     delete $taxonomy->{sql_rowcount};
 }
 
@@ -302,6 +300,22 @@ sub list_warnings {
 }
 
 
+=head3 has_warning ( code )
+
+Returns true if the most recent query method called on this Taxonomy object
+generated a warning with the specified code, false otherwise.
+
+=cut
+
+sub has_warning {
+    
+    my ($taxonomy, $code) = @_;
+    
+    return 1 if $taxonomy->{warning_codes}{$code};	# true if code was flagged
+    return;						# false otherwise
+}
+
+
 =head3 add_warning ( code, message... )
 
 Adds a warning message to the list that will be returned by L</list_warnings>.  This method is
@@ -316,7 +330,7 @@ sub add_warning {
     foreach my $m (@messages)
     {
 	push @{$taxonomy->{warnings}}, $m;
-	push @{$taxonomy->{warning_codes}}, $code;
+	push @{$taxonomy->{warning_codes}{$code}}, $m;
     }
 }
 
@@ -610,19 +624,19 @@ List all synonyms of each specified taxon
 
 List the currently accepted taxon corresponding to each specified taxon
 
-=item parent
+=item senpar
 
 List the parent taxon of each specified taxon.  This is equivalent to the
 senior synonym of the immediate parent taxon.
 
-=item immparent
+=item immpar
 
 List the immediate parent of each specified taxon.
 
 =item children
 
 List the taxa immediately contained within each specified taxon and all its synonyms.  If the
-option 'imm_children' is also specified, then list only immediate children of the specified taxa,
+option 'immediate' is also specified, then list only immediate children of the specified taxa,
 and not children of their synonyms.
 
 If some of the base taxa are marked as excluded, then children of those taxa will not be returned.
@@ -630,7 +644,7 @@ If some of the base taxa are marked as excluded, then children of those taxa wil
 =item all_children
 
 List all taxa contained within the any of the specified taxa or their synonyms.  If the option
-'imm_children' is also specified, then list only children of the specified taxa, and not children
+'immediate' is also specified, then list only children of the specified taxa, and not children
 of their synonyms.
 
 If some of the base taxa are marked as excluded, then children of those taxa will not be returned.
@@ -714,7 +728,7 @@ sub list_taxa {
     my @fields = $taxonomy->generate_fields($fieldspec, $tables);
     
     my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
-    my $order_expr = $taxonomy->taxon_order($options, $tables);
+    my $order_expr = $taxonomy->taxon_order($rel, 'taxa', $options, $tables);
     my $limit_expr = $taxonomy->simple_limit($options);
     
     my $auth_table = $taxonomy->{AUTH_TABLE};
@@ -750,14 +764,19 @@ sub list_taxa {
 		GROUP BY a.taxon_no $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'immparent' )
+    elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' || $rel eq 'immpar' )
     {
 	$copy_exclusions = 1 if $rel eq 'accepted' || $rel eq 'senior';
 	
 	push @fields, 'base.orig_no as base_no';
 	my $fields = join ', ', @fields;
 	
-	my $rel_field = $TAXON_FIELD_MAP{$rel};
+	if ( $rel eq 'parent' )
+	{
+	    $rel = $options->{immediate} ? 'immpar' : 'senpar';
+	}
+	
+	my $rel_field = $rel eq 'senior' ? 'synonym_no' : $rel . '_no';
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
@@ -793,7 +812,7 @@ sub list_taxa {
 	    $sel_field = 'synonym_no';
 	}
 	
-	elsif ( $options->{imm_children} )
+	elsif ( $options->{immediate} )
 	{
 	    $rel_field = 'immpar_no';
 	    $sel_field = 'orig_no';
@@ -810,7 +829,7 @@ sub list_taxa {
 	push @filters, $taxonomy->exclusion_filters($base_nos);
 	
 	push @filters, "t.lft > tb.lft and t.lft <= tb.rgt" if $rel eq 'juniors';
-	push @filters, "tb.lft > t.lft and tb.lft <= t.rgt" if $rel eq 'seniors';
+	push @filters, "t.lft < tb.lft and t.rgt > tb.rgt" if $rel eq 'seniors';
 	
 	push @filters, $taxonomy->refno_filter($options, 'a');
 	
@@ -831,15 +850,31 @@ sub list_taxa {
     
     elsif ( $rel eq 'all_children' )
     {
-	push @fields, 'base.orig_no as base_no';
+	if ( $options->{immediate} )
+	{
+	    push @fields, "tb.orig_no as base_no";
+	}
+	
+	else
+	{
+	    push @fields, "tb2.orig_no as base_no";
+	}
+	
+	# push @fields, 'base.orig_no as base_no';
 	#push @fields, 'if (t.orig_no = base.orig_no, 1, 0) as is_base';
 	my $fields = join ', ', @fields;
 	
+	my @filters = "base.taxon_no in ($base_string)";
+	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->exclusion_filters($base_nos);
+	push @filters, $taxonomy->refno_filter($options, 'a');
+	
 	my ($joins);
 	
-	if ( $options->{imm_children} )
+	if ( $options->{immediate} )
 	{
 	    $joins = "JOIN $tree_table as t on t.lft between tb.lft and tb.rgt";
+	    push @filters, $taxonomy->immediate_filters($base_string);
 	}
 	
 	else
@@ -848,10 +883,6 @@ sub list_taxa {
 		JOIN $tree_table as t on t.lft between tb2.lft and tb2.rgt";
 	}
 	
-	my @filters = "base.taxon_no in ($base_string)";
-	push @filters, $taxonomy->taxon_filters($options, $tables);
-	push @filters, $taxonomy->exclusion_filters($base_nos);
-	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
@@ -873,7 +904,7 @@ sub list_taxa {
 	# orig_no values representing the ancestors of the taxa identified by
 	# $base_string.
 	
-	$taxonomy->compute_ancestry($base_string);
+	$taxonomy->compute_ancestry($base_string, $options->{immediate});
 	
 	# Now use this temporary table to do the actual query.
 	
@@ -937,7 +968,7 @@ sub list_taxa {
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
 	
-	$order_expr ||= 'ORDER BY if(t.lft > 0, 0, 1), t.lft';
+	# $order_expr ||= 'ORDER BY if(t.lft > 0, 0, 1), t.lft';
 	
 	$sql = "SELECT $count_expr $fields
 		FROM $tree_table as t JOIN $auth_table as a on $auth_expr
@@ -1042,7 +1073,7 @@ sub find_common_taxa {
     
     $ancestry = $dbh->selectall_arrayref($sql, { Slice => {} });
     
-    $taxonomy->{sql_string} = $sql;
+    $taxonomy->{sql_string} .= "$sql\n\n";
     
     # If no ancestors were found, we return just "0" which will lead to an
     # empty result.
@@ -1318,13 +1349,18 @@ sub list_associated {
 	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
     }
     
-    elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' )
+    elsif ( $rel eq 'accepted' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' || $rel eq 'immpar' )
     {
 	push @inner_filters, "base.taxon_no in ($base_string)";
 	push @inner_filters, $taxonomy->taxon_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables)
 	    if $record_type eq 'opinions';
+	
+	if ( $rel eq 'parent' )
+	{
+	    $rel = $options->{immediate} ? 'immpar' : 'senpar';
+	}
 	
 	my $rel_field = $rel eq 'senior' ? 'synonym_no' : $rel . '_no';
 	
@@ -1352,7 +1388,7 @@ sub list_associated {
 	    $sel_field = 'synonym_no';
 	}
 	
-	elsif ( $options->{imm_children} )
+	elsif ( $options->{immediate} )
 	{
 	    $rel_field = 'immpar_no';
 	    $sel_field = 'orig_no';
@@ -1378,7 +1414,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables)
 	    if $record_type eq 'opinions';
 	
-	if ( $options->{imm_children} )
+	if ( $options->{immediate} )
 	{
 	    $taxon_joins = "$auth_table as base JOIN $tree_table as tb using (orig_no)
 		JOIN $tree_table as t on t.lft between tb.lft and tb.rgt\n";
@@ -1400,7 +1436,7 @@ sub list_associated {
 	# orig_no values representing the ancestors of the taxa identified by
 	# $base_string.
 	
-	$taxonomy->compute_ancestry($base_string);
+	$taxonomy->compute_ancestry($base_string, $options->{immediate});
 	
 	# Now use this temporary table to do the actual query.
 	
@@ -1887,7 +1923,8 @@ sub list_associated {
 	croak "list_associated: the option { return => 'id' } is not compatible with 'list_reftaxa'\n"
 	    if $return_type eq 'id';
 	
-	my $order_expr = $taxonomy->taxon_order($options, $outer_tables) || "ORDER BY r.author1last, r.author1init, r.author2last, r.author2init, r.reference_no, a.taxon_name";
+	my $order_expr = $taxonomy->taxon_order($rel, 'assoc', $options, $outer_tables) || 
+	    "ORDER BY r.author1last, r.author1init, r.author2last, r.author2init, r.reference_no, a.taxon_name";
 	my $outer_joins = $taxonomy->taxon_joins('t', $outer_tables);
 	$outer_joins .= $taxonomy->ref_joins('r', $outer_tables);
 	
@@ -2245,6 +2282,7 @@ sub resolve_names {
     # Check the arguments.
     
     $taxonomy->clear_warnings;
+    $taxonomy->clear_sql;
     
     croak "resolve_names: second argument must be a hashref"
 	if defined $options && ref $options ne 'HASH';
@@ -2255,7 +2293,37 @@ sub resolve_names {
     foreach my $key ( keys %$options )
     {
 	croak "resolve_names: invalid option '$key'\n"
-	    unless $STD_OPTION{$key} || $TAXON_OPTION{$key} || $key eq 'all_names';
+	    unless $STD_OPTION{$key} || $TAXON_OPTION{$key} || $RESOLVE_OPTION{$key};
+    }
+    
+    # Check for option 'common'.
+    
+    my ($scientific, $common) = ('', '');
+    
+    if ( $options->{common} )
+    {
+	my @lang;
+	
+	foreach my $l ( ref $options->{common} eq 'ARRAY' ? 
+			@{$options->{common}} :
+			$options->{common} )
+	{
+	    if ( $l eq 'S' )
+	    {
+		$scientific = 1;
+	    }
+	    else
+	    {
+		push @lang, "'$l'";
+	    }
+	}
+	
+	$common = join(',', @lang);
+    }
+    
+    else
+    {
+	$scientific = 1;
     }
     
     # Generate a template query that will be able to find a name.
@@ -2274,7 +2342,7 @@ sub resolve_names {
 		join authorities as a using (taxon_no)
 	WHERE ";
 	
-    my $sql_order = "GROUP BY s.taxon_no ORDER BY v.n_occs desc, s.is_current desc, s.is_exact desc ";
+    my $sql_order = "GROUP BY s.taxon_no ORDER BY v.n_occs desc, s.is_current desc, s.is_exact desc, t.lft asc";
     
     my $sql_limit = $options->{all_names} ? "LIMIT 1000" : "LIMIT 1";
     
@@ -2365,19 +2433,23 @@ sub resolve_names {
 	# If no base was found, then the base must have included a bad name.
 	# In that case, skip this entry.
 	
+	my $base_n = $n;
 	my $range_clause;
+	my $prefix_rank = 25;	# an arbitrary high number, happens to equal 'unranked'
+	my @n_result;
 	
 	if ( $n =~ qr{ (.*) [:] (.*) }xs )
 	{
-	    my $prefix_base = $base{$1};	
+	    my $prefix_base = $base{$1};
 	    $n = $2;
 	    
 	    if ( ref $prefix_base && $prefix_base->{lft} > 0 && $prefix_base->{rgt} > 0 )
 	    {
-		$range_clause = 'lft between '. $prefix_base->{lft} . ' and ' . $prefix_base->{rgt};
+		$range_clause = 't.lft between '. $prefix_base->{lft} . ' and ' . $prefix_base->{rgt};
+		$prefix_rank = $prefix_base->{taxon_rank} if $prefix_base->{taxon_rank};
 	    }
 	    
-	    elsif ( defined $prefix_base && $prefix_base =~ qr{ ^ lft }xs )
+	    elsif ( defined $prefix_base && $prefix_base =~ qr{ ^ t[.]lft }xs )
 	    {
 		$range_clause = $prefix_base
 	    }
@@ -2390,10 +2462,11 @@ sub resolve_names {
 	
 	$n =~ s{[.]}{% }g;
 	
-	if ( $n =~ qr{ ^ ( [A-Za-z_%]+ )
-			    (?: \s+ \( ( [A-Za-z_%]+ ) \) )?
-			    (?: \s+    ( [A-Za-z_%]+ )    )?
-			    (?: \s+    ( [A-Za-z_%]+ )    )? }xs )
+	if ( $scientific &&
+	     $n =~ qr{ ^ ( [a-z_%]+ )
+			    (?: \s+ \( ( [a-z_%]+ ) \s* \) )?
+			    (?: \s+    ( [a-z_%]+ )    )?
+			    (?: \s+    ( [a-z_%]+ )    )? $ }xsi )
 	{
 	    my $main = $1;
 	    my $subgenus = $2;
@@ -2402,23 +2475,45 @@ sub resolve_names {
 	    
 	    my @clauses = @filters;
 	    
-	    unless ( $n =~ /[A-Za-z][A-Za-z]/ )
+	    unless ( $n =~ /[a-z]/i )
 	    {
-		$taxonomy->add_warning('W_BAD_NAME', "The name '$n' is not valid, it must have at least two consecutive letters");
+		$taxonomy->add_warning('W_BAD_NAME', "The name '$n' is not valid, it must have at least one letter");
 		next NAME;
 	    }
 	    
-	    if ( $species eq '%' )
+	    if ( $species )
 	    {
-		my $quoted = $dbh->quote($subgenus || $main);
-		push @clauses, "s.genus like $quoted and s.taxon_rank < 4";
-	    }
-	    
-	    elsif ( $species )
-	    {
-		my $quoted = $dbh->quote($subgenus || $main);
+		my $genus_clause;
+		
+		if ( $subgenus && $subgenus !~ /%/ )
+		{
+		    my $quoted = $dbh->quote($subgenus);
+		    push @clauses, "s.genus like $quoted";
+		    $genus_clause = 1;
+		}
+		
+		elsif ( $main && $main !~ /%/ )
+		{
+		    my $quoted = $dbh->quote($main);
+		    push @clauses, "s.genus like $quoted";
+		    $genus_clause = 1;
+		}
+		
+		if ( $subgenus )
+		{
+		    my $quoted = $dbh->quote("$main ($subgenus) %");
+		    push @clauses, "s.full_name like $quoted";
+		}
+		
+		elsif ( ! $genus_clause )
+		{
+		    my $quoted = $dbh->quote("$main %");
+		    my $quoted2 = $dbh->quote("% ($main) %");
+		    push @clauses, "(s.full_name like $quoted or s.full_name like $quoted2)";
+		}
+		
 		my $q_species = $dbh->quote($species);
-		push @clauses, "s.genus like $quoted and s.taxon_name like $q_species and s.taxon_rank < 4";
+		push @clauses, "s.taxon_name like $q_species and s.taxon_rank < 4";
 	    }
 	    
 	    elsif ( $subgenus eq '%' )
@@ -2434,17 +2529,25 @@ sub resolve_names {
 		push @clauses, "s.genus like $quoted and s.taxon_name like $q_sub and s.taxon_rank = 4";
 	    }
 	    
+	    elsif ( $prefix_rank eq '5' )
+	    {
+		my $quoted = $dbh->quote($main);
+		push @clauses, "s.taxon_name like $quoted and s.taxon_rank < 5";
+	    }
+	    
 	    else
 	    {
-		my $quoted = $dbh->quote($subgenus || $main);
-		push @clauses, "s.taxon_name like $quoted and s.taxon_rank > 4";
+		my $quoted = $dbh->quote($main);
+		push @clauses, "s.taxon_name like $quoted and s.taxon_rank >= 4";
 	    }
 	    
 	    push @clauses, "($range_clause)" if $range_clause;
+	    push @clauses, "common = ''";
 	    
 	    my $sql = $sql_base . join(' and ', @clauses) . "\n" . $sql_order . " " . $sql_limit;
 	    
-	    $taxonomy->{sql_string} = $sql;
+	    $taxonomy->{sql_string} .= $sql;
+	    $taxonomy->{sql_string} .= "\n\n";
 	    
 	    my $this_result = $dbh->selectall_arrayref($sql, { Slice => {} });
 	    
@@ -2452,18 +2555,75 @@ sub resolve_names {
 	    {
 		bless $r, 'PBDB::Taxon';
 		$r->{exclude} = 1 if $exclude;
-		push @result, $return_type eq 'id' ? $r->{orig_no} : $r;
+		push @n_result, $return_type eq 'id' ? $r->{taxon_no} : $r;
 	    }
 	    
 	    if ( ref $this_result->[0] )
 	    {
-		$base{$n} = $this_result->[0];
+		$base{$base_n} = $this_result->[0];
+	    }
+	}
+	
+	elsif ( $scientific )
+	{
+	    $taxonomy->add_warning('W_BAD_NAME', "The name '$n' is not valid, " .
+				   "it does not match the pattern for a scientific name");
+	    next NAME unless $common;
+	}
+	
+	if ( $common && $n =~ qr{ ^ [A-Za-z %._-]+ $ }xs )
+	{
+	    my @clauses = @filters;
+	    
+	    $n =~ s/^\s+//;
+	    $n =~ s/\s+$//;
+	    
+	    unless ( $n =~ /[a-z]/i )
+	    {
+		$taxonomy->add_warning('W_BAD_NAME', "The name '$n' is not valid, it must have at least one letter");
+		next NAME;
 	    }
 	    
-	    unless ( ref $this_result eq 'ARRAY' && @$this_result )
+	    my $quoted = $dbh->quote($n);
+	    push @clauses, "s.taxon_name like $quoted and s.common in ($common)";
+	    push @clauses, "($range_clause)" if $range_clause;
+	    
+	    my $sql = $sql_base . join(' and ', @clauses) . "\n" . $sql_order . " " . $sql_limit;
+	    
+	    $taxonomy->{sql_string} .= $sql;
+	    $taxonomy->{sql_string} .= "\n\n";
+	    
+	    my $this_result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	    
+	    foreach my $r ( @$this_result )
 	    {
-		$taxonomy->add_warning('W_BAD_NAME', "The name '$n' did not match any record in the taxonomy table");
+		bless $r, 'PBDB::Taxon';
+		$r->{exclude} = 1 if $exclude;
+		push @n_result, $return_type eq 'id' ? $r->{taxon_no} : $r;
 	    }
+	    
+	    if ( ref $this_result->[0] )
+	    {
+		$base{$base_n} = $this_result->[0];
+	    }
+	}
+	
+	elsif ( $common )
+	{
+	    $taxonomy->add_warning('W_BAD_NAME', "The name '$n' is not valid, " .
+				   "it contains an invalid character");
+	    next NAME unless @n_result;
+	}
+	
+	if ( @n_result )
+	{
+	    push @result, @n_result; # $$$
+	}
+	
+	else
+	{
+	    $taxonomy->add_warning('W_NO_MATCH', "The name '$base_n' did not match " . 
+				   "any record in the taxonomy table");
 	}
     }
     
@@ -2497,7 +2657,7 @@ sub lex_namestring {
 	{
 	    $source_string = $2;
 	    my $name_group = $1;
-	    my $main_name;
+	    my $main_name = '';
 	    
 	    # From this string, take everything up to the first ^.  That's the
 	    # main name.  Remove any whitespace at the end.
@@ -2523,7 +2683,7 @@ sub lex_namestring {
 		
 		my $prefix = '';
 		
-		while ( $main_name =~ qr{ ( [^:]+ ) : [:\s]* (.*) }xs )
+		while ( $main_name =~ qr{ ( [^:]+ ) [:] \s* (.*) }xs )
 		{
 		    $main_name = $2;
 		    my $selector = $1;
@@ -2534,10 +2694,10 @@ sub lex_namestring {
 		    $selector =~ s/\s+$//g;
 		    $selector =~ s/[%_.]+$//;
 		    
-		    if ( $selector =~ qr{ [^a-zA-Z] }xs || length($selector) < 3 )
+		    if ( $selector =~ qr{ [^a-zA-Z] }xs || length($selector) < 4 )
 		    {
 			$taxonomy->add_warning('W_BAD_NAME', "Invalid selector '$selector', must " .
-				"contain only Roman letters a-z and must have at least 3 letters.");
+				"contain only Roman letters a-z and must have at least 4 letters.");
 			next LEXEME;
 		    }
 		    
@@ -2549,20 +2709,42 @@ sub lex_namestring {
 		    $prefixes{$prefix} = 1;
 		}
 		
+		# If there is still a : in the main name, then we have found a
+		# syntax error.
+		
+		if ( $main_name =~ /:/ )
+		{
+		    $taxonomy->add_warning('W_BAD_NAME', "Taxon name '$main_name' does not match the pattern for a scientific name");
+		    next LEXEME;
+		}
+		
+		# In the main name, '.' should be taken as a wildcard that
+		# ends a word (as in "T.rex").  So it should be translated
+		# into '%' if it appears at the end of a name and '% '
+		# otherwise.
+		
+		$main_name =~ s/[.](?:$|[:])/%/g;
+		$main_name =~ s/[.]/% /g;
+		
+		# Condense any repeated wildcards and spaces.
+		
+		$main_name =~ s/%+/%/g;
+		$main_name =~ s/\s+/ /g;
+		
 		# Now add the prefix(es) back to the main name.
 		
 		$main_name = $prefix . $main_name;
 		
-		# In the main name, '.' should be taken as a wildcard that
-		# ends a word (as in "T.rex").  Condense any repeated
-		# wildcards and spaces.
+		# Add all of the prefxies collected so far to the name list,
+		# and then clear the prefix hash.  We sort the prefixes
+		# alphabetically, which means that shorter ones will always
+		# come first.
 		
-		$main_name =~ s/[.]/% /g;
-		$main_name =~ s/%+/%/g;
-		$main_name =~ s/\s+/ /g;
+		push @names, sort keys %prefixes;
+		%prefixes = ();
 		
-		# This will be one of the names to be resolved, as well as
-		# being the base for any subsequent exclusions.
+		# Then add the name itself.  This won't end in ':', so it
+		# counts as one of the actual names to resolve.
 		
 		push @names, $main_name;
 	    }
@@ -2571,7 +2753,7 @@ sub lex_namestring {
 	    # exclusion.  Remove any whitespace at the end.
 	    
 	EXCLUSION:
-	    while ( $name_group =~ qr{ ^ \^+ ( [^^]+ ) (.*) }xs )
+	    while ( $name_group =~ qr{ ^ \^+ \s* ( [^^]+ ) (.*) }xs )
 	    {
 		$name_group = $2;
 		my $exclude_name = $1;
@@ -2579,31 +2761,74 @@ sub lex_namestring {
 		
 		# If the exclusion contains any invalid characters, ignore it.
 		
-		if ( $exclude_name =~ qr{ [^\w%.] }xs )
+		if ( $exclude_name =~ qr{ [^\w\s%.:] }xs )
 		{
 		    $taxonomy->add_warning('W_BAD_NAME', "Taxon name '$exclude_name' contains invalid characters");
 		    next EXCLUSION;
 		}
 		
-		# Any '.' should be taken as a wildcard with a space
-		# following.  Condense any repeated wildcards and spaces.
+		# If the name includes a ':', split off the first component as a Selector prefix.
+		# This will be looked up first, and used to resolve any ambiguities in the
+		# remaining part of the name.  Repeat until there are no such prefixes left.
 		
+		my $prefix = $main_name ? "$main_name:" : '';
+		
+		while ( $exclude_name =~ qr{ ( [^:]+ ) : [:\s]* (.*) }xs )
+		{
+		    $exclude_name = $2;
+		    my $selector = $1;
+		    
+		    # Selector prefixes must consist of Roman letters only.  But they may have
+		    # trailing whitespace and/or trailing wildcards, which is ignored.
+		    
+		    $selector =~ s/\s+$//g;
+		    $selector =~ s/[%_.]+$//;
+		    
+		    if ( $selector =~ qr{ [^a-zA-Z] }xs || length($selector) < 4 )
+		    {
+			$taxonomy->add_warning('W_BAD_NAME', "Invalid selector '$selector', must " .
+				"contain only Roman letters a-z and must have at least 4 letters.");
+			next EXCLUSION;
+		    }
+		    
+		    # Keep track of the prefix so far, because each prefix
+		    # will need to be looked up before the main name is.
+		    
+		    $prefix .= "$selector:";
+		    
+		    $prefixes{$prefix} = 1;
+		}
+		
+		# Any '.' should be taken as a wildcard with a space
+		# following.  
+		
+		$exclude_name =~ s/[.]$/%/g;
 		$exclude_name =~ s/[.]/% /g;
+		
+		# Condense any repeated wildcards and spaces.
+		
 		$exclude_name =~ s/%+/%/g;
 		$exclude_name =~ s/\s+/ /g;
+		
+		# Add all of the prefxies collected for this exclusion to the
+		# name list, and then clear the prefix hash.  We sort the
+		# prefixes alphabetically, which means that shorter ones will
+		# always come first.
+		
+		push @names, sort keys %prefixes;
+		%prefixes = ();
 		
 		# Add this exclusion to the list of names to be resolved,
 		# including the '^' flag and base name at the beginning.
 		
-		if ( $main_name )
-		{
-		    push @names, "^$main_name:$exclude_name";
-		}
+		$exclude_name = "$prefix$exclude_name";
 		
-		else
-		{
-		    push @names, "^$exclude_name";
-		}
+		push @names, "^$exclude_name";
+	    }
+	    
+	    if ( $name_group ne '' )
+	    {
+		$taxonomy->add_warning('W_BAD_NAME', "Invalid exclusion '$name_group'");
 	    }
 	    
 	    next LEXEME;
@@ -2617,12 +2842,7 @@ sub lex_namestring {
 	}
     }
     
-    # Now return the prefixes followed by the names.
-    
-    my @result = sort keys %prefixes;
-    push @result, @names;
-    
-    return @result;
+    return @names;
 }
 
 
@@ -2648,10 +2868,10 @@ sub lookup_base {
     
     if ( ref $prefix_base && $prefix_base->{lft} > 0 && $prefix_base->{rgt} )
     {
-	$range_clause = 'and lft between '. $prefix_base->{lft} . ' and ' . $prefix_base->{rgt};
+	$range_clause = 'and t.lft between '. $prefix_base->{lft} . ' and ' . $prefix_base->{rgt};
     }
     
-    elsif ( defined $prefix_base && $prefix_base =~ qr{ ^ lft }xs )
+    elsif ( defined $prefix_base && $prefix_base =~ qr{ ^ t.lft }xs )
     {
 	$range_clause = "and ($prefix_base)";
     }
@@ -2664,22 +2884,31 @@ sub lookup_base {
     
     my $letter_count = () = $base_name =~ m/[a-zA-Z]/g;
     
-    # If the base name doesn't contain any wildcards, and contains at least 3
-    # letters, see if we can find an exactly coresponding taxonomic name.  If
-    # we can find at least one, pick the one with the most subtaxa and we're
-    # done.
+    # We require at least 4 actual letters.
     
-    unless ( $base_name =~ qr{ [%_] } && $letter_count >= 3 )
+    if ( $letter_count < 4 )
     {
-	my $quoted = $dbh->quote("$base_name%");
+	$taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' must contain at least 4 letters");
+	return;
+    }
+    
+    # If the base name doesn't contain any wildcards, see if we can find an
+    # exactly coresponding taxonomic name.  If we can find at least one, pick
+    # the one with the most subtaxa and we're done.
+    
+    if ( $base_name !~ qr{[%_]} && $letter_count >= 3 )
+    {
+	my $quoted = $dbh->quote($base_name);
 	
-	# Note that we use 'like' so that that differences in case and
-	# accent marks will be ignored.
+	# Note that we use 'like' so that that differences in case and accent
+	# marks will be ignored (note: taxonomic names don't have any accent
+	# marks anyway.)
 	
 	my $sql = "
-		SELECT orig_no, lft, rgt, (taxon_rank + 0) as taxon_rank
-		FROM taxon_search as s JOIN taxon_trees as t using (orig_no)
-			JOIN taxon_attrs as v using (orig_no)
+		SELECT t.orig_no, t.lft, t.rgt, (taxon_rank + 0) as taxon_rank
+		FROM taxon_search as s JOIN taxon_trees as t1 using (orig_no)
+			JOIN taxon_trees as t on t.orig_no = t1.synonym_no
+			JOIN taxon_attrs as v on v.orig_no = t.orig_no
 		WHERE taxon_name like $quoted and taxon_rank > 5 $range_clause
 		GROUP BY orig_no
 		ORDER BY v.taxon_size desc LIMIT 1";
@@ -2694,44 +2923,36 @@ sub lookup_base {
 	}
     }
     
-    # Otherwise, look up all entries where the name matches the given string
-    # prefix-wise.  We require at least 3 actual letters, and if we get more
-    # than 200 results then we declare the prefix to be bad.
-    
-    unless ( $letter_count >= 3 )
-    {
-	$taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' must be at least 3 characters");
-	return;
-    }
+    # Otherwise, look for prefix matches.
     
     my $quoted = $dbh->quote("$base_name%");
     
     my $sql = "
-	SELECT lft, rgt
-	FROM taxon_search as s JOIN taxon_trees as t using (orig_no)
-	WHERE taxon_name like $quoted and taxon_rank >= 4 $range_clause
-	GROUP BY orig_no";
+	SELECT t.lft, t.rgt
+	FROM taxon_search as s JOIN taxon_trees as t1 using (orig_no)
+		JOIN taxon_trees as t on t.orig_no = t1.synonym_no
+	WHERE taxon_name like $quoted and taxon_rank > 5 $range_clause
+	GROUP BY t.orig_no";
     
     my $ranges = $dbh->selectall_arrayref($sql);
     
-    unless ( $ranges && @$ranges > 0 && @$ranges <= 200 )
+    if ( ref $ranges ne 'ARRAY' || @$ranges == 0 )
     {
-	if ( @$ranges > 200 )
-	{
-	    $taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' is not specific enough");
-	}
-	
-	else
-	{
-	    $taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' does not match any record in the taxonomy table");
-	}
-	
+	$taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' does not match any higher taxon in the taxonomy table");
+	return;
+    }
+    
+    # If we find more than 50 matches, then the prefix is not specific enough.
+    
+    if ( @$ranges > 50 )
+    {
+	$taxonomy->add_warning('W_BAD_NAME', "Selector '$base_name' is not specific enough, you must add more letters");
 	return;
     }
     
     my @check = grep { $_->[0] > 0 && $_->[1] > 0 } @$ranges; 
     
-    my $range_string = join(' or ', map { "lft between $_->[0] and $_->[1]" } @check);
+    my $range_string = join(' or ', map { "t.lft between $_->[0] and $_->[1]" } @check);
     
     return $range_string;
 }
@@ -3031,6 +3252,60 @@ sub exclusion_filters {
 }
 
 
+# immediate_filters ( base_string )
+# 
+# This routine is called when the relationship is 'all_children' and the
+# option 'immediate' was also given.  It generates a filter which will
+# exclude all children of junior synonyms of the specified base taxa.
+
+sub immediate_filters {
+    
+    my ($taxonomy, $id_string) = @_;
+    
+    # First query for the sequence range of each synonym of any of the specified taxa.
+    
+    my $dbh = $taxonomy->{dbh};
+    
+    my $auth_table = $taxonomy->{AUTH_TABLE};
+    my $tree_table = $taxonomy->{TREE_TABLE};
+    
+    my $sql = "SELECT t.lft, t.rgt, t.orig_no as junior_no, tb.orig_no as senior_no
+	FROM $auth_table as base JOIN $tree_table as tb using (orig_no)
+		LEFT JOIN $tree_table as t on t.synonym_no = tb.orig_no
+	WHERE base.taxon_no in ($id_string)
+	GROUP BY t.orig_no";
+    
+    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    return unless ref $rows eq 'ARRAY' && @$rows;
+    
+    # Now comes the tricky part.  We have to add an exclusion for each
+    # sequence range, EXCEPT for those taxa that were also specified as base
+    # taxa. The reason for this is so that if the user specifies,
+    # i.e. "stegosaurus,hesperosaurus" then they will get all of the immediate
+    # children of those two taxa and not of any of the other synonyms of
+    # stegosaurus.  This will require two passes through the list.
+    
+    my %base;
+    my @exclusions;
+    
+    foreach my $r ( @$rows )
+    {
+	$base{$r->{senior_no}} = 1 if $r->{senior_no};
+    }
+    
+    foreach my $r ( @$rows )
+    {
+	next if $base{$r->{junior_no}};
+	next unless $r->{lft} && $r->{rgt};
+	
+	push @exclusions, "t.lft not between $r->{lft} and $r->{rgt}";
+    }
+    
+    return @exclusions;
+}
+
+
 # generate_range_filter ( id_string )
 # 
 # This routine translates a string list of taxon identifiers into a filter
@@ -3055,7 +3330,8 @@ sub range_filter {
     
     my $sql = "	SELECT t.lft, t.rgt
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
-		WHERE a.taxon_no in ($id_string)";
+		WHERE a.taxon_no in ($id_string)
+		GROUP BY t.orig_no";
     
     my $rows = $dbh->selectall_arrayref($sql, { Slice => {} });
     
@@ -3170,6 +3446,8 @@ my (%STATUS_FILTER) = ( valid => "t.accepted_no = t.synonym_no",
 		        any => '1=1',
 		        all => '1=1');
 
+my (%VARIANT_FILTER) = ( valid => 1, accepted => 1, senior => 1, junior => 1 );
+
 my (%OP_TYPE_FILTER) = ( valid => "in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
 			 accepted => "in ('belongs to')",
 			 senior => "in ('belongs to')",
@@ -3186,16 +3464,29 @@ sub taxon_filters {
     
     my @filters;
     
+    # If the 'status' option was given, add the appropriate filter.
+    
     if ( $options->{status} )
     {
 	my $filter = $STATUS_FILTER{$options->{status}};
+	
 	if ( defined $filter )
 	{
 	    push @filters, $filter unless $filter eq '1=1';
 	}
+	
 	else
 	{
 	    croak "bad value '$options->{status}' for option 'status'\n";
+	}
+	
+	# If the status was given as 'valid', 'accepted', 'senior' or
+	# 'junior', then also filter out all name variant other than the
+	# current one.
+	
+	if ( $VARIANT_FILTER{$options->{status}} && ! $options->{all_variants} )
+	{
+	    push @filters, "a.taxon_no = t.spelling_no";
 	}
     }
     
@@ -3269,7 +3560,16 @@ sub taxon_filters {
 	if ( @ranks )
 	{
 	    my $rank_string = join( q{,}, @ranks );
-	    push @rank_filters, "t.rank in ($rank_string)";
+	    
+	    if ( $tables_ref->{use_a} )
+	    {
+		push @rank_filters, "(a.taxon_rank + 0) in ($rank_string)";
+	    }
+	    
+	    else
+	    {
+		push @rank_filters, "t.rank in ($rank_string)";
+	    }
 	}
 	
 	my $rank_filter;
@@ -3460,6 +3760,10 @@ sub taxon_filters {
 }
 
 
+my %RANK_CMP = ( max => '<=', below => '<', min => '>=', above => '>' );
+my %RANK_FIELD = ( max => 'max_rank', below => 'max_rank', 
+		   min => 'min_rank', above => 'min_rank' );
+
 sub rank_filter {
     
     my ($taxonomy, $rank, $type, $tables_ref) = @_;
@@ -3468,8 +3772,23 @@ sub rank_filter {
     
     if ( $RANK_STRING{$rank} )
     {
-	return "t.rank = $rank" if $type eq 'single';
-	$prefix = $type eq 'bottom' ? 'min' : 'max';
+	if ( $type eq 'single' )
+	{
+	    if ( $tables_ref->{use_a} )
+	    {
+		return "(a.taxon_rank + 0) = $rank";
+	    }
+	    
+	    else
+	    {
+		return "t.rank = $rank";
+	    }
+	}
+	
+	else
+	{
+	    $prefix = $type eq 'bottom' ? 'min' : 'max';
+	}
     }
     
     elsif ( $rank =~ qr{ ^ ( above | below | min | max ) _ (.+) }xsi )
@@ -3487,118 +3806,36 @@ sub rank_filter {
     
     # Now construct the filter.
     
-    if ( $prefix eq 'max' )
+    if ( $tables_ref->{use_a} )
     {
-	return "t.max_rank <= $rank";
+	return "(a.taxon_rank + 0) $RANK_CMP{$prefix} $rank";
     }
     
-    elsif ( $prefix eq 'below' )
+    else
     {
-	return "t.max_rank < $rank";
+	return "t.$RANK_FIELD{$prefix} $RANK_CMP{$prefix} $rank";
     }
-    
-    elsif ( $prefix eq 'min' )
-    {
-	return "t.min_rank >= $rank";
-    }
-    
-    else # ( $prefix eq 'above' )
-    {
-	return "t.min_rank > $rank";
-    }
-    
-    # Now construct the filter.  First take care of some special cases.
-    
-    # if ( $prefix eq 'max' && ( $rank eq '8' || $rank eq '12' || $rank eq '16' || $rank eq '19' || $rank eq '22' ) )
+
+    # if ( $prefix eq 'max' )
     # {
-    # 	$rank++;
-    # 	$prefix = 'below';
+    # 	return "t.max_rank <= $rank";
     # }
     
-    # elsif ( $prefix eq 'min' && ( $rank eq '10' || $rank eq '14' || $rank eq '18' || $rank eq '21' ) )
+    # elsif ( $prefix eq 'below' )
     # {
-    # 	$rank--;
-    # 	$prefix = 'above';
+    # 	return "t.max_rank < $rank";
     # }
     
-    # # Now construct the filter.
-    
-    # if ( $prefix eq 'max' || $prefix eq 'below' )
+    # elsif ( $prefix eq 'min' )
     # {
-    # 	my $lt = $prefix eq 'max' ? '<=' : '<';
-    # 	$tables_ref->{ph} = 1 if $rank >= 9;
-	
-    # 	if ( $rank < 9 || $rank > 23 )
-    # 	{
-    # 	    return "t.rank $lt $rank";
-    # 	}
-	
-    # 	elsif ( $rank < 13 )
-    # 	{
-    # 	    my $clause = $prefix eq 'below' ? 'and ph.family_no <> ph.ints_no' : '';
-    # 	    return "(t.rank $lt $rank or (t.rank = 25 and ph.family_no is not null $clause))";
-    # 	}
-	
-    # 	elsif ( $rank < 17 )
-    # 	{
-    # 	    my $clause = $prefix eq 'below' ? 'and ph.order_no <> ph.ints_no' : '';
-    # 	    return "(t.rank $lt $rank or (t.rank = 25 and ph.order_no is not null $clause))";
-    # 	}
-	
-    # 	elsif ( $rank < 20 )
-    # 	{
-    # 	    my $clause = $prefix eq 'below' ? 'and ph.class_no <> ph.ints_no' : '';
-    # 	    return "(t.rank $lt $rank or (t.rank = 25 and ph.class_no is not null $clause))";
-    # 	}
-	
-    # 	elsif ( $rank < 23 )
-    # 	{
-    # 	    my $clause = $prefix eq 'below' ? 'and ph.phylum_no <> ph.ints_no' : '';
-    # 	    return "(t.rank $lt $rank or (t.rank = 25 and ph.phylum_no is not null $clause))";
-    # 	}
-	
-    # 	else # ( rank == 23 )
-    # 	{
-    # 	    my $clause = $prefix eq 'below' ? 'and ph.kingdom_no <> ph.ints_no' : '';
-    # 	    return "(t.rank $lt $rank or (t.rank = 25 and ph.kingdom_no is not null $clause))";
-    # 	}
+    # 	return "t.min_rank >= $rank";
     # }
     
-    # else # ( $prefix eq 'min' || $prefix eq 'above' )
+    # else # ( $prefix eq 'above' )
     # {
-    # 	my $gt = $prefix eq 'min' ? '>=' : '>';
-    # 	$tables_ref->{pc} = 1 if $rank >= 6;
-	
-    # 	if ( $rank < 6 || $rank > 24 )
-    # 	{
-    # 	    return "t.rank $gt $rank";
-    # 	}
-	
-    # 	elsif ( $rank < 10 )
-    # 	{
-    # 	    return "(t.rank $gt $rank and (t.rank < 25 or pc.family_count > 0))";
-    # 	}
-	
-    # 	elsif ( $rank < 14 )
-    # 	{
-    # 	    return "(t.rank $gt $rank and (t.rank < 25 or pc.order_count > 0))";
-    # 	}
-	
-    # 	elsif ( $rank < 18 )
-    # 	{
-    # 	    return "(t.rank $gt $rank and (t.rank < 25 or pc.class_count > 0))";
-    # 	}
-	
-    # 	elsif ( $rank < 21 )
-    # 	{
-    # 	    return "(t.rank $gt $rank and (t.rank < 25 or pc.phylum_count > 0))";
-    # 	}
-	
-    # 	else # ( $rank < 25 )
-    # 	{
-    # 	    return "(t.rank $gt $rank and (t.rank < 25 or pc.kingdom_count > 0))";
-    # 	}
+    # 	return "t.min_rank > $rank";
     # }
+    
 }
 
 
@@ -3670,7 +3907,7 @@ sub opinion_filters {
     
     my @stuff = caller;
     my $caller = $stuff[3];
-    print STDERR "caller: $caller\n";
+    # print STDERR "caller: $caller\n";
     
     if ( defined $options->{opinion_no} && $options->{opinion_no} ne 'all_records' )
     {
@@ -3796,59 +4033,77 @@ sub common_filters {
 	elsif ( $key =~ qr{authorized_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    if ( $list ) {
+	    if ( $list eq '-9998' ) {
+		push @filters, "$t.authorizer_no <> $t.enterer_no";
+	    } elsif ( $list eq '-9997' ) {
+		push @filters, "$t.authorizer_no = $t.enterer_no";
+	    } elsif ( $list ne '-9999' ) {
 		push @filters, "$t.authorizer_no ${exclude}in ($list)";
-	    } else {
-		push @filters, "t.orig_no in (-1)";
 	    }
 	}
 	
 	elsif ( $key =~ qr{entered_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    if ( $list ) {
+	    if ( $list eq '-9998' ) {
+		push @filters, "$t.authorizer_no <> $t.enterer_no";
+	    } elsif ( $list eq '-9997' ) {
+		push @filters, "$t.authorizer_no = $t.enterer_no";
+	    } elsif ( $list ne '-9999' ) {
 		push @filters, "$t.enterer_no ${exclude}in ($list)";
-	    } else {
-		push @filters, "t.orig_no in (-1)";
 	    }
 	}
 	
 	elsif ( $key =~ qr{authent_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    if ( $list ) {
-		push @filters, "$exclude($t.authorizer_no in ($list) or $t.enterer_no in ($list))";
-	    } else {
-		push @filters, "t.orig_no in (-1)";
+	    if ( $list eq '-9998' ) {
+		push @filters, "$t.authorizer_no <> $t.enterer_no";
+	    } elsif ( $list eq '-9997' ) {
+		push @filters, "$t.authorizer_no = $t.enterer_no";
+	    } elsif ( $list ne '-9999' ) {
+		push @filters, "${exclude}($t.authorizer_no in ($list) or $t.enterer_no in ($list))";
 	    }
 	}
 	
 	elsif ( $key =~ qr{modified_by$} )
 	{
-	    if ( $value eq '*' )
-	    {
-		push @filters, "$t.modifier_no <> $t.enterer_no" if $value eq '*';
+	    my ($list, $exclude) = $taxonomy->person_id_list($value);
+	    if ( $list eq '-9998' ) {
+		push @filters, "$t.modifier_no <> $t.enterer_no and $t.modifier_no <> 0";
+	    } elsif ( $list eq '-9997' ) {
+		push @filters, "$t.modifier_no = $t.enterer_no";
+	    } elsif ( $list eq '0' ) {
+		push @filters, "$t.modifier_no ${exclude}in ($list)";
+	    } elsif ( $list eq '-9999' ) {
+		push @filters, "$t.modifier_no <> 0";
+	    } else {
+		push @filters, "$t.modifier_no ${exclude}in ($list) and $t.modifier_no <> 0";
 	    }
+	    # if ( $value eq '*' )
+	    # {
+	    # 	push @filters, "$t.modifier_no <> $t.enterer_no" if $value eq '*';
+	    # }
 	    
-	    else
-	    {
-		my ($list, $exclude) = $taxonomy->person_id_list($value);
-		if ( $list ) {
-		    push @filters, "$t.modifier_no ${exclude}in ($list)";
-		} else {
-		    push @filters, "t.orig_no in (-1)";
-		}
-	    }
+	    # else
+	    # {
+	    # 	my ($list, $exclude) = $taxonomy->person_id_list($value);
+	    # 	if ( $list ) {
+	    # 	    push @filters, "$t.modifier_no ${exclude}in ($list)";
+	    # 	} else {
+	    # 	    push @filters, "t.orig_no in (-1)";
+	    # 	}
+	    # }
 	}
 	
 	elsif ( $key =~ qr{touched_by$} )
 	{
 	    my ($list, $exclude) = $taxonomy->person_id_list($value);
-	    if ( $list ) {
+	    if ( $list !~ /^-/ ) {
 		push @filters, 
 		"$exclude($t.authorizer_no in ($list) or $t.enterer_no in ($list) or $t.modifier_no in ($list))";
 	    } else {
-		push @filters, "t.orig_no in (-1)";
+		push @filters, "1=1";
 	    }
 	}
 	
@@ -3886,9 +4141,24 @@ sub common_filters {
 }
 
 
-sub person_id_list {
+sub person_id_list { # $$$ have to fix modified_by=!
     
     my ($taxonomy, $value) = @_;
+    
+    return ('-1', '') unless ref $value eq 'ARRAY';
+    
+    my $output = join(',', @$value);
+    print STDERR "id_list: $output\n";
+    
+    my $exclude = '';
+    
+    if ( $value->[0] =~ qr{ ^ ! \s* (.*) }xs )
+    {
+	$value->[0] = $1;
+	$exclude = 'not ';
+    }
+    
+    return join(',', @$value), $exclude;
     
     return unless $value;
     
@@ -3896,6 +4166,13 @@ sub person_id_list {
     my @ids;
     my $exclude = '';
     my $dbh = $taxonomy->{dbh};
+    
+    # If tbe only value is -9999, just return that.
+    
+    if ( $plist[0] < -9999 && @plist == 1 )
+    {
+	return @plist, '';
+    }
     
     # If the first value starts with !, generate an exclusion filter.
     
@@ -3949,10 +4226,10 @@ sub person_id_list {
 	}
     }
     
-    # If no identifiers were found, return the empty list.  Otherwise, join
+    # If no identifiers were found, return -1.  Otherwise, join
     # the identifiers together into a single string and return that.
     
-    return unless @ids;
+    return (-1, '') unless @ids;
     return (join(q{,}, @ids), $exclude);
 }
 
@@ -3980,7 +4257,7 @@ sub extra_filters {
 
 sub taxon_order {
     
-    my ($taxonomy, $options, $tables_ref) = @_;
+    my ($taxonomy, $rel, $type, $options, $tables_ref) = @_;
     
     return '' unless $options->{order};
     
@@ -4012,7 +4289,16 @@ sub taxon_order {
 	
 	elsif ( $order eq 'hierarchy' || $order eq 'hierarchy.asc' )
 	{
-	    push @clauses, "if(t.lft > 0, 0, 1), t.lft asc";
+	    if ( $rel eq 'children' || $rel eq 'all_children' || $rel eq 'parents' ||
+		 $rel eq 'all_parents' || $rel eq 'synonyms' )
+	    {
+		push @clauses, "t.lft asc";
+	    }
+	    
+	    else
+	    {
+		push @clauses, "if(t.lft > 0, 0, 1), t.lft asc";
+	    }	    
 	}
 	
 	elsif ( $order eq 'hierarchy.desc' )
@@ -4159,7 +4445,7 @@ sub taxon_order {
 	
 	elsif ( $order eq 'ref' || $order eq 'ref.asc' || $order eq 'ref.desc' )
 	{
-	    if ( $options->{record_type} eq 'taxa' )
+	    if ( $type eq 'assoc' )
 	    {
 		push @clauses, $order eq 'ref.desc' ? 'base.reference_no desc' : 'base.reference_no asc';
 	    }
@@ -4529,7 +4815,7 @@ sub simple_limit {
 	}
     }
     
-    elsif ( $options->{limit} && $options->{limit} ne '' && lc $options->{limit} ne 'all' )
+    elsif ( defined $options->{limit} && $options->{limit} ne '' && lc $options->{limit} ne 'all' )
     {
 	my $limit = $options->{limit} + 0;
 	
@@ -4556,7 +4842,7 @@ sub taxon_joins {
 	if $tables_hash->{ph};
     $joins .= "\t\tLEFT JOIN $taxonomy->{LOWER_TABLE} as pl on pl.orig_no = $mt.orig_no\n"
 	if $tables_hash->{pl};
-    $joins .= "\t\tLEFT JOIN $taxonomy->{COUNTS_TABLE} as pc on pc.orig_no = $mt.orig_no\n"
+    $joins .= "\t\tLEFT JOIN $taxonomy->{COUNTS_TABLE} as pc on pc.orig_no = $mt.synonym_no\n"
 	if $tables_hash->{pc};
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as pt on pt.orig_no = $mt.senpar_no\n"
 	if $tables_hash->{pt};
@@ -4679,17 +4965,18 @@ sub order_result_list {
 }
 
 
-# compute_ancestry ( base_nos )
+# compute_ancestry ( base_nos, immediate )
 # 
 # Use the ancestry scratch table to compute the set of common parents of the
-# specified taxa (a stringified list of identifiers).
+# specified taxa (a stringified list of identifiers).  If $immediate is true,
+# then list immediate parents rather than the senior synonyms of parents.
 # 
 # This function is only necessary because MySQL stored procedures cannot work
 # on temporary tables.  :(
 
 sub compute_ancestry {
 
-    my ($taxonomy, $base_string) = @_;
+    my ($taxonomy, $base_string, $immediate) = @_;
     
     my $dbh = $taxonomy->{dbh};
     my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
@@ -4720,9 +5007,11 @@ sub compute_ancestry {
     
     try
     {
+	my $imm = $immediate ? '_immediate' : '';
+	
 	# Fill the scratch table with the requested ancestry list.
 	
-	$result = $dbh->do("CALL compute_ancestry('$AUTH_TABLE','$TREE_TABLE', '$base_string')");
+	$result = $dbh->do("CALL compute_ancestry$imm('$AUTH_TABLE','$TREE_TABLE', '$base_string')");
 	
 	# Now copy the information out of the scratch table to a temporary
 	# table so that we can release the locks.
@@ -4809,7 +5098,7 @@ sub add_ancestry {
 
 our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      SIMPLE => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
-				 't.rank as taxon_rank', 't.lft', 't.status', 't.immpar_no', 
+				 't.rank as taxon_rank', 't.lft', 't.rgt', 't.status', 't.immpar_no', 
 				 't.senpar_no', 't.accepted_no'],
 		      AUTH_SIMPLE => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 
 				      '(a.taxon_rank + 0) as taxon_rank', 't.lft', 't.spelling_no',
@@ -4874,8 +5163,8 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      APP => ['v.first_early_age as firstapp_ea', 
 			      'v.first_late_age as firstapp_la',
 			      'v.last_early_age as lastapp_ea',
-			      'v.last_late_age as lastapp_la' ],
-			#      'app.early_interval', 'app.late_interval'],
+			      'v.last_late_age as lastapp_la', # ],
+			      'app.early_interval', 'app.late_interval'],
 		      ATTR => ['v.pubyr', 'v.attribution as taxon_attr'],
 		      OP_ATTR => ['cv.pubyr as taxon_pubyr', 'cv.attribution as taxon_attr', 
 				  'pv.pubyr as parent_pubyr', 'pv.attribution as parent_attr'],

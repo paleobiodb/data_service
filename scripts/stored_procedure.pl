@@ -270,6 +270,32 @@ $dbh->do("CREATE PROCEDURE compute_ancestry_2 (tree_table varchar(80), orig_tabl
 	END");
 
 
+$dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry_immediate");
+$dbh->do("CREATE PROCEDURE compute_ancestry_immediate (auth_table varchar(80), tree_table varchar(80), taxon_nos varchar(32000))
+	BEGIN
+		# Clear the scratch table
+		DELETE FROM ancestry_scratch;
+		# Insert the taxonomic concepts specified by 'taxon_nos'
+		SET \@stmt1 = CONCAT('INSERT INTO ancestry_scratch SELECT orig_no, 1 FROM ',
+				     auth_table, ' WHERE taxon_no in(', taxon_nos, ')');
+		PREPARE seed_table FROM \@stmt1;
+		EXECUTE seed_table;
+		# Now iterate adding parents to the table until no more are to
+		# be found.
+		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT immpar_no, 0 ',
+				     'FROM ancestry_scratch as s JOIN ', tree_table, ' using (orig_no) ',
+				     'WHERE senpar_no > 0');
+		PREPARE compute_parents	FROM \@stmt2;
+		SET \@cnt = 1;
+		SET \@bound = 1;
+		WHILE \@cnt > 0 AND \@bound < 100 DO
+			EXECUTE compute_parents;
+			SET \@cnt = ROW_COUNT();
+			SET \@bound = \@bound + 1;
+		END WHILE;
+	END");
+
+
 # $dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry");
 # $dbh->do("CREATE PROCEDURE compute_ancestry (s int)
 # 	BEGIN

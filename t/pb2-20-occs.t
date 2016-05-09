@@ -62,7 +62,9 @@ my $IDN1 = 'Dascillus shandongianus n. sp.';
 my $TNA1 = 'Dascillus shandongianus';
 my $INT1 = 'Middle Miocene';
 
-my $OID2 = '154322';	# For testing 'ident'
+my $OID2 = '1054041';
+
+# my $OID2 = '154322';	# For testing 'ident'
 
 my ($EAG1, $LAG1);
 
@@ -185,50 +187,28 @@ subtest 'single text by id' => sub {
 };
 
 
-# subtest 'single txt by name' => sub {
-    
-#     my $single_txt = $T->fetch_url("/data1.2/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo",
-# 				   "single txt request OK");
-    
-#     unless ( $single_txt )
-#     {
-# 	diag("skipping remainder of subtest");
-# 	return;
-#     }
-    
-#     # Now check the txt response in detail 
-    
-#     my ($r) = $T->extract_records($single_txt, 'single txt extract records', { type => 'header' } );
-    
-#     # Check the data fields
-    
-#     $T->check_fields($r, $t1t, "single txt");
-# };
+subtest 'list json by id' => sub {
 
-
-# Now we check for a request using the 'id' parameter, with the value
-# retrieved from the first request.  We also fetch the parent of our test
-# taxon, and make sure that it gets retrieved correctly as well.
-
-# subtest 'single json by id' => sub {
+    my $list_json = $T->fetch_url("/data1.2/occs/list.json?id=$OID1,$OID2",
+				    "single json request OK");
     
-#     my $response = $T->fetch_url("/data1.2/taxa/single.json?id=$taxon_id",
-# 				 "single json by id request OK");
+    unless ( $list_json )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
-#     unless ( $response )
-#     {
-# 	diag("skipping remainder of subtest");
-# 	return;
-#     }
+    # Check the json response to make sure we have two records with the proper oids.
     
-#     my ($r) = $T->extract_records($response, "single json by id extract records");
+    my (@r) = $T->extract_records($list_json, 'list json by id' );
     
-#     return unless $r;
+    my %found_occ;
     
-#     my $taxon_name = $r->{nam};
+    foreach my $r ( @r )
+    {
+	$found_occ{$r->{oid}} = 1;
+    }
     
-#     ok( defined $taxon_name, 'single json by id taxon name' ) or return;
-#     is( $taxon_name, $TEST_NAME_1, "single json by id retrieves proper record" );
-# };
-
-
+    ok( $found_occ{"occ:$OID1"}, "found occ 1" );
+    ok( $found_occ{"occ:$OID2"}, "found occ 2" );
+};

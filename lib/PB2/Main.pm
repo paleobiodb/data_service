@@ -5,6 +5,8 @@
 # 
 # Author: Michael McClennen <mmcclenn@geology.wisc.edu>
 
+use strict;
+use feature 'unicode_strings';
 
 package PBData;
 
@@ -165,7 +167,7 @@ use PB2::PersonData;
 			usage => [ "/occs/single.json?id=1001&show=loc", 
 				   "/occs/single.txt?id=1001&show=loc,crmod" ],
 			method => 'get',
-			post_configure_hook => 'prune_field_list',
+			before_operation_hook => 'prune_field_list',
 			output => '1.2:occs:basic',
 			optional_output => '1.2:occs:basic_map',
 			title => 'Single fossil occurrence'},
@@ -178,7 +180,7 @@ use PB2::PersonData;
 			usage => [ "/occs/list.txt?base_name=Cetacea&interval=Miocene&show=loc,class",
 				   "/occs/list.json?base_name=Cetacea&interval=Miocene&show=loc,class" ],
 			method => 'list',
-			post_configure_hook => 'prune_field_list',
+			before_operation_hook => 'prune_field_list',
 			output => '1.2:occs:basic',
 			optional_output => '1.2:occs:basic_map',
 			title => 'Lists of fossil occurrences' },
@@ -348,7 +350,7 @@ use PB2::PersonData;
 			place => 1,
 			title => 'Single fossil collection',
 			usage => [ "colls/single.json?id=50068&show=loc,stratext" ],
-			post_configure_hook => 'prune_field_list',
+			before_operation_hook => 'prune_field_list',
 			method => 'get',
 			output => '1.2:colls:basic',
 			optional_output => '1.2:colls:basic_map' },
@@ -358,7 +360,7 @@ use PB2::PersonData;
 			place => 2,
 			title => 'Lists of fossil collections',
 			usage => [ "colls/list.txt?base_name=Cetacea&interval=Miocene&show=ref,loc,stratext" ],
-			post_configure_hook => 'prune_field_list',
+			before_operation_hook => 'prune_field_list',
 			method => 'list',
 			output => '1.2:colls:basic',
 			optional_output => '1.2:colls:basic_map' },
@@ -481,13 +483,13 @@ use PB2::PersonData;
     $ds2->define_node({ path => 'taxa/single',
 			place => 1,
 			title => 'Single taxon',
-			usage => [ "taxa/single.json?id=69296&show=attr",
+			usage => [ "taxa/single.json?id=txn:69296&show=attr",
 				   "taxa/single.txt?name=Dascillidae" ],
 			method => 'get_taxon',
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:single_output_map' },
-	"This path returns information about a single taxonomic name, identified either",
+	"This operation returns information about a single taxonomic name, specified either",
 	"by name or by identifier.");
     
     $ds2->define_node({ path => 'taxa/list',
@@ -527,10 +529,22 @@ use PB2::PersonData;
 			output => '1.2:taxa:reftaxa',
 			optional_output => '1.2:taxa:mult_output_map' },
 	"This operation returns information about taxonomic names, grouped according to the bibliographic",
-	"reference in which they are mentioned.  You can use this operation in conjunction with",
-	"L<node:taxa/refs> to show, for each reference, all of the taxa entered from it.  You",
-	"can also use this to list all of the taxa entered from particular references selected",
-	"by identifier.");
+	"reference in which they are mentioned.  This is a companion operation to L<taxa/refs|node:taxa/refs>,",
+	"and you can use the two together to retrieve a list of references and a list of taxa grouped by",
+	"reference. You can then match the two lists using the L<reference_no/rid|#reference_no> field.",
+	"For this reason, this operation takes all of the parameters that L<taxa/refs|node:taxa/refs> does.", 
+	">>You can also use this operation simply to list the taxa mentioned in a given reference or a",
+	"set of references selected by reference identifier, author, year of publication, etc.");
+    
+    $ds2->extended_doc({ path => 'taxa/byref' },
+	"In database terminology, this operation is essentially a B<join> between the references table",
+	"and the taxonomic name table. It basically selects a set of (taxonomic name, reference) tuples,",
+	"orders them by reference identifier and secondarily according to the taxonomic hierarchy, and then",
+	"returns a set of annotated",
+	"taxon records. A given taxon may appear more than once, if it is mentioned in more than one",
+	"reference. Each record contains the field L<reference_no|#reference_no> to indicate the relevant reference,",
+	"and the field L<ref_type|#ref_type> to indicate the relationship(s) between the taxon and this",
+	"particular reference.");
     
     $ds2->define_node({ path => 'taxa/opinions',
 			place => 3,
@@ -549,9 +563,6 @@ use PB2::PersonData;
     $ds2->list_node({ list => 'taxa',
 		      path => 'occs/taxa',
 		      place => 4 });
-    
-    # $ds2->define_node({ path => 'taxa/match',
-    # 			method => 'match' });
     
     $ds2->define_node({ path => 'taxa/auto',
 			place => 10,

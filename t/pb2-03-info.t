@@ -24,18 +24,18 @@
 # upon proper coding of the operation methods.
 # 
 
-use lib '../lib';
+use strict;
 
 use Test::Most tests => 5;
-
-use JSON;
-use Text::CSV_XS;
 
 use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+# Start by creating an instance of the Tester class with which we can conduct
+# the following tests.
+
+my $T = Tester->new({ prefix => 'data1.2' });
 
 
 # First define the values we will be using to check the taxonomy operations.
@@ -62,9 +62,9 @@ my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1 };
 
 # Then the fields and values to expect as a result of the 'datainfo' parameter.
 
-my $OP1 = "/data1.2/taxa/single";
-my $OP2 = "/data1.2/taxa/list";
-my $OP3 = "/data1.2/taxa/refs";
+my $OP1 = "/taxa/single";
+my $OP2 = "/taxa/list";
+my $OP3 = "/taxa/refs";
 
 my $LIMIT_1 = "5";
 
@@ -136,7 +136,7 @@ subtest 'single json info' => sub {
     
     # First check the we have the proper headers
     
-    is( $single_json->header('Content-Type'), 'application/json; charset=utf-8', 'single json content-type' );
+    $T->ok_content_type($single_json, 'application/json', 'utf-?8', 'single json content-type' );
     is( $single_json->header('Access-Control-Allow-Origin'), '*', 'single json access-control-allow-origin' );
     
     # Then check the json response in detail

@@ -2,83 +2,77 @@
 # PBDB 1.2
 # --------
 # 
-# Test the following operations:
-# 
-# /data1.1/taxa/
-# /data1.1/taxa/index.html
-# /data1.1/taxa/index.pod
-# /data1.1/taxa_doc.html
-# /data1.1/taxa_doc.pod
-# /data1.1/taxa/single/
-# /data1.1/taxa/single/index.html
-# /data1.1/taxa/single/index.pod
-# /data1.1/taxa/single_doc.html
-# /data1.1/taxa/single_doc.pod
+# Test the documentation page output of the data service.
 # 
 # The purpose of this file is to test that documentation pages produced by the
 # data service have the expected structure and contents.  Other files will
 # test the production of documentation pages for the individual operations.
 # 
 
-use Test::Most tests => 7;
+use strict;
 
-use LWP::UserAgent;
-use JSON;
+use Test::Most tests => 6;
 
-my $ua = LWP::UserAgent->new(agent => "PBDB Tester/0.1");
+use lib 't';
+use Tester;
 
-my $SERVER = $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
 
-diag("TESTING SERVER: $SERVER");
+# We start by creating a Tester instance that we will use for the subsequent tests:
+
+my $T = Tester->new({ prefix => 'data1.2' });
+
+my $PREFIX = 'data1.2';
+
+# Declare variables to hold the results fetched during these tests.
 
 my ($taxa_doc, $taxa_html, $taxa_pod, $taxa_html2, $taxa_pod2);
 my ($single_doc, $single_html, $single_pod, $single_html2, $single_pod2);
 
-eval {
-    $taxa_doc = $ua->get("http://$SERVER/data1.1/taxa/");
-    $taxa_html = $ua->get("http://$SERVER/data1.1/taxa/index.html");
-    $taxa_pod = $ua->get("http://$SERVER/data1.1/taxa/index.pod");
-    $taxa_html2 = $ua->get("http://$SERVER/data1.1/taxa_doc.html");
-    $taxa_pod2 = $ua->get("http://$SERVER/data1.1/taxa_doc.pod");
+
+# Now fetch documentation using a variety of URLs and make sure that the
+# content-type and access-control-allow-origin headers come back properly.
+
+subtest 'fetch documentation' => sub {
+
+    # Fetch documentation using a variety of URLs, to make sure that all of
+    # the different ways of specifying a documentation page work correctly.
     
-    $single_doc = $ua->get("http://$SERVER/data1.1/taxa/single/");
-    $single_html = $ua->get("http://$SERVER/data1.1/taxa/single/index.html");
-    $single_pod = $ua->get("http://$SERVER/data1.1/taxa/single/index.pod");
-    $single_html2 = $ua->get("http://$SERVER/data1.1/taxa/single_doc.html");
-    $single_pod2 = $ua->get("http://$SERVER/data1.1/taxa/single_doc.pod");
-};
-
-# First make sure that the requests execute okay, and that the proper headers
-# come back.
-
-ok( !$@, 'initial requests' ) or diag( "    message was: $@" );
-ok( defined $taxa_doc && $taxa_doc->is_success, '/taxa/ documentation request ok' );
-
-subtest 'documentation headers' => sub {
-
-    unless ( defined $taxa_doc && $taxa_doc->is_success )
+    eval {
+	$taxa_doc = $T->fetch_url("/taxa/");
+	$taxa_html = $T->fetch_url("/taxa/index.html");
+	$taxa_pod = $T->fetch_url("/taxa/index.pod");
+	$taxa_html2 = $T->fetch_url("/taxa_doc.html");
+	$taxa_pod2 = $T->fetch_url("/taxa_doc.pod");
+	
+	$single_doc = $T->fetch_url("/taxa/single/");
+	$single_html = $T->fetch_url("/taxa/single/index.html");
+	$single_pod = $T->fetch_url("/taxa/single/index.pod");
+	$single_html2 = $T->fetch_url("/taxa/single_doc.html");
+	$single_pod2 = $T->fetch_url("/taxa/single_doc.pod");
+    };
+    
+    ok( !$@, 'fetch documentation' ) or diag( "    message was: $@" );
+    
+    unless ( $taxa_doc && $single_pod2 )
     {
-	fail('doc request success');
-	diag('skipping remainder of tests');
-	return;
+	diag("skipping remainder of this test");
+	done_testing();
+	exit;
     }
     
-    is( $taxa_doc->header('Content-Type'), 'text/html; charset=utf-8', '/taxa/ content-type' );
-    is( $taxa_doc->header('Access-Control-Allow-Origin'), '*', '/taxa/ access-control-allow-origin' );
-    is( $taxa_pod->header('Content-Type'), 'text/plain; charset=utf-8', '/taxa/index.pod content-type' );
-    is( $taxa_pod->header('Access-Control-Allow-Origin'), '*', '/taxa/index.pod access-control-allow-origin' );
+    $T->ok_content_type($taxa_doc, 'text/html', 'utf-?8', '/taxa/ content type' );
+    $T->ok_content_type($taxa_html, 'text/html', 'utf-?8', '/taxa/index.html content type' );
+    $T->ok_content_type($taxa_pod, 'text/plain', 'utf-?8', '/taxa/index.pod content type' );
+    $T->ok_content_type($taxa_html2, 'text/html', 'utf-?8', '/taxa_doc.html content type' );
+    $T->ok_content_type($taxa_pod2, 'text/plain', 'utf-?8', '/taxa_doc.pod content type' );
     
-    ok( $taxa_html->is_success, '/taxa/index.html request ok');
-    ok( $taxa_pod->is_success, '/taxa/index.pod request ok');
-    ok( $taxa_html2->is_success, '/taxa_doc.html request ok');
-    ok( $taxa_pod2->is_success, '/taxa_doc.pod request ok');
-
-    ok( $single_doc->is_success, '/taxa/single/ request ok');
-    ok( $single_html->is_success, '/taxa/single/index.html request ok');
-    ok( $single_pod->is_success, '/taxa/single/index.pod request ok');
-    ok( $single_html2->is_success, '/taxa/single_doc.html request ok');
-    ok( $single_pod2->is_success, '/taxa/single_doc.pod request ok');
+    is( $taxa_doc->header('Access-Control-Allow-Origin'), '*', '/taxa/ access-control-allow-origin' );
+    is( $taxa_html->header('Access-Control-Allow-Origin'), '*', '/taxa/index.html access-control-allow-origin' );
+    is( $taxa_pod->header('Access-Control-Allow-Origin'), '*', '/taxa/index.pod access-control-allow-origin' );
+    is( $taxa_html2->header('Access-Control-Allow-Origin'), '*', '/taxa_doc.html access-control-allow-origin' );
+    is( $taxa_pod2->header('Access-Control-Allow-Origin'), '*', '/taxa_doc.pod access-control-allow-origin' );
 };
+
 
 # Then make sure that each of these requests produces at least some content.
 # We will test one html and one pod request, and assume that if the variant
@@ -91,13 +85,6 @@ my ($cs_doc, $cs_html, $cs_pod, $cs_html2, $cs_pod2);
 
 subtest 'documentation unpack' => sub {
 
-    unless ( defined $taxa_doc && $taxa_doc->is_success )
-    {
-	fail('doc request success');
-	diag('skipping remainder of tests');
-	return;
-    }
-    
     eval { 
 	$content_doc = $taxa_doc->content;
 	$content_html = $taxa_html->content;
@@ -111,24 +98,29 @@ subtest 'documentation unpack' => sub {
 	$cs_pod2 = $single_pod2->content;
     };
     
-    ok( !$@, 'documentation unpack' ) or diag( "    message was: $@" );
+    unless ( ok( !$@, 'documentation unpack' ) )
+    {
+	diag( "    message was: $@" );
+	diag( "    skipping remainder of subtest" );
+	return;
+    }
     
-    ok( defined $content_doc && $content_doc =~ qr{href="/data1.1/taxa/single.json}m,
+    ok( defined $content_doc && $content_doc =~ qr{href="/$PREFIX/taxa/single.json}m,
 	'/taxa/ documentation basic check' );
-    ok( defined $content_html && $content_html =~ qr{href="/data1.1/taxa/single.json}m,
+    ok( defined $content_html && $content_html =~ qr{href="/$PREFIX/taxa/single.json}m,
 	'/taxa/index.html documentation basic check' );
-    ok( defined $content_html2 && $content_html2 =~ qr{href="/data1.1/taxa/single.json}m,
+    ok( defined $content_html2 && $content_html2 =~ qr{href="/$PREFIX/taxa/single.json}m,
 	'/taxa_doc.html documentation basic check' );
-    ok( defined $content_pod && $content_pod =~ qr{L</data1.1/taxa/single.json}m,
+    ok( defined $content_pod && $content_pod =~ qr{L</$PREFIX/taxa/single.json}m,
 	'/taxa/index.pod documentation basic check' );
-    ok( defined $content_pod2 && $content_pod2 =~ qr{L</data1.1/taxa/single.json}m,
+    ok( defined $content_pod2 && $content_pod2 =~ qr{L</$PREFIX/taxa/single.json}m,
 	'/taxa_doc.pod documentation basic check' );
     
-    ok( defined $cs_doc && $cs_doc =~ qr{<td class="pod_term">show}m,
+    ok( defined $cs_doc && $cs_doc =~ qr{<td class="pod_term"[^>]*>show}m,
 	'/taxa/single/ documentation basic check' );
-    ok( defined $cs_html && $cs_html =~ qr{<td class="pod_term">show}m,
+    ok( defined $cs_html && $cs_html =~ qr{<td class="pod_term"[^>]*>show}m,
 	'/taxa/single/index.html documentation basic check' );
-    ok( defined $cs_html2 && $cs_html2 =~ qr{<td class="pod_term">show}m,
+    ok( defined $cs_html2 && $cs_html2 =~ qr{<td class="pod_term"[^>]*>show}m,
 	'/taxa/single_doc.html documentation basic check' );
     ok( defined $cs_pod && $cs_pod =~ qr{^=item show}m,
 	'/taxa/single/index.pod documentation basic check' );
@@ -146,14 +138,20 @@ subtest '/taxa/ html documentation checks' => sub {
     {
 	fail('html content empty');
 	diag('skipping remainder of tests');
-	return;
+        return;
     }
     
     ok( $content_html =~ qr{<title>.*PBDB[^<]*</title>}m, 'html title' );
     ok( $content_html =~ qr{<h1 id="title">.*PBDB[^<]*</h1>}m, 'html header' );
-    ok( $content_html =~ qr{<h2 class="pod_heading">DESCRIPTION</h2>}m, 'html description section' );
-    ok( $content_html =~ qr{<h2 class="pod_heading">SYNOPSIS</h2>}m, 'html synopsis section' );
+    ok( $content_html =~ qr{<h2 class="pod_heading"[^>]*>DESCRIPTION</h2>}m, 'html description section' );
+    ok( $content_html =~ qr{<h2 class="pod_heading"[^>]*>SYNOPSIS</h2>}m, 'html synopsis section' );
     ok( $content_html =~ qr{CONTACT</h2>}m, 'html footer' );
+    
+    ok( $content_html =~ qr{href="/data1[.]2/taxa/opinions_doc[.]html"}m, 'link to subsection' );
+    
+    ok( $content_html !~ qr{node:taxa/|op:taxa/}m, 'link translation' );
+    
+    # $$$ add more checks
 };
 
 
@@ -171,6 +169,13 @@ subtest '/taxa/ pod documentation checks' => sub {
     ok( $content_pod =~ qr{^=head2 DESCRIPTION}m, 'pod description section' );
     ok( $content_pod =~ qr{^=head2 SYNOPSIS}m, 'pod synopsis section' );
     ok( $content_pod =~ qr{^=head2 CONTACT}m, 'pod footer' );
+    
+    ok( $content_pod =~ qr{^=item L<Opinions about taxa|/data1.2/taxa/opinions_doc.html>}mi,
+	'link to subsection' );
+    
+    ok( $content_pod !~ qr{node:taxa/|op:taxa/}m, 'link translation' );
+    
+    # $$$$ add checks for links etc.
 };
 
 
@@ -184,75 +189,168 @@ subtest '/taxa/single html documentation checks' => sub {
     }
     
     
-    my ($section, $title_ok, $header_ok, $nav_ok);
-    my ($description_ok);
-    my ($usage_ok);
-    my ($parameters_ok);
-    my ($methods_ok);
-    my ($response_a, $response_b);
-    my ($formats_ok);
-    my ($vocabularies_ok);
+    my ($section, %ok);
     
     foreach my $line ( split( qr{[\n\r]+}, $cs_html ) )
     {
-	if ( $line =~ qr{^<h2 \s+ class="pod_heading" \s+ id="([^"]+)">}x )
+	if ( $line =~ qr{^<h2 \s+ class="pod_heading" \s+ id="([^"]+)">}xs )
+	{
+	    $section = $1;
+	}
+	
+	elsif ( $line =~ qr{<h2 \s+ id="contact"}xs )
+	{
+	    $section = 'CONTACT';
+	}
+	
+	elsif ( ! $section )
+	{
+	    $ok{title} = 1 if $line =~ qr{<title>.*PBDB[^<]*</title>};
+	    $ok{header} = 1 if $line =~ qr{<h1 id="title">.*PBDB[^<]*</h1>};
+	    $ok{nav} = 1 if $line =~ qr{<a class="pod_link" href="/$PREFIX/">[^<]*PBDB};
+	    $ok{img} = 1 if $line =~ qr{<img [^<]*src="/$PREFIX/};
+	}
+	
+	elsif ( $section eq 'DESCRIPTION' )
+	{
+	    $ok{description} = 1 if $line =~ qr{<p class="pod_para">\w};
+	}
+	
+	elsif ( $section eq 'USAGE' )
+	{
+	    $ok{usage} = 1 if $line =~ qr{href="/$PREFIX/taxa/single.json};
+	}
+	
+	elsif ( $section eq 'PARAMETERS' )
+	{
+	    $ok{parameters} = 1 if $line =~ qr{<td class="pod_term">show</td>};
+	}
+	
+	elsif ( $section eq 'METHODS' )
+	{
+	    $ok{methods} = 1 if $line =~ qr{GET};
+	}
+	
+	elsif ( $section eq 'RESPONSE' )
+	{
+	    $ok{response_a} = 1 if $line =~ qr{<td class="pod_def">basic</td>};
+	    $ok{response_b} = 1 if $line =~ qr{<td class="pod_def">crmod</td>};
+	}
+	
+	elsif ( $section eq 'FORMATS' )
+	{
+	    $ok{formats} = 1 if $line =~ qr{>JSON format<};
+	}
+	
+	elsif ( $section eq 'VOCABULARIES' )
+	{
+	    $ok{vocabularies} = 1 if $line =~ qr{>Compact field names<};
+	}
+	
+	elsif ( $section eq 'CONTACT' )
+	{
+	    $ok{contact} = 1 if $line =~ qr{href="mailto:([^"]+)">\1};
+	}
+    }
+    
+    foreach my $check ( qw(title header nav img
+			   description usage parameters methods
+			   response_a response_b formats vocabularies contact) )
+    {
+	ok( $ok{$check}, "html $check" );
+    }
+};
+
+
+subtest '/taxa/single pod documentation checks' => sub {
+    
+    unless ( defined $cs_pod && $cs_pod ne '' )
+    {
+	fail('pod content empty');
+	diag('skipping remainder of tests');
+	return;
+    }
+    
+    my ($section, %ok);
+    
+    foreach my $line ( split( qr{[\n\r]+}, $cs_pod ) )
+    {
+	if ( $line =~ qr{^=head2 (.*)} )
+	{
+	    $section = $1;
+	}
+	
+	elsif ( $line =~ qr{^=begin (.*)} )
 	{
 	    $section = $1;
 	}
 	
 	elsif ( ! $section )
 	{
-	    $title_ok = 1 if $line =~ qr{<title>.*PBDB[^<]*</title>};
-	    $header_ok = 1 if $line =~ qr{<h1 id="title">.*PBDB[^<]*</h1>};
-	    $nav_ok = 1 if $line =~ qr{href="/data1.1/">[^<]*PBDB};
+	    $ok{encoding} = 1 if $line =~ qr{^=encoding utf8$};
+	}
+	
+	elsif ( $section eq 'wds_nav' )
+	{
+	    $ok{nav} = 1 if $line =~ qr{^=head3 L<[^|]+[|]/$PREFIX/> E<gt>.*single taxon}i;
 	}
 	
 	elsif ( $section eq 'DESCRIPTION' )
 	{
-	    $description_ok = 1 if $line =~ qr{<p class="pod_para">\w};
+	    $ok{description} = 1 if $line =~ qr{single};
 	}
 	
 	elsif ( $section eq 'USAGE' )
 	{
-	    $usage_ok = 1 if $line =~ qr{href="/data1.1/taxa/single.json};
+	    $ok{usage} = 1 if $line =~ qr{^L</$PREFIX/taxa/single[.](json|txt)[?]\w+=};
 	}
 	
 	elsif ( $section eq 'PARAMETERS' )
 	{
-	    $parameters_ok = 1 if $line =~ qr{<td class="pod_term">show</td>};
+	    $ok{parameters} = 1 if $line =~ qr{^=item show$};
 	}
 	
 	elsif ( $section eq 'METHODS' )
 	{
-	    $methods_ok = 1 if $line =~ qr{GET};
+	    $ok{methods} = 1 if $line =~ qr{C<GET>};
 	}
 	
 	elsif ( $section eq 'RESPONSE' )
 	{
-	    $response_a = 1 if $line =~ qr{<td class="pod_def">basic</td>};
-	    $response_b = 1 if $line =~ qr{<td class="pod_def">crmod</td>};
+	    $ok{response_header} = 1 if $line =~ 
+		qr{ ^ =for \s+ wds_table_header \s+ Field \s+ name[*]/[2-9] 
+		      \s+ [|] \s+ Block \s+ [|] \s+ Description $ }xsi;
+	    $ok{response_item} = 1 if $line =~ 
+		qr{ ^ =item \s+ \w+ \s+ (?:/ \s+ \w+)+ \s+ [(] \s+ basic \s+ [)] $ }xs;
+	    $ok{response_body} = 1 if $line =~
+		qr{ taxonomic \s+ name }xsi;
 	}
 	
 	elsif ( $section eq 'FORMATS' )
 	{
-	    $formats_ok = 1 if $line =~ qr{>JSON format<};
+	    $ok{format_json} = 1 if $line =~ qr{L<JSON format[|]/$PREFIX/formats/json_doc.html};
+	    $ok{format_txt} = 1 if $line =~ qr{L<Text formats[|]/$PREFIX/formats/text_doc.html};
 	}
 	
 	elsif ( $section eq 'VOCABULARIES' )
 	{
-	    $vocabularies_ok = 1 if $line =~ qr{>Compact field names<};
+	    $ok{vocabulary_json} = 1 if $line =~ 
+		qr{^=item Compact field names [|] C<com> [|] C<json>$};
+	    $ok{vocabulary_com} = 1 if $line =~ 
+		qr{^=item PaleobioDB field names [|] C<pbdb> [|] C<txt>, C<csv>, C<tsv>$};
+	}
+	
+	elsif ( $section eq 'CONTACT' )
+	{
+	    $ok{contact} = 1 if $line =~ qr{L<([^|]+)[|]mailto:\1>};
 	}
     }
     
-    ok( $title_ok, 'html title' );
-    ok( $header_ok, 'html header' );
-    ok( $nav_ok, 'html nav' );
-    ok( $description_ok, 'html DESCRIPTION' );
-    ok( $usage_ok, 'html USAGE' );
-    ok( $parameters_ok, 'html PARAMETERS' );
-    ok( $methods_ok, 'html METHODS' );
-    ok( $response_a && $response_b, 'html RESPONSE' );
-    ok( $formats_ok, 'html FORMATS' );
-    ok( $vocabularies_ok, 'html VOCABULARIES' );
+    foreach my $check ( qw(encoding nav description usage parameters methods contact
+			   response_header response_item response_body
+			   format_json format_txt vocabulary_json vocabulary_com) )
+    {
+	ok( $ok{$check}, "pod $check" );
+    }
 };
 

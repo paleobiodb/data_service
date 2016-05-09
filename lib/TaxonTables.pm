@@ -763,16 +763,15 @@ sub buildTaxonTables {
     
     computeSynonymy($dbh, $tree_table) if $step_control->{c};
     
-    # Update the synonymy relation so that synonym_no points to the most
-    # senior synonym, instead of the immediate senior synonym.
-    
-    linkSynonyms($dbh, $tree_table) if $step_control->{c};
+    collapseSynonyms($dbh) if $step_control->{c};
     
     # Next, compute the hierarchy relation from the data in the opinion cache.
     
 	clearHierarchy($dbh) if $step_control->{x} and $step_control->{d};
     
     computeHierarchy($dbh, $tree_table) if $step_control->{d};
+    
+    collapseInvalidity($dbh) if $step_control->{d};
     
     # Update the taxon names stored in the tree table so that species,
     # subspecies and subgenus names match the genera under which they are
@@ -785,6 +784,14 @@ sub buildTaxonTables {
 	clearTreeSequence($dbh) if $step_control->{x} and $step_control->{e};
     
     computeTreeSequence($dbh, $tree_table) if $step_control->{e};
+    
+    # Update the synonymy relation and the accepted relation. We want synonym_no to point to the
+    # most senior synonym instead of the immediate senior synonym, and accepted_no to point to the
+    # closest enclosing valid taxon instead of the immediately enclosing taxon.  We do this step
+    # after we compute the tree sequence, so that the intermediate relationships will still be
+    # preserved in the sequence numbers.
+    
+    # collapseChains($dbh, $tree_table) if $step_control->{e};
     
     # Next, compute the intermediate classification of each taxon: kingdom,
     # phylum, class, order, and family.
@@ -955,7 +962,7 @@ sub updateTables {
     # done before we update the hierarchy relation, because that computation
     # depends on this property of synonym_no.
     
-    linkSynonyms($dbh);
+    # linkSynonyms($dbh);
     
     # Then compute the hierarchy relation for every concept in $TREE_WORK.
     
@@ -1391,6 +1398,7 @@ sub createWorkingTables {
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
 				synonym_no int unsigned not null,
+				immsyn_no int unsigned not null,
 				accepted_no int unsigned not null,
 				immpar_no int unsigned not null,
 				senpar_no int unsigned not null,
@@ -2059,26 +2067,30 @@ sub expandToSeniors {
 }
 
 
-# linkSynonyms ( dbh )
+# collapseSynonyms ( dbh )
 # 
-# Alter the synonym_no field to remove synonym chains.  Whenever we have 
-# a -> b and b -> c, change the relation so that a -> c and b -> c.  This
-# makes synonym_no represent the most senior synonym, instead of just the
-# immediate senior synonym.  Because the chains may be more than three taxa
-# long, we need to repeat the process until no more rows are affected.
+# Alter the synonym_no field to remove synonym chains.  Whenever we have a -> b and b -> c, change
+# the relation so that a -> c and b -> c.  This makes synonym_no represent the most senior
+# synonym, instead of just the immediate senior synonym.  Because the chains may be more than
+# three taxa long, we need to repeat the process until no more rows are affected.
 
-sub linkSynonyms {
+sub collapseSynonyms {
 
     my ($dbh) = @_;
     
     logMessage(2, "    removing synonym chains");
+    
+    # First, copy synonym_no to immsyn_no to preserve the information about immediate synonymy.
+    
+    my $result = $dbh->do("
+		UPDATE $TREE_WORK
+		SET immsyn_no = synonym_no");
     
     # Repeat the following process until no more rows are affected, with a
     # limit of 20 to avoid an infinite loop just in case our algorithm above
     # was faulty and some cycles have slipped through.
     
     my $count = 0;
-    my $result;
     
     do
     {
@@ -2086,6 +2098,8 @@ sub linkSynonyms {
 		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
 		    on t1.synonym_no = t2.orig_no and t1.synonym_no != t2.synonym_no
 		SET t1.synonym_no = t2.synonym_no");
+	
+	logMessage(2, "      removed $result synonymy chains");
     }
 	while $result > 0 && ++$count < 20;
     
@@ -2093,6 +2107,54 @@ sub linkSynonyms {
     {
 	logMessage(0,"WARNING - possible synonymy cycle detected during synonym linking");
     }
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+# collapseInvalidity ( dbh )
+# 
+# Alter the accepted_no field to remove invalidity chains.  Whenever we have a -> b and b -> c,
+# change the relation so that a -> c.  This makes sure that accepted_no always points to a valid
+# taxon.  We can always extract the immediate relation from immpar_no, should that be necessary.
+
+sub collapseInvalidity {
+
+    my ($dbh) = @_;
+    
+    logMessage(2, "    removing invalidity chains");
+    
+    my $count = 0;
+    my $result;
+    
+    do
+    {
+    	$result = $dbh->do("
+     		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
+     		    on t1.accepted_no = t2.orig_no and t1.accepted_no != t2.accepted_no
+     		SET t1.accepted_no = t2.accepted_no");
+	
+	logMessage(2, "      removed $result invalidity chains");
+    }
+	while $result > 0 && ++$count < 20;
+    
+    if ( $count >= 20 )
+    {
+     	logMessage(0,"WARNING - possible invalidity cycle detected during synonym linking");
+    }
+    
+    # Also fix bad status codes for synonym chains.
+    
+    logMessage(2, "    fixing chained status codes");
+    
+    $result = $dbh->do("
+		UPDATE $TREE_WORK as ta JOIN $TREE_WORK as tb
+			on tb.orig_no = ta.immsyn_no and ta.immsyn_no <> ta.synonym_no
+		SET ta.status = tb.status
+		WHERE (tb.status like 'subj%' and (ta.status like 'obj%' or ta.status like 'rep%'))
+		   or (tb.status like 'obj%' and ta.status like 'rep%')");
+    
+    logMessage(2, "      fixed $result status codes");
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -2361,30 +2423,6 @@ sub computeHierarchy {
     logMessage(2, "    indexing accepted_no");
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (accepted_no)");
-    
-    # Remove chains, so that each accepted_no field points to a valid taxon.  We
-    # repeat the following process until no more rows are affected, with a
-    # limit of 20 to avoid an infinite loop just in case our algorithm above
-    # was faulty and some cycles have slipped through.
-    
-    logMessage(2, "    removing invalidity chains");
-    
-    my $count = 0;
-    my $result;
-    
-    do
-    {
-    	$result = $dbh->do("
-     		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
-     		    on t1.accepted_no = t2.orig_no and t1.accepted_no != t2.accepted_no
-     		SET t1.accepted_no = t2.accepted_no");
-    }
-    while $result > 0 && ++$count < 20;
-    
-    if ( $count >= 20 )
-    {
-     	logMessage(0,"WARNING - possible invalidity cycle detected during synonym linking");
-    }
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -3939,6 +3977,7 @@ sub computeSearchTable {
     $result = $dbh->do("CREATE TABLE $SEARCH_WORK
 			       (genus varchar(80) not null,
 				taxon_name varchar(80) not null,
+				full_name varchar(80) not null,
 				taxon_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
@@ -3947,6 +3986,7 @@ sub computeSearchTable {
 				is_exact boolean not null,
 				common char(2) not null,
 				KEY (taxon_name, genus),
+				KEY (full_name),
 				UNIQUE KEY (taxon_no, genus, common)) ENGINE=MYISAM");
     
     # We start by copying all higher taxa into the search table.  That's the
@@ -3955,9 +3995,9 @@ sub computeSearchTable {
     logMessage(2, "    adding higher taxa...");
     
     $count = $dbh->do("
-	INSERT INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no, orig_no, 
+	INSERT INTO $SEARCH_WORK (taxon_name, full_name, taxon_rank, taxon_no, orig_no, 
 				  accepted_no, is_current, is_exact)
-	SELECT taxon_name, taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
+	SELECT taxon_name, taxon_name, taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
@@ -3972,10 +4012,10 @@ sub computeSearchTable {
     logMessage(2, "    adding subgenera...");
     
     $count = $dbh->do("
-	INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+	INSERT INTO $SEARCH_WORK (genus, taxon_name, full_name, taxon_rank, taxon_no, orig_no,
 				  accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
-		trim(trailing ')' from substring_index(taxon_name,'(',-1)),
+		trim(trailing ')' from substring_index(taxon_name,'(',-1)), taxon_name,
 	        taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank = 'subgenus'");
@@ -3992,10 +4032,10 @@ sub computeSearchTable {
     # Species which aren't in a subgenus
     
     $count = $dbh->do("
-	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, full_name, taxon_rank, taxon_no, orig_no,
 					 accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
-		trim(substring(taxon_name, locate(' ', taxon_name)+1)),
+		trim(substring(taxon_name, locate(' ', taxon_name)+1)), taxon_name,
 		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name not like '%(%'");
@@ -4003,10 +4043,10 @@ sub computeSearchTable {
     # Species which do have a subgenus
     
     $count += $dbh->do("
-	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, full_name, taxon_rank, taxon_no, orig_no,
 					 accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
-		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+		trim(substring(taxon_name, locate(') ', taxon_name)+2)), taxon_name,
 		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
@@ -4014,10 +4054,10 @@ sub computeSearchTable {
     # And again with the subgenus name treated as if it was a genus
     
     $count += $dbh->do("
-	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, full_name, taxon_rank, taxon_no, orig_no,
 					 accepted_no, is_current, is_exact)
 	SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
-		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+		trim(substring(taxon_name, locate(') ', taxon_name)+2)), taxon_name,
 		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
@@ -4262,8 +4302,8 @@ sub computeAttrsTable {
 				is_extant boolean,
 				is_trace boolean,
 				is_form boolean,
-				extant_children smallint,
-				distinct_children smallint,
+				extant_children smallint unsigned,
+				distinct_children smallint unsigned,
 				extant_size int unsigned,
 				taxon_size int unsigned,
 				n_occs int unsigned not null,
@@ -4463,6 +4503,39 @@ sub computeAttrsTable {
     
     my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_WORK");
     
+    # First coalesce the attributes of junior synonyms with their seniors at the bottom level.
+
+    $sql = "
+		UPDATE $ATTRS_WORK as v JOIN 
+		(SELECT t.synonym_no,
+			max(v.is_extant) as is_extant,
+			sum(v.extant_children) as extant_children_sum,
+			sum(v.distinct_children) as distinct_children_sum,
+			sum(v.extant_size) as extant_size_sum,
+			sum(v.taxon_size) as taxon_size_sum,
+			sum(v.n_occs) as n_occs,
+			min(v.min_body_mass) as min_body_mass,
+			max(v.max_body_mass) as max_body_mass,
+			min(v.is_trace) as is_trace,
+			min(v.is_form) as is_form
+		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+		WHERE t.depth = $max_depth and v.is_senior
+		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
+		SET     v.is_extant = nv.is_extant,
+			v.extant_children = nv.extant_children_sum,
+			v.distinct_children = nv.distinct_children_sum,
+			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
+			v.taxon_size = nv.taxon_size_sum + 1,
+			v.n_occs = nv.n_occs,
+			v.min_body_mass = nv.min_body_mass,
+			v.max_body_mass = nv.max_body_mass,
+			v.is_trace = nv.is_trace,
+			v.is_form = nv.is_form";
+	
+    $result = $dbh->do($sql);
+    
+    # Then iterate from that level up to the top of the tree.
+    
     for (my $depth = $max_depth; $depth > 0; $depth--)
     {
 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
@@ -4472,6 +4545,8 @@ sub computeAttrsTable {
 	# First coalesce the attributes of each parent with those of all of
 	# its children that are not junior synonyms (except for the first/last
 	# interval numbers).
+	# 
+	# $$$ need to differentiate between valid and senior in computing size and extant_size.
 	
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN
@@ -4521,7 +4596,7 @@ sub computeAttrsTable {
 			min(v.is_trace) as is_trace,
 			min(v.is_form) as is_form
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-		WHERE t.depth = $depth and v.is_valid
+		WHERE t.depth = $depth and v.is_senior
 		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
 			v.extant_children = nv.extant_children_sum,
@@ -4606,15 +4681,15 @@ sub computeAttrsTable {
 		$coalesce->{early_occ} = $row->{early_occ};
 	    }
 	    
-	    if ( $row->{last_early_age} < $coalesce->{last_early_age} || 
-		 !defined $coalesce->{last_early_age} )
+	    if ( ! defined $coalesce->{last_early_age} ||
+		 ( defined $row->{last_early_age} && $row->{last_early_age} < $coalesce->{last_early_age} ) )
 	    {
 		$coalesce->{last_early_age} = $row->{last_early_age};
 		$coalesce->{late_occ} = $row->{late_occ};
 	    }
 	    
-	    if ( $row->{last_late_age} < $coalesce->{last_late_age} ||
-	         !defined $coalesce->{last_late_age} )
+	    if ( ! defined $coalesce->{last_late_age} ||
+		 ( defined $row->{last_late_age} && $row->{last_late_age} < $coalesce->{last_late_age} ) )
 	    {
 		$coalesce->{last_late_age} = $row->{last_late_age};
 	    }

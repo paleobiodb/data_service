@@ -290,7 +290,7 @@ sub initialize {
     	{ param => 'ref_primary', valid => MATCH_VALUE('.*\p{L}.*'), list => ',', 
 	  bad_value => '_', errmsg => $no_auth },
      	    "Select only records entered from references for which the primary author matches the specified name",
-	    "or names (see F<ref_author> above).  If you give a name like C<Smith and Jones>, then references",
+	    "or names (see B<C<ref_author>> above).  If you give a name like C<Smith and Jones>, then references",
 	    "are selected only if Smith is the primary author and Jones is also an author.",
 	    "You can include multiple names or name pairs, separated by commas.  In that case,",
 	    "records matching any of them will be selected.",
@@ -303,7 +303,10 @@ sub initialize {
 	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only records entered from references in publications whose title matches the specified",
-	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.");
+	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
+	    "Select only records entered from references with any of the specified DOIs.",
+	    "You may specify one or more, separated by commas.");
     
     $ds->define_ruleset('1.2:refs:single' => 
     	{ require => '1.2:refs:specifier' },
@@ -350,7 +353,7 @@ sub get {
     
     # Make sure we have a valid id number.
     
-    my $id = $request->clean_param('id');
+    my $id = $request->clean_param('ref_id');
     
     die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
     

@@ -652,7 +652,7 @@ sub process_interval_params {
 	    
 	    else
 	    {
-		push @errors, "Unknown interval identifier '$id'";
+		die $request->exception(400, "The interval identifier '$id' was not found in the database");
 	    }
 	}
     }

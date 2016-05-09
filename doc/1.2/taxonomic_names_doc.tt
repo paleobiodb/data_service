@@ -203,7 +203,7 @@ L<op:occs/list.txt?base_name=Ficus>
 
 =back
 
-=head3 ABBREVIATIONS AND WILDCARDS
+=head3 ABBREVIATIONS & WILDCARDS
 
 You can abbreviate any taxon name by ending it with a period.  When specifying a binomial, you can
 abbreviate the genus down to one letter in the usual way, or you can specify more letters.  You can

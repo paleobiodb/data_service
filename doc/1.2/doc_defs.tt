@@ -33,7 +33,7 @@
         IF block_done.descrip; RETURN; ELSE; SET block_done.descrip = 1; END;
 	SET descrip_doc = request.document_node;
 	IF descrip_doc or opt_force;
-	    GET "\n=for wds_anchor $section_label.descrip\n";
+	    # GET "\n=for wds_anchor $section_label.descrip\n";
     	    GET "\n=head2 $section_label.descrip\n\n";
             GET descrip_doc or sub_message("MSG_DOCSTRING_MISSING");
         END;
@@ -60,14 +60,14 @@
         IF block_done.usage; RETURN; ELSE; SET block_done.usage = 1; END;
         SET usage_doc = request.document_usage;
 	IF usage_doc;
-	    "\n=for wds_anchor $section_label.usage\n";
+	    # "\n=for wds_anchor $section_label.usage\n";
 	    "\n=head2 $section_label.usage\n\n";
             IF content; GET content FILTER trim; "\n\n";
             ELSE; sub_message("MSG_USAGE_HEADER_LONG"); "\n\n";
             END;
             GET usage_doc;
         ELSIF opt_force;
-	    "\n=for wds_anchor $section_label.usage\n";
+	    # "\n=for wds_anchor $section_label.usage\n";
             "\n=head2 $section_label.usage\n\n";
             GET sub_message("MSG_USAGE_NONE_DEFINED");
         END;
@@ -110,13 +110,13 @@
         IF block_done.params; RETURN; ELSE; SET block_done.params = 1; END;
 	SET param_doc = request.document_params(ruleset);
 	IF param_doc;
-	    "\n=for wds_anchor $section_label.params\n";
+	    # "\n=for wds_anchor $section_label.params\n";
     	    "\n=head2 $section_label.params\n\n";
 	    IF content; GET content FILTER trim; "\n\n";
             END;
             GET param_doc;
         ELSIF opt_force;
-	    "\n=for wds_anchor $section_label.params\n";
+	    # "\n=for wds_anchor $section_label.params\n";
             "\n=head2 $section_label.params\n\n";
             GET sub_message("MSG_PARAM_NONE_DEFINED"); "\n\n";
         END;
@@ -141,7 +141,7 @@
         IF block_done.methods; RETURN; ELSE; SET block_done.methods = 1; END;
         SET method_list = request.document_http_methods;
         IF method_list;
-	    "\n=for wds_anchor $section_label.methods\n";
+	    # "\n=for wds_anchor $section_label.methods\n";
       	    "\n=head2 $section_label.methods\n\n";
             IF content; GET content FILTER trim;
  	    ELSIF request.node_has_operation; sub_message("MSG_METHOD_HEADER_OP");
@@ -149,7 +149,7 @@
 	    END;
 	    GET " $method_list";
         ELSIF opt_force;
-	    "\n=for wds_anchor $section_label.methods\n";
+	    # "\n=for wds_anchor $section_label.methods\n";
       	    "\n=head2 $section_label.methods\n\n";
 	    sub_message("MSG_METHOD_NONE_DEFINED");
         END;
@@ -172,7 +172,7 @@
     
     BLOCK RESPONSE_SECTION;
         IF block_done.response; RETURN; ELSE; SET block_done.response = 1; END;
-	"\n=for wds_anchor $section_label.response\n";
+	# "\n=for wds_anchor $section_label.response\n";
         "\n=head2 $section_label.response\n\n";
 	SET response_doc = request.document_response;
 	SET fixed = request.output_label;
@@ -223,7 +223,7 @@
 	IF opt_all; options.all = 1; END;
 	IF request.node_path == '/'; options.all = 1; END;
 	SET format_doc = request.document_formats(options);
-	GET "\n=for wds_anchor $section_label.formats\n";
+	# GET "\n=for wds_anchor $section_label.formats\n";
 	GET "\n=head2 $section_label.formats\n\n";
   	IF format_doc.match('^MSG_'); sub_message(format_doc);
 	ELSIF content; GET content FILTER trim; "\n\n$format_doc";
@@ -270,7 +270,7 @@
 	IF opt_all; options.all = 1; END;
 	IF request.node_path == '/'; options.all = 1; END;
 	SET vocab_doc = request.document_vocabs(options);
-	GET "\n=for wds_anchor $section_label.vocabs\n";
+	# GET "\n=for wds_anchor $section_label.vocabs\n";
 	GET "\n=head2 $section_label.vocabs\n\n";
   	IF vocab_doc.match('^MSG_'); sub_message(vocab_doc);
 	ELSIF content; GET content FILTER trim; "\n\n$vocab_doc";

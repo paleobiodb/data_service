@@ -4,6 +4,7 @@
 
 
 use strict;
+use feature 'unicode_strings';
 
 use LWP::UserAgent;
 use Text::CSV_XS;
@@ -12,6 +13,7 @@ use JSON;
 package Tester;
 
 use Scalar::Util qw(looks_like_number);
+use Carp qw(croak);
 use Test::More;
 
 use namespace::clean;
@@ -27,18 +29,24 @@ our ($LAST_URL);
 
 sub new {
     
-    my ($class, $server) = @_;
+    my ($class, $options) = @_;
     
     my $ua = LWP::UserAgent->new(agent => "PBDB Tester/0.1")
 	or die "Could not create user agent: $!\n";
     
-    $server ||= $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
+    $options ||= { };
+    
+    my $server = $options->{server} || $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
+    my $prefix = $options->{prefix} || '';
+    my $base_url = "http://$server";
+    $base_url = "$base_url/$prefix" if $prefix ne '';
     
     my $instance = { ua => $ua,
-		     csv => Text::CSV_XS->new(),
-		     json => JSON->new(),
+		     csv => Text::CSV_XS->new({ binary => 1 }),
+		     json => JSON->new->utf8,
 		     server => $server,
-		     base_url => "http://$server" };
+		     prefix => $prefix,
+		     base_url => $base_url };
     
     bless $instance, $class;
     
@@ -74,7 +82,7 @@ sub set_url_check {
 
 sub fetch_url {
 
-    my ($tester, $path_and_args, $message) = @_;
+    my ($tester, $path_and_args, $message, $options) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
@@ -82,7 +90,7 @@ sub fetch_url {
     
     unless ( $tester->{message_displayed} )
     {
-	my $message = $tester->{server};
+	my $message = $tester->{base_url};
 	$message .= " $tester->{url_key}" if $tester->{url_key};
 	
 	diag("TESTING SERVER: $message");
@@ -116,9 +124,13 @@ sub fetch_url {
     
     # If the request succeeds, we are done.
     
+    my $diag = $options->{no_diag} ? 0 : 1;
+    
     if ( defined $response && $response->is_success )
     {
-	$tester->extract_errwarn($response, 1);
+	pass($message);
+	$tester->extract_errwarn($response, $diag, $message);
+	$response->{__URLPATH} = $path_and_args;
 	return $response;
     }
     
@@ -130,17 +142,23 @@ sub fetch_url {
 	my $status = $response->status_line;
 	diag("request was: $url") if $url;
 	diag("status was: $status") if $status;
-	$tester->extract_errwarn($response, 1);
+	$tester->extract_errwarn($response, $diag, $message);
 	return;
     }
     
     else
     {
+	fail($message);
 	diag("no response or bad response");
 	return;
     }
 }
 
+
+my %TEXT_HEAD = ( 'elapsed time' => 'elapsed_time',
+		  'records found' => 'records_found',
+		  'records returned' => 'records_returned',
+		  'record offset' => 'record_offset' );
 
 # extract_errwarn ( response, diag )
 # 
@@ -150,16 +168,27 @@ sub fetch_url {
 
 sub extract_errwarn {
     
-    my ($tester, $response, $diag) = @_;
+    my ($tester, $response, $diag, $message) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $body = $response->content;
-    my (@errors, @warnings);
+    my (@errors, @warnings, %metadata);
     
     if ( $body =~ qr< ^ [{] >xs )
     {
-	my $json = $tester->{json}->decode( $body );
+	my $json;
+	
+	eval {
+	    $json = $tester->{json}->decode( $body );
+	};
+	
+	if ( $@ )
+	{
+	    fail("$message extracting content (json)");
+	    diag("    " . $@);
+	    return;
+	}
 	
 	if ( ref $json->{errors} eq 'ARRAY' )
 	{
@@ -169,6 +198,11 @@ sub extract_errwarn {
 	if ( ref $json->{warnings} eq 'ARRAY' )
 	{
 	    @warnings = @{$json->{warnings}};
+	}
+	
+	foreach my $key ( qw(elapsed_time records_found records_returned) )
+	{
+	    $metadata{$key} = $json->{$key} if defined $json->{$key};
 	}
     }
     
@@ -202,24 +236,45 @@ sub extract_errwarn {
     
     else	# assume text format response
     {
-	my @lines = split qr{[\r\n]+}, $body;
+	my @lines = split qr{[\r\n]+}, $body, 100;
+	my @fields;
+	
+	my $format = $lines[0] =~ qr{^"} ? 'csv' : 'tsv';
 	
 	foreach my $line (@lines)
 	{
-	    if ( $line =~ qr{ ^ "Warning:" , " (.*?) " }xs )
+	    if ( $format eq 'csv' )
 	    {
-		push @warnings, $1;
+		$tester->{csv}->parse($line);
+		@fields = $tester->{csv}->fields;
+		
+		if ( $tester->{csv}->error_diag() )
+		{
+		    fail("$message parsing header (csv)");
+		    diag("    " . $tester->{csv}->error_diag());
+		}
 	    }
 	    
-	    elsif ( $line =~ qr{ ^ Warning: \t ( [^\t]+ ) }xs )
+	    else
 	    {
-		push @warnings, $1;
+		@fields = split(qr{\t}, $line);
+	    }
+	    
+	    if ( lc $fields[0] eq 'warning:' )
+	    {
+		push @warnings, $fields[1];
+	    }
+	    
+	    elsif ( my $item = $TEXT_HEAD{lc $fields[0]} )
+	    {
+		$metadata{$item} = $fields[1];
 	    }
 	}
     }
     
     $response->{__ERRORS} = \@errors if @errors;
     $response->{__WARNINGS} = \@warnings if @warnings;
+    $response->{__METADATA} = \%metadata if keys %metadata;
     
     if ( $diag && @errors )
     {
@@ -262,7 +317,8 @@ sub fetch_nocheck {
     
     if ( $response )
     {
-	$tester->extract_errwarn($response);
+	$tester->extract_errwarn($response, 0, $message);
+	$response->{__URLPATH} = $path_and_args;
 	return $response;
     }
     
@@ -270,6 +326,7 @@ sub fetch_nocheck {
     {
 	fail($message);
 	diag("no response");
+	diag("request was: $url") if $url;
 	return;
     }
 }
@@ -287,7 +344,322 @@ sub make_url {
 }
 
 
-# extract_records ( response, message )
+# ok_content_type ( response, type, charset, message )
+# 
+# Test whether the given response has the given content type.  Fail if it does
+# not.  Ignore character set unless it is specified.
+
+sub ok_content_type {
+    
+    my ($tester, $response, $type, $charset, $message) = @_;
+    
+    croak "No message specified" unless $message && ! ref $message;
+    
+    my $ct_header = $response->header("Content-Type");
+    
+    if ( ! ok( $ct_header =~ qr{ ^ $type (?: ; | $ ) }xs, $message ) )
+    {
+	diag "     got: $ct_header";
+	diag "expected: $type";
+	return;
+    }
+    
+    if ( $charset && ! ok( $ct_header =~ qr{ charset=$charset }xsi, $message) )
+    {
+	diag "     got: $ct_header";
+	diag "expected: charset=$charset";
+	return;
+    }
+    
+    return 1;
+}
+
+
+# ok_response_code ( response, code, message )
+# 
+# Test whether the given response has one of the given codes.  Codes must be
+# given as a string which may contain a comma-separated list.  Fail if the
+# response code is not one of those specified.
+
+sub ok_response_code {
+    
+    my ($tester, $response, $code, $message) = @_;
+    
+    croak "No message specified" unless $message && ! ref $message;
+    
+    my %acceptable = map { $_ => 1 } split /\s*,\s*/, $code;
+    
+    my $rc = $response->code;
+    
+    unless ( ok( $acceptable{$rc}, $message ) )
+    {
+	my $report = $code;
+	$report =~ s/\s*,\s*/, /g;
+	diag( "    got: $rc" );
+	diag( "    expected: $report" );
+    }
+}
+
+
+# get_errors ( response )
+# 
+# Return the errors, if any, from the given response.
+
+sub get_errors {
+
+    my ($tester, $response) = @_;
+    
+    return @{$response->{__ERRORS}} if $response->{__ERRORS};
+    return;
+}
+
+
+# get_warnings ( response )
+# 
+# Return the warnings, if any, from the given response.
+
+sub get_warnings {
+    
+    my ($tester, $response) = @_;
+    
+    return @{$response->{__WARNINGS}} if $response->{__WARNINGS};
+    return;
+}
+
+
+# error_count ( response )
+# 
+# Return the number of error messages in $response.
+
+sub error_count {
+    
+    my ($tester, $response) = @_;
+    
+    croak "First argument must be a response" unless ref($response) =~ /^HTTP/;
+    
+    return 0 unless ref $response->{__ERRORS} eq 'ARRAY';
+    return @{$response->{__ERRORS}};
+}
+    
+
+# error_like ( response, regex )
+# 
+# Return true if one of the errors in $response matches $regex, false otherwise.
+
+sub error_like {
+    
+    my ($tester, $response, $regex) = @_;
+    
+    croak "First argument must be a response" unless ref($response) =~ /^HTTP/;
+    croak "Second argument must be a regular expression" unless ref $regex eq 'Regexp';
+    
+    return unless ref $response->{__ERRORS} eq 'ARRAY';
+    
+    foreach my $e ( @{$response->{__ERRORS}} )
+    {
+	return 1 if $e =~ $regex;
+    }
+    
+    return;
+}
+
+
+sub ok_error_like {
+    
+    my ($tester, $response, $regex, $message) = @_;
+    
+    croak "You must specify a message" unless $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    unless ( ok( $tester->error_like($response, $regex), $message ) )
+    {
+	diag("  expected: $regex");
+	$tester->diag_errors($response);
+    }
+}
+
+
+sub diag_errors {
+    
+    my ($tester, $response) = @_;
+    
+    unless ( ref $response->{__ERRORS} )
+    {
+	diag("  got no error messages");
+    }
+    
+    else
+    {
+	foreach my $e ( @{$response->{__ERRORS}} )
+	{
+	    diag("  got error: $e");
+	}
+    }
+}
+    
+
+# warning_count ( response )
+# 
+# Return the number of error messages in $response.
+
+sub warning_count {
+    
+    my ($tester, $response) = @_;
+    
+    croak "First argument must be a response" unless ref($response) =~ /^HTTP/;
+    
+    return 0 unless ref $response->{__WARNINGS} eq 'ARRAY';
+    return @{$response->{__WARNINGS}};
+}
+    
+
+# warning_like ( response, regex )
+# 
+# Return true if one of the warnings in $response matches $regex, false otherwise.
+
+sub warning_like {
+    
+    my ($tester, $response, $regex) = @_;
+    
+    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
+    croak "Second argument must be a regular expression" unless ref $regex eq 'Regexp';
+
+    return unless ref $response->{__WARNINGS} eq 'ARRAY';
+    
+    foreach my $w ( @{$response->{__WARNINGS}} )
+    {
+	return 1 if $w =~ $regex;
+    }
+    
+    return;
+}
+
+
+sub ok_warning_like {
+    
+    my ($tester, $response, $regex, $message) = @_;
+    
+    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
+    croak "You must specify a message" unless $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    unless ( ok( $tester->warning_like($response, $regex), $message ) )
+    {
+	diag("  expected: $regex");
+	$tester->diag_warnings($response);
+    }
+}
+    
+
+sub diag_warnings {
+    
+    my ($tester, $response) = @_;
+    
+    unless ( ref $response->{__WARNINGS} )
+    {
+	diag("  got no warning messages");
+    }
+    
+    else
+    {
+	foreach my $w ( @{$response->{__WARNINGS}} )
+	{
+	    diag("  got warning: $w");
+	}
+    }
+}
+
+
+# ok_no_records ( response, message )
+# 
+# Test that the given response contains an empty record set.
+
+sub ok_no_records {
+    
+    my ($tester, $response, $message) = @_;
+    
+    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
+    
+    my @r = $tester->extract_records( $response, "$message extract records", { no_records_ok => 1 } );
+    
+    my $count = scalar(@r);
+    
+    ok( $count == 0, $message ) ||
+	diag( "    got: $count records" );
+}
+
+
+# get_metadata ( response )
+# 
+# Return any metadata that was included with the response.
+
+sub get_metadata {
+    
+    my ($tester, $response) = @_;
+    
+    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
+    
+    return $response->{__METADATA} if ref $response->{__METADATA} eq 'HASH';
+    return {};
+}
+
+
+# fetch_records ( path_and_args, options, message )
+# 
+# Call fetch_url and then extract_records.
+
+sub fetch_records {
+    
+    my ($tester, $path_and_args, $message, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $options ||= { };
+    
+    my $response = $tester->fetch_url($path_and_args, "$message response OK", $options);
+    return unless $response;
+    
+    return $tester->extract_records($response, "$message extract records", $options);
+}
+
+
+# fetch_record_values ( path_and_args, field, message, options )
+# 
+# Call fetch_url, extract_records, and then extract the values of the named
+# field. Return a hash whose keys are the values found, or which contains the
+# key 'NO_RECORDS' if no records were found.
+
+sub fetch_record_values {
+    
+    my ($tester, $path_and_args, $field, $message, $options) = @_;
+    
+    croak "You must specify a message" unless $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $options ||= { };
+    
+    my $response = $tester->fetch_url($path_and_args, "$message response OK");
+    return unless $response;
+    
+    my (@r) = $tester->extract_records($response, "$message extract records", $options);
+    
+    return ( NO_RECORDS => 1 ) unless @r;
+    
+    my %found;
+    
+    foreach my $r (@r)
+    {
+	$found{$r->{$field}} = 1 if defined $r->{$field} && $r->{$field} ne '';
+    }
+    
+    return %found;
+}
+
+
+# extract_records ( response, message, $options )
 # 
 # Decode the specified response.  If this succeeds, and if the response
 # contains at least one record, return a list of all the record hashes.
@@ -325,7 +697,7 @@ sub extract_records {
     }
 }
 
-	
+
 # extract_records_json ( response, message )
 # 
 # Decode the specified JSON response.  If it succeeds, and if the response
@@ -337,7 +709,10 @@ sub extract_records_json {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $options ||= {};
+    $options ||= { };
+    
+    croak "third argument must be an options hash"
+	unless ref $options eq 'HASH';
     
     my $body = $response->{__JSON};
     
@@ -346,6 +721,13 @@ sub extract_records_json {
 	eval {
 	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
 	};
+	
+	if ( $@ )
+	{
+	    fail("$message (json)");
+	    diag("    " . $@);
+	    return;
+	}
     }
     
     if ( ref $body->{records} eq 'ARRAY' && $options->{no_records_ok} )
@@ -362,6 +744,11 @@ sub extract_records_json {
     {
 	fail($message);
 	diag('no records found');
+	if ( $response->{__URLPATH} )
+	{
+	    my $url = $tester->make_url($response->{__URLPATH});
+	    diag("request was: $url");
+	}
 	return;
     }
 }
@@ -388,44 +775,131 @@ sub extract_records_text {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $options ||= {};
+    $options ||= { };
+    
+    # Check the arguments.
+    
+    croak "third argument must be an options hash"
+	unless ref $options eq 'HASH';
     
     my $raw_data = $response->content || '';
     my @records;
     
-    my $section = $options->{type} || 'header';
+    my $section = $options->{parse} || 'init';
     my $limit = $options->{limit};
     
     my (@fields, @values);
     my $count = 0;
-    
-    my $format = $raw_data =~ qr{^"} ? 'csv' : 'tsv';
+    my $format;
     
     my @lines = split( qr{[\n\r]+}, $raw_data );
+    my (@cells, @fields, $line_no);
+    
+    # Determine the format of the data.
+    
+    if ( $options->{format} )
+    {
+	$format = $options->{format};
+    }
+    
+    elsif ( $lines[0] =~ qr{^"} )
+    {
+	$format = 'csv';
+    }
+    
+    elsif ( $lines[0] =~ qr{\t} )
+    {
+	$format = 'tsv';
+    }
+    
+    else
+    {
+	fail("$message could not determine output format");
+	return;
+    }
+    
+    # Now go through the lines one by one.
     
  LINE:
     foreach my $line (@lines)
     {
-	if ( $section eq 'records' )
+	$line_no++;
+	
+	# Extract a list of values from each line.
+	
+	if ( $format eq 'csv' )
 	{
-	    if ( $format eq 'csv' )
+	    $tester->{csv}->parse($line);
+	    @cells = $tester->{csv}->fields;
+	    
+	    if ( $tester->{csv}->error_diag() )
 	    {
-		$tester->{csv}->parse($line);
-		@values = $tester->{csv}->fields;
+		fail("$message parse error at line $line_no (csv)");
+		diag("    " . $tester->{csv}->error_diag());
 	    }
+	}
+	
+	else
+	{
+	    @cells = split(qr{\t}, $line, -1);
+	}
+	
+	# If we are just starting out, we need to figure out where the records start.
+	
+	if ( $section eq 'init' )
+	{
+	    # If the first line starts with "Records:" then the next line will be the header.
+	    
+	    if ( lc $cells[0] eq 'records:' )
+	    {
+		$section = 'header';
+		next LINE;
+	    }
+	    
+	    # If the first line contains two values, or the first value ends in a colon, then we
+	    # are in the metadata section.
+	    
+	    elsif ( @cells == 2 || $cells[0] =~ qr{[:]$} )
+	    {
+		$section = 'metadata';
+		next LINE;
+	    }
+	    
+	    # Otherwise, we have to assume that the first line is the header."
 	    
 	    else
 	    {
-		@values = split(qr{\t}, $line);
+		$section = 'header';
 	    }
-	    
-	    last LINE if $values[0] eq 'THIS REQUEST DID NOT GENERATE ANY OUTPUT RECORDS';
+	}
+	
+	# If we are in the 'metadata' section, then look for a line starting with "Records:".
+	
+	if ( $section eq 'metadata' )
+	{
+	    $section = 'header' if lc $cells[0] eq 'records:';
+	    next LINE;
+	}
+	
+	# If we have reached the header line, then capture all of the values as the field names.
+	# All subsequent lines will be records.
+	
+	if ( $section eq 'header' )
+	{
+	    @fields = @cells;
+	    $section = 'records';
+	    next LINE;
+	}
+	
+	if ( $section eq 'records' )
+	{
+	    last LINE if uc $cells[0] eq 'THIS REQUEST DID NOT GENERATE ANY OUTPUT RECORDS';
 	    
 	    my $r;
 	    
 	    foreach my $i ( 0..$#fields )
 	    {
-		$r->{$fields[$i]} ||= $values[$i];
+		$r->{$fields[$i]} ||= $cells[$i];
 	    }
 	    
 	    push @records, $r;
@@ -434,26 +908,10 @@ sub extract_records_text {
 	    next LINE; # otherwise
 	}
 	
-	elsif ( $section eq 'header' )
+	else
 	{
-	    if ( $format eq 'csv' )
-	    {
-		$tester->{csv}->parse($line);
-		@fields = $tester->{csv}->fields;
-	    }
-	    
-	    else
-	    {
-		@fields = split(qr{\t}, $line);
-	    }
-	    
-	    $section = 'records';
-	}
-	
-	elsif ( $line =~ qr{ ^ "? Records: "? $ }xsi )
-	{
-	    $section = 'header';
-	    next LINE;
+	    fail("$message parse error at line $line_no ($format)");
+	    return;
 	}
     }
     
@@ -466,6 +924,11 @@ sub extract_records_text {
     {
 	fail($message);
 	diag('no records found');
+	if ( $response->{__URLPATH} )
+	{
+	    my $url = $tester->make_url($response->{__URLPATH});
+	    diag("request was: $url");
+	}
 	return;
     }
 }
@@ -521,6 +984,13 @@ sub extract_info_json {
 	eval {
 	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
 	};
+	
+	if ( $@ )
+	{
+	    fail("$message (json)");
+	    diag("    " . $@);
+	    return;
+	}
     }
     
     return $body;
@@ -531,7 +1001,7 @@ sub extract_info_json {
 
 sub extract_info_text {
 
-    my ($tester, $response) = @_;
+    my ($tester, $response, $message) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
@@ -570,6 +1040,12 @@ sub extract_info_text {
 		$tester->{csv}->parse($line);
 		my ($dummy, $param, $value) = $tester->{csv}->fields;
 		$info->{parameters}{$param} = $value;
+		
+		if ( $tester->{csv}->error_diag() )
+		{
+		    fail("$message (csv)");
+		    diag("    " . $tester->{csv}->error_diag());
+		}
 	    }
 	    
 	    else
@@ -589,6 +1065,12 @@ sub extract_info_text {
 		my ($field, $value) = $tester->{csv}->fields;
 		$field =~ s/:$//;	# take off final ':', if one is found
 		$info->{$field} = $value;
+		
+		if ( $tester->{csv}->error_diag() )
+		{
+		    fail("$message (csv)");
+		    diag("    " . $tester->{csv}->error_diag());
+		}
 	    }
 	    
 	    else
@@ -610,16 +1092,224 @@ sub scan_records {
     
     my @r = $tester->extract_records($response, $message);
     
-    return ( NO_RECORDS => 1 ) unless @r;
+    return $tester->extract_values(\@r, $field);
+}
+
+
+sub extract_values {
+
+    my ($tester, $records_ref, $field, $options) = @_;
+    
+    croak "first argument must be an arrayref"
+	unless ref $records_ref eq 'ARRAY';
+    
+    $options ||= { };
+    
+    return ( NO_RECORDS => 1 ) unless @$records_ref;
     
     my %found;
     
-    foreach my $r (@r)
+    foreach my $r (@$records_ref)
     {
-	$found{$r->{$field}} = 1 if defined $r->{$field} && $r->{$field} ne '';
+	if ( defined $r->{$field} && $r->{$field} ne '' )
+	{
+	    $found{$r->{$field}} = 1;
+	}
+	
+	elsif ( $options->{count_empty} )
+	{
+	    $found{''} = 1;
+	}
     }
     
     return %found;
+}
+
+
+sub count_values {
+
+    my ($tester, $records_ref, $field, $options) = @_;
+    
+    croak "first argument must be an arrayref"
+	unless ref $records_ref eq 'ARRAY';
+    
+    $options ||= { };
+    
+    return ( NO_RECORDS => 1 ) unless @$records_ref;
+    
+    my %found;
+    
+    foreach my $r (@$records_ref)
+    {
+	if ( defined $r->{$field} && $r->{$field} ne '' )
+	{
+	    $found{$r->{$field}}++;
+	}
+	
+	elsif ( $options->{count_empty} )
+	{
+	    $found{''}++;
+	}
+    }
+    
+    return %found;
+}
+
+
+sub find_max {
+    
+    my ($tester, $values_ref) = @_;
+    
+    croak "First argument must be a hashref" unless ref $values_ref eq 'HASH';
+    
+    my ($max_value, $max_count);
+    
+    foreach my $k ( keys %$values_ref )
+    {
+	if ( ! defined $max_count || $values_ref->{$k} > $max_count )
+	{
+	    $max_value = $k;
+	    $max_count = $values_ref->{$k};
+	}
+    }
+    
+    return ($max_value, $max_count);
+}
+
+
+sub check_values {
+    
+    my ($tester, $records_ref, $field, $pattern, $message) = @_;
+    
+    croak "first argument must be arrayref" unless ref $records_ref eq 'ARRAY';
+    croak "third argument must be pattern or scalar" unless ref $pattern eq 'Regexp' || ! ref $pattern;
+    croak "no message specified" unless $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my ($found_value);
+    
+    foreach my $r (@$records_ref)
+    {
+	my $v = $r->{$field};
+	
+	if ( defined $v && $v ne '' )
+	{
+	    $found_value = 1;
+	    
+	    if ( ref $pattern )
+	    {
+		unless ( $v =~ $pattern )
+		{
+		    fail("$message found '$v' not matching $pattern");
+		    return;
+		}
+	    }
+	    
+	    else
+	    {
+		unless ( $v eq $pattern )
+		{
+		    fail("$message found '$v' not matching '$pattern'");
+		    return;
+		}
+	    }
+	}
+	
+	else
+	{
+	    fail("$message found '' not matching '$pattern'");
+	    return
+	}
+    }
+    
+    ok( $found_value, "$message - no values found" );
+}
+
+
+sub cmp_values {
+    
+    my ($tester, $records_ref, $field, $cmp, $value, $message) = @_;
+    
+    croak "first argument must be arrayref" unless ref $records_ref eq 'ARRAY';
+    croak "no message specified" unless $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my ($found_value);
+    
+    foreach my $r (@$records_ref)
+    {
+	my $v = $r->{$field};
+	cmp_ok( $v, $cmp, $value, $message ) || return;
+	$found_value = 1 if defined $v && $v ne '';
+    }
+    
+    ok( $found_value, "$message - no values found" );
+}
+
+
+sub cmp_distinct_count {
+    
+    my ($tester, $records_ref, $field, $cmp, $value, $message) = @_;
+    
+    croak "first argument must be arrayref" unless ref $records_ref eq 'ARRAY';
+    croak "no message specified" unless $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my %values;
+    
+    foreach my $r (@$records_ref)
+    {
+	$values{$r->{$field}} = 1 if defined $r->{$field};
+    }
+    
+    cmp_ok( keys %values, $cmp, $value, $message );
+}
+
+
+sub ok_is_subset {
+    
+    my ($tester, $a_ref, $b_ref, $message) = @_;
+    
+    croak "first argument must be hashref" unless ref $a_ref eq 'HASH';
+    croak "second argument must be hashref" unless ref $b_ref eq 'HASH';
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    foreach my $k ( keys %$a_ref )
+    {
+	unless ( $b_ref->{$k} )
+	{
+	    fail($message);
+	    diag("    Value '$k' not found in second set");
+	    return;
+	}
+    }
+    
+    return 1;
+}
+
+
+sub decode_json_response {
+    
+    my ($tester, $response, $message) = @_;
+    
+    my $json;
+    
+    eval {
+	$json = $tester->{json}->decode( $response->content );
+    };
+    
+    if ( $@ )
+    {
+	fail("$message decode json");
+	diag("    " . $@);
+	return;
+    }
+    
+    return $json;
 }
 
 
@@ -664,26 +1354,57 @@ sub check_field {
     	cmp_ok( ref $check, 'eq', ref $value, "$message ref is " . ref $check ) || return;
     }
     
-    elsif ( $check eq '!notfound' )
+    elsif ( $check eq '!empty' )
     {
 	ok( !defined $value, "$message does not have a value" );
     }
     
     elsif ( $check eq '!numeric' )
     {
-	ok( looks_like_number($value), "$message is numeric" ) || return;
+	ok( looks_like_number($value), "$message is numeric" );
     }
     
     elsif ( $check eq '!nonzero' )
     {
 	ok( looks_like_number($value), "$message is numeric" ) || return;
-	cmp_ok( $value, '!=', 0, "$message is nonzero" ) || return;
+	cmp_ok( $value, '!=', 0, "$message is nonzero" );
     }
     
     elsif ( $check eq '!pos_num' )
     {
 	ok( looks_like_number($value), "$message is numeric" ) || return;
-	cmp_ok( $value, '>', 0, "$message is positive" ) || return;
+	cmp_ok( $value, '>', 0, "$message is positive" );
+    }
+    
+    elsif ( $check eq '!integer' )
+    {
+	ok( $value =~ qr{ ^ -? [1-9][0-9]* $ }xs, "$message is an integer" );
+    }
+    
+    elsif ( $check eq '!pos_int' )
+    {
+	ok( $value =~ qr{ ^ [1-9][0-9]* $ }xs, "$message is a positive integer" );
+    }
+    
+    elsif ( $check eq '!date' )
+    {
+	my $ok = ok( $value =~ qr{ ^ \d\d\d\d-\d\d-\d\d \s \d\d:\d\d:\d\d $ }xs, 
+		     "$message is a valid date" );
+	diag( "    Got: $value" ) unless $ok;
+    }
+    
+    elsif ( $check =~ qr{ ^ !extid [(] ( [^)]+ ) [)] $ }xs )
+    {
+	my $prefix = $1;
+	ok( $value =~ qr{ ^ (?: $prefix ) : [1-9][0-9]* $ }xs, "$message is a valid external id" );
+    }
+    
+    elsif ( $check =~ qr{ ^ ! ( [<=>]+ | eq | [ngl]e | [gl]t ) : (.*) }xsi )
+    {
+	my $op = $1;
+	my $bound = $2;
+	
+	cmp_ok( $value, $op, $bound, "$message value check" );
     }
     
     elsif ( $check eq '!array' )
@@ -716,8 +1437,15 @@ sub check_field {
 	}
     }
     
+    elsif ( $check =~ qr{ ^ ! }xs )
+    {
+	croak "invalid check '$check'";
+    }
+    
     else
     {
+	$check =~ s{^\\!}{!};
+	
     	cmp_ok( $value, 'eq', $check, $message ) || return;
     }
     
@@ -755,16 +1483,17 @@ sub check_fields {
  KEY:
     foreach my $key ( keys %$check )
     {
-	if ( defined $check->{$key} && $check->{$key} ne '' && $check->{$key} ne '!notfound' )
+	if ( defined $check->{$key} && $check->{$key} ne '' && $check->{$key} ne '!empty' )
 	{
 	    ok( defined $value->{$key} && $value->{$key} ne '', "$message '$key' nonempty" ) or next KEY;
 	}
 	
 	next KEY if $check->{$key} eq "!nonempty";
 	
-	if ( $check->{$key} eq '!notfound' )
+	if ( $check->{$key} eq '!empty' )
 	{
 	    ok( !exists $value->{$key}, "$message '$key' not found" );
+	    next KEY;
 	}
 	
 	elsif ( ref $check->{$key} eq 'ARRAY' )
@@ -776,6 +1505,8 @@ sub check_fields {
 	    {
 		$tester->check_array( $value->{$key}, $check->{$key}[0], "$message '$key'" );
 	    }
+	    
+	    next KEY;
 	}
 	
 	elsif ( ref $check->{$key} eq 'HASH' )
@@ -786,13 +1517,206 @@ sub check_fields {
 	    {
 		$tester->check_fields($value->{$key}, $check->{$key}, "$message '$key'");
 	    }
+	    
+	    next KEY;
 	}
 	
 	else
 	{
 	    $tester->check_field($value->{$key}, $check->{$key}, "$message '$key'");
+	    next KEY;
 	}
     }
+}
+
+
+# check_order ( result_ref, field, op, idfield, message )
+# 
+# Make sure that the records in $result_ref are in the proper order when field
+# $field is compared using $op.  Report the first discrepancy using the value
+# of the field $idfield and using $message.  The parameter $result_ref must be
+# an arrayref of hashes.
+
+sub check_order {
+    
+    my ($tester, $result_ref, $field, $op, $idfield, $message) = @_;
+    
+    croak "first argument must be an arrayref" unless ref $result_ref eq 'ARRAY';
+    croak "you must specify a message" unless $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my ($last, $bad_record);
+    my ($field2, $op2, $last2);
+    
+    if ( ref $field eq 'ARRAY' )
+    {
+	($field, $field2) = @$field;
+    }
+    
+    if ( ref $op eq 'ARRAY' )
+    {
+	($op, $op2) = @$op;
+    }
+    
+    foreach my $r ( @$result_ref )
+    {
+	next if $r->{SKIP_ORDER};
+	
+	if ( defined $last )
+	{
+	    my $is_equal;
+	    
+	    if ( $op eq '<' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last < $r->{$field};
+	    }
+	    
+	    elsif ( $op eq '<=' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last <= $r->{$field};
+		$is_equal = 1 if $last == $r->{$field};
+	    }
+	    
+	    elsif ( $op eq '>' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last > $r->{$field};
+	    }
+	    
+	    elsif ( $op eq '>=' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last >= $r->{$field};
+		$is_equal = 1 if $last == $r->{$field};
+	    }
+	    
+	    elsif ( $op eq 'lt' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last lt $r->{$field};
+	    }
+	    
+	    elsif ( $op eq 'le' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last le $r->{$field};
+		$is_equal = 1 if $last eq $r->{$field};
+	    }
+	    
+	    elsif ( $op eq 'gt' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last gt $r->{$field};
+	    }
+	    
+	    elsif ( $op eq 'ge' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last ge $r->{$field};
+		$is_equal = 1 if $last eq $r->{$field};
+	    }
+	    
+	    else
+	    {
+		die "unknown operation '$op'";
+	    }
+	    
+	    # If there is a second operation, it comes into play only if this
+	    # record has an equal value to the last.
+	    
+	    if ( $is_equal && $op2 && $field2 && defined $last2 )
+	    {
+		if ( $op2 eq '<' || $op2 eq '<=' )
+		{
+		    $bad_record ||= $r->{$idfield} unless $last2 <= $r->{$field2};
+		}
+		
+		elsif ( $op2 eq '>' || $op2 eq '>=' )
+		{
+		    $bad_record ||= $r->{$idfield} unless $last2 >= $r->{$field2};
+		}
+		
+		elsif ( $op2 eq 'lt' || $op2 eq 'le' )
+		{
+		    $bad_record ||= $r->{$idfield} unless $last2 le $r->{$field2};
+		}
+		
+		elsif ( $op2 eq 'gt' || $op2 eq 'ge' )
+		{
+		    $bad_record ||= $r->{$idfield} unless $last2 ge $r->{$field2};
+		}
+		
+		else
+		{
+		    die "unknown operation '$op2'";
+		}
+	    }
+	}
+	
+	$last = $r->{$field};
+	
+	unless ( defined $last && $last ne '' )
+	{
+	    fail("$message no value for '$field'");
+	    return;
+	}
+	
+	if ( $field2 )
+	{
+	    $last2 = $r->{$field2};
+	    
+	    unless ( defined $last2 && $last2 ne '' )
+	    {
+		fail("$message no value for '$field2'");
+		return;
+	    }
+	}
+	
+	unless ( defined $r->{$idfield} && $r->{$idfield} ne '' )
+	{
+	    fail("$message no value for '$idfield'");
+	    return;
+	}
+    }
+    
+    ok( ! $bad_record, "$message returned proper sequence" ) ||
+	diag("    Found: '$bad_record' out of order");
+}
+
+
+
+
+# check_messages ( string_list, regex_list )
+# 
+# Check each one of the specified list of regular expressions against the
+# specified list of strings, and return the number that match against at least
+# one string.  This can be used to check a list of warning messages to make
+# sure that the expected warnings are there, without any expectation as to the
+# order in which they appear.  The paramter $regex_list can be either a single
+# regular expression or a reference to an array of them.
+
+sub check_messages {
+
+    my ($tester, $message_list, $regex_list ) = @_;
+    
+    my @regex_list = ref $regex_list eq 'ARRAY' ? @$regex_list : $regex_list;
+    my $count = 0;
+    
+    croak "the first parameter must be a list of messages"
+	unless ref $message_list eq 'ARRAY';
+    
+ REGEXP:
+    foreach my $r ( @regex_list )
+    {
+	croak "the second parameter must be either a single regex or a reference to an array of them"
+	    unless ref $r eq 'Regexp';
+	
+    MESSAGE:	
+	foreach my $m ( @$message_list )
+	{
+	    if ( $m =~ $r )
+	    {
+		$count++; next REGEXP;
+	    }
+	}
+    }
+    
+    return $count;
 }
 
 

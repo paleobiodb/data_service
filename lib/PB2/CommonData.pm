@@ -11,6 +11,7 @@ use strict;
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
 use TableDefs qw(%IDP);
+use ExternalIdent qw(extract_identifier generate_identifier);
 
 use parent 'Exporter';
 
@@ -265,11 +266,17 @@ sub initialize {
         
     $ds->define_block('1.2:common:ent' =>
 	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
-	{ output => 'authorizer_no', com_name => 'ati', if_block => 'ent,entname' },
+	{ set => 'authorizer_id', from => 'authorizer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'authorizer_id', from => 'authorizer_no', if_vocab => 'pbdb' },
+	{ set => 'enterer_id', from => 'enterer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'enterer_id', from => 'enterer_no', if_vocab => 'pbdb' },
+	{ set => 'modifier_id', from => 'modifier_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'modifier_id', from => 'modifier_no', if_vocab => 'pbdb' },	
+	{ output => 'authorizer_id', com_name => 'ati', if_block => 'ent,entname' },
 	    "The identifier of the person who authorized the entry of this record",
-	{ output => 'enterer_no', com_name => 'eni', if_block => 'ent,entname' },
+	{ output => 'enterer_id', com_name => 'eni', if_block => 'ent,entname' },
 	    "The identifier of the person who actually entered this record.",
-	{ output => 'modifier_no', com_name => 'mdi', if_block => 'ent,entname' },
+	{ output => 'modifier_id', com_name => 'mdi', if_block => 'ent,entname' },
 	    "The identifier of the person who last modified this record, if it has been modified.");
     
     $ds->define_block('1.2:common:entname' =>
@@ -288,7 +295,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    my $values = $dbh->selectcol_arrayref("SELECT person_no, reversed_name FROM person",
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM person",
 					  { Columns => [1, 2] });
     
     %PERSON_NAME = @$values;
@@ -324,7 +331,10 @@ sub datetime_value {
 	}
     }
     
-    else {
+    else
+    {
+	$quoted = "\"$value-01-01\"" if $value =~ /^\d\d\d\d$/;
+	
 	($clean) = $dbh->selectrow_array("SELECT CONVERT($quoted, datetime)");
     }
     
@@ -426,97 +436,26 @@ sub generate_common_filters {
 }
 
 
-# generate_crmod_filters ( table_name )
-# 
-# Generate the proper filters to select records by date created/modified.
-
-sub generate_crmod_filters {
-
-    my ($request, $table_name, $tables_hash) = @_;
-    
-    my @filters;
-    
-    if ( my $dt = $request->clean_param('created_after') )
-    {
-	push @filters, "$table_name.created >= $dt";
-    }
-    
-    if ( my $dt = $request->clean_param('created_before') )
-    {
-	push @filters, "$table_name.created < $dt";
-    }
-    
-    if ( my $dt = $request->clean_param('modified_after') )
-    {
-	push @filters, "$table_name.modified >= $dt";
-    }
-    
-    if ( my $dt = $request->clean_param('modified_before') )
-    {
-	push @filters, "$table_name.modified < $dt";
-    }
-    
-    $tables_hash->{$table_name} = 1 if @filters && ref $tables_hash eq 'HASH';
-    
-    return @filters;
-}
-
-
-# generate_ent_filters ( table_name )
-# 
-# Generate the proper filters to select records by authorizer/enterer/modifier
-# name or number.
-
-sub generate_ent_filters {
-    
-    my ($request, $table_name, $tables_hash) = @_;
-    
-    my @filters;
-    
-    # First go through the parameters and figure out if we have names or
-    # identifiers.  Convert all names into identifiers.
-    
-    if ( my $value = $request->clean_param('authorized_by') )
-    {
-	push @filters, ent_filter($request, $table_name, 'authorizer_no', $value);
-    }
-    
-    if ( my $value = $request->clean_param('entered_by') )
-    {
-	push @filters, ent_filter($request, $table_name, 'enterer_no', $value);
-    }
-    
-    if ( my $value = $request->clean_param('modified_by') )
-    {
-	push @filters, ent_filter($request, $table_name, 'modifier_no', $value);
-    }
-    
-    if ( my $value = $request->clean_param('touched_by') )
-    {
-	push @filters, ent_filter($request, $table_name, 'touched', $value);
-    }
-    
-    $tables_hash->{$table_name} = 1 if @filters && ref $tables_hash eq 'HASH';
-        
-    return @filters;
-}
-
-
 sub ent_filter {
     
     my ($request, $tn, $param, $person_value) = @_;
-
+    
     my $dbh = $request->get_connection;
     my @values = ref $person_value eq 'ARRAY' ? @$person_value : $person_value;
     my @ids;
     my $exclude = '';
+    my $select_all;
+    my $select_different;
     
-    # If the first value starts with '!', generate an exclusion filter.
+    # If the first value starts with '!', generate an exclusion filter.  If there were no other
+    # values, set select_all to true.
     
     if ( $values[0] =~ qr{ ^ ! \s* (.*) }xs )
     {
 	$values[0] = $1;
 	$exclude = 'not ';
+	
+	$select_all = 1 if $values[0] eq '' && @values == 1;
     }
     
     # Go through each of the names in the list.  Any names we find get looked
@@ -524,9 +463,42 @@ sub ent_filter {
     
     foreach my $p ( @values )
     {
-	if ( $p =~ /^\d+$/ )
+	next unless defined $p && $p ne '';
+	
+	if ( $p =~ /\d/ )
 	{
-	    push @ids, $p;
+	    if ( $p =~ /^\d+$/ )
+	    {
+		push @ids, $p;
+	    }
+	    
+	    elsif ( my $id = extract_identifier('ANY', $p ) )
+	    {
+		if ( $id->{type} eq 'prs' )
+		{
+		    push @ids, $id->{num};
+		}
+		
+		else
+		{
+		    $request->add_warning("Bad identifier '$p': you may only use identifiers of type 'prs' with parameter '$param'");
+		}
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("Bad identifier '$p': must be an identifier of the form 'prs:nnnn' or a positive integer");
+	    }
+	}
+	
+	elsif ( $p eq '%' )
+	{
+	    $select_all = 1;
+	}
+	
+	elsif ( $p eq '@' )
+	{
+	    $select_different = 1;
 	}
 	
 	else
@@ -562,13 +534,99 @@ sub ent_filter {
 	}
     }
     
-    # Now generate a filter expression using the ids.  If we have no
-    # identifiers, return a string which will select nothing.  This is the
-    # proper response because the client clearly wanted to filter by identifier.
+    # If the paramter $tn is 'id_list', then return the list of identifiers directly.  If the
+    # exclusion flag was found, prepend it to the first item in the list.  If no valid identifiers
+    # were specified, then use the value '-1' which will select nothing.  This is the proper
+    # response because the client clearly wanted to filter by identifier.  If $select_all is set,
+    # then return the special value -9999 meaning any value, or 0 meaning no value.
+    
+    if ( $tn eq 'id_list' )
+    {
+	# If $select_all or $select_different is set, return a special value.
+	
+	if ( $select_all )
+	{
+	    return $exclude ? [ 0 ] : [ -9999 ];
+	}
+	
+	if ( $select_different )
+	{
+	    return $exclude ? [ -9997 ] : [ -9998 ];
+	}
+	
+	# Return a list that will select nothing unless we have found at least one valid identifier.
+	
+	unless ( @ids )
+	{
+	    return [ -1 ];
+	}
+	
+	# If the exclusion flag was found, prepend it to the first item.
+	
+	if ( $exclude )
+	{
+	    $ids[0] = "!$ids[0]";
+	}
+	
+	# Now return the list.
+	
+	return \@ids;
+    }
+    
+    # Otherwise, generate an SQL filter expression using the ids and the value of $tn as the table
+    # name.  The first step is to join the ids together into a list.
     
     my $id_list = join(',', @ids);
     
-    return "$tn.authorizer_no = 0" unless $id_list;
+    # If $select_all is true, then return an expression that will select any value or no value.
+    
+    if ( $select_all )
+    {
+	my $op = $exclude ? '=' : '<>';
+	
+	if ( $param eq 'modifier_no' )
+	{
+	    return "$tn.modifier_no $op 0";
+	}
+	
+	elsif ( $param eq 'authorizer_no' or $param eq 'enterer_no' )
+	{
+	    return "$tn.$param $op 0";
+	}
+	
+	else
+	{
+	    return "1=1";
+	}
+    }
+    
+    # If $select_any is true, then return an expression that will select a difference.
+    
+    if ( $select_different )
+    {
+	my $op = $exclude ? '=' : '<>';
+	
+	if ( $param eq 'authorizer_no' or $param eq 'enterer_no' or $param eq 'authent' )
+	{
+	    return "$tn.authorizer_no $op $tn.enterer_no";
+	}
+	
+	elsif ( $param eq 'modifier_no' )
+	{
+	    return "$tn.modifier_no $op $tn.enterer_no";
+	}
+	
+	else
+	{
+	    return "1=1";
+	}
+    }
+    
+    # Otherwise, if no valid ids were found, return an expression that will select nothing.
+    
+    return "$tn.authorizer_no = -1" unless @ids;
+    
+    # Otherwise, return the proper expression.
     
     if ( $param eq 'touched' )
     {
@@ -660,6 +718,18 @@ sub safe_param_list {
 }
 
 
+# generate_person_id ( person_no )
+# 
+# Return an external person identifier given a person_no value.
+
+sub generate_person_id {
+    
+    my ($request, $person_no) = @_;
+    
+    return $person_no ? generate_identifier('PRS', $person_no) : '';
+}
+
+
 # check_values ( value_list, value_field, value_table, error_msg )
 # 
 # 
@@ -711,9 +781,28 @@ sub strict_check {
     
     my ($request) = @_;
     
-    if ( $request->clean_param('strict') && $request->warnings )
+    my @warnings = $request->warnings;
+    
+    if ( $request->clean_param('strict') && @warnings )
     {
-	die "400 Bad parameter values\n";
+	my $code = '404';
+	my $message = @warnings > 1 ? 'Not found' : $warnings[0];
+	
+	foreach my $w (@warnings)
+	{
+	    if ( $w !~ qr{unknown taxon|did not match|not known to the database}i )
+	    {
+		$code = '400';
+		$message = @warnings > 1 ? 'Bad parameter values' : $warnings[0];
+	    }
+	}
+	
+	if ( @warnings == 1 )
+	{
+	    $request->{warnings} = [ ];
+	}
+	
+	die $request->exception( $code, $message );
     }
 }
 
