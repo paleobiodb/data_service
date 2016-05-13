@@ -224,7 +224,7 @@ my $VALID_TAXON_ID = qr{ ^ (?: $IDP{TXN} | $IDP{VAR} )? ( [0-9]+ ) $ }xsi;
 my $VALID_OPINION_ID = qr{ ^ (?: $IDP{OPN} )? ( [0-9]+ ) $ }xsi;
 my $VALID_REF_ID = qr{ ^ (?: $IDP{REF} )? ( [0-9]+ ) $ }xsi;
 my $VALID_PERSON_ID = qr{ ^ (?: $IDP{PER} )? ( [0-9]+ ) $ }xsi;
-
+my $NUMERIC_ID = qr{ ^ -? \d+ $ }xs;
 
 # Type codes for opinions and references
 
@@ -1533,8 +1533,9 @@ sub list_associated {
 	
 	my $inner_filters = join q{ and }, @inner_filters;
 	
-	# If the relationship is 'all_taxa', then we just go through the
-	# entire opinion cache because that is the most efficient procedure.
+	# If the relationship is 'all_taxa', then we just go through the entire opinion cache
+	# because that is the most efficient procedure.  If a limit expression was given, use
+	# that.
 	
 	if ( $rel eq 'all_taxa' )
 	{
@@ -1559,9 +1560,11 @@ sub list_associated {
 	
 	else
 	{
+	    my $base_clause = $rel eq 'exact' ? 'and o.child_spelling_no = base.taxon_no' : '';
 	    my $query_core = "$taxon_joins
-			JOIN $op_cache as o on o.opinion_no = t.opinion_no
+			JOIN $op_cache as o on o.opinion_no = t.opinion_no $base_clause
 			JOIN $op_table as oo ignore key (created,modified) on oo.opinion_no = t.opinion_no
+			JOIN $refs_table as r on r.reference_no = o.reference_no
 			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no";
 	    
 	    $sql = "INSERT IGNORE INTO op_collect
@@ -1585,6 +1588,7 @@ sub list_associated {
 	    my $query_core = "$taxon_joins
 			JOIN $op_cache as o on o.orig_no = t.orig_no
 			JOIN $op_table as oo ignore key (created,modified) on oo.opinion_no = t.opinion_no
+			JOIN $refs_table as r on r.reference_no = o.reference_no
 			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no";
 	    
 	    $sql = "INSERT IGNORE INTO op_collect
@@ -1619,7 +1623,7 @@ sub list_associated {
 	    
 	    else
 	    {
-		$order_expr = "ORDER BY t.lft, if(base.opinion_type='C',0,1), o.pubyr";
+		$order_expr = "ORDER BY t.lft, if(base.opinion_type='C',0,1), o.pubyr desc";
 	    }
 	}
 	
@@ -3095,128 +3099,141 @@ sub generate_id_string {
 
 # generate_opinion_id_string ( base )
 # 
-# This routine is called internally by &list_opinions.  It decodes the base argument that was
-# passed to the query method, and returns a string of opinion identifiers.
+# This routine is called internally by some of the query methods.  It decodes the base argument
+# that was passed to the query method, and returns a string of opinion_no values joined by
+# commas. This return value is suitable for use in an SQL "in" expression.
 
 sub generate_opinion_id_string {
     
     my ($taxonomy, $base) = @_;
     
-    my @ids;
+    my (@ids, $id_list);
     
-    # If $base is a reference to a Taxon object, return its taxon_no value (if given) or its
-    # orig_no value.  But ignore it if the exclude flag is set, unless $ignore_exclude is given.
+    # First convert $base into a list.  A scalar gets split on commas.  A listref is unchanged.
+    # Any other type of reference is converted into a single-item list.
     
-    if ( ref $base eq 'PBDB::Opinion' )
+    if ( ref $base eq 'ARRAY' )
     {
-	my $base_no = $base->{opinion_no};
-	push @ids, $1 if $base_no && $base_no =~ $VALID_OPINION_ID;
-    }
-    
-    # If $base is a reference to an OpinionSet object, return a string consisting of all
-    # keys that are valid taxon identifiers.
-    
-    elsif ( ref $base eq 'PBDB::OpinionSet' )
-    {
-	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_OPINION_ID } keys %$base;
-    }
-    
-    # If $base is a reference to an array, then check all of the elements.  Collect up all valid
-    # taxon identifiers that are found, along with the identifiers from all Taxon objects.
-    
-    elsif ( ref $base eq 'ARRAY' )
-    {
-	foreach my $r ( @$base )
-	{
-	    if ( ref $r eq 'PBDB::Opinion' )
-	    {
-		my $base_no = $r->{opinion_no};
-		push @ids, $1 if $base_no && $base_no =~ $VALID_OPINION_ID;
-	    }
-	    
-	    elsif ( ! ref $r )
-	    {
-		push @ids, grep { $_ } map { $1 if $_ =~ $VALID_OPINION_ID } split(qr{\s*,\s*}, $r);
-	    }
-	    
-	    else
-	    {
-		croak "taxonomy: invalid opinion identifier '$r'\n";
-	    }
-	}
-    }
-    
-    # Any other kind of reference (i.e. a code reference) will generate an error.
-    
-    elsif ( ref $base )
-    {
-	croak "taxonomy: invalid opinion identifier '$base'\n";
+	$id_list = $base;
     }
     
     else
     {
-	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_OPINION_ID } split(qr{\s*,\s*}, $base);
+	my @list = ref $base ? ($base) : split(qr{\s*,\s*}, $base);
+	$id_list = \@list;
     }
     
-    # Now return the list of taxon identifiers, joined with commas.  If no identifiers were found,
-    # return the empty string.
+    # Now go through the list and extract one or more numeric identifiers from each element.
+    
+    foreach my $r ( @$id_list )
+    {
+	if ( ref $r eq 'PBDB::ExtIdent' )
+	{
+	    croak "taxonomy: invalid identifier type '$r->{type}', must be type 'opn'"
+		unless $r->{type} eq 'opn' || $r->{type} eq 'unk';
+	    push @ids, $r->{num} if defined $r->{num} && $r->{num} =~ $NUMERIC_ID;
+	}
+	
+	elsif ( ref $r eq 'PBDB::Opinion' )
+	{
+	    my $opinion_no = $base->{opinion_no};
+	    push @ids, $opinion_no if defined $opinion_no && $opinion_no =~ $NUMERIC_ID;
+	}
+	
+	elsif ( ref $base eq 'PBDB::OpinionSet' )
+	{
+	    push @ids, grep { defined $_ && $_ =~ $NUMERIC_ID } keys %$base;
+	}
+	
+	elsif ( ref $r )
+	{
+	    croak "taxonomy: invalid opinion identifier '$r'\n";
+	}
+	
+	else
+	{
+	    push @ids, $r if defined $r && $r =~ $NUMERIC_ID;
+	}
+    }
+    
+    # If no valid identifiers were found, use "-1" which will ensure that nothing is selected.
+    # This is the right thing to do, since if this routine is called then clearly the intent was
+    # to select only things that match a valid opinion identifier.
+    
+    push @ids, -1 unless @ids;
+    
+    # Now return the list of opinion identifiers, joined with commas.
     
     return join(q{,}, @ids);
 }
 
 
-
 # generate_ref_id_string ( base )
 # 
-# This routine is called internally by some of the query methods.  It decodes the base argument that
-# was passed to the query method, and returns a string of reference identifiers.
+# This routine is called internally by some of the query methods.  It decodes the base argument
+# that was passed to the query method, and returns a string of reference_no values joined by
+# commas. This return value is suitable for use in an SQL "in" expression.
 
 sub generate_ref_id_string {
     
     my ($taxonomy, $base) = @_;
     
-    my @ids;
+    my (@ids, $id_list);
     
-    if ( ref $base eq 'PBDB::Reference' )
-    {
-	my $ref_no = $base->{reference_no};
-	push @ids, $1 if $ref_no && $ref_no =~ $VALID_REF_ID;
-    }
+    # First convert $base into a list.  A scalar gets split on commas.  A listref is unchanged.
+    # Any other type of reference is converted into a single-item list.
     
-    elsif ( ref $base eq 'PBDB::ReferenceSet' )
+    if ( ref $base eq 'ARRAY' )
     {
-	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_REF_ID } keys %$base;
-    }
-    
-    elsif ( ref $base eq 'ARRAY' )
-    {
-	foreach my $r ( @$base )
-	{
-	    if ( ref $r eq 'PBDB::Reference' )
-	    {
-		my $ref_no = $base->{reference_no};
-		push @ids, $1 if $ref_no && $ref_no =~ $VALID_REF_ID;
-	    }
-	    
-	    elsif ( ! ref $r )
-	    {
-		push @ids, grep { $_ } map { $1 if $_ =~ $VALID_REF_ID } split(qr{\s*,\s*}, $r);
-	    }
-	}
-    }
-    
-    elsif ( ref $base )
-    {
-	croak "taxonomy: invalid reference identifier '$base'\n";
+	$id_list = $base;
     }
     
     else
     {
-	push @ids, grep { $_ } map { $1 if $_ =~ $VALID_REF_ID } split(qr{\s*,\s*}, $base);
+	my @list = ref $base ? ($base) : split(qr{\s*,\s*}, $base);
+	$id_list = \@list;
     }
     
-    # Now return the list of reference identifiers, joined with commas.  If no identifiers were
-    # found, return the empty string.
+    # Now go through the list and extract one or more numeric identifiers from each element.
+    
+    foreach my $r ( @$id_list )
+    {
+	if ( ref $r eq 'PBDB::ExtIdent' )
+	{
+	    croak "taxonomy: invalid identifier type '$r->{type}', must be type 'ref'"
+		unless $r->{type} eq 'ref' || $r->{type} eq 'unk';
+	    push @ids, $r->{num} if defined $r->{num} && $r->{num} =~ $NUMERIC_ID;
+	}
+	
+	elsif ( ref $r eq 'PBDB::Reference' )
+	{
+	    my $ref_no = $base->{reference_no};
+	    push @ids, $ref_no if defined $ref_no && $ref_no =~ $NUMERIC_ID;
+	}
+	
+	elsif ( ref $base eq 'PBDB::ReferenceSet' )
+	{
+	    push @ids, grep { defined $_ && $_ =~ $NUMERIC_ID } keys %$base;
+	}
+	
+	elsif ( ref $r )
+	{
+	    croak "taxonomy: invalid reference identifier '$r'\n";
+	}
+	
+	else
+	{
+	    push @ids, $r if defined $r && $r =~ $NUMERIC_ID;
+	}
+    }
+    
+    # If no valid identifiers were found, use "-1" which will ensure that nothing is selected.
+    # This is the right thing to do, since if this routine is called then clearly the intent was
+    # to select only things that match a valid reference identifier.
+    
+    push @ids, -1 unless @ids;
+    
+    # Now return the list of reference identifiers, joined with commas.
     
     return join(q{,}, @ids);
 }
@@ -3880,9 +3897,32 @@ sub ref_filters {
     
     if ( $options->{ref_author} )
     {
-	my $author = $dbh->quote($options->{author});
+	if ( $options->{ref_author} =~ /(.*?) \s+ and \s+ (.*)/xs )
+	{
+	    my $a1 = $1; my $a2 = $2;
+	    
+	    my $q1 = $dbh->quote($a1);
+	    my $q2 = $dbh->quote($a2);
+	    my $q3 = $dbh->quote("\\b$a2\\b");
+	    
+	    push @filters, "r.author1last like $q1 and (r.author2last like $q2 or r.otherauthors rlike $q3)";
+	}
 	
-	push @filters, "(r.author1last like $author or r.author2last like $author or r.otherauthors like $author)";
+	elsif ( $options->{ref_author} =~ /(.*?) \s+ et al[.]?/xs )
+	{
+	    my $a1 = $1;
+	    my $q1 = $dbh->quote($a1);
+	    
+	    push @filters, "r.author1last like $q1";
+	}
+	
+	else
+	{
+	    my $q1 = $dbh->quote($options->{author});
+	    my $q2 = $dbh->quote("\\b" . $options->{author} . "\\b"); 
+	    
+	    push @filters, "(r.author1last like $q1 or r.author2last like $q1 or r.otherauthors rlike $q2)";
+	}
     }
     
     if ( $options->{pub_title} )
@@ -3893,6 +3933,8 @@ sub ref_filters {
     }
     
     push @filters, $taxonomy->common_filters('r', 'refs', $options);
+    
+    $tables_ref->{r} = 1 if @filters;
     
     return @filters;
 }
@@ -3956,11 +3998,35 @@ sub opinion_filters {
 	}
     }
     
-    # if ( $options->{op_author} )
-    # {
-    # 	my $author = $dbh->quote($options->{author});
-    # 	push @filters, "o.author like $author";
-    # }
+    if ( $options->{op_author} )
+    {
+	my (@authors) = ref $options->{op_author} eq 'ARRAY' ? @{$options->{op_author}} : '';
+	
+	my @author_filters;
+	
+	foreach my $a ( @authors )
+	{
+	    next unless $a && $a =~ /\w/;
+	    
+	    if ( $a =~ / and | et al[.]/s )
+	    {
+		my $quoted = $dbh->quote($a);
+		push @author_filters, "o.author like $quoted";
+	    }
+	    
+	    else
+	    {
+		$a =~ s/%/.*/g;
+		$a =~ s/_/./g;
+		my $quoted = $dbh->quote("^$a\$|^$a and |^$a et al| and $a\$");
+		push @author_filters, "o.author rlike $quoted";
+	    }
+	}
+	
+	push @author_filters, "o.author = 'SELECT_NONE'" unless @author_filters;
+	
+	push @filters, '(' . join(' or ', @author_filters) . ')';
+    }
     
     push @filters, $taxonomy->common_filters('oo', 'ops', $options);
     
@@ -4234,14 +4300,27 @@ sub person_id_list { # $$$ have to fix modified_by=!
 }
 
 
+# refno_filter ( options, table )
+# 
+# If the option 'reference_no' was given, then return a filter expression that will select only
+# records for which the reference_no value in the specified table matches one of the specified
+# reference_no values.  Otherwise, return nothing.
+
 sub refno_filter {
 
     my ($taxonomy, $options, $table) = @_;
     
-    return unless $options->{reference_no};
+    if ( $options->{reference_no} )
+    {
+	my $ref_string = $taxonomy->generate_ref_id_string($options->{reference_no});
+	return "$table.reference_no in ($ref_string)";
+    }
     
-    my $ref_string = $taxonomy->generate_ref_id_string($options->{reference_no}) || '-1';
-    return "$table.reference_no in ($ref_string)";
+    else
+    {
+	return;
+    }
+    
 }
 
 
@@ -4783,7 +4862,7 @@ sub opinion_order {
 	}
     }
     
-    # order by t.lft, if(base.opinion_type='C',0,1), o.pubyr
+    # order by t.lft, if(base.opinion_type='C',0,1), o.pubyr desc
     return @clauses ? 'ORDER BY ' . join(', ', @clauses) : '';
 }
 
