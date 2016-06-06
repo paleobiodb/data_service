@@ -1890,18 +1890,20 @@ sub generateAccessFilter {
     
     my $dbh = $request->get_connection;
     
-    if ( my $cookie = $ENV{HTTP_COOKIE} )
+    if ( my $cookie_id = Dancer::cookie('session_id') )
     {
-	if ( $cookie =~ /session_id=([-\w]+).*authorizer_reversed/ )
-	{
-	    my $session_id = $dbh->quote($1);
-	    
-	    my $sql = "
+	my $session_id = $dbh->quote($cookie_id);
+	
+	my $sql = "
 		SELECT authorizer_no, superuser FROM session_data
 		WHERE session_id = $session_id";
-	    
-	    ($authorizer_no, $is_super) = $dbh->selectrow_array($sql);
-	}
+	
+	($authorizer_no, $is_super) = $dbh->selectrow_array($sql);
+    }
+    
+    else
+    {
+	print STDERR "cookie: NONE\n";
     }
     
     # If we don't have a recognizable cookie that corresponds to a session
