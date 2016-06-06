@@ -1227,7 +1227,7 @@ sub list_associated {
     
     if ( $record_type eq 'opinions' )
     {
-	my $type = $options->{op_type} || 'class';
+	my $type = $options->{op_type} || 'all';
 	
 	croak "list_associated: invalid value '$type' for 'op_type'" unless $OP_SELECT_VALUE{$type};
 	
@@ -4562,6 +4562,13 @@ sub taxon_joins {
 	if $tables_hash->{pt};
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as ipt on ipt.orig_no = $mt.immpar_no\n"
 	if $tables_hash->{ipt};
+    
+    if ( $tables_hash->{tt} )
+    {
+	$joins .= "\t\tLEFT JOIN $taxonomy->{AUTH_TABLE} as tta on tta.taxon_no = a.type_taxon_no\n";
+	$joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as tt on tt.orig_no = tta.orig_no\n";
+    }
+    
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as vt on vt.orig_no = $mt.accepted_no\n"
 	if $tables_hash->{vt} || $tables_hash->{e};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ATTRS_TABLE} as v on v.orig_no = $mt.orig_no\n"
@@ -4886,6 +4893,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				'ph.class_no', 'ph.class', 'ph.order_no', 'ph.order', 
 				'ph.family_no', 'ph.family'],
 		      GENUS => ['pl.genus_no', 'pl.genus', 'pl.subgenus_no', 'pl.subgenus'],
+		      TYPE_TAXON => [ 'tt.name as type_taxon', 'tt.orig_no as type_taxon_no' ],
 		      COUNTS => ['pc.order_count as n_orders', 'pc.family_count as n_families',
 				 'pc.genus_count as n_genera', 'pc.species_count as n_species'],
 		      TAPHONOMY => ['e.composition', 'e.thickness', 'e.architecture',
@@ -4919,6 +4927,7 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
 			SIZE => ['v'],
 			CLASS => ['ph'],
 			GENUS => ['pl'],
+			TYPE_TAXON => ['tt'],
 			SUBGENUS => ['pl'],
 			COUNTS => ['pc'],
 			TAPHONOMY => ['e'],

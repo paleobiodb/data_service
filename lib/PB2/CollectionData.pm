@@ -166,9 +166,19 @@ sub initialize {
 	    "A unique identifier for the collection.  This will be a string if the result",
 	    "format is JSON.  For backward compatibility, all identifiers in text format",
 	    "results will continue to be integers.",
-	{ output => 'record_type', com_name => 'typ', value => $IDP{COL},
-	  dwc_value => 'Occurrence' },
-	    "type of this object: C<$IDP{COL}> for a collection",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{COL} },
+	    "The type of this object: C<$IDP{COL}> for a collection",
+	{ output => 'permissions', com_name => 'prm' },
+	    "The accessibility of this record.  If empty, then the record is",
+	    "public.  Otherwise, the value of this record will be one",
+	    "of the following:", "=over",
+	    "=item members", "The record is accessible to database members only.",
+	    "=item authorizer", "The record is accessible to its authorizer group,",
+	    "and to any other authorizer groups given permission.",
+	    "=item group(...)", "The record is accessible to",
+	    "members of the specified research group(s) only.",
+	    "=back",
+	{ set => 'permissions', from => '*', code => \&process_permissions },
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
 	{ output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng', data_type => 'dec' },
@@ -1057,6 +1067,14 @@ sub get {
     
     $request->strict_check;
     
+    # Figure out what information we need to determine access permissions.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', { });
+    
+    $fields .= $access_fields if $access_fields;
+    
+    $request->delete_output_field('permissions') unless $access_fields;
+    
     # Determine the necessary joins.
     
     my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
@@ -1064,18 +1082,21 @@ sub get {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $fields
+	SELECT $fields, if($access_filter, 1, 0) as access_ok
 	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
-        WHERE c.collection_no = $id and c.access_level = 0
+        WHERE c.collection_no = $id
 	GROUP BY c.collection_no";
     
     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
-    die "404 Not found\n" unless $request->{main_record};
+    die $request->exception(404, "Not found") unless $request->{main_record};
+    
+    die $request->exception(403, "Access denied") 
+	unless $request->{main_record}{access_ok};
 }
 
 
@@ -1115,10 +1136,11 @@ sub list {
 	    unless $request->clean_param('all_records');
     }
     
-    # Until we provide for authenticated data service access, we had better
-    # restrict results to publicly accessible records.
+    # Figure out what information we need to determine access permissions.
     
-    push @filters, "c.access_level = 0";
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    push @filters, $access_filter;
     
     my $filter_string = join(' and ', @filters);
     
@@ -1149,6 +1171,10 @@ sub list {
     {
 	$fields =~ s{ c.n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
     }
+    
+    $fields .= $access_fields if $access_fields;
+    
+    $request->delete_output_field('permissions') unless $access_fields;
     
     # Determine the order in which the results should be returned.
     
@@ -1195,7 +1221,7 @@ sub summary {
     my $dbh = $request->get_connection;
     my $tables = $request->tables_hash;
     
-    # Figure out which bin level we are being asked for.  The default is 1.    
+    # Figure out which bin level we are being asked for.  The default is 1.    a
 
     my $bin_level = $request->clean_param('level') || 1;
     
@@ -1204,6 +1230,21 @@ sub summary {
     
     my @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generateCollFilters($tables);
+    
+    # Figure out the filter we need for determining access permissions.  We can ignore the extra
+    # fields, since we are not returning records of type 'collection' or 'occurrence'.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    if ( $tables->{cc} )
+    {
+	push @filters, $access_filter;
+    }
+    
+    else
+    {
+	push @filters, 's.access_level = 0';
+    }
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -1254,7 +1295,7 @@ sub summary {
     # 	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
     # }
     
-    push @filters, "s.access_level = 0", "s.bin_level = $bin_level";
+    push @filters, "s.bin_level = $bin_level";
     
     my $filter_string = join(' and ', @filters);
     
@@ -1392,7 +1433,14 @@ sub refs {
     # push @filters, $request->generate_crmod_filters('cc', $inner_tables);
     # push @filters, $request->generate_ent_filters('cc', $inner_tables);
     
-    push @filters, "c.access_level = 0";
+    # Figure out the filter we need for determining access permissions.  We can ignore the extra
+    # fields, since we are not returning records of type 'collection' or 'occurrence'.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('c', $inner_tables);
+    
+    push @filters, $access_filter;
+    
+    # Then construct the inner filter string, for selecting collection records.
     
     my $filter_string = join(' and ', @filters);
     
@@ -1436,6 +1484,8 @@ sub refs {
     
     my $inner_join_list = $request->generateJoinList('c', $inner_tables);
     my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($outer_tables);
+    
+    # Construct the main query.
     
     $request->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
@@ -1485,10 +1535,19 @@ sub list_strata {
     my $group_expr = "cs.grp, cs.formation, cs.member";
     my $strata_fields = "cs.grp, cs.formation, cs.member";
     
-    my $rank = $request->clean_param('rank');
-    
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     # push @filters, $request->generateStrataFilters($tables, $arg);
+    
+    # Figure out the filter we need for determining access permissions.  We can ignore the extra
+    # fields, since we are not returning records of type 'collection' or 'occurrence'.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('c', $tables);
+    
+    push @filters, $access_filter;
+    
+    # If the 'name' parameter was given, then add a filter for the stratigraphic name.
+    
+    my $rank = $request->clean_param('rank');
     
     if ( my @names = $request->clean_param_list('name') )
     {
@@ -1532,6 +1591,10 @@ sub list_strata {
     # Determine if any extra tables need to be joined in.
     
     my $base_joins = $request->generateJoinList('cs', $tables);
+    
+    # Add the collections table if we are doing access control.
+    
+    $base_joins = "JOIN collections as cc using (collection_no)\n" . $base_joins if $tables->{cc};
     
     $request->{main_sql} = "
 	SELECT $calc $fields, $strata_fields
@@ -1696,7 +1759,7 @@ sub generate_stratname_filter {
 	    $name = $1;
 	    my $rank = $2;
 	    
-	    unless ( $name =~ qr{[a-z]}xi )
+	    unless ( $name =~ qr{[a-z%]}xi )
 	    {
 		$request->add_warning("bad value '$name' for parameter 'strat', must contain at least one letter");
 		next;
@@ -1798,7 +1861,106 @@ sub generate_stratname_filter {
     
     return $clause;
 }
+
+
+# generateAccessFilter ( mt, tables_ref )
+# 
+# Generate a filter clause that will select only collections that the
+# requestor is allowed to access.  This determination is made by checking for
+# a PBDB Classic login cookie.
+
+sub generateAccessFilter {
     
+    my ($request, $mt, $tables_ref) = @_;
+    
+    # First check to see if the 'private' parameter was included in this
+    # request.  If not, then return a filter that will select only public
+    # data. 
+    
+    unless ( $request->clean_param('private') )
+    {
+	return ("c.access_level = 0", '');
+    }
+    
+    # Next see if we have a login cookie from Classic.  If so, extract the
+    # authorizer_no and is_super values from the corresponding record in the
+    # 'session_data' table.
+    
+    my ($authorizer_no, $is_super);
+    
+    my $dbh = $request->get_connection;
+    
+    if ( my $cookie = $ENV{HTTP_COOKIE} )
+    {
+	if ( $cookie =~ /session_id=([-\w]+).*authorizer_reversed/ )
+	{
+	    my $session_id = $dbh->quote($1);
+	    
+	    my $sql = "
+		SELECT authorizer_no, superuser FROM session_data
+		WHERE session_id = $session_id";
+	    
+	    ($authorizer_no, $is_super) = $dbh->selectrow_array($sql);
+	}
+    }
+    
+    # If we don't have a recognizable cookie that corresponds to a session
+    # still in the table, then abort!
+    
+    unless ( $authorizer_no && $authorizer_no =~ /^\d+$/ )
+    {
+	die $request->exception(401, "You must be logged in to use a URL that contains the parameter 'private'");
+    }
+    
+    # If we get here, then the requestor has some ability to see private data.  We need to select
+    # additional fields so that the records can be checked before being sent to the requestor.
+    
+    $request->{my_authorizer_no} = $is_super ? -1 : $authorizer_no;
+    $tables_ref->{$mt} = 1;
+    
+    my $fields = ", c.access_level, $mt.authorizer_no as access_no, " .
+	"if($mt.access_level = 'group members', $mt.research_group, '') as access_resgroup";
+    
+    # If the requestor has superuser privilege, they can access anything.  But we still need the
+    # access-control fields so that we can report the permissions on each individual record.
+    
+    if ( $is_super )
+    {
+	return ("c.access_level = c.access_level", $fields);
+    }
+    
+    # Otherwise, we need to filter by authorizer_no and/or research group.
+    
+    else
+    {
+	my @clauses = "c.access_level <= 1";
+	
+	my $sql = "SELECT authorizer_no FROM permissions WHERE modifier_no=$authorizer_no";
+	
+	my ($permlist) = $dbh->selectcol_arrayref($sql);
+	
+	if ( ref $permlist eq 'ARRAY' && @$permlist )
+	{
+	    my $perm_string = join(',', @$permlist);
+	    push @clauses, "$mt.authorizer_no in ($perm_string)";
+	}
+	
+	$sql = "SELECT research_group FROM person WHERE person_no=$authorizer_no";
+	
+	my ($grouplist) = $dbh->selectrow_array($sql);
+	
+	if ( $grouplist && $grouplist =~ /^[\w,-]+$/ )
+	{
+	    $grouplist =~ s/,/|/g;
+	    push @clauses, "$mt.access_level = 'group members' and $mt.research_group rlike '$grouplist'";
+	}
+	
+	my $filter = "(" . join(' or ', @clauses) . ")";
+	
+	return ( $filter, $fields );
+    }
+}
+
 
 # generateMainFilters ( op, mt, tables_ref )
 # 
@@ -3882,6 +4044,29 @@ sub process_coll_com {
 }
 
 
+sub process_permissions {
+    
+    my ($request, $record) = @_;
+    
+    return unless $record->{access_level};
+    
+    if ( $record->{access_level} == 1 )
+    {
+	return 'members';
+    }
+    
+    elsif ( $record->{access_resgroup} )
+    {
+	return "group($record->{access_resgroup})";
+    }
+    
+    else
+    {
+	return "authorizer";
+    }
+}
+
+
 # validate latitude and longitude values
 
 sub COORD_VALUE {
@@ -3937,6 +4122,81 @@ sub coord_value {
 	return { error => "bad value '$value' for {param}: must be a decimal number with optional sign or $suffix" };
     }
 }
+
+
+# check_access ( record )
+# 
+# Check to make sure that this record can properly be accessed by the
+# requestor.  Return 1 if so, false otherwise.
+
+# sub check_access {
+    
+#     my ($request, $record) = @_;
+    
+#     # If the record does not include an access level field, or if the value is
+#     # zero, then the record is accessible.
+    
+#     return 1 unless $record->{access_level};
+    
+#     # If the requestor is authenticated as a database member, the record is
+#     # accessible if its level is 1 or less.  The 'access_level' field will
+#     # only be part of the record if the requestor is authenticated.
+    
+#     return 1 if $record->{access_level} <= 1;
+    
+#     # Otherwise, we will need to check individual access rights.  If the
+#     # record's access_no (i.e. authorizer_no) field is the same as the
+#     # requestor's, then the record is accessible.
+    
+#     return 1 if $record->{access_no} && $request->{my_authorizer_no} &&
+# 	$record->{access_no} eq $request->{my_authorizer_no};
+    
+#     # Otherwise, we have to check whether permission was granted by the
+#     # record's authorizer.  If we haven't yet done so, grab a list of all
+#     # authorizers who have permitted the requestor to edit their collections
+#     # and also a list of the requestor's research groups.
+    
+#     unless ( $request->{my_permissions} )
+#     {
+# 	my (%permissions, %groups);
+	
+# 	my $dbh = $request->get_connection;
+# 	my $auth_no = $request->{my_authorizer_no};
+# 	my $sql = "SELECT authorizer_no FROM permissions WHERE modifier_no=$auth_no";
+	
+# 	my ($permlist) = $dbh->selectcol_arrayref($sql);
+	
+# 	%permissions = map { $_ => 1 } @$permlist if ref $permlist eq 'ARRAY';
+	
+# 	$sql = "SELECT research_group FROM person WHERE person_no=$auth_no";
+	
+# 	my ($grouplist) = $dbh->selectrow_array($sql);
+	
+# 	%groups = map { $_ => 1 } split( /\s*,\s*/, $grouplist ) if $grouplist;
+	
+# 	$request->{my_permissions} = \%permissions;
+# 	$request->{my_groups} = \%groups;
+#     }
+    
+#     return 1 if $request->{my_permissions}{$record->{access_no}};
+    
+#     # Otherwise, we have to check whether permission was granted for the
+#     # requestor's research group(s).
+    
+#     if ( $record->{access_resgroup} )
+#     {
+# 	my @groups = split( /\s*,\s*/, $record->{access_resgroup} );
+	
+# 	foreach my $g ( @groups )
+# 	{
+# 	    return 1 if $request->{my_groups}{$g};
+# 	}
+#     }
+    
+#     # If none of these rules grant access, then access is denied.
+    
+#     return 0;
+# }
 
 
 # cache_still_good ( key, created )

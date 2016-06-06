@@ -170,6 +170,17 @@ sub initialize {
 	    "in this field.",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
+	{ output => 'permissions', com_name => 'prm' },
+	    "The accessibility of this record.  If empty, then the record is",
+	    "public.  Otherwise, the value of this record will be one",
+	    "of the following:", "=over",
+	    "=item members", "The record is accessible to database members only.",
+	    "=item authorizer", "The record is accessible to its authorizer group,",
+	    "and to any other authorizer groups given permission.",
+	    "=item group(...)", "The record is accessible to",
+	    "members of the specified research group(s) only.",
+	    "=back",
+	{ set => 'permissions', from => '*', code => \&PB2::CollectionData::process_permissions },
 	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', not_block => 'acconly' },
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
@@ -705,7 +716,7 @@ sub initialize {
     # 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:div_params' =>
-	{ param => 'count', valid => '1.2:occs:div_count' },
+	{ param => 'count', valid => '1.2:occs:div_count', default => 'genera' },
 	    "This parameter specifies the taxonomic level at which to count.  If not",
 	    "specified, it defaults to C<genera>.  The accepted values are:",
 	{ param => 'subgenera', valid => FLAG_VALUE },
@@ -715,7 +726,7 @@ sub initialize {
 	    "If this parameter is specified, then taxa that are known to be extant",
 	    "are considered to range through to the present, regardless of the age",
 	    "of their last known fossil occurrence.",
-	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso' },
+	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso', default => 'stage' },
 	    "This parameter specifies the temporal resolution at which to count.  If not",
 	    "specified, it defaults to C<stage>.  You can also use the parameter name",
 	    "F<reso>.  Accepted values are:");
@@ -963,27 +974,37 @@ sub get {
 	}
     }
     
+    my $tables = $request->tables_hash;
+    
     my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->selectPaleoModel(\$fields, $tables) if $fields =~ /PALEOCOORDS/;
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
     
     $request->strict_check;
     
+    # Figure out what information we need to determine access permissions.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    $fields .= $access_fields if $access_fields;
+    
+    $request->delete_output_field('permissions') unless $access_fields;
+    
     # Determine the necessary joins.
     
-    my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
+    my ($join_list) = $request->generateJoinList('c', $tables);
     
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $fields
+	SELECT $fields, if($access_filter, 1, 0) as access_ok
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
-        WHERE o.occurrence_no = $id and c.access_level = 0
+        WHERE o.occurrence_no = $id
 	GROUP BY o.occurrence_no";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
@@ -992,9 +1013,10 @@ sub get {
     
     # Return an error response if we couldn't retrieve the record.
     
-    die "404 Not found\n" unless $request->{main_record};
-    
-    return 1;
+    die $request->exception(404, "Not found") unless $request->{main_record};
+   
+    die $request->exception(403, "Access denied") 
+	unless $request->{main_record}{access_ok};
 }
 
 
@@ -1036,19 +1058,22 @@ sub list {
 	    unless $request->clean_param('all_records');
     }
     
-    # Until we provide for authenticated data service access, we had better
-    # restrict results to publicly accessible records.
-    
-    push @filters, "c.access_level = 0";
-    
-    my $filter_string = join(' and ', @filters);
-    
-    $request->add_table('oc');
-    
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
     
     $request->strict_check;
+    
+    # Figure out what information we need to determine access permissions.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    $request->delete_output_field('permissions') unless $access_fields;
+    
+    push @filters, $access_filter;
+    
+    my $filter_string = join(' and ', @filters);
+    
+    $request->add_table('oc');
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -1141,6 +1166,8 @@ sub list {
     $request->adjustCoordinates(\$fields);
     $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
         
+    $fields .= $access_fields if $access_fields;
+    
     # Determine the order in which the results should be returned.
     
     my $tt = $tables->{tv} ? 'ts' : 't';
@@ -1210,7 +1237,13 @@ sub diversity {
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
-    push @filters, "c.access_level = 0";
+    # Figure out what information we need to determine access permissions.  We
+    # can ignore $access_fields, since we are not displaying either occurrence
+    # or collection records.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    push @filters, $access_filter;
     
     my $filter_string = join(' and ', @filters);
     
@@ -1343,6 +1376,13 @@ sub quickdiv {
     unless ( @filters )
     {
 	return $request->diversity();
+    }
+    
+    # If the 'private' parameter was specified, add a warning.
+    
+    if ( $request->clean_param('private') )
+    {
+	$request->add_warning("The parameter 'private' does not work with this operation.");
     }
     
     # Determine the taxonomic level at which we should be counting.  If not
@@ -1562,6 +1602,11 @@ sub taxa {
     
     $request->{my_promote} = $request->clean_param('subgenera');
     $request->{my_attr} = $request->has_block('attr');
+
+    # $$$ add 'variant=all' as an option?  We need to be as compatible as we
+    # can be with taxa/list.  This option would show all variants of every
+    # name that is found, in case people want to search through the list for a
+    # known name that happens to be non-current.
     
     # Determine the necessary set of query fields.
     
@@ -1699,7 +1744,13 @@ sub taxa {
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
-    push @filters, "c.access_level = 0", "o.orig_no <> 0";
+    # Figure out what information we need to determine access permissions.  We
+    # can ignore $access_fields, because we are not generating occurrence or
+    # collection records.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    push @filters, $access_filter, "o.orig_no <> 0";
     
     my $filter_string = join(' and ', @filters);
     
@@ -1776,6 +1827,13 @@ sub prevalence {
     $detail = 3 if $detail > 3;
     
     #$request->substitute_select( mt => 'o', cd => 'oc' );
+    
+    # If the 'private' parameter was specified, add a warning.
+    
+    if ( $request->clean_param('private') )
+    {
+	$request->add_warning("The parameter 'private' does not work with this operation.");
+    }
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.  First see if we can generate
@@ -2027,7 +2085,13 @@ sub list_associated {
     push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
     push @filters, $request->generateOccFilters($inner_tables);
     
-    push @filters, "c.access_level = 0";
+    # Figure out what information we need to determine access permissions.  We
+    # can ignore $access_fields since we are not generating occurrence or
+    # collection records.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $inner_tables);
+    
+    push @filters, $access_filter;
     
     my $filter_string = join(' and ', @filters);
     
@@ -2359,7 +2423,13 @@ sub strata {
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
     push @filters, $request->generateOccFilters($inner_tables);
     
-    push @filters, "c.access_level = 0";
+    # Figure out what information we need to determine access permissions.  We
+    # can ignore $access_fields since we are not generating occurrence or
+    # collection records.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $inner_tables);
+    
+    push @filters, $access_filter;
     
     my $filter_string = join(' and ', @filters);
     

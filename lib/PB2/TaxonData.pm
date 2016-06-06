@@ -52,7 +52,7 @@ sub initialize {
 	    "The attribution of this taxonomic name (author and year)",
 	{ value => 'app', maps_to => '1.2:taxa:app' },
 	    "The age of first and last appearance of this taxon from all of the occurrences",
-	    "recorded in this database.");
+	    "recorded in this database");
     
     @BASIC_2 = (
 	{ value => 'common' },
@@ -71,7 +71,8 @@ sub initialize {
 	{ value => 'size', maps_to => '1.2:taxa:size' },
 	    "The number of subtaxa appearing in this database, including the taxon itself.",
 	{ value => 'class', maps_to => '1.2:taxa:class' },
-	    "The classification of this taxon: phylum, class, order, family, genus.",
+	    "The classification of this taxon: phylum, class, order, family, genus.  Also",
+	    "includes the type taxon, if one is entered in the database.",
 	    "This information is also included in the C<nav> block, so do not specify both at once.",
 	{ value => 'classext', maps_to => '1.2:taxa:class' },
 	    "Like C<class>, but also includes the relevant taxon identifiers.",
@@ -365,7 +366,7 @@ sub initialize {
 	{ output => 'firstapp_ea', pbdb_name => 'firstapp_max_ma', com_name => 'fea' });
     
     $ds->define_block('1.2:taxa:class' =>
-	{ select => [ 'CLASS', 'GENUS' ] },
+	{ select => [ 'CLASS', 'GENUS', 'TYPE_TAXON' ] },
 	#{ output => 'kingdom', com_name => 'kgl' },
 	#    "The name of the kingdom in which this taxon occurs",
 	{ output => 'phylum', com_name => 'phl' },
@@ -400,6 +401,10 @@ sub initialize {
 	{ output => 'subgenus_no', com_name => 'sgn', if_block => 'classext', dedup => 'genus_no' },
 	    "The identifier of the subgenus in which this occurrence is classified,",
 	    "if any.  This is only included with the block C<classext>.",
+	{ output => 'type_taxon', com_name => 'ttl' },
+	    "The name of the type taxon for this taxon, if known.",
+	{ output => 'type_taxon_no', com_name => 'ttn', if_block => 'classext' },
+	    "The identifier of the type taxon for this taxon, if known.",
 	{ set => '*', code => \&process_subgenus, if_block => 'subgenus' });
     
     $ds->define_block('1.2:taxa:genus' =>
@@ -1313,9 +1318,9 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
 	">>You can also specify any of the following parameters:",
-	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select' },
+	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select', default => 'all' },
 	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
-	    "or only certain kinds of opinions.  Accepted values include:",
+	    "or only certain kinds of opinions.  The default is all opinions.  Accepted values include:",
 	{ allow => '1.2:opinions:filter' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
@@ -1340,7 +1345,8 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
 	">You can also specify any of the following parameters:",
-	{ optional => 'ref_type', valid => '1.2:taxa:refselect', alias => 'select', list => ',' },
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', alias => 'select', list => ',',
+	  default => 'taxonomy' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:refs:filter' },
@@ -1372,7 +1378,8 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
 	">>You can also specify any of the following parameters:",
-	{ optional => 'ref_type', valid => '1.2:taxa:refselect', list => ',', alias => 'select' },
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', list => ',', alias => 'select',
+	  default => 'taxonomy' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
 	    "The value of this attribute can be one or more of the following, separated by commas:",
 	{ allow => '1.2:common:select_refs_crmod' },
@@ -1468,9 +1475,9 @@ sub initialize {
 	{ allow => '1.2:common:select_ops_ent' },
 	{ require_any => ['1.2:opinions:selector', '1.2:opinions:filter', 
 			  '1.2:common:select_ops_crmod', '1.2:common:select_ops_ent'] },
-	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select' },
+	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select', default => 'all' },
 	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
-	    "or only certain kinds of opinions.  Accepted values include:",
+	    "or only certain kinds of opinions.  The default is all opinions.  Accepted values include:",
 	{ allow => '1.2:opinions:display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
@@ -3497,7 +3504,7 @@ sub process_com {
     
     foreach my $f ( qw(orig_no child_no parent_no immpar_no senpar_no accepted_no base_no
 		       kingdom_no phylum_no class_no order_no family_no genus_no
-		       subgenus_no) )
+		       subgenus_no type_taxon_no) )
     {
 	$record->{$f} = generate_identifier('TXN', $record->{$f}) if defined $record->{$f};
 	# $record->{$f} = $record->{$f} ? "$IDP{TXN}:$record->{$f}" : '';
