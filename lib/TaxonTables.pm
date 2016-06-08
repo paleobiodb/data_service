@@ -4829,6 +4829,12 @@ sub computeEcotaphTable {
 				motility_basis varchar(80),
 				life_habit_basis_no int unsigned not null,
 				life_habit_basis varchar(80),
+				visiion_basis_no int unsigned not null,
+				vision_basis varchar(80),
+				reproduction_basis_no int unsigned not null,
+				reproduction_basis varchar(80),
+				ontogeny_basis_no int unsigned not null,
+				ontogeny_basis varchar(80),
 				diet_basis_no int unsigned not null,
 				diet_basis varchar(80)) Engine=MyISAM");
     
@@ -4841,20 +4847,21 @@ sub computeEcotaphTable {
 		SET taxon_environment = null WHERE taxon_environment = ''");
     
     $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			DROP COLUMN taxon_no,
 			DROP COLUMN old_minimum_body_mass,
 			DROP COLUMN old_maximum_body_mass,
-			DROP COLUMN vision,
-			DROP COLUMN reproduction,
-			DROP COLUMN asexual,
-			DROP COLUMN brooding,
-			DROP COLUMN dispersal1,
-			DROP COLUMN dispersal2");
+			DROP COLUMN adult_length,
+			DROP COLUMN adult_width,
+			DROP COLUMN adult_height,
+			DROP COLUMN adult_area,
+			DROP COLUMN adult_volume");
     
     $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
 			ADD COLUMN composition varchar(255) null after composition2,
 			ADD COLUMN diet varchar(255) null after diet2,
 			ADD COLUMN skeletal_reinforcement varchar(255) null after internal_reinforcement,
-			ADD COLUMN motility varchar(255) null after epibiont");
+			ADD COLUMN motility varchar(255) null after epibiont,
+			ADD COLUMN repro_new varchar(255) null after reproduction");
     
     $result = $dbh->do("UPDATE $ECOTAPH_WORK SET
 			composition =
@@ -4897,6 +4904,20 @@ sub computeEcotaphTable {
     $result = $dbh->do("UPDATE $ECOTAPH_WORK
 			SET motility = null WHERE motility = ''");
     
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET repro_new = concat_ws(', ',
+			    reproduction,
+			    if(asexual is not null, 'asexual', null),
+			    if(brooding is not null, 'brooding', null),
+			    if(dispersal1 is not null or dispersal2 is not null,
+			       concat('dispersal=', concat_ws(',', dispersal1, dispersal2)), null))");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET repro_new = NULL WHERE repro_new = ''");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET ontogeny = NULL WHERE ontogeny = ''");
+    
     $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
 			DROP COLUMN reinforcement,
 			DROP COLUMN folds,
@@ -4904,7 +4925,13 @@ sub computeEcotaphTable {
 			DROP COLUMN internal_reinforcement,
 			DROP COLUMN locomotion,
 			DROP COLUMN attached,
-			DROP COLUMN epibiont");
+			DROP COLUMN epibiont,
+			CHANGE COLUMN reproduction repro_old varchar(80) null,
+			CHANGE COLUMN repro_new reproduction varchar(255) null,
+			DROP COLUMN asexual,
+			DROP COLUMN brooding,
+			DROP COLUMN dispersal1,
+			DROP COLUMN dispersal2");
     
     # Then fill in null entries for all other senior synonyms
     
@@ -4994,13 +5021,19 @@ sub computeEcotaphTable {
 			e.environment_basis_no, ebe1.name,
 			e.motility_basis_no, ebe2.name,
 			e.life_habit_basis_no, ebe3.name,
+			e.vision_basis_no, ebe5.name,
+			e.reproduction_basis_no, ebe6.name,
+			e.ontogeny_basis_no, ebe7.name,
 			e.diet_basis_no, ebe4.name
 		FROM $ECOTAPH_WORK as e
 			LEFT JOIN $TREE_WORK as ebt on ebt.orig_no = e.taphonomy_basis_no
 			LEFT JOIN $TREE_WORK as ebe1 on ebe1.orig_no = e.environment_basis_no
 			LEFT JOIN $TREE_WORK as ebe2 on ebe2.orig_no = e.motility_basis_no
 			LEFT JOIN $TREE_WORK as ebe3 on ebe3.orig_no = e.life_habit_basis_no
-			LEFT JOIN $TREE_WORK as ebe4 on ebe4.orig_no = e.diet_basis_no";
+			LEFT JOIN $TREE_WORK as ebe4 on ebe4.orig_no = e.diet_basis_no
+			LEFT JOIN $TREE_WORK as ebe5 on ebe5.orig_no = e.vision_basis_no
+			LEFT JOIN $TREE_WORK as ebe6 on ebe6.orig_no = e.reproduction_basis_no
+			LEFT JOIN $TREE_WORK as ebe7 on ebe7.orig_no = e.ontogeny_basis_no";
     
     $result = $dbh->do($sql);
     
