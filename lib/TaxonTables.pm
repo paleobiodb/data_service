@@ -4829,7 +4829,7 @@ sub computeEcotaphTable {
 				motility_basis varchar(80),
 				life_habit_basis_no int unsigned not null,
 				life_habit_basis varchar(80),
-				visiion_basis_no int unsigned not null,
+				vision_basis_no int unsigned not null,
 				vision_basis varchar(80),
 				reproduction_basis_no int unsigned not null,
 				reproduction_basis varchar(80),

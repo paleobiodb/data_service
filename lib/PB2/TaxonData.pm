@@ -539,8 +539,11 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:ecospace' =>
 	{ select => 'ECOSPACE' },
-	# { output => 'environment', com_name => 'jnv', disabled => 1 },
-	#     "The general environment or environments in which this life form is found.",
+	{ output => 'taxon_environment', com_name => 'jev' },
+	    "The general environment or environments in which this life form is found.",
+	{ output => 'environment_basis', com_name => 'jec' },
+	    "Specifies the taxon from which the environment information is",
+	    "inherited.",
 	#     "Here is a L<list of values|node:taxa/ecotaph_values>.",
 	{ output => 'motility', com_name => 'jmo' },
 	    "Whether the organism is motile, attached and/or epibiont, and its",
