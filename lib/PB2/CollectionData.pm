@@ -112,7 +112,7 @@ sub initialize {
 	    "Information about the geological context of the collection (includes C<env>).",
 	{ value => 'methods', maps_to => '1.2:colls:methods' },
 	    "Information about the collection methods used",
-        { value => 'rem', maps_to => '1.2:colls:rem' },
+        { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
 	    "Any additional remarks that were entered about the collection.",
 	{ value => 'bin', maps_to => '1.2:colls:bin' },
 	    "The list of geographic clusters to which the collection belongs.",
@@ -157,8 +157,8 @@ sub initialize {
     # Then define the output blocks which these mention.
     
     $ds->define_block('1.2:colls:basic' =>
-	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
-		     'c.lat', 'c.lng', 'c.n_occs', 'c.early_age', 'c.late_age',
+	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.collection_aka',
+		     'cc.formation', 'c.lat', 'c.lng', 'c.n_occs', 'c.early_age', 'c.late_age',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'c.reference_no'], 
 	  tables => ['cc', 'ei', 'li', 'sr', 'r'] },
@@ -186,9 +186,11 @@ sub initialize {
 	{ output => 'lat', dwc_name => 'decimalLatitude', com_name => 'lat', data_type => 'dec' },
 	    "The latitude at which the collection is located (in degrees)",
 	{ output => 'collection_name', dwc_name => 'collectionCode', com_name => 'nam' },
-	    "An arbitrary name which identifies the collection, not necessarily unique",
+	    "The name which identifies the collection, not necessarily unique",
 	{ output => 'collection_subset', com_name => 'nm2' },
 	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'collection_aka', com_name => 'aka' },
+	    "An alternate name for the collection, or additional remarks about it.",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences in the collection",
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
@@ -223,7 +225,20 @@ sub initialize {
     }
     
     $ds->define_block('1.2:colls:bin' => @bin_levels);
-        
+    
+    $ds->define_block('1.2:colls:rem');	# this block is deprecated, but we don't want to return an error
+                                        # if specified
+    
+    $ds->define_block('1.2:colls:name' =>
+	{ select => ['cc.collection_name', 'cc.collection_subset', 'cc.collection_aka' ],
+	  tables => ['cc'] },
+	{ output => 'collection_name', dwc_name => 'collectionCode', com_name => 'cnm' },
+	    "An arbitrary name which identifies the collection, not necessarily unique",
+	{ output => 'collection_subset', com_name => 'cns' },
+	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'collection_aka', com_name => 'aka' },
+	    "An alternate name for the collection, or additional remarks about it.");
+    
     $ds->define_block('1.2:colls:loc' =>
 	{ select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale', 'cc.geogcomments',
 		     'cc.latlng_basis', 'cc.latlng_precision', 'cc.altitude_value', 'cc.altitude_unit'],
@@ -432,11 +447,6 @@ sub initialize {
 	{ output => 'research_group', com_name => 'rgp' },
 	    "The research group(s), if any, associated with this collection.");
     
-    $ds->define_block('1.2:colls:rem' =>
-	{ set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
-	{ output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
-	    "Any additional remarks that were entered about the collection");
-    
     $ds->define_block('1.2:colls:secref' =>
 	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) as reference_nos'] });
     
@@ -448,8 +458,7 @@ sub initialize {
 	{ include => '1.2:colls:stratext' },
 	{ include => '1.2:colls:lithext' },
 	{ include => '1.2:colls:geo' },
-	{ include => '1.2:colls:methods' },
-	{ include => '1.2:colls:rem' });
+	{ include => '1.2:colls:methods' });
     
     # Then define an output block for displaying stratigraphic results
     
@@ -708,6 +717,12 @@ sub initialize {
 	    "A comma-separated list of collection identifiers.  All records associated with",
 	    "the specified collections are returned, provided they satisfy the other parameters",
 	    "given with this request.",
+	{ param => 'coll_re', valid => ANY_VALUE },
+	    "A regular expression which will be matched against the C<collection_name> and",
+	    "C<collection_aka> fields.  Records will be returned only if they belong to a",
+	    "matching collection.  You can specify two or more alternatives separated by",
+	    "the vertical bar character C<|>, and you can use all of the other standard",
+	    "regular expression syntax including the backslash C<\\>.",
 	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
 	    "You may specify one or more cluster ids, separated by commas.",
@@ -2056,8 +2071,6 @@ sub generateMainFilters {
 	}
     }
     
-    # Check for parameter 'coll_id'
-    
     # Check for parameter 'coll_id', If the parameter was given but no value was
     # found, then add a clause that will generate an empty result set.
     
@@ -2081,6 +2094,16 @@ sub generateMainFilters {
 	    push @filters, "c.collection_no in ($id_list)";
 	    $tables_ref->{non_summary} = 1;
 	}
+    }
+    
+    # Check for parameter 'coll_re'.
+    
+    if ( my $coll_re = $request->clean_param('coll_re') )
+    {
+	my $quoted = $dbh->quote($coll_re);
+	
+	$tables_ref->{cc} = 1;
+	push @filters, "(cc.collection_name rlike $quoted or cc.collection_aka rlike $quoted)";
     }
     
     # Check for parameters 'base_name', 'taxon_name', 'match_name',
