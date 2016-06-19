@@ -265,7 +265,7 @@ if ( $strata_tables )
     buildStrataTables($dbh);
 }
 
-if ( $specimen_tables )
+if ( $specimen_tables || $occurrence_tables )
 {
     buildSpecimenTables($dbh);
 }
