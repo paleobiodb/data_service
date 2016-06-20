@@ -1522,32 +1522,6 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
-    $ds->define_ruleset('1.2:taxa:opinions' =>
-	">You can use the following parameters if you wish to select opinions associated",
-	"with a specified list of taxa.  Only the records which also match the other",
-	"parameters that you specify will be returned.",
-	{ require => '1.2:taxa:aux_selector',
-	  error => "you must specify one of 'name', 'id', 'base_name', 'base_id', 'match_name', or 'all_records'" },
-	{ optional => 'variant', valid => '1.2:taxa:variants' },
-	    "! This parameter is not useful for opinions, but is included for consistency",
-	    "with 1.2:taxa:list and 1.2:taxa:refs.",
-	{ allow => '1.2:taxa:filter' },
-	{ allow => '1.2:common:select_taxa_crmod' },
-	{ allow => '1.2:common:select_taxa_ent' },
-	">>You can also specify any of the following parameters:",
-	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select', default => 'all' },
-	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
-	    "or only certain kinds of opinions.  The default is all opinions.  Accepted values include:",
-	{ allow => '1.2:opinions:filter' },
-	{ allow => '1.2:common:select_ops_crmod' },
-	{ allow => '1.2:common:select_ops_ent' },
-	{ allow => '1.2:refs:filter' },
-	{ allow => '1.2:opinions:display' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request.",
-	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
-	"the name of the primary author.");
-    
     $ds->define_ruleset('1.2:taxa:refs' =>
 	">>You can use the following parameters to retrieve the references associated",
 	"with a specified list of taxa:",

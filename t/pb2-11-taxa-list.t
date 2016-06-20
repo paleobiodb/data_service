@@ -3513,7 +3513,7 @@ subtest 'output blocks 2 json' => sub {
     
     foreach my $r ( @r2a )
     {
-	$tc->flag('img', $r->{nam}) unless $r->{img} && $r->{img} =~ /^img:\d+$/;
+	$tc->flag('img', $r->{nam}) unless $r->{img} && $r->{img} =~ /^php:\d+$/;
 	
 	$tc->flag('att', $r->{nam}) unless $r->{att} && $r->{att} =~ /\w\w/ && $r->{att} =~ /\d\d\d\d/;
 	

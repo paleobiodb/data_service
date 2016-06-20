@@ -117,7 +117,7 @@ my $ob_j1 = { 'par' => 'txn:71894',
 	      'gnn' => 'txn:71894',
 	      'lsq' => '!pos_int',
 	      'rsq' => '!pos_int',
-	      'img' => '!extid(img)',
+	      'img' => '!extid(php)',
 	      'dcr' => '2012-07-09 04:49:25',
 	      'dmd' => '!date' };
 
