@@ -1,0 +1,314 @@
+
+=for wds_node title=Specifying Taxonomic Names
+
+=head2 DESCRIPTION
+
+This page describes the usage of taxonomic names in this data service.  It describes the
+parameters that are used to specify taxonomic names in query operations, and the modifiers that
+can be applied to taxonomic names in order to precisely specify a portion of the tree of life.
+
+=head2 PARAMETERS
+
+Many of the data service operations allow you to specify taxonomic names as parameter values.  All of
+these operations, e.g. L<taxa/list|node:taxa/list> and L<occs/list|node:occs/list>, allow you to 
+specify a taxon or set of taxa via one of three parameters:
+
+=over
+
+=item taxon_name
+
+Selects all records corresponding to a I<single taxon>.  If the parameter value matches more than one
+taxononomic name in the database, either because it is a homonym or because you used
+L<wildcards|#ABBREVIATIONS AND WILDCARDS>,
+then the taxon with the most occurrences in the database will be selected by default.
+If you are not getting the taxon you intended, you can either add more letters (i.e. abbreviate
+less) or use a L<selector|#SELECTORS> (see below).
+
+=item base_name
+
+Selects all records corresponding to a I<single taxon plus all of its subtaxa>.  If the parameter
+value matches more than one taxonomic name in the database, either because it is a homonym or because
+you used wildcards, then the taxon with the most occurrences in the database will be selected by
+default.
+
+=item match_name
+
+Selects all records corresponding to I<all matching taxa>, where the matching is alphabetic rather
+than taxonomic.  If the parameter value matches more
+than one taxonomic name in the database, all will be selected.  Subtaxa will not be included; if
+you wish to get subtaxa, you can pick out from the result the name or names you are interested in
+and do a second query using the B<C<base_name>> parameter.
+
+=back
+
+If you use the B<C<taxon_name>> parameter, you get back a list of
+occurrences identified to that taxon specifically, and not to any subtaxon.  For example, the
+following query shows just occurrences that are identified as I<Stegosauridae>, without any genus
+or species identification:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?rowcount&taxon_name=Stegosauridae>
+
+=back
+
+If, on the other hand, you use the C<base_name> parameter, you get back a list of occurrences
+identified to that taxon inclusive of any subtaxa.  Note that the following result contains many
+more occurrences.  The additional ones are identified as belonging to particular species or genera
+within the Stegosauridae.
+
+=over
+
+=item *
+
+L<op:occs/list.txt?rowcount&base_name=Stegosauridae>
+
+=back
+
+You can always include more than one taxon name, separated by commas.  The resulting list will
+include all records that correspond to any of the names.  For example:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?rowcount&base_name=Dacentrurus, Loricatosaurus>
+
+=back
+
+The same parameters can be used with the L<taxa/list|node:taxa/list> operation.  For example, the
+following query returns all of the taxa within I<Stegosauridae> that have been entered into this
+database:
+
+=over
+
+=item *
+
+L<op:taxa/list.txt?rowcount&base_name=Stegosauridae>
+
+=back
+
+Finally, if you are not sure of the exact spelling of the name you are interested in, you
+can abbreviate and get a list of all matching names:
+
+=over
+
+=item *
+
+L<op:taxa/list.txt?rowcount&show=class&match_name=Stegos.>
+
+=back
+
+To narrow down the search, you can use a selector to indicate what part of the tree of
+life you wish to search in:
+
+=over
+
+=item *
+
+L<op:taxa/list.txt?rowcount&show=class&match_name=insecta:stegos.>
+
+=back
+
+Finally, note that all name matching is case B<insensitive>.  You can specify names in uppercase,
+lowercase, or mixed.
+
+=head2 MODIFIERS
+
+There are two kinds of modifiers that you can apply to any taxonomic name in order to
+specify exactly which part of the tree of life you are interested in.  You can use these modifiers
+in any combination.
+
+=head3 EXCLUSIONS
+
+The first kind of modifier is used to exclude subtaxa.  A name using this kind of modifier looks
+like:
+
+    name ^exclusion
+
+An exclusion must match a subtaxon of the name it modifies.  You can add as many exclusions as you
+like, and you can either separate them with a space or not as you choose.  For example, the
+following query will show all of the occurrences of I<Stegosauridae> except those in the genera
+I<Stegosaurus> and I<Kentrosaurus>:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=Stegosauridae ^Stegosaurus ^Kentrosaurus>
+
+=back
+
+As another example, the following query will tabulate the diversity of the non-avian dinosaur genera of
+North America over time:
+
+=over
+
+=item *
+
+L<op:occs/diversity.txt?base_name=DINOSAURIA^AVES&continent=NOA>
+
+=back
+
+Note that I have written the names in uppercase in this example, to demonstrate that case
+does not matter.
+
+=head3 SELECTORS
+
+The second kind of modifier is used to differentiate between homonyms.  A name using
+this kind of modifier looks like:
+
+    selector:name
+
+The selector should be the first few letters (3 or more) of any taxon enclosing the one you are interested in.
+For example, any of the following queries will return all of the occurrences of I<Ficus>, the genus of
+sea snails:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=Gastropoda:Ficus>
+
+=item *
+
+L<op:occs/list.txt?base_name=Gastro:Ficus>
+
+=item *
+
+L<op:occs/list.txt?base_name=Mollusc:Ficus>
+
+=back
+
+On the other hand, either of the following queries will return all of the occurrences of I<Ficus>, the genus
+of land plants:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=Plant:Ficus>
+
+=item *
+
+L<op:occs/list.txt?base_name=Moraceae:Ficus>
+
+=back
+
+If you use a name which is a homonym and do not specify any selector, then the homonym which has the
+most occurrences in the database will be selected by default.  For example:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=Ficus>
+
+=back
+
+=head3 ABBREVIATIONS AND WILDCARDS
+
+You can abbreviate any taxon name by ending it with a period.  When specifying a binomial, you can
+abbreviate the genus down to one letter in the usual way, or you can specify more letters.  You can
+also use the standard SQL wildcards.
+
+=over
+
+=item C<.>
+
+Matches any sequence of characters.  If you put it in the middle of a name it is assumed to
+end a word, with a space implicitly added after it.  So, for example C<T.rex> and C<T. rex>
+mean the same thing.
+
+=item C<%>
+
+Matches any sequence of characters, and can be used in the middle of a word or at the beginning.
+
+=item C<_>
+
+Matches any single character.
+
+=back
+
+For example, any of the following queries will show all of the occurrences of I<Tyrannosaurus rex>:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=T.rex>
+
+=item *
+
+L<op:occs/list.txt?base_name=Tyr. rex>
+
+=item *
+
+L<op:occs/list.txt?base_name=Ty% rex>
+
+=item *
+
+L<op:occs/list.txt?base_name=Tyr%us r_x>
+
+=back
+
+The most important thing to remember about abbreviations is that if your abbreviation matches more
+than one taxon, the selected taxon will be whichever one has the most occurrences in the
+database.  For example, the following query will actually show all of the occurrences of the coral
+I<Tarbellastraea reussiana>, which is the matching taxon with the most occurrences:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=T. re.>
+
+=back
+
+If you are getting a different taxon than you intended, you can either use more letters or add a
+selector:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=dino:T. re.>
+
+=back
+
+As another example, the following query will show all of the occurrences of I<Tyrannosauroidea>,
+which is the largest taxon in the database matching the name I<Tyrann.> :
+
+=over
+
+=item *
+
+L<op:occs/list.txt?base_name=Tyrann.>
+
+=back
+
+In order to see which taxon is being matched, you can use the L<taxa/single|node:taxa/single> operation, as
+follows:
+
+=over
+
+=item *
+
+L<op:taxa/single.txt?taxon_name=Tyrann.>
+
+=back
+
+For a completely different example, the following query will return all of the occurrences of the B<insect>
+species I<Tyrannasorus rex>:
+
+=over
+
+=item *
+
+L<op:occs/list.txt?show=class&base_name=insect:t.rex>
+
+=back
+
+

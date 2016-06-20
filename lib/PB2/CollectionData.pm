@@ -535,9 +535,9 @@ sub initialize {
     
     $ds->define_block( '1.2:colls:summary' =>
       { select => ['s.bin_id', 's.n_colls', 's.n_occs', 's.lat', 's.lng'] },
+      { set => '*', code => \&process_summary_com, if_vocab => 'com' },
       { output => 'bin_id', com_name => 'oid' }, 
-	  "A unique identifier for the cluster.  For now, these are positive",
-	  "integers, but this might change and should B<not be relied on>.",
+	  "A unique identifier for the cluster.",
       { output => 'bin_id_1', com_name => 'lv1' }, 
 	  "The identifier of the containing level-1 cluster, if any",
       { output => 'bin_id_2', com_name => 'lv2' }, 
@@ -615,6 +615,18 @@ sub initialize {
 	    "most recent first unless you add C<.asc>",
 	{ value => 'modified.asc', undocumented => 1 },
 	{ value => 'modified.desc', undocumented => 1 });
+    
+    $ds->define_set('1.2:occs:ident_type' =>
+	{ value => 'latest' },
+	    "Select only the latest identification of each occurrence, and",
+	    "ignore any previous ones.",
+	{ value => 'orig' },
+	    "Select only the original identification of each occurrence, and",
+	    "ignore any later ones.",
+	{ value => 'all' },
+	    "Select every identification that matches the other",
+	    "query parameters.  This may result in multiple records being",
+	    "returned for a given occurrence.");
     
     $ds->define_set('1.2:colls:pgmodel' =>
 	{ value => 'scotese' },
@@ -719,7 +731,7 @@ sub initialize {
 	    "wildcards, and occurrences associated with all matching names will",
 	    "be returned.  Synonyms will be ignored.  This is a syntactic rather",
 	    "than a taxonomic match.",
-	{ param => 'immediate', valid => FLAG_VALUE },
+	{ optional => 'immediate', valid => FLAG_VALUE },
 	    "You may specify this parameter along with F<base_name>, F<base_id>, or F<taxon_name>.",
 	    "If you do, then synonyms of the specified name(s) will",
 	    "be ignored.  No value is necessary for this parameter, just include the parameter name.",
@@ -732,10 +744,13 @@ sub initialize {
 	    "Return only records associated with the specified taxa, not including",
 	    "subtaxa or synonyms.  You may specify multiple taxon identifiers, separated by commas.",
 	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id'] },
-	{ param => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ','},
+	{ optional => 'exclude_id', valid => VALID_IDENTIFIER('TID'), list => ','},
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names,",
 	    "specified by taxon identifier.  This is an alternative to the use of the C<^> character",
 	    "in names.",
+	{ optional => 'ident_type', valid => '1.2:occs:ident_type', alias => 'ident' },
+	    "This parameter specifies how re-identified occurrences should be treated.",
+	    "Allowed values include:",
 	{ param => 'lngmin', valid => COORD_VALUE('lng') },
 	{ param => 'lngmax', valid => COORD_VALUE('lng') },
 	    "Return only records whose present longitude falls within the given bounds.",
@@ -1280,97 +1295,9 @@ sub summary {
 }
 
 
-# prevtaxa ( )
-# 
-# This operation queries for the most-occurring taxa found in the geographic
-# clusters matching the specified parameters.
-
-# $$$$ MUST ADD: alternate query for when summary bins don't work,
-# i.e. 'formation' or 'authorizer'
-# 
-# $$$$ MUST ADD: global query
-
-# sub prevtaxa {
-
-#     my ($request) = @_;
-    
-#     # Get a database handle by which we can make queries.
-    
-#     my $dbh = $request->get_connection;
-#     my $tables = $request->tables_hash;
-    
-#     # Figure out which bin level we are being asked for.  The default is 1.    
-    
-#     my $bin_level = $request->clean_param('level') || 1;
-    
-#     # Construct a list of filter expressions that must be added to the query
-#     # in order to select the proper result set.
-    
-#     my @filters = $request->generateMainFilters('summary', 's', $tables);
-#     push @filters, $request->generateCollFilters($tables);
-    
-#     # If the 'strict' parameter was given, make sure we haven't generated any
-#     # warnings. 
-    
-#     $request->strict_check;
-    
-#     # If a query limit has been specified, modify the query accordingly.
-    
-#     my $limit = $request->sql_limit_clause(1);
-    
-#     # If we were asked to count rows, modify the query accordingly
-    
-#     my $calc = $request->sql_count_clause;
-    
-#     # Determine which fields and tables are needed to display the requested
-#     # information.
-    
-#     $request->substitute_select( mt => 's' );
-    
-#     my $fields = $request->select_string;
-    
-#     $request->adjustCoordinates(\$fields);
-    
-#     my $summary_joins = '';
-    
-#     $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
-# 	if $tables->{c} || $tables->{cc} || $tables->{o} || $tables->{oc} || $tables->{pc};
-    
-#     $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
-    
-#     my $other_joins .= $request->generateJoinList('s', $tables);
-    
-#     push @filters, "s.access_level = 0", "s.bin_level = $bin_level";
-    
-#     my $filter_string = join(' and ', @filters);
-    
-#     $request->{main_sql} = "
-# 		SELECT $calc $fields
-# 		FROM $COLL_BINS as s $summary_joins
-# 			JOIN $PVL_MATRIX as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
-# 			$other_joins
-# 		WHERE $filter_string
-# 		GROUP BY ds.orig_no
-# 		ORDER BY n_occs desc $limit";
-    
-#     # Then prepare and execute the query.
-    
-#     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
-    
-#     $request->{main_sth} = $dbh->prepare($request->{main_sql});
-#     $request->{main_sth}->execute();
-    
-#     # Get the result count, if we were asked to do so.
-    
-#     $request->sql_count_rows;
-    
-#     return 1;
-# }
-
-
 # refs ( )
 # 
-# Query the database for the references associated with occurrences satisfying
+# Query the database for the references associated with collections satisfying
 # the conditions specified by the parameters.
 
 sub refs {
@@ -1488,6 +1415,7 @@ sub list_strata {
     my $rank = $request->clean_param('rank');
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
+    push @filters, $request->generateCollFilters($tables);
     # push @filters, $request->generateStrataFilters($tables, $arg);
     
     if ( my @names = $request->clean_param_list('name') )
@@ -1594,13 +1522,13 @@ sub generateCollFilters {
     my $dbh = $request->get_connection;
     my @filters;
     
-    # If our tables include the occurrence matrix, we must check the 'ident'
+    # If our tables include the occurrence matrix, we must check the 'ident_type'
     # parameter. 
     
     if ( ($tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc}) &&
          ! $tables_ref->{ds} )
     {
-	my $ident = $request->clean_param('ident');
+	my $ident = $request->clean_param('ident_type');
 	
 	if ( $ident eq 'orig' )
 	{
@@ -3686,6 +3614,17 @@ sub process_methods {
     }
 }
 
+
+sub process_summary_com {
+
+    my ($request, $record) = @_;
+    
+    foreach my $f ( qw(bin_id bin_id_1 bin_id_2 bin_id_3 bin_id_4) )
+    {
+	$record->{$f} = generate_identifier('CLU', $record->{bin_id})
+	    if $record->{$f};
+    }
+}
 
 # generateBasisCode ( record )
 # 

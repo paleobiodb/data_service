@@ -1,0 +1,255 @@
+
+=for wds_node title=Bibliographic References
+
+=head2 DESCRIPTION
+
+This page describes the character and usage of bibliographic references in this data service.  It
+describes the various roles that references play in the database, the parameters used to select
+them, and the values that are used to report these different roles.
+
+=head2 REFERENCES
+
+Every piece of data entered into the Paleobiology Database comes from a source, which may be either
+published or unpublished.  Each of these sources is entered into the References table in the database, 
+and every occurrence, collection, specimen, taxon, and opinion record contains a field named
+I<reference_no> which links it to the record for its source in the References table.
+
+When querying for any of these other data types, you can always ask for just those records that
+are linked to a particular reference, or to references from a particular publication or with
+particular authors.  When querying for references themselves, you can ask specifically for
+references that are linked to occurrences, opinions, and so on.  The parameters used for this are
+described below.
+
+It is important to remember that the author of a taxonomic name or opinion may not be the same
+as the author of the linked reference.  The reference may be a secondary source, which quotes or
+mentions the actual author of the name or opinion.  There is a separate set of parameters for
+querying for taxa and opinions by author.
+
+=head3 Reference parameters
+
+The following parameters are available when querying for occurrences, specimens, collections,
+taxa, and opinions.  You can also use them when querying for references, in which case they select
+which references to return.  If you use two or more of these parameters together in the same
+query, they are conjoined.  That is, a data record is selected only if it is linked to a reference
+that satisfies all of the given parameters together, or a reference is selected only if it
+satisfies all of them together.
+
+=over
+
+=item ref_id
+
+Return data records that are linked to one of the specified references.  The value of this parameter
+should be one or more reference identifiers, as a comma-separated list.
+
+=item ref_author
+
+Return data records that are linked to any reference with one of the specified authors.  You may
+specify more than one, as a comma-separated list.  You may specify authors using any of the
+following patterns:
+
+=over
+
+=item Smith
+
+Return records linked to any reference with an author whose last name is "Smith"
+
+=item S<J. Smith>
+
+Return records linked to any reference with an author whose first name starts with "J" and whose
+last name is "Smith"
+
+=item S<J. Smith and F. Jones>
+
+Return records linked to any reference with both "J. Smith" and "F. Jones" as authors (in any
+order).  You can also specify this as just "Smith and Jones" if you do not know the first
+names.  There is currently no way to search for three or more authors together, but this
+could be added if people ask for it.
+
+=back
+
+=item ref_primary
+
+Return data records that are linked to any reference whose primary author is one of the
+specified names.   You may specify names using the same patterns as with B<C<ref_author>>.
+If you use a name like C<Smith and Jones>, you will get back records that are linked to any
+reference for which Smith is the primary author and Jones is also an author.
+
+=item ref_title
+
+Return data records that are linked to a reference whose title matches the specified string.
+You can use C<< % >> and C<_> as wildcards, but the value of this parameter must contain at least one
+letter.
+
+=item pub_title
+
+Return data records that are linked to a reference whose "publication title" matches the
+specified string.  You can use C<%> and C<_> as wildcards, but the value of this parameter must contain at least one
+letter.  You can use this field, for example, to select all articles from a particular journal or
+monograph series.
+
+=item ref_pubyr
+
+Return data records that are linked to a reference that was published during the indicated year or
+range of years.  The parameter value must match one of the following patterns:
+
+=over
+
+=item 2000
+
+Return records linked to any reference published in the year 2000
+
+=item 1990-2000
+
+Return records linked to any reference published between 1990 and 2000, inclusive
+
+=item 1990-
+
+Return records linked to any reference published in 1990 or after
+
+=item -2000
+
+Return records linked to any reference published in 2000 or before
+
+=back
+
+=back
+
+The following parameter is used only when querying for references themselves, using any of the
+operations listed L<here|node:refs>:
+
+=over
+
+=item ref_type
+
+=for html <a name="ref_type">
+
+Return references that have any of the specified roles in the database.  The value of this
+parameter should be one or more of the following, as a comma-separated list.  If you are selecting
+references using the new download form, the second column of this table gives the label of the
+corresponding checkbox on the form.
+
+If your query also includes other parameters such as a base taxon name, occurrence location, and
+so on, then references are only selected if their linked records satisfy those parameters.
+
+=for wds_table_no_header value* | form label | description
+
+=over
+
+=item auth | authority references
+
+Select references that provide the authority for taxonomic names.  Note that such a reference may either be the
+published source of the name, or it may quote an earlier source.
+
+=item class | classification references
+
+Select references which provide I<classification opinions>.  Out of all the opinions entered for
+each taxonomic name, one is automatically selected as the classification opinion for that name.
+This classification opinion gives the name its position in the consensus taxonomic hierarchy.
+
+=item taxonomy | --
+
+This is a shortcut for C<auth,class>.
+
+=item ops | opinion references
+
+Select references from which taxonomic opinions were entered into the database, including opinions
+that are not selected as classification opinions.
+
+=item occs | occurrence references
+
+Select references from which fossil occurrences were entered into the database.
+
+=item spec | specimen references
+
+Select references from which fossil specimens were entered into the database.
+
+=item colls | collection references
+
+Select references that are indicated as the primary reference for one or more fossil collections.
+
+=back
+
+=back
+
+=head3 Reference types
+
+When you query for references, the resulting records will contain a field named C<ref_type> (C<rtp> in the
+compact vocabulary).  This field will contain a list of one or more of the the following codes,
+separated by commas:
+
+=for wds_table_header PBDB value* | Compact value* | Description
+
+=over
+
+=item auth | A
+
+A reference of this type provides the authority for at least one taxonomic name.  It may either be the
+published source of the name, or it may quote an earlier source.
+
+=item class | C
+
+A reference of this type provides at least one classification opinion.
+
+=item unsel | U
+
+A reference of this type provides at least one opinion that is not selected as a classification opinon.
+
+=item occ | O
+
+A reference of this type has at least one fossil occurrence entered from it.
+
+=item spec | S
+
+A reference of this type has at least one fossil specimen entered from it.
+
+=item prim | P
+
+A reference of this type is the primary reference for at least one fossil collection.
+
+=item ref | R
+
+A reference of this type plays an unspecified role in the database.
+
+=back
+
+=head3 Associated counts
+
+If you want to know exactly how many opinions, occurrences, taxa, etc. were entered from each
+reference, you can include the output block C<counts>.  This will include the following set
+of output fields.  Note that all counts are restricted to just those taxa, occurrences, specimens, and
+collections which match the parameters given in the query.  In other words, these counts do not
+necessarily reflect the total number of taxa, occurrences, etc. entered from each reference.
+
+=for wds_table_header PBDB* | Compact* | Description
+
+=over
+
+=item n_taxa / ntx
+
+The number of distinct taxa associated with this reference
+
+=item n_auth / nau
+
+The number of taxa for which this reference provides the authority
+
+=item n_class / ncl
+
+The number of classification opinions entered from this reference
+
+=item n_unclass / nuc
+
+The number of opinions not selected for classification entered from this reference
+
+=item n_occs / noc
+
+The number of occurrences entered from this reference
+
+=item n_specs / nsp
+
+The number of specimens entered from this reference
+
+=item n_colls / nco
+
+The number of collections for which this is the primary reference
+
+=back

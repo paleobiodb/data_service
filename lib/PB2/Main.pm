@@ -490,7 +490,9 @@ use PB2::PersonData;
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:single_output_map' },
 	"This operation returns information about a single taxonomic name, specified either",
-	"by name or by identifier.");
+	"by name or by identifier.",
+	">>Follow this link for more information on ",
+	"L<the use of taxonomic names in this data service|node:general/taxon_names>.");
     
     $ds2->define_node({ path => 'taxa/list',
 			place => 2,

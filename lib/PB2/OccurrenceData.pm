@@ -1021,7 +1021,7 @@ sub list {
     # in order to select the proper result set.
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
@@ -1059,9 +1059,11 @@ sub list {
     
     my $calc = $request->sql_count_clause;
     
-    # By default, we group by occurrence_no.
+    # By default, we group by occurrence_no.  But if all identifications were
+    # selected, we will need to group by reid_no as well.
     
     my $group_expr = "o.occurrence_no";
+    $group_expr .= ', o.reid_no' if $tables->{group_by_reid};
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -1090,16 +1092,8 @@ sub list {
 	}
     }
     
-    # If all identifications were selected, we will need to group by reid_no
-    # as well as occurrence_no.
-    
-    if ( $tables->{group_by_reid} )
-    {
-	$group_expr .= ', o.reid_no';
-    }
-    
     # If we were requested to lump by genus, we need to modify the query
-    # accordingly. 
+    # accordingly.  This includes substituting a different GROUP BY expression.
     
     my $taxonres = $request->clean_param('taxon_reso');
     
@@ -1122,18 +1116,6 @@ sub list {
 	    $tables->{lump} = 'genus';
 	}
     }
-    
-    # if ( $taxa_block{ECOSPACE} && $taxa_block{ETBASIS} )
-    # {
-    # 	push @fields, @{$Taxonomy::FIELD_LIST{ECOBASIS}};
-    # 	$request->add_table($_) foreach @{$Taxonomy::FIELD_TABLES{ECOBASIS}};
-    # }
-    
-    # if ( $taxa_block{TAPH} && $taxa_block{ETBASIS} )
-    # {
-    # 	push @fields, @{$Taxonomy::FIELD_LIST{TAPHBASIS}};
-    # 	$request->add_table($_) foreach @{$Taxonomy::FIELD_TABLES{TAPHBASIS}};
-    # }
     
     # Now generate the field list.
     
@@ -1206,7 +1188,7 @@ sub diversity {
     # in order to select the proper result set.
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
@@ -1287,15 +1269,16 @@ sub diversity {
     # construct the query.
     
     my $join_list = $request->generateJoinList('c', $tables);
-    
-    my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
+
+    my $group_expr = 'o.occurrence_no';
+    $group_expr .= ', o.reid_no' if $tables->{group_by_reid};
     
     $request->{main_sql} = "
 	SELECT $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 		$join_list
         WHERE $filter_string
-	GROUP BY o.occurrence_no $extra_group";
+	GROUP BY $group_expr";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
@@ -1695,7 +1678,7 @@ sub taxa {
     # in order to select the proper result set.
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
@@ -1713,15 +1696,16 @@ sub taxa {
     # construct the query.
     
     my $join_list = $request->generateJoinList('c', $tables);
-    
-    my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
+
+    my $group_expr = 'o.occurrence_no';
+    $group_expr .= ', o.reid_no' if $tables->{group_by_reid};
     
     $request->{main_sql} = "
 	SELECT $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
-	GROUP BY o.occurrence_no $extra_group";
+	GROUP BY $group_expr";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
@@ -1869,7 +1853,7 @@ sub prevalence {
     $tables = { };
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
-    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, $request->generate_crmod_filters('o', $tables);
     # push @filters, $request->generate_ent_filters('o', $tables);
@@ -1890,7 +1874,7 @@ sub prevalence {
 	$tables = { };
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
-	push @filters, $request->generateOccFilters($tables);
+	push @filters, $request->generateOccFilters($tables, 'o');
 	push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
 	# push @filters, $request->generate_crmod_filters('o', $tables);
 	# push @filters, $request->generate_ent_filters('o', $tables);
@@ -2026,7 +2010,7 @@ sub list_associated {
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
-    push @filters, $request->generateOccFilters($inner_tables);
+    push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     push @filters, "c.access_level = 0";
     
@@ -2264,7 +2248,7 @@ sub taxa_test {
     push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
-    push @filters, $request->generateOccFilters($inner_tables);
+    push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     push @filters, "c.access_level = 0";
     
@@ -2358,7 +2342,7 @@ sub strata {
     push @filters, $request->generate_common_filters( { occs => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
-    push @filters, $request->generateOccFilters($inner_tables);
+    push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     push @filters, "c.access_level = 0";
     
@@ -2417,7 +2401,7 @@ sub strata {
 }
 
 
-# generateOccFilters ( tables_ref )
+# generateOccFilters ( tables_ref, table_name )
 # 
 # Generate a list of filter clauses that will be used to compute the
 # appropriate result set.  This routine handles only parameters that are specific
@@ -2428,10 +2412,12 @@ sub strata {
 
 sub generateOccFilters {
 
-    my ($request, $tables_ref) = @_;
+    my ($request, $tables_ref, $tn) = @_;
     
     my $dbh = $request->{dbh};
     my @filters;
+
+    $tn ||= 'o';
     
     # Check for parameter 'occ_id'
     
@@ -2440,20 +2426,21 @@ sub generateOccFilters {
 	my $id_list = $request->check_values($dbh, \@occs, 'occurrence_no', 'occurrences', 
 					     "Unknown occurrence '%'");
 	
-	push @filters, "o.occurrence_no in ($id_list)";
-	$tables_ref->{o} = 1;
+	push @filters, "$tn.occurrence_no in ($id_list)";
+	$tables_ref->{$tn} = 1;
 	$tables_ref->{non_summary} = 1;
     }
     
-    # Check for parameter 'ident'.  In cases of reidentified occurrences, it
+    # Check for parameter 'ident_type'.  In cases of reidentified occurrences, it
     # specifies which identifications should be returned.  The default is
     # 'latest'.
     
-    my $ident = $request->clean_param('ident');
+    my $ident = $request->clean_param('ident_type');
     
     if ( $ident eq 'orig' )
     {
-	push @filters, "o.reid_no = 0";
+	push @filters, "$tn.reid_no = 0";
+	$tables_ref->{$tn} = 1;
 	$tables_ref->{non_summary} = 1;
     }
     
@@ -2465,7 +2452,8 @@ sub generateOccFilters {
     
     else # default: 'latest'
     {
-	push @filters, "o.latest_ident = true";
+	$tables_ref->{$tn} = 1;
+	push @filters, "$tn.latest_ident = true";
     }
     
     # Check for parameter 'ref_id'.
@@ -2473,7 +2461,8 @@ sub generateOccFilters {
     if ( my @reflist = $request->clean_param_list('ref_id') )
     {
 	my $refstring = join(',', @reflist);
-	push @filters, "o.reference_no in ($refstring)";
+	push @filters, "$tn.reference_no in ($refstring)";
+	$tables_ref->{$tn} = 1;
 	$tables_ref->{non_summary} = 1;
     }
     

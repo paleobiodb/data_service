@@ -1,0 +1,115 @@
+
+=for wds_node title=Record Identifiers
+
+=head2 DESCRIPTION
+
+This page describes the syntax and usage of record identifiers in this data service.  Every record
+in the database has a unique identifier, and in most cases the first column of a query result
+contains the identifier of each record returned.  Some of the other fields hold the identifiers of
+associated records, such as references, parent taxa, authorizers, and so on.  These identifiers can in
+turn be used as parameter values, i.e.  to query for associated records or to later fetch the
+updated state of an individual record.
+
+=head2 IDENTIFIER SYNTAX
+
+Every identifier is composed of a record type and a number.  For example, the taxonomic name "Felidae" has
+the following identifier:
+
+    txn:41045
+
+=head2 CONTINUITY WITH CLASSIC
+
+The identifying number of each individual record is exactly the same whether you retrieve the
+record through this data service or through PBDB Classic.  The record numbers from old downloads
+that you may have kept will still be the same.  Each record type has a particular field name in
+the PBDB vocabulary which is used to hold the identifying number of records of this type.  These
+are listed in the table below.
+
+I<For the purposes of continuity with old downloads from Classic, records downloaded in any of the
+Text formats (csv, tsv, txt) will be identified by their numbers only, and not using the full
+identifiers discussed here.>
+
+=head2 RECORD TYPES
+
+The database consists of the following types of records:
+
+=for wds_table_header Type* | Example | Classic field name | Description
+
+=over
+
+=item txn | L<txn:285777|op:taxa/single.json?id=txn:285777> | taxon_no
+
+A taxonomic name record.  An identifier of type C<B<txn>> always selects the currently
+accepted variant of the corresponding taxonomic name.
+
+=item var | L<var:285777|op:taxa/single.json?id=var:285777> | taxon_no
+
+A taxonomic name variant record.  An identifier of type C<B<var>> selects the exact
+name corresponding to the identifier, even if it is not a currently accepted variant.
+
+=item opn | L<opn:489175|op:opinions/single.json?id=opn:489175> | opinion_no
+
+A taxonomic opinion record.
+
+=item occ | L<occ:1054042|op:occs/single.json?id=occ:1054042> | occurrence_no
+
+A fossil occurrence record.
+
+=item rei | rei:12664 | reid_no
+
+A fossil re-identification record.  Currently, these are not directly retrievable
+through the data service.  You can, however, use the parameter B<C<ident=all>>
+to retrieve all identifications of each matching occurrence.
+
+=item spm | L<spm:77971|op:specs/single.json?id=spm:77971> | specimen_no
+
+A fossil specimen record.
+
+=item mea | L<mea:156352|op:specs/measurements.json?spec_id=77971> | measurement_no
+
+A fossil measurement record.
+
+=item col | L<col:128551|op:colls/single.json?id=col:128551> | collection_no
+
+A fossil collection record.
+
+=item int | L<int:84|op:intervals/single.json?id=int:84> | interval_no
+
+A geologic time interval record.
+
+=item tsc | L<tsc:1|op:scales/single.json?id=tsc:1> | I<n/a>
+
+A geologic time scale record.
+
+=item clu | L<clu:305970253|op:colls/summary.json?coll_id=col:128551&level=3> | I<n/a>
+
+A geographic summary cluster record.
+
+=item php | L<php:1432|op:taxa/thumb.json?id=php:1432> | I<n/a>
+
+A Phylopic taxon image. 
+
+=item ref | L<ref:56433|op:refs/single.json?id=ref:56433> | reference_no
+
+A bibliographic reference record.
+
+=item prs | prs:55 | person_no
+
+A database contributor record.  Currently, these are not directly retrievable
+through the data service.  However, you can find out the authorizer and enterer
+of any particular record by adding the output block C<B<crmod>>.
+
+=back
+
+=head2 SITE PREFIX
+
+In order to facilitate the combining of PBDB data with data from other databases, this data
+service also accepts identifiers that are prefixed with the name of the website, as follows:
+
+    paleobiodb.org:txn:41045
+
+You can use these as parameter values interchangeably with the basic identifier syntax.  This
+will allow the future definition of multi-site identifier schemes using identifiers that
+are unique across all of the sites together.  But for now, you can ignore this and simply use
+identifiers of the form given above.
+

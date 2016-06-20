@@ -70,7 +70,7 @@ sub initialize {
 	    "occurrence will have an C<I> in this field.",
 	{ output => 'occurrence_no', com_name => 'qid' },
 	    "The identifier of the occurrence, if any, with which this specimen is associated",
-	{ output => 'specimen_id', com_name => 'smi' },
+	{ output => 'specimen_id', com_name => 'smi', data_type => 'str' },
 	    "The identifier for this specimen according to its custodial institution",
 	{ output => 'is_type', com_name => 'smt' },
 	    "Indicates whether this specimen is a holotype or paratype",
@@ -236,10 +236,11 @@ sub initialize {
 	{ select => [ 'ms.measurement_no', 'ms.specimen_no', 'sp.specimens_measured as n_measured',
 		      'ms.position', 'ms.measurement_type as measurement', 'ms.average',
 		      'ms.min', 'ms.max' ] },
-	{ output => 'specimen_no', com_name => 'sid' },
-	    "The identifier of the specimen with which this measurement is associated",
+	{ set => '*', code => \&process_measurement_com, if_vocab => 'com' },
 	{ output => 'measurement_no', com_name => 'oid' },
 	    "The unique identifier of this measurement in the database",
+	{ output => 'specimen_no', com_name => 'sid' },
+	    "The identifier of the specimen with which this measurement is associated",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{MEA} },
 	    "The type of this object: C<$IDP{MEA}> for a measurement.",
 	{ output => 'n_measured', com_name => 'smn' },
@@ -292,8 +293,6 @@ sub initialize {
 	    "A comma-separated list of occurrence identifiers.");
     
     $ds->define_ruleset('1.2:specs:display' =>
-	"You can use the following parameters to select what information you wish to retrieve,",
-	"and the order in which you wish to get the records:",
 	{ optional => 'show', list => q{,}, valid => '1.2:specs:basic_map' },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
@@ -333,9 +332,17 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_specs_crmod' },
 	{ allow => '1.2:common:select_specs_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
 	{ allow => '1.2:refs:aux_selector' },
 	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent', '1.2:refs:aux_selector'] },
+			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_crmod',
+			  '1.2:refs:aux_selector'] },
+	">>The following parameters can be used to further filter the result list.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
 	{ allow => '1.2:specs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -354,9 +361,15 @@ sub initialize {
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:common:select_specs_crmod' },
 	{ allow => '1.2:common:select_specs_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
 	{ allow => '1.2:refs:aux_selector' },
 	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent', '1.2:refs:aux_selector'] },
+			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_crmod',
+			  '1.2:refs:aux_selector'] },
+	">>The following parameters can be used to further filter the result list.",
+	{ allow => '1.2:taxa:occ_list_filter' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -462,7 +475,7 @@ sub list_specimens {
     # in order to select the proper result set.
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generateOccFilters($tables, 'ss');
     push @filters, $request->generate_common_filters( { specs => 'ss', occs => 'o', bare => 'ss' } );
     
     if ( my @ids = $request->clean_param_list('spec_id') )
@@ -538,7 +551,7 @@ sub list_specimens {
     
     if ( $tables->{group_by_reid} )
     {
-	$group_expr .= ', o.reid_no';
+	$group_expr .= ', ss.reid_no';
     }
     
     # If we were requested to lump by genus, we need to modify the query
@@ -577,7 +590,7 @@ sub list_specimens {
     $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM $SPEC_MATRIX as ss JOIN specimens as sp using (specimen_no)
-		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.latest_ident = 1
+		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
 		$join_list
@@ -619,7 +632,7 @@ sub list_measurements {
     # in order to select the proper result set.
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateOccFilters($tables);
+    push @filters, $request->generateOccFilters($tables, 'ss');
     push @filters, $request->generate_common_filters( { specs => 'ss', occs => 'o', bare => 'ss' } );
     
     if ( my @ids = $request->clean_param_list('spec_id') )
@@ -722,7 +735,7 @@ sub list_measurements {
 	SELECT $calc $fields
 	FROM measurements as ms JOIN $SPEC_MATRIX as ss using (specimen_no)
 		JOIN specimens as sp using (specimen_no)
-		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.latest_ident = 1
+		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
 		$join_list
@@ -864,3 +877,13 @@ sub process_basic_record {
 }
 
 
+sub process_measurement_com {
+    
+    my ($request, $record) = @_;
+
+    $record->{specimen_no} = generate_identifier('SPM', $record->{specimen_no})
+	if defined $record->{specimen_no} && $record->{specimen_no} ne '';
+
+    $record->{measurement_no} = generate_identifier('MEA', $record->{measurement_no})
+	if defined $record->{measurement_no} && $record->{measurement_no} ne '';
+}

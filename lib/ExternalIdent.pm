@@ -34,7 +34,7 @@ our %IDP = ( URN => '(?:urn:lsid:)?paleobiodb.org:',
 	     INT => 'int',
 	     TSC => 'tsc',
 	     CLU => 'clu',
-	     IMG => 'img',
+	     PHP => 'php',
 	     PRS => 'prs' );
 
 our %IDRE;

@@ -6,139 +6,134 @@
 # The purpose of this file is to test all of the /data1.2/occs operations.
 # 
 
-use lib 'lib';
+use strict;
 
-use Test::Most tests => 4;
+use feature 'unicode_strings';
+use feature 'fc';
 
-use JSON;
-use Text::CSV_XS;
-use CoreFunction qw(connectDB configData);
-use Taxonomy;
+use Test::Most tests => 5;
+
+# use CoreFunction qw(connectDB configData);
+# use Taxonomy;
 
 use lib 't';
 use Tester;
+use Test::Conditions;
 
 
-# We turn off warnings for uninitialized variables and non-numeric
-# comparisons, because we don't want to clutter up our testing code with
-# "defined $t1 && $t1->{foo} eq ...
+# Start by creating an instance of the Tester class, with which to conduct the
+# following tests.
 
-no warnings 'uninitialized';
-no warnings 'numeric';
+my $T = Tester->new({ prefix => 'data1.2' });
 
-
-# Create a Tester object with which to fetch URLs and decode the results.
-
-my $T = Tester->new();
-
-$T->set_url_check('/data1.2', qr{^/data1.2});
 
 
 # Also set up a direct channel to the database, so we can compare what is in
 # the database to the results from the data service.
 
-my ($dbh, $taxonomy);
+# my ($dbh, $taxonomy);
 
-eval {
-    $dbh = connectDB("config.yml");
-};
+# eval {
+#     $dbh = connectDB("config.yml");
+# };
 
-unless ( ok(defined $dbh, "dbh acquired") )
-{
-    diag("message was: $@");
-    BAIL_OUT;
-}
+# unless ( ok(defined $dbh, "dbh acquired") )
+# {
+#     diag("message was: $@");
+#     BAIL_OUT;
+# }
 
 
 # Then define the values we will be using to check the results of the data service.
 
-my $NAME1 = 'Dascillidae';
-my $TID1 = '69296';
+# my $NAME1 = 'Dascillidae';
+# my $TID1 = '69296';
 
-my $OID1 = '1054042';
-my $CID1 = '128551';
-my $OTX1 = '241265';
-my $IDN1 = 'Dascillus shandongianus n. sp.';
-my $TNA1 = 'Dascillus shandongianus';
-my $INT1 = 'Middle Miocene';
+# my $OID1 = '1054042';
+# my $CID1 = '128551';
+# my $OTX1 = '241265';
+# my $IDN1 = 'Dascillus shandongianus n. sp.';
+# my $TNA1 = 'Dascillus shandongianus';
+# my $INT1 = 'Middle Miocene';
 
-my $OID2 = '1054041';
+# my $OID2 = '1054041';
 
-# my $OID2 = '154322';	# For testing 'ident'
+# # my $OID2 = '154322';	# For testing 'ident'
 
-my ($EAG1, $LAG1);
+# my ($EAG1, $LAG1);
 
-eval {
-    my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name = '$INT1'";
-    my ($eag, $lag) = $dbh->selectrow_array($sql);
+# eval {
+#     my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name = '$INT1'";
+#     my ($eag, $lag) = $dbh->selectrow_array($sql);
     
-    $eag =~ s/0+$//;
-    $lag =~ s/0+$//;
+#     $eag =~ s/0+$//;
+#     $lag =~ s/0+$//;
     
-    $EAG1 = qr{^${eag}0*$};
-    $LAG1 = qr{^${lag}0*$};
-};
+#     $EAG1 = qr{^${eag}0*$};
+#     $LAG1 = qr{^${lag}0*$};
+# };
 
-unless ( ok($EAG1 && $LAG1, "found ages for test interval '$INT1'") )
-{
-    diag("message was: $@");
-}
+# unless ( ok($EAG1 && $LAG1, "found ages for test interval '$INT1'") )
+# {
+#     diag("message was: $@");
+# }
 
-my $OCC1j = {
-    oid => "occ:$OID1",
-    typ => "occ",
-    cid => "col:$CID1",
-    idn => $IDN1,
-    tna => $TNA1,
-    rnk => 3,
-    tid => "txn:$OTX1",
-    oei => $INT1 };
+# my $OCC1j = {
+#     oid => "occ:$OID1",
+#     typ => "occ",
+#     cid => "col:$CID1",
+#     idn => $IDN1,
+#     tna => $TNA1,
+#     rnk => 3,
+#     tid => "txn:$OTX1",
+#     oei => $INT1 };
 
-if ( $EAG1 && $LAG1 )
-{
-    $OCC1j->{eag} = $EAG1;
-    $OCC1j->{lag} = $LAG1;
-}
+# if ( $EAG1 && $LAG1 )
+# {
+#     $OCC1j->{eag} = $EAG1;
+#     $OCC1j->{lag} = $LAG1;
+# }
 
-my $OCC1t = {
-    occurrence_no => $OID1,
-    record_type => "occ",
-    collection_no => $CID1,
-    identified_name => $IDN1,
-    identified_rank => 'species',
-    identified_no => $OTX1,
-    accepted_name => $TNA1,
-    accepted_rank => 'species',
-    accepted_no => $OTX1,
-    early_interval => $INT1,
-    reference_no => qr{^\d+$} };
+# my $OCC1t = {
+#     occurrence_no => $OID1,
+#     record_type => "occ",
+#     collection_no => $CID1,
+#     identified_name => $IDN1,
+#     identified_rank => 'species',
+#     identified_no => $OTX1,
+#     accepted_name => $TNA1,
+#     accepted_rank => 'species',
+#     accepted_no => $OTX1,
+#     early_interval => $INT1,
+#     reference_no => qr{^\d+$} };
 
-if ( $EAG1 && $LAG1 )
-{
-    $OCC1t->{max_ma} = $EAG1;
-    $OCC1t->{min_ma} = $LAG1;
-}
+# if ( $EAG1 && $LAG1 )
+# {
+#     $OCC1t->{max_ma} = $EAG1;
+#     $OCC1t->{min_ma} = $LAG1;
+# }
 
 
-my $TEST_NAME_2 = 'Dascilloidea';
+# my $TEST_NAME_2 = 'Dascilloidea';
 
-my $TEST_NAME_3 = 'Felidae';
-my $TEST_NAME_3a = 'Felinae';
-my $TEST_NAME_3b = 'Pantherinae';
-my $TEST_NAME_3c = 'Felis catus';
-my $TEST_NAME_3P = 'Aeluroidea';
+# my $TEST_NAME_3 = 'Felidae';
+# my $TEST_NAME_3a = 'Felinae';
+# my $TEST_NAME_3b = 'Pantherinae';
+# my $TEST_NAME_3c = 'Felis catus';
+# my $TEST_NAME_3P = 'Aeluroidea';
 
-my $TEST_NAME_4 = 'Canidae';
-my $TEST_NAME_4P = 'Canoidea';
+# my $TEST_NAME_4 = 'Canidae';
+# my $TEST_NAME_4P = 'Canoidea';
 
-my $TEST_NAME_COMMON = 'Carnivora';
+# my $TEST_NAME_COMMON = 'Carnivora';
 
-my $TEST_NAME_5 = 'Caviidae';
+# my $TEST_NAME_5 = 'Caviidae';
 
-my $TEST_NAME_6 = 'Tyrannosauridae';
+# my $TEST_NAME_6 = 'Tyrannosauridae';
 
-my $LIMIT_1 = 5;
-my $OFFSET_1 = 4;
+# my $LIMIT_1 = 5;
+# my $OFFSET_1 = 4;
+
 
 # We start by checking the basic 'single occurrence' response, in both .json
 # and .txt formats.  We will assume that if .txt works okay then .csv and .tsv

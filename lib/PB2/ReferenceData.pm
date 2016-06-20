@@ -33,7 +33,7 @@ sub initialize {
     
     $ds->define_output_map('1.2:refs:output_map' =>
 	{ value => 'counts', maps_to => '1.2:refs:counts' },
-	    "Include the number of taxa, opinions, occurrences, and collections",
+	    "Report the number of taxonomic names, opinions, occurrences, specimens, and collections",
 	    "derived from this reference that have been entered into the database.",
 	{ value => 'formatted' },
 	    "If this option is specified, show the formatted reference instead of",
@@ -93,20 +93,22 @@ sub initialize {
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
-	{ output => 'n_reftaxa', pbdb_name => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
-	    "The number of distinct taxa associated with this reference",
-	{ output => 'n_refauth', pbdb_name => 'n_auth', com_name => 'nau', if_block => 'counts' },
-	    "The number of taxa for which this reference gives the authority",
-	{ output => 'n_refclass', pbdb_name => 'n_class', com_name => 'ncl', if_block => 'counts' },
-	    "The number of classification opinions entered from this reference",
-	{ output => 'n_refunclass', pbdb_name => 'n_unclass', com_name => 'nuc', if_block => 'counts' },
-	    "The number of opinions not selected for classification entered from this reference",
-	{ output => 'n_refoccs', pbdb_name => 'n_occs', com_name => 'noc', if_block => 'counts' },
-	    "The number of occurrences entered from this reference",
-	{ output => 'n_refspecs', pbdb_name => 'n_specs', com_name => 'nsp', if_block => 'counts' },
-	    "The number of specimens entered from this reference",
-	{ output => 'n_refcolls', pbdb_name => 'n_colls', com_name => 'nco', if_block => 'counts' },
-	    "The number of collections for which this is the primary reference",
+      { output => 'n_reftaxa', pbdb_name => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
+	  "The number of distinct taxa associated with this reference",
+      { output => 'n_refauth', pbdb_name => 'n_auth', com_name => 'nau', if_block => 'counts' },
+	  "The number of taxa for which this reference gives the authority for the current name variant",
+      { output => 'n_refvar', pbdb_name => 'n_var', com_name => 'nva', if_block => 'counts' },
+	  "The number of non-current name variants for which this reference gives the authority",
+      { output => 'n_refclass', pbdb_name => 'n_class', com_name => 'ncl', if_block => 'counts' },
+	  "The number of classification opinions entered from this reference",
+      { output => 'n_refunclass', pbdb_name => 'n_unclass', com_name => 'nuc', if_block => 'counts' },
+	  "The number of opinions not selected for classification entered from this reference",
+      { output => 'n_refoccs', pbdb_name => 'n_occs', com_name => 'noc', if_block => 'counts' },
+	  "The number of occurrences entered from this reference",
+      { output => 'n_refspecs', pbdb_name => 'n_specs', com_name => 'nsp', if_block => 'counts' },
+	  "The number of specimens entered from this reference",
+      { output => 'n_refcolls', pbdb_name => 'n_colls', com_name => 'nco', if_block => 'counts' },
+	  "The number of collections for which this is the primary reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
 	  "Formatted reference",
       { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', not_block => 'formatted' },
@@ -222,6 +224,20 @@ sub initialize {
 	{ value => 'rank.asc', undocumented => 1 },
 	{ value => 'rank.desc', undocumented => 1 });
     
+    $ds->define_set('1.2:refs:pubtype' =>
+	{ value => 'unpublished' },
+	{ value => 'journal article' },
+	{ value => 'serial monograph' },
+	{ value => 'book' },
+	{ value => 'book chapter' },
+	{ value => 'book/book chapter' },
+	{ value => 'abstract' },
+	{ value => 'guidebook' },
+	{ value => 'compendium' },
+	{ value => 'news article' },
+	{ value => 'Ph.D. thesis' },
+	{ value => 'M.S. thesis' });
+    
     $ds->define_ruleset('1.2:refs:display' =>
 	{ optional => 'show', valid => $ds->valid_set('1.2:refs:output_map'), list => ',' },
 	    "Indicates additional information to be shown along",
@@ -269,7 +285,13 @@ sub initialize {
 	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references from publications whose title matches the specified",
-	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.");
+	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'pub_type', valid => '1.2:refs:pubtype', list => ',', bad_value => 'NOTHING' },
+	    "Select only references of the indicated type or types.  You can specify",
+	    "one or more from the following list, separated by commas:",
+	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
+	    "Select only records entered from references with any of the specified DOIs.",
+	    "You may specify one or more, separated by commas.");
     
     $ds->define_ruleset('1.2:refs:aux_selector' =>
 	{ param => 'ref_id', valid =>  VALID_IDENTIFIER('REF'), list => ',',
@@ -304,6 +326,9 @@ sub initialize {
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only records entered from references in publications whose title matches the specified",
 	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'pub_type', valid => '1.2:refs:pubtype', list => ',', bad_value => 'NOTHING' },
+	    "Select only references of the indicated type or types.  You can specify",
+	    "one or more from the following list, separated by commas:", 
 	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
 	    "Select only records entered from references with any of the specified DOIs.",
 	    "You may specify one or more, separated by commas.");
@@ -514,26 +539,101 @@ sub generate_ref_filters {
     
     if ( my $reftitle = $request->clean_param('ref_title') )
     {
+	my $op = 'rlike';
+	
+	if ( $reftitle =~  qr{ ^ [!] \s* (.*) }x )
+	{
+	    $reftitle = $1;
+	    $op = 'not rlike';
+	}
+	
 	$reftitle =~ s/%/.*/g;
 	$reftitle =~ s/_/./g;
 	$reftitle =~ s/\s+/\\s+/g;
+	$reftitle =~ s/\(/\\(/g;
+	$reftitle =~ s/\)/\\)/g;
 	
-	my $quoted = $dbh->quote($reftitle);
+	my $quoted = $dbh->quote("^$reftitle");
 	
-	push @filters, "coalesce(r.reftitle, r.pubtitle) rlike $quoted";
+	push @filters, "coalesce(r.reftitle, r.pubtitle) $op $quoted";
 	$tables_hash->{r} = 1;
     }
     
     if ( my $pubtitle = $request->clean_param('pub_title') )
     {
+	my $op = 'rlike';
+	
+	if ( $pubtitle =~ qr{ ^ [!] \s* (.*) }x )
+	{
+	    $pubtitle = $1;
+	    $op = 'not rlike';
+	}
+	
 	$pubtitle =~ s/%/.*/g;
 	$pubtitle =~ s/_/.*/g;
 	$pubtitle =~ s/\s+/\\s+/g;
+	$pubtitle =~ s/\(/\\(/g;
+	$pubtitle =~ s/\)/\\)/g;
 	
-	my $quoted = $dbh->quote($pubtitle);
+	my $quoted = $dbh->quote("^$pubtitle");
 	
-	push @filters, "r.pubtitle rlike $quoted";
+	push @filters, "r.pubtitle $op $quoted";
 	$tables_hash->{r} = 1;
+    }
+    
+    if ( my @doi_list = $request->clean_param_list('ref_doi') )
+    {
+	my @fixed_list;
+	my @like_list;
+	my @filter_list;
+	
+	if ( @doi_list == 1 && $doi_list[0] eq '!' )
+	{
+	    push @filters, "(r.doi is null or r.doi = '')";
+	}
+	
+	else
+	{
+	    foreach my $d ( @doi_list )
+	    {
+		if ( $d =~ /[_%]/ ) {
+		    push @like_list, $d;
+		} elsif ( defined $d && $d ne '' ) {
+		    push @fixed_list, $d;
+		}
+	    }
+	    
+	    foreach my $d ( @like_list )
+	    {
+		my $quoted = $dbh->quote($d);
+		push @filter_list, "r.doi like $quoted"; 
+	    }
+	    
+	    if ( @fixed_list )
+	    {
+		my $quoted = join( ',', map { $dbh->quote($_) } @fixed_list );
+		push @filter_list, "r.doi in ($quoted)";
+	    }
+	    
+	    push @filter_list, "r.doi = 'NOTHING'" unless @filter_list;
+	    push @filters, @filter_list;
+	}
+    }
+    
+    if ( my @type_list = $request->clean_param_list('pub_type') )
+    {
+	my $op = 'in';
+	
+	if ( @type_list == 1 && $type_list[0] eq '!' )
+	{
+	    push @filters, "(r.publication_type is null or r.publication_type = '')";
+	}
+	
+	else
+	{
+	    my $quoted = join( ',', map { $dbh->quote($_) } @type_list );
+	    push @filters, "r.publication_type $op ($quoted)";
+	}
     }
     
     return @filters;
@@ -583,13 +683,29 @@ sub generate_auth_filter {
     
     return "r.reference_no in (-1)" if @authnames == 0 || $authnames[0] eq '_';
     
+    # If the author list starts with '!', we need to generate an exclusion filter.  But difficult
+    # to implement because we would need to add "or <field> is null" to many of the filters.
+    
+    # my $op = ' or ';
+    
+    # if ( $authnames[0] && $authnames[0] =~ qr{ ^ [!] \s* (.*) }x )
+    # {
+    # 	$authnames[0] = $1;
+    # 	$op = ' and ';
+    # }
+    
     # Then go through each name one by one.
     
     foreach my $name (@authnames)
     {   
-	if ( $name =~ qr{ ^ (.+?) \s+ and (?: \s+ (.*) | $ ) }xsi )
+	if ( $name =~ qr{ ^ (\w.*?) \s+ and (?: \s+ (.*) | $ ) }xsi )
 	{
 	    push @authfilters, $request->generate_two_auth_filter($dbh, $1, $2, $selector);
+	}
+	
+	elsif ( $name =~ qr{ ^ (\w.*?) \s+ et \s+ al[.]? \s* $ }xsi )
+	{
+	    push @authfilters, $request->generate_one_auth_filter($dbh, $1, 'primary');
 	}
 	
 	else
@@ -866,8 +982,8 @@ sub format_reference {
     my $ai1 = $row->{r_ai1} || '';
     my $al1 = $row->{r_al1} || '';
     
-    $ai1 =~ s/\.//g;
-    $ai1 =~ s/([A-Za-z])/$1./g;
+    #$ai1 =~ s/\.//g;
+    #$ai1 =~ s/([A-Za-z])/$1./g;
     
     my $auth1 = $ai1;
     $auth1 .= ' ' if $ai1 ne '' && $al1 ne '';
@@ -1036,9 +1152,14 @@ sub set_reference_type {
     my $ref_type = $record->{ref_type} || '';
     my @types;
     
-    if ( $ref_type =~ qr{A} && ! $record->{not_auth} )
+    if ( $ref_type =~ qr{A} || $record->{n_refauth} )
     {
-	push @types, 'auth' || $record->{n_reftaxa};
+	push @types, 'auth';
+    }
+    
+    if ( $ref_type =~ qr{V} || $record->{n_refvar} )
+    {
+	push @types, 'var';
     }
     
     if ( $ref_type =~ qr{C} || $record->{n_refclass} )
@@ -1048,12 +1169,17 @@ sub set_reference_type {
     
     if ( $ref_type =~ qr{U} || $record->{n_refunclass} )
     {
-	push @types, 'unsel';
+	push @types, 'unclass';
     }
     
     if ( $ref_type =~ qr{O} || $record->{n_refoccs} )
     {
 	push @types, 'occ';
+    }
+    
+    if ( $ref_type =~ qr{X} )
+    {
+	push @types, 'suppressed';
     }
     
     if ( $ref_type =~ qr{S} || $record->{n_refspecs} )
@@ -1063,7 +1189,7 @@ sub set_reference_type {
     
     if ( $ref_type =~ qr{P} || $record->{n_refcolls} )
     {
-	push @types, 'prim';
+	push @types, 'coll';
     }
     
     # if ( defined $record->{n_refcolls} && defined $record->{n_refprim} && 

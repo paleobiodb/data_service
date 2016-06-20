@@ -14,7 +14,8 @@ our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING
 		      %AUTH_TABLE %OPINION_TABLE %OPINION_CACHE %REFS_TABLE
 		      %ATTRS_TABLE %INTS_TABLE %SEARCH_TABLE
 		      %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
-		      $ALL_STATUS $VALID_STATUS $INVALID_STATUS $JUNIOR_STATUS $VARIANT_STATUS
+		      $ALL_STATUS $VALID_STATUS $INVALID_STATUS $JUNIOR_STATUS $SENIOR_STATUS
+		      $VARIANT_STATUS
 		      $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE
 		      @ECOTAPH_FIELD_DEFS $RANK_MAP);
 
@@ -77,6 +78,7 @@ our ($ALL_STATUS) = "'belongs to','subjective synonym of','objective synonym of'
 our ($VARIANT_STATUS) = "'misspelling of'";
 our ($INVALID_STATUS) = "'nomen dubium','nomen nudum','nomen oblitum','nomen vanum','invalid subgroup of'";
 our ($JUNIOR_STATUS) = "'subjective synonym of','objective synonym of','replaced by'";
+our ($SENIOR_STATUS) = "'belongs to', $INVALID_STATUS";
 our ($VALID_STATUS) = "'belongs to','subjective synonym of','objective synonym of','replaced by','root'";
 
 

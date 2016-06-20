@@ -65,7 +65,7 @@ sub initialize {
 	    "If specified, then the header line which gives the field names is omitted.",
 	    "This parameter does not need any value.  It is equivalent to \"header=no\".",
 	{ optional => 'SPECIAL(linebreak)', alias => 'lb' },
-	{ optional => 'SPECIAL(header)', undocumented =>  1 },
+	{ optional => 'SPECIAL(header)' },
 	{ ignore => 'splat' });
     
     $ds->define_ruleset('1.2:common:select_crmod' =>
@@ -272,11 +272,11 @@ sub initialize {
 	{ set => 'enterer_id', from => 'enterer_no', if_vocab => 'pbdb' },
 	{ set => 'modifier_id', from => 'modifier_no', code => \&generate_person_id, not_vocab => 'pbdb' },
 	{ set => 'modifier_id', from => 'modifier_no', if_vocab => 'pbdb' },	
-	{ output => 'authorizer_id', com_name => 'ati', if_block => 'ent,entname' },
+	{ output => 'authorizer_id', com_name => 'ati', pbdb_name => 'authorizer_no', if_block => 'ent,entname' },
 	    "The identifier of the person who authorized the entry of this record",
-	{ output => 'enterer_id', com_name => 'eni', if_block => 'ent,entname' },
+	{ output => 'enterer_id', com_name => 'eni', pbdb_name => 'enterer_no', if_block => 'ent,entname' },
 	    "The identifier of the person who actually entered this record.",
-	{ output => 'modifier_id', com_name => 'mdi', if_block => 'ent,entname' },
+	{ output => 'modifier_id', com_name => 'mdi', pbdb_name => 'modifier_no', if_block => 'ent,entname' },
 	    "The identifier of the person who last modified this record, if it has been modified.");
     
     $ds->define_block('1.2:common:entname' =>
@@ -443,19 +443,39 @@ sub ent_filter {
     my $dbh = $request->get_connection;
     my @values = ref $person_value eq 'ARRAY' ? @$person_value : $person_value;
     my @ids;
-    my $exclude = '';
+    my $exclude;
+    my $exclude_all;
+    my $all_except;
     my $select_all;
     my $select_different;
+    
+    # If the value is '@' or '!@', generate a difference filter.
+    
+    if ( $values[0] =~ qr{ ^ ([!])? \s* [@] \s* (.*) $ }xs )
+    {
+	die $request->exception(400, "You may only use '\@' alone or with '!'")
+	    if (defined $2 && $2 ne '') || @values > 1;
+	
+	$select_different = 1;
+	$exclude = 1 if defined $1 && $1 eq '!';
+	@values = ();
+    }
     
     # If the first value starts with '!', generate an exclusion filter.  If there were no other
     # values, set select_all to true.
     
-    if ( $values[0] =~ qr{ ^ ! \s* (.*) }xs )
+    elsif ( $values[0] =~ qr{ ^ ! \s* (.*) }xs )
     {
 	$values[0] = $1;
-	$exclude = 'not ';
-	
-	$select_all = 1 if $values[0] eq '' && @values == 1;
+	$exclude = 1;
+    }
+    
+    # If the first value starts with '%!', generate an "all except" filter.
+    
+    elsif ( $values[0] =~ qr{ ^ %! \s* (.*) }xs )
+    {
+	$values[0] = $1;
+	$all_except = 1;
     }
     
     # Go through each of the names in the list.  Any names we find get looked
@@ -496,9 +516,9 @@ sub ent_filter {
 	    $select_all = 1;
 	}
 	
-	elsif ( $p eq '@' )
+	elsif ( $p =~ /@/ )
 	{
-	    $select_different = 1;
+	    die $request->exception(400, "You may only use '\@' alone or with '!'");
 	}
 	
 	else
@@ -537,8 +557,8 @@ sub ent_filter {
     # If the paramter $tn is 'id_list', then return the list of identifiers directly.  If the
     # exclusion flag was found, prepend it to the first item in the list.  If no valid identifiers
     # were specified, then use the value '-1' which will select nothing.  This is the proper
-    # response because the client clearly wanted to filter by identifier.  If $select_all is set,
-    # then return the special value -9999 meaning any value, or 0 meaning no value.
+    # response because the client clearly wanted to filter by identifier.  If any of the various
+    # flags were set, return a special value.
     
     if ( $tn eq 'id_list' )
     {
@@ -546,26 +566,51 @@ sub ent_filter {
 	
 	if ( $select_all )
 	{
-	    return $exclude ? [ 0 ] : [ -9999 ];
+	    return $exclude ? [ 0 ] : [ '_ANY_' ];
 	}
 	
 	if ( $select_different )
 	{
-	    return $exclude ? [ -9997 ] : [ -9998 ];
+	    return $exclude ? [ '_SAME_' ] : [ '_DIFFERENT_' ];
 	}
 	
-	# Return a list that will select nothing unless we have found at least one valid identifier.
+	# If we do not have any valid identifiers, return a special value.
 	
 	unless ( @ids )
 	{
+	    # If $exclude is set, then select only records with no value for this parameter.
+	    
+	    if ( $exclude )
+	    {
+		return [ 0 ];
+	    }
+	    
+	    # If $all_except is set, then select only records with a value for this parameter,
+	    # just as if $select_all were set.
+	    
+	    if ( $all_except )
+	    {
+		return [ '_ANY_' ];
+	    }
+	    
+	    # Otherwise, return the value -1 which will select an empty result set.  Since it is
+	    # clear that the user wanted to select only records with a specified value for this
+	    # parameter, and no valid values were given, an empty result set is the only
+	    # reasonable result.
+	    
 	    return [ -1 ];
 	}
 	
-	# If the exclusion flag was found, prepend it to the first item.
+	# If the exclusion or all except flag was found, prepend it to the list.
 	
 	if ( $exclude )
 	{
-	    $ids[0] = "!$ids[0]";
+	    unshift @ids, '_EXCLUDE_';
+	}
+	
+	elsif ( $all_except )
+	{
+	    unshift @ids, '_ANY_EXCEPT_';
 	}
 	
 	# Now return the list.
@@ -582,15 +627,9 @@ sub ent_filter {
     
     if ( $select_all )
     {
-	my $op = $exclude ? '=' : '<>';
-	
-	if ( $param eq 'modifier_no' )
+	if ( $param eq 'modifier_no' or $param eq 'authorizer_no' or $param eq 'enterer_no' )
 	{
-	    return "$tn.modifier_no $op 0";
-	}
-	
-	elsif ( $param eq 'authorizer_no' or $param eq 'enterer_no' )
-	{
+	    my $op = $exclude ? '=' : '<>';
 	    return "$tn.$param $op 0";
 	}
 	
@@ -600,7 +639,7 @@ sub ent_filter {
 	}
     }
     
-    # If $select_any is true, then return an expression that will select a difference.
+    # If $select_different is true, then return an expression that will select a difference.
     
     if ( $select_different )
     {
@@ -613,7 +652,17 @@ sub ent_filter {
 	
 	elsif ( $param eq 'modifier_no' )
 	{
-	    return "$tn.modifier_no $op $tn.enterer_no";
+	    if ( $exclude )
+	    {
+		return "($tn.modifier_no = $tn.enterer_no or $tn.modifier_no = $tn.authorizer_no" .
+		    " or $tn.modifier_no = 0)";
+	    }
+	    
+	    else
+	    {
+		return "$tn.modifier_no <> $tn.enterer_no and $tn.modifier_no <> $tn.authorizer_no" .
+		    " and $tn.modifier_no <> 0"
+	    }
 	}
 	
 	else
@@ -622,25 +671,54 @@ sub ent_filter {
 	}
     }
     
-    # Otherwise, if no valid ids were found, return an expression that will select nothing.
+    # Otherwise, if no valid ids were found, return an expression that will select the appropriate
+    # set given the other flags.
     
-    return "$tn.authorizer_no = -1" unless @ids;
+    unless ( @ids )
+    {
+	# If $exclude is set, then select only records with no value for this parameter.
+	
+	if ( $exclude )
+	{
+	    $param = 'authorizer_no' if $param eq 'authent' || $param eq 'touched';
+	    return "$tn.$param = 0";
+	}
+	
+	# If $all_except is set, then select only records with a value for this parameter,
+	# just as if $select_all were set.
+	
+	if ( $all_except )
+	{
+	    $param = 'authorizer_no' if $param eq 'authent' || $param eq 'touched';
+	    return "$tn.$param <> 0";
+	}
+	
+	# Otherwise, return an expression which will select an empty result set.  Since it is
+	# clear that the user wanted to select only records with a specified value for this
+	# parameter, and no valid values were given, an empty result set is the only
+	# reasonable result.
+	    
+	return "$tn.authorizer_no = -1";
+    }
     
     # Otherwise, return the proper expression.
     
+    my $op = $exclude || $all_except ? 'not ' : '';
+    
     if ( $param eq 'touched' )
     {
-	return "$exclude($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list) or $tn.modifier_no in ($id_list))";
+	return "$op($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list) or $tn.modifier_no in ($id_list))";
     }
     
     elsif ( $param eq 'authent' )
     {
-	return "$exclude($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list))";
+	return "$op($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list))";
     }
     
     else
     {
-	return "$tn.$param ${exclude}in ($id_list)";
+	my $ex = $all_except ? " and $tn.$param <> 0" : '';
+	return "$tn.$param ${op}in ($id_list)$ex";
     }
 }
 

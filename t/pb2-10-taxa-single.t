@@ -143,7 +143,7 @@ my $ob_t1 = { 'parent_no' => '71894',
 my $OB_NAME_2 = "Aves";
 my $OB_BLOCKS_2 = "subcounts,ecospace,taphonomy,etbasis,ent,entname";
 
-my $ob_j2 = { 'noc' => '!>=:5000',
+my $ob_j2 = { 'noc' => '!>=:4000',
 	      'odc' => '!>=:80',
 	      'fmc' => '!>=:200',
 	      'gnc' => '!>=:900',
@@ -164,7 +164,7 @@ my $ob_j2 = { 'noc' => '!>=:5000',
 	      'ent' => '!nonempty',
 	      'mdf' => '!nonempty' };
 
-my $ob_t2 = { 'n_occs' => '!>=:5000',
+my $ob_t2 = { 'n_occs' => '!>=:4000',
 	      'n_orders' => '!>=:80',
 	      'n_families' => '!>=:200',
 	      'n_genera' => '!>=:900',
@@ -616,14 +616,14 @@ subtest 'special params' => sub {
     my $strict = $T->fetch_nocheck("/taxa/single.json?name=badtaxon&strict", "special 'strict'");
     my $loose = $T->fetch_nocheck("/taxa/single.json?name=badtaxon&strict=no", "special 'strict=no'");
     
-    cmp_ok( $T->error_count($strict), '==', 1, "special 'strict' returns one error" );
-    cmp_ok( $T->warning_count($strict), '==', 1, "special 'strict' returns no warnings" );
-    ok( $T->warning_like($strict, qr{badtaxon}), "special 'strict' proper warning" );
+    $T->cmp_ok_errors($strict, '==', 1, "special 'strict' returns one error" );
+    $T->cmp_ok_warnings($strict, '==', 1, "special 'strict' returns one warning" );
+    $T->ok_warning_like($strict, qr{badtaxon}, "special 'strict' proper warning" );
     
-    ok( $T->error_count($loose) == 1, "special 'strict=no' returns one errors" ) ||
-	diag("    Error was: $loose->{__ERRORS}[0]");
-    cmp_ok( $T->warning_count($loose), '<', 2, "special 'strict=no' returns at most one warning" );
-    ok( $T->warning_like($loose, qr{badtaxon}), "special 'strict=no' proper warning" );
+    $T->cmp_ok_errors($loose, '==', 1, "special 'strict=no' returns one error" ) ||
+	$T->diag_errors($loose);
+    $T->cmp_ok_warnings($loose, '<', 2, "special 'strict=no' returns at most one warning" );
+    $T->ok_warning_like($loose, qr{badtaxon}, "special 'strict=no' proper warning" );
     
     # Now we check 'textresult'. This one is easy, we just need to check that the
     # content type has the correct value and the content does nto change.
@@ -787,9 +787,8 @@ subtest 'bad params' => sub {
     my $m5 = $T->fetch_nocheck( "/taxa/single.json?name=$BAD_5", "multiple invalid" );
     
     $T->ok_response_code( $m5, '400', "multiple invalid got 400 response" );
-    unless ( ok( $T->error_like( $m5, qr{single taxon name}i ) ||
-		 $T->error_like( $m5, qr{invalid character}i ), 
-		 "multiple invalid got proper error" ) )
+    unless ( $T->ok_error_like( $m5, qr{single taxon name|invalid character}i,
+				"multiple invalid got proper error" ) )
     {
 	diag("  expected: " . qr{single taxon name}i . ' or ' . qr{invalid character}i);
 	$T->diag_errors($m5);
@@ -802,8 +801,8 @@ subtest 'bad params' => sub {
     my $m6 = $T->fetch_nocheck( "/taxa/single.json?name=$BAD_6", "invalid character");
     
     $T->ok_response_code( $m6, '400,404', "invalid character got 400 or 404 response" );
-    unless ( ok( $T->error_like( $m6, qr{invalid character}i ) ||
-		 $T->warning_like( $m6, qr{invalid character}i ), 
+    unless ( ok( $T->has_error_like( $m6, qr{invalid character}i ) ||
+		 $T->has_warning_like( $m6, qr{invalid character}i ), 
 		 "invalid character got error or warning" ) )
     {
 	diag("  expected: " . qr{invalid character}i);

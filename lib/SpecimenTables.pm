@@ -38,7 +38,7 @@ sub buildSpecimenTables {
     
     my ($sql, $result, $count, $extra);
     
-    # Create a clean working table which will become the new occurrence
+    # Create a clean working table which will become the new specimen
     # matrix.
     
     logMessage(1, "Building specimen tables");
@@ -47,6 +47,8 @@ sub buildSpecimenTables {
     $result = $dbh->do("CREATE TABLE $SPEC_MATRIX_WORK (
 				specimen_no int unsigned not null,
 				occurrence_no int unsigned not null,
+				reid_no int unsigned not null,
+				latest_ident boolean not null,
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
 				reference_no int unsigned not null,
@@ -55,31 +57,33 @@ sub buildSpecimenTables {
 				modifier_no int unsigned not null,
 				created timestamp null,
 				modified timestamp null,
-				primary key (specimen_no)) ENGINE=MyISAM");
+				primary key (specimen_no, reid_no)) ENGINE=MyISAM");
     
-    # Add one row for every specimen in the database.
+    # Add one row for every specimen in the database.  For specimens tied to
+    # occurrences that have multiple identifications, we create a separate row
+    # for each identification.
     
     logMessage(2, "    inserting specimens...");
     
     $sql = "	INSERT INTO $SPEC_MATRIX_WORK
-		       (specimen_no, occurrence_no, taxon_no, orig_no, reference_no,
-			authorizer_no, enterer_no, modifier_no, created, modified)
-		SELECT s.specimen_no, s.occurrence_no,
+		       (specimen_no, occurrence_no, reid_no, latest_ident, taxon_no, orig_no,
+			reference_no, authorizer_no, enterer_no, modifier_no, created, modified)
+		SELECT s.specimen_no, s.occurrence_no, o.reid_no, ifnull(o.latest_ident, 1), 
 		       if(s.taxon_no is not null and s.taxon_no > 0, s.taxon_no, o.taxon_no),
 		       if(a.orig_no is not null and a.orig_no > 0, a.orig_no, o.orig_no),
 		       s.reference_no, s.authorizer_no, s.enterer_no, s.modifier_no,
 		       s.created, s.modified
 		FROM specimens as s LEFT JOIN authorities as a using (taxon_no)
-			LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = s.occurrence_no and o.latest_ident";
+			LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = s.occurrence_no";
     
     $count = $dbh->do($sql);
     
         # Now add some indices to the main occurrence relation, which is more
     # efficient to do now that the table is populated.
     
-    logMessage(2, "    indexing by occurrence...");
+    logMessage(2, "    indexing by occurrence and reid...");
     
-    $result = $dbh->do("ALTER TABLE $SPEC_MATRIX_WORK ADD INDEX selection (occurrence_no)");
+    $result = $dbh->do("ALTER TABLE $SPEC_MATRIX_WORK ADD INDEX selection (occurrence_no, reid_no)");
     
     logMessage(2, "    indexing by taxon...");
     

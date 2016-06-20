@@ -5,21 +5,23 @@
 
 use strict;
 use feature 'unicode_strings';
+use feature 'fc';
 
 use LWP::UserAgent;
 use Text::CSV_XS;
+use Encode qw(decode_utf8);
 use JSON;
 
 package Tester;
 
-use Scalar::Util qw(looks_like_number);
+use Scalar::Util qw(looks_like_number reftype);
 use Carp qw(croak);
 use Test::More;
 
 use namespace::clean;
 
-our ($TEST_NO_REPORT) = 1;
-our ($LAST_URL);
+
+our $LAST_BANNER = '';
 
 # new ( server_name )
 # 
@@ -62,13 +64,13 @@ sub new {
 # copied from a test file intended for one data service version into a test
 # file intended for another version.
 
-sub set_url_check {
+# sub set_url_check {
     
-    my ($tester, $key, $regex) = @_;
+#     my ($tester, $key, $regex) = @_;
     
-    $tester->{url_key} = $key;
-    $tester->{url_check} = $regex;
-}
+#     $tester->{url_key} = $key;
+#     $tester->{url_check} = $regex;
+# }
 
 
 # fetch_url ( path_and_args, message )
@@ -88,33 +90,36 @@ sub fetch_url {
     
     # If we haven't yet announced which server we are testing, do so now.
     
-    unless ( $tester->{message_displayed} )
+    unless ( $tester->{banner_displayed} )
     {
 	my $message = $tester->{base_url};
-	$message .= " $tester->{url_key}" if $tester->{url_key};
+	# $message .= " $tester->{url_key}" if $tester->{url_key};
 	
-	diag("TESTING SERVER: $message");
+	diag("TESTING SERVER: $message") unless $LAST_BANNER eq $message;
 	
 	$tester->{message_displayed} = 1;
+	$LAST_BANNER = $message;
     }
     
     # If a regex has been supplied for checking URLs, then fail if it doesn't
     # match.
     
-    if ( my $re = $tester->{url_check} )
-    {
-	unless ( $path_and_args =~ $re )
-	{
-	    fail($message);
-	    diag("ERROR: URL DID NOT MATCH $tester->{url_key} <===");
-	}
-    }
+    # if ( my $re = $tester->{url_check} )
+    # {
+    # 	unless ( $path_and_args =~ $re )
+    # 	{
+    # 	    fail($message);
+    # 	    diag("ERROR: URL DID NOT MATCH $tester->{url_key} <===");
+    # 	}
+    # }
+    
+    # Process the options.
+    
+    my $diag = $options->{no_diag} ? 0 : 1;
     
     # Create the full URL and execute a 'GET' request on the server being tested.
     
     my $url = $tester->make_url($path_and_args);
-    
-    $LAST_URL = $url;
     
     my $response;
     
@@ -122,36 +127,153 @@ sub fetch_url {
 	$response = $tester->{ua}->get($url);
     };
     
-    # If the request succeeds, we are done.
+    my $errmsg = $@;
     
-    my $diag = $options->{no_diag} ? 0 : 1;
+    # If we did not get a response at all, then fail with the specified
+    # message and add appropriate diagnostics.  Return undefined (false) to
+    # indicate failure.
     
-    if ( defined $response && $response->is_success )
+    if ( ! defined $response )
     {
+	# Fail the implicit test, and add an appropriate diagnostic.
+	
+	fail($message);
+	
+	$errmsg ||= "no response";
+	diag("    $errmsg");
+	
+	# Clear the saved response, and return false.
+	
+	$tester->{last_response} = undef;
+	return;
+    }
+    
+    # If we get a response and the 'no_check' option was given, just extract
+    # any error or warning messages that it contains and return the response
+    # object.  Pass the implicit test and return the response object, no
+    # matter what the result code is.  This can be used, for example, to test
+    # that bad parameter values will result in a failure.
+    
+    elsif ( $options->{no_check} )
+    {
+	# Pass the implicit test, regardless of response status.
+	
 	pass($message);
-	$tester->extract_errwarn($response, $diag, $message);
+	
+	# Extract any error or warning messages without printing them.  Also
+	# save the URL path and arguments used to generate this response.
+
+	$tester->extract_errwarn($response, 0, $message);
 	$response->{__URLPATH} = $path_and_args;
+	
+	# Save the response message for use by subsequent method calls, and
+	# also return it as a true value.
+	
+	$tester->{last_response} = $response;
 	return $response;
     }
     
-    # Otherwise, fail with the appropriate error message.
+    # Otherwise, if the request succeeded then pass the implicit test and
+    # handle the result as follows.
     
-    elsif ( defined $response )
+    elsif ( $response->is_success )
     {
-	fail($message);
-	my $status = $response->status_line;
-	diag("request was: $url") if $url;
-	diag("status was: $status") if $status;
+	pass($message);
+	
+	# Extract any error or warning messages that the response contained,
+	# and print them unless directed not to.  Also save the URL path and
+	# arguments.
+	
 	$tester->extract_errwarn($response, $diag, $message);
-	return;
+	$response->{__URLPATH} = $path_and_args;
+	
+	# Save the response message for use by subsequent method calls, and
+	# also return it as a true value.
+	
+	$tester->{last_response} = $response;
+	return $response;
     }
+    
+    # Otherwise, fail the implicit test with appropriate diagnostics.  Save
+    # the response object for use by subsequent method calls, but return false
+    # to indicate failure.
     
     else
     {
 	fail($message);
-	diag("no response or bad response");
+	
+	my $status = $response->status_line;
+	diag("request was: $url") if $url;
+	diag("status was: $status") if $status;
+	
+	# Extract any error or warning messages that the response contained,
+	# and print them unless directed not to.  Also save the URL path and
+	# arguments.
+	
+	$tester->extract_errwarn($response, $diag, $message);
+	$response->{__URLPATH} = $path_and_args;
+	
+	# Save the response object but return false.
+	
+	$tester->{last_response} = $response;
 	return;
     }
+    
+}
+
+
+# fetch_nocheck ( path_and_args )
+# 
+# Works just like fetch_url, but does not check to make sure the response is a
+# success. 
+
+sub fetch_nocheck {
+
+    my ($tester, $path_and_args, $message) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    return $tester->fetch_url($path_and_args, $message, { no_check => 1, no_diag => 1 });
+    
+    # my $url = $tester->make_url($path_and_args);
+    
+    # my $response;
+    
+    # eval {
+    # 	$response = $tester->{ua}->get($url);
+    # };
+    
+    # if ( $response )
+    # {
+    # 	$tester->extract_errwarn($response, 0, $message);
+    # 	$response->{__URLPATH} = $path_and_args;
+    # 	return $response;
+    # }
+    
+    # else
+    # {
+    # 	fail($message);
+    # 	diag("no response");
+    # 	diag("request was: $url") if $url;
+    # 	return;
+    # }
+}
+
+
+# make_url ( path_and_args )
+# 
+# Put the specified path and arguments together with the base URL for this
+# tester object to make a full HTTP URL.
+
+sub make_url {
+    
+    my ($tester, $path_and_args) = @_;
+    
+    my $url = $tester->{base_url};
+    $url .= '/' unless $path_and_args =~ qr{^/};
+    $url .= $path_and_args;
+    
+    return $url;
 }
 
 
@@ -177,17 +299,20 @@ sub extract_errwarn {
     
     if ( $body =~ qr< ^ [{] >xs )
     {
-	my $json;
+	my $json = $response->{__JSON};
 	
-	eval {
-	    $json = $tester->{json}->decode( $body );
-	};
-	
-	if ( $@ )
+	unless ( $json )
 	{
-	    fail("$message extracting content (json)");
-	    diag("    " . $@);
-	    return;
+	    eval {
+		$json = $response->{__JSON} = $tester->{json}->decode( $body );
+	    };
+	    
+	    if ( $@ )
+	    {
+		fail("$message extracting content (json)");
+		diag("    " . $@);
+		return;
+	    }
 	}
 	
 	if ( ref $json->{errors} eq 'ARRAY' )
@@ -269,12 +394,17 @@ sub extract_errwarn {
 	    {
 		$metadata{$item} = $fields[1];
 	    }
+	    
+	    elsif ( lc $fields[0] eq 'records:' )
+	    {
+		last;
+	    }
 	}
     }
     
-    $response->{__ERRORS} = \@errors if @errors;
-    $response->{__WARNINGS} = \@warnings if @warnings;
-    $response->{__METADATA} = \%metadata if keys %metadata;
+    $response->{__ERRORS} = \@errors;
+    $response->{__WARNINGS} = \@warnings;
+    $response->{__METADATA} = \%metadata;
     
     if ( $diag && @errors )
     {
@@ -294,53 +424,42 @@ sub extract_errwarn {
 }
 
 
-# fetch_nocheck ( path_and_args )
+# get_content_type ( response )
 # 
-# Works just like fetch_url, but does not check to make sure the response is a
-# success. 
+# Return the content type from the specified response object, or from the last
+# response fetched if no response object was given.
 
-sub fetch_nocheck {
+sub get_content_type {
+    
+    my ($tester, $response) = @_;
 
-    my ($tester, $path_and_args, $message) = @_;
+    $response ||= $tester->{last_response};
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    # If an HTTP response object was given, extract the content type from that.
     
-    my $url = $tester->make_url($path_and_args);
-    
-    $LAST_URL = $url;
-    
-    my $response;
-    
-    eval {
-	$response = $tester->{ua}->get($url);
-    };
-    
-    if ( $response )
+    if ( ref $response && $response->isa('HTTP::Response') )
     {
-	$tester->extract_errwarn($response, 0, $message);
-	$response->{__URLPATH} = $path_and_args;
-	return $response;
+	return $response->header("Content-Type");
     }
+    
+    # If no object was provided (or a scalar argument such as 'last'), extract
+    # the content type from the last response fetched or return undefined if
+    # there isn't one.
+    
+    elsif ( ! defined $response || lc $response eq 'last' )
+    {
+	return $tester->{last_response}->header("Content-Type")
+	    if defined $tester->{last_response};
+	return;
+    }
+    
+    # If some other kind of object was passed to use, throw an exception.
     
     else
     {
-	fail($message);
-	diag("no response");
-	diag("request was: $url") if $url;
-	return;
+	my $type = ref $response;
+	croak "First argument must be an HTTP response object, was type '$type'";
     }
-}
-
-
-sub make_url {
-    
-    my ($tester, $path_and_args) = @_;
-    
-    my $url = $tester->{base_url};
-    $url .= '/' unless $path_and_args =~ qr{^/};
-    $url .= $path_and_args;
-    
-    return $url;
 }
 
 
@@ -351,11 +470,21 @@ sub make_url {
 
 sub ok_content_type {
     
-    my ($tester, $response, $type, $charset, $message) = @_;
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($type, $charset, $message) = @_;
     
     croak "No message specified" unless $message && ! ref $message;
     
-    my $ct_header = $response->header("Content-Type");
+    my $ct_header = $tester->get_content_type($response);
+    
+    unless ( defined $ct_header )
+    {
+	fail($message);
+	diag("    No content type was found");
+	return;
+    }
     
     if ( ! ok( $ct_header =~ qr{ ^ $type (?: ; | $ ) }xs, $message ) )
     {
@@ -375,6 +504,43 @@ sub ok_content_type {
 }
 
 
+# get_response_code ( response )
+# 
+# Return the content type from the specified response object, or from the last
+# response fetched if no response object was given.
+
+sub get_response_code {
+
+    my ($tester, $response) = @_;
+    
+    # If an HTTP response object was given, extract the response code from that.
+    
+    if ( ref $response && $response->isa('HTTP::Response') )
+    {
+	return $response->code;
+    }
+    
+    # If no object was provided (or a scalar argument such as 'last'), extract
+    # the response code from the last response fetched or return undefined if
+    # there isn't one.
+    
+    elsif ( ! defined $response || lc $response eq 'last' )
+    {
+	return $tester->{last_response}->code
+	    if defined $tester->{last_response};
+	return;
+    }
+    
+    # If some other kind of object was passed to use, throw an exception.
+    
+    else
+    {
+	my $type = ref $response;
+	croak "First argument must be an HTTP response object, was type '$type'";
+    }
+}
+
+
 # ok_response_code ( response, code, message )
 # 
 # Test whether the given response has one of the given codes.  Codes must be
@@ -383,13 +549,23 @@ sub ok_content_type {
 
 sub ok_response_code {
     
-    my ($tester, $response, $code, $message) = @_;
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($code, $message) = @_;
     
     croak "No message specified" unless $message && ! ref $message;
     
     my %acceptable = map { $_ => 1 } split /\s*,\s*/, $code;
     
-    my $rc = $response->code;
+    my $rc = $tester->get_response_code($response);
+    
+    unless ( defined $rc )
+    {
+	fail($message);
+	diag("    No response code was found");
+	return;
+    }
     
     unless ( ok( $acceptable{$rc}, $message ) )
     {
@@ -403,59 +579,107 @@ sub ok_response_code {
 
 # get_errors ( response )
 # 
-# Return the errors, if any, from the given response.
+# Return the errors, if any, from the given response.  If no response is
+# given, use the last one fetched.  We assume that these responses were
+# fetched using the 'fetch_url' method of this class, which automatically
+# extracts any error and warning messages from the response body.
 
 sub get_errors {
 
     my ($tester, $response) = @_;
+
+    $response ||= $tester->{last_response};
     
-    return @{$response->{__ERRORS}} if $response->{__ERRORS};
-    return;
+    # If an HTTP response object was given, return any errors from that.
+    
+    if ( ref $response && $response->isa('HTTP::Response') )
+    {
+	return @{$response->{__ERRORS}} if $response->{__ERRORS};
+	return;	# return an empty list if no errors were found
+    }
+    
+    # If no object was provided (or a scalar argument such as 'last'), extract
+    # the response code from the last response fetched or return undefined if
+    # there isn't one.
+    
+    elsif ( ! defined $response || lc $response eq 'last' )
+    {
+	if ( $response = $tester->{last_response} )
+	{
+	    return @{$response->{__ERRORS}} if $response->{__ERRORS};
+	}
+	return; # return an empty list if no errors were found, or if no
+                # previously fetched response was found.
+    }
+    
+    # If some other kind of object was passed to use, throw an exception.
+    
+    else
+    {
+	my $type = ref $response;
+	croak "First argument must be an HTTP response object, was type '$type'";
+    }
 }
 
 
 # get_warnings ( response )
 # 
-# Return the warnings, if any, from the given response.
+# Return the warnings, if any, from the given response.  If no response is
+# given, use the last one fetched.  We assume that these responses were
+# fetched using the 'fetch_url' method of this class, which automatically
+# extracts any error and warning messages from the response body.
+
 
 sub get_warnings {
     
     my ($tester, $response) = @_;
     
-    return @{$response->{__WARNINGS}} if $response->{__WARNINGS};
-    return;
+    # If an HTTP response object was given, return any errors from that.
+    
+    if ( ref $response eq 'HTTP::Response' )
+    {
+	return @{$response->{__WARNINGS}} if $response->{__WARNINGS};
+	return;	# return an empty list if no errors were found
+    }
+    
+    # If no object was provided (or a scalar argument such as 'last'), extract
+    # the response code from the last response fetched or return undefined if
+    # there isn't one.
+    
+    elsif ( ! defined $response || lc $response eq 'last' )
+    {
+	if ( $response = $tester->{last_response} )
+	{
+	    return @{$response->{__WARNINGS}} if $response->{__WARNINGS};
+	}
+	return; # return an empty list if no errors were found, or if no
+                # previously fetched response was found.
+    }
+    
+    # If some other kind of object was passed to use, throw an exception.
+    
+    else
+    {
+	my $type = ref $response;
+	croak "First argument must be an HTTP response object, was type '$type'";
+    }    
 }
 
 
-# error_count ( response )
-# 
-# Return the number of error messages in $response.
-
-sub error_count {
-    
-    my ($tester, $response) = @_;
-    
-    croak "First argument must be a response" unless ref($response) =~ /^HTTP/;
-    
-    return 0 unless ref $response->{__ERRORS} eq 'ARRAY';
-    return @{$response->{__ERRORS}};
-}
-    
-
-# error_like ( response, regex )
+# has_error_like ( response, regex )
 # 
 # Return true if one of the errors in $response matches $regex, false otherwise.
 
-sub error_like {
+sub has_error_like {
     
-    my ($tester, $response, $regex) = @_;
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($regex) = @_;
     
-    croak "First argument must be a response" unless ref($response) =~ /^HTTP/;
-    croak "Second argument must be a regular expression" unless ref $regex eq 'Regexp';
+    croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
     
-    return unless ref $response->{__ERRORS} eq 'ARRAY';
-    
-    foreach my $e ( @{$response->{__ERRORS}} )
+    foreach my $e ( $tester->get_errors($response) )
     {
 	return 1 if $e =~ $regex;
     }
@@ -464,15 +688,50 @@ sub error_like {
 }
 
 
+# has_warning_like ( response, regex )
+# 
+# Return true if one of the warnings in $response matches $regex, false otherwise.
+
+sub has_warning_like {
+    
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($regex) = @_;
+    
+    croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
+    
+    foreach my $w ( $tester->get_warnings($response) )
+    {
+	return 1 if $w =~ $regex;
+    }
+    
+    return;
+}
+
+
 sub ok_error_like {
     
-    my ($tester, $response, $regex, $message) = @_;
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($regex, $message) = @_;
     
+    croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
     croak "You must specify a message" unless $message;
+    
+    $response ||= $tester->{last_response};
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    unless ( ok( $tester->error_like($response, $regex), $message ) )
+    unless ( reftype $response eq 'HASH' && ref $response->{__ERRORS} eq 'ARRAY' )
+    {
+	fail($message);
+	diag("    No error messages were extracted");
+	return;
+    }
+    
+    unless ( ok( $tester->has_error_like($response, $regex), $message ) )
     {
 	diag("  expected: $regex");
 	$tester->diag_errors($response);
@@ -484,68 +743,42 @@ sub diag_errors {
     
     my ($tester, $response) = @_;
     
-    unless ( ref $response->{__ERRORS} )
+    my @errors = $tester->get_errors($response);
+    
+    unless ( @errors )
     {
 	diag("  got no error messages");
     }
     
-    else
+    foreach my $e ( @errors )
     {
-	foreach my $e ( @{$response->{__ERRORS}} )
-	{
-	    diag("  got error: $e");
-	}
+	diag("  got error: $e");
     }
 }
     
-
-# warning_count ( response )
-# 
-# Return the number of error messages in $response.
-
-sub warning_count {
-    
-    my ($tester, $response) = @_;
-    
-    croak "First argument must be a response" unless ref($response) =~ /^HTTP/;
-    
-    return 0 unless ref $response->{__WARNINGS} eq 'ARRAY';
-    return @{$response->{__WARNINGS}};
-}
-    
-
-# warning_like ( response, regex )
-# 
-# Return true if one of the warnings in $response matches $regex, false otherwise.
-
-sub warning_like {
-    
-    my ($tester, $response, $regex) = @_;
-    
-    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
-    croak "Second argument must be a regular expression" unless ref $regex eq 'Regexp';
-
-    return unless ref $response->{__WARNINGS} eq 'ARRAY';
-    
-    foreach my $w ( @{$response->{__WARNINGS}} )
-    {
-	return 1 if $w =~ $regex;
-    }
-    
-    return;
-}
-
 
 sub ok_warning_like {
+
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($regex, $message) = @_;
     
-    my ($tester, $response, $regex, $message) = @_;
-    
-    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
+    croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
     croak "You must specify a message" unless $message;
+    
+    $response ||= $tester->{last_response};
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    unless ( ok( $tester->warning_like($response, $regex), $message ) )
+    unless ( reftype $response eq 'HASH' && ref $response->{__WARNINGS} eq 'ARRAY' )
+    {
+	fail($message);
+	diag("    No warnings were extracted");
+	return;
+    }
+    
+    unless ( ok( $tester->has_warning_like($response, $regex), $message ) )
     {
 	diag("  expected: $regex");
 	$tester->diag_warnings($response);
@@ -557,18 +790,143 @@ sub diag_warnings {
     
     my ($tester, $response) = @_;
     
-    unless ( ref $response->{__WARNINGS} )
+    my @warnings= $tester->get_warnings($response);
+    
+    unless ( @warnings )
     {
 	diag("  got no warning messages");
     }
     
+    foreach my $w ( @warnings )
+    {
+	diag("  got warning: $w");
+    }
+}
+
+
+# cmp_ok_errors ( response, operation, compvalue, message )
+# 
+# Run 'cmp_ok' on the number of errors in the specified response.  If no
+# response is given, use the last one fetched.
+
+sub cmp_ok_errors {
+    
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($operation, $compvalue, $message) = @_;
+    
+    croak "You must specify a message" unless defined $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+    $response ||= $tester->{last_response};
+    
+    unless ( reftype $response eq 'HASH' && ref $response->{__ERRORS} eq 'ARRAY' )
+    {
+	fail($message);
+	diag("    No error messages were extracted");
+	return;
+    }
+    
+    cmp_ok( @{$response->{__ERRORS}}, $operation, $compvalue, $message );
+}
+
+
+# cmp_ok_warnings ( response, operation, compvalue, message )
+# 
+# Run 'cmp_ok' on the number of warnings in the specified response.  If no
+# response is given, use the last one fetched.
+
+sub cmp_ok_warnings {
+    
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($operation, $compvalue, $message) = @_;
+    
+    croak "You must specify a message" unless defined $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $response ||= $tester->{last_response};
+    
+    unless ( reftype $response eq 'HASH' && ref $response->{__WARNINGS} eq 'ARRAY' )
+    {
+	fail($message);
+	diag("    No warnings were extracted");
+	return;
+    }
+    
+    cmp_ok( @{$response->{__WARNINGS}}, $operation, $compvalue, $message );
+}
+
+
+# get_meta ( response, field )
+# 
+# Return the value of the specified metadata field from the specified
+# response, or undefined if it doesn't exist or has no value.  If no response
+# is given, use the last one fetched.
+
+sub get_meta {
+    
+    my ($tester, $response, $field) = @_;
+    
+    # If an HTTP response object was given, look up the metadata directly.
+    # This assumes that &extract_errwarn was already called on this response.
+    
+    if ( ref $response eq 'HTTP::Response' )
+    {
+	return $response->{__METADATA}{$field} if defined $response->{__METADATA}{$field};
+	return;	# return undefined if no such field was found.
+    }
+    
+    # If no object was provided (or a scalar argument such as 'last'), extract
+    # the response code from the last response fetched or return undefined if
+    # there isn't one.
+    
+    elsif ( ! defined $response || lc $response eq 'last' )
+    {
+	if ( $response = $tester->{last_response} )
+	{
+	    return $response->{__METADATA}{$field} if defined $response->{__METADATA}{$field};
+	}
+	
+	return; # return undefined if no such field was found, or if no
+                # previously fetched response was found.
+    }
+    
+    # If some other kind of object was passed to use, throw an exception.
+    
     else
     {
-	foreach my $w ( @{$response->{__WARNINGS}} )
-	{
-	    diag("  got warning: $w");
-	}
+	my $type = ref $response;
+	croak "First argument must be an HTTP response object, was type '$type'";
     }
+}
+
+
+# cmp_ok_meta ( response, field, operation, compvalue, message )
+# 
+# Test that the specified metadata value from the given response compares properly with
+# the specified value according to the specified operation.
+
+sub cmp_ok_meta {
+
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($field, $operation, $compvalue, $message) = @_;
+    
+    croak "You must specify a message" unless defined $message;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $response ||= $tester->{last_response};
+    
+    my $value = $tester->get_meta($response, $field);
+    
+    cmp_ok($value, $operation, $compvalue, $message);
 }
 
 
@@ -578,11 +936,32 @@ sub diag_warnings {
 
 sub ok_no_records {
     
-    my ($tester, $response, $message) = @_;
+    my $tester = shift @_;
+    my $response;
+    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($message) = @_;
     
-    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my @r = $tester->extract_records( $response, "$message extract records", { no_records_ok => 1 } );
+    my $extract_from;
+    
+    if ( ref $response eq 'HTTP::Response' )
+    {
+	$extract_from = $response;
+    }
+    
+    elsif ( ! defined $response || lc $response eq 'last' )
+    {
+	$extract_from = $tester->{last_response};
+    }
+    
+    else
+    {
+	my $type = ref $response;
+	croak "First argument must be an HTTP response object, was type '$type'";
+    }
+    
+    my @r = $tester->extract_records( $extract_from, $message, { no_records_ok => 1 } );
     
     my $count = scalar(@r);
     
@@ -593,17 +972,17 @@ sub ok_no_records {
 
 # get_metadata ( response )
 # 
-# Return any metadata that was included with the response.
+# Return any metadata that was included with the response. $$$
 
-sub get_metadata {
+# sub get_metadata {
     
-    my ($tester, $response) = @_;
+#     my ($tester, $response) = @_;
     
-    croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
+#     croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
     
-    return $response->{__METADATA} if ref $response->{__METADATA} eq 'HASH';
-    return {};
-}
+#     return $response->{__METADATA} if ref $response->{__METADATA} eq 'HASH';
+#     return {};
+# }
 
 
 # fetch_records ( path_and_args, options, message )
@@ -618,10 +997,10 @@ sub fetch_records {
     
     $options ||= { };
     
-    my $response = $tester->fetch_url($path_and_args, "$message response OK", $options);
+    my $response = $tester->fetch_url($path_and_args, "$message: response OK", $options);
     return unless $response;
     
-    return $tester->extract_records($response, "$message extract records", $options);
+    return $tester->extract_records($response, "$message: extract records", $options);
 }
 
 
@@ -644,7 +1023,7 @@ sub fetch_record_values {
     my $response = $tester->fetch_url($path_and_args, "$message response OK");
     return unless $response;
     
-    my (@r) = $tester->extract_records($response, "$message extract records", $options);
+    my (@r) = $tester->extract_records($response, "$message: extract records", $options);
     
     return ( NO_RECORDS => 1 ) unless @r;
     
@@ -675,7 +1054,7 @@ sub extract_records {
     
     unless ( ref $response )
     {
-	fail("$message extract records");
+	fail("$message: extract records");
 	diag("empty response");
 	return;
     }
@@ -689,7 +1068,15 @@ sub extract_records {
 	return $tester->extract_records_json($response, $message, $options);
     }
     
-    # Otherwise, assume it is a text response.
+    # If the body contains 'TY - ' within the first 2000 characters, then this is an RIS
+    # response.
+    
+    elsif ( substr($body,0,2000) =~ qr<TY  - > )
+    {
+	return $tester->extract_records_ris($response, $message, $options);
+    }
+    
+    # Otherwise, assume it is a tsv or csv (including .txt) response.
     
     else
     {
@@ -893,7 +1280,7 @@ sub extract_records_text {
 	
 	if ( $section eq 'records' )
 	{
-	    last LINE if uc $cells[0] eq 'THIS REQUEST DID NOT GENERATE ANY OUTPUT RECORDS';
+	    last LINE if uc $cells[0] =~ / ^ THIS \s REQUEST \s .* RECORDS $ /x;
 	    
 	    my $r;
 	    
@@ -914,6 +1301,150 @@ sub extract_records_text {
 	    return;
 	}
     }
+    
+    if ( @records || $options->{no_records_ok} )
+    {
+	return @records;
+    }
+    
+    else
+    {
+	fail($message);
+	diag('no records found');
+	if ( $response->{__URLPATH} )
+	{
+	    my $url = $tester->make_url($response->{__URLPATH});
+	    diag("request was: $url");
+	}
+	return;
+    }
+}
+
+
+# extract_records_ris ( response, message )
+# 
+# Decode the specified RIS-format response.  Each entry is take to be a single
+# record, and is returned as a hash with the field codes as the hash keys.  If
+# it decoding succeeds, and if at least one record is found, return a list of all
+# the records.
+# 
+# Otherwise, call Test::More::Fail with the specified message and return the
+# empty list.
+
+sub extract_records_ris {
+
+    my ($tester, $response, $message, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $options ||= { };
+    
+    # Check the arguments.
+    
+    croak "third argument must be an options hash"
+	unless ref $options eq 'HASH';
+    
+    my $raw_data = $response->content || '';
+    my @records;
+    
+    my $section = $options->{parse} || 'init';
+    my $limit = $options->{limit};
+    
+    my (@fields, @values);
+    my $count = 0;
+    my $format;
+    
+    my @lines = split( qr{\r\n}, $raw_data );
+    my $record = { };
+    my $line_no;
+    
+    # Now go through the lines one by one.
+    
+ LINE:
+    foreach my $line (@lines)
+    {
+	$line_no++;
+	
+	# If we are just starting out, we need to figure out where the records start.  Each record
+	# starts with a 'TY' line, so until we find the first one we process header stuff.
+	
+	if ( $section eq 'init' && $line !~ /^TY/ )
+	{
+	    # Since we are just extracting records, we can skip the header.
+	    
+	    next LINE
+	}
+	
+	elsif ( $section eq 'init' )
+	{
+	    $section = 'metadata-maybe';
+	}
+	
+	# If we get here, we are processing records.  But the first few may be metadata instead of
+	# actual records.  Whenever we find a blank line, that means the end of a record.  So
+	# process it, and check to see if it is metadata.
+	
+	if ( $line eq '' )
+	{
+	    # If this is a metadata record, discard it.
+	    
+	    if ( $section eq 'metadata-maybe' && $record->{TY} eq 'GEN' && 
+		 (lc $record->{TI} eq 'data source' || 
+		  lc $record->{TI} eq 'documentation' ||
+		  lc $record->{TI} eq 'record counts') )
+	    {
+		next;
+	    }
+	    
+	    # Otherwise, save the record and change the state to 'records'.
+	    
+	    else
+	    {
+		push @records, $record;
+		$record = { };
+		$section = 'records';
+	    }
+	}
+	
+	# Otherwise, parse the field and value and add them to the current record.
+	
+	else
+	{
+	    if ( $line =~ qr{ ^ (\w\w) \s\s - \s (.*) }x )
+	    {
+		my $key = $1;
+		my $value = Encode::decode_utf8($2);
+
+		if ( defined $record->{$key} )
+		{
+		    $record->{$key} .= "\t$value";
+		}
+
+		else
+		{
+		    $record->{$key} = $value;
+		}
+	    }
+	    
+	    else
+	    {
+		fail("$message parse error at line $line_no");
+		my $url = $tester->make_url($response->{__URLPATH});
+		diag("request was: $url");
+		return;
+	    }
+	}
+    }
+    
+    # If there is an unclosed record at the end, add it to the result.
+    
+    if ( ref $record eq 'HASH' && keys %$record )
+    {
+	push @records, $record;
+    }
+    
+    # Now, if we have found some records (or if none are okay) then return them.  Otherwise, this
+    # operation fails.
     
     if ( @records || $options->{no_records_ok} )
     {
@@ -1100,6 +1631,8 @@ sub extract_values {
 
     my ($tester, $records_ref, $field, $options) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     croak "first argument must be an arrayref"
 	unless ref $records_ref eq 'ARRAY';
     
@@ -1120,6 +1653,11 @@ sub extract_values {
 	{
 	    $found{''} = 1;
 	}
+    }
+    
+    unless ( keys %found )
+    {
+	fail("no values found") unless $options->{no_values_ok};
     }
     
     return %found;
@@ -1152,6 +1690,8 @@ sub count_values {
 	}
     }
     
+    fail("found no values for '$field'") unless keys %found;
+    
     return %found;
 }
 
@@ -1173,7 +1713,122 @@ sub find_max {
 	}
     }
     
-    return ($max_value, $max_count);
+    return wantarray ? ($max_value, $max_count) : $max_value;
+}
+
+
+sub find_prevalent {
+    
+    my ($tester, $values_ref, $field) = @_;
+    
+    croak "First argument must be a listref or hashref"
+	unless ref $values_ref eq 'ARRAY' or ref $values_ref eq 'HASH';
+    
+    if ( ref $values_ref eq 'ARRAY' )
+    {
+	croak "Second argument must be a field name"
+	    unless defined $field && $field eq '';
+	
+	my %values = $tester->count_values( $values_ref, $field );
+	
+	return sort { $values{$b} <=> $values{$a} } keys %values;
+    }
+    
+    else
+    {
+	return sort { $values_ref->{$b} <=> $values_ref->{$a} } keys %$values_ref;
+    }
+}
+
+
+sub cmp_sets_ok {
+    
+    my ($tester, $ref1, $op, $ref2, $message) = @_;
+    
+    croak "You must specify a message" unless defined $message && $message ne '';
+    croak "First argument must be a hashref" unless ref $ref1 eq 'HASH';
+    croak "Third argument must be a hashref" unless ref $ref2 eq 'HASH';
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    # First check to see if we can find a key in the left set that is not in the right, or vice
+    # versa.
+    
+    my ($found_left, $found_right);
+    my ($left_only_count, $right_only_count);
+    
+    foreach my $key ( keys %$ref1 )
+    {
+	unless ( exists $ref2->{$key} )
+	{
+	    $found_left //= $key;
+	    $left_only_count++;
+	}
+    }
+    
+    foreach my $key ( keys %$ref2 )
+    {
+	unless ( exists $ref1->{$key} )
+	{
+	    $found_right //= $key;
+	    $right_only_count++;
+	}
+    }
+    
+    # Then use this info to pass or fail tests accordingly.
+    
+    my $left_msg = $left_only_count && $left_only_count > 1 ? " ($left_only_count total)" : "";
+    my $right_msg = $right_only_count && $right_only_count > 1 ? " ($right_only_count total)" : "";
+    
+    if ( $op eq '==' )
+    {
+	fail($message) if defined $found_left || defined $found_right;
+	diag("    Found '$found_left' in left, not in right$left_msg") if defined $found_left;
+	diag("    Found '$found_right' in right, not in left$right_msg") if defined $found_right;
+	pass($message) unless defined $found_left || defined $found_right;
+    }
+    
+    elsif ( $op eq '<=' )
+    {
+	fail($message) if defined $found_left;
+	diag("    Found '$found_left' in left, not in right$left_msg") if defined $found_left; 
+	pass($message) unless defined $found_left;
+    }
+    
+    elsif ( $op eq '<' )
+    {
+	fail($message) if defined $found_left || ! defined $found_right;
+	diag("    Found '$found_left' in left, not in right$left_msg") if defined $found_left;
+	diag("    Left is not a proper subset of right") unless defined $found_right;
+	pass($message) if ! defined $found_left && defined $found_right;
+    }
+    
+    elsif ( $op eq '>=' )
+    {
+	fail($message) if defined $found_right;
+	diag("    Found '$found_right' in right, not in left$right_msg") if defined $found_right; 
+	pass($message) unless defined $found_right;
+    }
+    
+    elsif ( $op eq '>' )
+    {
+	fail($message) if defined $found_right || ! defined $found_left;
+	diag("    Found '$found_right' in right, not in left$right_msg") if defined $found_right;
+	diag("    Left is not a proper superset of right") unless defined $found_left;
+	pass($message) if ! defined $found_right && defined $found_left;
+    }
+    
+    elsif ( $op eq '!=' )
+    {
+	fail($message) unless defined $found_left || defined $found_right;
+	diag("    Left is equal to right") unless defined $found_left || defined $found_right;
+	pass($message) if defined $found_left || defined $found_right;
+    }
+    
+    else
+    {
+	croak "The second argument must be a numeric comparison operator, was '$op'";
+    }
 }
 
 
@@ -1589,26 +2244,48 @@ sub check_order {
 		$is_equal = 1 if $last == $r->{$field};
 	    }
 	    
+	    elsif ( $op eq '==' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last == $r->{$field};
+		$is_equal = 1;
+	    }
+	    
+	    elsif ( $op eq '!=' )
+	    {
+		$bad_record ||= $r->{$idfield} unless $last != $r->{$field};
+	    }
+	    
 	    elsif ( $op eq 'lt' )
 	    {
-		$bad_record ||= $r->{$idfield} unless $last lt $r->{$field};
+		$bad_record ||= $r->{$idfield} unless fc($last) lt fc($r->{$field});
 	    }
 	    
 	    elsif ( $op eq 'le' )
 	    {
-		$bad_record ||= $r->{$idfield} unless $last le $r->{$field};
-		$is_equal = 1 if $last eq $r->{$field};
+		$bad_record ||= $r->{$idfield} unless fc($last) le fc($r->{$field});
+		$is_equal = 1 if fc($last) eq fc($r->{$field});
 	    }
 	    
 	    elsif ( $op eq 'gt' )
 	    {
-		$bad_record ||= $r->{$idfield} unless $last gt $r->{$field};
+		$bad_record ||= $r->{$idfield} unless fc($last) gt fc($r->{$field});
 	    }
 	    
 	    elsif ( $op eq 'ge' )
 	    {
-		$bad_record ||= $r->{$idfield} unless $last ge $r->{$field};
-		$is_equal = 1 if $last eq $r->{$field};
+		$bad_record ||= $r->{$idfield} unless fc($last) ge fc($r->{$field});
+		$is_equal = 1 if fc($last) eq fc($r->{$field});
+	    }
+	    
+	    elsif ( $op eq 'eq' )
+	    {
+		$bad_record ||= $r->{$idfield} unless fc($last) eq fc($r->{$field});
+		$is_equal = 1;
+	    }
+	    
+	    elsif ( $op eq 'ne' )
+	    {
+		$bad_record ||= $r->{$idfield} unless fc($last) ne fc($r->{$field});
 	    }
 	    
 	    else
@@ -1631,14 +2308,34 @@ sub check_order {
 		    $bad_record ||= $r->{$idfield} unless $last2 >= $r->{$field2};
 		}
 		
+		elsif ( $op2 eq '==' )
+		{
+		    $bad_record ||= $r->{$idfield} unless $last2 == $r->{$field2};
+		}
+		
+		elsif ( $op2 eq '!=' )
+		{
+		    $bad_record ||= $r->{$idfield} unless $last2 != $r->{$field2};
+		}
+		
 		elsif ( $op2 eq 'lt' || $op2 eq 'le' )
 		{
-		    $bad_record ||= $r->{$idfield} unless $last2 le $r->{$field2};
+		    $bad_record ||= $r->{$idfield} unless fc($last2) le fc($r->{$field2});
 		}
 		
 		elsif ( $op2 eq 'gt' || $op2 eq 'ge' )
 		{
-		    $bad_record ||= $r->{$idfield} unless $last2 ge $r->{$field2};
+		    $bad_record ||= $r->{$idfield} unless fc($last2) ge fc($r->{$field2});
+		}
+		
+		elsif ( $op2 eq 'eq' )
+		{
+		    $bad_record ||= $r->{$idfield} unless fc($last2) eq fc($r->{$field2});
+		}
+		
+		elsif ( $op2 eq 'ne' )
+		{
+		    $bad_record ||= $r->{$idfield} unless fc($last2) ne fc($r->{$field2});
 		}
 		
 		else
@@ -1652,7 +2349,7 @@ sub check_order {
 	
 	unless ( defined $last && $last ne '' )
 	{
-	    fail("$message no value for '$field'");
+	    fail("$message no value for '$field' ('$r->{$idfield}')");
 	    return;
 	}
 	
@@ -1662,7 +2359,7 @@ sub check_order {
 	    
 	    unless ( defined $last2 && $last2 ne '' )
 	    {
-		fail("$message no value for '$field2'");
+		fail("$message no value for '$field2' ('$r->{$idfield}')");
 		return;
 	    }
 	}
@@ -1720,4 +2417,3 @@ sub check_messages {
 }
 
 
-1;

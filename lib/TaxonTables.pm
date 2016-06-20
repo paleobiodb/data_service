@@ -16,7 +16,7 @@ use Try::Tiny;
 
 use TableDefs qw($REF_SUMMARY);
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS $RANK_MAP
-	         $ALL_STATUS $VALID_STATUS $VARIANT_STATUS $JUNIOR_STATUS);
+	         $ALL_STATUS $VALID_STATUS $VARIANT_STATUS $JUNIOR_STATUS $SENIOR_STATUS $INVALID_STATUS);
 use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
@@ -2132,7 +2132,8 @@ sub collapseInvalidity {
     	$result = $dbh->do("
      		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
      		    on t1.accepted_no = t2.orig_no and t1.accepted_no != t2.accepted_no
-     		SET t1.accepted_no = t2.accepted_no");
+     		SET t1.accepted_no = t2.accepted_no,
+		    t1.status = if(t2.status in ($INVALID_STATUS), t2.status, t1.status)");
 	
 	logMessage(2, "      removed $result invalidity chains");
     }
@@ -2234,21 +2235,21 @@ sub computeHierarchy {
 				ON c.orig_no = t.synonym_no
 			WHERE t.synonym_no <> t.orig_no");
     
-    # Then we use the same INSERT IGNORE trick to select the best opinion for
-    # these senior synonyms, considering all of the 'belongs to' opinions from
-    # its synonym group.
+    # Then we use the same INSERT IGNORE trick to select the best opinion for these senior
+    # synonyms, considering all of the 'belongs to' and various kinds of invalid opinions from its
+    # synonym group.
     
     $result = $dbh->do("INSERT IGNORE INTO $CLASSIFY_AUX
 			SELECT c.senior_no, o.opinion_no, o.parent_no, o.ri, 
 				o.pubyr, o.status
 			FROM $OPINION_CACHE o
 			    JOIN $SYNONYM_AUX c ON o.orig_no = c.junior_no
-			WHERE o.status = 'belongs to' and c.senior_no != o.parent_no
+			WHERE o.status in ($SENIOR_STATUS) and c.senior_no != o.parent_no
 			ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
     # The next step is to check for cycles within $CLASSIFY_AUX, for which we
     # use the same algorithm as is used for the rebuild operation.  This won't
-    # catch all cycles on updates, so we have to rely on the opinion-editing
+    # catch all cycles on updates, so we have to rely On the opinion-editing
     # code catching obvious cycles.  In any case, the tree will be fixed on
     # the next rebuild (if the user doesn't catch it and undo the change
     # themself).

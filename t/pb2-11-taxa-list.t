@@ -13,7 +13,9 @@ use feature 'unicode_strings';
 use Test::Most tests => 34;
 
 use lib 't';
+
 use Tester;
+use Test::Conditions;
 
 # Start by creating an instance of the Tester class, with which to conduct the
 # following tests.
@@ -112,21 +114,23 @@ subtest 'taxon_name bad' => sub {
     
     my $GOOD_1 = 'Felis';
     
-    my $m4a = $T->fetch_url("/taxa/list.json?name=$BAD_2a,$GOOD_1&strict=no", 
-			    "good and bad a", { no_diag => 1 });
+    my (@r4a) = $T->fetch_records("/taxa/list.json?name=$BAD_2a,$GOOD_1&strict=no", 
+				  "good and bad a", { no_diag => 1 });
+    
+    cmp_ok( @r4a, '==', 1, "good and bad a found one record" );
+    is( $r4a[0]{nam}, $GOOD_1, "good and bad a found proper record" );
+    $T->ok_response_code( '200', "good and bad a got 200 response" );
+    $T->ok_warning_like( qr{match the pattern}, "good and bad a found proper warning" );
+    
+    
     my $m4b = $T->fetch_url("/taxa/list.json?name=$BAD_2b,$GOOD_1&strict=no", 
 			    "good and bad b", { no_diag => 1 });
     
-    my (@r4a) = $T->extract_records($m4a, "good and bad a");
-    my (@r4b) = $T->extract_records($m4a, "good and bad a");
+    my (@r4b) = $T->extract_records($m4b, "good and bad b");
     
-    cmp_ok( @r4a, '==', 1, "good and bad a found one record" );
     cmp_ok( @r4b, '==', 1, "good and bad b found one record" );
-    is( $r4a[0]{nam}, $GOOD_1, "good and bad a found proper record" );
     is( $r4b[0]{nam}, $GOOD_1, "good and bad b found proper record" );
-    $T->ok_response_code( $m4a, '200', "good and bad a got 200 response" );
     $T->ok_response_code( $m4b, '200', "good and bad b got 200 response" );
-    $T->ok_warning_like( $m4a, qr{match the pattern}, "good and bad a found proper warning" );
     $T->ok_warning_like( $m4b, qr{not match}, "good and bad b found proper warning" );
     
     # Same with 'strict'.
@@ -586,8 +590,8 @@ subtest 'taxon_name with modifiers' => sub {
     my ($m2_b) = $T->fetch_nocheck("/taxa/list.json?taxon_name=$PREFIX_1b:$MOD_NAME_2", "selector b sp");
     
     is( $r2_a[0]{nam}, $MOD_NAME_2, "selector '$PREFIX_1a' finds '$MOD_NAME_2'" );
-    ok( $T->warning_like($m2_b, qr{$PREFIX_1b:$MOD_NAME_2.*did not match}i), 
-	"selector '$PREFIX_1b' does not find '$MOD_NAME_2'" );
+    $T->ok_warning_like($m2_b, qr{$PREFIX_1b:$MOD_NAME_2.*did not match}i,
+			"selector '$PREFIX_1b' does not find '$MOD_NAME_2'" );
     cmp_ok( @r2_a, '==', 1, "selector '$PREFIX_1a' sp found one name" );
     
     # Then check 'taxon_name' with a selector and a species-level exclusion
@@ -603,8 +607,8 @@ subtest 'taxon_name with modifiers' => sub {
     
     cmp_ok( @r3_a, '==', 2, "selector '$PREFIX_1a' with exclusion finds two names" );
     
-    ok( $T->warning_like($m3_b, qr{$PREFIX_1b:$EX_RESP_2.*did not match}i), 
-	"selector '$PREFIX_1b' finds proper error for '$EX_NAME_2'" );
+    $T->ok_warning_like($m3_b, qr{$PREFIX_1b:$EX_RESP_2.*did not match}i,
+			"selector '$PREFIX_1b' finds proper error for '$EX_NAME_2'" );
     
     # Now check the use of wildcards with selectors.
     
@@ -719,6 +723,12 @@ subtest 'match_name with modifiers' => sub {
     
     my (@r) = $T->fetch_records("/taxa/list.json?match_name=$NAME_1&show=class", "match double genus");
     
+    unless ( @r )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     # Flag all of the different phyla taxonomic classes these records are
     # found under, and then test them one by one as selectors.
     
@@ -770,7 +780,14 @@ subtest 'base_name with modifiers' => sub {
     my $NAME_1a = 'Lingulida';
     my $RANK_1 = 'order';
     
-    my %found1 = $T->fetch_record_values("/taxa/list.json?base_name=$NAME_1&rank=$RANK_1", 'nam', "selector and wildcard");
+    my %found1 = $T->fetch_record_values("/taxa/list.json?base_name=$NAME_1&rank=$RANK_1", 'nam', 
+					 "selector and wildcard");
+    
+    if ( $found1{NO_RECORDS} )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     ok( $found1{$NAME_1a}, "selector and wildcard found name '$NAME_1a'" );
     
@@ -895,6 +912,12 @@ subtest 'common names' => sub {
     my @r1a = $T->fetch_records("/taxa/list.json?match_name=$NAME_1a&common=EN&show=common", 
 				"match common many");
     
+    unless ( @r1a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     cmp_ok( @r1a, '>=', 5, "match common many found at least 5 names" );
     
     foreach my $r (@r1a)
@@ -986,7 +1009,7 @@ subtest 'taxon_id' => sub {
     
     my %found1 = $T->fetch_record_values("/taxa/list.json?id=$TEST_TXN_1a,$TEST_TXN_1b", 'nam', 'list by id');
     
-    unless ( keys %found1 && ! $found1{NO_RECORDS} )
+    if ( $found1{NO_RECORDS} )
     {
 	diag("skipping remainder of subtest");
 	return;
@@ -1521,6 +1544,12 @@ subtest 'exact, current, variants' => sub {
     my @r1b = $T->fetch_records("/taxa/list.json?name=$NAME_1a,$NAME_1b&rel=exact", "two names exact");
     my @r1c = $T->fetch_records("/taxa/list.json?name=$NAME_1a,$NAME_1b&rel=current", "two names current");
     
+    unless ( @r1a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     cmp_ok( @r1a, '==', 2, "two names default rel found two records" );
     cmp_ok( @r1b, '==', 2, "two names exact found two records" );
     cmp_ok( @r1c, '==', 1, "two names current found one record" );
@@ -1630,6 +1659,12 @@ subtest 'synonyms, senior, accepted' => sub {
     my @r1a = $T->fetch_records("/taxa/list.json?name=$NAME_1a&rel=synonyms", "synonyms a");
     my @r1b = $T->fetch_records("/taxa/list.json?name=$NAME_1b&rel=synonyms", "synonyms b");
     
+    unless ( @r1a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my %names1a = $T->extract_values( \@r1a, 'nam' );
     my %acn1a = $T->extract_values( \@r1a, 'acn' );
     
@@ -1699,6 +1734,12 @@ subtest 'children and parents' => sub {
     
     my @r1 = $T->fetch_records("/taxa/list.json?name=$NAME_1a,$NAME_1b&show=parent", "two names");
     
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my %prl_value = $T->extract_values( \@r1, 'prl' );
     
     cmp_ok( keys %prl_value, '==', 2, "two names found two parents" );
@@ -1725,6 +1766,12 @@ subtest 'classext and all_parents' => sub {
     
     my ($r1) = $T->fetch_records("/taxa/list.json?name=$NAME_1&show=classext", 
 				 "base record with classext");
+    
+    unless ( $r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     my @r2 = $T->fetch_records("/taxa/list.json?name=$NAME_1&rel=all_parents",
 			       "base record all parents");
@@ -1775,6 +1822,12 @@ subtest 'common' => sub {
     my @r1 = $T->fetch_records("/taxa/list.json?name=$NAME_1a,$NAME_1b&rel=common",
 			       "rel common");
     
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my @r2 = $T->fetch_records("/taxa/list.json?name=$NAME_1a,$NAME_1b&rel=all_parents",
 			       "rel all_parents");
     
@@ -1817,6 +1870,12 @@ subtest 'output blocks' => sub {
     my ($single1b) = $T->fetch_records("/taxa/single.json?name=$NAME_1b&show=full", "single json b");
     
     my (@r1) = $T->fetch_records("/taxa/list.json?name=$NAME_1a,$NAME_1b&show=full", "list json a+b");
+    
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     cmp_ok( @r1, '==', 2, "list json a+b found two records" );
     
@@ -1910,6 +1969,12 @@ subtest 'variant=all' => sub {
     my @r1c = $T->fetch_records("/taxa/list.json?base_name=$NAME_1", "default variants");
     my @r1v = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&variant=all", "all variants");
     
+    unless ( @r1c )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     cmp_ok( @r1v, '>', @r1c, "all variants found more records" );
     
     my %current = $T->extract_values( \@r1c, 'nam' );
@@ -1935,6 +2000,13 @@ subtest 'taxon status' => sub {
     
     my @r1a = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxon_status=all", 
 				"taxon_status=all 1");
+    
+    unless ( @r1a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my @r1v = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxon_status=valid",
 				"taxon_status=valid 1");
     my @r1s = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxon_status=accepted",
@@ -2109,6 +2181,13 @@ subtest 'taxon rank' => sub {
     my $NAME_1 = "carnivoraMORPHA";
     
     my @r1 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&rank=family,infraorder", "ranks 1");
+    
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }    
+    
     my @r2 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&rank=above_family-below_order", "ranks 2");
     my @r3 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&rank=min_family-max_order", "ranks 3");
     my @r4 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&rank=family-order", "ranks 4");
@@ -2150,6 +2229,12 @@ subtest 'extant and pres' => sub {
     
     my @r1j = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&show=pres", "base json");
     my @r1t = $T->fetch_records("/taxa/list.csv?base_name=$NAME_1&show=pres", "base csv");
+    
+    unless ( @r1j )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     my %pres1j = $T->extract_values( \@r1j, 'prs', { count_empty => 1 } );
     my %pres1t = $T->extract_values( \@r1t, 'preservation', { count_empty => 1 } );
@@ -2265,6 +2350,12 @@ subtest 'interval and ma bounds' => sub {
     # First check interval names and ids
     
     my @r1 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&show=app", "list base name");
+    
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     my @r2 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&interval=$INT_1&show=app",
 			       "list with interval '$INT_1'");
@@ -2451,6 +2542,12 @@ subtest 'tree depth' => sub {
     my @r1 = $T->fetch_records("/taxa/list.json?base_id=$TID_1", "base list");
     my @r2 = $T->fetch_records("/taxa/list.json?base_id=$TID_1&depth=$DEPTH_1", "limited depth '$DEPTH_1'");
     
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     cmp_ok( @r2, '<', @r1, "limited depth retrieves fewer records" );
     
     # Then go through the depth-limited result set, tracing the parent links to make sure that the
@@ -2515,30 +2612,32 @@ subtest 'tree depth' => sub {
 };
 
 
-# Test 'all_records' with 'limit' and 'offset'. We are not going to test all_records without a
-# limit, because that would involve fetching a 30+ MB result.
+# Test 'all_taxa' and 'all_records' with 'limit' and 'offset'. We are not
+# going to test all_records without a limit, because that would involve
+# fetching a 30+ MB result.
 
-subtest 'all_records, limit and offset' => sub {
+subtest 'all_taxa, all_records, limit and offset' => sub {
     
     # Fetch two overlapping sections. Make sure they overlap properly, and also check that the
     # oids are in numerical order. (The default order should be the order in which the entries
     # occur in the taxon_trees table, which is in order by orig_no).
     
-    my $m1 = $T->fetch_url("/taxa/list.csv?all_records&rowcount&offset=1000&limit=100", "offset 1000, limit 100");
-    my $m2 = $T->fetch_url("/taxa/list.csv?all_records&rowcount&offset=1050&limit=100", "offset 1050, limit 100");
+    my @r1 = $T->fetch_records("/taxa/list.csv?all_taxa&rowcount&offset=1000&limit=100", "offset 1000, limit 100");
     
-    my $meta1 = $T->get_metadata($m1);
-    my $meta2 = $T->get_metadata($m2);
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
-    my @r1 = $T->extract_records($m1, "offset 1000, limit 100");
-    my @r2 = $T->extract_records($m2, "offset 1050, limit 100");
-    
-    is( $meta1->{record_offset}, '1000', "offset 1000, limit 100 got proper record_offset" );
-    cmp_ok( $meta1->{records_found}, '>', 260000, "offset 1000, limit 100 got proper records_found" );
-    is( $meta1->{records_returned}, '100', "offset 1000, limit 100 got proper records_returned" );
+    $T->cmp_ok_meta( 'record_offset', '==', '1000', "offset 1000, limit 100 got proper record_offset" );
+    $T->cmp_ok_meta( 'records_found', '>', 260000, "offset 1000, limit 100 got proper records_found" );
+    $T->cmp_ok_meta( 'records_returned', '==', '100', "offset 1000, limit 100 got proper records_returned" );
     cmp_ok( @r1, '==', 100, "offset 1000, limit 100 returned 100 records" );
     
-    is( $meta2->{record_offset}, '1050', "offset 1050, limit 100 got proper record_offset" );
+    my @r2 = $T->fetch_records("/taxa/list.csv?all_taxa&rowcount&offset=1050&limit=100", "offset 1050, limit 100");
+    
+    $T->cmp_ok_meta( 'record_offset', '==', '1050', "offset 1050, limit 100 got proper record_offset" );
     
     my $bad_index;
     
@@ -2554,40 +2653,56 @@ subtest 'all_records, limit and offset' => sub {
     ok( ! $bad_index, "records from overlapping ranges matched up" ) ||
 	diag("    Difference started at index $bad_index");
     
-    my ($last1, $last2, $bad_record);
+    $T->check_order( \@r1, 'orig_no', '<', 'taxon_name', 
+		     "offset 1000 returned records in order by orig_no" );
     
-    foreach my $r ( @r1 )
-    {
-	unless ( ! defined $last1 || $last1 < $r->{orig_no} )
-	{
-	    $bad_record ||= $r->{taxon_name};
-	}
-	
-	$last1 = $r->{orig_no};
-    }
-    
-    foreach my $r ( @r2 )
-    {
-	unless ( ! defined $last2 || $last2 < $r->{orig_no} )
-	{
-	    $bad_record ||= $r->{taxon_name};
-	}
-	
-	$last2 = $r->{orig_no};
-    }
-    
-    ok( ! $bad_record, "both requests returned records in order by orig_no" ) ||
-	diag("    Found: '$bad_record' out of order");
+    $T->check_order( \@r2, 'orig_no', '<', 'taxon_name',
+		     "offset 1050 returned records in order by orig_no" );
     
     # Get just the number of taxa without actually returning any records.
     
-    my $m3 = $T->fetch_nocheck("/taxa/list.json?all_records&limit=0&rowcount", "all records count");
-    my $meta3 = $T->get_metadata($m3);
+    my $m3 = $T->fetch_nocheck("/taxa/list.json?all_taxa&limit=0&rowcount", "all taxa count");
+    
     my @r3 = $T->extract_records($m3, "all records count", { no_records_ok => 1 });
     
-    cmp_ok( $meta3->{records_found}, '>', 260000, "all records count got propr records_found" );
-    cmp_ok( $meta3->{records_returned}, 'eq', '0', "all records count found got proper records_returned" );
+    $T->cmp_ok_meta( $m3, 'records_found', '>', 260000, "all records count got propr records_found" );
+    $T->cmp_ok_meta( $m3, 'records_returned', 'eq', '0', "all records count found got proper records_returned" );
     cmp_ok( @r3, '==', 0, "all records count returned no records" );
+    
+    my $count_taxa = $T->get_meta( $m3, 'records_found' );
+    
+    # Now try 'all_records' instead of 'all_taxa'.  This will get all name
+    # variants. 
+    
+    my $m4 = $T->fetch_nocheck("/taxa/list.json?all_records&limit=0&rowcount", "all records count");
+    
+    my $count_records = $T->get_meta( $m4, 'records_found' );
+    
+    cmp_ok( $count_records, '>', $count_taxa, "all_records found more records than all_taxa" );
+    
+    my @r5 = $T->fetch_records("/taxa/list.json?all_records&offset=10000&limit=200", 
+			       "all_records offset 10000");
+    
+    my $tc = Test::Conditions->new;
+    
+    $tc->set("no record with 'V' flag");
+    
+    foreach my $r ( @r5 )
+    {
+	$tc->clear("no record with 'V' flag") if $r->{flg} && $r->{flg} =~ /V/;
+    }
+    
+    $tc->ok_all("all_records found at least one 'V' flag");
+    
+    my @r6 = $T->fetch_records("/taxa/list.json?all_taxa&offset=10000&limit=200",
+			       "all_taxa offset offset 10000");
+    
+    foreach my $r ( @r6 )
+    {
+	$tc->flag("found record with flag(s)", 'nam') if $r->{flg};
+    }
+    
+    $tc->ok_all("all_taxa no records have flags");
 };
 
 
@@ -2601,6 +2716,13 @@ subtest 'sort order' => sub {
     # Start with the default, which should be 'hierarchy';
     
     my @r1a = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&show=seq", "order default");
+    
+    unless ( @r1a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my @r1b = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&order=hierarchy&show=seq", 
 				"order hierarchy");
     my @r1c = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&order=hierarchy.desc&show=seq",
@@ -2831,6 +2953,12 @@ subtest 'list by crmod and all_records' => sub {
     my @r1a = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&order=created&show=crmod&limit=$COUNT_1",
 				"latest $COUNT_1 taxa from '$NAME_1'");
     
+    unless ( @r1a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     cmp_ok( @r1a, '==', $COUNT_1, "latest $COUNT_1 taxa from '$NAME_1' found $COUNT_1 records" );
     $T->check_order( \@r1a, 'dcr', 'ge', 'nam', "latest $COUNT_1 taxa from '$NAME_1'" );
     
@@ -2878,7 +3006,7 @@ subtest 'list by crmod and all_records' => sub {
 # Check that authorizers, enterers and modifiers are reported properly, and that we can select taxa using
 # names and identifiers.
 
-subtest 'list by authent and all_records' => sub {
+subtest 'list by authent' => sub {
     
     my $NAME_1 = 'Felidae';
     
@@ -2886,9 +3014,15 @@ subtest 'list by authent and all_records' => sub {
     
     my @r1 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&show=ent,entname", "base records");
     
+    unless ( @r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     # Make sure that the name and id fields all have proper values.
     
-    my $bad_record1;
+    my $tc = Test::Conditions->new;
     
  RECORD:
     foreach my $r ( @r1 )
@@ -2897,27 +3031,18 @@ subtest 'list by authent and all_records' => sub {
 	{
 	    next if $k eq 'mdi' && ! defined $r->{mdi};
 	    
-	    unless ( defined $r->{$k} && $r->{$k} =~ /^prs:\d+$/ )
-	    {
-		$bad_record1 = $r->{nam};
-		last RECORD;
-	    }
+	    $tc->flag($k, $r->{nam}) unless defined $r->{$k} && $r->{$k} =~ /^prs:\d+$/;
 	}
 	
 	foreach my $k ( 'ath', 'ent', 'mdf' )
 	{
 	    next if $k eq 'mdf' && ! defined $r->{mdf};
 	    
-	    unless ( defined $r->{$k} && $r->{$k} ne '' && $r->{$k} !~ /\d/ )
-	    {
-		$bad_record1 = $r->{nam};
-		last RECORD;
-	    }
+	    $tc->flag($k, $r->{nam}) unless defined $r->{$k} && $r->{$k} ne '' && $r->{$k} !~ /\d/;
 	}
     }
     
-    ok( ! $bad_record1, "base records all have proper authent names and ids" ) ||
-	diag("    Got: '$bad_record1' with improper value(s)");
+    $tc->ok_all("base records all have proper authent names and ids");
     
     # Find the person who has authorized the most records, then the non-authorizer who has entered
     # the most records, then the non-enterer who has modified the most records.  Do this for both
@@ -2978,31 +3103,21 @@ subtest 'list by authent and all_records' => sub {
     
     # Make sure that each of the records has the proper identifier and name.
     
-    my ($bad_record2a, $bad_record2b);
-    
     foreach my $r ( @r2a, @r2c, @r2e )
     {
-	unless ( $r->{ati} eq $ati_max && $r->{ath} eq $ath_max )
-	{
-	    $bad_record2a = $r->{nam};
-	    last;
-	}
+	$tc->flag('ati', $r->{nam}) unless $r->{ati} eq $ati_max;
+	$tc->flag('ath', $r->{nam}) unless $r->{ath} eq $ath_max;
     }
     
-    ok( ! $bad_record2a, "authorized by max finds records with proper name and id" ) ||
-	diag("    Got: '$bad_record2a' with improper value(s)");
+    $tc->ok_all("authorized by max finds records with proper name and id");
     
     foreach my $r ( @r2b, @r2d, @r2f )
     {
-	unless ( $r->{ati} ne $ati_max && $r->{ath} ne $ath_max )
-	{
-	    $bad_record2b = $r->{nam};
-	    last;
-	}
+	$tc->flag('ati', $r->{nam}) unless $r->{ati} ne $ati_max;
+	$tc->flag('ath', $r->{nam}) unless $r->{ath} ne $ath_max;
     }
     
-    ok( ! $bad_record2b, "not authorized by max finds records with proper name and id" ) ||
-	diag("    Got: '$bad_record2b' with improper value(s)");
+    $tc->ok_all("not authorized by max finds records with proper name and id");
     
     # Now check enterers in the same way.
     
@@ -3035,31 +3150,21 @@ subtest 'list by authent and all_records' => sub {
     
     # Again make sure that each of the records has the proper identifier and name.
     
-    my ($bad_record3a, $bad_record3b);
-    
     foreach my $r ( @r3a, @r3c, @r3e )
     {
-	unless ( $r->{eni} eq $eni_max && $r->{ent} eq $ent_max )
-	{
-	    $bad_record3a = $r->{nam};
-	    last;
-	}
+	$tc->flag('eni', $r->{nam}) unless $r->{eni} eq $eni_max;
+	$tc->flag('ent', $r->{nam}) unless $r->{ent} eq $ent_max;
     }
     
-    ok( ! $bad_record3a, "entered by max finds records with proper name and id" ) ||
-	diag("    Got: '$bad_record3a' with improper value(s)");
+    $tc->ok_all("entered by max finds records with proper name and id");
     
     foreach my $r ( @r3b, @r3d, @r3f )
     {
-	unless ( $r->{eni} ne $eni_max && $r->{ent} ne $ent_max )
-	{
-	    $bad_record3b = $r->{nam};
-	    last;
-	}
+	$tc->flag('eni', $r->{nam}) unless $r->{eni} ne $eni_max;
+	$tc->flag('ent', $r->{nam}) unless $r->{ent} ne $ent_max;
     }
     
-    ok( ! $bad_record3b, "not entered by max finds records with proper name and id" ) ||
-	diag("    Got: '$bad_record3b' with improper value(s)");
+    $tc->ok_all("not entered by max finds records with proper name and id");
     
     # Now same for modifiers.  For this, we have to take into account that not every record may
     # have a modifier.
@@ -3072,7 +3177,7 @@ subtest 'list by authent and all_records' => sub {
     my @r4b = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxa_modified_by=!$mdf_max&show=ent,entname",
 				"not modified by max name");
     
-    cmp_ok( @r4a + @r4b, '==', @r4any, "modified by + not modified by = modified by any (mdf max)" );
+    cmp_ok( @r4a + @r4b, '==', @r1, "modified by + not modified by = modified by any (mdf max)" );
     
     # Same with external identifiers.
     
@@ -3081,7 +3186,7 @@ subtest 'list by authent and all_records' => sub {
     my @r4d = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxa_modified_by=!$mdi_max&show=ent,entname",
 				"not modified by max id");
     
-    cmp_ok( @r4c + @r4d, '==', @r4any, "modified by + not modified by = modified by any (mdi max)" );
+    cmp_ok( @r4c + @r4d, '==', @r1, "modified by + not modified by = modified by any (mdi max)" );
     
     # Same with numeric identifiers.
     
@@ -3092,35 +3197,23 @@ subtest 'list by authent and all_records' => sub {
     my @r4f = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxa_modified_by=!$mdi_num&show=ent,entname",
 				"not modified by max num");
     
-    cmp_ok( @r4e + @r4f, '==', @r4any, "modified by + not modified by = modified by any (mdi num)" );
+    cmp_ok( @r4e + @r4f, '==', @r1, "modified by + not modified by = modified by any (mdi num)" );
     
     # Again make sure that each of the records has the proper identifier and name.
     
-    my ($bad_record4a, $bad_record4b);
-    
     foreach my $r ( @r4a, @r4c, @r4e )
     {
-	unless ( ! $r->{mdi} || $r->{mdi} eq $mdi_max && $r->{mdf} eq $mdf_max )
-	{
-	    $bad_record4a = $r->{nam};
-	    last;
-	}
+	$tc->flag('invalid', $r->{nam}) unless ! $r->{mdi} || $r->{mdi} eq $mdi_max && $r->{mdf} eq $mdf_max;
     }
     
-    ok( ! $bad_record4a, "modified by max finds records with proper name and id" ) ||
-	diag("    Got: '$bad_record4a' with improper value(s)");
+    $tc->ok_all("modified by max finds records with proper name and id");
     
     foreach my $r ( @r4b, @r4d, @r4f )
     {
-	unless ( ! $r->{mdi} || $r->{mdi} ne $mdi_max && $r->{mdf} ne $mdf_max )
-	{
-	    $bad_record4b = $r->{nam};
-	    last;
-	}
+	$tc->flag('invalid', $r->{nam}) unless ! $r->{mdi} || $r->{mdi} ne $mdi_max && $r->{mdf} ne $mdf_max;
     }
     
-    ok( ! $bad_record4b, "not modified by max finds records with proper name and id" ) ||
-	diag("    Got: '$bad_record4b' with improper value(s)");
+    $tc->ok_all("not modified by max finds records with proper name and id");
     
     # Now we need to try the value '!'. This should return no records for 'authorized_by' and
     # 'entered_by', and only taxa that have not been modified for 'modified_by'.
@@ -3138,15 +3231,12 @@ subtest 'list by authent and all_records' => sub {
     my @r5c = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxa_modified_by=!&show=ent,entname",
 				"modified by '!'");
     
-    my $bad_record5c;
-    
     foreach my $r ( @r5c )
     {
-	$bad_record5c = $r->{nam} if $r->{mdf} || $r->{mdi};
+	$tc->flag('invalid', $r->{nam}) if $r->{mdf} || $r->{mdi};
     }
     
-    ok( ! $bad_record5c, "modified by '!' finds records with no modifier" ) ||
-	diag("    Got '$bad_record5c' with modifier");
+    $tc->ok_all("modified by '!' finds records with no modifier");
     
     # Check 'authent_by' using the person who authorized the most records.
     
@@ -3157,23 +3247,19 @@ subtest 'list by authent and all_records' => sub {
     
     cmp_ok( @r6a + @r6b, '==', @r1, "authent_by + not authent_by = all (ati max)" );
     
-    my ($bad_record6a, $bad_record6b);
-    
     foreach my $r ( @r6a )
     {
-	$bad_record6a = $r->{nam} unless $r->{ati} eq $ati_max || $r->{eni} eq $ati_max;
+	$tc->flag('invalid', $r->{nam}) unless $r->{ati} eq $ati_max || $r->{eni} eq $ati_max;
     }
     
-    ok( ! $bad_record6a, "authent by max finds records with proper auth/ent identifier" ) ||
-	diag("    Got '$bad_record6a' without proper identifier");
+    $tc->ok_all("authent by max finds records with proper auth/ent identifier");
     
     foreach my $r ( @r6b )
     {
-	$bad_record6b = $r->{nam} if $r->{ati} eq $ati_max || $r->{eni} eq $ati_max;
+	$tc->flag('invalid', $r->{nam}) if $r->{ati} eq $ati_max || $r->{eni} eq $ati_max;
     }
     
-    ok( ! $bad_record6b, "not authent by max finds records with improper auth/ent identifier" ) ||
-	diag("    Got '$bad_record6b' with improper identifier");
+    $tc->ok_all("not authent by max finds records with improper auth/ent identifier");
     
     # Then check to make sure that the two sets of record oids match up.
     
@@ -3246,13 +3332,13 @@ subtest 'list by authent and all_records' => sub {
     my %combo_oid = $T->extract_values( \@r10a, 'oid' );
     %check_oid = $T->extract_values( \@r2a, 'oid' );
     %mod_by_oid = $T->extract_values( \@r4c, 'oid' );
-    my %no_mod_oid = $T->extract_values( \@r5c, 'oid' );
+    # my %no_mod_oid = $T->extract_values( \@r5c, 'oid' );
     
-    # subtract %mod_by_oid and %no_mod_oid from %check_oid, then test.
+    # subtract %mod_by_oid from %check_oid, then test.
     
-    delete $check_oid{$_} foreach keys %mod_by_oid, keys %no_mod_oid;
+    delete $check_oid{$_} foreach keys %mod_by_oid; # , keys %no_mod_oid;
     
-    is_deeply( \%combo_oid, \%check_oid, "auth_by and not mod_by returns proper records" );
+    $T->cmp_sets_ok( \%combo_oid, '==', \%check_oid, "auth_by and not mod_by returns proper records" );
     
     # Then we try a parameter with multiple values.
     
@@ -3272,8 +3358,8 @@ subtest 'list by authent and all_records' => sub {
 
 subtest 'output blocks 1 com' => sub {
     
-    my $NAME_1 = 'Mammalia';
-    my $OID_1 = 'txn:36651';
+    my $NAME_1 = 'Marsupialia';
+    my $OID_1 = 'txn:39937';
     
     # We have already checked common, parent, immparent, class, classext, crmod, ent, entname above.
     
@@ -3282,7 +3368,14 @@ subtest 'output blocks 1 com' => sub {
     my @r1a = $T->fetch_records("/taxa/list.json?base_id=$OID_1&show=app,size,subcounts,seq",
 				"output blocks 1 json");
     
-    my (%record, %bad_record, $base_flag);
+    unless ( @r1a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
+    my (%record, $base_flag);
+    my $tc = Test::Conditions->new;
     
     foreach my $r ( @r1a )
     {
@@ -3295,22 +3388,18 @@ subtest 'output blocks 1 com' => sub {
 	
 	else
 	{
-	    $bad_record{oid} ||= $r->{nam};
+	    $tc->flag('oid', $r->{nam});
 	}
 	
-	$bad_record{typ} ||= $r->{nam} unless defined $r->{typ} && $r->{typ} eq 'txn';
-	$bad_record{rnk} ||= $r->{nam} unless defined $r->{rnk} && $r->{rnk} =~ /^\d+$/;
-	$bad_record{noc} ||= $r->{nam} unless defined $r->{noc} && $r->{noc} =~ /^\d+$/;
-	$bad_record{rid} ||= $r->{nam} unless defined $r->{rid} && $r->{rid} =~ /^ref:\d+$/;
-	$bad_record{ext} ||= $r->{nam} unless ! defined $r->{ext} || $r->{ext} =~ /^[01]$/;
-	$bad_record{flg} ||= $r->{nam} if defined $r->{flg} && $r->{flg} =~ /[BVE]/ && $r->{oid} ne $OID_1;
+	$tc->flag('typ', $r->{nam}) unless defined $r->{typ} && $r->{typ} eq 'txn';
+	$tc->flag('rnk', $r->{nam}) unless defined $r->{rnk} && $r->{rnk} =~ /^\d+$/;
+	$tc->flag('noc', $r->{nam}) unless defined $r->{noc} && $r->{noc} =~ /^\d+$/;
+	$tc->flag('rid', $r->{nam}) unless defined $r->{rid} && $r->{rid} =~ /^ref:\d+$/;
+	$tc->flag('ext', $r->{nam}) unless ! defined $r->{ext} || $r->{ext} =~ /^[01]$/;
+	$tc->flag('flg', $r->{nam}) if defined $r->{flg} && $r->{flg} =~ /[BVE]/ && $r->{oid} ne $OID_1;
     }
     
-    foreach my $f ( keys %bad_record )
-    {
-	ok( ! $bad_record{$f}, "all records have proper value for '$f'" ) ||
-	    diag("    Got: '$bad_record{$f}' with improper field value");
-    }
+    $tc->ok_all("all records have proper values for basic fields");
     
     ok( $base_flag && $base_flag =~ /B/, "base record has flag 'B'" );
     
@@ -3319,10 +3408,8 @@ subtest 'output blocks 1 com' => sub {
     # test if we have one or more records with improper oids, which will have alreayd been flagged
     # and is much more severe.
     
-    unless ( $bad_record{oid} )
+    unless ( $tc->is_set('oid') )
     {
-	%bad_record = ();
-	
 	foreach my $r ( @r1a )
 	{
 	    next if $r->{oid} eq $OID_1;
@@ -3330,81 +3417,72 @@ subtest 'output blocks 1 com' => sub {
 	    
 	    # Check sequence numbers against the parent record
 	    
-	    $bad_record{lsq} ||= $r->{nam} unless $r->{lsq} > $p->{lsq};
-	    $bad_record{rsq} ||= $r->{nam} unless $r->{rsq} <= $p->{rsq};
+	    $tc->flag('lsq', $r->{nam}) unless $r->{lsq} > $p->{lsq};
+	    $tc->flag('rsq', $r->{nam}) unless $r->{rsq} <= $p->{rsq};
 	    
 	    # Check subcounts for proper values and against the parent record
 	    
 	    if ( $r->{rnk} > 3 )
 	    {
-		$bad_record{spc} ||= $r->{nam} unless defined $r->{spc} && $r->{spc} =~ /^\d+$/;
+		$tc->flag('spc', $r->{nam}) unless defined $r->{spc} && $r->{spc} =~ /^\d+$/;
 		    # && defined $p->{spc} && $r->{spc} <= $p->{spc};
 		
 		if ( $r->{rnk} > 5 )
 		{   
-		    $bad_record{gnc} ||= $r->{nam} unless defined $r->{gnc} && $r->{gnc} =~ /^\d+$/;
+		    $tc->flag('gnc', $r->{nam}) unless defined $r->{gnc} && $r->{gnc} =~ /^\d+$/;
 			# && defined $p->{gnc} && $r->{gnc} <= $p->{gnc};
 		}
 		
 		else
 		{
-		    $bad_record{gnc} ||= $r->{nam} if defined $r->{gnc} && ! $r->{tdf};
+		    $tc->flag('gnc', $r->{nam}) if defined $r->{gnc} && ! $r->{tdf};
 		}
 	    }
 	    
 	    else
 	    {
-		$bad_record{gnc} ||= $r->{nam} if defined $r->{gnc};
-		$bad_record{spc} ||= $r->{nam} if defined $r->{spc};
+		$tc->flag('gnc', $r->{nam}) if defined $r->{gnc};
+		$tc->flag('spc', $r->{nam}) if defined $r->{spc};
 	    }
 	    
 	    # Check size and extsize for proper values and against the parent record
 	    
-	    $bad_record{siz} ||= $r->{nam} unless defined $r->{siz} && $r->{siz} =~ /^\d+$/;
+	    $tc->flag('siz', $r->{nam}) unless defined $r->{siz} && $r->{siz} =~ /^\d+$/;
 		# && defined $p->{siz} && $r->{siz} <= $p->{siz};
-	    $bad_record{exs} ||= $r->{nam} unless defined $r->{exs} && $r->{exs} =~ /^\d+$/;
+	    $tc->flag('exs', $r->{nam}) unless defined $r->{exs} && $r->{exs} =~ /^\d+$/;
 	        # && defined $p->{exs} && $r->{exs} <= $p->{exs};
 	    
-	    # $bad_record{exs} ||= $r->{nam} if $r->{ext} && $r->{exs} eq '0' && ! $r->{tdf};
-	    # $bad_record{exs} ||= $r->{nam} if defined $r->{ext} && $r->{ext} eq '0' && $r->{exs} ne '0';
+	    # $tc->flag('exs', $r->{nam}) if $r->{ext} && $r->{exs} eq '0' && ! $r->{tdf};
+	    # $tc->flag('exs', $r->{nam}) if defined $r->{ext} && $r->{ext} eq '0' && $r->{exs} ne '0';
 	    
 	    # Check first and last appearances for proper values and against the parent record,
 	    # unless n_occs is zero in which case there should be no values for those fields.
 	    
 	    if ( $r->{noc} )
 	    {
-		# $bad_record{noc} ||= $r->{nam} unless defined $p->{noc} && $p->{noc} >= $r->{noc};
+		# $tc->flag('noc', $r->{nam}) unless defined $p->{noc} && $p->{noc} >= $r->{noc};
 		
-		$bad_record{fea} ||= $r->{nam} unless defined $r->{fea} && $r->{fea} =~ /^\d+(?:[.]\d+)?$/;
+		$tc->flag('fea', $r->{nam}) unless defined $r->{fea} && $r->{fea} =~ /^\d+(?:[.]\d+)?$/;
 		    # && defined $p->{fea} && $p->{fea} >= $r->{fea};
-		$bad_record{fla} ||= $r->{nam} unless defined $r->{fla} && $r->{fla} =~ /^\d+(?:[.]\d+)?$/;
+		$tc->flag('fla', $r->{nam}) unless defined $r->{fla} && $r->{fla} =~ /^\d+(?:[.]\d+)?$/;
 		    # && defined $r->{fea} && $r->{fea} > $r->{fla};
 		
-		$bad_record{lla} ||= $r->{nam} unless defined $r->{lla} && $r->{lla} =~ /^\d+(?:[.]\d+)?$/;
+		$tc->flag('lla', $r->{nam}) unless defined $r->{lla} && $r->{lla} =~ /^\d+(?:[.]\d+)?$/;
 		    # && defined $p->{lla} && $p->{lla} <= $r->{lla};
-		$bad_record{lea} ||= $r->{nam} unless defined $r->{lea} && $r->{lea} =~ /^\d+(?:[.]\d+)?$/;
+		$tc->flag('lea', $r->{nam}) unless defined $r->{lea} && $r->{lea} =~ /^\d+(?:[.]\d+)?$/;
 		    # && defined $r->{lla} && $r->{lea} > $r->{lla};
 	    }
 	    
 	    else
 	    {
-		# $bad_record{fea} ||= $r->{nam} if defined $r->{fea} && $r->{fea} ne '';
-		# $bad_record{fla} ||= $r->{nam} if defined $r->{fea} && $r->{fla} ne '';
-		# $bad_record{lea} ||= $r->{nam} if defined $r->{fea} && $r->{lea} ne '';
-		# $bad_record{lla} ||= $r->{nam} if defined $r->{fea} && $r->{lla} ne '';
+		# $tc->flag('fea', $r->{nam}) if defined $r->{fea} && $r->{fea} ne '';
+		# $tc->flag('fla', $r->{nam}) if defined $r->{fea} && $r->{fla} ne '';
+		# $tc->flag('lea', $r->{nam}) if defined $r->{fea} && $r->{lea} ne '';
+		# $tc->flag('lla', $r->{nam}) if defined $r->{fea} && $r->{lla} ne '';
 	    }
 	}
-	
-	foreach my $f ( keys %bad_record )
-	{
-	    ok( ! $bad_record{$f}, "all records have proper value for '$f'" ) ||
-		diag("    Got: '$bad_record{$f}' with improper field value");
-	}
-    }
-    
-    else
-    {
-	diag("    Got: '$bad_record{oid}' with improper oid");
+
+	$tc->ok_all("all records have proper value for blocks 'app', 'size', 'subcounts', 'seq'" );
     }
 };
 
@@ -3424,58 +3502,29 @@ subtest 'output blocks 2 json' => sub {
     my @r2a = $T->fetch_records("/taxa/list.json?base_id=$OID_1&show=img,attr,ref,refattr",
 				"output blocks 2 json");
     
-    my (%bad_record, %bad_count);
-    my %bad_limit = ( att => 1000 );
+    unless ( @r2a )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
+    my $tc = Test::Conditions->new;
+    $tc->set_limit( DEFAULT => 10, att => 1000 );
     
     foreach my $r ( @r2a )
     {
-	unless ( $r->{img} && $r->{img} =~ /^img:\d+$/ )
-	{
-	    $bad_record{img} ||= $r->{nam};
-	    $bad_count{img}++;
-	}
+	$tc->flag('img', $r->{nam}) unless $r->{img} && $r->{img} =~ /^img:\d+$/;
 	
-	unless ( $r->{att} && $r->{att} =~ /\w\w/ && $r->{att} =~ /\d\d\d\d/ )
-	{
-	    $bad_record{att} ||= $r->{nam};
-	    $bad_count{att}++;
-	}
+	$tc->flag('att', $r->{nam}) unless $r->{att} && $r->{att} =~ /\w\w/ && $r->{att} =~ /\d\d\d\d/;
 	
-	unless ( $r->{pby} && $r->{pby} =~ /^\d\d\d\d$/ )
-	{
-	    $bad_record{pby} ||= $r->{nam};
-	    $bad_count{pby}++;
-	}
+	$tc->flag('pby', $r->{nam}) unless $r->{pby} && $r->{pby} =~ /^\d\d\d\d$/;
 	
-	unless ( $r->{aut} && $r->{aut} =~ /\w\w/ )
-	{
-	    $bad_record{aut} ||= $r->{nam};
-	    $bad_count{aut}++;
-	}
+	$tc->flag('aut', $r->{nam}) unless $r->{aut} && $r->{aut} =~ /\w\w/;
 	
-	unless ( $r->{ref} && $r->{ref} =~ /\w\w\w\w/ && $r->{ref} =~ /\d\d\d\d/ )
-	{
-	    $bad_record{ref} ||= $r->{nam};
-	    $bad_count{ref}++;
-	}
+	$tc->flag('ref', $r->{nam}) unless $r->{ref} && $r->{ref} =~ /\w\w\w\w/ && $r->{ref} =~ /\d\d\d\d/;
     }
-    
-    foreach my $f ( keys %bad_record )
-    {
-	my $limit = $bad_limit{$f} || 10;
-	
-	if ( $bad_count{$f} && $bad_count{$f} < $limit )
-	{
-	    diag("Found $bad_count{$f} records with improper value for '$f'");
-	    next;
-	}
-	
-	unless ( ok( ! $bad_record{$f}, "all records have proper value for '$f'" ) )
-	{
-	    diag("    Got: '$bad_record{$f}' with improper field value");
-	    diag("    Found $bad_count{$f} records in total");
-	}
-    }
+
+    $tc->ok_all("all records have proper value for 'img', 'attr', 'ref', 'refattr'");
 };
 
 __END__

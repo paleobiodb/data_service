@@ -88,7 +88,7 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->generate_query_fields('p');
+    my $fields = $self->select_string('p');
     
     # Determine the necessary joins.
     

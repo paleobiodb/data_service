@@ -232,7 +232,7 @@ sub emit_record {
     $output .= $class->ris_year_line('PY', $pubyr) if $pubyr > 0;
     $output .= $class->emit_line('TI', $reftitle);
     $output .= $class->emit_line('T2', $pubtitle);
-    $output .= $class->emit_line('M1', $misc) if $misc;
+    $output .= $class->emit_line('M3', $misc) if $misc;
     $output .= $class->emit_line('VL', $record->{r_pubvol}) if $record->{r_pubvol};
     $output .= $class->emit_line('IS', $record->{r_pubno}) if $record->{r_pubno};
     $output .= $class->emit_line('PB', $record->{r_publisher}) if $record->{r_publisher};
@@ -240,28 +240,75 @@ sub emit_record {
     
     if ( defined $record->{r_refpages} and $record->{r_refpages} ne '' )
     {
-	if ( $record->{r_refpages} =~ /^(\d+)-(\d+)$/ )
-	{
-	    $output .= $class->emit_line('SP', $1);
-	    $output .= $class->emit_line('EP', $2);
-	}
-	else
-	{
-	    $output .= $class->emit_line('SP', $record->{r_refpages});
-	}
+	$output .= $class->emit_line('SP', $record->{r_refpages});
     }
     
     else
     {
-	$output .= $class->emit_line('SP', $record->{r_fp}) if $record->{r_fp};
-	$output .= $class->emit_line('EP', $record->{r_lp}) if $record->{r_lp};
+	my $pages = '';
+	$pages = $record->{r_fp} if defined $record->{r_fp} && $record->{r_fp} ne '';
+	$pages .= '-' . $record->{r_lp} if defined $record->{r_lp} && $record->{r_lp} ne '';
+	
+	$output .= $class->emit_line('SP', $pages) if $pages ne '';
+    }
+
+    if ( defined $record->{r_comments} && $record->{r_comments} ne '' )
+    {
+	my @lines = split(/\n|\r|\r\n/, $record->{r_comments});
+
+	foreach my $l ( @lines )
+	{
+	    $output .= $class->emit_line('N1', $l) if $l ne '';
+	}
     }
     
-    $output .= $class->emit_line('N1', $record->{r_comments}) if defined $record->{r_comments} and $record->{r_comments} ne '';
-    $output .= $class->emit_line('LA', $record->{r_language}) if defined $record->{r_language} and $record->{r_language} ne '';
-    $output .= $class->emit_line('DO', $record->{r_doi}) if defined $record->{r_doi} and $record->{r_doi} ne '';
+    $output .= $class->emit_line('LA', $record->{r_language})
+	if defined $record->{r_language} and $record->{r_language} ne '';
     
-    $output .= $class->emit_line('N1', "type = $record->{ref_type}") if defined $record->{ref_type} && $record->{ref_type} ne '';
+    $output .= $class->emit_line('DO', $record->{r_doi})
+	if defined $record->{r_doi} and $record->{r_doi} ne '';
+
+    if ( $request->{my_reftype} )
+    {
+	my @rt; my $type = $request->{my_reftype};
+	
+	push @rt, "taxa = $record->{n_reftaxa}" if $record->{n_reftaxa};
+	
+	push @rt, "auth = $record->{n_refauth}" if $record->{n_refauth} &&
+	    ($type->{auth} || $type->{var} || $type->{taxonomy} || $type->{all});
+	
+	push @rt, "var = $record->{n_refvar}" if $record->{n_refvar} &&
+	    ($type->{var} || $type->{all});
+	
+	push @rt, "class = $record->{n_refclass}" if $record->{n_refclass} &&
+	    ($type->{ops} || $type->{class} || $type->{taxonomy} || $type->{all});
+	
+	push @rt, "unclass = $record->{n_refunclass}" if $record->{n_refunclass} &&
+	    ($type->{ops} || $type->{all});
+	
+	push @rt, "occ = $record->{n_refoccs}" if $record->{n_refoccs} &&
+	    ($type->{occs} || $type->{all});
+	
+	push @rt, "spec = $record->{n_refspecs}" if $record->{n_refspecs} &&
+	    ($type->{specs} || $type->{all});
+
+	push @rt, "coll = $record->{n_refcolls}" if $record->{n_refcolls} &&
+	    ($type->{colls} || $type->{all});
+
+	if ( @rt )
+	{
+	    my $rt = join(', ', @rt);
+	    $output .= $class->emit_line('KW', $rt);
+	}
+    }
+    
+    elsif ( defined $record->{ref_type} && $record->{ref_type} ne '' )
+    {
+	my $rt = $record->{ref_type};
+	$rt =~ s/,/, /g;
+	
+	$output .= $class->emit_line('KW', $rt);
+    }
     
     $output .= $class->emit_line('ER');
     
@@ -284,7 +331,7 @@ sub ris_author_line {
     
     # If the last name includes a suffix, split it out
     
-    if ( $last =~ /^(.*),\s*(.*)/ or $last =~ /^(.*)\s+(jr.?|iii|iv)$/i or $last =~ /^(.*)\s+\((jr.?|iii|iv)\)$/ )
+    if ( $last =~ /^(.*),\s*(.*)/ or $last =~ /^(.*)\s+(jr.?|sr.?|iii|iv)$/i or $last =~ /^(.*)\s+\((jr.?|sr.?|iii|iv)\)$/ )
     {
 	$last = $1;
 	$suffix = $2;
@@ -400,6 +447,8 @@ sub emit_line {
     my $value = join ' ', @values;
     
     $value ||= '';
+    $value =~ s/[\n\r].*//s;
+    
     $tag = "\r\nTY" if $tag eq 'TY';
     
     return "$tag  - $value\r\n";
