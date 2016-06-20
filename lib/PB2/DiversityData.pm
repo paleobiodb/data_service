@@ -1685,7 +1685,7 @@ sub generate_prevalence {
     
     my @list = grep { $_->{orig_no} } values %phylum;
     
-    if ( exists $phylum{0} )
+    if ( ref $phylum{0}{class} eq 'HASH' )
     {
 	push @list, grep { $_->{orig_no} } values %{$phylum{0}{class}}
 	    if ref $phylum{0}{class} eq 'HASH';

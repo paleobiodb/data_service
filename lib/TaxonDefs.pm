@@ -118,10 +118,16 @@ our (@ECOTAPH_FIELD_DEFS) = (
 	  fields => ['taxon_environment'] },
 	{ basis => 'motility_basis_no', 
 	  fields => ['motility'] },
+	{ basis => 'vision_basis_no',
+	  fields => ['vision'] },
 	{ basis => 'life_habit_basis_no', 
 	  fields => ['life_habit'] },
 	{ basis => 'diet_basis_no', 
 	  fields => ['diet'] },
+	{ basis => 'reproduction_basis_no',
+	  fields => ['reproduction'] },
+	{ basis => 'ontogeny_basis_no',
+	  fields => ['ontogeny'] },
 );
 
 # 	{ output => 'composition', field => 'composition1', field2 => 'composition2',

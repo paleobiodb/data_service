@@ -230,21 +230,21 @@ sub initialize {
 	{ at_most_one => ['interval_id', 'interval', 'max_ma'] });
     
     $ds->define_ruleset('1.2:timerule_selector' =>
-	{ optional => 'timerule', valid => '1.2:timerules' },
+	{ optional => 'time_rule', valid => '1.2:timerules', alias => 'timerule', default => 'major' },
 	    "Resolve temporal locality according to the specified rule, as listed below.  This",
 	    "rule is applied to determine which occurrences, collections, and/or taxa will be selected if",
 	    "you also specify an age range using any of the parameters listed immediately above.",
 	    "For diversity output, this rule is applied to",
 	    "place each occurrence into one or more temporal bins, or to ignore the occcurrence if it",
 	    "does not match any of the bins.  The available rules are:",
-	{ optional => 'timebuffer', valid => POS_VALUE },
+	{ optional => 'time_buffer', valid => POS_VALUE },
 	    "Override the default buffer period for the beginning of the time range when resolving",
 	    "temporal locality.  The value must be given in millions of years.  This parameter",
 	    "is only relevant if C<timerule> is set to C<buffer> or is allowed to default to that value.",
-	{ optional => 'latebuffer', valid => POS_VALUE },
+	{ optional => 'late_buffer', valid => POS_VALUE },
 	    "Override the default buffer period for the end of the time range when resolving temporal",
 	    "locality.  The value must be given in millions of years.  This parameter is only relevant",
-	    "if C<timerule> is set to C<buffer> or is allowed to default to that value.");
+	    "if C<timerule> is set to C<buffer>.");
     
     # Read in all of the interval data, so we don't have to make lots of
     # queries for it later.

@@ -27,7 +27,8 @@ any qr{.*} => sub {
     {
 	params->{header} = "no";
     }
-    elsif ( exists params->{textresult} )
+    
+    if ( exists params->{textresult} )
     {
 	params->{save} = "no";
     }
