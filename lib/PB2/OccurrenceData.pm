@@ -103,6 +103,8 @@ sub initialize {
 	    "The latitude and longitude of this occurrence",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the occurrence",
+	{ value => 'bin', maps_to => '1.2:colls:bin' },
+	    "The list of geographic clusters to which the collection belongs.",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
 	    "Information about the paleogeographic locality of the occurrence,",
 	    "evaluated according to the model specified by the parameter F<pgm>.",
@@ -158,6 +160,7 @@ sub initialize {
 	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li', 'r'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ set => '*', code => \&process_occ_com, if_vocab => 'com' },
+	{ set => '*', code => \&process_occ_ids },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{OCC}, dwc_value => 'Occurrence' },
@@ -434,39 +437,39 @@ sub initialize {
     # The following block specifies the output for taxon records representing
     # occurrence taxonomies.
     
-    $ds->define_block('1.2:occs:taxa' =>
-	{ output => 'taxon_no', com_name => 'oid' },
-	    "The identifier of the taxon represented by this record",
-	{ output => 'parent_no', com_name => 'par' },
-	    "The identifier of the parent taxon.  You can use this field to assemble",
-	    "these records into one or more taxonomic trees.  A value of 0",
-	    "indicates a root of one of these trees.  By default, records representing",
-	    "classes have a value of 0 in this field.",
-	{ output => 'taxon_rank', com_name => 'rnk' },
-	    "The rank of the taxon represented by this record",
-	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
-	{ output => 'taxon_name', com_name => 'nam' },
-	    "The name of the taxon represented by this record",
-	{ output => 'taxon_attr', if_block => 'attr', com_name => 'att' },
-	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'n_orders', com_name => 'odc' },
-	    "The number of orders from within this taxon that appear in the set of",
-	    "fossil occurrences being analyzed",
-	{ output => 'n_families', com_name => 'fmc' },
-	    "The number of families from within this taxon that appear in the set of",
-	    "fossil occurrences being analyzed",
-	{ output => 'n_genera', com_name => 'gnc' },
-	    "The number of genera from within this taxon that appear in the set of",
-	    "fossil occurrences being analyzed",
-	{ output => 'n_species', com_name => 'spc' },
-	    "The number of species from within this taxon that appear in the set of",
-	    "fossil occurrences being analyzed",
-	{ output => 'specific_occs', com_name => 'soc' },
-	    "The number of occurrences that are identified to this specific taxon",
-	    "in the set of fossil occurrences being analyzed",
-	{ output => 'n_occs', com_name => 'noc' },
-	    "The total number of occurrences of this taxon or any of its subtaxa in the",
-	    "set of fossil occurrences being analyzed");
+    # $ds->define_block('1.2:occs:taxa' =>
+    # 	{ output => 'taxon_no', com_name => 'oid' },
+    # 	    "The identifier of the taxon represented by this record",
+    # 	{ output => 'parent_no', com_name => 'par' },
+    # 	    "The identifier of the parent taxon.  You can use this field to assemble",
+    # 	    "these records into one or more taxonomic trees.  A value of 0",
+    # 	    "indicates a root of one of these trees.  By default, records representing",
+    # 	    "classes have a value of 0 in this field.",
+    # 	{ output => 'taxon_rank', com_name => 'rnk' },
+    # 	    "The rank of the taxon represented by this record",
+    # 	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+    # 	{ output => 'taxon_name', com_name => 'nam' },
+    # 	    "The name of the taxon represented by this record",
+    # 	{ output => 'taxon_attr', if_block => 'attr', com_name => 'att' },
+    # 	    "The attribution (author and year) of this taxonomic name",
+    # 	{ output => 'n_orders', com_name => 'odc' },
+    # 	    "The number of orders from within this taxon that appear in the set of",
+    # 	    "fossil occurrences being analyzed",
+    # 	{ output => 'n_families', com_name => 'fmc' },
+    # 	    "The number of families from within this taxon that appear in the set of",
+    # 	    "fossil occurrences being analyzed",
+    # 	{ output => 'n_genera', com_name => 'gnc' },
+    # 	    "The number of genera from within this taxon that appear in the set of",
+    # 	    "fossil occurrences being analyzed",
+    # 	{ output => 'n_species', com_name => 'spc' },
+    # 	    "The number of species from within this taxon that appear in the set of",
+    # 	    "fossil occurrences being analyzed",
+    # 	{ output => 'specific_occs', com_name => 'soc' },
+    # 	    "The number of occurrences that are identified to this specific taxon",
+    # 	    "in the set of fossil occurrences being analyzed",
+    # 	{ output => 'n_occs', com_name => 'noc' },
+    # 	    "The total number of occurrences of this taxon or any of its subtaxa in the",
+    # 	    "set of fossil occurrences being analyzed");
     
     $ds->define_output_map('1.2:occs:taxa_opt' =>
 	@PB2::TaxonData::BASIC_1,
@@ -539,25 +542,40 @@ sub initialize {
 	    "Count by era");
     
     $ds->define_set('1.2:occs:order' =>
-	{ value => 'earlyage' },
+	{ value => 'id' },
+	    "Results are ordered by identifier, so they are reported in the order",
+	    "in which they were entered into the database.  This is the default",
+	    "if you select B<C<all_records>>.",
+	{ value => 'id.asc', undocumented => 1 },
+	{ value => 'id.desc', undocumented => 1 },
+	{ value => 'hierarchy' },
+	    "Results are ordered hierarchically by taxonomic identification.",
+	    "The order of sibling taxa is arbitrary, but children will always",
+	    "follow after parents.",
+	{ value => 'hierarchy.asc', undocumented => 1 },
+	{ value => 'hierarchy.desc', undocumented => 1 },
+	{ value => 'identification' },
+	    "Results are ordered alphabetically by taxonomic identification.",
+	{ value => 'identification.asc', undocumented => 1 },
+	{ value => 'identification.desc', undocumented => 1 },
+	{ value => 'ref' },
+	    "Results are ordered by reference id so that occurrences entered from",
+	    "the same reference are listed together.",
+	{ value => 'ref.asc', undocumented => 1 },
+	{ value => 'ref.desc', undocumented => 1 },
+	{ value => 'max_ma' },
 	    "Results are ordered chronologically by early age bound, oldest to youngest unless you add C<.asc>",
-	{ value => 'earlyage.asc', undocumented => 1 },
-	{ value => 'earlyage.desc', undocumented => 1 },
-	{ value => 'lateage' },
+	{ value => 'max_ma.asc', undocumented => 1 },
+	{ value => 'max_ma.desc', undocumented => 1 },
+	{ value => 'min_ma' },
 	    "Results are ordered chronologically by late age bound, oldest to youngest unless you add C<.asc>",
-	{ value => 'lateage.asc', undocumented => 1 },
-	{ value => 'lateage.desc', undocumented => 1 },
+	{ value => 'min_ma.asc', undocumented => 1 },
+	{ value => 'min_ma.desc', undocumented => 1 },
 	{ value => 'agespan' },
 	    "Results are ordered based on the difference between the early and late age bounds, starting",
 	    "with occurrences with the smallest spread (most precise temporal resolution) unless you add C<.desc>",
 	{ value => 'agespan.asc', undocumented => 1 },
 	{ value => 'agespan.desc', undocumented => 1 },
-	{ value => 'taxon' },
-	    "Results are ordered hierarchically by taxonomic identification.",
-	    "The order of sibling taxa is arbitrary, but children will follow immediately",
-	    "after parents.",
-	{ value => 'taxon.asc', undocumented => 1 },
-	{ value => 'taxon.desc', undocumented => 1 },
 	{ value => 'reso' },
 	    "Results are ordered according to the taxonomic rank to which they are resolved.  Unless",
 	    "you add C<.desc>, this would start with subspecies, species, genus, ...",
@@ -596,14 +614,21 @@ sub initialize {
 	    "You may instead use the parameter name F<id>.");
     
     $ds->define_ruleset('1.2:occs:selector' =>
-	{ param => 'all_records', valid => FLAG_VALUE },
-	    "List all occurrence records known to the database, subject",
-	    "to any other parameters you may specify.  This parameter needs",
-	    "no value.  Please note that specifying this parameter alone will",
-	    "result in a download of over 100 MB of data.",
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
-	    "A comma-separated list of occurrence identifiers.  You may instead",
-	    "use the parameter name F<id>.");
+	    "A comma-separated list of occurrence identifiers.  The specified occurrences",
+	    "are selected, provided they satisfy the other parameters",
+	    "given with this request.  You may also use the parameter name B<C<id>>.",
+	    "You can also use this parameter along with any of the other parameters",
+	    "to filter a known list of occurrences according to other criteria.",
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
+	    "A comma-separated list of collection identifiers.  All occurrences associated with the",
+	    "specified collections are selected, provided they satisfy the other parameters given",
+	    "with this request.");
+    
+    $ds->define_ruleset('1.2:occs:all_records' =>
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Select all occurrences entered in the database, subject to any other parameters you may specify.",
+	    "This parameter does not require any value.");
     
     $ds->define_ruleset('1.2:occs:id' =>
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
@@ -614,53 +639,132 @@ sub initialize {
 	{ optional => 'show', list => q{,}, valid => '1.2:occs:basic_map' },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
-	    "one or more of the following, separated by commas:",
-	{ optional => 'order', valid => '1.2:occs:order', split => ',', no_set_doc => 1 },
-	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with F<.asc> or F<.desc>.  Accepted values are:",
-	    $ds->document_set('1.2:occs:order'),
-	    "If no order is specified, results are sorted by occurrence identifier.",
-	{ ignore => 'level' });
+	    "one or more of the following, separated by commas:");
+    
+	# { optional => 'order', valid => '1.2:occs:order', split => ',', no_set_doc => 1 },
+	#     "Specifies the order in which the results are returned.  You can specify multiple values",
+	#     "separated by commas, and each value may be appended with F<.asc> or F<.desc>.  Accepted values are:",
+	#     $ds->document_set('1.2:occs:order'),
+	#     "If no order is specified, results are sorted by occurrence identifier.",
+	# { ignore => 'level' });
     
     $ds->define_ruleset('1.2:occs:single' => 
 	"The following parameter selects a record to retrieve:",
     	{ require => '1.2:occs:specifier', 
 	  error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" },
 	">>You may also use the following parameters to specify what information you wish to retrieve:",
-	{ optional => 'pgm', valid => $ds->valid_set('1.2:colls:pgmodel'), list => "," },
+	{ optional => 'pgm', valid => '1.2:colls:pgmodel', list => "," },
 	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
 	    "You may specify one or more from the following list, separated by commas.",
 	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
-	    $ds->document_set('1.2:colls:pgmodel'),
-    	{ optional => 'SPECIAL(show)', valid => '1.2:occs:basic_map' },
+    	{ allow => '1.2:occs:display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:list' => 
-	"You can use the following parameters if you wish to retrieve information about",
-	"a known list of occurrences or collections, or to filter a known list against",
-	"other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
+	"You can use the following parameter if you wish to retrieve the entire set of",
+	"occurrence records entered in this database.  Please use this with care, since the",
+	"result set will contain more than 1 million records and will be at least 100 megabytes in size.",
+	"You may also select subsets of this list by specifying some combinatino of the parameters listed below.",
+    	{ allow => '1.2:occs:all_records' },
+        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
 	{ allow => '1.2:occs:selector' },
-        ">>The following parameters can be used to select occurrences by a variety of criteria.",
-	"Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections,",
-	"or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:occs:all_records', '1.2:occs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	{ ignore => 'level' },
+	">>The following parameters can be used to filter the selection.",
+	"If you wish to use one of them and have not specified any of the selection parameters",
+	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ allow => '1.2:refs:aux_selector' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', 
-			  '1.2:ma_selector', '1.2:refs:aux_selector', 
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
-	">>The following parameters can be used to further filter the result list.",
+	">>The following parameters can also be used to filter the result list based on taxaonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ allow => '1.2:occs:display' },
+	{ optional => 'order', valid => '1.2:occs:order', split => ',', no_set_doc => 1 },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with F<.asc> or F<.desc>.  Accepted values are:",
+	    $ds->document_set('1.2:occs:order'),
+	    "If no order is specified, results are sorted by occurrence identifier.",
 	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:byref' => 
+	"You can use the following parameter if you wish to retrieve the entire set of",
+	"occurrence records entered in this database.  Please use this with care, since the",
+	"result set will contain more than 1 million records and will be at least 100 megabytes in size.",
+	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
+    	{ allow => '1.2:occs:all_records' },
+        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
+	{ allow => '1.2:occs:selector' },
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:occs:all_records', '1.2:occs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	{ ignore => ['level', 'ref_type', 'select'] },
+	">>You can use the following parameters to filter the result set based on attributes",
+	"of the bibliographic references.  If you wish to use one of them and have not specified",
+	"any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters can also be used to filter the selection.",
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	">>The following parameters can also be used to further filter the selection based on taxaonomy:",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameter to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
+	{ allow => '1.2:occs:display' },
+	{ optional => 'order', valid => '1.2:occs:order', split => ',' },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  If this",
+	    "parameter is not given, the returned occurrences are ordered by reference.  If",
+	    "B<C<all_records>> is specified, the references will be sorted in the order they were",
+	    "entered in the database.  Otherwise, they will be sorted by default by the name of the",
+	    "first and second author.  Accepted values include:",
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+
+    # $$$ need to add occs:order_byref, including 'ref'.  Also need to
+    # add occurrence id to occs:order and occs:order_byref.
+    
+    $ds->define_ruleset('1.2:occs:geosum' =>
+	"The following required parameter selects from the available resolution levels.",
+	"You can get a L<list of available resolution levels|op:config.txt?show=clusters>.",
+	{ param => 'level', valid => POS_VALUE, default => 1 },
+	    "Return records from the specified cluster level.  (REQUIRED)",
+	">>You can use the following parameter if you wish to retrieve a geographic summary",
+	"of the entire set of occurrences entered in the database.",
+    	{ allow => '1.2:occs:all_records' },
+	">>You can use the following parameters to query for occurrences by",
+	"a variety of criteria.  Except as noted below, you may use these in any combination.",
+	"The resulting list will be mapped onto summary clusters at the selected level of",
+	"resolution.",
+    	{ allow => '1.2:occs:selector' },
+    	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:occs:all_records', '1.2:occs:selector', '1.2:main_selector',
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	">>The following parameters filter the result set.  If you wish to use one of them and",
+	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	">>The following parameters can be used to further filter the selection, based on the",
+	"taxonomy of the selected occurrences.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameter to request additional information",
+	"beyond the basic summary cluster records.",
+   	{ allow => '1.2:summary_display' },
+    	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:taxa' =>
@@ -942,7 +1046,7 @@ sub initialize {
 # Query for all relevant information about the collection specified by the
 # 'id' parameter.  Returns true if the query succeeded, false otherwise.
 
-sub get {
+sub get_occ {
 
     my ($request) = @_;
     
@@ -989,6 +1093,7 @@ sub get {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Figure out what information we need to determine access permissions.
     
@@ -1011,7 +1116,7 @@ sub get {
         WHERE o.occurrence_no = $id
 	GROUP BY o.occurrence_no";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
     
@@ -1031,9 +1136,9 @@ sub get {
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
-sub list {
+sub list_occs {
 
-    my ($request) = @_;
+    my ($request, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
@@ -1066,6 +1171,7 @@ sub list {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Figure out what information we need to determine access permissions.
     
@@ -1156,9 +1262,16 @@ sub list {
     
     # Determine the order in which the results should be returned.
     
-    my $tt = $tables->{tv} ? 'ts' : 't';
+    my $tt = $tables->{tv} ? 'tv' : 't';
     
-    my $order_clause = $request->PB2::CollectionData::generate_order_clause($tables, { at => 'c', bt => 'o', tt => $tt }) || 'o.occurrence_no';
+    my $order_clause = $request->PB2::CollectionData::generate_order_clause($tables, { at => 'c', bt => 'o', tt => $tt });
+    
+    unless ( $order_clause )
+    {
+	$order_clause = defined $arg && $arg eq 'byref' ? 
+	    "r.reference_no, o.occurrence_no" : 
+		'o.occurrence_no';
+    }
     
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
@@ -1174,7 +1287,7 @@ sub list {
 	ORDER BY $order_clause
 	$limit";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
     # Then prepare and execute the main query.
     
@@ -1300,6 +1413,7 @@ sub diversity {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
@@ -1316,7 +1430,7 @@ sub diversity {
         WHERE $filter_string
 	GROUP BY $group_expr";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
     # Then prepare and execute the main query.
     
@@ -1469,6 +1583,7 @@ sub quickdiv {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Now generate the appropriate SQL expression based on what we are trying
     # to count.
@@ -1526,7 +1641,7 @@ sub quickdiv {
 		WHERE sm.scale_no = $scale_id and sm.scale_level = $reso $age_limit
 		ORDER BY early_age";
     
-    print STDERR "$outer_sql\n\n" if $request->debug;
+    $request->{ds}->debug_line("$outer_sql\n") if $request->debug;
     
     $result = $dbh->selectall_arrayref($outer_sql, { Slice => {} });
     
@@ -1564,7 +1679,7 @@ sub quickdiv {
 # Like 'list', but processes the resulting list of occurrences into a
 # taxonomic tree.
 
-sub taxa {
+sub list_occs_taxa {
 
     my ($request) = @_;
     
@@ -1745,6 +1860,7 @@ sub taxa {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
@@ -1761,7 +1877,7 @@ sub taxa {
         WHERE $filter_string
 	GROUP BY $group_expr";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
     # Then prepare and execute the main query.
     
@@ -1868,7 +1984,8 @@ sub prevalence {
 	# warnings. 
 	
 	$request->strict_check;
-    
+	$request->extid_check;
+	
 	# Then generate the required SQL statement.
 	
 	my $filter_string = join(' and ', @filters);
@@ -1900,7 +2017,7 @@ sub prevalence {
 		ORDER BY n_occs desc LIMIT $raw_limit";
 	}
 	
-	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
 	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
@@ -1954,6 +2071,7 @@ sub prevalence {
 	# warnings. 
 	
 	$request->strict_check;
+	$request->extid_check;
 	
 	# Determine which extra tables, if any, must be joined to the query.  Then
 	# construct the query.
@@ -1968,7 +2086,7 @@ sub prevalence {
 	GROUP BY ph.phylum_no, ph.class_no, ph.order_no
 	ORDER BY n_occs desc LIMIT $raw_limit";
 	
-	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
 	
 	# Then prepare and execute the main query.
 	
@@ -1991,6 +2109,7 @@ sub prevalence {
 	# warnings. 
 	
 	$request->strict_check;
+	$request->extid_check;
 	
 	# Construct and execute the necessary SQL statement.
 	
@@ -2006,7 +2125,7 @@ sub prevalence {
 		GROUP BY orig_no
 		ORDER BY n_occs desc LIMIT $raw_limit";
 	
-	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
 	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
@@ -2038,7 +2157,7 @@ sub generate_prevalence_joins {
 # Query the database for the references associated with occurrences satisfying
 # the conditions specified by the parameters.
 
-sub list_associated {
+sub list_occs_associated {
 
     my ($request, $record_type) = @_;
     
@@ -2063,6 +2182,7 @@ sub list_associated {
     }
     
     $use_taxonomy = 1 if $record_type eq 'taxa' || $record_type eq 'opinions';
+    $select{occs} = 1 unless %select;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -2083,30 +2203,17 @@ sub list_associated {
     
     my $filter_string = join(' and ', @filters);
     
-    # Construct another set of filter expressions to act on the references.
-    
-    my @ref_filters = $request->generate_ref_filters($request->tables_hash);
-    push @ref_filters, $request->generate_common_filters( { refs => 'r', occs => 'ignore' } );
-    push @ref_filters, "1=1" unless @ref_filters;
-    
-    my $ref_filter_string = join(' and ', @ref_filters);
-    
-    # Figure out the order in which we should return the references.  If none
-    # is selected by the options, sort by rank descending.
-    
-    my $order = $request->PB2::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
-	"r.author1last, r.author1init";
-    
-    # If the 'strict' parameter was given, make sure we haven't generated any
-    # warnings. 
-    
-    $request->strict_check;
-    
     # If we do want taxonomy references, we must constuct a temporary table of
     # occurrences and pass that to Taxonomy::list_associated.
     
     if ( $use_taxonomy )
     {
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings. 
+	
+	$request->strict_check;
+	$request->extid_check;
+	
 	$dbh->do("DROP TABLE IF EXISTS occ_list");
 	$dbh->do("CREATE TEMPORARY TABLE occ_list (
 			occurrence_no int unsigned not null primary key,
@@ -2132,7 +2239,7 @@ sub list_associated {
 	}
 	
 	finally {
-	    print STDERR $sql . "\n\n" if $request->debug;
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
 	};
 	
 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
@@ -2149,6 +2256,16 @@ sub list_associated {
 	
 	delete $options->{min_ma};
 	delete $options->{max_ma};
+	
+	# If debug mode is turned on, generate a closure which will be able to output debug
+	# messages. 
+	
+	if ( $request->debug )
+	{
+	    $options->{debug_out} = sub {
+		$request->{ds}->debug_line($_[0]);
+	    };
+	}
 	
 	# Indicate that we want a DBI statement handle in return, and that we will
 	# be using the table 'occ_list'.
@@ -2170,7 +2287,7 @@ sub list_associated {
 	
 	finally {
 	    $dbh->do("DROP TABLE IF EXISTS occ_list");
-	    print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+	    $request->{ds}->debug_line($taxonomy->last_sql . "\n") if $request->debug;
 	};
 	
 	$request->set_result_count($taxonomy->last_rowcount) if $options->{count};
@@ -2179,33 +2296,57 @@ sub list_associated {
     
     # Otherwise, we can construct a query ourselves.
     
-    $request->delete_output_field('n_auth');
-    $request->delete_output_field('n_class');
-    $request->delete_output_field('n_unclass');
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $request->sql_limit_clause(1);
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $request->sql_count_clause;
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    my $fields = $request->select_string;
-    
-    $request->adjustCoordinates(\$fields);
-    
-    my $inner_join_list = $request->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($request->tables_hash);
-    
-    $dbh->do("DROP TABLE IF EXISTS ref_collect");
-    
-    my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
-    
-    $dbh->do("CREATE $temp TABLE ref_collect (
+    else
+    {
+	$request->delete_output_field('n_auth');
+	$request->delete_output_field('n_class');
+	$request->delete_output_field('n_unclass');
+	
+	# If a query limit has been specified, modify the query accordingly.
+	
+	my $limit = $request->sql_limit_clause(1);
+	
+	# If we were asked to count rows, modify the query accordingly
+	
+	my $calc = $request->sql_count_clause;
+	
+	# Determine which fields and tables are needed to display the requested
+	# information.
+	
+	my $fields = $request->select_string;
+	
+	$request->adjustCoordinates(\$fields);
+	
+	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+	my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($request->tables_hash);
+	
+	# Construct another set of filter expressions to act on the references.
+	
+	my @ref_filters = $request->generate_ref_filters($request->tables_hash);
+	push @ref_filters, $request->generate_common_filters( { refs => 'r', occs => 'ignore' } );
+	push @ref_filters, "1=1" unless @ref_filters;
+	
+	my $ref_filter_string = join(' and ', @ref_filters);
+	
+	# Figure out the order in which we should return the references.  If none
+	# is selected by the options, sort by rank descending.
+	
+	my $order = $request->PB2::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
+	    "r.author1last, r.author1init, ifnull(r.author2last, ''), ifnull(r.author2init, ''), r.reference_no";
+	
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings. 
+	
+	$request->strict_check;
+	$request->extid_check;
+	
+	# Now collect up all of the requested references.
+	
+	$dbh->do("DROP TABLE IF EXISTS ref_collect");
+	
+	my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+	
+	$dbh->do("CREATE $temp TABLE ref_collect (
 		reference_no int unsigned not null,
 		ref_type varchar(10),
 		taxon_no int unsigned null,
@@ -2213,85 +2354,85 @@ sub list_associated {
 		specimen_no int unsigned null,
 		collection_no int unsigned null,
 		UNIQUE KEY (reference_no, ref_type, occurrence_no, specimen_no, collection_no)) engine=memory");
-    
-    if ( $select{occs} )
-    {
-	$sql = "INSERT IGNORE INTO ref_collect
+	
+	if ( $select{occs} )
+	{
+	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, 'O' as ref_type, o.taxon_no, o.occurrence_no, 
 			null as specimen_no, null as collection_no
 		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
+	    
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	    
+	    $dbh->do($sql);
+	}
 	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	$dbh->do($sql);
-    }
-    
-    if ( $select{colls} )
-    {
-	$sql = "INSERT IGNORE INTO ref_collect
+	if ( $select{colls} )
+	{
+	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
 			null as occurrence_no, null as specimen_no, c.collection_no
 		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
+	    
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	    
+	    $dbh->do($sql);
+	}
 	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	$dbh->do($sql);
-    }
-    
-    if ( $select{specs} )
-    {
-	$sql = "INSERT IGNORE INTO ref_collect
+	if ( $select{specs} )
+	{
+	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, null as occurrence_no,
 			ss.specimen_no, null as collection_no
 		FROM $SPEC_MATRIX as ss JOIN $OCC_MATRIX as o using (occurrence_no)
 			JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
-
-	print STDERR "$sql\n\n" if $request->debug;
+	    
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	    
+	    $dbh->do($sql);
+	}
 	
-	$dbh->do($sql);
-    }
-    
-    $request->{main_sql} = "
-	SELECT $calc $fields, group_concat(distinct ref_type) as ref_type,
-		count(distinct taxon_no) as n_reftaxa, 
-		count(distinct occurrence_no) as n_refoccs,
-		count(distinct specimen_no) as n_refspecs,
-		count(distinct collection_no) as n_refcolls
-	FROM ref_collect as base
-		LEFT JOIN refs as r using (reference_no)
-		$outer_join_list
-	WHERE $ref_filter_string
-	GROUP BY base.reference_no ORDER BY $order $limit";
-    
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
-    
-    # Then prepare and execute the main query.
-    
-    try 
-    {
-	$request->{main_sth} = $dbh->prepare($request->{main_sql});
-	$request->{main_sth}->execute();
-    }
+	$request->{main_sql} = "SELECT $calc $fields, group_concat(distinct ref_type) as ref_type,
+			count(distinct taxon_no) as n_reftaxa, 
+			count(distinct occurrence_no) as n_refoccs,
+			count(distinct specimen_no) as n_refspecs,
+			count(distinct collection_no) as n_refcolls
+		FROM ref_collect as base
+			LEFT JOIN refs as r using (reference_no)
+			$outer_join_list
+		WHERE $ref_filter_string
+		GROUP BY base.reference_no ORDER BY $order $limit";
 	
-    catch
-    {
-	die $_;
-    }
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
 	
-    finally
-    {
-	$dbh->do("DROP TABLE IF EXISTS ref_collect");
-    };
-    
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
+	# Then prepare and execute the main query.
+	
+	try 
+	{
+	    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+	    $request->{main_sth}->execute();
+	}
+	
+	catch
+	{
+	    die $_;
+	}
+	
+	finally
+	{
+	    $dbh->do("DROP TABLE IF EXISTS ref_collect");
+	};
+	
+	# If we were asked to get the count, then do so
+	
+	$request->sql_count_rows;
+    }
 }
 
 
@@ -2375,7 +2516,7 @@ sub taxa_test {
     
     finally {
 	$dbh->do("DROP TABLE IF EXISTS occ_list");
-	print STDERR $sqlA . "\n\n" . $taxonomy->last_sql . "\n\n" if $request->debug;
+	$request->{ds}->debug_line("$sqlA\n") if $request->debug;
     };
     
     $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
@@ -2388,7 +2529,7 @@ sub taxa_test {
 # Query the database for the strata associated with occurrences satisfying
 # the conditions specified by the parameters.
 
-sub strata {
+sub list_occs_strata {
 
     my ($request) = @_;
     
@@ -2431,6 +2572,7 @@ sub strata {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -2461,7 +2603,7 @@ sub strata {
 	ORDER BY $order_clause
 	$limit";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
     # Then prepare and execute the main query.
     
@@ -2504,40 +2646,45 @@ sub generateOccFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    # Check for parameter 'ident_type'.  In cases of reidentified occurrences, it
-    # specifies which identifications should be returned.  The default is
-    # 'latest'.
+    # If the specified table is already part of the query, then check for parameter 'ident_type'.
+    # In cases of reidentified occurrences, it specifies which identifications should be returned.
+    # The default is 'latest'.  If this table is not already part of the query, then we can (and
+    # should) ignore this parameter because it makes no difference and will unnecessarily slow
+    # down the query.
     
-    my $ident = $request->clean_param('ident_type');
-    
-    if ( $ident eq 'orig' )
+    if ( $tables_ref->{$tn} )
     {
-	push @filters, "$tn.reid_no = 0";
-	$tables_ref->{$tn} = 1;
-	$tables_ref->{non_summary} = 1;
-    }
-    
-    elsif ( $ident eq 'all' )
-    {
-	$tables_ref->{group_by_reid} = 1;
-	$tables_ref->{non_summary} = 1;
-    }
-    
-    else # default: 'latest'
-    {
-	$tables_ref->{$tn} = 1;
-	push @filters, "$tn.latest_ident = true";
+	my $ident = $request->clean_param('ident_type');
+	
+	if ( $ident eq 'orig' )
+	{
+	    push @filters, "$tn.reid_no = 0";
+	    $tables_ref->{$tn} = 1;
+	    $tables_ref->{non_summary} = 1;
+	}
+	
+	elsif ( $ident eq 'all' )
+	{
+	    $tables_ref->{group_by_reid} = 1;
+	    $tables_ref->{non_summary} = 1;
+	}
+	
+	else # default: 'latest'
+	{
+	    $tables_ref->{$tn} = 1;
+	    push @filters, "$tn.latest_ident = true";
+	}
     }
     
     # Check for parameter 'ref_id'.
     
-    if ( my @reflist = $request->clean_param_list('ref_id') )
-    {
-	my $refstring = join(',', @reflist);
-	push @filters, "$tn.reference_no in ($refstring)";
-	$tables_ref->{$tn} = 1;
-	$tables_ref->{non_summary} = 1;
-    }
+    # if ( my @reflist = $request->clean_param_list('ref_id') )
+    # {
+    # 	my $refstring = join(',', @reflist);
+    # 	push @filters, "$tn.reference_no in ($refstring)";
+    # 	$tables_ref->{$tn} = 1;
+    # 	$tables_ref->{non_summary} = 1;
+    # }
     
     return @filters;
 }
@@ -3147,7 +3294,11 @@ my %ID_TYPE = ( orig_no => 'TXN',
 		specimen_no => 'SPM',
 		collection_no => 'COL',
 		reid_no => 'REI',
-		reference_no => 'REF' );
+		reference_no => 'REF',
+		bin_id_1 => 'CLU',
+		bin_id_2 => 'CLU',
+		bin_id_3 => 'CLU',
+		bin_id_4 => 'CLU', );
 
 
 sub process_occ_com {
@@ -3167,29 +3318,6 @@ sub process_occ_com {
     
     delete $record->{identified_rank} if $record->{identified_rank} && $record->{accepted_rank} &&
 	$record->{identified_rank} eq $record->{accepted_rank};
-    
-    # Alter all object identifiers from the numeric values stored in the
-    # database to the text form reported externally.
-    
-    foreach my $f ( qw(orig_no taxon_no accepted_no phylum_no
-		       class_no order_no family_no genus_no subgenus_no
-		       interval_no specimen_no occurrence_no collection_no
-		       reid_no reference_no) )
-    {
-	$record->{$f} = generate_identifier($ID_TYPE{$f}, $record->{$f})
-	    if defined $record->{$f};
-    }
-    
-    if ( defined $record->{identified_no} && defined $record->{spelling_no} &&
-	 $record->{identified_no} ne $record->{spelling_no} )
-    {
-	$record->{identified_no} = generate_identifier('VAR', $record->{identified_no});
-    }
-    
-    else
-    {
-	$record->{identified_no} = generate_identifier('TXN', $record->{identified_no});
-    }
     
     # foreach my $f ( qw(interval_no) )
     # {
@@ -3224,6 +3352,44 @@ sub process_occ_com {
     if ( defined $record->{preservation} )
     {
 	$record->{preservation} = uc substr($record->{preservation}, 0, 1);
+    }
+}
+
+
+# Alter all object identifiers from the numeric values stored in the database to the text form
+# reported externally.
+
+sub process_occ_ids {
+    
+    my ($request, $record) = @_;
+    
+    return unless $request->{block_hash}{extids};
+    
+    # my $make_ids = $request->clean_param('extids');
+    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
+    
+    # return unless $make_ids;
+    
+    # $request->delete_output_field('record_type');
+    
+    foreach my $f ( qw(orig_no taxon_no accepted_no phylum_no
+		       class_no order_no family_no genus_no subgenus_no
+		       interval_no specimen_no occurrence_no collection_no
+		       reid_no reference_no bin_id_1 bin_id_2 bin_id_3 bin_id_4) )
+    {
+	$record->{$f} = generate_identifier($ID_TYPE{$f}, $record->{$f})
+	    if defined $record->{$f};
+    }
+    
+    if ( defined $record->{identified_no} && defined $record->{spelling_no} &&
+	 $record->{identified_no} ne $record->{spelling_no} )
+    {
+	$record->{identified_no} = generate_identifier('VAR', $record->{identified_no});
+    }
+    
+    else
+    {
+	$record->{identified_no} = generate_identifier('TXN', $record->{identified_no});
     }
 }
 

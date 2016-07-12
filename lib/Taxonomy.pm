@@ -90,6 +90,7 @@ sub new {
 my (%STD_OPTION) = ( fields => 1, 
 		     order => 1,
 		     record_type => 1,
+		     debug_out => 1,
 		     table => 1,
 		     count => 1,
 		     limit => 1,
@@ -448,6 +449,11 @@ sub list_taxa_simple {
     
     $taxonomy->{sql_string} = $sql;
     
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}($sql);
+    }
+    
     try {
 	$result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
     }
@@ -548,7 +554,7 @@ sub list_subtree {
     my $filters = @filters ? join ' and ', @filters : '1=1';
     
     my $other_joins = $taxonomy->taxon_joins('t', $tables);
-    my $other_joins = $taxonomy->ref_joins('a', $tables);
+    $other_joins .= $taxonomy->ref_joins('a', $tables);
     
     my $auth_table = $taxonomy->{AUTH_TABLE};
     my $tree_table = $taxonomy->{TREE_TABLE};
@@ -562,6 +568,11 @@ sub list_subtree {
 		ORDER BY t.lft\n";
     
     $taxonomy->{sql_string} = $sql;
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}($sql);
+    }
     
     my $result_list;
     
@@ -888,7 +899,7 @@ sub list_taxa {
 	if ( $options->{immediate} )
 	{
 	    $joins = "JOIN $tree_table as t on t.lft between tb.lft and tb.rgt";
-	    push @filters, $taxonomy->immediate_filters($base_string);
+	    push @filters, $taxonomy->immediate_filters($base_string, $options);
 	}
 	
 	else
@@ -919,7 +930,7 @@ sub list_taxa {
 	# orig_no values representing the ancestors of the taxa identified by
 	# $base_string.
 	
-	$taxonomy->compute_ancestry($base_string, $options->{immediate});
+	$taxonomy->compute_ancestry($base_string, $options->{immediate}, $options);
 	
 	# Now use this temporary table to do the actual query.
 	
@@ -1052,6 +1063,7 @@ sub list_taxa {
     return $taxonomy->execute_query($sql, { record_type => 'taxa',
 					    return_type => $return_type,
 					    count => $options->{count},
+					    debug_out => $options->{debug_out},
 					    sql_strings => \@sql_strings,
 					    drop_table => $drop_table,
 					    base_nos => $base_nos,
@@ -1091,7 +1103,7 @@ sub find_common_taxa {
     # set of orig_no values representing the ancestors of the taxa identified by
     # $base_string.
     
-    $taxonomy->compute_ancestry($base_string);
+    $taxonomy->compute_ancestry($base_string, undef, $options);
     
     # Now use this temporary table to query for the set of ancestral taxa.
     
@@ -1100,9 +1112,14 @@ sub find_common_taxa {
 			JOIN $ATTRS_TABLE as v on v.orig_no = t.orig_no
 		GROUP BY t.lft ORDER BY t.lft";
     
-    $ancestry = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
     $taxonomy->{sql_string} .= "$sql\n\n";
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}("$sql\n");
+    }
+    
+    $ancestry = $dbh->selectall_arrayref($sql, { Slice => {} });
     
     # If no ancestors were found, we return just "0" which will lead to an
     # empty result.
@@ -1175,6 +1192,11 @@ sub find_common_taxa {
 		JOIN $ATTRS_TABLE as v on v.orig_no = t.orig_no and v.extant_children > 1
 	WHERE tb.orig_no = $common_id and t.synonym_no = t.orig_no
 	ORDER BY t.depth LIMIT 1";
+	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$crown_sql\n");
+	}
 	
 	my $t = $dbh->selectrow_hashref($crown_sql);
 	
@@ -1471,7 +1493,7 @@ sub list_associated {
 	# orig_no values representing the ancestors of the taxa identified by
 	# $base_string.
 	
-	$taxonomy->compute_ancestry($base_string, $options->{immediate});
+	$taxonomy->compute_ancestry($base_string, $options->{immediate}, $options);
 	
 	# Now use this temporary table to do the actual query.
 	
@@ -1632,8 +1654,13 @@ sub list_associated {
 		FROM $query_core
 		WHERE $inner_filters $additional";
 	    
+	    if ( ref $options->{debug_out} eq 'CODE' )
+	    {
+		&{$options->{debug_out}}("$sql\n");
+	    }
+	    
 	    $dbh->do($sql);
-	    push @sql_strings, $sql;
+	    # push @sql_strings, $sql;
 	    
 	    # If we were asked to count rows, then get the total number of rows found by this
 	    # statement.
@@ -1690,8 +1717,13 @@ sub list_associated {
 		FROM $query_core
 		WHERE $inner_filters $additional";
 	    
+	    if ( ref $options->{debug_out} eq 'CODE' )
+	    {
+		&{$options->{debug_out}}("$sql\n");
+	    }
+	    
 	    $dbh->do($sql);
-	    push @sql_strings, $sql;
+	    # push @sql_strings, $sql;
 	    
 	    # If we were asked to count rows, then get the total number of rows found by this
 	    # statement.
@@ -1745,8 +1777,13 @@ sub list_associated {
 		FROM $query_core
 		WHERE $inner_filters and o.opinion_no <> t.opinion_no $additional";
 	    
+	    if ( ref $options->{debug_out} eq 'CODE' )
+	    {
+		&{$options->{debug_out}}("$sql\n");
+	    }
+	    
 	    $dbh->do($sql);
-	    push @sql_strings, $sql;
+	    # push @sql_strings, $sql;
 	    
 	    if ( $options->{count} )
 	    {
@@ -1800,6 +1837,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type,
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
+						 debug_out => $options->{debug_out},
 						 count => 0 } );
     }
     
@@ -1857,8 +1895,13 @@ sub list_associated {
 		WHERE $inner_filters
 		GROUP BY a.reference_no, a.taxon_no";
 	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @sql_strings, $sql;
+	# push @sql_strings, $sql;
     }
     
     if ( $select{refs_class} || $select{refs_ops} )
@@ -1897,8 +1940,13 @@ sub list_associated {
 		WHERE $inner_filters
 		GROUP BY o.reference_no, o.opinion_no";
        
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @sql_strings, $sql;
+	# push @sql_strings, $sql;
 	
 	my $query_core_2 = $rel eq 'all_taxa'
 	    ? "$refs_table as r
@@ -1920,8 +1968,13 @@ sub list_associated {
 		WHERE $inner_filters
 		GROUP BY o.reference_no, o.opinion_no";
        
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @sql_strings, $sql;
+	# push @sql_strings, $sql;
     }
     
     if ( $select{refs_occs} )
@@ -1971,8 +2024,13 @@ sub list_associated {
 		WHERE $inner_filters
 		GROUP BY $group_expr";
        
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @sql_strings, $sql;
+	# push @sql_strings, $sql;
     }
     
     if ( $select{refs_specs} )
@@ -2018,8 +2076,13 @@ sub list_associated {
 		WHERE $inner_filters
 		GROUP BY ss.reference_no, ss.specimen_no";
 	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @sql_strings, $sql;
+	# push @sql_strings, $sql;
     }
     
     if ( $select{refs_colls} && $record_type ne 'taxa' )
@@ -2063,8 +2126,13 @@ sub list_associated {
 		WHERE $inner_filters
 		GROUP BY c.reference_no, c.collection_no";
 	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @sql_strings, $sql;
+	# push @sql_strings, $sql;
     }
     
     # Now construct the full query using what we constructed above as a subquery.
@@ -2110,6 +2178,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
+						 debug_out => $options->{debug_out},
 						 drop_table => 'ref_collect',
 						 count => $options->{count} } );
     }
@@ -2150,6 +2219,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
+						 debug_out => $options->{debug_out},
 						 drop_table => 'ref_collect',
 						 count => $options->{count} } );
     }
@@ -2207,8 +2277,14 @@ sub generate_taxa_list {
 	$sql = "INSERT INTO taxa_list
 		SELECT taxon_no, orig_no, count(*)
 		FROM $occs_table GROUP BY taxon_no";
+
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @$sql_listref, $sql;
+	# push @$sql_listref, $sql;
 	
 	# Add the accepted names, where they differ from the identified names (note
 	# the WHERE clause).
@@ -2220,8 +2296,14 @@ sub generate_taxa_list {
 		WHERE t.spelling_no <> ot.taxon_no
 		GROUP BY t.orig_no
 		ON DUPLICATE KEY UPDATE n_occs = n_occs + values(n_occs)";
+	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @$sql_listref, $sql;
+	# push @$sql_listref, $sql;
     }
     
     # Otherwise, just get the accepted names.
@@ -2233,8 +2315,14 @@ sub generate_taxa_list {
 		FROM $occs_table JOIN $tree_table as t1 using (orig_no)
 			JOIN $tree_table as t on t.orig_no = t1.accepted_no
 		GROUP BY t.orig_no";
+	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @$sql_listref, $sql;
+	# push @$sql_listref, $sql;
     }
     
     # In either case, for all taxa which are not genera but have associated
@@ -2248,8 +2336,14 @@ sub generate_taxa_list {
 		WHERE pl.genus_no is not null and pl.genus_no <> pl.orig_no
 		GROUP BY t.orig_no
 		ON DUPLICATE KEY UPDATE n_occs = n_occs + values(n_occs)";
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}("$sql\n");
+    }
+    
     $dbh->do($sql);
-    push @$sql_listref, $sql;
+    # push @$sql_listref, $sql;
     
     # Same for subgenera.
     
@@ -2260,8 +2354,14 @@ sub generate_taxa_list {
 		WHERE pl.subgenus_no is not null and pl.subgenus_no <> pl.orig_no
 		GROUP BY t.orig_no
 		ON DUPLICATE KEY UPDATE n_occs = n_occs + values(n_occs)";
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}("$sql\n");
+    }
+    
     $dbh->do($sql);
-    push @$sql_listref, $sql;
+    # push @$sql_listref, $sql;
     
     # If the option 'higher' was given, then expand the list by adding higher
     # taxa.  We add all the way up the tree, but this list will typically be
@@ -2278,8 +2378,13 @@ sub generate_taxa_list {
 		SET tl.taxon_no = t.spelling_no
 		WHERE tl.taxon_no = 0";
 	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	$dbh->do($sql);
-	push @$sql_listref, $sql;
+	# push @$sql_listref, $sql;
     }
     
     my $a = 1;	# we can stop here when debugging
@@ -2311,6 +2416,11 @@ sub execute_query {
     {
 	print STDERR "$sql\n\n";
 	return;
+    }
+    
+    elsif ( ref $params->{debug_out} eq 'CODE' )
+    {
+	&{$params->{debug_out}}($taxonomy->{sql_string});
     }
     
     try
@@ -2579,7 +2689,7 @@ sub resolve_names {
 	    # Then try to see if the name matches an actual taxon.  If so,
 	    # save it.
 	    
-	    if ( my $base = $taxonomy->lookup_base($name, $prefix_base) )
+	    if ( my $base = $taxonomy->lookup_base($name, $prefix_base, $options) )
 	    {
 		$base{$base_name} = $base;
 	    }
@@ -2717,6 +2827,11 @@ sub resolve_names {
 	    
 	    $taxonomy->{sql_string} .= $sql;
 	    $taxonomy->{sql_string} .= "\n\n";
+	    
+	    if ( ref $options->{debug_out} eq 'CODE' )
+	    {
+		&{$options->{debug_out}}("$sql\n");
+	    }
 	    
 	    my $this_result = $dbh->selectall_arrayref($sql, { Slice => {} });
 	    
@@ -3017,7 +3132,7 @@ sub lex_namestring {
 
 sub lookup_base {
     
-    my ($taxonomy, $base_name, $prefix_base) = @_;
+    my ($taxonomy, $base_name, $prefix_base, $options) = @_;
     
     return unless $base_name;
     
@@ -3082,6 +3197,11 @@ sub lookup_base {
 		GROUP BY orig_no
 		ORDER BY v.taxon_size desc LIMIT 1";
 	
+	if ( ref $options->{debug_out} eq 'CODE' )
+	{
+	    &{$options->{debug_out}}("$sql\n");
+	}
+	
 	my $result = $dbh->selectrow_hashref($sql);
 	
 	# If we found something, then we're done.
@@ -3102,6 +3222,11 @@ sub lookup_base {
 		JOIN taxon_trees as t on t.orig_no = t1.synonym_no
 	WHERE taxon_name like $quoted and taxon_rank > 5 $range_clause
 	GROUP BY t.orig_no";
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}("$sql\n");
+    }
     
     my $ranges = $dbh->selectall_arrayref($sql);
     
@@ -3442,7 +3567,7 @@ sub exclusion_filters {
 
 sub immediate_filters {
     
-    my ($taxonomy, $id_string) = @_;
+    my ($taxonomy, $id_string, $options) = @_;
     
     # First query for the sequence range of each synonym of any of the specified taxa.
     
@@ -3456,6 +3581,11 @@ sub immediate_filters {
 		LEFT JOIN $tree_table as t on t.synonym_no = tb.orig_no
 	WHERE base.taxon_no in ($id_string)
 	GROUP BY t.orig_no";
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}("$sql\n");
+    }
     
     my $rows = $dbh->selectall_arrayref($sql, { Slice => {} });
     
@@ -4559,7 +4689,16 @@ sub taxon_order {
 	
 	elsif ( $order eq 'hierarchy.desc' )
 	{
-	    push @clauses, "t.lft desc";
+	    if ( $rel eq 'children' || $rel eq 'all_children' || $rel eq 'parents' ||
+		 $rel eq 'all_parents' || $rel eq 'synonyms' )
+	    {
+		push @clauses, "t.lft asc";
+	    }
+	    
+	    else
+	    {
+		push @clauses, "if(t.lft > 0, 1, 0), t.lft desc";
+	    }	    
 	}
 	
 	elsif ( $order eq 'n_occs' or $order eq 'n_occs.desc' )
@@ -4746,12 +4885,12 @@ sub ref_order {
 	
     	if ( $order eq 'author' or $order eq 'author.asc' )
 	{
-	    push @clauses, "r.author1last, r.author1init, r.author2last, r.author2init";
+	    push @clauses, "r.author1last, r.author1init, ifnull(r.author2last, ''), ifnull(r.author2init,'')";
 	}
 	
 	elsif ( $order eq 'author.desc' )
 	{
-	    push @clauses, "r.author1last desc, r.author1init desc, r.author2last desc, r.author2init desc";
+	    push @clauses, "r.author1last desc, r.author1init desc, ifnull(r.author2last,'') desc, ifnull(r.author2init,'') desc";
 	}
 	
 	elsif ( $order eq 'pubyr' or $order eq 'pubyr.asc' )
@@ -4766,12 +4905,12 @@ sub ref_order {
 	
 	elsif ( $order eq 'reftitle' or $order eq 'reftitle.asc' )
 	{
-	    push @clauses, "r.reftitle asc";
+	    push @clauses, "if(r.reftitle <> '', r.reftitle, r.pubtitle) asc";
 	}
 	
 	elsif ( $order eq 'reftitle.desc' )
 	{
-	    push @clauses, "r.reftitle desc";
+	    push @clauses, "if(r.reftitle <> '', r.reftitle, r.pubtitle) desc";
 	}
 	
 	elsif ( $order eq 'pubtitle' or $order eq 'pubtitle.asc' )
@@ -5258,7 +5397,7 @@ sub order_result_list {
 
 sub compute_ancestry {
 
-    my ($taxonomy, $base_string, $immediate) = @_;
+    my ($taxonomy, $base_string, $immediate, $options) = @_;
     
     my $dbh = $taxonomy->{dbh};
     my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
@@ -5268,15 +5407,25 @@ sub compute_ancestry {
     my $result;
     
     # Create a temporary table by which we can extract information from
-    # $scratch_table and convey it past the table locks.
+    # the scratch table and convey it past the table locks.
     
     $result = $dbh->do("DROP TABLE IF EXISTS ancestry_temp");
     $result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp (
 				orig_no int unsigned primary key,
 				is_base tinyint unsigned) Engine=MyISAM");
     
-    # Lock the tables that will be used by the stored procedure
-    # "compute_ancestry".
+    # Generate the SQL string to fill the scratch table, and output it as a debug line if necessary.
+    
+    my $imm = $immediate ? '_immediate' : '';
+    
+    my $sql = "CALL compute_ancestry$imm('$AUTH_TABLE','$TREE_TABLE', '$base_string')";
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}("$sql\n");
+    }
+    
+    # Lock the tables that will be used by the stored procedure.
     
     $result = $dbh->do("LOCK TABLES $SCRATCH_TABLE write,
 				    $SCRATCH_TABLE as s write,
@@ -5288,12 +5437,8 @@ sub compute_ancestry {
     # no matter what else happens.
     
     try
-    {
-	my $imm = $immediate ? '_immediate' : '';
-	
-	# Fill the scratch table with the requested ancestry list.
-	
-	$result = $dbh->do("CALL compute_ancestry$imm('$AUTH_TABLE','$TREE_TABLE', '$base_string')");
+    {	
+	$result = $dbh->do($sql);
 	
 	# Now copy the information out of the scratch table to a temporary
 	# table so that we can release the locks.
@@ -5327,13 +5472,23 @@ sub compute_ancestry {
 
 sub add_ancestry {
 
-    my ($taxonomy, $table_name) = @_;
+    my ($taxonomy, $table_name, $options) = @_;
     
     my $dbh = $taxonomy->{dbh};
     my $TREE_TABLE = $taxonomy->{TREE_TABLE};
     my $SCRATCH_TABLE = $taxonomy->{SCRATCH_TABLE};
     
     my $result;
+    
+    # Generate the SQL statement that will fill the scratch table, and output it as a debug line
+    # if necessary.
+    
+    my $sql = "CALL compute_ancestry_2('$TREE_TABLE', '$table_name')";
+    
+    if ( ref $options->{debug_out} eq 'CODE' )
+    {
+	&{$options->{debug_out}}("$sql\n");
+    }
     
     # Lock the tables that will be used by the stored procedure
     # "compute_ancestry".
@@ -5350,7 +5505,7 @@ sub add_ancestry {
     {
 	# Fill the scratch table with the requested ancestry list.
 	
-	$result = $dbh->do("CALL compute_ancestry_2('$TREE_TABLE', '$table_name')");
+	$result = $dbh->do($sql);
 	
 	# Now copy the ancestral orig_no values back to the specified table.
 	

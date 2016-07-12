@@ -959,6 +959,15 @@ sub get_upper_taxa {
     
     my $taxonomy = $request->{my_taxonomy};
     
+    # If we are in debug mode, generate a closure which will output debugging info.
+    
+    my $debug_out;
+    
+    if ( $request->debug )
+    {
+	$debug_out = sub { $request->{ds}->debug_line($_[0]); };
+    }
+    
     # Get a list of all the taxa in the specified subtree, above the rank of
     # genus.  If the option 'app' was specified, include the first-and-last
     # appearance info.
@@ -970,6 +979,7 @@ sub get_upper_taxa {
     try {
 	$taxa_list = $taxonomy->list_subtree($base_no, { min_rank => 6, 
 							 fields => \@fields, 
+							 debug_out => $debug_out,
 							 return => 'listref' });
     }
     
@@ -977,7 +987,7 @@ sub get_upper_taxa {
 	die $_ if $_;
     };
     
-    print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+    # print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
     
     # If no taxa were returned, then the base taxon is probably a genus or
     # below.  So just fetch that single record, so that we at least have
@@ -1065,10 +1075,20 @@ sub make_taxon_request {
     
     my $taxonomy = $request->{my_taxonomy};
     
+    # If we are in debug mode, generate a closure which will output debugging info.
+    
+    my $debug_out;
+    
+    if ( $request->debug )
+    {
+	$debug_out = sub { $request->{ds}->debug_line($_[0]); };
+    }
+    
     my $taxa_list = [];
     
     try {
 	$taxa_list = $taxonomy->list_taxa('current', $taxon_list, { fields => $field_list,
+								    debug_out => $debug_out,
 								    return => 'listref' });
     }
     
@@ -1076,7 +1096,7 @@ sub make_taxon_request {
 	die $_ if $_;
     };
     
-    print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+    # print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
     
     # Now go through the list, and copy the relevant info.
     

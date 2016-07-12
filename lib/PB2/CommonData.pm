@@ -65,6 +65,9 @@ sub initialize {
 	{ optional => 'markrefs', valid => FLAG_VALUE },
 	    "If specified, then formatted references will be marked up with E<lt>bE<gt> and E<lt>iE<gt> tags.",
 	    "This parameter does not need a value.",
+	{ optional => 'extids', valid => FLAG_VALUE },
+	    "If specified, then record identifiers will be output with a record type prefix rather than",
+	    "as numbers.  This is done by default for the JSON format.",
 	{ optional => 'SPECIAL(vocab)' },
 	{ optional => 'SPECIAL(save)' },
 	">>The following parameters are only relevant to the text formats (.csv, .tsv, .txt):",
@@ -891,5 +894,24 @@ sub strict_check {
     }
 }
 
+
+# extid_check ( )
+# 
+# If we are supposed to use external ids, add the block 'extid' to the request.
+
+sub extid_check {
+    
+    my ($request) = @_;
+    
+    if ( $request->clean_param('extids') || ( ! $request->param_given('extids') &&
+					      $request->output_vocab eq 'com' ) )
+    {
+	$request->{block_hash}{extids} = 1;
+	$request->delete_output_field('record_type');
+    }
+    
+    # my $make_ids = $request->clean_param('extids');
+    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
+}
 
 1;

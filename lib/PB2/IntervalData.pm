@@ -74,7 +74,7 @@ sub initialize {
 	# { set => 'reference_no', append => 1 },
 	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered",
-	{ set => '*', code => \&process_int_com, if_vocab => 'com' });
+	{ set => '*', code => \&process_int_ids });
     
     $ds->define_block('1.2:scales:basic' =>
 	{ select => [ 'sc.scale_no', 'sc.scale_name', 'sc.levels as num_levels',
@@ -103,7 +103,7 @@ sub initialize {
 	# { set => 'reference_no', append => 1 },
 	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered",
-	{ set => '*', code => \&process_int_com, if_vocab => 'com' });
+	{ set => '*', code => \&process_int_ids });
     
     $ds->define_block('1.2:scales:level' =>
 	{ output => 'scale_level', com_name => 'lvl' },
@@ -128,10 +128,10 @@ sub initialize {
 	    "This is the B<default> timerule unless you specifically select one.",
 	{ value => 'buffer' },
 	    "Select only records whose temporal locality overlaps the specified time range and also falls",
-	    "completely within a 'buffer zone' around this range.  This buffer varies by period, and has been",
-	    "set so that occurrences that are dated to the epoch level will be considered to match all of the",
-	    "corresponding stages.  You can override the buffer size using the parameters C<earlybuffer> and",
-	    "C<latebuffer>.  For diversity output, some occurrences will be counted as falling into more",
+	    "completely within a 'buffer zone' around this range.  This buffer defaults",
+	    "to 12 million years for the Paleozoic and Mesozoic and 5 million years for the Cenozoic.",
+	    "You can override the buffer width using the parameters B<C<time_buffer>> and",
+	    "B<C<late_buffer>>.  For diversity output, some occurrences will be counted as falling into more",
 	    "than one bin.  Some occurrences will still be ignored, but fewer than with the above rules.",
 	{ value => 'overlap' },
 	    "Select only records whose temporal locality overlaps the specified time range by any amount.",
@@ -237,14 +237,15 @@ sub initialize {
 	    "For diversity output, this rule is applied to",
 	    "place each occurrence into one or more temporal bins, or to ignore the occcurrence if it",
 	    "does not match any of the bins.  The available rules are:",
-	{ optional => 'time_buffer', valid => POS_VALUE },
-	    "Override the default buffer period for the beginning of the time range when resolving",
+	{ optional => 'time_buffer', alias => ['timebuffer', 'earlybuffer'], valid => DECI_VALUE(0,20) },
+	    "Override the default buffer period when resolving",
 	    "temporal locality.  The value must be given in millions of years.  This parameter",
-	    "is only relevant if C<timerule> is set to C<buffer> or is allowed to default to that value.",
-	{ optional => 'late_buffer', valid => POS_VALUE },
+	    "is only relevant if B<C<time_rule>> is set to C<B<buffer>>.",
+	{ optional => 'late_buffer', alias => 'latebuffer', valid => DECI_VALUE(0,20) },
 	    "Override the default buffer period for the end of the time range when resolving temporal",
-	    "locality.  The value must be given in millions of years.  This parameter is only relevant",
-	    "if C<timerule> is set to C<buffer>.");
+	    "locality.  This allows the buffer to be different on the late end of the interval than",
+	    "on the early end.  The value must be given in millions of years.  This parameter is only relevant",
+	    "if B<C<time_rule>> is set to C<B<buffer>>.");
     
     # Read in all of the interval data, so we don't have to make lots of
     # queries for it later.
@@ -286,6 +287,9 @@ sub get {
     {
 	$filter = "interval_no = $id";
     }
+    
+    $request->strict_check;
+    $request->extid_check;
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -456,6 +460,9 @@ sub list {
 	}
     }
     
+    $request->strict_check;
+    $request->extid_check;
+    
     # Determine which fields and tables are needed to display the requested
     # information.
     
@@ -528,6 +535,9 @@ sub list_scales {
     }
     
     push @filters, "1=1" unless @filters;
+    
+    $request->strict_check;
+    $request->extid_check;
     
     # If a query limit has been specified, modify the query accordingly.
     # If we were asked to count rows, modify the query accordingly
@@ -1025,9 +1035,18 @@ sub initOutput {
 }
 
 
-sub process_int_com {
+sub process_int_ids {
     
     my ($request, $record) = @_;
+    
+    return unless $request->{block_hash}{extids};
+
+    # my $make_ids = $request->clean_param('extids');
+    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
+    
+    # return unless $make_ids;
+    
+    # $request->delete_output_field('record_type');
     
     foreach my $f ( qw(interval_no parent_no) )
     {

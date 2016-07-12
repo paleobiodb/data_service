@@ -1027,14 +1027,14 @@ sub fetch_record_values {
     
     return ( NO_RECORDS => 1 ) unless @r;
     
-    my %found;
+    return $tester->extract_values( \@r, $field );
     
-    foreach my $r (@r)
-    {
-	$found{$r->{$field}} = 1 if defined $r->{$field} && $r->{$field} ne '';
-    }
+    # foreach my $r (@r)
+    # {
+    # 	$found{$r->{$field}} = 1 if defined $r->{$field} && $r->{$field} ne '';
+    # }
     
-    return %found;
+    # return %found;
 }
 
 
@@ -1642,14 +1642,21 @@ sub extract_values {
     
     my %found;
     
+    my @field_list = ref $field eq 'ARRAY' ? @$field : $field;
+
+ RECORD:
     foreach my $r (@$records_ref)
     {
-	if ( defined $r->{$field} && $r->{$field} ne '' )
+	foreach my $f ( @field_list )
 	{
-	    $found{$r->{$field}} = 1;
+	    if ( defined $r->{$f} && $r->{$f} ne '' )
+	    {
+		$found{$r->{$f}} = 1;
+		next RECORD;
+	    }
 	}
 	
-	elsif ( $options->{count_empty} )
+	if ( $options->{count_empty} )
 	{
 	    $found{''} = 1;
 	}

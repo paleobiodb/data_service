@@ -11,10 +11,14 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::Most tests => 5;
+use Test::Most tests => 1;
 
 # use CoreFunction qw(connectDB configData);
 # use Taxonomy;
+
+use lib 'lib', '../lib';
+
+use TaxonDefs;
 
 use lib 't';
 use Tester;
@@ -25,6 +29,122 @@ use Test::Conditions;
 # following tests.
 
 my $T = Tester->new({ prefix => 'data1.2' });
+
+
+my %INTERVAL_NAME;
+
+
+# Now try listing occurrences from a couple of taxa.  Check for basic consistency.
+
+subtest 'subtree basic' => sub {
+    
+    my $NAME_1 = 'Canis';
+    
+    my @o1 = $T->fetch_records("/occs/list.json?base_name=$NAME_1", "occs list json '$NAME_1'");
+    
+    unless ( @o1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
+    my %tid1 = $T->fetch_record_values("/taxa/list.json?base_name=$NAME_1", 'oid', "taxa oids '$NAME_1'");
+    
+    my %o_tid1 = $T->extract_values( \@o1, 'tid' );
+    
+    $T->cmp_sets_ok( \%o_tid1, '<=', \%tid1, "occ tids match taxa list" );
+    
+    my %o_tdf1 = $T->extract_values( \@o1, 'tdf' );
+    
+    my %test1 = ( 'species not entered' => 1, 'subjective synonym of' => 1,
+		 'obsolete variant of' => 1 );
+    
+    $T->cmp_sets_ok( \%o_tdf1, '>=', \%test1, "found sample 'tdf' values" );
+    
+    my %tna1 = $T->fetch_record_values("/taxa/list.json?base_name=$NAME_1", 'nam', "taxa names '$NAME_1'");
+    
+    my %o_tna1 = $T->extract_values( \@o1, 'tna' );
+    
+    $T->cmp_sets_ok( \%o_tna1, '<=', \%tna1, "occ taxa names match taxa list" );
+    
+    %INTERVAL_NAME = $T->fetch_record_values("/intervals/list.json?all_records", 'nam', "interval names");
+    
+    my $tc = Test::Conditions->new;
+    
+    foreach my $o ( @o1 )
+    {
+	my $oid = $o->{oid};
+	
+	$tc->flag('oid', 'MISSING VALUE') unless $oid && $oid =~ /^occ:\d+$/;
+	$tc->flag('typ', $oid) unless $o->{typ} && $o->{typ} eq 'occ';
+	$tc->flag('cid', $oid) unless $o->{cid} && $o->{cid} =~ /^col:\d+$/;
+	$tc->flag('eid', $oid) if $o->{eid} && $o->{eid} !~ /^rei:\d+$/;
+	$tc->flag('tna', $oid) unless $o->{tna} =~ /\w/;
+	$tc->flag('rnk', $oid) unless $o->{rnk} && $o->{rnk} =~ /^\d+$/;
+	$tc->flag('tna/rnk', $oid) if $o->{rnk} && $o->{rnk} < 5 && $o->{tna} !~ /\w [\w(]/;
+	$tc->flag('oei', $oid) unless $o->{oei} && $INTERVAL_NAME{$o->{oei}};
+	$tc->flag('eag', $oid) unless defined $o->{eag} && $o->{eag} =~ /^\d+$|^\d+[.]\d+$/;
+	$tc->flag('lag', $oid) unless defined $o->{lag} && $o->{lag} =~ /^\d+$|^\d+[.]\d+$/;
+	$tc->flag('rid', $oid) unless $o->{rid} && $o->{rid} =~ /^ref:\d+$/;
+	$tc->flag('iid', $oid) if $o->{iid} && $o->{iid} !~ /^(var|txn):\d+$/;
+	$tc->flag('iid/idn', $oid) if $o->{iid} && ! ( $o->{idn} && $o->{idn} =~ /\w/ );
+	
+	$tc->flag('nsp', $oid) if $o->{idn} && $o->{idn} =~ /n\. sp\./;
+	$tc->flag('ngen', $oid) if $o->{idn} && $o->{idn} =~ /n\. gen\./;
+	$tc->flag('cf', $oid) if $o->{idn} && $o->{idn} =~ /cf\./;
+    }
+    
+    $tc->expect('nsp', 'ngen', 'cf');
+    
+    $tc->ok_all("json records have proper values");
+    
+    my @o2 = $T->fetch_records("/occs/list.txt?base_name=$NAME_1", "occs list txt '$NAME_1'");
+    
+    if ( cmp_ok( @o2, '==', @o1, "occs list txt fetches same number of records" ) )
+    {
+	foreach my $i ( 0..$#o2 )
+	{
+	    my $o1 = $o1[$i];
+	    my $o2 = $o2[$i];
+	    my $oid = $o2->{occurrence_no};
+	    
+	    $tc->flag('occurrence_no', $oid) unless $o2->{occurrence_no} &&
+		"occ:" . $o2->{occurrence_no} eq $o1->{oid};
+	    $tc->flag('collection_no', $oid) unless $o2->{collection_no} &&
+		"col:" . $o2->{collection_no} eq $o1->{cid};
+	    $tc->flag('reference_no', $oid) unless $o2->{reference_no} &&
+		"ref:" . $o2->{reference_no} eq $o1->{rid};
+	    $tc->flag('record_type', $oid) unless $o2->{record_type} && $o2->{record_type} eq 'occ';
+	    
+	    $tc->flag('reid_no/eid', $oid) if $o2->{reid_no} xor $o1->{eid};
+	    
+	    $tc->flag('reid_no', $oid) if $o2->{reid_no} && $o1->{eid} &&
+		"rei:" . $o2->{reid_no} ne $o1->{eid};
+	    $tc->flag('accepted_no', $oid) unless $o2->{accepted_no} &&
+		"txn:" . $o2->{accepted_no} eq $o1->{tid};
+	    $tc->flag('identified_no', $oid) if $o2->{identified_no} && $o1->{iid} &&
+		not("txn:" . $o2->{identified_no} eq $o1->{iid} || "var:" . $o2->{identified_no} eq $o1->{iid});
+	    
+	    $tc->flag('difference', $oid) if $o2->{difference} ne ( $o1->{tdf} || '' );
+	    
+	    $tc->flag('accepted_name', $oid) if $o2->{accepted_name} ne $o1->{tna};
+	    $tc->flag('identified_name/idn', $oid) if $o2->{identified_name} ne ( $o1->{idn} || $o1->{tna} );
+	    
+	    $tc->flag('accepted_rank', $oid) if $o2->{accepted_rank} ne $TaxonDefs::RANK_STRING{$o1->{rnk}};
+	    $tc->flag('identified_rank', $oid) if $o2->{identified_rank} ne $o2->{accepted_rank} &&
+		$o2->{identified_rank} ne ($TaxonDefs::RANK_STRING{$o1->{idr}} || '');
+	    
+	    $tc->flag('early_interval', $oid) if $o2->{early_interval} ne $o1->{oei};
+	    $tc->flag('late_interval', $oid) if $o2->{late_interval} ne $o2->{early_interval} && 
+		$o2->{late_interval} ne ( $o1->{oli} || '' );
+	    $tc->flag('max_ma', $oid) if $o2->{max_ma} ne $o1->{eag};
+	    $tc->flag('min_ma', $oid) if $o2->{min_ma} ne $o1->{lag};
+	}
+    }
+    
+    $tc->ok_all("txt records have proper values");
+};
+
 
 
 
@@ -140,70 +260,66 @@ my $T = Tester->new({ prefix => 'data1.2' });
 # do too, because that is handled by Web::DataService and has already been
 # tested by earlier files in this series.
 
-subtest 'single json by id' => sub {
+# subtest 'single json by id' => sub {
     
-    my $single_json = $T->fetch_url("/data1.2/occs/single.json?id=$OID1&show=phylo",
-				    "single json request OK");
+#     my $OID1 = '1054042';
     
-    unless ( $single_json )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
+#     my (@o1) = $T->fetch_records("/data1.2/occs/single.json?id=$OID1&show=phylo",
+# 				 "single json request OK");
     
-    # Check the json response in detail
+#     unless ( @o1 )
+#     {
+# 	diag("skipping remainder of subtest");
+# 	return;
+#     }
     
-    my (@r) = $T->extract_records($single_json, 'single json by id' );
+#     cmp_ok( @o1, '==', 1, "single json got one record" );
     
-    ok( ref $r[0] eq 'HASH', 'single json content decoded') or return;
-    
-    $T->check_fields($r[0], $OCC1j, 'single occ json');
-};
+#     # $T->check_fields($r[0], $OCC1j, 'single occ json');
+# };
 
 
-subtest 'single text by id' => sub {
+# subtest 'single text by id' => sub {
     
-    my $single_txt = $T->fetch_url("/data1.2/occs/single.txt?id=$OID1&show=phylo",
-				    "single txt request OK");
+#     my $OID1 = '1054042';
     
-    unless ( $single_txt )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
+#     my (@o1) = $T->fetch_url("/data1.2/occs/single.txt?id=$OID1&show=phylo",
+# 			     "single txt request OK");
+    
+#     unless ( @o1 )
+#     {
+# 	diag("skipping remainder of subtest");
+# 	return;
+#     }
 
-    # Check the txt response in detail
+#     cmp_ok( @o1, '==', 1, "single txt got one record" );
     
-    my (@r) = $T->extract_records($single_txt, 'single txt by id' );
-    
-    ok( ref $r[0] eq 'HASH', 'single txt content decoded') or return;
-    
-    $T->check_fields($r[0], $OCC1t, 'single occ txt');
-};
+#     # $T->check_fields($r[0], $OCC1t, 'single occ txt');
+# };
 
 
-subtest 'list json by id' => sub {
+# subtest 'list json by id' => sub {
 
-    my $list_json = $T->fetch_url("/data1.2/occs/list.json?id=$OID1,$OID2",
-				    "single json request OK");
+#     my $OID1 = '1054042';
+#     my $OID2 = '154322';
     
-    unless ( $list_json )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
+#     my (@o1) = $T->fetch_url("/data1.2/occs/list.json?id=$OID1,$OID2",
+# 			     "list two records request OK");
     
-    # Check the json response to make sure we have two records with the proper oids.
+#     unless ( @o1 == 2 )
+#     {
+# 	diag("skipping remainder of subtest");
+# 	return;
+#     }
     
-    my (@r) = $T->extract_records($list_json, 'list json by id' );
+#     cmp_ok( @o1, '==', 2, "list two records got two records" );
     
-    my %found_occ;
+#     # Check the json response to make sure we have two records with the proper oids.
     
-    foreach my $r ( @r )
-    {
-	$found_occ{$r->{oid}} = 1;
-    }
+#     my %found_occ = ( $o1[0]{oid} => 1, $o1[1]{oid} => 2 );
     
-    ok( $found_occ{"occ:$OID1"}, "found occ 1" );
-    ok( $found_occ{"occ:$OID2"}, "found occ 2" );
-};
+#     ok( $found_occ{"occ:$OID1"}, "found occ 1" );
+#     ok( $found_occ{"occ:$OID2"}, "found occ 2" );
+# };
+
+

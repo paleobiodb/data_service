@@ -50,7 +50,7 @@ sub new {
 }
 
 
-sub set_limit {
+sub limit_max {
     
     my ($tc, %limits) = @_;
     
@@ -76,12 +76,55 @@ sub set_limit {
 }
 
 
+sub set_limit {
+
+    goto &limit;
+}
+
+
 sub get_limit {
     
     my ($tc, $key) = @_;
     
-    return $tc->{exlimit}{$key} if defined $k && $key ne '';
+    return $tc->{exlimit}{$key} if defined $key && $key ne '';
     return $tc->{limit};
+}
+
+
+sub expect_min {
+
+    my ($tc, %expect) = @_;
+    
+    foreach my $k ( keys %expect )
+    {
+	croak "bad key '$k'" unless defined $k && $k ne '';
+	croak "odd number of arguments or undefined argument" unless defined $expect{$k};
+	croak "expect values must be nonnegative integers" unless $expect{$k} =~ /^\d+$/;
+    }
+    
+    foreach my $k ( keys %expect )
+    {
+	$tc->{expect}{$k} = $expect{$k};
+    }
+}
+
+
+sub expect {
+    
+    my ($tc, @expect) = @_;
+    
+    my %e = map { $_ => 1 } @expect;
+    
+    $tc->expect_min(%e);
+}
+
+
+sub get_expect {
+    
+    my ($tc, $key) = @_;
+    
+    return $tc->{expect}{$key} if defined $key && $key ne '';
+    return;
 }
 
 
@@ -152,6 +195,15 @@ sub list_untested_keys {
 }
 
 
+sub list_expected_keys {
+    
+    my ($tc) = @_;
+    
+    return unless ref $tc->{expect} eq 'HASH';
+    return keys %{$tc->{expect}};
+}
+
+
 sub list_all_keys {
     
     my ($tc) = @_;
@@ -212,15 +264,31 @@ sub ok_all {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my (@fail, @ok);
+    my (@fail, @ok, %found);
     
+ KEY:
     foreach my $k ( $tc->list_untested_keys )
     {
 	my $count = $tc->get_count($k);
 	my $limit = $tc->get_limit($k);
+	my $expect = $tc->get_expect($k);
 	my $label = $tc->get_label($k);
 	
-	if ( defined $count && $count <= $limit )
+	$found{$k} = 1;
+	
+	if ( $expect )
+	{
+	    next KEY if $expect == 1;
+	    next KEY if defined $count && $count >= $expect;
+	    
+	    my $m = "    Condition '$k': found $count instance";
+	    $m .= "s" if $count > 1;
+	    $m .= ", expected at least $expect";
+	    
+	    push @fail, $m;
+	}
+	
+	elsif ( defined $count && $count <= $limit )
 	{
 	    my $m = "    Condition '$k': flagged $count instance";
 	    $m .= "s" if $count > 1;
@@ -249,6 +317,16 @@ sub ok_all {
 	}
 	
 	$tc->{tested}{$k} = 1;
+    }
+    
+    foreach my $k ( $tc->list_expected_keys )
+    {
+	unless ( $found{$k} )
+	{
+	    my $e = $tc->get_expect($k);
+	    my $m = "    Condition '$k': found no instances, expected at least $e";
+	    push @fail, $m;
+	}	
     }
     
     if ( @fail )

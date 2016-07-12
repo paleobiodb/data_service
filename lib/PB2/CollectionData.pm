@@ -88,6 +88,8 @@ sub initialize {
 	    "to include C<show=full>.",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the collection",
+	{ value => 'bin', maps_to => '1.2:colls:bin' },
+	    "The list of geographic clusters to which the collection belongs.",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
 	    "Information about the paleogeographic locality of the collection,",
 	    "evaluated according to the model(s) specified by the parameter C<pgm>.",
@@ -114,8 +116,6 @@ sub initialize {
 	    "Information about the collection methods used",
         { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
 	    "Any additional remarks that were entered about the collection.",
-	{ value => 'bin', maps_to => '1.2:colls:bin' },
-	    "The list of geographic clusters to which the collection belongs.",
 	{ value => 'resgroup', maps_to => '1.2:colls:group' },
 	    "The research group(s), if any, associated with this collection.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
@@ -214,7 +214,7 @@ sub initialize {
 	    "A list of identifiers of all of the references associated with this collection.",
 	    "In general, these include the primary reference plus any other references from which",
 	    "occurrences were entered.",
-	{ set => '*', code => \&process_coll_com, if_vocab => 'com' });
+	{ set => '*', code => \&process_coll_ids });
     
     my @bin_levels;
     
@@ -224,7 +224,9 @@ sub initialize {
 	push @bin_levels, "The identifier of the level-$level cluster in which the collection is located";
     }
     
-    $ds->define_block('1.2:colls:bin' => @bin_levels);
+    $ds->define_block('1.2:colls:bin' => 
+	{ select =>  [ 'c.bin_id_1', 'c.bin_id_2', 'c.bin_id_3'], tables => [ 'c' ] },
+	@bin_levels);
     
     $ds->define_block('1.2:colls:rem');	# this block is deprecated, but we don't want to return an error
                                         # if specified
@@ -529,13 +531,13 @@ sub initialize {
     $ds->define_block('1.2:strata:coords' =>
 	{ select => [ 'min(c.lat) as min_lat', 'min(c.lng) as min_lng',
 		      'max(c.lat) as max_lat', 'max(c.lng) as max_lng' ] },
-	{ output => 'min_lng', com_name => 'lx1' },
+	{ output => 'min_lng', com_name => 'lx1', pbdb_name => 'lng_min' },
 	    "The minimum longitude for selected occurrences in this stratum",
-	{ output => 'max_lng', com_name => 'lx2' },
+	{ output => 'max_lng', com_name => 'lx2', pbdb_name => 'lng_max' },
 	    "The maximum longitude for selected occurrences in this stratum",
-	{ output => 'min_lat', com_name => 'ly1' },
+	{ output => 'min_lat', com_name => 'ly1', pbdb_name => 'lat_min' },
 	    "The minimum latitude for selected occurrences in this stratum",
-	{ output => 'max_lat', com_name => 'ly2' },
+	{ output => 'max_lat', com_name => 'ly2', pbdb_name => 'lat_max' },
 	    "The maximum latitude for selected occurrences in this stratum");
     
     $ds->define_block('1.2:strata:gplates' =>
@@ -554,7 +556,7 @@ sub initialize {
     
     $ds->define_block( '1.2:colls:summary' =>
       { select => ['s.bin_id', 's.n_colls', 's.n_occs', 's.lat', 's.lng'] },
-      { set => '*', code => \&process_summary_com, if_vocab => 'com' },
+      { set => '*', code => \&process_summary_ids },
       { output => 'bin_id', com_name => 'oid' }, 
 	  "A unique identifier for the cluster.",
       { output => 'bin_id_1', com_name => 'lv1' }, 
@@ -568,9 +570,9 @@ sub initialize {
       { output => 'record_type', com_name => 'typ', value => $IDP{CLU} },
 	  "The type of this object: C<$IDP{CLU}> for a collection cluster",
       { output => 'n_colls', com_name => 'nco', data_type => 'pos' },
-	  "The number of collections in this cluster",
+	  "The number of collections from the selected set that map to this cluster",
       { output => 'n_occs', com_name => 'noc', data_type => 'pos' },
-	  "The number of occurrences in this cluster",
+	  "The number of occurrences from the selected set that map to this cluster",
       { output => 'lng', com_name => 'lng', data_type => 'dec' },
 	  "The longitude of the centroid of this cluster",
       { output => 'lat', com_name => 'lat', data_type => 'dec' },
@@ -725,19 +727,15 @@ sub initialize {
 	    "Unknown or indeterminate environment");
     
     $ds->define_ruleset('1.2:main_selector' =>
-	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
-	    "A comma-separated list of collection identifiers.  All records associated with",
-	    "the specified collections are returned, provided they satisfy the other parameters",
-	    "given with this request.",
+	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
+	    "Return only records associated with the specified geographic clusters.",
+	    "You may specify one or more cluster ids, separated by commas.",
 	{ param => 'coll_re', valid => ANY_VALUE },
 	    "A regular expression which will be matched against the C<collection_name> and",
 	    "C<collection_aka> fields.  Records will be returned only if they belong to a",
 	    "matching collection.  You can specify two or more alternatives separated by",
 	    "the vertical bar character C<|>, and you can use all of the other standard",
 	    "regular expression syntax including the backslash C<\\>.",
-	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
-	    "Return only records associated with the specified geographic clusters.",
-	    "You may specify one or more cluster ids, separated by commas.",
 	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s),",
 	    "I<including all subtaxa and synonyms>.  You may specify multiple names, separated",
@@ -853,78 +851,46 @@ sub initialize {
 	    "C<!slope,^carbonate>.  You may specify one or more of the following values,",
 	    "as a comma-separated list:", 
 	    $ds->document_set('1.2:colls:envtype'),
-	# { param => 'envtype', valid => ANY_VALUE, list => qr{ [\s,]+ | [\s,]* (?= [*^] ) }x },
-	#     "Return only records recorded as belonging to any of the specified environments.",
-	#     "If the parameter value starts with C<^> then",
-	#     "such records will be B<excluded> instead.",
-	#     "You may specify one or more of the following values, as a comma-separated list:",
-	#     $ds->document_set('1.2:colls:envtype'),
-	# { param => 'envzone', valid => ANY_VALUE, list => qr{[\s,]+} },
-	#     "If no C<envtype> filter is given, then return only records recorded as belonging",
-	#     "to any of the specified list of environmental zones.  If C<envtype> is also specified,",
-	#     "then modify that filter by restricting it to", 
-	#     "the specified list of environmental zones.  You can use this parameter",
-	#     "with or without with C<envtype> to precisely select the records you want.",
-	#     "If the parameter value starts with C<^> then the specified zones will instead be",
-	#     "excluded from the result.  If the parameter value starts with C<+>",
-	#     "then the specified zones will instead be added to it.",
-	#     "You can specify one or more of the following values:",
-	#     $ds->document_set('1.2:colls:envzone'),
-	# { param => 'min_ma', valid => DECI_VALUE(0) },
-	#     "Return only records whose temporal locality is at least this old, specified in Ma.",
-	# { param => 'max_ma', valid => DECI_VALUE(0) },
-	#     "Return only records whose temporal locality is at most this old, specified in Ma.",
-	# { param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',' },
-	#     "Return only records whose temporal locality falls within the given geologic time",
-	#     "interval or intervals, specified by numeric identifier.  If you specify more",
-	#     "than one interval, the time range used will be the contiguous period from the",
-	#     "beginning of the earliest to the end of the latest specified interval.",
-	# { param => 'interval', valid => ANY_VALUE },
-	#     "Return only records whose temporal locality falls within the named geologic time",
-	#     "interval or intervals, specified by name.  If you specify more than one interval,",
-	#     "the time range used will be the contiguous period from the beginning of the",
-	#     "earliest to the end of the latest specified interval.",
-	# { at_most_one => ['interval_id', 'interval', 'min_ma'] },
-	# { at_most_one => ['interval_id', 'interval', 'max_ma'] },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:timerule_selector' });
-
-	# { param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',', bad_value => '_' },
-	#     "Return only records which were entered from one or more particular bibliographic",
-	#     "references, specified by reference identifier.");
     
     $ds->define_ruleset('1.2:colls:specifier' =>
 	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), alias => 'id' },
 	    "The identifier of the collection you wish to retrieve (REQUIRED).  You",
-	    "may instead use the parameter name C<id>.");
+	    "may instead use the parameter name B<C<id>>.");
     
     $ds->define_ruleset('1.2:colls:selector' =>
-	{ param => 'id', valid => VALID_IDENTIFIER('COL'), key => 'coll_id'},
-	    "!",
-	{ param => 'all_records', valid => FLAG_VALUE },
-	    "This parameter needs no value. If included, all records will be selected. By default, all records are",
-	    "always included whenever any other parameter is specified.");
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), alias => 'id', list => ',' },
+	    "A comma-separated list of collection identifiers.  The specified collections",
+	    "are selected, provided they satisfy the other parameters",
+	    "given with this request.  You may also use the parameter name B<C<id>>.",
+	    "You can also use this parameter along with any of the other parameters",
+	    "to filter a known list of collections according to other criteria.",
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',' },
+	    "A comma-separated list of occurrence identifiers.  The collections associated with the",
+	    "specified occurrences are selected, provided they satisfy the other parameters given",
+	    "with this request.");
     
-    $ds->define_ruleset('1.2:colls:display' =>
-	"You can use the following parameters to request additional information about each",
-	"retrieved collection:",
+    $ds->define_ruleset('1.2:colls:all_records' =>
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Select all collections entered in the database, subject to any other parameters you may specify.",
+	    "This parameter does not require any value.");
+    
+    $ds->define_ruleset('1.2:colls:show' =>
 	{ optional => 'show', list => q{,},
-	  valid => $ds->valid_set('1.2:colls:basic_map') },
-	    "Selects additional information to be returned",
+	  valid => '1.2:colls:basic_map' },
+	    "This parameter is used to select additional blocks of information to be returned",
 	    "along with the basic record for each collection.  Its value should be",
-	    "one or more of the following, separated by commas:",
-	    $ds->document_set('1.2:colls:basic_map'),
-	{ optional => 'order', valid => $ds->valid_set('1.2:colls:order'), split => ',' },
-	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
-	    $ds->document_set('1.2:colls:order'),
-	    "If no order is specified, results are returned as they appear in the C<collections> table.",
-	{ ignore => 'level' });
-        
+	    "one or more of the following, separated by commas:");
+    
+	# { optional => 'order', valid => $ds->valid_set('1.2:colls:order'), split => ',' },
+	#     "Specifies the order in which the results are returned.  You can specify multiple values",
+	#     "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	#     $ds->document_set('1.2:colls:order'),
+	#     "If no order is specified, results are returned as they appear in the C<collections> table.",
+		
     $ds->define_ruleset('1.2:summary_display' =>
-	"You can use the following parameter to request additional information about each",
-	"retrieved cluster:",
 	{ param => 'show', list => q{,},
 	  valid => $ds->valid_set('1.2:colls:summary_map') },
 	    "This parameter is used to select additional information to be returned",
@@ -936,7 +902,14 @@ sub initialize {
 	"The following required parameter selects a record to retrieve:",
     	{ require => '1.2:colls:specifier', 
 	  error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" },
-    	{ allow => '1.2:colls:display' },
+	">>The following parameter specifies that additional blocks of data should be returned,",
+	"along with the basic collection record.",
+	">>You may also use the following parameters to specify what information you wish to retrieve:",
+	{ optional => 'pgm', valid => '1.2:colls:pgmodel', list => "," },
+	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
+	    "You may specify one or more from the following list, separated by commas.",
+	    "If you do not specify a value for this parameter, the default model is C<B<gplates>>.",
+    	{ allow => '1.2:colls:show' },
     	{ allow => '1.2:special_params' },
         "^You can also use any of the L<special parameters|node:special> with this request");
 
@@ -944,79 +917,155 @@ sub initialize {
 	"You can use the following parameter if you wish to retrieve the entire set of",
 	"collection records stored in this database.  Please use this with care, since the",
 	"result set will contain more than 100,000 records and will be at least 20 megabytes in size.",
-	"You may also specify any of the parameters listed below.",
-    	{ allow => '1.2:colls:selector' },
+	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
+    	{ allow => '1.2:colls:all_records' },
         ">>The following parameters can be used to query for collections by a variety of criteria.",
-	"Except as noted below, you may use these in any combination.",
-	"These parameters can all be used to select either occurrences, collections, or associated references.",
-	"You can use the paramter C<coll_id> in conjunction with other parameters to filter",
-	"a known list of collections against other criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
+	"The parameters referring to taxonomy",
+	"select those collections that contain at least one matching occurrence.",
+	{ allow => '1.2:colls:selector' },
    	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector' ] },
+	">>The following parameters can be used to filter the selection.",
+	"If you wish to use one of them and have not specified any of the selection parameters",
+	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ allow => '1.2:refs:aux_selector' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
-			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent'] },
-	">>The following parameters can be used to further filter the result list.",
+	">>The following parameters can be used to further filter the selection, based on the",
+	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
+	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
+	"contain at least one occurrence matching the specified parameters.",
 	{ allow => '1.2:taxa:occ_list_filter' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
-    	{ allow => '1.2:colls:display' },
+    	{ allow => '1.2:colls:show' },
+	{ optional => 'order', valid => '1.2:colls:order', split => ',' },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  If this",
+	    "parameter is not given, the returned collections are displayed in the order in which they",
+	    "were entered into the database.  Accepted values are:",
+	{ ignore => 'level' },
+    	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:colls:byref' => 
+	"You can use the following parameter if you wish to retrieve the entire set of",
+	"collection records stored in this database.  Please use this with care, since the",
+	"result set will contain more than 100,000 records and will be at least 20 megabytes in size.",
+	"You may also specify any of the parameters listed below.",
+    	{ allow => '1.2:colls:all_records' },
+        ">>The following parameters can be used to query for collections by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
+	"The parameters referring to taxonomy",
+	"select those collections that contain at least one matching occurrence.",
+	{ allow => '1.2:colls:selector' },
+   	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector' ] },
+	{ ignore => [ 'level', 'ref_type', 'select' ] },
+	">>You can use the following parameters to filter the result set based on attributes",
+	"of the bibliographic references.  If you wish to use one of them and have not specified",
+	"any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters can also be used to filter the selection.",
+	{ allow => '1.2:common:select_colls_crmod' },
+	{ allow => '1.2:common:select_colls_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	">>The following parameters can be used to further filter the selection, based on the",
+	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
+	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
+	"contain at least one occurrence matching the specified parameters.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
+    	{ allow => '1.2:colls:show' },
+	{ optional => 'order', valid => '1.2:colls:order', split => ',' },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  If this",
+	    "parameter is not given, the returned collections are ordered by reference.  If",
+	    "B<C<all_records>> is specified, the references will be sorted in the order they were",
+	    "entered in the database.  Otherwise, they will be sorted by default by the name of the",
+	    "first and second author.  Accepted values include:",
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:colls:summary' => 
-	"The following required parameter selects from the available clustering levels:",
+	"The following required parameter selects from the available resolution levels.",
+	"You can get a L<list of available resolution levels|op:config.txt?show=clusters>.",
 	{ param => 'level', valid => POS_VALUE, default => 1 },
-	    "Return records from the specified cluster level.  You can find out which",
-	    "levels are available by means of the L<config|node:config> URL path. (REQUIRED)",
-	">>You can use the following parameters to query for summary clusters by",
+	    "Return records from the specified cluster level.  (REQUIRED)",
+	">>You can use the following parameter if you wish to retrieve a geographic summary",
+	"of the entire set of collections entered in the database.",
+    	{ allow => '1.2:colls:all_records' },
+	">>You can use the following parameters to query for collections by",
 	"a variety of criteria.  Except as noted below, you may use these in any combination.",
+	"The resulting list will be mapped onto summary clusters at the selected level of",
+	"resolution.",
     	{ allow => '1.2:colls:selector' },
     	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	">>The following parameters filter the result set.  If you wish to use one of them and",
+	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
-	">>You can use the following parameter if you wish to retrieve information about",
-	"the summary clusters which contain a specified collection or collections.",
-	"Only the records which match the other parameters that you specify will be returned.",
+	">>The following parameters can be used to further filter the selection, based on the",
+	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
+	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
+	"contain at least one occurrence matching the specified parameters.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameter to request additional information",
+	"beyond the basic summary cluster records.",
     	{ allow => '1.2:summary_display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:colls:refs' =>
-	"You can use the following parameters if you wish to retrieve all of the references",
-	"with collections entered into the database.",
-	{ allow => '1.2:colls:selector' },
-        ">>The following parameters can be used to retrieve the references associated with occurrences",
+	"You can use the following parameter if you wish to retrieve all of the references",
+	"from which collections were entered into the database.",
+	{ allow => '1.2:colls:all_records' },
+        ">>The following parameters can be used to retrieve the references associated with collections",
 	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
 	"These parameters can all be used to select either occurrences, collections, or associated references.",
+	"The taxonomic parameters select all collections that contain at least one matching occurrence.",
+	{ allow => '1.2:colls:selector' },
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
+	">>The following parameters filter the result set.  If you wish to use one of them and",
+	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
-	">>You can also specify any of the following parameters:",
+	">>You can also filter the list according to the various fields of the references:",
 	{ allow => '1.2:refs:filter' },
+	">>The following parameter allows you to request additional blocks of information",
+	"beyond the basic reference record.",
 	{ allow => '1.2:refs:display' },
+	">>The following parameter specifies the order in which the results should be returned.",
+	{ allow => '1.2:refs:order' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
-    $ds->define_ruleset('1.2:toprank_selector' =>
-	{ param => 'show', valid => ENUM_VALUE('formation', 'ref', 'author'), list => ',' });
+    # $ds->define_ruleset('1.2:toprank_selector' =>
+    # 	{ param => 'show', valid => ENUM_VALUE('formation', 'ref', 'author'), list => ',' });
     
-    $ds->define_ruleset('1.2:colls:toprank' => 
-    	{ require => '1.2:main_selector' },
-    	{ require => '1.2:toprank_selector' },
-    	{ allow => '1.2:special_params' });
+    # $ds->define_ruleset('1.2:colls:toprank' => 
+    # 	{ require => '1.2:main_selector' },
+    # 	{ require => '1.2:toprank_selector' },
+    # 	{ allow => '1.2:special_params' });
     
     $ds->define_ruleset('1.2:strata:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
@@ -1068,7 +1117,7 @@ sub max_bin_level {
 # Query for all relevant information about the collection specified by the
 # 'id' parameter.  Returns true if the query succeeded, false otherwise.
 
-sub get {
+sub get_coll {
 
     my ($request) = @_;
     
@@ -1096,6 +1145,7 @@ sub get {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Figure out what information we need to determine access permissions.
     
@@ -1137,7 +1187,7 @@ sub get {
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
-sub list {
+sub list_colls {
 
     my ($request, $arg) = @_;
     
@@ -1152,6 +1202,9 @@ sub list {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateCollFilters($tables);
+    push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
+    push @filters, $request->generate_ref_filters($tables);
+    push @filters, $request->generate_refno_filter('c');
     push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'cc' }, $tables );
     push @filters, '1=1' if $request->clean_param('all_records');
     # push @filters, $request->generate_crmod_filters('cc', $tables);
@@ -1178,6 +1231,7 @@ sub list {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -1260,6 +1314,7 @@ sub summary {
     
     my @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generateCollFilters($tables);
+    push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
     
     # Figure out the filter we need for determining access permissions.  We can ignore the extra
     # fields, since we are not returning records of type 'collection' or 'occurrence'.
@@ -1280,6 +1335,7 @@ sub summary {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -1406,6 +1462,7 @@ sub refs {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -1460,7 +1517,7 @@ sub refs {
 # Query the database for geological strata.  If the arg is 'auto', then treat
 # this query as an auto-completion request.
 
-sub list_strata {
+sub list_coll_strata {
     
     my ($request, $arg) = @_;
     
@@ -1518,6 +1575,7 @@ sub list_strata {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Modify the query according to the common parameters.
     
@@ -3023,7 +3081,7 @@ sub generateMainFilters {
     # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
     # If no time rule was given, it defaults to 'buffer'.
     
-    my $time_rule = $request->clean_param('timerule') || 'major';
+    my $time_rule = $request->clean_param('time_rule') || 'major';
     # my $summary_interval = 0;
     # my ($early_age, $late_age, $early_bound, $late_bound);
     # my $interval_no = $request->clean_param('interval_id') + 0;
@@ -3044,22 +3102,31 @@ sub generateMainFilters {
 	$buffer = $early_age > 66 ? 12 : 5;
 	$early_bound = $early_age + $buffer;
 	$late_bound = $late_age || 0;
-	$late_bound -= $buffer if $late_bound >= $buffer;
+	$late_bound -= $buffer;
+	$late_bound = 0 if $late_bound < 0;
     }
     
     my $summary_interval = 0;
     
     # If the requestor wants to override the time bounds, do that.
     
-    if ( my $earlybuffer = $request->clean_param('earlybuffer') )
+    if ( my $earlybuffer = $request->clean_param('time_buffer') )
     {
 	$early_bound = $early_age + $earlybuffer;
+	if ( defined $late_age && $late_age > 0 )
+	{
+	    $late_bound = $late_age - $earlybuffer;
+	    $late_bound = 0 if $late_bound < 0;
+	}
     }
     
-    if ( my $latebuffer = $request->clean_param('latebuffer') )
+    if ( my $latebuffer = $request->clean_param('late_buffer') )
     {
-	$late_bound = $late_age - $latebuffer;
-	$late_bound = 0 if $late_bound < 0;
+	if ( defined $late_age && $late_age > 0 )
+	{
+	    $late_bound = $late_age - $latebuffer;
+	    $late_bound = 0 if $late_bound < 0;
+	}
     }
     
     # If $late_bound is less than zero, correct it to zero.
@@ -3529,15 +3596,68 @@ sub generate_order_clause {
 	    $term = $1;
 	    $dir = $2;
 	}
+
+	if ( $term eq 'id' )
+	{
+	    $dir ||= 'asc';
+	    
+	    if ( $bt eq 'o' )
+	    {
+		push @exprs, "o.occurrence_no $dir";
+	    }
+	    
+	    elsif ( $bt eq 'ss' )
+	    {
+		push @exprs, "ss.specimen_no $dir";
+	    }
+
+	    elsif ( $bt eq 'c' || $bt eq 'cc' )
+	    {
+		push @exprs, "$bt.collection_no $dir";
+	    }
+
+	    $tables->{$bt} = 1;
+	}
+
+	elsif ( $term eq 'ref' )
+	{
+	    $dir ||= 'asc';
+	    
+	    push @exprs, "$bt.reference_no $dir";
+	}
+
+	elsif ( $term eq 'hierarchy' )
+	{
+	    if ( defined $dir && $dir eq 'desc' )
+	    {
+		push @exprs, "if($tt.lft > 0, 0, 1) desc, $tt.left desc";
+	    }
+
+	    else
+	    {
+		push @exprs, "if($tt.lft > 0, 0, 1), $tt.lft asc";
+	    }
+
+	    $tables->{$tt} = 1;
+	}
+
+	elsif ( $term eq 'identification' )
+	{
+	    $dir ||= 'asc';
+
+	    push @exprs, "ifnull($tt.name, concat($bt.genus_name, ' ', $bt.species_name)) $dir";
+	    $tables->{$tt} = 1;
+	    $tables->{$bt} = 1;
+	}
 	
-	if ( $term eq 'earlyage' )
+	elsif ( $term eq 'max_ma' )
 	{
 	    $dir ||= 'desc';
 	    push @exprs, "$at.early_age $dir";
 	    $tables->{$at} = 1;
 	}
 	
-	elsif ( $term eq 'lateage' )
+	elsif ( $term eq 'min_ma' )
 	{
 	    $dir ||= 'desc';
 	    push @exprs, "$at.late_age $dir";
@@ -3802,9 +3922,18 @@ sub process_methods {
 }
 
 
-sub process_summary_com {
+sub process_summary_ids {
 
     my ($request, $record) = @_;
+    
+    return unless $request->{block_hash}{extids};
+    
+    # my $make_ids = $request->clean_param('extids');
+    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
+    
+    # return unless $make_ids;
+    
+    # $request->delete_output_field('record_type');
     
     foreach my $f ( qw(bin_id bin_id_1 bin_id_2 bin_id_3 bin_id_4) )
     {
@@ -3975,9 +4104,18 @@ sub prune_field_list {
 }
 
 
-sub process_coll_com {
+sub process_coll_ids {
     
     my ($request, $record) = @_;
+    
+    return unless $request->{block_hash}{extids};
+    
+    # my $make_ids = $request->clean_param('extids');
+    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
+    
+    # return unless $make_ids;
+    
+    # $request->delete_output_field('record_type');
     
     foreach my $f ( qw(collection_no) )
     {
@@ -4004,6 +4142,14 @@ sub process_coll_com {
 	}
 	
 	$record->{reference_nos} = \@list;
+    }
+    
+    if ( defined $record->{bin_id_1} )
+    {
+	foreach my $f ( qw(bin_id_1 bin_id_2 bin_id_3) )
+	{
+	    $record->{$f} = generate_identifier('CLU', $record->{$f}) if defined $record->{$f}
+	}
     }
 }
 

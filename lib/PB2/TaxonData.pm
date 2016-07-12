@@ -142,6 +142,7 @@ sub initialize {
 	{ set => '*', code => \&process_difference },
 	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
 	{ set => '*', code => \&process_com, if_vocab => 'com' },
+	{ set => '*', code => \&process_taxon_ids },
 	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'oid' },
 	    "A unique identifier for this taxonomic name",
 	{ output => 'taxon_no', com_name => 'vid', not_field => 'no_variant' },
@@ -230,9 +231,6 @@ sub initialize {
 	{ set => '*', code => \&process_com, if_vocab => 'com' },
 	{ set => 'ref_type', from => '*', code => \&PB2::ReferenceData::set_reference_type, 
 	  if_vocab => 'pbdb' },
-	{ output => 'reference_no', com_name => 'rid' },
-	    "=for wds_anchor reference_no",
-	    "The identifier of a reference in which this taxonomic name was mentioned.",
 	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'tid' },
 	    "A unique identifier for this taxonomic name",
 	{ output => 'taxon_no', com_name => 'vid', not_field => 'no_variant' },
@@ -240,6 +238,9 @@ sub initialize {
 	    "mentioned in the reference.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN}, dwc_value => 'Taxon' },
 	    "The type of this object: C<$IDP{TXN}> for an occurrence.",
+	{ output => 'reference_no', com_name => 'rid' },
+	    "=for wds_anchor reference_no",
+	    "The identifier of a reference in which this taxonomic name was mentioned.",
 	{ output => 'ref_type', com_name => 'rtp' },
 	    "=for wds_anchor ref_type",
 	    "The relationship between this name and the indicated reference.  Values will be one or",
@@ -992,20 +993,15 @@ sub initialize {
 	    "after parents.",
 	{ value => 'hierarchy.asc', undocumented => 1 },
 	{ value => 'hierarchy.desc', undocumented => 1 },
-	{ value => 'name' },
-	    "Results are ordered alphabetically by taxon name.",
-	{ value => 'name.asc', undocumented => 1 },
-    	{ value => 'name.desc', undocumented => 1 },
-	{ value => 'childname' },
-	    "Results are ordered alphabetically by the taxonomic name variant that is",
-	    "the subject of the opinion.",
-	{ value => 'childname.asc', undocumented => 1 },
-	{ value => 'childname.desc', undocumented => 1 },
 	{ value => 'ref' },
 	    "Results are ordered by reference id, so that taxa entered from the same",
 	    "reference are listed together.",
 	{ value => 'ref.asc', undocumented => 1 },
 	{ value => 'ref.desc', undocumented => 1 },
+	{ value => 'name' },
+	    "Results are ordered alphabetically by taxon name.",
+	{ value => 'name.asc', undocumented => 1 },
+    	{ value => 'name.desc', undocumented => 1 },
 	{ value => 'firstapp' },
 	    "Results are ordered chronologically by first appearance, oldest to youngest unless you add C<.asc>",
 	{ value => 'firstapp.asc', undocumented => 1 },
@@ -1087,8 +1083,8 @@ sub initialize {
 	{ value => 'childname.asc', undocumented => 1 },
 	{ value => 'childname.desc', undocumented => 1 },
 	{ value => 'ref' },
-	    "Results are ordered by reference id, so that opinions entered from the same",
-	    "reference are listed together.",
+	    "Results are ordered by the primary and secondary authors of the associated reference,",
+	    "so that opinions entered from the same reference are listed together.",
 	{ value => 'ref.asc', undocumented => 1 },
 	{ value => 'ref.desc', undocumented => 1 },
 	{ value => 'pubyr' },
@@ -1097,7 +1093,7 @@ sub initialize {
 	{ value => 'pubyr.asc', undocumented => 1 },
 	{ value => 'pubyr.desc', undocumented => 1 },
 	{ value => 'author' },
-	    "Results are ordered alphabetically by the last name of the primary author.",
+	    "Results are ordered alphabetically by the last name of the primary and secondary authors.",
 	{ value => 'author.asc', undocumented => 1 },
 	{ value => 'author.desc', undocumented => 1 },
 	{ value => 'basis' },
@@ -1886,6 +1882,7 @@ sub get_taxon {
     # warnings.
     
     $request->strict_check;
+    $request->extid_check;
     
     # Now attempt to fetch the record for the specified taxon.
     
@@ -2037,6 +2034,7 @@ sub get_opinion {
     # warnings.
     
     $request->strict_check;
+    $request->extid_check;
     
     # Next fetch the requested info about the opinion.
     
@@ -2099,6 +2097,7 @@ sub list_taxa {
     # warnings.
     
     $request->strict_check;
+    $request->extid_check;
     
     # For relationships that could return a long list of taxa, we ask for a
     # DBI statement handle.
@@ -2193,6 +2192,7 @@ sub list_associated {
     # warnings.
     
     $request->strict_check;
+    $request->extid_check;
     
     # For relationships that could return a long list of opinions, we ask for a
     # DBI statement handle.
@@ -2270,6 +2270,7 @@ sub list_opinions {
     # warnings.
     
     $request->strict_check;
+    $request->extid_check;
     
     # Next, fetch the list of opinion records.
     
@@ -2850,47 +2851,93 @@ sub generate_query_options {
     # If we have any ordering terms, then apply them.
     
     my (@orders);
-	
-    foreach my $term ( $request->clean_param_list('order') )
+    
+    if ( $record_type ne 'refs' )
     {
-	next unless $term;
-	
-	my $dir;
-	
-	if ( $term =~ /^(\w+)[.](asc|desc)$/ )
+	foreach my $term ( $request->clean_param_list('order') )
 	{
-	    $term = $1;
-	    $dir = $2;
+	    next unless $term;
+	
+	    my $dir;
+	
+	    if ( $term =~ /^(\w+)[.](asc|desc)$/ )
+	    {
+		$term = $1;
+		$dir = $2;
+	    }
+	
+	    # The following options default to ascending.
+	
+	    if ( $term eq 'hierarchy' || $term eq 'name' || $term eq 'childname' ||
+		 $term eq 'author' || $term eq 'ref' || $term eq 'optype' )
+	    {
+		$dir ||= 'asc';
+	    }
+	
+	    # The following options default to descending.
+	
+	    elsif ( $term eq 'pubyr' || $term eq 'firstapp' || $term eq 'lastapp' || $term eq 'agespan' || $term eq 'basis' ||
+		    $term eq 'size' || $term eq 'extsize' || $term eq 'n_occs' || $term eq 'extant' ||
+		    $term eq 'created' || $term eq 'modified' )
+	    {
+		$dir ||= 'desc';
+	    }
+	
+	    # If we find an unrecognized option, throw an error.
+	
+	    else
+	    {
+		$request->add_warning("unrecognized order option '$term'");
+		next;
+	    }
+	
+	    # Add the direction (asc or desc) if one was specified.
+	
+	    push @orders, "$term.$dir";
 	}
-	
-	# The following options default to ascending.
-	
-	if ( $term eq 'hierarchy' || $term eq 'name' || $term eq 'childname' ||
-	     $term eq 'author' || $term eq 'ref' || $term eq 'optype' )
+    }
+    
+    else	# $record_type eq 'refs' 
+    {
+	foreach my $term ( $request->clean_param_list('order') )
 	{
-	    $dir ||= 'asc';
+	    next unless $term;
+	
+	    my $dir;
+	
+	    if ( $term =~ /^(\w+)[.](asc|desc)$/ )
+	    {
+		$term = $1;
+		$dir = $2;
+	    }
+	
+	    # The following options default to ascending.
+	    
+	    if ( $term eq 'author' || $term eq 'reftitle' || $term eq 'pubtitle' || $term eq 'pubtype' ||
+		 $term eq 'language' )
+	    {
+		$dir ||= 'asc';
+	    }
+	    
+	    # The following options default to descending.
+	    
+	    elsif ( $term eq 'pubyr' || $term eq 'created' || $term eq 'modified' )
+	    {
+		$dir ||= 'desc';
+	    }
+	    
+	    # If we find an unrecognized option, throw an error.
+	
+	    else
+	    {
+		$request->add_warning("unrecognized order option '$term'");
+		next;
+	    }
+	
+	    # Add the direction (asc or desc) if one was specified.
+	
+	    push @orders, "$term.$dir";
 	}
-	
-	# The following options default to descending.
-	
-	elsif ( $term eq 'pubyr' || $term eq 'firstapp' || $term eq 'lastapp' || $term eq 'agespan' || $term eq 'basis' ||
-		$term eq 'size' || $term eq 'extsize' || $term eq 'n_occs' || $term eq 'extant' ||
-		$term eq 'created' || $term eq 'modified' )
-	{
-	    $dir ||= 'desc';
-	}
-	
-	# If we find an unrecognized option, throw an error.
-	
-	else
-	{
-	    $request->add_warning("unrecognized order option '$term'");
-	    next;
-	}
-	
-	# Add the direction (asc or desc) if one was specified.
-	
-	push @orders, "$term.$dir";
     }
     
     # If no explicit order was specified, use a default.  But if we are listing all taxa in the
@@ -3692,46 +3739,6 @@ sub process_com {
     # 	($request->{my_rel} eq 'variants' || $request->{my_rel} eq 'exact' ||
     # 	 $request->{my_rel} eq 'current');
     
-    foreach my $f ( qw(orig_no child_no parent_no immpar_no senpar_no accepted_no base_no
-		       kingdom_no phylum_no class_no order_no family_no genus_no
-		       subgenus_no type_taxon_no) )
-    {
-	$record->{$f} = generate_identifier('TXN', $record->{$f}) if defined $record->{$f};
-	# $record->{$f} = $record->{$f} ? "$IDP{TXN}:$record->{$f}" : '';
-    }
-    
-    foreach my $f ( qw(taxon_no spelling_no child_spelling_no parent_spelling_no parent_current_no) )
-    {
-	$record->{$f} = generate_identifier('VAR', $record->{$f}) if defined $record->{$f};
-	# $record->{$f} = $record->{$f} ? "$IDP{VAR}:$record->{$f}" : '';
-    }
-    
-    foreach my $f ( qw(opinion_no) )
-    {
-	$record->{$f} = generate_identifier('OPN', $record->{$f}) if defined $record->{$f};
-	# $record->{$f} = $record->{$f} ? "$IDP{OPN}:$record->{$f}" : '';
-    }
-    
-    foreach my $f ( qw(image_no) )
-    {
-	$record->{$f} = generate_identifier('PHP', $record->{$f}) if defined $record->{$f};
-    }
-    
-    # foreach my $f ( qw(authorizer_no enterer_no modifier_no) )
-    # {
-    # 	$record->{$f} = $record->{$f} ? generate_identifier('PRS', $record->{$f}) : '';
-    # }
-    
-    if ( ref $record->{reference_no} eq 'ARRAY' )
-    {
-	map { $_ = generate_identifier('REF', $_) } @{$record->{reference_no}};
-    }
-    
-    elsif ( defined $record->{reference_no} )
-    {
-	$record->{reference_no} = generate_identifier('REF', $record->{reference_no});
-	# $record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
-    }
     
     $record->{n_orders} = undef if defined $record->{n_orders} && 
 	$record->{n_orders} == 0 && $record->{taxon_rank} <= 13;
@@ -3785,6 +3792,63 @@ sub process_com {
     }
     
     my $a = 1;	# we can stop here when debugging
+}
+
+
+sub process_taxon_ids {
+    
+    my ($request, $record) = @_;
+    
+    return unless $request->{block_hash}{extids};
+    
+    # my $make_ids = $request->clean_param('extids');
+    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
+    
+    # return unless $make_ids;
+    
+    # $request->delete_output_field('record_type');
+    
+    foreach my $f ( qw(orig_no child_no parent_no immpar_no senpar_no accepted_no base_no
+		       kingdom_no phylum_no class_no order_no family_no genus_no
+		       subgenus_no type_taxon_no) )
+    {
+	$record->{$f} = generate_identifier('TXN', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{TXN}:$record->{$f}" : '';
+    }
+    
+    foreach my $f ( qw(taxon_no spelling_no child_spelling_no parent_spelling_no parent_current_no) )
+    {
+	$record->{$f} = generate_identifier('VAR', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{VAR}:$record->{$f}" : '';
+    }
+    
+    foreach my $f ( qw(opinion_no) )
+    {
+	$record->{$f} = generate_identifier('OPN', $record->{$f}) if defined $record->{$f};
+	# $record->{$f} = $record->{$f} ? "$IDP{OPN}:$record->{$f}" : '';
+    }
+    
+    foreach my $f ( qw(image_no) )
+    {
+	$record->{$f} = generate_identifier('PHP', $record->{$f}) if defined $record->{$f};
+    }
+    
+    # foreach my $f ( qw(authorizer_no enterer_no modifier_no) )
+    # {
+    # 	$record->{$f} = $record->{$f} ? generate_identifier('PRS', $record->{$f}) : '';
+    # }
+    
+    if ( ref $record->{reference_no} eq 'ARRAY' )
+    {
+	my @extids = map { generate_identifier('REF', $_) } @{$record->{reference_no}};
+	$record->{reference_no} = \@extids;
+    }
+    
+    elsif ( defined $record->{reference_no} )
+    {
+	$record->{reference_no} = generate_identifier('REF', $record->{reference_no});
+	# $record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
+    }
 }
 
 

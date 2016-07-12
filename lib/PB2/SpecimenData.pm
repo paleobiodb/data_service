@@ -58,7 +58,7 @@ sub initialize {
 		      'o.early_age', 'o.late_age', 'sp.reference_no'],
 	  tables => [ 'o', 't', 'nm', 'ns', 'tv', 'ei', 'li', 'o' ] },
 	{ set => '*', from => '*', code => \&process_basic_record },
-	{ set => '*', code => \&PB2::OccurrenceData::process_occ_com, if_vocab => 'com' },
+	{ set => '*', code => \&PB2::OccurrenceData::process_occ_ids },
 	{ output => 'specimen_no', com_name => 'oid' },
 	    "The unique identifier of this specimen in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{SPM} },
@@ -239,7 +239,7 @@ sub initialize {
 	{ select => [ 'ms.measurement_no', 'ms.specimen_no', 'sp.specimens_measured as n_measured',
 		      'ms.position', 'ms.measurement_type as measurement', 'ms.average',
 		      'ms.min', 'ms.max' ] },
-	{ set => '*', code => \&process_measurement_com, if_vocab => 'com' },
+	{ set => '*', code => \&process_measurement_ids },
 	{ output => 'measurement_no', com_name => 'oid' },
 	    "The unique identifier of this measurement in the database",
 	{ output => 'specimen_no', com_name => 'sid' },
@@ -430,6 +430,7 @@ sub get_specimen {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # Determine the necessary joins.
     
@@ -510,6 +511,7 @@ sub list_specimens {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -667,6 +669,7 @@ sub list_measurements {
     # warnings. 
     
     $request->strict_check;
+    $request->extid_check;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -881,10 +884,19 @@ sub process_basic_record {
 }
 
 
-sub process_measurement_com {
+sub process_measurement_ids {
     
     my ($request, $record) = @_;
-
+    
+    return unless $request->{block_hash}{extids};
+    
+    # my $make_ids = $request->clean_param('extids');
+    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
+    
+    # return unless $make_ids;
+        
+    # $request->delete_output_field('record_type');
+    
     $record->{specimen_no} = generate_identifier('SPM', $record->{specimen_no})
 	if defined $record->{specimen_no} && $record->{specimen_no} ne '';
 

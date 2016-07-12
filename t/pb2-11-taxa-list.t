@@ -71,6 +71,13 @@ subtest 'taxon_name bad' => sub {
     
     my $m1 = $T->fetch_nocheck("/taxa/list.json?name=$BAD_1", "bad character");
     
+    unless ( $m1 && $T->get_response_code($m1) ne '500' )
+    {
+	fail("bad response from server");
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     $T->ok_response_code( $m1, '200', "bad character got 200 response" );
     $T->ok_warning_like( $m1, qr{invalid character}, "bad character got proper warning" );
     $T->ok_no_records( $m1, "bad response got no records" );
@@ -403,6 +410,13 @@ subtest 'match_name bad' => sub {
     
     my $m1 = $T->fetch_nocheck("/taxa/list.json?name=$BAD_1", "bad character");
     
+    unless ( $m1 && $T->get_response_code($m1) ne '500' )
+    {
+	fail("bad response from server");
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     $T->ok_response_code( $m1, '200', "bad character got 200 response" );
     $T->ok_warning_like( $m1, qr{invalid character}, "bad character got proper warning" );
     $T->ok_no_records( $m1, "bad character got no records" );
@@ -504,6 +518,13 @@ subtest 'base_name bad' => sub {
     my $BAD_2 = 'not (a) taxon';
     
     my $m1 = $T->fetch_nocheck("/taxa/list.json?base_name=$BAD_1", "bad character");
+    
+    unless ( $m1 && $T->get_response_code($m1) ne '500' )
+    {
+	fail("bad response from server");
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     $T->ok_response_code( $m1, '200', "bad character got 200 response" );
     $T->ok_warning_like( $m1, qr{invalid character}, "bad character got proper warning" );
@@ -714,8 +735,6 @@ subtest 'taxon_name with modifiers' => sub {
 
 subtest 'match_name with modifiers' => sub {
 
-    ok('placeholder');
-    
     # Test match_name with and without selectors, no wildcards
     
     my $NAME_1 = 'Wexfordia';
@@ -783,7 +802,7 @@ subtest 'base_name with modifiers' => sub {
     my %found1 = $T->fetch_record_values("/taxa/list.json?base_name=$NAME_1&rank=$RANK_1", 'nam', 
 					 "selector and wildcard");
     
-    if ( $found1{NO_RECORDS} )
+    unless ( keys %found1 && ! $found1{NO_RECORDS} )
     {
 	diag("skipping remainder of subtest");
 	return;
@@ -1009,7 +1028,7 @@ subtest 'taxon_id' => sub {
     
     my %found1 = $T->fetch_record_values("/taxa/list.json?id=$TEST_TXN_1a,$TEST_TXN_1b", 'nam', 'list by id');
     
-    if ( $found1{NO_RECORDS} )
+    unless ( keys %found1 && ! $found1{NO_RECORDS} )
     {
 	diag("skipping remainder of subtest");
 	return;
@@ -1181,6 +1200,13 @@ subtest 'bad ids' => sub {
     my $m1c = $T->fetch_nocheck("/taxa/list.json?id=$BAD_1c&strict=no", "bad id c");
     my $m1d = $T->fetch_nocheck("/taxa/list.json?id=$BAD_1d&strict=no", "bad id d");
     
+    unless ( $m1a && $T->get_response_code($m1a) ne '500' )
+    {
+	fail("bad response from server");
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     $T->ok_response_code( $m1a, '200', "bad id a got 200 response" );
     $T->ok_response_code( $m1b, '200', "bad id b got 200 response" );
     $T->ok_response_code( $m1d, '200', "bad id c got 200 response" );
@@ -1334,6 +1360,12 @@ subtest 'immediate' => sub {
 				 "senior children");
     my @r1st = $T->fetch_records("/taxa/list.json?id=$ID_1s&rel=all_children&show=immparent", 
 				 "senior subtree");
+    
+    unless ( @r1sc )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     # Also fetch the list of parents, for use below.
     
@@ -3486,8 +3518,6 @@ subtest 'output blocks 1 com' => sub {
     }
 };
 
-# AAA
-
 
 # Now test the rest of the output blocks to make sure they produce the proper
 # results under the compact vocabulary.
@@ -3534,12 +3564,14 @@ __END__
 
 subtest 'list refs json' => sub {
 
-    my $response = $T->fetch_url("/data1.2/taxa/refs.json?base_name=$TEST_NAME_7",
-				 "list refs json request OK") || return;
+    my %found = $T->fetch_record_values("/data1.2/taxa/refs.json?base_name=$TEST_NAME_7", 'al1',
+					   "list refs json");
     
-    my %found = $T->scan_records($response, 'al1', "list refs json extract records");
-    
-    return if $found{NO_RECORDS};
+    unless ( keys %found && ! $found{NO_RECORDS} )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     ok($T->found_all(\%found, @TEST_AUTHOR_7a), "list refs json found a sample of records");
 };
@@ -3548,7 +3580,13 @@ subtest 'list refs json' => sub {
 subtest 'list refs ris' => sub {
 
     my $response = $T->fetch_url("/data1.2/taxa/refs.ris?base_name=$TEST_NAME_7&datainfo",
-				 "list refs ris request OK") || return;
+				 "list refs ris request OK");
+    
+    unless ( $response )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     my $body = $response->content;
     
@@ -3566,21 +3604,19 @@ subtest 'auto json' => sub {
     my $TEST_AUTO_2 = 't.rex';
     my @TEST_AUTO_2a = ("Tyrannosaurus rex", "Telmatornis rex");
     
-    my $cani = $T->fetch_url("/data1.2/taxa/auto.json?name=$TEST_AUTO_1&limit=10",
-			     "auto json '$TEST_AUTO_1' request OK") || return;
+    my %found = $T->fetch_record_values("/data1.2/taxa/auto.json?name=$TEST_AUTO_1&limit=10", 'nam',
+					"auto json '$TEST_AUTO_1'");
     
-    my %found = $T->scan_records($cani, 'nam', "auto json extract records");
-    
-    return if $found{NO_RECORDS};
+    unless ( keys %found && ! $found{NO_RECORDS} )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     ok($T->found_all(\%found, @TEST_AUTO_1a), "auto json found a sample of records");
     
-    my $trex = $T->fetch_url("/data1.2/taxa/auto.json?name=$TEST_AUTO_2&limit=10",
-			     "auto json $TEST_AUTO_2' request OK") || return;
-    
-    %found = $T->scan_records($trex, 'nam', "auto json extract records");
-    
-    return if $found{NO_RECORDS};
+    %found = $T->fetch_record_values("/data1.2/taxa/auto.json?name=$TEST_AUTO_2&limit=10", 'nam',
+			     "auto json $TEST_AUTO_2'");
     
     ok($T->found_all(\%found, @TEST_AUTO_2a), "auto json found a sample of records");
 };

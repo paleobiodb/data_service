@@ -86,7 +86,7 @@ sub initialize {
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
       { output => 'reference_no', com_name => 'oid' }, 
 	  "Numeric identifier for this document reference in the database",
-      { output => 'record_type', com_name => 'typ', value => $IDP{REF} },
+      { output => 'record_type', com_name => 'typ', value => $IDP{REF}, not_block => 'extids' },
 	  "The type of this object: C<$IDP{REF}> for a document reference.",
       { output => 'ref_type', com_name => 'rtp' },
 	  "The role(s) played by this reference in the database.  This field will only appear",
@@ -145,7 +145,7 @@ sub initialize {
 	  "The DOI for this document, if known",
       { output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', if_block => 'comments' },
 	  "Additional comments about this reference, if any",
-      { set => '*', code => \&process_ref_com, if_vocab => 'com' });
+      { set => '*', code => \&process_ref_ids });
     
     $ds->define_block('1.2:refs:counts' =>
 	{ select => ['rs.n_taxa', 'rs.n_class', 'rs.n_opinions', 'rs.n_occs', 'rs.n_colls'], 
@@ -193,7 +193,7 @@ sub initialize {
     
     $ds->define_set('1.2:refs:order' =>
 	{ value => 'author' },
-	    "Results are ordered alphabetically by the name of the primary author (last, first)",
+	    "Results are ordered alphabetically by the name of the primary and authors (last, first)",
 	{ value => 'author.asc', undocumented => 1 },
 	{ value => 'author.desc', undocumented => 1 },
 	{ value => 'pubyr' },
@@ -208,6 +208,10 @@ sub initialize {
 	    "Results are ordered alphabetically by the title of the publication",
 	{ value => 'pubtitle.asc', undocumented => 1 },
 	{ value => 'pubtitle.desc', undocumented => 1 },
+	{ value => 'pubtype' },
+	    "Results are ordered according to the publication type",
+	{ value => 'pubtype.asc', undocumented => 1 },
+	{ value => 'pubtype.desc', undocumented => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
@@ -239,16 +243,23 @@ sub initialize {
 	{ value => 'M.S. thesis' });
     
     $ds->define_ruleset('1.2:refs:display' =>
-	{ optional => 'show', valid => $ds->valid_set('1.2:refs:output_map'), list => ',' },
+	{ optional => 'show', valid => '1.2:refs:output_map', list => ',' },
 	    "Indicates additional information to be shown along",
 	    "with the basic record.  The value should be a comma-separated list containing",
-	    "one or more of the following values:",
-	    $ds->document_set('1.2:refs:output_map'),
-	{ ignore => 'level' });
+	    "one or more of the following values:");
+    
+    $ds->define_ruleset('1.2:refs:order' =>
+	{ optional => 'order', valid => '1.2:refs:order', split => ',', no_set_doc => 1 },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	    $ds->document_set('1.2:refs:order'),
+	    ">If no order is specified, the results are sorted alphabetically according to",
+	    "the name of the primary and secondary authors, unless B<C<all_records>> is specified in which",
+	    "case they are returned by default in the order they occur in the database.");
     
     $ds->define_ruleset('1.2:refs:specifier' => 
 	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id' },
-	    "A unique number identifying the reference to be selected");
+	    "The identifier of the reference to be returned");
     
     $ds->define_ruleset('1.2:refs:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
@@ -382,6 +393,9 @@ sub get {
     
     die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
     
+    $request->strict_check;
+    $request->extid_check;
+    
     # Determine which fields and tables are needed to display the requested
     # information.
     
@@ -426,6 +440,11 @@ sub list {
     push @filters, '1=1' if $all_records;
     
     my $filter_string = join(' and ', @filters);
+    
+    # Check for strictness and external identifiers
+    
+    $request->strict_check;
+    $request->extid_check;
     
     # Select the order in which the results should be returned.  If none was
     # specified, sort by the name of the primary author first and the
@@ -896,7 +915,7 @@ sub generate_order_clause {
 	
 	if ( $term eq 'author' )
 	{
-	    push @exprs, "r.author1last $dir, r.author1init $dir";
+	    push @exprs, "r.author1last $dir, r.author1init $dir, ifnull(r.author2last, '') $dir, ifnull(r.author2last, '') $dir";
 	}
 	
 	elsif ( $term eq 'pubyr' )
@@ -914,6 +933,16 @@ sub generate_order_clause {
 	    push @exprs, "r.pubtitle $dir",
 	}
 	
+	elsif ($term eq 'pubtype' )
+	{
+	    push @exprs, "r.publication_type $dir",
+	}
+	
+	elsif ( $term eq 'language' )
+	{
+	    push @exprs, "r.language $dir",
+	}
+	
 	elsif ( $term eq 'rank' && $options->{rank_table} )
 	{
 	    $dir ||= 'desc';
@@ -929,7 +958,7 @@ sub generate_order_clause {
 	elsif ( $term eq 'created' )
 	{
 	    $dir ||= 'desc';
-	    push @exprs, "r.reference_no $dir";
+	    push @exprs, "r.created $dir";
 	}
 	
 	elsif ( $term eq 'modified' )
@@ -1204,9 +1233,11 @@ sub set_reference_type {
 }
 
 
-sub process_ref_com {
+sub process_ref_ids {
     
     my ($request, $record) = @_;
+    
+    return unless $request->{block_hash}{extids};
     
     $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) if defined $record->{reference_no};
     # "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};

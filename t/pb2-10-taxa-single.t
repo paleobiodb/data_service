@@ -280,6 +280,12 @@ subtest 'other output blocks' => sub {
     my ($r_j1) = $T->fetch_records("/taxa/single.json?name=$OB_NAME_1&show=$OB_BLOCKS_1", 
 				  'output blocks 1 json');
     
+    unless ( $r_j1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my ($r_t1) = $T->fetch_records("/taxa/single.txt?name=$OB_NAME_1&show=$OB_BLOCKS_1",
 				  'output blocks 1 txt');
     
@@ -423,6 +429,13 @@ subtest 'single json name variants' => sub {
     
     my ($r_txn) = $T->fetch_records("/taxa/single.json?id=$VT_TXN_1", 
 				    'single variant txn');
+
+    unless ( $r_txn )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my ($r_txn_ex) = $T->fetch_records("/taxa/single.json?id=$VT_TXN_1&exact", 
 				       'single variant txn exact');
     my ($r_var) = $T->fetch_records("/taxa/single.json?id=$VT_VAR_1", 
@@ -559,6 +572,13 @@ subtest 'single by name with wildcards' => sub {
     # Check names with wildcards to make sure they give the expected response.
     
     my ($w1) = $T->fetch_records("/taxa/single.json?name=$NAME_WC_1", "single with wildcard '.'");
+    
+    unless ( $w1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
     my ($w2) = $T->fetch_records("/taxa/single.json?name=$NAME_WC_2", "single with wildcard '%'");
     my ($w3) = $T->fetch_records("/taxa/single.json?name=$NAME_WC_3", "single with wildcard '_'");
     my ($m4) = $T->fetch_nocheck("/taxa/single.json?name=$NAME_WC_4", "single with inline '.'");
@@ -615,6 +635,13 @@ subtest 'special params' => sub {
     
     my $strict = $T->fetch_nocheck("/taxa/single.json?name=badtaxon&strict", "special 'strict'");
     my $loose = $T->fetch_nocheck("/taxa/single.json?name=badtaxon&strict=no", "special 'strict=no'");
+    
+    unless ( $strict && $T->get_response_code($strict) ne '500' )
+    {
+	fail("bad response from server");
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     $T->cmp_ok_errors($strict, '==', 1, "special 'strict' returns one error" );
     $T->cmp_ok_warnings($strict, '==', 1, "special 'strict' returns one warning" );
@@ -752,6 +779,12 @@ subtest 'bad params' => sub {
     # Then try an unrecognized parameter
     
     my $m2 = $T->fetch_nocheck( "/taxa/single.json?id=abc_def&foo=bar", "bad param 'foo'" );
+    
+    unless ( $m2 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     $T->ok_response_code( $m2, '400', "bad param 'foo' got 400 response" );
     $T->ok_error_like($m2, qr{parameter 'foo'}i, "bad param 'foo' got proper error" );
