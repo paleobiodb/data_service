@@ -162,7 +162,8 @@ sub initialize {
 	{ param => 'scale_level', valid => POS_VALUE, list => ',', alias => 'level' },
 	    "Return intervals from the specified scale level(s).  The value of this",
 	    "parameter can be one or more level numbers separated by commas.",
-	{ param => 'id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'interval_id' },
+	{ param => 'id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'interval_id',
+	  bad_value => '_' },
 	    "Return intervals that have the specified identifiers",
 	{ param => 'name', list => ',' },
 	    "Return intervals that have the specified names",
@@ -665,6 +666,11 @@ sub process_interval_params {
 		die $request->exception(400, "The interval identifier '$id' was not found in the database");
 	    }
 	}
+	
+	unless ( @ids )
+	{
+	    die $request->exception(400, "No valid interval identifiers were given");
+	}
     }
     
     elsif ( my $interval_name_value = $request->clean_param('interval') )
@@ -687,9 +693,14 @@ sub process_interval_params {
     
     else
     {
-	if ( my $value = $request->clean_param('max_ma') )
+	my $value = $request->clean_param('max_ma');
+	
+	if ( defined $value && $value ne '' )
 	{
 	    $max_ma = $value;
+	    
+	    die $request->exception("400", "The value of 'max_ma' must be greater than 0")
+		unless $max_ma;
 	}
 	
 	if ( my $value = $request->clean_param('min_ma') )

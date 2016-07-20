@@ -47,7 +47,6 @@ subtest 'single taxon classification' => sub {
     my $TID_1 = $t1j->{oid};
     
     my $c1j = { 'oid' => '!extid(opn)',
-		'typ' => 'opn',
 		'otp' => 'C',
 		'rnk' => 5,
 		'nam' => $t1j->{nam},
@@ -127,12 +126,13 @@ subtest 'match_name basic' => sub {
     my (@r1) = $T->fetch_records("/taxa/opinions.json?match_name=$NAME_1&op_type=class", 
 				 "match_name opinions");
     
-    my (@t1) = $T->fetch_records("/taxa/list.json?match_name=$NAME_1", "match_name taxa");
+    my (@t1) = $T->fetch_records("/taxa/list.json?match_name=$NAME_1&variant=all", "match_name taxa");
     
     # cmp_ok( @r1, '==', @t1, "match_name opinion count = match_name taxon
     # count" );
     
     my %taxa_names = $T->extract_values( \@t1, 'nam' );
+    my %acc_names = $T->extract_values( \@t1, 'acn' );
     
     # Test that the set of names for the opinions matches the taxa list.
     
@@ -142,7 +142,7 @@ subtest 'match_name basic' => sub {
     
     foreach my $k ( keys %op_names )
     {
-	$tc->flag('not in list', $k) unless exists $taxa_names{$k};
+	$tc->flag('not in list', $k) unless exists $taxa_names{$k} || exists $acc_names{$k};
     }
     
     $tc->ok_all("opinions taxa is subset of list of taxa");
@@ -204,18 +204,17 @@ subtest 'subtree basic' => sub {
     
     foreach my $r ( @r1 )
     {
-	$tc->flag('oid', $r->{nam}) unless $r->{oid} =~ /^opn:\d+$/;
-	$tc->flag('typ', $r->{oid}) unless $r->{typ} eq 'opn';
-	$tc->flag('otp', $r->{oid}) unless $r->{otp} =~ /^[CU]$/;
+	$tc->flag('oid', $r->{nam}) unless $r->{oid} && $r->{oid} =~ /^opn:\d+$/;
+	$tc->flag('otp', $r->{oid}) unless $r->{otp} && $r->{otp} =~ /^[CU]$/;
 	$first_op_type{$r->{nam}} ||= $r->{otp};
-	$tc->flag('c_first', $r->{oid}) unless $first_op_type{$r->{nam}} eq 'C';
+	$tc->flag('c_first', $r->{oid}) unless $r->{nam} && $first_op_type{$r->{nam}} eq 'C';
 	$tc->flag('rnk', $r->{oid}) unless $r->{rnk} && $r->{rnk} > 0;
-	$tc->flag('tid', $r->{oid}) unless $r->{tid} =~ /^txn:\d+$/;
+	$tc->flag('tid', $r->{oid}) unless $r->{tid} && $r->{tid} =~ /^txn:\d+$/;
 	$tc->flag('sta', $r->{oid}) unless $r->{sta};
 	$tc->flag('spl', $r->{oid}) unless $r->{spl};
 	$tc->flag('oat', $r->{oid}) unless $r->{oat};
 	$tc->flag('opy', $r->{oid}) unless $r->{opy} && $r->{opy} > 0;
-	$tc->flag('rid', $r->{oid}) unless $r->{rid} =~ /^ref:\d+$/;
+	$tc->flag('rid', $r->{oid}) unless $r->{rid} && $r->{rid} =~ /^ref:\d+$/;
     }
     
     $tc->ok_all("subtree opinions basic");
@@ -399,8 +398,6 @@ subtest 'list by op_type and status' => sub {
     my (@r2) = $T->fetch_records("/taxa/opinions.json?base_name=$BASE_1&op_type=valid&taxon_status=invalid",
 				 "valid opinions about invalid taxa");
     
-    $tc->reset_all;
-    
     foreach my $r ( @r2 )
     {
 	# $tc->flag('otp', $r->{oid}) unless $r->{otp} && $r->{otp} eq 'U';
@@ -436,8 +433,6 @@ subtest 'taxon filters' => sub {
     my %names2 = $T->fetch_record_values("/taxa/list.json?base_name=$BASE_2&pres=ichno", 'nam',
 					  "taxa with pres filter");
     
-    $tc->reset_all;
-    
     foreach my $r ( @r2 )
     {
 	$tc->flag('nam', $r->{nam}) unless $names2{$r->{nam}};
@@ -451,8 +446,6 @@ subtest 'taxon filters' => sub {
     
     my %names3 = $T->fetch_record_values("/taxa/list.json?base_name=$BASE_1&extant=yes", 'nam',
 					  "taxa with extant filter");
-    
-    $tc->reset_all;
     
     foreach my $r ( @r3 )
     {

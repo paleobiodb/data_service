@@ -41,7 +41,6 @@ subtest 'single taxon refs' => sub {
     }
     
     my ($t1j) = { 'oid' => '!extid(ref)',
-		  'typ' => 'ref',
 		  'rtp' => 'A',
 		  'ai1' => qr{^\w[.]$},
 		  'al1' => qr{\w\w\w\w\w},

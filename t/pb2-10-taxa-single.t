@@ -53,7 +53,6 @@ my $TEST_LIST_1 = "felis,canis";
 my $TEST_LIST_2 = "txn:41055,txn:41198";
 
 my $t1 = { 'nam' => $TEST_NAME_1,
-	   'typ' => "txn",
 	   'oid' => $TEST_TXN_1,
 	   'rnk' => 9,
 	   'nm2' => "soft bodied plant beetle",

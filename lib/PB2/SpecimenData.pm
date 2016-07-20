@@ -54,9 +54,9 @@ sub initialize {
 		      'tv.spelling_no as accepted_spelling', 'tv.name as accepted_name', 'tv.rank as accepted_rank',
 		      'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		      'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
-		      'o.species_name', 'o.species_reso',
+		      'o.species_name', 'o.species_reso', 'v.is_form', 'v.is_trace',
 		      'o.early_age', 'o.late_age', 'sp.reference_no'],
-	  tables => [ 'o', 't', 'nm', 'ns', 'tv', 'ei', 'li', 'o' ] },
+	  tables => [ 'ss', 'o', 't', 'nm', 'ns', 'tv', 'ei', 'li', 'o', 'v' ] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ set => '*', code => \&PB2::OccurrenceData::process_occ_ids },
 	{ output => 'specimen_no', com_name => 'oid' },
@@ -181,9 +181,9 @@ sub initialize {
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
 	    "taxonomic level each piece of information was entered.",
-	{ value => 'pres', maps_to => '1.2:taxa:pres' },
-	    "Indicates whether the identification of this specimen is a regular",
-	    "taxon, a form taxon, or an ichnotaxon.",
+	{ value => 'pres', undocumented => 1 },
+	    # "Indicates whether the identification of this specimen is a regular",
+	    # "taxon, a form taxon, or an ichnotaxon.",
 	{ value => 'coll', maps_to => '1.2:colls:name' },
 	    "The name of the collection in which the associated occurrence was found, plus any",
 	    "additional remarks entered about it.",
@@ -273,7 +273,7 @@ sub initialize {
 	{ include => '1.2:colls:prot' },
 	{ include => '1.2:colls:stratext' },
 	{ include => '1.2:colls:lithext' },
-	{ include => '1.2:taxa:pres' },
+	# { include => '1.2:taxa:pres' },
 	{ include => '1.2:colls:geo' },
 	{ include => '1.2:colls:methods' },
 	{ include => '1.2:colls:rem' },
@@ -330,7 +330,8 @@ sub initialize {
 	{ allow => '1.2:specs:selector' },
         ">>The following parameters can be used to query for occurrences by a variety of criteria.",
 	"Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
+	"These same parameters can all be used to select either occurrences, collections,",
+	"or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
@@ -441,7 +442,7 @@ sub get_specimen {
     $request->{main_sql} = "
 	SELECT $fields
 	FROM $SPEC_MATRIX as ss JOIN specimens as sp using (specimen_no)
-		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.latest_ident = 1
+		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $COLL_MATRIX as c on c.collection_no = o.collection_no
 		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
 		$join_list
@@ -855,19 +856,14 @@ sub process_basic_record {
     
     $record->{flags} = "N" unless $record->{occurrence_no};
     
-    $record->{flags} = "I" if $record->{spec_orig_no} && $record->{orig_no} && 
+    $record->{flags} = "D" if $record->{spec_orig_no} && $record->{orig_no} && 
 	$record->{spec_orig_no} ne $record->{orig_no};
     
-    # Set the 'preservation' field.
-    
-    if ( $record->{is_trace} )
+    if ( $record->{is_trace} || $record->{is_form} )
     {
-	$record->{preservation} = 'ichnotaxon';
-    }
-    
-    elsif ( $record->{is_form} )
-    {
-	$record->{preservation} = 'form taxon';
+	$record->{flags} ||= '';
+	$record->{flags} .= 'I' if $record->{is_trace};
+	$record->{flags} .= 'F' if $record->{is_form};
     }
     
     # If no taxon name is given for this occurrence, generate it from the

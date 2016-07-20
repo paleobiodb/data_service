@@ -78,7 +78,7 @@ sub limit_max {
 
 sub set_limit {
 
-    goto &limit;
+    goto &limit_max;
 }
 
 
@@ -156,6 +156,17 @@ sub flag {
     
     $tc->{count}{$key}++;
     $tc->{label}{$key} ||= $label if defined $label;
+}
+
+
+sub decrement {
+    
+    my ($tc, $key) = @_;
+    
+    croak "you must specify a non-empty key" unless defined $key && $key ne '';
+    croak "key '$key' is not set" unless $tc->{count}{$key};
+    
+    $tc->{count}{$key}--;
 }
 
 
@@ -274,6 +285,7 @@ sub ok_all {
 	my $expect = $tc->get_expect($k);
 	my $label = $tc->get_label($k);
 	
+	$tc->{tested}{$k} = 1;
 	$found{$k} = 1;
 	
 	if ( $expect )
@@ -315,9 +327,9 @@ sub ok_all {
 	{
 	    push @fail, "    Condition '$k'";
 	}
-	
-	$tc->{tested}{$k} = 1;
     }
+    
+    # Now deal with the conditions we found
     
     foreach my $k ( $tc->list_expected_keys )
     {
@@ -411,7 +423,7 @@ sub ok_key {
 }
 
 
-sub reset_all {
+sub reset_keys {
     
     my ($tc) = @_;
     
@@ -432,6 +444,24 @@ sub reset_key {
     delete $tc->{label}{$key};
     delete $tc->{count}{$key};
     delete $tc->{tested}{$key};
+}
+
+
+sub reset_limits {
+    
+    my ($tc) = @_;
+    
+    # Remove any limits and expects that were set for this instance.
+    
+    $tc->{exlimit} = { };
+}
+
+
+sub reset_expects {
+    
+    my ($tc) = @_;
+    
+    $tc->{expect} = { };
 }
 
 
@@ -458,12 +488,12 @@ Test::Conditions - test for multiple conditions in a simple and compact way
 The purpose of this module is to facilitate testing complex data structures
 such as trees or lists of hashes.  You may want to run certain tests on each
 node of the structure, and report the results in a compact way.  You might,
-for example, wish to test a structure with 1,000 nodes and report the result
-as a single TAP test rather than some multiple of 1,000 tests.  If so, this
-module is for you.
+for example, wish to test a list or other structure with 1,000 nodes and
+report the result as a single event rather than some multiple of 1,000 event.
+If so, this module can do that.
 
 An object of class Test::Conditions can keep track of any number of
-conditions, and reports a single result when its 'ok_all' method is called:
+conditions, and reports a single event when its 'ok_all' method is called:
 FAIL if one or more conditions are set, and OK if none are.  Each condition
 which is set is reported as a separate diagnostic message.  Futhermore, if the
 nodes or other pieces of the data structure have unique identifiers, you can

@@ -16,6 +16,10 @@ use lib 't';
 
 use Tester;
 use Test::Conditions;
+use Test::Selection;
+
+
+choose_subtests(@ARGV);
 
 # Start by creating an instance of the Tester class, with which to conduct the
 # following tests.
@@ -32,6 +36,8 @@ my $TEST_ACC_1 = 'Aceratheriinae';
 # First we test the basic operation of parameter 'taxon_name', alias 'name'.
 
 subtest 'taxon_name basic' => sub {
+    
+    select_subtest || return;
     
     my $TEST_NAME_3 = 'Felis';
     my $TEST_NAME_4 = 'Canis';
@@ -64,6 +70,8 @@ subtest 'taxon_name basic' => sub {
 # Then check that bad names generate the proper errors.
 
 subtest 'taxon_name bad' => sub {
+    
+    select_subtest || return;
     
     # First try some bad characters.
     
@@ -154,6 +162,8 @@ subtest 'taxon_name bad' => sub {
 
 subtest 'taxon_name with wildcards' => sub {
 
+    select_subtest || return;
+    
     my $TEST_WC_1 = 'Pantherin.';
     my $TEST_WC_2 = 'Pantherin%';
     my $TEST_WC_3 = 'Pant%rinae';
@@ -212,6 +222,8 @@ subtest 'taxon_name with wildcards' => sub {
 
 subtest 'match_name basic' => sub {
 
+    select_subtest || return;
+    
     my $WC_1a = 't.affinis';
     my $WC_1b  = 'T.    AFFINIS';
     my $WC_PAT_1 = qr{^T.* affinis$|^\w+ \(T.*\) affinis$}s;
@@ -405,6 +417,8 @@ subtest 'match_name basic' => sub {
 
 subtest 'match_name bad' => sub {
     
+    select_subtest || return;
+    
     my $BAD_1 = 'not @ taxon';
     my $BAD_2 = 'not (a) taxon';
     
@@ -432,6 +446,8 @@ subtest 'match_name bad' => sub {
 # Check that 'base_name' works okay, with and without wildcards.
 
 subtest 'base_name basic' => sub {
+    
+    select_subtest || return;
     
     my $TEST_BASE_1 = 'Dascillidae';
     my $TEST_BASE_2 = 'Dascilloidea';
@@ -514,6 +530,8 @@ subtest 'base_name basic' => sub {
 
 subtest 'base_name bad' => sub {
     
+    select_subtest || return;
+    
     my $BAD_1 = 'not @ taxon';
     my $BAD_2 = 'not (a) taxon';
     
@@ -541,6 +559,8 @@ subtest 'base_name bad' => sub {
 # Check that 'taxon_name', works properly with exclusions and selectors.
 
 subtest 'taxon_name with modifiers' => sub {
+    
+    select_subtest || return;
     
     my $PREFIX_1a = 'Plant';
     my $PREFIX_1b = 'Animal';
@@ -735,6 +755,8 @@ subtest 'taxon_name with modifiers' => sub {
 
 subtest 'match_name with modifiers' => sub {
 
+    select_subtest || return;
+    
     # Test match_name with and without selectors, no wildcards
     
     my $NAME_1 = 'Wexfordia';
@@ -789,6 +811,8 @@ subtest 'match_name with modifiers' => sub {
 # Now test base_name using modifiers.
 
 subtest 'base_name with modifiers' => sub {
+    
+    select_subtest || return;
     
     # QUESTION: WHAT DOES conus ^ am% do??? does it exclude every species in
     # conus that begins with am??? $$$
@@ -872,6 +896,8 @@ subtest 'base_name with modifiers' => sub {
 
 sub check_exclusion {
     
+    select_subtest || return;
+    
     my ($base_ref, $remainder_ref, $exclusion_ref) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
@@ -921,6 +947,8 @@ sub check_exclusion {
 # including a bad name.
 
 subtest 'common names' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1a = 'felidae:% cat';
     my $NAME_1b = 'canidae:% cat';
@@ -1014,6 +1042,8 @@ subtest 'common names' => sub {
 
 subtest 'taxon_id' => sub {
     
+    select_subtest || return;
+    
     my $TEST_NAME_1a = 'Felis';
     my $TEST_NAME_1b = 'Canis';
     my $TEST_NAME_1c = 'Canis dirus';
@@ -1075,6 +1105,8 @@ subtest 'taxon_id' => sub {
 # Now check the base_id and exclude_id parameters.
 
 subtest 'base_id and exclude_id' => sub {
+    
+    select_subtest || return;
     
     my $TEST_NAME_1a = 'Felis';
     my $TEST_NAME_1b = 'Canis';
@@ -1187,6 +1219,8 @@ subtest 'base_id and exclude_id' => sub {
 
 subtest 'bad ids' => sub {
     
+    select_subtest || return;
+    
     # First check some bad identifiers.  Also check that 'strict=no' does not
     # cause the 'strict' behavior.
     
@@ -1275,6 +1309,8 @@ subtest 'bad ids' => sub {
 
 subtest 'parent and immparent' => sub {
     
+    select_subtest || return;
+    
     my $TEST_BASE_1 = 'Carnivora';
     
     my (@r1) = $T->fetch_records("/taxa/list.json?base_name=$TEST_BASE_1&show=immparent", 
@@ -1342,6 +1378,8 @@ subtest 'parent and immparent' => sub {
 # 'all_parents'.
 
 subtest 'immediate' => sub {
+    
+    select_subtest || return;
     
     # Test that 'immediate' works properly with both the senior and junior
     # synonym. We include the 'immparent' block so that we can check that the
@@ -1569,6 +1607,8 @@ subtest 'immediate' => sub {
 
 subtest 'exact, current, variants' => sub {
     
+    select_subtest || return;
+    
     my $NAME_1a = 'Dascillus';
     my $NAME_1b = 'Dascyllus';
     
@@ -1685,6 +1725,8 @@ subtest 'exact, current, variants' => sub {
 
 subtest 'synonyms, senior, accepted' => sub {
 
+    select_subtest || return;
+    
     my $NAME_1a = 'Stegosaurus';
     my $NAME_1b = 'Diracodon';
     
@@ -1759,6 +1801,8 @@ subtest 'synonyms, senior, accepted' => sub {
 
 subtest 'children and parents' => sub {
     
+    select_subtest || return;
+    
     my $NAME_1a = 'Felis';
     my $NAME_1b = 'Canis';
     
@@ -1794,6 +1838,8 @@ subtest 'children and parents' => sub {
 
 subtest 'classext and all_parents' => sub {
 
+    select_subtest || return;
+    
     my $NAME_1 = 'Canis familiaris';
     
     my ($r1) = $T->fetch_records("/taxa/list.json?name=$NAME_1&show=classext", 
@@ -1847,6 +1893,8 @@ subtest 'classext and all_parents' => sub {
 
 subtest 'common' => sub {
 
+    select_subtest || return;
+    
     my $NAME_1a = 'Felis';
     my $NAME_1b = 'Canis';
     my $NAME_2 = 'Carnivora';
@@ -1892,6 +1940,8 @@ subtest 'common' => sub {
 # gets a proper warning.
 
 subtest 'output blocks' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1a = 'Felis';
     my $NAME_1b = 'Canis';
@@ -1996,6 +2046,8 @@ subtest 'output blocks' => sub {
 
 subtest 'variant=all' => sub {
     
+    select_subtest || return;
+    
     my $NAME_1 = 'DASCILLIDAE';
     
     my @r1c = $T->fetch_records("/taxa/list.json?base_name=$NAME_1", "default variants");
@@ -2025,6 +2077,8 @@ subtest 'variant=all' => sub {
 # Test the 'taxon_status' parameter.
 
 subtest 'taxon status' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1 = 'dinosauria^AVES';
     my $NAME_2 = 'STEGOSAURIA';
@@ -2210,6 +2264,8 @@ subtest 'taxon status' => sub {
 
 subtest 'taxon rank' => sub {
     
+    select_subtest || return;
+    
     my $NAME_1 = "carnivoraMORPHA";
     
     my @r1 = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&rank=family,infraorder", "ranks 1");
@@ -2255,12 +2311,14 @@ subtest 'taxon rank' => sub {
 
 subtest 'extant and pres' => sub {
 
+    select_subtest || return;
+    
     my $NAME_1 = 'AVETHEROPODA^aves';
     my $NAME_2 = 'Aves';
     my $NAME_3 = 'Canis';
     
-    my @r1j = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&show=pres", "base json");
-    my @r1t = $T->fetch_records("/taxa/list.csv?base_name=$NAME_1&show=pres", "base csv");
+    my @r1j = $T->fetch_records("/taxa/list.json?base_name=$NAME_1", "base json");
+    my @r1t = $T->fetch_records("/taxa/list.csv?base_name=$NAME_1", "base csv");
     
     unless ( @r1j )
     {
@@ -2268,51 +2326,94 @@ subtest 'extant and pres' => sub {
 	return;
     }
     
-    my %pres1j = $T->extract_values( \@r1j, 'prs', { count_empty => 1 } );
-    my %pres1t = $T->extract_values( \@r1t, 'preservation', { count_empty => 1 } );
+    my $tc = Test::Conditions->new;
     
-    ok( $pres1j{F}, "base json includes pres 'F'" );
-    ok( $pres1j{IF}, "base json includes pres 'IF'" );
-    ok( $pres1j{I}, "base json includes pres 'I'" );
-    ok( $pres1j{''}, "base json includes pres ''" );
+    foreach my $r ( @r1j )
+    {
+	$tc->flag('json F', $r->{oid}) if $r->{flg} && $r->{flg} =~ /F/;
+	$tc->flag('json I', $r->{oid}) if $r->{flg} && $r->{flg} =~ /I/;
+	$tc->flag('json IF', $r->{oid}) if $r->{flg} && $r->{flg} =~ /I/ && $r->{flg} =~ /F/;
+	$tc->flag('json none', $r->{oid}) unless $r->{flg} && $r->{flg} =~ /[IF]/;
+    }
     
-    ok( $pres1t{'form taxon'}, "base csv includes pres 'form taxon'" );
-    ok( $pres1t{'ichnotaxon'}, "base csv includes pres 'ichnotaxon'" );
-    ok( $pres1t{'ichnotaxon+form taxon'}, "base csv includes pres 'ichno+form'" );
-    ok( $pres1t{''}, "base csv includes pres ''" );
+    foreach my $r ( @r1t )
+    {
+	$tc->flag('txt F', $r->{oid}) if $r->{flags} && $r->{flags} =~ /F/;
+	$tc->flag('txt I', $r->{oid}) if $r->{flags} && $r->{flags} =~ /I/;
+	$tc->flag('txt IF', $r->{oid}) if $r->{flags} && $r->{flags} =~ /I/ && $r->{flags} =~ /F/;
+	$tc->flag('txt none', $r->{oid}) unless $r->{flags} && $r->{flags} =~ /[IF]/;
+    }
     
-    my @r3f = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=form&show=pres", "pres=form");
+    $tc->expect('json F', 'json I', 'json IF', 'json none', 'txt F', 'txt I', 'txt IF', 'txt none');
+    $tc->ok_all("pres flags with base");
     
-    my %pres2f = $T->extract_values( \@r3f, 'prs', { count_empty => 1 } );
+    # my %pres1j = $T->extract_values( \@r1j, 'flg', { count_empty => 1 } );
+    # my %pres1t = $T->extract_values( \@r1t, 'flags', { count_empty => 1 } );
     
-    ok( $pres2f{F}, "pres=form includes 'F'" );
-    ok( $pres2f{IF}, "pres=form includes 'IF'" );
+    # ok( $pres1j{F}, "base json includes pres 'F'" );
+    # ok( $pres1j{IF}, "base json includes pres 'IF'" );
+    # ok( $pres1j{I}, "base json includes pres 'I'" );
+    # ok( $pres1j{''}, "base json includes pres ''" );
+    
+    # ok( $pres1t{'F'}, "base csv includes pres 'form taxon'" );
+    # ok( $pres1t{'I'}, "base csv includes pres 'ichnotaxon'" );
+    # ok( $pres1t{'IF'}, "base csv includes pres 'ichno+form'" );
+    # ok( $pres1t{''}, "base csv includes pres ''" );
+    
+    my @r3f = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=form", "pres=form");
+    
+    $tc->reset_expects;
+    
+    foreach my $r ( @r3f )
+    {
+	$tc->flag('no F', $r->{oid}) unless $r->{flg} && $r->{flg} =~ /F/;
+    }
+    
+    $tc->ok_all("pres flags with 'form'");
+    
+    # my %pres2f = $T->extract_values( \@r3f, 'prs', { count_empty => 1 } );
+    
+    # ok( $pres2f{F}, "pres=form includes 'F'" );
+    # ok( $pres2f{IF}, "pres=form includes 'IF'" );
 
-    cmp_ok( keys %pres2f, '==', 2, "pres=form finds proper records" );
+    # cmp_ok( keys %pres2f, '==', 2, "pres=form finds proper records" );
     
-    my @r3i = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=ichno&show=pres", "pres=ichno");
+    my @r3i = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=ichno", "pres=ichno");
     
-    my %pres3f = $T->extract_values( \@r3i, 'prs', { count_empty => 1 } );
+    foreach my $r ( @r3i )
+    {
+	$tc->flag('no I', $r->{oid}) unless $r->{flg} && $r->{flg} =~ /I/;
+    }
     
-    ok( $pres3f{I}, "pres=ichno includes 'I'" );
-    ok( $pres3f{IF}, "pres=ichno includes 'IF'" );
+    $tc->ok_all("pres flags with 'ichno'");
     
-    cmp_ok( keys %pres3f, '==', 2, "pres=form finds proper records" );
+    # my %pres3f = $T->extract_values( \@r3i, 'prs', { count_empty => 1 } );
+    
+    # ok( $pres3f{I}, "pres=ichno includes 'I'" );
+    # ok( $pres3f{IF}, "pres=ichno includes 'IF'" );
+    
+    # cmp_ok( keys %pres3f, '==', 2, "pres=form finds proper records" );
     
     my @r3fr = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=form,regular&show=pres", 
 				 "pres=form,regular");
     
-    my %pres3fr = $T->extract_values( \@r3fr, 'prs', { count_empty => 1 } );
+    foreach my $r ( @r3fr )
+    {
+	$tc->flag('bad I', $r->{oid}) if $r->{flg} && $r->{flg} =~ /I/ && $r->{flg} !~ /F/;
+    }
     
-    ok( $pres3fr{F}, "pres=form,regular includes 'F'" );
-    ok( $pres3fr{IF}, "pres=form,regular includes 'IF'" );
-    ok( $pres3fr{''}, "pres=form,regular includes ''" );
+    $tc->ok_all("pres flags with 'form,regular'");
     
-    cmp_ok( keys %pres3fr, '==', 3, "pres=form,regular finds proper records" );
+    # my %pres3fr = $T->extract_values( \@r3fr, 'prs', { count_empty => 1 } );
     
-    my @r3fa = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=form,all&show=pres",
-				 "pres=form,all");
-    my @r3a = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=all&show=pres", "pres=all");
+    # ok( $pres3fr{F}, "pres=form,regular includes 'F'" );
+    # ok( $pres3fr{IF}, "pres=form,regular includes 'IF'" );
+    # ok( $pres3fr{''}, "pres=form,regular includes ''" );
+    
+    # cmp_ok( keys %pres3fr, '==', 3, "pres=form,regular finds proper records" );
+    
+    my @r3fa = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=form,all", "pres=form,all");
+    my @r3a = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&pres=all", "pres=all");
     
     cmp_ok( @r3fa, '==', @r1j, "pres=form,all and base find same number of records" );
     cmp_ok( @r3a, '==', @r1j, "pres=all and base find same number of records" );
@@ -2324,27 +2425,17 @@ subtest 'extant and pres' => sub {
     cmp_ok( @r4b, '<', @r4a, "extant aves are subset of all" );
     cmp_ok( @r4c, '<', @r4a, "extinct aves are subset of all" );
     
-    my ($bad_extant, $bad_extinct);
-    
     foreach my $r ( @r4b )
     {
-	$bad_extant ||= $r->{nam} unless defined $r->{ext} && $r->{ext} eq '1';
+	$tc->flag('bad extant', $r->{nam}) unless defined $r->{ext} && $r->{ext} eq '1';
     }
     
     foreach my $r ( @r4c )
     {
-	$bad_extinct ||= $r->{nam} unless defined $r->{ext} && $r->{ext} eq '0';
+	$tc->flag('bad extinct', $r->{nam}) unless defined $r->{ext} && $r->{ext} eq '0';
     }
     
-    unless ( ok( ! $bad_extant, "extant aves returned bad value for 'ext'" ) )
-    {
-	diag("    Found '$bad_extant'" );
-    }
-    
-    unless ( ok( ! $bad_extinct, "extinct aves returned bad value for 'ext'" ) )
-    {
-	diag("    Found '$bad_extinct'" );
-    }
+    $tc->ok_all("extant values");
     
     # Now test alternate values 1 and 0 for extant
     
@@ -2364,15 +2455,17 @@ subtest 'extant and pres' => sub {
     
     my $m6 = $T->fetch_nocheck("/taxa/list.json?base_name=$NAME_3&extant=foo", "extant=foo");
     
-    $T->ok_response_code($m6, '400', "extant=foo got 400 response");
+    $T->ok_response_code('400', "extant=foo got 400 response");
     
     my $m7 = $T->fetch_nocheck("/taxa/list.json?base_name=$NAME_3&pres=foo", "pres=foo");
     
-    $T->ok_response_code($m7, '400', "pres=foo got 400 response");    
+    $T->ok_response_code('400', "pres=foo got 400 response");    
 };
 
 
 subtest 'interval and ma bounds' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1 = 'Dascillidae';
     my $INT_1 = 'Cretaceous';
@@ -2566,6 +2659,8 @@ subtest 'interval and ma bounds' => sub {
 
 subtest 'tree depth' => sub {
     
+    select_subtest || return;
+    
     my $TID_1 = 'txn:41189'; # Canidae
     my $DEPTH_1 = 3;
     
@@ -2650,6 +2745,8 @@ subtest 'tree depth' => sub {
 
 subtest 'all_taxa, all_records, limit and offset' => sub {
     
+    select_subtest('all_taxa') || return;
+    
     # Fetch two overlapping sections. Make sure they overlap properly, and also check that the
     # oids are in numerical order. (The default order should be the order in which the entries
     # occur in the taxon_trees table, which is in order by orig_no).
@@ -2731,7 +2828,7 @@ subtest 'all_taxa, all_records, limit and offset' => sub {
     
     foreach my $r ( @r6 )
     {
-	$tc->flag("found record with flag(s)", 'nam') if $r->{flg};
+	$tc->flag("found record with flag(s)", 'nam') if $r->{flg} && $r->{flg} =~ /[^FI]/;
     }
     
     $tc->ok_all("all_taxa no records have flags");
@@ -2741,6 +2838,8 @@ subtest 'all_taxa, all_records, limit and offset' => sub {
 # Test that the various sort orders work properly.
 
 subtest 'sort order' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1 = 'Dascillidae';
     my $NAME_2 = 'Canidae';
@@ -2976,7 +3075,9 @@ subtest 'sort order' => sub {
 # Then test the parameters for listing taxa by created/modified dates.  This will generally be
 # used to show the most recently entered taxa.
 
-subtest 'list by crmod and all_records' => sub {
+subtest 'crmod and all_records' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1 = 'Mammalia';
     my $COUNT_1 = '50';
@@ -3038,7 +3139,9 @@ subtest 'list by crmod and all_records' => sub {
 # Check that authorizers, enterers and modifiers are reported properly, and that we can select taxa using
 # names and identifiers.
 
-subtest 'list by authent' => sub {
+subtest 'authent' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1 = 'Felidae';
     
@@ -3390,6 +3493,8 @@ subtest 'list by authent' => sub {
 
 subtest 'output blocks 1 com' => sub {
     
+    select_subtest || return;
+    
     my $NAME_1 = 'Marsupialia';
     my $OID_1 = 'txn:39937';
     
@@ -3423,7 +3528,7 @@ subtest 'output blocks 1 com' => sub {
 	    $tc->flag('oid', $r->{nam});
 	}
 	
-	$tc->flag('typ', $r->{nam}) unless defined $r->{typ} && $r->{typ} eq 'txn';
+	# $tc->flag('typ', $r->{nam}) unless defined $r->{typ} && $r->{typ} eq 'txn';
 	$tc->flag('rnk', $r->{nam}) unless defined $r->{rnk} && $r->{rnk} =~ /^\d+$/;
 	$tc->flag('noc', $r->{nam}) unless defined $r->{noc} && $r->{noc} =~ /^\d+$/;
 	$tc->flag('rid', $r->{nam}) unless defined $r->{rid} && $r->{rid} =~ /^ref:\d+$/;
@@ -3522,7 +3627,9 @@ subtest 'output blocks 1 com' => sub {
 # Now test the rest of the output blocks to make sure they produce the proper
 # results under the compact vocabulary.
 
-subtest 'output blocks 2 json' => sub {
+subtest 'output blocks 2 com' => sub {
+    
+    select_subtest || return;
     
     my $NAME_1 = 'Mammalia';
     my $OID_1 = 'txn:36651';
@@ -3564,6 +3671,8 @@ __END__
 
 subtest 'list refs json' => sub {
 
+    select_subtest || return;
+    
     my %found = $T->fetch_record_values("/data1.2/taxa/refs.json?base_name=$TEST_NAME_7", 'al1',
 					   "list refs json");
     
@@ -3579,6 +3688,8 @@ subtest 'list refs json' => sub {
 
 subtest 'list refs ris' => sub {
 
+    select_subtest || return;
+    
     my $response = $T->fetch_url("/data1.2/taxa/refs.ris?base_name=$TEST_NAME_7&datainfo",
 				 "list refs ris request OK");
     
@@ -3599,6 +3710,8 @@ subtest 'list refs ris' => sub {
 
 subtest 'auto json' => sub {
 
+    select_subtest || return;
+    
     my $TEST_AUTO_1 = 'cani';
     my @TEST_AUTO_1a = ("Caniformia", "canine");
     my $TEST_AUTO_2 = 't.rex';
@@ -3623,6 +3736,8 @@ subtest 'auto json' => sub {
 
 
 subtest 'images' => sub {
+    
+    select_subtest || return;
     
     my $thumb = $T->fetch_url("/data1.2/taxa/thumb.png?id=$TEST_IMAGE_1",
 			      "image thumb request OK") || return;

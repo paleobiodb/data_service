@@ -93,9 +93,9 @@ sub initialize {
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block F<ecospace>, indicating at which",
 	    "taxonomic level each piece of information was entered.",
-	{ value => 'pres', maps_to => '1.2:taxa:pres' },
-	    "Indicates whether the identification of this occurrence is a regular",
-	    "taxon, a form taxon, or an ichnotaxon.",
+	{ value => 'pres', undocumented => 1 },
+	# The above has been deprecated, its information is now included in
+	# the 'flags' field.  But we keep it here to avoid errors.
 	{ value => 'coll', maps_to => '1.2:colls:name' },
 	    "The name of the collection in which the occurrence was found, plus any",
 	    "additional remarks entered about it.",
@@ -156,8 +156,8 @@ sub initialize {
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
 		     'o.species_name', 'o.species_reso',
-		     'o.early_age', 'o.late_age', 'o.reference_no', 'r.pubyr'],
-	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li', 'r'] },
+		     'o.early_age', 'o.late_age', 'o.reference_no', 'r.pubyr', 'v.is_trace', 'v.is_form'],
+	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li', 'r', 'v'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ set => '*', code => \&process_occ_com, if_vocab => 'com' },
 	{ set => '*', code => \&process_occ_ids },
@@ -171,9 +171,12 @@ sub initialize {
 	    "for debugging purposes.  It does, at least, indicate that this was not the original",
 	    "identification of the occurrence.",
 	{ output => 'flags', com_name => 'flg' },
-	    "This field will be empty for most records.  A record representing an identification",
-	    "that has been superceded by a more recent identification will have the letter C<R>",
-	    "in this field.",
+	    "This field will be empty for most records.  Otherwise, it will contain one or more",
+	    "of the following letters:", "=over",
+	    "=item R", "This identification has been superceded by a more recent one.",
+		"In other words, this occurrence has been reidentified.",
+	    "=item I", "This identification is an ichnotaxon",
+	    "=item F", "This identification is a form taxon",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
 	{ output => 'permissions', com_name => 'prm' },
@@ -347,7 +350,7 @@ sub initialize {
 	{ include => '1.2:colls:lithext' },
 	{ include => '1.2:taxa:ecospace' },
 	{ include => '1.2:taxa:taphonomy' },
-	{ include => '1.2:taxa:pres' },
+	# { include => '1.2:taxa:pres' },
 	{ include => '1.2:colls:geo' },
 	{ include => '1.2:colls:methods' },
 	{ include => '1.2:refs:attr' });
@@ -1229,7 +1232,7 @@ sub list_occs {
     # If we were requested to lump by genus, we need to modify the query
     # accordingly.  This includes substituting a different GROUP BY expression.
     
-    my $taxonres = $request->clean_param('taxon_reso');
+    my $taxonres = $request->clean_param('idreso');
     
     if ( $taxonres =~ qr{^lump} )
     {
@@ -2644,9 +2647,14 @@ sub generateOccFilters {
 	push @filters, "$tn.occurrence_no in ($id_list)";
 	$tables_ref->{$tn} = 1;
 	$tables_ref->{non_summary} = 1;
+
+	if ( $id_list eq '-1' )
+	{
+	    $request->add_warning("no valid occurrence identifiers were given");
+	}
     }
     
-    # If the specified table is already part of the query, then check for parameter 'ident_type'.
+    # If the specified table is already part of the query, then check for parameter 'idtype'.
     # In cases of reidentified occurrences, it specifies which identifications should be returned.
     # The default is 'latest'.  If this table is not already part of the query, then we can (and
     # should) ignore this parameter because it makes no difference and will unnecessarily slow
@@ -2654,25 +2662,48 @@ sub generateOccFilters {
     
     if ( $tables_ref->{$tn} )
     {
-	my $ident = $request->clean_param('ident_type');
+	# First check for 'idtype'.  The default is 'latest' if not otherwise specified.
 	
-	if ( $ident eq 'orig' )
+	my $idtype = $request->clean_param('idtype') || 'latest';
+	
+	if ( $idtype eq 'latest' )
+	{
+	    push @filters, "$tn.latest_ident = true";
+	}
+	
+	elsif ( $idtype eq 'orig' )
 	{
 	    push @filters, "$tn.reid_no = 0";
-	    $tables_ref->{$tn} = 1;
 	    $tables_ref->{non_summary} = 1;
 	}
 	
-	elsif ( $ident eq 'all' )
+	elsif ( $idtype eq 'reid' )
 	{
+	    push @filters, "($tn.reid_no > 0 or ($tn.reid_no = 0 and $tn.latest_ident = false))";
 	    $tables_ref->{group_by_reid} = 1;
 	    $tables_ref->{non_summary} = 1;
 	}
 	
-	else # default: 'latest'
+	else # ( $idtype eq 'all' )
 	{
-	    $tables_ref->{$tn} = 1;
-	    push @filters, "$tn.latest_ident = true";
+	    # no filter is needed, just select all records
+	    $tables_ref->{group_by_reid} = 1;
+	    $tables_ref->{non_summary} = 1;
+	}
+	
+	# Also check for 'idqual', 'idmod', 'idgenmod' and 'idspcmod'.
+	
+	my $idqual = $request->clean_param('idqual');
+	my $idmod = $request->clean_param('idmod');
+	my $idgen = $request->clean_param('idgenmod');
+	my $idspc = $request->clean_param('idspcmod');
+	
+	# We have to use table 'o', even if $tn eq 'ss'.  This is because the specimen matrix
+	# doesn't have the fields 'genus_reso', etc.  These are only in 'o'.
+	
+	if ( $idqual || $idmod || $idspc || $idgen )
+	{
+	    push @filters, $request->generateIdentFilters('o', $idqual, $idmod, $idgen, $idspc);
 	}
     }
     
@@ -2687,6 +2718,118 @@ sub generateOccFilters {
     # }
     
     return @filters;
+}
+
+
+our $IDENT_UNCERTAIN = "'aff.', 'cf.', '?', '\"', 'sensu lato', 'informal'";
+
+# generateIdentFilters ( tn, idstr, idspc, idgen )
+# 
+# Generate filters using the table name given by $tn, from the values of $idtype, $idspc and
+# $idgen. 
+
+sub generateIdentFilters {
+    
+    my ($request, $tn, $idqual, $idmod, $idgen, $idspc) = @_;
+    
+    my @filters;
+    
+    if ( $idqual )
+    {
+	if ( $idqual eq 'certain' || $idqual eq 'genus_certain' )
+	{
+	    push @filters, "$tn.genus_reso not in ($IDENT_UNCERTAIN)";
+	    push @filters, "$tn.subgenus_reso not in ($IDENT_UNCERTAIN)";
+	    push @filters, "$tn.species_reso not in ($IDENT_UNCERTAIN)" if $idqual eq 'certain';
+	}
+	
+	elsif ( $idqual eq 'uncertain' )
+	{
+	    push @filters, "($tn.genus_reso in ($IDENT_UNCERTAIN) or " .
+		"$tn.subgenus_reso in ($IDENT_UNCERTAIN) or $tn.species_reso in ($IDENT_UNCERTAIN))";
+	}
+	
+	elsif ( $idqual eq 'new' )
+	{
+	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or $tn.species_reso = 'n. sp.')";
+	}
+	
+	# otherwise $idqual is 'any', so do nothing
+    }
+    
+    if ( $idmod )
+    {
+	my ($op, $value_str) = $request->id_mod_filter('idmod', $idmod);
+	
+	if ( $op eq 'in' )
+	{
+	    push @filters, "($tn.genus_reso in ('$value_str') or " .
+		"$tn.subgenus_reso in ('$value_str') or " .
+		"$tn.species_reso in ('$value_str'))";
+	}
+	
+	else
+	{
+	    push @filters, "$tn.genus_reso not in ('$value_str')";
+	    push @filters, "$tn.subgenus_reso not in ('$value_str')";
+	    push @filters, "$tn.species_reso not in ('$value_str')";
+	}
+    }
+    
+    if ( $idspc )
+    {
+	my ($op, $value_str) = $request->id_mod_filter('idspc', $idspc);
+	push @filters, "$tn.species_reso $op ('$value_str')";
+    }
+    
+    if ( $idgen )
+    {
+	my ($op, $value_str) = $request->id_mod_filter('idgen', $idgen);
+	push @filters, "$tn.genus_reso $op ('$value_str')";
+    }
+    
+    return @filters;
+}
+
+
+our (%IDENT_MODIFIER) = ( ns => 'n. sp.', ng => "n. gen.','n. subgen.", af => 'aff.', cf => 'cf.',
+			  eg => 'ex gr.', sl => 'sensu lato', if => 'informal',
+			  qm => '?', qu => '"' );
+
+our ($IDENT_MOD_LIST) = "'ns', 'ng', 'af', 'cf', 'eg', 'sl', 'if', 'qm', 'qu'";
+
+sub id_mod_filter {
+    
+    my ($request, $param_name, $modifier_list) = @_;
+    
+    my $op = 'in';
+    my @values;
+    
+    if ( $modifier_list =~ / ^ [!] (.*) /xs )
+    {
+	$op = 'not in';
+	$modifier_list = $1;
+    }
+    
+    foreach my $code ( split( /\s*,\s*/, $modifier_list ) )
+    {
+	if ( $IDENT_MODIFIER{$code} )
+	{
+	    push @values, $IDENT_MODIFIER{$code};
+	}
+	
+	else
+	{
+	    $request->add_warning("bad value '$code' for parameter '$param_name', must be one of $IDENT_MOD_LIST");
+	}
+    }
+    
+    unless ( @values )
+    {
+	push @values, "SELECT_NOTHING";
+    }
+    
+    return $op, join("','", @values);
 }
 
 
@@ -3049,18 +3192,13 @@ sub process_basic_record {
     
     # Set the flags as appropriate.
     
-    $record->{flags} = "O" unless $record->{latest_ident};
+    $record->{flags} = "R" unless $record->{latest_ident};
     
-    # Set the 'preservation' field.
-    
-    if ( $record->{is_trace} )
+    if ( $record->{is_trace} || $record->{is_form} )
     {
-	$record->{preservation} = 'ichnotaxon';
-    }
-    
-    elsif ( $record->{is_form} )
-    {
-	$record->{preservation} = 'form taxon';
+	$record->{flags} ||= '';
+	$record->{flags} .= 'I' if $record->{is_trace};
+	$record->{flags} .= 'F' if $record->{is_form};
     }
     
     # Generate the identified name from the occurrence fields.
@@ -3095,26 +3233,27 @@ sub process_identification {
     # fields from the occurrence record.  Also build 'taxon_name' using just
     # the '_name' fields.
     
-    my $ident_name = $record->{genus_name} || 'UNKNOWN';
-    my $taxon_name = $ident_name;
+    my $ident_name = combine_modifier($record->{genus_name}, $record->{genus_reso}) || 'UNKNOWN';
+    my $taxon_name = $record->{genus_name} || 'UNKNOWN';
     
-    $ident_name .= " $record->{genus_reso}" if $record->{genus_reso};
+    # $ident_name .= " $record->{genus_reso}" if $record->{genus_reso};
     
     if ( $record->{subgenus_name} )
     {
-	$ident_name .= " ($record->{subgenus_name}";
-	$ident_name .= " $record->{subgenus_reso}" if $record->{subgenus_reso};
-	$ident_name .= ")";
+	$ident_name .= " (" . combine_modifier($record->{subgenus_name}, $record->{subgenus_reso}) . ")";
+	# $ident_name .= " $record->{subgenus_reso}" if $record->{subgenus_reso};
+	# $ident_name .= ")";
 	
 	$taxon_name .= " ($record->{subgenus_name})";
     }
     
     if ( $record->{species_name} )
     {
-	$ident_name .= " $record->{species_name}";
-	$ident_name .= " $record->{species_reso}" if $record->{species_reso};
+	$ident_name .= " " . combine_modifier($record->{species_name}, $record->{species_reso});
+	# $ident_name .= " $record->{species_reso}" if $record->{species_reso};
 
-	$taxon_name .= " $record->{species_name}" if $record->{species_name} !~ /\.$/;
+	$taxon_name .= " $record->{species_name}" if $record->{species_name} !~ /\.$|^[?]$/;
+	$taxon_name =~ s/[ ]?[?]$//;
     }
     
     $record->{identified_name} = $ident_name;
@@ -3146,6 +3285,28 @@ sub process_identification {
     my $a = 1;	# we can stop here when debugging
 }
 
+
+sub combine_modifier {
+    
+    my ($name, $modifier) = @_;
+    
+    return $name unless defined $modifier && $modifier ne '';
+    
+    if ( $modifier eq '?' )
+    {
+	return "$name $modifier";
+    }
+    
+    elsif ( $modifier eq '"' )
+    {
+	return qq{"$name"};
+    }
+    
+    else
+    {
+	return "$modifier $name";
+    }
+}
 
 sub process_difference {
     
@@ -3349,10 +3510,12 @@ sub process_occ_com {
     # 	$record->{reference_no} = "$IDP{REF}:$record->{reference_no}";
     # }
     
-    if ( defined $record->{preservation} )
-    {
-	$record->{preservation} = uc substr($record->{preservation}, 0, 1);
-    }
+    # if ( $record->{is_trace} || $record->{is_form} )
+    # {
+    # 	$record->{preservation} = '';
+    # 	$record->{preservation} .= 'I' if $record->{is_trace};
+    # 	$record->{preservation} .= 'F' if $record->{is_form};
+    # }
 }
 
 

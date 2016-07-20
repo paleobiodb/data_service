@@ -100,8 +100,9 @@ sub initialize {
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
 	    "taxonomic level each piece of information was entered.",
-	{ value => 'pres', maps_to => '1.2:taxa:pres' },
-	    "Indicates whether this is a regular taxon, an ichnotaxon, or a form taxon.");
+	{ value => 'pres', undocumented => 1 });
+	# The above has been deprecated, its information is now included in
+	# the 'flags' field.  But we keep it here to avoid errors.
     
     @BASIC_3 = (
 	{ value => 'seq', maps_to => '1.2:taxa:seq' },
@@ -152,12 +153,14 @@ sub initialize {
 	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN}, dwc_value => 'Taxon' },
 	    "The type of this object: C<$IDP{TXN}> for a taxon.",
 	{ output => 'flags', com_name => 'flg' },
-	    "This field will be empty for most records.  In a record representing an excluded",
-	    "group inside another taxon, the field will contain the letter C<E>.  In a result set whose",
-	    "records are arranged hierarchically, those records whose parents are not in the set",
-	    "will have the letter C<B> in this field.  This marks the base(s) of the reported",
-	    "portions of the taxonomic hierarchy.  In a record representing a name variant",
-	    "that is not the one currently accepted, the field will contain C<V>.",
+	    "This field will be empty for most records.  Otherwise, it will contain one or more",
+	    "of the following letters:", "=over",
+	    "=item B", "This taxon is one of the ones specified explicitly in the query.  If the result",
+	        "is a subtree, this represents the 'base'.",
+	    "=item E", "This taxon was specified in the query as an exclusion.",
+	    "=item V", "This taxonomic name is a variant that is not currently accepted.",
+	    "=item I", "This taxon is an ichnotaxon.",
+	    "=item F", "This taxon is a form taxon.",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ set => 'accepted_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
@@ -229,6 +232,7 @@ sub initialize {
 	{ set => '*', code => \&process_difference },
 	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
 	{ set => '*', code => \&process_com, if_vocab => 'com' },
+	{ set => '*', code => \&process_taxon_ids },
 	{ set => 'ref_type', from => '*', code => \&PB2::ReferenceData::set_reference_type, 
 	  if_vocab => 'pbdb' },
 	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'tid' },
@@ -660,12 +664,12 @@ sub initialize {
 	#{ set => '*', code => \&PB2::TaxonData::consolidate_basis, if_format => ['txt', 'csv', 'tsv'] }
 	);
     
-    $ds->define_block('1.2:taxa:pres' =>
-	{ select => 'PRES' },
-	{ output => 'preservation', com_name => 'prs' },
-	    "Indicates whether this is an C<ichnotaxon> or a C<form taxon>.",
-	    "if blank, then this is a regular taxon.  In the compact vocabulary,",
-	    "the values are C<I> and C<F>.");
+    # $ds->define_block('1.2:taxa:pres' =>
+    # 	{ select => 'PRES' },
+    # 	{ output => 'preservation', com_name => 'prs' },
+    # 	    "Indicates whether this is an C<ichnotaxon> or a C<form taxon>.",
+    # 	    "if blank, then this is a regular taxon.  In the compact vocabulary,",
+    # 	    "the values are C<I> and C<F>.");
     
     $ds->define_block('1.2:taxa:seq' =>
 	{ output => 'lft', com_name => 'lsq' },
@@ -685,8 +689,8 @@ sub initialize {
 	{ include => '1.2:taxa:class' },
 	{ include => '1.2:taxa:ecospace' },
 	{ include => '1.2:taxa:taphonomy' },
-	{ include => '1.2:taxa:etbasis' },
-	{ include => '1.2:taxa:pres' });
+	{ include => '1.2:taxa:etbasis' });
+	# { include => '1.2:taxa:pres' });
     
     # Now define output blocks for opinions
     
@@ -723,6 +727,7 @@ sub initialize {
 	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
 	{ set => '*', code => \&process_com, if_vocab => 'com' },
 	{ set => '*', code => \&process_op },
+	{ set => '*', code => \&process_taxon_ids },
 	{ output => 'opinion_no', com_name => 'oid' },
 	    "A unique identifier for this opinion record.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{OPN}, com_value => 'opn' },
@@ -894,6 +899,20 @@ sub initialize {
 	    "Select ichnotaxa",
 	{ value => 'all' },
 	    "Select all taxa");
+    
+    $ds->define_set('1.2:taxa:extant' =>
+	{ value => 'yes' },
+	    "Select extant taxa.",
+	{ value => 'no' },
+	    "Select extinct taxa.",
+	{ value => 'any' },
+	    "Select taxa regardless of extancy.  This is the default.",
+	{ value => 'not_entered' },
+	    "Select taxa whose extancy is not entered in the database",
+	{ value => 'yes_fuzzy' },
+	    "Select taxa which are not entered as extinct.",
+	{ value => 'no_fuzzy' },
+	    "Select taxa which are not entered as extant.");
     
     $ds->define_set('1.2:taxa:refselect' =>
 	{ value => 'auth' },
@@ -1362,7 +1381,7 @@ sub initialize {
 	    "Select only taxonomic names at the specified rank, e.g. C<B<genus>>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Select only extant or non-extant taxa.",
-	    "Accepted values are: C<B<yes>>, C<B<no>>, C<B<1>>, C<B<0>>, C<B<true>>, C<B<false>>.",
+	    "Accepted values are: C<B<yes>>, C<B<no>>.",
 	{ optional => 'pres', valid => '1.2:taxa:preservation', split => qr{[\s,]+} },
 	    "This parameter indicates whether to select",
 	    "ichnotaxa, form taxa, or regular taxa.  The default is C<B<all>>, which will select",
@@ -1399,7 +1418,7 @@ sub initialize {
 	     "upon a higher taxon wihtout printing out its entire subtree.");
     
     $ds->define_ruleset('1.2:taxa:occ_list_filter' =>
-	{ param => 'taxon_reso', valid => '1.2:taxa:resolution' },
+	{ param => 'idreso', valid => '1.2:taxa:resolution', alias => 'taxon_reso' },
 	    "Select only occurrences that are identified to the specified taxonomic",
 	    "resolution, and possibly lump together occurrences of the same genus or",
 	    "family.  Accepted values are:",
@@ -1416,7 +1435,7 @@ sub initialize {
 	    "of the following values as a list:",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Select only occurrences identified to extant or to non-extant taxa.",
-	    "Accepted values are: C<B<yes>>, C<B<no>>, C<B<1>>, C<B<0>>, C<B<true>>, C<B<false>>.");
+	    "Accepted values are: C<B<yes>>, C<B<no>>.");
     
     $ds->define_ruleset('1.2:taxa:occ_aux_filter' =>
 	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
@@ -1434,7 +1453,7 @@ sub initialize {
 	     "the base taxon or taxa in the hierarchy.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Selects only records associated with extant or with non-extant taxa.",
-	    "Accepted values are: C<B<yes>>, C<B<no>>, C<B<1>>, C<B<0>>, C<B<true>>, C<B<false>>.");
+	    "Accepted values are: C<B<yes>>, C<B<no>>.");
     
     # $ds->define_ruleset('1.2:taxa:summary_selector' => 
     # 	{ optional => 'rank', valid => '1.2:taxa:summary_rank', alias => 'summary_rank',
@@ -2194,6 +2213,16 @@ sub list_associated {
     $request->strict_check;
     $request->extid_check;
     
+    # If debug mode is turned on, generate a closure which will be able to output debug
+    # messages. 
+    
+    if ( $request->debug )
+    {
+	$options->{debug_out} = sub {
+	    $request->{ds}->debug_line($_[0]);
+	};
+    }
+    
     # For relationships that could return a long list of opinions, we ask for a
     # DBI statement handle.
     
@@ -2230,11 +2259,11 @@ sub list_associated {
     
     catch {
 	die $_;
-    }
-	
-    finally {
-	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
     };
+	
+    # finally {
+    # 	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+    # };
     
     $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
     $request->{main_sql} = $taxonomy->last_sql;
@@ -3657,44 +3686,18 @@ sub process_pbdb {
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
     
-    if ( $record->{is_trace} )
-    {
-	$record->{preservation} = 'ichnotaxon';
-	$record->{preservation} .= '+form taxon' if $record->{is_form};
-    }
+    # if ( $record->{is_trace} )
+    # {
+    # 	$record->{preservation} = 'ichnotaxon';
+    # 	$record->{preservation} .= '+form taxon' if $record->{is_form};
+    # }
     
-    elsif ( $record->{is_form} )
-    {
-	$record->{preservation} = 'form taxon';
-    }
+    # elsif ( $record->{is_form} )
+    # {
+    # 	$record->{preservation} = 'form taxon';
+    # }
     
-    no warnings 'uninitialized';
-    
-    if ( $record->{exclude} )
-    {
-	$record->{flags} = 'E';
-    }
-    
-    if ( defined $record->{base_no} && defined $record->{orig_no} && $record->{base_no} eq $record->{orig_no} )
-    {
-	$record->{flags} = 'B';
-    }
-    
-    elsif ( $record->{is_base} )
-    {
-	$record->{flags} = 'B';
-    }
-    
-    if ( defined $record->{spelling_no} && defined $record->{taxon_no} &&
-	 $record->{taxon_no} ne $record->{spelling_no} )
-    {
-	$record->{flags} .= 'V';
-    }
-    
-    if ( $record->{is_ident} && $record->{orig_no} ne $record->{accepted_no} )
-    {
-	$record->{flags} .= 'I';
-    }
+    $request->process_flags($record);
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -3752,18 +3755,26 @@ sub process_com {
     $record->{n_species} = undef if defined $record->{n_species} &&
 	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
     
-    if ( $record->{is_trace} )
-    {
-	$record->{preservation} = 'I';
-	$record->{preservation} .= 'F' if $record->{is_form};
-    }
+    # if ( $record->{is_trace} )
+    # {
+    # 	$record->{preservation} = 'I';
+    # 	$record->{preservation} .= 'F' if $record->{is_form};
+    # }
     
-    elsif ( $record->{is_form} )
-    {
-	$record->{preservation} = 'F';
-    }
+    # elsif ( $record->{is_form} )
+    # {
+    # 	$record->{preservation} = 'F';
+    # }
     
-    no warnings 'uninitialized';
+    $request->process_flags($record);
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+sub process_flags {
+
+    my ($request, $record) = @_;
     
     if ( $record->{exclude} )
     {
@@ -3780,16 +3791,31 @@ sub process_com {
 	$record->{flags} = 'B';
     }
     
-    if ( $record->{spelling_no} && $record->{taxon_no} &&
+    else 
+    {
+	$record->{flags} = '';
+    }
+    
+    if ( defined $record->{spelling_no} && defined $record->{taxon_no} &&
 	 $record->{taxon_no} ne $record->{spelling_no} )
     {
 	$record->{flags} .= 'V';
     }
     
-    if ( $record->{is_ident} && $record->{orig_no} ne $record->{accepted_no} )
+    if ( $record->{is_trace} )
     {
 	$record->{flags} .= 'I';
     }
+    
+    if ( $record->{is_form} )
+    {
+	$record->{flags} .= 'F';
+    }
+    
+    # if ( $record->{is_ident} && $record->{orig_no} ne $record->{accepted_no} )
+    # {
+    # 	$record->{flags} .= 'I';
+    # }
     
     my $a = 1;	# we can stop here when debugging
 }

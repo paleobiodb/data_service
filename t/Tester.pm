@@ -17,11 +17,16 @@ package Tester;
 use Scalar::Util qw(looks_like_number reftype);
 use Carp qw(croak);
 use Test::More;
+use base 'Exporter';
 
 use namespace::clean;
 
 
 our $LAST_BANNER = '';
+
+our (@EXPORT_OK) = qw(cmp_sets_ok);
+
+our ($DIAG_URLS);
 
 # new ( server_name )
 # 
@@ -51,6 +56,16 @@ sub new {
 		     base_url => $base_url };
     
     bless $instance, $class;
+    
+    # See if we recognize any arguments to the test from which this method was called
+
+    foreach my $arg ( @ARGV )
+    {
+	if ( $arg =~ /^--subtest=(.*)/si )
+	{
+	    $instance->{subtest_select} = $1;
+	}
+    }
     
     return $instance;
 }
@@ -120,6 +135,11 @@ sub fetch_url {
     # Create the full URL and execute a 'GET' request on the server being tested.
     
     my $url = $tester->make_url($path_and_args);
+    
+    if ( $DIAG_URLS )
+    {
+	diag("Fetching: $url");
+    }
     
     my $response;
     
@@ -1750,7 +1770,9 @@ sub find_prevalent {
 
 sub cmp_sets_ok {
     
-    my ($tester, $ref1, $op, $ref2, $message) = @_;
+    shift if ref $_[0] && ( ref $_[0] eq 'Tester' || $_[0]->isa('Tester') );
+    
+    my ($ref1, $op, $ref2, $message) = @_;
     
     croak "You must specify a message" unless defined $message && $message ne '';
     croak "First argument must be a hashref" unless ref $ref1 eq 'HASH';
@@ -2424,3 +2446,4 @@ sub check_messages {
 }
 
 
+1;

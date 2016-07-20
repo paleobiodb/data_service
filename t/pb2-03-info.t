@@ -49,13 +49,12 @@ my @TEST_AUTHOR_7a = ('Crowson');
 my $TEST_TITLE_7a = 'The Biology of the Coleoptera';
 
 my $t1 = { 'nam' => $TEST_NAME_1,
-	   'typ' => "txn",
 	 };
 	   
 my $t1_num = { 'oid' => 1 };
 
 my $t1t = { 'taxon_name' => $TEST_NAME_1,
-	    'record_type' => "txn",
+	    'record_type' => 'txn',
 	  };
 
 my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1 };

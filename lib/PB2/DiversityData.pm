@@ -1293,10 +1293,10 @@ sub generate_occs_taxa_options {
     
     my $options = { };
     
-    if ( my $extant = $request->clean_param('extant') )
-    {
-	$options->{extant} = $extant;
-    }
+    # if ( my $extant = $request->clean_param('extant') )
+    # {
+    # 	$options->{extant} = $extant;
+    # }
     
     my @ranks = $request->clean_param_list('rank');
     

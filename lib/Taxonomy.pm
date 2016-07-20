@@ -103,6 +103,7 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       min_ma => 1, 
 		       max_ma => 1,
 		       exact => 1,
+		       current => 1,
 		       extant => 1, 
 		       depth => 1,
 		       status => 1, 
@@ -2610,6 +2611,7 @@ sub resolve_names {
     my $tables = {};
     my @fields = $taxonomy->generate_fields($options->{fields} || 'NEW_SEARCH', $tables);
     my @filters = $taxonomy->taxon_filters($options, $tables);
+    push @filters, 's.is_current' if ($options->{status} && $options->{status} eq 'valid' || $options->{current});
     
     my $fields = join q{, }, @fields;
     my $joins = $taxonomy->taxon_joins('t', $tables);
@@ -2874,8 +2876,10 @@ sub resolve_names {
 	    
 	    my $sql = $sql_base . join(' and ', @clauses) . "\n" . $sql_order . " " . $sql_limit;
 	    
-	    $taxonomy->{sql_string} .= $sql;
-	    $taxonomy->{sql_string} .= "\n\n";
+	    if ( ref $options->{debug_out} eq 'CODE' )
+	    {
+		&{$options->{debug_out}}("$sql\n");
+	    }
 	    
 	    my $this_result = $dbh->selectall_arrayref($sql, { Slice => {} });
 	    
@@ -2906,8 +2910,9 @@ sub resolve_names {
 	
 	else
 	{
-	    $taxonomy->add_warning('W_NO_MATCH', "The name '$base_n' did not match " . 
-				   "any record in the taxonomy table");
+	    my $phrase = $options->{current} ? 'the currently accepted variant of any name' : 'any name';
+	    
+	    $taxonomy->add_warning('W_NO_MATCH', "The name '$base_n' did not match $phrase in the taxonomy table");
 	}
     }
     
@@ -3750,7 +3755,7 @@ sub generate_fields {
 
 
 
-my (%STATUS_FILTER) = ( valid => "t.accepted_no = t.synonym_no",
+our (%STATUS_FILTER) = ( valid => "t.accepted_no = t.synonym_no",
 			accepted => "t.accepted_no = t.orig_no",
 			senior => "t.accepted_no = t.orig_no",
 			junior => "t.accepted_no = t.synonym_no and t.orig_no <> t.synonym_no",
@@ -3758,9 +3763,9 @@ my (%STATUS_FILTER) = ( valid => "t.accepted_no = t.synonym_no",
 		        any => '1=1',
 		        all => '1=1');
 
-my (%VARIANT_FILTER) = ( valid => 1, accepted => 1, senior => 1, junior => 1 );
+# our (%VARIANT_FILTER) = ( valid => 1, accepted => 1, senior => 1, junior => 1 );
 
-my (%OP_TYPE_FILTER) = ( valid => "in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
+our (%OP_TYPE_FILTER) = ( valid => "in ('belongs to', 'subjective synonym of', 'objective synonym of', 'replaced by')",
 			 accepted => "in ('belongs to')",
 			 senior => "in ('belongs to')",
 			 junior => "in ('subjective synonym of', 'objective synonym of', 'replaced by')",
@@ -3988,12 +3993,12 @@ sub taxon_filters {
 	
 	if ( $options->{extant} )
 	{
-	    push @filters, "v.is_extant";
+	    push @filters, "v.is_extant = 1";
 	}
 	
 	else
 	{
-	    push @filters, "not v.is_extant";
+	    push @filters, "v.is_extant = 0";
 	}
     }
     
@@ -4624,7 +4629,7 @@ sub occ_filters {
     
     my ($taxonomy, $options, $tn) = @_;
 
-    unless ( defined $options->{ident_select} && $options->{ident_select} ne 'latest' )
+    if ( ! $options->{ident_select} || $options->{ident_select} eq 'latest' )
     {
 	return "$tn.latest_ident = true";
     }
@@ -4633,7 +4638,12 @@ sub occ_filters {
     {
 	return "$tn.reid_no = 0";
     }
-
+    
+    elsif ( $options->{ident_select} eq 'reid' )
+    {
+	return "($tn.reid_no > 0 or ($tn.reid_no = 0 and $tn.latest_ident = false))";
+    }
+    
     else # ident_select eq 'all'
     {
 	return;
@@ -4692,7 +4702,7 @@ sub taxon_order {
 	    if ( $rel eq 'children' || $rel eq 'all_children' || $rel eq 'parents' ||
 		 $rel eq 'all_parents' || $rel eq 'synonyms' )
 	    {
-		push @clauses, "t.lft asc";
+		push @clauses, "t.lft desc";
 	    }
 	    
 	    else
@@ -5544,13 +5554,13 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 			       't.rank as taxon_rank', 't.lft', 't.rgt', 't.status', 't.accepted_no',
 			       't.immpar_no', 't.senpar_no', 'a.common_name', 'a.reference_no',
 			       'vt.name as accepted_name', 'vt.rank as accepted_rank',
-			       'v.n_occs', 'v.is_extant'],
+			       'v.n_occs', 'v.is_extant', 'v.is_trace', 'v.is_form'],
 		      AUTH_DATA => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 't.spelling_no',
 				    '(a.taxon_rank + 0) as taxon_rank',
 				    't.lft', 't.rgt', 't.status', 't.accepted_no', 't.immpar_no', 't.senpar_no',
 				    'a.common_name', 'a.reference_no', 'vt.name as accepted_name', 
 				    'nn.spelling_reason', 'n.spelling_reason as accepted_reason',
-				    'vt.rank as accepted_rank', 'v.n_occs', 'v.is_extant'],
+				    'vt.rank as accepted_rank', 'v.n_occs', 'v.is_extant', 'v.is_trace', 'v.is_form'],
 		      REFTAXA_DATA => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
 				       'a.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
 				       'max(base.class_no) as class_no',
@@ -5561,7 +5571,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				       't.immpar_no', 't.senpar_no', 'vt.name as accepted_name', 
 				       'nn.spelling_reason', 'n.spelling_reason as accepted_reason',
 				       'vt.rank as accepted_rank',
-				       'v.n_occs', 'v.is_extant'],
+				       'v.n_occs', 'v.is_extant', 'v.is_trace', 'v.is_form'],
 		      REFTAXA_SIMPLE => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
 					 'base.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
 					 'max(base.class_no) as class_no',

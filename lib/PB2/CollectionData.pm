@@ -640,14 +640,39 @@ sub initialize {
     $ds->define_set('1.2:occs:ident_type' =>
 	{ value => 'latest' },
 	    "Select only the latest identification of each occurrence, and",
-	    "ignore any previous ones.",
+	    "ignore any previous ones.  This is the default.",
 	{ value => 'orig' },
 	    "Select only the original identification of each occurrence, and",
 	    "ignore any later ones.",
+	{ value => 'reid' },
+	    "Select all identifications of occurrences that have been reidentified,",
+	    "including the original.  Ignore occurrences for which no",
+	    "reidentification has been entered in the database.  This may",
+	    "result in multiple records being returned each occurrence.",
+	    "I<Note, however, that if you also specify a taxon name then identifications",
+	    "that do not fall under that name will be ignored.>  You can find these",
+	    "by specifically querying for the occurrences you are interested in by identifier,",
+	    "with C<B<idtype=all>>.",
 	{ value => 'all' },
 	    "Select every identification that matches the other",
 	    "query parameters.  This may result in multiple records being",
-	    "returned for a given occurrence.");
+	    "returned for a given occurrence.  See also the note given for",
+	    "C<B<reid>> above.");
+    
+    $ds->define_set('1.2:occs:ident_qualification' =>
+	{ value => 'any' },
+	    "Select all occurrences regardless of modifiers.  This is the default.",
+	{ value => 'certain' },
+	    "Exclude all occurrences marked with any of the following modifiers:",
+	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<informal> / C<sensu lato>.",
+	{ value => 'genus_certain' },
+	    "Like C<B<certain>>, but look only at the genus/subgenus and ignore species modifiers.",
+	{ value => 'uncertain' },
+	    "Select only occurrences marked with one of the following modifiers:",
+	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<sensu lato> / C<informal>.",
+	{ value => 'new' },
+	    "Select only occurrences marked with one of the following:",
+	    "C<n. gen.> / C<n. subgen.> / C<n. sp.>");
     
     $ds->define_set('1.2:colls:pgmodel' =>
 	{ value => 'scotese' },
@@ -751,9 +776,16 @@ sub initialize {
 	{ param => 'match_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s).",
 	    "You may specify multiple names, separated by commas.  Names may include",
-	    "wildcards, and occurrences associated with all matching names will",
+	    "the wildcards C<%> and C<_>, and occurrences associated with all matching names will",
 	    "be returned.  Synonyms will be ignored.  This is a syntactic rather",
 	    "than a taxonomic match.",
+	# { param => 'match_ident', valid => ANY_VALUE },
+	#     "Return only records whose identification matches the specified name(s).",
+	#     "You may specify multiple names, separated by commas.  Names may include",
+	#     "the wildcards C<%> and C<_>.  This parameter differs from C<B<match_name>>",
+	#     "in that its value is matched against the exact identification as opposed",
+	#     "to the corresponding record from the taxonomy table.  This allows you, for example, to",
+	#     "select identifications using old combinations that are no longer accepted.",
 	{ optional => 'immediate', valid => FLAG_VALUE },
 	    "You may specify this parameter along with F<base_name>, F<base_id>, or F<taxon_name>.",
 	    "If you do, then synonyms of the specified name(s) will",
@@ -771,9 +803,30 @@ sub initialize {
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names,",
 	    "specified by taxon identifier.  This is an alternative to the use of the C<^> character",
 	    "in names.",
-	{ optional => 'ident_type', valid => '1.2:occs:ident_type', alias => 'ident' },
+	{ optional => 'idtype', valid => '1.2:occs:ident_type', alias => ['ident', 'ident_type'] },
 	    "This parameter specifies how re-identified occurrences should be treated.",
 	    "Allowed values include:",
+	{ optional => 'idqual', valid => '1.2:occs:ident_qualification' },
+	    "This parameter selects or excludes occurrences based on their taxonomic modifiers.",
+	    "Allowed values include:",
+	{ optional => 'idmod', valid => ANY_VALUE },
+	    "This parameter selects or excludes occurrences based on any combination of",
+	    "taxonomic modifiers.  You can use this parameter and/or C<B<idgen>> and C<B<idspc>>",
+	    "if you need to select a combination of modifiers not available through C<B<idqual>>.",
+	    "You can specify one or more of the following codes, separated by commas.",
+	    "If the first one is preceded by C<!> then they are excluded.",
+	    "otherwise, only occurrences marked with at least one are included:", 
+	    "=over",
+	    "=item ns", "n. sp.", "=item ng", "n. gen. or n. subgen.",
+	    "=item af", "aff.", "=item cf", "cf.", "=item sl", "sensu lato", "=item if", "informal",
+	    "=item eg", "ex gr.", "=item qm", "question mark (?)", "=item du", "quotes (\"\")",
+	    "=back",
+	{ optional => 'idgenmod', valid => ANY_VALUE },
+	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
+	    "modifiers on the genus and/or subgenus name.  See C<B<idmod>> above.",
+	{ optional => 'idspcmod', valid => ANY_VALUE },
+	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
+	    "modifiers on the species name.  See C<B<idmod>> above.",
 	{ param => 'lngmin', valid => COORD_VALUE('lng') },
 	{ param => 'lngmax', valid => COORD_VALUE('lng') },
 	    "Return only records whose present longitude falls within the given bounds.",
@@ -1427,6 +1480,7 @@ sub refs {
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generateCollFilters($inner_tables);
+    push @filters, $request->PB2::OccurrenceData::generateOccFilters($inner_tables, 'o');
     push @filters, $request->generate_common_filters( { colls => 'cc' }, $inner_tables );
     # push @filters, $request->generate_crmod_filters('cc', $inner_tables);
     # push @filters, $request->generate_ent_filters('cc', $inner_tables);
@@ -1536,6 +1590,7 @@ sub list_coll_strata {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateCollFilters($tables);
+    push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
     # push @filters, $request->generateStrataFilters($tables, $arg);
     
     # Figure out the filter we need for determining access permissions.  We can ignore the extra
@@ -1658,29 +1713,36 @@ sub generateCollFilters {
     my $dbh = $request->get_connection;
     my @filters;
     
-    # If our tables include the occurrence matrix, we must check the 'ident_type'
+    # The following has been moved to 'generateOccFilters' in OccurrenceData.pm.
+    
+    # If our tables include the occurrence matrix, we must check the 'idtype'
     # parameter. 
     
-    if ( ($tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc}) &&
-         ! $tables_ref->{ds} )
-    {
-	my $ident = $request->clean_param('ident_type');
+    # if ( ($tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc}) &&
+    #      ! $tables_ref->{ds} )
+    # {
+    # 	my $ident = $request->clean_param('idtype');
 	
-	if ( $ident eq 'orig' )
-	{
-	    push @filters, "o.reid_no = 0";
-	}
+    # 	if ( $ident eq '' || $ident eq 'latest' )
+    # 	{
+    # 	    push @filters, "o.latest_ident = true";
+    # 	}
 	
-	elsif ( $ident eq 'all' )
-	{
-	    # we need do nothing in this case
-	}
+    # 	elsif ( $ident eq 'orig' )
+    # 	{
+    # 	    push @filters, "o.reid_no = 0";
+    # 	}
 	
-	else # default: 'latest'
-	{
-	    push @filters, "o.latest_ident = true";
-	}
-    }
+    # 	elsif ( $ident eq 'reid' )
+    # 	{
+    # 	    push @filters, "(o.reid_no > 0 or (o.reid_no = 0 and o.latest_ident = false))";
+    # 	}
+	
+    # 	elsif ( $ident eq 'all' )
+    # 	{
+    # 	    # we need do nothing in this case
+    # 	}
+    # }
     
     # Check for a 'ref_id' parameter.
     
@@ -1990,6 +2052,14 @@ sub generateMainFilters {
     {
 	my $id_list = $request->check_values($dbh, \@clusters, 'bin_id', 'coll_bins', 
 					     "Unknown summary cluster '%'");
+
+	# If the result is -1, that means that only invalid identifiers were
+	# specified.
+	
+	if ( $id_list eq '-1' )
+	{
+	    $request->add_warning("no valid cluster identifiers were given");
+	}
 	
 	# my $id_list = join(q{,}, @clusters);
 	# my %id_hash = map { $_ => 1 } @clusters;
@@ -2064,6 +2134,14 @@ sub generateMainFilters {
     {
 	my $id_list = $request->check_values($dbh, \@colls, 'collection_no', 'collections', 
 					     "Unknown collection '%'");
+	
+	# If the result is -1, that means that only invalid identifiers were
+	# specified.
+	
+	if ( $id_list eq '-1' )
+	{
+	    $request->add_warning("no valid collection identifiers were given");
+	}
 	
 	# If there aren't any bins, or no valid cluster ids were specified,
 	# include a filter that will return no results.
@@ -2142,15 +2220,17 @@ sub generateMainFilters {
 	if ( $do_match )
 	{
 	    my @taxa;
+	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
 	    
 	    try {
-		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE', all_names => 1 });
-	    }
-	    
-	    catch {
-		print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-		die $_;
+		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE', all_names => 1, 
+								current => 1, debug_out => $debug_out });
 	    };
+	    
+	    # catch {
+	    # 	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+	    # 	die $_;
+	    # };
 	    
 	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
@@ -2253,8 +2333,9 @@ sub generateMainFilters {
     elsif ( @include_taxa )
     {
 	my $taxon_list = join ',', map { $_->{orig_no} } @include_taxa;
-	push @filters, "o.orig_no in ($taxon_list)";
+	push @filters, "(t.accepted_no in ($taxon_list) or t.orig_no in ($taxon_list))";
 	$tables_ref->{o} = 1 unless $tables_ref->{ds};
+	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
 	$tables_ref->{non_summary} = 1;
 	$request->{my_taxa} = [ @include_taxa, @exclude_taxa ];
@@ -2398,10 +2479,10 @@ sub generateMainFilters {
     
     $request->add_warning(@taxon_warnings) if @taxon_warnings;
     
-    # Check for parameter 'taxonres'.  But not if we took the "identification
+    # Check for parameter 'taxon_reso'.  But not if we took the "identification
     # branch" because in that case it has already been handled.
     
-    my $taxonres = $request->clean_param('taxon_reso');
+    my $taxonres = $request->clean_param('idreso');
     
     if ( $taxonres && ! $ident_used )
     {
@@ -2423,6 +2504,19 @@ sub generateMainFilters {
 	    $tables_ref->{tv} = 1;
 	    $tables_ref->{ph} = 1;
 	}
+    }
+    
+    # Check for parameter 'taxon_status'
+    
+    my $taxon_status = $request->clean_param('taxon_status');
+    
+    if ( $tables_ref->{tf} && $taxon_status )
+    {
+	my $filter = $Taxonomy::STATUS_FILTER{$taxon_status};
+	
+	die "bad taxon status '$taxon_status'\n" unless $filter;
+	
+	push @filters, $filter;
     }
     
     # Check for parameter 'pres'
@@ -2500,6 +2594,16 @@ sub generateMainFilters {
 		# 3 and so all 3 classes of taxa are selected.
 	    }
 	}
+    }
+    
+    # Check for parameter 'extant'
+    
+    my $extant = $request->clean_param('extant');
+	
+    if ( defined $extant && $extant ne '' )
+    {
+	$tables_ref->{v} = 1;
+	push @filters, ($extant ? "v.is_extant = 1" : "v.is_extant = 0");
     }
     
     # Check for parameter 'cc'
@@ -3369,7 +3473,7 @@ sub generatePrevalenceFilters {
     
     my @filters;
     
-    my $interval_no = $request->clean_param('interval_id') + 0;
+    my $interval_no = $request->clean_param('interval_id');
     my $interval_name = $request->clean_param('interval');
     
     if ( $interval_name )
