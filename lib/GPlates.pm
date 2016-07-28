@@ -275,15 +275,18 @@ sub updatePaleocoords {
 	
 	while ( @points )
 	{
-	    # Start with the basic parameters, ending with the preamble for a
-	    # feature collection.
+	    # my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
+	    # $request_json .= "\"features\": [";
+	    # my $comma = '';
+	    # my @oid_list;
 	    
-	    my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
-	    $request_json .= "\"features\": [";
-	    my $comma = '';
+	    # Start building a parameter list.
+	    
+	    my $request_params = "points=";
+	    my $sep = '';
 	    my @oid_list;
 	    
-	    # Add one feature for each point, up to the limit for a single request.
+	    # Add each point, up to the limit for a single request.
 	    
 	FEATURE:
 	    while ( my $point = shift @points )
@@ -293,14 +296,20 @@ sub updatePaleocoords {
 		
 		next unless $lng ne '' && $lat ne '';	# skip any point with null coordinates.
 		
-		$request_json .= $comma; $comma = ",";
-		$request_json .= $self->generateFeature($lng, $lat, $oid);
+		# $request_json .= $comma; $comma = ",";
+		# $request_json .= $self->generateFeature($lng, $lat, $oid);
+		
+		$request_params .= $sep; $sep = ' ';
+		$request_params .= "$lng,$lat,$oid";
+		
 		push @oid_list, $oid;
 		
 		last FEATURE if @oid_list >= $self->{max_features};
 	    }
 	    
-	    $request_json .= "]}";
+	    # $request_json .= "]}";
+	    
+	    $request_params .= "&age=$age";
 	    
 	    # Now if we have at least one point to rotate then fire off the
 	    # request and process the answer (if any)
@@ -312,7 +321,9 @@ sub updatePaleocoords {
 	    
 	    logMessage(2, "    rotating $count points to $age Ma ($oid_string)");
 	    
-	    $self->makeGPlatesRequest($ua, \$request_json, $age);
+	    # $self->makeGPlatesRequest($ua, \$request_json, $age);
+	    
+	    $self->makeGPlatesRequest($ua, $request_params, $age);
 	    
 	    # If we have gotten too many server failures in a row, then abort this
 	    # run.
@@ -392,17 +403,22 @@ sub generateFeature {
 
 sub makeGPlatesRequest {
 
-    my ($self, $ua, $request_ref, $age) = @_;
+    # my ($self, $ua, $request_ref, $age) = @_;
+    
+    my ($self, $ua, $request_params, $age) = @_;
     
     # Generate a GPlates request.  The actual request is wrapped inside a
     # while loop so that we can retry it if something goes wrong.
     
     my $uri = $self->{service_uri};
     
-    my @headers = ( 'Content-Type' => 'application/x-www-form-urlencoded',
-		    'Content-Length' => length($$request_ref) );
+    # my @headers = ( 'Content-Type' => 'application/x-www-form-urlencoded',
+    # 		    'Content-Length' => length($$request_ref) );
     
-    my $req = HTTP::Request->new(POST => $uri, \@headers, $$request_ref);
+    # my $req = HTTP::Request->new(POST => $uri, \@headers, $$request_ref);
+
+    my $req = HTTP::Request->new(GET => "$uri?$request_params");
+    
     my ($resp, $content_ref);
     my $retry_count = $self->{retry_limit};
     my $retry_interval = $self->{retry_interval};
@@ -490,13 +506,23 @@ sub processResponse {
 	return;
     };
     
+    # Check for an error
+    
+    if ( $response->{error} )
+    {
+	logMessage(2, "ERROR: $response->{error}");
+	$self->{fail_count}++;
+	return;
+    }
+    
     # For each feature (i.e. result point) in the response, update the
     # corresponding entry in the database.
     
- POINT:
-    foreach my $feature ( @{$response->{features}} )
+  POINT:
+    foreach my $featcoll ( @{$response->{result}} )
     {
-	my $key = $feature->{properties}{NAME};
+	my $feature = $featcoll->{features}[0];
+	my $key = $feature->{properties}{label};
 	my ($selector, $collection_no) = split(qr{\.}, $key);
 	
 	unless ( defined $selector && $is_selector{$selector} && defined $collection_no && $collection_no > 0 )
@@ -514,7 +540,7 @@ sub processResponse {
 	    next POINT;
 	}
 	
-	my $plate_id = $feature->{properties}{PLATE_ID};
+	my $plate_id = $feature->{properties}{plate_id};
 	
 	$self->updateOneEntry($collection_no, $selector, $age, $lng, $lat, $plate_id);
     }

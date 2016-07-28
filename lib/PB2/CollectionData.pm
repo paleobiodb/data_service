@@ -659,20 +659,26 @@ sub initialize {
 	    "returned for a given occurrence.  See also the note given for",
 	    "C<B<reid>> above.");
     
-    $ds->define_set('1.2:occs:ident_qualification' =>
-	{ value => 'any' },
-	    "Select all occurrences regardless of modifiers.  This is the default.",
-	{ value => 'certain' },
-	    "Exclude all occurrences marked with any of the following modifiers:",
-	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<informal> / C<sensu lato>.",
-	{ value => 'genus_certain' },
-	    "Like C<B<certain>>, but look only at the genus/subgenus and ignore species modifiers.",
-	{ value => 'uncertain' },
-	    "Select only occurrences marked with one of the following modifiers:",
-	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<sensu lato> / C<informal>.",
-	{ value => 'new' },
-	    "Select only occurrences marked with one of the following:",
-	    "C<n. gen.> / C<n. subgen.> / C<n. sp.>");
+    $ds->define_set('1.2:occs:ident_single' =>
+	{ value => 'orig' },
+	    "Select the original identification of the specified occurrence.",
+	{ value => 'latest' },
+	    "Select the latest identification of the specified occurrence.");
+    
+    # $ds->define_set('1.2:occs:ident_qualification' =>
+    # 	{ value => 'any' },
+    # 	    "Select all occurrences regardless of modifiers.  This is the default.",
+    # 	{ value => 'certain' },
+    # 	    "Exclude all occurrences marked with any of the following modifiers:",
+    # 	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<informal> / C<sensu lato>.",
+    # 	{ value => 'genus_certain' },
+    # 	    "Like C<B<certain>>, but look only at the genus/subgenus and ignore species modifiers.",
+    # 	{ value => 'uncertain' },
+    # 	    "Select only occurrences marked with one of the following modifiers:",
+    # 	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<sensu lato> / C<informal>.",
+    # 	{ value => 'new' },
+    # 	    "Select only occurrences marked with one of the following:",
+    # 	    "C<n. gen.> / C<n. subgen.> / C<n. sp.>");
     
     $ds->define_set('1.2:colls:pgmodel' =>
 	{ value => 'scotese' },
@@ -755,12 +761,18 @@ sub initialize {
 	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
 	    "You may specify one or more cluster ids, separated by commas.",
-	{ param => 'coll_re', valid => ANY_VALUE },
-	    "A regular expression which will be matched against the C<collection_name> and",
+	{ param => 'coll_match', valid => ANY_VALUE },
+	    "A string which will be matched against the C<collection_name> and",
 	    "C<collection_aka> fields.  Records will be returned only if they belong to a",
-	    "matching collection.  You can specify two or more alternatives separated by",
+	    "matching collection.  This string may contain the wildcards C<%> and C<_>.",
+	    "In fact, it will probably not match anything unless you include a C<%> at the",
+	    "beginning and/or the end.",
+	{ param => 'coll_re', valid => ANY_VALUE },
+	    "This is like B<C<coll_match>>, except that it takes a regular expression.",
+	    "You can specify two or more alternatives separated by",
 	    "the vertical bar character C<|>, and you can use all of the other standard",
 	    "regular expression syntax including the backslash C<\\>.",
+	{ at_most_one => [ 'coll_match', 'coll_re' ] },
 	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s),",
 	    "I<including all subtaxa and synonyms>.  You may specify multiple names, separated",
@@ -803,10 +815,14 @@ sub initialize {
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names,",
 	    "specified by taxon identifier.  This is an alternative to the use of the C<^> character",
 	    "in names.",
+	{ param => 'idreso', valid => '1.2:taxa:resolution', alias => 'taxon_reso' },
+	    "Select only occurrences that are identified to the specified taxonomic",
+	    "resolution, and possibly lump together occurrences of the same genus or",
+	    "family.  Accepted values are:",
 	{ optional => 'idtype', valid => '1.2:occs:ident_type', alias => ['ident', 'ident_type'] },
 	    "This parameter specifies how re-identified occurrences should be treated.",
 	    "Allowed values include:",
-	{ optional => 'idqual', valid => '1.2:occs:ident_qualification' },
+	{ optional => 'idqual', valid => '1.2:taxa:ident_qualification' },
 	    "This parameter selects or excludes occurrences based on their taxonomic modifiers.",
 	    "Allowed values include:",
 	{ optional => 'idmod', valid => ANY_VALUE },
@@ -819,7 +835,7 @@ sub initialize {
 	    "=over",
 	    "=item ns", "n. sp.", "=item ng", "n. gen. or n. subgen.",
 	    "=item af", "aff.", "=item cf", "cf.", "=item sl", "sensu lato", "=item if", "informal",
-	    "=item eg", "ex gr.", "=item qm", "question mark (?)", "=item du", "quotes (\"\")",
+	    "=item eg", "ex gr.", "=item qm", "question mark (?)", "=item qu", "quotes (\"\")",
 	    "=back",
 	{ optional => 'idgenmod', valid => ANY_VALUE },
 	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
@@ -1034,6 +1050,8 @@ sub initialize {
 	{ allow => '1.2:common:select_colls_ent' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can be used to further filter the selection, based on the",
 	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
 	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
@@ -1051,6 +1069,44 @@ sub initialize {
 	    "first and second author.  Accepted values include:",
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:colls:refs' =>
+	"You can use the following parameter if you wish to retrieve all of the references",
+	"from which collections were entered into the database.",
+	{ allow => '1.2:colls:all_records' },
+        ">>The following parameters can be used to retrieve the references associated with collections",
+	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
+	"These parameters can all be used to select either occurrences, collections, or associated references.",
+	"The taxonomic parameters select all collections that contain at least one matching occurrence.",
+	{ allow => '1.2:colls:selector' },
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	">>You can use the following parameters to filter the result set based on attributes",
+	"of the bibliographic references.  If you wish to use one of them and have not specified",
+	"any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters further filter the selection:",
+	{ allow => '1.2:common:select_colls_crmod' },
+	{ allow => '1.2:common:select_colls_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
+	">>The following parameters can be used to further filter the selection, based on the",
+	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
+	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
+	"contain at least one occurrence matching the specified parameters.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>The following parameter allows you to request additional blocks of information",
+	"beyond the basic reference record.",
+	{ allow => '1.2:refs:display' },
+	">>The following parameter specifies the order in which the results should be returned.",
+	{ allow => '1.2:refs:order' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:colls:summary' => 
 	"The following required parameter selects from the available resolution levels.",
@@ -1084,33 +1140,6 @@ sub initialize {
     	{ allow => '1.2:summary_display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
-    
-    $ds->define_ruleset('1.2:colls:refs' =>
-	"You can use the following parameter if you wish to retrieve all of the references",
-	"from which collections were entered into the database.",
-	{ allow => '1.2:colls:all_records' },
-        ">>The following parameters can be used to retrieve the references associated with collections",
-	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
-	"These parameters can all be used to select either occurrences, collections, or associated references.",
-	"The taxonomic parameters select all collections that contain at least one matching occurrence.",
-	{ allow => '1.2:colls:selector' },
-	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
-	{ require_any => ['1.2:colls:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector'] },
-	">>The following parameters filter the result set.  If you wish to use one of them and",
-	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
-	{ allow => '1.2:common:select_colls_crmod' },
-	{ allow => '1.2:common:select_colls_ent' },
-	">>You can also filter the list according to the various fields of the references:",
-	{ allow => '1.2:refs:filter' },
-	">>The following parameter allows you to request additional blocks of information",
-	"beyond the basic reference record.",
-	{ allow => '1.2:refs:display' },
-	">>The following parameter specifies the order in which the results should be returned.",
-	{ allow => '1.2:refs:order' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     # $ds->define_ruleset('1.2:toprank_selector' =>
     # 	{ param => 'show', valid => ENUM_VALUE('formation', 'ref', 'author'), list => ',' });
@@ -2160,7 +2189,15 @@ sub generateMainFilters {
 	}
     }
     
-    # Check for parameter 'coll_re'.
+    # Check for parameters 'coll_match' and 'coll_re'.
+    
+    if ( my $coll_match = $request->clean_param('coll_match') )
+    {
+	my $quoted = $dbh->quote($coll_match);
+	
+	$tables_ref->{cc} = 1;
+	push @filters, "(cc.collection_name like $quoted or cc.collection_aka like $quoted)";
+    }
     
     if ( my $coll_re = $request->clean_param('coll_re') )
     {
@@ -3185,7 +3222,7 @@ sub generateMainFilters {
     # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
     # If no time rule was given, it defaults to 'buffer'.
     
-    my $time_rule = $request->clean_param('time_rule') || 'major';
+    my $time_rule = $request->clean_param('timerule') || 'major';
     # my $summary_interval = 0;
     # my ($early_age, $late_age, $early_bound, $late_bound);
     # my $interval_no = $request->clean_param('interval_id') + 0;
@@ -3214,7 +3251,7 @@ sub generateMainFilters {
     
     # If the requestor wants to override the time bounds, do that.
     
-    if ( my $earlybuffer = $request->clean_param('time_buffer') )
+    if ( my $earlybuffer = $request->clean_param('timebuffer') )
     {
 	$early_bound = $early_age + $earlybuffer;
 	if ( defined $late_age && $late_age > 0 )
@@ -3224,7 +3261,7 @@ sub generateMainFilters {
 	}
     }
     
-    if ( my $latebuffer = $request->clean_param('late_buffer') )
+    if ( my $latebuffer = $request->clean_param('latebuffer') )
     {
 	if ( defined $late_age && $late_age > 0 )
 	{

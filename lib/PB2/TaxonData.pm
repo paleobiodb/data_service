@@ -969,17 +969,37 @@ sub initialize {
 	    "coalesce all occurrences of the same genus/subgenus in a given collection",
 	    "into a single record.");
     
-    $ds->define_set('1.2:taxa:ident_select' =>
+    $ds->define_set('1.2:taxa:ident_type' =>
 	{ value => 'latest' },
 	    "Select only the latest identification of each occurrence, and",
-	    "ignore any previous ones.",
+	    "ignore any previous ones.  This is the default.",
 	{ value => 'orig' },
 	    "Select only the original identification of each occurrence, and",
 	    "ignore any later ones.",
+	{ value => 'reid' },
+	    "Select all identifications of occurrences that have been reidentified,",
+	    "including the original.  Ignore occurrences for which no",
+	    "reidentification has been entered in the database.  This may",
+	    "result in multiple records being returned for each occurrence.",
 	{ value => 'all' },
 	    "Select every identification that matches the other",
 	    "query parameters.  This may result in multiple records being",
 	    "returned for a given occurrence.");
+    
+    $ds->define_set('1.2:taxa:ident_qualification' =>
+	{ value => 'any' },
+	    "Select all occurrences regardless of modifiers.  This is the default.",
+	{ value => 'certain' },
+	    "Exclude all occurrences marked with any of the following modifiers:",
+	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<informal> / C<sensu lato>.",
+	{ value => 'genus_certain' },
+	    "Like C<B<certain>>, but look only at the genus/subgenus and ignore species modifiers.",
+	{ value => 'uncertain' },
+	    "Select only occurrences marked with one of the following modifiers:",
+	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<informal> / C<sensu lato>.",
+	{ value => 'new' },
+	    "Select only occurrences marked with one of the following:",
+	    "C<n. gen.> / C<n. subgen.> / C<n. sp.>");
     
     # { value => 'latest' },
     #     "Select only references associated with most recently published identification of",
@@ -1418,10 +1438,6 @@ sub initialize {
 	     "upon a higher taxon wihtout printing out its entire subtree.");
     
     $ds->define_ruleset('1.2:taxa:occ_list_filter' =>
-	{ param => 'idreso', valid => '1.2:taxa:resolution', alias => 'taxon_reso' },
-	    "Select only occurrences that are identified to the specified taxonomic",
-	    "resolution, and possibly lump together occurrences of the same genus or",
-	    "family.  Accepted values are:",
 	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
 	    "Select only occurrences identified to taxa that have the specified status.",
 	    "The default is C<B<all>>.  Accepted values include:",
@@ -1558,11 +1574,19 @@ sub initialize {
 	    "of each matching taxonomic name (the default) or for all variants.  The",
 	    "accepted values include:",
 	">>If you are retrieving occurrence and/or collection references, the following",
-	"parameter is also relevant:",
-	{ optional => 'ident_type', valid => '1.2:taxa:ident_select', alias => 'ident' },
+	"parameters are also relevant.  The occurrence/collection references returned will be those associated",
+	"with the selected identifications of the selected occurrences.",
+	{ optional => 'idtype', valid => '1.2:taxa:ident_type', alias => 'ident' },
 	    "This parameter specifies how re-identified occurrences should be treated.",
-	    "The references returned will be those associated with the selected identifications.",
-	    "The default is C<B<latest>> unless you specify otherwise.  Allowed values include:",
+	    "The default is C<B<latest>> unless you specify otherwise.  I<Note that any",
+	    "identifications not falling into the set of taxonomic names selected by this query",
+	    "will be ignored.>  So if an earlier identification of a particular occurrence",
+	    "falls into the set of taxonomic names selected for this query but the latest",
+	    "one does not, then by default that occurrence's reference will not be part of the result.",
+	    "Allowed values include:",
+	{ optional => 'idqual', valid => "1.2:taxa:ident_qualification" },
+	    "This parameter selects or excludes identifications based on their taxonomic modifiers.",
+	    "Allowed values include:",
 	">>You can use the following parameters in addition to (or instead of) the ones above,",
 	"to select references with particular authors, published within a specified range of years, etc.:",
 	{ allow => '1.2:refs:aux_selector' },
@@ -1616,11 +1640,19 @@ sub initialize {
 	    "a reference selection parameter, but you can override it by explicitly including",
 	    "B<C<variant=all>>.",
 	">>If you are retrieving occurrence and/or collection references, the following",
-	"parameter is also relevant:",
-	{ optional => 'ident_type', valid => '1.2:taxa:ident_select', alias => 'ident' },
+	"parameters are also relevant.  The occurrence/collection references returned will be those associated",
+	"with the selected identifications of the selected occurrences.",
+	{ optional => 'idtype', valid => '1.2:taxa:ident_type', alias => 'ident' },
 	    "This parameter specifies how re-identified occurrences should be treated.",
-	    "The references returned will be those associated with the selected identifications.",
-	    "The default is C<B<latest>> unless you specify otherwise.  Allowed values include:",
+	    "The default is C<B<latest>> unless you specify otherwise.  I<Note that any",
+	    "identifications not falling into the set of taxonomic names selected by this query",
+	    "will be ignored.>  So if an earlier identification of a particular occurrence",
+	    "falls into the set of taxonomic names selected for this query but the latest",
+	    "one does not, then by default that occurrence's reference will not be part of the result.",
+	    "Allowed values include:",
+	{ optional => 'idqual', valid => "1.2:taxa:ident_qualification" },
+	    "This parameter selects or excludes identifications based on their taxonomic modifiers.",
+	    "Allowed values include:",
 	">>The following parameters further filter the list of selected records:",
 	{ allow => '1.2:taxa:filter' },
 	{ allow => '1.2:common:select_taxa_crmod' },
@@ -2676,9 +2708,14 @@ sub generate_query_options {
 	$options->{depth} = $depth;
     }
 
-    if ( my $ident_type = $request->clean_param('ident_type') )
+    if ( my $idtype = $request->clean_param('idtype') )
     {
-	$options->{ident_select} = $ident_type;
+	$options->{ident_select} = $idtype;
+    }
+    
+    if ( my $idqual = $request->clean_param('idqual') )
+    {
+	$options->{ident_qual} = $idqual;
     }
     
     # if ( my $occ_name = $request->clean_param('usetaxon') )

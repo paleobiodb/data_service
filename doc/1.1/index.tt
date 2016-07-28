@@ -1,7 +1,5 @@
-This is the B<stable> version of the data service, and should be used for
-production applications.  Any future changes to this version will be
-bug fixes only; new features and capabilities will be added to
-L<version 1.2|/data1.2/>.
+This version of the data service is now B<obsolete>.  It will continue to be
+supported, but any new applications should be written to use L<version 1.2|/data1.2/>.
 
 =head2 DESCRIPTION
 

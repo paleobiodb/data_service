@@ -1,4 +1,6 @@
 
+=for wds_node title = Change Log
+
 =head2 DESCRIPTION
 
 This page tracks the changes to the PBDB data service over successive versions.
@@ -6,19 +8,323 @@ If you are developing an application, script, R module, or other client that int
 with this data service, you can use this page to adjust the URLs that you use to interact
 with the data service.
 
+=head2 CHANGES IN VERSION 1.2 v1
+
+This section tracks the changes to version 1.2 from beta (b2) to stable (v1)
+
+Data service 1.2 is now B<stable>, and is recommended for production use.  Any changes made
+subsequently will be done carefully to make sure that existing URLs and applications using this
+service will continue to work properly.  New parameters and parameter values may be added,
+but old ones will still work the same way.  If a parameter name absolutely has to be changd,
+the old name will still be accepted as an alias.
+
+=over
+
+=item General changes
+
+=over
+
+=item *
+
+The parameter C<B<private>> specifies that embargoed data to which you have access should be
+included in query results.  Any URL that contains this parameter will only work if you are
+simultaneously logged in to the PBDB Classic environment, and will return a C<401 Not Authenticated>
+error otherwise.  No parameter value is needed.
+
+=item *
+
+You can now specify explicitly whether object identifiers in the results are reported as numbers
+or using the extended identifier syntax, using the parameter C<B<extids>> with the value C<B<yes>>
+or C<B<no>>.  The defaults are still
+the same: extended identifiers with the compact vocabulary, numeric identifiers with the PBDB
+vocabulary.
+
+=back
+
+=item Additional documentation
+
+The following documentation pages have been added:
+
+=over
+
+=item *
+
+L<Record identifiers and record numbers|node:general/identifiers>
+
+=item *
+
+L<Special parameters|node:special>
+
+=back
+
+=item Fossil occurrences
+
+=over
+
+=item *
+
+The following changes have been made in the output of fossil occurrence records:
+
+=over
+
+=item *
+
+New output block B<C<coll>> is available.  It reports the name of the collection in which the occurrence was
+found, along with any remarks about the collection.
+
+=item *
+
+The C<flags> field in the basic occurrence record now records whether the occurrence is identified to an
+ichnotaxon (C<I>) or form taxon (C<F>).
+
+=back
+
+=item *
+
+The new operation L<occs/byref|node:occs/byref> selects occurrences using all of the usual parameters
+including the parameters for selecting references.  It sorts the results by default according to the
+reference from which they were entered, although this can be overridden.
+
+=item *
+
+The operation L<occs/list|node:occs/list> no longer takes parameters for selecting occurrences by the
+reference from which they were entered.  Use C<occs/byref> instead.
+
+=item *
+
+The operations L<occs/refs|node:occs/refs> and L<occs/byref|node:occs/byref> now accept the following
+new parameters: C<B<pub_type>>, C<B<ref_doi>>, C<B<ref_id>>.
+
+=item *
+
+The new operation L<occs/geosum|node:occs/geosum> summarizes occurrences according to their present-day
+geographical location.  This is essentially the same operation as L<colls/summary|node:colls/summary>,
+but it really belongs here instead of in the Fossil collections section.
+
+=item *
+
+The parameter C<taxon_reso> has been renamed to C<B<idreso>>.  The old name is still accepted as an
+alias.
+
+=item *
+
+The parameter C<ident_type> has been renamed to C<B<idtype>>.  The old name is still accepted as an
+alias.  It also takes a new value: C<B<reid>>, which selects all identifications of occurrences that
+have more than one.
+
+=item *
+
+The occurrence operations now take the following new parameters: C<B<idqual>>, C<B<idmod>>,
+C<B<idgenmod>>, and C<B<idspcmod>>.  These select or exclude occurrences based on the taxonomic
+name modifiers associated with the occurrence (e.g. I<cf.>, I<?>, I<n. sp.>).
+
+=item *
+
+The occurrence operations now take the new parameters C<B<coll_match>> and C<B<coll_re>>.  
+You can use either one if you want to retrieve occurrences only from collections which have
+a specific word or phrase in their name.  The first alternative takes the C<< % >> and C<_> wildcards, while
+the second takes a regular expression.  In either case, the pattern is matched against the
+C<collection_name> and C<collection_aka> fields.  Occurrences
+will only be returned if they are found in a matching collection.
+
+=item *
+
+The operation L<node:occs/single> now accepts an extended identifier either of type
+C<B<occ>> or C<B<rei>>, and also takes the parameter C<B<idtype>>.  These two changes together allow
+the retrieval of any identification of the requested occurrence.
+
+=back
+
+=item Fossil collections
+
+=over
+
+=item *
+
+The following changes have been made to the output of fossil collection records:
+
+=over
+
+=item *
+
+The output block C<B<rem>> is obsolete.  The information it had displayed (C<collection_aka>) is now
+part of the basic output block for collections.
+
+=back
+
+=item *
+
+The new operation L<colls/byref|node:colls/byref> selects collections using all of the usual parameters
+including the parameters for selecting references.  It sorts the results by default according to the
+primary reference from which they were entered, although this can be overridden.
+
+=item *
+
+The operation L<colls/list|node:colls/list> no longer takes parameters for selecting collections by the
+reference from which they were entered.  Use C<colls/byref> instead.
+
+=item *
+
+The operations L<colls/refs|node:colls/refs> and L<colls/byref|node:colls/byref> now accept the following
+new parameters: C<B<pub_type>>, C<B<ref_doi>>, C<B<ref_id>>.
+
+=item *
+
+The new parameters listed for occurrence operations above can also be used to select collections that
+contain matching occurrences.  These parameters include: C<B<idreso>>, C<B<idtype>>, C<B<idqual>>,
+C<B<idmod>>, C<B<idgenmod>>, C<B<idspcmod>>.
+
+=item *
+
+The collection operations now take the new parameters C<B<coll_match>> and C<B<coll_re>>.  
+You can use either one if you want to retrieve collections which have
+a specific word or phrase in their name.  The first alternative takes the C<%> and C<_> wildcards, while
+the second takes a regular expression.  In either case, the pattern is matched against the
+C<collection_name> and C<collection_aka> fields, and collections will be returned if either
+field matches.
+
+=back
+
+=item Specimens and measurements
+
+=over
+
+=item *
+
+You can now query for specimen records, and for measurement records associated with them.
+
+=item *
+
+The operations L<specs/single|node:specs/single> and L<specs/list|node:specs/list> allow you
+to retrieve information about fossil specimens entered in the database, using the same
+parameters that are available for selecting occurrences.
+
+=item *
+
+The operations L<specs/byref|node:specs/byref> and L<specs/refs|node:specs/refs> allow
+you to retrieve information about fossil specimens using both parameters that select
+specimens based on their properties and parameters that select them based on the
+properties of the associated references.
+
+=item
+
+The operation L<specs/measurements> allows you to retrieve infomration about measurements
+of specimens.
+
+=back
+
+=item Taxonomic names
+
+=over
+
+=item *
+
+The following changes have been made to the output of taxonomic name records:
+
+=over
+
+=item *
+
+The output block B<C<pres>> is now obsolete.  The information it contained is now reported
+in the field C<flags>.  The flag C<F> indicates a form taxon, while C<I> indicates an ichnotaxon.
+
+=back
+
+=back
+
+=item Taxonomic opinions
+
+=over
+
+=item *
+
+The following changes have been made to the output of taxonomic opinion records:
+
+=over
+
+=item *
+
+The output block B<C<seq>> is now available.  Just as with the identically named block
+available for taxonomic names, this block reports the sequence number of the taxon
+which is the subject of the opinion.
+
+=back
+
+=item *
+
+The operations L<taxa/refs|node:taxa/refs> and L<taxa/byref|node:taxa/byref> now take
+the parameters C<B<idtype>> and C<B<idqual>>.  If you are requesting occurrence, specimen,
+and/or collection references for a particular taxon or set of taxa, you can use these
+parameters to fine-tune which particular occurrences will have their references selected.
+
+=item *
+
+The operations L<taxa/refs|node:taxa/refs> and L<taxa/byref|node:taxa/byref> now accept the following
+new parameters: C<B<pub_type>>, C<B<ref_doi>>.
+
+=back
+
+=item Geological time intervals
+
+=over
+
+=item *
+
+No changes except for the general ones listed above.
+
+=back
+
+=item Geological strata
+
+=over
+
+=item *
+
+No changes except for the general ones listed above.
+
+=back
+
+=item Bibliographic references
+
+=over
+
+=item *
+
+The operation L<refs/list|node:refs/list> now takes the new parameters C<B<pub_type>> and C<B<ref_doi>>.
+
+=back
+
+=item Client configuration
+
+=over
+
+=item *
+
+No changes except for the general ones listed above.
+
+=back
+
+=item Output formats and vocabularies
+
+=over
+
+=item *
+
+No changes.
+
+=back
+
+=for wds_comment Start next section here.
+
+=back
+
 =head2 CHANGES IN VERSION 1.2 b2
 
-This section tracks the changes to version 1.2 (b2), from the base of
-version 1.1 (6).
+This section tracks the changes from version 1.1 (6) to version 1.2 beta (b2).
 
-This is the "beta-test" version of data service 1.2.  Be aware that
-the URL paths, parameters and result fields may change, as we get
-feedback from users.  We will do our best to keep from introducing incompatibilities
-during this process, but we cannot completely guarantee this.
-If you are writing a client for production use, we recommend that you use L<version 1.1|/data1.1/>
-of the service until we finalize 1.2.  We expect to do this by the end of summer, 2015.
+This was the version available from mid-2015 to mid-2016.
 
-=over 4
+=over
 
 =item General changes
 
@@ -152,38 +458,38 @@ The following changes have been made in the output of fossil occurrence records:
 
 =item *
 
-The old output block B<phylo> has been split into two new blocks, B<class> and B<classext>.
+The old output block C<phylo> has been split into two new blocks, B<C<class>> and B<C<classext>>.
 
 =item *
 
-New output block B<subgenus> is available, reporting the subgenus if any into which the 
+New output block B<C<subgenus>> is available, reporting the subgenus if any into which the 
 occurrence falls.
 
 =item *
 
-New output blocks B<ecospace>, B<taphonomy>, and B<etbasis> are available.  These report the
+New output blocks B<C<ecospace>>, B<C<taphonomy>>, and B<C<etbasis>> are available.  These report the
 ecospace and taphonomy information of the taxon corresponding to each occurrence.
 
 =item *
 
-New output block B<plant> is available.  This reports the plant organ, if any, identified for
+New output block B<C<plant>> is available.  This reports the plant organ, if any, identified for
 each occurrence.
 
 =item *
 
-New output block B<methods> is available, reporting the collection methods, museum information,
+New output block B<C<methods>> is available, reporting the collection methods, museum information,
 and related fields.
 
 =item *
 
-New output block B<resgroup> is available, reporting the research group with which this
+New output block B<C<resgroup>> is available, reporting the research group with which this
 collection is associated.
 
 =item *
 
-New output block B<full> is available.  This includes all of the information in the blocks
-B<class>, B<subgenus>, B<plant>, B<abund>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>,
-B<lithext>, B<geo>, B<methods>, B<rem>.
+New output block B<C<full>> is available.  This includes all of the information in the blocks
+B<C<class>>, B<C<subgenus>>, B<C<plant>>, B<C<abund>>, B<C<coords>>, B<C<loc>>, B<C<paleoloc>>, B<C<prot>>, B<C<stratext>>,
+B<C<lithext>>, B<C<geo>>, B<C<methods>>, B<C<rem>>.
 
 =item *
 
@@ -206,22 +512,22 @@ if you specify C<ident=orig> or C<ident=all>.
 =item *
 
 The old field C<llp> has been split into C<latlng_basis> and
-C<latlng_precision> and has been moved to the output block B<loc>.
+C<latlng_precision> and has been moved to the output block B<C<loc>>.
 But in the compact vocabulary, it remains the single field C<prc>.
 
 =item *
 
-In the output block B<loc>, the field C<state> is now called C<stp> in the compact vocabulary.
+In the output block B<C<loc>>, the field C<state> is now called C<stp> in the compact vocabulary.
 The field C<geogcomments> has been added.
 
 =item *
 
-In the output block B<ident>, the old fields C<genus_name> and C<genus_reso> have been renamed to
+In the output block B<C<ident>>, the old fields C<genus_name> and C<genus_reso> have been renamed to
 C<primary_name> and C<primary_reso>.
 
 =item *
 
-The old output blocks B<attr> and B<time> been removed.  The field C<pubyr> has been added to
+The old output blocks B<C<attr>> and B<C<time>> been removed.  The field C<pubyr> has been added to
 the basic output block.  The time fields were there to support functionality which was never
 added to Navigator, and so are now removed.
 
@@ -229,12 +535,12 @@ added to Navigator, and so are now removed.
 
 =item *
 
-L<node:occs/single> has no changes to the parameters.  The parameter C<id> is
+L<occs/single|node:occs/single> has no changes to the parameters.  The parameter C<id> is
 still an alias for C<occ_id>.
 
 =item *
 
-L<node:occs/list> has the following parameter changes:
+L<occs/list|node:occs/list> has the following parameter changes:
 
 =over
 
@@ -257,7 +563,8 @@ The parameters C<created_after>, C<authorized_by>, etc. are now renamed C<occ_cr
 
 =item *
 
-L<node:occs/taxa> now takes the same parameters as L<node:occs/list>, with the exception of C<all_records>, 
+L<occs/taxa|node:occs/taxa> now takes the same parameters as L<occs/list|node:occs/list>, 
+with the exception of C<all_records>, 
 C<occ_id>, and C<order>.  It also has the following parameter changes:
 
 =over
@@ -268,40 +575,40 @@ The old parameter C<rank> has been replaced by the new parameters C<reso> and C<
 
 =back
 
-Its output is the same as the output of L<node:taxa/list> (see below), with the following changes:
+Its output is the same as the output of L<taxa/list|node:taxa/list> (see below), with the following changes:
 
 =over
 
 =item *
 
-New block B<occapp> reports the age of first and last appearance according to the set of
+New block B<C<occapp>> reports the age of first and last appearance according to the set of
 occurrences being analyzed rather than from the full set of occurrences in the database.
 
 =item *
 
-New block B<subcounts> reports subtaxon counts.
+New block B<C<subcounts>> reports subtaxon counts.
 
 =back
 
 =item *
 
-New operation L<node:occs/diversity> which tabulates fossil diversity over time for any selection
+New operation L<occs/diversity|node:occs/diversity> which tabulates fossil diversity over time for any selection
 of occurrences.
 
 =item *
 
-New operation L<node:occs/quickdiv> which does a quicker but less precise computation of fossil
+New operation L<occs/quickdiv|node:occs/quickdiv> which does a quicker but less precise computation of fossil
 diversity over time.  This operation is intended primarily to support the Navigator application.
 
 =item *
 
-New operation L<node:occs/prevalence> which reports the most prevalent major taxa from any
+New operation L<occs/prevalence|node:occs/prevalence> which reports the most prevalent major taxa from any
 selection of occurrences.  At the moment you can only specify a single time interval with this
 operation, but that limitation will be removed in a subsequent version of the data service.
 
 =item *
 
-L<node:occs/refs> has the same parameter changes as C<occs/list>, plus the following:
+L<occs/refs|node:occs/refs> has the same parameter changes as L<occs/list|node:occs/list>, plus the following:
 
 =over
 
@@ -325,7 +632,7 @@ Its output has the following changes:
 
 =item *
 
-New output block B<counts> is available, reporting the number of taxa, occurrences, etc. which
+New output block B<C<counts>> is available, reporting the number of taxa, occurrences, etc. which
 were entered from each reference.  The old field C<associated_records> has been removed.
 
 =item *
@@ -358,12 +665,12 @@ The following changes have been made in the output of fossil collection records:
 
 =item *
 
-New output block B<methods> is available, reporting the collection methods, museum information,
+New output block B<C<methods>> is available, reporting the collection methods, museum information,
 and related fields.
 
 =item *
 
-New output block B<resgroup> is available, reporting the research group with which this
+New output block B<C<resgroup>> is available, reporting the research group with which this
 collection is associated.
 
 =item *
@@ -374,29 +681,29 @@ now part of the basic output block.
 =item *
 
 The field C<llp> has been split into C<latlng_basis> and
-C<latlng_precision> and has been moved to the output block B<loc>.
+C<latlng_precision> and has been moved to the output block B<C<loc>>.
 But in the compact vocabulary, it remains the single field C<prc>.
 
 =item *
 
-In the output block B<loc>, the field C<state> is now called C<stp> in the compact vocabulary.
+In the output block B<C<loc>>, the field C<state> is now called C<stp> in the compact vocabulary.
 The field C<geogcomments> has been added.
 
 =item *
 
 The fields C<cx_int_no>, C<early_int_no>, and C<late_int_no> have been removed.  The output
-block B<time> is now empty and deprecated.
+block B<C<time>> is now empty and deprecated.
 
 =back
 
 =item *
 
-L<node:colls/single> has no changes to the parameters.  The parameter C<id> is
+L<colls/single|node:colls/single> has no changes to the parameters.  The parameter C<id> is
 still an alias for C<coll_id>.
 
 =item *
 
-L<node:colls/list> has the following parameter changes:
+L<colls/list|node:colls/list> has the following parameter changes:
 
 =over
 
@@ -419,7 +726,7 @@ The parameters C<created_after>, C<authorized_by>, etc. are now renamed C<coll_c
 
 =item *
 
-L<node:colls/summary> has the same parameter changes as C<colls/list>.  Its output has the following
+L<colls/summary|node:colls/summary> has the same parameter changes as C<colls/list>.  Its output has the following
 changes:
 
 =over
@@ -438,7 +745,7 @@ of the basic output block.
 
 =item *
 
-L<node:colls/refs> has the same parameter changes as C<colls/list>, plus the following.
+L<colls/refs|node:colls/refs> has the same parameter changes as C<colls/list>, plus the following.
 The parameters C<author> and C<primary> have been renamed C<ref_author> and C<ref_primary>.  The
 parameter C<year> has now been replaced by C<ref_published>, C<ref_published_after>, and C<ref_published_before>.
 The parameters C<reftitle> and C<pubtitle> have been renamed C<ref_title> and C<pub_title>.
@@ -447,7 +754,7 @@ The parameters C<reftitle> and C<pubtitle> have been renamed C<ref_title> and C<
 
 =item *
 
-New output block B<counts> is available, reporting the number of taxa, occurrences, etc. entered
+New output block B<C<counts>> is available, reporting the number of taxa, occurrences, etc. entered
 from this reference.
 
 =item *
@@ -484,11 +791,11 @@ The new field C<flags> indicates special information about certain records.
 =item *
 
 The field C<associated_records> has been removed, and the field C<n_occs> has been added to the output
-blocks B<size> and B<subcounts>.
+blocks B<C<size>> and B<C<subcounts>>.
 
 =item *
 
-The field C<common> has been moved from the basic output to the output block B<common>.
+The field C<common> has been moved from the basic output to the output block B<C<common>>.
 
 =item *
 
@@ -502,27 +809,27 @@ The field C<status> has been replaced by C<difference>.
 =item *
 
 The field C<parent_no> now lists the senior synonym of the parent taxon.  If you want to know the immediate
-parent taxon, include the output block B<immparent> to get the field C<immpar_no>.
+parent taxon, include the output block B<C<immparent>> to get the field C<immpar_no>.
 
 =item *
 
-In the output block B<app>, the fields C<firstapp_ea>, C<firstapp_la>, C<lastapp_ea>, and C<lastapp_la> have been renamed to C<firstapp_max_ma>,
+In the output block B<C<app>>, the fields C<firstapp_ea>, C<firstapp_la>, C<lastapp_ea>, and C<lastapp_la> have been renamed to C<firstapp_max_ma>,
 C<firstapp_min_ma>, C<lastapp_max_ma>, C<lastapp_min_ma>.  New fields C<early_interval> and C<late_interval> have been added.
 
 =item *
 
-The old output block B<phylo> has been renamed to B<class>.
+The old output block C<phylo> has been renamed to B<C<class>>.
 
 =item *
 
-The following new output blocks are available: B<common>, B<parent>, B<immparent>, B<subcounts>, B<ecospace>, B<taphonomy>,
-B<etbasis>.
+The following new output blocks are available: B<C<common>>, B<C<parent>>, B<C<immparent>>, B<C<subcounts>>, B<C<ecospace>>, B<C<taphonomy>>,
+B<C<etbasis>>.
 
 =back
 
 =item *
 
-L<node:taxa/single> has the following changes to the parameters:
+L<taxa/single|node:taxa/single> has the following changes to the parameters:
 
 =over
 
@@ -535,7 +842,7 @@ be returned, rather than about the currently accepted variant.
 
 =item *
 
-L<node:taxa/list> has the following changes to the parameters:
+L<taxa/list|node:taxa/list> has the following changes to the parameters:
 
 =over
 
@@ -559,17 +866,17 @@ it from C<op_status>.
 
 =item *
 
-New operation L<node:taxa/opinions> returns information about the taxonomic opinions associated with
-any set of taxa.  This takes the same parameters as L<node:taxa/list>, plus additional ones for 
+New operation L<taxa/opinions|node:taxa/opinions> returns information about the taxonomic opinions associated with
+any set of taxa.  This takes the same parameters as L<taxa/list|node:taxa/list>, plus additional ones for 
 selecting the desired opinions.
 
 =item *
 
-The operation L<node:occs/taxa> is described above in the section on I<Fossil occurrences>.
+The operation L<occs/taxa|node:occs/taxa> is described above in the section on I<Fossil occurrences>.
 
 =item *
 
-L<node:taxa/refs> has the same parameter changes as C<taxa/list>, plus the following:
+L<taxa/refs|node:taxa/refs> has the same parameter changes as C<taxa/list>, plus the following:
 
 =over
 
@@ -598,7 +905,7 @@ Its output has the following changes:
 
 =item *
 
-New output block B<counts> is available, reporting the number of taxa, occurrences, etc. which
+New output block B<C<counts>> is available, reporting the number of taxa, occurrences, etc. which
 were entered from each reference.  The old field C<associated_records> has been removed.
 
 =item *
@@ -619,13 +926,13 @@ C<lng> for I<longitude>.
 
 =item *
 
-New operation L<node:taxa/byref> which groups a selected set of taxa by reference and by reference
-mode.  It takes the same parameters as L<node:taxa/refs>, so that you can make both calls and
+New operation L<taxa/byref|node:taxa/byref> which groups a selected set of taxa by reference and by reference
+mode.  It takes the same parameters as L<taxa/refs|node:taxa/refs>, so that you can make both calls and
 match up the reference_no values.
 
 =item *
 
-No changes to the operations L<node:taxa/auto>, L<node:taxa/thumb>, L<node:taxa/icon>.
+No changes to the operations L<taxa/auto|node:taxa/auto>, L<taxa/thumb|node:taxa/thumb>, L<taxa/icon|node:taxa/icon>.
 
 =back
 
@@ -635,7 +942,7 @@ No changes to the operations L<node:taxa/auto>, L<node:taxa/thumb>, L<node:taxa/
 
 =item *
 
-New operations L<node:taxa/opinions>, L<node:opinions/list>, L<node:opinions/single>
+New operations L<taxa/opinions|node:taxa/opinions>, L<opinions/list|node:opinions/list>, L<opinions/single|node:opinions/single>
 provide access to the taxonomic opinions in the database.
 
 =back
@@ -646,7 +953,7 @@ provide access to the taxonomic opinions in the database.
 
 =item *
 
-The operation L<node:intervals/list> has a new parameter C<scale_level>.
+The operation L<intervals/list|node:intervals/list> has a new parameter C<scale_level>.
 
 =item *
 
@@ -676,7 +983,7 @@ The following changes have been made to the output of bibliographic reference re
 
 =item *
 
-New output block B<counts> is available, reporting the number of taxa, occurrences, etc. which
+New output block B<C<counts>> is available, reporting the number of taxa, occurrences, etc. which
 were entered from each reference.  The old field C<associated_records> has been removed.
 
 =item *
@@ -697,11 +1004,11 @@ C<lng> for I<longitude>.
 
 =item *
 
-The operation L<node:refs/single> has no changes to the parameters.
+The operation L<refs/single|node:refs/single> has no changes to the parameters.
 
 =item *
 
-The operation L<node:refs/list> has the following changes to the parameters:
+The operation L<refs/list|node:refs/list> has the following changes to the parameters:
 
 =over
 
@@ -726,7 +1033,7 @@ etc.
 
 =item *
 
-The operations L<node:occs/refs>, L<node:colls/refs>, and L<node:taxa/refs> are discussed above.
+The operations L<occs/refs|node:occs/refs>, L<colls/refs|node:colls/refs>, and L<taxa/refs|node:taxa/refs> are discussed above.
 
 =back
 
@@ -736,7 +1043,7 @@ The operations L<node:occs/refs>, L<node:colls/refs>, and L<node:taxa/refs> are 
 
 =item *
 
-New output block B<countries> returns a list of the ISO-3166-1 country codes.
+New output block B<C<countries>> returns a list of the ISO-3166-1 country codes.
 The output includes the continent on which each country is located.
 
 =back

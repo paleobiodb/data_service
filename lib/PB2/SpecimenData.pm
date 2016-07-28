@@ -28,7 +28,7 @@ use Try::Tiny;
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::OccurrenceData PB2::TaxonData PB2::CollectionData PB2::IntervalData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData PB2::OccurrenceData PB2::TaxonData PB2::CollectionData PB2::IntervalData);
 
 
 # initialize ( )
@@ -46,8 +46,8 @@ sub initialize {
 	{ select => [ 'ss.specimen_no', 'sp.specimen_id', 'sp.is_type', 'sp.specimen_side',
 		      'sp.specimen_part', 'sp.sex as specimen_sex', 'sp.specimens_measured as n_measured',
 		      'sp.measurement_source', 'sp.magnification', 'sp.comments',
-		      'sp.occurrence_no', 'ss.taxon_no as identified_no', 'a.taxon_name as identified_name',
-		      'a.orig_no as spec_orig_no',
+		      'sp.occurrence_no', 'ss.reid_no', 'ss.taxon_no as identified_no',
+		      'a.taxon_name as identified_name', 'a.orig_no as spec_orig_no',
 		      't.rank as identified_rank', 't.status as taxon_status', 't.orig_no',
 		      'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
 		      't.spelling_no', 't.accepted_no',
@@ -64,12 +64,37 @@ sub initialize {
 	{ output => 'record_type', com_name => 'typ', value => $IDP{SPM} },
 	    "The type of this object: C<$IDP{SPM}> for a specimen.",
 	{ output => 'flags', com_name => 'flg' },
+	    "This field will be empty for most records.  Otherwise, it will contain one or more",
+	    "of the following letters:", "=over",
+	    "=item N", "This specimen is not associated with an occurrence.",
+	    "=item D", "The identification entered for this specimen is different from the",
+	        "identification entered for the corresponding occurrence.",
+	    "=item R", "This identification has been superceded by a more recent one.",
+		"In other words, this specimen has been reidentified.",
+	    "=item I", "This identification is an ichnotaxon",
+	    "=item F", "This identification is a form taxon",
 	    "This field will be empty for most records.  A record representing a specimen",
 	    "not associated with an occurrence will have an C<N> in this field.  A record",
 	    "representing a specimen whose identification is different than its associated",
 	    "occurrence will have an C<I> in this field.",
 	{ output => 'occurrence_no', com_name => 'qid' },
 	    "The identifier of the occurrence, if any, with which this specimen is associated",
+	{ output => 'reid_no', com_name => 'eid' },
+	    "If the associated occurrence was reidentified, a unique identifier for the",
+	    "reidentification.",
+	{ output => 'collection_no', com_name => 'cid' },
+	    "The identifier of the collection, if any, with which this specimen is associated",
+	{ output => 'permissions', com_name => 'prm' },
+	    "The accessibility of this record.  If empty, then the record is",
+	    "public.  Otherwise, the value of this record will be one",
+	    "of the following:", "=over",
+	    "=item members", "The record is accessible to database members only.",
+	    "=item authorizer", "The record is accessible to its authorizer group,",
+	    "and to any other authorizer groups given permission.",
+	    "=item group(...)", "The record is accessible to",
+	    "members of the specified research group(s) only.",
+	    "=back",
+	{ set => 'permissions', from => '*', code => \&PB2::CollectionData::process_permissions },
 	{ output => 'specimen_id', com_name => 'smi', data_type => 'str' },
 	    "The identifier for this specimen according to its custodial institution",
 	{ output => 'is_type', com_name => 'smt' },
@@ -279,6 +304,16 @@ sub initialize {
 	{ include => '1.2:colls:rem' },
 	{ include => '1.2:refs:attr' });
     
+    # Parameter value definitions
+    
+    $ds->define_set('1.2:specs:type' =>
+	{ value => 'holo' },
+	    "Select only holotypes.",
+	{ value => 'para' },
+	    "Select only holotypes and paratypes.",
+	{ value => "any" },
+	    "Select all specimens.  This is the default.");
+    
     # Rulesets for the various operations defined by this package
     
     $ds->define_ruleset('1.2:specs:specifier' =>
@@ -287,14 +322,29 @@ sub initialize {
 	    "You may instead use the parameter name C<id>.");
     
     $ds->define_ruleset('1.2:specs:selector' =>
-	{ param => 'all_records', valid => FLAG_VALUE },
-	    "List all specimen records known to the database, subject",
-	    "to any other parameters you may specify.  This parameter needs",
-	    "no value.  Please note that specifying this parameter alone will",
-	    "result in a download of over 20 MB of data.",
 	{ param => 'spec_id', valid => VALID_IDENTIFIER('SPM'), list => ',', alias => 'id' },
+	    "A comma-separated list of specimen identifiers.  Specimens identified by",
+	    "these identifiers are selected, provided they satisfy any other parameters",
+	    "given with this request.",
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',' },
-	    "A comma-separated list of occurrence identifiers.");
+	    "A comma-separated list of occurrence identifiers.  Specimens corresponding",
+	    "to the specified occurrences are selected, provided they satisfy any other",
+	    "parameters given with this request.",
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
+	    "A comma-separated list of collection identifiers.  Specimens corresponding",
+	    "to occurrences in the specified collections are selected, provided they satisfy any other",
+	    "parameters given with this request.",
+	{ at_most_one => [ 'all_records', 'spec_id', 'occ_id' ] });
+    
+    $ds->define_ruleset('1.2:specs:all_records' =>
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Select all occurrences entered in the database, subject to any other parameters you may specify.",
+	    "This parameter does not require any value.");
+    
+    $ds->define_ruleset('1.2:specs:filter' =>
+	{ optional => 'spectype', valid => '1.2:specs:type' },
+	    "Select specimens according to whether they are a paratype or holotype.",
+	    "Accepted values include:");
     
     $ds->define_ruleset('1.2:specs:display' =>
 	{ optional => 'show', list => q{,}, valid => '1.2:specs:basic_map' },
@@ -311,7 +361,7 @@ sub initialize {
     $ds->define_ruleset('1.2:specs:single' =>
 	"The following parameter selects a record to retrieve:",
     	{ require => '1.2:specs:specifier', 
-	  error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" },
+	  error => "you must specify a specimen identifier, either in the URL or with the 'id' parameter" },
 	">>You may also use the following parameter to specify what information you wish to retrieve:",
 	{ optional => 'pgm', valid => $ds->valid_set('1.2:colls:pgmodel'), list => "," },
 	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
@@ -323,28 +373,30 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:specs:list' =>
-	"You can use the following parameters if you wish to retrieve information about",
-	"a known list of specimens, occurrences, or collections, or to filter a known list against",
-	"other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
+	"You can use the following parameter if you wish to retrieve the entire set of",
+	"specimen records entered in this database.  Please use this with care, since the",
+	"result set will contain more than 130,000 records and will be at least 25 megabytes in size.",
+    	{ allow => '1.2:specs:all_records' },
+	">>The following parameters can be used to specify which kinds of specimens you are interested in:",
+	{ allow => '1.2:specs:filter' },
+        ">>The following parameters can be used to query for specimens by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
 	{ allow => '1.2:specs:selector' },
-        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
-	"Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections,",
-	"or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:specs:all_records', '1.2:specs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	{ ignore => 'level' },
+	">>The following parameters can be used to further filter the selection.",
+	"If you wish to use one of them and have not specified any of the selection parameters",
+	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_specs_crmod' },
 	{ allow => '1.2:common:select_specs_ent' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ allow => '1.2:refs:aux_selector' },
-	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_crmod',
-			  '1.2:refs:aux_selector'] },
-	">>The following parameters can be used to further filter the result list.",
+	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
@@ -352,28 +404,114 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
+    $ds->define_ruleset('1.2:specs:byref' =>
+	"You can use the following parameter if you wish to retrieve the entire set of",
+	"specimens records entered in this database.  Please use this with care, since the",
+	"result set will contain more than 7,000 records and will be at least 2 megabytes in size.",
+    	{ allow => '1.2:specs:all_records' },
+	">>The following parameters can be used to specify which kinds of specimens you are interested in:",
+	{ allow => '1.2:specs:filter' },
+        ">>The following parameters can be used to query for specimens by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
+	{ allow => '1.2:specs:selector' },
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:specs:all_records', '1.2:specs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	{ ignore => ['level', 'ref_type', 'select'] },
+	">>You can use the following parameters to filter the result set based on attributes",
+	"of the bibliographic references.  If you wish to use one of them and have not specified",
+	"any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters can be used to further filter the selection.",
+	{ allow => '1.2:common:select_specs_crmod' },
+	{ allow => '1.2:common:select_specs_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
+	">>The following parameters can also be used to filter the result list based on taxonomy:",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
+	{ allow => '1.2:specs:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:specs:refs' =>
+	"You can use the following parameter if you wish to retrieve the references associated with the entire set of",
+	"occurrence records entered in this database.  Please use this with care, since the",
+	"result set will contain more than 20,000 records and will be at least 20 megabytes in size.",
+    	{ allow => '1.2:specs:all_records' },
+	">>The following parameters can be used to specify which kinds of specimens you are interested in:",
+	{ allow => '1.2:specs:filter' },
+	">>The following B<very important parameter> allows you to select references that",
+	"have particular relationships to the taxa they mention, and skip others:",
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', alias => 'select', list => ',',
+	  bad_value => '_' },
+	    "You can use this parameter to specify which kinds of references to retrieve.",
+	    "The default is C<B<specs>>, which selects only those references from which",
+	    "specimens were entered.",
+	    "The value of this attribute can be one or more of the following, separated by commas:",
+        ">>The following parameters can be used to query for specimens by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
+	{ allow => '1.2:specs:selector' },
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:specs:all_records', '1.2:specs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	{ ignore => 'level' },
+	">>You can use the following parameters to filter the result set based on attributes",
+	"of the bibliographic references.  If you wish to use one of them and have not specified",
+	"any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters can be used to further filter the selection.",
+	{ allow => '1.2:common:select_specs_crmod' },
+	{ allow => '1.2:common:select_specs_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
+	">>The following parameters can also be used to filter the result list based on taxonomy:",
+	{ allow => '1.2:taxa:occ_aux_filter' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
+	{ allow => '1.2:refs:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
     $ds->define_ruleset('1.2:specs:measurements' =>
-	"You can use the following parameters if you wish to retrieve information about",
-	"a known list of specimens, occurrences, or collections, or to filter a known list against",
-	"other criteria such as location or time.",
+	"You can use the following parameter if you wish to retrieve the entire set of",
+	"measurement records entered in this database.  Please use this with care, since the",
+	"result set will contain more than 300,000 records and will be at least 17 megabytes in size.",
+    	{ allow => '1.2:specs:all_records' },
+	">>The following parameters can be used to specify which kinds of specimens you are interested in:",
+	{ allow => '1.2:specs:filter' },
+	">>You can use the following parameters if you wish to retrieve measurements from",
+	"a known list of specimens, occurrences, or collections.",
 	"Only the records which match the other parameters that you specify will be returned.",
 	{ allow => '1.2:specs:selector' },
-        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+        ">>The following parameters can be used to query for specimens by a variety of criteria.",
 	"Except as noted below, you may use these in any combination.",
 	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:specs:all_records', '1.2:specs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector'] },
+	{ ignore => 'level' },
+	">>The following parameters can be used to further filter the selection.",
+	"If you wish to use one of them and have not specified any of the selection parameters",
+	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_specs_crmod' },
 	{ allow => '1.2:common:select_specs_ent' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ allow => '1.2:refs:aux_selector' },
-	{ require_any => ['1.2:specs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_specs_crmod', '1.2:common:select_specs_ent',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_crmod',
-			  '1.2:refs:aux_selector'] },
-	">>The following parameters can be used to further filter the result list.",
+	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -405,6 +543,8 @@ sub get_specimen {
     
     $request->substitute_select( mt => 'sp', cd => 'sp' );
     
+    my $tables = $request->tables_hash;
+    
     my @raw_fields = $request->select_list;
     my @fields;
     
@@ -433,6 +573,14 @@ sub get_specimen {
     $request->strict_check;
     $request->extid_check;
     
+    # Figure out what information we need to determine access permissions.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    $fields .= $access_fields if $access_fields;
+    
+    $request->delete_output_field('permissions') unless $access_fields;
+    
     # Determine the necessary joins.
     
     my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
@@ -440,7 +588,7 @@ sub get_specimen {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $fields
+	SELECT $fields, if($access_filter, 1, 0) as access_ok
 	FROM $SPEC_MATRIX as ss JOIN specimens as sp using (specimen_no)
 		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $COLL_MATRIX as c on c.collection_no = o.collection_no
@@ -457,6 +605,12 @@ sub get_specimen {
     
     die "404 Not found\n" unless $request->{main_record};
     
+    # Return an error response if we could retrieve the record but the user is not authorized to
+    # access it.  Any specimen not tied to an occurrence record is public by definition.
+    
+    die $request->exception(403, "Access denied") 
+	unless $request->{main_record}{access_ok} || ! $request->{main_record}{occurrence_no};
+    
     return 1;
 }
 
@@ -468,7 +622,7 @@ sub get_specimen {
 
 sub list_specimens {
     
-    my ($request) = @_;
+    my ($request, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
@@ -482,6 +636,9 @@ sub list_specimens {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'ss');
+    push @filters, $request->generate_spec_filters($tables);
+    push @filters, $request->generate_ref_filters($tables);
+    push @filters, $request->generate_refno_filter('ss');
     push @filters, $request->generate_common_filters( { specs => 'ss', occs => 'o', bare => 'ss' } );
     
     if ( my @ids = $request->clean_param_list('spec_id') )
@@ -499,20 +656,22 @@ sub list_specimens {
 	    unless $request->clean_param('all_records');
     }
     
-    # Until we provide for authenticated data service access, we had better
-    # restrict results to publicly accessible records.  But if no occurrence
-    # number was given for this specimen, we must assume it is public since
-    # access levels are only specified for collections (and thus occurrences).
-    
-    push @filters, "(c.access_level = 0 or o.occurrence_no is null)";
-    
-    my $filter_string = join(' and ', @filters);
-    
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
     
     $request->strict_check;
     $request->extid_check;
+    
+    # Figure out what information we need to determine access permissions.  Any specimen not tied
+    # to an occurrence is public by definition.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    
+    $request->delete_output_field('permissions') unless $access_fields;
+    
+    push @filters, "(ss.occurrence_no = 0 or $access_filter)";
+    
+    my $filter_string = join(' and ', @filters);
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -572,7 +731,9 @@ sub list_specimens {
     
     $request->adjustCoordinates(\$fields);
     $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
-        
+    
+    $fields .= $access_fields if $access_fields;
+    
     # Determine the order in which the results should be returned.
     
     my $tt = $tables->{tv} ? 'ts' : 't';
@@ -582,6 +743,12 @@ sub list_specimens {
     if ( $order_clause )
     {
 	$order_clause .= ", ss.specimen_no";
+    }
+    
+    elsif ( defined $arg && $arg eq 'byref' )
+    {
+	$order_clause = "r.reference_no, ss.specimen_no";
+	$tables->{r} = 1;
     }
     
     else
@@ -619,6 +786,314 @@ sub list_specimens {
 }
 
 
+# list_specimens_associated
+# 
+# List bibliographic references for specimens
+
+sub list_specimens_associated {
+
+    my ($request, $record_type) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    
+    $request->substitute_select( mt => 'r', cd => 'r' );
+    
+    # $request->delete_output_field('n_opinions');
+    
+    # First figure out if we just want occurrence/collection references, or if
+    # we also want taxonomy references.
+    
+    my @select = $request->clean_param_list('ref_type');
+    my ($sql, $use_taxonomy, %select);
+    
+    foreach my $s ( @select )
+    {
+	$use_taxonomy = 1 if $s ne 'occs' && $s ne 'colls' && $s ne 'specs';
+	$select{$s} = 1;
+    }
+    
+    $use_taxonomy = 1 if $record_type eq 'taxa' || $record_type eq 'opinions';
+    $select{specs} = 1 unless %select;
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my $inner_tables = {};
+    
+    my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
+    push @filters, $request->generate_common_filters( { specs => 'ss', occs => 'o', refs => 'ignore' } );
+    push @filters, $request->generateOccFilters($inner_tables, 'ss');
+    push @filters, $request->generate_spec_filters($inner_tables);
+    
+    if ( my @ids = $request->clean_param_list('spec_id') )
+    {
+	my $id_list = join(',', @ids);
+	push @filters, "ss.specimen_no in ($id_list)";
+    }
+    
+    # Do a final check to make sure that all records are only returned if
+    # 'all_records' was specified.
+    
+    if ( @filters == 0 )
+    {
+	die "400 You must specify 'all_records' if you want to retrieve the entire set of records.\n"
+	    unless $request->clean_param('all_records');
+    }
+    
+    # Figure out what information we need to determine access permissions.  We
+    # can ignore $access_fields since we are not generating occurrence or
+    # collection records.
+    
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $inner_tables);
+    
+    push @filters, "(ss.occurrence_no = 0 or $access_filter)";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If we do want taxonomy references, we must constuct a temporary table of
+    # occurrences and pass that to Taxonomy::list_associated.
+    
+    if ( $use_taxonomy )
+    {
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings. 
+	
+	$request->strict_check;
+	$request->extid_check;
+	
+	$dbh->do("DROP TABLE IF EXISTS spec_list");
+	$dbh->do("CREATE TEMPORARY TABLE spec_list (
+			specimen_no int unsigned not null primary key,
+			occurrence_no int unsigned not null,
+			taxon_no int unsigned not null,
+			orig_no int unsigned not null ) engine=memory");
+	
+	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+	
+	try {
+	    $sql = "
+		INSERT IGNORE INTO spec_list
+		SELECT ss.specimen_no, ss.occurrence_no, ss.taxon_no, ss.orig_no FROM $SPEC_MATRIX as ss
+			JOIN specimens as sp using (specimen_no)
+			JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN $COLL_MATRIX as c using (collection_no)
+			LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
+			$inner_join_list
+		WHERE $filter_string";
+	
+	    $dbh->do($sql);
+	}
+	
+	catch {
+	    $dbh->do("DROP TEMPORARY TABLE IF EXISTS spec_list");
+	    die $_;
+	}
+	
+	finally {
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	};
+	
+	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	
+	# Then generate a set of query options based on the request parameters.
+	# This routine will only take into account parameters relevant to
+	# selecting taxa.
+	
+	my $options = PB2::TaxonData::generate_query_options($request, $record_type);
+	
+	# We need to remove the options 'min_ma' and 'max_ma' if they were
+	# specified, because these overlap with the parameters of the same name
+	# used to select occurrences and have already been taken care of above.
+	
+	delete $options->{min_ma};
+	delete $options->{max_ma};
+	
+	# If debug mode is turned on, generate a closure which will be able to output debug
+	# messages. 
+	
+	if ( $request->debug )
+	{
+	    $options->{debug_out} = sub {
+		$request->{ds}->debug_line($_[0]);
+	    };
+	}
+	
+	# Indicate that we want a DBI statement handle in return, and that we will
+	# be using the table 'spec_list'.
+	
+	$options->{return} = 'stmt';
+	$options->{table} = 'spec_list';
+	
+	try {
+	    my ($result) = $taxonomy->list_associated('specs', $request->{my_base_taxa}, $options);
+	    my @warnings = $taxonomy->list_warnings;
+	    
+	    $request->sth_result($result) if $result;
+	    $request->add_warning(@warnings) if @warnings;
+	}
+	
+	catch {
+	    die $_;
+	}
+	
+	finally {
+	    $dbh->do("DROP TABLE IF EXISTS spec_list");
+	    $request->{ds}->debug_line($taxonomy->last_sql . "\n") if $request->debug;
+	};
+	
+	$request->set_result_count($taxonomy->last_rowcount) if $options->{count};
+	return;
+    }
+    
+    # Otherwise, we can construct a query ourselves.
+    
+    else
+    {
+	$request->delete_output_field('n_auth');
+	$request->delete_output_field('n_class');
+	$request->delete_output_field('n_unclass');
+	
+	# If a query limit has been specified, modify the query accordingly.
+	
+	my $limit = $request->sql_limit_clause(1);
+	
+	# If we were asked to count rows, modify the query accordingly
+	
+	my $calc = $request->sql_count_clause;
+	
+	# Determine which fields and tables are needed to display the requested
+	# information.
+	
+	my $fields = $request->select_string;
+	
+	$request->adjustCoordinates(\$fields);
+	
+	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
+	my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($request->tables_hash);
+	
+	# Construct another set of filter expressions to act on the references.
+	
+	my @ref_filters = $request->generate_ref_filters($request->tables_hash);
+	push @ref_filters, $request->generate_common_filters( { refs => 'r', occs => 'ignore' } );
+	push @ref_filters, "1=1" unless @ref_filters;
+	
+	my $ref_filter_string = join(' and ', @ref_filters);
+	
+	# Figure out the order in which we should return the references.  If none
+	# is selected by the options, sort by rank descending.
+	
+	my $order = $request->PB2::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
+	    "r.author1last, r.author1init, ifnull(r.author2last, ''), ifnull(r.author2init, ''), r.reference_no";
+	
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings. 
+	
+	$request->strict_check;
+	$request->extid_check;
+	
+	# Now collect up all of the requested references.
+	
+	$dbh->do("DROP TABLE IF EXISTS ref_collect");
+	
+	my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+	
+	$dbh->do("CREATE $temp TABLE ref_collect (
+		reference_no int unsigned not null,
+		ref_type varchar(10),
+		taxon_no int unsigned null,
+		occurrence_no int unsigned null,
+		specimen_no int unsigned null,
+		collection_no int unsigned null,
+		UNIQUE KEY (reference_no, ref_type, occurrence_no, specimen_no, collection_no)) engine=memory");
+	
+	if ( $select{specs} )
+	{
+	    $sql = "INSERT IGNORE INTO ref_collect
+		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, NULL as occurrence_no, 
+			ss.specimen_no, null as collection_no
+		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN specimens as sp using (specimen_no)
+			LEFT JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+	    
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	    
+	    $dbh->do($sql);
+	}
+	
+	if ( $select{occs} )
+	{
+	    $sql = "INSERT IGNORE INTO ref_collect
+		SELECT o.reference_no, 'O' as ref_type, ss.taxon_no, o.occurrence_no, 
+			null as specimen_no, null as collection_no
+		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN specimens as sp using (specimen_no)
+			LEFT JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+	    
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	    
+	    $dbh->do($sql);
+	}
+	
+	if ( $select{colls} )
+	{
+	    $sql = "INSERT IGNORE INTO ref_collect
+		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
+			null as occurrence_no, null as specimen_no, c.collection_no
+		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN specimens as sp using (specimen_no)
+			LEFT JOIN $COLL_MATRIX as c using (collection_no)
+			$inner_join_list
+		WHERE $filter_string";
+	    
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	    
+	    $dbh->do($sql);
+	}
+	
+	$request->{main_sql} = "SELECT $calc $fields, group_concat(distinct ref_type) as ref_type,
+			count(distinct taxon_no) as n_reftaxa, 
+			count(distinct occurrence_no) as n_refoccs,
+			count(distinct specimen_no) as n_refspecs,
+			count(distinct collection_no) as n_refcolls
+		FROM ref_collect as base
+			LEFT JOIN refs as r using (reference_no)
+			$outer_join_list
+		WHERE $ref_filter_string
+		GROUP BY base.reference_no ORDER BY $order $limit";
+	
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
+	
+	# Then prepare and execute the main query.
+	
+	try 
+	{
+	    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+	    $request->{main_sth}->execute();
+	}
+	
+	catch
+	{
+	    die $_;
+	}
+	
+	finally
+	{
+	    $dbh->do("DROP TABLE IF EXISTS ref_collect");
+	};
+	
+	# If we were asked to get the count, then do so
+	
+	$request->sql_count_rows;
+    }
+}
+
+
 # list_measurements
 # 
 # Query for all measurements associated with the specimen(s) matching the
@@ -640,6 +1115,7 @@ sub list_measurements {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'ss');
+    push @filters, $request->generate_spec_filters($tables);
     push @filters, $request->generate_common_filters( { specs => 'ss', occs => 'o', bare => 'ss' } );
     
     if ( my @ids = $request->clean_param_list('spec_id') )
@@ -765,6 +1241,38 @@ sub list_measurements {
 }
 
 
+# generate_spec_filters ( tables )
+# 
+# Generate filters based on parameters relevant to specimens only.
+
+sub generate_spec_filters {
+    
+    my ($request, $tables_ref) = @_;
+    
+    my $dbh = $request->{dbh};
+    my @filters;
+    
+    # Check for parameter 'spectype'
+    
+    if ( my $spectype = $request->clean_param('spectype') )
+    {
+	if ( $spectype eq 'holo' )
+	{
+	    push @filters, "sp.is_type = 'holotype'";
+	    $tables_ref->{sp} = 1;
+	}
+	
+	elsif ( $spectype eq 'para' )
+	{
+	    push @filters, "sp.is_type in ('holotype', 'paratype', 'some paratypes')";
+	    $tables_ref->{sp} = 1;
+	}
+    }
+    
+    return @filters;
+}
+
+
 # generateJoinList ( tables )
 # 
 # Generate the actual join string indicated by the table hash.
@@ -803,7 +1311,7 @@ sub generateJoinList {
 	if $tables->{ph};
     $join_list .= "LEFT JOIN taxon_attrs as v on v.orig_no = $t.orig_no\n"
 	if $tables->{v};
-    $join_list .= "LEFT JOIN taxon_names as nm on nm.taxon_no = o.taxon_no\n"
+    $join_list .= "LEFT JOIN taxon_names as nm on nm.taxon_no = ss.taxon_no\n"
 	if $tables->{nm};
     $join_list .= "LEFT JOIN taxon_names as ns on ns.taxon_no = t.spelling_no\n"
 	if $tables->{nm} && $tables->{t};
@@ -811,7 +1319,7 @@ sub generateJoinList {
 	if $tables->{pc};
     $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
 	if $tables->{gp};
-    $join_list .= "LEFT JOIN refs as r on r.reference_no = o.reference_no\n" 
+    $join_list .= "LEFT JOIN refs as r on r.reference_no = ss.reference_no\n" 
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
 	if $tables->{ppa};
@@ -869,7 +1377,7 @@ sub process_basic_record {
     # If no taxon name is given for this occurrence, generate it from the
     # occurrence fields.
     
-    $request->process_identification($record) unless $record->{orig_no};
+    $request->process_identification($record);
     
     # Now generate the 'difference' field if the accepted name and identified
     # name are different.

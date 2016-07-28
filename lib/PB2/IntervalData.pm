@@ -130,7 +130,7 @@ sub initialize {
 	    "Select only records whose temporal locality overlaps the specified time range and also falls",
 	    "completely within a 'buffer zone' around this range.  This buffer defaults",
 	    "to 12 million years for the Paleozoic and Mesozoic and 5 million years for the Cenozoic.",
-	    "You can override the buffer width using the parameters B<C<time_buffer>> and",
+	    "You can override the buffer width using the parameters B<C<timebuffer>> and",
 	    "B<C<late_buffer>>.  For diversity output, some occurrences will be counted as falling into more",
 	    "than one bin.  Some occurrences will still be ignored, but fewer than with the above rules.",
 	{ value => 'overlap' },
@@ -231,22 +231,22 @@ sub initialize {
 	{ at_most_one => ['interval_id', 'interval', 'max_ma'] });
     
     $ds->define_ruleset('1.2:timerule_selector' =>
-	{ optional => 'time_rule', valid => '1.2:timerules', alias => 'timerule', default => 'major' },
+	{ optional => 'timerule', valid => '1.2:timerules', alias => 'time_rule', default => 'major' },
 	    "Resolve temporal locality according to the specified rule, as listed below.  This",
 	    "rule is applied to determine which occurrences, collections, and/or taxa will be selected if",
 	    "you also specify an age range using any of the parameters listed immediately above.",
 	    "For diversity output, this rule is applied to",
 	    "place each occurrence into one or more temporal bins, or to ignore the occcurrence if it",
 	    "does not match any of the bins.  The available rules are:",
-	{ optional => 'time_buffer', alias => ['timebuffer', 'earlybuffer'], valid => DECI_VALUE(0,20) },
+	{ optional => 'timebuffer', alias => ['time_buffer', 'earlybuffer', 'early_buffer'], valid => DECI_VALUE(0,20) },
 	    "Override the default buffer period when resolving",
 	    "temporal locality.  The value must be given in millions of years.  This parameter",
-	    "is only relevant if B<C<time_rule>> is set to C<B<buffer>>.",
-	{ optional => 'late_buffer', alias => 'latebuffer', valid => DECI_VALUE(0,20) },
+	    "is only relevant if B<C<timerule>> is set to C<B<buffer>>.",
+	{ optional => 'latebuffer', alias => 'late_buffer', valid => DECI_VALUE(0,20) },
 	    "Override the default buffer period for the end of the time range when resolving temporal",
 	    "locality.  This allows the buffer to be different on the late end of the interval than",
 	    "on the early end.  The value must be given in millions of years.  This parameter is only relevant",
-	    "if B<C<time_rule>> is set to C<B<buffer>>.");
+	    "if B<C<timerule>> is set to C<B<buffer>>.");
     
     # Read in all of the interval data, so we don't have to make lots of
     # queries for it later.

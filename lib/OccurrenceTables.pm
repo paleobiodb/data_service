@@ -74,7 +74,8 @@ sub buildOccurrenceTables {
 				modifier_no int unsigned not null,
 				created timestamp null,
 				modified timestamp null,
-				primary key (occurrence_no, reid_no)) ENGINE=MyISAM");
+				primary key (occurrence_no, reid_no),
+			        key (reid_no)) ENGINE=MyISAM");
     
     # Add one row for every occurrence in the database.
     

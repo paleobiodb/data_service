@@ -20,7 +20,7 @@ our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier %I
 
 # List the identifier prefixes:
 
-our %IDP = ( URN => '(?:urn:lsid:)?paleobiodb.org:',
+our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',
 	     TID => 'txn|var',
 	     TXN => 'txn',
 	     VAR => 'var',
@@ -28,6 +28,7 @@ our %IDP = ( URN => '(?:urn:lsid:)?paleobiodb.org:',
 	     REF => 'ref',
 	     OCC => 'occ',
 	     REI => 'rei',
+	     OID => 'occ|rei',
 	     SPM => 'spm',
 	     MEA => 'mea',
 	     COL => 'col',

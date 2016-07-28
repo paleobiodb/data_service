@@ -27,7 +27,7 @@ use PB2::PersonData;
     our ($ds2) = Web::DataService->new(
 	{ name => '1.2',
 	  title => 'PBDB Data Service',
-	  version => 'b2',
+	  version => 'v1',
 	  features => 'standard',
 	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
@@ -291,7 +291,7 @@ use PB2::PersonData;
 			method => 'prevalence',
 			output => '1.2:occs:prevalence',
 			default_limit => 20},
-	"This path returns a list of the most prevalent taxa (according to number of occurrences)",
+	"This operation returns a list of the most prevalent taxa (according to number of occurrences)",
 	"from among the selected set of fossil occurrences.  These taxa will be phyla and/or classes,",
 	"depending upon the size of the list and the requested number of entries.",
 	"Major taxa that are roughly at the level of classes may be included even if they are not",
@@ -385,7 +385,7 @@ use PB2::PersonData;
 			method => 'get_coll',
 			output => '1.2:colls:basic',
 			optional_output => '1.2:colls:basic_map' },
-	"This path returns information about a single collection, selected by its identifier.");
+	"This operation returns information about a single collection, selected by its identifier.");
     
     $ds2->define_node({ path => 'colls/list',
 			place => 2,
@@ -462,7 +462,7 @@ use PB2::PersonData;
 			method => 'list_coll_strata',
 			output => '1.2:strata:basic',
 			optional_output => '1.2:strata:basic_map' },
-	"This path returns information about geological strata selected by name, rank,",
+	"This operation returns information about geological strata selected by name, rank,",
 	"and/or geographic location.");
     
     $ds2->define_node({ path => 'strata/auto',
@@ -472,7 +472,7 @@ use PB2::PersonData;
 			method => 'list_coll_strata',
 			arg => 'auto',
 			output => '1.2:strata:basic' },
-	"This path returns a list of geological strata from the database that match the given",
+	"This operation returns a list of geological strata from the database that match the given",
 	"prefix or partial name.  This can be used to implement auto-completion for strata names,",
 	"and can be limited by geographic location if desired.");
     
@@ -495,7 +495,7 @@ use PB2::PersonData;
 			method => 'get_specimen',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
-	"This path returns information about a single fossil specimen, identified either",
+	"This operation returns information about a single fossil specimen, identified either",
 	"by name or by identifier.");
     
     $ds2->define_node({ path => 'specs/list',
@@ -505,17 +505,42 @@ use PB2::PersonData;
 			method => 'list_specimens',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
-	"This path returns information about multiple specimens, selected according to the parameters you provide.",
+	"This operation returns information about multiple specimens, selected according to the parameters you provide.",
 	"Depending upon which output blocks you select, the response will contain some",
 	"fields describing the specimens and some describing the occurrences and collections (if any)",
 	"with which they are associated.");
     
-    $ds2->define_node({ path => 'specs/measurements',
+    $ds2->define_node({ path => 'specs/refs',
 			place => 3,
+			title => 'Bibiographic references for specimens',
+			method => 'list_specimens_associated',
+			arg => 'refs',
+			allow_format => '+ris,-xml',
+			output => '1.2:refs:basic',
+			optional_output => '1.2:refs:output_map' },
+	"This operation returns information about the bibliographic references associated with fossil specimens.",
+	"You can pass identical filtering parameters to L<specs/byref|node:specs/byref> and to L<specs/refs|node:specs/refs>,",
+	"which will give you both a list of occurrences and a list of the associated references.");
+    
+    $ds2->define_node({ path => 'specs/byref',
+			place => 4,
+			title => 'Specimens grouped by bibliographic reference',
+			method => 'list_specimens',
+			arg => 'byref',
+			output => '1.2:specs:basic',
+			optional_output => '1.2:specs:basic_map' },
+	"This operation returns information about multiple specimens, selected with respect to some combination of",
+	"the attributes of the occurrences and the attributes of the bibliographic reference(s) from which",
+	"they were entered.  You can use this operation in",
+	"conjunction with L<specs/refs|node:specs/refs> to show, for each selected reference, all of the specimens",
+	"entered from it, or all which meet certain criteria.");
+    
+    $ds2->define_node({ path => 'specs/measurements',
+			place => 5,
 			title => 'Measurements of specimens',
 			method => 'list_measurements',
 			output => '1.2:measure:basic'},
-	"This path returns information about the measurements associated with selected",
+	"This operation returns information about the measurements associated with selected",
 	"specimens.");
     
     # Taxa.  These paths are used to fetch information about biological taxa known
@@ -558,7 +583,7 @@ use PB2::PersonData;
 			allow_vocab => '+dwc',
 			optional_output => '1.2:taxa:mult_output_map' },
 	"This operation returns information about multiple taxonomic names, selected according to",
-	"the criteria you specify.  This path could be used to query for all of the children",
+	"the criteria you specify.  This operation could be used to query for all of the children",
 	"or parents of a given taxon, among other operations.");
     
     $ds2->define_node({ path => 'taxa/refs',
@@ -610,7 +635,7 @@ use PB2::PersonData;
 			arg => 'opinions',
 			output => '1.2:opinions:basic',
 			optional_output => '1.2:opinions:output_map' },
-	"This path returns information about the taxonomic opinions used to build the taxonomic",
+	"This operation returns information about the taxonomic opinions used to build the taxonomic",
 	"hierarchy.  From all of the opinions entered into the database about a particular",
 	"taxon, the most recent opinion that is stated with the most evidence is used to classify",
 	"that taxon.  The others are considered to be superseded and are ignored.");
@@ -627,7 +652,7 @@ use PB2::PersonData;
 				   "taxa/auto.json?name=cani&limit=10" ],
 			allow_format => 'json',
 			output => '1.2:taxa:auto' },
-	"This path returns a list of names matching the given prefix or partial name.",
+	"This operation returns a list of names matching the given prefix or partial name.",
 	"You can use it for auto-completion of taxonomic names in a client application.");
     
     $ds2->define_node({ path => 'taxa/thumb',
@@ -639,7 +664,7 @@ use PB2::PersonData;
 			arg => 'thumb',
 			allow_format => '+png',
 			output => '1.2:taxa:imagedata' },
-	"This path returns an image to represent the specified taxon.",
+	"This operation returns an image to represent the specified taxon.",
 	"These 64x64 thumbnail images are sourced from L<http://phylopic.org/>.",
 	"You can get the image identifiers by including C<$show=img> with any taxonomic",
 	"name query.");
@@ -653,7 +678,7 @@ use PB2::PersonData;
 			arg => 'icon',
 			allow_format => '+png',
 			output => '1.2:taxa:imagedata' },
-	"This path returns an image to represent the specified taxon.",
+	"This operation returns an image to represent the specified taxon.",
 	"These 32x32 icon (blue silhouette) images are sourced from L<http://phylopic.org/>.",
 	"You can get the image identifiers by including C<$show=img> with any taxonomic",
 	"name query.");
@@ -681,7 +706,7 @@ use PB2::PersonData;
 			usage => [ "opinions/single.json?id=1000&show=entname" ],
 			method => 'get_opinion',
 			optional_output => '1.2:opinions:output_map' },
-	"This path returns information about a single taxonomic opinion selected",
+	"This operation returns information about a single taxonomic opinion selected",
 	"by identifier.");
     
     $ds2->define_node({ path => 'opinions/list',
@@ -692,8 +717,8 @@ use PB2::PersonData;
 			method => 'list_opinions',
 			default_limit => $ref_limit,
 			optional_output => '1.2:opinions:output_map' },
-	"This path returns information about multiple taxonomic opinions, selected according to",
-	"criteria other than taxon name.  This path could be used to query for all of the opinions",
+	"This operation returns information about multiple taxonomic opinions, selected according to",
+	"criteria other than taxon name.  This operation could be used to query for all of the opinions",
 	"attributed to a particular author, or to show all of the recently entered opinions.");
     
     $ds2->list_node({ path => 'taxa/opinions',
@@ -701,7 +726,7 @@ use PB2::PersonData;
 		      list => 'other',
 		      title => 'Opinions about taxa',
 		      usage => [ "taxa/opinions.json?base_name=Felidae" ] },
-	"This path returns information about taxonomic opinions, selected by taxon name.");
+	"This operation returns information about taxonomic opinions, selected by taxon name.");
     
     # Time scales and intervals.  These paths are used to fetch information about
     # geological time scales and time intervals known to the database.
@@ -721,14 +746,14 @@ use PB2::PersonData;
 			title => 'Single geological time interval',
 			usage => "intervals/single.json?id=16",
 			method => 'get' },
-	"This path returns information about a single interval, selected by identifier.");
+	"This operation returns information about a single interval, selected by identifier.");
     
     $ds2->define_node({ path => 'intervals/list',
 			place => 2,
 			title => 'Lists of geological time intervals',
 			usage => "intervals/list.txt?scale=1",
 			method => 'list' },
-	"This path returns information about multiple intervals, selected according to",
+	"This operation returns information about multiple intervals, selected according to",
 	"the parameters you provide.");
     
     $ds2->list_node({ path => 'scales/single',
@@ -750,14 +775,14 @@ use PB2::PersonData;
 			title => 'Single geological time scale',
 			usage => "scales/single.json?id=1",
 			method => 'list_scales' },
-	"This path information about a single time scale, selected by identifier.");
+	"This operation returns information about a single time scale, selected by identifier.");
     
     $ds2->define_node({ path => 'scales/list',
 			place => 2,
 			title => 'Lists of geological time scales',
 			usage => "scales/list.json",
 			method => 'list_scales' },
-	"This path returns information about multiple time scales.  To get a list of all of the available",
+	"This operation returns information about multiple time scales.  To get a list of all of the available",
 	"scales, use this path with no parameters.");
 
 
@@ -796,7 +821,7 @@ use PB2::PersonData;
 			title => 'Single bibliographic reference',
 			usage => "refs/single.json?id=6930&show=both",
 			method => 'get' },
-	"This path returns information about a single bibliographic reference,",
+	"This operation returns information about a single bibliographic reference,",
 	"selected by its identifier");
     
     $ds2->define_node({ path => 'refs/list',
@@ -804,7 +829,7 @@ use PB2::PersonData;
 			title => 'Lists of bibliographic references',
 			usage => "refs/list.txt?ref_author=Sepkoski",
 			method => 'list' },
-	"This path returns information about lists of bibliographic references,",
+	"This operation returns information about lists of bibliographic references,",
 	"selected according to the parameters you provide");
     
     $ds2->list_node({ path => 'occs/refs',
@@ -812,21 +837,29 @@ use PB2::PersonData;
 		      place => 3,
 		      title => 'References for fossil occurrences',
 		      usage => "occs/refs.ris?base_name=Cetacea&interval=Eocene&textresult" },
-	"This path returns information about the references from which the",
+	"This operation returns information about the references from which the",
+	"selected occurrence data were entered.");
+    
+    $ds2->list_node({ path => 'specs/refs',
+		      list => 'refs',
+		      place => 3,
+		      title => 'References for fossil specimens',
+		      usage => "specs/refs.ris?base_name=Cetacea&interval=Eocene&textresult" },
+	"This operation returns information about the references from which the",
 	"selected occurrence data were entered.");
     
     $ds2->list_node({ path => 'colls/refs',
 		      list => 'refs',
 		      place => 4,
 		      title => 'References for fossil collections' },
-	"This path returns information about the references from which",
+	"This operation returns information about the references from which",
 	"the selected collections were entered.");
     
     $ds2->list_node({ path => 'taxa/refs',
 		      list => 'refs',
 		      place => 5,
 		      title => 'References for taxonomic names' },
-	"This path returns information about the references from which",
+	"This operation returns information about the references from which",
 	"the selected taxonomic names were entered.");
     
     # The following paths are used for miscellaneous documentation
@@ -835,6 +868,13 @@ use PB2::PersonData;
 			title => 'General documentation',
 			doc_default_template => 'default.tt' },
 	"This page lists general documentation about how to use the data service.");
+    
+    $ds2->define_node({ path => 'general/identifiers',
+			title => 'Record identifiers and record numbers',
+			place => 1 },
+	"Records retrieved from the data service can be identified either by using the",
+	"numeric identifiers from the underlying database records (i.e. 'occurrence_no'),",
+	"or using an extended identifier syntax.");
     
     $ds2->define_node({ path => 'general/taxon_names',
 			title => 'Specifying taxonomic names',
@@ -860,7 +900,9 @@ use PB2::PersonData;
     
     $ds2->define_node({ path => 'special',
 			ruleset => '1.2:special_params',
-			title => 'Special parameters' });
+			title => 'Special parameters' },
+	"There are a number of special parameters which you can use with almost any data service",
+	"operation. These constrain or alter the response in various ways.");
     
     $ds2->define_node({ path => 'formats',
 			title => 'Output formats and Vocabularies' },
@@ -871,6 +913,11 @@ use PB2::PersonData;
 		      list => 'general',
 		      place => 5,
 		      title => 'Formats and Vocabularies' });
+    
+    $ds2->list_node({ path => 'special',
+		      list => 'general',
+		      place => 6,
+		      title => 'Special Parameters' });
     
     $ds2->define_node({ path => 'formats/json',
 			title => 'JSON format' });

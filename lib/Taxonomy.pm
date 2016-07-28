@@ -136,6 +136,7 @@ my (%RESOLVE_OPTION) = ( all_names => 1,
 my (%ASSOC_OPTION) = ( reference_no => 1,
 		       opinion_no => 1,
 		       ident_select => 1,
+		       ident_qual => 1,
 		       extra_filters => 1,
 		       record_order => 1 );
 
@@ -713,7 +714,7 @@ sub list_taxa {
 	
 	$base_string = $taxonomy->generate_id_string($base_nos, $ignore_exclude, $exact);
 	
-	unless ( $base_string || $rel eq 'occs' )
+	unless ( $base_string || $rel eq 'occs' || $rel eq 'specs' )
 	{
 	    return $return_type eq 'listref' ? [] : ();
 	}
@@ -1016,13 +1017,13 @@ sub list_taxa {
 		WHERE $filters $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'occs' )
+    elsif ( $rel eq 'occs' || $rel eq 'specs' )
     {
 	my $occs_table = $options->{table};
 	my $tree_table = $taxonomy->{TREE_TABLE};
 	my $lower_table = $taxonomy->{LOWER_TABLE};
 	
-	croak "you must include the option 'table' if you specify rel = 'occs'" unless $occs_table;
+	croak "you must include the option 'table' if you specify rel = 'occs' or rel = 'specs'" unless $occs_table;
 	
 	$taxonomy->generate_taxa_list($options->{table}, $options);
 	
@@ -1276,10 +1277,10 @@ sub list_associated {
     croak "list_associated: bad value '$record_type' for 'record_type'\n"
 	unless $RECORD_TYPE_VALUE{$record_type};
     
-    unless ( $rel eq 'all_taxa' || $rel eq 'all_records' || 
+    unless ( $rel eq 'all_taxa' || $rel eq 'all_records' || $rel eq 'occs' || $rel eq 'specs' ||
 	     ($base_string = $taxonomy->generate_id_string($base_nos)) )
     {
-	return $return_type eq 'listref' ? [] : () unless $rel eq 'occs';
+	return $return_type eq 'listref' ? [] : ();
     }
     
     # Check the options.  If an option for selecting references is present,
@@ -1528,13 +1529,13 @@ sub list_associated {
 	$other_joins = $taxonomy->ref_joins('r', $inner_tables);
     }
     
-    elsif ( $rel eq 'occs' )
+    elsif ( $rel eq 'occs' || $rel eq 'specs' )
     {
 	my $occs_table = $options->{table};
 	my $tree_table = $taxonomy->{TREE_TABLE};
 	my $lower_table = $taxonomy->{LOWER_TABLE};
 	
-	croak "you must include the option 'table' if you specify rel = 'occs'" unless $occs_table;
+	croak "you must include the option 'table' if you specify rel = 'occs' or rel = 'specs'" unless $occs_table;
 	
 	$taxonomy->generate_taxa_list($occs_table, $options, \@sql_strings);
 	
@@ -2000,7 +2001,7 @@ sub list_associated {
 			JOIN $tree_table as t using (orig_no)
 			JOIN $auth_table as a on a.taxon_no = m.taxon_no"
 	}
-	elsif ( $rel eq 'occs' )
+	elsif ( $rel eq 'occs' || $rel eq 'specs' )
 	{
 	    my $occs_table = $options->{table};
 	    $query_core = "$occs_table as list
@@ -2057,6 +2058,16 @@ sub list_associated {
 	    my $occs_table = $options->{table};
 	    $query_core = "$occs_table as list
 			JOIN $SPEC_MATRIX as ss using (occurrence_no)
+			JOIN $tree_table as t on t.orig_no = ss.orig_no
+			JOIN $auth_table as a on a.taxon_no = ss.taxon_no
+			JOIN $refs_table as r on r.reference_no = ss.reference_no";
+	}
+	elsif ( $rel eq 'specs' )
+	{
+	    my $specs_table = $options->{table};
+	    $query_core = "$specs_table as list
+			JOIN $OCC_MATRIX as m using (occurrence_no)
+			JOIN $SPEC_MATRIX as ss using (specimen_no)
 			JOIN $tree_table as t on t.orig_no = ss.orig_no
 			JOIN $auth_table as a on a.taxon_no = ss.taxon_no
 			JOIN $refs_table as r on r.reference_no = ss.reference_no";
@@ -2275,7 +2286,7 @@ sub generate_taxa_list {
     {
 	# Get the exact taxon identifications
 	
-	$sql = "INSERT INTO taxa_list
+	$sql = "INSERT IGNORE INTO taxa_list
 		SELECT taxon_no, orig_no, count(*)
 		FROM $occs_table GROUP BY taxon_no";
 
@@ -4625,29 +4636,61 @@ sub extra_filters {
 }
 
 
+my $IDENT_UNCERTAIN = "'aff.', 'cf.', '?', '\"', 'sensu lato', 'informal'";
+
 sub occ_filters {
     
     my ($taxonomy, $options, $tn) = @_;
-
+    
+    my @filters;
+    
     if ( ! $options->{ident_select} || $options->{ident_select} eq 'latest' )
     {
-	return "$tn.latest_ident = true";
+	push @filters, "$tn.latest_ident = true";
     }
     
     elsif ( $options->{ident_select} eq 'orig' )
     {
-	return "$tn.reid_no = 0";
+	push @filters, "$tn.reid_no = 0";
     }
     
     elsif ( $options->{ident_select} eq 'reid' )
     {
-	return "($tn.reid_no > 0 or ($tn.reid_no = 0 and $tn.latest_ident = false))";
+	push @filters, "($tn.reid_no > 0 or ($tn.reid_no = 0 and $tn.latest_ident = false))";
     }
     
     else # ident_select eq 'all'
     {
-	return;
+	# no filter needed
     }
+    
+    if ( my $idqual = $options->{ident_qual} )
+    {
+	if ( $idqual eq 'certain' || $idqual eq 'genus_certain' )
+	{
+	    push @filters, "$tn.genus_reso not in ($IDENT_UNCERTAIN)";
+	    push @filters, "$tn.subgenus_reso not in ($IDENT_UNCERTAIN)";
+	    push @filters, "$tn.species_reso not in ($IDENT_UNCERTAIN)" if $idqual eq 'certain';
+	}
+	
+	elsif ( $idqual eq 'uncertain' )
+	{
+	    push @filters, "($tn.genus_reso in ($IDENT_UNCERTAIN) or " .
+		"$tn.subgenus_reso in ($IDENT_UNCERTAIN) or $tn.species_reso in ($IDENT_UNCERTAIN))";
+	}
+	
+	elsif ( $idqual eq 'new' )
+	{
+	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or $tn.species_reso = 'n. sp.')";
+	}
+	
+	else # idqual eq 'any'
+	{
+	    # no filter needed
+	}
+    }
+    
+    return @filters;
 }
 
 

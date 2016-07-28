@@ -167,9 +167,6 @@ sub initialize {
 	    "The type of this object: C<$IDP{OCC}> for an occurrence.",
 	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
 	    "If this occurrence was reidentified, a unique identifier for the reidentification.",
-	    "This value is a key for the reidentification table, and is probably useful only",
-	    "for debugging purposes.  It does, at least, indicate that this was not the original",
-	    "identification of the occurrence.",
 	{ output => 'flags', com_name => 'flg' },
 	    "This field will be empty for most records.  Otherwise, it will contain one or more",
 	    "of the following letters:", "=over",
@@ -612,9 +609,18 @@ sub initialize {
 	{ value => 'modified.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.2:occs:specifier' =>
-	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), alias => 'id' },
-	    "The identifier of the occurrence you wish to retrieve (REQUIRED).",
-	    "You may instead use the parameter name F<id>.");
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OID'), alias => 'id' },
+	    "The identifier of the occurrence or re-identification you wish to retrieve (REQUIRED).",
+	    "You may instead use the parameter name B<C<id>>.  If the value of this",
+	    "parameter is a numeric identifier or an extended identifier of type C<B<occ>>,",
+	    "then the latest identification of the specified occurrence will be returned.  If it is",
+	    "an identifier of type C<B<rei>>, then the specified re-identification will be",
+	    "returned.  See also B<C<idtype>> below.",
+	">>The following optional parameter may occasionally be useful:",
+	{ optional => 'idtype', valid => '1.2:occs:ident_single', alias => 'ident_type', no_set_doc => 1 },
+	    "If the value of this parameter is C<B<orig>>, then the original",
+	    "identification of the specified occurrence is returned.  This overrides",
+	    "any specification of a particular re-identification.");
     
     $ds->define_ruleset('1.2:occs:selector' =>
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
@@ -668,7 +674,7 @@ sub initialize {
 	"You can use the following parameter if you wish to retrieve the entire set of",
 	"occurrence records entered in this database.  Please use this with care, since the",
 	"result set will contain more than 1 million records and will be at least 100 megabytes in size.",
-	"You may also select subsets of this list by specifying some combinatino of the parameters listed below.",
+	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
     	{ allow => '1.2:occs:all_records' },
         ">>The following parameters can be used to query for occurrences by a variety of criteria.",
 	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
@@ -685,7 +691,7 @@ sub initialize {
 	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	">>The following parameters can also be used to filter the result list based on taxaonomy:",
+	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
@@ -721,7 +727,9 @@ sub initialize {
 	">>The following parameters can also be used to filter the selection.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	">>The following parameters can also be used to further filter the selection based on taxaonomy:",
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
+	">>The following parameters can also be used to further filter the selection based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
 	">>You can use the following parameter to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
@@ -771,26 +779,30 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:taxa' =>
-	"You can use the following parameter if you wish to retrieve the taxonomy",
-	"of a known list of occurrences.",
-	{ allow => '1.2:occs:id' },
-       ">>The following parameters can be used to select occurrences by a variety of criteria.",
-	"Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections,",
-	"or associated strata, references, or taxa.",
+	"You can use the following parameter if you wish to retrieve taxonomic tree corresponding",
+	"to the entire set of occurrence records entered in this database.  Please use this with care,",
+	"since the result set will contain more than 250,000 records and will be at least 50 megabytes in size.",
+	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
+    	{ allow => '1.2:occs:all_records' },
+        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
+	{ allow => '1.2:occs:selector' },
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:occs:all_records', '1.2:occs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector' ] },
+	{ ignore => 'level' },
+	">>The following parameters can be used to filter the selection.",
+	"If you wish to use one of them and have not specified any of the selection parameters",
+	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
-	{ allow => '1.2:refs:aux_selector' },
-	{ require_any => ['1.2:occs:id', '1.2:main_selector', '1.2:interval_selector',
-			  '1.2:ma_selector', '1.2:refs:aux_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
-	">>The following parameters can be used to select which taxa to report:",
-	{ allow => '1.2:taxa:occ_aux_filter' },
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
+	">>The following parameters can also be used to filter the result list based on taxonomy:",
+	{ allow => '1.2:taxa:occ_aux_filter' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
@@ -899,88 +911,128 @@ sub initialize {
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
-
     
     $ds->define_ruleset('1.2:occs:refs' =>
-	"You can use the following parameters if you wish to retrieve the references associated",
-	"with a known list of occurrences or collections, or to filter a known list against",
-	"other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
+	"You can use the following parameter if you wish to retrieve the references corresponding",
+	"to the entire set of occurrence records entered in this database.  Please use this with care,",
+	"since the result set will contain more than 50,000 records and will be at least 10 megabytes in size.",
+	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
+    	{ allow => '1.2:occs:all_records' },
+	">>The following B<very important parameter> allows you to select references that",
+	"have particular relationships to the taxa they mention, and skip others:",
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', alias => 'select', list => ',',
+	  bad_value => '_' },
+	    "You can use this parameter to specify which kinds of references to retrieve.",
+	    "The default is C<B<occs>>, which selects only those references from which",
+	    "occurrences were entered.",
+	    "The value of this attribute can be one or more of the following, separated by commas:",
+        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
 	{ allow => '1.2:occs:selector' },
-        ">>The following parameters can be used to retrieve the references associated with occurrences",
-	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
-	{ allow => '1.2:taxa:occ_aux_filter' },
+	{ require_any => ['1.2:occs:all_records', '1.2:occs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector' ] },
+	{ ignore => 'level' },
+	">>You can use the following parameters to filter the result set based on attributes",
+	"of the bibliographic references.  If you wish to use one of them and have not specified",
+	"any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters can also be used to filter the selection.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
-			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
+	">>The following parameters can also be used to further filter the selection based on taxonomy:",
+	{ allow => '1.2:taxa:occ_aux_filter' },
 	"You can also specify any of the following parameters:",
-	{ optional => 'ref_type', valid => '1.2:taxa:refselect', list => ',', alias => 'select' },
-	    "You can use this parameter to specify which kinds of references to retrieve.",
-	    "The value of this attribute can be one or more of the following, separated by commas:",
-	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:refs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:taxabyref' =>
-	"You can use the following parameters if you wish to retrieve the references associated",
-	"with a known list of occurrences or collections, or to filter a known list against",
-	"other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
+	"You can use the following parameter if you wish to retrieve taxonomic tree corresponding",
+	"to the entire set of occurrence records entered in this database.  Please use this with care,",
+	"since the result set will contain more than 250,000 records and will be at least 50 megabytes in size.",
+	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
+    	{ allow => '1.2:occs:all_records' },
+	">>The following B<very important parameter> allows you to select references that",
+	"have particular relationships to the taxa they mention, and skip others:",
+	{ optional => 'ref_type', valid => '1.2:taxa:refselect', alias => 'select', list => ',',
+	  bad_value => '_' },
+	    "You can use this parameter to specify which kinds of references to retrieve.",
+	    "The default is C<B<taxonomy>>, which selects only those references which provide the",
+	    "authority and classification opinions for the selected taxa.",
+	    "The value of this attribute can be one or more of the following, separated by commas:",
+        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
 	{ allow => '1.2:occs:selector' },
-        ">>The following parameters can be used to retrieve the references associated with occurrences",
-	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
-	{ allow => '1.2:taxa:occ_aux_filter' },
+	{ require_any => ['1.2:occs:all_records', '1.2:occs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector' ] },
+	{ ignore => 'level' },
+	">>You can use the following parameters to filter the result set based on attributes",
+	"of the bibliographic references.  If you wish to use one of them and have not specified",
+	"any of the selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters can also be used to filter the selection.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_taxa_crmod' },
+	{ allow => '1.2:common:select_taxa_ent' },
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
-			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
+	">>The following parameters can also be used to further filter the selection based on taxonomy:",
+	{ allow => '1.2:taxa:occ_aux_filter' },
 	"You can also specify any of the following parameters:",
-	{ optional => 'ref_type', valid => '1.2:taxa:refselect', list => ',', alias => 'select' },
-	    "You can use this parameter to specify which kinds of references to retrieve.",
-	    "The value of this attribute can be one or more of the following, separated by commas:",
-	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:taxa:show' },
 	{ allow => '1.2:taxa:order' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:opinions' =>
+	"You can use the following parameter if you wish to retrieve the taxonomic opinions corresponding",
+	"to the entire set of occurrence records entered in this database.  Please use this with care,",
+	"since the result set will contain more than 400,000 records and will be at least 50 megabytes in size.",
+	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
+    	{ allow => '1.2:occs:all_records' },
+	">>The following B<very important parameter> allows you to select which kinds of opinions",
+	"you wish to retrieve:",
+	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select' },
+	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
+	    "or only certain types of opinions.  Accepted values include:",
+        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"you must specify at least one selection parameter from the following list.",
 	{ allow => '1.2:occs:selector' },
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
+	{ require_any => ['1.2:occs:all_records', '1.2:occs:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector' ] },
+	{ ignore => 'level' },
+	">>You can use the folowing parameters to filter the result set based on attributes",
+	"of the opinions and the bibliographic references from which they were entered.",
+	"If you wish to use one of them and have not specified any of the",
+	"selection parameters listed above, use B<C<all_records>>.",
+	{ allow => '1.2:opinions:filter' },
+	{ allow => '1.2:refs:aux_selector' },
+	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_aux_filter' },
+	">>The following parameters further filter the list of selected records:",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
-			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent',
-			  '1.2:common:select_taxa_crmod', '1.2:common:select_taxa_ent'] },
-	"You can also specify any of the following parameters:",
-	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select' },
-	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
-	    "or only certain types of opinions.  Accepted values include:",
-	{ allow => '1.2:opinions:filter' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
-	{ allow => '1.2:refs:filter' },
+	">>You can use the following parameters specify what information should be returned about each",
+	"resulting opinion, and the order in which the results should be returned:",
 	{ allow => '1.2:opinions:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
@@ -1063,6 +1115,42 @@ sub get_occ {
     
     die "400 Bad identifier '$id'\n" unless $id and $id =~ /^\d+$/;
     
+    # If this is an extended identifier, select the proper parameter based on identifier type.
+    
+    my $specifier;
+    
+    if ( ref $id eq 'PBDB::ExtIdent' && $id->{type} eq 'rei' )
+    {
+	$specifier = "o.reid_no = $id";
+    }
+    
+    else
+    {
+	$specifier = "o.occurrence_no = $id and latest_ident = true";
+    }
+    
+    # If the parameter 'idtype' is given with the value 'orig', and if a 'rei' identifier was
+    # given, we must look up the corresponding occurrence_no value.  Otherwise, we just add 'and
+    # reid_no = 0' to select the original identification.
+    
+    my $idtype = $request->clean_param('idtype');
+    
+    if ( $idtype eq 'orig' )
+    {
+	if ( ref $id eq 'PBDB::ExtIdent' && $id->{type} eq 'rei' )
+	{
+	    my $sql = "SELECT occurrence_no FROM $OCC_MATRIX WHERE reid_no = $id";
+	    
+	    $request->{ds}->debug_line("$sql\n") if $request->debug;
+	    
+	    $id = $dbh->selectrow_array($sql);
+
+	    die $request->exception(404, "Not found") unless $id;
+	}
+	
+	$specifier = "o.occurrence_no = $id and o.reid_no = 0";
+    }
+    
     # Determine which fields and tables are needed to display the requested
     # information.
     
@@ -1116,7 +1204,7 @@ sub get_occ {
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
-        WHERE o.occurrence_no = $id
+        WHERE $specifier
 	GROUP BY o.occurrence_no";
     
     $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
@@ -1126,7 +1214,9 @@ sub get_occ {
     # Return an error response if we couldn't retrieve the record.
     
     die $request->exception(404, "Not found") unless $request->{main_record};
-   
+    
+    # Return an error if we could retrieve the record but the user is not authorized to access it.
+    
     die $request->exception(403, "Access denied") 
 	unless $request->{main_record}{access_ok};
 }
@@ -1158,8 +1248,6 @@ sub list_occs {
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
-    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
-    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.

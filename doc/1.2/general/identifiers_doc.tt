@@ -1,5 +1,5 @@
 
-=for wds_node title=Record Identifiers
+=for wds_node title=Record identifiers and record numbers
 
 =head2 DESCRIPTION
 
@@ -10,12 +10,34 @@ associated records, such as references, parent taxa, authorizers, and so on.  Th
 turn be used as parameter values, i.e.  to query for associated records or to later fetch the
 updated state of an individual record.
 
-=head2 IDENTIFIER SYNTAX
+=head2 OLD STYLE NUMERIC IDENTIFIERS
 
-Every identifier is composed of a record type and a number.  For example, the taxonomic name "Felidae" has
-the following identifier:
+For most of the history of this project, each record in the database was identified by a numeric key
+unique within its table.  The names of these key fields end in C<_no>, as in C<occurrence_no> or 
+C<taxon_no>.  If you wish, you can still use these numbers as parameter values in the current version 
+of the data service.  Responses expressed in the PBDB vocabulary show these plain numbers by default,
+for backward compatibility with old downloads.
+
+=head2 EXTENDED IDENTIFIER SYNTAX
+
+The problem with these numeric identifiers is that they don't specify what type of object they refer to.
+So the value C<1027> could refer to a taxon, an occurrence, a specimen, or even an image.  This is a
+problem for several different reasons, not least of which is that the data service has no way to warn
+you if you accidentally cut and paste from the wrong column, and paste in an occurrence number where you
+should be putting a taxon number.
+
+To solve this and other problems, we have defined a new identifier syntax composed of a record type
+together with a record number.  For example, the taxonomic name "Felidae" has the following identifier:
 
     txn:41045
+
+The record number is the same as it always was, but this identifier specifies that it refers to a taxon
+and nothing else.
+
+By default, responses in the compact vocabulary (which is used for JSON responses) include these
+extended identifiers.  Lists of references in the RIS format use them as well.  You can turn the
+extended identifiers on or off explicitly in any query by including C<B<extids=yes>> or
+C<B<extids=no>>. 
 
 =head2 CONTINUITY WITH CLASSIC
 
@@ -24,10 +46,6 @@ record through this data service or through PBDB Classic.  The record numbers fr
 that you may have kept will still be the same.  Each record type has a particular field name in
 the PBDB vocabulary which is used to hold the identifying number of records of this type.  These
 are listed in the table below.
-
-I<For the purposes of continuity with old downloads from Classic, records downloaded in any of the
-Text formats (csv, tsv, txt) will be identified by their numbers only, and not using the full
-identifiers discussed here.>
 
 =head2 RECORD TYPES
 
@@ -42,10 +60,10 @@ The database consists of the following types of records:
 A taxonomic name record.  An identifier of type C<B<txn>> always selects the currently
 accepted variant of the corresponding taxonomic name.
 
-=item var | L<var:285777|op:taxa/single.json?id=var:285777> | taxon_no
+=item txn | L<var:285777|op:taxa/single.json?id=var:285777> | taxon_no
 
-A taxonomic name variant record.  An identifier of type C<B<var>> selects the exact
-name corresponding to the identifier, even if it is not a currently accepted variant.
+A taxonomic name record.  An identifier of type C<B<var>> selects the exact
+name corresponding to the identifier, whether or not it is the currently accepted variant.
 
 =item opn | L<opn:489175|op:opinions/single.json?id=opn:489175> | opinion_no
 
@@ -53,13 +71,15 @@ A taxonomic opinion record.
 
 =item occ | L<occ:1054042|op:occs/single.json?id=occ:1054042> | occurrence_no
 
-A fossil occurrence record.
+A fossil occurrence record.  An identifier of type C<B<occ>> selects the most recent
+identification of the corresponding fossil occurrence.
 
-=item rei | rei:12664 | reid_no
+=item occ | L<rei:12664|op:occs/single.json?id=rei:12664> | reid_no
 
-A fossil re-identification record.  Currently, these are not directly retrievable
-through the data service.  You can, however, use the parameter B<C<ident=all>>
-to retrieve all identifications of each matching occurrence.
+A fossil occurrence record.  An identifier of type C<B<rei>> selects a specific
+identification of the corresponding fossil occurrence, whether or not it is the
+most recent.  To select the original identification of a specified occurrence,
+add the parameter C<B<idtype=orig>>.
 
 =item spm | L<spm:77971|op:specs/single.json?id=spm:77971> | specimen_no
 
@@ -97,19 +117,33 @@ A bibliographic reference record.
 
 A database contributor record.  Currently, these are not directly retrievable
 through the data service.  However, you can find out the authorizer and enterer
-of any particular record by adding the output block C<B<crmod>>.
+of any particular record by adding the output block C<B<ent>>.
 
 =back
+
+=head2 RECORD VARIANTS
+
+One of the advantages of the new extended identifier syntax is that we can handle records with
+multiple variants in a consistant way that is not possible with purely numeric identifiers.  For
+example, some taxonomic names have two or more variants (recombinations, misspellings, etc.).  If
+you specify an identifier of type C<B<txn>>, you will get the currently accepted variant of that
+taxonomic name.  But if you specify an identifier of type C<B<var>>, you will get the variant
+explicitly identified by that record number.  This kind of distinction would be much more clumsy
+to implement with purely numeric identifiers.  A similar situation obtains with occurrences 
+and re-identifications (see above).
 
 =head2 SITE PREFIX
 
 In order to facilitate the combining of PBDB data with data from other databases, this data
-service also accepts identifiers that are prefixed with the name of the website, as follows:
+service also accepts identifiers that are prefixed with the name of the website.  The following
+three variants of each identifier are accepted:
 
+    txn:41045
+    pbdb:txn:41045
     paleobiodb.org:txn:41045
 
 You can use these as parameter values interchangeably with the basic identifier syntax.  This
 will allow the future definition of multi-site identifier schemes using identifiers that
 are unique across all of the sites together.  But for now, you can ignore this and simply use
-identifiers of the form given above.
+first of these three forms.
 
