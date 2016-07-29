@@ -24,7 +24,7 @@ use JSON;
 use LWP::UserAgent;
 
 use TableDefs qw($PALEOCOORDS $GEOPLATES $COLLECTIONS $COLL_MATRIX $INTERVAL_DATA);
-use ConsoleLog qw(initMessages logMessage);
+use ConsoleLog qw(logMessage);
 use CoreFunction qw(loadConfig configData);
 
 
@@ -38,6 +38,7 @@ our ($DEFAULT_MAX_FEATURES) = 35;	# This value can be adjusted if necessary; it 
                                         # that the length of each request URL won't exceed the
                                         # server's limit.  Since we don't actually know what that
                                         # limit is, we are conservative.
+
 
 # updatePaleocoords ( dbh, options )
 # 
@@ -101,14 +102,13 @@ sub updatePaleocoords {
     
     ensureTables($dbh);
     
-    logMessage(1, "Updating paleocoordinates");
-    
     # If the option 'update_all' or 'clear_all' was specified, then we start
     # by clearing the $PALEOCOORDS table of entries falling into the given age
     # range.
     
     if ( $options->{update_all} || $options->{clear_all} )
     {
+	$self->initMessage($options);
 	logMessage(2, "    clearing all paleocoords between $max_age Ma and $min_age Ma...");
 	
 	$sql = "UPDATE $PALEOCOORDS
@@ -147,8 +147,11 @@ sub updatePaleocoords {
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "    cleared paleocoords from $count collections without a valid location")
-	if defined $count && $count > 0;
+    if ( defined $count && $count > 0 )
+    {
+	$self->initMessage($options);
+	logMessage(2, "    cleared paleocoords from $count collections without a valid location")
+    }
     
     # Then delete any rows in $PALEOCOORDS corresponding to collections whose
     # coordinates have been edited.  These will have to be recomputed entirely.
@@ -159,8 +162,11 @@ sub updatePaleocoords {
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "    cleared paleocoords from $count collections whose location has been changed")
-	if defined $count && $count > 0;
+    if ( defined $count && $count > 0 )
+    {
+	$self->initMessage($options);
+	logMessage(2, "    cleared paleocoords from $count collections whose location has been changed")
+    }
     
     # Then clear any entries in $PALEOCOORDS corresponding to entries whose
     # ages have been changed.
@@ -190,12 +196,15 @@ sub updatePaleocoords {
     
     $count += $dbh->do($sql);
     
-    logMessage(2, "    cleared $count entries whose ages did not correspond to their collections")
-	if defined $count && $count > 0;
+    if ( defined $count && $count > 0 )
+    {
+	$self->initMessage($options);
+	logMessage(2, "    cleared $count entries whose ages did not correspond to their collections")
+    }
     
     # Now query for all collections whose paleocoordinates need updating.
     
-    logMessage(2, "    looking for collections whose palecoordinates need updating...");
+    # logMessage(2, "    looking for collections whose palecoordinates need updating...");
     
     $sql =     "SELECT collection_no, c.lng as present_lng, c.lat as present_lat,
 		       'early' as selector, round(c.early_age,0) as age
@@ -238,7 +247,16 @@ sub updatePaleocoords {
 	$count++;
     }
     
-    logMessage(2, "    found $count entries to update");
+    if ( $count )
+    {
+	$self->initMessage($options);
+	logMessage(2, "    found $count entries to update");
+    }
+    
+    else
+    {
+	return;
+    }
     
     # At this point, we need to prepare the SQL statements that will be used
     # to update entries in the table.
@@ -337,7 +355,6 @@ sub updatePaleocoords {
     }
     
     logMessage(2, "    updated $self->{update_count} paleocoordinate entries");
-    logMessage(2, "DONE.");
     
     my $a = 1; # we can stop here when debugging
 }
@@ -345,6 +362,19 @@ sub updatePaleocoords {
 
 # The following routines are internally used methods, and are not exported:
 # =========================================================================
+
+sub initMessage {
+
+    my ($self, $options) = @_;
+    
+    return if $self->{init_message};
+    $self->{init_message} = 1;
+    
+    my $now = localtime;
+    
+    logMessage(1, "Updating paleocoordinates at $now");
+}
+
 
 sub prepareStatements {
     

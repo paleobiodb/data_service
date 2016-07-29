@@ -17,7 +17,7 @@ use GPlates qw(ensureTables updatePaleocoords readPlateData);
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
 
-my ($replace_table, $update_all, $clear_all, $min_age, $max_age, $read_plates, $debug);
+my ($replace_table, $update_all, $clear_all, $min_age, $max_age, $read_plates, $quiet, $debug);
 
 GetOptions("replace-table|R" => \$replace_table,
 	   "update-all|a" => \$update_all,
@@ -25,6 +25,8 @@ GetOptions("replace-table|R" => \$replace_table,
 	   "min-age=i" => \$min_age,
 	   "max-age=i" => \$max_age,
 	   "read-plate-data" => \$read_plates,
+	   "quiet|q" => \$quiet,
+	   "verbose|v" => \$verbose,
 	   "debug" => \$debug) or die;
 
 my $cmd_line_db_name = shift @ARGV;
@@ -33,7 +35,7 @@ my $cmd_line_db_name = shift @ARGV;
 # Initialize the output-message subsystem
 
 initMessages(2, 'GPlates update');
-logTimestamp();
+logTimestamp() if $verbose;
 
 # Get a database handle.
 
@@ -43,11 +45,11 @@ my $dbh = connectDB("config.yml", $cmd_line_db_name);
 
 if ( $dbh->{Name} =~ /database=([^;]+)/ )
 {
-    logMessage(1, "Using database: $1");
+    logMessage(1, "Using database: $1") if $verbose;
 }
 else
 {
-    logMessage(1, "Using connect string: $dbh->{Name}");
+    logMessage(1, "Using connect string: $dbh->{Name}") if $verbose;
 }
 
 # If we are debugging, stop here.
@@ -80,9 +82,11 @@ updatePaleocoords($dbh, { update_all => $update_all,
 			  clear_all => $clear_all,
 			  min_age => $min_age,
 			  max_age => $max_age,
+			  quiet => $quiet,
+			  verbose => $verbose,
 			  debug => $debug });
 
-logTimestamp();
+logTimestamp() if $verbose;
 
 my $a = 1; # we can stop here when debugging.
 
