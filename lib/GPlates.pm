@@ -563,8 +563,8 @@ sub processResponse {
 	
 	my ($lng, $lat) = @{$feature->{geometry}{coordinates}};
 	
-	unless ( $lng =~ qr{ ^ -? \d+ (?: \. \d* )? $ }x and
-		 $lat =~ qr{ ^ -? \d+ (?: \. \d* )? $ }x )
+	unless ( $lng =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi and
+		 $lat =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi )
 	{
 	    push @bad_list, "$key ($lng, $lat)";
 	    next POINT;
