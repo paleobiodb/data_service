@@ -207,7 +207,7 @@ sub initialize {
     	    "Select only references for which any of the authors matches the specified name",
     	{ param => 'primary', valid => ANY_VALUE },
     	    "Select only references for which the primary author matches the specified name",
-    	{ param => 'year', valid => MATCH_VALUE('(?:(?:\d{4})\s*(?:-\s*\d{4})?|\d{4}\s*)'),
+    	{ param => 'year', valid => MATCH_VALUE(qr{^\d{4}$|^-\d{4}$|^\d{4}\s*(-\s*\d{4})?$}),
     	  error => "the value of {param} must a range of years, with either bound optional ('2010-' is okay); found {value}" },
     	    "Select only references published in the specified year",
     	{ param => 'pubtitle', valid => ANY_VALUE },
