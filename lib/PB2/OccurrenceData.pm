@@ -623,13 +623,13 @@ sub initialize {
 	    "any specification of a particular re-identification.");
     
     $ds->define_ruleset('1.2:occs:selector' =>
-	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id', bad_value => '_' },
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
 	    "A comma-separated list of occurrence identifiers.  The specified occurrences",
 	    "are selected, provided they satisfy the other parameters",
 	    "given with this request.  You may also use the parameter name B<C<id>>.",
 	    "You can also use this parameter along with any of the other parameters",
 	    "to filter a known list of occurrences according to other criteria.",
-	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',', bad_value => '_' },
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
 	    "A comma-separated list of collection identifiers.  All occurrences associated with the",
 	    "specified collections are selected, provided they satisfy the other parameters given",
 	    "with this request.");
