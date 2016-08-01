@@ -2081,46 +2081,21 @@ sub generateMainFilters {
     {
 	my $id_list = $request->check_values($dbh, \@clusters, 'bin_id', 'coll_bins', 
 					     "Unknown summary cluster '%'");
-
+	
 	# If the result is -1, that means that only invalid identifiers were
-	# specified.
+	# specified.  So add a filter that will select nothing.
 	
 	if ( $id_list eq '-1' )
 	{
 	    $request->add_warning("no valid cluster identifiers were given");
+	    push @filters, "c.collection_no = -1";
 	}
 	
-	# my $id_list = join(q{,}, @clusters);
-	# my %id_hash = map { $_ => 1 } @clusters;
-	
-	# # Check for invalid identifiers.
-	
-	# unless ( $id_list eq '-1' )
-	# {
-	#     my $check_result = $dbh->selectcol_arrayref("
-	# 	SELECT bin_id FROM coll_bins WHERE bin_id in ($id_list)");
-	    
-	#     foreach my $id ( @$check_result )
-	#     {
-	# 	delete $id_hash{$id};
-	#     }
-	    
-	#     foreach my $id ( keys %id_hash )
-	#     {
-	# 	$request->add_warning("Unknown collection '$id'");
-	#     }
-	    
-	#     my $id_list = join(q{,}, @$check_result) || '-1';
-	# }
-	
-	# If there aren't any bins, or no valid cluster ids were specified,
-	# include a filter that will return no results.
-	
-	if ( $op eq 'summary' )
+	elsif ( $op eq 'summary' )
 	{
 	    push @filters, "s.bin_id in ($id_list)";
 	}
-	
+
 	else
 	{
 	    my %clusters;
@@ -2170,12 +2145,13 @@ sub generateMainFilters {
 	if ( $id_list eq '-1' )
 	{
 	    $request->add_warning("no valid collection identifiers were given");
+	    push @filters, "c.collection_no = -1";
 	}
 	
 	# If there aren't any bins, or no valid cluster ids were specified,
 	# include a filter that will return no results.
 	
-	if ( $op eq 'summary' )
+	elsif ( $op eq 'summary' )
 	{
 	    $tables_ref->{non_summary} = 1;
 	    $tables_ref->{cm} = 1;
