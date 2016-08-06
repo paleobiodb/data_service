@@ -24,6 +24,7 @@ GetOptions("replace-table|R" => \$replace_table,
 	   "clear-all|x" => \$clear_all,
 	   "min-age=i" => \$min_age,
 	   "max-age=i" => \$max_age,
+	   "verbose|v" => \$verbose,
 	   "read-plate-data" => \$read_plates,
 	   "debug" => \$debug) or die;
 
@@ -80,6 +81,7 @@ updatePaleocoords($dbh, { update_all => $update_all,
 			  clear_all => $clear_all,
 			  min_age => $min_age,
 			  max_age => $max_age,
+			  verbose => $verbose,
 			  debug => $debug });
 
 logTimestamp();
