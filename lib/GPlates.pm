@@ -92,6 +92,8 @@ sub updatePaleocoords {
 		 retry_interval => $retry_interval,
 		 fail_limit => $fail_limit,
 		 max_features => $max_features,
+		 quiet => $options->{quiet},
+		 verbose => $options->{verbose},
 	       };
     
     bless $self, 'GPlates';
@@ -102,7 +104,16 @@ sub updatePaleocoords {
     
     ensureTables($dbh);
     
-    logMessage(1, "Updating paleocoordinates");
+    # logMessage(1, "Updating paleocoordinates") unless $self->{quiet};
+
+    # If other filters were specified, compute them now.
+
+    my $filters = '';
+    
+    if ( $options->{collection_no} )
+    {
+	$filters .= " and collection_no in ($options->{collection_no})";
+    }
     
     # If the option 'clear_all' was specified, then we clear the $PALEOCOORDS table of entries
     # falling into the given age range.  No further action should be taken in this case.
@@ -114,19 +125,19 @@ sub updatePaleocoords {
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET early_lng = null, early_lat = null, update_time = now()
-		WHERE early_age between $min_age and $max_age";
+		WHERE early_age between $min_age and $max_age $filters";
 	
 	$count = $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET mid_lng = null, mid_lat = null, update_time = now()
-		WHERE mid_age between $min_age and $max_age";
+		WHERE mid_age between $min_age and $max_age $filters";
 	
 	$count += $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET late_lng = null, late_lat = null, update_time = now()
-		WHERE late_age between $min_age and $max_age";
+		WHERE late_age between $min_age and $max_age $filters";
 	
 	$count += $dbh->do($sql);
 	
@@ -141,104 +152,110 @@ sub updatePaleocoords {
     # range so that they will be updated below.  Otherwise, only entries that have been added or
     # changed will be updated.
     
-    elsif ( $options->{update_all} )
+    elsif ( $options->{update_all} || $options->{collection_no} )
     {    
 	logMessage(2, "    updating all paleocoords between $max_age Ma and $min_age Ma...");
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET update_early = true
-		WHERE early_age between $min_age and $max_age";
+		WHERE early_age between $min_age and $max_age $filters";
 	
 	$count = $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET update_mid = true
-		WHERE mid_age between $min_age and $max_age";
+		WHERE mid_age between $min_age and $max_age $filters";
 	
 	$count += $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET update_late = true
-		WHERE late_age between $min_age and $max_age";
+		WHERE late_age between $min_age and $max_age $filters";
 	
 	$count += $dbh->do($sql);
 	
 	logMessage(2, "      flagging $count coordinates to update");
     }
-    
-    # Now delete any rows in $PALEOCOORDS corresponding to collections whose
-    # coordinates have been made invalid.  This should not happen very often,
-    # but is a boundary case that we need to take care of.
-    
-    $sql =     "DELETE FROM p
+
+    # Otherwise, we check for all coordinates within the specified age range
+    # that need updating.
+
+    else
+    {
+	# Now delete any rows in $PALEOCOORDS corresponding to collections whose
+	# coordinates have been made invalid.  This should not happen very often,
+	# but is a boundary case that we need to take care of.
+	
+	$sql = "DELETE FROM p
 		USING $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
 		WHERE c.lat is null or c.lat not between -90 and 90 or
 		      c.lng is null or c.lng not between -180 and 180";
-    
-    $count = $dbh->do($sql);
-    
-    if ( defined $count && $count > 0 )
-    {
-	$self->initMessage($options);
-	logMessage(2, "    cleared paleocoords from $count collections without a valid location")
-    }
-    
-    # Then delete any rows in $PALEOCOORDS corresponding to collections whose
-    # coordinates have been edited.  These will have to be recomputed entirely.
-    
-    $sql =     "DELETE FROM p
+	
+	$count = $dbh->do($sql);
+	
+	if ( defined $count && $count > 0 )
+	{
+	    $self->initMessage($options);
+	    logMessage(2, "    cleared paleocoords from $count collections without a valid location");
+	}
+	
+	# Then delete any rows in $PALEOCOORDS corresponding to collections whose
+	# coordinates have been edited.  These will have to be recomputed entirely.
+	
+	$sql = "DELETE FROM p
                 USING $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
                 WHERE c.lat <> p.present_lat or c.lng <> p.present_lng";
-    
-    $count = $dbh->do($sql);
-
-    # # Then set the update flags on any rows in $PALEOCOORDS corresponding to collections whose
-    # # coordinates have been edited.  These will have to be recomputed entirely.
-    
-    # $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-    # 		SET p.update_early = true, p.update_mid = true, p.update_late = true
-    # 		WHERE c.lat <> p.present_lat or c.lng <> p.present_lng";
-    
-    # $count = $dbh->do($sql);
-    
-    if ( defined $count && $count > 0 )
-    {
-	$self->initMessage($options);
-	logMessage(2, "    cleared paleocoords from $count collections whose location has been changed")
-    }
-    
-    # Then clear any entries in $PALEOCOORDS corresponding to collections whose ages have been
-    # changed.
-    
-    $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-		SET p.early_age = null, p.early_lng = null, p.early_lat = null,
+	
+	$count = $dbh->do($sql);
+	
+	# # Then set the update flags on any rows in $PALEOCOORDS corresponding to collections whose
+	# # coordinates have been edited.  These will have to be recomputed entirely.
+	
+	# $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
+	# 		SET p.update_early = true, p.update_mid = true, p.update_late = true
+	# 		WHERE c.lat <> p.present_lat or c.lng <> p.present_lng";
+	
+	# $count = $dbh->do($sql);
+	
+	if ( defined $count && $count > 0 )
+	{
+	    $self->initMessage($options);
+	    logMessage(2, "    cleared paleocoords from $count collections whose location has been changed");
+	}
+	
+	# Then clear any entries in $PALEOCOORDS corresponding to collections whose ages have been
+	# changed.
+	
+	$sql = "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
+		SET p.early_age = null, p.early_lng = null, p.early_lat = null, p.update_early = 1,
 		    p.update_time = now()
 		WHERE round(c.early_age,0) <> p.early_age and
 		      (round(c.early_age,0) between $min_age and $max_age or p.early_age is not null)";
-    
-    $count = $dbh->do($sql);
-    
-    $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-		SET p.late_age = null, p.late_lng = null, p.late_lat = null,
+	
+	$count = $dbh->do($sql);
+	
+	$sql = "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
+		SET p.late_age = null, p.late_lng = null, p.late_lat = null, p.update_late = 1,
 		    p.update_time = now()
 		WHERE round(c.late_age,0) <> p.late_age and
 		      (round(c.late_age,0) between $min_age and $max_age or p.late_age is not null)";
-    
-    $count += $dbh->do($sql);
-    
-    $sql =     "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-		SET p.mid_age = null, p.mid_lng = null, p.mid_lat = null,
+	
+	$count += $dbh->do($sql);
+	
+	$sql = "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
+		SET p.mid_age = null, p.mid_lng = null, p.mid_lat = null, p.update_mid = 1,
 		    p.update_time = now()
 		WHERE round((c.early_age + c.late_age)/2,0) <> p.mid_age and
 		      (round((c.early_age + c.late_age)/2,0) between $min_age and $max_age or 
 		       p.mid_age is not null)";
-    
-    $count += $dbh->do($sql);
-    
-    if ( defined $count && $count > 0 )
-    {
-	$self->initMessage($options);
-	logMessage(2, "    cleared $count entries whose ages did not correspond to their collections")
+	
+	$count += $dbh->do($sql);
+	
+	if ( defined $count && $count > 0 )
+	{
+	    $self->initMessage($options);
+	    logMessage(2, "    cleared $count entries whose ages did not correspond to their collections");
+	}
     }
     
     # Now query for all collections whose paleocoordinates need updating.  This includes:
@@ -254,8 +271,7 @@ sub updatePaleocoords {
     		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
     		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
 			and round(c.early_age,0) between $min_age and $max_age
-			and (p.early_age is null or p.early_lng is null or p.early_lat is null or
-			     p.update_early)";
+			and (p.present_lng is null or p.update_early) $filters";
     
     my $early_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
     
@@ -264,8 +280,7 @@ sub updatePaleocoords {
     		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
     		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
 			and round((c.early_age + c.late_age)/2,0) between $min_age and $max_age
-			and (p.mid_age is null or p.mid_lng is null or p.mid_lat is null or
-			     p.update_mid)";
+			and (p.present_lng is null or p.update_mid) $filters";
     
     my $mid_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
     
@@ -274,8 +289,7 @@ sub updatePaleocoords {
     		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
     		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
 			and round(c.late_age,0) between $min_age and $max_age
-			and (p.late_age is null or p.late_lng is null or p.late_lat is null or
-			     p.update_late)";
+			and (p.present_lng is null or p.update_late) $filters";
     
     my $late_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
     
@@ -319,7 +333,7 @@ sub updatePaleocoords {
     my $ua = LWP::UserAgent->new();
     $ua->agent("Paleobiology Database Updater/0.1");
     
-    $DB::single = 1;
+    # $DB::single = 1;
     
  AGE:
     foreach my $age (sort { $a <=> $b } keys %{$self->{source_points}})
@@ -436,22 +450,37 @@ sub prepareStatements {
     $self->{add_row_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $PALEOCOORDS
-	    SET early_age = ?, early_lng = ?, early_lat = ?, plate_no = ?, update_time = now()
+	    SET early_age = ?, early_lng = ?, early_lat = ?, 
+		update_early = 0, update_time = now()
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{early_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $PALEOCOORDS
-	    SET mid_age = ?, mid_lng = ?, mid_lat = ?, plate_no = ?, update_time = now()
+	    SET mid_age = ?, mid_lng = ?, mid_lat = ?, 
+		update_mid = 0, update_time = now()
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{mid_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $PALEOCOORDS
-	    SET late_age = ?, late_lng = ?, late_lat = ?, plate_no = ?, update_time = now()
+	    SET late_age = ?, late_lng = ?, late_lat = ?, 
+		update_late = 0, update_time = now()
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{late_sth} = $dbh->prepare($sql);
+
+    $sql = "UPDATE $PALEOCOORDS
+	    SET early_plate = ?
+	    WHERE collection_no = ? LIMIT 1";
+
+    $self->{early_plate_sth} = $dbh->prepare($sql);
+
+    $sql = "UPDATE $PALEOCOORDS
+	    SET late_plate = ?
+	    WHERE collection_no = ? LIMIT 1";
+
+    $self->{late_plate_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
 	    SET c.g_plate_no = pc.plate_no
@@ -502,7 +531,7 @@ sub makeGPlatesRequest {
  RETRY:
     while ( $retry_count )
     {
-	$DB::single = 1;
+	# $DB::single = 1;
 	
 	my $start = time;
 	my $time1;
@@ -516,22 +545,23 @@ sub makeGPlatesRequest {
 	if ( $resp->is_success )
 	{
 	    $time1 = time;
-	    my $elapsed1 = $time1 - $start;
+	    my $elapsed = $time1 - $start;
 	    
-	    logMessage(3, "    response elapsed time: $elapsed1");
+	    logMessage(3, "    response elapsed time: $elapsed");
 	    
 	    $self->processResponse($age, $content_ref);
 	    $self->{fail_count} = 0;
+
+	    $elapsed = time - $time1;
+	    
+	    logMessage(3, "    process elapsed time: $elapsed");
+	    
 	    return;
 	}
 	
 	# Otherwise, check the initial part of the response message body.  If
 	# the server didn't give us any response, wait a few seconds and try
 	# again.
-	
-	my $elapsed2 = time - $time1;
-	
-	logMessage(3, "    process elapsed time: $elapsed2");
 	
 	my $content_start = substr($$content_ref, 0, 1000);
 	
@@ -578,7 +608,8 @@ my %is_selector = ( 'early' => 1, 'mid' => 1, 'late' => 1 );
 sub processResponse {
     
     my ($self, $age, $content_ref) = @_;
-    
+
+    my $dbh = $self->{dbh};
     my $response;
     my @bad_list;
     
@@ -605,10 +636,23 @@ sub processResponse {
     
     # For each feature (i.e. result point) in the response, update the
     # corresponding entry in the database.
+
+    my @result; @result = @{$response->{result}} if ref $response->{result} eq 'ARRAY';
+    my $errmsg_displayed;
     
   POINT:
-    foreach my $featcoll ( @{$response->{result}} )
+    foreach my $featcoll ( @result )
     {
+	unless ( ref $featcoll->{features} eq 'ARRAY' &&
+		 ref $featcoll->{features}[0] eq 'HASH' &&
+		 defined $featcoll->{features}[0]{properties}{label} )
+	{
+	    logMessage(1, "ERROR: found a feature collection with no 'label' property")
+		unless $errmsg_displayed;
+	    $errmsg_displayed = 1;
+	    next;
+	}
+	
 	my $feature = $featcoll->{features}[0];
 	my $key = $feature->{properties}{label};
 	my ($selector, $collection_no) = split(qr{\.}, $key);
@@ -619,18 +663,33 @@ sub processResponse {
 	    next POINT;
 	}
 	
-	my ($lng, $lat) = @{$feature->{geometry}{coordinates}};
-	
-	unless ( $lng =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi and
-		 $lat =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi )
+	unless ( ref $feature->{geometry}{coordinates} eq 'ARRAY' )
 	{
-	    push @bad_list, "$key ($lng, $lat)";
-	    next POINT;
+	    $self->updateOneEntry($collection_no, $selector, $age, undef, undef, undef);
 	}
 	
-	my $plate_id = int($feature->{properties}{plate_id});
-	
-	$self->updateOneEntry($collection_no, $selector, $age, $lng, $lat, $plate_id);
+	else
+	{
+	    my ($lng, $lat) = @{$feature->{geometry}{coordinates}};
+	    
+	    unless ( $lng =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi and
+		     $lat =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi )
+	    {
+		push @bad_list, "$key ($lng, $lat)";
+		$self->updateOneEntry($collection_no, $selector, $age, undef, undef, undef);
+		next POINT;
+	    }
+	    
+	    my $plate_id = $feature->{properties}{plate_id};
+	    $plate_id =~ s/[.]0$//;
+	    
+	    $plate_id = undef if $plate_id eq 'NULL';
+	    
+	    # my $quoted = defined $plate_id && $plate_id ne '' && $plate_id !~ /null/i ?
+	    # 	$dbh->quote($plate_id) : undef;
+	    
+	    $self->updateOneEntry($collection_no, $selector, $age, $lng, $lat, $plate_id);
+	}
     }
     
     if ( @bad_list )
@@ -654,17 +713,27 @@ sub updateOneEntry {
     
     if ( $selector eq 'early' )
     {
-	$self->{early_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
+	$self->{early_sth}->execute($age, $lng, $lat, $collection_no);
     }
     
     elsif ( $selector eq 'mid' )
     {
-	$self->{mid_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
+	$self->{mid_sth}->execute($age, $lng, $lat, $collection_no);
     }
     
     elsif ( $selector eq 'late' )
     {
-	$self->{late_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
+	$self->{late_sth}->execute($age, $lng, $lat, $collection_no);
+    }
+    
+    if ( $age > 200 )
+    {
+	$self->{early_plate_sth}->execute($plate_id, $collection_no);
+    }
+
+    else
+    {
+	$self->{late_plate_sth}->execute($plate_id, $collection_no);
     }
     
     $self->{coll_matrix_sth}->execute($collection_no);
