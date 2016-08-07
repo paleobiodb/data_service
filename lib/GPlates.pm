@@ -773,6 +773,8 @@ sub ensureTables {
 		present_lng decimal(9,6),
 		present_lat decimal(9,6),
 		plate_no int unsigned,
+		early_plate varchar(20),
+	        late_plate varchar(20),
 		early_age int unsigned,
 		early_lng decimal(5,2),
 		early_lat decimal(5,2),

@@ -53,6 +53,10 @@ my $level = $verbose ? 3 : 2;
 initMessages($level, 'GPlates update');
 logTimestamp() if $verbose;
 
+# Make sure output is not buffered
+
+$| = 1;
+
 # Get a database handle.
 
 my $dbh = connectDB("config.yml", $cmd_line_db_name);
