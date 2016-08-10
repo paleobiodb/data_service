@@ -5,6 +5,8 @@
 # Update paleocoordinates in the paleobiology database using the GPlates
 # service.
 
+use strict;
+
 use lib '../lib', 'lib';
 use Getopt::Long qw(:config bundling no_auto_abbrev);
 
@@ -17,23 +19,43 @@ use GPlates qw(ensureTables updatePaleocoords readPlateData);
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
 
-my ($replace_table, $update_all, $clear_all, $min_age, $max_age, $read_plates, $debug);
+my ($replace_table, $update_all, $clear_all, $min_age, $max_age, $collection_no,
+    $read_plates, $quiet, $verbose, $debug);
 
 GetOptions("replace-table|R" => \$replace_table,
 	   "update-all|a" => \$update_all,
 	   "clear-all|x" => \$clear_all,
-	   "min-age=i" => \$min_age,
-	   "max-age=i" => \$max_age,
+	   "min-age=s" => \$min_age,
+	   "max-age=s" => \$max_age,
+	   "coll=s" => \$collection_no,
 	   "read-plate-data" => \$read_plates,
+	   "quiet|q" => \$quiet,
+	   "verbose|v" => \$verbose,
 	   "debug" => \$debug) or die;
 
 my $cmd_line_db_name = shift @ARGV;
 
+# Make sure we have good values for the switches.
+
+die "Bad arguments: the value of 'min-age' must be a positive integer\n"
+    if defined $min_age && $min_age !~ /^\d+$/;
+
+die "Bad arguments: the value of 'max-age' must be a positive integer\n"
+    if defined $max_age && $max_age !~ /^\d+$/;
+
+die "Bad arguments: the value of 'coll' must be a comma-separated list of collection_no values\n"
+    if defined $collection_no && $collection_no !~ qr{ ^ \d+ (?: \s*,\s* \d+ )* $ }xs;
 
 # Initialize the output-message subsystem
 
-initMessages(2, 'GPlates update');
-logTimestamp();
+my $level = $verbose ? 3 : 2;
+
+initMessages($level, 'GPlates update');
+logTimestamp() if $verbose;
+
+# Make sure output is not buffered
+
+$| = 1;
 
 # Get a database handle.
 
@@ -43,18 +65,18 @@ my $dbh = connectDB("config.yml", $cmd_line_db_name);
 
 if ( $dbh->{Name} =~ /database=([^;]+)/ )
 {
-    logMessage(1, "Using database: $1");
+    logMessage(1, "Using database: $1") if $verbose;
 }
 else
 {
-    logMessage(1, "Using connect string: $dbh->{Name}");
+    logMessage(1, "Using connect string: $dbh->{Name}") if $verbose;
 }
 
 # If we are debugging, stop here.
 
 $DB::single = 1;
 
-# Make sure we hvae the proper fields in the collections table.
+# Make sure we have the proper fields in the collections table.
 
 if ( $replace_table )
 {
@@ -80,9 +102,12 @@ updatePaleocoords($dbh, { update_all => $update_all,
 			  clear_all => $clear_all,
 			  min_age => $min_age,
 			  max_age => $max_age,
+			  collection_no => $collection_no,
+			  quiet => $quiet,
+			  verbose => $verbose,
 			  debug => $debug });
 
-logTimestamp();
+logTimestamp() if $verbose;
 
 my $a = 1; # we can stop here when debugging.
 
