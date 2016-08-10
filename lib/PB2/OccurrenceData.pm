@@ -1419,7 +1419,12 @@ sub diversity {
     $options->{timereso} = $level_map{$reso_param} || 5;
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
+    # in order to select the proper result set.  We must add 'o' to the table
+    # hash, so that the proper identification filter (idtype) will be added to
+    # the query.  This will have no effect on the join list, because table 'o'
+    # is already part of it.
+    
+    $tables->{o} = 1;
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o');
@@ -1929,7 +1934,11 @@ sub list_occs_taxa {
     my $fields = join(', ', @fields);
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
+    # in order to select the proper result set.  We must add 'o' to the table
+    # hash, so that the proper identification filter (idtype) will be added to
+    # the query.
+    
+    $tables->{o} = 1;
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o');
@@ -2136,11 +2145,13 @@ sub prevalence {
     # Determine which fields and tables are needed to display the requested
     # information.  If the given parameters can be fulfilled by just querying
     # for summary bins, we do so.  Otherwise, we have to go through the entire
-    # set of occurrences again.
+    # set of occurrences again.  In this case, we must include 'o' in the table
+    # hash, so that the proper identification filter (idtype) is added to the
+    # query.
     
     if ( $tables->{o} || $tables->{cc} || $tables->{c} || $tables->{non_summary} )
     {
-	$tables = { };
+	$tables = { o => 1 };
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
 	push @filters, $request->generateOccFilters($tables, 'o');
@@ -2276,9 +2287,10 @@ sub list_occs_associated {
     $select{occs} = 1 unless %select;
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
+    # in order to select the proper result set.  We must include table 'o', so
+    # that the proper identification filter (idtype) will be added to the query.
     
-    my $inner_tables = {};
+    my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
@@ -2527,94 +2539,6 @@ sub list_occs_associated {
 }
 
 
-sub taxa_test {
-
-    my ($request) = @_;
-    
-    # Get a database handle by which we can make queries.
-    
-    my $dbh = $request->get_connection;
-    
-    # Then generate a table of occurrences that match the query parameters.
-    # Only take into account parameters that are relevant for selecting
-    # occurrences.
-    
-    $request->substitute_select( mt => 'r', cd => 'r' );
-    
-    my $inner_tables = {};
-    
-    my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
-    # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
-    # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
-    push @filters, $request->generateOccFilters($inner_tables, 'o');
-    
-    push @filters, "c.access_level = 0";
-    
-    my $filter_string = join(' and ', @filters);
-    
-    $dbh->do("DROP TABLE IF EXISTS occ_list");
-    $dbh->do("CREATE TEMPORARY TABLE occ_list (
-		occurrence_no int unsigned not null primary key,
-		taxon_no int unsigned not null,
-		orig_no int unsigned not null ) engine=memory");
-    
-    my $inner_join_list = $request->generateJoinList('c', $inner_tables);
-    
-    my $sqlA = "INSERT IGNORE INTO occ_list
-		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $OCC_MATRIX as o
-			JOIN $COLL_MATRIX as c using (collection_no)
-			$inner_join_list
-		WHERE $filter_string";
-    
-    $dbh->do($sqlA);
-    
-    # Then use this table of occurrences to generate a list of matching
-    # taxa. Start by creating a taxonomy object.
-    
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
-    
-    # Then generate a set of query options based on the request parameters.
-    # This routine will only take into account parameters relevant to
-    # selecting taxa.
-    
-    my $options = PB2::TaxonData::generate_query_options($request, 'taxa');
-    
-    # We need to remove the options 'min_ma' and 'max_ma' if they were
-    # specified, because these overlap with the parameters of the same name
-    # used to select occurrences and have already been taken care of above.
-    
-    delete $options->{min_ma};
-    delete $options->{max_ma};
-    
-    # Indicate that we want a DBI statement handle in return, and that we will
-    # be using the table 'occ_list'.
-    
-    $options->{return} = 'stmt';
-    $options->{table} = 'occ_list';
-    
-    try {
-	my ($result) = $taxonomy->list_taxa('occs', $request->{my_base_taxa}, $options);
-	my @warnings = $taxonomy->list_warnings;
-	
-	$request->sth_result($result) if $result;
-	$request->add_warning(@warnings) if @warnings;
-    }
-    
-    catch {
-	die $_;
-    }
-    
-    finally {
-	$dbh->do("DROP TABLE IF EXISTS occ_list");
-	$request->{ds}->debug_line("$sqlA\n") if $request->debug;
-    };
-    
-    $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
-    $request->{main_sql} = $sqlA . "\n\n" . $taxonomy->last_sql;
-}
-
-
 # strata ( )
 # 
 # Query the database for the strata associated with occurrences satisfying
@@ -2633,9 +2557,10 @@ sub list_occs_strata {
     $request->delete_output_field('n_opinions');
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
+    # in order to select the proper result set.  We must include table 'o' so
+    # that the proper identification filter (idtype) is added to the query.
     
-    my $inner_tables = { };
+    my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { occs => 'o' } );

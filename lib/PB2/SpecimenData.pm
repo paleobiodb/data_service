@@ -818,9 +818,11 @@ sub list_specimens_associated {
     $select{specs} = 1 unless %select;
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
+    # in order to select the proper result set.  We have to include table 'o'
+    # so that the proper identification filter (idtype) is added to the query
+    # by generateOccFilters.
     
-    my $inner_tables = {};
+    my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { specs => 'ss', occs => 'o', refs => 'ignore' } );
@@ -1111,7 +1113,10 @@ sub list_measurements {
     $request->substitute_select( mt => 'ss', cd => 'ss' );
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
+    # in order to select the proper result set.  We must include the table 'o'
+    # so that the proper identification filter (idtype) is added to the query.
+    
+    $tables->{o} = 1;
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'ss');

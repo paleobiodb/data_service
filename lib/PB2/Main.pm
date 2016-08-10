@@ -273,17 +273,6 @@ use PB2::PersonData;
 	"appear within the selected set of occurrences.  The parent taxon identifier is also reported",
 	"for each taxon, so that you are able to organize the result records into their proper hierarchy.");
     
-    $ds2->define_node({ path => 'occs/ttest',
-			place => 0,
-			undocumented => 1,
-			method => 'taxa_test',
-			output => '1.2:taxa:basic',
-			ruleset => '1.2:occs:taxa',
-			optional_output => '1.2:occs:taxa_opt',
-			default_limit => $taxa_limit,
-			title => 'Taxonomy test list' },
-	"Test taxonomy routines");
-    
     $ds2->define_node({ path => 'occs/prevalence',
 			place => 8,
 			usage => [ "/occs/prevalence.json?continent=noa&interval=mesozoic&limit=10" ],
