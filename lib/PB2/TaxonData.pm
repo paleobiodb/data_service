@@ -541,8 +541,9 @@ sub initialize {
 	    "The number of occurrences of this taxon in the database");
     
     $ds->define_block('1.2:taxa:imagedata' =>
-	{ select => [ 'image_no', 'uid', 'modified', 'credit', 'license' ] },
+	{ select => [ 'p.image_no', 'p.uid', 'p.modified', 'p.credit', 'p.license' ] },
 	{ set => '*', code => \&process_com },
+	{ set => '*', code => \&process_image_ids },
 	{ output => 'image_no', com_name => 'oid' },
 	    "A unique identifier for this image, generated locally by this database",
 	{ output => 'record_type', com_name => 'typ', com_value => 'img', value => $IDP{PHP} },
@@ -833,7 +834,7 @@ sub initialize {
 	    "=item L<285777&exact|op:taxa/single.json?id=285777&exact>",
 	    "If the paramter B<C<exact>> is also given, return the exact variant.",
 	    "=back",
-	{ at_most_one => ['name', 'id'] },
+	{ at_most_one => ['taxon_name', 'name', 'taxon_id', 'id'] },
 	    "You may not specify both B<C<taxon_name>> and B<C<taxon_id>> in the same query.",
 	">>You may also specify any of the following parameters:",
 	{ optional => 'exact', valid => FLAG_VALUE },
@@ -1749,9 +1750,23 @@ sub initialize {
     
     $ds->define_ruleset('1.2:taxa:thumb' =>
 	{ param => 'id', valid => VALID_IDENTIFIER('PHP') },
-	    "Return the image corresponding to this identifier, or information about the image.",
+	    "Return the image corresponding to the specified image identifier,",
+	    "or information about the image.",
+	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TID') },
+	    "Return the image corresponding to the specified taxon, or information",
+	    "about the image.",
+	{ param => 'taxon_name', valid => \&PB2::TaxonData::validNameSpec, alias => 'name' },
+	    "Return the image corresponding to the specified taxonomic name, or information",
+	    "about the image.  If more",
+	    "than one name matches the parameter value, the one with the largest number",
+	    "of occurrences in the database will be used.  You can also use the parameter",
+	    "alias B<C<name>>.",
+	{ at_most_one => ['id', 'taxon_id', 'taxon_name'] },
+	    "You may not specify both B<C<taxon_name>> and B<C<taxon_id>> in the same query.",
 	{ optional => 'SPECIAL(save)' },
-	{ ignore => 'splat' });
+	{ ignore => 'splat' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:taxa:icon' =>
 	{ require => '1.2:taxa:thumb' });
@@ -1911,14 +1926,22 @@ sub get_taxon {
 	    $name_select->{rank} = $rank;
 	    $not_found_msg .= " at specified rank";
 	}
+
+	# Check for debug mode
+
+	if ( $request->debug )
+	{
+	    $name_select->{debug_out} = sub {
+		$request->{ds}->debug_line($_[0]);
+	    };
+	}
+
+	# Now look up the name to find the corresponding taxon_no.
 	
 	($taxon_no) = $taxonomy->resolve_names($taxon_name, $name_select);
 	
 	my @warnings = $taxonomy->list_warnings;
 	$request->add_warning(@warnings) if @warnings;
-	
-	my $sql = $taxonomy->last_sql;
-	print STDERR "$sql\n\n" if $sql && $request->debug;
 	
 	die $request->exception(400, "Invalid taxon name '$taxon_name'")
 	    if $taxonomy->has_warning('W_BAD_NAME');
@@ -3331,8 +3354,9 @@ sub auto {
 
 # get_image ( )
 # 
-# Given an id (image_no) value, return the corresponding image if the format
-# is 'png', and information about it if the format is 'json'.
+# Given an id (image_no) value, taxon_id, or taxon_name, return the
+# corresponding image if the format is 'png', and information about it if the
+# format is 'json'.
 
 sub get_image {
     
@@ -3346,8 +3370,79 @@ sub get_image {
     croak "invalid type '$type' for get_image"
 	unless $type eq 'icon' || $type eq 'thumb';
     
-    my $image_no = $request->clean_param('id');
+    $request->strict_check;
+    $request->extid_check;
+    
     my $format = $request->output_format;
+    
+    my $joins = "";
+    my @clauses;
+    
+    # If we are given an image_no value, then select that particular image.
+    
+    if ( my $image_no = $request->clean_param('id') )
+    {
+	push @clauses, "image_no = $image_no";
+    }
+
+    # If we are given a taxon_no value, then select the image corresponding to
+    # that taxon.
+
+    elsif ( my $taxon_no = $request->clean_param('taxon_id') )
+    {
+	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	
+	$joins = "
+		join $taxonomy->{ATTRS_TABLE} as v using (image_no)
+		join $taxonomy->{TREE_TABLE} as t on v.orig_no = t.accepted_no
+		join $taxonomy->{AUTH_TABLE} as a on t.orig_no = a.orig_no";
+	
+	push @clauses, "a.taxon_no = $taxon_no";
+    }
+
+    elsif ( my $taxon_name = $request->clean_param('taxon_name') )
+    {
+	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	
+	# Return an immediate error if more than one name was specified.
+	
+	die $request->exception(400, "The value of 'taxon_name' must be a single taxon name")
+	    if $taxon_name =~ qr{,};
+	
+	# Look up the identifier corresponding to the name (if more than one name matches, the one
+	# with the highest number of occurrences in the database is chosen).
+	
+	my $options = { fields => 'SIMPLE' };
+	
+	if ( $request->debug )
+	{
+	    $options->{debug_out} = sub {
+		$request->{ds}->debug_line($_[0]);
+	    };
+	}
+	
+	my ($taxon) = $taxonomy->resolve_names($taxon_name, $options);
+	
+	my @warnings = $taxonomy->list_warnings;
+	$request->add_warning(@warnings) if @warnings;
+	
+	die $request->exception(400, "Invalid taxon name '$taxon_name'")
+	    if $taxonomy->has_warning('W_BAD_NAME');
+	
+	die $request->exception(404, "Taxon '$taxon_name' was not found in the database")
+	    unless $taxon;
+	
+	$joins = "
+		join $taxonomy->{ATTRS_TABLE} as v using (image_no)";
+	
+	push @clauses, "v.orig_no = $taxon->{accepted_no}";
+    }
+    
+    # Generate the proper filter.
+    
+    my $filter = join( q{ and }, @clauses );
+    
+    croak "No filter clauses were generated\n" unless $filter;
     
     # If the output format is 'png', then query for the image.  If found,
     # return it in $request->{main_data}.  Otherwise, we throw a 404 error.
@@ -3355,15 +3450,14 @@ sub get_image {
     if ( $format eq 'png' )
     {
 	$request->{main_sql} = "
-		SELECT $type FROM $PHYLOPICS as p
-		WHERE image_no = $image_no";
+		SELECT $type FROM $PHYLOPICS as p $joins
+		WHERE $filter";
 	
-	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	$request->{ds}->debug_line($request->{main_sql}) if $request->debug;
 	
 	($request->{main_data}) = $dbh->selectrow_array($request->{main_sql});
 	
-	return if $request->{main_data};
-	die "404 Image not found\n";	# otherwise
+	die $request->exception(404, "Image not found") unless $request->{main_data};
     }
     
     # If the output format is 'json' or one of the text formats, then query
@@ -3376,14 +3470,14 @@ sub get_image {
 	my $fields = $request->select_string();
 	
 	$request->{main_sql} = "
-		SELECT $fields FROM $PHYLOPICS
-		WHERE image_no = $image_no";
+		SELECT $fields FROM $PHYLOPICS as p $joins
+		WHERE $filter";
 	
-	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	$request->{ds}->debug_line($request->{main_sql}) if $request->debug;
 	
 	$request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
 	
-	return;
+	die $request->exception(404, "Image not found") unless $request->{main_record};
     }
 }
 
@@ -3993,6 +4087,17 @@ sub process_ages {
     }
     
     $record->{ages_processed} = 1;
+}
+
+
+sub process_image_ids {
+    
+    my ($request, $record) = @_;
+
+    if ( $request->{block_hash}{extids} )
+    {
+	$record->{image_no} = generate_identifier('PHP', $record->{image_no});
+    }
 }
 
 

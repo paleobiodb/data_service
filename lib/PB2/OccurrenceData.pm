@@ -890,6 +890,8 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:prev_selector' =>
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',' },
+	    "Show the prevalence of taxa across the listed collections.",
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "Show the prevalence of taxa across all of the occurrences in the database");
     
@@ -2882,8 +2884,8 @@ sub generateQuickDivFilters {
     
     # Same with coll_id or clusts_id
     
-    return () if $request->param_given('coll_id');
-    # return () if $request->param_given('clust_id');
+    return () if $request->param_given('coll_id') || $request->param_given('occ_id') ||
+	$request->param_given('coll_re');
     
     # Same with ref_id
     
