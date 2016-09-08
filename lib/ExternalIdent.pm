@@ -77,6 +77,8 @@ foreach my $key ( keys %IDP )
     $key_expr .= $IDP{$key};
 }
 
+$IDRE{UNKTXN} = qr{ ^ (?: (?: $IDP{URN} )? txn [:] )? ( U [A-Z] \d* ) $ }xsi;
+
 $IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? ( $key_expr ) [:] )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
 $IDVALID{ANY} = sub { return valid_identifier(shift, shift, 'ANY') };
 
@@ -96,10 +98,20 @@ sub valid_identifier {
     
     if ( $value =~ $IDRE{$type} )
     {
-	my $type = $1;
-	my $num = ($2 eq 'ERROR') ? -1 : $2;
+	my $idtype = $1;
+	my $idnum = ($2 eq 'ERROR') ? -1 : $2;
 	
-	return { value => PBDB::ExtIdent->new($type, $num) };
+	return { value => PBDB::ExtIdent->new($idtype, $idnum) };
+    }
+    
+    # Check for "unknown taxon" identifiers.
+
+    elsif ( ($type eq 'TID' || $type eq 'TXN') && $value =~ $IDRE{UNKTXN} )
+    {
+	my $idtype = 'txn';
+	my $idnum = $1;
+
+	return { value => PBDB::ExtIdent->new($idtype, $idnum) };
     }
     
     # Otherwise, attempt to provide a useful error message.  If the value
@@ -191,7 +203,7 @@ sub generate_identifier {
 	return '';
     }
     
-    elsif ( defined $value && $value =~ qr{^U[A-Z]\d+$} )
+    elsif ( defined $value && $value =~ qr{ ^ U[A-Z] \d* $ }xs )
     {
 	return "$IDP{$type}:$value";
     }

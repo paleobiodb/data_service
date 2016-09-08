@@ -1,4 +1,4 @@
-# 
+#  
 # TaxonData
 # 
 # A class that returns information from the PaleoDB database about a single
@@ -32,6 +32,14 @@ our (%DB_FIELD);
 our (@BASIC_1, @BASIC_2, @BASIC_3);
 
 our (%LANGUAGE) = ( 'S' => 1 );
+
+our (%UNK_NAME) = ( 'UG' => 'UNKNOWN GENUS',
+		    'UF' => 'UNKNOWN FAMILY',
+		    'UO' => 'UNKNOWN ORDER',
+		    'UC' => 'UNKNOWN CLASS',
+		    'UP' => 'UNKNOWN PHYLUM' );
+
+our (%UNK_RANK) = ( 'UG' => 5, 'UF' => 9, 'UO' => 13, 'UC' => 17, 'UP' => 20 );
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -213,6 +221,12 @@ sub initialize {
 	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
 	  if_block => 'immparent', dedup => 'senpar_name' },
 	    "The name of the immediate parent taxon, even if it is a junior synonym.",
+	{ output => 'container_no', com_name => 'ctn', dedup => 'senpar_no' },
+	    "The identifier of a taxon from the result set containing this one, which",
+	    "may or may not be the parent.  This field will only appear in the result",
+	    "of the L<occs/taxa|node:occs/taxa> operation, where no base taxon is",
+	    "specified.  The taxa reported in this case are the \"classical\" ranks,",
+	    "rather than the full taxonomic hierarcy.",
 	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
 	    "The author(s) of the reference from which this name was entered.  Note that",
 	    "the author of the name itself may be different if the reference is a secondary source.",
@@ -299,7 +313,7 @@ sub initialize {
 	    "the same as C<taxon_name>.  In the compact vocabulary, this field",
 	    "will be omitted in that case.",
 	{ output => 'senpar_no', pbdb_name => 'parent_no',
-	  dwc_name => 'parentNameUsageID', com_name => 'par', if_block => 'full' }, 
+	  dwc_name => 'parentNameUsageID', com_name => 'par' }, 
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
 	    "This field and those following are only available if the classification of",
 	    "this taxon is known to the database.",
@@ -1847,6 +1861,8 @@ sub get_taxon {
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my ($taxon_no);
     
+    $request->delete_output_field('container_no');
+    
     # First determine the fields necessary to show the requested info.
     
     my $options = $request->generate_query_options('taxa');
@@ -1857,11 +1873,9 @@ sub get_taxon {
     my $not_found_msg = '';
     
     if ( $taxon_no = $request->clean_param('taxon_id') )
-    {    
+    {
 	die $request->exception(400, "Invalid taxon id '$taxon_no'")
-	    unless defined $taxon_no && $taxon_no > 0;
-	
-	my $raw_id = $request->{raw_params}{id} || $request->{raw_params}{taxon_id};
+	    unless $taxon_no > 0 || $taxon_no =~ qr{ ^ U[A-Z] \d* $ }xs;
 	
 	if ( ! ref $taxon_no || $taxon_no->{type} eq 'unk' )
 	{
@@ -1958,7 +1972,15 @@ sub get_taxon {
     $request->strict_check;
     $request->extid_check;
     
-    # Now attempt to fetch the record for the specified taxon.
+    # If this is an 'unknown taxon', return a synthesized record.
+
+    if ( $taxon_no && $taxon_no =~ qr{ ^ ( U[A-Z] ) }xs )
+    {
+	$request->single_result( generate_unknown_taxon($1) );
+	return;
+    }
+    
+    # Otherwise, attempt to fetch the record for the specified taxon.
     
     my ($r);
     
@@ -2146,6 +2168,8 @@ sub list_taxa {
     
     my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+
+    $request->delete_output_field('container_no');
     
     # If the 'ref_id' parameter was included, signal an error.  I had to include it in the
     # ruleset which is used by both taxa/list and taxa/byref, but it is only relevant for the
@@ -2158,9 +2182,14 @@ sub list_taxa {
     
     # First, figure out the basic set of taxa we are being asked for.
     
-    my ($rel, $base) = $request->generate_query_base($taxonomy, 'taxa');
+    my ($rel, $base, $unknown) = $request->generate_query_base($taxonomy, 'taxa');
     
     $request->{my_rel} = $rel;
+    
+    if ( ref $unknown eq 'ARRAY' && @$unknown )
+    {
+	$request->add_result(@$unknown);
+    }
     
     # Then determine any other filters to be applied, and also figure what
     # fields are necessary to show the requested info.
@@ -2203,7 +2232,7 @@ sub list_taxa {
 	
 	else
 	{
-	    $request->list_result(\@result);
+	    $request->add_result(@result);
 	}
     }
     
@@ -2226,6 +2255,8 @@ sub list_associated {
     
     my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    $request->delete_output_field('container_no') if $arg eq 'taxa';
     
     # First, figure out the set of taxa we are being asked for.
     
@@ -3199,7 +3230,7 @@ sub generate_query_base {
     
     # Now figure out the base taxa and excluded taxa if any.
     
-    my (@taxa);
+    my (@taxa, @unknown_taxa);
     
     # If we are listing by name (as opposed to id) then resolve the specified
     # string into one or more taxonomic name records. Some of these will
@@ -3222,10 +3253,18 @@ sub generate_query_base {
     
     else
     {
-	@taxa = $taxonomy->list_taxa('exact', \@taxon_ids);
+	my @clean_ids = grep { $_ > 0 } @taxon_ids;
+	
+	@taxa = $taxonomy->list_taxa('exact', \@clean_ids);
 	
 	my @warnings = $taxonomy->list_warnings;	
 	$request->add_warning(@warnings) if @warnings;
+
+	if ( $rel eq 'exact' || $rel eq 'current' )
+	{
+	    my @unknown_ids = grep { /^U/ } @taxon_ids;
+	    @unknown_taxa = map { generate_unknown_taxon($_) } @unknown_ids;
+	}
     }
     
     # Now see if the 'exclude_id' parameter was given.  If so, list all of
@@ -3244,7 +3283,7 @@ sub generate_query_base {
     # were bad. Because of the way that 'list_taxa' and 'list_taxa_simple' are
     # implemented, we have to check this directly.
     
-    my %bad_nos = map { $_ => 1 } grep { $_ && $_ ne '-1' } @taxon_ids, @exclude_ids;
+    my %bad_nos = map { $_ => 1 } grep { $_ && $_ > 0 } @taxon_ids, @exclude_ids;
     
     foreach my $t ( @taxa )
     {
@@ -3262,7 +3301,7 @@ sub generate_query_base {
     
     # Return the specified relationship and list of taxa.
     
-    return $rel, \@taxa;
+    return $rel, \@taxa, \@unknown_taxa;
 }
 
 
@@ -3276,6 +3315,8 @@ sub auto {
     
     my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+
+    $request->delete_output_field('container_no');
     
     my $partial = $request->clean_param('name');
     
@@ -3691,6 +3732,17 @@ sub validRankSpec {
 }
 
 
+sub generate_unknown_taxon {
+    
+    my ($taxon_no) = @_;
+    
+    my $code = substr($taxon_no, 0, 2);
+    
+    return { orig_no => $taxon_no, taxon_rank => $UNK_RANK{$code},
+	     taxon_name => $UNK_NAME{$code} };
+};
+
+
 # This routine will be called if necessary in order to properly process the
 # results of a query for taxon parents.
 
@@ -3967,7 +4019,7 @@ sub process_taxon_ids {
     
     foreach my $f ( qw(orig_no child_no parent_no immpar_no senpar_no accepted_no base_no
 		       kingdom_no phylum_no class_no order_no family_no genus_no
-		       subgenus_no type_taxon_no) )
+		       subgenus_no type_taxon_no container_no) )
     {
 	$record->{$f} = generate_identifier('TXN', $record->{$f}) if defined $record->{$f};
 	# $record->{$f} = $record->{$f} ? "$IDP{TXN}:$record->{$f}" : '';

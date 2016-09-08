@@ -10,10 +10,11 @@
 use strict;
 use feature 'unicode_strings';
 
-use Test::Most tests => 9;
+use Test::Most tests => 10;
 
 use lib 't';
 use Tester;
+use Test::Conditions;
 
 # Start by creating an instance of the Tester class, with which to conduct the
 # following tests.
@@ -861,4 +862,38 @@ subtest 'bad params' => sub {
     
     $T->ok_error_like( $m7a, qr{invalid taxon name}i, "name a got proper error" );
     $T->ok_warning_like( $m7a, qr{pattern}i, "name a got proper warning" );
+};
+
+
+# Now test taxon identifiers indicating "unknown taxon".
+
+subtest 'unknown taxon' => sub {
+    
+    my $ID1 = 'txn:UF1';
+    my $ID2 = 'txn:UF';
+    my $ID3 = 'UF1';
+    my $ID4 = 'UF';
+    
+    my ($r1) = $T->fetch_records("/taxa/single.json?id=$ID1", "id1");
+    
+    unless ( $r1 )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
+    my ($r2) = $T->fetch_records("/taxa/single.json?id=$ID2", "id2");
+    my ($r3) = $T->fetch_records("/taxa/single.json?id=$ID3", "id3");
+    my ($r4) = $T->fetch_records("/taxa/single.json?id=$ID4", "id4");
+    
+    my $tc = Test::Conditions->new;
+
+    foreach my $r ($r1, $r2, $r3, $r4)
+    {
+	$tc->flag('oid', $r->{oid}) unless $r->{oid} eq $ID1 || $r->{oid} eq $ID2;
+	$tc->flag('rnk', $r->{rnk}) unless $r->{rnk} eq '9';
+	$tc->flag('nam', $r->{nam}) unless $r->{nam} eq 'UNKNOWN FAMILY';
+    }
+    
+    $tc->ok_all('unknown taxon records');
 };

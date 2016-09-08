@@ -434,7 +434,7 @@ sub generate_diversity_table {
 # remainder of this file.  This is done to reduce the number of parameters
 # that must be passed to &count_subtaxa and &add_result_records.
 
-my (%taxon_node, %uns_counter, %lower_taxon_nos);
+my (%taxon_node, %uns_counter, %lower_taxon_nos, $container_was_set);
 
 my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
 		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
@@ -452,13 +452,13 @@ sub generate_taxon_table_ints {
     
     $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
     
-    # First figure out the level to which we will be resolving the phylogeny
+    # First figure out the level to which we will be resolving the taxonomy.
     
     my $reso_rank = $request->{my_reso_rank} || 9;
     my $count_rank = $request->{my_count_rank} || 5;
     my $promote = $request->{my_promote};
     
-    # Initialize the variables necessary for enumerating the phylogeny.
+    # Initialize the variables necessary for enumerating the taxonomy.
     
     my (%base_taxa);
     my $total_count = 0;
@@ -466,6 +466,8 @@ sub generate_taxon_table_ints {
     
     %taxon_node = ();				# visible to called subroutines
     %uns_counter = ();				# visible to called subroutines
+
+    my $uns_phylum = uns_identifier(20);
     
     # Then go through the occurrences one by one, putting together a tree
     # and counting at the specified taxonomic levels.
@@ -492,38 +494,63 @@ sub generate_taxon_table_ints {
 	# Then create any taxon nodes that don't already exist, and increment
 	# the occurrence counts at all levels.
 	
-	my $base_no = $r->{class_no} || $r->{phylum_no} || uns_identifier(17);
-	$base_taxa{$base_no} = 1;
-	
-	unless ( $taxon_node{$base_no} )
-	{
-	    if ( $r->{class_no} )
-	    {
-		$taxon_node{$base_no} = { taxon_rank => 17, n_occs => 0, taxon_name => $r->{class}, is_base => 1 };
-	    }
-	    
-	    else
-	    {
-		$taxon_node{$base_no} = { taxon_rank => 20, n_occs => 0, taxon_name => $r->{phylum}, is_base => 1 };
-	    }
-	}
-	
-	my $base_node = $taxon_node{$base_no};
-	
 	no warnings 'numeric';
 	
+	my $phylum_no = $r->{phylum_no} || $uns_phylum;
+	
+	$base_taxa{$phylum_no} = 1;
+	
+	my $phylum_node = $taxon_node{$phylum_no} //= { taxon_rank => 20, n_occs => 0,
+						       taxon_name => $r->{phylum}, is_base => 1 };
+
+	if ( $rank <= 17 )
+	{
+	    my $class_no = $r->{class_no} || $phylum_node->{uns} ||
+		($phylum_node->{uns} = uns_identifier(17));
+
+	    my $class_node = $taxon_node{$class_no} //= { taxon_rank => 17, n_occs => 0,
+							  taxon_name => $r->{class} };
+	    
+	    $class_node->{is_uns} = 1 unless $class_no > 0;
+	    $phylum_node->{chld}{$class_no} = 1;
+	
+	# unless ( $taxon_node{$base_no} )
+	# {
+	#     if ( $r->{class_no} )
+	#     {
+	# 	$taxon_node{$base_no} = { taxon_rank => 17, n_occs => 0, taxon_name => $r->{class}, is_base => 1 };
+
+	# 	if ( my $phylum_no = $r->{phylum_no} )
+	# 	{
+	# 	    $taxon_node{$phylum_no} = { taxon_rank => 20, n_occs => 0, taxon_name => $r->{phylum} };
+	# 	    $taxon_node{$phylum_no}{chld}{$base_no} = 1;
+	# 	}
+	#     }
+	    
+	#     else
+	#     {
+	# 	$taxon_node{$base_no} = { taxon_rank => 20, n_occs => 0, taxon_name => $r->{phylum}, is_base => 1 };
+	#     }
+	# }
+	
+	# my $base_node = $taxon_node{$base_no};
+	    
 	if ( $rank <= 13 )
 	{
-	    my $order_no = $r->{order_no} || $base_node->{uns} || ($base_node->{uns} = uns_identifier(13));
+	    my $order_no = $r->{order_no} || $class_node->{uns} ||
+		($class_node->{uns} = uns_identifier(13));
+	    
 	    my $order_node = $taxon_node{$order_no} //= { taxon_rank => 13, n_occs => 0, 
 							  taxon_name => $r->{order} };
 	    
 	    $order_node->{is_uns} = 1 unless $order_no > 0;
-	    $base_node->{chld}{$order_no} = 1;
+	    $class_node->{chld}{$order_no} = 1;
 	    
 	    if ( $count_rank <= 9 && $rank <= 9 )
 	    {
-		my $family_no = $r->{family_no} || $order_node->{uns} || ($order_node->{uns} = uns_identifier(9));
+		my $family_no = $r->{family_no} || $order_node->{uns} ||
+		    ($order_node->{uns} = uns_identifier(9));
+		
 		my $family_node = $taxon_node{$family_no} //= { taxon_rank => 9, n_occs => 0, 
 								taxon_name => $r->{family} };
 		
@@ -535,14 +562,17 @@ sub generate_taxon_table_ints {
 		    my ($genus_no, $genus_name);
 		    if ( $promote && $r->{subgenus_no} )
 		    {
-			$genus_no = $r->{subgenus_no} || $family_node->{uns} || ($family_node->{uns} = uns_identifier(5));
+			$genus_no = $r->{subgenus_no} || $family_node->{uns} ||
+			    ($family_node->{uns} = uns_identifier(5));
 			$genus_name = $r->{subgenus};
 		    }
 		    else
 		    {
-			$genus_no = $r->{genus_no} || $family_node->{uns} || ($family_node->{uns} = uns_identifier(5));
+			$genus_no = $r->{genus_no} || $family_node->{uns} ||
+			    ($family_node->{uns} = uns_identifier(5));
 			$genus_name = $r->{genus};
 		    }
+		    
 		    my $genus_node = $taxon_node{$genus_no} //= { taxon_rank => 5, n_occs => 0, 
 								  taxon_name => $genus_name };
 		    
@@ -551,7 +581,8 @@ sub generate_taxon_table_ints {
 		    
 		    if ( $count_rank <= 3 && $rank <= 3 )
 		    {
-			my $species_no = $r->{species_no} || $genus_node->{uns} || ($genus_node->{uns} = uns_identifier(5));
+			my $species_no = $r->{species_no} || $genus_node->{uns} ||
+			    ($genus_node->{uns} = uns_identifier(5));
 			my $species_node = $taxon_node{$species_no} //= { taxon_rank => 3, n_occs => 0, 
 									  taxon_name => $r->{species} };
 			
@@ -580,7 +611,13 @@ sub generate_taxon_table_ints {
 	
 	else
 	{
-	    $base_node->{n_occs}++;
+	    $class_node->{n_occs}++;
+	}
+	}
+
+	else
+	{
+	    $phylum_node->{n_occs}++;
 	}
     }
     
@@ -616,23 +653,21 @@ sub generate_taxon_table_ints {
     # there is more than one base taxon (class), then output them in sorted
     # order as separate trees.
     
-    my (@sorted_classes) = sort { ($taxon_node{$a}{taxon_name} || '~') cmp 
-				  ($taxon_node{$b}{taxon_name} || '~') } keys %base_taxa;
+    $container_was_set = undef;
     
-    foreach my $base_no ( @sorted_classes )
+    my (@sorted_taxa) = sort { ($taxon_node{$a}{taxon_name} || '~') cmp 
+			       ($taxon_node{$b}{taxon_name} || '~') } keys %base_taxa;
+    
+    foreach my $base_no ( @sorted_taxa )
     {
-	# If the root of the tree has only one child, skip down until we get
-	# to a node with more than one child.
-	
-	# while ( keys %{$taxon_node{$base_no}{chld}} == 1 )
-	# {
-	#     ($base_no) = keys %{$taxon_node{$base_no}{chld}};
-	# }
-	
-	# Then output the result records for this base taxon and all of its
-	# subtaxa.
-	
 	$request->add_result_records($options, $base_no, 0);
+    }
+
+    # If we didn't set the 'container_no' field for any taxon, then delete that output field.
+
+    unless ( $container_was_set )
+    {
+	$request->delete_output_field('container_no');
     }
     
     # Now add a summary record.
@@ -861,11 +896,21 @@ sub generate_taxon_table_full {
     
     # Now traverse the tree again and produce the appropriate output.
     
-    my (@sorted_classes) = sort { ($taxon_node{$a}{taxon_name} // '~') cmp ($taxon_node{$b}{taxon_name} // '~') } keys %base_taxa;
+    $container_was_set = undef;
     
-    foreach my $base_no ( @sorted_classes )
+    my (@sorted_taxa) = sort { ($taxon_node{$a}{taxon_name} // '~') cmp
+			       ($taxon_node{$b}{taxon_name} // '~') } keys %base_taxa;
+    
+    foreach my $base_no ( @sorted_taxa )
     {
 	$request->add_result_records($options, $base_no, 0);
+    }
+    
+    # If we didn't set the 'container_no' field for any taxon, then delete that output field.
+    
+    unless ( $container_was_set )
+    {
+	$request->delete_output_field('container_no');
     }
     
     # Now add a summary record.
@@ -1364,7 +1409,7 @@ sub generate_occs_taxa_options {
 
 sub add_result_records {
     
-    my ($request, $options, $taxon_no, $parent_no, $family_ok, $recursion_count) = @_;
+    my ($request, $options, $taxon_no, $container_no, $family_ok, $recursion_count) = @_;
     
     $options ||= { };
     
@@ -1416,11 +1461,16 @@ sub add_result_records {
 	$node->{orig_no} = $taxon_no;
     }
     
-    # Make this node conform to the hierarchy we are generating, by overriding
-    # the parent_no value if it exists.  We want to make sure that people can
-    # link up the generated records to each other.
-    
-    $node->{senpar_no} = $parent_no if $parent_no;
+    # If the hierarchy we are generating does not correspond to the full taxonomic hierarchy, set
+    # the 'container_no' field to point to the containing node.  This will allow users to link up
+    # the nodes into a complete tree.  This situation can happen if the hierarchy is generated
+    # using 'generate_taxon_table_ints', because some taxonomic levels are missing.
+
+    if ( $container_no && $container_no ne $node->{senpar_no} )
+    {
+	$node->{container_no} = $container_no;
+	$container_was_set = 1;
+    }
     
     # If the 'family_no' field is set, or if the rank is 9, then we have found
     # a family.
