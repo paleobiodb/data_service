@@ -43,6 +43,8 @@ sub initialize {
     
     my ($class, $ds) = @_;
     
+    use utf8;
+    
     # First read the configuration information that describes how the
     # collections are organized into summary clusters (bins).
     
@@ -81,11 +83,12 @@ sub initialize {
     $ds->define_output_map('1.2:colls:basic_map' =>
 	{ value => 'full', maps_to => '1.2:colls:full_info' },
 	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: B<attr>, B<loc>,",
-	    "B<paleoloc>, B<prot>, B<stratext>, B<lithext>, B<geo>, B<methods>, B<rem>, B<refattr>.",
+	    "includes the following blocks: C<B<attr>>, C<B<loc>>,",
+	    "C<B<paleoloc>>, C<B<prot>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<ctaph>>,",
+	    "C<B<comps>>, C<B<methods>>, C<B<rem>>, C<B<refattr>>.",
 	    "If we later add new data fields to the collection records, these will be included",
 	    "by this block.  Therefore, if you are publishing a URL, it might be a good idea",
-	    "to include C<show=full>.",
+	    "to include B<C<show=full>>.",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the collection",
 	{ value => 'bin', maps_to => '1.2:colls:bin' },
@@ -112,6 +115,12 @@ sub initialize {
 	    "The paleoenvironment associated with this collection.",
 	{ value => 'geo', maps_to => '1.2:colls:geo' },
 	    "Information about the geological context of the collection (includes C<env>).",
+	{ value => 'ctaph', maps_to =>'1.2:colls:taphonomy' },
+	    "Information about the taphonomy of the collection and the mode of",
+	    "preservation of the constituent fossils.",
+	{ value => 'comps', maps_to => '1.2:colls:components' },
+	    "Information about the various kinds of body parts and other things",
+	    "found as part of this collection.",
 	{ value => 'methods', maps_to => '1.2:colls:methods' },
 	    "Information about the collection methods used",
         { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
@@ -403,6 +412,61 @@ sub initialize {
 	{ select => [ qw(cc.environment) ], tables => 'cc' },
 	{ output => 'environment', com_name => 'env', not_block => '1.2:colls:geo' },
 	    "The paleoenvironment associated with the collection site");
+    
+    $ds->define_block('1.2:colls:taphonomy' =>
+	{ select => [ qw(cc.pres_mode cc.spatial_resolution cc.temporal_resolution cc.lagerstatten
+			cc.concentration cc.orientation cc.preservation_quality cc.bioerosion
+			cc.abund_in_sediment cc.sorting cc.fragmentation cc.encrustation
+			cc.preservation_comments) ], tables => 'cc' },
+	{ output => 'pres_mode', com_name => 'tpm' },
+	    "This field reports the modes of preservation, occurrence, and mineralization",
+	    "from the 'Preservation' tab on the PBDB collection form.",
+	{ output => 'preservation_quality', com_name => 'tpq' },
+	    "Quality of the anatomical detail preserved.",
+	{ output => 'spatial_resolution', com_name => 'tps' },
+	    "Spatial resolution of the preservation information.",
+	{ output => 'temporal_resolution', com_name => 'tpt' },
+	    "Temporal resolution of the preservation information.",
+	{ output => 'lagerstatten', com_name => 'tpl' },
+	    "Type of lagerstätten found in this collection.",
+	{ output => 'concentration', com_name => 'tpc' },
+	    "Degree of concentration of the fossils found in this collection.",
+	{ output => 'orientation', com_name => 'tpo' },
+	    "Orientation of the fossil(s) found in this collection.",
+	{ output => 'abund_in_sediment', com_name => 'tpa' },
+	    "Abundance in sediment",
+	{ output => 'sorting', com_name => 'tpr' },
+	    "Degree of size sorting",
+	{ output => 'fragmentation', com_name => 'tpf' },
+	    "Degree of fragmentation",
+	{ output => 'bioerosion', com_name => 'tpb' },
+	    "Degree of bioerosion",
+	{ output => 'encrustation', com_name => 'tpe' },
+	    "Degree of encrustation",
+	{ output => 'preservation_comments', com_name => 'pcm' },
+	    "Preservation comments, if any.");
+    
+    $ds->define_block('1.2:colls:components' =>
+	{ select => [ qw(cc.assembl_comps cc.articulated_parts cc.associated_parts
+			 cc.common_body_parts cc.rare_body_parts cc.feed_pred_traces
+			 cc.artifacts cc.component_comments) ], tables => 'cc' },
+	{ output => 'assembl_comps', com_name => 'cps' },
+	    "The size classes found in this collection.  The value of this field",
+	    "will be one or more of: C<B<macrofossils>, C<B<mesofossils>>, C<B<microfossils>>.",
+	{ output => 'articulated_parts', com_name => 'cpa' },
+	    "The prevalence of articulated body parts in this collection.",
+	{ output => 'associated_parts', com_name => 'cpb' },
+	    "The prevalence of associated body parts in this collection.",
+	{ output => 'common_body_parts', com_name => 'cpc' },
+	    "A list of body parts that are common in this collection.",
+	{ output => 'rare_body_parts', com_name => 'cpd' },
+	    "A list of body parts that are rare in this collection.",
+	{ output => 'feed_pred_traces', com_name => 'cpt' },
+	    "A list of feeding/predation traces found in this collection, if any.",
+	{ output => 'artifacts', com_name => 'cpf' },
+	    "A list of artifacts found in this collection, if any.",
+	{ output => 'component_comments', com_name => 'acm' },
+	    "Component comments, if any.");
     
     $ds->define_block('1.2:colls:geo' =>
 	{ select => [ qw(cc.environment cc.tectonic_setting cc.geology_comments) ], 
