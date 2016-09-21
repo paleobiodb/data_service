@@ -539,6 +539,19 @@ sub initialize {
 	    "Count orders.  You can also use the value C<order>.",
 	{ value => 'order', undocumented => 1 });
     
+    $ds->define_set('1.2:occs:quickdiv_count' =>
+	{ value => 'genera' },
+	    "Count genera.  You can also use the value C<genus>.",
+	{ value => 'genus', undocumented => 1 },
+	{ value => 'genera_plus', undocumented => 1 },
+	{ value => 'genus_plus', undocumented => 1 },
+	{ value => 'families' },
+	    "Count families.  You can also use the value C<family>.",
+	{ value => 'family', undocumented => 1 },
+	{ value => 'orders' },
+	    "Count orders.  You can also use the value C<order>.",
+	{ value => 'order', undocumented => 1 });
+    
     $ds->define_set('1.2:occs:div_reso' =>
 	{ value => 'stage' },
 	    "Count by stage",
@@ -880,9 +893,18 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
+    $ds->define_ruleset('1.2:occs:quickdiv_params' =>
+	{ param => 'count', valid => '1.2:occs:quickdiv_count', default => 'genera' },
+	    "This parameter specifies the taxonomic level at which to count.  If not",
+	    "specified, it defaults to C<genera>.  The accepted values are:",
+	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso', default => 'stage' },
+	    "This parameter specifies the temporal resolution at which to count.  If not",
+	    "specified, it defaults to C<stage>.  You can also use the parameter name",
+	    "F<reso>.  Accepted values are:");
+    
     $ds->define_ruleset('1.2:occs:quickdiv' =>
 	"The following parameters specify what to count and at what temporal resolution:",
-	{ allow => '1.2:occs:div_params' }, 
+	{ allow => '1.2:occs:quickdiv_params' }, 
         ">>The following parameters select which occurrences to analyze.",
 	"Except as noted below, you may use these in any combination.",
 	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
@@ -1699,7 +1721,8 @@ sub quickdiv {
     my $main_table = $tables->{use_global} ? $DIV_GLOBAL : $DIV_MATRIX;
     my $other_joins = $request->generateQuickDivJoins('d', $tables, $taxonomy);
     
-    if ( $count_what eq 'genera' || $count_what eq 'genera_plus' )
+    if ( $count_what eq 'genera' || $count_what eq 'genera_plus' || $count_what eq 'genus' ||
+	 $count_what eq 'genus_plus' )
     {
 	$sql = "SELECT d.interval_no, count(distinct d.genus_no) as sampled_in_bin, sum(d.n_occs) as n_occs
 		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
