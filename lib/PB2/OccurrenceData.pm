@@ -353,11 +353,12 @@ sub initialize {
 	{ include => '1.2:colls:prot' },
 	{ include => '1.2:colls:stratext' },
 	{ include => '1.2:colls:lithext' },
+	{ include => '1.2:colls:geo' },
+	{ include => '1.2:colls:components' },
+	{ include => '1.2:colls:taphonomy' },
+	{ include => '1.2:colls:methods' },
 	{ include => '1.2:taxa:ecospace' },
 	{ include => '1.2:taxa:taphonomy' },
-	# { include => '1.2:taxa:pres' },
-	{ include => '1.2:colls:geo' },
-	{ include => '1.2:colls:methods' },
 	{ include => '1.2:refs:attr' });
     
     # The following block specifies the output for diversity matrices.

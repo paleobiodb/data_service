@@ -517,14 +517,16 @@ sub initialize {
 	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) as reference_nos'] });
     
     $ds->define_block( '1.2:colls:full_info' =>
-	{ include => '1.2:refs:attr' },
 	{ include => '1.2:colls:loc' },
 	{ include => '1.2:colls:paleoloc' },
 	{ include => '1.2:colls:prot' },
 	{ include => '1.2:colls:stratext' },
 	{ include => '1.2:colls:lithext' },
 	{ include => '1.2:colls:geo' },
-	{ include => '1.2:colls:methods' });
+	{ include => '1.2:colls:components' },
+	{ include => '1.2:colls:taphonomy' },
+	{ include => '1.2:colls:methods' },
+	{ include => '1.2:refs:attr' });
     
     # Then define an output block for displaying stratigraphic results
     
