@@ -1733,7 +1733,7 @@ sub quickdiv {
 		$request->add_warning("The option 'genera_plus' is not supported with '/occs/quickdiv'.  If you want to promote subgenera to genera, use the operation '/occs/diversity' instead.") if $count_what eq 'genera_plus';
     }
     
-    elsif ( $count_what eq 'families' )
+    elsif ( $count_what eq 'families' || $count_what eq 'family' )
     {
 	$sql = "SELECT d.interval_no, count(distinct ph.family_no) as sampled_in_bin, sum(d.n_occs) as n_occs
 		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
@@ -1743,7 +1743,7 @@ sub quickdiv {
 		GROUP BY interval_no";
     }
     
-    elsif ( $count_what eq 'orders' )
+    elsif ( $count_what eq 'orders' || $count_what eq 'order' )
     {
 	$sql = "SELECT d.interval_no, count(distinct ph.order_no) as sampled_in_bin, sum(d.n_occs) as n_occs
 		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
