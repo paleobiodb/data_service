@@ -24,7 +24,7 @@ use namespace::clean;
 
 our $LAST_BANNER = '';
 
-our (@EXPORT_OK) = qw(cmp_sets_ok);
+our (@EXPORT_OK) = qw(cmp_sets_ok ok_checkpoint);
 
 our ($DIAG_URLS);
 
@@ -2405,8 +2405,6 @@ sub check_order {
 }
 
 
-
-
 # check_messages ( string_list, regex_list )
 # 
 # Check each one of the specified list of regular expressions against the
@@ -2443,6 +2441,71 @@ sub check_messages {
     }
     
     return $count;
+}
+
+
+# generate_coverage_expr ( hash )
+# 
+# Generate an SQL expression for checking the coverage (number of non-empty values) for a set of
+# fields. 
+
+sub generate_coverage_expr {
+    
+    shift if ref $_[0] eq 'Tester';
+    
+    my ($field_ref) = @_;
+    
+    my @field_list;
+    
+    if ( ref $field_ref eq 'HASH' )
+    {
+	@field_list = keys %$field_ref;
+    }
+    
+    elsif ( ref $field_ref eq 'ARRAY' )
+    {
+	@field_list = @$field_ref;
+    }
+    
+    else
+    {
+	croak "argument must be either a hash ref whose keys are field names or an array ref of field names\n";
+    }
+    
+    croak "no field names were specified\n" unless @field_list && $field_list[0];
+    
+    my $list = join(', ', map { "if($_, '1', '')" } @field_list);
+    
+    return "concat($list)";
+}
+
+
+sub generate_value_expr {
+
+    shift if ref $_[0] eq 'Tester';
+    
+    my ($field_ref) = @_;
+    
+    my @field_list;
+    
+    if ( ref $field_ref eq 'HASH' )
+    {
+	@field_list = keys %$field_ref;
+    }
+    
+    elsif ( ref $field_ref eq 'ARRAY' )
+    {
+	@field_list = @$field_ref;
+    }
+    
+    else
+    {
+	croak "argument must be either a hash ref whose keys are field names or an array ref of field names\n";
+    }
+    
+    croak "no field names were specified\n" unless @field_list && $field_list[0];
+    
+    return join(', ', @field_list);
 }
 
 

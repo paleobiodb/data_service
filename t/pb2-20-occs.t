@@ -26,12 +26,16 @@ use Test::Conditions;
 use Test::Selection;
 
 
+# If we provided any command-line arguments, run only subtests whose names match.
+
 choose_subtests(@ARGV);
 
 # Start by creating an instance of the Tester class, with which to conduct the
 # following tests.
 
 my $T = Tester->new({ prefix => 'data1.2' });
+
+# The following variables allow values fetched by one subtest to be used by subsequent tests.
 
 my %INTERVAL_NAME;
 my ($SAVE_OCCS_1, $SAVE_OCCS_2, $SAVE_NAME_1, $SAVE_BYOCC_1);
