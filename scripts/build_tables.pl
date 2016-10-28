@@ -20,7 +20,7 @@ use ConsoleLog qw(initMessages
 		  logTimestamp);
 use IntervalTables qw(loadIntervalData
 		      buildIntervalMap);
-use CollectionTables qw(buildCollectionTables buildStrataTables);
+use CollectionTables qw(buildCollectionTables buildStrataTables buildLithTables);
 use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
 use SpecimenTables qw(buildSpecimenTables);
 use TaxonTables qw(populateOrig
@@ -36,7 +36,7 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydqspfAMS', \%options);
+getopts('tT:OmR:bcKUuIivrydqspfAMSL', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -84,6 +84,7 @@ my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
 my $old_taxon_tables = $options{y};
 my $strata_tables = $options{s};
+my $lith_tables = $options{L};
 
 my $options = { taxon_steps => $options{T},
 		colls_cluster => $options{k},
@@ -126,6 +127,11 @@ if ( $collection_tables )
 {
     my $bins = configData('bins');
     buildCollectionTables($dbh, $bins, $options);
+}
+
+if ( $lith_tables && ! $collection_tables )
+{
+    buildLithTables($dbh);
 }
 
 # The option -m causes the occurrence tables to be (re)computed.  -R also

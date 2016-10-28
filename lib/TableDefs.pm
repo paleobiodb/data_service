@@ -14,6 +14,7 @@ use base 'Exporter';
 
 our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS
 		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA
+		      $COLL_LITH $COLL_ENV
 		      $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS
 		      $DIV_MATRIX $DIV_GLOBAL $PVL_MATRIX $PVL_GLOBAL
@@ -22,7 +23,8 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
 		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
 		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS
-		      $IDIGBIO %IDP VALID_IDENTIFIER);
+		      $IDIGBIO %IDP VALID_IDENTIFIER
+		      $MACROSTRAT_LITHS);
 
 # classic tables
 
@@ -46,6 +48,9 @@ our $BIN_LOC = "bin_loc";
 our $BIN_CONTAINER = "bin_container";
 our $PALEOCOORDS = 'paleocoords';
 our $GEOPLATES = 'geoplates';
+
+our $COLL_LITH = 'coll_lith';
+our $COLL_ENV = 'coll_env';
 
 our $BIN_KEY = "999999";
 
@@ -93,5 +98,8 @@ our $PVL_GLOBAL = 'pvl_global';
 
 our $IDIGBIO = 'idigbio';
 
+# Macrostrat tables that we use
+
+our $MACROSTRAT_LITHS = 'macrostrat.liths';
 
 1;
