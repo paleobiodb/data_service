@@ -877,17 +877,18 @@ sub buildLithTables {
     
     $dbh->do("CREATE TABLE $COLL_LITH_WORK (
 	collection_no int unsigned not null,
-	uncertain tinyint not null,
 	lithology varchar(30) not null,
+	macros_lith varchar(30) not null,
 	lith_type varchar(30) not null,
-	UNIQUE KEY (collection_no, lithology, uncertain),
-	KEY (lithology)) ENGINE=MYISAM");
+	UNIQUE KEY (collection_no, lithology),
+	KEY (lithology),
+	KEY (macros_lith)) ENGINE=MYISAM");
     
     my ($sql, $count);
     
     $sql = "
-	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
-	SELECT collection_no, lith, lith_type
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology1, lith, lith_type
 	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology1 = lith
 	WHERE fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null";
     
@@ -896,9 +897,8 @@ sub buildLithTables {
     logMessage(2, "      found $count matches for lithology1");
     
     $sql = "
-	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, uncertain, 
-		lithology, lith_type)
-	SELECT collection_no, 1, lith, lith_type
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology1, lith, lith_type
 	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology1 = concat('\"',lith,'\"')
 	WHERE fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null";
     
@@ -906,12 +906,19 @@ sub buildLithTables {
     
     logMessage(2, "      found $count matches for lithology1 with \"\"");
 
+    # $sql = "
+    # 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
+    # 	SELECT collection_no, lithology1, 'other'
+    # 	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology1 = lith
+    # 	WHERE lithology1 is not null and lithology1 <> ''
+    # 		and lithology1 not like '\"%' and lith is null
+    # 		and (fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null)";
+    
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
 	SELECT collection_no, lithology1, 'other'
-	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology1 = lith
-	WHERE lithology1 is not null and lithology1 <> ''
-		and lithology1 not like '\"%' and lith is null
+	FROM $COLLECTIONS
+	WHERE lithology1 is not null and lithology1 <> '' and lithology1 <> 'not reported'
 		and (fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null)";
     
     $count = $dbh->do($sql);
@@ -919,8 +926,8 @@ sub buildLithTables {
     logMessage(2, "      found $count collections with no match for lithology1");
     
     $sql = "
-	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
-	SELECT collection_no, lith, lith_type
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology2, lith, lith_type
 	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology2 = lith
 	WHERE fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null";
     
@@ -929,9 +936,8 @@ sub buildLithTables {
     logMessage(2, "      found $count matches for lithology2");
     
     $sql = "
-	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, uncertain,
-		lithology, lith_type)
-	SELECT collection_no, 1, lith, lith_type
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology2, lith, lith_type
 	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology2 = concat('\"',lith,'\"')
 	WHERE fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null";
     
@@ -939,12 +945,19 @@ sub buildLithTables {
     
     logMessage(2, "      found $count matches for lithology2 with \"\"");
     
+    # $sql = "
+    # 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
+    # 	SELECT collection_no, lithology2, 'other'
+    # 	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology2 = lith
+    # 	WHERE lithology2 is not null and lithology2 <> '' 
+    # 		and lithology2 not like '\"%' and lith is null
+    # 		and (fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null)";
+    
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
 	SELECT collection_no, lithology2, 'other'
-	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology2 = lith
-	WHERE lithology2 is not null and lithology2 <> '' 
-		and lithology2 not like '\"%' and lith is null
+	FROM $COLLECTIONS
+	WHERE lithology2 is not null and lithology2 <> '' and lithology2 <> 'not reported'
 		and (fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null)";
     
     $count = $dbh->do($sql);
@@ -953,11 +966,11 @@ sub buildLithTables {
     
     $sql = "
 	UPDATE $COLL_LITH_WORK SET lith_type = 'mixed'
-	WHERE lithology like 'mixed%' or lithology = 'marl'";
+	WHERE lithology like '\%carbonate%' and lithology like '\%siliciclastic%' or lithology = 'marl'";
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "      updated lithology type to 'mixed' on $count rows");
+    logMessage(2, "      updated lith_type to 'mixed' on $count rows");
     
     activateTables($dbh, $COLL_LITH_WORK => $COLL_LITH);
 }

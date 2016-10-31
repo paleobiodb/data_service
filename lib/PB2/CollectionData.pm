@@ -15,7 +15,7 @@ package PB2::CollectionData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
@@ -33,6 +33,8 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
 our (%ETVALUE, %EZVALUE);
+our (%LITH_VALUE, %LITHTYPE_VALUE);
+
 
 # initialize ( )
 # 
@@ -703,6 +705,15 @@ sub initialize {
 	{ value => 'modified.asc', undocumented => 1 },
 	{ value => 'modified.desc', undocumented => 1 });
     
+    $ds->define_set('1.2:occs:abund_type' =>
+	{ value => 'count' },
+	    "Select only occurrences with an abundance type of 'individuals', 'specimens'",
+	    "'grid-count', 'elements', or 'fragments'",
+	{ value => 'coverage' },
+	    "Select only occurrences with an abundance type of '%-...'",
+	{ value => 'any' },
+	    "Select only occurrences with some type of abundance information");
+    
     $ds->define_set('1.2:occs:ident_type' =>
 	{ value => 'latest' },
 	    "Select only the latest identification of each occurrence, and",
@@ -909,6 +920,11 @@ sub initialize {
 	{ optional => 'idspcmod', valid => ANY_VALUE },
 	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
 	    "modifiers on the species name.  See C<B<idmod>> above.",
+	{ param => 'abundance', valid => ANY_VALUE },
+	    "This parameter selects only occurrences that have particular kinds of abundance",
+	    "values.  Accepted values are:", $ds->document_set('1.2:occs:abund_type'),
+	    "You may also append a colon followed by a decimal number.  This will select",
+	    "only occurrences whose abundance is at least the specified minimum value.",
 	{ param => 'lngmin', valid => COORD_VALUE('lng') },
 	{ param => 'lngmax', valid => COORD_VALUE('lng') },
 	    "Return only records whose present longitude falls within the given bounds.",
@@ -977,6 +993,12 @@ sub initialize {
 	{ param => 'member', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic member(s).",
 	    "This parameter is deprecated; use F<strat> instead.",
+	{ param =>'lithology', valid => ANY_VALUE, list => ',' },
+	    "Return only records recorded as coming from any of the specified lithologies and/or",
+	    "lithology types.  If the paramter value string starts with C<!> then matching records",
+	    "will be B<excluded> instead.  If the symbol C<^> occurs at the beginning of any",
+	    "lithology name, then all subsequent values will be subtracted from the filter.",
+	    "Example: carbonate,^bafflestone.",
 	{ param => 'envtype', valid => ANY_VALUE, list => ',' },
 	    "Return only records recorded as belonging to any of the specified environments",
 	    "and/or environmental zones.  If the parameter value string starts with C<!> then",
@@ -1251,6 +1273,15 @@ sub initialize {
 	{ require => '1.2:strata:selector' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
+    
+    if ( ref $PB2::ConfigData::LITHOLOGIES eq 'ARRAY' )
+    {
+	foreach my $record ( @$PB2::ConfigData::LITHOLOGIES )
+	{
+	    $LITH_VALUE{$record->{lithology}} = 1;
+	    $LITHTYPE_VALUE{$record->{lith_type}} = 1;
+	}
+    }
 }
 
 
@@ -2966,11 +2997,142 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
+    # Check for parameter 'lithology'
+    
+    my @lithology = $request->clean_param_list('lithology');
+    
+    my (%lith_values, %exlith_values, %lt_values, $lith_invert, $lith_unknown);
+    
+    if ( @lithology && $lithology[0] =~ qr{ ^ ! (.*) }xs )
+    {
+	$lithology[0] = $1;
+	$lith_invert = 1;
+    }
+    
+    foreach my $lith ( @lithology )
+    {
+	my $lith_exclude;
+	
+	if ( $lith =~ qr{ ^ \^ \s* (.*) }xs )
+	{
+	    $lith = $1;
+	    $lith_exclude = 1;
+	}
+	
+	next unless $lith;
+	
+	$lith = lc $lith;
+	
+	if ( $lith eq 'unknown' )
+	{
+	    $lith_unknown = $lith_exclude ? 'exclude' : 'include';
+	}
+	
+	elsif ( $LITHTYPE_VALUE{$lith} )
+	{
+	    if ( $lith_exclude )
+	    {
+		$request->add_warning("parameter 'lithology': you cannot exclude lithology types, only lithologies");
+	    }
+	    
+	    else
+	    {
+		$lt_values{$lith} = 1;
+	    }
+	}
+	
+	elsif ( $LITH_VALUE{$lith} )
+	{
+	    if ( $lith_exclude )
+	    {
+		$exlith_values{$lith} = 1;
+		delete $lith_values{$lith};
+	    }
+	    
+	    else
+	    {
+		$lith_values{$lith} = 1;
+	    }
+	}
+	
+	else
+	{
+	    $request->add_warning("there are no records with lithology or lithology type '$lith' in the database");
+	}
+    }
+    
+    my $type_string = join(q{','}, keys %lt_values);
+    my $lith_string = join(q{','}, keys %lith_values);
+    my $exlith_string = join(q{','}, keys %exlith_values);
+    
+    if ( $type_string || $lith_string || $exlith_string || $lith_unknown )
+    {
+	$tables_ref->{cl} = 1;
+	
+	my (@include, @lith_filters);
+	
+	if ( $type_string )
+	{
+	    push @include, "cl.lith_type in ('$type_string')";
+	}
+	
+	if ( $lith_string )
+	{
+	    push @include, "cl.lithology in ('$lith_string')";
+	}
+	
+	if ( $lith_unknown && $lith_unknown eq 'include' )
+	{
+	    push @include, "cl.lithology is null";
+	}
+	
+	if ( @include > 1 )
+	{
+	    my $include = join(' or ', @include);
+	    push @lith_filters, "($include)";
+	}
+	
+	elsif ( @include )
+	{
+	    push @lith_filters, @include;
+	}
+	
+	elsif ( $lith_unknown && $lith_unknown eq 'exclude' )
+	{
+	    push @lith_filters, "cl.lithology is not null";
+	}
+	
+	if ( $exlith_string )
+	{
+	    push @lith_filters, "cl.lithology not in ('$exlith_string')";
+	}
+	
+	if ( $lith_invert )
+	{
+	    my $filter_string = @lith_filters > 1 ? join(' and ', @lith_filters) : $lith_filters[0];
+	    
+	    if ( $lith_unknown )
+	    {
+		push @filters, "not($filter_string)";
+	    }
+	    
+	    else
+	    {
+		push @filters, "(not($filter_string) or cl.lithology is null)";
+	    }
+	}
+	
+	else
+	{
+	    push @filters, @lith_filters;
+	}
+    }
+    
     # Check for parameter 'envtype'
     
     my @envtype = $request->clean_param_list('envtype');
     
-    my (%env_values, %exc_values, $et_invert, $et_exclude, $et_unknown);
+    my (%env_values, %exc_values, $et_invert, $et_unknown);
     
     if ( @envtype && $envtype[0] =~ qr{ ^ ! (.*) }xs )
     {
@@ -2980,11 +3142,11 @@ sub generateMainFilters {
     
     foreach my $e ( @envtype )
     {
-	$e = lc $e;
-	
 	my $et_exclude;
 	
-	if ( $e =~ qr{ ^ \^ (.*) }xs )
+	$e = lc $e;
+	
+	if ( $e =~ qr{ ^ \^ \s* (.*) }xs )
 	{
 	    $e = $1;
 	    $et_exclude = 1;
@@ -4052,6 +4214,9 @@ sub generateJoinList {
 	if $tables->{li};
     $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
 	if $tables->{ccmap};
+    
+    $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
+	if $tables->{cl};
     
     return $join_list;
 }
