@@ -146,10 +146,9 @@ PY  - 1879///
 TI  - On remains of Mastodon and other Vertebrata of the Miocene beds of the Maltese islands
 T2  - Quarterly Journal of the Geological Society, London
 VL  - 35
-SP  - 517
-EP  - 531
+SP  - 517-531
 LA  - English
-N1  - type = occ
+KW  - occ
 ER  - ";
 
 my $TAXON_NAME_1 = 'Balaenoptera rostrata';

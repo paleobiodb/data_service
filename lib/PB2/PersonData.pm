@@ -15,6 +15,8 @@ use HTTP::Validate qw(:validators);
 
 use Carp qw(carp croak);
 
+our (@REQUIRES_ROLE) = qw(PB2::CommonData);
+
 use Moo::Role;
 
 
@@ -54,13 +56,21 @@ sub initialize {
 
     $ds->define_ruleset('1.2:people:single' => 
 	{ allow => '1.2:people:specifier' },
-	{ allow => '1.2:special_params' });
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:people:list' => 
 	{ require => '1.2:people:selector' },
-	{ allow => '1.2:special_params' });
-}
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
+    $ds->define_ruleset('1.2:people:auto' =>
+	{ param => 'name', valid => ANY_VALUE },
+	    "A string of at least 3 characters, which will be matched against the beginning",
+	    "of each last name.",
+	"^You can also use any of the L<special parameters|node:special> with this request.");
+}
+
 
 # get ( )
 # 
@@ -162,6 +172,66 @@ sub list {
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});
     $self->{main_sth}->execute();
+}
+
+
+sub people_auto {
+    
+    my ($request) = @_;
+    
+    my $dbh = $request->get_connection;
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any warnings. If the
+    # 'extid' parameter was given, make sure that all identifiers are properly formatted.
+    
+    $request->strict_check;
+    $request->extid_check;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    my $count = $request->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = $request->select_string('p');
+    
+    # Generate the necessary filter.
+    
+    my $name = $request->clean_param('name');
+    my @filters;
+    
+    # If we have a name of at least three characters, return some results. Otherwise, use a filter
+    # expression that will return nothing.
+    
+    if ( $name && length($name) >= 3 )
+    {
+	my $quoted = $dbh->quote("${name}%");
+	push @filters, "reversed_name like $quoted";
+    }
+    
+    else
+    {
+	push @filters, "reversed_name like 'qqq'";
+    }
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # Generate the main query.
+    
+    $request->{main_sql} = "
+	SELECT $count $fields
+	FROM person as p
+	WHERE $filter_string
+	ORDER BY p.reversed_name $limit";
+    
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+    
+    # Then prepare and execute the main query and the secondary query.
+    
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
 }
 
 

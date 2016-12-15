@@ -16,7 +16,7 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
@@ -2752,6 +2752,54 @@ sub generateOccFilters {
 	{
 	    push @filters, $request->generateIdentFilters('o', $idqual, $idmod, $idgen, $idspc);
 	}
+	
+	# Now check for abundance
+	
+	if ( my $abundance = $request->clean_param('abundance') )
+	{
+	    $tables_ref->{oc} = 1;
+	    
+	    my $abund_min;
+	    
+	    if ( $abundance =~ qr{ ^ ( \w+ ) \s* [:] \s* ( .* ) $ }xs )
+	    {
+		$abundance = lc $1;
+		$abund_min = $2;
+	    }
+	    
+	    else
+	    {
+		$abundance = lc $abundance;
+	    }
+	    
+	    if ( $abundance eq 'count' )
+	    {
+		push @filters, "oc.abund_unit in ('individuals', 'specimens', 'elements', 'fragments', 'grid-count')";
+	    }
+	    
+	    elsif ( $abundance eq 'coverage' )
+	    {
+		push @filters, "oc.abund_unit like '\\%%'";
+	    }
+	    
+	    elsif ( $abundance eq 'any' )
+	    {
+		push @filters, "oc.abund_unit <> ''";
+	    }
+	    
+	    elsif ( $abundance )
+	    {
+		die $request->exception(400, "parameter 'abundance': unknown type '$abundance'");
+	    }
+	    
+	    if ( defined $abund_min && $abund_min ne '' )
+	    {
+		die $request->exception(400, "parameter 'abundance': '$abund_min' is not a positive integer")
+		    unless $abund_min =~ qr{ ^ \d+ $ }xs;
+		
+		push @filters, "oc.abund_value >= $abund_min";
+	    }
+	}
     }
     
     # Check for parameter 'ref_id'.
@@ -3197,6 +3245,9 @@ sub generateJoinList {
 	if $tables->{e};
     $join_list .= "\t\tLEFT JOIN taxon_etbasis as etb on etb.orig_no = tv.orig_no\n"
 	if $tables->{etb};
+    
+    $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
+	if $tables->{cl};
     
     return $join_list;
 }

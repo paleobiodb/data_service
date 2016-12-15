@@ -147,8 +147,8 @@ subtest '/taxa/ html documentation checks' => sub {
     
     ok( $content_html =~ qr{<title>.*PBDB[^<]*</title>}m, 'html title' );
     ok( $content_html =~ qr{<h1 id="title">.*PBDB[^<]*</h1>}m, 'html header' );
-    ok( $content_html =~ qr{<h2 class="pod_heading">DESCRIPTION</h2>}m, 'html description section' );
-    ok( $content_html =~ qr{<h2 class="pod_heading">SYNOPSIS</h2>}m, 'html synopsis section' );
+    ok( $content_html =~ qr{<h2 class="pod_heading" id="DESCRIPTION">DESCRIPTION</h2>}m, 'html description section' );
+    ok( $content_html =~ qr{<h2 class="pod_heading" id="SYNOPSIS">SYNOPSIS</h2>}m, 'html synopsis section' );
     ok( $content_html =~ qr{CONTACT</h2>}m, 'html footer' );
 };
 

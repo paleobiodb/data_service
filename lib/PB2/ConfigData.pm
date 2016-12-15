@@ -10,7 +10,7 @@ package PB2::ConfigData;
 
 use strict;
 
-use TableDefs qw($CONTINENT_DATA $COLL_BINS $COUNTRY_MAP);
+use TableDefs qw($CONTINENT_DATA $COLL_BINS $COLL_LITH $COLLECTIONS $COUNTRY_MAP);
 use TaxonDefs qw(%TAXON_RANK %RANK_STRING);
 
 use Carp qw(carp croak);
@@ -22,7 +22,7 @@ use Moo::Role;
 
 # Variables to store the configuration information.
 
-our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES);
+our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, $LITHOLOGIES);
 
 
 # Initialization
@@ -49,10 +49,11 @@ sub initialize {
 	{ value => 'continents', maps_to => '1.2:config:continents' },
 	    "Return continent names and their corresponding codes.",
 	{ value => 'countries', maps_to => '1.2:config:countries' },
-	    "Return country names and the corresponding ISO-3166-1 country codes",
+	    "Return country names and the corresponding ISO-3166-1 country codes.",
+	{ value => 'lithologies', maps_to => '1.2:config:lithologies' },
+	    "Return lithologies and lithology types.",
 	{ value => 'all', maps_to => '1.2:config:all' },
-	    "Return all of the above blocks of information.",
-	    "This is generally useful only with C<json> format.");
+	    "Return all of the above blocks of information.");
     
     # Next, define these output blocks.
     
@@ -99,11 +100,17 @@ sub initialize {
 	{ output => 'continent', com_name => 'con' },
 	    "The code for the continent on which this country is located");
     
+    $ds->define_block('1.2:config:lithologies' => 
+	{ output => 'config_section', com_name => 'cfg', value => 'lth', if_field => 'lithology' },
+	{ output => 'lithology', com_name => 'lth' },
+	{ output => 'lith_type', com_name => 'ltp' });
+    
     $ds->define_block('1.2:config:all' =>
 	{ include => 'clusters' },
 	{ include => 'ranks' },
 	{ include => 'continents' },
-	{ include => 'countries' });
+	{ include => 'countries' },
+	{ include => 'lithologies' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
@@ -149,6 +156,11 @@ sub initialize {
     
     $COUNTRIES = $dbh->selectall_arrayref("
 	SELECT cc, continent, name FROM $COUNTRY_MAP", { Slice => {} });
+    
+    # Get the list of lithologies from the database.
+    
+    $LITHOLOGIES = $dbh->selectall_arrayref("
+	SELECT distinct lithology, lith_type FROM $COLL_LITH", { Slice => {} });
 }
 
 
@@ -170,6 +182,7 @@ sub get {
     push @result, @$RANKS if $request->has_block('ranks') or $show_all;
     push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     push @result, @$COUNTRIES if $request->has_block('countries') or $show_all;
+    push @result, @$LITHOLOGIES if $request->has_block('lithologies') or $show_all;
     
     if ( my $offset = $request->result_offset(1) )
     {

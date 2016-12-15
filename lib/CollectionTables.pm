@@ -1,4 +1,3 @@
- 
 # The Paleobiology Database
 # 
 #   CollectionTables.pm
@@ -10,24 +9,29 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables
+our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables buildLithTables
 		      deleteProtLandData startProtLandInsert insertProtLandRecord finishProtLandInsert);
 
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS
+use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS $STRATA_NAMES
+		 $MACROSTRAT_LITHS
 		 $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		 $COUNTRY_MAP $CONTINENT_DATA
 		 $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $COLL_LITH $COLL_ENV);
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(logMessage);
 
-our $COLL_MATRIX_WORK = "cmn";
-our $COLL_BINS_WORK = "cbn";
-our $COLL_STRATA_WORK = "csn";
-our $COLL_INTS_WORK = "cin";
+our $COLL_MATRIX_WORK = "cmw";
+our $COLL_BINS_WORK = "cbw";
+our $COLL_STRATA_WORK = "csw";
+our $STRATA_NAMES_WORK = "snw";
+our $COLL_INTS_WORK = "ciw";
+
+our $COLL_LITH_WORK = 'clw';
+our $COLL_ENV_WORK = 'cew';
 
 our $CLUST_AUX = "clust_aux";
 
@@ -519,6 +523,8 @@ sub buildCollectionTables {
     # Then we build a table listing all of the different geological strata.
     
     buildStrataTables($dbh);
+    buildLithTables($dbh);
+    buildEnvTables($dbh);
     
     # Finally, we swap in the new tables for the old ones.
     
@@ -656,6 +662,7 @@ sub buildStrataTables {
 		maybe boolean not null,
 		lithology varchar(255),
 		collection_no int unsigned not null,
+		access_level tinyint unsigned not null,
 		n_occs int unsigned not null,
 		cc char(2),
 		lat decimal(9,6),
@@ -668,46 +675,24 @@ sub buildStrataTables {
     
     # Fill it from the collections and coll_matrix tables.
     
-    logMessage(2, "    computing stratum table...");
+    logMessage(2, "    computing strata table...");
     
     my ($sql, $result, $count);
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (grp, formation, member, lithology,
-			collection_no, n_occs, cc, lat, lng, g_plate_no, s_plate_no, loc)
+			collection_no, access_level, n_occs, cc, lat, lng, 
+			g_plate_no, s_plate_no, loc)
 		SELECT cc.geological_group, cc.formation, cc.member, 
 			if(lithology1 <> '' and lithology2 <> '' and lithology1 <> lithology2,
 			  concat(lithology1,'/',lithology2),
 			    if(lithology1 <> '' and lithology1 <> 'not reported', lithology1, null)),
-			collection_no, c.n_occs, c.cc, c.lat, c.lng,
+			collection_no, c.access_level, c.n_occs, c.cc, c.lat, c.lng,
 			c.g_plate_no, c.s_plate_no, c.loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
-		WHERE c.access_level = 0";
+		FROM $coll_matrix as c JOIN collections as cc using (collection_no)";
     
     $result = $dbh->do($sql);
     
     logMessage(2, "      $result collections");
-    
-    # $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
-    # 			cc, lat, lng, g_plate_no, s_plate_no, loc)
-    # 		SELECT geological_group, 'grp', collection_no, c.n_occs, c.cc, c.lat, c.lng,
-    # 			c.g_plate_no, c.s_plate_no, c.loc
-    # 		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
-    # 		WHERE geological_group <> ''";
-    
-    # $result = $dbh->do($sql);
-    
-    # logMessage(2, "      $result groups");
-    
-    # $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs,
-    # 			cc, lat, lng, g_plate_no, s_plate_no, loc)
-    # 		SELECT member, 'member', collection_no, c.n_occs, c.cc, c.lat, c.lng,
-    # 			c.g_plate_no, c.s_plate_no, c.loc
-    # 		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
-    # 		WHERE member <> ''";
-    
-    # $result = $dbh->do($sql);
-    
-    # logMessage(2, "      $result members");
     
     logMessage(2, "    cleaning stratum names...");
     
@@ -852,9 +837,170 @@ sub buildStrataTables {
     
     $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD SPATIAL INDEX (loc)");
     
-    activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA);
+    # Now create a separate table just listing all of the names, primarily for use in
+    # auto-completion.
+    
+    logMessage(2, "    creating strata names table...");
+    
+    $dbh->do("DROP TABLE IF EXISTS $STRATA_NAMES_WORK");
+    
+    $dbh->do("CREATE TABLE $STRATA_NAMES_WORK (
+		name varchar(255) not null,
+		type enum('group', 'formation', 'member'),
+		cc_list varchar(255) not null,
+		n_colls int unsigned not null,
+		n_occs int unsigned not null,
+		lng_min decimal(9,6),
+		lng_max decimal(9,6),
+		lat_min decimal(9,6),
+		lat_max decimal(9,6),
+		UNIQUE KEY (name, type)) Engine=MyISAM");
+    
+    logMessage(2, "    inserting groups...");
+    
+    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
+			lng_min, lng_max, lat_min, lat_max)
+		SELECT grp, 'group', count(*), sum(n_occs), group_concat(distinct cc),
+			min(lng), max(lng), min(lat), max(lat)
+		FROM $COLL_STRATA_WORK
+		WHERE grp <> ''	and grp not like 'unnamed' GROUP BY grp");
+    
+    logMessage(2, "      $result groups");
+    
+    logMessage(2, "    inserting formations...");
+    
+    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
+			lng_min, lng_max, lat_min, lat_max)
+		SELECT formation, 'formation', count(*), sum(n_occs), group_concat(distinct cc),
+			min(lng), max(lng), min(lat), max(lat)
+		FROM $COLL_STRATA_WORK
+		WHERE formation <> '' and formation not like 'unnamed' GROUP BY formation");
+    
+    logMessage(2, "      $result formations");
+    
+    activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA,
+			 $STRATA_NAMES_WORK => $STRATA_NAMES);
 }
 
+
+# buildLithTables ( dbh )
+#
+# Build a table that relates collections to lithologies.
+
+sub buildLithTables {
+    
+    my ($dbh, $options) = @_;
+    
+    $options ||= { };
+
+    logMessage(2, "    building collection lithology table...");
+    
+    $dbh->do("DROP TABLE IF EXISTS $COLL_LITH_WORK");
+    
+    $dbh->do("CREATE TABLE $COLL_LITH_WORK (
+	collection_no int unsigned not null,
+	lithology varchar(30) not null,
+	macros_lith varchar(30) not null,
+	lith_type varchar(30) not null,
+	UNIQUE KEY (collection_no, lithology),
+	KEY (lithology),
+	KEY (macros_lith)) ENGINE=MYISAM");
+    
+    my ($sql, $count);
+    
+    $sql = "
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology1, lith, lith_type
+	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology1 = lith
+	WHERE fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      found $count matches for lithology1");
+    
+    $sql = "
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology1, lith, lith_type
+	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology1 = concat('\"',lith,'\"')
+	WHERE fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      found $count matches for lithology1 with \"\"");
+
+    # $sql = "
+    # 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
+    # 	SELECT collection_no, lithology1, 'other'
+    # 	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology1 = lith
+    # 	WHERE lithology1 is not null and lithology1 <> ''
+    # 		and lithology1 not like '\"%' and lith is null
+    # 		and (fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null)";
+    
+    $sql = "
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
+	SELECT collection_no, lithology1, 'other'
+	FROM $COLLECTIONS
+	WHERE lithology1 is not null and lithology1 <> '' and lithology1 <> 'not reported'
+		and (fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null)";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      found $count collections with no match for lithology1");
+    
+    $sql = "
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology2, lith, lith_type
+	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology2 = lith
+	WHERE fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      found $count matches for lithology2");
+    
+    $sql = "
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
+	SELECT collection_no, lithology2, lith, lith_type
+	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology2 = concat('\"',lith,'\"')
+	WHERE fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      found $count matches for lithology2 with \"\"");
+    
+    # $sql = "
+    # 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
+    # 	SELECT collection_no, lithology2, 'other'
+    # 	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology2 = lith
+    # 	WHERE lithology2 is not null and lithology2 <> '' 
+    # 		and lithology2 not like '\"%' and lith is null
+    # 		and (fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null)";
+    
+    $sql = "
+	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
+	SELECT collection_no, lithology2, 'other'
+	FROM $COLLECTIONS
+	WHERE lithology2 is not null and lithology2 <> '' and lithology2 <> 'not reported'
+		and (fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null)";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      found $count collections with no match for lithology2");
+    
+    $sql = "
+	UPDATE $COLL_LITH_WORK SET lith_type = 'mixed'
+	WHERE lithology like '\%carbonate%' and lithology like '\%siliciclastic%' or lithology = 'marl'";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      updated lith_type to 'mixed' on $count rows");
+    
+    activateTables($dbh, $COLL_LITH_WORK => $COLL_LITH);
+}
+
+
+sub buildEnvTables {
+
+}
 
 # applyClustering ( bin_list )
 # 

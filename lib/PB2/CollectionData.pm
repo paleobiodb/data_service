@@ -15,7 +15,7 @@ package PB2::CollectionData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
@@ -33,6 +33,8 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
 our (%ETVALUE, %EZVALUE);
+our (%LITH_VALUE, %LITHTYPE_VALUE);
+
 
 # initialize ( )
 # 
@@ -618,6 +620,24 @@ sub initialize {
 	    "The identifier(s) of the geological plate(s) on which the selected",
 	    "occurrences in this stratum lie, from the Scotese model.");
     
+    $ds->define_block('1.2:strata:auto' =>
+	{ select => [ 'name', 'type', 'n_colls', 'n_occs', 'cc_list' ] },
+	{ output => 'record_type', com_name => 'typ', value => 'str' },
+	    "The type of this record: 'str' for a stratum",
+	{ output => 'name', com_name => 'nam' },
+	    "The name of a matching stratum",
+	{ output => 'type', com_name => 'rnk' },
+	    "The type of stratum: group, formation, or member.",
+	{ output => 'cc_list', com_name => 'cc2' },
+	    "The country or countries in which this stratum lies, as ISO-3166 country codes.",
+	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
+	    "The number of fossil collections in the database that are associated with this stratum.",
+	    "Note that if your search is limited to a particular geographic area, then",
+	    "only collections within the selected area are counted.",
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
+	    "The number of fossil occurrences in the database that are associated with this stratum.",
+	    "The above note about geographic area selection also applies.");
+    
     # And a block for basic geographic summary cluster info
     
     $ds->define_block( '1.2:colls:summary' =>
@@ -702,6 +722,15 @@ sub initialize {
 	    "most recent first unless you add C<.asc>",
 	{ value => 'modified.asc', undocumented => 1 },
 	{ value => 'modified.desc', undocumented => 1 });
+    
+    $ds->define_set('1.2:occs:abund_type' =>
+	{ value => 'count' },
+	    "Select only occurrences with an abundance type of 'individuals', 'specimens'",
+	    "'grid-count', 'elements', or 'fragments'",
+	{ value => 'coverage' },
+	    "Select only occurrences with an abundance type of '%-...'",
+	{ value => 'any' },
+	    "Select only occurrences with some type of abundance information");
     
     $ds->define_set('1.2:occs:ident_type' =>
 	{ value => 'latest' },
@@ -909,6 +938,11 @@ sub initialize {
 	{ optional => 'idspcmod', valid => ANY_VALUE },
 	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
 	    "modifiers on the species name.  See C<B<idmod>> above.",
+	{ param => 'abundance', valid => ANY_VALUE },
+	    "This parameter selects only occurrences that have particular kinds of abundance",
+	    "values.  Accepted values are:", $ds->document_set('1.2:occs:abund_type'),
+	    "You may also append a colon followed by a decimal number.  This will select",
+	    "only occurrences whose abundance is at least the specified minimum value.",
 	{ param => 'lngmin', valid => COORD_VALUE('lng') },
 	{ param => 'lngmax', valid => COORD_VALUE('lng') },
 	    "Return only records whose present longitude falls within the given bounds.",
@@ -977,6 +1011,12 @@ sub initialize {
 	{ param => 'member', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named stratigraphic member(s).",
 	    "This parameter is deprecated; use F<strat> instead.",
+	{ param =>'lithology', valid => ANY_VALUE, list => ',' },
+	    "Return only records recorded as coming from any of the specified lithologies and/or",
+	    "lithology types.  If the paramter value string starts with C<!> then matching records",
+	    "will be B<excluded> instead.  If the symbol C<^> occurs at the beginning of any",
+	    "lithology name, then all subsequent values will be subtracted from the filter.",
+	    "Example: carbonate,^bafflestone.",
 	{ param => 'envtype', valid => ANY_VALUE, list => ',' },
 	    "Return only records recorded as belonging to any of the specified environments",
 	    "and/or environmental zones.  If the parameter value string starts with C<!> then",
@@ -1222,10 +1262,10 @@ sub initialize {
 	    "A full or partial name.  You can use % and _ as wildcards.",
 	{ optional => 'rank', valid => ENUM_VALUE('formation','group','member') },
 	    "Return only strata of the specified rank: formation, group or member",
-	{ param => 'lngmin', valid => DECI_VALUE },
-	{ param => 'lngmax', valid => DECI_VALUE },
-	{ param => 'latmin', valid => DECI_VALUE },
-	{ param => 'latmax', valid => DECI_VALUE },
+	{ param => 'lngmin', valid => COORD_VALUE('lng') },
+	{ param => 'lngmax', valid => COORD_VALUE('lng') },
+	{ param => 'latmin', valid => COORD_VALUE('lat') },
+	{ param => 'latmax', valid => COORD_VALUE('lat') },
 	    "Return only strata associated with at least one occurrence whose geographic location falls within the given bounding box.",
 	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
 	    "two adjacent bounding boxes if the range crosses the antimeridian.",
@@ -1248,9 +1288,36 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:strata:auto' =>
-	{ require => '1.2:strata:selector' },
-	{ allow => '1.2:special_params' },
+	{ param => 'name', valid => ANY_VALUE },
+	    "A full or partial name.  It must have at least 3 significant characters,",
+	    "and may end in a space followed by either 'g' or 'f' to indicate",
+	    "that you are looking for a group or formation.",
+	{ optional => 'rank', valid => ENUM_VALUE('formation','group') },
+	    "Return only strata of the specified rank: formation or group.",
+	    "This may be overridden by a suffix on the value of B<C<name>>.",
+	{ param => 'lngmin', valid => DECI_VALUE },
+	{ param => 'lngmax', valid => DECI_VALUE },
+	{ param => 'latmin', valid => DECI_VALUE },
+	{ param => 'latmax', valid => DECI_VALUE },
+	    "Return only strata associated with at least one occurrence whose geographic location falls within the given bounding box.",
+	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
+	    "two adjacent bounding boxes if the range crosses the antimeridian.",
+	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
+	{ together => ['lngmin', 'lngmax'],
+	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
+	# { param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
+	#     "Return only strata associated with some occurrence whose geographic location falls",
+	#     "within the specified geometry, specified in WKT format.",
 	"^You can also use any of the L<special parameters|node:special> with this request.");
+    
+    if ( ref $PB2::ConfigData::LITHOLOGIES eq 'ARRAY' )
+    {
+	foreach my $record ( @$PB2::ConfigData::LITHOLOGIES )
+	{
+	    $LITH_VALUE{$record->{lithology}} = 1;
+	    $LITHTYPE_VALUE{$record->{lith_type}} = 1;
+	}
+    }
 }
 
 
@@ -1668,7 +1735,7 @@ sub refs {
 
 sub list_coll_strata {
     
-    my ($request, $arg) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries. $$$
     
@@ -1769,6 +1836,72 @@ sub list_coll_strata {
 }
 
 
+# strata_auto ( )
+#
+# List strata by name for the purposes of auto-completion.
+
+sub strata_auto {
+    
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my $tables = $request->tables_hash;
+    
+    my @filters = $request->generate_strata_auto_filters('sn', $tables);
+    push @filters, '1=1' unless @filters;
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. We skip the extid_check, since strata don't have identifiers.
+    
+    $request->strict_check;
+    
+    # Modify the query according to the common parameters.
+    
+    my $limit = $request->sql_limit_clause(1);
+    my $calc = $request->sql_count_clause;
+    
+    my $fields = $request->select_string;
+    
+    #$request->adjustCoordinates(\$fields);
+    
+    # Determine if any extra tables need to be joined in.
+    
+    # my $base_joins = $request->generateJoinList('sn', $tables);
+    
+    # Add the collections table if we are doing access control.
+    
+    # $base_joins = "JOIN collections as cc using (collection_no)\n" . $base_joins if
+    # $tables->{cc};
+    
+    $request->{main_sql} = "
+	SELECT $calc $fields
+	FROM strata_names as sn
+        WHERE $filter_string
+	ORDER BY n_occs desc
+	$limit";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    # Then prepare and execute the main query and the secondary query.
+    
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $request->sql_count_rows;   
+    
+}
+
+
 # fixTimeOutput ( record )
 # 
 # Adjust the time output by truncating unneeded digits.
@@ -1852,7 +1985,7 @@ sub generateCollFilters {
 }
 
 
-# generateStrataFilters ( tables_ref, $is_auto )
+# generateStrataFilters ( tables_ref )
 # 
 # Generate a list of filter clauses that will help to select the appropriate
 # set of records.  This routine only handles parameters that are specific to
@@ -2020,6 +2153,127 @@ sub generate_stratname_filter {
     return $clause;
 }
 
+
+# generate_strata_auto_filters ( main_table )
+# 
+# Generate filters for strata auto-completion (as opposed to listing, which is handled above).
+
+sub generate_strata_auto_filters {
+    
+    my ($request, $mt) = @_;
+    
+    my $dbh = $request->get_connection;
+    
+    my @filters;
+    
+    my $name = $request->clean_param('name');
+    my $rank = $request->clean_param('rank');
+    
+    unless ( $name && length($name) >= 3 )
+    {
+	return $request->exception(400, "You must specify at least 3 characters to be matched against strata names");
+    }
+    
+    if ( $name =~ /(.*)\s+([fgm])\w*$/i )
+    {
+	my $r = lc $2;
+	$name = $1;
+	
+	if ( $r eq 'f' ) {
+	    $rank = 'formation';
+	} elsif ( $r eq 'g' ) {
+	    $rank = 'group';
+	} elsif ( $r eq 'm' ) {
+	    $rank = 'member';
+	}
+    }
+    
+    if ( $rank eq 'formation' || $rank eq 'group' || $rank eq 'member' )
+    {
+	push @filters, "type = '$rank'";
+    }
+    
+    $name =~ s/\s+$//;
+    
+    my $quoted_name = $dbh->quote("${name}%");
+    
+    push @filters, "$mt.name like $quoted_name";
+    
+    # Now check for the lat/lng parameters and add the necessary filters.  Note that we are
+    # filtering for any stratum whose range *overlaps* the specified region.
+    
+    my $x1 = $request->clean_param('lngmin');
+    my $x2 = $request->clean_param('lngmax');
+    my $y1 = $request->clean_param('latmin');
+    my $y2 = $request->clean_param('latmax');
+    
+    # If longitude bounds were specified, add filters for them.
+    
+    if ( $x1 ne '' && $x2 ne '' && ! ( $x1 == -180 && $x2 == 180 ) )
+    {
+	# If the longitude coordinates do not fall between -180 and 180,
+	# adjust them so that they do.
+	
+	if ( $x1 < -180.0 )
+	{
+	    $x1 = $x1 + ( POSIX::floor( (180.0 - $x1) / 360.0) * 360.0);
+	}
+	
+	if ( $x2 < -180.0 )
+	{
+	    $x2 = $x2 + ( POSIX::floor( (180.0 - $x2) / 360.0) * 360.0);
+	}
+	
+	if ( $x1 > 180.0 )
+	{
+	    $x1 = $x1 - ( POSIX::floor( ($x1 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	if ( $x2 > 180.0 )
+	{
+	    $x2 = $x2 - ( POSIX::floor( ($x2 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	# If $x1 < $x2, then we query on a single range defined by
+	# those coordinates.
+	
+	if ( $x1 <= $x2 )
+	{
+	    $request->add_warning("The values of 'lngmin' and 'lngmax' are equal, " .
+				  "so only records with that exact longitude will be selected")
+		if $x1 == $x2;
+	    
+	    push @filters, "$mt.lng_max > $x1 and $mt.lng_min < $x2";
+	}
+	
+	# Otherwise, our range crosses the antimeridian and so must be
+	# split in two.
+	
+	else
+	{
+	    push @filters, "($mt.lng_max > $x1 or $mt.lng_min < $x2)";
+	}
+    }
+    
+    # If latitude bounds were specified, add filters for them.
+    
+    if ( $y1 && $y1 < 90.0 && $y1 > -90.0 )
+    {
+	push @filters, "$mt.lat_max > $y1";
+    }
+    
+    if ( $y2 && $y2 < 90.0 && $y2 > -90.0 )
+    {
+	push @filters, "$mt.lat_min < $y2";
+    }
+    
+    if ( defined $y1 && defined $y2 && $y1 ne '' && $y2 ne '' && $y1 > $y2 )
+    {
+	$request->add_warning("The minimum latitude specified is greater than the maximum latitude specified, so no records will be selected");
+    }
+    
+    return @filters;
+}
 
 # generateAccessFilter ( mt, tables_ref )
 # 
@@ -2838,7 +3092,7 @@ sub generateMainFilters {
 		if $x1 == $x2;
 	    
 	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	    push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
 	}
 	
 	# Otherwise, our bounding box crosses the antimeridian and so must be
@@ -2849,7 +3103,7 @@ sub generateMainFilters {
 	{
 	    my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))," .
 					"((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
-	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	    push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
 	}
     }
     
@@ -2864,7 +3118,7 @@ sub generateMainFilters {
 	$y2 = 90.0 unless defined $y2 && $y2 ne '';
 	
 	my $polygon = "'POLYGON((-180.0 $y1,180.0 $y1,180.0 $y2,-180.0 $y2,-180.0 $y1))'";
-	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
     }
     
     # If the latitude bounds are such as to select no records, then add a warning.
@@ -2886,7 +3140,7 @@ sub generateMainFilters {
 	die "400 the value of parameter 'loc' is too large\n"
 	    if length($loc) > 5000;
 	my $quoted = $dbh->quote($loc);
-	push @filters, "contains(geomfromtext($quoted), $mt.loc)";
+	push @filters, "st_contains(geomfromtext($quoted), $mt.loc)";
     }
     
     # Check for parameter 'plate'
@@ -2966,11 +3220,142 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
+    # Check for parameter 'lithology'
+    
+    my @lithology = $request->clean_param_list('lithology');
+    
+    my (%lith_values, %exlith_values, %lt_values, $lith_invert, $lith_unknown);
+    
+    if ( @lithology && $lithology[0] =~ qr{ ^ ! (.*) }xs )
+    {
+	$lithology[0] = $1;
+	$lith_invert = 1;
+    }
+    
+    foreach my $lith ( @lithology )
+    {
+	my $lith_exclude;
+	
+	if ( $lith =~ qr{ ^ \^ \s* (.*) }xs )
+	{
+	    $lith = $1;
+	    $lith_exclude = 1;
+	}
+	
+	next unless $lith;
+	
+	$lith = lc $lith;
+	
+	if ( $lith eq 'unknown' )
+	{
+	    $lith_unknown = $lith_exclude ? 'exclude' : 'include';
+	}
+	
+	elsif ( $LITHTYPE_VALUE{$lith} )
+	{
+	    if ( $lith_exclude )
+	    {
+		$request->add_warning("parameter 'lithology': you cannot exclude lithology types, only lithologies");
+	    }
+	    
+	    else
+	    {
+		$lt_values{$lith} = 1;
+	    }
+	}
+	
+	elsif ( $LITH_VALUE{$lith} )
+	{
+	    if ( $lith_exclude )
+	    {
+		$exlith_values{$lith} = 1;
+		delete $lith_values{$lith};
+	    }
+	    
+	    else
+	    {
+		$lith_values{$lith} = 1;
+	    }
+	}
+	
+	else
+	{
+	    $request->add_warning("there are no records with lithology or lithology type '$lith' in the database");
+	}
+    }
+    
+    my $type_string = join(q{','}, keys %lt_values);
+    my $lith_string = join(q{','}, keys %lith_values);
+    my $exlith_string = join(q{','}, keys %exlith_values);
+    
+    if ( $type_string || $lith_string || $exlith_string || $lith_unknown )
+    {
+	$tables_ref->{cl} = 1;
+	
+	my (@include, @lith_filters);
+	
+	if ( $type_string )
+	{
+	    push @include, "cl.lith_type in ('$type_string')";
+	}
+	
+	if ( $lith_string )
+	{
+	    push @include, "cl.lithology in ('$lith_string')";
+	}
+	
+	if ( $lith_unknown && $lith_unknown eq 'include' )
+	{
+	    push @include, "cl.lithology is null";
+	}
+	
+	if ( @include > 1 )
+	{
+	    my $include = join(' or ', @include);
+	    push @lith_filters, "($include)";
+	}
+	
+	elsif ( @include )
+	{
+	    push @lith_filters, @include;
+	}
+	
+	elsif ( $lith_unknown && $lith_unknown eq 'exclude' )
+	{
+	    push @lith_filters, "cl.lithology is not null";
+	}
+	
+	if ( $exlith_string )
+	{
+	    push @lith_filters, "cl.lithology not in ('$exlith_string')";
+	}
+	
+	if ( $lith_invert )
+	{
+	    my $filter_string = @lith_filters > 1 ? join(' and ', @lith_filters) : $lith_filters[0];
+	    
+	    if ( $lith_unknown )
+	    {
+		push @filters, "not($filter_string)";
+	    }
+	    
+	    else
+	    {
+		push @filters, "(not($filter_string) or cl.lithology is null)";
+	    }
+	}
+	
+	else
+	{
+	    push @filters, @lith_filters;
+	}
+    }
+    
     # Check for parameter 'envtype'
     
     my @envtype = $request->clean_param_list('envtype');
     
-    my (%env_values, %exc_values, $et_invert, $et_exclude, $et_unknown);
+    my (%env_values, %exc_values, $et_invert, $et_unknown);
     
     if ( @envtype && $envtype[0] =~ qr{ ^ ! (.*) }xs )
     {
@@ -2980,11 +3365,11 @@ sub generateMainFilters {
     
     foreach my $e ( @envtype )
     {
-	$e = lc $e;
-	
 	my $et_exclude;
 	
-	if ( $e =~ qr{ ^ \^ (.*) }xs )
+	$e = lc $e;
+	
+	if ( $e =~ qr{ ^ \^ \s* (.*) }xs )
 	{
 	    $e = $1;
 	    $et_exclude = 1;
@@ -4052,6 +4437,9 @@ sub generateJoinList {
 	if $tables->{li};
     $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
 	if $tables->{ccmap};
+    
+    $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
+	if $tables->{cl};
     
     return $join_list;
 }

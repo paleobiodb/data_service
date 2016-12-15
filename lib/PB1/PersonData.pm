@@ -15,8 +15,9 @@ use HTTP::Validate qw(:validators);
 
 use Carp qw(carp croak);
 
-use Moo::Role;
+our (@REQUIRES_ROLE) = qw(PB1::CommonData);
 
+use Moo::Role;
 
 # initialize ( )
 # 
