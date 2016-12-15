@@ -14,7 +14,7 @@ use base 'Exporter';
 
 our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS
 		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA
-		      $COLL_LITH $COLL_ENV
+		      $COLL_LITH $COLL_ENV $STRATA_NAMES
 		      $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS
 		      $DIV_MATRIX $DIV_GLOBAL $PVL_MATRIX $PVL_GLOBAL
@@ -41,6 +41,7 @@ our $COLL_MATRIX = "coll_matrix";
 our $COLL_BINS = "coll_bins";
 our $COLL_INTS = "coll_ints";
 our $COLL_STRATA = "coll_strata";
+our $STRATA_NAMES = "strata_names";
 our $COLL_LOC = "coll_loc";
 our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
@@ -101,5 +102,13 @@ our $IDIGBIO = 'idigbio';
 # Macrostrat tables that we use
 
 our $MACROSTRAT_LITHS = 'macrostrat.liths';
+
+# New timescale system
+
+our $TIMESCALE_DATA = 'timescales';
+our $TIMESCALE_REFS = 'timescale_refs';
+our $TIMESCALE_INTS = 'timescale_ints';
+our $TIMESCALE_BOUNDARIES = 'timescale_bounds';
+our $TIMESCALE_PERMS = 'timescale_perms';
 
 1;

@@ -458,9 +458,9 @@ use PB2::PersonData;
 			place => 2,
 			title => 'Auto-completion for geological strata',
 			usage => [ "strata/auto.json?name=aba&limit=10" ],
-			method => 'list_coll_strata',
-			arg => 'auto',
-			output => '1.2:strata:basic' },
+			method => 'strata_auto',
+			default_limit => 10,
+			output => '1.2:strata:auto' },
 	"This operation returns a list of geological strata from the database that match the given",
 	"prefix or partial name.  This can be used to implement auto-completion for strata names,",
 	"and can be limited by geographic location if desired.");
@@ -640,6 +640,7 @@ use PB2::PersonData;
 			usage => [ "taxa/auto.json?name=h. sap&limit=10",
 				   "taxa/auto.json?name=cani&limit=10" ],
 			allow_format => 'json',
+			default_limit => 10,
 			output => '1.2:taxa:auto' },
 	"This operation returns a list of names matching the given prefix or partial name.",
 	"You can use it for auto-completion of taxonomic names in a client application.");
@@ -797,6 +798,14 @@ use PB2::PersonData;
     
     $ds2->define_node({ path => 'people/list',
 			method => 'list' });
+    
+    $ds2->define_node({ path => 'people/auto',
+			method => 'people_auto',
+			default_limit => 10,
+			usage => "people/auto?name=smi" },
+	"This operation is used for auto-completion of database contributor names.",
+	"It returns a list of people whose last name begins with the specified string.",
+	"The default limit is 10, unless overridden.");
 
     
     # Bibliographic References

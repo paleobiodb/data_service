@@ -620,6 +620,24 @@ sub initialize {
 	    "The identifier(s) of the geological plate(s) on which the selected",
 	    "occurrences in this stratum lie, from the Scotese model.");
     
+    $ds->define_block('1.2:strata:auto' =>
+	{ select => [ 'name', 'type', 'n_colls', 'n_occs', 'cc_list' ] },
+	{ output => 'record_type', com_name => 'typ', value => 'str' },
+	    "The type of this record: 'str' for a stratum",
+	{ output => 'name', com_name => 'nam' },
+	    "The name of a matching stratum",
+	{ output => 'type', com_name => 'rnk' },
+	    "The type of stratum: group, formation, or member.",
+	{ output => 'cc_list', com_name => 'cc2' },
+	    "The country or countries in which this stratum lies, as ISO-3166 country codes.",
+	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
+	    "The number of fossil collections in the database that are associated with this stratum.",
+	    "Note that if your search is limited to a particular geographic area, then",
+	    "only collections within the selected area are counted.",
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
+	    "The number of fossil occurrences in the database that are associated with this stratum.",
+	    "The above note about geographic area selection also applies.");
+    
     # And a block for basic geographic summary cluster info
     
     $ds->define_block( '1.2:colls:summary' =>
@@ -1244,10 +1262,10 @@ sub initialize {
 	    "A full or partial name.  You can use % and _ as wildcards.",
 	{ optional => 'rank', valid => ENUM_VALUE('formation','group','member') },
 	    "Return only strata of the specified rank: formation, group or member",
-	{ param => 'lngmin', valid => DECI_VALUE },
-	{ param => 'lngmax', valid => DECI_VALUE },
-	{ param => 'latmin', valid => DECI_VALUE },
-	{ param => 'latmax', valid => DECI_VALUE },
+	{ param => 'lngmin', valid => COORD_VALUE('lng') },
+	{ param => 'lngmax', valid => COORD_VALUE('lng') },
+	{ param => 'latmin', valid => COORD_VALUE('lat') },
+	{ param => 'latmax', valid => COORD_VALUE('lat') },
 	    "Return only strata associated with at least one occurrence whose geographic location falls within the given bounding box.",
 	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
 	    "two adjacent bounding boxes if the range crosses the antimeridian.",
@@ -1270,8 +1288,26 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:strata:auto' =>
-	{ require => '1.2:strata:selector' },
-	{ allow => '1.2:special_params' },
+	{ param => 'name', valid => ANY_VALUE },
+	    "A full or partial name.  It must have at least 3 significant characters,",
+	    "and may end in a space followed by either 'g' or 'f' to indicate",
+	    "that you are looking for a group or formation.",
+	{ optional => 'rank', valid => ENUM_VALUE('formation','group') },
+	    "Return only strata of the specified rank: formation or group.",
+	    "This may be overridden by a suffix on the value of B<C<name>>.",
+	{ param => 'lngmin', valid => DECI_VALUE },
+	{ param => 'lngmax', valid => DECI_VALUE },
+	{ param => 'latmin', valid => DECI_VALUE },
+	{ param => 'latmax', valid => DECI_VALUE },
+	    "Return only strata associated with at least one occurrence whose geographic location falls within the given bounding box.",
+	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
+	    "two adjacent bounding boxes if the range crosses the antimeridian.",
+	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
+	{ together => ['lngmin', 'lngmax'],
+	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
+	# { param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
+	#     "Return only strata associated with some occurrence whose geographic location falls",
+	#     "within the specified geometry, specified in WKT format.",
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     if ( ref $PB2::ConfigData::LITHOLOGIES eq 'ARRAY' )
@@ -1699,7 +1735,7 @@ sub refs {
 
 sub list_coll_strata {
     
-    my ($request, $arg) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries. $$$
     
@@ -1800,6 +1836,72 @@ sub list_coll_strata {
 }
 
 
+# strata_auto ( )
+#
+# List strata by name for the purposes of auto-completion.
+
+sub strata_auto {
+    
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my $tables = $request->tables_hash;
+    
+    my @filters = $request->generate_strata_auto_filters('sn', $tables);
+    push @filters, '1=1' unless @filters;
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. We skip the extid_check, since strata don't have identifiers.
+    
+    $request->strict_check;
+    
+    # Modify the query according to the common parameters.
+    
+    my $limit = $request->sql_limit_clause(1);
+    my $calc = $request->sql_count_clause;
+    
+    my $fields = $request->select_string;
+    
+    #$request->adjustCoordinates(\$fields);
+    
+    # Determine if any extra tables need to be joined in.
+    
+    # my $base_joins = $request->generateJoinList('sn', $tables);
+    
+    # Add the collections table if we are doing access control.
+    
+    # $base_joins = "JOIN collections as cc using (collection_no)\n" . $base_joins if
+    # $tables->{cc};
+    
+    $request->{main_sql} = "
+	SELECT $calc $fields
+	FROM strata_names as sn
+        WHERE $filter_string
+	ORDER BY n_occs desc
+	$limit";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    # Then prepare and execute the main query and the secondary query.
+    
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $request->sql_count_rows;   
+    
+}
+
+
 # fixTimeOutput ( record )
 # 
 # Adjust the time output by truncating unneeded digits.
@@ -1883,7 +1985,7 @@ sub generateCollFilters {
 }
 
 
-# generateStrataFilters ( tables_ref, $is_auto )
+# generateStrataFilters ( tables_ref )
 # 
 # Generate a list of filter clauses that will help to select the appropriate
 # set of records.  This routine only handles parameters that are specific to
@@ -2051,6 +2153,127 @@ sub generate_stratname_filter {
     return $clause;
 }
 
+
+# generate_strata_auto_filters ( main_table )
+# 
+# Generate filters for strata auto-completion (as opposed to listing, which is handled above).
+
+sub generate_strata_auto_filters {
+    
+    my ($request, $mt) = @_;
+    
+    my $dbh = $request->get_connection;
+    
+    my @filters;
+    
+    my $name = $request->clean_param('name');
+    my $rank = $request->clean_param('rank');
+    
+    unless ( $name && length($name) >= 3 )
+    {
+	return $request->exception(400, "You must specify at least 3 characters to be matched against strata names");
+    }
+    
+    if ( $name =~ /(.*)\s+([fgm])\w*$/i )
+    {
+	my $r = lc $2;
+	$name = $1;
+	
+	if ( $r eq 'f' ) {
+	    $rank = 'formation';
+	} elsif ( $r eq 'g' ) {
+	    $rank = 'group';
+	} elsif ( $r eq 'm' ) {
+	    $rank = 'member';
+	}
+    }
+    
+    if ( $rank eq 'formation' || $rank eq 'group' || $rank eq 'member' )
+    {
+	push @filters, "type = '$rank'";
+    }
+    
+    $name =~ s/\s+$//;
+    
+    my $quoted_name = $dbh->quote("${name}%");
+    
+    push @filters, "$mt.name like $quoted_name";
+    
+    # Now check for the lat/lng parameters and add the necessary filters.  Note that we are
+    # filtering for any stratum whose range *overlaps* the specified region.
+    
+    my $x1 = $request->clean_param('lngmin');
+    my $x2 = $request->clean_param('lngmax');
+    my $y1 = $request->clean_param('latmin');
+    my $y2 = $request->clean_param('latmax');
+    
+    # If longitude bounds were specified, add filters for them.
+    
+    if ( $x1 ne '' && $x2 ne '' && ! ( $x1 == -180 && $x2 == 180 ) )
+    {
+	# If the longitude coordinates do not fall between -180 and 180,
+	# adjust them so that they do.
+	
+	if ( $x1 < -180.0 )
+	{
+	    $x1 = $x1 + ( POSIX::floor( (180.0 - $x1) / 360.0) * 360.0);
+	}
+	
+	if ( $x2 < -180.0 )
+	{
+	    $x2 = $x2 + ( POSIX::floor( (180.0 - $x2) / 360.0) * 360.0);
+	}
+	
+	if ( $x1 > 180.0 )
+	{
+	    $x1 = $x1 - ( POSIX::floor( ($x1 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	if ( $x2 > 180.0 )
+	{
+	    $x2 = $x2 - ( POSIX::floor( ($x2 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	# If $x1 < $x2, then we query on a single range defined by
+	# those coordinates.
+	
+	if ( $x1 <= $x2 )
+	{
+	    $request->add_warning("The values of 'lngmin' and 'lngmax' are equal, " .
+				  "so only records with that exact longitude will be selected")
+		if $x1 == $x2;
+	    
+	    push @filters, "$mt.lng_max > $x1 and $mt.lng_min < $x2";
+	}
+	
+	# Otherwise, our range crosses the antimeridian and so must be
+	# split in two.
+	
+	else
+	{
+	    push @filters, "($mt.lng_max > $x1 or $mt.lng_min < $x2)";
+	}
+    }
+    
+    # If latitude bounds were specified, add filters for them.
+    
+    if ( $y1 && $y1 < 90.0 && $y1 > -90.0 )
+    {
+	push @filters, "$mt.lat_max > $y1";
+    }
+    
+    if ( $y2 && $y2 < 90.0 && $y2 > -90.0 )
+    {
+	push @filters, "$mt.lat_min < $y2";
+    }
+    
+    if ( defined $y1 && defined $y2 && $y1 ne '' && $y2 ne '' && $y1 > $y2 )
+    {
+	$request->add_warning("The minimum latitude specified is greater than the maximum latitude specified, so no records will be selected");
+    }
+    
+    return @filters;
+}
 
 # generateAccessFilter ( mt, tables_ref )
 # 
@@ -2869,7 +3092,7 @@ sub generateMainFilters {
 		if $x1 == $x2;
 	    
 	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	    push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
 	}
 	
 	# Otherwise, our bounding box crosses the antimeridian and so must be
@@ -2880,7 +3103,7 @@ sub generateMainFilters {
 	{
 	    my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))," .
 					"((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
-	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	    push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
 	}
     }
     
@@ -2895,7 +3118,7 @@ sub generateMainFilters {
 	$y2 = 90.0 unless defined $y2 && $y2 ne '';
 	
 	my $polygon = "'POLYGON((-180.0 $y1,180.0 $y1,180.0 $y2,-180.0 $y2,-180.0 $y1))'";
-	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
     }
     
     # If the latitude bounds are such as to select no records, then add a warning.
@@ -2917,7 +3140,7 @@ sub generateMainFilters {
 	die "400 the value of parameter 'loc' is too large\n"
 	    if length($loc) > 5000;
 	my $quoted = $dbh->quote($loc);
-	push @filters, "contains(geomfromtext($quoted), $mt.loc)";
+	push @filters, "st_contains(geomfromtext($quoted), $mt.loc)";
     }
     
     # Check for parameter 'plate'
