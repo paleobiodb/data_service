@@ -124,19 +124,19 @@ sub updatePaleocoords {
 	logMessage(2, "    clearing all paleocoords between $max_age Ma and $min_age Ma...");
 	
 	$sql = "UPDATE $PALEOCOORDS
-		SET early_lng = null, early_lat = null, update_time = now()
+		SET early_lng = null, early_lat = null
 		WHERE early_age between $min_age and $max_age $filters";
 	
 	$count = $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
-		SET mid_lng = null, mid_lat = null, update_time = now()
+		SET mid_lng = null, mid_lat = null
 		WHERE mid_age between $min_age and $max_age $filters";
 	
 	$count += $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
-		SET late_lng = null, late_lat = null, update_time = now()
+		SET late_lng = null, late_lat = null
 		WHERE late_age between $min_age and $max_age $filters";
 	
 	$count += $dbh->do($sql);
@@ -160,19 +160,24 @@ sub updatePaleocoords {
 		SET update_early = true
 		WHERE early_age between $min_age and $max_age $filters";
 	
-	$count = $dbh->do($sql);
+	$dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET update_mid = true
 		WHERE mid_age between $min_age and $max_age $filters";
 	
-	$count += $dbh->do($sql);
+	$dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET update_late = true
 		WHERE late_age between $min_age and $max_age $filters";
 	
-	$count += $dbh->do($sql);
+	$dbh->do($sql);
+	
+	$sql = "SELECT count(*) FROM $PALEOCOORDS
+		WHERE update_early or update_mid or update_late";
+	
+	my ($count) = $dbh->selectrow_array($sql);
 	
 	logMessage(2, "      flagging $count coordinates to update");
     }
@@ -227,24 +232,21 @@ sub updatePaleocoords {
 	# changed.
 	
 	$sql = "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-		SET p.early_age = null, p.early_lng = null, p.early_lat = null, p.update_early = 1,
-		    p.update_time = now()
+		SET p.early_age = null, p.early_lng = null, p.early_lat = null, p.update_early = 1
 		WHERE round(c.early_age,0) <> p.early_age and
 		      (round(c.early_age,0) between $min_age and $max_age or p.early_age is not null)";
 	
 	$count = $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-		SET p.late_age = null, p.late_lng = null, p.late_lat = null, p.update_late = 1,
-		    p.update_time = now()
+		SET p.late_age = null, p.late_lng = null, p.late_lat = null, p.update_late = 1
 		WHERE round(c.late_age,0) <> p.late_age and
 		      (round(c.late_age,0) between $min_age and $max_age or p.late_age is not null)";
 	
 	$count += $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS as p JOIN $COLL_MATRIX as c using (collection_no)
-		SET p.mid_age = null, p.mid_lng = null, p.mid_lat = null, p.update_mid = 1,
-		    p.update_time = now()
+		SET p.mid_age = null, p.mid_lng = null, p.mid_lat = null, p.update_mid = 1
 		WHERE round((c.early_age + c.late_age)/2,0) <> p.mid_age and
 		      (round((c.early_age + c.late_age)/2,0) between $min_age and $max_age or 
 		       p.mid_age is not null)";
@@ -451,36 +453,36 @@ sub prepareStatements {
     
     $sql = "UPDATE $PALEOCOORDS
 	    SET early_age = ?, early_lng = ?, early_lat = ?, 
-		update_early = 0, update_time = now()
+		update_early = 0
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{early_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $PALEOCOORDS
 	    SET mid_age = ?, mid_lng = ?, mid_lat = ?, 
-		update_mid = 0, update_time = now()
+		update_mid = 0
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{mid_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $PALEOCOORDS
 	    SET late_age = ?, late_lng = ?, late_lat = ?, 
-		update_late = 0, update_time = now()
+		update_late = 0
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{late_sth} = $dbh->prepare($sql);
 
     $sql = "UPDATE $PALEOCOORDS
-	    SET early_plate = ?
+	    SET plate_no = ?, early_plate = ?, late_plate = ?
 	    WHERE collection_no = ? LIMIT 1";
+    
+    $self->{set_plate} = $dbh->prepare($sql);
+    
+    # $sql = "UPDATE $PALEOCOORDS
+    # 	    SET late_plate = ?
+    # 	    WHERE collection_no = ? LIMIT 1";
 
-    $self->{early_plate_sth} = $dbh->prepare($sql);
-
-    $sql = "UPDATE $PALEOCOORDS
-	    SET late_plate = ?
-	    WHERE collection_no = ? LIMIT 1";
-
-    $self->{late_plate_sth} = $dbh->prepare($sql);
+    # $self->{late_plate_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
 	    SET c.g_plate_no = pc.plate_no
@@ -726,15 +728,17 @@ sub updateOneEntry {
 	$self->{late_sth}->execute($age, $lng, $lat, $collection_no);
     }
     
-    if ( $age > 200 )
-    {
-	$self->{early_plate_sth}->execute($plate_id, $collection_no);
-    }
+    $self->{set_plate}->execute($plate_id, $plate_id, $plate_id, $collection_no);
+    
+    # if ( $age > 200 )
+    # {
+	# $self->{early_plate_sth}->execute($plate_id, $collection_no);
+    # }
 
-    else
-    {
-	$self->{late_plate_sth}->execute($plate_id, $collection_no);
-    }
+    # else
+    # {
+	# $self->{late_plate_sth}->execute($plate_id, $collection_no);
+    # }
     
     $self->{coll_matrix_sth}->execute($collection_no);
     
@@ -769,7 +773,7 @@ sub ensureTables {
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $PALEOCOORDS (
 		collection_no int unsigned primary key,
-		update_time timestamp,
+		update_time timestamp not null,
 		present_lng decimal(9,6),
 		present_lat decimal(9,6),
 		plate_no int unsigned,

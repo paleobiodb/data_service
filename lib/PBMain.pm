@@ -33,6 +33,8 @@ any qr{.*} => sub {
 	params->{save} = "no";
     }
     
+    delete params->{_};
+    
     if ( $r->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
     {
 	my $newpath = "$1/single.$3";
