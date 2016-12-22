@@ -24,7 +24,10 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
 		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS
 		      $IDIGBIO %IDP VALID_IDENTIFIER
-		      $MACROSTRAT_LITHS);
+		      $MACROSTRAT_LITHS
+		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
+		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS);
+
 
 # classic tables
 
@@ -108,7 +111,7 @@ our $MACROSTRAT_LITHS = 'macrostrat.liths';
 our $TIMESCALE_DATA = 'timescales';
 our $TIMESCALE_REFS = 'timescale_refs';
 our $TIMESCALE_INTS = 'timescale_ints';
-our $TIMESCALE_BOUNDARIES = 'timescale_bounds';
+our $TIMESCALE_BOUNDS = 'timescale_bounds';
 our $TIMESCALE_PERMS = 'timescale_perms';
 
 1;

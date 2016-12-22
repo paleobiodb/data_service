@@ -26,6 +26,7 @@ use SpecimenTables qw(buildSpecimenTables);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
+use TimescaleTables qw(establishTimescaleTables);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
@@ -78,7 +79,7 @@ my $occurrence_int_maps = $options{M};
 my $occurrence_reso = $options{R};
 my $diversity_tables = $options{d};
 my $prevalence_tables = $options{q};
-my $specimen_tables = $options{S};
+my $timescale_tables = $options{S};
 
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
@@ -271,11 +272,15 @@ if ( $strata_tables )
     buildStrataTables($dbh);
 }
 
-if ( $specimen_tables || $occurrence_tables )
+if ( $occurrence_tables )
 {
     buildSpecimenTables($dbh);
 }
 
+if ( $timescale_tables )
+{
+    establishTimescaleTables($dbh);
+}
 
 print "done rebuilding tables\n";
 
