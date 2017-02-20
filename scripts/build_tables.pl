@@ -26,7 +26,7 @@ use SpecimenTables qw(buildSpecimenTables);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
-use TimescaleTables qw(establishTimescaleTables);
+# use TimescaleTables qw(establishTimescaleTables);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
