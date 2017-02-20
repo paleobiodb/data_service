@@ -5,18 +5,16 @@ of the data service available:
 
 =item L<version 1.1|/data1.1/>
 
-This is the B<stable> version of the service, and should be used for production applications.
+This version of the data service is now B<obsolete>. It will continue to be supported, but any new
+applications should be written to use L<version 1.2|/data1.2/>.
 
 =item L<version 1.2|/data1.2/>
 
-This is the B<development> version of the data service.  It is now undergoing user testing, and
-the URL paths, parameters and response fields may change as a result of user feedback.
-Our target for freezing this version is December, 2015, and at that point it
-will become the preferred version to use for production applications.
-
-Watch this space for updates.  You can also view the L<change log|/data1.2/changelog/>
-which tracks changes to this data service across the different
-versions.
+This is the B<stable> version of the data service.  It is now the preferred version for
+production applications.  We may add new URL paths, parameters, and response fields from
+time to time, but existing ones will continue to work as they did before.  You can view
+the L<change log|/data1.2/changelog/> which tracks changes to this data service across the
+different versions.
 
 =back
 
