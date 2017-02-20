@@ -88,16 +88,16 @@ sub select_subtest {
     my $tb = Test::Builder->new;
     my $in_subtest;
     
-    if ( $tb->{Parent} )
-    {
+    # if ( $tb->{Parent} )
+    # {
 	$name ||= $tb->name;
-	$in_subtest = 1;
-    }
+    # 	$in_subtest = 1;
+    # }
     
-    elsif ( ! $name )
-    {
-	croak "select_subtest must have an argument if called outside of a subtest\n";
-    }
+    # elsif ( ! $name )
+    # {
+    # 	croak "select_subtest must have an argument if called outside of a subtest\n";
+    # }
     
     # If no subtests are selected, just return true.
     
