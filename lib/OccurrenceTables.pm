@@ -6,7 +6,6 @@
 # Build the tables needed by the data service for satisfying queries about
 # occurrences.
 
-
 package OccurrenceTables;
 
 use strict;
@@ -75,7 +74,7 @@ sub buildOccurrenceTables {
 				created timestamp null,
 				modified timestamp null,
 				primary key (occurrence_no, reid_no),
-			        key (reid_no)) ENGINE=MyISAM");
+				key (reid_no)) ENGINE=MyISAM");
     
     # Add one row for every occurrence in the database.
     
@@ -313,9 +312,9 @@ sub buildTaxonSummaryTable {
 			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
 			false
 		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
-			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-		WHERE latest_ident and orig_no > 0
+			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+		WHERE latest_ident and access_level = 0 and orig_no > 0
 		GROUP BY orig_no";
     
     $count = $dbh->do($sql);
