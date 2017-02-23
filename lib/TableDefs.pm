@@ -25,8 +25,11 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS
 		      $IDIGBIO %IDP VALID_IDENTIFIER
 		      $MACROSTRAT_LITHS
+		      $INSTITUTIONS $INST_NAMES $INST_COLLS
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
-		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS);
+		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
+		      $CONTRIB_STATS $CONTRIB_COUNTS
+		      $USERS_TABLE);
 
 
 # classic tables
@@ -106,6 +109,12 @@ our $IDIGBIO = 'idigbio';
 
 our $MACROSTRAT_LITHS = 'macrostrat.liths';
 
+# Institution tables
+
+our $INSTITUTIONS = 'institutions';
+our $INST_NAMES = 'inst_names';
+our $INST_COLLS = 'inst_colls';
+
 # New timescale system
 
 our $TIMESCALE_DATA = 'timescales';
@@ -113,5 +122,14 @@ our $TIMESCALE_REFS = 'timescale_refs';
 our $TIMESCALE_INTS = 'timescale_ints';
 our $TIMESCALE_BOUNDS = 'timescale_bounds';
 our $TIMESCALE_PERMS = 'timescale_perms';
+
+# Contributor tables
+
+our $CONTRIB_STATS = 'contrib_stats';
+our $CONTRIB_COUNTS = 'contrib_counts';
+
+# Wing user table
+
+our $USERS_TABLE = 'pbdb_wing.users';
 
 1;

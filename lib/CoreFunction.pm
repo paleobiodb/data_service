@@ -276,7 +276,21 @@ sub activateTables {
     
     $result = $dbh->do($sql);
     
-    # Then delete the backup tables.
+    # Then delete the backup tables.  We must look for and remove foreign key constraints first.
+
+    foreach my $t (@work_tables)
+    {
+	my ($table, $defn) = $dbh->selectrow_array("SHOW CREATE TABLE $backup_table{$t}");
+
+	next unless $table && $defn;
+
+	while ( $defn =~ m/ CONSTRAINT \s+ (`[^`]+`) \s+ FOREIGN \s+ KEY /xsig )
+	{
+	    my $key_name = $1;
+
+	    $dbh->do("ALTER TABLE $table DROP FOREIGN KEY $key_name");
+	}
+    }
     
     foreach my $t (@work_tables)
     {

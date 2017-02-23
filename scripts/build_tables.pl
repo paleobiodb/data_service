@@ -30,6 +30,8 @@ use TaxonTables qw(populateOrig
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
+use ContributorTables qw(buildContributorTables);
+use InstitutionTables qw(createInstitutionTables);
 
 
 # First parse option switches.  If we were given an argument, then use that as
@@ -37,7 +39,7 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydqspfAMSL', \%options);
+getopts('tT:OmR:bcKIUuivrydqspfAMSLC', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -68,7 +70,7 @@ my $t = Taxonomy->new($dbh, 'taxon_trees');
 # that were specified.
 
 my $force = $options{f};
-my $interval_data = $options{I};
+my $institution_tables = $options{I};
 my $interval_map = $options{U};
 my $rank_map = $options{r};
 my $taxon_pics = $options{p};
@@ -80,6 +82,7 @@ my $occurrence_reso = $options{R};
 my $diversity_tables = $options{d};
 my $prevalence_tables = $options{q};
 my $timescale_tables = $options{S};
+my $contrib_tables = $options{C};
 
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
@@ -97,12 +100,12 @@ my $options = { taxon_steps => $options{T},
 # data files.  Otherwise, do a (non-forced) call to LoadIntervalData if any
 # function has been selected that requires it.
 
-if ( $interval_data )
+if ( $institution_tables )
 {
-    loadIntervalData($dbh, 1);
+    createInstitutionTables($dbh);
 }
 
-elsif ( $interval_map || $collection_tables || $occurrence_tables )
+if ( $interval_map || $collection_tables || $occurrence_tables )
 {
     loadIntervalData($dbh);
 }
@@ -280,6 +283,12 @@ if ( $occurrence_tables )
 if ( $timescale_tables )
 {
     establishTimescaleTables($dbh);
+}
+
+if ( $contrib_tables )
+{
+    my $options = { new_tables => $options{f} };
+    buildContributorTables($dbh, $options);
 }
 
 print "done rebuilding tables\n";
