@@ -160,28 +160,58 @@ sub updatePaleocoords {
 		SET update_early = true
 		WHERE early_age between $min_age and $max_age $filters";
 	
-	$dbh->do($sql);
+	my ($count) = $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET update_mid = true
 		WHERE mid_age between $min_age and $max_age $filters";
 	
-	$dbh->do($sql);
+	$count += $dbh->do($sql);
 	
 	$sql = "UPDATE $PALEOCOORDS
 		SET update_late = true
 		WHERE late_age between $min_age and $max_age $filters";
 	
-	$dbh->do($sql);
+	$count += $dbh->do($sql);
 	
-	$sql = "SELECT count(*) FROM $PALEOCOORDS
-		WHERE update_early or update_mid or update_late";
+	# $sql = "SELECT count(*) FROM $PALEOCOORDS
+	# 	WHERE update_early or update_mid or update_late";
 	
-	my ($count) = $dbh->selectrow_array($sql);
+	# my ($count) = $dbh->selectrow_array($sql);
 	
 	logMessage(2, "      flagging $count coordinates to update");
     }
 
+    elsif ( $options->{update_empty} )
+    {
+	logMessage(2, "    updating all paleocoords that are empty");
+
+	$sql = "UPDATE $PALEOCOORDS
+		SET update_early = true
+		WHERE (early_lat is null or early_lng is null) $filters";
+
+	my ($count) = $dbh->do($sql);
+
+	$sql = "UPDATE $PALEOCOORDS
+		SET update_mid = true
+		WHERE (mid_lat is null or mid_lng is null) $filters";
+
+	$count += $dbh->do($sql);
+
+	$sql = "UPDATE $PALEOCOORDS
+		SET update_late = true
+		WHERE (late_lat is null or late_lng is null) $filters";
+
+	$count += $dbh->do($sql);
+
+	# $sql = "SELECT count(*) FROM $PALEOCOORDS
+	# 	WHERE update_early or update_mid or update_late";
+
+	# my ($count) = $dbh->selectrow_array($sql);
+	
+	logMessage(2, "      flagging $count coordinates to update");
+    }
+    
     # Otherwise, we check for all coordinates within the specified age range
     # that need updating.
 

@@ -19,11 +19,12 @@ use GPlates qw(ensureTables updatePaleocoords readPlateData);
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
 
-my ($replace_table, $update_all, $clear_all, $min_age, $max_age, $collection_no,
+my ($replace_table, $update_all, $update_empty, $clear_all, $min_age, $max_age, $collection_no,
     $read_plates, $quiet, $verbose, $debug);
 
 GetOptions("replace-table|R" => \$replace_table,
 	   "update-all|a" => \$update_all,
+	   "update-empty|e" => \$update_empty,
 	   "clear-all|x" => \$clear_all,
 	   "min-age=s" => \$min_age,
 	   "max-age=s" => \$max_age,
@@ -99,6 +100,7 @@ if ( $read_plates )
 # Otherwise, update the coordinates.
 
 updatePaleocoords($dbh, { update_all => $update_all,
+			  update_empty => $update_empty,
 			  clear_all => $clear_all,
 			  min_age => $min_age,
 			  max_age => $max_age,
