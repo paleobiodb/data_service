@@ -4177,6 +4177,20 @@ sub computeSearchTable {
     
     logMessage(2, "      found $count names");
     
+    # Finally, we add all of the names that are in the occurrences table but not in the taxon
+    # table.
+    
+    # logMessage(2, "    adding names from the occurrences table...");
+    
+    # # First the genera.
+    
+    # $SQL_STRING = "
+    # 	INSERT IGNORE INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no)
+    # 	SELECT DISTINCT genus_name, 'genus', 0
+    # 	FROM occ_matrix as m
+    # 	WHERE taxon_no = 0 and access_level = 0";
+
+    
     # We can stop here when debugging.
     
     my $a = 1;

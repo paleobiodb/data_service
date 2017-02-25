@@ -952,16 +952,26 @@ sub initialize {
 	    "the query will be processed as if you had said C<lngmin=-90 & lngmax=0 >.  In this",
 	    "case, I<all longitude values in the query result will be adjusted to fall within the actual",
 	    "numeric range you specified.>",
+	{ together => ['lngmin', 'lngmax'],
+	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
 	{ param => 'latmin', valid => COORD_VALUE('lat') },
 	    "Return only records whose present latitude is at least the given value.",
 	{ param => 'latmax', valid => COORD_VALUE('lat') },
 	    "Return only records whose present latitude is at most the given value.",
-	{ together => ['lngmin', 'lngmax'],
-	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
 	{ param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
 	    "Return only records whose present location (longitude and latitude) falls within",
 	    "the specified shape, which must be given in L<WKT|https://en.wikipedia.org/wiki/Well-known_text> format",
 	    "with the coordinates being longitude and latitude values.",
+	{ param => 'plngmin', valid => COORD_VALUE('lng') },
+	{ param => 'plngmax', valid => COORD_VALUE('lng') },
+	    "Return only records whose paleo longitude falls within the given bounds.",
+	    "If you specify one of these parameters then you must specify both.",
+	{ together => ['plngmin', 'plngmax'],
+	  error => "you must specify both of 'plngmin' and 'plngmax' if you specify either of them" },
+	{ param => 'platmin', valid => COORD_VALUE('lat') },
+	    "Return only records whose paleo latitude is at least the given value.",
+	{ param => 'platmax', valid => COORD_VALUE('lat') },
+	    "Return only reocrds whose paleo latitude is at most the given value.",
 	{ param => 'plate', valid => ANY_VALUE },
 	    "Return only records located on the specified geological plate(s).  If the value",
 	    "of this parameter starts with C<!>, then all records on the specified plates",
@@ -3143,6 +3153,104 @@ sub generateMainFilters {
 	push @filters, "st_contains(geomfromtext($quoted), $mt.loc)";
     }
     
+    # Check for parameters 'plngmin', 'plngmax', 'platmin', 'platmax'
+    
+    my $px1 = $request->clean_param('plngmin');
+    my $px2 = $request->clean_param('plngmax');
+    my $py1 = $request->clean_param('platmin');
+    my $py2 = $request->clean_param('platmax');
+    
+    # If longitude bounds were specified, create a range filter from them.
+    
+    if ( $px1 ne '' && $px2 ne '' && ! ( $px1 == -180 && $px2 == 180 ) )
+    {
+	# First figure out which location field we should be using.
+
+	my $prefix = $request->check_pgm($tables_ref);
+	
+	# If the longitude coordinates do not fall between -180 and 180,
+	# adjust them so that they do.
+	
+	if ( $px1 < -180.0 )
+	{
+	    $px1 = $px1 + ( POSIX::floor( (180.0 - $px1) / 360.0) * 360.0);
+	}
+	
+	if ( $px2 < -180.0 )
+	{
+	    $px2 = $px2 + ( POSIX::floor( (180.0 - $px2) / 360.0) * 360.0);
+	}
+	
+	if ( $px1 > 180.0 )
+	{
+	    $px1 = $px1 - ( POSIX::floor( ($px1 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	if ( $px2 > 180.0 )
+	{
+	    $px2 = $px2 - ( POSIX::floor( ($px2 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	# If $px1 < $px2, then we query on a single longitude range.
+	
+	if ( $px1 <= $px2 )
+	{
+	    $request->add_warning("The values of 'plngmin' and 'plngmax' are equal, " .
+				  "so only records with that exact paleolongitude will be selected")
+		if $px1 == $px2;
+	    
+	    # my $polygon = "'POLYGON(($px1 $py1,$px2 $py1,$px2 $py2,$px1 $py2,$px1 $py1))'";
+	    # push @filters, "st_contains(geomfromtext($polygon), $paleoloc_field)";
+	    
+	    push @filters, "${prefix}lng between $px1 and $px2";
+	}
+	
+	# Otherwise, our bounding box crosses the antimeridian and so must be
+	# split in two.  The latitude bounds must always be between -90 and
+	# 90, regardless.
+	
+	else
+	{
+	    # my $polygon = "'MULTIPOLYGON((($px1 $py1,180.0 $py1,180.0 $py2,$px1 $py2,$px1 $py1))," .
+	    # 				"((-180.0 $py1,$px2 $py1,$px2 $py2,-180.0 $py2,-180.0 $py1)))'";
+	    # push @filters, "st_contains(geomfromtext($polygon), $paleoloc_field)";
+
+	    push @filters, "(${prefix}lng between -180.0 and $px2 or ${prefix}lng between $px1 and 180.0)";
+	}
+    }
+    
+    # If latitude bounds were specified then create a range filter from them.
+
+    if ( $py1 ne '' || $py2 ne '' )
+    {
+	my $prefix = $request->check_pgm($tables_ref);
+	
+	push @filters, "${prefix}lat > $py1" if $py1 ne '' && $py1 > -90.0;
+	push @filters, "${prefix}lat < $py2" if $py2 ne '' && $py2 < 90.0;
+	
+	if ( $py1 ne '' && $py2 ne '' && $py1 == $py2 )
+	{
+	    $request->add_warning("The values of 'platmin' and 'platgmax' are equal, " .
+				  "so only records with that exact paleolatitude will be selected");
+	}
+	
+	elsif ( $py1 ne '' && $py2 ne '' && $py1 > $py2 )
+	{
+	    $request->add_warning("The value of 'platmin' is greater than the value of 'platmax', " .
+				  "so no records will be returned");
+	}
+	
+	if ( $py1 ne '' && $py1 > 90.0 )
+	{
+	    $request->add_warning("The value of 'platmin' is greater than +90 degrees, so no records will be selected");
+	}
+	
+	elsif ( $py2 ne '' && $py2 < -90.0 )
+	{
+	    $request->add_warning("The value of 'platmax' is less than -90 degrees, so no records will be selected");
+ 	}
+    }
+    
     # Check for parameter 'plate'
     
     my $plate_param = $request->clean_param('plate');
@@ -3667,7 +3775,7 @@ sub generateMainFilters {
     
     if ( $early_age )
     {
-	$buffer = $early_age > 66 ? 12 : 5;
+	$buffer = $early_age && $early_age > 66 ? 12 : 5;
 	$early_bound = $early_age + $buffer;
 	$late_bound = $late_age || 0;
 	$late_bound -= $buffer;
@@ -3838,6 +3946,46 @@ sub generateMainFilters {
     # Return the list
     
     return @filters;
+}
+
+
+# check_pgm ( tables_ref )
+#
+# This routine is called if a paleocoordinate filter is specified. It returns the prefix to be
+# used for generating the name of the field to filter by, according to the value of the parameter 'pgm'
+# and defaulting to 'gp_mid'. It also updates $tables_ref to include the proper table.
+
+sub check_pgm {
+    
+    my ($request, $tables_ref) = @_;
+    
+    my ($model) = $request->clean_param_list('pgm');
+    
+    $model = 'gp_mid' if ! defined $model || $model eq 'gplates';
+    
+    if ( $model eq 'scotese' )
+    {
+	$tables_ref->{cc} = 1;
+	return "cc.paleo";
+    }
+
+    elsif ( $model eq 'gp_early' )
+    {
+	$tables_ref->{pc} = 1;
+	return "pc.early_";
+    }
+
+    elsif ( $model eq 'gp_late' )
+    {
+	$tables_ref->{pc} = 1;
+	return "pc.late_";
+    }
+    
+    else # $model eq 'gp_mid'
+    {
+	$tables_ref->{pc} = 1;
+	return "pc.mid_";
+    }
 }
 
 

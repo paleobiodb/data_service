@@ -2859,6 +2859,12 @@ sub resolve_names {
 	    {
 		$base{$base_n} = $this_result->[0];
 	    }
+
+	    unless ( @$this_result )
+	    {
+		my $r = $taxonomy->check_occ_names($main, $subgenus, $species);
+		push @n_result, $return_type eq 'id' ? "-1 $r->{taxon_name}" : $r;
+	    }
 	}
 	
 	elsif ( $scientific )
@@ -3265,6 +3271,21 @@ sub lookup_base {
     my $range_string = join(' or ', map { "t.lft between $_->[0] and $_->[1]" } @check);
     
     return $range_string;
+}
+
+
+# check_occ_names ( main, subgenus, species )
+#
+# This routine is called by &resolve_names for any name that cannot be
+# found. We check the occurrence table to see if any occurrences with this
+# name have been entered, whereas the name itself has not been entered into
+# the authorities table.
+
+sub check_occ_names {
+    
+    my ($taxonomy, $main, $subgenus, $species) = @_;
+
+    # $$$
 }
 
 
@@ -4512,7 +4533,7 @@ sub person_id_filter {
     return "$tn.authorizer_no = -1" unless ref $value eq 'ARRAY' && defined $value->[0];
     
     my $output = join(',', @$value);
-    print STDERR "id_list: $output\n";
+    # print STDERR "id_list: $output\n";
     
     my $exclude;
     my $any_except;

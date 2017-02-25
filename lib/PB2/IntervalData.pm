@@ -27,6 +27,7 @@ no warnings 'numeric';
 
 our (%IDATA, %INAME, %SDATA, %SLDATA, %SMDATA);
 our (%BOUNDARY_LIST, %BOUNDARY_MAP);
+our ($USE_SCALE_MAP_LEVEL);
 
 
 # initialize ( )
@@ -364,7 +365,7 @@ sub list {
     {
 	unless ( $level_string )
 	{
-	    push @filters, "sm.scale_level is not null";
+	    push @filters, $USE_SCALE_MAP_LEVEL ? "sm.level is not null" : "sm.scale_level is not null";
 	}
     }
     
@@ -422,7 +423,7 @@ sub list {
     
     if ( $level_string )
     {
-	push @filters, "sm.scale_level in ($level_string)";
+	push @filters, $USE_SCALE_MAP_LEVEL ? "sm.level in ($level_string)" : "sm.scale_level in ($level_string)";
     }
     
     push @filters, "1=1" unless @filters;
@@ -470,6 +471,13 @@ sub list {
     $request->substitute_select( mt => 'i' );
     
     my $fields = $request->select_string;
+    
+    # Compensate for possible old field names
+
+    if ( $USE_SCALE_MAP_LEVEL )
+    {
+	$fields =~ s/sm.scale_level/sm.level as scale_level/g;
+    }
     
     # Determine the necessary joins.
     
@@ -526,6 +534,13 @@ sub list_scales {
     $request->substitute_select( mt => 'sc' );
     
     my $fields = $request->select_string;
+    
+    # Compensate for possible old field names
+
+    if ( $USE_SCALE_MAP_LEVEL )
+    {
+	$fields =~ s/sm.scale_level/sm.level as scale_level/g;
+    }
     
     # Construct the list of filter expressions.
     
@@ -980,6 +995,11 @@ sub read_interval_data {
 						 color => $color,
 						 scale_level => $scale_level + 0,
 						 "L$scale_level" => $interval_no };
+	}
+	
+	if ( defined $result->[0]{level} )
+	{
+	    $USE_SCALE_MAP_LEVEL = 1;
 	}
 	
 	# Now compute boundary lists and parent level mappings. $$$
