@@ -101,8 +101,7 @@ sub initialize {
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indicate whether the collection is on protected land",
         { value => 'time', maps_to => '1.2:colls:time' },
-	    "This block is obsolete, and is included only for compatibility reasons.",
-	    "It does not include any fields in the response.",
+	    "This block is includes the field 'cx_int_no', which is needed by Navigator.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -326,7 +325,11 @@ sub initialize {
 	{ output => 'protected', com_name => 'ptd' },
 	    "The protected status of the land on which the collection is located, if known.");
     
-    $ds->define_block('1.2:colls:time');
+    $ds->define_block('1.2:colls:time' =>
+	{ select => 'im.cx_int_no', tables => ['im'] },
+	{ output => 'cx_int_no', com_name => 'cxi' },
+    	    "The identifier of the most specific single interval from the selected timescale that",
+    	    "covers the entire time range associated with the collection or cluster.");
     
     #   { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
     # 	tables => ['im'] },

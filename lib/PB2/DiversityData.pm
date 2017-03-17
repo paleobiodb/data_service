@@ -57,65 +57,112 @@ sub generate_diversity_table {
     
     # Get the age bounds (if any) that were specified for this process.
     
-    my $interval_no = $self->clean_param('interval_id');
-    my $interval_name = $self->clean_param('interval');
-    my $min_ma = $self->clean_param('min_ma');
-    my $max_ma = $self->clean_param('max_ma');
+    # my @interval_nos = $self->clean_param_list('interval_id');
+    # my $interval_names = $self->clean_param('interval');
+    # my $min_ma = $self->clean_param('min_ma');
+    # my $max_ma = $self->clean_param('max_ma');
     
-    my ($early_limit, $late_limit);
+    my $early_limit;
+    my $late_limit;
     
-    if ( $interval_no )
-    {
-	my $no = $interval_no + 0;
-	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_no = $no";
+    # if ( @interval_nos )
+    # {
+    # 	foreach my $n ( @interval_nos )
+    # 	{
+    # 	    next unless $n;
+	    
+    # 	    my $idata = $PB2::IntervalData::IDATA{$n};
+	    
+    # 	    unless ( $idata )
+    # 	    {
+    # 		$self->add_warning("unknown time interval id '$n'");
+    # 		next;
+    # 	    }
+
+    # 	    $early_limit = $idata->{early_age} if !defined $early_limit || $idata->{early_age} > $early_limit;
+    # 	    $late_limit = $idata->{late_age} if !defined $late_limit || $idata->{late_age} < $late_limit;
+    # 	}
 	
-	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+    # 	# my $sql = "SELECT min(early_age) as early_age, max(late_age) as late_age FROM interval_data WHERE interval_no in ($list)";
 	
-	unless ( $max_ma )
-	{
-	    $early_limit = 0;
-	    $late_limit = 0;
-	    $self->add_warning("unknown interval id '$interval_no'");
-	}
+    # 	# my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
 	
-	else
-	{
-	    $early_limit = $max_ma;
-	    $late_limit = $min_ma;
-	}
-    }
+    # 	# unless ( $max_ma )
+    # 	# {
+    # 	#     $early_limit = 0;
+    # 	#     $late_limit = 0;
+    # 	#     $self->add_warning("unknown interval id(s) '$interval_no'");
+    # 	# }
+	
+    # 	# else
+    # 	# {
+    # 	#     $early_limit = $max_ma;
+    # 	#     $late_limit = $min_ma;
+    # 	# }
+
+    # 	unless ( defined $early_limit )
+    # 	{
+    # 	    $self->add_warning("no valid time intervals were specified");
+    # 	    $early_limit = $late_limit = 0;
+    # 	}
+    # }
     
-    elsif ( $interval_name )
-    {
-	my $name = $dbh->quote($interval_name);
-	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name like $name";
+    # elsif ( $interval_names )
+    # {
+    # 	my @names = split /\s*,\s*/, $interval_names;
+
+    # 	foreach my $n ( @names )
+    # 	{
+    # 	    next unless $n;
+	    
+    # 	    my $idata = $PB2::IntervalData::INAME{lc $n};
+	    
+    # 	    unless ( $idata )
+    # 	    {
+    # 		$self->add_warning("unknown time interval '$n'");
+    # 		next;
+    # 	    }
 	
-	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+    # 	    $early_limit = $idata->{early_age} if !defined $early_limit || $idata->{early_age} < $early_limit;
+    # 	    $late_limit = $idata->{late_age} if !defined $late_limit || $idata->{late_age} > $late_limit;
+    # 	}
 	
-	unless ( $max_ma )
-	{
-	    $early_limit = 0;
-	    $late_limit = 0;
-	    $self->add_warning("unknown interval '$interval_name'");
-	}
+    # 	# my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name like $name";
 	
-	else
-	{
-	    $early_limit = $max_ma;
-	    $late_limit = $min_ma;
-	}
-    }
+    # 	# my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+	
+    # 	# unless ( $max_ma )
+    # 	# {
+    # 	#     $early_limit = 0;
+    # 	#     $late_limit = 0;
+    # 	#     $self->add_warning("unknown interval '$interval_name'");
+    # 	# }
+	
+    # 	# else
+    # 	# {
+    # 	#     $early_limit = $max_ma;
+    # 	#     $late_limit = $min_ma;
+    # 	# }
+	
+    # 	unless ( defined $early_limit )
+    # 	{
+    # 	    $self->add_warning("no valid time intervals were specified");
+    # 	    $early_limit = $late_limit = 0;
+    # 	}
+    # }
     
-    elsif ( $min_ma || $max_ma )
-    {
-	$early_limit = $max_ma + 0 if $max_ma;
-	$late_limit = $min_ma + 0;
-    }
+    # elsif ( $min_ma || $max_ma )
+    # {
+    # 	$early_limit = $max_ma + 0 if $max_ma;
+    # 	$late_limit = $min_ma + 0;
+    # }
     
     # Now scan through the occurrences.  We cache the lists of matching
     # intervals from the selected scale, under the name of the interval(s)
     # recorded for the occurrence (which may or may not be in the standard
     # timescale).
+
+    ($early_limit, $late_limit) = $self->process_interval_params();
     
     my (%interval_cache);
     

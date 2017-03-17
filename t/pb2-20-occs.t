@@ -1227,7 +1227,7 @@ subtest 'interval' => sub {
     my @o9a = $T->fetch_nocheck("/occs/list.json?interval=bad&limit=10", "list bad interval name");
     
     $T->ok_response_code("400", "list bad interval got 400 response");
-    $T->ok_error_like(qr{unknown interval}i, "list bad interval name got proper error");
+    $T->ok_error_like(qr{unknown interval|no valid interval}i, "list bad interval name got proper error");
     
     my @o9b = $T->fetch_nocheck("/occs/list.json?interval_id=bad&limit=10", "list bad interval id");
     

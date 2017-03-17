@@ -112,6 +112,8 @@ sub initialize {
 	    "evaluated according to the model specified by the parameter F<pgm>.",
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indication of whether the occurrence is located on protected land.",
+        { value => 'time', maps_to => '1.2:colls:time' },
+	    "Additional information about the temporal locality of the occurrence.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the occurrence.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
