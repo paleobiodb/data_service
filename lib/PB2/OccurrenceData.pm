@@ -1462,7 +1462,7 @@ sub diversity {
     $tables->{o} = 1;
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateOccFilters($tables, 'o');
+    push @filters, $request->generateOccFilters($tables, 'o', 1);
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
@@ -2167,7 +2167,7 @@ sub prevalence {
     $tables = { };
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
-    push @filters, $request->generateOccFilters($tables, 'o');
+    push @filters, $request->generateOccFilters($tables, 'o', 1);
     push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
     # push @filters, $request->generate_crmod_filters('o', $tables);
     # push @filters, $request->generate_ent_filters('o', $tables);
@@ -2190,7 +2190,7 @@ sub prevalence {
 	$tables = { o => 1 };
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
-	push @filters, $request->generateOccFilters($tables, 'o');
+	push @filters, $request->generateOccFilters($tables, 'o', 1);
 	push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
 	# push @filters, $request->generate_crmod_filters('o', $tables);
 	# push @filters, $request->generate_ent_filters('o', $tables);
@@ -2668,7 +2668,7 @@ sub list_occs_strata {
 }
 
 
-# generateOccFilters ( tables_ref, table_name )
+# generateOccFilters ( tables_ref, table_name, conditional )
 # 
 # Generate a list of filter clauses that will be used to compute the
 # appropriate result set.  This routine handles only parameters that are specific
@@ -2703,116 +2703,120 @@ sub generateOccFilters {
 	}
     }
     
-    # If the specified table is already part of the query, then check for parameter 'idtype'.
-    # In cases of reidentified occurrences, it specifies which identifications should be returned.
-    # The default is 'latest'.  If this table is not already part of the query, then we can (and
-    # should) ignore this parameter because it makes no difference and will unnecessarily slow
-    # down the query.
+    # Then check for 'idqual', 'idmod', 'idgenmod' and 'idspcmod'.
     
-    if ( $tables_ref->{$tn} )
+    my $idqual = $request->clean_param('idqual');
+    my $idmod = $request->clean_param('idmod');
+    my $idgen = $request->clean_param('idgenmod');
+    my $idspc = $request->clean_param('idspcmod');
+    
+    # If any of these parameters are given, add the appropriate filters. If
+    # $tn is 'ss', substitute 'o'. This is because the specimen matrix doesn't
+    # have the fields 'genus_reso', etc.  These are only in 'o'.
+    
+    if ( $idqual || $idmod || $idspc || $idgen )
     {
-	# First check for 'idtype'.  The default is 'latest' if not otherwise specified.
+	my $idtn = $tn eq 'ss' ? 'o' : $tn;
+	push @filters, $request->PB2::OccurrenceData::generateIdentFilters($idtn, $idqual, $idmod, $idgen, $idspc);
+	$tables_ref->{$idtn} = 1;
+	$tables_ref->{non_summary} = 1;
+    }
+    
+    # Now check for 'abundance'. This requires the table 'oc', since abundance
+    # data is not stored anywhere else.
+    
+    if ( my $abundance = $request->clean_param('abundance') )
+    {
+	$tables_ref->{oc} = 1;
+	$tables_ref->{non_summary} = 1;
 	
-	my $idtype = $request->clean_param('idtype') || 'latest';
+	my $abund_min;
 	
-	if ( $idtype eq 'latest' )
+	if ( $abundance =~ qr{ ^ ( \w+ ) \s* [:] \s* ( .* ) $ }xs )
 	{
-	    push @filters, "$tn.latest_ident = true";
+	    $abundance = lc $1;
+	    $abund_min = $2;
 	}
 	
-	elsif ( $idtype eq 'orig' )
+	else
 	{
-	    push @filters, "$tn.reid_no = 0";
-	    $tables_ref->{non_summary} = 1;
+	    $abundance = lc $abundance;
 	}
 	
-	elsif ( $idtype eq 'reid' )
+	if ( $abundance eq 'count' )
 	{
-	    push @filters, "($tn.reid_no > 0 or ($tn.reid_no = 0 and $tn.latest_ident = false))";
-	    $tables_ref->{group_by_reid} = 1;
-	    $tables_ref->{non_summary} = 1;
+	    push @filters, "oc.abund_unit in ('individuals', 'specimens', 'elements', 'fragments', 'grid-count')";
 	}
 	
-	else # ( $idtype eq 'all' )
+	elsif ( $abundance eq 'coverage' )
 	{
-	    # no filter is needed, just select all records
-	    $tables_ref->{group_by_reid} = 1;
-	    $tables_ref->{non_summary} = 1;
+	    push @filters, "oc.abund_unit like '\\%%'";
 	}
 	
-	# Also check for 'idqual', 'idmod', 'idgenmod' and 'idspcmod'.
-	
-	my $idqual = $request->clean_param('idqual');
-	my $idmod = $request->clean_param('idmod');
-	my $idgen = $request->clean_param('idgenmod');
-	my $idspc = $request->clean_param('idspcmod');
-	
-	# We have to use table 'o', even if $tn eq 'ss'.  This is because the specimen matrix
-	# doesn't have the fields 'genus_reso', etc.  These are only in 'o'.
-	
-	if ( $idqual || $idmod || $idspc || $idgen )
+	elsif ( $abundance eq 'any' )
 	{
-	    push @filters, $request->generateIdentFilters('o', $idqual, $idmod, $idgen, $idspc);
+	    push @filters, "oc.abund_unit <> ''";
 	}
 	
-	# Now check for abundance
-	
-	if ( my $abundance = $request->clean_param('abundance') )
+	elsif ( $abundance )
 	{
-	    $tables_ref->{oc} = 1;
+	    die $request->exception(400, "parameter 'abundance': unknown type '$abundance'");
+	}
+	
+	if ( defined $abund_min && $abund_min ne '' )
+	{
+	    die $request->exception(400, "parameter 'abundance': '$abund_min' is not a positive integer")
+		unless $abund_min =~ qr{ ^ \d+ $ }xs;
 	    
-	    my $abund_min;
-	    
-	    if ( $abundance =~ qr{ ^ ( \w+ ) \s* [:] \s* ( .* ) $ }xs )
-	    {
-		$abundance = lc $1;
-		$abund_min = $2;
-	    }
-	    
-	    else
-	    {
-		$abundance = lc $abundance;
-	    }
-	    
-	    if ( $abundance eq 'count' )
-	    {
-		push @filters, "oc.abund_unit in ('individuals', 'specimens', 'elements', 'fragments', 'grid-count')";
-	    }
-	    
-	    elsif ( $abundance eq 'coverage' )
-	    {
-		push @filters, "oc.abund_unit like '\\%%'";
-	    }
-	    
-	    elsif ( $abundance eq 'any' )
-	    {
-		push @filters, "oc.abund_unit <> ''";
-	    }
-	    
-	    elsif ( $abundance )
-	    {
-		die $request->exception(400, "parameter 'abundance': unknown type '$abundance'");
-	    }
-	    
-	    if ( defined $abund_min && $abund_min ne '' )
-	    {
-		die $request->exception(400, "parameter 'abundance': '$abund_min' is not a positive integer")
-		    unless $abund_min =~ qr{ ^ \d+ $ }xs;
-		
-		push @filters, "oc.abund_value >= $abund_min";
-	    }
+	    push @filters, "oc.abund_value >= $abund_min";
 	}
     }
     
-    # Check for parameter 'ref_id'.
+    # At the very end, we check for parameter 'idtype'.  In cases of reidentified occurrences, it
+    # specifies which identifications should be returned.  The default is 'latest', but this
+    # should only be applied if table $tn is already part of the query.  The summary tables are
+    # already computed using the filter "latest_ident = true", so it would needlessly slow down
+    # the query to specifically add this by default.
     
-    # if ( my @reflist = $request->clean_param_list('ref_id') )
-    # {
-    # 	my $refstring = join(',', @reflist);
-    # 	push @filters, "$tn.reference_no in ($refstring)";
-    # 	$tables_ref->{$tn} = 1;
-    # 	$tables_ref->{non_summary} = 1;
-    # }
+    my $idtype = $request->clean_param('idtype') || 'latest';
+    
+    if ( $idtype eq 'latest' )
+    {
+	if ( $tables_ref->{$tn} )
+	{
+	    push @filters, "$tn.latest_ident = true";
+	}
+
+	else
+	{
+	    # If table $tn is not already in the query do nothing, because the query either does
+	    # not refer to occurrences at all or else it will use summary tables which have
+	    # already been computed using latest_ident = true.
+	}
+    }
+    
+    elsif ( $idtype eq 'orig' )
+    {
+	push @filters, "$tn.reid_no = 0";
+	$tables_ref->{non_summary} = 1;
+	$tables_ref->{$tn} = 1;
+    }
+    
+    elsif ( $idtype eq 'reid' )
+    {
+	push @filters, "($tn.reid_no > 0 or ($tn.reid_no = 0 and $tn.latest_ident = false))";
+	$tables_ref->{group_by_reid} = 1;
+	$tables_ref->{non_summary} = 1;
+	$tables_ref->{$tn} = 1;
+    }
+    
+    else # ( $idtype eq 'all' )
+    {
+	# no filter is needed, just select all records
+	$tables_ref->{group_by_reid} = 1;
+	$tables_ref->{non_summary} = 1;
+	$tables_ref->{$tn} = 1;
+    }
     
     return @filters;
 }
