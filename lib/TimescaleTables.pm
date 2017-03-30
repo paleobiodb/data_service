@@ -18,7 +18,7 @@ use ConsoleLog qw(logMessage);
 
 use base 'Exporter';
 
-our(@EXPORT_OK) = qw(establishTimescaleTables);
+our(@EXPORT_OK) = qw(establishTimescaleTables copyOldTimescales);
 
 
 # Table and file names
@@ -75,10 +75,10 @@ sub establishTimescaleTables {
     $dbh->do("DROP TABLE IF EXISTS $TIMESCALE_WORK");
     
     $dbh->do("CREATE TABLE $TIMESCALE_WORK (
-		timescale_no int unsigned primary key,
+		timescale_no int unsigned primary key auto_increment,
 		authorizer_no int unsigned not null,
 		timescale_name varchar(80) not null,
-		source_timescale_no int unsigned,
+		source_timescale_no int unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
 		reference_no int unsigned not null,
@@ -86,6 +86,7 @@ sub establishTimescaleTables {
 		is_active boolean,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp,
+		updated timestamp default current_timestamp on update current_timestamp,
 		key (reference_no),
 		key (authorizer_no))");
     
@@ -124,32 +125,38 @@ sub establishTimescaleTables {
     $dbh->do("CREATE TABLE $TS_INTS_WORK (
 		interval_no int unsigned primary key,
 		interval_name varchar(80) not null,
-		interval_abbrev varchar(10) not null)");
+		abbrev varchar(10) not null)");
     
     # The table 'timescale_bounds' defines boundaries between intervals.
     
     $dbh->do("DROP TABLE IF EXISTS $TS_BOUNDS_WORK");
     
     $dbh->do("CREATE TABLE $TS_BOUNDS_WORK (
-		bound_no int unsigned primary key,
+		bound_no int unsigned primary key auto_increment,
 		timescale_no int unsigned not null,
-		bound_type enum('absolute', 'spike', 'same', 'relative', 'offset'),
-		lower_interval_no int unsigned not null,
-		upper_interval_no int unsigned not null,
-		source_bound_no int unsigned not null,
-		range_bound_no int unsigned not null,
-		color_bound_no int unsigned not null,
+		authorizer_no int unsigned not null,
+		enterer_no int unsigned not null,
+		bound_type enum('absolute', 'spike', 'same', 'percent', 'offset'),
+		lower_no int unsigned not null,
+		upper_no int unsigned not null,
+		source_bound_no int unsigned,
+		range_bound_no int unsigned,
+		color_bound_no int unsigned,
 		age decimal(9,5),
 		age_error decimal(9,5),
-		percent decimal(7,4),
-		percent_error decimal(7,4),
+		offset decimal(9,5),
+		offset_error decimal(9,5),
 		is_locked boolean not null,
 		is_different boolean not null,
 		color varchar(10),
-		reference_no int unsigned not null,
+		reference_no int unsigned,
 		derived_age decimal(9,5),
+		derived_age_error decimal(9,5),
 		derived_color varchar(10),
-		derived_reference_no int unsigned not null,
+		derived_reference_no int unsigned,
+		created timestamp default current_timestamp,
+		modified timestamp default current_timestamp,
+		updated timestamp default current_timestamp on update current_timestamp,
 		key (source_bound_no),
 		key (range_bound_no),
 		key (color_bound_no),
@@ -177,315 +184,489 @@ sub establishTimescaleTables {
 }
 
 
-# sub loadIntervalData {
+# initFromOldIntervals ( dbh )
+# 
+# Initialize the new tables from the old set of timescale intervals.
 
-#     my ($dbh, $force) = @_;
-    
-#     # Unless $force was specified, check whether the table already exists and
-#     # contains data.
-    
-#     my $result;
-    
-#     unless ( $force )
-#     {
-# 	try {
-# 	    $result = $dbh->do("SELECT COUNT(*) FROM $INTERVAL_DATA");
-# 	};
-#     }
-    
-#     # If the relevant tables were not found, try to read the data in from
-#     # files on disk.
-    
-#     my $update = 0;
-    
-#     if ( $force or not $result )
-#     {
-# 	logMessage(2, "loading tables from system/interval_data.sql...");
-# 	loadSQLFile($dbh, $INTERVAL_DATA_FILE);
-# 	$update = 1;
-#     }
-    
-#     # If new data was loaded, then we need to recompute the interval map table.
-    
-#     if ( $update )
-#     {
-# 	buildIntervalMap($dbh);
-# 	buildIntervalBufferMap($dbh);
-#     }
-# }
+sub copyOldTimescales {
 
-
-# =head2 buildIntervalMap ( dbh )
-
-# Generate the tables 'interval_map' and 'interval_bracket'.  The first of these
-# maps each possible time range (whose endpoints are the start or end of any
-# known intervals) and each known time scale to a single containing interval in
-# that time scale plus a starting and ending interval which most precisely
-# bracket the starting range.
-
-# The second table just maps single ages to bracketing intervals.  By means of
-# these two tables, we can translate any range or age into any of the known time
-# scales. 
-
-# =cut
-
-# sub buildIntervalMap {
-
-#     my ($dbh) = @_;
+    my ($dbh, $options) = @_;
     
-#     my ($sql, $result, $count);
+    $options ||= { };
     
-#     logMessage(2, "computing interval map");
+    my $authorizer_no = $options->{authorizer_no} || 0;
+    my $auth_quoted = $dbh->quote($authorizer_no);
+    my ($sql, $result);
     
-#     # Then create a new working map table.  For each possible combination of
-#     # start and end ages and each possible scale, insert a row if a containing
-#     # interval exists for that age range in that scale.
+    # First establish the international timescales.
     
-#     $dbh->do("DROP TABLE IF EXISTS $INTERVAL_MAP_WORK");
+    $sql = "REPLACE INTO $TIMESCALE_DATA (timescale_no, authorizer_no, timescale_name,
+	interval_type, is_active) VALUES
+	(1, $auth_quoted, 'International Chronostratigraphic Eons', 'eon', 1),
+	(2, $auth_quoted, 'International Chronostratigraphic Eras', 'era', 1),
+	(3, $auth_quoted, 'Internatioanl Chronostratigraphic Periods', 'period', 1),
+	(4, $auth_quoted, 'International Chronostratigraphic Epochs', 'epoch', 1),
+	(5, $auth_quoted, 'International Chronostratigraphic Stages', 'stage', 1)";
     
-#     $dbh->do("CREATE TABLE $INTERVAL_MAP_WORK (
-# 		scale_no smallint unsigned not null,
-# 		early_age decimal(9,5),
-# 		late_age decimal(9,5),
-# 		range_key varchar(20) not null,
-# 		cx_int_no int unsigned not null,
-# 		cx_interval varchar(80) not null,
-# 		early_int_no int unsigned not null,
-# 		early_interval varchar(80) not null,
-# 		late_int_no int unsigned not null,
-# 		late_interval varchar(80) not null,
-# 		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
+    $result = $dbh->do($sql);
     
-#     logMessage(2, "    computing containing intervals...");
+    # Then copy the interval data from the old tables for scale_no 1.
     
-#     $sql = "	INSERT IGNORE $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-# 		SELECT i.scale_no, i.early_age, i.late_age, 
-# 		       (SELECT cxi.interval_no 
-# 			FROM $INTERVAL_DATA as cxi JOIN $SCALE_MAP as sm using (interval_no)
-# 			WHERE cxi.early_age >= i.early_age and cxi.late_age <= i.late_age 
-# 				and sm.scale_no = i.scale_no
-# 			ORDER BY scale_level desc limit 1) as cx_int_no
-# 		FROM (SELECT distinct s.scale_no, ei.early_age, li.late_age
-# 		      FROM scale_data as s JOIN interval_data as ei JOIN interval_data as li
-# 		      WHERE ei.early_age > li.late_age and
-# 			ei.early_age <= s.early_age and li.late_age >= s.late_age) as i";
+    $sql = "REPLACE INTO $TIMESCALE_INTS (interval_no, interval_name, abbrev)
+	SELECT i.interval_no, i.interval_name, i.abbrev
+	FROM interval_data as i join scale_map as sm using (interval_no)
+	WHERE scale_no = 1
+	GROUP BY interval_no";
     
-#     $result = $dbh->do($sql);
+    $result = $dbh->do($sql);
     
-#     logMessage(2, "      found $result age start/end pairs");
+    # Then we need to establish the bounds for each timescale.
     
-#     $sql = "	INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-# 		SELECT i.scale_no, i.early_age, i.early_age,
-# 		       (SELECT cxi.interval_no 
-# 			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
-# 			WHERE cxi.early_age > i.early_age and cxi.late_age < i.early_age
-# 				and sm.scale_no = i.scale_no
-# 			ORDER BY scale_level desc limit 1) as cx_int_no
-# 		FROM (SELECT distinct s.scale_no, i.early_age
-# 		      FROM scale_data as s JOIN interval_data as i
-# 		      WHERE i.early_age <= s.early_age and i.early_age >= s.late_age) as i";
+    $sql = "TRUNCATE TABLE $TIMESCALE_BOUNDS";
     
-#     $result = $dbh->do($sql);
+    $result = $dbh->do($sql);
     
-#     $sql = "	INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-# 		SELECT i.scale_no, i.late_age, i.late_age,
-# 		       (SELECT cxi.interval_no 
-# 			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
-# 			WHERE cxi.early_age >= i.late_age and cxi.late_age < i.late_age
-# 				and sm.scale_no = i.scale_no
-# 			ORDER BY scale_level desc limit 1) as cx_int_no
-# 		FROM (SELECT distinct s.scale_no, i.late_age
-# 		      FROM scale_data as s JOIN interval_data as i
-# 		      WHERE i.late_age <= s.early_age and i.late_age >= s.late_age) as i";
+    foreach my $level_no (1..5)
+    {
+	$sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, enterer_no, 
+			bound_type, lower_no, upper_no, age, color, reference_no)
+	SELECT $level_no as timescale_no, $auth_quoted as authorizer_no, $auth_quoted as enterer_no,
+			'spike' as bound_type, lower_no, upper_no, age, color, reference_no
+	FROM
+	((SELECT null as lower_no, null as lower_name, i1.early_age as age, i1.interval_name as upper_name, 
+		i1.interval_no as upper_no, sm1.color, i1.reference_no
+	FROM scale_map as sm1 join interval_data as i1 using (interval_no)
+	WHERE sm1.scale_level = $level_no ORDER BY i1.early_age desc LIMIT 1)
+	UNION
+	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i1.late_age as age, 
+		i2.interval_name as upper_name, i2.interval_no as upper_no, sm2.color, i2.reference_no
+	FROM scale_map as sm1 join scale_map as sm2 on (sm1.scale_no = sm2.scale_no and sm1.scale_level = sm2.scale_level)
+		join interval_data as i1 on i1.interval_no = sm1.interval_no
+		join interval_data as i2 on i2.interval_no = sm2.interval_no
+	WHERE (i1.late_age = i2.early_age) and sm1.scale_level = $level_no GROUP BY i1.interval_no)
+	UNION
+	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i1.late_age as age,
+		null as upper_name, null as upper_no, null as color, null as reference_no
+	FROM scale_map as sm1 join interval_data as i1 using (interval_no)
+	WHERE sm1.scale_level = $level_no ORDER BY i1.late_age asc LIMIT 1)
+	ORDER BY age asc) as innerquery";
+	
+	print "$sql\n\n" if $options->{debug};
+	
+	$dbh->do($sql);
+	
+	update_timescale_attrs($dbh, $level_no);
+    }
     
-#     $result += $dbh->do($sql);
+    # Finally, we knit pieces of these together into a single timescale, for demonstration
+    # purposes. 
     
-#     logMessage(2, "      found $result age boundary points");
+    my $test_timescale_no = 10;
     
-#     # Now, we fill in the most specific early interval for each age range.
+    $sql = "REPLACE INTO $TIMESCALE_DATA (timescale_no, authorizer_no, timescale_name,
+	is_active) VALUES
+	($test_timescale_no, $auth_quoted, 'Test timescale using international intervals', 1)";
     
-#     logMessage(2, "    computing early intervals...");
+    $dbh->do($sql);
     
-#     $sql = "UPDATE $INTERVAL_MAP_WORK as i
-# 	    SET i.early_int_no =
-# 	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-# 		WHERE d.early_age >= i.early_age and d.late_age < i.early_age and d.late_age >= i.late_age
-# 			and sm.scale_no = i.scale_no
-# 		ORDER BY early_age asc, scale_level asc limit 1)";
+    my @boundaries;
     
-#     $result = $dbh->do($sql);
+    add_timescale_chunk($dbh, \@boundaries, 5);
+    add_timescale_chunk($dbh, \@boundaries, 3);
+    add_timescale_chunk($dbh, \@boundaries, 2);
+    add_timescale_chunk($dbh, \@boundaries, 1);
     
-#     $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on i.late_age = d.late_age
-# 		JOIN $SCALE_MAP as sm using (interval_no)
-# 	    SET i.early_int_no =
-# 	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-# 		WHERE d.late_age = i.late_age
-# 		ORDER BY scale_level asc limit 1)
-# 	    WHERE i.early_age = i.late_age";
+    set_timescale_boundaries($dbh, $test_timescale_no, \@boundaries, $authorizer_no);
+    update_timescale_attrs($dbh, $test_timescale_no);
     
-#     $result = $dbh->do($sql);
+    # Now check each of these new timescales to make sure there are no gaps. This will also let us
+    # set the bottom and top bounds on each timescale.
     
-#     $sql = "UPDATE $INTERVAL_MAP_WORK
-# 	    SET early_int_no = cx_int_no
-# 	    WHERE early_int_no = 0 and
-# 		(early_age = late_age or late_int_no = 0 or late_int_no = cx_int_no)";
+ TIMESCALE:
+    foreach my $level_no (1..5, $test_timescale_no)
+    {
+	$sql = "SELECT bound_no, age, lower_no, lower.interval_name as lower_name,
+			upper_no, upper.interval_name as upper_name
+		FROM $TIMESCALE_BOUNDS as tsb
+			left join $TIMESCALE_INTS as lower on lower.interval_no = tsb.lower_no
+			left join $TIMESCALE_INTS as upper on upper.interval_no = tsb.upper_no
+		WHERE timescale_no = $level_no";
+	
+	my ($results) = $dbh->selectall_arrayref($sql, { Slice => { } });
+	my (@results);
+	
+	@results = @$results if ref $results eq 'ARRAY';
+	
+	my (@errors);
+	
+	# Make sure that we actually have some results.
+	
+	unless ( @results )
+	{
+	    push @errors, "No boundaries found";
+	    next TIMESCALE;
+	}
+	
+	# Make sure that the first and last intervals have the correct properties.
+	
+	if ( $results[0]{upper_no} )
+	{
+	    my $bound_no = $results[0]{bound_no};
+	    push @errors, "Error in bound $bound_no: should be upper boundary but has upper_no = $results[0]{upper_no}";
+	}
+	
+	if ( $results[-1]{lower_no} )
+	{
+	    my $bound_no = $results[-1]{bound_no};
+	    push @errors, "Error in bound $bound_no: should be lower boundary but has lower_no = $results[-1]{lower_no}";
+	}
+	
+	# Then check all of the boundaries in sequence.
+	
+	my ($early_age, $late_age, $last_age, $last_lower_no);
+	my $boundary_count = 0;
+	
+	$results[-1]{last_record} = 1;
+	
+	foreach my $r (@results)
+	{
+	    my $bound_no = $r->{bound_no};
+	    my $age = $r->{age};
+	    my $upper_no = $r->{upper_no};
+	    my $lower_no = $r->{lower_no};
+	    
+	    $boundary_count++;
+	    
+	    # The first age will be the late end of the scale, the last age will be the early end.
+	    
+	    $late_age //= $age;
+	    $early_age = $age;
+	    
+	    # Make sure the ages are all defined and monotonic.
+	    
+	    unless ( defined $age )
+	    {
+		push @errors, "Error in bound $bound_no: age is not defined";
+	    }
+	    
+	    if ( defined $last_age && $last_age >= $age )
+	    {
+		push @errors, "Error in bound $bound_no: age ($age) >= last age ($last_age)";
+	    }
+	    
+	    # Make sure that the upper_no matches the lower_no of the previous
+	    # record.
+	    
+	    if ( defined $last_lower_no )
+	    {
+		unless ( $upper_no )
+		{
+		    push @errors, "Error in bound $bound_no: upper_no not defined";
+		}
+		
+		elsif ( $upper_no ne $last_lower_no )
+		{
+		    push @errors, "Error in bound $bound_no: upper_no ($upper_no) does not match upward ($last_lower_no)";
+		}
+	    }
+	    
+	    $last_lower_no = $lower_no;
+	    
+	    unless ( $lower_no || $r->{last_record} )
+	    {
+		push @errors, "Error in bound $bound_no: lower_no not defined";
+	    }
+	}
+	
+	# Now report.
+	
+	print "\nTimescale $level_no: $boundary_count boundaries from $early_age Ma to $late_age Ma\n";
+	
+	foreach my $e (@errors)
+	{
+	    print "    $e\n";
+	}
+	
+	if ( $options->{verbose} && $options->{verbose} > 2 )
+	{
+	    print "\n";
+	    
+	    foreach my $r (@results)
+	    {
+		my $name = $r->{upper_name} || "TOP";
+		my $interval_no = $r->{upper_no};
+		
+		printf "  %-20s%s\n", $r->{age}, "$name ($interval_no)";
+	    }
+	}
+	
+	# Then set the early and late age for the timescale.
+	
+	# $sql = "UPDATE $TIMESCALE_DATA SET early_age = $early_age, late_age = $late_age
+	# 	WHERE timescale_no = $level_no";
+	
+	# $result = $dbh->do($sql);
+    }
     
-#     $result = $dbh->do($sql);
-    
-#     my ($hadean_no, $early) = $dbh->selectrow_array("
-# 	SELECT interval_no, early_age FROM $INTERVAL_DATA
-# 	WHERE interval_name = 'Hadean'");
-    
-#     $hadean_no ||= 0;
-#     $early ||= 4600.0;
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK
-# 	    SET cx_int_no = $hadean_no, early_int_no = $hadean_no, late_int_no = $hadean_no
-# 	    WHERE early_age = $early and late_age = $early";
-    
-#     $result = $dbh->do($sql);
-    
-#     logMessage(2, "    computing late intervals...");
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK as i
-# 	    SET i.late_int_no =
-# 	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-# 		WHERE d.early_age <= i.early_age and d.early_age > i.late_age and d.late_age <= i.late_age
-# 			and sm.scale_no = i.scale_no
-# 		ORDER BY late_age desc, scale_level asc limit 1)";
-    
-#     $result = $dbh->do($sql);
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on i.early_age = d.early_age
-# 		JOIN $SCALE_MAP as sm using (interval_no)
-# 	    SET i.late_int_no =
-# 	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-# 		WHERE d.early_age = i.early_age
-# 		ORDER BY scale_level asc limit 1)
-# 	    WHERE i.early_age = i.late_age";
-    
-#     $result = $dbh->do($sql);
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK
-# 	    SET late_int_no = cx_int_no
-# 	    WHERE late_int_no = 0 and
-# 		(early_age = late_age or early_int_no = 0 or early_int_no = cx_int_no)";
-    
-#     $result = $dbh->do($sql);
-    
-#     my ($holocene_no) = $dbh->selectrow_array("
-# 	SELECT interval_no FROM $INTERVAL_DATA
-# 	WHERE interval_name = 'Holocene'");
-    
-#     $holocene_no ||= 0;
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK
-# 	    SET cx_int_no = $holocene_no, early_int_no = $holocene_no, late_int_no = $holocene_no
-# 	    WHERE early_age = 0 and late_age = 0";
-    
-#     $result = $dbh->do($sql);
-    
-#     my ($quaternary_no) = $dbh->selectrow_array("
-# 	SELECT interval_no FROM $INTERVAL_DATA
-# 	WHERE interval_name = 'Quaternary'");
-    
-#     my ($pleistocene_no) = $dbh->selectrow_array("
-# 	SELECT interval_no FROM $INTERVAL_DATA
-# 	WHERE interval_name = 'Pleistocene'");
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK
-# 	    SET late_int_no = $holocene_no
-# 	    WHERE late_age = 0 and late_int_no = $quaternary_no";
-    
-#     $result = $dbh->do($sql);
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK
-# 	    SET early_int_no = $pleistocene_no
-# 	    WHERE early_int_no = $quaternary_no";
-    
-#     $result = $dbh->do($sql);
-    
-#     logMessage(2, "    setting interval names...");
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on d.interval_no = i.cx_int_no
-# 	    SET i.cx_interval = d.interval_name";
-    
-#     $result = $dbh->do($sql);
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK
-# 	    SET cx_interval = 'Geologic Time'
-# 	    WHERE cx_int_no = 0";
-    
-#     $dbh->do($sql);
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on d.interval_no = i.late_int_no
-# 	    SET i.late_interval = d.interval_name";
-    
-#     $result = $dbh->do($sql);
-    
-#     $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on d.interval_no = i.early_int_no
-# 	    SET i.early_interval = d.interval_name";
-    
-#     $result = $dbh->do($sql);
-    
-#     # Now compute the range_key column, and add an index on it.
-    
-#     logMessage(2, "    setting range keys...");
-    
-#     $result = $dbh->do("
-# 	UPDATE $INTERVAL_MAP_WORK
-# 	SET range_key = concat(cast(early_age as double), '-', cast(late_age as double))");
-    
-#     $result = $dbh->do("
-# 	ALTER TABLE $INTERVAL_MAP_WORK ADD UNIQUE KEY (range_key, scale_no)");
-    
-#     activateTables($dbh, $INTERVAL_MAP_WORK => $INTERVAL_MAP);
-    
-#     my $a = 1;		# we can stop here when debugging   
-# }
+    print "\n\n";
+}
 
 
-# sub buildIntervalBufferMap {
+# add_timescale_chunk ( timescale_dest, timescale_source, last_boundary_age )
+# 
+# Add boundaries to the destination timescale, which refer to boundaries in the source timescale.
+# Add only boundaries earlier than $last_boundary_age, and return the age of the last boundary
+# added.
+# 
+# This routine is meant to be used in sequence to knit together a timescale with chunks from a
+# variety of source timescales. It should be called most recent -> least recent.
+
+sub add_timescale_chunk {
+
+    my ($dbh, $boundary_list, $source_no, $early_bound, $late_bound) = @_;
     
-#     my ($dbh) = @_;
+    my ($sql, $result);
     
-#     my ($result, $sql);
+    # First get a list of boundaries from the specified timescale, restricted according to the
+    # specified bounds.
     
-#     logMessage(2, "    setting interval buffer bounds...");
+    my $source_quoted = $dbh->quote($source_no);
+    my @filters = "timescale_no = $source_quoted";
     
-#     $dbh->do("DROP TABLE IF EXISTS $INTERVAL_BUFFER_WORK");
+    if ( $early_bound )
+    {
+	my $quoted = $dbh->quote($early_bound);
+	push @filters, "age <= $quoted";
+    }
     
-#     $dbh->do("CREATE TABLE $INTERVAL_BUFFER_WORK (
-# 		interval_no int unsigned primary key,
-# 		early_bound decimal(9,5),
-# 		late_bound decimal(9,5))");
+    if ( @$boundary_list && $boundary_list->[-1]{age} )
+    {
+	$late_bound = $boundary_list->[-1]{age} + 0.1 if ! defined $late_bound || $boundary_list->[-1]{age} >= $late_bound;
+    }
     
-#     $sql = "INSERT IGNORE INTO $INTERVAL_BUFFER_WORK (interval_no, early_bound, late_bound)
-# 		SELECT interval_no, early_age + 50, if(late_age - 50 > 0, late_age - 50, 0)
-# 		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
-# 		WHERE scale_no = 1";
+    if ( $late_bound )
+    {
+	my $quoted = $dbh->quote($late_bound);
+	push @filters, "age >= $quoted";
+    }
     
-#     $result = $dbh->do($sql);
+    my $filter = "";
     
-#     $sql = "UPDATE $INTERVAL_BUFFER_WORK as ib JOIN $INTERVAL_DATA as i1 using (interval_no)
-# 		JOIN $INTERVAL_DATA as i2
-# 		JOIN $SCALE_MAP as s1 on i1.interval_no = s1.interval_no
-# 		JOIN $SCALE_MAP as s2 on s2.interval_no = i2.interval_no
-# 	    SET ib.late_bound = if(i1.late_age - 50.0 > i2.late_age, i1.late_age - 50, i2.late_age)
-# 	    WHERE s1.scale_no = s2.scale_no and s1.scale_level = s2.scale_level and i1.late_age = i2.early_age";
+    if ( @filters )
+    {
+	$filter = "WHERE " . join( ' and ', @filters );
+    }
     
-#     $result = $dbh->do($sql);
+    $sql = "SELECT bound_no, age, lower_no, upper_no
+	    FROM $TIMESCALE_BOUNDS $filter ORDER BY age asc";
     
-#     $sql = "UPDATE $INTERVAL_BUFFER_WORK as ib JOIN $INTERVAL_DATA as i1 using (interval_no)
-# 		JOIN $INTERVAL_DATA as i2
-# 		JOIN $SCALE_MAP as s1 on i1.interval_no = s1.interval_no
-# 		JOIN $SCALE_MAP as s2 on s2.interval_no = i2.interval_no
-# 	    SET ib.early_bound = if(i1.early_age + 50 < i2.early_age, i1.early_age + 50, i2.early_age)
-# 	    WHERE s1.scale_no = s2.scale_no and s1.scale_level = s2.scale_level and i1.early_age = i2.late_age";
+    my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
+    my @results;
     
-#     $result = $dbh->do($sql);
+    @results = @$result if ref $result eq 'ARRAY';
     
-#     activateTables($dbh, $INTERVAL_BUFFER_WORK => $INTERVAL_BUFFER);
+    # If we have no results, do nothing.
     
-#     my $a = 1;	# we can stop here when debugging
-# }
+    return unless @results;
+    
+    # If the top boundary has no upper_no, and the list to which we are adding has at least one
+    # member, then remove it.
+    
+    if ( @$boundary_list && ! $results[0]{upper_no} )
+    {
+	shift @results;
+    }
+    
+    # Now tie the two ranges together.
+    
+    if ( @$boundary_list )
+    {
+	$boundary_list->[-1]{lower_no} = $results[0]{upper_no};
+    }
+    
+    # Alter each record so that it is indicated as a copy of the specified bound.
+    
+    foreach my $b (@results)
+    {
+	$b->{bound_type} = 'same';
+    }
+    
+    # Then add the new results on to the list.
+    
+    push @$boundary_list, @results;
+}
+
+
+# set_timescale_boundaries ( dbh, timescale_no, boundary_list )
+# 
+# 
+
+sub set_timescale_boundaries {
+    
+    my ($dbh, $timescale_no, $boundary_list, $authorizer_no) = @_;
+    
+    my $result;
+    my $sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, enterer_no,
+		bound_type, lower_no, upper_no, source_bound_no, age) VALUES ";
+    
+    my @values;
+    
+    my $ts_quoted = $dbh->quote($timescale_no);
+    my $auth_quoted = $dbh->quote($authorizer_no);
+    
+    foreach my $b (@$boundary_list)
+    {
+	my $lower_quoted = $dbh->quote($b->{lower_no});
+	my $upper_quoted = $dbh->quote($b->{upper_no});
+	my $source_quoted = $dbh->quote($b->{source_bound_no} // $b->{bound_no});
+	my $age_quoted = $dbh->quote($b->{age});
+	
+	push @values, "($ts_quoted, $auth_quoted, $auth_quoted, 'same', $lower_quoted, " .
+	    "$upper_quoted, $source_quoted, $age_quoted)";
+    }
+    
+    $sql .= join( q{, } , @values );
+    
+    $result = $dbh->do($sql);
+}
+
+
+# update_timescale_attrs ( dbh, timescale_no )
+# 
+# Make sure that the attributes of the specified timescale are consistent with the boundaries it
+# contains. If no value is given for $timescale_no, then update all timescales. If the value is 0,
+# then do nothing.
+
+sub update_timescale_attrs {
+    
+    my ($dbh, $timescale_no) = @_;
+    
+    return if defined $timescale_no && $timescale_no == 0;
+    
+    my $filter = "";
+    $filter = "WHERE timescale_no = " . $dbh->quote($timescale_no) if defined $timescale_no;
+    
+    my $result;
+    my $sql = "UPDATE $TIMESCALE_DATA as t join 
+		(SELECT timescale_no, max(b.age) as early_age, min(b.age) as late_age FROM timescale_bounds as b
+		$filter GROUP BY timescale_no) as bb using (timescale_no)
+	SET t.early_age = bb.early_age, t.late_age = bb.late_age";
+    
+    $result = $dbh->do($sql);
+}
+
+
+# update_boundary_attrs ( dbh, timescale_no )
+# 
+# Make sure that the attributes of the specified bounaries are consistent with their source
+# boundaries, if any. If n o value is given for timescale_no, then update all boundaries. If the
+# value is 0, then do nothing. Otherwise, update all boundaries.
+
+sub update_boundary_attrs {
+    
+    my ($dbh, $timescale_no) = @_;
+    
+    # If no value is given for $timescale_no, just call propagate_boudary_changes( ) to update any
+    # changes to the boundaries.
+    
+    if ( ! defined $timescale_no )
+    {
+	return propagate_boundary_changes($dbh);
+    }
+    
+    # If a value of 0 is given, do nothing.
+    
+    elsif ( $timescale_no == 0 )
+    {
+	return;
+    }
+    
+    # Otherwise, update just the boundaries in the specified timescale.
+    
+    my ($result, $sql);
+    
+    my $age_update_count = 0;
+    my $color_update_count = 0;
+    my $ts_quoted = $dbh->quote($timescale_no);
+    
+    # We start by figuring out how many boundaries of various types we have.
+    
+    $sql = "SELECT min(source_bound_no) as has_source, min(range_bound_no) as has_range,
+		min(color_bound_no) as has_color
+	FROM $TIMESCALE_BOUNDS WHERE timescale_no = $ts_quoted";
+    
+    my ($has_source, $has_range, $has_color) = $dbh->selectrow_array($sql);
+    
+    # Unless at least one of those is greater than zero, there is nothing to do.
+    
+    unless ( $has_source || $has_range || $has_color )
+    {
+	return;
+    }
+    
+    # If we get here, then we have some work to do. We start by recomputing ages for 'relative' boundaries.
+    
+    if ( $has_range )
+    {
+	# $$$ derived_age_error needs a more sophisticated calculation, taking into account both
+	# the source age error and the offset error.
+	
+	$sql = "UPDATE $TIMESCALE_BOUNDS as b
+			join $TIMESCALE_BOUNDS as bottom on base.bound_no = b.source_bound_no
+			join $TIMESCALE_BOUNDS as top on top.bound_no = b.range_bound_no
+		SET b.derived_age = bottom.age - (bottom.age - top.age) * b.offset,
+		    b.derived_age_error = (bottom.age - top.age) * b.offset_error,
+		    b.derived_reference_no = null,
+		    b.derived_color = bottom.color
+		WHERE timescale_no = $ts_quoted and bound_type = 'percent'";
+	
+	$age_update_count += $dbh->do($sql);
+    }
+    
+    # Then compute ages for 'same' and 'offset' boundaries.
+    
+    if ( $has_source )
+    {
+	# $$$ derived_age_error needs a more sophisticated calculation when boundary type is
+	# 'offset', taking into account both the source age error and the offset error.
+	
+	$sql = "UPDATE $TIMESCALE_BOUNDS as b
+			join $TIMESCALE_BOUNDS as source on source.bound_no = b.source_bound_no
+		SET b.derived_age = source.age - ifnull(b.offset, 0),
+		    b.derived_age_error = if(b.bound_type = 'same', source.age_error, b.offset_error),
+		    b.derived_reference_no = if(b.bound_type = 'same', source.reference_no, null)
+		    b.derived_color = source.color
+		WHERE timescale_no = $ts_quoted and bound_type in ('same', 'offset')";
+	
+	$age_update_count += $dbh->do($sql);
+    }
+    
+    # If we have any boundaries that take their color from a different boundary, update those now.
+    
+    if ( $has_color )
+    {
+	$sql = "UPDATE $TIMESCALE_BOUNDS as b
+			join $TIMESCALE_BOUNDS as source on source.bound_no = b.color_bound_no
+		SET b.derived_color = source.color
+		WHERE timescale_no = $ts_quoted";
+	
+	$color_update_count += $dbh->do($sql);
+    }
+    
+    # Now recompute the ages from the derived ages for any interval that is not locked. For any
+    # interval that is locked, set the 'is_different' flag if the derived age is different from
+    # the locked age.
+    
+    if ( $age_update_count )
+    {
+	$sql = "UPDATE $TIMESCALE_BOUNDS as b
+		SET b.age = if(b.is_locked, b.age, b.derived_age),
+		    b.age_error = if(b.is_locked, b.age_error, b.derived_age_error),
+		    b.is_different = b.is_locked and b.age <> b.derived_age
+		WHERE timescale_no = $ts_quoted and bound_type in ('same', 'percent', 'offset')";
+	
+	$result = $dbh->do($sql);
+    }
+}
+
+1;
