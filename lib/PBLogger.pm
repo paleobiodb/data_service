@@ -26,9 +26,11 @@ sub new {
     
     my ($class) = @_;
     
-    if ( setting('logger') ne 'file' )
+    my $setting = setting('request_log');
+    
+    unless ( $setting && $setting ne 'none' )
     {
-	info("Request log disabled");
+	warning("Request log disabled");
 	return;
     }
     
@@ -55,7 +57,7 @@ sub open_logfile {
     my $logdir = Dancer::Logger::File::logdir;
     return unless $logdir;
     
-    my $logfile = setting('request_log') || 'request_log';
+    my $logfile = setting('request_log_file') || 'request_log';
     
     mkdir($logdir) unless(-d $logdir);
     $logfile = File::Spec->catfile($logdir, $logfile);
