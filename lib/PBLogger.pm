@@ -30,7 +30,7 @@ sub new {
     
     unless ( $setting && $setting ne 'none' )
     {
-	warning("Request log disabled");
+	print STDERR "Request log disabled\n";
 	return;
     }
     
