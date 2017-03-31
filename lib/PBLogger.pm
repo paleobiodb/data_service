@@ -105,8 +105,21 @@ sub format_logline {
     my $uri = $request->uri;
     my $referer = $request->referer || '';
     my $agent = $request->user_agent || '';
+    my $post_params = '';
+
+    if ( $method eq 'POST' )
+    {
+	my %params = $request->params('body');
+
+	while ( my ($key, $value) = each %params )
+	{
+	    $post_params .= "  $key=$value\n";
+	}
+
+	$post_params .= "==\n";
+    }
     
-    return sprintf(qq{%s <%s> [%s] "%s %s" "%s" "%s"\n}, $remote_addr, $$, $time_formatted, $method, $uri, $referer, $agent);
+    return sprintf(qq{%s <%s> [%s] "%s %s" "%s" "%s"\n%s}, $remote_addr, $$, $time_formatted, $method, $uri, $referer, $agent, $post_params);
 }
 
 1;
