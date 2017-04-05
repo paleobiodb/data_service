@@ -12,7 +12,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
-	         $INTERVAL_DATA $INTERVAL_MAP $SCALE_MAP);
+	         $INTERVAL_DATA $INTERVAL_MAP $SCALE_MAP $MACROSTRAT_INTERVALS);
 use CoreFunction qw(activateTables loadSQLFile);
 use ConsoleLog qw(logMessage);
 
@@ -124,8 +124,18 @@ sub establishTimescaleTables {
     
     $dbh->do("CREATE TABLE $TS_INTS_WORK (
 		interval_no int unsigned primary key,
+		macrostrat_id int unsigned not null,
 		interval_name varchar(80) not null,
-		abbrev varchar(10) not null)");
+		early_age decimal(9,5),
+		late_age decimal(9,5),
+		abbrev varchar(10) not null,
+		orig_early decimal(9,5),
+		orig_late decimal(9,5),
+		orig_color varchar(10) not null,
+		orig_refno int unsigned not null,
+		macrostrat_color varchar(10) not null,
+		KEY (macrostrat_id),
+		KEY (interval_name))");
     
     # The table 'timescale_bounds' defines boundaries between intervals.
     
@@ -148,11 +158,11 @@ sub establishTimescaleTables {
 		offset_error decimal(9,5),
 		is_locked boolean not null,
 		is_different boolean not null,
-		color varchar(10),
+		color varchar(10) not null,
 		reference_no int unsigned,
 		derived_age decimal(9,5),
 		derived_age_error decimal(9,5),
-		derived_color varchar(10),
+		derived_color varchar(10) not null,
 		derived_reference_no int unsigned,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp,
@@ -202,21 +212,42 @@ sub copyOldTimescales {
     
     $sql = "REPLACE INTO $TIMESCALE_DATA (timescale_no, authorizer_no, timescale_name,
 	interval_type, is_active) VALUES
-	(1, $auth_quoted, 'International Chronostratigraphic Eons', 'eon', 1),
-	(2, $auth_quoted, 'International Chronostratigraphic Eras', 'era', 1),
+	(5, $auth_quoted, 'International Chronostratigraphic Eons', 'eon', 1),
+	(4, $auth_quoted, 'International Chronostratigraphic Eras', 'era', 1),
 	(3, $auth_quoted, 'Internatioanl Chronostratigraphic Periods', 'period', 1),
-	(4, $auth_quoted, 'International Chronostratigraphic Epochs', 'epoch', 1),
-	(5, $auth_quoted, 'International Chronostratigraphic Stages', 'stage', 1)";
+	(2, $auth_quoted, 'International Chronostratigraphic Epochs', 'epoch', 1),
+	(1, $auth_quoted, 'International Chronostratigraphic Stages', 'stage', 1)";
     
     $result = $dbh->do($sql);
     
     # Then copy the interval data from the old tables for scale_no 1.
     
-    $sql = "REPLACE INTO $TIMESCALE_INTS (interval_no, interval_name, abbrev)
-	SELECT i.interval_no, i.interval_name, i.abbrev
+    $sql = "REPLACE INTO $TIMESCALE_INTS (interval_no, interval_name, abbrev,
+		orig_early, orig_late, orig_color, orig_refno)
+	SELECT i.interval_no, i.interval_name, i.abbrev, i.early_age, i.late_age, 
+		sm.color, i.reference_no
 	FROM interval_data as i join scale_map as sm using (interval_no)
 	WHERE scale_no = 1
 	GROUP BY interval_no";
+    
+    $result = $dbh->do($sql);
+    
+    # Then copy the interval data from macrostrat. Override any intervals that are already
+    # in the table (by name) and add any others that are fond.
+    
+    $sql = "UPDATE $TIMESCALE_INTS as i join $MACROSTRAT_INTERVALS as msi using (interval_name)
+	SET i.orig_early = msi.age_bottom, i.orig_late = msi.age_top,
+	    i.macrostrat_id = msi.id,
+	    i.orig_color = msi.orig_color, i.macrostrat_color = msi.interval_color";
+    
+    $result = $dbh->do($sql);
+    
+    $sql = "INSERT INTO $TIMESCALE_INTS (macrostrat_id, interval_name, abbrev, orig_early, orig_late,
+	    orig_color, macrostrat_color)
+	SELECT msi.id, msi.interval_name, msi.interval_abbrev, msi.age_bottom, msi.age_top,
+		msi.interval_color, msi.orig_color
+	FROM $MACROSTRAT_INTERVALS as msi join $TIMESCALE_INTS as i using (interval_name)
+	WHERE i.interval_name is null";
     
     $result = $dbh->do($sql);
     
@@ -226,36 +257,40 @@ sub copyOldTimescales {
     
     $result = $dbh->do($sql);
     
-    foreach my $level_no (1..5)
+    foreach my $level_no (reverse 1..5)
     {
+	my $timescale_no = 6 - $level_no;
+	
 	$sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, enterer_no, 
 			bound_type, lower_no, upper_no, age, color, reference_no)
-	SELECT $level_no as timescale_no, $auth_quoted as authorizer_no, $auth_quoted as enterer_no,
-			'spike' as bound_type, lower_no, upper_no, age, color, reference_no
+	SELECT $timescale_no as timescale_no, $auth_quoted as authorizer_no, $auth_quoted as enterer_no,
+			'spike' as bound_type, lower_no, upper_no, age, color, orig_refno
 	FROM
-	((SELECT null as lower_no, null as lower_name, i1.early_age as age, i1.interval_name as upper_name, 
-		i1.interval_no as upper_no, sm1.color, i1.reference_no
-	FROM scale_map as sm1 join interval_data as i1 using (interval_no)
-	WHERE sm1.scale_level = $level_no ORDER BY i1.early_age desc LIMIT 1)
+	((SELECT null as lower_no, null as lower_name, i1.orig_early as age, i1.interval_name as upper_name, 
+		i1.interval_no as upper_no, 
+		if(i1.macrostrat_color <> '', i1.macrostrat_color, i1.orig_color) as color, i1.orig_refno
+	FROM scale_map as sm1 join $TIMESCALE_INTS as i1 using (interval_no)
+	WHERE sm1.scale_level = $level_no ORDER BY i1.orig_early desc LIMIT 1)
 	UNION
-	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i1.late_age as age, 
-		i2.interval_name as upper_name, i2.interval_no as upper_no, sm2.color, i2.reference_no
+	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i2.orig_early as age, 
+		i2.interval_name as upper_name, i2.interval_no as upper_no,
+		if(i2.macrostrat_color <> '', i2.macrostrat_color, i2.orig_color) as color, i2.orig_refno
 	FROM scale_map as sm1 join scale_map as sm2 on (sm1.scale_no = sm2.scale_no and sm1.scale_level = sm2.scale_level)
-		join interval_data as i1 on i1.interval_no = sm1.interval_no
-		join interval_data as i2 on i2.interval_no = sm2.interval_no
-	WHERE (i1.late_age = i2.early_age) and sm1.scale_level = $level_no GROUP BY i1.interval_no)
+		join $TIMESCALE_INTS as i1 on i1.interval_no = sm1.interval_no
+		join $TIMESCALE_INTS as i2 on i2.interval_no = sm2.interval_no
+	WHERE (i1.orig_late = i2.orig_early) and sm1.scale_level = $level_no GROUP BY i1.interval_no)
 	UNION
-	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i1.late_age as age,
-		null as upper_name, null as upper_no, null as color, null as reference_no
-	FROM scale_map as sm1 join interval_data as i1 using (interval_no)
-	WHERE sm1.scale_level = $level_no ORDER BY i1.late_age asc LIMIT 1)
+	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i1.orig_late as age,
+		null as upper_name, null as upper_no, null as color, null as orig_refno
+	FROM scale_map as sm1 join $TIMESCALE_INTS as i1 using (interval_no)
+	WHERE sm1.scale_level = $level_no ORDER BY i1.orig_late asc LIMIT 1)
 	ORDER BY age asc) as innerquery";
 	
 	print "$sql\n\n" if $options->{debug};
 	
 	$dbh->do($sql);
 	
-	update_timescale_attrs($dbh, $level_no);
+	update_timescale_attrs($dbh, $timescale_no);
     }
     
     # Finally, we knit pieces of these together into a single timescale, for demonstration
@@ -271,10 +306,10 @@ sub copyOldTimescales {
     
     my @boundaries;
     
-    add_timescale_chunk($dbh, \@boundaries, 5);
-    add_timescale_chunk($dbh, \@boundaries, 3);
-    add_timescale_chunk($dbh, \@boundaries, 2);
     add_timescale_chunk($dbh, \@boundaries, 1);
+    add_timescale_chunk($dbh, \@boundaries, 3);
+    add_timescale_chunk($dbh, \@boundaries, 4);
+    add_timescale_chunk($dbh, \@boundaries, 5);
     
     set_timescale_boundaries($dbh, $test_timescale_no, \@boundaries, $authorizer_no);
     update_timescale_attrs($dbh, $test_timescale_no);
@@ -283,14 +318,14 @@ sub copyOldTimescales {
     # set the bottom and top bounds on each timescale.
     
  TIMESCALE:
-    foreach my $level_no (1..5, $test_timescale_no)
+    foreach my $timescale_no (1..5, $test_timescale_no)
     {
 	$sql = "SELECT bound_no, age, lower_no, lower.interval_name as lower_name,
 			upper_no, upper.interval_name as upper_name
 		FROM $TIMESCALE_BOUNDS as tsb
 			left join $TIMESCALE_INTS as lower on lower.interval_no = tsb.lower_no
 			left join $TIMESCALE_INTS as upper on upper.interval_no = tsb.upper_no
-		WHERE timescale_no = $level_no";
+		WHERE timescale_no = $timescale_no";
 	
 	my ($results) = $dbh->selectall_arrayref($sql, { Slice => { } });
 	my (@results);
@@ -380,7 +415,7 @@ sub copyOldTimescales {
 	
 	# Now report.
 	
-	print "\nTimescale $level_no: $boundary_count boundaries from $early_age Ma to $late_age Ma\n";
+	print "\nTimescale $timescale_no: $boundary_count boundaries from $early_age Ma to $late_age Ma\n";
 	
 	foreach my $e (@errors)
 	{
