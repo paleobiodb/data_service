@@ -113,9 +113,9 @@ our $MACROSTRAT_INTERVALS = 'macrostrat.intervals';
 # Institution tables
 
 our $INSTITUTIONS = 'institutions';
-our $INST_ALTNAMES = 'inst_names';
+our $INST_ALTNAMES = 'inst_altnames';
 our $INST_COLLS = 'inst_colls';
-our $INST_COLL_ALTNAMES = 'inst_coll_names';
+our $INST_COLL_ALTNAMES = 'inst_coll_altnames';
 our $INST_CODES = 'inst_codes';
 
 # New timescale system
