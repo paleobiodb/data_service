@@ -47,12 +47,14 @@ sub new {
     my $prefix = $options->{prefix} || '';
     my $base_url = "http://$server";
     $base_url = "$base_url/$prefix" if $prefix ne '';
+    my $timeout = $options->{timeout} || $ENV{PBDB_TEST_TIMEOUT} || 0;
     
     my $instance = { ua => $ua,
 		     csv => Text::CSV_XS->new({ binary => 1 }),
 		     json => JSON->new->utf8,
 		     server => $server,
 		     prefix => $prefix,
+		     timeout => $timeout,
 		     base_url => $base_url };
     
     bless $instance, $class;
@@ -132,11 +134,13 @@ sub fetch_url {
     
     my $diag = $options->{no_diag} ? 0 : 1;
     
+    my $timeout = $options->{timeout} || $tester->{timeout};
+    
     # Create the full URL and execute a 'GET' request on the server being tested.
     
     my $url = $tester->make_url($path_and_args);
     
-    if ( $DIAG_URLS )
+    if ( $DIAG_URLS || $ENV{PBDB_TEST_SHOW_URLS}    )
     {
 	diag("Fetching: $url");
     }
@@ -144,10 +148,31 @@ sub fetch_url {
     my $response;
     
     eval {
+	
+	local($SIG{ALRM}) = sub { die "timeout\n" };	# \n is required, see perldoc -f alarm
+	alarm $timeout if $timeout;
+	
 	$response = $tester->{ua}->get($url);
+	
+	alarm 0;
     };
     
     my $errmsg = $@;
+    
+    alarm 0;	# in case the alarm wasn't canceled inside the eval above
+    
+    # If the timeout signal was given, then fail with the appropriate message.
+    
+    if ( $errmsg && $errmsg eq "timeout\n" )
+    {
+	fail($message);
+	diag("    TIMED OUT WAITING FOR SERVER");
+	
+	 # Clear the saved response, and return false.
+	
+	$tester->{last_response} = undef;
+	return;
+    }
     
     # If we did not get a response at all, then fail with the specified
     # message and add appropriate diagnostics.  Return undefined (false) to

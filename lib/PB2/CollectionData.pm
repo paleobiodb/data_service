@@ -101,8 +101,7 @@ sub initialize {
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indicate whether the collection is on protected land",
         { value => 'time', maps_to => '1.2:colls:time' },
-	    "This block is obsolete, and is included only for compatibility reasons.",
-	    "It does not include any fields in the response.",
+	    "This block is includes the field 'cx_int_no', which is needed by Navigator.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -145,6 +144,8 @@ sub initialize {
     # Then a second map for geographic summary clusters.
     
     $ds->define_output_map('1.2:colls:summary_map' =>
+	{ value => 'bin' },
+	    "The list of larger-scale clusters to which this cluster belongs.",
         { value => 'ext', maps_to => '1.2:colls:ext' },
 	    "Additional information about the geographic extent of each cluster.",
         { value => 'time', maps_to => '1.2:colls:time' },
@@ -227,16 +228,17 @@ sub initialize {
 	    "occurrences were entered.",
 	{ set => '*', code => \&process_coll_ids });
     
-    my @bin_levels;
+    my (@bin_levels, @bin_fields);
     
-    foreach my $level ( 1..$MAX_BIN_LEVEL )
+    foreach my $level ( reverse 1..$MAX_BIN_LEVEL )
     {
 	push @bin_levels, { output => "bin_id_$level", com_name => "lv$level" };
-	push @bin_levels, "The identifier of the level-$level cluster in which the collection is located";
+	push @bin_levels, "The identifier of the level-$level cluster in which the collection or cluster is located";
+	push @bin_fields, "c.bin_id_$level";
     }
     
     $ds->define_block('1.2:colls:bin' => 
-	{ select =>  [ 'c.bin_id_1', 'c.bin_id_2', 'c.bin_id_3'], tables => [ 'c' ] },
+	{ select =>  \@bin_fields, tables => [ 'c' ] },
 	@bin_levels);
     
     $ds->define_block('1.2:colls:rem');	# this block is deprecated, but we don't want to return an error
@@ -326,7 +328,11 @@ sub initialize {
 	{ output => 'protected', com_name => 'ptd' },
 	    "The protected status of the land on which the collection is located, if known.");
     
-    $ds->define_block('1.2:colls:time');
+    $ds->define_block('1.2:colls:time' =>
+	{ select => 'im.cx_int_no', tables => 'im' },
+	{ output => 'cx_int_no', com_name => 'cxi' },
+    	    "The identifier of the most specific single interval from the selected timescale that",
+    	    "covers the entire time range associated with the collection or cluster.");
     
     #   { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
     # 	tables => ['im'] },
@@ -645,14 +651,12 @@ sub initialize {
       { set => '*', code => \&process_summary_ids },
       { output => 'bin_id', com_name => 'oid' }, 
 	  "A unique identifier for the cluster.",
-      { output => 'bin_id_1', com_name => 'lv1' }, 
-	  "The identifier of the containing level-1 cluster, if any",
-      { output => 'bin_id_2', com_name => 'lv2' }, 
-	  "The identifier of the containing level-2 cluster, if any",
-      { output => 'bin_id_3', com_name => 'lv3' },
+      { output => 'bin_id_3', com_name => 'lv3', if_block => 'bin' },
 	  "The identifier of the containing level-3 cluster, if any",
-      { output => 'bin_id_4', com_name => 'lv4' },
-	  "The identifier of the containing level-4 cluster, if any",
+      { output => 'bin_id_2', com_name => 'lv2', if_block => 'bin' }, 
+	  "The identifier of the containing level-2 cluster, if any",
+      { output => 'bin_id_1', com_name => 'lv1', if_block => 'bin' }, 
+	  "The identifier of the containing level-1 cluster, if any",
       { output => 'record_type', com_name => 'typ', value => $IDP{CLU} },
 	  "The type of this object: C<$IDP{CLU}> for a collection cluster",
       { output => 'n_colls', com_name => 'nco', data_type => 'pos' },
@@ -676,7 +680,7 @@ sub initialize {
 	  "The mimimum latitude for collections in this cluster",
       { output => 'lat_max', com_name => 'ly2', pbdb_name => 'max_lat', data_type => 'dec' },
 	  "The maximum latitude for collections in this cluster",
-      { output => 'std_dev', com_name => 'std', data_type => 'dec' },
+      { output => 'std_dev', com_name => 'std' },
 	  "The standard deviation of the coordinates in this cluster");
     
     # Finally, define rulesets to interpret the parmeters used with operations
@@ -1370,8 +1374,6 @@ sub get_coll {
     
     $request->delete_output_field('permissions') unless $access_fields;
     
-    # Determine the necessary joins.
-    
     my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
     
     # Generate the main query.
@@ -1536,16 +1538,6 @@ sub summary {
     
     my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
     
-    if ( $tables->{cc} )
-    {
-	push @filters, $access_filter;
-    }
-    
-    else
-    {
-	push @filters, 's.access_level = 0';
-    }
-    
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
     
@@ -1573,16 +1565,63 @@ sub summary {
     {
 	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
 	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
+	$tables->{c} = 1;
+    }
+    
+    elsif ( $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} )
+    {
+	$tables->{c} = 1;
+    }
+    
+    if ( $tables->{im} )
+    {
+	if ( $tables->{c} )
+	{
+	    $fields =~ s{ im[.]cx_int_no }{max(c.early_age) as early_age, min(c.late_age) as late_age}xs;
+	}
+	
+	else
+	{
+	    $fields =~ s{ im[.]cx_int_no}{s.early_age, s.late_age}xs;
+	}
+
+	delete $tables->{im};
+    }
+    
+    if ( $request->has_block('bin') )
+    {
+	$request->delete_output_field('bin_id_1') if $bin_level < 2;
+	$request->delete_output_field('bin_id_2') if $bin_level < 3;
+	$request->delete_output_field('bin_id_3') if $bin_level < 4;
+	
+	$fields .= ", s.bin_id_1" if $bin_level > 1;
+	$fields .= ", s.bin_id_2" if $bin_level > 2;
+	$fields .= ", s.bin_id_3" if $bin_level > 3;
     }
     
     my $summary_joins = '';
     
     $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
-	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} || $tables->{tf};
+	if $tables->{c};
     
     $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
     
     $summary_joins .= $request->generateJoinList('s', $tables);
+    
+    if ( $tables->{cc} )
+    {
+	push @filters, $access_filter;
+    }
+    
+    elsif ( $tables->{c} )
+    {
+	push @filters, 'c.access_level = 0';
+    }
+    
+    else
+    {
+	push @filters, 's.access_level = 0';
+    }
     
     # if ( $request->{select_tables}{o} )
     # {
@@ -1600,12 +1639,31 @@ sub summary {
     
     my $filter_string = join(' and ', @filters);
     
-    $request->{main_sql} = "
-		SELECT $calc $fields
-		FROM $COLL_BINS as s $summary_joins
+    # If we want the containing interval numbers, we have to specify this as
+    # an inner and an outer query.
+    
+    if ( $request->has_block('1.2:colls:time') )
+    {
+	$request->{main_sql} = "
+	SELECT $calc innerq.*, im.cx_int_no
+	FROM (SELECT $fields FROM $COLL_BINS as s $summary_joins
 		WHERE $filter_string
 		GROUP BY s.bin_id
-		ORDER BY s.bin_id $limit";
+		ORDER BY s.bin_id $limit) as innerq
+	join $INTERVAL_MAP as im on im.early_age = innerq.early_age and im.late_age = innerq.late_age";
+    }
+    
+    # Otherwise we just need a single query.
+    
+    else
+    {
+	$request->{main_sql} = "
+	SELECT $calc $fields
+	FROM $COLL_BINS as s $summary_joins
+	WHERE $filter_string
+	GROUP BY s.bin_id
+	ORDER BY s.bin_id $limit";
+    }
     
     # Then prepare and execute the query..
     
@@ -2991,11 +3049,13 @@ sub generateMainFilters {
 	    if ( @cc2 )
 	    {
 	    	push @disjoint_filters, "c.cc in ('" . join("','", @cc2) . "')";
+		$tables_ref->{c} = 1;
 	    }
 	    
 	    if ( @cc3 )
 	    {
 	    	push @disjoint_filters, "ccmap.continent in ('" . join("','", @cc3) . "')";
+		$tables_ref->{c} = 1;
 	    	$tables_ref->{ccmap} = 1;
 	    }
 	    
@@ -3760,6 +3820,11 @@ sub generateMainFilters {
     
     elsif ( $early_age || $late_age )
     {
+	if ( $op eq 'summary' )
+	{
+	    push @filters, "s.interval_no = 0";
+	}
+	
 	unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer') or
 	         $tables_ref->{ds} or $op eq 'prevalence' )
 	{
@@ -3833,6 +3898,11 @@ sub generateMainFilters {
 	$request->{early_age} = $early_age;
 	$request->{late_age} = $late_age;
 	$tables_ref->{non_summary} = 1;
+    }
+    
+    elsif ( $op eq 'summary' )
+    {
+	push @filters, "s.interval_no = 0";
     }
     
     # Return the list
@@ -4508,7 +4578,7 @@ sub process_summary_ids {
     
     foreach my $f ( qw(bin_id bin_id_1 bin_id_2 bin_id_3 bin_id_4) )
     {
-	$record->{$f} = generate_identifier('CLU', $record->{bin_id})
+	$record->{$f} = generate_identifier('CLU', $record->{$f})
 	    if $record->{$f};
     }
 }

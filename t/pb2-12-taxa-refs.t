@@ -683,7 +683,7 @@ subtest 'taxon parameters' => sub {
     my $m1 = $T->fetch_nocheck("/taxa/refs.ris?base_name=$NAME_5&interval=foo", "bad interval");
 
     $T->ok_response_code( "400", "bad interval gets 400 response" );
-    $T->ok_error_like( qr/unknown interval/i, "bad interval gets proper error message" );
+    $T->ok_error_like( qr/unknown interval|no valid interval/i, "bad interval gets proper error message" );
 
     my $m2 = $T->fetch_nocheck("/taxa/refs.json?base_name=$NAME_5&exclude_id=foo", "bad exclude_id");
 

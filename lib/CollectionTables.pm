@@ -347,17 +347,28 @@ sub buildCollectionTables {
     {
 	my $level = $i + 1;
 	my $reso = $bin_reso[$i];
+	my $bin_str = 'bin_id';
+	my $bin_select_str = "bin_id_$level";
 	
 	next unless $level > 0 && $reso > 0;
+	
+	if ( $level > 1 )
+	{
+	    foreach my $j (1..$level-1)
+	    {
+		$bin_str .= ", bin_id_$j";
+		$bin_select_str .= ", bin_id_$j";
+	    }
+	}
 	
 	logMessage(2, "      summarizing at level $level by geography...");
 	
 	$sql = "INSERT IGNORE INTO $COLL_BINS_WORK
-			(bin_id, bin_level, interval_no,
+			($bin_str, bin_level, interval_no,
 			 n_colls, n_occs, early_age, late_age, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
-		SELECT bin_id_$level, $level, 0, count(*), sum(n_occs),
+		SELECT $bin_select_str, $level, 0, count(*), sum(n_occs),
 		       max(early_age), min(late_age),
 		       avg(lng), avg(lat),
 		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
@@ -366,6 +377,28 @@ sub buildCollectionTables {
 		       min(access_level)
 		FROM $COLL_MATRIX_WORK as m
 		GROUP BY bin_id_$level";
+	
+	# my $level = $i + 1;
+	# my $reso = $bin_reso[$i];
+	
+	# next unless $level > 0 && $reso > 0;
+	
+	# logMessage(2, "      summarizing at level $level by geography...");
+	
+	# $sql = "INSERT IGNORE INTO $COLL_BINS_WORK
+	# 		(bin_id, bin_level, interval_no,
+	# 		 n_colls, n_occs, early_age, late_age, lng, lat,
+	# 		 lng_min, lng_max, lat_min, lat_max, std_dev,
+	# 		 access_level)
+	# 	SELECT bin_id_$level, $level, 0, count(*), sum(n_occs),
+	# 	       max(early_age), min(late_age),
+	# 	       avg(lng), avg(lat),
+	# 	       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
+	# 	       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
+	# 	       sqrt(var_pop(lng)+var_pop(lat)),
+	# 	       min(access_level)
+	# 	FROM $COLL_MATRIX_WORK as m
+	# 	GROUP BY bin_id_$level";
 	
 	$result = $dbh->do($sql);
 	

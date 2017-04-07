@@ -26,9 +26,11 @@ sub new {
     
     my ($class) = @_;
     
-    if ( setting('logger') ne 'file' )
+    my $setting = setting('request_log');
+    
+    unless ( $setting && $setting ne 'none' )
     {
-	info("Request log disabled");
+	print STDERR "Request log disabled\n";
 	return;
     }
     
@@ -55,7 +57,7 @@ sub open_logfile {
     my $logdir = Dancer::Logger::File::logdir;
     return unless $logdir;
     
-    my $logfile = setting('request_log') || 'request_log';
+    my $logfile = setting('request_log_file') || 'request_log';
     
     mkdir($logdir) unless(-d $logdir);
     $logfile = File::Spec->catfile($logdir, $logfile);
@@ -105,8 +107,21 @@ sub format_logline {
     my $uri = $request->uri;
     my $referer = $request->referer || '';
     my $agent = $request->user_agent || '';
+    my $post_params = '';
+
+    if ( $method eq 'POST' )
+    {
+	my %params = $request->params('body');
+
+	while ( my ($key, $value) = each %params )
+	{
+	    $post_params .= "  $key=$value\n";
+	}
+
+	$post_params .= "==\n";
+    }
     
-    return sprintf(qq{%s <%s> [%s] "%s %s" "%s" "%s"\n}, $remote_addr, $$, $time_formatted, $method, $uri, $referer, $agent);
+    return sprintf(qq{%s <%s> [%s] "%s %s" "%s" "%s"\n%s}, $remote_addr, $$, $time_formatted, $method, $uri, $referer, $agent, $post_params);
 }
 
 1;

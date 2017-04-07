@@ -431,23 +431,23 @@ sub list {
     
     my $order = $request->clean_param('order');
     
-    my $order_expr = '';
+    my $order_expr = 'ORDER BY i.early_age desc, sm.scale_no, sm.scale_level';
     
     if ( defined $order )
     {
 	if ( $order eq 'age' || $order eq 'age.asc' )
 	{
-	    $order_expr = "ORDER BY i.early_age";
+	    $order_expr = "ORDER BY i.early_age asc, sm.scale_no, sm.scale_level";
 	}
 	
 	elsif ( $order eq 'age.desc' )
 	{
-	    $order_expr = "ORDER BY i.early_age desc";
+	    # leave it unchanged
 	}
 	
 	elsif ( $order eq 'name' || $order eq 'name.asc' )
 	{
-	    $order_expr = "ORDER BY i.interval_name";
+	    $order_expr = "ORDER BY i.interval_name asc";
 	}
 	
 	elsif ( $order eq 'name.desc' )
@@ -640,15 +640,24 @@ sub generateJoinList {
 # spans all of the given intervals, no matter how many or in which order they
 # were specified.  Any number of intervals can be specified, separated by
 # either dashes or commas.
+#
+# If the parameter $not_strict is true, then don't throw an exception for warnings.
 # 
 # Returns: $max_ma, $min_ma, $early_interval_no, $late_interval_no
 
 sub process_interval_params {
     
-    my ($request) = @_;
+    my ($request, $no_warnings) = @_;
     
-    my (@ids, @errors);
+    my (@ids, @warnings, @errors);
     my ($max_ma, $min_ma, $early_interval_no, $late_interval_no, $early_duration, $late_duration);
+    
+    # If this routine has already been called for this request, just return the result.
+
+    if ( ref $request->{my_interval_bounds}  eq 'ARRAY' )
+    {
+	return @{$request->{my_interval_bounds}};
+    }
     
     # First check for each of the relevant parameters.
     
@@ -661,15 +670,15 @@ sub process_interval_params {
 		push @ids, $id;
 	    }
 	    
-	    else
+	    elsif ( $id )
 	    {
-		die $request->exception(400, "The interval identifier '$id' was not found in the database");
+		push @warnings, "The interval identifier '$id' was not found in the database.";
 	    }
 	}
 	
 	unless ( @ids )
 	{
-	    die $request->exception(400, "No valid interval identifiers were given");
+	    push @errors, "No valid interval identifiers were given.";
 	}
     }
     
@@ -686,8 +695,13 @@ sub process_interval_params {
 	    
 	    else
 	    {
-		push @errors, "Unknown interval '$name'";
+		push @warnings, "Unknown interval '$name.'";
 	    }
+	}
+	
+	unless ( @ids )
+	{
+	    push @errors, "No valid interval names were given.";
 	}
     }
     
@@ -698,24 +712,46 @@ sub process_interval_params {
 	if ( defined $value && $value ne '' )
 	{
 	    $max_ma = $value;
-	    
-	    die $request->exception("400", "The value of 'max_ma' must be greater than 0")
-		unless $max_ma;
 	}
 	
 	if ( my $value = $request->clean_param('min_ma') )
 	{
 	    $min_ma = $value;
 	}
+
+	if ( defined $min_ma && defined $max_ma && $min_ma >= $max_ma )
+	{
+	    push @warnings, "The value of 'min_ma' is greater than or equal to the value of 'max_ma'.";
+	}
+
+	elsif ( defined $max_ma && $max_ma == 0 )
+	{
+	    push @warnings, "The value of 'max_ma' must be greater than zero.";
+	}
     }
     
     # If we have found any errors, report them and abort the request.
     
-    if ( @errors )
+    if ( @errors || @warnings )
     {
-	my $errstring = join('; ', @errors);
+	# if ( $not_strict && ! @errors )
+	# {
+	#     $request->add_warning(@warnings);
+	# }
 	
-	die "400 $errstring\n";
+	if ( @errors )
+	{
+	    $request->add_warning(@warnings) if @warnings;
+	    
+	    my $errstring = join(' ', @errors);
+	    die "400 $errstring\n";
+	}
+	
+	else
+	{
+	    my $errstring = join(' ', @warnings);
+	    die "400 $errstring\n";
+	}
     }
     
     # If we have one or more interval ids, scan through to find the earliest
@@ -752,6 +788,8 @@ sub process_interval_params {
     }
     
     # Now return the results.
+
+    $request->{my_interval_bounds} = [ $max_ma, $min_ma, $early_interval_no, $late_interval_no ];
     
     return ($max_ma, $min_ma, $early_interval_no, $late_interval_no);
     
