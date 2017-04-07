@@ -112,8 +112,10 @@ our $MACROSTRAT_LITHS = 'macrostrat.liths';
 # Institution tables
 
 our $INSTITUTIONS = 'institutions';
-our $INST_NAMES = 'inst_names';
+our $INST_ALTNAMES = 'inst_names';
 our $INST_COLLS = 'inst_colls';
+our $INST_COLL_ALTNAMES = 'inst_coll_names';
+our $INST_CODES = 'inst_codes';
 
 # New timescale system
 
