@@ -45,7 +45,7 @@ sub init_institution_tables {
 	
 	$dbh->do("DROP TABLE IF EXISTS $INSTITUTIONS_WORK");
 	$dbh->do("CREATE TABLE $INSTITUTIONS_WORK (
-		institution_no int unsigned PRIMARY KEY,
+		institution_no int unsigned PRIMARY KEY auto_increment not null,
 		institution_code varchar(20) not null,
 		institution_name varchar(100) not null,
 		main_url varchar(255) not null,
@@ -66,13 +66,13 @@ sub init_institution_tables {
 	
 	$dbh->do("DROP TABLE IF EXISTS $INST_COLLS_WORK");
 	$dbh->do("CREATE TABLE $INST_COLLS_WORK (
-		collection_no int unsigned PRIMARY KEY,
+		instcoll_no int unsigned PRIMARY KEY auto_increment not null,
 		institution_no int unsigned not null,
-		collection_code varchar(20) not null,
-		collection_name varchar(255) not null,
-		collection_status enum('active', 'inactive'),
-		has_ih_record boolean,
-		collection_url varchar(255) not null,
+		instcoll_code varchar(20) not null,
+		instcoll_name varchar(255) not null,
+		instcoll_status enum('active', 'inactive') null,
+		has_ih_record boolean null,
+		instcoll_url varchar(255) not null,
 		catalog_url varchar(255) not null,
 		last_updated datetime null,
 		mailing_address varchar(255) not null,
@@ -89,33 +89,33 @@ sub init_institution_tables {
 		physical_cc varchar(2) not null,
 		lon decimal(9,3),
 		lat decimal(9,3),
-		collection_contact varchar(80) not null,
+		instcoll_contact varchar(80) not null,
 		contact_role varchar(80) not null,
 		contact_email varchar(80) not null,
-		collection_lsid varchar(100) not null,
+		instcoll_lsid varchar(100) not null,
 		KEY (institution_no),
-		KEY (collection_code),
-		KEY (collection_name),
+		KEY (instcoll_code),
+		KEY (instcoll_name),
 		KEY (lon, lat),
 		KEY (physical_cc))");
 	
 	$dbh->do("DROP TABLE IF EXISTS $INST_COLL_ALTNAMES_WORK");
 	$dbh->do("CREATE TABLE $INST_COLL_ALTNAMES_WORK (
-		collection_no int unsigned not null,
-		collection_code varchar(20) not null,
-		collection_name varchar(255) not null,
-		KEY (collection_no),
-		KEY (collection_code),
-		KEY (collection_name))");
+		instcoll_no int unsigned not null,
+		instcoll_code varchar(20) not null,
+		instcoll_name varchar(255) not null,
+		KEY (instcoll_no),
+		KEY (instcoll_code),
+		KEY (instcoll_name))");
 	
 	$dbh->do("DROP TABLE IF EXISTS $INST_CODES_WORK");
 	$dbh->do("CREATE TABLE $INST_CODES_WORK (
-		collection_code varchar(20) not null,
-		collection_no int unsigned not null,
+		instcoll_code varchar(20) not null,
+		instcoll_no int unsigned not null,
 		institution_no int unsigned not null,
 		is_inst_code boolean not null,
 		KEY (collection_code),
-		KEY (collection_no),
+		KEY (instcoll_no),
 		KEY (institution_no))");
 	
     } catch {
@@ -153,10 +153,23 @@ sub init_institution_tables {
 # Generate (or regenerate) the $INST_CODES table.  This involves copying codes, id numbers, and
 # names from both $INSTITUTIONS and $INST_COLLS, plus their associated ALTNAMES tables.
 
-sub compute_institution_codes {
+# Perhaps we don't actually need this...
+
+# sub compute_institution_codes {
     
-    my ($dbh) = @_;
+#     my ($dbh) = @_;
     
-}
+#     my ($sql, $result);
+    
+#     $dbh->do("START TRANSACTION");
+    
+#     $dbh->do("TRUNCATE TABLE $INST_CODES");
+    
+#     $dbh->do("INSERT INTO $INST_CODES (code, collection_no, institution_no)
+# 		SELECT collection_code, collection_no, institution_no
+# 		FROM $INST_COLLS");
+    
+#     $dbh->do("INSERT INTO $INST ...");
+# }
 
 1;

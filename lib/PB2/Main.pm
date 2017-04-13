@@ -20,6 +20,7 @@ use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
+use PB2::InstitutionData;
 
 {
     # We start by defining a data service instance for version 1.2
@@ -867,6 +868,66 @@ use PB2::PersonData;
 		      title => 'References for taxonomic names' },
 	"This operation returns information about the references from which",
 	"the selected taxonomic names were entered.");
+    
+    # Institutions and institutional collections
+    
+    $ds2->define_node({ path => 'instcolls',
+			title => 'Institutions and Institutional Collections',
+			place => 6,
+			role => 'PB2::InstitutionData' },
+	"Many of the fossil specimens listed in this database are housed in",
+	"institutional collections at a variety of museums and other institutions.");
+    
+    $ds2->define_node({ path => 'institutions',
+			role => 'PB2::InstitutionData' });
+    
+    $ds2->define_node({ path => 'instcolls/single',
+			title => 'Single institutional collection',
+			place => 1,
+			method => 'get_instcoll',
+			output => '1.2:instcolls:basic',
+			optional_output => '1.2:instcolls:basic_map' },
+	"This operation returns information about a single institutional collection,",
+	"specified by its identifier.");
+    
+    $ds2->define_node({ path => 'institutions/single',
+			title => 'Single institution',
+			place => 2,
+			method => 'get_institution',
+			output => '1.2:institutions:basic',
+			optional_output => '1.2:institutions:basic_map' },
+	"This operation returns information about a single institution,",
+	"specified by its identifier.");
+    
+    $ds2->list_node({ path => 'institutions/single',
+		      list => 'instcolls',
+		      place => 2 });
+    
+    $ds2->define_node({ path => 'instcolls/list',
+			title => 'Lists of instiutional collections',
+			place => 3,
+			method => 'list_instcolls',
+			arg => 'instcolls',
+			output => '1.2:instcolls:basic',
+			optional_output => '1.2:instcolls:basic_map' },
+	"This operation returns information about one or more institutional",
+	"collections, based on the parameters given.");
+    
+    $ds2->define_node({ path => 'institutions/list',
+			title => 'Lists of institutions',
+			place => 4,
+			method => 'list_instcolls',
+			arg => 'institutions',
+			output => '1.2:institutions:basic',
+			optional_output => '1.2:institutions:basic_map' },
+	"This operation returns information about one o rmore institutions,",
+	"based on the parameters given.");
+    
+    $ds2->list_node({ path => 'institutions/list',
+		      list => 'instcolls',
+		      place => 4 });
+    
+    # $ds2->list_node({ path => 'instcolls/auto' });
     
     # The following paths are used for miscellaneous documentation
     

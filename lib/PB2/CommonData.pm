@@ -88,6 +88,14 @@ sub initialize {
 	{ param => 'modified_after', valid => \&datetime_value, alias => 'modified_since' },
 	    "Select only records that were modified on or after the specified L<date or date/time|/data1.2/datetime>.");
     
+    $ds->define_ruleset('1.2:common:select_updated' =>
+	{ param => 'updated_before', valid => \&datetime_value },
+	    "Select only records that were last verified or updated before the specified",
+	    "L<date or date/time|/data1.2/datetime>.",
+	{ param => 'updated_after', valid => \&datetime_value },
+	    "Select only records that were last verified or updated on or after the specified",
+	    "L<date or date/time|/data1.2/datetime>.");
+    
     $ds->define_ruleset('1.2:common:select_taxa_crmod' =>
 	{ param => 'taxa_created_before', valid => \&datetime_value },
 	    "Select only records associated with taxa that were created before the specified L<date or date/time|/data1.2/datetime>.",
