@@ -46,10 +46,10 @@ sub init_institution_tables {
 	$dbh->do("DROP TABLE IF EXISTS $INSTITUTIONS_WORK");
 	$dbh->do("CREATE TABLE $INSTITUTIONS_WORK (
 		institution_no int unsigned PRIMARY KEY auto_increment not null,
+		line_no int unsigned not null,
 		institution_code varchar(20) not null,
 		institution_name varchar(100) not null,
 		main_url varchar(255) not null,
-		websvc_url varchar(255) not null,
 		last_updated datetime null,
 		institution_lsid varchar(255) not null,
 		KEY (institution_code),
@@ -67,6 +67,7 @@ sub init_institution_tables {
 	$dbh->do("DROP TABLE IF EXISTS $INST_COLLS_WORK");
 	$dbh->do("CREATE TABLE $INST_COLLS_WORK (
 		instcoll_no int unsigned PRIMARY KEY auto_increment not null,
+		line_no int unsigned not null,
 		institution_no int unsigned not null,
 		instcoll_code varchar(20) not null,
 		instcoll_name varchar(255) not null,
@@ -74,6 +75,7 @@ sub init_institution_tables {
 		has_ih_record boolean null,
 		instcoll_url varchar(255) not null,
 		catalog_url varchar(255) not null,
+		websvc_url varchar(255) not null,
 		last_updated datetime null,
 		mailing_address varchar(255) not null,
 		mailing_city varchar(80) not null,
