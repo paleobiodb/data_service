@@ -431,11 +431,15 @@ sub buildCollectionTables {
 		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i
 			JOIN $SCALE_MAP as s using (interval_no)
 			JOIN $INTERVAL_BUFFER as ib using (interval_no)
-		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
-			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
-			and (m.early_age > i.late_age and m.late_age < i.early_age)
+		WHERE if(m.late_age >= i.late_age,
+			if(m.early_age <= i.early_age, m.early_age - m.late_age, i.early_age - m.late_age),
+			if(m.early_age > i.early_age, i.early_age - i.late_age, m.early_age - i.late_age)) / (m.early_age - m.late_age) >= 0.5
 		GROUP BY interval_no, bin_id_$level";
 	
+		# WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
+		# 	and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
+		# 	and (m.early_age > i.late_age and m.late_age < i.early_age)
+
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");

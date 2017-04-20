@@ -25,7 +25,7 @@ no warnings 'numeric';
 
 # Store the basic data about each interval and scale.
 
-our (%IDATA, %INAME, %SDATA, %SLDATA, %SMDATA);
+our (%IDATA, %INAME, %IPREFIX, %SDATA, %SLDATA, %SMDATA);
 our (%BOUNDARY_LIST, %BOUNDARY_MAP);
 
 
@@ -939,8 +939,15 @@ sub read_interval_data {
 	foreach my $i ( @$result )
 	{
 	    next unless $interval_no = $i->{interval_no};
+	    my $interval_name = lc $i->{interval_name};
+	    
+	    my $interval_prefix = $interval_name;
+	    $interval_prefix =~ s/ ^early\s | ^middle\s | ^late\s //xs;
+	    $interval_prefix = substr($interval_prefix, 0, 3);
+	    
 	    $IDATA{$interval_no} = $i;
-	    $INAME{lc $i->{interval_name}} = $i;
+	    $INAME{$interval_name} = $i;
+	    push @{$IPREFIX{$interval_prefix}}, $i;
 	}
     }
     

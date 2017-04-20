@@ -1312,6 +1312,7 @@ sub initialize {
 	# { param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
 	#     "Return only strata associated with some occurrence whose geographic location falls",
 	#     "within the specified geometry, specified in WKT format.",
+	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     if ( ref $PB2::ConfigData::LITHOLOGIES eq 'ARRAY' )
@@ -3767,10 +3768,18 @@ sub generateMainFilters {
     # Otherwise, we need the unrestricted cluster table row (the one for
     # interval_no = 0) plus additional filters.
     
-    if ( ($op eq 'summary' || $op eq 'prevalence') && $time_rule eq 'buffer' &&
-	 ($early_interval_no && $late_interval_no && $early_interval_no == $late_interval_no) )
+    if ($op eq 'summary' || $op eq 'prevalence')
     {
-	push @filters, "s.interval_no = $summary_interval";
+	if ( $time_rule eq 'major' && $early_interval_no && $late_interval_no && 
+	     $early_interval_no == $late_interval_no)
+	{
+	    push @filters, "s.interval_no = $summary_interval";
+	}
+	
+	else
+	{
+	    push @filters, "s.interval_no = 0";
+	}
     }
     
     # Otherwise, if a range of years was specified, use that.
@@ -3818,79 +3827,79 @@ sub generateMainFilters {
     # specified, then we don't need one because the necessary filtering has
     # already been done by selecting the appropriate interval_no in the summary table.
     
-    elsif ( $early_age || $late_age )
+    if ( $early_age || $late_age )
     {
-	if ( $op eq 'summary' )
-	{
-	    push @filters, "s.interval_no = 0";
-	}
+	# if ( $op eq 'summary' || $op eq 'prevalence' )
+	# {
+	#     push @filters, "s.interval_no = 0";
+	# }
 	
-	unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer') or
-	         $tables_ref->{ds} or $op eq 'prevalence' )
+	# unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'major') or
+	#          $tables_ref->{ds} or $op eq 'prevalence' )
+	# {
+	
+	$tables_ref->{c} = 1;
+
+	# The exact filter we use will depend upon the time rule that was
+	# selected.
+
+	if ( $time_rule eq 'contain' )
 	{
-	    $tables_ref->{c} = 1;
-	    
-	    # The exact filter we use will depend upon the time rule that was
-	    # selected.
-	    
-	    if ( $time_rule eq 'contain' )
+	    if ( defined $late_age and $late_age > 0 )
 	    {
-		if ( defined $late_age and $late_age > 0 )
-		{
-		    push @filters, "$mt.late_age >= $late_age";
-		}
-		
-		if ( defined $early_age and $early_age > 0 )
-		{
-		    push @filters, "$mt.early_age <= $early_age";
-		}
+		push @filters, "c.late_age >= $late_age";
 	    }
-	    
-	    elsif ( $time_rule eq 'overlap' )
+
+	    if ( defined $early_age and $early_age > 0 )
 	    {
-		if ( defined $late_age and $late_age > 0 )
-		{
-		    push @filters, "$mt.early_age > $late_age";
-		}
-		
-		if ( defined $early_age and $early_age > 0 )
-		{
-		    push @filters, "$mt.late_age < $early_age";
-		}
+		push @filters, "c.early_age <= $early_age";
 	    }
-	    
-	    elsif ( $time_rule eq 'major' )
+	}
+
+	elsif ( $time_rule eq 'overlap' )
+	{
+	    if ( defined $late_age and $late_age > 0 )
 	    {
-		my $ea = $early_age ? $early_age + 0 : 5000;
-		my $la = $late_age ? $late_age + 0 : 0;
-		
-		push @filters, "if($mt.late_age >= $la,
-			if($mt.early_age <= $ea, $mt.early_age - $mt.late_age, $ea - $mt.late_age),
-			if($mt.early_age > $ea, $ea - $la, $mt.early_age - $la)) / ($mt.early_age - $mt.late_age) >= 0.5"
+		push @filters, "c.early_age > $late_age";
 	    }
-	    
-	    else # $time_rule eq 'buffer'
+
+	    if ( defined $early_age and $early_age > 0 )
 	    {
-		if ( defined $late_age and defined $early_age and 
-		     defined $late_bound and defined $early_bound )
+		push @filters, "c.late_age < $early_age";
+	    }
+	}
+
+	elsif ( $time_rule eq 'major' )
+	{
+	    my $ea = $early_age ? $early_age + 0 : 5000;
+	    my $la = $late_age ? $late_age + 0 : 0;
+
+	    push @filters, "if(c.late_age >= $la,
+		    if(c.early_age <= $ea, c.early_age - c.late_age, $ea - c.late_age),
+		    if(c.early_age > $ea, $ea - $la, c.early_age - $la)) / (c.early_age - c.late_age) >= 0.5"
+	}
+
+	else # $time_rule eq 'buffer'
+	{
+	    if ( defined $late_age and defined $early_age and 
+		 defined $late_bound and defined $early_bound )
+	    {
+		push @filters, "c.early_age <= $early_bound and c.late_age >= $late_bound";
+		push @filters, "(c.early_age < $early_bound or c.late_age > $late_bound)";
+		push @filters, "c.early_age > $late_age";
+		push @filters, "c.late_age < $early_age";
+	    }
+
+	    else
+	    {
+		if ( defined $late_age and defined $late_bound )
 		{
-		    push @filters, "$mt.early_age <= $early_bound and $mt.late_age >= $late_bound";
-		    push @filters, "($mt.early_age < $early_bound or $mt.late_age > $late_bound)";
-		    push @filters, "$mt.early_age > $late_age";
-		    push @filters, "$mt.late_age < $early_age";
+		    push @filters, "c.late_age >= $late_bound and c.early_age > $late_age";
 		}
-		
-		else
+
+		if ( defined $early_age and defined $early_bound )
 		{
-		    if ( defined $late_age and defined $late_bound )
-		    {
-			push @filters, "$mt.late_age >= $late_bound and $mt.early_age > $late_age";
-		    }
-		    
-		    if ( defined $early_age and defined $early_bound )
-		    {
-			push @filters, "$mt.early_age <= $early_bound and $mt.late_age < $early_age";
-		    }
+		    push @filters, "c.early_age <= $early_bound and c.late_age < $early_age";
 		}
 	    }
 	}

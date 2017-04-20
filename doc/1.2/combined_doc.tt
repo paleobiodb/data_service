@@ -1,0 +1,12 @@
+=head2 DESCRIPTION
+
+The URL paths documented in this section provide access to operations that
+return more than one record type.
+
+Follow this link for more information on L<the use of taxonomic names in this data service|node:general/taxon_names>.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+<% NODELIST(opt_usage=1) %>

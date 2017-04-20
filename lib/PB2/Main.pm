@@ -20,6 +20,7 @@ use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
+use PB2::CombinedData;
 
 {
     # We start by defining a data service instance for version 1.2
@@ -146,10 +147,29 @@ use PB2::PersonData;
 			role => 'PB2::ConfigData',
 			method => 'get',
 			optional_output => '1.2:config:get_map' },
-	"This class provides information about the structure, encoding and organization",
+	"This operation provides information about the structure, encoding and organization",
 	"of the information in the database. It is designed to enable the easy",
 	"configuration of client applications.");
-
+    
+    # Combined data.
+    
+    $ds2->define_node({ path => 'combined',
+			place => 11,
+			title => 'Combined data',
+			role => 'PB2::CombinedData' },
+	"The operations in this group provide access to multiple types of data records,",
+	"including auto-completion for client applications.");
+    
+    $ds2->define_node({ path => 'combined/auto',
+			place => 1,
+			title => 'General auto-completion',
+			method => 'auto_complete',
+			output => '1.2:combined:auto'},
+	"Return a list of names matching any string of characters. This operation is intended",
+	"to be used for auto-completion in client applications. The desired record types",
+	"can be specified using the B<C<type>> parameter, and the number of records to be returned",
+	"using B<C<limit>>.");
+    
     # Occurrences.  These paths are used to fetch information about fossil
     # occurrences known to the database.
     

@@ -11,7 +11,7 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::Most tests => 7;
+use Test::Most tests => 8;
 
 # use CoreFunction qw(connectDB configData);
 # use Taxonomy;
@@ -42,7 +42,10 @@ my (%LEVEL_1_BIN_ID, %LEVEL_2_BIN_ID, $BIN_1_EMPTY, $BIN_2_EMPTY);
 my $NAME_1 = 'Reptilia';
 my $GENUS_2 = 'Cyclophthalmus';
 my $NAME_3 = 'Scorpiones';
+my $NAME_4 = 'Dinosauria';
 my $TAXON_ID_3 = 243100;
+my $INTERVAL_1 = 'Jurassic';
+my $DINOSAURIA_JURASSIC_BOUND = 1500;
 
 my $unsigned_re = qr{ ^ [1-9] [0-9]* $ }xs;
 my $nonneg_re = qr{ ^ [0-9] [0-9]* $ }xs;
@@ -238,6 +241,32 @@ sub test_summary_json {
 	$tc->flag('bad cxi', $r->{oid}) unless defined $r->{cxi} && $r->{cxi} =~ $unsigned_re;
     }
 }
+
+
+# Check collection counts between 'colls/list' and 'colls/summary'
+
+subtest 'collection count crosscheck' => sub {
+    
+    select_subtest || return;
+    
+    my (@s1) = $T->fetch_records("/colls/summary.json?base_name=$NAME_4&interval=$INTERVAL_1&level=2",
+				 "colls summary $NAME_4 $INTERVAL_1 level 2");
+    
+    my ($n_colls_summary);
+    
+    foreach my $s (@s1)
+    {
+	$n_colls_summary += $s->{nco} if $s->{nco};
+    }
+    
+    my (@c1) = $T->fetch_records("/colls/list.json?base_name=$NAME_4&interval=$INTERVAL_1",
+				 "colls list $NAME_4 $INTERVAL_1");
+    
+    my $n_colls_list = scalar(@c1);
+    
+    cmp_ok($n_colls_summary, '==', $n_colls_list, "collection count matches between summary and list");
+    cmp_ok($n_colls_list, '>', $DINOSAURIA_JURASSIC_BOUND, "collection count matches hard-coded bound");    
+};
 
 
 # Now check all_records, with rowcount to make sure that those parameters are properly accepted.

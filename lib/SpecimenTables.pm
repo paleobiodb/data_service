@@ -149,16 +149,16 @@ sub init_specimen_element_tables {
 		KEY (neotoma_element_id),
 		KEY (neotoma_element_type_id))");
     
-    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS");
+    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK");
     
-    $dbh->do("CREATE TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS (
+    $dbh->do("CREATE TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK (
 		spec_elt_no int unsigned not null,
 		taxon_no int unsigned not null,
 		KEY (spec_elt_no)");
     
     $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_MAP_WORK");
     
-    $dbh->do("CREATE TABLE $SPEC_MAP_WORK (
+    $dbh->do("CREATE TABLE $SPEC_ELT_MAP_WORK (
 		spec_elt_no int unsigned not null,
 		lft int unsigned not null,
 		rgt int unsigned not null,
