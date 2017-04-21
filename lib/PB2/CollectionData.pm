@@ -284,6 +284,7 @@ sub initialize {
 
      $ds->define_block('1.2:colls:paleoloc' =>
 	{ select => 'PALEOCOORDS' },
+	{ set => '*', code => \&process_paleocoords },
 	{ output => 'paleomodel', com_name => 'pm1' },
 	    "The primary model specified by the parameter C<pgm>.  This",
 	    "field will only be included if more than one model is indicated.",
@@ -4636,6 +4637,30 @@ sub process_summary_ids {
 	    if $record->{$f};
     }
 }
+
+
+# process_paleocoords ( record )
+# 
+# If any of the paleocoords are blank, add to the corresponding 'geoplate' field a message to the
+# effect that the coordinates for this collection cannot be computed using this model. We put the
+# message in the 'geoplate' field because this is an unstructured text field, while the lat/lng
+# fields should either contain numbers or be blank.
+
+sub process_paleocoords {
+    
+    my ($request, $record) = @_;
+    
+    foreach my $label ( '', '2', '3', '4' )
+    {
+	last unless $record->{ 'paleomodel' . $label };
+	
+	unless ( $record->{ 'paleolat' . $label } || $record->{ 'paleolng' . $label } )
+	{
+	    $record->{ 'geoplate' . $label } = "coordinates not computable using this model";
+	}
+    }
+}
+
 
 # generateBasisCode ( record )
 # 
