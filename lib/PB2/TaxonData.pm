@@ -3395,6 +3395,134 @@ sub auto {
 }
 
 
+# auto_complete_txn ( name, limit )
+# 
+# This method provides an alternate matching operation, designed to be called from the combined
+# auto-completion operation for client applications. It is passed a name, which is taken to be a
+# prefix, and a limit on the number of results to return.
+
+sub auto_complete_txn {
+    
+    my ($request, $name, $limit) = @_;
+    
+    my $dbh = $request->get_connection();
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    my $search_table = $taxonomy->{SEARCH_TABLE};
+    my $names_table = $taxonomy->{NAMES_TABLE};
+    my $attrs_table = $taxonomy->{ATTRS_TABLE};
+    my $ints_table = $taxonomy->{INTS_TABLE};
+    my $tree_table = $taxonomy->{TREE_TABLE};
+    
+    $limit ||= 10;
+    my @filters;
+    
+    my $use_extids = $request->has_block('extids');
+    
+    my $fields = "s.full_name as name, s.taxon_rank, s.taxon_no, s.accepted_no, s.orig_no, t.status, tv.spelling_no, " .
+	"tv.name as accepted_name, v.n_occs, n.spelling_reason, acn.spelling_reason as accepted_reason, " .
+	"if(ph.class <> '', ph.class, if(ph.phylum <> '', ph.phylum, ph.kingdom)) as higher_taxon";
+    my $sql;
+    my $filter;
+    
+    # Strip out any characters that don't appear in taxonomic names.  But allow SQL wildcards.
+    
+    $name =~ tr/[a-zA-Z_%. ]//dc;
+    
+    # If we are given a genus (possibly abbreviated), generate a search on
+    # genus and species name.
+    
+    if ( $name =~ qr{ ^ ([a-zA-Z_]+) ( [.] | [.%]? \s+ ) ([a-zA-Z_%]+) }xs )
+    {
+	my $genus = ($2 ne ' ') ? $dbh->quote("$1%") : $dbh->quote($1);
+	my $species = $dbh->quote("$3%");
+	
+	$filter = "s.genus like $genus and s.taxon_name like $species";
+    }
+    
+    # If we are given a name like '% somespecies', then generate a search on species name only.
+    
+    elsif ( $name =~ qr{ ^ %[.]? \s+ ([a-zA-Z_%]+) $ }xs )
+    {
+	my $species = $dbh->quote("$1%");
+	
+	$filter = "s.taxon_name like $species and s.taxon_rank = 'species'";
+    }
+    
+    # If we are given a single name followed by one or more spaces and nothing
+    # else, take it as a genus name.
+    
+    elsif ( $name =~ qr{ ^ ([a-zA-Z]+) ([.%]+)? \s+ $ }xs )
+    {
+	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
+	
+	$filter = "s.genus like $genus and s.taxon_rank = 'genus'";
+    }
+    
+    # Otherwise, if it has no spaces then just search for the name.  Turn all
+    # periods into wildcards.
+    
+    elsif ( $name =~ qr{^[a-zA-Z_%.]+$} )
+    {
+	return if length($name) < 3;
+	
+	$name =~ s/\./%/g;
+	
+	$filter = "s.full_name like " . $dbh->quote("$name%");
+    }
+    
+    # If none of these patterns are matched, return an empty result.
+    
+    else
+    {
+	return;
+    }
+    
+    # Now execute the query.
+    
+    $sql = "SELECT $fields
+		FROM $search_table as s JOIN $tree_table as t using (orig_no)
+			JOIN $tree_table as tv on tv.orig_no = t.accepted_no
+			JOIN $attrs_table as v on v.orig_no = t.accepted_no
+			JOIN $ints_table as ph on ph.ints_no = tv.ints_no
+			JOIN $names_table as n on n.taxon_no = s.taxon_no
+			JOIN $names_table as acn on acn.taxon_no = t.spelling_no
+		WHERE $filter
+		ORDER BY s.taxon_no = tv.spelling_no desc, n_occs desc LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    my %found_taxon;
+    my @results;
+    
+    # If we found some results, go through the list and process each record. The method
+    # 'process_difference' is called to generate the 'difference' (tdf) field. The 'oid' and 'vid'
+    # fields are converted to external identifiers if appropriate. Finally, we keep track of the
+    # orig_no of each record, and skip any repeats. This filters out multiple records in cases
+    # where a name was changed in rank, and possibly other cases.
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	foreach my $r ( @$result_list )
+	{
+	    next if $found_taxon{$r->{orig_no}};
+	    $found_taxon{$r->{orig_no}} = 1;
+	    
+	    $request->process_difference($r);
+	    $r->{record_id} = $use_extids ? generate_identifier('TXN', $r->{accepted_no}) :
+		$r->{accepted_no};
+	    $r->{taxon_no} = generate_identifier('VAR', $r->{taxon_no}) if $use_extids;
+	    $r->{record_type} = 'txn' unless $use_extids;
+	    
+	    push @results, $r;
+	}
+    }
+    
+    return @results;
+}
+
+
 # get_image ( )
 # 
 # Given an id (image_no) value, taxon_id, or taxon_name, return the

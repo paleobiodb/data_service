@@ -876,6 +876,61 @@ sub process_interval_params {
 }
 
 
+# auto_complete_int ( name, limit )
+# 
+# This routine returns interval records matching the specified name, and is intended for use with
+# auto-completion in client applications. The parameter $name must contain at least three letters,
+# or else an empty result is returned. The parameter $limit specifies the maximum number of
+# matches to be returned.
+
+sub auto_complete_int {
+    
+    my ($request, $name, $limit) = @_;
+    
+    # Return an empty result if the argument starts with 'early', 'middle', or 'late' or some
+    # prefix thereof, and does not specify any other letters. There is no point in matching until
+    # we have at least a few letters of the base interval name.
+    
+    return if $name =~ qr{ ^ (?: e(a(r(ly?)?)?)? \s* | m(i(d(d(le?)?)?)?)? \s* | l(a(te?)?)? \s* ) $ }xsi;
+    
+    # Take out 'early', 'middle' or 'late' if they occur at the beginning of the name, and
+    # lowercase it. (Fold case isn't needed because interval names are all in the unaccented roman
+    # alphabet). Return an empty result unless we have at least three characters, and extract the
+    # first three to look up using %IPREFIX.
+    
+    my $search_name = lc $name;
+    
+    $search_name =~ s/ ^early\s* | ^middle\s* | ^late\s* //xs;
+    
+    my $prefix = substr($search_name, 0, 3);
+    my $name_len = length($name);
+    
+    return unless length($prefix) == 3;
+    
+    # For each interval with the specified prefix, check whether it matches the full name
+    # given. If so, add this to the results. But stop once we have reached the specified limit.
+    
+    my @results;
+    my $count;
+    my $use_extids = $request->has_block('extids');
+    
+    foreach my $i ( @{$PB2::IntervalData::IPREFIX{$prefix}} )
+    {
+	if ( lc substr($i->{interval_name}, 0, $name_len) eq $name )
+	{
+	    my $record_id = $use_extids ? generate_identifier('INT', $i->{interval_no}) : $i->{interval_no};
+	    
+	    push @results, { name => $i->{interval_name}, record_type => 'int', record_id => $record_id,
+			     early_age => $i->{early_age}, late_age => $i->{late_age} };
+	    
+	    last if ++$count >= $limit;
+	}
+    }
+    
+    return @results;
+}
+
+
 # generateHierarchy ( rows )
 # 
 # Arrange the rows into a hierarchy.  This is only called on requests

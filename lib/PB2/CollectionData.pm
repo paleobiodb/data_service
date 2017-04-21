@@ -1961,6 +1961,44 @@ sub strata_auto {
 }
 
 
+# auto_complete_str ( name, limit )
+# 
+# This is an alternate operation for auto-completion, designed to be called by the combined
+# auto-complete operation.
+
+sub auto_complete_str {
+    
+    my ($request, $name, $limit) = @_;
+    
+    # Reject obvious mismatches
+    
+    # return if $name =~ qr{ ^ \w [.] \s+ \w }xsi;
+    
+    my $dbh = $request->get_connection();
+    
+    $limit ||= 10;
+    my @filters;
+    
+    my $quoted_name = $dbh->quote("${name}%");
+    
+    push @filters, "sn.name like $quoted_name";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    my $sql = "
+	SELECT name, type, cc_list, n_colls, n_occs, 'str' as record_type, 'str' as record_id
+	FROM strata_names as sn
+	WHERE $filter_string
+	ORDER BY n_occs desc LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    return ref $result_list eq 'ARRAY' ? @$result_list : ( );
+}
+
+
 # fixTimeOutput ( record )
 # 
 # Adjust the time output by truncating unneeded digits.
@@ -2717,6 +2755,7 @@ sub generateMainFilters {
     {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
+	$tables_ref->{o} = 1;
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
 	$request->{my_base_taxa} = [ @include_taxa, @exclude_taxa ];
@@ -2726,7 +2765,7 @@ sub generateMainFilters {
     {
 	my $taxon_list = join ',', map { $_->{orig_no} } @include_taxa;
 	push @filters, "(t.accepted_no in ($taxon_list) or t.orig_no in ($taxon_list))";
-	$tables_ref->{o} = 1 unless $tables_ref->{ds};
+	$tables_ref->{o} = 1;
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
 	$tables_ref->{non_summary} = 1;
@@ -2856,7 +2895,7 @@ sub generateMainFilters {
 	push @filters, "o.orig_no = -1";
 	$tables_ref->{non_summary} = 1;
     }
-
+    
     # Now add filters for excluded taxa.  But only if there is at least one
     # included taxon as well.
     
@@ -2882,12 +2921,14 @@ sub generateMainFilters {
 	{
 	    push @filters, "tv.rank <= 3";
 	    $tables_ref->{tv} = 1;
+	    $tables_ref->{o} = 1;
 	}
 	
 	elsif ( $taxonres eq 'genus' || $taxonres eq 'lump_genus' || $taxonres eq 'lump_gensub' )
 	{
 	    push @filters, "tv.rank <= 5";
 	    $tables_ref->{tv} = 1;
+	    $tables_ref->{o} = 1;
 	}
 	
 	elsif ( $taxonres eq 'family' || $taxonres eq 'lump_family' )
@@ -2895,6 +2936,7 @@ sub generateMainFilters {
 	    push @filters, "(tv.rank <= 9 or ph.family_no is not null)";
 	    $tables_ref->{tv} = 1;
 	    $tables_ref->{ph} = 1;
+	    $tables_ref->{o} = 1;
 	}
     }
     
@@ -2909,6 +2951,7 @@ sub generateMainFilters {
 	die "bad taxon status '$taxon_status'\n" unless $filter;
 	
 	push @filters, $filter;
+	$tables_ref->{o} = 1;
     }
     
     # Check for parameter 'pres'
@@ -2927,6 +2970,7 @@ sub generateMainFilters {
 	if ( %pres && ! $pres{all} )
 	{
 	    $tables_ref->{v} = 1;
+	    $tables_ref->{o} = 1;
 	    
 	    my @keys = keys %pres;
 	    
@@ -2995,6 +3039,7 @@ sub generateMainFilters {
     if ( defined $extant && $extant ne '' )
     {
 	$tables_ref->{v} = 1;
+	$tables_ref->{o} = 1;
 	push @filters, ($extant ? "v.is_extant = 1" : "v.is_extant = 0");
     }
     

@@ -27,7 +27,7 @@ use Moo::Role;
 no warnings 'numeric';
 
 
-our (@REQUIRES_ROLE) = qw(PB2::IntervalData PB2::CollectionData PB2::TaxonData PB2::PersonData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::IntervalData PB2::CollectionData PB2::TaxonData PB2::PersonData);
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
@@ -46,20 +46,31 @@ sub initialize {
     
     $ds->define_block('1.2:combined:auto' =>
 	# common fields
-	{ output => 'record_type', com_name => 'typ' },
-	    "The type of this record: varies by record. Will be one of: C<B<str>>, C<B<txn>>, C<B<prs>>, C<B<int>>.",
 	{ output => 'record_id', com_name => 'oid' },
 	    "The identifier (if any) of the database record corresponding to this name.",
+	{ output => 'record_type', com_name => 'typ' },
+	    "The type of this record: varies by record. Will be one of: C<B<str>>, C<B<txn>>, C<B<prs>>, C<B<int>>.",
 	{ output => 'name', com_name => 'nam' },
 	    "A name that matches the characters given by the B<C<name>> parameter.",
 	# taxa
-	# { set => 'taxon_rank', if_vocab => 'com', lookup => \%TAXON_RANK },
+	{ output => 'taxon_no', com_name => 'vid', dedup => 'record_id' },
+	    "For taxonomic names: the identifier of the actual matching name, if this",
+	    "is different from the identifier of the corresponding accepted name.",
 	{ output => 'taxon_rank', com_name => 'rnk' },
-	    "For taxonomic names: this field specifies the taxonomic rank.",
-	{ output => 'misspelling', com_name => 'msp' },
-	    "If this name is marked as a misspelling, then this field will be included with the value '1'",
-	{ output => 'status', com_name => 'sta' },
-	    "For taxonomic names: this field specifies the taxonomic status.",
+	    "For taxonomic names: this field specifies the taxonomic rank of the actual matching name.",
+	{ output => 'difference', com_name => 'tdf' },
+	    "For taxonomic names: if the name is either a junior synonym or is invalid for some reason,",
+	    "this field gives the reason.  The fields B<C<accepted_no>>",
+	    "and B<C<accepted_name>> then specify the name that should be used instead.",
+	{ output => 'accepted_name', com_name => 'acn', dedup => 'name' },
+	    "For taxonomic names: if the name is not valid, this field gives the",
+	    "corresponding accepted name.",
+	{ output => 'accepted_rank', com_name => 'acr', dedup => 'taxon_rank' },
+	    "For taxonomic names: if the accepted name has a different rank, this",
+	    "field gives the rank of that name.",
+	{ output => 'higher_taxon', com_name => 'htn' },
+	    "For taxonomic names: a higher taxon (class if known or else phylum) in",
+	    "which this taxon is contained.",
 	# strata
 	{ output => 'type', com_name => 'rnk' },
 	    "For strata, this field specifies: group, formation, or member.",
@@ -92,83 +103,6 @@ sub initialize {
 	    "geological strata",
 	{ value => 'prs' },
 	    "database contributors");
-    
-    # 	{ output => 'type', com_name => 'rnk' },
-    # 	    "The type of stratum: group, formation, or member.",
-    # 	{ output => 'cc_list', com_name => 'cc2' },
-    # 	    "The country or countries in which this stratum lies, as ISO-3166 country codes.",
-    # 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
-    # 	    "The number of fossil collections in the database that are associated with this stratum.",
-    # 	    "Note that if your search is limited to a particular geographic area, then",
-    # 	    "only collections within the selected area are counted.",
-    # 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
-    # 	    "The number of fossil occurrences in the database that are associated with this stratum.",
-    # 	    "The above note about geographic area selection also applies.");
-    
-    # $ds->define_block('1.2:taxa:auto' =>
-    # 	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
-    # 	    "A positive integer that uniquely identifies this taxonomic name",
-    # 	{ output => 'record_type', com_name => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => $IDP{TXN} },
-    # 	    "The type of this object: {value} for a taxonomic name",
-    # 	{ set => 'taxon_rank', if_vocab => 'com', lookup => \%TAXON_RANK },
-    # 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
-    # 	    "The taxonomic rank of this name",
-    # 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
-    # 	    "The scientific name of this taxon",
-    # 	{ output => 'misspelling', com_name => 'msp' },
-    # 	    "If this name is marked as a misspelling, then this field will be included with the value '1'",
-    # 	{ output => 'n_occs', com_name => 'noc' },
-    # 	    "The number of occurrences of this taxon in the database");
-    
-    # $ds->define_block('1.2:people:basic' =>
-    # 	{ select => [ qw(p.person_no p.name p.country p.institution
-    # 			 p.email p.is_authorizer) ] },
-    # 	{ output => 'person_no', com_name => 'oid' },
-    # 	    "A positive integer that uniquely identifies this database contributor",
-    # 	{ output => 'record_type', com_name => 'typ', com_value => 'prs', value => 'person' },
-    # 	    "The type of this object: {value} for a database contributor",
-    # 	{ output => 'name', com_name => 'nam' },
-    # 	    "The person's name",
-    # 	{ output => 'institution', com_name => 'ist' },
-    # 	    "The person's institution",
-    # 	{ output => 'country', com_name => 'ctr' },
-    # 	    "The database contributor's country");
-    
-    # $ds->define_block('1.2:intervals:basic' =>
-    # 	{ select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.scale_level
-    # 			 sm.parent_no sm.color i.early_age i.late_age i.reference_no) ] },
-    # 	{ output => 'interval_no', com_name => 'oid' },
-    # 	    "A positive integer that uniquely identifies this interval",
-    # 	{ output => 'record_type', com_name => 'typ', value => $IDP{INT} },
-    # 	    "The type of this object: C<$IDP{INT}> for an interval",
-    # 	{ output => 'scale_no', com_name => 'tsc' },
-    # 	    "The time scale in which this interval lies.  An interval may be reported more than",
-    # 	    "once, as a member of different time scales",
-    # 	{ output => 'scale_level', com_name => 'lvl' },
-    # 	    "The level within the time scale to which this interval belongs.  For example,",
-    # 	    "the default time scale is organized into the following levels:",
-    # 	    "=over", "=item Level 1", "Eons",
-    # 		       "=item Level 2", "Eras",
-    # 		       "=item Level 3", "Periods",
-    # 		       "=item Level 4", "Epochs",
-    # 		       "=item Level 5", "Stages",
-    # 	    "=back",
-    # 	{ output => 'interval_name', com_name => 'nam' },
-    # 	    "The name of this interval",
-    # 	{ output => 'abbrev', com_name => 'abr' },
-    # 	    "The standard abbreviation for the interval name, if any",
-    # 	{ output => 'parent_no', com_name => 'pid' },
-    # 	    "The identifier of the parent interval",
-    # 	{ Output', com_name => 'col' },
-    # 	    "The standard color for displaying this interval",
-    # 	{ output => 'early_age', pbdb_name => 'max_ma', com_name => 'eag' },
-    # 	    "The early age boundary of this interval (in Ma)",
-    # 	{ output => 'late_age', pbdb_name => 'min_ma', com_name => 'lag' },
-    # 	    "The late age boundary of this interval (in Ma)",
-    # 	# { set => 'reference_no', append => 1 },
-    # 	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
-    # 	    "The identifier(s) of the references from which this data was entered",
-    # 	{ set => '*', code => \&process_int_ids });
     
     $ds->define_ruleset('1.2:combined:auto' =>
 	{ param => 'name', valid => ANY_VALUE },
@@ -205,8 +139,10 @@ sub auto_complete {
     
     my $total_limit = $request->clean_param('limit') || 10;
     
-    # $request->strict_check;
-    # $request->extid_check;
+    $name =~ s/^\s+//;
+    
+    $request->strict_check;
+    $request->extid_check;
     
     # Now collect up all of the results.
     
@@ -297,59 +233,125 @@ sub auto_complete {
 }
 
 
-sub auto_complete_int {
-    
-    my ($request, $name, $limit) = @_;
-    
-    return if $name =~ qr{ ^ \s }xsi;
-    return if $name =~ qr{ ^ (?: e(a(r(ly?)?)?)? \s* | m(i(d(d(le?)?)?)?)? \s* | l(a(te?)?)? \s* ) $ }xsi;
-    
-    my $search_name = lc $name;
-    
-    $search_name =~ s/ ^early\s* | ^middle\s* | ^late\s* //xs;
-    
-    my $prefix = substr($search_name, 0, 3);
-    my $name_len = length($name);
-    
-    return unless length($prefix) == 3;
-    
-    my @results;
-    
-    foreach my $i ( @{$PB2::IntervalData::IPREFIX{$prefix}} )
-    {
-	if ( lc substr($i->{interval_name}, 0, $name_len) eq $name )
-	{
-	    push @results, { name => $i->{interval_name}, record_type => 'int',
-			     record_id => generate_identifier('int', $i->{interval_no}),
-			     early_age => $i->{early_age}, late_age => $i->{late_age} };
-	}
-    }
-    
-    return @results;
-}
-
-
 sub auto_complete_txn {
     
     my ($request, $name, $limit) = @_;
     
-    return;
-}
-
-
-sub auto_complete_str {
+    my $dbh = $request->get_connection();
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
-    my ($request) = @_;
+    my $search_table = $taxonomy->{SEARCH_TABLE};
+    my $names_table = $taxonomy->{NAMES_TABLE};
+    my $attrs_table = $taxonomy->{ATTRS_TABLE};
+    my $ints_table = $taxonomy->{INTS_TABLE};
+    my $tree_table = $taxonomy->{TREE_TABLE};
     
-    return;
-}
-
-
-sub auto_complete_prs {
+    $limit ||= 10;
+    my @filters;
     
-    my ($request) = @_;
+    my $use_extids = $request->has_block('extids');
     
-    return;
+    my $fields = "s.full_name as name, s.taxon_rank, s.taxon_no, s.accepted_no, s.orig_no, t.status, tv.spelling_no, " .
+	"tv.name as accepted_name, v.n_occs, n.spelling_reason, acn.spelling_reason as accepted_reason, " .
+	"if(ph.class <> '', ph.class, if(ph.phylum <> '', ph.phylum, ph.kingdom)) as higher_taxon";
+    my $sql;
+    my $filter;
+    
+    # Strip out any characters that don't appear in taxonomic names.  But allow SQL wildcards.
+    
+    $name =~ tr/[a-zA-Z_%. ]//dc;
+    
+    # If we are given a genus (possibly abbreviated), generate a search on
+    # genus and species name.
+    
+    if ( $name =~ qr{ ^ ([a-zA-Z_]+) ( [.] | [.%]? \s+ ) ([a-zA-Z_%]+) }xs )
+    {
+	my $genus = ($2 ne ' ') ? $dbh->quote("$1%") : $dbh->quote($1);
+	my $species = $dbh->quote("$3%");
+	
+	$filter = "s.genus like $genus and s.taxon_name like $species";
+    }
+    
+    # If we are given a name like '% somespecies', then generate a search on species name only.
+    
+    elsif ( $name =~ qr{ ^ %[.]? \s+ ([a-zA-Z_%]+) $ }xs )
+    {
+	my $species = $dbh->quote("$1%");
+	
+	$filter = "s.taxon_name like $species and s.taxon_rank = 'species'";
+    }
+    
+    # If we are given a single name followed by one or more spaces and nothing
+    # else, take it as a genus name.
+    
+    elsif ( $name =~ qr{ ^ ([a-zA-Z]+) ([.%]+)? \s+ $ }xs )
+    {
+	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
+	
+	$filter = "s.genus like $genus and s.taxon_rank = 'genus'";
+    }
+    
+    # Otherwise, if it has no spaces then just search for the name.  Turn all
+    # periods into wildcards.
+    
+    elsif ( $name =~ qr{^[a-zA-Z_%.]+$} )
+    {
+	return if length($name) < 3;
+	
+	$name =~ s/\./%/g;
+	
+	$filter = "s.full_name like " . $dbh->quote("$name%");
+    }
+    
+    # If none of these patterns are matched, return an empty result.
+    
+    else
+    {
+	return;
+    }
+    
+    # Now execute the query.
+    
+    $sql = "SELECT $fields
+		FROM $search_table as s JOIN $tree_table as t using (orig_no)
+			JOIN $tree_table as tv on tv.orig_no = t.accepted_no
+			JOIN $attrs_table as v on v.orig_no = t.accepted_no
+			JOIN $ints_table as ph on ph.ints_no = tv.ints_no
+			JOIN $names_table as n on n.taxon_no = s.taxon_no
+			JOIN $names_table as acn on acn.taxon_no = t.spelling_no
+		WHERE $filter
+		ORDER BY s.taxon_no = tv.spelling_no desc, n_occs desc LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    my %found_taxon;
+    my @results;
+    
+    # If we found some results, go through the list and process each record. The method
+    # 'process_difference' is called to generate the 'difference' (tdf) field. The 'oid' and 'vid'
+    # fields are converted to external identifiers if appropriate. Finally, we keep track of the
+    # orig_no of each record, and skip any repeats. This filters out multiple records in cases
+    # where a name was changed in rank, and possibly other cases.
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	foreach my $r ( @$result_list )
+	{
+	    next if $found_taxon{$r->{orig_no}};
+	    $found_taxon{$r->{orig_no}} = 1;
+	    
+	    $request->process_difference($r);
+	    $r->{record_id} = $use_extids ? generate_identifier('TXN', $r->{accepted_no}) :
+		$r->{accepted_no};
+	    $r->{taxon_no} = generate_identifier('VAR', $r->{taxon_no}) if $use_extids;
+	    $r->{record_type} = 'txn' unless $use_extids;
+	    
+	    push @results, $r;
+	}
+    }
+    
+    return @results;
 }
 
 
