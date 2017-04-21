@@ -25,10 +25,10 @@ use Moo::Role;
 
 sub generate_diversity_table {
 
-    my ($self, $sth, $options) = @_;
+    my ($request, $sth, $options) = @_;
     
-    my $ds = $self->ds;
-    my $dbh = $self->get_connection;
+    my $ds = $request->ds;
+    my $dbh = $request->get_connection;
     
     # First figure out which timescale (and thus which list of intervals) we
     # will be using in order to bin the occurrences.  We will eventually add
@@ -38,7 +38,7 @@ sub generate_diversity_table {
     my $scale_no = $options->{scale_no} || 1;
     my $scale_level = $options->{timereso} || $PB2::IntervalData::SCALE_DATA{$scale_no}{levels};
     
-    my $debug_mode = $self->debug;
+    my $debug_mode = $request->debug;
     
     # Figure out the parameters to use in the binning process.
     
@@ -57,10 +57,10 @@ sub generate_diversity_table {
     
     # Get the age bounds (if any) that were specified for this process.
     
-    # my @interval_nos = $self->clean_param_list('interval_id');
-    # my $interval_names = $self->clean_param('interval');
-    # my $min_ma = $self->clean_param('min_ma');
-    # my $max_ma = $self->clean_param('max_ma');
+    # my @interval_nos = $request->clean_param_list('interval_id');
+    # my $interval_names = $request->clean_param('interval');
+    # my $min_ma = $request->clean_param('min_ma');
+    # my $max_ma = $request->clean_param('max_ma');
     
     my $early_limit;
     my $late_limit;
@@ -75,7 +75,7 @@ sub generate_diversity_table {
 	    
     # 	    unless ( $idata )
     # 	    {
-    # 		$self->add_warning("unknown time interval id '$n'");
+    # 		$request->add_warning("unknown time interval id '$n'");
     # 		next;
     # 	    }
 
@@ -91,7 +91,7 @@ sub generate_diversity_table {
     # 	# {
     # 	#     $early_limit = 0;
     # 	#     $late_limit = 0;
-    # 	#     $self->add_warning("unknown interval id(s) '$interval_no'");
+    # 	#     $request->add_warning("unknown interval id(s) '$interval_no'");
     # 	# }
 	
     # 	# else
@@ -102,7 +102,7 @@ sub generate_diversity_table {
 
     # 	unless ( defined $early_limit )
     # 	{
-    # 	    $self->add_warning("no valid time intervals were specified");
+    # 	    $request->add_warning("no valid time intervals were specified");
     # 	    $early_limit = $late_limit = 0;
     # 	}
     # }
@@ -119,7 +119,7 @@ sub generate_diversity_table {
 	    
     # 	    unless ( $idata )
     # 	    {
-    # 		$self->add_warning("unknown time interval '$n'");
+    # 		$request->add_warning("unknown time interval '$n'");
     # 		next;
     # 	    }
 	
@@ -135,7 +135,7 @@ sub generate_diversity_table {
     # 	# {
     # 	#     $early_limit = 0;
     # 	#     $late_limit = 0;
-    # 	#     $self->add_warning("unknown interval '$interval_name'");
+    # 	#     $request->add_warning("unknown interval '$interval_name'");
     # 	# }
 	
     # 	# else
@@ -146,7 +146,7 @@ sub generate_diversity_table {
 	
     # 	unless ( defined $early_limit )
     # 	{
-    # 	    $self->add_warning("no valid time intervals were specified");
+    # 	    $request->add_warning("no valid time intervals were specified");
     # 	    $early_limit = $late_limit = 0;
     # 	}
     # }
@@ -162,7 +162,7 @@ sub generate_diversity_table {
     # recorded for the occurrence (which may or may not be in the standard
     # timescale).
 
-    ($early_limit, $late_limit) = $self->process_interval_params();
+    ($early_limit, $late_limit) = $request->process_interval_params();
     
     my (%interval_cache);
     
@@ -429,29 +429,30 @@ sub generate_diversity_table {
     
     # If we are in debug mode, report the interval assignments.
     
-    # if ( $self->debug ) 
+    # if ( $request->debug ) 
     # {
-    # 	# $self->add_warning("Skipped $imprecise_time_count occurrences because of imprecise temporal locality:")
+    # 	# $request->add_warning("Skipped $imprecise_time_count occurrences because of imprecise temporal locality:")
     # 	#     if $imprecise_time_count;
 	
     # 	# foreach my $key ( sort { $b cmp $a } keys %interval_report )
     # 	# {
-    # 	#     $self->add_warning("    $key ($interval_report{$key})");
+    # 	#     $request->add_warning("    $key ($interval_report{$key})");
     # 	# }
 	
     # 	foreach my $key ( sort { $a cmp $b } keys %taxon_report )
     # 	{
-    # 	    $self->add_warning("    $key ($taxon_report{$key})");
+    # 	    $request->add_warning("    $key ($taxon_report{$key})");
     # 	}
     # }
     
     # Add a summary record with counts.
     
-    $self->summary_data({ total_count => $total_count,
+    $request->summary_data({ total_count => $total_count,
 			  bin_count => $bin_count,
 			  imprecise_time => $imprecise_time_count,
 			  imprecise_taxon => $imprecise_taxon_count,
-			  missing_taxon => $missing_taxon_count });
+			  missing_taxon => $missing_taxon_count })
+	if $request->clean_param('datainfo');
     
     # Now we scan through the bins again and prepare the data records.
     
@@ -473,7 +474,7 @@ sub generate_diversity_table {
 	push @result, $r;
     }
     
-    $self->list_result(reverse @result);
+    $request->list_result(reverse @result);
 }
 
 
@@ -720,7 +721,8 @@ sub generate_taxon_table_ints {
     # Now add a summary record.
     
     $request->summary_data({ total_count => $total_count,
-			     missing_taxon => $missing_count });
+    			     missing_taxon => $missing_count })
+	if $request->clean_param('datainfo');
 }
 
 
@@ -960,9 +962,10 @@ sub generate_taxon_table_full {
 	$request->delete_output_field('container_no');
     }
     
-    # Now add a summary record.
+    # Now add a summary record, if 'datainfo' was specified.
     
-    $request->summary_data({ total_count => $total_count });
+    $request->summary_data({ total_count => $total_count })
+	if $request->clean_param('datainfo');
 }
 
 
