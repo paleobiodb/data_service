@@ -885,6 +885,7 @@ sub buildStrataTables {
 		name varchar(255) not null,
 		type enum('group', 'formation', 'member'),
 		cc_list varchar(255) not null,
+		country_list varchar(255) not null,
 		n_colls int unsigned not null,
 		n_occs int unsigned not null,
 		lng_min decimal(9,6),
@@ -896,10 +897,10 @@ sub buildStrataTables {
     logMessage(2, "    inserting groups...");
     
     $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
-			lng_min, lng_max, lat_min, lat_max)
+			country_list, lng_min, lng_max, lat_min, lat_max)
 		SELECT grp, 'group', count(*), sum(n_occs), group_concat(distinct cc),
-			min(lng), max(lng), min(lat), max(lat)
-		FROM $COLL_STRATA_WORK
+		       group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
+		FROM $COLL_STRATA_WORK join $COUNTRY_MAP as cm using (cc)
 		WHERE grp <> ''	and grp not like 'unnamed' GROUP BY grp");
     
     logMessage(2, "      $result groups");
@@ -907,10 +908,10 @@ sub buildStrataTables {
     logMessage(2, "    inserting formations...");
     
     $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
-			lng_min, lng_max, lat_min, lat_max)
+			country_list, lng_min, lng_max, lat_min, lat_max)
 		SELECT formation, 'formation', count(*), sum(n_occs), group_concat(distinct cc),
-			min(lng), max(lng), min(lat), max(lat)
-		FROM $COLL_STRATA_WORK
+			group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
+		FROM $COLL_STRATA_WORK join $COUNTRY_MAP as cm using (cc)
 		WHERE formation <> '' and formation not like 'unnamed' GROUP BY formation");
     
     logMessage(2, "      $result formations");

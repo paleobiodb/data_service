@@ -1969,7 +1969,7 @@ sub strata_auto {
 
 sub auto_complete_str {
     
-    my ($request, $name, $limit) = @_;
+    my ($request, $name, $limit, $options) = @_;
     
     # Reject obvious mismatches
     
@@ -1978,6 +1978,7 @@ sub auto_complete_str {
     my $dbh = $request->get_connection();
     
     $limit ||= 10;
+    $options ||= { };
     my @filters;
     
     my $quoted_name = $dbh->quote("${name}%");
@@ -1986,8 +1987,10 @@ sub auto_complete_str {
     
     my $filter_string = join(' and ', @filters);
     
+    my $country_field = $options->{countries} ? 'country_list' : 'cc_list';
+    
     my $sql = "
-	SELECT name, type, cc_list, n_colls, n_occs, 'str' as record_type, 'str' as record_id
+	SELECT name, type, $country_field as cc_list, n_colls, n_occs, 'str' as record_type, 'str' as record_id
 	FROM strata_names as sn
 	WHERE $filter_string
 	ORDER BY n_occs desc LIMIT $limit";
@@ -4171,37 +4174,37 @@ sub selectPaleoModel {
 	if ( $model eq 'scotese' )
 	{
 	    push @fields, "cc.paleolng as $lng_field", "cc.paleolat as $lat_field";
-	    push @fields, "cc.plate as $plate_field" unless $plate_version_shown{'scotese'};
+	    push @fields, "cc.plate as $plate_field";
 	    push @fields, "'scotese' as $model_field";
 	    $tables_ref->{cc} = 1;
-	    $plate_version_shown{'scotese'} = 1;
+	    # $plate_version_shown{'scotese'} = 1;
 	}
 	
 	elsif ( $model eq 'gplates' || $model eq 'gp_mid' )
 	{
 	    push @fields, "pc.mid_lng as $lng_field", "pc.mid_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "pc.plate_no as $plate_field";
 	    push @fields, "'gp_mid' as $model_field";
 	    $tables_ref->{pc} = 1;
-	    $plate_version_shown{'gplates'} = 1;
+	    # $plate_version_shown{'gplates'} = 1;
 	}
 	
 	elsif ( $model eq 'gp_early' )
 	{
 	    push @fields, "pc.early_lng as $lng_field", "pc.early_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "pc.plate_no as $plate_field";
 	    push @fields, "'gp_early' as $model_field";
 	    $tables_ref->{pc} = 1;
-	    $plate_version_shown{'gplates'} = 1;
+	    # $plate_version_shown{'gplates'} = 1;
 	}
 	
 	elsif ( $model eq 'gp_late' )
 	{
 	    push @fields, "pc.late_lng as $lng_field", "pc.late_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "pc.plate_no as $plate_field";
 	    push @fields, "'gp_late' as $model_field";
 	    $tables_ref->{pc} = 1;
-	    $plate_version_shown{'gplates'} = 1;
+	    # $plate_version_shown{'gplates'} = 1;
 	}
     }
     
