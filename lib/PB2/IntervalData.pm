@@ -916,7 +916,7 @@ sub auto_complete_int {
     
     foreach my $i ( @{$PB2::IntervalData::IPREFIX{$prefix}} )
     {
-	if ( lc substr($i->{interval_name}, 0, $name_len) eq $name )
+	if ( lc substr($i->{interval_name}, 0, $name_len) eq lc $name )
 	{
 	    my $record_id = $use_extids ? generate_identifier('INT', $i->{interval_no}) : $i->{interval_no};
 	    
