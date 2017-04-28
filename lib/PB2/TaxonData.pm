@@ -397,7 +397,7 @@ sub initialize {
     $ds->define_block('1.2:taxa:subtaxon' =>
 	{ output => 'orig_no', com_name => 'oid', dwc_name => 'taxonID' },
 	{ output => 'taxon_no', com_name => 'vid', not_field => 'no_variant' },
-	{ output => 'record_type', com_name => 'typ', com_value => 'txn' },
+	{ output => 'record_type', com_name => 'typ', com_value => 'txn', not_field => 'no_recordtype' },
 	{ output => 'taxon_rank', com_name => 'rnk', dwc_name => 'taxonRank' },
 	{ output => 'taxon_name', com_name => 'nam', dwc_name => 'scientificName' },
 	{ output => 'accepted_no', com_name => 'acc', dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
@@ -2023,33 +2023,33 @@ sub get_taxon {
 	
 	if ( $r->{kingdom_no} )
 	{
-	    $r->{kingdom_txn} = $taxonomy->list_taxa_simple($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{kingdom_txn}) = $taxonomy->list_taxa_simple($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{phylum_no} )
 	{
-	    $r->{phylum_txn} = $taxonomy->list_taxa_simple($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{phylum_txn}) = $taxonomy->list_taxa_simple($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{class_no} )
 	{
-	    $r->{class_txn} = $taxonomy->list_taxa_simple($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{class_txn}) = $taxonomy->list_taxa_simple($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{order_no} )
 	{
-	    $r->{order_txn} = $taxonomy->list_taxa_simple($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{order_txn}) = $taxonomy->list_taxa_simple($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{family_no} )
 	{
-	    $r->{family_txn} = $taxonomy->list_taxa_simple($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{family_txn}) = $taxonomy->list_taxa_simple($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
-	if ( $r->{parsen_no} || $r->{parent_no} )
+	if ( $r->{immpar_no} || $r->{senpar_no} )
 	{
-	    my $parent_no = $r->{parsen_no} || $r->{parent_no};
-	    $r->{parent_txn} = $taxonomy->list_taxa_simple($parent_no, { fields => ['SIMPLE','SIZE'] });
+	    my $parent_no = $r->{immpar_no} || $r->{senpar_no};
+	    ($r->{parent_txn}) = $taxonomy->list_taxa_simple($parent_no, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	# Then add the various lists of subtaxa.
@@ -4043,10 +4043,10 @@ sub process_com {
 	}
     }
     
-    # $record->{no_variant} = 1 if defined $record->{spelling_no} && defined $record->{taxon_no} &&
-    # 	$record->{spelling_no} eq $record->{taxon_no};
+    $record->{no_variant} = 1 if $record->{taxon_no} && $record->{orig_no} &&
+    	$record->{taxon_no} eq $record->{orig_no};
     
-    $record->{no_variant} = 1 unless defined $record->{spelling_no};
+    # $record->{no_variant} = 1 unless defined $record->{spelling_no};
     
     # $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{child_spelling_no} &&
     # 	$record->{orig_no} eq $record->{child_spelling_no};
@@ -4054,7 +4054,6 @@ sub process_com {
     # $record->{no_variant} = 0 if defined $request->{my_rel} && 
     # 	($request->{my_rel} eq 'variants' || $request->{my_rel} eq 'exact' ||
     # 	 $request->{my_rel} eq 'current');
-    
     
     $record->{n_orders} = undef if defined $record->{n_orders} && 
 	$record->{n_orders} == 0 && $record->{taxon_rank} <= 13;
@@ -4159,6 +4158,41 @@ sub process_taxon_ids {
     {
 	$record->{$f} = generate_identifier('VAR', $record->{$f}) if defined $record->{$f};
 	# $record->{$f} = $record->{$f} ? "$IDP{VAR}:$record->{$f}" : '';
+    }
+    
+    if ( ref $record->{parent_txn} )
+    {
+	foreach my $f ( qw(parent_txn kingdom_txn phylum_txn class_txn order_txn family_txn) )
+	{
+	    # This has to be first, because the two fields won't be equal once external
+	    # identifiers have been generated.
+	    $record->{$f}{no_variant} = 1 if $record->{$f}{orig_no} && $record->{$f}{taxon_no} && 
+		$record->{$f}{orig_no} eq $record->{$f}{taxon_no};
+	    $record->{$f}{no_recordtype} = 1;
+	    
+	    delete $record->{$f}{accepted_no};
+	    
+	    $record->{$f}{orig_no} = generate_identifier('TXN', $record->{$f}{orig_no}) if defined $record->{$f}{orig_no};
+	    $record->{$f}{taxon_no} = generate_identifier('VAR', $record->{$f}{taxon_no}) if defined $record->{$f}{taxon_no};
+	}
+	
+	foreach my $f ( qw(children phylum_list class_list order_list family_list genus_list subgenus_list species_list subspecies_list) )
+	{
+	    next unless ref $record->{$f} eq 'ARRAY';
+	    
+	    foreach my $t ( @{$record->{$f}} )
+	    {
+		# This has to be first, because the two fields won't be equal once external
+		# identifiers have been generated.
+		$t->{no_variant} = 1 if $t->{orig_no} && $t->{taxon_no} && $t->{orig_no} eq $t->{taxon_no};
+		$t->{no_recordtype} = 1;
+		
+		delete $t->{accepted_no};
+		
+		$t->{orig_no} = generate_identifier('TXN', $t->{orig_no}) if defined $t->{orig_no};
+		$t->{taxon_no} = generate_identifier('VAR', $t->{taxon_no}) if defined $t->{taxon_no};
+	    }
+	}
     }
     
     foreach my $f ( qw(opinion_no) )

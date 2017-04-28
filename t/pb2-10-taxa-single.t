@@ -10,7 +10,7 @@
 use strict;
 use feature 'unicode_strings';
 
-use Test::Most tests => 10;
+use Test::Most tests => 11;
 
 use lib 't';
 use Tester;
@@ -498,7 +498,7 @@ subtest 'single json name variants' => sub {
     {
 	is($r_id_ex->{nam}, $VT_TXNNAME_1, 'single variant id exact has proper name');
 	is($r_id_ex->{oid}, $VT_TXN_1, 'single variant id exact has proper oid');
-	is($r_id_ex->{vid}, $VT_VAR_1a, 'single variant id exact has proper vid');
+	is($r_id_ex->{vid}, undef, 'single variant id exact has proper vid');
     }
     
     if ( $r_idv )
@@ -519,14 +519,14 @@ subtest 'single json name variants' => sub {
     {
 	is($r_txnname->{nam}, $VT_TXNNAME_1, 'single variant txnname has proper name');
 	is($r_txnname->{oid}, $VT_TXN_1, 'single variant txnname has proper oid');
-	is($r_txnname->{vid}, $VT_VAR_1a, 'single variant txnname has proper vid');
+	is($r_txnname->{vid}, undef, 'single variant txnname has proper vid');
     }
     
     if ( $r_txnname_ex )
     {
 	is($r_txnname_ex->{nam}, $VT_TXNNAME_1, 'single variant txnname exact has proper name');
 	is($r_txnname_ex->{oid}, $VT_TXN_1, 'single variant txnname exact has proper oid');
-	is($r_txnname_ex->{vid}, $VT_VAR_1a, 'single variant txnname exact has proper vid');
+	is($r_txnname_ex->{vid}, undef, 'single variant txnname exact has proper vid');
     }
     
     if ( $r_varname )
@@ -621,6 +621,84 @@ subtest 'single by name with wildcards' => sub {
     is( $max_id, $w1->{oid}, "single with wildcard '.' found max occs" );
 };
 
+
+# Now test the 'nav' block of single taxon output.
+
+subtest 'nav block' => sub {
+    
+    my ($r1) = $T->fetch_records("/taxa/single.json?name=$TEST_NAME_1&show=nav,parent", "single with nav block");
+    my ($r1c) = $T->fetch_records("/taxa/single.json?name=$TEST_NAME_1&show=classext", "single with classext block");
+    
+    my ($ipr) = $T->fetch_records("/taxa/list.json?name=$TEST_NAME_1&rel=immpar", "single immpar");
+    my ($spr) = $T->fetch_records("/taxa/list.json?name=$TEST_NAME_1&rel=senpar", "single senpar");
+    
+    cmp_ok( $ipr->{nam}, 'eq', $r1->{ipl}, "immpar label is correct" );
+    cmp_ok( $spr->{nam}, 'eq', $r1->{prl}, "senpar label is correct" );
+    cmp_ok( $spr->{rnk}, 'eq', $r1->{prr}, "senpar rank is correct" );
+    
+    # First check that we have a 'prt' subrecord and that its basic values are okay.
+    
+    if ( ok( ref $r1->{prt} eq 'HASH', "single with nav bock has 'prt'" ) )
+    {
+	cmp_ok( $r1->{prt}{oid}, 'eq', $spr->{oid}, "prt oid is correct" );
+	if ( $spr->{vid} )
+	{
+	    cmp_ok( $r1->{prt}{vid}, 'eq', $spr->{vid}, "prt vid is correct" );
+	}
+	cmp_ok( $r1->{prt}{nam}, 'eq', $spr->{nam}, "prt label is correct" );
+	cmp_ok( $r1->{prt}{rnk}, 'eq', $spr->{rnk}, "prt rank is correct" );
+	cmp_ok( $r1->{prt}{siz}, '>', 0, "prt size is correct" );
+	cmp_ok( $r1->{prt}{exs}, '>', 0, "prt extant_size is correct" );
+    }
+    
+    # Next check that we have a 'kgt' subrecord and that its basic values are okay.
+    
+    if ( ok( ref $r1->{kgt} eq 'HASH', "single with nav block has 'kgt'" ) )
+    {
+	cmp_ok( $r1->{kgl}, 'eq', $r1->{kgt}{nam}, "kgt label is correct" );
+	cmp_ok( $r1->{kgn}, 'eq', $r1->{kgt}{oid}, "kgt oid is correct" );
+	cmp_ok( $r1->{kgt}{rnk}, '>', 21, "kgt rank is correct" );
+	cmp_ok( $r1->{kgt}{siz}, '>', 0, "prt size is greater than zero" );
+	cmp_ok( $r1->{kgt}{exs}, '>', 0, "prt extant_size is greater than zero" );
+    }
+    
+    # Now check the subtaxon records for phylum, class, order, family
+    
+    foreach my $prefix ( qw(ph cl od fm) )
+    {
+	next unless ok( ref $r1->{"${prefix}t"} eq 'HASH', "single with nav block has '${prefix}t'" );
+	
+	cmp_ok( $r1->{"${prefix}t"}{nam}, 'eq', $r1c->{"${prefix}l"}, "${prefix}t name is correct" );
+	cmp_ok( $r1->{"${prefix}t"}{oid}, 'eq', $r1c->{"${prefix}n"}, "${prefix}t oid is correct" );
+	cmp_ok( $r1->{"${prefix}t"}{rnk}, '>', 5, "${prefix}t rank is greater than minimum" );
+	cmp_ok( $r1->{"${prefix}t"}{siz}, '>', 0, "${prefix}t size is greater than zero" );
+	cmp_ok( $r1->{"${prefix}t"}{exs}, '>', 0, "${prefix}t extant_size is greater than zero" );
+    }
+    
+    # Now check the subtaxon records for children and genera
+    
+    my $tc = Test::Conditions->new;
+    $tc->limit_max( fea => 3 );
+    
+    foreach my $key ( qw(chl gns) )
+    {
+	next unless ok( ref $r1->{$key} eq 'ARRAY', "single with nav block has '$key' array" );
+	
+	foreach my $t ( @{$r1->{$key}} )
+	{
+	    my $oid = $t->{oid};
+	    
+	    $tc->flag('oid', 'MISSING VALUE') unless $oid && $oid =~ /^txn:\d+$/;
+	    $tc->flag('nam', $oid) unless $t->{nam};
+	    $tc->flag('rnk', $oid) unless $t->{rnk} && $t->{rnk} > 0;
+	    $tc->flag('siz', $oid) unless $t->{siz} && $t->{siz} > 0;
+	    $tc->flag('exs', $oid) unless defined $t->{exs} && $t->{exs} >= 0;
+	    $tc->flag('fea', $oid) unless $t->{fea} && $t->{fea} > 0;
+	}
+    }
+    
+    $tc->ok_all("chl and gns records are correct");
+};
 
 # Some of the special parameters have already been tested above: 'limit',
 # 'offset', 'rowcount', 'datainfo'.

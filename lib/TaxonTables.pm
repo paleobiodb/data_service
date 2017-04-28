@@ -4559,7 +4559,7 @@ sub computeAttrsTable {
 		WHERE t.depth = $max_depth
 		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
-			v.extant_size = nv.is_extant,
+			v.extant_size = coalesce(nv.is_extant, 0),
 			v.taxon_size = 1,
 			v.invalid_size = not(v.is_valid),
 			v.n_occs = nv.n_occs,
@@ -4614,7 +4614,7 @@ sub computeAttrsTable {
 			v.extant_children = nv.extant_children,
 			v.immediate_children = nv.valid_children,
 			v.taxon_size = nv.taxon_size_sum,
-			v.extant_size = nv.extant_size_sum,
+			v.extant_size = coalesce(nv.extant_size_sum, 0),
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.is_trace = nv.is_trace,
@@ -4676,7 +4676,7 @@ sub computeAttrsTable {
 			v.valid_children = nv.valid_children_sum,
 			v.extant_children = nv.extant_children_sum,
 			v.invalid_children = nv.invalid_children_sum,
-			v.extant_size = nv.extant_size_sum + (v.is_valid and nv.is_extant),
+			v.extant_size = coalesce(nv.extant_size_sum, 0) + (v.is_valid and nv.is_extant),
 			v.taxon_size = nv.taxon_size_sum + (v.is_valid and 1),
 			v.invalid_size = nv.invalid_size_sum + nv.invalid_count,
 			v.n_occs = nv.n_occs_sum,
@@ -4866,6 +4866,9 @@ sub computeAttrsTable {
 			v.late_occ = sv.late_occ,
 			v.is_trace = sv.is_trace,
 			v.is_form = sv.is_form");
+    
+    $result = $dbh->do("UPDATE $ATTRS_WORK as v
+		SET v.extant_size = 0 WHERE v.extant_size is null");
     
     # Now we can set the 'pubyr', 'modyr', 'is_changed' and 'attribution' fields, which are not
     # inherited. 
