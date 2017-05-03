@@ -1241,6 +1241,8 @@ sub initialize {
 	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
 	">>The following parameters can be used to further filter the selection, based on the",
 	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
 	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
@@ -1534,6 +1536,7 @@ sub summary {
     my @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generateCollFilters($tables);
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc' }, $tables );
     
     # Figure out the filter we need for determining access permissions.  We can ignore the extra
     # fields, since we are not returning records of type 'collection' or 'occurrence'.
