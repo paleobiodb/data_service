@@ -1593,6 +1593,12 @@ sub summary {
 	delete $tables->{im};
     }
     
+    if ( $tables->{o} )
+    {
+	$fields =~ s{ \bs.n_colls\b }{count(distinct o.collection_no) as n_colls}xs;
+	$fields =~ s{ \bs.n_occs\b }{count(distinct o.occurrence_no) as n_occs}xs;
+    }
+    
     if ( $request->has_block('bin') )
     {
 	$request->delete_output_field('bin_id_1') if $bin_level < 2;
