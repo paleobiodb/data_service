@@ -54,18 +54,21 @@ sub initialize {
     
     $ds->define_set('1.2:refs:reftype' =>
 	{ value => 'auth (A)' },
-	    "This reference gives the authority for a taxonomic name",
+	    "This reference gives the authority for at least one taxonomic name",
+	{ value => 'var (V)' },
+	    "This reference is the source for at least one taxonomic name variant",
+	    "that is not currently accepted.",
 	{ value => 'class (C)' },
-	    "This reference is the source for a classification opinion",
+	    "This reference is the source for at least one classification opinion",
 	{ value => 'unclass (U)' },
-	    "This reference is the source for an opinion that is not selected for",
+	    "This reference is the source for a least one opinion that is not selected for",
 	    "classification because of its date of publication and/or basis",
 	{ value => 'occ (O)' },
-	    "This reference is the source for a fossil occurrence",
+	    "This reference is the source for at least one fossil occurrence",
+	{ value => 'spec (S)' },
+	    "This reference is the source for at least one fossil specimen",
 	{ value => 'prim (P)' },
-	    "This reference is indicated to be the primary source for a fossil collection",
-	{ value => 'sec (S)' },
-	    "This reference is an additional source for a fossil collection",
+	    "This reference is indicated to be the primary source for at least one fossil collection",
 	{ value => 'ref (R)' },
 	    "This reference has an unknown or unspecified role in the database");
     

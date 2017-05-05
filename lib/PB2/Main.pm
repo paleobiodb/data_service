@@ -28,7 +28,7 @@ use PB2::CombinedData;
     our ($ds2) = Web::DataService->new(
 	{ name => '1.2',
 	  title => 'PBDB Data Service',
-	  version => 'v1',
+	  version => 'v2',
 	  features => 'standard',
 	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
@@ -237,7 +237,7 @@ use PB2::CombinedData;
 	"This operation returns a tabulation of fossil diversity over time, based on a selected set of occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
 	"valid for the L<occs/list|node:occs/list> operation.  This operation can take up a lot of server time,",
-	"so if you just want to display a quick overview plot please use the L<occs/quickdev|node:occs/quickdev>",
+	"so if you just want to display a quick overview plot please use the L<occs/quickdiv|node:occs/quickdiv>",
 	"operation.");
     
     $ds2->extended_doc({ path => 'occs/diversity' },

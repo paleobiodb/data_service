@@ -267,7 +267,7 @@ sub initialize {
 	    "The county or municipal area in which the collection is located, if known",
 	{ output => 'latlng_basis', if_vocab => 'pbdb' },
 	    "The basis of the reported location of the collection.  Follow this link for a",
-	    "L<list of basis and precision codes|node:basis_precision>.  This field and",
+	    "L<list of basis and precision codes|node:general/basis_precision>.  This field and",
 	    "the next are only included in responses using the pbdb vocabulary.",
 	{ output =>'latlng_precision', if_vocab => 'pbdb' },
 	    "The precision of the collection coordinates.  Follow the above",
