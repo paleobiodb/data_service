@@ -13,6 +13,7 @@ package PBData;
 use PB2::CommonData;
 use PB2::ConfigData;
 use PB2::IntervalData;
+use PB2::TimescaleData;
 use PB2::TaxonData;
 use PB2::CollectionData;
 use PB2::OccurrenceData;
@@ -20,6 +21,8 @@ use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
+
+use PB2::MainEntry;
 
 {
     # We start by defining a data service instance for version 1.2
@@ -868,6 +871,103 @@ use PB2::PersonData;
 	"This operation returns information about the references from which",
 	"the selected taxonomic names were entered.");
     
+    # Timescales, intervals, and bounds
+    
+    $ds2->define_node({ path => 'timescales',
+			title => 'Geological timescales, intervals, and interval bounds',
+			place => 3,
+			role => 'PB2::TimescaleData' },
+	"The database lists almost every geologic time interval in current use, including the",
+	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
+	"(L<2013-01|http://www.stratigraphy.org/ICSchart/ChronostratChart2013-01.jpg>).");
+    
+    $ds2->define_node({ path => 'intervals2',
+		       place => 0,
+		       role => 'PB2::TimescaleData' });
+    
+    $ds2->define_node({ path => 'bounds',
+		       place => 0,
+		       role => 'PB2::TimescaleData' });
+    
+    $ds2->define_node({ path => 'timescales/single',
+			title => 'Single geological timescale',
+			place => 1,
+			usage => [ 'timescales/single.json?id=1' ],
+			method => 'get_record',
+			arg => 'timescales',
+			output => '1.2:timescales:basic',
+		        optional_output => '1.2:timescales:optional_basic' },
+	"This operation returns information about a single timescale, specified by",
+	"its unique identifier in the database.");
+    
+    $ds2->define_node({ path => 'timescales/list',
+			title => 'Lists of geological timescales',
+			place => 1,
+			usage => [ 'timescales/list.json?all_records', 'timescales/list.json?timescale_match=gradstein' ],
+			method => 'list_records',
+			arg => 'timescales',
+			output => '1.2:timescales:basic',
+			optional_output => '1.2:timescales:optional_basic' },
+	"This operation returns information about a list of timescales, selected",
+	"according to the query parameters.");
+    
+    $ds2->define_node({ path => 'bounds/single',
+			title => 'Single geological time interval boundary',
+			usage => [ 'bounds/single.json?id=10' ],
+			method => 'get_record',
+			arg => 'bounds',
+			output => '1.2:timescales:bound',
+		        optional_output => '1.2:timescales:optional_bound' },
+	"This operation returns information about a single time interval boundary, specified by",
+	"its unique identifier in the database.");
+    
+    $ds2->list_node({ path => 'bounds/single',
+		      list => 'timescales',
+		      place => 2 });
+
+    $ds2->define_node({ path => 'bounds/list',
+			title => 'Lists of geological time interval bounds',
+			usage => [ 'bounds/list.json?timescale_id=1', 'bounds/list.json?interval_name=cretaceous' ],
+			method => 'list_records',
+			arg => 'bounds',
+			output => '1.2:timescales:bound',
+			optional_output => '1.2:timescales:optional_bound' },
+	"This operation returns information about a list of time interval bounds,",
+	"selected according to the query parameters.");
+    
+    $ds2->list_node({ path => 'bounds/list',
+		      list => 'timescales',
+		      place => 2 });
+    
+    $ds2->define_node({ path => 'intervals2/single',
+			title => 'Single geological time interval',
+			usage => [ 'intervals2/single.json?id=3', 'intervals2/single.json?id=3&timescale_id=4' ],
+			method => 'get_record',
+			arg => 'intervals',
+			output => '1.2:timescales:interval',
+		        optional_output => '1.2:timescales:optional_interval' },
+	"This operation returns information about a single time interval, specified by",
+	"its unique identifier in the database.");
+    
+    $ds2->list_node({ path => 'intervals2/single',
+		      list => 'timescales',
+		      place => 3 });
+    
+    $ds2->define_node({ path => 'intervals2/list',
+			title => 'Lists of geological time intervals',
+			usage => [ 'intervals2/list.json?timescale_id=5', 'intervals2/list.json?interval_name=cretaceous',
+				   'intervals2/list.json?interval_name=cretaceous&absolute' ],
+			method => 'list_records',
+			arg => 'intervals',
+			output => '1.2:timescales:interval',
+			optional_output => '1.2:timescales:optional_interval' },
+	"This operation returns information about a list of time intervals,",
+	"selected according to the query parameters.");
+    
+    $ds2->list_node({ path => 'intervals2/list',
+		      list => 'timescales',
+		      place => 3 });
+    
     # The following paths are used for miscellaneous documentation
     
     $ds2->define_node({ path => 'general',
@@ -948,6 +1048,10 @@ use PB2::PersonData;
     
     $ds2->define_node({ path => 'images',
 			file_dir => 'images' });
+    
+    # Now initialize the data entry nodes.
+    
+    PBEntry::initialize($ds2);
 };
 
 1;

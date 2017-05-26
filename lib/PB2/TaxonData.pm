@@ -2023,33 +2023,33 @@ sub get_taxon {
 	
 	if ( $r->{kingdom_no} )
 	{
-	    $r->{kingdom_txn} = $taxonomy->list_taxa_simple($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{kingdom_txn}) = $taxonomy->list_taxa_simple($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{phylum_no} )
 	{
-	    $r->{phylum_txn} = $taxonomy->list_taxa_simple($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{phylum_txn}) = $taxonomy->list_taxa_simple($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{class_no} )
 	{
-	    $r->{class_txn} = $taxonomy->list_taxa_simple($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{class_txn}) = $taxonomy->list_taxa_simple($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{order_no} )
 	{
-	    $r->{order_txn} = $taxonomy->list_taxa_simple($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{order_txn}) = $taxonomy->list_taxa_simple($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{family_no} )
 	{
-	    $r->{family_txn} = $taxonomy->list_taxa_simple($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
+	    ($r->{family_txn}) = $taxonomy->list_taxa_simple($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
-	if ( $r->{parsen_no} || $r->{parent_no} )
+	if ( $r->{immpar_no} || $r->{senpar_no} )
 	{
-	    my $parent_no = $r->{parsen_no} || $r->{parent_no};
-	    $r->{parent_txn} = $taxonomy->list_taxa_simple($parent_no, { fields => ['SIMPLE','SIZE'] });
+	    my $parent_no = $r->{immpar_no} || $r->{senpar_no};
+	    ($r->{parent_txn}) = $taxonomy->list_taxa_simple($parent_no, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	# Then add the various lists of subtaxa.

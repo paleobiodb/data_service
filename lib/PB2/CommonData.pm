@@ -860,6 +860,87 @@ sub check_values {
 }
 
 
+# generate_match_like ( string_list )
+# 
+
+sub generate_match_like {
+
+    my ($request, $dbh, $field, $match_list) = @_;
+    
+    my @exprs;
+    
+    foreach my $n ( @$match_list )
+    {
+	next unless defined $n && $n ne '';
+	
+	my $quoted = $dbh->quote($n);
+	
+	push @exprs, "$field like $quoted";
+    }
+    
+    push @exprs, '_MATCH_NOTHING_' unless @exprs;
+    
+    if ( @exprs == 1 )
+    {
+	return @exprs;
+    }
+    
+    else
+    {
+	return '(' . join(' or ', @exprs) . ')';
+    }
+}
+
+
+# generate_match_regex ( string_list )
+# 
+# Convert the specified list of strings into a regex
+
+sub generate_match_regex {
+    
+    my ($request, $dbh, $field, $match_list) = @_;
+    
+    my @exprs;
+    
+    foreach my $n ( @$match_list )
+    {
+	next unless defined $n && $n ne '';
+	
+	$n =~ s/([()|{}])/\\$1/g;
+	$n =~ s/\s+/\\s+/g;
+	$n =~ s/%/.*/g;
+	$n =~ s/_/./g;
+	
+	push @exprs, $n;
+    }
+    
+    push @exprs, '_MATCH_NOTHING_' unless @exprs;
+    
+    my $regex = $dbh->quote(join('|', @exprs));
+    
+    return "$field rlike $regex";
+}
+
+
+sub generate_match_list {
+    
+    my ($request, $dbh, $field, $match_list) = @_;
+    
+    my @list;
+    
+    foreach my $n ( @$match_list )
+    {
+	next unless defined $n && $n ne '';
+	
+	push @list, $dbh->quote($n);
+    }
+    
+    push @list, '_MATCH_NOTHING_' unless @list;
+    
+    return "$field in (" . join(q{,}, @list) . ")";
+}
+
+
 # stict_check ( )
 # 
 # If the special parameter 'strict' was specified, and if any warnings have
