@@ -190,10 +190,10 @@ sub initialize {
     $ds->define_block('1.2:timescales:bound' =>
 	{ select => [ 'tsb.bound_no', 'tsb.age', 'tsb.age_error', 'tsb.bound_type', 
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
-		      'tsb.offset', 'tsb.offset_error', 'tsb.lower_no', 'tsb.upper_no',
+		      'tsb.offset', 'tsb.offset_error', 'tsb.lower_no', 'tsb.interval_no',
 		      'tsb.base_no', 'tsb.range_no', 'tsb.color_no', 'tsb.is_error',
 		      'tsb.is_locked', 'tsb.is_different', 'tsb.color', 'tsb.reference_no',
-		      'tsil.interval_name as lower_name', 'tsi.interval_name as upper_name' ],
+		      'tsil.interval_name as lower_name', 'tsi.interval_name as interval_name' ],
 	  tables => [ 'tsb', 'tsi', 'tsil' ] },
 	{ set => '*', code => \&process_ids },
 	{ output => 'bound_no', com_name => 'oid' },
@@ -218,7 +218,7 @@ sub initialize {
 	    "by which this boundary differs from the base boundary.",
 	{ output => 'offset_error', com_name => 'oer' },
 	    "The error (+/-) associated with the offset or percentage",
-	{ output => 'upper_no', com_name => 'uid' },
+	{ output => 'interval_no', com_name => 'uid' },
 	    "The identifier of the upper interval bounded by this boundary.",
 	    "If this field is empty, then the boundary lies at the top of",
 	    "its timescale.",
@@ -226,7 +226,7 @@ sub initialize {
 	    "The identifier of the lower interval bounded by this boundary.",
 	    "If this field is empty, then the boundary lies at the bottom of",
 	    "its timescale.",
-	{ output => 'upper_name', com_name => 'unm' },
+	{ output => 'interval_name', com_name => 'unm' },
 	    "The name of the upper interval bounded by this boundary.",
 	{ output => 'lower_name', com_name => 'lnm' },
 	    "The name of the lower interval bounded by this boundary.",
@@ -500,7 +500,7 @@ sub get_record {
 	$request->{main_sql} = "
 	SELECT $fields
 	FROM $TIMESCALE_INTS as tsi
-	    join $TIMESCALE_BOUNDS as tsb on (tsb.upper_no = tsi.interval_no)
+	    join $TIMESCALE_BOUNDS as tsb on (tsb.interval_no = tsi.interval_no)
 	    left join $TIMESCALE_BOUNDS as tsbu on (tsbu.lower_no = tsi.interval_no and tsbu.timescale_no = tsb.timescale_no)
 	WHERE tsi.interval_no = $id and tsb.timescale_no = $timescale_id
 	GROUP BY tsi.interval_no, tsb.timescale_no";
@@ -742,7 +742,7 @@ sub generate_timescale_filters {
 	
 	else
 	{	
-	    push @filters, "tsb.upper_no in ($id_list)";
+	    push @filters, "tsb.interval_no in ($id_list)";
 	    $tables->{tsb} = 1;
 	}
     }
@@ -883,14 +883,14 @@ sub generate_join_list {
     {
 	$joins .= "\tjoin $TIMESCALE_BOUNDS as tsb using (timescale_no)\n"
 	    if $tables->{tsb} || $tables->{tsi};
-	$joins .= "\tjoin $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.upper_no\n"
+	$joins .= "\tjoin $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n"
 	    if $tables->{tsi};
     }
     
     elsif ( $mt eq 'tsb' )
     {
 	$joins .= "\tjoin $TIMESCALE_DATA as ts using (timescale_no)\n";
-	$joins .= "\tleft join $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.upper_no\n"
+	$joins .= "\tleft join $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n"
 	    if $tables->{tsi};
 	$joins .= "\tleft join $TIMESCALE_INTS as tsil on tsil.interval_no = tsb.lower_no\n"
 	    if $tables->{tsil};
@@ -898,7 +898,7 @@ sub generate_join_list {
     
     elsif ( $mt eq 'tsi' )
     {
-	$joins .= "\tjoin $TIMESCALE_BOUNDS as tsb on tsb.upper_no = tsi.interval_no\n"
+	$joins .= "\tjoin $TIMESCALE_BOUNDS as tsb on tsb.interval_no = tsi.interval_no\n"
 	    if $tables->{tsb} || $tables->{ts};
 	$joins .= "\tjoin $TIMESCALE_DATA as ts using (timescale_no)\n"
 	    if $tables->{ts};
@@ -929,7 +929,7 @@ sub process_ids {
 	    if defined $record->{$k} && $record->{$k} ne '';
     }
     
-    foreach my $k ( qw(interval_no upper_no lower_no) )
+    foreach my $k ( qw(interval_no lower_no) )
     {
 	$record->{$k} = generate_identifier('INT', $record->{$k})
 	    if defined $record->{$k} && $record->{$k} ne '';
