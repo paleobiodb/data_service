@@ -38,7 +38,15 @@ sub initialize {
     
     # Value sets for specifying data entry options.
     
-    $ds->define_set('1.2:timescales:cautions' =>
+    $ds->define_set('1.2:timescales:conditions' =>
+	{ value => 'CREATE_RECORDS' },
+	    "Any records which lack a value for the primary identifier",
+	    "(bound_id or timescale_id depending on the operation) will be",
+	    "created and a new identifier assigned to them. This parameter",
+	    "is only necessary with the B<C<update>> operation, where it serves",
+	    "as a check to make sure that records that mistakenly lack an identifier",
+	    "are not taken as creation requests. It is not necessary with the C<B<add>>",
+	    "operation.",
 	{ value => 'CREATE_INTERVALS' },
 	    "If any interval names are encountered during this operation which",
 	    "do not correspond to interval records already in the database, then",
@@ -55,13 +63,6 @@ sub initialize {
 	    "cautions that were generated.");
     
     # Rulesets for entering and updating data.
-    
-    $ds->define_ruleset('1.2:common:update_flags' =>
-	{ optional => 'create_records', valid => FLAG_VALUE },
-	    "If this flag is given, then any records which lack",
-	    "a value for the primary identifier will be created and",
-	    "a new identifier assigned to them. Otherwise, the request",
-	    "will be rejected if any records lack a primary identifier.");
     
     $ds->define_ruleset('1.2:bounds:entry' =>
 	{ optional => 'record_id', valid => ANY_VALUE },
@@ -153,18 +154,13 @@ sub initialize {
 	    "or if that is empty, from the reference for this timescale.");
     
     $ds->define_ruleset('1.2:bounds:update' => 
-	">>The following parameters affect how this operation is carried out:",
-	{ allow => '1.2:common:update_flags' },
-	# { optional => 'create_intervals', valid => FLAG_VALUE },
-	#     "If this parameter is given, and if any value of C<B<interval_name>>",
-	#     "or C<B<lower_name>> does not correspond to an interval record",
-	#     "in the database, then one will be created.",
-	{ optional => 'allow', valid => '1.2:timescales:cautions' },
+	">>The following parameter affects how this operation is carried out:",
+	{ optional => 'allow', valid => '1.2:timescales:conditions' },
 	    "This parameter specifies a list of conditions that will",
 	    "be allowed to occur during processing of this request, and",
-	    "not block it from completing. B<Important:> for most applications,",
+	    "not block it from completing. B<Important:> for many applications,",
 	    "it is best to allow the request to block, get confirmation from",
-	    "the user for each separate condition, and if confirmed then repeat the request",
+	    "the user for each flagged condition, and if confirmed then repeat the request",
 	    "with these specific conditions allowed using this parameter. Accepted",
 	    "values include:",
 	">>The following parameters may be given either in the URL or in",
@@ -185,9 +181,13 @@ sub initialize {
 }
 
 
+
+our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, 'record_id' => 1, 'create_records' => 1 );
+
+
 sub update_bounds {
     
-    my ($request) = @_;
+    my ($request, $arg) = @_;
     
     my $dbh = $request->get_connection;
     
@@ -196,13 +196,32 @@ sub update_bounds {
     
     my @request_keys = $request->param_keys;
     my %main_params;
+    my %conditions;
+    
+    $conditions{CREATE_RECORDS} = 1 if $arg && $arg eq 'add';
     
     foreach my $k ( @request_keys )
     {
 	my @list = $request->clean_param_list($k);
 	
-	if ( @list == 1 ) { $main_params{$k} = $list[0]; }
-	else { $main_params{$k} = \@list; }
+	if ( $k eq 'show' || $k eq 'return' )
+	{
+	    next;
+	}
+	
+	elsif ( $k eq 'allow' )
+	{
+	    $conditions{$_} = 1 foreach @list;
+	}
+	
+	elsif ( @list == 1 )
+	{
+	    $main_params{$k} = $list[0];
+	}
+	
+	else {
+	    $main_params{$k} = \@list;
+	}
     }
     
     # Then decode the body, and extract parameters from it. If an error occured, return an
@@ -240,9 +259,9 @@ sub update_bounds {
 	}
     }
     
-    # Figure out what conditions will be allowed durint this operation.
+    # Figure out what conditions will be allowed during this operation.
     
-    my $conditions = $request->clean_param_hash('allow');
+    # my $conditions = $request->clean_param_hash('allow');
     
     # Then look for a list of records under the key 'records'. Or if the body decodes to a
     # top-level array then assume each entry in the array is a record.
@@ -261,14 +280,13 @@ sub update_bounds {
     
     elsif ( defined $body && $body ne '' && ref $body ne 'HASH' )
     {
-	$request->add_error("E_REQUEST_BODY: Badly formatted request body: must be a hash or an array");
+	$request->add_error("E_BODY: Badly formatted request body: must be a hash or an array");
 	die $request->exception(400, "Invalid request");
     }
     
     elsif ( $main_params{bound_id} && $main_params{bound_id} > 0 )
     {
-	$main_params{record_id} ||= 'main';
-	$record_list = [ \%main_params ];
+	$record_list = [ { } ];
     }
     
     else
@@ -283,33 +301,32 @@ sub update_bounds {
     
     foreach my $r ( @$record_list )
     {
-	my $record_id = $r->{record_id};
+	my $record_id = $r->{record_id} || $r->{bound_id} || '';
 	
-	if ( ! defined $record_id || $record_id eq '' )
+	if ( $record_id ne '' )
 	{
-	    $request->add_error("record unknown: E_RECORD_ID: no identifier specified");
-	    next;
+	    if ( $record_id{$record_id} )
+	    {
+		$request->add_warning("W_RECORD_ID: record identifier '$record_id' is not unique");
+		next;
+	    }
+	    
+	    $record_id{$record_id} = 1;
 	}
 	
-	elsif ( $record_id{$record_id} )
-	{
-	    $request->add_error("record $record_id: E_RECORD_ID: record identifier is not unique");
-	    next;
-	}
-	
-	$record_id{$record_id} = 1;
 	$timescale_id{$r->{timescale_id} + 0} = 1 if $r->{timescale_id};
 	
 	foreach my $k ( keys %main_params )
 	{
-	    $r->{$k} = $main_params{$k} unless defined $r->{$k};
+	    $r->{$k} = $main_params{$k} unless defined $r->{$k} || $IGNORE_PARAM{$k};
 	}
 	
 	my $result = $request->validate_params('1.2:bounds:entry', $r);
 	
 	foreach my $e ( $request->errors )
 	{
-	    $request->add_error("record $record_id: E_PARAM: $e");
+	    my $msg = $record_id ? "E_PARAM ($record_id): $e" : "E_PARAM: $e";
+	    $request->add_error($msg);
 	}
 	
 	$request->check_record($r);
@@ -318,11 +335,6 @@ sub update_bounds {
     if ( $request->errors )
     {
 	die $request->exception(400, "Bad request");
-    }
-    
-    if ( $request->cautions && ! $main_params{force} )
-    {
-	die $request->exception(422, "Cannot process");
     }
     
     # Now go through and try to actually update each of the bounds. This needs
@@ -339,42 +351,21 @@ sub update_bounds {
 	
 	foreach my $r ( @$record_list )
 	{
-	    my $bound_no = $main_params{bound_id} + 0;
-	    my $record_id = $r->{record_id};
+	    my $record_id = $r->{record_id} || $r->{bound_id} || '';
 	    my $result;
 	    
-	    if ( $bound_no )
+	    if ( $r->{bound_id} )
 	    {
-		print STDERR "UPDATING record '$record_id' ($bound_no)\n";
+		print STDERR "UPDATING record '$record_id'\n" if $request->debug;
 		
-		$result = update_boundary($dbh, $r, $conditions, $options);
+		$result = update_boundary($dbh, $r, \%conditions, $options);
 	    }
 	    
 	    else
 	    {
-		print STDERR "ADDING record '$record_id'\n";
+		print STDERR "ADDING record '$record_id'\n" if $request->debug;
 		
-		$result = add_boundary($dbh, $r, $conditions, $options);
-	    }
-	    
-	    foreach my $c ( $result->conditions )
-	    {
-		if ( $c =~ /^E/ )
-		{
-		    $request->add_error("record $record_id: $c");
-		    $options->{check_only} = 1;
-		}
-		
-		elsif ( $c =~ /^C/ )
-		{
-		    $request->add_caution("record $record_id: $c");
-		    $options->{check_only} = 1;
-		}
-		
-		else
-		{
-		    $request->add_warning("record $record_id: $c");
-		}
+		$result = add_boundary($dbh, $r, \%conditions, $options);
 	    }
 	    
 	    # Keep track of bound_id and timescale_id values, for use in computing the return
@@ -384,6 +375,30 @@ sub update_bounds {
 	    
 	    $bound_updated{$bound_updated} = 1;
 	    $timescale_updated{$timescale_updated} = 1;
+	    
+	    # Then process all conditions (errors, cautions, warnings) generated by this
+	    # operation.
+	    
+	    foreach my $e ( $result->conditions )
+	    {
+		$record_id ||= $bound_updated;
+		
+		if ( $record_id ne '' )
+		{
+		    $e =~ s/^(\w+)[:]\s*/$1 ($record_id): /;
+		}
+		
+		if ( $e =~ /^[EC]/ )
+		{
+		    $request->add_error($e);
+		    $options->{check_only} = 1;
+		}
+		
+		else
+		{
+		    $request->add_warning($e);
+		}
+	    }
 	}
 	
 	# check_boundaries($dbh, $timescale_id);
@@ -396,12 +411,6 @@ sub update_bounds {
     };
     
     if ( $request->errors )
-    {
-	rollback_transaction($dbh);
-	die $request->exception(400, "Bad request");
-    }
-    
-    elsif ( $request->cautions && ! $main_params{force} )
     {
 	rollback_transaction($dbh);
 	die $request->exception(400, "Bad request");
@@ -421,20 +430,20 @@ sub update_bounds {
 	
 	# Return the indicated information.
 	
-	my $bounds_return = $request->clean_param('bounds_return') || 'timescale';
+	my $return_what = $request->clean_param('return') || 'timescale';
 	my $list = '';
 	
-	if ( $bounds_return eq 'timescale' )
+	if ( $return_what eq 'timescale' )
 	{
 	    $list = join(',', keys %timescale_updated);
 	}
 	
-	elsif ( $bounds_return eq 'updated' )
+	elsif ( $return_what eq 'updated' )
 	{
 	    $list = join(',', keys %bound_updated);
 	}
 	
-	$request->list_bounds_for_update($dbh, $bounds_return, $list) if $list;
+	$request->list_bounds_for_update($dbh, $return_what, $list) if $list;
     }
 }
 

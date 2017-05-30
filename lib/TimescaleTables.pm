@@ -136,13 +136,14 @@ sub establish_timescale_tables {
 		timescale_extent varchar(80) not null,
 		timescale_taxon varchar(80) not null,
 		is_active boolean,
+		is_error boolean,
 		is_locked boolean,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp,
 		updated timestamp default current_timestamp on update current_timestamp,
 		key (reference_no),
 		key (authorizer_no),
-	        key (is_locked))");
+		key (is_updated))");
     
     # $dbh->do("DROP TABLE IF EXISTS $TIMESCALE_ARCHIVE");
     
@@ -216,10 +217,10 @@ sub establish_timescale_tables {
 		age_error decimal(9,5),
 		offset decimal(9,5),
 		offset_error decimal(9,5),
-		is_dirty boolean not null,
 		is_error boolean not null,
 		is_locked boolean not null,
 		is_different boolean not null,
+		is_updated boolean not null,
 		color varchar(10) not null,
 		reference_no int unsigned,
 		derived_age decimal(9,5),
@@ -382,6 +383,27 @@ sub copy_international_timescales {
     $result = $dbh->do($sql);
     
     logMessage(2, "    Initialized the attributes of $result bounds");
+    
+    # Then we create links between same-age bounds across these different
+    # scales. 
+    
+    my %ages;
+    
+    foreach my $timescale_no ( 4,3,2,1 )
+    {
+	my $source_no = $timescale_no + 1;
+	
+	$sql = "UPDATE $TIMESCALE_BOUNDS as tsb join $TIMESCALE_BOUNDS as source on tsb.age = source.age
+		SET tsb.bound_type = 'same', tsb.base_no = source.bound_no,
+		    tsb.derived_age = source.age
+		WHERE tsb.timescale_no = $timescale_no and source.timescale_no = $source_no";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$result = $dbh->do($sql);
+	
+	logMessage(2, "    Linked up $result bounds from timescale $timescale_no as 'same'");
+    }
     
     # Finally, we knit pieces of these together into a single timescale, for demonstration
     # purposes. 
