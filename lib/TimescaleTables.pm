@@ -11,7 +11,8 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
+use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_QUEUE
+		 $TIMESCALE_PERMS
 	         $INTERVAL_DATA $INTERVAL_MAP $SCALE_MAP $MACROSTRAT_SCALES $MACROSTRAT_INTERVALS
 	         $MACROSTRAT_SCALES_INTS $REFERENCES);
 use CoreFunction qw(activateTables loadSQLFile);
@@ -21,7 +22,8 @@ use base 'Exporter';
 
 our(@EXPORT_OK) = qw(establish_timescale_tables copy_international_timescales
 		   copy_pbdb_timescales copy_macrostrat_timescales process_one_timescale
-		   update_timescale_descriptions %TIMESCALE_BOUND_ATTRS %TIMESCALE_ATTRS %TIMESCALE_REFDEF);
+		   update_timescale_descriptions create_triggers
+		   %TIMESCALE_BOUND_ATTRS %TIMESCALE_ATTRS %TIMESCALE_REFDEF);
 
 
 our (%TIMESCALE_ATTRS) = 
@@ -31,8 +33,8 @@ our (%TIMESCALE_ATTRS) =
       timescale_extent => 'varchar80',
       timescale_taxon => 'varchar80',
       authority_level => 'range0-255',
-      source_timescale_no => 'timescale_no',
-      reference_no => 'reference_no',
+      source_timescale_id => 'timescale_no',
+      reference_id => 'reference_no',
       is_active => 'boolean' );
     
 our (%TIMESCALE_BOUND_ATTRS) = 
@@ -43,14 +45,14 @@ our (%TIMESCALE_BOUND_ATTRS) =
       interval_taxon => 'varchar80',
       timescale_no => 'timescale_no',
       is_locked => 'boolean',
-      interval_no => 'interval_no',
-      lower_no => 'interval_no',
+      interval_id => 'interval_no',
+      lower_id => 'interval_no',
       interval_name => 'varchar80',
       lower_name => 'varchar80',
-      base_no => 'bound_no',
-      range_no => 'bound_no',
-      color_no => 'bound_no',
-      refsource_no => 'bound_no',
+      base_id => 'bound_no',
+      range_id => 'bound_no',
+      color_id => 'bound_no',
+      refsource_id => 'bound_no',
       age => 'pos_decimal',
       age_error => 'pos_decimal',
       offset => 'pos_decimal',
@@ -72,6 +74,7 @@ our $TS_REFS_WORK = 'tsrw';
 our $TS_INTS_WORK = 'tsiw';
 our $TS_BOUNDS_WORK = 'tsbw';
 our $TS_PERMS_WORK = 'tspw';
+our $TS_QUEUE_WORK = 'tsqw';
 
 =head1 NAME
 
@@ -136,6 +139,7 @@ sub establish_timescale_tables {
 		timescale_extent varchar(80) not null,
 		timescale_taxon varchar(80) not null,
 		is_active boolean,
+		is_updated boolean,
 		is_error boolean,
 		is_locked boolean,
 		created timestamp default current_timestamp,
@@ -143,6 +147,7 @@ sub establish_timescale_tables {
 		updated timestamp default current_timestamp on update current_timestamp,
 		key (reference_no),
 		key (authorizer_no),
+		key (is_active)
 		key (is_updated))");
     
     # $dbh->do("DROP TABLE IF EXISTS $TIMESCALE_ARCHIVE");
@@ -218,14 +223,14 @@ sub establish_timescale_tables {
 		offset decimal(9,5),
 		offset_error decimal(9,5),
 		is_error boolean not null,
+		is_updated boolean not null,
 		is_locked boolean not null,
 		is_different boolean not null,
-		is_updated boolean not null,
 		color varchar(10) not null,
 		reference_no int unsigned,
 		derived_age decimal(9,5),
 		derived_age_error decimal(9,5),
-		derived_color varchar(10) not null,
+		derived_color varchar(10),
 		derived_reference_no int unsigned,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp,
@@ -236,8 +241,18 @@ sub establish_timescale_tables {
 		key (color_no),
 		key (age),
 		key (reference_no),
-		key (updated))");
+		key (is_updated))");
     
+    # The table 'timescale_queue' stores pending update events. It is used to propagate bound
+    # updates to other bounds that depend on them.
+    
+    $dbh->do("DROP TABLE IF EXISTS $TS_QUEUE_WORK");
+    
+    $dbh->do("CREATE TABLE $TS_QUEUE_WORK (
+		bound_no int unsigned not null,
+		type enum('age', 'color', 'refno', 'source_age', 'source_color', 'source_refno') not null,
+		is_done boolean,
+		created timestamp default current_timestamp) engine=memory");
     
     # The table 'timescale_perms' stores viewing and editing permission for timescales.
     
@@ -256,6 +271,7 @@ sub establish_timescale_tables {
 		         $TS_REFS_WORK => $TIMESCALE_REFS,
 			 $TS_INTS_WORK => $TIMESCALE_INTS,
 			 $TS_BOUNDS_WORK => $TIMESCALE_BOUNDS,
+			 $TS_QUEUE_WORK => $TIMESCALE_QUEUE,
 			 $TS_PERMS_WORK => $TIMESCALE_PERMS);
 }
 
@@ -325,16 +341,16 @@ sub copy_international_timescales {
 	my $timescale_no = 6 - $level_no;
 	
 	$sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, enterer_no, 
-			bound_type, lower_no, interval_no, age, color, reference_no)
+			bound_type, lower_no, interval_no, age, derived_age, color, reference_no)
 	SELECT $timescale_no as timescale_no, $auth_quoted as authorizer_no, $auth_quoted as enterer_no,
-			'spike' as bound_type, lower_no, interval_no, age, color, orig_refno
+			'spike' as bound_type, lower_no, interval_no, age, age as derived_age, color, orig_refno
 	FROM
 	((SELECT null as lower_no, null as lower_name, i1.orig_early as age, i1.interval_name, i1.interval_no,
 		if(i1.macrostrat_color <> '', i1.macrostrat_color, i1.orig_color) as color, i1.orig_refno
 	FROM scale_map as sm1 join $TIMESCALE_INTS as i1 using (interval_no)
 	WHERE sm1.scale_level = $level_no ORDER BY i1.orig_early desc LIMIT 1)
 	UNION
-	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i2.orig_early as age, 
+	(SELECT i1.interval_no as lower_no, i1.interval_name as lower_name, i2.orig_early as age,
 		i2.interval_name, i2.interval_no,
 		if(i2.macrostrat_color <> '', i2.macrostrat_color, i2.orig_color) as color, i2.orig_refno
 	FROM scale_map as sm1 join scale_map as sm2 on (sm1.scale_no = sm2.scale_no and sm1.scale_level = sm2.scale_level)
@@ -627,9 +643,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, reference_no)
+			lower_no, interval_no, age, derived_age, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 0,
-			$i->{interval_no}, $i->{base_age}, $reference_no)";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $reference_no)";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -645,9 +661,9 @@ sub process_one_timescale {
 	{
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, reference_no)
+			lower_no, interval_no, age, derived_age, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -664,9 +680,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
-			lower_no, interval_no, age, reference_no)
+			lower_no, interval_no, age, derived_age, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -679,9 +695,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
-			lower_no, interval_no, age, reference_no)
+			lower_no, interval_no, age, derived_age, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -694,9 +710,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
-			lower_no, interval_no, age, reference_no)
+			lower_no, interval_no, age, derived_age, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -710,9 +726,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, reference_no)
+			lower_no, interval_no, age, derived_age, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
 	    
 	    # print "\n$sql\n\n" if $options->{debug};
 	    
@@ -727,9 +743,9 @@ sub process_one_timescale {
     # Now we need to process the upper boundary of the last interval.
     
     $sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, reference_no)
+			lower_no, interval_no, age, derived_age, reference_no)
 		VALUES ($timescale_no, $last_interval->{authorizer_no}, 'absolute',
-			$last_interval->{interval_no}, 0, $last_late, $last_interval->{reference_no})";
+			$last_interval->{interval_no}, 0, $last_late, $last_late, $last_interval->{reference_no})";
     
     $result = $dbh->do($sql);
     
@@ -928,7 +944,7 @@ sub set_timescale_boundaries {
     
     my $result;
     my $sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, enterer_no,
-		bound_type, lower_no, interval_no, base_no, age, interval_type,
+		bound_type, lower_no, interval_no, base_no, age, derived_age, interval_type,
 		interval_extent, interval_taxon) VALUES ";
     
     my @values;
@@ -947,7 +963,7 @@ sub set_timescale_boundaries {
 	my $taxon_quoted = $dbh->quote($b->{timescale_taxon} // '');
 	
 	push @values, "($ts_quoted, $auth_quoted, $auth_quoted, 'same', $lower_quoted, " .
-	    "$upper_quoted, $source_quoted, $age_quoted, $type_quoted, $extent_quoted, $taxon_quoted)";
+	    "$upper_quoted, $source_quoted, $age_quoted, $age_quoted, $type_quoted, $extent_quoted, $taxon_quoted)";
     }
     
     $sql .= join( q{, } , @values );
@@ -1313,6 +1329,210 @@ sub update_timescale_descriptions {
     $result = $dbh->do($sql);
     
     logMessage(2, "Updated attributes of $result boundaries to match their timescales") if $result && $result > 0;
+}
+
+
+sub create_triggers {
+    
+    my ($dbh) = @_;
+    
+    $dbh->do("DROP PROCEDURE IF EXISTS complete_bound_updates");
+    
+    $dbh->do("CREATE PROCEDURE complete_bound_updates ( )
+	BEGIN
+
+	SET \@row_count = 1;
+	SET \@age_iterations = 0;
+	
+	# Mark all timescales that have updated bounds as updated, plus all
+	# other bounds in those timescales.
+	
+	UPDATE timescale_bounds as tsb join timescales as ts using (timescale_no)
+		join timescale_bounds as base using (timescale_no)
+	SET ts.is_updated = 1, tsb.is_updated = 1
+	WHERE base.is_updated;
+	
+	# Now update the ages on all bounds that are marked as is_updated.  If
+	# this results in any updated records, repeat the process until no
+	# records change. We put a limit of 20 on the number of iterations.
+	
+	WHILE \@row_count > 0 AND \@age_iterations < 20 DO
+	    
+	    UPDATE timescale_bounds as tsb
+		left join timescale_bounds as base on base.bound_no = tsb.base_no
+		left join timescale_bounds as top on top.bound_no = tsb.range_no
+	    SET tsb.is_updated = 1,
+		tsb.derived_age = case tsb.bound_type
+			when 'same' then base.derived_age
+			when 'offset' then base.derived_age - tsb.offset
+			when 'percent' then base.derived_age - (tsb.offset / 100) * ( base.derived_age - top.derived_age )
+			else tsb.age
+			end,
+		tsb.derived_age_error = case tsb.bound_type
+			when 'same' then base.age_error
+			when 'offset' then base.age_error + tsb.offset_error
+			when 'percent' then base.age_error + (tsb.offset_error / 100) * ( base.derived_age - top.derived_age )
+			else tsb.age_error
+			end
+	    WHERE base.is_updated or top.is_updated or tsb.is_updated;
+	    
+	    SET \@row_count = ROW_COUNT();
+	    SET \@age_iterations = \@age_iterations + 1;
+	    
+	    # SET \@debug = concat(\@debug, \@cnt, ' : ');
+	    
+	END WHILE;
+	
+	# Then do the same thing for the color and reference_no attributes
+	
+	SET \@row_count = 1;
+	SET \@attr_iterations = 0;
+
+	WHILE \@row_count > 0 AND \@attr_iterations < 20 DO
+	
+	    UPDATE timescale_bounds as tsb
+		join timescales as ts using (timescale_no)
+		left join timescale_bounds as csource on csource.bound_no = tsb.color_no
+		left join timescale_bounds as rsource on rsource.bound_no = tsb.refsource_no
+	    SET tsb.is_updated = 1,
+		tsb.derived_color = case
+			when csource.color <> '' then csource.color
+			else csource.derived_color end,
+		tsb.derived_reference_no = case
+			when rsource.reference_no > 0 then rsource.reference_no
+			when rsource.derived_reference_no > 0 then rsource.derived_reference_no
+			else ts.reference_no end
+	    WHERE tsb.is_updated or csource.is_updated or rsource.is_updated;
+	    
+	    SET \@row_count = ROW_COUNT();
+	    SET \@attr_iterations = \@attr_iterations + 1;
+	    
+	END WHILE;
+	
+	# Now, for locked records we set the is_different flag if any of the derived attributes
+	# are different from the active ones.
+	
+	UPDATE timescale_bounds as tsb
+	SET tsb.is_different = tsb.age <> tsb.derived_age or tsb.age_error <> tsb.derived_age_error
+		or tsb.color <> tsb.derived_color or tsb.reference_no <> tsb.derived_reference_no
+	WHERE tsb.is_updated and tsb.is_locked;
+	
+	# For unlocked records, we set the active values equal to the derived ones.
+	
+	UPDATE timescale_bounds as tsb
+	SET tsb.is_different = 0,
+	    tsb.age = tsb.derived_age,
+	    tsb.age_error = tsb.derived_age_error,
+	    tsb.color = tsb.derived_color,
+	    tsb.reference_no = tsb.derived_reference_no
+	WHERE tsb.is_updated and not tsb.is_locked;
+	
+	# Now clear all of the is_updated flags on the bounds, and at the same time set the
+	# is_updated flags on all timescales that had updated bounds.
+	
+	# UPDATE $TIMESCALE_DATA as ts join timescale_bounds as tsb using (timescale_no)
+	# SET ts.is_updated = 1, tsb.is_updated = 0
+	# WHERE tsb.is_updated;
+	
+	# Then check all of the bounds in the specified timescales for errors.
+	
+	CALL check_timescales;
+	
+	# Then 
+	
+	END;");
+    
+    
+    $dbh->do("DROP PROCEDURE IF EXISTS check_updated_bounds");
+    
+    $dbh->do("CREATE PROCEDURE check_updated_bounds ( )
+	BEGIN
+	
+	UPDATE timescales as ts join
+	    (SELECT timescale_no, min(b.age) as min, max(b.age) as max FROM
+		timescale_bounds as b join timescale_bounds as base using (timescale_no)
+	     WHERE base.is_updated GROUP BY timescale_no) as all_bounds using (timescale_no)
+	SET ts.min_age = all_bounds.min,
+	    ts.max_age = all_bounds.max;
+	
+	UPDATE timescale_bounds as tsb join timescales as ts using (timescale_no) join
+		(SELECT b1.bound_no,
+		    if(b1.is_top, 1, b1.age_this > b1.age_prev) as age_ok,
+		    if(b1.is_top, b1.interval_no = 0, b1.interval_no = b1.lower_prev) as bound_ok,
+		    (b1.interval_no = 0 or b1.upper_int > 0) as interval_ok,
+		    (b1.lower_this = 0 or b1.lower_int > 0) as lower_ok,
+		    (b1.duplicate_no is null) as unique_ok
+		 FROM
+		  (SELECT b0.bound_no, b0.timescale_no, (\@ts_prev:=\@ts_this) as ts_prev, (\@ts_this:=timescale_no) as ts_this,
+			(\@ts_prev is null or \@ts_prev <> \@ts_this) as is_top, b0.interval_no, upper_int, lower_int,
+			(\@lower_prev:=\@lower_this) as lower_prev, (\@lower_this:=lower_no) as lower_this,
+			(\@age_prev:=\@age_this) as age_prev, (\@age_this:=b0.age) as age_this, b0.duplicate_no
+		   FROM (SELECT b.bound_no, b.timescale_no, b.age, b.interval_no, b.lower_no,
+			upper.interval_no as upper_int, lower.interval_no as lower_int,
+			duplicate.bound_no as duplicate_no
+		   FROM timescale_bounds as b
+			join timescale_bounds as base using (timescale_no)
+			left join timescale_bounds as duplicate on duplicate.timescale_no = b.timescale_no and
+				duplicate.interval_no = b.interval_no and duplicate.bound_no <> b.bound_no and
+				duplicate.bound_no > 0
+		        left join timescale_ints as upper on upper.interval_no = b.interval_no
+		        left join timescale_ints as lower on lower.interval_no = b.lower_no
+			join (SELECT \@lower_this:=null, \@lower_prev:=null, \@age_this:=null, \@age_prev:=null,
+				\@ts_prev:=0, \@ts_this:=0) as initializer
+		   WHERE base.is_updated GROUP BY b.bound_no ORDER BY b.timescale_no, b.age) as b0) as b1) as b2 using (bound_no)
+		 
+	      SET tsb.is_error = not(bound_ok and age_ok and interval_ok and lower_ok and unique_ok),
+		  ts.is_error = not(bound_ok and age_ok and interval_ok and lower_ok and unique_ok);
+	END;");
+    
+    $dbh->do("DROP PROCEDURE IF EXISTS unmark_updated");
+    
+    $dbh->do("CREATE PROCEDURE unmark_updated ( )
+	BEGIN
+	
+	UPDATE timescale_bounds SET is_updated = 0;
+	
+	END;");
+    
+    $dbh->do("DROP TRIGGER IF EXISTS insert_bound");
+    
+    $dbh->do("CREATE TRIGGER insert_bound
+	BEFORE INSERT ON timescale_bounds FOR EACH ROW
+	BEGIN
+	    DECLARE ts_interval_type varchar(10);
+	    
+	    IF NEW.timescale_no > 0 THEN
+		SELECT timescale_type INTO ts_interval_type
+		FROM timescales WHERE timescale_no = NEW.timescale_no;
+		
+		IF NEW.interval_type is null or NEW.interval_type = ''
+		THEN SET NEW.interval_type = interval_type; END IF;
+	    END IF;
+	    
+	    SET NEW.is_updated = 1;
+	END;");
+    
+    $dbh->do("DROP TRIGGER IF EXISTS update_bound");
+    
+    $dbh->do("CREATE TRIGGER update_bound
+	BEFORE UPDATE ON timescale_bounds FOR EACH ROW
+	BEGIN
+	    IF OLD.is_updated = 0 and NEW.is_updated = 0 THEN
+	    SET NEW.is_updated = 1; END IF;
+	END;");
+    
+    # my $propagate_bound_routine = "
+    # 	BEGIN
+    # 	    UPDATE timescale_bounds SET is_propagated = 1
+    # 		WHERE base_no = NEW.bound_no or range_no = NEW.bound_no
+    # 		    or color_no = NEW.bound_no or refsource_no = NEW.bound_no;
+    # 	END;";
+    
+    # $dbh->do("DROP TRIGGER IF EXISTS propagate_bound");
+    
+    # $dbh->do("CREATE TRIGGER propagate_bound
+    # 	AFTER UPDATE ON timescale_bounds
+    # 	FOR EACH ROW $propagate_bound_routine");
 }
 
 1;

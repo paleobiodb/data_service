@@ -23,6 +23,9 @@ use TimescaleTables qw(%TIMESCALE_ATTRS %TIMESCALE_BOUND_ATTRS %TIMESCALE_REFDEF
 use base 'EditTransaction';
 
 
+our ($UPDATE_LIMIT) = 10;	# Limit on the number of iterations when propagating changes to
+                                # updated records.
+
 
 sub add_timescale {
     
@@ -56,6 +59,11 @@ sub add_boundary {
     croak "add_boundary: must not have a value for bound_id\n" if $attrs->{bound_id};
     
     my $dbh = $edt->dbh;
+    
+    # Clear the last bound updated and last timescale updated.
+    
+    $edt->{last_bound} = undef;
+    $edt->{last_timescale} = undef;
     
     # Make sure that we know what timescale to create the boundary in, and
     # that a bound type was specified.
@@ -140,7 +148,7 @@ sub add_boundary {
     
     # If any errors occurred, or if $check_only was specified, we stop here.
     
-    return $edt if $conditions->{CHECK_ONLY} || $edt->status eq 'ERROR';
+    return 0 if $conditions->{CHECK_ONLY} || $edt->errors_occurred;
     
     # Otherwise, insert the new record.
     
@@ -152,25 +160,28 @@ sub add_boundary {
     try {
 	$insert_result = $dbh->do($sql);
 	$insert_id = $dbh->last_insert_id;
-	
-	if ( $insert_result )
-	{
-	    $edt->status('OK');
-	    $edt->record_keys($insert_id, $timescale_id);
-	}
-	
-	else
-	{
-	    $edt->add_condition("E_INTERNAL: record could not be created");
-	}
+	print STDERR "RESULT: 0\n" unless $insert_id;
     }
 	
     catch {
 	print STDERR "ERROR: $_\n";
-	$edt->add_condition("E_INTERNAL: an error occurred while inserting this record");
+    };
+    
+    if ( $insert_id )
+    {
+	$edt->{last_bound} = $insert_id;
+	$edt->{last_timescale} = $timescale_id;
+	
+	$edt->{bound_updated}{$insert_id} = 1;
+	$edt->{timescale_updated}{$timescale_id} = 1;
+	
+	return $insert_id;
     }
     
-    return $edt;
+    else
+    {
+	$edt->add_condition("E_INTERNAL: an error occurred during record insertion");
+    }
 }
 
 
@@ -185,12 +196,18 @@ sub update_boundary {
     
     my $bound_id = $attrs->{bound_id};
     
+    # Clear the record of last updated bound and timescale
+    
+    $edt->{last_bound} = undef;
+    $edt->{last_timescale} = undef;
+    
     # We first need to make sure that the record to be updated actually exists, and fetch its
     # current attributes.
     
     unless ( $bound_id =~ /^\d+$/ && $bound_id > 0 )
     {
-	return $edt->add_condition("E_BOUND_ID: bad value '$bound_id' for 'bound_id'");
+	$edt->add_condition("E_BOUND_ID: bad value '$bound_id' for 'bound_id'");
+	return 0;
     }
     
     my ($current) = $dbh->selectrow_hashref("
@@ -198,7 +215,8 @@ sub update_boundary {
     
     unless ( $current )
     {
-	return $edt->add_condition("E_NOT_FOUND: boundary '$bound_id' is not in the database");
+	$edt->add_condition("E_NOT_FOUND: boundary '$bound_id' is not in the database");
+	return 0;
     }
     
     # If a timescale_id was specified, it must match the current one otherwise an error will be
@@ -282,11 +300,11 @@ sub update_boundary {
     
     # If any errors occurred, or if $check_only was specified, we stop here.
     
-    return $edt if $conditions->{CHECK_ONLY} || $edt->status eq 'ERROR';
+    return 0 if $conditions->{CHECK_ONLY} || $edt->errors_occurred;
     
     # Otherwise, update the record.
     
-    my $sql = "	UPDATE $TIMESCALE_BOUNDS SET $set_list, is_updated = 1, modified = now()
+    my $sql = "	UPDATE $TIMESCALE_BOUNDS SET $set_list, modified = now()
 		WHERE bound_no = $bound_id";
     
     print STDERR "$sql\n\n" if $edt->debug;
@@ -295,37 +313,29 @@ sub update_boundary {
     
     try {
 	$update_result = $dbh->do($sql);
-	
-	if ( $update_result )
-	{
-	    $edt->status('OK');
-	    $edt->record_keys($bound_id, $timescale_id);
-	}
-	
-	else
-	{
-	    $edt->add_condition("E_INTERNAL: record was not updated");
-	}
+	print STDERR "RESULT: 0\n" unless $update_result;
     }
     
     catch {
 	print STDERR "ERROR: $_\n";
-	$edt->add_condition("E_INTERNAL: an error occurred while updating this record");
     };
     
-    return $edt;
-}
-
-
-sub update_boundary_prepare {
+    if ( $update_result )
+    {
+	$edt->{last_bound} = $bound_id;
+	$edt->{last_timescale} = $timescale_id;
+	
+	$edt->{bound_updated}{$bound_id} = 1;
+	$edt->{timescale_updated}{$timescale_id} = 1;
+	
+	return $bound_id;
+    }
     
-    my ($edt) = @_;
-    
-    my $dbh = $edt->dbh;
-    
-    my $sql = " UPDATE $TIMESCALE_BOUNDS SET is_updated = 0";
-    
-    $dbh->do($sql);
+    else
+    {
+	$edt->add_condition("E_INTERNAL: an error occurred while updating record '$bound_id'");
+	return 0;
+    }
 }
 
 
@@ -340,7 +350,7 @@ sub delete_boundary {
     
     my $bound_id = $attrs->{bound_id} ? "$attrs->{bound_id}" : "";
     my $timescale_id = $attrs->{timescale_id} ? "$attrs->{timescale_id}" : "";
-    my $select_which = $bound_id ne '' ? 'bound' : 'timescale';
+    my $un_updated = $attrs->{un_updated} ? 1 : undef;
     
     # If we are deleting a single boundary, we need to make sure the record actually exists and
     # fetch its current attributes.
@@ -357,7 +367,6 @@ sub delete_boundary {
 	
 	unless ( $current )
 	{
-	    $edt->status('OK');
 	    $edt->record_keys(undef, $timescale_id) if $timescale_id;
 	    return $edt->add_condition("W_NOT_FOUND: boundary '$bound_id' is not in the database");
 	}
@@ -404,6 +413,10 @@ sub delete_boundary {
 	return $edt->add_condition("E_PARAM: you must specify either 'bound_id' or 'timescale_id'");
     }
     
+    # If any errors occurred, or if $check_only was specified, we stop here.
+    
+    return $edt if $conditions->{CHECK_ONLY} || $edt->errors_occurred;
+    
     # Now check to see if there are any other boundaries that depend on this one. If so, then we
     # need to deal with them. If the condition RELATED_RECORDS is allowed, then cut each of these
     # records loose. Otherwise, return a caution.
@@ -419,11 +432,13 @@ sub delete_boundary {
     
     else
     {
+	my $updated_clause = ''; $updated_clause = "and source.is_updated = 0" if $un_updated;
+	
 	$sql = "SELECT count(*) FROM $TIMESCALE_BOUNDS as tsb
 		join $TIMESCALE_BOUNDS as source on tsb.base_no = source.bound_no
 		or tsb.range_no = source.bound_no or tsb.color_no = source.bound_no
 		or tsb.refsource_no = source.bound_no
-		WHERE source.timescale_no = $timescale_id";
+		WHERE source.timescale_no = $timescale_id $updated_clause";
     }
     
     my ($dependent_count) = $dbh->selectrow_hashref($sql);
@@ -434,10 +449,25 @@ sub delete_boundary {
 	
 	unless ( $conditions->{RELATED_RECORDS} )
 	{
-	    return $edt->add_condition("C_RELATED_RECORDS: there are $dependent_count other bounds that depend on this one");
+	    return $edt->add_condition("C_RELATED_RECORDS: there are $dependent_count other bounds that depend on the bound or bounds to be deleted");
 	}
 	
-	$edt->detach_related_bounds('bound', $bound_id) || return;
+	my $result;
+	
+	if ( $bound_id ne '' )
+	{
+	    $result = $edt->detach_related_bounds('bound', $bound_id);
+	}
+	
+	elsif ( $un_updated )
+	{
+	    $result = $edt->detach_related_bounds('unupdated', $timescale_id);
+	}
+	
+	else
+	{
+	    $result = $edt->detach_related_bounds('timescale', $timescale_id);
+	}
     }
     
     # If we get here, then we can delete. We return an OK as long as no exception is caught, on
@@ -452,18 +482,24 @@ sub delete_boundary {
     
     try {
 	$delete_result = $dbh->do($sql);
-	
-	$edt->add_condition("W_INTERNAL: problem deleting record") unless $delete_result;
-	$edt->status('OK');
-	$edt->record_keys(undef, $timescale_id);
+	print STDERR "RESULT: 0\n" unless $delete_result;
     }
     
     catch {
 	print STDERR "ERROR: $_\n";
-	$edt->add_condition("E_INTERNAL: an error occurred while deleting this record");
+    };
+    
+    if ( $delete_result )
+    {
+	$edt->{timescale_updated} = $timescale_id;
+	return $bound_id;
     }
     
-    return $edt;
+    else
+    {
+	$edt->add_condition("W_INTERNAL: an error occurred while deleting record '$bound_id'") unless $delete_result;
+	return 0;
+    }
 }
 
 
@@ -481,7 +517,7 @@ sub detach_related_bounds {
     
     # Construct the proper filter expression.
     
-    my $filter;
+    my ($filter, $extra);
     my @sql;
     
     if ( $select_which eq 'bound' )
@@ -492,6 +528,11 @@ sub detach_related_bounds {
     elsif ( $select_which eq 'timescale' )
     {
 	$filter = "timescale_no in ($id)";
+    }
+    
+    elsif ( $select_which eq 'unupdated' )
+    {
+	$filter = "source.timescale_no in ($id) and source.is_updated = 0";
     }
     
     else
@@ -544,10 +585,11 @@ sub detach_related_bounds {
     
     catch {
 	print STDERR "ERROR: $_\n";
-	$edt->add_condition("E_INTERNAL: an error occurred while deleting this record");
+	$edt->add_condition("E_INTERNAL: an error occurred while deleting a record");
+	return undef;
     }
     
-    return $edt;
+    return 1;
 }
 
 
@@ -589,9 +631,8 @@ sub check_timescale_attrs {
 	
 	elsif ( ! defined $value )
 	{
-	    # no checking need be done if the value is undefined
-	    
-	    $quoted = 'NULL';
+	    $edt->add_condition("W_BAD_VALUE: $k: not defined");
+	    next;
 	}
 	
 	# Special case the interval names
@@ -710,26 +751,39 @@ sub check_timescale_attrs {
 	
 	# Then create the proper SQL expressions for it.
 	
+	$k =~ s/_id$/_no/;
+	
 	if ( $op eq 'update' )
 	{
 	    push @sql_list, "$k = $quoted";
+	    
+	    if ( $k eq 'age' )
+	    {
+		push @sql_list, "derived_age = $quoted";
+	    }
 	}
 	
 	else
 	{
 	    push @field_list, $k;
 	    push @sql_list, $quoted;
+	    
+	    if ( $k eq 'age' )
+	    {
+		push @field_list, 'derived_age';
+		push @sql_list, $quoted;
+	    }
 	}
     }
     
     if ( $op eq 'update' )
     {
-	return join(', ', @sql_list);
+	return join(', ', @sql_list, "is_updated = 1");
     }
     
     else
     {
-	return join(',', @field_list), join(',', @sql_list);
+	return join(',', @field_list, 'is_updated'), join(',', @sql_list, 1);
     }
 }
 
@@ -788,251 +842,359 @@ sub check_bound_values {
 	    }
 	}
     }
+        
+    return $edt;
+}
+
+
+# complete_bound_updates ( dbh )
+# 
+# Propagate any updates that have been made to the set of timescale boundaries. All bounds that
+# depend on the updated bounds will be recomputed, and all timescales containing them will be
+# updated as well.
+
+sub complete_bound_updates {
     
-    # If we are setting 'base_id' or 'range_id', make sure that both of these are from other
-    # timescales.
+    my ($edt) = @_;
     
-    my @check_bounds;
+    my $dbh = $edt->dbh;
     
-    push @check_bounds, $new->{base_id} if $new->{base_id};
-    push @check_bounds, $new->{range_id} if $new->{range_id};
+    my ($result, $step);
     
-    my $timescale_id = $new->{timescale_id} || $current->{timescale_id};
+    # Catch any exceptions.
     
-    if ( @check_bounds && $timescale_id )
-    {
-	my $list = join(',', @check_bounds);
+    try {
 	
-	my ($check) = $dbh->selectrow_array("
-		SELECT timescale_no FROM $TIMESCALE_BOUNDS
-		WHERE bound_no in ($list) and timescale_no = $timescale_id");
+	# First propagate changes to dependent boundaries.
 	
-	if ( $check )
-	{
-	    $edt->add_condition("E_INVALID_KEY: the base and range bounds must be from a different timescale");
-	}
+	$step = 'propagating boundary changes';
+	
+	$result = $dbh->do("CALL complete_bound_updates");
+	
+	# Then check all boundaries in every timescale that had at least one updated boundary. Set
+	# or clear the is_error flags on those boundaries and their timescales. Also update the
+	# min_age and max_age values for those timescales.
+	
+	$step = 'checking boundaries for correctness';
+	
+	$result = $dbh->do("CALL check_updated_bounds");
+	
+	# Finally, clear all of the is_updated flags.
+	
+	$step = 'clearing the updated flags';
+	
+	$result = $dbh->do("CALL unmark_updated");
     }
     
-    return $edt;
+    catch {
+
+	print STDERR "ERROR: $_\n";
+	$edt->add_condition("E_INTERNAL: an error occurred while $step");
+	
+    };
+}
+
+
+sub bounds_updated {
+    
+    my ($edt) = @_;
+    
+    return ref $edt->{bound_updated} eq 'HASH' ? keys %{$edt->{bound_updated}} : ();
+}
+
+
+sub timescales_updated {
+    
+    my ($edt) = @_;
+    
+    return ref $edt->{timescale_updated} eq 'HASH' ? keys %{$edt->{timescale_updated}}: ();
 }
 
 
 # propagate_boundary_changes ( dbh, source_bounds )
 # 
 # Propagate any changes to interval boundaries and timescales to the boundaries that refer to
-# them. The parameter $source_bounds may be set to indicate which bounds have changed. If so, then
-# the first iteration of the propagation loop will check only bounds which directly reference
-# these. This will improve the efficiency of making small changes.
+# them. The flag is_updated indicates which ones have changed. If $update_all is specified, then
+# update all bounds.
 
-sub propagate_boundary_changes {
+# sub propagate_boundary_changes {
 
-    my ($edt, $select_which, $source_nos) = @_;
+#     my ($edt, $update_all) = @_;
     
-    $options ||= { };
+#     # If errors have occurred, then the transaction will be rolled back, so there is no point in
+#     # doing anything.
     
-    my $update_count;
-    my $source_selector = '> 0';
-    my $sql;
+#     return if $edt->errors_occurred;
     
-    # First create an SQL filter based on $source_nos.
+#     my $dbh = $edt->dbh;
     
-    my $selector = $select_which eq 'bounds' ? 'bound_no' : 'timescale_no';
+#     my ($update_count, $update_previous, $loop_count);
+#     my $sql;
     
-    if ( ref $source_bounds eq 'ARRAY' )
-    {
-	$source_selector = "$selector in (" . join(',', @$source_nos) . ')';
-    }
+#     # If we are directed to update all bounds, then set the is_update flag on all records.
     
-    elsif ( $source_bounds )
-    {
-	$source_selector = "$selector in ($source_nos)";
-    }
-    
-    # Start by marking the updated records.
-    
-    $sql = "	UPDATE $TIMESCALE_BOUNDS as tsb SET is_updated = 1
-		WHERE $source_selector";
-    
-    # Then execute a loop, propagating updated information one step at a time. Each newly updated
-    # record gets the update flag set as well.
-    
-    $update_count = 1;
-    
-    while ( $update_count )
-    {
-	# First update bounds
+#     if ( $update_all )
+#     {
+# 	$sql = "	UPDATE $TIMESCALE_BOUNDS as tsb SET is_updated = 1";
 	
-	$sql = "    UPDATE $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as base on base.bound_no = tsb.base_no
-		left join $TIMESCALE_BOUNDS as top on top.bound_no = tsb.range_no
-	    SET tsb.is_updated = 1, 
-		tsb.derived_age = case tsb.bound_type
-			when 'same' then base.age
-			when 'offset' then base.age + tsb.offset
-			when 'percent' then base.age + tsb.offset * ( base.age - top.age )
-			end,
-		tsb.derived_age_error = case tsb.bound_type
-			when 'same' then base.age_error
-			when 'offset' then base.age_error + tsb.offset_error
-			when 'percent' then base.age_error + tsb.offset_error * ( base.age - top.age )
-			end
-	    WHERE base.is_updated or top.is_updated";
-	
-	print STDERR "$sql\n\n" if $options->{debug};
-	
-	$update_count = $dbh->do($sql);
-	
-	print STDERR "updated $update_count rows\n\n" if $options->{debug} && $update_count && $update_count > 0;
-    }
+# 	$dbh->do($sql);
+#     }
     
-    # Now do the same for colors
+#     # Then execute a loop, propagating updated information one step at a time. Each newly updated
+#     # record gets the update flag set as well. We stop the loop when either the number of updated
+#     # records is zero or it is the same as the number the previous time through the loop,
+#     # depending on the value of $UPDATE_MATCHED. We also have an absolute loop count to prevent
+#     # runaway update loops.
     
-    $update_count = 1;
+#     # First update bounds
     
-    while ( $update_count )
-    {
-	$sql = "
-	    UPDATE $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as base on base.bound_no = tsb.color_no
-	    SET tsb.is_updated = 1, tsb.derived_color = base.color
-	    WHERE base.is_updated";
+#     # $$$ need to fix: 1) percent computation is incorrect, 2) is_error flag setting works on
+#     # incorrect timescale. 1 = possibly array count rather than element?
+    
+#     $update_count = 1;
+#     $update_previous = 0;
+#     $loop_count = 0;
+    
+#     while ( $update_count )
+#     {
+# 	$sql = "    UPDATE $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as base on base.bound_no = tsb.base_no
+# 		left join $TIMESCALE_BOUNDS as top on top.bound_no = tsb.range_no
+# 	    SET tsb.is_updated = 1, tsb.updated = now(),
+# 		tsb.derived_age = case tsb.bound_type
+# 			when 'same' then base.derived_age
+# 			when 'offset' then base.derived_age - tsb.offset
+# 			when 'percent' then base.derived_age - (tsb.offset / 100) * ( base.derived_age - top.derived_age )
+# 			end,
+# 		tsb.derived_age_error = case tsb.bound_type
+# 			when 'same' then base.age_error
+# 			when 'offset' then base.age_error + tsb.offset_error
+# 			when 'percent' then base.age_error + (tsb.offset_error / 100) * ( base.derived_age - top.derived_age )
+# 			end
+# 	    WHERE base.is_updated or top.is_updated or tsb.is_updated";
 	
-	print STDERR "$sql\n\n" if $options->{debug};
+# 	print STDERR "$sql\n\n" if $edt->debug;
 	
-	$update_count = $dbh->do($sql);
+# 	$update_count = $dbh->do($sql);
 	
-	print STDERR "updated $update_count rows\n\n" if $options->{debug} && $update_count && $update_count > 0;
-    }
+# 	print STDERR "updated $update_count rows\n\n" if $edt->debug && $update_count;
+	
+# 	last if $EditTransaction::UPDATE_MATCHED && $update_count == $update_previous;
+	
+# 	$update_previous = $update_count;
+	
+# 	if ( $loop_count++ >= $UPDATE_LIMIT )
+# 	{
+# 	    $edt->add_condition("W_BAD_LOOP: iteration limit exceeded");
+# 	    last;
+# 	}
+#     }
+    
+#     # Now do the same for colors
+    
+#     $update_count = 0;
+    
+#     while ( $update_count && $update_count > 0 )
+#     {
+# 	$sql = "
+# 	    UPDATE $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as base on base.bound_no = tsb.color_no
+# 	    SET tsb.is_updated = 1, updated = now(),
+# 		tsb.derived_color = base.color
+# 	    WHERE base.is_updated or tsb.is_updated";
+	
+# 	print STDERR "$sql\n\n" if $edt->debug;
+	
+# 	$dbh->do($sql);
+	
+# 	($update_count) = $dbh->selectrow_array("SELECT ROW_COUNT()");
+	
+# 	print STDERR "updated $update_count rows\n\n" if $edt->debug && $update_count && $update_count > 0;
+#     }
 
-    # And then for reference_nos
+#     # And then for reference_nos
     
-    $update_count = 1;
+#     $update_count = 0;
     
-    while ( $update_count )
-    {
-	$sql = "
-	    UPDATE $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as base on base.bound_no = tsb.refsource_no
-	    SET tsb.is_updated = 1, tsb.derived_reference_no = base.reference_no
-	    WHERE base.is_updated";
+#     while ( $update_count && $update_count > 0 )
+#     {
+# 	$sql = "
+# 	    UPDATE $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as base on base.bound_no = tsb.refsource_no
+# 	    SET tsb.is_updated = 1, updated = now(),
+# 		tsb.derived_reference_no = base.reference_no
+# 	    WHERE base.is_updated or tsb.is_updated";
 	
-	print STDERR "$sql\n\n" if $options->{debug};
+# 	print STDERR "$sql\n\n" if $edt->debug;
 	
-	$update_count = $dbh->do($sql);
+# 	$dbh->do($sql);
 	
-	print STDERR "updated $update_count rows\n\n" 
-	    if $options->{debug} && $update_count && $update_count > 0;
-    }
+# 	($update_count) = $dbh->selectrow_array("SELECT ROW_COUNT()");
+	
+# 	print STDERR "updated $update_count rows\n\n" 
+# 	    if $edt->debug && $update_count && $update_count > 0;
+#     }
     
-    # Now, in all updated records, set or clear the 'is_different' bit depending upon
-    # whether the derived attributes are different from the main ones.
+#     # Now, in all updated records, set or clear the 'is_different' bit depending upon
+#     # whether the derived attributes are different from the main ones.
     
-    $sql = "
-	UPDATE $TIMESCALE_BOUNDS as tsb
-	SET tsb.is_different = tsb.age <> tsb.derived_age or tsb.age_error <> tsb.derived_age_error
-		or tsb.color <> tsb.derived_color or tsb.reference_no <> tsb.derived_reference_no
-	WHERE tsb.is_updated and tsb.is_locked";
+#     $sql = "
+# 	UPDATE $TIMESCALE_BOUNDS as tsb
+# 	SET tsb.is_different = tsb.age <> tsb.derived_age or tsb.age_error <> tsb.derived_age_error
+# 		or tsb.color <> tsb.derived_color or tsb.reference_no <> tsb.derived_reference_no
+# 	WHERE tsb.is_updated and tsb.is_locked";
     
-    print STDERR "$sql\n\n" if $options->{debug};
+#     print STDERR "$sql\n\n" if $edt->debug;
     
-    $update_count = $dbh->do($sql);
+#     $dbh->do($sql);
     
-    print STDERR "updated is_different on $update_count locked rows\n\n" 
-	if $options->{debug} && $update_count && $update_count > 0;
+#     if ( $edt->debug )
+#     {
+# 	($update_count) = $dbh->selectrow_array("SELECT ROW_COUNT()");
+	
+# 	print STDERR "updated is_different on $update_count locked rows\n\n" 
+# 	    if $update_count && $update_count > 0;
+#     }
     
-    # In all unlocked rows, set the main attributes from the derived ones. We clear the
-    # is_different bit just in case a newly unlocked record was previously different.
+#     # In all unlocked rows, set the main attributes from the derived ones. We clear the
+#     # is_different bit just in case a newly unlocked record was previously different.
     
-    $sql = "
-	UPDATE $TIMESCALE_BOUNDS as tsb
-	SET tsb.is_different = 0,
-	    tsb.age = tsb.derived_age,
-	    tsb.age_error = tsb.derived_age_error,
-	    tsb.color = tsb.derived_color,
-	    tsb.reference_no = tsb.derived_reference_no
-	WHERE tsb.is_updated and not tsb.is_locked";
+#     $sql = "
+# 	UPDATE $TIMESCALE_BOUNDS as tsb
+# 	SET tsb.is_different = 0,
+# 	    tsb.age = tsb.derived_age,
+# 	    tsb.age_error = tsb.derived_age_error,
+# 	    tsb.color = tsb.derived_color,
+# 	    tsb.reference_no = tsb.derived_reference_no
+# 	WHERE tsb.is_updated and not tsb.is_locked";
     
-    print STDERR "$sql\n\n" if $options->{debug};
+#     print STDERR "$sql\n\n" if $edt->debug;
     
-    $update_count = $dbh->do($sql);
+#     $dbh->do($sql);
     
-    print STDERR "updated is_different on $update_count unlocked rows\n\n" 
-	if $options->{debug} && $update_count && $update_count > 0;
-    
-    # Now we need to check (and possibly update) all timescales in which updated boundaries are
-    # found.
-    
-    my ($timescale_list) = $dbh->do("
-	SELECT group_concat(distinct timescale_no) FROM $TIMESCALE_BOUNDS
-	WHERE is_updated");
-    
-    unless ( $timescale_list )
-    {
-	print STDERR "PROBLEM: no timescales found\n\n" if $options->{debug};
-	$edt->add_condition("W_UPDATE_BOUNDS: problem checking for boundary errors");
-	$timescale_list = '0';	# so we won't throw any exceptions below
-    }
-    
-    # Update min and max ages for these timescales.
-    
-    $sql = "  UPDATE $TIMESCALE_DATA as ts join 
-		(SELECT timescale_no, max(age) as max_age, min(age) as min_age
-		 FROM $TIMESCALE_BOUNDS as tsb
-		 WHERE timescale_no in ($timescale_list) GROUP BY timescale_no) as n using (timescale_no)
-	    SET ts.max_age = n.max_age, ts.late_age = n.min_age";
-    
-    print STDERR "$sql\n\n" if $options->{debug};
-    
-    $update_count = $dbh->do($sql);
-    
-    # Now set the is_error flags for every boundary in these timescales.
-    
-    $sql = "SET \@r1=0, \@r2=0";
-    
-    print STDERR "$sql\n\n" if $options->{debug};
-    
-    $dbh->do($sql);
-    
-    # We will be able to substantially simplify the following expression once we are able to
-    # upgrade to MariaDB 10.2, which introduces common table expressions. For now:
-    # 
-    # We select all of the bounds in the updated timescales twice, as b1 and b2. In each
-    # selection, we order them by timescale and age and number the rows using @r1 and @r2. We then
-    # join each row in b1 to the previous row from the same timescale in b2, so that we can check
-    # that the upper interval for each boundary matches the lower interval from the previous
-    # boundary, and that the age of each boundary is greater than the age of the previous
-    # boundary. This check is done in the second and third lines. Initial boundaries don't have a
-    # matching row in b2, so the lower_no and age will be null. The expressions 'bound_ok' and 
-    # 'age_ok' are then used to set the error flag for each boundary.
-    
-    $sql = "  UPDATE $TIMESCALE_BOUNDS as tsb join
-		(SELECT b1.bound_no, (b1.age > b2.age or b2.age is null) as age_ok,
-		    (b1.interval_no = b2.lower_no or (b1.interval_no = 0 and b2.lower_no is null)) as bound_ok
-		 FROM
-		  (select (@r1 := @r1 + 1) as row, bound_no, timescale_no, age, interval_no from $TIMESCALE_BOUNDS 
-		   WHERE timescale_no in ($timescale_list) ORDER BY timescale_no, age) as b1 LEFT JOIN
-		  (select (@r2 := @r2 + 1) as row, timescale_no, age, lower_no FROM $TIMESCALE_BOUNDS
-		   WHERE timescale_no in ($timescale_list) ORDER BY timescale_no, age) as b2 on
-			b1.row = b2.row + 1 and b1.timescale_no = b2.timescale_no) as bound_check using (bound_no)
-	      SET is_error = not(bound_ok and age_ok)";
-    
-    print STDERR "$sql\n\n" if $options->{debug};
-    
-    $update_count = $dbh->do($sql);
-    
-    # Finally, we need to update the error flag for each of the updated timescales.
-    
-    $sql = "  UPDATE $TIMESCALE_DATA as ts join 
-		(SELECT timescale_no, max(is_error) as is_error
-		 FROM $TIMESCALE_BOUNDS WHERE timescale_no in ($timescale_list)
-		 GROUP BY timescale_no) as any_tsb
-	      SET ts.is_error = any_tsb.is_error";
-    
-    print STDERR "$sql\n\n" if $options->{debug};
-    
-    $update_count = $dbh->do($sql);
-}
+#     if ( $edt->debug )
+#     {
+# 	($update_count) = $dbh->selectrow_array("SELECT ROW_COUNT()");
+	
+# 	print STDERR "updated is_different on $update_count unlocked rows\n\n" 
+# 	    if $update_count && $update_count > 0;
+#     }
+# }
 
+
+# sub update_and_check_timescales {
+
+#     my ($edt, $timescale_ids) = @_;
+    
+#     # If errors have occurred, then the transaction will be rolled back, so there is no point in
+#     # doing anything.
+    
+#     return if $edt->errors_occurred;
+    
+#     my $dbh = $edt->dbh;
+#     my $update_count;
+#     my $sql;
+    
+#     # First, we need to figure out which timescales contain updated boundaries.
+    
+#     my ($timescale_list) = $dbh->do("
+# 	SELECT group_concat(distinct timescale_no) FROM $TIMESCALE_BOUNDS
+# 	WHERE is_updated");
+    
+#     # If we are given a list of timescale ids to update, join this in too.
+    
+#     if ( $timescale_ids && $timescale_list )
+#     {
+# 	$timescale_list = join(',', $timescale_ids, $timescale_list);
+#     }
+    
+#     elsif ( $timescale_ids )
+#     {
+# 	$timescale_list = $timescale_ids;
+#     }
+    
+#     # Return if the combined list is empty.
+    
+#     return unless $timescale_list;
+    
+#     # Update min and max ages for these timescales.
+    
+#     $sql = "  UPDATE $TIMESCALE_DATA as ts join 
+# 		(SELECT timescale_no, max(age) as max_age, min(age) as min_age
+# 		 FROM $TIMESCALE_BOUNDS as tsb
+# 		 WHERE timescale_no in ($timescale_list) GROUP BY timescale_no) as n using (timescale_no)
+# 	    SET ts.max_age = n.max_age, ts.min_age = n.min_age";
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     $update_count = $dbh->do($sql);
+    
+#     # Now set or clear the is_error flags for every boundary in these timescales.
+    
+#     # We will be able to substantially simplify the following expression once we are able to
+#     # upgrade to MariaDB 10.2, which introduces common table expressions. For now:
+#     # 
+#     # We select all of the bounds in the updated timescales twice, as b1 and b2. In each
+#     # selection, we order them by timescale and age and number the rows using @r1 and @r2. We then
+#     # join each row in b1 to the previous row from the same timescale in b2, so that we can check
+#     # that the upper interval for each boundary matches the lower interval from the previous
+#     # boundary, and that the age of each boundary is greater than the age of the previous
+#     # boundary. This check is done in the second and third lines. Initial boundaries don't have a
+#     # matching row in b2, so the lower_no and age will be null. The expressions 'bound_ok' and 
+#     # 'age_ok' are then used to set the error flag for each boundary.
+    
+#     $sql = "SET \@r1=0, \@r2=0";
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     $dbh->do($sql);
+    
+#     $sql = "  UPDATE $TIMESCALE_BOUNDS as tsb join
+# 		(SELECT b1.bound_no, (b1.age > b2.age or b2.age is null) as age_ok,
+# 		    (b1.interval_no = b2.lower_no or (b1.interval_no = 0 and b2.lower_no is null)) as bound_ok
+# 		 FROM
+# 		  (select (\@r1 := \@r1 + 1) as row, bound_no, timescale_no, age, interval_no from $TIMESCALE_BOUNDS 
+# 		   WHERE timescale_no in ($timescale_list) ORDER BY timescale_no, age) as b1 LEFT JOIN
+# 		  (select (\@r2 := \@r2 + 1) as row, timescale_no, age, lower_no FROM $TIMESCALE_BOUNDS
+# 		   WHERE timescale_no in ($timescale_list) ORDER BY timescale_no, age) as b2 on
+# 			b1.row = b2.row + 1 and b1.timescale_no = b2.timescale_no) as bound_check using (bound_no)
+# 	      SET is_error = not(bound_ok and age_ok)";
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     $update_count = $dbh->do($sql);
+    
+#     # Finally, we need to update the error flag for each of the updated timescales.
+    
+#     $sql = "  UPDATE $TIMESCALE_DATA as ts join 
+# 		(SELECT timescale_no, max(is_error) as is_error
+# 		 FROM $TIMESCALE_BOUNDS WHERE timescale_no in ($timescale_list)
+# 		 GROUP BY timescale_no) as any_tsb
+# 	      SET ts.is_error = any_tsb.is_error";
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     $update_count = $dbh->do($sql);
+# }
+
+
+# sub clear_update_flags {
+    
+#     my ($edt) = @_;
+    
+#     # If errors have occurred, then the transaction will be rolled back, so there is no point in
+#     # doing anything.
+    
+#     return if $edt->errors_occurred;
+    
+#     # Otherwise, clear all update flags.
+    
+#     my $dbh = $edt->dbh;
+    
+#     my $sql = " UPDATE $TIMESCALE_BOUNDS SET is_updated = 0";
+    
+#     $dbh->do($sql);
+# }
 
 
 1;

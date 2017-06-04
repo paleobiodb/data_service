@@ -20,7 +20,7 @@ use ConsoleLog qw(initMessages
 		  logTimestamp);
 use TimescaleTables qw(establish_timescale_tables copy_international_timescales
 		       copy_pbdb_timescales process_one_timescale copy_macrostrat_timescales
-		       update_timescale_descriptions);
+		       update_timescale_descriptions create_triggers);
 use TimescaleEdit qw(add_boundary update_boundary);
 use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
@@ -30,10 +30,11 @@ use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
 my ($opt_init_tables, $opt_copy_old, $opt_authorizer_no, $opt_help, $opt_man, $opt_verbose, $opt_debug);
 my ($opt_copy_from_pbdb, $opt_copy_from_macro, $opt_copy_international, $opt_update_one, $opt_update_desc);
-my ($opt_ub);
+my ($opt_init_triggers, $opt_ub);
 my $options = { };
 
 GetOptions("init-tables" => \$opt_init_tables,
+	   "init-triggers" => \$opt_init_triggers,
 	   "copy-old" => \$opt_copy_old,
 	   "copy-international|ci" => \$opt_copy_international,
 	   "copy-from-pbdb|cp" => \$opt_copy_from_pbdb,
@@ -53,7 +54,7 @@ GetOptions("init-tables" => \$opt_init_tables,
 
 pod2usage(1) if $opt_help;
 pod2usage(2) unless $opt_init_tables || $opt_copy_from_pbdb || $opt_copy_from_macro || 
-    $opt_update_one || $opt_update_desc || $opt_ub;
+    $opt_update_one || $opt_update_desc || $opt_ub || $opt_init_triggers;
 pod2usage(-exitval => 0, -verbose => 2) if $opt_man;
 
 # If we get here, then we have stuff to do. So get a database handle.
@@ -129,6 +130,10 @@ if ( $opt_ub )
     update_boundaries($dbh, $options);
 }
 
+if ( $opt_init_triggers )
+{
+    create_triggers($dbh);
+}
 
 
 sub update_boundaries {
