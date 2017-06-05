@@ -1436,7 +1436,7 @@ sub create_triggers {
 	
 	# Then check all of the bounds in the specified timescales for errors.
 	
-	CALL check_timescales;
+	CALL check_updated_bounds;
 	
 	# Then 
 	
@@ -1517,7 +1517,15 @@ sub create_triggers {
     $dbh->do("CREATE TRIGGER update_bound
 	BEFORE UPDATE ON timescale_bounds FOR EACH ROW
 	BEGIN
-	    IF OLD.is_updated = 0 and NEW.is_updated = 0 THEN
+	    IF OLD.bound_type <> NEW.bound_type or OLD.interval_no <> NEW.interval_no or
+		OLD.lower_no <> NEW.lower_no or OLD.base_no <> NEW.base_no or
+		OLD.range_no <> NEW.range_no or OLD.color_no <> NEW.color_no or
+		OLD.refsource_no <> NEW.refsource_no or OLD.age <> NEW.age or
+		OLD.age_error <> NEW.age_error or OLD.offset <> NEW.offset or
+		OLD.offset_error <> NEW.offset_error or OLD.color <> NEW.color or
+		OLD.derived_age <> NEW.derived_age or OLD.derived_age_error <> NEW.derived_age_error or
+		OLD.derived_color <> NEW.derived_color or OLD.derived_reference_no <> NEW.derived_reference_no
+		 THEN
 	    SET NEW.is_updated = 1; END IF;
 	END;");
     

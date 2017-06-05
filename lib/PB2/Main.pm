@@ -25,15 +25,22 @@ use PB2::PersonData;
 use PB2::MainEntry;
 
 {
-    # We start by defining a data service instance for version 1.2
+    # We start by defining a data service instance for version 1.2. We provide the ability to
+    # override the path prefix and version string using the configuration file, so that test
+    # versions can be run separately from the main version.
+    
+    my $path_prefix = Dancer::config->{override_prefix} || 'data1.2/';
+    my $version_string = Dancer::config->{override_version} || 'v2';
+    
+    # Now define the data service instance.
     
     our ($ds2) = Web::DataService->new(
 	{ name => '1.2',
 	  title => 'PBDB Data Service',
-	  version => 'v1',
+	  path_prefix => $path_prefix,
+	  version => $version_string,
 	  features => 'standard',
 	  special_params => 'standard,count=rowcount',
-	  path_prefix => 'data1.2/',
 	  ruleset_prefix => '1.2:',
 	  doc_template_dir => 'doc/1.2',
 	  doc_compile_dir => 'doc/ttc-1.2' });
