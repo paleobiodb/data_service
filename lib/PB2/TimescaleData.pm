@@ -54,7 +54,7 @@ sub initialize {
     $ds->define_block('1.2:timescales:basic' =>
 	{ select => [ 'ts.timescale_no', 'ts.timescale_name',
 		      'ts.timescale_extent', 'ts.timescale_taxon', 'ts.timescale_type',
-		      'ts.source_timescale_no', 'ts.early_bound', 'ts.late_bound',
+		      'ts.source_timescale_no', 'ts.max_age', 'ts.min_age',
 		      'ts.is_active', 'ts.authority_level', 'ts.reference_no' ],
 	  tables => 'ts' },
 	{ set => '*', code => \&process_ids },
@@ -79,9 +79,9 @@ sub initialize {
 	    $ds->document_set('1.2:timescales:types'),
 	{ output => 'source_timescale_no', com_name => 'bid' },
 	    "Identifier of the timescale from which this one was derived, if any",
-	{ output => 'late_bound', com_name => 'lag' },
+	{ output => 'min_age', com_name => 'lag' },
 	    "The late bound of this timescale, in Ma",
-	{ output => 'early_bound', com_name => 'eag' },
+	{ output => 'max_age', com_name => 'eag' },
 	    "The early bound of this timescale, in Ma",
 	{ output => 'is_active', com_name => 'vsb' },
 	    "True if this timescale is active for general use, false otherwise.",
@@ -193,7 +193,7 @@ sub initialize {
 		      'tsb.offset', 'tsb.offset_error', 'tsb.lower_no', 'tsb.interval_no',
 		      'tsb.base_no', 'tsb.range_no', 'tsb.color_no', 'tsb.is_error',
 		      'tsb.is_locked', 'tsb.is_different', 'tsb.color', 'tsb.reference_no',
-		      'tsil.interval_name as lower_name', 'tsi.interval_name as interval_name' ],
+		      'tsil.interval_name as lower_name', 'tsi.interval_name' ],
 	  tables => [ 'tsb', 'tsi', 'tsil' ] },
 	{ set => '*', code => \&process_ids },
 	{ output => 'bound_no', com_name => 'oid' },
@@ -218,7 +218,7 @@ sub initialize {
 	    "by which this boundary differs from the base boundary.",
 	{ output => 'offset_error', com_name => 'oer' },
 	    "The error (+/-) associated with the offset or percentage",
-	{ output => 'interval_no', com_name => 'uid' },
+	{ output => 'interval_no', com_name => 'iid' },
 	    "The identifier of the upper interval bounded by this boundary.",
 	    "If this field is empty, then the boundary lies at the top of",
 	    "its timescale.",
@@ -226,7 +226,7 @@ sub initialize {
 	    "The identifier of the lower interval bounded by this boundary.",
 	    "If this field is empty, then the boundary lies at the bottom of",
 	    "its timescale.",
-	{ output => 'interval_name ', com_name => 'unm' },
+	{ output => 'interval_name', com_name => 'inm' },
 	    "The name of the upper interval bounded by this boundary.",
 	{ output => 'lower_name', com_name => 'lnm' },
 	    "The name of the lower interval bounded by this boundary.",
@@ -631,7 +631,7 @@ sub list_records {
     
     if ( $type eq 'timescales' )
     {
-	$order_expr ||= 'order by ts.early_bound';
+	$order_expr ||= 'order by ts.min_age';
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
@@ -773,7 +773,7 @@ sub generate_timescale_filters {
     {
 	if ( $type eq 'timescales' )
 	{
-	    push @filters, "ts.early_bound <= $max_ma";
+	    push @filters, "ts.max_age <= $max_ma";
 	}
 	
 	else
@@ -787,7 +787,7 @@ sub generate_timescale_filters {
     {
 	if ( $type eq 'timescales' )
 	{
-	    push @filters, "ts.late_bound >= $min_ma";
+	    push @filters, "ts.min_age >= $min_ma";
 	}
 	
 	elsif ( $type eq 'intervals' )
@@ -890,8 +890,7 @@ sub generate_join_list {
     elsif ( $mt eq 'tsb' )
     {
 	$joins .= "\tjoin $TIMESCALE_DATA as ts using (timescale_no)\n";
-	$joins .= "\tleft join $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n"
-	    if $tables->{tsi};
+	$joins .= "\tleft join $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n";
 	$joins .= "\tleft join $TIMESCALE_INTS as tsil on tsil.interval_no = tsb.lower_no\n"
 	    if $tables->{tsil};
     }
