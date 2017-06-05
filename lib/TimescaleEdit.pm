@@ -11,12 +11,9 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use CommonEdit;
 use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 	         $INTERVAL_DATA $INTERVAL_MAP $SCALE_MAP $MACROSTRAT_SCALES $MACROSTRAT_INTERVALS
 	         $MACROSTRAT_SCALES_INTS);
-use CoreFunction qw(activateTables loadSQLFile);
-use ConsoleLog qw(logMessage);
 
 use TimescaleTables qw(%TIMESCALE_ATTRS %TIMESCALE_BOUND_ATTRS %TIMESCALE_REFDEF);
 
@@ -59,6 +56,10 @@ sub add_boundary {
     croak "add_boundary: must not have a value for bound_id\n" if $attrs->{bound_id};
     
     my $dbh = $edt->dbh;
+    
+    # Start by making sure that we are in a state in which we can proceed.
+    
+    return 0 unless $edt->can_proceed;
     
     # Clear the last bound updated and last timescale updated.
     
@@ -146,9 +147,9 @@ sub add_boundary {
     
     $edt->check_bound_values($attrs);
     
-    # If any errors occurred, or if $check_only was specified, we stop here.
+    # If any errors occurred, we stop here. This counts as "check only" mode.
     
-    return 0 if $conditions->{CHECK_ONLY} || $edt->errors_occurred;
+    return 0 unless $edt->can_edit;
     
     # Otherwise, insert the new record.
     
@@ -195,6 +196,10 @@ sub update_boundary {
     my $dbh = $edt->dbh;
     
     my $bound_id = $attrs->{bound_id};
+    
+    # Start by making sure that we are in a state in which we can proceed.
+    
+    return 0 unless $edt->can_proceed;
     
     # Clear the record of last updated bound and timescale
     
@@ -300,7 +305,7 @@ sub update_boundary {
     
     # If any errors occurred, or if $check_only was specified, we stop here.
     
-    return 0 if $conditions->{CHECK_ONLY} || $edt->errors_occurred;
+    return 0 unless $edt->can_edit;
     
     # Otherwise, update the record.
     
@@ -347,6 +352,10 @@ sub delete_boundary {
     croak "update_boundary: must have a value for bound_id\n" unless $attrs->{bound_id};
     
     my $dbh = $edt->dbh;
+    
+    # Start by making sure that we are in a state in which we can proceed.
+    
+    return 0 unless $edt->can_proceed;
     
     my $bound_id = $attrs->{bound_id} ? "$attrs->{bound_id}" : "";
     my $timescale_id = $attrs->{timescale_id} ? "$attrs->{timescale_id}" : "";
@@ -413,9 +422,13 @@ sub delete_boundary {
 	return $edt->add_condition("E_PARAM: you must specify either 'bound_id' or 'timescale_id'");
     }
     
+    # Permission checks go here.
+    
+    # ... permission checks ...
+    
     # If any errors occurred, or if $check_only was specified, we stop here.
     
-    return $edt if $conditions->{CHECK_ONLY} || $edt->errors_occurred;
+    return 0 unless $edt->can_edit;
     
     # Now check to see if there are any other boundaries that depend on this one. If so, then we
     # need to deal with them. If the condition RELATED_RECORDS is allowed, then cut each of these

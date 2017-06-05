@@ -74,8 +74,7 @@ sub initialize {
 			place => 0,
 			allow_method => 'GET,PUT,DELETE',
 			role => 'PB2::TimescaleEntry',
-			method => 'delete_timescales',
-			output => '1.2:timescales:basic' },
+			method => 'delete_timescales' },
 	"This operation allows you to delete one or more existing timescales.");
     
     $ds2->list_node({ path => 'timescales/delete',
@@ -150,8 +149,7 @@ sub initialize {
 			place => 0,
 			allow_method => 'GET,PUT,DELETE',
 			role => 'PB2::TimescaleEntry',
-			method => 'delete_bounds',
-			output => '1.2:timescales:basic' },
+			method => 'delete_bounds' },
 	"This operation allows you to delete one or more existing interval bounds.");
     
     $ds2->list_node({ path => 'bounds/delete',

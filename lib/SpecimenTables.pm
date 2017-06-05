@@ -17,14 +17,16 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX);
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPEC_ELEMENTS $SPEC_ELT_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables);
+our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables
+			establish_spec_element_tables load_spec_element_tables);
 
 our $SPEC_MATRIX_WORK = "smw";
-
+our $SPEC_ELTS_WORK = "sew";
+our $ELT_MAP_WORK = "semw";
 
 
 # buildSpecimenTables ( dbh )
@@ -123,5 +125,255 @@ sub buildMeasurementTables {
 }
 
 
+# establish_extra_specimen_tables ( dbh )
+# 
+# Create additional tables necessary for specimen entry.
+
+sub establish_extra_specimen_tables {
+
+    my ($dbh, $options) = @_;
+    
+    $options ||= { };
+    
+    $dbh->do("DROP TABLE IF EXISTS $SPEC_PROV_WORK");
+    
+    $dbh->do("CREATE TABLE $SPEC_PROV_WORK (
+		
+
+)");
+
+}
 
 
+# establish_specimen_element_tables ( dbh )
+# 
+# Create the tables for specimen elements.
+
+sub establish_spec_element_tables {
+    
+    my ($dbh, $options) = @_;
+    
+    my ($sql, $result);
+    
+    $options ||= { };
+    
+    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELTS_WORK");
+    
+    $dbh->do("CREATE TABLE $SPEC_ELTS_WORK (
+		spec_elt_no int unsigned PRIMARY KEY AUTO_INCREMENT,
+		element_name varchar(80) not null,
+		alternate_names varchar(80) not null,
+		orig_no int unsigned not null,
+		parent_elt_name varchar(80) not null,
+		has_number boolean,
+		neotoma_element_id int unsigned not null,
+		neotoma_element_type_id int unsigned not null,
+		KEY (element_name),
+		KEY (neotoma_element_id),
+		KEY (neotoma_element_type_id))");
+    
+    # $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS");
+    
+    # $dbh->do("CREATE TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS (
+    # 		spec_elt_no int unsigned not null,
+    # 		taxon_no int unsigned not null,
+    # 		KEY (spec_elt_no)");
+    
+    $dbh->do("DROP TABLE IF EXISTS $ELT_MAP_WORK");
+    
+    $dbh->do("CREATE TABLE $ELT_MAP_WORK (
+		spec_elt_no int unsigned not null,
+		lft int unsigned not null,
+		rgt int unsigned not null,
+		KEY (lft, rgt))");
+    
+    # Then activate the new tables.
+    
+    activateTables($dbh, $SPEC_ELTS_WORK => $SPEC_ELEMENTS,
+			 $ELT_MAP_WORK => $SPEC_ELT_MAP);
+}
+
+
+my %TAXON_CACHE;
+my %FIELD_MAP;
+
+# load_spec_element_tables
+# 
+# 
+
+sub load_spec_element_tables {
+
+    my ($dbh, $new_contents, $options) = @_;
+    
+    my ($sql, $result, $header);
+    
+    $options ||= { };
+    
+    # First grab and parse the header line
+    
+    if ( ref $new_contents eq 'ARRAY' )
+    {
+	$header = shift @$new_contents;
+	chomp $header;
+    }
+    
+    elsif ( ref $new_contents eq 'GLOB' )
+    {
+	$header = <$new_contents>;
+	chomp $header;
+    }
+    
+    else
+    {
+	croak "new contents must be an array ref or file handle\n";
+    }
+    
+    my @fields = split /\s*,\s*/, $header;
+    %FIELD_MAP = ( );
+    
+    foreach my $i ( 0 .. $#fields )
+    {
+	$FIELD_MAP{$fields[$i]} = $i;
+    }
+    
+    # Delete existing contents of the specimen elements table and the map table.
+    
+    $result = $dbh->do("TRUNCATE TABLE $SPEC_ELEMENTS");
+    $result = $dbh->do("TRUNCATE TABLE $SPEC_ELT_MAP");
+    
+    # Then go through the lines one by one and add the contents to these tables.
+    
+    if ( ref $new_contents eq 'ARRAY' )
+    {
+	foreach my $line ( @$new_contents )
+	{
+	    chomp $line;
+	    next unless defined $line && $line ne '';
+	    
+	    add_element_line($dbh, $line, $options);
+	}
+    }
+    
+    elsif ( ref $new_contents eq 'GLOB' )
+    {
+	my $line;
+	
+	logMessage(2, "    Reading data from standard input...");
+	
+	while ( defined( $line = <$new_contents> ) )
+	{
+	    chomp $line;
+	    next if $line eq '';
+	    
+	    add_element_line($dbh, $line, $options);
+	}
+	
+	logMessage(2, "    done.");
+    }
+}
+
+
+sub add_element_line {
+
+    my ($dbh, $line, $options) = @_;
+    
+    my @fields = split /\s*,\s*/, $line;
+    
+    my $taxon_name = line_value('Taxon', \@fields);
+    my $elt_name = line_value('SpecimenElement', \@fields);
+    my $alt_names = line_value('AlternateNames', \@fields);
+    my $parent_elt = line_value('ParentElement', \@fields);
+    my $neotoma_no = line_value('NeotomaElementID', \@fields) || "0";
+    my $neotoma_type_no = line_value('NeotomaElementTypeID', \@fields) || "0";
+    my $has_number = line_value('HasNumber', \@fields);
+    my $inactive = line_value('Inactive', \@fields);
+    
+    next if $inactive;
+    
+    $alt_names = '' if $alt_names eq $elt_name;
+    
+    # Fix Eukarya
+    
+    $taxon_name = 'Eukaryota' if $taxon_name eq 'Eukarya';
+    
+    # Look up the taxon name in the database.
+    
+    my ($orig_no, $lft, $rgt) = lookup_taxon($dbh, $taxon_name);
+    
+    my $quoted_name = $dbh->quote($elt_name);
+    my $quoted_alt = $alt_names ? $dbh->quote($alt_names) : "''";
+    my $quoted_parent = $parent_elt ? $dbh->quote($parent_elt) : "''";
+    my $quoted_hasnum = $has_number ? "1" : "0";
+    my $quoted_neo = $dbh->quote($neotoma_no);
+    my $quoted_neotype = $dbh->quote($neotoma_type_no);
+    
+    # Insert the record into the database.
+    
+    my $sql = "	INSERT INTO $SPEC_ELEMENTS (element_name, alternate_names, orig_no, parent_elt_name,
+			has_number, neotoma_element_id, neotoma_element_type_id)
+		VALUES ($quoted_name, $quoted_alt, $orig_no, $quoted_parent,
+			$quoted_hasnum, $quoted_neo, $quoted_neotype)";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    my $result = $dbh->do($sql);
+    
+    my $insert_id = $dbh->last_insert_id(undef, undef, $SPEC_ELEMENTS, undef);
+    
+    unless ( $insert_id )
+    {
+	print STDERR "Error: element not inserted\n";
+	next;
+    }
+    
+    # If we know the taxon number, also insert a record into the element map.
+    
+    if ( $orig_no )
+    {
+	$sql = "	INSERT INTO $SPEC_ELT_MAP (spec_elt_no, lft, rgt)
+		VALUES ($insert_id, $lft, $rgt)";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$result = $dbh->do($sql);
+    }
+    
+    return $result;
+}
+
+
+sub line_value {
+    
+    my ($column, $fields_ref) = @_;
+    
+    my $i = $FIELD_MAP{$column};
+    croak "Column '$column' not found.\n" unless defined $i;
+    
+    return $fields_ref->[$i];
+}
+
+
+sub lookup_taxon {
+    
+    my ($dbh, $taxon_name) = @_;
+    
+    unless ( $TAXON_CACHE{$taxon_name} )
+    {
+	my $quoted = $dbh->quote($taxon_name);
+	
+	my $sql = "	SELECT orig_no, lft, rgt, name FROM $TREE_TABLE_LIST[0]
+			WHERE name = $quoted";
+	
+	my ($orig_no, $lft, $rgt, $name) = $dbh->selectrow_array($sql);
+	
+	$orig_no ||= 0;
+	
+	print STDERR "WARNING: could not find taxon '$taxon_name'\n" unless $orig_no;
+	
+	$TAXON_CACHE{$taxon_name} = [ $orig_no, $lft, $rgt, $name ];
+    }
+    
+    return @{$TAXON_CACHE{$taxon_name}};
+}
+
+1;

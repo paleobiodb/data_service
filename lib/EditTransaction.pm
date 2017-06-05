@@ -18,33 +18,6 @@ use ConsoleLog qw(logMessage);
 our ($UPDATE_MATCHED);
 
 
-# sub initialize {
-    
-#     my ($class, $ds) = @_;
-    
-#     return if defined $UPDATE_MATCHED;
-    
-#     my $dbh = $ds->get_connection;
-    
-#     $dbh->do("CREATE TEMPORARY TABLE a (b int unsigned not null)");
-#     $dbh->do("INSERT INTO a (b) values (1)");
-    
-#     my $result = $dbh->do("UPDATE a SET b = 1 WHERE b = 1");
-    
-#     if ( $result )
-#     {
-# 	print STDERR "UPDATE statement returns number of rows MATCHED.\n" if $ds->debug;
-#     }
-    
-#     else
-#     {
-# 	print STDERR "UPDATE statement returns number of rows CHANGED.\n" if $ds->debug; 
-#     }
-    
-#     $UPDATE_MATCHED = $result || 0;
-# }
-
-
 sub new {
     
     my ($class, $dbh, $options) = @_;
@@ -52,11 +25,43 @@ sub new {
     my $edt = { dbh => $dbh, 
 		conditions => [ ],
 		result => '',
-		state => 'active' };
+		state => '' };
     
-    $edt->{debug} = 1 if $options && $options->{debug};
+    if ( $options && ref $options eq 'HASH' )
+    {
+	$edt->{session_id} = $options->{session_id};
+	$edt->{debug} = 1 if $options->{debug};
+    }
     
-    $dbh->do("START TRANSACTION");
+    my ($authorizer_no, $enterer_no, $is_super);
+    
+    if ( $edt->{session_id} )
+    {
+	my $quoted_id = $dbh->quote($edt->{session_id});
+	
+	my $sql = "
+		SELECT authorizer_no, enterer_no, superuser FROM session_data
+		WHERE session_id = $quoted_id";
+	
+	($authorizer_no, $enterer_no, $is_super) = $dbh->selectrow_array($sql);
+    }
+    
+    if ( $authorizer_no && $enterer_no )
+    {
+	$edt->{authorizer_no} = $authorizer_no;
+	$edt->{enterer_no} = $enterer_no;
+	$edt->{is_super} = 1 if $is_super;
+	
+	$dbh->do("START TRANSACTION");
+	
+	$edt->{state} = 'active';
+    }
+    
+    else
+    {
+	$edt->add_condition("E_SESSION: bad session identifier");
+	$edt->{state} = 'blocked';
+    }
     
     return bless $edt, $class;
 }
@@ -97,6 +102,7 @@ sub add_condition {
     if ( $message =~ /^[EC]_/ )
     {
 	$edt->{errors_occurred} = 1;
+	$edt->{state} = 'error';
     }
     
     return $edt;
@@ -120,6 +126,29 @@ sub clear_conditions {
 }
 
 
+sub can_proceed {
+
+    my ($edt) = @_;
+    
+    return $edt->{state} && ($edt->{state} eq 'active' || $edt->{state} eq 'error') ? 1 : 0;
+}
+
+
+sub can_edit {
+    
+    my ($edt) = @_;
+    
+    return $edt->{state} && $edt->{state} eq 'active' ? 1 : 0;
+}
+
+
+sub check_only {
+
+    my ($edt) = @_;
+    
+    $edt->{state} = 'error';
+}
+
 # sub status {
     
 #     my ($edt) = shift;
@@ -140,24 +169,28 @@ sub errors_occurred {
     return $edt->{errors_occurred};
 }
 
-sub record_keys {
-    
-    my ($edt, @keys) = @_;
-    
-    if ( @keys )
-    {
-	$edt->{keys} = \@keys;
-    }
-    
-    return ref $edt->{keys} eq 'ARRAY' ? @{$edt->{keys}} : ();
-}
-
 
 sub dbh {
     
     my ($edt) = @_;
     
     return $edt->{dbh};
+}
+
+
+sub authorizer_no {
+    
+    my ($edt) = @_;
+    
+    return $edt->{authorizer_no};
+}
+
+
+sub enterer_no {
+    
+    my ($edt) = @_;
+    
+    return $edt->{enterer_no};
 }
 
 

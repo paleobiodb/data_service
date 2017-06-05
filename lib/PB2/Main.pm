@@ -535,6 +535,14 @@ use PB2::MainEntry;
 	"This operation returns information about the measurements associated with selected",
 	"specimens.");
     
+    $ds2->define_node({ path => 'specs/elements',
+			place => 6,
+			title => 'Specimen descriptive elements',
+			method => 'list_elements',
+			output => '1.2:specs:element' },
+	"This operation returns a list of descriptive elements suitable for describing",
+	"specimens.");
+    
     # Taxa.  These paths are used to fetch information about biological taxa known
     # to the database.
     

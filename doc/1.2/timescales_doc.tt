@@ -10,3 +10,7 @@ others as well.
 =head2 SYNOPSIS
 
 <% NODELIST(opt_usage=1) %>
+
+This data service also provides data entry and editing operations on timescales and interval boundaries:
+
+<% NODELIST(opt_usage=1, opt_list='entry/timescales') %>
