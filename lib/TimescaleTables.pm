@@ -147,7 +147,7 @@ sub establish_timescale_tables {
 		updated timestamp default current_timestamp on update current_timestamp,
 		key (reference_no),
 		key (authorizer_no),
-		key (is_active)
+		key (is_active),
 		key (is_updated))");
     
     # $dbh->do("DROP TABLE IF EXISTS $TIMESCALE_ARCHIVE");
