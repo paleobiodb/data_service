@@ -29,7 +29,7 @@ use PB2::MainEntry;
     # override the path prefix and version string using the configuration file, so that test
     # versions can be run separately from the main version.
     
-    my $path_prefix = Dancer::config->{override_prefix} || 'data1.2';
+    my $path_prefix = Dancer::config->{override_prefix} || 'data1.2/';
     my $version_string = Dancer::config->{override_version} || 'v2';
     
     # Now define the data service instance.

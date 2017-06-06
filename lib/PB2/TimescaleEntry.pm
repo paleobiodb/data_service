@@ -501,7 +501,7 @@ sub update_bounds {
 	# If this routine was called as 'bounds/replace', then we need to delete all bounds from
 	# updated timescales that were not explicitly added or updated by this operation.
 	
-	if ( $arg eq 'replace' )
+	if ( $arg && $arg eq 'replace' )
 	{
 	    my @timescale_list = $edt->timescales_updated;
 	    
@@ -515,7 +515,7 @@ sub update_bounds {
 	# that depend on them, update the min and max ages of the associated timescales, and then
 	# clear all is_updated flags.
 	
-	$edt->complete_bound_changes;
+	$edt->complete_bound_updates;
     }
 	
     # If an exception is caught, we roll back the transaction before re-throwing it as an internal
