@@ -17,7 +17,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPEC_ELEMENTS $SPEC_ELT_MAP);
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPEC_ELEMENTS $LOCALITIES $WOF_PLACES);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
@@ -27,6 +27,9 @@ our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables
 our $SPEC_MATRIX_WORK = "smw";
 our $SPEC_ELTS_WORK = "sew";
 our $ELT_MAP_WORK = "semw";
+
+our $LOCALITY_WORK = "locw";
+our $PLACES_WORK = "placw";
 
 
 # buildSpecimenTables ( dbh )
@@ -135,12 +138,79 @@ sub establish_extra_specimen_tables {
     
     $options ||= { };
     
-    $dbh->do("DROP TABLE IF EXISTS $SPEC_PROV_WORK");
+    $dbh->do("DROP TABLE IF EXISTS $PLACES_WORK");
     
-    $dbh->do("CREATE TABLE $SPEC_PROV_WORK (
-		
+    $dbh->do("CREATE TABLE $PLACES_WORK (
+		wof_id int unsigned PRIMARY KEY,
+		name varchar(255) not null,
+		name_formal varchar(255) not null,
+		name_eng varchar(255) not null,
+		placetype enum ('continent','country','region','county','locality'),
+		iso2 varchar(2) not null,
+		iso3 varchar(3) not null,
+		continent int unsigned not null,
+		country int unsigned not null,
+		region int unsigned not null,
+		county int unsigned not null,
+		locality int unsigned not null,
+		geom geometry,
+		INDEX (name),
+		INDEX (name_eng),
+		SPATIAL INDEX (geom))");
+    
+    $dbh->do("DROP TABLE IF EXISTS $LOCALITY_WORK");
+    
+    $dbh->do("CREATE TABLE $LOCALITY_WORK (
+		locality_no int unsigned auto_increment PRIMARY KEY,
+		collection_name varchar(255) not null,
+		wof_id int unsigned not null,
+		early_int_no int unsigned not null,
+		late_int_no int unsigned not null,
+		grp varchar(255) not null,
+		formation varchar(255) not null,
+		member varchar(255) not null,
+		lithology varchar(255) not null,
+		INDEX (wof_id))");
+    
+    # $dbh->do("DROP TABLE IF EXISTS $COLLEVENT_WORK");
+    
+    # $dbh->do("CREATE TABLE $COLLEVENT_WORK (
+    # 		collevent_no int unsigned auto_increment PRIMARY KEY,
+    # 		field_site varchar(255) not null,
+    # 		year varchar(4),
+    # 		coll_date date,
+    # 		collector_name varchar(255) not null,
+    # 		collection_comments text,
+    # 		geology_comments text,
+    # 		INDEX (year))");
 
-)");
+# # add to specimens
+
+# instcoll_no
+# occurrence_no
+# inst_code
+# coll_code
+# spec_elt_no
+
+# # create table "spec_occurrences" with occurrence_no > 5000000
+
+# occurrence_no
+# reid_no?
+# authorizer_no
+# enterer_no
+# modifier_no
+# locality_no
+# orig_no
+# genus_name
+# genus_reso
+# subgenus_name
+# subgenus_reso
+# species_name
+# species_reso
+# subspecies_name
+# subspecies_reso
+# created
+# modified
 
 }
 
@@ -179,18 +249,17 @@ sub establish_spec_element_tables {
     # 		taxon_no int unsigned not null,
     # 		KEY (spec_elt_no)");
     
-    $dbh->do("DROP TABLE IF EXISTS $ELT_MAP_WORK");
+    # $dbh->do("DROP TABLE IF EXISTS $ELT_MAP_WORK");
     
-    $dbh->do("CREATE TABLE $ELT_MAP_WORK (
-		spec_elt_no int unsigned not null,
-		lft int unsigned not null,
-		rgt int unsigned not null,
-		KEY (lft, rgt))");
+    # $dbh->do("CREATE TABLE $ELT_MAP_WORK (
+    # 		spec_elt_no int unsigned not null,
+    # 		lft int unsigned not null,
+    # 		rgt int unsigned not null,
+    # 		KEY (lft, rgt))");
     
     # Then activate the new tables.
     
-    activateTables($dbh, $SPEC_ELTS_WORK => $SPEC_ELEMENTS,
-			 $ELT_MAP_WORK => $SPEC_ELT_MAP);
+    activateTables($dbh, $SPEC_ELTS_WORK => $SPEC_ELEMENTS);
 }
 
 
@@ -239,7 +308,7 @@ sub load_spec_element_tables {
     # Delete existing contents of the specimen elements table and the map table.
     
     $result = $dbh->do("TRUNCATE TABLE $SPEC_ELEMENTS");
-    $result = $dbh->do("TRUNCATE TABLE $SPEC_ELT_MAP");
+    # $result = $dbh->do("TRUNCATE TABLE $SPEC_ELT_MAP");
     
     # Then go through the lines one by one and add the contents to these tables.
     
@@ -328,15 +397,15 @@ sub add_element_line {
     
     # If we know the taxon number, also insert a record into the element map.
     
-    if ( $orig_no )
-    {
-	$sql = "	INSERT INTO $SPEC_ELT_MAP (spec_elt_no, lft, rgt)
-		VALUES ($insert_id, $lft, $rgt)";
+    # if ( $orig_no )
+    # {
+    # 	$sql = "	INSERT INTO $SPEC_ELT_MAP (spec_elt_no, lft, rgt)
+    # 		VALUES ($insert_id, $lft, $rgt)";
 	
-	print STDERR "$sql\n\n" if $options->{debug};
+    # 	print STDERR "$sql\n\n" if $options->{debug};
 	
-	$result = $dbh->do($sql);
-    }
+    # 	$result = $dbh->do($sql);
+    # }
     
     return $result;
 }

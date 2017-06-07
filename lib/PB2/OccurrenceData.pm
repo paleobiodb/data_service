@@ -3390,7 +3390,7 @@ sub combine_modifier {
     
     return $name unless defined $modifier && $modifier ne '';
     
-    if ( $modifier eq '?' )
+    if ( $modifier eq '?' || $modifier eq 'sensu lato' || $modifier eq 'informal' )
     {
 	return "$name $modifier";
     }
