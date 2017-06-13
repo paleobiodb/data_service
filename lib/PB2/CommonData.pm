@@ -995,4 +995,54 @@ sub extid_check {
     # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
 }
 
+
+# check_edt ( edt )
+# 
+# This ought to be moved to a separate module for common data entry routines. The single parameter
+# must be an object of class EditTransaction. If the transaction can proceed, we
+# return. Otherwise, we throw an exception using the error condition read from the transaction
+# object. 
+
+sub check_edt {
+    
+    my ($request, $edt) = @_;
+    
+    # If we don't have a valid EditTransaction object, something has gone very wrong.
+    
+    unless ( $edt && $edt->isa('EditTransaction') )
+    {
+	my ($package, $filename, $line) = caller;
+	print STDERR "ERROR: no EditTransaction found at $filename, line $line\n";
+	
+	die $request->exception(500, "Server error");
+    }
+    
+    # If the operation can proceed, we're good.
+    
+    if ( $edt->can_proceed )
+    {
+	return 1;
+    }
+    
+    # Otherwise, we need to throw an exception. Use the first error condition if there are is
+    # than one.
+    
+    else
+    {
+	my ($errmsg) = $edt->conditions;
+	
+	if ( $errmsg =~ /^E_SESSION/ )
+	{
+	    die $request->exception(401, "You must log in before entering data");
+	}
+	
+	else
+	{
+	    print STDERR "UNKNOWN ERROR MESSAGE: $errmsg\n";
+	    die $request->exception(500, "Server error");
+	}
+    }
+}
+
+
 1;

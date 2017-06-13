@@ -1,0 +1,7 @@
+=head2 DESCRIPTION
+
+Entry operations for timescales and timescale bounds.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>

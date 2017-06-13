@@ -16,7 +16,10 @@ use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX
+		 $SPEC_ELEMENTS);
+
+use Taxonomy;
 
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
@@ -304,6 +307,20 @@ sub initialize {
 	{ include => '1.2:colls:rem' },
 	{ include => '1.2:refs:attr' });
     
+    # Output blocks for specimen elements
+    
+    $ds->define_block('1.2:specs:element' => 
+	{ select => [ 'elt.spec_elt_no', 'elt.element_name', 'elt.orig_no',
+		      'elt.parent_elt_name as parent_name', 'elt.has_number',
+		      't.name as taxon_name' ] },
+	{ set => '*', code => \&process_element_ids },
+	{ output => 'spec_elt_no', com_name => 'oid' },
+	{ output => 'element_name', com_name => 'nam' },
+	{ output => 'parent_name', com_name => 'par' },
+	{ output => 'has_number', com_name => 'hnm' },
+	{ output => 'taxon_no', com_name => 'tid' },
+	{ output => 'taxon_name', com_name => 'tnm' });
+    
     # Parameter value definitions
     
     $ds->define_set('1.2:specs:type' =>
@@ -515,6 +532,22 @@ sub initialize {
 	{ allow => '1.2:taxa:occ_list_filter' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:specs:element_selector' =>
+    	{ param => 'all_records', valid => FLAG_VALUE },
+    	    "Return the entire list of specimen elements",
+    	{ param => 'taxon_name', valid => ANY_VALUE },
+    	    "A taxon, specified by name. All elements which are valid",
+    	    "for this taxon will be returned.",
+    	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TXN') },
+    	    "A taxon, specified by identifier. All elements which are valid",
+    	    "for this taxon will be returned.",
+    	{ at_most_one => [ 'taxon_name', 'taxon_id' ] });
+    
+    $ds->define_ruleset('1.2:specs:elements' =>
+    	{ require => '1.2:specs:element_selector' },
+    	{ allow => '1.2:special_params' },
+    	"^You can also use any of the L<special parameters|node:special> with this request");
     
 }
 
@@ -1246,6 +1279,95 @@ sub list_measurements {
 }
 
 
+# list_elements ( )
+# 
+# This operation returns lists of specimen elements.
+
+sub list_elements {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    my $tables = { };
+    
+    # Determine the query parameters.
+    
+    my @filters;
+    
+    if ( my $taxon_id = $request->clean_param('taxon_id') )
+    {
+	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	
+	my ($taxon) = $taxonomy->list_taxa_simple($taxon_id);
+	
+	unless ( $taxon && $taxon->{lft} )
+	{
+	    die $request->exception(404, "Taxon not found");
+	}
+	
+	my $lft = $taxon->{lft};
+	
+	push @filters, "$lft between t.lft and t.rgt";
+    }
+    
+    elsif ( my $taxon_name = $request->clean_param('taxon_name') )
+    {
+	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	
+	my ($taxon) = $taxonomy->resolve_names($taxon_name, { });
+	
+	unless ( $taxon && $taxon->{lft} )
+	{
+	    die $request->exception(404, "Taxon not found");
+	}
+	
+	my $lft = $taxon->{lft};
+	
+	push @filters, "$lft between t.lft and t.rgt";	
+    }
+    
+    push @filters, '1=1' unless @filters;
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. Also determine how we should be handling external identifiers.
+    
+    $request->strict_check;
+    $request->extid_check;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+    
+    # Now construct the query expression.
+    
+    my $fields = $request->select_string;
+    
+    $request->{main_sql} = "
+	SELECT $calc $fields
+	FROM $SPEC_ELEMENTS as elt left join taxon_trees as t using (orig_no)
+	WHERE $filter_string $limit";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    # Then prepare and execute the main query.
+    
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $request->sql_count_rows;
+}
+
+
 # generate_spec_filters ( tables )
 # 
 # Generate filters based on parameters relevant to specimens only.
@@ -1411,4 +1533,21 @@ sub process_measurement_ids {
 
     $record->{measurement_no} = generate_identifier('MEA', $record->{measurement_no})
 	if defined $record->{measurement_no} && $record->{measurement_no} ne '';
+}
+
+
+sub process_element_ids {
+
+    my ($request, $record) = @_;
+    
+    $record->{has_number} = '' unless $record->{has_number};
+    
+    return unless $request->{block_hash}{extids};
+    
+    $record->{spec_elt_no} = generate_identifier('ELS', $record->{spec_elt_no})
+	if defined $record->{spec_elt_no} && $record->{spec_elt_no} ne '';
+
+    $record->{orig_no} = generate_identifier('TXN', $record->{orig_no})
+	if defined $record->{orig_no} && $record->{orig_no} ne '';
+
 }

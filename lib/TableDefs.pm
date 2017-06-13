@@ -12,13 +12,14 @@ use Carp qw(croak);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS
+our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS $SPECIMENS
 		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA
 		      $COLL_LITH $COLL_ENV $STRATA_NAMES
 		      $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS
 		      $DIV_MATRIX $DIV_GLOBAL $PVL_MATRIX $PVL_GLOBAL
 		      $OCC_MATRIX $OCC_TAXON $REF_SUMMARY $SPEC_MATRIX
+		      $SPEC_ELEMENTS $SPEC_ELT_MAP $LOCALITIES $WOF_PLACES $COLL_EVENTS
 		      $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
 		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
@@ -39,6 +40,7 @@ our $OPINIONS = "opinions";
 our $REFERENCES = "refs";
 our $OCCURRENCES = "occurrences";
 our $REIDS = "reidentifications";
+our $SPECIMENS = "specimens";
 
 # new collection tables
 
@@ -75,6 +77,12 @@ our $OCC_OVERLAP_MAP = 'occ_overlap_map';
 # new specimen tables
 
 our $SPEC_MATRIX = "spec_matrix";
+our $SPEC_ELEMENTS = "spec_elements";
+our $SPEC_ELT_MAP = "spec_elt_map";
+
+our $LOCALITIES = "localities";
+our $WOF_PLACES = "wof_places";
+our $COLL_EVENTS = "coll_events";
 
 # new interval tables
 

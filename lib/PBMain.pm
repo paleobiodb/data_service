@@ -68,6 +68,7 @@ hook after_error_render => sub {
 
 package PBBase;
 
+unless ( Dancer::config->{no_old_versions} )
 {
     my ($dsb) = Web::DataService->new(
 	{ name => 'base',

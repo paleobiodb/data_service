@@ -17,6 +17,7 @@ use PB1::OccurrenceData;
 use PB1::ReferenceData;
 use PB1::PersonData;
 
+unless ( Dancer::config->{no_old_versions} )
 {
     # We start by defining a data service instance for version 1.1
     
