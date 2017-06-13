@@ -18,19 +18,22 @@ use CoreFunction qw(connectDB
 use ConsoleLog qw(initMessages
 		  logMessage
 		  logTimestamp);
-use SpecimenTables qw(establish_spec_element_tables load_spec_element_tables);
+use SpecimenTables qw(establish_spec_element_tables establish_extra_specimen_tables
+		      load_spec_element_tables);
 
 
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
 
 my ($opt_help, $opt_man, $opt_verbose, $opt_debug);
-my ($opt_init_tables, $opt_load_data);
+my ($opt_elt_tables, $opt_spec_tables, $opt_elt_data, $opt_place_data);
 
 my $options = { };
 
-GetOptions("init-tables" => \$opt_init_tables,
-	   "load-data" => \$opt_load_data,
+GetOptions("init-elt-tables" => \$opt_elt_tables,
+	   "init-spec-tables" => \$opt_spec_tables,
+	   "load-elt-data" => \$opt_elt_data,
+	   "load-place-data=s" => \$opt_place_data,
 	   "debug" => \$opt_debug,
 	   "help|h" => \$opt_help,
 	   "man" => \$opt_man,
@@ -41,7 +44,7 @@ GetOptions("init-tables" => \$opt_init_tables,
 # Check for documentation requests
 
 pod2usage(1) if $opt_help;
-pod2usage(2) unless $opt_init_tables || $opt_load_data;
+pod2usage(2) unless $opt_elt_tables || $opt_spec_tables || $opt_elt_data || $opt_place_data;
 pod2usage(-exitval => 0, -verbose => 2) if $opt_man;
 
 # If we get here, then we have stuff to do. So get a database handle.
@@ -59,20 +62,29 @@ $options->{debug} = 1 if $opt_debug;
 
 # First check for the init-tables option.
 
-if ( $opt_init_tables )
+if ( $opt_elt_tables )
 {
     establish_spec_element_tables($dbh, $options);
+}
+
+if ( $opt_spec_tables )
+{
+    establish_extra_specimen_tables($dbh, $options);
 }
 
 # If the "load-data" option is given, then read data lines from standard
 # input. We expect CSV format, with the first line giving the field names.
 
-if ( $opt_load_data )
+if ( $opt_elt_data )
 {
-    # open(my $input, "<&1") || die "error opening stdin: $!";
-    
     load_spec_element_tables($dbh, \*STDIN, $options);
     exit;
+}
+
+if ( $opt_place_data )
+{
+    my $filename = shift;
+    load_place_data_table($dbh, $opt_place_data, $options);
 }
 
 1;
@@ -96,13 +108,20 @@ timescale_tables.pl - initialize and/or reset the new timescale tables for The P
     
     --debug             Produce debugging output
     
-    --init-tables       Create or re-create the necessary database tables.
+    --init-elt-tables   Create or re-create the database tables for specimen elements.
                         The tables will be empty after this is done.
     
-    --load-data         Read specimen element data from standard input, and
+    --load-elt-data     Read specimen element data from standard input, and
 			replace the contents of the tables with the data read.
 			It should be in CSV, with the first line giving field
 			names.
+    
+    --init-spec-tables  Create or re-create the database tables for the expanded specimen
+			system. The tables and/or columns added will be empty after this is done.
+    
+    --load-place-data [filename]
+
+			Load WOF data into the 'wof_places' table.
     
 =head1 OPTIONS
 
