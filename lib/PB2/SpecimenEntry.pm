@@ -145,6 +145,18 @@ sub update_specimens {
 
 sub delete_specimens {
     
+    my ($request) = @_;
     
-    
+}
+
+
+sub update_collevents {
+
+
+}
+
+
+sub delete_collevents {
+
+
 }

@@ -33,6 +33,9 @@ our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',
 	     MEA => 'mea',
 	     ELS => 'els',
 	     COL => 'col',
+	     LOC => 'loc',
+	     WOF => 'wof',
+	     PLC => 'col|loc|wof',
 	     INT => 'int',
 	     BND => 'bnd',
 	     TSC => 'tsc',
@@ -263,6 +266,14 @@ sub regenerate {
     {
 	return "$id->{type}:$id->{num}";
     }
+}
+
+
+sub type {
+    
+    my ($id) = @_;
+    
+    return $id->{type};
 }
 
 1;

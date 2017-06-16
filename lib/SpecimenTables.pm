@@ -17,12 +17,14 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPEC_ELEMENTS $LOCALITIES $WOF_PLACES);
+use TableDefs qw($OCC_MATRIX $OCCURRENCES $SPEC_MATRIX $SPECIMENS
+		 $SPEC_ELEMENTS $LOCALITIES $WOF_PLACES $COLL_EVENTS);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
 our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables
-			establish_spec_element_tables load_spec_element_tables);
+		      establish_spec_element_tables establish_extra_specimen_tables
+		      load_spec_element_tables);
 
 our $SPEC_MATRIX_WORK = "smw";
 our $SPEC_ELTS_WORK = "sew";
@@ -30,6 +32,7 @@ our $ELT_MAP_WORK = "semw";
 
 our $LOCALITY_WORK = "locw";
 our $PLACES_WORK = "placw";
+our $COLL_EVENT_WORK = "cevw";
 
 
 # buildSpecimenTables ( dbh )
@@ -138,6 +141,8 @@ sub establish_extra_specimen_tables {
     
     $options ||= { };
     
+    logMessage(1, "Adding tables and columns for new specimens system");
+    
     $dbh->do("DROP TABLE IF EXISTS $PLACES_WORK");
     
     $dbh->do("CREATE TABLE $PLACES_WORK (
@@ -153,37 +158,163 @@ sub establish_extra_specimen_tables {
 		region int unsigned not null,
 		county int unsigned not null,
 		locality int unsigned not null,
-		geom geometry,
+		geom geometry not null,
+		wkt longtext,
 		INDEX (name),
 		INDEX (name_eng),
-		SPATIAL INDEX (geom))");
+		SPATIAL INDEX (geom)) engine=MyISAM");
     
     $dbh->do("DROP TABLE IF EXISTS $LOCALITY_WORK");
     
     $dbh->do("CREATE TABLE $LOCALITY_WORK (
 		locality_no int unsigned auto_increment PRIMARY KEY,
-		collection_name varchar(255) not null,
 		wof_id int unsigned not null,
+		site_name varchar(255) not null,
+		verbatim_location text not null,
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
-		grp varchar(255) not null,
+		stratgroup varchar(255) not null,
 		formation varchar(255) not null,
 		member varchar(255) not null,
 		lithology varchar(255) not null,
 		INDEX (wof_id))");
     
-    # $dbh->do("DROP TABLE IF EXISTS $COLLEVENT_WORK");
+    $dbh->do("DROP TABLE IF EXISTS $COLL_EVENT_WORK");
     
-    # $dbh->do("CREATE TABLE $COLLEVENT_WORK (
-    # 		collevent_no int unsigned auto_increment PRIMARY KEY,
-    # 		field_site varchar(255) not null,
-    # 		year varchar(4),
-    # 		coll_date date,
-    # 		collector_name varchar(255) not null,
-    # 		collection_comments text,
-    # 		geology_comments text,
-    # 		INDEX (year))");
+    $dbh->do("CREATE TABLE $COLL_EVENT_WORK (
+    		coll_event_no int unsigned auto_increment PRIMARY KEY,
+		locality_no int unsigned not null,
+    		field_site varchar(255) not null,
+    		year varchar(4),
+    		coll_date date,
+    		collector_name varchar(255) not null,
+    		collection_comments text,
+    		geology_comments text,
+    		INDEX (year))");
 
+    # $dbh->do("DROP TABLE IF EXISTS $SPEC_OCCURRENCES");
+    
+    # my ($reso_list) = "'','aff.','cf.','ex gr.','n. gen.','sensu lato','?','\"','informal'";
+    
+    # $dbh->do("CREATE TABLE $SPEC_OCCURRENCES (
+    # 		spec_occurrence_no int unsigned auto_increment PRIMARY KEY,
+    # 		spec_reid_no int unsigned not null,
+    # 		locality_no int unsigned not null,
+    # 		authorizer_no int unsigned not null,
+    # 		enterer_no int unsigned not null,
+    # 		modifier_no int unsigned not null,
+    # 		taxon_no int unsigned not null,
+    # 		genus_reso enum($reso_list),
+    # 		genus_name varchar(255) not null,
+    # 		subgenus_reso enum($reso_list),
+    # 		subgenus_name varchar(255) not null,
+    # 		species_reso enum($reso_list),
+    # 		species_name varchar(255) not null,
+    # 		subspecies_reso enum($reso_list),
+    # 		subspecies_name vachar(255) not null,
+    # 		reference_no int unsigned not null,
+    # 		created timestamp DEFAULT CURRENT_TIMESTAMP,
+    # 		modified DEFAULT CURRENT_TIMESTAMP,
+    # 		INDEX (locality_no),
+    # 		INDEX (reference_no),
+    # 		INDEX (authorizer_no),
+    # 		INDEX (enterer_no),
+    # 		INDEX (modifier_no),
+    # 		INDEX (genus_name),
+    # 		INDEX (species_name))");
+    
+    activateTables($dbh, $PLACES_WORK => $WOF_PLACES, $LOCALITY_WORK => $LOCALITIES,
+			 $COLL_EVENT_WORK => $COLL_EVENTS);
+    
+    # Now add columns to the 'occurrences' table, if they aren't already there.
+    
+    my ($occ_columns) = $dbh->selectall_arrayref("SHOW COLUMNS FROM $OCCURRENCES", { Slice => { } });
+    my (%occ_column, $result);
+    
+    if ( ref $occ_columns eq 'ARRAY' )
+    {
+	foreach my $col ( @$occ_columns )
+	{
+	    my $field_name = $col->{Field};
+	    my $type = $col->{Type};
+	    $occ_column{$field_name} = $type;
+	}
+	
+	if ( $occ_column{locality_no} )
+	{
+	    logMessage(2, "Column 'locality_no' already present in $OCCURRENCES")
+	}
+	
+	else
+	{
+	    $result = $dbh->do("ALTER TABLE $OCCURRENCES add locality_no int unsigned not null after collection_no");
+	    logMessage(2, "Added column 'locality_no' to $OCCURRENCES");
+	}
+	
+	if ( $occ_column(coll_event_no} )
+	{
+	    logMessage(2, "Column 'coll_event_no' already present in $OCCURRENCES");
+	}
+	
+	else
+	{
+	    $result = $dbh->do("ALTER TABLE $OCCURRENCES add coll_event_no int unsigned not null after locality_no");
+	    logMessage(2, "Added column 'coll_event_no' to $OCCURRENCES");
+	}
+    }
+    
+    else
+    {
+	logMessage(1, "ERROR: could not query columns from $OCCURRENCES");
+    }
+    
+    # Now add columns for the 'specimens' table, if they aren't already there.
+    
+    my ($spec_columns) = $dbh->selectall_arrayref("SHOW COLUMNS FROM $SPECIMENS", { Slice => { } });
+    my (%spec_column);
+    
+    my (@new_columns) = qw(instcoll_no inst_code coll_code spec_elt_no);
+    
+    my (%new_column) = ( instcoll_no => 'int unsigned not null',
+			 inst_code => 'varchar(20) not null',
+			 coll_code => 'varchar(20) not null',
+			 spec_elt_no => 'int unsigned not null' );
+    
+    my (%new_after) = ( instcoll_no => 'specimen_coverage',
+			inst_code => 'instcoll_no',
+			coll_code => 'inst_code',
+			spec_elt_no => 'specimen_id' );
+    
+    if ( ref $spec_columns eq 'ARRAY' )
+    {
+	foreach my $col ( @$spec_columns )
+	{
+	    my $field_name = $col->{Field};
+	    my $type = $col->{Type};
+	    $spec_column{$field_name} = $type;
+	}
+	
+	foreach my $new ( @new_columns )
+	{
+	    if ( $spec_column{$new} )
+	    {
+		logMessage(2, "Column '$new' already present in $SPECIMENS")
+	    }
+	    
+	    else
+	    {
+		my $spec = "$new_column{$new} after $new_after{$new}";
+		$result = $dbh->do("ALTER TABLE $SPECIMENS add $new $spec");
+		logMessage(2, "Added column '$new' to $SPECIMENS");
+	    }
+	}
+    }
+    
+    else
+    {
+	logMessage(1, "ERROR: could not query columns from $SPECIMENS");
+    }
+    
 # # add to specimens
 
 # instcoll_no
@@ -191,27 +322,7 @@ sub establish_extra_specimen_tables {
 # inst_code
 # coll_code
 # spec_elt_no
-
-# # create table "spec_occurrences" with occurrence_no > 5000000
-
-# occurrence_no
-# reid_no?
-# authorizer_no
-# enterer_no
-# modifier_no
-# locality_no
-# orig_no
-# genus_name
-# genus_reso
-# subgenus_name
-# subgenus_reso
-# species_name
-# species_reso
-# subspecies_name
-# subspecies_reso
-# created
-# modified
-
+    
 }
 
 
