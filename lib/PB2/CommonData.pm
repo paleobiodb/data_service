@@ -1,4 +1,5 @@
-# CollectionData
+# 
+# CommonData.pm
 # 
 # A class that contains common routines for formatting and processing PBDB data.
 # 
@@ -12,10 +13,6 @@ use HTTP::Validate qw(:validators);
 use Carp qw(croak);
 use TableDefs qw(%IDP);
 use ExternalIdent qw(extract_identifier generate_identifier);
-
-use parent 'Exporter';
-
-our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference);
 
 use Moo::Role;
 
