@@ -1,4 +1,5 @@
-# CollectionData
+# 
+# CommonData.pm
 # 
 # A class that contains common routines for formatting and processing PBDB data.
 # 

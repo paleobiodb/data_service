@@ -21,6 +21,8 @@ use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
 use PB2::CombinedData;
+use PB2::ResourceData;
+use PB2::MainEntry;
 
 {
     # We start by defining a data service instance for version 1.2
@@ -889,6 +891,22 @@ use PB2::CombinedData;
 	"This operation returns information about the references from which",
 	"the selected taxonomic names were entered.");
     
+    # Educational resources
+    
+    $ds2->define_node({ path => 'eduresources',
+			title => 'Educational resources',
+			role => 'PB2::ResourceData',
+			output => '1.2:eduresources:basic' },
+	"The database also includes information about educational resources",
+	"that are relevant to its mission. These are used to populate a",
+	"page on our main website.");
+    
+    $ds2->define_node({ path => 'eduresources/single',
+			title => "Single educational resource",
+			method => 'get_resource' },
+	"This operation returns information about a single educational resource",
+	"specified by identifier.");
+    
     # The following paths are used for miscellaneous documentation
     
     $ds2->define_node({ path => 'general',
@@ -969,6 +987,10 @@ use PB2::CombinedData;
     
     $ds2->define_node({ path => 'images',
 			file_dir => 'images' });
+
+    # Now initialize the data entry nodes.
+     
+    PBEntry::initialize($ds2);
 };
 
 1;

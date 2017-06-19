@@ -26,7 +26,8 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $IDIGBIO %IDP VALID_IDENTIFIER
 		      $MACROSTRAT_LITHS $MACROSTRAT_INTERVALS
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
-		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS);
+		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
+		      $RESOURCE_DATA $RESOURCE_QUEUE);
 
 
 # classic tables
@@ -114,5 +115,10 @@ our $TIMESCALE_REFS = 'timescale_refs';
 our $TIMESCALE_INTS = 'timescale_ints';
 our $TIMESCALE_BOUNDS = 'timescale_bounds';
 our $TIMESCALE_PERMS = 'timescale_perms';
+
+# Educational resources
+
+our $RESOURCE_DATA = 'eduresources';
+our $RESOURCE_QUEUE = 'eduresources_queue';
 
 1;
