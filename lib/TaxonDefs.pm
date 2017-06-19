@@ -31,6 +31,7 @@ our (%TAXON_TABLE);
 $TAXON_TABLE{taxon_trees} = {
     names => 'taxon_names',
     attrs => 'taxon_attrs',
+    ages => 'taxon_ages',
     search => 'taxon_search',
     ints => 'taxon_ints',
     lower => 'taxon_lower',

@@ -131,6 +131,7 @@ sub buildMeasurementTables {
 }
 
 
+<<<<<<< HEAD
 # establish_extra_specimen_tables ( dbh )
 # 
 # Create additional tables necessary for specimen entry.
@@ -557,3 +558,45 @@ sub lookup_taxon {
 }
 
 1;
+=======
+# init_specimen_element_tables ( dbh )
+# 
+# Create the tables for specimen elements.
+
+sub init_specimen_element_tables {
+    
+    my ($dbh) = @_;
+    
+    my ($sql, $result);
+    
+    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_WORK");
+    
+    $dbh->do("CREATE TABLE $SPEC_ELT_WORK (
+		spec_elt_no int unsigned PRIMARY KEY,
+		element_name varchar(80) not null,
+		parent_elt_no int unsigned not null,
+		base_no int unsigned not null,
+		neotoma_element_id int unsigned not null,
+		neotoma_element_type_id int unsigned not null,
+		KEY (element_name),
+		KEY (neotoma_element_id),
+		KEY (neotoma_element_type_id))");
+    
+    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK");
+    
+    $dbh->do("CREATE TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK (
+		spec_elt_no int unsigned not null,
+		taxon_no int unsigned not null,
+		KEY (spec_elt_no)");
+    
+    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_MAP_WORK");
+    
+    $dbh->do("CREATE TABLE $SPEC_ELT_MAP_WORK (
+		spec_elt_no int unsigned not null,
+		lft int unsigned not null,
+		rgt int unsigned not null,
+		KEY (lft, rgt))");
+    
+    
+}
+>>>>>>> feature-resources

@@ -101,8 +101,7 @@ sub initialize {
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indicate whether the collection is on protected land",
         { value => 'time', maps_to => '1.2:colls:time' },
-	    "This block is obsolete, and is included only for compatibility reasons.",
-	    "It does not include any fields in the response.",
+	    "This block is includes the field 'cx_int_no', which is needed by Navigator.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -145,6 +144,8 @@ sub initialize {
     # Then a second map for geographic summary clusters.
     
     $ds->define_output_map('1.2:colls:summary_map' =>
+	{ value => 'bin' },
+	    "The list of larger-scale clusters to which this cluster belongs.",
         { value => 'ext', maps_to => '1.2:colls:ext' },
 	    "Additional information about the geographic extent of each cluster.",
         { value => 'time', maps_to => '1.2:colls:time' },
@@ -227,16 +228,17 @@ sub initialize {
 	    "occurrences were entered.",
 	{ set => '*', code => \&process_coll_ids });
     
-    my @bin_levels;
+    my (@bin_levels, @bin_fields);
     
-    foreach my $level ( 1..$MAX_BIN_LEVEL )
+    foreach my $level ( reverse 1..$MAX_BIN_LEVEL )
     {
 	push @bin_levels, { output => "bin_id_$level", com_name => "lv$level" };
-	push @bin_levels, "The identifier of the level-$level cluster in which the collection is located";
+	push @bin_levels, "The identifier of the level-$level cluster in which the collection or cluster is located";
+	push @bin_fields, "c.bin_id_$level";
     }
     
     $ds->define_block('1.2:colls:bin' => 
-	{ select =>  [ 'c.bin_id_1', 'c.bin_id_2', 'c.bin_id_3'], tables => [ 'c' ] },
+	{ select =>  \@bin_fields, tables => [ 'c' ] },
 	@bin_levels);
     
     $ds->define_block('1.2:colls:rem');	# this block is deprecated, but we don't want to return an error
@@ -265,7 +267,7 @@ sub initialize {
 	    "The county or municipal area in which the collection is located, if known",
 	{ output => 'latlng_basis', if_vocab => 'pbdb' },
 	    "The basis of the reported location of the collection.  Follow this link for a",
-	    "L<list of basis and precision codes|node:basis_precision>.  This field and",
+	    "L<list of basis and precision codes|node:general/basis_precision>.  This field and",
 	    "the next are only included in responses using the pbdb vocabulary.",
 	{ output =>'latlng_precision', if_vocab => 'pbdb' },
 	    "The precision of the collection coordinates.  Follow the above",
@@ -282,6 +284,7 @@ sub initialize {
 
      $ds->define_block('1.2:colls:paleoloc' =>
 	{ select => 'PALEOCOORDS' },
+	{ set => '*', code => \&process_paleocoords },
 	{ output => 'paleomodel', com_name => 'pm1' },
 	    "The primary model specified by the parameter C<pgm>.  This",
 	    "field will only be included if more than one model is indicated.",
@@ -326,7 +329,11 @@ sub initialize {
 	{ output => 'protected', com_name => 'ptd' },
 	    "The protected status of the land on which the collection is located, if known.");
     
-    $ds->define_block('1.2:colls:time');
+    $ds->define_block('1.2:colls:time' =>
+	{ select => 'im.cx_int_no', tables => 'im' },
+	{ output => 'cx_int_no', com_name => 'cxi' },
+    	    "The identifier of the most specific single interval from the selected timescale that",
+    	    "covers the entire time range associated with the collection or cluster.");
     
     #   { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
     # 	tables => ['im'] },
@@ -645,14 +652,12 @@ sub initialize {
       { set => '*', code => \&process_summary_ids },
       { output => 'bin_id', com_name => 'oid' }, 
 	  "A unique identifier for the cluster.",
-      { output => 'bin_id_1', com_name => 'lv1' }, 
-	  "The identifier of the containing level-1 cluster, if any",
-      { output => 'bin_id_2', com_name => 'lv2' }, 
-	  "The identifier of the containing level-2 cluster, if any",
-      { output => 'bin_id_3', com_name => 'lv3' },
+      { output => 'bin_id_3', com_name => 'lv3', if_block => 'bin' },
 	  "The identifier of the containing level-3 cluster, if any",
-      { output => 'bin_id_4', com_name => 'lv4' },
-	  "The identifier of the containing level-4 cluster, if any",
+      { output => 'bin_id_2', com_name => 'lv2', if_block => 'bin' }, 
+	  "The identifier of the containing level-2 cluster, if any",
+      { output => 'bin_id_1', com_name => 'lv1', if_block => 'bin' }, 
+	  "The identifier of the containing level-1 cluster, if any",
       { output => 'record_type', com_name => 'typ', value => $IDP{CLU} },
 	  "The type of this object: C<$IDP{CLU}> for a collection cluster",
       { output => 'n_colls', com_name => 'nco', data_type => 'pos' },
@@ -676,7 +681,7 @@ sub initialize {
 	  "The mimimum latitude for collections in this cluster",
       { output => 'lat_max', com_name => 'ly2', pbdb_name => 'max_lat', data_type => 'dec' },
 	  "The maximum latitude for collections in this cluster",
-      { output => 'std_dev', com_name => 'std', data_type => 'dec' },
+      { output => 'std_dev', com_name => 'std' },
 	  "The standard deviation of the coordinates in this cluster");
     
     # Finally, define rulesets to interpret the parmeters used with operations
@@ -1236,6 +1241,8 @@ sub initialize {
 	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_colls_crmod' },
 	{ allow => '1.2:common:select_colls_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
 	">>The following parameters can be used to further filter the selection, based on the",
 	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
 	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
@@ -1308,6 +1315,7 @@ sub initialize {
 	# { param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
 	#     "Return only strata associated with some occurrence whose geographic location falls",
 	#     "within the specified geometry, specified in WKT format.",
+	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     if ( ref $PB2::ConfigData::LITHOLOGIES eq 'ARRAY' )
@@ -1369,8 +1377,6 @@ sub get_coll {
     $fields .= $access_fields if $access_fields;
     
     $request->delete_output_field('permissions') unless $access_fields;
-    
-    # Determine the necessary joins.
     
     my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
     
@@ -1530,21 +1536,12 @@ sub summary {
     my @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generateCollFilters($tables);
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc' }, $tables );
     
     # Figure out the filter we need for determining access permissions.  We can ignore the extra
     # fields, since we are not returning records of type 'collection' or 'occurrence'.
     
     my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
-    
-    if ( $tables->{cc} )
-    {
-	push @filters, $access_filter;
-    }
-    
-    else
-    {
-	push @filters, 's.access_level = 0';
-    }
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -1573,16 +1570,69 @@ sub summary {
     {
 	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
 	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
+	$tables->{c} = 1;
+    }
+    
+    elsif ( $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} )
+    {
+	$tables->{c} = 1;
+    }
+    
+    if ( $tables->{im} )
+    {
+	if ( $tables->{c} )
+	{
+	    $fields =~ s{ im[.]cx_int_no }{max(c.early_age) as early_age, min(c.late_age) as late_age}xs;
+	}
+	
+	else
+	{
+	    $fields =~ s{ im[.]cx_int_no}{s.early_age, s.late_age}xs;
+	}
+
+	delete $tables->{im};
+    }
+    
+    if ( $tables->{o} )
+    {
+	$fields =~ s{ \bs.n_colls\b }{count(distinct o.collection_no) as n_colls}xs;
+	$fields =~ s{ \bs.n_occs\b }{count(distinct o.occurrence_no) as n_occs}xs;
+    }
+    
+    if ( $request->has_block('bin') )
+    {
+	$request->delete_output_field('bin_id_1') if $bin_level < 2;
+	$request->delete_output_field('bin_id_2') if $bin_level < 3;
+	$request->delete_output_field('bin_id_3') if $bin_level < 4;
+	
+	$fields .= ", s.bin_id_1" if $bin_level > 1;
+	$fields .= ", s.bin_id_2" if $bin_level > 2;
+	$fields .= ", s.bin_id_3" if $bin_level > 3;
     }
     
     my $summary_joins = '';
     
     $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
-	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} || $tables->{tf};
+	if $tables->{c};
     
     $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
     
     $summary_joins .= $request->generateJoinList('s', $tables);
+    
+    if ( $tables->{cc} )
+    {
+	push @filters, $access_filter;
+    }
+    
+    elsif ( $tables->{c} )
+    {
+	push @filters, 'c.access_level = 0';
+    }
+    
+    else
+    {
+	push @filters, 's.access_level = 0';
+    }
     
     # if ( $request->{select_tables}{o} )
     # {
@@ -1596,16 +1646,35 @@ sub summary {
     # 	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
     # }
     
-    push @filters, "s.bin_level = $bin_level";
+    push @filters, "s.bin_level = $bin_level and s.bin_id > 0";
     
     my $filter_string = join(' and ', @filters);
     
-    $request->{main_sql} = "
-		SELECT $calc $fields
-		FROM $COLL_BINS as s $summary_joins
+    # If we want the containing interval numbers, we have to specify this as
+    # an inner and an outer query.
+    
+    if ( $request->has_block('1.2:colls:time') )
+    {
+	$request->{main_sql} = "
+	SELECT $calc innerq.*, im.cx_int_no
+	FROM (SELECT $fields FROM $COLL_BINS as s $summary_joins
 		WHERE $filter_string
 		GROUP BY s.bin_id
-		ORDER BY s.bin_id $limit";
+		ORDER BY s.bin_id $limit) as innerq
+	join $INTERVAL_MAP as im on im.early_age = innerq.early_age and im.late_age = innerq.late_age";
+    }
+    
+    # Otherwise we just need a single query.
+    
+    else
+    {
+	$request->{main_sql} = "
+	SELECT $calc $fields
+	FROM $COLL_BINS as s $summary_joins
+	WHERE $filter_string
+	GROUP BY s.bin_id
+	ORDER BY s.bin_id $limit";
+    }
     
     # Then prepare and execute the query..
     
@@ -1899,6 +1968,47 @@ sub strata_auto {
     
     $request->sql_count_rows;   
     
+}
+
+
+# auto_complete_str ( name, limit )
+# 
+# This is an alternate operation for auto-completion, designed to be called by the combined
+# auto-complete operation.
+
+sub auto_complete_str {
+    
+    my ($request, $name, $limit, $options) = @_;
+    
+    # Reject obvious mismatches
+    
+    # return if $name =~ qr{ ^ \w [.] \s+ \w }xsi;
+    
+    my $dbh = $request->get_connection();
+    
+    $limit ||= 10;
+    $options ||= { };
+    my @filters;
+    
+    my $quoted_name = $dbh->quote("${name}%");
+    
+    push @filters, "sn.name like $quoted_name";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    my $country_field = $options->{countries} ? 'country_list' : 'cc_list';
+    
+    my $sql = "
+	SELECT name, type, $country_field as cc_list, n_colls, n_occs, 'str' as record_type, 'str' as record_id
+	FROM strata_names as sn
+	WHERE $filter_string
+	ORDER BY n_occs desc LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    return ref $result_list eq 'ARRAY' ? @$result_list : ( );
 }
 
 
@@ -2658,6 +2768,7 @@ sub generateMainFilters {
     {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
+	$tables_ref->{o} = 1;
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
 	$request->{my_base_taxa} = [ @include_taxa, @exclude_taxa ];
@@ -2667,7 +2778,7 @@ sub generateMainFilters {
     {
 	my $taxon_list = join ',', map { $_->{orig_no} } @include_taxa;
 	push @filters, "(t.accepted_no in ($taxon_list) or t.orig_no in ($taxon_list))";
-	$tables_ref->{o} = 1 unless $tables_ref->{ds};
+	$tables_ref->{o} = 1;
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
 	$tables_ref->{non_summary} = 1;
@@ -2797,7 +2908,7 @@ sub generateMainFilters {
 	push @filters, "o.orig_no = -1";
 	$tables_ref->{non_summary} = 1;
     }
-
+    
     # Now add filters for excluded taxa.  But only if there is at least one
     # included taxon as well.
     
@@ -2823,12 +2934,14 @@ sub generateMainFilters {
 	{
 	    push @filters, "tv.rank <= 3";
 	    $tables_ref->{tv} = 1;
+	    $tables_ref->{o} = 1;
 	}
 	
 	elsif ( $taxonres eq 'genus' || $taxonres eq 'lump_genus' || $taxonres eq 'lump_gensub' )
 	{
 	    push @filters, "tv.rank <= 5";
 	    $tables_ref->{tv} = 1;
+	    $tables_ref->{o} = 1;
 	}
 	
 	elsif ( $taxonres eq 'family' || $taxonres eq 'lump_family' )
@@ -2836,6 +2949,7 @@ sub generateMainFilters {
 	    push @filters, "(tv.rank <= 9 or ph.family_no is not null)";
 	    $tables_ref->{tv} = 1;
 	    $tables_ref->{ph} = 1;
+	    $tables_ref->{o} = 1;
 	}
     }
     
@@ -2850,6 +2964,7 @@ sub generateMainFilters {
 	die "bad taxon status '$taxon_status'\n" unless $filter;
 	
 	push @filters, $filter;
+	$tables_ref->{o} = 1;
     }
     
     # Check for parameter 'pres'
@@ -2868,6 +2983,7 @@ sub generateMainFilters {
 	if ( %pres && ! $pres{all} )
 	{
 	    $tables_ref->{v} = 1;
+	    $tables_ref->{o} = 1;
 	    
 	    my @keys = keys %pres;
 	    
@@ -2936,6 +3052,7 @@ sub generateMainFilters {
     if ( defined $extant && $extant ne '' )
     {
 	$tables_ref->{v} = 1;
+	$tables_ref->{o} = 1;
 	push @filters, ($extant ? "v.is_extant = 1" : "v.is_extant = 0");
     }
     
@@ -2991,11 +3108,13 @@ sub generateMainFilters {
 	    if ( @cc2 )
 	    {
 	    	push @disjoint_filters, "c.cc in ('" . join("','", @cc2) . "')";
+		$tables_ref->{c} = 1;
 	    }
 	    
 	    if ( @cc3 )
 	    {
 	    	push @disjoint_filters, "ccmap.continent in ('" . join("','", @cc3) . "')";
+		$tables_ref->{c} = 1;
 	    	$tables_ref->{ccmap} = 1;
 	    }
 	    
@@ -3707,10 +3826,18 @@ sub generateMainFilters {
     # Otherwise, we need the unrestricted cluster table row (the one for
     # interval_no = 0) plus additional filters.
     
-    if ( ($op eq 'summary' || $op eq 'prevalence') && $time_rule eq 'buffer' &&
-	 ($early_interval_no && $late_interval_no && $early_interval_no == $late_interval_no) )
+    if ($op eq 'summary' || $op eq 'prevalence')
     {
-	push @filters, "s.interval_no = $summary_interval";
+	if ( $time_rule eq 'major' && $early_interval_no && $late_interval_no && 
+	     $early_interval_no == $late_interval_no)
+	{
+	    push @filters, "s.interval_no = $summary_interval";
+	}
+	
+	else
+	{
+	    push @filters, "s.interval_no = 0";
+	}
     }
     
     # Otherwise, if a range of years was specified, use that.
@@ -3758,74 +3885,79 @@ sub generateMainFilters {
     # specified, then we don't need one because the necessary filtering has
     # already been done by selecting the appropriate interval_no in the summary table.
     
-    elsif ( $early_age || $late_age )
+    if ( $early_age || $late_age )
     {
-	unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer') or
-	         $tables_ref->{ds} or $op eq 'prevalence' )
+	# if ( $op eq 'summary' || $op eq 'prevalence' )
+	# {
+	#     push @filters, "s.interval_no = 0";
+	# }
+	
+	# unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'major') or
+	#          $tables_ref->{ds} or $op eq 'prevalence' )
+	# {
+	
+	$tables_ref->{c} = 1;
+
+	# The exact filter we use will depend upon the time rule that was
+	# selected.
+
+	if ( $time_rule eq 'contain' )
 	{
-	    $tables_ref->{c} = 1;
-	    
-	    # The exact filter we use will depend upon the time rule that was
-	    # selected.
-	    
-	    if ( $time_rule eq 'contain' )
+	    if ( defined $late_age and $late_age > 0 )
 	    {
-		if ( defined $late_age and $late_age > 0 )
-		{
-		    push @filters, "$mt.late_age >= $late_age";
-		}
-		
-		if ( defined $early_age and $early_age > 0 )
-		{
-		    push @filters, "$mt.early_age <= $early_age";
-		}
+		push @filters, "c.late_age >= $late_age";
 	    }
-	    
-	    elsif ( $time_rule eq 'overlap' )
+
+	    if ( defined $early_age and $early_age > 0 )
 	    {
-		if ( defined $late_age and $late_age > 0 )
-		{
-		    push @filters, "$mt.early_age > $late_age";
-		}
-		
-		if ( defined $early_age and $early_age > 0 )
-		{
-		    push @filters, "$mt.late_age < $early_age";
-		}
+		push @filters, "c.early_age <= $early_age";
 	    }
-	    
-	    elsif ( $time_rule eq 'major' )
+	}
+
+	elsif ( $time_rule eq 'overlap' )
+	{
+	    if ( defined $late_age and $late_age > 0 )
 	    {
-		my $ea = $early_age ? $early_age + 0 : 5000;
-		my $la = $late_age ? $late_age + 0 : 0;
-		
-		push @filters, "if($mt.late_age >= $la,
-			if($mt.early_age <= $ea, $mt.early_age - $mt.late_age, $ea - $mt.late_age),
-			if($mt.early_age > $ea, $ea - $la, $mt.early_age - $la)) / ($mt.early_age - $mt.late_age) >= 0.5"
+		push @filters, "c.early_age > $late_age";
 	    }
-	    
-	    else # $time_rule eq 'buffer'
+
+	    if ( defined $early_age and $early_age > 0 )
 	    {
-		if ( defined $late_age and defined $early_age and 
-		     defined $late_bound and defined $early_bound )
+		push @filters, "c.late_age < $early_age";
+	    }
+	}
+
+	elsif ( $time_rule eq 'major' )
+	{
+	    my $ea = $early_age ? $early_age + 0 : 5000;
+	    my $la = $late_age ? $late_age + 0 : 0;
+
+	    push @filters, "if(c.late_age >= $la,
+		    if(c.early_age <= $ea, c.early_age - c.late_age, $ea - c.late_age),
+		    if(c.early_age > $ea, $ea - $la, c.early_age - $la)) / (c.early_age - c.late_age) >= 0.5"
+	}
+
+	else # $time_rule eq 'buffer'
+	{
+	    if ( defined $late_age and defined $early_age and 
+		 defined $late_bound and defined $early_bound )
+	    {
+		push @filters, "c.early_age <= $early_bound and c.late_age >= $late_bound";
+		push @filters, "(c.early_age < $early_bound or c.late_age > $late_bound)";
+		push @filters, "c.early_age > $late_age";
+		push @filters, "c.late_age < $early_age";
+	    }
+
+	    else
+	    {
+		if ( defined $late_age and defined $late_bound )
 		{
-		    push @filters, "$mt.early_age <= $early_bound and $mt.late_age >= $late_bound";
-		    push @filters, "($mt.early_age < $early_bound or $mt.late_age > $late_bound)";
-		    push @filters, "$mt.early_age > $late_age";
-		    push @filters, "$mt.late_age < $early_age";
+		    push @filters, "c.late_age >= $late_bound and c.early_age > $late_age";
 		}
-		
-		else
+
+		if ( defined $early_age and defined $early_bound )
 		{
-		    if ( defined $late_age and defined $late_bound )
-		    {
-			push @filters, "$mt.late_age >= $late_bound and $mt.early_age > $late_age";
-		    }
-		    
-		    if ( defined $early_age and defined $early_bound )
-		    {
-			push @filters, "$mt.early_age <= $early_bound and $mt.late_age < $early_age";
-		    }
+		    push @filters, "c.early_age <= $early_bound and c.late_age < $early_age";
 		}
 	    }
 	}
@@ -3833,6 +3965,11 @@ sub generateMainFilters {
 	$request->{early_age} = $early_age;
 	$request->{late_age} = $late_age;
 	$tables_ref->{non_summary} = 1;
+    }
+    
+    elsif ( $op eq 'summary' )
+    {
+	push @filters, "s.interval_no = 0";
     }
     
     # Return the list
@@ -4046,37 +4183,37 @@ sub selectPaleoModel {
 	if ( $model eq 'scotese' )
 	{
 	    push @fields, "cc.paleolng as $lng_field", "cc.paleolat as $lat_field";
-	    push @fields, "cc.plate as $plate_field" unless $plate_version_shown{'scotese'};
+	    push @fields, "cc.plate as $plate_field";
 	    push @fields, "'scotese' as $model_field";
 	    $tables_ref->{cc} = 1;
-	    $plate_version_shown{'scotese'} = 1;
+	    # $plate_version_shown{'scotese'} = 1;
 	}
 	
 	elsif ( $model eq 'gplates' || $model eq 'gp_mid' )
 	{
 	    push @fields, "pc.mid_lng as $lng_field", "pc.mid_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "pc.plate_no as $plate_field";
 	    push @fields, "'gp_mid' as $model_field";
 	    $tables_ref->{pc} = 1;
-	    $plate_version_shown{'gplates'} = 1;
+	    # $plate_version_shown{'gplates'} = 1;
 	}
 	
 	elsif ( $model eq 'gp_early' )
 	{
 	    push @fields, "pc.early_lng as $lng_field", "pc.early_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "pc.plate_no as $plate_field";
 	    push @fields, "'gp_early' as $model_field";
 	    $tables_ref->{pc} = 1;
-	    $plate_version_shown{'gplates'} = 1;
+	    # $plate_version_shown{'gplates'} = 1;
 	}
 	
 	elsif ( $model eq 'gp_late' )
 	{
 	    push @fields, "pc.late_lng as $lng_field", "pc.late_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "pc.plate_no as $plate_field";
 	    push @fields, "'gp_late' as $model_field";
 	    $tables_ref->{pc} = 1;
-	    $plate_version_shown{'gplates'} = 1;
+	    # $plate_version_shown{'gplates'} = 1;
 	}
     }
     
@@ -4508,10 +4645,34 @@ sub process_summary_ids {
     
     foreach my $f ( qw(bin_id bin_id_1 bin_id_2 bin_id_3 bin_id_4) )
     {
-	$record->{$f} = generate_identifier('CLU', $record->{bin_id})
+	$record->{$f} = generate_identifier('CLU', $record->{$f})
 	    if $record->{$f};
     }
 }
+
+
+# process_paleocoords ( record )
+# 
+# If any of the paleocoords are blank, add to the corresponding 'geoplate' field a message to the
+# effect that the coordinates for this collection cannot be computed using this model. We put the
+# message in the 'geoplate' field because this is an unstructured text field, while the lat/lng
+# fields should either contain numbers or be blank.
+
+sub process_paleocoords {
+    
+    my ($request, $record) = @_;
+    
+    foreach my $label ( '', '2', '3', '4' )
+    {
+	last unless $record->{ 'paleomodel' . $label };
+	
+	unless ( $record->{ 'paleolat' . $label } || $record->{ 'paleolng' . $label } )
+	{
+	    $record->{ 'geoplate' . $label } = "coordinates not computable using this model";
+	}
+    }
+}
+
 
 # generateBasisCode ( record )
 # 

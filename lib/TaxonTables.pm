@@ -174,6 +174,7 @@ hierarchy should look like.
 our $TREE_WORK = "tn";
 our $NAME_WORK = "nn";
 our $ATTRS_WORK = "vn";
+our $AGES_WORK = "abn";
 our $SEARCH_WORK = "sn";
 our $INTS_WORK = "phyn";
 our $LOWER_WORK = "lown";
@@ -183,6 +184,7 @@ our $TREE_CACHE_WORK = "ttcn";
 our $LIST_CACHE_WORK = "tlcn";
 our $ECOTAPH_WORK = "ectn";
 our $ETBASIS_WORK = "etbn";
+our $HOMONYMS_WORK = "homn";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -808,6 +810,7 @@ sub buildTaxonTables {
     # attributes such as extancy and mass ranges.
     
     computeAttrsTable($dbh, $tree_table) if $step_control->{h};
+    computeAgesTable($dbh, $tree_table) if $step_control->{h};
     
     # And then the ecotaph table which holds ecology and taphonomy attributes.
     
@@ -2117,6 +2120,10 @@ sub collapseSynonyms {
 # Alter the accepted_no field to remove invalidity chains.  Whenever we have a -> b and b -> c,
 # change the relation so that a -> c.  This makes sure that accepted_no always points to a valid
 # taxon.  We can always extract the immediate relation from immpar_no, should that be necessary.
+# 
+# Also alter senpar_no for children of invalid subgroups to point to the closest valid
+# parent. Again, immpar_no points to the immediate parent in case we need to extract this
+# information.
 
 sub collapseInvalidity {
 
@@ -2156,6 +2163,29 @@ sub collapseInvalidity {
 		   or (tb.status like 'obj%' and ta.status like 'rep%')");
     
     logMessage(2, "      fixed $result status codes");
+    
+    # Now adjust the senpar_no of all children whose parent taxon has status 'invalid subgroup
+    # of'. This field should point to the closest taxon up the chain whose status is valid. We
+    # need to repeat this until no more changes happen, because there may exist chains of two or
+    # more links.
+    
+    $count = 0;
+    
+    do
+    {
+	$result = $dbh->do("
+		UPDATE $TREE_WORK as t1 join $TREE_WORK as t2 on t2.orig_no = t1.senpar_no
+			and t2.status = 'invalid subgroup of'
+		SET t1.senpar_no = t2.senpar_no");
+	
+	logMessage(2, "      reassigned $result children of invalid subgroups");
+    }
+	while $result > 0 && ++$count < 20;
+    
+    if ( $count >= 20 )
+    {
+	logMessage(0, "WARNING - possible senior parent cycle detected while eliding invalid subgroups");
+    }
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -3998,7 +4028,8 @@ sub computeSearchTable {
     $count = $dbh->do("
 	INSERT INTO $SEARCH_WORK (taxon_name, full_name, taxon_rank, taxon_no, orig_no, 
 				  accepted_no, is_current, is_exact)
-	SELECT taxon_name, taxon_name, taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
+	SELECT taxon_name, taxon_name, taxon_rank, taxon_no, orig_no, accepted_no,
+		(taxon_no = spelling_no and orig_no = accepted_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
@@ -4017,7 +4048,8 @@ sub computeSearchTable {
 				  accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(trailing ')' from substring_index(taxon_name,'(',-1)), taxon_name,
-	        taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
+	        taxon_rank, taxon_no, orig_no, accepted_no,
+		(taxon_no = spelling_no and orig_no = accepted_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank = 'subgenus'");
     
@@ -4037,7 +4069,7 @@ sub computeSearchTable {
 					 accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(substring(taxon_name, locate(' ', taxon_name)+1)), taxon_name,
-		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no and orig_no = accepted_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name not like '%(%'");
     
@@ -4048,7 +4080,7 @@ sub computeSearchTable {
 					 accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(substring(taxon_name, locate(') ', taxon_name)+2)), taxon_name,
-		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no and orig_no = accepted_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
     
@@ -4059,7 +4091,7 @@ sub computeSearchTable {
 					 accepted_no, is_current, is_exact)
 	SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
 		trim(substring(taxon_name, locate(') ', taxon_name)+2)), taxon_name,
-		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no and orig_no = accepted_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
     
@@ -4303,10 +4335,15 @@ sub computeAttrsTable {
 				is_extant boolean,
 				is_trace boolean,
 				is_form boolean,
+				n_synonyms smallint unsigned,
+				n_homonyms smallint unsigned,
+				valid_children smallint unsigned,
 				extant_children smallint unsigned,
-				distinct_children smallint unsigned,
-				extant_size int unsigned,
+				invalid_children smallint unsigned,
+				immediate_children smallint unsigned,
 				taxon_size int unsigned,
+				extant_size int unsigned,
+				invalid_size int unsigned,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
 				min_body_mass float,
@@ -4332,13 +4369,15 @@ sub computeAttrsTable {
     logMessage(2, "    seeding table with initial taxon information...");
     
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
-			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
-			 extant_size, taxon_size, n_colls, n_occs, is_trace, is_form)
+			(orig_no, is_valid, is_senior, is_extant, n_synonyms,
+			 valid_children, immediate_children, extant_children, invalid_children,
+			 taxon_size, extant_size, invalid_size, 
+			 n_colls, n_occs, is_trace, is_form)
 		SELECT a.orig_no,
 			if(t.accepted_no = t.synonym_no, 1, 0) as is_valid,
 			if(t.synonym_no = t.orig_no, 1, 0) as is_senior,
 			sum(if(a.extant = 'yes', 1, if(a.extant = 'no', 0, null))) as is_extant,
-			0, 0, 0, 0, 0, 0, if(a.preservation = 'trace', 1, 0),
+			1, 0, 0, 0, 0, 0, 0, 0, 0, 0, if(a.preservation = 'trace', 1, 0),
 			if(a.form_taxon = 'yes', 1, 0)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 		GROUP BY a.orig_no";
@@ -4504,37 +4543,34 @@ sub computeAttrsTable {
     
     my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_WORK");
     
-    # First coalesce the attributes of junior synonyms with their seniors at the bottom level.
-
+    # First coalesce the attributes of junior synonyms with their seniors at the lowest level.
+    
     $sql = "
 		UPDATE $ATTRS_WORK as v JOIN 
 		(SELECT t.synonym_no,
 			max(v.is_extant) as is_extant,
-			sum(v.extant_children) as extant_children_sum,
-			sum(v.distinct_children) as distinct_children_sum,
-			sum(v.extant_size) as extant_size_sum,
-			sum(v.taxon_size) as taxon_size_sum,
 			sum(v.n_occs) as n_occs,
+			count(*) as n_synonyms,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
 			min(v.is_trace) as is_trace,
 			min(v.is_form) as is_form
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-		WHERE t.depth = $max_depth and v.is_senior
+		WHERE t.depth = $max_depth
 		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
-			v.extant_children = nv.extant_children_sum,
-			v.distinct_children = nv.distinct_children_sum,
-			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
-			v.taxon_size = nv.taxon_size_sum + 1,
+			v.extant_size = coalesce(nv.is_extant, 0),
+			v.taxon_size = 1,
+			v.invalid_size = not(v.is_valid),
 			v.n_occs = nv.n_occs,
+			v.n_synonyms = nv.n_synonyms,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.is_trace = nv.is_trace,
 			v.is_form = nv.is_form";
-	
-    $result = $dbh->do($sql);
     
+    $result = $dbh->do($sql);
+
     # Then iterate from that level up to the top of the tree.
     
     for (my $depth = $max_depth; $depth > 0; $depth--)
@@ -4543,21 +4579,26 @@ sub computeAttrsTable {
 	
 	my $child_depth = $depth + 1;
 	
-	# First coalesce the attributes of each parent with those of all of
-	# its children that are not junior synonyms (except for the first/last
-	# interval numbers).
-	# 
-	# $$$ need to differentiate between valid and senior in computing size and extant_size.
+	# At each level we coalesce the attributes of each parent with those its children. We have
+	# to do this in several steps, since some of the attributes need to be treated differently.
+	
+	# All attributes except for n_occs, invalid_children, invalid_count, and appearance ages
+	# and occurrences are computed by the following SQL statement that coaleses the attribute
+	# value of each parent with the value of all its valid children that are not junior
+	# synonyms.
+	
+	# For some attributes, this is a sum, for others, it is a min or max. For boolean values,
+	# we use 'sum' inside 'if' to compute an 'or' operation and 'min' inside 'if' to compute an
+	# 'and'.
 	
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN
 		(SELECT t.immpar_no,
 			if(sum(v.is_extant) > 0, 1, pv.is_extant) as is_extant,
-			coalesce(sum(v.is_extant), 0) as extant_children,
-			count(v.orig_no) as distinct_children,
-			sum(v.extant_size) as extant_size,
-			sum(v.taxon_size) as taxon_size,
-			sum(v.n_occs) + pv.n_occs as n_occs,
+			count(*) as valid_children,
+			coalesce(sum(v.is_extant and 1), 0) as extant_children,
+			sum(v.taxon_size) as taxon_size_sum,
+			sum(v.extant_size) as extant_size_sum,
 			coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
@@ -4566,14 +4607,14 @@ sub computeAttrsTable {
 			if(min(v.is_form) > 0, 1, pv.is_form) as is_form
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.immpar_no 
-		 WHERE t.depth = $child_depth and v.is_senior
+		 WHERE t.depth = $child_depth and v.is_senior and v.is_valid
 		 GROUP BY t.immpar_no) as nv on v.orig_no = nv.immpar_no
 		SET     v.is_extant = nv.is_extant,
+			v.valid_children = nv.valid_children,
 			v.extant_children = nv.extant_children,
-			v.distinct_children = nv.distinct_children,
-			v.extant_size = nv.extant_size,
-			v.n_occs = nv.n_occs,
-			v.taxon_size = nv.taxon_size,
+			v.immediate_children = nv.valid_children,
+			v.taxon_size = nv.taxon_size_sum,
+			v.extant_size = coalesce(nv.extant_size_sum, 0),
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.is_trace = nv.is_trace,
@@ -4581,30 +4622,65 @@ sub computeAttrsTable {
 	
 	$result = $dbh->do($sql);
 	
-	# Then coalesce attributes across synonym groups.
+	# The attribute n_occs is computed by summing the value of each parent with the value of
+	# all children that are not junior synonyms, whether or not they are valid. This is
+	# because occurrences that are identified as e.g. nomen dubia still count as occurrences
+	# of all the valid taxa are contained in. The same is true of occurrences which are
+	# contained in taxa that are labeled 'invalid subgroup'.
+	
+	# The attributes invalid_children and invalid_size must be computed by counting invalid
+	# children, so we do that in this statement as well.
+	
+	my $sql = "
+		UPDATE $ATTRS_WORK as v JOIN
+		(SELECT t.immpar_no,
+			sum(v.n_occs) as n_occs_sum,
+			sum(if(v.is_valid, 0, v.n_synonyms)) as invalid_children_sum,
+			sum(v.invalid_size) as invalid_size_sum
+		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+		 WHERE t.depth = $child_depth and v.is_senior
+		 GROUP BY t.immpar_no) as nv on v.orig_no = nv.immpar_no
+		SET     v.n_occs = v.n_occs + nv.n_occs_sum,
+			v.invalid_children = nv.invalid_children_sum,
+			v.invalid_size = nv.invalid_size_sum";
+	
+	$result = $dbh->do($sql);
+	
+	# Then coalesce all of these attributes across synonym groups. For the boolean attributes,
+	# we use 'max' for 'or' and 'min' for 'and'. NOTE: in computing extant_size, taxon_size,
+	# and invalid_size, we count each parent taxon HERE RATHER THAN IN THE STEPS ABOVE
+	# because each parent taxon together with all of its synonyms should be counted as a
+	# single taxon. If we added the parent above then taxa with synonyms would be over-counted.
 	
 	$sql = "
 		UPDATE $ATTRS_WORK as v JOIN 
 		(SELECT t.synonym_no,
 			max(v.is_extant) as is_extant,
+			sum(v.valid_children) as valid_children_sum,
 			sum(v.extant_children) as extant_children_sum,
-			sum(v.distinct_children) as distinct_children_sum,
+			sum(v.invalid_children) as invalid_children_sum,
 			sum(v.extant_size) as extant_size_sum,
 			sum(v.taxon_size) as taxon_size_sum,
-			sum(v.n_occs) as n_occs,
+			sum(v.invalid_size) as invalid_size_sum,
+			sum(not v.is_valid) as invalid_count,
+			sum(v.n_occs) as n_occs_sum,
+			count(*) as n_synonyms,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
 			min(v.is_trace) as is_trace,
 			min(v.is_form) as is_form
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-		WHERE t.depth = $depth and v.is_senior
+		WHERE t.depth = $depth
 		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
+			v.valid_children = nv.valid_children_sum,
 			v.extant_children = nv.extant_children_sum,
-			v.distinct_children = nv.distinct_children_sum,
-			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
-			v.taxon_size = nv.taxon_size_sum + 1,
-			v.n_occs = nv.n_occs,
+			v.invalid_children = nv.invalid_children_sum,
+			v.extant_size = coalesce(nv.extant_size_sum, 0) + (v.is_valid and nv.is_extant),
+			v.taxon_size = nv.taxon_size_sum + (v.is_valid and 1),
+			v.invalid_size = nv.invalid_size_sum + nv.invalid_count,
+			v.n_occs = nv.n_occs_sum,
+			v.n_synonyms = nv.n_synonyms,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.is_trace = nv.is_trace,
@@ -4612,8 +4688,8 @@ sub computeAttrsTable {
 	
 	$result = $dbh->do($sql);
 	
-	# Now propagate appearance ages and occurrences.  The logic involved
-	# in this is too complicated for SQL, so we must download the
+	# We then propagate appearance ages and occurrences up the tree, from children to parents.
+	# The logic involved in this is too complicated for SQL, so we must download the
 	# occurrences, do the computation, then upload them again.
 	
 	$sql = "SELECT t.orig_no, t.synonym_no, t.senpar_no, t.depth, v.taxon_size,
@@ -4682,15 +4758,15 @@ sub computeAttrsTable {
 		$coalesce->{early_occ} = $row->{early_occ};
 	    }
 	    
-	    if ( ! defined $coalesce->{last_early_age} ||
-		 ( defined $row->{last_early_age} && $row->{last_early_age} < $coalesce->{last_early_age} ) )
+	    if ( $row->{last_early_age} < $coalesce->{last_early_age} || 
+		 !defined $coalesce->{last_early_age} )
 	    {
 		$coalesce->{last_early_age} = $row->{last_early_age};
 		$coalesce->{late_occ} = $row->{late_occ};
 	    }
 	    
-	    if ( ! defined $coalesce->{last_late_age} ||
-		 ( defined $row->{last_late_age} && $row->{last_late_age} < $coalesce->{last_late_age} ) )
+	    if ( $row->{last_late_age} < $coalesce->{last_late_age} ||
+	         !defined $coalesce->{last_late_age} )
 	    {
 		$coalesce->{last_late_age} = $row->{last_late_age};
 	    }
@@ -4723,10 +4799,11 @@ sub computeAttrsTable {
 	}
     }
     
-    # Finally, we iterate from the top of the tree back down, computing those
-    # attributes that propagate downward.  For now, these include:
-    # - a value of extant=0 (which overrides any values of extant=null)
-    # - image_no values
+    # Now that we have worked our way from the bottom (branches) up to the top (root) of the tree,
+    # we iterate from the top of the tree back down, computing those attributes that propagate
+    # downward.  For now, these include:
+    #   - a value of extant=0 (which overrides any values of extant=null)
+    #   - image_no values
     
     for (my $row = 2; $row <= $max_depth; $row++)
     {
@@ -4770,11 +4847,14 @@ sub computeAttrsTable {
 		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t on v.orig_no = t.orig_no
 			JOIN $ATTRS_WORK as sv on sv.orig_no = t.synonym_no and sv.orig_no <> v.orig_no
 		SET	v.is_extant = sv.is_extant,
+			v.valid_children = sv.valid_children,
 			v.extant_children = sv.extant_children,
-			v.distinct_children = sv.distinct_children,
-			v.extant_size = sv.extant_size,
+			v.invalid_children = sv.invalid_children,
 			v.taxon_size = sv.taxon_size,
+			v.extant_size = sv.extant_size,
+			v.invalid_size = sv.invalid_size,
 			v.n_occs = sv.n_occs,
+			v.n_synonyms = sv.n_synonyms,
 			v.min_body_mass = sv.min_body_mass,
 			v.max_body_mass = sv.max_body_mass,
 			v.first_early_age = sv.first_early_age,
@@ -4786,6 +4866,9 @@ sub computeAttrsTable {
 			v.late_occ = sv.late_occ,
 			v.is_trace = sv.is_trace,
 			v.is_form = sv.is_form");
+    
+    $result = $dbh->do("UPDATE $ATTRS_WORK as v
+		SET v.extant_size = 0 WHERE v.extant_size is null");
     
     # Now we can set the 'pubyr', 'modyr', 'is_changed' and 'attribution' fields, which are not
     # inherited. 
@@ -4823,6 +4906,30 @@ sub computeAttrsTable {
     
     logMessage(2, "      $result names without pubyr");
     
+    # Now we count homonyms, which are also not inherited.
+    
+    logMessage(2, "    setting homonym counts");
+    
+    $result = $dbh->do("DROP TEMPORARY TABLE IF EXISTS $HOMONYMS_WORK");
+    
+    $result = $dbh->do("CREATE TEMPORARY TABLE $HOMONYMS_WORK (
+				name varchar(80) not null collate latin1_swedish_ci,
+				count smallint not null)");
+    
+    $result = $dbh->do("
+		INSERT INTO $HOMONYMS_WORK (name, count)
+		SELECT name, count(*) as c FROM $TREE_WORK GROUP BY name
+		HAVING c > 1");
+    
+    logMessage(2, "      found $result homonyms");
+    
+    $result= $dbh->do("
+		UPDATE $HOMONYMS_WORK as h join $TREE_WORK as t using (name)
+			join $ATTRS_WORK as v using (orig_no)
+		SET v.n_homonyms = h.count");
+    
+    logMessage(2, "      updated $result names");
+    
     # We can stop here when debugging.
     
     my $a = 1;
@@ -4839,6 +4946,52 @@ sub rebuildAttrsTable {
     activateTables($dbh, $ATTRS_WORK => $TAXON_TABLE{$tree_table}{attrs});
     
     my $a = 1;	# we can stop here when debugging
+}
+
+
+# computeAgesTable ( dbh, tree_table )
+# 
+# Create a table in which taxon age bounds are recorded.  These attributes propagate upward
+# through the taxonomic hierarchy; the minimum and maximum taxon ages are based on occurrences of
+# this taxon and also of any subtaxa.
+
+sub computeAgesTable {
+    
+    my ($dbh, $tree_table) = @_;
+    
+    logMessage(2, "computing ages table (h2)");
+    
+    my ($result, $sql);
+    
+    my $ages_table = $TAXON_TABLE{$tree_table}{ages};
+    my $attrs_table = $TAXON_TABLE{$tree_table}{attrs};
+    
+    # Create a table through which taxon ages can be looked up.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $AGES_WORK");
+    $result = $dbh->do("CREATE TABLE $AGES_WORK
+			       (orig_no int unsigned not null,
+				precise_age boolean,
+				first_early_age decimal(9,5),
+				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
+				last_late_age decimal(9,5),
+				early_occ int unsigned,
+				late_occ int unsigned,
+				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
+    
+    # For now, we will fill in these values from the (already computed) attributes table. Once the
+    # data service code has been changed to look in the new table, we will move the code to
+    # compute it to this routine.
+    
+    $result = $dbh->do("
+	INSERT INTO $AGES_WORK (orig_no, precise_age, first_early_age, first_late_age,
+		last_early_age, last_late_age, early_occ, late_occ)
+	SELECT orig_no, precise_age, first_early_age, first_late_age,
+		last_early_age, last_late_age, early_occ, late_occ
+	FROM $ATTRS_WORK");
+    
+    logMessage(2, "    inserted $result rows from attrs table");
 }
 
 
@@ -5238,6 +5391,7 @@ sub activateNewTaxonomyTables {
 		         $SEARCH_WORK => $TAXON_TABLE{$tree_table}{search},
 			 $NAME_WORK => $TAXON_TABLE{$tree_table}{names},
 			 $ATTRS_WORK => $TAXON_TABLE{$tree_table}{attrs},
+			 $AGES_WORK => $TAXON_TABLE{$tree_table}{ages},
 			 $ECOTAPH_WORK => $TAXON_TABLE{$tree_table}{ecotaph},
 			 $ETBASIS_WORK => $TAXON_TABLE{$tree_table}{etbasis},
 			 $INTS_WORK => $TAXON_TABLE{$tree_table}{ints},

@@ -29,13 +29,20 @@ sub new {
     
     if ( $options && ref $options eq 'HASH' )
     {
-	$edt->{session_id} = $options->{session_id};
+	$edt->{session_id} = $options->{session_id} if $options->{session_id};
+	$edt->{auth_info} = $options->{auth_info} if $options->{auth_info};
 	$edt->{debug} = 1 if $options->{debug};
     }
     
     my ($authorizer_no, $enterer_no, $is_super);
     
-    if ( $edt->{session_id} )
+    if ( $edt->{auth_info} )
+    {
+	$authorizer_no = $edt->{auth_info}{authorizer_no};
+	$enterer_no = $edt->{auth_info}{enterer_no};
+    }
+    
+    elsif ( $edt->{session_id} )
     {
 	my $quoted_id = $dbh->quote($edt->{session_id});
 	

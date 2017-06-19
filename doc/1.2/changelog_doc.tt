@@ -8,6 +8,78 @@ If you are developing an application, script, R module, or other client that int
 with this data service, you can use this page to adjust the URLs that you use to interact
 with the data service.
 
+=head2 CHANGES IN VERSION 1.2 v2
+
+This section tracks the changes from version 1.2 v1 to 1.2 v2.
+
+This batch of changes was made primarily in order to allow the Navigator web application to
+be upgraded to use data 1.2. It also fixes a number of bugs that were discovered in the
+interim.
+
+=over
+
+=item General changes
+
+=over
+
+=item *
+
+The summary operation didn't actually work the way it was supposed to; these problems have
+been fixed, and colls/summary now does everything that it did under data1.1 and much more.
+
+=item *
+
+Many tests have been added to the source code, in order to make sure that the data service
+actually does what the documentation says it is supposed to.
+
+=back
+
+=item Fossil occurrences, collections, and specimens
+
+=over
+
+=item *
+
+A new parameter  C<B<lithology>> has been added for selecting fossil occurrences, specimens, and collections.
+If this parameter is specified, only occurrences from the given lithologies will be selected.
+
+=item *
+
+If paleocoordinates are returned (output block C<B<paleoloc>>), any records whose coordinates are
+blank will now have an explanatory message included in the C<B<geoplate>> field. The message is put
+there becase it is an unstructured text field and the coordinate fields should always be either empty
+or contain a valid coordinate.
+
+=back
+
+=item Fossil diversity
+
+=over
+
+=item *
+
+If the output format is text (csv or tsv), the summary lines giving the number of occurrences that
+were analyzed and the number that were excluded will only appear if the parameter C<B<datainfo>> is
+included in the request. Otherwise, the list of field names will be the first line of the output,
+consistent with the output of the other data service operations.
+
+=back
+
+=item Combined autcomplete
+
+=over
+
+=item *
+
+A new operation has been added: L<combined/auto|node:combined/auto>. This is designed for use
+by Navigator or other web application clients, and provides a single prefix-search operation
+for use in auto-completion. This can be configured to search any or all of the following:
+geologic time intervals, geologic strata, taxa, and database contributor names.
+
+=back
+
+=back
+
 =head2 CHANGES IN VERSION 1.2 v1
 
 This section tracks the changes to version 1.2 from beta (b2) to stable (v1)

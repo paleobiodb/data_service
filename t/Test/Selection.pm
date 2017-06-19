@@ -88,20 +88,27 @@ sub select_subtest {
     my $tb = Test::Builder->new;
     my $in_subtest;
     
-    if ( $tb->{Parent} )
-    {
-	$name ||= $tb->name;
-	$in_subtest = 1;
-    }
+    # if ( $tb->{Parent} )
+    # {
+    $name ||= $tb->name || $tb->{Stack}[0]{_meta}{Test::Builder}{child};
+    # 	$in_subtest = 1;
+    # }
     
-    elsif ( ! $name )
-    {
-	croak "select_subtest must have an argument if called outside of a subtest\n";
-    }
+    # elsif ( ! $name )
+    # {
+    # 	croak "select_subtest must have an argument if called outside of a subtest\n";
+    # }
     
     # If no subtests are selected, just return true.
     
     if ( ! keys %SELECTED_TEST )
+    {
+	return 1;
+    }
+    
+    # If we can't figure out the name of the test, just return true.
+
+    unless ( defined $name )
     {
 	return 1;
     }
@@ -121,7 +128,7 @@ sub select_subtest {
     # return false.  The placeholder test prevents the subtest from which this
     # subroutine was called from being flagged with "No tests run!"
     
-    Test::More::pass('test not selected') if $in_subtest;
+    Test::More::pass('test not selected');
     return;
 }
 

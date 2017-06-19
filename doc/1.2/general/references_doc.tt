@@ -140,6 +140,10 @@ so on, then references are only selected if their linked records satisfy those p
 Select references that provide the authority for taxonomic names.  Note that such a reference may either be the
 published source of the name, or it may quote an earlier source.
 
+=item var | variant name references
+
+Select references that provide the source for taxonomic name variants that are not currently accepted.
+
 =item class | classification references
 
 Select references which provide I<classification opinions>.  Out of all the opinions entered for
@@ -159,7 +163,7 @@ that are not selected as classification opinions.
 
 Select references from which fossil occurrences were entered into the database.
 
-=item spec | specimen references
+=item specs | specimen references
 
 Select references from which fossil specimens were entered into the database.
 
@@ -186,11 +190,17 @@ separated by commas:
 A reference of this type provides the authority for at least one taxonomic name.  It may either be the
 published source of the name, or it may quote an earlier source.
 
+=item auth | V
+
+A reference of this type provides the authority for a taxonomic name variant that is not currently
+accepted.
+
 =item class | C
 
-A reference of this type provides at least one classification opinion.
+A reference of this type provides at least one opinion that is selected as the classification opinion
+for its subject taxon.
 
-=item unsel | U
+=item unclass | U
 
 A reference of this type provides at least one opinion that is not selected as a classification opinon.
 
@@ -231,6 +241,11 @@ The number of distinct taxa associated with this reference
 =item n_auth / nau
 
 The number of taxa for which this reference provides the authority
+
+=item n_var / nva
+
+The number of taxa for which this reference is the source for a name variant that is
+not currently accepted.
 
 =item n_class / ncl
 

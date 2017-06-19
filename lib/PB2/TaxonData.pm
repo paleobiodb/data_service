@@ -397,7 +397,7 @@ sub initialize {
     $ds->define_block('1.2:taxa:subtaxon' =>
 	{ output => 'orig_no', com_name => 'oid', dwc_name => 'taxonID' },
 	{ output => 'taxon_no', com_name => 'vid', not_field => 'no_variant' },
-	{ output => 'record_type', com_name => 'typ', com_value => 'txn' },
+	{ output => 'record_type', com_name => 'typ', com_value => 'txn', not_field => 'no_recordtype' },
 	{ output => 'taxon_rank', com_name => 'rnk', dwc_name => 'taxonRank' },
 	{ output => 'taxon_name', com_name => 'nam', dwc_name => 'scientificName' },
 	{ output => 'accepted_no', com_name => 'acc', dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
@@ -3395,6 +3395,134 @@ sub auto {
 }
 
 
+# auto_complete_txn ( name, limit )
+# 
+# This method provides an alternate matching operation, designed to be called from the combined
+# auto-completion operation for client applications. It is passed a name, which is taken to be a
+# prefix, and a limit on the number of results to return.
+
+sub auto_complete_txn {
+    
+    my ($request, $name, $limit) = @_;
+    
+    my $dbh = $request->get_connection();
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    my $search_table = $taxonomy->{SEARCH_TABLE};
+    my $names_table = $taxonomy->{NAMES_TABLE};
+    my $attrs_table = $taxonomy->{ATTRS_TABLE};
+    my $ints_table = $taxonomy->{INTS_TABLE};
+    my $tree_table = $taxonomy->{TREE_TABLE};
+    
+    $limit ||= 10;
+    my @filters;
+    
+    my $use_extids = $request->has_block('extids');
+    
+    my $fields = "s.full_name as name, s.taxon_rank, s.taxon_no, s.accepted_no, s.orig_no, t.status, tv.spelling_no, " .
+	"tv.name as accepted_name, v.n_occs, n.spelling_reason, acn.spelling_reason as accepted_reason, " .
+	"if(ph.class <> '', ph.class, if(ph.phylum <> '', ph.phylum, ph.kingdom)) as higher_taxon";
+    my $sql;
+    my $filter;
+    
+    # Strip out any characters that don't appear in taxonomic names.  But allow SQL wildcards.
+    
+    $name =~ tr/[a-zA-Z_%. ]//dc;
+    
+    # If we are given a genus (possibly abbreviated), generate a search on
+    # genus and species name.
+    
+    if ( $name =~ qr{ ^ ([a-zA-Z_]+) ( [.] | [.%]? \s+ ) ([a-zA-Z_%]+) }xs )
+    {
+	my $genus = ($2 ne ' ') ? $dbh->quote("$1%") : $dbh->quote($1);
+	my $species = $dbh->quote("$3%");
+	
+	$filter = "s.genus like $genus and s.taxon_name like $species";
+    }
+    
+    # If we are given a name like '% somespecies', then generate a search on species name only.
+    
+    elsif ( $name =~ qr{ ^ %[.]? \s+ ([a-zA-Z_%]+) $ }xs )
+    {
+	my $species = $dbh->quote("$1%");
+	
+	$filter = "s.taxon_name like $species and s.taxon_rank = 'species'";
+    }
+    
+    # If we are given a single name followed by one or more spaces and nothing
+    # else, take it as a genus name.
+    
+    elsif ( $name =~ qr{ ^ ([a-zA-Z]+) ([.%]+)? \s+ $ }xs )
+    {
+	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
+	
+	$filter = "s.genus like $genus and s.taxon_rank = 'genus'";
+    }
+    
+    # Otherwise, if it has no spaces then just search for the name.  Turn all
+    # periods into wildcards.
+    
+    elsif ( $name =~ qr{^[a-zA-Z_%.]+$} )
+    {
+	return if length($name) < 3;
+	
+	$name =~ s/\./%/g;
+	
+	$filter = "s.full_name like " . $dbh->quote("$name%");
+    }
+    
+    # If none of these patterns are matched, return an empty result.
+    
+    else
+    {
+	return;
+    }
+    
+    # Now execute the query.
+    
+    $sql = "SELECT $fields
+		FROM $search_table as s JOIN $tree_table as t using (orig_no)
+			JOIN $tree_table as tv on tv.orig_no = t.accepted_no
+			JOIN $attrs_table as v on v.orig_no = t.accepted_no
+			JOIN $ints_table as ph on ph.ints_no = tv.ints_no
+			JOIN $names_table as n on n.taxon_no = s.taxon_no
+			JOIN $names_table as acn on acn.taxon_no = t.spelling_no
+		WHERE $filter
+		ORDER BY s.taxon_no = tv.spelling_no desc, n_occs desc LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    my %found_taxon;
+    my @results;
+    
+    # If we found some results, go through the list and process each record. The method
+    # 'process_difference' is called to generate the 'difference' (tdf) field. The 'oid' and 'vid'
+    # fields are converted to external identifiers if appropriate. Finally, we keep track of the
+    # orig_no of each record, and skip any repeats. This filters out multiple records in cases
+    # where a name was changed in rank, and possibly other cases.
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	foreach my $r ( @$result_list )
+	{
+	    next if $found_taxon{$r->{orig_no}};
+	    $found_taxon{$r->{orig_no}} = 1;
+	    
+	    $request->process_difference($r);
+	    $r->{record_id} = $use_extids ? generate_identifier('TXN', $r->{accepted_no}) :
+		$r->{accepted_no};
+	    $r->{taxon_no} = generate_identifier('VAR', $r->{taxon_no}) if $use_extids;
+	    $r->{record_type} = 'txn' unless $use_extids;
+	    
+	    push @results, $r;
+	}
+    }
+    
+    return @results;
+}
+
+
 # get_image ( )
 # 
 # Given an id (image_no) value, taxon_id, or taxon_name, return the
@@ -3915,10 +4043,10 @@ sub process_com {
 	}
     }
     
-    # $record->{no_variant} = 1 if defined $record->{spelling_no} && defined $record->{taxon_no} &&
-    # 	$record->{spelling_no} eq $record->{taxon_no};
+    $record->{no_variant} = 1 if $record->{taxon_no} && $record->{orig_no} &&
+    	$record->{taxon_no} eq $record->{orig_no};
     
-    $record->{no_variant} = 1 unless defined $record->{spelling_no};
+    # $record->{no_variant} = 1 unless defined $record->{spelling_no};
     
     # $record->{no_variant} = 1 if defined $record->{orig_no} && defined $record->{child_spelling_no} &&
     # 	$record->{orig_no} eq $record->{child_spelling_no};
@@ -3926,7 +4054,6 @@ sub process_com {
     # $record->{no_variant} = 0 if defined $request->{my_rel} && 
     # 	($request->{my_rel} eq 'variants' || $request->{my_rel} eq 'exact' ||
     # 	 $request->{my_rel} eq 'current');
-    
     
     $record->{n_orders} = undef if defined $record->{n_orders} && 
 	$record->{n_orders} == 0 && $record->{taxon_rank} <= 13;
@@ -4031,6 +4158,41 @@ sub process_taxon_ids {
     {
 	$record->{$f} = generate_identifier('VAR', $record->{$f}) if defined $record->{$f};
 	# $record->{$f} = $record->{$f} ? "$IDP{VAR}:$record->{$f}" : '';
+    }
+    
+    if ( ref $record->{parent_txn} )
+    {
+	foreach my $f ( qw(parent_txn kingdom_txn phylum_txn class_txn order_txn family_txn) )
+	{
+	    # This has to be first, because the two fields won't be equal once external
+	    # identifiers have been generated.
+	    $record->{$f}{no_variant} = 1 if $record->{$f}{orig_no} && $record->{$f}{taxon_no} && 
+		$record->{$f}{orig_no} eq $record->{$f}{taxon_no};
+	    $record->{$f}{no_recordtype} = 1;
+	    
+	    delete $record->{$f}{accepted_no};
+	    
+	    $record->{$f}{orig_no} = generate_identifier('TXN', $record->{$f}{orig_no}) if defined $record->{$f}{orig_no};
+	    $record->{$f}{taxon_no} = generate_identifier('VAR', $record->{$f}{taxon_no}) if defined $record->{$f}{taxon_no};
+	}
+	
+	foreach my $f ( qw(children phylum_list class_list order_list family_list genus_list subgenus_list species_list subspecies_list) )
+	{
+	    next unless ref $record->{$f} eq 'ARRAY';
+	    
+	    foreach my $t ( @{$record->{$f}} )
+	    {
+		# This has to be first, because the two fields won't be equal once external
+		# identifiers have been generated.
+		$t->{no_variant} = 1 if $t->{orig_no} && $t->{taxon_no} && $t->{orig_no} eq $t->{taxon_no};
+		$t->{no_recordtype} = 1;
+		
+		delete $t->{accepted_no};
+		
+		$t->{orig_no} = generate_identifier('TXN', $t->{orig_no}) if defined $t->{orig_no};
+		$t->{taxon_no} = generate_identifier('VAR', $t->{taxon_no}) if defined $t->{taxon_no};
+	    }
+	}
     }
     
     foreach my $f ( qw(opinion_no) )

@@ -305,6 +305,7 @@ sub ok_all {
 	    my $m = "    Condition '$k': flagged $count instance";
 	    $m .= "s" if $count > 1;
 	    $m .= " ('$label')" if defined $label & $label ne '';
+	    $m .= " (limit $limit)" if $limit;
 	    
 	    push @ok, $m;
 	}

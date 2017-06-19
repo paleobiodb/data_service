@@ -347,17 +347,28 @@ sub buildCollectionTables {
     {
 	my $level = $i + 1;
 	my $reso = $bin_reso[$i];
+	my $bin_str = 'bin_id';
+	my $bin_select_str = "bin_id_$level";
 	
 	next unless $level > 0 && $reso > 0;
+	
+	if ( $level > 1 )
+	{
+	    foreach my $j (1..$level-1)
+	    {
+		$bin_str .= ", bin_id_$j";
+		$bin_select_str .= ", bin_id_$j";
+	    }
+	}
 	
 	logMessage(2, "      summarizing at level $level by geography...");
 	
 	$sql = "INSERT IGNORE INTO $COLL_BINS_WORK
-			(bin_id, bin_level, interval_no,
+			($bin_str, bin_level, interval_no,
 			 n_colls, n_occs, early_age, late_age, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
-		SELECT bin_id_$level, $level, 0, count(*), sum(n_occs),
+		SELECT $bin_select_str, $level, 0, count(*), sum(n_occs),
 		       max(early_age), min(late_age),
 		       avg(lng), avg(lat),
 		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
@@ -366,6 +377,28 @@ sub buildCollectionTables {
 		       min(access_level)
 		FROM $COLL_MATRIX_WORK as m
 		GROUP BY bin_id_$level";
+	
+	# my $level = $i + 1;
+	# my $reso = $bin_reso[$i];
+	
+	# next unless $level > 0 && $reso > 0;
+	
+	# logMessage(2, "      summarizing at level $level by geography...");
+	
+	# $sql = "INSERT IGNORE INTO $COLL_BINS_WORK
+	# 		(bin_id, bin_level, interval_no,
+	# 		 n_colls, n_occs, early_age, late_age, lng, lat,
+	# 		 lng_min, lng_max, lat_min, lat_max, std_dev,
+	# 		 access_level)
+	# 	SELECT bin_id_$level, $level, 0, count(*), sum(n_occs),
+	# 	       max(early_age), min(late_age),
+	# 	       avg(lng), avg(lat),
+	# 	       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
+	# 	       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
+	# 	       sqrt(var_pop(lng)+var_pop(lat)),
+	# 	       min(access_level)
+	# 	FROM $COLL_MATRIX_WORK as m
+	# 	GROUP BY bin_id_$level";
 	
 	$result = $dbh->do($sql);
 	
@@ -398,11 +431,15 @@ sub buildCollectionTables {
 		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i
 			JOIN $SCALE_MAP as s using (interval_no)
 			JOIN $INTERVAL_BUFFER as ib using (interval_no)
-		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
-			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
-			and (m.early_age > i.late_age and m.late_age < i.early_age)
+		WHERE if(m.late_age >= i.late_age,
+			if(m.early_age <= i.early_age, m.early_age - m.late_age, i.early_age - m.late_age),
+			if(m.early_age > i.early_age, i.early_age - i.late_age, m.early_age - i.late_age)) / (m.early_age - m.late_age) >= 0.5
 		GROUP BY interval_no, bin_id_$level";
 	
+		# WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
+		# 	and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
+		# 	and (m.early_age > i.late_age and m.late_age < i.early_age)
+
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");
@@ -848,6 +885,7 @@ sub buildStrataTables {
 		name varchar(255) not null,
 		type enum('group', 'formation', 'member'),
 		cc_list varchar(255) not null,
+		country_list varchar(255) not null,
 		n_colls int unsigned not null,
 		n_occs int unsigned not null,
 		lng_min decimal(9,6),
@@ -859,10 +897,10 @@ sub buildStrataTables {
     logMessage(2, "    inserting groups...");
     
     $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
-			lng_min, lng_max, lat_min, lat_max)
+			country_list, lng_min, lng_max, lat_min, lat_max)
 		SELECT grp, 'group', count(*), sum(n_occs), group_concat(distinct cc),
-			min(lng), max(lng), min(lat), max(lat)
-		FROM $COLL_STRATA_WORK
+		       group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
+		FROM $COLL_STRATA_WORK join $COUNTRY_MAP as cm using (cc)
 		WHERE grp <> ''	and grp not like 'unnamed' GROUP BY grp");
     
     logMessage(2, "      $result groups");
@@ -870,10 +908,10 @@ sub buildStrataTables {
     logMessage(2, "    inserting formations...");
     
     $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
-			lng_min, lng_max, lat_min, lat_max)
+			country_list, lng_min, lng_max, lat_min, lat_max)
 		SELECT formation, 'formation', count(*), sum(n_occs), group_concat(distinct cc),
-			min(lng), max(lng), min(lat), max(lat)
-		FROM $COLL_STRATA_WORK
+			group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
+		FROM $COLL_STRATA_WORK join $COUNTRY_MAP as cm using (cc)
 		WHERE formation <> '' and formation not like 'unnamed' GROUP BY formation");
     
     logMessage(2, "      $result formations");

@@ -66,6 +66,7 @@ sub new {
 		 TREE_TABLE => $table_name,
 		 SEARCH_TABLE => $t->{search},
 	         ATTRS_TABLE => $t->{attrs},
+		 AGES_TABLE => $t->{ages},
 		 ECOTAPH_TABLE => $t->{ecotaph},
 		 ETBASIS_TABLE => $t->{etbasis},
 		 INTS_TABLE => $t->{ints},

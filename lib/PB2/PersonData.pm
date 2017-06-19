@@ -11,6 +11,8 @@ use strict;
 
 package PB2::PersonData;
 
+use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
+
 use HTTP::Validate qw(:validators);
 
 use Carp qw(carp croak);
@@ -232,6 +234,61 @@ sub people_auto {
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
+}
+
+
+# auto_complete_prs ( name, limit )
+# 
+# This operation provides an alternate query functionality, designed to be called from the
+# combined auto-complete operation.
+
+sub auto_complete_prs {
+    
+    my ($request, $name, $limit) = @_;
+    
+    my $dbh = $request->get_connection();
+    
+    my $quoted_name = $dbh->quote("${name}%");
+    
+    my $use_extids = $request->has_block('extids');
+    
+    $limit ||= 10;
+    my @filters;
+    
+    if ( $name =~ qr{ ^ ( \w ) [.]? \s+ ( [a-zA-Z_%] .* ) }xs )
+    {
+	push @filters, "p.name like '$1% $2'";
+    }
+    
+    else
+    {
+	push @filters, "p.reversed_name like $quoted_name";
+    }
+    
+    my $filter_string = join(' and ', @filters);
+    
+    my $sql = "
+	SELECT person_no, name, country, institution, 'prs' as record_type
+	FROM person as p
+	WHERE $filter_string
+	ORDER BY reversed_name asc LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	foreach my $r ( @$result_list )
+	{
+	    $r->{record_id} = $use_extids ? generate_identifier('PRS', $r->{person_no}) :
+		$r->{person_no};
+	}
+	
+	return @$result_list;
+    }
+    
+    return;
 }
 
 

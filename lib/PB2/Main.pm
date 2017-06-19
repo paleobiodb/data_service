@@ -22,6 +22,9 @@ use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
+use PB2::CombinedData;
+use PB2::ResourceData;
+use PB2::MainEntry;
 
 use PB2::MainEntry;
 
@@ -157,10 +160,30 @@ use PB2::MainEntry;
 			role => 'PB2::ConfigData',
 			method => 'get',
 			optional_output => '1.2:config:get_map' },
-	"This class provides information about the structure, encoding and organization",
+	"This operation provides information about the structure, encoding and organization",
 	"of the information in the database. It is designed to enable the easy",
 	"configuration of client applications.");
-
+    
+    # Combined data.
+    
+    $ds2->define_node({ path => 'combined',
+			place => 11,
+			title => 'Combined data',
+			role => 'PB2::CombinedData' },
+	"The operations in this group provide access to multiple types of data records,",
+	"including auto-completion for client applications.");
+    
+    $ds2->define_node({ path => 'combined/auto',
+			place => 1,
+			title => 'General auto-completion',
+			method => 'auto_complete',
+			output => '1.2:combined:auto',
+			optional_output => '1.2:combined:auto_optional'},
+	"Return a list of names matching any string of characters. This operation is intended",
+	"to be used for auto-completion in client applications. The desired record types",
+	"can be specified using the B<C<type>> parameter, and the number of records to be returned",
+	"using B<C<limit>>.");
+    
     # Occurrences.  These paths are used to fetch information about fossil
     # occurrences known to the database.
     
@@ -227,7 +250,7 @@ use PB2::MainEntry;
 	"This operation returns a tabulation of fossil diversity over time, based on a selected set of occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
 	"valid for the L<occs/list|node:occs/list> operation.  This operation can take up a lot of server time,",
-	"so if you just want to display a quick overview plot please use the L<occs/quickdev|node:occs/quickdev>",
+	"so if you just want to display a quick overview plot please use the L<occs/quickdiv|node:occs/quickdiv>",
 	"operation.");
     
     $ds2->extended_doc({ path => 'occs/diversity' },
@@ -885,7 +908,7 @@ use PB2::MainEntry;
 		      place => 5,
 		      title => 'References for taxonomic names' },
 	"This operation returns information about the references from which",
-	"the selected taxonomic names were entered.");
+	"the selected taxonomic names were entered.");    
     
     # Timescales, intervals, and bounds
     
@@ -1010,6 +1033,22 @@ use PB2::MainEntry;
 	"This operation returns a list of geographic place records matching the",
 	"parameters you specify.");
     
+    # Educational resources
+    
+    $ds2->define_node({ path => 'eduresources',
+			title => 'Educational resources',
+			role => 'PB2::ResourceData',
+			output => '1.2:eduresources:basic' },
+	"The database also includes information about educational resources",
+	"that are relevant to its mission. These are used to populate a",
+	"page on our main website.");
+    
+    $ds2->define_node({ path => 'eduresources/single',
+			title => "Single educational resource",
+			method => 'get_resource' },
+	"This operation returns information about a single educational resource",
+	"specified by identifier.");
+    
     # The following paths are used for miscellaneous documentation
     
     $ds2->define_node({ path => 'general',
@@ -1090,7 +1129,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'images',
 			file_dir => 'images' });
-    
+
     # Now initialize the data entry nodes.
     
     PBEntry::initialize($ds2);

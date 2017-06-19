@@ -15,7 +15,7 @@ use Carp qw(croak);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier %IDP);
+our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier %IDP %IDRE);
 
 
 # List the identifier prefixes:
@@ -41,6 +41,7 @@ our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',
 	     TSC => 'tsc',
 	     CLU => 'clu',
 	     PHP => 'php',
+	     EDR => 'edr',
 	     PRS => 'prs' );
 
 our %IDRE;
