@@ -113,7 +113,7 @@ sub initialize {
 	    "A partial name or prefix.  It must have at least 3 significant characters,",
 	    "and for taxa may include both a genus",
 	    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex", 
-	{ optional => 'type', valid => '1.2:combined:auto_types', list => ',' },
+	{ optional => 'type', valid => '1.2:combined:auto_types', list => ',', bad_value => 'none' },
 	    "One or more record types from the following list. Matching records",
 	    "from each of the specified types will be returned, up to the specified",
 	    "limit, in the order specified. To the extent possible, an equal number of records from each type",
@@ -134,7 +134,8 @@ sub auto_complete {
     
     my ($request) = @_;
     
-    my (@requested_types) = $request->clean_param_list('type') || ('int', 'str', 'prs', 'txn');
+    my (@requested_types) = $request->clean_param_list('type');
+    @requested_types = ('int', 'str', 'prs', 'txn') unless @requested_types;
     my $name = $request->clean_param('name');
     
     # Unless we have at least three letters, and at least one record type, return an empty result.
