@@ -1646,7 +1646,7 @@ sub summary {
     # 	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
     # }
     
-    push @filters, "s.bin_level = $bin_level";
+    push @filters, "s.bin_level = $bin_level and s.bin_id > 0";
     
     my $filter_string = join(' and ', @filters);
     
