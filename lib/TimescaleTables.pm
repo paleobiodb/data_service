@@ -11,7 +11,7 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_QUEUE
+use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS
 		 $TIMESCALE_PERMS
 	         $INTERVAL_DATA $INTERVAL_MAP $SCALE_MAP $MACROSTRAT_SCALES $MACROSTRAT_INTERVALS
 	         $MACROSTRAT_SCALES_INTS $REFERENCES);
@@ -243,17 +243,6 @@ sub establish_timescale_tables {
 		key (reference_no),
 		key (is_updated))");
     
-    # The table 'timescale_queue' stores pending update events. It is used to propagate bound
-    # updates to other bounds that depend on them.
-    
-    $dbh->do("DROP TABLE IF EXISTS $TS_QUEUE_WORK");
-    
-    $dbh->do("CREATE TABLE $TS_QUEUE_WORK (
-		bound_no int unsigned not null,
-		type enum('age', 'color', 'refno', 'source_age', 'source_color', 'source_refno') not null,
-		is_done boolean,
-		created timestamp default current_timestamp) engine=memory");
-    
     # The table 'timescale_perms' stores viewing and editing permission for timescales.
     
     $dbh->do("DROP TABLE IF EXISTS $TS_PERMS_WORK");
@@ -271,7 +260,6 @@ sub establish_timescale_tables {
 		         $TS_REFS_WORK => $TIMESCALE_REFS,
 			 $TS_INTS_WORK => $TIMESCALE_INTS,
 			 $TS_BOUNDS_WORK => $TIMESCALE_BOUNDS,
-			 $TS_QUEUE_WORK => $TIMESCALE_QUEUE,
 			 $TS_PERMS_WORK => $TIMESCALE_PERMS);
 }
 

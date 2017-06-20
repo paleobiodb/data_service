@@ -26,23 +26,140 @@ our ($UPDATE_LIMIT) = 10;	# Limit on the number of iterations when propagating c
 
 sub add_timescale {
     
+    my ($edt, $attrs, $conditions) = @_;
     
+    croak "add_timescale: bad attrs\n" unless ref $attrs eq 'HASH';
+    croak "add_timescale: must not have a value for timescale_id\n" if $attrs->{timescale_id};
     
+    my $dbh = $edt->dbh;
     
+    # Start by making sure that we are in a state in which we can proceed.
+    
+    return 0 unless $edt->can_proceed;
+    
+    # Now check that all of the specified attributes are of the correct type and in the correct
+    # value range, and that all references to other records match up to existing records.
+    
+    my ($fields, $values) = $edt->check_timescale_attrs('add', 'timescale', $attrs, $conditions);
+    
+    # Then make sure that the necessary attributes have the proper values.
+    
+    $edt->check_timescale_values($attrs);
+    
+    # If any errors occurred, we stop here. This counts as "check only" mode.
+    
+    return 0 unless $edt->can_edit;
+    
+    # Otherwise, insert the new record.
+    
+    my $sql = "INSERT INTO $TIMESCALE_DATA ($fields) VALUES ($values)";
+    my ($insert_result, $insert_id);
+    
+    print STDERR "$sql\n\n" if $edt->debug;
+    
+    try {
+	$insert_result = $dbh->do($sql);
+	$insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
+	print STDERR "RESULT: 0\n" unless $insert_id;
+    }
+	
+    catch {
+	print STDERR "ERROR: $_\n";
+    };
+    
+    if ( $insert_id )
+    {
+	$edt->{timescale_updated}{$insert_id} = 1;
+	return $insert_id;
+    }
+    
+    else
+    {
+	$edt->add_condition("E_INTERNAL: an error occurred during record insertion");
+    }
 }
 
 
 sub update_timescale {
 
-
-
+    my ($edt, $attrs, $conditions) = @_;
+    
+    croak "update_timescale: bad attrs\n" unless ref $attrs eq 'HASH';
+    croak "update_timescale: must have a value for timescale_id\n" unless $attrs->{timescale_id};
+    
+    my $dbh = $edt->dbh;
+    
+    # Start by making sure that we are in a state in which we can proceed.
+    
+    return 0 unless $edt->can_proceed;
+    
+    # We first need to make sure that the record to be updated actually exists, and fetch its
+    # current attributes.
+    
+    unless ( $timescale_id =~ /^\d+$/ && $timescale_id > 0 )
+    {
+	$edt->add_condition("E_BOUND_ID: bad value '$timescale_id' for 'timescale_id'");
+	return 0;
+    }
+    
+    my ($current) = $dbh->selectrow_hashref("
+		SELECT * FROM $TIMESCALE_DATA WHERE timescale_no = $timescale_id");
+    
+    unless ( $current )
+    {
+	$edt->add_condition("E_NOT_FOUND: timescale '$timescale_id' is not in the database");
+	return 0;
+    }
+    
+    # Now check that all of the specified attributes are of the correct type and in the correct
+    # value range, and that all references to other records match up to existing records.
+    
+    my ($fields, $values) = $edt->check_timescale_attrs('add', 'timescale', $attrs, $conditions);
+    
+    # Then make sure that the necessary attributes have the proper values.
+    
+    $edt->check_timescale_values($attrs, $current);
+    
+    # If any errors occurred, we stop here. This counts as "check only" mode.
+    
+    return 0 unless $edt->can_edit;
+    
+    # Otherwise, insert the new record.
+    
+    my $sql = "INSERT INTO $TIMESCALE_DATA ($fields) VALUES ($values)";
+    my ($insert_result, $insert_id);
+    
+    print STDERR "$sql\n\n" if $edt->debug;
+    
+    try {
+	$insert_result = $dbh->do($sql);
+	$insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
+	print STDERR "RESULT: 0\n" unless $insert_id;
+    }
+	
+    catch {
+	print STDERR "ERROR: $_\n";
+    };
+    
+    if ( $insert_id )
+    {
+	$edt->{timescale_updated}{$insert_id} = 1;
+	return $insert_id;
+    }
+    
+    else
+    {
+	$edt->add_condition("E_INTERNAL: an error occurred during record insertion");
+    }
 }
 
 
 sub delete_timescale {
 
-
-
+    my ($edt, $list, $conditions) = @_;
+    
+    
+    
 }
 
 
@@ -160,7 +277,7 @@ sub add_boundary {
     
     try {
 	$insert_result = $dbh->do($sql);
-	$insert_id = $dbh->last_insert_id;
+	$insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
 	print STDERR "RESULT: 0\n" unless $insert_id;
     }
 	
@@ -170,9 +287,6 @@ sub add_boundary {
     
     if ( $insert_id )
     {
-	$edt->{last_bound} = $insert_id;
-	$edt->{last_timescale} = $timescale_id;
-	
 	$edt->{bound_updated}{$insert_id} = 1;
 	$edt->{timescale_updated}{$timescale_id} = 1;
 	
@@ -200,11 +314,6 @@ sub update_boundary {
     # Start by making sure that we are in a state in which we can proceed.
     
     return 0 unless $edt->can_proceed;
-    
-    # Clear the record of last updated bound and timescale
-    
-    $edt->{last_bound} = undef;
-    $edt->{last_timescale} = undef;
     
     # We first need to make sure that the record to be updated actually exists, and fetch its
     # current attributes.
@@ -327,9 +436,6 @@ sub update_boundary {
     
     if ( $update_result )
     {
-	$edt->{last_bound} = $bound_id;
-	$edt->{last_timescale} = $timescale_id;
-	
 	$edt->{bound_updated}{$bound_id} = 1;
 	$edt->{timescale_updated}{$timescale_id} = 1;
 	
@@ -666,7 +772,7 @@ sub check_timescale_attrs {
 	    elsif ( $conditions->{CREATE_INTERVALS} )
 	    {
 		$dbh->do("INSERT INTO $TIMESCALE_INTS (interval_name) VALUES ($quoted_name)");
-		$quoted = $dbh->last_insert_id();
+		$quoted = $dbh->last_insert_id(undef, undef, undef, undef);
 		
 		unless ( $quoted )
 		{
@@ -797,6 +903,38 @@ sub check_timescale_attrs {
     else
     {
 	return join(',', @field_list, 'is_updated'), join(',', @sql_list, 1);
+    }
+}
+
+
+sub check_timescale_values {
+    
+    my ($edt, $new, $current) = @_;
+    
+    if ( $current )
+    {
+	if ( defined $new->{timescale_name} && $new->{timescale_name} eq '' )
+	{
+	    $edt->add_condition("E_PARAM: the value of 'timescale_name' must not be empty");
+	}
+	
+	if ( defined $new->{timescale_type} && $new->{timescale_type} eq '' )
+	{
+	    $edt->add_condition("E_PARAM: the value of 'timescale_type' must not be empty");
+	}
+    }
+    
+    else
+    {
+	unless ( defined $new->{timescale_name} && $new->{timescale_name} ne '' )
+	{
+	    $edt->add_condition("E_PARAM: the value of 'timescale_name' must not be empty");
+	}
+	
+	unless ( defined $new->{timescale_type} && $new->{timescale_type} ne '' )
+	{
+	    $edt->add_condition("E_PARAM: the value of 'timescale_type' must not be empty");
+	}
     }
 }
 
