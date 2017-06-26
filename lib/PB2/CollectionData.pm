@@ -1973,8 +1973,8 @@ sub strata_auto {
 
 # auto_complete_str ( name, limit )
 # 
-# This is an alternate operation for auto-completion, designed to be called by the combined
-# auto-complete operation.
+# This is an alternate operation for auto-completion of geological strata names, designed to be
+# called by the combined auto-complete operation.
 
 sub auto_complete_str {
     
@@ -2009,6 +2009,85 @@ sub auto_complete_str {
     my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
     
     return ref $result_list eq 'ARRAY' ? @$result_list : ( );
+}
+
+
+# auto_complete_col ( name, limit )
+# 
+# This operation provides for auto-completion of collection names, designed to be
+# called by the combined auto-complete operation.
+
+sub auto_complete_col {
+    
+    my ($request, $name, $limit, $options) = @_;
+    
+    # Reject obvious mismatches
+    
+    # return if $name =~ qr{ ^ \w [.] \s+ \w }xsi;
+    
+    my $dbh = $request->get_connection();
+    
+    $limit ||= 10;
+    $options ||= { };
+    my @filters;
+    
+    # Add a filter to select collections that match the specified name. Special-case it so that a
+    # ^ will leave off the initial % wildcard.
+    
+    $name = "${name}%";
+    
+    my $quoted_name = $dbh->quote($name);
+    
+    push @filters, "cc.collection_name like $quoted_name";
+    
+    my $use_extids = $request->has_block('extids');
+    
+    # If we are given early and/or late age bounds, select only collections whose age *overlaps*
+    # this range.
+    
+    if ( $options->{early_age} )
+    {
+	push @filters, "c.late_age <= $options->{early_age}";
+    }
+    
+    if ( $options->{late_age} )
+    {
+	push @filters, "c.early_age >= $options->{late_age}";
+    }
+    
+    # Construct the query.
+    
+    my $filter_string = join(' and ', @filters);
+    
+    my $country_field = $options->{countries} ? 'cm.name' : 'c.cc';
+    
+    my $sql = "
+	SELECT collection_no, 'col' as record_type, collection_name as name,
+		$country_field as cc_list, n_occs,
+		ei.interval_name as early_interval, li.interval_name as late_interval
+	FROM collections as cc join $COLL_MATRIX as c using (collection_no)
+		left join $COUNTRY_MAP as cm using (cc)
+		left join $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
+		left join $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+	WHERE $filter_string
+	ORDER BY n_occs desc LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	foreach my $r ( @$result_list )
+	{
+	    $r->{record_id} = $use_extids ? generate_identifier('COL', $r->{collection_no}) :
+		$r->{collection_no};
+	}
+	
+	return @$result_list;
+    }
+    
+    return;
 }
 
 

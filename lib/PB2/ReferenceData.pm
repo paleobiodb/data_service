@@ -502,6 +502,75 @@ sub list {
 }
 
 
+# auto_complete_ref ( name, limit )
+# 
+# This operation provides for auto-completion of bibliographic references, designed to be called
+# by the combined auto-complete operation. It will only trigger if the specified name ends in a
+# four-digit year.
+
+sub auto_complete_ref {
+    
+    my ($request, $name, $limit, $options) = @_;
+    
+    # Do nothing unless the name ends in a four-digit year.
+    
+    return unless $name =~ qr{ ^ (.*) \s+ (\d\d\d\d) $ }xsi;
+    
+    my $author_string = $1;
+    my $pubyear = $2;
+    
+    my $dbh = $request->get_connection();
+    
+    $limit ||= 10;
+    $options ||= { };
+    my @filters;
+    
+    # Add a filter to select collections that match the specified name. Special-case it so that a
+    # ^ will leave off the initial % wildcard.
+    
+    $author_string =~ s/\s+$//;
+    my $quoted_year = $dbh->quote($pubyear);
+    
+    push @filters, $request->generate_auth_filter($author_string, 'primary');
+    push @filters, "r.pubyr = $quoted_year";
+    
+    my $use_extids = $request->has_block('extids');
+    
+    # Construct the query.
+    
+    my $filter_string = join(' and ', @filters);
+    
+    my $sql = "
+	SELECT r.reference_no, r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2,
+		   r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, 
+		   r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, 
+		   r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, 
+		   r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype 
+	FROM refs as r
+	WHERE $filter_string
+	ORDER BY author1last, author1init, author2last, author2init LIMIT $limit";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	foreach my $r ( @$result_list )
+	{
+	    $r->{record_id} = $use_extids ? generate_identifier('REF', $r->{reference_no}) :
+		$r->{reference_no};
+	    
+	    $r->{name} = $request->format_reference($r);
+	}
+	
+	return @$result_list;
+    }
+    
+    return;
+}
+
+
 # generate_ref_filters ( )
 # 
 # Generate the necessary filter clauses to reflect the query parameters.

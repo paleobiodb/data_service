@@ -14,10 +14,10 @@ package PB2::CombinedData;
 
 use HTTP::Validate qw(:validators);
 
-use PB2::IntervalData;
+use PB2::IntervalData qw(%IDATA %INAME);
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
-use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
+use ExternalIdent qw(generate_identifier %IDRE VALID_IDENTIFIER);
 
 use Try::Tiny;
 use Carp qw(carp croak);
@@ -27,7 +27,7 @@ use Moo::Role;
 no warnings 'numeric';
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::IntervalData PB2::CollectionData PB2::TaxonData PB2::PersonData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData PB2::IntervalData PB2::CollectionData PB2::TaxonData PB2::PersonData);
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
@@ -49,7 +49,8 @@ sub initialize {
 	{ output => 'record_id', com_name => 'oid' },
 	    "The identifier (if any) of the database record corresponding to this name.",
 	{ output => 'record_type', com_name => 'typ' },
-	    "The type of this record: varies by record. Will be one of: C<B<str>>, C<B<txn>>, C<B<prs>>, C<B<int>>.",
+	    "The type of this record: varies by record. Will be one of: C<B<str>>, C<B<txn>>, C<B<prs>>, C<B<int>>,",
+	    "C<B<col>>, C<B<ref>>.",
 	{ output => 'name', com_name => 'nam' },
 	    "A name that matches the characters given by the B<C<name>> parameter.",
 	# taxa
@@ -71,11 +72,18 @@ sub initialize {
 	{ output => 'higher_taxon', com_name => 'htn' },
 	    "For taxonomic names: a higher taxon (class if known or else phylum) in",
 	    "which this taxon is contained.",
-	# strata
+	# strata and collections
 	{ output => 'type', com_name => 'rnk' },
 	    "For strata, this field specifies: group, formation, or member.",
 	{ output => 'cc_list', com_name => 'cc2' },
-	    "For strata: the country or countries in which it lies, as ISO-3166 country codes.",
+	    "For strata and collections: the country or countries in which it lies, as ISO-3166 country codes.",
+	# collections
+	{ output => 'early_interval', com_name => 'oei' },
+	    "For collections, this field specifies the interval from which the collection dates, or",
+	    "the early end of the range.",
+	{ output => 'late_interval', com_name => 'oli', dedup => 'early_interval' },
+	    "For collections, this field (if not empty) specifies the end of the time range from which",
+	    "this collection dates.",
 	# intervals
 	{ output => 'abbrev', com_name => 'abr' },
 	    "For intervals: the standard abbreviation, if any",
@@ -102,7 +110,15 @@ sub initialize {
 	{ value => 'prs' },
 	    "database contributors",
 	{ value => 'txn' },
-	    "taxonomic names");
+	    "taxonomic names",
+	{ value => 'col' },
+	    "fossil collections",
+	{ value => 'ref' },
+	    "bibliographic references",
+	{ value => 'nav' },
+	    "select the set of types appropriate for auto-complete in the Navigator web application",
+	{ value => 'cls' },
+	    "select the set of types appropriate for auto-complete in the Classic web application");
     
     $ds->define_set('1.2:combined:auto_optional' =>
 	{ value => 'countries' },
@@ -117,8 +133,11 @@ sub initialize {
 	    "One or more record types from the following list. Matching records",
 	    "from each of the specified types will be returned, up to the specified",
 	    "limit, in the order specified. To the extent possible, an equal number of records from each type",
-	    "will be returned. If this parameter is not specified, all four types",
-	    "will be returned in the order listed below.",
+	    "will be returned. If this parameter is not specified, it will default to C<B<int, str, prs, txn>>.",
+	{ optional => 'interval', valid => ANY_VALUE },
+	    "If the list of types to be returned includes collecitons, you can provide the name",
+	    "or identifier of a geological time interval. In this case, only collections",
+	    "occurring within that interval (or overlapping it) will be returned.",
 	{ optional => 'SPECIAL(show)', valid => '1.2:combined:auto_optional', list => ','},
 	    "This parameter is used to select additional information to be returned",
 	    "along with each record.  Its value should be",
@@ -135,7 +154,18 @@ sub auto_complete {
     my ($request) = @_;
     
     my (@requested_types) = $request->clean_param_list('type');
-    @requested_types = ('int', 'str', 'prs', 'txn') unless @requested_types;
+    
+    if ( @requested_types == 1 )
+    {
+	@requested_types = ('int', 'str', 'prs', 'txn', 'col', 'ref') if $requested_types[0] eq 'nav';
+	@requested_types = ('str', 'txn', 'col', 'ref') if $requested_types[0] eq 'cls';
+    }
+    
+    elsif ( @requested_types == 0 )
+    {
+	@requested_types = ('int', 'str', 'prs', 'txn');
+    }
+    
     my $name = $request->clean_param('name');
     
     # Unless we have at least three letters, and at least one record type, return an empty result.
@@ -148,15 +178,41 @@ sub auto_complete {
     # Get the limit, if any. Do other necessary parameter checks.
     
     my $total_limit = $request->clean_param('limit') || 10;
+    my $interval = $request->clean_param('interval');
     
     $name =~ s/^\s+//;
+    
+    my $options = { countries =>  $request->has_block('countries') };
+    
+    if ( $interval )
+    {
+	my $interval_record;
+	
+	if ( $interval =~ $IDRE{INT} )
+	{
+	    $interval_record = $PB2::IntervalData::IDATA{$2};
+	}
+	
+	else
+	{
+	    $interval_record = $PB2::IntervalData::INAME{lc $interval};
+	}
+	
+	unless ( ref $interval_record )
+	{
+	    die $request->exception(400, "Unknown interval '$interval'");
+	}
+	
+	$options->{early_age} = $interval_record->{early_age};
+	$options->{late_age} = $interval_record->{late_age};
+    }
     
     $request->strict_check;
     $request->extid_check;
     
     # Now collect up all of the results.
     
-    my (@txn_results, @int_results, @str_results, @prs_results);
+    my (@txn_results, @int_results, @str_results, @prs_results, @col_results, @ref_results);
     my (%type_processed, @found_types);
     
     foreach my $type ( @requested_types )
@@ -178,7 +234,6 @@ sub auto_complete {
 	
 	elsif ( $type eq 'str' )
 	{
-	    my $options = { countries =>  $request->has_block('countries') };
 	    @str_results = $request->auto_complete_str($name, $total_limit, $options);
 	    push @found_types, 'str' if @str_results;
 	}
@@ -187,6 +242,18 @@ sub auto_complete {
 	{
 	    @prs_results = $request->auto_complete_prs($name, $total_limit);
 	    push @found_types, 'prs' if @prs_results;
+	}
+	
+	elsif ( $type eq 'col' )
+	{
+	    @col_results = $request->auto_complete_col($name, $total_limit, $options);
+	    push @found_types, 'col' if @col_results;
+	}
+	
+	elsif ( $type eq 'ref' )
+	{
+	    @ref_results = $request->auto_complete_ref($name, $total_limit);
+	    push @found_types, 'ref' if @ref_results;
 	}
     }
     
@@ -232,6 +299,26 @@ sub auto_complete {
 	elsif ( $type eq 'prs' )
 	{
 	    foreach my $r (@prs_results)
+	    {
+		push @results, $r;
+		last if ++$count >= $per_type_limit;
+		last if @results > $total_limit;
+	    }
+	}
+	
+	elsif ( $type eq 'col' )
+	{
+	    foreach my $r (@col_results)
+	    {
+		push @results, $r;
+		last if ++$count >= $per_type_limit;
+		last if @results > $total_limit;
+	    }
+	}
+	
+	elsif ( $type eq 'ref' )
+	{
+	    foreach my $r (@ref_results)
 	    {
 		push @results, $r;
 		last if ++$count >= $per_type_limit;
