@@ -22,8 +22,10 @@ sub new {
     
     my ($class, $dbh, $options) = @_;
     
-    my $edt = { dbh => $dbh, 
-		conditions => [ ],
+    my $edt = { dbh => $dbh,
+		condition => { },
+		error => { },
+		warning => { },
 		result => '',
 		state => '' };
     
@@ -32,6 +34,7 @@ sub new {
 	$edt->{session_id} = $options->{session_id} if $options->{session_id};
 	$edt->{auth_info} = $options->{auth_info} if $options->{auth_info};
 	$edt->{debug} = 1 if $options->{debug};
+	$edt->{condition} = $options->{conditions};
     }
     
     my ($authorizer_no, $enterer_no, $is_super);
@@ -55,8 +58,8 @@ sub new {
     
     if ( $authorizer_no && $enterer_no )
     {
-	$edt->{authorizer_no} = $authorizer_no;
-	$edt->{enterer_no} = $enterer_no;
+	$edt->{authorizer_no} = $dbh->quote($authorizer_no);
+	$edt->{enterer_no} = $dbh->quote($enterer_no);
 	$edt->{is_super} = 1 if $is_super;
 	
 	$dbh->do("START TRANSACTION");
@@ -100,44 +103,102 @@ sub rollback {
 }
 
 
-sub add_condition {
+sub new_record {
+    
+    my ($edt) = @_;
+    
+    delete $edt->{this_record_errors};
+}
 
-    my ($edt, $message) = @_;
+
+sub add_condition {
     
-    push @{$edt->{conditions}}, $message;
+    my ($edt, $code, $record_label, $data) = @_;
     
-    if ( $message =~ /^[EC]_/ )
+    # if ( $code eq 'E_NOT_FOUND' && $edt->{condition}{PROCEED} )
+    # {
+    # 	$edt->{warning}{W_NOT_FOUND} ||= [ ];
+    # 	push @{$edt->{warning}{W_NOT_FOUND}}, [$record_label, $data];
+    # }
+    
+    # $$$ where do we put the logic to convert errors into warnings with 'PROCEED'?
+    
+    if ( $code =~ qr{ ^ [EC] _ }xsi )
     {
-	$edt->{errors_occurred} = 1;
+        $edt->{error}{$code} ||= [ ];
+	push @{$edt->{error}{$code}}, [$record_label, $data];
+	
+	$edt->{this_record_errors}++;
 	$edt->{state} = 'error';
+    }
+    
+    else
+    {
+	$edt->{warning}{$code} ||= [ ];
+	push @{$edt->{warning}{$code}}, [$record_label, $data];
     }
     
     return $edt;
 }
 
 
-sub conditions {
+sub errors {
 
     my ($edt) = @_;
     
-    return @{$edt->{conditions}};
+    return %{$edt->{error}};
 }
 
 
-sub clear_conditions {
-
+sub warnings {
+    
     my ($edt) = @_;
     
-    @{$edt->{conditions}} = ();
-    return $edt;
+    return %{$edt->{warning}};
 }
 
 
-sub can_proceed {
+sub allow_proceed {
 
     my ($edt) = @_;
     
-    return $edt->{state} && ($edt->{state} eq 'active' || $edt->{state} eq 'error') ? 1 : 0;
+    $edt->{allow_proceed} = 1;
+}
+
+
+# sub add_condition {
+
+#     my ($edt, $code, $record_label, $data) = @_;
+    
+#     $edt->{condition}{$code} ||= [ ];
+    
+#     push @{$edt->{condition}{"C_$code"}}, [$record_label, $data];
+    
+#     $edt->{errors_occurred} = 1;
+#     $edt->{state} = 'error';
+    
+#     return $edt;
+# }
+
+
+# sub conditions {
+
+#     my ($edt) = @_;
+    
+#     return %{$edt->{condition}};
+# }
+
+
+sub can_check {
+
+    my ($edt) = @_;
+    
+    if ( $edt->{state} )
+    {
+	return 1 $edt->{state} eq 'active' || $edt->{state} eq 'error';
+    }
+    
+    return 0;
 }
 
 
@@ -145,7 +206,13 @@ sub can_edit {
     
     my ($edt) = @_;
     
-    return $edt->{state} && $edt->{state} eq 'active' ? 1 : 0;
+    if ( $edt->{state} )
+    {
+	return 1 if $edt->{state} eq 'active';
+	return 1 if $edt->{state} eq 'error' && $edt->{condition}{PROCEED} && ! $edt->{this_record_errors};
+    }
+    
+    return 0;
 }
 
 
@@ -154,6 +221,7 @@ sub check_only {
     my ($edt) = @_;
     
     $edt->{state} = 'error';
+    delete $edt->{condition}{PROCEED};
 }
 
 # sub status {
@@ -167,14 +235,6 @@ sub check_only {
     
 #     return $edt->{status};
 # }
-
-
-sub errors_occurred {
-
-    my ($edt) = @_;
-    
-    return $edt->{errors_occurred};
-}
 
 
 sub dbh {
@@ -208,5 +268,22 @@ sub debug {
     return $edt->{debug};
 }
 
+
+sub generate_set_list {
+    
+    my ($edt, $fields, $values) = @_;
+    
+    return unless ref $fields eq 'ARRAY' && @$fields;
+    
+    my @set_list;
+    
+    foreach my $i ( 0..$#$fields )
+    {
+	my $value = defined $values->[$i] && $values->[$i] ne '' ? $values->[$i] : 'NULL';
+	push @set_list, "$fields->[$i]=$values->[$i]";
+    }
+    
+    return join(', ', @set_list);
+}
 
 1;

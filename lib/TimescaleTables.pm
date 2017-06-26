@@ -27,7 +27,8 @@ our(@EXPORT_OK) = qw(establish_timescale_tables copy_international_timescales
 
 
 our (%TIMESCALE_ATTRS) = 
-    ( timescale_name => 'varchar80',
+    ( timescale_id => 'IGNORE',
+      timescale_name => 'varchar80',
       timescale_type => { eon => 1, era => 1, period => 1, epoch => 1, stage => 1,
 			  substage => 1, zone => 1, other => 1, multi => 1 },
       timescale_extent => 'varchar80',
@@ -38,12 +39,13 @@ our (%TIMESCALE_ATTRS) =
       is_active => 'boolean' );
     
 our (%TIMESCALE_BOUND_ATTRS) = 
-    ( bound_type => { absolute => 1, spike => 1, same => 1, percent => 1, offset => 1 },
+    ( bound_id => 'IGNORE',
+      bound_type => { absolute => 1, spike => 1, same => 1, percent => 1, offset => 1 },
       interval_type => { eon => 1, era => 1, period => 1, epoch => 1, stage => 1,
 			 substage => 1, zone => 1, other => 1 },
       interval_extent => 'varchar80',
       interval_taxon => 'varchar80',
-      timescale_no => 'timescale_no',
+      timescale_id => 'timescale_no',
       is_locked => 'boolean',
       interval_id => 'interval_no',
       lower_id => 'interval_no',

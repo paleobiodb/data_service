@@ -20,38 +20,57 @@ use Moo::Role;
 our (@REQUIRES_ROLE) = qw(PB2::TableData);
 
 
+# The following hash will cache the list of ruleset parameters corresponding to various
+# rulesets. The hash keys are ruleset names.
+
+our (%RULESET_HAS_PARAM);
+
+
+
+# get_main_params ( conditions_ref, entry_ruleset )
+# 
+# Go through the main parameters to this request, looking for the following. If the parameter
+# 'allow' is found, then enter all of the specified conditions as hash keys into
+# $conditions_ref. These will already have been checked by the initial ruleset validation of the
+# request. Otherwise, any parameters we find that are specified in the ruleset whose name is given
+# in $entry_ruleset should be copied into a hash which is then returned as the result. These
+# parameters will be used as defaults for all records specified in the request body.
 
 sub get_main_params {
     
-    my ($request, $conditions_ref, $ignore_ref) = @_;
+    my ($request, $conditions_ref, $entry_ruleset) = @_;
+    
+    # First grab a list of the parameters that were specified in the request URL. Also allocate a
+    # new hash which will end up being the return value of this routine.
     
     my @request_keys = $request->param_keys;
     my $main_params = { };
     
-    $ignore_ref ||= { };
+    # If we have not already extracted the list of parameters corresponding to the named ruleset,
+    # do that now.
+    
+    if ( $entry_ruleset && ! defined $RULESET_HAS_PARAM{$entry_ruleset} )
+    {
+	my @ruleset_params = $request->ds->list_ruleset_params($entry_ruleset);
+	
+	foreach my $p ( @ruleset_params )
+	{
+	    $RULESET_HAS_PARAM{$entry_ruleset}{$p} = 1 if $p;
+	}
+    }
     
     foreach my $k ( @request_keys )
     {
-	my @list = $request->clean_param_list($k);
-	
-	if ( $k eq 'show' || $k eq 'return' || $k eq 'record_label' || $ignore_ref->{$k} )
+	if ( $k eq 'allow' )
 	{
-	    next;
-	}
-	
-	elsif ( $k eq 'allow' )
-	{
+	    my @list = $request->clean_param_list($k);
 	    $conditions_ref->{$_} = 1 foreach @list;
 	}
 	
-	elsif ( @list == 1 )
-	{
-	    $main_params->{$k} = $list[0];
-	}
+	next if $k eq 'record_label';
+	next if $entry_ruleset && ! $RULESET_HAS_PARAM{$entry_ruleset}{$k};
 	
-	else {
-	    $main_params->{$k} = \@list;
-	}
+	$main_params->{$k} = $request->clean_param($k);
     }
     
     return $main_params;
@@ -96,73 +115,84 @@ sub get_auth_info {
 
 sub unpack_input_records {
     
-    my ($request, $main_params_ref) = @_;
+    my ($request, $main_params_ref, $entry_ruleset, $main_key) = @_;
     
-    # First decode the body, and extract parameters from it. If an error occured, return an
-    # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
+    my (@raw_records, @records);
+    my ($body, $error);
     
-    my ($body, $error) = $request->decode_body;
+    # If the method is GET, then we don't expect any body. Assume that the main parameters
+    # constitute the only input record.
     
-    if ( $error )
+    if ( Dancer::request->method eq 'GET' )
     {
-	die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: $error");
+	push @raw_records, $main_params_ref;
     }
     
-    # If there was no request body at all, just return the hashref of main parameters minus
-    # those specified to be ignored. These will constitute the entire input record.
-    
-    elsif ( ! $body )
-    {
-	return $main_params_ref;
-    }
-    
-    # Otherwise, if the request body is an object with the key 'records' and an array value,
-    # then we assume that the array is a list of inptut records. If there is also a key 'all' with
-    # an object value, then we assume that it gives common parameters to be applied to all records.
-    
-    my (@body_records, @records);
-    
-    if ( ref $body eq 'HASH' && ref $body->{records} eq 'ARRAY' )
-    {
-	push @body_records, @{$body->{records}};
-	
-	if ( ref $body->{all} eq 'HASH' )
-	{
-	    foreach my $k ( keys %{$body->{all}} )
-	    {
-		$main_params_ref->{$k} = $body->{all}{$k};
-	    }
-	}
-    }
-    
-    # If we don't find a 'records' key with an array value, then assume that the body is a single
-    # record.
-    
-    elsif ( ref $body eq 'HASH' )
-    {
-	push @body_records, $body;
-    }
-    
-    # If the body is in fact an array, and that array is either empty or contains at least one
-    # object, then assume its elements are records.
-    
-    elsif ( ref $body eq 'ARRAY' && ( @$body == 0 || ref $body->[0] eq 'HASH'  ) )
-    {
-	push @body_records, @$body;
-    }
-    
-    # Otherwise, we must return a 400 error.
+    # Otherwise decode the body and extract input records from it. If an error occured, return an
+    # HTTP 400 result.
     
     else
     {
-	$request->add_error("E_BODY: Badly formatted request body: no record found");
-	die $request->exception(400, "Invalid request");
+	($body, $error) = $request->decode_body;
+	
+	if ( $error )
+	{
+	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: $error");
+	}
+	
+	# If there was no request body at all, throw an exception.
+	
+	elsif ( ! defined $body || $body eq '' )
+	{
+	    die $request->exception(400, "E_REQUEST_BODY: Request body must not be empty with PUT or POST");
+	}
+	
+	# Otherwise, if the request body is an object with the key 'records' and an array value,
+	# then we assume that the array is a list of inptut records. If there is also a key 'all'
+	# with an object value, then we assume that it gives common parameters to be applied to
+	# all records.
+	
+	if ( ref $body eq 'HASH' && ref $body->{records} eq 'ARRAY' )
+	{
+	    push @raw_records, @{$body->{records}};
+	    
+	    if ( ref $body->{all} eq 'HASH' )
+	    {
+		foreach my $k ( keys %{$body->{all}} )
+		{
+		    $main_params_ref->{$k} = $body->{all}{$k};
+		}
+	    }
+	}
+	
+	# If we don't find a 'records' key with an array value, then assume that the body is a single
+	# record.
+	
+	elsif ( ref $body eq 'HASH' )
+	{
+	    push @raw_records, $body;
+	}
+	
+	# If the body is in fact an array, and that array is either empty or contains at least one
+	# object, then assume its elements are records.
+	
+	elsif ( ref $body eq 'ARRAY' && ( @$body == 0 || ref $body->[0] eq 'HASH'  ) )
+	{
+	    push @raw_records, @$body;
+	}
+	
+	# Otherwise, we must return a 400 error.
+	
+	else
+	{
+	    die $request->exception("E_REQUEST_BODY: Badly formatted request body: no record found");
+	}
     }
     
     # Now, for each record, substitute any missing parameters with the values
-    # given by $main_params_ref.
+    # given by $main_params_ref. Then validate it according to the specified ruleset.
     
-    foreach my $r ( @body_records )
+    foreach my $r ( @raw_records )
     {
 	unless ( ref $r eq 'HASH' )
 	{
@@ -175,6 +205,12 @@ sub unpack_input_records {
 	    next;
 	}
 	
+	if ( $r == $main_params_ref )
+	{
+	    push @records, $r;
+	    next;
+	}
+	
 	foreach my $k ( keys %$main_params_ref )
 	{
 	    unless ( exists $r->{$k} )
@@ -183,12 +219,95 @@ sub unpack_input_records {
 	    }
 	}
 	
-	push @records, $r;
+	if ( $entry_ruleset )
+	{
+	    my $result = $request->validate_params($entry_ruleset, $r);
+	    
+	    my $label = $r->{record_id} || ($main_key && $r->{main_key}) || '';
+	    my $lstr = $label ? " ($label)" : "";
+	    
+	    foreach my $e ( $result->errors )
+	    {
+		$request->add_error("E_PARAM$lstr: $e");
+	    }
+	    
+	    foreach my $w ( $result->warnings )
+	    {
+		$request->add_warning("W_PARAM$lstr: $w");
+	    }
+	    
+	    push @records, $result->values;
+	}
+	
+	else
+	{
+	    push @records, $r;
+	}
     }
     
     # Now, return the list of records, which might be empty.
     
     return @records;
+}
+
+
+sub add_edt_warnings {
+    
+    my ($request, $edt) = @_;
+    
+    my (%warnings) = $edt->warnings;
+    
+    return unless %warnings;
+    my %added;
+    
+    foreach my $code ( keys %warnings )
+    {
+	next unless ref $warnings{$code} eq 'ARRAY';
+	
+	foreach my $w ( @{$warnings{$code}} )
+	{
+	    next unless ref $w eq 'ARRAY';
+	    
+	    my $str = $code;
+	    $str .= " ($w->[0])" if defined $w->[0] && $w->[0] ne '';
+	    $str .= ": $w->[1]" if defined $w->[1] && $w->[1] ne '';
+	    
+	    unless ( $added{$str} )
+	    {
+		$request->add_warning($str);
+		$added{$str} = 1;
+	    }
+	}
+    }
+}
+
+
+sub add_edt_errors {
+    
+    my ($request, $edt) = @_;
+    
+    my (%errors) = $edt->errors;
+    
+    return unless %errors;
+    my %added;
+    
+    foreach my $code ( keys %errors )
+    {
+	next unless ref $errors{$code} eq 'ARRAY';
+	
+	foreach my $e ( @{$errors{$code}} )
+	{
+	    my $str = $code;
+	    $str .= " ($e->[0])" if defined $e->[0] && $e->[0] ne '';
+	    $str .= ": $e->[1]" if defined $e->[1] && $e->[1] ne '';
+	    
+	    unless ( $added{$str} )
+	    {
+		$request->add_error($str);
+		$added{$str} = 1;
+	    }
+	}
+    }
 }
 
 

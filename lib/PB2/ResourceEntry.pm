@@ -90,7 +90,7 @@ sub initialize {
 
 
 
-our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, 'record_id' => 1 );
+our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, 'record_label' => 1 );
 
 
 sub update_resources {
@@ -157,7 +157,7 @@ sub update_resources {
 
 	foreach my $r ( @records )
 	{
-	    my $record_id = $r->{record_id} || $r->{eduresource_no} || '';
+	    my $record_id = $r->{record_label} || $r->{eduresource_no} || '';
 	    
 	    if ( $r->{eduresource_no} && $r->{eduresource_no} > 0 )
 	    {

@@ -946,11 +946,11 @@ sub process_ids {
 	    if defined $record->{$k} && $record->{$k} ne '';
     }
     
-    foreach my $k ( qw(authorizer_no enterer_no modifier_no) )
-    {
-	$record->{$k} = generate_identifier('PRS', $record->{$k})
-	    if defined $record->{$k} && $record->{$k} ne '';
-    }
+    # foreach my $k ( qw(authorizer_no enterer_no modifier_no) )
+    # {
+    # 	$record->{$k} = generate_identifier('PRS', $record->{$k})
+    # 	    if defined $record->{$k} && $record->{$k} ne '';
+    # }
 }
 
 1;

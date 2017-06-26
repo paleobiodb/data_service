@@ -81,7 +81,8 @@ sub initialize {
 			place => 0,
 			allow_method => 'GET,PUT,DELETE',
 			role => 'PB2::TimescaleEntry',
-			method => 'delete_timescales' },
+			method => 'delete_timescales',
+		        output => '1.2:timescales:basic' },
 	"This operation allows you to delete one or more existing timescales.");
     
     $ds2->list_node({ path => 'timescales/delete',
