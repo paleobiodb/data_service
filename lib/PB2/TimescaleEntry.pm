@@ -718,7 +718,7 @@ sub update_bounds {
 	{
 	    foreach my $timescale_id ( $edt->timescales_updated )
 	    {
-		$edt->delete_boundary('un_updated', $timescale_id, $conditions);
+		$edt->delete_boundary('unupdated', $timescale_id);
 		
 		foreach my $e ( $edt->conditions )
 		{

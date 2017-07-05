@@ -191,7 +191,8 @@ sub initialize {
 	{ select => [ 'tsb.bound_no', 'tsb.age', 'tsb.age_error', 'tsb.bound_type', 
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
 		      'tsb.offset', 'tsb.offset_error', 'tsb.lower_no', 'tsb.interval_no',
-		      'tsb.base_no', 'tsb.range_no', 'tsb.color_no', 'tsb.is_error',
+		      'tsb.base_no', 'tsbb.timescale_no as base_timescale_no',
+		      'tsb.range_no', 'tsb.color_no', 'tsb.is_error',
 		      'tsb.is_locked', 'tsb.is_different', 'tsb.color', 'tsb.reference_no',
 		      'tsil.interval_name as lower_name', 'tsi.interval_name' ],
 	  tables => [ 'tsb', 'tsi', 'tsil' ] },
@@ -233,9 +234,16 @@ sub initialize {
 	{ output => 'range_no', com_name => 'tid' },
 	    "If the boundary type is 'percent', this field specifies the other",
 	    "boundary of the pair between which this boundary lies.",
+	# { output => 'range_timescale_no', com_name => 'rtd' },
+	#     "If the boundary type is 'percent', this field specifies the",
+	#     "timescale identifier for the other boundary.",
 	{ output => 'base_no', com_name => 'bid' },
-	    "If the boundary type is 'reference', 'percent', or 'offset', this field specifies",
+	    "If the boundary type is 'same', 'percent', or 'offset', this field specifies",
 	    "the identifier of the base boundary with respect to which",
+	    "this boundary is defined.",
+	{ output => 'base_timescale_no', com_name => 'btd' },
+	    "If the boundary type is 'same', 'percent', or 'offset', this field specifies",
+	    "the timescale identifier for the base boundary with respect to which",
 	    "this boundary is defined.",
 	{ output => 'color_no', com_name => 'cid' },
 	    "If this field is not empty, it specifies the identifier of a boundary",
@@ -893,6 +901,7 @@ sub generate_join_list {
 	$joins .= "\tleft join $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n";
 	$joins .= "\tleft join $TIMESCALE_INTS as tsil on tsil.interval_no = tsb.lower_no\n"
 	    if $tables->{tsil};
+	$joins .= "\tleft join $TIMESCALE_BOUNDS as tsbb on tsbb.bound_no = tsb.base_no\n";
     }
     
     elsif ( $mt eq 'tsi' )
@@ -922,7 +931,7 @@ sub process_ids {
         
     # $request->delete_output_field('record_type');
     
-    foreach my $k ( qw(timescale_no source_timescale_no) )
+    foreach my $k ( qw(timescale_no source_timescale_no base_timescale_no) )
     {
 	$record->{$k} = generate_identifier('TSC', $record->{$k})
 	    if defined $record->{$k} && $record->{$k} ne '';

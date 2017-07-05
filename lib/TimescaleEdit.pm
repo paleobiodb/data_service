@@ -50,7 +50,7 @@ sub add_timescale {
     
     $edt->new_record;
     
-    my ($fields, $values) = $edt->check_timescale_attrs('add', 'timescale', $attrs, $conditions);
+    my ($fields, $values) = $edt->check_timescale_attrs('add', 'timescale', $attrs);
     
     # Then make sure that the necessary attributes have the proper values.
     
@@ -251,9 +251,9 @@ sub delete_timescale {
     # the assumption that the delete statement is so simple that the only way it could go wrong is
     # if the record is somehow already gone.
     
-    my @sql = "	DELETE FROM $TIMESCALE_BOUNDS WHERE timescale_no in ($timescale_id_list)";
+    my @sql = "	DELETE FROM $TIMESCALE_BOUNDS WHERE timescale_no in ($timescale_id)";
     
-    push @sql,"	DELETE FROM $TIMESCALE_DATA WHERE timescale_no in ($timescale_id_list)";
+    push @sql,"	DELETE FROM $TIMESCALE_DATA WHERE timescale_no in ($timescale_id)";
     
     my $delete_result;
     
@@ -590,6 +590,8 @@ sub delete_boundary {
     
     my $dbh = $edt->dbh;
     
+    my $timescale_id;
+    
     # If we are deleting one or more boundaries, we need to make sure the records
     # actually exist and fetch their current attributes.
     
@@ -601,7 +603,7 @@ sub delete_boundary {
 	# }
 	
 	my ($current) = $dbh->selectrow_hashref("
-		SELECT * FROM $TIMESCALE_BOUNDS WHERE bound_no = $bound_id");
+		SELECT * FROM $TIMESCALE_BOUNDS WHERE bound_no = $id");
 	
 	unless ( $current )
 	{
@@ -612,13 +614,13 @@ sub delete_boundary {
 	# If we get here, then there is a record in the database that we can delete. If a
 	# timescale id was specified, it had better match the one in the record.
 	
-	if ( defined $attrs->{timescale_id} && $attrs->{timescale_id} ne '' )
-	{
-	    if ( $current->{timescale_no} && $current->{timescale_no} ne $attrs->{timescale_id} )
-	    {
-		$edt->add_condition("E_BOUND_TIMESCALE: the specified bound is not associated with the specified timescale");
-	    }
-	}
+	# if ( defined $attrs->{timescale_id} && $attrs->{timescale_id} ne '' )
+	# {
+	#     if ( $current->{timescale_no} && $current->{timescale_no} ne $attrs->{timescale_id} )
+	#     {
+	# 	$edt->add_condition("E_BOUND_TIMESCALE: the specified bound is not associated with the specified timescale");
+	#     }
+	# }
 	
 	# Keep track of what timescale this bound is in, if we didn't know it originally.
 	
@@ -628,27 +630,24 @@ sub delete_boundary {
     # If we are given a timescale_id but not a bound_id, check to make sure that timescale
     # actually exists.
     
-    elsif ( $timescale_id ne '' )
+    elsif ( $delete_type ne 'timescale' || $delete_type eq 'unupdated' )
     {
-	unless ( $timescale_id =~ /^\d+$/ && $timescale_id > 0 )
-	{
-	    return $edt->add_condition("E_TIMESCALE_ID: bad value '$timescale_id' for 'timescale_id'");
-	}
-	
 	my ($ts) = $dbh->selectrow_hashref("
-		SELECT * FROM $TIMESCALE_DATA WHERE timescale_no = $timescale_id");
+		SELECT * FROM $TIMESCALE_DATA WHERE timescale_no = $id");
 	
 	unless ( $ts )
 	{
-	    return $edt->add_condition("E_NOT_FOUND: timescale '$timescale_id' is not in the database");
+	    return $edt->add_condition("E_NOT_FOUND: timescale '$id' is not in the database");
 	}
+	
+	$timescale_id = $id;
     }
     
     # Otherwise, we weren't given anything to work with.
     
     else
     {
-	return $edt->add_condition("E_PARAM: you must specify either 'bound_id' or 'timescale_id'");
+	croak "delete_boundary: bad value for 'delete_type'";
     }
     
     # Permission checks go here.
@@ -665,22 +664,22 @@ sub delete_boundary {
     
     my $sql;
     
-    if ( $bound_id ne '' )
+    if ( $delete_type eq 'bound' )
     {
 	$sql = "SELECT count(*) FROM $TIMESCALE_BOUNDS
-		WHERE base_no = $bound_id or range_no = $bound_id or
-			color_no = $bound_id or refsource_no = $bound_id";
+		WHERE base_no = $id or range_no = $id or
+			color_no = $id or refsource_no = $id";
     }
     
     else
     {
-	my $updated_clause = ''; $updated_clause = "and source.is_updated = 0" if $un_updated;
+	my $updated_clause = ''; $updated_clause = "and source.is_updated = 0" if $delete_type = 'unupdated';
 	
 	$sql = "SELECT count(*) FROM $TIMESCALE_BOUNDS as tsb
 		join $TIMESCALE_BOUNDS as source on tsb.base_no = source.bound_no
 		or tsb.range_no = source.bound_no or tsb.color_no = source.bound_no
 		or tsb.refsource_no = source.bound_no
-		WHERE source.timescale_no = $timescale_id $updated_clause";
+		WHERE source.timescale_no = $id $updated_clause";
     }
     
     my ($dependent_count) = $dbh->selectrow_hashref($sql);
@@ -696,27 +695,33 @@ sub delete_boundary {
 	
 	my $result;
 	
-	if ( $bound_id ne '' )
-	{
-	    $result = $edt->detach_related_bounds('bound', $bound_id);
-	}
-	
-	elsif ( $un_updated )
-	{
-	    $result = $edt->detach_related_bounds('unupdated', $timescale_id);
-	}
-	
-	else
-	{
-	    $result = $edt->detach_related_bounds('timescale', $timescale_id);
-	}
+	$result = $edt->detach_related_bounds($delete_type, $id);
     }
     
     # If we get here, then we can delete. We return an OK as long as no exception is caught, on
     # the assumption that the delete statement is so simple that the only way it could go wrong is
     # if the record is somehow already gone.
     
-    $sql = "	DELETE FROM $TIMESCALE_BOUNDS WHERE bound_no = $bound_id";
+    if ( $delete_type eq 'bound' )
+    {
+	$sql = " DELETE FROM $TIMESCALE_BOUNDS WHERE bound_no = $id";
+    }
+    
+    elsif ( $delete_type eq 'timescale' )
+    {
+	$sql = " DELETE FROM $TIMESCALE_BOUNDS WHERE timescale_no = $id";
+    }
+    
+    elsif ( $delete_type eq 'unupdated' )
+    {
+	$sql = " DELETE FROM $TIMESCALE_BOUNDS
+		WHERE timescale_no = $id and is_updated = 0";
+    }
+    
+    else
+    {
+	croak "delete_boundary: bad value '$delete_type' for 'delete_type'";
+    }
     
     print STDERR "$sql\n\n" if $edt->debug;
     
@@ -734,12 +739,12 @@ sub delete_boundary {
     if ( $delete_result )
     {
 	$edt->{timescale_updated} = $timescale_id;
-	return $bound_id;
+	return $id;
     }
     
     else
     {
-	$edt->add_condition("W_INTERNAL: an error occurred while deleting record '$bound_id'") unless $delete_result;
+	$edt->add_condition("W_INTERNAL: an error occurred while deleting record '$id'") unless $delete_result;
 	return 0;
     }
 }

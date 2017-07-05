@@ -195,7 +195,7 @@ sub can_check {
     
     if ( $edt->{state} )
     {
-	return 1 $edt->{state} eq 'active' || $edt->{state} eq 'error';
+	return 1 if $edt->{state} eq 'active' || $edt->{state} eq 'error';
     }
     
     return 0;
