@@ -27,6 +27,8 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
+our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD);
+
 
 sub initialize {
 
@@ -88,6 +90,13 @@ sub initialize {
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
+    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active');
+    $RESOURCE_TAGS = $ds->config_value('eduresources_tags');
+    $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
+    
+    die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
+	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
+
     my $dbh = $ds->get_connection;
     
     complete_output_block($ds, $dbh, '1.2:eduresources:basic', $RESOURCE_QUEUE);
@@ -166,6 +175,11 @@ sub list_resources {
     
     my $dbh = $request->get_connection;
     
+    my $active; $active = 1 if ($arg && $arg eq 'active') || $request->clean_param('active');
+    
+    my $main_table = $active ? $RESOURCE_ACTIVE : $RESOURCE_QUEUE;
+    my $primary_key = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
+    
     # Generate a list of filter expressions.
     
     my @filters;
@@ -173,7 +187,7 @@ sub list_resources {
     if ( my @id_list = $request->safe_param_list('eduresource_id') )
     {
 	my $id_string = join(',', @id_list);
-	push @filters, "edr.eduresource_no in ($id_string)";
+	push @filters, "edr.$primary_key in ($id_string)";
     }
     
     if ( my $title = $request->clean_param('title') )
@@ -197,8 +211,6 @@ sub list_resources {
     }
     
     push @filters, "1=1" unless @filters;
-    
-    my $active; $active = 1 if ($arg && $arg eq 'active') || $request->clean_param('active');
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -227,8 +239,6 @@ sub list_resources {
     
     # Determine the necessary joins.
     
-    my $main_table = $active ? $RESOURCE_DATA : $RESOURCE_QUEUE;
-    
     my $filter_string = join( q{ and }, @filters );
     
     # Generate the main query.
@@ -236,7 +246,7 @@ sub list_resources {
     $request->{main_sql} = "
 	SELECT $calc edr.* FROM $main_table as edr
         WHERE $filter_string
-	GROUP BY edr.eduresource_no $limit";
+	GROUP BY edr.$primary_key $limit";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     

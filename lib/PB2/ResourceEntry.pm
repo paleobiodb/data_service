@@ -50,7 +50,7 @@ sub initialize {
 	    "and has not yet been reviewed for possible activation.",
 	{ value => 'inactive' },
 	    "An inactive resource is one that has been reviewed, and was not",
-	    "chosen for acivation.");
+	    "chosen for activation.");
     
     # Rulesets for entering and updating data.
     
