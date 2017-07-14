@@ -17,6 +17,7 @@ use HTTP::Validate qw(:validators);
 
 use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
+use PB2::TableData qw(complete_ruleset);
 
 use EditTransaction;
 
@@ -84,10 +85,16 @@ sub initialize {
 	"the request body, or some in either place. If they are given",
 	"in the URL, they apply to every resource specified in the body.",
 	{ allow => '1.2:eduresources:entry' },
-	">>You may include one or more records in the body, in JSON form. The fields",
-	"given in the body must match the C<B<eduresources>> table definition in the database.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
+    
+    $ds->define_ruleset('1.2:eduresources:addupdate_body' =>
+	">>You may include one or more records in the body of the request, in JSON form.",
+	"The body must be either a single JSON object, or an array of objects. The fields",
+	"in each object must be as specified below. If no specific documentation is given",
+	"the value must match the corresponding column in the C<B<eduresources>> table",
+	"in the database.",
+	{ allow => '1.2:eduresources:entry' });
     
     $ds->define_ruleset('1.2:eduresources:update' =>
 	">>The following parameters may be given either in the URL or in",
@@ -98,6 +105,15 @@ sub initialize {
 	"given in the body must match the C<B<eduresources>> table definition in the database.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
+    
+    $ds->define_ruleset('1.2:eduresources:update_body' =>
+	">>You may include one or more records in the body of the request, in JSON form.",
+	"The body must be either a single JSON object, or an array of objects. The fields",
+	"in each object must be as specified below. If no specific documentation is given",
+	"the value must match the corresponding column in the C<B<eduresources>> table",
+	"in the database. For this operation, every record must include a value for",
+	"B<C<eduresource_id>>.",
+	{ allow => '1.2:eduresources:entry' });
     
     $ds->define_ruleset('1.2:eduresources:delete' =>
 	">>The following parameter may be given either in the URL or in",
@@ -114,6 +130,11 @@ sub initialize {
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
 	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
+    
+    my $dbh = $ds->get_connection;
+    
+    complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', $RESOURCE_QUEUE);
+    complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', $RESOURCE_QUEUE);
 }
 
 

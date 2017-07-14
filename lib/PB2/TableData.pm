@@ -15,7 +15,7 @@ use ExternalIdent qw(extract_identifier generate_identifier);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block get_table_schema);
+our (@EXPORT_OK) = qw(complete_output_block complete_ruleset get_table_schema);
 
 our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 			    resource_no => 'rid',
@@ -136,8 +136,58 @@ sub complete_output_block {
 	    push @$output_list, { set => $field_name, code => $COMMON_FIELD_IDSUB{$type} };
 	}
     }
+    
+    $ds->process_doc($block);
 }
 
+
+sub complete_ruleset {
+    
+    my ($ds, $dbh, $ruleset_name, $table_name) = @_;
+    
+    # First get a hash of table column definitions
+    
+    my $schema = get_table_schema($ds, $dbh, $table_name);
+    
+    # Then get the existing ruleset documentation and create a hash of the field names that are
+    # already defined. If no ruleset by this name is yet defined, croak.
+    
+    my $rs = $ds->validator->{RULESETS}{$ruleset_name};
+    
+    croak "unknown ruleset '$ruleset_name'" unless defined $rs;
+    
+    my @param_list = $ds->validator->list_params($ruleset_name);
+    
+    my %ruleset_has_field = map { $_ => 1 } @param_list;
+    
+    # We need to keep a list of the parameter records generated below, because the references to
+    # them inside the validator record are weakened.
+    
+    $ds->{my_param_records} = [ ];
+    
+    # Then go through the field list from the schema and add any fields that aren't already in the
+    # ruleset. We need to translate names that end in '_no' to '_id'.
+    
+    my $field_list = $schema->{_field_list};
+    
+    foreach my $field_name ( @$field_list )
+    {
+	next if $COMMON_FIELD_OTHER{$field_name};
+	
+	if ( $field_name =~ /(.*)_no/ )
+	{
+	    $field_name = $1 . '_id';
+	}
+	
+	next if $ruleset_has_field{$field_name};
+	
+	my $rr = { type => 'param', param => $field_name };
+	
+	push @{$ds->{my_param_records}}, $rr;
+	
+	$ds->validator->add_doc($rs, $rr, "This parameter sets the value of C<$field_name> in the table");
+    }
+}
 
 
 sub get_table_schema {
