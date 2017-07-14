@@ -620,27 +620,68 @@ sub validate_limited {
     {
 	next unless $schema->{$k};
 	
+	my $new_value;
+	
 	if ( $k eq 'authorizer_no' )
 	{
-	    next if $op ne 'add' && $op ne 'replace';
-	    next unless $request->{my_auth_info}{authorizer_no};
+	    if ( $op eq 'add' )
+	    {
+		$new_value = $request->{my_auth_info}{authorizer_no};
+	    }
+	    
+	    elsif ( $op eq 'replace' )
+	    {
+		$new_value = defined $record->{$k} && $record->{$k} ne '' ? $dbh->quote($record->{$k}) : $request->{my_auth_info}{authorizer_no};
+	    }
+	    
+	    else
+	    {
+		next;
+	    }
+	    
+	    next unless $new_value;
 	    push @fields, $k;
-	    push @values, $request->{my_auth_info}{authorizer_no};
+	    push @values, $new_value;
 	}
 	
 	elsif ( $k eq 'enterer_no' )
 	{
-	    next if $op ne 'add' && $op ne 'replace';
-	    croak "unauthorized access" unless $request->{my_auth_info}{enterer_no};
+	    if ( $op eq 'add' )
+	    {
+		$new_value = $request->{my_auth_info}{enterer_no};
+	    }
+	    
+	    elsif ( $op eq 'replace' )
+	    {
+		$new_value = defined $record->{$k} && $record->{$k} ne '' ? $dbh->quote($record->{$k}) : $request->{my_auth_info}{enterer_no};
+	    }
+	    
+	    else
+	    {
+		next;
+	    }
+	    
+	    next unless $new_value;
 	    push @fields, $k;
-	    push @values, $request->{my_auth_info}{enterer_no};
+	    push @values, $new_value;
 	}
 	
 	elsif ( $k eq 'modifier_no' )
 	{
-	    next if $op eq 'add' || $op eq 'replace';
+	    if ( $op eq 'replace' )
+	    {
+		$new_value = defined $record->{$k} && $record->{$k} ne '' ? $dbh->quote($record->{$k}) : $request->{my_auth_info}{enterer_no};
+	    }
+	    
+	    elsif ( $op eq 'update' )
+	    {
+		$new_value = $request->{my_auth_info}{enterer_no};
+		next;
+	    }
+	    
+	    next unless $new_value;
 	    push @fields, $k;
-	    push @values, $request->{my_auth_info}{enterer_no};
+	    push @values, $new_value;
 	}
 	
 	elsif ( $k eq 'modified' )
