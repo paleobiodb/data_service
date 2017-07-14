@@ -163,7 +163,7 @@ sub complete_ruleset {
     # We need to keep a list of the parameter records generated below, because the references to
     # them inside the validator record are weakened.
     
-    $ds->{my_param_records} = [ ];
+    $ds->{my_param_records} ||= [ ];
     
     # Then go through the field list from the schema and add any fields that aren't already in the
     # ruleset. We need to translate names that end in '_no' to '_id'.
