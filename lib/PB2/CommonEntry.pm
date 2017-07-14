@@ -12,6 +12,8 @@ use strict;
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
 
+use TableDefs qw(%TABLE_PROPERTIES);
+
 use ExternalIdent qw(extract_identifier generate_identifier %IDP %IDRE);
 use PB2::TableData qw(get_table_schema);
 
@@ -79,12 +81,27 @@ sub get_main_params {
 
 sub get_auth_info {
     
-    my ($request, $dbh, $message) = @_;
+    my ($request, $dbh, $table_name, $options) = @_;
+    
+    $options ||= { };
+    
+    # If we already have authorization info cached for this request, just
+    # return it. But if a table name is given, and the requestor's role for
+    # that table is not known, look it up.
     
     if ( $request->{my_auth_info} )
     {
+	if ( $table_name && ! $request->{my_auth_info}{table_name} )
+	{
+	    $request->get_table_role($dbh, $table_name);
+	}
+	
 	return $request->{my_auth_info};
     }
+    
+    # Otherwise, if we have a session cookie, then look up the authorization
+    # info from the session_data table. If we are given a table name, then
+    # look up the requestor's role for that table as well.
     
     $dbh ||= $request->get_connection;
     
@@ -92,24 +109,71 @@ sub get_auth_info {
     {
 	my $session_id = $dbh->quote($cookie_id);
 	
-	my $sql = "
-		SELECT authorizer_no, enterer_no, superuser FROM session_data
-		WHERE session_id = $session_id";
+	my $auth_info;
 	
-	my $auth_info = $dbh->selectrow_hashref($sql);
-	
-	unless ( ref $auth_info eq 'HASH' && $auth_info->{authorizer_no} && $auth_info->{enterer_no} )
+	if ( $table_name )
 	{
-	    die $request->exception(401, $message || "You must be logged in to perform this operation");
+	    my $quoted_table = $dbh->quote($table_name);
+	    
+	    my $sql = "
+		SELECT authorizer_no, enterer_no, superuser, s.role, p.role as table_role
+		FROM session_data as s left join table_permissions as p
+			on p.person_no = s.enterer_no and p.table_name = $quoted_table
+		WHERE session_id = $session_id";
+	    
+	    print STDERR "$sql\n\n" if $request->debug;
+	    
+	    $auth_info = $dbh->selectrow_hashref($sql);
+	    
+	    $auth_info->{$table_name} = $auth_info->{table_role} || 'none';
+	    delete $auth_info->{table_role};
 	}
 	
-	return $request->{my_auth_info} = $auth_info;
+	else
+	{
+	    my $sql = "
+		SELECT authorizer_no, enterer_no, superuser, role FROM session_data as s
+		WHERE session_id = $session_id";
+	    
+	    print STDERR "$sql\n\n" if $request->debug;
+	    
+	    $auth_info = $dbh->selectrow_hashref($sql);
+	}
+	
+	# If we have retrieved the proper information, cache it and return it.
+	
+	if ( ref $auth_info eq 'HASH' && $auth_info->{authorizer_no} && $auth_info->{enterer_no} )
+	{
+	    $request->{my_auth_info} = $auth_info;
+	    return $auth_info;
+	}
     }
     
-    else
+    die $request->exception(401, $options->{errmsg} || "You must be logged in to perform this operation");
+}
+
+
+sub get_table_role {
+    
+    my ($request, $dbh, $table_name) = @_;
+    
+    unless ( $request->{my_auth_info}{$table_name} )
     {
-	die $request->exception(401, $message || "You must be logged in to perform this operation");
+	$dbh ||= $request->get_connection;
+	
+	my $quoted_person = $dbh->quote($request->{my_auth_info}{enterer_no});
+	my $quoted_table = $dbh->quote($table_name);
+	
+	my $sql = "
+		SELECT role FROM table_permissions
+		WHERE person_no = $quoted_person and table_name = $quoted_table";
+	
+	my ($role) = $dbh->selectrow_array($sql);
+	
+	$request->{my_auth_info}{$table_name} = $role || 'none';
     }
+    
+    return $request->{my_auth_info}{$table_name};
 }
 
 
@@ -364,7 +428,12 @@ sub validate_against_table {
 	    next;
 	}
 	
-	if ( $field eq 'created' || $field eq 'modified' || $field eq 'authorizer_no' || $field eq 'enterer_no' || $key eq 'PRI' )
+	if ( $field eq 'created' || $field eq 'modified' || $field eq 'authorizer_no' || $field eq 'enterer_no' )
+	{
+	    next;
+	}
+	
+	if ( $key eq 'PRI' && $op ne 'replace' )
 	{
 	    next;
 	}
@@ -393,6 +462,11 @@ sub validate_against_table {
 	
 	else
 	{
+	    if ( ref $value eq 'ARRAY' )
+	    {
+		$value = join(',', @$value);
+	    }
+	    
 	    my $quoted = $dbh->quote($value);
 	    
 	    push @fields, $field;
@@ -406,24 +480,172 @@ sub validate_against_table {
     {
 	next unless $schema->{$k};
 	
-	next if $k eq 'modifier_no' && $op eq 'add';
-	
-	push @fields, $k;
-	
 	if ( $k eq 'authorizer_no' )
 	{
-	    croak "unauthorized access" unless $request->{my_auth_info}{authorizer_no};
+	    next if $op ne 'add' && $op ne 'replace';
+	    next unless $request->{my_auth_info}{authorizer_no};
+	    push @fields, $k;
 	    push @values, $request->{my_auth_info}{authorizer_no};
 	}
 	
-	elsif ( $k eq 'enterer_no' || $k eq 'modifier_no' )
+	elsif ( $k eq 'enterer_no' )
 	{
+	    next if $op ne 'add' && $op ne 'replace';
 	    croak "unauthorized access" unless $request->{my_auth_info}{enterer_no};
+	    push @fields, $k;
+	    push @values, $request->{my_auth_info}{enterer_no};
+	}
+	
+	elsif ( $k eq 'modifier_no' )
+	{
+	    next if $op eq 'add' || $op eq 'replace';
+	    push @fields, $k;
 	    push @values, $request->{my_auth_info}{enterer_no};
 	}
 	
 	elsif ( $k eq 'modified' )
 	{
+	    push @fields, $k;
+	    push @values, "NOW()";
+	}
+	
+	else
+	{
+	    croak "bad built-in field name";
+	}
+    }
+    
+    $record->{_fields} = \@fields;
+    $record->{_values} = \@values;
+    
+    # if ( $op eq 'add' )
+    # {
+    # 	my $field_string = join(',', @fields);
+    # 	my $value_string = join(',', @values);
+	
+    # 	return $field_string, $value_string;
+    # }
+    
+    # elsif ( $op eq 'update' )
+    # {
+    # 	my @exprs;
+	
+    # 	foreach my $i ( 0..$#$fields )
+    # 	{
+    # 	    push @exprs, "$fields[$i] = $values[$i]";
+    # 	}
+	
+    # 	my $expr_string = join(",\n", @exprs);
+	
+    # 	return $expr_string;
+    # }
+    
+    # else
+    # {
+    # 	croak "bad value for 'op'";
+    # }
+}
+
+
+sub validate_limited {
+    
+    my ($request, $dbh, $table_name, $op, $record, $label) = @_;
+    
+    croak "bad record" unless ref $record eq 'HASH';
+    
+    my (@fields, @values);
+    
+    my $schema = get_table_schema($request, $dbh, $table_name);
+    
+    foreach my $k ( keys %$record )
+    {
+	next unless $schema->{$k};
+	
+	my $value = $record->{$k};
+	my $field_record = $schema->{$k};
+	my $field = $field_record->{Field};
+	my $type = $field_record->{Type};
+	my $key = $field_record->{Key};
+	
+	if ( $field eq 'created' || $field eq 'created_on' || $field eq 'modified' || $field eq 'modified_on' ||
+	     $field eq 'authorizer_no' || $field eq 'enterer_no' )
+	{
+	    next;
+	}
+	
+	if ( $key eq 'PRI' && $op ne 'replace' )
+	{
+	    next;
+	}
+	
+	if ( ! defined $value )
+	{
+	    push @fields, $field;
+	    push @values, "NULL";
+	}
+	
+	elsif ( $type =~ /int\(/ )
+	{
+	    unless ( defined $value && $value =~ /^\d+$/ )
+	    {
+		$request->add_record_error('E_PARAM', $label, "field '$k' must have an integer value (was '$value')");
+		next;
+	    }
+	    
+	    push @fields, $field;
+	    push @values, $value;
+	}
+	
+	# elsif other types ...
+	
+	# otherwise, treat this as a string value
+	
+	else
+	{
+	    if ( ref $value eq 'ARRAY' )
+	    {
+		$value = join(',', @$value);
+	    }
+	    
+	    my $quoted = $dbh->quote($value);
+	    
+	    push @fields, $field;
+	    push @values, $quoted;
+	}
+    }
+    
+    # Now add the appropriate values for any of the built-in fields.
+    
+    foreach my $k ( qw(authorizer_no enterer_no modifier_no modified) )
+    {
+	next unless $schema->{$k};
+	
+	if ( $k eq 'authorizer_no' )
+	{
+	    next if $op ne 'add' && $op ne 'replace';
+	    next unless $request->{my_auth_info}{authorizer_no};
+	    push @fields, $k;
+	    push @values, $request->{my_auth_info}{authorizer_no};
+	}
+	
+	elsif ( $k eq 'enterer_no' )
+	{
+	    next if $op ne 'add' && $op ne 'replace';
+	    croak "unauthorized access" unless $request->{my_auth_info}{enterer_no};
+	    push @fields, $k;
+	    push @values, $request->{my_auth_info}{enterer_no};
+	}
+	
+	elsif ( $k eq 'modifier_no' )
+	{
+	    next if $op eq 'add' || $op eq 'replace';
+	    push @fields, $k;
+	    push @values, $request->{my_auth_info}{enterer_no};
+	}
+	
+	elsif ( $k eq 'modified' )
+	{
+	    push @fields, $k;
 	    push @values, "NOW()";
 	}
 	
@@ -478,7 +700,7 @@ sub do_add {
     my $field_string = join(',', @{$r->{_fields}});
     my $value_string = join(',', @{$r->{_values}});
     
-    my $quoted_table = $dbh->quote_identifier($table_name);
+    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
     
     my $sql = "INSERT INTO $quoted_table ($field_string) VALUES ($value_string)";
     
@@ -490,6 +712,31 @@ sub do_add {
     print STDERR "RESULT: 0\n" unless $insert_id;
     
     return $insert_id;
+}
+
+
+sub do_replace {
+    
+    my ($request, $dbh, $table_name, $r, $conditions_ref) = @_;
+    
+    $dbh ||= $request->get_connection;
+    $conditions_ref ||= { };
+    
+    croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
+    croak "empty record" unless @{$r->{_fields}};
+    
+    my $field_string = join(',', @{$r->{_fields}});
+    my $value_string = join(',', @{$r->{_values}});
+    
+    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
+    
+    my $sql = "REPLACE INTO $quoted_table ($field_string) VALUES ($value_string)";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result = $dbh->do($sql);
+    
+    return $result;
 }
 
 
@@ -512,7 +759,7 @@ sub do_update {
     }
     
     my $set_string = join(",\n", @exprs);
-    my $quoted_table = $dbh->quote_identifier($table_name);
+    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
     
     my $sql = " UPDATE $quoted_table
 		SET $set_string
@@ -523,6 +770,172 @@ sub do_update {
     my $result = $dbh->do($sql);
     
     return $result;
+}
+
+
+sub fetch_record_values {
+    
+    my ($request, $dbh, $table_name, $key_expr, $field_expr) = @_;
+    
+    $dbh ||= $request->get_connection;
+    
+    croak "empty key expr" unless $key_expr;
+    croak "empty field expr" unless $field_expr;
+    
+    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
+    
+    my $sql = "	SELECT $field_expr FROM $quoted_table
+		WHERE $key_expr LIMIT 1";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my (@values) = $dbh->selectrow_array($sql);
+    
+    return @values;
+}
+
+
+sub check_record_auth {
+    
+    my ($request, $dbh, $table_name, $record_no, $record_authorizer_no, $record_enterer_no) = @_;
+    
+    my $table_role = $request->get_table_role($dbh, $table_name);
+    
+    # If we have a record number, then we need to determine what permissions the requestor has to
+    # this particular record.
+    
+    if ( $record_no )
+    {
+	# If the table role is 'admin' or if they have superuser privileges, then they have
+	# 'admin' privileges on any record.
+	
+	if ( $table_role eq 'admin' || $request->{my_auth_info}{superuser} )
+	{
+	    print STDERR "    Role for $table_name : $record_no = 'admin' from " . 
+		($request->{my_auth_info}{superuser} ? 'superuser' : 'table role') . "\n\n"
+		if $request->debug;
+	    
+	    return 'admin';
+	}
+	
+	# If they are the person who originally created the record, then they have 'edit'
+	# privileges to it.
+	
+	elsif ( $record_enterer_no && $request->{my_auth_info}{enterer_no} &&
+		$record_enterer_no eq $request->{my_auth_info}{enterer_no} )
+	{
+	    print STDERR "    Role for $table_name : $record_no = 'edit' from enterer\n\n"
+		if $request->debug;
+	    
+	    return 'edit';
+	}
+	
+	# If the person who originally created the record has the same authorizer as the person
+	# who originally created the record, then they have 'edit' privileges to it unless
+	# the table has the 'BY_ENTERER' property.
+	
+	elsif ( $record_authorizer_no && $request->{my_auth_info}{authorizer_no} &&
+		$record_authorizer_no eq $request->{my_auth_info}{authorizer_no} &&
+		! $TABLE_PROPERTIES{$table_name}{BY_ENTERER} )
+	{
+	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer\n\n"
+		if $request->debug;
+	    
+	    return 'edit';
+	}
+	
+	# Otherwise, the requestor has no privileges on this record.
+	
+	else
+	{
+	    print STDERR "    Role for $table_name : $record_no = 'none'\n\n"
+		if $request->debug;
+	    
+	    return 'none';
+	}
+    }
+    
+    # Otherwise, we just return their permissions with respect to the table as
+    # a whole.
+    
+    elsif ( $request->{my_auth_info}{superuser} )
+    {
+	print STDERR "    Role for $table_name : <new> = 'admin' from superuser\n\n"
+	    if $request->debug;
+	
+	return 'admin';
+    }
+    
+    elsif ( $table_role && $table_role ne 'none' )
+    {
+	print STDERR "    Role for $table_name : <new> = '$table_role' from table role\n\n"
+	    if $request->debug;
+	
+	return $table_role;
+    }
+    
+    elsif ( my $allow_post = $TABLE_PROPERTIES{$table_name}{ALLOW_POST} )
+    {
+	if ( $allow_post eq 'MEMBERS' && $request->{my_auth_info}{enterer_no} )
+	{
+	    print STDERR "    Role for $table_name : <new> = 'post' from MEMBERS\n\n"
+		if $request->debug;
+	    
+	    return 'post';
+	}
+	
+	elsif ( $allow_post eq 'AUTHORIZED' && $request->{my_auth_info}{authorizer_no} )
+	{
+	    print STDERR "    Role for $table_name : <new> = 'post' from AUTHORIZED\n\n"
+		if $request->debug;
+	    
+	    return 'post';
+	}
+    }
+    
+    else
+    {
+	print STDERR "    Role for $table_name : <new> = 'none'\n\n"
+	    if $request->debug;
+	
+	return 'none';
+    }
+}
+
+
+sub add_record_error {
+    
+    my ($request, $code, $label, $string) = @_;
+    
+    my $err = $code;
+    $err .= " ($label)" if defined $label && $label ne '';
+    $err .= ": $string" if defined $string && $string ne '';
+    
+    unless ( $request->{my_err_hash}{$err} )
+    {
+	$request->{my_err_hash}{$err} = 1;
+	$request->add_error($err);
+    }
+    
+    return;
+}
+
+
+sub add_record_warning {
+    
+    my ($request, $code, $label, $string) = @_;
+    
+    my $err = $code;
+    $err .= " ($label)" if defined $label && $label ne '';
+    $err .= ": $string" if defined $string && $string ne '';
+    
+    unless ( $request->{my_warning_hash}{$err} )
+    {
+	$request->{my_warning_hash}{$err} = 1;
+	$request->add_warning($err);
+    }
+    
+    return;
 }
 
 

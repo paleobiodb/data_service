@@ -29,7 +29,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $MACROSTRAT_INTERVALS $MACROSTRAT_SCALES $MACROSTRAT_SCALES_INTS
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
-		      $RESOURCE_DATA $RESOURCE_QUEUE);
+		      $RESOURCE_DATA $RESOURCE_QUEUE %TABLE_PROPERTIES);
 
 
 # classic tables
@@ -132,5 +132,14 @@ our $TIMESCALE_PERMS = 'timescale_perms';
 
 our $RESOURCE_DATA = 'eduresources';
 our $RESOURCE_QUEUE = 'eduresources_queue';
+
+
+# Table properties, especially regarding permissions. If the table has the
+# property 'BY_ENTERER' then records may only be entered by their enterers,
+# rather than by anybody in their authorizer group. If the table has the
+# property 'ALLOW_POST', with the value 'MEMBERS', then all logged-in database
+# members can post to it.
+
+our (%TABLE_PROPERTIES) = ( $RESOURCE_QUEUE => { ALLOW_POST => 'MEMBERS' } );
 
 1;

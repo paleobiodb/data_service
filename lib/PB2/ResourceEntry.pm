@@ -28,6 +28,8 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::CommonEntry);
 
+our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD);
+
 # initialize ( )
 # 
 # This routine is called by the Web::DataService module, and allows us to define
@@ -38,6 +40,17 @@ sub initialize {
     my ($class, $ds) = @_;
     
     # Value sets for specifying data entry options.
+    
+    $ds->define_set('1.2:eduresources:status' =>
+	{ value => 'active' },
+	    "An active resource is one that is visible on the Resources page",
+	    "of this website.",
+	{ value => 'pending' },
+	    "A pending resource is one that is not currently active on the Resources page,",
+	    "and has not yet been reviewed for possible activation.",
+	{ value => 'inactive' },
+	    "An inactive resource is one that has been reviewed, and was not",
+	    "chosen for acivation.");
     
     # Rulesets for entering and updating data.
     
@@ -50,11 +63,21 @@ sub initialize {
 	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
 	    "The identifier of the educational resource record to be updated. If it is",
 	    "empty, a new record will be created. You can also use the alias B<C<id>>.",
-	{ optional => 'is_active', valid => BOOLEAN_VALUE },
-	    "If this parameter is given with a true value, then the resource record",
-	    "will be moved to the active list. If given with a false value, then",
-	    "the record will be moved to the inactive list. If not specified,",
-	    "the record will not be moved.");
+	{ optional => 'status', valid => '1.2:eduresources:status' },
+	    "This parameter should only be given if the logged-in user has administrator",
+	    "privileges on the educational resources table. It allows the resource to be",
+	    "activated or inactivated, controlling whether or not it appears on the",
+	    "Resources page of the website. Newly added resources are given the status",
+	    "C<B<pending>> by default. If an active resource is later updated, its",
+	    "status is automatically changed to C<B<changes>>. If the record's status",
+	    "is later set to C<B<active>> once again, the new values will be copied",
+	    "over to the table that drives the Resources page. Accepted values for",
+	    "this parameter are:",
+	{ optional => 'tags', valid => ANY_VALUE },
+	    "The value of this parameter should be a list of integers, identifying",
+	    "the tags/headings with which this resource should be associated. You",
+	    "can specify this as either a comma-separated list in a string, or as a",
+	    "JSON list of integers.");
     
     $ds->define_ruleset('1.2:eduresources:addupdate' =>
 	">>The following parameters may be given either in the URL or in",
@@ -85,7 +108,12 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
+    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active');
+    $RESOURCE_TAGS = $ds->config_value('eduresources_tags');
+    $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
     
+    die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
+	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
 }
 
 
@@ -107,7 +135,7 @@ sub update_resources {
     $conditions{CREATE_RECORDS} = 1 if $arg && $arg eq 'add';
     
     my $main_params = $request->get_main_params(\%conditions);
-    my $auth_info = $request->get_auth_info($dbh);
+    my $auth_info = $request->get_auth_info($dbh, $RESOURCE_QUEUE);
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
@@ -116,23 +144,145 @@ sub update_resources {
     
     # Now go through the records and validate each one in turn.
     
+    my %record_activation;
+    
     foreach my $r ( @records )
     {
 	my $record_label = $r->{record_label} || $r->{eduresource_id} || '';
 	my $op = $r->{eduresource_id} ? 'update' : 'add';
 	
-	if ( my $id = $r->{eduresource_id} )
+	# If we are updating an existing record, we need to validate its fields.
+	
+	if ( my $record_id = $r->{eduresource_id} || $r->{eduresource_no} )
 	{
-	    $r->{eduresource_no} = $request->validate_extident('EDR', $id, 'eduresource_id');
+	    $r->{eduresource_no} = $record_id = $request->validate_extident('EDR', $record_id, 'eduresource_id');
 	    delete $r->{eduresource_id};
+	    
+	    # Fetch the current authorization and status information.
+	    
+	    my ($current_status, $record_authno, $record_entno) = 
+		$request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
+					      'status, authorizer_no, enterer_no');
+	    
+	    # Make sure the record actually exists.
+	    
+	    unless ( defined $current_status )
+	    {
+		$request->add_record_error('E_NOT_FOUND', $record_label, "record '$record_id' not found");
+		next;
+	    }
+	    
+	    # Then make sure that we have authorization to modify this record.
+	    
+	    my $role = $request->check_record_auth($dbh, $RESOURCE_QUEUE, $record_id, $record_authno, $record_entno);
+	    
+	    # If we have the 'admin' role on this record, we can modify the record and we can also
+	    # adjust its status.
+	    
+	    if ( $role eq 'admin' )
+	    {
+		# If the status is being explicitly set to 'active', then the new record
+		# values should be copied into the active resources table. This is a valid
+		# operation even if a previous version of the record is already in that table.
+		
+		if ( $r->{status} && $r->{status} eq 'active' )
+		{
+		    $record_activation{$record_id} = 'copy';
+		}
+		
+		# Otherwise, if this record has a status that marks it as already having been
+		# copied to the active table, then we need to check and see if it is being set
+		# to some inactive status. If so, it will need to be removed from the active
+		# table.
+		
+		elsif ( $r->{status} && $r->{status} ne 'changes' )
+		{
+		    $record_activation{$record_id} = 'delete';
+		}
+		
+		else
+		{
+		    $r->{status} = 'changes';
+		}
+		
+		# Otherwise, the status can be set or left unchanged according to the value of
+		# $r->{status}.
+	    }
+	    
+	    # If we have the 'edit' role on this record, then we can update its values but not its
+	    # status. If the current status is 'active', then it will be automatically changed to
+	    # 'changes'.
+	    
+	    elsif ( $role eq 'edit' )
+	    {
+		if ( $r->{status} )
+		{
+		    $request->add_record_warning('W_PERM', $record_label, 
+				"you do not have permission to change the status of this record");
+		    next;
+		}
+		
+		if ( $current_status eq 'active' )
+		{
+		    $r->{status} = 'changes';
+		}
+	    }
+	    
+	    # Otherwise, we do not have permission to edit this record.
+	    
+	    else
+	    {
+		$request->add_record_error('E_PERM', $record_label, "you do not have permission to edit this record");
+		next;
+	    }
 	}
 	
-	elsif ( ! $conditions{CREATE_RECORDS} )
+	# If we do not have a record identifier, then we are adding a new record. This requires
+	# different validation checks.
+	
+	else
 	{
-	    my $lstr = $record_label ? " ($record_label)" : "";
-	    $request->add_error("C_CREATE$lstr: missing record identifier; this operation cannot create new records");
-	    next;
+	    # Make sure that this operation allows us to create records in the first place.
+	    
+	    unless ( $conditions{CREATE_RECORDS} )
+	    {
+		$request->add_record_error('C_CREATE', $record_label, "missing record identifier; this operation cannot create new records");
+		next;
+	    }
+	    
+	    # Make sure that we have authorization to add records to this table.
+	    
+	    my $role = $request->check_record_auth($dbh, $RESOURCE_QUEUE);
+	    
+	    # If we have 'admin' privileges on the resource queue table, then we can add a new
+	    # record with any status we choose. The status will default to 'pending' if not
+	    # explicitly set.
+	    
+	    if ( $role eq 'admin' )
+	    {
+		$r->{status} ||= 'pending';
+	    }
+	    
+	    # If we have 'post' privileges, we can create a new record. The status will
+	    # automatically be set to 'pending', regardless of what is specified in the record.
+	    
+	    elsif ( $role eq 'post' )
+	    {
+		$r->{status} = 'pending';
+	    }
+	    
+	    # Otherwise, we have no ability to do anything at all.
+	    
+	    else
+	    {
+		$request->add_record_error('E_PERM', undef, 
+				    "you do not have permission to add records");
+		next;
+	    }
 	}
+	
+	# Now validate the fields and construct the lists that will be used to generate an SQL
+	# statement to add or update the record.
 	
 	$request->validate_against_table($dbh, $RESOURCE_QUEUE, $op, $r, $record_label);
     }
@@ -146,7 +296,8 @@ sub update_resources {
     
     # Now go through and try to actually add or update these records.
     
-    my $edt = EditTransaction->new($dbh, { debug => $request->debug,
+    my $edt = EditTransaction->new($dbh, { conditions => \%conditions,
+					   debug => $request->debug,
 					   auth_info => $auth_info });
     
     # $request->check_edt($edt);
@@ -157,13 +308,22 @@ sub update_resources {
 
 	foreach my $r ( @records )
 	{
-	    my $record_id = $r->{record_label} || $r->{eduresource_no} || '';
+	    my $record_label = $r->{record_label} || $r->{eduresource_no} || '';
 	    
-	    if ( $r->{eduresource_no} && $r->{eduresource_no} > 0 )
+	    # If we have a value for eduresource_no, update the corresponding record.
+	    
+	    if ( my $record_id = $r->{eduresource_no} )
 	    {
-		$request->do_update($dbh, $RESOURCE_QUEUE, "eduresource_no = $r->{eduresource_no}", $r, \%conditions);
+		$request->do_update($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", $r, \%conditions);
 		
-		$updated_records{$r->{eduresource_no}} = 1;
+		$updated_records{$record_id} = 1;
+		
+		# If this record should be added to or removed from the active table, do so now.
+		
+		if ( $record_activation{$record_id} )
+		{
+		    $request->activate_resource($dbh, $r->{eduresource_no}, $record_activation{$record_id});
+		}		
 	    }
 	    
 	    else
@@ -171,30 +331,14 @@ sub update_resources {
 		my $new_id = $request->do_add($dbh, $RESOURCE_QUEUE, $r, \%conditions);
 		
 		$updated_records{$new_id} = 1 if $new_id;
-	    }
-	    
-	    # Then process all conditions (errors, cautions, warnings) generated by this
-	    # operation.
-	    
-	    foreach my $e ( $edt->conditions )
-	    {
-		if ( $record_id ne '' )
-		{
-		    $e =~ s/^(\w+)[:]\s*/$1 ($record_id): /;
-		}
 		
-		if ( $e =~ /^[EC]/ )
-		{
-		    $request->add_error($e);
-		}
+		# If this record should be added to the active table, do so now.
 		
-		else
+		if ( $r->{status} eq 'active' )
 		{
-		    $request->add_warning($e);
+		    $request->activate_resource($dbh, $new_id, 'copy');
 		}
 	    }
-	    
-	    $edt->clear_conditions;
 	}
     }
     
@@ -207,12 +351,18 @@ sub update_resources {
 	die $_;
     };
     
+    # If any warnings (non-fatal conditions) were detected, add them to the
+    # request record so they will be communicated back to the user.
+    
+    $request->add_edt_warnings($edt);
+    
     # If we completed the procedure without any exceptions, but error conditions were detected
     # nonetheless, we also roll back the transaction.
     
-    if ( $edt->errors_occurred )
+    if ( $edt->errors )
     {
 	$edt->rollback;
+	$request->add_edt_errors($edt);
 	die $request->exception(400, "Bad request");
     }
     
@@ -236,6 +386,96 @@ sub update_resources {
 	my ($id_string) = join(',', keys %updated_records);
 	
 	$request->list_updated_resources($dbh, $id_string) if $id_string;
+    }
+}
+
+
+sub activate_resource {
+    
+    my ($request, $dbh, $eduresource_no, $action) = @_;
+    
+    $dbh ||= $request->get_connection;
+    
+    my $quoted_id = $dbh->quote($eduresource_no);
+    
+    unless ( $eduresource_no && $eduresource_no =~ /^\d+$/ )
+    {
+	die "error activating or inactivating resource: bad resource id";
+    }
+    
+    if ( $action eq 'delete' )
+    {
+	my $sql = "
+		DELETE FROM $RESOURCE_ACTIVE
+		WHERE $RESOURCE_IDFIELD = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	my $result = $dbh->do($sql);
+	
+	$sql = "	DELETE FROM $RESOURCE_TAGS
+		WHERE resource_id = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	$result = $dbh->do($sql);
+		
+	my $a = 1;	# we can stop here when debugging
+    }
+    
+    elsif ( $action eq 'copy' )
+    {
+	my $sql = "
+		SELECT e.eduresource_no as id, e.* FROM $RESOURCE_QUEUE as e
+		WHERE eduresource_no = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	my ($r) = $dbh->selectrow_hashref($sql);
+	
+	$request->validate_limited($dbh, $RESOURCE_ACTIVE, 'replace', $r, $eduresource_no);
+	
+	$request->do_replace($dbh, $RESOURCE_ACTIVE, $r, { });
+	
+	$sql =  "	DELETE FROM $RESOURCE_TAGS
+		WHERE resource_id = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	my $result = $dbh->do($sql);
+	
+	# Then add tags, if any
+	
+	if ( $r->{tags} )
+	{
+	    my @tags = split /,\s*/, $r->{tags};
+	    my @insert;
+	    
+	    foreach my $t ( @tags )
+	    {
+		next unless $t =~ /^\d+$/ && $t;
+		
+		push @insert, "($eduresource_no, $t)";
+	    }
+	    
+	    if ( @insert )
+	    {
+		my $insert_str = join(', ', @insert);
+		
+		$sql = "	INSERT INTO $RESOURCE_TAGS (resource_id, tag_id) VALUES $insert_str";
+		
+		print STDERR "$sql\n\n" if $request->debug;
+		
+		my $result = $dbh->do($sql);
+		
+		my $a = 1;	# we can stop here when debugging
+	    }
+	}
+    }
+    
+    else
+    {
+	die "invalid activation action '$action'";
     }
 }
 
@@ -271,13 +511,9 @@ sub list_updated_resources {
     # Generate the main query.
     
     $request->{main_sql} = "
-	(SELECT edr.*, 'active' as status FROM $RESOURCE_DATA as edr
-        WHERE edr.eduresource_no in ($list)
-	GROUP BY edr.eduresource_no)
-	UNION
-	(SELECT edr.*, 'pending' as status FROM $RESOURCE_QUEUE as edr
+	SELECT edr.* FROM $RESOURCE_QUEUE as edr
 	WHERE edr.eduresource_no in ($list)
-	GROUP BY edr.eduresource_no)";
+	GROUP BY edr.eduresource_no";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     

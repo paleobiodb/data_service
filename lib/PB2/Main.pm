@@ -1045,9 +1045,25 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'eduresources/single',
 			title => "Single educational resource",
+			place => 1,
 			method => 'get_resource' },
-	"This operation returns information about a single educational resource",
+	"This operation returns information about a single educational resource record",
 	"specified by identifier.");
+
+    $ds2->define_node({ path => 'eduresources/list',
+			title => "Lists of educational resources",
+			place => 2,
+			method => 'list_resources' },
+	"This operation returns information about a list of educational resource",
+	"records, selected according to the query parameters.");
+
+    $ds2->define_node({ path => 'eduresources/active',
+			title => "Active educational resources",
+			place => 3,
+			method => 'list_resources',
+		        arg => 'active' },
+	"This operation returns a list of active educational resource records,",
+	"selected according to the query parameters.");
     
     # The following paths are used for miscellaneous documentation
     

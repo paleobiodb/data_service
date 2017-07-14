@@ -151,21 +151,32 @@ sub get_table_schema {
 	return $ds->{my_table_schema}{$table_name};
     }
     
-    my $quoted_table = $dbh->quote($table_name);
-    my ($check_table, %schema);
+    my ($sql, $check_table, %schema, $quoted_table);
+    
+    if ( $table_name =~ /(\w+)[.](.+)/ )
+    {
+	$sql = "SHOW TABLES FROM `$1` LIKE " . $dbh->quote($2);
+	$quoted_table = "`$1`.". $dbh->quote_identifier($2);
+    }
+    
+    else
+    {
+	$sql = "SHOW TABLES LIKE " . $dbh->quote($table_name);
+	$quoted_table = $dbh->quote_identifier($table_name);
+    }
+    
+    print STDERR "$sql\n\n";
     
     eval {
-	($check_table) = $dbh->selectrow_array("SHOW TABLES LIKE $quoted_table");
+	($check_table) = $dbh->selectrow_array($sql);
     };
     
     croak "unknown table '$table_name'" unless $check_table;
     
-    my $quoted2 = $dbh->quote_identifier($table_name);
-    
-    print STDERR "	SHOW COLUMNS FROM $quoted2\n\n" if $ds->debug;
+    print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $ds->debug;
     
     my $columns_ref = $dbh->selectall_arrayref("
-	SHOW COLUMNS FROM $quoted2", { Slice => { } });
+	SHOW COLUMNS FROM $quoted_table", { Slice => { } });
     
     my @field_list;
     
