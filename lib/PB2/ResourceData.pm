@@ -14,7 +14,7 @@ package PB2::ResourceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE);
+use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES);
 
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
 use PB2::TableData qw(complete_output_block);
@@ -27,25 +27,65 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
-our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD);
+our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
 
 
 sub initialize {
 
     my ($class, $ds) = @_;
     
+    # Value sets
+    
+    $ds->define_set('1.2:eduresources:status' =>
+	{ value => 'active' },
+	    "An active resource is one that is visible on the Resources page",
+	    "of this website.",
+	{ value => 'changes' },
+	    "A resource with this status is active, but changes have been made to the",
+	    "record in the queue table that have not been copied to the active table.",
+	    "The status of an active record is set to this value automatically if any",
+	    "changes are made to it.",
+	{ value => 'pending' },
+	    "A pending resource is one that is not currently active on the Resources page,",
+	    "and has not yet been reviewed for possible activation.",
+	{ value => 'inactive' },
+	    "An inactive resource is one that has been reviewed, and the reviewer did",
+	    "not choose to activate it.");
+    
+    # Optional output
+    
+    $ds->define_output_map('1.2:eduresources:optional_output' =>
+	{ value => 'image', maps_to => '1.2:eduresources:image_data' },
+	    "The image data, if any, associated with this record.",
+	{ value => 'ent', maps_to => '1.2:common:ent' },
+	    "The identifiers of the people who authorized, entered and modified this record",
+	{ value => 'entname', maps_to => '1.2:common:entname' },
+	    "The names of the people who authorized, entered and modified this record",
+        { value => 'crmod', maps_to => '1.2:common:crmod' },
+	    "The C<created> and C<modified> timestamps for the collection record");
+    
+    # Output blocks
+    
     $ds->define_block('1.2:eduresources:basic' =>
 	{ output => 'eduresource_no', com_name => 'oid' },
 	    "The unique identifier of this record in the database.",
+	{ set => '*', code => \&process_record},
 	{ set => 'eduresource_no', code => sub {
 		    my ($request, $value) = @_;
 		    return $value unless $request->{block_hash}{extids};
 		    return generate_identifier('EDR', $value);
 		} },
 	{ output => 'status', com_name => 'sta' },
-	    "If this educational resource record is displayed",
-	    "on the appropriate website page, the status is C<B<active>>.",
-	    "Otherwise, it will be C<B<pending>>.");
+	    "The status will be one of the following codes:",
+	    $ds->document_set('1.2:eduresources:status'));
+    
+    $ds->define_block('1.2:eduresources:image_data' =>
+	{ select => 'edi.image_data', tables => 'edi' },
+	{ output => 'image_data', com_name => 'image_data' },
+	    "The image data, if any, associated with this record. If it was properly",
+	    "uploaded, it should be encoded in base64.");
+    
+    # Rulesets
     
     $ds->define_ruleset('1.2:eduresources:specifier' =>
 	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
@@ -58,6 +98,8 @@ sub initialize {
 	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id', list => ',' },
 	    "Return the educational resource record(s) corresponding to the specified",
 	    "identifier(s). You can specify more than one, as a comma-separated list.",
+	{ param => 'status', valid => '1.2:eduresources:status', list => ',' },
+	    "Return only resource records with the specified status or statuses.",
 	{ param => 'title', valid => ANY_VALUE },
 	    "Return only records with the given word or phrase in the title",
 	{ param => 'keyword', valid => ANY_VALUE, list => ',' },
@@ -72,6 +114,7 @@ sub initialize {
 	    "returned if one exists, and a 'not found' error otherwise. If this parameter",
 	    "is not included, or is included with the value C<B<no>>, then the master",
 	    "version of the record is returned (if one exists).",
+	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -82,17 +125,21 @@ sub initialize {
 	    "returned if one exists, and a 'not found' error otherwise. If this parameter",
 	    "is not included, or is included with the value C<B<no>>, then the master",
 	    "version of the record is returned (if one exists).",
+	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:eduresources:active' =>
 	{ allow => '1.2:eduresources:selector' },
+	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active');
-    $RESOURCE_TAGS = $ds->config_value('eduresources_tags');
+    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active') || $RESOURCE_DATA;
+    $RESOURCE_TAGS = $ds->config_value('eduresources_tags') || 'eduresource_tags';
     $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
+    $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
+    $RESOURCE_IMG_PATH = $ds->config_value('eduresources_img_path');
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
 	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
@@ -138,16 +185,32 @@ sub get_resource {
     
     # Determine the necessary joins.
     
-    my $main_table = $active ? $RESOURCE_DATA : $RESOURCE_QUEUE;
+    my ($join_list) = $request->generate_join_list($request->tables_hash, $active);
     
-    # my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
+    my $extra_fields = $request->select_string;
+    $extra_fields = ", $extra_fields" if $extra_fields;
     
     # Generate the main query.
     
-    $request->{main_sql} = "
-	SELECT edr.* FROM $main_table as edr
+    if ( $active )
+    {
+	$request->{main_sql} = "
+	SELECT edr.* $extra_fields FROM $RESOURCE_ACTIVE as edr $join_list
         WHERE edr.eduresource_no = $id
 	GROUP BY edr.eduresource_no";
+    }
+    
+    else
+    {
+	$request->{main_sql} = "
+	SELECT edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
+	FROM $RESOURCE_QUEUE as edr
+		left join $RESOURCE_IMAGES as edi using (eduresource_no)
+		left join $RESOURCE_ACTIVE as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
+		$join_list
+        WHERE edr.eduresource_no = $id
+	GROUP BY edr.eduresource_no";
+    }
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
@@ -177,8 +240,7 @@ sub list_resources {
     
     my $active; $active = 1 if ($arg && $arg eq 'active') || $request->clean_param('active');
     
-    my $main_table = $active ? $RESOURCE_ACTIVE : $RESOURCE_QUEUE;
-    my $primary_key = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
+    # my $main_table = $active ? $RESOURCE_ACTIVE : $RESOURCE_QUEUE;
     
     # Generate a list of filter expressions.
     
@@ -186,8 +248,15 @@ sub list_resources {
     
     if ( my @id_list = $request->safe_param_list('eduresource_id') )
     {
+	my $primary_key = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
 	my $id_string = join(',', @id_list);
 	push @filters, "edr.$primary_key in ($id_string)";
+    }
+    
+    if ( my @status_list = $request->safe_param_list('status', 'SELECT_NONE') )
+    {
+	my $status_string = join("','", @status_list);
+	push @filters, "edr.status in ('$status_string')";
     }
     
     if ( my $title = $request->clean_param('title') )
@@ -239,14 +308,38 @@ sub list_resources {
     
     # Determine the necessary joins.
     
+    my $tables = $request->tables_hash;
+    
+    delete $tables->{edi} unless $active;
+    
+    my ($join_list) = $request->generate_join_list($request->tables_hash, $active);
+    
     my $filter_string = join( q{ and }, @filters );
+    
+    my $extra_fields = $request->select_string;
+    $extra_fields = ", $extra_fields" if $extra_fields;
     
     # Generate the main query.
     
-    $request->{main_sql} = "
-	SELECT $calc edr.* FROM $main_table as edr
+    if ( $active )
+    {
+	$request->{main_sql} = "
+	SELECT $calc edr.* $extra_fields
+	FROM $RESOURCE_ACTIVE as edr $join_list
         WHERE $filter_string
-	GROUP BY edr.$primary_key $limit";
+	GROUP BY edr.$RESOURCE_IDFIELD $limit";
+    }
+    
+    else
+    {
+	$request->{main_sql} = "
+	SELECT $calc edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
+	FROM $RESOURCE_QUEUE as edr
+		left join $RESOURCE_IMAGES as edi using (eduresource_no)
+		left join $RESOURCE_ACTIVE as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
+        WHERE $filter_string
+	GROUP BY edr.eduresource_no";
+    }
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
@@ -258,6 +351,39 @@ sub list_resources {
     # If we were asked to get the count, then do so
     
     $request->sql_count_rows;
+}
+
+
+sub generate_join_list {
+    
+    my ($request, $tables_ref, $active) = @_;
+    
+    my $joins = '';
+    
+    if ( $tables_ref->{edi} && $active )
+    {
+	$joins .= "left join $RESOURCE_IMAGES as edi on edi.eduresource_no = edr.$RESOURCE_IDFIELD\n";
+    }
+    
+    return $joins;
+}
+
+
+sub process_record {
+    
+    my ($request, $record) = @_;
+    
+    $record->{image} ||= $record->{active_image};
+    
+    if ( $record->{image} && $RESOURCE_IMG_PATH )
+    {
+	$record->{image} = "$RESOURCE_IMG_PATH/$record->{image}";
+    }
+    
+    elsif ( $record->{has_image} )
+    {
+	$record->{image} ||= 1;
+    }
 }
 
 

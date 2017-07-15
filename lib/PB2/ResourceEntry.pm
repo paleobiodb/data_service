@@ -15,7 +15,7 @@ package PB2::ResourceEntry;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE);
+use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use PB2::TableData qw(complete_ruleset);
 
@@ -23,13 +23,16 @@ use EditTransaction;
 
 use Carp qw(carp croak);
 use Try::Tiny;
+use MIME::Base64;
 
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::CommonEntry);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::CommonEntry PB2::ResourceData);
 
-our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD);
+our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
+
+our (%RESOURCE_IGNORE) = ( 'image_data' => 1 );
 
 # initialize ( )
 # 
@@ -41,17 +44,6 @@ sub initialize {
     my ($class, $ds) = @_;
     
     # Value sets for specifying data entry options.
-    
-    $ds->define_set('1.2:eduresources:status' =>
-	{ value => 'active' },
-	    "An active resource is one that is visible on the Resources page",
-	    "of this website.",
-	{ value => 'pending' },
-	    "A pending resource is one that is not currently active on the Resources page,",
-	    "and has not yet been reviewed for possible activation.",
-	{ value => 'inactive' },
-	    "An inactive resource is one that has been reviewed, and was not",
-	    "chosen for activation.");
     
     # Rulesets for entering and updating data.
     
@@ -92,7 +84,7 @@ sub initialize {
 	">>You may include one or more records in the body of the request, in JSON form.",
 	"The body must be either a single JSON object, or an array of objects. The fields",
 	"in each object must be as specified below. If no specific documentation is given",
-	"the value must match the corresponding column in the C<B<eduresources>> table",
+	"the value must match the corresponding column in the C<B<$RESOURCE_QUEUE>> table",
 	"in the database.",
 	{ allow => '1.2:eduresources:entry' });
     
@@ -124,9 +116,10 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active');
-    $RESOURCE_TAGS = $ds->config_value('eduresources_tags');
+    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active') || 'eduresources';
+    $RESOURCE_TAGS = $ds->config_value('eduresources_tags') || 'eduresource_tags';
     $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
+    $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
 	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
@@ -305,7 +298,7 @@ sub update_resources {
 	# Now validate the fields and construct the lists that will be used to generate an SQL
 	# statement to add or update the record.
 	
-	$request->validate_against_table($dbh, $RESOURCE_QUEUE, $op, $r, $record_label);
+	$request->validate_against_table($dbh, $RESOURCE_QUEUE, $op, $r, 'eduresource_no', \%RESOURCE_IGNORE);
     }
     
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
@@ -337,6 +330,8 @@ sub update_resources {
 	    {
 		$request->do_update($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", $r, \%conditions);
 		
+		$request->store_image($dbh, $record_id, $r) if $r->{image_data};
+		
 		$updated_records{$record_id} = 1;
 		
 		# If this record should be added to or removed from the active table, do so now.
@@ -350,6 +345,8 @@ sub update_resources {
 	    else
 	    {
 		my $new_id = $request->do_add($dbh, $RESOURCE_QUEUE, $r, \%conditions);
+		
+		$request->store_image($dbh, $new_id, $r) if $new_id && $r->{image_data};
 		
 		$updated_records{$new_id} = 1 if $new_id;
 		
@@ -411,6 +408,20 @@ sub update_resources {
 }
 
 
+sub store_image {
+    
+    my ($request, $dbh, $eduresource_no, $r) = @_;
+    
+    return unless $eduresource_no && $r->{image_data};
+    
+    my $sql = "REPLACE INTO $RESOURCE_IMAGES (eduresource_no, image_data) values ($eduresource_no, ?)";
+    
+    my $result = $dbh->do($sql, { }, $r->{image_data});
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
 sub activate_resource {
     
     my ($request, $dbh, $eduresource_no, $action) = @_;
@@ -423,6 +434,8 @@ sub activate_resource {
     {
 	die "error activating or inactivating resource: bad resource id";
     }
+    
+    # If we are directed to delete this resource from the active table, do so.
     
     if ( $action eq 'delete' )
     {
@@ -440,23 +453,51 @@ sub activate_resource {
 	print STDERR "$sql\n\n" if $request->debug;
 	
 	$result = $dbh->do($sql);
+	
+	# Delete the image file, if any.
+	
+	$request->delete_image_file($eduresource_no);
 		
 	my $a = 1;	# we can stop here when debugging
     }
     
+    # If the action is 'copy', then we copy the record from the queue table to the active
+    # table. The active table has a somewhat different set of fields.
+    
     elsif ( $action eq 'copy' )
     {
+	# First get the record values to copy.
+	
 	my $sql = "
-		SELECT e.eduresource_no as id, e.* FROM $RESOURCE_QUEUE as e
+		SELECT e.eduresource_no as id, i.image_data, e.*
+		FROM $RESOURCE_QUEUE as e join $RESOURCE_IMAGES as i using (eduresource_no)
 		WHERE eduresource_no = $quoted_id";
 	
 	print STDERR "$sql\n\n" if $request->debug;
 	
 	my ($r) = $dbh->selectrow_hashref($sql);
 	
-	$request->validate_limited($dbh, $RESOURCE_ACTIVE, 'replace', $r, $eduresource_no);
+	# We want the 'authorizer_no' and 'created' fields to be filled in automatically.
+	
+	delete $r->{authorizer_no};
+	delete $r->{created};
+	
+	# Then handle the image, if any. We need to decode the image data and write it to a file
+	# in the proper directory, then stuff the file name into the 'image' field of the mirrored
+	# record.
+	
+	$r->{image} = $request->write_image_file($r->{id}, $r->{image_data});
+	
+	# Now check the field values.
+	
+	$request->validate_against_table($dbh, $RESOURCE_ACTIVE, 'mirror', $r, 'id');
+	
+	# Then copy the record over to the active table.
 	
 	$request->do_replace($dbh, $RESOURCE_ACTIVE, $r, { });
+	
+	# Then handle the tags. We first delete any which are there, then create new records for
+	# the ones we know are supposed to be there.
 	
 	$sql =  "	DELETE FROM $RESOURCE_TAGS
 		WHERE resource_id = $quoted_id";
@@ -464,8 +505,6 @@ sub activate_resource {
 	print STDERR "$sql\n\n" if $request->debug;
 	
 	my $result = $dbh->do($sql);
-	
-	# Then add tags, if any
 	
 	if ( $r->{tags} )
 	{
@@ -499,6 +538,76 @@ sub activate_resource {
 	die "invalid activation action '$action'";
     }
 }
+
+
+sub write_image_file {
+    
+    my ($request, $record_id, $image_data) = @_;
+    
+    return unless $RESOURCE_IMG_DIR;
+    return unless $image_data;
+    
+    # First, decode the image and determine the type.
+    
+    my $suffix;
+    
+    if ( $image_data =~ qr{ ^ data: .*? image/(\w+) }xsi )
+    {
+	$suffix = $1;
+	$image_data =~ s/ ^ data: .*? , //xsi;
+    }
+    
+    my $raw_data = MIME::Base64::decode($image_data);
+    
+    unless ( $suffix )
+    {
+	my $first_four = unpack("l", $raw_data);
+	
+	if ( $first_four == 1196314761 )
+	{
+	    $suffix = 'png';
+	}
+	
+	elsif ( $first_four == 944130375 )
+	{
+	    $suffix = 'gif';
+	}
+	
+	elsif ( $first_four == 544099650 )
+	{
+	    $suffix = 'bmp';
+	}
+	
+	elsif ( $first_four == -520103681 )
+	{
+	    $suffix = 'jpg';
+	}
+	
+	else
+	{
+	    $suffix = ".image";
+	}
+    }
+    
+    my $filename = "eduresource_$record_id.$suffix";
+    my $filepath = "$RESOURCE_IMG_DIR/$filename";
+    
+    open( my $fout, ">", $filepath ) || die "could not open '$filepath': $!";
+    binmode($fout);
+    
+    print $fout $raw_data;
+    
+    close $fout || die "error writing '$filename': $!";
+    
+    return $filename;
+}
+
+
+sub delete_image_file {
+
+
+}
+
 
 
 sub delete_resources {

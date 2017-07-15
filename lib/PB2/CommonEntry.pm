@@ -315,6 +315,189 @@ sub unpack_input_records {
 }
 
 
+sub validate_against_table {
+    
+    my ($request, $dbh, $table_name, $op, $record, $primary_key, $ignore_keys) = @_;
+    
+    croak "bad record" unless ref $record eq 'HASH';
+    croak "bad value '$op' for op" unless $op eq 'add' || $op eq 'update' || $op eq 'mirror';
+    
+    my (@fields, @values);
+    
+    $dbh ||= $request->get_connection;
+    
+    # Get the schema for the requested table.
+    
+    my $schema = get_table_schema($request, $dbh, $table_name);
+    
+    croak "no schema found for table '$table_name'" unless $schema;
+    
+    # First go through all of the fields in the record and validate their values.
+    
+    foreach my $k ( keys %$record )
+    {
+	# Skip any field called 'record_label', because that is only used by the data service and
+	# has no relevance to the backend database.
+	
+	next if $k eq 'record_label';
+	
+	# If we were given a hash of keys to ignore, then ignore them.
+	
+	next if ref $ignore_keys && $ignore_keys->{$k};
+	
+	# For each field in the record, fetch the correspondingly named field from the schema.
+	
+	my $value = $record->{$k};
+	my $field_record = $schema->{$k};
+	my $field = $field_record->{Field};
+	my $type = $field_record->{Type};
+	my $key = $field_record->{Key};
+	
+	# If no such field is found, skip this one. Add a warning to the request unless the
+	# operation is 'mirror', in which case the mirror table may be missing some of the fields
+	# of the original one.
+	
+	unless ( $field_record && $field)
+	{
+	    $request->add_record_warning('W_PARAM', $record->{record_label} || $record->{$primary_key}, 
+					 "unknown field '$k' in the table for this data type")
+		unless $op eq 'mirror';
+	    
+	    next;
+	}
+	
+	# The following set of fields is handled automatically, and are skipped if they appear in
+	# the record.
+	
+	if ( $field eq 'modified_no' || $field eq 'authorizer_no' || $field eq 'enterer_no' ||
+	     $field eq 'modified' || $field eq 'modified_on' )
+	{
+	    next;
+	}
+	
+	# The following set of fields are skipped automatically unless the operation is 'mirror'
+	# and the field has a value in the source record. This includes the primary key for the
+	# table, if one was specified. For add operations there is no primary key value yet, and
+	# for updates it is handled separately.
+	
+	if ( $field eq 'created' || $field eq 'created_on' || ($primary_key && $field eq $primary_key) )
+	{
+	    next unless $op eq 'mirror' && defined $value && $value ne '';
+	}
+	
+	# Now we add the field and its value to their respective lists. These can be used later to
+	# construct an SQL insert or update statement.
+	
+	# If the field value is undefined, set it to "NULL". We need to do this because the user
+	# may specifically want to null out that field in the record.
+	
+	if ( ! defined $value )
+	{
+	    push @fields, $field;
+	    push @values, "NULL";
+	}
+	
+	# Otherwise, if the field has an integer type then make sure the corresponding value is an
+	# integer. Record an error otherwise.
+	
+	elsif ( $type =~ /int\(/ )
+	{
+	    unless ( defined $value && $value =~ /^\d+$/ )
+	    {
+		$request->add_record_error('E_PARAM', $record->{record_label} || $record->{$primary_key}, 
+					   "field '$k' must have an integer value (was '$value')");
+		next;
+	    }
+	    
+	    push @fields, $field;
+	    push @values, $value;
+	}
+	
+	# elsif other types ...
+	
+	# Otherwise, treat this as a string value. If the value we get is an array, just
+	# concatenate the items with commas. (This will probably have to be revisited later, and
+	# made into a more general mechanism).
+	
+	else
+	{
+	    if ( ref $value eq 'ARRAY' )
+	    {
+		$value = join(',', @$value);
+	    }
+	    
+	    my $quoted = $dbh->quote($value);
+	    
+	    push @fields, $field;
+	    push @values, $quoted;
+	}
+    }
+    
+    # Now add the appropriate values for any of the built-in fields.
+    
+    foreach my $k ( qw(authorizer_no enterer_no modifier_no modified modified_on) )
+    {
+	next unless $schema->{$k};
+	
+	my $new_value;
+	
+	# We don't set 'authorizer_no' and 'enterer_no' on update, the values given when the
+	# record was created are retained. If we are mirroring from another record, then we copy
+	# the value from that record if there is one. Otherwise, we use the authorizer_no and
+	# enterer_no associated with the requestor.
+	
+	if ( $k eq 'authorizer_no' || $k eq 'enterer_no' )
+	{
+	    next if $op eq 'update';
+	    
+	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
+		$dbh->quote($record->{$k}) : 
+		$request->{my_auth_info}{$k};
+	    
+	    # If the table has an authorizer_no or enterer_no field, then we need to be providing
+	    # a value for them. If no value can be found, then bomb.
+	    
+	    croak "no value was found for '$k'" unless $new_value;
+	}
+	
+	# The modifier_no field is in some sense the opposite of authorizer_no and enterer_no,
+	# since it is set on update but not when we are adding a new record. If we are mirroring
+	# from another record, use the value from that record if there is one. Otherwise, set this
+	# field to the enterer_no associated with the requestor.
+	
+	elsif ( $k eq 'modifier_no' )
+	{
+	    next if $op eq 'add';
+	    
+	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
+		$dbh->quote($record->{$k}) : 
+		$request->{my_auth_info}{enterer_no};
+	}
+	
+	# The modification timestamp is copied if the record is being mirrored, and otherwise set
+	# to the current timestamp unless the operation is 'add'.
+	
+	elsif ( $k eq 'modified' || $k eq 'modified_on' )
+	{
+	    next if $op eq 'add';
+	    
+	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ?
+		$dbh->quote($record->{$k}) :
+		'NOW()';
+	}
+	
+	push @fields, $k;
+	push @values, $new_value;
+    }
+    
+    # We stuff the fields and values into special record keys, so they will be available for use
+    # in constructing subsequent SQL statements.
+    
+    $record->{_fields} = \@fields;
+    $record->{_values} = \@values;
+}
+
+
 sub add_edt_warnings {
     
     my ($request, $edt) = @_;
@@ -395,336 +578,6 @@ sub validate_extident {
     {
 	$request->add_error("E_PARAM: the value of '$param' must be a valid external identifier of type '$IDP{$type}'");
     }
-}
-
-
-sub validate_against_table {
-    
-    my ($request, $dbh, $table_name, $op, $record, $label) = @_;
-    
-    croak "bad record" unless ref $record eq 'HASH';
-    
-    my $lstr = defined $label && $label ne '' ? " ($label)" : "";
-    
-    # $$$ op = add or update
-    
-    my (@fields, @values);
-    
-    my $schema = get_table_schema($request, $dbh, $table_name);
-    
-    foreach my $k ( keys %$record )
-    {
-	next if $k eq 'record_label';
-	
-	my $value = $record->{$k};
-	my $field_record = $schema->{$k};
-	my $field = $field_record->{Field};
-	my $type = $field_record->{Type};
-	my $key = $field_record->{Key};
-	
-	unless ( $field_record && $field )
-	{
-	    $request->add_warning("W_PARAM$lstr: unknown field '$k' in the table for this data type");
-	    next;
-	}
-	
-	if ( $field eq 'created' || $field eq 'modified' || $field eq 'authorizer_no' || $field eq 'enterer_no' )
-	{
-	    next;
-	}
-	
-	if ( $key eq 'PRI' && $op ne 'replace' )
-	{
-	    next;
-	}
-	
-	if ( ! defined $value )
-	{
-	    push @fields, $field;
-	    push @values, "NULL";
-	}
-	
-	elsif ( $type =~ /int\(/ )
-	{
-	    unless ( defined $value && $value =~ /^\d+$/ )
-	    {
-		$request->add_error("E_PARAM$lstr: field '$k' must have an integer value (was '$value')");
-		next;
-	    }
-	    
-	    push @fields, $field;
-	    push @values, $value;
-	}
-	
-	# elsif other types ...
-	
-	# otherwise, treat this as a string value
-	
-	else
-	{
-	    if ( ref $value eq 'ARRAY' )
-	    {
-		$value = join(',', @$value);
-	    }
-	    
-	    my $quoted = $dbh->quote($value);
-	    
-	    push @fields, $field;
-	    push @values, $quoted;
-	}
-    }
-    
-    # Now add the appropriate values for any of the built-in fields.
-    
-    foreach my $k ( qw(authorizer_no enterer_no modifier_no modified) )
-    {
-	next unless $schema->{$k};
-	
-	if ( $k eq 'authorizer_no' )
-	{
-	    next if $op ne 'add' && $op ne 'replace';
-	    next unless $request->{my_auth_info}{authorizer_no};
-	    push @fields, $k;
-	    push @values, $request->{my_auth_info}{authorizer_no};
-	}
-	
-	elsif ( $k eq 'enterer_no' )
-	{
-	    next if $op ne 'add' && $op ne 'replace';
-	    croak "unauthorized access" unless $request->{my_auth_info}{enterer_no};
-	    push @fields, $k;
-	    push @values, $request->{my_auth_info}{enterer_no};
-	}
-	
-	elsif ( $k eq 'modifier_no' )
-	{
-	    next if $op eq 'add' || $op eq 'replace';
-	    push @fields, $k;
-	    push @values, $request->{my_auth_info}{enterer_no};
-	}
-	
-	elsif ( $k eq 'modified' )
-	{
-	    push @fields, $k;
-	    push @values, "NOW()";
-	}
-	
-	else
-	{
-	    croak "bad built-in field name";
-	}
-    }
-    
-    $record->{_fields} = \@fields;
-    $record->{_values} = \@values;
-    
-    # if ( $op eq 'add' )
-    # {
-    # 	my $field_string = join(',', @fields);
-    # 	my $value_string = join(',', @values);
-	
-    # 	return $field_string, $value_string;
-    # }
-    
-    # elsif ( $op eq 'update' )
-    # {
-    # 	my @exprs;
-	
-    # 	foreach my $i ( 0..$#$fields )
-    # 	{
-    # 	    push @exprs, "$fields[$i] = $values[$i]";
-    # 	}
-	
-    # 	my $expr_string = join(",\n", @exprs);
-	
-    # 	return $expr_string;
-    # }
-    
-    # else
-    # {
-    # 	croak "bad value for 'op'";
-    # }
-}
-
-
-sub validate_limited {
-    
-    my ($request, $dbh, $table_name, $op, $record, $label) = @_;
-    
-    croak "bad record" unless ref $record eq 'HASH';
-    
-    my (@fields, @values);
-    
-    my $schema = get_table_schema($request, $dbh, $table_name);
-    
-    foreach my $k ( keys %$record )
-    {
-	next unless $schema->{$k};
-	
-	my $value = $record->{$k};
-	my $field_record = $schema->{$k};
-	my $field = $field_record->{Field};
-	my $type = $field_record->{Type};
-	my $key = $field_record->{Key};
-	
-	if ( $field eq 'created' || $field eq 'created_on' || $field eq 'modified' || $field eq 'modified_on' ||
-	     $field eq 'authorizer_no' || $field eq 'enterer_no' )
-	{
-	    next;
-	}
-	
-	if ( $key eq 'PRI' && $op ne 'replace' )
-	{
-	    next;
-	}
-	
-	if ( ! defined $value )
-	{
-	    push @fields, $field;
-	    push @values, "NULL";
-	}
-	
-	elsif ( $type =~ /int\(/ )
-	{
-	    unless ( defined $value && $value =~ /^\d+$/ )
-	    {
-		$request->add_record_error('E_PARAM', $label, "field '$k' must have an integer value (was '$value')");
-		next;
-	    }
-	    
-	    push @fields, $field;
-	    push @values, $value;
-	}
-	
-	# elsif other types ...
-	
-	# otherwise, treat this as a string value
-	
-	else
-	{
-	    if ( ref $value eq 'ARRAY' )
-	    {
-		$value = join(',', @$value);
-	    }
-	    
-	    my $quoted = $dbh->quote($value);
-	    
-	    push @fields, $field;
-	    push @values, $quoted;
-	}
-    }
-    
-    # Now add the appropriate values for any of the built-in fields.
-    
-    foreach my $k ( qw(authorizer_no enterer_no modifier_no modified) )
-    {
-	next unless $schema->{$k};
-	
-	my $new_value;
-	
-	if ( $k eq 'authorizer_no' )
-	{
-	    if ( $op eq 'add' )
-	    {
-		$new_value = $request->{my_auth_info}{authorizer_no};
-	    }
-	    
-	    elsif ( $op eq 'replace' )
-	    {
-		$new_value = defined $record->{$k} && $record->{$k} ne '' ? $dbh->quote($record->{$k}) : $request->{my_auth_info}{authorizer_no};
-	    }
-	    
-	    else
-	    {
-		next;
-	    }
-	    
-	    next unless $new_value;
-	    push @fields, $k;
-	    push @values, $new_value;
-	}
-	
-	elsif ( $k eq 'enterer_no' )
-	{
-	    if ( $op eq 'add' )
-	    {
-		$new_value = $request->{my_auth_info}{enterer_no};
-	    }
-	    
-	    elsif ( $op eq 'replace' )
-	    {
-		$new_value = defined $record->{$k} && $record->{$k} ne '' ? $dbh->quote($record->{$k}) : $request->{my_auth_info}{enterer_no};
-	    }
-	    
-	    else
-	    {
-		next;
-	    }
-	    
-	    next unless $new_value;
-	    push @fields, $k;
-	    push @values, $new_value;
-	}
-	
-	elsif ( $k eq 'modifier_no' )
-	{
-	    if ( $op eq 'replace' )
-	    {
-		$new_value = defined $record->{$k} && $record->{$k} ne '' ? $dbh->quote($record->{$k}) : $request->{my_auth_info}{enterer_no};
-	    }
-	    
-	    elsif ( $op eq 'update' )
-	    {
-		$new_value = $request->{my_auth_info}{enterer_no};
-		next;
-	    }
-	    
-	    next unless $new_value;
-	    push @fields, $k;
-	    push @values, $new_value;
-	}
-	
-	elsif ( $k eq 'modified' )
-	{
-	    push @fields, $k;
-	    push @values, "NOW()";
-	}
-	
-	else
-	{
-	    croak "bad built-in field name";
-	}
-    }
-    
-    $record->{_fields} = \@fields;
-    $record->{_values} = \@values;
-    
-    # if ( $op eq 'add' )
-    # {
-    # 	my $field_string = join(',', @fields);
-    # 	my $value_string = join(',', @values);
-	
-    # 	return $field_string, $value_string;
-    # }
-    
-    # elsif ( $op eq 'update' )
-    # {
-    # 	my @exprs;
-	
-    # 	foreach my $i ( 0..$#$fields )
-    # 	{
-    # 	    push @exprs, "$fields[$i] = $values[$i]";
-    # 	}
-	
-    # 	my $expr_string = join(",\n", @exprs);
-	
-    # 	return $expr_string;
-    # }
-    
-    # else
-    # {
-    # 	croak "bad value for 'op'";
-    # }
 }
 
 

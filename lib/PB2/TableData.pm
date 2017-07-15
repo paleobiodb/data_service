@@ -89,6 +89,9 @@ sub complete_output_block {
 	next if $block_has_field{$field_name};
 	next if $COMMON_FIELD_OTHER{$field_name};
 	
+	my $field_record = $schema->{$field_name};
+	my $type = $field_record->{Type};
+	
 	my $r = { output => $field_name };
 	
 	if ( $COMMON_FIELD_COM{$field_name} )
@@ -114,11 +117,21 @@ sub complete_output_block {
 	    $r->{com_name} = $field_name;
 	}
 	
+	my $doc = "The contents of field C<$field_name> from the table.";
+	
+	if ( $type =~ /int\(/ )
+	{
+	    $doc .= " The value will be an integer.";
+	}
+	
 	$block_needs_oid = 0;
 	
 	push @$output_list, $r;
 	$ds->add_doc($block, $r);
-	$ds->add_doc($block, "The contents of field C<$field_name> from the table");
+	$ds->add_doc($block, $doc);
+	
+	# If the field is one that we know contains a value that should be expressed as an
+	# external identifier, create a subroutine to do that.
 	
 	if ( my $type = $COMMON_FIELD_IDTYPE{$field_name} )
 	{
@@ -130,8 +143,6 @@ sub complete_output_block {
 		    return generate_identifier($type, $value);
 		};
 	    }
-	    
-	    # $$$
 	    
 	    push @$output_list, { set => $field_name, code => $COMMON_FIELD_IDSUB{$type} };
 	}
@@ -181,11 +192,20 @@ sub complete_ruleset {
 	
 	next if $ruleset_has_field{$field_name};
 	
+	my $field_record = $schema->{$field_name};
+	my $type = $field_record->{Type};
+	
 	my $rr = { type => 'param', param => $field_name };
+	my $doc = "This parameter sets the value of C<$field_name> in the table.";
+	
+	if ( $type =~ /int\(/ )
+	{
+	    $doc .= " The value must be an integer.";
+	}
 	
 	push @{$ds->{my_param_records}}, $rr;
 	
-	$ds->validator->add_doc($rs, $rr, "This parameter sets the value of C<$field_name> in the table");
+	$ds->validator->add_doc($rs, $rr, $doc);
     }
 }
 

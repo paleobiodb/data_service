@@ -53,6 +53,8 @@ sub new {
 		SELECT authorizer_no, enterer_no, superuser FROM session_data
 		WHERE session_id = $quoted_id";
 	
+	print STDERR "$sql\n\n" if $edt->debug;
+	
 	($authorizer_no, $enterer_no, $is_super) = $dbh->selectrow_array($sql);
     }
     
@@ -61,6 +63,8 @@ sub new {
 	$edt->{authorizer_no} = $dbh->quote($authorizer_no);
 	$edt->{enterer_no} = $dbh->quote($enterer_no);
 	$edt->{is_super} = 1 if $is_super;
+	
+	print STDERR " >>> START TRANSACTION\n\n" if $options->{debug};
 	
 	$dbh->do("START TRANSACTION");
 	
@@ -83,6 +87,8 @@ sub commit {
     
     my $dbh = $edt->{dbh};
     
+    print STDERR " <<< COMMIT TRANSACTION\n\n" if $edt->debug;
+	
     $dbh->do("COMMIT");
     $edt->{state} = 'committed';
     
@@ -96,6 +102,8 @@ sub rollback {
     
     my $dbh = $edt->{dbh};
     
+    print STDERR " <<< ROLLBACK TRANSACTION\n\n" if $edt->debug;
+	
     $dbh->do("ROLLBACK");
     $dbh->{state} = 'aborted';
     

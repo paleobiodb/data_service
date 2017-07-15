@@ -29,7 +29,8 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $MACROSTRAT_INTERVALS $MACROSTRAT_SCALES $MACROSTRAT_SCALES_INTS
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
-		      $RESOURCE_DATA $RESOURCE_QUEUE %TABLE_PROPERTIES);
+		      $RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES 
+		      %TABLE_PROPERTIES);
 
 
 # classic tables
@@ -131,8 +132,8 @@ our $TIMESCALE_PERMS = 'timescale_perms';
 # Educational resources
 
 our $RESOURCE_DATA = 'eduresources';
-our $RESOURCE_QUEUE = 'eduresources_queue';
-
+our $RESOURCE_QUEUE = 'eduresource_queue';
+our $RESOURCE_IMAGES = 'eduresource_images';
 
 # Table properties, especially regarding permissions. If the table has the
 # property 'BY_ENTERER' then records may only be entered by their enterers,

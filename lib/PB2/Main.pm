@@ -1037,8 +1037,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'eduresources',
 			title => 'Educational resources',
-			role => 'PB2::ResourceData',
-			output => '1.2:eduresources:basic' },
+			role => 'PB2::ResourceData' },
 	"The database also includes information about educational resources",
 	"that are relevant to its mission. These are used to populate a",
 	"page on our main website.");
@@ -1046,6 +1045,8 @@ use PB2::MainEntry;
     $ds2->define_node({ path => 'eduresources/single',
 			title => "Single educational resource",
 			place => 1,
+			output => '1.2:eduresources:basic',
+			optional_output => '1.2:eduresources:optional_output',
 			method => 'get_resource' },
 	"This operation returns information about a single educational resource record",
 	"specified by identifier.");
@@ -1053,6 +1054,8 @@ use PB2::MainEntry;
     $ds2->define_node({ path => 'eduresources/list',
 			title => "Lists of educational resources",
 			place => 2,
+			output => '1.2:eduresources:basic',
+			optional_output => '1.2:eduresources:optional_output',
 			method => 'list_resources' },
 	"This operation returns information about a list of educational resource",
 	"records, selected according to the query parameters.");
@@ -1060,6 +1063,8 @@ use PB2::MainEntry;
     $ds2->define_node({ path => 'eduresources/active',
 			title => "Active educational resources",
 			place => 3,
+			output => '1.2:eduresources:basic',
+			optional_output => '1.2:eduresources:optional_output',
 			method => 'list_resources',
 		        arg => 'active' },
 	"This operation returns a list of active educational resource records,",
