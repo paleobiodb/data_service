@@ -86,7 +86,10 @@ sub initialize {
 	"in each object must be as specified below. If no specific documentation is given",
 	"the value must match the corresponding column in the C<B<$RESOURCE_QUEUE>> table",
 	"in the database.",
-	{ allow => '1.2:eduresources:entry' });
+	{ allow => '1.2:eduresources:entry' },
+	{ optional => 'image_data', valid => ANY_VALUE },
+	    "An image to be associated with this record, encoded into base64. The",
+	    "data may begin with the HTML prefix C<data:image/[type]; base64,>.");
     
     $ds->define_ruleset('1.2:eduresources:update' =>
 	">>The following parameters may be given either in the URL or in",
@@ -105,7 +108,10 @@ sub initialize {
 	"the value must match the corresponding column in the C<B<eduresources>> table",
 	"in the database. For this operation, every record must include a value for",
 	"B<C<eduresource_id>>.",
-	{ allow => '1.2:eduresources:entry' });
+	{ allow => '1.2:eduresources:entry' },
+	{ optional => 'image_data', valid => ANY_VALUE },
+	    "An image to be associated with this record, encoded into base64. The",
+	    "data may begin with the HTML prefix C<data:image/[type]; base64,>.");
     
     $ds->define_ruleset('1.2:eduresources:delete' =>
 	">>The following parameter may be given either in the URL or in",
@@ -116,7 +122,7 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active') || 'eduresources';
+    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active') || $RESOURCE_DATA;
     $RESOURCE_TAGS = $ds->config_value('eduresources_tags') || 'eduresource_tags';
     $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
     $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
