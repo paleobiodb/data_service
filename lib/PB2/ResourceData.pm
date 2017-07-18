@@ -29,7 +29,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::Authentication);
 
 our ($RESOURCE_ACTIVE, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
 
-our (%TAG_VALUE);
+our (%TAG_VALUE, %TAG_NAME);
 
 sub initialize {
 
@@ -456,6 +456,7 @@ sub cache_tag_values {
 	    if ( defined $r->{id} && $r->{id} ne '' && $r->{name} )
 	    {
 		$TAG_VALUE{lc $r->{name}} = $r->{id};
+		$TAG_NAME{$r->{id}} = $r->{name};
 	    }
 	}
 	
@@ -464,9 +465,17 @@ sub cache_tag_values {
 }
 
 
+# process_record ( request, record )
+# 
+# This procedure is called automatically for each record that is expressed via the output block
+# '1.2:eduresources:basic'. It cleans up some of the data fields.
+
 sub process_record {
     
     my ($request, $record) = @_;
+    
+    # The 'image' filename might be in either of these fields. Append it to the proper path, read
+    # from the configuration file.
     
     $record->{image} ||= $record->{active_image};
     
@@ -475,9 +484,29 @@ sub process_record {
 	$record->{image} = "$RESOURCE_IMG_PATH/$record->{image}";
     }
     
+    # If we don't have an image name, just us '1' to indicate that there is an image but it is not
+    # stored in a file.
+    
     elsif ( $record->{has_image} )
     {
 	$record->{image} ||= 1;
+    }
+    
+    # If we have tags, run through the numbers and convert them to names.
+    
+    if ( my $tag_list = $record->{tags} )
+    {
+	$request->cache_tag_values();
+	
+	my @id_list = split(/\s*,\s*/, $tag_list);
+	my @tag_names;
+	
+	foreach my $id (@id_list)
+	{
+	    push @tag_names, $TAG_NAME{$id} if $TAG_NAME{$id};
+	}
+	
+	$record->{tags} = join(', ', @tag_names);
     }
 }
 
