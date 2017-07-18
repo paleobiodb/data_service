@@ -14,7 +14,7 @@ package PB2::ResourceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES);
+use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
 
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
 use PB2::TableData qw(complete_output_block);
@@ -25,10 +25,11 @@ use Try::Tiny;
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::Authentication);
 
-our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
+our ($RESOURCE_ACTIVE, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
 
+our (%TAG_VALUE);
 
 sub initialize {
 
@@ -51,6 +52,13 @@ sub initialize {
 	{ value => 'inactive' },
 	    "An inactive resource is one that has been reviewed, and the reviewer did",
 	    "not choose to activate it.");
+    
+    $ds->define_set('1.2:eduresources:enterer' =>
+	{ value => 'me' },
+	    "Select only records that were entered by the current requestor.",
+	{ value => 'auth' },
+	    "Select only records that were entered by the anyone in the current",
+	    "requestor's authorizer group.");
     
     # Optional output
     
@@ -100,8 +108,14 @@ sub initialize {
 	    "identifier(s). You can specify more than one, as a comma-separated list.",
 	{ param => 'status', valid => '1.2:eduresources:status', list => ',' },
 	    "Return only resource records with the specified status or statuses.",
+	{ param => 'enterer', valid => '1.2:eduresources:enterer' },
+	    "If this parameter is specified, then only resources created by the requestor",
+	    "are shown. Accepted values include:",
 	{ param => 'title', valid => ANY_VALUE },
 	    "Return only records with the given word or phrase in the title",
+	{ param => 'tag', valid => ANY_VALUE, list => ',' },
+	    "Return only records associated with the specified tag or tags. You can",
+	    "specify either the integer identifiers or the tag names.",
 	{ param => 'keyword', valid => ANY_VALUE, list => ',' },
 	    "Return only records associated with the given keyword(s). You can",
 	    "specify more than one, as a comma-separated list. Only records",
@@ -136,7 +150,6 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $RESOURCE_ACTIVE = $ds->config_value('eduresources_active') || $RESOURCE_DATA;
-    $RESOURCE_TAGS = $ds->config_value('eduresources_tags') || 'eduresource_tags';
     $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
     $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
     $RESOURCE_IMG_PATH = $ds->config_value('eduresources_img_path');
@@ -240,6 +253,8 @@ sub list_resources {
     
     my $active; $active = 1 if ($arg && $arg eq 'active') || $request->clean_param('active');
     
+    my $tables = $request->tables_hash;
+    
     # my $main_table = $active ? $RESOURCE_ACTIVE : $RESOURCE_QUEUE;
     
     # Generate a list of filter expressions.
@@ -259,10 +274,61 @@ sub list_resources {
 	push @filters, "edr.status in ('$status_string')";
     }
     
+    if ( my $enterer = $request->clean_param('enterer') )
+    {
+	my $auth_info = $request->get_auth_info($dbh);
+	
+	if ( $enterer eq 'me' )
+	{
+	    my $enterer_no = $dbh->quote($auth_info->{enterer_no} || '0');
+	    push @filters, "edr.enterer_no = $enterer_no";
+	}
+	
+	elsif ( $enterer eq 'auth' )
+	{
+	    my $authorizer_no = $dbh->quote($auth_info->{authorizer_no} || '0');
+	    push @filters, "edr.authorizer_no = $authorizer_no";
+	}
+	
+	else
+	{
+	    push @filters, "edr.authorizer_no = -1";	# select nothing
+	}
+    }
+    
     if ( my $title = $request->clean_param('title') )
     {
 	my $quoted = $dbh->quote("%${title}%");
 	push @filters, "edr.title like $quoted";
+    }
+    
+    if ( my @tags = $request->clean_param_list('tag') )
+    {
+	$request->cache_tag_values();
+	my @tag_ids;
+	
+	foreach my $t ( @tags )
+	{
+	    if ( $t =~ /^\d+$/ )
+	    {
+		push @tag_ids, $t;
+	    }
+	    
+	    elsif ( $TAG_VALUE{lc $t} )
+	    {
+		push @tag_ids, $TAG_VALUE{lc $t};
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("unknown resource tag '$t'");
+	    }
+	}
+	
+	my $id_string = join(',', @tag_ids) || '-1';
+	
+	push @filters, "edt.tag_id in ($id_string)";
+	$tables->{edt} = 1;
     }
     
     if ( my @keywords = $request->clean_param_list('keywords') )
@@ -286,8 +352,6 @@ sub list_resources {
     
     $request->substitute_select( mt => 'edr', cd => 'edr' );
     
-    my $tables = $request->tables_hash;
-    
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. Also check whether we should generate external identifiers.
     
@@ -308,11 +372,7 @@ sub list_resources {
     
     # Determine the necessary joins.
     
-    my $tables = $request->tables_hash;
-    
-    delete $tables->{edi} unless $active;
-    
-    my ($join_list) = $request->generate_join_list($request->tables_hash, $active);
+    my ($join_list) = $request->generate_join_list($tables, $active);
     
     my $filter_string = join( q{ and }, @filters );
     
@@ -337,6 +397,7 @@ sub list_resources {
 	FROM $RESOURCE_QUEUE as edr
 		left join $RESOURCE_IMAGES as edi using (eduresource_no)
 		left join $RESOURCE_ACTIVE as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
+		$join_list
         WHERE $filter_string
 	GROUP BY edr.eduresource_no";
     }
@@ -365,7 +426,41 @@ sub generate_join_list {
 	$joins .= "left join $RESOURCE_IMAGES as edi on edi.eduresource_no = edr.$RESOURCE_IDFIELD\n";
     }
     
+    if ( $tables_ref->{edt} )
+    {
+	$joins .= "left join $RESOURCE_TAGS as edt on edt.resource_id = edr.$RESOURCE_IDFIELD\n";
+    }
+    
     return $joins;
+}
+
+
+sub cache_tag_values {
+    
+    my ($request, $dbh) = @_;
+    
+    $dbh ||= $request->get_connection;
+    
+    # If the contents of this hash have been updated within the past 10 minutes, assume they are good.
+    
+    return if $TAG_VALUE{_timestamp} && $TAG_VALUE{_timestamp} > (time - 600);
+    
+    # Otherwise, fill in the hash from the database.
+    
+    my $result = $dbh->selectall_arrayref("SELECT * FROM $RESOURCE_TAG_NAMES", { Slice => { } });
+    
+    if ( $result && ref $result eq 'ARRAY' )
+    {
+	foreach my $r ( @$result )
+	{
+	    if ( defined $r->{id} && $r->{id} ne '' && $r->{name} )
+	    {
+		$TAG_VALUE{lc $r->{name}} = $r->{id};
+	    }
+	}
+	
+	$TAG_VALUE{_timestamp} = time;
+    }
 }
 
 

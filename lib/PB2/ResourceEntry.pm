@@ -28,11 +28,13 @@ use MIME::Base64;
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::CommonEntry PB2::ResourceData);
+our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::ResourceData);
 
 our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
 
 our (%RESOURCE_IGNORE) = ( 'image_data' => 1 );
+
+our (%TAG_VALUES);
 
 # initialize ( )
 # 
@@ -135,7 +137,6 @@ sub initialize {
     complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', $RESOURCE_QUEUE);
     complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', $RESOURCE_QUEUE);
 }
-
 
 
 our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, 'record_label' => 1 );
@@ -299,6 +300,37 @@ sub update_resources {
 				    "you do not have permission to add records");
 		next;
 	    }
+	}
+	
+	# If $r has a 'tags' field, then look up the tag definitions if necessary and translate
+	# the value into a list of integers.
+	
+	if ( my $tag_list = $r->{tags} )
+	{
+	    $request->cache_tag_values();
+	    
+	    my @tags = ref $tag_list eq 'ARRAY' ? @$tag_list : split (/\s*,\s*/, $tag_list);
+	    my @tag_ids;
+	    
+	    foreach my $t ( @tags )
+	    {
+		if ( $t =~ /^\d+$/ )
+		{
+		    push @tag_ids, $t;
+		}
+		
+		elsif ( $PB2::ResourceData::TAG_VALUE{lc $t} )
+		{
+		    push @tag_ids, $PB2::ResourceData::TAG_VALUE{lc $t};
+		}
+		
+		else
+		{
+		    $request->add_record_warning('E_TAG', $record_label, "unknown resource tag '$t'");
+		}
+	    }
+	    
+	    $r->{tags} = join(',', @tag_ids);
 	}
 	
 	# Now validate the fields and construct the lists that will be used to generate an SQL

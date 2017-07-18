@@ -24,6 +24,7 @@ use PB2::ReferenceData;
 use PB2::PersonData;
 use PB2::CombinedData;
 use PB2::ResourceData;
+use PB2::Authentication;
 use PB2::MainEntry;
 
 use PB2::MainEntry;

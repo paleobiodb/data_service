@@ -190,7 +190,9 @@ sub initialize {
 			doc_template => 'entry_operation.tt',
 			role => 'PB2::ResourceEntry',
 			method => 'update_resources',
-			arg => 'add' },
+			arg => 'add',
+			output => '1.2:eduresources:basic',
+			optional_output => '1.2:eduresources:optional_output' },
 	"This operation allows you to add new educational resource records to the database and/or",
 	"update the attributes of existing records.");
     
@@ -213,7 +215,9 @@ sub initialize {
 			doc_template => 'entry_operation.tt',
 			role => 'PB2::ResourceEntry',
 			method => 'update_resources',
-			arg => 'update' },
+			arg => 'update',
+			output => '1.2:eduresources:basic',
+			optional_output => '1.2:eduresources:optional_output' },
 	"This operation allows you to update the attributes of existing educational resource records.");
     
     $ds2->list_node({ path => 'eduresources/update',
