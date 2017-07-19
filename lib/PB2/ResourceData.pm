@@ -420,15 +420,16 @@ sub generate_join_list {
     my ($request, $tables_ref, $active) = @_;
     
     my $joins = '';
+    my $idfield = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
     
     if ( $tables_ref->{edi} && $active )
     {
-	$joins .= "left join $RESOURCE_IMAGES as edi on edi.eduresource_no = edr.$RESOURCE_IDFIELD\n";
+	$joins .= "left join $RESOURCE_IMAGES as edi on edi.eduresource_no = edr.$idfield\n";
     }
     
     if ( $tables_ref->{edt} )
     {
-	$joins .= "left join $RESOURCE_TAGS as edt on edt.resource_id = edr.$RESOURCE_IDFIELD\n";
+	$joins .= "left join $RESOURCE_TAGS as edt on edt.resource_id = edr.$idfield\n";
     }
     
     return $joins;
