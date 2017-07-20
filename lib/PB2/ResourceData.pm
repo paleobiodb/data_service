@@ -280,13 +280,13 @@ sub list_resources {
 	
 	if ( $enterer eq 'me' )
 	{
-	    my $enterer_no = $dbh->quote($auth_info->{enterer_no} || '0');
-	    push @filters, "edr.enterer_no = $enterer_no";
+	    my $enterer_no = $dbh->quote($auth_info->{enterer_no} || $auth_info->{guest_no} || '-1');
+	    push @filters, "edr.enterer_no = $enterer_no or edr.authorizer_no = $enterer_no";
 	}
 	
 	elsif ( $enterer eq 'auth' )
 	{
-	    my $authorizer_no = $dbh->quote($auth_info->{authorizer_no} || '0');
+	    my $authorizer_no = $dbh->quote($auth_info->{authorizer_no} || '-1');
 	    push @filters, "edr.authorizer_no = $authorizer_no";
 	}
 	

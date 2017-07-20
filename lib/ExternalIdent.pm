@@ -196,9 +196,9 @@ sub generate_identifier {
     
     if ( ref $value eq 'ARRAY' )
     {
-	map { $_ = defined $_ && $_ > 0 ? "$IDP{$type}:$_" : "$IDP{$type}:ERROR" } @$value;
+	map { $_ = generate_identifier($type, $_) } @$value;
     }
-    
+
     elsif ( defined $value && $value > 0 )
     {
 	return "$IDP{$type}:$value";
@@ -212,6 +212,11 @@ sub generate_identifier {
     elsif ( defined $value && $value =~ qr{ ^ U[A-Z] \d* $ }xs )
     {
 	return "$IDP{$type}:$value";
+    }
+    
+    elsif ( $value =~ $IDRE{ANY} )
+    {
+	return $value;
     }
     
     elsif ( defined $value )

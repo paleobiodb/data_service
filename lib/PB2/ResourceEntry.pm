@@ -119,7 +119,7 @@ sub initialize {
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), list => ',' },
+	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), list => ',', alias => 'id' },
 	    "The identifier(s) of the resource record(s) to delete.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
@@ -629,13 +629,21 @@ sub write_image_file {
     
     my $filename = "eduresource_$record_id.$suffix";
     my $filepath = "$RESOURCE_IMG_DIR/$filename";
+
+    my $result = open( my $fout, ">", $filepath );
+
+    unless ( $result )
+    {
+	print STDERR "ERROR: could not open '$filepath' for writing: $!\n";
+	$request->add_error("E_INTERNAL ($record_id): could not write image file");
+	return;
+    }
     
-    open( my $fout, ">", $filepath ) || die "could not open '$filepath': $!";
     binmode($fout);
     
     print $fout $raw_data;
     
-    close $fout || die "error writing '$filename': $!";
+    close $fout || warn "ERROR: could not write '$filename': $!";
     
     return $filename;
 }
@@ -643,14 +651,166 @@ sub write_image_file {
 
 sub delete_image_file {
 
+    my ($request, $record_id) = @_;
+    
+    my $filename = "eduresource_$record_id.png";
+    my $filepath = "$RESOURCE_IMG_DIR/$filename";
 
+    if ( -e $filepath )
+    {
+	unless ( unlink($filepath) )
+	{
+	    print STDERR "ERROR: could not unlink '$filepath': $!\n";
+	    $request->add_error("E_INTERNAL ($record_id): could not delete image file");
+	}
+    }
 }
 
 
 
 sub delete_resources {
 
+    my ($request) = @_;
 
+    my $dbh = $request->get_connection;
+
+    # Get the resources to delete from the URL paramters. This operation takes no body.
+
+    my (@id_list) = $request->clean_param_list('eduresource_id');
+
+    # Determine our authentication info.
+
+    my $auth_info = $request->get_auth_info($dbh, $RESOURCE_QUEUE);
+
+    # Then go through the records and validate each one in turn.
+
+    my %delete_ids;
+    
+    foreach my $record_id ( @id_list )
+    {
+	next unless $record_id =~ /^\d+$/;
+	
+	# Fetch the current authorization and status information.
+	
+	my ($current_status, $record_authno, $record_entno, $confirm_id) = 
+	    $request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
+					  'status, authorizer_no, enterer_no, eduresource_no');
+
+	unless ( $confirm_id )
+	{
+	    $request->add_record_warning('W_NOTFOUND', $record_id, "record not found");
+	    next;
+	}
+
+	my ($enterer_no) = $auth_info->{enterer_no};
+
+	# If we have 'admin' privileges on the table, or if we are the superuser, then we can delete any
+	# record.
+
+	if ( $auth_info->{table_role}{$RESOURCE_QUEUE} eq 'admin' || $auth_info->{superuser} )
+	{
+	    $delete_ids{$record_id} = 1;
+	}
+	
+	# Otherwise, we can delete any record that we created, or any one for which we are the
+	# authorizer.
+
+	elsif ( $enterer_no && $record_entno && $enterer_no eq $record_entno )
+	{
+	    $delete_ids{$record_id} = 1;
+	}
+
+	elsif ( $enterer_no && $record_authno && $enterer_no eq $record_authno )
+	{
+	    $delete_ids{$record_id} = 1;
+	}
+
+	else
+	{
+	    $request->add_record_warning('W_PERM', $record_id, "you do not have permission to delete this record");
+	}
+    }
+
+    # Unless we have records that we can delete, return immediately.
+
+    unless ( %delete_ids )
+    {
+	$request->add_warning('W_NOTHING: nothing to delete');
+	return;
+    }
+
+    # Otherwise, we create a new EditTransaction and then try to delete the records.
+    
+    my %conditions;
+    
+    my $edt = EditTransaction->new($dbh, { conditions => \%conditions,
+					   debug => $request->debug,
+					   auth_info => $auth_info });
+
+    try {
+
+	my $id_list = join(',', keys %delete_ids);
+
+	my $sql = "
+		DELETE FROM $RESOURCE_QUEUE
+		WHERE eduresource_no in ($id_list)";
+
+	print STDERR "$sql\n\n" if $request->debug;
+
+	my $result = $dbh->do($sql);
+    }
+
+    # If an exception is caught, roll back the transaction before re-throwing it as an internal
+    # error. This will generate an HTTP 500 response.
+	
+    catch {
+
+	$edt->rollback;
+	die $_;
+    };
+
+    # If any warnings (non-fatal conditions) were detected, add them to the
+    # request record so they will be communicated back to the user.
+    
+    $request->add_edt_warnings($edt);
+    
+    # If we completed the procedure without any exceptions, but error conditions were detected
+    # nonetheless, we also roll back the transaction.
+    
+    if ( $edt->errors )
+    {
+	$edt->rollback;
+	$request->add_edt_errors($edt);
+	die $request->exception(400, "Bad request");
+    }
+    
+    # If the parameter 'strict' was given and warnings were generated, also roll back the
+    # transaction.
+    
+    elsif ( $request->clean_param('strict') && $request->warnings )
+    {
+	$edt->rollback;
+	die $request->exceptions(400, "E_STRICT: warnings were generated");
+    }
+    
+    else
+    {
+	# If we get here, we're good to go! Yay!!!
+	
+	$edt->commit;
+	
+	# Return a list of records that were deleted.
+
+	my @results;
+	
+	foreach my $record_id ( sort keys %delete_ids )
+	{
+	    push @results, { eduresource_no => generate_identifier('EDR', $record_id) };
+	}
+	
+	$request->{main_result} = \@results;
+	$request->{result_count} = scalar(@results);
+    }
 }
 
 

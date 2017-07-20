@@ -37,14 +37,22 @@ sub new {
 	$edt->{condition} = $options->{conditions};
     }
     
-    my ($authorizer_no, $enterer_no, $is_super);
+    my ($authorizer_no, $enterer_no, $guest_no, $is_super);
     
     if ( $edt->{auth_info} )
     {
-	$authorizer_no = $edt->{auth_info}{authorizer_no};
-	$enterer_no = $edt->{auth_info}{enterer_no};
+	if ( $edt->{auth_info}{guest_no} && $edt->{auth_info}{role} eq 'guest' )
+	{
+	    $guest_no = $edt->{auth_info}{guest_no};
+	}
+
+	else
+	{
+	    $authorizer_no = $edt->{auth_info}{authorizer_no};
+	    $enterer_no = $edt->{auth_info}{enterer_no};
+	}
     }
-    
+	    
     elsif ( $edt->{session_id} )
     {
 	my $quoted_id = $dbh->quote($edt->{session_id});
@@ -70,10 +78,21 @@ sub new {
 	
 	$edt->{state} = 'active';
     }
+
+    elsif ( $guest_no )
+    {
+	$edt->{guest_no} = $dbh->quote($guest_no);
+
+	print STDERR " >>> START TRANSACTION (guest)\n\n" if $options->{debug};
+	
+	$dbh->do("START TRANSACTION");
+	
+	$edt->{state} = 'active';
+    }
     
     else
     {
-	$edt->add_condition("E_SESSION: bad session identifier");
+	$edt->add_condition("E_SESSION", undef, "bad session identifier");
 	$edt->{state} = 'blocked';
     }
     

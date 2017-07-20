@@ -36,7 +36,7 @@ our (%RULESET_HAS_PARAM);
 # $conditions_ref. These will already have been checked by the initial ruleset validation of the
 # request. Otherwise, any parameters we find that are specified in the ruleset whose name is given
 # in $entry_ruleset should be copied into a hash which is then returned as the result. These
-# parameters will be used as defaults for all records specified in the request body.
+# parameters will be used as defaults for all records speified in the request body.
 
 sub get_main_params {
     
@@ -358,8 +358,20 @@ sub validate_against_table {
 	    
 	    # If the table has an authorizer_no or enterer_no field, then we need to be providing
 	    # a value for them. If no value can be found, then bomb.
-	    
-	    croak "no value was found for '$k'" unless $new_value;
+
+	    unless ( $new_value )
+	    {
+		if ( $request->{my_auth_info}{guest_no} && $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
+		     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' )
+		{
+		    $new_value = $k eq 'enterer_no' ? $request->{my_auth_info}{guest_no} : 0;
+		}
+
+		else
+		{
+		    croak "no value was found for '$k'";
+		}
+	    }
 	}
 	
 	# The modifier_no field is in some sense the opposite of authorizer_no and enterer_no,
@@ -614,8 +626,8 @@ sub check_record_auth {
 	    return 'admin';
 	}
 	
-	# If they are the person who originally created the record, then they have 'edit'
-	# privileges to it.
+	# If they are the person who originally created or authorized the record, then they have
+	# 'edit' privileges to it.
 	
 	elsif ( $record_enterer_no && $request->{my_auth_info}{enterer_no} &&
 		$record_enterer_no eq $request->{my_auth_info}{enterer_no} )
@@ -625,14 +637,36 @@ sub check_record_auth {
 	    
 	    return 'edit';
 	}
+
+	elsif ( $record_authorizer_no && $request->{my_auth_info}{enterer_no} &&
+		$record_authorizer_no eq $request->{my_auth_info}{enterer_no} )
+	{
+	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer\n\n"
+		if $request->debug;
+	    
+	    return 'edit';
+	}
+
+	# If they are a guest user and guest users are allowed to edit records created by guest
+	# users, then they have 'edit' privileges.
+	
+	elsif ( $record_enterer_no && $request->{my_auth_info}{guest_no} &&
+		$record_enterer_no eq $request->{my_auth_info}{guest_no} &&
+	        $TABLE_PROPERTIES{$table_name}{GUEST_EDIT} )
+	{
+	    print STDERR "    Role for $table_name : $record_no = 'edit' from guest\n\n"
+		if $request->debug;
+
+	    return 'edit';
+	}
 	
 	# If the person who originally created the record has the same authorizer as the person
 	# who originally created the record, then they have 'edit' privileges to it unless
-	# the table has the 'BY_ENTERER' property.
+	# the table has the 'BY_AUTHORIZER' property.
 	
 	elsif ( $record_authorizer_no && $request->{my_auth_info}{authorizer_no} &&
 		$record_authorizer_no eq $request->{my_auth_info}{authorizer_no} &&
-		! $TABLE_PROPERTIES{$table_name}{BY_ENTERER} )
+		$TABLE_PROPERTIES{$table_name}{BY_AUTHORIZER} )
 	{
 	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer\n\n"
 		if $request->debug;
@@ -672,7 +706,15 @@ sub check_record_auth {
     
     elsif ( my $allow_post = $TABLE_PROPERTIES{$table_name}{ALLOW_POST} )
     {
-	if ( $allow_post eq 'MEMBERS' && $request->{my_auth_info}{enterer_no} )
+	if ( $allow_post eq 'LOGGED_IN' && $request->{my_auth_info}{guest_no} )
+	{
+	    print STDERR "    Role for $table_name : <new> = 'post' from LOGGED_IN\n\n"
+		if $request->debug;
+	    
+	    return 'post';
+	}
+	
+	elsif ( $allow_post eq 'MEMBERS' && $request->{my_auth_info}{enterer_no} )
 	{
 	    print STDERR "    Role for $table_name : <new> = 'post' from MEMBERS\n\n"
 		if $request->debug;

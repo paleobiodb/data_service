@@ -143,6 +143,7 @@ our $RESOURCE_TAG_NAMES = 'edutags';
 # property 'ALLOW_POST', with the value 'MEMBERS', then all logged-in database
 # members can post to it.
 
-our (%TABLE_PROPERTIES) = ( $RESOURCE_QUEUE => { ALLOW_POST => 'MEMBERS' } );
+our (%TABLE_PROPERTIES) = ( $RESOURCE_QUEUE => { ALLOW_POST => 'LOGGED_IN',
+					         GUEST_EDIT => 1 } );
 
 1;

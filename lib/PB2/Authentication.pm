@@ -93,6 +93,18 @@ sub get_auth_info {
 	    $request->{my_auth_info} = $auth_info;
 	    return $auth_info;
 	}
+
+	# Otherwise, if we have a session id that belongs to a guest then we don't actually have
+	# any info. If we have a 'generic_guest_no' value, then use that. Otherwise, fail.
+
+	elsif ( my $guest_no = $request->ds->config_value('generic_guest_no') )
+	{
+	    $auth_info = { guest_no => $guest_no, role => 'guest' };
+	    $auth_info->{table_role}{$table_name} = 'none' if $table_name;
+	    
+	    $request->{my_auth_info} = $auth_info;
+	    return $auth_info;
+	}
     }
     
     if ( $options->{required} )
@@ -102,7 +114,12 @@ sub get_auth_info {
     
     else
     {
-	return { authorizer_no => 0, enterer_no => 0 };
+	my $default = { authorizer_no => 0, enterer_no => 0, role => 'none' };
+	$default->{table_role}{$table_name} = 'none' if $table_name;
+
+	$request->{my_auth_info} = $default;
+	
+	return $default;
     }
 }
 

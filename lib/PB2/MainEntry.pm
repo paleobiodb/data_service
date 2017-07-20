@@ -236,7 +236,8 @@ sub initialize {
 			place => 0,
 			allow_method => 'GET,PUT,DELETE',
 			role => 'PB2::ResourceEntry',
-			method => 'delete_resources' },
+			method => 'delete_resources',
+			output => '1.2:eduresources:basic'},
 	"This operation allows you to delete one or more existing educational resources.");
     
     $ds2->list_node({ path => 'eduresources/delete',
