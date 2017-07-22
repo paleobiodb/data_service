@@ -18,6 +18,7 @@ use HTTP::Validate qw(:validators);
 use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use PB2::TableData qw(complete_ruleset);
+use File::Temp qw(tempfile);
 
 use EditTransaction;
 
@@ -35,6 +36,8 @@ our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
 our (%RESOURCE_IGNORE) = ( 'image_data' => 1 );
 
 our (%TAG_VALUES);
+
+our ($IMAGE_IDENTIFY_COMMAND, $IMAGE_CONVERT_COMMAND, $IMAGE_MAX);
 
 # initialize ( )
 # 
@@ -128,6 +131,10 @@ sub initialize {
     $RESOURCE_TAGS = $ds->config_value('eduresources_tags') || 'eduresource_tags';
     $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
     $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
+    
+    $IMAGE_IDENTIFY_COMMAND = $ds->config_value('image_identify_cmd') || '/opt/local/bin/identify';
+    $IMAGE_CONVERT_COMMAND = $ds->config_value('image_convert_cmd') || '/opt/local/bin/convert';
+    $IMAGE_MAX = $ds->config_value('image_max_dimension') || 150;
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
 	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
@@ -452,9 +459,70 @@ sub store_image {
     
     return unless $eduresource_no && $r->{image_data};
     
+    print STDERR "Storing image:\n" if $request->debug;
+    
+    my $fh = File::Temp->new( UNLINK => 1 );
+    
+    unless ( $fh )
+    {
+	print STDERR "ERROR: could not create temporary file for image\n"
+	    if $request->debug;
+	return;
+    }
+    
+    my $filename = $fh->filename;
+    
+    print STDERR "Writing image to $filename\n" if $request->debug;
+    
+    binmode($fh);
+    
+    my $base64_data = $r->{image_data};
+    $base64_data =~ s/ ^ data: .*? , //xsi;
+    
+    my $raw_data = MIME::Base64::decode($base64_data);
+    
+    my $store_data;
+    
+    print $fh $raw_data;
+    
+    close $fh;
+    
+    my $output = `$IMAGE_IDENTIFY_COMMAND $filename`;
+    
+    print STDERR "Executing: $IMAGE_IDENTIFY_COMMAND $filename\nOutput: $output\n" if $request->debug;
+    
+    if ( $output =~ qr{ \s (\d+) x (\d+) }xs )
+    {
+	my $width = $1;
+	my $height = $2;
+	
+	if ( $width > 0 && $height > 0 && $width <= $IMAGE_MAX && $height <= $IMAGE_MAX )
+	{
+	    $store_data = $r->{image_data};
+	}
+	
+	else
+	{
+	    my $newsize = $width >= $height ? $IMAGE_MAX : "x$IMAGE_MAX";
+	    my $resize_cmd = "convert $filename -resize $newsize -format png -";
+	    
+	    print STDERR "Executing: $resize_cmd\n" if $request->debug;
+	    
+	    my $converted_data = `$resize_cmd`;
+	    $store_data = "data:image/png;base64," . MIME::Base64::encode_base64($converted_data);
+	    
+	    print STDERR 'Output: [' . length($store_data) . " chars converted to base64]\n" if $request->debug;
+	}
+    }
+    
+    else
+    {
+	$request->add_error("E_IMAGEDATA: the value of 'image_data' was not an image in a recognized format");
+    }
+    
     my $sql = "REPLACE INTO $RESOURCE_IMAGES (eduresource_no, image_data) values ($eduresource_no, ?)";
     
-    my $result = $dbh->do($sql, { }, $r->{image_data});
+    my $result = $dbh->do($sql, { }, $store_data);
     
     my $a = 1;	# we can stop here when debugging
 }
