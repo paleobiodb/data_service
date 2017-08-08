@@ -576,12 +576,19 @@ sub activate_resource {
 	
 	my $sql = "
 		SELECT e.eduresource_no as id, i.image_data, e.*
-		FROM $RESOURCE_QUEUE as e join $RESOURCE_IMAGES as i using (eduresource_no)
+		FROM $RESOURCE_QUEUE as e left join $RESOURCE_IMAGES as i using (eduresource_no)
 		WHERE eduresource_no = $quoted_id";
 	
 	print STDERR "$sql\n\n" if $request->debug;
 	
 	my ($r) = $dbh->selectrow_hashref($sql);
+	
+	# If we can't find the requested resource, throw an exception.
+	
+	unless ( ref $r eq 'HASH' )
+	{
+	    die $request->exception(500, "internal error");
+	}
 	
 	# We want the 'authorizer_no' and 'created' fields to be filled in automatically.
 	
@@ -829,8 +836,32 @@ sub delete_resources {
 	print STDERR "$sql\n\n" if $request->debug;
 
 	my $result = $dbh->do($sql);
+	
+	$sql = "
+		DELETE FROM $RESOURCE_DATA
+		WHERE id in ($id_list)";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	$result = $dbh->do($sql);
+	
+	$sql = "
+		DELETE FROM $RESOURCE_TAGS
+		WHERE resource_id in ($id_list)";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	$result = $dbh->do($sql);
+	
+	$sql = "
+		DELETE FROM $RESOURCE_IMAGES
+		WHERE eduresource_no in ($id_list)";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	$result = $dbh->do($sql);
     }
-
+    
     # If an exception is caught, roll back the transaction before re-throwing it as an internal
     # error. This will generate an HTTP 500 response.
 	
