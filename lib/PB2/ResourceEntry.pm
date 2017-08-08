@@ -592,7 +592,10 @@ sub activate_resource {
 	# in the proper directory, then stuff the file name into the 'image' field of the mirrored
 	# record.
 	
-	$r->{image} = $request->write_image_file($r->{id}, $r->{image_data});
+	if ( $r->{image_data} )
+	{
+	    $r->{image} = $request->write_image_file($r->{id}, $r->{image_data});
+	}
 	
 	# Now check the field values.
 	
