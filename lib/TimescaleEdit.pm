@@ -349,7 +349,7 @@ sub add_boundary {
 	    if $attrs->{offset};
     }
     
-    elsif ( $bound_type eq 'offset' || $bound_type eq 'percent' )
+    elsif ( $bound_type eq 'offset' || $bound_type eq 'range' )
     {
 	$edt->add_condition("E_BASE_MISSING", $attrs->{record_label})
 	    unless $attrs->{base_id};
@@ -360,7 +360,7 @@ sub add_boundary {
 	$edt->add_condition("W_AGE_IGNORED", $attrs->{record_label})
 	    if $attrs->{age};
 	
-	if ( $bound_type eq 'percent' )
+	if ( $bound_type eq 'range' )
 	{
 	    $edt->add_condition("E_RANGE_MISSING", $attrs->{record_label})
 		unless $attrs->{range_id};
@@ -388,8 +388,8 @@ sub add_boundary {
     
     # Otherwise, insert the new record.
     
-    my $field_list = join(',', @$fields);
-    my $value_list = join(',', @$values);
+    my $field_list = join(',', @$fields, 'is_updated');
+    my $value_list = join(',', @$values, '1');
     
     my $sql = "INSERT INTO $TIMESCALE_BOUNDS ($field_list) VALUES ($value_list)";
     my ($insert_result, $insert_id);
@@ -501,7 +501,7 @@ sub update_boundary {
 	    if $attrs->{offset};
     }
     
-    elsif ( $bound_type eq 'offset' || $bound_type eq 'percent' )
+    elsif ( $bound_type eq 'offset' || $bound_type eq 'range' )
     {
 	$edt->add_condition("E_BASE_MISSING", $record_label)
 	    unless $attrs->{base_id} || $current->{base_no};
@@ -512,7 +512,7 @@ sub update_boundary {
 	$edt->add_condition("W_AGE_IGNORED", $record_label)
 	    if $attrs->{age};
 	
-	if ( $bound_type eq 'percent' )
+	if ( $bound_type eq 'range' )
 	{
 	    $edt->add_condition("E_RANGE_MISSING", $record_label)
 		unless $attrs->{range_id} || $current->{range_no};
@@ -544,7 +544,7 @@ sub update_boundary {
     
     return 0 unless $set_list;
     
-    my $sql = "	UPDATE $TIMESCALE_BOUNDS SET $set_list, modified = now()
+    my $sql = "	UPDATE $TIMESCALE_BOUNDS SET $set_list, is_updated=1, modified = now()
 		WHERE bound_no = $bound_id";
     
     print STDERR "$sql\n\n" if $edt->debug;
@@ -805,9 +805,9 @@ sub detach_related_bounds {
     
     push @sql,"	UPDATE $TIMESCALE_BOUNDS as tsb
 		join $TIMESCALE_BOUNDS as source on tsb.range_no = source.bound_no
-		SET tsb.bound_type = if(tsb.bound_type = 'percent', 'absolute', tsb.bound_type),
+		SET tsb.bound_type = if(tsb.bound_type = 'range', 'absolute', tsb.bound_type),
 		    tsb.range_no = 0,
-		    tsb.base_no = if(tsb.bound_type = 'percent', 0, tsb.base_no)
+		    tsb.base_no = if(tsb.bound_type = 'range', 0, tsb.base_no)
 		WHERE $filter";
     
     # Then detach all base relationships.
@@ -1007,10 +1007,10 @@ sub check_timescale_attrs {
 	
 	$k =~ s/_id$/_no/;
 	
-	if ( $k eq 'age' )
-	{
-	    $k = "derived_age";
-	}
+	# if ( $k eq 'age' )
+	# {
+	#     $k = "derived_age";
+	# }
 	
 	push @field_list, $k;
 	push @value_list, $quoted;
@@ -1096,7 +1096,7 @@ sub check_bound_values {
 	    $new_bound_type ||= $current->{bound_type};
 	}
 	
-	if ( $new_bound_type eq 'percent' )
+	if ( $new_bound_type eq 'range' )
 	{
 	    unless ( defined $new_offset && $new_offset ne '' && $new_offset >= 0.0 && $new_offset <= 100.0 )
 	    {
@@ -1143,7 +1143,20 @@ sub complete_bound_updates {
     
     try {
 	
-	print STDERR "	propagating bound updates...\n\n" if $edt->debug;
+	if ( $edt->debug )
+	{
+	    my $updated = $dbh->selectcol_arrayref("SELECT bound_no FROM $TIMESCALE_BOUNDS
+							WHERE is_updated");
+
+	    my $str = 'no bounds changed';
+
+	    if ( ref $updated eq 'ARRAY' && @$updated )
+	    {
+		$str = join(',', @$updated);
+	    }
+	    
+	    print STDERR "	propagating bound updates ($str)\n\n";
+	}
 	
 	# First propagate changes to dependent boundaries.
 	

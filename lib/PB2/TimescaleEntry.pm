@@ -25,7 +25,7 @@ use Try::Tiny;
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::CommonEntry PB2::TimescaleData PB2::ReferenceData);
+our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::TimescaleData PB2::ReferenceData);
 
 # initialize ( )
 # 

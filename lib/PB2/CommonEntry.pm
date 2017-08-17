@@ -75,6 +75,11 @@ sub get_main_params {
 	$main_params->{$k} = $request->clean_param($k);
     }
     
+    if ( $request->debug )
+    {
+	$request->debug_out($main_params);
+    }
+    
     return $main_params;
 }
 
@@ -208,6 +213,14 @@ sub unpack_input_records {
 	else
 	{
 	    push @records, $r;
+	}
+    }
+    
+    if ( $request->debug )
+    {
+	foreach my $r ( @records )
+	{
+	    $request->debug_out($r, '    ');
 	}
     }
     
@@ -776,5 +789,27 @@ sub add_record_warning {
     return;
 }
 
+
+sub debug_out {
+
+    my ($request, $record, $prefix) = @_;
+    
+    return unless ref $record eq 'HASH';
+    
+    $prefix ||= '';
+    
+    foreach my $k ( keys %$record )
+    {
+	my $value = ref $record->{$k} eq 'ARRAY' ? '(' . join(', ', @{$record->{$k}}) . ')'
+	    : $record->{$k};
+	
+	if ( defined $value && $value ne '' )
+	{
+	    $request->{ds}->debug_line("$prefix$k = $value");
+	}
+    }
+    
+    $request->{ds}->debug_line("");
+}
 
 1;

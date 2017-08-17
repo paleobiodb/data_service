@@ -40,7 +40,7 @@ our (%TIMESCALE_ATTRS) =
     
 our (%TIMESCALE_BOUND_ATTRS) = 
     ( bound_id => 'IGNORE',
-      bound_type => { absolute => 1, spike => 1, same => 1, percent => 1, offset => 1 },
+      bound_type => { absolute => 1, spike => 1, same => 1, range => 1, offset => 1 },
       interval_type => { eon => 1, era => 1, period => 1, epoch => 1, stage => 1,
 			 substage => 1, zone => 1, other => 1 },
       interval_extent => 'varchar80',
@@ -210,7 +210,7 @@ sub establish_timescale_tables {
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,
 		modifier_no int unsigned not null,
-		bound_type enum('absolute', 'spike', 'same', 'percent', 'offset'),
+		bound_type enum('absolute', 'spike', 'same', 'range', 'offset', 'modeled'),
 		interval_extent varchar(80) not null,
 		interval_taxon varchar(80) not null,
 		interval_type enum('eon', 'era', 'period', 'epoch', 'stage', 'substage', 'zone', 'other') not null,
@@ -1052,7 +1052,7 @@ sub update_boundary_attrs {
 		    b.derived_age_error = (bottom.age - top.age) * b.offset_error,
 		    b.derived_reference_no = null,
 		    b.derived_color = bottom.color
-		WHERE timescale_no = $ts_quoted and bound_type = 'percent'";
+		WHERE timescale_no = $ts_quoted and bound_type = 'range'";
 	
 	$age_update_count += $dbh->do($sql);
     }
@@ -1097,7 +1097,7 @@ sub update_boundary_attrs {
 		SET b.age = if(b.is_locked, b.age, b.derived_age),
 		    b.age_error = if(b.is_locked, b.age_error, b.derived_age_error),
 		    b.is_different = b.is_locked and b.age <> b.derived_age
-		WHERE timescale_no = $ts_quoted and bound_type in ('same', 'percent', 'offset')";
+		WHERE timescale_no = $ts_quoted and bound_type in ('same', 'range', 'offset')";
 	
 	$result = $dbh->do($sql);
     }
@@ -1355,13 +1355,13 @@ sub create_triggers {
 		tsb.derived_age = case tsb.bound_type
 			when 'same' then base.derived_age
 			when 'offset' then base.derived_age - tsb.offset
-			when 'percent' then base.derived_age - (tsb.offset / 100) * ( base.derived_age - top.derived_age )
+			when 'range' then base.derived_age - (tsb.offset / 100) * ( base.derived_age - top.derived_age )
 			else tsb.age
 			end,
 		tsb.derived_age_error = case tsb.bound_type
 			when 'same' then base.age_error
 			when 'offset' then base.age_error + tsb.offset_error
-			when 'percent' then base.age_error + (tsb.offset_error / 100) * ( base.derived_age - top.derived_age )
+			when 'range' then base.age_error + (tsb.offset_error / 100) * ( base.derived_age - top.derived_age )
 			else tsb.age_error
 			end
 	    WHERE base.is_updated or top.is_updated or tsb.is_updated;
