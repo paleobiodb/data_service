@@ -22,7 +22,7 @@ use base 'Exporter';
 
 our(@EXPORT_OK) = qw(establish_timescale_tables copy_international_timescales
 		   copy_pbdb_timescales copy_macrostrat_timescales process_one_timescale
-		   update_timescale_descriptions create_triggers
+		   update_timescale_descriptions complete_bound_updates create_triggers
 		   %TIMESCALE_BOUND_ATTRS %TIMESCALE_ATTRS %TIMESCALE_REFDEF);
 
 
@@ -135,6 +135,8 @@ sub establish_timescale_tables {
 		authority_level tinyint unsigned not null,
 		min_age decimal(9,5),
 		max_age decimal(9,5),
+		min_age_prec tinyint,
+		max_age_prec tinyint,
 		reference_no int unsigned not null,
 		timescale_type enum('eon', 'era', 'period', 'epoch', 'stage', 'substage', 
 			'zone', 'other', 'multi') not null,
@@ -190,6 +192,8 @@ sub establish_timescale_tables {
 		interval_name varchar(80) not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
+		early_age_prec tinyint,
+		late_age_prec tinyint,
 		abbrev varchar(10) not null,
 		color varchar(10) not null,
 		orig_early decimal(9,5),
@@ -210,7 +214,7 @@ sub establish_timescale_tables {
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,
 		modifier_no int unsigned not null,
-		bound_type enum('absolute', 'spike', 'same', 'range', 'offset', 'modeled'),
+		bound_type enum('absolute', 'spike', 'same', 'range', 'offset'),
 		interval_extent varchar(80) not null,
 		interval_taxon varchar(80) not null,
 		interval_type enum('eon', 'era', 'period', 'epoch', 'stage', 'substage', 'zone', 'other') not null,
@@ -224,14 +228,21 @@ sub establish_timescale_tables {
 		age_error decimal(9,5),
 		offset decimal(9,5),
 		offset_error decimal(9,5),
+		age_prec tinyint,
+		age_error_prec tinyint,
+		offset_prec tinyint,
+		offset_error_prec tinyint,
 		is_error boolean not null,
 		is_updated boolean not null,
 		is_locked boolean not null,
 		is_different boolean not null,
+		is_modeled boolean not null,
 		color varchar(10) not null,
 		reference_no int unsigned,
 		derived_age decimal(9,5),
 		derived_age_error decimal(9,5),
+		derived_age_prec tinyint,
+		derived_age_error_prec tinyint,
 		derived_color varchar(10),
 		derived_reference_no int unsigned,
 		created timestamp default current_timestamp,
@@ -354,6 +365,15 @@ sub copy_international_timescales {
 	WHERE sm1.scale_level = $level_no ORDER BY i1.orig_late asc LIMIT 1)
 	ORDER BY age asc) as innerquery";
 	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$dbh->do($sql);
+	
+	$sql = "UPDATE $TIMESCALE_BOUNDS 
+		SET age_prec = length(regexp_substr(age, '(?<=[.])\\\\d*?(?=0*\$)')),
+		    derived_age_prec = length(regexp_substr(age, '(?<=[.])\\\\d*?(?=0*\$)'))
+		WHERE timescale_no = $timescale_no";
+
 	print STDERR "$sql\n\n" if $options->{debug};
 	
 	$dbh->do($sql);
@@ -623,25 +643,30 @@ sub process_one_timescale {
     }
     
     my ($first_early, $last_early, $last_late, $last_interval);
+    my ($first_early_prec, $last_late_prec);
     
  INTERVAL:
     foreach my $i ( @$interval_list )
     {
+	my $prec = get_precision($i->{base_age});
+	
 	unless ( $last_early )
 	{
 	    my $reference_no = $i->{reference_no} || '0';
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, derived_age, reference_no)
+			lower_no, interval_no, age, derived_age, age_prec, derived_age_prec, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 0,
-			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $reference_no)";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $prec, $prec, $reference_no)";
 	    
 	    $result = $dbh->do($sql);
 	    
 	    $first_early = $i->{base_age};
+	    $first_early_prec = $prec;
 	    $last_early = $i->{base_age};
 	    $last_late = $i->{top_age};
+	    $last_late_prec = $prec;
 	    $last_interval = $i;
 	    
 	    next INTERVAL;
@@ -651,14 +676,15 @@ sub process_one_timescale {
 	{
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, derived_age, reference_no)
+			lower_no, interval_no, age, derived_age, age_prec, derived_age_prec, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $prec, $prec, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
 	    $last_early = $i->{base_age};
 	    $last_late = $i->{top_age};
+	    $last_late_prec = get_precision($i->{top_age});
 	    $last_interval = $i;
 	    
 	    next INTERVAL;
@@ -670,9 +696,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
-			lower_no, interval_no, age, derived_age, reference_no)
+			lower_no, interval_no, age, derived_age, age_prec, derived_age_prec, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $prec, $prec, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -685,9 +711,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
-			lower_no, interval_no, age, derived_age, reference_no)
+			lower_no, interval_no, age, derived_age, age_prec, derived_age_prec, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $prec, $prec, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -700,9 +726,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
-			lower_no, interval_no, age, derived_age, reference_no)
+			lower_no, interval_no, age, derived_age, age_prec, derived_age_prec, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $prec, $prec, $i->{reference_no})";
 	    
 	    $result = $dbh->do($sql);
 	    
@@ -716,9 +742,9 @@ sub process_one_timescale {
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, derived_age, reference_no)
+			lower_no, interval_no, age, derived_age, age_prec, derived_age_prec, reference_no)
 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', $last_interval->{interval_no},
-			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $i->{reference_no})";
+			$i->{interval_no}, $i->{base_age}, $i->{base_age}, $prec, $prec, $i->{reference_no})";
 	    
 	    # print "\n$sql\n\n" if $options->{debug};
 	    
@@ -726,6 +752,7 @@ sub process_one_timescale {
 	    
 	    $last_early = $i->{base_age};
 	    $last_late = $i->{top_age};
+	    $last_late_prec = get_precision($i->{top_age});
 	    $last_interval = $i;	
 	}
     }
@@ -733,16 +760,18 @@ sub process_one_timescale {
     # Now we need to process the upper boundary of the last interval.
     
     $sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
-			lower_no, interval_no, age, derived_age, reference_no)
+			lower_no, interval_no, age, derived_age, age_prec, derived_age_prec, reference_no)
 		VALUES ($timescale_no, $last_interval->{authorizer_no}, 'absolute',
-			$last_interval->{interval_no}, 0, $last_late, $last_late, $last_interval->{reference_no})";
+			$last_interval->{interval_no}, 0, $last_late, $last_late, $last_late_prec, $last_late_prec, 
+			$last_interval->{reference_no})";
     
     $result = $dbh->do($sql);
     
     # Then update the timescale age range
     
     $sql = "UPDATE $TIMESCALE_DATA
-		SET max_age = $first_early, min_age = $last_late
+		SET max_age = $first_early, min_age = $last_late,
+		    max_age_prec = $first_early_prec, min_age_prec = $last_late_prec
 		WHERE timescale_no = $timescale_no";
     
     $result = $dbh->do($sql);
@@ -837,6 +866,25 @@ sub copy_macrostrat_timescales {
 
 }
 
+
+# get_precision ( value )
+#
+# Return the number of digits after the decimal point other than trailing zeros.
+
+sub get_precision {
+    
+    my ($value) = @_;
+
+    if ( $value =~ qr{ (?<=[.]) (\d*?) (?=0*$) }xs )
+    {
+	return length($1);
+    }
+
+    else
+    {
+	return 'NULL';
+    }
+}
 
 # add_timescale_chunk ( timescale_dest, timescale_source, last_boundary_age )
 # 
@@ -934,8 +982,8 @@ sub set_timescale_boundaries {
     
     my $result;
     my $sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, enterer_no,
-		bound_type, lower_no, interval_no, base_no, age, derived_age, interval_type,
-		interval_extent, interval_taxon) VALUES ";
+		bound_type, lower_no, interval_no, base_no, age, derived_age, age_prec, derived_age_prec,
+		interval_type, interval_extent, interval_taxon) VALUES ";
     
     my @values;
     
@@ -948,12 +996,14 @@ sub set_timescale_boundaries {
 	my $upper_quoted = $dbh->quote($b->{interval_no});
 	my $source_quoted = $dbh->quote($b->{base_no} // $b->{bound_no});
 	my $age_quoted = $dbh->quote($b->{age});
+	my $prec_quoted = $dbh->quote(get_precision($b->{age}));
 	my $type_quoted = $dbh->quote($b->{timescale_type} // '');
 	my $extent_quoted = $dbh->quote($b->{timescale_extent} // '');
 	my $taxon_quoted = $dbh->quote($b->{timescale_taxon} // '');
 	
 	push @values, "($ts_quoted, $auth_quoted, $auth_quoted, 'same', $lower_quoted, " .
-	    "$upper_quoted, $source_quoted, $age_quoted, $age_quoted, $type_quoted, $extent_quoted, $taxon_quoted)";
+	    "$upper_quoted, $source_quoted, $age_quoted, $age_quoted, $prec_quoted, $prec_quoted, " .
+	    "$type_quoted, $extent_quoted, $taxon_quoted)";
     }
     
     $sql .= join( q{, } , @values );
@@ -1322,6 +1372,15 @@ sub update_timescale_descriptions {
 }
 
 
+sub complete_bound_updates {
+    
+    my ($dbh) = @_;
+
+    $dbh->do("CALL complete_bound_updates");
+    $dbh->do("UPDATE $TIMESCALE_BOUNDS SET is_updated = 0");
+}
+
+
 sub create_triggers {
     
     my ($dbh) = @_;
@@ -1358,11 +1417,35 @@ sub create_triggers {
 			when 'range' then base.derived_age - (tsb.offset / 100) * ( base.derived_age - top.derived_age )
 			else tsb.age
 			end,
+		tsb.derived_age_prec = case tsb.bound_type
+			when 'same' then base.derived_age_prec
+			when 'offset' then coalesce(greatest(tsb.offset_prec, base.derived_age_prec),
+						    tsb.offset_prec, base.derived_age_prec)
+			when 'range' then coalesce(greatest(tsb.offset_prec, base.derived_age_prec, top.derived_age_prec),
+						   greatest(base.derived_age_prec, top.derived_age_prec),
+						   greatest(tsb.offset_prec, coalesce(base.derived_age_prec, top.derived_age_prec)),
+						   tsb.offset_prec, base.derived_age_prec, top.derived_age_prec)
+			else tsb.age_prec
+			end,
 		tsb.derived_age_error = case tsb.bound_type
-			when 'same' then base.age_error
-			when 'offset' then base.age_error + tsb.offset_error
-			when 'range' then base.age_error + (tsb.offset_error / 100) * ( base.derived_age - top.derived_age )
+			when 'same' then base.derived_age_error
+			when 'offset' then coalesce(greatest(base.derived_age_error, tsb.offset_error), base.derived_age_error, tsb.offset_error)
+			when 'range' then coalesce(greatest(base.derived_age_error, top.derived_age_error,
+							    (tsb.offset_error / 100) * ( base.derived_age - top.derived_age )),
+						   greatest(base.derived_age_error, top.derived_age_error),
+						   base.derived_age_error, top.derived_age_error,
+						   (tsb.offset_error / 100) * ( base.derived_age - top.derived_age ))
 			else tsb.age_error
+			end,
+		tsb.derived_age_error_prec = case tsb.bound_type
+			when 'same' then base.derived_age_error_prec
+			when 'offset' then coalesce(greatest(tsb.offset_error_prec, base.derived_age_error_prec),
+						    tsb.offset_error_prec, base.derived_age_error_prec)
+			when 'range' then coalesce(greatest(tsb.offset_error_prec, base.derived_age_error_prec, top.derived_age_error_prec),
+						   greatest(base.derived_age_error_prec, top.derived_age_error_prec),
+						   greatest(tsb.offset_error_prec, coalesce(base.derived_age_error_prec, top.derived_age_error_prec)),
+						   tsb.offset_error_prec, base.derived_age_error_prec, top.derived_age_error_prec)
+			else tsb.age_error_prec
 			end
 	    WHERE base.is_updated or top.is_updated or tsb.is_updated;
 	    

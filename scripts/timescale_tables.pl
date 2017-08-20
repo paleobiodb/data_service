@@ -20,7 +20,7 @@ use ConsoleLog qw(initMessages
 		  logTimestamp);
 use TimescaleTables qw(establish_timescale_tables copy_international_timescales
 		       copy_pbdb_timescales process_one_timescale copy_macrostrat_timescales
-		       update_timescale_descriptions create_triggers);
+		       update_timescale_descriptions complete_bound_updates create_triggers);
 use TimescaleEdit qw(add_boundary update_boundary);
 use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
@@ -53,7 +53,7 @@ GetOptions("init-tables" => \$opt_init_tables,
 # Check for documentation requests
 
 pod2usage(1) if $opt_help;
-pod2usage(2) unless $opt_init_tables || $opt_copy_from_pbdb || $opt_copy_from_macro || 
+pod2usage(2) unless $opt_init_tables || $opt_copy_old || $opt_copy_from_pbdb || $opt_copy_from_macro || 
     $opt_update_one || $opt_update_desc || $opt_ub || $opt_init_triggers;
 pod2usage(-exitval => 0, -verbose => 2) if $opt_man;
 
@@ -86,24 +86,29 @@ if ( $opt_copy_old )
     copy_pbdb_timescales($dbh, $options);
     copy_macrostrat_timescales($dbh, $options);
     update_timescale_descriptions($dbh, undef, $options);
-    exit;
+    complete_bound_updates($dbh);
 }
 
 # Otherwise, check for the individual options.
 
-if ( $opt_copy_international )
+else
 {
-    copy_international_timescales($dbh, $options);
-}
+    if ( $opt_copy_international )
+    {
+	copy_international_timescales($dbh, $options);
+    }
+    
+    if ( $opt_copy_from_pbdb )
+    {
+	copy_pbdb_timescales($dbh, $options);
+    }
+    
+    if ( $opt_copy_from_macro )
+    {
+	copy_macrostrat_timescales($dbh, $options);
+    }
 
-if ( $opt_copy_from_pbdb )
-{
-    copy_pbdb_timescales($dbh, $options);
-}
-
-if ( $opt_copy_from_macro )
-{
-    copy_macrostrat_timescales($dbh, $options);
+    complete_bound_updates($dbh);
 }
 
 if ( defined $opt_update_one && $opt_update_one ne '' )
@@ -146,6 +151,14 @@ sub update_boundaries {
     my $attrs = { };
     my @update;
     my $error;
+    
+    my $auth_info = { is_fixup => 1 };
+
+    if ( $options->{authorizer_no} )
+    {
+	$auth_info->{authorizer_no} = $options->{authorizer_no};
+	$auth_info->{enterer_no} = $options->{enterer_no};
+    }
     
     while ( my $line = <STDIN> )
     {
@@ -211,50 +224,48 @@ sub update_boundaries {
     {
 	print "ERROR: no bound specified.\n";
     }
+
+    my $edt = TimescaleEdit->new($dbh, { debug => 1,
+					 auth_info => $auth_info });
     
     try {
 
-	start_transaction($dbh);
+	$edt->start_transaction;
 	
 	while ( @update )
 	{
 	    $bound_no = shift @update;
 	    $attrs = shift @update;
 	    
-	    my ($result, $error_list, $warning_list) = update_boundary($dbh, $bound_no, $attrs, $options);
+	    $attrs->{bound_id} = $bound_no;
 	    
-	    if ( $result eq 'OK' )
-	    {
-		print "    boundary $bound_no OK\n";
-	    }
+	    $edt->update_boundary($attrs);
 	    
-	    else
-	    {
-		$error = 1;
-		
-		print "    boundary $bound_no ERRORS:\n";
-		
-		foreach my $e ( @$error_list )
-		{
-		    print "        $e\n";
-		}
-	    }
+	    print "    boundary $bound_no OK\n";
 	}
 	
-	if ( $error )
-	{
-	    rollback_transaction($dbh);
-	}
+	$edt->complete_bound_updates;
+	$edt->commit_transaction;
 	
-	else
+	foreach my $w ( $edt->warnings )
 	{
-	    commit_transaction($dbh);
+	    print "WARNING: $w\n";
 	}
     }
-	
+    
     catch {
 	print "EXCEPTION: $_\n";
-	rollback_transaction($dbh);
+	$edt->rollback_transaction;
+	
+	foreach my $w ( $edt->warnings )
+	{
+	    print "WARNING: $w\n";
+	}
+	
+	foreach my $e ( $edt->errors )
+	{
+	    print "ERROR: $e\n";
+	}
     };
 }
 
@@ -283,6 +294,9 @@ timescale_tables.pl - initialize and/or reset the new timescale tables for The P
     --init-tables       Create or re-create the necessary database tables.
                         The tables will be empty after this is done.
     
+    --init-triggers     Create or re-create the necessary database procedures
+                        and functions.
+    
     --copy-old          Copy the old interval data from both pbdb and macrostrat
     
     --copy-international    Copy the international intervals using data
@@ -300,6 +314,9 @@ timescale_tables.pl - initialize and/or reset the new timescale tables for The P
     --update-desc	Update timescale description attributes 'type', 'taxon', 'extent'
     
     --update-one=[n]    Re-process the timescale whose new number is given by [n].
+    
+    --ub                Update the attributes of one or more boundaries. You will be prompted
+                        to enter the boundary numbers and other attributes.
     
     --auth [n]          Set the authorizer_no value for newly created records
                         to n.

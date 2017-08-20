@@ -854,6 +854,17 @@ sub check_timescale_attrs {
     
     my $dbh = $edt->dbh;
     
+    # If any of the age values are being set, then compute and add the new precision as well.
+    
+    foreach my $k ( qw(age offset age_error offset_error) )
+    {
+	if ( defined $attrs->{$k} )
+	{
+	    my $prec = $attrs->{$k} =~ qr{ [.] (\d+) }xs ? length($1) : 0;
+	    $attrs->{"${k}_prec"} = $prec;
+	}
+    }
+    
     # Check the attributes one by one, according to their specified types.
     
     my $specification = $record_type eq 'bound' ? \%TIMESCALE_BOUND_ATTRS : 
@@ -867,9 +878,14 @@ sub check_timescale_attrs {
 	
 	# First make sure the field name and value are okay.
 	
-	if ( $type eq 'IGNORE' || $k eq 'record_label' )
+	if ( $k eq 'record_label' || ( $type && $type eq 'IGNORE' ) )
 	{
 	    next;
+	}
+	
+	elsif ( $k =~ /_prec$/ )
+	{
+	    $quoted = $dbh->quote($value);
 	}
 	
 	elsif ( ! defined $type )
@@ -1024,7 +1040,7 @@ sub check_timescale_attrs {
 	push @value_list, $edt->{authorizer_no}, $edt->{enterer_no};
     }
     
-    else
+    elsif ( ! $edt->{is_fixup} )
     {
 	push @field_list, 'modifier_no';
 	push @value_list, $edt->{enterer_no};

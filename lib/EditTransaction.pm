@@ -37,7 +37,7 @@ sub new {
 	$edt->{condition} = $options->{conditions};
     }
     
-    my ($authorizer_no, $enterer_no, $guest_no, $is_super);
+    my ($authorizer_no, $enterer_no, $guest_no, $is_super, $is_fixup);
     
     if ( $edt->{auth_info} )
     {
@@ -45,11 +45,12 @@ sub new {
 	{
 	    $guest_no = $edt->{auth_info}{guest_no};
 	}
-
+	
 	else
 	{
 	    $authorizer_no = $edt->{auth_info}{authorizer_no};
 	    $enterer_no = $edt->{auth_info}{enterer_no};
+	    $is_fixup = $edt->{auth_info}{fixup};
 	}
     }
 	    
@@ -84,6 +85,18 @@ sub new {
 	$edt->{guest_no} = $dbh->quote($guest_no);
 
 	print STDERR " >>> START TRANSACTION (guest)\n\n" if $options->{debug};
+	
+	$dbh->do("START TRANSACTION");
+	
+	$edt->{state} = 'active';
+    }
+
+    elsif ( $is_fixup )
+    {
+	$edt->{is_super} = 1;
+	$edt->{is_fixup} = 1;
+	
+	print STDERR " >>> START TRANSACTION (fixup)\n\n" if $options->{debug};
 	
 	$dbh->do("START TRANSACTION");
 	

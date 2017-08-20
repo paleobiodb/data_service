@@ -141,17 +141,17 @@ sub initialize {
 	    "reference boundary or boundaries. If set to true, then this boundary",
 	    "will not change even if the reference boundary does. If set to false, then the",
 	    "boundary will be updated to reflect the reference boundary.",
-	{ optional => 'age', valid => DECI_VALUE },
+	{ optional => 'age', valid => \&valid_age },
 	    "The age of this boundary, in Ma",
-	{ optional => 'age_error', valid => DECI_VALUE },
+	{ optional => 'age_error', valid => \&valid_age },
 	    "The uncertainty in the age, in Ma",
-	{ optional => 'offset', valid => DECI_VALUE },
+	{ optional => 'offset', valid => \&valid_age },
 	    "If the boundary type is C<B<offset>>, then the age of this boundary",
 	    "is derived by adding the value of this attribute (in Ma) to the age of",
 	    "the reference boundary. If the boundary type is C<B<percent>>,",
 	    "then the age is derived as the specified percentage of the difference between",
 	    "the two reference boundaries.",
-	{ optional => 'offset_error', valid => DECI_VALUE },
+	{ optional => 'offset_error', valid => \&valid_age },
 	    "The value of this attribute gives the uncertainty in the offset/percentage.",
 	{ optional => 'interval_id', valid => VALID_IDENTIFIER('INT') },
 	    "The identifier of the interval (if any) for which this is the lower",
@@ -935,5 +935,25 @@ sub list_timescales_for_update {
     
     $request->sql_count_rows;
 }
+
+
+# valid_age ( value )
+# 
+# This routine acts as a validator for age values. We cannot use the ordinary DECI_VALUE
+# validator, because it chops off trailing zeros.
+
+sub valid_age {
+    
+    my ($value) = @_;
+    
+    unless ( $value =~ qr{ ^ \d+ (?: [.] \d*)? $ }xs )
+    {
+	return { error => "bad value '$value' for {param}: must be a decimal number" };
+    }
+    
+    return { value => $value };
+}
+
+
 
 1;

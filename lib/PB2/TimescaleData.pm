@@ -137,7 +137,7 @@ sub initialize {
 	    "True if this boundary is locked and its age is different from",
 	    "the value that would be computed from the base and/or range boundary,",
 	    "or if its color or bibliographic reference are different from those",
-	    "indicated by its source boundaries.",
+		      "indicated by its source boundaries.",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color for this interval, if any");
     
@@ -192,15 +192,17 @@ sub initialize {
 	    "with respect to some other base boundary.");
     
     $ds->define_block('1.2:timescales:bound' =>
-	{ select => [ 'tsb.bound_no', 'tsb.age', 'tsb.age_error', 'tsb.bound_type', 
+	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.derived_age', 'tsb.derived_age_error',
+		      'tsb.derived_age_prec', 'tsb.derived_age_error_prec',
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
 		      'tsb.offset', 'tsb.offset_error', 'tsb.lower_no', 'tsb.interval_no',
 		      'tsb.base_no', 'tsbb.timescale_no as base_timescale_no',
-		      'tsb.range_no', 'tsb.color_no', 'tsb.is_error',
+		      'tsb.range_no', 'tsb.color_no', 'tsb.is_error', 'tsb.is_modeled',
 		      'tsb.is_locked', 'tsb.is_different', 'tsb.color', 'tsb.reference_no',
 		      'tsil.interval_name as lower_name', 'tsi.interval_name' ],
 	  tables => [ 'tsb', 'tsi', 'tsil' ] },
 	{ set => '*', code => \&process_ids },
+	{ set => '*', code => \&process_ages },
 	{ output => 'bound_no', com_name => 'oid' },
 	    "The unique identifier of this boundary in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{BND} },
@@ -209,19 +211,19 @@ sub initialize {
 	    "being returned as a number.",
 	{ output => 'timescale_no', com_name => 'sid' },
 	    "The identifier of the timescale containing this bound",
-	{ output => 'age', com_name => 'age' },
+	{ output => 'derived_age', com_name => 'age', data_type => 'str' },
 	    "The age at which this boundary is fixed or calculated, in Ma",
-	{ output => 'age_error', com_name => 'ger' },
+	{ output => 'derived_age_error', com_name => 'ger', data_type => 'str' },
 	    "The error (+/-) associated with the age",
 	{ output => 'interval_type', com_name => 'typ' },
 	    "The type of the upper interval, if any",
 	{ output => 'bound_type', com_name => 'btp' },
 	    "The boundary type, which will be one of the following:",
 	    $ds->document_set('1.2:timescales:bound_types'),
-	{ output => 'offset', com_name => 'ofs' },
+	{ output => 'offset', com_name => 'ofs', data_type => 'str' },
 	    "The offset or percentage, depending on the boundary type,",
 	    "by which this boundary differs from the base boundary.",
-	{ output => 'offset_error', com_name => 'oer' },
+	{ output => 'offset_error', com_name => 'oer', data_type => 'str' },
 	    "The error (+/-) associated with the offset or percentage",
 	{ output => 'interval_no', com_name => 'iid' },
 	    "The identifier of the upper interval bounded by this boundary.",
@@ -266,6 +268,9 @@ sub initialize {
 	    "the value that would be computed from the base and/or range boundary,",
 	    "or if its color or bibliographic reference are different from those",
 	    "indicated by its source boundaries.",
+	{ output => 'is_modeled', com_name => 'mdl' },
+	    "True if this boundary was modeled relative to the international",
+	    "chronostratigraphic intervals.",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color (if any) that should be assigned to the upper",
 	    "interval associated with this boundary.",
@@ -654,7 +659,7 @@ sub list_records {
     
     elsif ( $type eq 'bounds' )
     {
-	$order_expr ||= 'order by age';
+	$order_expr ||= 'order by tsb.derived_age';
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
@@ -965,5 +970,50 @@ sub process_ids {
     # 	    if defined $record->{$k} && $record->{$k} ne '';
     # }
 }
+
+
+sub process_ages {
+    
+    my ($request, $record) = @_;
+
+    $record->{derived_age} = precise_value($record->{derived_age}, $record->{derived_age_prec});
+    $record->{derived_age_error} = precise_value($record->{derived_age_error}, $record->{derived_age_error_prec});
+    $record->{offset} = precise_value($record->{offset}, $record->{offset_prec});
+    $record->{offset_error} = precise_value($record->{offset_error_prec});
+}
+
+
+sub precise_value {
+    
+    my ($value, $prec) = @_;
+
+    if ( defined $prec && $value =~ qr{ (\d+) (?: [.] (\d*) )? }xs )
+    {
+	my $whole = $1;
+	my $point = $prec ? '.' : '';
+	my $frac = $2 // '';
+	my $len = length($frac);
+	
+	if ( $len > $prec )
+	{
+	    $frac = substr($frac, 0, $prec);
+	}
+	
+	elsif ( $len < $prec )
+	{
+	    $frac = $frac . '0' x ($prec - $len);
+	}
+	
+	return "$whole$point$frac";
+    }
+
+    elsif ( defined $value && $value =~ qr{ ^ \d }xs )
+    {
+	$value =~ s/ [.]? 0+ $ //xs;
+    }
+    
+    return $value;
+}
+
 
 1;
