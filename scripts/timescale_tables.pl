@@ -91,7 +91,7 @@ if ( $opt_copy_old )
 
 # Otherwise, check for the individual options.
 
-else
+elsif ( $opt_copy_international || $opt_copy_from_pbdb || $opt_copy_from_macro )
 {
     if ( $opt_copy_international )
     {

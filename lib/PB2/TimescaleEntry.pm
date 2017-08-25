@@ -946,7 +946,7 @@ sub valid_age {
     
     my ($value) = @_;
     
-    unless ( $value =~ qr{ ^ \d+ (?: [.] \d*)? $ }xs )
+    unless ( $value =~ qr{ ^ (?: \d+ | \d+ [.] \d* | [.] \d+ ) $ }xs )
     {
 	return { error => "bad value '$value' for {param}: must be a decimal number" };
     }

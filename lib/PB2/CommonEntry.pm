@@ -119,7 +119,7 @@ sub unpack_input_records {
 	}
 	
 	# Otherwise, if the request body is an object with the key 'records' and an array value,
-	# then we assume that the array is a list of inptut records. If there is also a key 'all'
+	# then we assume that the array is a list of input records. If there is also a key 'all'
 	# with an object value, then we assume that it gives common parameters to be applied to
 	# all records.
 	
@@ -190,9 +190,32 @@ sub unpack_input_records {
 	    }
 	}
 	
+	# If a ruleset was specified for validating the parameters, then apply
+	# it. Unfortunately, HTTP::Validate (at the time this code was
+	# written) does not properly handle parameters with empty values. So
+	# a quick hack fills these in.
+	
 	if ( $entry_ruleset )
 	{
+	    # Validate the input record against the specified ruleset.
+	    
 	    my $result = $request->validate_params($entry_ruleset, $r);
+	    
+	    # Fill in any parameters that were included with empty values.
+	    
+	    my $raw = $result->raw;
+	    
+	    foreach my $k ( %$raw )
+	    {
+		if ( defined $raw->{$k} && $raw->{$k} eq '' )
+		{
+		    $result->{clean}{$k} = '';
+		    push @{$result->{clean_list}}, $k;
+		}
+	    }
+	    
+	    # If any errors or warnings were generated, add them to the
+	    # current request.
 	    
 	    my $label = $r->{record_id} || ($main_key && $r->{main_key}) || '';
 	    my $lstr = $label ? " ($label)" : "";
@@ -206,6 +229,9 @@ sub unpack_input_records {
 	    {
 		$request->add_warning("W_PARAM$lstr: $w");
 	    }
+	    
+	    # Then add the hash of cleaned parameter values to the list of
+	    # records to add or update.
 	    
 	    push @records, $result->values;
 	}
@@ -803,7 +829,7 @@ sub debug_out {
 	my $value = ref $record->{$k} eq 'ARRAY' ? '(' . join(', ', @{$record->{$k}}) . ')'
 	    : $record->{$k};
 	
-	if ( defined $value && $value ne '' )
+	if ( defined $value )
 	{
 	    $request->{ds}->debug_line("$prefix$k = $value");
 	}

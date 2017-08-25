@@ -128,16 +128,6 @@ sub initialize {
 	{ output => 'is_error', com_name => 'err' },
 	    "True if this boundary is inconsistent with the other boundaries in",
 	    "its timescale, for example in overlapping with another boundary.",
-	{ output => 'is_locked', com_name => 'lck' },
-	    "True if this boundary is locked. If the age of the base boundary",
-	    "and/or range boundary is changed, then the age of this boundary will be",
-	    "updated only if it is not locked. The same is true of color",
-	    "and bibliographic reference identifier.",
-	{ output => 'is_different', com_name => 'dfa' },
-	    "True if this boundary is locked and its age is different from",
-	    "the value that would be computed from the base and/or range boundary,",
-	    "or if its color or bibliographic reference are different from those",
-		      "indicated by its source boundaries.",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color for this interval, if any");
     
@@ -156,7 +146,7 @@ sub initialize {
 	    "The name of the timescale in which this interval or bound is contained.");
     
     $INTERVAL_ATTRS_RELATIVE = "tsb.age as early_age, tsbu.age as late_age, tsb.color, " .
-	"tsb.is_error, tsb.is_locked, tsb.is_different, tsb.timescale_no";
+	"tsb.is_error, tsb.timescale_no";
     $INTERVAL_ATTRS_ABSOLUTE = "tsi.early_age, tsi.late_age, tsi.color";
     
     $ds->define_output_map('1.2:timescales:optional_interval' =>
@@ -180,25 +170,22 @@ sub initialize {
 	    "A boundary which has the same value as some other base boundary. For",
 	    "example, the beginning of the Triassic might be defined by reference to",
 	    "the beginning of the Mesozoic.",
-	{ value => 'range' },
+	{ value => 'percent' },
 	    "A boundary which is fixed between two other boundaries, a base and a top, as a",
-	    "percentage of the span between them.",
-	{ value => 'modeled' },
-	    "Identical to C<B<range>>, but this boundary type is set by the code",
-	    "that loads initial values. It indicates a boundary whose definition has",
-	    "not been changed manually.",
+	    "percentage of the range between them.",
 	{ value => 'offset' },
 	    "A boundary which is defined by a specified offset in millions of years",
 	    "with respect to some other base boundary.");
     
     $ds->define_block('1.2:timescales:bound' =>
-	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.derived_age', 'tsb.derived_age_error',
-		      'tsb.derived_age_prec', 'tsb.derived_age_error_prec',
+	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.age', 'tsb.age_error',
+		      'tsb.age_prec', 'tsb.age_error_prec',
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
-		      'tsb.offset', 'tsb.offset_error', 'tsb.lower_no', 'tsb.interval_no',
+		      'tsb.offset', 'tsb.offset_error', 'tsb.offset_prec', 'tsb.offset_error_prec',
+		      'tsb.lower_no', 'tsb.interval_no',
 		      'tsb.base_no', 'tsbb.timescale_no as base_timescale_no',
 		      'tsb.range_no', 'tsb.color_no', 'tsb.is_error', 'tsb.is_modeled',
-		      'tsb.is_locked', 'tsb.is_different', 'tsb.color', 'tsb.reference_no',
+		      'tsb.color', 'tsb.reference_no',
 		      'tsil.interval_name as lower_name', 'tsi.interval_name' ],
 	  tables => [ 'tsb', 'tsi', 'tsil' ] },
 	{ set => '*', code => \&process_ids },
@@ -211,9 +198,9 @@ sub initialize {
 	    "being returned as a number.",
 	{ output => 'timescale_no', com_name => 'sid' },
 	    "The identifier of the timescale containing this bound",
-	{ output => 'derived_age', com_name => 'age', data_type => 'str' },
+	{ output => 'age', com_name => 'age', data_type => 'str' },
 	    "The age at which this boundary is fixed or calculated, in Ma",
-	{ output => 'derived_age_error', com_name => 'ger', data_type => 'str' },
+	{ output => 'age_error', com_name => 'ger', data_type => 'str' },
 	    "The error (+/-) associated with the age",
 	{ output => 'interval_type', com_name => 'typ' },
 	    "The type of the upper interval, if any",
@@ -258,16 +245,6 @@ sub initialize {
 	{ output => 'is_error', com_name => 'err' },
 	    "True if this boundary is inconsistent with the other boundaries in",
 	    "its timescale, for example in overlapping with another boundary.",
-	{ output => 'is_locked', com_name => 'lck' },
-	    "True if this boundary is locked. If the age of the base boundary",
-	    "and/or range boundary is changed, then the age of this boundary will be",
-	    "updated only if it is not locked. The same is true of color",
-	    "and bibliographic reference identifier.",
-	{ output => 'is_different', com_name => 'dfa' },
-	    "True if this boundary is locked and its age is different from",
-	    "the value that would be computed from the base and/or range boundary,",
-	    "or if its color or bibliographic reference are different from those",
-	    "indicated by its source boundaries.",
 	{ output => 'is_modeled', com_name => 'mdl' },
 	    "True if this boundary was modeled relative to the international",
 	    "chronostratigraphic intervals.",
@@ -281,36 +258,12 @@ sub initialize {
 	    "in which this boundary is contained.");
     
     $ds->define_output_map('1.2:timescales:optional_bound' =>
-	{ value => 'derived', maps_to => '1.2:timescales:derived' },
-	    "The values for age, color, and bibliographic reference",
-	    "as derived from the base boundary and color source",
-	    "boundary. These values will only be different from",
-	    "the actual values for this boundary if this boundary",
-	    "is locked and the source values have changed.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered, and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered, and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the boundary record");
-    
-    $ds->define_block('1.2:timescales:derived' =>
-	{ output => 'derived_age', com_name => 'dag' },
-	    "The age of this boundary as computed from the base and/or",
-	    "range boundaries, and from the offset or percentage (if any)",
-	    "specified for htis boundary. This will differ from the actual",
-	    "age only if this boundary is locked and the ages of the other",
-	    "boundaries have changed. And the same is true of the following",
-	    "fields.",
-	{ output => 'derived_age_error', com_name => 'dgr' },
-	    "The age error of this boundary as computed from the base and/or",
-	    "range boundaries.",
-	{ output => 'derived_color', com_name => 'dco' },
-	    "The color of this boundary as derived from the color source",
-	    "boundary.",
-	{ output => 'derived_reference_no', com_name => 'dri' },
-	    "The identifier of the bibliographic reference for this boundary",
-	    "derived from the base boundary (if any).");
     
     $ds->define_ruleset('1.2:timescales:specifier' =>
 	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), alias => 'id' },
@@ -659,7 +612,7 @@ sub list_records {
     
     elsif ( $type eq 'bounds' )
     {
-	$order_expr ||= 'order by tsb.derived_age';
+	$order_expr ||= 'order by tsb.age';
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
@@ -976,10 +929,12 @@ sub process_ages {
     
     my ($request, $record) = @_;
 
-    $record->{derived_age} = precise_value($record->{derived_age}, $record->{derived_age_prec});
-    $record->{derived_age_error} = precise_value($record->{derived_age_error}, $record->{derived_age_error_prec});
+    $record->{age} = precise_value($record->{age}, $record->{age_prec});
+    $record->{age_error} = precise_value($record->{age_error}, $record->{age_error_prec});
     $record->{offset} = precise_value($record->{offset}, $record->{offset_prec});
     $record->{offset_error} = precise_value($record->{offset_error_prec});
+    
+    delete $record->{is_modeled} unless $record->{is_modeled};
 }
 
 
@@ -987,7 +942,7 @@ sub precise_value {
     
     my ($value, $prec) = @_;
 
-    if ( defined $prec && $value =~ qr{ (\d+) (?: [.] (\d*) )? }xs )
+    if ( defined $prec && defined $value && $value =~ qr{ (\d+) (?: [.] (\d*) )? }xs )
     {
 	my $whole = $1;
 	my $point = $prec ? '.' : '';
