@@ -16,14 +16,17 @@ use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUN
 	         $INTERVAL_DATA $INTERVAL_MAP $SCALE_MAP $MACROSTRAT_SCALES $MACROSTRAT_INTERVALS
 	         $MACROSTRAT_SCALES_INTS $REFERENCES);
 use CoreFunction qw(activateTables loadSQLFile);
-use ConsoleLog qw(logMessage);
+use ConsoleLog qw(logMessage logQuestion);
 
 use base 'Exporter';
 
 our(@EXPORT_OK) = qw(establish_timescale_tables copy_international_timescales
 		   copy_pbdb_timescales copy_macrostrat_timescales process_one_timescale
-		   update_timescale_descriptions complete_bound_updates create_triggers
+		   update_timescale_descriptions model_timescale complete_bound_updates 
+		   establish_procedures establish_triggers
 		   %TIMESCALE_BOUND_ATTRS %TIMESCALE_ATTRS %TIMESCALE_REFDEF);
+
+our ($TIMESCALE_FIX) = 'timescale_fix';
 
 
 our (%TIMESCALE_ATTRS) = 
@@ -235,8 +238,10 @@ sub establish_timescale_tables {
 		is_error boolean not null,
 		is_updated boolean not null,
 		is_modeled boolean not null,
+		is_spike boolean not null,
 		color varchar(10) not null,
 		reference_no int unsigned,
+		orig_age decimal(9,5),
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp,
 		updated timestamp default current_timestamp on update current_timestamp,
@@ -266,6 +271,117 @@ sub establish_timescale_tables {
 			 $TS_INTS_WORK => $TIMESCALE_INTS,
 			 $TS_BOUNDS_WORK => $TIMESCALE_BOUNDS,
 			 $TS_PERMS_WORK => $TIMESCALE_PERMS);
+    
+    # Now establish the necessary triggers on the new tables.
+
+    establish_triggers($dbh, $options);
+    
+    # Now make sure the timescale_fix table is properly initialized.
+    
+    $dbh->do("DROP TABLE IF EXISTS $TIMESCALE_FIX");
+    
+    $dbh->do("CREATE TABLE $TIMESCALE_FIX (
+		timescale_no int unsigned not null,
+		interval_name varchar(80) not null,
+		bound_type enum('absolute', 'spike') null,
+		age decimal(9,5) null,
+		age_prec tinyint null,
+	        age_error decimal(9,5) null,
+		age_error_prec tinyint null,
+		primary key (timescale_no, interval_name))");
+    
+    $dbh->do("REPLACE INTO $TIMESCALE_FIX (timescale_no, interval_name, bound_type, age, age_prec,
+			age_error, age_error_prec) VALUES
+		(4, 'Holocene', 'spike', '0.0117', 4, null, null),
+		(5, 'Calabrian', 'spike', '1.80', 2, null, null),
+		(3, 'Quaternary', 'spike', '2.58', 2, null, null),
+		(5, 'Piacenzian', 'spike', '3.600', 3, null, null),
+		(4, 'Pliocene', 'spike', '5.333', 3, null, null),
+		(5, 'Messinian', 'spike', '7.246', 3, null, null),
+		(5, 'Tortonian', 'spike', '11.63', 2, null, null),
+		(5, 'Serravallian', 'spike', '13.82', 2, null, null),
+		(3, 'Neogene', 'spike', '23.03', 2, null, null),
+		(5, 'Chattian', 'spike', '27.82', 2, null, null),
+		(4, 'Oligocene', 'spike', '33.9', 1, null, null),
+		(5, 'Bartonian', 'absolute', '41.2', 1, null, null),
+		(5, 'Lutetian', 'spike', '47.8', 1, null, null),
+		(4, 'Eocene', 'spike', '56.0', 1, null, null),
+		(5, 'Thanetian', 'spike', '59.2', 1, null, null),
+		(5, 'Selandian', 'spike', '61.6', 1, null, null),
+		(2, 'Cenozoic', 'spike', '66.0', 1, null, null),
+		(5, 'Maastrichtian', 'spike', '72.1', 1, '0.2', 1),
+		(5, 'Campanian', 'absolute', '83.6', 1, '0.2', 1),
+		(5, 'Santonian', 'spike', '86.3', 1, '0.5', 1),
+		(5, 'Coniacian', 'absolute', '89.8', 1, '0.3', 1),
+		(5, 'Turonian', 'spike', '93.9', 1, null, null),
+		(4, 'Late Cretaceous', 'spike', '100.5', 1, null, null),
+		(5, 'Albian', 'spike', '113.0', 1, null, null),
+		(5, 'Aptian', 'absolute', '125.0', 1, null, null),
+		(3, 'Cretaceous', 'absolute', '145.0', 1, null, null),
+		(5, 'Tithonian', 'absolute', '152.1', 1, '0.9', 1),
+		(5, 'Kimmeridgian', 'absolute', '157.3', 1, '1.0', 1),
+		(4, 'Late Jurassic', 'absolute', '163.5', 1, '1.0', 1),
+		(5, 'Callovian', 'absolute', '166.1', 1, '1.2', 1),
+		(5, 'Bathonian', 'spike', '168.3', 1, '1.3', 1),
+		(5, 'Bajocian', 'spike', '170.3', 1, '1.4', 1),
+		(4, 'Middle Jurassic', 'spike', '174.1', 1, '1.0', 1),
+		(5, 'Toarcian', 'spike', '182.7', 1, '0.7', 1),
+		(5, 'Pliensbachian', 'spike', '190.8', 1, '1.0', 1),
+		(5, 'Sinemurian', 'spike', '199.3', 1, '0.3', 1),
+		(3, 'Jurassic', 'spike', '201.3', 1, '0.2', 1),
+		(4, 'Late Triassic', 'spike', '237', 0, null, null),
+		(5, 'Ladinian', 'spike', '242', 0, null, null),
+		(5, 'Olenekian', 'absolute', '251.2', 0, null, null),
+		(4, 'Middle Triassic', 'absolute', '247.2', 1, null, null),
+		(2, 'Mesozoic', 'spike', '251.902', 3, '0.024', 3),
+		(5, 'Changhsingian', 'spike', '254.14', 2, '0.07', 2),
+		(4, 'Lopingian', 'spike', '259.1', 1, '0.5', 1),
+		(5, 'Capitanian', 'spike', '265.1', 1, '0.4', 1),
+		(5, 'Wordian', 'spike', '268.8', 1, '0.5', 1),
+		(4, 'Guadalupian', 'spike', '272.95', 2, '0.11', 2),
+		(5, 'Kungurian', 'absolute', '283.5', 1, '0.6', 1),
+		(5, 'Artinskian', 'absolute', '290.1', 1, '0.26', 1),
+		(5, 'Sakmarian', 'absolute', '295.0', 1, '0.18', 2),
+		(3, 'Permian', 'spike', '298.9', 1, '0.15', 2),
+		(5, 'Gzhelian', 'absolute', '303.7', 1, '0.1', 1),
+		(5, 'Kasimovian', 'absolute', '307.0', 1, '0.1', 1),
+		(4, 'Pennsylvanian', 'spike', '323.2', 1, '0.4', 1),
+		(5, 'Serpukhovian', 'absolute', '330.9', 1, '0.2', 1),
+		(5, 'Visean', 'spike', '346.7', 1, '0.4', 1),
+		(3, 'Carboniferous', 'spike', '358.9', 1, '0.4', 1),
+		(5, 'Famennian', 'spike', '372.2', 1, '1.6', 1),
+		(4, 'Late Devonian', 'spike', '382.7', 1, '1.6', 1),
+		(5, 'Givetian', 'spike', '387.7', 1, '0.8', 1),
+		(4, 'Middle Devonian', 'spike', '393.3', 1, '1.2', 1),
+		(5, 'Emsian', 'spike', '407.6', 1, '2.6', 1),
+		(5, 'Pragian', 'spike', '410.8', 1, '2.8', 1),
+		(3, 'Devonian', 'spike', '419.2', 1, '3.2', 1),
+		(4, 'Pridoli', 'spike', '423.0', 1, '2.3', 1),
+		(5, 'Ludfordian', 'spike', '425.6', 1, '0.9', 1),
+		(4, 'Ludlow', 'spike', '427.4', 1, '0.5', 1),
+		(5, 'Homerian', 'spike', '430.5', 1, '0.7', 1),
+		(4, 'Wenlock', 'spike', '433.4', 1, '0.8', 1),
+		(5, 'Telychian', 'spike', '438.5', 1, '1.1', 1),
+		(5, 'Aeronian', 'spike', '440.8', 1, '1.2', 1),
+		(3, 'Silurian', 'spike', '443.8', 1, '1.5', 1),
+		(5, 'Hirnantian', 'spike', '445.2', 1, '1.4', 1),
+		(5, 'Katian', 'spike', '453.0', 1, '0.7', 1),
+		(4, 'Late Ordovician', 'spike', '458.4', 1, '0.9', 1),
+		(5, 'Darriwilian', 'spike', '458.4', 1, '0.9', 1),
+		(4, 'Middle Ordovician', 'spike', '470.0', 1, '1.4', 1),
+		(5, 'Floian', 'spike', '477.7', 1, '1.4', 1),
+		(3, 'Ordovician', 'spike', '485.4', 1, '1.9', 1),
+		(5, 'Stage 10', 'absolute', '489.5', 1, null, null),
+		(5, 'Jiangshanian', 'spike', '494', 0, null, null),
+		(4, 'Furongian', 'spike', '497', 0, null, null),
+		(5, 'Guzhangian', 'spike', '500.5', 1, null, null),
+		(5, 'Drumian', 'spike', '504.5', 1, null, null),
+		(4, 'Series 3', 'absolute', '509', 0, null, null),
+		(5, 'Stage 4', 'absolute', '514', 0, null, null),
+		(4, 'Series 2', 'absolute', '521', 0, null, null),
+		(5, 'Stage 2', 'absolute', '529', 0, null, null),
+		(1, 'Phanerozoic', 'spike', '541.0', 1, '1.0', 1),
+		(3, 'Ediacaran', 'spike', '635', 0, null, null)");
 }
 
 
@@ -289,11 +405,13 @@ sub copy_international_timescales {
     
     $sql = "REPLACE INTO $TIMESCALE_DATA (timescale_no, authorizer_no, enterer_no, timescale_name,
 	timescale_type, timescale_extent, authority_level, is_active) VALUES
-	(5, $auth_quoted, $auth_quoted, 'International Chronostratigraphic Eons', 'eon', 'international', 5, 1),
-	(4, $auth_quoted, $auth_quoted, 'International Chronostratigraphic Eras', 'era', 'international', 5, 1),
-	(3, $auth_quoted, $auth_quoted, 'Internatioanl Chronostratigraphic Periods', 'period', 'international', 5, 1),
-	(2, $auth_quoted, $auth_quoted, 'International Chronostratigraphic Epochs', 'epoch', 'international', 5, 1),
-	(1, $auth_quoted, $auth_quoted, 'International Chronostratigraphic Stages', 'stage', 'international', 5, 1)";
+	(1, $auth_quoted, $auth_quoted, 'ICS Eons', 'eon', 'ics', 5, 1),
+	(2, $auth_quoted, $auth_quoted, 'ICS Eras', 'era', 'ics', 5, 1),
+	(3, $auth_quoted, $auth_quoted, 'ICS Periods', 'period', 'ics', 5, 1),
+	(4, $auth_quoted, $auth_quoted, 'ICS Epochs', 'epoch', 'ics', 5, 1),
+	(5, $auth_quoted, $auth_quoted, 'ICS Stages', 'stage', 'ics', 5, 1)";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -307,6 +425,8 @@ sub copy_international_timescales {
 	WHERE scale_no = 1 and i.interval_no < 3000
 	GROUP BY interval_no";
     
+    print STDERR "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     logMessage(1, "Inserted 5 timescales and $result intervals from PBDB");
@@ -319,6 +439,8 @@ sub copy_international_timescales {
 	    i.macrostrat_id = msi.id,
 	    i.orig_color = msi.orig_color, i.macrostrat_color = msi.interval_color";
     
+    print STDERR "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     logMessage(1, "Updated $result intervals with data from Macrostrat");
@@ -327,16 +449,21 @@ sub copy_international_timescales {
     
     $sql = "TRUNCATE TABLE $TIMESCALE_BOUNDS";
     
+    print STDERR "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
-    foreach my $level_no (reverse 1..5)
+    # Then add all of the bounds for each of the 5 international timescales in turn. Bound number
+    # 1 will be the present, with an age of zero.
+    
+    foreach my $level_no (1..5)
     {
-	my $timescale_no = 6 - $level_no;
+	my $timescale_no = $level_no;
 	
 	$sql = "INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, enterer_no, 
 			bound_type, lower_no, interval_no, age, color, reference_no)
 	SELECT $timescale_no as timescale_no, $auth_quoted as authorizer_no, $auth_quoted as enterer_no,
-			'spike' as bound_type, lower_no, interval_no, age, color, orig_refno
+			'absolute' as bound_type, lower_no, interval_no, age, color, orig_refno
 	FROM
 	((SELECT null as lower_no, null as lower_name, i1.orig_early as age, i1.interval_name, i1.interval_no,
 		if(i1.macrostrat_color <> '', i1.macrostrat_color, i1.orig_color) as color, i1.orig_refno
@@ -417,9 +544,9 @@ sub copy_international_timescales {
     
     my %ages;
     
-    foreach my $timescale_no ( 4,3,2,1 )
+    foreach my $timescale_no ( 2, 3, 4 ,5 )
     {
-	my $source_no = $timescale_no + 1;
+	my $source_no = $timescale_no - 1;
 	
 	$sql = "UPDATE $TIMESCALE_BOUNDS as tsb join $TIMESCALE_BOUNDS as source on tsb.age = source.age
 		SET tsb.bound_type = 'same', tsb.base_no = source.bound_no,
@@ -433,6 +560,18 @@ sub copy_international_timescales {
 	logMessage(2, "    Linked up $result bounds from timescale $timescale_no as 'same'");
     }
     
+    # Save the ages that we just loaded from the source databases
+    
+    $sql = "UPDATE $TIMESCALE_BOUNDS as tsb SET orig_age = age WHERE timescale_no in (1,2,3,4,5)";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $dbh->do($sql);
+    
+    # Then update the international bounds to their currently accepted values and attributes.
+    
+    update_international_bounds($dbh, $options);
+    
     # Finally, we knit pieces of these together into a single timescale, for demonstration
     # purposes. 
     
@@ -442,6 +581,8 @@ sub copy_international_timescales {
 	is_active, timescale_type, timescale_extent) VALUES
 	($test_timescale_no, $auth_quoted, 'Test timescale using international intervals', 1,
 	 'multi', 'international')";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
     
     $dbh->do($sql);
     
@@ -784,7 +925,7 @@ sub process_one_timescale {
 	
 	elsif ( $i->{base_age} == $last_early )
 	{
-	    logMessage(2, "  error: $i->{interval_name} ($i->{interval_no}) matches bottom of previous");
+	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) matches bottom of previous");
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
@@ -799,7 +940,7 @@ sub process_one_timescale {
 	
 	elsif ( $i->{top_age} == $last_late )
 	{
-	    logMessage(2, "  error: $i->{interval_name} ($i->{interval_no}) matches top of previous");
+	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) matches top of previous");
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
@@ -814,7 +955,7 @@ sub process_one_timescale {
 	
 	elsif ( $i->{base_age} > $last_late )
 	{
-	    logMessage(2, "  error: $i->{interval_name} ($i->{interval_no}) overlaps top");
+	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) overlaps top");
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type, is_error,
@@ -830,7 +971,7 @@ sub process_one_timescale {
 	else
 	{
 	    my $gap = $last_late - $i->{base_age};
-	    logMessage(2, "  error: $i->{interval_name} ($i->{interval_no}) has a gap of $gap Ma");
+	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) has a gap of $gap Ma");
 	    
 	    $sql = "
 		INSERT INTO $TIMESCALE_BOUNDS (timescale_no, authorizer_no, bound_type,
@@ -1013,33 +1154,6 @@ sub set_timescale_boundaries {
     }
     
     $sql .= join( q{, } , @values );
-    
-    $result = $dbh->do($sql);
-}
-
-
-# update_timescale_attrs ( dbh, timescale_no )
-# 
-# Make sure that the attributes of the specified timescale are consistent with the boundaries it
-# contains. If no value is given for $timescale_no, then update all timescales. If the value is 0,
-# then do nothing.
-
-sub update_timescale_attrs {
-    
-    my ($dbh, $timescale_no) = @_;
-    
-    return if defined $timescale_no && $timescale_no == 0;
-    
-    my $filter = "";
-    $filter = "WHERE timescale_no = " . $dbh->quote($timescale_no) if defined $timescale_no;
-    
-    # $$$ need to grab precision as well!
-    
-    my $result;
-    my $sql = "UPDATE $TIMESCALE_DATA as t join 
-		(SELECT timescale_no, max(b.age) as max_age, min(b.age) as min_age FROM timescale_bounds as b
-		$filter GROUP BY timescale_no) as bb using (timescale_no)
-	SET t.max_age = bb.max_age, t.min_age = bb.min_age";
     
     $result = $dbh->do($sql);
 }
@@ -1263,19 +1377,315 @@ sub update_timescale_descriptions {
 }
 
 
+# complete_bound_updates ( dbh, options )
+# 
+# Make sure that all changes to bound updates are propagated to referring bounds, and check for
+# errors. Then clear the 'is_updated' flag on all updated bounds.
+
 sub complete_bound_updates {
     
-    my ($dbh) = @_;
-
+    my ($dbh, $options) = @_;
+    
+    logMessage(2, "Completing bound updates...");
+    
     $dbh->do("CALL complete_bound_updates");
     $dbh->do("CALL check_updated_bounds");
-    $dbh->do("CALL unmark_updated");
+    $dbh->do("CALL unmark_updated_bounds");
+    
+    print STDERR "CALL complete_bound_updates\nCALL check_updated_bounds\nCALL unmark_updated\n\n"
+	if $options->{debug};
+    
+    logMessage(2, "Done.");
 }
 
 
-sub create_triggers {
+# update_international_bounds ( dbh, options )
+# 
+# A few of the international boundaries are not correct in the source database. Correct them, and
+# also set precision and 'spike' where appropriate.
+
+sub update_international_bounds {
     
-    my ($dbh) = @_;
+    my ($dbh, $options) = @_;
+    
+    logMessage(1, "Fixing international boundaries...");
+    
+    # First check that all of our fixes actually match up to one of the international time intervals.
+    
+    my $sql = "	SELECT fix.timescale_no, fix.interval_name
+		FROM $TIMESCALE_FIX as fix left join $TIMESCALE_INTS as tsi using (interval_name)
+			left join $TIMESCALE_BOUNDS as tsb on tsb.timescale_no = fix.timescale_no
+			and tsb.interval_no = tsi.interval_no
+		WHERE tsb.bound_no is null";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $result eq 'ARRAY' && @$result )
+    {
+	foreach my $r ( @$result )
+	{
+	    my $message = "  ERROR: fix for '$r->{interval_name}' in timescale $r->{timescale_no} has no match";
+	    logMessage(2, $message);
+	}
+    }
+    
+    else
+    {
+	logMessage(2, "  All fixes are okay.");
+    }
+    
+    # Then use this table to update the international timescale boundaries.
+    
+    $sql = "	UPDATE $TIMESCALE_BOUNDS as tsb	join $TIMESCALE_INTS as tsi using (interval_no)
+			join $TIMESCALE_FIX as fix using (timescale_no, interval_name)
+		SET tsb.bound_type = coalesce(fix.bound_type, tsb.bound_type),
+		    tsb.age = coalesce(fix.age, tsb.age),
+		    tsb.age_prec = coalesce(fix.age_prec, tsb.age_prec),
+		    tsb.age_error = coalesce(fix.age_error, tsb.age_error),
+		    tsb.age_error_prec = coalesce(fix.age_error_prec, tsb.age_error_prec),
+		    tsb.is_spike = coalesce(fix.bound_type, tsb.bound_type) = 'spike'";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    my $result = $dbh->do($sql);
+    
+    logMessage(2, "  Fixed $result international bounds from timescale_fix table") if $result && $result > 0;
+}
+
+
+# Given a timescale number, check to see which of the boundaries might correspond to international
+# interval boundaries, and model the rest as percentages.
+
+sub model_timescale {
+    
+    my ($dbh, $timescale_no, $options) = @_;
+
+    # Check that the argument is in the proper range.
+    
+    unless ( $timescale_no && $timescale_no =~ /^\d+$/ )
+    {
+	print STDERR "Invalid timescale number '$timescale_no'. Aborting.\n";
+	return;
+    }
+    
+    # Then query all of the boundaries for the specified timescale.
+    
+    my $sql = " SELECT tsb.*, tsi.interval_name FROM $TIMESCALE_BOUNDS as tsb 
+			left join $TIMESCALE_INTS as tsi using (interval_no)
+		WHERE timescale_no = $timescale_no ORDER BY age";
+
+    my $ts_res = $dbh->selectall_arrayref($sql, { Slice => {} });
+
+    unless ( ref $ts_res eq 'ARRAY' && @$ts_res )
+    {
+	logMessage(2, "No boundaries found for timescale '$timescale_no'");
+	return;
+    }
+
+    # Now query all of the international boundaries.
+    
+    my (@INTERNATIONAL, %INT, %INT_BY_AGE, @AGES);
+    
+    $sql = "	SELECT tsb.*, tsi.interval_name FROM $TIMESCALE_BOUNDS as tsb 
+			left join $TIMESCALE_INTS as tsi using (interval_no)
+		WHERE timescale_no in (1,2,3,4,5) ORDER BY age, timescale_no desc";
+    
+    my $int_res = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    foreach my $r ( @$int_res )
+    {
+	push @INTERNATIONAL, $r;
+	push @{$INT_BY_AGE{$r->{age}}}, $r;
+	$INT{$r->{bound_no}} = $r;
+    }
+
+    @AGES = sort { $a <=> $b } keys %INT_BY_AGE;
+    
+    # Then go through the interval bounds and see which if any match up to international bounds.
+
+ BOUND:
+    foreach my $r ( @$ts_res )
+    {
+	foreach my $a1 ( @AGES )
+	{
+	    my $diff = abs($r->{age} - $a1);
+	    my $r1 = match_age($a1, \%INT_BY_AGE);
+	    
+	    if ( $r->{age} == $a1 )
+	    {
+		logMessage(2, "Matched $r->{age} ($r->{interval_name}) to $r1->{age} ($r1->{interval_name})");
+		$r->{match} = $r1->{bound_no};
+		next BOUND;
+		
+	    }
+	    
+	    elsif ( $r->{age} > 0 && $diff < 2.0 && $diff < 0.05 * $r1->{age} )
+	    {
+		my $answer = logQuestion("Match $r->{age} ($r->{interval_name}) to $r1->{age} ($r1->{interval_name})?");
+		if ( $answer && $answer =~ /y/i )
+		{
+		    $r->{match} = $r1->{bound_no};
+		    next BOUND;
+		}
+	    }
+	}
+    }
+
+    # Now go back through them again. For each one that doesn't match, compute a percentage offset based on
+    # the ORIGINAL ages (not the matched ones).
+    
+    my ($base_age, $base_no);
+    my ($top_age, $top_no);
+    
+    foreach my $r ( reverse @$ts_res )
+    {
+	if ( $r->{match} )
+	{
+	    $base_age = $r->{age};
+	    $base_no = $r->{match};
+	}
+	
+	elsif ( $base_age )
+	{
+	    $r->{base_age} = $base_age;
+	    $r->{base_no} = $base_no;
+	}
+    }
+    
+    foreach my $r ( @$ts_res )
+    {
+	if ( $r->{match} )
+	{
+	    $top_age = $r->{age};
+	    $top_no = $r->{match};
+	}
+	
+	elsif ( defined $top_age )
+	{
+	    $r->{top_age} = $top_age;
+	    $r->{top_no} = $top_no;
+	}
+
+	if ( $r->{base_no} && $r->{top_no} )
+	{
+	    my $percent = 100 * ($r->{base_age} - $r->{age}) / ($r->{base_age} - $r->{top_age});
+	    $r->{percent} = sprintf("%.1f", $percent);
+	}
+    }
+    
+    # Now print them out
+    
+    logMessage(2, "");
+    logMessage(2, "Modeled boundaries:");
+    
+    foreach my $r ( @$ts_res )
+    {
+	if ( $r->{match} )
+	{
+	    my $name = $INT{$r->{match}}{interval_name};
+	    logMessage(2, "$r->{age} ($r->{interval_name}) : matches $name [$r->{match}]");
+	}
+
+	elsif ( defined $r->{percent} )
+	{
+	    logMessage(2, "$r->{age} ($r->{interval_name}) : $r->{percent}\% : $r->{base_age} ($r->{base_no}) - $r->{top_age} ($r->{top_no})");
+	}
+
+	else
+	{
+	    logMessage(2, "$r->{age} ($r->{interval_name}) : absolute");
+	}
+    }
+
+    # Ask if the user wants to update, and if so then do it.
+
+    my $answer = logQuestion("Update these boundaries?");
+
+    if ( $answer && $answer =~ /y/i )
+    {
+	$dbh->do("START TRANSACTION");
+
+	try {
+	    update_modeled($dbh, $ts_res, $options);
+	}
+
+        catch {
+	    $dbh->do("ROLLBACK");
+	    logMessage(2, "Aborted...");
+	};
+
+	$dbh->do("COMMIT");	
+    }
+}
+
+
+sub match_age {
+    
+    my ($age, $intervals) = @_;
+
+    my $limit;
+    
+    if ( $age <= 66 ) { $limit = 2; }
+    elsif ( $age <= 542 ) { $limit = 3; }
+    else { $limit = 4; }
+
+    foreach my $r ( @{$intervals->{$age}} )
+    {
+	return $r if $r->{timescale_no} <= $limit;
+    }
+
+    return $intervals->{$age}[0];
+}
+
+
+sub update_modeled {
+    
+    my ($dbh, $ints, $options) = @_;
+
+    my $sql;
+    
+    foreach my $r ( @$ints )
+    {
+	if ( $r->{match} )
+	{
+	    $sql = "
+		UPDATE $TIMESCALE_BOUNDS SET bound_type = 'same', base_no = $r->{match}
+		WHERE bound_no = $r->{bound_no}";
+
+	    print STDERR "$sql\n\n" if $options->{debug};
+
+	    $dbh->do($sql);
+	}
+
+	elsif ( $r->{percent} )
+	{
+	    $sql = "
+		UPDATE $TIMESCALE_BOUNDS SET bound_type = 'percent', base_no = $r->{base_no},
+			range_no = $r->{top_no}, offset = $r->{percent}, is_modeled = 1
+		WHERE bound_no = $r->{bound_no}";
+
+	    print STDERR "$sql\n\n" if $options->{debug};
+
+	    $dbh->do($sql);
+	}
+    }
+}
+
+
+# establish_procedures ( dbh )
+#
+# Create or replace the triggers and stored procedures necessary for the timescale tables to work
+# properly.
+
+sub establish_procedures {
+    
+    my ($dbh, $options) = @_;
+
+    logMessage(1, "Creating or replacing stored procedures...");
+    
+    logMessage(2, "    complete_bound_updates");
     
     $dbh->do("DROP PROCEDURE IF EXISTS complete_bound_updates");
     
@@ -1307,7 +1717,7 @@ sub create_triggers {
 	WHERE is_updated and (age_prec is null or age_error_prec is null or
 			      offset_prec is null or offset_error_prec is null);
 	
-	# Now update the ages on all bounds that are marked as is_updated.  If
+	# Now update the ages and flags on all bounds that are marked as is_updated.  If
 	# this results in any updated records, repeat the process until no
 	# records change. We put a limit of 20 on the number of iterations.
 	
@@ -1346,6 +1756,11 @@ sub create_triggers {
 			when 'percent' then least(coalesce(base.age_error_prec, 0),
 						  coalesce(top.age_error_prec, 0))
 			else tsb.age_error_prec
+			end,
+		tsb.is_spike = case tsb.bound_type
+			when 'spike' then 1
+			when 'same' then base.is_spike
+			else 0
 			end
 	    WHERE base.is_updated or top.is_updated or tsb.is_updated;
 	    
@@ -1383,6 +1798,8 @@ sub create_triggers {
 	
 	END;");
     
+    logMessage(2, "    update_timescale_ages");
+    
     $dbh->do("DROP PROCEDURE IF EXISTS update_timescale_ages");
     
     $dbh->do("CREATE PROCEDURE update_timescale_ages ( t int unsigned )
@@ -1403,6 +1820,8 @@ sub create_triggers {
 	WHERE timescale_no = t;
 	
 	END;");
+    
+    logMessage(2, "    check_updated_bounds");
     
     $dbh->do("DROP PROCEDURE IF EXISTS check_updated_bounds");
     
@@ -1455,6 +1874,8 @@ sub create_triggers {
 	
 	END;");
     
+    logMessage(2, "    unmark_updated_bounds");
+    
     $dbh->do("DROP PROCEDURE IF EXISTS unmark_updated_bounds");
     
     $dbh->do("CREATE PROCEDURE unmark_updated_bounds ( )
@@ -1463,6 +1884,23 @@ sub create_triggers {
 	UPDATE $TIMESCALE_BOUNDS SET is_updated = 0;
 	
 	END;");
+    
+    logMessage(1, "Done.");
+}
+
+
+# establish_triggers ( dbh )
+#
+# Create or replace the triggers and stored procedures necessary for the timescale tables to work
+# properly.
+
+sub establish_triggers {
+    
+    my ($dbh, $options) = @_;
+
+    logMessage(1, "Creating or replacing triggers...");
+    
+    logMessage(2, "    insert_bound on $TIMESCALE_BOUNDS");
     
     $dbh->do("DROP TRIGGER IF EXISTS insert_bound");
     
@@ -1482,6 +1920,8 @@ sub create_triggers {
 	    SET NEW.is_updated = 1;
 	END;");
     
+    logMessage(2, "    update_bound on $TIMESCALE_BOUNDS");
+    
     $dbh->do("DROP TRIGGER IF EXISTS update_bound");
     
     $dbh->do("CREATE TRIGGER update_bound
@@ -1499,7 +1939,8 @@ sub create_triggers {
 		 THEN
 	    SET NEW.is_updated = 1; END IF;
 	END;");
-    
+
+    logMessage(1, "Done.");
 }
 
 1;

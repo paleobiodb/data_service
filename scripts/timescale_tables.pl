@@ -20,7 +20,8 @@ use ConsoleLog qw(initMessages
 		  logTimestamp);
 use TimescaleTables qw(establish_timescale_tables copy_international_timescales
 		       copy_pbdb_timescales process_one_timescale copy_macrostrat_timescales
-		       update_timescale_descriptions complete_bound_updates create_triggers);
+		       update_timescale_descriptions model_timescale complete_bound_updates
+		       establish_procedures establish_triggers);
 use TimescaleEdit qw(add_boundary update_boundary);
 use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
@@ -30,17 +31,20 @@ use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
 my ($opt_init_tables, $opt_copy_old, $opt_authorizer_no, $opt_help, $opt_man, $opt_verbose, $opt_debug);
 my ($opt_copy_from_pbdb, $opt_copy_from_macro, $opt_copy_international, $opt_update_one, $opt_update_desc);
-my ($opt_init_triggers, $opt_ub);
+my ($opt_init_procedures, $opt_init_triggers, $opt_ub, $opt_copy_one, $opt_model_one);
 my $options = { };
 
 GetOptions("init-tables" => \$opt_init_tables,
+	   "init-procedures" => \$opt_init_procedures,
 	   "init-triggers" => \$opt_init_triggers,
 	   "copy-old" => \$opt_copy_old,
 	   "copy-international|ci" => \$opt_copy_international,
 	   "copy-from-pbdb|cp" => \$opt_copy_from_pbdb,
 	   "copy-from-macro|cm" => \$opt_copy_from_macro,
+	   "copy-one|c=i" => \$opt_copy_one,
 	   "update-one|u=s" => \$opt_update_one,
 	   "update-desc|D" => \$opt_update_desc,
+	   "model-one|m=i" => \$opt_model_one,
 	   "ub" => \$opt_ub,
 	   "auth=i" => \$opt_authorizer_no,
 	   "debug" => \$opt_debug,
@@ -54,7 +58,8 @@ GetOptions("init-tables" => \$opt_init_tables,
 
 pod2usage(1) if $opt_help;
 pod2usage(2) unless $opt_init_tables || $opt_copy_old || $opt_copy_from_pbdb || $opt_copy_from_macro || 
-    $opt_update_one || $opt_update_desc || $opt_ub || $opt_init_triggers;
+    $opt_copy_international || $opt_update_one || $opt_update_desc || $opt_ub || $opt_copy_one || $opt_model_one || 
+    $opt_init_procedures || $opt_init_triggers;
 pod2usage(-exitval => 0, -verbose => 2) if $opt_man;
 
 # If we get here, then we have stuff to do. So get a database handle.
@@ -71,11 +76,24 @@ $options->{verbose} = $opt_verbose ? 3 : 2;
 $options->{authorizer_no} = $opt_authorizer_no if $opt_authorizer_no;
 $options->{debug} = 1 if $opt_debug;
 
-# First check for the init-tables option.
+# First check for the init-tables and init-triggers options. The second is only relevant if the
+# first was not chosen, since trigger initialization is part of table initialization.
 
 if ( $opt_init_tables )
 {
     establish_timescale_tables($dbh, $options);
+}
+
+elsif ( $opt_init_triggers )
+{
+    establish_triggers($dbh, $options);
+}
+
+# Then check for the init-procedures option.
+
+if ( $opt_init_procedures )
+{
+    establish_procedures($dbh, $options);
 }
 
 # If the "copy-old" option is given, then copy everything.
@@ -111,6 +129,11 @@ elsif ( $opt_copy_international || $opt_copy_from_pbdb || $opt_copy_from_macro )
     complete_bound_updates($dbh);
 }
 
+elsif ( $opt_copy_one )
+{
+    process_one_timescale($dbh, $opt_copy_one, $options);
+}
+
 if ( defined $opt_update_one && $opt_update_one ne '' )
 {
     if ( $opt_update_one > 0 )
@@ -125,6 +148,11 @@ if ( defined $opt_update_one && $opt_update_one ne '' )
     }
 }
 
+if ( defined $opt_model_one && $opt_model_one ne '' )
+{
+    model_timescale($dbh, $opt_model_one, $options);
+}
+
 if ( $opt_update_desc )
 {
     update_timescale_descriptions($dbh, undef, $options);
@@ -133,11 +161,6 @@ if ( $opt_update_desc )
 if ( $opt_ub )
 {
     update_boundaries($dbh, $options);
-}
-
-if ( $opt_init_triggers )
-{
-    create_triggers($dbh);
 }
 
 
@@ -311,9 +334,14 @@ timescale_tables.pl - initialize and/or reset the new timescale tables for The P
                             the international ones, either all or a 
                             specified timescale.
     
+    --copy-one          Re-copy a single timescale from its source database.
+    
     --update-desc	Update timescale description attributes 'type', 'taxon', 'extent'
     
     --update-one=[n]    Re-process the timescale whose new number is given by [n].
+    
+    --model-one=[n]     Model the timescale whose number is given by [n], with respect to the
+                        international interval boundaries.
     
     --ub                Update the attributes of one or more boundaries. You will be prompted
                         to enter the boundary numbers and other attributes.

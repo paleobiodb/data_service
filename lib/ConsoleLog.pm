@@ -10,7 +10,7 @@ use strict;
 
 use base qw(Exporter);
 
-our (@EXPORT_OK) = qw(initMessages logMessage logTimestamp);
+our (@EXPORT_OK) = qw(initMessages logMessage logTimestamp logQuestion);
 
 
 # Controlling variables for debug messages
@@ -40,7 +40,7 @@ sub initMessages {
 # logMessage ( level, message )
 # 
 # If $level is greater than or equal to the package variable $MSG_LEVEL, then
-# print $message to standard error.
+# print $message to the log.
 
 sub logMessage {
 
@@ -52,6 +52,24 @@ sub logMessage {
     my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
     
     print STDOUT "$MSG_TAG: [ $elapsed_str ]  $message\n";
+}
+
+
+# logQuestion ( message )
+#
+# Print $message to the log, and read a line of text.
+
+sub logQuestion {
+
+    my ($message) = @_;
+
+    my $elapsed = time - $START_TIME;    
+    my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
+    
+    print STDOUT "$MSG_TAG: [ $elapsed_str ]  $message ";
+    my $answer = <STDIN>;
+
+    return $answer;
 }
 
 

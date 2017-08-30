@@ -183,8 +183,8 @@ sub initialize {
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
 		      'tsb.offset', 'tsb.offset_error', 'tsb.offset_prec', 'tsb.offset_error_prec',
 		      'tsb.lower_no', 'tsb.interval_no',
-		      'tsb.base_no', 'tsbb.timescale_no as base_timescale_no',
-		      'tsb.range_no', 'tsb.color_no', 'tsb.is_error', 'tsb.is_modeled',
+		      'tsb.base_no', 'tsb.range_no', 'tsb.color_no', 'tsb.refsource_no',
+		      'tsb.is_error', 'tsb.is_modeled', 'tsb.is_spike',
 		      'tsb.color', 'tsb.reference_no',
 		      'tsil.interval_name as lower_name', 'tsi.interval_name' ],
 	  tables => [ 'tsb', 'tsi', 'tsil' ] },
@@ -234,20 +234,22 @@ sub initialize {
 	    "If the boundary type is 'same', 'percent', or 'offset', this field specifies",
 	    "the identifier of the base boundary with respect to which",
 	    "this boundary is defined.",
-	{ output => 'base_timescale_no', com_name => 'btd' },
-	    "If the boundary type is 'same', 'percent', or 'offset', this field specifies",
-	    "the timescale identifier for the base boundary with respect to which",
-	    "this boundary is defined.",
 	{ output => 'color_no', com_name => 'cid' },
 	    "If this field is not empty, it specifies the identifier of a boundary",
 	    "from which the color for this boundary is taken. Note that this might",
 	    "be different than the base boundary.",
+	{ output => 'refsource_no', com_name => 'fid' },
+	    "If this field is not empty, it specifies the identifier of a boundary",
+	    "from which the reference identifier for this boundary is taken.",
+	    "Note that this might be different than the base boundary.",
 	{ output => 'is_error', com_name => 'err' },
 	    "True if this boundary is inconsistent with the other boundaries in",
 	    "its timescale, for example in overlapping with another boundary.",
 	{ output => 'is_modeled', com_name => 'mdl' },
 	    "True if this boundary was modeled relative to the international",
 	    "chronostratigraphic intervals.",
+	{ output => 'is_spike', com_name => 'spk' },
+	    "True if this boundary is a GSSP.",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color (if any) that should be assigned to the upper",
 	    "interval associated with this boundary.",
@@ -935,6 +937,8 @@ sub process_ages {
     $record->{offset_error} = precise_value($record->{offset_error_prec});
     
     delete $record->{is_modeled} unless $record->{is_modeled};
+    delete $record->{is_spike} unless $record->{is_spike};
+    delete $record->{is_error} unless $record->{is_error};
 }
 
 
