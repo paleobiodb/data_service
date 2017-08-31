@@ -47,7 +47,7 @@ sub initialize {
 	{ value => 'stage' },
 	{ value => 'substage' },
 	{ value => 'zone' },
-	{ value => 'chron' }, "synonym for C<B<zone>>",
+	{ value => 'chron' },
 	{ value => 'multi' }, "used for timescales containing multiple interval types",
 	{ value => 'other' });
     
@@ -168,20 +168,20 @@ sub initialize {
 	    "An absolute boundary which is fixed by a GSSP",
 	{ value => 'same' },
 	    "A boundary which has the same value as some other base boundary. For",
-	    "example, the beginning of the Triassic might be defined by reference to",
-	    "the beginning of the Mesozoic.",
+	    "example, the beginning of the Triassic is defined to be the same as",
+	    "the beginning of the Induan.",
 	{ value => 'percent' },
-	    "A boundary which is fixed between two other boundaries, a base and a top, as a",
-	    "percentage of the range between them.",
-	{ value => 'offset' },
-	    "A boundary which is defined by a specified offset in millions of years",
-	    "with respect to some other base boundary.");
+	    "A boundary which is specified as a percentage of the span of some",
+	    "interval, or as a percentage of the span between two other boundaries.",
+	{ value => 'alternate' },
+	    "A boundary which is the top or bottom of an alternate interval,",
+	    "not part of the main sequence of this timescale.");
     
     $ds->define_block('1.2:timescales:bound' =>
 	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.age', 'tsb.age_error',
 		      'tsb.age_prec', 'tsb.age_error_prec',
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
-		      'tsb.offset', 'tsb.offset_error', 'tsb.offset_prec', 'tsb.offset_error_prec',
+		      'tsb.percent', 'tsb.percent_error', 'tsb.percent_prec', 'tsb.percent_error_prec',
 		      'tsb.lower_no', 'tsb.interval_no',
 		      'tsb.base_no', 'tsb.range_no', 'tsb.color_no', 'tsb.refsource_no',
 		      'tsb.is_error', 'tsb.is_modeled', 'tsb.is_spike',
@@ -207,31 +207,29 @@ sub initialize {
 	{ output => 'bound_type', com_name => 'btp' },
 	    "The boundary type, which will be one of the following:",
 	    $ds->document_set('1.2:timescales:bound_types'),
-	{ output => 'offset', com_name => 'ofs', data_type => 'str' },
-	    "The offset or percentage, depending on the boundary type,",
-	    "by which this boundary differs from the base boundary.",
-	{ output => 'offset_error', com_name => 'oer', data_type => 'str' },
-	    "The error (+/-) associated with the offset or percentage",
 	{ output => 'interval_no', com_name => 'iid' },
 	    "The identifier of the upper interval bounded by this boundary.",
 	    "If this field is empty, then the boundary lies at the top of",
-	    "its timescale.",
+	    "its timescale, or else there is a gap above it.",
 	{ output => 'lower_no', com_name => 'lid' },
 	    "The identifier of the lower interval bounded by this boundary.",
 	    "If this field is empty, then the boundary lies at the bottom of",
-	    "its timescale.",
+	    "its timescale, or else there is a gap below it.",
 	{ output => 'interval_name', com_name => 'inm' },
 	    "The name of the upper interval bounded by this boundary.",
 	{ output => 'lower_name', com_name => 'lnm' },
 	    "The name of the lower interval bounded by this boundary.",
+	{ output => 'percent', com_name => 'pct', data_type => 'str' },
+	    "For boundaries of type 'percent', the boundary lies this percent",
+	    "of the way through the span indicated by the base and range",
+	    "boundaries.",
+	{ output => 'percent_error', com_name => 'oer', data_type => 'str' },
+	    "The error (+/-) associated with the percent value",
 	{ output => 'range_no', com_name => 'tid' },
-	    "If the boundary type is 'percent', this field specifies the other",
-	    "boundary of the pair between which this boundary lies.",
-	# { output => 'range_timescale_no', com_name => 'rtd' },
-	#     "If the boundary type is 'percent', this field specifies the",
-	#     "timescale identifier for the other boundary.",
+	    "If the boundary type is 'percent', and this field is not empty, it specifies",
+	    "the top boundary of the pair between which this boundary lies.",
 	{ output => 'base_no', com_name => 'bid' },
-	    "If the boundary type is 'same', 'percent', or 'offset', this field specifies",
+	    "If the boundary type is 'same', 'percent', or 'alias', this field specifies",
 	    "the identifier of the base boundary with respect to which",
 	    "this boundary is defined.",
 	{ output => 'color_no', com_name => 'cid' },
@@ -792,10 +790,10 @@ sub generate_timescale_filters {
 	    $tables->{tsb} = 1;
 	}
 	
-	foreach my $t ( @types )
-	{
-	    $t = 'zone' if lc $t eq 'chron';
-	}
+	# foreach my $t ( @types )
+	# {
+	#     $t = 'zone' if lc $t eq 'chron';
+	# }
 	
 	push @filters, $request->generate_match_list($dbh, $field, \@types);
     }
@@ -933,8 +931,8 @@ sub process_ages {
 
     $record->{age} = precise_value($record->{age}, $record->{age_prec});
     $record->{age_error} = precise_value($record->{age_error}, $record->{age_error_prec});
-    $record->{offset} = precise_value($record->{offset}, $record->{offset_prec});
-    $record->{offset_error} = precise_value($record->{offset_error_prec});
+    $record->{percent} = precise_value($record->{percent}, $record->{percent_prec});
+    $record->{percent_error} = precise_value($record->{percent_error_prec});
     
     delete $record->{is_modeled} unless $record->{is_modeled};
     delete $record->{is_spike} unless $record->{is_spike};
