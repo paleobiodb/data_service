@@ -144,6 +144,6 @@ our $RESOURCE_TAG_NAMES = 'edutags';
 # members can post to it.
 
 our (%TABLE_PROPERTIES) = ( $RESOURCE_QUEUE => { ALLOW_POST => 'LOGGED_IN',
-					         GUEST_EDIT => 1 } );
+					         GUEST_EDIT => 0 } );
 
 1;

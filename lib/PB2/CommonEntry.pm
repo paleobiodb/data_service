@@ -311,7 +311,7 @@ sub validate_against_table {
 	# the record.
 	
 	if ( $field eq 'modified_no' || $field eq 'authorizer_no' || $field eq 'enterer_no' ||
-	     $field eq 'modified' || $field eq 'modified_on' )
+	     $field eq 'modified' || $field eq 'modified_on' || $field eq 'enterer_id' )
 	{
 	    next;
 	}
@@ -376,7 +376,7 @@ sub validate_against_table {
     
     # Now add the appropriate values for any of the built-in fields.
     
-    foreach my $k ( qw(authorizer_no enterer_no modifier_no modified modified_on) )
+    foreach my $k ( qw(authorizer_no enterer_no modifier_no modified modified_on enterer_id) )
     {
 	next unless $schema->{$k};
 	
@@ -397,20 +397,35 @@ sub validate_against_table {
 	    
 	    # If the table has an authorizer_no or enterer_no field, then we need to be providing
 	    # a value for them. If no value can be found, then bomb.
-
-	    unless ( $new_value )
+	    
+	    unless ( $new_value || ( $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
+				     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' ) )
 	    {
-		if ( $request->{my_auth_info}{guest_no} && $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
-		     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' )
-		{
-		    $new_value = $k eq 'enterer_no' ? $request->{my_auth_info}{guest_no} : 0;
-		}
-
-		else
-		{
-		    croak "no value was found for '$k'";
-		}
+		croak "no value was found for '$k'";
 	    }
+	    
+	    # unless ( $new_value )
+	    # {
+	    # 	if ( $request->{my_auth_info}{guest_no} && $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
+	    # 	     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' )
+	    # 	{
+	    # 	    $new_value = $k eq 'enterer_no' ? $request->{my_auth_info}{guest_no} : 0;
+	    # 	}
+
+	    # 	else
+	    # 	{
+	    # 	    croak "no value was found for '$k'";
+	    # 	}
+	    # }
+	}
+	
+	# We only set 'enterer_id' on record creation, not on update.
+	
+	elsif ( $k eq 'enterer_id' )
+	{
+	    next if $op eq 'update';
+	    
+	    $new_value = $dbh->quote($request->{my_auth_info}{user_id} || '');
 	}
 	
 	# The modifier_no field is in some sense the opposite of authorizer_no and enterer_no,
@@ -644,7 +659,7 @@ sub fetch_record_values {
 
 sub check_record_auth {
     
-    my ($request, $dbh, $table_name, $record_no, $record_authorizer_no, $record_enterer_no) = @_;
+    my ($request, $dbh, $table_name, $operation, $id_field, $record_no, $auth_fields) = @_;
     
     my $table_role = $request->get_table_role($dbh, $table_name);
     
@@ -653,6 +668,30 @@ sub check_record_auth {
     
     if ( $record_no )
     {
+	# The first thing to do is to fetch the specified fields from the record.
+        
+	my $sql = "	SELECT $auth_fields FROM $table_name
+		WHERE $id_field = $record_no LIMIT 1";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	my ($record) = $dbh->selectrow_hashref($sql);
+	
+	# If no record is found, then we return 'notfound'. Otherwise, set the status if there is
+	# one. 
+	
+	my $status;
+	
+	if ( $record )
+	{
+	    $status = $record->{status};
+	}
+	
+	else
+	{
+	    return 'notfound';
+	}
+	
 	# If the table role is 'admin' or if they have superuser privileges, then they have
 	# 'admin' privileges on any record.
 	
@@ -662,55 +701,63 @@ sub check_record_auth {
 		($request->{my_auth_info}{superuser} ? 'superuser' : 'table role') . "\n\n"
 		if $request->debug;
 	    
-	    return 'admin';
+	    return ('admin', $status);
 	}
 	
 	# If they are the person who originally created or authorized the record, then they have
 	# 'edit' privileges to it.
 	
-	elsif ( $record_enterer_no && $request->{my_auth_info}{enterer_no} &&
-		$record_enterer_no eq $request->{my_auth_info}{enterer_no} )
+	elsif ( $record->{enterer_no} && $request->{my_auth_info}{enterer_no} &&
+		$record->{enterer_no} eq $request->{my_auth_info}{enterer_no} )
 	{
-	    print STDERR "    Role for $table_name : $record_no = 'edit' from enterer\n\n"
+	    print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_no\n\n"
 		if $request->debug;
 	    
-	    return 'edit';
+	    return ('edit', $status);
 	}
 
-	elsif ( $record_authorizer_no && $request->{my_auth_info}{enterer_no} &&
-		$record_authorizer_no eq $request->{my_auth_info}{enterer_no} )
+	elsif ( $record->{authorizer_no} && $request->{my_auth_info}{enterer_no} &&
+		$record->{authorizer_no} eq $request->{my_auth_info}{enterer_no} )
 	{
-	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer\n\n"
+	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer_no\n\n"
 		if $request->debug;
 	    
-	    return 'edit';
+	    return ('edit', $status);
+	}
+	
+	elsif ( $record->{enterer_id} && $request->{my_auth_info}{user_id} &&
+		$record->{enterer_id} eq $request->{my_auth_info}{user_id} )
+	{
+	    print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_id\n\n"
+		if $request->debug;
+	    
+	    return ('edit', $status);
 	}
 
 	# If they are a guest user and guest users are allowed to edit records created by guest
 	# users, then they have 'edit' privileges.
 	
-	elsif ( $record_enterer_no && $request->{my_auth_info}{guest_no} &&
-		$record_enterer_no eq $request->{my_auth_info}{guest_no} &&
+	elsif ( $request->{my_auth_info}{role} && $request->{my_auth_info}{role} eq 'guest' &&
 	        $TABLE_PROPERTIES{$table_name}{GUEST_EDIT} )
 	{
 	    print STDERR "    Role for $table_name : $record_no = 'edit' from guest\n\n"
 		if $request->debug;
 
-	    return 'edit';
+	    return ('edit', $status);
 	}
 	
 	# If the person who originally created the record has the same authorizer as the person
-	# who originally created the record, then they have 'edit' privileges to it unless
+	# who originally created the record, then they have 'edit' privileges to it if
 	# the table has the 'BY_AUTHORIZER' property.
 	
-	elsif ( $record_authorizer_no && $request->{my_auth_info}{authorizer_no} &&
-		$record_authorizer_no eq $request->{my_auth_info}{authorizer_no} &&
+	elsif ( $record->{authorizer_no} && $request->{my_auth_info}{authorizer_no} &&
+		$record->{authorizer_no} eq $request->{my_auth_info}{authorizer_no} &&
 		$TABLE_PROPERTIES{$table_name}{BY_AUTHORIZER} )
 	{
 	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer\n\n"
 		if $request->debug;
 	    
-	    return 'edit';
+	    return ('edit', $status);
 	}
 	
 	# Otherwise, the requestor has no privileges on this record.
@@ -720,7 +767,7 @@ sub check_record_auth {
 	    print STDERR "    Role for $table_name : $record_no = 'none'\n\n"
 		if $request->debug;
 	    
-	    return 'none';
+	    return ('none', $status);
 	}
     }
     

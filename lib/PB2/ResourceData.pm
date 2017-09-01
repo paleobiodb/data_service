@@ -57,8 +57,8 @@ sub initialize {
 	{ value => 'me' },
 	    "Select only records that were entered by the current requestor.",
 	{ value => 'auth' },
-	    "Select only records that were entered by the anyone in the current",
-	    "requestor's authorizer group.");
+	    "Select only records that were entered by the current requestor",
+	    "or one of their authorized enterers.");
     
     # Optional output
     
@@ -79,7 +79,7 @@ sub initialize {
 	    "The unique identifier of this record in the database.",
 	{ set => '*', code => \&process_record},
 	{ set => 'eduresource_no', code => sub {
-		    my ($request, $value) = @_;
+	      my ($request, $value) = @_;
 		    return $value unless $request->{block_hash}{extids};
 		    return generate_identifier('EDR', $value);
 		} },
@@ -280,14 +280,33 @@ sub list_resources {
 	
 	if ( $enterer eq 'me' )
 	{
-	    my $enterer_no = $dbh->quote($auth_info->{enterer_no} || $auth_info->{guest_no} || '-1');
-	    push @filters, "edr.enterer_no = $enterer_no or edr.authorizer_no = $enterer_no";
+	    my $enterer_no = $dbh->quote($auth_info->{enterer_no});
+	    my $user_id = $dbh->quote($auth_info->{user_id});
+	    
+	    my @clauses;
+	    
+	    push @clauses, "edr.enterer_no = $enterer_no" if $auth_info->{enterer_no};
+	    push @clauses, "edr.enterer_id = $user_id" if $auth_info->{user_id};
+	    push @clauses, "edr.enterer_no = -1" unless @clauses;
+	    
+	    my $filter_str = join(' or ', @clauses);
+	    push @filters, $filter_str;
 	}
 	
 	elsif ( $enterer eq 'auth' )
 	{
-	    my $authorizer_no = $dbh->quote($auth_info->{authorizer_no} || '-1');
-	    push @filters, "edr.authorizer_no = $authorizer_no";
+	    my $enterer_no = $dbh->quote($auth_info->{enterer_no});
+	    my $user_id = $dbh->quote($auth_info->{user_id});
+	    
+	    my @clauses;
+	    
+	    push @clauses, "edr.enterer_no = $enterer_no" if $auth_info->{enterer_no};
+	    push @clauses, "edr.authorizer_no = $enterer_no" if $auth_info->{enterer_no};
+	    push @clauses, "edr.enterer_id = $user_id" if $auth_info->{user_id};
+	    push @clauses, "edr.enterer_no = -1" unless @clauses;
+	    
+	    my $filter_str = join(' or ', @clauses);
+	    push @filters, $filter_str;
 	}
 	
 	else

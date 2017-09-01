@@ -42,9 +42,12 @@ our (%COMMON_FIELD_IDSUB);
 our (%COMMON_FIELD_OTHER) = ( authorizer_no => 'authent',
 			      enterer_no => 'authent',
 			      modifier_no => 'authent',
+			      enterer_id => 'authent',
 			      created => 'crmod',
 			      modified => 'crmod',
 			    );
+
+our (%TABLE_HAS_FIELD);
 
 
 sub complete_output_block {
@@ -86,8 +89,23 @@ sub complete_output_block {
     
     foreach my $field_name ( @$field_list )
     {
+	# If this field is one of the standard ones for authorizer/enterer or created/modified,
+	# then skip it. But also record that the table has this field, for use later.
+	
+	if ( $COMMON_FIELD_OTHER{$field_name} )
+	{
+	    $TABLE_HAS_FIELD{$table_name}{$field_name} = $COMMON_FIELD_OTHER{$field_name};
+	    next;
+	}
+	
+	# If this field is already in the output block, skip it as well. This allows us to
+	# explicitly include some of the fields in the block definition, with documentation
+	# strings and other attributes, and prevents duplicate output fields.
+	
 	next if $block_has_field{$field_name};
-	next if $COMMON_FIELD_OTHER{$field_name};
+	
+	# Now create a record to represent this field, along with a documentation string and
+	# whatever other attributes we can glean from the table definition.
 	
 	my $field_record = $schema->{$field_name};
 	my $type = $field_record->{Type};

@@ -60,7 +60,7 @@ sub get_auth_info {
 	    my $quoted_table = $dbh->quote($table_name);
 	    
 	    my $sql = "
-		SELECT authorizer_no, enterer_no, superuser, s.role, p.role as table_role
+		SELECT authorizer_no, enterer_no, user_id, superuser, s.role, p.role as table_role
 		FROM session_data as s left join table_permissions as p
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
 		WHERE session_id = $session_id";
@@ -78,7 +78,7 @@ sub get_auth_info {
 	else
 	{
 	    my $sql = "
-		SELECT authorizer_no, enterer_no, superuser, role FROM session_data as s
+		SELECT authorizer_no, enterer_no, user_id, superuser, role FROM session_data as s
 		WHERE session_id = $session_id";
 	    
 	    print STDERR "$sql\n\n" if $request->debug;
@@ -86,25 +86,35 @@ sub get_auth_info {
 	    $auth_info = $dbh->selectrow_hashref($sql);
 	}
 	
-	# If we have retrieved the proper information, cache it and return it.
+	# If this request comes from a database contributor, cache this info and return it.
 	
 	if ( ref $auth_info eq 'HASH' && $auth_info->{authorizer_no} && $auth_info->{enterer_no} )
 	{
 	    $request->{my_auth_info} = $auth_info;
 	    return $auth_info;
 	}
-
-	# Otherwise, if we have a session id that belongs to a guest then we don't actually have
-	# any info. If we have a 'generic_guest_no' value, then use that. Otherwise, fail.
-
-	elsif ( my $guest_no = $request->ds->config_value('generic_guest_no') )
+	
+	# If this request comes from a guest user, cache this info and return it. But make
+	# absolutely sure that the role is 'guest' and the superuser bit is turned off. If our
+	# configuration file has a 'generic_guest_no' value, then put that into the
+	# guest_no field. Otherwise, it will be left as 0.
+	
+	elsif ( ref $auth_info eq 'HASH' && $auth_info->{user_id} )
 	{
-	    $auth_info = { guest_no => $guest_no, role => 'guest' };
+	    $auth_info->{role} = 'guest';
+	    $auth_info->{superuser} = 0;
 	    $auth_info->{table_role}{$table_name} = 'none' if $table_name;
+	    
+	    if ( my $guest_no = $request->ds->config_value('generic_guest_no') )
+	    {
+		$auth_info->{guest_no} = $guest_no;
+	    }
 	    
 	    $request->{my_auth_info} = $auth_info;
 	    return $auth_info;
 	}
+	
+	# If we get here, then the requestor isn't even logged in. So fall through to the check below.
     }
     
     if ( $options->{required} )
@@ -114,9 +124,9 @@ sub get_auth_info {
     
     else
     {
-	my $default = { authorizer_no => 0, enterer_no => 0, role => 'none' };
+	my $default = { authorizer_no => 0, enterer_no => 0, user_id => '', role => 'none' };
 	$default->{table_role}{$table_name} = 'none' if $table_name;
-
+	
 	$request->{my_auth_info} = $default;
 	
 	return $default;

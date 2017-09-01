@@ -188,26 +188,27 @@ sub update_resources {
 	    
 	    # Fetch the current authorization and status information.
 	    
-	    my ($current_status, $record_authno, $record_entno) = 
-		$request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
-					      'status, authorizer_no, enterer_no');
+	    # my ($current_status, $record_authno, $record_entno, $record_entid) = 
+	    # 	$request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
+	    # 				      'status, authorizer_no, enterer_no, enterer_id');
 	    
-	    # Make sure the record actually exists.
+	    # Make sure that we have authorization to modify this record, and that it actually exists.
 	    
-	    unless ( defined $current_status )
+	    my ($role, $current_status) = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'update', 'eduresource_no', $record_id, 
+							      'status, authorizer_no, enterer_no, enterer_id');
+	    
+	    # If the role is 'notfound', then no record exists with the specified id.
+	    
+	    if ( $role eq 'notfound' )
 	    {
 		$request->add_record_error('E_NOT_FOUND', $record_label, "record '$record_id' not found");
 		next;
 	    }
 	    
-	    # Then make sure that we have authorization to modify this record.
-	    
-	    my $role = $request->check_record_auth($dbh, $RESOURCE_QUEUE, $record_id, $record_authno, $record_entno);
-	    
 	    # If we have the 'admin' role on this record, we can modify the record and we can also
 	    # adjust its status.
 	    
-	    if ( $role eq 'admin' )
+	    elsif ( $role eq 'admin' )
 	    {
 		# If the status is being explicitly set to 'active', then the new record
 		# values should be copied into the active resources table. This is a valid
@@ -280,7 +281,7 @@ sub update_resources {
 	    
 	    # Make sure that we have authorization to add records to this table.
 	    
-	    my $role = $request->check_record_auth($dbh, $RESOURCE_QUEUE);
+	    my $role = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'add');
 	    
 	    # If we have 'admin' privileges on the resource queue table, then we can add a new
 	    # record with any status we choose. The status will default to 'pending' if not
@@ -770,9 +771,9 @@ sub delete_resources {
 	
 	# Fetch the current authorization and status information.
 	
-	my ($current_status, $record_authno, $record_entno, $confirm_id) = 
+	my ($current_status, $record_authno, $record_entno, $record_entid, $confirm_id) = 
 	    $request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
-					  'status, authorizer_no, enterer_no, eduresource_no');
+					  'status, authorizer_no, enterer_no, enterer_id, eduresource_no');
 
 	unless ( $confirm_id )
 	{

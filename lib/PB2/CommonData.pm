@@ -298,6 +298,12 @@ sub initialize {
 	{ output => 'modifier', com_name => 'mdf' },
 	    "The name of the person who last modified this record, if it has been modified.");
     
+    $ds->define_block('1.2:common:entname_guest' =>
+	{ select => ['$cd.enterer_no', '$cd.enterer_id', 'wu.real_name'], tables => 'wu' },
+	{ set => '*', code => \&process_entnames },
+	{ output => 'enterer', com_name => 'ent' },
+	    "The name of the person who actually entered this record");
+    
     # Now fill in the %PERSON_NAME hash.
     
     my $dbh = $ds->get_connection;
@@ -730,6 +736,27 @@ sub ent_filter {
 }
 
 
+# process_entnames ( )
+# 
+# Process a record containing either an enterer_no or enterer_id value, to generate a name for the
+# person.
+
+sub process_entnames {
+    
+    my ($request, $record) = @_;
+    
+    if ( $record->{enterer_no} )
+    {
+	$record->{enterer} = $PERSON_NAME{$record->{enterer_no}};
+    }
+    
+    elsif ( $record->{real_name} )
+    {
+	$record->{enterer} = $record->{real_name};
+    }
+}
+
+
 # generateAttribution ( )
 # 
 # Generate an attribution string for the given record.  This relies on the
@@ -811,7 +838,20 @@ sub generate_person_id {
     
     my ($request, $person_no) = @_;
     
-    return $person_no ? generate_identifier('PRS', $person_no) : '';
+    if ( $request->{block_hash}{extids} && $person_no && $person_no =~ /^\d+$/ )
+    {
+	return generate_identifier('PRS', $person_no);
+    }
+    
+    elsif ( $person_no )
+    {
+	return $person_no;
+    }
+    
+    else
+    {
+	return;
+    }
 }
 
 
