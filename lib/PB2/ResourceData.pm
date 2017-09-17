@@ -183,6 +183,7 @@ sub get_resource {
     # information.
     
     $request->substitute_select( mt => 'edr', cd => 'edr' );
+    $request->check_entname($RESOURCE_QUEUE => 'edr');
     
     my $tables = $request->tables_hash;
     

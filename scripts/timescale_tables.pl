@@ -317,8 +317,9 @@ timescale_tables.pl - initialize and/or reset the new timescale tables for The P
     --init-tables       Create or re-create the necessary database tables.
                         The tables will be empty after this is done.
     
-    --init-triggers     Create or re-create the necessary database procedures
-                        and functions.
+    --init-procedures   Create or re-create the necessary database procedures
+        
+    --init-triggers     Create or re-create the necessary table triggers
     
     --copy-old          Copy the old interval data from both pbdb and macrostrat
     
