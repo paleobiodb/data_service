@@ -16,6 +16,7 @@ use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
+		 $SPECELT_DATA $SPECELT_MAP
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
@@ -516,6 +517,82 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
+    # Specimen element definitions
+    
+    $ds->define_block('1.2:specs:element' => 
+	{ select => ['e.specelt_no', 'e.element_name', 'e.parent_name', 'e.taxon_name', 
+		     'm.exclude'] },
+	{ set => '*', code => \&process_element_record },
+	{ output => 'specelt_no', com_name => 'oid' },
+	    "The unique identifier of this specimen element in the database",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{ELT} },
+	    "The type of this object: C<$IDP{ELT}> for a specimen element.",
+	{ output => 'element_name', com_name => 'nam' },
+	    "The name of this specimen element",
+	{ output => 'parent_name', com_name => 'par' },
+	    "The name of the parent element, if any. This can be used to display",
+	    "the elements in a collapsed list where individual elements can be",
+	    "expanded to show their children.",
+	{ output => 'taxon_name', com_name => 'tna' },
+	    "The name of the base taxon for which this element is defined.");
+    
+    $ds->define_output_map('1.2:specs:element_map' =>
+	{ value => 'seq', maps_to => '1.2:specs:element_seq' },
+	    "Includes the sequence numbers from a preorder traversal of",
+	    "the taxon tree which bracket the taxa for which each element",
+	    "is defined.");
+    
+    $ds->define_set('1.2:specs:element_order' =>
+	{ value => 'name' },
+	    "Return the elements in alphabetical order by name.",
+	{ value => 'name.asc', undocumented => 1 },
+	{ value => 'name.desc', undocumented => 1 },
+	{ value => 'hierarchy' },
+	    "Return the elements that are defined for higher taxa first,",
+	    "more specific ones following. Elements that are defined at",
+	    "the same taxonomic level are sorted alphabetically by name.",
+	{ value => 'hierarchy.asc', undocumented => 1 },
+	{ value => 'hierarchy.desc', undocumented => 1 });
+    
+    $ds->define_block('1.2:specs:element_seq' =>
+	{ select => ['m.lft', 'm.rgt'] },
+	{ output => 'lft', com_name => 'lsq' },
+	    "The base taxon's position in the preorder traversal of the taxonomic",
+	    "tree. If you display elements in the order specified by this field,",
+	    "then elements defined for higher taxa will appear higher in the list",
+	    "and more specific elements lower down.",
+	{ output => 'rgt', com_name => 'rsq' },
+	    "The end of the range of subtaxa for which this specimen element is",
+	    "valid, in the preorder traversal sequence.");
+    
+    $ds->define_ruleset('1.2:specs:element_selector' =>
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Return all specimen element records known to the database, subject",
+	    "to any other parameters given.",
+	{ param => 'taxon_name', valid => ANY_VALUE },
+	    "Return only elements that are valid for the named taxon.",
+	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TXN') },
+	    "Return only elements that are valid for the specified taxon,",
+	    "given by its identifier in the database.",
+	{ at_most_one => ['all_records', 'taxon_name', 'taxon_id'] });
+
+    $ds->define_ruleset('1.2:specs:element_display' =>
+	{ optional => 'show', list => q{,}, valid => '1.2:specs:element_map' },
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each element.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	{ optional => 'order', valid => '1.2:specs:element_order' },
+	    "Specifies the order in which the results are returned. If this",
+	    "parameter is not given, the results are ordered alphabetically by",
+	    "name. The value of this parameter should be one of the following:");
+    
+    $ds->define_ruleset('1.2:specs:elements' =>
+	"The following parameters select which records to return:",
+	{ require => '1.2:specs:element_selector' },
+	"The following parameters specify what information should be returned:",
+	{ allow => '1.2:specs:element_display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
 }
 
 
@@ -1351,6 +1428,157 @@ sub generateJoinList {
 }
 
 
+# list_elements ( )
+# 
+# Return lists of specimen elements.
+
+sub list_elements {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters;
+    my $tables_hash = $request->tables_hash;
+    my $ignore_exclude;
+    
+    if ( $request->clean_param('all_records') )
+    {
+	push @filters, "1=1";
+	$ignore_exclude = 1;
+    }
+    
+    elsif ( my $taxon_no = $request->clean_param('taxon_id') )
+    {
+	my ($taxon) = $taxonomy->list_taxa_simple($taxon_no, { fields => 'SEARCH' });
+	
+	    # $dbh->selectrow_array("
+	    # 	SELECT t.lft FROM taxon_trees as t
+	    # 	WHERE t.orig_no = $id");
+	
+	die $request->exception(404, "Not found") unless $taxon;
+	
+	push @filters, "$taxon->{lft} between m.lft and m.rgt";
+    }
+    
+    elsif ( my $taxon_name = $request->clean_param('taxon_name') )
+    {
+	my ($taxon) = $taxonomy->resolve_names($taxon_name, { fields => 'SEARCH' });
+	
+	die $request->exception(404, "Not found") unless $taxon;
+	
+	push @filters, "$taxon->{lft} between m.lft and m.rgt";
+    }
+    
+    # Do a final check to make sure that all records are only returned if
+    # 'all_records' was specified.
+    
+    if ( @filters == 0 )
+    {
+	die $request->exception(400, "You must specify 'all_records' if you want to retrieve the entire set of records.");
+    }
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. Also check for the 'extids' parameter.
+    
+    $request->strict_check;
+    $request->extid_check;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+    
+    # Now generate the field list.
+    
+    my $fields = $request->select_string;
+	
+    # Determine the order in which the results should be returned.
+    
+    my $order_clause = 'element_name';
+    
+    if ( my $order_param = $request->clean_param('order') )
+    {
+	$order_param = lc $order_param;
+	
+	if ( $order_param eq 'hierarchy' || $order_param eq 'hierarchy.asc' )
+	{
+	    $order_clause = 'lft, element_name';
+	}
+	
+	elsif ( $order_param eq 'hierarchy.desc' )
+	{
+	    $order_clause = 'lft desc, element_name';
+	}
+	
+	elsif ( $order_param eq 'name' || $order_param eq 'name.asc' )
+	{
+	    $order_clause = 'element_name';
+	}
+	
+	elsif ( $order_param eq 'name.desc' )
+	{
+	    $order_clause = 'element_name desc';
+	}
+    }
+    
+    # Then construct the query.
+    
+    $request->{main_sql} = "
+	SELECT $calc $fields
+	FROM $SPECELT_MAP as m join $SPECELT_DATA as e using (specelt_no)
+        WHERE $filter_string
+	ORDER BY $order_clause
+	$limit";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    # Then prepare and execute the main query.
+    
+    my ($unfiltered) = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
+    
+    # If we were asked to get the count, then do so
+    
+    $request->sql_count_rows;
+    
+    # If there are no results, just return.
+    
+    return unless ref $unfiltered eq 'ARRAY' && @$unfiltered;
+    
+    # Otherwise go through the result set and remove all exclusions.
+    
+    my (@results, %exclude);
+    
+    foreach my $r ( @$unfiltered )
+    {
+	my $specelt_no = $r->{specelt_no};
+	
+	if ( $r->{exclude} || ( $exclude{$specelt_no} && ! $ignore_exclude ) )
+	{
+	    $exclude{$specelt_no} = 1;
+	    next;
+	}
+	
+	else
+	{
+	    push @results, $r;
+	}
+    }
+    
+    return $request->list_result(\@results);
+}
+
 
 # process_basic_record ( )
 # 
@@ -1411,4 +1639,16 @@ sub process_measurement_ids {
 
     $record->{measurement_no} = generate_identifier('MEA', $record->{measurement_no})
 	if defined $record->{measurement_no} && $record->{measurement_no} ne '';
+}
+
+
+sub process_element_record {
+    
+    my ($request, $record) = @_;
+    
+    if ( $request->{block_hash}{extids} )
+    {
+	$record->{specelt_no} = generate_identifier('ELT', $record->{specelt_no})
+	    if defined $record->{specelt_no} && $record->{specelt_no} ne '';
+    }
 }

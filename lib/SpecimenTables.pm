@@ -15,19 +15,22 @@ use base 'Exporter';
 
 use Carp qw(carp croak);
 use Try::Tiny;
+use Text::CSV_XS;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX);
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables);
+our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables
+		      init_specelt_tables load_specelt_tables build_specelt_map);
 
 our $SPEC_MATRIX_WORK = "smw";
 
-our $SPEC_ELT_WORK = "seltw";
-our $SPEC_ELT_EXCLUSIONS_WORK = "sexw";
-our $SPEC_ELT_MAP_WORK = "semw";
+our $SPECELT_WORK = "seltw";
+our $SPECELT_EXCLUSIONS_WORK = "sexw";
+our $SPECELT_MAP_WORK = "semw";
+our $TREE_TABLE = 'taxon_trees';
 
 
 # buildSpecimenTables ( dbh )
@@ -126,43 +129,313 @@ sub buildMeasurementTables {
 }
 
 
+# build_specelt_map ( dbh )
+# 
+# Build the specimen element map, according to the current taxonomy.
+
+sub build_specelt_map {
+    
+    my ($dbh, $tree_table, $options) = @_;
+    
+    $options ||= { };
+    
+    $dbh->do("DROP TABLE IF EXISTS $SPECELT_MAP_WORK");
+    
+    $dbh->do("CREATE TABLE $SPECELT_MAP_WORK (
+    		specelt_no int unsigned not null,
+    		base_no int unsigned not null,
+    		exclude boolean not null,
+		check_value tinyint unsigned not null,
+    		lft int unsigned not null,
+    		rgt int unsigned not null,
+    		KEY (lft, rgt))");
+    
+    my ($sql, $result);
+    
+    # First add all of the elements directly.
+    
+    $sql = "INSERT INTO $SPECELT_MAP_WORK (specelt_no, base_no, check_value, lft, rgt)
+	    SELECT e.specelt_no, t.orig_no, count(distinct t.orig_no), t.lft, t.rgt
+	    FROM $SPECELT_DATA as e join $tree_table as t1 on t1.name = e.taxon_name
+		join $tree_table as t on t.orig_no = t1.accepted_no
+	    WHERE t.rank > 5 GROUP BY e.specelt_no";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
+    
+    # Then add any exclusions.
+    
+    $sql = "INSERT INTO $SPECELT_MAP_WORK (specelt_no, base_no, exclude, check_value, lft, rgt)
+	    SELECT e.specelt_no, t.orig_no, 1, count(distinct t.orig_no), t.lft, t.rgt
+	    FROM $SPECELT_EXC as e join $tree_table as t1 on t1.name = e.taxon_name
+		join $tree_table as t on t.orig_no = t1.accepted_no
+	    WHERE t.rank > 5 GROUP BY e.specelt_no, e.taxon_name";
+
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
+    
+    my ($check_count) = $dbh->selectrow_array("
+	SELECT count(*) FROM $SPECELT_MAP_WORK
+	WHERE check_value > 1");
+    
+    logMessage(2, "    found $check_count grouped entries") if $check_count && $check_count > 0;
+    
+    activateTables($dbh, $SPECELT_MAP_WORK => $SPECELT_MAP);
+}
+
+
 # init_specimen_element_tables ( dbh )
 # 
 # Create the tables for specimen elements.
 
-sub init_specimen_element_tables {
+sub init_specelt_tables {
     
-    my ($dbh) = @_;
+    my ($dbh, $options) = @_;
     
     my ($sql, $result);
     
-    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_WORK");
+    $dbh->do("DROP TABLE IF EXISTS $SPECELT_WORK");
     
-    $dbh->do("CREATE TABLE $SPEC_ELT_WORK (
-		spec_elt_no int unsigned PRIMARY KEY,
+    $dbh->do("CREATE TABLE $SPECELT_WORK (
+		specelt_no int unsigned PRIMARY KEY AUTO_INCREMENT,
 		element_name varchar(80) not null,
-		parent_elt_no int unsigned not null,
-		base_no int unsigned not null,
+		parent_name varchar(80) not null,
+		taxon_name varchar(80) not null,
+		status enum ('active', 'inactive') not null default 'active',
+		has_number boolean not null,
 		neotoma_element_id int unsigned not null,
 		neotoma_element_type_id int unsigned not null,
+		comments varchar(255) null,
 		KEY (element_name),
 		KEY (neotoma_element_id),
 		KEY (neotoma_element_type_id))");
     
-    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK");
+    $dbh->do("DROP TABLE IF EXISTS $SPECELT_EXCLUSIONS_WORK");
     
-    $dbh->do("CREATE TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK (
-		spec_elt_no int unsigned not null,
-		taxon_no int unsigned not null,
-		KEY (spec_elt_no)");
+    $dbh->do("CREATE TABLE $SPECELT_EXCLUSIONS_WORK (
+		specelt_no int unsigned not null,
+		taxon_name varchar(80) not null,
+		KEY (specelt_no))");
     
-    $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_MAP_WORK");
+    # $dbh->do("DROP TABLE IF EXISTS $SPECELT_MAP_WORK");
     
-    $dbh->do("CREATE TABLE $SPEC_ELT_MAP_WORK (
-		spec_elt_no int unsigned not null,
-		lft int unsigned not null,
-		rgt int unsigned not null,
-		KEY (lft, rgt))");
+    # $dbh->do("CREATE TABLE $SPECELT_MAP_WORK (
+    # 		specelt_no int unsigned not null,
+    # 		base_no int unsigned not null,
+    # 		exclude boolean,
+    # 		lft int unsigned not null,
+    # 		rgt int unsigned not null,
+    # 		KEY (lft, rgt))");
     
+    activateTables($dbh, $SPECELT_WORK => $SPECELT_DATA,
+			 # $SPECELT_MAP_WORK => $SPECELT_MAP,
+			 $SPECELT_EXCLUSIONS_WORK => $SPECELT_EXC);
+}
+
+
+our (%COLUMN_MAP) = (Taxon => 'taxon_name',
+		     ExcludeTaxa => 'exclude_names',
+		     SpecimenElement => 'element_name',
+		     ParentElement => 'parent_name',
+		     HasNumber => 'has_number',
+		     Inactive => 'inactive',
+		     NeotomaElementID => 'neotoma_element_id',
+		     NeotomaElementTypeID => 'neotoma_element_type_id',
+		     Comments => 'comments');
+
+our (%TAXON_FIX) = (Eukarya => 'Eukaryota');
+
+sub load_specelt_tables {
+
+    my ($dbh, $filename, $options) = @_;
     
+    $options ||= { };
+    
+    my ($sql, $insert_line, $result);
+    
+    my $csv = Text::CSV_XS->new();
+    my ($fh, $count, $header, @rows, %column, %taxon_no_cache);
+    
+    if ( $filename eq '-' )
+    {
+	open $fh, "<&STDIN" or die "cannot read standard input: $!";
+    }
+    
+    else
+    {
+	open $fh, "<", $filename or die "cannot read '$filename': $!";
+    }
+    
+    while ( my $row = $csv->getline($fh) )
+    {
+	unless ( $header )
+	{
+	    $header = $row;
+	}
+	
+	else
+	{
+	    push @rows, $row;
+	    $count++;
+	}
+    }
+    
+    logMessage(2, "    read $count lines from '$filename'");
+    
+    foreach my $i ( 0..$#$header )
+    {
+	my $load_col = $COLUMN_MAP{$header->[$i]};
+	$column{$load_col} = $i if $load_col;
+    }
+    
+    my $inserter = "
+	INSERT INTO $SPECELT_DATA (element_name, parent_name, taxon_name,
+		has_number, neotoma_element_id, neotoma_element_type_id, comments)
+	VALUES (";
+    
+    my @columns = qw(inactive exclude_names element_name parent_name taxon_name has_number
+		     neotoma_element_id neotoma_element_type_id comments);
+    
+    foreach my $k (@columns)
+    {
+	croak "could not find column for '$k' in input"
+	    unless defined $column{$k};
+    }
+    
+    my $rowcount = 0;
+    
+  ROW:
+    foreach my $r ( @rows )
+    {
+	$rowcount++;
+	
+	# my $taxon_name = $r->[$column{taxon_name}];
+	# my $base_no;
+	
+	# unless ( $taxon_name )
+	# {
+	#     logMessage(2, "    WARNING: no taxon name for row $rowcount");
+	#     next ROW;
+	# }
+	
+	# if ( $TAXON_FIX{$taxon_name} )
+	# {
+	#     $taxon_name = $TAXON_FIX{$taxon_name};
+	# }
+	
+	# unless ( $base_no = $taxon_no_cache{$taxon_name} )
+	# {
+	#     next ROW if defined $base_no && $base_no == 0;
+	    
+	#     my $quoted_name = $dbh->quote($taxon_name);
+	#     ($base_no) = $dbh->selectrow_array("
+	# 	SELECT accepted_no FROM $TREE_TABLE WHERE name = $quoted_name");
+	    
+	#     $taxon_no_cache{$taxon_name} = $base_no || 0;
+	    
+	#     unless ( $base_no )
+	#     {
+	# 	logMessage(2, "    WARNING: could not find taxon name '$taxon_name'");
+	# 	next ROW;
+	#     }
+	# }
+	
+	my @values;
+	my @exclude_names;
+	
+	foreach my $k (@columns)
+	{
+	    my $v = $r->[$column{$k}];
+	    
+	    # if ( $k eq 'taxon_name' )
+	    # {
+	    # 	push @values, $dbh->quote($base_no);
+	    # 	next;
+	    # }
+	    
+	    if ( $k eq 'inactive' )
+	    {
+		next ROW if $v;
+	    }
+	    
+	    elsif ( $k eq 'taxon_name' )
+	    {
+		$v = $TAXON_FIX{$v} if $TAXON_FIX{$v};
+
+		unless ( $v )
+		{
+		    logMessage(2, "    WARNING: no taxon name for row $rowcount");
+		    next ROW;
+		}
+		
+		push @values, $dbh->quote($v);
+	    }
+	    
+	    elsif ( $k eq 'exclude_names' )
+	    {
+		@exclude_names = split(/\s*[,;]\s*/, $v) if $v;
+	    }
+	    
+	    elsif ( defined $v )
+	    {
+		push @values, $dbh->quote($v);
+	    }
+	    
+	    else
+	    {
+		if ( $k eq 'element_name' )
+		{
+		    logMessage(2, "    WARNING: empty element name in row $rowcount");
+		    next ROW;
+		}
+		
+		push @values, 'NULL';
+	    }
+	}
+	
+	$sql = $inserter . join(',', @values) . ")";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$result = $dbh->do($sql);
+	
+	unless ( $result )
+	{
+	    my $errstr = $dbh->errstr;
+	    logMessage(2, "    ERROR inserting row $rowcount: $errstr");
+	}
+	
+	my $id = $dbh->last_insert_id(undef, undef, undef, undef);
+	
+	if ( $id && @exclude_names )
+	{
+	    $sql = "INSERT INTO $SPECELT_EXC (specelt_no, taxon_name) VALUES ";
+	    
+	    my @excludes;
+	    
+	    foreach my $n (@exclude_names)
+	    {
+		push @excludes, "($id," . $dbh->quote($n) . ")";
+	    }
+	    
+	    $sql .= join(',', @excludes);
+	    
+	    print STDERR "$sql\n\n" if $options->{debug};
+	    
+	    $result = $dbh->do($sql);
+	    
+	    unless ( $result )
+	    {
+		my $errstr = $dbh->errstr;
+		logMessage(2, "    ERROR inserting excludes for row $rowcount: $errstr");
+	    }
+	}
+    }
+    
+    my ($count1) = $dbh->selectrow_array("SELECT count(*) FROM $SPECELT_DATA");
+    my ($count2) = $dbh->selectrow_array("SELECT count(*) FROM $SPECELT_EXC");
+    
+    logMessage(2, "    inserted $count1 elements, $count2 exclusions");
 }

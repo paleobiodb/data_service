@@ -553,6 +553,15 @@ use PB2::CombinedData;
 	"This operation returns information about the measurements associated with selected",
 	"specimens.");
     
+    $ds2->define_node({ path => 'specs/elements',
+			place => 6,
+			title => 'Specimen elements',
+			method => 'list_elements',
+			output => '1.2:specs:element',
+			optional_output => '1.2:specs:element_map' },
+	"This operation returns lists of elements that can be used to describe specimens,",
+	"for example 'bone', 'tooth', 'valve'.");
+    
     # Taxa.  These paths are used to fetch information about biological taxa known
     # to the database.
     
