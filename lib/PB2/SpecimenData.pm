@@ -1562,18 +1562,12 @@ sub list_elements {
     
     foreach my $r ( @$unfiltered )
     {
-	my $specelt_no = $r->{specelt_no};
-	
-	if ( $r->{exclude} || ( $exclude{$specelt_no} && ! $ignore_exclude ) )
-	{
-	    $exclude{$specelt_no} = 1;
-	    next;
-	}
-	
-	else
-	{
-	    push @results, $r;
-	}
+	$exclude{$r->{specelt_no}} = 1 if $r->{exclude};
+    }
+    
+    foreach my $r ( @$unfiltered )
+    {
+	push @results, $r unless $exclude{$r->{specelt_no}} && ! $ignore_exclude;
     }
     
     return $request->list_result(\@results);
