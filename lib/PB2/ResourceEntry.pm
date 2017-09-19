@@ -194,8 +194,9 @@ sub update_resources {
 	    
 	    # Make sure that we have authorization to modify this record, and that it actually exists.
 	    
-	    my ($role, $current_status) = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'update', 'eduresource_no', $record_id, 
-							      'status, authorizer_no, enterer_no, enterer_id');
+	    my ($role, $current_status) = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'update', 
+							'eduresource_no', $record_id, 
+							'status, authorizer_no, enterer_no, enterer_id');
 	    
 	    # If the role is 'notfound', then no record exists with the specified id.
 	    
@@ -281,7 +282,7 @@ sub update_resources {
 	    
 	    # Make sure that we have authorization to add records to this table.
 	    
-	    my $role = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'add');
+	    my $role = $request->check_table_auth($dbh, $RESOURCE_QUEUE, 'add');
 	    
 	    # If we have 'admin' privileges on the resource queue table, then we can add a new
 	    # record with any status we choose. The status will default to 'pending' if not
@@ -769,41 +770,62 @@ sub delete_resources {
     {
 	next unless $record_id =~ /^\d+$/;
 	
-	# Fetch the current authorization and status information.
+	# # Fetch the current authorization and status information.
 	
-	my ($current_status, $record_authno, $record_entno, $record_entid, $confirm_id) = 
-	    $request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
-					  'status, authorizer_no, enterer_no, enterer_id, eduresource_no');
+	# my ($current_status, $record_authno, $record_entno, $record_entid, $confirm_id) = 
+	#     $request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
+	# 				  'status, authorizer_no, enterer_no, enterer_id, eduresource_no');
 
-	unless ( $confirm_id )
+	# unless ( $confirm_id )
+	# {
+	#     $request->add_record_warning('W_NOTFOUND', $record_id, "record not found");
+	#     next;
+	# }
+
+	# my ($enterer_no) = $auth_info->{enterer_no};
+
+	# # If we have 'admin' privileges on the table, or if we are the superuser, then we can delete any
+	# # record.
+
+	# if ( $auth_info->{table_role}{$RESOURCE_QUEUE} eq 'admin' || $auth_info->{superuser} )
+	# {
+	#     $delete_ids{$record_id} = 1;
+	# }
+	
+	# # Otherwise, we can delete any record that we created, or any one for which we are the
+	# # authorizer.
+
+	# elsif ( $enterer_no && $record_entno && $enterer_no eq $record_entno )
+	# {
+	#     $delete_ids{$record_id} = 1;
+	# }
+
+	# elsif ( $enterer_no && $record_authno && $enterer_no eq $record_authno )
+	# {
+	#     $delete_ids{$record_id} = 1;
+	# }
+	
+	my ($role, $current_status) = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'delete',
+							'eduresource_no', $record_id,
+							'status, authorizer_no, enterer_no, enterer_id');
+	
+	# If the role is 'notfound', then no record exists with the specified id.
+	
+	if ( $role eq 'notfound' )
 	{
 	    $request->add_record_warning('W_NOTFOUND', $record_id, "record not found");
 	    next;
 	}
-
-	my ($enterer_no) = $auth_info->{enterer_no};
-
-	# If we have 'admin' privileges on the table, or if we are the superuser, then we can delete any
-	# record.
-
-	if ( $auth_info->{table_role}{$RESOURCE_QUEUE} eq 'admin' || $auth_info->{superuser} )
+	
+	# If we have either the 'admin' or 'edit' role on this record, we can delete it.
+	
+	elsif ( $role eq 'admin' || $role eq 'edit' )
 	{
 	    $delete_ids{$record_id} = 1;
 	}
 	
-	# Otherwise, we can delete any record that we created, or any one for which we are the
-	# authorizer.
-
-	elsif ( $enterer_no && $record_entno && $enterer_no eq $record_entno )
-	{
-	    $delete_ids{$record_id} = 1;
-	}
-
-	elsif ( $enterer_no && $record_authno && $enterer_no eq $record_authno )
-	{
-	    $delete_ids{$record_id} = 1;
-	}
-
+	# Otherwise, we do not have permission to delete this record.
+	
 	else
 	{
 	    $request->add_record_warning('W_PERM', $record_id, "you do not have permission to delete this record");
@@ -908,7 +930,8 @@ sub delete_resources {
 	
 	foreach my $record_id ( sort keys %delete_ids )
 	{
-	    push @results, { eduresource_no => generate_identifier('EDR', $record_id) };
+	    push @results, { eduresource_no => generate_identifier('EDR', $record_id),
+			     status => 'deleted' };
 	}
 	
 	$request->{main_result} = \@results;

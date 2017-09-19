@@ -11,6 +11,8 @@ use strict;
 
 use Carp qw(carp croak);
 
+use TableDefs qw(%TABLE_PROPERTIES);
+
 use Moo::Role;
 
 
@@ -60,7 +62,7 @@ sub get_auth_info {
 	    my $quoted_table = $dbh->quote($table_name);
 	    
 	    my $sql = "
-		SELECT authorizer_no, enterer_no, user_id, superuser, s.role, p.role as table_role
+		SELECT authorizer_no, enterer_no, user_id, superuser, s.role, p.role as person_role
 		FROM session_data as s left join table_permissions as p
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
 		WHERE session_id = $session_id";
@@ -69,10 +71,17 @@ sub get_auth_info {
 	    
 	    $auth_info = $dbh->selectrow_hashref($sql);
 	    
-	    my $table_role = $auth_info->{table_role} || 'none';
-	    delete $auth_info->{table_role};
+	    if ( $auth_info->{person_role} )
+	    {
+		$auth_info->{table_role}{$table_name} = $auth_info->{person_role};
+		$auth_info->{auth_diag}{$table_name} = 'PERMISSIONS';
+	    }
 	    
-	    $auth_info->{table_role}{$table_name} = $table_role;
+	    else
+	    {
+		$auth_info->{table_role}{$table_name} =
+		    $request->default_table_role($table_name, $auth_info);
+	    }
 	}
 	
 	else
@@ -103,7 +112,9 @@ sub get_auth_info {
 	{
 	    $auth_info->{role} = 'guest';
 	    $auth_info->{superuser} = 0;
-	    $auth_info->{table_role}{$table_name} = 'none' if $table_name;
+	    
+	    $auth_info->{table_role}{$table_name} = $request->default_table_role($table_name, $auth_info)
+		if $table_name;
 	    
 	    if ( my $guest_no = $request->ds->config_value('generic_guest_no') )
 	    {
@@ -155,11 +166,46 @@ sub get_table_role {
 	    ($role) = $dbh->selectrow_array($sql);
 	};
 	
-	$request->{my_auth_info}{table_role}{$table_name} = $role || 'none';
+	$request->{my_auth_info}{table_role}{$table_name} = $role ||
+	    $request->default_table_role($table_name, $request->{my_auth_info});
     }
     
     return $request->{my_auth_info}{table_role}{$table_name};
 }
 
+
+sub default_table_role {
+    
+    my ($request, $table_name, $auth_info) = @_;
+    
+    # If this table allows posting for certain classes of people, check to see
+    # if the current user falls into one of them.
+    
+    if ( my $allow_post = $TABLE_PROPERTIES{$table_name}{ALLOW_POST} )
+    {
+	if ( $allow_post eq 'LOGGED_IN' && $auth_info->{user_id} )
+	{
+	    $auth_info->{auth_diag}{$table_name} = 'LOGGED_IN';
+	    return 'post';
+	}
+	
+	elsif ( $allow_post eq 'MEMBERS' && $auth_info->{enterer_no} )
+	{
+	    $auth_info->{auth_diag}{$table_name} = 'MEMBERS';
+	    return 'post';
+	}
+	
+	elsif ( $allow_post eq 'AUTHORIZED' && $auth_info->{authorizer_no} )
+	{
+	    $auth_info->{auth_diag}{$table_name} = 'AUTHORIZED';
+	    return 'post';
+	}
+    }
+    
+    else
+    {
+	return 'none';
+    }
+}
 
 1;
