@@ -663,164 +663,153 @@ sub check_record_auth {
     
     my $table_role = $request->get_table_role($dbh, $table_name);
     
-    # If we have a record number, then we need to determine what permissions the requestor has to
-    # this particular record.
+    # If we need to determine what permissions the requestor has to this
+    # particular record. If no record was given, return 'notfound'.
     
-    if ( $record_no )
+    unless ( $record_no && $record_no =~ /^\d+$/ )
     {
-	# The first thing to do is to fetch the specified fields from the record.
-        
-	my $sql = "	SELECT $auth_fields FROM $table_name
-		WHERE $id_field = $record_no LIMIT 1";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	my ($record) = $dbh->selectrow_hashref($sql);
-	
-	# If no record is found, then we return 'notfound'. Otherwise, set the status if there is
-	# one. 
-	
-	my $status;
-	
-	if ( $record )
-	{
-	    $status = $record->{status};
-	}
-	
-	else
-	{
-	    return 'notfound';
-	}
-	
-	# If the table role is 'admin' or if they have superuser privileges, then they have
-	# 'admin' privileges on any record.
-	
-	if ( $table_role eq 'admin' || $request->{my_auth_info}{superuser} )
-	{
-	    print STDERR "    Role for $table_name : $record_no = 'admin' from " . 
-		($request->{my_auth_info}{superuser} ? 'superuser' : 'table role') . "\n\n"
-		if $request->debug;
-	    
-	    return ('admin', $status);
-	}
-	
-	# If they are the person who originally created or authorized the record, then they have
-	# 'edit' privileges to it.
-	
-	elsif ( $record->{enterer_no} && $request->{my_auth_info}{enterer_no} &&
-		$record->{enterer_no} eq $request->{my_auth_info}{enterer_no} )
-	{
-	    print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_no\n\n"
-		if $request->debug;
-	    
-	    return ('edit', $status);
-	}
-
-	elsif ( $record->{authorizer_no} && $request->{my_auth_info}{enterer_no} &&
-		$record->{authorizer_no} eq $request->{my_auth_info}{enterer_no} )
-	{
-	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer_no\n\n"
-		if $request->debug;
-	    
-	    return ('edit', $status);
-	}
-	
-	elsif ( $record->{enterer_id} && $request->{my_auth_info}{user_id} &&
-		$record->{enterer_id} eq $request->{my_auth_info}{user_id} )
-	{
-	    print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_id\n\n"
-		if $request->debug;
-	    
-	    return ('edit', $status);
-	}
-
-	# If they are a guest user and guest users are allowed to edit records created by guest
-	# users, then they have 'edit' privileges.
-	
-	elsif ( $request->{my_auth_info}{role} && $request->{my_auth_info}{role} eq 'guest' &&
-	        $TABLE_PROPERTIES{$table_name}{GUEST_EDIT} )
-	{
-	    print STDERR "    Role for $table_name : $record_no = 'edit' from guest\n\n"
-		if $request->debug;
-
-	    return ('edit', $status);
-	}
-	
-	# If the person who originally created the record has the same authorizer as the person
-	# who originally created the record, then they have 'edit' privileges to it if
-	# the table has the 'BY_AUTHORIZER' property.
-	
-	elsif ( $record->{authorizer_no} && $request->{my_auth_info}{authorizer_no} &&
-		$record->{authorizer_no} eq $request->{my_auth_info}{authorizer_no} &&
-		$TABLE_PROPERTIES{$table_name}{BY_AUTHORIZER} )
-	{
-	    print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer\n\n"
-		if $request->debug;
-	    
-	    return ('edit', $status);
-	}
-	
-	# Otherwise, the requestor has no privileges on this record.
-	
-	else
-	{
-	    print STDERR "    Role for $table_name : $record_no = 'none'\n\n"
-		if $request->debug;
-	    
-	    return ('none', $status);
-	}
+	print STDERR "ERROR: no record number was given\n\n" if $request->debug;
+	return 'notfound';
     }
     
-    # Otherwise, we just return their permissions with respect to the table as
-    # a whole.
+    # The first thing to do is to fetch the specified fields from the record.
     
-    elsif ( $request->{my_auth_info}{superuser} )
+    my $sql = "	SELECT $auth_fields FROM $table_name
+		WHERE $id_field = $record_no LIMIT 1";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my ($record) = $dbh->selectrow_hashref($sql);
+    
+    # If no record is found, then we return 'notfound'. Otherwise, set the status if there is
+    # one. 
+    
+    my $status;
+    
+    if ( $record )
     {
-	print STDERR "    Role for $table_name : <new> = 'admin' from superuser\n\n"
+	$status = $record->{status};
+    }
+    
+    else
+    {
+	return 'notfound';
+    }
+    
+    # If the table role is 'admin' or if the user has superuser privileges, then
+    # they have 'admin' privileges on any record.
+    
+    if ( $table_role eq 'admin' || $request->{my_auth_info}{superuser} )
+    {
+	print STDERR "    Role for $table_name : $record_no = 'admin' from " . 
+	    ($request->{my_auth_info}{superuser} ? 'SUPERUSER' : 'PERMISSIONS') . "\n\n"
+	    if $request->debug;
+	
+	return ('admin', $status);
+    }
+    
+    # If they are the person who originally created or authorized the record, then they have
+    # 'edit' privileges to it.
+    
+    elsif ( $record->{enterer_no} && $request->{my_auth_info}{enterer_no} &&
+	    $record->{enterer_no} eq $request->{my_auth_info}{enterer_no} )
+    {
+	print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_no\n\n"
+	    if $request->debug;
+	
+	return ('edit', $status);
+    }
+    
+    elsif ( $record->{authorizer_no} && $request->{my_auth_info}{enterer_no} &&
+	    $record->{authorizer_no} eq $request->{my_auth_info}{enterer_no} )
+    {
+	print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer_no\n\n"
+	    if $request->debug;
+	
+	return ('edit', $status);
+    }
+    
+    elsif ( $record->{enterer_id} && $request->{my_auth_info}{user_id} &&
+	    $record->{enterer_id} eq $request->{my_auth_info}{user_id} )
+    {
+	print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_id\n\n"
+	    if $request->debug;
+	
+	return ('edit', $status);
+    }
+    
+    # # If they are a guest user and guest users are allowed to edit records created by guest
+    # # users, then they have 'edit' privileges.
+    
+    # elsif ( $request->{my_auth_info}{role} && $request->{my_auth_info}{role} eq 'guest' &&
+    # 	    $TABLE_PROPERTIES{$table_name}{GUEST_EDIT} )
+    # {
+    # 	print STDERR "    Role for $table_name : $record_no = 'edit' from GUEST_EDIT\n\n"
+    # 	    if $request->debug;
+	
+    # 	return ('edit', $status);
+    # }
+    
+    # If the person who originally created the record has the same authorizer as the person
+    # who originally created the record, then they have 'edit' privileges to it if
+    # the table has the 'BY_AUTHORIZER' property.
+    
+    elsif ( $record->{authorizer_no} && $request->{my_auth_info}{authorizer_no} &&
+	    $record->{authorizer_no} eq $request->{my_auth_info}{authorizer_no} &&
+	    $TABLE_PROPERTIES{$table_name}{BY_AUTHORIZER} )
+    {
+	print STDERR "    Role for $table_name : $record_no = 'edit' from BY_AUTHORIZER\n\n"
+	    if $request->debug;
+	
+	return ('edit', $status);
+    }
+    
+    # Otherwise, the requestor has no privileges on this record.
+    
+    else
+    {
+	print STDERR "    Role for $table_name : $record_no = 'none'\n\n"
+	    if $request->debug;
+	
+	return ('none', $status);
+    }
+}
+
+
+sub check_table_auth {
+    
+    my ($request, $dbh, $table_name, $operation) = @_;
+    
+    my $table_role = $request->get_table_role($dbh, $table_name);
+    
+    # If the user has the superuser privilege, then they have the 'admin' role
+    # on this (and every other) table.
+    
+    if ( $request->{my_auth_info}{superuser} )
+    {
+	print STDERR "    Role for $table_name : <new> = 'admin' from SUPERUSER\n\n"
 	    if $request->debug;
 	
 	return 'admin';
     }
     
-    elsif ( $table_role && $table_role ne 'none' )
+    # Otherwise, if we know their role with respect to this table, return that.
+    
+    elsif ( $table_role )
     {
-	print STDERR "    Role for $table_name : <new> = '$table_role' from table role\n\n"
+	my $diag = $request->{my_auth_info}{auth_diag}{$table_name} || 'DEFAULT ROLE';
+	
+	print STDERR "    Role for $table_name : <new> = '$table_role' from $diag\n\n"
 	    if $request->debug;
 	
 	return $table_role;
     }
     
-    elsif ( my $allow_post = $TABLE_PROPERTIES{$table_name}{ALLOW_POST} )
-    {
-	if ( $allow_post eq 'LOGGED_IN' && $request->{my_auth_info}{guest_no} )
-	{
-	    print STDERR "    Role for $table_name : <new> = 'post' from LOGGED_IN\n\n"
-		if $request->debug;
-	    
-	    return 'post';
-	}
-	
-	elsif ( $allow_post eq 'MEMBERS' && $request->{my_auth_info}{enterer_no} )
-	{
-	    print STDERR "    Role for $table_name : <new> = 'post' from MEMBERS\n\n"
-		if $request->debug;
-	    
-	    return 'post';
-	}
-	
-	elsif ( $allow_post eq 'AUTHORIZED' && $request->{my_auth_info}{authorizer_no} )
-	{
-	    print STDERR "    Role for $table_name : <new> = 'post' from AUTHORIZED\n\n"
-		if $request->debug;
-	    
-	    return 'post';
-	}
-    }
+    # Otherwise, they have no privileges whatsoever to this table.
     
     else
     {
-	print STDERR "    Role for $table_name : <new> = 'none'\n\n"
-	    if $request->debug;
+	print STDERR "   Role for $table_name : <new> = 'none' from NONE FOUND\n\n";
 	
 	return 'none';
     }

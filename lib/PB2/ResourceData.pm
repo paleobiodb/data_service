@@ -51,7 +51,10 @@ sub initialize {
 	    "and has not yet been reviewed for possible activation.",
 	{ value => 'inactive' },
 	    "An inactive resource is one that has been reviewed, and the reviewer did",
-	    "not choose to activate it.");
+	    "not choose to activate it.",
+	{ value => 'deleted' },
+	    "A resource that has just been deleted from the database is reported",
+	    "with this status code. Subsequent queries will return a Not Found error.");
     
     $ds->define_set('1.2:eduresources:enterer' =>
 	{ value => 'me' },
