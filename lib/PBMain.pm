@@ -15,13 +15,98 @@ use PBLogger;
 my $logger = PBLogger->new;
 
 
-# A single route is all we need in order to handle all requests.
+# We need a couple of routes to handle interaction with the server when it is in test mode.
+
+get '/:prefix/testmode/:tablename/:op' => sub {
+
+    my $tablename = params->{tablename};
+    my $operation = params->{op};
+    my $ds = Web::DataService->select(request);
+    
+    unless ( $ds )
+    {
+	pass;
+    }
+    
+    unless ( $PBData::TEST_MODE )
+    {
+	die "500 Server is not in test mode\n";
+    }
+    
+    if ( my $testsub = $TableDefs::TEST_SELECT{$tablename} )
+    {
+    	if ( $operation eq 'enable' )
+    	{
+    	    my ($result) = $testsub->($ds, 1);
+    	    return "$tablename enabled" if $result && $result eq '1';
+    	}
+	
+    	elsif ( $operation eq 'disable' )
+    	{
+    	    my ($result) = $testsub->($ds, 0);
+    	    return "$tablename disabled" if $result && $result eq '2';
+    	}
+	
+	else
+	{
+	    die "400 Unrecognized operation '$operation'\n";
+	}
+	
+	die "500 Operation '$operation $tablename' failed\n";
+    }
+    
+    else
+    {
+    	die "400 Unrecognized test table name '$tablename'\n";
+    }
+};
+    
+get '/:prefix/startsession/:id' => sub {
+
+    my $id = params->{id};
+    
+    unless ( Web::DataService->select(request) )
+    {
+	pass;
+    }
+    
+    unless ( $PBData::TEST_MODE )
+    {
+	die "500 Server is not in test mode\n";
+    }
+    
+    if ( $id eq 'none' )
+    {
+	cookie session_id => '';
+	return "Session cleared.";
+    }
+    
+    elsif ( $id =~ /^[\w-]+$/ )
+    {
+	cookie session_id => $id;
+	return "Session set to '$id'";
+    }
+    
+    else
+    {
+	die "400 Bad session id value '$id'\n";
+    }
+};
+
+
+# Otherwise, a single route is all we need in order to handle all requests.
 
 any qr{.*} => sub {
     
     my $r = request;
     
-    $logger->log_request($r) if $logger;
+    # If we have successfully created a logger object, pass this request to it before we do
+    # anything else. This will make sure that we have a record of it even in case this process
+    # hangs while responding. But suppress this if we are running in test mode.
+    
+    $logger->log_request($r) if $logger && !$PBData::TEST_MODE;
+    
+    # Handle some special parameters.
     
     if ( exists params->{noheader} )
     {
@@ -33,7 +118,15 @@ any qr{.*} => sub {
 	params->{save} = "no";
     }
     
+    # A parameter named _ sometimes shows up. It appears to be added by certain javascript
+    # libraries when they send AJAX requests. We need to delete this so that it doesn't mess up
+    # the parameter validation.
+    
     delete params->{_};
+    
+    # If the path ends in a string of digits with a format suffix, we treat this as if it were a
+    # request for the object whose identifier corresponds to the digit string. To do this, we
+    # rewrite the request as if it had been .../single.<format>?id=<digits>
     
     if ( $r->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
     {
@@ -43,6 +136,9 @@ any qr{.*} => sub {
 	params->{id} = $id;
 	forward($newpath);
     }
+    
+    # Now pass the request off to Web::DataService to handle according to the configuration
+    # it has been given.
     
     return Web::DataService->handle_request($r);
 };

@@ -1037,7 +1037,7 @@ sub check_timescale_attrs {
     if ( $op eq 'add' )
     {
 	push @field_list, 'authorizer_no', 'enterer_no';
-	push @value_list, $edt->{authorizer_no}, $edt->{enterer_no};
+	push @value_list, $edt->{auth_info}{authorizer_no}, $edt->{auth_info}{enterer_no};
     }
     
     elsif ( ! $edt->{is_fixup} )

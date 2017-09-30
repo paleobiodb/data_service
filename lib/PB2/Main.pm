@@ -27,8 +27,6 @@ use PB2::ResourceData;
 use PB2::Authentication;
 use PB2::MainEntry;
 
-use PB2::MainEntry;
-
 {
     # We start by defining a data service instance for version 1.2. We provide the ability to
     # override the path prefix and version string using the configuration file, so that test
@@ -830,25 +828,42 @@ use PB2::MainEntry;
     # People.  These paths are used to fetch the names of database contributors.
 
     $ds2->define_node({ path => 'people',
-			place => 0,
+			place => 11,
 			title => 'Database contributors',
 			role => 'PB2::PersonData',
 			default_limit => undef,
 			output => '1.2:people:basic' });
     
     $ds2->define_node({ path => 'people/single', 
-			method => 'get' });
+			place => 1,
+			title => 'Single database contributor',
+			method => 'get_person' },
+	"This operation returns information about a single database contributor,",
+	"specified by either name or identifier.");
+    
+    $ds2->define_node({ path => 'people/loggedin',
+			place => 2,
+			title => 'Currenly logged-in user',
+			method => 'get_person',
+		        arg => 'loggedin' },
+	"If this operation is executed by somebody who is logged in to the database,",
+	"it returns the name and identifier of that person. This can be used by a",
+	"web application to determine the database identifier corresponding to its user.");
     
     $ds2->define_node({ path => 'people/list',
-			method => 'list' });
+			place => 3,
+			method => 'list' },
+	"This operation returns lists of database contributors, selected according to",
+	"the specified criteria. It is only available to people who are logged in to the",
+	"database.");
     
-    $ds2->define_node({ path => 'people/auto',
-			method => 'people_auto',
-			default_limit => 10,
-			usage => "people/auto?name=smi" },
-	"This operation is used for auto-completion of database contributor names.",
-	"It returns a list of people whose last name begins with the specified string.",
-	"The default limit is 10, unless overridden.");
+    # $ds2->define_node({ path => 'people/auto',
+    # 			method => 'people_auto',
+    # 			default_limit => 10,
+    # 			usage => "people/auto?name=smi" },
+    # 	"This operation is used for auto-completion of database contributor names.",
+    # 	"It returns a list of people whose last name begins with the specified string.",
+    # 	"The default limit is 10, unless overridden.");
 
     
     # Bibliographic References

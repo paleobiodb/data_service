@@ -1,8 +1,13 @@
 # 
 # The Paleobiology Database
 # 
-#   CollectionDefs.pm
-# 
+#   TableDefs.pm
+#
+# This file specifies the database tables to be used by the data service code.
+#
+# This allows for tables to be later renamed without having to search laboriously through the code
+# for each statement referring to them. It also provides for operating the data service in "test
+# mode", which can select alternate tables for use in running the unit tests.
 
 package TableDefs;
 
@@ -13,6 +18,7 @@ use Carp qw(croak);
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS $SPECIMENS
+		      $PERSON_DATA $SESSION_DATA $TABLE_PERMS $WING_USERS
 		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA
 		      $COLL_LITH $COLL_ENV $STRATA_NAMES
 		      $BIN_KEY $BIN_LOC $BIN_CONTAINER
@@ -29,8 +35,23 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $MACROSTRAT_INTERVALS $MACROSTRAT_SCALES $MACROSTRAT_SCALES_INTS
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
-		      $RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS
-		      %TABLE_PROPERTIES);
+		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
+		      %TABLE_PROPERTIES %TEST_SELECT);
+
+
+# If the name of a test database was specified in the configuration file, remember it.
+
+our ($TEST_DB);
+
+{
+    $TEST_DB = Dancer::config->{test_db};
+}
+
+
+# Define a global hash variable to hold table properties, in a way that can be accessed by other
+# modules. Routines for getting and setting these appear below.
+
+our (%TABLE_PROPERTIES);
 
 
 # classic tables
@@ -42,6 +63,82 @@ our $REFERENCES = "refs";
 our $OCCURRENCES = "occurrences";
 our $REIDS = "reidentifications";
 our $SPECIMENS = "specimens";
+
+
+# Authentication and permission tables
+
+our $PERSON_DATA = "person";
+our $TABLE_PERMS = "table_permissions";
+our $SESSION_DATA = "session_data";
+our $WING_USERS = "pbdb_wing.users";
+
+# If we are being run in test mode, substitute table names as indicated by the configuration file.
+
+if ( $PBData::TEST_MODE )
+{
+    $TEST_SELECT{session_data} = sub {
+	
+	my ($ds, $enable) = @_;
+	
+	if ( $enable )
+	{
+	    die "You must define 'test_db' in the configuration file" unless $TEST_DB;
+	    
+	    $SESSION_DATA = "$TEST_DB.session_data";
+	    $TABLE_PERMS = "$TEST_DB.table_permissions";
+	    $PERSON_DATA = "$TEST_DB.person";
+
+	    eval {
+		PB2::CommonData->update_person_name_cache($ds);
+	    };
+
+	    print STDERR "TEST MODE: enable 'session_data'\n\n" if $ds->debug;
+	    
+	    return 1;
+	}
+	
+	else
+	{
+	    $SESSION_DATA = "session_data";
+	    $TABLE_PERMS = "table_permissions";
+	    $PERSON_DATA = "person";
+	    
+	    print STDERR "TEST MODE: disable 'session_data'\n\n" if $ds->debug;
+	    
+	    return 2;
+	}
+    };
+    
+    # if ( $TEST_SELECT{person} eq 'separate' || $TEST_SELECT{authentication} eq 'separate' )
+    # {
+    # 	$PERSON_DATA = "$TEST_DB.person";
+    # }
+
+    # if ( $TEST_SELECT{table_permissions} eq 'separate' || $TEST_SELECT{authentication} eq 'separate' )
+    # {
+    # 	$TABLE_PERMS = "$TEST_DB.table_permissions";
+    # }
+
+    # if ( $TEST_SELECT{session_data} eq 'separate' || $TEST_SELECT{authentication} eq 'separate' )
+    # {
+    # 	$SESSION_DATA = "$TEST_DB.session_data";
+    # }
+
+    # if ( $TEST_SELECT{authentication} )
+    # {
+    # 	$USING_TEST_TABLES{person} = $TEST_SELECT{authentication};
+    # 	$USING_TEST_TABLES{table_permissions} = $TEST_SELECT{authentication};
+    # 	$USING_TEST_TABLES{session_data} = $TEST_SELECT{authentication};
+    # }
+
+    # else
+    # {
+    # 	foreach my $k ( qw(person table_permissions session_data) )
+    # 	{
+    # 	    $USING_TEST_TABLES{$k} = $TEST_SELECT{$k};
+    # 	}
+    # }
+}
 
 # new collection tables
 
@@ -131,19 +228,101 @@ our $TIMESCALE_PERMS = 'timescale_perms';
 
 # Educational resources
 
-our $RESOURCE_DATA = 'eduresources';
 our $RESOURCE_QUEUE = 'eduresource_queue';
 our $RESOURCE_IMAGES = 'eduresource_images';
-our $RESOURCE_TAGS = 'eduresource_tags';
 our $RESOURCE_TAG_NAMES = 'edutags';
+my $resource_tags_main = Dancer::config->{eduresources_tags} || 'eduresource_tags';
+our $RESOURCE_TAGS = $resource_tags_main;
+my $resource_active_main = Dancer::config->{eduresources_active} || 'eduresources';
+our $RESOURCE_ACTIVE = $resource_active_main;
 
-# Table properties, especially regarding permissions. If the table has the
-# property 'BY_ENTERER' then records may only be entered by their enterers,
-# rather than by anybody in their authorizer group. If the table has the
-# property 'ALLOW_POST', with the value 'MEMBERS', then all logged-in database
-# members can post to it.
+if ( $PBData::TEST_MODE )
+{
+    $TEST_SELECT{eduresources} = sub {
+	
+	my ($ds, $enable) = @_;
+	
+	if ( $enable )
+	{
+	    die "You must define 'test_db' in the configuration file" unless $TEST_DB;
+	    
+	    $RESOURCE_QUEUE = "$TEST_DB.eduresource_queue";
+	    $RESOURCE_IMAGES = "$TEST_DB.eduresource_images";
+	    $RESOURCE_TAG_NAMES = "$TEST_DB.edutags";
+	    $RESOURCE_TAGS = "$TEST_DB.$resource_tags_main";
+	    $RESOURCE_ACTIVE = "$TEST_DB.$resource_active_main";
+	    
+	    print STDERR "TEST MODE: enable 'eduresources'\n\n" if $ds->debug;
+	    
+	    return 1;
+	}
+	
+	else
+	{
+	    $RESOURCE_QUEUE = 'eduresource_queue';
+	    $RESOURCE_IMAGES = 'eduresource_images';
+	    $RESOURCE_TAG_NAMES = 'edutags';
+	    $RESOURCE_TAGS = $resource_tags_main;
+	    $RESOURCE_ACTIVE = $resource_active_main;
+	    
+	    print STDERR "TEST MODE: disable 'eduresources'\n\n" if $ds->debug;
+	    
+	    return 2;
+	}
+    };
+    
+    # $USING_TEST_TABLES{eduresources} = $TEST_SELECT{eduresources};
+}
 
-our (%TABLE_PROPERTIES) = ( $RESOURCE_QUEUE => { ALLOW_POST => 'LOGGED_IN',
-					         GUEST_EDIT => 0 } );
+
+# Now define routines for getting and setting table properties. We ignore any database prefix on
+# the table name, because we want the properties to be the same regardless of whether they are in
+# the main database, the test database, or some other database we have subsequently defined. We
+# are operating under the assumption that two tables with the same name in different databases are
+# meant to be alternatives to each other, i.e. a main table and a test table.
+
+our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
+			   ALLOW_VIEW => 1,
+			   ALLOW_DELETE => 1,
+			   BY_AUTHORIZER => 1 );
+
+
+sub set_table_property {
+    
+    my ($table_name, $property, $value) = @_;
+    
+    if ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
+    {
+	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
+	
+	$TABLE_PROPERTIES{$1}{$property} = $value;
+    }
+    
+    else
+    {
+	$table_name ||= '';
+	croak "Invalid table name '$table_name'";
+    }
+}
+
+
+sub get_table_property {
+    
+    my ($table_name, $property) = @_;
+    
+    if ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
+    {
+	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
+	
+	return $TABLE_PROPERTIES{$1}{$property} || '';
+    }
+    
+    else
+    {
+	$table_name ||= '';
+	croak "Invalid table name '$table_name'";
+    }
+}
+
 
 1;

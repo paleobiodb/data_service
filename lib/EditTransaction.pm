@@ -8,15 +8,23 @@ package EditTransaction;
 
 use strict;
 
+use TableDefs qw(get_table_property);
+
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use ConsoleLog qw(logMessage);
+
+# This class is intended to encapsulate the lowest-level machinery necessary for updating records
+# in the database. It handles transaction initiation, commitment, and rollback, and also error and
+# warning conditions. It does not contain any routines for adding or updating records.
+#
+# This class can be subclassed (see TimescaleEdit.pm) in order to provide additional logic for
+# checking values and adding and updating records.
 
 
-
-our ($UPDATE_MATCHED);
-
+# new ( dbh, options )
+#
+# Create a new EditTransaction object. 
 
 sub new {
     
@@ -28,6 +36,8 @@ sub new {
 		warning => { },
 		result => '',
 		state => '' };
+    
+    bless $edt, $class;
     
     if ( $options && ref $options eq 'HASH' )
     {
@@ -53,7 +63,7 @@ sub new {
 	    $is_fixup = $edt->{auth_info}{fixup};
 	}
     }
-	    
+    
     elsif ( $edt->{session_id} )
     {
 	my $quoted_id = $dbh->quote($edt->{session_id});
@@ -109,7 +119,21 @@ sub new {
 	$edt->{state} = 'blocked';
     }
     
-    return bless $edt, $class;
+    return $edt;
+}
+
+
+sub DESTROY {
+    
+    my ($edt) = @_;
+    
+    return if $edt->{state} eq 'committed' || $edt->{state} eq 'aborted';
+    
+    my $dbh = $edt->{dbh};
+    
+    print STDERR " <<< ROLLBACK TRANSACTION\n\n" if $edt->debug;
+	
+    $dbh->do("ROLLBACK");
 }
 
 
@@ -169,7 +193,7 @@ sub add_condition {
 	push @{$edt->{error}{$code}}, [$record_label, $data];
 	
 	$edt->{this_record_errors}++;
-	$edt->{state} = 'error';
+	$edt->{state} = 'error' if $edt->{state} eq 'active';
     }
     
     else
@@ -196,37 +220,6 @@ sub warnings {
     
     return %{$edt->{warning}};
 }
-
-
-sub allow_proceed {
-
-    my ($edt) = @_;
-    
-    $edt->{allow_proceed} = 1;
-}
-
-
-# sub add_condition {
-
-#     my ($edt, $code, $record_label, $data) = @_;
-    
-#     $edt->{condition}{$code} ||= [ ];
-    
-#     push @{$edt->{condition}{"C_$code"}}, [$record_label, $data];
-    
-#     $edt->{errors_occurred} = 1;
-#     $edt->{state} = 'error';
-    
-#     return $edt;
-# }
-
-
-# sub conditions {
-
-#     my ($edt) = @_;
-    
-#     return %{$edt->{condition}};
-# }
 
 
 sub can_check {
@@ -260,21 +253,9 @@ sub check_only {
 
     my ($edt) = @_;
     
-    $edt->{state} = 'error';
+    $edt->{state} = 'error' if $edt->{state} eq 'active';
     delete $edt->{condition}{PROCEED};
 }
-
-# sub status {
-    
-#     my ($edt) = shift;
-    
-#     if ( @_ )
-#     {
-# 	$edt->{status} = (shift // '');
-#     }
-    
-#     return $edt->{status};
-# }
 
 
 sub dbh {
@@ -282,22 +263,6 @@ sub dbh {
     my ($edt) = @_;
     
     return $edt->{dbh};
-}
-
-
-sub authorizer_no {
-    
-    my ($edt) = @_;
-    
-    return $edt->{authorizer_no};
-}
-
-
-sub enterer_no {
-    
-    my ($edt) = @_;
-    
-    return $edt->{enterer_no};
 }
 
 
@@ -325,5 +290,8 @@ sub generate_set_list {
     
     return join(', ', @set_list);
 }
+
+
+
 
 1;

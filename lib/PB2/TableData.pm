@@ -253,7 +253,7 @@ sub get_table_schema {
 	$quoted_table = $dbh->quote_identifier($table_name);
     }
     
-    print STDERR "$sql\n\n";
+    print STDERR "$sql\n\n" if $ds->debug;
     
     eval {
 	($check_table) = $dbh->selectrow_array($sql);

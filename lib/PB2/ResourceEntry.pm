@@ -15,7 +15,7 @@ package PB2::ResourceEntry;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES);
+use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use PB2::TableData qw(complete_ruleset);
 use File::Temp qw(tempfile);
@@ -31,7 +31,7 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::ResourceData);
 
-our ($RESOURCE_ACTIVE, $RESOURCE_TAGS, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
+our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
 
 our (%RESOURCE_IGNORE) = ( 'image_data' => 1 );
 
@@ -72,10 +72,11 @@ sub initialize {
 	    "over to the table that drives the Resources page. Accepted values for",
 	    "this parameter are:",
 	{ optional => 'tags', valid => ANY_VALUE },
-	    "The value of this parameter should be a list of integers, identifying",
+	    "The value of this parameter should be a list of tag names, identifying",
 	    "the tags/headings with which this resource should be associated. You",
 	    "can specify this as either a comma-separated list in a string, or as a",
-	    "JSON list of integers.");
+	    "JSON list of strings. Alternatively, you can use the integer identifiers",
+	    "corresponding to the tags.");
     
     $ds->define_ruleset('1.2:eduresources:addupdate' =>
 	">>The following parameters may be given either in the URL or in",
@@ -127,8 +128,6 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active') || $RESOURCE_DATA;
-    $RESOURCE_TAGS = $ds->config_value('eduresources_tags') || 'eduresource_tags';
     $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
     $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
     
@@ -163,7 +162,7 @@ sub update_resources {
     $conditions{CREATE_RECORDS} = 1 if $arg && $arg eq 'add';
     
     my $main_params = $request->get_main_params(\%conditions);
-    my $auth_info = $request->get_auth_info($dbh, $RESOURCE_QUEUE);
+    my $auth_info = $request->require_auth($dbh, $RESOURCE_QUEUE);
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
@@ -173,6 +172,7 @@ sub update_resources {
     # Now go through the records and validate each one in turn.
     
     my %record_activation;
+    my @good_records;
     
     foreach my $r ( @records )
     {
@@ -194,22 +194,24 @@ sub update_resources {
 	    
 	    # Make sure that we have authorization to modify this record, and that it actually exists.
 	    
-	    my ($role, $current_status) = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'update', 
-							'eduresource_no', $record_id, 
-							'status, authorizer_no, enterer_no, enterer_id');
+	    my ($current) = $request->fetch_record($dbh, $RESOURCE_QUEUE, "eduresource_no=$record_id",
+						   'eduresource_no, status, authorizer_no, enterer_no, enterer_id');
 	    
-	    # If the role is 'notfound', then no record exists with the specified id.
+	    # If we cannot find the record, then add an error to the request and continue on to
+	    # the next.
 	    
-	    if ( $role eq 'notfound' )
+	    unless ( $current )
 	    {
-		$request->add_record_error('E_NOT_FOUND', $record_label, "record '$record_id' not found");
+		$request->add_record_error('E_NOT_FOUND', $record_label, "record not found");
 		next;
 	    }
+
+	    # Otherwise, check the permission that the current user has on this record. If they
+	    # have the 'admin' permission, they can modify the record and also adjust its status.
+
+	    my $permission = $request->check_record_permission($current, $RESOURCE_QUEUE, 'edit', 'eduresource_no');
 	    
-	    # If we have the 'admin' role on this record, we can modify the record and we can also
-	    # adjust its status.
-	    
-	    elsif ( $role eq 'admin' )
+	    if ( $permission eq 'admin' )
 	    {
 		# If the status is being explicitly set to 'active', then the new record
 		# values should be copied into the active resources table. This is a valid
@@ -243,7 +245,7 @@ sub update_resources {
 	    # status. If the current status is 'active', then it will be automatically changed to
 	    # 'changes'.
 	    
-	    elsif ( $role eq 'edit' )
+	    elsif ( $permission eq 'edit' )
 	    {
 		if ( $r->{status} )
 		{
@@ -252,7 +254,7 @@ sub update_resources {
 		    next;
 		}
 		
-		if ( $current_status eq 'active' )
+		if ( $current->{status} eq 'active' )
 		{
 		    $r->{status} = 'changes';
 		}
@@ -282,13 +284,13 @@ sub update_resources {
 	    
 	    # Make sure that we have authorization to add records to this table.
 	    
-	    my $role = $request->check_table_auth($dbh, $RESOURCE_QUEUE, 'add');
+	    my $permission = $request->check_table_permission($dbh, $RESOURCE_QUEUE, 'post');
 	    
 	    # If we have 'admin' privileges on the resource queue table, then we can add a new
 	    # record with any status we choose. The status will default to 'pending' if not
 	    # explicitly set.
 	    
-	    if ( $role eq 'admin' )
+	    if ( $permission eq 'admin' )
 	    {
 		$r->{status} ||= 'pending';
 	    }
@@ -296,7 +298,7 @@ sub update_resources {
 	    # If we have 'post' privileges, we can create a new record. The status will
 	    # automatically be set to 'pending', regardless of what is specified in the record.
 	    
-	    elsif ( $role eq 'post' )
+	    elsif ( $permission eq 'post' )
 	    {
 		$r->{status} = 'pending';
 	    }
@@ -346,12 +348,22 @@ sub update_resources {
 	# statement to add or update the record.
 	
 	$request->validate_against_table($dbh, $RESOURCE_QUEUE, $op, $r, 'eduresource_no', \%RESOURCE_IGNORE);
+	
+	push @good_records, $r;
     }
     
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
     
     if ( $request->errors )
     {
+	die $request->exception(400, "Bad request");
+    }
+    
+    # If no good records were found, stop now and return an HTTP 400 response.
+    
+    unless ( @good_records )
+    {
+	$request->add_error("E_NO_RECORDS: no valid records for add or update");
 	die $request->exception(400, "Bad request");
     }
     
@@ -396,6 +408,8 @@ sub update_resources {
 		$request->store_image($dbh, $new_id, $r) if $new_id && $r->{image_data};
 		
 		$updated_records{$new_id} = 1 if $new_id;
+		
+		$request->{my_record_label}{$new_id} = $r->{record_label} if $r->{record_label};
 		
 		# If this record should be added to the active table, do so now.
 		
@@ -770,56 +784,23 @@ sub delete_resources {
     {
 	next unless $record_id =~ /^\d+$/;
 	
-	# # Fetch the current authorization and status information.
+	my ($current) = $request->fetch_record($dbh, $RESOURCE_QUEUE, "eduresource_no=$record_id",
+					       'eduresource_no, status, authorizer_no, enterer_no, enterer_id');
 	
-	# my ($current_status, $record_authno, $record_entno, $record_entid, $confirm_id) = 
-	#     $request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
-	# 				  'status, authorizer_no, enterer_no, enterer_id, eduresource_no');
-
-	# unless ( $confirm_id )
-	# {
-	#     $request->add_record_warning('W_NOTFOUND', $record_id, "record not found");
-	#     next;
-	# }
-
-	# my ($enterer_no) = $auth_info->{enterer_no};
-
-	# # If we have 'admin' privileges on the table, or if we are the superuser, then we can delete any
-	# # record.
-
-	# if ( $auth_info->{table_role}{$RESOURCE_QUEUE} eq 'admin' || $auth_info->{superuser} )
-	# {
-	#     $delete_ids{$record_id} = 1;
-	# }
+	# If we cannot find the record, then add an error to the request and continue on to
+	# the next.
 	
-	# # Otherwise, we can delete any record that we created, or any one for which we are the
-	# # authorizer.
-
-	# elsif ( $enterer_no && $record_entno && $enterer_no eq $record_entno )
-	# {
-	#     $delete_ids{$record_id} = 1;
-	# }
-
-	# elsif ( $enterer_no && $record_authno && $enterer_no eq $record_authno )
-	# {
-	#     $delete_ids{$record_id} = 1;
-	# }
-	
-	my ($role, $current_status) = $request->check_record_auth($dbh, $RESOURCE_QUEUE, 'delete',
-							'eduresource_no', $record_id,
-							'status, authorizer_no, enterer_no, enterer_id');
-	
-	# If the role is 'notfound', then no record exists with the specified id.
-	
-	if ( $role eq 'notfound' )
+	unless ( $current )
 	{
-	    $request->add_record_warning('W_NOTFOUND', $record_id, "record not found");
+	    $request->add_record_warning('W_NOT_FOUND', $record_id, "record not found");
 	    next;
 	}
 	
+	my ($permission) = $request->check_record_permission($current, $RESOURCE_QUEUE, 'edit', 'eduresource_no');
+	
 	# If we have either the 'admin' or 'edit' role on this record, we can delete it.
 	
-	elsif ( $role eq 'admin' || $role eq 'edit' )
+	if ( $permission eq 'admin' || $permission eq 'edit' )
 	{
 	    $delete_ids{$record_id} = 1;
 	}
@@ -861,8 +842,8 @@ sub delete_resources {
 	my $result = $dbh->do($sql);
 	
 	$sql = "
-		DELETE FROM $RESOURCE_DATA
-		WHERE id in ($id_list)";
+		DELETE FROM $RESOURCE_ACTIVE
+		WHERE $RESOURCE_IDFIELD in ($id_list)";
 	
 	print STDERR "$sql\n\n" if $request->debug;
 	

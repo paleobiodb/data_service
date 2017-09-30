@@ -11,13 +11,14 @@ use strict;
 
 package PB2::PersonData;
 
+use TableDefs qw($PERSON_DATA $WING_USERS);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use HTTP::Validate qw(:validators);
 
 use Carp qw(carp croak);
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::Authentication);
 
 use Moo::Role;
 
@@ -30,47 +31,105 @@ sub initialize {
 
     my ($class, $ds) = @_;
     
-   # Define the basic output block for person data.
+    # Define the basic output block for person data.
+    
+    $ds->define_set('1.2:people:contributor_status' =>
+	{ value => 'active' },
+	    "The person is an active database contributor.",
+	{ value => 'disabled' },
+	    "The person's account has been disabled, either temporarily or permanently.",
+	{ value => 'deceased' },
+	    "The person is deceased, and so their contributed records have been reassigned.");
+    
+    $ds->define_set('1.2:people:contributor_role' =>
+	{ value =>'authorizer' },
+	    "The person is a database authorizer.",
+	{ value => 'enterer' },
+	    "The person is a database enterer, working under the supervision of an authorizer.",
+	{ value => 'student' },
+	    "The person is a student, with fewer privileges than an enterer, also working",
+	    "under the supervision of an authorizer.",
+	{ value => 'guest' },
+	    "The person has created an account, but has not yet been accepted as a database",
+	    "contributor.");
     
     $ds->define_block('1.2:people:basic' =>
-	{ select => [ qw(p.person_no p.name p.country p.institution
-			 p.email p.is_authorizer) ] },
+	{ select => [ 'wu.id as person_id', 'wu.real_name', 'wu.country',
+		      'wu.institution', 'wu.role', 'wu.orcid', 
+		      'wu.contributor_status as status' ] },
+	{ set => '*', code => \&process_record },
 	{ output => 'person_no', com_name => 'oid' },
-	    "A positive integer that uniquely identifies this database contributor",
-	{ output => 'record_type', com_name => 'typ', com_value => 'prs', value => 'person' },
-	    "The type of this object: {value} for a database contributor",
-	{ output => 'name', com_name => 'nam' },
+	    "A positive integer that uniquely identifies this database contributor,",
+	    "or else a unique record identifier for guest accounts.",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{PRS} },
+	    "The type of this object: C<B<$IDP{PRS}>> for a database contributor",
+	{ output => 'real_name', com_name => 'nam' },
 	    "The person's name",
 	{ output => 'institution', com_name => 'ist' },
-	    "The person's institution",
+	    "The person's institution, if known to the database.",
 	{ output => 'country', com_name => 'ctr' },
-	    "The database contributor's country");
+	    "The person's country, if known to the database.",
+	{ output => 'orcid', com_name => 'orc' },
+	    "The person's ORCID, if known to the database.",
+	{ output => 'role', com_name => 'rol' },
+	    "The person's database role, if they are a database contributor. The",
+	    "value of this field will be one of the following:",
+	    $ds->document_set('1.2:people:contributor_role'),
+	{ output => 'status', com_name => 'sta' },
+	    "The person's status, if they are a database contributor. The value of",
+	    "this field will be one of the following:",
+	    $ds->document_set('1.2:people:contributor_status'));
+    
+    $ds->define_output_map('1.2:people:basic_map' =>
+	{ value => 'crmod', maps_to => '1.2:common:crmod' },
+	    "The C<created> and C<modified> timestamps for each record");
     
     # Then some rulesets.
     
     $ds->define_ruleset('1.2:people:specifier' => 
-	{ param => 'id', valid => POS_VALUE, alias => 'person_id' },
-	    "The numeric identifier of the person to select");
-
-    $ds->define_ruleset('1.2:people:selector' => 
+	{ param => 'id', valid => ANY_VALUE, alias => 'person_id' },
+	    "The identifier of a database contributor, either as an external identifier or",
+	    "an integer, or the user identifier string.",
+	{ param => 'loggedin', valid => FLAG_VALUE },
+	    "This parameter is only valid if given in a request accompanied by a cookie indicating",
+	    "a still-valid login session. The information about the currently logged-in user is",
+	    "returned.",
+	{ at_most_one => ['id', 'loggedin'] });
+    
+    $ds->define_ruleset('1.2:people:selector' =>
+	"One of the following parameters must be specified, to indicate which records to return:",
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "Return all database contributor records. This parameter does not require a value.",
+	{ param => 'id', valid => ANY_VALUE, list => ',', alias => 'person_id' },
+	    "Return only the records corresponding to the specified database contributor identifiers.",
+	    "More than one can be given, as a comma-separated list.",
+	    "These can be specified as integer or external identifiers, or as user identifier strings.",
 	{ param => 'name', valid => ANY_VALUE },
-	    "A name, in either order: 'J. Smith' or 'Smith, J.' with C<%> as a wildcard");
-
+	    "A string to be matched against person names.");
+    
     $ds->define_ruleset('1.2:people:single' => 
-	{ allow => '1.2:people:specifier' },
+	{ require => '1.2:people:specifier' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:people:basic_map' },
 	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
+    
+    $ds->define_ruleset('1.2:people:loggedin' =>
+	{ allow => '1.2:special_params' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:people:basic_map' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.2:people:list' => 
 	{ require => '1.2:people:selector' },
+	{ allow => '1.2:common:select_crmod' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:people:basic_map' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
     
-    $ds->define_ruleset('1.2:people:auto' =>
-	{ param => 'name', valid => ANY_VALUE },
-	    "A string of at least 3 characters, which will be matched against the beginning",
-	    "of each last name.",
-	"^You can also use any of the L<special parameters|node:special> with this request.");
+    # $ds->define_ruleset('1.2:people:auto' =>
+    # 	{ param => 'name', valid => ANY_VALUE },
+    # 	    "A string of at least 3 characters, which will be matched against the beginning",
+    # 	    "of each last name.",
+    # 	"^You can also use any of the L<special parameters|node:special> with this request.");
 }
 
 
@@ -83,40 +142,117 @@ sub initialize {
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
-sub get {
+sub get_person {
 
-    my ($self) = @_;
+    my ($request, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
-    # Make sure we have a valid id number.
+    # Make sure we have a valid id number, or else the 'loggedin' parameter.
     
-    my $id = $self->clean_param('id');
+    my ($person_no, $wing_id);
     
-    die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
+    if ( $arg && $arg eq 'loggedin' || $request->clean_param('loggedin') )
+    {
+	my $auth_info = $request->require_auth($dbh);
+	
+	if ( $auth_info->{enterer_no} )
+	{
+	    $person_no = $dbh->quote($auth_info->{enterer_no});
+	}
+	
+	elsif ( $auth_info->{user_id} )
+	{
+	    $wing_id = $dbh->quote($auth_info->{user_id});
+	}
+	
+	else
+	{
+	    die $request->exception(401, "You must be logged in to execute this operation.");
+	}
+    }
+    
+    elsif ( defined ( my $id = $request->clean_param('id') ) )
+    {
+	if ( $id =~ /^[A-Z0-9-]{10,80}$/ )
+	{
+	    my $auth_info = $request->require_auth($dbh);
+	    $wing_id = $dbh->quote($id);
+	}
+	
+	elsif ( $id && $id =~ /^\d+$/ )
+	{
+	    $person_no = $dbh->quote($id);
+	}
+	
+	else
+	{
+	    die $request->exception(400, "E_BAD_PARAM: Bad value '$id' for 'id'");
+	}
+    }
+    
+    else
+    {
+	die $request->exception(400, "E_PARAM_ERROR: at least one parameter is required for this operation");
+    }
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->select_string('p');
+    # $request->substitute_select( cd => 'p' );
+    
+    my $fields = $request->select_string();
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. Also check whether we should generate external identifiers.
+    
+    $request->strict_check;
+    $request->extid_check;
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
+    # my ($join_list) = $request->generateJoinList('p', $request->tables_hash);
     
     # Generate the main query.
     
-    $self->{main_sql} = "
-	SELECT $fields
-	FROM person as p
-		$join_list
-        WHERE p.person_no = $id";
+    if ( $wing_id )
+    {
+	if ( $request->has_block('1.2:common:crmod') )
+	{
+	    $fields =~ s/\$cd.created/wu.date_created/;
+	    $fields =~ s/\$cd.modiied/wu.date_modified/;
+	}
+	
+	$request->{main_sql} = "
+	SELECT $fields, wu.person_no
+	FROM $WING_USERS as wu
+	WHERE id = $wing_id";
+    }
     
-    print $self->{main_sql} . "\n\n" if $self->debug;
+    else
+    {
+	if ( $request->has_block('1.2:common:crmod') )
+	{
+	    $fields =~ s/\$cd.created/coalesce(wu.date_created, p.created) as created/;
+	    $fields =~ s/\$cd.modified/coalesce(wu.date_modified, p.modified) as modified/;
+	}
+	
+	$request->{main_sql} = "
+	SELECT p.name as p_name, p.role as p_role, p.institution as p_institution,
+		p.country as p_country, p.active as p_active, p.person_no, $fields 
+	FROM $PERSON_DATA as p left join $WING_USERS as wu using (person_no)
+	WHERE person_no = $person_no";
+    }
     
-    $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+    
+    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+
+    # Return an error response if we couldn't retrieve the record.
+    
+    die "404 Not found\n" unless $request->{main_record};
 }
 
 
@@ -157,14 +293,13 @@ sub list {
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('p', $self->{select_tables});
+    # my ($join_list) = $self->generateJoinList('p', $self->{select_tables});
     
     # Generate the main query
     
     $self->{main_sql} = "
 	SELECT $count $fields
 	FROM person as p
-		$join_list
         WHERE $filter_string
 	ORDER BY p.reversed_name $limit";
     
@@ -319,23 +454,35 @@ sub generateJoinList {
     # Return an empty string unless we actually have some joins to make
     
     return $join_list unless ref $tables eq 'HASH' and %$tables;
-    
-    # Some tables imply others.
-    
-    $tables->{o} = 1 if $tables->{t};
-    $tables->{c} = 1 if $tables->{o};
-    
-    # Create the necessary join expressions.
-    
-    $join_list .= "JOIN coll_matrix as c on p.person_no = c.authorizer_no\n"
-	if $tables->{c};
-    $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
-	if $tables->{o};
-    $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
-	if $tables->{t};
-    
+        
     return $join_list;
 }
 
+
+# process_record ( )
+# 
+# This routine is called automatically to process each record before it is output.
+
+sub process_record {
+
+    my ($request, $record) = @_;
+    
+    if ( $record->{person_id} && ! $record->{person_no} )
+    {
+	$record->{person_no} = $record->{person_id};
+    }
+    
+    elsif ( $record->{person_no} )
+    {
+	$record->{person_no} = generate_identifier('PRS', $record->{person_no});
+    }
+    
+    $record->{real_name} ||= $record->{p_name};
+    $record->{institution} ||= $record->{p_institution};
+    $record->{country} ||= $record->{p_country};
+    $record->{role} ||= $record->{p_role};
+    $record->{status} = 'inactive' if defined $record->{p_active} && $record->{p_active} eq '0';
+    $record->{status} ||= 'active' if $record->{p_active};
+}
 
 1;

@@ -273,6 +273,11 @@ sub validate_against_table {
     
     croak "no schema found for table '$table_name'" unless $schema;
     
+    # Determine the name of the table without any database prefix.
+    
+    my $lookup_name = $table_name;
+    $lookup_name =~ s/^\w+[.]//;
+    
     # First go through all of the fields in the record and validate their values.
     
     foreach my $k ( keys %$record )
@@ -301,7 +306,7 @@ sub validate_against_table {
 	unless ( $field_record && $field)
 	{
 	    $request->add_record_warning('W_PARAM', $record->{record_label} || $record->{$primary_key}, 
-					 "unknown field '$k' in the table for this data type")
+					 "field '$k' does not match any column in the table for this data type")
 		unless $op eq 'mirror';
 	    
 	    next;
@@ -398,8 +403,8 @@ sub validate_against_table {
 	    # If the table has an authorizer_no or enterer_no field, then we need to be providing
 	    # a value for them. If no value can be found, then bomb.
 	    
-	    unless ( $new_value || ( $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
-				     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' ) )
+	    unless ( $new_value || ( $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} &&
+				     $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} eq 'LOGGED_IN' ) )
 	    {
 		croak "no value was found for '$k'";
 	    }
@@ -635,7 +640,7 @@ sub do_update {
 }
 
 
-sub fetch_record_values {
+sub fetch_record {
     
     my ($request, $dbh, $table_name, $key_expr, $field_expr) = @_;
     
@@ -651,168 +656,181 @@ sub fetch_record_values {
     
     print STDERR "$sql\n\n" if $request->debug;
     
-    my (@values) = $dbh->selectrow_array($sql);
-    
-    return @values;
+    return $dbh->selectrow_hashref($sql, { Slice => { } });
 }
 
 
-sub check_record_auth {
+# sub fetch_record_permission {
     
-    my ($request, $dbh, $table_name, $operation, $id_field, $record_no, $auth_fields) = @_;
+#     my ($request, $dbh, $table_name, $permission, $id_field, $record_no, $auth_fields) = @_;
     
-    my $table_role = $request->get_table_role($dbh, $table_name);
+#     # If we need to determine what permissions the requestor has to this
+#     # particular record. If no record was given, return 'notfound'.
     
-    # If we need to determine what permissions the requestor has to this
-    # particular record. If no record was given, return 'notfound'.
+#     unless ( $record_no && $record_no =~ /^\d+$/ )
+#     {
+# 	print STDERR "ERROR: no record number was given\n\n" if $request->debug;
+# 	return (undef, 'notfound');
+#     }
     
-    unless ( $record_no && $record_no =~ /^\d+$/ )
+#     # The first thing to do is to fetch the specified fields from the record.
+    
+#     my $sql = "	SELECT $auth_fields FROM $table_name
+# 		WHERE $id_field = $record_no LIMIT 1";
+    
+#     print STDERR "$sql\n\n" if $request->debug;
+    
+#     my ($record) = $dbh->selectrow_hashref($sql);
+    
+#     # If no record is found, then we return 'notfound'. Otherwise, set the status if there is
+#     # one. 
+    
+#     my $status;
+    
+#     if ( $record )
+#     {
+# 	my $permission = $request->check_fetched_permission($table_name, $permission, $record, $id_field)
+# 	return ($permission, $record->{status} || '');
+#     }
+    
+#     else
+#     {
+# 	return (undef, 'notfound');
+#     }
+# }
+
+
+sub check_record_permission {
+
+    my ($request, $record, $table_name, $permission, $id_field) = @_;
+
+    # If the requested permission is undefined, return false right away.
+    
+    croak "bad call to 'check_record_permission': no permission specified" unless $permission;
+    croak "bad call to 'check_record_permission': no table name specified" unless $table_name;
+    croak "bad call to 'check_record_permission': bad permission '$permission'" unless
+	$permission eq 'admin' || $permission eq 'edit' || $permission eq 'delete';
+    
+    # Otherwise, initialize the necessary variables.
+    
+    my $record_no = $id_field ? $record->{$id_field} : '?';
+    $record_no ||= '?';
+    
+    my $table_permission = $request->get_table_permission(undef, $table_name);
+    
+    # If the table permission is 'admin' or if the user has superuser privileges, then
+    # they have all privileges on this record including 'delete'.
+    
+    if ( $table_permission->{admin} || $request->{my_auth_info}{superuser} )
     {
-	print STDERR "ERROR: no record number was given\n\n" if $request->debug;
-	return 'notfound';
-    }
-    
-    # The first thing to do is to fetch the specified fields from the record.
-    
-    my $sql = "	SELECT $auth_fields FROM $table_name
-		WHERE $id_field = $record_no LIMIT 1";
-    
-    print STDERR "$sql\n\n" if $request->debug;
-    
-    my ($record) = $dbh->selectrow_hashref($sql);
-    
-    # If no record is found, then we return 'notfound'. Otherwise, set the status if there is
-    # one. 
-    
-    my $status;
-    
-    if ( $record )
-    {
-	$status = $record->{status};
-    }
-    
-    else
-    {
-	return 'notfound';
-    }
-    
-    # If the table role is 'admin' or if the user has superuser privileges, then
-    # they have 'admin' privileges on any record.
-    
-    if ( $table_role eq 'admin' || $request->{my_auth_info}{superuser} )
-    {
-	print STDERR "    Role for $table_name : $record_no = 'admin' from " . 
+	print STDERR "    Permission for $table_name ($record_no) : 'admin' from " . 
 	    ($request->{my_auth_info}{superuser} ? 'SUPERUSER' : 'PERMISSIONS') . "\n\n"
-	    if $request->debug;
-	
-	return ('admin', $status);
-    }
-    
-    # If they are the person who originally created or authorized the record, then they have
-    # 'edit' privileges to it.
-    
-    elsif ( $record->{enterer_no} && $request->{my_auth_info}{enterer_no} &&
-	    $record->{enterer_no} eq $request->{my_auth_info}{enterer_no} )
-    {
-	print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_no\n\n"
-	    if $request->debug;
-	
-	return ('edit', $status);
-    }
-    
-    elsif ( $record->{authorizer_no} && $request->{my_auth_info}{enterer_no} &&
-	    $record->{authorizer_no} eq $request->{my_auth_info}{enterer_no} )
-    {
-	print STDERR "    Role for $table_name : $record_no = 'edit' from authorizer_no\n\n"
-	    if $request->debug;
-	
-	return ('edit', $status);
-    }
-    
-    elsif ( $record->{enterer_id} && $request->{my_auth_info}{user_id} &&
-	    $record->{enterer_id} eq $request->{my_auth_info}{user_id} )
-    {
-	print STDERR "    Role for $table_name : $record_no = 'edit' from enterer_id\n\n"
-	    if $request->debug;
-	
-	return ('edit', $status);
-    }
-    
-    # # If they are a guest user and guest users are allowed to edit records created by guest
-    # # users, then they have 'edit' privileges.
-    
-    # elsif ( $request->{my_auth_info}{role} && $request->{my_auth_info}{role} eq 'guest' &&
-    # 	    $TABLE_PROPERTIES{$table_name}{GUEST_EDIT} )
-    # {
-    # 	print STDERR "    Role for $table_name : $record_no = 'edit' from GUEST_EDIT\n\n"
-    # 	    if $request->debug;
-	
-    # 	return ('edit', $status);
-    # }
-    
-    # If the person who originally created the record has the same authorizer as the person
-    # who originally created the record, then they have 'edit' privileges to it if
-    # the table has the 'BY_AUTHORIZER' property.
-    
-    elsif ( $record->{authorizer_no} && $request->{my_auth_info}{authorizer_no} &&
-	    $record->{authorizer_no} eq $request->{my_auth_info}{authorizer_no} &&
-	    $TABLE_PROPERTIES{$table_name}{BY_AUTHORIZER} )
-    {
-	print STDERR "    Role for $table_name : $record_no = 'edit' from BY_AUTHORIZER\n\n"
-	    if $request->debug;
-	
-	return ('edit', $status);
-    }
-    
-    # Otherwise, the requestor has no privileges on this record.
-    
-    else
-    {
-	print STDERR "    Role for $table_name : $record_no = 'none'\n\n"
-	    if $request->debug;
-	
-	return ('none', $status);
-    }
-}
-
-
-sub check_table_auth {
-    
-    my ($request, $dbh, $table_name, $operation) = @_;
-    
-    my $table_role = $request->get_table_role($dbh, $table_name);
-    
-    # If the user has the superuser privilege, then they have the 'admin' role
-    # on this (and every other) table.
-    
-    if ( $request->{my_auth_info}{superuser} )
-    {
-	print STDERR "    Role for $table_name : <new> = 'admin' from SUPERUSER\n\n"
 	    if $request->debug;
 	
 	return 'admin';
     }
     
-    # Otherwise, if we know their role with respect to this table, return that.
+    # Otherwise, the 'delete' permission is only allowed if the table has the ALLOW_DELETE
+    # property.
     
-    elsif ( $table_role )
+    if ( $permission eq 'delete' && ! $TABLE_PROPERTIES{$table_name}{ALLOW_DELETE} )
     {
-	my $diag = $request->{my_auth_info}{auth_diag}{$table_name} || 'DEFAULT ROLE';
-	
-	print STDERR "    Role for $table_name : <new> = '$table_role' from $diag\n\n"
+	print STDERR "    Permission for $table_name ($record_no) : '$permission' DENIED by TABLE PROPERTY\n\n"
 	    if $request->debug;
 	
-	return $table_role;
+	return 'none';
+    }
+    
+    # If the user is the person who originally created or authorized the record, then they have
+    # both 'edit' and 'delete' permissions.
+    
+    elsif ( $record->{enterer_no} && $request->{my_auth_info}{enterer_no} &&
+	    $record->{enterer_no} eq $request->{my_auth_info}{enterer_no} )
+    {
+	print STDERR "    Permission for $table_name ($record_no) : '$permission' from enterer_no\n\n"
+	    if $request->debug;
+	
+	return $permission;
+    }
+    
+    elsif ( $record->{authorizer_no} && $request->{my_auth_info}{enterer_no} &&
+	    $record->{authorizer_no} eq $request->{my_auth_info}{enterer_no} )
+    {
+	print STDERR "    Permission for $table_name ($record_no) : '$permission' from authorizer_no\n\n"
+	    if $request->debug;
+	
+	return $permission;
+    }
+    
+    elsif ( $record->{enterer_id} && $request->{my_auth_info}{user_id} &&
+	    $record->{enterer_id} eq $request->{my_auth_info}{user_id} )
+    {
+	print STDERR "    Permission for $table_name ($record_no) : '$permission' from enterer_id\n\n"
+	    if $request->debug;
+	
+	return $permission;
+    }
+    
+    # If the user has the same authorizer as the person who originally created the record, then
+    # they have 'edit' and 'delete' permissions if the table has the 'BY_AUTHORIZER' property.
+    
+    elsif ( $record->{authorizer_no} && $request->{my_auth_info}{authorizer_no} &&
+	    $record->{authorizer_no} eq $request->{my_auth_info}{authorizer_no} &&
+	    $TABLE_PROPERTIES{$table_name}{BY_AUTHORIZER} )
+    {
+	print STDERR "    Permission for $table_name ($record_no) : '$permission' from BY_AUTHORIZER\n\n"
+	    if $request->debug;
+	
+	return $permission;
+    }
+    
+    # Otherwise, the requestor has no permission on this record.
+    
+    print STDERR "    Permission for $table_name ($record_no) : '$permission' DENIED from NOT FOUND\n\n"
+	if $request->debug;
+    
+    return 'none';
+}
+
+
+sub check_table_permission {
+    
+    my ($request, $dbh, $table_name, $permission) = @_;
+    
+    return unless $permission;
+    
+    my $table_permission = $request->get_table_permission($dbh, $table_name);
+    
+    # If the user has the superuser privilege, or the 'admin' permission on this table, then they
+    # have any requested permission.
+    
+    if ( $request->{my_auth_info}{superuser} || $table_permission->{admin} )
+    {
+	print STDERR "    Permission for $table_name : '$permission' from " . 
+	    ($request->{my_auth_info}{superuser} ? 'SUPERUSER' : 'PERMISSIONS') . "\n\n"
+	    if $request->debug;
+	
+	return 'admin';
+    }
+    
+    # Otherwise, if we know they have the requested permission, return it.
+    
+    elsif ( $table_permission->{$permission} )
+    {
+	my $diag = $request->{my_auth_info}{auth_diag}{$table_name} || 'DEFAULT';
+	
+	print STDERR "    Permission for $table_name : '$permission' from $diag\n\n"
+	    if $request->debug;
+	
+	return $permission;
     }
     
     # Otherwise, they have no privileges whatsoever to this table.
     
-    else
-    {
-	print STDERR "   Role for $table_name : <new> = 'none' from NONE FOUND\n\n";
-	
-	return 'none';
-    }
+    print STDERR "   Permission for $table_name : '$permission' DENIED from NOT FOUND\n\n"
+	if $request->debug;
+    
+    return 'none';
 }
 
 

@@ -14,9 +14,10 @@ package PB2::ResourceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($RESOURCE_DATA $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
-
+use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
+use ResourceTables;
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
+
 use PB2::TableData qw(complete_output_block);
 
 use Carp qw(carp croak);
@@ -27,7 +28,7 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::Authentication);
 
-our ($RESOURCE_ACTIVE, $RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
+our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
 
 our (%TAG_VALUE, %TAG_NAME);
 
@@ -81,11 +82,9 @@ sub initialize {
 	{ output => 'eduresource_no', com_name => 'oid' },
 	    "The unique identifier of this record in the database.",
 	{ set => '*', code => \&process_record},
-	{ set => 'eduresource_no', code => sub {
-	      my ($request, $value) = @_;
-		    return $value unless $request->{block_hash}{extids};
-		    return generate_identifier('EDR', $value);
-		} },
+	{ output => 'record_label', com_name => 'rlb' },
+	    "For newly submitted records, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
 	{ output => 'status', com_name => 'sta' },
 	    "The status will be one of the following codes:",
 	    $ds->document_set('1.2:eduresources:status'));
@@ -105,7 +104,7 @@ sub initialize {
     $ds->define_ruleset('1.2:eduresources:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "If this parameter is specified, then all records in the database",
-	    "will be returedn, subject to any other parameters that are also specified.",
+	    "will be returned, subject to any other parameters that are also specified.",
 	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id', list => ',' },
 	    "Return the educational resource record(s) corresponding to the specified",
 	    "identifier(s). You can specify more than one, as a comma-separated list.",
@@ -152,7 +151,6 @@ sub initialize {
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    $RESOURCE_ACTIVE = $ds->config_value('eduresources_active') || $RESOURCE_DATA;
     $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
     $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
     $RESOURCE_IMG_PATH = $ds->config_value('eduresources_img_path');
@@ -180,13 +178,32 @@ sub get_resource {
     
     die "400 Bad identifier '$id'\n" unless $id and $id =~ /^\d+$/;
     
+    # Determine if we are asked to show the active version of the resource record or the master
+    # version.
+    
     my $active = $request->clean_param('active');
+    
+    # If the user is not logged in, only show information about the active version.
+    
+    my $auth_info = $request->get_auth_info($dbh);
+    
+    $active = 1 unless $auth_info->{role} && $auth_info->{role} ne 'none';
+    
+    # Delete unnecessary output fields, and select the enterer id if appropriate.
+    
+    $request->delete_output_field('record_label');
+
+    if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
+    {
+	my $ds = $request->ds;
+	$ds->add_output_block($request, { }, '1.2:common:ent_guest');
+    }
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $request->substitute_select( mt => 'edr', cd => 'edr' );
-    $request->check_entname($RESOURCE_QUEUE => 'edr');
+    $request->substitute_select( cd => 'edr' );
+    # $request->check_entname($RESOURCE_QUEUE => 'edr');
     
     my $tables = $request->tables_hash;
     
@@ -195,10 +212,6 @@ sub get_resource {
     
     $request->strict_check;
     $request->extid_check;
-    
-    # Figure out what information we need to determine access permissions.
-    
-    # $$$
     
     # Determine the necessary joins.
     
@@ -212,9 +225,11 @@ sub get_resource {
     if ( $active )
     {
 	$request->{main_sql} = "
-	SELECT edr.* $extra_fields FROM $RESOURCE_ACTIVE as edr $join_list
-        WHERE edr.eduresource_no = $id
-	GROUP BY edr.eduresource_no";
+	SELECT edr.*, group_concat(tg.tag_id) as tags $extra_fields FROM $RESOURCE_ACTIVE as edr
+		left join $RESOURCE_TAGS as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
+		$join_list
+        WHERE edr.$RESOURCE_IDFIELD = $id
+	GROUP BY edr.$RESOURCE_IDFIELD";
     }
     
     else
@@ -237,12 +252,6 @@ sub get_resource {
     
     die "404 Not found\n" unless $request->{main_record};
     
-    # Return an error response if we could retrieve the record but the user is not authorized to
-    # access it.  Any specimen not tied to an occurrence record is public by definition.
-    
-    # die $request->exception(403, "Access denied") 
-    # 	unless $request->{main_record}{access_ok};
-    
     return 1;
 }
 
@@ -259,7 +268,16 @@ sub list_resources {
     
     my $tables = $request->tables_hash;
     
-    # my $main_table = $active ? $RESOURCE_ACTIVE : $RESOURCE_QUEUE;
+    # If the user is not logged in, only show information about active resources. If we are asked
+    # for anything but active resources, return a 401 error.
+    
+    my $auth_info = $request->get_auth_info($dbh, $RESOURCE_QUEUE);
+    my ($perm) = $auth_info->table_permission($RESOURCE_QUEUE, 'view', 'post');
+    
+    unless ( $perm || $active )
+    {
+	die $request->exception(401, "Login Required");
+    }
     
     # Generate a list of filter expressions.
     
@@ -275,10 +293,17 @@ sub list_resources {
     if ( my @status_list = $request->safe_param_list('status', 'SELECT_NONE') )
     {
 	my $status_string = join("','", @status_list);
-	push @filters, "edr.status in ('$status_string')";
+	my $status_table = $active ? 'edq' : 'edr';
+	push @filters, "$status_table.status in ('$status_string')";
     }
+
+    # If we have 'post' but not 'view' permission on the table, then implicitly select only those
+    # records entered by the user.
     
-    if ( my $enterer = $request->clean_param('enterer') )
+    my $enterer = $request->clean_param('enterer');
+    $enterer = 'me' if $perm && $perm eq 'post';
+    
+    if ( $enterer )
     {
 	my $auth_info = $request->get_auth_info($dbh);
 	
@@ -319,9 +344,11 @@ sub list_resources {
 	}
     }
     
+    # Check for other filter parameters.
+    
     if ( my $title = $request->clean_param('title') )
     {
-	my $quoted = $dbh->quote("%${title}%");
+	my $quoted = $dbh->quote("${title}");
 	push @filters, "edr.title like $quoted";
     }
     
@@ -354,10 +381,19 @@ sub list_resources {
 	$tables->{edt} = 1;
     }
     
-    if ( my @keywords = $request->clean_param_list('keywords') )
+    if ( my @keywords = $request->clean_param_list('keyword') )
     {
-	# This will need to be implemented later.
-	push @filters, "edr.title like 'SELECT_NONE'";
+	my @kwfilters;
+	
+	foreach my $k (@keywords)
+	{
+	    push @kwfilters, "edr.title rlike '\\\\b$k\\\\b'";
+	    push @kwfilters, "edr.description rlike '\\\\b$k\\\\b'";
+	}
+	
+	push @kwfilters, "edr.title = 'SELECT_NOTHING'" unless @kwfilters;
+
+	push @filters, '(' . join(' or ', @kwfilters) . ')';
     }
     
     # Make sure that we have either one filter expression or 'all_records' was selected or else
@@ -369,6 +405,16 @@ sub list_resources {
     }
     
     push @filters, "1=1" unless @filters;
+    
+    # Delete unnecessary output fields, and select the enterer id if appropriate.
+    
+    $request->delete_output_field('record_label');
+
+    if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
+    {
+	my $ds = $request->ds;
+	$ds->add_output_block($request, { }, '1.2:common:ent_guest');
+    }
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -389,10 +435,6 @@ sub list_resources {
     
     my $calc = $request->sql_count_clause;
     
-    # Figure out what information we need to determine access permissions.
-    
-    # $$$
-    
     # Determine the necessary joins.
     
     my ($join_list) = $request->generate_join_list($tables, $active);
@@ -401,14 +443,24 @@ sub list_resources {
     
     my $extra_fields = $request->select_string;
     $extra_fields = ", $extra_fields" if $extra_fields;
+
+    # Remove fields that don't exist in the active table, if we are doing an active-table query.
+
+    if ( $active && $extra_fields )
+    {
+	$extra_fields =~ s/, *edr.(?:modifier_no|enterer_no)//g;
+    }
     
     # Generate the main query.
     
     if ( $active )
     {
 	$request->{main_sql} = "
-	SELECT $calc edr.* $extra_fields
-	FROM $RESOURCE_ACTIVE as edr $join_list
+	SELECT $calc edr.*, group_concat(tg.tag_id) as tags $extra_fields
+	FROM $RESOURCE_ACTIVE as edr
+		left join $RESOURCE_TAGS as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
+		left join $RESOURCE_QUEUE as edq on edr.$RESOURCE_IDFIELD = edq.eduresource_no
+		$join_list
         WHERE $filter_string
 	GROUP BY edr.$RESOURCE_IDFIELD $limit";
     }
@@ -497,6 +549,35 @@ sub cache_tag_values {
 sub process_record {
     
     my ($request, $record) = @_;
+    
+    # If we have an 'id' field instead of an 'eduresource_no' field, copy the
+    # value over.
+    
+    if ( ! $record->{eduresource_no} && $record->{id} )
+    {
+	$record->{eduresource_no} = $record->{id};
+    }
+    
+    # If we have a record label hash, fill in those values.
+    
+    if ( my $label = $request->{my_record_label}{$record->{eduresource_no}} )
+    {
+	$record->{record_label} = $label;
+    }
+    
+    # Generate the proper external identifiers.
+    
+    if ( $request->{block_hash}{extids} )
+    {
+	$record->{eduresource_no} = generate_identifier('EDR', $record->{eduresource_no})
+	    if $record->{eduresource_no};
+    }
+    
+	# { set => 'eduresource_no', code => sub {
+	#       my ($request, $value) = @_;
+	# 	    return $value unless $request->{block_hash}{extids};
+	# 	    return generate_identifier('EDR', $value);
+	# 	} },
     
     # The 'image' filename might be in either of these fields. Append it to the proper path, read
     # from the configuration file.
