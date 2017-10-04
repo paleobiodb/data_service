@@ -162,7 +162,7 @@ sub update_resources {
     $conditions{CREATE_RECORDS} = 1 if $arg && $arg eq 'add';
     
     my $main_params = $request->get_main_params(\%conditions);
-    my $auth_info = $request->require_auth($dbh, $RESOURCE_QUEUE);
+    my $perms = $request->require_authentication($RESOURCE_QUEUE);
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.

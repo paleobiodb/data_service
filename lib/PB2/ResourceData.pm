@@ -185,14 +185,16 @@ sub get_resource {
     
     # If the user is not logged in, only show information about the active version.
     
-    my $auth_info = $request->get_auth_info($dbh);
-    
-    $active = 1 unless $auth_info->{role} && $auth_info->{role} ne 'none';
+    unless ( $active )
+    {
+	my $perms = $request->authenticate;
+	$active = 1 unless $perms->role ne 'none';
+    }
     
     # Delete unnecessary output fields, and select the enterer id if appropriate.
     
     $request->delete_output_field('record_label');
-
+    
     if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
     {
 	my $ds = $request->ds;
@@ -271,12 +273,11 @@ sub list_resources {
     # If the user is not logged in, only show information about active resources. If we are asked
     # for anything but active resources, return a 401 error.
     
-    my $auth_info = $request->get_auth_info($dbh, $RESOURCE_QUEUE);
-    my ($perm) = $auth_info->table_permission($RESOURCE_QUEUE, 'view', 'post');
+    my $perms;
     
-    unless ( $perm || $active )
+    unless ( $active )
     {
-	die $request->exception(401, "Login Required");
+	$perms = $request->require_authentication($RESOURCE_QUEUE, "Login Required");
     }
     
     # Generate a list of filter expressions.
@@ -301,21 +302,21 @@ sub list_resources {
     # records entered by the user.
     
     my $enterer = $request->clean_param('enterer');
-    $enterer = 'me' if $perm && $perm eq 'post';
+    $enterer = 'me' if $perms && $perms->check_table_permission($RESOURCE_QUEUE, 'view') eq 'own';
     
     if ( $enterer )
     {
-	my $auth_info = $request->get_auth_info($dbh);
+	$perms ||= $request->authenticate($RESOURCE_QUEUE);
 	
 	if ( $enterer eq 'me' )
 	{
-	    my $enterer_no = $dbh->quote($auth_info->{enterer_no});
-	    my $user_id = $dbh->quote($auth_info->{user_id});
+	    my $enterer_no = $dbh->quote($perms->enterer_no);
+	    my $user_id = $dbh->quote($perms->user_id);
 	    
 	    my @clauses;
 	    
-	    push @clauses, "edr.enterer_no = $enterer_no" if $auth_info->{enterer_no};
-	    push @clauses, "edr.enterer_id = $user_id" if $auth_info->{user_id};
+	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
+	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
 	    push @clauses, "edr.enterer_no = -1" unless @clauses;
 	    
 	    my $filter_str = join(' or ', @clauses);
@@ -324,14 +325,14 @@ sub list_resources {
 	
 	elsif ( $enterer eq 'auth' )
 	{
-	    my $enterer_no = $dbh->quote($auth_info->{enterer_no});
-	    my $user_id = $dbh->quote($auth_info->{user_id});
+	    my $enterer_no = $dbh->quote($perms->enterer_no);
+	    my $user_id = $dbh->quote($perms->user_id);
 	    
 	    my @clauses;
 	    
-	    push @clauses, "edr.enterer_no = $enterer_no" if $auth_info->{enterer_no};
-	    push @clauses, "edr.authorizer_no = $enterer_no" if $auth_info->{enterer_no};
-	    push @clauses, "edr.enterer_id = $user_id" if $auth_info->{user_id};
+	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
+	    push @clauses, "edr.authorizer_no = $enterer_no" if $enterer_no;
+	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
 	    push @clauses, "edr.enterer_no = -1" unless @clauses;
 	    
 	    my $filter_str = join(' or ', @clauses);

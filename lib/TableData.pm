@@ -1,14 +1,16 @@
 # 
 # TableData.pm
 # 
-# A role that contains routines for formatting and processing PBDB data based on table
-# definitions.
+# This module manages table schemas. It fetches them when necessary and checks records against
+# them to make sure that data inserts and updates will complete properly.
 # 
 # Author: Michael McClennen
 
-package PB2::TableData;
+package TableData;
 
 use strict;
+
+use TableDefs qw(get_table_property get_column_property %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER);
 
 use Carp qw(croak);
 use ExternalIdent qw(extract_identifier generate_identifier);
@@ -16,6 +18,7 @@ use ExternalIdent qw(extract_identifier generate_identifier);
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw(complete_output_block complete_ruleset get_table_schema);
+
 
 our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 			    resource_no => 'rid',
@@ -28,26 +31,80 @@ our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 			    modified => 'dmd',
 			  );
 
-our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TXN',
-			       resource_no => 'RES',
-			       collection_no => 'COL',
-			       interval_no => 'INT',
-			       authorizer_no => 'PRS',
-			       enterer_no => 'PRS',
-			       modifier_no => 'PRS',
-			     );
-
 our (%COMMON_FIELD_IDSUB);
 
-our (%COMMON_FIELD_OTHER) = ( authorizer_no => 'authent',
-			      enterer_no => 'authent',
-			      modifier_no => 'authent',
-			      enterer_id => 'authent',
-			      created => 'crmod',
-			      modified => 'crmod',
-			    );
+# our (%TABLE_HAS_FIELD);
 
-our (%TABLE_HAS_FIELD);
+our (%SCHEMA_CACHE);
+
+
+# get_table_scheme ( table_name, debug_flag )
+# 
+# Fetch the schema for the specified table, and return it as a hash ref. This information is
+# cached, so that subsequent queries can be satisfied without hitting the database again. The key
+# '_column_list' contains a list of the column names, in the order they appear in the table.
+
+sub get_table_schema {
+    
+    my ($dbh, $table_name, $debug) = @_;
+    
+    return $SCHEMA_CACHE{$table_name} if ref $SCHEMA_CACHE{$table_name} eq 'HASH';
+    
+    my ($sql, $check_table, %schema, $quoted_table);
+    
+    if ( $table_name =~ /(\w+)[.](.+)/ )
+    {
+	$sql = "SHOW TABLES FROM `$1` LIKE " . $dbh->quote($2);
+	$quoted_table = "`$1`.". $dbh->quote_identifier($2);
+    }
+    
+    else
+    {
+	$sql = "SHOW TABLES LIKE " . $dbh->quote($table_name);
+	$quoted_table = $dbh->quote_identifier($table_name);
+    }
+    
+    print STDERR "$sql\n\n" if $debug;
+    
+    eval {
+	($check_table) = $dbh->selectrow_array($sql);
+    };
+    
+    croak "unknown table '$table_name'" unless $check_table;
+    
+    print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $ds->debug;
+    
+    my $columns_ref = $dbh->selectall_arrayref("
+	SHOW COLUMNS FROM $quoted_table", { Slice => { } });
+    
+    my @field_list;
+    
+    foreach my $c ( @$columns_ref )
+    {
+	my $field = $c->{Field};
+	
+	# my $can_input = $c->{Key} eq 'PRI' ? 0 : 1;
+	
+	# $can_input = 0 if $field eq 'created' || $field eq 'created_on' || $field eq 'modified' ||
+	#     $field eq 'authorizer_no' || $field eq 'enterer_no';
+	
+	# $c->{can_input} = $can_input;
+	
+	$schema{$field} = $c;
+	push @field_list, $field;
+	
+	if ( $c->{Key} =~ 'PRI' && ! $schema{_primary} )
+	{
+	    $schema{_primary} = $field;
+	}
+    }
+    
+    $schema{_column_list} = \@field_list;
+    
+    $SCHEMA_CACHE{$table_name} = \%schema;
+    
+    return \%schema;
+}
 
 
 sub complete_output_block {
@@ -85,7 +142,7 @@ sub complete_output_block {
     # output list. We need to translate names that end in '_no' to '_id', and we can substitute
     # compact vocabulary names where known.
     
-    my $field_list = $schema->{_field_list};
+    my $field_list = $schema->{_column_list};
     
     foreach my $field_name ( @$field_list )
     {
@@ -94,7 +151,7 @@ sub complete_output_block {
 	
 	if ( $COMMON_FIELD_OTHER{$field_name} )
 	{
-	    $TABLE_HAS_FIELD{$table_name}{$field_name} = $COMMON_FIELD_OTHER{$field_name};
+	    # $TABLE_HAS_FIELD{$table_name}{$field_name} = $COMMON_FIELD_OTHER{$field_name};
 	    next;
 	}
 	
@@ -197,7 +254,7 @@ sub complete_ruleset {
     # Then go through the field list from the schema and add any fields that aren't already in the
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
-    my $field_list = $schema->{_field_list};
+    my $field_list = $schema->{_column_list};
     
     foreach my $field_name ( @$field_list )
     {
@@ -228,71 +285,6 @@ sub complete_ruleset {
 }
 
 
-sub get_table_schema {
-    
-    my ($obj, $dbh, $table_name) = @_;
-    
-    my $ds = $obj->can('ds') ? $obj->ds : $obj;
-    
-    if ( ref $ds->{my_table_schema}{$table_name} eq 'HASH' )
-    {
-	return $ds->{my_table_schema}{$table_name};
-    }
-    
-    my ($sql, $check_table, %schema, $quoted_table);
-    
-    if ( $table_name =~ /(\w+)[.](.+)/ )
-    {
-	$sql = "SHOW TABLES FROM `$1` LIKE " . $dbh->quote($2);
-	$quoted_table = "`$1`.". $dbh->quote_identifier($2);
-    }
-    
-    else
-    {
-	$sql = "SHOW TABLES LIKE " . $dbh->quote($table_name);
-	$quoted_table = $dbh->quote_identifier($table_name);
-    }
-    
-    print STDERR "$sql\n\n" if $ds->debug;
-    
-    eval {
-	($check_table) = $dbh->selectrow_array($sql);
-    };
-    
-    croak "unknown table '$table_name'" unless $check_table;
-    
-    print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $ds->debug;
-    
-    my $columns_ref = $dbh->selectall_arrayref("
-	SHOW COLUMNS FROM $quoted_table", { Slice => { } });
-    
-    my @field_list;
-    
-    foreach my $c ( @$columns_ref )
-    {
-	my $field = $c->{Field};
-	my $can_input = $c->{Key} eq 'PRI' ? 0 : 1;
-	
-	$can_input = 0 if $field eq 'created' || $field eq 'created_on' || $field eq 'modified' ||
-	    $field eq 'authorizer_no' || $field eq 'enterer_no';
-	
-	$c->{can_input} = $can_input;
-	
-	$schema{$field} = $c;
-	push @field_list, $field;
-	
-	if ( $c->{Key} eq 'PRI' && ! $schema{_primary} )
-	{
-	    $schema{_primary} = $field;
-	}
-    }
-    
-    $schema{_field_list} = \@field_list;
-    
-    $ds->{my_table_schema}{$table_name} = \%schema;
-    
-    return \%schema;
-}
 
 
 1;

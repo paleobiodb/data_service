@@ -36,7 +36,8 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
-		      %TABLE_PROPERTIES %TEST_SELECT);
+		      %TABLE_PROPERTIES %TEST_SELECT
+		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE);
 
 
 # If the name of a test database was specified in the configuration file, remember it.
@@ -46,12 +47,6 @@ our ($TEST_DB);
 {
     $TEST_DB = Dancer::config->{test_db};
 }
-
-
-# Define a global hash variable to hold table properties, in a way that can be accessed by other
-# modules. Routines for getting and setting these appear below.
-
-our (%TABLE_PROPERTIES);
 
 
 # classic tables
@@ -64,6 +59,14 @@ our $OCCURRENCES = "occurrences";
 our $REIDS = "reidentifications";
 our $SPECIMENS = "specimens";
 
+set_table_property($COLLECTIONS, PRIMARY_KEY => 'collection_no');
+set_table_property($AUTHORITIES, PRIMARY_KEY => 'taxon_no');
+set_table_property($OPINIONS, PRIMARY_KEY => 'opinion_no');
+set_table_property($REFERENCES, PRIMARY_KEY => 'reference_no');
+set_table_property($OCCURRENCES, PRIMARY_KEY => 'occurrence_no');
+set_table_property($REIDS, PRIMARY_KEY => 'reid_no');
+set_table_property($SPECIMENS, PRIMARY_KEY => 'specimen_no');
+
 
 # Authentication and permission tables
 
@@ -71,6 +74,10 @@ our $PERSON_DATA = "person";
 our $TABLE_PERMS = "table_permissions";
 our $SESSION_DATA = "session_data";
 our $WING_USERS = "pbdb_wing.users";
+
+set_table_property($PERSON_DATA, PRIMARY_KEY => 'person_no');
+set_table_property($SESSION_DATA, PRIMARY_KEY => 'session_id');
+set_table_property($WING_USERS, PRIMARY_KEY => 'id');
 
 # If we are being run in test mode, substitute table names as indicated by the configuration file.
 
@@ -84,9 +91,9 @@ if ( $PBData::TEST_MODE )
 	{
 	    die "You must define 'test_db' in the configuration file" unless $TEST_DB;
 	    
-	    $SESSION_DATA = "$TEST_DB.session_data";
-	    $TABLE_PERMS = "$TEST_DB.table_permissions";
-	    $PERSON_DATA = "$TEST_DB.person";
+	    $SESSION_DATA = substitute_table("$TEST_DB.session_data", "session_data");
+	    $TABLE_PERMS = substitute_table("$TEST_DB.table_permissions", "table_permissions");
+	    $PERSON_DATA = substitute_table("$TEST_DB.person", "person");
 
 	    eval {
 		PB2::CommonData->update_person_name_cache($ds);
@@ -108,36 +115,6 @@ if ( $PBData::TEST_MODE )
 	    return 2;
 	}
     };
-    
-    # if ( $TEST_SELECT{person} eq 'separate' || $TEST_SELECT{authentication} eq 'separate' )
-    # {
-    # 	$PERSON_DATA = "$TEST_DB.person";
-    # }
-
-    # if ( $TEST_SELECT{table_permissions} eq 'separate' || $TEST_SELECT{authentication} eq 'separate' )
-    # {
-    # 	$TABLE_PERMS = "$TEST_DB.table_permissions";
-    # }
-
-    # if ( $TEST_SELECT{session_data} eq 'separate' || $TEST_SELECT{authentication} eq 'separate' )
-    # {
-    # 	$SESSION_DATA = "$TEST_DB.session_data";
-    # }
-
-    # if ( $TEST_SELECT{authentication} )
-    # {
-    # 	$USING_TEST_TABLES{person} = $TEST_SELECT{authentication};
-    # 	$USING_TEST_TABLES{table_permissions} = $TEST_SELECT{authentication};
-    # 	$USING_TEST_TABLES{session_data} = $TEST_SELECT{authentication};
-    # }
-
-    # else
-    # {
-    # 	foreach my $k ( qw(person table_permissions session_data) )
-    # 	{
-    # 	    $USING_TEST_TABLES{$k} = $TEST_SELECT{$k};
-    # 	}
-    # }
 }
 
 # new collection tables
@@ -246,11 +223,11 @@ if ( $PBData::TEST_MODE )
 	{
 	    die "You must define 'test_db' in the configuration file" unless $TEST_DB;
 	    
-	    $RESOURCE_QUEUE = "$TEST_DB.eduresource_queue";
-	    $RESOURCE_IMAGES = "$TEST_DB.eduresource_images";
-	    $RESOURCE_TAG_NAMES = "$TEST_DB.edutags";
-	    $RESOURCE_TAGS = "$TEST_DB.$resource_tags_main";
-	    $RESOURCE_ACTIVE = "$TEST_DB.$resource_active_main";
+	    $RESOURCE_QUEUE = substitute_table("$TEST_DB.eduresource_queue", "eduresource_queue");
+	    $RESOURCE_IMAGES = substitute_table("$TEST_DB.eduresource_images", "eduresource_images");
+	    $RESOURCE_TAG_NAMES = substitute_table("$TEST_DB.edutags", "edutags");
+	    $RESOURCE_TAGS = substitute_table("$TEST_DB.$resource_tags_main", $resource_tags_main);
+	    $RESOURCE_ACTIVE = substitute_table("$TEST_DB.$resource_active_main", $resource_active_main);
 	    
 	    print STDERR "TEST MODE: enable 'eduresources'\n\n" if $ds->debug;
 	    
@@ -275,6 +252,38 @@ if ( $PBData::TEST_MODE )
 }
 
 
+# Define the properties of certain fields that are common to many tables in the PBDB.
+
+our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITIES',
+			     resource_no => 'REFERENCES',
+			     collection_no => 'COLLECTIONS',
+			     interval_no => 'INTERVAL_DATA' );
+
+our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TXN',
+			       resource_no => 'RES',
+			       collection_no => 'COL',
+			       interval_no => 'INT',
+			       authorizer_no => 'PRS',
+			       enterer_no => 'PRS',
+			       modifier_no => 'PRS',
+			     );
+
+our (%COMMON_FIELD_OTHER) = ( authorizer_no => 'authent',
+			      enterer_no => 'authent',
+			      modifier_no => 'authent',
+			      enterer_id => 'authent',
+			      created => 'crmod',
+			      modified => 'crmod',
+			      admin_locked => 'admin',
+			    );
+
+
+# Define global hash variables to hold table properties and column properties, in a way that can
+# be accessed by other modules. Routines for getting and setting these appear below.
+
+our (%TABLE_PROPERTIES, %COLUMN_PROPERTIES);
+
+
 # Now define routines for getting and setting table properties. We ignore any database prefix on
 # the table name, because we want the properties to be the same regardless of whether they are in
 # the main database, the test database, or some other database we have subsequently defined. We
@@ -284,25 +293,40 @@ if ( $PBData::TEST_MODE )
 our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
 			   ALLOW_VIEW => 1,
 			   ALLOW_DELETE => 1,
-			   BY_AUTHORIZER => 1 );
+			   ALLOW_KEY_INSERT => 1,
+			   BY_AUTHORIZER => 1,
+			   AUTH_FIELDS => 1,
+			   PRIMARY_KEY => 1,
+			   PRIMARY_ATTR => 1 );
+
+our (%COLUMN_PROP_NAME) = ( REQUIRED => 1,
+			    ADMIN_SET => 1 );
+
+our (%TABLE_NAME_MAP);
 
 
 sub set_table_property {
     
     my ($table_name, $property, $value) = @_;
     
-    if ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
-    {
-	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
-	
-	$TABLE_PROPERTIES{$1}{$property} = $value;
-    }
+    croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
     
-    else
-    {
-	$table_name ||= '';
-	croak "Invalid table name '$table_name'";
-    }
+    my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
+    $TABLE_PROPERTIES{$base_name}{$property} = $value;
+    
+    # if ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
+    # {
+    # 	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
+	
+    # 	$TABLE_PROPERTIES{$1}{$property} = $value;
+    # 	$TABLE_NAME_MAP{$table_name} = $1;
+    # }
+    
+    # else
+    # {
+    # 	$table_name ||= '';
+    # 	croak "Invalid table name '$table_name'";
+    # }
 }
 
 
@@ -310,19 +334,88 @@ sub get_table_property {
     
     my ($table_name, $property) = @_;
     
-    if ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
+    croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
+    
+    if ( $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
     {
-	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
-	
-	return $TABLE_PROPERTIES{$1}{$property} || '';
+	return $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property};
+    }
+    
+    elsif ( $TABLE_PROPERTIES{$table_name} )
+    {
+	$TABLE_NAME_MAP{$table_name} = $table_name;
+	return $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property};
     }
     
     else
     {
-	$table_name ||= '';
-	croak "Invalid table name '$table_name'";
+	croak "No properties set for table '$table_name'";
+    }
+    
+    # elsif ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
+    # {
+    # 	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
+    # 	croak "No properties set for '$table_name'" unless $TABLE_PROPERTIES{$1};
+	
+    # 	$TABLE_NAME_MAP{$table_name} = $1;
+    # 	$TABLE_PROPERTIES{$1}{$property} = undef;
+    # 	return $TABLE_PROPERTIES{$1}{$property};
+    # }
+    
+    # else
+    # {
+    # 	$table_name ||= '';
+    # 	croak "Invalid table name '$table_name'";
+    # }
+}
+
+
+sub set_column_property {
+    
+    my ($table_name, $column_name, $property, $value) = @_;
+    
+    croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
+    
+    my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
+    $TABLE_PROPERTIES{$base_name}{$column_name}{$property} = $value;
+}
+
+
+sub get_column_properties {
+
+    my ($table_name) = @_;
+    
+    # croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
+    
+    if ( $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    {
+	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}};
+    }
+    
+    elsif ( $COLUMN_PROPERTIES{$table_name} )
+    {
+	$TABLE_NAME_MAP{$table_name} = $table_name;
+	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}};
+    }
+    
+    elsif ( $TABLE_PROPERTIES{$table_name} )
+    {
+	return { };
+    }
+    
+    else
+    {
+	croak "No properties set for table '$table_name'";	
     }
 }
 
+
+sub substitute_table {
+
+    my ($new_name, $old_name) = @_;
+    
+    $TABLE_NAME_MAP{$new_name} = $old_name;
+    return $new_name;
+}
 
 1;
