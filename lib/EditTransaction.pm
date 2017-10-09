@@ -39,6 +39,8 @@ our (%HOOKS_BY_CLASS);
 our (%ALLOW_BY_CLASS) = ( EditTransaction => { CREATE => 1,
 					       PROCEED => 1, 
 					       KEY_INSERT => 1,
+					       MULTI_INSERT => 1,
+					       MULTI_DELETE => 1,
 					       NO_RECORDS => 1,
 					       ALTER_TRAIL => 1 } );
 
@@ -449,6 +451,16 @@ sub record_errors {
 }
 
 
+# record_warnings ( )
+# 
+# Return the list of warnings for the current record. This is only here in case it is needed by a
+# subroutine defined by some subclass.
+
+sub record_warnings {
+
+    return @{$_[0]->{current_warnings}};
+}
+
 # record_condition_ref ( )
 # 
 # Return a reference to a list of all the conditions associated with the current record, errors
@@ -465,6 +477,9 @@ sub record_condition_ref {
     return \@list;
 }
 
+
+# Record sequencing
+# -----------------
 
 # _new_record {
 # 
@@ -489,14 +504,17 @@ sub _new_record {
     
     my ($key_column, $key_attr);
     
-    if ( $key_column = get_table_property($table, 'PRIMARY_KEY'); )
+    if ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
     {
-	$key_attr = get_table_property($table, 'PRIMARY_ATTR') || $key_column;
-	
 	if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
 	{
-	    $edt->{current_keyexpr} = "$key_column=" . $edt->dbh->quote($key_value);
+	    $edt->{current_keyval} = $record->{$key_attr};
 	}
+    }
+    
+    else
+    {
+	$edt->{current_keyval} = undef;
     }
     
     # Then determine a label for this record. If one is specified, use that. Otherwise, keep count
@@ -524,8 +542,6 @@ sub _new_record {
 sub _finish_record {
     
     my ($edt) = @_;
-    
-    return unless defined $edt->{current_label};
     
     if ( @{$edt->{current_errors}} )
     {
@@ -569,6 +585,7 @@ sub _finish_record {
 	push @{$edt->{warnings}}, $w;
     }
     
+    $edt->{current_keyval} = undef;
     $edt->{current_label} = undef;
 }
 
@@ -587,6 +604,38 @@ sub _clear_record {
     $edt->{current_label} =  undef;
 }
 
+
+# record_key ( )
+# 
+# Return the key value, if any, for the record currently being processed. This is valid both
+# during checking and execution.
+
+sub record_key {
+
+    return $_[0]->{current_keyval};
+}
+
+
+# record_keyexpr ( )
+# 
+# Return the key expression, if any, for the record currently being processed. This is an
+# expression that can be used in SQL statements to select the specific record.
+
+sub record_keyexpr {
+
+    # $$$ okay, I need to stop now
+}
+
+
+# record_label ( )
+# 
+# Return the record label for the record currently being processed. This is valid both during
+# checking and execution.
+
+sub record_label {
+
+    return $_[0]->{current_label};
+}
 
 # Transaction control
 # -------------------
@@ -667,13 +716,13 @@ sub rollback {
 # $$$ do we need an option to carry out database operations immediately?
 
 
-# start_operations
+# start_execution
 # 
 # Call 'start_transaction' and also set the 'execute_immediately' flag. This means that subsequent
-# record operations will be carried out immediately on the database rather than waiting for a call
-# to 'execute'.
+# actions will be carried out immediately on the database rather than waiting for a call to
+# 'execute'.
 
-sub start_operations {
+sub start_execution {
     
     my ($edt) = @_;
     
@@ -692,12 +741,10 @@ sub insert_record {
     
     my ($edt, $table, $record) = @_;
     
-    # Move any accumulated record error or warning conditions to the main lists, and determine the
-    # key expression and label for the record being inserted.
+    # Move any accumulated record error or warning conditions to the main lists, and initialize
+    # the action object for the record being inserted.
     
-    $edt->_new_record($record);
-    
-    my $permission;
+    my $action = $edt->_new_action($record);
     
     # We can only create records if specifically allowed. This may be specified by the user as a
     # parameter to the operation being executed, or it may be set by the operation method itself
@@ -710,14 +757,14 @@ sub insert_record {
 	# the user has on this record, or THE EMPTY STRING if none. Otherwise, we call the default
 	# 'check_table_permission' method.
 	
-        if ( $edt->_call_hooks($table, 'auth_insert', $record, 'insert') )
+        if ( $edt->_call_hooks($table, 'auth_insert', 'insert', $action) )
 	{
-	    $permission = $edt->_hook_result;
+	    $action->permission($edt->_hook_result);
 	}
 	
 	else
 	{
-	    $permission = $edt->check_table_permission($table, 'post');
+	    $action->permission($edt->check_table_permission($table, 'post'));
 	}
 	
 	# If the user does not have permission to add a record, add an error condition.
@@ -727,35 +774,21 @@ sub insert_record {
 	    $edt->add_record_condition('E_PERM', 'insert');
 	}
 	
-	# A record to be added must not have a primary key value specified for it. Records with
+	# A record to be inserted must not have a primary key value specified for it. Records with
 	# primary key values can only be passed to 'update_record' or 'replace_record'.
 	
-	if ( $edt->record_key )
+	if ( $action->key )
 	{
 	    $edt->add_record_condition('E_HAS_KEY' 'insert');
 	}
-	
-	# # Adding a record with a specified primary key value is allowed only if:
-	# # 1) The table has the property 'ALLOW_KEY_INSERT'
-	# # 2) This EditTransaction allows the condition 'KEY_INSERT'
-	# # 3) The user has 'admin' permission on the table.
-	
-	# elsif ( $edt->record_key )
-	# {
-	#     unless ( $permission eq 'admin' && get_table_property($table, 'ALLOW_KEY_INSERT' ) 
-	# 	     && $edt->allows('KEY_INSERT') )
-	#     {
-	# 	$edt->add_record_condition('E_KEY_PERM' 'insert');
-	#     }
-	# }
 	
 	# Then check the actual record to be inserted, to make sure that the column values meet
 	# all of the criteria for this table. If a 'check_insert' method was specified, then call
 	# it. Otherwise, call the 'validate_record' method. In either case, the method must add an
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
-	$edt->_call_hooks($table, 'check_insert', 'insert', $record, $permission) ||
-	    $edt->validate_record($table, 'insert', $record, $permission);
+	$edt->_call_hooks($table, 'check_insert', 'insert', $action) ||
+	    $edt->validate_record($table, 'insert', $action);
     }
     
     # If an attempt is made to add a record without the 'CREATE' allowance, add the appropriate
@@ -766,12 +799,10 @@ sub insert_record {
 	$edt->add_record_condition('C_CREATE');
     }
     
-    # Create an action record, and either execute it immediately or add it to the appropriate list
-    # depending on whether or not any error conditions are found.
+    # Either execute the action immediately or add it to the appropriate list depending on whether
+    # or not any error conditions are found.
     
-    my $action = [ 'insert', $table, $record, $permission, undef, $edt->record_condition_ref ];
-    
-    return _handle_record($action);
+    return _handle_action($table, 'insert', $action);
 }
 
 
@@ -801,7 +832,7 @@ sub update_record {
 	# the user has on this record, or THE EMPTY STRING if none. Otherwise, we call the default
 	# 'check_record_permission' method.
 	
-	if ( $edt->_call_hooks($table, 'auth_update', $record, 'update') )
+	if ( $edt->_call_hooks($table, 'auth_update', 'update', $record) )
 	{
 	    $permission = $edt->_hook_result;
 	}
@@ -817,25 +848,6 @@ sub update_record {
 	{
 	    $edt->add_record_condition('E_NOT_FOUND', 'update');
 	}
-	
-	# # If no such record is found in the database, add an error condition. But if the table and
-	# # the EditTransaction both allow insertion of a record with a specified primary key, clear
-	# # any accumulated error and warning conditions for this record and call 'insert_record'
-	# # instead.
-	
-	# if ( $permission eq 'notfound' )
-	# {
-	#     if ( $edt->allows('KEY_INSERT') && get_table_property($table, 'ALLOW_KEY_INSERT') )
-	#     {
-	# 	$edt->_clear_record;
-	# 	return insert_record($edt, $table, $record);
-	#     }
-	    
-	#     else
-	#     {
-	# 	$edt->add_record_condition('E_NOT_FOUND', 'update');
-	#     }
-	# }
 	
 	# If the user does not have permission to edit the record, add an error condition. 
 	
@@ -865,9 +877,7 @@ sub update_record {
     # Create an action record, and either execute it immediately or add it to the appropriate list
     # depending on whether or not any error conditions are found.
     
-    my $action = [ 'update', $table, $record, $permission, $key, $edt->record_condition_ref ];
-    
-    return _handle_record($action);
+    return _handle_record($table, 'update', $record, $permission);
 }
 
 
@@ -883,7 +893,7 @@ sub replace_record {
     my ($edt, $table, $record) = @_;
     
     # Move any accumulated record error or warning conditions to the main lists, and determine the
-    # key expression and label for the record being updated.
+    # key expression and label for the record being replaced.
     
     $edt->_new_record($record);
     
@@ -893,12 +903,12 @@ sub replace_record {
     
     if ( my $key = $edt->record_key )
     {
-	# First check to make sure we have permission to edit this record. If an 'auth_update'
+	# First check to make sure we have permission to edit this record. If an 'auth_replace'
 	# method was defined, call it. This method must return a string indicating the permission
 	# the user has on this record, or THE EMPTY STRING if none. Otherwise, we call the default
 	# 'check_record_permission' method.
 	
-	if ( $edt->_call_hooks($table, 'auth_update', $record, 'update') )
+	if ( $edt->_call_hooks($table, 'auth_replace', 'replace', $record) )
 	{
 	    $permission = $edt->_hook_result;
 	}
@@ -930,11 +940,11 @@ sub replace_record {
 	}
 	
 	# Then check the actual record, to make sure that the new column values to be stored meet
-	# all of the criteria for this table. If a 'check_update' method was specified, then call
+	# all of the criteria for this table. If a 'check_replace' method was specified, then call
 	# it. Otherwise, call the 'validate_record' method. In either case, the method must add an
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
-	$edt->_call_hooks($table, 'check_update', 'replace', $record, $permission) ||
+	$edt->_call_hooks($table, 'check_replace', 'replace', $record, $permission) ||
 	    $edt->validate_record($table, 'replace', $record, $permission);
     }
     
@@ -950,9 +960,7 @@ sub replace_record {
     # Create an action record, and either execute it immediately or add it to the appropriate list
     # depending on whether or not any error conditions are found.
     
-    my $action = [ 'replace', $table, $record, $permission, $key, $edt->record_condition_ref ];
-    
-    return _handle_record($action);
+    return _handle_record($table, 'replace', $record, $permission);
 }
 
 
@@ -991,7 +999,7 @@ sub delete_record {
 	# the user has on this record, or THE EMPTY STRING if none. Otherwise, we call the default
 	# 'check_record_permission' method.
 	
-	if (  $edt->_call_hooks($table, 'auth_delete', $record, 'delete') )
+	if (  $edt->_call_hooks($table, 'auth_delete', 'delete', $record) )
 	{
 	    $permission = $edt->_hook_result;
 	}
@@ -1008,7 +1016,7 @@ sub delete_record {
 	
 	if ( $permission eq 'notfound' )
 	{
-	    $edt->add_record_condition('E_NOT_FOUND', 'update');
+	    $edt->add_record_condition('E_NOT_FOUND', 'delete');
 	}
 	
 	# If we do not have permission to delete the record, add an error condition.
@@ -1034,9 +1042,7 @@ sub delete_record {
     
     # Create an action record, and then take the appropriate action.
     
-    my $action = [ 'delete', $table, $record, $permission, $key, $edt->record_condition_ref ];
-    
-    return $edt->_handle_record($action);
+    return $edt->_handle_record($table, 'delete', $record, $permission);
 }
 
 
@@ -1101,6 +1107,11 @@ sub _handle_record {
 
     my ($edt, $action) = @_;
     
+    # Create an action record.
+    
+    my $action = [ $operation, $table, $record, $permission, $edt->{current_keyval}, $edt->{current_label},
+		   $edt->record_condition_ref ];
+    
     # If errors were generated for this record, put it on the 'bad record' list and otherwise do
     # nothing.
     
@@ -1116,38 +1127,35 @@ sub _handle_record {
     
     unless ( $edt->errors )
     {
-	if ( $edt->{execute_immediately} )
+	unless ( $edt->{execute_immediately} )
 	{
-	    if ( $action eq 'insert' )
-	    {
-		return $edt->_execute_insert($action);
-	    }
-	    
-	    elsif ( $action eq 'update' )
-	    {
-		return $edt->_execute_update($action);
-	    }
-	    
-	    elsif ( $action eq 'replace')
-	    {
-		return $edt->_execute_replace($action);
-	    }
-	    
-	    elsif ( $action eq 'delete' )
-	    {
-		return $edt->_execute_delete($action);
-	    }
-	    
-	    else
-	    {
-		croak "bad action '$action'";
-	    }
+	    push @{$edt->{action_list}}, $action;
+	    return;
+	}
+	
+	if ( $action eq 'insert' )
+	{
+	    return $edt->_execute_insert($action);
+	}
+	
+	elsif ( $action eq 'update' )
+	{
+	    return $edt->_execute_update($action);
+	}
+	
+	elsif ( $action eq 'replace')
+	{
+	    return $edt->_execute_replace($action);
+	}
+	
+	elsif ( $action eq 'delete' )
+	{
+	    return $edt->_execute_delete($action);
 	}
 	
 	else
 	{
-	    push @{$edt->{action_list}}, $action;
-	    return;
+	    croak "bad action '$action'";
 	}
     }
     
@@ -1206,13 +1214,16 @@ sub execute {
 	# inserts or deletes in a row on the same table, handle them with a single call for
 	# efficiency.
 	
-	while ( my $a = shift @{$edt->{action_list}} )
+	while ( my $action = shift @{$edt->{action_list}} )
 	{
 	    last if $edt->errors;
 	    
-	    my ($action, $table, $record, $permission) = @$a;
+	    my $operation = $action->[0];
 	    
-	    if ( $action eq 'insert' )
+	    $edt->{current_keyval} = $action->[4];
+	    $edt->{current_label} = $action->[5];
+	    
+	    if ( $operation eq 'insert' )
 	    {
 		# push @records, $record;
 		
@@ -1227,17 +1238,17 @@ sub execute {
 		$edt->_execute_insert($action);
 	    }
 	    
-	    elsif ( $action eq 'update' )
+	    elsif ( $operation eq 'update' )
 	    {
 		$edt->_execute_update($action);
 	    }
 	    
-	    elsif ( $action eq 'replace' )
+	    elsif ( $operation eq 'replace' )
 	    {
 		$edt->_execute_replace($action);
 	    }
 	    
-	    elsif ( $action eq 'delete' )
+	    elsif ( $operation eq 'delete' )
 	    {
 		# push @records, $record;
 		
@@ -1301,7 +1312,7 @@ sub _execute_insert {
     # Start by calling the 'before_insert' hook. This can be used to do any necessary auxiliary
     # actions to the database.
     
-    $edt->_call_hooks('insert', $table, 'before_insert', $record, $permission);
+    $edt->_call_hooks($table, 'before_insert', 'insert', $record, $permission);
     
     # Construct the insert statement.
     
@@ -1349,7 +1360,7 @@ sub _execute_insert {
     # the database. This is passed an extra argument, which will contain the primary key of the
     # newly inserted record. If the insert failed, it will be undefined.
     
-    $edt->_call_hooks($table, 'after_insert', 'insert', $new_keyval, $record, $permission);
+    $edt->_call_hooks($table, 'after_insert', 'insert', $record, $permission, $new_keyval);
     
     # If the insert succeeded, return the new primary key value. Otherwise, return undefined.
     
@@ -1368,12 +1379,86 @@ sub _execute_insert {
 }
 
 
-# execute_update ( table, record )
+# _execute_replace ( table, record )
+# 
+# Actually perform an replace operation on the database. The record keys and values have been
+# checked by 'validate_record' or some other code, and lists of columns and values generated.
+
+sub _execute_replace {
+
+    my ($edt, $action) = @_;
+    
+    my ($operation, $table, $record, $permission, $keyval) = @$action;
+    
+    # Start by calling the 'before_replace' hook. This can be used to do any necessary auxiliary
+    # actions to the database.
+    
+    $edt->_call_hooks($table, 'before_replace', 'replace', $record, $permission, $keyval);
+    
+    # Construct the replace statement.
+    
+    unless ( ref $record->{_columns} eq 'ARRAY' && ref $record->{_values} eq 'ARRAY' &&
+	     @{$record->{_columns}} == @{$record->{_values}} )
+    {
+	$edt->add_condition('E_EXECUTE', 'internal error: column/value mismatch');
+	return;
+    }
+    
+    my $dbh = $edt->dbh;
+    
+    my $column_list = join(',', @{$record->{_columns}});
+    my $value_list = join(',', @{$record->{_values}});
+    
+    my $sql = "	REPLACE INTO $table ($column_list)
+		VALUES ($value_list)";
+    
+    # Execute the statement inside a try block. If it fails, add either an error or a warning
+    # depending on whether this EditTransaction allows PROCEED.
+    
+    try {
+	
+	my ($result) = $dbh->do($sql);
+	
+	unless ( $result )
+	{
+	    $edt->add_record_condition('E_EXECUTE', 'replace');
+	}
+    }
+    
+    catch {
+	
+	$edt->add_record_condition('E_EXECUTE', 'replace');
+    };
+    
+    # Now call the 'after_replace' hook. This can be used to do any necessary auxiliary actions to
+    # the database. This is passed an extra argument, which will contain the primary key of the
+    # newly replaced record. If the replace failed, it will be undefined.
+    
+    $edt->_call_hooks($table, 'after_replace', 'replace', $record, $permission, $keyval);
+    
+    # If the replace succeeded, return the new primary key value. Otherwise, return undefined.
+    
+    if ( $result )
+    {
+	$edt->{action_count}++;
+	$edt->{replaced_keys}{$keyval} = 1;
+	return $result;
+    }
+    
+    else
+    {
+	$edt->{fail_count}++;
+	return undef;
+    }
+}
+
+
+# _execute_update ( table, record )
 # 
 # Actually perform an update operation on the database. The keys and values have been checked
 # previously.
 
-sub execute_update {
+sub _execute_update {
 
     my ($edt, $action) = @_;
     
@@ -1382,25 +1467,57 @@ sub execute_update {
     # Start by calling the 'before_update' hook. This can be used to do any necessary auxiliary
     # actions to the database. It is passed the key value of the record to be updated.
     
-    $edt->_call_hooks('update', $table, 'before_update', $record, $permission, $keyval);
+    $edt->_call_hooks($table, 'before_update', 'update', $record, $permission);
     
     # Construct the update statement.
     
+    unless ( ref $record->{_columns} eq 'ARRAY' && ref $record->{_values} eq 'ARRAY' &&
+	     @{$record->{_columns}} == @{$record->{_values}} )
+    {
+	$edt->add_condition('E_EXECUTE', 'internal error: column/value mismatch');
+	return;
+    }
+    
     my $dbh = $edt->dbh;
     
-    my $column_list = join(',', $record->{_columns});
-    my $value_list = join(',', $record->{_values});
+    my $set_list = '';
     
-    my $sql = "	INSERT INTO $table ($column_list)
-		VALUES ($value_list)";
-   
-    # ...
+    foreach my $i ( 0..$#{$record->{_columns}} )
+    {
+	$set_list .= ', ' if $set_list;
+	$set_list .= $record->{_columns}[$i] . '=' . $record->{_values}[$i];
+    }
+    
+    my $key_expr = $dbh->record_keyexpr;
+    
+    my $sql = "	UPDATE $table SET $set_list
+		WHERE $key_expr";
+    
+    # Execute the statement inside a try block. If it fails, add either an error or a warning
+    # depending on whether this EditTransaction allows PROCEED.
+    
+    try {
+	
+	my ($result) = $dbh->do($sql);
+	
+	unless ( $result )
+	{
+	    $edt->add_record_condition('E_EXECUTE', 'insert');
+	}
+	
+	# $$$ we maybe should set RaiseError instead?
+    }
+    
+    catch {
+	
+	$edt->add_record_condition('E_EXECUTE', 'insert');
+    };
     
     # Now call the 'after_update' hook. This can be used to do any necessary auxiliary actions to
     # the database. This is passed two extra arguments. The first contains the key value of the
     # record to be updated, and the second will be true if the update succeeded and false otherwise.
     
-    $edt->_call_hooks($table, 'after_update', $record, $keyval, $result);
+    $edt->_call_hooks($table, 'after_update', 'update', $record, $permission, $result);
     
     # If the update succeeded, return true. Otherwise, return false.
     
@@ -1425,18 +1542,21 @@ sub execute_update {
 
 sub execute_delete {
 
-    my ($edt, $table, $record) = @_;
+    my ($edt, $action) = @_;
+    
+    my ($operation, $table, $record, $permission, $keyval) = @$action;
     
     # Start by calling the 'before_delete' hook. This can be used to do any necessary auxiliary
     # actions to the database. It is passed the key value of the record to be deleted.
     
-    $edt->_call_hooks($table, 'before_delete', $record, $keyval);
+    $edt->_call_hooks($table, 'before_delete', 'delete', $record, $keyval);
     
     # Now delete the record.
     
-    my $keyval;
+    my $key_expr = $dbh->record_keyexpr;
     
-    # ...
+    my $sql = "	UPDATE $table SET $set_list
+		WHERE $key_expr";    
     
     # Now call the 'after_delete' hook. This can be used to do any necessary auxiliary actions to
     # the database. This is passed two extra arguments. The first contains the key value of the
@@ -1894,24 +2014,5 @@ sub validate_record {
     return;
 }
 
-
-# Do we need this?
-
-# sub generate_set_list {
-    
-#     my ($edt, $fields, $values) = @_;
-    
-#     return unless ref $fields eq 'ARRAY' && @$fields;
-    
-#     my @set_list;
-    
-#     foreach my $i ( 0..$#$fields )
-#     {
-# 	my $value = defined $values->[$i] && $values->[$i] ne '' ? $values->[$i] : 'NULL';
-# 	push @set_list, "$fields->[$i]=$values->[$i]";
-#     }
-    
-#     return join(', ', @set_list);
-# }
 
 1;
