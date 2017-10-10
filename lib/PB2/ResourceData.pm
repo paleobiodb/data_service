@@ -17,8 +17,7 @@ use HTTP::Validate qw(:validators);
 use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
 use ResourceTables;
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
-
-use PB2::TableData qw(complete_output_block);
+use TableData qw(complete_output_block);
 
 use Carp qw(carp croak);
 use Try::Tiny;

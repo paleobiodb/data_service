@@ -122,8 +122,8 @@ sub new {
 	unless ( $perms->{authorizer_no} && $perms->{authorizer_no} > 0 &&
 		 $perms->{enterer_no} && $perms->{enterer_no} > 0 )
 	{
-	    $auth_info->{role} = 'guest';
-	    $auth_info->{superuser} = 0;
+	    $perms->{role} = 'guest';
+	    $perms->{superuser} = 0;
 	}
 	
 	# Cache the request and dbh values for later use, plus the debug flag.
@@ -231,10 +231,10 @@ sub get_table_permissions {
 	    my $lookup_name = $table_name;
 	    $lookup_name =~ s/^\w+[.]//;
 	    
+	    my $dbh = $perms->{dbh};
+	    
 	    my $quoted_person = $dbh->quote($perms->{enterer_no});
 	    my $quoted_table = $dbh->quote($lookup_name);
-	    
-	    my $dbh = $perms->{dbh};
 	    
 	    my $sql = "
 		SELECT permission FROM $TABLE_PERMS
@@ -250,7 +250,7 @@ sub get_table_permissions {
 	    
 	    if ( $permission )
 	    {
-		my @list = split qr{/}, $permissions;
+		my @list = split qr{/}, $permission;
 		$perms->{table_permission}{$table_name} = { map { $_ => 1 } @list };
 	    }
 	    
@@ -258,7 +258,7 @@ sub get_table_permissions {
 	    
 	    else
 	    {
-		$request->default_table_permission($table_name);
+		$perms->default_table_permissions($table_name);
 	    }
 	}
 	
@@ -267,18 +267,18 @@ sub get_table_permissions {
 	
 	else
 	{
-	    $request->default_table_permission($table_name);
+	    $perms->default_table_permissions($table_name);
 	}
     }
     
-    return $request->{my_auth_info}{table_permission}{$table_name};
+    return $perms->{table_permission}{$table_name};
 }
 
 
 # default_table_permissions ( table_name )
 # 
-# If we have do not already know the table permissions for the specified table, compute them
-# from the authorization info and table properties.
+# If we have do not already have the user's table permissions for the specified table, set a
+# default from the authorization info and table properties.
 
 sub default_table_permissions {
     
@@ -407,7 +407,7 @@ sub check_table_permission {
     {
 	unless ( $perms->{can_delete}{$table_name} //= get_table_property($table_name, 'ALLOW_DELETE') )
 	{
-	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED by TABLE PROPERTY\n\n"
+	    print STDERR "    Permission for $table_name : '$permission' DENIED by TABLE PROPERTY\n\n"
 		if $perms->{debug};
 	    
 	    return '';

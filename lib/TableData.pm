@@ -10,7 +10,7 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(get_table_property get_column_property %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER);
+use TableDefs qw(get_table_property %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER);
 
 use Carp qw(croak);
 use ExternalIdent qw(extract_identifier generate_identifier);
@@ -72,7 +72,7 @@ sub get_table_schema {
     
     croak "unknown table '$table_name'" unless $check_table;
     
-    print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $ds->debug;
+    print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $debug;
     
     my $columns_ref = $dbh->selectall_arrayref("
 	SHOW COLUMNS FROM $quoted_table", { Slice => { } });

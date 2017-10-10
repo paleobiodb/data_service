@@ -17,7 +17,7 @@ use HTTP::Validate qw(:validators);
 
 use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
-use PB2::TableData qw(complete_ruleset);
+use TableData qw(complete_ruleset);
 use File::Temp qw(tempfile);
 
 use EditTransaction;

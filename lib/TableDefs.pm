@@ -37,12 +37,28 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
 		      %TABLE_PROPERTIES %TEST_SELECT
-		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE);
+		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE
+		      set_table_property get_table_property
+		      set_column_property get_column_properties);
 
+
+# Define the properties that are allowed to be specified for tables and table columns.
+
+our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
+			   ALLOW_VIEW => 1,
+			   ALLOW_DELETE => 1,
+			   ALLOW_KEY_INSERT => 1,
+			   BY_AUTHORIZER => 1,
+			   AUTH_FIELDS => 1,
+			   PRIMARY_KEY => 1,
+			   PRIMARY_ATTR => 1 );
+
+our (%COLUMN_PROP_NAME) = ( REQUIRED => 1,
+			    ADMIN_SET => 1 );
 
 # If the name of a test database was specified in the configuration file, remember it.
 
-our ($TEST_DB);
+our ($TEST_DB, %TEST_SELECT);
 
 {
     $TEST_DB = Dancer::config->{test_db};
@@ -290,17 +306,6 @@ our (%TABLE_PROPERTIES, %COLUMN_PROPERTIES);
 # are operating under the assumption that two tables with the same name in different databases are
 # meant to be alternatives to each other, i.e. a main table and a test table.
 
-our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
-			   ALLOW_VIEW => 1,
-			   ALLOW_DELETE => 1,
-			   ALLOW_KEY_INSERT => 1,
-			   BY_AUTHORIZER => 1,
-			   AUTH_FIELDS => 1,
-			   PRIMARY_KEY => 1,
-			   PRIMARY_ATTR => 1 );
-
-our (%COLUMN_PROP_NAME) = ( REQUIRED => 1,
-			    ADMIN_SET => 1 );
 
 our (%TABLE_NAME_MAP);
 

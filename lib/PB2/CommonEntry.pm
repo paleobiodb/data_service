@@ -15,7 +15,7 @@ use Carp qw(croak);
 use TableDefs qw(%TABLE_PROPERTIES);
 
 use ExternalIdent qw(extract_identifier generate_identifier %IDP %IDRE);
-use PB2::TableData qw(get_table_schema);
+use TableData qw(get_table_schema);
 
 use Moo::Role;
 
