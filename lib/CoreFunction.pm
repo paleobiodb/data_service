@@ -110,7 +110,7 @@ sub loadConfig {
     
     # If we have already loaded the configuration data, we are done.
     
-    return if ref $CONFIG eq 'HASH';
+    return $CONFIG if ref $CONFIG eq 'HASH';
     
     # If no filename was given, it defaults to 'config.yml'.
     
@@ -124,6 +124,8 @@ sub loadConfig {
     }
     
     carp "Could not read $filename: $!" unless $CONFIG;
+    
+    return $CONFIG;
 }
 
 
@@ -135,6 +137,13 @@ sub loadConfig {
 sub configData {
     
     my ($key) = @_;
+    
+    # Unless a key was given, return the whole hash.
+    
+    unless ( defined $key )
+    {
+	return $CONFIG;
+    }
     
     # Throw an error if we haven't yet loaded the configuration information.
     

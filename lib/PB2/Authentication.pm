@@ -33,12 +33,17 @@ sub authenticate {
     
     elsif ( my $session_id = Dancer::cookie('session_id') )
     {
-	$request->{my_perms} = Permissions->new($request, $session_id, $table_name);
+	my $dbh = $request->get_connection;
+	my $options = { debug => $request->debug };
+	
+	$request->{my_perms} = Permissions->new($dbh, $session_id, $table_name, $options);
     }
     
     else
     {
-	$request->{my_perms} = Permissions->no_login($request, $table_name);
+	my $options = { debug => $request->debug };
+	
+	$request->{my_perms} = Permissions->no_login($dbh, $table_name, $options);
     }
 
     return $request->{my_perms};
@@ -62,7 +67,10 @@ sub require_authentication {
     
     elsif ( my $session_id = Dancer::cookie('session_id') )
     {
-	$request->{my_perms} = Permissions->new($request, $session_id, $table_name);
+	my $dbh = $request->get_connection;
+	my $options = { debug => $request->debug };
+	
+	$request->{my_perms} = Permissions->new($dbh, $session_id, $table_name, $options);
     }
     
     else

@@ -206,4 +206,25 @@ sub set_multiple {
 }
 
 
+sub set_keyval {
+
+    $_[0]->{keyval} = $_[1];
+}
+
+
+# We also have a facility to set and get general action attributes.
+
+sub set_attr {
+    
+    croak "you must specify an attribute name" unless $_[1];
+    $_[0]->{attrs}{$_[1]} = $_[2];
+}
+
+
+sub get_attr {
+
+    croak "you must specify an attribute name" unless $_[1];
+    return $_[0]->{attrs} && $_[0]->{attrs}{$_[1]};
+}
+
 1;

@@ -10,9 +10,13 @@ use strict;
 
 use Dancer qw(:syntax);
 use PBLogger;
+use TableDefs qw(init_table_names test_select);
 
 
-my $logger = PBLogger->new;
+BEGIN {
+    my $logger = PBLogger->new;
+    init_table_names(Dancer::config);
+}
 
 
 # We need a couple of routes to handle interaction with the server when it is in test mode.
@@ -28,36 +32,34 @@ get '/:prefix/testmode/:tablename/:op' => sub {
 	pass;
     }
     
-    unless ( $PBData::TEST_MODE )
+    unless ( $TableDefs::TEST_MODE )
     {
 	die "500 Server is not in test mode\n";
     }
     
-    if ( my $testsub = $TableDefs::TEST_SELECT{$tablename} )
+    if ( $operation eq 'enable' )
     {
-    	if ( $operation eq 'enable' )
-    	{
-    	    my ($result) = $testsub->($ds, 1);
-    	    return "$tablename enabled" if $result && $result eq '1';
-    	}
+	my ($result) = select_test_tables($tablename, 1, $ds);
 	
-    	elsif ( $operation eq 'disable' )
-    	{
-    	    my ($result) = $testsub->($ds, 0);
-    	    return "$tablename disabled" if $result && $result eq '2';
-    	}
-	
-	else
+	if ( $result && $result eq '1' )
 	{
-	    die "400 Unrecognized operation '$operation'\n";
+	    return "$tablename enabled";
 	}
+    }
+    
+    elsif ( $operation eq 'disable' )
+    {
+	my ($result) = select_test_tables($tablename, 0, $ds);
 	
-	die "500 Operation '$operation $tablename' failed\n";
+	if ( $result && $result eq '2' )
+	{
+	    return "$tablename disabled";
+	}
     }
     
     else
     {
-    	die "400 Unrecognized test table name '$tablename'\n";
+	die "400 Operation $operation $tablename failed\n";
     }
 };
     
@@ -70,7 +72,7 @@ get '/:prefix/startsession/:id' => sub {
 	pass;
     }
     
-    unless ( $PBData::TEST_MODE )
+    unless ( $TableDefs::TEST_MODE )
     {
 	die "500 Server is not in test mode\n";
     }

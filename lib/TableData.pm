@@ -113,7 +113,7 @@ sub complete_output_block {
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($ds, $dbh, $table_name);
+    my $schema = get_table_schema($dbh, $table_name, $ds->debug);
     
     # Then get the existing contents of the block and create a hash of the field names that are
     # already defined. If no block by this name is yet defined, create an empty one.
@@ -233,7 +233,7 @@ sub complete_ruleset {
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($ds, $dbh, $table_name);
+    my $schema = get_table_schema($dbh, $table_name, $ds->debug);
     
     # Then get the existing ruleset documentation and create a hash of the field names that are
     # already defined. If no ruleset by this name is yet defined, croak.

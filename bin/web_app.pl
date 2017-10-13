@@ -13,6 +13,7 @@ use Dancer;
 use Dancer::Plugin::Database;
 use Dancer::Plugin::StreamData;
 use Template;
+use TableDefs qw(init_table_names);
 use Web::DataService;
 
 # If we were called from the command line with one or more arguments, then
@@ -23,6 +24,8 @@ use Web::DataService;
 BEGIN {
 
     Web::DataService->VERSION(0.3);
+    
+    my $test_mode;
     
     # If we were given a command-line argument, figure out what to do with it.
     
@@ -96,8 +99,8 @@ BEGIN {
 	    my $test_port = setting('test_port');
 	    set port => $test_port if $test_port;
 
-	    $PBData::TEST_MODE = 1;
-
+	    $test_mode = 1;
+	    
 	    # Also check for the 'debug' command following this one.
 
 	    Web::DataService->set_mode('debug') if defined $ARGV[1] and lc $ARGV[1] eq 'debug';
@@ -110,6 +113,8 @@ BEGIN {
 	    die "Unrecognized command '$ARGV[0]'";
 	}
     }
+    
+    init_table_names(Dancer::config, $test_mode);
 }
 
 use PB0::Main;

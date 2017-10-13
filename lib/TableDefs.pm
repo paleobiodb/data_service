@@ -38,6 +38,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
 		      %TABLE_PROPERTIES %TEST_SELECT
 		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE
+		      init_table_names select_test_tables
 		      set_table_property get_table_property
 		      set_column_property get_column_properties);
 
@@ -56,12 +57,55 @@ our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
 our (%COLUMN_PROP_NAME) = ( REQUIRED => 1,
 			    ADMIN_SET => 1 );
 
-# If the name of a test database was specified in the configuration file, remember it.
+our ($TEST_MODE, $TEST_DB);
 
-our ($TEST_DB, %TEST_SELECT);
 
+# Determine if we are going to be running in test mode or not.
+
+# init_table_names ( config, test_mode )
+# 
+# If this subroutine is run with $test_mode true, then it enables the flag that allows switching
+# over to the test tables using 'select_test_tables'.
+
+sub init_table_names
 {
-    $TEST_DB = Dancer::config->{test_db};
+    my ($config, $test_mode) = @_;
+    
+    if ( $test_mode )
+    {
+	$TEST_MODE = $1;
+	$TEST_DB = $config->{test_db};
+    }
+}
+
+
+# select_test_tables ( tablename, enable, ds )
+# 
+# If $enable is true, then set the table name(s) associated with $tablename to their test values,
+# as opposed to their regular ones. If $enable is false, switch them back. The argument $ds should
+# be a data service object if this is run from a data service process. If run from a command-line
+# script, then the argument should be '1' to enable debugging output.
+
+sub select_test_tables
+{
+    my ($tablename, $enable, $ds) = @_;
+    
+    my $debug = defined $ds ? (ref $ds && $ds->debug || $ds eq '1') : 0;
+    
+    if ( $tablename eq 'session_data' )
+    {
+	return test_session_data($enable, $ds, $debug);
+    }
+    
+    elsif ( $tablename eq 'eduresources' )
+    {
+	return test_eduresources($enable, $ds, $debug);
+    }
+    
+    else
+    {
+	die "500 unknown tablename '$tablename'"
+    }
 }
 
 
@@ -97,41 +141,39 @@ set_table_property($WING_USERS, PRIMARY_KEY => 'id');
 
 # If we are being run in test mode, substitute table names as indicated by the configuration file.
 
-if ( $PBData::TEST_MODE )
-{
-    $TEST_SELECT{session_data} = sub {
+sub test_session_data {
+    
+    my ($enable, $ds, $debug) = @_;
+    
+    if ( $enable )
+    {
+	die "You must define 'test_db' in the configuration file and call 'init_table_names'" unless $TEST_DB;
 	
-	my ($ds, $enable) = @_;
+	$SESSION_DATA = substitute_table("$TEST_DB.session_data", "session_data");
+	$TABLE_PERMS = substitute_table("$TEST_DB.table_permissions", "table_permissions");
+	$PERSON_DATA = substitute_table("$TEST_DB.person", "person");
 	
-	if ( $enable )
-	{
-	    die "You must define 'test_db' in the configuration file" unless $TEST_DB;
-	    
-	    $SESSION_DATA = substitute_table("$TEST_DB.session_data", "session_data");
-	    $TABLE_PERMS = substitute_table("$TEST_DB.table_permissions", "table_permissions");
-	    $PERSON_DATA = substitute_table("$TEST_DB.person", "person");
-
-	    eval {
-		PB2::CommonData->update_person_name_cache($ds);
-	    };
-
-	    print STDERR "TEST MODE: enable 'session_data'\n\n" if $ds->debug;
-	    
-	    return 1;
-	}
+	eval {
+	    PB2::CommonData->update_person_name_cache($ds) if ref $ds;
+	};
 	
-	else
-	{
-	    $SESSION_DATA = "session_data";
-	    $TABLE_PERMS = "table_permissions";
-	    $PERSON_DATA = "person";
-	    
-	    print STDERR "TEST MODE: disable 'session_data'\n\n" if $ds->debug;
-	    
-	    return 2;
-	}
-    };
+	print STDERR "TEST MODE: enable 'session_data'\n\n" if $debug;
+	
+	return 1;
+    }
+    
+    else
+    {
+	$SESSION_DATA = "session_data";
+	$TABLE_PERMS = "table_permissions";
+	$PERSON_DATA = "person";
+	
+	print STDERR "TEST MODE: disable 'session_data'\n\n" if $debug;
+	
+	return 2;
+    }
 }
+
 
 # new collection tables
 
@@ -224,48 +266,44 @@ our $TIMESCALE_PERMS = 'timescale_perms';
 our $RESOURCE_QUEUE = 'eduresource_queue';
 our $RESOURCE_IMAGES = 'eduresource_images';
 our $RESOURCE_TAG_NAMES = 'edutags';
-my $resource_tags_main = Dancer::config->{eduresources_tags} || 'eduresource_tags';
-our $RESOURCE_TAGS = $resource_tags_main;
-my $resource_active_main = Dancer::config->{eduresources_active} || 'eduresources';
-our $RESOURCE_ACTIVE = $resource_active_main;
+our $RESOURCE_TAGS = 'eduresource_tags',
+our $RESOURCE_ACTIVE = 'eduresources';
 
-if ( $PBData::TEST_MODE )
-{
-    $TEST_SELECT{eduresources} = sub {
+sub test_eduresources {
 	
-	my ($ds, $enable) = @_;
-	
-	if ( $enable )
-	{
-	    die "You must define 'test_db' in the configuration file" unless $TEST_DB;
-	    
-	    $RESOURCE_QUEUE = substitute_table("$TEST_DB.eduresource_queue", "eduresource_queue");
-	    $RESOURCE_IMAGES = substitute_table("$TEST_DB.eduresource_images", "eduresource_images");
-	    $RESOURCE_TAG_NAMES = substitute_table("$TEST_DB.edutags", "edutags");
-	    $RESOURCE_TAGS = substitute_table("$TEST_DB.$resource_tags_main", $resource_tags_main);
-	    $RESOURCE_ACTIVE = substitute_table("$TEST_DB.$resource_active_main", $resource_active_main);
-	    
-	    print STDERR "TEST MODE: enable 'eduresources'\n\n" if $ds->debug;
-	    
-	    return 1;
-	}
-	
-	else
-	{
-	    $RESOURCE_QUEUE = 'eduresource_queue';
-	    $RESOURCE_IMAGES = 'eduresource_images';
-	    $RESOURCE_TAG_NAMES = 'edutags';
-	    $RESOURCE_TAGS = $resource_tags_main;
-	    $RESOURCE_ACTIVE = $resource_active_main;
-	    
-	    print STDERR "TEST MODE: disable 'eduresources'\n\n" if $ds->debug;
-	    
-	    return 2;
-	}
-    };
+    my ($enable, $ds, $debug) = @_;
     
-    # $USING_TEST_TABLES{eduresources} = $TEST_SELECT{eduresources};
+    if ( $enable )
+    {
+	die "You must define 'test_db' in the configuration file" unless $TEST_DB;
+	
+	$RESOURCE_QUEUE = substitute_table("$TEST_DB.eduresource_queue", "eduresource_queue");
+	$RESOURCE_IMAGES = substitute_table("$TEST_DB.eduresource_images", "eduresource_images");
+	$RESOURCE_TAG_NAMES = substitute_table("$TEST_DB.edutags", "edutags");
+	$RESOURCE_TAGS = substitute_table("$TEST_DB.eduresource_tags", 'eduresource_tags');
+	$RESOURCE_ACTIVE = substitute_table("$TEST_DB.eduresources", 'eduresources');
+	
+	print STDERR "TEST MODE: enable 'eduresources'\n\n" if $debug;
+	
+	return 1;
+    }
+    
+    else
+    {
+	$RESOURCE_QUEUE = 'eduresource_queue';
+	$RESOURCE_IMAGES = 'eduresource_images';
+	$RESOURCE_TAG_NAMES = 'edutags';
+	$RESOURCE_TAGS = 'eduresource_tags';
+	$RESOURCE_ACTIVE = 'eduresources';
+	
+	print STDERR "TEST MODE: disable 'eduresources'\n\n" if $debug;
+	
+	return 2;
+    }
 }
+
+
+
 
 
 # Define the properties of certain fields that are common to many tables in the PBDB.
@@ -422,5 +460,6 @@ sub substitute_table {
     $TABLE_NAME_MAP{$new_name} = $old_name;
     return $new_name;
 }
+
 
 1;

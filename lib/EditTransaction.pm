@@ -12,6 +12,7 @@ use ExternalIdent qw(%IDP);
 use TableDefs qw(get_table_property get_column_properties $PERSON_DATA
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE);
 use TableData qw(get_table_schema);
+use EditAction;
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -26,12 +27,11 @@ use Scalar::Util qw(weaken blessed);
 # additional logic for checking values and performing auxiliary operations in conjunction with
 # database inserts, updates, and deletes.
 
-our (%HOOK_NAMES) = ( auth_insert => 1, check_insert => 1,
-		      auth_update => 1, check_update => 1,
-		      auth_delete => 1, check_delete => 1,
-		      before_insert => 1, after_insert => 1,
-		      before_update => 1, after_update => 1,
-		      before_delete => 1, after_delete => 1,
+our (%HOOK_NAMES) = ( auth_insert => 1, validate_insert => 1,
+		      auth_update => 1, validate_update => 1,
+		      auth_replace => 1, validate_replace => 1,
+		      auth_delete => 1, validate_delete => 1,
+		      before_action => 1, after_action => 1,
 		      begin_transaction => 1, end_transaction => 1 );
 
 our (%HOOKS_BY_CLASS);
@@ -48,19 +48,20 @@ our (%ALLOW_BY_CLASS) = ( EditTransaction => { CREATE => 1,
 # Constructor and destructor
 # --------------------------
 
-# new ( request, perms, conditions )
+# new ( request_or_dbh, perms, table, allows )
 # 
 # Create a new EditTransaction object, for use in association with the specified request. The
-# second argument should be a Permissions object, and the third a hash of allowed conditions.
+# second argument should be a Permissions object, the third a table name, and the fourth a hash of
+# allowed conditions.
 
 sub new {
     
-    my ($class, $request, $perms, $table, $allows) = @_;
+    my ($class, $request_or_dbh, $perms, $table, $allows) = @_;
     
     # Check the arguments.
     
-    croak "new EditTransaction: request is required"
-	unless blessed($request) && $request->can('get_connection');
+    croak "new EditTransaction: request or dbh is required"
+	unless $request_or_dbh && blessed($request_or_dbh);
     
     croak "new EditTransaction: perms is required"
 	unless blessed $perms && $perms->isa('Permissions');
@@ -97,13 +98,24 @@ sub new {
     # reference to this EditTransaction object and as we all know, circular references can prevent
     # garbage collection unless one of them is weakened.
     
-    $edt->{dbh} = $request->get_connection;
-    weaken $edt->{dbh};
+    if ( $request_or_dbh->can('get_connection') )
+    {
+	$edt->{request} = $request_or_dbh;
+	weaken $edt->{request};
+	
+	$edt->{dbh} = $request_or_dbh->get_connection;
+	weaken $edt->{dbh};
+	
+	$edt->{debug} = $request_or_dbh->debug if $request_or_dbh->can('debug');
+    }
     
-    $edt->{request} = $request;
-    weaken $edt->{request};
-    
-    $edt->{debug} = $request->debug;
+    else
+    {
+	$edt->{dbh} = $request_or_dbh;
+	weaken $edt->{dbh};
+	
+	$edt->{debug} = ref $allows eq 'HASH' && $allows->{DEBUG_MODE} ? 1 : 0;
+    }
     
     # If we are given either a hash or an array of conditions that should be allowed, store them
     # in the object.
@@ -748,11 +760,11 @@ sub insert_record {
 	}
 	
 	# Then check the actual record to be inserted, to make sure that the column values meet
-	# all of the criteria for this table. If a 'check_insert' method was specified, then call
+	# all of the criteria for this table. If a 'validate_insert' method was specified, then call
 	# it. Otherwise, call the 'validate_record' method. In either case, the method must add an
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
-	$edt->_call_hooks($table, 'check_insert', 'insert', $action) ||
+	$edt->_call_hooks($table, 'validate_insert', 'insert', $action) ||
 	    $edt->validate_record($table, 'insert', $action);
     }
     
@@ -822,11 +834,11 @@ sub update_record {
 	}
 	
 	# Then check the actual record, to make sure that the new column values to be stored meet
-	# all of the criteria for this table. If a 'check_update' method was specified, then call
+	# all of the criteria for this table. If a 'validate_update' method was specified, then call
 	# it. Otherwise, call the 'validate_record' method. In either case, the method must add an
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
-	$edt->_call_hooks($table, 'check_update', 'update', $action) ||
+	$edt->_call_hooks($table, 'validate_update', 'update', $action) ||
 	    $edt->validate_record($table, 'update', $action);
     }
     
@@ -910,11 +922,11 @@ sub replace_record {
 	}
 	
 	# Then check the actual record, to make sure that the new column values to be stored meet
-	# all of the criteria for this table. If a 'check_replace' method was specified, then call
+	# all of the criteria for this table. If a 'validate_replace' method was specified, then call
 	# it. Otherwise, call the 'validate_record' method. In either case, the method must add an
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
-	$edt->_call_hooks($table, 'check_replace', 'replace', $action) ||
+	$edt->_call_hooks($table, 'validate_replace', 'replace', $action) ||
 	    $edt->validate_record($table, 'replace', $action);
     }
     
@@ -989,11 +1001,11 @@ sub delete_record {
 	    $edt->add_record_condition('E_PERM', 'delete');
 	}
 	
-	# If a 'check_delete' method was specified, then call it. This method may abort the
+	# If a 'validate_delete' method was specified, then call it. This method may abort the
 	# deletion by adding an error condition. Otherwise, we assume that the permission check we
 	# have already done is all that is necessary.
 	
-	$edt->_call_hooks($table, 'check_delete', 'delete', $action);
+	$edt->_call_hooks($table, 'validate_delete', 'delete', $action);
     }
     
     # If no primary key was specified, add an error condition.
@@ -1314,10 +1326,10 @@ sub _execute_insert {
     
     my $table = $action->table;
     
-    # Start by calling the 'before_insert' hook. This can be used to do any necessary auxiliary
+    # Start by calling the 'before_action' hook. This can be used to do any necessary auxiliary
     # actions to the database.
     
-    $edt->_call_hooks($table, 'before_insert', 'insert', $action);
+    $edt->_call_hooks($table, 'before_action', 'insert', $action);
     
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
@@ -1355,7 +1367,12 @@ sub _execute_insert {
 	    $new_keyval = $dbh->last_insert_id(undef, undef, undef, undef);
 	}
 	
-	unless ( $result && $new_keyval )
+	if ( $new_keyval )
+	{
+	    $action->set_keyval($new_keyval);
+	}
+	
+	else
 	{
 	    $edt->add_record_condition('E_EXECUTE', 'insert');
 	}
@@ -1366,11 +1383,11 @@ sub _execute_insert {
 	$edt->add_record_condition('E_EXECUTE', 'insert');
     };
     
-    # Now call the 'after_insert' hook. This can be used to do any necessary auxiliary actions to
+    # Now call the 'after_action' hook. This can be used to do any necessary auxiliary actions to
     # the database. This is passed an extra argument, which will contain the primary key of the
     # newly inserted record. If the insert failed, it will be undefined.
     
-    $edt->_call_hooks($table, 'after_insert', 'insert', $action, $new_keyval);
+    $edt->_call_hooks($table, 'after_action', 'insert', $action, $new_keyval);
     
     # If the insert succeeded, return the new primary key value. Otherwise, return undefined.
     
@@ -1400,10 +1417,10 @@ sub _execute_replace {
     
     my $table = $action->table;
     
-    # Start by calling the 'before_replace' hook. This can be used to do any necessary auxiliary
+    # Start by calling the 'before_action' hook. This can be used to do any necessary auxiliary
     # actions to the database.
     
-    $edt->_call_hooks($table, 'before_replace', 'replace', $action);
+    $edt->_call_hooks($table, 'before_action', 'replace', $action);
     
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
@@ -1447,11 +1464,11 @@ sub _execute_replace {
 	$edt->add_record_condition('E_EXECUTE', 'replace');
     };
     
-    # Now call the 'after_replace' hook. This can be used to do any necessary auxiliary actions to
+    # Now call the 'after_action' hook. This can be used to do any necessary auxiliary actions to
     # the database. This is passed an extra argument, which will contain the primary key of the
     # newly replaced record. If the replace failed, it will be undefined.
     
-    $edt->_call_hooks($table, 'after_replace', 'replace', $action, $result);
+    $edt->_call_hooks($table, 'after_action', 'replace', $action, $result);
     
     # If the replace succeeded, return true. Otherwise, return false.
     
@@ -1484,10 +1501,10 @@ sub _execute_update {
     
     my $table = $action->table;
     
-    # Start by calling the 'before_update' hook. This can be used to do any necessary auxiliary
+    # Start by calling the 'before_action' hook. This can be used to do any necessary auxiliary
     # actions to the database. It is passed the key value of the record to be updated.
     
-    $edt->_call_hooks($table, 'before_update', 'update', $action);
+    $edt->_call_hooks($table, 'before_action', 'update', $action);
     
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
@@ -1539,11 +1556,11 @@ sub _execute_update {
 	$edt->add_record_condition('E_EXECUTE', 'update');
     };
     
-    # Now call the 'after_update' hook. This can be used to do any necessary auxiliary actions to
+    # Now call the 'after_action' hook. This can be used to do any necessary auxiliary actions to
     # the database. This is passed two extra arguments. The first contains the key value of the
     # record to be updated, and the second will be true if the update succeeded and false otherwise.
     
-    $edt->_call_hooks($table, 'after_update', 'update', $action, $result);
+    $edt->_call_hooks($table, 'after_action', 'update', $action, $result);
     
     # If the update succeeded, return true. Otherwise, return false.
     
@@ -1575,10 +1592,10 @@ sub _execute_delete {
     
     my $table = $action->table;
     
-    # Start by calling the 'before_delete' hook. This can be used to do any necessary auxiliary
+    # Start by calling the 'before_action' hook. This can be used to do any necessary auxiliary
     # actions to the database. It is passed the key value of the record to be deleted.
     
-    $edt->_call_hooks($table, 'before_delete', 'delete', $action);
+    $edt->_call_hooks($table, 'before_action', 'delete', $action);
     
     # Construct the DELETE statement.
     
@@ -1610,11 +1627,11 @@ sub _execute_delete {
 	$edt->add_record_condition('E_EXECUTE', 'delete');
     };
     
-    # Now call the 'after_delete' hook. This can be used to do any necessary auxiliary actions to
+    # Now call the 'after_action' hook. This can be used to do any necessary auxiliary actions to
     # the database. This is passed two extra arguments. The first contains the key value of the
     # record that was deleted, and the second will be true if the delete succeeded and false otherwise.
     
-    $edt->_call_hooks($table, 'after_delete', $action, $result);
+    $edt->_call_hooks($table, 'after_action', $action, $result);
     
     # If the delete succeeded, return true. Otherwise, return false.
     
@@ -1715,7 +1732,7 @@ sub check_record_permission {
 # column using 'set_column_property' such as 'REQUIRED' and 'ADMIN_SET'.
 # 
 # Subclasses of EditTransaction can also register their own validation methods using the hooks
-# 'check_insert', 'check_update', and 'check_delete'. If such registrations are made, then the
+# 'validate_insert', 'validate_update', and 'validate_delete'. If such registrations are made, then the
 # methods specified below will NOT be called. But the subclass methods may call the ones specified
 # below, as well as conducting their own checks. In any case, the mechanism by which validation
 # routines communicate an error or warning is by calling 'add_record_condition'.
@@ -1957,7 +1974,7 @@ sub validate_record {
 	elsif ( defined $value && $value ne '' )
 	{
 	    # Handle references to keys from other PBDB tables by checking them against the
-	    # specified table. We use a soft reference because the system of table names is based
+	    # specified table. We use a symbolic reference because the system of table names is based
 	    # on global variables, whose values might change. Yes, I know this is not the best way
 	    # to do it.
 	    

@@ -20,7 +20,7 @@ use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use TableData qw(complete_ruleset);
 use File::Temp qw(tempfile);
 
-use EditTransaction;
+use ResourceEdit qw(config_resource_edit);
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -31,13 +31,8 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::ResourceData);
 
-our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
-
-our (%RESOURCE_IGNORE) = ( 'image_data' => 1 );
-
 our (%TAG_VALUES);
 
-our ($IMAGE_IDENTIFY_COMMAND, $IMAGE_CONVERT_COMMAND, $IMAGE_MAX);
 
 # initialize ( )
 # 
@@ -128,15 +123,7 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
-    $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
-    
-    $IMAGE_IDENTIFY_COMMAND = $ds->config_value('image_identify_cmd') || '/opt/local/bin/identify';
-    $IMAGE_CONVERT_COMMAND = $ds->config_value('image_convert_cmd') || '/opt/local/bin/convert';
-    $IMAGE_MAX = $ds->config_value('image_max_dimension') || 150;
-    
-    die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
-	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
+    config_resource_edit(Dancer::config);
     
     my $dbh = $ds->get_connection;
     
@@ -157,11 +144,11 @@ sub update_resources {
     # First get the parameters from the URL, and/or from the body if it is from a web form. In the
     # latter case, it will necessarily specify a single record only.
     
-    my %conditions;
+    my $allows = { };
     
-    $conditions{CREATE_RECORDS} = 1 if $arg && $arg eq 'add';
+    $allows->{CREATE_RECORDS} = 1 if $arg && $arg eq 'add';
     
-    my $main_params = $request->get_main_params(\%conditions);
+    my $main_params = $request->get_main_params($allows);
     my $perms = $request->require_authentication($RESOURCE_QUEUE);
     
     # Then decode the body, and extract input records from it. If an error occured, return an
@@ -169,597 +156,345 @@ sub update_resources {
     
     my (@records) = $request->unpack_input_records($main_params);
     
-    # Now go through the records and validate each one in turn.
-    
-    my %record_activation;
-    my @good_records;
-    
-    foreach my $r ( @records )
-    {
-	my $record_label = $r->{record_label} || $r->{eduresource_id} || '';
-	my $op = $r->{eduresource_id} ? 'update' : 'add';
-	
-	# If we are updating an existing record, we need to validate its fields.
-	
-	if ( my $record_id = $r->{eduresource_id} || $r->{eduresource_no} )
-	{
-	    $r->{eduresource_no} = $record_id = $request->validate_extident('EDR', $record_id, 'eduresource_id');
-	    delete $r->{eduresource_id};
-	    
-	    # Fetch the current authorization and status information.
-	    
-	    # my ($current_status, $record_authno, $record_entno, $record_entid) = 
-	    # 	$request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
-	    # 				      'status, authorizer_no, enterer_no, enterer_id');
-	    
-	    # Make sure that we have authorization to modify this record, and that it actually exists.
-	    
-	    my ($current) = $request->fetch_record($dbh, $RESOURCE_QUEUE, "eduresource_no=$record_id",
-						   'eduresource_no, status, authorizer_no, enterer_no, enterer_id');
-	    
-	    # If we cannot find the record, then add an error to the request and continue on to
-	    # the next.
-	    
-	    unless ( $current )
-	    {
-		$request->add_record_error('E_NOT_FOUND', $record_label, "record not found");
-		next;
-	    }
-
-	    # Otherwise, check the permission that the current user has on this record. If they
-	    # have the 'admin' permission, they can modify the record and also adjust its status.
-
-	    my $permission = $request->check_record_permission($current, $RESOURCE_QUEUE, 'edit', 'eduresource_no');
-	    
-	    if ( $permission eq 'admin' )
-	    {
-		# If the status is being explicitly set to 'active', then the new record
-		# values should be copied into the active resources table. This is a valid
-		# operation even if a previous version of the record is already in that table.
-		
-		if ( $r->{status} && $r->{status} eq 'active' )
-		{
-		    $record_activation{$record_id} = 'copy';
-		}
-		
-		# Otherwise, if this record has a status that marks it as already having been
-		# copied to the active table, then we need to check and see if it is being set
-		# to some inactive status. If so, it will need to be removed from the active
-		# table.
-		
-		elsif ( $r->{status} && $r->{status} ne 'changes' )
-		{
-		    $record_activation{$record_id} = 'delete';
-		}
-		
-		else
-		{
-		    $r->{status} = 'changes';
-		}
-		
-		# Otherwise, the status can be set or left unchanged according to the value of
-		# $r->{status}.
-	    }
-	    
-	    # If we have the 'edit' role on this record, then we can update its values but not its
-	    # status. If the current status is 'active', then it will be automatically changed to
-	    # 'changes'.
-	    
-	    elsif ( $permission eq 'edit' )
-	    {
-		if ( $r->{status} )
-		{
-		    $request->add_record_warning('W_PERM', $record_label, 
-				"you do not have permission to change the status of this record");
-		    next;
-		}
-		
-		if ( $current->{status} eq 'active' )
-		{
-		    $r->{status} = 'changes';
-		}
-	    }
-	    
-	    # Otherwise, we do not have permission to edit this record.
-	    
-	    else
-	    {
-		$request->add_record_error('E_PERM', $record_label, "you do not have permission to edit this record");
-		next;
-	    }
-	}
-	
-	# If we do not have a record identifier, then we are adding a new record. This requires
-	# different validation checks.
-	
-	else
-	{
-	    # Make sure that this operation allows us to create records in the first place.
-	    
-	    unless ( $conditions{CREATE_RECORDS} )
-	    {
-		$request->add_record_error('C_CREATE', $record_label, "missing record identifier; this operation cannot create new records");
-		next;
-	    }
-	    
-	    # Make sure that we have authorization to add records to this table.
-	    
-	    my $permission = $request->check_table_permission($dbh, $RESOURCE_QUEUE, 'post');
-	    
-	    # If we have 'admin' privileges on the resource queue table, then we can add a new
-	    # record with any status we choose. The status will default to 'pending' if not
-	    # explicitly set.
-	    
-	    if ( $permission eq 'admin' )
-	    {
-		$r->{status} ||= 'pending';
-	    }
-	    
-	    # If we have 'post' privileges, we can create a new record. The status will
-	    # automatically be set to 'pending', regardless of what is specified in the record.
-	    
-	    elsif ( $permission eq 'post' )
-	    {
-		$r->{status} = 'pending';
-	    }
-	    
-	    # Otherwise, we have no ability to do anything at all.
-	    
-	    else
-	    {
-		$request->add_record_error('E_PERM', undef, 
-				    "you do not have permission to add records");
-		next;
-	    }
-	}
-	
-	# If $r has a 'tags' field, then look up the tag definitions if necessary and translate
-	# the value into a list of integers.
-	
-	if ( my $tag_list = $r->{tags} )
-	{
-	    $request->cache_tag_values();
-	    
-	    my @tags = ref $tag_list eq 'ARRAY' ? @$tag_list : split (/\s*,\s*/, $tag_list);
-	    my @tag_ids;
-	    
-	    foreach my $t ( @tags )
-	    {
-		if ( $t =~ /^\d+$/ )
-		{
-		    push @tag_ids, $t;
-		}
-		
-		elsif ( $PB2::ResourceData::TAG_VALUE{lc $t} )
-		{
-		    push @tag_ids, $PB2::ResourceData::TAG_VALUE{lc $t};
-		}
-		
-		else
-		{
-		    $request->add_record_warning('E_TAG', $record_label, "unknown resource tag '$t'");
-		}
-	    }
-	    
-	    $r->{tags} = join(',', @tag_ids);
-	}
-	
-	# Now validate the fields and construct the lists that will be used to generate an SQL
-	# statement to add or update the record.
-	
-	$request->validate_against_table($dbh, $RESOURCE_QUEUE, $op, $r, 'eduresource_no', \%RESOURCE_IGNORE);
-	
-	push @good_records, $r;
-    }
-    
-    # If any errors were found in the parameters, stop now and return an HTTP 400 response.
-    
     if ( $request->errors )
     {
-	die $request->exception(400, "Bad request");
+	die $request->exception(400);
     }
     
-    # If no good records were found, stop now and return an HTTP 400 response.
+    # If we get here without any errors being detected so far, create a new ResourceEdit object to
+    # handle this operation. ResourceEdit is a subclass of EditTransaction, specialized for this
+    # table.
     
-    unless ( @good_records )
+    my $edt = ResourceEdit->new($request, $perms, $RESOURCE_QUEUE, $allows);
+    
+    # Now go through the records and handle each one in turn. This will check every record and
+    # queue them up for insertion and/or updating.
+    
+    foreach my $r (@records)
     {
-	$request->add_error("E_NO_RECORDS: no valid records for add or update");
-	die $request->exception(400, "Bad request");
+	$edt->insert_update_record($RESOURCE_QUEUE, $r);
     }
     
-    # Now go through and try to actually add or update these records.
+    # If no errors have been detected so far, execute the queued actions inside a database
+    # transaction. If any errors occur during that process, the transaction will be automatically
+    # rolled back. Otherwise, it will be automatically committed.
     
-    my $edt = EditTransaction->new($dbh, { conditions => \%conditions,
-					   debug => $request->debug,
-					   auth_info => $auth_info });
+    $edt->execute;
     
-    # $request->check_edt($edt);
-    
-    my (%updated_records);
-    
-    try {
-
-	foreach my $r ( @records )
-	{
-	    my $record_label = $r->{record_label} || $r->{eduresource_no} || '';
-	    
-	    # If we have a value for eduresource_no, update the corresponding record.
-	    
-	    if ( my $record_id = $r->{eduresource_no} )
-	    {
-		$request->do_update($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", $r, \%conditions);
-		
-		$request->store_image($dbh, $record_id, $r) if $r->{image_data};
-		
-		$updated_records{$record_id} = 1;
-		
-		# If this record should be added to or removed from the active table, do so now.
-		
-		if ( $record_activation{$record_id} )
-		{
-		    $request->activate_resource($dbh, $r->{eduresource_no}, $record_activation{$record_id});
-		}		
-	    }
-	    
-	    else
-	    {
-		my $new_id = $request->do_add($dbh, $RESOURCE_QUEUE, $r, \%conditions);
-		
-		$request->store_image($dbh, $new_id, $r) if $new_id && $r->{image_data};
-		
-		$updated_records{$new_id} = 1 if $new_id;
-		
-		$request->{my_record_label}{$new_id} = $r->{record_label} if $r->{record_label};
-		
-		# If this record should be added to the active table, do so now.
-		
-		if ( $r->{status} eq 'active' )
-		{
-		    $request->activate_resource($dbh, $new_id, 'copy');
-		}
-	    }
-	}
-    }
-    
-    # If an exception is caught, we roll back the transaction before re-throwing it as an internal
-    # error. This will generate an HTTP 500 response.
-    
-    catch {
-
-	$edt->rollback;
-	die $_;
-    };
-    
-    # If any warnings (non-fatal conditions) were detected, add them to the
-    # request record so they will be communicated back to the user.
+    # Now handle any errors or warnings that may have been generated.
     
     $request->add_edt_warnings($edt);
     
-    # If we completed the procedure without any exceptions, but error conditions were detected
-    # nonetheless, we also roll back the transaction.
-    
     if ( $edt->errors )
     {
-	$edt->rollback;
-	$request->add_edt_errors($edt);
-	die $request->exception(400, "Bad request");
+    	$request->add_edt_errors($edt);
+    	die $request->exception(400, "Bad request");
     }
     
-    # If the parameter 'strict' was given and warnings were generated, also roll back the
-    # transaction.
+    # Return all inserted or updated records.
     
-    elsif ( $request->clean_param('strict') && $request->warnings )
-    {
-	$edt->rollback;
-	die $request->exceptions(400, "E_STRICT: warnings were generated");
-    }
-    
-    else
-    {
-	# If we get here, we're good to go! Yay!!!
+    my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
 	
-	$edt->commit;
-	
-	# Return the indicated information. This will generally be the updated record.
-	
-	my ($id_string) = join(',', keys %updated_records);
-	
-	$request->list_updated_resources($dbh, $id_string) if $id_string;
-    }
+    $request->list_updated_resources($dbh, $id_string) if $id_string;
 }
 
-
-sub store_image {
     
-    my ($request, $dbh, $eduresource_no, $r) = @_;
+    # my %record_activation;
+    # my @good_records;
     
-    return unless $eduresource_no && $r->{image_data};
-    
-    print STDERR "Storing image:\n" if $request->debug;
-    
-    my $fh = File::Temp->new( UNLINK => 1 );
-    
-    unless ( $fh )
-    {
-	print STDERR "ERROR: could not create temporary file for image\n"
-	    if $request->debug;
-	return;
-    }
-    
-    my $filename = $fh->filename;
-    
-    print STDERR "Writing image to $filename\n" if $request->debug;
-    
-    binmode($fh);
-    
-    my $base64_data = $r->{image_data};
-    $base64_data =~ s/ ^ data: .*? , //xsi;
-    
-    my $raw_data = MIME::Base64::decode($base64_data);
-    
-    my $store_data;
-    
-    print $fh $raw_data;
-    
-    close $fh;
-    
-    my $output = `$IMAGE_IDENTIFY_COMMAND $filename`;
-    
-    print STDERR "Executing: $IMAGE_IDENTIFY_COMMAND $filename\nOutput: $output\n" if $request->debug;
-    
-    if ( $output =~ qr{ \s (\d+) x (\d+) }xs )
-    {
-	my $width = $1;
-	my $height = $2;
+    # foreach my $r ( @records )
+    # {
+    # 	my $record_label = $r->{record_label} || $r->{eduresource_id} || '';
+    # 	my $op = $r->{eduresource_id} ? 'update' : 'add';
 	
-	if ( $width > 0 && $height > 0 && $width <= $IMAGE_MAX && $height <= $IMAGE_MAX )
-	{
-	    $store_data = $r->{image_data};
-	}
+    # 	# If we are updating an existing record, we need to validate its fields.
 	
-	else
-	{
-	    my $newsize = $width >= $height ? $IMAGE_MAX : "x$IMAGE_MAX";
-	    my $resize_cmd = "convert $filename -resize $newsize -format png -";
+    # 	if ( my $record_id = $r->{eduresource_id} || $r->{eduresource_no} )
+    # 	{
+    # 	    $r->{eduresource_no} = $record_id = $request->validate_extident('EDR', $record_id, 'eduresource_id');
+    # 	    delete $r->{eduresource_id};
 	    
-	    print STDERR "Executing: $resize_cmd\n" if $request->debug;
+    # 	    # Fetch the current authorization and status information.
 	    
-	    my $converted_data = `$resize_cmd`;
-	    $store_data = "data:image/png;base64," . MIME::Base64::encode_base64($converted_data);
+    # 	    # my ($current_status, $record_authno, $record_entno, $record_entid) = 
+    # 	    # 	$request->fetch_record_values($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", 
+    # 	    # 				      'status, authorizer_no, enterer_no, enterer_id');
 	    
-	    print STDERR 'Output: [' . length($store_data) . " chars converted to base64]\n" if $request->debug;
-	}
-    }
-    
-    else
-    {
-	$request->add_error("E_IMAGEDATA: the value of 'image_data' was not an image in a recognized format");
-    }
-    
-    my $sql = "REPLACE INTO $RESOURCE_IMAGES (eduresource_no, image_data) values ($eduresource_no, ?)";
-    
-    my $result = $dbh->do($sql, { }, $store_data);
-    
-    my $a = 1;	# we can stop here when debugging
-}
-
-
-sub activate_resource {
-    
-    my ($request, $dbh, $eduresource_no, $action) = @_;
-    
-    $dbh ||= $request->get_connection;
-    
-    my $quoted_id = $dbh->quote($eduresource_no);
-    
-    unless ( $eduresource_no && $eduresource_no =~ /^\d+$/ )
-    {
-	die "error activating or inactivating resource: bad resource id";
-    }
-    
-    # If we are directed to delete this resource from the active table, do so.
-    
-    if ( $action eq 'delete' )
-    {
-	my $sql = "
-		DELETE FROM $RESOURCE_ACTIVE
-		WHERE $RESOURCE_IDFIELD = $quoted_id";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	my $result = $dbh->do($sql);
-	
-	$sql = "	DELETE FROM $RESOURCE_TAGS
-		WHERE resource_id = $quoted_id";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	$result = $dbh->do($sql);
-	
-	# Delete the image file, if any.
-	
-	$request->delete_image_file($eduresource_no);
-		
-	my $a = 1;	# we can stop here when debugging
-    }
-    
-    # If the action is 'copy', then we copy the record from the queue table to the active
-    # table. The active table has a somewhat different set of fields.
-    
-    elsif ( $action eq 'copy' )
-    {
-	# First get the record values to copy.
-	
-	my $sql = "
-		SELECT e.eduresource_no as id, i.image_data, e.*
-		FROM $RESOURCE_QUEUE as e left join $RESOURCE_IMAGES as i using (eduresource_no)
-		WHERE eduresource_no = $quoted_id";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	my ($r) = $dbh->selectrow_hashref($sql);
-	
-	# If we can't find the requested resource, throw an exception.
-	
-	unless ( ref $r eq 'HASH' )
-	{
-	    die $request->exception(500, "internal error");
-	}
-	
-	# We want the 'authorizer_no' and 'created' fields to be filled in automatically.
-	
-	delete $r->{authorizer_no};
-	delete $r->{created};
-	
-	# Then handle the image, if any. We need to decode the image data and write it to a file
-	# in the proper directory, then stuff the file name into the 'image' field of the mirrored
-	# record.
-	
-	if ( $r->{image_data} )
-	{
-	    $r->{image} = $request->write_image_file($r->{id}, $r->{image_data});
-	}
-	
-	# Now check the field values.
-	
-	$request->validate_against_table($dbh, $RESOURCE_ACTIVE, 'mirror', $r, 'id');
-	
-	# Then copy the record over to the active table.
-	
-	$request->do_replace($dbh, $RESOURCE_ACTIVE, $r, { });
-	
-	# Then handle the tags. We first delete any which are there, then create new records for
-	# the ones we know are supposed to be there.
-	
-	$sql =  "	DELETE FROM $RESOURCE_TAGS
-		WHERE resource_id = $quoted_id";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	my $result = $dbh->do($sql);
-	
-	if ( $r->{tags} )
-	{
-	    my @tags = split /,\s*/, $r->{tags};
-	    my @insert;
+    # 	    # Make sure that we have authorization to modify this record, and that it actually exists.
 	    
-	    foreach my $t ( @tags )
-	    {
-		next unless $t =~ /^\d+$/ && $t;
-		
-		push @insert, "($eduresource_no, $t)";
-	    }
+    # 	    my ($current) = $request->fetch_record($dbh, $RESOURCE_QUEUE, "eduresource_no=$record_id",
+    # 						   'eduresource_no, status, authorizer_no, enterer_no, enterer_id');
 	    
-	    if ( @insert )
-	    {
-		my $insert_str = join(', ', @insert);
+    # 	    # If we cannot find the record, then add an error to the request and continue on to
+    # 	    # the next.
+	    
+    # 	    unless ( $current )
+    # 	    {
+    # 		$request->add_record_error('E_NOT_FOUND', $record_label, "record not found");
+    # 		next;
+    # 	    }
+
+    # 	    # Otherwise, check the permission that the current user has on this record. If they
+    # 	    # have the 'admin' permission, they can modify the record and also adjust its status.
+
+    # 	    my $permission = $request->check_record_permission($current, $RESOURCE_QUEUE, 'edit', 'eduresource_no');
+	    
+    # 	    if ( $permission eq 'admin' )
+    # 	    {
+    # 		# If the status is being explicitly set to 'active', then the new record
+    # 		# values should be copied into the active resources table. This is a valid
+    # 		# operation even if a previous version of the record is already in that table.
 		
-		$sql = "	INSERT INTO $RESOURCE_TAGS (resource_id, tag_id) VALUES $insert_str";
+    # 		if ( $r->{status} && $r->{status} eq 'active' )
+    # 		{
+    # 		    $record_activation{$record_id} = 'copy';
+    # 		}
 		
-		print STDERR "$sql\n\n" if $request->debug;
+    # 		# Otherwise, if this record has a status that marks it as already having been
+    # 		# copied to the active table, then we need to check and see if it is being set
+    # 		# to some inactive status. If so, it will need to be removed from the active
+    # 		# table.
 		
-		my $result = $dbh->do($sql);
+    # 		elsif ( $r->{status} && $r->{status} ne 'changes' )
+    # 		{
+    # 		    $record_activation{$record_id} = 'delete';
+    # 		}
 		
-		my $a = 1;	# we can stop here when debugging
-	    }
-	}
-    }
-    
-    else
-    {
-	die "invalid activation action '$action'";
-    }
-}
-
-
-sub write_image_file {
-    
-    my ($request, $record_id, $image_data) = @_;
-    
-    return unless $RESOURCE_IMG_DIR;
-    return unless $image_data;
-    
-    # First, decode the image and determine the type.
-    
-    my $suffix;
-    
-    if ( $image_data =~ qr{ ^ data: .*? image/(\w+) }xsi )
-    {
-	$suffix = $1;
-	$image_data =~ s/ ^ data: .*? , //xsi;
-    }
-    
-    my $raw_data = MIME::Base64::decode($image_data);
-    
-    unless ( $suffix )
-    {
-	my $first_four = unpack("l", $raw_data);
+    # 		else
+    # 		{
+    # 		    $r->{status} = 'changes';
+    # 		}
+		
+    # 		# Otherwise, the status can be set or left unchanged according to the value of
+    # 		# $r->{status}.
+    # 	    }
+	    
+    # 	    # If we have the 'edit' role on this record, then we can update its values but not its
+    # 	    # status. If the current status is 'active', then it will be automatically changed to
+    # 	    # 'changes'.
+	    
+    # 	    elsif ( $permission eq 'edit' )
+    # 	    {
+    # 		if ( $r->{status} )
+    # 		{
+    # 		    $request->add_record_warning('W_PERM', $record_label, 
+    # 				"you do not have permission to change the status of this record");
+    # 		    next;
+    # 		}
+		
+    # 		if ( $current->{status} eq 'active' )
+    # 		{
+    # 		    $r->{status} = 'changes';
+    # 		}
+    # 	    }
+	    
+    # 	    # Otherwise, we do not have permission to edit this record.
+	    
+    # 	    else
+    # 	    {
+    # 		$request->add_record_error('E_PERM', $record_label, "you do not have permission to edit this record");
+    # 		next;
+    # 	    }
+    # 	}
 	
-	if ( $first_four == 1196314761 )
-	{
-	    $suffix = 'png';
-	}
+    # 	# If we do not have a record identifier, then we are adding a new record. This requires
+    # 	# different validation checks.
 	
-	elsif ( $first_four == 944130375 )
-	{
-	    $suffix = 'gif';
-	}
+    # 	else
+    # 	{
+    # 	    # Make sure that this operation allows us to create records in the first place.
+	    
+    # 	    unless ( $conditions{CREATE_RECORDS} )
+    # 	    {
+    # 		$request->add_record_error('C_CREATE', $record_label, "missing record identifier; this operation cannot create new records");
+    # 		next;
+    # 	    }
+	    
+    # 	    # Make sure that we have authorization to add records to this table.
+	    
+    # 	    my $permission = $request->check_table_permission($dbh, $RESOURCE_QUEUE, 'post');
+	    
+    # 	    # If we have 'admin' privileges on the resource queue table, then we can add a new
+    # 	    # record with any status we choose. The status will default to 'pending' if not
+    # 	    # explicitly set.
+	    
+    # 	    if ( $permission eq 'admin' )
+    # 	    {
+    # 		$r->{status} ||= 'pending';
+    # 	    }
+	    
+    # 	    # If we have 'post' privileges, we can create a new record. The status will
+    # 	    # automatically be set to 'pending', regardless of what is specified in the record.
+	    
+    # 	    elsif ( $permission eq 'post' )
+    # 	    {
+    # 		$r->{status} = 'pending';
+    # 	    }
+	    
+    # 	    # Otherwise, we have no ability to do anything at all.
+	    
+    # 	    else
+    # 	    {
+    # 		$request->add_record_error('E_PERM', undef, 
+    # 				    "you do not have permission to add records");
+    # 		next;
+    # 	    }
+    # 	}
 	
-	elsif ( $first_four == 544099650 )
-	{
-	    $suffix = 'bmp';
-	}
+    # 	# If $r has a 'tags' field, then look up the tag definitions if necessary and translate
+    # 	# the value into a list of integers.
 	
-	elsif ( $first_four == -520103681 )
-	{
-	    $suffix = 'jpg';
-	}
+    # 	if ( my $tag_list = $r->{tags} )
+    # 	{
+    # 	    $request->cache_tag_values();
+	    
+    # 	    my @tags = ref $tag_list eq 'ARRAY' ? @$tag_list : split (/\s*,\s*/, $tag_list);
+    # 	    my @tag_ids;
+	    
+    # 	    foreach my $t ( @tags )
+    # 	    {
+    # 		if ( $t =~ /^\d+$/ )
+    # 		{
+    # 		    push @tag_ids, $t;
+    # 		}
+		
+    # 		elsif ( $PB2::ResourceData::TAG_VALUE{lc $t} )
+    # 		{
+    # 		    push @tag_ids, $PB2::ResourceData::TAG_VALUE{lc $t};
+    # 		}
+		
+    # 		else
+    # 		{
+    # 		    $request->add_record_warning('E_TAG', $record_label, "unknown resource tag '$t'");
+    # 		}
+    # 	    }
+	    
+    # 	    $r->{tags} = join(',', @tag_ids);
+    # 	}
 	
-	else
-	{
-	    $suffix = ".image";
-	}
-    }
+    # 	# Now validate the fields and construct the lists that will be used to generate an SQL
+    # 	# statement to add or update the record.
+	
+    # 	$request->validate_against_table($dbh, $RESOURCE_QUEUE, $op, $r, 'eduresource_no', \%RESOURCE_IGNORE);
+	
+    # 	push @good_records, $r;
+    # }
     
-    my $filename = "eduresource_$record_id.$suffix";
-    my $filepath = "$RESOURCE_IMG_DIR/$filename";
-
-    my $result = open( my $fout, ">", $filepath );
-
-    unless ( $result )
-    {
-	print STDERR "ERROR: could not open '$filepath' for writing: $!\n";
-	$request->add_error("E_INTERNAL ($record_id): could not write image file");
-	return;
-    }
+    # # If any errors were found in the parameters, stop now and return an HTTP 400 response.
     
-    binmode($fout);
+    # if ( $request->errors )
+    # {
+    # 	die $request->exception(400, "Bad request");
+    # }
     
-    print $fout $raw_data;
+    # # If no good records were found, stop now and return an HTTP 400 response.
     
-    close $fout || warn "ERROR: could not write '$filename': $!";
+    # unless ( @good_records )
+    # {
+    # 	$request->add_error("E_NO_RECORDS: no valid records for add or update");
+    # 	die $request->exception(400, "Bad request");
+    # }
     
-    return $filename;
-}
-
-
-sub delete_image_file {
-
-    my ($request, $record_id) = @_;
+    # # Now go through and try to actually add or update these records.
     
-    my $filename = "eduresource_$record_id.png";
-    my $filepath = "$RESOURCE_IMG_DIR/$filename";
+    # my $edt = EditTransaction->new($dbh, { conditions => \%conditions,
+    # 					   debug => $request->debug,
+    # 					   auth_info => $auth_info });
+    
+    # # $request->check_edt($edt);
+    
+    # my (%updated_records);
+    
+    # try {
 
-    if ( -e $filepath )
-    {
-	unless ( unlink($filepath) )
-	{
-	    print STDERR "ERROR: could not unlink '$filepath': $!\n";
-	    $request->add_error("E_INTERNAL ($record_id): could not delete image file");
-	}
-    }
-}
+    # 	foreach my $r ( @records )
+    # 	{
+    # 	    my $record_label = $r->{record_label} || $r->{eduresource_no} || '';
+	    
+    # 	    # If we have a value for eduresource_no, update the corresponding record.
+	    
+    # 	    if ( my $record_id = $r->{eduresource_no} )
+    # 	    {
+    # 		$request->do_update($dbh, $RESOURCE_QUEUE, "eduresource_no = $record_id", $r, \%conditions);
+		
+    # 		$request->store_image($dbh, $record_id, $r) if $r->{image_data};
+		
+    # 		$updated_records{$record_id} = 1;
+		
+    # 		# If this record should be added to or removed from the active table, do so now.
+		
+    # 		if ( $record_activation{$record_id} )
+    # 		{
+    # 		    $request->activate_resource($dbh, $r->{eduresource_no}, $record_activation{$record_id});
+    # 		}		
+    # 	    }
+	    
+    # 	    else
+    # 	    {
+    # 		my $new_id = $request->do_add($dbh, $RESOURCE_QUEUE, $r, \%conditions);
+		
+    # 		$request->store_image($dbh, $new_id, $r) if $new_id && $r->{image_data};
+		
+    # 		$updated_records{$new_id} = 1 if $new_id;
+		
+    # 		$request->{my_record_label}{$new_id} = $r->{record_label} if $r->{record_label};
+		
+    # 		# If this record should be added to the active table, do so now.
+		
+    # 		if ( $r->{status} eq 'active' )
+    # 		{
+    # 		    $request->activate_resource($dbh, $new_id, 'copy');
+    # 		}
+    # 	    }
+    # 	}
+    # }
+    
+    # # If an exception is caught, we roll back the transaction before re-throwing it as an internal
+    # # error. This will generate an HTTP 500 response.
+    
+    # catch {
 
+    # 	$edt->rollback;
+    # 	die $_;
+    # };
+    
+    # # If any warnings (non-fatal conditions) were detected, add them to the
+    # # request record so they will be communicated back to the user.
+    
+    # $request->add_edt_warnings($edt);
+    
+    # # If we completed the procedure without any exceptions, but error conditions were detected
+    # # nonetheless, we also roll back the transaction.
+    
+    # if ( $edt->errors )
+    # {
+    # 	$edt->rollback;
+    # 	$request->add_edt_errors($edt);
+    # 	die $request->exception(400, "Bad request");
+    # }
+    
+    # # If the parameter 'strict' was given and warnings were generated, also roll back the
+    # # transaction.
+    
+    # elsif ( $request->clean_param('strict') && $request->warnings )
+    # {
+    # 	$edt->rollback;
+    # 	die $request->exceptions(400, "E_STRICT: warnings were generated");
+    # }
+    
+    # else
+    # {
+    # 	# If we get here, we're good to go! Yay!!!
+	
+    # 	$edt->commit;
+	
+    # 	# Return the indicated information. This will generally be the updated record.
+	
+    # 	my ($id_string) = join(',', keys %updated_records);
+	
+    # 	$request->list_updated_resources($dbh, $id_string) if $id_string;
+    # }
+# }
 
 
 sub delete_resources {
@@ -772,153 +507,182 @@ sub delete_resources {
 
     my (@id_list) = $request->clean_param_list('eduresource_id');
 
-    # Determine our authentication info.
-
-    my $auth_info = $request->get_auth_info($dbh, $RESOURCE_QUEUE);
-
-    # Then go through the records and validate each one in turn.
-
-    my %delete_ids;
+    # Determine our authentication info, and then create an EditTransaction object.
     
-    foreach my $record_id ( @id_list )
+    my $perms = $request->require_authentication($RESOURCE_QUEUE);
+    
+    my $edt = ResourceEdit->new($request, $perms, $RESOURCE_QUEUE, { });
+
+    # Then go through the records and handle each one in turn.
+    
+    foreach my $id (@id_list)
     {
-	next unless $record_id =~ /^\d+$/;
-	
-	my ($current) = $request->fetch_record($dbh, $RESOURCE_QUEUE, "eduresource_no=$record_id",
-					       'eduresource_no, status, authorizer_no, enterer_no, enterer_id');
-	
-	# If we cannot find the record, then add an error to the request and continue on to
-	# the next.
-	
-	unless ( $current )
-	{
-	    $request->add_record_warning('W_NOT_FOUND', $record_id, "record not found");
-	    next;
-	}
-	
-	my ($permission) = $request->check_record_permission($current, $RESOURCE_QUEUE, 'edit', 'eduresource_no');
-	
-	# If we have either the 'admin' or 'edit' role on this record, we can delete it.
-	
-	if ( $permission eq 'admin' || $permission eq 'edit' )
-	{
-	    $delete_ids{$record_id} = 1;
-	}
-	
-	# Otherwise, we do not have permission to delete this record.
-	
-	else
-	{
-	    $request->add_record_warning('W_PERM', $record_id, "you do not have permission to delete this record");
-	}
-    }
-
-    # Unless we have records that we can delete, return immediately.
-
-    unless ( %delete_ids )
-    {
-	$request->add_warning('W_NOTHING: nothing to delete');
-	return;
-    }
-
-    # Otherwise, we create a new EditTransaction and then try to delete the records.
-    
-    my %conditions;
-    
-    my $edt = EditTransaction->new($dbh, { conditions => \%conditions,
-					   debug => $request->debug,
-					   auth_info => $auth_info });
-
-    try {
-
-	my $id_list = join(',', keys %delete_ids);
-
-	my $sql = "
-		DELETE FROM $RESOURCE_QUEUE
-		WHERE eduresource_no in ($id_list)";
-
-	print STDERR "$sql\n\n" if $request->debug;
-
-	my $result = $dbh->do($sql);
-	
-	$sql = "
-		DELETE FROM $RESOURCE_ACTIVE
-		WHERE $RESOURCE_IDFIELD in ($id_list)";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	$result = $dbh->do($sql);
-	
-	$sql = "
-		DELETE FROM $RESOURCE_TAGS
-		WHERE resource_id in ($id_list)";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	$result = $dbh->do($sql);
-	
-	$sql = "
-		DELETE FROM $RESOURCE_IMAGES
-		WHERE eduresource_no in ($id_list)";
-	
-	print STDERR "$sql\n\n" if $request->debug;
-	
-	$result = $dbh->do($sql);
+	$edt->delete_record($RESOURCE_QUEUE, $id);
     }
     
-    # If an exception is caught, roll back the transaction before re-throwing it as an internal
-    # error. This will generate an HTTP 500 response.
-	
-    catch {
-
-	$edt->rollback;
-	die $_;
-    };
-
-    # If any warnings (non-fatal conditions) were detected, add them to the
-    # request record so they will be communicated back to the user.
+    # If no errors have been detected so far, execute the queued actions inside a database
+    # transaction. If any errors occur during that process, the transaction will be automatically
+    # rolled back. Otherwise, it will be automatically committed.
+    
+    $edt->execute;
+    
+    # Now handle any errors or warnings that may have been generated.
     
     $request->add_edt_warnings($edt);
     
-    # If we completed the procedure without any exceptions, but error conditions were detected
-    # nonetheless, we also roll back the transaction.
-    
     if ( $edt->errors )
     {
-	$edt->rollback;
-	$request->add_edt_errors($edt);
-	die $request->exception(400, "Bad request");
+    	$request->add_edt_errors($edt);
+    	die $request->exception(400, "Bad request");
     }
     
-    # If the parameter 'strict' was given and warnings were generated, also roll back the
-    # transaction.
+    # Then return one result record for each deleted database record.
     
-    elsif ( $request->clean_param('strict') && $request->warnings )
+    my @results;
+    
+    foreach my $record_id ( $edt->deleted_keys )
     {
-	$edt->rollback;
-	die $request->exceptions(400, "E_STRICT: warnings were generated");
+	push @results, { eduresource_no => generate_identifier('EDR', $record_id),
+			 status => 'deleted' };
     }
     
-    else
-    {
-	# If we get here, we're good to go! Yay!!!
-	
-	$edt->commit;
-	
-	# Return a list of records that were deleted.
-
-	my @results;
-	
-	foreach my $record_id ( sort keys %delete_ids )
-	{
-	    push @results, { eduresource_no => generate_identifier('EDR', $record_id),
-			     status => 'deleted' };
-	}
-	
-	$request->{main_result} = \@results;
-	$request->{result_count} = scalar(@results);
-    }
+    $request->{main_result} = \@results;
+    $request->{result_count} = scalar(@results);
 }
+    
+
+#     my %delete_ids;
+    
+#     foreach my $record_id ( @id_list )
+#     {
+# 	next unless $record_id =~ /^\d+$/;
+	
+# 	my ($current) = $request->fetch_record($dbh, $RESOURCE_QUEUE, "eduresource_no=$record_id",
+# 					       'eduresource_no, status, authorizer_no, enterer_no, enterer_id');
+	
+# 	# If we cannot find the record, then add an error to the request and continue on to
+# 	# the next.
+	
+# 	unless ( $current )
+# 	{
+# 	    $request->add_record_warning('W_NOT_FOUND', $record_id, "record not found");
+# 	    next;
+# 	}
+	
+# 	my ($permission) = $request->check_record_permission($current, $RESOURCE_QUEUE, 'edit', 'eduresource_no');
+	
+# 	# If we have either the 'admin' or 'edit' role on this record, we can delete it.
+	
+# 	if ( $permission eq 'admin' || $permission eq 'edit' )
+# 	{
+# 	    $delete_ids{$record_id} = 1;
+# 	}
+	
+# 	# Otherwise, we do not have permission to delete this record.
+	
+# 	else
+# 	{
+# 	    $request->add_record_warning('W_PERM', $record_id, "you do not have permission to delete this record");
+# 	}
+#     }
+
+#     # Unless we have records that we can delete, return immediately.
+
+#     unless ( %delete_ids )
+#     {
+# 	$request->add_warning('W_NOTHING: nothing to delete');
+# 	return;
+#     }
+
+#     # Otherwise, we create a new EditTransaction and then try to delete the records.
+    
+#     my %conditions;
+    
+#     my $edt = EditTransaction->new($dbh, { conditions => \%conditions,
+# 					   debug => $request->debug,
+# 					   auth_info => $auth_info });
+
+#     try {
+
+# 	my $id_list = join(',', keys %delete_ids);
+
+# 	my $sql = "
+# 		DELETE FROM $RESOURCE_QUEUE
+# 		WHERE eduresource_no in ($id_list)";
+
+# 	print STDERR "$sql\n\n" if $request->debug;
+
+# 	my $result = $dbh->do($sql);
+	
+# 	$sql = "
+# 		DELETE FROM $RESOURCE_ACTIVE
+# 		WHERE $RESOURCE_IDFIELD in ($id_list)";
+	
+# 	print STDERR "$sql\n\n" if $request->debug;
+	
+# 	$result = $dbh->do($sql);
+	
+# 	$sql = "
+# 		DELETE FROM $RESOURCE_TAGS
+# 		WHERE resource_id in ($id_list)";
+	
+# 	print STDERR "$sql\n\n" if $request->debug;
+	
+# 	$result = $dbh->do($sql);
+	
+# 	$sql = "
+# 		DELETE FROM $RESOURCE_IMAGES
+# 		WHERE eduresource_no in ($id_list)";
+	
+# 	print STDERR "$sql\n\n" if $request->debug;
+	
+# 	$result = $dbh->do($sql);
+#     }
+    
+#     # If an exception is caught, roll back the transaction before re-throwing it as an internal
+#     # error. This will generate an HTTP 500 response.
+	
+#     catch {
+
+# 	$edt->rollback;
+# 	die $_;
+#     };
+
+#     # If any warnings (non-fatal conditions) were detected, add them to the
+#     # request record so they will be communicated back to the user.
+    
+#     $request->add_edt_warnings($edt);
+    
+#     # If we completed the procedure without any exceptions, but error conditions were detected
+#     # nonetheless, we also roll back the transaction.
+    
+#     if ( $edt->errors )
+#     {
+# 	$edt->rollback;
+# 	$request->add_edt_errors($edt);
+# 	die $request->exception(400, "Bad request");
+#     }
+    
+#     # If the parameter 'strict' was given and warnings were generated, also roll back the
+#     # transaction.
+    
+#     elsif ( $request->clean_param('strict') && $request->warnings )
+#     {
+# 	$edt->rollback;
+# 	die $request->exceptions(400, "E_STRICT: warnings were generated");
+#     }
+    
+#     else
+#     {
+# 	# If we get here, we're good to go! Yay!!!
+	
+# 	$edt->commit;
+	
+# 	# Return a list of records that were deleted.
+
+# 	my @results;
+	
+
 
 
 sub list_updated_resources {

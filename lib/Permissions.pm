@@ -24,20 +24,20 @@ use Scalar::Util qw(weaken);
 our (%PERMISSION_NAME) = ( view => 1, post => 1, edit => 1, delete => 1, admin => 1 );
 
 
-# new ( request, session_id, table_name )
+# new ( dbh, session_id, table_name, options )
 # 
 # Given a session_id string, look up the user_id, authorizer_no, and enterer_no values from the
 # session table and create a new Permissions object. If a table name is given, fill in the
 # permissions (if any) that the user has for that table.
 # 
-# Each Permissions object is tied to a particular request, but we weaken the reference so that it
-# will not prevent the request object from being destroyed when it goes out of scope. In general,
-# the Permissions object should only be stored in dynamic variables or as a subordinate object to
-# a request.
+# Each Permissions object is generated for a data service request or the execution of a
+# command-line script.
 
 sub new {
     
-    my ($class, $request, $session_id, $table_name) = @_;
+    my ($class, $dbh, $session_id, $table_name, $options) = @_;
+    
+    $options ||= { };
     
     my $perms;
     
@@ -45,9 +45,8 @@ sub new {
     # table. If we are given a table name, then look up the requestor's role for that table as
     # well.
     
-    if ( my $session_id )
+    if ( $session_id )
     {
-	my $dbh = $request->get_connection;
 	my $quoted_id = $dbh->quote($session_id);
 	
 	if ( $table_name )
@@ -64,7 +63,7 @@ sub new {
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
 		WHERE session_id = $quoted_id";
 	    
-	    print STDERR "$sql\n\n" if $request->debug;
+	    print STDERR "$sql\n\n" if $options->{debug};
 	    
 	    $perms = $dbh->selectrow_hashref($sql);
 	    
@@ -72,7 +71,7 @@ sub new {
 	    
 	    unless ( $perms && $perms->{user_id} )
 	    {
-		return Permissions->no_login($request, $table_name);
+		return Permissions->no_login($dbh, $table_name, $options);
 	    }
 	    
 	    # If we retrieved a specific table permission, add it into the new object. Otherwise, add
@@ -103,7 +102,7 @@ sub new {
 		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, role
 		FROM $SESSION_DATA WHERE session_id = $quoted_id";
 	    
-	    print STDERR "$sql\n\n" if $request->debug;
+	    print STDERR "$sql\n\n" if $options->{debug};
 	    
 	    $perms = $dbh->selectrow_hashref($sql);
 	    
@@ -112,7 +111,7 @@ sub new {
 	    
 	    unless ( $perms && $perms->{user_id} )
 	    {
-		return Permissions->no_login($request, $table_name);
+		return Permissions->no_login($dbh, $table_name, $options);
 	    }
 	}
 	
@@ -126,17 +125,14 @@ sub new {
 	    $perms->{superuser} = 0;
 	}
 	
-	# Cache the request and dbh values for later use, plus the debug flag.
+	# Cache the dbh in case we need it later, plus the debug flag.
 	
 	bless $perms, $class;
 	
 	$perms->{dbh} = $dbh;
 	weaken $perms->{dbh};
 	
-	$perms->{request} = $request;
-	weaken $perms->{request};
-	
-	$perms->{debug} = $request->debug;
+	$perms->{debug} = $options->{debug};
 	
 	$perms->{role} ||= 'guest';
 	
@@ -147,31 +143,28 @@ sub new {
     
     else
     {
-	return Permissions->no_login($request, $table_name);
+	return Permissions->no_login($dbh, $table_name, $options);
     }
 }
 
 
-# no_login ( request, table_name )
+# no_login ( dbh, table_name )
 # 
 # Return a Permissions object that gives no permissions at all. If a table name was given, add a
 # placeholder permissions hash that does not give any permissions.
 
 sub no_login {
     
-    my ($class, $request, $table_name) = @_;
+    my ($class, $dbh, $table_name, $options) = @_;
     
     my $no_perms = { authorizer_no => 0, enterer_no => 0, user_id => '', role => 'none' };
     
     $no_perms->{table_permission}{$table_name} = { } if $table_name;
     
-    $no_perms->{dbh} = $request->get_connection;
+    $no_perms->{dbh} = $dbh;
     weaken $no_perms->{dbh};
     
-    $no_perms->{request} = $request;
-    weaken $no_perms->{request};
-    
-    $no_perms->{debug} = $request->debug;
+    $no_perms->{debug} = $options->{debug};
     
     bless $no_perms, $class;
     return $no_perms;
