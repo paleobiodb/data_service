@@ -228,7 +228,7 @@ use PB2::CombinedData;
     
     $ds2->define_node({ path => 'occs/diversity',
 			place => 5,
-			usage => [ "/occs/diversity.txt?base_name=Dinosauria^Aves&continent=NOA&count=genera&reso=epoch" ],
+			usage => [ "/occs/diversity.txt?base_name=Dinosauria^Aves&continent=NOA&count=genera" ],
 			method => 'diversity',
 			output => '1.2:occs:diversity',
 			default_limit => 1000,
@@ -255,18 +255,32 @@ use PB2::CombinedData;
     
     $ds2->define_node({ path => 'occs/quickdiv',
 			place => 6,
-			usage => [ "/occs/quickdiv.txt?base_name=Dinosauria^Aves&continent=NOA&count=genera&reso=epoch" ],
+			usage => [ "/occs/quickdiv.txt?base_name=Dinosauria^Aves&continent=NOA&count=genera" ],
 			method => 'quickdiv',
 			output => '1.2:occs:quickdiv',
 			default_limit => 1000,
 			title => 'Fossil diversity over time (quick computation)' },
 	"This operation returns a tabulation of fossil diversity over time, similar to that",
-	"provided by C<occs/diversity>.  It returns results much more quickly, but returns",
+	"provided by L<occs/diversity|node:occs/diversity>.  It returns results much more quickly,",
+	"but returns",
 	"only the basic counts of distinct taxa appearing in each time interval.",
 	"This operation is intended for quick overview plots; if you want to do",
 	"detailed diversity analyses, we suggest using the L<occs/diversity|node:occs/diversity>",
 	"operation instead, or downloading a L<list of occurrences|node:occs/list> and",
 	"performing your own procedure to tabulate the diversity of taxa over time.");
+    
+    $ds2->define_node({ path => 'occs/checkdiv',
+    			place => 6,
+    			usage => [ "/occs/checkdiv.txt?base_name=Dinosauria^Aves&continent=NOA&count=genera&list=Santonian" ],
+    			method => 'diversity',
+    			arg => 'check',
+    			output => '1.2:occs:checkdiv',
+    			title => 'Fossil diversity over time (diagnostic)' },
+    	"This operation provides a means of checking the taxa counted by the",
+    	"L<occs/diversity|node:occs/diversity> operation. You can pass the same",
+    	"parameters to this operation as you pass to the latter, but add either the B<C<diag>>",
+	"or the B<C<list>> parameter. The former will show you how the relevant occurrences are",
+	"being interpreted, while the latter will show you which taxonomic names were counted.");
     
     $ds2->define_node({ path => 'occs/taxa',
 			place => 3,

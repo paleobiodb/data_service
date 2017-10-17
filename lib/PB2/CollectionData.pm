@@ -3878,7 +3878,11 @@ sub generateMainFilters {
     
     if ( my $earlybuffer = $request->clean_param('timebuffer') )
     {
-	$early_bound = $early_age + $earlybuffer;
+	if ( defined $early_age )
+	{
+	    $early_bound = $early_age + $earlybuffer;
+	}
+	
 	if ( defined $late_age && $late_age > 0 )
 	{
 	    $late_bound = $late_age - $earlybuffer;
