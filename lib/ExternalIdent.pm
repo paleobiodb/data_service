@@ -15,7 +15,7 @@ use Carp qw(croak);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier %IDP %IDRE);
+our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier extract_num %IDP %IDRE);
 
 
 # List the identifier prefixes:
@@ -169,6 +169,22 @@ sub extract_identifier {
 	my $num = ($2 eq 'ERROR') ? -1 : $2;
 	
 	return PBDB::ExtIdent->new($type, $num);
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+sub extract_num {
+    
+    my ($type, $value) = @_;
+    
+    if ( $value =~ $IDRE{$type} )
+    {
+	return ($2 eq 'ERROR') ? -1 : $2;
     }
     
     else

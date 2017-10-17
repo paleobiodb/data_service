@@ -398,6 +398,14 @@ sub initialize {
 	    "The number of distinct taxa found in this interval.  This is",
 	    "equal to the sum of the previous four fields, minus the number",
 	    "of taxa from Xbt that do not actually occur in this interval.",
+	{ output => 'implied_in_bin', com_name => 'dib' },
+	    "The number of additional distinct taxa implied in this interval,",
+	    "as a result of imprecisely identified occurrences. For example, if",
+	    "you are counting species, an occurrence identified only to the genus level",
+	    "to a genus not otherwise appearing in this interval would add one",
+	    "to this count. This is an experimental feature, and the number reported",
+	    "in this field does not affect the other statistics. You can feel free",
+	    "to ignore it if you want.",
 	{ output => 'n_occs', com_name => 'noc' },
 	    "The total number of occurrences that are resolved to this interval");
     
@@ -522,6 +530,41 @@ sub initialize {
 	    "The number of occurrences of this taxon that match the specified",
 	    "parameters.  The list is sorted on this field, from highest",
 	    "to lowest.");
+    
+    # One more block for checking the diversity output.
+    
+    $ds->define_block('1.2:occs:checkdiv' =>
+	{ output => 'interval_no', com_name => 'iid' },
+	    "The identifier of an interval from the diversity output.",
+	{ output => 'interval_name', com_name => 'nam' },
+	    "The name of an interval from the diversity output.",
+	{ output => 'occurrence_no', com_name => 'oid' },
+	    "The identifier of an occurrence from the database.",
+	{ output => 'diagnosis', com_name => 'dgn' },
+	    "A message indicating how, and if, the occurence or taxon was counted. This will",
+	    "be one of the following:", "=over",
+	    "=item counted", "This occurrence or taxon contributed to the diversity count for this interval.",
+	    "=item implied", "This occurrence or taxon was counted as an \"implied\" taxon, because",
+	         "it represented a higher taxon which did not otherwise appear in this interval.",
+	    "=item imprecise age", "This occurrence was not counted because its age range was too large",
+	         "to match any of the reported intervals under the time rule used for this operation.",
+	    "=item imprecise taxon", "This occurrence was not counted because it was not identified to a",
+	         "low enough rank to be counted at the level selected for this operation. For example,",
+	         "genera are being counted and this occurrence was only identified to the family level.",
+	    "=item missing taxon", "This occurrence was not counted because it was not identified to",
+	         "a taxon represented in the taxonomic tree.",
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	    "The early end of the age range for this occurrence.",
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	    "The late end of the age ragne for this occurrence.",
+	{ output => 'orig_no', com_name => 'tid' },
+	    "The identifier of a taxon from the database.",
+	{ output => 'count_name', com_name => 'con', pbdb_name => 'counted_name' },
+	    "The name under which this taxon or occurrence was counted.",
+	{ output => 'accepted_name', com_name => 'acn' },
+	    "A list of the accepted names of the occurrences that were counted for this taxon.",
+	{ output => 'occ_ids', com_name => 'ocs' },
+	    "A list of the occurrence identifiers that were counted for this taxon.");
     
     # Then define parameter rulesets to validate the parameters passed to the
     # operations implemented by this class.
@@ -878,6 +921,44 @@ sub initialize {
 	    "F<reso>.  Accepted values are:");
     
     $ds->define_ruleset('1.2:occs:diversity' =>
+	"The following parameters specify what to count and at what temporal resolution:",
+	{ allow => '1.2:occs:div_params' }, 
+        ">>The following parameters select which occurrences to analyze.",
+	"Except as noted below, you may use these in any combination.",
+	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
+	"the exact list of occurrences used to compute this diversity tabulation.  Note, however, that",
+	"some occurrences may be skipped when tabulating diversity because they are imprecisely",
+	"characterized temporally or taxonomically.",
+	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:interval_selector' },
+	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:checkdiv_params' =>
+	{ param => 'list', valid => ANY_VALUE },
+	    "The value of this parameter must be the name of a time interval or two",
+	    "interval names separated by a hyphen. For each interval from the corresponding",
+	    "diversity output that lies within this range, the output will include a list",
+	    "of all counted and implied taxa.",
+	{ param => 'diag', valid => ANY_VALUE },
+	    "The value of this parameter must be either a time interval or two interval",
+	    "names separated by a hyphen, or else one or more occurrence identifiers",
+	    "as a comma-separated list.",
+	    "The output will be a list of all occurrences from the specified time range or",
+	    "else all occurrences matching one or more of the specified identifiers. The",
+	    "output will report whether each occurrence was counted, and the taxon name",
+	    "under which it was counted. Under certain time rules, an occurrence may be",
+	    "counted under more than one interval.",
+	{ at_most_one => [ 'dump', 'diag' ] });
+    
+    $ds->define_ruleset('1.2:occs:checkdiv' =>
+	"One of the following parameters is required:",
+	{ require => '1.2:occs:checkdiv_params' },
 	"The following parameters specify what to count and at what temporal resolution:",
 	{ allow => '1.2:occs:div_params' }, 
         ">>The following parameters select which occurrences to analyze.",
@@ -1433,7 +1514,7 @@ sub list_occs {
 
 sub diversity {
 
-    my ($request) = @_;
+    my ($request, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
@@ -1446,6 +1527,11 @@ sub diversity {
     
     $options->{timerule} = $request->clean_param('timerule') || 'major';
     $options->{timebuffer} = $request->clean_param('timebuffer');
+    $options->{implied} = $request->clean_param('implied');
+    $options->{generate_list} = $request->clean_param('list');
+    $options->{generate_diag} = $request->clean_param('diag');
+    
+    # if ( my @occs = $request->clean_param_list('check') )
     
     my $reso_param = $request->clean_param('time_reso');
     
@@ -1489,7 +1575,7 @@ sub diversity {
     $tables->{li} = 1;
     
     my @fields = ('o.occurrence_no', 'tv.orig_no', 'tv.rank', 'im.cx_int_no as interval_no, o.early_age, o.late_age',
-		  'ei.interval_name as early_name', 'li.interval_name as late_name', 'o.genus_name');
+		  'ei.interval_name as early_name', 'li.interval_name as late_name', 'tv.name as accepted_name');
     
     if ( $request->clean_param('recent') )
     {
@@ -1505,31 +1591,37 @@ sub diversity {
     
     if ( $count_what eq 'species' )
     {
-	push @fields, 'tv.orig_no as taxon1';
+	push @fields, 'pl.species_no as count_no', 'pl.species as count_name', 
+		      'pl.genus_no as implied_no', 'pl.genus as implied_name';
 	$options->{count_rank} = 3;
     }
     
     elsif ( $count_what eq 'genera' )
     {
-	push @fields, 'pl.genus_no as taxon1';
+	push @fields, 'pl.genus_no as count_no', 'pl.genus as count_name',
+		      'ph.family_no as implied_no', 'ph.family as implied_name';
 	$options->{count_rank} = 5;
     }
     
     elsif ( $count_what eq 'genera_plus' )
     {
-	push @fields, 'if(pl.subgenus_no, pl.subgenus_no, pl.genus_no) as taxon1';
+	push @fields, 'if(pl.subgenus_no, pl.subgenus_no, pl.genus_no) as count_no', 
+		      'if(pl.subgenus_no, pl.subgenus, pl.genus) as count_name',
+		      'ph.family_no as implied_no', 'ph.family as implied_name';
 	$options->{count_rank} = 5;
     }
     
     elsif ( $count_what eq 'families' )
     {
-	push @fields, 'ph.family_no as taxon1';
+	push @fields, 'ph.family_no as count_no', 'ph.family as count_name',
+		      'ph.order_no as implied_no', 'ph.order as implied_name';
 	$options->{count_rank} = 9;
     }
     
     elsif ( $count_what eq 'orders' )
     {
-	push @fields, 'ph.order_no as taxon1';
+	push @fields, 'ph.order_no as count_no', 'ph.order as count_name',
+		      'ph.class_no as implied_no', 'ph.class as implied_name';
 	$options->{count_rank} = 13;
     }
     
@@ -1570,9 +1662,9 @@ sub diversity {
     
     # Now fetch all of the rows, and process them into a diversity matrix.
     
-    my $result = $request->generate_diversity_table($sth, $options);
+    $request->generate_diversity_table($sth, $options);
     
-    $request->list_result($result);
+    # $request->list_result($result);
 }
 
 

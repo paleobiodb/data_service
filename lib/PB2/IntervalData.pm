@@ -792,87 +792,37 @@ sub process_interval_params {
     $request->{my_interval_bounds} = [ $max_ma, $min_ma, $early_interval_no, $late_interval_no ];
     
     return ($max_ma, $min_ma, $early_interval_no, $late_interval_no);
+}
+
+
+# interval_age_range ( interval_names )
+# 
+# Given an interval name or range, return the first and last ages.
+
+sub interval_age_range {
+
+    my ($request, $name) = @_;
     
-    # 	    my $qname = $dbh->quote($name);
-    # 	    my ($id) = $dbh->selectrow_array("
-    # 		SELECT interval_no FROM $INTERVAL_DATA
-    # 		WHERE interval_name like $qname");
-	    
-    # 	    if ( $id )
-    # 	    {
-    # 		push @ids, $id;
-    # 	    }
-	    
-    # 	    else
-    # 	    {
-    # 		push @errors, $name;
-    # 	    }
-    # 	}
-    # }
+    if ( my $i = $INAME{lc $name} )
+    {
+	return ($i->{early_age}, $i->{late_age});
+    }
+    
+    elsif ( $name =~ qr{ ^ (\w+) \s* - \s* (\w+) $ }xs )
+    {
+	my $i1 = $INAME{lc $1};
+	my $i2 = $INAME{lc $2};
 	
-	
-	# if ( @errors )
-	# {
-	#     my $error_string = join("', '", @errors);
+	if ( $i1 && $i2 )
+	{
+	    my $early_age = $i1->{early_age} > $i2->{early_age} ? $i1->{early_age} : $i2->{early_age};
+	    my $late_age = $i1->{late_age} < $i2->{late_age} ? $i1->{late_age} : $i2->{late_age};
 	    
-	#     die "400 bad value '$error_string' for parameter 'interval_id': must be of the form 'I<n>' where <n> is a positive integer\n";
-	# }
-    # }
+	    return ($early_age, $late_age);
+	}
+    }
     
-    # elsif ( $interval_name_value )
-    # {
-    # 	foreach my $name ( split qr{[\s,-]+}, $interval_name_value )
-    # 	{
-    # 	    my $qname = $dbh->quote($name);
-    # 	    my ($id) = $dbh->selectrow_array("
-    # 		SELECT interval_no FROM $INTERVAL_DATA
-    # 		WHERE interval_name like $qname");
-	    
-    # 	    if ( $id )
-    # 	    {
-    # 		push @ids, $id;
-    # 	    }
-	    
-    # 	    else
-    # 	    {
-    # 		push @errors, $name;
-    # 	    }
-    # 	}
-	
-    # 	if ( @errors )
-    # 	{
-    # 	    my $error_string = join("', '", @errors);
-	    
-    # 	    die "400 could not find any intervals matching '$error_string'\n";
-    # 	}
-    # }
-    
-    # return unless @ids;
-    
-    # my $id_list = join(',', @ids);
-    
-    # my $result = $dbh->selectall_arrayref("
-    # 		SELECT early_age, late_age, interval_no
-    # 		FROM $INTERVAL_DATA WHERE interval_no in ($id_list)");
-    
-    # my ($max_ma, $min_ma, $early_interval_no, $late_interval_no);
-    
-    # foreach my $r ( @$result )
-    # {
-    # 	if ( !defined $max_ma || $r->[0] > $max_ma )
-    # 	{
-    # 	    $max_ma = $r->[0];
-    # 	    $early_interval_no = $r->[2];
-    # 	}
-	
-    # 	if ( !defined $min_ma || $r->[1] < $min_ma )
-    # 	{
-    # 	    $min_ma = $r->[1];
-    # 	    $late_interval_no = $r->[2];
-    # 	}
-    # }
-    
-    # return ($max_ma, $min_ma, $early_interval_no, $late_interval_no);
+    return;
 }
 
 

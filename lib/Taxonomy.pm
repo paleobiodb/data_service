@@ -4513,7 +4513,7 @@ sub person_id_filter {
     return "$tn.authorizer_no = -1" unless ref $value eq 'ARRAY' && defined $value->[0];
     
     my $output = join(',', @$value);
-    print STDERR "id_list: $output\n";
+    # print STDERR "id_list: $output\n";
     
     my $exclude;
     my $any_except;

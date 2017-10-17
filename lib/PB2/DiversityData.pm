@@ -16,6 +16,8 @@ package PB2::DiversityData;
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use TableDefs qw($INTERVAL_MAP);
 use Taxonomy;
+use ExternalIdent qw(extract_num);
+
 use Try::Tiny;
 use Carp qw(croak confess);
 
@@ -50,119 +52,79 @@ sub generate_diversity_table {
     my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
     my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
     
-    my ($starting_age, $ending_age, %taxon_first, %taxon_last, %occurrences, %unique_in_bin);
+    my ($starting_bin, $ending_bin, %taxon_first, %taxon_last, %occurrences);
+    my (%unique_in_bin, %implied_in_bin);
+    my (%counted_name, %occ_accepted_name, %occ_no);
+    
     my ($total_count, $imprecise_time_count, $imprecise_taxon_count, $missing_taxon_count, $bin_count);
-    my (%imprecise_interval, %imprecise_taxon);
+    my (%imprecise_interval);
     my (%interval_report, %taxon_report);
-    
-    # Get the age bounds (if any) that were specified for this process.
-    
-    # my @interval_nos = $request->clean_param_list('interval_id');
-    # my $interval_names = $request->clean_param('interval');
-    # my $min_ma = $request->clean_param('min_ma');
-    # my $max_ma = $request->clean_param('max_ma');
-    
-    my $early_limit;
-    my $late_limit;
-    
-    # if ( @interval_nos )
-    # {
-    # 	foreach my $n ( @interval_nos )
-    # 	{
-    # 	    next unless $n;
-	    
-    # 	    my $idata = $PB2::IntervalData::IDATA{$n};
-	    
-    # 	    unless ( $idata )
-    # 	    {
-    # 		$request->add_warning("unknown time interval id '$n'");
-    # 		next;
-    # 	    }
-
-    # 	    $early_limit = $idata->{early_age} if !defined $early_limit || $idata->{early_age} > $early_limit;
-    # 	    $late_limit = $idata->{late_age} if !defined $late_limit || $idata->{late_age} < $late_limit;
-    # 	}
-	
-    # 	# my $sql = "SELECT min(early_age) as early_age, max(late_age) as late_age FROM interval_data WHERE interval_no in ($list)";
-	
-    # 	# my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
-	
-    # 	# unless ( $max_ma )
-    # 	# {
-    # 	#     $early_limit = 0;
-    # 	#     $late_limit = 0;
-    # 	#     $request->add_warning("unknown interval id(s) '$interval_no'");
-    # 	# }
-	
-    # 	# else
-    # 	# {
-    # 	#     $early_limit = $max_ma;
-    # 	#     $late_limit = $min_ma;
-    # 	# }
-
-    # 	unless ( defined $early_limit )
-    # 	{
-    # 	    $request->add_warning("no valid time intervals were specified");
-    # 	    $early_limit = $late_limit = 0;
-    # 	}
-    # }
-    
-    # elsif ( $interval_names )
-    # {
-    # 	my @names = split /\s*,\s*/, $interval_names;
-
-    # 	foreach my $n ( @names )
-    # 	{
-    # 	    next unless $n;
-	    
-    # 	    my $idata = $PB2::IntervalData::INAME{lc $n};
-	    
-    # 	    unless ( $idata )
-    # 	    {
-    # 		$request->add_warning("unknown time interval '$n'");
-    # 		next;
-    # 	    }
-	
-    # 	    $early_limit = $idata->{early_age} if !defined $early_limit || $idata->{early_age} < $early_limit;
-    # 	    $late_limit = $idata->{late_age} if !defined $late_limit || $idata->{late_age} > $late_limit;
-    # 	}
-	
-    # 	# my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name like $name";
-	
-    # 	# my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
-	
-    # 	# unless ( $max_ma )
-    # 	# {
-    # 	#     $early_limit = 0;
-    # 	#     $late_limit = 0;
-    # 	#     $request->add_warning("unknown interval '$interval_name'");
-    # 	# }
-	
-    # 	# else
-    # 	# {
-    # 	#     $early_limit = $max_ma;
-    # 	#     $late_limit = $min_ma;
-    # 	# }
-	
-    # 	unless ( defined $early_limit )
-    # 	{
-    # 	    $request->add_warning("no valid time intervals were specified");
-    # 	    $early_limit = $late_limit = 0;
-    # 	}
-    # }
-    
-    # elsif ( $min_ma || $max_ma )
-    # {
-    # 	$early_limit = $max_ma + 0 if $max_ma;
-    # 	$late_limit = $min_ma + 0;
-    # }
     
     # Now scan through the occurrences.  We cache the lists of matching
     # intervals from the selected scale, under the name of the interval(s)
     # recorded for the occurrence (which may or may not be in the standard
     # timescale).
 
-    ($early_limit, $late_limit) = $request->process_interval_params();
+    my ($early_limit, $late_limit) = $request->process_interval_params();
+    
+    my ($early_dump, $late_dump, %diag_occs, $diag_dump, @occ_diag_list);
+    
+    if ( my $interval = $options->{generate_list} )
+    {
+	if ( lc $interval eq 'all' )
+	{
+	    $early_dump = $early_limit;
+	    $late_dump = $late_limit;
+	}
+	
+	else
+	{
+	    ($early_dump, $late_dump) = $request->interval_age_range($interval);
+	    die $request->exception(400, "invalid interval(s) '$interval'") unless $early_dump;
+	}
+    }
+    
+    elsif ( my $diag = $options->{generate_diag} )
+    {
+	if ( lc $interval eq 'all' )
+	{
+	    $early_dump = $early_limit;
+	    $late_dump = $late_limit;
+	    $diag_dump = 'all';
+	}
+	
+	elsif ( $diag =~ qr{ ^ \s* (?: occ: | \d ) }xs )
+	{
+	    foreach my $id ( split(/\s*[,-]\s*/, $diag) )
+	    {
+		next unless $id;
+		
+		if ( $id =~ /^\d+$/ )
+		{
+		    $diag_occs{$id} = 1;
+		}
+		
+		elsif ( my $num = extract_num('OCC', $id) )
+		{
+		    $diag_occs{$num} = 1;
+		}
+		
+		else
+		{
+		    die $request->exception(400, "invalid occurrence identifier '$id'")
+		}
+	    }
+	    
+	    $diag_dump = 1;
+	}
+	
+	else
+	{
+	    ($early_dump, $late_dump) = $request->interval_age_range($diag);
+	    die $request->exception(400, "invalid interval(s) '$diag'") unless $early_dump;
+	    $diag_dump = 1;
+	}
+    }
     
     my (%interval_cache);
     
@@ -175,24 +137,20 @@ sub generate_diversity_table {
 	# occurrence.  Depending upon the value of $timerule, there may be
 	# more than one.
 	
-	# The first step is to compute the key under which to cache lists of
-	# matching intervals.
-	
-	my $interval_key = $r->{early_name} || 'UNKNOWN';
-	$interval_key .= '-' . $r->{late_name}
-	    if defined $r->{late_name} && defined $r->{early_name} && $r->{late_name} ne $r->{early_name};
-	
-	# If we have already figured out which intervals match this, we're
-	# done.  Otherwise, we must do this computation.
-	
-	my $bins = $interval_cache{$interval_key};
-	
 	my $occ_early = $r->{early_age} + 0;
 	my $occ_late = $r->{late_age} + 0;
 	
-	unless ( $bins )
+	my $interval_key = "$occ_early-$occ_late";
+	
+	# If we have already figured out which intervals match this age range
+	# according to the time rule we are using, we're done.  Otherwise, we must
+	# do this computation.
+	
+	my $occ_bins;
+	
+	unless ( $occ_bins = $interval_cache{$interval_key} )
 	{
-	    $bins = $interval_cache{$interval_key} = [];
+	    $occ_bins = $interval_cache{$interval_key} = [];
 	    
 	    # Scan the entire list of intervals for the selected timescale,
 	    # looking for those that match according to the value of
@@ -267,7 +225,7 @@ sub generate_diversity_table {
 		
 		# If we are not skipping this interval, add it to the list.
 		
-		push @$bins, $early_bound;
+		push @$occ_bins, $early_bound;
 		
 		# If we are using timerule 'major' or 'contains', then stop
 		# the scan because each occurrence gets assigned to only one
@@ -280,95 +238,198 @@ sub generate_diversity_table {
 	# If we did not find at least one bin to assign this occurrence to,
 	# report that fact and go on to the next occurrence.
 	
-	unless ( @$bins )
+	unless ( @$occ_bins )
 	{
 	    $imprecise_time_count++;
 	    $imprecise_interval{$interval_key}++;
-	    if ( $debug_mode )
+	    
+	    # if ( $debug_mode )
+	    # {
+	    # 	$interval_key .= " [$r->{early_name} - $r->{late_name}]";
+	    # 	$interval_report{'0 IMPRECISE <= ' . $interval_key}++;
+	    # }
+	    
+	    # If we are in diagnosis mode, add this record to the diagnosis list if it is among
+	    # those we are supposed to count.
+	    
+	    if ( $diag_dump && ($diag_dump eq 'all' || $diag_occs{$r->{occurrence_no}} ||
+			        ($early_dump && $r->{late_age} < $early_dump && $r->{early_age} > $late_dump) ) )
 	    {
-		$interval_key .= " [$occ_early - $occ_late]";
-		$interval_report{'0 IMPRECISE <= ' . $interval_key}++;
+		$r->{diagnosis} = 'imprecise age';
+		push @occ_diag_list, $r;
 	    }
+	    
 	    next OCCURRENCE;
 	}
-
-	# Otherwise, count this occurrence in each selected bin.  Then adjust
-	# the range of bins that we are reporting to reflect this occurrence.
 	
-	foreach my $b ( @$bins )
+	# Otherwise, count this occurrence in each selected bin. If we are in diagnosis mode,
+	# check to see if we should be diagnosing this one.
+	
+	my $diag_this;
+	
+	foreach my $b ( @$occ_bins )
 	{
 	    $occurrences{$b}++;
 	    $bin_count++;
+	    
+	    if ( $diag_dump && ($diag_dump eq 'all' || $diag_occs{$r->{occurrence_no}} ||
+				($early_dump && $b <= $early_dump && $b > $late_dump) ) )
+	    {
+		$diag_this = 1;
+		push @{$r->{diag_bins}}, $b;
+	    }
 	}
 	
-	$starting_age = $bins->[0] unless defined $starting_age && $starting_age >= $bins->[0];
-	$ending_age = $bins->[-1] unless defined $ending_age && $ending_age <= $bins->[-1];
+	$starting_bin = $occ_bins->[0] unless defined $starting_bin && $starting_bin >= $occ_bins->[0];
+	$ending_bin = $occ_bins->[-1] unless defined $ending_bin && $ending_bin <= $occ_bins->[-1];
 	
-	# If we are in debug mode, also count it in the %interval_report hash.
+	# # If we are in debug mode, also count it in the %interval_report hash.
 	
-	if ( $debug_mode )
+	# if ( $debug_mode )
+	# {
+	#     my $report_key = join(',', @$occ_bins) . ' <= ' . $interval_key . " [$r->{early_name} - $r->{late_name}]";
+	#     $interval_report{$report_key}++;
+	# }
+	
+	# If we are in diagnosis mode, add this record to the list.
+	
+	if ( $diag_this )
 	{
-	    my $report_key = join(',', @$bins) . ' <= ' . $interval_key . " [$occ_early - $occ_late]";
-	    $interval_report{$report_key}++;
+	    $r->{diagnosis} = 'counted';
+	    push @occ_diag_list, $r;
 	}
 	
 	# Now check to see if the occurrence is taxonomically identified
 	# precisely enough to count further.
 	
-	my $taxon_no = $r->{taxon1};
+	my $taxon_no = $r->{count_no};
+	my $implied_no = $r->{implied_no};
 	
-	unless ( $taxon_no )
+	# If we have a taxon number, then count it in every bin and also
+	# determine the first and last bins in which it is found.
+	
+	if ( $taxon_no )
 	{
-	    $taxon_report{$r->{genus_name}}++;
+	    # If this is the oldest occurrence of the taxon that we have found so
+	    # far, mark it as originating in the first (oldest) matching bin.
 	    
-	    if ( !defined $r->{rank} || $r->{rank} > $options->{count_rank} )
+	    unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $occ_bins->[0] )
+	    {
+		$taxon_first{$taxon_no} = $occ_bins->[0];
+	    }
+	    
+	    # If this is the youngest occurrence of the taxon that we have found
+	    # so far, mark it as ending in the last (youngest) matching bin.
+	    
+	    unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $occ_bins->[-1] )
+	    {
+		$taxon_last{$taxon_no} = $occ_bins->[-1];
+	    }
+	    
+	    # If the 'use_recent' option was given, and the taxon is known to be
+	    # extant, then mark it as ending at the present (0 Ma).
+	    
+	    if ( $options->{use_recent} && $r->{is_extant} )
+	    {
+		$taxon_last{$taxon_no} = 0;
+	    }
+	    
+	    # Now count the taxon in each selected bin. If we have a
+	    # 'implied_no' value as well, mark it with a 2 to indicate that it
+	    # does not count as an implied taxon because we have found an
+	    # actual taxon corresponding to that value in this bin.
+	    
+	    foreach my $b ( @$occ_bins )
+	    {
+		$unique_in_bin{$b}{$taxon_no}++;
+		$implied_in_bin{$b}{$implied_no} = 2 if $implied_no;
+	    }
+	    
+	    # If we are supposed to be dumping the output for a particular
+	    # interval range, then if any of our bins are in that range save
+	    # the necessary info.
+	    
+	    if ( $early_dump )
+	    {
+		my $count_name = $r->{count_name} || 'UNKNOWN';
+		my $occ_name = $r->{accepted_name} || 'UNKNOWN';
+		my $occ_no = "$r->{occurrence_no}" || 'UNKNOWN';
+		
+		$counted_name{$taxon_no} ||= $count_name;
+		
+		foreach my $b ( @$occ_bins )
+		{
+		    next if $b > $early_dump || $b < $late_dump;
+		    
+		    $occ_accepted_name{$b}{$taxon_no}{$occ_name} ||= 1;
+		    $occ_no{$b}{$taxon_no}{$occ_no} ||= 1;
+		}
+	    }
+	}
+	
+	# Otherwise, count this taxon as either imprecise (if the occurrence
+	# is too imprecise to count at the specified level) or missing.
+	
+	else
+	{
+	    if ( defined $r->{rank} && $r->{rank} > $options->{count_rank} )
 	    {
 		$imprecise_taxon_count++;
+		$r->{diagnosis} = 'imprecise taxon' if $diag_this;
 	    }
+	    
 	    else
 	    {
 		$missing_taxon_count++;
+		$r->{diagnosis} = 'missing taxon' if $diag_this;
 	    }
 	    
-	    next;
-	}
-	
-	# If this is the oldest occurrence of the taxon that we have found so
-	# far, mark it as originating in the first (oldest) matching bin.
-	
-	unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $bins->[0] )
-	{
-	    $taxon_first{$taxon_no} = $bins->[0];
-	}
-	
-	# If this is the youngest occurrence of the taxon that we have found
-	# so far, mark it as ending in the last (youngest) matching bin.
-	
-	unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $bins->[-1] )
-	{
-	    $taxon_last{$taxon_no} = $bins->[-1];
-	}
-	
-	# If the 'use_recent' option was given, and the taxon is known to be
-	# extant, then mark it as ending at the present (0 Ma).
-	
-	if ( $options->{use_recent} && $r->{is_extant} )
-	{
-	    $taxon_last{$taxon_no} = 0;
-	}
-	
-	# Now count the taxon in each selected bin.
-	
-	foreach my $b ( @$bins )
-	{
-	    $unique_in_bin{$b}{$taxon_no} ||= 1;
+	    # If we have a value for implied_no but not for taxon_no, then mark
+	    # the implied_no value in the 'implied' hash with a 1 to indicate
+	    # that it should be counted as an implied taxon. But only do this
+	    # if it has not yet been marked. If it already has a 1 or a 2, do
+	    # nothing.
+	    
+	    if ( $implied_no )
+	    {
+		foreach my $b ( @$occ_bins )
+		{
+		    $implied_in_bin{$b}{$implied_no}++;
+		}
+		
+		# If we are supposed to be dumping the output for a particular
+		# interval range, then if any of our bins are in that range save
+		# the necessary info.
+		
+		if ( $diag_this )
+		{
+		    $r->{diagnosis} = 'implied';
+		}
+		
+		elsif ( $early_dump )
+		{
+		    my $implied_name = $r->{implied_name} || 'UNKNOWN';
+		    my $occ_name = $r->{accepted_name} || 'UNKNOWN';
+		    my $occ_no = "$r->{occurrence_no}" || 'UNKNOWN';
+		    
+		    $counted_name{$implied_no} ||= $implied_name;
+		    
+		    foreach my $b ( @$occ_bins )
+		    {
+			next if $b > $early_dump || $b < $late_dump;
+			
+			$occ_accepted_name{$b}{$implied_no}{$occ_name} ||= 1;
+			$occ_no{$b}{$implied_no}{$occ_no} ||= 1;
+		    }
+		}
+	    }
 	}
     }
     
     # At this point we are done scanning the occurrence list.  Unless
-    # $starting_age has a value, we don't have any results.
+    # $starting_bin has a value, we don't have any results.
     
-    unless ( $starting_age )
+    unless ( $starting_bin )
     {
 	return;
     }
@@ -376,15 +437,15 @@ sub generate_diversity_table {
     # Now we need to compute the four diversity statistics defined by Foote:
     # XFt, XFL, XbL, Xbt.  So we start by running through the bins and
     # initializing the counts.  We also keep track of all the bins between
-    # $starting_age and $ending_age.
+    # $starting_bin and $ending_bin.
     
     my (%X_Ft, %X_FL, %X_bL, %X_bt);
     my (@bins, $is_last);
     
     foreach my $age ( @$boundary_list )
     {
-	next if $age > $starting_age;
-	last if $age < $ending_age;
+	next if $age > $starting_bin;
+	last if $age < $ending_bin;
 	
 	push @bins, $age;
 	
@@ -420,10 +481,10 @@ sub generate_diversity_table {
 	$X_Ft{$first_bin}++;
 	$X_bL{$last_bin}++;
 	
-	foreach my $bin (@bins)
+	foreach my $b (@bins)
 	{
-	    last if $bin <= $last_bin;
-	    $X_bt{$bin}++ if $bin < $first_bin;
+	    last if $b <= $last_bin;
+	    $X_bt{$b}++ if $b < $first_bin;
 	}
     }
     
@@ -445,38 +506,157 @@ sub generate_diversity_table {
     # 	}
     # }
     
-    # Add a summary record with counts.
+    # If we are asked to generate a list of the counted taxa, do so.
     
-    $request->summary_data({ total_count => $total_count,
-			  bin_count => $bin_count,
-			  imprecise_time => $imprecise_time_count,
-			  imprecise_taxon => $imprecise_taxon_count,
-			  missing_taxon => $missing_taxon_count })
-	if $request->clean_param('datainfo');
-    
-    # Now we scan through the bins again and prepare the data records.
-    
-    my @result;
-    
-    foreach my $age (@bins)
+    if ( $options->{generate_list} )
     {
-	my $r = { interval_no => $boundary_map->{$age}{interval_no},
-		  interval_name => $boundary_map->{$age}{interval_name},
-		  early_age => $age,
-		  late_age => $boundary_map->{$age}{late_age},
-		  originations => $X_Ft{$age},
-		  extinctions => $X_bL{$age},
-		  singletons => $X_FL{$age},
-		  range_throughs => $X_bt{$age},
-		  sampled_in_bin => scalar(keys %{$unique_in_bin{$age}}) || 0,
-		  n_occs => $occurrences{$age} || 0 };
+	my @result;
 	
-	push @result, $r;
+	$request->delete_output_field('occurrence_no');
+	$request->delete_output_field('early_age');
+	$request->delete_output_field('late_age');
+	
+	foreach my $bin (@bins)
+	{
+	    next if $bin > $early_dump || $bin <= $late_dump;
+	    
+	    my @taxon_list = sort { $counted_name{$a} cmp $counted_name{$b} } keys %{$unique_in_bin{$bin}};
+	    
+	    foreach my $t ( @taxon_list )
+	    {
+		my $r = { interval_no => $boundary_map->{$bin}{interval_no},
+			  interval_name => $boundary_map->{$bin}{interval_name},
+			  orig_no => $t,
+			  count_name => $counted_name{$t},
+			  diagnosis => 'counted' };
+		
+		if ( my $names = $occ_accepted_name{$bin}{$t} )
+		{
+		    my $list = join(', ', sort keys %{$occ_accepted_name{$bin}{$t}});
+		    $r->{accepted_name} = $list;
+		}
+		
+		$r->{occ_ids} = join(', ', sort keys %{$occ_no{$bin}{$t}});
+		
+		push @result, $r;
+	    }
+	    
+	    my @implied_list = sort { $counted_name{$a} cmp $counted_name{$b} }
+		grep { $implied_in_bin{$bin}{$_} == 1 } keys %{$implied_in_bin{$bin}};
+	    
+	    foreach my $t ( @implied_list )
+	    {
+		my $r = { interval_no => $boundary_map->{$bin}{interval_no},
+			  interval_name => $boundary_map->{$bin}{interval_name},
+			  orig_no => $t,
+			  count_name => $counted_name{$t},
+			  diagnosis => 'implied' };
+		
+		if ( my $names = $occ_accepted_name{$bin}{$t} )
+		{
+		    my $list = join(', ', sort keys %{$occ_accepted_name{$bin}{$t}});
+		    $r->{accepted_name} = $list;
+		}
+		
+		$r->{occ_ids} = join(', ', sort keys %{$occ_no{$bin}{$t}});
+		
+		push @result, $r;
+	    }
+	}
+	
+	return $request->list_result(@result);
     }
     
-    $request->list_result(reverse @result);
+    # If we were asked to generate diagnostic output for occurrences, do so. For diagnosed
+    # occurrences that appear in more than one bin, we generate more than one record.
+    
+    elsif ( $options->{generate_diag} )
+    {
+	$request->delete_output_field('occ_ids');
+	
+	foreach my $r ( @occ_diag_list )
+	{
+	    if ( $r->{diag_bins} )
+	    {
+		my @list = reverse @{$r->{diag_bins}};
+		my $top_bin = shift @list;
+		
+		$r->{interval_no} = $boundary_map->{$top_bin}{interval_no};
+		$r->{interval_name} = $boundary_map->{$top_bin}{interval_name};
+		
+		$request->add_result($r);
+		
+		foreach my $bin ( @list )
+		{
+		    my $s = { %$r };
+		    $s->{interval_no} = $boundary_map->{$bin}{interval_no};
+		    $s->{interval_name} = $boundary_map->{$bin}{interval_name};
+		    $request->add_result($s);
+		}
+	    }
+	    
+	    else
+	    {
+		$request->add_result($r);
+	    }
+	}
+	
+	return;
+    }
+    
+    # Otherwise, generate the usual diversity output.
+    
+    else
+    {
+	# Go through the keys of %unique_in_bin and %implied_in_bin, and for
+	# each bin count up the number of unique taxa. In the latter hash, we
+	# only count those that are marked with a 1.
+	
+	foreach my $b ( keys %unique_in_bin )
+	{
+	    my $unique_count = scalar(keys %{$unique_in_bin{$b}});
+	    $unique_in_bin{$b} = $unique_count;
+	}
+	
+	foreach my $b ( keys %implied_in_bin )
+	{
+	    my $implied_count = grep { $implied_in_bin{$b}{$_} == 1 } keys %{$implied_in_bin{$b}};
+	    $implied_in_bin{$b} = $implied_count;
+	}
+	
+	# Add a summary record with counts.
+	
+	$request->summary_data({ total_count => $total_count,
+				 bin_count => $bin_count,
+				 imprecise_time => $imprecise_time_count,
+				 imprecise_taxon => $imprecise_taxon_count,
+				 missing_taxon => $missing_taxon_count })
+	    if $request->clean_param('datainfo');
+	
+	# Now we scan through the bins again and prepare the data records.
+	
+	my @result;
+	
+	foreach my $b (@bins)
+	{
+	    my $r = { interval_no => $boundary_map->{$b}{interval_no},
+		      interval_name => $boundary_map->{$b}{interval_name},
+		      early_age => $b,
+		      late_age => $boundary_map->{$b}{late_age},
+		      originations => $X_Ft{$b},
+		      extinctions => $X_bL{$b},
+		      singletons => $X_FL{$b},
+		      range_throughs => $X_bt{$b},
+		      sampled_in_bin => $unique_in_bin{$b} || 0,
+		      implied_in_bin => $implied_in_bin{$b} || 0,
+		      n_occs => $occurrences{$b} || 0 };
+	    
+	    push @result, $r;
+	}
+	
+	$request->list_result(reverse @result);
+    }
 }
-
 
 # The following variables are visible to all of the subroutines in the
 # remainder of this file.  This is done to reduce the number of parameters
