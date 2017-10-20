@@ -32,6 +32,8 @@ sub generate_diversity_table {
     my $ds = $request->ds;
     my $dbh = $request->get_connection;
     
+    my $debug_mode = $request->debug;
+    
     # First figure out which timescale (and thus which list of intervals) we
     # will be using in order to bin the occurrences.  We will eventually add
     # other scale options than 1.  If no resolution is specified, use the
@@ -40,32 +42,35 @@ sub generate_diversity_table {
     my $scale_no = $options->{scale_no} || 1;
     my $scale_level = $options->{timereso} || $PB2::IntervalData::SCALE_DATA{$scale_no}{levels};
     
-    my $debug_mode = $request->debug;
-    
     # Figure out the parameters to use in the binning process.
     
-    my $timerule = $options->{timerule};
+    my $timerule = $options->{timerule} || 'major';
     my $timebuffer = $options->{timebuffer};
+    my $latebuffer = $options->{latebuffer};
+    
+    my ($early_limit, $late_limit) = $request->process_interval_params();
+    
+    my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
+    my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
+    
+    my @trimmed_bounds;
+    
+    foreach my $bin ( @$boundary_list )
+    {
+	push @trimmed_bounds, $bin if (! defined $early_limit || $bin <= $early_limit) &&
+				      (! defined $late_limit || $bin >= $late_limit);
+    }
     
     # Declare variables to be used in this process.
-    
-    my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
-    my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
     
     my ($starting_bin, $ending_bin, %taxon_first, %taxon_last, %occurrences);
     my (%unique_in_bin, %implied_in_bin);
     my (%counted_name, %occ_accepted_name, %occ_no);
     
     my ($total_count, $imprecise_time_count, $imprecise_taxon_count, $missing_taxon_count, $bin_count);
-    my (%imprecise_interval);
     my (%interval_report, %taxon_report);
     
-    # Now scan through the occurrences.  We cache the lists of matching
-    # intervals from the selected scale, under the name of the interval(s)
-    # recorded for the occurrence (which may or may not be in the standard
-    # timescale).
-
-    my ($early_limit, $late_limit) = $request->process_interval_params();
+    # If we were asked to generate diagnostic output, then set up the parameters for this.
     
     my ($early_dump, $late_dump, %diag_occs, $diag_dump, @occ_diag_list);
     
@@ -126,128 +131,25 @@ sub generate_diversity_table {
 	}
     }
     
-    my (%interval_cache);
+    # Now scan through the occurrences, and determine how (and whether) to count each one by time
+    # and taxon.
     
  OCCURRENCE:
     while ( my $r = $sth->fetchrow_hashref )
     {
 	$total_count++;
 	
-	# Start by figuring out the interval(s) in which to bin this
-	# occurrence.  Depending upon the value of $timerule, there may be
-	# more than one.
+	# Start by figuring out the interval(s) in which to bin this occurrence.  Depending upon
+	# the value of $timerule, there may be more than one.
 	
-	my $occ_early = $r->{early_age} + 0;
-	my $occ_late = $r->{late_age} + 0;
-	
-	my $interval_key = "$occ_early-$occ_late";
-	
-	# If we have already figured out which intervals match this age range
-	# according to the time rule we are using, we're done.  Otherwise, we must
-	# do this computation.
-	
-	my $occ_bins;
-	
-	unless ( $occ_bins = $interval_cache{$interval_key} )
-	{
-	    $occ_bins = $interval_cache{$interval_key} = [];
-	    
-	    # Scan the entire list of intervals for the selected timescale,
-	    # looking for those that match according to the value of
-	    # $timerule.
-	    
-	INTERVAL:
-	    foreach my $early_bound ( @$boundary_list )
-	    {
-		# Skip all intervals that fall below the lower limit specified
-		# by the request parameters.
-		
-		next INTERVAL if defined $early_limit && $early_bound > $early_limit;
-		
-		# Skip all intervals that do not overlap with the occurrence
-		# range, and stop the scan when we have passed that range.
-		
-		last INTERVAL if $early_bound <= $occ_late;
-		
-		my $int = $boundary_map->{$early_bound};
-		my $late_bound = $int->{late_age};
-		
-		next INTERVAL if $late_bound >= $occ_early;
-		
-		next INTERVAL if defined $late_limit && $late_bound < $late_limit;
-		
-		# Skip any interval that is not selected by the specified
-		# timerule.  Note that the 'overlap' timerule includes
-		# everything that overlaps.
-		
-		if ( $timerule eq 'contain' )
-		{
-		    last INTERVAL if $occ_early > $early_bound || $occ_late < $late_bound;
-		}
-		
-		elsif ( $timerule eq 'major' )
-		{
-		    my $overlap;
-		    
-		    if ( $occ_late >= $late_bound )
-		    {
-			if ( $occ_early <= $early_bound )
-			{
-			    $overlap = $occ_early - $occ_late;
-			}
-			
-			else
-			{
-			    $overlap = $early_bound - $occ_late;
-			}
-		    }
-		    
-		    elsif ( $occ_early > $early_bound )
-		    {
-			$overlap = $early_bound - $late_bound;
-		    }
-		    
-		    else
-		    {
-			$overlap = $occ_early - $late_bound;
-		    }
-		    
-		    next INTERVAL if $occ_early != $occ_late && $overlap / ($occ_early - $occ_late) < 0.5;
-		}
-		
-		elsif ( $timerule eq 'buffer' )
-		{
-		    my $buffer = $timebuffer || ($early_bound > 66 ? 12 : 5);
-		    
-		    next INTERVAL if $occ_early > $early_bound + $buffer || 
-			$occ_late < $late_bound - $buffer;
-		}
-		
-		# If we are not skipping this interval, add it to the list.
-		
-		push @$occ_bins, $early_bound;
-		
-		# If we are using timerule 'major' or 'contains', then stop
-		# the scan because each occurrence gets assigned to only one
-		# bin. 
-		
-		last INTERVAL if $timerule eq 'contains' || $timerule eq 'major';
-	    }
-	}
+	my @occ_bins = $request->bin_by_interval($r, \@trimmed_bounds, $timerule, $timebuffer, $latebuffer);
 	
 	# If we did not find at least one bin to assign this occurrence to,
 	# report that fact and go on to the next occurrence.
 	
-	unless ( @$occ_bins )
+	unless ( @occ_bins )
 	{
 	    $imprecise_time_count++;
-	    $imprecise_interval{$interval_key}++;
-	    
-	    # if ( $debug_mode )
-	    # {
-	    # 	$interval_key .= " [$r->{early_name} - $r->{late_name}]";
-	    # 	$interval_report{'0 IMPRECISE <= ' . $interval_key}++;
-	    # }
 	    
 	    # If we are in diagnosis mode, add this record to the diagnosis list if it is among
 	    # those we are supposed to count.
@@ -267,7 +169,7 @@ sub generate_diversity_table {
 	
 	my $diag_this;
 	
-	foreach my $b ( @$occ_bins )
+	foreach my $b ( @occ_bins )
 	{
 	    $occurrences{$b}++;
 	    $bin_count++;
@@ -280,16 +182,11 @@ sub generate_diversity_table {
 	    }
 	}
 	
-	$starting_bin = $occ_bins->[0] unless defined $starting_bin && $starting_bin >= $occ_bins->[0];
-	$ending_bin = $occ_bins->[-1] unless defined $ending_bin && $ending_bin <= $occ_bins->[-1];
+	# The variables $starting_bin and $ending_bin record the earliest and
+	# latest bins that actually contain ocurrences.
 	
-	# # If we are in debug mode, also count it in the %interval_report hash.
-	
-	# if ( $debug_mode )
-	# {
-	#     my $report_key = join(',', @$occ_bins) . ' <= ' . $interval_key . " [$r->{early_name} - $r->{late_name}]";
-	#     $interval_report{$report_key}++;
-	# }
+	$starting_bin = $occ_bins[0] unless defined $starting_bin && $starting_bin >= $occ_bins[0];
+	$ending_bin = $occ_bins[-1] unless defined $ending_bin && $ending_bin <= $occ_bins[-1];
 	
 	# If we are in diagnosis mode, add this record to the list.
 	
@@ -313,17 +210,17 @@ sub generate_diversity_table {
 	    # If this is the oldest occurrence of the taxon that we have found so
 	    # far, mark it as originating in the first (oldest) matching bin.
 	    
-	    unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $occ_bins->[0] )
+	    unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $occ_bins[0] )
 	    {
-		$taxon_first{$taxon_no} = $occ_bins->[0];
+		$taxon_first{$taxon_no} = $occ_bins[0];
 	    }
 	    
 	    # If this is the youngest occurrence of the taxon that we have found
 	    # so far, mark it as ending in the last (youngest) matching bin.
 	    
-	    unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $occ_bins->[-1] )
+	    unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $occ_bins[-1] )
 	    {
-		$taxon_last{$taxon_no} = $occ_bins->[-1];
+		$taxon_last{$taxon_no} = $occ_bins[-1];
 	    }
 	    
 	    # If the 'use_recent' option was given, and the taxon is known to be
@@ -339,7 +236,7 @@ sub generate_diversity_table {
 	    # does not count as an implied taxon because we have found an
 	    # actual taxon corresponding to that value in this bin.
 	    
-	    foreach my $b ( @$occ_bins )
+	    foreach my $b ( @occ_bins )
 	    {
 		$unique_in_bin{$b}{$taxon_no}++;
 		$implied_in_bin{$b}{$implied_no} = 2 if $implied_no;
@@ -357,7 +254,7 @@ sub generate_diversity_table {
 		
 		$counted_name{$taxon_no} ||= $count_name;
 		
-		foreach my $b ( @$occ_bins )
+		foreach my $b ( @occ_bins )
 		{
 		    next if $b > $early_dump || $b < $late_dump;
 		    
@@ -392,9 +289,9 @@ sub generate_diversity_table {
 	    
 	    if ( $implied_no )
 	    {
-		foreach my $b ( @$occ_bins )
+		foreach my $b ( @occ_bins )
 		{
-		    $implied_in_bin{$b}{$implied_no}++;
+		    $implied_in_bin{$b}{$implied_no} = 1;
 		}
 		
 		# If we are supposed to be dumping the output for a particular
@@ -414,7 +311,7 @@ sub generate_diversity_table {
 		    
 		    $counted_name{$implied_no} ||= $implied_name;
 		    
-		    foreach my $b ( @$occ_bins )
+		    foreach my $b ( @occ_bins )
 		    {
 			next if $b > $early_dump || $b < $late_dump;
 			
@@ -434,79 +331,7 @@ sub generate_diversity_table {
 	return;
     }
     
-    # Now we need to compute the four diversity statistics defined by Foote:
-    # XFt, XFL, XbL, Xbt.  So we start by running through the bins and
-    # initializing the counts.  We also keep track of all the bins between
-    # $starting_bin and $ending_bin.
-    
-    my (%X_Ft, %X_FL, %X_bL, %X_bt);
-    my (@bins, $is_last);
-    
-    foreach my $age ( @$boundary_list )
-    {
-	next if $age > $starting_bin;
-	last if $age < $ending_bin;
-	
-	push @bins, $age;
-	
-	$X_Ft{$age} = 0;
-	$X_FL{$age} = 0;
-	$X_bL{$age} = 0;
-	$X_bt{$age} = 0;
-    }
-    
-    # Then we scan through the taxa.  For each one, we scan through the bins
-    # from the taxon's origination to its ending and mark the appropriate
-    # counts.  This step takes time o(MN) where M is the number of taxa and N
-    # the number of intervals.
-    
-    foreach my $taxon_no ( keys %taxon_first )
-    {
-	my $first_bin = $taxon_first{$taxon_no};
-	my $last_bin = $taxon_last{$taxon_no};
-	
-	# If the interval of first appearance is the same as the interval of
-	# last appearance, then this is a singleton.
-	
-	if ( $first_bin == $last_bin )
-	{
-	    $X_FL{$first_bin}++;
-	    next;
-	}
-	
-	# Otherwise, we mark the bin where the taxon starts and the bin where
-	# it ends, and then scan through the bins between to mark
-	# rangethroughs.
-	
-	$X_Ft{$first_bin}++;
-	$X_bL{$last_bin}++;
-	
-	foreach my $b (@bins)
-	{
-	    last if $b <= $last_bin;
-	    $X_bt{$b}++ if $b < $first_bin;
-	}
-    }
-    
-    # If we are in debug mode, report the interval assignments.
-    
-    # if ( $request->debug ) 
-    # {
-    # 	# $request->add_warning("Skipped $imprecise_time_count occurrences because of imprecise temporal locality:")
-    # 	#     if $imprecise_time_count;
-	
-    # 	# foreach my $key ( sort { $b cmp $a } keys %interval_report )
-    # 	# {
-    # 	#     $request->add_warning("    $key ($interval_report{$key})");
-    # 	# }
-	
-    # 	foreach my $key ( sort { $a cmp $b } keys %taxon_report )
-    # 	{
-    # 	    $request->add_warning("    $key ($taxon_report{$key})");
-    # 	}
-    # }
-    
-    # If we are asked to generate a list of the counted taxa, do so.
+    # If we are asked to generate a list of the counted taxa, do so and return.
     
     if ( $options->{generate_list} )
     {
@@ -516,7 +341,7 @@ sub generate_diversity_table {
 	$request->delete_output_field('early_age');
 	$request->delete_output_field('late_age');
 	
-	foreach my $bin (@bins)
+	foreach my $bin (@trimmed_bounds)
 	{
 	    next if $bin > $early_dump || $bin <= $late_dump;
 	    
@@ -567,8 +392,8 @@ sub generate_diversity_table {
 	return $request->list_result(@result);
     }
     
-    # If we were asked to generate diagnostic output for occurrences, do so. For diagnosed
-    # occurrences that appear in more than one bin, we generate more than one record.
+    # If we were asked to generate diagnostic output for occurrences, do so and return. For
+    # diagnosed occurrences that appear in more than one bin, we generate more than one record.
     
     elsif ( $options->{generate_diag} )
     {
@@ -604,58 +429,106 @@ sub generate_diversity_table {
 	return;
     }
     
-    # Otherwise, generate the usual diversity output.
+    # Otherwise, we generate the usual diversity output including the four diversity statistics
+    # defined by Foote: XFt, XFL, XbL, Xbt.  So we start by running through the bins and
+    # initializing the counts.
     
-    else
+    my (%X_Ft, %X_FL, %X_bL, %X_bt);
+    my (@bins, $is_last);
+    
+    foreach my $age ( @trimmed_bounds )
     {
-	# Go through the keys of %unique_in_bin and %implied_in_bin, and for
-	# each bin count up the number of unique taxa. In the latter hash, we
-	# only count those that are marked with a 1.
+	next if $age > $starting_bin;
+	last if $age < $ending_bin;
 	
-	foreach my $b ( keys %unique_in_bin )
+	push @bins, $age;
+	
+	$X_Ft{$age} = 0;
+	$X_FL{$age} = 0;
+	$X_bL{$age} = 0;
+	$X_bt{$age} = 0;
+    }
+    
+    # Then we scan through the taxa.  For each one, we scan through the bins
+    # from the taxon's origination to its ending and mark the appropriate
+    # counts.  This step takes time o(MN) where M is the number of taxa and N
+    # the number of intervals.
+    
+    foreach my $taxon_no ( keys %taxon_first )
+    {
+	my $first_bin = $taxon_first{$taxon_no};
+	my $last_bin = $taxon_last{$taxon_no};
+	
+	# If the interval of first appearance is the same as the interval of
+	# last appearance, then this is a singleton.
+	
+	if ( $first_bin == $last_bin )
 	{
-	    my $unique_count = scalar(keys %{$unique_in_bin{$b}});
-	    $unique_in_bin{$b} = $unique_count;
+	    $X_FL{$first_bin}++;
+	    next;
 	}
 	
-	foreach my $b ( keys %implied_in_bin )
-	{
-	    my $implied_count = grep { $implied_in_bin{$b}{$_} == 1 } keys %{$implied_in_bin{$b}};
-	    $implied_in_bin{$b} = $implied_count;
-	}
+	# Otherwise, we mark the bin where the taxon starts and the bin where
+	# it ends, and then scan through the bins between to mark
+	# rangethroughs.
 	
-	# Add a summary record with counts.
-	
-	$request->summary_data({ total_count => $total_count,
-				 bin_count => $bin_count,
-				 imprecise_time => $imprecise_time_count,
-				 imprecise_taxon => $imprecise_taxon_count,
-				 missing_taxon => $missing_taxon_count })
-	    if $request->clean_param('datainfo');
-	
-	# Now we scan through the bins again and prepare the data records.
-	
-	my @result;
+	$X_Ft{$first_bin}++;
+	$X_bL{$last_bin}++;
 	
 	foreach my $b (@bins)
 	{
-	    my $r = { interval_no => $boundary_map->{$b}{interval_no},
-		      interval_name => $boundary_map->{$b}{interval_name},
-		      early_age => $b,
-		      late_age => $boundary_map->{$b}{late_age},
-		      originations => $X_Ft{$b},
-		      extinctions => $X_bL{$b},
-		      singletons => $X_FL{$b},
-		      range_throughs => $X_bt{$b},
-		      sampled_in_bin => $unique_in_bin{$b} || 0,
-		      implied_in_bin => $implied_in_bin{$b} || 0,
-		      n_occs => $occurrences{$b} || 0 };
-	    
-	    push @result, $r;
+	    last if $b <= $last_bin;
+	    $X_bt{$b}++ if $b < $first_bin;
 	}
-	
-	$request->list_result(reverse @result);
     }
+    
+    # Then we go through the keys of %unique_in_bin and %implied_in_bin, and for each bin count up
+    # the number of unique taxa. In the latter hash, we only count those that are marked with a 1.
+    
+    foreach my $b ( keys %unique_in_bin )
+    {
+	my $unique_count = scalar(keys %{$unique_in_bin{$b}});
+	$unique_in_bin{$b} = $unique_count;
+    }
+    
+    foreach my $b ( keys %implied_in_bin )
+    {
+	my $implied_count = grep { $implied_in_bin{$b}{$_} == 1 } keys %{$implied_in_bin{$b}};
+	$implied_in_bin{$b} = $implied_count;
+    }
+    
+    # At this point, we have all of the information we need to generate the results. If the
+    # request included the 'datainfo' parameter, we add a summary record.
+    
+    $request->summary_data({ total_count => $total_count,
+			     bin_count => $bin_count,
+			     imprecise_time => $imprecise_time_count,
+			     imprecise_taxon => $imprecise_taxon_count,
+			     missing_taxon => $missing_taxon_count })
+	if $request->clean_param('datainfo');
+    
+    # Then we scan through the bins again and prepare the data records.
+    
+    my @result;
+    
+    foreach my $b (@bins)
+    {
+	my $r = { interval_no => $boundary_map->{$b}{interval_no},
+		  interval_name => $boundary_map->{$b}{interval_name},
+		  early_age => $b,
+		  late_age => $boundary_map->{$b}{late_age},
+		  originations => $X_Ft{$b},
+		  extinctions => $X_bL{$b},
+		  singletons => $X_FL{$b},
+		  range_throughs => $X_bt{$b},
+		  sampled_in_bin => $unique_in_bin{$b} || 0,
+		  implied_in_bin => $implied_in_bin{$b} || 0,
+		  n_occs => $occurrences{$b} || 0 };
+	
+	push @result, $r;
+    }
+    
+    $request->list_result(reverse @result);
 }
 
 # The following variables are visible to all of the subroutines in the
@@ -2190,85 +2063,6 @@ sub generate_prevalence {
     
     #return $request->generate_prevalence(\@records, $limit, $detail);
 };
-
-
-# sub generate_prevalence_old {
-    
-#     my ($request, $sth, $tree_table) = @_;
-    
-#     no warnings 'uninitialized';
-    
-#     my (%n_occs, %rank);
-    
-#     # First count all of the phyla, classes and orders into which the
-#     # occurrences fall.
-    
-#     while ( my $r = $sth->fetchrow_hashref )
-#     {
-# 	if ( $r->{phylum_no} && $r->{phylum_no} > 0 )
-# 	{
-# 	    $n_occs{$r->{phylum_no}} += $r->{n_occs};
-# 	    $rank{$r->{phylum_no}} = 20;
-# 	}
-	
-# 	if ( $r->{class_no} && $r->{class_no} > 0 )
-# 	{
-# 	    $n_occs{$r->{class_no}} += $r->{n_occs};
-# 	    $rank{$r->{class_no}} = 17;
-# 	}
-	
-# 	if ( $r->{order_no} && $r->{order_no} > 0 )
-# 	{
-# 	    $n_occs{$r->{order_no}} += $r->{n_occs};
-# 	    $rank{$r->{order_no}} = 13;
-# 	}
-#     }
-    
-#     # Then determine the taxa with the highest counts from this list.  If a
-#     # query limit has been specified, only return that many items.
-    
-#     my @taxa = sort { $n_occs{$b} <=> $n_occs{$a} || $rank{$b} <=> $rank{a} } keys %n_occs;
-    
-#     my $limit;
-    
-#     if ( $limit = $request->result_limit )
-#     {
-# 	$limit += $request->result_offset;
-# 	splice(@taxa, $limit, 0) if $limit < @taxa;
-#     }
-    
-#     # Construct a query that will retrieve the other necessary information
-#     # about these taxa.
-    
-#     my $taxon_string = join q{,}, sort { $a <=> $b } @taxa;
-    
-#     my $dbh = $request->get_connection;
-#     my $attrs_table = $TAXON_TABLE{$tree_table}{attrs};
-#     my $ints_table = $TAXON_TABLE{$tree_table}{ints};
-    
-#     my $sql = "
-# 	SELECT t.orig_no, t.name, t.rank, ph.class_no, ph.phylum_no, v.image_no
-# 	FROM $tree_table as t JOIN $ints_table as ph using (ints_no)
-# 		LEFT JOIN $attrs_table as v using (orig_no)
-# 	WHERE t.orig_no in ($taxon_string)";
-    
-#     my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
-#     # Add the occurrence counts.
-    
-#     if ( ref $result eq 'ARRAY' )
-#     {
-# 	foreach my $r ( @$result )
-# 	{
-# 	    $r->{n_occs} = $n_occs{$r->{orig_no}};
-# 	    $n_occs{$r->{orig_no}} = $r;
-# 	}
-#     }
-    
-#     # Return the result.
-    
-#     $request->list_result(map { $n_occs{$_} } @taxa);
-# }
 
 
 1;

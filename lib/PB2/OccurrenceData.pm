@@ -114,6 +114,13 @@ sub initialize {
 	    "Indication of whether the occurrence is located on protected land.",
         { value => 'time', maps_to => '1.2:colls:time' },
 	    "Additional information about the temporal locality of the occurrence.",
+	{ value => 'timebins', maps_to => '1.2:colls:timebins' },
+	    "Shows a list of temporal bins into which each occurrence falls according",
+	    "to the timerule selected for this request. You may select one using the",
+	    "B<C<timerule>> parameter, or it will default to C<B<major>>.",
+	{ value => 'timecompare', maps_to => '1.2:colls:timecompare' },
+	    "Like B<C<timebins>>, but shows this information for all available",
+	    "timerules.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the occurrence.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -1527,6 +1534,7 @@ sub diversity {
     
     $options->{timerule} = $request->clean_param('timerule') || 'major';
     $options->{timebuffer} = $request->clean_param('timebuffer');
+    $options->{latebuffer} = $request->clean_param('latebuffer');
     $options->{implied} = $request->clean_param('implied');
     $options->{generate_list} = $request->clean_param('list');
     $options->{generate_diag} = $request->clean_param('diag');

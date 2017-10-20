@@ -826,6 +826,122 @@ sub interval_age_range {
 }
 
 
+# bin_by_interval ( record, bounds_list, timerule, timebuffer, latebuffer )
+# 
+# Given a record representing an occurrence or collection and a list of interval bounds
+# representing time bins, return a list of the bins into which the record falls according
+# according to the specified time rule. If the timerule is 'buffer', then a timebuffer and
+# optionally a latebuffer value can also be provided.
+# 
+# Any record can be passed to this method, as long as it has the fields 'early_age' and
+# 'late_age'.
+
+sub bin_by_interval {
+    
+    my ($request, $record, $bounds_list, $timerule, $timebuffer, $latebuffer) = @_;
+    
+    my $occ_early = $record->{early_age} + 0;
+    my $occ_late = $record->{late_age} + 0;
+    
+    my $interval_key = "$occ_early-$occ_late";
+    
+    # If we have already computed the list of bins for the specified age range, then we don't need
+    # to do that again.
+    
+    if ( my $bin_list = $request->{"my_intervals_$timerule"}{$interval_key} )
+    {
+	return @$bin_list;
+    }
+    
+    # Otherwise, we need to go through every interval in the timescale selected for this request
+    # and pick the ones into which this record should be binned.
+    
+    my @occ_bins;
+    my $last = scalar(@$bounds_list) - 2;
+    
+ INTERVAL:
+    foreach my $i ( 0 .. $last )
+    {
+	# Skip all intervals that do not overlap with the occurrence range, and stop the scan when
+	# we have passed that range.
+	
+	my $late_bound = $bounds_list->[$i+1];
+	
+	next INTERVAL if $late_bound >= $occ_early;
+	
+	my $early_bound = $bounds_list->[$i];
+	
+	last INTERVAL if $early_bound <= $occ_late;
+	
+	# Skip any interval that is not selected by the specified timerule.  Note that the
+	# 'overlap' timerule includes everything that overlaps.
+	
+	if ( $timerule eq 'contain' )
+	{
+	    last INTERVAL if $occ_early > $early_bound || $occ_late < $late_bound;
+	}
+	
+	elsif ( $timerule eq 'major' )
+	{
+	    my $overlap;
+	    
+	    if ( $occ_late >= $late_bound )
+	    {
+		if ( $occ_early <= $early_bound )
+		{
+		    $overlap = $occ_early - $occ_late;
+		}
+		
+		else
+		{
+		    $overlap = $early_bound - $occ_late;
+		}
+	    }
+	    
+	    elsif ( $occ_early > $early_bound )
+	    {
+		$overlap = $early_bound - $late_bound;
+	    }
+	    
+	    else
+	    {
+		$overlap = $occ_early - $late_bound;
+	    }
+	    
+	    next INTERVAL if $occ_early != $occ_late && $overlap / ($occ_early - $occ_late) < 0.5;
+	}
+		
+	elsif ( $timerule eq 'buffer' )
+	{
+	    my $early_buffer = $timebuffer || ($early_bound > 66 ? 12 : 5);
+	    
+	    next INTERVAL if $occ_early > $early_bound + $early_buffer;
+	    
+	    my $late_buffer = $latebuffer || $early_buffer;
+	    
+	    next INTERVAL if $occ_late < $late_bound - $late_buffer;
+	}
+	
+	# If we are not skipping this interval, add it to the list.
+	
+	push @occ_bins, $early_bound;
+	
+	# If we are using timerule 'major' or 'contains', then stop
+	# the scan because each occurrence gets assigned to only one
+	# bin.
+	
+	last INTERVAL if $timerule eq 'contains' || $timerule eq 'major';
+    }
+    
+    # Return the list of matching bins, but also remember it in case other occurrences are found
+    # with the same age range.
+
+    $request->{"my_intervals_$timerule"}{$interval_key} = \@occ_bins;
+    
+    return @occ_bins;
+}
+
+
 # auto_complete_int ( name, limit )
 # 
 # This routine returns interval records matching the specified name, and is intended for use with
@@ -1065,11 +1181,12 @@ sub read_interval_data {
 	    }
 	    
 	    # Now sort each of the boundary lists (oldest to youngest) and
-	    # store them in the appropriate package variable.
+	    # store them in the appropriate package variable. Add the end age of the scale.
 	    
 	    foreach my $scale_level ( keys %boundary_map )
 	    {
 		$BOUNDARY_LIST{$scale_no}{$scale_level} = [ sort { $b <=> $a } keys %{$boundary_map{$scale_level}} ];
+		push @{$BOUNDARY_LIST{$scale_no}{$scale_level}}, $SDATA{$scale_no}{late_age};
 		$BOUNDARY_MAP{$scale_no}{$scale_level} = $boundary_map{$scale_level};
 	    }
 	}

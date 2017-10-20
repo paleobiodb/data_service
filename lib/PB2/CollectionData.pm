@@ -102,6 +102,13 @@ sub initialize {
 	    "Indicate whether the collection is on protected land",
         { value => 'time', maps_to => '1.2:colls:time' },
 	    "This block is includes the field 'cx_int_no', which is needed by Navigator.",
+	{ value => 'timebins', maps_to => '1.2:colls:timebins' },
+	    "Shows a list of temporal bins into which each occurrence falls according",
+	    "to the timerule selected for this request. You may select one using the",
+	    "B<C<timerule>> parameter, or it will default to C<B<major>>.",
+	{ value => 'timecompare', maps_to => '1.2:colls:timecompare' },
+	    "Like B<C<timebins>>, but shows this information for all available",
+	    "timerules.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -335,22 +342,27 @@ sub initialize {
     	    "The identifier of the most specific single interval from the selected timescale that",
     	    "covers the entire time range associated with the collection or cluster.");
     
-    #   { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
-    # 	tables => ['im'] },
-    #   { set => '*', code => \&fixTimeOutput },
-    #   { output => 'early_age', com_name => 'eag', data_type => 'dec' },
-    # 	  "The early bound of the geologic time range associated with the collection or cluster (in Ma)",
-    #   { output => 'late_age', com_name => 'lag', data_type => 'dec' },
-    # 	  "The late bound of the geologic time range associated with the collection or cluster (in Ma)",
-    #   { output => 'cx_int_no', com_name => 'cxi' },
-    # 	  "The identifier of the most specific single interval from the selected timescale that",
-    # 	  "covers the entire time range associated with the collection or cluster.",
-    #   { output => 'early_int_no', com_name => 'ein' },
-    # 	  "The beginning of a range of intervals from the selected timescale that most closely",
-    # 	  "brackets the time range associated with the collection or cluster (with C<late_int_no>)",
-    #   { output => 'late_int_no', com_name => 'lin' },
-    # 	  "The end of a range of intervals from the selected timescale that most closely brackets",
-    # 	  "the time range associated with the collection or cluster (with C<early_int_no>)");
+    $ds->define_block('1.2:colls:timebins' =>
+	{ set => '*', code => \&generate_timebins },
+	{ output => 'time_bins', com_name => 'tbl' },
+	    "List of time intervals into which this occurrence or collection is placed",
+	    "according to the timerule selected for this operation. You can see which",
+	    "rule is selected by including the B<C<datainfo>> parameter.");
+    
+    $ds->define_block('1.2:colls:timecompare' =>
+	{ set => '*', code => \&generate_timecompare },
+	{ output => 'time_contain', com_name => 'tbc' },
+	    "List of time intervals into which this occurrence or collection would be placed",
+	    "according to the C<B<contain>> timerule.",
+	{ output => 'time_major', com_name => 'tbm' },
+	    "List of time intervals into which this occurrence or collection would be placed",
+	    "according to the C<B<major>> timerule.",
+	{ output => 'time_buffer', com_name => 'tbb' },
+	    "List of time intervals into which this occurrence or collection would be placed",
+	    "according to the C<B<buffer>> timerule.",
+	{ output => 'time_overlap', com_name => 'tbo' },
+	    "List of time intervals into which this occurrence or collection would be placed",
+	    "according to the C<B<overlap>> timerule.");
     
     $ds->define_block('1.2:colls:strat' =>
 	{ select => ['cc.formation', 'cc.geological_group', 'cc.member'], tables => 'cc' },
@@ -4991,6 +5003,108 @@ sub process_permissions {
     }
 }
 
+
+# subroutines for generating time bin lists
+
+sub generate_timebins {
+    
+    my ($request, $record) = @_;
+    
+    unless ( $request->{my_binrule} )
+    {
+	$request->setup_time_variables;
+    }
+    
+    my @bin_list = $request->bin_by_interval($record, $request->{my_boundary_list}, $request->{my_binrule},
+					     $request->{my_timebuffer}, $request->{my_latebuffer});
+    
+    $record->{time_bins} = $request->generate_bin_names(@bin_list);
+}
+
+
+sub generate_timecompare {
+
+    my ($request, $record) = @_;
+    
+    unless ( $request->{my_binrule} )
+    {
+	$request->setup_time_variables;
+    }
+    
+    my @bin_contain = $request->bin_by_interval($record, $request->{my_boundary_list}, 'contain');
+    
+    $record->{time_contain} = $request->generate_bin_names(@bin_contain);
+    
+    my @bin_major = $request->bin_by_interval($record, $request->{my_boundary_list}, 'major');
+    
+    $record->{time_major} = $request->generate_bin_names(@bin_major);
+    
+    my @bin_buffer = $request->bin_by_interval($record, $request->{my_boundary_list}, 'buffer',
+					     $request->{my_timebuffer}, $request->{my_latebuffer});
+    
+    $record->{time_buffer} = $request->generate_bin_names(@bin_buffer);
+    
+    my @bin_overlap = $request->bin_by_interval($record, $request->{my_boundary_list}, 'overlap');
+    
+    $record->{time_overlap} = $request->generate_bin_names(@bin_overlap);
+}
+
+
+sub setup_time_variables {
+
+    my ($request) = @_;
+    
+    $request->{my_binrule} = $request->clean_param('timerule') || 'major';
+    $request->{my_timebuffer} = $request->clean_param('timebuffer');
+    $request->{my_latebuffer} = $request->clean_param('latebuffer');
+    
+    my ($early, $late) = $request->process_interval_params;
+    
+    $request->{my_early} = $early;
+    $request->{my_late} = $late;
+    
+    my $scale_no = $request->clean_param('scale_id') || 1;
+    my $scale_level = $request->clean_param('reso') || $PB2::IntervalData::SDATA{$scale_no}{levels};
+    
+    if ( ! defined $scale_level ) { $scale_level = 1 }
+	elsif ( $scale_level eq 'epoch' ) { $scale_level = 4 }
+    elsif ( $scale_level eq 'period' ) { $scale_level = 3 }
+    elsif ( $scale_level eq 'era' ) { $scale_level = 2 }
+    
+    $request->{my_scale_no} = $scale_no;
+    $request->{my_scale_level} = $scale_level;
+    
+    my @bins;
+    
+    foreach my $b ( @{$PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level}} )
+    {
+	push @bins, $b unless defined $early && $b > $early || defined $late && $b < $late; 
+    }
+    
+    $request->{my_boundary_list} = \@bins;
+    $request->{my_boundary_map} = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
+}
+
+
+sub generate_bin_names {
+
+    my $request = shift;
+    
+    if ( @_ == 0 )
+    {
+	return 'IMPRECISE';
+    }
+    
+    elsif ( my $bm = $request->{my_boundary_map} )
+    {    
+	return join ', ', map { $bm->{$_}{interval_name} || 'x' } @_;
+    }
+    
+    else
+    {
+	return 'UNKNOWN TIMESCALE';
+    }
+}
 
 # validate latitude and longitude values
 
