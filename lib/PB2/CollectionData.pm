@@ -5092,7 +5092,7 @@ sub generate_bin_names {
     
     if ( @_ == 0 )
     {
-	return 'IMPRECISE';
+	return '-';
     }
     
     elsif ( my $bm = $request->{my_boundary_map} )
