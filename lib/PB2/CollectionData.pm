@@ -345,21 +345,23 @@ sub initialize {
     $ds->define_block('1.2:colls:timebins' =>
 	{ set => '*', code => \&generate_timebins },
 	{ output => 'time_bins', com_name => 'tbl' },
-	    "List of time intervals into which this occurrence or collection is placed",
+	    "A list of time intervals into which this occurrence or collection is placed",
 	    "according to the timerule selected for this operation. You can see which",
-	    "rule is selected by including the B<C<datainfo>> parameter.");
+	    "rule is selected by including the B<C<datainfo>> parameter. A value of",
+	    "- means that the time range is too large to match any bin under",
+	    "this timerule.");
     
     $ds->define_block('1.2:colls:timecompare' =>
 	{ set => '*', code => \&generate_timecompare },
 	{ output => 'time_contain', com_name => 'tbc' },
 	    "List of time intervals into which this occurrence or collection would be placed",
-	    "according to the C<B<contain>> timerule.",
+	    "according to the C<B<contain>> timerule, or - if the range is too large.",
 	{ output => 'time_major', com_name => 'tbm' },
 	    "List of time intervals into which this occurrence or collection would be placed",
-	    "according to the C<B<major>> timerule.",
+	    "according to the C<B<major>> timerule, or - if the range is too large.",
 	{ output => 'time_buffer', com_name => 'tbb' },
 	    "List of time intervals into which this occurrence or collection would be placed",
-	    "according to the C<B<buffer>> timerule.",
+	    "according to the C<B<buffer>> timerule, or - if the range is too large.",
 	{ output => 'time_overlap', com_name => 'tbo' },
 	    "List of time intervals into which this occurrence or collection would be placed",
 	    "according to the C<B<overlap>> timerule.");
@@ -5092,7 +5094,7 @@ sub generate_bin_names {
     
     if ( @_ == 0 )
     {
-	return 'IMPRECISE';
+	return '-';
     }
     
     elsif ( my $bm = $request->{my_boundary_map} )
