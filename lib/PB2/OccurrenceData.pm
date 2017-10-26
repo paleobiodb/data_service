@@ -936,6 +936,15 @@ sub initialize {
 	{ allow => '1.2:common:select_occs_ent' },
 	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	">>The following parameters can be used to filter the selection of occurrences",
+	"that are analyzed for diversity:",
+	{ optional => 'pres', valid => '1.2:taxa:preservation', list => ',' },
+	    "This parameter indicates whether to select occurrences that are identified as",
+	    "ichnotaxa, form taxa, or regular taxa.  The default is C<B<all>>, which will select",
+	    "all records that meet the other specified criteria.  You can specify one or more",
+	    "of the following values as a list:",
+	{ ignore => 'level' },
+	{ ignore => 'show' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
