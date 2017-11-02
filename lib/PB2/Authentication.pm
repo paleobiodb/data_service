@@ -43,7 +43,7 @@ sub authenticate {
     {
 	my $options = { debug => $request->debug };
 	
-	$request->{my_perms} = Permissions->no_login($dbh, $table_name, $options);
+	$request->{my_perms} = Permissions->no_login($request->get_connection, $table_name, $options);
     }
 
     return $request->{my_perms};

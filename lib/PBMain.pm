@@ -10,13 +10,10 @@ use strict;
 
 use Dancer qw(:syntax);
 use PBLogger;
-use TableDefs qw(init_table_names test_select);
+use TableDefs qw(init_table_names select_test_tables is_test_mode);
 
 
-BEGIN {
-    my $logger = PBLogger->new;
-    init_table_names(Dancer::config);
-}
+my $logger = PBLogger->new;
 
 
 # We need a couple of routes to handle interaction with the server when it is in test mode.
@@ -32,7 +29,7 @@ get '/:prefix/testmode/:tablename/:op' => sub {
 	pass;
     }
     
-    unless ( $TableDefs::TEST_MODE )
+    unless ( is_test_mode )
     {
 	die "500 Server is not in test mode\n";
     }

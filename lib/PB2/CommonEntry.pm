@@ -475,30 +475,32 @@ sub add_edt_warnings {
     
     my ($request, $edt) = @_;
     
-    my (%warnings) = $edt->warnings;
+    my (@warnings) = $edt->warnings;
     
-    return unless %warnings;
+    return unless @warnings;
     my %added;
     
-    foreach my $code ( keys %warnings )
-    {
-	next unless ref $warnings{$code} eq 'ARRAY';
+    # foreach my $w ( @warnings )
+    # {
+    # 	my $foo;
 	
-	foreach my $w ( @{$warnings{$code}} )
-	{
-	    next unless ref $w eq 'ARRAY';
+    # 	next unless ref $warnings{$code} eq 'ARRAY';
+	
+    # 	foreach my $w ( @{$warnings{$code}} )
+    # 	{
+    # 	    next unless ref $w eq 'ARRAY';
 	    
-	    my $str = $code;
-	    $str .= " ($w->[0])" if defined $w->[0] && $w->[0] ne '';
-	    $str .= ": $w->[1]" if defined $w->[1] && $w->[1] ne '';
+    # 	    my $str = $code;
+    # 	    $str .= " ($w->[0])" if defined $w->[0] && $w->[0] ne '';
+    # 	    $str .= ": $w->[1]" if defined $w->[1] && $w->[1] ne '';
 	    
-	    unless ( $added{$str} )
-	    {
-		$request->add_warning($str);
-		$added{$str} = 1;
-	    }
-	}
-    }
+    # 	    unless ( $added{$str} )
+    # 	    {
+    # 		$request->add_warning($str);
+    # 		$added{$str} = 1;
+    # 	    }
+    # 	}
+    # }
 }
 
 

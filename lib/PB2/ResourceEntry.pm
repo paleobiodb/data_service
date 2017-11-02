@@ -20,7 +20,7 @@ use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use TableData qw(complete_ruleset);
 use File::Temp qw(tempfile);
 
-use ResourceEdit qw(config_resource_edit);
+use ResourceEdit;
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -123,7 +123,7 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    config_resource_edit(Dancer::config);
+    ResourceEdit->configure(Dancer::config);
     
     my $dbh = $ds->get_connection;
     

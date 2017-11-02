@@ -433,12 +433,12 @@ sub add_record_condition {
     
     if ( $code =~ qr{ ^ [EC] _ }xs )
     {
-	push @{$edt->{current_errors}}, [$code, $edt->{current_label}, '_', @data];
+	push @{$edt->{current_errors}}, [$code, $edt->{current_label} || '_', @data];
     }
     
     elsif ( $code =~ qr{ ^ W_ }xs )
     {
-	push @{$edt->{current_warnings}}, [$code, $edt->{current_label}, '_', @data];
+	push @{$edt->{current_warnings}}, [$code, $edt->{current_label} || '_', @data];
     }
     
     else
@@ -779,7 +779,7 @@ sub insert_record {
     # Either execute the action immediately or add it to the appropriate list depending on whether
     # or not any error conditions are found.
     
-    return _handle_action($table, 'insert', $action);
+    return $edt->_handle_action($action);
 }
 
 
@@ -854,7 +854,7 @@ sub update_record {
     # Create an action record, and either execute it immediately or add it to the appropriate list
     # depending on whether or not any error conditions are found.
     
-    return _handle_action($table, 'update', $action);
+    return $edt->_handle_action($action);
 }
 
 
@@ -942,7 +942,7 @@ sub replace_record {
     # Create an action record, and either execute it immediately or add it to the appropriate list
     # depending on whether or not any error conditions are found.
     
-    return _handle_action($table, 'replace', $action);
+    return $edt->_handle_action($action);
 }
 
 
@@ -1017,7 +1017,7 @@ sub delete_record {
     
     # Create an action record, and then take the appropriate action.
     
-    return $edt->_handle_action($table, 'delete', $action);
+    return $edt->_handle_action($action);
 }
 
 
@@ -1080,8 +1080,8 @@ sub _handle_action {
 
     my ($edt, $action) = @_;
     
-    # If errors were generated for this action, put it on the 'bad action' list and otherwise do
-    # nothing.
+    # If any errors were already generated for the record currently being processed, put this
+    # action on the 'bad action' list and otherwise do nothing.
     
     if ( $edt->record_errors )
     {
@@ -1089,44 +1089,52 @@ sub _handle_action {
 	return;
     }
     
-    # If no errors have been accumulated from previous records, then we can proceed with this
-    # action. We either execute it immediately, or put it on the action list to be executed after
-    # all of the records are checked.
+    # If errors were generated for previous records, then there is no point in proceeding with
+    # this action since the edit transaction will either never be started or will be subsequently
+    # rolled back. Since we already know that no errors were generated for this particular record,
+    # there is nothing more that needs to be done.
     
-    unless ( $edt->errors )
+    elsif ( $edt->errors )
     {
-	unless ( $edt->{execute_immediately} )
-	{
-	    push @{$edt->{action_list}}, $action;
-	    return;
-	}
-	
-	my $operation = $action->operation;
-	
-	if ( $operation eq 'insert' )
-	{
-	    return $edt->_execute_insert($action);
-	}
-	
-	elsif ( $operation eq 'update' )
-	{
-	    return $edt->_execute_update($action);
-	}
-	
-	elsif ( $operation eq 'replace')
-	{
-	    return $edt->_execute_replace($action);
-	}
-	
-	elsif ( $operation eq 'delete' )
-	{
-	    return $edt->_execute_delete($action);
-	}
-	
-	else
-	{
-	    croak "bad operation '$operation'";
-	}
+	return;
+    }
+    
+    # If the 'execute immediately' flag not been turned on, then just push this action on the list
+    # for later execution.
+    
+    elsif ( ! $edt->{execute_immediately} )
+    {
+	push @{$edt->{action_list}}, $action;
+	return;
+    }
+    
+    # Otherwise, we execute the action immediately.
+    
+    my $operation = $action->operation;
+    
+    if ( $operation eq 'insert' )
+    {
+	return $edt->_execute_insert($action);
+    }
+    
+    elsif ( $operation eq 'update' )
+    {
+	return $edt->_execute_update($action);
+    }
+    
+    elsif ( $operation eq 'replace')
+    {
+	return $edt->_execute_replace($action);
+    }
+    
+    elsif ( $operation eq 'delete' )
+    {
+	return $edt->_execute_delete($action);
+    }
+    
+    else
+    {
+	croak "bad operation '$operation'";
     }
     
     return;

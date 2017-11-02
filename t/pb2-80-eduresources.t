@@ -53,8 +53,8 @@ subtest 'by role' => sub {
     
     $T->set_cookie("session_id", "SESSION-ENTERER");
     
-    my (@r1) = $T->fetch_records("/eduresources/list.json?all_records", "superuser all records");
-    my (@r2) = $T->fetch_records("/eduresources/active.json", "superuser active records");
+    my (@r1) = $T->fetch_records("/eduresources/list.json?all_records", "enterer all records");
+    my (@r2) = $T->fetch_records("/eduresources/active.json", "enterer active records");
     
     $T->set_cookie("session_id", "SESSION-GUEST");
     

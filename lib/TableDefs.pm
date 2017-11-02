@@ -38,7 +38,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
 		      %TABLE_PROPERTIES %TEST_SELECT
 		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE
-		      init_table_names select_test_tables
+		      init_table_names select_test_tables is_test_mode
 		      set_table_property get_table_property
 		      set_column_property get_column_properties);
 
@@ -47,6 +47,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 
 our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
 			   ALLOW_VIEW => 1,
+			   ALLOW_EDIT => 1,
 			   ALLOW_DELETE => 1,
 			   ALLOW_KEY_INSERT => 1,
 			   BY_AUTHORIZER => 1,
@@ -73,9 +74,15 @@ sub init_table_names
     
     if ( $test_mode )
     {
-	$TEST_MODE = $1;
+	$TEST_MODE = $test_mode;
 	$TEST_DB = $config->{test_db};
     }
+}
+
+
+sub is_test_mode
+{
+    return $TEST_MODE;
 }
 
 
@@ -463,3 +470,4 @@ sub substitute_table {
 
 
 1;
+

@@ -41,13 +41,17 @@ sub new {
     
     my $perms;
     
-    # If we have a session cookie, then look up the authorization info from the session_data
-    # table. If we are given a table name, then look up the requestor's role for that table as
-    # well.
+    # If we were given a login session id, then look up the authorization info from the
+    # session_data table.
     
     if ( $session_id )
     {
 	my $quoted_id = $dbh->quote($session_id);
+	
+	my $perms;
+	
+	# If we were also given a table name, then check to see if this user has any special
+	# permissions on that table. Otherwise, just get the login information.
 	
 	if ( $table_name )
 	{
@@ -66,17 +70,38 @@ sub new {
 	    print STDERR "$sql\n\n" if $options->{debug};
 	    
 	    $perms = $dbh->selectrow_hashref($sql);
+	}
+	
+	else
+	{
+	    my $sql = "
+		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, role
+		FROM $SESSION_DATA WHERE session_id = $quoted_id";
 	    
-	    # If we get nothing, then the login session is no longer valid.
+	    print STDERR "$sql\n\n" if $options->{debug};
 	    
-	    unless ( $perms && $perms->{user_id} )
-	    {
-		return Permissions->no_login($dbh, $table_name, $options);
-	    }
-	    
-	    # If we retrieved a specific table permission, add it into the new object. Otherwise, add
-	    # the default permission for this table.
-	    
+	    $perms = $dbh->selectrow_hashref($sql);
+	}
+	
+	# If we retrieved a record that includes a value for 'user_id', then we have the basis for
+	# a valid Permissions object. Otherwise, return a dummy Permissions object that has no
+	# permissions other than those available to everybody.
+	
+	if ( $perms && $perms->{user_id} )
+	{
+	    bless $perms, $class;
+	}
+	
+	else
+	{
+	    return Permissions->no_login($dbh, $table_name, $options);
+	}
+	
+	# If a table name was specified and we retrieved a specific table permission, add it into
+	# the new object. Otherwise, add the default permission for the specified table.
+	
+	if ( $table_name )
+	{
 	    if ( $perms->{permission} )
 	    {
 		my @list = grep $_, (split qr{/}, $perms->{permission});
@@ -89,32 +114,10 @@ sub new {
 	    
 	    else
 	    {
-		# $perms->{table_permission}{$table_name} = $perms->default_table_permission($table_name);
 		$perms->default_table_permissions($table_name);
 	    }
 	}
-	
-	# If we weren't given a table name, just query for the session data.
-	
-	else
-	{
-	    my $sql = "
-		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, role
-		FROM $SESSION_DATA WHERE session_id = $quoted_id";
-	    
-	    print STDERR "$sql\n\n" if $options->{debug};
-	    
-	    $perms = $dbh->selectrow_hashref($sql);
-	    
-	    # If we get nothing, then the login session is no longer valid. Otherwise, bless the
-	    # newly acquired info into the proper class.
-	    
-	    unless ( $perms && $perms->{user_id} )
-	    {
-		return Permissions->no_login($dbh, $table_name, $options);
-	    }
-	}
-	
+		
 	# If this request comes from a user who is not a full database member with an authorizer,
 	# make absolutely sure that the role is 'guest' and the superuser bit is turned off.
 	
@@ -125,9 +128,8 @@ sub new {
 	    $perms->{superuser} = 0;
 	}
 	
-	# Cache the dbh in case we need it later, plus the debug flag.
-	
-	bless $perms, $class;
+	# Cache the dbh in case we need it later, plus the debug flag. If 'role' is not set for some
+	# reason, default it to 'guest'.
 	
 	$perms->{dbh} = $dbh;
 	weaken $perms->{dbh};
