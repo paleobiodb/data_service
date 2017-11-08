@@ -205,7 +205,7 @@ sub unpack_input_records {
 	    
 	    my $raw = $result->raw;
 	    
-	    foreach my $k ( %$raw )
+	    foreach my $k ( keys %$raw )
 	    {
 		if ( defined $raw->{$k} && $raw->{$k} eq '' )
 		{
@@ -480,27 +480,22 @@ sub add_edt_warnings {
     return unless @warnings;
     my %added;
     
-    # foreach my $w ( @warnings )
-    # {
-    # 	my $foo;
+    foreach my $w ( @warnings )
+    {
+    	my $code = $w->code;
+	my $label = $w->label;
+	my $explanation = join('; ', $w->data);
 	
-    # 	next unless ref $warnings{$code} eq 'ARRAY';
+	my $str = $code;
+	$str .= " ($label)" if defined $label && $label ne '';
+	$str .= ": $explanation" if defined $explanation && $explanation ne '';
 	
-    # 	foreach my $w ( @{$warnings{$code}} )
-    # 	{
-    # 	    next unless ref $w eq 'ARRAY';
-	    
-    # 	    my $str = $code;
-    # 	    $str .= " ($w->[0])" if defined $w->[0] && $w->[0] ne '';
-    # 	    $str .= ": $w->[1]" if defined $w->[1] && $w->[1] ne '';
-	    
-    # 	    unless ( $added{$str} )
-    # 	    {
-    # 		$request->add_warning($str);
-    # 		$added{$str} = 1;
-    # 	    }
-    # 	}
-    # }
+	unless ( $added{$str} )
+	{
+	    $request->add_warning($str);
+	    $added{$str} = 1;
+	}
+    }
 }
 
 
@@ -508,26 +503,25 @@ sub add_edt_errors {
     
     my ($request, $edt) = @_;
     
-    my (%errors) = $edt->errors;
+    my (@errors) = $edt->errors;
     
-    return unless %errors;
+    return unless @errors;
     my %added;
     
-    foreach my $code ( keys %errors )
+    foreach my $e ( @errors )
     {
-	next unless ref $errors{$code} eq 'ARRAY';
+    	my $code = $e->code;
+	my $label = $e->label;
+	my $explanation = join('; ', $e->data);
 	
-	foreach my $e ( @{$errors{$code}} )
+	my $str = $code;
+	$str .= " ($label)" if defined $label && $label ne '';
+	$str .= ": $explanation" if defined $explanation && $explanation ne '';
+	
+	unless ( $added{$str} )
 	{
-	    my $str = $code;
-	    $str .= " ($e->[0])" if defined $e->[0] && $e->[0] ne '';
-	    $str .= ": $e->[1]" if defined $e->[1] && $e->[1] ne '';
-	    
-	    unless ( $added{$str} )
-	    {
-		$request->add_error($str);
-		$added{$str} = 1;
-	    }
+	    $request->add_error($str);
+	    $added{$str} = 1;
 	}
     }
 }

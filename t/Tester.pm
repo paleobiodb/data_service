@@ -808,6 +808,8 @@ sub get_content_type {
 
 sub ok_content_type {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
@@ -886,6 +888,8 @@ sub get_response_code {
 # response code is not one of those specified.
 
 sub ok_response_code {
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
     my $response;
@@ -1050,6 +1054,8 @@ sub has_warning_like {
 
 sub ok_error_like {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
@@ -1097,6 +1103,8 @@ sub diag_errors {
 
 sub ok_warning_like {
 
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
@@ -1149,6 +1157,8 @@ sub diag_warnings {
 
 sub cmp_ok_errors {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
@@ -1177,6 +1187,8 @@ sub cmp_ok_errors {
 # response is given, use the last one fetched.
 
 sub cmp_ok_warnings {
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
     my $response;
@@ -1251,6 +1263,8 @@ sub get_meta {
 
 sub cmp_ok_meta {
 
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
@@ -1273,6 +1287,8 @@ sub cmp_ok_meta {
 # Test that the given response contains an empty record set.
 
 sub ok_no_records {
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
     my $response;
@@ -1486,7 +1502,7 @@ sub extract_records_json {
     else
     {
 	fail($message);
-	diag('recrords section is missing');
+	diag('no records were returned');
 	if ( $response->{__URLPATH} )
 	{
 	    my $url = $tester->make_url($response->{__URLPATH});
@@ -1666,7 +1682,7 @@ sub extract_records_text {
     else
     {
 	fail($message);
-	diag('no records found');
+	diag('no records were returned');
 	if ( $response->{__URLPATH} )
 	{
 	    my $url = $tester->make_url($response->{__URLPATH});
@@ -1810,7 +1826,7 @@ sub extract_records_ris {
     else
     {
 	fail($message);
-	diag('no records found');
+	diag('no records were returned');
 	if ( $response->{__URLPATH} )
 	{
 	    my $url = $tester->make_url($response->{__URLPATH});

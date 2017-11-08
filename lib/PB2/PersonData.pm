@@ -156,7 +156,7 @@ sub get_person {
     
     if ( $arg && $arg eq 'loggedin' || $request->clean_param('loggedin') )
     {
-	my $auth_info = $request->require_auth($dbh);
+	my $auth_info = $request->require_authentication();
 	
 	if ( $auth_info->{enterer_no} )
 	{
@@ -178,7 +178,7 @@ sub get_person {
     {
 	if ( $id =~ /^[A-Z0-9-]{10,80}$/ )
 	{
-	    my $auth_info = $request->require_auth($dbh);
+	    my $auth_info = $request->require_authentication();
 	    $wing_id = $dbh->quote($id);
 	}
 	

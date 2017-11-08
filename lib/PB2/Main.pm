@@ -841,7 +841,7 @@ use PB2::MainEntry;
 	"This operation returns information about a single database contributor,",
 	"specified by either name or identifier.");
     
-    $ds2->define_node({ path => 'people/loggedin',
+    $ds2->define_node({ path => 'people/me',
 			place => 2,
 			title => 'Currenly logged-in user',
 			method => 'get_person',

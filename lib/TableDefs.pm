@@ -39,7 +39,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      %TABLE_PROPERTIES %TEST_SELECT
 		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE
 		      init_table_names select_test_tables is_test_mode
-		      set_table_property get_table_property
+		      set_table_property get_table_property original_table
 		      set_column_property get_column_properties);
 
 
@@ -55,7 +55,8 @@ our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
 			   PRIMARY_KEY => 1,
 			   PRIMARY_ATTR => 1 );
 
-our (%COLUMN_PROP_NAME) = ( REQUIRED => 1,
+our (%COLUMN_PROP_NAME) = ( ID_TYPE => 1,
+			    REQUIRED => 1,
 			    ADMIN_SET => 1 );
 
 our ($TEST_MODE, $TEST_DB);
@@ -427,7 +428,7 @@ sub set_column_property {
     croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
     
     my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
-    $TABLE_PROPERTIES{$base_name}{$column_name}{$property} = $value;
+    $COLUMN_PROPERTIES{$base_name}{$column_name}{$property} = $value;
 }
 
 
@@ -448,7 +449,7 @@ sub get_column_properties {
 	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}};
     }
     
-    elsif ( $TABLE_PROPERTIES{$table_name} )
+    elsif ( $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
     {
 	return { };
     }
@@ -466,6 +467,12 @@ sub substitute_table {
     
     $TABLE_NAME_MAP{$new_name} = $old_name;
     return $new_name;
+}
+
+
+sub original_table {
+    
+    return $TABLE_NAME_MAP{$_[0]};
 }
 
 

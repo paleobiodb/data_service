@@ -38,7 +38,7 @@ sub new {
 	$action->{keycol} = $key_column;
     }
     
-    if ( $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
+    if ( $key_attr = get_table_property($table, 'PRIMARY_ATTR') || $key_column )
     {
 	if ( ref $record eq 'HASH' && defined $record->{$key_attr} && $record->{$key_attr} ne '' )
 	{
@@ -125,9 +125,10 @@ sub record {
     
     unless ( ref $_[0]{record} eq 'HASH' )
     {
-	croak "no record defined for this action" unless $_[0]->{operation} eq 'delete' && defined $_[0]->{record};
-	croak "record must be a hash ref or scalar" if ref $_[0]->{record};
-	$_[0]{record} = { $_[0]{keycol} => $_[0]{record} };
+	return unless $_[0]{operation} eq 'delete' && defined $_[0]{record};
+	# croak "no record defined for this action" unless $_[0]->{operation} eq 'delete' && defined $_[0]->{record};
+	# croak "record must be a hash ref or scalar" if ref $_[0]->{record};
+	return { $_[0]{keycol} => $_[0]{record} };
     }
     
     return $_[0]{record};
@@ -136,14 +137,14 @@ sub record {
 
 sub label {
     
-    croak "no label defined for this action" unless defined $_[0]{label} && $_[0]{label} ne '';
+    # croak "no label defined for this action" unless defined $_[0]{label} && $_[0]{label} ne '';
     return $_[0]{label};
 }
 
 
 sub field {
 
-    croak "no record defined for this action" unless ref $_[0]{record} eq 'HASH';
+    # croak "no record defined for this action" unless ref $_[0]{record} eq 'HASH';
     return $_[0]{record}{$_[1]};
 }
 
@@ -157,14 +158,14 @@ sub permission {
 
 sub keycol {
     
-    croak "no keycol defined for this action" unless defined $_[0]{keycol};
+    # croak "no keycol defined for this action" unless defined $_[0]{keycol};
     return $_[0]{keycol};
 }
 
 
 sub keyval {
     
-    return $_[0]->{keyval};
+    return $_[0]{keyval};
 }
 
 

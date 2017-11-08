@@ -9,10 +9,11 @@ package EditTransaction;
 use strict;
 
 use ExternalIdent qw(%IDP);
-use TableDefs qw(get_table_property get_column_properties $PERSON_DATA
+use TableDefs qw(get_table_property get_column_properties original_table $PERSON_DATA
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE);
 use TableData qw(get_table_schema);
 use EditAction;
+use Permissions;
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -83,6 +84,7 @@ sub new {
 		inserted_keys => { },
 		updated_keys => { },
 		deleted_keys => { },
+		key_labels => { },
 		record_count => 0,
 		action_count => 0,
 		commit_count => 0,
@@ -153,8 +155,7 @@ sub new {
     # Store a reference to the hooks (if any) for the subclass into which this object is
     # blessed. If none were registered, store an empty hash.
     
-    $HOOKS_BY_CLASS{$class} ||= { };
-    $edt->{hooks} = $HOOKS_BY_CLASS{$class};
+    $edt->{hooks} = $HOOKS_BY_CLASS{$class} || { };
     
     return $edt;
 }
@@ -236,7 +237,9 @@ sub _call_hooks {
 
     my ($edt, $table, $hook_name, @args) = @_;
     
-    if ( my $hooks = $edt->{hooks}{$table}{$hook_name} )
+    my $orig_table = original_table($table);
+    
+    if ( my $hooks = $edt->{hooks}{$orig_table}{$hook_name} )
     {
 	unless ( ref $hooks )
 	{
@@ -378,14 +381,16 @@ sub add_condition {
     
     my ($edt, $code, @data) = @_;
     
+    my $condition = EditCondition->new($code, '_', @data);
+    
     if ( $code =~ qr{ ^ [EC] _ }xs )
     {
-	push @{$edt->{errors}}, [$code, '_', @data];
+	push @{$edt->{errors}}, $condition;
     }
     
     elsif ( $code =~ qr{ ^ W_ }xs )
     {
-	push @{$edt->{warnings}}, [$code, '_', @data];
+	push @{$edt->{warnings}}, $condition;
     }
     
     else
@@ -431,22 +436,22 @@ sub add_record_condition {
     
     croak "_new_record must be called first" unless defined $edt->{current_label};
     
+    my $condition = EditCondition->new($code, $edt->{current_label}, @data);
+    
     if ( $code =~ qr{ ^ [EC] _ }xs )
     {
-	push @{$edt->{current_errors}}, [$code, $edt->{current_label} || '_', @data];
+	push @{$edt->{current_errors}}, $condition;
     }
     
     elsif ( $code =~ qr{ ^ W_ }xs )
     {
-	push @{$edt->{current_warnings}}, [$code, $edt->{current_label} || '_', @data];
+	push @{$edt->{current_warnings}}, $condition;
     }
     
     else
     {
 	croak "bad condition '$code'";
     }
-    
-    $edt->{current_condition}{$code} = 1;
     
     return $edt;
 }
@@ -550,6 +555,7 @@ sub _finish_record {
 	    {
 		substr($e->[0],0,1) =~ tr/CE/DF/;
 		push @{$edt->{warnings}}, $e;
+		$edt->{condition}{$e->[0]} = 1;
 	    }
 	}
 	
@@ -567,6 +573,8 @@ sub _finish_record {
 		{
 		    push @{$edt->{errprs}}, $e;
 		}
+		
+		$edt->{condition}{$e->[0]} = 1;
 	    }
 	}
 	
@@ -575,6 +583,7 @@ sub _finish_record {
 	    while ( my $e = shift @{$edt->{current_errors}} )
 	    {
 		push @{$edt->{errors}}, $e;
+		$edt->{condition}{$e->[0]} = 1;
 	    }
 	}
     }
@@ -741,7 +750,8 @@ sub insert_record {
 	
 	else
 	{
-	    $permission = $action->set_permission($edt->check_table_permission($table, 'post'));
+	    $permission = $edt->set_permission($action);
+	    # $permission = $action->set_permission($edt->check_table_permission($table, 'post'));
 	}
 	
 	# If the user does not have permission to add a record, add an error condition.
@@ -765,7 +775,7 @@ sub insert_record {
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
 	$edt->_call_hooks($table, 'validate_insert', 'insert', $action) ||
-	    $edt->validate_record($table, 'insert', $action);
+	    $edt->validate_record($action);
     }
     
     # If an attempt is made to add a record without the 'CREATE' allowance, add the appropriate
@@ -811,12 +821,13 @@ sub update_record {
 	
 	if ( $edt->_call_hooks($table, 'auth_update', 'update', $action) )
 	{
-	    $action->set_permission($edt->_hook_result);
+	    $permission = $action->set_permission($edt->_hook_result);
 	}
 	
 	else
 	{
-	    $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
+	    $permission = $edt->set_permission($action, $keyexpr);
+	    # $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
 	}
 	
 	# If no such record is found in the database, add an error condition.
@@ -839,7 +850,7 @@ sub update_record {
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
 	$edt->_call_hooks($table, 'validate_update', 'update', $action) ||
-	    $edt->validate_record($table, 'update', $action);
+	    $edt->validate_record($action);
     }
     
     # If no primary key value was specified for this record, add an error condition. This will, of
@@ -892,7 +903,8 @@ sub replace_record {
 	
 	else
 	{
-	    $permission = $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
+	    $permission = $edt->set_permission($action, $keyexpr);
+	    # $permission = $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
 	}
 	
 	# If no such record is found in the database, check to see if the user has administrative
@@ -927,7 +939,7 @@ sub replace_record {
 	# error condition if any criteria are violated. It may also add warning conditions.
 	
 	$edt->_call_hooks($table, 'validate_replace', 'replace', $action) ||
-	    $edt->validate_record($table, 'replace', $action);
+	    $edt->validate_record($action);
     }
     
     # If no primary key value was specified for this record, add an error condition. This will, of
@@ -981,7 +993,8 @@ sub delete_record {
 	
 	else
 	{
-	    $permission = $action->set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
+	    $permission = $edt->set_permission($action, $keyexpr);
+	    # $permission = $action->set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
 	}
 	
 	# If no such record is found in the database, add an error condition. If this
@@ -1109,6 +1122,18 @@ sub _handle_action {
     }
     
     # Otherwise, we execute the action immediately.
+    
+    else
+    {
+	$edt->execute_action($action);
+	return;
+    }
+}
+
+
+sub execute_action {
+    
+    my ($edt, $action) = @_;
     
     my $operation = $action->operation;
     
@@ -1308,8 +1333,8 @@ sub get_keyexpr {
     
     my ($edt, $action) = @_;
     
-    my $keycol = $edt->keycol;
-    my $keyval = $edt->keyval;
+    my $keycol = $action->keycol;
+    my $keyval = $action->keyval;
     
     if ( $keycol && $keyval )
     {
@@ -1319,6 +1344,41 @@ sub get_keyexpr {
     else
     {
 	return;
+    }
+}
+
+
+# set_permission ( action, key_expr )
+# 
+# Determine the current user's permission to do the specified action.
+
+sub set_permission {
+    
+    my ($edt, $action, $keyexpr) = @_;
+    
+    my $operation = $action->operation;
+    my $table = $action->table;
+    
+    if ( $operation eq 'insert' )
+    {
+	return $action->set_permission($edt->check_table_permission($table, 'post'))
+    }
+    
+    elsif ( $operation eq 'update' || $operation eq 'replace' )
+    {
+	$keyexpr ||= $edt->get_keyexpr($action);
+	return $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
+    }
+    
+    elsif ( $operation eq 'delete' )
+    {
+	$keyexpr ||= $edt->get_keyexpr($action);
+	return $action->set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
+    }
+    
+    else
+    {
+	croak "bad operation '$operation'";
     }
 }
 
@@ -1361,6 +1421,8 @@ sub _execute_insert {
     my $sql = "	INSERT INTO $table ($column_list)
 		VALUES ($value_list)";
     
+    print STDERR "$sql\n\n" if $edt->debug;
+    
     my $new_keyval;
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
@@ -1397,12 +1459,14 @@ sub _execute_insert {
     
     $edt->_call_hooks($table, 'after_action', 'insert', $action, $new_keyval);
     
-    # If the insert succeeded, return the new primary key value. Otherwise, return undefined.
+    # If the insert succeeded, return the new primary key value. Also record this value so that it
+    # can be queried for later. Otherwise, return undefined.
     
     if ( $new_keyval )
     {
 	$edt->{action_count}++;
 	$edt->{inserted_keys}{$new_keyval} = 1;
+	$edt->{key_labels}{$new_keyval} = $action->label;
 	return $new_keyval;
     }
     
@@ -1452,6 +1516,8 @@ sub _execute_replace {
     my $sql = "	REPLACE INTO $table ($column_list)
 		VALUES ($value_list)";
     
+    print STDERR "$sql\n\n" if $edt->debug;
+    
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
     
@@ -1478,9 +1544,12 @@ sub _execute_replace {
     
     $edt->_call_hooks($table, 'after_action', 'replace', $action, $result);
     
-    # If the replace succeeded, return true. Otherwise, return false.
+    # If the replace succeeded, return true. Otherwise, return false. In either case, record the
+    # mapping between key value and record label.
     
     my $keyval = $action->keyval;
+    
+    $edt->{key_labels}{$keyval} = $action->label;
     
     if ( $result )
     {
@@ -1542,6 +1611,8 @@ sub _execute_update {
     my $sql = "	UPDATE $table SET $set_list
 		WHERE $key_expr";
     
+    print STDERR "$sql\n\n" if $edt->debug;
+    
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
     
@@ -1570,9 +1641,12 @@ sub _execute_update {
     
     $edt->_call_hooks($table, 'after_action', 'update', $action, $result);
     
-    # If the update succeeded, return true. Otherwise, return false.
+    # If the update succeeded, return true. Otherwise, return false. In either case, record the
+    # mapping between key value and record label.
     
     my $keyval = $action->keyval;
+    
+    $edt->{key_labels}{$keyval} = $action->label;
     
     if ( $result )
     {
@@ -1613,6 +1687,8 @@ sub _execute_delete {
     
     my $sql = "	DELETE FROM $table WHERE $key_expr";
     
+    print STDERR "$sql\n\n" if $edt->debug;
+    
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
     
@@ -1639,11 +1715,14 @@ sub _execute_delete {
     # the database. This is passed two extra arguments. The first contains the key value of the
     # record that was deleted, and the second will be true if the delete succeeded and false otherwise.
     
-    $edt->_call_hooks($table, 'after_action', $action, $result);
+    $edt->_call_hooks($table, 'after_action', 'delete', $action, $result);
     
-    # If the delete succeeded, return true. Otherwise, return false.
+    # If the delete succeeded, return true. Otherwise, return false. In either case, record the
+    # mapping between key value and record label.
     
     my $keyval = $action->keyval;
+    
+    $edt->{key_labels}{$keyval} = $action->label;
     
     if ( $result )
     {
@@ -1698,6 +1777,12 @@ sub failed_keys {
 }
 
 
+sub key_labels {
+
+    return $_[0]{key_labels};
+}
+
+
 sub action_count {
     
     return $_[0]->{action_count};
@@ -1727,7 +1812,7 @@ sub check_record_permission {
     
     my ($edt, $table, $permission, $key_expr, $record) = @_;
     
-    return $edt->{perms}->check_table_permission($table, $permission, $key_expr, $record) = @_;
+    return $edt->{perms}->check_record_permission($table, $permission, $key_expr, $record);
 }
 
 
@@ -1776,12 +1861,10 @@ our (%UNSIGNED_BOUND) = ( tiny => 255,
 
 sub validate_record {
 
-    my ($edt, $table, $operation, $action, $special) = @_;
+    my ($edt, $action, $special) = @_;
     
-    croak "bad operation '$operation'" unless
-	$operation eq 'insert' || $operation eq 'update' || $operation eq 'replace' || 
-	$operation eq 'mirror';
-    
+    my $operation = $action->operation;
+    my $table = $action->table;
     my $record = $action->record;
     my $permission = $action->permission;
     
@@ -1811,27 +1894,19 @@ sub validate_record {
 	# the same as the database column name. Start with the assumption that it is, but if
 	# the column ends in '_no' then also check for a corresponding column ending in '_id'.
 	
-	my $lookup_col = $col;
+	my $record_col = $col;
 	
-	unless ( exists $record->{$lookup_col} )
+	unless ( exists $record->{$record_col} )
 	{
 	    if ( $col =~ qr{ ^ (.*) _no $ }xs )
 	    {
-		$lookup_col = $1 . '_id';
+		$record_col = $1 . '_id';
 	    }
 	}
 	
-	# Skip any columns that aren't included in the record, unless they are required and this
-	# is a non-update operation.
+	# Grab whatever value has been specified for this column.
 	
-	unless ( exists $record->{$lookup_col} )
-	{
-	    next unless $property->{$col}{REQUIRED} && $operation ne 'update';
-	}
-	
-	# Grab the value specified in the record.
-	
-	my $value = $record->{$lookup_col};
+	my $value = $record->{$record_col};
 	
 	# Handle special columns in the appropriate ways.
 	
@@ -1852,7 +1927,7 @@ sub validate_record {
 		
 		unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
 		{
-		    $edt->add_record_condition('E_PERM_COL', $lookup_col);
+		    $edt->add_record_condition('E_PERM_COL', $record_col);
 		    next;
 		}
 		
@@ -1860,7 +1935,7 @@ sub validate_record {
 		
 		unless ( $value =~ qr{ ^ \d\d\d\d - \d\d - \d\d (?: \s+ \d\d : \d\d : \d\d ) $ }xs )
 		{
-		    $edt->add_record_condition('E_PARAM', $lookup_col, 'invalid format');
+		    $edt->add_record_condition('E_PARAM', $record_col, $value, 'invalid format');
 		    next;
 		}
 	    }
@@ -1879,7 +1954,7 @@ sub validate_record {
 		{
 		    unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
 		    {
-			$edt->add_record_condition('E_PERM_COL', $lookup_col);
+			$edt->add_record_condition('E_PERM_COL', $record_col);
 			next;
 		    }
 		    
@@ -1887,7 +1962,7 @@ sub validate_record {
 		    {
 			unless ( $value->{type} eq 'PRS' )
 			{
-			    $edt->add_record_condition('E_PARAM', $lookup_col, 
+			    $edt->add_record_condition('E_PARAM', $record_col, $value,
 						       "must be an external identifier of type '$IDP{PRS}'");
 			}
 			
@@ -1896,14 +1971,14 @@ sub validate_record {
 		    
 		    elsif ( ref $value || $value !~ qr{ ^ \d+ $ }xs )
 		    {
-			$edt->add_record_condition('E_PARAM', $lookup_col,
+			$edt->add_record_condition('E_PARAM', $record_col, $value,
 						   'must be an external identifier or an unsigned integer');
 			next;
 		    }
 		    
 		    unless ( $edt->check_key($PERSON_DATA, $value) )
 		    {
-			$edt->add_record_condition('E_KEY_NOT_FOUND', $lookup_col, $value);
+			$edt->add_record_condition('E_KEY_NOT_FOUND', $record_col, $value);
 		    }
 		}
 		
@@ -1966,7 +2041,7 @@ sub validate_record {
 		
 		if ( $col eq 'admin_lock' && not ( $value eq '1' || $value eq '0' ) )
 		{
-		    $edt->add_record_condition('E_PARAM', $col, 'value must be 1 or 0');
+		    $edt->add_record_condition('E_PARAM', $col, $value, 'value must be 1 or 0');
 		    next;
 		}
 	    }
@@ -1977,10 +2052,18 @@ sub validate_record {
 	    }
 	}
 	
-	# Otherwise, if the value is not empty then validate against the column definition.
+	# Otherwise, if the value is defined then validate against the column definition.
 	
-	elsif ( defined $value && $value ne '' )
+	elsif ( defined $value )
 	{
+	    # If the value is empty but a value is required for this column, throw an error.
+	    
+	    if ( $value eq '' && $property->{$col}{REQUIRED} )
+	    {
+		$edt->add_record_condition('E_REQUIRED', $record_col);
+		next;
+	    }
+	    
 	    # Handle references to keys from other PBDB tables by checking them against the
 	    # specified table. We use a symbolic reference because the system of table names is based
 	    # on global variables, whose values might change. Yes, I know this is not the best way
@@ -1996,9 +2079,14 @@ sub validate_record {
 		    
 		    unless ( $edt->check_key($foreign_table_name, $value) )
 		    {
-			$edt->add_record_condition('E_KEY_NOT_FOUND', $lookup_col, $value);
+			$edt->add_record_condition('E_KEY_NOT_FOUND', $record_col, $value);
 			next;
 		    }
+		}
+		
+		else
+		{
+		    $value = '0';
 		}
 	    }
 	    
@@ -2012,7 +2100,7 @@ sub validate_record {
 		{
 		    if ( length($value) > $1 )
 		    {
-			$edt->add_record_condition('E_PARAM', $lookup_col, "must be no more than $1 characters");
+			$edt->add_record_condition('E_PARAM', $record_col, $value, "must be no more than $1 characters");
 			next;
 		    }
 		}
@@ -2025,7 +2113,7 @@ sub validate_record {
 		    
 		    if ( length($value) > $max_length )
 		    {
-			$edt->add_record_condition('E_PARAM', $lookup_col, "must be no more than $1 characters");
+			$edt->add_record_condition('E_PARAM', $record_col, $value, "must be no more than $1 characters");
 			next;
 		    }
 		}
@@ -2036,14 +2124,14 @@ sub validate_record {
 		elsif ( $type =~ qr{ ^ (tiny|small|medium|big)? int \( (\d+) \) \s* (unsigned)? }xs )
 		{
 		    my $size = $1 || 'regular';
-		    my $tinyint = $1;
-		    my $unsigned = $2;
+		    my $bits = $2;
+		    my $unsigned = $3;
 		    
-		    if ( $tinyint eq '1' )
+		    if ( $bits eq '1' )
 		    {
 			if ( $value !~ qr{ ^ [01] $ }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $lookup_col, "must be 0 or 1");
+			    $edt->add_record_condition('E_PARAM', $record_col, $value, "must be 0 or 1");
 			    next;
 			}
 		    }
@@ -2052,7 +2140,7 @@ sub validate_record {
 		    {
 			if ( $value !~ qr{ ^ \d+ $ }xs || $value > $UNSIGNED_BOUND{$size} )
 			{
-			    $edt->add_record_condition('E_PARAM', $lookup_col, 
+			    $edt->add_record_condition('E_PARAM', $record_col, $value, 
 						       "must be an unsigned integer no greater than $UNSIGNED_BOUND{$size}");
 			    next;
 			}
@@ -2062,14 +2150,14 @@ sub validate_record {
 		    {
 			if ( $value !~ qr{ ^ -? \s* \d+ $ }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $lookup_col, "must be an integer");
+			    $edt->add_record_condition('E_PARAM', $record_col, $value, "must be an integer");
 			    next;
 			}
 			
 			elsif ( $value > $SIGNED_BOUND{$size} || -1 * $value > $SIGNED_BOUND{$size} + 1 )
 			{
 			    my $lower = $SIGNED_BOUND{$size} + 1;
-			    $edt->add_record_condition('E_PARAM', $lookup_col,
+			    $edt->add_record_condition('E_PARAM', $record_col, $value, 
 						       "must be an integer between -$lower and $SIGNED_BOUND{$size}");
 			    next;
 			}
@@ -2088,7 +2176,7 @@ sub validate_record {
 		    {
 			if ( $value !~ qr{ ^ (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $lookup_col, "must be an unsigned decimal number");
+			    $edt->add_record_condition('E_PARAM', $record_col, $value, "must be an unsigned decimal number");
 			    next;
 			}
 		    }
@@ -2097,7 +2185,7 @@ sub validate_record {
 		    {
 			if ( $value !~ qr{ ^ -? (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $lookup_col, "must be a decimal number");
+			    $edt->add_record_condition('E_PARAM', $record_col, $value, "must be a decimal number");
 			    next;
 			}
 		    }
@@ -2110,16 +2198,31 @@ sub validate_record {
 	    }
 	}
 	
-	# Now, if the value is required and empty, then add an error. But not if this is an update
-	# operation where no value was specified. In that case, we assume that the existing value
-	# will be left unchanged whatever it is.
+	# If a value is required for this column and none was given, then we need to check whether
+	# this is an update of an existing record. If it is, and if this column was not mentioned
+	# in the record at all, then we just skip it. Otherwise, we signal an error.
 	
-	if ( $property->{$col}{REQUIRED} && ! ( defined $value && $value ne '' ) )
+	elsif ( $property->{$col}{REQUIRED} )
 	{
-	    unless ( $operation eq 'update' && ! exists $record->{$lookup_col} )
+	    if ( $operation eq 'update' && ! exists $record->{$record_col} )
 	    {
-		$edt->add_record_condition('E_REQUIRED', $lookup_col);
+		next;
 	    }
+	    
+	    else
+	    {
+		$edt->add_record_condition('E_REQUIRED', $record_col);
+		next;
+	    }
+	}
+	
+	# Otherwise, if this column is not mentioned in the record at all, just skip it. If the
+	# column exists in the record with an undefined value, the code below will substitute a
+	# value of NULL.
+	
+	elsif ( ! exists $record->{$record_col} )
+	{
+	    next;
 	}
 	
 	# If we get here, then we have a good value! Push the column and value on the respective
@@ -2145,6 +2248,47 @@ sub validate_record {
     $action->set_column_values(\@columns, \@values);
     
     return;
+}
+
+
+# Error and warning conditions
+# ----------------------------
+# 
+# We define a separate package for error and warning conditions.
+
+package EditCondition;
+
+sub new {
+    
+    my ($class, $code, $label, @data) = @_;
+    
+    my $new = [ $code, $label, @data ];
+    
+    return bless $new, $class;
+}
+
+
+sub code {
+    
+    my ($condition) = @_;
+    
+    return $condition->[0];
+}
+
+
+sub label {
+    
+    my ($condition) = @_;
+    
+    return $condition->[1];
+}
+
+
+sub data {
+    
+    my ($condition) = @_;
+    
+    return @$condition[2..$#$condition];
 }
 
 

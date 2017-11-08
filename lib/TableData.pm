@@ -10,14 +10,14 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(get_table_property %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER);
+use TableDefs qw(get_table_property get_column_properties %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER);
 
 use Carp qw(croak);
-use ExternalIdent qw(extract_identifier generate_identifier);
+use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block complete_ruleset get_table_schema);
+our (@EXPORT_OK) = qw(complete_output_block complete_ruleset get_table_schema get_authinfo_fields);
 
 
 our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
@@ -104,6 +104,49 @@ sub get_table_schema {
     $SCHEMA_CACHE{$table_name} = \%schema;
     
     return \%schema;
+}
+
+
+# get_authinfo_fields ( dbh, table_name, debug )
+# 
+# Return a list of the fields from the specified table that record who created each record. If
+# there are none, return false.
+
+our (%IS_AUTH) = (authorizer_no => 1, enterer_no => 1, enterer_id => 1);
+our (%AUTH_FIELD_CACHE);
+
+sub get_authinfo_fields {
+
+    my ($dbh, $table_name, $debug) = @_;
+    
+    # If we already have this info cached, just return it.
+    
+    return $AUTH_FIELD_CACHE{$table_name} if exists $AUTH_FIELD_CACHE{$table_name};
+    
+    # Otherwise, get a hash of table column definitions
+    
+    my $schema = get_table_schema($dbh, $table_name, $debug);
+    
+    # If we don't have one, then barf.
+    
+    unless ( $schema && $schema->{_column_list} )
+    {
+	croak "Cannot retrieve schema for table '$table_name'";
+    }
+    
+    # Then scan through the columns and collect up the names that are significant.
+    
+    my @authinfo_fields;
+    
+    foreach my $col ( @{$schema->{_column_list}} )
+    {
+	push @authinfo_fields, $col if $IS_AUTH{$col};
+    }
+    
+    my $fields = join(', ', @authinfo_fields);
+    $AUTH_FIELD_CACHE{$table_name} = $fields;
+    
+    return $fields;
 }
 
 
@@ -255,10 +298,13 @@ sub complete_ruleset {
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
     my $field_list = $schema->{_column_list};
+    my $properties = get_column_properties($table_name);
     
-    foreach my $field_name ( @$field_list )
+    foreach my $column_name ( @$field_list )
     {
-	next if $COMMON_FIELD_OTHER{$field_name};
+	next if $COMMON_FIELD_OTHER{$column_name};
+	
+	my $field_name = $column_name;
 	
 	if ( $field_name =~ /(.*)_no/ )
 	{
@@ -270,7 +316,7 @@ sub complete_ruleset {
 	my $field_record = $schema->{$field_name};
 	my $type = $field_record->{Type};
 	
-	my $rr = { type => 'param', param => $field_name };
+	my $rr = { optional => $field_name };
 	my $doc = "This parameter sets the value of C<$field_name> in the table.";
 	
 	if ( $type =~ /int\(/ )
@@ -278,13 +324,16 @@ sub complete_ruleset {
 	    $doc .= " The value must be an integer.";
 	}
 	
+	if ( my $type = $properties->{$column_name}{ID_TYPE} )
+	{
+	    $rr->{valid} = VALID_IDENTIFIER($type);
+	}
+	
 	push @{$ds->{my_param_records}}, $rr;
 	
-	$ds->validator->add_doc($rs, $rr, $doc);
+	$ds->validator->add_rules($rs, $rr, $doc);
     }
 }
-
-
 
 
 1;

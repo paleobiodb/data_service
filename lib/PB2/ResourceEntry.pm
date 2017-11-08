@@ -123,9 +123,9 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    ResourceEdit->configure(Dancer::config);
-    
     my $dbh = $ds->get_connection;
+    
+    ResourceEdit->configure($dbh, Dancer::config);
     
     complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', $RESOURCE_QUEUE);
     complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', $RESOURCE_QUEUE);
@@ -146,7 +146,7 @@ sub update_resources {
     
     my $allows = { };
     
-    $allows->{CREATE_RECORDS} = 1 if $arg && $arg eq 'add';
+    $allows->{CREATE} = 1 if $arg && $arg eq 'add';
     
     my $main_params = $request->get_main_params($allows);
     my $perms = $request->require_authentication($RESOURCE_QUEUE);
@@ -154,7 +154,7 @@ sub update_resources {
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->unpack_input_records($main_params);
+    my (@records) = $request->unpack_input_records($main_params, '1.2:eduresources:addupdate_body');
     
     if ( $request->errors )
     {
@@ -195,10 +195,66 @@ sub update_resources {
     
     my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
 	
-    $request->list_updated_resources($dbh, $id_string) if $id_string;
+    $request->list_updated_resources($dbh, $id_string, $edt->key_labels) if $id_string;
 }
 
+
+sub list_updated_resources {
     
+    my ($request, $dbh, $id_list, $label_ref) = @_;
+    
+    $request->substitute_select( mt => 'edr', cd => 'edr' );
+    
+    my $tables = $request->tables_hash;
+    
+    $request->extid_check;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+    
+    # Determine the necessary joins.
+    
+    # my ($join_list) = $request->generate_join_list('tsb', $tables);
+    
+    # Generate the main query.
+    
+    $request->{main_sql} = "
+	SELECT $calc edr.* FROM $RESOURCE_QUEUE as edr
+	WHERE edr.eduresource_no in ($id_list)
+	GROUP BY edr.eduresource_no";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    my $results = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
+    
+    # If we were asked to get the count, then do so
+    
+    $request->sql_count_rows;
+    
+    # If we got some results, go through them and substitute in the record labels.
+    
+    if ( ref $results eq 'ARRAY' && @$results )
+    {
+	foreach my $r ( @$results )
+	{
+	    my $keyval = $r->{eduresource_no};
+	    
+	    if ( $label_ref && $label_ref->{$keyval} )
+	    {
+		$r->{record_label} = $label_ref->{$keyval};
+	    }
+	}
+	
+	$request->list_result($results);
+    }
+}
+
+
     # my %record_activation;
     # my @good_records;
     
@@ -685,43 +741,5 @@ sub delete_resources {
 
 
 
-sub list_updated_resources {
-    
-    my ($request, $dbh, $list) = @_;
-    
-    $request->substitute_select( mt => 'edr', cd => 'edr' );
-    
-    my $tables = $request->tables_hash;
-    
-    $request->extid_check;
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $request->sql_limit_clause(1);
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $request->sql_count_clause;
-    
-    # Determine the necessary joins.
-    
-    # my ($join_list) = $request->generate_join_list('tsb', $tables);
-    
-    # Generate the main query.
-    
-    $request->{main_sql} = "
-	SELECT edr.* FROM $RESOURCE_QUEUE as edr
-	WHERE edr.eduresource_no in ($list)
-	GROUP BY edr.eduresource_no";
-    
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
-    
-    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
-    
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
-}
 
 1;

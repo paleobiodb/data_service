@@ -16,6 +16,7 @@ package Permissions;
 use strict;
 
 use TableDefs qw($SESSION_DATA $TABLE_PERMS get_table_property);
+use TableData qw(get_authinfo_fields);
 
 use Carp qw(carp croak);
 use Scalar::Util qw(weaken);
@@ -125,7 +126,7 @@ sub new {
 		 $perms->{enterer_no} && $perms->{enterer_no} > 0 )
 	{
 	    $perms->{role} = 'guest';
-	    $perms->{superuser} = 0;
+	    delete $perms->{is_superuser};
 	}
 	
 	# Cache the dbh in case we need it later, plus the debug flag. If 'role' is not set for some
@@ -199,7 +200,7 @@ sub user_id {
 }
 
 
-sub superuser {
+sub is_superuser {
     
     return $_[0]->{is_superuser};
 }
@@ -386,10 +387,10 @@ sub check_table_permission {
     # If the user has the superuser privilege, or the 'admin' permission on this table, then they
     # have any requested permission.
     
-    if ( $perms->{superuser} || $p_hash->{admin} )
+    if ( $perms->is_superuser || $p_hash->{admin} )
     {
 	print STDERR "    Permission for $table_name : '$permission' from " . 
-	    ($perms->{superuser} ? 'SUPERUSER' : 'PERMISSIONS') . "\n\n"
+	    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n\n"
 	    if $perms->{debug};
 	
 	return 'admin';
@@ -478,21 +479,14 @@ sub check_record_permission {
 	return $permission;
     }
     
-    # Unless we were given the current contents of the record, fetch the info necessary to
-    # determine permissions.  If the record was not found, then return
-    # 'notfound' to indicate that the record was not found.
+    # Otherwise, if the person is not logged in then they have no permission to do anything.
     
-    unless ( ref $record eq 'HASH' )
+    if ( $perms->{role} eq 'none' )
     {
-	$record = $perms->get_record_authinfo($table_name, $key_expr);
+	print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED : NOT LOGGED IN\n\n"
+	    if $perms->{debug};
 	
-	unless ( ref $record )
-	{
-	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED : $record\n\n"
-		if $perms->{debug};
-	    
-	    return $record;
-	}
+	return 'none';
     }
     
     # If the table permission is 'admin' or if the user has superuser privileges, then they have
@@ -501,13 +495,31 @@ sub check_record_permission {
     # then return 'locked' instead. The operation method should, in this case, allow the user to
     # unlock the record but not to modify it or delete it.
     
-    if ( $perms->{superuser} || $p_hash->{admin} )
+    if ( $perms->is_superuser || $p_hash->{admin} )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : 'admin' from " . 
-	    ($perms->{superuser} ? 'SUPERUSER' : 'PERMISSIONS') . "\n\n"
+	print STDERR "    Permission for $table_name ($key_expr) : '$permission' from " . 
+	    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n\n"
 	    if $perms->{debug};
 	
 	return $record->{admin_locked} ? 'locked' : 'admin';
+    }
+    
+    # Otherwise, we need to check the record itself to see if the user is the person who created
+    # or authorized it. Unless we were given the current contents of the record, fetch the info
+    # necessary to determine permissions.  If the record was not found, then return 'notfound' to
+    # indicate that the record was not found.
+    
+    unless ( ref $record eq 'HASH' )
+    {
+	$record = $perms->get_record_authinfo($table_name, $key_expr);
+	
+	unless ( ref $record )
+	{
+	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' : NOT FOUND\n\n"
+		if $perms->{debug};
+	    
+	    return 'notfound';
+	}
     }
     
     # If the user does not have 'admin' permission, then the 'delete' permission is only allowed
@@ -517,7 +529,7 @@ sub check_record_permission {
     {
 	unless ( $perms->{can_delete}{$table_name} //= get_table_property($table_name, 'ALLOW_DELETE') )
 	{
-	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED by TABLE PROPERTY\n\n"
+	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED : TABLE PROPERTY\n\n"
 		if $perms->{debug};
 	    
 	    return '';
@@ -525,7 +537,8 @@ sub check_record_permission {
     }
     
     # If the record has an adminsitrative lock, then the user does not have any permissions to it
-    # unless they have administrative privileges.
+    # unless they have administrative privileges, in which case the operation would have been
+    # approved above.
     
     if ( $record->{admin_locked} )
     {
@@ -587,6 +600,37 @@ sub check_record_permission {
 	if $perms->{debug};
     
     return '';
+}
+
+
+# get_record_authinfo ( table_name, key_expr )
+# 
+# Fetch the authorization info for this record, in order to determine if the current user has
+# permission to carry out some operation on it.
+
+sub get_record_authinfo {
+    
+    my ($perms, $table_name, $key_expr) = @_;
+    
+    # First get a list of the authorization fields for this table.
+    
+    my $auth_fields = get_authinfo_fields($perms->{dbh}, $table_name, $perms->{debug});
+    
+    # If it is empty, then return an empty record.
+    
+    return { } unless $auth_fields;
+    
+    # Otherwise, construct an SQL statement to get the values of these fields.
+    
+    my $sql = "
+	SELECT $auth_fields FROM $table_name
+	WHERE $key_expr LIMIT 1";
+    
+    print STDERR "$sql\n\n" if $perms->{debug};
+    
+    my $record = $perms->{dbh}->selectrow_hashref($sql);
+    
+    return $record;
 }
 
 
