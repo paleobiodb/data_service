@@ -1066,8 +1066,6 @@ sub ok_error_like {
     
     $response ||= $tester->{last_response};
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
     unless ( reftype $response eq 'HASH' && ref $response->{__ERRORS} eq 'ARRAY' )
     {
 	fail($message);

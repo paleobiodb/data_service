@@ -484,7 +484,9 @@ sub add_edt_warnings {
     {
     	my $code = $w->code;
 	my $label = $w->label;
-	my $explanation = join('; ', $w->data);
+	my $table = $w->table;
+	my $explanation = $edt->generate_msg($w);
+	# my $explanation = join('; ', $w->data);
 	
 	my $str = $code;
 	$str .= " ($label)" if defined $label && $label ne '';
@@ -512,7 +514,9 @@ sub add_edt_errors {
     {
     	my $code = $e->code;
 	my $label = $e->label;
-	my $explanation = join('; ', $e->data);
+	my $table = $e->table;
+	my $explanation = $edt->generate_msg($e);
+	# my $explanation = join('; ', $e->data);
 	
 	my $str = $code;
 	$str .= " ($label)" if defined $label && $label ne '';

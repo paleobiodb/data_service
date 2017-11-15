@@ -181,44 +181,77 @@ sub value_list {
 }
 
 
+sub is_multiple {
+
+    return $_[0]{additional} && 1;
+}
+
+
+sub count {
+    
+    return $_[0]{additional} ? scalar(@{$_[0]{additional}}) + 1 : 1;
+}
+
+
+sub all_keys {
+
+    return unless $_[0]{all_keys};
+    return @{$_[0]{all_keys}};
+}
+
+
+sub all_labels {
+
+    return unless $_[0]{all_labels};
+    return @{$_[0]{all_labels}};
+}
+
+
+sub has_labels {
+
+    return $_[0]{has_labels};
+}
+
 # We have very few mutator methods, because almost all the attributes of an action are immutable.
 
 sub set_permission {
+
+    my ($action, $permission) = @_;
     
-    croak "you must specify a permission" unless defined $_[1];
-    $_[0]->{permission} = $_[1];
+    croak "you must specify a permission" unless defined $permission;
+    $action->{permission} = $permission;
 }
 
 
 sub set_column_values {
+
+    my ($action, $cols, $vals) = @_;
     
     croak "columns and values must be specified as array refs" unless
-	ref $_[1] eq 'ARRAY' && ref $_[2] eq 'ARRAY';
+	ref $cols eq 'ARRAY' && ref $vals eq 'ARRAY';
     
-    $_[0]{columns} = $_[1];
-    $_[0]{values} = $_[2];
-}
-
-
-sub set_multiple {
-    
-    croak "you must specify an array ref" unless ref $_[1] eq 'ARRAY';
-    $_[0]->{multiple} = $_[1];
+    $action->{columns} = $cols;
+    $action->{values} = $vals;
 }
 
 
 sub set_keyval {
 
-    $_[0]->{keyval} = $_[1];
+    my ($action, $keyval) = @_;
+    
+    croak "cannot call 'set_keyval' on a multiple action" if $action->{all_keys};
+    $action->{keyval} = $keyval;
 }
 
 
 # We also have a facility to set and get general action attributes.
 
 sub set_attr {
+
+    my ($action, $attr, $value) = @_;
     
-    croak "you must specify an attribute name" unless $_[1];
-    $_[0]->{attrs}{$_[1]} = $_[2];
+    croak "you must specify an attribute name" unless $attr;
+    $action->{attrs}{$attr} = $value;
 }
 
 
@@ -227,5 +260,34 @@ sub get_attr {
     croak "you must specify an attribute name" unless $_[1];
     return $_[0]->{attrs} && $_[0]->{attrs}{$_[1]};
 }
+
+
+# Finally, we can coalesce multiple actions into one. This method should not
+# be called except by EditTransaction.pm.
+
+sub _coalesce {
+
+    my ($action, @additional) = @_;
+    
+    croak "you cannot coalesce a non-delete operation" unless $action->operation eq 'delete';
+    
+    return unless @additional;
+    
+    $action->{all_keys} = [ $action->{keyval} ];
+    $action->{all_labels} = [ $action->{label} ];
+    $action->{has_labels} = undef;
+    $action->{additional} = [ ];
+    
+    foreach my $a ( @additional )
+    {
+	next unless $a && defined $a->{keyval} && $a->{keyval} ne '';
+	
+	push @{$action->{all_keys}}, $a->{keyval};
+	push @{$action->{all_labels}}, $a->{label};
+	push @{$action->{additional}}, $a;
+	$action->{has_labels} = 1 if defined $a->{label} && $a->{label} ne '';
+    }
+}
+
 
 1;

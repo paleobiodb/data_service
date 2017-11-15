@@ -567,7 +567,7 @@ sub delete_resources {
     
     my $perms = $request->require_authentication($RESOURCE_QUEUE);
     
-    my $edt = ResourceEdit->new($request, $perms, $RESOURCE_QUEUE, { });
+    my $edt = ResourceEdit->new($request, $perms, $RESOURCE_QUEUE, { MULTI_DELETE => 1 });
 
     # Then go through the records and handle each one in turn.
     
