@@ -137,28 +137,30 @@ sub record {
 
 sub label {
     
-    # croak "no label defined for this action" unless defined $_[0]{label} && $_[0]{label} ne '';
     return $_[0]{label};
 }
 
 
 sub field {
 
-    # croak "no record defined for this action" unless ref $_[0]{record} eq 'HASH';
     return $_[0]{record}{$_[1]};
+}
+
+
+sub has_field {
+
+    return exists $_[0]{record}{$_[1]};
 }
 
 
 sub permission {
     
-    croak "no permission defined for this action" unless defined $_[0]{permission};
     return $_[0]{permission};
 }
 
 
 sub keycol {
     
-    # croak "no keycol defined for this action" unless defined $_[0]{keycol};
     return $_[0]{keycol};
 }
 
@@ -183,7 +185,7 @@ sub value_list {
 
 sub is_multiple {
 
-    return $_[0]{additional} && 1;
+    return $_[0]{additional} ? 1 : undef;
 }
 
 
@@ -212,13 +214,14 @@ sub has_labels {
     return $_[0]{has_labels};
 }
 
+
 # We have very few mutator methods, because almost all the attributes of an action are immutable.
 
 sub set_permission {
 
     my ($action, $permission) = @_;
     
-    croak "you must specify a permission" unless defined $permission;
+    croak "you must specify a non-empty permission" unless defined $permission;
     $action->{permission} = $permission;
 }
 
@@ -258,7 +261,7 @@ sub set_attr {
 sub get_attr {
 
     croak "you must specify an attribute name" unless $_[1];
-    return $_[0]->{attrs} && $_[0]->{attrs}{$_[1]};
+    return $_[0]->{attrs} ? $_[0]->{attrs}{$_[1]} : undef;
 }
 
 

@@ -1,7 +1,7 @@
 # 
 # The Paleobiology Database
 # 
-#   EditOperation.pm - base class for database editing
+#   EditTransaction.pm - base class for data acquisition and modification
 # 
 
 package EditTransaction;
@@ -21,8 +21,9 @@ use Scalar::Util qw(weaken blessed);
 
 
 # This class is intended to encapsulate the mid-level code necessary for updating records in the
-# database in the context of a data service operation. It handles transaction initiation,
-# commitment, and rollback, permission checking, and also error and warning conditions.
+# database in the context of a data service operation or a command-line utility. It handles
+# transaction initiation, commitment, and rollback, permission checking, and also error and
+# warning conditions.
 # 
 # This class can be subclassed (see ResourceEdit.pm, TimescaleEdit.pm) in order to provide
 # additional logic for checking values and performing auxiliary operations in conjunction with
@@ -55,8 +56,9 @@ our (%CONDITION_TEMPLATE) = (
 			    default => "You do not have permission for this operation" },
 		E_PERM_COL => "You do not have permission to set the value of the field '%1'",
 		E_REQUIRED => "Field '%1' must have a nonempty value",
-		E_PARAM => "Field '%1': %3, was '%2'",
+		E_PARAM => "Field '%1': %2",
 		W_ALLOW => "Unknown allowance '%1'",
+		W_EXECUTE => "An error occurred while executing '%1'",
 		UNKNOWN => "MISSING ERROR MESSAGE");
 
 
@@ -65,9 +67,10 @@ our (%CONDITION_TEMPLATE) = (
 
 # new ( request_or_dbh, perms, table, allows )
 # 
-# Create a new EditTransaction object, for use in association with the specified request. The
-# second argument should be a Permissions object, the third a table name, and the fourth a hash of
-# allowed conditions.
+# Create a new EditTransaction object, for use in association with the specified request. It is
+# also possible to specify a DBI database connection handle, as would typically be done by a
+# command-line utility. The second argument should be a Permissions object which has already been
+# created, the third a table name, and the fourth a hash of allowed cautions.
 
 sub new {
     
@@ -218,33 +221,34 @@ sub role {
 }
 
 
-# Error and warning conditions, and allows.
-# -----------------------------------------
+# Error, caution, and warning conditions
+# --------------------------------------
 
 # Error and warning conditions are indicated by codes, all in upper case word symbols. Those that
-# start with 'E_' and 'C_' represent errors, and those that start with 'W_' represent warnings. In
-# general, errors cause the operation to be aborted while warnings do not.
+# start with 'E_' represent errors, those that start with 'C_' represent cautions, and those that
+# start with 'W_' represent warnings. In general, errors cause the operation to be aborted while
+# warnings do not. Cautions cause the operation to be aborted unless specifically allowed.
 # 
-# Codes that start with 'C_' indicate conditions that may be allowed, so that the operation
-# proceeds despite them. A canonical example is 'C_CREATE', which is returned if records are to be
+# Codes that start with 'C_' indicate cautions that may be allowed, so that the operation proceeds
+# despite them. A canonical example is 'C_CREATE', which is returned if records are to be
 # created. If the data service operation method knows that records are to be created, it can
 # explicitly allow 'CREATE', which will allow the records to be created. Alternatively, it can
-# return the 'C_CREATE' error to the user, and allow the operation to be re-tried with the
-# 'CREATE' condition specified in the operation parameters. This will allow the operation to
-# proceed. The same can be done with other conditions.
+# return 'C_CREATE' as an error code to the client-side application, which can ask the user if
+# they really want to create new records. If they answer affirmatively, the operation can be
+# re-tried with 'CREATE' specifically allowed. The same can be done with other cautions.
 # 
-# Codes that start with 'E_' indicate conditions that must be remedied for the operation to
-# proceed. For example, 'E_PERM' indicates that the user does not have permission to operate on
-# the specified record or table. 'E_NOT_FOUND' indicates that the record to be updated is not in
-# the database. These conditions can not, in general, be allowed. However, the special allowance
-# 'PROCEED' specifies that whatever parts of the operation are able to succeed should be carried
-# out, even if some record operations fail.
+# Codes that start with 'E_' indicate conditions that prevent the operation from proceeding. For
+# example, 'E_PERM' indicates that the user does not have permission to operate on the specified
+# record or table. 'E_NOT_FOUND' indicates that a record to be updated is not in the
+# database. Unlike cautions, these conditions cannot be specifically allowed. However, the special
+# allowance 'PROCEED' specifies that whatever parts of the operation are able to succeed should be
+# carried out, even if some record operations fail.
 # 
-# Codes that start with 'W_' indicate warnings that should be passed back to the user but do not
+# Codes that start with 'W_' indicate warnings that should be passed back to the client but do not
 # prevent the operation from proceeding.
 # 
-# Codes that start with 'D_' and 'F_' indicate conditions that would otherwise have been errors,
-# under the 'PROCEED' allowance. These are treated as warnings.
+# Codes that start with 'D_' and 'F_' indicate conditions that would otherwise have been cautions
+# or errors, under the 'PROCEED' allowance. These are treated as warnings.
 # 
 # Allowed conditions must be specified for each EditTransaction object when it is created.
 
@@ -315,8 +319,8 @@ sub add_condition {
 # errors ( )
 # 
 # Return the list of errors for the current EditTransaction. In numeric context, Perl will simply
-# evaluate this as a number. In boolean context, as true if there are any and false if not. This
-# is one of my favorite features of Perl.
+# evaluate this as a number. In boolean context, this will be evaluated as true if there are any and
+# false if not. This is one of my favorite features of Perl.
 
 sub errors {
 
@@ -342,7 +346,7 @@ sub add_record_condition {
     
     my ($edt, $code, $table, @data) = @_;
     
-    croak "_new_record must be called first" unless defined $edt->{current_label};
+    croak "this call requires that a record operation be initiated first" unless defined $edt->{current_label};
     
     my $condition = EditCondition->new($code, $edt->{current_label}, $table, @data);
     
@@ -389,26 +393,42 @@ sub record_warnings {
 
 # generate_msg ( condition )
 #
-# This routine returns a single error string given a condition record.
+# This routine generates an error message from a condition record.
 
 sub generate_msg {
     
     my ($edt, $condition) = @_;
-
+    
+    # Extract the necessary information from the condition record.
+    
     my $code = $condition->code;
     my $table = $condition->table;
     my @params = $condition->data;
-    my $template = $edt->get_condition_template($code, $table, $params[0]);
-
+    
+    # If the code was altered because of the PROCEED allowance, change it back
+    # so we can look up the proper template.
+    
+    my $lookup = $code;
+    substr($lookup,0,1) =~ tr/DF/CE/;
+    
+    # Look up the template according to the specified, code, table, and first
+    # parameter. The method called may be overridden by a subclass, in order
+    # to handle codes that we do not know about.
+    
+    my $template = $edt->get_condition_template($lookup, $table, $params[0]);
+    
+    # Then generate the message.
+    
     return $edt->substitute_msg($code, $table, $template, @params);
 }
 
 
 # get_condition_template ( code, table, selector )
 #
-# Return a message template, given a code, a table, and an optional selector string.  This message
-# is designed to be overridden by subclasses, but the override methods must call the SUPER if they
-# cannot find a template corresponding to the information they are given.
+# Given a code, a table, and an optional selector string, return a message template.  This method
+# is designed to be overridden by subclasses, but the override methods must call
+# SUPER::get_condition_template if they cannot find a template for their particular class that
+# corresponds to the information they are given.
 
 sub get_condition_template {
 
@@ -420,12 +440,12 @@ sub get_condition_template {
 	{
 	    return $CONDITION_TEMPLATE{$code}{$selector};
 	}
-
+	
 	elsif ( $CONDITION_TEMPLATE{$code}{default} )
 	{
 	    return $CONDITION_TEMPLATE{$code}{default};
 	}
-
+	
 	else
 	{
 	    return $CONDITION_TEMPLATE{'UNKNOWN'};
@@ -436,7 +456,7 @@ sub get_condition_template {
     {
 	return $CONDITION_TEMPLATE{$code};
     }
-
+    
     else
     {
 	return $CONDITION_TEMPLATE{'UNKNOWN'};
@@ -444,24 +464,46 @@ sub get_condition_template {
 }    
 
 
-# substitute_msg ( code, label, table, template, params )
+# substitute_msg ( code, table, template, params... )
 #
-# Generate a message using the specified elements.
+# Generate a message string using the specified elements. The message template may include any of
+# the following symbols:
+# 
+# %t		substitute the name of the database table that was being operated on
+# %1..%9	substitute one of the parameters associated with the error
 
 sub substitute_msg {
     
     my ($edt, $code, $table, $template, @params) = @_;
     
+    # If we have a non-empty template, then substitute all of the symbols that appear in it.
+    
     if ( defined $template && $template ne '' )
     {
-	my $explanation = $template;
 	
-	$explanation =~ s{ [%]t }{ $table }xs;
-	$explanation =~ s{ [%](\d) }{ $params[$1-1] }xseg;
+	my $message = $template;
 	
-	return $explanation;
+	foreach my $t ( @params )
+	{
+	    if ( length($t) > 80 )
+	    {
+		$t = substr($t,0,80) . '...';
+	    }
+	}
+	
+	$message =~ s{ [%]t }{ $table }xs;
+	$message =~ s{ [%](\d) }{ $params[$1-1] }xseg;
+	
+	if ( $code eq 'E_PARAM' && defined $params[2] && $params[2] ne '' )
+	{
+	    $message .= ", was '$params[2]'";
+	}
+	
+	return $message;
     }
 
+    # Otherwise, return the empty string.
+    
     else
     {
 	return '';
@@ -1563,13 +1605,13 @@ sub _execute_replace {
 	
 	unless ( $result )
 	{
-	    $edt->add_record_condition('E_EXECUTE', 'replace');
+	    $edt->add_record_condition('E_EXECUTE', $table, 'replace');
 	}
     }
     
     catch {
 	
-	$edt->add_record_condition('E_EXECUTE', 'replace');
+	$edt->add_record_condition('E_EXECUTE', $table, 'replace');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -1658,7 +1700,7 @@ sub _execute_update {
 	
 	unless ( $result )
 	{
-	    $edt->add_record_condition('E_EXECUTE', 'update');
+	    $edt->add_record_condition('E_EXECUTE', $table, 'update');
 	}
 	
 	# $$$ we maybe should set RaiseError instead?
@@ -1666,7 +1708,7 @@ sub _execute_update {
     
     catch {
 	
-	$edt->add_record_condition('E_EXECUTE', 'update');
+	$edt->add_record_condition('E_EXECUTE', $table, 'update');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -1735,7 +1777,7 @@ sub _execute_delete {
 	
 	unless ( $result )
 	{
-	    $edt->add_record_condition('E_EXECUTE', 'delete');
+	    $edt->add_record_condition('E_EXECUTE', $table, 'delete');
 	}
 	
 	# $$$ we maybe should set RaiseError instead?
@@ -1743,7 +1785,7 @@ sub _execute_delete {
     
     catch {
 	
-	$edt->add_record_condition('E_EXECUTE', 'delete');
+	$edt->add_record_condition('E_EXECUTE', $table, 'delete');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -2089,7 +2131,7 @@ sub validate_against_schema {
 		
 		unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
 		{
-		    $edt->add_record_condition('E_PERM_COL', $record_col);
+		    $edt->add_record_condition('E_PERM_COL', $table, $record_col);
 		    next;
 		}
 		
@@ -2097,7 +2139,7 @@ sub validate_against_schema {
 		
 		unless ( $value =~ qr{ ^ \d\d\d\d - \d\d - \d\d (?: \s+ \d\d : \d\d : \d\d ) $ }xs )
 		{
-		    $edt->add_record_condition('E_PARAM', $record_col, $value, 'invalid format');
+		    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, 'invalid format');
 		    next;
 		}
 	    }
@@ -2116,7 +2158,7 @@ sub validate_against_schema {
 		{
 		    unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
 		    {
-			$edt->add_record_condition('E_PERM_COL', $record_col);
+			$edt->add_record_condition('E_PERM_COL', $table, $record_col);
 			next;
 		    }
 		    
@@ -2124,7 +2166,7 @@ sub validate_against_schema {
 		    {
 			unless ( $value->{type} eq 'PRS' )
 			{
-			    $edt->add_record_condition('E_PARAM', $record_col, $value,
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value,
 						       "must be an external identifier of type '$IDP{PRS}'");
 			}
 			
@@ -2133,14 +2175,14 @@ sub validate_against_schema {
 		    
 		    elsif ( ref $value || $value !~ qr{ ^ \d+ $ }xs )
 		    {
-			$edt->add_record_condition('E_PARAM', $record_col, $value,
+			$edt->add_record_condition('E_PARAM', $table, $record_col, $value,
 						   'must be an external identifier or an unsigned integer');
 			next;
 		    }
 		    
 		    unless ( $edt->check_key($PERSON_DATA, $value) )
 		    {
-			$edt->add_record_condition('E_KEY_NOT_FOUND', $record_col, $value, 'person');
+			$edt->add_record_condition('E_KEY_NOT_FOUND', $table, $record_col, $value, 'person');
 		    }
 		}
 		
@@ -2195,7 +2237,7 @@ sub validate_against_schema {
 		
 		unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
 		{
-		    $edt->add_record_condition('E_PERM_COL', $col);
+		    $edt->add_record_condition('E_PERM_COL', $table, $col);
 		    next;
 		}
 		
@@ -2203,7 +2245,7 @@ sub validate_against_schema {
 		
 		if ( $col eq 'admin_lock' && not ( $value eq '1' || $value eq '0' ) )
 		{
-		    $edt->add_record_condition('E_PARAM', $col, $value, 'value must be 1 or 0');
+		    $edt->add_record_condition('E_PARAM', $table, $col, $value, 'value must be 1 or 0');
 		    next;
 		}
 	    }
@@ -2222,7 +2264,7 @@ sub validate_against_schema {
 	    
 	    if ( $value eq '' && $property->{$col}{REQUIRED} )
 	    {
-		$edt->add_record_condition('E_REQUIRED', $record_col);
+		$edt->add_record_condition('E_REQUIRED', $table, $record_col);
 		next;
 	    }
 	    
@@ -2241,7 +2283,7 @@ sub validate_against_schema {
 		    
 		    unless ( $edt->check_key($foreign_table_name, $value) )
 		    {
-			$edt->add_record_condition('E_KEY_NOT_FOUND', $record_col, $value);
+			$edt->add_record_condition('E_KEY_NOT_FOUND', $table, $record_col, $value);
 			next;
 		    }
 		}
@@ -2262,7 +2304,7 @@ sub validate_against_schema {
 		{
 		    if ( length($value) > $1 )
 		    {
-			$edt->add_record_condition('E_PARAM', $record_col, $value, "must be no more than $1 characters");
+			$edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be no more than $1 characters");
 			next;
 		    }
 		}
@@ -2275,7 +2317,7 @@ sub validate_against_schema {
 		    
 		    if ( length($value) > $max_length )
 		    {
-			$edt->add_record_condition('E_PARAM', $record_col, $value, "must be no more than $1 characters");
+			$edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be no more than $1 characters");
 			next;
 		    }
 		}
@@ -2293,7 +2335,7 @@ sub validate_against_schema {
 		    {
 			if ( $value !~ qr{ ^ [01] $ }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $record_col, $value, "value must be 0 or 1");
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, "value must be 0 or 1");
 			    next;
 			}
 		    }
@@ -2302,14 +2344,14 @@ sub validate_against_schema {
 		    {
 			if ( $value !~ qr{ ^ \d+ $ }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $record_col, $value, 
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, 
 						       "value must be an unsigned integer");
 			    next;
 			}
 			
 			elsif ( $value > $UNSIGNED_BOUND{$size} )
 			{
-			    $edt->add_record_condition('E_PARAM', $record_col, $value,
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value,
 						       "value must be no greater than $UNSIGNED_BOUND{$size}");
 			}
 		    }
@@ -2318,14 +2360,14 @@ sub validate_against_schema {
 		    {
 			if ( $value !~ qr{ ^ -? \s* \d+ $ }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $record_col, $value, "value must be an integer");
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, "value must be an integer");
 			    next;
 			}
 			
 			elsif ( $value > $SIGNED_BOUND{$size} || -1 * $value > $SIGNED_BOUND{$size} + 1 )
 			{
 			    my $lower = $SIGNED_BOUND{$size} + 1;
-			    $edt->add_record_condition('E_PARAM', $record_col, $value, 
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, 
 						       "value must lie between -$lower and $SIGNED_BOUND{$size}");
 			    next;
 			}
@@ -2344,7 +2386,7 @@ sub validate_against_schema {
 		    {
 			if ( $value !~ qr{ ^ (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $record_col, $value, "must be an unsigned decimal number");
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be an unsigned decimal number");
 			    next;
 			}
 		    }
@@ -2353,7 +2395,7 @@ sub validate_against_schema {
 		    {
 			if ( $value !~ qr{ ^ -? (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $record_col, $value, "must be a decimal number");
+			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be a decimal number");
 			    next;
 			}
 		    }
@@ -2379,7 +2421,7 @@ sub validate_against_schema {
 	    
 	    else
 	    {
-		$edt->add_record_condition('E_REQUIRED', $record_col);
+		$edt->add_record_condition('E_REQUIRED', $table, $record_col);
 		next;
 	    }
 	}

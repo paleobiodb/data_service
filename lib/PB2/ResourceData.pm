@@ -515,13 +515,13 @@ sub cache_tag_values {
     
     my ($request, $dbh) = @_;
     
-    $dbh ||= $request->get_connection;
-    
     # If the contents of this hash have been updated within the past 10 minutes, assume they are good.
     
     return if $TAG_VALUE{_timestamp} && $TAG_VALUE{_timestamp} > (time - 600);
     
     # Otherwise, fill in the hash from the database.
+    
+    $dbh ||= $request->get_connection;
     
     my $result = $dbh->selectall_arrayref("SELECT * FROM $RESOURCE_TAG_NAMES", { Slice => { } });
     
@@ -582,7 +582,7 @@ sub process_record {
     # The 'image' filename might be in either of these fields. Append it to the proper path, read
     # from the configuration file.
     
-    $record->{image} ||= $record->{active_image};
+    $record->{image} = $record->{active_image} if $record->{active_image};
     
     if ( $record->{image} && $RESOURCE_IMG_PATH )
     {

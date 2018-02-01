@@ -34,8 +34,7 @@ our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
 our (%TAG_ID);
 
 our (%CONDITION_TEMPLATE) = (
-		E_IMAGEDATA => "Image data error: %1",
-		E_PERM => "You do not have permission to change the status of this record",
+		E_PERM => { status => "You do not have permission to change the status of this record" },
 		W_TAG_NOT_FOUND => "Unrecognized resource tag '%1'",
 		W_PERM => "The status of this record has been set to 'pending'");
 
@@ -52,16 +51,18 @@ our (%CONDITION_TEMPLATE) = (
 sub get_condition_template {
     
     my ($edt, $code, $table, $selector) = @_;
-
-    if ( $CONDITION_TEMPLATE{$code} )
+    
+    if ( ref $CONDITION_TEMPLATE{$code} eq 'HASH' )
+    {
+	return $CONDITION_TEMPLATE{$code}{$selector} if $CONDITION_TEMPLATE{$code}{$selector};
+    }
+    
+    elsif ( $CONDITION_TEMPLATE{$code} )
     {
 	return $CONDITION_TEMPLATE{$code};
     }
     
-    else
-    {
-	return $edt->SUPER::get_condition_template($code, $table, $selector);
-    }
+    return $edt->SUPER::get_condition_template($code, $table, $selector);
 }
 
 
@@ -95,7 +96,7 @@ sub validate_action {
 	{
 	    if ( $record->{status} && $record->{status} ne 'pending' )
 	    {
-		$edt->add_record_condition('W_PERM', 'status');
+		$edt->add_record_condition('W_PERM', $table, 'status');
 	    }
 	    
 	    $record->{status} = 'pending';
@@ -126,7 +127,7 @@ sub validate_action {
 	{
 	    if ( $record->{status} && $record->{status} ne 'changes' )
 	    {
-		$edt->add_record_condition('E_PERM', 'status');
+		$edt->add_record_condition('E_PERM', $table, 'status');
 	    }
 	    
 	    $record->{status} = 'changes';
@@ -159,11 +160,28 @@ sub validate_action {
 	    
 	    else
 	    {
-		$edt->add_record_condition('W_TAG_NOT_FOUND', $t);
+		$edt->add_record_condition('W_TAG_NOT_FOUND', $table, $t);
 	    }
 	}
 	
 	$record->{tags} = join(',', @tags) || '';
+    }
+    
+    # If an ORCID is specified, make sure it matches the proper pattern.
+    
+    if ( defined $record->{orcid} && $record->{orcid} ne '' )
+    {
+	unless ( $record->{orcid} =~ qr{ ^ \d\d\d\d - \d\d\d\d - \d\d\d\d - \d\d\d\d $ }xs )
+	{
+	    $edt->add_record_condition('E_PARAM', $table, 'orcid', $record->{orcid}, 'not a valid ORCID');
+	}
+    }
+    
+    # If image data was specified, check if it needs resizing.
+    
+    if ( $record->{image_data} )
+    {
+	$record->{image_data} = $edt->convert_image($record->{image_data})
     }
     
     # Then call the regular validation routine.
@@ -194,7 +212,7 @@ sub after_action {
 	
 	if ( $record->{image_data} )
 	{
-	    $edt->store_image($keyval, $record);
+	    $edt->store_image($keyval, $record->{image_data});
 	}
 	
 	# If the record should be activated or deactivated, do so now. 
@@ -205,10 +223,37 @@ sub after_action {
 	}
     }
     
+    # For delete operations, we need to delete any auxiliary records corresponding to the deleted
+    # records in the $RESOURCE_QUEUE table. We also delete any corresponding image files from 
+    # the active image directory.
+    
     else
     {
 	my $dbh = $edt->dbh;
 	my $keylist = $edt->get_keylist($action);
+	
+	# First find and delete the image files, if any
+	
+	my $sql = "
+		SELECT image FROM $RESOURCE_ACTIVE
+		WHERE $RESOURCE_IDFIELD in ($keylist) AND image <> ''";
+	
+	my $images = $dbh->selectcol_arrayref($sql);
+	
+	if ( ref $images eq 'ARRAY' && @$images )
+	{
+	    foreach my $i ( @$images )
+	    {
+		my $msg = $edt->delete_image_file($i);
+		if ( $msg )
+		{
+		    print STDERR "$msg\n";
+		    $edt->add_record_condition('E_EXECUTE', $table, 'delete image file');
+		}
+	    }
+	}
+	
+	# Then delete the active records, if any
 	
 	my $sql = "
 		DELETE FROM $RESOURCE_ACTIVE
@@ -216,7 +261,9 @@ sub after_action {
 	
 	print STDERR "$sql\n\n" if $edt->debug;
 	
-	$result = $dbh->do($sql);
+	my $res = $dbh->do($sql);
+	
+	# Then delete the tag assignments, if any
 	
 	$sql = "
 		DELETE FROM $RESOURCE_TAGS
@@ -224,7 +271,9 @@ sub after_action {
 	
 	print STDERR "$sql\n\n" if $edt->debug;
 	
-	$result = $dbh->do($sql);
+	$res = $dbh->do($sql);
+	
+	# Then delete the images, if any
 	
 	$sql = "
 		DELETE FROM $RESOURCE_IMAGES
@@ -232,20 +281,24 @@ sub after_action {
 	
 	print STDERR "$sql\n\n" if $edt->debug;
 	
-	$result = $dbh->do($sql);
+	$res = $dbh->do($sql);
+	
+	foreach my $k ( split /\s*,\s*/, $keylist )
+	{
+	    next unless $k;
+	    $edt->delete_image_file($k);
+	}
     }
 }
 
 
-sub store_image {
+sub convert_image {
     
-    my ($edt, $eduresource_no, $r) = @_;
+    my ($edt, $image_data) = @_;
     
-    return unless $eduresource_no && $r->{image_data};
+    # return unless $eduresource_no && $r->{image_data};
     
-    print STDERR "Storing image:\n" if $edt->debug;
-    
-    my $dbh = $edt->dbh;
+    print STDERR "Converting image:\n" if $edt->debug;
     
     my $fh = File::Temp->new( UNLINK => 1 );
     
@@ -253,6 +306,7 @@ sub store_image {
     {
 	print STDERR "ERROR: could not create temporary file for image\n"
 	    if $edt->debug;
+	$edt->add_record_condition('E_EXECUTE', $RESOURCE_IMAGES, 'convert image');
 	return;
     }
     
@@ -262,7 +316,7 @@ sub store_image {
     
     binmode($fh);
     
-    my $base64_data = $r->{image_data};
+    my $base64_data = $image_data;
     $base64_data =~ s/ ^ data: .*? , //xsi;
     
     my $raw_data = MIME::Base64::decode($base64_data);
@@ -277,36 +331,65 @@ sub store_image {
     
     print STDERR "Executing: $IMAGE_IDENTIFY_COMMAND $filename\nOutput: $output\n" if $edt->debug;
     
-    if ( $output =~ qr{ \s (\d+) x (\d+) }xs )
+    if ( $output =~ qr{ \s (\w+) \s (\d+) x (\d+) }xs )
     {
-	my $width = $1;
-	my $height = $2;
+	my $format = lc $1;
+	my $width = $2;
+	my $height = $3;
+	
+	unless ( $format eq 'png' || $format eq 'gif' || $format eq 'gif89a' || $format eq 'bmp' || $format eq 'jpeg' )
+	{
+	    $edt->add_record_condition('E_PARAM', $RESOURCE_QUEUE, 'image_data', "image format '$format' is not accepted");
+	    return;
+	}
 	
 	if ( $width > 0 && $height > 0 && $width <= $IMAGE_MAX && $height <= $IMAGE_MAX )
 	{
-	    $store_data = $r->{image_data};
+	    return $image_data;
 	}
 	
 	else
 	{
 	    my $newsize = $width >= $height ? $IMAGE_MAX : "x$IMAGE_MAX";
-	    my $resize_cmd = "convert $filename -resize $newsize -format png -";
+	    my $resize_cmd = "convert $filename -resize $newsize -";
 	    
 	    print STDERR "Executing: $resize_cmd\n" if $edt->debug;
 	    
 	    my $converted_data = `$resize_cmd`;
-	    $store_data = "data:image/png;base64," . MIME::Base64::encode_base64($converted_data);
+	    
+	    unless ( $converted_data )
+	    {
+		$edt->add_record_condition('E_PARAM', $RESOURCE_QUEUE, 'image_data', 'could not convert image');
+		return;
+	    }
+	    
+	    $store_data = "data:image/$format;base64," . MIME::Base64::encode_base64($converted_data);
 	    
 	    print STDERR 'Output: [' . length($store_data) . " chars converted to base64]\n" if $edt->debug;
+	    
+	    return $store_data;
 	}
     }
     
     else
     {
-	$edt->add_record_condition('E_IMAGEDATA', 'unrecognized image format');
+	$edt->add_record_condition('E_PARAM', $RESOURCE_QUEUE, 'image_data', 'unrecognized image format');
+	return;
     }
+}
+
+
+sub store_image {
+    
+    my ($edt, $eduresource_no, $store_data) = @_;
+    
+    return unless $eduresource_no;
+    
+    my $dbh = $edt->dbh;
     
     my $sql = "REPLACE INTO $RESOURCE_IMAGES (eduresource_no, image_data) values ($eduresource_no, ?)";
+    
+    print STDERR "$sql\n\n" if $edt->debug;
     
     my $result = $dbh->do($sql, { }, $store_data);
     
@@ -331,6 +414,27 @@ sub activate_resource {
     
     if ( $operation eq 'delete' )
     {
+	# Start by deleting the image file, if any.
+	
+	my $sql = "
+		SELECT image FROM $RESOURCE_ACTIVE
+		WHERE $RESOURCE_IDFIELD = $quoted_id";
+	
+	my ($filename) = $dbh->selectrow_array($sql);
+	
+	if ( $filename )
+	{
+	    my $msg = $edt->delete_image_file($filename);
+	    
+	    if ( $msg )
+	    {
+		print STDERR "$msg\n";
+		$edt->add_record_condition("W_EXECUTE", $RESOURCE_ACTIVE, 'delete image file');
+	    }
+	}
+	
+	# Then delete the active resource record and the tag assignments.
+	
 	my $sql = "
 		DELETE FROM $RESOURCE_ACTIVE
 		WHERE $RESOURCE_IDFIELD = $quoted_id";
@@ -346,10 +450,6 @@ sub activate_resource {
 	
 	$result = $dbh->do($sql);
 	
-	# Delete the image file, if any.
-	
-	$edt->delete_image_file($eduresource_no);
-		
 	my $a = 1;	# we can stop here when debugging
     }
     
@@ -464,34 +564,33 @@ sub write_image_file {
     
     my $raw_data = MIME::Base64::decode($image_data);
     
-    unless ( $suffix )
+    my $first_four = unpack("l", $raw_data);
+    
+    if ( $first_four == 1196314761 )
     {
-	my $first_four = unpack("l", $raw_data);
-	
-	if ( $first_four == 1196314761 )
-	{
-	    $suffix = 'png';
-	}
-	
-	elsif ( $first_four == 944130375 )
-	{
-	    $suffix = 'gif';
-	}
-	
-	elsif ( $first_four == 544099650 )
-	{
-	    $suffix = 'bmp';
-	}
-	
-	elsif ( $first_four == -520103681 )
-	{
-	    $suffix = 'jpg';
-	}
-	
-	else
-	{
-	    $suffix = ".image";
-	}
+	$suffix = 'png';
+    }
+    
+    elsif ( $first_four == 944130375 )
+    {
+	$suffix = 'gif';
+    }
+    
+    elsif ( $first_four == 544099650 )
+    {
+	$suffix = 'bmp';
+    }
+    
+    elsif ( $first_four == -520103681 )
+    {
+	$suffix = 'jpg';
+    }
+    
+    else
+    {
+	print STDERR "ERROR: cannot decode image format\n";
+	$edt->add_record_condition('E_EXECUTE', $RESOURCE_ACTIVE, 'store image');
+	return;
     }
     
     my $filename = "eduresource_$record_id.$suffix";
@@ -505,7 +604,7 @@ sub write_image_file {
     unless ( $result )
     {
 	print STDERR "ERROR: could not open '$filepath' for writing: $!\n";
-	$edt->add_record_condition("E_EXECUTE", 'store image');
+	$edt->add_record_condition("E_EXECUTE", $RESOURCE_ACTIVE, 'store image');
 	return;
     }
     
@@ -522,18 +621,30 @@ sub write_image_file {
 
 sub delete_image_file {
 
-    my ($edt, $record_id) = @_;
+    # my ($edt, $record_id) = @_;
     
-    my $filename = "eduresource_$record_id.png";
+    # my $filename = "Teduresource_$record_id.png";
+    
+    my ($edt, $filename) = @_;
+    
     my $filepath = "$RESOURCE_IMG_DIR/$filename";
-
+    
     if ( -e $filepath )
     {
-	unless ( unlink($filepath) )
+	if ( unlink($filepath) )
 	{
-	    print STDERR "ERROR: could not unlink '$filepath': $!\n";
-	    $edt->add_record_condition("E_EXECUTE", 'delete image');
+	    return undef;
 	}
+	
+	else
+	{
+	    return "ERROR: could not unlink '$filepath': $!";
+	}
+    }
+    
+    else
+    {
+	return "ERROR: could not unlink '$filepath': not found";
     }
 }
 

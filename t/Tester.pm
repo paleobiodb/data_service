@@ -811,9 +811,15 @@ sub ok_content_type {
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($type, $charset, $message) = @_;
+    
+    if ( ! defined $type )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }
     
     croak "No message specified" unless $message && ! ref $message;
     
@@ -892,9 +898,15 @@ sub ok_response_code {
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($code, $message) = @_;
+    
+    if ( ! defined $code )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }
     
     croak "No message specified" unless $message && ! ref $message;
     
@@ -1057,9 +1069,15 @@ sub ok_error_like {
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($regex, $message) = @_;
+        
+    if ( ! defined $regex )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }    
     
     croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
     croak "You must specify a message" unless $message;
@@ -1104,9 +1122,15 @@ sub ok_warning_like {
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($regex, $message) = @_;
+    
+    if ( ! defined $regex )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }
     
     croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
     croak "You must specify a message" unless $message;
@@ -1289,9 +1313,15 @@ sub ok_no_records {
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($message) = @_;
+    
+    if ( ! defined $message )
+    {
+	fail("no message");
+	diag("    No response was found");
+	return;
+    }
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     

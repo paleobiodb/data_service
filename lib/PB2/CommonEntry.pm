@@ -40,7 +40,7 @@ our (%RULESET_HAS_PARAM);
 
 sub get_main_params {
     
-    my ($request, $conditions_ref, $entry_ruleset) = @_;
+    my ($request, $allowances_ref, $entry_ruleset) = @_;
     
     # First grab a list of the parameters that were specified in the request URL. Also allocate a
     # new hash which will end up being the return value of this routine.
@@ -66,7 +66,8 @@ sub get_main_params {
 	if ( $k eq 'allow' )
 	{
 	    my @list = $request->clean_param_list($k);
-	    $conditions_ref->{$_} = 1 foreach @list;
+	    $allowances_ref->{$_} = 1 foreach @list;
+	    next;
 	}
 	
 	next if $k eq 'record_label';
@@ -556,10 +557,9 @@ sub validate_extident {
 
 sub do_add {
     
-    my ($request, $dbh, $table_name, $r, $conditions_ref) = @_;
+    my ($request, $dbh, $table_name, $r) = @_;
     
     $dbh ||= $request->get_connection;
-    $conditions_ref ||= { };
     
     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
     croak "empty record" unless @{$r->{_fields}};
@@ -584,10 +584,9 @@ sub do_add {
 
 sub do_replace {
     
-    my ($request, $dbh, $table_name, $r, $conditions_ref) = @_;
+    my ($request, $dbh, $table_name, $r) = @_;
     
     $dbh ||= $request->get_connection;
-    $conditions_ref ||= { };
     
     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
     croak "empty record" unless @{$r->{_fields}};
@@ -609,10 +608,9 @@ sub do_replace {
 
 sub do_update {
 
-    my ($request, $dbh, $table_name, $key_expr, $r, $conditions_ref) = @_;
+    my ($request, $dbh, $table_name, $key_expr, $r) = @_;
 
     $dbh ||= $request->get_connection;
-    $conditions_ref ||= { };
     
     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
     croak "empty record" unless @{$r->{_fields}};

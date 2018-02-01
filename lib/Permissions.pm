@@ -202,7 +202,7 @@ sub user_id {
 
 sub is_superuser {
     
-    return $_[0]->{is_superuser};
+    return $_[0]->{enterer_no} && $_[0]->{is_superuser};
 }
 
 
