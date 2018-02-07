@@ -19,7 +19,7 @@ use TableDefs qw($SESSION_DATA $TABLE_PERMS get_table_property);
 use TableData qw(get_authinfo_fields);
 
 use Carp qw(carp croak);
-use Scalar::Util qw(weaken);
+use Scalar::Util qw(weaken blessed);
 
 
 our (%PERMISSION_NAME) = ( view => 1, post => 1, edit => 1, delete => 1, admin => 1 );
@@ -36,11 +36,23 @@ our (%PERMISSION_NAME) = ( view => 1, post => 1, edit => 1, delete => 1, admin =
 
 sub new {
     
-    my ($class, $dbh, $session_id, $table_name, $options) = @_;
+    my ($class, $request_or_dbh, $session_id, $table_name, $options) = @_;
     
     $options ||= { };
     
     my $perms;
+    
+    croak "new Permissions: request or dbh is required"
+	unless $request_or_dbh && blessed($request_or_dbh);
+    
+    # Make sure we have a database handle.
+    
+    my $dbh = $request_or_dbh;
+    
+    if ( $request_or_dbh->can('get_connection') )
+    {
+	$dbh = $request_or_dbh->get_connection;
+    }
     
     # If we were given a login session id, then look up the authorization info from the
     # session_data table.
@@ -135,7 +147,7 @@ sub new {
 	$perms->{dbh} = $dbh;
 	weaken $perms->{dbh};
 	
-	$perms->{debug} = $options->{debug};
+	$perms->{debug} = 1 if $options->{debug};
 	
 	$perms->{role} ||= 'guest';
 	
@@ -203,6 +215,16 @@ sub user_id {
 sub is_superuser {
     
     return $_[0]->{enterer_no} && $_[0]->{is_superuser};
+}
+
+
+sub debug_line {
+    
+    return unless ref $_[0] && $_[0]->{debug};
+
+    my ($perms, $line) = @_;
+
+    print STDERR "$line\n" if $perms->{debug};
 }
 
 
@@ -389,9 +411,8 @@ sub check_table_permission {
     
     if ( $perms->is_superuser || $p_hash->{admin} )
     {
-	print STDERR "    Permission for $table_name : '$permission' from " . 
-	    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name : '$permission' from " . 
+			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
 	
 	return 'admin';
     }
@@ -403,8 +424,7 @@ sub check_table_permission {
     {
 	unless ( $perms->{can_delete}{$table_name} //= get_table_property($table_name, 'ALLOW_DELETE') )
 	{
-	    print STDERR "    Permission for $table_name : '$permission' DENIED by TABLE PROPERTY\n\n"
-		if $perms->{debug};
+	    $perms->debug_line( "    Permission for $table_name : '$permission' DENIED by TABLE PROPERTY\n" );
 	    
 	    return '';
 	}
@@ -416,8 +436,7 @@ sub check_table_permission {
     {
 	my $diag = $perms->{auth_diag}{$table_name} || 'DEFAULT';
 	
-	print STDERR "    Permission for $table_name : '$permission' from $diag\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name : '$permission' from $diag\n" );
 	
 	return $permission;
     }
@@ -429,16 +448,14 @@ sub check_table_permission {
     {
 	my $diag = $perms->{auth_diag}{$table_name} || 'DEFAULT';
 	
-	print STDERR "    Permission for $table_name : '$permission' from $diag\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name : '$permission' from $diag\n" );
 	
 	return 'own';
     }
     
     # Otherwise, they have no privileges whatsoever to this table.
     
-    print STDERR "   Permission for $table_name : '$permission' DENIED : NO PERMISSION\n\n"
-	if $perms->{debug};
+    $perms->debug_line( "   Permission for $table_name : '$permission' DENIED : NO PERMISSION\n" );
     
     return '';
 }
@@ -473,8 +490,7 @@ sub check_record_permission {
     
     if ( $permission eq 'view' && $p_hash->{$permission} )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : '$permission' from PERMISSIONS\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from PERMISSIONS\n" );
 	
 	return $permission;
     }
@@ -483,8 +499,7 @@ sub check_record_permission {
     
     if ( $perms->{role} eq 'none' )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED : NOT LOGGED IN\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : NOT LOGGED IN\n" );
 	
 	return 'none';
     }
@@ -497,9 +512,8 @@ sub check_record_permission {
     
     if ( $perms->is_superuser || $p_hash->{admin} )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : '$permission' from " . 
-	    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from " . 
+			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
 	
 	return $record->{admin_locked} ? 'locked' : 'admin';
     }
@@ -515,8 +529,7 @@ sub check_record_permission {
 	
 	unless ( ref $record )
 	{
-	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' : NOT FOUND\n\n"
-		if $perms->{debug};
+	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' : NOT FOUND\n" );
 	    
 	    return 'notfound';
 	}
@@ -529,8 +542,7 @@ sub check_record_permission {
     {
 	unless ( $perms->{can_delete}{$table_name} //= get_table_property($table_name, 'ALLOW_DELETE') )
 	{
-	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED : TABLE PROPERTY\n\n"
-		if $perms->{debug};
+	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : TABLE PROPERTY\n" );
 	    
 	    return '';
 	}
@@ -542,8 +554,7 @@ sub check_record_permission {
     
     if ( $record->{admin_locked} )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED : LOCKED\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : LOCKED\n" );
 	
 	return '';
     }
@@ -554,8 +565,7 @@ sub check_record_permission {
     if ( $record->{enterer_no} && $perms->{enterer_no} &&
 	 $record->{enterer_no} eq $perms->{enterer_no} )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : '$permission' from enterer_no\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from enterer_no\n" );
 	
 	return $permission;
     }
@@ -563,8 +573,7 @@ sub check_record_permission {
     if ( $record->{authorizer_no} && $perms->{enterer_no} &&
 	 $record->{authorizer_no} eq $perms->{enterer_no} )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : '$permission' from authorizer_no\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from authorizer_no\n" );
 	
 	return $permission;
     }
@@ -572,8 +581,7 @@ sub check_record_permission {
     if ( $record->{enterer_id} && $perms->{user_id} &&
 	 $record->{enterer_id} eq $perms->{user_id} )
     {
-	print STDERR "    Permission for $table_name ($key_expr) : '$permission' from enterer_id\n\n"
-	    if $perms->{debug};
+	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from enterer_id\n" );
 	
 	return $permission;
     }
@@ -587,8 +595,7 @@ sub check_record_permission {
     {
 	if ( $perms->{table_by_authorizer}{$table_name} //= get_table_property($table_name, 'BY_AUTHORIZER') )
 	{
-	    print STDERR "    Permission for $table_name ($key_expr) : '$permission' from BY_AUTHORIZER\n\n"
-		if $perms->{debug};
+	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from BY_AUTHORIZER\n" );
 	    
 	    return $permission;
 	}
@@ -596,8 +603,7 @@ sub check_record_permission {
     
     # Otherwise, the requestor has no permission on this record.
     
-    print STDERR "    Permission for $table_name ($key_expr) : '$permission' DENIED : NO PERMISSION\n\n"
-	if $perms->{debug};
+    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : NO PERMISSION\n" );
     
     return '';
 }
@@ -626,7 +632,7 @@ sub get_record_authinfo {
 	SELECT $auth_fields FROM $table_name
 	WHERE $key_expr LIMIT 1";
     
-    print STDERR "$sql\n\n" if $perms->{debug};
+    $perms->debug_line( "$sql\n" );
     
     my $record = $perms->{dbh}->selectrow_hashref($sql);
     

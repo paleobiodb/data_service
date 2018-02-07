@@ -18,12 +18,26 @@ use TableDefs qw(get_table_property);
 
 use Carp qw(carp croak);
 
+our %ALLOWED_OPERATION = ( insert => 1, updated => 1, replace => 1, delete => 1 );
+
 
 # Create a new action record with the specified information.
 
 sub new {
     
     my ($class, $table, $operation, $record, $label) = @_;
+    
+    # Start by checking that we have the required attributes.
+    
+    croak "a non-empty table name is required" unless $table;
+
+    unless ( $operation && $ALLOWED_OPERATION{$operation} )
+    {
+	$operation ||= '';
+	croak "unknown operation '$operation'";
+    }
+    
+    # Create an action object.
     
     my ($action) = { table => $table, operation => $operation, record => $record, label => $label };
     
@@ -109,14 +123,12 @@ sub get_record_key {
 
 sub table {
 
-    croak "no table defined for this action" unless $_[0]{table};
     return $_[0]{table};
 }
 
 
 sub operation {
     
-    croak "no operation defined for this action" unless $_[0]{operation};
     return $_[0]{operation};
 }
 
@@ -265,30 +277,60 @@ sub get_attr {
 }
 
 
+# The following method can be called from a subclass that overrides the 'validate_action' method
+# of EditTransaction.pm. It specifies that the specified column should be ignored during any
+# subsequent automatic validation check. Presumably, the override method has already performed
+# whatever checks it considers to be appropriate.
+
+sub column_skip_validate {
+    
+    my ($action, @cols) = @_;
+
+    foreach my $col ( @cols )
+    {
+	$action->{skip_validate}{$col} = 1 if $col;
+    }
+}
+
+
 # Finally, we can coalesce multiple actions into one. This method should not
 # be called except by EditTransaction.pm.
 
 sub _coalesce {
 
     my ($action, @additional) = @_;
+
+    my $operation = $action->operation;
     
-    croak "you cannot coalesce a non-delete operation" unless $action->operation eq 'delete';
-    
-    return unless @additional;
-    
-    $action->{all_keys} = [ $action->{keyval} ];
-    $action->{all_labels} = [ $action->{label} ];
-    $action->{has_labels} = undef;
-    $action->{additional} = [ ];
-    
-    foreach my $a ( @additional )
+
+    if ( $operation eq 'delete' )
     {
-	next unless $a && defined $a->{keyval} && $a->{keyval} ne '';
+	return unless @additional;
 	
-	push @{$action->{all_keys}}, $a->{keyval};
-	push @{$action->{all_labels}}, $a->{label};
-	push @{$action->{additional}}, $a;
-	$action->{has_labels} = 1 if defined $a->{label} && $a->{label} ne '';
+	$action->{all_keys} = [ $action->{keyval} ];
+	$action->{all_labels} = [ $action->{label} ];
+	$action->{has_labels} = undef;
+	$action->{additional} = [ ];
+	
+	foreach my $a ( @additional )
+	{
+	    next unless $a && defined $a->{keyval} && $a->{keyval} ne '';
+	    
+	    push @{$action->{all_keys}}, $a->{keyval};
+	    push @{$action->{all_labels}}, $a->{label};
+	    push @{$action->{additional}}, $a;
+	    $action->{has_labels} = 1 if defined $a->{label} && $a->{label} ne '';
+	}
+    }
+
+    elsif ( $operation eq 'insert' )
+    {
+	...
+    }
+
+    else
+    {
+	croak "you cannot coalesce a '$operation' operation";
     }
 }
 

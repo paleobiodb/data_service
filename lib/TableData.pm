@@ -142,8 +142,7 @@ sub get_authinfo_fields {
     {
 	push @authinfo_fields, $col if $IS_AUTH{$col};
     }
-    
-    my $fields = join(', ', @authinfo_fields);
+        my $fields = join(', ', @authinfo_fields);
     $AUTH_FIELD_CACHE{$table_name} = $fields;
     
     return $fields;

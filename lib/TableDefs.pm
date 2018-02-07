@@ -36,6 +36,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
+		      $EDT_TEST
 		      %TABLE_PROPERTIES %TEST_SELECT
 		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE
 		      init_table_names select_test_tables is_test_mode
@@ -108,6 +109,11 @@ sub select_test_tables
     elsif ( $tablename eq 'eduresources' )
     {
 	return test_eduresources($enable, $ds, $debug);
+    }
+
+    elsif ( $tablename eq 'edt_test' )
+    {
+	return test_edt($enable, $ds, $debug);
     }
     
     else
@@ -311,9 +317,36 @@ sub test_eduresources {
 }
 
 
+# Test class for EditTransaction.
 
+our $EDT_TEST = 'edt_test';
 
+sub test_edt {
 
+    my ($enable, $ds, $debug) = @_;
+
+    if ( $enable )
+    {
+	die "You must define 'test_db' in the configuration file" unless $TEST_DB;
+	
+	$EDT_TEST = substitute_table("$TEST_DB.edt_test", "edt_test");
+
+	print STDERR "TEST MODE: enable 'edt_test'\n\n" if $debug;
+
+	return 1;
+    }
+
+    else
+    {
+	$EDT_TEST = 'edt_test';
+
+	print STDERR "TEST MODE: disable 'edt_test'\n\n" if $debug;
+
+	return 2;
+    }
+}
+	
+	
 # Define the properties of certain fields that are common to many tables in the PBDB.
 
 our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITIES',

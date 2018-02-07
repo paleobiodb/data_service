@@ -494,7 +494,7 @@ sub activate_resource {
 	
 	my $activation_action = EditAction->new($RESOURCE_ACTIVE, 'replace', $r);
 	
-	$edt->set_permission($activation_action);
+	$edt->check_permission($activation_action);
 	$edt->validate_against_schema($activation_action);
 	
 	# Then copy the record over to the active table.
