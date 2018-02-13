@@ -9,7 +9,7 @@ package EditTransaction;
 use strict;
 
 use ExternalIdent qw(%IDP);
-use TableDefs qw(get_table_property get_column_properties original_table $PERSON_DATA
+use TableDefs qw(get_table_property get_column_properties $PERSON_DATA
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE);
 use TableData qw(get_table_schema);
 use EditAction;
@@ -97,9 +97,9 @@ sub new {
 		errors => [ ],
 		warnings => [ ],
 		condition => { },
+		proceed => undef,
 		current_errors => [ ],
 		current_warnings => [ ],
-		current_label => undef,
 		inserted_keys => { },
 		updated_keys => { },
 		deleted_keys => { },
@@ -163,11 +163,14 @@ sub new {
 	if ( $ALLOW_BY_CLASS{$class}{$k} || $ALLOW_BY_CLASS{EditTransaction}{$k} )
 	{
 	    $edt->{allows}{$k} = 1;
+
+	    if ( $k eq 'PROCEED' ) { $edt->{proceed} = 1 }
+	    elsif ( $k eq 'NOT_FOUND' ) { $edt->{proceed} ||= 2 }
 	}
 	
 	else
 	{
-	    $edt->add_condition('W_ALLOW', $k);
+	    $edt->add_condition(undef, 'W_ALLOW', $k);
 	}
     }
     
@@ -306,43 +309,121 @@ sub register_allows {
 
 sub allows {
     
-    return $_[0]->{allows}{$_[1]};
+    return ref $_[0]->{allows} && defined $_[1] && $_[0]->{allows}{$_[1]};
 }
 
 
-# add_condition ( condition, data... )
+# add_condition ( action, condition, data... )
 # 
-# Add a condition (error or warning) that pertains to the entire transaction rather than a single
-# record. One or more pieces of data will generally also be passed in, which can be used later by
-# code in the data service operation module to generate an error or warning message to return to
-# the user. Since these conditions apply to the transaction as a whole, they cannot be ignored
-# with 'PROCEED'.
+# Register a condition (error, caution, or warning) that pertains to the either the entire transaction
+# or to a single action. One or more pieces of data will generally also be passed in, which can be
+# used later by code in the data service operation module to generate an error or warning message
+# to return to the user. Conditions that pertain to an action may be translated to warnings if
+# either the PROCEED or the NOT_FOUND allowance was specified.
 
 sub add_condition { 
     
-    my ($edt, $code, @data) = @_;
+    my ($edt, $action, $code, @data) = @_;
     
-    my $condition = EditCondition->new($code, undef, undef, @data);
+    # If an action was specified for this condition, then mark that action as having errors or
+    # warnings. The condition record itself is added to either the error or warning list for this
+    # transaction. For errors/cautions, we must also check to see if either PROCEED or NOT_FOUND
+    # are allowed for this EditTransaction. If so, then the condition must be changed to a
+    # warning.
     
-    if ( $code =~ qr{ ^ [EC] _ }xs )
+    if ( $action )
     {
-	push @{$edt->{errors}}, $condition;
-    }
-    
-    elsif ( $code =~ qr{ ^ W_ }xs )
-    {
-	push @{$edt->{warnings}}, $condition;
+	croak "the first argument must be an instance of EditAction" unless ref $action && $action->isa('EditAction');
+	
+	if ( $code =~ qr{ ^ [EC] _ }xs )
+	{
+	    $action->add_error;
+	    
+	    if ( $edt->{proceed} && ( $edt->{proceed} == 1 || $code eq 'E_NOT_FOUND' ) )
+	    {
+		substr($code,0,1) =~ tr/CE/DF/;
+
+		my $condition = EditCondition->new($action, $code, @data);
+		push @{$edt->{warnings}}, $condition;
+	    }
+
+	    else
+	    {
+		my $condition = EditCondition->new($action, $code, @data);
+		push @{$edt->{errors}}, $condition;
+	    }
+
+	    $edt->{condition}{$code}++;
+	    return $code;
+	}
+	
+	elsif ( $code =~ qr{ ^ [W] _ }xs )
+	{
+	    $action->add_warning;
+
+	    push @{$edt->{warnings}}, EditCondition->new($action, $code, @data);
+	}
+
+	else
+	{
+	    croak "bad condition '$code'";
+	}
     }
     
     else
     {
-	croak "bad condition '$code'";
+        my $condition = EditCondition->new($action, $code, @data);
+	
+	if ( $code =~ qr{ ^ [EC] _ }xs )
+	{
+	    push @{$edt->{errors}}, $condition;
+	}
+	
+	elsif ( $code =~ qr{ ^ W_ }xs )
+	{
+	    push @{$edt->{warnings}}, $condition;
+	}
+	
+	else
+	{
+	    croak "bad condition '$code'";
+	}
+	
+	$edt->{condition}{$code}++;
+	return $code;
     }
-    
-    $edt->{condition}{$code} = 1;
-    
-    return 1;
 }
+
+
+# add_record_condition ( condition, data... )
+# 
+# Add a condition (error or warning) that pertains to the current record.
+
+# sub add_record_condition {
+    
+#     my ($edt, $code, $table, @data) = @_;
+    
+#     croak "this call requires that a record operation be initiated first" unless defined $edt->{current_label};
+    
+#     my $condition = EditCondition->new($code, $edt->{current_label}, $table, @data);
+    
+#     if ( $code =~ qr{ ^ [EC] _ }xs )
+#     {
+# 	push @{$edt->{current_errors}}, $condition;
+#     }
+    
+#     elsif ( $code =~ qr{ ^ W_ }xs )
+#     {
+# 	push @{$edt->{current_warnings}}, $condition;
+#     }
+    
+#     else
+#     {
+# 	croak "bad condition '$code'";
+#     }
+    
+#     return $edt;
+# }
 
 
 # errors ( )
@@ -367,46 +448,15 @@ sub warnings {
 }
 
 
-# add_record_condition ( condition, data... )
-# 
-# Add a condition (error or warning) that pertains to the current record.
-
-sub add_record_condition {
-    
-    my ($edt, $code, $table, @data) = @_;
-    
-    croak "this call requires that a record operation be initiated first" unless defined $edt->{current_label};
-    
-    my $condition = EditCondition->new($code, $edt->{current_label}, $table, @data);
-    
-    if ( $code =~ qr{ ^ [EC] _ }xs )
-    {
-	push @{$edt->{current_errors}}, $condition;
-    }
-    
-    elsif ( $code =~ qr{ ^ W_ }xs )
-    {
-	push @{$edt->{current_warnings}}, $condition;
-    }
-    
-    else
-    {
-	croak "bad condition '$code'";
-    }
-    
-    return $edt;
-}
-
-
 # record_errors ( )
 # 
 # Return the list of errors (not warnings) for the current record. This is used below to test
 # whether or not we can proceed with the current record.
 
-sub record_errors {
+# sub record_errors {
     
-    return @{$_[0]->{current_errors}};
-}
+#     return @{$_[0]->{current_errors}};
+# }
 
 
 # record_warnings ( )
@@ -414,10 +464,10 @@ sub record_errors {
 # Return the list of warnings for the current record. This is only here in case it is needed by a
 # subroutine defined by some subclass.
 
-sub record_warnings {
+# sub record_warnings {
 
-    return @{$_[0]->{current_warnings}};
-}
+#     return @{$_[0]->{current_warnings}};
+# }
 
 
 # generate_msg ( condition )
@@ -574,29 +624,31 @@ sub _new_record {
     croak "no record specified" unless ref $record eq 'HASH' ||
 	$operation eq 'delete' && defined $record && $record ne '';
     
-    # If there are any errors and warnings pending from the previous record, move them to the main
-    # lists.
+    # # If there are any errors and warnings pending from the previous record, move them to the main
+    # # lists.
     
-    $edt->_finish_record;
+    # $edt->_finish_record;
     
     # Then determine a label for this record. If one is specified, use that. Otherwise, keep count
     # of how many records we have seen so far and use that prepended by '#'.
     
+    my $label;
+    
     $edt->{record_count}++;
     
-    if ( defined $record->{record_label} && $record->{record_label} ne '' )
+    if ( ref $record && defined $record->{record_label} && $record->{record_label} ne '' )
     {
-	$edt->{current_label} = $record->{record_label};
+	$label = $record->{record_label};
     }
     
     else
     {
-	$edt->{current_label} = '#' . $edt->{record_count};
+	$label = '#' . $edt->{record_count};
     }
     
     # Then create a new EditAction object and return it.
     
-    return EditAction->new($table, $operation, $record, $edt->{current_label});
+    return EditAction->new($table, $operation, $record, $label);
 }
 
 
@@ -605,75 +657,80 @@ sub _new_record {
 # Finish processing the current record. All record conditions are moved over to the main lists,
 # and the 'current_label' is set to undefined.
 
-sub _finish_record {
+# sub _finish_record {
     
-    my ($edt) = @_;
-    
-    # If any errors have been generated for the current record, move them.
-    
-    if ( $edt->{current_errors} && @{$edt->{current_errors}} )
-    {
-	# If the allowance 'PROCEED' is in effect, then all errors and cautions are converted into
-	# warnings and the initial letter of each code changed from E -> F and C -> D.
-	
-	if ( $edt->allows('PROCEED') )
-	{
-	    while ( my $e = shift @{$edt->{current_errors}} )
-	    {
-		substr($e->[0],0,1) =~ tr/CE/DF/;
-		push @{$edt->{warnings}}, $e;
-		$edt->{condition}{$e->[0]} = 1;
-	    }
-	}
+#     my ($edt) = @_;
 
-	# Otherwise, if the allowance 'NOT_FOUND' is in effect, then 'E_NOT_FOUND' errors are
-	# treated as above and all other errors and cautions are moved unchanged.
+#     # Clear the "current record label" to indicate that we are done processing the most recent
+#     # record.
+
+#     $edt->{current_label} = undef;
+    
+#     # # If any errors have been generated for the current record, move them.
+    
+#     # if ( $edt->{current_errors} && @{$edt->{current_errors}} )
+#     # {
+#     # 	# If the allowance 'PROCEED' is in effect, then all errors and cautions are converted into
+#     # 	# warnings and the initial letter of each code changed from E -> F and C -> D.
 	
-	elsif ( $edt->allows('NOT_FOUND') )
-	{
-	    while ( my $e = shift @{$edt->{current_errors}} )
-	    {
-		if ( $e->[0] eq 'E_NOT_FOUND' )
-		{
-		    $e->[0] = 'F_NOT_FOUND';
-		    push @{$edt->{warnings}}, $e;
-		}
+#     # 	if ( $edt->allows('PROCEED') )
+#     # 	{
+#     # 	    while ( my $e = shift @{$edt->{current_errors}} )
+#     # 	    {
+#     # 		substr($e->[0],0,1) =~ tr/CE/DF/;
+#     # 		push @{$edt->{warnings}}, $e;
+#     # 		$edt->{condition}{$e->[0]} = 1;
+#     # 	    }
+#     # 	}
+
+#     # 	# Otherwise, if the allowance 'NOT_FOUND' is in effect, then 'E_NOT_FOUND' errors are
+#     # 	# treated as above and all other errors and cautions are moved unchanged.
+	
+#     # 	elsif ( $edt->allows('NOT_FOUND') )
+#     # 	{
+#     # 	    while ( my $e = shift @{$edt->{current_errors}} )
+#     # 	    {
+#     # 		if ( $e->[0] eq 'E_NOT_FOUND' )
+#     # 		{
+#     # 		    $e->[0] = 'F_NOT_FOUND';
+#     # 		    push @{$edt->{warnings}}, $e;
+#     # 		}
 		
-		else
-		{
-		    push @{$edt->{errors}}, $e;
-		}
+#     # 		else
+#     # 		{
+#     # 		    push @{$edt->{errors}}, $e;
+#     # 		}
 		
-		$edt->{condition}{$e->[0]} = 1;
-	    }
-	}
+#     # 		$edt->{condition}{$e->[0]} = 1;
+#     # 	    }
+#     # 	}
 
-	# Otherwise, just move all errors and cautions over to the main list.
+#     # 	# Otherwise, just move all errors and cautions over to the main list.
 	
-	else
-	{
-	    while ( my $e = shift @{$edt->{current_errors}} )
-	    {
-		push @{$edt->{errors}}, $e;
-		$edt->{condition}{$e->[0]} = 1;
-	    }
-	}
-    }
+#     # 	else
+#     # 	{
+#     # 	    while ( my $e = shift @{$edt->{current_errors}} )
+#     # 	    {
+#     # 		push @{$edt->{errors}}, $e;
+#     # 		$edt->{condition}{$e->[0]} = 1;
+#     # 	    }
+#     # 	}
+#     # }
 
-    # If there are any warnings, just move them over unchanged.
+#     # # If there are any warnings, just move them over unchanged.
 
-    if ( $edt->{current_warnings} && @{$edt->{current_warnings}} )
-    {
-	while ( my $w = shift @{$edt->{current_warnings}} )
-	{
-	    push @{$edt->{warnings}}, $w;
-	}
-    }
+#     # if ( $edt->{current_warnings} && @{$edt->{current_warnings}} )
+#     # {
+#     # 	while ( my $w = shift @{$edt->{current_warnings}} )
+#     # 	{
+#     # 	    push @{$edt->{warnings}}, $w;
+#     # 	}
+#     # }
     
-    # Clear the 'current record label'.
+#     # # Clear the 'current record label'.
     
-    $edt->{current_label} = undef;
-}
+#     # $edt->{current_label} = undef;
+# }
 
 
 # _clear_record ( )
@@ -681,14 +738,14 @@ sub _finish_record {
 # Clear any error and warning messages generated by the current record, and also the record
 # label. This method is called when processing of a record is to be abandoned.
 
-sub _clear_record {
+# sub _clear_record {
     
-    my ($edt) = @_;
+#     my ($edt) = @_;
     
-    @{$edt->{curremt_errors}} = ();
-    @{$edt->{current_warnings}} = ();
-    $edt->{current_label} =  undef;
-}
+#     @{$edt->{curremt_errors}} = ();
+#     @{$edt->{current_warnings}} = ();
+#     $edt->{current_label} =  undef;
+# }
 
 
 # record_label ( )
@@ -696,10 +753,10 @@ sub _clear_record {
 # Return the record label for the record currently being processed. This is valid both during
 # checking and execution.
 
-sub record_label {
+# sub record_label {
 
-    return $_[0]->{current_label};
-}
+#     return $_[0]->{current_label};
+# }
 
 
 # Transaction control
@@ -762,7 +819,7 @@ sub commit {
     
     my ($edt) = @_;
     
-    $edt->_finish_record;
+    # $edt->_finish_record;
     $edt->_commit_transaction;
     
     return $edt;
@@ -803,7 +860,7 @@ sub rollback {
 
     my ($edt) = @_;
 
-    $edt->_finish_record;
+    # $edt->_finish_record;
     $edt->_rollback_transaction;
     
     return $edt;
@@ -893,7 +950,7 @@ sub insert_record {
 	
 	if ( $permission ne 'post' && $permission ne 'admin' )
 	{
-	    $edt->add_record_condition('E_PERM', $table, 'insert');
+	    $edt->add_condition($action, 'E_PERM');
 	}
 	
 	# A record to be inserted must not have a primary key value specified for it. Records with
@@ -901,7 +958,7 @@ sub insert_record {
 	
 	if ( $action->keyval )
 	{
-	    $edt->add_record_condition('E_HAS_KEY', $table, 'insert');
+	    $edt->add_condition($action, 'E_HAS_KEY');
 	}
 	
 	# Then check the actual record to be inserted, to make sure that the column values meet
@@ -917,7 +974,7 @@ sub insert_record {
     
     else
     {
-	$edt->add_record_condition('C_CREATE', $table);
+	$edt->add_condition($action, 'C_CREATE');
     }
     
     # Either execute the action immediately or add it to the appropriate list depending on whether
@@ -958,14 +1015,14 @@ sub update_record {
 	
 	if ( $permission eq 'notfound' )
 	{
-	    $edt->add_record_condition('E_NOT_FOUND', $table, $action->keyval);
+	    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
 	}
 	
 	# If the user does not have permission to edit the record, add an error condition. 
 	
 	elsif ( $permission ne 'edit' && $permission ne 'admin' )
 	{
-	    $edt->add_record_condition('E_PERM', $table, 'update');
+	    $edt->add_condition($action, 'E_PERM');
 	}
 	
 	# Then check the new record values, to make sure that the column values meet all of the
@@ -982,7 +1039,7 @@ sub update_record {
     
     else
     {
-	$edt->add_record_condition('E_NO_KEY', $table, 'update');
+	$edt->add_condition($action, 'E_NO_KEY');
     }
     
     # Either execute the action immediately or add it to the appropriate list depending on whether
@@ -1034,7 +1091,7 @@ sub replace_record {
 		
 		else
 		{
-		    $edt->add_record_condition('E_PERM', $table, 'replace_new');
+		    $edt->add_condition($action, 'E_PERM', 'replace_new');
 		}
 	    }
 	    
@@ -1045,7 +1102,7 @@ sub replace_record {
 	    
 	    else
 	    {
-		$edt->add_record_condition('E_NOT_FOUND', $table, $action->keyval);
+		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
 	    }
 	}
 	
@@ -1053,7 +1110,7 @@ sub replace_record {
 	
 	elsif ( $permission ne 'edit' && $permission ne 'admin' )
 	{
-	    $edt->add_record_condition('E_PERM', $table, 'replace_old');
+	    $edt->add_condition($action, 'E_PERM', 'replace_old');
 	}
 	
 	# Then check the new record values, to make sure that the replacement record meets all of
@@ -1070,7 +1127,7 @@ sub replace_record {
     
     else
     {
-	$edt->add_record_condition('E_NO_KEY', $table, 'replace');
+	$edt->add_condition($action, 'E_NO_KEY');
     }
     
     # Create an action record, and either execute it immediately or add it to the appropriate list
@@ -1113,14 +1170,14 @@ sub delete_record {
 	
 	if ( $permission eq 'notfound' )
 	{
-	    $edt->add_record_condition('E_NOT_FOUND', $table, $action->keyval);
+	    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
 	}
 	
 	# If we do not have permission to delete the record, add an error condition.
 	
 	elsif ( $permission ne 'delete' && $permission ne 'admin' )
 	{
-	    $edt->add_record_condition('E_PERM', $table, 'delete');
+	    $edt->add_condition($action, 'E_PERM');
 	}
 	
 	# If a 'validate_delete' method was specified, then call it. This method may abort the
@@ -1134,7 +1191,7 @@ sub delete_record {
     
     else
     {
-	$edt->add_record_condition('E_NO_KEY', $table, 'delete');
+	$edt->add_condition($action, 'E_NO_KEY');
     }
     
     # Create an action record, and then take the appropriate action.
@@ -1161,6 +1218,42 @@ sub insert_update_record {
     {
 	return $edt->insert_record($table, $record);
     }
+}
+
+
+# get_record_key ( table, record )
+# 
+# Return the key value (if any) specified in this record. Look first to see if the table has a
+# 'PRIMARY_ATTR' property. If so, check to see if we have a value for the named
+# attribute. Otherwise, check to see if the table has a 'PRIMARY_KEY' property and check under
+# that name as well. If no non-empty value is found, return undefined.
+
+sub get_record_key {
+
+    my ($edt, $table, $record) = @_;
+    
+    if ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
+    {
+	if ( ref $record eq 'HASH' && defined $record->{$key_attr} && $record->{$key_attr} ne '' )
+	{
+	    return $record->{$key_attr};
+	}
+	
+	else
+	{
+	    return;
+	}
+    }
+    
+    elsif ( my $key_column = get_table_property($table, 'PRIMARY_KEY') )
+    {
+	if ( ref $record eq 'HASH' && defined $record->{$key_column} && $record->{$key_column} ne '' )
+	{
+	    $record->{$key_column};
+	}
+    }
+    
+    return;
 }
 
 
@@ -1206,30 +1299,30 @@ sub abandon_record {
 # notfound	no record was found corresponding to the specified key expression
 # 
 # This method may be overridden by subclasses. Override methods should indicate error and warning
-# conditions by calling the method 'add_record_condition'.
+# conditions by calling the method 'add_condition'.
 
 sub authorize_action {
     
     my ($edt, $action, $operation, $table, $keyexpr) = @_;
-    
-    if ( $operation eq 'insert' )
+
+    sswitch ( $operation )
     {
-	return $action->set_permission($edt->check_table_permission($table, 'post'))
-    }
-    
-    elsif ( $operation eq 'update' || $operation eq 'replace' )
-    {
-	return $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
-    }
-    
-    elsif ( $operation eq 'delete' )
-    {
-	return $action->set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
-    }
-    
-    else
-    {
-	croak "bad operation '$operation'";
+	case 'insert': {
+	    return $action->set_permission($edt->check_table_permission($table, 'post'))
+	}
+	
+	case 'update':
+	case 'replace': {
+	    return $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
+	}
+	
+	case 'delete': {
+	    return $action->set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
+	}
+
+        default: {
+	    croak "bad operation '$operation'";
+	}
     }
 }
 
@@ -1247,7 +1340,7 @@ sub _handle_action {
     # If any errors were already generated for the record currently being processed, put this
     # action on the 'bad action' list and otherwise do nothing.
     
-    if ( $edt->record_errors )
+    if ( $action->has_errors )
     {
 	push @{$edt->{bad_list}}, $action;
 	$edt->{fail_count}++;
@@ -1337,9 +1430,9 @@ sub execute {
 	croak "this transaction has already been committed or aborted";
     }
     
-    # Finish processing of the final record that was added to the action list, if any.
+    # # Finish processing of the final record that was added to the action list, if any.
     
-    $edt->_finish_record;
+    # $edt->_finish_record;
     
     # If errors have already occurred (i.e. when records were checked for insertion or updating),
     # then return without doing anything. If a transaction is already active, then roll it back.
@@ -1366,7 +1459,7 @@ sub execute {
 	    $edt->_rollback_transaction;
 	}
 	
-	$edt->add_condition('C_NO_RECORDS');
+	$edt->add_condition(undef, 'C_NO_RECORDS');
 	return;
     }
     
@@ -1383,101 +1476,82 @@ sub execute {
 	$edt->start_transaction unless $edt->{transaction} eq 'active';
 	
 	# Then go through the action list and execute each action in turn. If there are multiple
-	# inserts or deletes in a row on the same table, these can be handled with a single call
-	# for efficiency.
+	# deletes in a row on the same table, these can be handled with a single call for
+	# efficiency.
 	
 	while ( my $action = shift @{$edt->{action_list}} )
 	{
+	    # If any errors have accumulated on this transaction, immediately stop. This includes
+	    # any errors that may have been generated by the previous action.
+	    
 	    last if $edt->errors;
 	    
-	    my $operation = $action->operation;
+	    # If this particular action has any errors, then skip it. We need to do this check
+	    # separately, because if PROCEED has been allowed for this transaction then any errors
+	    # that were generated during validation of this action will have been converted to
+	    # warnings. But in that case, $action->has_errors will still return true.
 	    
-	    $edt->{current_label} = $action->label;
+	    next if $action->has_errors;	    
 	    
-	    if ( $operation eq 'insert' )
+	    # Now execute the appropriate handler for this action's operation.
+	    
+	    sswitch ( $action->operation )
 	    {
-		# If we are allowing multiple insertion and there are more actions remaining,
-		# check to see if the immediately subsequent ones are also insertions on the same
-		# table and with the same permission. If so, coalesce them all into one action.
-		
-		# if ( $edt->allows('MULTI_INSERT') && @{$edt->{action_list}} )
-		# {
-		#     my @additional;
-		#     my $table = $action->table;
-		#     my $permission = $action->permission;
-		    
-		#     while ( my $next = $edt->{action_list}[0] )
-		#     {
-		# 	if ( $next->operation eq 'insert' && 
-		# 	     $next->table eq $table &&
-		# 	     $next->permission eq $permission )
-		# 	{
-		# 	    push @additional, shift(@{$edt->{action_list}});
-		# 	    last unless @additional < $MULTI_INSERT_LIMIT;
-		# 	}
-			
-		# 	else
-		# 	{
-		# 	    last;
-		# 	}
-		#     }
-		    
-		#     if ( @additional )
-		#     {
-		# 	$action->_coalesce(@additional);
-		#     }
-		# }
-		
-		$edt->_execute_insert($action);
-	    }
-	    
-	    elsif ( $operation eq 'update' )
-	    {
-		$edt->_execute_update($action);
-	    }
-	    
-	    elsif ( $operation eq 'replace' )
-	    {
-		$edt->_execute_replace($action);
-	    }
-	    
-	    elsif ( $operation eq 'delete' )
-	    {
-		# If we are allowing multiple deletion and there are more actions remaining, check
-		# to see if the immediately subsequent ones are also deletes on the same table and
-		# with the same permission. If so, coalesce them all into one action.
-		
-		if ( $edt->allows('MULTI_DELETE') && @{$edt->{action_list}} )
-		{
-		    my @additional;
-		    my $table = $action->table;
-		    my $permission = $action->permission;
-		    
-		    while ( my $next = $edt->{action_list}[0] )
-		    {
-			if ( $next->operation eq 'delete' && 
-			     $next->table eq $table &&
-			     $next->permission eq $permission )
-			{
-			    push @additional, shift(@{$edt->{action_list}});
-			    last unless @additional < $MULTI_DELETE_LIMIT;
-			}
-			
-			else
-			{
-			    last;
-			}
-		    }
-		    
-		    if ( @additional )
-		    {
-			$action->_coalesce(@additional);
-		    }
+		case 'insert': {
+		    $edt->_execute_insert($action);
 		}
 		
-		# Now execute the action.
+		case 'update': {
+		    $edt->_execute_update($action);
+		}
+
+		case 'replace': {
+		    $edt->_execute_replace($action);
+		}
+
+		case 'delete': {
+		    
+		    # If we are allowing multiple deletion and there are more actions remaining, check
+		    # to see if the immediately subsequent ones are also deletes on the same table and
+		    # with the same permission. If so, coalesce them all into one action.
+		    
+		    if ( $edt->allows('MULTI_DELETE') && @{$edt->{action_list}} )
+		    {
+			my @additional;
+			my $table = $action->table;
+			my $permission = $action->permission;
+			
+			while ( my $next = $edt->{action_list}[0] )
+			{
+			    if ( $next->operation eq 'delete' && 
+				 $next->table eq $table &&
+				 $next->permission eq $permission )
+			    {
+				next if $action->has_errors;
+				push @additional, shift(@{$edt->{action_list}});
+				last unless @additional < $MULTI_DELETE_LIMIT;
+			    }
+			    
+			    else
+			    {
+				last;
+			    }
+			}
+			
+			if ( @additional )
+			{
+			    $action->_coalesce(@additional);
+			}
+		    }
+		    
+		    # Now execute the action.
+		    
+		    $edt->_execute_delete($action);
+		}
 		
-		$edt->_execute_delete($action);
+	        default: {
+		    croak "bad operation '$_'";
+		}
 	    }
 	}
 	
@@ -1513,7 +1587,7 @@ sub execute {
 	$edt->finalize_transaction($edt->{main_table}, 1) unless $end_transaction_called;
 	$edt->_rollback_transaction;
 	$edt->debug_line( "$_\n" );
-	$edt->add_condition('E_EXECUTE', 'an exception was thrown');
+	$edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown');
     };
     
     return $result;
@@ -1593,29 +1667,28 @@ sub check_permission {
     
     my ($edt, $action, $keyexpr) = @_;
     
-    my $operation = $action->operation;
     my $table = $action->table;
-    
-    if ( $operation eq 'insert' )
+
+    sswitch ( $action->operation )
     {
-	return $action->set_permission($edt->check_table_permission($table, 'post'))
-    }
+	case 'insert': {
+	    return $action->set_permission($edt->check_table_permission($table, 'post'))
+	}
+	
+	case 'update':
+	case 'replace': {
+	    $keyexpr ||= $edt->get_keyexpr($action);
+	    return $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
+	}
     
-    elsif ( $operation eq 'update' || $operation eq 'replace' )
-    {
-	$keyexpr ||= $edt->get_keyexpr($action);
-	return $action->set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
-    }
-    
-    elsif ( $operation eq 'delete' )
-    {
-	$keyexpr ||= $edt->get_keyexpr($action);
-	return $action->set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
-    }
-    
-    else
-    {
-	croak "bad operation '$operation'";
+	case 'delete': {
+	    $keyexpr ||= $edt->get_keyexpr($action);
+	    return $action->set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
+	}
+	
+       default: {
+	   croak "bad operation '$_'";
+       }
     }
 }
 
@@ -1646,7 +1719,7 @@ sub _execute_insert {
     
     unless ( ref $cols eq 'ARRAY' && ref $vals eq 'ARRAY' && @$cols && @$cols == @$vals )
     {
-	$edt->add_condition('E_EXECUTE', 'column/value mismatch on insert');
+	$edt->add_condition($action, 'E_EXECUTE', 'column/value mismatch on insert');
 	return;
     }
     
@@ -1683,14 +1756,14 @@ sub _execute_insert {
 	
 	else
 	{
-	    $edt->add_record_condition('E_EXECUTE', $table, 'insert failed');
+	    $edt->add_condition($action, 'E_EXECUTE', 'insert failed');
 	    $result = undef;
 	}
     }
     
     catch {
 	
-	$edt->add_record_condition('E_EXECUTE', $table, 'insert failed');
+	$edt->add_condition($action, 'E_EXECUTE', 'insert failed');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -1745,7 +1818,7 @@ sub _execute_replace {
     
     unless ( ref $cols eq 'ARRAY' && ref $vals eq 'ARRAY' && @$cols && @$cols == @$vals )
     {
-	$edt->add_condition('E_EXECUTE', 'column/value mismatch on replace');
+	$edt->add_condition($action, 'E_EXECUTE', 'column/value mismatch on replace');
 	return;
     }
     
@@ -1772,13 +1845,13 @@ sub _execute_replace {
 	
 	unless ( $result )
 	{
-	    $edt->add_record_condition('E_EXECUTE', $table, 'replace failed');
+	    $edt->add_condition($action, 'E_EXECUTE', 'replace failed');
 	}
     }
     
     catch {
 	
-	$edt->add_record_condition('E_EXECUTE', $table, 'replace failed');
+	$edt->add_condition($action, 'E_EXECUTE', 'replace failed');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -1834,7 +1907,7 @@ sub _execute_update {
     
     unless ( ref $cols eq 'ARRAY' && ref $vals eq 'ARRAY' && @$cols && @$cols == @$vals )
     {
-	$edt->add_condition('E_EXECUTE', 'column/value mismatch on update');
+	$edt->add_condition($action, 'E_EXECUTE', 'column/value mismatch on update');
 	return;
     }
     
@@ -1867,7 +1940,7 @@ sub _execute_update {
 	
 	unless ( $result )
 	{
-	    $edt->add_record_condition('E_EXECUTE', $table, 'update failed');
+	    $edt->add_condition($action, 'E_EXECUTE', 'update failed');
 	}
 	
 	# $$$ we maybe should set RaiseError instead?
@@ -1875,7 +1948,7 @@ sub _execute_update {
     
     catch {
 	
-	$edt->add_record_condition('E_EXECUTE', $table, 'update failed');
+	$edt->add_condition($action, 'E_EXECUTE', 'update failed');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -1944,7 +2017,7 @@ sub _execute_delete {
 	
 	unless ( $result )
 	{
-	    $edt->add_record_condition('E_EXECUTE', $table, 'delete failed');
+	    $edt->add_condition($action, 'E_EXECUTE', 'delete failed');
 	}
 	
 	# $$$ we maybe should set RaiseError instead?
@@ -1952,7 +2025,7 @@ sub _execute_delete {
     
     catch {
 	
-	$edt->add_record_condition('E_EXECUTE', $table, 'delete failed');
+	$edt->add_condition($action, 'E_EXECUTE', 'delete failed');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -2180,7 +2253,7 @@ our (%UNSIGNED_BOUND) = ( tiny => 255,
 #
 # This method may be overridden by subclasses, in order to provide different checks or additional
 # checks. Such methods should indicate error and warning conditions using the method
-# 'add_record_condition'. Override methods will probably want to call SUPER::validate_action as
+# 'add_condition'. Override methods will probably want to call SUPER::validate_action as
 # well, because it provides comprehensive checks to make sure that all record values can be
 # properly stored in the database. Specific columns can be exempted from validation checks by
 # calling 'column_skip_validate' on the action object and providing one or more column names.
@@ -2202,7 +2275,7 @@ sub validate_action {
 # validate_against_schema ( action, operation, table, special )
 # 
 # Check the field values to be stored in the database against the corresponding table definition,
-# and call 'add_record_condition' to record any error or warning conditions that are detected. The
+# and call 'add_condition' to record any error or warning conditions that are detected. The
 # column names and corresponding values to be stored are added to the action record using
 # 'set_column_values', for later use by the action execution methods.
 # 
@@ -2277,7 +2350,7 @@ sub validate_against_schema {
 		    
 		    unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
 		    {
-			$edt->add_record_condition('E_PERM_COL', $table, $record_col);
+			$edt->add_condition($action, 'E_PERM_COL', $record_col);
 			next;
 		    }
 		    
@@ -2285,7 +2358,7 @@ sub validate_against_schema {
 		    
 		    unless ( $value =~ qr{ ^ \d\d\d\d - \d\d - \d\d (?: \s+ \d\d : \d\d : \d\d ) $ }xs )
 		    {
-			$edt->add_record_condition('E_PARAM', $table, $record_col, $value, 'invalid format');
+			$edt->add_condition($action, 'E_PARAM', $record_col, $value, 'invalid format');
 			next;
 		    }
 		}
@@ -2304,7 +2377,7 @@ sub validate_against_schema {
 		    {
 			unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
 			{
-			    $edt->add_record_condition('E_PERM_COL', $table, $record_col);
+			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
 			    next;
 			}
 			
@@ -2312,23 +2385,23 @@ sub validate_against_schema {
 			{
 			    unless ( $value->{type} eq 'PRS' )
 			    {
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value,
-							   "must be an external identifier of type '$IDP{PRS}'");
-			}
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						    "must be an external identifier of type '$IDP{PRS}'");
+			    }
 			    
 			    $value = $value->stringify;
 			}
 			
 			elsif ( ref $value || $value !~ qr{ ^ \d+ $ }xs )
 			{
-			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value,
-						       'must be an external identifier or an unsigned integer');
+			    $edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						'must be an external identifier or an unsigned integer');
 			    next;
 			}
 			
 			unless ( $edt->check_key($PERSON_DATA, $value) )
 			{
-			    $edt->add_record_condition('E_KEY_NOT_FOUND', $table, $record_col, $value, 'person');
+			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value, 'person');
 			}
 		    }
 		    
@@ -2383,7 +2456,7 @@ sub validate_against_schema {
 		    
 		    unless ( $permission eq 'admin' )
 		    {
-			$edt->add_record_condition('E_PERM_COL', $table, $col);
+			$edt->add_condition($action, 'E_PERM_COL', $col);
 			next;
 		    }
 		    
@@ -2391,7 +2464,7 @@ sub validate_against_schema {
 		    
 		    if ( $col eq 'admin_lock' && not ( $value eq '1' || $value eq '0' ) )
 		    {
-			$edt->add_record_condition('E_PARAM', $table, $col, $value, 'value must be 1 or 0');
+			$edt->add_condition($action, 'E_PARAM', $col, $value, 'value must be 1 or 0');
 			next;
 		    }
 		}
@@ -2410,7 +2483,7 @@ sub validate_against_schema {
 		
 		if ( $value eq '' && $property->{$col}{REQUIRED} )
 		{
-		    $edt->add_record_condition('E_REQUIRED', $table, $record_col);
+		    $edt->add_condition($action, 'E_REQUIRED', $record_col);
 		    next;
 		}
 		
@@ -2429,7 +2502,7 @@ sub validate_against_schema {
 			
 			unless ( $edt->check_key($foreign_table_name, $value) )
 			{
-			    $edt->add_record_condition('E_KEY_NOT_FOUND', $table, $record_col, $value);
+			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
 			    next;
 			}
 		    }
@@ -2450,7 +2523,8 @@ sub validate_against_schema {
 		    {
 			if ( length($value) > $1 )
 			{
-			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be no more than $1 characters");
+			    $edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						"must be no more than $1 characters");
 			    next;
 			}
 		    }
@@ -2463,7 +2537,8 @@ sub validate_against_schema {
 			
 			if ( length($value) > $max_length )
 			{
-			    $edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be no more than $1 characters");
+			    $edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						"must be no more than $1 characters");
 			    next;
 			}
 		    }
@@ -2481,7 +2556,8 @@ sub validate_against_schema {
 			{
 			    if ( $value !~ qr{ ^ [01] $ }xs )
 			    {
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value, "value must be 0 or 1");
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						    "value must be 0 or 1");
 				next;
 			    }
 			}
@@ -2490,15 +2566,15 @@ sub validate_against_schema {
 			{
 			    if ( $value !~ qr{ ^ \d+ $ }xs )
 			    {
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value, 
-							   "value must be an unsigned integer");
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value, 
+						    "value must be an unsigned integer");
 				next;
 			    }
 			    
 			    elsif ( $value > $UNSIGNED_BOUND{$size} )
 			    {
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value,
-							   "value must be no greater than $UNSIGNED_BOUND{$size}");
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						    "value must be no greater than $UNSIGNED_BOUND{$size}");
 			    }
 			}
 			
@@ -2506,15 +2582,16 @@ sub validate_against_schema {
 			{
 			    if ( $value !~ qr{ ^ -? \s* \d+ $ }xs )
 			    {
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value, "value must be an integer");
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						    "value must be an integer");
 				next;
 			    }
 			    
 			    elsif ( $value > $SIGNED_BOUND{$size} || -1 * $value > $SIGNED_BOUND{$size} + 1 )
 			    {
 				my $lower = $SIGNED_BOUND{$size} + 1;
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value, 
-							   "value must lie between -$lower and $SIGNED_BOUND{$size}");
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value, 
+						    "value must lie between -$lower and $SIGNED_BOUND{$size}");
 				next;
 			    }
 			}
@@ -2532,7 +2609,8 @@ sub validate_against_schema {
 			{
 			    if ( $value !~ qr{ ^ (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
 			    {
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be an unsigned decimal number");
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						    "must be an unsigned decimal number");
 				next;
 			    }
 			}
@@ -2541,7 +2619,8 @@ sub validate_against_schema {
 			{
 			    if ( $value !~ qr{ ^ -? (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
 			    {
-				$edt->add_record_condition('E_PARAM', $table, $record_col, $value, "must be a decimal number");
+				$edt->add_condition($action, 'E_PARAM', $record_col, $value,
+						    "must be a decimal number");
 				next;
 			    }
 			}
@@ -2567,7 +2646,7 @@ sub validate_against_schema {
 		
 		else
 		{
-		    $edt->add_record_condition('E_REQUIRED', $table, $record_col);
+		    $edt->add_condition($action, 'E_REQUIRED', $record_col);
 		    next;
 		}
 	    }
@@ -2623,15 +2702,25 @@ sub validate_against_schema {
 
 package EditCondition;
 
+
+# new ( action, code, data... )
+#
+# Create a new EditCondition for the specified action, which may be undef. The second argument
+# must be a condition code, i.e. 'E_PERM' or 'W_NOT_FOUND'. The remaining arguments, if any,
+# indicate the particulars of the condition and are used in generating a string value from the
+# condition record.
+
 sub new {
     
-    my ($class, $code, $label, $table, @data) = @_;
+    my $class = shift;
     
-    my $new = [ $code, $label, $table, @data ];
-    
-    return bless $new, $class;
+    return bless [ @_ ], $class;
 }
 
+
+# code ( )
+#
+# Return the code associated with this error condition.
 
 sub code {
     
@@ -2641,27 +2730,41 @@ sub code {
 }
 
 
+# label ( )
+#
+# Return the label associated with this error condition. If no action was specified, the empty
+# string is returned.
+
 sub label {
     
     my ($condition) = @_;
     
-    return $condition->[1];
+    return $condition->[1] && $condition->[1]->isa('EditAction') ? $condition->[1]->label : '';
 }
 
+
+# table ( )
+#
+# Return the table associated with this error condition. If no action was specified, the empty
+# string is returned.
 
 sub table {
 
     my ($condition) = @_;
 
-    return $condition->[2];
+    return $condition->[1] && $condition->[1]->isa('EditAction') ? $condition->[1]->table : '';
 }
 
+
+# data ( )
+#
+# Return the data elements, if any, associated with this error condition.
 
 sub data {
     
     my ($condition) = @_;
     
-    return @$condition[3..$#$condition];
+    return @$condition[2..$#$condition];
 }
 
 1;

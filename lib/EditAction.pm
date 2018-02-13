@@ -81,44 +81,6 @@ sub new {
 }
 
 
-# Auxiliary class methods
-
-# get_record_key ( table, record )
-# 
-# Return the key value (if any) specified in this record. Look first to see if the table has a
-# 'PRIMARY_ATTR' property. If so, check to see if we have a value for the named
-# attribute. Otherwise, check to see if the table has a 'PRIMARY_KEY' property and check under
-# that name as well. If no non-empty value is found, return undefined.
-
-sub get_record_key {
-
-    my ($class, $table, $record) = @_;
-    
-    if ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
-    {
-	if ( ref $record eq 'HASH' && defined $record->{$key_attr} && $record->{$key_attr} ne '' )
-	{
-	    return $record->{$key_attr};
-	}
-	
-	else
-	{
-	    return;
-	}
-    }
-    
-    elsif ( my $key_column = get_table_property($table, 'PRIMARY_KEY') )
-    {
-	if ( ref $record eq 'HASH' && defined $record->{$key_column} && $record->{$key_column} ne '' )
-	{
-	    $record->{$key_column};
-	}
-    }
-    
-    return;
-}
-
-
 # General accessor methods
 
 sub table {
@@ -153,7 +115,7 @@ sub label {
 }
 
 
-sub field {
+sub value {
 
     return $_[0]{record}{$_[1]};
 }
@@ -227,6 +189,18 @@ sub has_labels {
 }
 
 
+sub has_errors {
+
+    return $_[0]{error_count};
+}
+
+
+sub has_warnings {
+
+    return $_[0]{warning_count};
+}
+
+
 # We have very few mutator methods, because almost all the attributes of an action are immutable.
 
 sub set_permission {
@@ -256,6 +230,18 @@ sub set_keyval {
     
     croak "cannot call 'set_keyval' on a multiple action" if $action->{all_keys};
     $action->{keyval} = $keyval;
+}
+
+
+sub add_error {
+
+    $_[0]{error_count}++;
+}
+
+
+sub add_warning {
+
+    $_[0]{warning_count}++;
 }
 
 
@@ -302,7 +288,6 @@ sub _coalesce {
 
     my $operation = $action->operation;
     
-
     if ( $operation eq 'delete' )
     {
 	return unless @additional;

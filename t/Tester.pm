@@ -28,7 +28,7 @@ our (@EXPORT_OK) = qw(cmp_sets_ok ok_checkpoint);
 
 our ($DIAG_URLS);
 
-# new ( server_name )
+# new ( options )
 # 
 # Create a new tester instance.  If no server is specified, the value of the
 # environment variable PBDB_TEST_SERVER is used instead.  If this is not set,
@@ -71,13 +71,13 @@ sub new {
     
     # See if we recognize any arguments to the test from which this method was called
 
-    foreach my $arg ( @ARGV )
-    {
-	if ( $arg =~ /^--subtest=(.*)/si )
-	{
-	    $instance->{subtest_select} = $1;
-	}
-    }
+    # foreach my $arg ( @ARGV )
+    # {
+    # 	if ( $arg =~ /^--subtest=(.*)/si )
+    # 	{
+    # 	    $instance->{subtest_select} = $1;
+    # 	}
+    # }
     
     return $instance;
 }
