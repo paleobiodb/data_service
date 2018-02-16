@@ -10,13 +10,14 @@ use feature 'fc';
 
 package EditTester;
 
-use Scalar::Util qw(looks_like_number reftype);
+use Scalar::Util qw(looks_like_number reftype weaken);
 use Carp qw(croak);
 use Test::More;
 use base 'Exporter';
 
 use CoreFunction qw(connectDB configData);
-use TableDefs qw(init_table_names select_test_tables $EDT_TEST);
+use TableDefs qw(init_table_names select_test_tables get_table_property get_column_properties $EDT_TEST
+		 $SESSION_DATA $PERSON_DATA $TABLE_PERMS);
 
 use EditTest;
 
@@ -37,12 +38,16 @@ sub new {
     my ($class, $options) = @_;
     
     $options ||= { };
-
+    
+    $options->{debug} = 1 if @ARGV && $ARGV[0] eq 'debug';
+    
     my $dbh;
     
     eval {
 	$dbh = connectDB("config.yml");
 	init_table_names(configData, 1);
+	select_test_tables('edt_test', 1);
+	select_test_tables('session_data', 1);
     };
     
     unless ( defined $dbh )
@@ -81,6 +86,16 @@ sub dbh {
 }
 
 
+# debug ( )
+#
+# Return the status of the debug flag on this object.
+
+sub debug {
+
+    return $_[0]->{dbh};
+}
+
+
 # create_tables ( )
 # 
 # Create or re-create the tables necessary for testing.
@@ -90,7 +105,9 @@ sub create_tables {
     my ($T) = @_;
     
     eval {
-	select_test_tables('edt_test', 1);
+	# select_test_tables('edt_test', 1);
+	# select_test_tables('session_data', 1);
+	establish_session_data($T->dbh);
 	EditTest->establish_tables($T->dbh);
     };
 
@@ -98,6 +115,102 @@ sub create_tables {
     {
 	my $msg = trim_exception($@);
 	diag("Could not establish tables. Message was: $msg");
+	BAIL_OUT;
+    }
+}
+
+
+sub establish_session_data {
+    
+    my ($dbh) = @_;
+
+    eval {
+	
+	$dbh->do("CREATE TABLE IF NOT EXISTS $SESSION_DATA (
+  `session_id` varchar(80) NOT NULL,
+  `user_id` char(36) NOT NULL,
+  `authorizer` varchar(64) NOT NULL DEFAULT '',
+  `enterer` varchar(64) NOT NULL DEFAULT '',
+  `role` varchar(20) DEFAULT NULL,
+  `roles` varchar(128) DEFAULT NULL,
+  `reference_no` int(11) DEFAULT NULL,
+  `queue` varchar(255) DEFAULT NULL,
+  `record_date` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `marine_invertebrate` tinyint(1) DEFAULT 0,
+  `micropaleontology` tinyint(1) DEFAULT 0,
+  `paleobotany` tinyint(1) DEFAULT 0,
+  `taphonomy` tinyint(1) DEFAULT 0,
+  `vertebrate` tinyint(1) DEFAULT 0,
+  `superuser` tinyint(1) DEFAULT 0,
+  `authorizer_no` int(10) NOT NULL DEFAULT 0,
+  `enterer_no` int(10) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`session_id`))");
+	
+	$dbh->do("DELETE FROM $SESSION_DATA");
+
+	$dbh->do("INSERT INTO $SESSION_DATA (session_id, user_id, authorizer_no, enterer_no, role, superuser)
+		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','3998','3998','authorizer',0),
+			('SESSION-ENTERER','USERID-ENTERER','3998','3997','enterer',0),
+			('SESSION-GUEST','USERID-GUEST','0','0','guest',0),
+			('SESSION-STUDENT','USERID-STUDENT','3998','3996','student',0),
+			('SESSION-SUPERUSER','USERID-SUPERUSER','3999','3999','authorizer',1),
+			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','3999','3991','enterer',0)");
+
+	$dbh->do("CREATE TABLE IF NOT EXISTS $PERSON_DATA (
+  `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(64) NOT NULL DEFAULT '',
+  `reversed_name` varchar(64) NOT NULL DEFAULT '',
+  `first_name` varchar(30) NOT NULL DEFAULT '',
+  `middle` varchar(10) DEFAULT NULL,
+  `last_name` varchar(30) NOT NULL DEFAULT '',
+  `country` varchar(80) DEFAULT NULL,
+  `institution` varchar(80) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `homepage` varchar(255) DEFAULT NULL,
+  `photo` varchar(255) DEFAULT NULL,
+  `is_authorizer` tinyint(1) NOT NULL DEFAULT 0,
+  `role` set('authorizer','enterer','officer','student','technician') DEFAULT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `heir_no` int(10) unsigned NOT NULL DEFAULT 0,
+  `research_group` varchar(64) DEFAULT NULL,
+  `preferences` varchar(64) DEFAULT NULL,
+  `last_download` varchar(64) DEFAULT NULL,
+  `created` datetime DEFAULT NULL,
+  `modified` datetime DEFAULT NULL,
+  `last_action` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `last_entry` datetime DEFAULT NULL,
+  `hours` int(4) unsigned DEFAULT NULL,
+  `hours_ever` int(6) unsigned DEFAULT NULL,
+  `hours_authorized` int(6) unsigned DEFAULT NULL,
+  `superuser` tinyint(1) DEFAULT 0,
+  PRIMARY KEY (`person_no`))");
+
+	$dbh->do("DELETE FROM $PERSON_DATA WHERE institution = 'Test'");
+
+	$dbh->do("INSERT INTO $PERSON_DATA (person_no, name, reversed_name, institution)
+		VALUES	(3999,'A. Superuser','Superuser, A.','Test'),
+			(3998,'A. Authorizer','Authorizer, A.','Test'),
+			(3997,'A. Enterer','Enterer, A.','Test'),
+			(3996,'A. Student','Student, A.','Test'),
+			(3991,'A. Admin','Admin, A.','Test')");
+
+	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE_PERMS (
+  `person_no` int(10) unsigned NOT NULL,
+  `table_name` varchar(80) NOT NULL,
+  `permission` enum('none','view','post','view/post','admin') NOT NULL,
+  UNIQUE KEY `person_no` (`person_no`,`table_name`))");
+	
+	my $table_name = $EDT_TEST; $table_name =~ s/^\w+[.]//;
+	
+	$dbh->do("REPLACE INTO $TABLE_PERMS (person_no, table_name, permission)
+			VALUES (3991, '$table_name', 'admin')");
+	
+    };
+    
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("Could not establish session data. Message was: $msg");
 	BAIL_OUT;
     }
 }
@@ -111,6 +224,14 @@ sub trim_exception {
 }
 
 
+sub debug_line {
+    
+    my ($T, $line) = @_;
+
+    print STDERR " ### $line\n\n" if $T->{debug};
+}
+
+
 # new_edt ( perms, options )
 #
 # Create a new EditTest object. The CREATE allowance is specified by default.
@@ -119,20 +240,10 @@ sub new_edt {
     
     my ($T, $perm, $options) = @_;
     
-    $options ||= { };
-    $options->{CREATE} = 1;
-
-    return $T->get_new_edt($perm, $options);
-}
-
-
-# new_edt_nocreate ( perms, options )
-#
-# Create a new EditTest object without the CREATE allowance.
-
-sub new_edt_nocreate {
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my ($T, $perm, $options) = @_;
+    $options ||= { };
+    $options->{CREATE} = 1 unless exists $options->{CREATE};
     
     return $T->get_new_edt($perm, $options);
 }
@@ -146,41 +257,41 @@ sub get_new_edt {
     
     my ($T, $perm, $options) = @_;
     
-    croak "you must specify a permission" unless ref $perm && $perm->isa('Permissions');
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $T->{last_edt} = undef;
+    $T->{last_exception} = undef;
     
     my $allow = { };
-
+    
     if ( ref $options eq 'HASH' )
     {
 	foreach my $k ( keys %$options )
 	{
-	    if ( $k =~ /^[A-Z_]+$/ )
+	    if ( $k =~ /^[A-Z_]+$/ && $options->{$k} )
 	    {
 		$allow->{$k} = 1;
 	    }
 	}
     }
     
-    $allow->{DEBUG_MODE} if $T->{debug};
-
-    my $edt;
-
-    eval {
-	$edt = EditTest->new($T->dbh, $perm, $EDT_TEST, $allow);
-    };
-
-    if ( $@ )
+    $allow->{DEBUG_MODE} = 1 if $T->{debug};
+    
+    my $edt = EditTest->new($T->dbh, $perm, $EDT_TEST, $allow);
+    
+    if ( $edt )
     {
-	my $msg = trim_exception($@);
-	diag("EXCEPTION: $msg");
-    }
-
-    elsif ( !$edt )
-    {
-	diag("ERROR: no object was created");
+	pass("created edt");
+	$T->{last_edt} = $edt;
+	return $edt;
     }
     
-    return $edt;
+    else
+    {
+	fail("created edt");
+	$T->{last_edt} = undef;
+	return;
+    }
 }
 
 
@@ -197,23 +308,38 @@ sub new_perm {
     
     my ($T, $session_id, $table_name) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     croak "you must specify a session id string" unless $session_id && ! ref $session_id;
     
     $table_name ||= $EDT_TEST;
+
+    $T->{last_exception} = undef;
 
     my $perm;
 
     eval {
 	$perm = Permissions->new($T->dbh, $session_id, $table_name);
     };
-
+    
     if ( $@ )
     {
 	my $msg = trim_exception($@);
 	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
     }
-
-    return $perm;
+    
+    if ( $perm && ($perm->role ne 'none' || $session_id eq 'NO_LOGIN' ) )
+    {
+	pass("created permission object for '$session_id'");
+	return $perm;
+    }
+    
+    else
+    {
+	fail("created permission object for '$session_id'");
+	return;
+    }
 }
 
 
@@ -232,31 +358,8 @@ sub do_insert_records {
     $options->{CREATE} = 1;
     
     my $edt = $T->get_new_edt($perm, $options);
-    my $result;
-
-    if ( $edt )
-    {
-	eval {
-	    foreach my $r ( @records )
-	    {
-		$edt->insert_record($table, $r);
-	    }
-	    
-	    $result = $edt->execute;
-	};
-	
-	if ( $@ )
-	{
-	    my $msg = trim_exception($@);
-	    diag("EXCEPTION: $msg");
-	}
-    }
     
-    $T->{last_edt} = $edt;
-    
-    ok( $result, $label );
-    
-    return $result;
+    return $T->do_one_operation($edt, $options, 'insert_record', $label, $table, @records);
 }
 
 
@@ -270,7 +373,6 @@ sub do_update_records {
     
     my $edt = $T->get_new_edt($perm, $options);
     
-    $T->{last_edt} = $edt;
     return $T->do_one_operation($edt, $options, 'update_record', $label, $table, @records);
 }
 
@@ -284,31 +386,8 @@ sub do_replace_records {
     croak "you must specify at least one record" unless @records && ref $records[0] eq 'HASH';
     
     my $edt = $T->get_new_edt($perm, $options);
-    my $result;
-
-    if ( $edt )
-    {
-	eval {
-	    foreach my $r ( @records )
-	    {
-		$edt->replace_record($table, $r);
-	    }
-	    
-	    $result = $edt->execute;
-	};
-	
-	if ( $@ )
-	{
-	    my $msg = trim_exception($@);
-	    diag("EXCEPTION: $msg");
-	}
-    }
     
-    $T->{last_edt} = $edt;
-    
-    ok( $result, $label );
-    
-    return $result;
+    return $T->do_one_operation($edt, $options, 'replace_record', $label, $table, @records);
 }
 
 
@@ -318,34 +397,11 @@ sub do_delete_records {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    croak "you must specify at least one record" unless @records && ref $records[0] eq 'HASH';
+    croak "you must specify at least one record" unless @records && $records[0];
     
     my $edt = $T->get_new_edt($perm, $options);
-    my $result;
-
-    if ( $edt )
-    {
-	eval {
-	    foreach my $r ( @records )
-	    {
-		$edt->delete_record($table, $r);
-	    }
-	    
-	    $result = $edt->execute;
-	};
-	
-	if ( $@ )
-	{
-	    my $msg = trim_exception($@);
-	    diag("EXCEPTION: $msg");
-	}
-    }
     
-    $T->{last_edt} = $edt;
-    
-    ok( $result, $label );
-    
-    return $result;
+    return $T->do_one_operation($edt, $options, 'delete_record', $label, $table, @records);
 }
 
 
@@ -353,18 +409,31 @@ sub do_one_operation {
 
     my ($T, $edt, $options, $operation, $label, $table, @records) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     unless ( $edt )
     {
-	fail($label);
+	if ( $options && $options->{nocheck} )
+	{
+	    pass($label);
+	}
+
+	else
+	{
+	    fail($label);
+	}
+
 	return;
     }
+    
+    $T->{last_exception} = undef;
     
     my $result;
     
     eval {
 	foreach my $r ( @records )
 	{
-	    $edt->update_record($table, $r);
+	    $edt->$operation($table, $r);
 	}
 	
 	$result = $edt->execute;
@@ -374,7 +443,18 @@ sub do_one_operation {
     {
 	my $msg = trim_exception($@);
 	diag("EXCEPTION: $msg");
-	fail($label);
+	
+	if ( $options && $options->{nocheck} )
+	{
+	    pass($label);
+	}
+
+	else
+	{
+	    fail($label);
+	}
+	
+	$T->{last_exception} = $msg;
 	return;
     }
     
@@ -438,6 +518,119 @@ sub ok_result {
 }
 
 
+sub ok_no_errors {
+
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    my $label = shift;
+    croak "you must specify a label" unless $label && ! ref $label;
+    
+    if ( $edt->errors )
+    {
+	fail($label);
+	return;
+    }
+
+    else
+    {
+	pass($label);
+	return 1;
+    }
+}
+
+
+sub ok_has_error {
+    
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    my $regexp = shift;
+    croak "you must specify a regexp" unless $regexp && ref $regexp eq 'Regexp';
+    
+    my $label = shift;
+    croak "you must specify a label" unless $label && ! ref $label;
+    
+    foreach my $e ( $edt->error_strings )
+    {
+	if ( $e =~ $regexp )
+	{
+	    pass($label);
+	    return 1;
+	}
+    }
+
+    fail($label);
+    return;
+}
+
+	
+sub ok_no_warnings {
+
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    my $label = shift;
+    croak "you must specify a label" unless $label && ! ref $label;
+    
+    if ( $edt->warnings )
+    {
+	fail($label);
+	return;
+    }
+
+    else
+    {
+	pass($label);
+	return 1;
+    }
+}
+
+
+sub ok_has_warning {
+    
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    my $regexp = shift;
+    croak "you must specify a regexp" unless $regexp && ref $regexp eq 'Regexp';
+    
+    my $label = shift;
+    croak "you must specify a label" unless $label && ! ref $label;
+    
+    foreach my $e ( $edt->warning_strings )
+    {
+	if ( $e =~ $regexp )
+	{
+	    pass($label);
+	    return 1;
+	}
+    }
+
+    fail($label);
+    return;
+}
+
+	
+sub ok_last_exception {
+
+    my ($T, $regex, $label) = @_;
+    
+    croak "you must specify a regular expression" unless $regex && ref $regex eq 'Regexp';
+    croak "you must specify a label" unless $label;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $msg = $T->{last_exception};
+    
+    ok( $msg && $msg =~ $regex, $label);
+}
+
+
 sub diag_errors {
 
     my ($T, $edt) = @_;
@@ -445,10 +638,9 @@ sub diag_errors {
     $edt //= $T->{last_edt};
     return unless ref $edt;
     
-    foreach my $e ( $edt->errors )
+    foreach my $e ( $edt->error_strings )
     {
-        my $msg = $edt->generate_msg($e);
-        diag("ERROR: $msg");
+        diag($e);
     }
 }
 
@@ -460,10 +652,9 @@ sub diag_warnings {
     $edt //= $T->{last_edt};
     return unless ref $edt;
     
-    foreach my $e ( $edt->warnings )
+    foreach my $w ( $edt->warning_strings )
     {
-        my $msg = $edt->generate_msg($e);
-        diag("WARNING: $msg");
+        diag($w);
     }
 }
 
@@ -512,6 +703,58 @@ sub deleted_keys {
 }
 
 
+sub fetch_records_by_key {
+    
+    my ($T, $table, @keys) = @_;
+    
+    my $dbh = $T->dbh;
+
+    croak "you must specify a table" unless $table;
+    croak "you must specify at least one key" unless @keys && $keys[0];
+    
+    my @key_list;
+
+    foreach my $k ( @keys )
+    {
+	next unless defined $k;
+	croak "keys cannot be refs" if ref $k;
+	push @key_list, $dbh->quote($k);
+    }
+    
+    return unless @key_list;
+    
+    my $key_string = join(',', @key_list);
+    my $key_name = get_table_property($table, 'PRIMARY_KEY');
+    
+    croak "could not determine primary key for table '$table'" unless $key_string;
+    
+    my $sql = "SELECT * FROM $table WHERE $key_name in ($key_string)";
+
+    $T->debug_line($sql);
+    
+    my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+
+    return ref $results eq 'ARRAY' ? @$results : ();
+}
+
+
+sub fetch_records_by_expr {
+
+    my ($T, $table, $expr) = @_;
+
+    my $dbh = $T->dbh;
+
+    croak "you must specify a table" unless $table;
+    croak "you must specify a valid SQL expression" unless $expr;
+    
+    my $sql = "SELECT * FROM $table WHERE $expr";
+
+    $T->debug_line($sql);
+
+    my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+
+    return ref $results eq 'ARRAY' ? @$results : ();
+}
 
 
 1;

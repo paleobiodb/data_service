@@ -29,6 +29,7 @@ use namespace::clean;
 our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR",
 			     W_TEST => "TEST WARNING");
 
+
 # At runtime, set column properties for our test table
 # ----------------------------------------------------
 
@@ -39,7 +40,7 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR",
     set_column_property($EDT_TEST, 'string_req', REQUIRED => 1);
     set_column_property($EDT_TEST, 'signed_req', REQUIRED => 1);
 
-    EditTest->register_allows('TEST_ALLOW');
+    EditTest->register_allowances('TEST_DEBUG');
 }
 
 
@@ -100,7 +101,45 @@ sub after_action {
 }
 
 
-# establishTestTables ( class, dbh, options )
+# debug_line ( text )
+#
+# Capture debug output for testing.
+
+sub debug_line {
+    
+    return unless ref $_[0] && defined $_[1] && $_[0]->{debug};
+    return $_[0]->SUPER::debug_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
+    
+    push @{$_[0]->{debug_output}}, $_[1];
+}
+
+
+sub clear_debug_output {
+
+    my ($edt) = @_;
+
+    $edt->{debug_output} = [ ];
+}
+
+
+sub has_debug_output {
+
+    my ($edt, $regex) = @_;
+    
+    croak "you must specify a regular expression" unless $regex && ref $regex eq 'Regexp';
+    
+    return unless $edt->{debug_output};
+    
+    foreach my $line ( @{$edt->{debug_output}} )
+    {
+	return 1 if $line =~ $regex;
+    }
+
+    return;
+}
+
+
+# establish_tables ( class, dbh, options )
 # 
 # This class method creates database tables necessary to use this class for testing purposes, or
 # replaces the existing ones.
@@ -123,8 +162,8 @@ sub establish_tables {
 		interval_no int unsigned not null,
 		string_val varchar(40) not null,
 		string_req varchar(40) not null,
-		signed_val mediumint not null,
-		unsigned_val mediumint unsigned not null,
+		signed_val mediumint,
+		unsigned_val mediumint unsigned,
 		signed_req int unsigned not null,
 		decimal_val decimal(5,2),
 		float_val double,
@@ -133,3 +172,8 @@ sub establish_tables {
 		modified timestamp default current_timestamp)");
     
 }
+
+
+1;
+
+

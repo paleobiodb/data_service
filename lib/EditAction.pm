@@ -18,7 +18,7 @@ use TableDefs qw(get_table_property);
 
 use Carp qw(carp croak);
 
-our %ALLOWED_OPERATION = ( insert => 1, updated => 1, replace => 1, delete => 1 );
+our %ALLOWED_OPERATION = ( insert => 1, update => 1, replace => 1, delete => 1 );
 
 
 # Create a new action record with the specified information.
@@ -52,11 +52,32 @@ sub new {
 	$action->{keycol} = $key_column;
     }
     
-    if ( $key_attr = get_table_property($table, 'PRIMARY_ATTR') || $key_column )
+    if ( $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
     {
 	if ( ref $record eq 'HASH' && defined $record->{$key_attr} && $record->{$key_attr} ne '' )
 	{
 	    $action->{keyval} = $record->{$key_attr};
+	}
+    }
+
+    elsif ( $key_attr = $key_column )
+    {
+	if ( ref $record eq 'HASH' )
+	{
+	    if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
+	    {
+		$action->{keyval} = $record->{$key_column};
+	    }
+	    
+	    else
+	    {
+		$key_attr =~ s/_no$/_id/;
+
+		if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
+		{
+		    $action->{keyval} = $record->{$key_attr};
+		}
+	    }
 	}
     }
     

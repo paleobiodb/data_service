@@ -64,6 +64,9 @@ our (%CONDITION_TEMPLATE) = (
 		W_EXECUTE => "An error occurred while executing '%1'",
 		UNKNOWN => "MISSING ERROR MESSAGE");
 
+our (%TEST_PROBLEM);	# This variable can be set in order to trigger specific errors, in order
+                        # to test the error-response mechanisms.
+
 
 # CONSTRUCTOR and destructor
 # --------------------------
@@ -124,18 +127,27 @@ sub new {
 	$edt->{request} = $request_or_dbh;
 	weaken $edt->{request};
 	
+	die "TEST NO CONNECT" if $TEST_PROBLEM{no_connect};
+	
 	$edt->{dbh} = $request_or_dbh->get_connection;
 	weaken $edt->{dbh};
 	
 	$edt->{debug} = $request_or_dbh->debug if $request_or_dbh->can('debug');
     }
     
-    else
+    elsif ( ref($request_or_dbh) =~ /DBI::db$/ )
     {
 	$edt->{dbh} = $request_or_dbh;
 	weaken $edt->{dbh};
 	
+	die "TEST NO CONNECT" if $TEST_PROBLEM{no_connect};
+	
 	$edt->{debug} = ref $allows eq 'HASH' && $allows->{DEBUG_MODE} ? 1 : 0;
+    }
+
+    else
+    {
+	croak "no database handle was provided";
     }
     
     # If we are given either a hash or an array of conditions that should be allowed, store them
@@ -185,7 +197,7 @@ sub DESTROY {
     my ($edt) = @_;
     
     if ( $edt->{transaction} && $edt->{transaction} eq 'active' )
-    {    
+    {
 	$edt->rollback;
     }
 }
@@ -291,7 +303,7 @@ sub debug_line {
 # subclass. This class method is designed to be called at startup from a module that subclasses
 # this one.
 
-sub register_allows {
+sub register_allowances {
     
     my ($class, @names) = @_;
     
@@ -428,9 +440,9 @@ sub add_condition {
 
 # errors ( )
 # 
-# Return the list of errors for the current EditTransaction. In numeric context, Perl will simply
-# evaluate this as a number. In boolean context, this will be evaluated as true if there are any and
-# false if not. This is one of my favorite features of Perl.
+# Return the list of error/caution condition records for the current EditTransaction. In numeric
+# context, Perl will simply evaluate this as a number. In boolean context, this will be evaluated
+# as true if there are any and false if not. This is one of my favorite features of Perl.
 
 sub errors {
 
@@ -440,11 +452,84 @@ sub errors {
 
 # warnings ( )
 # 
-# Return the list of warnings for the current EditTransaction.
+# Return the list of warning condition records for the current EditTransaction. See &errors above.
 
 sub warnings {
     
     return @{$_[0]->{warnings}};
+}
+
+
+# error_strings ( )
+#
+# Return a list of error strings that can be printed out, returned in a JSON data structure, or
+# otherwise displayed to the end user.
+
+sub error_strings {
+    
+    my ($edt) = @_;
+    
+    return $edt->_generate_strings('errors');
+}
+
+
+sub warning_strings {
+
+    my ($edt) = @_;
+
+    return $edt->_generate_strings('warnings');
+}
+
+
+sub _generate_strings {
+
+    my ($edt, $field) = @_;
+    
+    my %message;
+    my @messages;
+    
+    foreach my $e ( @{$edt->{$field}} )
+    {
+	my $str = $e->code . ': ' . $edt->generate_msg($e);
+	
+	push @messages, $str unless $message{$str};
+	push @{$message{$str}}, $e->label;
+    }
+
+    my @strings;
+    
+    foreach my $m ( @messages )
+    {
+	my $nolabel;
+	my %label;
+	my @labels;
+	
+	foreach my $l ( @{$message{$m}} )
+	{
+	    if ( defined $l && $l ne '' ) { push @labels, $l unless $label{$l}; $label{$l} = 1; }
+	    else { $nolabel = 1; }
+	}
+	
+	if ( $nolabel )
+	{
+	    push @strings, $m;
+	}
+	
+	if ( @labels > 3 )
+	{
+	    my $count = scalar(@labels) - 2;
+	    my $list = " ($labels[0], $labels[1], and $count more):";
+	    push @strings, $m =~ s/:/$list/r;
+	}
+
+	elsif ( @labels )
+	{
+	    my $list = ' (' . join(', ', @labels) . '):';
+	    push @strings, $m =~ s/:/$list/r;
+	}
+    }
+
+    return @strings;
 }
 
 
@@ -795,13 +880,24 @@ sub start_transaction {
     
     $edt->debug_line( " >>> START TRANSACTION $label\n" );
     
-    $edt->dbh->do("START TRANSACTION");
-    $edt->{transaction} = 'active';
-    
-    # Call the 'initialize_transaction' method, which is designed to be overridden by subclasses. The
-    # default method does nothing.
-    
-    $edt->initialize_transaction($edt->{main_table});
+    try {
+	
+	$edt->dbh->do("START TRANSACTION");
+	$edt->{transaction} = 'active';
+	
+	# Call the 'initialize_transaction' method, which is designed to be overridden by subclasses. The
+	# default method does nothing.
+	
+	$edt->initialize_transaction($edt->{main_table});
+    }
+
+    catch {
+	
+	my $msg = $edt->{transaction} eq 'active' ? 'initialize_transaction threw an exception' :
+	    'start transaction threw an exception';
+	
+	$edt->add_condition(undef, 'E_EXCUTE', $msg);
+    };
     
     return $edt;
 }
@@ -820,9 +916,7 @@ sub commit {
     my ($edt) = @_;
     
     # $edt->_finish_record;
-    $edt->_commit_transaction;
-    
-    return $edt;
+    return $edt->execute;
 }
 
 
@@ -838,10 +932,19 @@ sub _commit_transaction {
     elsif ( $edt->{transaction} eq 'active' )
     {
 	$edt->debug_line( " <<< COMMIT TRANSACTION\n" );
+
+	try {
+	    
+	    $edt->dbh->do("COMMIT");
+	    $edt->{transaction} = 'committed';
+	    $edt->{commit_count}++;
+	}
 	
-	$edt->dbh->do("COMMIT");
-	$edt->{transaction} = 'committed';
-	$edt->{commit_count}++;
+	catch {
+	    $edt->add_condition(undef, 'E_EXECUTE', 'commit threw an exception');
+	    $edt->{transaction} = 'aborted';
+	    $edt->{rollback_count}++;
+	};
     }
     
     elsif ( $edt->{transaction} eq 'committed' )
@@ -879,8 +982,16 @@ sub _rollback_transaction {
     elsif ( $edt->{transaction} eq 'active' )
     {
 	$edt->debug_line( " <<< ROLLBACK TRANSACTION\n" );
+
+	try {
+	    
+	    $edt->dbh->do("ROLLBACK");
+	}
+
+	catch {
+	    $edt->add_condition(undef, 'E_EXECUTE', 'rollback threw an exception');
+	};
 	
-	$edt->dbh->do("ROLLBACK");
 	$edt->{transaction} = 'aborted';
 	$edt->{rollback_count}++;
     }
@@ -1039,7 +1150,7 @@ sub update_record {
     
     else
     {
-	$edt->add_condition($action, 'E_NO_KEY');
+	$edt->add_condition($action, 'E_NO_KEY', 'update');
     }
     
     # Either execute the action immediately or add it to the appropriate list depending on whether
@@ -1127,7 +1238,7 @@ sub replace_record {
     
     else
     {
-	$edt->add_condition($action, 'E_NO_KEY');
+	$edt->add_condition($action, 'E_NO_KEY', 'replace');
     }
     
     # Create an action record, and either execute it immediately or add it to the appropriate list
@@ -1191,7 +1302,7 @@ sub delete_record {
     
     else
     {
-	$edt->add_condition($action, 'E_NO_KEY');
+	$edt->add_condition($action, 'E_NO_KEY', 'delete');
     }
     
     # Create an action record, and then take the appropriate action.
@@ -1304,7 +1415,9 @@ sub abandon_record {
 sub authorize_action {
     
     my ($edt, $action, $operation, $table, $keyexpr) = @_;
-
+    
+    die "TEST AUTHORIZE" if $TEST_PROBLEM{authorize};
+    
     sswitch ( $operation )
     {
 	case 'insert': {
@@ -1607,7 +1720,7 @@ sub get_keyexpr {
     
     my $keycol = $action->keycol;
     my $keyval = $action->keyval;
-
+    
     return '0' unless $keycol;
     
     if ( $action->is_multiple )
@@ -1722,6 +1835,14 @@ sub _execute_insert {
 	$edt->add_condition($action, 'E_EXECUTE', 'column/value mismatch on insert');
 	return;
     }
+
+    # If the following flag is set, deliberately generate an SQL error for
+    # testing purposes.
+    
+    if ( $TEST_PROBLEM{insert_sql} )
+    {
+	push @$cols, 'XXXX';
+    }
     
     # Construct the INSERT statement.
     
@@ -1729,7 +1850,7 @@ sub _execute_insert {
     
     my $column_list = join(',', @$cols);
     my $value_list = join(',', @$vals);
-    
+        
     my $sql = "	INSERT INTO $table ($column_list)
 		VALUES ($value_list)";
     
@@ -1756,14 +1877,14 @@ sub _execute_insert {
 	
 	else
 	{
-	    $edt->add_condition($action, 'E_EXECUTE', 'insert failed');
+	    $edt->add_condition($action, 'E_EXECUTE', 'insert statement failed');
 	    $result = undef;
 	}
     }
     
     catch {
 	
-	$edt->add_condition($action, 'E_EXECUTE', 'insert failed');
+	$edt->add_condition($action, 'E_EXECUTE', 'SQL error on insert');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -1845,13 +1966,13 @@ sub _execute_replace {
 	
 	unless ( $result )
 	{
-	    $edt->add_condition($action, 'E_EXECUTE', 'replace failed');
+	    $edt->add_condition($action, 'E_EXECUTE', 'replace statement failed');
 	}
     }
     
     catch {
 	
-	$edt->add_condition($action, 'E_EXECUTE', 'replace failed');
+	$edt->add_condition($action, 'E_EXECUTE', 'SQL error on replace');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -1948,7 +2069,7 @@ sub _execute_update {
     
     catch {
 	
-	$edt->add_condition($action, 'E_EXECUTE', 'update failed');
+	$edt->add_condition($action, 'E_EXECUTE', 'SQL error on update');
     };
     
     # Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
@@ -2261,7 +2382,13 @@ our (%UNSIGNED_BOUND) = ( tiny => 255,
 sub validate_action {
     
     my ($edt, $action, $operation, $table, $keyexpr) = @_;
-
+    
+    if ( $TEST_PROBLEM{validate} )
+    {
+	$edt->add_condition($action, 'E_PARAM', 'TEST VALIDATE');
+	return;
+    }
+    
     # For all operations except deletions, validate the column values specified for this action
     # against the table schema.
     
@@ -2726,7 +2853,7 @@ sub code {
     
     my ($condition) = @_;
     
-    return $condition->[0];
+    return $condition->[1];
 }
 
 
@@ -2739,7 +2866,7 @@ sub label {
     
     my ($condition) = @_;
     
-    return $condition->[1] && $condition->[1]->isa('EditAction') ? $condition->[1]->label : '';
+    return $condition->[0] && $condition->[0]->isa('EditAction') ? $condition->[0]->label : '';
 }
 
 
@@ -2752,7 +2879,7 @@ sub table {
 
     my ($condition) = @_;
 
-    return $condition->[1] && $condition->[1]->isa('EditAction') ? $condition->[1]->table : '';
+    return $condition->[0] && $condition->[0]->isa('EditAction') ? $condition->[0]->table : '';
 }
 
 

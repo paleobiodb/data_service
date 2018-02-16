@@ -29,7 +29,7 @@
 # authorized - can insert, update, delete
 # enterer - can insert, update, delete
 
-# 4. Allowances:
+# 4. Allowances: 
 #
 # CREATE
 # PROCEED
@@ -38,25 +38,27 @@
 # NO_RECORDS
 # ALTER_TRAIL
 # DEBUG_MODE
-# extra allowance defined by EditTest.pm
+# extra allowance defined by EditTest.pm [edt-01-basic.t 'allowances']
+# check that all of these are accepted, and no others. [edt-01-basic.t 'allowances']
 
-# 5. EditTest->new
+# 5. EditTest->new [DONE]
 #
-# create with dbh
-# create with request
-# bad allowance -> W_ALLOW
+# create with dbh [edt-01-basic.t 'create objects']
+# create with request [edt-01-basic.t 'create objects']
+# bad allowance -> W_ALLOW [edt-01-basic.t 'allowances']
 
-# 6. Accessor methods
-#
-# $edt->dbh
-# $edt->request
-# $edt->transaction
-# $edt->role
-# $edt->allows
+# 6. Accessor methods [DONE]
+# 
+# $edt->dbh [edt-01-basic.t 'accessors']
+# $edt->request [edt-02-request.t 'request']
+# $edt->transaction [edt-01-basic.t 'accessors']
+# $edt->perms [edt-01-basic.t 'accessors']
+# $edt->role [edt-01-basic.t 'accessors']
+# $edt->allows [edt-01-basic.t 'allowances']
 
-# 7. Debugging
+# 7. Debugging [DONE]
 #
-# override and capture calls to debug_line
+# override and capture calls to debug_line [edt-01-basic.t 'debug output']
 
 # 8. add_condition
 #
@@ -114,6 +116,8 @@
 # authorize_action and validate_action
 #  - check status with $edt->transaction, $edt->active, and $edt->executing
 #  - check both before and after $edt->start_execution
+#
+# automatic rollback when object goes out of scope [edt-01-basicst 'out of scope']
 
 # 12. insert
 #
