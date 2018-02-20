@@ -26,8 +26,8 @@ use base 'EditTransaction';
 
 use namespace::clean;
 
-our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR",
-			     W_TEST => "TEST WARNING");
+our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
+			     W_TEST => "TEST WARNING '%1'");
 
 
 # At runtime, set column properties for our test table
@@ -70,24 +70,131 @@ sub get_condition_template {
 
 
 sub authorize_action {
+    
+    my ($edt, $action, $operation, $table, $keyexpr) = @_;
+    
+    my $record = $action->record;
 
+    if ( $record && $record->{string_req} )
+    {
+	if ( $record->{string_req} eq 'authorize exception' )
+	{
+	    die "generated exception";
+	}
+	
+	elsif ( $record->{string_req} eq 'authorize error' )
+	{
+	    $edt->add_condition($action, 'E_TEST', 'xyzzy');
+	}
+
+	elsif ( $record->{string_req} eq 'authorize warning' )
+	{
+	    $edt->add_condition($action, 'W_TEST', 'xyzzy');
+	}
+
+	elsif ( $record->{string_req} eq 'authorize save' )
+	{
+	    $edt->{save_authorize_action} = $action;
+	    $edt->{save_authorize_operation} = $operation;
+	    $edt->{save_authorize_table} = $table;
+	    $edt->{save_authorize_keyexpr} = $keyexpr;
+	}
+    }
+    
     return EditTransaction::authorize_action(@_);
 }
 
 
 sub validate_action {
 
+    my ($edt, $action, $operation, $table, $keyexpr) = @_;
+
+    my $record = $action->record;
+
+    if ( $record && $record->{string_req} )
+    {
+	if ( $record->{string_req} eq 'validate exception' )
+	{
+	    die "generated exception";
+	}
+	
+	elsif ( $record->{string_req} eq 'validate error' )
+	{
+	    $edt->add_condition($action, 'E_TEST', 'xyzzy');
+	}
+
+	elsif ( $record->{string_req} eq 'validate warning' )
+	{
+	    $edt->add_condition($action, 'W_TEST', 'xyzzy');
+	}
+
+	elsif ( $record->{string_req} eq 'validate save' )
+	{
+	    $edt->{save_validate_action} = $action;
+	    $edt->{save_validate_operation} = $operation;
+	    $edt->{save_validate_table} = $table;
+	    $edt->{save_validate_keyexpr} = $keyexpr;
+	    $edt->{save_validate_errors} = $action->has_errors;
+	}
+    }
+    
     return EditTransaction::validate_action(@_);
 }
 
 
 sub initialize_transaction {
 
+    my ($edt, $table) = @_;
+
+    if ( $edt->get_attr('initialize exception') )
+    {
+	die "generated exception";
+    }
+
+    elsif ( $edt->get_attr('initialize error') )
+    {
+	$edt->add_condition(undef, 'E_TEST', 'initialize');
+    }
+    
+    elsif ( my $value = $edt->get_attr('initialize add') )
+    {
+	my $quoted = $edt->dbh->quote($value);
+	$edt->dbh->do("INSERT INTO $table (string_req) values ($quoted)");
+    }
+
+    $edt->{save_init_table} = $table;
+    $edt->{save_init_count}++;
 }
 
 
 sub finalize_transaction {
 
+    my ($edt, $table, $rollback) = @_;
+    
+    if ( $edt->get_attr('finalize exception') )
+    {
+	die "generated exception";
+    }
+    
+    elsif ( $edt->get_attr('finalize error' ) )
+    {
+	$edt->add_condition(undef, 'E_TEST', 'finalize');
+    }
+    
+    elsif ( $edt->get_attr('finalize warning') )
+    {
+	$edt->add_condition(undef, 'W_TEST', 'finalize');
+    }
+    
+    elsif ( my $value = $edt->get_attr('finalize add') )
+    {
+	my $quoted = $edt->dbh->quote($value);
+	$edt->dbh->do("INSERT INTO $table (string_req) values ($quoted)");
+    }
+    
+    $edt->{save_final_count}++;
+    $edt->{save_final_table} = $table;
+    $edt->{save_final_rollback} = $rollback;
 }
 
 
@@ -164,13 +271,12 @@ sub establish_tables {
 		string_req varchar(40) not null,
 		signed_val mediumint,
 		unsigned_val mediumint unsigned,
-		signed_req int unsigned not null,
 		decimal_val decimal(5,2),
 		float_val double,
 		boolean_val boolean,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp)");
-    
+
 }
 
 

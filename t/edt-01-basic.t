@@ -164,16 +164,16 @@ subtest 'test exceptions' => sub {
     }
     
     $T->ok_has_error( qr/E_EXECUTE/, "test insert sql error" );
+    $T->clear_edt;
     
-    # eval {
-    # 	local $EditTransaction::TEST_PROBLEM{execute} = 1;
+    eval {
+	local $EditTransaction::TEST_PROBLEM{validate} = 1;
 	
-    # 	$T->do_insert_records($perm_a, { nocheck => 1 }, "insert record", $EDT_TEST,
-    # 			      { signed_req => 999, string_req => 'should not be inserted' });
-    # };
+    	$T->do_insert_records($perm_a, { nocheck => 1 }, "insert record", $EDT_TEST,
+    			      { signed_req => 999, string_req => 'should not be inserted' });
+    };
     
-    # $T->ok_last_exception( qr/TEST EXECUTE/, "test exception on execution" );
-	
+    $T->ok_has_error( qr/E_EXECUTE/, "test validate error" );
 };
 
 
@@ -198,6 +198,7 @@ subtest 'allowances' => sub {
 				      NO_RECORDS => 1,
 				      ALTER_TRAIL => 1,
 				      DEBUG_MODE => 1,
+				      IMMEDIATE_MODE => 1,
 				      TEST_DEBUG => 1,
 				      BAD_ALLOW => 1,
 				      NO_ALLOW => 0 }), "new edt with many allowances" );
@@ -210,6 +211,7 @@ subtest 'allowances' => sub {
 	ok( $edt->allows('NO_RECORDS'), "allowance NO_RECORDS accepted" );
 	ok( $edt->allows('ALTER_TRAIL'), "allowance ALTER_TRAIL accepted" );
 	ok( $edt->allows('DEBUG_MODE'), "allowance DEBUG_MODE accepted" );
+	ok( $edt->allows('IMMEDIATE_MODE'), "allowance DEBUG_MODE accepted" );
 	ok( $edt->allows('TEST_DEBUG'), "allowance TEST_DEBUG accepted" );
 	ok( ! $edt->allows('BAD_ALLOW'), "allowance BAD_ALLOW not accepted" );
 	ok( ! $edt->allows('NO_ALLOW'), "allowance NO_ALLOW not accepted" );
@@ -224,28 +226,29 @@ subtest 'allowances' => sub {
 
 subtest 'accessors' => sub {
 
-    my $edt1 = $T->new_edt($perm_a, { DEBUG_MODE => 1 });
-    my $edt2 = $T->new_edt($perm_g);
+    my $edt = $T->new_edt($perm_a, { DEBUG_MODE => 1 });
     
-    ok( $edt1 && $edt2, "created both objects" ) || return;
+    ok( $edt, "created edt" ) || return;
     
-    cmp_ok( $edt1->dbh, '==', $T->dbh, "fetch dbh" );
-    cmp_ok( $edt1->transaction, 'eq', '', "fetch transaction before start" );
-    cmp_ok( $edt1->perms, '==', $perm_a, "fetch perm_a" );
-    cmp_ok( $edt1->role, 'eq', 'authorizer', "fetch role a" );
-    cmp_ok( $edt2->perms, '==', $perm_g, "fetch perm_g" );
-    cmp_ok( $edt2->role, 'eq', 'guest', "fetch role g" );
+    cmp_ok( $edt->dbh, '==', $T->dbh, "fetch dbh" );
+    cmp_ok( $edt->perms, '==', $perm_a, "fetch perm_a" );
+    cmp_ok( $edt->role, 'eq', 'authorizer', "fetch role a" );
+    ok( $edt->debug, "fetch debug" );
     
-    ok( $edt1->debug, "fetch debug" );
-    ok( ! $edt2->debug || $T->debug, "fetch debug 2" );
+    $edt = $T->new_edt($perm_g);
     
-    $edt2->start_transaction;
+    cmp_ok( $edt->transaction, 'eq', '', "fetch transaction before start" );
+    cmp_ok( $edt->perms, '==', $perm_g, "fetch perm_g" );
+    cmp_ok( $edt->role, 'eq', 'guest', "fetch role g" );
+    ok( $T->debug || ! $edt->debug, "fetch debug 2" );
     
-    cmp_ok( $edt2->transaction, 'eq', 'active', "transaction is active" );
-
-    $edt2->rollback;
-
-    cmp_ok( $edt2->transaction, 'eq', 'aborted', "transaction is aborted" );
+    $edt->start_transaction;
+    
+    cmp_ok( $edt->transaction, 'eq', 'active', "transaction is active" );
+    
+    $edt->rollback;
+    
+    cmp_ok( $edt->transaction, 'eq', 'aborted', "transaction is aborted" );
 };
 
 
@@ -288,7 +291,7 @@ subtest 'out of scope' => sub {
 	
 	$edt->start_execution;
 	
-	$edt->insert_record($EDT_TEST, { signed_req => 222, string_req => 'insert this' });
+	$edt->insert_record($EDT_TEST, { signed_val => 222, string_req => 'insert this' });
 	
 	my ($active) = $T->dbh->selectrow_array("SELECT \@\@in_transaction");
 	
@@ -304,7 +307,7 @@ subtest 'out of scope' => sub {
 
     ok( ! $still_active, "transaction 1 is no longer active" );
     
-    my ($r) = $T->fetch_records_by_expr($EDT_TEST, "signed_req = '222'");
+    my ($r) = $T->fetch_records_by_expr($EDT_TEST, "signed_val = '222'");
 
     ok( $r, "found record from transaction 1" );
 
@@ -313,7 +316,7 @@ subtest 'out of scope' => sub {
 	
 	$edt->start_execution;
 	
-	$edt->insert_record($EDT_TEST, { signed_req => 223, string_req => 'do not insert' });
+	$edt->insert_record($EDT_TEST, { signed_val => 223, string_req => 'do not insert' });
 	
 	my ($active) = $T->dbh->selectrow_array("SELECT \@\@in_transaction");
 	
@@ -327,7 +330,7 @@ subtest 'out of scope' => sub {
     
     ok( ! $still_active, "transaction 2 is no longer active" );
 
-    my ($r) = $T->fetch_records_by_expr($EDT_TEST, "signed_req = '223'");
+    my ($r) = $T->fetch_records_by_expr($EDT_TEST, "signed_val = '223'");
     
     ok( ! $r, "transaction 2 was rolled back" );
 };

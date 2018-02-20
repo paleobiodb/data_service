@@ -92,7 +92,7 @@ sub dbh {
 
 sub debug {
 
-    return $_[0]->{dbh};
+    return $_[0]->{debug};
 }
 
 
@@ -228,7 +228,15 @@ sub debug_line {
     
     my ($T, $line) = @_;
 
-    print STDERR " ### $line\n\n" if $T->{debug};
+    print STDERR " ### $line\n" if $T->{debug};
+}
+
+
+sub debug_skip {
+
+    my ($T) = @_;
+    
+    print STDERR "\n" if $T->{debug};
 }
 
 
@@ -245,7 +253,17 @@ sub new_edt {
     $options ||= { };
     $options->{CREATE} = 1 unless exists $options->{CREATE};
     
-    return $T->get_new_edt($perm, $options);
+    if ( my $edt = $T->get_new_edt($perm, $options) )
+    {
+	pass("created edt");
+	return $edt;
+    }
+
+    else
+    {
+	fail("created edt");
+	return;
+    }
 }
 
 
@@ -281,14 +299,14 @@ sub get_new_edt {
     
     if ( $edt )
     {
-	pass("created edt");
+	# pass("created edt");
 	$T->{last_edt} = $edt;
 	return $edt;
     }
     
     else
     {
-	fail("created edt");
+	# fail("created edt");
 	$T->{last_edt} = undef;
 	return;
     }
@@ -487,6 +505,14 @@ sub last_edt {
 }
 
 
+sub clear_edt {
+
+    my ($T) = @_;
+
+    $T->{last_edt} = undef;
+}
+
+
 sub ok_result {
     
     my $T = shift;
@@ -527,6 +553,8 @@ sub ok_no_errors {
     my $label = shift;
     croak "you must specify a label" unless $label && ! ref $label;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     if ( $edt->errors )
     {
 	fail($label);
@@ -553,6 +581,8 @@ sub ok_has_error {
     my $label = shift;
     croak "you must specify a label" unless $label && ! ref $label;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     foreach my $e ( $edt->error_strings )
     {
 	if ( $e =~ $regexp )
@@ -575,6 +605,8 @@ sub ok_no_warnings {
     
     my $label = shift;
     croak "you must specify a label" unless $label && ! ref $label;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     if ( $edt->warnings )
     {
@@ -601,6 +633,8 @@ sub ok_has_warning {
     
     my $label = shift;
     croak "you must specify a label" unless $label && ! ref $label;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     foreach my $e ( $edt->warning_strings )
     {
@@ -631,10 +665,86 @@ sub ok_last_exception {
 }
 
 
+sub ok_found_record {
+    
+    my ($T, $table, $expr, $label) = @_;
+    
+    my $dbh = $T->dbh;
+    
+    # Check arguments
+    
+    croak "you must specify an expression" unless defined $expr && ! ref $expr && $expr ne '';
+    $label ||= 'record was found';
+
+    # If the given expression is a single decimal number, assume it is a key.
+    
+    if ( $expr =~ /^\d+$/ )
+    {
+	my $key_name = get_table_property($table, 'PRIMARY_KEY') or
+	    croak "could not determine primary key for table '$table'";
+	$expr = "$key_name = $expr";
+    }
+    
+    # Execute the SQL expression and test the result.
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $sql = "SELECT COUNT(*) FROM $table WHERE $expr";
+    
+    $T->debug_line($sql);
+    
+    my ($count) = $dbh->selectrow_array($sql);
+    
+    $T->debug_line("Returned $count rows");
+    $T->debug_skip;
+
+    ok( $count, $label );
+}
+
+
+sub ok_no_record {
+    
+    my ($T, $table, $expr, $label) = @_;
+    
+    my $dbh = $T->dbh;
+    
+    # Check arguments
+    
+    croak "you must specify an expression" unless defined $expr && ! ref $expr && $expr ne '';
+    $label ||= 'record was absent';
+
+    # If the given expression is a single decimal number, assume it is a key.
+    
+    if ( $expr =~ /^\d+$/ )
+    {
+	my $key_name = get_table_property($table, 'PRIMARY_KEY') or
+	    croak "could not determine primary key for table '$table'";
+	$expr = "$key_name = $expr";
+    }
+    
+    # Execute the SQL expression and test the result.
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $sql = "SELECT COUNT(*) FROM $table WHERE $expr";
+    
+    $T->debug_line($sql);
+    
+    my ($count) = $dbh->selectrow_array($sql);
+    
+    $T->debug_line("Returned $count rows");
+    $T->debug_skip;
+
+    ok( $count == 0, $label );
+}
+
+
 sub diag_errors {
 
     my ($T, $edt) = @_;
 
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     $edt //= $T->{last_edt};
     return unless ref $edt;
     
@@ -648,6 +758,8 @@ sub diag_errors {
 sub diag_warnings {
 
     my ($T, $edt) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     $edt //= $T->{last_edt};
     return unless ref $edt;
@@ -703,6 +815,31 @@ sub deleted_keys {
 }
 
 
+sub clear_table {
+
+    my ($T, $table) = @_;
+
+    my $dbh = $T->dbh;
+
+    croak "you must specify a table" unless $table;
+
+    my $sql = "DELETE FROM $table";
+    
+    $T->debug_line($sql);
+    
+    my $results = $dbh->do($sql);
+
+    if ( $results )
+    {
+	$T->debug_line("Deleted $results rows");
+    }
+
+    $T->debug_skip;
+
+    return;
+}
+
+
 sub fetch_records_by_key {
     
     my ($T, $table, @keys) = @_;
@@ -726,15 +863,27 @@ sub fetch_records_by_key {
     my $key_string = join(',', @key_list);
     my $key_name = get_table_property($table, 'PRIMARY_KEY');
     
-    croak "could not determine primary key for table '$table'" unless $key_string;
+    croak "could not determine primary key for table '$table'" unless $key_name;
     
     my $sql = "SELECT * FROM $table WHERE $key_name in ($key_string)";
 
     $T->debug_line($sql);
     
     my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $results eq 'ARRAY' )
+    {
+	$T->debug_line("Returned " . scalar(@$results) . " rows");
+	$T->debug_skip;
+	return @$results;
+    }
 
-    return ref $results eq 'ARRAY' ? @$results : ();
+    else
+    {
+	$T->debug_line("Returned no results");
+	$T->debug_skip;
+	return;
+    }
 }
 
 
@@ -753,7 +902,19 @@ sub fetch_records_by_expr {
 
     my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
 
-    return ref $results eq 'ARRAY' ? @$results : ();
+    if ( ref $results eq 'ARRAY' )
+    {
+	$T->debug_line("Returned " . scalar(@$results) . " rows");
+	$T->debug_skip;
+	return @$results;
+    }
+
+    else
+    {
+	$T->debug_line("Returned no results");
+	$T->debug_skip;
+	return;
+    }
 }
 
 

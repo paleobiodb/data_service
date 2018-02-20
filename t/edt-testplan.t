@@ -38,6 +38,7 @@
 # NO_RECORDS
 # ALTER_TRAIL
 # DEBUG_MODE
+# register_allowances [EditTest.pm, edt-01-basic.t 'allowances']
 # extra allowance defined by EditTest.pm [edt-01-basic.t 'allowances']
 # check that all of these are accepted, and no others. [edt-01-basic.t 'allowances']
 
@@ -47,7 +48,7 @@
 # create with request [edt-01-basic.t 'create objects']
 # bad allowance -> W_ALLOW [edt-01-basic.t 'allowances']
 
-# 6. Accessor methods [DONE]
+# 6. Accessor methods 
 # 
 # $edt->dbh [edt-01-basic.t 'accessors']
 # $edt->request [edt-02-request.t 'request']
@@ -71,7 +72,9 @@
 # 9. errors and warnings
 # 
 # $edt->errors
+# $edt->error_strings
 # $edt->warnings
+# $edt->warning_strings
 # $edt->generate_msg
 # check variable substitution in at least one template
 
@@ -192,19 +195,29 @@
 #
 #  - check that this can be called on an explicitly created action
 
-# 19. initialize_transaction and finalize_transaction
+# 19. initialize_transaction and finalize_transaction [DONE]
 #
-#  - check that these are called at the right times
-#  - check that they can do useful work within a transaction
+#  - check that these are called at the right times [edt-10-subclass.t 'initialize and finalize']
+#  - check that they can do useful work within a transaction [edt-10-subclass.t 'initialize and finalize']
 
 # 20. before_action and after_action
 #
 #  - check that these are called at the right times
 #  - check that they can do useful work within a transaction
 
-# 21. inserted_keys, updated_keys, replaced_keys, deleted_keys, failed_keys, key_labels, action_count, fail_count
+# 21. reporting methods
 #
-#  - check that these all provide proper values when all are done together in one transaction.
+#  - check that the following provide proper values when all operations are done together in one
+#    transaction:
+# 
+#    - inserted_keys
+#    - updated_keys
+#    - replaced_keys
+#    - deleted_keys
+#    - failed_keys
+#    - key_labels
+#    - action_count
+#    - fail_count
 
 # 22. check_permission, check_table_permission, check_record_permission
 #

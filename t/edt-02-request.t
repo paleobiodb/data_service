@@ -27,14 +27,16 @@ my $T = EditTester->new;
 
 
 
-my ($perm_a, $perm_e, $perm_g, $request);
+my ($perm_a);
 
 
 subtest 'request' => sub {
     
-    $request = Request->new($T);
+    my $request = Request->new($T);
     
-    $perm_a = $T->new_perm('SESSION-AUTHORIZER') || return;
+    $perm_a = $T->new_perm('SESSION-AUTHORIZER');
+
+    ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
     
     my ($edt, $result);
     
@@ -45,7 +47,7 @@ subtest 'request' => sub {
 	$edt = EditTest->new($request, $perm_a, $EDT_TEST,
 			     { CREATE => 1, DEBUG_MODE => $debug });
 
-	$edt->insert_record($EDT_TEST, { signed_req => 823, string_req => 'request test' });
+	$edt->insert_record($EDT_TEST, { string_req => 'request test' });
 	$result = $edt->execute;
     };
     
@@ -57,11 +59,8 @@ subtest 'request' => sub {
     }
     
     ok( $result, "inserted one record using request edt" );
-
-    my ($r) = $T->fetch_records_by_expr($EDT_TEST, "signed_req = 823");
-
-    ok( $r && $r->{string_req} eq 'request test', "found record in the table" );
-
+    $T->ok_found_record($EDT_TEST, "string_req='request test'");
+    
     cmp_ok( $edt->request, '==', $request, "fetch request ref" );
 };
 
@@ -83,6 +82,14 @@ sub get_connection {
     my ($r) = @_;
 
     return $r->{dbh};
+}
+
+
+sub debug_line {
+    
+    my ($r, $line) = @_;
+
+    print STDERR "$line\n";
 }
 
 
