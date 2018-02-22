@@ -34,13 +34,14 @@ our ($MULTI_DELETE_LIMIT) = 100;
 our ($MULTI_INSERT_LIMIT) = 100;
 
 our (%ALLOW_BY_CLASS) = ( EditTransaction => { CREATE => 1,
-					       PROCEED => 1, 
-					       KEY_INSERT => 1,
 					       MULTI_INSERT => 1,
 					       MULTI_DELETE => 1,
-					       NO_RECORDS => 1,
 					       ALTER_TRAIL => 1,
+					       NOT_FOUND => 1,
+					       NO_RECORDS => 1,
 					       DEBUG_MODE => 1,
+					       SILENT_MODE => 1,
+					       PROCEED_MODE => 1, 
 					       IMMEDIATE_MODE => 1 } );
 
 our (%CONDITION_TEMPLATE) = (
@@ -175,7 +176,7 @@ sub new {
 	{
 	    $edt->{allows}{$k} = 1;
 
-	    if ( $k eq 'PROCEED' ) { $edt->{proceed} = 1 }
+	    if ( $k eq 'PROCEED_MODE' ) { $edt->{proceed} = 1 }
 	    elsif ( $k eq 'NOT_FOUND' ) { $edt->{proceed} ||= 2 }
 	    elsif ( $k eq 'DEBUG_MODE' ) { $edt->{debug} = 1 };
 	}
@@ -344,14 +345,14 @@ sub debug_line {
 # example, 'E_PERM' indicates that the user does not have permission to operate on the specified
 # record or table. 'E_NOT_FOUND' indicates that a record to be updated is not in the
 # database. Unlike cautions, these conditions cannot be specifically allowed. However, the special
-# allowance 'PROCEED' specifies that whatever parts of the operation are able to succeed should be
+# allowance 'PROCEED_MODE' specifies that whatever parts of the operation are able to succeed should be
 # carried out, even if some record operations fail.
 # 
 # Codes that start with 'W_' indicate warnings that should be passed back to the client but do not
 # prevent the operation from proceeding.
 # 
 # Codes that start with 'D_' and 'F_' indicate conditions that would otherwise have been cautions
-# or errors, under the 'PROCEED' allowance. These are treated as warnings.
+# or errors, under the 'PROCEED_MODE' allowance. These are treated as warnings.
 # 
 # Allowed conditions must be specified for each EditTransaction object when it is created.
 
@@ -390,7 +391,7 @@ sub allows {
 # or to a single action. One or more pieces of data will generally also be passed in, which can be
 # used later by code in the data service operation module to generate an error or warning message
 # to return to the user. Conditions that pertain to an action may be translated to warnings if
-# either the PROCEED or the NOT_FOUND allowance was specified.
+# either the PROCEED_MODE or the NOT_FOUND allowance was specified.
 
 sub add_condition { 
     
@@ -398,7 +399,7 @@ sub add_condition {
     
     # If an action was specified for this condition, then mark that action as having errors or
     # warnings. The condition record itself is added to either the error or warning list for this
-    # transaction. For errors/cautions, we must also check to see if either PROCEED or NOT_FOUND
+    # transaction. For errors/cautions, we must also check to see if either PROCEED_MODE or NOT_FOUND
     # are allowed for this EditTransaction. If so, then the condition must be changed to a
     # warning.
     
@@ -628,7 +629,7 @@ sub generate_msg {
     my $table = $condition->table;
     my @params = $condition->data;
     
-    # If the code was altered because of the PROCEED allowance, change it back
+    # If the code was altered because of the PROCEED_MODE allowance, change it back
     # so we can look up the proper template.
     
     my $lookup = $code;
@@ -814,10 +815,10 @@ sub _new_record {
     
 #     # if ( $edt->{current_errors} && @{$edt->{current_errors}} )
 #     # {
-#     # 	# If the allowance 'PROCEED' is in effect, then all errors and cautions are converted into
+#     # 	# If the allowance 'PROCEED_MODE' is in effect, then all errors and cautions are converted into
 #     # 	# warnings and the initial letter of each code changed from E -> F and C -> D.
 	
-#     # 	if ( $edt->allows('PROCEED') )
+#     # 	if ( $edt->allows('PROCEED_MODE') )
 #     # 	{
 #     # 	    while ( my $e = shift @{$edt->{current_errors}} )
 #     # 	    {
@@ -959,7 +960,7 @@ sub _start_transaction {
 
     catch {
 	
-	my $msg = $edt->{transaction} eq 'active' ? 'an exception occurred during transaction initialization' :
+	my $msg = $edt->{transaction} eq 'active' ? 'an exception occurred on initialization' :
 	    'an exception occurred while starting the transaction';
 	
 	$edt->add_condition(undef, 'E_EXECUTE', $msg);
@@ -1197,7 +1198,7 @@ sub update_record {
 	    my $permission = $edt->authorize_action($action, 'update', $table, $keyexpr);
 	    
 	    # If no such record is found in the database, add an error condition. If this
-	    # EditTransaction has been created with the 'PROCEED' or 'NOT_FOUND' allowance, it
+	    # EditTransaction has been created with the 'PROCEED_MODE' or 'NOT_FOUND' allowance, it
 	    # will automatically be turned into a warning and will not cause the transaction to be
 	    # aborted.
 	    
@@ -1292,7 +1293,7 @@ sub replace_record {
 		}
 		
 		# If we are not allowed to create new records, add an error condition. If this
-		# EditTransaction has been created with the PROCEED or NOT_FOUND allowance, it
+		# EditTransaction has been created with the PROCEED_MODE or NOT_FOUND allowance, it
 		# will automatically be turned into a warning and will not cause the transaction to be
 		# aborted.
 		
@@ -1368,7 +1369,7 @@ sub delete_record {
 	    my $permission = $edt->authorize_action($action, 'delete', $table, $keyexpr);
 	    
 	    # If no such record is found in the database, add an error condition. If this
-	    # EditTransaction has been created with the 'PROCEED' or 'NOT_FOUND' allowance, it
+	    # EditTransaction has been created with the 'PROCEED_MODE' or 'NOT_FOUND' allowance, it
 	    # will automatically be turned into a warning and will not cause the transaction to be
 	    # aborted.
 	    
@@ -1578,7 +1579,7 @@ sub _handle_action {
     
     elsif ( $edt->{execute_immediately} )
     {
-	return $edt->execute_action($action);
+	return $edt->_execute_action($action);
     }
 
     # Otherwise, we push it on the action list for later execution.
@@ -1600,33 +1601,74 @@ sub execute_action {
     
     my ($edt, $action) = @_;
     
-    unless ( $edt->has_started )
+    # If errors have already occurred, then do nothing.
+    
+    if ( $edt->errors )
+    {
+	return;
+    }
+    
+    # If we haven't already started the transaction in the database, do so now.
+    
+    elsif ( ! $edt->has_started )
     {
 	$edt->_start_transaction;
     }
+
+    # Now execute the action.
+
+    return $edt->_execute_action($action);
+}
+
+
+sub _execute_action {
+
+    my ($edt, $action) = @_;
+
+    my $result;
+    
+    # Call the appropriate routine to execute this operation.
     
     sswitch ( $action->operation )
     {
 	case 'insert': {
-	    return $edt->_execute_insert($action);
+	    $result = $edt->_execute_insert($action);
 	}
 	
 	case 'update': {
-	    return $edt->_execute_update($action);
+	    $result = $edt->_execute_update($action);
 	}
 	
 	case 'replace': {
-	    return $edt->_execute_replace($action);
+	    $result = $edt->_execute_replace($action);
 	}
 	
 	case 'delete': {
-	    return $edt->_execute_delete($action);
+	    $result = $edt->_execute_delete($action);
 	}
 	
         default: {
 	    croak "bad operation '$_'";
 	}
     }
+    
+    # If errors have occurred, then we need to roll back the transaction.
+    
+    if ( $edt->errors )
+    {
+	try {
+	    $edt->cleanup_transaction($edt->{main_table});
+	}
+	    
+	catch {
+	    $edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during cleanup');
+	    $edt->debug_line( "$_\n" );
+	};
+	
+	$edt->_rollback_transaction;
+    }
+
+    return $result;
 }
 
 
@@ -1657,7 +1699,9 @@ sub execute {
     }
     
     # If errors have already occurred (i.e. when records were checked for insertion or updating),
-    # then return without doing anything. If a transaction is already active, then roll it back.
+    # then return without doing anything. If a transaction is already active, then roll it
+    # back. If the transaction has already been initialized and a cleanup_transaction method is
+    # defined for this class, call it.
     
     if ( my $error_count = scalar($edt->errors) )
     {
@@ -1665,11 +1709,11 @@ sub execute {
 	{
 	    try {
 		
-		$edt->finalize_transaction($edt->{main_table}, $error_count);
+		$edt->cleanup_transaction($edt->{main_table});
 	    }
 	    
 	    catch {
-		$edt->add_condition(undef, 'E_EXECUTE', 'an exception occurred during finalize');
+		$edt->add_condition(undef, 'E_EXECUTE', 'an exception occurred during cleanup');
 		$edt->debug_line($_);
 	    };
 	    
@@ -1684,7 +1728,7 @@ sub execute {
     # transaction if any errors occur.
     
     my $result;
-    my $end_transaction_called;
+    my $cleanup_called;
     
     try {
 	
@@ -1704,7 +1748,7 @@ sub execute {
 	    last if $edt->errors;
 	    
 	    # If this particular action has any errors, then skip it. We need to do this check
-	    # separately, because if PROCEED has been allowed for this transaction then any errors
+	    # separately, because if PROCEED_MODE has been allowed for this transaction then any errors
 	    # that were generated during validation of this action will have been converted to
 	    # warnings. But in that case, $action->has_errors will still return true.
 	    
@@ -1772,19 +1816,23 @@ sub execute {
 	    }
 	}
 	
-	# Call the 'finalize_transaction' method, which is designed to be overridden by subclasses. The
-	# default does nothing. We have to remember that we have called this method, so it doesn't
-	# get called again if an exception is thrown.
+	# If no errors have occurred, then call the 'finalize_transaction' method, which is designed to
+	# be overridden by subclasses. The default does nothing.
+
+	unless ( $edt->errors )
+	{
+	    $edt->finalize_transaction($edt->{main_table});
+	}
 	
-	$end_transaction_called = 1;
-	
-	$edt->finalize_transaction($edt->{main_table}, scalar($edt->errors));
-	
-	# If any errors have occurred, we roll back the transaction. We have to call $edt->errors
-	# again, because the finalize_transaction method might have added an error condition.
+	# We need to check the error count again, because 'finalize_transaction' itself may have
+	# thrown an exception or added an error condition. Or, on the other hand, it may have
+	# quashed errors it thinks were generated inappropriately. If we have any errors at this
+	# point, we call 'cleanup_transaction' and then roll the whole thing back.
 	
 	if ( $edt->errors )
 	{
+	    $cleanup_called = 1;
+	    $edt->cleanup_transaction($edt->{main_table});
 	    $edt->_rollback_transaction;
 	}
 	
@@ -1800,21 +1848,25 @@ sub execute {
     # If an exception is caught, we roll back the transaction and add an error condition.
     
     catch {
-
-	unless ( $end_transaction_called )
+	
+	$edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during execution');
+	
+	# If we haven't yet called 'cleanup_transaction', do it now.
+	
+	unless ( $cleanup_called )
 	{
 	    try {
-		$edt->finalize_transaction($edt->{main_table}, 1);
+		$edt->cleanup_transaction($edt->{main_table});
 	    }
-
+	    
 	    catch {
+		$edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during cleanup');
 		$edt->debug_line( "$_\n" );
 	    };
 	}
 	
 	$edt->_rollback_transaction;
 	$edt->debug_line($_);
-	$edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during execution');
     };
     
     return $result;
@@ -1964,10 +2016,10 @@ sub _execute_insert {
     
     $edt->debug_line( "$sql\n" );
     
-    my ($result, $new_keyval);
+    my ($result, $cleanup_called, $new_keyval);
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
-    # depending on whether this EditTransaction allows PROCEED.
+    # depending on whether this EditTransaction allows PROCEED_MODE.
     
     try {
 	
@@ -1986,28 +2038,40 @@ sub _execute_insert {
 	    $new_keyval = $dbh->last_insert_id(undef, undef, undef, undef);
 	}
 	
+	# Finaly, call the 'after_action' method. This is designed to be overridden by subclasses,
+	# and can be used to do any necessary auxiliary actions to the database. If the insert
+	# failed, then 'cleanup_action' is called instead.
+	
 	if ( $new_keyval )
 	{
 	    $action->set_keyval($new_keyval);
+	    $edt->after_action($action, 'insert', $table, $new_keyval);
 	}
 	
 	else
 	{
+	    $cleanup_called = 1;
 	    $edt->add_condition($action, 'E_EXECUTE', 'insert statement failed');
+	    $edt->cleanup_action($action, 'insert', $table);
 	    $result = undef;
 	}
-	
-	# Finaly, call the 'after_action' method. This is designed to be overridden by subclasses, and can
-	# be used to do any necessary auxiliary actions to the database. If the insert succeeded, the
-	# fourth parameter will contain the new primary key value. Otherwise, it will be
-	# undefined. The default method does nothing.
-	
-	$edt->after_action($action, 'insert', $table, $result ? $new_keyval : undef);
     }
     
     catch {
-	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred on execution');
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
 	$edt->debug_line($_);
+
+	unless ( $cleanup_called )
+	{
+	    try {
+		$edt->cleanup_action($action, 'insert', $table);
+	    }
+	    
+	    catch {
+		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
+		$edt->debug_line( "$_\n" );
+	    };
+	}
     };
     
     # If the insert succeeded, return the new primary key value. Also record this value so that it
@@ -2053,6 +2117,14 @@ sub _execute_replace {
 	return;
     }
     
+    # If the following flag is set, deliberately generate an SQL error for
+    # testing purposes.
+    
+    if ( $TEST_PROBLEM{replace_sql} )
+    {
+	push @$cols, 'XXXX';
+    }
+    
     # Construct the REPLACE statement.
     
     my $dbh = $edt->dbh;
@@ -2066,9 +2138,9 @@ sub _execute_replace {
     $edt->debug_line( "$sql\n" );
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
-    # depending on whether this EditTransaction allows PROCEED.
+    # depending on whether this EditTransaction allows PROCEED_MODE.
     
-    my $result;
+    my ($result, $cleanup_called);
     
     try {
 	
@@ -2082,20 +2154,39 @@ sub _execute_replace {
 	
 	$result = $dbh->do($sql);
 	
-	unless ( $result )
-	{
-	    $edt->add_condition($action, 'E_EXECUTE', 'replace statement failed');
-	}
-
-        # Finally, call the 'after_action' method. This is designed to be overridden by subclasses, and can
-	# be used to do any necessary auxiliary actions to the database. The default method does nothing.
+        # Finally, call the 'after_action' method. This is designed to be overridden by
+	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
+	# default method does nothing. If the replace failed, then 'cleanup_action' is called
+	# instead.
 	
-	$edt->after_action($action, 'replace', $table, $result);
+	if ( $result )
+	{
+	    $edt->after_action($action, 'replace', $table);
+	}
+	
+	else
+	{
+	    $cleanup_called = 1;
+	    $edt->add_condition($action, 'E_EXECUTE', 'replace statement failed');
+	    $edt->cleanup_action($action, 'replace', $table);
+	}
     }
     
     catch {	
-	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred on execution');
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
 	$edt->debug_line($_);
+	
+	unless ( $cleanup_called )
+	{
+	    try {
+		$edt->cleanup_action($action, 'replace', $table);
+	    }
+	    
+	    catch {
+		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
+		$edt->debug_line( "$_\n" );
+	    };
+	}
     };
     
     my $keyval = $action->keyval;
@@ -2144,6 +2235,14 @@ sub _execute_update {
 	return;
     }
     
+    # If the following flag is set, deliberately generate an SQL error for
+    # testing purposes.
+    
+    if ( $TEST_PROBLEM{update_sql} )
+    {
+	push @$cols, 'XXXX';
+    }
+    
     # Construct the UPDATE statement.
     
     my $dbh = $edt->dbh;
@@ -2163,9 +2262,9 @@ sub _execute_update {
     $edt->debug_line( "$sql\n" );
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
-    # depending on whether this EditTransaction allows PROCEED.
+    # depending on whether this EditTransaction allows PROCEED_MODE.
     
-    my ($result);
+    my ($result, $cleanup_called);
     
     try {
 	
@@ -2179,20 +2278,39 @@ sub _execute_update {
 	
 	$result = $dbh->do($sql);
 	
-	unless ( $result )
+	# Finally, call the 'after_action' method. This is designed to be overridden by
+	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
+	# default method does nothing. If the update failed, then 'cleanup_action' is called
+	# instead.
+	
+	if ( $result )
 	{
-	    $edt->add_condition($action, 'E_EXECUTE', 'update failed');
+	    $edt->after_action($action, 'update', $table);
 	}
 	
-	# Finally, call the 'after_action' method. This is designed to be overridden by subclasses, and can
-	# be used to do any necessary auxiliary actions to the database. The default method does nothing.
-	
-	$edt->after_action($action, 'update', $table, $result);
+	else
+	{
+	    $cleanup_called = 1;
+	    $edt->add_condition($action, 'E_EXECUTE', 'update failed');
+	    $edt->cleanup_action($action, 'update', $table);
+	}
     }
     
     catch {
 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
 	$edt->debug_line($_);
+	
+	unless ( $cleanup_called )
+	{
+	    try {
+		$edt->cleanup_action($action, 'update', $table);
+	    }
+	    
+	    catch {
+		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
+		$edt->debug_line( "$_\n" );
+	    };
+	}
     };
     
     # If the update succeeded, return true. Otherwise, return false. In either case, record the
@@ -2229,20 +2347,28 @@ sub _execute_delete {
     
     my $table = $action->table;
     
-    # Construct the DELETE statement.
-    
     my $dbh = $edt->dbh;
     
     my $key_expr = $edt->get_keyexpr($action);
+    
+    # If the following flag is set, deliberately generate an SQL error for
+    # testing purposes.
+    
+    if ( $TEST_PROBLEM{delete_sql} )
+    {
+	$key_expr .= 'XXXX';
+    }
+    
+    # Construct the DELETE statement.
     
     my $sql = "	DELETE FROM $table WHERE $key_expr";
     
     $edt->debug_line( "$sql\n" );
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
-    # depending on whether this EditTransaction allows PROCEED.
+    # depending on whether this EditTransaction allows PROCEED_MODE.
     
-    my ($result);
+    my ($result, $cleanup_called);
     
     try {
 	
@@ -2256,20 +2382,39 @@ sub _execute_delete {
 	
 	$result = $dbh->do($sql);
 	
-	unless ( $result )
+	# Finally, call the 'after_action' method. This is designed to be overridden by
+	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
+	# default method does nothing. If the delete failed, then 'cleanup_action' is called
+	# instead.
+	
+	if ( $result )
 	{
-	    $edt->add_condition($action, 'E_EXECUTE', 'delete failed');
+	    $edt->after_action($action, 'delete', $table);
 	}
 	
-	# Now call the 'after_action' method. This is designed to be overridden by subclasses, and can
-	# be used to do any necessary auxiliary actions to the database. The default method does nothing.
-	
-	$edt->after_action($action, 'delete', $table, $result);
+	else
+	{
+	    $cleanup_called = 1;
+	    $edt->add_condition($action, 'E_EXECUTE', 'delete failed');
+	    $edt->cleanup_action($action, 'delete', $table);
+	}
     }
     
     catch {
 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
 	$edt->debug_line($_);
+	
+	unless ( $cleanup_called )
+	{
+	    try {
+		$edt->cleanup_action($action, 'delete', $table);
+	    }
+	    
+	    catch {
+		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
+		$edt->debug_line( "$_\n" );
+	    };
+	}
     };
     
     # Record the number of records deleted, along with the mapping between key values and record labels.
@@ -2367,18 +2512,31 @@ sub before_action {
 }
 
 
-# after_action ( action, operation, table, result )
+# after_action ( action, operation, table, key )
 #
-# This method is called after each action. It is designed to be overridden by subclasses, so that
-# any necessary auxiliary work can be carried out. The parameter $result will get the result of
-# the database operation, except for an 'insert' operation where it holds the primary key value of
-# the newly inserted record on success, and undefined on failure.
+# This method is called after each successfully completed action. It is designed to be overridden
+# by subclasses, so that any necessary auxiliary work can be carried out. For insert operations,
+# the parameter $key will get the primary key value of the newly inserted record. Otherwise, this
+# parameter will be undefined.
 
 sub after_action {
 
     my ($edt, $action, $operation, $table, $result) = @_;
     
     my $a = 1;	# We can stop here when debugging.
+}
+
+
+# cleanup_action ( action, operation, table )
+#
+# This method is called after each failed action. It is designed to be overridden by subclasses,
+# so that any necessary auxiliary work can be carried out.
+
+sub cleanup_action {
+
+    my ($edt, $action, $operation, $table) = @_;
+    
+    my $a = 1;  # We can stop here when debugging.
 }
 
 

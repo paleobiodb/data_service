@@ -14,7 +14,7 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
-use TableDefs qw(init_table_names select_test_tables $EDT_TEST);
+use TableDefs qw($EDT_TEST);
 
 use EditTest;
 use EditTester;
@@ -65,6 +65,12 @@ subtest 'create objects' => sub {
 
 subtest 'insert and delete' => sub {
 
+    # Clear the table so we can check for proper record insertion.
+    
+    $T->clear_table($EDT_TEST);
+    
+    # Check that we can insert records.
+    
     my $result1 = $T->do_insert_records($perm_a, undef, "insert record",
 					$EDT_TEST, { signed_req => 123, string_req => 'abc' })
 	|| BAIL_OUT;
@@ -82,6 +88,8 @@ subtest 'insert and delete' => sub {
 
     ok( $r, "record was in the table" ) &&
 	cmp_ok( $r->{string_req}, 'eq', 'abc', "record had proper string value" );
+
+    # Check that we can delete records.
     
     my $result2 = $T->do_delete_records($perm_a, undef, "delete record",
 					$EDT_TEST, $inserted[0])
@@ -115,6 +123,8 @@ subtest 'update and replace' => sub {
     ok( $r1, "record was in the table" ) &&
 	cmp_ok( $r1->{string_req}, 'eq', 'test for update', "record had proper string value" );
 
+    # Check that we can update records.
+    
     my $result2 = $T->do_update_records($perm_a, undef, "update record", $EDT_TEST,
 					{ test_id => $test_key, string_req => 'updated' })
 	|| BAIL_OUT;
@@ -126,6 +136,8 @@ subtest 'update and replace' => sub {
 	cmp_ok( $r2->{string_req}, 'eq', 'updated', "string value was updated" );
 	cmp_ok( $r2->{signed_val}, 'eq', '456', "int value was not changed" );
     }
+    
+    # Check that we can replace records.
     
     my $result3 = $T->do_replace_records($perm_a, undef, "replace record", $EDT_TEST,
 					 { test_id => $test_key, string_req => 'replaced',
@@ -192,26 +204,26 @@ subtest 'allowances' => sub {
     $T->ok_no_warnings("no warnings with CREATE");
     
     ok( $edt = $T->new_edt($perm_a, { CREATE => 1,
-				      PROCEED => 1, 
-				      KEY_INSERT => 1,
 				      MULTI_DELETE => 1,
 				      NO_RECORDS => 1,
+				      NOT_FOUND => 1,
 				      ALTER_TRAIL => 1,
 				      DEBUG_MODE => 1,
 				      IMMEDIATE_MODE => 1,
+				      PROCEED_MODE => 1,
 				      TEST_DEBUG => 1,
 				      BAD_ALLOW => 1,
 				      NO_ALLOW => 0 }), "new edt with many allowances" );
     if ( $edt )
     {
 	ok( $edt->allows('CREATE'), "allowance CREATE accepted" );
-	ok( $edt->allows('PROCEED'), "allowance PROCEED accepted" );
-	ok( $edt->allows('KEY_INSERT'), "allowance KEY_INSERT accepted" );
 	ok( $edt->allows('MULTI_DELETE'), "allowance MULTI_DELETE accepted" );
 	ok( $edt->allows('NO_RECORDS'), "allowance NO_RECORDS accepted" );
+	ok( $edt->allows('NOT_FOUND'), "allowance NOT_FOUND accepted" );
 	ok( $edt->allows('ALTER_TRAIL'), "allowance ALTER_TRAIL accepted" );
 	ok( $edt->allows('DEBUG_MODE'), "allowance DEBUG_MODE accepted" );
 	ok( $edt->allows('IMMEDIATE_MODE'), "allowance DEBUG_MODE accepted" );
+	ok( $edt->allows('PROCEED_MODE'), "allowance PROCEED accepted" );
 	ok( $edt->allows('TEST_DEBUG'), "allowance TEST_DEBUG accepted" );
 	ok( ! $edt->allows('BAD_ALLOW'), "allowance BAD_ALLOW not accepted" );
 	ok( ! $edt->allows('NO_ALLOW'), "allowance NO_ALLOW not accepted" );
@@ -229,26 +241,38 @@ subtest 'accessors' => sub {
     my $edt = $T->new_edt($perm_a, { DEBUG_MODE => 1 });
     
     ok( $edt, "created edt" ) || return;
-    
-    cmp_ok( $edt->dbh, '==', $T->dbh, "fetch dbh" );
-    cmp_ok( $edt->perms, '==', $perm_a, "fetch perm_a" );
-    cmp_ok( $edt->role, 'eq', 'authorizer', "fetch role a" );
-    ok( $edt->debug, "fetch debug" );
+
+    if ( can_ok( 'EditTransaction', 'dbh', 'perms', 'role', 'debug' ) )
+    {    
+	is( $edt->dbh, $T->dbh, "fetch dbh" );
+	is( $edt->perms, $perm_a, "fetch perm_a" );
+	is( $edt->role, 'authorizer', "fetch role a" );
+	ok( $edt->debug, "fetch debug" );
+    }
     
     $edt = $T->new_edt($perm_g);
-    
-    cmp_ok( $edt->transaction, 'eq', '', "fetch transaction before start" );
-    cmp_ok( $edt->perms, '==', $perm_g, "fetch perm_g" );
-    cmp_ok( $edt->role, 'eq', 'guest', "fetch role g" );
-    ok( $T->debug || ! $edt->debug, "fetch debug 2" );
-    
-    $edt->start_transaction;
-    
-    cmp_ok( $edt->transaction, 'eq', 'active', "transaction is active" );
-    
-    $edt->rollback;
-    
-    cmp_ok( $edt->transaction, 'eq', 'aborted', "transaction is aborted" );
+
+    if ( can_ok( 'EditTransaction', 'transaction', 'has_started', 'has_finished', 'is_active' ) )
+    {
+	is( $edt->transaction, '', "fetch transaction before start" );
+	is( $edt->has_started, 0, "test has_started" );
+	is( $edt->has_finished, 0, "test has_finished" );
+	is( $edt->is_active, 0, "test is_active" );
+	is( $edt->perms, $perm_g, "fetch perm_g" );
+	is( $edt->role, 'guest', "fetch role g" );
+	ok( $T->debug || ! $edt->debug, "fetch debug 2" );
+	
+	$edt->start_transaction;
+	
+	cmp_ok( $edt->transaction, 'eq', 'active', "transaction is active" );
+	
+	$edt->rollback;
+	
+	cmp_ok( $edt->transaction, 'eq', 'aborted', "transaction is aborted" );
+    }
+
+    can_ok( 'EditTransaction', 'inserted_keys', 'updated_keys', 'replaced_keys', 'deleted_keys',
+	    'failed_keys', 'key_labels', 'action_count', 'fail_count' );
 };
 
 
@@ -281,8 +305,14 @@ subtest 'debug output' => sub {
 subtest 'out of scope' => sub {
     
     my ($t1, $t2);
+
+    # clear any pending transaction just in case
     
-    $T->dbh->do("ROLLBACK");  # clear any pending transaction just in case
+    $T->dbh->do("ROLLBACK");
+    
+    # Clear the table so we can check for proper record insertion.
+    
+    $T->clear_table($EDT_TEST);
     
     # First try a transaction that is committed and then goes out of scope.
 
@@ -307,10 +337,8 @@ subtest 'out of scope' => sub {
 
     ok( ! $still_active, "transaction 1 is no longer active" );
     
-    my ($r) = $T->fetch_records_by_expr($EDT_TEST, "signed_val = '222'");
-
-    ok( $r, "found record from transaction 1" );
-
+    $T->ok_found_record($EDT_TEST, "signed_val = '222'", "transaction 1 was committed");
+    
     {
 	my $edt = $T->new_edt($perm_a);
 	
@@ -330,9 +358,7 @@ subtest 'out of scope' => sub {
     
     ok( ! $still_active, "transaction 2 is no longer active" );
 
-    my ($r) = $T->fetch_records_by_expr($EDT_TEST, "signed_val = '223'");
-    
-    ok( ! $r, "transaction 2 was rolled back" );
+    $T->ok_no_record($EDT_TEST, "signed_val = '223'", "transaction 2 was rolled back");
 };
 
 

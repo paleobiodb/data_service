@@ -48,11 +48,14 @@
 # create with request [edt-01-basic.t 'create objects']
 # bad allowance -> W_ALLOW [edt-01-basic.t 'allowances']
 
-# 6. Accessor methods 
+# 6. Accessor methods [DONE]
 # 
 # $edt->dbh [edt-01-basic.t 'accessors']
 # $edt->request [edt-02-request.t 'request']
 # $edt->transaction [edt-01-basic.t 'accessors']
+# $edt->has_started [edt-01-basic.t 'accessors']
+# $edt->has_finished [edt-01-basic.t 'accessors']
+# $edt->is_active [edt-01-basic.t 'accessors']
 # $edt->perms [edt-01-basic.t 'accessors']
 # $edt->role [edt-01-basic.t 'accessors']
 # $edt->allows [edt-01-basic.t 'allowances']
@@ -195,15 +198,19 @@
 #
 #  - check that this can be called on an explicitly created action
 
-# 19. initialize_transaction and finalize_transaction [DONE]
+# 19. initialize_transaction, finalize_transaction, cleanup_transaction [DONE]
 #
-#  - check that these are called at the right times [edt-10-subclass.t 'initialize and finalize']
-#  - check that they can do useful work within a transaction [edt-10-subclass.t 'initialize and finalize']
+#  - check that these are called at the right times [edt-20-subclass.t 'initialize and finalize']
+#  - check that exceptions thrown by these are properly caught [edt-20-subclass.t 'initialize and finalize']
+#  - check that they can do useful work within a transaction [edt-20-subclass.t 'initialize and finalize']
 
-# 20. before_action and after_action
+# 20. before_action, after_action [DONE]
 #
-#  - check that these are called at the right times
-#  - check that they can do useful work within a transaction
+# cleanup_action
+#
+#  - check that these are called at the right times [edt-20-subclass.t 'before and after']
+#  - check that exceptions thrown by these are properly caught [edt-20-subclass.t 'before and after']
+#  - check that they can do useful work within a transaction [edt-20-subclass.t 'before and after']
 
 # 21. reporting methods
 #
@@ -218,6 +225,10 @@
 #    - key_labels
 #    - action_count
 #    - fail_count
+#    - has_started
+#    - has_finished
+#    - is_active
+#    - transaction
 
 # 22. check_permission, check_table_permission, check_record_permission
 #

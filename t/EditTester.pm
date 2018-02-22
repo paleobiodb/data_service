@@ -557,6 +557,7 @@ sub ok_no_errors {
     
     if ( $edt->errors )
     {
+	$T->diag_errors($edt);
 	fail($label);
 	return;
     }
@@ -610,6 +611,7 @@ sub ok_no_warnings {
     
     if ( $edt->warnings )
     {
+	$T->diag_warnings($edt);
 	fail($label);
 	return;
     }

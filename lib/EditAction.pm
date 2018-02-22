@@ -136,9 +136,14 @@ sub label {
 }
 
 
-sub value {
+sub record_value {
 
-    return $_[0]{record}{$_[1]};
+    unless ( ref $_[0]{record} eq 'HASH' )
+    {
+	return $_[0]{operation} eq 'delete' && $_[1] eq $_[0]{keycol} && defined $_[0]{record} ? $_[0]{record} : undef;
+    }
+    
+    return defined $_[1] ? $_[0]{record}{$_[1]} : undef;
 }
 
 

@@ -169,7 +169,7 @@ sub initialize_transaction {
 
 sub finalize_transaction {
 
-    my ($edt, $table, $rollback) = @_;
+    my ($edt, $table) = @_;
     
     if ( $edt->get_attr('finalize exception') )
     {
@@ -194,17 +194,113 @@ sub finalize_transaction {
     
     $edt->{save_final_count}++;
     $edt->{save_final_table} = $table;
-    $edt->{save_final_rollback} = $rollback;
+}
+
+
+sub cleanup_transaction {
+    
+    my ($edt, $table) = @_;
+    
+    if ( $edt->get_attr('cleanup exception') )
+    {
+	die "generated exception";
+    }
+    
+    $edt->{save_cleanup_count}++;
+    $edt->{save_cleanup_table} = $table;
 }
 
 
 sub before_action {
+    
+    my ($edt, $action, $operation, $table) = @_;
+    
+    my $record = $action->record;
+    
+    if ( $record && $record->{string_req} )
+    {
+	if ( $record->{string_req} eq 'before exception' )
+	{
+	    die "generated exception";
+	}
 
+	elsif ( $record->{string_req} eq 'before error' )
+	{
+	    $edt->add_condition($action, 'E_TEST', 'before');
+	}
+	
+	elsif ( $record->{string_req} eq 'before warning' )
+	{
+	    $edt->add_condition($action, 'W_TEST', 'before');
+	}
+    }
+    
+    if ( my $value = $edt->get_attr('before add') )
+    {
+	my $quoted = $edt->dbh->quote($value);
+	$edt->dbh->do("INSERT INTO $table (string_req) values ($quoted)");
+    }
+    
+    $edt->{save_before_count}++;
+    $edt->{save_before_action} = $action;
+    $edt->{save_before_operation} = $operation;
+    $edt->{save_before_table} = $table;
 }
 
 
 sub after_action {
 
+    my ($edt, $action, $operation, $table, $keyval) = @_;
+
+    my $record = $action->record;
+    
+    if ( $record && $record->{string_req} )
+    {
+	if ( $record->{string_req} eq 'after exception' )
+	{
+	    die "generated exception";
+	}
+
+	elsif ( $record->{string_req} eq 'after error' )
+	{
+	    $edt->add_condition($action, 'E_TEST', 'after');
+	}
+
+	elsif ( $record->{string_req} eq 'after warning' )
+	{
+	    $edt->add_condition($action, 'W_TEST', 'after');
+	}
+    }
+    
+    if ( $edt->get_attr('after delete') )
+    {
+	my $value = $edt->get_attr('before add');
+	my $quoted = $edt->dbh->quote($value);
+	$edt->dbh->do("DELETE FROM $table WHERE string_req=$quoted");
+    }
+    
+    $edt->{save_after_count}++;
+    $edt->{save_after_action} = $action;
+    $edt->{save_after_operation} = $operation;
+    $edt->{save_after_table} = $table;
+    $edt->{save_after_result} = $keyval;
+}
+
+
+sub cleanup_action {
+    
+    my ($edt, $action, $operation, $table) = @_;
+    
+    if ( $edt->get_attr('cleanup action exception') )
+    {
+	$edt->add_condition(undef, 'W_TEST', 'cleanup exception');
+	die "generated exception";
+    }
+    
+    $edt->{save_cleanup_action_count}++;
+    $edt->{save_cleanup_action_action} = $action;
+    $edt->{save_cleanup_action_operation} = $operation;
+    $edt->{save_cleanup_action_table} = $table;
 }
 
 
