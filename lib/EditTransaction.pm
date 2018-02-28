@@ -12,7 +12,7 @@ use ExternalIdent qw(%IDP);
 use TableDefs qw(get_table_property get_column_properties $PERSON_DATA
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE);
 use TableData qw(get_table_schema);
-use EditAction;
+use EditTransaction::Action;
 use Permissions;
 
 use Carp qw(carp croak);
@@ -33,18 +33,19 @@ use Switch::Plain;
 our ($MULTI_DELETE_LIMIT) = 100;
 our ($MULTI_INSERT_LIMIT) = 100;
 
-our (%ALLOW_BY_CLASS) = ( EditTransaction => { CREATE => 1,
-					       MULTI_INSERT => 1,
-					       MULTI_DELETE => 1,
-					       ALTER_TRAIL => 1,
-					       NOT_FOUND => 1,
-					       NO_RECORDS => 1,
-					       DEBUG_MODE => 1,
-					       SILENT_MODE => 1,
-					       PROCEED_MODE => 1, 
-					       IMMEDIATE_MODE => 1 } );
+our (%ALLOW_BY_CLASS) = ( EditTransaction => { 
+		CREATE => 1,
+		MULTI_INSERT => 1,
+		MULTI_DELETE => 1,
+		ALTER_TRAIL => 1,
+		NOT_FOUND => 1,
+		NO_RECORDS => 1,
+		DEBUG_MODE => 1,
+		SILENT_MODE => 1,
+		PROCEED_MODE => 1, 
+		IMMEDIATE_MODE => 1 } );
 
-our (%CONDITION_TEMPLATE) = (
+our (%CONDITION_BY_CLASS) = ( EditTransaction => {		     
 		C_CREATE => "Allow 'CREATE' to create records",
 		C_NO_RECORDS => "Allow 'NO_RECORDS' to allow transactions with no records",
 		E_EXECUTE => "%1",
@@ -54,8 +55,8 @@ our (%CONDITION_TEMPLATE) = (
 		E_NOT_FOUND => "No record was found with key '%1'",
 		E_PERM => { insert => "You do not have permission to insert a record into this table",
 			    update => "You do not have permission to update this record",
-			    replace_new => "This record does not exist, ".
-				"and you do not have permission to insert it",
+			    replace_new => "No record was found with key '%2', ".
+				"and you do not have permission to insert one",
 			    replace_old => "You do not have permission to replace this record",
 			    delete => "You do not have permission to delete this record",
 			    default => "You do not have permission for this operation" },
@@ -63,11 +64,13 @@ our (%CONDITION_TEMPLATE) = (
 		E_REQUIRED => "Field '%1' must have a nonempty value",
 		E_PARAM => "Field '%1': %2",
 		W_ALLOW => "Unknown allowance '%1'",
-		W_EXECUTE => "An error occurred while executing '%1'",
-		UNKNOWN => "MISSING ERROR MESSAGE");
+		W_EXECUTE => "%1",
+		UNKNOWN => "MISSING ERROR MESSAGE" });
 
 our (%TEST_PROBLEM);	# This variable can be set in order to trigger specific errors, in order
                         # to test the error-response mechanisms.
+
+our (%OPERATION_TYPE) = ( insert => 'record', replace => 'record', update => 'record', delete => 'single' );
 
 # The following hash is used to make sure that if one transaction interrupts the other, we will
 # know about it.
@@ -106,15 +109,12 @@ sub new {
 		errors => [ ],
 		warnings => [ ],
 		condition => { },
+		current_action => undef,
 		proceed => undef,
-		current_errors => [ ],
-		current_warnings => [ ],
-		inserted_keys => { },
-		updated_keys => { },
-		deleted_keys => { },
-		key_labels => { },
 		record_count => 0,
 		action_count => 0,
+		fail_count => 0,
+		skip_count => 0,
 		commit_count => 0,
 		rollback_count => 0,
 		transaction => '',
@@ -178,12 +178,14 @@ sub new {
 
 	    if ( $k eq 'PROCEED_MODE' ) { $edt->{proceed} = 1 }
 	    elsif ( $k eq 'NOT_FOUND' ) { $edt->{proceed} ||= 2 }
-	    elsif ( $k eq 'DEBUG_MODE' ) { $edt->{debug} = 1 };
+	    elsif ( $k eq 'DEBUG_MODE' ) { $edt->{debug} = 1; $edt->{silent} = undef }
+	    elsif ( $k eq 'SILENT_MODE' ) { $edt->{silent} = 1 unless $edt->{debug} }
+	    elsif ( $k eq 'IMMEDIATE_MODE' ) { $edt->{execute_immediately} = 1 }
 	}
 	
 	else
 	{
-	    $edt->add_condition(undef, 'W_ALLOW', $k);
+	    $edt->add_condition('W_ALLOW', $k);
 	}
     }
     
@@ -201,10 +203,9 @@ sub new {
     # If IMMEDIATE_MODE was specified, then immediately start a new transaction. The same effect
     # can be provided by calling the method 'start_execution' on this new object.
     
-    if ( $edt->{allows}{IMMEDIATE_MODE} )
+    if ( $edt->{execute_immediately} )
     {
 	$edt->_start_transaction;
-	$edt->{execute_immediately} = 1;
     }
     
     return $edt;
@@ -231,37 +232,50 @@ sub DESTROY {
 
 sub dbh {
     
-    return $_[0]->{dbh};
+    return $_[0]{dbh};
 }
 
 
 sub request {
     
-    return $_[0]->{request};
+    return $_[0]{request};
 }
 
 
 sub transaction {
 
-    return $_[0]->{transaction} || '';
+    return $_[0]{transaction} || '';
 }
 
 
 sub has_started {
 
-    return $_[0]->{transaction} ? 1 : 0;
+    return $_[0]{transaction} ? $_[0]{transaction} : '';
 }
 
 
 sub is_active {
 
-    return $_[0]->{transaction} && $_[0]->{transaction} eq 'active' ? 1 : 0;
+    return $_[0]{transaction} && $_[0]{transaction} eq 'active' ? 'active' : '';
 }
 
 
 sub has_finished {
 
-    return $_[0]->{transaction} && $_[0]->{transaction} ne 'active' ? 1 : 0;
+    return $_[0]{transaction} && $_[0]{transaction} ne 'active' ? $_[0]{transaction} : '';
+}
+
+
+sub has_committed {
+
+    return $_[0]{transaction} && $_[0]{transaction} eq 'committed' ? 'committed' : '';
+}
+
+
+sub can_proceed {
+
+    return defined $_[0]{transaction} && ($_[0]{transaction} eq '' || $_[0]{transaction} eq 'active') &&
+	! ( $_[0]{errors} && @{$_[0]{errors}} )
 }
 
 
@@ -304,9 +318,39 @@ sub get_attr {
 
 
 
-# Debugging
-# ---------
+# Debugging and error message display
+# -----------------------------------
 
+# error_line ( text )
+# 
+# This method is called internally to display error messages, including
+# exceptions that were generated during the execution of code in this
+# module. These messages are suppressed if SILENT_MODE is true. Note that
+# setting DEUBG_MODE to true. will turn off SILENT_MODE.
+
+sub error_line {
+
+    return if ref $_[0] && $_[0]->{silent};
+
+    my ($edt, $line) = @_;
+
+    if ( $edt->{request} )
+    {
+	$edt->{request}->debug_line($line);
+    }
+
+    else
+    {
+	print STDERR "$line\n";
+    }
+}
+
+
+# debug_line ( text )
+#
+# This method is called internally to display extra output for
+# debugging. These messages are only shown if DEBUG_MODE is true.
+    
 sub debug_line {
     
     return unless ref $_[0] && $_[0]->{debug};
@@ -328,10 +372,10 @@ sub debug_line {
 # Error, caution, and warning conditions
 # --------------------------------------
 
-# Error and warning conditions are indicated by codes, all in upper case word symbols. Those that
-# start with 'E_' represent errors, those that start with 'C_' represent cautions, and those that
-# start with 'W_' represent warnings. In general, errors cause the operation to be aborted while
-# warnings do not. Cautions cause the operation to be aborted unless specifically allowed.
+# Error and warning conditions are indicated by codes, all composed of upper case word symbols. Those
+# that start with 'E_' represent errors, those that start with 'C_' represent cautions, and those
+# that start with 'W_' represent warnings. In general, errors cause the operation to be aborted
+# while warnings do not. Cautions cause the operation to be aborted unless specifically allowed.
 # 
 # Codes that start with 'C_' indicate cautions that may be allowed, so that the operation proceeds
 # despite them. A canonical example is 'C_CREATE', which is returned if records are to be
@@ -345,23 +389,24 @@ sub debug_line {
 # example, 'E_PERM' indicates that the user does not have permission to operate on the specified
 # record or table. 'E_NOT_FOUND' indicates that a record to be updated is not in the
 # database. Unlike cautions, these conditions cannot be specifically allowed. However, the special
-# allowance 'PROCEED_MODE' specifies that whatever parts of the operation are able to succeed should be
-# carried out, even if some record operations fail.
+# allowance 'PROCEED_MODE' specifies that whatever parts of the operation are able to succeed
+# should be carried out, even if some record operations fail. The special allowance 'NOT_FOUND'
+# indicates that E_NOT_FOUND should be demoted to a warning, and that particular record skipped,
+# but other errors will still block the operation from proceeding.
 # 
 # Codes that start with 'W_' indicate warnings that should be passed back to the client but do not
 # prevent the operation from proceeding.
 # 
 # Codes that start with 'D_' and 'F_' indicate conditions that would otherwise have been cautions
-# or errors, under the 'PROCEED_MODE' allowance. These are treated as warnings.
+# or errors, under the 'PROCEED_MODE' or 'NOT_FOUND' allowance. These are treated as warnings.
 # 
 # Allowed conditions must be specified for each EditTransaction object when it is created.
 
 
 # register_allows ( condition... )
 # 
-# Register the names of extra conditions that can be allowed for transactions in a particular
-# subclass. This class method is designed to be called at startup from a module that subclasses
-# this one.
+# Register the names of extra allowances for transactions in a particular subclass. This class
+# method is designed to be called at startup from modules that subclasses this one.
 
 sub register_allowances {
     
@@ -370,6 +415,32 @@ sub register_allowances {
     foreach my $n ( @names )
     {
 	$ALLOW_BY_CLASS{$class}{$n} = 1;
+    }
+}
+
+
+# inherit_from ( from_class )
+# 
+# Copy all of the allowances and conditions from the specified class to this one.
+
+sub inherit_from {
+    
+    my ($class, $from_class) = @_;
+    
+    if ( ref $ALLOW_BY_CLASS{$from_class} eq 'HASH' )
+    {
+	foreach my $n ( keys %{$ALLOW_BY_CLASS{$from_class}} )
+	{
+	    $ALLOW_BY_CLASS{$class}{$n} = $ALLOW_BY_CLASS{$from_class}{$n};
+	}
+    }
+
+    if ( ref $CONDITION_BY_CLASS{$from_class} eq 'HASH' )
+    {
+	foreach my $n ( keys %{$CONDITION_BY_CLASS{$from_class}} )
+	{
+	    $CONDITION_BY_CLASS{$class}{$n} = $CONDITION_BY_CLASS{$from_class}{$n};
+	}
     }
 }
 
@@ -385,124 +456,170 @@ sub allows {
 }
 
 
-# add_condition ( action, condition, data... )
+# register_conditions ( condition ... )
+#
+# Register the names and templates of conditions which may be generated by transactions in a
+# particular subclass. This is designed to be called at startup from modules which subclass this
+# one.
+
+sub register_conditions {
+
+    my $class = shift;
+    
+    # Process the arguments in pairs.
+    
+    while ( @_ )
+    {
+	my $code = shift;
+	
+	croak "you must specify an even number of arguments" unless @_;
+	
+	my $template = shift;
+
+	# Make sure the code follows the proper pattern, and the template is not empty.
+	
+	croak "bad condition code '$code'" unless $code =~ qr{ ^ [ECW] _ [A-Z0-9_]+ $ }xs;
+	croak "bad condition template '$template'" unless defined $template && $template ne '';
+	
+	$CONDITION_BY_CLASS{$class}{$code} = $template;
+    }
+};
+
+
+# add_condition ( [action], condition, data... )
 # 
 # Register a condition (error, caution, or warning) that pertains to the either the entire transaction
 # or to a single action. One or more pieces of data will generally also be passed in, which can be
 # used later by code in the data service operation module to generate an error or warning message
 # to return to the user. Conditions that pertain to an action may be translated to warnings if
 # either the PROCEED_MODE or the NOT_FOUND allowance was specified.
+# 
+# If the first parameter is a reference to an action, then the condition will be attached to that
+# action. If it is the undefined value or the string 'main', then the condition will apply to the
+# transaction as a whole. Otherwise, the condition will be attached to the current action if there
+# is one or the transaction as a whole otherwise.
 
-sub add_condition { 
+sub add_condition {
     
-    my ($edt, $action, $code, @data) = @_;
+    my $edt = shift;
     
-    # If an action was specified for this condition, then mark that action as having errors or
-    # warnings. The condition record itself is added to either the error or warning list for this
-    # transaction. For errors/cautions, we must also check to see if either PROCEED_MODE or NOT_FOUND
-    # are allowed for this EditTransaction. If so, then the condition must be changed to a
-    # warning.
+    my $action;
     
-    if ( $action )
+    # If the first parameter is a reference, it must be a reference to an action. 
+    
+    if ( ref $_[0] )
     {
-	croak "the first argument must be an instance of EditAction" unless ref $action && $action->isa('EditAction');
+	$action = shift;
 	
-	if ( $code =~ qr{ ^ [EC] _ }xs )
+	croak "first parameter must be either a code, or an action, or 'main'"
+	    unless $action->isa('EditTransaction::Action');
+    }
+
+    # If it is 'main' or the undefined value, then the action will be empty.
+    
+    elsif ( ! defined $_[0] || $_[0] eq 'main' )
+    {
+	shift;	# in this case, $action will be empty
+    }
+
+    # Otherwise, we use the "current action", which may be empty if this method is called before
+    # the first action is handled or after the last one is done.
+    
+    else
+    {
+	$action = $edt->{current_action};
+    }
+    
+    # The next parameter must be the condition code. Any subsequent parameters are data elements
+    # that will be used as parameters for generating the error message.
+    
+    my $code = shift || '';
+
+    # Make sure this is a code that we recognize.
+
+    unless ( $CONDITION_BY_CLASS{ref $edt}{$code} || $CONDITION_BY_CLASS{EditTransaction}{$code} )
+    {
+	croak "unknown condition code '$code'";
+    }
+    
+    # If the code starts with E_ or C_ then it represents an error.
+    
+    if ( $code =~ qr{ ^ [EC] }xs )
+    {
+	# If it is attached to an action, then mark that action as having at least one error, and
+	# check to see if it needs to be demoted.
+	
+	if ( $action )
 	{
 	    $action->add_error;
+	    
+	    # If this transaction allows either PROCEED_MODE or NOT_FOUND, then we demote this
+	    # error to a warning. But in the latter case, only if it is E_NOT_FOUND.
 	    
 	    if ( $edt->{proceed} && ( $edt->{proceed} == 1 || $code eq 'E_NOT_FOUND' ) )
 	    {
 		substr($code,0,1) =~ tr/CE/DF/;
-
-		my $condition = EditCondition->new($action, $code, @data);
+		
+		$edt->{condition}{$code}++;
+		
+		my $condition = EditTransaction::Condition->new($action, $code, @_);
 		push @{$edt->{warnings}}, $condition;
+		
+		return $condition;
 	    }
-
-	    else
-	    {
-		my $condition = EditCondition->new($action, $code, @data);
-		push @{$edt->{errors}}, $condition;
-	    }
-
-	    $edt->{condition}{$code}++;
-	    return $code;
 	}
 	
-	elsif ( $code =~ qr{ ^ [W] _ }xs )
+	# If we get here, then the condition will be saved as an error.
+	
+	$edt->{condition}{$code}++;
+	
+	my $condition = EditTransaction::Condition->new($action, $code, @_);
+	push @{$edt->{errors}}, $condition;
+
+	return $condition;
+    }
+    
+    # if the code starts with W_ then it represents a warning.
+    
+    elsif ( $code =~ qr{ ^ [W] }xs )
+    {
+	# If it is attached to an action, mark that action as having at least one warning.
+	
+	if ( $action )
 	{
 	    $action->add_warning;
-
-	    push @{$edt->{warnings}}, EditCondition->new($action, $code, @data);
 	}
 
-	else
-	{
-	    croak "bad condition '$code'";
-	}
+	# This condition will be saved on the warning list.
+	
+	$edt->{condition}{$code}++;
+	
+	my $condition = EditTransaction::Condition->new($action, $code, @_);
+	push @{$edt->{warnings}}, $condition;
+
+	return $condition;
     }
+
+    # If it doesn't match either pattern, throw an exception.
     
     else
     {
-        my $condition = EditCondition->new($action, $code, @data);
-	
-	if ( $code =~ qr{ ^ [EC] _ }xs )
-	{
-	    push @{$edt->{errors}}, $condition;
-	}
-	
-	elsif ( $code =~ qr{ ^ W_ }xs )
-	{
-	    push @{$edt->{warnings}}, $condition;
-	}
-	
-	else
-	{
-	    croak "bad condition '$code'";
-	}
-	
-	$edt->{condition}{$code}++;
-	return $code;
+	croak "bad condition code '$code'";
     }
 }
 
 
-# add_record_condition ( condition, data... )
+# demote_condition ( action )
+#
 # 
-# Add a condition (error or warning) that pertains to the current record.
-
-# sub add_record_condition {
-    
-#     my ($edt, $code, $table, @data) = @_;
-    
-#     croak "this call requires that a record operation be initiated first" unless defined $edt->{current_label};
-    
-#     my $condition = EditCondition->new($code, $edt->{current_label}, $table, @data);
-    
-#     if ( $code =~ qr{ ^ [EC] _ }xs )
-#     {
-# 	push @{$edt->{current_errors}}, $condition;
-#     }
-    
-#     elsif ( $code =~ qr{ ^ W_ }xs )
-#     {
-# 	push @{$edt->{current_warnings}}, $condition;
-#     }
-    
-#     else
-#     {
-# 	croak "bad condition '$code'";
-#     }
-    
-#     return $edt;
-# }
 
 
 # errors ( )
 # 
-# Return the list of error/caution condition records for the current EditTransaction. In numeric
-# context, Perl will simply evaluate this as a number. In boolean context, this will be evaluated
-# as true if there are any and false if not. This is one of my favorite features of Perl.
+# Return the list of error and caution condition records for the current EditTransaction. In
+# numeric context, Perl will simply evaluate this as a number. In boolean context, this will be
+# evaluated as true if there are any and false if not. This is one of my favorite features of
+# Perl.
 
 sub errors {
 
@@ -517,6 +634,137 @@ sub errors {
 sub warnings {
     
     return @{$_[0]->{warnings}};
+}
+
+
+# specific_errors ( [action] )
+# 
+# Return the list of error and caution condition records for the current action, or for a
+# specified action, or those not associated with any action. For the latter case, the argument
+# 'main' should be provided.
+
+sub specific_errors {
+    
+    my ($edt, $search) = @_;
+    
+    # If a specific action was given, look for that one unless the argument 'main' was given, in
+    # which case we look for no action at all. If no action was given, we just use the current
+    # action, which may be empty.
+    
+    if ( $search eq 'main' )
+    {
+	$search = undef;
+    }
+    
+    else
+    {
+	$search ||= $edt->{current_action};
+    }
+    
+    # If we are looking for a specific action, then we can return immediately under either of the
+    # following conditions: if this routine was called in scalar context, or if this action was
+    # not associated with any errors. In either case, we need only check the action's error count.
+    
+    my @specific_list;
+    
+    if ( $search )
+    {
+	return $search->{error_count} // 0 unless wantarray && $search->{error_count};
+
+	# If PROCEED_MODE or NOT_FOUND is allowed, then we have to check the warning list first,
+	# because errors for this action may have been demoted to warnings.
+
+	if ( $edt->{proceed} && $search->{error_count} )
+	{
+	    foreach my $i ( 1..@{$edt->{warnings}} )
+	    {
+		last if $search->{error_count} == @specific_list;
+		
+		if ( $edt->{warnings}[-$i][0] == $search &&
+		     $edt->{warnings}[-$i][1] && $edt->{warnings}[-$i][1] =~ /^[DF]/ )
+		{
+		    unshift @specific_list, $edt->{warnings}[-$i];
+		}
+	    }
+	}
+    }
+    
+    # Otherwise, go through the error list backwards looking for errors that match the specified
+    # action. Note the negation operator on the array index. The reason we search backwards is that we
+    # are most likely to be looking for errors associated with the most recent action.
+    
+    foreach my $i ( 1..@{$edt->{errors}} )
+    {
+	# If we are looking for a specific action, then stop when we have found as many errors as are
+	# recorded for this action.
+	
+	last if $search && $search->{error_count} == @specific_list;
+	
+	# The first field of each condition record indicates the action (if any) that it was
+	# attached to.
+	
+	if ( $edt->{errors}[-$i][0] == $search )
+	{
+	    unshift @specific_list, $edt->{errors}[-$i];
+	}
+    }
+    
+    return @specific_list;
+}
+
+
+# specific_warnings ( [action] )
+#
+# Do the same for warnings.
+
+sub specific_warnings {
+    
+    my ($edt, $search) = @_;
+    
+    # If a specific action was given, look for that one unless the argument 'main' was given, in
+    # which case we look for no action at all. If no action was given, we just use the current
+    # action, which may be empty.
+    
+    if ( $search eq 'main' )
+    {
+	$search = undef;
+    }
+    
+    else
+    {
+	$search ||= $edt->{current_action};
+    }
+
+    # If we are looking for a specific action, then we can return immediately under either of the
+    # following conditions: if this routine was called in scalar context, or if this action was
+    # not associated with any warnings. In either case, we need only check the action's warning count.
+    
+    if ( $search )
+    {
+	return $search->{warning_count} // 0 unless wantarray && $search->{warning_count};
+    }
+    
+    # Otherwise, go through the warning list backwards looking for warnings that match the specified
+    # action. Note the negation operator on the array index. The reason we search backwards is that we
+    # are most likely to be looking for warnings associated with the most recent action.
+    
+    my @specific_list;
+    
+    foreach my $i ( 1..@{$edt->{warnings}} )
+    {
+	last if $search && $search->{warning_count} == @specific_list;
+	
+	# If we are looking for a specific action, as opposed to no action, then stop when we
+	# reach the warning count recorded for that action.
+	
+	if ( $edt->{warnings}[-$i][0] == $search &&
+	     $edt->{warnings}[-$i][1] && $edt->{warnings}[-$i][1] =~ /^W/ )
+	{
+	    unshift @specific_list, $edt->{warnings}[-$i];
+	}
+    }
+
+    return @specific_list;
 }
 
 
@@ -639,7 +887,7 @@ sub generate_msg {
     # parameter. The method called may be overridden by a subclass, in order
     # to handle codes that we do not know about.
     
-    my $template = $edt->get_condition_template($lookup, $table, $params[0]);
+    my $template = $edt->get_condition_template($lookup, $params[0]);
     
     # Then generate the message.
     
@@ -656,34 +904,32 @@ sub generate_msg {
 
 sub get_condition_template {
 
-    my ($edt, $code, $table, $selector) = @_;
+    my ($edt, $code, $selector) = @_;
     
-    if ( ref $CONDITION_TEMPLATE{$code} eq 'HASH' )
+    my $template = $CONDITION_BY_CLASS{ref $edt}{$code} ||
+	$CONDITION_BY_CLASS{EditTransaction}{$code};
+    
+    if ( ref $template eq 'HASH' )
     {
-	if ( $selector && $CONDITION_TEMPLATE{$code}{$selector} )
+	if ( $selector && $template->{$selector} )
 	{
-	    return $CONDITION_TEMPLATE{$code}{$selector};
+	    return $template->{$selector};
 	}
 	
-	elsif ( $CONDITION_TEMPLATE{$code}{default} )
+	elsif ( $template->{default} )
 	{
-	    return $CONDITION_TEMPLATE{$code}{default};
+	    return $template->{default};
 	}
 	
 	else
 	{
-	    return $CONDITION_TEMPLATE{'UNKNOWN'};
+	    return $CONDITION_BY_CLASS{EditTransaction}{'UNKNOWN'};
 	}
-    }
-    
-    elsif ( $CONDITION_TEMPLATE{$code} )
-    {
-	return $CONDITION_TEMPLATE{$code};
     }
     
     else
     {
-	return $CONDITION_TEMPLATE{'UNKNOWN'};
+	return $template || $CONDITION_BY_CLASS{EditTransaction}{'UNKNOWN'};
     }
 }
 
@@ -728,7 +974,7 @@ sub substitute_msg {
 #
 # Return a value suitable for inclusion into a message template. If the parameter value is longer
 # than 40 characters, it is truncated and ellipses are appended. If the value is not defined, then
-# 'UNKNOWN' is returned.
+# 'UNKNOWN PARAMETER' is returned.
 
 sub squash_param {
 
@@ -791,9 +1037,9 @@ sub _new_record {
 	$label = '#' . $edt->{record_count};
     }
     
-    # Then create a new EditAction object and return it.
-    
-    return EditAction->new($table, $operation, $record, $label);
+    # Then create a new EditTransaction::Action object, save it, and return it.
+
+    $edt->{current_action} = EditTransaction::Action->new($table, $operation, $record, $label);
 }
 
 
@@ -909,31 +1155,30 @@ sub _new_record {
 
 # start_transaction ( )
 # 
-# Start the database transaction associated with this EditTransaction. This is done automatically when
-# 'execute' is called, but can be done explicitly at an earlier stage if the checking of record
-# values needs to be done inside a transaction.
+# Start the database transaction associated with this EditTransaction. This is done automatically
+# when 'execute' is called, but can be done explicitly at an earlier stage if the checking of
+# record values needs to be done inside a transaction. Returns true if the transaction is can proceed,
+# false otherwise.
 
 sub start_transaction {
     
     my ($edt) = @_;
-    
-    if ( $edt->{transaction} )
-    {
-	if ( $edt->{transaction} eq 'active' )
-	{
-	    return;
-	}
-	
-	else
-	{
-	    croak "this transaction has already finished";
-	}
-    }
 
-    else
+    # If this transaction has already committed, throw an exception.
+
+    if ( $edt->has_committed )
     {
-	return $edt->_start_transaction;
+	croak "this transaction has already committed";
     }
+    
+    # If we have not started the transaction yet, and there are no errors, then start it now.
+    
+    elsif ( ! $edt->has_started && ! $edt->errors )
+    {
+	$edt->_start_transaction;
+    }
+    
+    return $edt->can_proceed;
 }
 
 
@@ -942,6 +1187,7 @@ sub _start_transaction {
     my ($edt) = @_;
     
     my $label = $edt->role eq 'guest' ? '(guest) ' : '';
+    my ($result, $save_action);
     
     $edt->debug_line( " >>> START TRANSACTION $label\n" );
     
@@ -952,30 +1198,42 @@ sub _start_transaction {
 	$edt->dbh->do("START TRANSACTION");
 	$edt->{transaction} = 'active';
 	
+	# Save and clear the 'current action', if any, before calling
+	# 'initialize_transaction'. This way, error conditions generated by that method will not
+	# be attached to any specific transaction.
+	
+	$save_action = $edt->{current_action};
+	$edt->{current_action} = undef;
+	
 	# Call the 'initialize_transaction' method, which is designed to be overridden by subclasses. The
 	# default method does nothing.
 	
 	$edt->initialize_transaction($edt->{main_table});
     }
-
+    
     catch {
+
+	$edt->{transaction} = 'aborted';
 	
 	my $msg = $edt->{transaction} eq 'active' ? 'an exception occurred on initialization' :
 	    'an exception occurred while starting the transaction';
 	
 	$edt->add_condition(undef, 'E_EXECUTE', $msg);
-	$edt->debug_line($_);
+	$edt->error_line($_);
     };
+
+    # Restore the current action, if any.
     
-    return $edt;
+    $edt->{current_action} = $save_action;
 }
 
 
 # commit ( )
 # 
-# Commit the database transaction associated with this EditTransaction. After this is done, this
+# If this EditTransaction has not yet been completed, do so. After this is done, this
 # EditTransaction cannot be used for any more actions. If the operation method needs to make more
-# changes to the database, a new EditTransaction must be created.
+# changes to the database, a new EditTransaction must be created. This operation returns a true
+# value if the transaction succeeded, false otherwise.
 # 
 # $$$ Perhaps I will later modify this class so that it can be used for multiple transactions in turn.
 
@@ -983,28 +1241,16 @@ sub commit {
     
     my ($edt) = @_;
 
-    unless ( $edt->has_finished )
-    {
-	return $edt->execute;
-    }
-    
-    elsif ( $edt->transaction eq 'aborted' )
-    {
-	croak "this transaction has already been aborted";
-    }
-
-    else
-    {
-	$edt->{transaction} ||= 'finished';
-	return $edt;
-    }
+    return $edt->execute;
 }
 
 
 sub _commit_transaction {
     
     my ($edt) = @_;
-
+    
+    $edt->{current_action} = undef;    
+    
     $edt->debug_line( " <<< COMMIT TRANSACTION\n" );
     
     try {
@@ -1016,39 +1262,43 @@ sub _commit_transaction {
 	
     catch {
 	$edt->add_condition(undef, 'E_EXECUTE', 'an exception occurred on transaction commit');
-	$edt->debug_line($_);
+	$edt->error_line($_);
 	$edt->{transaction} = 'aborted';
 	$edt->{rollback_count}++;
     };
 }
 
 
+# rollback ( )
+#
+# If this EditTransaction has not yet been completed, roll back whatever work has been done. If
+# the database transaction has not yet been started, just mark the transaction 'finished' and
+# return. This operation returns a true value if an active transaction was rolled back, and false
+# otherwise.
+
 sub rollback {
 
     my ($edt) = @_;
-
+    
     if ( $edt->is_active )
     {
-	return $edt->_rollback_transaction;
-    }
-
-    elsif ( $edt->transaction eq 'committed' )
-    {
-	croak "this transaction has already been committed";
+	$edt->_rollback_transaction;
     }
     
     else
     {
 	$edt->{transaction} ||= 'finished';
-	return $edt;
     }
     
+    return $edt->{transaction} eq 'aborted' ? 1 : undef;
 }
 
 
 sub _rollback_transaction {
-
+    
     my ($edt, $from_destroy) = @_;
+    
+    $edt->{current_action} = undef;    
     
     if ( $from_destroy )
     {
@@ -1067,12 +1317,11 @@ sub _rollback_transaction {
     
     catch {
 	$edt->add_condition(undef, 'E_EXECUTE', 'an exception occurred on transaction rollback');
-	$edt->debug_line($_);
+	$edt->error_line($_);
     };
     
-    $edt->{transaction} = 'aborted';
     $edt->{rollback_count}++;
-    return $edt;
+    $edt->{transaction} = 'aborted';
 }
 
 
@@ -1087,14 +1336,24 @@ sub _rollback_transaction {
 # 
 # Call 'start_transaction' and also set the 'execute_immediately' flag. This means that subsequent
 # actions will be carried out immediately on the database rather than waiting for a call to
-# 'execute'.
+# 'execute'. Returns true if the transaction can proceed, false otherwise.
 
 sub start_execution {
     
     my ($edt) = @_;
     
-    $edt->start_transaction unless $edt->{transaction} && $edt->{transaction} eq 'active';
+    $edt->start_transaction;
     $edt->{execute_immediately} = 1;
+
+    # If the transaction is now active, then execute all pending actions before we do anything
+    # else.
+    
+    if ( $edt->is_active )
+    {
+	$edt->_execute_action_list;
+    }
+    
+    return $edt->can_proceed;
 }
 
 
@@ -1109,7 +1368,7 @@ sub insert_record {
     my ($edt, $table, $record) = @_;
     
     # Move any accumulated record error or warning conditions to the main
-    # lists, and create a new EditAction to represent this insertion.
+    # lists, and create a new EditTransaction::Action to represent this insertion.
     
     my $action = $edt->_new_record($table, 'insert', $record);
     
@@ -1131,7 +1390,7 @@ sub insert_record {
 	    
 	    if ( $permission ne 'post' && $permission ne 'admin' )
 	    {
-		$edt->add_condition($action, 'E_PERM');
+		$edt->add_condition($action, 'E_PERM', 'insert');
 	    }
 	    
 	    # A record to be inserted must not have a primary key value specified for it. Records with
@@ -1139,7 +1398,7 @@ sub insert_record {
 	    
 	    if ( $action->keyval )
 	    {
-		$edt->add_condition($action, 'E_HAS_KEY');
+		$edt->add_condition($action, 'E_HAS_KEY', 'insert');
 	    }
 	    
 	    # Then check the actual record to be inserted, to make sure that the column values meet
@@ -1152,7 +1411,7 @@ sub insert_record {
 
 	catch {
 	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
-	    $edt->debug_line($_);
+	    $edt->error_line($_);
 	};
     }
     
@@ -1224,7 +1483,7 @@ sub update_record {
 
 	catch {
 	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
-	    $edt->debug_line($_);
+	    $edt->error_line($_);
 	};
     }
     
@@ -1280,15 +1539,26 @@ sub replace_record {
 	    {
 		if ( $edt->allows('CREATE') )
 		{
-		    if ( $edt->check_table_permission($table, 'admin') eq 'admin' )
+		    $permission = $edt->check_table_permission($table, 'admin');
+		    
+		    if ( $permission eq 'admin' )
 		    {
-			$permission = 'admin';
 			$action->set_permission($permission);
+		    }
+		    
+		    elsif ( get_table_property($table, 'ALLOW_KEY_INSERT') && $permission eq 'post' )
+		    {
+			$action->set_permission($permission);
+		    }
+		    
+		    elsif ( $edt->allows('NOT_FOUND') )
+		    {
+			$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
 		    }
 		    
 		    else
 		    {
-			$edt->add_condition($action, 'E_PERM', 'replace_new');
+			$edt->add_condition($action, 'E_PERM', 'replace_new', $action->keyval);
 		    }
 		}
 		
@@ -1320,7 +1590,7 @@ sub replace_record {
 
 	catch {
 	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
-	    $edt->debug_line($_);
+	    $edt->error_line($_);
 	};
     }
     
@@ -1394,7 +1664,7 @@ sub delete_record {
 
 	catch {
 	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
-	    $edt->debug_line($_);
+	    $edt->error_line($_);
 	};
     }
     
@@ -1420,7 +1690,7 @@ sub insert_update_record {
     
     my ($edt, $table, $record) = @_;
     
-    if ( EditAction->get_record_key($table, $record) )
+    if ( EditTransaction::Action->get_record_key($table, $record) )
     {
 	return $edt->update_record($table, $record);
     }
@@ -1492,7 +1762,33 @@ sub abandon_record {
     
     my ($edt) = @_;
     
-    $edt->_clear_record;
+    # $$$ need to remove any error messages from this record.
+}
+
+
+# aux_action ( table, operation, record )
+# 
+# This method is called from client code or subclass methods that wish to create auxiliary actions
+# to supplement the current one. For example, adding a record to one table may involve also adding
+# another record to a different table.
+
+sub aux_action {
+    
+    my ($edt, $table, $operation, $record) = @_;
+    
+    my $action = EditTransaction::Action->new($table, $operation, $record);
+    
+    $action->set_auxiliary($edt->{current_action});
+    
+    return $action;
+}
+
+
+sub current_action {
+
+    my ($edt) = @_;
+
+    return $edt->{current_action};
 }
 
 
@@ -1547,8 +1843,18 @@ sub authorize_action {
 # executed later.
 
 sub _handle_action {
-
+    
     my ($edt, $action) = @_;
+    
+    # If this transaction has already committed, throw a real exception. Client code should never
+    # try to execute operations on a transaction that has already committed. (One that has been
+    # rolled back is different. The status of such a transaction will clearly indicate that the
+    # operations will not actually be carried out.)
+
+    if ( $edt->{transaction} && $edt->{transaction} eq 'committed' )
+    {
+	croak "This transaction has already been committed";
+    }
     
     # If any errors were already generated for the record currently being processed, put this
     # action on the 'bad action' list and otherwise do nothing.
@@ -1559,7 +1865,7 @@ sub _handle_action {
 	$edt->{fail_count}++;
 	
 	my $keyval = $action->keyval;
-	$edt->{failed_keys}{$keyval} = 1 if defined $keyval && $keyval ne '';
+	push @{$edt->{failed_keys}}, $keyval if defined $keyval && $keyval ne '';
 	
 	return;
     }
@@ -1571,6 +1877,7 @@ sub _handle_action {
     
     elsif ( $edt->errors )
     {
+	$edt->{skip_count}++;
 	return;
     }
     
@@ -1581,13 +1888,14 @@ sub _handle_action {
     {
 	return $edt->_execute_action($action);
     }
-
-    # Otherwise, we push it on the action list for later execution.
+    
+    # Otherwise, we push it on the action list for later execution. We return 1 in this case, to
+    # indicate that the operation has succeeded up to this point.
     
     else
     {
 	push @{$edt->{action_list}}, $action;
-	return;
+	return 1;
     }
 }
 
@@ -1605,6 +1913,7 @@ sub execute_action {
     
     if ( $edt->errors )
     {
+	$edt->{skip_count}++;
 	return;
     }
     
@@ -1656,19 +1965,23 @@ sub _execute_action {
     
     if ( $edt->errors )
     {
-	try {
-	    $edt->cleanup_transaction($edt->{main_table});
-	}
+	# try {
+	#     $edt->cleanup_transaction($edt->{main_table});
+	# }
 	    
-	catch {
-	    $edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during cleanup');
-	    $edt->debug_line( "$_\n" );
-	};
+	# catch {
+	#     $edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during cleanup');
+	#     $edt->error_line($_);
+	# };
 	
-	$edt->_rollback_transaction;
+	# $edt->_rollback_transaction;
+	return undef;
     }
-
-    return $result;
+    
+    else
+    {
+	return $result;
+    }
 }
 
 
@@ -1676,17 +1989,19 @@ sub _execute_action {
 # 
 # Start a database transaction, if one has not already been started. Then execute all of the
 # pending insert/update/delete operations, and then either commit or rollback as
-# appropriate. Returns true on success, false otherwise.
+# appropriate. Returns a true value if the transaction succeeded, and false otherwise.
 
 sub execute {
     
     my ($edt) = @_;
 
-    # Throw an exception if this EditTransaction has already been committed or aborted.
-
+    $edt->{current_action} = undef;
+    
+    # Return immediately if the transaction has already finished.
+    
     if ( $edt->has_finished )
     {
-	croak "this transaction has already finished";
+	return $edt->{transaction} eq 'committed' ? 1 : undef;
     }
     
     # If there are no actions to do, and none have been done so far, and no errors have already
@@ -1703,7 +2018,7 @@ sub execute {
     # back. If the transaction has already been initialized and a cleanup_transaction method is
     # defined for this class, call it.
     
-    if ( my $error_count = scalar($edt->errors) )
+    if ( $edt->errors )
     {
 	if ( $edt->is_active )
 	{
@@ -1714,16 +2029,106 @@ sub execute {
 	    
 	    catch {
 		$edt->add_condition(undef, 'E_EXECUTE', 'an exception occurred during cleanup');
-		$edt->debug_line($_);
+		$edt->error_line($_);
 	    };
 	    
 	    $edt->_rollback_transaction;
 	}
 
+	if ( $edt->{action_list} )
+	{
+	    $edt->{skip_count} += scalar(@{$edt->{action_list}});
+	    $edt->{action_list} = [ ];
+	}
+	
 	$edt->{transaction} ||= 'finished';
-	return;
+	return undef;
     }
     
+    # Now execute any pending actions. Unless immediate mode has been turned on, these will
+    # include all actions that have been done on this transaction.
+    
+    $edt->_execute_action_list;
+    
+    # Now we need to finish the transaction. If errors have occurred, then call the
+    # 'cleanup_transaction' method. Otherwise, call 'finalize_transaction'.
+    
+    my ($result, $culprit);
+    
+    try {
+	
+	$edt->{current_action} = undef;
+	
+	# If errors have occurred, then call the 'cleanup_transaction' method, which is designed to
+	# be overridden by subclasses. The default does nothing.
+	
+	if ( $edt->errors )
+	{
+	    $culprit = 'cleanup';
+	    $edt->cleanup_transaction($edt->{main_table});
+	}
+	
+	# Otherwise, we call 'finalize_transaction'. This too is designed to be overridden by
+	# subclasses, and the default does nothing.
+	
+	else
+	{
+	    $culprit = 'execution';
+	    $edt->finalize_transaction($edt->{main_table});
+	}
+    }
+    
+    # If an error occurs, we add an error condition, which will cause the transaction to be
+    # aborted below.
+    
+    catch {
+	
+	$edt->add_condition(undef, 'E_EXECUTE', "an exception was thrown during $culprit");
+	$edt->error_line($_);
+    };
+    
+    # At this point, we need to do a final check to see if there are any errors accumulated for
+    # this transaction. An error condition could have been added explicitly by the
+    # finalize or cleanup method, or could have been generated if that method died.
+    
+    try {
+	
+	# If there are any errors, then roll back the transaction.
+	
+	if ( $edt->errors )
+	{
+	    $culprit = 'rollback';
+	    $edt->_rollback_transaction;
+	}
+	
+	# Otherwise, we're good to go! Yay!
+	
+	else
+	{
+	    $culprit = 'commit';
+	    $edt->_commit_transaction;
+	    $result = 1;
+	}
+    }
+
+    catch {
+
+	$edt->add_condition(undef, 'E_EXECUTE', "an exception was thrown during $culprit");
+	$edt->error_line($_);
+    };
+    
+    return $result;
+}
+
+
+# _execute_action_list ( )
+#
+# Execute any pending actions. This is called one of two ways: either by 'execute' or by 'start_execution'.
+
+sub _execute_action_list {
+
+    my ($edt) = @_;
+
     # The main part of this routine is executed inside a try block, so that we can roll back the
     # transaction if any errors occur.
     
@@ -1742,17 +2147,30 @@ sub execute {
 	
 	while ( my $action = shift @{$edt->{action_list}} )
 	{
-	    # If any errors have accumulated on this transaction, immediately stop. This includes
-	    # any errors that may have been generated by the previous action.
+	    $edt->{current_action} = $action;
 	    
-	    last if $edt->errors;
+	    # If any errors have accumulated on this transaction, skip all remaining actions. This
+	    # includes any errors that may have been generated by the previous action.
+	    
+	    if ( $edt->errors )
+	    {
+		$edt->{skip_count}++;				# the one we just shifted
+		$edt->{skip_count} += @{$edt->{action_list}};	# any remaining
+		$edt->{action_list} = [ ];			# clear the action list
+		last;
+	    }
 	    
 	    # If this particular action has any errors, then skip it. We need to do this check
-	    # separately, because if PROCEED_MODE has been allowed for this transaction then any errors
-	    # that were generated during validation of this action will have been converted to
-	    # warnings. But in that case, $action->has_errors will still return true.
+	    # separately, because if PROCEED_MODE has been set for this transaction then any
+	    # errors that were generated during validation of this action will have been converted
+	    # to warnings. But in that case, $action->has_errors will still return true, and this
+	    # action should not be executed.
 	    
-	    next if $action->has_errors;	    
+	    elsif ( $action->has_errors )
+	    {
+		$edt->{fail_count}++;
+		next;
+	    }
 	    
 	    # Now execute the appropriate handler for this action's operation.
 	    
@@ -1815,61 +2233,18 @@ sub execute {
 		}
 	    }
 	}
-	
-	# If no errors have occurred, then call the 'finalize_transaction' method, which is designed to
-	# be overridden by subclasses. The default does nothing.
-
-	unless ( $edt->errors )
-	{
-	    $edt->finalize_transaction($edt->{main_table});
-	}
-	
-	# We need to check the error count again, because 'finalize_transaction' itself may have
-	# thrown an exception or added an error condition. Or, on the other hand, it may have
-	# quashed errors it thinks were generated inappropriately. If we have any errors at this
-	# point, we call 'cleanup_transaction' and then roll the whole thing back.
-	
-	if ( $edt->errors )
-	{
-	    $cleanup_called = 1;
-	    $edt->cleanup_transaction($edt->{main_table});
-	    $edt->_rollback_transaction;
-	}
-	
-	# Otherwise, we're good to go! Yay!
-	
-	else
-	{
-	    $edt->_commit_transaction;
-	    $result = 1;
-	}
     }
     
-    # If an exception is caught, we roll back the transaction and add an error condition.
+    # If an exception is caught, we add an error condition. This will stop any further execution.
     
     catch {
 	
-	$edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during execution');
+	$edt->add_condition('E_EXECUTE', 'an exception was thrown during execution');
+
+	# Add to the skip count all remaining actions.
 	
-	# If we haven't yet called 'cleanup_transaction', do it now.
-	
-	unless ( $cleanup_called )
-	{
-	    try {
-		$edt->cleanup_transaction($edt->{main_table});
-	    }
-	    
-	    catch {
-		$edt->add_condition(undef, 'E_EXECUTE', 'an exception was thrown during cleanup');
-		$edt->debug_line( "$_\n" );
-	    };
-	}
-	
-	$edt->_rollback_transaction;
-	$edt->debug_line($_);
+	$edt->{skip_count} += scalar(@{$edt->{action_list}});
     };
-    
-    return $result;
 }
 
 
@@ -1984,6 +2359,10 @@ sub _execute_insert {
     
     my $table = $action->table;
     
+    # Set this as the current action.
+
+    $edt->{current_action} = $action;
+    
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
     
@@ -2059,7 +2438,7 @@ sub _execute_insert {
     
     catch {
 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
-	$edt->debug_line($_);
+	$edt->error_line($_);
 
 	unless ( $cleanup_called )
 	{
@@ -2069,7 +2448,7 @@ sub _execute_insert {
 	    
 	    catch {
 		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
-		$edt->debug_line( "$_\n" );
+		$edt->error_line($_);
 	    };
 	}
     };
@@ -2077,10 +2456,10 @@ sub _execute_insert {
     # If the insert succeeded, return the new primary key value. Also record this value so that it
     # can be queried for later. Otherwise, return undefined.
     
-    if ( $new_keyval )
+    if ( $new_keyval && ! $action->has_errors )
     {
 	$edt->{action_count}++;
-	$edt->{inserted_keys}{$new_keyval} = 1;
+	push @{$edt->{inserted_keys}}, $new_keyval;
 	$edt->{key_labels}{$new_keyval} = $action->label;
 	return $new_keyval;
     }
@@ -2104,6 +2483,10 @@ sub _execute_replace {
     my ($edt, $action) = @_;
     
     my $table = $action->table;
+    
+    # Set this as the current action.
+
+    $edt->{current_action} = $action;
     
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
@@ -2174,7 +2557,7 @@ sub _execute_replace {
     
     catch {	
 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
-	$edt->debug_line($_);
+	$edt->error_line($_);
 	
 	unless ( $cleanup_called )
 	{
@@ -2184,7 +2567,7 @@ sub _execute_replace {
 	    
 	    catch {
 		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
-		$edt->debug_line( "$_\n" );
+		$edt->error_line($_);
 	    };
 	}
     };
@@ -2196,17 +2579,17 @@ sub _execute_replace {
     
     $edt->{key_labels}{$keyval} = $action->label;
     
-    if ( $result )
+    if ( $result && ! $action->has_errors )
     {
 	$edt->{action_count}++;
-	$edt->{replaced_keys}{$keyval} = 1;
+	push @{$edt->{replaced_keys}}, $keyval;
 	return $result;
     }
     
     else
     {
 	$edt->{fail_count}++;
-	$edt->{failed_keys}{$keyval} = 1;
+	push @{$edt->{failed_keys}}, $keyval;
 	return undef;
     }
 }
@@ -2222,6 +2605,10 @@ sub _execute_update {
     my ($edt, $action) = @_;
     
     my $table = $action->table;
+    
+    # Set this as the current action.
+
+    $edt->{current_action} = $action;
     
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
@@ -2308,7 +2695,7 @@ sub _execute_update {
 	    
 	    catch {
 		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
-		$edt->debug_line( "$_\n" );
+		$edt->debug_line($_);
 	    };
 	}
     };
@@ -2320,17 +2707,17 @@ sub _execute_update {
     
     $edt->{key_labels}{$keyval} = $action->label;
     
-    if ( $result )
+    if ( $result && ! $action->has_errors )
     {
 	$edt->{action_count}++;
-	$edt->{updated_keys}{$keyval} = 1;
+	push @{$edt->{updated_keys}}, $keyval;
 	return $result;
     }
     
     else
     {
 	$edt->{fail_count}++;
-	$edt->{failed_keys}{$keyval} = 1;
+	push @{$edt->{failed_keys}}, $keyval;
 	return undef;
     }
 }
@@ -2350,6 +2737,10 @@ sub _execute_delete {
     my $dbh = $edt->dbh;
     
     my $key_expr = $edt->get_keyexpr($action);
+    
+    # Set this as the current action.
+
+    $edt->{current_action} = $action;
     
     # If the following flag is set, deliberately generate an SQL error for
     # testing purposes.
@@ -2402,7 +2793,7 @@ sub _execute_delete {
     
     catch {
 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
-	$edt->debug_line($_);
+	$edt->error_line($_);
 	
 	unless ( $cleanup_called )
 	{
@@ -2412,7 +2803,7 @@ sub _execute_delete {
 	    
 	    catch {
 		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
-		$edt->debug_line( "$_\n" );
+		$edt->error_line($_);
 	    };
 	}
     };
@@ -2444,17 +2835,17 @@ sub _execute_delete {
     
     # If the delete succeeded, return true. Otherwise, return false.
     
-    if ( $result )
+    if ( $result && ! $action->has_errors )
     {
 	$edt->{action_count} += $count;
-	$edt->{deleted_keys}{$_} = 1 foreach @keys;
+	push @{$edt->{deleted_keys}}, @keys;
 	return $result;
     }
     
     else
     {
 	$edt->{fail_count} += $count;
-	$edt->{failed_keys}{$_} = 1 foreach @keys;
+	push @{$edt->{failed_keys}}, @keys;
 	return undef;
     }
 }
@@ -2549,49 +2940,61 @@ sub cleanup_action {
 
 sub inserted_keys {
 
-    return keys %{$_[0]->{inserted_keys}};
+    return @{$_[0]->{inserted_keys}} if $_[0]->{inserted_keys};
 }
 
 
 sub updated_keys {
 
-    return keys %{$_[0]->{updated_keys}};
+    return @{$_[0]->{updated_keys}} if $_[0]->{updated_keys};
 }
 
 
 sub replaced_keys {
 
-    return keys %{$_[0]->{replaced_keys}};
+    return @{$_[0]->{replaced_keys}} if $_[0]->{replaced_keys};
 }
 
 
 sub deleted_keys {
 
-    return keys %{$_[0]->{deleted_keys}};
+    return @{$_[0]->{deleted_keys}} if $_[0]->{deleted_keys};
 }
 
 
 sub failed_keys {
 
-    return keys %{$_[0]->{failed_keys}};
+    return keys @{$_[0]->{failed_keys}} if $_[0]->{failed_keys};
 }
 
 
 sub key_labels {
 
-    return $_[0]{key_labels};
+    return $_[0]{key_labels} if $_[0]->{key_labels};
+}
+
+
+sub record_count {
+
+    return $_[0]->{record_count} || 0;
 }
 
 
 sub action_count {
     
-    return $_[0]->{action_count};
+    return $_[0]->{action_count} || 0;
 }
 
 
 sub fail_count {
     
-    return $_[0]->{fail_count};
+    return $_[0]->{fail_count} || 0;
+}
+
+
+sub skip_count {
+
+    return $_[0]->{skip_count} || 0;
 }
 
 
@@ -3103,15 +3506,15 @@ sub validate_against_schema {
 # 
 # We define a separate package for error and warning conditions.
 
-package EditCondition;
+package EditTransaction::Condition;
 
 
 # new ( action, code, data... )
 #
-# Create a new EditCondition for the specified action, which may be undef. The second argument
-# must be a condition code, i.e. 'E_PERM' or 'W_NOT_FOUND'. The remaining arguments, if any,
-# indicate the particulars of the condition and are used in generating a string value from the
-# condition record.
+# Create a new EditTransaction::Condition for the specified action, which may be undef. The second
+# argument must be a condition code, i.e. 'E_PERM' or 'W_NOT_FOUND'. The remaining arguments, if
+# any, indicate the particulars of the condition and are used in generating a string value from
+# the condition record.
 
 sub new {
     
@@ -3142,7 +3545,8 @@ sub label {
     
     my ($condition) = @_;
     
-    return $condition->[0] && $condition->[0]->isa('EditAction') ? $condition->[0]->label : '';
+    return $condition->[0] && $condition->[0]->isa('EditTransaction::Action') ?
+	$condition->[0]->label : '';
 }
 
 
@@ -3155,7 +3559,8 @@ sub table {
 
     my ($condition) = @_;
 
-    return $condition->[0] && $condition->[0]->isa('EditAction') ? $condition->[0]->table : '';
+    return $condition->[0] && $condition->[0]->isa('EditTransaction::Action') ?
+	$condition->[0]->table : '';
 }
 
 

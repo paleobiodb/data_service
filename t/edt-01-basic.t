@@ -14,7 +14,7 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
-use TableDefs qw($EDT_TEST);
+use TableDefs qw(get_table_property $EDT_TEST);
 
 use EditTest;
 use EditTester;
@@ -32,7 +32,7 @@ $T->create_tables;
 # made available to subsequent tests. If we cannot create EditTest objects without an error
 # occurring, we bail out. There is no point in running any more tests.
 
-my ($perm_a, $perm_g);
+my ($perm_a, $perm_g, $primary_key);
 
 subtest 'create objects' => sub {
 
@@ -57,6 +57,9 @@ subtest 'create objects' => sub {
     my $edt2 = $T->new_edt($perm_a);
     
     ok( $edt2, "created EditTest object with CREATE") || BAIL_OUT;
+
+    $primary_key = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    ok( $primary_key, "found primary key" ) || BAIL_OUT;
 };
 
 
@@ -92,17 +95,15 @@ subtest 'insert and delete' => sub {
     # Check that we can delete records.
     
     my $result2 = $T->do_delete_records($perm_a, undef, "delete record",
-					$EDT_TEST, $inserted[0])
-	|| BAIL_OUT;
+    					$EDT_TEST, $inserted[0])
+    	|| BAIL_OUT;
     
     my @deleted = $T->deleted_keys;
     
     cmp_ok( @deleted, '==', 1, "deleted one record" ) &&
 	cmp_ok( $deleted[0], 'eq', $inserted[0], "deleted same record that was inserted" );
-
-    ($r) = $T->fetch_records_by_key($EDT_TEST, $inserted[0]);
-
-    ok( !$r, "record was removed from the table" );
+    
+    $T->ok_no_record($EDT_TEST, "$primary_key=$inserted[0]");
 };
 
 
@@ -209,6 +210,7 @@ subtest 'allowances' => sub {
 				      NOT_FOUND => 1,
 				      ALTER_TRAIL => 1,
 				      DEBUG_MODE => 1,
+				      SILENT_MODE => 1,
 				      IMMEDIATE_MODE => 1,
 				      PROCEED_MODE => 1,
 				      TEST_DEBUG => 1,
@@ -222,8 +224,9 @@ subtest 'allowances' => sub {
 	ok( $edt->allows('NOT_FOUND'), "allowance NOT_FOUND accepted" );
 	ok( $edt->allows('ALTER_TRAIL'), "allowance ALTER_TRAIL accepted" );
 	ok( $edt->allows('DEBUG_MODE'), "allowance DEBUG_MODE accepted" );
+	ok( $edt->allows('SILENT_MODE'), "allowance SILENT_MODE accepted" );
 	ok( $edt->allows('IMMEDIATE_MODE'), "allowance DEBUG_MODE accepted" );
-	ok( $edt->allows('PROCEED_MODE'), "allowance PROCEED accepted" );
+	ok( $edt->allows('PROCEED_MODE'), "allowance PROCEED_MODE accepted" );
 	ok( $edt->allows('TEST_DEBUG'), "allowance TEST_DEBUG accepted" );
 	ok( ! $edt->allows('BAD_ALLOW'), "allowance BAD_ALLOW not accepted" );
 	ok( ! $edt->allows('NO_ALLOW'), "allowance NO_ALLOW not accepted" );
@@ -231,6 +234,24 @@ subtest 'allowances' => sub {
 	cmp_ok( $edt->warnings, '==', 1, "return one warning" );
 	$T->ok_has_warning( qr/BAD_ALLOW/, "warning about BAD_ALLOW" );
     }
+
+    # Now try to create an EditTransaction using the array form for
+    # allowances.
+
+    $edt = EditTest->new($T->dbh, $perm_a, $EDT_TEST, [ 'CREATE', 'NOT_FOUND', 'TEST_DEBUG' ]);
+
+    ok( $edt, "EditTransaction was created" );
+    ok( $edt->allows('CREATE'), "allows 'CREATE'" );
+    ok( $edt->allows('NOT_FOUND'), "allows 'NOT_FOUND'" );
+    ok( $edt->allows('TEST_DEBUG'), "allows 'TEST_DEBUG'" );
+    
+    # And then try again using the string form.
+    
+    $edt = EditTest->new($T->dbh, $perm_a, $EDT_TEST, 'TEST_DEBUG , ,,CREATE');
+    
+    ok( $edt, "EditTransaction was created" );
+    ok( $edt->allows('TEST_DEBUG'), "allows 'TEST_DEBUG'" );
+    ok( $edt->allows('CREATE'), "allows 'CREATE'" );
 };
 
 
@@ -252,23 +273,27 @@ subtest 'accessors' => sub {
     
     $edt = $T->new_edt($perm_g);
 
-    if ( can_ok( 'EditTransaction', 'transaction', 'has_started', 'has_finished', 'is_active' ) )
+    if ( can_ok( 'EditTransaction', 'transaction', 'has_started', 'has_finished', 'is_active',
+	         'has_committed', 'can_proceed' ) )
     {
 	is( $edt->transaction, '', "fetch transaction before start" );
-	is( $edt->has_started, 0, "test has_started" );
-	is( $edt->has_finished, 0, "test has_finished" );
-	is( $edt->is_active, 0, "test is_active" );
+	ok( ! $edt->has_started, "transaction has not started" );
+	ok( ! $edt->has_finished, "transaction has not finished" );
+	ok( ! $edt->is_active, "transaction is not active" );
+	ok( $edt->can_proceed, "transaction can proceed" );
 	is( $edt->perms, $perm_g, "fetch perm_g" );
 	is( $edt->role, 'guest', "fetch role g" );
 	ok( $T->debug || ! $edt->debug, "fetch debug 2" );
 	
 	$edt->start_transaction;
 	
-	cmp_ok( $edt->transaction, 'eq', 'active', "transaction is active" );
+	is( $edt->transaction, 'active', "transaction status is 'active'" );
+	ok( $edt->is_active, "transaction is active" );
 	
 	$edt->rollback;
 	
-	cmp_ok( $edt->transaction, 'eq', 'aborted', "transaction is aborted" );
+	is( $edt->transaction, 'aborted', "transaction is aborted" );
+	ok( $edt->has_finished, "transaction has finished" );
     }
 
     can_ok( 'EditTransaction', 'inserted_keys', 'updated_keys', 'replaced_keys', 'deleted_keys',
@@ -280,6 +305,8 @@ subtest 'accessors' => sub {
 
 subtest 'debug output' => sub {
 
+    # First try a transaction with DEBUG_MODE on and check that we get some debugging messages.
+    
     my $edt = $T->new_edt($perm_a, { DEBUG_MODE => 1, TEST_DEBUG => 1 });
     
     $edt->start_transaction;
@@ -287,15 +314,44 @@ subtest 'debug output' => sub {
     ok( $edt->has_debug_output( qr/START TRANSACTION/ ), "captured start from debug output" );
     
     $edt->rollback;
-
+    
     ok( $edt->has_debug_output( qr/ROLLBACK TRANSACTION/ ), "captured rollback from debug output" );
 
-    my $edt2 = $T->new_edt($perm_a, { DEBUG_MODE => 0, TEST_DEBUG => 1 });
-
-    $edt2->start_transaction;
+    # Then try a transaction with DEBUG_MODE off and check that we get none.
     
-    ok( ! $edt2->has_debug_output( qr/START TRANSACTION/ ) || $T->debug ,
+    my $edt2 = $T->new_edt($perm_a, { DEBUG_MODE => 0, TEST_DEBUG => 1 });
+    
+    $edt2->start_execution;
+    
+    ok( ! $edt2->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
 	"did not capture debug output without DEBUG_MODE" );
+    
+    {
+	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
+
+	$edt2->insert_record($EDT_TEST, { signed_req => 'abc' });
+    }
+    
+    ok( ! $edt2->has_debug_output( qr/XXXX/ ), "did not capture exception because of default SILENT_MODE" );
+    
+    $edt2->rollback;
+
+    # Then try one with SILENT_MODE off (it is on by default) and make sure that we get exceptions
+    # but not debugging output.
+    
+    my $edt3 = $T->new_edt($perm_a, { SILENT_MODE => 0, TEST_DEBUG => 1, IMMEDIATE_MODE => 1 });
+    
+    ok ( ! $edt3->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
+	 "did not capture debug output without DEBUG_MODE" );
+
+    {
+	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
+
+	$edt3->insert_record($EDT_TEST, { string_req => 'abc' });
+    }
+    
+    ok( $edt3->has_debug_output( qr/do failed/ ), "captured exception because SILENT_MODE was off" );
+    $T->diag_errors;
 };
 
 

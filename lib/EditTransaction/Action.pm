@@ -10,7 +10,7 @@
 # 
 
 
-package EditAction;
+package EditTransaction::Action;
 
 use strict;
 
@@ -18,7 +18,7 @@ use TableDefs qw(get_table_property);
 
 use Carp qw(carp croak);
 
-our %ALLOWED_OPERATION = ( insert => 1, update => 1, replace => 1, delete => 1 );
+our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record', delete => 'single' );
 
 
 # Create a new action record with the specified information.
@@ -31,7 +31,7 @@ sub new {
     
     croak "a non-empty table name is required" unless $table;
 
-    unless ( $operation && $ALLOWED_OPERATION{$operation} )
+    unless ( $operation && $OPERATION_TYPE{$operation} )
     {
 	$operation ||= '';
 	croak "unknown operation '$operation'";
@@ -136,6 +136,18 @@ sub label {
 }
 
 
+sub root {
+
+    return $_[0]{root};
+}
+
+
+sub is_aux {
+
+    return $_[0]{is_aux};
+}
+
+
 sub record_value {
 
     unless ( ref $_[0]{record} eq 'HASH' )
@@ -228,6 +240,16 @@ sub has_warnings {
 
 
 # We have very few mutator methods, because almost all the attributes of an action are immutable.
+
+sub set_auxiliary {
+    
+    my ($action, $root) = @_;
+    
+    $action->{root} = $root;
+    $action->{label} ||= $root->{label};
+    $action->{is_aux} = 1;
+}
+
 
 sub set_permission {
 

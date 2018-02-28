@@ -63,7 +63,7 @@ subtest 'authorize' => sub {
     $edt->delete_record($EDT_TEST, { string_req => 'authorize save', test_no => '423' });
     $T->ok_has_error($edt, qr/E_NOT_FOUND/, "not found error");
     
-    ok( $edt->{save_authorize_action} && $edt->{save_authorize_action}->isa('EditAction'),
+    ok( $edt->{save_authorize_action} && $edt->{save_authorize_action}->isa('EditTransaction::Action'),
 	"first argument is a valid action" );
     ok( $edt->{save_authorize_operation} && $edt->{save_authorize_operation} eq 'delete',
 	"second argument is the operation" );
@@ -99,7 +99,7 @@ subtest 'validate' => sub {
 
     $edt->delete_record($EDT_TEST, { string_req => 'validate save', test_no => '999' });
 
-    ok( $edt->{save_validate_action} && $edt->{save_validate_action}->isa('EditAction'),
+    ok( $edt->{save_validate_action} && $edt->{save_validate_action}->isa('EditTransaction::Action'),
 	"first argument is a valid action" );
     ok( $edt->{save_validate_operation} && $edt->{save_validate_operation} eq 'delete',
 	"second argument is the operation" );
@@ -337,7 +337,7 @@ subtest 'before and after' => sub {
     $T->ok_no_errors("no errors were generated");
     $T->ok_has_warning(qr/W_TEST.*before/, "found test warning");
     is( $edt->{save_before_count}, 1, "before_action finished" );
-    isa_ok( $edt->{save_before_action}, 'EditAction', "action record" ) &&
+    isa_ok( $edt->{save_before_action}, 'EditTransaction::Action', "action record" ) &&
 	is( $edt->{save_before_action}->record->{string_req}, 'before warning', "correct action record" );
     is( $edt->{save_before_table}, $EDT_TEST, "before_action passed proper table name" );
     is( $edt->{save_before_operation}, 'insert', "before_action passed proper operation" );
@@ -351,7 +351,7 @@ subtest 'before and after' => sub {
     
     if ( is( $edt->{save_after_count}, 1, "after_action was called once" ) )
     {
-	isa_ok( $edt->{save_after_action}, 'EditAction', "action record" ) &&
+	isa_ok( $edt->{save_after_action}, 'EditTransaction::Action', "action record" ) &&
 	    is( $edt->{save_after_action}->record->{string_req}, 'test after', "correct action record" );
 	is( $edt->{save_after_table}, $EDT_TEST, "after_action passed proper table" );
 	is( $edt->{save_after_operation}, 'insert', "after_action passed proper operation" );
@@ -365,8 +365,10 @@ subtest 'before and after' => sub {
 	$edt->insert_record($EDT_TEST, { string_req => 'test after 2' });
     }
     
-    is( $edt->transaction, 'aborted', "transaction was aborted" );
+    is( $edt->transaction, 'active', "transaction is still active" );
+    ok( ! $edt->can_proceed, "transaction cannot proceed" );
     is( $edt->{save_after_count}, 1, "after_action was not called again" );
+    is( $edt->{save_cleanup_action_count}, 1, "cleanup_action was called" );
     $T->ok_has_error(qr/E_EXECUTE/, "found error" );
     
     # Check that an exception thrown by after_action will abort the transaction, but that a
@@ -386,7 +388,7 @@ subtest 'before and after' => sub {
     is( $edt->errors, 1, "found just one error" );
     if ( is( $edt->{save_cleanup_action_count}, 1, "cleanup routine was called" ) )
     {
-	isa_ok( $edt->{save_cleanup_action_action}, 'EditAction', "cleanup was passed an action" );
+	isa_ok( $edt->{save_cleanup_action_action}, 'EditTransaction::Action', "cleanup was passed an action" );
 	is( $edt->{save_cleanup_action_operation}, 'insert', "cleanup was passed proper operation" );
 	is( $edt->{save_cleanup_action_table}, $EDT_TEST, "cleanup was passed proper table name" );
     }
@@ -419,9 +421,9 @@ subtest 'before and after' => sub {
     {
 	is( $edt->{save_before_operation}, 'insert', "before insert operation" );
 	is( $edt->{save_after_operation}, 'insert', "after insert operation" );
-	isa_ok( $edt->{save_before_action}, 'EditAction', "before insert action" ) &&
+	isa_ok( $edt->{save_before_action}, 'EditTransaction::Action', "before insert action" ) &&
 	    is( $edt->{save_before_action}->record_value('string_req'), 'op test 1', "before insert record" );
-	isa_ok( $edt->{save_after_action}, 'EditAction', "after insert action" ) &&
+	isa_ok( $edt->{save_after_action}, 'EditTransaction::Action', "after insert action" ) &&
 	    is( $edt->{save_after_action}->record_value('string_req'), 'op test 1', "after insert record" );
 	is( $edt->{save_before_table}, $EDT_TEST, "before insert table" );
 	is( $edt->{save_after_table}, $EDT_TEST, "after insert table" );
@@ -431,9 +433,9 @@ subtest 'before and after' => sub {
 	
 	is( $edt->{save_before_operation}, 'replace', "before replace operation" );
 	is( $edt->{save_after_operation}, 'replace', "after replace operation" );
-	isa_ok( $edt->{save_before_action}, 'EditAction', "before replace action" ) &&
+	isa_ok( $edt->{save_before_action}, 'EditTransaction::Action', "before replace action" ) &&
 	    is( $edt->{save_before_action}->record_value('string_req'), 'op test 2', "before replace record" );
-	isa_ok( $edt->{save_after_action}, 'EditAction', "after replace action" ) &&
+	isa_ok( $edt->{save_after_action}, 'EditTransaction::Action', "after replace action" ) &&
 	    is( $edt->{save_after_action}->record_value('string_req'), 'op test 2', "after replace record" );
 	is( $edt->{save_before_table}, $EDT_TEST, "before replace table" );
 	is( $edt->{save_after_table}, $EDT_TEST, "after replace table" );
@@ -443,9 +445,9 @@ subtest 'before and after' => sub {
 	
 	is( $edt->{save_before_operation}, 'update', "before update operation" );
 	is( $edt->{save_after_operation}, 'update', "after update operation" );
-	isa_ok( $edt->{save_before_action}, 'EditAction', "before update action" ) &&
+	isa_ok( $edt->{save_before_action}, 'EditTransaction::Action', "before update action" ) &&
 	    is( $edt->{save_before_action}->record_value('unsigned_val'), '3', "before update record" );
-	isa_ok( $edt->{save_after_action}, 'EditAction', "after update action" ) &&
+	isa_ok( $edt->{save_after_action}, 'EditTransaction::Action', "after update action" ) &&
 	    is( $edt->{save_after_action}->record_value('unsigned_val'), '3', "after update record" );
 	is( $edt->{save_before_table}, $EDT_TEST, "before update table" );
 	is( $edt->{save_after_table}, $EDT_TEST, "after update table" );
@@ -455,9 +457,9 @@ subtest 'before and after' => sub {
 	
 	is( $edt->{save_before_operation}, 'delete', "before delete operation" );
 	is( $edt->{save_after_operation}, 'delete', "after delete operation" );
-	isa_ok( $edt->{save_before_action}, 'EditAction', "before delete action" ) &&
+	isa_ok( $edt->{save_before_action}, 'EditTransaction::Action', "before delete action" ) &&
 	    is( $edt->{save_before_action}->record_value('test_no'), $new_keyval, "before delete record" );
-	isa_ok( $edt->{save_after_action}, 'EditAction', "after delete action" ) &&
+	isa_ok( $edt->{save_after_action}, 'EditTransaction::Action', "after delete action" ) &&
 	    is( $edt->{save_after_action}->record_value('test_no'), $new_keyval, "after delete record" );
 	is( $edt->{save_before_table}, $EDT_TEST, "before delete table" );
 	is( $edt->{save_after_table}, $EDT_TEST, "after delete table" );
@@ -490,28 +492,28 @@ subtest 'before and after' => sub {
 	my $second_keyval = $edt->insert_record($EDT_TEST, { string_req => 'cleanup test 2' });
 	
 	is( $edt->{save_cleanup_action_operation}, 'insert', "cleanup insert operation" );
-	isa_ok( $edt->{save_cleanup_action_action}, 'EditAction', "cleanup insert action" ) &&
+	isa_ok( $edt->{save_cleanup_action_action}, 'EditTransaction::Action', "cleanup insert action" ) &&
 	    is( $edt->{save_cleanup_action_action}->record_value('string_req'), 'cleanup test 2', "cleanup insert record" );
 	is( $edt->{save_cleanup_action_table}, $EDT_TEST, "cleanup insert table" );
 
 	$edt->replace_record($EDT_TEST, { test_no => $new_keyval, string_req => 'cleanup test 3' });
 	
 	is( $edt->{save_cleanup_action_operation}, 'replace', "cleanup replace operation" );
-	isa_ok( $edt->{save_cleanup_action_action}, 'EditAction', "cleanup replace action" ) &&
+	isa_ok( $edt->{save_cleanup_action_action}, 'EditTransaction::Action', "cleanup replace action" ) &&
 	    is( $edt->{save_cleanup_action_action}->record_value('string_req'), 'cleanup test 3', "cleanup replace record" );
 	is( $edt->{save_cleanup_action_table}, $EDT_TEST, "cleanup replace table" );
 
 	$edt->update_record($EDT_TEST, { test_no => $new_keyval, unsigned_val => 4 });
 	
 	is( $edt->{save_cleanup_action_operation}, 'update', "cleanup update operation" );
-	isa_ok( $edt->{save_cleanup_action_action}, 'EditAction', "cleanup update action" ) &&
+	isa_ok( $edt->{save_cleanup_action_action}, 'EditTransaction::Action', "cleanup update action" ) &&
 	    is( $edt->{save_cleanup_action_action}->record_value('unsigned_val'), '4', "cleanup update record" );
 	is( $edt->{save_cleanup_action_table}, $EDT_TEST, "cleanup update table" );
 
 	$edt->delete_record($EDT_TEST, { test_no => $new_keyval });
 	
 	is( $edt->{save_cleanup_action_operation}, 'delete', "cleanup delete operation" );
-	isa_ok( $edt->{save_cleanup_action_action}, 'EditAction', "cleanup delete action" ) &&
+	isa_ok( $edt->{save_cleanup_action_action}, 'EditTransaction::Action', "cleanup delete action" ) &&
 	    is( $edt->{save_cleanup_action_action}->record_value('test_no'), $new_keyval, "cleanup delete record" );
 	is( $edt->{save_cleanup_action_table}, $EDT_TEST, "cleanup delete table" );	
     }

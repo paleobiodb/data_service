@@ -11,6 +11,7 @@
 # ALLOW_VIEW
 # ALLOW_EDIT
 # ALLOW_DELETE
+# ALLOW_REPLACE
 # ALLOW_KEY_INSERT
 # BY_AUTHORIZER
 # AUTH_FIELDS
@@ -32,12 +33,14 @@
 # 4. Allowances: 
 #
 # CREATE
-# PROCEED
-# KEY_INSERT
 # MULTI_DELETE
-# NO_RECORDS
 # ALTER_TRAIL
-# DEBUG_MODE
+# DEBUG_MODE [edt-01-basic.t 'debug output']
+# SILENT_MODE [edt-01-basic.t 'debug output']
+# IMMEDIATE_MODE [edt-10-transaction.pm 'immediate']
+# PROCEED_MODE [edt-11-proceed.pm 'proceed_mode']
+# NOT_FOUND [edt-11-proceed.pm 'not_found']
+# NO_RECORDS [edt-11-proceed.pm 'no_records']
 # register_allowances [EditTest.pm, edt-01-basic.t 'allowances']
 # extra allowance defined by EditTest.pm [edt-01-basic.t 'allowances']
 # check that all of these are accepted, and no others. [edt-01-basic.t 'allowances']
@@ -52,10 +55,12 @@
 # 
 # $edt->dbh [edt-01-basic.t 'accessors']
 # $edt->request [edt-02-request.t 'request']
-# $edt->transaction [edt-01-basic.t 'accessors']
-# $edt->has_started [edt-01-basic.t 'accessors']
-# $edt->has_finished [edt-01-basic.t 'accessors']
-# $edt->is_active [edt-01-basic.t 'accessors']
+# $edt->transaction [edt-10-transaction.t 'execute', 'immediate', 'errors]
+# $edt->has_started [edt-10-transaction.t 'execute', 'immediate', 'errors]
+# $edt->has_finished [edt-10-transaction.t 'execute', 'immediate', 'errors]
+# $edt->has_committed [edt-10-transaction.t 'execute', 'immediate', 'errors']
+# $edt->is_active [edt-10-transaction.t 'execute', 'immediate', 'errors]
+# $edt->can_proceed [edt-10-transaction.t 'execute', 'immediate', 'errors']
 # $edt->perms [edt-01-basic.t 'accessors']
 # $edt->role [edt-01-basic.t 'accessors']
 # $edt->allows [edt-01-basic.t 'allowances']
@@ -64,66 +69,88 @@
 #
 # override and capture calls to debug_line [edt-01-basic.t 'debug output']
 
-# 8. add_condition
-#
-# with and without actions extra template defined by EditTest.pm, with data
-#   and variation by first data element
-# change error to warning with PROCEED
-# change error to warning with NOT_FOUND
-# parameter errors not changed by NOT_FOUND
-
-# 9. errors and warnings
+# 8. errors, warnings, and cautions [DONE]
 # 
-# $edt->errors
-# $edt->error_strings
-# $edt->warnings
-# $edt->warning_strings
-# $edt->generate_msg
-# check variable substitution in at least one template
+#  $edt->add_condition [edt-12-conditions.t 'basic']
+#  - works before first action, works after actions [edt-12-conditions.t 'basic']
+#  - works with specific actions [edt-12-conditions.t 'basic']
+#  - works with both undef and 'main' as first argument [edt-12-conditions.t 'basic']
+#  - throws exception if bad code is given [edt-12-conditions.t 'register']
+#  - errors are demoted to warnings with PROCEED_MODE
+#	[edt-11-proceed.t 'proceed_mode', edt-12-conditions.t 'proceed']
+#  - E_NOT_FOUND is demoted to warning with NOT_FOUND
+#	[edt-11-proceed.t 'not_found', edt-12-conditions.t 'notfound']
+#
+#  $edt->register_condition [edt-12-conditions.t 'register']
+#  - throws exception if code does not match proper pattern [edt-12-conditions.t 'register']
+# 
+#  $edt->errors [edt-12-conditions.t 'basic']
+#  $edt->specific_errors [edt-12-conditions.t 'basic']
+#  $edt->error_strings [edt-12-conditions.t 'basic']
+#  $edt->warnings [edt-12-conditions.t 'basic']
+#  $edt->specific_warnings [edt-12-conditions.t 'basic']
+#  $edt->warning_strings [edt-12-conditions.t 'basic']
+#  $edt->generate_msg [edt-12-conditions.t 'generate_msg']
+#
+#  variable substitution in templates [edt-12-conditions.t 'templates']
+#  selection of template by first parameter [edt-12-conditions.t 'templates']
+#  
+#  conditions work properly from the following overrideable methods:
+#   - authorize_action [edt-20-subclass.t 'authorize']
+#   - validate_action [edt-20-subclass.t 'validate']
+#   - before_action [edt-20-subclass.t 'before and after']
+#   - after_action [edt-20-subclass.t 'before and after']
+#   - cleanup_action [edt-20-subclass.t 'before and after']
+#   - initialize_transaction [edt-20-subclass.t 'initialize and finalize']
+#   - finalize_transaction [edt-20-subclass.t 'initialize and finalize']
+#   - cleanup_transaction [edt-20-subclass.t 'initialize and finalize']
 
 # 10. record labels
 #
-# check error messages to make sure that record_label is carried through
-# check error messages to make sure that labels are properly generated for unlabeled records.
+# record label is carried through properly to conditions and messages [edt-12-condition.t 'basic']
+# labels are properly generated for unlabeled records.
 
 # 11. transaction control
 #
-# $edt->start_execution
-#  - exception when called after committed and aborted transactions
-#  - make sure that calling a second time on an active transaction is okay
-#       (capture debug_line to make sure)
-#  - check for immediate effect with $dbh->select
-#  - exception when called if actions have already been specified (use allow instead?)
-#  - check with $edt->transaction, $edt->active, and $edt->executing
+# $edt->start_transaction [DONE]
+#  - check that transaction status is properly changed [edt-10-transaction.t 'start']
+#  - check that database operations are not carried out until execute or start_execution
+#	is called [edt-10-transaction.t 'start']
+#  - exception when called after committed transactions [edt-10-transaction.t 'execute']
+#  - make sure that calling a second time on an active transaction is okay [edt-10-transaction.t 'start']
 # 
-# $edt->commit
-#  - check effect with $dbh->select
-#  - exception when called before transaction starts
-#  - exception when called after committed and aborted transactions
-#  - check with $edt->transaction
-#
-# $edt->rollback
-#  - check effect with $dbh->select
-#  - exception when called before transaction starts
-#  - exception when called after committed and aborted transactions
-#
-# $edt->start_transaction
-#  - check effect with $dbh->select (no effect until $edt->execute)
-#  - exception when called after committed and aborted transactions
-#  - make sure that calling a second time on an active transaction is okay
-#       (capture debug_line to make sure)
-#  - check status with $edt->transaction, $edt->active, and $edt->executing
-#
-# $edt->execute
-#  - check effect with $dbh->select
-#  - exception when called after committed and aborted transactions
-#  - check status with $edt->transaction, $edt->active, and $edt->executing
-#
+# $edt->start_execution [DONE]
+#  - check that transaction status is properly changed [edt-10-transaction.t 'start']
+#  - check that pending database operations are immediately done [edt-10-transaction.t 'start']
+#  - check that subsequent operations are immediately done [edt-10-transaction.t 'start', 'immediate']
+#  - exception when called after transaction commits [edt-10-transaction.t 'execute']
+#  - make sure that calling a second time on an active transaction is okay [edt-10-transaction.t 'start']
+# 
+# $edt->execute [DONE]
+#  - pending operations are carried out [edt-10-transaction.t 'execute']
+#  - transaction status is properly changed [edt-10-transaction.t 'execute']
+#  - initialize_transaction and finalize_transaction are properly called
+#	[edt-10-transaction.t 'execute']
+# 
+# $edt->commit [DONE]
+#  - has the same effect as execute [edt-10-transaction.t 'execute']
+#  - calling a second time is okay [edt-10-transaction.t 'execute']
+#  - okay to call before a transaction starts, returns false [edt-10-transaction.t 'execute']
+#  - returns true after commit, no matter how many times called [edt-10-transaction.t 'execute']
+#  - calling after a transaction fails returns false [edt-10-transaction.t 'errors']
+# 
+# $edt->rollback [DONE]
+#  - really does a database rollback [edt-10-transaction.t 'rollback']
+#  - ok to call before a transaction starts [edt-10-transaction.t 'rollback']
+#  - returns false when called before transaction starts [edt-10-transaction.t 'rollback']
+#  - returns true when called after transaction starts [edt-10-transaction.t 'rollback']
+# 
 # authorize_action and validate_action
 #  - check status with $edt->transaction, $edt->active, and $edt->executing
 #  - check both before and after $edt->start_execution
 #
-# automatic rollback when object goes out of scope [edt-01-basicst 'out of scope']
+# general [DONE]
+# - automatic rollback when object goes out of scope [edt-01-basic.t 'out of scope']
 
 # 12. insert
 #
@@ -217,18 +244,18 @@
 #  - check that the following provide proper values when all operations are done together in one
 #    transaction:
 # 
-#    - inserted_keys
-#    - updated_keys
-#    - replaced_keys
-#    - deleted_keys
+#    - inserted_keys [edt-10-transaction.t 'execute']
+#    - updated_keys [edt-10-transaction.t 'execute']
+#    - replaced_keys [edt-10-transaction.t 'execute']
+#    - deleted_keys [edt-10-transaction.t 'execute']
 #    - failed_keys
 #    - key_labels
-#    - action_count
+#    - action_count [edt-10-transaction.t 'execute']
 #    - fail_count
-#    - has_started
-#    - has_finished
-#    - is_active
-#    - transaction
+#    - has_started [edt-10-transaction.t 'execute']
+#    - has_finished [edt-10-transaction.t 'execute']
+#    - is_active [edt-10-transaction.t 'execute']
+#    - transaction [edt-10-transaction.t 'execute']
 
 # 22. check_permission, check_table_permission, check_record_permission
 #
@@ -332,13 +359,3 @@
 
 
 
-
-
-
-
-
-
-# two commits in a row
-# two aborts in a row
-# commit followed by abort
-# abort followed by commit

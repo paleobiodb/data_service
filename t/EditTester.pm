@@ -40,6 +40,7 @@ sub new {
     $options ||= { };
     
     $options->{debug} = 1 if @ARGV && $ARGV[0] eq 'debug';
+    $options->{notsilent} = 1 if @ARGV && $ARGV[0] eq 'notsilent';
     
     my $dbh;
     
@@ -68,7 +69,8 @@ sub new {
     }
     
     my $instance = { dbh => $dbh,
-		     debug => $options->{debug} };
+		     debug => $options->{debug},
+		     notsilent => $options->{notsilent} };
     
     bless $instance, $class;
     
@@ -124,6 +126,9 @@ sub establish_session_data {
     
     my ($dbh) = @_;
 
+    croak "The table name $SESSION_DATA is not correct. You must establish a test database."
+	unless $SESSION_DATA =~ /test/i;
+    
     eval {
 	
 	$dbh->do("CREATE TABLE IF NOT EXISTS $SESSION_DATA (
@@ -280,20 +285,27 @@ sub get_new_edt {
     $T->{last_edt} = undef;
     $T->{last_exception} = undef;
     
+    # Turn on debug mode if 'debug' was given as an argument to the entire test, and turn off
+    # silent mode if 'notsilent' was given. Otherwise, silent mode is on by default.
+    
+    $options->{DEBUG_MODE} = 1 if $T->{debug} && ! exists $options->{DEBUG_MODE};
+    $options->{SILENT_MODE} = 1 unless $T->{debug} || $T->{notsilent} || exists $options->{SILENT_MODE};
+    
+    # Now process all of the specified options, and apply all those which are in upper case as
+    # allowances.
+    
     my $allow = { };
     
     if ( ref $options eq 'HASH' )
     {
 	foreach my $k ( keys %$options )
 	{
-	    if ( $k =~ /^[A-Z_]+$/ && $options->{$k} )
+	    if ( $k =~ /^[A-Z_]+$/ )
 	    {
-		$allow->{$k} = 1;
+		$allow->{$k} = $options->{$k} ? 1 : 0;
 	    }
 	}
     }
-    
-    $allow->{DEBUG_MODE} = 1 if $T->{debug};
     
     my $edt = EditTest->new($T->dbh, $perm, $EDT_TEST, $allow);
     
@@ -701,6 +713,8 @@ sub ok_found_record {
     $T->debug_skip;
 
     ok( $count, $label );
+
+    return $count;
 }
 
 
@@ -820,25 +834,33 @@ sub deleted_keys {
 sub clear_table {
 
     my ($T, $table) = @_;
-
+    
     my $dbh = $T->dbh;
-
+    
     croak "you must specify a table" unless $table;
-
+    
     my $sql = "DELETE FROM $table";
     
     $T->debug_line($sql);
     
     my $results = $dbh->do($sql);
-
+    
     if ( $results )
     {
 	$T->debug_line("Deleted $results rows");
     }
-
+    
     $T->debug_skip;
-
+    
     return;
+}
+
+
+sub add_test_records {
+    
+    my ($T, $table) = @_;
+
+    # $$$
 }
 
 
@@ -849,7 +871,14 @@ sub fetch_records_by_key {
     my $dbh = $T->dbh;
 
     croak "you must specify a table" unless $table;
-    croak "you must specify at least one key" unless @keys && $keys[0];
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+    unless ( @keys && $keys[0] )
+    {
+	fail("no keys were defined");
+	return;
+    }
     
     my @key_list;
 
@@ -877,6 +906,17 @@ sub fetch_records_by_key {
     {
 	$T->debug_line("Returned " . scalar(@$results) . " rows");
 	$T->debug_skip;
+	
+	if ( @$results )
+	{
+	    pass("found records");
+	}
+
+	else
+	{
+	    fail("found records");
+	}
+	
 	return @$results;
     }
 
@@ -884,6 +924,7 @@ sub fetch_records_by_key {
     {
 	$T->debug_line("Returned no results");
 	$T->debug_skip;
+	fail("found records");
 	return;
     }
 }
@@ -892,32 +933,96 @@ sub fetch_records_by_key {
 sub fetch_records_by_expr {
 
     my ($T, $table, $expr) = @_;
-
+    
     my $dbh = $T->dbh;
-
+    
     croak "you must specify a table" unless $table;
     croak "you must specify a valid SQL expression" unless $expr;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $sql = "SELECT * FROM $table WHERE $expr";
-
+    
     $T->debug_line($sql);
-
+    
     my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
-
+    
     if ( ref $results eq 'ARRAY' )
     {
 	$T->debug_line("Returned " . scalar(@$results) . " rows");
 	$T->debug_skip;
+	
+	if ( @$results )
+	{
+	    pass("found records");
+	}
+
+	else
+	{
+	    fail("found records");
+	}
+
 	return @$results;
     }
-
+    
     else
     {
 	$T->debug_line("Returned no results");
 	$T->debug_skip;
+	fail("found records");
 	return;
     }
 }
+
+
+sub fetch_keys_by_expr {
+
+    my ($T, $table, $expr) = @_;
+    
+    my $dbh = $T->dbh;
+    
+    croak "you must specify a table" unless $table;
+    croak "you must specify a valid SQL expression" unless $expr;
+    
+    my $key_name = get_table_property($table, 'PRIMARY_KEY');
+    
+    croak "could not determine primary key for table '$table'" unless $key_name;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $sql = "SELECT $key_name FROM $table WHERE $expr";
+    
+    $T->debug_line($sql);
+    
+    my $results = $dbh->selectcol_arrayref($sql);
+    
+    if ( ref $results eq 'ARRAY' )
+    {
+	$T->debug_line("Returned " . scalar(@$results) . " rows");
+	$T->debug_skip;
+	
+	if ( @$results )
+	{
+	    pass("found keys");
+	}
+
+	else
+	{
+	    fail("found keys");
+	}
+
+	return @$results;
+    }
+    
+    else
+    {
+	$T->debug_line("Returned no results");
+	$T->debug_skip;
+	fail("found keys");
+	return;
+    }
+}
+
 
 
 1;

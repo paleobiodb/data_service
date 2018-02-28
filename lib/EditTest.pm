@@ -41,6 +41,8 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
     set_column_property($EDT_TEST, 'signed_req', REQUIRED => 1);
 
     EditTest->register_allowances('TEST_DEBUG');
+    EditTest->register_conditions(E_TEST => "TEST ERROR '%1'",
+				  W_TEST => "TEST WARNING '%1'");
 }
 
 
@@ -53,20 +55,20 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
 # matching template can be found, we call the parent method. Other subclasses of EditTransaction
 # should do something similar.
 
-sub get_condition_template {
+# sub get_condition_template {
     
-    my ($edt, $code, $table, $selector) = @_;
+#     my ($edt, $code, $table, $selector) = @_;
     
-    if ( $CONDITION_TEMPLATE{$code} )
-    {
-	return $CONDITION_TEMPLATE{$code};
-    }
+#     if ( $CONDITION_TEMPLATE{$code} )
+#     {
+# 	return $CONDITION_TEMPLATE{$code};
+#     }
 
-    else
-    {
-	return $edt->SUPER::get_condition_template($code, $table, $selector);
-    }
-}
+#     else
+#     {
+# 	return $edt->SUPER::get_condition_template($code, $table, $selector);
+#     }
+# }
 
 
 sub authorize_action {
@@ -84,12 +86,12 @@ sub authorize_action {
 	
 	elsif ( $record->{string_req} eq 'authorize error' )
 	{
-	    $edt->add_condition($action, 'E_TEST', 'xyzzy');
+	    $edt->add_condition('E_TEST', 'xyzzy');
 	}
 
 	elsif ( $record->{string_req} eq 'authorize warning' )
 	{
-	    $edt->add_condition($action, 'W_TEST', 'xyzzy');
+	    $edt->add_condition('W_TEST', 'xyzzy');
 	}
 
 	elsif ( $record->{string_req} eq 'authorize save' )
@@ -120,12 +122,12 @@ sub validate_action {
 	
 	elsif ( $record->{string_req} eq 'validate error' )
 	{
-	    $edt->add_condition($action, 'E_TEST', 'xyzzy');
+	    $edt->add_condition('E_TEST', 'xyzzy');
 	}
 
 	elsif ( $record->{string_req} eq 'validate warning' )
 	{
-	    $edt->add_condition($action, 'W_TEST', 'xyzzy');
+	    $edt->add_condition('W_TEST', 'xyzzy');
 	}
 
 	elsif ( $record->{string_req} eq 'validate save' )
@@ -153,7 +155,7 @@ sub initialize_transaction {
 
     elsif ( $edt->get_attr('initialize error') )
     {
-	$edt->add_condition(undef, 'E_TEST', 'initialize');
+	$edt->add_condition('E_TEST', 'initialize');
     }
     
     elsif ( my $value = $edt->get_attr('initialize add') )
@@ -162,8 +164,9 @@ sub initialize_transaction {
 	$edt->dbh->do("INSERT INTO $table (string_req) values ($quoted)");
     }
 
-    $edt->{save_init_table} = $table;
     $edt->{save_init_count}++;
+    $edt->{save_init_table} = $table;
+    $edt->{save_init_status} = $edt->transaction;
 }
 
 
@@ -178,12 +181,12 @@ sub finalize_transaction {
     
     elsif ( $edt->get_attr('finalize error' ) )
     {
-	$edt->add_condition(undef, 'E_TEST', 'finalize');
+	$edt->add_condition('E_TEST', 'finalize');
     }
     
     elsif ( $edt->get_attr('finalize warning') )
     {
-	$edt->add_condition(undef, 'W_TEST', 'finalize');
+	$edt->add_condition('W_TEST', 'finalize');
     }
     
     elsif ( my $value = $edt->get_attr('finalize add') )
@@ -194,6 +197,7 @@ sub finalize_transaction {
     
     $edt->{save_final_count}++;
     $edt->{save_final_table} = $table;
+    $edt->{save_final_status} = $edt->transaction;
 }
 
 
@@ -208,6 +212,7 @@ sub cleanup_transaction {
     
     $edt->{save_cleanup_count}++;
     $edt->{save_cleanup_table} = $table;
+    $edt->{save_cleanup_status} = $edt->transaction;
 }
 
 
@@ -226,12 +231,12 @@ sub before_action {
 
 	elsif ( $record->{string_req} eq 'before error' )
 	{
-	    $edt->add_condition($action, 'E_TEST', 'before');
+	    $edt->add_condition('E_TEST', 'before');
 	}
 	
 	elsif ( $record->{string_req} eq 'before warning' )
 	{
-	    $edt->add_condition($action, 'W_TEST', 'before');
+	    $edt->add_condition('W_TEST', 'before');
 	}
     }
     
@@ -245,6 +250,7 @@ sub before_action {
     $edt->{save_before_action} = $action;
     $edt->{save_before_operation} = $operation;
     $edt->{save_before_table} = $table;
+    $edt->{save_before_status} = $edt->transaction;
 }
 
 
@@ -263,12 +269,12 @@ sub after_action {
 
 	elsif ( $record->{string_req} eq 'after error' )
 	{
-	    $edt->add_condition($action, 'E_TEST', 'after');
+	    $edt->add_condition('E_TEST', 'after');
 	}
 
 	elsif ( $record->{string_req} eq 'after warning' )
 	{
-	    $edt->add_condition($action, 'W_TEST', 'after');
+	    $edt->add_condition('W_TEST', 'after');
 	}
     }
     
@@ -284,6 +290,7 @@ sub after_action {
     $edt->{save_after_operation} = $operation;
     $edt->{save_after_table} = $table;
     $edt->{save_after_result} = $keyval;
+    $edt->{save_after_status} = $edt->transaction;
 }
 
 
@@ -293,7 +300,7 @@ sub cleanup_action {
     
     if ( $edt->get_attr('cleanup action exception') )
     {
-	$edt->add_condition(undef, 'W_TEST', 'cleanup exception');
+	$edt->add_condition('W_TEST', 'cleanup exception');
 	die "generated exception";
     }
     
@@ -301,6 +308,7 @@ sub cleanup_action {
     $edt->{save_cleanup_action_action} = $action;
     $edt->{save_cleanup_action_operation} = $operation;
     $edt->{save_cleanup_action_table} = $table;
+    $edt->{save_cleanup_action_status} = $edt->transaction;
 }
 
 
@@ -310,10 +318,19 @@ sub cleanup_action {
 
 sub debug_line {
     
-    return unless ref $_[0] && defined $_[1] && $_[0]->{debug};
+    return unless ref $_[0] && defined $_[1];
     return $_[0]->SUPER::debug_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
     
-    push @{$_[0]->{debug_output}}, $_[1];
+    push @{$_[0]->{debug_output}}, $_[1] if $_[0]->{debug};
+}
+
+
+sub error_line {
+
+    return unless ref $_[0] && defined $_[1];
+    return $_[0]->SUPER::error_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
+
+    push @{$_[0]->{debug_output}}, $_[1] unless $_[0]->{silent};
 }
 
 
