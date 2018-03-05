@@ -18,6 +18,9 @@ use TableDefs qw(get_table_property);
 
 use Carp qw(carp croak);
 
+use namespace::clean;
+
+
 our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record', delete => 'single' );
 
 
@@ -39,7 +42,11 @@ sub new {
     
     # Create an action object.
     
-    my ($action) = { table => $table, operation => $operation, record => $record, label => $label };
+    my ($action) = { table => $table,
+		     operation => $operation,
+		     record => $record,
+		     label => $label,
+		     status => '' };
     
     # If the record has a primary key and a non-empty key attribute, store these in the action
     # record. This will be used to fetch information about the record, such as the authorization
@@ -136,6 +143,12 @@ sub label {
 }
 
 
+sub status {
+
+    return $_[0]{status};
+}
+
+
 sub root {
 
     return $_[0]{root};
@@ -201,7 +214,7 @@ sub is_multiple {
 }
 
 
-sub count {
+sub action_count {
     
     return $_[0]{additional} ? scalar(@{$_[0]{additional}}) + 1 : 1;
 }
@@ -221,12 +234,6 @@ sub all_labels {
 }
 
 
-sub has_labels {
-
-    return $_[0]{has_labels};
-}
-
-
 sub has_errors {
 
     return $_[0]{error_count};
@@ -241,7 +248,15 @@ sub has_warnings {
 
 # We have very few mutator methods, because almost all the attributes of an action are immutable.
 
-sub set_auxiliary {
+sub _set_status {
+
+    my ($action, $status) = @_;
+    
+    $action->{status} = $status;
+}
+
+
+sub _set_auxiliary {
     
     my ($action, $root) = @_;
     
@@ -251,12 +266,21 @@ sub set_auxiliary {
 }
 
 
-sub set_permission {
-
+sub _set_permission {
+    
     my ($action, $permission) = @_;
     
     croak "you must specify a non-empty permission" unless defined $permission;
     $action->{permission} = $permission;
+}
+
+
+sub _set_keyval {
+
+    my ($action, $keyval) = @_;
+    
+    croak "cannot call 'set_keyval' on a multiple action" if $action->{all_keys};
+    $action->{keyval} = $keyval;
 }
 
 
@@ -269,15 +293,6 @@ sub set_column_values {
     
     $action->{columns} = $cols;
     $action->{values} = $vals;
-}
-
-
-sub set_keyval {
-
-    my ($action, $keyval) = @_;
-    
-    croak "cannot call 'set_keyval' on a multiple action" if $action->{all_keys};
-    $action->{keyval} = $keyval;
 }
 
 
@@ -342,7 +357,6 @@ sub _coalesce {
 	
 	$action->{all_keys} = [ $action->{keyval} ];
 	$action->{all_labels} = [ $action->{label} ];
-	$action->{has_labels} = undef;
 	$action->{additional} = [ ];
 	
 	foreach my $a ( @additional )
@@ -352,7 +366,6 @@ sub _coalesce {
 	    push @{$action->{all_keys}}, $a->{keyval};
 	    push @{$action->{all_labels}}, $a->{label};
 	    push @{$action->{additional}}, $a;
-	    $action->{has_labels} = 1 if defined $a->{label} && $a->{label} ne '';
 	}
     }
 

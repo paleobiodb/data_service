@@ -89,7 +89,7 @@ subtest 'proceed_mode' => sub {
     # Check that the transaction actually committed and that the record with a warning was
     # inserted while the record with an error was not.
     
-    ok( $result, "transaction succeeded" );
+    ok( $result, "transaction succeeded" ) || $T->diag_errors;
     ok( $edt->has_finished, "transaction has finished" );
     $T->ok_found_record($EDT_TEST, "string_req='proceed test a1'");
     $T->ok_found_record($EDT_TEST, "string_req='validate warning'");
@@ -128,7 +128,7 @@ subtest 'proceed_mode' => sub {
     
     $result = $edt->execute;
     
-    ok( $result, "transaction succeeded in PROCEED_MODE" );
+    ok( $result, "transaction succeeded in PROCEED_MODE" ) || $T->diag_errors;
     is( $edt->warning_strings, 3, "got 3 warnings" );
     $T->ok_has_warning(qr/F_NOT_FOUND/, "got 'F_NOT_FOUND'");
     $T->ok_has_warning(qr/F_EXECUTE/, "got 'F_EXECUTE'");
@@ -163,7 +163,7 @@ subtest 'not_found' => sub {
     $edt->insert_record($EDT_TEST, { string_req => 'notfound test a2' });
     $edt->insert_record($EDT_TEST, { string_req => 'notfound test delete' });
     
-    ok( $edt->execute, "initial transaction succeeded" );
+    ok( $edt->execute, "initial transaction succeeded" ) || $T->diag_errors;
     
     # Now try a transaction with some "not found" errors.
     
@@ -191,7 +191,7 @@ subtest 'not_found' => sub {
     
     $result = $edt->commit;
     
-    ok( $result, "transaction succeeded with NOT_FOUND" );
+    ok( $result, "transaction succeeded with NOT_FOUND" ) || $T->diag_errors;
     is( $edt->warnings, 3, "got 3 warnings" );
     $T->ok_has_warning(qr/F_NOT_FOUND/, "got 'F_NOT_FOUND'");
     
@@ -222,7 +222,7 @@ subtest 'not_found' => sub {
     ok( ! $edt->can_proceed, "execute error is not okay" );
 
     $result = $edt->commit;
-
+    
     ok( ! $result, "transaction failed" );
     is( $edt->transaction, 'aborted', "transaction was rolled back" );
 };
@@ -262,7 +262,7 @@ subtest 'no_records' => sub {
     
     $result = $edt->execute;
     
-    ok( $result, "transaction succeeded with NO_RECORDS" );
+    ok( $result, "transaction succeeded with NO_RECORDS" ) || $T->diag_errors;
     is( $edt->transaction, 'committed', "transaction committed" );
     ok( ! $edt->errors, "no errors were generated" );
     

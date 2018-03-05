@@ -19,7 +19,7 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw(set_table_property set_column_property $EDT_TEST);
+use TableDefs qw(set_table_property set_column_property $EDT_TEST $EDT_AUX);
 use ResourceTables;
 
 use base 'EditTransaction';
@@ -39,7 +39,12 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
     set_table_property($EDT_TEST, PRIMARY_KEY => 'test_no');
     set_column_property($EDT_TEST, 'string_req', REQUIRED => 1);
     set_column_property($EDT_TEST, 'signed_req', REQUIRED => 1);
-
+    
+    set_table_property($EDT_AUX, ALLOW_POST => 'AUTHORIZED');
+    set_table_property($EDT_AUX, PRIMARY_KEY => 'aux_no');
+    set_column_property($EDT_AUX, 'test_no', FOREIGN_KEY => 'EDT_TEST');
+    set_column_property($EDT_AUX, 'name', REQUIRED => 1);
+    
     EditTest->register_allowances('TEST_DEBUG');
     EditTest->register_conditions(E_TEST => "TEST ERROR '%1'",
 				  W_TEST => "TEST WARNING '%1'");
@@ -238,6 +243,16 @@ sub before_action {
 	{
 	    $edt->add_condition('W_TEST', 'before');
 	}
+
+	elsif ( $record->{string_req} eq 'before set_attr' )
+	{
+	    $action->set_attr(test => 'abc');
+	}
+
+	elsif ( $record->{string_req} eq 'before abandon' )
+	{
+	    $edt->abort_action;
+	}
     }
     
     if ( my $value = $edt->get_attr('before add') )
@@ -257,7 +272,7 @@ sub before_action {
 sub after_action {
 
     my ($edt, $action, $operation, $table, $keyval) = @_;
-
+    
     my $record = $action->record;
     
     if ( $record && $record->{string_req} )
@@ -266,15 +281,20 @@ sub after_action {
 	{
 	    die "generated exception";
 	}
-
+	
 	elsif ( $record->{string_req} eq 'after error' )
 	{
 	    $edt->add_condition('E_TEST', 'after');
 	}
-
+	
 	elsif ( $record->{string_req} eq 'after warning' )
 	{
 	    $edt->add_condition('W_TEST', 'after');
+	}
+
+	elsif ( $record->{string_req} eq 'before set_attr' )
+	{
+	    $edt->{save_after_attr} = $action->get_attr('test');
 	}
     }
     
@@ -390,6 +410,13 @@ sub establish_tables {
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp)");
 
+    $dbh->do("DROP TABLE IF EXISTS $EDT_AUX");
+
+    $dbh->do("CREATE TABLE $EDT_AUX (
+		aux_no int unsigned primary key auto_increment,
+		name varchar(255) not null,
+		test_no int unsigned not null,
+		unique key (name))");
 }
 
 

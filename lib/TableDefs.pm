@@ -36,7 +36,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
-		      $EDT_TEST
+		      $EDT_TEST $EDT_AUX
 		      %TABLE_PROPERTIES %TEST_SELECT
 		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE
 		      init_table_names select_test_tables is_test_mode
@@ -50,7 +50,6 @@ our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
 			   ALLOW_VIEW => 1,
 			   ALLOW_EDIT => 1,
 			   ALLOW_DELETE => 1,
-			   ALLOW_REPLACE => 1,
 			   ALLOW_KEY_INSERT => 1,
 			   BY_AUTHORIZER => 1,
 			   AUTH_FIELDS => 1,
@@ -58,6 +57,7 @@ our (%TABLE_PROP_NAME) = ( ALLOW_POST => 1,
 			   PRIMARY_ATTR => 1 );
 
 our (%COLUMN_PROP_NAME) = ( ID_TYPE => 1,
+			    FOREIGN_KEY => 1,
 			    REQUIRED => 1,
 			    ADMIN_SET => 1 );
 
@@ -321,9 +321,10 @@ sub test_eduresources {
 # Test class for EditTransaction.
 
 our $EDT_TEST = 'edt_test';
+our $EDT_AUX = 'edt_aux';
 
 sub test_edt {
-
+    
     my ($enable, $ds, $debug) = @_;
 
     if ( $enable )
@@ -331,7 +332,8 @@ sub test_edt {
 	die "You must define 'test_db' in the configuration file" unless $TEST_DB;
 	
 	$EDT_TEST = substitute_table("$TEST_DB.edt_test", "edt_test");
-
+	$EDT_AUX = substitute_table("$TEST_DB.edt_aux", "edt_aux");
+	
 	print STDERR "TEST MODE: enable 'edt_test'\n\n" if $debug;
 
 	return 1;
@@ -340,7 +342,8 @@ sub test_edt {
     else
     {
 	$EDT_TEST = 'edt_test';
-
+	$EDT_AUX = 'edt_aux';
+	
 	print STDERR "TEST MODE: disable 'edt_test'\n\n" if $debug;
 
 	return 2;

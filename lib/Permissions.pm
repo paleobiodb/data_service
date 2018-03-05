@@ -426,7 +426,7 @@ sub check_table_permission {
 	{
 	    $perms->debug_line( "    Permission for $table_name : '$permission' DENIED by TABLE PROPERTY\n" );
 	    
-	    return '';
+	    return 'none';
 	}
     }
     
@@ -457,7 +457,7 @@ sub check_table_permission {
     
     $perms->debug_line( "   Permission for $table_name : '$permission' DENIED : NO PERMISSION\n" );
     
-    return '';
+    return 'none';
 }
 
 
@@ -515,7 +515,7 @@ sub check_record_permission {
 	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
 	
-	return $record->{admin_locked} ? 'locked' : 'admin';
+	return $record->{admin_locked} ? 'unlock' : 'admin';
     }
     
     # Otherwise, we need to check the record itself to see if the user is the person who created
@@ -544,19 +544,20 @@ sub check_record_permission {
 	{
 	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : TABLE PROPERTY\n" );
 	    
-	    return '';
+	    return 'none';
 	}
     }
     
     # If the record has an adminsitrative lock, then the user does not have any permissions to it
     # unless they have administrative privileges, in which case the operation would have been
-    # approved above.
+    # approved above. We return 'locked' instead of the requested permission, if they would
+    # otherwise have that permission.
     
     if ( $record->{admin_locked} )
     {
 	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : LOCKED\n" );
 	
-	return '';
+	$permission = 'locked';
     }
     
     # If the user is the person who originally created or authorized the record, then they have
@@ -605,7 +606,7 @@ sub check_record_permission {
     
     $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : NO PERMISSION\n" );
     
-    return '';
+    return 'none';
 }
 
 

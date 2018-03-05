@@ -59,6 +59,7 @@ subtest 'authorize' => sub {
     
     $T->ok_has_warning($edt, qr/W_TEST.*xyzzy/, "specific warning");
     $T->ok_has_error($edt, qr/E_PARAM.*abc/, "bad value error");
+    ok( ! $edt->can_proceed, "transaction cannot proceed" );
     
     $edt->delete_record($EDT_TEST, { string_req => 'authorize save', test_no => '423' });
     $T->ok_has_error($edt, qr/E_NOT_FOUND/, "not found error");
@@ -96,6 +97,7 @@ subtest 'validate' => sub {
     
     $T->ok_has_warning($edt, qr/W_TEST.*xyzzy/, "specific warning");
     $T->ok_has_error($edt, qr/E_PARAM/, "found error from base class validate routine");
+    ok( ! $edt->can_proceed, "transaction cannot proceed" );
 
     $edt->delete_record($EDT_TEST, { string_req => 'validate save', test_no => '999' });
 

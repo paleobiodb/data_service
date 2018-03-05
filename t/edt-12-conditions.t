@@ -63,7 +63,8 @@ subtest 'basic' => sub {
     
     my ($e) = $edt->errors;
     
-    unless ( isa_ok($e, 'EditTransaction::Condition', "error has proper class" ) )
+    unless ( isa_ok($e, 'EditTransaction::Condition', "error has proper class" ) &&
+	     can_ok($e, 'code', 'label', 'table') )
     {
 	return;
     }
@@ -274,35 +275,6 @@ subtest 'invalid' => sub {
 
     my $edt = $T->new_edt($perm_a) || return;
     
-    # # Check that trying to add a condition with an invalid code throws an exception.
-
-    # eval {
-    # 	$edt->add_condition("X_ABC");
-    # };
-    
-    # ok( $@, "exception on code X_ABC" );
-
-    # eval {
-    # 	$edt->add_condition("w_def");
-    # };
-
-    # ok( $@, "exception on code w_def" );
-
-    # # Make sure that D_ and F_ codes cannot be added specifically. They can only be produced by
-    # # PROCEED_MODE and NOT_FOUND.
-    
-    # eval {
-    # 	$edt->add_condition("F_EXECUTE");
-    # };
-    
-    # ok( $@, "exception on code F_EXECUTE" );
-
-    # eval {
-    # 	$edt->add_condition("D_CREATE");
-    # };
-
-    # ok( $@, "exception on code D_CREATE" );
-    
     # Check that starting the argument list with a reference that is not an action is also caught.
     
     eval {
@@ -427,7 +399,7 @@ subtest 'generate_msg' => sub {
     
     my $edt = $T->new_edt($perm_a) || return;
 
-    $edt->add_condition('E_PERM', 'abc', 'xyz');
+    $edt->add_condition('E_PARAM', 'abc', 'xyz');
 
     my ($e) = $edt->errors;
 

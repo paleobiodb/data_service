@@ -60,7 +60,8 @@ subtest 'execute' => sub {
     $edt->insert_record($EDT_TEST, { string_req => 'execute test', signed_val => '3' });
     $edt->insert_record($EDT_TEST, { string_req => 'update test', signed_val => '3' });
     $edt->insert_record($EDT_TEST, { string_req => 'delete test' });
-    $edt->execute;
+
+    ok( $edt->execute, "transaction succeeded" ) || $T->diag_errors;
     
     my ($key1, $key2, $key3) = $edt->inserted_keys;
     
@@ -96,7 +97,7 @@ subtest 'execute' => sub {
     ok( ! $edt->is_active, "transaction is not active" );
     ok( ! $edt->has_finished, "transaction has not finished" );
 
-    ok( $edt->commit, "execution succeeded" );
+    ok( $edt->commit, "execution succeeded" ) || $T->diag_errors;
     
     is( $edt->transaction, 'committed', "transaction committed" );
     ok( $edt->has_started, "transaction has started" );
@@ -168,7 +169,7 @@ subtest 'execute' => sub {
 	$commit = $edt->commit;
 	$rollback = $edt->rollback;
     };
-
+    
     ok( !$@, "no errors on commit and rollback" ) || diag("message was: $@");
     
     ok( $commit, "second commit returns true, because transaction did succeed" );
@@ -244,7 +245,7 @@ subtest 'immediate' => sub {
 
     $result = $edt->commit;
     
-    ok( $result, "transaction succeeded" );
+    ok( $result, "transaction succeeded" ) || $T->diag_errors;
     is( $edt->{transaction}, 'committed', "transaction has committed" );
     ok( $edt->has_started, "transaction has started" );
     ok( ! $edt->is_active, "transaction is not active" );
@@ -329,7 +330,7 @@ subtest 'start' => sub {
 
     $result = $edt->execute;
 
-    ok( $result, "transaction succeeded" );
+    ok( $result, "transaction succeeded" ) || $T->diag_errors;
     ok( $edt->has_started, "transaction is still started" );
     ok( $edt->has_finished, "transaction has finished" );
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
@@ -455,7 +456,7 @@ subtest 'errors' => sub {
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
     ok( $edt->insert_record($EDT_TEST, { string_req => 'insert okay' }), "insert succeeded" );
-    ok( ! $edt->insert_record($EDT_TEST, { string_req => 'after error' }), "insert failed" );
+    ok( ! $edt->insert_record($EDT_TEST, { string_req => 'after error' }), "insert failed though SQL succeeded" );
     ok( ! $edt->insert_record($EDT_TEST, { string_val => 'string_req is empty' }), "insert failed" );
     
     is( $edt->transaction, 'active', "transaction is active" );
@@ -469,8 +470,8 @@ subtest 'errors' => sub {
     is( $edt->transaction, 'aborted', "transaction aborted" );
     is( $edt->errors, 2, "error count did not change" );
     is( $edt->record_count, 3, "received 3 records" );
-    is( $edt->action_count, 1, "one action succeeded although transaction failed" );
-    is( $edt->fail_count, 2, "two actions failed" );
+    is( $edt->action_count, 2, "two actions succeeded although transaction failed" );
+    is( $edt->fail_count, 1, "one action failed" );
     is( $edt->skip_count, 0, "no actions were skipped" );
     is( $edt->{save_cleanup_count}, 1, "cleanup_transaction executed once" );
     $T->ok_no_record($EDT_TEST, "string_req='insert okay'");
@@ -611,16 +612,102 @@ subtest 'rollback' => sub {
 };
 
 
-# And again under both IMMEDIATE_MODE and PROCEED_MODE.
+# Now check that 'abort_action' works properly.
 
-subtest 'immediate and proceed' => sub {
+subtest 'abort_action' => sub {
 
-    pass("placeholder");
+    my ($edt, $result);
+    
+    # Clear the table so we can check for proper record insertion.
+    
+    $T->clear_table($EDT_TEST);
+    
+    # Then create a transaction, and add some records.
+    
+    $edt = $T->new_edt($perm_a);
+    
+    $result = $edt->abort_action;
 
+    ok( ! $result, "early call to 'abort_action' failed" );
+    
+    $edt->insert_record($EDT_TEST, { string_req => 'test a1' });
+    $edt->insert_record($EDT_TEST, { string_req => 'test a2' });
+    
+    ok( $edt->can_proceed, "transaction can proceed" );
+    
+    # Now try adding an error, then abandoning the record.
+    
+    $edt->insert_record($EDT_TEST, { string_req => 'abandon a1' });
+    $edt->add_condition('E_TEST');
+    $edt->add_condition('W_TEST');
+    
+    ok( ! $edt->can_proceed, "transaction cannot proceed because of error" );
+    
+    $result = $edt->abort_action;
+    
+    ok( $result, "record was abandoned" );
+    ok( $edt->can_proceed, "transaction can now proceed" );
+    
+    $result = $edt->execute;
+    
+    ok( $result, "transaction succeeded" ) || $T->diag_errors;
+    
+    $T->ok_found_record($EDT_TEST, "string_req='test a1'");
+    $T->ok_no_record($EDT_TEST, "string_req='abandon a1'");
+    is( $edt->action_count, 2, "two actions succeeded" );
+    is( $edt->fail_count, 0, "no actions failed" );
+    $T->ok_no_warnings("warning from abandoned record was removed");
+    
+    # Now try the same, but call 'abort_action' from 'before_action'.
 
+    $edt = $T->new_edt($perm_a);
 
+    $edt->insert_record($EDT_TEST, { string_req => 'test b1' });
+    $edt->insert_record($EDT_TEST, { string_req => 'before abandon' });
 
+    $result = $edt->execute;
+    
+    ok( $result, "transaction succeeded" ) || $T->diag_errors;
+    
+    $T->ok_found_record($EDT_TEST, "string_req='test b1'");
+    $T->ok_no_record($EDT_TEST, "string_req='before abandon'");
+    is( $edt->action_count, 1, "one action succeeded" );
+    is( $edt->fail_count, 1, "one action failed" );
 
+    # Finally, try this under IMMEDIATE_MODE.
+    
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
+    
+    $edt->insert_record($EDT_TEST, { string_req => 'test c1' });
+    $edt->insert_record($EDT_TEST, { string_req => 'test c2' });
 
+    $result = $edt->abort_action;
+
+    ok( ! $result, "abort_action failed because action was already executed" );
+
+    $result = $edt->commit;
+    
+    ok( $result, "transaction succeeded" ) || $T->diag_errors;
+    $T->ok_found_record($EDT_TEST, "string_req='test c1'");
+    $T->ok_found_record($EDT_TEST, "string_req='test c2'");
+
+    # And once again to test that errors added to an already executed record will not be removed
+    # by 'abort_action'.
+
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
+    
+    $edt->insert_record($EDT_TEST, { string_req => 'test d1' });
+    $edt->insert_record($EDT_TEST, { string_req => 'test d2' });
+    $edt->add_condition('E_TEST');
+    
+    $result = $edt->abort_action;
+    
+    ok( ! $result, "abort_action failed because action was already executed" );
+
+    $result = $edt->commit;
+    
+    ok( ! $result, "transaction failed" );
+    $T->ok_no_record($EDT_TEST, "string_req='test d1'");
+    $T->ok_no_record($EDT_TEST, "string_req='test d2'");
 };
 

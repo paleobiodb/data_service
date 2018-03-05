@@ -15,7 +15,7 @@
 # ALLOW_KEY_INSERT
 # BY_AUTHORIZER
 # AUTH_FIELDS
-# PRIMARY_KEY
+# PRIMARY_KEY [edt-01-basic.t 'create objects']
 # PRIMARY_ATTR
 
 # 2. Column properties:
@@ -96,22 +96,23 @@
 #  selection of template by first parameter [edt-12-conditions.t 'templates']
 #  
 #  conditions work properly from the following overrideable methods:
-#   - authorize_action [edt-20-subclass.t 'authorize']
-#   - validate_action [edt-20-subclass.t 'validate']
-#   - before_action [edt-20-subclass.t 'before and after']
-#   - after_action [edt-20-subclass.t 'before and after']
-#   - cleanup_action [edt-20-subclass.t 'before and after']
-#   - initialize_transaction [edt-20-subclass.t 'initialize and finalize']
-#   - finalize_transaction [edt-20-subclass.t 'initialize and finalize']
-#   - cleanup_transaction [edt-20-subclass.t 'initialize and finalize']
+#   - authorize_action [edt-30-subclass.t 'authorize']
+#   - validate_action [edt-30-subclass.t 'validate']
+#   - before_action [edt-30-subclass.t 'before and after']
+#   - after_action [edt-30-subclass.t 'before and after']
+#   - cleanup_action [edt-30-subclass.t 'before and after']
+#   - initialize_transaction [edt-30-subclass.t 'initialize and finalize']
+#   - finalize_transaction [edt-30-subclass.t 'initialize and finalize']
+#   - cleanup_transaction [edt-30-subclass.t 'initialize and finalize']
 
-# 10. record labels
-#
-# record label is carried through properly to conditions and messages [edt-12-condition.t 'basic']
-# labels are properly generated for unlabeled records.
+# 10. record labels [$$$]
+# 
+#  - record label is carried through properly to conditions and messages [edt-12-condition.t 'basic']
+#  - labels are properly generated for unlabeled records [edt-14-records.t 'basic']
+#  - $edt->key_labels
 
-# 11. transaction control
-#
+# 11. transaction control [DONE]
+# 
 # $edt->start_transaction [DONE]
 #  - check that transaction status is properly changed [edt-10-transaction.t 'start']
 #  - check that database operations are not carried out until execute or start_execution
@@ -145,25 +146,26 @@
 #  - returns false when called before transaction starts [edt-10-transaction.t 'rollback']
 #  - returns true when called after transaction starts [edt-10-transaction.t 'rollback']
 # 
-# authorize_action and validate_action
-#  - check status with $edt->transaction, $edt->active, and $edt->executing
-#  - check both before and after $edt->start_execution
-#
+# authorize_action and validate_action [DONE]
+#  - check status with $edt->transaction, $edt->active, and $edt->can_proceed
+#	[edt-30-subclass.t 'authorize', 'validate']
+#  - check both before and after $edt->start_execution [edt-10-transaction.t 'errors']
+# 
 # general [DONE]
 # - automatic rollback when object goes out of scope [edt-01-basic.t 'out of scope']
 
-# 12. insert
-#
-#  - can insert with CREATE
-#  - check for C_CREATE without CREATE
+# 12. insert_record
+# 
+#  - can insert with CREATE [edt-10-transaction.t 'basic']
+#  - check for C_CREATE without CREATE [edt-20-insert.t 'basic']
 #  - can insert with 'post' permission
 #  - can insert with 'admin' permission
 #  - check for E_PERM without one of these permissions
 #  - check for E_HAS_KEY if a key is given
 #  - check for authorize_action and validate_action (by overriding)
 #  - in validate_action, check $action->get_keyexpr and $action->get_keylist
-#  - check for E_EXECUTE on an SQL statement deliberately created to crash
-#  - check for E_EXECUTE on an SQL statement deliberately created to fail
+#  - an SQL statement deliberately created to crash results in E_EXECUTE
+#	[edt-11-proceed.t 'proceed_mode', edt-30-subclass.t 'before and after']
 
 # 13. update
 #
@@ -215,11 +217,22 @@
 #  - can insert and update with insert_update, depending on whether or not a key is present
 #  - check that get_record_key works properly aside from insert_update
 
-# 17. ignore_record and abandon_record
+# 17. ignore_record and abort_action [DONE]
 #
-#  - labels are properly computed if some records are ignored
-#  - rest of transaction proceeds if some records are abandoned
-#  - error messages from abandoned records are removed
+#  - $edt->ignore_record [edt-14-records.t 'basic']
+#  - action and condition labels are properly computed with and without record labels
+#	[edt-14-records.t 'basic']
+#  - $edt->abort_action [edt-14-records.t 'abort_action']
+#  - transaction proceeds if a record with errors is abandoned [edt-14-records.t 'abort_action']
+#  - but not in IMMEDIATE_MODE, unless abort_action is called before the action is executed
+#	[edt-14-records.t 'abort_action']
+#  - error and warning messages from abandoned records are removed [edt-14-records.t 'abort_action']
+
+# 17a. current_action [DONE]
+# 
+#  - $edt->current_action [edt-12-conditions.t 'basic', edt-13-actions.t 'basic']
+
+# 17b. aux_action
 
 # 18. check_permission
 #
@@ -227,17 +240,15 @@
 
 # 19. initialize_transaction, finalize_transaction, cleanup_transaction [DONE]
 #
-#  - check that these are called at the right times [edt-20-subclass.t 'initialize and finalize']
-#  - check that exceptions thrown by these are properly caught [edt-20-subclass.t 'initialize and finalize']
-#  - check that they can do useful work within a transaction [edt-20-subclass.t 'initialize and finalize']
+#  - check that these are called at the right times [edt-30-subclass.t 'initialize and finalize']
+#  - check that exceptions thrown by these are properly caught [edt-30-subclass.t 'initialize and finalize']
+#  - check that they can do useful work within a transaction [edt-30-subclass.t 'initialize and finalize']
 
-# 20. before_action, after_action [DONE]
+# 20. before_action, after_action, cleanup_action [DONE]
 #
-# cleanup_action
-#
-#  - check that these are called at the right times [edt-20-subclass.t 'before and after']
-#  - check that exceptions thrown by these are properly caught [edt-20-subclass.t 'before and after']
-#  - check that they can do useful work within a transaction [edt-20-subclass.t 'before and after']
+#  - check that these are called at the right times [edt-30-subclass.t 'before and after']
+#  - check that exceptions thrown by these are properly caught [edt-30-subclass.t 'before and after']
+#  - check that they can do useful work within a transaction [edt-30-subclass.t 'before and after']
 
 # 21. reporting methods
 #
@@ -327,35 +338,37 @@
 #  - check for E_PARAM on width and precision violations on columns with the STRICT property
 #  - check for W_PARAM on width and precision violations on columns without STRICT
 
-# 24. error and warning conditions
-#
-#  - check that $c->code, $c->label, $c->table, and $c->data work properly
+# 24. EditTransaction::Condition [DONE]
+# 
+#  - check that $c->code, $c->label, $c->table, and $c->data work properly [edt-12-conditions.t 'basic']
 
-# 25. EditAction:
+# 25. EditTransaction::Action: [DONE]
 #
 # accessor methods:
-#  - check $action->table
-#  - check $action->operation
-#  - check $action->record
-#  - check $action->label
-#  - check $action->field
-#  - check $action->has_field
-#  - check $action->permission
-#  - check $action->keyval
-#  - check $action->column_list
-#  - check $action->value_list
-#  - check $action->is_multiple
-#  - check $action->count
-#  - check $action->all_keys
-#  - check $action->all_labels
-#  - check $action->has_errors
-#  - check $action->has_warnings
-#  - check $action->set_permission
-#  - check $action->set_column_values
-#  - check $action->set_keyval
-#  - check $action->add_error;
-#  - check $action->add_warning;
-#  - check $action->set_attr and $action->get_attr, from e.g. before_action and after_action
-
+#  - $action->table [edt-13-actions.t 'basic']
+#  - $action->operation [edt-13-actions.t 'basic']
+#  - $action->label [edt-13-actions.t 'basic']
+#  - $action->record [edt-13-actions.t 'basic']
+#  - $action->record_value [edt-13-actions.t 'basic']
+#  - $action->has_field [edt-13-actions.t 'basic']
+#  - $action->permission [edt-13-actions.t 'basic']
+#  - $action->keycol [edt-13-actions.t 'basic', 'delete']
+#  - $action->keyval [edt-13-actions.t 'basic', 'delete']
+#  - $action->column_list [edt-13-actions.t 'basic']
+#  - $action->value_list [edt-13-actions.t 'basic']
+#  - $action->is_multiple [edt-13-actions.t 'multiple']
+#  - $action->action_count [edt-13-actions.t 'multiple']
+#  - $action->all_keys [edt-13-actions.t 'multiple']
+#  - $action->all_labels [edt-13-actions.t 'multiple']
+#  - $action->has_errors [edt-13-actions.t 'basic']
+#  - $action->has_warnings [edt-13-actions.t 'basic']
+#  - $action->add_error [edt-13-actions.t 'basic']
+#  - $action->add_warning [edt-13-actions.t 'basic']
+#  - $action->set_attr [edt-13-actions.t 'basic', 'attrs']
+#  - $action->get_attr [edt-13-actions.t 'basic', 'attrs']
+#  - get_attr called in 'after_action' fetches value from set_attr called in 'before_action'
+#	 [edt-13-actions.t 'attrs']
+#
+# 
 
 

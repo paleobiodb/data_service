@@ -16,7 +16,8 @@ use Test::More;
 use base 'Exporter';
 
 use CoreFunction qw(connectDB configData);
-use TableDefs qw(init_table_names select_test_tables get_table_property get_column_properties $EDT_TEST
+use TableDefs qw(init_table_names select_test_tables get_table_property get_column_properties
+		 $EDT_TEST $EDT_AUX
 		 $SESSION_DATA $PERSON_DATA $TABLE_PERMS);
 
 use EditTest;
@@ -205,10 +206,11 @@ sub establish_session_data {
   `permission` enum('none','view','post','view/post','admin') NOT NULL,
   UNIQUE KEY `person_no` (`person_no`,`table_name`))");
 	
-	my $table_name = $EDT_TEST; $table_name =~ s/^\w+[.]//;
+	my $table_1 = $EDT_TEST; $table_1 =~ s/^\w+[.]//;
+	my $table_2 = $EDT_AUX; $table_2 =~ s/^\w+[.]//;
 	
 	$dbh->do("REPLACE INTO $TABLE_PERMS (person_no, table_name, permission)
-			VALUES (3991, '$table_name', 'admin')");
+			VALUES (3991, '$table_1', 'admin'), (3991, '$table_2', 'admin')");
 	
     };
     

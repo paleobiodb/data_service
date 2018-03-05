@@ -351,7 +351,6 @@ subtest 'debug output' => sub {
     }
     
     ok( $edt3->has_debug_output( qr/do failed/ ), "captured exception because SILENT_MODE was off" );
-    $T->diag_errors;
 };
 
 
