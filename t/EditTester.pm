@@ -158,9 +158,11 @@ sub establish_session_data {
 		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','3998','3998','authorizer',0),
 			('SESSION-ENTERER','USERID-ENTERER','3998','3997','enterer',0),
 			('SESSION-GUEST','USERID-GUEST','0','0','guest',0),
-			('SESSION-STUDENT','USERID-STUDENT','3998','3996','student',0),
-			('SESSION-SUPERUSER','USERID-SUPERUSER','3999','3999','authorizer',1),
-			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','3999','3991','enterer',0)");
+			('SESSION-STUDENT','USERID-STUDENT','3999','3996','student',0),
+			('SESSION-OTHER', 'USERID-OTHER', '3999', '3995', 'enterer', 0),
+			('SESSION-UNAUTH', 'USERID-UNAUTH', '0', '3994', 'enterer', 0),
+			('SESSION-SUPERUSER','USERID-SUPERUSER','3999','3999','authorizer', 1),
+			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','3999','3991','enterer', 0)");
 
 	$dbh->do("CREATE TABLE IF NOT EXISTS $PERSON_DATA (
   `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -198,19 +200,15 @@ sub establish_session_data {
 			(3998,'A. Authorizer','Authorizer, A.','Test'),
 			(3997,'A. Enterer','Enterer, A.','Test'),
 			(3996,'A. Student','Student, A.','Test'),
+			(3995,'B. Enterer','Enterer, B.','Test'),
+			(3994,'C. Enterer','Enterer, C.','Test'),
 			(3991,'A. Admin','Admin, A.','Test')");
 
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE_PERMS (
   `person_no` int(10) unsigned NOT NULL,
   `table_name` varchar(80) NOT NULL,
-  `permission` enum('none','view','post','view/post','admin') NOT NULL,
+  `permission` set('none','view','post','modify','delete','insert_key','admin') NOT NULL,
   UNIQUE KEY `person_no` (`person_no`,`table_name`))");
-	
-	my $table_1 = $EDT_TEST; $table_1 =~ s/^\w+[.]//;
-	my $table_2 = $EDT_AUX; $table_2 =~ s/^\w+[.]//;
-	
-	$dbh->do("REPLACE INTO $TABLE_PERMS (person_no, table_name, permission)
-			VALUES (3991, '$table_1', 'admin'), (3991, '$table_2', 'admin')");
 	
     };
     
@@ -220,6 +218,67 @@ sub establish_session_data {
 	diag("Could not establish session data. Message was: $msg");
 	BAIL_OUT;
     }
+}
+
+
+sub set_specific_permission {
+
+    my ($T, $table_name, $perm, $value) = @_;
+
+    $T->clear_edt;
+    
+    my ($person_no);
+    
+    croak "The second argument must be a permission object" unless ref $perm eq 'Permissions';
+    # croak "Bad permission '$value'" unless $value &&
+    # 	($value eq 'admin' || $value eq 'post' || $value eq 'modify' || $value eq 'none');
+    
+    $table_name =~ s/^\w+[.]//;
+    $person_no = $perm->{enterer_no};
+    
+    my $sql = "REPLACE INTO $TABLE_PERMS (person_no, table_name, permission)
+		 VALUES ('$person_no', '$table_name', '$value')";
+    
+    $T->debug_line($sql);
+    $T->debug_skip;
+    
+    my $result = $T->dbh->do($sql);
+
+    unless ( $result )
+    {
+	croak "permission was not set";
+    }
+}
+
+
+sub clear_specific_permissions {
+    
+    my ($T, $arg) = @_;
+
+    $T->clear_edt;
+    
+    my $sql;
+
+    if ( ref $arg eq 'Permissions' )
+    {
+	my $person_no = $arg->{enterer_no};
+	$sql = "DELETE FROM $TABLE_PERMS WHERE person_no = '$person_no'";
+    }
+    
+    elsif ( $arg )
+    {
+	$sql = "DELETE FROM $TABLE_PERMS WHERE table_name = '$arg'";
+    }
+    
+    else
+    {
+	$sql = "DELETE FROM $TABLE_PERMS";
+    }
+
+    $T->debug_line($sql);
+    $T->debug_skip;
+
+    $T->dbh->do($sql);
 }
 
 
@@ -507,6 +566,217 @@ sub do_one_operation {
 	$T->diag_errors($edt);
 	fail($label);
 	return;
+    }
+}
+
+
+# test_permissions ( table, insert_perm, [check_perm,] test, result, label )
+# 
+# We now define a subroutine which will check the ability to do all four operations on a
+# particular table, or some subset, according to a particular set of permissions. This subroutine
+# will pass or fail a test depending on the result of these operations.
+
+sub test_permissions {
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    # First check the arguments.
+
+    my $T = shift;
+    my $table = shift;
+    my $insert_perm = shift;
+    my $edit_perm = $insert_perm;
+    
+    croak "bad insert permission '" . ref $insert_perm . "'"
+	unless ref $insert_perm eq 'Permissions';
+    
+    if ( ref $_[0] eq 'Permissions' )
+    {
+	$edit_perm = shift;
+    }
+    
+    elsif ( ref $_[0] )
+    {
+	croak "bad check permission '" . ref $_[0] . "'";
+    }
+    
+    my ($test, $result, $label) = @_;
+    
+    croak "bad test '$test'" unless $test &&
+	($test eq 'basic' || $test =~ qr{ ^ [IDRUK]+ $ }xs );
+    
+    $test = 'IDRU' if $test eq 'basic';
+    
+    if ( $result && $result eq 'succeeds' )
+    {
+	$label ||= 'transaction succeeded';
+    }
+    
+    elsif ( $result && $result eq 'fails' )
+    {
+	$label ||= 'transaction failed with E_PERM';
+    }
+    
+    else
+    {
+	croak "bad check '$result', must be one of 'succeeds', 'fails'";
+    }
+    
+    my $primary = get_table_property($table, 'PRIMARY_KEY') or
+	die "cannot fetch primary key for table '$table'";
+    
+    my $string = $table =~ /edt_aux/ ? 'name' : 'string_req';
+    
+    # First test insertion. We use the first specified permission to do this. We must insert no
+    # matter which tests are being done, so that we have records to replace, update, and/or
+    # delete.
+    
+    my ($insert_result, @insert_errors, $perm_count);
+    my ($key1, $key2, $key3);
+    
+    my $edt = $T->new_edt($insert_perm, { IMMEDIATE_MODE => 1 });
+    
+    if ( $test =~ /[IR]/ )
+    {
+	$key1 = $edt->insert_record($table, { $string => 'insert permission' });
+	$perm_count++ if $test =~ /I/;
+    }
+    
+    if ( $test =~ /U/ )
+    {
+	$key2 = $edt->insert_record($table, { $string => 'insert permission 2' });
+    }
+    
+    if ( $test =~ /D/ )
+    {
+	$key3 = $edt->insert_record($table, { $string => 'insert permission 3' });
+    }
+    
+    # If we are using a different permission for the rest of the tests, then commit the first
+    # transaction and start a second one. If any errors have occurred during the insert phase, the
+    # test fails.
+    
+    if ( $edit_perm != $insert_perm )
+    {
+	$edt->commit;
+	
+	if ( $edt->errors )
+	{
+	    foreach my $e ( $edt->errors )
+	    {
+		diag($e->code . ': ' . $edt->generate_msg($e));
+	    }
+	    
+	    fail($label);
+	}
+	
+	$edt = $T->new_edt($edit_perm, { IMMEDIATE_MODE => 1 });
+	$perm_count = 0;
+    }
+
+    elsif ( $result eq 'fails' && $edt->errors )
+    {
+	$edt->rollback;
+	return pass( $label );
+    }
+    
+    if ( $test =~ /R/ && $key1 )
+    {
+	$edt->replace_record($table, { $primary => $key1, $string => 'replace permission' });
+	$perm_count++;
+    }
+    
+    if ( $test =~ /U/ && $key2 )
+    {
+	$edt->update_record($table, { $primary => $key2, $string => 'update permission' });
+	$perm_count++;
+    }
+    
+    if ( $test =~ /D/ && $key3 )
+    {
+	my ($delete_check) = $T->fetch_records_by_key($table, $key3);
+	
+	unless ( $delete_check && $delete_check->{$string} eq 'insert permission 3' )
+	{
+	    diag("Expected record was not found for deletion");
+	    fail($label);
+	    $edt->rollback;
+	    return;
+	}
+	
+	$edt->delete_record($table, $key3);
+	$perm_count++;
+    }
+
+    if ( $test =~ /K/ )
+    {
+	my ($max) = $T->dbh->selectrow_array("SELECT max($primary) FROM $table");
+	
+	$edt->replace_record($table, { $primary => $max + 1, $string => 'specific key permission' });
+	$perm_count++;
+    }
+    
+    # Now commit the transaction (possibly the second one). If it succeeds, then return the proper
+    # result.
+    
+    if ( $edt->commit )
+    {
+	# If the transaction was supposed to succeed, then the test passes. Otherwise, it fails.
+	
+	return ok( $result eq 'succeeds', $label );
+    }
+    
+    # $T->diag_errors($edt);
+    
+    # If the transaction fails, we have to look at the reasons behind the failure.
+    
+    my (%error_count, $bad_code);
+    
+    foreach my $e ( @insert_errors, $edt->errors )
+    {
+	if ( $e->code eq 'E_PERM' )
+	{
+	    $error_count{E_PERM}++;
+	    diag($e->code . ': ' . $edt->generate_msg($e)) if $result eq 'succeeds';
+	}
+	
+	else
+	{
+	    $bad_code = 1;
+	    $error_count{$e->code}++;
+	    diag($e->code . ': ' . $edt->generate_msg($e));
+	}
+    }
+    
+    # If we have any errors other than E_PERM, then the test fails regardless of what the fourth
+    # argument was.
+    
+    if ( $bad_code )
+    {
+	return fail( $label );
+    }
+    
+    # If the test was supposed to succeed, we fail if we have even one E_PERM.
+    
+    elsif ( $result eq 'succeeds' )
+    {
+	return fail( $label );
+    }
+    
+    # Otherwise, if we have at one E_PERM for each operation we counted, then the test succeeds if the
+    # transaction was supposed to fail.
+    
+    elsif ( $error_count{E_PERM} && $perm_count && $error_count{E_PERM} == $perm_count )
+    {
+	return pass( $label );
+    }
+    
+    # If we don't get at least one E_PERM or other error, something has gone very wrong.
+    
+    else
+    {
+	diag( "The transaction failed, but the wrong number of E_PERM errors was found." );
+	return fail( $label );
     }
 }
 
@@ -834,8 +1104,10 @@ sub deleted_keys {
 
 
 sub clear_table {
-
+    
     my ($T, $table) = @_;
+
+    $T->clear_edt;
     
     my $dbh = $T->dbh;
     
@@ -847,12 +1119,22 @@ sub clear_table {
     
     my $results = $dbh->do($sql);
     
+    $sql = "ALTER TABLE $table AUTO_INCREMENT = 1";
+
+    $T->debug_line($sql);
+    
+    eval {
+	$dbh->do($sql);
+    };
+    
     if ( $results )
     {
 	$T->debug_line("Deleted $results rows");
     }
     
     $T->debug_skip;
+    
+    
     
     return;
 }

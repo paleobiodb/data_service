@@ -91,3 +91,50 @@ subtest 'basic' => sub {
     is( $action && $action->status, 'abandoned', "record has been marked as abandoned" );
 };
 
+
+# Test the PRIMARY_ATTR table property, by setting it and then using the new field name.
+
+subtest 'primary_attr' => sub {
+
+    # Clear the table so that we can check for record updating.
+    
+    $T->clear_table($EDT_TEST);
+    
+    # First check that we can update records using the primary key field name for the table, as a
+    # control.
+    
+    my $edt = $T->new_edt($EDT_TEST, $perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
+    my $key = $edt->insert_record($EDT_TEST, { string_req => 'primary attr test' });
+    
+    ok( $key, "record was properly inserted" );
+    
+    ok( $edt->update_record($EDT_TEST, { $primary => $key, signed_val => 3 }),
+	"record was updated using primary key field name" );
+
+    # Now try a different field name, and see that it fails.
+    
+    ok( ! $edt->update_record($EDT_TEST, { not_the_key => $key, signed_val => 4 }),
+	"record was not updated using field name 'not_the_key'" );
+
+    $T->ok_has_error( qr/F_NO_KEY/, "got F_NO_KEY warning" );
+
+    # Then set this field name as the PRIMARY_ATTR, and check that it succeeds.
+
+    set_table_property($EDT_TEST, PRIMARY_ATTR => 'not_the_key');
+
+    ok( $edt->update_record($EDT_TEST, { not_the_key => $key, signed_val => 5 }),
+	"record was updated using field name 'not_the_key'" );
+    
+    # Make sure that the record was in fact updated in the table.
+    
+    $T->ok_found_record($EDT_TEST, "signed_val=5");
+
+    # Then check that we can still use the primary key name.
+
+    ok( $edt->update_record($EDT_TEST, { $primary => $key, signed_val => 6 }),
+	"record was updated again using primary key field name" );
+    
+    $T->ok_found_record($EDT_TEST, "signed_val=6");
+};
+

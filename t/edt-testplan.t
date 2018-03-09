@@ -5,18 +5,15 @@
 
 # Things to test:
 #
-# 1. Table properties:
+# 1. Table properties: [DONE]
 #
-# ALLOW_POST
-# ALLOW_VIEW
-# ALLOW_EDIT
-# ALLOW_DELETE
-# ALLOW_REPLACE
-# ALLOW_KEY_INSERT
-# BY_AUTHORIZER
-# AUTH_FIELDS
+# CAN_POST [edt-21-permissions.t 'basic', 'can_post']
+# CAN_EDIT [edt-21-permissions.t 'can_modify']
+# ALLOW_DELETE [edt-21-permissions.t 'allow_delete']
+# ALLOW_INSERT_KEY [edt-21-permissions.t 'allow_insert_key']
+# BY_AUTHORIZER [edt-21-permissions.t 'by_authorizer']
 # PRIMARY_KEY [edt-01-basic.t 'create objects']
-# PRIMARY_ATTR
+# PRIMARY_ATTR [edt-14-records.t 'primary_attr']
 
 # 2. Column properties:
 #

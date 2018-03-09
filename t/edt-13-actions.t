@@ -137,9 +137,9 @@ subtest 'basic' => sub {
     
     is( $a1->has_errors, 2, "still counted two errors" );
     is( $a1->has_warnings, 2, "still counted two warnings" );
-
+    
     # Specifically bump up the error and warning counts.
-
+    
     $a1->add_error;
     is( $a1->has_errors, 3, "error count is now three" );
     

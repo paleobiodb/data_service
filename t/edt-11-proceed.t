@@ -114,10 +114,10 @@ subtest 'proceed_mode' => sub {
 	$edt->update_record($EDT_TEST, { $primary => 99999, signed_val => 9 });
 	$edt->replace_record($EDT_TEST, { $primary => $k2, string_req => 'proceed upated',
 					  signed_val => 10 });
-	$edt->replace_record($EDT_TEST, { $primary => 99999, string_req => 'not updated',
+	$edt->replace_record($EDT_TEST, { $primary => 99998, string_req => 'not updated',
 					  signed_val => 11 });
 	$edt->delete_record($EDT_TEST, $k3);
-	$edt->delete_record($EDT_TEST, 99999);
+	$edt->delete_record($EDT_TEST, 99997);
 	
 	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
 	
@@ -129,7 +129,8 @@ subtest 'proceed_mode' => sub {
     $result = $edt->execute;
     
     ok( $result, "transaction succeeded in PROCEED_MODE" ) || $T->diag_errors;
-    is( $edt->warning_strings, 3, "got 3 warnings" );
+    is( $edt->warning_strings, 4, "got 4 warnings" );
+    
     $T->ok_has_warning(qr/F_NOT_FOUND/, "got 'F_NOT_FOUND'");
     $T->ok_has_warning(qr/F_EXECUTE/, "got 'F_EXECUTE'");
     $T->ok_has_warning(qr/F_PERM/, "got 'F_PERM'");

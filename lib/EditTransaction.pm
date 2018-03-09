@@ -62,7 +62,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    update => "You do not have permission to update this record",
 			    replace_new => "No record was found with key '%2', ".
 				"and you do not have permission to insert one",
-			    replace_old => "You do not have permission to replace this record",
+			    replace_existing => "You do not have permission to replace this record",
 			    delete => "You do not have permission to delete this record",
 			    default => "You do not have permission for this operation" },
 		E_PERM_COL => "You do not have permission to set the value of the field '%1'",
@@ -1617,23 +1617,19 @@ sub replace_record {
 	    
 	    my $permission = $edt->authorize_action($action, 'replace', $table, $keyexpr);
 	    
-	    # If no such record is found in the database, check to see if this EditTransaction allows
-	    # CREATE. If this is the case, and if the user also has 'admin' permission on this table,
-	    # then a new record will be created with the specified primary key value. Otherwise, an
-	    # appropriate error condition will be added.
+	    # If no such record is found in the database, check to see if this EditTransaction
+	    # allows CREATE. If this is the case, and if the user also has 'admin' permission on
+	    # this table, or if the user has 'post' and the table property ADMIN_INSERT_KEY is NOT
+	    # set, then a new record will be created with the specified primary key
+	    # value. Otherwise, an appropriate error condition will be added.
 	    
 	    if ( $permission eq 'notfound' )
 	    {
 		if ( $edt->allows('CREATE') )
 		{
-		    $permission = $edt->check_table_permission($table, 'admin');
+		    $permission = $edt->check_table_permission($table, 'insert_key');
 		    
-		    if ( $permission eq 'admin' )
-		    {
-			$action->_set_permission($permission);
-		    }
-		    
-		    elsif ( get_table_property($table, 'ALLOW_KEY_INSERT') && $permission eq 'post' )
+		    if ( $permission eq 'admin' || $permission eq 'insert_key' )
 		    {
 			$action->_set_permission($permission);
 		    }
@@ -1660,11 +1656,33 @@ sub replace_record {
 		}
 	    }
 	    
+	    # If the record has been found but is locked, then add an E_LOCKED condition. The user
+	    # would have had permission to replace this record, except for the lock.
+	    
+	    elsif ( $permission eq 'locked' )
+	    {
+		$edt->add_condition($action, 'E_LOCKED', $action->keyval);
+	    }
+	    
+	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
+	    # record is actually being unlocked by this operation, or the transaction allows
+	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
+	    # that the user does have permission to update the record if the lock is disregarded.
+	    
+	    elsif ( $permission eq 'unlock' )
+	    {
+		unless ( (defined $record->{admin_lock} && $record->{admin_lock} == 0) ||
+			 $edt->allows('LOCKED') )
+		{
+		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
+		}
+	    }
+	    
 	    # If the user does not have permission to edit the record, add an error condition. 
 	    
 	    elsif ( $permission ne 'edit' && $permission ne 'admin' )
 	    {
-		$edt->add_condition($action, 'E_PERM', 'replace_old');
+		$edt->add_condition($action, 'E_PERM', 'replace_existing');
 	    }
 	    
 	    # Then check the new record values, to make sure that the replacement record meets all of
@@ -1735,11 +1753,35 @@ sub delete_record {
 		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
 	    }
 	    
+	    # If the record has been found but is locked, then add an E_LOCKED condition. The user
+	    # would have had permission to delete this record, except for the lock.
+	    
+	    elsif ( $permission eq 'locked' )
+	    {
+		$edt->add_condition($action, 'E_LOCKED', $action->keyval);
+	    }
+	    
+	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
+	    # record is actually being unlocked by this operation, or the transaction allows
+	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
+	    # that the user does have permission to update the record if the lock is disregarded.
+	    
+	    elsif ( $permission eq 'unlock' )
+	    {
+		unless ( (ref $record eq 'HASH' &&
+			  defined $record->{admin_lock} &&
+			  $record->{admin_lock} == 0) ||
+			 $edt->allows('LOCKED') )
+		{
+		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
+		}
+	    }
+	    
 	    # If we do not have permission to delete the record, add an error condition.
 	    
-	    elsif ( $permission ne 'delete' && $permission ne 'admin' )
+	    elsif ( $permission ne 'admin' && $permission ne 'delete' )
 	    {
-		$edt->add_condition($action, 'E_PERM');
+		$edt->add_condition($action, 'E_PERM', 'delete');
 	    }
 	    
 	    # If a 'validate_delete' method was specified, then call it. This method may abort the

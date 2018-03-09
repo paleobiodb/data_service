@@ -19,8 +19,7 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw(set_table_property set_column_property $EDT_TEST $EDT_AUX);
-use ResourceTables;
+use TableDefs qw(set_table_property set_column_property $EDT_TEST $EDT_AUX $EDT_ANY);
 
 use base 'EditTransaction';
 
@@ -34,16 +33,21 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
 # ----------------------------------------------------
 
 {
-    set_table_property($EDT_TEST, ALLOW_POST => 'AUTHORIZED');
+    set_table_property($EDT_TEST, CAN_POST => 'AUTHORIZED');
     set_table_property($EDT_TEST, ALLOW_DELETE => 1);
     set_table_property($EDT_TEST, PRIMARY_KEY => 'test_no');
     set_column_property($EDT_TEST, 'string_req', REQUIRED => 1);
     set_column_property($EDT_TEST, 'signed_req', REQUIRED => 1);
     
-    set_table_property($EDT_AUX, ALLOW_POST => 'AUTHORIZED');
+    set_table_property($EDT_AUX, CAN_POST => 'AUTHORIZED');
     set_table_property($EDT_AUX, PRIMARY_KEY => 'aux_no');
     set_column_property($EDT_AUX, 'test_no', FOREIGN_KEY => 'EDT_TEST');
     set_column_property($EDT_AUX, 'name', REQUIRED => 1);
+
+    set_table_property($EDT_ANY, CAN_POST => 'LOGGED_IN');
+    set_table_property($EDT_ANY, ALLOW_DELETE => 1);
+    set_table_property($EDT_ANY, PRIMARY_KEY => 'any_no');
+    set_column_property($EDT_ANY, 'string_req', REQUIRED => 1);
     
     EditTest->register_allowances('TEST_DEBUG');
     EditTest->register_conditions(E_TEST => "TEST ERROR '%1'",
@@ -409,7 +413,7 @@ sub establish_tables {
 		boolean_val boolean,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp)");
-
+    
     $dbh->do("DROP TABLE IF EXISTS $EDT_AUX");
 
     $dbh->do("CREATE TABLE $EDT_AUX (
@@ -417,6 +421,16 @@ sub establish_tables {
 		name varchar(255) not null,
 		test_no int unsigned not null,
 		unique key (name))");
+
+    $dbh->do("DROP TABLE IF EXISTS $EDT_ANY");
+    
+    $dbh->do("CREATE TABLE $EDT_ANY (
+		any_no int unsigned primary key auto_increment,
+		authorizer_no int unsigned not null,
+		enterer_no int unsigned not null,
+		enterer_id varchar(36) not null,
+		string_req varchar(255) not null)");
+		
 }
 
 
