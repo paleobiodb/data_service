@@ -56,7 +56,7 @@ subtest 'proceed_mode' => sub {
     
     # Then create a transaction and add some records.
     
-    $edt = $T->new_edt($perm_a, { PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { PROCEED_MODE => 1, SILENT_MODE => 1 });
     
     $edt->insert_record($EDT_TEST, { string_req => 'proceed test a1' });
     $edt->insert_record($EDT_TEST, { string_req => 'proceed test a2' });
@@ -76,15 +76,15 @@ subtest 'proceed_mode' => sub {
     ok( ! $edt->errors, "transaction has no errors" );
     is( $edt->warnings, 2, "transaction has two warnings" );
     
-    $T->ok_has_warning( qr/W_TEST/, "found warning W_TEST" );
-    $T->ok_has_warning( qr/F_TEST/, "found warning F_TEST" );
+    $T->ok_has_warning('any', 'W_TEST', "found warning W_TEST");
+    $T->ok_has_warning('any', 'F_TEST', "found warning F_TEST");
     
     ok( $edt->can_proceed, "transaction can proceed" );
     
     my $result = $edt->commit;
     
     is( $edt->warnings, 3, "transaction has three warnings" );
-    $T->ok_has_warning( qr/F_EXECUTE/, "found warning F_EXECUTE" );
+    $T->ok_has_warning('any', qr/F_EXECUTE/, "found warning F_EXECUTE");
     
     # Check that the transaction actually committed and that the record with a warning was
     # inserted while the record with an error was not.
@@ -99,7 +99,7 @@ subtest 'proceed_mode' => sub {
     # sure that errors are properly changed into warnings for these operations as well. We also
     # set IMMEDIATE_MODE to check that this doesn't interfere with PROCEED_MODE.
     
-    $edt = $T->new_edt($perm_a, { PROCEED_MODE => 1, IMMEDIATE_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { PROCEED_MODE => 1, IMMEDIATE_MODE => 1, SILENT_MODE => 1 });
     
     my ($k1, $k2) = $T->fetch_keys_by_expr($EDT_TEST, "string_req like 'proceed test %'");
     my ($k3) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='proceed test delete'");
@@ -131,9 +131,9 @@ subtest 'proceed_mode' => sub {
     ok( $result, "transaction succeeded in PROCEED_MODE" ) || $T->diag_errors;
     is( $edt->warning_strings, 4, "got 4 warnings" );
     
-    $T->ok_has_warning(qr/F_NOT_FOUND/, "got 'F_NOT_FOUND'");
-    $T->ok_has_warning(qr/F_EXECUTE/, "got 'F_EXECUTE'");
-    $T->ok_has_warning(qr/F_PERM/, "got 'F_PERM'");
+    $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");
+    $T->ok_has_warning('any', 'F_EXECUTE', "got 'F_EXECUTE'");
+    $T->ok_has_warning('any', 'F_PERM', "got 'F_PERM'");
 
     $T->ok_found_record($EDT_TEST, "signed_val=8");
     $T->ok_no_record($EDT_TEST, "signed_val=9");
@@ -194,7 +194,7 @@ subtest 'not_found' => sub {
     
     ok( $result, "transaction succeeded with NOT_FOUND" ) || $T->diag_errors;
     is( $edt->warnings, 3, "got 3 warnings" );
-    $T->ok_has_warning(qr/F_NOT_FOUND/, "got 'F_NOT_FOUND'");
+    $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");
     
     $T->ok_found_record($EDT_TEST, "signed_val=21");
     $T->ok_no_record($EDT_TEST, "signed_val=22");
@@ -210,12 +210,12 @@ subtest 'not_found' => sub {
     $edt->update_record($EDT_TEST, { $primary => 99998, string_req => 'cannot update' });
     ok( $edt->can_proceed, "not found error is okay" );
     $edt->update_record($EDT_TEST, { $primary => $k1, signed_val => 'abc' });
-    $T->ok_has_error( qr/E_PARAM/, "has parameter error" );
+    $T->ok_has_error( 'E_FORMAT' );
     ok( ! $edt->can_proceed, "parameter error is not okay" );
 
     # And same with IMMEDIATE_MODE.
 
-    $edt = $T->new_edt($perm_a, { NOT_FOUND => 1, IMMEDIATE_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { NOT_FOUND => 1, IMMEDIATE_MODE => 1, SILENT_MODE => 1 });
 
     $edt->update_record($EDT_TEST, { $primary => 99997, string_req => 'cannot update' });
     ok( $edt->can_proceed, "not found error is okay" );
@@ -249,7 +249,7 @@ subtest 'no_records' => sub {
     
     ok( ! $result, "transaction failed" );
     is( $edt->transaction, 'aborted', "transaction was rolled back" );
-    $T->ok_has_error( qr/C_NO_RECORDS/, "found no records error" );
+    $T->ok_has_error( 'C_NO_RECORDS', "found no records caution" );
     
     is( $edt->{save_init_count}, 1, "initialize_transaction was called" );
     ok( ! $edt->{save_final_count}, "finalize_transaction was not called" );

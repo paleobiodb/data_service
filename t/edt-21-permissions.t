@@ -70,7 +70,7 @@ subtest 'setup' => sub {
     
     $perm_n = $T->new_perm('NO_LOGIN');
 
-    ok( $perm_n && $perm_n->role eq 'none', "found no-login permissin" ) or die;
+    ok( $perm_n && $perm_n->role eq 'none', "found no-login permission" ) or die;
     
     # Grab the name of the primary key of our test table.
     

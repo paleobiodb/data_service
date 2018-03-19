@@ -166,27 +166,29 @@ subtest 'test exceptions' => sub {
 	
 	$edt = $T->new_edt($perm_a);
     };
-
+    
     ok( $@ && $@ =~ /TEST NO CONNECT/, "test exception for no database connection" );
     
     {
 	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
-	
-	$T->do_insert_records($perm_a, { nocheck => 1 }, "insert record exception", $EDT_TEST,
-			      { signed_req => 999, string_req => 'should not be inserted' });
+
+	$edt = $T->new_edt($perm_a, { SILENT_MODE => 1, IMMEDIATE_MODE => 1 });
+
+	$edt->insert_record($EDT_TEST, { string_req => 'should not be inserted' });
     }
     
-    $T->ok_has_error( qr/E_EXECUTE/, "test insert sql error" );
+    $T->ok_has_error( 'any', 'E_EXECUTE' );
     $T->clear_edt;
     
     eval {
 	local $EditTransaction::TEST_PROBLEM{validate} = 1;
 	
-    	$T->do_insert_records($perm_a, { nocheck => 1 }, "insert record", $EDT_TEST,
-    			      { signed_req => 999, string_req => 'should not be inserted' });
+	$edt = $T->new_edt($perm_a, { SILENT_MODE => 1, IMMEDIATE_MODE => 1 });
+
+	$edt->insert_record($EDT_TEST, { string_req => 'should not be inserted' });
     };
     
-    $T->ok_has_error( qr/E_EXECUTE/, "test validate error" );
+    $T->ok_has_error( 'any', 'E_EXECUTE' );
 };
 
 
@@ -317,40 +319,56 @@ subtest 'debug output' => sub {
     
     ok( $edt->has_debug_output( qr/ROLLBACK TRANSACTION/ ), "captured rollback from debug output" );
 
-    # Then try a transaction with DEBUG_MODE off and check that we get none.
+    # Then try a transaction with DEBUG_MODE off and SILENT_MODE on check that we get none.
     
-    my $edt2 = $T->new_edt($perm_a, { DEBUG_MODE => 0, TEST_DEBUG => 1 });
+    $edt = $T->new_edt($perm_a, { DEBUG_MODE => 0, SILENT_MODE => 1, TEST_DEBUG => 1, PROCEED_MODE => 1 });
+
+    $edt->start_execution;
     
-    $edt2->start_execution;
-    
-    ok( ! $edt2->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
+    ok( ! $edt->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
 	"did not capture debug output without DEBUG_MODE" );
     
     {
 	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
+	
+	$edt->insert_record($EDT_TEST, { string_req => 'abc' });
+	
+	ok( ! $edt->has_debug_output( qr/do failed/i ),
+	    "did not capture exception because of SILENT_MODE" );
 
-	$edt2->insert_record($EDT_TEST, { signed_req => 'abc' });
+	# Then turn silent mode off and check that we get exceptions again.
+	
+	$edt->silent_mode(0);
+	$edt->clear_debug_output;
+	
+	$edt->insert_record($EDT_TEST, { string_req => 'abc' });
+	
+	ok( $edt->has_debug_output( qr/do failed/i ), "silent mode has been turned off" );
     }
     
-    ok( ! $edt2->has_debug_output( qr/XXXX/ ), "did not capture exception because of default SILENT_MODE" );
-    
-    $edt2->rollback;
-
-    # Then try one with SILENT_MODE off (it is on by default) and make sure that we get exceptions
+    # Then try one with SILENT_MODE off and make sure that we get exceptions
     # but not debugging output.
     
-    my $edt3 = $T->new_edt($perm_a, { SILENT_MODE => 0, TEST_DEBUG => 1, IMMEDIATE_MODE => 1 });
-    
-    ok ( ! $edt3->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
-	 "did not capture debug output without DEBUG_MODE" );
+    $edt = $T->new_edt($perm_a, { SILENT_MODE => 0, TEST_DEBUG => 1, IMMEDIATE_MODE => 1 });
 
+    ok ( ! $edt->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
+	 "did not capture debug output without DEBUG_MODE" );
+    
     {
 	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
-
-	$edt3->insert_record($EDT_TEST, { string_req => 'abc' });
+	
+	$edt->insert_record($EDT_TEST, { string_req => 'abc' });
+	
+	ok( $edt->has_debug_output( qr/do failed/i ), "captured exception because SILENT_MODE was off" );
     }
+
+    # Now turn debug mode on and make sure we get debugging output once more.
     
-    ok( $edt3->has_debug_output( qr/do failed/ ), "captured exception because SILENT_MODE was off" );
+    $edt->debug_mode(1);
+    
+    $edt->rollback;
+
+    ok( $edt->has_debug_output( qr/ROLLBACK/i ), "captured debugging output again" );    
 };
 
 

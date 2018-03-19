@@ -18,7 +18,8 @@
 # 2. Column properties:
 #
 # ID_TYPE
-# REQUIRED
+# FOREIGN_KEY
+# REQUIRED [edt-22-validate.t 'required']
 # ADMIN_SET
 
 # 3. Table roles:
@@ -28,7 +29,7 @@
 # enterer - can insert, update, delete
 
 # 4. Allowances: 
-#
+# 
 # CREATE
 # MULTI_DELETE
 # ALTER_TRAIL
@@ -43,7 +44,7 @@
 # check that all of these are accepted, and no others. [edt-01-basic.t 'allowances']
 
 # 5. EditTest->new [DONE]
-#
+# 
 # create with dbh [edt-01-basic.t 'create objects']
 # create with request [edt-01-basic.t 'create objects']
 # bad allowance -> W_ALLOW [edt-01-basic.t 'allowances']
@@ -64,7 +65,11 @@
 
 # 7. Debugging [DONE]
 #
-# override and capture calls to debug_line [edt-01-basic.t 'debug output']
+#  - override and capture calls to debug_line [edt-01-basic.t 'debug output']
+#  - debugging output can be turned on and off [edt-01-basic.t 'debug output']
+#  - silent mode prevents exception messages from being printed out
+# 	[edt-01-basic.t 'test exceptions']
+#  - silent mode can be turned on and off [edt-01-basic.t 'debug output']
 
 # 8. errors, warnings, and cautions [DONE]
 # 
@@ -108,7 +113,7 @@
 #  - labels are properly generated for unlabeled records [edt-14-records.t 'basic']
 #  - $edt->key_labels
 
-# 11. transaction control [DONE]
+# 11. transaction control [$$$]
 # 
 # $edt->start_transaction [DONE]
 #  - check that transaction status is properly changed [edt-10-transaction.t 'start']
@@ -148,8 +153,10 @@
 #	[edt-30-subclass.t 'authorize', 'validate']
 #  - check both before and after $edt->start_execution [edt-10-transaction.t 'errors']
 # 
-# general [DONE]
+# general [$$$]
 # - automatic rollback when object goes out of scope [edt-01-basic.t 'out of scope']
+# - automatic rollback when a new transaction is started before an old one is finished
+
 
 # 12. insert_record
 # 
@@ -228,6 +235,8 @@
 # 17a. current_action [DONE]
 # 
 #  - $edt->current_action [edt-12-conditions.t 'basic', edt-13-actions.t 'basic']
+#  - $edt->specific_errors [edt-12-conditions.t 'basic']
+#  - $edt->specific_warnings [edt-12-conditions.t 'basic']
 
 # 17b. aux_action
 
@@ -274,10 +283,10 @@
 #  - check that *_no is properly checked as *_id
 #  - check that $action->column_skip_validate works properly
 #  - check that columns with an undefined value are ignored
-#  - check for E_REQUIRED if a required column is missing
-#  - check for E_REQUIRED if a required column has the undefined value
-#  - check for E_REQUIRED if a required column has the empty string
-#
+#  - check for E_REQUIRED if a required column is missing [edt-22-validate.t 'required']
+#  - check for E_REQUIRED if a required column has the undefined value [edt-22-validate.t 'required']
+#  - check for E_REQUIRED if a required column has the empty string [edt-22-validate.t 'required']
+# 
 # crmod:
 #  - check that crmod columns can be set with ALTER_TRAIL and 'admin'
 #  - check for E_PERM_COL on crmod columns without ALTER_TRAIL or 'admin'
@@ -309,31 +318,35 @@
 #  - check for E_KEY_NOT_FOUND if the key does is not found in the foreign table
 #  - check for E_PARAM for text, negative integer, or other reference type
 #  - check that the empty string or 0 produces 0
+# 
+# char and varchar: [DONE]
+#  - check that empty string and arbitrary string are accepted [edt-22-validate.t 'text']
+#  - check for E_RANGE on length violation [edt-22-validate.t 'text']
+# 
+# text and tinytext: [DONE]
+#  - check that empty string and arbitrary string are accepted [edt-22-validate.t 'text']
+#  - check for E_RANGE on length violation [edt-22-validate.t 'text']
+# 
+# int types: [DONE]
+#  - check that boolean fields accept 0 and 1 [edt-22-validate.t 'integer']
+#  - check for E_FORMAT on non-numeric values [edt-22-validate.t 'integer']
+#  - check for E_RANGE on too large values, both signed and unsigned [edt-22-validate.t 'integer']
+#  - check that integer fields accept positive values, 0, and '' [edt-22-validate.t 'integer']
+#  - check that '' is entered as null [edt-22-validate.t 'integer']
+#  - check that signed integer fields accept negative values [edt-22-validate.t 'integer']
+#  - check that values starting with zeros are accepted [edt-22-validate.t 'integer']
+#  - check for E_RANGE on size violations for tiny, small, medium, and big [edt-22-validate.t 'integer']
+#  - check for E_RANGE on negative size violations for all of the above [edt-22-validate.t 'integer']
+#  - check for E_RANGE on negative values for unsigned [edt-22-validate.t 'integer']
 #
-# char and varchar:
-#  - check that empty string and arbitrary string are accepted
-#  - check for E_PARAM on length violation
-#
-# text and tinytext:
-#  - check that empty string and arbitrary string are accepted
-#  - check for E_PARAM on length violation
-#
-# int types:
-#  - check that boolean fields accept 0 and 1
-#  - check for E_PARAM on empty string or character values or larger numerics
-#  - check that integer fields accept positive values, 0, and ''
-#  - check that signed integer fields accept negative values
-#  - check that values starting with zeros are accepted
-#  - check for E_PARAM on size violations for tiny, small, medium, and big
-#  - check for E_PARAM on negative size violations for all of the above
-#  - check for E_PARAM on negative values for unsigned
-#  - check for E_PARAM on badly formatted values
-#
-# decimal types:
-#  - check that decimal fields accept positive and negative values, 0, and ''
-#  - check for E_PARAM on an unsigned field with a negative value
-#  - check for E_PARAM on width and precision violations on columns with the STRICT property
-#  - check for W_PARAM on width and precision violations on columns without STRICT
+# decimal types: [DONE]
+#  - check that decimal fields accept positive and negative values, 0, and '' [edt-22-validate.t 'fixed']
+#  - check that '' is entered as null [edt-22-validate.t 'fixed']
+#  - check for E_RANGE on an unsigned field with a negative value [edt-22-validate.t 'fixed']
+#  - check for E_RANGE on width violations [edt-22-validate.t 'fixed']
+#  - check for E_SIZE on precision violations [edt-22-validate.t 'fixed']
+#  - check for W_TRUNC on precision violations on columns with ALLOW_TRUNC property
+#	[edt-22-validate.t 'fixed']
 
 # 24. EditTransaction::Condition [DONE]
 # 
@@ -341,7 +354,7 @@
 
 # 25. EditTransaction::Action: [DONE]
 #
-# accessor methods:
+# accessor methods: [DONE]
 #  - $action->table [edt-13-actions.t 'basic']
 #  - $action->operation [edt-13-actions.t 'basic']
 #  - $action->label [edt-13-actions.t 'basic']
@@ -366,6 +379,5 @@
 #  - get_attr called in 'after_action' fetches value from set_attr called in 'before_action'
 #	 [edt-13-actions.t 'attrs']
 #
-# 
 
 

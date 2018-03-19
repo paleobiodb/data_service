@@ -47,6 +47,8 @@ sub new {
     
     eval {
 	$dbh = connectDB("config.yml");
+	$dbh->{mysql_enable_utf8} = 1;
+	$dbh->do('SET @@SQL_MODE = CONCAT(@@SQL_MODE, ",STRICT_TRANS_TABLES")');
 	init_table_names(configData, 1);
 	select_test_tables('edt_test', 1);
 	select_test_tables('session_data', 1);
@@ -108,8 +110,6 @@ sub create_tables {
     my ($T) = @_;
     
     eval {
-	# select_test_tables('edt_test', 1);
-	# select_test_tables('session_data', 1);
 	establish_session_data($T->dbh);
 	EditTest->establish_tables($T->dbh);
     };
@@ -350,7 +350,7 @@ sub get_new_edt {
     # silent mode if 'notsilent' was given. Otherwise, silent mode is on by default.
     
     $options->{DEBUG_MODE} = 1 if $T->{debug} && ! exists $options->{DEBUG_MODE};
-    $options->{SILENT_MODE} = 1 unless $T->{debug} || $T->{notsilent} || exists $options->{SILENT_MODE};
+    # $options->{SILENT_MODE} = 1 unless $T->{debug} || $T->{notsilent} || exists $options->{SILENT_MODE};
     
     # Now process all of the specified options, and apply all those which are in upper case as
     # allowances.
@@ -801,6 +801,7 @@ sub ok_result {
     
     my $T = shift;
     my $result = shift;
+    my $label = shift || "operation succeeded";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
@@ -810,19 +811,20 @@ sub ok_result {
     {
 	$edt = shift;
     }
-
+    
     else
     {
 	$edt = $T->{last_edt};
     }
-
-    my $label = shift;
-
-    croak "you must specify a label" unless $label;
     
-    unless ($result )
+    if ( $result )
     {
-	$T->diag_errors;
+	pass($label);
+    }
+    
+    else
+    {
+	$T->diag_errors('current');
 	fail($label);
     }
 }
@@ -834,18 +836,34 @@ sub ok_no_errors {
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
+    croak "no EditTransaction found" unless $edt;
+    
+    my $selector = 'current';
+
+    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any') )
+    {
+	$selector = shift;
+    }
+
     my $label = shift;
-    croak "you must specify a label" unless $label && ! ref $label;
+    $label ||= "no errors found";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    if ( $edt->errors )
+    if ( $selector eq 'any' && $edt->errors )
     {
-	$T->diag_errors($edt);
+	$T->diag_errors($edt, 'any');
 	fail($label);
 	return;
     }
 
+    elsif ( $selector eq 'current' && $edt->specific_errors )
+    {
+	$T->diag_errors($edt, 'current');
+	fail($label);
+	return;
+    }
+    
     else
     {
 	pass($label);
@@ -860,46 +878,148 @@ sub ok_has_error {
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
-    my $regexp = shift;
-    croak "you must specify a regexp" unless $regexp && ref $regexp eq 'Regexp';
+    croak "no EditTransaction found" unless $edt;
+    
+    my $selector = 'current';
+
+    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any') )
+    {
+	$selector = shift;
+    }
+    
+    my $check = shift;
+    
+    unless ( $check && ( ref $check eq 'Regexp' || $check =~ /^[A-Z0-9_]+$/ ) )
+    {
+	croak "you must specify either a condition code or regexp";
+    }
     
     my $label = shift;
-    croak "you must specify a label" unless $label && ! ref $label;
+    $label ||= "found matching error";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    foreach my $e ( $edt->error_strings )
+    my @errors = ($selector eq 'current' ? $edt->specific_errors : $edt->errors);
+    
+    foreach my $e ( @errors )
     {
-	if ( $e =~ $regexp )
+	if ( ref $check eq 'Regexp' )
+	{
+	    my $msg = $e->code;
+	    $msg .= ' (' . $e->label . ')' if $e->label;
+	    $msg .= ': ' . $edt->generate_msg($e);
+	    
+	    if ( $msg =~ $check )
+	    {
+		pass($label);
+		return 1;
+	    }
+	}
+	
+	elsif ( $check eq $e->code )
 	{
 	    pass($label);
 	    return 1;
 	}
     }
-
+    
+    $T->diag_errors($edt, $selector);
     fail($label);
     return;
 }
 
+
+sub diag_errors {
+
+    my $T = shift;
+
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    my $selector = shift || 'current';
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    croak "no EditTransaction found" unless ref $edt;
+    
+    my @errors = ($selector eq 'current' ? $edt->specific_errors : $edt->errors);
+    
+    foreach my $e ( @errors )
+    {
+	my $msg = $e->code;
+	$msg .= ' (' . $e->label . ')' if $e->label;
+	$msg .= ': ' . $edt->generate_msg($e);
 	
+        diag($msg);
+    }
+}
+
+
+# sub ok_current_error {
+    
+#     my $T = shift;
+    
+#     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+#     my $regexp = shift;
+#     croak "you must specify an error code or a regexp" unless $regexp && ref $regexp eq 'Regexp';
+    
+#     my $label = shift;
+#     croak "you must specify a label" unless $label && ! ref $label;
+    
+#     local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+#     my @current = $edt->specific_errors;
+    
+#     foreach my $e ( @current )
+#     {
+# 	my $msg = $e->code . ': ' . $edt->generate_msg($e);
+	
+# 	if ( $msg =~ $regexp )
+# 	{
+# 	    pass($label);
+# 	    return 1;
+# 	}
+#     }
+    
+#     fail($label);
+#     return;
+# }
+
+
 sub ok_no_warnings {
 
     my $T = shift;
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
+    croak "no EditTransaction found" unless $edt;
+    
+    my $selector = 'current';
+
+    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any') )
+    {
+	$selector = shift;
+    }
+
     my $label = shift;
-    croak "you must specify a label" unless $label && ! ref $label;
+    $label ||= "no warnings found";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    if ( $edt->warnings )
+    if ( $selector eq 'any' && $edt->warnings )
     {
-	$T->diag_warnings($edt);
+	$T->diag_warnings($edt, 'any');
 	fail($label);
 	return;
     }
 
+    elsif ( $selector eq 'current' && $edt->specific_warnings )
+    {
+	$T->diag_warnings($edt, 'current');
+	fail($label);
+	return;
+    }
+    
     else
     {
 	pass($label);
@@ -914,41 +1034,170 @@ sub ok_has_warning {
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
-    my $regexp = shift;
-    croak "you must specify a regexp" unless $regexp && ref $regexp eq 'Regexp';
+    croak "no EditTransaction found" unless $edt;
+    
+    my $selector = 'current';
+
+    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any') )
+    {
+	$selector = shift;
+    }
+    
+    my $check = shift;
+    
+    unless ( $check && ( ref $check eq 'Regexp' || $check =~ /^[A-Z0-9_]+$/ ) )
+    {
+	croak "you must specify either a condition code or regexp";
+    }
     
     my $label = shift;
-    croak "you must specify a label" unless $label && ! ref $label;
+    
+    $label ||= "found matching warning";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    foreach my $e ( $edt->warning_strings )
+    my @warnings = ($selector eq 'current' ? $edt->specific_warnings : $edt->warnings);
+    
+    foreach my $w ( @warnings )
     {
-	if ( $e =~ $regexp )
+	if ( ref $check eq 'Regexp' )
+	{
+	    my $msg = $w->code;
+	    $msg .= ' (' . $w->label . ')' if $w->label;
+	    $msg .= ': ' . $edt->generate_msg($w);
+	    
+	    if ( $msg =~ $check )
+	    {
+		pass($label);
+		return 1;
+	    }
+	}
+
+	elsif ( $check eq $w->code )
 	{
 	    pass($label);
 	    return 1;
 	}
     }
 
+    $T->diag_warnings($edt, $selector);
     fail($label);
     return;
 }
 
-	
-sub ok_last_exception {
 
-    my ($T, $regex, $label) = @_;
+sub ok_no_conditions {
     
-    croak "you must specify a regular expression" unless $regex && ref $regex eq 'Regexp';
-    croak "you must specify a label" unless $label;
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    croak "no EditTransaction found" unless $edt;
+    
+    my $selector = 'current';
+
+    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any') )
+    {
+	$selector = shift;
+    }
+
+    my $label = shift;
+    $label ||= "no error or warning conditions found";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $msg = $T->{last_exception};
+    if ( $selector eq 'any' && ($edt->errors || $edt->warnings ) )
+    {
+	$T->diag_errors($edt, 'any') if $edt->errors;
+	$T->diag_warnings($edt, 'any') if $edt->warnings;
+	fail($label);
+	return;
+    }
     
-    ok( $msg && $msg =~ $regex, $label);
+    elsif ( $selector eq 'current' && ($edt->specific_errors || $edt->specific_warnings) )
+    {
+	$T->diag_errors($edt, 'current') if $edt->specific_errors;
+	$T->diag_warnings($edt, 'current') if $edt->specific_warnings;
+	fail($label);
+	return;
+    }
+    
+    else
+    {
+	pass($label);
+	return 1;
+    }
 }
+
+
+sub diag_warnings {
+
+    my ($T, $edt, $selector) = @_;
+
+    $selector ||= 'current';
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $edt //= $T->{last_edt};
+
+    croak "no EditTransaction found" unless ref $edt;
+    
+    my @warnings = ($selector eq 'current' ? $edt->specific_warnings : $edt->warnings);
+    
+    foreach my $w ( @warnings )
+    {
+	my $msg = $w->code;
+	$msg .= ' (' . $w->label . ')' if $w->label;
+	$msg .= ': ' . $edt->generate_msg($w);
+	
+        diag($msg);
+    }
+}
+
+
+# sub ok_current_warning {
+    
+#     my $T = shift;
+    
+#     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+#     my $regexp = shift;
+#     croak "you must specify a regexp" unless $regexp && ref $regexp eq 'Regexp';
+    
+#     my $label = shift;
+#     croak "you must specify a label" unless $label && ! ref $label;
+    
+#     local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+#     foreach my $w ( $edt->specific_warnings )
+#     {
+# 	my $msg =~ $w->code . ': ' . $edt->generate_msg($w);
+	
+# 	if ( $msg =~ $regexp )
+# 	{
+# 	    pass($label);
+# 	    return 1;
+# 	}
+#     }
+
+#     fail($label);
+#     return;
+# }
+
+	
+# sub ok_last_exception {
+
+#     my ($T, $regex, $label) = @_;
+    
+#     croak "you must specify a regular expression" unless $regex && ref $regex eq 'Regexp';
+#     croak "you must specify a label" unless $label;
+    
+#     local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+#     my $msg = $T->{last_exception};
+    
+#     ok( $msg && $msg =~ $regex, $label);
+# }
 
 
 sub ok_found_record {
@@ -960,7 +1209,7 @@ sub ok_found_record {
     # Check arguments
     
     croak "you must specify an expression" unless defined $expr && ! ref $expr && $expr ne '';
-    $label ||= 'record was found';
+    $label ||= 'found at least one record';
 
     # If the given expression is a single decimal number, assume it is a key.
     
@@ -1027,34 +1276,38 @@ sub ok_no_record {
 }
 
 
-sub diag_errors {
+sub ok_count_records {
+    
+    my ($T, $count, $table, $expr, $label) = @_;
+    
+    my $dbh = $T->dbh;
 
-    my ($T, $edt) = @_;
+    croak "invalid count '$count'" unless defined $count && $count =~ /^\d+$/;
+    croak "you must specify a table" unless $table;
+    croak "you must specify a valid SQL expression" unless $expr;
 
+    $label ||= "found proper number of records";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $edt //= $T->{last_edt};
-    return unless ref $edt;
+    my $sql = "SELECT count(*) FROM $table WHERE $expr";
     
-    foreach my $e ( $edt->error_strings )
+    $T->debug_line($sql);
+    
+    my ($result) = $dbh->selectrow_array($sql);
+    
+    if ( defined $result && $result == $count )
     {
-        diag($e);
+	pass($label);
     }
-}
 
-
-sub diag_warnings {
-
-    my ($T, $edt) = @_;
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    $edt //= $T->{last_edt};
-    return unless ref $edt;
-    
-    foreach my $w ( $edt->warning_strings )
+    else
     {
-        diag($w);
+	$result //= "undefined";
+	
+	fail("$label");
+	diag("     got: $result");
+	diag("expected: $count"); 
     }
 }
 

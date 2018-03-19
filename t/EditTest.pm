@@ -37,7 +37,6 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
     set_table_property($EDT_TEST, ALLOW_DELETE => 1);
     set_table_property($EDT_TEST, PRIMARY_KEY => 'test_no');
     set_column_property($EDT_TEST, 'string_req', REQUIRED => 1);
-    set_column_property($EDT_TEST, 'signed_req', REQUIRED => 1);
     
     set_table_property($EDT_AUX, CAN_POST => 'AUTHORIZED');
     set_table_property($EDT_AUX, PRIMARY_KEY => 'aux_no');
@@ -170,9 +169,9 @@ sub initialize_transaction {
     elsif ( my $value = $edt->get_attr('initialize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $table (string_req) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $EDT_AUX (name) values ($quoted)");
     }
-
+    
     $edt->{save_init_count}++;
     $edt->{save_init_table} = $table;
     $edt->{save_init_status} = $edt->transaction;
@@ -201,7 +200,7 @@ sub finalize_transaction {
     elsif ( my $value = $edt->get_attr('finalize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $table (string_req) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $EDT_AUX (name) values ($quoted)");
     }
     
     $edt->{save_final_count}++;
@@ -262,7 +261,7 @@ sub before_action {
     if ( my $value = $edt->get_attr('before add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $table (string_req) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $EDT_AUX (name) values ($quoted)");
     }
     
     $edt->{save_before_count}++;
@@ -340,21 +339,29 @@ sub cleanup_action {
 #
 # Capture debug output for testing.
 
-sub debug_line {
+# sub debug_line {
     
-    return unless ref $_[0] && defined $_[1];
+#     return unless ref $_[0] && defined $_[1];
+#     return $_[0]->SUPER::debug_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
+    
+#     push @{$_[0]->{debug_output}}, $_[1] if $_[0]->{debug};
+# }
+
+
+# sub error_line {
+
+#     return unless ref $_[0] && defined $_[1];
+#     return $_[0]->SUPER::error_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
+
+#     push @{$_[0]->{debug_output}}, $_[1] unless $_[0]->{silent};
+# }
+
+
+sub write_debug_output {
+
     return $_[0]->SUPER::debug_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
     
-    push @{$_[0]->{debug_output}}, $_[1] if $_[0]->{debug};
-}
-
-
-sub error_line {
-
-    return unless ref $_[0] && defined $_[1];
-    return $_[0]->SUPER::error_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
-
-    push @{$_[0]->{debug_output}}, $_[1] unless $_[0]->{silent};
+    push @{$_[0]->{debug_output}}, $_[1];
 }
 
 
@@ -402,24 +409,32 @@ sub establish_tables {
 		test_no int unsigned primary key auto_increment,
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,
-		modifier_no int unsigned not null,
-		interval_no int unsigned not null,
-		string_val varchar(40) not null,
-		string_req varchar(40) not null,
+		modifier_no int unsigned not null default 0,
+		interval_no int unsigned not null default 0,
+		string_val varchar(40) not null default '',
+		string_req varchar(40) not null default '',
+		binary_val varbinary(40),
+		text_val text,
+		blob_val blob,
 		signed_val mediumint,
-		unsigned_val mediumint unsigned,
+		unsigned_val mediumint unsigned not null default 0,
+		tiny_val tinyint unsigned,
 		decimal_val decimal(5,2),
-		float_val double,
+		unsdecimal_val decimal(5,2) unsigned not null default 0,
+		double_val double,
+		unsfloat_val float unsigned not null default 0,
 		boolean_val boolean,
+		enum_val enum('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
+		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp)");
     
     $dbh->do("DROP TABLE IF EXISTS $EDT_AUX");
-
+    
     $dbh->do("CREATE TABLE $EDT_AUX (
 		aux_no int unsigned primary key auto_increment,
-		name varchar(255) not null,
-		test_no int unsigned not null,
+		name varchar(255) not null default '',
+		test_no int unsigned not null default 0,
 		unique key (name))");
 
     $dbh->do("DROP TABLE IF EXISTS $EDT_ANY");
@@ -429,7 +444,7 @@ sub establish_tables {
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,
 		enterer_id varchar(36) not null,
-		string_req varchar(255) not null)");
+		string_req varchar(255) not null default '')");
 		
 }
 

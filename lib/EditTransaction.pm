@@ -18,6 +18,7 @@ use Permissions;
 use Carp qw(carp croak);
 use Try::Tiny;
 use Scalar::Util qw(weaken blessed);
+use Encode qw(encode_utf8);
 
 use Switch::Plain;
 
@@ -66,11 +67,16 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    delete => "You do not have permission to delete this record",
 			    default => "You do not have permission for this operation" },
 		E_PERM_COL => "You do not have permission to set the value of the field '%1'",
-		E_REQUIRED => "Field '%1' must have a nonempty value",
-		E_PARAM => "Field '%1': %2",
+		E_REQUIRED => "Field '%1': must have a nonempty value",
+		E_RANGE => "Field '%1': %2",
+		E_LENGTH => "Field '%1': %2",
+		E_FORMAT => "Field '%1': %2",
 		W_ALLOW => "Unknown allowance '%1'",
 		W_EXECUTE => "%1",
+		W_TRUNC => "Field '$1': %2",
 		UNKNOWN => "MISSING ERROR MESSAGE" });
+
+our (%SPECIAL_BY_CLASS);
 
 our (%TEST_PROBLEM);	# This variable can be set in order to trigger specific errors, in order
                         # to test the error-response mechanisms.
@@ -78,9 +84,17 @@ our (%TEST_PROBLEM);	# This variable can be set in order to trigger specific err
 our (%OPERATION_TYPE) = ( insert => 'record', replace => 'record', update => 'record', delete => 'single' );
 
 # The following hash is used to make sure that if one transaction interrupts the other, we will
-# know about it.
+# know about it. The hash keys are DBI connection handles. In fact, under most circumstances there
+# will only be one key in this hash at any given time. The value, if defined, will be a weakened
+# reference to an EditTransaction object which may possibly have an active transaction.
 
-# $$$
+our (%TRANSACTION_INTERLOCK);
+
+# Also, just for the heck of it, we keep a count which is incremented with each new transaction
+# and can be displayed in debugging messages.
+
+our ($TRANSACTION_COUNT) = 1;
+
 
 # CONSTRUCTOR and destructor
 # --------------------------
@@ -107,7 +121,8 @@ sub new {
     # Create a new EditTransaction object, and bless it into the proper class.
     
     my $edt = { perms => $perms,
-		main_table => $table || '', 
+		main_table => $table || '',
+		unique_id => $TRANSACTION_COUNT++,
 		allows => { },
 		action_list => [ ],
 		bad_list => [ ],
@@ -137,8 +152,10 @@ sub new {
 	weaken $edt->{request};
 	
 	$edt->{dbh} = $request_or_dbh->get_connection;
-	$edt->{debug} = $request_or_dbh->debug if $request_or_dbh->can('debug') &&
-	    not( ref $allows eq 'HASH' && defined $allows->{DEBUG_MODE} && $allows->{DEBUG_MODE} eq '0' );
+	$edt->{debug} = $request_or_dbh->debug if $request_or_dbh->can('debug');
+
+	$edt->{debug} = 0 if ref $allows eq 'HASH' &&
+	    defined $allows->{DEBUG_MODE} && ! $allows->{DEBUG_MODE};
 	
 	die "TEST NO CONNECT" if $TEST_PROBLEM{no_connect};
     }
@@ -225,7 +242,7 @@ sub DESTROY {
     
     if ( $edt->is_active )
     {
-	$edt->_rollback_transaction(1);
+	$edt->_rollback_transaction('destroy');
     }
 }
 
@@ -346,7 +363,7 @@ sub error_line {
 
     else
     {
-	print STDERR "$line\n";
+	$edt->write_debug_output($line);
     }
 }
 
@@ -358,7 +375,7 @@ sub error_line {
     
 sub debug_line {
     
-    return unless ref $_[0] && $_[0]->{debug};
+    return unless ref $_[0] && $_[0]->{debug} && ! $_[0]->{silent};
     
     my ($edt, $line) = @_;
     
@@ -369,8 +386,45 @@ sub debug_line {
 
     else
     {
-	print STDERR "$line\n";
+	$edt->write_debug_output($line);
     }
+}
+
+
+# write_debug_output ( line )
+#
+# This can be overridden by subclasses, in order to capture debugging output. This is particularly
+# useful for unit tests.
+
+sub write_debug_output {
+
+    print STDERR "$_[1]\n";
+}
+
+
+# debug_mode ( value )
+#
+# Turn debug mode on or off. When this mode is on, all SQL statements are printed to standard
+# error along with some extra debugging output.
+
+sub debug_mode {
+
+    my ($edt, $new_value) = @_;
+
+    $edt->{debug} = $new_value;
+}
+
+
+# silent_mode ( value )
+#
+# Turn silent mode on or off. When this mode is on, exceptions are NOT printed to standard error
+# the way they usually are.
+
+sub silent_mode {
+    
+    my ($edt, $new_value) = @_;
+
+    $edt->{silent} = $new_value;
 }
 
 
@@ -470,6 +524,8 @@ sub allows {
 sub register_conditions {
 
     my $class = shift;
+    
+    croak "you must call this as a class method" unless $class->isa('EditTransaction') && ! ref $class;
     
     # Process the arguments in pairs.
     
@@ -674,8 +730,11 @@ sub specific_errors {
     
     if ( $search )
     {
-	return $search->{error_count} // 0 unless wantarray && $search->{error_count};
-
+	unless ( $search->{error_count} && wantarray )
+	{
+	    return wantarray ? () : $search->{error_count} || 0;
+	}
+	
 	# If PROCEED_MODE or NOT_FOUND is allowed, then we have to check the warning list first,
 	# because errors for this action may have been demoted to warnings.
 
@@ -744,9 +803,9 @@ sub specific_warnings {
     # following conditions: if this routine was called in scalar context, or if this action was
     # not associated with any warnings. In either case, we need only check the action's warning count.
     
-    if ( $search )
+    if ( $search && ! ( $search->{warning_count} && wantarray ) )
     {
-	return $search->{warning_count} // 0 unless wantarray && $search->{warning_count};
+	return wantarray ? () : $search->{warning_count} || 0;
     }
     
     # Otherwise, go through the warning list backwards looking for warnings that match the specified
@@ -1045,9 +1104,9 @@ sub squash_param {
 
     if ( defined $_[0] )
     {
-	if ( length($_[0]) > 40 )
+	if ( length($_[0]) > 80 )
 	{
-	    return substr($_[0],0,40) . '...';
+	    return substr($_[0],0,80) . '...';
 	}
 
 	else
@@ -1102,9 +1161,25 @@ sub _new_record {
 	$label = '#' . $edt->{record_count};
     }
     
-    # Then create a new EditTransaction::Action object, save it, and return it.
-
+    # Then create a new EditTransaction::Action object.
+    
     $edt->{current_action} = EditTransaction::Action->new($table, $operation, $record, $label);
+
+    # If there are special actions already set for this table, copy them in.
+    
+    if ( my $s = $SPECIAL_BY_CLASS{ref $edt}{$table} )
+    {
+	$edt->{current_action}->column_special($s);
+    }
+
+    if ( my $s = $edt->{column_special}{$table} )
+    {
+	$edt->{current_action}->column_special($s);
+    }
+
+    # Return the new action.
+    
+    return $edt->{current_action};
 }
 
 
@@ -1247,14 +1322,34 @@ sub start_transaction {
 }
 
 
+# _start_transaction ( )
+#
+# This method does the actual work of starting a new transaction. If one is already active on this
+# database connection, then we assume that something has gone wrong and issue a rollback first.
+
 sub _start_transaction {
 
     my ($edt) = @_;
     
-    my $label = $edt->role eq 'guest' ? '(guest) ' : '';
     my ($result, $save_action);
+
+    # Check to see if there might be an active transaction on this database connection. We cannot
+    # be absolutely sure, since a COMMIT or ROLLBACK might have been issued outside the scope of
+    # the current module, but just in case we issue a ROLLBACK now.
+
+    my $dbh = $edt->dbh;
     
-    $edt->debug_line( " >>> START TRANSACTION $label\n" );
+    if ( ref $TRANSACTION_INTERLOCK{$dbh} && $TRANSACTION_INTERLOCK{$dbh}->isa('EditTransaction') )
+    {
+	my ($in_transaction) = $dbh->selectrow_array('SELECT @@in_transaction');
+
+	if ( $in_transaction )
+	{
+	    $TRANSACTION_INTERLOCK{$dbh}->_rollback_transaction('interlock');
+	}
+    }
+    
+    $edt->debug_line( " >>> START TRANSACTION $edt->{unique_id}\n" );
     
     try {
 
@@ -1274,11 +1369,33 @@ sub _start_transaction {
 	# default method does nothing.
 	
 	$edt->initialize_transaction($edt->{main_table});
+
+	# Keep a reference to this transaction, so it can be rolled back if the client code tries
+	# to start another transaction before this one is committed. But the reference must be a
+	# weak one, because the transaction should be automatically rolled back through the
+	# DESTROY method if all other references to it are destroyed.
+	
+	$TRANSACTION_INTERLOCK{$dbh} = $edt;
+	weaken $TRANSACTION_INTERLOCK{$dbh};
     }
     
     catch {
 
+	# If an error occurs during the above block, then mark this EditTransaction as 'aborted'.
+	
 	$edt->{transaction} = 'aborted';
+
+	# If the transaction was actually started, then roll it back.
+	
+	my ($in_transaction) = $dbh->selectrow_array('SELECT @@in_transaction');
+	
+	if ( $in_transaction )
+	{
+	    $edt->_rollback_transaction('errors');
+	}
+	
+	# Add an error condition, and output the exception to standard error so that it can be
+	# tracked and (hopefully) debugged.
 	
 	my $msg = $edt->{transaction} eq 'active' ? 'an exception occurred on initialization' :
 	    'an exception occurred while starting the transaction';
@@ -1316,7 +1433,7 @@ sub _commit_transaction {
     
     $edt->{current_action} = undef;    
     
-    $edt->debug_line( " <<< COMMIT TRANSACTION\n" );
+    $edt->debug_line( " <<< COMMIT TRANSACTION $edt->{unique_id}\n" );
     
     try {
 	
@@ -1347,7 +1464,7 @@ sub rollback {
     
     if ( $edt->is_active )
     {
-	$edt->_rollback_transaction;
+	$edt->_rollback_transaction('call');
     }
     
     else
@@ -1361,23 +1478,27 @@ sub rollback {
 
 sub _rollback_transaction {
     
-    my ($edt, $from_destroy) = @_;
+    my ($edt, $reason) = @_;
+    
+    my $dbh = $edt->dbh;
     
     $edt->{current_action} = undef;    
     
-    if ( $from_destroy )
+    if ( $reason )
     {
-	$edt->debug_line( " <<< ROLLBACK TRANSACTION FROM DESTROY\n" );
+	$reason = uc $reason;
+	$edt->debug_line( " <<< ROLLBACK TRANSACTION $edt->{unique_id} FROM $reason\n" );
     }
     
     else
     {
-	$edt->debug_line( " <<< ROLLBACK TRANSACTION\n" );
+	$edt->debug_line( " <<< ROLLBACK TRANSACTION $edt->{unique_id}\n" );
     }
     
     try {
 	
-	$edt->dbh->do("ROLLBACK");
+	$TRANSACTION_INTERLOCK{$dbh} = undef;
+	$dbh->do("ROLLBACK");
     }
     
     catch {
@@ -1930,10 +2051,26 @@ sub abort_action {
 sub aux_action {
     
     my ($edt, $table, $operation, $record) = @_;
+
+    # Create a new action, and set it as auxiliary to the current action.
     
     my $action = EditTransaction::Action->new($table, $operation, $record);
     
     $action->_set_auxiliary($edt->{current_action});
+    
+    # If there are special column attributes already set for this table, copy them in.
+    
+    if ( my $s = $SPECIAL_BY_CLASS{ref $edt}{$table} )
+    {
+	$edt->{current_action}->column_special($s);
+    }
+    
+    if ( my $s = $edt->{column_special}{$table} )
+    {
+	$edt->{current_action}->column_special($s);
+    }
+    
+    # Return the action.
     
     return $action;
 }
@@ -2191,9 +2328,9 @@ sub execute {
 		$edt->error_line($_);
 	    };
 	    
-	    $edt->_rollback_transaction;
+	    $edt->_rollback_transaction('errors');
 	}
-
+	
 	if ( $edt->{action_list} )
 	{
 	    $edt->{skip_count} += scalar(@{$edt->{action_list}});
@@ -2257,7 +2394,7 @@ sub execute {
 	if ( $edt->errors )
 	{
 	    $culprit = 'rollback';
-	    $edt->_rollback_transaction;
+	    $edt->_rollback_transaction('errors');
 	}
 	
 	# Otherwise, we're good to go! Yay!
@@ -2559,7 +2696,7 @@ sub _execute_insert {
     my $sql = "	INSERT INTO $table ($column_list)
 		VALUES ($value_list)";
     
-    $edt->debug_line( "$sql\n" );
+    $edt->debug_line( encode_utf8("$sql\n") );
     
     my ($result, $cleanup_called, $new_keyval);
     
@@ -2610,6 +2747,7 @@ sub _execute_insert {
     catch {
 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
 	$edt->error_line($_);
+	
 	$action->_set_status('exception') unless $action->status;
 	
 	unless ( $cleanup_called )
@@ -2690,7 +2828,7 @@ sub _execute_replace {
     my $sql = "	REPLACE INTO $table ($column_list)
 		VALUES ($value_list)";
     
-    $edt->debug_line( "$sql\n" );
+    $edt->debug_line( encode_utf8("$sql\n") );
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED_MODE.
@@ -2824,7 +2962,7 @@ sub _execute_update {
     my $sql = "	UPDATE $table SET $set_list
 		WHERE $key_expr";
     
-    $edt->debug_line( "$sql\n" );
+    $edt->debug_line( encode_utf8("$sql\n") );
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED_MODE.
@@ -3268,6 +3406,42 @@ sub validate_action {
 }
 
 
+# column_special ( special, column ... )
+#
+# This is intended to be called as either a class method or an instance. It specifies special
+# treatment for certain columns given by name.
+
+sub column_special {
+    
+    my ($edt, $table_name, $special, @columns) = @_;
+    
+    my $hash;
+    
+    # If this was called as an instance method, attach the special column information to this
+    # instance, stored under the table name as a hash key.
+    
+    if ( ref $edt )
+    {
+    	$hash = $edt->{column_special}{$table_name} ||= { };
+    }
+    
+    # Otherwise, store it in a global variable using the name of the class and table name as a
+    # hash key.
+    
+    else
+    {
+    	$hash = $SPECIAL_BY_CLASS{$edt}{$table_name} ||= { };
+    }
+    
+    # Now set the specific attribute for non-empty column name.
+    
+    foreach my $col ( @columns )
+    {
+	$hash->{$col} = $special if $col;
+    }
+}
+
+
 # validate_against_schema ( action, operation, table, special )
 # 
 # Check the field values to be stored in the database against the corresponding table definition,
@@ -3295,7 +3469,7 @@ sub validate_against_schema {
     
     my $dbh = $edt->dbh;
     my $schema = get_table_schema($dbh, $table, $edt->debug);
-    my $property = get_column_properties($table);
+    # my $property = get_column_properties($table);
     
     # Start by going through the list of field names, and constructing a list of values to be
     # inserted.
@@ -3304,28 +3478,41 @@ sub validate_against_schema {
     
     foreach my $col ( @{$schema->{_column_list}} )
     {
-	# The name under which the value is stored in the record provided us may not be exactly
-	# the same as the database column name. Start with the assumption that it is, but if
-	# the column ends in '_no' then also check for a corresponding column ending in '_id'.
+	my $cr = $schema->{$col};
 	
+	# Start by checking to see if there are special handling instructions for this column.
+	
+	my $special = $action->get_special($col);
+	
+	# If we are supposed to ignore this column, then do so.
+
+	next if $special eq 'ignore';
+	
+	# If a value for this column is found in the record, then use that. If not, then check
+	# to see if the column has an alternate name.
+	
+	my $value = $record->{$col};
 	my $record_col = $col;
 	
-	unless ( exists $record->{$record_col} )
+	unless ( exists $record->{$col} )
 	{
-	    if ( $col =~ qr{ ^ (.*) _no $ }xs )
+	    my $alt = $cr->{ALTERNATE_NAME};
+	    
+	    # If an alternate name for this column is known, and this name appears as a key in the
+	    # record, use that name and value. But not if we have been told to ignore it.
+	    
+	    if ( $alt && exists $record->{$alt} && $action->get_special($alt) ne 'ignore' )
 	    {
-		$record_col = $1 . '_id';
+		$value = $record->{$alt};
+		$record_col = $alt;
+		$special = $action->get_special($alt);
 	    }
 	}
-	
-	# Grab whatever value has been specified for this column.
-	
-	my $value = $record->{$record_col};
 	
 	# Don't check any columns we are directed to ignore. These were presumably checked by code
 	# from a subclass that has called this method.
 	
-	unless ( $action->{skip_validate} && $action->{skip_validate}{$col} )
+	unless ( $special eq 'pass' )
 	{
 	    # Handle special columns in the appropriate ways.
 	    
@@ -3351,10 +3538,12 @@ sub validate_against_schema {
 		    }
 		    
 		    # If so, check that the value matches the required format.
+
+		    # $$$ check for now, 2d, etc.
 		    
 		    unless ( $value =~ qr{ ^ \d\d\d\d - \d\d - \d\d (?: \s+ \d\d : \d\d : \d\d ) $ }xs )
 		    {
-			$edt->add_condition($action, 'E_PARAM', $record_col, $value, 'invalid format');
+			$edt->add_condition($action, 'E_FORMAT', $record_col, $value, 'invalid date format');
 			next;
 		    }
 		}
@@ -3381,7 +3570,7 @@ sub validate_against_schema {
 			{
 			    unless ( $value->{type} eq 'PRS' )
 			    {
-				$edt->add_condition($action, 'E_PARAM', $record_col, $value,
+				$edt->add_condition($action, 'E_FORMAT', $record_col, $value,
 						    "must be an external identifier of type '$IDP{PRS}'");
 			    }
 			    
@@ -3390,7 +3579,7 @@ sub validate_against_schema {
 			
 			elsif ( ref $value || $value !~ qr{ ^ \d+ $ }xs )
 			{
-			    $edt->add_condition($action, 'E_PARAM', $record_col, $value,
+			    $edt->add_condition($action, 'E_FORMAT', $record_col, $value,
 						'must be an external identifier or an unsigned integer');
 			    next;
 			}
@@ -3460,7 +3649,7 @@ sub validate_against_schema {
 		    
 		    if ( $col eq 'admin_lock' && not ( $value eq '1' || $value eq '0' ) )
 		    {
-			$edt->add_condition($action, 'E_PARAM', $col, $value, 'value must be 1 or 0');
+			$edt->add_condition($action, 'E_FORMAT', $col, $value, 'value must be 1 or 0');
 			next;
 		    }
 		}
@@ -3475,32 +3664,40 @@ sub validate_against_schema {
 	    
 	    elsif ( defined $value )
 	    {
-		# If the value is empty but a value is required for this column, throw an error.
+		# # If the value is empty but a value is required for this column, throw an error.
 		
-		if ( $value eq '' && $property->{$col}{REQUIRED} )
-		{
-		    $edt->add_condition($action, 'E_REQUIRED', $record_col);
-		    next;
-		}
+		# if ( $value eq '' && $cr->{REQUIRED} )
+		# {
+		#     $edt->add_condition($action, 'E_REQUIRED', $record_col);
+		#     next;
+		# }
 		
 		# Handle references to keys from other PBDB tables by checking them against the
 		# specified table. We use a symbolic reference because the system of table names is based
 		# on global variables, whose values might change. Yes, I know this is not the cleanest way
 		# to do it.
 		
-		if ( my $foreign_table = $FOREIGN_KEY_TABLE{$col} )
+		if ( my $foreign_table = $cr->{FOREIGN_KEY} // $FOREIGN_KEY_TABLE{$col} )
 		{
 		    if ( $value )
 		    {
+			# $$$ stringify?
+			
 			no strict 'refs';
 			
-			my $foreign_table_name = ${$foreign_table};
+			my $foreign_table_name = ${"TableDefs::" . $foreign_table};
 			
 			unless ( $edt->check_key($foreign_table_name, $value) )
 			{
 			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
 			    next;
 			}
+		    }
+		    
+		    elsif ( $cr->{REQUIRED} )
+		    {
+			$edt->add_condition($action, 'E_REQUIRED', $record_col);
+			next;
 		    }
 		    
 		    else
@@ -3511,121 +3708,426 @@ sub validate_against_schema {
 		
 		# Otherwise, check the value according to the column type.
 		
-		elsif ( my $type = $schema->{$col}{Type} )
+		elsif ( ref $cr->{TypeParams} )
 		{
-		    # If the type is char or varchar, we only need to check the maximum length.
+		    my ($type, @param) = @{$schema->{$col}{TypeParams}};
 		    
-		    if ( $type =~ qr{ ^ (?: var )? char \( ( \d+ ) }xs )
+		    # If the type is char or data, we only need to check the maximum length.
+		    
+		    if ( $type eq 'char' || $type eq 'data' )
 		    {
-			if ( length($value) > $1 )
+			if ( defined $param[0] && length($value) > $param[0] )
 			{
-			    $edt->add_condition($action, 'E_PARAM', $record_col,
-						"must be no more than $1 characters, $value");
-			    next;
-			}
-		    }
-		    
-		    # If the type is text or tinytext, similarly.
-		    
-		    elsif ( $type =~ qr{ ^ (tiny)? text }xs )
-		    {
-			my $max_length = $1 ? 255 : 65535;
-			
-			if ( length($value) > $max_length )
-			{
-			    $edt->add_condition($action, 'E_PARAM', $record_col,
-						"must be no more than $1 characters", $value);
-			    next;
-			}
-		    }
-		    
-		    # If the type is integer, do format and bound checking. Special case booleans,
-		    # which are represented as tinyint(1).
-		    
-		    elsif ( $type =~ qr{ ^ (tiny|small|medium|big)? int \( (\d+) \) \s* (unsigned)? }xs )
-		    {
-			my $size = $1 || 'regular';
-			my $bits = $2;
-			my $unsigned = $3;
-			
-			if ( $bits eq '1' )
-			{
-			    if ( $value !~ qr{ ^ [01] $ }xs )
+			    my $word = $type eq 'char' ? 'characters' : 'bytes';
+			    my $size = length($value);
+
+			    if ( $cr->{ALLOW_TRUNCATE} )
 			    {
-				$edt->add_condition($action, 'E_PARAM', $record_col,
-						    "value must be 0 or 1", $value);
+				$value = substr($value, 0, $param[0]);
+				$edt->add_condition($action, 'W_TRUNC', $record_col,
+						    "value was truncated to a length of $param[0]");
+			    }
+
+			    else
+			    {
+				$edt->add_condition($action, 'E_LENGTH', $record_col,
+						    "value must be no more than $param[0] $word in length, was $size");
 				next;
 			    }
 			}
 			
-			elsif ( $unsigned )
+			elsif ( $value eq '' && $cr->{REQUIRED} )
 			{
-			    if ( $value !~ qr{ ^ \d+ $ }xs )
+			    $edt->add_condition($action, 'E_REQUIRED', $record_col);
+			    next;
+			}
+			
+			elsif ( ref $cr->{VALIDATOR} eq 'Regexp' &&
+				$value !~ $cr->{VALIDATOR} )
+			{
+			    $edt->add_condition($action, 'E_INVALID', $record_col,
+						'value is not valid for this field');
+			    next;
+			}
+			
+			elsif ( ref $cr->{VALIDATOR} eq 'CODE' )
+			{
+			    if ( my $result = &{$cr->{VALIDATOR}}($value, $record) )
 			    {
-				$edt->add_condition($action, 'E_PARAM', $record_col, 
-						    "value must be an unsigned integer", $value);
+				$edt->add_condition($action, 'E_INVALID', $record_col, $result);
+				next;
+			    }
+			}
+		    }
+		    
+		    # If the type is boolean, the value must be either 1 or 0. But we allow 'yes',
+		    # 'no', 'true', and 'false' as synonyms. A string that is empty or has only
+		    # whitespace is turned into the default value for this column.
+		    
+		    elsif ( $type eq 'boolean' )
+		    {
+			if ( $value =~ qr{ ^ \s* $ }xs )
+			{
+			    if ( $cr->{REQUIRED} )
+			    {
+				$edt->add_condition($action, 'E_REQUIRED', $record_col);
 				next;
 			    }
 			    
-			    elsif ( $value > $UNSIGNED_BOUND{$size} )
+			    elsif ( $cr->{Default} )
 			    {
-				$edt->add_condition($action, 'E_PARAM', $record_col,
-						    "value must be no greater than $UNSIGNED_BOUND{$size}", $value);
+				$value = $cr->{Default};
+			    }
+			    
+			    else
+			    {
+				$value = undef;
 			    }
 			}
 			
 			else
 			{
-			    if ( $value !~ qr{ ^ -? \s* \d+ $ }xs )
+			    unless ( $value =~ qr{ ^ \s* (?: ( 1 | true | yes ) | ( 0 | false | no ) ) \s* $ }xsi )
 			    {
-				$edt->add_condition($action, 'E_PARAM', $record_col,
-						    "value must be an integer", $value);
+				$edt->add_condition($action, 'E_FORMAT', $record_col,
+						    "value must be one of: 1, 0, true, false, yes, no");
 				next;
 			    }
 			    
-			    elsif ( $value > $SIGNED_BOUND{$size} || -1 * $value > $SIGNED_BOUND{$size} + 1 )
-			    {
-				my $lower = $SIGNED_BOUND{$size} + 1;
-				$edt->add_condition($action, 'E_PARAM', $record_col, 
-						    "value must lie between -$lower and $SIGNED_BOUND{$size}", $value);
-				next;
-			    }
+			    $value = $1 ? 1 : 0;
 			}
 		    }
 		    
-		    # If the type is decimal, do format and bound checking. 
+		    # If the type is integer, do format and bound checking.
 		    
-		    elsif ( $type =~ qr{ ^ decimal \( (\d+) , (\d+) \) \s* (unsigned)? }xs )
+		    elsif ( $type eq 'integer' )
 		    {
-			my $width = $1;
-			my $prec = $2;
-			my $unsigned = $3;
+			# First make sure that the value is either empty or matches the proper
+			# format. A value which is empty or contains only whitespace will be
+			# treated as a NULL.
 			
-			if ( $unsigned )
+			if ( $value =~ qr{ ^ \s* $ }xs )
 			{
-			    if ( $value !~ qr{ ^ (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
+			    if ( $cr->{REQUIRED} )
 			    {
-				$edt->add_condition($action, 'E_PARAM', $record_col,
-						    "must be an unsigned decimal number", $value);
+				$edt->add_condition($action, 'E_REQUIRED', $record_col);
 				next;
+			    }
+			    
+			    elsif ( defined $cr->{Default} )
+			    {
+				$value = $cr->{Default};
+			    }
+			    
+			    else
+			    {
+				$value = undef;
+			    }
+			}
+			
+			elsif ( $value !~ qr{ ^ \s* ( [-+]? ) \s* ( \d+ ) \s* $ }xs )
+			{
+			    my $phrase = $param[0] eq 'unsigned' ? 'an unsigned' : 'an';
+			    
+			    $edt->add_condition($action, 'E_FORMAT', $record_col,
+						"value must be $phrase integer");
+			    next;
+			}
+			
+			elsif ( $param[0] eq 'unsigned' )
+			{
+			    $value = $2;
+			    
+			    if ( $1 && $1 eq '-' )
+			    {
+				$edt->add_condition($action, 'E_RANGE', $record_col, 
+						    "value must an unsigned decimal number");
+				next;
+			    }
+			    
+			    elsif ( $value > $param[1] )
+			    {
+				$edt->add_condition($action, 'E_RANGE', $record_col,
+						    "value must be less than or equal to $param[1]");
 			    }
 			}
 			
 			else
 			{
-			    if ( $value !~ qr{ ^ -? (?: \d+ [.] \d* | \d* [.] \d+ ) }xs )
+			    $value = ($1 && $1 eq '-') ? "-$2" : $2;
+			    
+			    my $lower = $param[1] + 1;
+			    
+			    if ( $value > $param[1] || (-1 * $value) > $lower )
 			    {
-				$edt->add_condition($action, 'E_PARAM', $record_col,
-						    "must be a decimal number", $value);
+				$edt->add_condition($action, 'E_RANGE', $record_col, 
+						    "value must lie between -$lower and $param[1]");
 				next;
 			    }
 			}
 		    }
 		    
-		    # $$$ should add float later
+		    # If the type is fixed point, do format and bound checking.
 		    
-		    # Otherwise, we just throw up our hands and accept whatever they give us. This
-		    # might not be wise.
+		    elsif ( $type eq 'fixed' )
+		    {
+			# First make sure that the value is either empty or matches the proper
+			# format.  A value which is empty or contains only whitespace is turned
+			# into NULL.
+			
+			if ( $value =~ qr{ ^ \s* $ }xs )
+			{
+			    if ( $cr->{REQUIRED} )
+			    {
+				$edt->add_condition($action, 'E_REQUIRED', $record_col);
+				next;
+			    }
+			    
+			    elsif ( $cr->{Default} )
+			    {
+				$value = $cr->{Default};
+			    }
+			    
+			    else
+			    {
+				$value = undef;
+			    }
+			}
+			
+			elsif ( $value !~ qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
+					      (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs )
+			{
+			    my $phrase = $param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+			    
+			    $edt->add_condition($action, 'E_FORMAT', $record_col,
+						"value must be $phrase decimal number");
+			    next;
+			}
+			
+			else
+			{
+			    # If the column is unsigned, make sure there is no minus sign.
+			    
+			    if ( $param[0] eq 'unsigned' && defined $1 && $1 eq '-' )
+			    {
+				$edt->add_condition($action, 'E_RANGE', $record_col,
+						    "value must be an unsigned decimal number");
+				next;
+			    }
+			    
+			    # Now put the number back together from the regex captures. If there is an
+			    # exponent, reformat it as a fixed point.
+			    
+			    my ($unsigned, $whole, $precision) = @param;
+			    
+			    my $sign = $1 && $1 eq '-' ? '-' : '';
+			    my $intpart = $2 // '';
+			    my $fracpart = $3 // $4 // '';
+			    
+			    if ( $6 )
+			    {
+				my $exponent = ($5 && $5 eq '-' ? "-$6" : $6);
+				my $formatted = sprintf("%.10f", "${intpart}.${fracpart}E${exponent}");
+				
+				($intpart, $fracpart) = split(/[.]/, $formatted);
+			    }
+			    
+			    # Check that the number of digits is not exceeded, either before or
+			    # after the decimal. In the latter case, we add an error unless the column
+			    # property ALLOW_TRUNCATE is set in which case we add a warning.
+			    
+			    $intpart =~ s/^0+//;
+			    $fracpart =~ s/0+$//;
+			    
+			    if ( $intpart && length($intpart) > $whole )
+			    {
+				my $total = $whole + $precision;
+				
+				$edt->add_condition($action, 'E_RANGE', $record_col,
+						    "value is too large for decimal($total,$precision)");
+				next;
+			    }
+			    
+			    if ( $fracpart && length($fracpart) > $precision )
+			    {
+				my $total = $whole + $precision;
+				
+				if ( $schema->{$col}{ALLOW_TRUNCATE} )
+				{
+				    $edt->add_condition($action, 'W_TRUNC', $record_col,
+							"value has been truncated to decimal($total,$precision)");
+				}
+				
+				else
+				{
+				    $edt->add_condition($action, 'E_LENGTH', $record_col,
+							"too many decimal digits for decimal($total,$precision)");
+				    next;
+				}
+			    }
+			    
+			    # Rebuild the value, with the fracional part trimmed.
+			    
+			    $value = $sign;
+			    $value .= $intpart || '0';
+			    $value .= '.' . substr($fracpart, 0, $precision);
+			}
+		    }
+		    
+		    # Same for floating point 
+		    
+		    elsif ( $type eq 'floating' )
+		    {
+			# First make sure that the value is either empty or matches the proper
+			# format. A value which is empty or contains only whitespace will be
+			# treated as a NULL.
+			
+			if ( $value =~ qr{ ^ \s* $ }xs )
+			{
+			    if ( $cr->{REQUIRED} )
+			    {
+				$edt->add_condition($action, 'E_REQUIRED', $record_col);
+				next;
+			    }
+			    
+			    elsif ( $cr->{Default} )
+			    {
+				$value = $cr->{Default};
+			    }
+			    
+			    else
+			    {
+				$value = undef;
+			    }
+			}
+						
+			elsif ( $value !~ qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
+					     (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs )
+			{
+			    my $phrase = $param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+			    
+			    $edt->add_condition($action, 'E_FORMAT', $record_col,
+						"value must be $phrase floating point number");
+			    next;
+			}
+
+			else
+			{
+			    my $sign = (defined $1 && $1 eq '-') ? '-' : '';
+			    
+			    # If the column is unsigned, make sure there is no minus sign.
+			    
+			    if ( $param[0] eq 'unsigned' && $sign eq '-' )
+			    {
+				$edt->add_condition($action, 'E_RANGE', $record_col,
+						    "value must be an unsigned floating point number");
+				next;
+			    }
+			    
+			    # Put the pieces of the value back together.
+			    
+			    $value = $sign . ( $2 // '' ) . '.';
+			    $value .= ( $3 // $4 // '' );
+
+			    if ( $6 )
+			    {
+				my $esign = $5 eq '-' ? '-' : '';
+				$value .= 'E' . $esign . $6;
+			    }
+			    
+			    # Then check that the number is not too large to be represented, given the
+			    # size of the field. We are conservative in the bounds we check. We do not
+			    # check for the number of decimal places being exceeded, because floating
+			    # point is naturally inexact. Also, if maximum digits were specified we
+			    # ignore these.
+			    
+			    my $bound = $param[1] eq 'double' ? 1E308 : 1E38;
+			    my $word = $param[1] eq 'float' ? 'single' : 'double';
+			    
+			    if ( $value > $bound || ( $value < 0 && -$value > $bound ) )
+			    {
+				$edt->add_condition($action, 'E_RANGE', $record_col,
+						    "magnitude is too large for $word-precision floating point");
+			    }
+			}
+		    }
+		    
+		    # If the data type is either 'set' or 'enum', then we check to make sure that
+		    # the value is one of the allowable ones. We always match without regard to
+		    # case, using the Unicode 'fold case' function (fc).
+		    
+		    elsif ( $type eq 'enum' || $type eq 'set' )
+		    {
+			use feature 'fc';
+
+			$value =~ s/^\s+//;
+			$value =~ s/\s+$//;
+			
+			my @raw = $value;
+			my $good_value = $param[0];
+			
+			if ( $type eq 'set' )
+			{
+			    my $sep = $schema->{$col}{VALUE_SEPARATOR} || qr{ \s* , \s* }xs;
+			    @raw = split $sep, $value;
+			}
+			
+			my (@good, @bad);
+			
+			foreach my $v ( @raw )
+			{
+			    next unless defined $v && $v ne '';
+			    
+			    if ( $good_value->{fc $v} )
+			    {
+				# $v =~ s/'/''/g;
+				push @good, $v;
+			    }
+			    
+			    else
+			    {
+				push @bad, $v;
+			    }
+			}
+			
+			if ( @bad )
+			{
+			    my $value_string = join(', ', @bad);
+			    my $word = @bad > 1 ? 'values' : 'value';
+			    my $word2 = @bad > 1 ? 'are' : 'is';
+			    
+			    $edt->add_condition($action, 'E_RANGE', $record_col,
+						"$word '$value_string' $word2 not allowed for this table column");
+			    next;
+			}
+
+			if ( @good )
+			{
+			    $value = join(',', @good);
+			}
+
+			else
+			{
+			    if ( $cr->{REQUIRED} )
+			    {
+				$edt->add_condition($action, 'E_REQUIRED', $record_col);
+				next;
+			    }
+			    
+			    elsif ( $cr->{Default} )
+			    {
+				$value = $cr->{Default};
+			    }
+			    
+			    else
+			    {
+				$value = undef;
+			    }
+			}
+		    }
+		    
+		    # If the data type is anything else, we just throw up our hands and accept
+		    # whatever they give us. This might not be wise.
 		}
 	    }
 	    
@@ -3633,7 +4135,7 @@ sub validate_against_schema {
 	    # this is an update of an existing record. If it is, and if this column was not mentioned
 	    # in the record at all, then we just skip it. Otherwise, we signal an error.
 	    
-	    elsif ( $property->{$col}{REQUIRED} )
+	    elsif ( $cr->{REQUIRED} )
 	    {
 		if ( $operation eq 'update' && ! exists $record->{$record_col} )
 		{
@@ -3647,16 +4149,24 @@ sub validate_against_schema {
 		}
 	    }
 	    
-	    # Otherwise, if this column is not mentioned in the record at all, just skip it. If the
-	    # column exists in the record with an undefined value, the code below will substitute a
-	    # value of NULL.
+	    # If this column is not mentioned in the record at all, just skip it. If the column
+	    # exists in the record with an undefined value, the code below will substitute a value
+	    # of NULL.
 	    
 	    elsif ( ! exists $record->{$record_col} )
 	    {
 		next;
 	    }
-	}
+	    
+	    # If this column is mentioned in the record an is explicitly given a null value, then
+	    # substitute the default value if one was defined.
 
+	    elsif ( defined $cr->{Default} )
+	    {
+		$value = $cr->{Default};
+	    }
+	}
+	
 	# If we were directed not to validate this column, we still need to check whether it is
 	# mentioned in the record. If not, we skip it.
 
@@ -3682,6 +4192,8 @@ sub validate_against_schema {
 	    push @values, 'NULL';
 	}
     }
+    
+    # 
     
     # Now store our column and value lists for subsequent use in constructing SQL statements.
     

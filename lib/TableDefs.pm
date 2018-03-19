@@ -14,6 +14,7 @@ package TableDefs;
 use strict;
 
 use Carp qw(croak);
+use Hash::Util qw(lock_hash unlock_hash);
 
 use base 'Exporter';
 
@@ -53,12 +54,18 @@ our (%TABLE_PROP_NAME) = ( CAN_POST => 1,
 			   ALLOW_INSERT_KEY => 1,
 			   BY_AUTHORIZER => 1,
 			   PRIMARY_KEY => 1,
-			   PRIMARY_ATTR => 1 );
+			   PRIMARY_ATTR => 1,
+			   TABLE_COMMENT => 1 );
 
-our (%COLUMN_PROP_NAME) = ( ID_TYPE => 1,
+our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 			    FOREIGN_KEY => 1,
+			    ID_TYPE => 1,
+			    ALLOW_TRUNCATE => 1,
+			    REJECT_EMPTY => 1,		# $$$ think about this
+			    VALUE_SEPARATOR => 1,
 			    REQUIRED => 1,
-			    ADMIN_SET => 1 );
+			    ADMIN_SET => 1,
+			    COLUMN_COMMENT => 1 );
 
 our ($TEST_MODE, $TEST_DB);
 
@@ -441,22 +448,6 @@ sub get_table_property {
     {
 	croak "No properties set for table '$table_name'";
     }
-    
-    # elsif ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
-    # {
-    # 	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
-    # 	croak "No properties set for '$table_name'" unless $TABLE_PROPERTIES{$1};
-	
-    # 	$TABLE_NAME_MAP{$table_name} = $1;
-    # 	$TABLE_PROPERTIES{$1}{$property} = undef;
-    # 	return $TABLE_PROPERTIES{$1}{$property};
-    # }
-    
-    # else
-    # {
-    # 	$table_name ||= '';
-    # 	croak "Invalid table name '$table_name'";
-    # }
 }
 
 
@@ -467,30 +458,38 @@ sub set_column_property {
     croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
     
     my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
+    
     $COLUMN_PROPERTIES{$base_name}{$column_name}{$property} = $value;
+}
+
+
+sub get_column_property {
+    
+    my ($table_name, $column_name, $property) = @_;
+    
+    return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name} || $table_name}{$column_name}{$property};
 }
 
 
 sub get_column_properties {
 
-    my ($table_name) = @_;
+    my ($table_name, $column_name) = @_;
     
-    # croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
+    my $base_name = ($TABLE_NAME_MAP{$table_name} ||= $table_name);
     
-    if ( $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    if ( $column_name )
     {
-	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}};
+	return %{$COLUMN_PROPERTIES{$base_name}{$column_name}};
     }
     
-    elsif ( $COLUMN_PROPERTIES{$table_name} )
+    elsif ( $COLUMN_PROPERTIES{$base_name} )
     {
-	$TABLE_NAME_MAP{$table_name} = $table_name;
-	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}};
+	return map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$base_name}};
     }
-    
-    elsif ( $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+        
+    elsif ( $TABLE_PROPERTIES{$base_name} )
     {
-	return { };
+	return;
     }
     
     else

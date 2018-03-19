@@ -308,6 +308,69 @@ sub add_warning {
 }
 
 
+# Actions also need to keep track of special instructions for various table columns. The following
+# instructions are available for any given column, and specify how any value that may be present
+# in the action's record should be treated:
+#
+#  ignore	Skip this column value entirely, and do not use it to construct SQL statements.
+#		This can be used to mark hash keys that exist in the action record for some other
+#		purpose and do not correspond to table columns.
+#  
+#  pass		Use this column value, but do not add the automatic checks. Assume that the value
+#		has passed all necessary checks.
+#  
+#  validate	Run the automatic validation checks on this column value. This is the same as no
+#		special instruction at all.
+#  
+# These instructions can be given both for table column names and for alternate field names.
+
+# column_special ( arg, column_name... )
+#
+# If the first argument is a hashref, then assume that its keys are column names and its values
+# are instructions. Otherwise, record the special instruction given by $arg for each of the given
+# column names.
+
+sub column_special {
+    
+    my ($action, $special, @cols) = @_;
+
+    # If the first argument is a hashref, just copy in the contents.
+
+    if ( ref $special eq 'HASH' )
+    {
+	foreach my $col ( keys %$special )
+	{
+	    $action->{column_special}{$col} = $special->{$col};
+	}
+    }
+    
+    # Otherwise, set the special treatment of the indicated columns to the indicated value.
+
+    else
+    {
+	croak "the first argument must be either 'pass' or 'ignore' or 'validate'"
+	    unless $special && ($special eq 'pass' || $special eq 'ignore' || $special eq 'validate');
+	
+	foreach my $col ( @cols )
+	{
+	    $action->{column_special}{$col} = $special if $col;
+	}
+    }
+}
+
+
+# get_special ( column_name )
+# 
+# Return the special column instruction for this column name, or the default if there are none.
+
+sub get_special {
+    
+    my ($action, $column_name) = @_;
+    
+    return $action->{column_special}{$column_name} || 'validate';
+}
+
+
 # We also have a facility to set and get general action attributes.
 
 sub set_attr {
@@ -323,22 +386,6 @@ sub get_attr {
 
     croak "you must specify an attribute name" unless $_[1];
     return $_[0]->{attrs} ? $_[0]->{attrs}{$_[1]} : undef;
-}
-
-
-# The following method can be called from a subclass that overrides the 'validate_action' method
-# of EditTransaction.pm. It specifies that the specified column should be ignored during any
-# subsequent automatic validation check. Presumably, the override method has already performed
-# whatever checks it considers to be appropriate.
-
-sub column_skip_validate {
-    
-    my ($action, @cols) = @_;
-
-    foreach my $col ( @cols )
-    {
-	$action->{skip_validate}{$col} = 1 if $col;
-    }
 }
 
 

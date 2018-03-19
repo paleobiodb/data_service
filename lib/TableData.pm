@@ -17,7 +17,8 @@ use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block complete_ruleset get_table_schema get_authinfo_fields);
+our (@EXPORT_OK) = qw(complete_output_block complete_rulesets
+		      get_table_schema reset_cached_column_properties get_authinfo_fields);
 
 
 our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
@@ -33,9 +34,26 @@ our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 
 our (%COMMON_FIELD_IDSUB);
 
-# our (%TABLE_HAS_FIELD);
-
 our (%SCHEMA_CACHE);
+
+our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALLOW_TRUNCATE ADMIN_SET FOREIGN_KEY ID_TYPE);
+
+our (%PREFIX_SIZE) = ( tiny => 255,
+		       regular => 65535,
+		       medium => 16777215,
+		       large => 4294967295 );
+
+our (%SIGNED_BOUND) = ( tiny => 127,
+			small => 32767,
+			medium => 8388607,
+			regular => 2147483647,
+			big => 9223372036854775807 );
+
+our (%UNSIGNED_BOUND) = ( tiny => 255,
+			  small => 65535,
+			  medium => 16777215,
+			  regular => 4294967295,
+			  big => 18446744073709551615 );
 
 
 # get_table_scheme ( table_name, debug_flag )
@@ -48,7 +66,11 @@ sub get_table_schema {
     
     my ($dbh, $table_name, $debug) = @_;
     
+    # If we already have the schema cached, just return it.
+    
     return $SCHEMA_CACHE{$table_name} if ref $SCHEMA_CACHE{$table_name} eq 'HASH';
+    
+    # Otherwise construct an SQL statement to get the schema from the appropriate database.
     
     my ($sql, $check_table, %schema, $quoted_table);
     
@@ -77,25 +99,153 @@ sub get_table_schema {
     my $columns_ref = $dbh->selectall_arrayref("
 	SHOW COLUMNS FROM $quoted_table", { Slice => { } });
     
-    my @field_list;
+    # Figure out which columns from this table have had properties set for them.
     
+    my %has_properties = get_column_properties($table_name);
+    
+    # Now go through the columns one by one. Find the primary key if there is one, and also parse
+    # the column datatypes. Collect up the list of field names for easy access later.
+    
+    my @field_list;
+
     foreach my $c ( @$columns_ref )
     {
+	# Each field definition comes to us as a hash. The name is in 'Field'.
+	
 	my $field = $c->{Field};
-	
-	# my $can_input = $c->{Key} eq 'PRI' ? 0 : 1;
-	
-	# $can_input = 0 if $field eq 'created' || $field eq 'created_on' || $field eq 'modified' ||
-	#     $field eq 'authorizer_no' || $field eq 'enterer_no';
-	
-	# $c->{can_input} = $can_input;
 	
 	$schema{$field} = $c;
 	push @field_list, $field;
 	
-	if ( $c->{Key} =~ 'PRI' && ! $schema{_primary} )
+	# if ( $c->{Key} =~ 'PRI' && ! $schema{_primary} )
+	# {
+	#     $schema{_primary} = $field;
+	# }
+    }
+    
+    # Then go through the list again and add the proper attributes to each column.
+
+    foreach my $c ( @$columns_ref )
+    {
+	my $field = $c->{Field};
+	
+	# If the column has properties, then record those we are interested in.
+	
+	if ( $has_properties{$field} )
 	{
-	    $schema{_primary} = $field;
+	    my %properties = get_column_properties($table_name, $field);
+	    
+	    foreach my $p ( @SCHEMA_COLUMN_PROPS )
+	    {
+		$c->{$p} = $properties{$p} if defined $properties{$p};
+	    }
+	}
+	
+	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
+	# as REQUIRED. Otherwise, a database error will be generated when we try to insert or
+	# update a record with a null value for this column.
+	
+	if ( $c->{Null} && $c->{Null} eq 'NO' && not ( defined $c->{Default} ) &&
+	     not ( $c->{Extra} && $c->{Extra} =~ /auto_increment/i ) )
+	{
+	    $c->{REQUIRED} = 1;
+	}
+	
+	# If the name of the field ends in _no, then record its alternate as the same name with
+	# _id substituted unless there is already a field with that name.
+	
+	if ( ! $c->{ALTERNATE_NAME} && $field =~ qr{ ^ (.*) _no }xs )
+	{
+	    my $alt = $1 . '_id';
+	    
+	    unless ( $schema{$alt} )
+	    {
+		$c->{ALTERNATE_NAME} = $alt;
+	    }
+	}
+	
+	# The type definition is in 'Type'. We parse each type, for easy access by validation
+	# routines later, and store the parsed values in TypeParams.
+	
+	my $type = $c->{Type};
+	
+	if ( $type =~ qr{ ^ ( var )? ( char | binary ) [(] ( \d+ ) }xs )
+	{
+	    my $type = $2 eq 'char' ? 'char' : 'data';
+	    my $mode = $1 ? 'variable' : 'fixed';
+	    $c->{TypeParams} = [ $type, $3, $mode ];
+	}
+	
+	elsif ( $type =~ qr{ ^ ( tiny | medium | long )? ( text | blob ) (?: [(] ( \d+ ) )? }xs )
+	{
+	    my $type = $2 eq 'text' ? 'text' : 'data';
+	    my $size = $3 || $PREFIX_SIZE{$1 || 'regular'};
+	    $c->{TypeParams} = [ $type, $size, 'variable' ];
+	}
+	
+	elsif ( $type =~ qr{ ^ tinyint [(] 1 [)] }xs )
+	{
+	    $c->{TypeParams} = [ 'boolean' ];
+	}
+	
+	elsif ( $type =~ qr{ ^ (tiny|small|medium|big)? int [(] (\d+) [)] \s* (unsigned)? }xs )
+	{
+	    my $bound = $3 ? $UNSIGNED_BOUND{$1 || 'regular'} : $SIGNED_BOUND{$1 || 'regular'};
+	    my $sign = $3 ? 'unsigned' : 'signed';
+	    $c->{TypeParams} = [ 'integer', $sign, $bound, $2 ];
+	}
+	
+	elsif ( $type =~ qr{ ^ decimal [(] (\d+) , (\d+) [)] \s* (unsigned)? }xs )
+	{
+	    my $sign = $3 ? 'unsigned' : 'signed';
+	    my $before = $1 - $2;
+	    my $after = $2;
+	    $after = 10 if $after > 10;	# This is necessary for value checking in EditTransaction.pm.
+					# If people want fields with more than 10 decimals, they should
+					# use floating point.
+	    $c->{TypeParams} = [ 'fixed', $sign, $before, $after ];
+	}
+	
+	elsif ( $type =~ qr{ ^ ( float | double ) (?: [(] ( \d+ ) , ( \d+ ) [)] )? \s* (unsigned)? }xs )
+	{
+	    my $sign = $3 ? 'unsigned' : 'signed';
+	    my $precision = $1;
+	    my $before = defined $2 ? $2 - $3 : undef;
+	    my $after = $3;
+	    $c->{TypeParams} = [ 'floating', $sign, $precision, $before, $after ];
+	}
+	
+	elsif ( $type =~ qr{ ^ bit [(] ( \d+ ) }xs )
+	{
+	    $c->{TypeParams} = [ 'bits', $1 ];
+	}
+	
+	elsif ( $type =~ qr{ ^ ( enum | set ) [(] (.+) [)] $ }xs )
+	{
+	    my $type = $1;
+	    my $value_hash = unpack_enum($2);
+	    $c->{TypeParams} = [ $type, $value_hash ];
+	}
+	
+	elsif ( $type =~ qr{ ^ ( date | time | datetime | timestamp ) \b }xs )
+	{
+	    my $type = $1 eq 'time' ? 'time' : 'datetime';
+	    $c->{TypeParams} = [ $type, $1 ];
+	}
+
+	elsif ( $type =~ qr{ ^ ( (?: multi )? (?: point | linestring | polygon ) ) \b }xs )
+	{
+	    $c->{TypeParams} = [ 'geometry', $1 ];
+	}
+
+	elsif ( $type =~ qr{ ^ ( geometry (?: collection )? ) \b }xs )
+	{
+	    $c->{TypeParams} = [ 'geometry', $1 ];
+	}
+
+	else
+	{
+	    $c->{TypeParams} = [ 'unknown' ];
 	}
     }
     
@@ -104,6 +254,57 @@ sub get_table_schema {
     $SCHEMA_CACHE{$table_name} = \%schema;
     
     return \%schema;
+}
+
+
+# unpack_enum ( value_string )
+# 
+# Given a string of values, unpack them and construct a hash ref with each value as a key.
+
+sub unpack_enum {
+
+    use feature 'fc';
+    
+    my ($string) = @_;
+    
+    my $value_hash = { };
+    
+    while ( $string =~ qr{ ^ ['] ( (?: [^'] | '' )* ) ['] ,? (.*) }xs )
+    {
+	my $value = $1;
+	$string = $2;
+
+	$value =~ s/''/'/g;
+	$value_hash->{fc $value} = 1;
+    }
+    
+    if ( $string )
+    {
+	print STDERR "ERROR: could not parse ENUM($_[0])";
+    }
+    
+    return $value_hash;
+}
+
+
+# reset_cached_column_properties ( table_name, column_name )
+#
+# This routine is intended primarily for for testing purposes.
+
+sub reset_cached_column_properties {
+    
+    my ($table_name, $column_name) = @_;
+    
+    if ( my $col = $SCHEMA_CACHE{$table_name}{$column_name} )
+    {
+	my %properties = get_column_properties($table_name, $column_name);
+	
+	foreach my $p ( @SCHEMA_COLUMN_PROPS )
+	{
+	    delete $col->{$p};
+	    $col->{$p} = $properties{$p} if defined $properties{$p};
+	}
+    }
 }
 
 
@@ -142,7 +343,8 @@ sub get_authinfo_fields {
     {
 	push @authinfo_fields, $col if $IS_AUTH{$col};
     }
-        my $fields = join(', ', @authinfo_fields);
+    
+    my $fields = join(', ', @authinfo_fields);
     $AUTH_FIELD_CACHE{$table_name} = $fields;
     
     return $fields;

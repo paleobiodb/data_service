@@ -55,11 +55,11 @@ subtest 'basic' => sub {
     
     # Add a condition, and test that the error message is properly formatted.
     
-    $edt->add_condition('E_PARAM', 'AAA', 'BBB');
+    $edt->add_condition('E_FORMAT', 'AAA', 'BBB');
     
     my ($msg) = $edt->error_strings;
     
-    like( $msg, qr/E_PARAM.*'AAA'.*BBB/, "message was generated with proper parmaeters" );
+    like( $msg, qr/E_FORMAT.*'AAA'.*BBB/, "message was generated with proper parmaeters" );
     
     my ($e) = $edt->errors;
     
@@ -69,7 +69,7 @@ subtest 'basic' => sub {
 	return;
     }
     
-    is( $e->code, 'E_PARAM', "condition has proper code" );
+    is( $e->code, 'E_FORMAT', "condition has proper code" );
     is( $e->label, '', "condition has empty label" );
     is( $e->table, '', "condition has empty table" );
     
@@ -255,17 +255,17 @@ subtest 'register' => sub {
 	return;
     }
     
-    $T->ok_has_error( qr/E_TEST_2/, "found error" );
-    $T->ok_has_error( qr/C_TEST_2: xxx/, "found caution with default" );
+    $T->ok_has_error( 'any', 'E_TEST_2' );
+    $T->ok_has_error( 'any', qr/C_TEST_2: xxx/, "found caution with default" );
     $T->ok_has_warning( qr/W_TEST_2/, "found warning" );
 
     $edt->add_condition('C_TEST_2', 'abc', 'def');
 
-    $T->ok_has_error( qr/C_TEST_2: test caution def/, "found caution with template" );
+    $T->ok_has_error( 'any', qr/C_TEST_2: test caution def/, "found caution with template" );
 
     $edt->add_condition('C_TEST_2', 'qrs');
 
-    $T->ok_has_error( qr/C_TEST_2: xxx/, "found caution with default 2" );
+    $T->ok_has_error( 'any', qr/C_TEST_2: xxx/, "found caution with default 2" );
 };
 
 
@@ -294,9 +294,9 @@ subtest 'invalid' => sub {
 
     # Check that missing parameters are filled in with UNKNOWN.
 
-    $edt->add_condition('E_PARAM');
+    $edt->add_condition('E_FORMAT');
 
-    $T->ok_has_error( qr/E_PARAM.*UNKNOWN.*UNKNOWN/, "found both UNKNOWN substitutions" );
+    $T->ok_has_error( 'any', qr/E_FORMAT.*UNKNOWN.*UNKNOWN/, "found both UNKNOWN substitutions" );
 };
 
 
@@ -399,7 +399,7 @@ subtest 'generate_msg' => sub {
     
     my $edt = $T->new_edt($perm_a) || return;
 
-    $edt->add_condition('E_PARAM', 'abc', 'xyz');
+    $edt->add_condition('E_FORMAT', 'abc', 'xyz');
 
     my ($e) = $edt->errors;
 

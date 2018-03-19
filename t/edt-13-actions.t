@@ -198,7 +198,7 @@ subtest 'delete' => sub {
     is( $a1->keycol, $primary, "got proper key column" );
     is( $a1->record_value($primary), 99999, "got proper key value from record_value" );
     is( $a1->has_errors, 1, "action has one error" );
-    $T->ok_has_error( qr/E_NOT_FOUND/, "found proper error" );
+    $T->ok_has_error( 'E_NOT_FOUND', "found proper error" );
     
     # Then try a delete action with a record but no primary key.
     
@@ -209,7 +209,7 @@ subtest 'delete' => sub {
     is( $a2->keyval, undef, "got undefined key value" );
     is( $a2->keycol, $primary, "got proper key column" );
     is( $a2->has_errors, 1, "action has one error" );
-    $T->ok_has_error( qr/E_NO_KEY/, "found proper error" );
+    $T->ok_has_error( 'E_NO_KEY', "found proper error" );
     
     # Then try a delete action with a bare key value.
 
