@@ -61,8 +61,9 @@ our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 			    FOREIGN_KEY => 1,
 			    ID_TYPE => 1,
 			    ALLOW_TRUNCATE => 1,
-			    REJECT_EMPTY => 1,		# $$$ think about this
 			    VALUE_SEPARATOR => 1,
+			    VALIDATOR => 1,
+			    VALIDATOR_MSG => 1,
 			    REQUIRED => 1,
 			    ADMIN_SET => 1,
 			    COLUMN_COMMENT => 1 );

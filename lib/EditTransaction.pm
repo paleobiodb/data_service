@@ -598,7 +598,7 @@ sub add_condition {
 
     # Make sure this is a code that we recognize.
 
-    unless ( $CONDITION_BY_CLASS{ref $edt}{$code} || $CONDITION_BY_CLASS{EditTransaction}{$code} )
+    unless ( $CONDITION_BY_CLASS{EditTransaction}{$code} || $CONDITION_BY_CLASS{ref $edt}{$code} )
     {
 	croak "unknown condition code '$code'";
     }
@@ -3454,6 +3454,9 @@ sub column_special {
 # available for use when this method is called from within a subclass method that overrides
 # 'validate_action'.
 
+our $DECIMAL_NUMBER_RE = qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
+			     (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs;
+
 sub validate_against_schema {
 
     my ($edt, $action, $operation, $table) = @_;
@@ -3720,14 +3723,14 @@ sub validate_against_schema {
 			{
 			    my $word = $type eq 'char' ? 'characters' : 'bytes';
 			    my $size = length($value);
-
+			    
 			    if ( $cr->{ALLOW_TRUNCATE} )
 			    {
 				$value = substr($value, 0, $param[0]);
 				$edt->add_condition($action, 'W_TRUNC', $record_col,
 						    "value was truncated to a length of $param[0]");
 			    }
-
+			    
 			    else
 			    {
 				$edt->add_condition($action, 'E_LENGTH', $record_col,
@@ -3736,7 +3739,9 @@ sub validate_against_schema {
 			    }
 			}
 			
-			elsif ( $value eq '' && $cr->{REQUIRED} )
+			# Now check for required values and check to see if there is a validator.
+			
+			if ( $value eq '' && $cr->{REQUIRED} )
 			{
 			    $edt->add_condition($action, 'E_REQUIRED', $record_col);
 			    next;
@@ -3745,18 +3750,26 @@ sub validate_against_schema {
 			elsif ( ref $cr->{VALIDATOR} eq 'Regexp' &&
 				$value !~ $cr->{VALIDATOR} )
 			{
-			    $edt->add_condition($action, 'E_INVALID', $record_col,
-						'value is not valid for this field');
+			    $edt->add_condition($action, 'E_FORMAT', $record_col,
+						$cr->{VALIDATOR_MSG} || 'value is not valid for this field');
 			    next;
 			}
 			
 			elsif ( ref $cr->{VALIDATOR} eq 'CODE' )
 			{
-			    if ( my $result = &{$cr->{VALIDATOR}}($value, $record) )
+			    my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
+			    
+			    if ( $code )
 			    {
-				$edt->add_condition($action, 'E_INVALID', $record_col, $result);
+				$edt->add_condition($action, $code, $record_col, $message);
 				next;
 			    }
+			}
+			
+			elsif ( ref $cr->{VALIDATOR} )
+			{
+			    croak "validator reference type '" . ref $cr->{VALIDATOR} .
+				"' is not allowed for this column type";
 			}
 		    }
 		    
@@ -3795,6 +3808,24 @@ sub validate_against_schema {
 			    }
 			    
 			    $value = $1 ? 1 : 0;
+			    
+			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
+			    {
+				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
+				
+				if ( $code )
+				{
+				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
+				    $edt->add_condition($action, $code, $record_col, @error_params);
+				    next;
+				}
+			    }
+			    
+			    elsif ( ref $cr->{VALIDATOR} )
+			    {
+				croak "validator reference type '" . ref $cr->{VALIDATOR} .
+				    "' is not allowed for this column type";
+			    }
 			}
 		    }
 		    
@@ -3834,35 +3865,59 @@ sub validate_against_schema {
 			    next;
 			}
 			
-			elsif ( $param[0] eq 'unsigned' )
-			{
-			    $value = $2;
-			    
-			    if ( $1 && $1 eq '-' )
-			    {
-				$edt->add_condition($action, 'E_RANGE', $record_col, 
-						    "value must an unsigned decimal number");
-				next;
-			    }
-			    
-			    elsif ( $value > $param[1] )
-			    {
-				$edt->add_condition($action, 'E_RANGE', $record_col,
-						    "value must be less than or equal to $param[1]");
-			    }
-			}
-			
 			else
 			{
-			    $value = ($1 && $1 eq '-') ? "-$2" : $2;
-			    
-			    my $lower = $param[1] + 1;
-			    
-			    if ( $value > $param[1] || (-1 * $value) > $lower )
+			    if ( $param[0] eq 'unsigned' )
 			    {
-				$edt->add_condition($action, 'E_RANGE', $record_col, 
-						    "value must lie between -$lower and $param[1]");
-				next;
+				$value = $2;
+				
+				if ( $1 && $1 eq '-' )
+				{
+				    $edt->add_condition($action, 'E_RANGE', $record_col, 
+							"value must an unsigned decimal number");
+				    next;
+				}
+				
+				elsif ( $value > $param[1] )
+				{
+				    $edt->add_condition($action, 'E_RANGE', $record_col,
+							"value must be less than or equal to $param[1]");
+				    next;
+				}
+			    }
+			    
+			    else
+			    {
+				$value = ($1 && $1 eq '-') ? "-$2" : $2;
+				
+				my $lower = $param[1] + 1;
+				
+				if ( $value > $param[1] || (-1 * $value) > $lower )
+				{
+				    $edt->add_condition($action, 'E_RANGE', $record_col, 
+							"value must lie between -$lower and $param[1]");
+				    next;
+				}
+			    }
+
+			    # Now check to see if there is a validator.
+
+			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
+			    {
+				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
+				
+				if ( $code )
+				{
+				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
+				    $edt->add_condition($action, $code, $record_col, @error_params);
+				    next;
+				}
+			    }
+			    
+			    elsif ( ref $cr->{VALIDATOR} )
+			    {
+				croak "validator reference type '" . ref $cr->{VALIDATOR} .
+				    "' is not allowed for this column type";
 			    }
 			}
 		    }
@@ -3894,8 +3949,7 @@ sub validate_against_schema {
 			    }
 			}
 			
-			elsif ( $value !~ qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
-					      (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs )
+			elsif ( $value !~ $DECIMAL_NUMBER_RE )
 			{
 			    my $phrase = $param[0] eq 'unsigned' ? 'an unsigned' : 'a';
 			    
@@ -3971,6 +4025,26 @@ sub validate_against_schema {
 			    $value = $sign;
 			    $value .= $intpart || '0';
 			    $value .= '.' . substr($fracpart, 0, $precision);
+
+			    # Now see if there is a validator.
+			    
+			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
+			    {
+				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
+				
+				if ( $code )
+				{
+				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
+				    $edt->add_condition($action, $code, $record_col, @error_params);
+				    next;
+				}
+			    }
+			    
+			    elsif ( ref $cr->{VALIDATOR} )
+			    {
+				croak "validator reference type '" . ref $cr->{VALIDATOR} .
+				    "' is not allowed for this column type";
+			    }
 			}
 		    }
 		    
@@ -4001,8 +4075,7 @@ sub validate_against_schema {
 			    }
 			}
 						
-			elsif ( $value !~ qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
-					     (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs )
+			elsif ( $value !~ $DECIMAL_NUMBER_RE )
 			{
 			    my $phrase = $param[0] eq 'unsigned' ? 'an unsigned' : 'a';
 			    
@@ -4049,6 +4122,27 @@ sub validate_against_schema {
 				$edt->add_condition($action, 'E_RANGE', $record_col,
 						    "magnitude is too large for $word-precision floating point");
 			    }
+
+			    # Now see if there is a validator, and if so then execute it.
+			    
+			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
+			    {
+				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
+				
+				if ( $code )
+				{
+				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
+				    $edt->add_condition($action, $code, $record_col, @error_params);
+				    next;
+				}
+			    }
+			    
+			    elsif ( ref $cr->{VALIDATOR} )
+			    {
+				croak "validator reference type '" . ref $cr->{VALIDATOR} .
+				    "' is not allowed for this column type";
+			    }
+
 			}
 		    }
 		    

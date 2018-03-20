@@ -5,22 +5,29 @@
 
 # Things to test:
 #
-# 1. Table properties: [DONE]
+# 1. Table properties: [$$$]
 #
 # CAN_POST [edt-21-permissions.t 'basic', 'can_post']
-# CAN_EDIT [edt-21-permissions.t 'can_modify']
+# CAN_VIEW [$$$]
+# CAN_MODIFY [edt-21-permissions.t 'can_modify']
 # ALLOW_DELETE [edt-21-permissions.t 'allow_delete']
 # ALLOW_INSERT_KEY [edt-21-permissions.t 'allow_insert_key']
 # BY_AUTHORIZER [edt-21-permissions.t 'by_authorizer']
 # PRIMARY_KEY [edt-01-basic.t 'create objects']
 # PRIMARY_ATTR [edt-14-records.t 'primary_attr']
+# TABLE_COMMENT [EditTest.pm, line 39]
 
 # 2. Column properties:
-#
-# ID_TYPE
+# 
+# ALTERNATE_NAME
 # FOREIGN_KEY
+# ID_TYPE
+# ALLOW_TRUNCATE [edt-23-datatypes.t 'text', 'fixed']
+# VALUE_SEPARATOR
+# VALUE_REGEXP
 # REQUIRED [edt-22-validate.t 'required']
 # ADMIN_SET
+# COLUMN_COMMENT [EditTest.pm, line 42]
 
 # 3. Table roles:
 #

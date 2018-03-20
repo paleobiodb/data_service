@@ -36,7 +36,10 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
     set_table_property($EDT_TEST, CAN_POST => 'AUTHORIZED');
     set_table_property($EDT_TEST, ALLOW_DELETE => 1);
     set_table_property($EDT_TEST, PRIMARY_KEY => 'test_no');
+    set_table_property($EDT_TEST, TABLE_COMMENT => 'This table is used only for testing ' .
+		       'EditTransaction.pm and its subclass EditTest.pm');
     set_column_property($EDT_TEST, 'string_req', REQUIRED => 1);
+    set_column_property($EDT_TEST, 'string_req', COLUMN_COMMENT => 'This is a test comment.');
     
     set_table_property($EDT_AUX, CAN_POST => 'AUTHORIZED');
     set_table_property($EDT_AUX, PRIMARY_KEY => 'aux_no');
