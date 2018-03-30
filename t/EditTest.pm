@@ -36,19 +36,24 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
     set_table_property($EDT_TEST, CAN_POST => 'AUTHORIZED');
     set_table_property($EDT_TEST, ALLOW_DELETE => 1);
     set_table_property($EDT_TEST, PRIMARY_KEY => 'test_no');
-    set_table_property($EDT_TEST, TABLE_COMMENT => 'This table is used only for testing ' .
-		       'EditTransaction.pm and its subclass EditTest.pm');
+    set_table_property($EDT_TEST, TABLE_COMMENT => 'This table is used for testing EditTransaction.pm and its subclass EditTest.pm');
+    
     set_column_property($EDT_TEST, 'string_req', REQUIRED => 1);
     set_column_property($EDT_TEST, 'string_req', COLUMN_COMMENT => 'This is a test comment.');
+    set_column_property($EDT_TEST, 'string_val', ALTERNATE_NAME => 'alt_val');
+    set_column_property($EDT_TEST, 'string_val', VALIDATOR => 'test_validator');
     
     set_table_property($EDT_AUX, CAN_POST => 'AUTHORIZED');
+    set_table_property($EDT_AUX, CAN_MODIFY => 'AUTHORIZED');
     set_table_property($EDT_AUX, PRIMARY_KEY => 'aux_no');
-    set_column_property($EDT_AUX, 'test_no', FOREIGN_KEY => 'EDT_TEST');
+    
+    set_column_property($EDT_AUX, 'test_no', FOREIGN_TABLE => 'EDT_TEST');
     set_column_property($EDT_AUX, 'name', REQUIRED => 1);
-
+    
     set_table_property($EDT_ANY, CAN_POST => 'LOGGED_IN');
     set_table_property($EDT_ANY, ALLOW_DELETE => 1);
     set_table_property($EDT_ANY, PRIMARY_KEY => 'any_no');
+    
     set_column_property($EDT_ANY, 'string_req', REQUIRED => 1);
     
     EditTest->register_allowances('TEST_DEBUG');
@@ -59,28 +64,6 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
 
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
-
-# get_condition_template ( code, table, selector )
-#
-# Return the proper template for error and warning conditions defined by this subclass. If no
-# matching template can be found, we call the parent method. Other subclasses of EditTransaction
-# should do something similar.
-
-# sub get_condition_template {
-    
-#     my ($edt, $code, $table, $selector) = @_;
-    
-#     if ( $CONDITION_TEMPLATE{$code} )
-#     {
-# 	return $CONDITION_TEMPLATE{$code};
-#     }
-
-#     else
-#     {
-# 	return $edt->SUPER::get_condition_template($code, $table, $selector);
-#     }
-# }
-
 
 sub authorize_action {
     
@@ -152,6 +135,22 @@ sub validate_action {
     }
     
     return EditTransaction::validate_action(@_);
+}
+
+
+sub test_validator {
+    
+    my ($edt, $value, $field, $action) = @_;
+    
+    if ( defined $value && length($value) == 10 )
+    {
+	return ('E_FORMAT', "args: $field $action");
+    }
+    
+    else
+    {
+	return;
+    }	
 }
 
 
@@ -362,7 +361,7 @@ sub cleanup_action {
 
 sub write_debug_output {
 
-    return $_[0]->SUPER::debug_line($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
+    return $_[0]->SUPER::write_debug_output($_[1]) unless $_[0]->{allows}{TEST_DEBUG};
     
     push @{$_[0]->{debug_output}}, $_[1];
 }

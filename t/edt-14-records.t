@@ -12,7 +12,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 use TableDefs qw($EDT_TEST get_table_property set_table_property);
 
@@ -89,6 +89,14 @@ subtest 'basic' => sub {
     $edt->abort_action;
 
     is( $action && $action->status, 'abandoned', "record has been marked as abandoned" );
+
+    # Add another action and make sure it has the proper label.
+
+    $edt->insert_record($EDT_TEST, { string_req => 'test action' });
+
+    $action = $edt->current_action;
+
+    is( $action && $action->label, '#5', "action has the proper label" );
 };
 
 
@@ -107,7 +115,7 @@ subtest 'primary_attr' => sub {
     
     my $key = $edt->insert_record($EDT_TEST, { string_req => 'primary attr test' });
     
-    ok( $key, "record was properly inserted" );
+    $T->ok_result( $key, "test record was properly inserted" ) || return;
     
     ok( $edt->update_record($EDT_TEST, { $primary => $key, signed_val => 3 }),
 	"record was updated using primary key field name" );
@@ -138,3 +146,36 @@ subtest 'primary_attr' => sub {
     $T->ok_found_record($EDT_TEST, "signed_val=6");
 };
 
+
+# Now test the ALTERNATE_NAME column property, which has the same effect for arbitrary columns.
+
+subtest 'alternate_name' => sub {
+    
+    # Clear the table so that we can check for record updating.
+    
+    $T->clear_table($EDT_TEST);
+    
+    # First check that we can update records using the primary key field name for the table, as a
+    # control.
+    
+    my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    
+    my $key1 = $edt->insert_record($EDT_TEST, { string_req => 'alternate name test' });
+    
+    $T->ok_result( $key1, "test record was properly inserted" ) || return;
+    
+    $edt->update_record($EDT_TEST, { $primary => $key1, alt_val => 'abc' });
+    
+    $T->ok_no_conditions;
+    $T->ok_found_record($EDT_TEST, "$primary = $key1 and string_val = 'abc'");
+    
+    $edt->update_record($EDT_TEST, { $primary => $key1, string_val => 'def' });
+
+    $T->ok_no_conditions;
+    $T->ok_found_record($EDT_TEST, "$primary = $key1 and string_val = 'def'");
+
+    $edt->update_record($EDT_TEST, { $primary => $key1, alt_val => undef });
+
+    $T->ok_no_conditions;
+    $T->ok_found_record($EDT_TEST, "$primary = $key1 and string_val = ''");
+};

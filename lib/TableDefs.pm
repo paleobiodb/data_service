@@ -31,15 +31,14 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
 		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
 		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS
-		      $IDIGBIO %IDP VALID_IDENTIFIER
+		      $IDIGBIO
 		      $MACROSTRAT_LITHS
 		      $MACROSTRAT_INTERVALS $MACROSTRAT_SCALES $MACROSTRAT_SCALES_INTS
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE
 		      $EDT_TEST $EDT_AUX $EDT_ANY
-		      %TABLE_PROPERTIES %TEST_SELECT
-		      %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE
+		      %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL 
 		      init_table_names select_test_tables is_test_mode
 		      set_table_property get_table_property original_table
 		      set_column_property get_column_properties);
@@ -55,23 +54,76 @@ our (%TABLE_PROP_NAME) = ( CAN_POST => 1,
 			   BY_AUTHORIZER => 1,
 			   PRIMARY_KEY => 1,
 			   PRIMARY_ATTR => 1,
+			   NO_LOG => 1,
 			   TABLE_COMMENT => 1 );
 
 our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 			    FOREIGN_KEY => 1,
-			    ID_TYPE => 1,
+			    FOREIGN_TABLE => 1,
+			    EXTID_TYPE => 1,
 			    ALLOW_TRUNCATE => 1,
 			    VALUE_SEPARATOR => 1,
 			    VALIDATOR => 1,
-			    VALIDATOR_MSG => 1,
 			    REQUIRED => 1,
 			    ADMIN_SET => 1,
 			    COLUMN_COMMENT => 1 );
 
+
+# Define the properties of certain fields that are common to many tables in the PBDB.
+
+our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITIES',
+			     resource_no => 'REFERENCES',
+			     collection_no => 'COLLECTIONS',
+			     occurrence_no => 'OCCURRENCES',
+			     specimen_no => 'SPECIMENS',
+			     measurement_no => 'MEASUREMENTS',
+			     spec_elt_no => 'SPEC_ELEMENTS',
+			     reid_no => 'REIDS',
+			     opinion_no => 'OPINIONS',
+			     interval_no => 'INTERVAL_DATA',
+			     timescale_no => 'TIMESCALE_DATA',
+			     bound_no => 'TIMESCALE_BOUNDS',
+			     eduresource_no => 'RESOURCE_QUEUE',
+			     person_no => 'WING_USERS',
+			     authorizer_no => 'WING_USERS',
+			     enterer_no => 'WING_USERS',
+			     modifier_no => 'WING_USERS');
+
+our (%FOREIGN_KEY_COL) = ( authorizer_no => 'person_no',
+			   enterer_no => 'person_no',
+			   modifier_no => 'person_no' );
+
+our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TXN',
+			       resource_no => 'RES',
+			       collection_no => 'COL',
+			       occurrence_no => 'OCC',
+			       specimen_no => 'SPM',
+			       measurement_no => 'MEA',
+			       spec_elt_no => 'ELS',
+			       reid_no => 'REI',
+			       opinion_no => 'OPN',
+			       interval_no => 'INT',
+			       timescale_no => 'TSC',
+			       bound_no => 'BND',
+			       eduresource_no => 'EDR',
+			       person_no => 'PRS',
+			       authorizer_no => 'PRS',
+			       enterer_no => 'PRS',
+			       modifier_no => 'PRS' );
+
+our (%COMMON_FIELD_SPECIAL) = ( authorizer_no => 'authent',
+				enterer_no => 'authent',
+				modifier_no => 'authent',
+				enterer_id => 'authent',
+				created => 'crmod',
+				modified => 'crmod',
+				admin_locked => 'admin' );
+
+
+# Define the mechanism for substituting test tables instead of real ones.
+
 our ($TEST_MODE, $TEST_DB);
 
-
-# Determine if we are going to be running in test mode or not.
 
 # init_table_names ( config, test_mode )
 # 
@@ -140,6 +192,7 @@ our $REFERENCES = "refs";
 our $OCCURRENCES = "occurrences";
 our $REIDS = "reidentifications";
 our $SPECIMENS = "specimens";
+our $MEASUREMENTS = "measurements";
 
 set_table_property($COLLECTIONS, PRIMARY_KEY => 'collection_no');
 set_table_property($AUTHORITIES, PRIMARY_KEY => 'taxon_no');
@@ -361,32 +414,6 @@ sub test_edt {
 }
 	
 	
-# Define the properties of certain fields that are common to many tables in the PBDB.
-
-our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITIES',
-			     resource_no => 'REFERENCES',
-			     collection_no => 'COLLECTIONS',
-			     interval_no => 'INTERVAL_DATA' );
-
-our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TXN',
-			       resource_no => 'RES',
-			       collection_no => 'COL',
-			       interval_no => 'INT',
-			       authorizer_no => 'PRS',
-			       enterer_no => 'PRS',
-			       modifier_no => 'PRS',
-			     );
-
-our (%COMMON_FIELD_OTHER) = ( authorizer_no => 'authent',
-			      enterer_no => 'authent',
-			      modifier_no => 'authent',
-			      enterer_id => 'authent',
-			      created => 'crmod',
-			      modified => 'crmod',
-			      admin_locked => 'admin',
-			    );
-
-
 # Define global hash variables to hold table properties and column properties, in a way that can
 # be accessed by other modules. Routines for getting and setting these appear below.
 
@@ -411,20 +438,6 @@ sub set_table_property {
     
     my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
     $TABLE_PROPERTIES{$base_name}{$property} = $value;
-    
-    # if ( $table_name && $table_name =~ qr{ ( [^.]+ $ ) }xs )
-    # {
-    # 	croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
-	
-    # 	$TABLE_PROPERTIES{$1}{$property} = $value;
-    # 	$TABLE_NAME_MAP{$table_name} = $1;
-    # }
-    
-    # else
-    # {
-    # 	$table_name ||= '';
-    # 	croak "Invalid table name '$table_name'";
-    # }
 }
 
 
@@ -461,6 +474,19 @@ sub set_column_property {
     my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
     
     $COLUMN_PROPERTIES{$base_name}{$column_name}{$property} = $value;
+
+    if ( ref $value )
+    {
+	if ( $property eq 'VALIDATOR' )
+	{	
+	    croak "value must be either a code ref or a string" unless ref $value eq 'CODE';
+	}
+
+	elsif ( $property eq 'VALUE_SEPARATOR' )
+	{
+	    croak "value must be a regexp" unless ref $value eq 'Regexp';
+	}
+    }
 }
 
 

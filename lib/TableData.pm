@@ -10,7 +10,7 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(get_table_property get_column_properties %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER);
+use TableDefs qw(get_table_property get_column_properties %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
 
 use Carp qw(croak);
 use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
@@ -36,7 +36,8 @@ our (%COMMON_FIELD_IDSUB);
 
 our (%SCHEMA_CACHE);
 
-our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALLOW_TRUNCATE ADMIN_SET FOREIGN_KEY ID_TYPE);
+our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALLOW_TRUNCATE VALUE_SEPARATOR
+				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR);
 
 our (%PREFIX_SIZE) = ( tiny => 255,
 		       regular => 65535,
@@ -139,6 +140,11 @@ sub get_table_schema {
 	    {
 		$c->{$p} = $properties{$p} if defined $properties{$p};
 	    }
+
+	    if ( ref $c->{VALIDATOR} && ref $c->{VALIDATOR} ne 'code' )
+	    {
+		croak "the value of VALIDATOR must be a code ref";
+	    }
 	}
 	
 	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
@@ -191,28 +197,28 @@ sub get_table_schema {
 	elsif ( $type =~ qr{ ^ (tiny|small|medium|big)? int [(] (\d+) [)] \s* (unsigned)? }xs )
 	{
 	    my $bound = $3 ? $UNSIGNED_BOUND{$1 || 'regular'} : $SIGNED_BOUND{$1 || 'regular'};
-	    my $sign = $3 ? 'unsigned' : 'signed';
-	    $c->{TypeParams} = [ 'integer', $sign, $bound, $2 ];
+	    my $unsigned = $3 ? 'unsigned' : '';
+	    $c->{TypeParams} = [ 'integer', $unsigned, $bound, $2 ];
 	}
 	
 	elsif ( $type =~ qr{ ^ decimal [(] (\d+) , (\d+) [)] \s* (unsigned)? }xs )
 	{
-	    my $sign = $3 ? 'unsigned' : 'signed';
+	    my $unsigned = $3 ? 'unsigned' : '';
 	    my $before = $1 - $2;
 	    my $after = $2;
 	    $after = 10 if $after > 10;	# This is necessary for value checking in EditTransaction.pm.
 					# If people want fields with more than 10 decimals, they should
 					# use floating point.
-	    $c->{TypeParams} = [ 'fixed', $sign, $before, $after ];
+	    $c->{TypeParams} = [ 'fixed', $unsigned, $before, $after ];
 	}
 	
 	elsif ( $type =~ qr{ ^ ( float | double ) (?: [(] ( \d+ ) , ( \d+ ) [)] )? \s* (unsigned)? }xs )
 	{
-	    my $sign = $3 ? 'unsigned' : 'signed';
+	    my $unsigned = $3 ? 'unsigned' : '';
 	    my $precision = $1;
 	    my $before = defined $2 ? $2 - $3 : undef;
 	    my $after = $3;
-	    $c->{TypeParams} = [ 'floating', $sign, $precision, $before, $after ];
+	    $c->{TypeParams} = [ 'floating', $unsigned, $precision, $before, $after ];
 	}
 	
 	elsif ( $type =~ qr{ ^ bit [(] ( \d+ ) }xs )
@@ -304,6 +310,25 @@ sub reset_cached_column_properties {
 	    delete $col->{$p};
 	    $col->{$p} = $properties{$p} if defined $properties{$p};
 	}
+	
+	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
+	# as REQUIRED. Otherwise, a database error will be generated when we try to insert or
+	# update a record with a null value for this column.
+	
+	if ( $col->{Null} && $col->{Null} eq 'NO' && not ( defined $col->{Default} ) &&
+	     not ( $col->{Extra} && $col->{Extra} =~ /auto_increment/i ) )
+	{
+	    $col->{REQUIRED} = 1;
+	}
+	
+	# If the name of the field ends in _no, then record its alternate as the same name with
+	# _id substituted unless there is already a field with that name.
+	
+	if ( ! $col->{ALTERNATE_NAME} && $column_name =~ qr{ ^ (.*) _no }xs )
+	{
+	    my $alt = $1 . '_id';
+	    $col->{ALTERNATE_NAME} = $alt;
+	}
     }
 }
 
@@ -391,11 +416,10 @@ sub complete_output_block {
     foreach my $field_name ( @$field_list )
     {
 	# If this field is one of the standard ones for authorizer/enterer or created/modified,
-	# then skip it. But also record that the table has this field, for use later.
+	# then skip it.
 	
-	if ( $COMMON_FIELD_OTHER{$field_name} )
+	if ( $COMMON_FIELD_SPECIAL{$field_name} )
 	{
-	    # $TABLE_HAS_FIELD{$table_name}{$field_name} = $COMMON_FIELD_OTHER{$field_name};
 	    next;
 	}
 	
@@ -503,7 +527,7 @@ sub complete_ruleset {
     
     foreach my $column_name ( @$field_list )
     {
-	next if $COMMON_FIELD_OTHER{$column_name};
+	next if $COMMON_FIELD_SPECIAL{$column_name};
 	
 	my $field_name = $column_name;
 	
@@ -525,7 +549,7 @@ sub complete_ruleset {
 	    $doc .= " The value must be an integer.";
 	}
 	
-	if ( my $type = $properties->{$column_name}{ID_TYPE} )
+	if ( my $type = $properties->{$column_name}{EXTID_TYPE} )
 	{
 	    $rr->{valid} = VALID_IDENTIFIER($type);
 	}

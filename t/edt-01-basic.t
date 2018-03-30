@@ -73,12 +73,14 @@ subtest 'insert and delete' => sub {
     $T->clear_table($EDT_TEST);
     
     # Check that we can insert records.
+
+    my $edt = $T->new_edt($perm_a);
     
-    my $result1 = $T->do_insert_records($perm_a, undef, "insert record",
-					$EDT_TEST, { signed_req => 123, string_req => 'abc' })
-	|| BAIL_OUT;
+    $edt->insert_record($EDT_TEST, { signed_req => 123, string_req => 'abc' });
     
-    my @inserted = $T->inserted_keys;
+    ok( $edt->commit, "insert record transaction succeeded" ) || BAIL_OUT;
+    
+    my @inserted = $edt->inserted_keys;
     
     unless ( cmp_ok( @inserted, '==', 1, "inserted one record" ) )
     {
@@ -93,12 +95,14 @@ subtest 'insert and delete' => sub {
 	cmp_ok( $r->{string_req}, 'eq', 'abc', "record had proper string value" );
 
     # Check that we can delete records.
+
+    $edt = $T->new_edt($perm_a);
     
-    my $result2 = $T->do_delete_records($perm_a, undef, "delete record",
-    					$EDT_TEST, $inserted[0])
-    	|| BAIL_OUT;
+    $edt->delete_record($EDT_TEST, $inserted[0]);
+
+    ok( $edt->commit, "delete record transaction succeeded" ) || BAIL_OUT;
     
-    my @deleted = $T->deleted_keys;
+    my @deleted = $edt->deleted_keys;
     
     cmp_ok( @deleted, '==', 1, "deleted one record" ) &&
 	cmp_ok( $deleted[0], 'eq', $inserted[0], "deleted same record that was inserted" );
@@ -112,13 +116,15 @@ subtest 'insert and delete' => sub {
 
 subtest 'update and replace' => sub {
 
-    my $result1 = $T->do_insert_records($perm_a, undef, "insert record", $EDT_TEST,
-					{ signed_req => 123, signed_val => 456,
-					  string_req => 'test for update' })
-	|| BAIL_OUT;
-    
-    my ($test_key) = $T->inserted_keys;
+    my $edt = $T->new_edt($perm_a);
 
+    $edt->insert_record($EDT_TEST, { signed_req => 123, signed_val => 456,
+				     string_req => 'test for update' });
+
+    ok( $edt->commit, "insert record transaction succeeded" ) || BAIL_OUT;
+    
+    my ($test_key) = $edt->inserted_keys;
+    
     my ($r1) = $T->fetch_records_by_key($EDT_TEST, $test_key);
     
     ok( $r1, "record was in the table" ) &&
@@ -126,9 +132,12 @@ subtest 'update and replace' => sub {
 
     # Check that we can update records.
     
-    my $result2 = $T->do_update_records($perm_a, undef, "update record", $EDT_TEST,
-					{ test_id => $test_key, string_req => 'updated' })
-	|| BAIL_OUT;
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
+    
+    my $result2 = $edt->update_record($EDT_TEST,
+				 { test_id => $test_key, string_req => 'updated' });
+
+    ok( $result2, "update record succeeded" ) || BAIL_OUT;
     
     my ($r2) = $T->fetch_records_by_key($EDT_TEST, $test_key);
     
@@ -140,10 +149,11 @@ subtest 'update and replace' => sub {
     
     # Check that we can replace records.
     
-    my $result3 = $T->do_replace_records($perm_a, undef, "replace record", $EDT_TEST,
-					 { test_id => $test_key, string_req => 'replaced',
-					   signed_req => 789 })
-	|| BAIL_OUT;
+    my $result3 = $edt->replace_record($EDT_TEST,
+				   { test_id => $test_key, string_req => 'replaced',
+				     signed_req => 789 });
+
+    ok( $result3, "replace record succeeded" ) || BAIL_OUT;
     
     my ($r3) = $T->fetch_records_by_key($EDT_TEST, $test_key);
     
@@ -152,6 +162,8 @@ subtest 'update and replace' => sub {
 	cmp_ok( $r3->{string_req}, 'eq', 'replaced', "string value was changed" );
 	ok( ! defined $r3->{signed_val}, "int value was replaced by nothing" );
     }
+    
+    ok( $edt->commit, "transaction committed" );
 };
 
 

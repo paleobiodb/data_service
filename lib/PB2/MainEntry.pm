@@ -10,9 +10,9 @@ use feature 'unicode_strings';
 
 package PBEntry;
 
-use PB2::CommonEntry;
-use PB2::TimescaleEntry;
-use PB2::ResourceEntry;
+#use PB2::CommonEntry;
+#use PB2::TimescaleEntry;
+#use PB2::ResourceEntry;
 
 
 sub initialize {

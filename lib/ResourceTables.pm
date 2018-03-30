@@ -25,7 +25,7 @@ use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG
     set_table_property($RESOURCE_QUEUE, PRIMARY_KEY => "eduresource_no");
     set_table_property($RESOURCE_QUEUE, PRIMARY_ATTR => "eduresource_id");
     
-    set_column_property($RESOURCE_QUEUE, 'eduresource_no', ID_TYPE => 'EDR');
+    set_column_property($RESOURCE_QUEUE, 'eduresource_no', EXTID_TYPE => 'EDR');
     set_column_property($RESOURCE_QUEUE, 'title', REQUIRED => 1);
     set_column_property($RESOURCE_QUEUE, 'status', ADMIN_SET => 1);
     

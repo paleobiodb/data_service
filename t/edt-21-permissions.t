@@ -97,7 +97,7 @@ subtest 'basic' => sub {
     my ($edt, $result);
     
     set_table_property($EDT_TEST, CAN_POST => 'AUTHORIZED');
-
+    
     $perm_a->clear_cached_permissions;
     $perm_e->clear_cached_permissions;
     $perm_s->clear_cached_permissions;
@@ -119,10 +119,10 @@ subtest 'basic' => sub {
     
     $T->test_permissions($EDT_TEST, $perm_a, $perm_e, 'basic', 'fails', "enterer cannot edit authorizer");
     $T->test_permissions($EDT_TEST, $perm_e, $perm_a, 'basic', 'succeeds', "authorizer can edit enterer");
-
+    
     # Test that the superuser can update and delete records that a regular user put in, but not
     # vice versa.
-
+    
     $T->test_permissions($EDT_TEST, $perm_s, $perm_e, 'basic', 'fails', "enterer cannot edit superuser");
     $T->test_permissions($EDT_TEST, $perm_e, $perm_s, 'basic', 'succeeds', "superuser can edit enterer");
     
@@ -131,13 +131,13 @@ subtest 'basic' => sub {
     $T->test_permissions($EDT_TEST, $perm_a, $perm_u, 'basic', 'fails', "no-authorizer cannot edit records");
     $T->test_permissions($EDT_TEST, $perm_a, $perm_g, 'basic', 'fails', "guest cannot edit records");
     $T->test_permissions($EDT_TEST, $perm_a, $perm_n, 'basic', 'fails', "no login cannot edit records");
-
+    
     # Specifically deny a user access to the table, and check that this now fails.
-
+    
     $T->set_specific_permission($EDT_TEST, $perm_a, 'none');
-
+    
     $perm_a->clear_cached_permissions;
-
+    
     $T->test_permissions($EDT_TEST, $perm_a, 'basic', 'fails', "authorizer fails with specific denial");
 };
 
@@ -363,6 +363,18 @@ subtest 'can_modify' => sub {
 
     $T->test_permissions($EDT_TEST, $perm_s, $perm_e, 'basic', 'fails', "enterer cannot modify with specific denial");
 
+    # Finally, check that in a table without ownership columns, setting CAN_MODIFY to 'nobody'
+    # allows posting but not modification of records.
+
+    set_table_property($EDT_AUX, CAN_MODIFY => 'NOBODY');
+
+    $perm_a->clear_cached_permissions;
+
+    $T->test_permissions($EDT_AUX, $perm_a, $perm_a, 'U', 'fails', "can post but cannot modify");
+
+    # Set the property back so that any subsequent tests that use it will run correctly.
+    
+    set_table_property($EDT_AUX, CAN_MODIFY => 'AUTHORIZED');
 };
 
 

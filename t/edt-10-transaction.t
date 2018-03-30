@@ -13,7 +13,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 use TableDefs qw($EDT_TEST get_table_property);
 
@@ -398,9 +398,9 @@ subtest 'errors' => sub {
     eval {
 	ok( ! $edt->insert_record($EDT_TEST, { string_req => 'good record' }), "insert failed" );
 	is( $edt->fail_count, 1, "fail count was not incremented" );
-	ok( ! $edt->insert_record($EDT_TEST, { string_val => 'bad record' }), "insert failed" );
+	ok( ! $edt->insert_record($EDT_TEST, { string_val => 'bad record!' }), "insert failed" );
 	is( $edt->fail_count, 2, "fail count was incremented" );
-	is( $edt->errors, 2, "two errors were generated" );
+	is( $edt->errors, 2, "two errors were generated" ) || $T->diag_errors($edt, 'any');
 	is( $edt->record_count, 5, "received 5 records in total" );
     };
 
@@ -711,3 +711,14 @@ subtest 'abort_action' => sub {
     $T->ok_no_record($EDT_TEST, "string_req='test d2'");
 };
 
+
+# Check that a single transaction can affect more than one table.
+
+subtest 'multiple tables' => sub {
+    
+    pass('placeholder');
+
+    # $$$
+    
+    
+};

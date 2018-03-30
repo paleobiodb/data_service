@@ -78,7 +78,7 @@ subtest 'text' => sub {
     
     $result = $edt->insert_record($EDT_TEST, { string_req => $long_value });
     
-    $T->ok_has_error(qr/F_LENGTH.*no more than/, "could not insert record with string value too long");
+    $T->ok_has_one_error(qr/F_LENGTH.*no more than/, "could not insert record with string value too long");
     
     # Set the table column property ALLOW_TRUNCATE, and try again.
     
@@ -243,7 +243,7 @@ subtest 'boolean' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, boolean_val => 'true_but_bad' });
     
-    $T->ok_has_error( 'F_FORMAT', "got parameter error for bad boolean value" );
+    $T->ok_has_one_error( 'F_FORMAT', "got parameter error for bad boolean value" );
 };
 
 
@@ -382,54 +382,54 @@ subtest 'integer' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, signed_val => 'abc' });
     
-    $T->ok_has_error('F_FORMAT', "parameter error for non-integer value");
+    $T->ok_has_one_error('F_FORMAT', "parameter error for non-integer value");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, signed_val => '12a' });
 
-    $T->ok_has_error('F_FORMAT', "parameter error for non-integer ending");
+    $T->ok_has_one_error('F_FORMAT', "parameter error for non-integer ending");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, signed_val => '-' });
 
-    $T->ok_has_error('F_FORMAT', "format error for single minus sign");
+    $T->ok_has_one_error('F_FORMAT', "format error for single minus sign");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, signed_val => "8388608" });
     
-    $T->ok_has_error('F_RANGE', "signed int exceeds bound");
+    $T->ok_has_one_error('F_RANGE', "signed int exceeds bound");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, signed_val => "-8388609" });
     
-    $T->ok_has_error('F_RANGE', "signed int exceeds negative bound");
+    $T->ok_has_one_error('F_RANGE', "signed int exceeds negative bound");
     $T->ok_no_warnings;
     
     # Now try for unsigned integers.
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsigned_val => "16777216" });
     
-    $T->ok_has_error('F_RANGE', "unsigned int exceeds bound");
+    $T->ok_has_one_error('F_RANGE', "unsigned int exceeds bound");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsigned_val => "  - 23 " });
     
-    $T->ok_has_error('F_RANGE', "unsigned int must be nonnegative");
+    $T->ok_has_one_error('F_RANGE', "unsigned int must be nonnegative");
     $T->ok_no_warnings;
 
     $edt->update_record($EDT_TEST, { $primary => $key1, unsigned_val => "  14    b" });
     
-    $T->ok_has_error('F_FORMAT', "format error for non-digit suffix");
+    $T->ok_has_one_error('F_FORMAT', "format error for non-digit suffix");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsigned_val => "-0" });
     
-    $T->ok_has_error('F_RANGE', "value -0 not accepted for unsigned integer");
+    $T->ok_has_one_error('F_RANGE', "value -0 not accepted for unsigned integer");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, tiny_val => 256 });
 
-    $T->ok_has_error('F_RANGE', "value 256 out of range for tinyint unsigned");
+    $T->ok_has_one_error('F_RANGE', "value 256 out of range for tinyint unsigned");
     $T->ok_no_warnings;
 };
 
@@ -548,84 +548,84 @@ subtest 'fixed' => sub {
 
     $edt->update_record($EDT_TEST, { $primary => $key1, unsdecimal_val => 'abc' });
     
-    $T->ok_has_error('F_FORMAT', "format error for non-number");
+    $T->ok_has_one_error('F_FORMAT', "format error for non-number");
     $T->ok_no_warnings;
         
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => ' -2.03a5  ' });
     
-    $T->ok_has_error('F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_has_one_error('F_FORMAT', "format error for non-numeric suffix");
     $T->ok_no_warnings;
         
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '2. 03' });
     
-    $T->ok_has_error('F_FORMAT', "format error for space in the middle of the number");
+    $T->ok_has_one_error('F_FORMAT', "format error for space in the middle of the number");
     $T->ok_no_warnings;
         
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '-' });
     
-    $T->ok_has_error('F_FORMAT', "format error for single minus sign");
+    $T->ok_has_one_error('F_FORMAT', "format error for single minus sign");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '.' });
     
-    $T->ok_has_error('F_FORMAT', "format error for single decimal point");
+    $T->ok_has_one_error('F_FORMAT', "format error for single decimal point");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '1000.0' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding bound");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding bound");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '-1000.0' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding lower bound");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding lower bound");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '1000.2345' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '1.2345' });
     
-    $T->ok_has_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '-1.2345' });
     
-    $T->ok_has_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     # Now try some incorrect values on the unsigned column.
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsdecimal_val => '1e3' });
     
-    $T->ok_has_error('F_RANGE', "range error for value that is too large");
+    $T->ok_has_one_error('F_RANGE', "range error for value that is too large");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsdecimal_val => '-1.23456' });
     
-    $T->ok_has_error('F_RANGE', "range error for value that is negative");
+    $T->ok_has_one_error('F_RANGE', "range error for value that is negative");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsdecimal_val => '1.23456' });
     
-    $T->ok_has_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '10000.2345' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '10000.2345-' });
     
-    $T->ok_has_error('F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_has_one_error('F_FORMAT', "format error for non-numeric suffix");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsdecimal_val => '-0' });
     
-    $T->ok_has_error('F_RANGE', "range error for -0");
+    $T->ok_has_one_error('F_RANGE', "range error for -0");
     $T->ok_no_warnings;
     
     # Now set the column property ALLOW_TRUNCATE to true, and check that we get W_TRUNC warnings
@@ -652,7 +652,7 @@ subtest 'fixed' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '-1e5' });
     
-    $T->ok_has_error('F_RANGE', "range error with ALLOW_TRUNCATE");
+    $T->ok_has_one_error('F_RANGE', "range error with ALLOW_TRUNCATE");
     $T->ok_no_warnings;
         
 };
@@ -798,84 +798,84 @@ subtest 'float' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => 'abc' });
     
-    $T->ok_has_error('F_FORMAT', "format error for non-number");
+    $T->ok_has_one_error('F_FORMAT', "format error for non-number");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => ' -2.03a5  ' });
     
-    $T->ok_has_error('F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_has_one_error('F_FORMAT', "format error for non-numeric suffix");
     $T->ok_no_warnings;
         
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '2. 03' });
     
-    $T->ok_has_error('F_FORMAT', "format error for space in the middle of the number");
+    $T->ok_has_one_error('F_FORMAT', "format error for space in the middle of the number");
     $T->ok_no_warnings;
         
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '-' });
     
-    $T->ok_has_error('F_FORMAT', "format error for single minus sign");
+    $T->ok_has_one_error('F_FORMAT', "format error for single minus sign");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '.' });
     
-    $T->ok_has_error('F_FORMAT', "format error for single decimal point");
+    $T->ok_has_one_error('F_FORMAT', "format error for single decimal point");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '2e500' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding bound");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding bound");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '-2e500' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding lower bound");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding lower bound");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '1.2345' });
     
-    $T->ok_has_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '-1.2345' });
     
-    $T->ok_has_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     # Now try some incorrect values on the unsigned column.
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsfloat_val => '1e3' });
     
-    $T->ok_has_error('F_RANGE', "range error for value that is too large");
+    $T->ok_has_one_error('F_RANGE', "range error for value that is too large");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsfloat_val => '-1.23456' });
     
-    $T->ok_has_error('F_RANGE', "range error for value that is negative");
+    $T->ok_has_one_error('F_RANGE', "range error for value that is negative");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsfloat_val => '1.23456' });
     
-    $T->ok_has_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '10000.2345' });
     
-    $T->ok_has_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_has_one_error('F_RANGE', "range error for exceeding bound, even though precision is also too high");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '10000.2345-' });
     
-    $T->ok_has_error('F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_has_one_error('F_FORMAT', "format error for non-numeric suffix");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsfloat_val => '-0' });
     
-    $T->ok_has_error('F_RANGE', "range error for -0");
+    $T->ok_has_one_error('F_RANGE', "range error for -0");
     $T->ok_no_warnings;
     
     # Now set the column property ALLOW_TRUNCATE to true, and check that we get W_TRUNC warnings
@@ -902,7 +902,7 @@ subtest 'float' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '-1e5' });
     
-    $T->ok_has_error('F_RANGE', "range error with ALLOW_TRUNCATE");
+    $T->ok_has_one_error('F_RANGE', "range error with ALLOW_TRUNCATE");
     $T->ok_no_warnings;
         
 };
@@ -980,17 +980,17 @@ subtest 'enumerated' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, enum_val => 'xxx' });
     
-    $T->ok_has_error( 'F_RANGE', "got 'E_RANGE' error for unrecognized enum value" );
+    $T->ok_has_one_error( 'F_RANGE', "got 'E_RANGE' error for unrecognized enum value" );
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, enum_val => 'abc,ghi' });
     
-    $T->ok_has_error( 'F_RANGE', "got 'E_RANGE' error for combination of correct values" );
+    $T->ok_has_one_error( 'F_RANGE', "got 'E_RANGE' error for combination of correct values" );
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, enum_val => 'abc\'' });
     
-    $T->ok_has_error( 'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
+    $T->ok_has_one_error( 'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
     $T->ok_no_warnings;
 };
 
@@ -1067,16 +1067,31 @@ subtest 'sets' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, set_val => 'xxx' });
     
-    $T->ok_has_error( 'F_RANGE', "got 'E_RANGE' error for unrecognized set value" );
+    $T->ok_has_one_error( 'F_RANGE', "got 'E_RANGE' error for unrecognized set value" );
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, set_val => 'abc,xxx,ghi' });
     
-    $T->ok_has_error( 'F_RANGE', "got 'E_RANGE' error for bad value among good ones" );
+    $T->ok_has_one_error( 'F_RANGE', "got 'E_RANGE' error for bad value among good ones" );
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, set_val => 'abc\'' });
     
-    $T->ok_has_error( 'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
-    $T->ok_no_warnings;    
+    $T->ok_has_one_error( 'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
+    $T->ok_no_warnings;
+
+    # Now try setting the property VALUE_SEPARATOR and check that it is properly applied.
+
+    set_column_property($EDT_TEST, 'set_val', VALUE_SEPARATOR => qr{ / }xs );
+    reset_cached_column_properties($EDT_TEST, 'set_val');
+
+    $edt->update_record($EDT_TEST, { $primary => $key1, set_val => 'abc/\'jkl\'' });
+    
+    $T->ok_no_conditions;
+    $T->ok_found_record($EDT_TEST, "$primary = $key1 and set_val = 'abc,''jkl'''");
+
+    $edt->update_record($EDT_TEST, { $primary => $key1, set_val => 'abc,ghi' });
+
+    $T->ok_has_one_error('F_RANGE', "got 'E_RANGE' error for improperly separated values");
+    $T->ok_no_warnings;
 };

@@ -8,11 +8,12 @@ package EditTransaction;
 
 use strict;
 
-use ExternalIdent qw(%IDP);
+use ExternalIdent qw(%IDP %IDRE);
 use TableDefs qw(get_table_property get_column_properties $PERSON_DATA
-		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_OTHER %FOREIGN_KEY_TABLE);
+		 %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 use TableData qw(get_table_schema);
 use EditTransaction::Action;
+use EditTransaction::Datalog;
 use Permissions;
 
 use Carp qw(carp croak);
@@ -39,7 +40,6 @@ our ($MULTI_INSERT_LIMIT) = 100;
 
 our (%ALLOW_BY_CLASS) = ( EditTransaction => { 
 		CREATE => 1,
-		MULTI_INSERT => 1,
 		MULTI_DELETE => 1,
 		ALTER_TRAIL => 1,
 		NOT_FOUND => 1,
@@ -47,30 +47,36 @@ our (%ALLOW_BY_CLASS) = ( EditTransaction => {
 		DEBUG_MODE => 1,
 		SILENT_MODE => 1,
 		PROCEED_MODE => 1, 
-		IMMEDIATE_MODE => 1 } );
+		IMMEDIATE_MODE => 1,
+		FIXUP_MODE => 1,
+		NO_LOG_MODE => 1 } );
 
 our (%CONDITION_BY_CLASS) = ( EditTransaction => {		     
 		C_CREATE => "Allow 'CREATE' to create records",
 		C_LOCKED => "Allow 'LOCKED' to update locked records",
 		C_NO_RECORDS => "Allow 'NO_RECORDS' to allow transactions with no records",
-		E_EXECUTE => "%1",
+		C_ALTER_TRAIL => "Allow 'ALTER_TRAIL' to explicitly set crmod and authent fields",
+  		E_EXECUTE => "%1",
 		E_NO_KEY => "The %1 operation requires a primary key value",
 		E_HAS_KEY => "You may not specify a primary key value for the %1 operation",
-		E_KEY_NOT_FOUND => "Field '%1': no %3 record was found with key '%2'",
+		E_KEY_NOT_FOUND => "Field '%1': no record was found with key '%2'",
 		E_NOT_FOUND => "No record was found with key '%1'",
 		E_LOCKED => "This record is locked",
 		E_PERM => { insert => "You do not have permission to insert a record into this table",
 			    update => "You do not have permission to update this record",
+			    update_many => "You do not have permission to update records in this table",
 			    replace_new => "No record was found with key '%2', ".
 				"and you do not have permission to insert one",
 			    replace_existing => "You do not have permission to replace this record",
 			    delete => "You do not have permission to delete this record",
+			    delete_many => "You do not have permission to delete records from this table",
 			    default => "You do not have permission for this operation" },
 		E_PERM_COL => "You do not have permission to set the value of the field '%1'",
 		E_REQUIRED => "Field '%1': must have a nonempty value",
 		E_RANGE => "Field '%1': %2",
 		E_LENGTH => "Field '%1': %2",
 		E_FORMAT => "Field '%1': %2",
+		E_EXTTYPE => "Field '%1': %2",
 		W_ALLOW => "Unknown allowance '%1'",
 		W_EXECUTE => "%1",
 		W_TRUNC => "Field '$1': %2",
@@ -81,7 +87,6 @@ our (%SPECIAL_BY_CLASS);
 our (%TEST_PROBLEM);	# This variable can be set in order to trigger specific errors, in order
                         # to test the error-response mechanisms.
 
-our (%OPERATION_TYPE) = ( insert => 'record', replace => 'record', update => 'record', delete => 'single' );
 
 # The following hash is used to make sure that if one transaction interrupts the other, we will
 # know about it. The hash keys are DBI connection handles. In fact, under most circumstances there
@@ -203,6 +208,7 @@ sub new {
 	    elsif ( $k eq 'DEBUG_MODE' ) { $edt->{debug} = 1; $edt->{silent} = undef }
 	    elsif ( $k eq 'SILENT_MODE' ) { $edt->{silent} = 1 unless $edt->{debug} }
 	    elsif ( $k eq 'IMMEDIATE_MODE' ) { $edt->{execute_immediately} = 1 }
+	    elsif ( $k eq 'FIXUP_MODE' ) { $edt->{fixup_mode} = 1; }
 	}
 	
 	else
@@ -575,14 +581,14 @@ sub add_condition {
 	croak "first parameter must be either a code, or an action, or 'main'"
 	    unless $action->isa('EditTransaction::Action');
     }
-
+    
     # If it is 'main' or the undefined value, then the action will be empty.
     
     elsif ( ! defined $_[0] || $_[0] eq 'main' )
     {
 	shift;	# in this case, $action will be empty
     }
-
+    
     # Otherwise, we use the "current action", which may be empty if this method is called before
     # the first action is handled or after the last one is done.
     
@@ -798,7 +804,7 @@ sub specific_warnings {
     {
 	$search ||= $edt->{current_action};
     }
-
+    
     # If we are looking for a specific action, then we can return immediately under either of the
     # following conditions: if this routine was called in scalar context, or if this action was
     # not associated with any warnings. In either case, we need only check the action's warning count.
@@ -1183,113 +1189,6 @@ sub _new_record {
 }
 
 
-# _finish_record ( )
-# 
-# Finish processing the current record. All record conditions are moved over to the main lists,
-# and the 'current_label' is set to undefined.
-
-# sub _finish_record {
-    
-#     my ($edt) = @_;
-
-#     # Clear the "current record label" to indicate that we are done processing the most recent
-#     # record.
-
-#     $edt->{current_label} = undef;
-    
-#     # # If any errors have been generated for the current record, move them.
-    
-#     # if ( $edt->{current_errors} && @{$edt->{current_errors}} )
-#     # {
-#     # 	# If the allowance 'PROCEED_MODE' is in effect, then all errors and cautions are converted into
-#     # 	# warnings and the initial letter of each code changed from E -> F and C -> D.
-	
-#     # 	if ( $edt->allows('PROCEED_MODE') )
-#     # 	{
-#     # 	    while ( my $e = shift @{$edt->{current_errors}} )
-#     # 	    {
-#     # 		substr($e->[0],0,1) =~ tr/CE/DF/;
-#     # 		push @{$edt->{warnings}}, $e;
-#     # 		$edt->{condition}{$e->[0]} = 1;
-#     # 	    }
-#     # 	}
-
-#     # 	# Otherwise, if the allowance 'NOT_FOUND' is in effect, then 'E_NOT_FOUND' errors are
-#     # 	# treated as above and all other errors and cautions are moved unchanged.
-	
-#     # 	elsif ( $edt->allows('NOT_FOUND') )
-#     # 	{
-#     # 	    while ( my $e = shift @{$edt->{current_errors}} )
-#     # 	    {
-#     # 		if ( $e->[0] eq 'E_NOT_FOUND' )
-#     # 		{
-#     # 		    $e->[0] = 'F_NOT_FOUND';
-#     # 		    push @{$edt->{warnings}}, $e;
-#     # 		}
-		
-#     # 		else
-#     # 		{
-#     # 		    push @{$edt->{errors}}, $e;
-#     # 		}
-		
-#     # 		$edt->{condition}{$e->[0]} = 1;
-#     # 	    }
-#     # 	}
-
-#     # 	# Otherwise, just move all errors and cautions over to the main list.
-	
-#     # 	else
-#     # 	{
-#     # 	    while ( my $e = shift @{$edt->{current_errors}} )
-#     # 	    {
-#     # 		push @{$edt->{errors}}, $e;
-#     # 		$edt->{condition}{$e->[0]} = 1;
-#     # 	    }
-#     # 	}
-#     # }
-
-#     # # If there are any warnings, just move them over unchanged.
-
-#     # if ( $edt->{current_warnings} && @{$edt->{current_warnings}} )
-#     # {
-#     # 	while ( my $w = shift @{$edt->{current_warnings}} )
-#     # 	{
-#     # 	    push @{$edt->{warnings}}, $w;
-#     # 	}
-#     # }
-    
-#     # # Clear the 'current record label'.
-    
-#     # $edt->{current_label} = undef;
-# }
-
-
-# _clear_record ( )
-# 
-# Clear any error and warning messages generated by the current record, and also the record
-# label. This method is called when processing of a record is to be abandoned.
-
-# sub _clear_record {
-    
-#     my ($edt) = @_;
-    
-#     @{$edt->{curremt_errors}} = ();
-#     @{$edt->{current_warnings}} = ();
-#     $edt->{current_label} =  undef;
-# }
-
-
-# record_label ( )
-# 
-# Return the record label for the record currently being processed. This is valid both during
-# checking and execution.
-
-# sub record_label {
-
-#     return $_[0]->{current_label};
-# }
-
-
 # Transaction control
 # -------------------
 
@@ -1594,7 +1493,7 @@ sub insert_record {
 	    
 	    $edt->validate_action($action, 'insert', $table);
 	}
-
+	
 	catch {
 	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
 	    $edt->error_line($_);
@@ -1711,6 +1610,57 @@ sub update_record {
 }
 
 
+# update_many ( table, selector, record )
+# 
+# All records matching the selector are to be updated in the specified table. Depending on the
+# settings of this particular EditTransaction, this action may happen immediately or may be
+# executed later. The selector may indicate a set of keys, or it may include some expression that
+# selects all matching records.
+
+sub update_many {
+    
+    my ($edt, $table, $selector, $record) = @_;
+    
+    # Move any accumulated record error or warning conditions to the main lists, and determine the
+    # key expression and label for the record being updated.
+    
+    my $action = $edt->_new_record($table, 'update_many', $record);
+    
+    $action->_set_selector($selector);
+    
+    try {
+	# First check to make sure we have permission to update records in this table. A subclass
+	# may override this method, if it needs to make different checks than the default ones.
+	
+	my $permission = $edt->authorize_action($action, 'update_many', $table);
+	
+	# If the user does not have permission to edit the record, add an E_PERM condition. 
+	
+	if ( $permission ne 'edit' && $permission ne 'admin' )
+	{
+	    $edt->add_condition($action, 'E_PERM', 'update_many');
+	}
+
+	# The update record must not include a key value.
+
+	if ( $action->keyval )
+	{
+	    $edt->add_condition($action, 'E_HAS_KEY', 'update_many');
+	}
+    }
+    
+    catch {
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
+	$edt->error_line($_);
+    };
+    
+    # Either execute the action immediately or add it to the appropriate list depending on whether
+    # or not any error conditions are found.
+    
+    return $edt->_handle_action($action);
+}
+
+
 # replace_record ( table, record )
 # 
 # The specified record is to be inserted into the specified table, replacing any record that may
@@ -1813,7 +1763,7 @@ sub replace_record {
 	    
 	    $edt->validate_action($action, 'replace', $table, $keyexpr);
 	}
-
+	
 	catch {
 	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
 	    $edt->error_line($_);
@@ -1926,6 +1876,50 @@ sub delete_record {
     }
     
     # Create an action record, and then take the appropriate action.
+    
+    return $edt->_handle_action($action);
+}
+
+
+# delete_many ( table, selector )
+# 
+# All records matching the selector are to be deleted in the specified table. Depending on the
+# settings of this particular EditTransaction, this action may happen immediately or may be
+# executed later. The selector may indicate a set of keys, or it may include some expression that
+# selects all matching records.
+
+sub update_many {
+    
+    my ($edt, $table, $selector) = @_;
+    
+    # Move any accumulated record error or warning conditions to the main lists, and determine the
+    # key expression and label for the record being updated.
+    
+    my $action = $edt->_new_record($table, 'delete_many', { });
+    
+    $action->_set_selector($selector);
+    
+    try {
+	# First check to make sure we have permission to delete records in this table. A subclass
+	# may override this method, if it needs to make different checks than the default ones.
+	
+	my $permission = $edt->authorize_action($action, 'delete_many', $table);
+	
+	# If the user does not have permission to edit the record, add an E_PERM condition. 
+	
+	if ( $permission ne 'delete' && $permission ne 'admin' )
+	{
+	    $edt->add_condition($action, 'E_PERM', 'delete_many');
+	}
+    }
+    
+    catch {
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
+	$edt->error_line($_);
+    };
+    
+    # Either execute the action immediately or add it to the appropriate list depending on whether
+    # or not any error conditions are found.
     
     return $edt->_handle_action($action);
 }
@@ -2105,26 +2099,38 @@ sub authorize_action {
     my ($edt, $action, $operation, $table, $keyexpr) = @_;
     
     die "TEST AUTHORIZE" if $TEST_PROBLEM{authorize};
+
+    my $permission;
     
     sswitch ( $operation )
     {
 	case 'insert': {
-	    return $action->_set_permission($edt->check_table_permission($table, 'post'))
+	    $permission = $edt->check_table_permission($table, 'post');
+	}
+	
+	case 'update_many': {
+	    $permission = $edt->check_table_permission($table, 'edit');
 	}
 	
 	case 'update':
 	case 'replace': {
-	    return $action->_set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
+	    $permission = $edt->check_record_permission($table, 'edit', $keyexpr);
+	}
+
+	case 'delete_many': {
+	    $permission = $edt->check_table_permission($table, 'delete');
 	}
 	
 	case 'delete': {
-	    return $action->_set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
+	    $permission = $edt->check_record_permission($table, 'delete', $keyexpr);
 	}
-
+	
         default: {
 	    croak "bad operation '$operation'";
 	}
-    }
+    };
+    
+    return $action->_set_permission($permission);
 }
 
 
@@ -2142,12 +2148,12 @@ sub _handle_action {
     # try to execute operations on a transaction that has already committed. (One that has been
     # rolled back is different. The status of such a transaction will clearly indicate that the
     # operations will not actually be carried out.)
-
+    
     if ( $edt->{transaction} && $edt->{transaction} eq 'committed' )
     {
 	croak "This transaction has already been committed";
     }
-
+    
     # If this action was abandoned, then ignore it. A new action's status is empty, and any
     # non-empty value means that the action should be ignored.
     
@@ -2252,6 +2258,10 @@ sub _execute_action {
 	case 'update': {
 	    $result = $edt->_execute_update($action);
 	}
+
+	case 'update_many': {
+	    $result = $edt->_execute_update_many($action);
+	}
 	
 	case 'replace': {
 	    $result = $edt->_execute_replace($action);
@@ -2259,6 +2269,10 @@ sub _execute_action {
 	
 	case 'delete': {
 	    $result = $edt->_execute_delete($action);
+	}
+
+	case 'delete_many': {
+	    $result = $edt->_execute_delete_many($action);
 	}
 	
         default: {
@@ -2487,10 +2501,14 @@ sub _execute_action_list {
 		    $edt->_execute_update($action);
 		}
 
+		case 'update_many': {
+		    $edt->_execute_update_many($action);
+		}
+		
 		case 'replace': {
 		    $edt->_execute_replace($action);
 		}
-
+		
 		case 'delete': {
 		    
 		    # If we are allowing multiple deletion and there are more actions remaining, check
@@ -2529,6 +2547,10 @@ sub _execute_action_list {
 		    # Now execute the action.
 		    
 		    $edt->_execute_delete($action);
+		}
+		
+		case 'delete_many': {
+		    $edt->_execute_delete_many($action);
 		}
 		
 	        default: {
@@ -2613,6 +2635,43 @@ sub get_keylist {
     {
 	return '';
     }
+}
+
+
+# get_old_values ( action, table, fields )
+# 
+# Fetch the specified columns from the table record whose key is given by the specified action.
+
+sub get_old_values {
+
+    my ($edt, $action, $table, $fields) = @_;
+    
+    $table ||= $action->table;
+    
+    my $keycol = $action->keycol;
+    my $keyval = $action->keyval;
+    
+    return () unless $keycol && $keyval;
+    
+    my $sql = "SELECT $fields FROM $table WHERE $keycol=" . $edt->dbh->quote($keyval);
+    
+    $edt->debug_line("$sql\n");
+    
+    return $edt->dbh->selectrow_array($sql);
+}
+
+
+# fetch_old_record ( action, table, key_expr )
+# 
+# Fetch the old version of the specified record, if it hasn't already been fetched.
+
+sub fetch_old_record {
+    
+    my ($edt, $action, $table, $keyexpr) = @_;
+    
+    # return if $action->old_record;
+
+    
 }
 
 
@@ -2770,6 +2829,7 @@ sub _execute_insert {
     {
 	$edt->{action_count}++;
 	push @{$edt->{inserted_keys}}, $new_keyval;
+	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($new_keyval, $action);
 	$edt->{key_labels}{$new_keyval} = $action->label;
 	return $new_keyval;
     }
@@ -2782,7 +2842,7 @@ sub _execute_insert {
 }
 
 
-# _execute_replace ( table, record )
+# _execute_replace ( action )
 # 
 # Actually perform an replace operation on the database. The record keys and values should already
 # have been checked by 'validate_record' or some other code, and lists of columns and values
@@ -2836,6 +2896,13 @@ sub _execute_replace {
     my ($result, $cleanup_called);
     
     try {
+	
+	# If we are logging this action, then fetch the existing record if any.
+	
+	unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table, 'NO_LOG') )
+	{
+	    $edt->fetch_old_record($action, $table);
+	}
 	
 	# Start by calling the 'before_action' method. This is designed to be overridden by
 	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
@@ -2899,6 +2966,7 @@ sub _execute_replace {
     {
 	$edt->{action_count}++;
 	push @{$edt->{replaced_keys}}, $keyval;
+	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
 	return $result;
     }
     
@@ -2911,7 +2979,7 @@ sub _execute_replace {
 }
 
 
-# _execute_update ( table, record )
+# _execute_update ( action )
 # 
 # Actually perform an update operation on the database. The keys and values have been checked
 # previously.
@@ -2970,6 +3038,13 @@ sub _execute_update {
     my ($result, $cleanup_called);
     
     try {
+	
+	# If we are logging this action, then fetch the existing record.
+	
+	unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table, 'NO_LOG') )
+	{
+	    $edt->fetch_old_record($action, $table, $key_expr);
+	}
 	
 	# Start by calling the 'before_action' method. This is designed to be overridden by
 	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
@@ -3033,6 +3108,7 @@ sub _execute_update {
     {
 	$edt->{action_count}++;
 	push @{$edt->{updated_keys}}, $keyval;
+	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
 	return $result;
     }
     
@@ -3045,7 +3121,22 @@ sub _execute_update {
 }
 
 
-# _execute_delete ( table, record )
+# _execute_update_many ( action )
+# 
+# Actually perform an update_many operation on the database. The keys and values have NOT yet been
+# checked.
+
+sub _execute_update_many {
+
+    my ($edt, $action) = @_;
+    
+    my $table = $action->table;
+    
+    croak "operation 'update_many' is not yet implemented";
+}
+
+
+# _execute_delete ( action )
 # 
 # Actually perform a delete operation on the database. The only field that makes any difference
 # here is the primary key.
@@ -3061,7 +3152,7 @@ sub _execute_delete {
     my $key_expr = $edt->get_keyexpr($action);
     
     # Set this as the current action.
-
+    
     $edt->{current_action} = $action;
     
     # If the following flag is set, deliberately generate an SQL error for
@@ -3084,6 +3175,13 @@ sub _execute_delete {
     my ($result, $cleanup_called);
     
     try {
+	
+	# If we are logging this action, then fetch the existing record.
+	
+	unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table, 'NO_LOG') )
+	{
+	    $edt->fetch_old_record($action, $table, $key_expr);
+	}
 	
 	# Start by calling the 'before_action' method. This is designed to be overridden by
 	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
@@ -3150,6 +3248,7 @@ sub _execute_delete {
 	foreach my $i ( 0..$#keys )
 	{
 	    $edt->{key_labels}{$keys[$i]} = $labels[$i] if defined $labels[$i] && $labels[$i] ne '';
+	    push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keys[$i], $action);
 	}
     }
     
@@ -3159,6 +3258,7 @@ sub _execute_delete {
 	
 	@keys = $action->keyval;
 	$edt->{key_labels}{$keys[0]} = $action->label;
+	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keys[0], $action);
     }
     
     # If the delete succeeded, return true. Otherwise, return false.
@@ -3176,6 +3276,21 @@ sub _execute_delete {
 	push @{$edt->{failed_keys}}, @keys;
 	return undef;
     }
+}
+
+
+# _execute_delete_many ( action )
+# 
+# Actually perform an update_many operation on the database. The keys and values have NOT yet been
+# checked.
+
+sub _execute_delete_many {
+
+    my ($edt, $action) = @_;
+    
+    my $table = $action->table;
+    
+    croak "operation 'delete_many' is not yet implemented";
 }
 
 
@@ -3268,25 +3383,25 @@ sub cleanup_action {
 
 sub inserted_keys {
 
-    return @{$_[0]->{inserted_keys}} if $_[0]->{inserted_keys};
+    return $_[0]->{inserted_keys} ? @{$_[0]->{inserted_keys}} : ();
 }
 
 
 sub updated_keys {
 
-    return @{$_[0]->{updated_keys}} if $_[0]->{updated_keys};
+    return $_[0]->{updated_keys} ? @{$_[0]->{updated_keys}} : ();
 }
 
 
 sub replaced_keys {
 
-    return @{$_[0]->{replaced_keys}} if $_[0]->{replaced_keys};
+    return $_[0]->{replaced_keys} ? @{$_[0]->{replaced_keys}} : ();
 }
 
 
 sub deleted_keys {
 
-    return @{$_[0]->{deleted_keys}} if $_[0]->{deleted_keys};
+    return $_[0]->{deleted_keys} ? @{$_[0]->{deleted_keys}} : ();
 }
 
 
@@ -3457,22 +3572,36 @@ sub column_special {
 our $DECIMAL_NUMBER_RE = qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
 			     (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs;
 
+our %EXTID_CHECK;
+
 sub validate_against_schema {
 
     my ($edt, $action, $operation, $table) = @_;
-
+    
     $operation ||= $action->operation;
     $table ||= $action->table;
     
     my $record = $action->record;
     my $permission = $action->permission;
+    my $keycol = $action->keycol;
     
     # Grab the table schema, or throw an exception if it is not available. This information is cached, so
     # the database will only need to be asked for this information once per process per table.
     
     my $dbh = $edt->dbh;
     my $schema = get_table_schema($dbh, $table, $edt->debug);
-    # my $property = get_column_properties($table);
+    
+    # If the operation is 'replace', then get the current created/modified timestamps from the old
+    # record.
+    
+    my (@copy_columns);
+    
+    # if ( $operation eq 'replace' )
+    # {
+    # 	($old_values{created}, $old_values{modified},
+    # 	 $old_values{authorizer_no}, $old_values{enterer_no}, $old_values{modifier_no}) =
+    # 	    $edt->get_old_values($action, $table, 'created, modified, authorizer_no, enterer_no, modifier_no');
+    # }
     
     # Start by going through the list of field names, and constructing a list of values to be
     # inserted.
@@ -3490,6 +3619,10 @@ sub validate_against_schema {
 	# If we are supposed to ignore this column, then do so.
 
 	next if $special eq 'ignore';
+
+	# Skip the primary key for any operation except 'replace'.
+	
+	next if $col eq $keycol && $operation ne 'replace';
 	
 	# If a value for this column is found in the record, then use that. If not, then check
 	# to see if the column has an alternate name.
@@ -3513,13 +3646,16 @@ sub validate_against_schema {
 	}
 	
 	# Don't check any columns we are directed to ignore. These were presumably checked by code
-	# from a subclass that has called this method.
+	# from a subclass that has called this method. Columns that have a type assigned by
+	# %COMMON_FIELD_SPECIAL cannot be passed.
 	
-	unless ( $special eq 'pass' )
+	my $type = $COMMON_FIELD_SPECIAL{$col};
+	
+	if ( $type || $special ne 'pass' )
 	{
 	    # Handle special columns in the appropriate ways.
 	    
-	    if ( my $type = $COMMON_FIELD_OTHER{$col} )
+	    if ( $type )
 	    {
 		# The 'crmod' fields store the record creation and modification dates. These cannot be
 		# specified explicitly except by a user with administrative permission, and then only
@@ -3528,25 +3664,93 @@ sub validate_against_schema {
 		
 		if ( $type eq 'crmod' )
 		{
-		    # If the value is empty, skip it and let it be filled in by the database engine.
-		    
-		    next unless defined $value && $value ne '';
-		    
-		    # Otherwise, check to make sure the user has permission to set a specific value.
-		    
-		    unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
+		    # If a value is specified for either 'created' or 'modified', then it is only
+		    # allowed to be explicitly set if the user has permission to do so.
+
+		    if ( defined $value && $value ne '' )
 		    {
-			$edt->add_condition($action, 'E_PERM_COL', $record_col);
-			next;
+			my $error;
+			
+			unless ( $permission eq 'admin' )
+			{
+			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
+			    $error = 1;
+			}
+			
+			unless ( $edt->{fixup_mode} || $edt->allows('ALTER_TRAIL') )
+			{
+			    $edt->add_condition($action, 'C_ALTER_TRAIL');
+			    $error = 1;
+			}
+			
+			next if $value eq 'UNCHANGED';
+			
+			# Check that the value matches the required format.
+			
+			# $$$ check for now, 2d, etc.
+			
+			if ( $value =~ qr{ ^ now (?: [(] [)] ) ? $ }xsi )
+			{
+			    $value = undef;
+			}
+			
+			elsif ( $value !~ qr{ ^ \d\d\d\d - \d\d - \d\d (?: \s+ \d\d : \d\d : \d\d ) ? $ }xs )
+			{
+			    $edt->add_condition($action, 'E_FORMAT', $record_col, $value, 'invalid date format');
+			    $error = 1;
+			}
+			
+			next if $error;
 		    }
 		    
-		    # If so, check that the value matches the required format.
-
-		    # $$$ check for now, 2d, etc.
+		    # Otherwise, if we are working under FIXUP_MODE or this action was specifically
+		    # directed to leave no record of the modification, then do that. But this is
+		    # only allowed with 'admin' privilege.
 		    
-		    unless ( $value =~ qr{ ^ \d\d\d\d - \d\d - \d\d (?: \s+ \d\d : \d\d : \d\d ) $ }xs )
+		    elsif ( $operation ne 'insert' && $col eq 'modified' && $edt->{fixup_mode} )
 		    {
-			$edt->add_condition($action, 'E_FORMAT', $record_col, $value, 'invalid date format');
+			if ( $permission ne 'admin' )
+			{
+			    $edt->add_condition($action, 'E_PERM_COL', $col);
+			    next;
+			}
+			
+			elsif ( $operation eq 'replace' )
+			{
+			    push @copy_columns, $col;
+			    $value = undef;
+			}
+			
+			else
+			{
+			    next;
+			}
+		    }
+		    
+		    # Otherwise, if the operation is 'update' then set the modification time to
+		    # the present. This is handled by specifying an explicit null value. The creation
+		    # time will be unchanged, unless explicitly specified above.
+		    
+		    elsif ( $operation eq 'update' && $col eq 'modified' )
+		    {
+			$value = undef;
+		    }
+		    
+		    # If the operation is 'replace', then copy the creation time from the old
+		    # record. The modification time will be null unless specifically specified
+		    # above, which will cause it to be set to the current time.
+		    
+		    elsif ( $operation eq 'replace' && $col eq 'created' )
+		    {
+			push @copy_columns, $col;
+			$value = undef;
+		    }
+		    
+		    # Otherwise, we skip the column. For a newly inserted record, this will cause
+		    # the 'created' and 'modified' times to be set to the current timestamp.
+		    
+		    else
+		    {
 			next;
 		    }
 		}
@@ -3563,18 +3767,31 @@ sub validate_against_schema {
 		    
 		    if ( defined $value && $value ne '' )
 		    {
-			unless ( $permission eq 'admin' && $edt->allows('ALTER_TRAIL') )
+			my $error;
+			
+			unless ( $permission eq 'admin' )
 			{
 			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
-			    next;
+			    $error = 1;
 			}
+			
+			unless ( $edt->{fixup_mode} || $edt->allows('ALTER_TRAIL') )
+			{
+			    $edt->add_condition($action, 'C_ALTER_TRAIL');
+			    $error = 1;
+			}
+			
+			next if $value eq 'UNCHANGED';
+			
+			# Now check to make sure the value is properly formatted.
 			
 			if ( ref $value eq 'PBDB::ExtIdent' )
 			{
-			    unless ( $value->{type} eq 'PRS' )
+			    unless ( $value->{type} eq $IDP{PRS} )
 			    {
 				$edt->add_condition($action, 'E_FORMAT', $record_col, $value,
 						    "must be an external identifier of type '$IDP{PRS}'");
+				next;
 			    }
 			    
 			    $value = $value->stringify;
@@ -3587,38 +3804,73 @@ sub validate_against_schema {
 			    next;
 			}
 			
-			unless ( $edt->check_key($PERSON_DATA, $value) )
+			unless ( $edt->check_key($PERSON_DATA, $col, $value) )
 			{
-			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value, 'person');
+			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
+			    next;
+			}
+			
+			next if $error;
+		    }
+		    
+		    # Otherwise, if we are working under FIXUP_MODE or this action was
+		    # specifically directed to leave no record of the modification, then do
+		    # that. But this is only allowed with 'admin' privilege.
+		    
+		    elsif ( $operation ne 'insert' && $col eq 'modifier_no' && $edt->{fixup_mode} )
+		    {
+			if ( $permission ne 'admin' )
+			{
+			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
+			    next;
+			}
+			
+			elsif ( $operation eq 'replace' )
+			{
+			    push @copy_columns, $col;
+			    $value = undef;
+			}
+			
+			else
+			{
+			    next;
 			}
 		    }
 		    
-		    # If (as is generally supposed to happen) no value is specified for this column,
-		    # then fill it in from the known information. The 'authorizer_no', 'enterer_no',
-		    # and 'enterer_id' fields are filled in on record insertion, and 'modifier_no' on
-		    # record update.
+		    # If (as is generally supposed to happen) no value is specified for this
+		    # column, then fill it in from the known information. The 'authorizer_no',
+		    # 'enterer_no', and 'enterer_id' fields are filled in on record insertion, and
+		    # 'modifier_no' on record update. If this is a 'replace' operation, then
+		    # specify that this value should be replaced by the one in the old record.
 		    
 		    elsif ( $col eq 'authorizer_no' && $operation ne 'update' )
 		    {
 			$value = $edt->{perms}->authorizer_no;
+			
+			push @copy_columns, $col if $operation eq 'replace';
 		    }
 		    
 		    elsif ( $col eq 'enterer_no' && $operation ne 'update' )
 		    {
 			$value = $edt->{perms}->enterer_no;
+			
+			push @copy_columns, $col if $operation eq 'replace';
 		    }
 		    
 		    elsif ( $col eq 'enterer_id' && $operation ne 'update' )
 		    {
 			$value = $edt->{perms}->user_id;
+			
+			push @copy_columns, $col if $operation eq 'replace';
+			
 		    }
 		    
-		    elsif ( $col eq 'modifier_no' && $operation eq 'update' )
+		    elsif ( $col eq 'modifier_no' && $operation ne 'insert' )
 		    {
 			$value = $edt->{perms}->enterer_no;
 		    }
 		    
-		    elsif ( $col eq 'modifier_id' && $operation eq 'update' )
+		    elsif ( $col eq 'modifier_id' && $operation ne 'insert' )
 		    {
 			$value = $edt->{perms}->user_id;
 		    }
@@ -3667,45 +3919,110 @@ sub validate_against_schema {
 	    
 	    elsif ( defined $value )
 	    {
-		# # If the value is empty but a value is required for this column, throw an error.
+		# If the column allows external identifiers, and if the value is one, then unpack
+		# it. If the value is already a PBDB::ExtIdent object, we assume that type checking has
+		# already been done.
 		
-		# if ( $value eq '' && $cr->{REQUIRED} )
-		# {
-		#     $edt->add_condition($action, 'E_REQUIRED', $record_col);
-		#     next;
-		# }
+		if ( my $extid_type = $cr->{EXTID_TYPE} || $COMMON_FIELD_IDTYPE{$col} )
+		{
+		    # If the external identifier has already been parsed, make sure it has the
+		    # proper type.
+		    
+		    if ( ref $value eq 'PBDB::ExtIdent' )
+		    {
+			$EXTID_CHECK{$extid_type} ||= qr{$IDP{$extid_type}};
+			
+			unless ( $value->type =~ $EXTID_CHECK{$extid_type} )
+			{
+			    $edt->add_condition($action, 'E_EXTTYPE', $record_col,
+						"wrong type for external identifier: must be '$IDP{$extid_type}'");
+			    next;
+			}
+			
+			$value = $value->stringify;
+		    }
+		    
+		    # If it is a number, then leave it alone. We'll have to change this check if
+		    # we ever add non-integer keys.
+		    
+		    elsif ( $value =~ /^\d+$/ )
+		    {
+			# do nothing
+		    }
+		    
+		    # If it looks like an external identifier of the proper type, unpack it.
+		    
+		    elsif ( $value =~ $IDRE{$extid_type} )
+		    {
+			$value = $2;
+			
+			# If the value is 0, or ERROR, or something else not valid, add an error
+			# condition.
+			
+			unless ( $value > 0 )
+			{
+			    $edt->add_condition($action, 'E_RANGE', $record_col,
+						"value does not specify a valid record");
+			    next;
+			}
+		    }
+		    
+		    # Otherwise, if it looks like an external identifier but is not of the right
+		    # type, then add an error condition.
+		    
+		    elsif ( $value =~ $IDRE{LOOSE} )
+		    {
+			$edt->add_condition($action, 'E_EXTTYPE', $record_col,
+					    "external id type '$1' is not valid for this field");
+			next;
+		    }
+		    
+		    # Otherwise, add an error condition if we are expecting an integer. If we ever
+		    # add non-integer keys, we'll have to come up with some other check.
+		    
+		    elsif ( $cr->{TypeParams}[0] && $cr->{TypeParams}[0] eq 'integer' )
+		    {
+			$edt->add_condition($action, 'E_FORMAT', $record_col,
+					    "value must be an unsigned integer or an external " .
+					    "identifier of type '$IDP{$extid_type}'");
+			next;
+		    }
+		}
 		
-		# Handle references to keys from other PBDB tables by checking them against the
-		# specified table. We use a symbolic reference because the system of table names is based
-		# on global variables, whose values might change. Yes, I know this is not the cleanest way
-		# to do it.
+		# Throw an exception (a real one) if we are handed a value which is an anonymous
+		# hash or array ref. In fact, the only reference type we accept is a PBDB external
+		# identifier.
 		
-		if ( my $foreign_table = $cr->{FOREIGN_KEY} // $FOREIGN_KEY_TABLE{$col} )
+		if ( ref $value )
+		{
+		    my $type = ref $value;
+		    croak "invalid value type '$type'";
+		}
+		
+		# Handle references to keys from other PBDB tables by checking them
+		# against the specified table. We use a symbolic reference because the system of
+		# table names is based on global variables, whose values might change. Yes, I know
+		# this is not the cleanest way to do it.
+		
+		if ( my $foreign_table = $cr->{FOREIGN_TABLE} || $FOREIGN_KEY_TABLE{$col} )
 		{
 		    if ( $value )
 		    {
-			# $$$ stringify?
-			
 			no strict 'refs';
 			
-			my $foreign_table_name = ${"TableDefs::" . $foreign_table};
+			my $f_table = ${"TableDefs::" . $foreign_table};
+			my $f_col = $cr->{FOREIGN_KEY} || $FOREIGN_KEY_COL{$col} || $col;
 			
-			unless ( $edt->check_key($foreign_table_name, $value) )
+			unless ( $edt->check_key($f_table, $f_col, $value) )
 			{
 			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
 			    next;
 			}
 		    }
 		    
-		    elsif ( $cr->{REQUIRED} )
-		    {
-			$edt->add_condition($action, 'E_REQUIRED', $record_col);
-			next;
-		    }
-		    
 		    else
 		    {
-			$value = '0';
+			$value = undef;
 		    }
 		}
 		
@@ -3739,63 +4056,24 @@ sub validate_against_schema {
 			    }
 			}
 			
-			# Now check for required values and check to see if there is a validator.
+			# If this column is required and the value is empty, add an error condition.
 			
 			if ( $value eq '' && $cr->{REQUIRED} )
 			{
 			    $edt->add_condition($action, 'E_REQUIRED', $record_col);
 			    next;
 			}
-			
-			elsif ( ref $cr->{VALIDATOR} eq 'Regexp' &&
-				$value !~ $cr->{VALIDATOR} )
-			{
-			    $edt->add_condition($action, 'E_FORMAT', $record_col,
-						$cr->{VALIDATOR_MSG} || 'value is not valid for this field');
-			    next;
-			}
-			
-			elsif ( ref $cr->{VALIDATOR} eq 'CODE' )
-			{
-			    my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
-			    
-			    if ( $code )
-			    {
-				$edt->add_condition($action, $code, $record_col, $message);
-				next;
-			    }
-			}
-			
-			elsif ( ref $cr->{VALIDATOR} )
-			{
-			    croak "validator reference type '" . ref $cr->{VALIDATOR} .
-				"' is not allowed for this column type";
-			}
 		    }
 		    
 		    # If the type is boolean, the value must be either 1 or 0. But we allow 'yes',
 		    # 'no', 'true', and 'false' as synonyms. A string that is empty or has only
-		    # whitespace is turned into the default value for this column.
+		    # whitespace is turned into a null.
 		    
 		    elsif ( $type eq 'boolean' )
 		    {
 			if ( $value =~ qr{ ^ \s* $ }xs )
 			{
-			    if ( $cr->{REQUIRED} )
-			    {
-				$edt->add_condition($action, 'E_REQUIRED', $record_col);
-				next;
-			    }
-			    
-			    elsif ( $cr->{Default} )
-			    {
-				$value = $cr->{Default};
-			    }
-			    
-			    else
-			    {
-				$value = undef;
-			    }
+			    $value = undef;
 			}
 			
 			else
@@ -3808,24 +4086,6 @@ sub validate_against_schema {
 			    }
 			    
 			    $value = $1 ? 1 : 0;
-			    
-			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
-			    {
-				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
-				
-				if ( $code )
-				{
-				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
-				    $edt->add_condition($action, $code, $record_col, @error_params);
-				    next;
-				}
-			    }
-			    
-			    elsif ( ref $cr->{VALIDATOR} )
-			    {
-				croak "validator reference type '" . ref $cr->{VALIDATOR} .
-				    "' is not allowed for this column type";
-			    }
 			}
 		    }
 		    
@@ -3833,219 +4093,18 @@ sub validate_against_schema {
 		    
 		    elsif ( $type eq 'integer' )
 		    {
-			# First make sure that the value is either empty or matches the proper
-			# format. A value which is empty or contains only whitespace will be
-			# treated as a NULL.
-			
-			if ( $value =~ qr{ ^ \s* $ }xs )
-			{
-			    if ( $cr->{REQUIRED} )
-			    {
-				$edt->add_condition($action, 'E_REQUIRED', $record_col);
-				next;
-			    }
-			    
-			    elsif ( defined $cr->{Default} )
-			    {
-				$value = $cr->{Default};
-			    }
-			    
-			    else
-			    {
-				$value = undef;
-			    }
-			}
-			
-			elsif ( $value !~ qr{ ^ \s* ( [-+]? ) \s* ( \d+ ) \s* $ }xs )
-			{
-			    my $phrase = $param[0] eq 'unsigned' ? 'an unsigned' : 'an';
-			    
-			    $edt->add_condition($action, 'E_FORMAT', $record_col,
-						"value must be $phrase integer");
-			    next;
-			}
-			
-			else
-			{
-			    if ( $param[0] eq 'unsigned' )
-			    {
-				$value = $2;
-				
-				if ( $1 && $1 eq '-' )
-				{
-				    $edt->add_condition($action, 'E_RANGE', $record_col, 
-							"value must an unsigned decimal number");
-				    next;
-				}
-				
-				elsif ( $value > $param[1] )
-				{
-				    $edt->add_condition($action, 'E_RANGE', $record_col,
-							"value must be less than or equal to $param[1]");
-				    next;
-				}
-			    }
-			    
-			    else
-			    {
-				$value = ($1 && $1 eq '-') ? "-$2" : $2;
-				
-				my $lower = $param[1] + 1;
-				
-				if ( $value > $param[1] || (-1 * $value) > $lower )
-				{
-				    $edt->add_condition($action, 'E_RANGE', $record_col, 
-							"value must lie between -$lower and $param[1]");
-				    next;
-				}
-			    }
+			$value = $edt->validate_integer_value($action, \@param, $record_col, $value);
 
-			    # Now check to see if there is a validator.
-
-			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
-			    {
-				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
-				
-				if ( $code )
-				{
-				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
-				    $edt->add_condition($action, $code, $record_col, @error_params);
-				    next;
-				}
-			    }
-			    
-			    elsif ( ref $cr->{VALIDATOR} )
-			    {
-				croak "validator reference type '" . ref $cr->{VALIDATOR} .
-				    "' is not allowed for this column type";
-			    }
-			}
+			next if ref $value;
 		    }
 		    
 		    # If the type is fixed point, do format and bound checking.
 		    
 		    elsif ( $type eq 'fixed' )
 		    {
-			# First make sure that the value is either empty or matches the proper
-			# format.  A value which is empty or contains only whitespace is turned
-			# into NULL.
+			$value = $edt->validate_fixed_value($action, $schema->{$col}, $record_col, $value);
 			
-			if ( $value =~ qr{ ^ \s* $ }xs )
-			{
-			    if ( $cr->{REQUIRED} )
-			    {
-				$edt->add_condition($action, 'E_REQUIRED', $record_col);
-				next;
-			    }
-			    
-			    elsif ( $cr->{Default} )
-			    {
-				$value = $cr->{Default};
-			    }
-			    
-			    else
-			    {
-				$value = undef;
-			    }
-			}
-			
-			elsif ( $value !~ $DECIMAL_NUMBER_RE )
-			{
-			    my $phrase = $param[0] eq 'unsigned' ? 'an unsigned' : 'a';
-			    
-			    $edt->add_condition($action, 'E_FORMAT', $record_col,
-						"value must be $phrase decimal number");
-			    next;
-			}
-			
-			else
-			{
-			    # If the column is unsigned, make sure there is no minus sign.
-			    
-			    if ( $param[0] eq 'unsigned' && defined $1 && $1 eq '-' )
-			    {
-				$edt->add_condition($action, 'E_RANGE', $record_col,
-						    "value must be an unsigned decimal number");
-				next;
-			    }
-			    
-			    # Now put the number back together from the regex captures. If there is an
-			    # exponent, reformat it as a fixed point.
-			    
-			    my ($unsigned, $whole, $precision) = @param;
-			    
-			    my $sign = $1 && $1 eq '-' ? '-' : '';
-			    my $intpart = $2 // '';
-			    my $fracpart = $3 // $4 // '';
-			    
-			    if ( $6 )
-			    {
-				my $exponent = ($5 && $5 eq '-' ? "-$6" : $6);
-				my $formatted = sprintf("%.10f", "${intpart}.${fracpart}E${exponent}");
-				
-				($intpart, $fracpart) = split(/[.]/, $formatted);
-			    }
-			    
-			    # Check that the number of digits is not exceeded, either before or
-			    # after the decimal. In the latter case, we add an error unless the column
-			    # property ALLOW_TRUNCATE is set in which case we add a warning.
-			    
-			    $intpart =~ s/^0+//;
-			    $fracpart =~ s/0+$//;
-			    
-			    if ( $intpart && length($intpart) > $whole )
-			    {
-				my $total = $whole + $precision;
-				
-				$edt->add_condition($action, 'E_RANGE', $record_col,
-						    "value is too large for decimal($total,$precision)");
-				next;
-			    }
-			    
-			    if ( $fracpart && length($fracpart) > $precision )
-			    {
-				my $total = $whole + $precision;
-				
-				if ( $schema->{$col}{ALLOW_TRUNCATE} )
-				{
-				    $edt->add_condition($action, 'W_TRUNC', $record_col,
-							"value has been truncated to decimal($total,$precision)");
-				}
-				
-				else
-				{
-				    $edt->add_condition($action, 'E_LENGTH', $record_col,
-							"too many decimal digits for decimal($total,$precision)");
-				    next;
-				}
-			    }
-			    
-			    # Rebuild the value, with the fracional part trimmed.
-			    
-			    $value = $sign;
-			    $value .= $intpart || '0';
-			    $value .= '.' . substr($fracpart, 0, $precision);
-
-			    # Now see if there is a validator.
-			    
-			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
-			    {
-				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
-				
-				if ( $code )
-				{
-				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
-				    $edt->add_condition($action, $code, $record_col, @error_params);
-				    next;
-				}
-			    }
-			    
-			    elsif ( ref $cr->{VALIDATOR} )
-			    {
-				croak "validator reference type '" . ref $cr->{VALIDATOR} .
-				    "' is not allowed for this column type";
-			    }
-			}
+			next if ref $value;
 		    }
 		    
 		    # Same for floating point 
@@ -4058,21 +4117,7 @@ sub validate_against_schema {
 			
 			if ( $value =~ qr{ ^ \s* $ }xs )
 			{
-			    if ( $cr->{REQUIRED} )
-			    {
-				$edt->add_condition($action, 'E_REQUIRED', $record_col);
-				next;
-			    }
-			    
-			    elsif ( $cr->{Default} )
-			    {
-				$value = $cr->{Default};
-			    }
-			    
-			    else
-			    {
-				$value = undef;
-			    }
+			    $value = undef;
 			}
 						
 			elsif ( $value !~ $DECIMAL_NUMBER_RE )
@@ -4122,27 +4167,6 @@ sub validate_against_schema {
 				$edt->add_condition($action, 'E_RANGE', $record_col,
 						    "magnitude is too large for $word-precision floating point");
 			    }
-
-			    # Now see if there is a validator, and if so then execute it.
-			    
-			    if ( ref $cr->{VALIDATOR} eq 'CODE' )
-			    {
-				my ($code, @error_params) = &{$cr->{VALIDATOR}}($value, $action);
-				
-				if ( $code )
-				{
-				    $message ||= $cr->{VALIDATOR_MSG} || 'value is not valid for this field';
-				    $edt->add_condition($action, $code, $record_col, @error_params);
-				    next;
-				}
-			    }
-			    
-			    elsif ( ref $cr->{VALIDATOR} )
-			    {
-				croak "validator reference type '" . ref $cr->{VALIDATOR} .
-				    "' is not allowed for this column type";
-			    }
-
 			}
 		    }
 		    
@@ -4202,21 +4226,7 @@ sub validate_against_schema {
 
 			else
 			{
-			    if ( $cr->{REQUIRED} )
-			    {
-				$edt->add_condition($action, 'E_REQUIRED', $record_col);
-				next;
-			    }
-			    
-			    elsif ( $cr->{Default} )
-			    {
-				$value = $cr->{Default};
-			    }
-			    
-			    else
-			    {
-				$value = undef;
-			    }
+			    $value = undef;
 			}
 		    }
 		    
@@ -4225,39 +4235,72 @@ sub validate_against_schema {
 		}
 	    }
 	    
-	    # If a value is required for this column and none was given, then we need to check whether
-	    # this is an update of an existing record. If it is, and if this column was not mentioned
-	    # in the record at all, then we just skip it. Otherwise, we signal an error.
+	    # Now we have to re-check whether we have a defined value or not. Some of the data
+	    # types checked above turn whitespace into null, for example. If we have a value, then
+	    # if a validator function has been defined for this column, call it. If the function
+	    # returns a condition code, then add the specified error or warning condition.
 	    
-	    elsif ( $cr->{REQUIRED} )
+	    if ( defined $value )
 	    {
-		if ( $operation eq 'update' && ! exists $record->{$record_col} )
+		if ( $cr->{VALIDATOR} )
 		{
-		    next;
-		}
-		
-		else
-		{
-		    $edt->add_condition($action, 'E_REQUIRED', $record_col);
-		    next;
+		    my $v = $cr->{VALIDATOR};
+		    
+		    my ($code, @error_params) = ref $v eq 'CODE' ?
+			&$v($edt, $value, $record_col, $action) :
+			$edt->$v($value, $record_col, $action);
+		    
+		    if ( $code )
+		    {
+			$error_params[0] ||= 'value is not valid for this field';
+			$edt->add_condition($action, $code, $record_col, @error_params);
+			next;
+		    }
 		}
 	    }
 	    
-	    # If this column is not mentioned in the record at all, just skip it. If the column
-	    # exists in the record with an undefined value, the code below will substitute a value
-	    # of NULL.
+	    # Otherwise, we don't have a defined value for this column. If the column name is
+	    # 'modified' and this is an 'update' or 'replace' operation, or 'created' on a
+	    # 'replace' operation, then let it go through as a null. This will cause the current
+	    # timestamp to be stored.
 	    
-	    elsif ( ! exists $record->{$record_col} )
+	    elsif ( $col eq 'modified' && $operation ne 'insert' )
 	    {
+		# let this column go through with a value of NULL
+	    }
+	    
+	    elsif ( $col eq 'created' && $operation eq 'replace' )
+	    {
+		# let this column go through with a value of NULL
+	    }
+	    
+	    # Otherwise, if this column is required to have a value, then throw an exception
+	    # unless this is an update operation and the column does not appear in the action
+	    # record. Any columns not explicitly given a value in an update operation are left
+	    # with whatever value was previously stored in the table.
+	    
+	    elsif ( $cr->{REQUIRED} && ( $operation ne 'update' || exists $record->{$record_col} ) )
+	    {
+		$edt->add_condition($action, 'E_REQUIRED', $record_col);
 		next;
 	    }
 	    
-	    # If this column is mentioned in the record an is explicitly given a null value, then
-	    # substitute the default value if one was defined.
-
-	    elsif ( defined $cr->{Default} )
+	    # If this column does appear in the action record, then it should be explicitly
+	    # included in the SQL statement. If it has a default value, we substitute
+	    # that. Otherwise, we will let its value be NULL.
+	    
+	    elsif ( exists $record->{$record_col} )
 	    {
-		$value = $cr->{Default};
+		$value = $cr->{Default} if defined $cr->{Default}
+	    }
+	    
+	    # If we get here, then the column does not appear in the action record, is not
+	    # explicitly required, and is not implicitly required for this operation
+	    # (i.e. 'modified' with an 'update' or 'replace' operation). So we skip it.
+	    
+	    else
+	    {
+		next;
 	    }
 	}
 	
@@ -4286,14 +4329,245 @@ sub validate_against_schema {
 	    push @values, 'NULL';
 	}
     }
+
+    # If the action has no errors, then we save the column values to it.
     
-    # 
-    
-    # Now store our column and value lists for subsequent use in constructing SQL statements.
-    
-    $action->set_column_values(\@columns, \@values);
+    unless ( $action->has_errors )
+    {    
+	# If we were directed to copy any old column values, do this first.
+	
+	if ( @copy_columns )
+	{
+	    my (@copy_values) = $edt->get_old_values($action, $table, join(',', @copy_columns));
+	    
+	    my (%copy_values, $substitution_count);
+	    
+	    foreach my $i ( 0..$#copy_columns )
+	    {
+		$copy_values{$copy_columns[$i]} = $dbh->quote($copy_values[$i]) if defined $copy_values[$i];
+	    }
+	    
+	    foreach my $i ( 0..$#columns )
+	    {
+		if ( defined $copy_values{$columns[$i]} )
+		{
+		    $values[$i] = $copy_values{$columns[$i]};
+		    $substitution_count++;
+		}
+		
+		last if $substitution_count == scalar(keys %copy_values);
+	    }
+	}
+	
+	# Now store our column and value lists for subsequent use in constructing SQL statements.
+	
+	$action->set_column_values(\@columns, \@values);
+    }
     
     return;
+}
+
+
+# validate_integer_value ( action, format, record_col, value )
+# 
+# Check that the specified value is suitable for storing into an integer column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_integer_value {
+    
+    my ($edt, $action, $format, $record_col, $value) = @_;
+    
+    # First make sure that the value is either empty or matches the proper format. A value which
+    # is empty or contains only whitespace will be treated as a NULL.
+    
+    if ( $value =~ qr{ ^ \s* $ }xs )
+    {
+	return undef;
+    }
+    
+    elsif ( $value !~ qr{ ^ \s* ( [-+]? ) \s* ( \d+ ) \s* $ }xs )
+    {
+	my $phrase = $format->[0] eq 'unsigned' ? 'an unsigned' : 'an';
+	
+	$edt->add_condition($action, 'E_FORMAT', $record_col,
+			    "value must be $phrase integer");
+	return { };
+    }
+    
+    elsif ( $format->[0] eq 'unsigned' )
+    {
+	$value = $2;
+	
+	if ( $1 && $1 eq '-' )
+	{
+	    $edt->add_condition($action, 'E_RANGE', $record_col, 
+				"value must an unsigned decimal number");
+	    return { };
+	}
+	
+	elsif ( $value > $format->[1] )
+	{
+	    $edt->add_condition($action, 'E_RANGE', $record_col,
+				"value must be less than or equal to $format->[1]");
+	    return { };
+	}
+
+	else
+	{
+	    return $value;
+	}
+    }
+    
+    else
+    {
+	$value = ($1 && $1 eq '-') ? "-$2" : $2;
+	
+	my $lower = $format->[1] + 1;
+	
+	if ( $value > $format->[1] || (-1 * $value) > $lower )
+	{
+	    $edt->add_condition($action, 'E_RANGE', $record_col, 
+				"value must lie between -$lower and $format->[1]");
+	    return { };
+	}
+
+	else
+	{
+	    return $value;
+	}
+    }
+};
+
+
+# validate_integer_value ( action, format, record_col, value )
+# 
+# Check that the specified value is suitable for storing into a fixed-point decimal column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_fixed_value {
+
+    my ($edt, $action, $column_data, $record_col, $value) = @_;
+    
+    my ($type, $unsigned, $whole, $precision) = @{$column_data->{TypeParams}};
+    
+    # First make sure that the value is either empty or matches the proper format.  A value which
+    # is empty or contains only whitespace is turned into NULL.
+    
+    if ( $value =~ qr{ ^ \s* $ }xs )
+    {
+	return undef;
+    }
+    
+    elsif ( $value !~ $DECIMAL_NUMBER_RE )
+    {
+	my $phrase = $unsigned ? 'an unsigned' : 'a';
+	
+	$edt->add_condition($action, 'E_FORMAT', $record_col,
+			    "value must be $phrase decimal number");
+	return { };
+    }
+    
+    else
+    {
+	# If the column is unsigned, make sure there is no minus sign.
+	
+	if ( $unsigned && defined $1 && $1 eq '-' )
+	{
+	    $edt->add_condition($action, 'E_RANGE', $record_col,
+				"value must be an unsigned decimal number");
+	    return { };
+	}
+	
+	# Now put the number back together from the regex captures. If there is an
+	# exponent, reformat it as a fixed point.
+	
+	my $sign = $1 && $1 eq '-' ? '-' : '';
+	my $intpart = $2 // '';
+	my $fracpart = $3 // $4 // '';
+	
+	if ( $6 )
+	{
+	    my $exponent = ($5 && $5 eq '-' ? "-$6" : $6);
+	    my $formatted = sprintf("%.10f", "${intpart}.${fracpart}E${exponent}");
+	    
+	    ($intpart, $fracpart) = split(/[.]/, $formatted);
+	}
+	
+	# Check that the number of digits is not exceeded, either before or after the decimal. In
+	# the latter case, we add an error unless the column property ALLOW_TRUNCATE is set in
+	# which case we add a warning.
+	
+	$intpart =~ s/^0+//;
+	$fracpart =~ s/0+$//;
+	
+	if ( $intpart && length($intpart) > $whole )
+	{
+	    my $total = $whole + $precision;
+	    
+	    $edt->add_condition($action, 'E_RANGE', $record_col,
+				"value is too large for decimal($total,$precision)");
+	    return { };
+	}
+	
+	if ( $fracpart && length($fracpart) > $precision )
+	{
+	    my $total = $whole + $precision;
+	    
+	    if ( $column_data->{ALLOW_TRUNCATE} )
+	    {
+		$edt->add_condition($action, 'W_TRUNC', $record_col,
+				    "value has been truncated to decimal($total,$precision)");
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition($action, 'E_LENGTH', $record_col,
+				    "too many decimal digits for decimal($total,$precision)");
+		return { };
+	    }
+	}
+	
+	# Rebuild the value, with the fracional part trimmed.
+	
+	$value = $sign;
+	$value .= $intpart || '0';
+	$value .= '.' . substr($fracpart, 0, $precision);
+	
+	return $value;
+    }
+}
+
+
+# check_key ( table, value )
+#
+# Make sure that the specified key exists in the specified table.
+
+sub check_key {
+    
+    my ($edt, $table, $col, $value) = @_;
+    
+    if ( $FOREIGN_KEY_COL{$col} )
+    {
+	$col = $FOREIGN_KEY_COL{$col};
+    }
+    
+    my $quoted = $edt->dbh->quote($value);
+    
+    my $sql = "SELECT $col FROM $table WHERE $col=$quoted";
+
+    $edt->debug_line( "$sql\n" );
+    
+    my ($found) = $edt->dbh->selectrow_array($sql);
+
+    return $found;
 }
 
 

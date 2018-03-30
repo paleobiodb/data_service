@@ -569,6 +569,24 @@ sub check_record_permission {
 	return 'none';
     }
     
+    # Otherwise, we need to check the record itself to see if it exists. If so, we also fetch the
+    # information necessary to tell whether the user is the person who created or authorized
+    # it. Unless we were given the current contents of the record, fetch the info necessary to
+    # determine permissions.  If the record was not found, then return 'notfound' to indicate that
+    # the record was not found.
+    
+    unless ( ref $record eq 'HASH' )
+    {
+	$record = $perms->get_record_authinfo($table_name, $key_expr);
+	
+	unless ( ref $record )
+	{
+	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' : NOT FOUND\n" );
+	    
+	    return 'notfound';
+	}
+    }
+    
     # If the table permission is 'admin' or if the user has superuser privileges, then they have
     # all privileges on this record including 'delete'. Return 'admin' to indicate that they have
     # the requested permission and also administrative permission. But if the record is locked,
@@ -599,23 +617,6 @@ sub check_record_permission {
 	    
     	    return 'none';
     	}
-    }
-    
-    # Otherwise, we need to check the record itself to see if the user is the person who created
-    # or authorized it. Unless we were given the current contents of the record, fetch the info
-    # necessary to determine permissions.  If the record was not found, then return 'notfound' to
-    # indicate that the record was not found.
-    
-    unless ( ref $record eq 'HASH' )
-    {
-	$record = $perms->get_record_authinfo($table_name, $key_expr);
-	
-	unless ( ref $record )
-	{
-	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' : NOT FOUND\n" );
-	    
-	    return 'notfound';
-	}
     }
     
     # If the record has an administrative lock, then the user does not have any permissions to it

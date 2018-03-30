@@ -16,12 +16,14 @@ use strict;
 
 use TableDefs qw(get_table_property);
 
+use EditTransaction;
 use Carp qw(carp croak);
 
 use namespace::clean;
 
 
-our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record', delete => 'single' );
+our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record', delete => 'single',
+		        update_many => 'selector', delete_many => 'selector' );
 
 
 # Create a new action record with the specified information.
@@ -33,7 +35,7 @@ sub new {
     # Start by checking that we have the required attributes.
     
     croak "a non-empty table name is required" unless $table;
-
+    
     unless ( $operation && $OPERATION_TYPE{$operation} )
     {
 	$operation ||= '';
@@ -134,6 +136,12 @@ sub record {
     }
     
     return $_[0]{record};
+}
+
+
+sub selector {
+
+    return $_[0]{selector};
 }
 
 
@@ -281,6 +289,14 @@ sub _set_keyval {
     
     croak "cannot call 'set_keyval' on a multiple action" if $action->{all_keys};
     $action->{keyval} = $keyval;
+}
+
+
+sub _set_selector {
+
+    my ($action, $selector);
+
+    $action->{selector} = $selector;
 }
 
 

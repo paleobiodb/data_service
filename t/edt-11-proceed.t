@@ -40,6 +40,8 @@ subtest 'setup' => sub {
 
     $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
+
+    $T->clear_specific_permissions;
 };
 
 
@@ -129,12 +131,12 @@ subtest 'proceed_mode' => sub {
     $result = $edt->execute;
     
     ok( $result, "transaction succeeded in PROCEED_MODE" ) || $T->diag_errors;
-    is( $edt->warning_strings, 4, "got 4 warnings" );
+    is( $edt->warning_strings, 4, "got 4 warnings" ) || $T->diag_warnings;
     
     $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");
     $T->ok_has_warning('any', 'F_EXECUTE', "got 'F_EXECUTE'");
     $T->ok_has_warning('any', 'F_PERM', "got 'F_PERM'");
-
+    
     $T->ok_found_record($EDT_TEST, "signed_val=8");
     $T->ok_no_record($EDT_TEST, "signed_val=9");
     $T->ok_found_record($EDT_TEST, "signed_val=10");
@@ -193,7 +195,7 @@ subtest 'not_found' => sub {
     $result = $edt->commit;
     
     ok( $result, "transaction succeeded with NOT_FOUND" ) || $T->diag_errors;
-    is( $edt->warnings, 3, "got 3 warnings" );
+    is( $edt->warnings, 3, "got 3 warnings" ) || $T->diag_warnings;
     $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");
     
     $T->ok_found_record($EDT_TEST, "signed_val=21");

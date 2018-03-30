@@ -1,7 +1,9 @@
 #
 #
 
+use Test::More tests => 1;
 
+pass('placeholder');
 
 # Things to test:
 #
@@ -17,25 +19,26 @@
 # PRIMARY_ATTR [edt-14-records.t 'primary_attr']
 # TABLE_COMMENT [EditTest.pm, line 39]
 
-# 2. Column properties:
+# 2. Column properties: [$$$]
 # 
-# ALTERNATE_NAME
-# FOREIGN_KEY
-# ID_TYPE
+# ALTERNATE_NAME [edt-14-records.t 'alternate_name']
+# FOREIGN_KEY [edt-22-validate.t 'foreign_table']
+# FOREIGN_TABLE [edt-22-validate.t 'foreign_table']
+# EXTID_TYPE [edt-22-validate.t 'foreign keys']
 # ALLOW_TRUNCATE [edt-23-datatypes.t 'text', 'fixed']
-# VALUE_SEPARATOR
-# VALUE_REGEXP
+# VALUE_SEPARATOR [edt-23-datatypes.t 'sets']
+# VALIDATOR [edt-22-validate.t 'validators']
 # REQUIRED [edt-22-validate.t 'required']
 # ADMIN_SET
 # COLUMN_COMMENT [EditTest.pm, line 42]
 
-# 3. Table roles:
+# 3. Table roles: [$$$]
 #
 # admin - can insert, update, delete
 # authorized - can insert, update, delete
 # enterer - can insert, update, delete
 
-# 4. Allowances: 
+# 4. Allowances: [$$$]
 # 
 # CREATE
 # MULTI_DELETE
@@ -120,7 +123,7 @@
 #  - labels are properly generated for unlabeled records [edt-14-records.t 'basic']
 #  - $edt->key_labels
 
-# 11. transaction control [$$$]
+# 11. transaction control [DONE]
 # 
 # $edt->start_transaction [DONE]
 #  - check that transaction status is properly changed [edt-10-transaction.t 'start']
@@ -160,12 +163,13 @@
 #	[edt-30-subclass.t 'authorize', 'validate']
 #  - check both before and after $edt->start_execution [edt-10-transaction.t 'errors']
 # 
-# general [$$$]
+# general [DONE]
 # - automatic rollback when object goes out of scope [edt-01-basic.t 'out of scope']
 # - automatic rollback when a new transaction is started before an old one is finished
+#	[edt-15-interlock.t 'interlock']
 
 
-# 12. insert_record
+# 12. insert_record [$$$]
 # 
 #  - can insert with CREATE [edt-10-transaction.t 'basic']
 #  - check for C_CREATE without CREATE [edt-20-insert.t 'basic']
@@ -178,7 +182,7 @@
 #  - an SQL statement deliberately created to crash results in E_EXECUTE
 #	[edt-11-proceed.t 'proceed_mode', edt-30-subclass.t 'before and after']
 
-# 13. update
+# 13. update_record [$$$]
 #
 #  - can update with a key
 #  - check for E_NO_KEY without one
@@ -191,7 +195,7 @@
 #  - check for E_EXECUTE on an SQL statement deliberately created to crash
 #  - check for E_EXECUTE on an SQL statement deliberately created to fail
 
-# 14. replace
+# 14. replace_record [$$$]
 # 
 #  - can replace with a key
 #  - check for E_NO_KEY without one
@@ -207,7 +211,7 @@
 #  - check for E_EXECUTE on an SQL statement deliberately created to crash
 #  - check for E_EXECUTE on an SQL statement deliberately created to fail
 
-# 15. delete
+# 15. delete_record [$$$]
 #
 #  - can delete with a key
 #  - check for E_NO_KEY without one
@@ -223,7 +227,7 @@
 #  - check for E_EXECUTE on an SQL statement deliberately created to crash
 #  - check for E_EXECUTE on an SQL statement deliberately created to fail
 
-# 16. insert_update
+# 16. insert_update_record [$$$]
 #
 #  - can insert and update with insert_update, depending on whether or not a key is present
 #  - check that get_record_key works properly aside from insert_update
@@ -245,9 +249,9 @@
 #  - $edt->specific_errors [edt-12-conditions.t 'basic']
 #  - $edt->specific_warnings [edt-12-conditions.t 'basic']
 
-# 17b. aux_action
+# 17b. aux_action [$$$]
 
-# 18. check_permission
+# 18. check_permission [$$$]
 #
 #  - check that this can be called on an explicitly created action
 
@@ -263,7 +267,7 @@
 #  - check that exceptions thrown by these are properly caught [edt-30-subclass.t 'before and after']
 #  - check that they can do useful work within a transaction [edt-30-subclass.t 'before and after']
 
-# 21. reporting methods
+# 21. reporting methods [$$$]
 #
 #  - check that the following provide proper values when all operations are done together in one
 #    transaction:
@@ -281,15 +285,14 @@
 #    - is_active [edt-10-transaction.t 'execute']
 #    - transaction [edt-10-transaction.t 'execute']
 
-# 22. check_permission, check_table_permission, check_record_permission
+# 22. check_permission, check_table_permission, check_record_permission [$$$]
 #
 #  - make sure these return proper values
 
-# 23. validate_against_schema
-#
-#  - check that *_no is properly checked as *_id
-#  - check that $action->column_skip_validate works properly
-#  - check that columns with an undefined value are ignored
+# 23. validate_against_schema [$$$]
+#  
+#  - check that *_no is properly checked as *_id [edt-22-validate.t 'foreign keys']
+#  - check that $action->column_special works properly [$$$]
 #  - check for E_REQUIRED if a required column is missing [edt-22-validate.t 'required']
 #  - check for E_REQUIRED if a required column has the undefined value [edt-22-validate.t 'required']
 #  - check for E_REQUIRED if a required column has the empty string [edt-22-validate.t 'required']
@@ -318,13 +321,16 @@
 #  - check that 0 and 1 are accepted as values
 #  - check for E_PARAM with other values
 # 
-# foreign keys:
-#  - check that foreign key columns accept an unsigned integer
+# foreign keys: [DONE]
+#  - check that foreign key columns accept an unsigned integer [edt-22-validate.t 'foreign keys']
 #  - check that foreign key columns accept a PBDB::ExtIdent of the appropriate type
-#  - check for E_PARAM if the extident has an inappropriate type
+#  	[edt-22-validate.t 'foreign keys']
+#  - check for E_EXTTYPE if the extident has an inappropriate type [edt-22-validate.t 'foreign keys']
 #  - check for E_KEY_NOT_FOUND if the key does is not found in the foreign table
-#  - check for E_PARAM for text, negative integer, or other reference type
-#  - check that the empty string or 0 produces 0
+#  	[edt-22-validate.t 'foreign keys']
+#  - check for E_FORMAT for text, negative integer, or other reference type
+#  	[edt-22-validate.t 'foreign keys']
+#  - check that the empty string or 0 produces 0 [edt-22-validate.t 'foreign keys']
 # 
 # char and varchar: [DONE]
 #  - check that empty string and arbitrary string are accepted [edt-22-validate.t 'text']
@@ -387,4 +393,118 @@
 #	 [edt-13-actions.t 'attrs']
 #
 
-
+# 26. EditTester [DONE]
+#
+#  $T->new [edt-01-basic.t (initial statements), edt-03-tester.t 'basic']
+#  
+#  $T->dbh [edt-03-tester.t 'basic']
+#  
+#  $T->debug [edt-03-tester.t 'basic']
+#  
+#  $T->create_tables [edt-01-basic.t (initial statements)]
+#  
+#  $T->set_specific_permission [edt-03-tester.t 'permissions']
+#  
+#  $T->clear_specific_permissions [edt-03-tester.t 'permissions']
+#  
+#  $T->new_perm [edt-01-basic.t 'create objects']
+#  
+#  $T->new_edt [edt-01-basic.t 'create objects']
+#  
+#  $T->last_edt [edt-03-tester.t 'edts']
+#  
+#  $T->clear_edt [edt-03-tester.t 'edts']
+#  
+#  $T->test_permissions [edt-03-tester.t 'test_permissions']
+#  
+#  $T->ok_result [edt-03-tester.t 'errors', 'warnings']
+#   - works with specific edt
+#   - reports both errors and warnings
+#  
+#  $T->ok_no_errors [edt-03-tester.t 'errors']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with both error and caution conditions
+#   - works with explicit $edt argument
+#   - fails when it should
+#  
+#  $T->ok_has_error [edt-03-tester.t 'errors']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with both error and caution conditions
+#   - works with explicit $edt argument
+#   - fails when it should
+#  
+#  $T->ok_has_one_error [edt-03-tester.t 'errors']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with both error and caution conditions
+#   - works with explicit $edt argument
+#   - fails when it should
+#  
+#  $T->diag_errors [edt-03-tester.t 'errors']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with both error and caution conditions
+#   - works with explicit $edt argument
+#  
+#  $T->ok_no_warnings [edt-03-tester.t 'warnings']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with explicit $edt argument
+#   - fails when it should
+#  
+#  $T->ok_has_warning [edt-03-tester.t 'warnings']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with explicit $edt argument
+#   - fails when it should
+#  
+#  $T->ok_no_conditions [edt-03-tester.t 'errors']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with explicit $edt argument
+#   - fails when it should
+#  
+#  $T->diag_warnings [edt-03-tester.t 'warnings']
+#   - works with 'current', 'main', 'any'
+#   - works with specific edt
+#   - works with explicit $edt argument
+#  
+#  $T->ok_found_record [edt-03-tester.t 'records']
+#   - works with both single and multiple records
+#   - fails when it should
+#  
+#  $T->ok_no_record [edt-03-tester.t 'records']
+#   - works with both single and multiple records
+#   - fails when it should
+#  
+#  $T->ok_count_records [edt-03-tester.t 'records']
+#   - works with both single and multiple records
+#   - fails when it should
+#  
+#  $T->clear_table [edt-03-tester.t 'records']
+#  
+#  $T->fetch_records_by_key [edt-03-tester.t 'records']
+#  
+#  $T->fetch_records_by_expr [edt-03-tester.t 'records']
+#  
+#  $T->fetch_keys_by_expr [edt-03-tester.t 'records']
+#  
+#  $T->fetch_row_by_expr [edt-03-tester.t 'records']
+#  
+#  $T->inserted_keys [edt-03-tester.t 'keys']
+#  
+#  $T->updated_keys [edt-03-tester.t 'keys']
+#  
+#  $T->replaced_keys [edt-03-tester.t 'keys']
+#  
+#  $T->deleted_keys [edt-03-tester.t 'keys']
+#  
+#  
+#  
+#  
+#  
+#  
+#  
+#  
