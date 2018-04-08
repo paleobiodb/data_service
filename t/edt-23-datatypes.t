@@ -14,14 +14,13 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 8;
+use Test::More tests => 9;
 
-use TableDefs qw($EDT_TEST $EDT_AUX $EDT_ANY
-		 get_table_property set_column_property);
+use TableDefs qw(get_table_property set_column_property);
 
 use TableData qw(reset_cached_column_properties);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 use Carp qw(croak);
@@ -74,22 +73,22 @@ subtest 'text' => sub {
 
     my $long_value = "a string which is too long to fit inside the database table into which it must be stored";
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $result = $edt->insert_record($EDT_TEST, { string_req => $long_value });
     
-    $T->ok_has_one_error(qr/F_LENGTH.*no more than/, "could not insert record with string value too long");
+    $T->ok_has_one_error(qr/F_WIDTH.*no more than/, "could not insert record with string value too long");
     
     # Set the table column property ALLOW_TRUNCATE, and try again.
     
     set_column_property($EDT_TEST, 'string_req', ALLOW_TRUNCATE => 1);
     reset_cached_column_properties($EDT_TEST, 'string_req');
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $result = $edt->insert_record($EDT_TEST, { string_req => $long_value });
     
-    $T->ok_no_errors("inserted test record");
+    $T->ok_no_errors("inserted test record with long value");
     $T->ok_has_warning( qr/W_TRUNC.*truncated/ );
 
     # Make sure that the string value was actually truncated to 40 characters.
@@ -125,7 +124,7 @@ subtest 'text' => sub {
 	    "value of 'string_req' was not truncated" );
 	is( $r->{string_req}, $wide_value, "value was not corrupted" );
     }
-
+    
     # Make sure we can set text columns as well as char columns. The particular column in the test
     # table is also set to allow null values, so we can check this as well.
 
@@ -167,6 +166,16 @@ subtest 'text' => sub {
 };
 
 
+# Test that binary (non-text) character data is properly checked and input.
+
+subtest 'binary' => sub {
+
+    pass('placeholder');
+    diag("\$\$\$ need to add binary data tests");
+    
+};
+
+
 # Test that boolean data is properly checked and input.
 
 subtest 'boolean' => sub {
@@ -179,7 +188,7 @@ subtest 'boolean' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'boolean test', boolean_val => 1 });
 
@@ -259,7 +268,7 @@ subtest 'integer' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'boolean test', unsigned_val => 1 });
     
@@ -446,7 +455,7 @@ subtest 'fixed' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'decimal test', decimal_val => 3.14 });
     
@@ -588,12 +597,12 @@ subtest 'fixed' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '1.2345' });
     
-    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_WIDTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '-1.2345' });
     
-    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_WIDTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     # Now try some incorrect values on the unsigned column.
@@ -610,7 +619,7 @@ subtest 'fixed' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsdecimal_val => '1.23456' });
     
-    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_WIDTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, decimal_val => '10000.2345' });
@@ -629,7 +638,7 @@ subtest 'fixed' => sub {
     $T->ok_no_warnings;
     
     # Now set the column property ALLOW_TRUNCATE to true, and check that we get W_TRUNC warnings
-    # instead of E_LENGTH errors.
+    # instead of E_WIDTH errors.
 
     set_column_property($EDT_TEST, 'decimal_val', ALLOW_TRUNCATE => 1);
     set_column_property($EDT_TEST, 'unsdecimal_val', ALLOW_TRUNCATE => 1);
@@ -670,7 +679,7 @@ subtest 'float' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'floating point test', double_val => 3.14 });
     
@@ -838,12 +847,12 @@ subtest 'float' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '1.2345' });
     
-    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_WIDTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '-1.2345' });
     
-    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_WIDTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     # Now try some incorrect values on the unsigned column.
@@ -860,7 +869,7 @@ subtest 'float' => sub {
     
     $edt->update_record($EDT_TEST, { $primary => $key1, unsfloat_val => '1.23456' });
     
-    $T->ok_has_one_error('F_LENGTH', "length error for exceeding precision");
+    $T->ok_has_one_error('F_WIDTH', "length error for exceeding precision");
     $T->ok_no_warnings;
     
     $edt->update_record($EDT_TEST, { $primary => $key1, double_val => '10000.2345' });
@@ -879,7 +888,7 @@ subtest 'float' => sub {
     $T->ok_no_warnings;
     
     # Now set the column property ALLOW_TRUNCATE to true, and check that we get W_TRUNC warnings
-    # instead of E_LENGTH errors.
+    # instead of E_WIDTH errors.
 
     set_column_property($EDT_TEST, 'double_val', ALLOW_TRUNCATE => 1);
     set_column_property($EDT_TEST, 'unsfloat_val', ALLOW_TRUNCATE => 1);
@@ -920,7 +929,7 @@ subtest 'enumerated' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'enumerated value test', enum_val => 'abc' });
     
@@ -1007,7 +1016,7 @@ subtest 'sets' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'set value test', set_val => 'abc' });
     

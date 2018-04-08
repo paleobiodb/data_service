@@ -15,9 +15,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 2;
 
-use TableDefs qw($EDT_TEST get_table_property);
+use TableDefs qw(get_table_property);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 

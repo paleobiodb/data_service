@@ -22,22 +22,25 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS is_test_mode);
-use ResourceTables;
+use TableDefs qw(is_test_mode);
+use ResourceDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
 
 use base 'EditTransaction';
 
+use namespace::clean;
 
 our ($IMAGE_IDENTIFY_COMMAND, $IMAGE_CONVERT_COMMAND, $IMAGE_MAX);
 our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
 
 our (%TAG_ID);
 
-our (%CONDITION_TEMPLATE) = (
-		E_PERM => { status => "You do not have permission to change the status of this record" },
-		W_TAG_NOT_FOUND => "Unrecognized resource tag '%1'",
-		W_PERM => "The status of this record has been set to 'pending'");
 
+{
+    ResourceEdit->register_conditions(
+	E_PERM => { status => "You do not have permission to change the status of this record" },
+	W_TAG_NOT_FOUND => "Unrecognized resource tag '%1'",
+	W_PERM => { status => "The status of this record has been set to 'pending'" });
+}
 
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
@@ -48,22 +51,22 @@ our (%CONDITION_TEMPLATE) = (
 # matching template can be found, we call the parent method. Other subclasses of EditTransaction
 # should do something similar.
 
-sub get_condition_template {
+# sub get_condition_template {
     
-    my ($edt, $code, $table, $selector) = @_;
+#     my ($edt, $code, $table, $selector) = @_;
     
-    if ( ref $CONDITION_TEMPLATE{$code} eq 'HASH' )
-    {
-	return $CONDITION_TEMPLATE{$code}{$selector} if $CONDITION_TEMPLATE{$code}{$selector};
-    }
+#     if ( ref $CONDITION_TEMPLATE{$code} eq 'HASH' )
+#     {
+# 	return $CONDITION_TEMPLATE{$code}{$selector} if $CONDITION_TEMPLATE{$code}{$selector};
+#     }
     
-    elsif ( $CONDITION_TEMPLATE{$code} )
-    {
-	return $CONDITION_TEMPLATE{$code};
-    }
+#     elsif ( $CONDITION_TEMPLATE{$code} )
+#     {
+# 	return $CONDITION_TEMPLATE{$code};
+#     }
     
-    return $edt->SUPER::get_condition_template($code, $table, $selector);
-}
+#     return $edt->SUPER::get_condition_template($code, $table, $selector);
+# }
 
 
 # validate_action ( table, operation, action )
@@ -96,7 +99,7 @@ sub validate_action {
 	{
 	    if ( $record->{status} && $record->{status} ne 'pending' )
 	    {
-		$edt->add_record_condition('W_PERM', $table, 'status');
+		$edt->add_condition('W_PERM', 'status');
 	    }
 	    
 	    $record->{status} = 'pending';
@@ -127,7 +130,7 @@ sub validate_action {
 	{
 	    if ( $record->{status} && $record->{status} ne 'changes' )
 	    {
-		$edt->add_record_condition('E_PERM', $table, 'status');
+		$edt->add_condition('E_PERM', 'status');
 	    }
 	    
 	    $record->{status} = 'changes';
@@ -160,7 +163,7 @@ sub validate_action {
 	    
 	    else
 	    {
-		$edt->add_record_condition('W_TAG_NOT_FOUND', $table, $t);
+		$edt->add_condition('W_TAG_NOT_FOUND', $t);
 	    }
 	}
 	
@@ -173,7 +176,7 @@ sub validate_action {
     {
 	unless ( $record->{orcid} =~ qr{ ^ \d\d\d\d - \d\d\d\d - \d\d\d\d - \d\d\d\d $ }xs )
 	{
-	    $edt->add_record_condition('E_PARAM', $table, 'orcid', $record->{orcid}, 'not a valid ORCID');
+	    $edt->add_condition('E_FORMAT', 'orcid', 'not a valid ORCID');
 	}
     }
     
@@ -181,7 +184,7 @@ sub validate_action {
     
     if ( $record->{image_data} )
     {
-	$record->{image_data} = $edt->convert_image($record->{image_data})
+	$record->{image_data} = $edt->convert_image($action, $record->{image_data})
     }
     
     # Then call the regular validation routine.
@@ -248,7 +251,7 @@ sub after_action {
 		if ( $msg )
 		{
 		    print STDERR "$msg\n";
-		    $edt->add_record_condition('E_EXECUTE', $table, 'delete image file');
+		    $edt->add_condition('E_EXECUTE', 'delete image file');
 		}
 	    }
 	}
@@ -294,7 +297,7 @@ sub after_action {
 
 sub convert_image {
     
-    my ($edt, $image_data) = @_;
+    my ($edt, $action, $image_data) = @_;
     
     # return unless $eduresource_no && $r->{image_data};
     
@@ -306,7 +309,7 @@ sub convert_image {
     {
 	print STDERR "ERROR: could not create temporary file for image\n"
 	    if $edt->debug;
-	$edt->add_record_condition('E_EXECUTE', $RESOURCE_IMAGES, 'convert image');
+	$edt->add_condition('E_EXECUTE', 'convert image');
 	return;
     }
     
@@ -339,7 +342,7 @@ sub convert_image {
 	
 	unless ( $format eq 'png' || $format eq 'gif' || $format eq 'gif89a' || $format eq 'bmp' || $format eq 'jpeg' )
 	{
-	    $edt->add_record_condition('E_PARAM', $RESOURCE_QUEUE, 'image_data', "image format '$format' is not accepted");
+	    $edt->add_condition('E_FORMAT', 'image_data', "image format '$format' is not accepted");
 	    return;
 	}
 	
@@ -359,7 +362,7 @@ sub convert_image {
 	    
 	    unless ( $converted_data )
 	    {
-		$edt->add_record_condition('E_PARAM', $RESOURCE_QUEUE, 'image_data', 'could not convert image');
+		$edt->add_condition('E_FORMAT', 'image_data', 'could not convert image');
 		return;
 	    }
 	    
@@ -373,7 +376,7 @@ sub convert_image {
     
     else
     {
-	$edt->add_record_condition('E_PARAM', $RESOURCE_QUEUE, 'image_data', 'unrecognized image format');
+	$edt->add_condition('E_FORMAT', 'image_data', 'unrecognized image format');
 	return;
     }
 }
@@ -429,7 +432,7 @@ sub activate_resource {
 	    if ( $msg )
 	    {
 		print STDERR "$msg\n";
-		$edt->add_record_condition("W_EXECUTE", $RESOURCE_ACTIVE, 'delete image file');
+		$edt->add_condition("W_EXECUTE", 'delete image file');
 	    }
 	}
 	
@@ -490,11 +493,13 @@ sub activate_resource {
 	    $r->{image} = $edt->write_image_file($r->{id}, $r->{image_data});
 	}
 	
-	# Now create a new action for this activation, and check the field values.
+	# Now create a new action for this activation, and check the field values. We already know
+	# that the user has admin permission on $RESOURCE_QUEUE, so we record them as having admin
+	# permission for this action as well.
 	
-	my $activation_action = EditAction->new($RESOURCE_ACTIVE, 'replace', $r);
+	my $activation_action = $edt->aux_action($RESOURCE_ACTIVE, 'replace', $r);
 	
-	$edt->check_permission($activation_action);
+	$activation_action->_set_permission('admin');
 	$edt->validate_against_schema($activation_action);
 	
 	# Then copy the record over to the active table.
@@ -589,7 +594,7 @@ sub write_image_file {
     else
     {
 	print STDERR "ERROR: cannot decode image format\n";
-	$edt->add_record_condition('E_EXECUTE', $RESOURCE_ACTIVE, 'store image');
+	$edt->add_condition('E_EXECUTE', 'store image');
 	return;
     }
     
@@ -604,7 +609,7 @@ sub write_image_file {
     unless ( $result )
     {
 	print STDERR "ERROR: could not open '$filepath' for writing: $!\n";
-	$edt->add_record_condition("E_EXECUTE", $RESOURCE_ACTIVE, 'store image');
+	$edt->add_condition("E_EXECUTE", 'store image');
 	return;
     }
     

@@ -14,8 +14,7 @@ package PB2::ResourceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
-use ResourceTables;
+use ResourceDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
 use TableData qw(complete_output_block);
 

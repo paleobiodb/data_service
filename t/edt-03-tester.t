@@ -15,12 +15,11 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
-use TableDefs qw($EDT_TEST $EDT_AUX $EDT_ANY $TABLE_PERMS
-		 get_table_property set_table_property set_column_property);
+use TableDefs qw($TABLE_PERMS get_table_property set_table_property set_column_property);
 
 use TableData qw(reset_cached_column_properties);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 use Carp qw(croak);

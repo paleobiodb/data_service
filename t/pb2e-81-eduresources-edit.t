@@ -186,6 +186,8 @@ subtest 'add by role' => sub {
     
     ok($r2b[0]{sta} eq 'pending', "added record with status 'pending'");
     
+    # $$$ have to set proper contents of session_data and person tables!
+    
     $T->set_cookie("session_id", "SESSION-WITH-ADMIN");
     
     my $record2c = { record_label => '2c',
@@ -306,6 +308,7 @@ subtest 'update admin' => sub {
     cmp_ok($r3a[0]{sta}, 'eq', 'active', "admin activate succeeded");
 
     my (@r3b) = $T->fetch_records("/eduresources/active.json?id=$test_record_oid", "check active 3");
+    
 };
 
 
@@ -683,10 +686,10 @@ subtest 'invalid' => sub {
     
     $T->ok_response_code($m1, '400', "insert with errors got 400 response");
     $T->ok_error_like($m1, qr{E_REQUIRED \(e1\):.*title}i, "error for missing title");
-    $T->ok_error_like($m1, qr{E_PARAM \(e2\):.*characters}i, "error for too long author");
-    $T->ok_error_like($m1, qr{E_PARAM \(e3\):.*orcid.*valid}i, "error for bad orcid");
-    $T->ok_error_like($m1, qr{E_PARAM \(e3\):.*is_video.*1}i, "error for bad is_video");
-    $T->ok_error_like($m1, qr{E_PARAM \(e5\):.*format}i, "error for bad image data");
+    $T->ok_error_like($m1, qr{E_WIDTH \(e2\):.*characters}i, "error for too long author");
+    $T->ok_error_like($m1, qr{E_FORMAT \(e3\):.*orcid.*valid}i, "error for bad orcid");
+    $T->ok_error_like($m1, qr{E_FORMAT \(e3\):.*is_video.*1}i, "error for bad is_video");
+    $T->ok_error_like($m1, qr{E_FORMAT \(e5\):.*format}i, "error for bad image data");
     $T->ok_warning_like($m1, qr{W_TAG_NOT_FOUND \(e4\):.*foo}i, "warning for bad tag 'foo'");
     $T->ok_warning_like($m1, qr{W_TAG_NOT_FOUND \(e4\):.*bar}i, "warning for bad tag 'bar'");
     
@@ -703,10 +706,10 @@ subtest 'invalid' => sub {
     ok( $label{'e6'}, "inserted record e6" );
     
     $T->ok_warning_like($m2, qr{F_REQUIRED}, "warning for missing title");
-    $T->ok_warning_like($m2, qr{F_PARAM.*'author'}, "warning for too long author");
-    $T->ok_warning_like($m2, qr{F_PARAM.*'orcid'}, "warning for bad orcid");
-    $T->ok_warning_like($m2, qr{F_PARAM.*'is_video'}, "warning for bad is_video");
-    $T->ok_warning_like($m2, qr{F_PARAM.*image_data}, "warning for bad image data");
+    $T->ok_warning_like($m2, qr{F_WIDTH.*'author'}, "warning for too long author");
+    $T->ok_warning_like($m2, qr{F_FORMAT.*'orcid'}, "warning for bad orcid");
+    $T->ok_warning_like($m2, qr{F_FORMAT.*'is_video'}, "warning for bad is_video");
+    $T->ok_warning_like($m2, qr{F_FORMAT.*image_data}, "warning for bad image data");
 };
 
 

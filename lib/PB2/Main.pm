@@ -23,9 +23,9 @@ use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
 use PB2::CombinedData;
-#use PB2::ResourceData;
+use PB2::ResourceData;
 use PB2::Authentication;
-# use PB2::MainEntry;
+use PB2::MainEntry;
 
 {
     # We start by defining a data service instance for version 1.2. We provide the ability to
@@ -1051,40 +1051,40 @@ use PB2::Authentication;
     
     # Educational resources
     
-    # $ds2->define_node({ path => 'eduresources',
-    # 			title => 'Educational resources',
-    # 			role => 'PB2::ResourceData' },
-    # 	"The database also includes information about educational resources",
-    # 	"that are relevant to its mission. These are used to populate a",
-    # 	"page on our main website.");
+    $ds2->define_node({ path => 'eduresources',
+    			title => 'Educational resources',
+    			role => 'PB2::ResourceData' },
+    	"The database also includes information about educational resources",
+    	"that are relevant to its mission. These are used to populate a",
+    	"page on our main website.");
     
-    # $ds2->define_node({ path => 'eduresources/single',
-    # 			title => "Single educational resource",
-    # 			place => 1,
-    # 			output => '1.2:eduresources:basic',
-    # 			optional_output => '1.2:eduresources:optional_output',
-    # 			method => 'get_resource' },
-    # 	"This operation returns information about a single educational resource record",
-    # 	"specified by identifier.");
+    $ds2->define_node({ path => 'eduresources/single',
+    			title => "Single educational resource",
+    			place => 1,
+    			output => '1.2:eduresources:basic',
+    			optional_output => '1.2:eduresources:optional_output',
+    			method => 'get_resource' },
+    	"This operation returns information about a single educational resource record",
+    	"specified by identifier.");
 
-    # $ds2->define_node({ path => 'eduresources/list',
-    # 			title => "Lists of educational resources",
-    # 			place => 2,
-    # 			output => '1.2:eduresources:basic',
-    # 			optional_output => '1.2:eduresources:optional_output',
-    # 			method => 'list_resources' },
-    # 	"This operation returns information about a list of educational resource",
-    # 	"records, selected according to the query parameters.");
+    $ds2->define_node({ path => 'eduresources/list',
+    			title => "Lists of educational resources",
+    			place => 2,
+    			output => '1.2:eduresources:basic',
+    			optional_output => '1.2:eduresources:optional_output',
+    			method => 'list_resources' },
+    	"This operation returns information about a list of educational resource",
+    	"records, selected according to the query parameters.");
 
-    # $ds2->define_node({ path => 'eduresources/active',
-    # 			title => "Active educational resources",
-    # 			place => 3,
-    # 			output => '1.2:eduresources:basic',
-    # 			optional_output => '1.2:eduresources:optional_output',
-    # 			method => 'list_resources',
-    # 		        arg => 'active' },
-    # 	"This operation returns a list of active educational resource records,",
-    # 	"selected according to the query parameters.");
+    $ds2->define_node({ path => 'eduresources/active',
+    			title => "Active educational resources",
+    			place => 3,
+    			output => '1.2:eduresources:basic',
+    			optional_output => '1.2:eduresources:optional_output',
+    			method => 'list_resources',
+    		        arg => 'active' },
+    	"This operation returns a list of active educational resource records,",
+    	"selected according to the query parameters.");
     
     # The following paths are used for miscellaneous documentation
     
@@ -1169,7 +1169,7 @@ use PB2::Authentication;
 
     # Now initialize the data entry nodes.
     
-    #PBEntry::initialize($ds2);
+    PBEntry::initialize($ds2);
 };
 
 1;

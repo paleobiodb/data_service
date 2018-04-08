@@ -11,7 +11,7 @@ use strict;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
-use TableDefs qw(%IDP $PERSON_DATA $WING_USERS);
+use TableDefs qw($PERSON_DATA $WING_USERS);
 use ExternalIdent qw(extract_identifier generate_identifier);
 
 use Moo::Role;

@@ -15,9 +15,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 1;
 
-use TableDefs qw($EDT_TEST);
+use TableDefs;
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 

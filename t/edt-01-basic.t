@@ -14,9 +14,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
-use TableDefs qw(get_table_property $EDT_TEST);
+use TableDefs qw(get_table_property);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 
@@ -25,7 +25,8 @@ use EditTester;
 
 my $T = EditTester->new;
 
-$T->create_tables;
+$T->establish_session_data;
+$T->establish_test_tables;
 
 
 # Test creation of both Permissions objects and an EditTest object. The Permissions objects are
@@ -222,11 +223,11 @@ subtest 'allowances' => sub {
 				      MULTI_DELETE => 1,
 				      NO_RECORDS => 1,
 				      NOT_FOUND => 1,
+				      PROCEED => 1,
 				      ALTER_TRAIL => 1,
 				      DEBUG_MODE => 1,
 				      SILENT_MODE => 1,
 				      IMMEDIATE_MODE => 1,
-				      PROCEED_MODE => 1,
 				      TEST_DEBUG => 1,
 				      BAD_ALLOW => 1,
 				      NO_ALLOW => 0 }), "new edt with many allowances" );
@@ -240,7 +241,7 @@ subtest 'allowances' => sub {
 	ok( $edt->allows('DEBUG_MODE'), "allowance DEBUG_MODE accepted" );
 	ok( $edt->allows('SILENT_MODE'), "allowance SILENT_MODE accepted" );
 	ok( $edt->allows('IMMEDIATE_MODE'), "allowance DEBUG_MODE accepted" );
-	ok( $edt->allows('PROCEED_MODE'), "allowance PROCEED_MODE accepted" );
+	ok( $edt->allows('PROCEED'), "allowance PROCEED accepted" );
 	ok( $edt->allows('TEST_DEBUG'), "allowance TEST_DEBUG accepted" );
 	ok( ! $edt->allows('BAD_ALLOW'), "allowance BAD_ALLOW not accepted" );
 	ok( ! $edt->allows('NO_ALLOW'), "allowance NO_ALLOW not accepted" );
@@ -333,7 +334,7 @@ subtest 'debug output' => sub {
 
     # Then try a transaction with DEBUG_MODE off and SILENT_MODE on check that we get none.
     
-    $edt = $T->new_edt($perm_a, { DEBUG_MODE => 0, SILENT_MODE => 1, TEST_DEBUG => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { DEBUG_MODE => 0, SILENT_MODE => 1, TEST_DEBUG => 1, PROCEED => 1 });
 
     $edt->start_execution;
     

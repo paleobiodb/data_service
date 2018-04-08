@@ -19,14 +19,20 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw(set_table_property set_column_property $EDT_TEST $EDT_AUX $EDT_ANY);
+use TableDefs qw(set_table_property set_column_property alternate_table $TEST_DB);
 
 use base 'EditTransaction';
+use base 'Exporter';
 
 use namespace::clean;
 
-our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
-			     W_TEST => "TEST WARNING '%1'");
+our (@EXPORT_OK) = qw($EDT_TEST $EDT_AUX $EDT_ANY);
+
+# Table names
+
+our $EDT_TEST = 'edt_test';
+our $EDT_AUX = 'edt_aux';
+our $EDT_ANY = 'edt_any';
 
 
 # At runtime, set column properties for our test table
@@ -47,7 +53,7 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
     set_table_property($EDT_AUX, CAN_MODIFY => 'AUTHORIZED');
     set_table_property($EDT_AUX, PRIMARY_KEY => 'aux_no');
     
-    set_column_property($EDT_AUX, 'test_no', FOREIGN_TABLE => 'EDT_TEST');
+    set_column_property($EDT_AUX, 'test_no', FOREIGN_TABLE => 'EditTest::EDT_TEST');
     set_column_property($EDT_AUX, 'name', REQUIRED => 1);
     
     set_table_property($EDT_ANY, CAN_POST => 'LOGGED_IN');
@@ -59,6 +65,51 @@ our (%CONDITION_TEMPLATE) = (E_TEST => "TEST ERROR '%1'",
     EditTest->register_allowances('TEST_DEBUG');
     EditTest->register_conditions(E_TEST => "TEST ERROR '%1'",
 				  W_TEST => "TEST WARNING '%1'");
+}
+
+
+# The following methods allow the use of the test database instead of the main one.
+# ---------------------------------------------------------------------------------
+
+# enable_test_mode ( class, table, ds )
+# 
+# Change the global variables that hold the names of the eduresource tables over to the test
+# database. If $ds is either 1 or a reference to a Web::DataService object with the debug flag
+# set, then print out a debugging message.
+
+sub enable_test_mode {
+    
+    my ($class, $table, $ds) = @_;
+    
+    croak "You must define 'test_db' in the configuration file" unless $TEST_DB;
+    
+    $EDT_TEST = alternate_table($TEST_DB, $EDT_TEST);
+    $EDT_AUX = alternate_table($TEST_DB, $EDT_AUX);
+    $EDT_ANY = alternate_table($TEST_DB, $EDT_ANY);
+    
+    if ( $ds && $ds == 1 || ref $ds && $ds->debug )
+    {
+	$ds->debug_line("TEST MODE: enable 'edt_test'\n");
+    }
+    
+    return 1;
+}
+
+
+sub disable_test_mode {
+
+    my ($class, $table, $ds) = @_;
+    
+    $EDT_TEST = original_table($EDT_TEST);
+    $EDT_AUX = original_table($EDT_AUX);
+    $EDT_ANY = original_table($EDT_ANY);
+    
+    if ( $ds && $ds == 1 || ref $ds && $ds->debug )
+    {
+	$ds->debug_line("TEST MODE: disable 'edt_test'\n");
+    }
+    
+    return 2;
 }
 
 

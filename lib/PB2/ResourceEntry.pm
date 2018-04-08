@@ -13,15 +13,14 @@ use lib '..';
 
 package PB2::ResourceEntry;
 
-use HTTP::Validate qw(:validators);
-
-use TableDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
-use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
-use TableData qw(complete_ruleset);
-use File::Temp qw(tempfile);
-
+use ResourceDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
 use ResourceEdit;
 
+use ExternalIdent qw(generate_identifier VALID_IDENTIFIER);
+use TableData qw(complete_ruleset);
+
+use HTTP::Validate qw(:validators);
+use File::Temp qw(tempfile);
 use Carp qw(carp croak);
 use Try::Tiny;
 use MIME::Base64;
@@ -159,7 +158,7 @@ sub update_resources {
     # First get the parameters from the URL, and/or from the body if it is from a web form. In the
     # latter case, it will necessarily specify a single record only.
     
-    my $allowances = { };
+    my $allowances = { ALTER_TRAIL => 1 };
     
     $allowances->{CREATE} = 1 if $arg && $arg eq 'add';
     
@@ -194,15 +193,15 @@ sub update_resources {
     # transaction. If any errors occur during that process, the transaction will be automatically
     # rolled back. Otherwise, it will be automatically committed.
     
-    $edt->execute;
+    $edt->commit;
     
     # Now handle any errors or warnings that may have been generated.
     
-    $request->add_edt_warnings($edt);
+    $request->collect_edt_warnings($edt);
     
     if ( $edt->errors )
     {
-    	$request->add_edt_errors($edt);
+    	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");
     }
     
@@ -312,11 +311,11 @@ sub delete_resources {
     
     # Now handle any errors or warnings that may have been generated.
     
-    $request->add_edt_warnings($edt);
+    $request->collect_edt_warnings($edt);
     
     if ( $edt->errors )
     {
-    	$request->add_edt_errors($edt);
+    	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");
     }
     

@@ -16,9 +16,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 5;
 
-use TableDefs qw($EDT_TEST $EDT_AUX);
+use TableDefs;
 
-use EditTest;
+use EditTest qw($EDT_TEST $EDT_AUX);
 use EditTester;
 
 
@@ -26,7 +26,7 @@ use EditTester;
 
 my $T = EditTester->new;
 
-
+$T->set_table($EDT_TEST);
 
 my ($perm_a);
 
@@ -493,10 +493,10 @@ subtest 'before and after' => sub {
     
     # Now test the same for the routine cleanup_action. We need to set special variables to
     # deliberately trigger an exception on each operation, so that the cleanup routine will be
-    # called. We also need to set PROCEED_MODE flag so that errors in one operation will not
+    # called. We also need to set PROCEED flag so that errors in one operation will not
     # prevent the subsequent ones from being executed.
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1, SILENT_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1, SILENT_MODE => 1 });
     
     my $new_keyval = $edt->insert_record($EDT_TEST, { string_req => 'cleanup test 1' });
     

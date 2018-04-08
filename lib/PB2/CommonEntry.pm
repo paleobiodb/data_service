@@ -12,7 +12,7 @@ use strict;
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
 
-use TableDefs qw(%TABLE_PROPERTIES);
+use TableDefs qw(get_table_property);
 
 use ExternalIdent qw(extract_identifier generate_identifier %IDP %IDRE);
 use TableData qw(get_table_schema);
@@ -257,247 +257,280 @@ sub unpack_input_records {
 }
 
 
-sub validate_against_table {
+sub debug_line {
     
-    my ($request, $dbh, $table_name, $op, $record, $primary_key, $ignore_keys) = @_;
+    my ($request, $line) = @_;
     
-    croak "bad record" unless ref $record eq 'HASH';
-    croak "bad value '$op' for op" unless $op eq 'add' || $op eq 'update' || $op eq 'mirror';
-    
-    my (@fields, @values);
-    
-    $dbh ||= $request->get_connection;
-    
-    # Get the schema for the requested table.
-    
-    my $schema = get_table_schema($request, $dbh, $table_name);
-    
-    croak "no schema found for table '$table_name'" unless $schema;
-    
-    # Determine the name of the table without any database prefix.
-    
-    my $lookup_name = $table_name;
-    $lookup_name =~ s/^\w+[.]//;
-    
-    # First go through all of the fields in the record and validate their values.
-    
-    foreach my $k ( keys %$record )
-    {
-	# Skip any field called 'record_label', because that is only used by the data service and
-	# has no relevance to the backend database.
-	
-	next if $k eq 'record_label';
-	
-	# If we were given a hash of keys to ignore, then ignore them.
-	
-	next if ref $ignore_keys && $ignore_keys->{$k};
-	
-	# For each field in the record, fetch the correspondingly named field from the schema.
-	
-	my $value = $record->{$k};
-	my $field_record = $schema->{$k};
-	my $field = $field_record->{Field};
-	my $type = $field_record->{Type};
-	my $key = $field_record->{Key};
-	
-	# If no such field is found, skip this one. Add a warning to the request unless the
-	# operation is 'mirror', in which case the mirror table may be missing some of the fields
-	# of the original one.
-	
-	unless ( $field_record && $field)
-	{
-	    $request->add_record_warning('W_PARAM', $record->{record_label} || $record->{$primary_key}, 
-					 "field '$k' does not match any column in the table for this data type")
-		unless $op eq 'mirror';
-	    
-	    next;
-	}
-	
-	# The following set of fields is handled automatically, and are skipped if they appear in
-	# the record.
-	
-	if ( $field eq 'modified_no' || $field eq 'authorizer_no' || $field eq 'enterer_no' ||
-	     $field eq 'modified' || $field eq 'modified_on' || $field eq 'enterer_id' )
-	{
-	    next;
-	}
-	
-	# The following set of fields are skipped automatically unless the operation is 'mirror'
-	# and the field has a value in the source record. This includes the primary key for the
-	# table, if one was specified. For add operations there is no primary key value yet, and
-	# for updates it is handled separately.
-	
-	if ( $field eq 'created' || $field eq 'created_on' || ($primary_key && $field eq $primary_key) )
-	{
-	    next unless $op eq 'mirror' && defined $value && $value ne '';
-	}
-	
-	# Now we add the field and its value to their respective lists. These can be used later to
-	# construct an SQL insert or update statement.
-	
-	# If the field value is undefined, set it to "NULL". We need to do this because the user
-	# may specifically want to null out that field in the record.
-	
-	if ( ! defined $value )
-	{
-	    push @fields, $field;
-	    push @values, "NULL";
-	}
-	
-	# Otherwise, if the field has an integer type then make sure the corresponding value is an
-	# integer. Record an error otherwise.
-	
-	elsif ( $type =~ /int\(/ )
-	{
-	    unless ( defined $value && $value =~ /^\d+$/ )
-	    {
-		$request->add_record_error('E_PARAM', $record->{record_label} || $record->{$primary_key}, 
-					   "field '$k' must have an integer value (was '$value')");
-		next;
-	    }
-	    
-	    push @fields, $field;
-	    push @values, $value;
-	}
-	
-	# elsif other types ...
-	
-	# Otherwise, treat this as a string value. If the value we get is an array, just
-	# concatenate the items with commas. (This will probably have to be revisited later, and
-	# made into a more general mechanism).
-	
-	else
-	{
-	    if ( ref $value eq 'ARRAY' )
-	    {
-		$value = join(',', @$value);
-	    }
-	    
-	    my $quoted = $dbh->quote($value);
-	    
-	    push @fields, $field;
-	    push @values, $quoted;
-	}
-    }
-    
-    # Now add the appropriate values for any of the built-in fields.
-    
-    foreach my $k ( qw(authorizer_no enterer_no modifier_no modified modified_on enterer_id) )
-    {
-	next unless $schema->{$k};
-	
-	my $new_value;
-	
-	# We don't set 'authorizer_no' and 'enterer_no' on update, the values given when the
-	# record was created are retained. If we are mirroring from another record, then we copy
-	# the value from that record if there is one. Otherwise, we use the authorizer_no and
-	# enterer_no associated with the requestor.
-	
-	if ( $k eq 'authorizer_no' || $k eq 'enterer_no' )
-	{
-	    next if $op eq 'update';
-	    
-	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
-		$dbh->quote($record->{$k}) : 
-		$request->{my_auth_info}{$k};
-	    
-	    # If the table has an authorizer_no or enterer_no field, then we need to be providing
-	    # a value for them. If no value can be found, then bomb.
-	    
-	    unless ( $new_value || ( $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} &&
-				     $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} eq 'LOGGED_IN' ) )
-	    {
-		croak "no value was found for '$k'";
-	    }
-	    
-	    # unless ( $new_value )
-	    # {
-	    # 	if ( $request->{my_auth_info}{guest_no} && $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
-	    # 	     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' )
-	    # 	{
-	    # 	    $new_value = $k eq 'enterer_no' ? $request->{my_auth_info}{guest_no} : 0;
-	    # 	}
-
-	    # 	else
-	    # 	{
-	    # 	    croak "no value was found for '$k'";
-	    # 	}
-	    # }
-	}
-	
-	# We only set 'enterer_id' on record creation, not on update.
-	
-	elsif ( $k eq 'enterer_id' )
-	{
-	    next if $op eq 'update';
-	    
-	    $new_value = $dbh->quote($request->{my_auth_info}{user_id} || '');
-	}
-	
-	# The modifier_no field is in some sense the opposite of authorizer_no and enterer_no,
-	# since it is set on update but not when we are adding a new record. If we are mirroring
-	# from another record, use the value from that record if there is one. Otherwise, set this
-	# field to the enterer_no associated with the requestor.
-	
-	elsif ( $k eq 'modifier_no' )
-	{
-	    next if $op eq 'add';
-	    
-	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
-		$dbh->quote($record->{$k}) : 
-		$request->{my_auth_info}{enterer_no};
-	}
-	
-	# The modification timestamp is copied if the record is being mirrored, and otherwise set
-	# to the current timestamp unless the operation is 'add'.
-	
-	elsif ( $k eq 'modified' || $k eq 'modified_on' )
-	{
-	    next if $op eq 'add';
-	    
-	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ?
-		$dbh->quote($record->{$k}) :
-		'NOW()';
-	}
-	
-	push @fields, $k;
-	push @values, $new_value;
-    }
-    
-    # We stuff the fields and values into special record keys, so they will be available for use
-    # in constructing subsequent SQL statements.
-    
-    $record->{_fields} = \@fields;
-    $record->{_values} = \@values;
+    print STDERR "$line\n";
 }
 
+# sub validate_against_table {
+    
+#     my ($request, $dbh, $table_name, $op, $record, $primary_key, $ignore_keys) = @_;
+    
+#     croak "bad record" unless ref $record eq 'HASH';
+#     croak "bad value '$op' for op" unless $op eq 'add' || $op eq 'update' || $op eq 'mirror';
+    
+#     my (@fields, @values);
+    
+#     $dbh ||= $request->get_connection;
+    
+#     # Get the schema for the requested table.
+    
+#     my $schema = get_table_schema($request, $dbh, $table_name);
+    
+#     croak "no schema found for table '$table_name'" unless $schema;
+    
+#     # Determine the name of the table without any database prefix.
+    
+#     my $lookup_name = $table_name;
+#     $lookup_name =~ s/^\w+[.]//;
+    
+#     # First go through all of the fields in the record and validate their values.
+    
+#     foreach my $k ( keys %$record )
+#     {
+# 	# Skip any field called 'record_label', because that is only used by the data service and
+# 	# has no relevance to the backend database.
+	
+# 	next if $k eq 'record_label';
+	
+# 	# If we were given a hash of keys to ignore, then ignore them.
+	
+# 	next if ref $ignore_keys && $ignore_keys->{$k};
+	
+# 	# For each field in the record, fetch the correspondingly named field from the schema.
+	
+# 	my $value = $record->{$k};
+# 	my $field_record = $schema->{$k};
+# 	my $field = $field_record->{Field};
+# 	my $type = $field_record->{Type};
+# 	my $key = $field_record->{Key};
+	
+# 	# If no such field is found, skip this one. Add a warning to the request unless the
+# 	# operation is 'mirror', in which case the mirror table may be missing some of the fields
+# 	# of the original one.
+	
+# 	unless ( $field_record && $field)
+# 	{
+# 	    $request->add_record_warning('W_PARAM', $record->{record_label} || $record->{$primary_key}, 
+# 					 "field '$k' does not match any column in the table for this data type")
+# 		unless $op eq 'mirror';
+	    
+# 	    next;
+# 	}
+	
+# 	# The following set of fields is handled automatically, and are skipped if they appear in
+# 	# the record.
+	
+# 	if ( $field eq 'modified_no' || $field eq 'authorizer_no' || $field eq 'enterer_no' ||
+# 	     $field eq 'modified' || $field eq 'modified_on' || $field eq 'enterer_id' )
+# 	{
+# 	    next;
+# 	}
+	
+# 	# The following set of fields are skipped automatically unless the operation is 'mirror'
+# 	# and the field has a value in the source record. This includes the primary key for the
+# 	# table, if one was specified. For add operations there is no primary key value yet, and
+# 	# for updates it is handled separately.
+	
+# 	if ( $field eq 'created' || $field eq 'created_on' || ($primary_key && $field eq $primary_key) )
+# 	{
+# 	    next unless $op eq 'mirror' && defined $value && $value ne '';
+# 	}
+	
+# 	# Now we add the field and its value to their respective lists. These can be used later to
+# 	# construct an SQL insert or update statement.
+	
+# 	# If the field value is undefined, set it to "NULL". We need to do this because the user
+# 	# may specifically want to null out that field in the record.
+	
+# 	if ( ! defined $value )
+# 	{
+# 	    push @fields, $field;
+# 	    push @values, "NULL";
+# 	}
+	
+# 	# Otherwise, if the field has an integer type then make sure the corresponding value is an
+# 	# integer. Record an error otherwise.
+	
+# 	elsif ( $type =~ /int\(/ )
+# 	{
+# 	    unless ( defined $value && $value =~ /^\d+$/ )
+# 	    {
+# 		$request->add_record_error('E_PARAM', $record->{record_label} || $record->{$primary_key}, 
+# 					   "field '$k' must have an integer value (was '$value')");
+# 		next;
+# 	    }
+	    
+# 	    push @fields, $field;
+# 	    push @values, $value;
+# 	}
+	
+# 	# elsif other types ...
+	
+# 	# Otherwise, treat this as a string value. If the value we get is an array, just
+# 	# concatenate the items with commas. (This will probably have to be revisited later, and
+# 	# made into a more general mechanism).
+	
+# 	else
+# 	{
+# 	    if ( ref $value eq 'ARRAY' )
+# 	    {
+# 		$value = join(',', @$value);
+# 	    }
+	    
+# 	    my $quoted = $dbh->quote($value);
+	    
+# 	    push @fields, $field;
+# 	    push @values, $quoted;
+# 	}
+#     }
+    
+#     # Now add the appropriate values for any of the built-in fields.
+    
+#     foreach my $k ( qw(authorizer_no enterer_no modifier_no modified modified_on enterer_id) )
+#     {
+# 	next unless $schema->{$k};
+	
+# 	my $new_value;
+	
+# 	# We don't set 'authorizer_no' and 'enterer_no' on update, the values given when the
+# 	# record was created are retained. If we are mirroring from another record, then we copy
+# 	# the value from that record if there is one. Otherwise, we use the authorizer_no and
+# 	# enterer_no associated with the requestor.
+	
+# 	if ( $k eq 'authorizer_no' || $k eq 'enterer_no' )
+# 	{
+# 	    next if $op eq 'update';
+	    
+# 	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
+# 		$dbh->quote($record->{$k}) : 
+# 		$request->{my_auth_info}{$k};
+	    
+# 	    # If the table has an authorizer_no or enterer_no field, then we need to be providing
+# 	    # a value for them. If no value can be found, then bomb.
+	    
+# 	    unless ( $new_value || ( $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} &&
+# 				     $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} eq 'LOGGED_IN' ) )
+# 	    {
+# 		croak "no value was found for '$k'";
+# 	    }
+	    
+# 	    # unless ( $new_value )
+# 	    # {
+# 	    # 	if ( $request->{my_auth_info}{guest_no} && $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
+# 	    # 	     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' )
+# 	    # 	{
+# 	    # 	    $new_value = $k eq 'enterer_no' ? $request->{my_auth_info}{guest_no} : 0;
+# 	    # 	}
 
-sub add_edt_warnings {
+# 	    # 	else
+# 	    # 	{
+# 	    # 	    croak "no value was found for '$k'";
+# 	    # 	}
+# 	    # }
+# 	}
+	
+# 	# We only set 'enterer_id' on record creation, not on update.
+	
+# 	elsif ( $k eq 'enterer_id' )
+# 	{
+# 	    next if $op eq 'update';
+	    
+# 	    $new_value = $dbh->quote($request->{my_auth_info}{user_id} || '');
+# 	}
+	
+# 	# The modifier_no field is in some sense the opposite of authorizer_no and enterer_no,
+# 	# since it is set on update but not when we are adding a new record. If we are mirroring
+# 	# from another record, use the value from that record if there is one. Otherwise, set this
+# 	# field to the enterer_no associated with the requestor.
+	
+# 	elsif ( $k eq 'modifier_no' )
+# 	{
+# 	    next if $op eq 'add';
+	    
+# 	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
+# 		$dbh->quote($record->{$k}) : 
+# 		$request->{my_auth_info}{enterer_no};
+# 	}
+	
+# 	# The modification timestamp is copied if the record is being mirrored, and otherwise set
+# 	# to the current timestamp unless the operation is 'add'.
+	
+# 	elsif ( $k eq 'modified' || $k eq 'modified_on' )
+# 	{
+# 	    next if $op eq 'add';
+	    
+# 	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ?
+# 		$dbh->quote($record->{$k}) :
+# 		'NOW()';
+# 	}
+	
+# 	push @fields, $k;
+# 	push @values, $new_value;
+#     }
+    
+#     # We stuff the fields and values into special record keys, so they will be available for use
+#     # in constructing subsequent SQL statements.
+    
+#     $record->{_fields} = \@fields;
+#     $record->{_values} = \@values;
+# }
+
+
+# sub add_edt_warnings {
+    
+#     my ($request, $edt) = @_;
+    
+#     my (@warnings) = $edt->warnings;
+    
+#     return unless @warnings;
+#     my %added;
+    
+#     foreach my $w ( @warnings )
+#     {
+#     	my $code = $w->code;
+# 	my $label = $w->label;
+# 	my $table = $w->table;
+# 	my $explanation = $edt->generate_msg($w);
+# 	# my $explanation = join('; ', $w->data);
+	
+# 	my $str = $code;
+# 	$str .= " ($label)" if defined $label && $label ne '';
+# 	$str .= ": $explanation" if defined $explanation && $explanation ne '';
+	
+# 	unless ( $added{$str} )
+# 	{
+# 	    $request->add_warning($str);
+# 	    $added{$str} = 1;
+# 	}
+#     }
+# }
+
+
+sub collect_edt_warnings {
     
     my ($request, $edt) = @_;
     
-    my (@warnings) = $edt->warnings;
-    
-    return unless @warnings;
-    my %added;
-    
-    foreach my $w ( @warnings )
+    my @strings = $edt->warning_strings;
+
+    foreach my $m ( @strings )
     {
-    	my $code = $w->code;
-	my $label = $w->label;
-	my $table = $w->table;
-	my $explanation = $edt->generate_msg($w);
-	# my $explanation = join('; ', $w->data);
-	
-	my $str = $code;
-	$str .= " ($label)" if defined $label && $label ne '';
-	$str .= ": $explanation" if defined $explanation && $explanation ne '';
-	
-	unless ( $added{$str} )
-	{
-	    $request->add_warning($str);
-	    $added{$str} = 1;
-	}
+	$request->add_warning($m);
+    }
+}
+
+
+sub collect_edt_errors {
+    
+    my ($request, $edt) = @_;
+    
+    my @strings = $edt->error_strings;
+
+    foreach my $m ( @strings )
+    {
+	$request->add_error($m);
     }
 }
 
@@ -555,107 +588,107 @@ sub validate_extident {
 }
 
 
-sub do_add {
+# sub do_add {
     
-    my ($request, $dbh, $table_name, $r) = @_;
+#     my ($request, $dbh, $table_name, $r) = @_;
     
-    $dbh ||= $request->get_connection;
+#     $dbh ||= $request->get_connection;
     
-    croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
-    croak "empty record" unless @{$r->{_fields}};
+#     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
+#     croak "empty record" unless @{$r->{_fields}};
     
-    my $field_string = join(',', @{$r->{_fields}});
-    my $value_string = join(',', @{$r->{_values}});
+#     my $field_string = join(',', @{$r->{_fields}});
+#     my $value_string = join(',', @{$r->{_values}});
     
-    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
+#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
     
-    my $sql = "INSERT INTO $quoted_table ($field_string) VALUES ($value_string)";
+#     my $sql = "INSERT INTO $quoted_table ($field_string) VALUES ($value_string)";
     
-    print STDERR "$sql\n\n" if $request->debug;
+#     print STDERR "$sql\n\n" if $request->debug;
     
-    my $result = $dbh->do($sql);
+#     my $result = $dbh->do($sql);
     
-    my $insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
-    print STDERR "RESULT: 0\n" unless $insert_id;
+#     my $insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
+#     print STDERR "RESULT: 0\n" unless $insert_id;
     
-    return $insert_id;
-}
+#     return $insert_id;
+# }
 
 
-sub do_replace {
+# sub do_replace {
     
-    my ($request, $dbh, $table_name, $r) = @_;
+#     my ($request, $dbh, $table_name, $r) = @_;
     
-    $dbh ||= $request->get_connection;
+#     $dbh ||= $request->get_connection;
     
-    croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
-    croak "empty record" unless @{$r->{_fields}};
+#     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
+#     croak "empty record" unless @{$r->{_fields}};
     
-    my $field_string = join(',', @{$r->{_fields}});
-    my $value_string = join(',', @{$r->{_values}});
+#     my $field_string = join(',', @{$r->{_fields}});
+#     my $value_string = join(',', @{$r->{_values}});
     
-    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
+#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
     
-    my $sql = "REPLACE INTO $quoted_table ($field_string) VALUES ($value_string)";
+#     my $sql = "REPLACE INTO $quoted_table ($field_string) VALUES ($value_string)";
     
-    print STDERR "$sql\n\n" if $request->debug;
+#     print STDERR "$sql\n\n" if $request->debug;
     
-    my $result = $dbh->do($sql);
+#     my $result = $dbh->do($sql);
     
-    return $result;
-}
+#     return $result;
+# }
 
 
-sub do_update {
+# sub do_update {
 
-    my ($request, $dbh, $table_name, $key_expr, $r) = @_;
+#     my ($request, $dbh, $table_name, $key_expr, $r) = @_;
 
-    $dbh ||= $request->get_connection;
+#     $dbh ||= $request->get_connection;
     
-    croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
-    croak "empty record" unless @{$r->{_fields}};
-    croak "empty key expr" unless $key_expr;
+#     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
+#     croak "empty record" unless @{$r->{_fields}};
+#     croak "empty key expr" unless $key_expr;
     
-    my @exprs;
+#     my @exprs;
     
-    foreach my $i ( 0..$#{$r->{_fields}} )
-    {
-	push @exprs, "$r->{_fields}[$i] = $r->{_values}[$i]";
-    }
+#     foreach my $i ( 0..$#{$r->{_fields}} )
+#     {
+# 	push @exprs, "$r->{_fields}[$i] = $r->{_values}[$i]";
+#     }
     
-    my $set_string = join(",\n", @exprs);
-    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
+#     my $set_string = join(",\n", @exprs);
+#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
     
-    my $sql = " UPDATE $quoted_table
-		SET $set_string
-		WHERE $key_expr LIMIT 1";
+#     my $sql = " UPDATE $quoted_table
+# 		SET $set_string
+# 		WHERE $key_expr LIMIT 1";
     
-    print STDERR "$sql\n\n" if $request->debug;
+#     print STDERR "$sql\n\n" if $request->debug;
     
-    my $result = $dbh->do($sql);
+#     my $result = $dbh->do($sql);
     
-    return $result;
-}
+#     return $result;
+# }
 
 
-sub fetch_record {
+# sub fetch_record {
     
-    my ($request, $dbh, $table_name, $key_expr, $field_expr) = @_;
+#     my ($request, $dbh, $table_name, $key_expr, $field_expr) = @_;
     
-    $dbh ||= $request->get_connection;
+#     $dbh ||= $request->get_connection;
     
-    croak "empty key expr" unless $key_expr;
-    croak "empty field expr" unless $field_expr;
+#     croak "empty key expr" unless $key_expr;
+#     croak "empty field expr" unless $field_expr;
     
-    my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
+#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
     
-    my $sql = "	SELECT $field_expr FROM $quoted_table
-		WHERE $key_expr LIMIT 1";
+#     my $sql = "	SELECT $field_expr FROM $quoted_table
+# 		WHERE $key_expr LIMIT 1";
     
-    print STDERR "$sql\n\n" if $request->debug;
+#     print STDERR "$sql\n\n" if $request->debug;
     
-    return $dbh->selectrow_hashref($sql, { Slice => { } });
-}
+#     return $dbh->selectrow_hashref($sql, { Slice => { } });
+# }
 
 
 # sub fetch_record_permission {

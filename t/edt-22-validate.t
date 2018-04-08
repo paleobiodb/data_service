@@ -16,13 +16,12 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 5;
 
-use TableDefs qw($EDT_TEST $EDT_AUX $EDT_ANY $INTERVAL_DATA
-		 get_table_property set_table_property set_column_property);
+use TableDefs qw($INTERVAL_DATA get_table_property set_table_property set_column_property);
 
 use TableData qw(reset_cached_column_properties);
 use ExternalIdent;
 
-use EditTest;
+use EditTest qw($EDT_TEST $EDT_AUX $EDT_ANY);
 use EditTester;
 
 use Carp qw(croak);
@@ -33,6 +32,7 @@ use Encode;
 
 my $T = EditTester->new;
 
+$T->set_table($EDT_TEST);
 
 
 my ($perm_a, $perm_e, $primary);
@@ -71,7 +71,7 @@ subtest 'required' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'abc' });
     
@@ -154,7 +154,7 @@ subtest 'foreign keys' => sub {
     
     my ($edt, $result, $key1, $key2, $key3);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'foreign key test', interval_no => $int_good });
     
@@ -294,7 +294,7 @@ subtest 'foreign_table' => sub {
     
     my ($edt, $result, $key1, $key2, $key3);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'foreign table a' });
     
@@ -318,11 +318,11 @@ subtest 'foreign_table' => sub {
     # Now specifically redirect this column to a different table/key combination. The same key
     # value should now work.
     
-    set_column_property($EDT_AUX, 'test_no', FOREIGN_TABLE => 'INTERVAL_DATA');
+    set_column_property($EDT_AUX, 'test_no', FOREIGN_TABLE => 'TableDefs::INTERVAL_DATA');
     set_column_property($EDT_AUX, 'test_no', FOREIGN_KEY => 'interval_no');
     
     reset_cached_column_properties($EDT_AUX, 'test_no');
-    $DB::single = 1;
+    
     $edt->update_record($EDT_AUX, { aux_no => $key3, test_id => $int_good });
     
     $T->ok_no_conditions;
@@ -342,7 +342,7 @@ subtest 'validators' => sub {
     
     my ($edt, $result, $key1);
     
-    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt->insert_record($EDT_TEST, { string_req => 'abc' });
     

@@ -17,7 +17,7 @@ use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block complete_rulesets
+our (@EXPORT_OK) = qw(complete_output_block complete_ruleset
 		      get_table_schema reset_cached_column_properties get_authinfo_fields);
 
 
@@ -177,7 +177,7 @@ sub get_table_schema {
 	
 	if ( $type =~ qr{ ^ ( var )? ( char | binary ) [(] ( \d+ ) }xs )
 	{
-	    my $type = $2 eq 'char' ? 'char' : 'data';
+	    my $type = $2 eq 'char' ? 'text' : 'data';
 	    my $mode = $1 ? 'variable' : 'fixed';
 	    $c->{TypeParams} = [ $type, $3, $mode ];
 	}
@@ -235,15 +235,14 @@ sub get_table_schema {
 	
 	elsif ( $type =~ qr{ ^ ( date | time | datetime | timestamp ) \b }xs )
 	{
-	    my $type = $1 eq 'time' ? 'time' : 'datetime';
-	    $c->{TypeParams} = [ $type, $1 ];
+	    $c->{TypeParams} = [ 'date', $1 ];
 	}
-
+	
 	elsif ( $type =~ qr{ ^ ( (?: multi )? (?: point | linestring | polygon ) ) \b }xs )
 	{
 	    $c->{TypeParams} = [ 'geometry', $1 ];
 	}
-
+	
 	elsif ( $type =~ qr{ ^ ( geometry (?: collection )? ) \b }xs )
 	{
 	    $c->{TypeParams} = [ 'geometry', $1 ];
@@ -523,7 +522,7 @@ sub complete_ruleset {
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
     my $field_list = $schema->{_column_list};
-    my $properties = get_column_properties($table_name);
+    my %has_properties = get_column_properties($table_name);
     
     foreach my $column_name ( @$field_list )
     {
@@ -549,9 +548,14 @@ sub complete_ruleset {
 	    $doc .= " The value must be an integer.";
 	}
 	
-	if ( my $type = $properties->{$column_name}{EXTID_TYPE} )
+	if ( $has_properties{$column_name} )
 	{
-	    $rr->{valid} = VALID_IDENTIFIER($type);
+	    my %properties = get_column_properties($table_name, $column_name);
+	    
+	    if ( my $type = $properties{EXTID_TYPE} )
+	    {
+		$rr->{valid} = VALID_IDENTIFIER($type);
+	    }
 	}
 	
 	push @{$ds->{my_param_records}}, $rr;

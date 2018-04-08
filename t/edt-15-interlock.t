@@ -15,12 +15,11 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 2;
 
-use TableDefs qw($EDT_TEST $EDT_AUX $EDT_ANY
-		 get_table_property set_table_property set_column_property);
+use TableDefs qw(get_table_property set_table_property set_column_property);
 
 use TableData qw(reset_cached_column_properties);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 use Carp qw(croak);
@@ -68,7 +67,7 @@ subtest 'interlock' => sub {
     
     my ($edt1, $edt2, $key1, $key2);
     
-    $edt1 = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt1 = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key1 = $edt1->insert_record($EDT_TEST, { string_req => 'interlock 1' });
     
@@ -77,7 +76,7 @@ subtest 'interlock' => sub {
     
     # Now initiate a second one, and test that the first one was rolled back.
     
-    $edt2 = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    $edt2 = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     $key2 = $edt1->insert_record($EDT_TEST, { string_req => 'interlock 2' });
     

@@ -16,9 +16,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 7;
 
-use TableDefs qw($EDT_TEST $EDT_AUX $EDT_ANY get_table_property set_table_property);
+use TableDefs qw(get_table_property set_table_property);
 
-use EditTest;
+use EditTest qw($EDT_TEST $EDT_AUX $EDT_ANY);
 use EditTester;
 
 use Carp qw(croak);

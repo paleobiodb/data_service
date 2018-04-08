@@ -14,9 +14,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 7;
 
-use TableDefs qw($EDT_TEST get_table_property);
+use TableDefs qw(get_table_property);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 
@@ -300,7 +300,7 @@ subtest 'invalid' => sub {
 };
 
 
-# Now make sure that conditions demoted by PROCEED_MODE and NOT_FOUND are counted properly. Errors
+# Now make sure that conditions demoted by PROCEED and NOT_FOUND are counted properly. Errors
 # should still be errors as far as specific_errors and specific_warnings are concerned.
 
 subtest 'proceed' => sub {
@@ -309,7 +309,7 @@ subtest 'proceed' => sub {
     
     # Start by creating a transaction to which these conditions can be attached.
     
-    $edt = $T->new_edt($perm_a, { PROCEED_MODE => 1 }) || return;
+    $edt = $T->new_edt($perm_a, { PROCEED => 1 }) || return;
     
     # Add a condition without an action, and test that it is still counted as an error.
     
@@ -340,7 +340,7 @@ subtest 'proceed' => sub {
     
     # Now try a caution.
     
-    $edt = $T->new_edt($perm_a, { CREATE => 0, PROCEED_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { CREATE => 0, PROCEED => 1 });
     
     $edt->insert_record($EDT_TEST, { string_req => 'will trigger caution' });
     

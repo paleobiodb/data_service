@@ -17,10 +17,10 @@ use base 'Exporter';
 
 use CoreFunction qw(connectDB configData);
 use TableDefs qw(init_table_names select_test_tables get_table_property get_column_properties
-		 $EDT_TEST $EDT_AUX
 		 $SESSION_DATA $PERSON_DATA $TABLE_PERMS);
 
 use EditTest;
+
 
 use namespace::clean;
 
@@ -56,8 +56,8 @@ sub new {
 	$dbh->{mysql_enable_utf8} = 1;
 	$dbh->do('SET @@SQL_MODE = CONCAT(@@SQL_MODE, ",STRICT_TRANS_TABLES")');
 	init_table_names(configData, 1);
-	select_test_tables('edt_test', 1);
 	select_test_tables('session_data', 1);
+	EditTest->enable_test_mode('edt_test', $options->{debug});
     };
     
     unless ( defined $dbh )
@@ -79,7 +79,8 @@ sub new {
     
     my $instance = { dbh => $dbh,
 		     debug => $options->{debug},
-		     notsilent => $options->{notsilent} };
+		     notsilent => $options->{notsilent}
+		   };
     
     bless $instance, $class;
     
@@ -107,19 +108,31 @@ sub debug {
 }
 
 
-# create_tables ( )
+
+# set_table ( table_name )
+#
+# Set the default table for all new EditTransactions created by this tester object.
+
+sub set_table {
+
+    my ($T, $table) = @_;
+
+    $T->{table} = $table;
+}
+
+
+# establish_test_tables ( )
 # 
-# Create or re-create the tables necessary for testing.
+# Create or re-create the tables necessary for testing EditTransaction.pm using its subclass EditTest.pm.
 
-sub create_tables {
-
+sub establish_test_tables {
+    
     my ($T) = @_;
     
     eval {
-	establish_session_data($T->dbh);
 	EditTest->establish_tables($T->dbh);
     };
-
+    
     if ( $@ )
     {
 	my $msg = trim_exception($@);
@@ -129,10 +142,18 @@ sub create_tables {
 }
 
 
+# establish_session_data ( )
+#
+# Create or re-create the session_data, person_data, and table_perms tables. If they exist and are
+# not empty, clear the contents and establish known records for testing purposes. This method
+# should only be called after calling "select_test_tables('session_data')".
+
 sub establish_session_data {
     
-    my ($dbh) = @_;
+    my ($T) = @_;
 
+    my $dbh = $T->dbh;
+    
     croak "The table name $SESSION_DATA is not correct. You must establish a test database."
 	unless $SESSION_DATA =~ /test/i;
     
@@ -378,7 +399,7 @@ sub get_new_edt {
 	}
     }
     
-    my $edt = EditTest->new($T->dbh, $perm, $EDT_TEST, $allow);
+    my $edt = EditTest->new($T->dbh, $perm, $T->{table}, $allow);
     
     if ( $edt )
     {
@@ -413,12 +434,12 @@ sub new_perm {
     
     croak "you must specify a session id string" unless $session_id && ! ref $session_id;
     
-    $table_name ||= $EDT_TEST;
-
+    $table_name //= $T->{table};
+    
     $T->{last_exception} = undef;
-
+    
     my $perm;
-
+    
     eval {
 	$perm = Permissions->new($T->dbh, $session_id, $table_name);
     };

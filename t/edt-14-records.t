@@ -14,9 +14,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 4;
 
-use TableDefs qw($EDT_TEST get_table_property set_table_property);
+use TableDefs qw(get_table_property set_table_property);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 
@@ -111,7 +111,7 @@ subtest 'primary_attr' => sub {
     # First check that we can update records using the primary key field name for the table, as a
     # control.
     
-    my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     my $key = $edt->insert_record($EDT_TEST, { string_req => 'primary attr test' });
     
@@ -158,7 +158,7 @@ subtest 'alternate_name' => sub {
     # First check that we can update records using the primary key field name for the table, as a
     # control.
     
-    my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED_MODE => 1 });
+    my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
     my $key1 = $edt->insert_record($EDT_TEST, { string_req => 'alternate name test' });
     

@@ -4,7 +4,7 @@
 #
 # This file contains unit tests for the EditTransaction class.
 #
-# edt-11-proceed.t : Test that PROCEED_MODE and NO_RECORDS allowances work
+# edt-11-proceed.t : Test that PROCEED and NO_RECORDS allowances work
 # properly. These allow a transaction to proceed even if errors have occurred.
 # 
 
@@ -15,9 +15,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 4;
 
-use TableDefs qw($EDT_TEST get_table_property);
+use TableDefs qw(get_table_property);
 
-use EditTest;
+use EditTest qw($EDT_TEST);
 use EditTester;
 
 
@@ -45,7 +45,7 @@ subtest 'setup' => sub {
 };
 
 
-# Test that an EditTransaction with PROCEED_MODE works the way it is supposed to. Errors of all
+# Test that an EditTransaction with PROCEED works the way it is supposed to. Errors of all
 # kinds are supposed to be converted to warnings.
 
 subtest 'proceed_mode' => sub {
@@ -58,7 +58,7 @@ subtest 'proceed_mode' => sub {
     
     # Then create a transaction and add some records.
     
-    $edt = $T->new_edt($perm_a, { PROCEED_MODE => 1, SILENT_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { PROCEED => 1, SILENT_MODE => 1 });
     
     $edt->insert_record($EDT_TEST, { string_req => 'proceed test a1' });
     $edt->insert_record($EDT_TEST, { string_req => 'proceed test a2' });
@@ -99,9 +99,9 @@ subtest 'proceed_mode' => sub {
 
     # Now we create a second transaction and do replace, update, and delete operations to make
     # sure that errors are properly changed into warnings for these operations as well. We also
-    # set IMMEDIATE_MODE to check that this doesn't interfere with PROCEED_MODE.
+    # set IMMEDIATE_MODE to check that this doesn't interfere with PROCEED.
     
-    $edt = $T->new_edt($perm_a, { PROCEED_MODE => 1, IMMEDIATE_MODE => 1, SILENT_MODE => 1 });
+    $edt = $T->new_edt($perm_a, { PROCEED => 1, IMMEDIATE_MODE => 1, SILENT_MODE => 1 });
     
     my ($k1, $k2) = $T->fetch_keys_by_expr($EDT_TEST, "string_req like 'proceed test %'");
     my ($k3) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='proceed test delete'");
@@ -130,7 +130,7 @@ subtest 'proceed_mode' => sub {
     
     $result = $edt->execute;
     
-    ok( $result, "transaction succeeded in PROCEED_MODE" ) || $T->diag_errors;
+    ok( $result, "transaction succeeded in PROCEED" ) || $T->diag_errors;
     is( $edt->warning_strings, 4, "got 4 warnings" ) || $T->diag_warnings;
     
     $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");

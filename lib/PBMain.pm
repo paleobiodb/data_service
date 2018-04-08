@@ -23,6 +23,7 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     my $tablename = params->{tablename};
     my $operation = params->{op};
     my $ds = Web::DataService->select(request);
+    my $result;
     
     unless ( $ds )
     {
@@ -36,7 +37,15 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     
     if ( $operation eq 'enable' )
     {
-	my ($result) = select_test_tables($tablename, 1, $ds);
+	if ( $tablename eq 'eduresources' )
+	{
+	    ($result) = ResourceTables->enable_test_mode($tablename, $ds);
+	}
+	
+	else
+	{
+	    ($result) = select_test_tables($tablename, 1, $ds);
+	}
 	
 	if ( $result && $result eq '1' )
 	{
@@ -46,7 +55,15 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     
     elsif ( $operation eq 'disable' )
     {
-	my ($result) = select_test_tables($tablename, 0, $ds);
+	if ( $tablename =~ /eduresources/i )
+	{
+	    ($result) = ResourceTables->disable_test_mode($tablename, $ds);
+	}
+
+	else
+	{
+	    ($result) = select_test_tables($tablename, 0, $ds);
+	}
 	
 	if ( $result && $result eq '2' )
 	{

@@ -17,7 +17,7 @@ use ConsoleLog qw(logMessage);
 
 use base qw(Exporter);
 
-our (@EXPORT_OK) = qw(connectDB loadConfig configData loadSQLFile activateTables);
+our (@EXPORT_OK) = qw(connectDB loadConfig configData loadSQLFile activateTables new_tables_safe);
 
 
 
@@ -293,6 +293,72 @@ sub activateTables {
     }
     
     my $a = 1;		# We can stop here when debugging
+}
+
+
+# new_tables_safe ( dbh, table_list )
+#
+# Unlike 'activate_tables' above, this routine is designed to substitute new versions of tables
+# for old ones. It moves each active table to a backup name, so that the data it contains can be
+# copied into the new tables. This routine will FAIL if tables already exist under the backup
+# names. This will ensure that if accidentally called twice, the data will not be deleted.
+
+sub new_tables_safe {
+    
+    my ($dbh, @table_list) = @_;
+    
+    my @work_tables;
+    my @active_tables;
+    my %active_table;
+    my %backup_table;
+    
+    my ($sql, $result);
+    
+    while ( @table_list )
+    {
+	my $work_table = shift @table_list;
+	my $active_table = shift @table_list;
+	
+	croak "missing work table name" unless $work_table;
+	croak "missing active table name" unless $active_table;
+	
+	push @work_tables, $work_table;
+	push @active_tables, $active_table;
+	$active_table{$work_table} = $active_table;
+	$backup_table{$work_table} = "${active_table}_bak";
+    }
+    
+    my $activate_string = join("', '", @active_tables);
+    
+    logMessage(2, "activating tables '$activate_string'");
+    
+    # Create empty active tables if any of them don't exist, so that the atomic table swap won't
+    # throw an error.
+    
+    foreach my $t (@work_tables)
+    {
+	$result = $dbh->do("CREATE TABLE IF NOT EXISTS $active_table{$t} LIKE $t");
+    }
+    
+    # Now construct an SQL statement that will swap in all of the tables at
+    # the same time.
+    
+    my $rename_lines = '';
+    
+    foreach my $t (@work_tables)
+    {
+	$rename_lines .= ",\n" if $rename_lines;
+	$rename_lines .= "	$active_table{$t} to $backup_table{$t},\n";
+	$rename_lines .= "	$t to $active_table{$t}";
+    }
+    
+    $sql = "RENAME TABLE\n$rename_lines";
+    
+    $result = $dbh->do($sql);
+    
+    my $a = 1;		# We can stop here when debugging
+
+    return $result;
 }
 
 

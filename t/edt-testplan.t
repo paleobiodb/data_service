@@ -42,11 +42,11 @@ pass('placeholder');
 # 
 # CREATE
 # MULTI_DELETE
-# ALTER_TRAIL
+# ALTER_TRAIL [edt-16-modified.t 'crmod admin', 'authent admin']
 # DEBUG_MODE [edt-01-basic.t 'debug output']
 # SILENT_MODE [edt-01-basic.t 'debug output']
 # IMMEDIATE_MODE [edt-10-transaction.pm 'immediate']
-# PROCEED_MODE [edt-11-proceed.pm 'proceed_mode']
+# PROCEED [edt-11-proceed.pm 'proceed_mode']
 # NOT_FOUND [edt-11-proceed.pm 'not_found']
 # NO_RECORDS [edt-11-proceed.pm 'no_records']
 # register_allowances [EditTest.pm, edt-01-basic.t 'allowances']
@@ -88,7 +88,7 @@ pass('placeholder');
 #  - works with specific actions [edt-12-conditions.t 'basic']
 #  - works with both undef and 'main' as first argument [edt-12-conditions.t 'basic']
 #  - throws exception if bad code is given [edt-12-conditions.t 'register']
-#  - errors are demoted to warnings with PROCEED_MODE
+#  - errors are demoted to warnings with PROCEED
 #	[edt-11-proceed.t 'proceed_mode', edt-12-conditions.t 'proceed']
 #  - E_NOT_FOUND is demoted to warning with NOT_FOUND
 #	[edt-11-proceed.t 'not_found', edt-12-conditions.t 'notfound']
@@ -298,22 +298,22 @@ pass('placeholder');
 #  - check for E_REQUIRED if a required column has the empty string [edt-22-validate.t 'required']
 # 
 # crmod:
-#  - check that crmod columns can be set with ALTER_TRAIL and 'admin'
-#  - check for E_PERM_COL on crmod columns without ALTER_TRAIL or 'admin'
-#  - check that both date and date/time are accepted value formats
-#  - check for E_PARAM on crmod columns with improper value format
-#  - check that crmod fields are auto-filled correctly on both insert and update
+#  - check that crmod columns can be set with ALTER_TRAIL and 'admin' [edt-16-modified.t 'crmod admin']
+#  - check for E_PERM_COL on crmod columns without ALTER_TRAIL or 'admin' [edt-16-modified.t 'crmod non-admin']
+#  - check that both date and date/time are accepted value formats [edt-16-modified.t 'crmod admin']
+#  - check for E_FORMAT on crmod columns with improper value format [edt-16-modified.t 'crmod admin']
+#  - check that crmod fields are auto-filled correctly on both insert and update [edt-16-modified.t 'crmod']
 #
 # authent:
-#  - check that authent columns can be set with ALTER_TRAIL and 'admin'
-#  - check for E_PERM_COL on authent columns without ALTER_TRAIL or 'admin'
-#  - check that authent columns can be set with a PBDB::ExtIdent of type PRS.
-#  - check for E_PARAM for another extident type
-#  - check that authent columns can be set with an unsigned integer
-#  - check for E_PARAM for negative numbers or text or another reference
-#  - check for E_KEY_NOT_FOUND if no matching person record is found
-#  - check that authent fields are auto-filled correctly on both insert and update
-#  - check user_id as well as the others
+#  - check that authent columns can be set with ALTER_TRAIL and 'admin' [edt-16-modified.t 'authent admin']
+#  - check for E_PERM_COL on authent columns without ALTER_TRAIL or 'admin' [edt-16-modified.t 'authent non-admin']
+#  - check that authent columns can be set with a PBDB::ExtIdent of type PRS. [edt-16-modified.t 'authent admin']
+#  - check for E_EXTTYPE for another extident type [edt-16-modified.t 'authent admin']
+#  - check that authent columns can be set with an unsigned integer [edt-16-modified.t 'authent admin']
+#  - check for E_FORMAT for negative numbers or text or another reference
+#  - check for E_KEY_NOT_FOUND if no matching person record is found [$$$]
+#  - check that authent fields are auto-filled correctly on both insert and update [edt-16-modified.t 'authent']
+#  - check user_id as well as the others [$$$]
 #
 # admin:
 #  - check that admin columns can be set with 'admin' permission
