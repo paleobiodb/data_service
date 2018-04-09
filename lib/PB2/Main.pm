@@ -13,7 +13,9 @@ package PBData;
 use PB2::CommonData;
 use PB2::ConfigData;
 use PB2::IntervalData;
+use PB2::TimescaleData;
 use PB2::TaxonData;
+use PB2::PlaceData;
 use PB2::CollectionData;
 use PB2::OccurrenceData;
 use PB2::SpecimenData;
@@ -21,17 +23,27 @@ use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
 use PB2::CombinedData;
+use PB2::ResourceData;
+use PB2::Authentication;
+use PB2::MainEntry;
 
 {
-    # We start by defining a data service instance for version 1.2
+    # We start by defining a data service instance for version 1.2. We provide the ability to
+    # override the path prefix and version string using the configuration file, so that test
+    # versions can be run separately from the main version.
+    
+    my $path_prefix = Dancer::config->{override_prefix} || 'data1.2/';
+    my $version_string = Dancer::config->{override_version} || 'v2';
+    
+    # Now define the data service instance.
     
     our ($ds2) = Web::DataService->new(
 	{ name => '1.2',
 	  title => 'PBDB Data Service',
-	  version => 'v2',
+	  path_prefix => $path_prefix,
+	  version => $version_string,
 	  features => 'standard',
 	  special_params => 'standard,count=rowcount',
-	  path_prefix => 'data1.2/',
 	  ruleset_prefix => '1.2:',
 	  doc_template_dir => 'doc/1.2',
 	  doc_compile_dir => 'doc/ttc-1.2' });
@@ -569,7 +581,7 @@ use PB2::CombinedData;
     
     $ds2->define_node({ path => 'specs/elements',
 			place => 6,
-			title => 'Specimen elements',
+			title => 'Specimen descriptive elements',
 			method => 'list_elements',
 			output => '1.2:specs:element',
 			optional_output => '1.2:specs:element_map' },
@@ -831,25 +843,42 @@ use PB2::CombinedData;
     # People.  These paths are used to fetch the names of database contributors.
 
     $ds2->define_node({ path => 'people',
-			place => 0,
+			place => 11,
 			title => 'Database contributors',
 			role => 'PB2::PersonData',
 			default_limit => undef,
 			output => '1.2:people:basic' });
     
     $ds2->define_node({ path => 'people/single', 
-			method => 'get' });
+			place => 1,
+			title => 'Single database contributor',
+			method => 'get_person' },
+	"This operation returns information about a single database contributor,",
+	"specified by either name or identifier.");
+    
+    $ds2->define_node({ path => 'people/me',
+			place => 2,
+			title => 'Currenly logged-in user',
+			method => 'get_person',
+		        arg => 'loggedin' },
+	"If this operation is executed by somebody who is logged in to the database,",
+	"it returns the name and identifier of that person. This can be used by a",
+	"web application to determine the database identifier corresponding to its user.");
     
     $ds2->define_node({ path => 'people/list',
-			method => 'list' });
+			place => 3,
+			method => 'list' },
+	"This operation returns lists of database contributors, selected according to",
+	"the specified criteria. It is only available to people who are logged in to the",
+	"database.");
     
-    $ds2->define_node({ path => 'people/auto',
-			method => 'people_auto',
-			default_limit => 10,
-			usage => "people/auto?name=smi" },
-	"This operation is used for auto-completion of database contributor names.",
-	"It returns a list of people whose last name begins with the specified string.",
-	"The default limit is 10, unless overridden.");
+    # $ds2->define_node({ path => 'people/auto',
+    # 			method => 'people_auto',
+    # 			default_limit => 10,
+    # 			usage => "people/auto?name=smi" },
+    # 	"This operation is used for auto-completion of database contributor names.",
+    # 	"It returns a list of people whose last name begins with the specified string.",
+    # 	"The default limit is 10, unless overridden.");
 
     
     # Bibliographic References
@@ -910,7 +939,167 @@ use PB2::CombinedData;
 		      place => 5,
 		      title => 'References for taxonomic names' },
 	"This operation returns information about the references from which",
-	"the selected taxonomic names were entered.");
+	"the selected taxonomic names were entered.");    
+    
+    # Timescales, intervals, and bounds
+    
+    $ds2->define_node({ path => 'timescales',
+			title => 'Geological timescales, intervals, and interval bounds',
+			place => 3,
+			role => 'PB2::TimescaleData' },
+	"The database lists almost every geologic time interval in current use, including the",
+	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
+	"(L<2013-01|http://www.stratigraphy.org/ICSchart/ChronostratChart2013-01.jpg>).");
+    
+    $ds2->define_node({ path => 'intervals2',
+		       place => 0,
+		       role => 'PB2::TimescaleData' });
+    
+    $ds2->define_node({ path => 'bounds',
+		       place => 0,
+		       role => 'PB2::TimescaleData' });
+    
+    $ds2->define_node({ path => 'timescales/single',
+			title => 'Single geological timescale',
+			place => 1,
+			usage => [ 'timescales/single.json?id=1' ],
+			method => 'get_record',
+			arg => 'timescales',
+			output => '1.2:timescales:basic',
+		        optional_output => '1.2:timescales:optional_basic' },
+	"This operation returns information about a single timescale, specified by",
+	"its unique identifier in the database.");
+    
+    $ds2->define_node({ path => 'timescales/list',
+			title => 'Lists of geological timescales',
+			place => 1,
+			usage => [ 'timescales/list.json?all_records', 'timescales/list.json?timescale_match=gradstein' ],
+			method => 'list_records',
+			arg => 'timescales',
+			output => '1.2:timescales:basic',
+			optional_output => '1.2:timescales:optional_basic' },
+	"This operation returns information about a list of timescales, selected",
+	"according to the query parameters.");
+    
+    $ds2->define_node({ path => 'bounds/single',
+			title => 'Single geological time interval boundary',
+			usage => [ 'bounds/single.json?id=10' ],
+			method => 'get_record',
+			arg => 'bounds',
+			output => '1.2:timescales:bound',
+		        optional_output => '1.2:timescales:optional_bound' },
+	"This operation returns information about a single time interval boundary, specified by",
+	"its unique identifier in the database.");
+    
+    $ds2->list_node({ path => 'bounds/single',
+		      list => 'timescales',
+		      place => 2 });
+
+    $ds2->define_node({ path => 'bounds/list',
+			title => 'Lists of geological time interval bounds',
+			usage => [ 'bounds/list.json?timescale_id=1', 'bounds/list.json?interval_name=cretaceous' ],
+			method => 'list_records',
+			arg => 'bounds',
+			output => '1.2:timescales:bound',
+			optional_output => '1.2:timescales:optional_bound' },
+	"This operation returns information about a list of time interval bounds,",
+	"selected according to the query parameters.");
+    
+    $ds2->list_node({ path => 'bounds/list',
+		      list => 'timescales',
+		      place => 2 });
+    
+    $ds2->define_node({ path => 'intervals2/single',
+			title => 'Single geological time interval',
+			usage => [ 'intervals2/single.json?id=3', 'intervals2/single.json?id=3&timescale_id=4' ],
+			method => 'get_record',
+			arg => 'intervals',
+			output => '1.2:timescales:interval',
+		        optional_output => '1.2:timescales:optional_interval' },
+	"This operation returns information about a single time interval, specified by",
+	"its unique identifier in the database.");
+    
+    $ds2->list_node({ path => 'intervals2/single',
+		      list => 'timescales',
+		      place => 3 });
+    
+    $ds2->define_node({ path => 'intervals2/list',
+			title => 'Lists of geological time intervals',
+			usage => [ 'intervals2/list.json?timescale_id=5', 'intervals2/list.json?interval_name=cretaceous',
+				   'intervals2/list.json?interval_name=cretaceous&absolute' ],
+			method => 'list_records',
+			arg => 'intervals',
+			output => '1.2:timescales:interval',
+			optional_output => '1.2:timescales:optional_interval' },
+	"This operation returns information about a list of time intervals,",
+	"selected according to the query parameters.");
+    
+    $ds2->list_node({ path => 'intervals2/list',
+		      list => 'timescales',
+		      place => 3 });
+    
+    # Geographic places
+    
+    $ds2->define_node({ path => 'places',
+			title => 'Geographic places',
+			place => 3,
+			role => 'PB2::PlaceData' },
+	"The collections and specimens in the database are associated with specific geographic locations,",
+	"which can be queried separately from other operations.");
+    
+    $ds2->define_node({ path => 'places/single',
+			title => 'Single geographic place',
+			place => 1,
+			method => 'get_place',
+			output => '1.2:places:basic' },
+	"This operation returns information about a single geographic place, either",
+	"a collection record, a locality record, or a geographic name record, specified",
+	"by its unique identifier.");
+    
+    $ds2->define_node({ path => 'places/list',
+			title => 'Lists of geographic places',
+			place => 2,
+			method => 'list_places',
+			output => '1.2:places:basic' },
+	"This operation returns a list of geographic place records matching the",
+	"parameters you specify.");
+    
+    # Educational resources
+    
+    $ds2->define_node({ path => 'eduresources',
+    			title => 'Educational resources',
+    			role => 'PB2::ResourceData' },
+    	"The database also includes information about educational resources",
+    	"that are relevant to its mission. These are used to populate a",
+    	"page on our main website.");
+    
+    $ds2->define_node({ path => 'eduresources/single',
+    			title => "Single educational resource",
+    			place => 1,
+    			output => '1.2:eduresources:basic',
+    			optional_output => '1.2:eduresources:optional_output',
+    			method => 'get_resource' },
+    	"This operation returns information about a single educational resource record",
+    	"specified by identifier.");
+
+    $ds2->define_node({ path => 'eduresources/list',
+    			title => "Lists of educational resources",
+    			place => 2,
+    			output => '1.2:eduresources:basic',
+    			optional_output => '1.2:eduresources:optional_output',
+    			method => 'list_resources' },
+    	"This operation returns information about a list of educational resource",
+    	"records, selected according to the query parameters.");
+
+    $ds2->define_node({ path => 'eduresources/active',
+    			title => "Active educational resources",
+    			place => 3,
+    			output => '1.2:eduresources:basic',
+    			optional_output => '1.2:eduresources:optional_output',
+    			method => 'list_resources',
+    		        arg => 'active' },
+    	"This operation returns a list of active educational resource records,",
+    	"selected according to the query parameters.");
     
     # The following paths are used for miscellaneous documentation
     
@@ -992,6 +1181,10 @@ use PB2::CombinedData;
     
     $ds2->define_node({ path => 'images',
 			file_dir => 'images' });
+
+    # Now initialize the data entry nodes.
+    
+    PBEntry::initialize($ds2);
 };
 
 1;

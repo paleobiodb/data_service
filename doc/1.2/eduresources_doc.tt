@@ -1,0 +1,13 @@
+=head2 DESCRIPTION
+
+The operations documented in this section provide access to educational resource records stored in
+the Paleobiology Database.  Records can be selected by their unique identifier, or by resource
+name, URL, author, or any of a number of other attributes.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>
+
+This data service also provides data entry and editing operations on educational resource records:
+
+<% NODELIST(opt_usage=1, opt_list='entry/eduresources') %>

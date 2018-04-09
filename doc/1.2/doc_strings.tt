@@ -7,6 +7,7 @@
         descrip = "DESCRIPTION"
         usage = "USAGE"
         params = "PARAMETERS"
+	body = "BODY"
  	methods = "METHODS"
     	response = "RESPONSE"
     	formats = "FORMATS"
@@ -29,6 +30,9 @@
 	
 	MSG_PARAM_HEADER_LONG = "You can use any of the following parameters with this operation:"
 	MSG_PARAM_NONE_DEFINED = "I<No parameters are defined.>"
+	
+	MSG_BODY_HEADER_LONG = "You can use any of the following keys in the body, which must consist of one or more JSON hashes:"
+	MSG_BODY_NONE_DEFINED = "I<No body definition is given for this operation.>"
 	
     	MSG_FORMAT_HEADER_SOME = "The following response formats are available for this operation.  "
     	MSG_FORMAT_HEADER_ALL = "The following response formats are available for this data service.  Not all of these may be available for every operation.  "

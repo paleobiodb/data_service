@@ -1,4 +1,5 @@
-# CollectionData
+# 
+# CommonData.pm
 # 
 # A class that contains common routines for formatting and processing PBDB data.
 # 
@@ -10,12 +11,8 @@ use strict;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
-use TableDefs qw(%IDP);
+use TableDefs qw($PERSON_DATA $WING_USERS);
 use ExternalIdent qw(extract_identifier generate_identifier);
-
-use parent 'Exporter';
-
-our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference);
 
 use Moo::Role;
 
@@ -276,24 +273,25 @@ sub initialize {
         
     $ds->define_block('1.2:common:ent' =>
 	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
-	{ set => 'authorizer_id', from => 'authorizer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
-	{ set => 'authorizer_id', from => 'authorizer_no', if_vocab => 'pbdb' },
-	{ set => 'enterer_id', from => 'enterer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
-	{ set => 'enterer_id', from => 'enterer_no', if_vocab => 'pbdb' },
-	{ set => 'modifier_id', from => 'modifier_no', code => \&generate_person_id, not_vocab => 'pbdb' },
-	{ set => 'modifier_id', from => 'modifier_no', if_vocab => 'pbdb' },	
-	{ output => 'authorizer_id', com_name => 'ati', pbdb_name => 'authorizer_no', if_block => 'ent,entname' },
+	{ set => 'authorizer_extid', from => 'authorizer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'authorizer_extid', from => 'authorizer_no', if_vocab => 'pbdb' },
+	{ set => 'enterer_extid', from => 'enterer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'enterer_extid', from => 'enterer_no', if_vocab => 'pbdb' },
+	{ set => 'modifier_extid', from => 'modifier_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'modifier_extid', from => 'modifier_no', if_vocab => 'pbdb' },	
+	{ output => 'authorizer_extid', com_name => 'ati', pbdb_name => 'authorizer_no', if_block => 'ent,entname' },
 	    "The identifier of the person who authorized the entry of this record",
-	{ output => 'enterer_id', com_name => 'eni', pbdb_name => 'enterer_no', if_block => 'ent,entname' },
+	{ output => 'enterer_extid', com_name => 'eni', pbdb_name => 'enterer_no', if_block => 'ent,entname' },
 	    "The identifier of the person who actually entered this record.",
-	{ output => 'modifier_id', com_name => 'mdi', pbdb_name => 'modifier_no', if_block => 'ent,entname' },
+	{ output => 'modifier_extid', com_name => 'mdi', pbdb_name => 'modifier_no', if_block => 'ent,entname' },
 	    "The identifier of the person who last modified this record, if it has been modified.");
     
     $ds->define_block('1.2:common:entname' =>
 	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
-	{ set => 'authorizer', from => 'authorizer_no', lookup => \%PERSON_NAME, default => 'unknown' },
-	{ set => 'enterer', from => 'enterer_no', lookup => \%PERSON_NAME, default => 'unknown' },
-	{ set => 'modifier', from => 'modifier_no', lookup => \%PERSON_NAME },
+	# { set => 'authorizer', from => 'authorizer_no', lookup => \%PERSON_NAME, default => 'unknown' },
+	# { set => 'enterer', from => 'enterer_no', lookup => \%PERSON_NAME, default => 'unknown' },
+	# { set => 'modifier', from => 'modifier_no', lookup => \%PERSON_NAME },
+	{ set => '*', code => \&process_entnames },
 	{ output => 'authorizer', com_name => 'ath' },
 	    "The name of the person who authorized the entry of this record",
 	{ output => 'enterer', com_name => 'ent' },
@@ -301,14 +299,44 @@ sub initialize {
 	{ output => 'modifier', com_name => 'mdf' },
 	    "The name of the person who last modified this record, if it has been modified.");
     
+    $ds->define_block('1.2:common:ent_guest' =>
+    	{ select => ['$cd.enterer_id'] },
+    	{ set => '*', code => \&process_enterer_id });
+    
+    # $ds->define_block('1.2:common:entname_guest' =>
+    # 	{ select => ['$cd.enterer_id', 'wu.real_name'], tables => 'wu' },
+    # 	{ set => '*', code => \&process_entnames },
+    # 	{ output => 'enterer', com_name => 'ent' },
+    # 	    "The name of the person who actually entered this record");
+    
     # Now fill in the %PERSON_NAME hash.
     
     my $dbh = $ds->get_connection;
     
-    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM person",
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $PERSON_DATA",
 					  { Columns => [1, 2] });
     
     %PERSON_NAME = @$values;
+}
+
+
+sub update_person_name_cache { 
+    
+    my ($class, $ds) = @_;
+    
+    my $dbh = $ds->get_connection;
+    
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $PERSON_DATA",
+					  { Columns => [1, 2] });
+    
+    my %new_names = @$values;
+
+    foreach my $k (keys %new_names)
+    {
+	$PERSON_NAME{$k} = $new_names{$k};
+    }
+
+    print STDERR "Updating PERSON_NAME cache\n\n" if $ds->debug;
 }
 
 
@@ -322,7 +350,7 @@ sub datetime_value {
     
     my ($value, $context) = @_;
     
-    my $dbh = $PBData::ds1->get_connection;
+    my $dbh = $PBData::ds2->get_connection;
     my $quoted = $dbh->quote($value);
     my $clean;
     
@@ -535,7 +563,7 @@ sub ent_filter {
 	{
 	    my $quoted = $dbh->quote("$p%");
 	    my $values = $dbh->selectcol_arrayref("
-		SELECT person_no, name FROM person
+		SELECT person_no, name FROM $PERSON_DATA
 		WHERE name like $quoted or reversed_name like $quoted", { Columns => [1, 2] });
 	    
 	    if ( defined $values && @$values < 3 && defined $values->[0] && $values->[0] ne '' )
@@ -733,6 +761,66 @@ sub ent_filter {
 }
 
 
+# process_enterer_id ( )
+# 
+# If the record contains an enterer_id value and no enterer_no value, set the enterer_no from the
+# enterer_id.
+
+sub process_enterer_id {
+    
+    my ($request, $record) = @_;
+    
+    if ( $record->{enterer_id} && ! $record->{enterer_no} )
+    {
+	$record->{enterer_no} = $record->{enterer_extid} = $record->{enterer_id};
+    }
+}
+
+
+# process_entnames ( )
+#
+# Generate enterer names from ids, when available.
+
+sub process_entnames {
+
+    my ($request, $record) = @_;
+
+    if ( $record->{authorizer_no} )
+    {
+	$record->{authorizer} = $PERSON_NAME{$record->{authorizer_no}} || 'unknown';
+    }
+
+    if ( $record->{modifier_no} )
+    {
+	$record->{modifier} = $PERSON_NAME{$record->{modifier_no}} || 'unknown';
+    }
+
+    if ( $record->{enterer_no} && $record->{enterer_no} =~ /^\d+$/ )
+    {
+	$record->{enterer} = $PERSON_NAME{$record->{enterer_no}} || 'unknown';
+    }
+
+    elsif ( $record->{enterer_id} )
+    {
+	if ( $PERSON_NAME{$record->{enterer_id}} )
+	{
+	    $record->{enterer} = $PERSON_NAME{$record->{enterer_id}};
+	}
+
+	else
+	{
+	    my $dbh = $request->get_connection;
+	    my $quoted_id = $dbh->quote($record->{enterer_id});
+	    my ($name) = $dbh->selectrow_array("SELECT real_name FROM $WING_USERS WHERE id = $quoted_id");
+
+	    $name ||= 'unknown';
+
+	    $record->{enterer} = $PERSON_NAME{$record->{enterer_id}} = $name;
+	}
+    }
+}
+
+
 # generateAttribution ( )
 # 
 # Generate an attribution string for the given record.  This relies on the
@@ -814,7 +902,20 @@ sub generate_person_id {
     
     my ($request, $person_no) = @_;
     
-    return $person_no ? generate_identifier('PRS', $person_no) : '';
+    if ( $request->{block_hash}{extids} && $person_no && $person_no =~ /^\d+$/ )
+    {
+	return generate_identifier('PRS', $person_no);
+    }
+    
+    elsif ( $person_no )
+    {
+	return $person_no;
+    }
+    
+    else
+    {
+	return;
+    }
 }
 
 
@@ -857,6 +958,87 @@ sub check_values {
     
     my $result = join(q{,}, @$check_result) || '-1';
     return $result;
+}
+
+
+# generate_match_like ( string_list )
+# 
+
+sub generate_match_like {
+
+    my ($request, $dbh, $field, $match_list) = @_;
+    
+    my @exprs;
+    
+    foreach my $n ( @$match_list )
+    {
+	next unless defined $n && $n ne '';
+	
+	my $quoted = $dbh->quote($n);
+	
+	push @exprs, "$field like $quoted";
+    }
+    
+    push @exprs, '_MATCH_NOTHING_' unless @exprs;
+    
+    if ( @exprs == 1 )
+    {
+	return @exprs;
+    }
+    
+    else
+    {
+	return '(' . join(' or ', @exprs) . ')';
+    }
+}
+
+
+# generate_match_regex ( string_list )
+# 
+# Convert the specified list of strings into a regex
+
+sub generate_match_regex {
+    
+    my ($request, $dbh, $field, $match_list) = @_;
+    
+    my @exprs;
+    
+    foreach my $n ( @$match_list )
+    {
+	next unless defined $n && $n ne '';
+	
+	$n =~ s/([()|{}])/\\$1/g;
+	$n =~ s/\s+/\\s+/g;
+	$n =~ s/%/.*/g;
+	$n =~ s/_/./g;
+	
+	push @exprs, $n;
+    }
+    
+    push @exprs, '_MATCH_NOTHING_' unless @exprs;
+    
+    my $regex = $dbh->quote(join('|', @exprs));
+    
+    return "$field rlike $regex";
+}
+
+
+sub generate_match_list {
+    
+    my ($request, $dbh, $field, $match_list) = @_;
+    
+    my @list;
+    
+    foreach my $n ( @$match_list )
+    {
+	next unless defined $n && $n ne '';
+	
+	push @list, $dbh->quote($n);
+    }
+    
+    push @list, '_MATCH_NOTHING_' unless @list;
+    
+    return "$field in (" . join(q{,}, @list) . ")";
 }
 
 
@@ -913,5 +1095,6 @@ sub extid_check {
     # my $make_ids = $request->clean_param('extids');
     # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
 }
+
 
 1;

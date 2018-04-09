@@ -183,7 +183,7 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
 
     $ds->define_ruleset('1.2:intervals:single' => 
-	{ allow => '1.2:intervals:specifier' },
+	{ require => '1.2:intervals:specifier' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     

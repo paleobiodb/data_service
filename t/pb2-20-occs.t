@@ -11,7 +11,7 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::Most tests => 15;
+use Test::Most tests => 16;
 
 # use CoreFunction qw(connectDB configData);
 # use Taxonomy;

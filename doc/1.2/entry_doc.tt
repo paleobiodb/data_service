@@ -1,0 +1,8 @@
+=head2 DESCRIPTION
+
+The URL paths documented in this section provide for data entry. Ultimately, there
+will be one section for each different kind of data.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>

@@ -11,7 +11,8 @@
 package Taxonomy;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
-use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX %IDP);
+use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX);
+use ExternalIdent qw(%IDP);
 use Carp qw(carp croak);
 use Try::Tiny;
 
