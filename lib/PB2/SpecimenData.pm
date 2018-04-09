@@ -1343,89 +1343,89 @@ sub list_measurements {
 # 
 # This operation returns lists of specimen elements.
 
-sub list_elements {
+# sub list_elements {
 
-    my ($request) = @_;
+#     my ($request) = @_;
     
-    # Get a database handle by which we can make queries.
+#     # Get a database handle by which we can make queries.
     
-    my $dbh = $request->get_connection;
-    my $tables = { };
+#     my $dbh = $request->get_connection;
+#     my $tables = { };
     
-    # Determine the query parameters.
+#     # Determine the query parameters.
     
-    my @filters;
+#     my @filters;
     
-    if ( my $taxon_id = $request->clean_param('taxon_id') )
-    {
-	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+#     if ( my $taxon_id = $request->clean_param('taxon_id') )
+#     {
+# 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
-	my ($taxon) = $taxonomy->list_taxa_simple($taxon_id);
+# 	my ($taxon) = $taxonomy->list_taxa_simple($taxon_id);
 	
-	unless ( $taxon && $taxon->{lft} )
-	{
-	    die $request->exception(404, "Taxon not found");
-	}
+# 	unless ( $taxon && $taxon->{lft} )
+# 	{
+# 	    die $request->exception(404, "Taxon not found");
+# 	}
 	
-	my $lft = $taxon->{lft};
+# 	my $lft = $taxon->{lft};
 	
-	push @filters, "$lft between t.lft and t.rgt";
-    }
+# 	push @filters, "$lft between t.lft and t.rgt";
+#     }
     
-    elsif ( my $taxon_name = $request->clean_param('taxon_name') )
-    {
-	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+#     elsif ( my $taxon_name = $request->clean_param('taxon_name') )
+#     {
+# 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
-	my ($taxon) = $taxonomy->resolve_names($taxon_name, { });
+# 	my ($taxon) = $taxonomy->resolve_names($taxon_name, { });
 	
-	unless ( $taxon && $taxon->{lft} )
-	{
-	    die $request->exception(404, "Taxon not found");
-	}
+# 	unless ( $taxon && $taxon->{lft} )
+# 	{
+# 	    die $request->exception(404, "Taxon not found");
+# 	}
 	
-	my $lft = $taxon->{lft};
+# 	my $lft = $taxon->{lft};
 	
-	push @filters, "$lft between t.lft and t.rgt";	
-    }
+# 	push @filters, "$lft between t.lft and t.rgt";	
+#     }
     
-    push @filters, '1=1' unless @filters;
+#     push @filters, '1=1' unless @filters;
     
-    my $filter_string = join(' and ', @filters);
+#     my $filter_string = join(' and ', @filters);
     
-    # If the 'strict' parameter was given, make sure we haven't generated any
-    # warnings. Also determine how we should be handling external identifiers.
+#     # If the 'strict' parameter was given, make sure we haven't generated any
+#     # warnings. Also determine how we should be handling external identifiers.
     
-    $request->strict_check;
-    $request->extid_check;
+#     $request->strict_check;
+#     $request->extid_check;
     
-    # If a query limit has been specified, modify the query accordingly.
+#     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $request->sql_limit_clause(1);
+#     my $limit = $request->sql_limit_clause(1);
     
-    # If we were asked to count rows, modify the query accordingly
+#     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $request->sql_count_clause;
+#     my $calc = $request->sql_count_clause;
     
-    # Now construct the query expression.
+#     # Now construct the query expression.
     
-    my $fields = $request->select_string;
+#     my $fields = $request->select_string;
     
-    $request->{main_sql} = "
-	SELECT $calc $fields
-	FROM $SPECELT_DATA as elt left join taxon_trees as t using (orig_no)
-	WHERE $filter_string $limit";
+#     $request->{main_sql} = "
+# 	SELECT $calc $fields
+# 	FROM $SPECELT_DATA as elt left join taxon_trees as t using (orig_no)
+# 	WHERE $filter_string $limit";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+#     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
-    # Then prepare and execute the main query.
+#     # Then prepare and execute the main query.
     
-    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
+#     $request->{main_sth} = $dbh->prepare($request->{main_sql});
+#     $request->{main_sth}->execute();
     
-    # If we were asked to get the count, then do so
+#     # If we were asked to get the count, then do so
     
-    $request->sql_count_rows;
-}
+#     $request->sql_count_rows;
+# }
 
 
 # generate_spec_filters ( tables )
