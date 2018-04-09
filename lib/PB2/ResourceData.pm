@@ -14,7 +14,8 @@ package PB2::ResourceData;
 
 use HTTP::Validate qw(:validators);
 
-use ResourceDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
+use TableDefs qw(%TABLE);
+use ResourceDefs; # qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
 use TableData qw(complete_output_block);
 
@@ -154,11 +155,11 @@ sub initialize {
     $RESOURCE_IMG_PATH = $ds->config_value('eduresources_img_path');
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
-	unless $RESOURCE_ACTIVE && $RESOURCE_TAGS;
+	unless $TABLE{RESOURCE_ACTIVE} && $TABLE{RESOURCE_TAGS};
 
     my $dbh = $ds->get_connection;
     
-    complete_output_block($ds, $dbh, '1.2:eduresources:basic', $RESOURCE_QUEUE);
+    complete_output_block($ds, $dbh, '1.2:eduresources:basic', $TABLE{RESOURCE_QUEUE});
 }
 
 
@@ -203,7 +204,7 @@ sub get_resource {
     # information.
     
     $request->substitute_select( cd => 'edr' );
-    # $request->check_entname($RESOURCE_QUEUE => 'edr');
+    # $request->check_entname($TABLE{RESOURCE_QUEUE} => 'edr');
     
     my $tables = $request->tables_hash;
     
@@ -225,8 +226,8 @@ sub get_resource {
     if ( $active )
     {
 	$request->{main_sql} = "
-	SELECT edr.*, group_concat(tg.tag_id) as tags $extra_fields FROM $RESOURCE_ACTIVE as edr
-		left join $RESOURCE_TAGS as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
+	SELECT edr.*, group_concat(tg.tag_id) as tags $extra_fields FROM $TABLE{RESOURCE_ACTIVE} as edr
+		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
 		$join_list
         WHERE edr.$RESOURCE_IDFIELD = $id
 	GROUP BY edr.$RESOURCE_IDFIELD";
@@ -236,9 +237,9 @@ sub get_resource {
     {
 	$request->{main_sql} = "
 	SELECT edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
-	FROM $RESOURCE_QUEUE as edr
-		left join $RESOURCE_IMAGES as edi using (eduresource_no)
-		left join $RESOURCE_ACTIVE as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
+	FROM $TABLE{RESOURCE_QUEUE} as edr
+		left join $TABLE{RESOURCE_IMAGES} as edi using (eduresource_no)
+		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
 		$join_list
         WHERE edr.eduresource_no = $id
 	GROUP BY edr.eduresource_no";
@@ -275,7 +276,7 @@ sub list_resources {
     
     unless ( $active )
     {
-	$perms = $request->require_authentication($RESOURCE_QUEUE, "Login Required");
+	$perms = $request->require_authentication($TABLE{RESOURCE_QUEUE}, "Login Required");
     }
     
     # Generate a list of filter expressions.
@@ -300,11 +301,11 @@ sub list_resources {
     # records entered by the user.
     
     my $enterer = $request->clean_param('enterer');
-    $enterer = 'me' if $perms && $perms->check_table_permission($RESOURCE_QUEUE, 'view') eq 'own';
+    $enterer = 'me' if $perms && $perms->check_table_permission($TABLE{RESOURCE_QUEUE}, 'view') eq 'own';
     
     if ( $enterer )
     {
-	$perms ||= $request->authenticate($RESOURCE_QUEUE);
+	$perms ||= $request->authenticate($TABLE{RESOURCE_QUEUE});
 	
 	if ( $enterer eq 'me' )
 	{
@@ -456,9 +457,9 @@ sub list_resources {
     {
 	$request->{main_sql} = "
 	SELECT $calc edr.*, group_concat(tg.tag_id) as tags $extra_fields
-	FROM $RESOURCE_ACTIVE as edr
-		left join $RESOURCE_TAGS as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
-		left join $RESOURCE_QUEUE as edq on edr.$RESOURCE_IDFIELD = edq.eduresource_no
+	FROM $TABLE{RESOURCE_ACTIVE} as edr
+		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
+		left join $TABLE{RESOURCE_QUEUE} as edq on edr.$RESOURCE_IDFIELD = edq.eduresource_no
 		$join_list
         WHERE $filter_string
 	GROUP BY edr.$RESOURCE_IDFIELD $limit";
@@ -468,9 +469,9 @@ sub list_resources {
     {
 	$request->{main_sql} = "
 	SELECT $calc edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
-	FROM $RESOURCE_QUEUE as edr
-		left join $RESOURCE_IMAGES as edi using (eduresource_no)
-		left join $RESOURCE_ACTIVE as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
+	FROM $TABLE{RESOURCE_QUEUE} as edr
+		left join $TABLE{RESOURCE_IMAGES} as edi using (eduresource_no)
+		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
 		$join_list
         WHERE $filter_string
 	GROUP BY edr.eduresource_no";
@@ -498,12 +499,12 @@ sub generate_join_list {
     
     if ( $tables_ref->{edi} && $active )
     {
-	$joins .= "left join $RESOURCE_IMAGES as edi on edi.eduresource_no = edr.$idfield\n";
+	$joins .= "left join $TABLE{RESOURCE_IMAGES} as edi on edi.eduresource_no = edr.$idfield\n";
     }
     
     if ( $tables_ref->{edt} )
     {
-	$joins .= "left join $RESOURCE_TAGS as edt on edt.resource_id = edr.$idfield\n";
+	$joins .= "left join $TABLE{RESOURCE_TAGS} as edt on edt.resource_id = edr.$idfield\n";
     }
     
     return $joins;
@@ -522,7 +523,7 @@ sub cache_tag_values {
     
     $dbh ||= $request->get_connection;
     
-    my $result = $dbh->selectall_arrayref("SELECT * FROM $RESOURCE_TAG_NAMES", { Slice => { } });
+    my $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{RESOURCE_TAG_NAMES}", { Slice => { } });
     
     if ( $result && ref $result eq 'ARRAY' )
     {

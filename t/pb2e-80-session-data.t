@@ -15,7 +15,8 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 1;
 
-use ResourceTables qw($RESOURCE_QUEUE);
+use TableDefs qw(%TABLE);
+use ResourceDefs; # qw($RESOURCE_QUEUE);
 
 use EditTester;
 
@@ -28,5 +29,5 @@ my $T = EditTester->new;
 my $perm_a = $T->new_perm('SESSION-WITH-ADMIN');
 
 $T->establish_session_data;
-$T->set_specific_permission($RESOURCE_QUEUE, $perm_a, 'admin');
+$T->set_specific_permission($TABLE{RESOURCE_QUEUE}, $perm_a, 'admin');
 

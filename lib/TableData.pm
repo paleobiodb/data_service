@@ -10,7 +10,8 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(get_table_property get_column_properties %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
+use TableDefs qw(get_table_property get_column_properties list_column_properties
+		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
 
 use Carp qw(croak);
 use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
@@ -102,7 +103,7 @@ sub get_table_schema {
     
     # Figure out which columns from this table have had properties set for them.
     
-    my %has_properties = get_column_properties($table_name);
+    my %has_properties = list_column_properties($table_name);
     
     # Now go through the columns one by one. Find the primary key if there is one, and also parse
     # the column datatypes. Collect up the list of field names for easy access later.
@@ -522,7 +523,7 @@ sub complete_ruleset {
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
     my $field_list = $schema->{_column_list};
-    my %has_properties = get_column_properties($table_name);
+    my %has_properties = list_column_properties($table_name);
     
     foreach my $column_name ( @$field_list )
     {

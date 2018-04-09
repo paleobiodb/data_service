@@ -22,8 +22,8 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw(is_test_mode);
-use ResourceDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
+use TableDefs qw(%TABLE is_test_mode);
+use ResourceDefs; # qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
 
 use base 'EditTransaction';
 
@@ -238,7 +238,7 @@ sub after_action {
 	# First find and delete the image files, if any
 	
 	my $sql = "
-		SELECT image FROM $RESOURCE_ACTIVE
+		SELECT image FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD in ($keylist) AND image <> ''";
 	
 	my $images = $dbh->selectcol_arrayref($sql);
@@ -259,7 +259,7 @@ sub after_action {
 	# Then delete the active records, if any
 	
 	my $sql = "
-		DELETE FROM $RESOURCE_ACTIVE
+		DELETE FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD in ($keylist)";
 	
 	print STDERR "$sql\n\n" if $edt->debug;
@@ -269,7 +269,7 @@ sub after_action {
 	# Then delete the tag assignments, if any
 	
 	$sql = "
-		DELETE FROM $RESOURCE_TAGS
+		DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id in ($keylist)";
 	
 	print STDERR "$sql\n\n" if $edt->debug;
@@ -279,7 +279,7 @@ sub after_action {
 	# Then delete the images, if any
 	
 	$sql = "
-		DELETE FROM $RESOURCE_IMAGES
+		DELETE FROM $TABLE{RESOURCE_IMAGES}
 		WHERE eduresource_no in ($keylist)";
 	
 	print STDERR "$sql\n\n" if $edt->debug;
@@ -390,7 +390,7 @@ sub store_image {
     
     my $dbh = $edt->dbh;
     
-    my $sql = "REPLACE INTO $RESOURCE_IMAGES (eduresource_no, image_data) values ($eduresource_no, ?)";
+    my $sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} (eduresource_no, image_data) values ($eduresource_no, ?)";
     
     print STDERR "$sql\n\n" if $edt->debug;
     
@@ -420,7 +420,7 @@ sub activate_resource {
 	# Start by deleting the image file, if any.
 	
 	my $sql = "
-		SELECT image FROM $RESOURCE_ACTIVE
+		SELECT image FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD = $quoted_id";
 	
 	my ($filename) = $dbh->selectrow_array($sql);
@@ -439,14 +439,14 @@ sub activate_resource {
 	# Then delete the active resource record and the tag assignments.
 	
 	my $sql = "
-		DELETE FROM $RESOURCE_ACTIVE
+		DELETE FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD = $quoted_id";
 	
 	print STDERR "$sql\n\n" if $edt->debug;
 	
 	my $result = $dbh->do($sql);
 	
-	$sql = "	DELETE FROM $RESOURCE_TAGS
+	$sql = "	DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id = $quoted_id";
 	
 	print STDERR "$sql\n\n" if $edt->debug;
@@ -465,7 +465,7 @@ sub activate_resource {
 	
 	my $sql = "
 		SELECT e.eduresource_no as id, i.image_data, e.*
-		FROM $RESOURCE_QUEUE as e left join $RESOURCE_IMAGES as i using (eduresource_no)
+		FROM $TABLE{RESOURCE_QUEUE} as e left join $TABLE{RESOURCE_IMAGES} as i using (eduresource_no)
 		WHERE eduresource_no = $quoted_id";
 	
 	print STDERR "$sql\n\n" if $edt->debug;
@@ -497,7 +497,7 @@ sub activate_resource {
 	# that the user has admin permission on $RESOURCE_QUEUE, so we record them as having admin
 	# permission for this action as well.
 	
-	my $activation_action = $edt->aux_action($RESOURCE_ACTIVE, 'replace', $r);
+	my $activation_action = $edt->aux_action($TABLE{RESOURCE_ACTIVE}, 'replace', $r);
 	
 	$activation_action->_set_permission('admin');
 	$edt->validate_against_schema($activation_action);
@@ -509,7 +509,7 @@ sub activate_resource {
 	# Then handle the tags. We first delete any which are there, then create new records for
 	# the ones we know are supposed to be there.
 	
-	$sql =  "	DELETE FROM $RESOURCE_TAGS
+	$sql =  "	DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id = $quoted_id";
 	
 	print STDERR "$sql\n\n" if $edt->debug;
@@ -532,7 +532,7 @@ sub activate_resource {
 	    {
 		my $insert_str = join(', ', @insert);
 		
-		$sql = "	INSERT INTO $RESOURCE_TAGS (resource_id, tag_id) VALUES $insert_str";
+		$sql = "	INSERT INTO $TABLE{RESOURCE_TAGS} (resource_id, tag_id) VALUES $insert_str";
 		
 		print STDERR "$sql\n\n" if $edt->debug;
 		
@@ -669,7 +669,7 @@ sub configure {
     # For now, we execute the following in an eval block, so that if something goes wrong it
     # doesn't prevent the entire data service from running.
     
-    my $sql = "SELECT * from $RESOURCE_TAG_NAMES";
+    my $sql = "SELECT * from $TABLE{RESOURCE_TAG_NAMES}";
     
     eval {
 	my $taglist = $dbh->selectall_arrayref($sql, { Slice => { } });

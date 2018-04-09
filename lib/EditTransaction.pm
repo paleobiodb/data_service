@@ -9,7 +9,7 @@ package EditTransaction;
 use strict;
 
 use ExternalIdent qw(%IDP %IDRE);
-use TableDefs qw(get_table_property get_column_properties $PERSON_DATA
+use TableDefs qw(get_table_property $PERSON_DATA
 		 %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 use TableData qw(get_table_schema);
 use EditTransaction::Action;

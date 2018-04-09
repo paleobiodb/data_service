@@ -15,8 +15,8 @@ use Carp qw(croak);
 
 use CoreFunction qw(new_tables_safe);
 
-use ResourceDefs qw($RESOURCE_QUEUE $RESOURCE_IMAGES
-		    $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE);
+# use ResourceDefs qw($RESOURCE_QUEUE $RESOURCE_IMAGES
+# 		    $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE);
 
 
 # establish_tables ( class, dbh, options )

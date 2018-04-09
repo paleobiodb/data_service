@@ -14,7 +14,7 @@ package TableDefs;
 use strict;
 
 use Carp qw(carp croak);
-use Hash::Util qw(lock_value unlock_value);
+use Hash::Util qw(lock_value unlock_value lock_keys unlock_keys);
 
 use base 'Exporter';
 
@@ -36,13 +36,13 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $MACROSTRAT_INTERVALS $MACROSTRAT_SCALES $MACROSTRAT_SCALES_INTS
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
-		      $TEST_DB
+		      $TEST_DB %TABLE
 		      %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL 
 		      init_table_names select_test_tables is_test_mode
-		      set_table_name change_table_db change_table_name original_table
+		      set_table_name change_table_db change_table_name restore_table_name original_table
 		      set_table_property get_table_property
-		      set_column_property get_column_properties
-		      substitute_table);
+		      set_column_property get_column_properties list_column_properties
+		      substitute_table alternate_table);
 
 
 # Define the properties that are allowed to be specified for tables and table columns.
@@ -357,11 +357,13 @@ our (%TABLE, %TABLE_NAME_MAP);
 sub set_table_name {
 
     my ($table_specifier, $table_name) = @_;
-    
+
+    unlock_keys(%TABLE);
     unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
     $TABLE{$table_specifier} = $table_name;
     lock_value(%TABLE, $table_specifier);
-
+    lock_keys(%TABLE);
+    
     return $table_name;
 }
 
@@ -383,7 +385,7 @@ sub change_table_db {
     $TABLE_NAME_MAP{$new_name} = $orig_name;
     
     unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
-    $TABLE{$table_specifier} = $table_name;
+    $TABLE{$table_specifier} = $new_name;
     lock_value(%TABLE, $table_specifier);
     
     return $new_name;
@@ -531,8 +533,8 @@ sub get_column_properties {
     my ($table_name, $column_name) = @_;
     
     # my $base_name = ($TABLE_NAME_MAP{$table_name} ||= $table_name);
-
-    if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    
+    if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name} )
     {
 	my %props = %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}};
 	
@@ -547,10 +549,50 @@ sub get_column_properties {
 	
 	return %props;
     }
-
+    
     elsif ( $COLUMN_PROPERTIES{$table_name}{$column_name} )
     {
 	return %{$COLUMN_PROPERTIES{$table_name}{$column_name}};
+    }
+    
+    elsif ( defined $TABLE_PROPERTIES{$table_name} ||
+	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    {
+	return;
+    }
+    
+    else
+    {
+	carp "No properties set for table '$table_name'";	
+    }
+}
+
+
+sub list_column_properties {
+    
+    my ($table_name) = @_;
+    
+    # my $base_name = ($TABLE_NAME_MAP{$table_name} ||= $table_name);
+    
+    if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    {
+	my %props = map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}};
+	
+	if ( $COLUMN_PROPERTIES{$table_name} )
+	{
+	    foreach my $k ( %{$COLUMN_PROPERTIES{$table_name}} )
+	    {
+		$props{$k} = 1 if
+		    defined $COLUMN_PROPERTIES{$table_name}{$k};
+	    }
+	}
+	
+	return %props;
+    }
+    
+    elsif ( $COLUMN_PROPERTIES{$table_name} )
+    {
+	return map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$table_name}};
     }
     
     elsif ( defined $TABLE_PROPERTIES{$table_name} ||
@@ -574,6 +616,19 @@ sub substitute_table {
     return $new_name;
 }
 
+
+sub alternate_table {
+    
+    my ($new_db, $table_name) = @_;
+    
+    croak "you must specify an alternate database name" unless $new_db;
+    
+    my $orig_name = original_table($table_name);
+    my $new_name = "$new_db.$orig_name";
+    
+    $TABLE_NAME_MAP{$new_name} = $orig_name;
+    return $new_name;
+}
 
 
 1;

@@ -11,7 +11,7 @@ use strict;
 use Dancer qw(:syntax);
 use PBLogger;
 use TableDefs qw(init_table_names select_test_tables is_test_mode);
-
+use ResourceDefs;
 
 my $logger = PBLogger->new;
 
@@ -39,7 +39,7 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     {
 	if ( $tablename eq 'eduresources' )
 	{
-	    ($result) = ResourceTables->enable_test_mode($tablename, $ds);
+	    ($result) = ResourceDefs->enable_test_mode($tablename, $ds);
 	}
 	
 	else
@@ -57,7 +57,7 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     {
 	if ( $tablename =~ /eduresources/i )
 	{
-	    ($result) = ResourceTables->disable_test_mode($tablename, $ds);
+	    ($result) = ResourceDefs->disable_test_mode($tablename, $ds);
 	}
 
 	else

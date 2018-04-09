@@ -13,7 +13,8 @@ use lib '..';
 
 package PB2::ResourceEntry;
 
-use ResourceDefs qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
+use TableDefs qw(%TABLE);
+use ResourceDefs; # qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
 use ResourceEdit;
 
 use ExternalIdent qw(generate_identifier VALID_IDENTIFIER);
@@ -97,7 +98,7 @@ sub initialize {
 	">>You may include one or more records in the body of the request, in JSON form.",
 	"The body must be either a single JSON object, or an array of objects. The fields",
 	"in each object must be as specified below. If no specific documentation is given",
-	"the value must match the corresponding column in the C<B<$RESOURCE_QUEUE>> table",
+	"the value must match the corresponding column in the C<B<$TABLE{RESOURCE_QUEUE}>> table",
 	"in the database.",
 	{ allow => '1.2:eduresources:entry' },
 	{ optional => 'image_data', valid => ANY_VALUE },
@@ -141,8 +142,8 @@ sub initialize {
     
     ResourceEdit->configure($dbh, Dancer::config);
     
-    complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', $RESOURCE_QUEUE);
-    complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', $RESOURCE_QUEUE);
+    complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', $TABLE{RESOURCE_QUEUE});
+    complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', $TABLE{RESOURCE_QUEUE});
 }
 
 
@@ -163,7 +164,7 @@ sub update_resources {
     $allowances->{CREATE} = 1 if $arg && $arg eq 'add';
     
     my $main_params = $request->get_main_params($allowances);
-    my $perms = $request->require_authentication($RESOURCE_QUEUE);
+    my $perms = $request->require_authentication($TABLE{RESOURCE_QUEUE});
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
@@ -179,14 +180,14 @@ sub update_resources {
     # handle this operation. ResourceEdit is a subclass of EditTransaction, specialized for this
     # table.
     
-    my $edt = ResourceEdit->new($request, $perms, $RESOURCE_QUEUE, $allowances);
+    my $edt = ResourceEdit->new($request, $perms, $TABLE{RESOURCE_QUEUE}, $allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
     
     foreach my $r (@records)
     {
-	$edt->insert_update_record($RESOURCE_QUEUE, $r);
+	$edt->insert_update_record($TABLE{RESOURCE_QUEUE}, $r);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -238,8 +239,8 @@ sub list_updated_resources {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $calc edr.*, if(edr.status = 'active', act.image, null) as active_image FROM $RESOURCE_QUEUE as edr
-		left join $RESOURCE_ACTIVE as act on edr.eduresource_no = act.$ResourceEdit::RESOURCE_IDFIELD
+	SELECT $calc edr.*, if(edr.status = 'active', act.image, null) as active_image FROM $TABLE{RESOURCE_QUEUE} as edr
+		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$ResourceEdit::RESOURCE_IDFIELD
 	WHERE edr.eduresource_no in ($id_list)
 	GROUP BY edr.eduresource_no";
     
@@ -292,15 +293,15 @@ sub delete_resources {
     
     # Determine our authentication info, and then create an EditTransaction object.
     
-    my $perms = $request->require_authentication($RESOURCE_QUEUE);
+    my $perms = $request->require_authentication($TABLE{RESOURCE_QUEUE});
     
-    my $edt = ResourceEdit->new($request, $perms, $RESOURCE_QUEUE, $allowances);
+    my $edt = ResourceEdit->new($request, $perms, $TABLE{RESOURCE_QUEUE}, $allowances);
 
     # Then go through the records and handle each one in turn.
     
     foreach my $id (@id_list)
     {
-	$edt->delete_record($RESOURCE_QUEUE, $id);
+	$edt->delete_record($TABLE{RESOURCE_QUEUE}, $id);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
