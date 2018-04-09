@@ -541,8 +541,8 @@ sub initialize {
 	{ set => '*', code => \&process_element_record },
 	{ output => 'specelt_no', com_name => 'oid' },
 	    "The unique identifier of this specimen element in the database",
-	{ output => 'record_type', com_name => 'typ', value => $IDP{ELT} },
-	    "The type of this object: C<$IDP{ELT}> for a specimen element.",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{ELS} },
+	    "The type of this object: C<$IDP{ELS}> for a specimen element.",
 	{ output => 'element_name', com_name => 'nam' },
 	    "The name of this specimen element",
 	{ output => 'parent_name', com_name => 'par' },
@@ -1412,7 +1412,7 @@ sub list_elements {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $SPEC_ELEMENTS as elt left join taxon_trees as t using (orig_no)
+	FROM $SPECELT_DATA as elt left join taxon_trees as t using (orig_no)
 	WHERE $filter_string $limit";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
@@ -1747,7 +1747,7 @@ sub process_element_record {
     
     if ( $request->{block_hash}{extids} )
     {
-	$record->{specelt_no} = generate_identifier('ELT', $record->{specelt_no})
+	$record->{specelt_no} = generate_identifier('ELS', $record->{specelt_no})
 	    if defined $record->{specelt_no} && $record->{specelt_no} ne '';
     }
 }
