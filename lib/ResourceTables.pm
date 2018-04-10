@@ -14,6 +14,8 @@ use strict;
 use Carp qw(croak);
 
 use CoreFunction qw(new_tables_safe);
+use ResourceDefs;
+use TableDefs qw(%TABLE);
 
 # use ResourceDefs qw($RESOURCE_QUEUE $RESOURCE_IMAGES
 # 		    $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE);
@@ -116,11 +118,11 @@ sub establish_tables {
     # and the data will still be in the backup tables. When you have copied over the active data,
     # or verified that you really want to delete it, you can manually drop the backup tables.
     
-    my $result = new_tables_safe($dbh, $RESQUEUE_NEW => $RESOURCE_QUEUE,
-				       $RESIMAGE_NEW => $RESOURCE_IMAGES,
-				       $RESACTIVE_NEW => $RESOURCE_ACTIVE,
-				       $RESTAGNAMES_NEW => $RESOURCE_TAG_NAMES,
-				       $RESTAGS_NEW => $RESOURCE_TAGS);
+    my $result = new_tables_safe($dbh, $RESQUEUE_NEW => $TABLE{RESOURCE_QUEUE},
+				       $RESIMAGE_NEW => $TABLE{RESOURCE_IMAGES},
+				       $RESACTIVE_NEW => $TABLE{RESOURCE_ACTIVE},
+				       $RESTAGNAMES_NEW => $TABLE{RESOURCE_TAG_NAMES},
+				       $RESTAGS_NEW => $TABLE{RESOURCE_TAGS});
     
     return $result;
 }
