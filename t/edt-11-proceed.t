@@ -15,9 +15,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 4;
 
-use TableDefs qw(get_table_property);
+use TableDefs qw(%TABLE get_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -38,7 +38,7 @@ subtest 'setup' => sub {
 
     ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
 
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 
     $T->clear_specific_permissions;
@@ -54,24 +54,24 @@ subtest 'proceed_mode' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction and add some records.
     
     $edt = $T->new_edt($perm_a, { PROCEED => 1, SILENT_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'proceed test a1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'proceed test a2' });
-    $edt->insert_record($EDT_TEST, { string_req => 'proceed test delete' });
+    $edt->insert_record('EDT_TEST', { string_req => 'proceed test a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'proceed test a2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'proceed test delete' });
     
     # Add another one with an explicit error, and one with a warning.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'validate error' });
-    $edt->insert_record($EDT_TEST, { string_req => 'validate warning' });
+    $edt->insert_record('EDT_TEST', { string_req => 'validate error' });
+    $edt->insert_record('EDT_TEST', { string_req => 'validate warning' });
 
     # Add one that will generate an error when executed.
 
-    $edt->insert_record($EDT_TEST, { string_req => 'before exception' });
+    $edt->insert_record('EDT_TEST', { string_req => 'before exception' });
     
     # Now check that we have the proper errors and warnings.
     
@@ -93,9 +93,9 @@ subtest 'proceed_mode' => sub {
     
     ok( $result, "transaction succeeded" ) || $T->diag_errors;
     ok( $edt->has_finished, "transaction has finished" );
-    $T->ok_found_record($EDT_TEST, "string_req='proceed test a1'");
-    $T->ok_found_record($EDT_TEST, "string_req='validate warning'");
-    $T->ok_no_record($EDT_TEST, "string_req='validate error'");
+    $T->ok_found_record('EDT_TEST', "string_req='proceed test a1'");
+    $T->ok_found_record('EDT_TEST', "string_req='validate warning'");
+    $T->ok_no_record('EDT_TEST', "string_req='validate error'");
 
     # Now we create a second transaction and do replace, update, and delete operations to make
     # sure that errors are properly changed into warnings for these operations as well. We also
@@ -103,8 +103,8 @@ subtest 'proceed_mode' => sub {
     
     $edt = $T->new_edt($perm_a, { PROCEED => 1, IMMEDIATE_MODE => 1, SILENT_MODE => 1 });
     
-    my ($k1, $k2) = $T->fetch_keys_by_expr($EDT_TEST, "string_req like 'proceed test %'");
-    my ($k3) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='proceed test delete'");
+    my ($k1, $k2) = $T->fetch_keys_by_expr('EDT_TEST', "string_req like 'proceed test %'");
+    my ($k3) = $T->fetch_keys_by_expr('EDT_TEST', "string_req='proceed test delete'");
     
     ok( $k1, "found first inserted record" );
     ok( $k2, "found second inserted record" );
@@ -112,18 +112,18 @@ subtest 'proceed_mode' => sub {
 
     if ( $k1 && $k2 && $k3 )
     {
-	$edt->update_record($EDT_TEST, { $primary => $k1, signed_val => 8 });
-	$edt->update_record($EDT_TEST, { $primary => 99999, signed_val => 9 });
-	$edt->replace_record($EDT_TEST, { $primary => $k2, string_req => 'proceed upated',
+	$edt->update_record('EDT_TEST', { $primary => $k1, signed_val => 8 });
+	$edt->update_record('EDT_TEST', { $primary => 99999, signed_val => 9 });
+	$edt->replace_record('EDT_TEST', { $primary => $k2, string_req => 'proceed upated',
 					  signed_val => 10 });
-	$edt->replace_record($EDT_TEST, { $primary => 99998, string_req => 'not updated',
+	$edt->replace_record('EDT_TEST', { $primary => 99998, string_req => 'not updated',
 					  signed_val => 11 });
-	$edt->delete_record($EDT_TEST, $k3);
-	$edt->delete_record($EDT_TEST, 99997);
+	$edt->delete_record('EDT_TEST', $k3);
+	$edt->delete_record('EDT_TEST', 99997);
 	
 	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
 	
-	$edt->insert_record($EDT_TEST, { string_req => 'not inserted' });
+	$edt->insert_record('EDT_TEST', { string_req => 'not inserted' });
     }
     
     ok( $edt->can_proceed, "transaction can proceed" );
@@ -137,12 +137,12 @@ subtest 'proceed_mode' => sub {
     $T->ok_has_warning('any', 'F_EXECUTE', "got 'F_EXECUTE'");
     $T->ok_has_warning('any', 'F_PERM', "got 'F_PERM'");
     
-    $T->ok_found_record($EDT_TEST, "signed_val=8");
-    $T->ok_no_record($EDT_TEST, "signed_val=9");
-    $T->ok_found_record($EDT_TEST, "signed_val=10");
-    $T->ok_no_record($EDT_TEST, "signed_val=11");
+    $T->ok_found_record('EDT_TEST', "signed_val=8");
+    $T->ok_no_record('EDT_TEST', "signed_val=9");
+    $T->ok_found_record('EDT_TEST', "signed_val=10");
+    $T->ok_no_record('EDT_TEST', "signed_val=11");
 
-    $T->ok_no_record($EDT_TEST, "string_req='proceed test delete'");
+    $T->ok_no_record('EDT_TEST', "string_req='proceed test delete'");
 };
 
 
@@ -156,15 +156,15 @@ subtest 'not_found' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction and add some records.
 
     $edt = $T->new_edt($perm_a);
     
-    $edt->insert_record($EDT_TEST, { string_req => 'notfound test a1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'notfound test a2' });
-    $edt->insert_record($EDT_TEST, { string_req => 'notfound test delete' });
+    $edt->insert_record('EDT_TEST', { string_req => 'notfound test a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'notfound test a2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'notfound test delete' });
     
     ok( $edt->execute, "initial transaction succeeded" ) || $T->diag_errors;
     
@@ -172,8 +172,8 @@ subtest 'not_found' => sub {
     
     $edt = $T->new_edt($perm_a, { NOT_FOUND => 1 });
 
-    my ($k1, $k2) = $T->fetch_keys_by_expr($EDT_TEST, "string_req like 'notfound test %'");
-    my ($k3) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='notfound test delete'");
+    my ($k1, $k2) = $T->fetch_keys_by_expr('EDT_TEST', "string_req like 'notfound test %'");
+    my ($k3) = $T->fetch_keys_by_expr('EDT_TEST', "string_req='notfound test delete'");
     
     ok( $k1, "found first inserted record" );
     ok( $k2, "found second inserted record" );
@@ -181,14 +181,14 @@ subtest 'not_found' => sub {
 
     return unless $k1 && $k2 && $k3;
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, signed_val => 21 });
-    $edt->update_record($EDT_TEST, { $primary => 99999, signed_val => 22 });
-    $edt->replace_record($EDT_TEST, { $primary => 99999, string_req => 'cannot update',
+    $edt->update_record('EDT_TEST', { $primary => $k1, signed_val => 21 });
+    $edt->update_record('EDT_TEST', { $primary => 99999, signed_val => 22 });
+    $edt->replace_record('EDT_TEST', { $primary => 99999, string_req => 'cannot update',
 				      signed_val => 23 });
-    $edt->replace_record($EDT_TEST, { $primary => $k2, string_req => 'notfound updated',
+    $edt->replace_record('EDT_TEST', { $primary => $k2, string_req => 'notfound updated',
 				      signed_val => 24 });
-    $edt->delete_record($EDT_TEST, { $primary => $k3 });
-    $edt->delete_record($EDT_TEST, { $primary => 99999 });
+    $edt->delete_record('EDT_TEST', { $primary => $k3 });
+    $edt->delete_record('EDT_TEST', { $primary => 99999 });
     
     ok( $edt->can_proceed, "transaction can proceed" );
     
@@ -198,20 +198,20 @@ subtest 'not_found' => sub {
     is( $edt->warnings, 3, "got 3 warnings" ) || $T->diag_warnings;
     $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");
     
-    $T->ok_found_record($EDT_TEST, "signed_val=21");
-    $T->ok_no_record($EDT_TEST, "signed_val=22");
-    $T->ok_no_record($EDT_TEST, "signed_val=23");
-    $T->ok_found_record($EDT_TEST, "signed_val=24");
+    $T->ok_found_record('EDT_TEST', "signed_val=21");
+    $T->ok_no_record('EDT_TEST', "signed_val=22");
+    $T->ok_no_record('EDT_TEST', "signed_val=23");
+    $T->ok_found_record('EDT_TEST', "signed_val=24");
     
-    $T->ok_no_record($EDT_TEST, "string_req='notfound test delete'");
+    $T->ok_no_record('EDT_TEST', "string_req='notfound test delete'");
     
     # Now check that other errors do abort the transaction.
 
     $edt = $T->new_edt($perm_a, { NOT_FOUND => 1 });
     
-    $edt->update_record($EDT_TEST, { $primary => 99998, string_req => 'cannot update' });
+    $edt->update_record('EDT_TEST', { $primary => 99998, string_req => 'cannot update' });
     ok( $edt->can_proceed, "not found error is okay" );
-    $edt->update_record($EDT_TEST, { $primary => $k1, signed_val => 'abc' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, signed_val => 'abc' });
     $T->ok_has_error( 'E_FORMAT' );
     ok( ! $edt->can_proceed, "parameter error is not okay" );
 
@@ -219,9 +219,9 @@ subtest 'not_found' => sub {
 
     $edt = $T->new_edt($perm_a, { NOT_FOUND => 1, IMMEDIATE_MODE => 1, SILENT_MODE => 1 });
 
-    $edt->update_record($EDT_TEST, { $primary => 99997, string_req => 'cannot update' });
+    $edt->update_record('EDT_TEST', { $primary => 99997, string_req => 'cannot update' });
     ok( $edt->can_proceed, "not found error is okay" );
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'after exception' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'after exception' });
     ok( ! $edt->can_proceed, "execute error is not okay" );
 
     $result = $edt->commit;
@@ -240,7 +240,7 @@ subtest 'no_records' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction and execute it without any actions.
 

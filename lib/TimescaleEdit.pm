@@ -11,11 +11,8 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($TIMESCALE_DATA $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
-	         $INTERVAL_DATA $INTERVAL_MAP $SCALE_MAP $MACROSTRAT_SCALES $MACROSTRAT_INTERVALS
-	         $MACROSTRAT_SCALES_INTS);
-
-use TimescaleTables qw(%TIMESCALE_ATTRS %TIMESCALE_BOUND_ATTRS %TIMESCALE_REFDEF);
+use TableDefs qw(%TABLE);
+use TimescaleDefs;
 
 use base 'EditTransaction';
 

@@ -15,11 +15,11 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
-use TableDefs qw($TABLE_PERMS get_table_property set_table_property set_column_property);
+use TableDefs qw(%TABLE get_table_property set_table_property set_column_property);
 
 use TableData qw(reset_cached_column_properties);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 use Carp qw(croak);
@@ -53,7 +53,7 @@ subtest 'permissions' => sub {
     
     $T->clear_specific_permissions;
     
-    my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE_PERMS");
+    my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{TABLE_PERMS}");
     
     is( $count, 0, "specific permissions table was cleared" );
 
@@ -61,16 +61,16 @@ subtest 'permissions' => sub {
     
     ok( ref $perm_a && $perm_a->isa('Permissions'), "created permission object" );
     
-    $T->set_specific_permission($EDT_TEST, $perm_a, 'admin');
+    $T->set_specific_permission('EDT_TEST', $perm_a, 'admin');
     
-    ($count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE_PERMS");
+    ($count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{TABLE_PERMS}");
     
     is( $count, 1, "inserted one permission row" );
     
-    my $check_table = $EDT_TEST; $check_table =~ s/^.*[.]//;
+    my $check_table = 'EDT_TEST'; $check_table =~ s/^.*[.]//;
     
     my ($person_no, $table_name, $permission) = $dbh->selectrow_array(
-		"SELECT person_no, table_name, permission FROM $TABLE_PERMS LIMIT 1");
+		"SELECT person_no, table_name, permission FROM $TABLE{TABLE_PERMS} LIMIT 1");
     
     is( $person_no, $perm_a->enterer_no, "permission person number matches" );
     is( $table_name, $check_table, "permission table name matches" );
@@ -117,7 +117,7 @@ subtest 'errors' => sub {
     # Insert a record and add a single error condition. Check that the methods for testing error
     # conditions work properly.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'abc' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc' });
     
     $edt->add_condition('E_EXECUTE', "test condition");
     
@@ -146,7 +146,7 @@ subtest 'errors' => sub {
     # methods still work properly. In particular, the most recent action should show no errors,
     # but using 'any' should still indicate that errors are present.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'def' });
+    $edt->insert_record('EDT_TEST', { string_req => 'def' });
     
     $T->ok_no_errors("ok_no_errors passes test");
     $T->ok_no_conditions("ok_no_conditions passes test");
@@ -172,7 +172,7 @@ subtest 'errors' => sub {
     
     # Now add a third record, with two errors. This time, "has one error" should fail.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'ghi' });
+    $edt->insert_record('EDT_TEST', { string_req => 'ghi' });
     
     $edt->add_condition('E_PERM', 'foobar');
     $edt->add_condition('C_CREATE');
@@ -232,7 +232,7 @@ subtest 'errors' => sub {
 	$T->ok_no_conditions($edt2, 'main', "ok_no_conditions properly fails with edt2 and 'main'");
     }
     
-    $edt2->insert_record($EDT_TEST, { string_req => 'ghi' });
+    $edt2->insert_record('EDT_TEST', { string_req => 'ghi' });
 
     $edt2->add_condition('E_REQUIRED', 'foobar');
     
@@ -319,7 +319,7 @@ subtest 'warnings' => sub {
     # Insert a record and add a single warning condition. Check that the methods for testing warning
     # conditions work properly.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'abc' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc' });
     
     $edt->add_condition('W_TEST', "test condition");
     
@@ -353,7 +353,7 @@ subtest 'warnings' => sub {
     # methods still work properly. In particular, the most recent action should show no warnings,
     # but using 'any' should still indicate that warnings are present.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'def' });
+    $edt->insert_record('EDT_TEST', { string_req => 'def' });
     
     $T->ok_no_warnings("ok_no_warnings passes test");
     $T->ok_no_conditions("ok_no_conditions passes test");
@@ -449,7 +449,7 @@ subtest 'warnings' => sub {
 	$T->ok_no_conditions($edt2, 'main', "ok_no_conditions properly fails with edt2 and 'main'");
     }
     
-    $edt2->insert_record($EDT_TEST, { string_req => 'ghi' });
+    $edt2->insert_record('EDT_TEST', { string_req => 'ghi' });
     
     $edt2->add_condition('W_TRUNC', 'foobar', 'baz');
     
@@ -547,26 +547,26 @@ subtest 'records' => sub {
     # First clear the table, and insert some records. We make sure that more than one record will
     # be matched by the test expression.
     
-    $dbh->do("DELETE FROM $EDT_TEST");
-    $dbh->do("ALTER TABLE $EDT_TEST AUTO_INCREMENT = 1");
+    $dbh->do("DELETE FROM $TABLE{EDT_TEST}");
+    $dbh->do("ALTER TABLE $TABLE{EDT_TEST} AUTO_INCREMENT = 1");
     
-    $dbh->do("INSERT INTO $EDT_TEST (string_req, authorizer_no, enterer_no)
+    $dbh->do("INSERT INTO $TABLE{EDT_TEST} (string_req, authorizer_no, enterer_no)
 		values ('abc',0,0), ('abc',0,0), ('def',0,0)");
     
-    $T->ok_found_record($EDT_TEST, "string_req = 'def'", "found unique record");
-    $T->ok_found_record($EDT_TEST, "string_req = 'abc'", "found non-unique record");
-    $T->ok_no_record($EDT_TEST, "string_req = 'xyz'", "did not find non-existent record");
-    $T->ok_count_records(2, $EDT_TEST, "string_req = 'abc'", "found 2 matching records");
+    $T->ok_found_record('EDT_TEST', "string_req = 'def'", "found unique record");
+    $T->ok_found_record('EDT_TEST', "string_req = 'abc'", "found non-unique record");
+    $T->ok_no_record('EDT_TEST', "string_req = 'xyz'", "did not find non-existent record");
+    $T->ok_count_records(2, 'EDT_TEST', "string_req = 'abc'", "found 2 matching records");
     
     {
 	local($EditTester::TEST_MODE) = 1;
-	$T->ok_found_record($EDT_TEST, "string_req = 'xyz'", "ok_found_record properly failed");
-	$T->ok_no_record($EDT_TEST, "string_req = 'abc'", "ok_no_record properly failed");
-	$T->ok_count_records(1, $EDT_TEST, "string_req = 'abc'", "ok_count_records properly failed with 'abc'");
-	$T->ok_count_records(1, $EDT_TEST, "string_req = 'jkl'", "ok_count_records properly failed with 'jkl'");
+	$T->ok_found_record('EDT_TEST', "string_req = 'xyz'", "ok_found_record properly failed");
+	$T->ok_no_record('EDT_TEST', "string_req = 'abc'", "ok_no_record properly failed");
+	$T->ok_count_records(1, 'EDT_TEST', "string_req = 'abc'", "ok_count_records properly failed with 'abc'");
+	$T->ok_count_records(1, 'EDT_TEST', "string_req = 'jkl'", "ok_count_records properly failed with 'jkl'");
     }
     
-    my (@r) = $T->fetch_records_by_expr($EDT_TEST, "string_req = 'abc'");
+    my (@r) = $T->fetch_records_by_expr('EDT_TEST', "string_req = 'abc'");
     
     if ( is( scalar(@r), 2, "fetch_records_by_expr retrieved two records" ) )
     {
@@ -575,48 +575,48 @@ subtest 'records' => sub {
 	cmp_ok( $r[0]{test_no}, '>', 0, "record 0 had proper value for test_no" );
 	cmp_ok( $r[1]{test_no}, '>', 0, "record 1 had proper value for test_no" );
 	
-	my (@s) = $T->fetch_records_by_key($EDT_TEST, $r[0]{test_no}, $r[1]{test_no});
+	my (@s) = $T->fetch_records_by_key('EDT_TEST', $r[0]{test_no}, $r[1]{test_no});
 	
 	is( scalar(@s), 2, "fetch_records_by_key retrieved two records" );
 
 	is( $s[0]{string_req}, 'abc', "record 0 had proper value for string_req" );
 	is( $s[1]{string_req}, 'abc', "record 1 had proper value for string_req" );
 
-	$T->ok_found_record($EDT_TEST, "test_no = $r[0]{test_no} and string_req = 'abc'");
+	$T->ok_found_record('EDT_TEST', "test_no = $r[0]{test_no} and string_req = 'abc'");
     }
 
     {
 	local($EditTester::TEST_MODE) = 1;
-	$T->fetch_records_by_expr($EDT_TEST, "string_req = 'xyzzy'");
-	$T->fetch_records_by_key($EDT_TEST, 99998, 99997, 99996);
-	$T->fetch_row_by_expr($EDT_TEST, 'string_req, string_val', "test_no = 99999");
+	$T->fetch_records_by_expr('EDT_TEST', "string_req = 'xyzzy'");
+	$T->fetch_records_by_key('EDT_TEST', 99998, 99997, 99996);
+	$T->fetch_row_by_expr('EDT_TEST', 'string_req, string_val', "test_no = 99999");
     }
     
-    my ($max, $min) = $T->fetch_row_by_expr($EDT_TEST, 'max(test_no), min(test_no)');
+    my ($max, $min) = $T->fetch_row_by_expr('EDT_TEST', 'max(test_no), min(test_no)');
     
     cmp_ok($max, '>', 0, "fetch_row_by_expr found max greater than zero");
     cmp_ok($min, '>', 0, "fetch_row_by_expr found min graeter than zero");
 
-    my ($key) = $T->fetch_row_by_expr($EDT_TEST, 'test_no', "string_req='abc'");
+    my ($key) = $T->fetch_row_by_expr('EDT_TEST', 'test_no', "string_req='abc'");
 
     cmp_ok($key, '>', 0, "fetch_row_by_expr found record with key");
 
-    my ($count) = $T->fetch_row_by_expr($EDT_TEST, 'count(*)');
+    my ($count) = $T->fetch_row_by_expr('EDT_TEST', 'count(*)');
 
-    cmp_ok($count, '>', 0, "table $EDT_TEST has at least one row");
+    cmp_ok($count, '>', 0, "table 'EDT_TEST' has at least one row");
 
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
 
-    ($count) = $T->fetch_row_by_expr($EDT_TEST, 'count(*)');
+    ($count) = $T->fetch_row_by_expr('EDT_TEST', 'count(*)');
 
-    cmp_ok($count, '==', 0, "table $EDT_TEST has no records after clearing");
+    cmp_ok($count, '==', 0, "table 'EDT_TEST' has no records after clearing");
 
-    $dbh->do("INSERT INTO $EDT_TEST (string_req, authorizer_no, enterer_no)
+    $dbh->do("INSERT INTO $TABLE{EDT_TEST} (string_req, authorizer_no, enterer_no)
 		values ('foo',0,0)");
-
-    ($max) = $T->fetch_row_by_expr($EDT_TEST, 'max(test_no)');
-
-    cmp_ok($max, '==', 1, "table $EDT_TEST has auto increment = 1 after clearing");
+    
+    ($max) = $T->fetch_row_by_expr('EDT_TEST', 'max(test_no)');
+    
+    cmp_ok($max, '==', 1, "table 'EDT_TEST' has auto increment = 1 after clearing");
 };
 
 
@@ -627,22 +627,22 @@ subtest 'records' => sub {
 
 subtest 'test_permissions' => sub {
 
-    # Make sure that CAN_POST is set properly for $EDT_TEST, and then call test_permissions. Set
+    # Make sure that CAN_POST is set properly for 'EDT_TEST', and then call test_permissions. Set
     # it to NOBODY and then check that test_permissions fails.
     
-    set_table_property($EDT_TEST, CAN_POST => 'AUTHORIZED');
+    set_table_property('EDT_TEST', CAN_POST => 'AUTHORIZED');
     $perm_a->clear_cached_permissions;
     
-    $T->test_permissions($EDT_TEST, $perm_a, 'basic', 'succeeds', "authorizer succeeded");
+    $T->test_permissions('EDT_TEST', $perm_a, 'basic', 'succeeds', "authorizer succeeded");
     
-    set_table_property($EDT_TEST, CAN_POST => 'NOBODY');
+    set_table_property('EDT_TEST', CAN_POST => 'NOBODY');
     $perm_a->clear_cached_permissions;
     
-    $T->test_permissions($EDT_TEST, $perm_a, 'basic', 'fails', "fails with permission denial");
+    $T->test_permissions('EDT_TEST', $perm_a, 'basic', 'fails', "fails with permission denial");
     
     # Now set the table property back again.
 
-    set_table_property($EDT_TEST, CAN_POST => 'AUTHORIZED');
+    set_table_property('EDT_TEST', CAN_POST => 'AUTHORIZED');
     $perm_a->clear_cached_permissions;
 };
 
@@ -654,7 +654,7 @@ subtest 'keys' => sub {
 
     # First clear the table so that we can track record insertions.
 
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
 
     # Then create a new transaction and insert some records. Check that we can retrieve the
     # inserted keys, and that calling the edt directly and through EditTester produces the same
@@ -662,9 +662,9 @@ subtest 'keys' => sub {
     
     my $edt1 = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt1->insert_record($EDT_TEST, { string_req => 'abc' });
-    $edt1->insert_record($EDT_TEST, { string_req => 'def' });
-    $edt1->insert_record($EDT_TEST, { string_req => 'ghi' });
+    $edt1->insert_record('EDT_TEST', { string_req => 'abc' });
+    $edt1->insert_record('EDT_TEST', { string_req => 'def' });
+    $edt1->insert_record('EDT_TEST', { string_req => 'ghi' });
     
     $edt1->commit;
     
@@ -678,7 +678,7 @@ subtest 'keys' => sub {
     
     my $edt2 = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt2->replace_record($EDT_TEST, { test_no => $k1[0], string_req => 'ghi' });
+    $edt2->replace_record('EDT_TEST', { test_no => $k1[0], string_req => 'ghi' });
     
     my (@k3) = $edt2->replaced_keys;
     my (@k4) = $T->replaced_keys;
@@ -696,8 +696,8 @@ subtest 'keys' => sub {
     
     ok( ! $T->replaced_keys($edt1), "call to replaced_keys with edt ref in scalar context returned false" );
     
-    $edt2->update_record($EDT_TEST, { test_no => $k1[1], string_req => 'update1' });
-    $edt2->update_record($EDT_TEST, { test_no => $k1[0], string_req => 'update2' });
+    $edt2->update_record('EDT_TEST', { test_no => $k1[1], string_req => 'update1' });
+    $edt2->update_record('EDT_TEST', { test_no => $k1[0], string_req => 'update2' });
     
     my (@k7) = $edt2->updated_keys;
     my (@k8) = $T->updated_keys;
@@ -705,7 +705,7 @@ subtest 'keys' => sub {
     is_deeply( \@k7, \@k8, "two calls to updated_keys returned same list" );
     ok( @k8, "updated_keys returned at least one value" );
 
-    $edt2->delete_record($EDT_TEST, $k1[0]);
+    $edt2->delete_record('EDT_TEST', $k1[0]);
 
     my (@k9) = $edt2->deleted_keys;
     my (@k10) = $T->deleted_keys;

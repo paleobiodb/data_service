@@ -16,7 +16,7 @@ use Test::More tests => 7;
 
 use TableDefs qw(get_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -37,7 +37,7 @@ subtest 'setup' => sub {
     
     ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
     
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 };
 
@@ -117,7 +117,7 @@ subtest 'basic' => sub {
     # Now add a condition after an action, ane make sure that it is properly attached to that
     # action.
     
-    $edt->insert_record($EDT_TEST, { record_label => 'abc1', string_req => 'def' });
+    $edt->insert_record('EDT_TEST', { record_label => 'abc1', string_req => 'def' });
     $edt->add_condition('E_EXECUTE', 'ghi');
     
     is( $edt->errors, 2, "now there are two errors" );
@@ -135,7 +135,7 @@ subtest 'basic' => sub {
     
     is( $s[0]->code, 'E_EXECUTE', "condition has proper code" );
     is( $s[0]->label, 'abc1', "condition has proper label" );
-    is( $s[0]->table, $EDT_TEST, "condition has proper table" );
+    is( $s[0]->table, 'EDT_TEST', "condition has proper table" );
     
     my @d = $s[0]->data;
     
@@ -165,7 +165,7 @@ subtest 'basic' => sub {
     
     # Now add another action, another error, and a warning, and check that the counts add up.
 
-    $edt->insert_record($EDT_TEST, { record_label => 'abc2', string_req => 'jkl' });
+    $edt->insert_record('EDT_TEST', { record_label => 'abc2', string_req => 'jkl' });
     $edt->add_condition('E_TEST');
     $edt->add_condition('W_TEST');
     
@@ -318,12 +318,12 @@ subtest 'proceed' => sub {
     
     # Now add a record with two errors, and test that they are demoted to warnings.
     
-    $edt->insert_record($EDT_TEST, { signed_val => 'abc' });
+    $edt->insert_record('EDT_TEST', { signed_val => 'abc' });
     
-    is( $edt->errors, 1, "still one error" );
-    is( $edt->warnings, 2, "two errors demoted to warnings" );
-    is( $edt->specific_errors, 2, "errors still count when checked for this action" );
-    ok( ! $edt->specific_warnings, "no specific warnings for this action" );
+    is( $edt->errors, 1, "still one error" ) || $T->diag_errors('any');
+    is( $edt->warnings, 2, "two errors demoted to warnings" ) || $T->diag_warnings('any');
+    is( $edt->specific_errors, 2, "errors still count when checked for this action" ) || $T->diag_errors;
+    ok( ! $edt->specific_warnings, "no specific warnings for this action" ) || $T->diag_warnings;
     
     my ($e) = $edt->specific_errors;
 
@@ -332,7 +332,7 @@ subtest 'proceed' => sub {
     
     # Now add a record with a warning, and test that the counts add up.
 
-    $edt->insert_record($EDT_TEST, { string_req => 'validate warning' });
+    $edt->insert_record('EDT_TEST', { string_req => 'validate warning' });
     
     is( $edt->warnings, 3, "now there are three warnings" );
     is( $edt->specific_errors, 0, "no specific errors" );
@@ -342,7 +342,7 @@ subtest 'proceed' => sub {
     
     $edt = $T->new_edt($perm_a, { CREATE => 0, PROCEED => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'will trigger caution' });
+    $edt->insert_record('EDT_TEST', { string_req => 'will trigger caution' });
     
     is( $edt->warnings, 1, "caution was demoted to warning" );
 
@@ -365,7 +365,7 @@ subtest 'notfound' => sub {
     
     # Add an action that will generate E_NOT_FOUND.
 
-    $edt->update_record($EDT_TEST, { record_label => 'f1', $primary => 99999, signed_val => 32 });
+    $edt->update_record('EDT_TEST', { record_label => 'f1', $primary => 99999, signed_val => 32 });
 
     is( $edt->specific_errors, 1, "one specific error" );
     is( $edt->errors, 0, "no general errors" );
@@ -383,7 +383,7 @@ subtest 'notfound' => sub {
 	is( $d, 99999, "error had proper parameter" );
     }
     
-    $edt->insert_record($EDT_TEST, { record_label => 'f2', signed_val => 'abc' });
+    $edt->insert_record('EDT_TEST', { record_label => 'f2', signed_val => 'abc' });
     
     is( $edt->specific_errors, 2, "two specific errors" );
     is( $edt->errors, 2, "two general errors" );

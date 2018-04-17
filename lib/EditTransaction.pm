@@ -9,7 +9,7 @@ package EditTransaction;
 use strict;
 
 use ExternalIdent qw(%IDP %IDRE);
-use TableDefs qw(get_table_property $PERSON_DATA
+use TableDefs qw(get_table_property $PERSON_DATA %TABLE
 		 %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 use TableData qw(get_table_schema);
 use EditTransaction::Action;
@@ -113,7 +113,7 @@ our ($TRANSACTION_COUNT) = 1;
 
 sub new {
     
-    my ($class, $request_or_dbh, $perms, $table, $allows) = @_;
+    my ($class, $request_or_dbh, $perms, $table_specifier, $allows) = @_;
     
     # Check the arguments.
     
@@ -122,11 +122,17 @@ sub new {
     
     croak "new EditTransaction: perms is required"
 	unless blessed $perms && $perms->isa('Permissions');
+
+    if ( $table_specifier )
+    {
+	croak "new EditTransaction: unknown table '$table_specifier'"
+	    unless $TABLE{$table_specifier}
+    }
     
     # Create a new EditTransaction object, and bless it into the proper class.
     
     my $edt = { perms => $perms,
-		main_table => $table || '',
+		main_table => $table_specifier || '',
 		unique_id => $TRANSACTION_COUNT++,
 		allows => { },
 		action_list => [ ],
@@ -1155,6 +1161,8 @@ sub _new_record {
     
     croak "no record specified" unless ref $record eq 'HASH' ||
 	$operation eq 'delete' && defined $record && $record ne '';
+    
+    croak "unknown table '$table'" unless $TABLE{$table};
     
     # # If there are any errors and warnings pending from the previous record, move them to the main
     # # lists.
@@ -2446,7 +2454,7 @@ sub execute {
 sub _execute_action_list {
 
     my ($edt) = @_;
-
+    
     # The main part of this routine is executed inside a try block, so that we can roll back the
     # transaction if any errors occur.
     
@@ -2573,7 +2581,8 @@ sub _execute_action_list {
     catch {
 	
 	$edt->add_condition('E_EXECUTE', 'an exception was thrown during execution');
-
+	$edt->debug_line($_);
+	
 	# Add to the skip count all remaining actions.
 	
 	$edt->{skip_count} += scalar(@{$edt->{action_list}});
@@ -2661,7 +2670,7 @@ sub get_old_values {
     
     return () unless $keycol && $keyval;
     
-    my $sql = "SELECT $fields FROM $table WHERE $keycol=" . $edt->dbh->quote($keyval);
+    my $sql = "SELECT $fields FROM $TABLE{$table} WHERE $keycol=" . $edt->dbh->quote($keyval);
     
     $edt->debug_line("$sql\n");
     
@@ -2769,7 +2778,7 @@ sub _execute_insert {
     my $column_list = join(',', @$cols);
     my $value_list = join(',', @$vals);
         
-    my $sql = "	INSERT INTO $table ($column_list)
+    my $sql = "	INSERT INTO $TABLE{$table} ($column_list)
 		VALUES ($value_list)";
     
     $edt->debug_line( encode_utf8("$sql\n") );
@@ -2902,7 +2911,7 @@ sub _execute_replace {
     my $column_list = join(',', @$cols);
     my $value_list = join(',', @$vals);
     
-    my $sql = "	REPLACE INTO $table ($column_list)
+    my $sql = "	REPLACE INTO $TABLE{$table} ($column_list)
 		VALUES ($value_list)";
     
     $edt->debug_line( encode_utf8("$sql\n") );
@@ -3044,7 +3053,7 @@ sub _execute_update {
     
     my $key_expr = $edt->get_keyexpr($action);
     
-    my $sql = "	UPDATE $table SET $set_list
+    my $sql = "	UPDATE $TABLE{$table} SET $set_list
 		WHERE $key_expr";
     
     $edt->debug_line( encode_utf8("$sql\n") );
@@ -3182,7 +3191,7 @@ sub _execute_delete {
     
     # Construct the DELETE statement.
     
-    my $sql = "	DELETE FROM $table WHERE $key_expr";
+    my $sql = "	DELETE FROM $TABLE{$table} WHERE $key_expr";
     
     $edt->debug_line( "$sql\n" );
     
@@ -3555,7 +3564,7 @@ sub validate_action {
 
 sub column_special {
     
-    my ($edt, $table_name, $special, @columns) = @_;
+    my ($edt, $table_specifier, $special, @columns) = @_;
     
     my $hash;
     
@@ -3564,7 +3573,7 @@ sub column_special {
     
     if ( ref $edt )
     {
-    	$hash = $edt->{column_special}{$table_name} ||= { };
+    	$hash = $edt->{column_special}{$table_specifier} ||= { };
     }
     
     # Otherwise, store it in a global variable using the name of the class and table name as a
@@ -3572,7 +3581,7 @@ sub column_special {
     
     else
     {
-    	$hash = $SPECIAL_BY_CLASS{$edt}{$table_name} ||= { };
+    	$hash = $SPECIAL_BY_CLASS{$edt}{$table_specifier} ||= { };
     }
     
     # Now set the specific attribute for non-empty column name.
@@ -3904,7 +3913,7 @@ sub validate_against_schema {
 			
 			# Now make sure that the specific person actually exists.
 			
-			unless ( $edt->check_key($PERSON_DATA, $col, $value) )
+			unless ( $edt->check_key('PERSON_DATA', $col, $value) )
 			{
 			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
 			    next;
@@ -4114,10 +4123,10 @@ sub validate_against_schema {
 		    {
 			no strict 'refs';
 			
-			my $f_table = ${$foreign_table};
-			my $f_col = $cr->{FOREIGN_KEY} || $FOREIGN_KEY_COL{$col} || $col;
+			# my $f_table = ${$foreign_table};
+			my $foreign_col = $cr->{FOREIGN_KEY} || $FOREIGN_KEY_COL{$col} || $col;
 			
-			unless ( $edt->check_key($f_table, $f_col, $value) )
+			unless ( $edt->check_key($foreign_table, $foreign_col, $value) )
 			{
 			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
 			    next;
@@ -4824,7 +4833,7 @@ sub validate_geometry_value {
 
 sub check_key {
     
-    my ($edt, $table, $col, $value) = @_;
+    my ($edt, $table_specifier, $col, $value) = @_;
     
     if ( $FOREIGN_KEY_COL{$col} )
     {
@@ -4833,7 +4842,7 @@ sub check_key {
     
     my $quoted = $edt->dbh->quote($value);
     
-    my $sql = "SELECT $col FROM $table WHERE $col=$quoted";
+    my $sql = "SELECT $col FROM $TABLE{$table_specifier} WHERE $col=$quoted";
 
     $edt->debug_line( "$sql\n" );
     

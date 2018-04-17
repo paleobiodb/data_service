@@ -17,7 +17,7 @@ use Test::More tests => 9;
 
 use TableDefs qw(get_table_property set_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -38,7 +38,7 @@ subtest 'setup' => sub {
     # We need to set this property in order to test what happens when a new record is inserted
     # using a 'replace' operation.
     
-    set_table_property($EDT_TEST, ALLOW_INSERT_KEY => 1 );
+    set_table_property('EDT_TEST', ALLOW_INSERT_KEY => 1 );
 
     # Clear any special permissions that may have been set.
     
@@ -62,7 +62,7 @@ subtest 'setup' => sub {
     $person_e = $perm_e->enterer_no;
     $person_s = $perm_s->enterer_no;
     
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 };
 
@@ -76,18 +76,18 @@ subtest 'crmod' => sub {
     
     # Start by clearing the table.
 
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
 
     # Then insert some records and check the created and modified timestamps.
     
     $edt = $T->new_edt($perm_e);
     
-    $edt->insert_record($EDT_TEST, { string_req => 'abc', unsigned_val => 3 });
-    $edt->insert_record($EDT_TEST, { string_req => 'def', unsigned_val => 4 });
-    $edt->insert_record($EDT_TEST, { string_req => 'ghi', unsigned_val => 5 });
-    $edt->insert_record($EDT_TEST, { string_req => 'jkl', unsigned_val => 6 });
-    $edt->insert_record($EDT_TEST, { string_req => 'mno', unsigned_val => 7 });
-    $edt->insert_record($EDT_TEST, { string_req => 'pqr', unsigned_val => 8 });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc', unsigned_val => 3 });
+    $edt->insert_record('EDT_TEST', { string_req => 'def', unsigned_val => 4 });
+    $edt->insert_record('EDT_TEST', { string_req => 'ghi', unsigned_val => 5 });
+    $edt->insert_record('EDT_TEST', { string_req => 'jkl', unsigned_val => 6 });
+    $edt->insert_record('EDT_TEST', { string_req => 'mno', unsigned_val => 7 });
+    $edt->insert_record('EDT_TEST', { string_req => 'pqr', unsigned_val => 8 });
     
     my ($now) = $T->dbh->selectrow_array("SELECT NOW()");
     
@@ -97,7 +97,7 @@ subtest 'crmod' => sub {
     my ($k1, $k2, $k4, $k5) = $edt->inserted_keys;
     my $k3 = 99999;
     
-    my ($r1) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    my ($r1) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $r1->{created}, $now, "created timestamp is current" );
     is( $r1->{modified}, $now, "modified timestamp is current" );
@@ -111,17 +111,17 @@ subtest 'crmod' => sub {
     
     $edt = $T->new_edt($perm_a);
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated' });
-    $edt->replace_record($EDT_TEST, { $primary => $k2, string_req => 'replaced' });
-    $edt->replace_record($EDT_TEST, { $primary => $k3, string_req => 'new' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated' });
+    $edt->replace_record('EDT_TEST', { $primary => $k2, string_req => 'replaced' });
+    $edt->replace_record('EDT_TEST', { $primary => $k3, string_req => 'new' });
     
     ($now) = $T->dbh->selectrow_array("SELECT NOW()");
     
     $T->ok_result( $edt->commit, 'any', "update records committed" ) || return;
     
-    my ($u1) = $T->fetch_records_by_key($EDT_TEST, $k1);
-    my ($u2) = $T->fetch_records_by_key($EDT_TEST, $k2);
-    my ($u3) = $T->fetch_records_by_key($EDT_TEST, $k3);
+    my ($u1) = $T->fetch_records_by_key('EDT_TEST', $k1);
+    my ($u2) = $T->fetch_records_by_key('EDT_TEST', $k2);
+    my ($u3) = $T->fetch_records_by_key('EDT_TEST', $k3);
     
     is( $u1->{created}, $orig_stamp, "created timestamp has not changed on update" );
     is( $u1->{modified}, $now, "modified timestamp is current on update" );
@@ -142,15 +142,15 @@ subtest 'crmod' => sub {
     
     $edt = $T->new_edt($perm_a);
     
-    $edt->update_record($EDT_TEST, { $primary => $k4, string_req => 'updated by other' });
-    $edt->replace_record($EDT_TEST, { $primary => $k5, string_req => 'replaced by other' });
+    $edt->update_record('EDT_TEST', { $primary => $k4, string_req => 'updated by other' });
+    $edt->replace_record('EDT_TEST', { $primary => $k5, string_req => 'replaced by other' });
     
     ($now) = $T->dbh->selectrow_array("SELECT NOW()");
     
     $T->ok_result( $edt->commit, 'any', "update other committed" ) || return;
     
-    my ($u4) = $T->fetch_records_by_key($EDT_TEST, $k4);
-    my ($u5) = $T->fetch_records_by_key($EDT_TEST, $k5);
+    my ($u4) = $T->fetch_records_by_key('EDT_TEST', $k4);
+    my ($u5) = $T->fetch_records_by_key('EDT_TEST', $k5);
     
     is( $u4->{created}, $orig_stamp, "created timestamp has not changed on update" );
     is( $u4->{modified}, $now, "modified timestamp is current on update" );
@@ -171,45 +171,45 @@ subtest 'crmod non-admin' => sub {
     
     my ($edt, $k1);
 
-    ($k1) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='mno'");
+    ($k1) = $T->fetch_keys_by_expr('EDT_TEST', "string_req='mno'");
     
     $edt = $T->new_edt($perm_a, { FIXUP_MODE => 1, IMMEDIATE_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'insert test' });
+    $edt->insert_record('EDT_TEST', { string_req => 'insert test' });
     
     $T->ok_no_errors("no errors on insert_record with FIXUP_MODE");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_val => 'updated' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_val => 'updated' });
     
     $T->ok_has_error('E_PERM_COL', "got permission violation on update_record with FIXUP_MODE");
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated' });
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated' });
     
     $T->ok_has_error('E_PERM_COL', "got permission violation on replace_record with FIXUP_MODE");
     
     # Make sure that neither update nor replacement went through.
     
-    $T->ok_no_record($EDT_TEST, "$primary = $k1 and string_req = 'updated'");
+    $T->ok_no_record('EDT_TEST', "$primary = $k1 and string_req = 'updated'");
     
     # Now try the same thing without FIXUP_MODE but explicitly setting modified to UNCHANGED.
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, ALTER_TRAIL => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'insert test', modified => 'UNCHANGED' });
+    $edt->insert_record('EDT_TEST', { string_req => 'insert test', modified => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modified}, "got permission violation on insert_record with modified UNCHANGED");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_val => 'updated',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_val => 'updated',
 				     modified => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modified}, "got permission violation on update_record with modified UNCHANGED");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_val => 'updated',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_val => 'updated',
 				     modifier_no => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on update_record with modified UNCHANGED");
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				      modified => 'UNCHANGED', modifier_no => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modified}, "got permission violation on replace_record with modified UNCHANGED");
@@ -217,44 +217,44 @@ subtest 'crmod non-admin' => sub {
     
     # Make sure that neither update nor replacement went through.
     
-    $T->ok_no_record($EDT_TEST, "$primary = $k1 and string_req = 'updated'");
+    $T->ok_no_record('EDT_TEST', "$primary = $k1 and string_req = 'updated'");
     
     # Now try to explicitly set values for created and modified. This should also give an error.
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, ALTER_TRAIL => 1 });
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				     modified => '2010-01-01 12:51:42' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modified}, "got permission violation on update_record setting modified" );
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				     modified => '2010-02-03 12:51:08' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modified}, "got permission violation on replace_record setting modified" );
 
-    $edt->insert_record($EDT_TEST, { string_req => 'inserted 2', modified => '2010-03-04 01:01:02' });
+    $edt->insert_record('EDT_TEST', { string_req => 'inserted 2', modified => '2010-03-04 01:01:02' });
 
     $T->ok_has_error( qr{E_PERM_COL.*modified}, "got permission violation on insert_record setting modified" );
 
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				     created => '2010-01-01 abc' });
     
     $T->ok_has_error( qr{E_PERM_COL.*created}, "got permission violation on update_record setting created" );
     $T->ok_has_error( qr{E_FORMAT.*created}, "got format error on update_record setting created" );
 
-     $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+     $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				     created => '2010-01-01 def' });
     
     $T->ok_has_error( qr{E_PERM_COL.*created}, "got permission violation on replace_record setting created" );
     $T->ok_has_error( qr{E_FORMAT.*created}, "got format error on replace_record setting created" );
     
-    $edt->insert_record($EDT_TEST, { string_req => 'inserted 2', created => '2010-01-01 ghi' });
+    $edt->insert_record('EDT_TEST', { string_req => 'inserted 2', created => '2010-01-01 ghi' });
     
     $T->ok_has_error( qr{E_PERM_COL.*created}, "got permission violation on insert_record setting created" );
     $T->ok_has_error( qr{E_FORMAT.*created}, "got format error on insert_record setting created" );
 
-    $edt->insert_record($EDT_TEST, { string_req => 'inserted 3', created => '2011-01-01',
+    $edt->insert_record('EDT_TEST', { string_req => 'inserted 3', created => '2011-01-01',
 				     modified => '2011-01-01' });
     
     $T->ok_has_error( qr{E_PERM_COL.*created}, "got permission violation on insert_record setting created" );
@@ -263,8 +263,8 @@ subtest 'crmod non-admin' => sub {
     # Make sure that neither update nor replacement went through. Also make sure that insertion
     # didn't go through.
     
-    $T->ok_no_record($EDT_TEST, "$primary = $k1 and string_req = 'updated'");
-    $T->ok_no_record($EDT_TEST, "string_req='inserted 3'");
+    $T->ok_no_record('EDT_TEST', "$primary = $k1 and string_req = 'updated'");
+    $T->ok_no_record('EDT_TEST', "string_req='inserted 3'");
 };
 
 
@@ -276,35 +276,35 @@ subtest 'crmod admin' => sub {
     
     my ($edt, $k1, $k2, $orig, $new);
     
-    $T->set_specific_permission($EDT_TEST, $perm_a, 'admin');
+    $T->set_specific_permission('EDT_TEST', $perm_a, 'admin');
     $perm_a->clear_cached_permissions;
     
     $edt = $T->new_edt($perm_a);	# now with 'admin' !!!
     
-    ($k1) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='mno'");
-    ($orig) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($k1) = $T->fetch_keys_by_expr('EDT_TEST', "string_req='mno'");
+    ($orig) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     $edt = $T->new_edt($perm_a, { FIXUP_MODE => 1, IMMEDIATE_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'insert test admin' });
+    $edt->insert_record('EDT_TEST', { string_req => 'insert test admin' });
     
     $T->ok_no_errors("no errors on insert_record with FIXUP_MODE");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated admin' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated admin' });
     
     $T->ok_no_errors("no permission violation on update_record with FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'updated admin', "update went through" );
     is( $new->{created}, $orig->{created}, "update did not change created date" );
     is( $new->{modified}, $orig->{modified}, "update did not change modified date" );
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'replaced admin' });
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'replaced admin' });
     
     $T->ok_no_errors("no permission violation on replace_record with FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'replaced admin', "replace went through" );
     is( $new->{created}, $orig->{created}, "replace did not change created date" );
@@ -316,11 +316,11 @@ subtest 'crmod admin' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated admin 2' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated admin 2' });
     
     $T->ok_no_errors("no permission violation on update_record without FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'updated admin 2', "update went through" );
     is( $new->{created}, $orig->{created}, "update did not change created date" );
@@ -328,11 +328,11 @@ subtest 'crmod admin' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'replaced admin 2' });
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'replaced admin 2' });
     
     $T->ok_no_errors("no permission violation on replace_record without FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'replaced admin 2', "replace went through" );
     is( $new->{created}, $orig->{created}, "replace did not change created date" );
@@ -342,12 +342,12 @@ subtest 'crmod admin' => sub {
 
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, ALTER_TRAIL => 1 });
 
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated admin 3',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated admin 3',
 				     modified => 'UNCHANGED' });
     
     $T->ok_no_errors("no permission violation on update_record");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'updated admin 3', "update went through" );
     is( $new->{created}, $orig->{created}, "update did not change created date" );
@@ -356,20 +356,20 @@ subtest 'crmod admin' => sub {
     # Now we can test setting the created and modified timestamps explicitly. We get a caution if
     # 'ALTER_TRAIL' is not allowed.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'explicit set', created => '2011-06-22',
+    $edt->insert_record('EDT_TEST', { string_req => 'explicit set', created => '2011-06-22',
 				     modified => '2011-06-23 22:15:18' });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "created = '2011-06-22' and modified = '2011-06-23 22:15:18'");
+    $T->ok_found_record('EDT_TEST', "created = '2011-06-22' and modified = '2011-06-23 22:15:18'");
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'explicit set without alter_trail',
+    $edt->insert_record('EDT_TEST', { string_req => 'explicit set without alter_trail',
 				     created => '2011-06-24', modified => '2011-06-25' });
     
     $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated no alter_trail',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated no alter_trail',
 				     created => '2011-06-26', modified => '2011-06-27' });
     
     $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
@@ -390,7 +390,7 @@ subtest 'authent' => sub {
     
     # Start by clearing the table, and the 'admin' permission set by one of the previous tests.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     $T->clear_specific_permissions;
     $perm_a->clear_cached_permissions;
@@ -399,19 +399,19 @@ subtest 'authent' => sub {
     
     $edt = $T->new_edt($perm_e);
     
-    $edt->insert_record($EDT_TEST, { string_req => 'abc', unsigned_val => 3 });
-    $edt->insert_record($EDT_TEST, { string_req => 'def', unsigned_val => 4 });
-    $edt->insert_record($EDT_TEST, { string_req => 'ghi', unsigned_val => 5 });
-    $edt->insert_record($EDT_TEST, { string_req => 'jkl', unsigned_val => 6 });
-    $edt->insert_record($EDT_TEST, { string_req => 'mno', unsigned_val => 7 });
-    $edt->insert_record($EDT_TEST, { string_req => 'pqr', unsigned_val => 8 });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc', unsigned_val => 3 });
+    $edt->insert_record('EDT_TEST', { string_req => 'def', unsigned_val => 4 });
+    $edt->insert_record('EDT_TEST', { string_req => 'ghi', unsigned_val => 5 });
+    $edt->insert_record('EDT_TEST', { string_req => 'jkl', unsigned_val => 6 });
+    $edt->insert_record('EDT_TEST', { string_req => 'mno', unsigned_val => 7 });
+    $edt->insert_record('EDT_TEST', { string_req => 'pqr', unsigned_val => 8 });
     
     ok( $edt->commit, "insert records committed" ) || return;
     
     my ($k1, $k2, $k4, $k5) = $edt->inserted_keys;
     my $k3 = 99999;
 
-    my ($r1) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    my ($r1) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $r1->{authorizer_no}, $person_a, "authorizer_no is correct" );
     is( $r1->{enterer_no}, $person_e, "enterer_no is correct" );
@@ -422,15 +422,15 @@ subtest 'authent' => sub {
     
     $edt = $T->new_edt($perm_s);
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated' });
-    $edt->replace_record($EDT_TEST, { $primary => $k2, string_req => 'replaced' });
-    $edt->replace_record($EDT_TEST, { $primary => $k3, string_req => 'new' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated' });
+    $edt->replace_record('EDT_TEST', { $primary => $k2, string_req => 'replaced' });
+    $edt->replace_record('EDT_TEST', { $primary => $k3, string_req => 'new' });
 
     $T->ok_result( $edt->commit, 'any', "update records committed" ) || return;
     
-    my ($u1) = $T->fetch_records_by_key($EDT_TEST, $k1);
-    my ($u2) = $T->fetch_records_by_key($EDT_TEST, $k2);
-    my ($u3) = $T->fetch_records_by_key($EDT_TEST, $k3);
+    my ($u1) = $T->fetch_records_by_key('EDT_TEST', $k1);
+    my ($u2) = $T->fetch_records_by_key('EDT_TEST', $k2);
+    my ($u3) = $T->fetch_records_by_key('EDT_TEST', $k3);
     
     is( $u1->{authorizer_no}, $person_a, "authorizer_no has not changed on update" );
     is( $u1->{enterer_no}, $person_e, "enterer_no has not changed on update" );
@@ -458,13 +458,13 @@ subtest 'authent' => sub {
     
     $edt = $T->new_edt($perm_e);
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated 2' });
-    $edt->replace_record($EDT_TEST, { $primary => $k2, string_req => 'replaced 2' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated 2' });
+    $edt->replace_record('EDT_TEST', { $primary => $k2, string_req => 'replaced 2' });
     
     $T->ok_result( $edt->commit, "transaction committed" );
 
-    my ($u1a) = $T->fetch_records_by_key($EDT_TEST, $k1);
-    my ($u2a) = $T->fetch_records_by_key($EDT_TEST, $k2);
+    my ($u1a) = $T->fetch_records_by_key('EDT_TEST', $k1);
+    my ($u2a) = $T->fetch_records_by_key('EDT_TEST', $k2);
     
     is( $u1a->{authorizer_no}, $person_a, "authorizer_no has not changed on update" );
     is( $u1a->{enterer_no}, $person_e, "enterer_no has not changed on update" );
@@ -484,45 +484,45 @@ subtest 'authent non-admin' => sub {
     
     my ($edt, $k1);
     
-    ($k1) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='mno'");
+    ($k1) = $T->fetch_keys_by_expr('EDT_TEST', "string_req='mno'");
     
     $edt = $T->new_edt($perm_a, { FIXUP_MODE => 1, IMMEDIATE_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'insert test' });
+    $edt->insert_record('EDT_TEST', { string_req => 'insert test' });
     
     $T->ok_no_errors("no errors on insert_record with FIXUP_MODE");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_val => 'updated' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_val => 'updated' });
     
     $T->ok_has_error('E_PERM_COL', "got permission violation on update_record with FIXUP_MODE");
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated' });
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated' });
     
     $T->ok_has_error('E_PERM_COL', "got permission violation on replace_record with FIXUP_MODE");
     
     # Make sure that neither update nor replacement went through.
     
-    $T->ok_no_record($EDT_TEST, "$primary = $k1 and string_req = 'updated'");
+    $T->ok_no_record('EDT_TEST', "$primary = $k1 and string_req = 'updated'");
     
     # Now try the same thing without FIXUP_MODE but explicitly setting modifier_no to UNCHANGED.
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, ALTER_TRAIL => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'insert test', modifier_no => 'UNCHANGED' });
+    $edt->insert_record('EDT_TEST', { string_req => 'insert test', modifier_no => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on insert_record with modifier_no UNCHANGED");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_val => 'updated',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_val => 'updated',
 				     modifier_no => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on update_record with modifier_no UNCHANGED");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_val => 'updated',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_val => 'updated',
 				     modifier_no => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on update_record with modifier_no UNCHANGED");
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				      modifier_no => 'UNCHANGED', modifier_no => 'UNCHANGED' });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on replace_record with modifier_no UNCHANGED");
@@ -530,35 +530,35 @@ subtest 'authent non-admin' => sub {
     
     # Make sure that neither update nor replacement went through.
     
-    $T->ok_no_record($EDT_TEST, "$primary = $k1 and string_req = 'updated'");
+    $T->ok_no_record('EDT_TEST', "$primary = $k1 and string_req = 'updated'");
     
     # Now try to explicitly set values for authorizer_no, enterer_no and modifier_no. This should
     # also give an error.
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, ALTER_TRAIL => 1 });
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				     modifier_no => $person_a });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on update_record setting modifier_no" );
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated',
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated',
 				     modifier_no => 99999 });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on replace_record setting modifier_no" );
     $T->ok_has_error( qr{E_KEY_NOT_FOUND.*modifier_no}, "got key not found on replace_record setting modifier_no" );
     
-    $edt->insert_record($EDT_TEST, { string_req => 'inserted 2', modifier_no => $person_a });
+    $edt->insert_record('EDT_TEST', { string_req => 'inserted 2', modifier_no => $person_a });
     
     $T->ok_has_error( qr{E_PERM_COL.*modifier_no}, "got permission violation on insert_record setting modifier_no" );
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated', authorizer_no => $person_a,
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated', authorizer_no => $person_a,
 				     enterer_no => $person_a });
     
     $T->ok_has_error( qr{E_PERM_COL.*authorizer_no}, "got permission violation on update_record setting authorizer_no" );
     $T->ok_has_error( qr{E_PERM_COL.*enterer_no}, "got permission violation on update_record setting enterer_no" );
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'updated', authorizer_no => 'abc',
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'updated', authorizer_no => 'abc',
 				      enterer_no => 'abc' });
     
     $T->ok_has_error( qr{E_PERM_COL.*authorizer_no}, "got permission violation on replace_record setting authorizer_no" );
@@ -566,12 +566,12 @@ subtest 'authent non-admin' => sub {
     $T->ok_has_error( qr{E_PERM_COL.*enterer_no}, "got permission violation on replace_record setting enterer_no" );
     $T->ok_has_error( qr{E_FORMAT.*enterer_no}, "got format error on replace_record setting enterer_no" );
     
-    $edt->insert_record($EDT_TEST, { string_req => 'inserted 2', enterer_no => 'int:2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'inserted 2', enterer_no => 'int:2' });
     
     $T->ok_has_error( qr{E_PERM_COL.*enterer_no}, "got permission violation on insert_record setting enterer_no" );
     $T->ok_has_error( qr{E_EXTTYPE.*enterer_no}, "got external type error on insert_record setting enterer_no" );
     
-    $edt->insert_record($EDT_TEST, { string_req => 'inserted 3', authorizer_no => $perm_a,
+    $edt->insert_record('EDT_TEST', { string_req => 'inserted 3', authorizer_no => $perm_a,
 				     modifier_no => $perm_a });
     
     $T->ok_has_error( qr{E_PERM_COL.*authorizer_no}, "got permission violation on insert_record setting authorizer_no" );
@@ -580,8 +580,8 @@ subtest 'authent non-admin' => sub {
     # Make sure that neither update nor replacement went through. Also make sure that insertion
     # didn't go through.
     
-    $T->ok_no_record($EDT_TEST, "$primary = $k1 and string_req = 'updated'");
-    $T->ok_no_record($EDT_TEST, "string_req='inserted 3'");
+    $T->ok_no_record('EDT_TEST', "$primary = $k1 and string_req = 'updated'");
+    $T->ok_no_record('EDT_TEST', "string_req='inserted 3'");
 };
 
 
@@ -591,23 +591,23 @@ subtest 'authent admin' => sub {
     
     my ($edt, $k1, $k2, $orig, $new);
     
-    $T->set_specific_permission($EDT_TEST, $perm_a, 'admin');
+    $T->set_specific_permission('EDT_TEST', $perm_a, 'admin');
     $perm_a->clear_cached_permissions;
     
     # Now create a transaction and start inserting and updating.
     
     $edt = $T->new_edt($perm_a);	# now with 'admin' !!!
     
-    ($k1) = $T->fetch_keys_by_expr($EDT_TEST, "string_req='mno'");
-    ($orig) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($k1) = $T->fetch_keys_by_expr('EDT_TEST', "string_req='mno'");
+    ($orig) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     $edt = $T->new_edt($perm_a, { FIXUP_MODE => 1, IMMEDIATE_MODE => 1 });
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated admin' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated admin' });
     
     $T->ok_no_errors("no permission violation on update_record with FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'updated admin', "update went through" );
     is( $new->{authorizer_no}, $orig->{authorizer_no}, "update did not change authorizer_no" );
@@ -615,11 +615,11 @@ subtest 'authent admin' => sub {
     is( $new->{modifier_no}, $orig->{modifier_no}, "update did not change modifier_no" );
     is( $new->{modified}, $orig->{modified}, "update did not change modified date" );
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'replaced admin' });
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'replaced admin' });
     
     $T->ok_no_errors("no permission violation on replace_record with FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'replaced admin', "replace went through" );
     is( $new->{authorizer_no}, $orig->{authorizer_no}, "replace did not change authorizer_no" );
@@ -633,11 +633,11 @@ subtest 'authent admin' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated admin 2' });
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated admin 2' });
     
     $T->ok_no_errors("no permission violation on update_record without FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'updated admin 2', "update went through" );
     is( $new->{authorizer_no}, $orig->{authorizer_no}, "update did not change authorizer_no" );
@@ -646,11 +646,11 @@ subtest 'authent admin' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->replace_record($EDT_TEST, { $primary => $k1, string_req => 'replaced admin 2' });
+    $edt->replace_record('EDT_TEST', { $primary => $k1, string_req => 'replaced admin 2' });
     
     $T->ok_no_errors("no permission violation on replace_record without FIXUP_MODE");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'replaced admin 2', "replace went through" );
     is( $new->{authorizer_no}, $orig->{authorizer_no}, "replace did not change authorizer_no" );
@@ -661,12 +661,12 @@ subtest 'authent admin' => sub {
 
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, ALTER_TRAIL => 1 });
 
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated admin 3',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated admin 3',
 				     modifier_no => 'UNCHANGED' });
     
     $T->ok_no_errors("no permission violation on update_record");
     
-    ($new) = $T->fetch_records_by_key($EDT_TEST, $k1);
+    ($new) = $T->fetch_records_by_key('EDT_TEST', $k1);
     
     is( $new->{string_req}, 'updated admin 3', "update went through" );
     is( $new->{authorizer_no}, $orig->{authorizer_no}, "replace did not change authorizer_no" );
@@ -678,26 +678,26 @@ subtest 'authent admin' => sub {
     
     my $ext_s = PBDB::ExtIdent->new('prs', $person_s);
     
-    $edt->insert_record($EDT_TEST, { string_req => 'explicit set', authorizer_no => $person_s,
+    $edt->insert_record('EDT_TEST', { string_req => 'explicit set', authorizer_no => $person_s,
 				     enterer_no => "prs:$person_s", modifier_no => $ext_s });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "string_req='explicit set' and authorizer_no=$person_s
+    $T->ok_found_record('EDT_TEST', "string_req='explicit set' and authorizer_no=$person_s
 		and enterer_no=$person_s and modifier_no=$person_s");
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'explicit set without alter_trail',
+    $edt->insert_record('EDT_TEST', { string_req => 'explicit set without alter_trail',
 				     authorizer_no => $person_s, enterer_no => $person_s });
     
     $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
     
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated no alter_trail',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated no alter_trail',
 				     modifier_no => 'UNCHANGED' });
     
     $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
 
-    $edt->update_record($EDT_TEST, { $primary => $k1, string_req => 'updated 2 no altera_trail',
+    $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated 2 no altera_trail',
 				     authorizer_no => 'UNCHANGED', enterer_no => 'UNCHANGED' });
 
     $T->ok_no_conditions("no ALTER_TRAIl caution with 'UNCHANGED' for authorizer_no, enterer_no");

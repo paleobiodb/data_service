@@ -10,7 +10,7 @@ use strict;
 
 use Dancer qw(:syntax);
 use PBLogger;
-use TableDefs qw(init_table_names select_test_tables is_test_mode);
+use TableDefs qw(init_table_names enable_test_mode disable_test_mode is_test_mode);
 use ResourceDefs;
 
 my $logger = PBLogger->new;
@@ -37,37 +37,41 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     
     if ( $operation eq 'enable' )
     {
-	if ( $tablename eq 'eduresources' )
-	{
-	    ($result) = ResourceDefs->enable_test_mode($tablename, $ds);
-	}
-	
-	else
-	{
-	    ($result) = select_test_tables($tablename, 1, $ds);
-	}
+	($result) = enable_test_mode($tablename, $ds);
 	
 	if ( $result && $result eq '1' )
 	{
 	    return "$tablename enabled";
 	}
+
+	else
+	{
+	    die "400 Unknown table group '$tablename'";
+	}
     }
     
     elsif ( $operation eq 'disable' )
     {
-	if ( $tablename =~ /eduresources/i )
-	{
-	    ($result) = ResourceDefs->disable_test_mode($tablename, $ds);
-	}
+	($result) = disable_test_mode($tablename, $ds);
+	
+	# if ( $tablename =~ /eduresources/i )
+	# {
+	#     ($result) = ResourceDefs->disable_test_mode($tablename, $ds);
+	# }
 
-	else
-	{
-	    ($result) = select_test_tables($tablename, 0, $ds);
-	}
+	# else
+	# {
+	#     ($result) = select_test_tables($tablename, 0, $ds);
+	# }
 	
 	if ( $result && $result eq '2' )
 	{
 	    return "$tablename disabled";
+	}
+	
+	else
+	{
+	    die "400 Unknown table group '$tablename'";
 	}
     }
     

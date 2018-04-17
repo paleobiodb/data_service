@@ -11,7 +11,7 @@ use strict;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
-use TableDefs qw($PERSON_DATA $WING_USERS);
+use TableDefs qw(%TABLE);
 use ExternalIdent qw(extract_identifier generate_identifier);
 
 use Moo::Role;
@@ -313,7 +313,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $PERSON_DATA",
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $TABLE{PERSON_DATA}",
 					  { Columns => [1, 2] });
     
     %PERSON_NAME = @$values;
@@ -326,7 +326,7 @@ sub update_person_name_cache {
     
     my $dbh = $ds->get_connection;
     
-    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $PERSON_DATA",
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $TABLE{PERSON_DATA}",
 					  { Columns => [1, 2] });
     
     my %new_names = @$values;
@@ -563,7 +563,7 @@ sub ent_filter {
 	{
 	    my $quoted = $dbh->quote("$p%");
 	    my $values = $dbh->selectcol_arrayref("
-		SELECT person_no, name FROM $PERSON_DATA
+		SELECT person_no, name FROM $TABLE{PERSON_DATA}
 		WHERE name like $quoted or reversed_name like $quoted", { Columns => [1, 2] });
 	    
 	    if ( defined $values && @$values < 3 && defined $values->[0] && $values->[0] ne '' )
@@ -811,7 +811,7 @@ sub process_entnames {
 	{
 	    my $dbh = $request->get_connection;
 	    my $quoted_id = $dbh->quote($record->{enterer_id});
-	    my ($name) = $dbh->selectrow_array("SELECT real_name FROM $WING_USERS WHERE id = $quoted_id");
+	    my ($name) = $dbh->selectrow_array("SELECT real_name FROM $TABLE{WING_USERS} WHERE id = $quoted_id");
 
 	    $name ||= 'unknown';
 

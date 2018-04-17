@@ -16,7 +16,7 @@ use Test::More tests => 8;
 
 use TableDefs qw(get_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -59,7 +59,7 @@ subtest 'create objects' => sub {
     
     ok( $edt2, "created EditTest object with CREATE") || BAIL_OUT;
 
-    $primary_key = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary_key = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary_key, "found primary key" ) || BAIL_OUT;
 };
 
@@ -71,26 +71,31 @@ subtest 'insert and delete' => sub {
 
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Check that we can insert records.
 
     my $edt = $T->new_edt($perm_a);
     
-    $edt->insert_record($EDT_TEST, { signed_req => 123, string_req => 'abc' });
+    $edt->insert_record('EDT_TEST', { signed_req => 123, string_req => 'abc' });
     
-    ok( $edt->commit, "insert record transaction succeeded" ) || BAIL_OUT;
+    unless ( ok( $edt->commit, "insert record transaction succeeded" ) )
+    {
+	$T->diag_errors('any');
+	$T->diag_warnings('any');
+	BAIL_OUT;
+    }
     
     my @inserted = $edt->inserted_keys;
     
     unless ( cmp_ok( @inserted, '==', 1, "inserted one record" ) )
     {
-	$T->diag_errors;
-	$T->diag_warnings;
+	$T->diag_errors('any');
+	$T->diag_warnings('any');
 	BAIL_OUT;
     }
     
-    my ($r) = $T->fetch_records_by_key($EDT_TEST, $inserted[0]);
+    my ($r) = $T->fetch_records_by_key('EDT_TEST', $inserted[0]);
 
     ok( $r, "record was in the table" ) &&
 	cmp_ok( $r->{string_req}, 'eq', 'abc', "record had proper string value" );
@@ -99,16 +104,21 @@ subtest 'insert and delete' => sub {
 
     $edt = $T->new_edt($perm_a);
     
-    $edt->delete_record($EDT_TEST, $inserted[0]);
-
-    ok( $edt->commit, "delete record transaction succeeded" ) || BAIL_OUT;
+    $edt->delete_record('EDT_TEST', $inserted[0]);
+    
+    unless ( ok( $edt->commit, "delete record transaction succeeded" ) )
+    {
+	$T->diag_errors('any');
+	$T->diag_warnings('any');
+	BAIL_OUT;
+    }
     
     my @deleted = $edt->deleted_keys;
     
     cmp_ok( @deleted, '==', 1, "deleted one record" ) &&
 	cmp_ok( $deleted[0], 'eq', $inserted[0], "deleted same record that was inserted" );
     
-    $T->ok_no_record($EDT_TEST, "$primary_key=$inserted[0]");
+    $T->ok_no_record('EDT_TEST', "$primary_key=$inserted[0]");
 };
 
 
@@ -119,14 +129,14 @@ subtest 'update and replace' => sub {
 
     my $edt = $T->new_edt($perm_a);
 
-    $edt->insert_record($EDT_TEST, { signed_req => 123, signed_val => 456,
+    $edt->insert_record('EDT_TEST', { signed_req => 123, signed_val => 456,
 				     string_req => 'test for update' });
 
     ok( $edt->commit, "insert record transaction succeeded" ) || BAIL_OUT;
     
     my ($test_key) = $edt->inserted_keys;
     
-    my ($r1) = $T->fetch_records_by_key($EDT_TEST, $test_key);
+    my ($r1) = $T->fetch_records_by_key('EDT_TEST', $test_key);
     
     ok( $r1, "record was in the table" ) &&
 	cmp_ok( $r1->{string_req}, 'eq', 'test for update', "record had proper string value" );
@@ -135,12 +145,17 @@ subtest 'update and replace' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    my $result2 = $edt->update_record($EDT_TEST,
+    my $result2 = $edt->update_record('EDT_TEST',
 				 { test_id => $test_key, string_req => 'updated' });
 
-    ok( $result2, "update record succeeded" ) || BAIL_OUT;
+    unless ( ok( $result2, "update record succeeded" ) )
+    {
+	$T->diag_errors('any');
+	$T->diag_warnings('any');
+	BAIL_OUT;
+    }
     
-    my ($r2) = $T->fetch_records_by_key($EDT_TEST, $test_key);
+    my ($r2) = $T->fetch_records_by_key('EDT_TEST', $test_key);
     
     if ( ok( $r2, "updated record was in the table" ) )
     {
@@ -150,13 +165,18 @@ subtest 'update and replace' => sub {
     
     # Check that we can replace records.
     
-    my $result3 = $edt->replace_record($EDT_TEST,
+    my $result3 = $edt->replace_record('EDT_TEST',
 				   { test_id => $test_key, string_req => 'replaced',
 				     signed_req => 789 });
 
-    ok( $result3, "replace record succeeded" ) || BAIL_OUT;
+    unless ( ok( $result3, "replace record succeeded" ) )
+    {
+	$T->diag_errors('any');
+	$T->diag_warnings('any');
+	BAIL_OUT;
+    }
     
-    my ($r3) = $T->fetch_records_by_key($EDT_TEST, $test_key);
+    my ($r3) = $T->fetch_records_by_key('EDT_TEST', $test_key);
     
     if ( ok( $r3, "replaced record was in the table" ) )
     {
@@ -187,7 +207,7 @@ subtest 'test exceptions' => sub {
 
 	$edt = $T->new_edt($perm_a, { SILENT_MODE => 1, IMMEDIATE_MODE => 1 });
 
-	$edt->insert_record($EDT_TEST, { string_req => 'should not be inserted' });
+	$edt->insert_record('EDT_TEST', { string_req => 'should not be inserted' });
     }
     
     $T->ok_has_error( 'any', 'E_EXECUTE' );
@@ -198,7 +218,7 @@ subtest 'test exceptions' => sub {
 	
 	$edt = $T->new_edt($perm_a, { SILENT_MODE => 1, IMMEDIATE_MODE => 1 });
 
-	$edt->insert_record($EDT_TEST, { string_req => 'should not be inserted' });
+	$edt->insert_record('EDT_TEST', { string_req => 'should not be inserted' });
     };
     
     $T->ok_has_error( 'any', 'E_EXECUTE' );
@@ -253,7 +273,7 @@ subtest 'allowances' => sub {
     # Now try to create an EditTransaction using the array form for
     # allowances.
 
-    $edt = EditTest->new($T->dbh, $perm_a, $EDT_TEST, [ 'CREATE', 'NOT_FOUND', 'TEST_DEBUG' ]);
+    $edt = EditTest->new($T->dbh, $perm_a, 'EDT_TEST', [ 'CREATE', 'NOT_FOUND', 'TEST_DEBUG' ]);
 
     ok( $edt, "EditTransaction was created" );
     ok( $edt->allows('CREATE'), "allows 'CREATE'" );
@@ -262,7 +282,7 @@ subtest 'allowances' => sub {
     
     # And then try again using the string form.
     
-    $edt = EditTest->new($T->dbh, $perm_a, $EDT_TEST, 'TEST_DEBUG , ,,CREATE');
+    $edt = EditTest->new($T->dbh, $perm_a, 'EDT_TEST', 'TEST_DEBUG , ,,CREATE');
     
     ok( $edt, "EditTransaction was created" );
     ok( $edt->allows('TEST_DEBUG'), "allows 'TEST_DEBUG'" );
@@ -344,7 +364,7 @@ subtest 'debug output' => sub {
     {
 	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
 	
-	$edt->insert_record($EDT_TEST, { string_req => 'abc' });
+	$edt->insert_record('EDT_TEST', { string_req => 'abc' });
 	
 	ok( ! $edt->has_debug_output( qr/do failed/i ),
 	    "did not capture exception because of SILENT_MODE" );
@@ -354,7 +374,7 @@ subtest 'debug output' => sub {
 	$edt->silent_mode(0);
 	$edt->clear_debug_output;
 	
-	$edt->insert_record($EDT_TEST, { string_req => 'abc' });
+	$edt->insert_record('EDT_TEST', { string_req => 'abc' });
 	
 	ok( $edt->has_debug_output( qr/do failed/i ), "silent mode has been turned off" );
     }
@@ -370,7 +390,7 @@ subtest 'debug output' => sub {
     {
 	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
 	
-	$edt->insert_record($EDT_TEST, { string_req => 'abc' });
+	$edt->insert_record('EDT_TEST', { string_req => 'abc' });
 	
 	ok( $edt->has_debug_output( qr/do failed/i ), "captured exception because SILENT_MODE was off" );
     }
@@ -398,7 +418,7 @@ subtest 'out of scope' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # First try a transaction that is committed and then goes out of scope.
 
@@ -407,7 +427,7 @@ subtest 'out of scope' => sub {
 	
 	$edt->start_execution;
 	
-	$edt->insert_record($EDT_TEST, { signed_val => 222, string_req => 'insert this' });
+	$edt->insert_record('EDT_TEST', { signed_val => 222, string_req => 'insert this' });
 	
 	my ($active) = $T->dbh->selectrow_array("SELECT \@\@in_transaction");
 	
@@ -423,14 +443,14 @@ subtest 'out of scope' => sub {
 
     ok( ! $still_active, "transaction 1 is no longer active" );
     
-    $T->ok_found_record($EDT_TEST, "signed_val = '222'", "transaction 1 was committed");
+    $T->ok_found_record('EDT_TEST', "signed_val = '222'", "transaction 1 was committed");
     
     {
 	my $edt = $T->new_edt($perm_a);
 	
 	$edt->start_execution;
 	
-	$edt->insert_record($EDT_TEST, { signed_val => 223, string_req => 'do not insert' });
+	$edt->insert_record('EDT_TEST', { signed_val => 223, string_req => 'do not insert' });
 	
 	my ($active) = $T->dbh->selectrow_array("SELECT \@\@in_transaction");
 	
@@ -444,7 +464,7 @@ subtest 'out of scope' => sub {
     
     ok( ! $still_active, "transaction 2 is no longer active" );
 
-    $T->ok_no_record($EDT_TEST, "signed_val = '223'", "transaction 2 was rolled back");
+    $T->ok_no_record('EDT_TEST', "signed_val = '223'", "transaction 2 was rolled back");
 };
 
 

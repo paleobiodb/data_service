@@ -16,12 +16,12 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 5;
 
-use TableDefs qw($INTERVAL_DATA get_table_property set_table_property set_column_property);
+use TableDefs qw(get_table_property set_table_property set_column_property);
 
 use TableData qw(reset_cached_column_properties);
 use ExternalIdent;
 
-use EditTest qw($EDT_TEST $EDT_AUX $EDT_ANY);
+use EditTest;
 use EditTester;
 
 use Carp qw(croak);
@@ -32,7 +32,7 @@ use Encode;
 
 my $T = EditTester->new;
 
-$T->set_table($EDT_TEST);
+$T->set_table('EDT_TEST');
 
 
 my ($perm_a, $perm_e, $primary);
@@ -50,7 +50,7 @@ subtest 'setup' => sub {
     
     # Grab the name of the primary key of our test table.
     
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || die;
     
     # Clear any specific table permissions.
@@ -65,7 +65,7 @@ subtest 'required' => sub {
     
     # Clear the table, so that we can track record insertions.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then try inserting some records.
     
@@ -73,55 +73,55 @@ subtest 'required' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    $key1 = $edt->insert_record($EDT_TEST, { string_req => 'abc' });
+    $key1 = $edt->insert_record('EDT_TEST', { string_req => 'abc' });
     
     $T->ok_result( $key1, "inserted record with required field" ) || return;
     
-    $result = $edt->insert_record($EDT_TEST, { string_val => 'def' });
+    $result = $edt->insert_record('EDT_TEST', { string_val => 'def' });
     
     ok( ! $result, "could not insert record with required field missing" );
     
-    $result = $edt->insert_record($EDT_TEST, { string_req => '', string_val => 'def' });
+    $result = $edt->insert_record('EDT_TEST', { string_req => '', string_val => 'def' });
     
     ok( ! $result, "could not insert record with empty value for required field" );
     
-    $result = $edt->insert_record($EDT_TEST, { string_req => undef, string_val => 'def' });
+    $result = $edt->insert_record('EDT_TEST', { string_req => undef, string_val => 'def' });
     
     ok( ! $result, "could not insert record with undefined value for required field" );
     
-    $result = $edt->update_record($EDT_TEST, { $primary => $key1, string_req => 'def' });
+    $result = $edt->update_record('EDT_TEST', { $primary => $key1, string_req => 'def' });
     
     ok( $result, "updated record with required field" ) || $T->diag_errors;
     
-    $result = $edt->update_record($EDT_TEST, { $primary => $key1, signed_val => '5' });
+    $result = $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '5' });
     
     ok( $result, "updated record with required field missing" ) || $T->diag_errors;
     
-    $result = $edt->update_record($EDT_TEST, { $primary => $key1, string_req => '' });
+    $result = $edt->update_record('EDT_TEST', { $primary => $key1, string_req => '' });
     
     ok( ! $result, "could not update record with required field set to empty" );
     
-    $result = $edt->update_record($EDT_TEST, { $primary => $key1, string_req => undef });
+    $result = $edt->update_record('EDT_TEST', { $primary => $key1, string_req => undef });
     
     ok( ! $result, "could not update record with required field set to undef" );
     
-    $result = $edt->replace_record($EDT_TEST, { $primary => $key1, string_req => 'ghi' });
+    $result = $edt->replace_record('EDT_TEST', { $primary => $key1, string_req => 'ghi' });
     
     ok( $result, "replaced record with required field" ) || $T->diag_errors;
     
-    $result = $edt->replace_record($EDT_TEST, { $primary => $key1, signed_val => 6 });
+    $result = $edt->replace_record('EDT_TEST', { $primary => $key1, signed_val => 6 });
     
     ok( ! $result, "could not replace record with required field missing" );
     
-    $result = $edt->replace_record($EDT_TEST, { $primary => $key1, string_req => '' });
+    $result = $edt->replace_record('EDT_TEST', { $primary => $key1, string_req => '' });
     
     ok( ! $result, "could not replace record with required field empty" );
     
-    $result = $edt->replace_record($EDT_TEST, { $primary => $key1, string_req => undef });
+    $result = $edt->replace_record('EDT_TEST', { $primary => $key1, string_req => undef });
     
     ok( ! $result, "could not replace record with required field undefined" );
     
-    $T->ok_found_record( $EDT_TEST, "string_req='ghi'", "found replaced record as a check" );
+    $T->ok_found_record( 'EDT_TEST', "string_req='ghi'", "found replaced record as a check" );
     
 };
 
@@ -132,17 +132,17 @@ subtest 'foreign keys' => sub {
     
     # Clear the table, so that we can track record insertions.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Find a good foreign key value and a non-existent one.
     
-    my ($int_good) = $T->fetch_row_by_expr($INTERVAL_DATA, 'interval_no',
+    my ($int_good) = $T->fetch_row_by_expr('INTERVAL_DATA', 'interval_no',
 					   "interval_name='Cretaceous'");
 
-    my ($int_alt) = $T->fetch_row_by_expr($INTERVAL_DATA, 'interval_no',
+    my ($int_alt) = $T->fetch_row_by_expr('INTERVAL_DATA', 'interval_no',
 					  "interval_name='Permian'");
     
-    my ($int_bad) = $T->fetch_row_by_expr($INTERVAL_DATA, 'max(interval_no) + 1');
+    my ($int_bad) = $T->fetch_row_by_expr('INTERVAL_DATA', 'max(interval_no) + 1');
     
     unless ( $int_good && $int_alt && $int_bad )
     {
@@ -156,11 +156,11 @@ subtest 'foreign keys' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    $key1 = $edt->insert_record($EDT_TEST, { string_req => 'foreign key test', interval_no => $int_good });
+    $key1 = $edt->insert_record('EDT_TEST', { string_req => 'foreign key test', interval_no => $int_good });
     
     $T->ok_result( $key1, "inserted record with valid foreign key" ) || return;
     
-    $edt->insert_record($EDT_TEST, { string_req => 'foreign key test', interval_no => $int_bad });
+    $edt->insert_record('EDT_TEST', { string_req => 'foreign key test', interval_no => $int_bad });
     
     $T->ok_has_one_error('F_KEY_NOT_FOUND', "bad key is recognized");
     $T->ok_no_warnings;
@@ -175,12 +175,12 @@ subtest 'foreign keys' => sub {
     
     ok( $ext_bad, "generated bad external ident for interval" );
 
-    $key2 = $edt->insert_record($EDT_TEST, { string_req => 'external ident test', interval_no => $ext_good });
+    $key2 = $edt->insert_record('EDT_TEST', { string_req => 'external ident test', interval_no => $ext_good });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key2 and interval_no = $int_good") || return;
+    $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good") || return;
     
-    $edt->update_record($EDT_TEST, { $primary => $key2, interval_no => $ext_bad });
+    $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $ext_bad });
     
     $T->ok_has_one_error('F_KEY_NOT_FOUND', "bad external identifier is recognized");
     $T->ok_no_warnings;
@@ -191,7 +191,7 @@ subtest 'foreign keys' => sub {
     
     ok( $ext_wrong, "generated external ident of wrong type" );
     
-    $edt->update_record($EDT_TEST, { $primary => $key2, interval_no => $ext_wrong });
+    $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $ext_wrong });
 
     $T->ok_has_one_error('F_EXTTYPE', "bad external identifier type is recognized");
     $T->ok_no_warnings;
@@ -203,67 +203,67 @@ subtest 'foreign keys' => sub {
     my $urn_ugly = "paleobiodb.org:blargh:23";
     my $urn_hideous = "xxxz";
     
-    $edt->update_record($EDT_TEST, { $primary => $key2, interval_no => $urn_good });
+    $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_good });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key2 and interval_no = $int_good");
+    $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
-    $edt->update_record($EDT_TEST, { $primary => $key2, interval_no => $urn_bad });
+    $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_bad });
     
     $T->ok_has_one_error('F_KEY_NOT_FOUND', "bad urn key value is recognized");
-    $T->ok_found_record($EDT_TEST, "$primary = $key2 and interval_no = $int_good");
+    $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
-    $edt->update_record($EDT_TEST, { $primary => $key2, interval_no => $urn_ugly });
+    $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_ugly });
     
     $T->ok_has_one_error('F_EXTTYPE', "bad urn type is recognized");
-    $T->ok_found_record($EDT_TEST, "$primary = $key2 and interval_no = $int_good");
+    $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
-    $edt->update_record($EDT_TEST, { $primary => $key2, interval_no => $urn_hideous });
+    $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_hideous });
     
     $T->ok_has_one_error('F_FORMAT', "bad urn format is recognized");
-    $T->ok_found_record($EDT_TEST, "$primary = $key2 and interval_no = $int_good");
+    $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
     # Now try overriding the identifier type.
     
-    set_column_property($EDT_TEST, 'interval_no', EXTID_TYPE => 'TXN');
-    reset_cached_column_properties($EDT_TEST, 'interval_no');
+    set_column_property('EDT_TEST', 'interval_no', EXTID_TYPE => 'TXN');
+    reset_cached_column_properties('EDT_TEST', 'interval_no');
     
     # Test that the new identifier type works and the old one does not.
     
-    $key3 = $edt->insert_record($EDT_TEST, { string_req => 'external ident override',
+    $key3 = $edt->insert_record('EDT_TEST', { string_req => 'external ident override',
 					     interval_no => "txn:$int_good" });
     
     
     $T->ok_result( $key3, "inserted record with overridden external ident type" ) || return;
     
-    $edt->update_record($EDT_TEST, { $primary => $key3, interval_no => "int:$int_alt" });
+    $edt->update_record('EDT_TEST', { $primary => $key3, interval_no => "int:$int_alt" });
     
     $T->ok_has_one_error('F_EXTTYPE', "override of external ident type is recognized");
-    $T->ok_found_record($EDT_TEST, "$primary = $key3 and interval_no = $int_good");
+    $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = $int_good");
     
     # Now test that we can set field values using _id in place of _no.
     
-    $edt->update_record($EDT_TEST, { $primary => $key3, interval_id => "txn:$int_alt" });
+    $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => "txn:$int_alt" });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key3 and interval_no = $int_alt");
+    $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = $int_alt");
 
     # Now test that we can set the field to zero, and to null.
 
-    $edt->update_record($EDT_TEST, { $primary => $key3, interval_id => 0 });
+    $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => 0 });
 
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key3 and interval_no = 0");
+    $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = 0");
 
-    $edt->update_record($EDT_TEST, { $primary => $key3, interval_id => $int_alt });
+    $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => $int_alt });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key3 and interval_no = $int_alt");
+    $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = $int_alt");
     
-    $edt->update_record($EDT_TEST, { $primary => $key3, interval_id => undef });
+    $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => undef });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key3 and interval_no = 0");
+    $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = 0");
 };
 
 
@@ -274,15 +274,15 @@ subtest 'foreign_table' => sub {
     
     # Clear the table, so that we can track record insertions.
     
-    $T->clear_table($EDT_TEST);
-    $T->clear_table($EDT_AUX);
+    $T->clear_table('EDT_TEST');
+    $T->clear_table('EDT_AUX');
     
     # Find a good foreign key value and a non-existent one.
     
-    my ($int_good) = $T->fetch_row_by_expr($INTERVAL_DATA, 'interval_no',
+    my ($int_good) = $T->fetch_row_by_expr('INTERVAL_DATA', 'interval_no',
 					   "interval_name='Ordovician'");
     
-    # my ($int_bad) = $T->fetch_row_by_expr($INTERVAL_DATA, 'max(interval_no) + 1');
+    # my ($int_bad) = $T->fetch_row_by_expr('INTERVAL_DATA', 'max(interval_no) + 1');
     
     unless ( $int_good )
     {
@@ -296,37 +296,37 @@ subtest 'foreign_table' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    $key1 = $edt->insert_record($EDT_TEST, { string_req => 'foreign table a' });
+    $key1 = $edt->insert_record('EDT_TEST', { string_req => 'foreign table a' });
     
     $T->ok_result($key1, "inserted test record") || return;
     
-    $key2 = $edt->insert_record($EDT_TEST, { string_req => 'foreign table b' });
+    $key2 = $edt->insert_record('EDT_TEST', { string_req => 'foreign table b' });
     
     $T->ok_no_conditions;
     
-    $key3 = $edt->insert_record($EDT_AUX, { name => 'good', test_id => $key2 });
+    $key3 = $edt->insert_record('EDT_AUX', { name => 'good', test_id => $key2 });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_AUX, "aux_no = $key3 and test_no = $key2");
+    $T->ok_found_record('EDT_AUX', "aux_no = $key3 and test_no = $key2");
     
-    $edt->update_record($EDT_AUX, { aux_no => $key3, test_id => $int_good });
+    $edt->update_record('EDT_AUX', { aux_no => $key3, test_id => $int_good });
     
     $T->ok_has_one_error( 'F_KEY_NOT_FOUND', "error condition for bad foreign key value" );
     $T->ok_no_warnings;
-    $T->ok_no_record($EDT_AUX, "aux_no = $key3 and test_no = $int_good");
+    $T->ok_no_record('EDT_AUX', "aux_no = $key3 and test_no = $int_good");
     
     # Now specifically redirect this column to a different table/key combination. The same key
     # value should now work.
     
-    set_column_property($EDT_AUX, 'test_no', FOREIGN_TABLE => 'TableDefs::INTERVAL_DATA');
-    set_column_property($EDT_AUX, 'test_no', FOREIGN_KEY => 'interval_no');
+    set_column_property('EDT_AUX', 'test_no', FOREIGN_TABLE => 'INTERVAL_DATA');
+    set_column_property('EDT_AUX', 'test_no', FOREIGN_KEY => 'interval_no');
     
-    reset_cached_column_properties($EDT_AUX, 'test_no');
+    reset_cached_column_properties('EDT_AUX', 'test_no');
     
-    $edt->update_record($EDT_AUX, { aux_no => $key3, test_id => $int_good });
+    $edt->update_record('EDT_AUX', { aux_no => $key3, test_id => $int_good });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_AUX, "aux_no = $key3 and test_no = $int_good");
+    $T->ok_found_record('EDT_AUX', "aux_no = $key3 and test_no = $int_good");
 };
 
 
@@ -336,7 +336,7 @@ subtest 'validators' => sub {
     
     # Clear the table, so that we can track record insertions.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then try inserting some records.
     
@@ -344,11 +344,11 @@ subtest 'validators' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    $key1 = $edt->insert_record($EDT_TEST, { string_req => 'abc' });
+    $key1 = $edt->insert_record('EDT_TEST', { string_req => 'abc' });
     
     $T->ok_result($key1, "inserted test record") || return;
     
-    $edt->update_record($EDT_TEST, { $primary => $key1, string_req => 'validator test',
+    $edt->update_record('EDT_TEST', { $primary => $key1, string_req => 'validator test',
 				     string_val => 'abcdefghij' });
     
     $T->ok_has_one_error('F_FORMAT', "found error condition from validator");

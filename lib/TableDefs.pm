@@ -39,8 +39,9 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $TEST_DB %TABLE
 		      %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL 
-		      init_table_names select_test_tables is_test_mode
-		      set_table_name change_table_db change_table_name restore_table_name original_table
+		      init_table_names enable_test_mode disable_test_mode is_test_mode
+		      get_table_name set_table_name set_table_group
+		      change_table_db change_table_name restore_table_name original_table
 		      set_table_property get_table_property
 		      set_column_property get_column_properties list_column_properties
 		      substitute_table alternate_table);
@@ -73,23 +74,23 @@ our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 
 # Define the properties of certain fields that are common to many tables in the PBDB.
 
-our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'TableDefs::AUTHORITIES',
-			     resource_no => 'TableDefs::REFERENCES',
-			     collection_no => 'TableDefs::COLLECTIONS',
-			     occurrence_no => 'TableDefs::OCCURRENCES',
-			     specimen_no => 'TableDefs::SPECIMENS',
-			     measurement_no => 'TableDefs::MEASUREMENTS',
-			     specelt_no => 'TableDefs::SPECELT_DATA',
-			     reid_no => 'TableDefs::REIDS',
-			     opinion_no => 'TableDefs::OPINIONS',
-			     interval_no => 'TableDefs::INTERVAL_DATA',
-			     timescale_no => 'TableDefs::TIMESCALE_DATA',
-			     bound_no => 'TableDefs::TIMESCALE_BOUNDS',
-			     eduresource_no => 'TableDefs::RESOURCE_QUEUE',
-			     person_no => 'TableDefs::WING_USERS',
-			     authorizer_no => 'TableDefs::WING_USERS',
-			     enterer_no => 'TableDefs::WING_USERS',
-			     modifier_no => 'TableDefs::WING_USERS');
+our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITIES',
+			     resource_no => 'REFERENCES',
+			     collection_no => 'COLLECTIONS',
+			     occurrence_no => 'OCCURRENCES',
+			     specimen_no => 'SPECIMENS',
+			     measurement_no => 'MEASUREMENTS',
+			     specelt_no => 'SPECELT_DATA',
+			     reid_no => 'REIDS',
+			     opinion_no => 'OPINIONS',
+			     interval_no => 'INTERVAL_DATA',
+			     timescale_no => 'TIMESCALE_DATA',
+			     bound_no => 'TIMESCALE_BOUNDS',
+			     eduresource_no => 'RESOURCE_QUEUE',
+			     person_no => 'WING_USERS',
+			     authorizer_no => 'WING_USERS',
+			     enterer_no => 'WING_USERS',
+			     modifier_no => 'WING_USERS');
 
 our (%FOREIGN_KEY_COL) = ( authorizer_no => 'person_no',
 			   enterer_no => 'person_no',
@@ -207,49 +208,56 @@ set_table_property($SPECIMENS, PRIMARY_KEY => 'specimen_no');
 
 # Authentication and permission tables
 
-our $PERSON_DATA = "person";
-our $TABLE_PERMS = "table_permissions";
-our $SESSION_DATA = "session_data";
-our $WING_USERS = "pbdb_wing.users";
+# our $PERSON_DATA = "person";
+# our $TABLE_PERMS = "table_permissions";
+# our $SESSION_DATA = "session_data";
+# our $WING_USERS = "pbdb_wing.users";
 
-set_table_property($PERSON_DATA, PRIMARY_KEY => 'person_no');
-set_table_property($SESSION_DATA, PRIMARY_KEY => 'session_id');
-set_table_property($WING_USERS, PRIMARY_KEY => 'id');
+set_table_name(PERSON_DATA => 'person');
+set_table_name(TABLE_PERMS => 'table_permissions');
+set_table_name(SESSION_DATA => 'session_data');
+set_table_name(WING_USERS => 'pbdb_wing.users');
+
+set_table_group('session_data' => 'PERSON_DATA', 'TABLE_PERMS', 'SESSION_DATA', 'WING_USERS');
+
+set_table_property(PERSON_DATA => PRIMARY_KEY => 'person_no');
+set_table_property(SESSION_DATA => PRIMARY_KEY => 'session_id');
+set_table_property(WING_USERS => PRIMARY_KEY => 'id');
 
 # If we are being run in test mode, substitute table names as indicated by the configuration file.
 
-sub test_session_data {
+# sub test_session_data {
     
-    my ($enable, $ds, $debug) = @_;
+#     my ($enable, $ds, $debug) = @_;
     
-    if ( $enable )
-    {
-	die "You must define 'test_db' in the configuration file and call 'init_table_names'" unless $TEST_DB;
+#     if ( $enable )
+#     {
+# 	die "You must define 'test_db' in the configuration file and call 'init_table_names'" unless $TEST_DB;
 	
-	$SESSION_DATA = substitute_table("$TEST_DB.session_data", "session_data");
-	$TABLE_PERMS = substitute_table("$TEST_DB.table_permissions", "table_permissions");
-	$PERSON_DATA = substitute_table("$TEST_DB.person", "person");
+# 	$SESSION_DATA = substitute_table("$TEST_DB.session_data", "session_data");
+# 	$TABLE_PERMS = substitute_table("$TEST_DB.table_permissions", "table_permissions");
+# 	$PERSON_DATA = substitute_table("$TEST_DB.person", "person");
 	
-	eval {
-	    PB2::CommonData->update_person_name_cache($ds) if ref $ds;
-	};
+# 	eval {
+# 	    PB2::CommonData->update_person_name_cache($ds) if ref $ds;
+# 	};
 	
-	print STDERR "TEST MODE: enable 'session_data'\n\n" if $debug;
+# 	print STDERR "TEST MODE: enable 'session_data'\n\n" if $debug;
 	
-	return 1;
-    }
+# 	return 1;
+#     }
     
-    else
-    {
-	$SESSION_DATA = "session_data";
-	$TABLE_PERMS = "table_permissions";
-	$PERSON_DATA = "person";
+#     else
+#     {
+# 	$SESSION_DATA = "session_data";
+# 	$TABLE_PERMS = "table_permissions";
+# 	$PERSON_DATA = "person";
 	
-	print STDERR "TEST MODE: disable 'session_data'\n\n" if $debug;
+# 	print STDERR "TEST MODE: disable 'session_data'\n\n" if $debug;
 	
-	return 2;
-    }
-}
+# 	return 2;
+#     }
+# }
 
 
 # new collection tables
@@ -305,6 +313,8 @@ our $INTERVAL_BRACKET = "interval_bracket";
 our $INTERVAL_MAP = "interval_map";
 our $INTERVAL_BUFFER = "interval_buffer";
 
+set_table_name(INTERVAL_DATA => 'interval_data');
+
 # taxon pic tables
 
 our $PHYLOPICS = 'phylopics';
@@ -353,13 +363,13 @@ our (%TABLE_PROPERTIES, %COLUMN_PROPERTIES);
 # meant to be alternatives to each other, i.e. a main table and a test table.
 
 
-our (%TABLE, %TABLE_NAME_MAP);
+our (%TABLE, %TABLE_GROUP, %TABLE_NAME_MAP);
 
 
 sub set_table_name {
 
     my ($table_specifier, $table_name) = @_;
-
+    
     unlock_keys(%TABLE);
     unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
     $TABLE{$table_specifier} = $table_name;
@@ -370,27 +380,9 @@ sub set_table_name {
 }
 
 
-sub change_table_db {
-    
-    my ($table_specifier, $new_db) = @_;
-    
-    croak "you must specify an alternate database name" unless $new_db;
-    
-    my $orig_name = $TABLE{$table_specifier};
-    
-    croak "no table name has been set for '$table_specifier'" unless $orig_name;
-    
-    $orig_name =~ s/^.+[.]//;
-    
-    my $new_name = "$new_db.$orig_name";
+sub get_table_name {
 
-    $TABLE_NAME_MAP{$new_name} = $orig_name;
-    
-    unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
-    $TABLE{$table_specifier} = $new_name;
-    lock_value(%TABLE, $table_specifier);
-    
-    return $new_name;
+    return $TABLE{$_[0]} || croak "unknown table '$_[0]'";
 }
 
 
@@ -401,6 +393,31 @@ sub change_table_name {
     my $orig_name = original_table($TABLE{$table_specifier});
     
     croak "no table name has been set for '$table_specifier'" unless $orig_name;
+    
+    $TABLE_NAME_MAP{$new_name} = $orig_name;
+    
+    unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
+    $TABLE{$table_specifier} = $new_name;
+    lock_value(%TABLE, $table_specifier);
+    
+    return $new_name;
+}
+
+
+sub change_table_db {
+    
+    my ($table_specifier, $new_db) = @_;
+    
+    croak "you must specify an alternate database name" unless $new_db;
+    
+    my $table_name = $TABLE{$table_specifier};
+    my $orig_name = original_table($table_name);
+    
+    croak "no table name has been set for '$table_specifier'" unless $table_name;
+    
+    $table_name =~ s/^.+[.]//;
+    
+    my $new_name = "$new_db.$table_name";
     
     $TABLE_NAME_MAP{$new_name} = $orig_name;
     
@@ -430,39 +447,128 @@ sub original_table {
 }
 
 
+sub set_table_group {
+    
+    my ($group_name, @table_specifiers) = @_;
+    
+    $TABLE_GROUP{$group_name} = \@table_specifiers;
+}
+
+
+sub enable_test_mode {
+    
+    my ($group_name, $debug) = @_;
+    
+    croak "You must set test mode using 'init_table_names'" unless $TEST_MODE;
+    croak "You must define 'test_db' in the configuration file" unless $TEST_DB;
+    croak "unknown table group '$group_name'" unless $TABLE_GROUP{$group_name};
+    
+    foreach my $t ( @{$TABLE_GROUP{$group_name}} )
+    {
+	change_table_db($t, $TEST_DB);
+    }
+    
+    if ( $debug )
+    {
+	my $line = "TEST MODE: enable '$group_name'\n";
+	
+	if ( $debug eq 'test' )
+	{
+	    Test::More::diag($line);
+	}
+
+	elsif ( ref $debug && $debug->can('debug_line') )
+	{
+	    $debug->debug_line($line) if $debug->debug;
+	}
+	
+	elsif ( $debug eq 'stderr' )
+	{
+	    print STDERR $line;
+	}
+   }
+    
+    return 1;
+}
+
+
+sub disable_test_mode {
+
+    my ($group_name, $debug) = @_;
+    
+    croak "unknown table group '$group_name'" unless $TABLE_GROUP{$group_name};
+    
+    foreach my $t ( @{$TABLE_GROUP{$group_name}} )
+    {
+	restore_table_name($t);
+    }
+    
+    if ( $debug )
+    {
+	my $line = "TEST MODE: disable '$group_name'\n";
+
+	if ( $debug eq 'test' )
+	{
+	    Test::More::diag($line);
+	}
+
+	elsif ( ref $debug && $debug->can('debug_line') )
+	{
+	    $debug->debug_line($line) if $debug->debug;
+	}
+	
+	elsif ( $debug eq 'stderr' )
+	{
+	    print STDERR $line;
+	}
+    }
+    
+    return 2;
+}
+
+
 sub set_table_property {
     
-    my ($table_name, $property, $value) = @_;
+    my ($table_specifier, $property, $value) = @_;
     
     croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
     
-    # my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
-    $TABLE_PROPERTIES{$table_name}{$property} = $value;
+    $TABLE_PROPERTIES{$table_specifier}{$property} = $value;
 }
 
 
 sub get_table_property {
     
-    my ($table_name, $property) = @_;
+    my ($table_specifier, $property) = @_;
     
     croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
     
-    if ( defined $TABLE_PROPERTIES{$table_name}{$property} )
+    if ( exists $TABLE_PROPERTIES{$table_specifier}{$property} )
     {
-	return $TABLE_PROPERTIES{$table_name}{$property}
+	return $TABLE_PROPERTIES{$table_specifier}{$property}
     }
     
-    elsif ( $TABLE_NAME_MAP{$table_name} &&
-	    defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property} )
-    {
-	return $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property};
-    }
-    
-    elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
     {
 	return;
     }
+    
+    # if ( defined $TABLE_PROPERTIES{$table_name}{$property} )
+    # {
+    # 	return $TABLE_PROPERTIES{$table_name}{$property}
+    # }
+    
+    # elsif ( $TABLE_NAME_MAP{$table_name} &&
+    # 	    defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property} )
+    # {
+    # 	return $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property};
+    # }
+    
+    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
+    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    # {
+    # 	return;
+    # }
     
     # elsif ( $TABLE_PROPERTIES{$table_name} )
     # {
@@ -472,14 +578,14 @@ sub get_table_property {
     
     else
     {
-	carp "No properties set for table '$table_name'";
+	carp "No properties set for table '$table_specifier'";
     }
 }
 
 
 sub set_column_property {
     
-    my ($table_name, $column_name, $property, $value) = @_;
+    my ($table_specifier, $column_name, $property, $value) = @_;
     
     croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
     
@@ -498,114 +604,140 @@ sub set_column_property {
 	}
     }
     
-    $COLUMN_PROPERTIES{$table_name}{$column_name}{$property} = $value;
+    $COLUMN_PROPERTIES{$table_specifier}{$column_name}{$property} = $value;
 }
 
 
 sub get_column_property {
     
-    my ($table_name, $column_name, $property) = @_;
+    my ($table_specifier, $column_name, $property) = @_;
     
-    if ( defined $COLUMN_PROPERTIES{$table_name}{$column_name}{$property} )
+    if ( exists $COLUMN_PROPERTIES{$table_specifier}{$column_name}{$property} )
     {
-	return $COLUMN_PROPERTIES{$table_name}{$column_name}{$property};
-    }
-
-    elsif ( $TABLE_NAME_MAP{$table_name} &&
-	    defined $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}{$property} )
-    {
-	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}{$property};
+	return $COLUMN_PROPERTIES{$table_specifier}{$column_name}{$property};
     }
     
-    elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
     {
 	return;
     }
     
+    # if ( defined $COLUMN_PROPERTIES{$table_name}{$column_name}{$property} )
+    # {
+    # 	return $COLUMN_PROPERTIES{$table_name}{$column_name}{$property};
+    # }
+
+    # elsif ( $TABLE_NAME_MAP{$table_name} &&
+    # 	    defined $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}{$property} )
+    # {
+    # 	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}{$property};
+    # }
+    
+    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
+    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    # {
+    # 	return;
+    # }
+    
     else
     {
-	carp "No properties set for table '$table_name'";	
+	carp "No properties set for table '$table_specifier'";	
     }
 }
 
 
 sub get_column_properties {
 
-    my ($table_name, $column_name) = @_;
+    my ($table_specifier, $column_name) = @_;
     
-    # my $base_name = ($TABLE_NAME_MAP{$table_name} ||= $table_name);
-    
-    if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name} )
+    if ( defined $COLUMN_PROPERTIES{$table_specifier}{$column_name} )
     {
-	my %props = %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}};
-	
-	if ( $COLUMN_PROPERTIES{$table_name}{$column_name} )
-	{
-	    foreach my $k ( %{$COLUMN_PROPERTIES{$table_name}{$column_name}} )
-	    {
-		$props{$k} = $COLUMN_PROPERTIES{$table_name}{$column_name}{$k} if
-		    defined $COLUMN_PROPERTIES{$table_name}{$column_name}{$k};
-	    }
-	}
-	
-	return %props;
+	return %{$COLUMN_PROPERTIES{$table_specifier}{$column_name}};
     }
-    
-    elsif ( $COLUMN_PROPERTIES{$table_name}{$column_name} )
-    {
-	return %{$COLUMN_PROPERTIES{$table_name}{$column_name}};
-    }
-    
-    elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+
+    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
     {
 	return;
     }
     
+    # if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name} )
+    # {
+    # 	my %props = %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}};
+	
+    # 	if ( $COLUMN_PROPERTIES{$table_name}{$column_name} )
+    # 	{
+    # 	    foreach my $k ( %{$COLUMN_PROPERTIES{$table_name}{$column_name}} )
+    # 	    {
+    # 		$props{$k} = $COLUMN_PROPERTIES{$table_name}{$column_name}{$k} if
+    # 		    defined $COLUMN_PROPERTIES{$table_name}{$column_name}{$k};
+    # 	    }
+    # 	}
+	
+    # 	return %props;
+    # }
+    
+    # elsif ( $COLUMN_PROPERTIES{$table_name}{$column_name} )
+    # {
+    # 	return %{$COLUMN_PROPERTIES{$table_name}{$column_name}};
+    # }
+    
+    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
+    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    # {
+    # 	return;
+    # }
+    
     else
     {
-	carp "No properties set for table '$table_name'";	
+	carp "No properties set for table '$table_specifier'";	
     }
 }
 
 
 sub list_column_properties {
     
-    my ($table_name) = @_;
+    my ($table_specifier) = @_;
     
-    # my $base_name = ($TABLE_NAME_MAP{$table_name} ||= $table_name);
-    
-    if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    if ( defined $COLUMN_PROPERTIES{$table_specifier} )
     {
-	my %props = map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}};
-	
-	if ( $COLUMN_PROPERTIES{$table_name} )
-	{
-	    foreach my $k ( %{$COLUMN_PROPERTIES{$table_name}} )
-	    {
-		$props{$k} = 1 if
-		    defined $COLUMN_PROPERTIES{$table_name}{$k};
-	    }
-	}
-	
-	return %props;
+	return map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$table_specifier}};
     }
     
-    elsif ( $COLUMN_PROPERTIES{$table_name} )
-    {
-	return map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$table_name}};
-    }
-    
-    elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
     {
 	return;
     }
     
+    # if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    # {
+    # 	my %props = map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}};
+	
+    # 	if ( $COLUMN_PROPERTIES{$table_name} )
+    # 	{
+    # 	    foreach my $k ( %{$COLUMN_PROPERTIES{$table_name}} )
+    # 	    {
+    # 		$props{$k} = 1 if
+    # 		    defined $COLUMN_PROPERTIES{$table_name}{$k};
+    # 	    }
+    # 	}
+	
+    # 	return %props;
+    # }
+    
+    # elsif ( $COLUMN_PROPERTIES{$table_name} )
+    # {
+    # 	return map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$table_name}};
+    # }
+    
+    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
+    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
+    # {
+    # 	return;
+    # }
+    
     else
     {
-	carp "No properties set for table '$table_name'";	
+	carp "No properties set for table '$table_specifier'";	
     }
 }
 

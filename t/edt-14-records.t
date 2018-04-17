@@ -16,7 +16,7 @@ use Test::More tests => 4;
 
 use TableDefs qw(get_table_property set_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -37,7 +37,7 @@ subtest 'setup' => sub {
     
     ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
     
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 };
 
@@ -55,7 +55,7 @@ subtest 'basic' => sub {
     
     # Add some records, with and without record labels. Use 'ignore_record' to skip some.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'abc', record_label => 'a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc', record_label => 'a1' });
     
     is( $edt->current_action && $edt->current_action->label, 'a1',
 	"first action has proper label" );
@@ -64,14 +64,14 @@ subtest 'basic' => sub {
     
     $T->ok_has_error( 'any', qr/^E_TEST \(a1\):/, "first condition has proper label" );
     
-    $edt->insert_record($EDT_TEST, { string_req => 'no label' });
+    $edt->insert_record('EDT_TEST', { string_req => 'no label' });
 
     is( $edt->current_action && $edt->current_action->label, '#2',
 	"second action has proper label" );
     
     $edt->ignore_record;
     
-    $edt->insert_record($EDT_TEST, { string_req => 'no label' });
+    $edt->insert_record('EDT_TEST', { string_req => 'no label' });
     
     is( $edt->current_action && $edt->current_action->label, '#4',
 	"third action has proper label" );
@@ -92,7 +92,7 @@ subtest 'basic' => sub {
 
     # Add another action and make sure it has the proper label.
 
-    $edt->insert_record($EDT_TEST, { string_req => 'test action' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test action' });
 
     $action = $edt->current_action;
 
@@ -106,44 +106,44 @@ subtest 'primary_attr' => sub {
 
     # Clear the table so that we can check for record updating.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # First check that we can update records using the primary key field name for the table, as a
     # control.
     
     my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    my $key = $edt->insert_record($EDT_TEST, { string_req => 'primary attr test' });
+    my $key = $edt->insert_record('EDT_TEST', { string_req => 'primary attr test' });
     
     $T->ok_result( $key, "test record was properly inserted" ) || return;
     
-    ok( $edt->update_record($EDT_TEST, { $primary => $key, signed_val => 3 }),
+    ok( $edt->update_record('EDT_TEST', { $primary => $key, signed_val => 3 }),
 	"record was updated using primary key field name" );
 
     # Now try a different field name, and see that it fails.
     
-    ok( ! $edt->update_record($EDT_TEST, { not_the_key => $key, signed_val => 4 }),
+    ok( ! $edt->update_record('EDT_TEST', { not_the_key => $key, signed_val => 4 }),
 	"record was not updated using field name 'not_the_key'" );
 
     $T->ok_has_warning('any', 'F_NO_KEY', "got F_NO_KEY warning" );
 
     # Then set this field name as the PRIMARY_ATTR, and check that it succeeds.
 
-    set_table_property($EDT_TEST, PRIMARY_ATTR => 'not_the_key');
+    set_table_property('EDT_TEST', PRIMARY_ATTR => 'not_the_key');
 
-    ok( $edt->update_record($EDT_TEST, { not_the_key => $key, signed_val => 5 }),
+    ok( $edt->update_record('EDT_TEST', { not_the_key => $key, signed_val => 5 }),
 	"record was updated using field name 'not_the_key'" );
     
     # Make sure that the record was in fact updated in the table.
     
-    $T->ok_found_record($EDT_TEST, "signed_val=5");
+    $T->ok_found_record('EDT_TEST', "signed_val=5");
 
     # Then check that we can still use the primary key name.
 
-    ok( $edt->update_record($EDT_TEST, { $primary => $key, signed_val => 6 }),
+    ok( $edt->update_record('EDT_TEST', { $primary => $key, signed_val => 6 }),
 	"record was updated again using primary key field name" );
     
-    $T->ok_found_record($EDT_TEST, "signed_val=6");
+    $T->ok_found_record('EDT_TEST', "signed_val=6");
 };
 
 
@@ -153,29 +153,29 @@ subtest 'alternate_name' => sub {
     
     # Clear the table so that we can check for record updating.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # First check that we can update records using the primary key field name for the table, as a
     # control.
     
     my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    my $key1 = $edt->insert_record($EDT_TEST, { string_req => 'alternate name test' });
+    my $key1 = $edt->insert_record('EDT_TEST', { string_req => 'alternate name test' });
     
     $T->ok_result( $key1, "test record was properly inserted" ) || return;
     
-    $edt->update_record($EDT_TEST, { $primary => $key1, alt_val => 'abc' });
+    $edt->update_record('EDT_TEST', { $primary => $key1, alt_val => 'abc' });
     
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key1 and string_val = 'abc'");
+    $T->ok_found_record('EDT_TEST', "$primary = $key1 and string_val = 'abc'");
     
-    $edt->update_record($EDT_TEST, { $primary => $key1, string_val => 'def' });
+    $edt->update_record('EDT_TEST', { $primary => $key1, string_val => 'def' });
 
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key1 and string_val = 'def'");
+    $T->ok_found_record('EDT_TEST', "$primary = $key1 and string_val = 'def'");
 
-    $edt->update_record($EDT_TEST, { $primary => $key1, alt_val => undef });
+    $edt->update_record('EDT_TEST', { $primary => $key1, alt_val => undef });
 
     $T->ok_no_conditions;
-    $T->ok_found_record($EDT_TEST, "$primary = $key1 and string_val = ''");
+    $T->ok_found_record('EDT_TEST', "$primary = $key1 and string_val = ''");
 };

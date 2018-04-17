@@ -16,8 +16,7 @@ use Test::More;
 use base 'Exporter';
 
 use CoreFunction qw(connectDB configData);
-use TableDefs qw(init_table_names select_test_tables get_table_property get_column_properties
-		 $SESSION_DATA $PERSON_DATA $TABLE_PERMS);
+use TableDefs qw(%TABLE init_table_names enable_test_mode get_table_name get_table_property get_column_properties);
 
 use EditTest;
 
@@ -49,16 +48,23 @@ sub new {
     $options->{debug} = 1 if @ARGV && $ARGV[0] eq 'debug';
     $options->{notsilent} = 1 if @ARGV && $ARGV[0] eq 'notsilent';
     
-    my $dbh;
+    my ($dbh);
     
     eval {
 	$dbh = connectDB("config.yml");
 	$dbh->{mysql_enable_utf8} = 1;
 	$dbh->do('SET @@SQL_MODE = CONCAT(@@SQL_MODE, ",STRICT_TRANS_TABLES")');
 	init_table_names(configData, 1);
-	select_test_tables('session_data', 1);
-	EditTest->enable_test_mode('edt_test', $options->{debug});
+	enable_test_mode('session_data');
+	enable_test_mode('edt_test');
+	# EditTest->enable_test_mode('edt_test', $options->{debug});
     };
+    
+    if ( $@ )
+    {
+	diag("Setup failed: $@");
+	BAIL_OUT;
+    }
     
     unless ( defined $dbh )
     {
@@ -74,6 +80,20 @@ sub new {
 	    diag("Could not connect to database. No error message.");
 	}
 
+	BAIL_OUT;
+    }
+    
+    my $test_db = configData->{test_db};
+    
+    unless ( $test_db && $TABLE{SESSION_DATA} =~ /$test_db/ )
+    {
+	diag("Could not enable test mode for 'SESSION_DATA'.");
+	BAIL_OUT;
+    }
+    
+    unless ( $test_db && $TABLE{EDT_TEST} =~ /$test_db/ )
+    {
+	diag("Could not enable test mode for 'EDT_TEST'.");
 	BAIL_OUT;
     }
     
@@ -154,12 +174,21 @@ sub establish_session_data {
 
     my $dbh = $T->dbh;
     
-    croak "The table name $SESSION_DATA is not correct. You must establish a test database."
-	unless $SESSION_DATA =~ /test/i;
+    croak "The table name $TABLE{SESSION_DATA} is not correct. You must establish a test database."
+	unless $TABLE{SESSION_DATA} =~ /test[.]/i;
+    
+    croak "The table name $TABLE{PERSON_DATA} is not correct. You must establish a test database."
+	unless $TABLE{PERSON_DATA} =~ /test[.]/i;
+    
+    croak "The table name $TABLE{WING_USERS} is not correct. You must establish a test database."
+	unless $TABLE{WING_USERS} =~ /test[.]/i;
+    
+    croak "The table name $TABLE{TABLE_PERMS} is not correct. You must establish a test database."
+	unless $TABLE{TABLE_PERMS} =~ /test[.]/i;
     
     eval {
 	
-	$dbh->do("CREATE TABLE IF NOT EXISTS $SESSION_DATA (
+	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{SESSION_DATA} (
   `session_id` varchar(80) NOT NULL,
   `user_id` char(36) NOT NULL,
   `authorizer` varchar(64) NOT NULL DEFAULT '',
@@ -179,9 +208,9 @@ sub establish_session_data {
   `enterer_no` int(10) NOT NULL DEFAULT 0,
   PRIMARY KEY (`session_id`))");
 	
-	$dbh->do("DELETE FROM $SESSION_DATA");
+	$dbh->do("DELETE FROM $TABLE{SESSION_DATA}");
 
-	$dbh->do("INSERT INTO $SESSION_DATA (session_id, user_id, authorizer_no, enterer_no, role, superuser)
+	$dbh->do("INSERT INTO $TABLE{SESSION_DATA} (session_id, user_id, authorizer_no, enterer_no, role, superuser)
 		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','3998','3998','authorizer',0),
 			('SESSION-ENTERER','USERID-ENTERER','3998','3997','enterer',0),
 			('SESSION-GUEST','USERID-GUEST','0','0','guest',0),
@@ -191,7 +220,7 @@ sub establish_session_data {
 			('SESSION-SUPERUSER','USERID-SUPERUSER','3999','3999','authorizer', 1),
 			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','3999','3991','enterer', 0)");
 
-	$dbh->do("CREATE TABLE IF NOT EXISTS $PERSON_DATA (
+	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PERSON_DATA} (
   `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(64) NOT NULL DEFAULT '',
   `reversed_name` varchar(64) NOT NULL DEFAULT '',
@@ -220,9 +249,9 @@ sub establish_session_data {
   `superuser` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`person_no`))");
 
-	$dbh->do("DELETE FROM $PERSON_DATA WHERE institution = 'Test'");
+	$dbh->do("DELETE FROM $TABLE{PERSON_DATA} WHERE institution = 'Test'");
 
-	$dbh->do("INSERT INTO $PERSON_DATA (person_no, name, reversed_name, institution)
+	$dbh->do("INSERT INTO $TABLE{PERSON_DATA} (person_no, name, reversed_name, institution)
 		VALUES	(3999,'A. Superuser','Superuser, A.','Test'),
 			(3998,'A. Authorizer','Authorizer, A.','Test'),
 			(3997,'A. Enterer','Enterer, A.','Test'),
@@ -231,7 +260,53 @@ sub establish_session_data {
 			(3994,'C. Enterer','Enterer, C.','Test'),
 			(3991,'A. Admin','Admin, A.','Test')");
 
-	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE_PERMS (
+	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{WING_USERS} (
+  `id` char(36) COLLATE utf8_unicode_ci NOT NULL,
+  `date_created` datetime NOT NULL DEFAULT current_timestamp,
+  `date_updated` datetime NOT NULL DEFAULT current_timestamp,
+  `admin` tinyint(4) NOT NULL DEFAULT 0,
+  `real_name` varchar(255) COLLATE utf8_unicode_ci DEFAULT '',
+  `password_type` varchar(10) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'bcrypt',
+  `password_salt` char(16) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'abcdefghijklmnop',
+  `username` varchar(30) COLLATE utf8_unicode_ci NOT NULL,
+  `email` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `password` char(50) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `use_as_display_name` varchar(10) COLLATE utf8_unicode_ci DEFAULT 'username',
+  `developer` tinyint(4) NOT NULL DEFAULT 0,
+  `last_login` datetime DEFAULT NULL,
+  `country` char(2) COLLATE utf8_unicode_ci NOT NULL default '',
+  `person_no` int(11) DEFAULT NULL,
+  `middle_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
+  `role` enum('guest','authorizer','enterer','student') COLLATE utf8_unicode_ci NOT NULL,
+  `institution` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
+  `last_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
+  `first_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
+  `authorizer_no` int(11) DEFAULT NULL,
+  `orcid` varchar(19) COLLATE utf8_unicode_ci NOT NULL default '',
+  `contributor_status` enum('active','disabled','deceased') COLLATE utf8_unicode_ci NOT NULL default 'active',
+  `last_pwchange` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `users_username` (`username`),
+  KEY `idx_search` (`real_name`,`username`,`email`),
+  KEY `idx_country` (`country`),
+  KEY `idx_last_name` (`last_name`),
+  KEY `users_email` (`email`),
+  KEY `idx_person_no` (`person_no`))");
+	
+	$dbh->do("DELETE FROM $TABLE{WING_USERS}");
+	
+	$dbh->do("INSERT INTO $TABLE{WING_USERS} (id, person_no, username, role,
+						  real_name, first_name, last_name, institution)
+		VALUES	('USERID-SUPERUSER','3999','sua','authorizer','A. Superuser','A.','Superuser','Test'),
+			('USERID-AUTHORIZER','3998','aua','authorizer','A. Authorizer','A.','Authorizer','Test'),
+			('USERID-ENTERER','3997','ena','enterer','A. Enterer','A.','Enterer','Test'),
+			('USERID-STUDENT','3996','sta','student','A. Student','A.','Student','Test'),
+			('USERID-OTHER','3995','enb','enterer','B. Enterer','B.','Enterer','Test'),
+			('USERID-UNAUTH','3994','enc','enterer','C. Enterer','C.','Enterer','Test'),
+			('USERID-WITH-ADMIN','3991','adm','enterer','A. Admin','A.','Admin','Test'),
+			('USERID-GUEST','0','gua','guest','A. Guest','A.','Guest','Test')");
+	
+	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{TABLE_PERMS} (
   `person_no` int(10) unsigned NOT NULL,
   `table_name` varchar(80) NOT NULL,
   `permission` set('none','view','post','modify','delete','insert_key','admin') NOT NULL,
@@ -265,7 +340,7 @@ sub set_specific_permission {
     $table_name =~ s/^\w+[.]//;
     $person_no = $perm->{enterer_no};
     
-    my $sql = "REPLACE INTO $TABLE_PERMS (person_no, table_name, permission)
+    my $sql = "REPLACE INTO $TABLE{TABLE_PERMS} (person_no, table_name, permission)
 		 VALUES ('$person_no', '$table_name', '$value')";
     
     $T->debug_line($sql);
@@ -293,17 +368,17 @@ sub clear_specific_permissions {
     if ( ref $arg eq 'Permissions' )
     {
 	my $person_no = $arg->{enterer_no};
-	$sql = "DELETE FROM $TABLE_PERMS WHERE person_no = '$person_no'";
+	$sql = "DELETE FROM $TABLE{TABLE_PERMS} WHERE person_no = '$person_no'";
     }
     
     elsif ( $arg )
     {
-	$sql = "DELETE FROM $TABLE_PERMS WHERE table_name = '$arg'";
+	$sql = "DELETE FROM $TABLE{TABLE_PERMS} WHERE table_name = '$arg'";
     }
     
     else
     {
-	$sql = "DELETE FROM $TABLE_PERMS";
+	$sql = "DELETE FROM $TABLE{TABLE_PERMS}";
     }
 
     $T->debug_line($sql);
@@ -418,13 +493,13 @@ sub get_new_edt {
 
 
 # new_perm ( session_id, table_name )
-#
+# 
 # Create a new Permissions object for the given session id. The session record must be in the
 # session_data table in the selected database. Consequently, the test database should be selected
 # before running this.
 #
-# If the optional table name is given, it will be used instead of $EDT_TEST in fetching table
-# permissions.
+# If the optional table name is given, it will be used instead of the default table in fetching
+# table permissions.
 
 sub new_perm {
     
@@ -438,10 +513,12 @@ sub new_perm {
     
     $T->{last_exception} = undef;
     
-    my $perm;
+    my ($perm, $options);
+
+    $options = { debug => 1 } if $T->debug;
     
     eval {
-	$perm = Permissions->new($T->dbh, $session_id, $table_name);
+	$perm = Permissions->new($T->dbh, $session_id, $table_name, $options);
     };
     
     if ( $@ )
@@ -741,7 +818,7 @@ sub test_permissions {
 
     if ( $test =~ /K/ )
     {
-	my ($max) = $T->dbh->selectrow_array("SELECT max($primary) FROM $table");
+	my ($max) = $T->dbh->selectrow_array("SELECT max($primary) FROM $TABLE{$table}");
 	
 	$edt->replace_record($table, { $primary => $max + 1, $string => 'specific key permission' });
 	$perm_count++;
@@ -1372,7 +1449,7 @@ sub ok_found_record {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $sql = "SELECT COUNT(*) FROM $table WHERE $expr";
+    my $sql = "SELECT COUNT(*) FROM $TABLE{$table} WHERE $expr";
     
     $T->debug_line($sql);
     
@@ -1413,7 +1490,7 @@ sub ok_no_record {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $sql = "SELECT COUNT(*) FROM $table WHERE $expr";
+    my $sql = "SELECT COUNT(*) FROM $TABLE{$table} WHERE $expr";
     
     $T->debug_line($sql);
     
@@ -1442,7 +1519,7 @@ sub ok_count_records {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $sql = "SELECT count(*) FROM $table WHERE $expr";
+    my $sql = "SELECT count(*) FROM $TABLE{$table} WHERE $expr";
     
     $T->debug_line($sql);
     
@@ -1478,13 +1555,13 @@ sub clear_table {
     
     croak "you must specify a table" unless $table;
     
-    my $sql = "DELETE FROM $table";
+    my $sql = "DELETE FROM $TABLE{$table}";
     
     $T->debug_line($sql);
     
     my $results = $dbh->do($sql);
     
-    $sql = "ALTER TABLE $table AUTO_INCREMENT = 1";
+    $sql = "ALTER TABLE $TABLE{$table} AUTO_INCREMENT = 1";
 
     $T->debug_line($sql);
     
@@ -1535,7 +1612,7 @@ sub fetch_records_by_key {
     
     croak "could not determine primary key for table '$table'" unless $key_name;
     
-    my $sql = "SELECT * FROM $table WHERE $key_name in ($key_string)";
+    my $sql = "SELECT * FROM $TABLE{$table} WHERE $key_name in ($key_string)";
 
     $T->debug_line($sql);
     
@@ -1580,7 +1657,7 @@ sub fetch_records_by_expr {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $sql = "SELECT * FROM $table WHERE $expr";
+    my $sql = "SELECT * FROM $TABLE{$table} WHERE $expr";
     
     $T->debug_line($sql);
     
@@ -1629,7 +1706,7 @@ sub fetch_keys_by_expr {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $sql = "SELECT $key_name FROM $table WHERE $expr";
+    my $sql = "SELECT $key_name FROM $TABLE{$table} WHERE $expr";
     
     $T->debug_line($sql);
     
@@ -1678,13 +1755,13 @@ sub fetch_row_by_expr {
     
     if ( $expr )
     {
-	$sql = "SELECT $columns FROM $table WHERE $expr";
+	$sql = "SELECT $columns FROM $TABLE{$table} WHERE $expr";
 	$msg = "found a row matching '$expr'";
     }
     
     else
     {
-	$sql = "SELECT $columns FROM $table LIMIT 1";
+	$sql = "SELECT $columns FROM $TABLE{$table} LIMIT 1";
 	$msg = "found a row for '$columns'";
     }
     

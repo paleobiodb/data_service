@@ -15,7 +15,7 @@ use Test::More tests => 2;
 
 use TableDefs qw(get_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -36,7 +36,7 @@ subtest 'setup' => sub {
     
     ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
     
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 };
 
@@ -49,13 +49,13 @@ subtest 'create' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create an edt without CREATE mode and try to insert.
 
     $edt = $T->new_edt($perm_a, { CREATE => 0 });
     
-    $result = $edt->insert_record($EDT_TEST, { string_req => 'test a1' });
+    $result = $edt->insert_record('EDT_TEST', { string_req => 'test a1' });
 
     ok( ! $result, "insert_record returned false" );
     $T->ok_has_error( qr/C_CREATE/, "found caution C_CREATE" );

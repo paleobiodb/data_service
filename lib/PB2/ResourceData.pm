@@ -156,10 +156,10 @@ sub initialize {
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
 	unless $TABLE{RESOURCE_ACTIVE} && $TABLE{RESOURCE_TAGS};
-
+    
     my $dbh = $ds->get_connection;
     
-    complete_output_block($ds, $dbh, '1.2:eduresources:basic', $TABLE{RESOURCE_QUEUE});
+    complete_output_block($ds, $dbh, '1.2:eduresources:basic', 'RESOURCE_QUEUE');
 }
 
 

@@ -10,7 +10,7 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(get_table_property get_column_properties list_column_properties
+use TableDefs qw(%TABLE get_table_property get_column_properties list_column_properties
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
 
 use Carp qw(croak);
@@ -21,6 +21,7 @@ use base 'Exporter';
 our (@EXPORT_OK) = qw(complete_output_block complete_ruleset
 		      get_table_schema reset_cached_column_properties get_authinfo_fields);
 
+our (@CARP_NOT) = qw(EditTransaction Try::Tiny);
 
 our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 			    resource_no => 'rid',
@@ -66,13 +67,17 @@ our (%UNSIGNED_BOUND) = ( tiny => 255,
 
 sub get_table_schema {
     
-    my ($dbh, $table_name, $debug) = @_;
+    my ($dbh, $table_specifier, $debug) = @_;
     
     # If we already have the schema cached, just return it.
     
-    return $SCHEMA_CACHE{$table_name} if ref $SCHEMA_CACHE{$table_name} eq 'HASH';
+    return $SCHEMA_CACHE{$table_specifier} if ref $SCHEMA_CACHE{$table_specifier} eq 'HASH';
     
     # Otherwise construct an SQL statement to get the schema from the appropriate database.
+
+    croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+    
+    my $table_name = $TABLE{$table_specifier};
     
     my ($sql, $check_table, %schema, $quoted_table);
     
@@ -94,7 +99,7 @@ sub get_table_schema {
 	($check_table) = $dbh->selectrow_array($sql);
     };
     
-    croak "unknown table '$table_name'" unless $check_table;
+    croak "unknown table '$table_specifier'" unless $check_table;
     
     print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $debug;
     
@@ -103,13 +108,13 @@ sub get_table_schema {
     
     # Figure out which columns from this table have had properties set for them.
     
-    my %has_properties = list_column_properties($table_name);
+    my %has_properties = list_column_properties($table_specifier);
     
     # Now go through the columns one by one. Find the primary key if there is one, and also parse
     # the column datatypes. Collect up the list of field names for easy access later.
     
     my @field_list;
-
+    
     foreach my $c ( @$columns_ref )
     {
 	# Each field definition comes to us as a hash. The name is in 'Field'.
@@ -135,7 +140,7 @@ sub get_table_schema {
 	
 	if ( $has_properties{$field} )
 	{
-	    my %properties = get_column_properties($table_name, $field);
+	    my %properties = get_column_properties($table_specifier, $field);
 	    
 	    foreach my $p ( @SCHEMA_COLUMN_PROPS )
 	    {
@@ -257,7 +262,7 @@ sub get_table_schema {
     
     $schema{_column_list} = \@field_list;
     
-    $SCHEMA_CACHE{$table_name} = \%schema;
+    $SCHEMA_CACHE{$table_specifier} = \%schema;
     
     return \%schema;
 }
@@ -299,11 +304,11 @@ sub unpack_enum {
 
 sub reset_cached_column_properties {
     
-    my ($table_name, $column_name) = @_;
+    my ($table_specifier, $column_name) = @_;
     
-    if ( my $col = $SCHEMA_CACHE{$table_name}{$column_name} )
+    if ( my $col = $SCHEMA_CACHE{$table_specifier}{$column_name} )
     {
-	my %properties = get_column_properties($table_name, $column_name);
+	my %properties = get_column_properties($table_specifier, $column_name);
 	
 	foreach my $p ( @SCHEMA_COLUMN_PROPS )
 	{
@@ -343,21 +348,21 @@ our (%AUTH_FIELD_CACHE);
 
 sub get_authinfo_fields {
 
-    my ($dbh, $table_name, $debug) = @_;
+    my ($dbh, $table_specifier, $debug) = @_;
     
     # If we already have this info cached, just return it.
     
-    return $AUTH_FIELD_CACHE{$table_name} if exists $AUTH_FIELD_CACHE{$table_name};
+    return $AUTH_FIELD_CACHE{$table_specifier} if exists $AUTH_FIELD_CACHE{$table_specifier};
     
     # Otherwise, get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_name, $debug);
+    my $schema = get_table_schema($dbh, $table_specifier, $debug);
     
     # If we don't have one, then barf.
     
     unless ( $schema && $schema->{_column_list} )
     {
-	croak "Cannot retrieve schema for table '$table_name'";
+	croak "Cannot retrieve schema for table '$table_specifier'";
     }
     
     # Then scan through the columns and collect up the names that are significant.
@@ -370,7 +375,7 @@ sub get_authinfo_fields {
     }
     
     my $fields = join(', ', @authinfo_fields);
-    $AUTH_FIELD_CACHE{$table_name} = $fields;
+    $AUTH_FIELD_CACHE{$table_specifier} = $fields;
     
     return $fields;
 }
@@ -378,11 +383,11 @@ sub get_authinfo_fields {
 
 sub complete_output_block {
     
-    my ($ds, $dbh, $block_name, $table_name) = @_;
+    my ($ds, $dbh, $block_name, $table_specifier) = @_;
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_name, $ds->debug);
+    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
     
     # Then get the existing contents of the block and create a hash of the field names that are
     # already defined. If no block by this name is yet defined, create an empty one.
@@ -497,11 +502,11 @@ sub complete_output_block {
 
 sub complete_ruleset {
     
-    my ($ds, $dbh, $ruleset_name, $table_name) = @_;
+    my ($ds, $dbh, $ruleset_name, $table_specifier) = @_;
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_name, $ds->debug);
+    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
     
     # Then get the existing ruleset documentation and create a hash of the field names that are
     # already defined. If no ruleset by this name is yet defined, croak.
@@ -523,7 +528,7 @@ sub complete_ruleset {
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
     my $field_list = $schema->{_column_list};
-    my %has_properties = list_column_properties($table_name);
+    my %has_properties = list_column_properties($table_specifier);
     
     foreach my $column_name ( @$field_list )
     {
@@ -551,7 +556,7 @@ sub complete_ruleset {
 	
 	if ( $has_properties{$column_name} )
 	{
-	    my %properties = get_column_properties($table_name, $column_name);
+	    my %properties = get_column_properties($table_specifier, $column_name);
 	    
 	    if ( my $type = $properties{EXTID_TYPE} )
 	    {

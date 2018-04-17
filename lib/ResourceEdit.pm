@@ -23,7 +23,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TableDefs qw(%TABLE is_test_mode);
-use ResourceDefs; # qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
+use ResourceDefs;
 
 use base 'EditTransaction';
 
@@ -497,7 +497,7 @@ sub activate_resource {
 	# that the user has admin permission on $RESOURCE_QUEUE, so we record them as having admin
 	# permission for this action as well.
 	
-	my $activation_action = $edt->aux_action($TABLE{RESOURCE_ACTIVE}, 'replace', $r);
+	my $activation_action = $edt->aux_action('RESOURCE_ACTIVE', 'replace', $r);
 	
 	$activation_action->_set_permission('admin');
 	$edt->validate_against_schema($activation_action);
