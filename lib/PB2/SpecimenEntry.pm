@@ -14,18 +14,22 @@ package PB2::SpecimenEntry;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $SPEC_ELEMENTS);
+
+use CoreTableDefs;
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
-use Taxonomy;
-use TaxonDefs qw(%RANK_STRING);
+use SpecimenEdit;
+
+# use Taxonomy;
+# use TaxonDefs qw(%RANK_STRING);
 
 use Carp qw(carp croak);
 use Try::Tiny;
 
 use Moo::Role;
 
+our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::SpecimenData);
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData PB2::OccurrenceData PB2::TaxonData PB2::CollectionData PB2::IntervalData);
 
 # initialize ( )
 # 
@@ -61,32 +65,34 @@ sub initialize {
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:specs:basic_entry' =>
-	{ optional => 'record_id', value => ANY_VALUE },
+	{ optional => 'record_label', valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted for entry or update. This allows the data service",
 	    "to accurately indicate which records generated errors or warnings.",
 	    "You may specify any string, but if you submit multiple records in",
 	    "one call each record should have a unique value.",
-	{ optional => 'spec_id', valid => VALID_IDENTIFIER('SPM') },
+	{ optional => 'specimen_id', valid => VALID_IDENTIFIER('SPM') },
 	    "The identifier of the specimen to be updated. If empty,",
 	    "a new specimen record will be created.",
-	{ optional => 'coll_id', value => VALID_IDENTIFIER('COL') },
+	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL') },
 	    "The identifier of a collection record representing the site from",
 	    "which the specimen was collected.",
-	{ optional => 'inst_code', value => ANY_VALUE },
-	    "The acronym or abbreviation of the institution holding the specimen.",
-	{ optional => 'instcoll_code', value => ANY_VALUE },
-	    "The acronym or abbreviation for the institutional collection of which",
-	    "the specimen is a part.",
-	{ optional => 'specimen_code', value => ANY_VALUE },
-	    "The specimen code or identifier in its institutional collection.",
-	{ optional => 'taxon_name', value => ANY_VALUE },
+	# { optional => 'inst_code', value => ANY_VALUE },
+	#     "The acronym or abbreviation of the institution holding the specimen.",
+	# { optional => 'instcoll_code', value => ANY_VALUE },
+	#     "The acronym or abbreviation for the institutional collection of which",
+	#     "the specimen is a part.",
+	{ optional => 'specimen_code', valid => ANY_VALUE },
+	    "The specimen code or identifier as assigned by its holding institution.",
+	{ optional => 'taxon_name', valid => ANY_VALUE },
 	    "The name of the taxon to which this specimen is identified.",
 	    "You must either specify this OR B<C<taxon_id>>.",
-	{ optional => 'taxon_id', value => VALID_IDENTIFIER('TXN') },
+	{ optional => 'taxon_id', valid => VALID_IDENTIFIER('TXN') },
 	    "The identifier of the taxon to which this specimen is identified.",
-	    "You must either specify this OR B<C<taxoon_name>>.",
-	{ at_most_one => [ 'taxon_name', 'taxon_id' ] });
+	    "You must either specify this OR B<C<taxon_name>>.",
+	{ at_most_one => [ 'taxon_name', 'taxon_id' ] },
+	{ optional => 'reference_id', valid => VALID_IDENTIFIER('REF') },
+	    "The identifier of the reference with which this specimen is identified.");
     
     $ds->define_ruleset('1.2:specs:op_mod' =>
 	">>The following parameters affect how this operation is carried out:",
@@ -139,7 +145,77 @@ sub update_specimens {
     
     my ($request, $arg) = @_;
     
+    my $dbh = $request->get_connection;
     
+    # First get the parameters from the URL, and/or from the body if it is from a web form. In the
+    # latter case, it will necessarily specify a single timescale only.
+    
+    my %allowances;
+    
+    $allowances{CREATE} = 1 if $arg && $arg eq 'add';
+    
+    my $main_params = $request->get_main_params(\%allowances, '1.2:specs:basic_entry');
+    my $perms = $request->require_authentication('SPECIMEN_DATA');
+    
+    # Then decode the body, and extract input records from it. If an error occured, return an
+    # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
+    
+    my (@records) = $request->unpack_input_records($main_params, '1.2:specs:basic_entry', 'specimen_id');
+    
+    # If any errors were found in the parameters, stop now and return an HTTP 400 response.
+    
+    if ( $request->errors )
+    {
+	die $request->exception(400, "Bad request");
+    }
+
+    # Otherwise, start a new transaction.
+    
+    my $edt = SpecimenEdit->new($request, $perms, 'SPECIMEN_DATA', \%allowances);
+    
+    # Now go through the records and handle each one in turn. This will check every record and
+    # queue them up for insertion and/or updating.
+
+    foreach my $r (@records)
+    {
+	$edt->insert_update_record('SPECIMEN_DATA', $r);
+    }
+    
+    # If no errors have been detected so far, execute the queued actions inside a database
+    # transaction. If any errors occur during that process, the transaction will be automatically
+    # rolled back. Otherwise, it will be automatically committed.
+    
+    $edt->commit;
+    
+    # If any warnings (non-fatal conditions) were detected, add them to the
+    # request record so they will be communicated back to the user.
+    
+    $request->collect_edt_warnings($edt);
+    
+    # If we completed the procedure without any exceptions, but error conditions were detected
+    # nonetheless, these should be reported. In this case, the transaction will have automatically
+    # been rolled back.
+    
+    if ( $edt->errors )
+    {
+    	$request->collect_edt_errors($edt);
+	
+	if ( $edt->has_condition_code('E_EXECUTE') )
+	{
+	    die $request->exception(500, "Internal error");
+	}
+	
+	else
+	{
+	    die $request->exception(400, "Bad request");
+	}
+    }
+    
+    # Return all inserted or updated records.
+    
+    # my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
+    
+    # $request->list_specimens_for_update($dbh, $edt->key_labels, $id_string) if $id_string;
 }
 
 
@@ -150,13 +226,16 @@ sub delete_specimens {
 }
 
 
-sub update_collevents {
+# sub update_collevents {
 
 
-}
+# }
 
 
-sub delete_collevents {
+# sub delete_collevents {
 
 
-}
+# }
+
+
+1;

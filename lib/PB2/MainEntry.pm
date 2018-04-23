@@ -11,6 +11,7 @@ use feature 'unicode_strings';
 package PBEntry;
 
 use PB2::CommonEntry;
+use PB2::SpecimenEntry;
 use PB2::TimescaleEntry;
 use PB2::ResourceEntry;
 
@@ -251,6 +252,39 @@ sub initialize {
 	"and will delete the specified record if you have permission to do so.",
 	">Nothing will be returned except a result code indicating success or failure,",
 	"plus any errors or warnings that were generated.");
+    
+    $ds2->define_node({ path => 'entry/specs',
+			title => 'Specimens and Measurements' });
+    
+    $ds2->list_node({ path => 'entry/specs',
+		      list => 'entry',
+		      place => 2 },
+	"Data entry operations for specimen and measurement records.");
+    
+    $ds2->define_node({ path => 'specs/addupdate',
+			title => 'Add specimen records or update existing records',
+			place => 0,
+			allow_method => 'GET,PUT,POST',
+			doc_template => 'entry_operation.tt',
+			role => 'PB2::SpecimenEntry',
+			method => 'update_specimens',
+			arg => 'add',
+			output => '1.2:specs:basic',
+			optional_output => '1.2:specs:basic_map' },
+	"This operation allows you to add new educational resource records to the database and/or",
+	"update the attributes of existing records.");
+    
+    $ds2->list_node({ path => 'specs/addupdate',
+		      list => 'entry/specs',
+		      place => 1 });
+    
+    $ds2->extended_doc({ path => 'specs/addupdate' },
+	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
+	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
+	"you may specify multiple records. Any records which specify an eduresource identifier",
+	"will update the attributes of that record if you have permission to do so.",
+	"Otherwise, a new record will be created, owned by you.",
+	">By default, this operation returns the new or updated record(s).");
     
 }
 

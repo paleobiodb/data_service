@@ -77,6 +77,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_WIDTH => "Field '%1': %2",
 		E_FORMAT => "Field '%1': %2",
 		E_EXTTYPE => "Field '%1': %2",
+		E_PARAM => "%1",
 		W_ALLOW => "Unknown allowance '%1'",
 		W_EXECUTE => "%1",
 		W_TRUNC => "Field '$1': %2",
@@ -1532,6 +1533,7 @@ sub insert_record {
 	    # needs to make additional checks or perform additional work.
 	    
 	    $edt->validate_action($action, 'insert', $table);
+	    $edt->validate_against_schema($action, 'insert', $table);
 	}
 	
 	catch {
@@ -1626,8 +1628,9 @@ sub update_record {
 	    # additional checks or perform additional work.
 	    
 	    $edt->validate_action($action, 'update', $table, $keyexpr);
+	    $edt->validate_against_schema($action, 'update', $table);
 	}
-
+	
 	catch {
 	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
 	    $edt->error_line($_);
@@ -1804,6 +1807,7 @@ sub replace_record {
 	    # make additional checks or perform additional work.
 	    
 	    $edt->validate_action($action, 'replace', $table, $keyexpr);
+	    $edt->validate_against_schema($action, 'replace', $table);
 	}
 	
 	catch {
@@ -3567,14 +3571,6 @@ sub validate_action {
 	$edt->add_condition($action, 'E_EXECUTE', 'TEST VALIDATE');
 	return;
     }
-    
-    # For all operations except deletions, validate the column values specified for this action
-    # against the table schema.
-    
-    if ( $operation ne 'delete' )
-    {
-	return $edt->validate_against_schema($action, $operation, $table);
-    }
 }
 
 
@@ -3690,7 +3686,7 @@ sub validate_against_schema {
 	
 	my $quote_this_value;
 	
-	unless ( exists $record->{$col} )
+	if ( $cr->{ALTERNATE_ONLY} || ! exists $record->{$col} )
 	{
 	    my $alt = $cr->{ALTERNATE_NAME};
 	    
@@ -3702,6 +3698,11 @@ sub validate_against_schema {
 		$value = $record->{$alt};
 		$record_col = $alt;
 		$special = $action->get_special($alt);
+	    }
+
+	    else
+	    {
+		$value = undef;
 	    }
 	}
 	

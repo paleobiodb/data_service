@@ -6,7 +6,7 @@
 # Definitions and properties necessary for working with the Educational Resource tables.
 # 
 
-package ResourceDefs;
+package ResourceTables;
 
 use strict;
 

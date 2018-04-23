@@ -21,8 +21,10 @@ use strict;
 
 use Carp qw(carp croak);
 
-use TableDefs qw(%TABLE is_test_mode);
-use SpecimenDefs;
+use TableDefs qw(%TABLE get_table_property);
+use CoreTableDefs;
+
+use Taxonomy;
 
 use base 'EditTransaction';
 
@@ -30,31 +32,52 @@ use namespace::clean;
 
 
 
-# {
-    # SpecimenEdit->register_conditions(
-    # 	E_PERM => { status => "You do not have permission to change the status of this record" },
-    # 	W_TAG_NOT_FOUND => "Unrecognized resource tag '%1'",
-    # 	W_PERM => { status => "The status of this record has been set to 'pending'" });
-# }
+{
+    SpecimenEdit->register_conditions(
+	C_UNKNOWN_TAXON => "The specified taxon name is not in the database. Add 'allow=UNKNOWN_TAXON' to continue.");
+}
 
 
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
 
 # validate_action ( table, operation, action )
-# 
+
 # This method is called from EditTransaction.pm to validate each insert and update action.
 # We override it to do additional checks before calling validate_against_schema.
 
-# sub validate_action {
+sub validate_action {
     
-#     my ($edt, $action, $operation, $table, $keyexpr) = @_;
+    my ($edt, $action, $operation, $table, $keyexpr) = @_;
     
-#     my $record = $action->record;
-#     my $permission = $action->permission;
+    my $record = $action->record;
     
-#     $edt->validate_against_schema($action, $operation, $table);
-# }
+    if ( $record->{taxon_name} )
+    {
+	if ( $record->{taxon_id} )
+	{
+	    $edt->add_condition('E_PARAM', "you may not specify both 'taxon_name' and 'taxon_id' in the same record");
+	}
+
+	else
+	{
+	    my $dbh = $edt->dbh;
+	    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+
+	    my ($result) = $taxonomy->resolve_names($record->{taxon_name}, { fields => 'SEARCH' });
+	    
+	    if ( $result && $result->{orig_no} )
+	    {
+		$record->{taxon_id} = $result->{taxon_no};
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition('C_UNKNOWN_TAXON', 'taxon_name');
+	    }
+	}
+    }
+}
 
 
 # after_action ( action, operation, table, result )

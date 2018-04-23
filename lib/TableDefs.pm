@@ -63,6 +63,7 @@ our (%TABLE_PROP_NAME) = ( CAN_POST => 1,		# specifies who is allowed to add new
 			   TABLE_COMMENT => 1 );	# specifies a comment relating to the table
 
 our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
+			    ALTERNATE_ONLY => 1,
 			    FOREIGN_KEY => 1,
 			    FOREIGN_TABLE => 1,
 			    EXTID_TYPE => 1,
@@ -76,15 +77,15 @@ our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 
 # Define the properties of certain fields that are common to many tables in the PBDB.
 
-our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITIES',
-			     resource_no => 'REFERENCES',
-			     collection_no => 'COLLECTIONS',
-			     occurrence_no => 'OCCURRENCES',
-			     specimen_no => 'SPECIMENS',
-			     measurement_no => 'MEASUREMENTS',
+our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITY_DATA',
+			     resource_no => 'REFERENCE_DATA',
+			     collection_no => 'COLLECTION_DATA',
+			     occurrence_no => 'OCCURRENCE_DATA',
+			     specimen_no => 'SPECIMEN_DATA',
+			     measurement_no => 'MEASUREMENT_DATA',
 			     specelt_no => 'SPECELT_DATA',
-			     reid_no => 'REIDS',
-			     opinion_no => 'OPINIONS',
+			     reid_no => 'REID_DATA',
+			     opinion_no => 'OPINION_DATA',
 			     interval_no => 'INTERVAL_DATA',
 			     timescale_no => 'TIMESCALE_DATA',
 			     bound_no => 'TIMESCALE_BOUNDS',

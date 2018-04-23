@@ -165,7 +165,7 @@ sub validate_action {
     
     # Then call the regular validation routine.
     
-    $edt->validate_against_schema($action, $operation, $table);
+    # $edt->validate_against_schema($action, $operation, $table);
 }
 
 
