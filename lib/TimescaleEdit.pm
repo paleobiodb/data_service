@@ -11,1210 +11,1295 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw(%TABLE);
+use TableDefs qw(%TABLE get_table_property);
 use TimescaleDefs;
 
 use base 'EditTransaction';
 
+our (@CARP_NOT) = qw(EditTransaction);
 
 our ($UPDATE_LIMIT) = 10;	# Limit on the number of iterations when propagating changes to
                                 # updated records.
 
+our ($TIMESCALE_KEY) = 'timescale_no';
 
-sub add_timescale {
+{
+    TimescaleEdit->register_conditions(
+	C_CREATE_INTERVALS => "The interval '%1' was not found. Allow CREATE_INTERVALS to create it.");
+}
+
+
+# The following methods override methods from EditTransaction.pm:
+# ---------------------------------------------------------------
+
+# authorize_action ( action, operation, table, keyexpr )
+#
+# If the table being acted on is TIMESCALE_BOUNDS, then the action must be authorized by checking
+# the corresponding timescale record for TIMESCALE_DATA instead.
+
+sub authorize_action {
     
-    my ($edt, $attrs) = @_;
+    my ($edt, $action, $operation, $table, $keyexpr) = @_;
     
-    croak "add_timescale: bad attrs\n" unless ref $attrs eq 'HASH';
-    croak "add_timescale: must not have a value for timescale_id\n" if $attrs->{timescale_id};
+    # Operations regarding 'TIMESCALE_DATA' are authorized as usual.
     
-    my $dbh = $edt->dbh;
-    
-    # Start by making sure that we are in a state in which we can proceed.
-    
-    return 0 unless $edt->can_check;
-    
-    # Then make sure that we can actually add records.
-    
-    unless ( $edt->{condition}{CREATE_RECORDS} )
+    if ( $table eq 'TIMESCALE_DATA' )
     {
-	$edt->add_condition("C_CREATE_RECORDS", $attrs->{record_label});
-	return;
+	return $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
     }
+
+    # Operations regarding 'TIMESCALE_BOUNDS' and 'TIMESCALE_REFS' must be authorized with respect
+    # to the 'TIMESCALE_DATA' table. They count as updates on the corresponding timescale record.
     
-    # Now check that all of the specified attributes are of the correct type and in the correct
-    # value range, and that all references to other records match up to existing records.
-    
-    $edt->new_record;
-    
-    my ($fields, $values) = $edt->check_timescale_attrs('add', 'timescale', $attrs);
-    
-    # Then make sure that the necessary attributes have the proper values.
-    
-    $edt->check_timescale_values($attrs);
-    
-    # If any errors occurred, we stop here. This counts as "check only" mode.
-    
-    return 0 unless $edt->can_edit;
-    
-    # Otherwise, insert the new record.
-    
-    my $field_list = join(',', @$fields);
-    my $value_list = join(',', @$values);
-    
-    my $sql = "INSERT INTO $TIMESCALE_DATA ($field_list) VALUES ($value_list)";
-    my ($insert_result, $insert_id);
-    
-    print STDERR "$sql\n\n" if $edt->debug;
-    
-    try {
-	$insert_result = $dbh->do($sql);
-	$insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
-	print STDERR "RESULT: 0\n" if $edt->debug && ! $insert_id;
-    }
+    elsif ( $table eq 'TIMESCALE_BOUNDS' || $table eq 'TIMESCALE_REFS' )
+    {
+	my $record = $action->record;
+	my $keyval = $record->{timescale_id} || $record->{timescale_no};
 	
-    catch {
-	print STDERR "ERROR: $_\n";
-    };
-    
-    if ( $insert_id )
-    {
-	$edt->{timescale_updated}{$insert_id} = 1;
-	return $insert_id;
+	# Unless a timescale was specified in which to add this boundary, add an error condition
+	# and return an innocuous permission code so that no additional error condition will be
+	# attached to this action.
+	
+	unless ( $keyval )
+	{
+	    $edt->add_condition($action, 'E_REQUIRED', 'timescale_no');
+	    return 'post';
+	}
+	
+	return $edt->SUPER::authorize_action($action, 'update', 'TIMESCALE_DATA', "timescale_no=$keyval");
     }
     
+    # User-initiated operations regarding 'TIMESCALE_INTS' are only allowed with admin permission.
+
+    elsif ( $table eq 'TIMESCALE_INTS' )
+    {
+	my $permission = $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
+
+	return $permission eq 'admin' ? 'admin' : 'none';
+    }
+
     else
     {
-	$edt->add_condition("E_INTERNAL", $attrs->{record_label});
-	return 0;
+	croak "Invalid table '$table'";
     }
 }
 
 
-sub update_timescale {
-
-    my ($edt, $attrs) = @_;
+sub before_action {
     
-    croak "update_timescale: bad attrs\n" unless ref $attrs eq 'HASH';
-    croak "update_timescale: must have a value for timescale_id\n" unless $attrs->{timescale_id};
+    my ($edt, $action, $operation, $table) = @_;
     
     my $dbh = $edt->dbh;
-    
-    # Start by making sure that we are in a state in which we can proceed.
-    
-    return 0 unless $edt->can_check;
-    
-    # We first need to make sure that the record to be updated actually exists, and fetch its
-    # current attributes.
-    
-    my $timescale_id = $attrs->{timescale_id};
-    my $record_label = $attrs->{record_label} || $attrs->{timescale_id};
-    
-    unless ( $timescale_id =~ /^\d+$/ && $timescale_id > 0 )
-    {
-	$edt->add_condition("E_TIMESCALE_ID", $record_label, $timescale_id);
-	return 0;
-    }
-    
-    my ($current) = $dbh->selectrow_hashref("
-		SELECT * FROM $TIMESCALE_DATA WHERE timescale_no = $timescale_id");
-    
-    unless ( $current )
-    {
-	$edt->add_condition("E_NOT_FOUND", $record_label, $timescale_id);
-	return 0;
-    }
-    
-    # Now check that all of the specified attributes are of the correct type and in the correct
-    # value range, and that all references to other records match up to existing records.
-    
-    $edt->new_record;
-    
-    my ($fields, $values) = $edt->check_timescale_attrs('update', 'timescale', $attrs);
-    
-    # Then make sure that the necessary attributes have the proper values.
-    
-    $edt->check_timescale_values($attrs, $current);
-    
-    # If any errors occurred, we stop here. This counts as "check only" mode.
-    
-    return 0 unless $edt->can_edit;
-    
-    # Otherwise, update the record.
-    
-    my $set_list = $edt->generate_set_list($fields, $values);
-    
-    return 0 unless $set_list;
-    
-    my $sql = "	UPDATE $TIMESCALE_DATA SET $set_list, modified = NOW()
-		WHERE timescale_no = $timescale_id";
-    my $update_result;
-    
-    print STDERR "$sql\n\n" if $edt->debug;
-    
-    try {
-	$update_result = $dbh->do($sql);
-	print STDERR "RESULT: 0\n" if $edt->debug && ! $update_result;
-    }
-	
-    catch {
-	print STDERR "ERROR: $_\n";
-    };
-    
-    if ( $update_result )
-    {
-	$edt->{timescale_updated}{$timescale_id} = 1;
-	return $timescale_id;
-    }
-    
-    else
-    {
-	$edt->add_condition("E_INTERNAL", $record_label, $timescale_id);
-	return 0;
-    }
-}
-
-
-sub delete_timescale {
-
-    my ($edt, $timescale_id) = @_;
-    
-    return unless defined $timescale_id && $timescale_id ne '';
-    
-    # Throw an exception if we are given an invalid id.
-    
-    croak "delete_timescale: bad timescale identifier '$timescale_id'\n" unless $timescale_id =~ /^\d+$/;
-    
-    # Then make sure that we are in a state in which we can proceed.
-    
-    return 0 unless $edt->can_check;
-    
-    my $dbh = $edt->dbh;
-    
-    # First determine if the record actually exists.
-    
-    my ($exists) = $dbh->selectrow_array("
-		SELECT timescale_no FROM $TIMESCALE_DATA WHERE timescale_no = $timescale_id");
-    
-    unless ( $exists )
-    {
-	$edt->add_condition("W_NOT_FOUND", $timescale_id);
-	return 0;
-    }
-    
-    # If we get here, then there is a record in the database that we can delete.
-    
-    # Permission checks go here.
-    
-    # ... permission checks ...
-    
-    # If any errors occurred, or if $check_only was specified, we stop here.
-    
-    return 0 unless $edt->can_edit;
-    
-    # Now check to see if there are any other boundaries that depend on the ones in this
-    # timescale. If so, then we need to deal with them. If the condition BREAK_DEPENDENCIES is
-    # allowed, then cut each of these records loose. Otherwise, return a caution.
-    
-    my $sql;
-    
-    $sql = "	SELECT count(*) FROM $TIMESCALE_BOUNDS as related
-			join $TIMESCALE_BOUNDS as base
-		WHERE base.timescale_no in ($timescale_id) and
-		    related.base_no = base.bound_no or related.range_no = base.bound_no or
-		    related.color_no = base.bound_no or related.refsource_no = base.bound_no";
-    
-    print STDERR "$sql\n\n" if $edt->debug;
-    
-    my ($dependent_count) = $dbh->selectrow_array($sql);
+    my $keyval = $action->keyval;
     my $result;
     
-    if ( $dependent_count )
+    if ( $operation eq 'delete' && $table eq 'TIMESCALE_DATA' )
     {
-	unless ( $edt->{condition}{BREAK_DEPENDENCIES} )
+	unless ( $keyval )
 	{
-	    $edt->add_condition("C_BREAK_DEPENDENCIES", $timescale_id, $dependent_count);
-	    return 0;
+	    $edt->add_condition('E_NO_KEY', 'delete');
+	    return;
 	}
 	
-	else
-	{
-	    $result = $edt->detach_related_bounds('timescale', $timescale_id);
-	    return 0 unless $result;
-	}
-    }
-    
-    # If we get here, then we can delete. We return an OK as long as no exception is caught, on
-    # the assumption that the delete statement is so simple that the only way it could go wrong is
-    # if the record is somehow already gone.
-    
-    my @sql = "	DELETE FROM $TIMESCALE_BOUNDS WHERE timescale_no in ($timescale_id)";
-    
-    push @sql,"	DELETE FROM $TIMESCALE_DATA WHERE timescale_no in ($timescale_id)";
-    
-    my $delete_result;
-    
-    try {
-	
-	foreach my $stmt ( @sql )
-	{
-	    print STDERR "$stmt\n\n" if $edt->debug;
-	    $delete_result = $dbh->do($sql);
-	}	
-	
-	print STDERR "RESULT: 0\n" if $edt->debug && ! $delete_result;
-    }
-    
-    catch {
-	print STDERR "ERROR: $_\n";
-    };
-    
-    if ( $delete_result )
-    {
-	$edt->{timescale_updated}{$timescale_id} = 1;
-	return $timescale_id;
-    }
-    
-    else
-    {
-	$edt->add_condition("W_INTERNAL", $timescale_id);
-	return 0;
+	$result = $dbh->do("DELETE FROM $TABLE{TIMESCALE_BOUNDS} WHERE timescale_no=$keyval");
     }
 }
 
 
-# Add a new boundary according to the specified attributes.
-
-sub add_boundary {
+# sub add_timescale {
     
-    my ($edt, $attrs) = @_;
+#     my ($edt, $attrs) = @_;
     
-    croak "add_boundary: bad attrs\n" unless ref $attrs eq 'HASH';
-    croak "add_boundary: must not have a value for bound_id\n" if $attrs->{bound_id};
+#     croak "add_timescale: bad attrs\n" unless ref $attrs eq 'HASH';
+#     croak "add_timescale: must not have a value for timescale_id\n" if $attrs->{timescale_id};
     
-    # Start by making sure that we are in a state in which we can proceed.
+#     my $dbh = $edt->dbh;
     
-    return 0 unless $edt->can_check;
+#     # Start by making sure that we are in a state in which we can proceed.
     
-    my $dbh = $edt->dbh;
+#     return 0 unless $edt->can_check;
     
-    # Make sure that we know what timescale to create the boundary in, and
-    # that a bound type was specified.
+#     # Then make sure that we can actually add records.
     
-    unless ( $attrs->{timescale_id} )
-    {
-        $edt->add_condition("E_BOUND_TIMESCALE", $attrs->{record_label});
-    }
+#     unless ( $edt->{condition}{CREATE_RECORDS} )
+#     {
+# 	$edt->add_condition("C_CREATE_RECORDS", $attrs->{record_label});
+# 	return;
+#     }
     
-    unless ( $attrs->{bound_type} )
-    {
-	$edt->add_condition("E_BOUND_TYPE", $attrs->{record_label});
-    }
+#     # Now check that all of the specified attributes are of the correct type and in the correct
+#     # value range, and that all references to other records match up to existing records.
     
-    # Then check for missing or redundant attributes. These will vary by bound type.
+#     $edt->new_record;
     
-    my $timescale_id = $attrs->{timescale_id};
-    my $bound_type = $attrs->{bound_type};
+#     my ($fields, $values) = $edt->check_timescale_attrs('add', 'timescale', $attrs);
     
-    if ( $bound_type eq 'absolute' || $bound_type eq 'spike' )
-    {
-	$edt->add_condition("E_AGE_MISSING", $attrs->{record_label})
-	    unless $attrs->{age};
-
-	$edt->add_condition("W_BASE_IGNORED", $attrs->{record_label})
-	    if $attrs->{range_id};
+#     # Then make sure that the necessary attributes have the proper values.
+    
+#     $edt->check_timescale_values($attrs);
+    
+#     # If any errors occurred, we stop here. This counts as "check only" mode.
+    
+#     return 0 unless $edt->can_edit;
+    
+#     # Otherwise, insert the new record.
+    
+#     my $field_list = join(',', @$fields);
+#     my $value_list = join(',', @$values);
+    
+#     my $sql = "INSERT INTO $TIMESCALE_DATA ($field_list) VALUES ($value_list)";
+#     my ($insert_result, $insert_id);
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     try {
+# 	$insert_result = $dbh->do($sql);
+# 	$insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
+# 	print STDERR "RESULT: 0\n" if $edt->debug && ! $insert_id;
+#     }
 	
-	$edt->add_condition("W_RANGE_IGNORED", $attrs->{record_label})
-	    if $attrs->{range_id};
-	
-	$edt->add_condition("W_OFFSET_IGNORED", $attrs->{record_label})
-	    if $attrs->{offset};
-    }
+#     catch {
+# 	print STDERR "ERROR: $_\n";
+#     };
     
-    elsif ( $bound_type eq 'same' )
-    {
-	$edt->add_condition("E_BASE_MISSING", $attrs->{record_label})
-	    unless $attrs->{base_id};
-	
-	$edt->add_condition("W_RANGE_IGNORED", $attrs->{record_label})
-	    if $attrs->{range_id};
-	
-	$edt->add_condition("W_AGE_IGNORED", $attrs->{record_label})
-	    if $attrs->{age};
-
-	$edt->add_condition("W_OFFSET_IGNORED", $attrs->{record_label})
-	    if $attrs->{offset};
-    }
+#     if ( $insert_id )
+#     {
+# 	$edt->{timescale_updated}{$insert_id} = 1;
+# 	return $insert_id;
+#     }
     
-    elsif ( $bound_type eq 'offset' || $bound_type eq 'percent' )
-    {
-	$edt->add_condition("E_BASE_MISSING", $attrs->{record_label})
-	    unless $attrs->{base_id};
-	
-	$edt->add_condition("E_OFFSET_MISSING", $attrs->{record_label})
-	    unless $attrs->{offset};
-	
-	$edt->add_condition("W_AGE_IGNORED", $attrs->{record_label})
-	    if $attrs->{age};
-	
-	if ( $bound_type eq 'percent' )
-	{
-	    $edt->add_condition("E_RANGE_MISSING", $attrs->{record_label})
-		unless $attrs->{range_id};
-	}
-	
-	else
-	{
-	    $edt->add_condition("W_RANGE_IGNORED", $attrs->{record_label})
-		if $attrs->{range_id};
-	}
-    }
-    
-    # Now check that all of the specified attributes are of the correct type and in the correct
-    # value range, and that all references to other records match up to existing records.
-    
-    my ($fields, $values) = $edt->check_timescale_attrs('add', 'bound', $attrs);
-    
-    # Then make sure that the necessary attributes have the proper values.
-    
-    $edt->check_bound_values($attrs);
-    
-    # If any errors occurred, we stop here. This counts as "check only" mode.
-    
-    return 0 unless $edt->can_edit;
-    
-    # Otherwise, insert the new record.
-    
-    my $field_list = join(',', @$fields, 'is_updated');
-    my $value_list = join(',', @$values, '1');
-    
-    my $sql = "INSERT INTO $TIMESCALE_BOUNDS ($field_list) VALUES ($value_list)";
-    my ($insert_result, $insert_id);
-    
-    print STDERR "$sql\n\n" if $edt->debug;
-    
-    try {
-	$insert_result = $dbh->do($sql);
-	$insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
-	print STDERR "RESULT: 0\n" if $edt->debug && ! $insert_id;
-    }
-    
-    catch {
-	print STDERR "ERROR: $_\n";
-    };
-    
-    if ( $insert_id )
-    {
-	$edt->{bound_updated}{$insert_id} = 1;
-	$edt->{timescale_updated}{$timescale_id} = 1;
-	return $insert_id;
-    }
-    
-    else
-    {
-	$edt->add_condition("E_INTERNAL", $attrs->{record_label});
-	return 0;
-    }
-}
+#     else
+#     {
+# 	$edt->add_condition("E_INTERNAL", $attrs->{record_label});
+# 	return 0;
+#     }
+# }
 
 
-sub update_boundary {
+# sub update_timescale {
 
-    my ($edt, $attrs) = @_;
+#     my ($edt, $attrs) = @_;
     
-    croak "update_boundary: bad attrs\n" unless ref $attrs eq 'HASH';
-    croak "update_boundary: must have a value for bound_id\n" unless $attrs->{bound_id};
+#     croak "update_timescale: bad attrs\n" unless ref $attrs eq 'HASH';
+#     croak "update_timescale: must have a value for timescale_id\n" unless $attrs->{timescale_id};
     
-    my $dbh = $edt->dbh;
+#     my $dbh = $edt->dbh;
     
-    my $bound_id = $attrs->{bound_id};
-    my $record_label = $attrs->{record_label} || $attrs->{bound_id};
+#     # Start by making sure that we are in a state in which we can proceed.
     
-    # Start by making sure that we are in a state in which we can proceed.
+#     return 0 unless $edt->can_check;
     
-    return 0 unless $edt->can_check;
+#     # We first need to make sure that the record to be updated actually exists, and fetch its
+#     # current attributes.
     
-    # We first need to make sure that the record to be updated actually exists, and fetch its
-    # current attributes.
+#     my $timescale_id = $attrs->{timescale_id};
+#     my $record_label = $attrs->{record_label} || $attrs->{timescale_id};
     
-    unless ( $bound_id =~ /^\d+$/ && $bound_id > 0 )
-    {
-	$edt->add_condition("E_BOUND_ID", $record_label, $bound_id);
-	return 0;
-    }
+#     unless ( $timescale_id =~ /^\d+$/ && $timescale_id > 0 )
+#     {
+# 	$edt->add_condition("E_TIMESCALE_ID", $record_label, $timescale_id);
+# 	return 0;
+#     }
     
-    my ($current) = $dbh->selectrow_hashref("
-		SELECT * FROM $TIMESCALE_BOUNDS WHERE bound_no = $bound_id");
+#     my ($current) = $dbh->selectrow_hashref("
+# 		SELECT * FROM $TIMESCALE_DATA WHERE timescale_no = $timescale_id");
     
-    unless ( $current )
-    {
-	$edt->add_condition("E_NOT_FOUND", $record_label, $bound_id);
-	return 0;
-    }
+#     unless ( $current )
+#     {
+# 	$edt->add_condition("E_NOT_FOUND", $record_label, $timescale_id);
+# 	return 0;
+#     }
     
-    # If a timescale_id was specified, it must match the current one otherwise an error will be
-    # thrown. It is not permitted to move a boundary to a different timescale.
+#     # Now check that all of the specified attributes are of the correct type and in the correct
+#     # value range, and that all references to other records match up to existing records.
     
-    if ( defined $attrs->{timescale_id} && $attrs->{timescale_id} ne '' )
-    {
-	if ( $current->{timescale_no} && $current->{timescale_no} ne $attrs->{timescale_id} )
-	{
-	    $edt->add_condition("E_BOUND_TIMESCALE", $record_label);
-	}
-    }
+#     $edt->new_record;
     
-    # Check for missing or redundant attributes. These will vary by bound type.
+#     my ($fields, $values) = $edt->check_timescale_attrs('update', 'timescale', $attrs);
     
-    my $bound_type = $attrs->{bound_type} || $current->{bound_type};
-    my $timescale_id = $current->{timescale_no};
+#     # Then make sure that the necessary attributes have the proper values.
     
-    if ( $bound_type eq 'absolute' || $bound_type eq 'spike' )
-    {
-	$edt->add_condition("E_AGE_MISSING", $record_label)
-	    unless defined $attrs->{age} || defined $current->{age};
+#     $edt->check_timescale_values($attrs, $current);
+    
+#     # If any errors occurred, we stop here. This counts as "check only" mode.
+    
+#     return 0 unless $edt->can_edit;
+    
+#     # Otherwise, update the record.
+    
+#     my $set_list = $edt->generate_set_list($fields, $values);
+    
+#     return 0 unless $set_list;
+    
+#     my $sql = "	UPDATE $TIMESCALE_DATA SET $set_list, modified = NOW()
+# 		WHERE timescale_no = $timescale_id";
+#     my $update_result;
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     try {
+# 	$update_result = $dbh->do($sql);
+# 	print STDERR "RESULT: 0\n" if $edt->debug && ! $update_result;
+#     }
 	
-	$edt->add_condition("W_BASE_IGNORED", $record_label)
-	    if $attrs->{range_id};
-	
-	$edt->add_condition("W_RANGE_IGNORED", $record_label)
-	    if $attrs->{range_id};
-	
-	$edt->add_condition("W_OFFSET_IGNORED", $record_label)
-	    if $attrs->{offset};
-    }
+#     catch {
+# 	print STDERR "ERROR: $_\n";
+#     };
     
-    elsif ( $bound_type eq 'same' )
-    {
-	$edt->add_condition("E_BASE_MISSING", $record_label)
-	    unless $attrs->{base_id} || $current->{base_no};
-	
-	$edt->add_condition("W_RANGE_IGNORED", $record_label)
-	    if $attrs->{range_id};
-	
-	$edt->add_condition("W_AGE_IGNORED", $record_label)
-	    if defined $attrs->{age};
-
-	$edt->add_condition("W_OFFSET_IGNORED", $record_label)
-	    if $attrs->{offset};
-    }
+#     if ( $update_result )
+#     {
+# 	$edt->{timescale_updated}{$timescale_id} = 1;
+# 	return $timescale_id;
+#     }
     
-    elsif ( $bound_type eq 'offset' || $bound_type eq 'percent' )
-    {
-	$edt->add_condition("E_BASE_MISSING", $record_label)
-	    unless $attrs->{base_id} || $current->{base_no};
-	
-	$edt->add_condition("E_OFFSET_MISSING", $record_label)
-	    unless $attrs->{offset};
-	
-	$edt->add_condition("W_AGE_IGNORED", $record_label)
-	    if $attrs->{age};
-	
-	if ( $bound_type eq 'percent' )
-	{
-	    $edt->add_condition("E_RANGE_MISSING", $record_label)
-		unless $attrs->{range_id} || $current->{range_no};
-	}
-	
-	else
-	{
-	    $edt->add_condition("W_RANGE_IGNORED", $record_label)
-		if $attrs->{range_id};
-	}
-    }
-    
-    # Now check that all of the specified attributes are of the correct type and in the correct
-    # value range, and that all references to other records match up to existing records.
-    
-    my ($fields, $values) = $edt->check_timescale_attrs('update', 'bound', $attrs);
-    
-    # Then make sure that the necessary attributes have the proper values.
-    
-    $edt->check_bound_values($attrs, $current);
-    
-    # If any errors occurred, or if $check_only was specified, we stop here.
-    
-    return 0 unless $edt->can_edit;
-    
-    # Otherwise, update the record.
-    
-    my $set_list = $edt->generate_set_list($fields, $values);
-    
-    return 0 unless $set_list;
-    
-    my $sql = "	UPDATE $TIMESCALE_BOUNDS SET $set_list, is_updated=1, modified = now()
-		WHERE bound_no = $bound_id";
-    
-    print STDERR "$sql\n\n" if $edt->debug;
-    
-    my $update_result;
-    
-    try {
-	$update_result = $dbh->do($sql);
-	print STDERR "RESULT: 0\n" unless $update_result;
-    }
-    
-    catch {
-	print STDERR "ERROR: $_\n";
-    };
-    
-    if ( $update_result )
-    {
-	$edt->{bound_updated}{$bound_id} = 1;
-	$edt->{timescale_updated}{$timescale_id} = 1;
-	
-	return $bound_id;
-    }
-    
-    else
-    {
-	$edt->add_condition("E_INTERNAL", $record_label);
-	return 0;
-    }
-}
+#     else
+#     {
+# 	$edt->add_condition("E_INTERNAL", $record_label, $timescale_id);
+# 	return 0;
+#     }
+# }
 
 
-sub delete_boundary {
+# sub delete_timescale {
 
-    my ($edt, $delete_type, $id) = @_;
+#     my ($edt, $timescale_id) = @_;
     
-    return unless defined $id && $id ne '';
+#     return unless defined $timescale_id && $timescale_id ne '';
     
-    croak "delete_boundary: bad value '$id' for id\n" unless $id =~ /^\d+$/;
+#     # Throw an exception if we are given an invalid id.
     
-    # Start by making sure that we are in a state in which we can proceed.
+#     croak "delete_timescale: bad timescale identifier '$timescale_id'\n" unless $timescale_id =~ /^\d+$/;
     
-    return 0 unless $edt->can_check;
+#     # Then make sure that we are in a state in which we can proceed.
     
-    my $dbh = $edt->dbh;
+#     return 0 unless $edt->can_check;
     
-    my $timescale_id;
+#     my $dbh = $edt->dbh;
     
-    # If we are deleting one or more boundaries, we need to make sure the records
-    # actually exist and fetch their current attributes.
+#     # First determine if the record actually exists.
     
-    if ( $delete_type eq 'bound' )
-    {
-	# unless ( $bound_id =~ /^\d+$/ && $bound_id > 0 )
-	# {
-	#     return $edt->add_condition("E_BOUND_ID: bad value '$bound_id' for 'bound_id'");
-	# }
+#     my ($exists) = $dbh->selectrow_array("
+# 		SELECT timescale_no FROM $TIMESCALE_DATA WHERE timescale_no = $timescale_id");
+    
+#     unless ( $exists )
+#     {
+# 	$edt->add_condition("W_NOT_FOUND", $timescale_id);
+# 	return 0;
+#     }
+    
+#     # If we get here, then there is a record in the database that we can delete.
+    
+#     # Permission checks go here.
+    
+#     # ... permission checks ...
+    
+#     # If any errors occurred, or if $check_only was specified, we stop here.
+    
+#     return 0 unless $edt->can_edit;
+    
+#     # Now check to see if there are any other boundaries that depend on the ones in this
+#     # timescale. If so, then we need to deal with them. If the condition BREAK_DEPENDENCIES is
+#     # allowed, then cut each of these records loose. Otherwise, return a caution.
+    
+#     my $sql;
+    
+#     $sql = "	SELECT count(*) FROM $TIMESCALE_BOUNDS as related
+# 			join $TIMESCALE_BOUNDS as base
+# 		WHERE base.timescale_no in ($timescale_id) and
+# 		    related.base_no = base.bound_no or related.range_no = base.bound_no or
+# 		    related.color_no = base.bound_no or related.refsource_no = base.bound_no";
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     my ($dependent_count) = $dbh->selectrow_array($sql);
+#     my $result;
+    
+#     if ( $dependent_count )
+#     {
+# 	unless ( $edt->{condition}{BREAK_DEPENDENCIES} )
+# 	{
+# 	    $edt->add_condition("C_BREAK_DEPENDENCIES", $timescale_id, $dependent_count);
+# 	    return 0;
+# 	}
 	
-	my ($current) = $dbh->selectrow_hashref("
-		SELECT * FROM $TIMESCALE_BOUNDS WHERE bound_no = $id");
+# 	else
+# 	{
+# 	    $result = $edt->detach_related_bounds('timescale', $timescale_id);
+# 	    return 0 unless $result;
+# 	}
+#     }
+    
+#     # If we get here, then we can delete. We return an OK as long as no exception is caught, on
+#     # the assumption that the delete statement is so simple that the only way it could go wrong is
+#     # if the record is somehow already gone.
+    
+#     my @sql = "	DELETE FROM $TIMESCALE_BOUNDS WHERE timescale_no in ($timescale_id)";
+    
+#     push @sql,"	DELETE FROM $TIMESCALE_DATA WHERE timescale_no in ($timescale_id)";
+    
+#     my $delete_result;
+    
+#     try {
 	
-	unless ( $current )
-	{
-	    $edt->add_condition("W_NOT_FOUND", $id);
-	    return 0;
-	}
+# 	foreach my $stmt ( @sql )
+# 	{
+# 	    print STDERR "$stmt\n\n" if $edt->debug;
+# 	    $delete_result = $dbh->do($sql);
+# 	}	
 	
-	# If we get here, then there is a record in the database that we can delete. If a
-	# timescale id was specified, it had better match the one in the record.
-	
-	# if ( defined $attrs->{timescale_id} && $attrs->{timescale_id} ne '' )
-	# {
-	#     if ( $current->{timescale_no} && $current->{timescale_no} ne $attrs->{timescale_id} )
-	#     {
-	# 	$edt->add_condition("E_BOUND_TIMESCALE: the specified bound is not associated with the specified timescale");
-	#     }
-	# }
-	
-	# Keep track of what timescale this bound is in, if we didn't know it originally.
-	
-	$timescale_id = $current->{timescale_id};
-    }
+# 	print STDERR "RESULT: 0\n" if $edt->debug && ! $delete_result;
+#     }
     
-    # If we are given a timescale_id but not a bound_id, check to make sure that timescale
-    # actually exists.
+#     catch {
+# 	print STDERR "ERROR: $_\n";
+#     };
     
-    elsif ( $delete_type ne 'timescale' || $delete_type eq 'unupdated' )
-    {
-	my ($ts) = $dbh->selectrow_hashref("
-		SELECT * FROM $TIMESCALE_DATA WHERE timescale_no = $id");
-	
-	unless ( $ts )
-	{
-	    return $edt->add_condition("E_NOT_FOUND: timescale '$id' is not in the database");
-	}
-	
-	$timescale_id = $id;
-    }
+#     if ( $delete_result )
+#     {
+# 	$edt->{timescale_updated}{$timescale_id} = 1;
+# 	return $timescale_id;
+#     }
     
-    # Otherwise, we weren't given anything to work with.
-    
-    else
-    {
-	croak "delete_boundary: bad value for 'delete_type'";
-    }
-    
-    # Permission checks go here.
-    
-    # ... permission checks ...
-    
-    # If any errors occurred, or if $check_only was specified, we stop here.
-    
-    return 0 unless $edt->can_edit;
-    
-    # Now check to see if there are any other boundaries that depend on this one. If so, then we
-    # need to deal with them. If the condition BREAK_DEPENDENCIES is allowed, then cut each of these
-    # records loose. Otherwise, return a caution.
-    
-    my $sql;
-    
-    if ( $delete_type eq 'bound' )
-    {
-	$sql = "SELECT count(*) FROM $TIMESCALE_BOUNDS
-		WHERE base_no = $id or range_no = $id or
-			color_no = $id or refsource_no = $id";
-    }
-    
-    else
-    {
-	my $updated_clause = ''; $updated_clause = "and source.is_updated = 0" if $delete_type = 'unupdated';
-	
-	$sql = "SELECT count(*) FROM $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as source on tsb.base_no = source.bound_no
-		or tsb.range_no = source.bound_no or tsb.color_no = source.bound_no
-		or tsb.refsource_no = source.bound_no
-		WHERE source.timescale_no = $id $updated_clause";
-    }
-    
-    my ($dependent_count) = $dbh->selectrow_hashref($sql);
-    
-    if ( $dependent_count )
-    {
-	print STDERR "$sql\n\n" if $edt->debug;
-	
-	unless ( $edt->{condition}{BREAK_DEPENDENCIES} )
-	{
-	    return $edt->add_condition("C_BREAK_DEPENDENCIES: there are $dependent_count other bounds that depend on the bound or bounds to be deleted");
-	}
-	
-	my $result;
-	
-	$result = $edt->detach_related_bounds($delete_type, $id);
-    }
-    
-    # If we get here, then we can delete. We return an OK as long as no exception is caught, on
-    # the assumption that the delete statement is so simple that the only way it could go wrong is
-    # if the record is somehow already gone.
-    
-    if ( $delete_type eq 'bound' )
-    {
-	$sql = " DELETE FROM $TIMESCALE_BOUNDS WHERE bound_no = $id";
-    }
-    
-    elsif ( $delete_type eq 'timescale' )
-    {
-	$sql = " DELETE FROM $TIMESCALE_BOUNDS WHERE timescale_no = $id";
-    }
-    
-    elsif ( $delete_type eq 'unupdated' )
-    {
-	$sql = " DELETE FROM $TIMESCALE_BOUNDS
-		WHERE timescale_no = $id and is_updated = 0";
-    }
-    
-    else
-    {
-	croak "delete_boundary: bad value '$delete_type' for 'delete_type'";
-    }
-    
-    print STDERR "$sql\n\n" if $edt->debug;
-    
-    my $delete_result;
-    
-    try {
-	$delete_result = $dbh->do($sql);
-	print STDERR "RESULT: 0\n" unless $delete_result;
-    }
-    
-    catch {
-	print STDERR "ERROR: $_\n";
-    };
-    
-    if ( $delete_result )
-    {
-	$edt->{timescale_updated} = $timescale_id;
-	return $id;
-    }
-    
-    else
-    {
-	$edt->add_condition("W_INTERNAL: an error occurred while deleting record '$id'") unless $delete_result;
-	return 0;
-    }
-}
+#     else
+#     {
+# 	$edt->add_condition("W_INTERNAL", $timescale_id);
+# 	return 0;
+#     }
+# }
 
 
-# detach_related_bounds ( select_which, id, options )
-# 
-# Look for bounds which have the specified bound as a source (or all bounds from the specified
-# timescale). Convert these so that this relationship is broken. If $select_which is 'timescale',
-# then we are preparing to delete all the bounds in the specified timescale(s).
+# # Add a new boundary according to the specified attributes.
 
-sub detach_related_bounds {
+# sub add_boundary {
+    
+#     my ($edt, $attrs) = @_;
+    
+#     croak "add_boundary: bad attrs\n" unless ref $attrs eq 'HASH';
+#     croak "add_boundary: must not have a value for bound_id\n" if $attrs->{bound_id};
+    
+#     # Start by making sure that we are in a state in which we can proceed.
+    
+#     return 0 unless $edt->can_check;
+    
+#     my $dbh = $edt->dbh;
+    
+#     # Make sure that we know what timescale to create the boundary in, and
+#     # that a bound type was specified.
+    
+#     unless ( $attrs->{timescale_id} )
+#     {
+#         $edt->add_condition("E_BOUND_TIMESCALE", $attrs->{record_label});
+#     }
+    
+#     unless ( $attrs->{bound_type} )
+#     {
+# 	$edt->add_condition("E_BOUND_TYPE", $attrs->{record_label});
+#     }
+    
+#     # Then check for missing or redundant attributes. These will vary by bound type.
+    
+#     my $timescale_id = $attrs->{timescale_id};
+#     my $bound_type = $attrs->{bound_type};
+    
+#     if ( $bound_type eq 'absolute' || $bound_type eq 'spike' )
+#     {
+# 	$edt->add_condition("E_AGE_MISSING", $attrs->{record_label})
+# 	    unless $attrs->{age};
 
-    my ($edt, $select_which, $id_list) = @_;
+# 	$edt->add_condition("W_BASE_IGNORED", $attrs->{record_label})
+# 	    if $attrs->{range_id};
+	
+# 	$edt->add_condition("W_RANGE_IGNORED", $attrs->{record_label})
+# 	    if $attrs->{range_id};
+	
+# 	$edt->add_condition("W_OFFSET_IGNORED", $attrs->{record_label})
+# 	    if $attrs->{offset};
+#     }
     
-    my $dbh = $edt->dbh;
-    
-    # Construct the proper filter expression.
-    
-    my ($filter, $extra);
-    my @sql;
-    
-    if ( $select_which eq 'bound' )
-    {
-	$filter = "source.bound_no in ($id_list)";
-    }
-    
-    elsif ( $select_which eq 'timescale' )
-    {
-	$filter = "source.timescale_no in ($id_list)";
-    }
-    
-    elsif ( $select_which eq 'unupdated' )
-    {
-	$filter = "source.timescale_no in ($id_list) and source.is_updated = 0";
-    }
-    
-    else
-    {
-	croak "bad value for 'select_which'\n";
-    }
-    
-    # Detach all derived-color relationships.
-    
-    push @sql,"	UPDATE $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as source on tsb.color_no = source.bound_no
-		SET tsb.color_no = 0
-		WHERE $filter";
-    
-    # Then detach all reference relationships.
-    
-    push @sql,"	UPDATE $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as source on tsb.refsource_no = source.bound_no
-		SET tsb.refsource_no = 0
-		WHERE $filter";
-    
-    # Then detach all range relationships.
-    
-    push @sql,"	UPDATE $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as source on tsb.range_no = source.bound_no
-		SET tsb.bound_type = if(tsb.bound_type = 'percent', 'absolute', tsb.bound_type),
-		    tsb.range_no = 0,
-		    tsb.base_no = if(tsb.bound_type = 'percent', 0, tsb.base_no)
-		WHERE $filter";
-    
-    # Then detach all base relationships.
-    
-    push @sql," UPDATE $TIMESCALE_BOUNDS as tsb
-		join $TIMESCALE_BOUNDS as source on tsb.base_no = source.bound_no
-		SET tsb.bound_type = if(tsb.bound_type not in ('absolute','spike'), 'absolute', tsb.bound_type),
-		    tsb.base_no = 0
-		WHERE $filter";
-    
-    # Now execute all of these.
-    
-    try {
+#     elsif ( $bound_type eq 'same' )
+#     {
+# 	$edt->add_condition("E_BASE_MISSING", $attrs->{record_label})
+# 	    unless $attrs->{base_id};
+	
+# 	$edt->add_condition("W_RANGE_IGNORED", $attrs->{record_label})
+# 	    if $attrs->{range_id};
+	
+# 	$edt->add_condition("W_AGE_IGNORED", $attrs->{record_label})
+# 	    if $attrs->{age};
 
-	foreach my $stmt ( @sql )
-	{
-	    print STDERR "$stmt\n\n" if $edt->debug;
+# 	$edt->add_condition("W_OFFSET_IGNORED", $attrs->{record_label})
+# 	    if $attrs->{offset};
+#     }
+    
+#     elsif ( $bound_type eq 'offset' || $bound_type eq 'percent' )
+#     {
+# 	$edt->add_condition("E_BASE_MISSING", $attrs->{record_label})
+# 	    unless $attrs->{base_id};
+	
+# 	$edt->add_condition("E_OFFSET_MISSING", $attrs->{record_label})
+# 	    unless $attrs->{offset};
+	
+# 	$edt->add_condition("W_AGE_IGNORED", $attrs->{record_label})
+# 	    if $attrs->{age};
+	
+# 	if ( $bound_type eq 'percent' )
+# 	{
+# 	    $edt->add_condition("E_RANGE_MISSING", $attrs->{record_label})
+# 		unless $attrs->{range_id};
+# 	}
+	
+# 	else
+# 	{
+# 	    $edt->add_condition("W_RANGE_IGNORED", $attrs->{record_label})
+# 		if $attrs->{range_id};
+# 	}
+#     }
+    
+#     # Now check that all of the specified attributes are of the correct type and in the correct
+#     # value range, and that all references to other records match up to existing records.
+    
+#     my ($fields, $values) = $edt->check_timescale_attrs('add', 'bound', $attrs);
+    
+#     # Then make sure that the necessary attributes have the proper values.
+    
+#     $edt->check_bound_values($attrs);
+    
+#     # If any errors occurred, we stop here. This counts as "check only" mode.
+    
+#     return 0 unless $edt->can_edit;
+    
+#     # Otherwise, insert the new record.
+    
+#     my $field_list = join(',', @$fields, 'is_updated');
+#     my $value_list = join(',', @$values, '1');
+    
+#     my $sql = "INSERT INTO $TIMESCALE_BOUNDS ($field_list) VALUES ($value_list)";
+#     my ($insert_result, $insert_id);
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     try {
+# 	$insert_result = $dbh->do($sql);
+# 	$insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
+# 	print STDERR "RESULT: 0\n" if $edt->debug && ! $insert_id;
+#     }
+    
+#     catch {
+# 	print STDERR "ERROR: $_\n";
+#     };
+    
+#     if ( $insert_id )
+#     {
+# 	$edt->{bound_updated}{$insert_id} = 1;
+# 	$edt->{timescale_updated}{$timescale_id} = 1;
+# 	return $insert_id;
+#     }
+    
+#     else
+#     {
+# 	$edt->add_condition("E_INTERNAL", $attrs->{record_label});
+# 	return 0;
+#     }
+# }
+
+
+# sub update_boundary {
+
+#     my ($edt, $attrs) = @_;
+    
+#     croak "update_boundary: bad attrs\n" unless ref $attrs eq 'HASH';
+#     croak "update_boundary: must have a value for bound_id\n" unless $attrs->{bound_id};
+    
+#     my $dbh = $edt->dbh;
+    
+#     my $bound_id = $attrs->{bound_id};
+#     my $record_label = $attrs->{record_label} || $attrs->{bound_id};
+    
+#     # Start by making sure that we are in a state in which we can proceed.
+    
+#     return 0 unless $edt->can_check;
+    
+#     # We first need to make sure that the record to be updated actually exists, and fetch its
+#     # current attributes.
+    
+#     unless ( $bound_id =~ /^\d+$/ && $bound_id > 0 )
+#     {
+# 	$edt->add_condition("E_BOUND_ID", $record_label, $bound_id);
+# 	return 0;
+#     }
+    
+#     my ($current) = $dbh->selectrow_hashref("
+# 		SELECT * FROM $TIMESCALE_BOUNDS WHERE bound_no = $bound_id");
+    
+#     unless ( $current )
+#     {
+# 	$edt->add_condition("E_NOT_FOUND", $record_label, $bound_id);
+# 	return 0;
+#     }
+    
+#     # If a timescale_id was specified, it must match the current one otherwise an error will be
+#     # thrown. It is not permitted to move a boundary to a different timescale.
+    
+#     if ( defined $attrs->{timescale_id} && $attrs->{timescale_id} ne '' )
+#     {
+# 	if ( $current->{timescale_no} && $current->{timescale_no} ne $attrs->{timescale_id} )
+# 	{
+# 	    $edt->add_condition("E_BOUND_TIMESCALE", $record_label);
+# 	}
+#     }
+    
+#     # Check for missing or redundant attributes. These will vary by bound type.
+    
+#     my $bound_type = $attrs->{bound_type} || $current->{bound_type};
+#     my $timescale_id = $current->{timescale_no};
+    
+#     if ( $bound_type eq 'absolute' || $bound_type eq 'spike' )
+#     {
+# 	$edt->add_condition("E_AGE_MISSING", $record_label)
+# 	    unless defined $attrs->{age} || defined $current->{age};
+	
+# 	$edt->add_condition("W_BASE_IGNORED", $record_label)
+# 	    if $attrs->{range_id};
+	
+# 	$edt->add_condition("W_RANGE_IGNORED", $record_label)
+# 	    if $attrs->{range_id};
+	
+# 	$edt->add_condition("W_OFFSET_IGNORED", $record_label)
+# 	    if $attrs->{offset};
+#     }
+    
+#     elsif ( $bound_type eq 'same' )
+#     {
+# 	$edt->add_condition("E_BASE_MISSING", $record_label)
+# 	    unless $attrs->{base_id} || $current->{base_no};
+	
+# 	$edt->add_condition("W_RANGE_IGNORED", $record_label)
+# 	    if $attrs->{range_id};
+	
+# 	$edt->add_condition("W_AGE_IGNORED", $record_label)
+# 	    if defined $attrs->{age};
+
+# 	$edt->add_condition("W_OFFSET_IGNORED", $record_label)
+# 	    if $attrs->{offset};
+#     }
+    
+#     elsif ( $bound_type eq 'offset' || $bound_type eq 'percent' )
+#     {
+# 	$edt->add_condition("E_BASE_MISSING", $record_label)
+# 	    unless $attrs->{base_id} || $current->{base_no};
+	
+# 	$edt->add_condition("E_OFFSET_MISSING", $record_label)
+# 	    unless $attrs->{offset};
+	
+# 	$edt->add_condition("W_AGE_IGNORED", $record_label)
+# 	    if $attrs->{age};
+	
+# 	if ( $bound_type eq 'percent' )
+# 	{
+# 	    $edt->add_condition("E_RANGE_MISSING", $record_label)
+# 		unless $attrs->{range_id} || $current->{range_no};
+# 	}
+	
+# 	else
+# 	{
+# 	    $edt->add_condition("W_RANGE_IGNORED", $record_label)
+# 		if $attrs->{range_id};
+# 	}
+#     }
+    
+#     # Now check that all of the specified attributes are of the correct type and in the correct
+#     # value range, and that all references to other records match up to existing records.
+    
+#     my ($fields, $values) = $edt->check_timescale_attrs('update', 'bound', $attrs);
+    
+#     # Then make sure that the necessary attributes have the proper values.
+    
+#     $edt->check_bound_values($attrs, $current);
+    
+#     # If any errors occurred, or if $check_only was specified, we stop here.
+    
+#     return 0 unless $edt->can_edit;
+    
+#     # Otherwise, update the record.
+    
+#     my $set_list = $edt->generate_set_list($fields, $values);
+    
+#     return 0 unless $set_list;
+    
+#     my $sql = "	UPDATE $TIMESCALE_BOUNDS SET $set_list, is_updated=1, modified = now()
+# 		WHERE bound_no = $bound_id";
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     my $update_result;
+    
+#     try {
+# 	$update_result = $dbh->do($sql);
+# 	print STDERR "RESULT: 0\n" unless $update_result;
+#     }
+    
+#     catch {
+# 	print STDERR "ERROR: $_\n";
+#     };
+    
+#     if ( $update_result )
+#     {
+# 	$edt->{bound_updated}{$bound_id} = 1;
+# 	$edt->{timescale_updated}{$timescale_id} = 1;
+	
+# 	return $bound_id;
+#     }
+    
+#     else
+#     {
+# 	$edt->add_condition("E_INTERNAL", $record_label);
+# 	return 0;
+#     }
+# }
+
+
+# sub delete_boundary {
+
+#     my ($edt, $delete_type, $id) = @_;
+    
+#     return unless defined $id && $id ne '';
+    
+#     croak "delete_boundary: bad value '$id' for id\n" unless $id =~ /^\d+$/;
+    
+#     # Start by making sure that we are in a state in which we can proceed.
+    
+#     return 0 unless $edt->can_check;
+    
+#     my $dbh = $edt->dbh;
+    
+#     my $timescale_id;
+    
+#     # If we are deleting one or more boundaries, we need to make sure the records
+#     # actually exist and fetch their current attributes.
+    
+#     if ( $delete_type eq 'bound' )
+#     {
+# 	# unless ( $bound_id =~ /^\d+$/ && $bound_id > 0 )
+# 	# {
+# 	#     return $edt->add_condition("E_BOUND_ID: bad value '$bound_id' for 'bound_id'");
+# 	# }
+	
+# 	my ($current) = $dbh->selectrow_hashref("
+# 		SELECT * FROM $TIMESCALE_BOUNDS WHERE bound_no = $id");
+	
+# 	unless ( $current )
+# 	{
+# 	    $edt->add_condition("W_NOT_FOUND", $id);
+# 	    return 0;
+# 	}
+	
+# 	# If we get here, then there is a record in the database that we can delete. If a
+# 	# timescale id was specified, it had better match the one in the record.
+	
+# 	# if ( defined $attrs->{timescale_id} && $attrs->{timescale_id} ne '' )
+# 	# {
+# 	#     if ( $current->{timescale_no} && $current->{timescale_no} ne $attrs->{timescale_id} )
+# 	#     {
+# 	# 	$edt->add_condition("E_BOUND_TIMESCALE: the specified bound is not associated with the specified timescale");
+# 	#     }
+# 	# }
+	
+# 	# Keep track of what timescale this bound is in, if we didn't know it originally.
+	
+# 	$timescale_id = $current->{timescale_id};
+#     }
+    
+#     # If we are given a timescale_id but not a bound_id, check to make sure that timescale
+#     # actually exists.
+    
+#     elsif ( $delete_type ne 'timescale' || $delete_type eq 'unupdated' )
+#     {
+# 	my ($ts) = $dbh->selectrow_hashref("
+# 		SELECT * FROM $TIMESCALE_DATA WHERE timescale_no = $id");
+	
+# 	unless ( $ts )
+# 	{
+# 	    return $edt->add_condition("E_NOT_FOUND: timescale '$id' is not in the database");
+# 	}
+	
+# 	$timescale_id = $id;
+#     }
+    
+#     # Otherwise, we weren't given anything to work with.
+    
+#     else
+#     {
+# 	croak "delete_boundary: bad value for 'delete_type'";
+#     }
+    
+#     # Permission checks go here.
+    
+#     # ... permission checks ...
+    
+#     # If any errors occurred, or if $check_only was specified, we stop here.
+    
+#     return 0 unless $edt->can_edit;
+    
+#     # Now check to see if there are any other boundaries that depend on this one. If so, then we
+#     # need to deal with them. If the condition BREAK_DEPENDENCIES is allowed, then cut each of these
+#     # records loose. Otherwise, return a caution.
+    
+#     my $sql;
+    
+#     if ( $delete_type eq 'bound' )
+#     {
+# 	$sql = "SELECT count(*) FROM $TIMESCALE_BOUNDS
+# 		WHERE base_no = $id or range_no = $id or
+# 			color_no = $id or refsource_no = $id";
+#     }
+    
+#     else
+#     {
+# 	my $updated_clause = ''; $updated_clause = "and source.is_updated = 0" if $delete_type = 'unupdated';
+	
+# 	$sql = "SELECT count(*) FROM $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as source on tsb.base_no = source.bound_no
+# 		or tsb.range_no = source.bound_no or tsb.color_no = source.bound_no
+# 		or tsb.refsource_no = source.bound_no
+# 		WHERE source.timescale_no = $id $updated_clause";
+#     }
+    
+#     my ($dependent_count) = $dbh->selectrow_hashref($sql);
+    
+#     if ( $dependent_count )
+#     {
+# 	print STDERR "$sql\n\n" if $edt->debug;
+	
+# 	unless ( $edt->{condition}{BREAK_DEPENDENCIES} )
+# 	{
+# 	    return $edt->add_condition("C_BREAK_DEPENDENCIES: there are $dependent_count other bounds that depend on the bound or bounds to be deleted");
+# 	}
+	
+# 	my $result;
+	
+# 	$result = $edt->detach_related_bounds($delete_type, $id);
+#     }
+    
+#     # If we get here, then we can delete. We return an OK as long as no exception is caught, on
+#     # the assumption that the delete statement is so simple that the only way it could go wrong is
+#     # if the record is somehow already gone.
+    
+#     if ( $delete_type eq 'bound' )
+#     {
+# 	$sql = " DELETE FROM $TIMESCALE_BOUNDS WHERE bound_no = $id";
+#     }
+    
+#     elsif ( $delete_type eq 'timescale' )
+#     {
+# 	$sql = " DELETE FROM $TIMESCALE_BOUNDS WHERE timescale_no = $id";
+#     }
+    
+#     elsif ( $delete_type eq 'unupdated' )
+#     {
+# 	$sql = " DELETE FROM $TIMESCALE_BOUNDS
+# 		WHERE timescale_no = $id and is_updated = 0";
+#     }
+    
+#     else
+#     {
+# 	croak "delete_boundary: bad value '$delete_type' for 'delete_type'";
+#     }
+    
+#     print STDERR "$sql\n\n" if $edt->debug;
+    
+#     my $delete_result;
+    
+#     try {
+# 	$delete_result = $dbh->do($sql);
+# 	print STDERR "RESULT: 0\n" unless $delete_result;
+#     }
+    
+#     catch {
+# 	print STDERR "ERROR: $_\n";
+#     };
+    
+#     if ( $delete_result )
+#     {
+# 	$edt->{timescale_updated} = $timescale_id;
+# 	return $id;
+#     }
+    
+#     else
+#     {
+# 	$edt->add_condition("W_INTERNAL: an error occurred while deleting record '$id'") unless $delete_result;
+# 	return 0;
+#     }
+# }
+
+
+# # detach_related_bounds ( select_which, id, options )
+# # 
+# # Look for bounds which have the specified bound as a source (or all bounds from the specified
+# # timescale). Convert these so that this relationship is broken. If $select_which is 'timescale',
+# # then we are preparing to delete all the bounds in the specified timescale(s).
+
+# sub detach_related_bounds {
+
+#     my ($edt, $select_which, $id_list) = @_;
+    
+#     my $dbh = $edt->dbh;
+    
+#     # Construct the proper filter expression.
+    
+#     my ($filter, $extra);
+#     my @sql;
+    
+#     if ( $select_which eq 'bound' )
+#     {
+# 	$filter = "source.bound_no in ($id_list)";
+#     }
+    
+#     elsif ( $select_which eq 'timescale' )
+#     {
+# 	$filter = "source.timescale_no in ($id_list)";
+#     }
+    
+#     elsif ( $select_which eq 'unupdated' )
+#     {
+# 	$filter = "source.timescale_no in ($id_list) and source.is_updated = 0";
+#     }
+    
+#     else
+#     {
+# 	croak "bad value for 'select_which'\n";
+#     }
+    
+#     # Detach all derived-color relationships.
+    
+#     push @sql,"	UPDATE $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as source on tsb.color_no = source.bound_no
+# 		SET tsb.color_no = 0
+# 		WHERE $filter";
+    
+#     # Then detach all reference relationships.
+    
+#     push @sql,"	UPDATE $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as source on tsb.refsource_no = source.bound_no
+# 		SET tsb.refsource_no = 0
+# 		WHERE $filter";
+    
+#     # Then detach all range relationships.
+    
+#     push @sql,"	UPDATE $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as source on tsb.range_no = source.bound_no
+# 		SET tsb.bound_type = if(tsb.bound_type = 'percent', 'absolute', tsb.bound_type),
+# 		    tsb.range_no = 0,
+# 		    tsb.base_no = if(tsb.bound_type = 'percent', 0, tsb.base_no)
+# 		WHERE $filter";
+    
+#     # Then detach all base relationships.
+    
+#     push @sql," UPDATE $TIMESCALE_BOUNDS as tsb
+# 		join $TIMESCALE_BOUNDS as source on tsb.base_no = source.bound_no
+# 		SET tsb.bound_type = if(tsb.bound_type not in ('absolute','spike'), 'absolute', tsb.bound_type),
+# 		    tsb.base_no = 0
+# 		WHERE $filter";
+    
+#     # Now execute all of these.
+    
+#     try {
+
+# 	foreach my $stmt ( @sql )
+# 	{
+# 	    print STDERR "$stmt\n\n" if $edt->debug;
 	    
-	    my $result = $dbh->do($stmt);
+# 	    my $result = $dbh->do($stmt);
 	    
-	    if ( $edt->debug && $result && $result > 0 )
-	    {
-		print STDERR "    detached $result bounds\n\n";
-	    }
-	}
-    }
+# 	    if ( $edt->debug && $result && $result > 0 )
+# 	    {
+# 		print STDERR "    detached $result bounds\n\n";
+# 	    }
+# 	}
+#     }
     
-    catch {
-	print STDERR "ERROR: $_\n";
-	$edt->add_condition("E_INTERNAL: an error occurred while deleting a record");
-	return undef;
-    };
+#     catch {
+# 	print STDERR "ERROR: $_\n";
+# 	$edt->add_condition("E_INTERNAL: an error occurred while deleting a record");
+# 	return undef;
+#     };
     
-    return 1;
-}
+#     return 1;
+# }
 
 
-sub check_timescale_attrs {
+# sub check_timescale_attrs {
     
-    my ($edt, $op, $record_type, $attrs) = @_;
+#     my ($edt, $op, $record_type, $attrs) = @_;
     
-    my @field_list;
-    my @value_list;
+#     my @field_list;
+#     my @value_list;
     
-    my $dbh = $edt->dbh;
+#     my $dbh = $edt->dbh;
     
-    # If any of the age values are being set, then compute and add the new precision as well.
+#     # If any of the age values are being set, then compute and add the new precision as well.
     
-    foreach my $k ( qw(age offset age_error offset_error) )
-    {
-	if ( defined $attrs->{$k} )
-	{
-	    my $prec = $attrs->{$k} =~ qr{ [.] (\d+) }xs ? length($1) : 0;
-	    $attrs->{"${k}_prec"} = $prec;
-	}
-    }
+#     foreach my $k ( qw(age offset age_error offset_error) )
+#     {
+# 	if ( defined $attrs->{$k} )
+# 	{
+# 	    my $prec = $attrs->{$k} =~ qr{ [.] (\d+) }xs ? length($1) : 0;
+# 	    $attrs->{"${k}_prec"} = $prec;
+# 	}
+#     }
     
-    # Check the attributes one by one, according to their specified types.
+#     # Check the attributes one by one, according to their specified types.
     
-    my $specification = $record_type eq 'bound' ? \%TIMESCALE_BOUND_ATTRS : 
-	\%TIMESCALE_ATTRS;
+#     my $specification = $record_type eq 'bound' ? \%TIMESCALE_BOUND_ATTRS : 
+# 	\%TIMESCALE_ATTRS;
     
-    foreach my $k ( keys %$attrs )
-    {
-	my $value = $attrs->{$k};
-	my $type = $specification->{$k};
-	my $quoted;
+#     foreach my $k ( keys %$attrs )
+#     {
+# 	my $value = $attrs->{$k};
+# 	my $type = $specification->{$k};
+# 	my $quoted;
 	
-	# First make sure the field name and value are okay.
+# 	# First make sure the field name and value are okay.
 	
-	if ( $k eq 'record_label' || ( $type && $type eq 'IGNORE' ) )
-	{
-	    next;
-	}
+# 	if ( $k eq 'record_label' || ( $type && $type eq 'IGNORE' ) )
+# 	{
+# 	    next;
+# 	}
 	
-	elsif ( $k =~ /_prec$/ )
-	{
-	    $quoted = $dbh->quote($value);
-	}
+# 	elsif ( $k =~ /_prec$/ )
+# 	{
+# 	    $quoted = $dbh->quote($value);
+# 	}
 	
-	elsif ( ! defined $type )
-	{
-	    $edt->add_condition("W_BAD_FIELD: $k: unknown attribute");
-	    next;
-	}
+# 	elsif ( ! defined $type )
+# 	{
+# 	    $edt->add_condition("W_BAD_FIELD: $k: unknown attribute");
+# 	    next;
+# 	}
 	
-	elsif ( ! defined $value )
-	{
-	    $edt->add_condition("W_BAD_VALUE: $k: not defined");
-	    next;
-	}
+# 	elsif ( ! defined $value )
+# 	{
+# 	    $edt->add_condition("W_BAD_VALUE: $k: not defined");
+# 	    next;
+# 	}
 	
-	# Special case the interval names
+# 	# Special case the interval names
 	
-	elsif ( $k eq 'interval_name' || $k eq 'lower_name' )
-	{
-	    my $quoted_name = $dbh->quote($value);
+# 	elsif ( $k eq 'interval_name' || $k eq 'lower_name' )
+# 	{
+# 	    my $quoted_name = $dbh->quote($value);
 	    
-	    my ($id) = $dbh->selectrow_array("
-		SELECT interval_no FROM $TIMESCALE_INTS WHERE interval_name like $quoted_name");
+# 	    my ($id) = $dbh->selectrow_array("
+# 		SELECT interval_no FROM $TIMESCALE_INTS WHERE interval_name like $quoted_name");
 	    
-	    if ( $id )
-	    {
-		$k =~ s/name/no/;
-		$quoted = $id;
-	    }
+# 	    if ( $id )
+# 	    {
+# 		$k =~ s/name/no/;
+# 		$quoted = $id;
+# 	    }
 	    
-	    elsif ( $edt->{condition}{CREATE_INTERVALS} )
-	    {
-		$dbh->do("INSERT INTO $TIMESCALE_INTS (interval_name) VALUES ($quoted_name)");
-		$quoted = $dbh->last_insert_id(undef, undef, undef, undef);
+# 	    elsif ( $edt->{condition}{CREATE_INTERVALS} )
+# 	    {
+# 		$dbh->do("INSERT INTO $TIMESCALE_INTS (interval_name) VALUES ($quoted_name)");
+# 		$quoted = $dbh->last_insert_id(undef, undef, undef, undef);
 		
-		unless ( $quoted )
-		{
-		    croak "could not create interval $quoted_name\n";
-		}
-	    }
+# 		unless ( $quoted )
+# 		{
+# 		    croak "could not create interval $quoted_name\n";
+# 		}
+# 	    }
 	    
-	    else
-	    {
-		$edt->add_condition("C_CREATE_INTERVALS: $k: not found");
-	    }
-	}
+# 	    else
+# 	    {
+# 		$edt->add_condition("C_CREATE_INTERVALS: $k: not found");
+# 	    }
+# 	}
 	
-	# Otherwise, check other types
+# 	# Otherwise, check other types
 	
-	elsif ( $type eq 'varchar80' )
-	{
-	    if ( length($value) > 80 )
-	    {
-		$edt->add_condition("E_TOO_LONG: $k: must be 80 characters or less");
-		next;
-	    }
+# 	elsif ( $type eq 'varchar80' )
+# 	{
+# 	    if ( length($value) > 80 )
+# 	    {
+# 		$edt->add_condition("E_TOO_LONG: $k: must be 80 characters or less");
+# 		next;
+# 	    }
 	    
-	    $quoted = $dbh->quote($value);
-	}
+# 	    $quoted = $dbh->quote($value);
+# 	}
 	
-	elsif ( $type eq 'colorhex' )
-	{
-	    unless ( $value =~ qr{ ^ \# [0-9a-z]{6} $ }xsi )
-	    {
-		$edt->add_condition("E_BAD_COLOR: $k: must be a valid color in hexadecimal notation");
-		next;
-	    }
+# 	elsif ( $type eq 'colorhex' )
+# 	{
+# 	    unless ( $value =~ qr{ ^ \# [0-9a-z]{6} $ }xsi )
+# 	    {
+# 		$edt->add_condition("E_BAD_COLOR: $k: must be a valid color in hexadecimal notation");
+# 		next;
+# 	    }
 	    
-	    $quoted = $dbh->quote(uc $value);
-	}
+# 	    $quoted = $dbh->quote(uc $value);
+# 	}
 	
-	elsif ( $type eq 'pos_decimal' )
-	{
-	    unless ( $value =~ qr{ ^ (?: \d* [.] \d+ | \d+ [.] \d* | \d+ ) $ }xsi )
-	    {
-		$edt->add_condition("E_BAD_NUMBER: $k: must be a positive decimal number");
-		next;
-	    }
+# 	elsif ( $type eq 'pos_decimal' )
+# 	{
+# 	    unless ( $value =~ qr{ ^ (?: \d* [.] \d+ | \d+ [.] \d* | \d+ ) $ }xsi )
+# 	    {
+# 		$edt->add_condition("E_BAD_NUMBER: $k: must be a positive decimal number");
+# 		next;
+# 	    }
 	    
-	    $quoted = $value
-	}
+# 	    $quoted = $value
+# 	}
 	
-	elsif ( $type =~ /_no$/ )
-	{
-	    my ($idtype, $table, $label) = @{$TIMESCALE_REFDEF{$type}};
+# 	elsif ( $type =~ /_no$/ )
+# 	{
+# 	    my ($idtype, $table, $label) = @{$TIMESCALE_REFDEF{$type}};
 	    
-	    if ( ref $value eq 'PBDB::ExtIdent' )
-	    {
-		$quoted = "$value";
-	    }
+# 	    if ( ref $value eq 'PBDB::ExtIdent' )
+# 	    {
+# 		$quoted = "$value";
+# 	    }
 	    
-	    elsif ( $value =~ $ExternalIdent::IDRE{$idtype} && $2 > 0 )
-	    {
-		$quoted = $2;
-	    }
+# 	    elsif ( $value =~ $ExternalIdent::IDRE{$idtype} && $2 > 0 )
+# 	    {
+# 		$quoted = $2;
+# 	    }
 	    
-	    else
-	    {
-		$edt->add_condition("E_BAD_KEY: $k: must be a valid $label identifier");
-		next;
-	    }
+# 	    else
+# 	    {
+# 		$edt->add_condition("E_BAD_KEY: $k: must be a valid $label identifier");
+# 		next;
+# 	    }
 	    
-	    my $check_value;
+# 	    my $check_value;
 	    
-	    eval {
-		($check_value) = $dbh->selectrow_array("SELECT $type FROM $table WHERE $type = $quoted");
-	    };
+# 	    eval {
+# 		($check_value) = $dbh->selectrow_array("SELECT $type FROM $table WHERE $type = $quoted");
+# 	    };
 	    
-	    unless ( $check_value )
-	    {
-		$edt->add_condition("E_KEY_NOT_FOUND: $k: the identifier $quoted was not found in the database");
-		next;
-	    }
-	}
+# 	    unless ( $check_value )
+# 	    {
+# 		$edt->add_condition("E_KEY_NOT_FOUND: $k: the identifier $quoted was not found in the database");
+# 		next;
+# 	    }
+# 	}
 	
-	elsif ( ref $type eq 'HASH' )
-	{
-	    if ( $type->{lc $value} )
-	    {
-		$quoted = $dbh->quote(lc $value);
-	    }
+# 	elsif ( ref $type eq 'HASH' )
+# 	{
+# 	    if ( $type->{lc $value} )
+# 	    {
+# 		$quoted = $dbh->quote(lc $value);
+# 	    }
 	    
-	    else
-	    {
-		$edt->add_condition("E_BAD_VALUE: $k: value not acceptable");
-		next;
-	    }
-	}
+# 	    else
+# 	    {
+# 		$edt->add_condition("E_BAD_VALUE: $k: value not acceptable");
+# 		next;
+# 	    }
+# 	}
 	
-	else
-	{
-	    croak "check_attrs: bad data type for '$k'\n";
-	}
+# 	else
+# 	{
+# 	    croak "check_attrs: bad data type for '$k'\n";
+# 	}
 	
-	# Then create the proper SQL expressions for it.
+# 	# Then create the proper SQL expressions for it.
 	
-	$k =~ s/_id$/_no/;
+# 	$k =~ s/_id$/_no/;
 	
-	# if ( $k eq 'age' )
-	# {
-	#     $k = "derived_age";
-	# }
+# 	# if ( $k eq 'age' )
+# 	# {
+# 	#     $k = "derived_age";
+# 	# }
 	
-	push @field_list, $k;
-	push @value_list, $quoted;
-    }
+# 	push @field_list, $k;
+# 	push @value_list, $quoted;
+#     }
     
-    # Add the 'authorizer_no', 'enterer_no', 'modifier_no' values.
+#     # Add the 'authorizer_no', 'enterer_no', 'modifier_no' values.
     
-    if ( $op eq 'add' )
-    {
-	push @field_list, 'authorizer_no', 'enterer_no';
-	push @value_list, $edt->{auth_info}{authorizer_no}, $edt->{auth_info}{enterer_no};
-    }
+#     if ( $op eq 'add' )
+#     {
+# 	push @field_list, 'authorizer_no', 'enterer_no';
+# 	push @value_list, $edt->{auth_info}{authorizer_no}, $edt->{auth_info}{enterer_no};
+#     }
     
-    elsif ( ! $edt->{is_fixup} )
-    {
-	push @field_list, 'modifier_no';
-	push @value_list, $edt->{enterer_no};
-    }
+#     elsif ( ! $edt->{is_fixup} )
+#     {
+# 	push @field_list, 'modifier_no';
+# 	push @value_list, $edt->{enterer_no};
+#     }
     
-    return \@field_list, \@value_list;
-}
+#     return \@field_list, \@value_list;
+# }
 
 
-sub check_timescale_values {
+# sub check_timescale_values {
     
-    my ($edt, $new, $current) = @_;
+#     my ($edt, $new, $current) = @_;
     
-    if ( $current )
-    {
-	if ( defined $new->{timescale_name} && $new->{timescale_name} eq '' )
-	{
-	    $edt->add_condition("E_PARAM: the value of 'timescale_name' must not be empty");
-	}
+#     if ( $current )
+#     {
+# 	if ( defined $new->{timescale_name} && $new->{timescale_name} eq '' )
+# 	{
+# 	    $edt->add_condition("E_PARAM: the value of 'timescale_name' must not be empty");
+# 	}
 	
-	if ( defined $new->{timescale_type} && $new->{timescale_type} eq '' )
-	{
-	    $edt->add_condition("E_PARAM: the value of 'timescale_type' must not be empty");
-	}
-    }
+# 	if ( defined $new->{timescale_type} && $new->{timescale_type} eq '' )
+# 	{
+# 	    $edt->add_condition("E_PARAM: the value of 'timescale_type' must not be empty");
+# 	}
+#     }
     
-    else
-    {
-	unless ( defined $new->{timescale_name} && $new->{timescale_name} ne '' )
-	{
-	    $edt->add_condition("E_PARAM: the value of 'timescale_name' must not be empty");
-	}
+#     else
+#     {
+# 	unless ( defined $new->{timescale_name} && $new->{timescale_name} ne '' )
+# 	{
+# 	    $edt->add_condition("E_PARAM: the value of 'timescale_name' must not be empty");
+# 	}
 	
-	unless ( defined $new->{timescale_type} && $new->{timescale_type} ne '' )
-	{
-	    $edt->add_condition("E_PARAM: the value of 'timescale_type' must not be empty");
-	}
-    }
-}
+# 	unless ( defined $new->{timescale_type} && $new->{timescale_type} ne '' )
+# 	{
+# 	    $edt->add_condition("E_PARAM: the value of 'timescale_type' must not be empty");
+# 	}
+#     }
+# }
 
 
-sub check_bound_values {
+# sub check_bound_values {
 
-    my ($edt, $new, $current) = @_;
+#     my ($edt, $new, $current) = @_;
     
-    my $new_age = $new->{age};
-    my $new_offset = $new->{offset};
-    my $new_bound_type = $new->{bound_type};
+#     my $new_age = $new->{age};
+#     my $new_offset = $new->{offset};
+#     my $new_bound_type = $new->{bound_type};
     
-    # If we are specifying any of 'bound_type', 'age', 'offset', then make sure 'age'
-    # and 'offset' have the proper range for the bound type.
+#     # If we are specifying any of 'bound_type', 'age', 'offset', then make sure 'age'
+#     # and 'offset' have the proper range for the bound type.
     
-    if ( (defined $new->{age} && $new->{age} ne '') ||
-	 (defined $new->{offset} && $new->{offset} ne '') ||
-	 $new->{bound_type} )
-    {
-	if ( $current )
-	{
-	    unless ( defined $new_age and $new_age ne '')
-	    {
-		$new_age = $current->{age};
-	    }
+#     if ( (defined $new->{age} && $new->{age} ne '') ||
+# 	 (defined $new->{offset} && $new->{offset} ne '') ||
+# 	 $new->{bound_type} )
+#     {
+# 	if ( $current )
+# 	{
+# 	    unless ( defined $new_age and $new_age ne '')
+# 	    {
+# 		$new_age = $current->{age};
+# 	    }
 	    
-	    unless ( defined $new_offset and $new_offset ne '')
-	    {
-		$new_offset = $current->{offset};
-	    }
+# 	    unless ( defined $new_offset and $new_offset ne '')
+# 	    {
+# 		$new_offset = $current->{offset};
+# 	    }
 	    
-	    $new_bound_type ||= $current->{bound_type};
-	}
+# 	    $new_bound_type ||= $current->{bound_type};
+# 	}
 	
-	if ( $new_bound_type eq 'percent' )
-	{
-	    unless ( defined $new_offset && $new_offset ne '' && $new_offset >= 0.0 && $new_offset <= 100.0 )
-	    {
-		$edt->add_condition("E_OFFSET_RANGE: the value of 'offset' must be a percentage between 0 and 100.0 for this bound type");
-	    }
-	}
+# 	if ( $new_bound_type eq 'percent' )
+# 	{
+# 	    unless ( defined $new_offset && $new_offset ne '' && $new_offset >= 0.0 && $new_offset <= 100.0 )
+# 	    {
+# 		$edt->add_condition("E_OFFSET_RANGE: the value of 'offset' must be a percentage between 0 and 100.0 for this bound type");
+# 	    }
+# 	}
 	
-	elsif ( $new_bound_type eq 'offset' )
-	{
-	    unless ( defined $new_offset && $new_offset ne '' && $new_offset >= 0.0 && $new_offset <= 1000.0 )
-	    {
-		$edt->add_condition("E_OFFSET_RANGE: the value of 'offset' must be a value between 0 and 1000.0 Ma for this bound type");
-	    }
-	}
+# 	elsif ( $new_bound_type eq 'offset' )
+# 	{
+# 	    unless ( defined $new_offset && $new_offset ne '' && $new_offset >= 0.0 && $new_offset <= 1000.0 )
+# 	    {
+# 		$edt->add_condition("E_OFFSET_RANGE: the value of 'offset' must be a value between 0 and 1000.0 Ma for this bound type");
+# 	    }
+# 	}
 	
-	elsif ( $new_bound_type eq 'absolute' || $new_bound_type eq 'spike' )
-	{
-	    unless ( defined $new_age && $new_age ne '' && $new_age >= 0.0 && $new_age <= 4600.0 )
-	    {
-		$edt->add_condition("E_AGE_RANGE: the value of 'age' must be a value between 0 and 4600.0 Ma for this bound type");
-	    }
-	}
-    }
+# 	elsif ( $new_bound_type eq 'absolute' || $new_bound_type eq 'spike' )
+# 	{
+# 	    unless ( defined $new_age && $new_age ne '' && $new_age >= 0.0 && $new_age <= 4600.0 )
+# 	    {
+# 		$edt->add_condition("E_AGE_RANGE: the value of 'age' must be a value between 0 and 4600.0 Ma for this bound type");
+# 	    }
+# 	}
+#     }
         
-    return $edt;
-}
+#     return $edt;
+# }
 
 
-# complete_bound_updates ( dbh )
-# 
-# Propagate any updates that have been made to the set of timescale boundaries. All bounds that
-# depend on the updated bounds will be recomputed, and all timescales containing them will be
-# updated as well.
+# # complete_bound_updates ( dbh )
+# # 
+# # Propagate any updates that have been made to the set of timescale boundaries. All bounds that
+# # depend on the updated bounds will be recomputed, and all timescales containing them will be
+# # updated as well.
 
-sub complete_bound_updates {
+# sub complete_bound_updates {
     
-    my ($edt) = @_;
+#     my ($edt) = @_;
     
-    my $dbh = $edt->dbh;
+#     my $dbh = $edt->dbh;
     
-    my ($result, $step);
+#     my ($result, $step);
     
-    # Catch any exceptions.
+#     # Catch any exceptions.
     
-    try {
+#     try {
 	
-	if ( $edt->debug )
-	{
-	    my $updated = $dbh->selectcol_arrayref("SELECT bound_no FROM $TIMESCALE_BOUNDS
-							WHERE is_updated");
+# 	if ( $edt->debug )
+# 	{
+# 	    my $updated = $dbh->selectcol_arrayref("SELECT bound_no FROM $TIMESCALE_BOUNDS
+# 							WHERE is_updated");
 
-	    my $str = 'no bounds changed';
+# 	    my $str = 'no bounds changed';
 
-	    if ( ref $updated eq 'ARRAY' && @$updated )
-	    {
-		$str = join(',', @$updated);
-	    }
+# 	    if ( ref $updated eq 'ARRAY' && @$updated )
+# 	    {
+# 		$str = join(',', @$updated);
+# 	    }
 	    
-	    print STDERR "	propagating bound updates ($str)\n\n";
-	}
+# 	    print STDERR "	propagating bound updates ($str)\n\n";
+# 	}
 	
-	# First propagate changes to dependent boundaries.
+# 	# First propagate changes to dependent boundaries.
 	
-	$step = 'propagating boundary changes';
+# 	$step = 'propagating boundary changes';
 	
-	$result = $dbh->do("CALL complete_bound_updates");
+# 	$result = $dbh->do("CALL complete_bound_updates");
 	
-	# Then check all boundaries in every timescale that had at least one updated boundary. Set
-	# or clear the is_error flags on those boundaries and their timescales. Also update the
-	# min_age and max_age values for those timescales.
+# 	# Then check all boundaries in every timescale that had at least one updated boundary. Set
+# 	# or clear the is_error flags on those boundaries and their timescales. Also update the
+# 	# min_age and max_age values for those timescales.
 	
-	$step = 'checking boundaries for correctness';
+# 	$step = 'checking boundaries for correctness';
 	
-	$result = $dbh->do("CALL check_updated_bounds");
+# 	$result = $dbh->do("CALL check_updated_bounds");
 	
-	# Finally, clear all of the is_updated flags.
+# 	# Finally, clear all of the is_updated flags.
 	
-	$step = 'clearing the updated flags';
+# 	$step = 'clearing the updated flags';
 	
-	$result = $dbh->do("CALL unmark_updated");
-    }
+# 	$result = $dbh->do("CALL unmark_updated");
+#     }
     
-    catch {
+#     catch {
 
-	print STDERR "ERROR: $_\n";
-	$edt->add_condition("E_INTERNAL: an error occurred while $step");
+# 	print STDERR "ERROR: $_\n";
+# 	$edt->add_condition("E_INTERNAL: an error occurred while $step");
 	
-    };
-}
-
-
-sub bounds_updated {
-    
-    my ($edt) = @_;
-    
-    return ref $edt->{bound_updated} eq 'HASH' ? keys %{$edt->{bound_updated}} : ();
-}
+#     };
+# }
 
 
-sub timescales_updated {
+# sub bounds_updated {
     
-    my ($edt) = @_;
+#     my ($edt) = @_;
     
-    return ref $edt->{timescale_updated} eq 'HASH' ? keys %{$edt->{timescale_updated}}: ();
-}
+#     return ref $edt->{bound_updated} eq 'HASH' ? keys %{$edt->{bound_updated}} : ();
+# }
+
+
+# sub timescales_updated {
+    
+#     my ($edt) = @_;
+    
+#     return ref $edt->{timescale_updated} eq 'HASH' ? keys %{$edt->{timescale_updated}}: ();
+# }
 
 
 # propagate_boundary_changes ( dbh, source_bounds )

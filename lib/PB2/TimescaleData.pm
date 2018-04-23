@@ -39,7 +39,7 @@ sub initialize {
     
     # We start with the basic output blocks for timescales, intervals, and bounds.
     
-    $ds->define_set('1.2:timescales:types' =>
+    $ds->define_set('1.2:timescales:interval_types' =>
 	{ value => 'eon' },
 	{ value => 'era' },
 	{ value => 'period' },
@@ -76,7 +76,7 @@ sub initialize {
 	    "This should be a singular common name, for example: 'ammonite' or 'conodont'.",
 	{ output => 'timescale_type', com_name => 'typ' },
 	    "The type of interval defined by this time scale, which will be one of the following:",
-	    $ds->document_set('1.2:timescales:types'),
+	    $ds->document_set('1.2:timescales:interval_types'),
 	{ output => 'source_timescale_no', com_name => 'bid' },
 	    "Identifier of the timescale from which this one was derived, if any",
 	{ output => 'min_age', com_name => 'lag' },
@@ -125,14 +125,14 @@ sub initialize {
 	{ output => 'early_age', com_name => 'eag' },
 	    "The early age bound for this interval, according to the",
 	    "most authoritative timescale in which it is contained",
-	{ output => 'is_error', com_name => 'err' },
+	{ output => 'has_error', com_name => 'err' },
 	    "True if this boundary is inconsistent with the other boundaries in",
 	    "its timescale, for example in overlapping with another boundary.",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color for this interval, if any");
     
     $ds->define_block('1.2:timescales:interval_desc' =>
-	{ select => [ 'tsb.interval_extent', 'tsb.interval_taxon', 'tsb.interval_type' ], tables => 'tsb' },
+	{ select => [ 'ts.timescale_extent', 'tsb.interval_taxon', 'tsb.interval_type' ], tables => ['tsb', 'ts'] },
 	{ output => 'interval_extent', com_name => 'iex' },
 	    "The geographic extent of the timescale, if any",
 	{ output => 'interval_taxon', com_name => 'itx' },
@@ -146,7 +146,7 @@ sub initialize {
 	    "The name of the timescale in which this interval or bound is contained.");
     
     $INTERVAL_ATTRS_RELATIVE = "tsb.age as early_age, tsbu.age as late_age, tsb.color, " .
-	"tsb.is_error, tsb.timescale_no";
+	"tsb.has_error, tsb.timescale_no";
     $INTERVAL_ATTRS_ABSOLUTE = "tsi.early_age, tsi.late_age, tsi.color";
     
     $ds->define_output_map('1.2:timescales:optional_interval' =>
@@ -172,22 +172,16 @@ sub initialize {
 	    "the beginning of the Induan.",
 	{ value => 'percent' },
 	    "A boundary which is specified as a percentage of the span of some",
-	    "interval, or as a percentage of the span between two other boundaries.",
-	{ value => 'alternate' },
-	    "A boundary which is the top or bottom of an alternate interval,",
-	    "not part of the main sequence of this timescale.");
+	    "interval, or as a percentage of the span between two other boundaries.");
     
     $ds->define_block('1.2:timescales:bound' =>
-	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.age', 'tsb.age_error',
-		      'tsb.age_prec', 'tsb.age_error_prec',
+	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.age', 'tsb.age_error', 'tsb.age_prec', 'tsb.age_error_prec',
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
 		      'tsb.percent', 'tsb.percent_error', 'tsb.percent_prec', 'tsb.percent_error_prec',
-		      'tsb.lower_no', 'tsb.interval_no',
-		      'tsb.base_no', 'tsb.range_no', 'tsb.color_no', 'tsb.refsource_no',
-		      'tsb.is_error', 'tsb.is_modeled', 'tsb.is_spike',
-		      'tsb.color', 'tsb.reference_no',
-		      'tsil.interval_name as lower_name', 'tsi.interval_name' ],
-	  tables => [ 'tsb', 'tsi', 'tsil' ] },
+		      'tsb.interval_no', 'tsb.base_no', 'tsb.top_no', 'tsb.range_no', 'tsb.color_no', 'tsb.refsource_no',
+		      'tsb.has_error', 'tsb.is_modeled', 'tsb.is_spike',
+		      'tsb.color', 'tsb.reference_no', 'tsi.interval_name' ],
+	  tables => [ 'tsb', 'tsi' ] },
 	{ set => '*', code => \&process_ids },
 	{ set => '*', code => \&process_ages },
 	{ output => 'bound_no', com_name => 'oid' },
@@ -202,45 +196,35 @@ sub initialize {
 	    "The age at which this boundary is fixed or calculated, in Ma",
 	{ output => 'age_error', com_name => 'ger', data_type => 'str' },
 	    "The error (+/-) associated with the age",
-	{ output => 'interval_type', com_name => 'typ' },
-	    "The type of the upper interval, if any",
 	{ output => 'bound_type', com_name => 'btp' },
 	    "The boundary type, which will be one of the following:",
-	    $ds->document_set('1.2:timescales:bound_types'),
+		      $ds->document_set('1.2:timescales:bound_types'),
 	{ output => 'interval_no', com_name => 'iid' },
 	    "The identifier of the upper interval bounded by this boundary.",
 	    "If this field is empty, then the boundary lies at the top of",
 	    "its timescale, or else there is a gap above it.",
-	{ output => 'lower_no', com_name => 'lid' },
-	    "The identifier of the lower interval bounded by this boundary.",
-	    "If this field is empty, then the boundary lies at the bottom of",
-	    "its timescale, or else there is a gap below it.",
 	{ output => 'interval_name', com_name => 'inm' },
 	    "The name of the upper interval bounded by this boundary.",
-	{ output => 'lower_name', com_name => 'lnm' },
-	    "The name of the lower interval bounded by this boundary.",
+	{ output => 'interval_type', com_name => 'typ' },
+	    "The type of the upper interval, if any",
+	# { output => 'lower_name', com_name => 'lnm' },
+	#     "The name of the lower interval bounded by this boundary.",
+	{ output => 'top_no', com_name => 'uid' },
+	    "The identifier of the top boundary of the interval corresponding to this one.",
+	{ output => 'base_no', com_name => 'bid' },
+	    "If the boundary type is 'same', 'percent', or 'alias', this field specifies",
+	    "the identifier of the base boundary with respect to which",
+	    "this boundary is defined.",
+	{ output => 'range_no', com_name => 'tid' },
+	    "If the boundary type is 'percent', and this field is not empty, it specifies",
+	    "the top boundary of the pair between which this boundary lies.",
 	{ output => 'percent', com_name => 'pct', data_type => 'str' },
 	    "For boundaries of type 'percent', the boundary lies this percent",
 	    "of the way through the span indicated by the base and range",
 	    "boundaries.",
 	{ output => 'percent_error', com_name => 'oer', data_type => 'str' },
 	    "The error (+/-) associated with the percent value",
-	{ output => 'range_no', com_name => 'tid' },
-	    "If the boundary type is 'percent', and this field is not empty, it specifies",
-	    "the top boundary of the pair between which this boundary lies.",
-	{ output => 'base_no', com_name => 'bid' },
-	    "If the boundary type is 'same', 'percent', or 'alias', this field specifies",
-	    "the identifier of the base boundary with respect to which",
-	    "this boundary is defined.",
-	{ output => 'color_no', com_name => 'cid' },
-	    "If this field is not empty, it specifies the identifier of a boundary",
-	    "from which the color for this boundary is taken. Note that this might",
-	    "be different than the base boundary.",
-	{ output => 'refsource_no', com_name => 'fid' },
-	    "If this field is not empty, it specifies the identifier of a boundary",
-	    "from which the reference identifier for this boundary is taken.",
-	    "Note that this might be different than the base boundary.",
-	{ output => 'is_error', com_name => 'err' },
+	{ output => 'has_error', com_name => 'err' },
 	    "True if this boundary is inconsistent with the other boundaries in",
 	    "its timescale, for example in overlapping with another boundary.",
 	{ output => 'is_modeled', com_name => 'mdl' },
@@ -257,6 +241,15 @@ sub initialize {
 	    "should be taken to be the main reference for the timescale",
 	    "in which this boundary is contained.");
     
+	# { output => 'color_no', com_name => 'cid' },
+	#     "If this field is not empty, it specifies the identifier of a boundary",
+	#     "from which the color for this boundary is taken. Note that this might",
+	#     "be different than the base boundary.",
+	# { output => 'refsource_no', com_name => 'fid' },
+	#     "If this field is not empty, it specifies the identifier of a boundary",
+	#     "from which the reference identifier for this boundary is taken.",
+	#     "Note that this might be different than the base boundary.",
+
     $ds->define_output_map('1.2:timescales:optional_bound' =>
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered, and modified this record",
@@ -285,7 +278,7 @@ sub initialize {
 	    "You may instead use the parameter name B<C<id>>.");
     
     $ds->define_ruleset('1.2:timescales:common_selector' =>
-	{ param => 'type', valid => '1.2:timescales:types', list => ',', bad_value => '_' },
+	{ param => 'type', valid => '1.2:timescales:interval_types', list => ',', bad_value => '_' },
 	    "Return only timescales, intervals, or bounds of the specified type(s).",
 	    "Accepted values include:",
 	{ param => 'taxon', valid => ANY_VALUE, list => ',' },
@@ -861,8 +854,8 @@ sub generate_join_list {
     {
 	$joins .= "\tjoin $TIMESCALE_DATA as ts using (timescale_no)\n";
 	$joins .= "\tleft join $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n";
-	$joins .= "\tleft join $TIMESCALE_INTS as tsil on tsil.interval_no = tsb.lower_no\n"
-	    if $tables->{tsil};
+	# $joins .= "\tleft join $TIMESCALE_INTS as tsil on tsil.interval_no = tsb.lower_no\n"
+	#     if $tables->{tsil};
 	$joins .= "\tleft join $TIMESCALE_BOUNDS as tsbb on tsbb.bound_no = tsb.base_no\n";
     }
     
@@ -872,8 +865,8 @@ sub generate_join_list {
 	    if $tables->{tsb} || $tables->{ts};
 	$joins .= "\tjoin $TIMESCALE_DATA as ts using (timescale_no)\n"
 	    if $tables->{ts};
-	$joins .= "\tleft join $TIMESCALE_BOUNDS as tsbu on tsbu.lower_no = tsi.interval_no and tsbu.timescale_no = tsb.timescale_no\n"
-	    if $tables->{tsb};
+	# $joins .= "\tleft join $TIMESCALE_BOUNDS as tsbu on tsbu.lower_no = tsi.interval_no and tsbu.timescale_no = tsb.timescale_no\n"
+	#     if $tables->{tsb};
     }
     
     return $joins;
@@ -936,7 +929,7 @@ sub process_ages {
     
     delete $record->{is_modeled} unless $record->{is_modeled};
     delete $record->{is_spike} unless $record->{is_spike};
-    delete $record->{is_error} unless $record->{is_error};
+    delete $record->{has_error} unless $record->{has_error};
 }
 
 

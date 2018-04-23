@@ -30,4 +30,5 @@ my $perm_a = $T->new_perm('SESSION-WITH-ADMIN');
 
 $T->establish_session_data;
 $T->set_specific_permission('RESOURCE_QUEUE', $perm_a, 'admin');
+$T->set_specific_permission('TIMESCALE_DATA', $perm_a, 'admin');
 

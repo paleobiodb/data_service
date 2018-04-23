@@ -139,7 +139,7 @@ sub new {
 		bad_list => [ ],
 		errors => [ ],
 		warnings => [ ],
-		condition => { },
+		condition_code => { },
 		current_action => undef,
 		proceed => undef,
 		record_count => 0,
@@ -633,7 +633,7 @@ sub add_condition {
 	    {
 		substr($code,0,1) =~ tr/CE/DF/;
 		
-		$edt->{condition}{$code}++;
+		$edt->{condition_code}{$code}++;
 		
 		my $condition = EditTransaction::Condition->new($action, $code, @_);
 		push @{$edt->{warnings}}, $condition;
@@ -644,7 +644,7 @@ sub add_condition {
 	
 	# If we get here, then the condition will be saved as an error.
 	
-	$edt->{condition}{$code}++;
+	$edt->{condition_code}{$code}++;
 	
 	my $condition = EditTransaction::Condition->new($action, $code, @_);
 	push @{$edt->{errors}}, $condition;
@@ -665,7 +665,7 @@ sub add_condition {
 
 	# This condition will be saved on the warning list.
 	
-	$edt->{condition}{$code}++;
+	$edt->{condition_code}{$code}++;
 	
 	my $condition = EditTransaction::Condition->new($action, $code, @_);
 	push @{$edt->{warnings}}, $condition;
@@ -841,6 +841,27 @@ sub specific_warnings {
     }
 
     return @specific_list;
+}
+
+
+# has_condition_code ( code... )
+#
+# Return true if any of the specified codes have been attached to the current transaction.
+
+sub has_condition_code {
+    
+    my ($edt, @codes) = @_;
+
+    # Return true if any of the following codes are found.
+    
+    foreach my $code ( @codes )
+    {
+	return 1 if $edt->{condition_code}{$code};
+    }
+
+    # Otherwise, return false.
+    
+    return;
 }
 
 
@@ -2124,21 +2145,21 @@ sub authorize_action {
 	    $permission = $edt->check_table_permission($table, 'post');
 	}
 	
-	case 'update_many': {
-	    $permission = $edt->check_table_permission($table, 'edit');
-	}
-	
 	case 'update':
 	case 'replace': {
 	    $permission = $edt->check_record_permission($table, 'edit', $keyexpr);
 	}
 
-	case 'delete_many': {
-	    $permission = $edt->check_table_permission($table, 'delete');
+	case 'update_many': {
+	    $permission = $edt->check_many_permission($table, 'edit', $keyexpr);
 	}
 	
 	case 'delete': {
 	    $permission = $edt->check_record_permission($table, 'delete', $keyexpr);
+	}
+
+	case 'delete_many': {
+	    $permission = $edt->check_many_permission($table, 'delete', $keyexpr);
 	}
 	
         default: {

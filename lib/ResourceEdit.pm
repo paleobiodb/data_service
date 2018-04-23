@@ -45,30 +45,6 @@ our (%TAG_ID);
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
 
-# get_condition_template ( code, table, selector )
-#
-# Return the proper template for error and warning conditions defined by this subclass. If no
-# matching template can be found, we call the parent method. Other subclasses of EditTransaction
-# should do something similar.
-
-# sub get_condition_template {
-    
-#     my ($edt, $code, $table, $selector) = @_;
-    
-#     if ( ref $CONDITION_TEMPLATE{$code} eq 'HASH' )
-#     {
-# 	return $CONDITION_TEMPLATE{$code}{$selector} if $CONDITION_TEMPLATE{$code}{$selector};
-#     }
-    
-#     elsif ( $CONDITION_TEMPLATE{$code} )
-#     {
-# 	return $CONDITION_TEMPLATE{$code};
-#     }
-    
-#     return $edt->SUPER::get_condition_template($code, $table, $selector);
-# }
-
-
 # validate_action ( table, operation, action )
 # 
 # This method is called from EditTransaction.pm to validate each insert and update action.

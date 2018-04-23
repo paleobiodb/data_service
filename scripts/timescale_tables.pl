@@ -22,8 +22,8 @@ use TimescaleTables qw(establish_timescale_tables copy_international_timescales
 		       copy_pbdb_timescales process_one_timescale copy_macrostrat_timescales
 		       update_timescale_descriptions model_timescale complete_bound_updates
 		       establish_procedures establish_triggers);
-use TimescaleEdit qw(add_boundary update_boundary);
-use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
+# use TimescaleEdit qw(add_boundary update_boundary);
+# use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
 
 # First parse option switches.  If we were given an argument, then use that as

@@ -23,7 +23,7 @@ use TaxonDefs;
 
 use lib 't';
 use Tester;
-use Test::Conditions;
+
 use Test::Selection;
 
 

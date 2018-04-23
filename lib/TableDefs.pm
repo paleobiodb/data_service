@@ -49,16 +49,18 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 
 # Define the properties that are allowed to be specified for tables and table columns.
 
-our (%TABLE_PROP_NAME) = ( CAN_POST => 1,
-			   CAN_VIEW => 1,
-			   CAN_MODIFY => 1,
-			   ALLOW_DELETE => 1,
-			   ALLOW_INSERT_KEY => 1,
-			   BY_AUTHORIZER => 1,
-			   PRIMARY_KEY => 1,
-			   PRIMARY_ATTR => 1,
-			   NO_LOG => 1,
-			   TABLE_COMMENT => 1 );
+our (%TABLE_PROP_NAME) = ( CAN_POST => 1,		# specifies who is allowed to add new records
+			   CAN_VIEW => 1,		# specifies who is allowed to view records
+			   CAN_MODIFY => 1,		# specifies who is allowed to modify existing records
+			   ALLOW_DELETE => 1,		# if true, then deletion is allowed without admin
+			   ALLOW_INSERT_KEY => 1,	# if true, then insertion allowed with specified primary key
+			   BY_AUTHORIZER => 1,		# if true, then editing permission by authorizer_no
+			   PERMISSION_TABLE => 1,	# specifies table which controls permissions for this one
+			   PERMISSION_KEY => 1,		# specifies foreign key for the permission table, if different
+			   PRIMARY_KEY => 1,		# specifies the primary key column(s) for this table
+			   PRIMARY_ATTR => 1,		# specifies the primary key record field for this table
+			   NO_LOG => 1,			# specifies that changes to this table should not be logged
+			   TABLE_COMMENT => 1 );	# specifies a comment relating to the table
 
 our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 			    FOREIGN_KEY => 1,
