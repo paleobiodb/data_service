@@ -82,15 +82,40 @@ sub validate_action {
 
 # after_action ( action, operation, table, result )
 #
-# This method is called from EditTransaction.pm after each action, whether or not it is
-# successful.  We override it to handle adding and removing records from the active resource table
-# as appropriate.
+# This method is called from EditTransaction.pm after each action. We override it to add the
+# proper record to the specimen matrix for each newly added specimen.
 
-# sub after_action {
+sub after_action {
     
-#     my ($edt, $action, $operation, $table, $result) = @_;
+    my ($edt, $action, $operation, $table, $keyval) = @_;
+
+    my $dbh = $edt->dbh;
+    my ($sql, $count);
     
-# }
+    if ( $operation eq 'insert' )
+    {
+	$sql = "INSERT INTO $TABLE{SPECIMEN_MATRIX}
+		       (specimen_no, occurrence_no, reid_no, latest_ident, taxon_no, orig_no,
+			reference_no, authorizer_no, enterer_no, modifier_no, created, modified)
+		SELECT s.specimen_no, s.occurrence_no, o.reid_no, ifnull(o.latest_ident, 1), 
+		       if(s.taxon_no is not null and s.taxon_no > 0, s.taxon_no, o.taxon_no),
+		       if(a.orig_no is not null and a.orig_no > 0, a.orig_no, o.orig_no),
+		       s.reference_no, s.authorizer_no, s.enterer_no, s.modifier_no,
+		       s.created, s.modified
+		FROM $TABLE{SPECIMEN_DATA} as s LEFT JOIN $TABLE{AUTHORITY_DATA} as a using (taxon_no)
+			LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = s.occurrence_no
+		WHERE s.specimen_no = $keyval";
+	
+	$edt->debug_line($sql);
+	
+	$count = $dbh->do($sql);
+
+	unless ( $count )
+	{
+	    $edt->add_condition('E_EXECUTE', 'error inserting to the specimen matrix');
+	}
+    }
+}
 
 
 

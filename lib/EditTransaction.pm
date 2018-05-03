@@ -3416,7 +3416,7 @@ sub before_action {
 
 sub after_action {
 
-    my ($edt, $action, $operation, $table, $result) = @_;
+    my ($edt, $action, $operation, $table, $keyval) = @_;
     
     my $a = 1;	# We can stop here when debugging.
 }

@@ -13,7 +13,7 @@ package PB2::SpecimenEntry;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $SPEC_ELEMENTS);
+use TableDefs qw(%TABLE);
 
 use CoreTableDefs;
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
@@ -28,7 +28,7 @@ use Try::Tiny;
 
 use Moo::Role;
 
-our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::SpecimenData);
+our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::OccurrenceData PB2::SpecimenData);
 
 
 # initialize ( )
@@ -213,9 +213,79 @@ sub update_specimens {
     
     # Return all inserted or updated records.
     
-    # my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
+    my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
     
-    # $request->list_specimens_for_update($dbh, $edt->key_labels, $id_string) if $id_string;
+    $request->list_updated_specimens($dbh, $id_string, $edt->key_labels) if $id_string;
+}
+
+
+sub list_updated_specimens {
+    
+    my ($request, $dbh, $id_list, $label_ref) = @_;
+    
+    $request->substitute_select( mt => 'ss', cd => 'ss' );
+    
+    my $tables = $request->tables_hash;
+    
+    $request->extid_check;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+
+    # Determine the fields to be selected.
+
+    my $fields = $request->select_string;
+    
+    # Determine the necessary joins.
+    
+    # my ($join_list) = $request->generate_join_list('tsb', $tables);
+    
+    # Determine which extra tables, if any, must be joined to the query.  Then
+    # construct the query.
+    
+    my $join_list = $request->PB2::SpecimenData::generateJoinList('c', $tables);
+    
+    $request->{main_sql} = "
+	SELECT $calc $fields
+	FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+		LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
+		LEFT JOIN $TABLE{COLLECTION_MATRIX} as c on o.collection_no = c.collection_no
+		LEFT JOIN $TABLE{AUTHORITY_DATA} as a on a.taxon_no = ss.taxon_no
+		$join_list
+        WHERE ss.specimen_no in ($id_list)
+	GROUP BY ss.specimen_no
+	ORDER BY ss.specimen_no
+	$limit";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    my $results = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
+    
+    # If we were asked to get the count, then do so
+    
+    $request->sql_count_rows;
+    
+    # If we got some results, go through them and substitute in the record labels.
+    
+    if ( ref $results eq 'ARRAY' && @$results )
+    {
+	foreach my $r ( @$results )
+	{
+	    my $keyval = $r->{specimen_no};
+	    
+	    if ( ref $label_ref eq 'HASH' && $label_ref->{$keyval} )
+	    {
+		$r->{record_label} = $label_ref->{$keyval};
+	    }
+	}
+	
+	$request->list_result($results);
+    }
 }
 
 

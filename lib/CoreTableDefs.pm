@@ -20,8 +20,13 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
 {
     set_table_name(AUTHORITY_DATA => 'authorities');
     set_table_name(OPINION_DATA => 'opinions');
+    
     set_table_name(OCCURRENCE_DATA => 'occurrences');
+    set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
+    
     set_table_name(COLLECTION_DATA => 'collections');
+    set_table_name(COLLECTION_MATRIX => 'coll_matrix');
+    
     set_table_name(REFERENCE_DATA => 'refs');
     
     set_table_name(SPECIMEN_DATA => 'specimens');

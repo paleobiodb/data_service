@@ -1,11 +1,12 @@
 # 
 # Test::Conditions.pm
 # 
-# This module allows you to set and clear and arbitrary set of conditions.  Its purpose is to
-# facilitate testing large data structures, for example trees and lists, without generating
-# enormous numbers of individual tests.  Instead, you can create a Test::Conditions object, and
-# then run through the various nodes in the data structure running a series of checks on each
-# node.
+# This module allows you to set and clear an arbitrary set of conditions tagged by an arbitrary
+# set of labels.  Its purpose is to facilitate testing large data structures, for example trees
+# and lists, without generating enormous numbers of individual tests.  Instead, you can create a
+# Test::Conditions instance, and then run through the various nodes in the data structure running
+# a series of checks on each node. When you are finished, you can execute a single test which will
+# fail if any conditions were flagged and succeed otherwise.
 
 
 package Test::Conditions;
@@ -16,16 +17,15 @@ use Test::More;
 use namespace::clean;
 
 
-# new ( args... )
+# new ( )
 # 
-# Create a new Test::Conditions object, with the specified arguments.
-# Currently, the only argument accepted is 'limit'.
+# Create a new Test::Conditions object.
 
 sub new {
     
-    my ( $class, %args ) = @_;
+    my ( $class ) = @_;
     
-    my $new = { limit => 0,
+    my $new = { default_limit => 0,
 		label => { },
 		count => { },
 		tested => { },
@@ -33,46 +33,64 @@ sub new {
     
     bless $new, $class;
     
-    foreach my $k ( keys %args )
-    {
-	if ( $k eq 'limit' )
-	{
-	    $new->{limit} = $args{limit};
-	}
+    # foreach my $k ( keys %args )
+    # {
+    # 	if ( $k eq 'default_limit' )
+    # 	{
+    # 	    $new->{default_limit} = $args{default_limit};
+    # 	}
 	
-	else
-	{
-	    croak "unknown argument '$k'";
-	}
-    }
+    # 	else
+    # 	{
+    # 	    croak "unknown argument '$k'";
+    # 	}
+    # }
     
     return $new;
 }
 
 
+# limit_max ( condition => limit )
+#
+# Set the maximum number of times the specified condition can be flagged before it causes ok_all to
+# fail. The default for every condition is zero.
+
 sub limit_max {
     
-    my ($tc, %limits) = @_;
+    my ($tc, $condition, $limit) = @_;
     
-    foreach my $k ( keys %limits )
+    croak "you must specify a condition name" unless defined $condition && $condition ne '' && $condition !~ /^\d+$/;
+    croak "the limit value must be a nonnegative integer" unless defined $limit && $limit =~ /^\d+$/;
+    
+    if ( $condition eq 'DEFAULT' )
     {
-	croak "bad key '$k'" unless defined $k && $k ne '';
-	croak "odd number of arguments or undefined argument" unless defined $limits{$k};
-	croak "limit values must be nonnegative integers" unless $limits{$k} =~ /^\d+$/;
+	$tc->{default_limit} = $limit;
+    }
+
+    else
+    {
+	$tc->{exlimit}{$condition} = $limit;
     }
     
-    foreach my $k ( keys %limits )
-    {
-	if ( $k eq 'DEFAULT' )
-	{
-	    $tc->{limit} = $limits{$k};
-	}
+    # foreach my $k ( keys %limits )
+    # {
+    # 	croak "bad key '$k'" unless defined $k && $k ne '';
+    # 	croak "odd number of arguments or undefined argument" unless defined $limits{$k};
+    # 	croak "limit values must be nonnegative integers" unless $limits{$k} =~ /^\d+$/;
+    # }
+    
+    # foreach my $k ( keys %limits )
+    # {
+    # 	if ( $k eq 'DEFAULT' )
+    # 	{
+    # 	    $tc->{limit} = $limits{$k};
+    # 	}
 	
-	else
-	{
-	    $tc->{exlimit}{$k} = $limits{$k};
-	}
-    }
+    # 	else
+    # 	{
+    # 	    $tc->{exlimit}{$k} = $limits{$k};
+    # 	}
+    # }
 }
 
 
@@ -87,7 +105,7 @@ sub get_limit {
     my ($tc, $key) = @_;
     
     return $tc->{exlimit}{$key} if defined $key && $key ne '';
-    return $tc->{limit};
+    return $tc->{default_limit};
 }
 
 
@@ -179,7 +197,8 @@ sub clear {
     if ( $tc->{tested}{$key} )
     {
 	delete $tc->{tested}{$key};
-	$tc->{set}{$key} == -1;
+	delete $tc->{set}{$key};
+	# $tc->{set}{$key} == -1;
     }
     
     elsif ( defined $tc->{set}{$key} && $tc->{set}{$key} >= 0 )
@@ -189,7 +208,7 @@ sub clear {
     
     else
     {
-	$tc->{set}{$key} = -1;
+	delete $tc->{set}{$key};
     }
     
     delete $tc->{count}{$key};
@@ -220,7 +239,7 @@ sub list_all_keys {
     my ($tc) = @_;
     
     return unless ref $tc->{set} eq 'HASH';
-    return grep { $tc->{set}{$_} } keys %{$tc->{set}};
+    return grep { defined $tc->{set}{$_} } keys %{$tc->{set}};
 }
 
 
@@ -275,7 +294,7 @@ sub ok_all {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my (@fail, @ok, %found);
+    my (@fail, @warn, %found);
     
  KEY:
     foreach my $k ( $tc->list_untested_keys )
@@ -300,14 +319,14 @@ sub ok_all {
 	    push @fail, $m;
 	}
 	
-	elsif ( defined $count && $count <= $limit )
+	elsif ( defined $count && defined $limit && $count <= $limit )
 	{
 	    my $m = "    Condition '$k': flagged $count instance";
 	    $m .= "s" if $count > 1;
 	    $m .= " ('$label')" if defined $label & $label ne '';
 	    $m .= " (limit $limit)" if $limit;
 	    
-	    push @ok, $m;
+	    push @warn, $m;
 	}
 	
 	elsif ( defined $count )
@@ -321,7 +340,7 @@ sub ok_all {
 	
 	elsif ( $tc->{set}{$k} && $tc->{set}{$k} == -1 )
 	{
-	    push @fail, "    Condition '$k': cleared without being set";
+	    push @warn, "    Condition '$k': cleared without being set";
 	}
 	
 	else
@@ -347,18 +366,18 @@ sub ok_all {
 	fail($message);
 	diag($_) foreach @fail;
 	
-	if ( @ok )
+	if ( @warn )
 	{
 	    diag("This test also generated the following warnings:");
-	    diag($_) foreach @ok;
+	    diag($_) foreach @warn;
 	}
     }
     
-    elsif ( @ok )
+    elsif ( @warn )
     {
 	pass($message);
 	diag("Passed test '$message' with warnings:");
-	diag($_) foreach @ok;
+	diag($_) foreach @warn;
     }
     
     else
@@ -468,7 +487,7 @@ sub reset_expects {
 
 =head1 NAME
 
-Test::Conditions - test for multiple conditions in a simple and compact way
+Test::Conditions - test multiple conditions across a large data structure in a simple and compact way
 
 =head1 SYNOPSIS
 
@@ -486,16 +505,16 @@ Test::Conditions - test for multiple conditions in a simple and compact way
 
 =head1 DESCRIPTION
 
-The purpose of this module is to facilitate testing complex data structures
-such as trees or lists of hashes.  You may want to run certain tests on each
-node of the structure, and report the results in a compact way.  You might,
-for example, wish to test a list or other structure with 1,000 nodes and
-report the result as a single event rather than some multiple of 1,000 event.
-If so, this module can do that.
+The purpose of this module is to facilitate testing complex data structures such as trees, lists
+of hashes, results of database queries, etc. You may want to run certain tests on each node or
+row, and report the results in a compact way.  You might, for example, wish to test a list or
+other structure with 1,000 nodes and report the result as a single test rather than multiple
+thousands of individual tests. This module provides a far more flexible approach than the
+C<is_deeply> method of L<Test::More>.
 
 An object of class Test::Conditions can keep track of any number of
 conditions, and reports a single event when its 'ok_all' method is called:
-FAIL if one or more conditions are set, and OK if none are.  Each condition
+the test fails if one or more conditions are set, and succeeds if none are.  Each condition
 which is set is reported as a separate diagnostic message.  Futhermore, if the
 nodes or other pieces of the data structure have unique identifiers, you can
 easily arrange for Test::Conditions to report the identifier of one of the
