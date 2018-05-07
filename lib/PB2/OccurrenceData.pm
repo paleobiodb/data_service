@@ -75,7 +75,9 @@ sub initialize {
 	    "Show the individual components of the taxonomic identification of the occurrence.",
 	    "These values correspond to the value of F<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
-	{ value => 'img', maps_to => '1.2:taxa:img' },
+        { value => 'rem', maps_to => '1.2:occs:rem' },
+	    "Any additional remarks that were entered about the occurrence.",
+ 	{ value => 'img', maps_to => '1.2:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
 	    "These images are sourced from L<phylopic.org>.",
 	{ value => 'plant', maps_to => '1.2:occs:plant' },
@@ -143,9 +145,7 @@ sub initialize {
 	{ value => 'comps', maps_to => '1.2:colls:components' },
 	    "Information about the various kinds of body parts and other things",
 	    "found as part of the associated collection.",
-        { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
-	    "Any additional remarks that were entered about the containing collection.",
-        { value => 'ref', maps_to => '1.2:refs:primary' },
+	{ value => 'ref', maps_to => '1.2:refs:primary' },
 	    "The reference from which the occurrence was entered, as formatted text.",
 	    "If no reference is recorded for this occurrence, the primary reference for its",
 	    "associated collection is returned.",
@@ -350,12 +350,18 @@ sub initialize {
 	{ output => 'abund_unit', com_name => 'abu' },
 	    "The unit in which this abundance is expressed");
     
+    $ds->define_block('1.2:occs:rem' =>
+	{ select => ['oc.comments'], tables => ['oc'] },
+	{ output => 'comments', pbdb_name => 'occurrence_comments', com_name => 'ocm' },
+	    "Additional comments about this occurrence, if any.");
+    
     $ds->define_block( '1.2:occs:full_info' =>
 	{ include => '1.2:occs:attr' },
 	{ include => '1.2:occs:class' },
 	{ include => '1.2:occs:plant' },
 	{ include => '1.2:occs:abund' },
 	{ include => '1.2:occs:coords' },
+	{ include => '1.2:occs:rem' },
 	{ include => '1.2:colls:name' },
 	{ include => '1.2:colls:loc' },
 	{ include => '1.2:colls:paleoloc' },
@@ -943,6 +949,15 @@ sub initialize {
 	{ allow => '1.2:common:select_occs_ent' },
 	{ require_any => ['1.2:main_selector', '1.2:interval_selector', '1.2:ma_selector',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	">>The following parameters can be used to filter the selection of occurrences",
+	"that are analyzed for diversity:",
+	{ optional => 'pres', valid => '1.2:taxa:preservation', list => ',' },
+	    "This parameter indicates whether to select occurrences that are identified as",
+	    "ichnotaxa, form taxa, or regular taxa.  The default is C<B<all>>, which will select",
+	    "all records that meet the other specified criteria.  You can specify one or more",
+	    "of the following values as a list:",
+	{ ignore => 'level' },
+	{ ignore => 'show' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -3496,7 +3511,7 @@ sub combine_modifier {
     
     return $name unless defined $modifier && $modifier ne '';
     
-    if ( $modifier eq '?' )
+    if ( $modifier eq '?' || $modifier eq 'sensu lato' || $modifier eq 'informal' )
     {
 	return "$name $modifier";
     }
