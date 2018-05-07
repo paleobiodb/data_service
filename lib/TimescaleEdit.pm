@@ -25,7 +25,8 @@ our ($TIMESCALE_KEY) = 'timescale_no';
 
 {
     TimescaleEdit->register_conditions(
-	C_CREATE_INTERVALS => "The interval '%1' was not found. Allow CREATE_INTERVALS to create it.");
+	C_CREATE_INTERVALS => "The interval '%1' was not found. Allow CREATE_INTERVALS to create it.",
+	C_BREAK_DEPENDENCIES => "There are intervals in other timescales dependent on this one. Allow BREAK_DEPENDENCIES to break these dependencies.");
 }
 
 
@@ -85,24 +86,168 @@ sub authorize_action {
 }
 
 
+# Before we execute certain actions, we must check for conditions specific to this data type and
+# execute some auxiliary actions.
+
 sub before_action {
     
     my ($edt, $action, $operation, $table) = @_;
-    
-    my $dbh = $edt->dbh;
-    my $keyval = $action->keyval;
-    my $result;
-    
+            
     if ( $operation eq 'delete' && $table eq 'TIMESCALE_DATA' )
     {
-	unless ( $keyval )
+	return $edt->before_delete_timescale($action);
+    }
+
+    elsif ( $operation eq 'update' && $table eq 'TIMESCALE_DATA' )
+    {
+	return $edt->before_update_timescale($action, $operation);
+    }
+    
+    elsif ( $operation eq 'replace' && $table eq 'TIMESCALE_DATA' )
+    {
+	return $edt->before_update_timescale($action, $operation);
+    }
+}
+
+
+# finalize_transaction ( table )
+#
+# We have a lot to do at the end of each transaction. In particular, we will need to check bounds
+# on all updated timescales and also recompute all intervals whose authority timescale has been
+# deleted or had its status change.
+
+sub finalize_transaction {
+
+    my ($edt, $table) = @_;
+
+    my $dbh = $edt->dbh;
+    my $result;
+    
+    my @timescales = $edt->get_attr_keys('update_bound_list');
+
+    foreach my $t ( @timescales )
+    {
+	$result = $dbh->do("CALL check_bound_list($t)");
+	# $result = $dbh->do("CALL update_bound_list($t)");
+    }
+    
+    my @intervals = $edt->get_attr_keys('update_intervals');
+    
+    while ( @intervals )
+    {
+	my $interval_nos = join(',', splice(@intervals,0,100));
+	
+	$result = $dbh->do("CALL update_interval_definitions($interval_nos)");
+    }
+}
+
+
+# before_update_timescale ( action )
+#
+# If we change the authority level on a timescale, or change its is_active status, we must
+# recompute the definition of every interval that is referenced by that timescale. If we are
+# replacing the entire record, we recompute them regardless.
+
+sub before_update_timescale {
+    
+    my ($edt, $action, $operation) = @_;
+    
+    return if $action eq 'update' && ! ( $action->has_field('authority_level') ||
+					 $action->has_field('is_active') );
+    
+    my $dbh = $edt->dbh;
+    my $keyexpr = $action->keyexpr;
+    
+    my $auth = $dbh->selectcol_arrayref("SELECT interval_no
+		FROM $TABLE{TIMESCALE_BOUNDS} WHERE timescale_no in ($keyexpr)");
+    
+    if ( ref $auth eq 'ARRAY' && @$auth )
+    {
+	foreach my $i ( @$auth )
 	{
-	    $edt->add_condition('E_NO_KEY', 'delete');
+	    $edt->set_attr_key('update_intervals', $i, 1);
+	}
+    }
+}
+
+
+# before_delete_timescale ( action )
+# 
+# If we are deleting a timescale, we need to check that no bounds from any other timescale depend
+# on this one. If so, then we return the caution C_BREAK_DEPENDENCIES unless BREAK_DEPENDENCIES is
+# allowed. If it is, we break any dependencies. If there are any intervals for which this
+# timescale is the authority, they must be recalculated. Finally, we must delete all boundaries in
+# the specified timescale before the timescale itself is deleted. All of this takes place inside
+# the same transaction, so if any errors occur the transaction will be aborted.
+
+sub before_delete_timescale {
+
+    my ($edt, $action) = @_;
+    
+    my $dbh = $edt->dbh;
+    my $keylist = $edt->get_keylist($action);
+    my $result;
+    
+    # If we don't have an actual timescale_no, there is no point in continuing with a delete operation.
+    
+    unless ( $keylist )
+    {
+	$edt->add_condition('E_NO_KEY', 'delete');
+	return;
+    }
+    
+    # Now we query for any bounds *in other timescales* that depend on this one.
+    
+    my $keyexpr = "timescale_no in ($keylist)";
+    
+    my $link = "$TABLE{TIMESCALE_BOUNDS} as base JOIN $TABLE{TIMESCALE_BOUNDS} as dep on base.timescale_no <> dep.timescale_no and base.bound_no =";
+    
+    my ($has_deps) = $dbh->selectrow_array("SELECT count(*) FROM (
+	SELECT dep.bound_no FROM $link dep.top_no WHERE base.$keyexpr UNION ALL
+	SELECT dep.bound_no FROM $link dep.base_no WHERE base.$keyexpr UNION ALL
+	SELECT dep.bound_no FROM $link dep.range_no WHERE base.$keyexpr UNION ALL
+	SELECT dep.bound_no FROM $link dep.color_no WHERE base.$keyexpr UNION ALL
+	SELECT dep.bound_no FROM $link dep.refsource_no WHERE base.$keyexpr) as deps");
+    
+    # If we find any, then we must either return a caution or break the dependencies.
+    
+    if ( $has_deps )
+    {
+	unless ( $edt->allows('BREAK_DEPENDENCIES') )
+	{
+	    $edt->add_condition('C_BREAK_DEPENDENCIES');
 	    return;
 	}
 	
-	$result = $dbh->do("DELETE FROM $TABLE{TIMESCALE_BOUNDS} WHERE timescale_no=$keyval");
+	my $result = $dbh->do("UPDATE $link dep.top_no WHERE base.$keyexpr SET dep.top_no = 0");
+	my $result = $dbh->do("UPDATE $link dep.base_no WHERE base.$keyexpr SET dep.base_no = 0");
+	my $result = $dbh->do("UPDATE $link dep.range_no WHERE base.$keyexpr SET dep.range_no = 0");
+	my $result = $dbh->do("UPDATE $link dep.color_no WHERE base.$keyexpr SET dep.color_no = 0");
+	my $result = $dbh->do("UPDATE $link dep.refsource_no WHERE base.$keyexpr SET dep.refsource_no = 0");
     }
+    
+    # If any intervals have this timescale as their authority, add them to the list of intervals
+    # to recompute at the end of the transaction.
+    
+    my ($auth) = $dbh->selectcol_arrayref("SELECT interval_no FROM $TABLE{TIMESCALE_INTS}
+	WHERE authority_timescale_no in ($keylist)");
+    
+    if ( ref $auth eq 'ARRAY' && @$auth )
+    {
+	foreach my $i ( @$auth )
+	{
+	    $edt->set_attr_key('update_intervals', $i, 1);
+	}
+    }
+    
+    # Now we must delete all of the bounds in the timescale.
+    
+    $result = $dbh->do("DELETE FROM $TABLE{TIMESCALE_BOUNDS} WHERE $keyexpr");
+    
+    # And finally, if any other timescale uses this one as its source_no, set that to zero.
+    
+    $result = $dbh->do("UPDATE $TABLE{TIMESCALE_DATA} SET source_timescale_no = 0
+	WHERE source_timescale_no in ($keylist)");
 }
 
 

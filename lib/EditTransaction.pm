@@ -340,18 +340,65 @@ sub role {
 
 sub set_attr {
 
-    croak "you must specify an attribute name" unless $_[1];
-    $_[0]->{attrs}{$_[1]} = $_[2];
+    my ($edt, $attr, $value) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    $edt->{attrs}{$attr} = $value;
 }
 
 
 sub get_attr {
 
-    croak "you must specify an attribute name" unless $_[1];
-    return $_[0]->{attrs} ? $_[0]->{attrs}{$_[1]} : undef;
+    my ($edt, $attr) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    return $edt->{attrs} ? $edt->{attrs}{$attr} : undef;
 }
 
 
+sub set_attr_key {
+    
+    my ($edt, $attr, $key, $value) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
+	! ref $edt->{attrs}{$attr} eq 'HASH';
+    $edt->{attrs}{$attr}{$key} = $value;
+}
+
+
+sub delete_attr_key {
+
+    my ($edt, $attr, $key) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
+	! ref $edt->{attrs}{$attr} eq 'HASH';
+    delete $edt->{attrs}{$attr}{$key};
+}
+
+
+sub get_attr_keys {
+    
+    my ($edt, $attr) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
+	! ref $edt->{attrs}{$attr} eq 'HASH';
+    return keys %{$edt->{attrs}{$attr}};
+}
+    
+
+sub get_attr_hash {
+    
+    my ($edt, $attr) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
+	! ref $edt->{attrs}{$attr} eq 'HASH';
+    return %{$edt->{attrs}{$attr}};
+}
+    
 
 # Debugging and error message display
 # -----------------------------------
@@ -2636,10 +2683,12 @@ sub get_keyexpr {
 	my $dbh = $edt->dbh;
 	my @keys = map { $dbh->quote($_) } $action->all_keys;
 	
+	return '0' unless @keys;
+	
 	return "$keycol in (" . join(',', @keys) . ")";
     }
     
-    elsif ( defined $keyval && $keyval ne '' )
+    elsif ( defined $keyval && $keyval ne '' && $keyval ne '0' )
     {
 	return "$keycol=" . $edt->dbh->quote($keyval);
     }
@@ -2658,7 +2707,7 @@ sub get_keylist {
     my $keycol = $action->keycol;
     my $keyval = $action->keyval;
     
-    return unless $keycol;
+    return '' unless $keycol;
     
     if ( $action->is_multiple )
     {
