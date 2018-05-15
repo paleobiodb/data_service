@@ -20,7 +20,7 @@ use Text::CSV_XS;
 use CoreFunction qw(activateTables);
 
 use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC
-		 $OCCURRENCES $LOCALITIES $WOF_PLACES $COLL_EVENTS);
+		 $SPECIMENS $OCCURRENCES $LOCALITIES $WOF_PLACES $COLL_EVENTS);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
@@ -744,108 +744,108 @@ sub establish_spec_element_tables {
 }
 
 
-sub add_element_line {
+# sub add_element_line {
 
-    my ($dbh, $line, $options) = @_;
+#     my ($dbh, $line, $options) = @_;
     
-    my @fields = split /\s*,\s*/, $line;
+#     my @fields = split /\s*,\s*/, $line;
     
-    my $taxon_name = line_value('Taxon', \@fields);
-    my $elt_name = line_value('SpecimenElement', \@fields);
-    my $alt_names = line_value('AlternateNames', \@fields);
-    my $parent_elt = line_value('ParentElement', \@fields);
-    my $neotoma_no = line_value('NeotomaElementID', \@fields) || "0";
-    my $neotoma_type_no = line_value('NeotomaElementTypeID', \@fields) || "0";
-    my $has_number = line_value('HasNumber', \@fields);
-    my $inactive = line_value('Inactive', \@fields);
+#     my $taxon_name = line_value('Taxon', \@fields);
+#     my $elt_name = line_value('SpecimenElement', \@fields);
+#     my $alt_names = line_value('AlternateNames', \@fields);
+#     my $parent_elt = line_value('ParentElement', \@fields);
+#     my $neotoma_no = line_value('NeotomaElementID', \@fields) || "0";
+#     my $neotoma_type_no = line_value('NeotomaElementTypeID', \@fields) || "0";
+#     my $has_number = line_value('HasNumber', \@fields);
+#     my $inactive = line_value('Inactive', \@fields);
     
-    next if $inactive;
+#     next if $inactive;
     
-    $alt_names = '' if $alt_names eq $elt_name;
+#     $alt_names = '' if $alt_names eq $elt_name;
     
-    # Fix Eukarya
+#     # Fix Eukarya
     
-    $taxon_name = 'Eukaryota' if $taxon_name eq 'Eukarya';
+#     $taxon_name = 'Eukaryota' if $taxon_name eq 'Eukarya';
     
-    # Look up the taxon name in the database.
+#     # Look up the taxon name in the database.
     
-    my ($orig_no, $lft, $rgt) = lookup_taxon($dbh, $taxon_name);
+#     my ($orig_no, $lft, $rgt) = lookup_taxon($dbh, $taxon_name);
     
-    my $quoted_name = $dbh->quote($elt_name);
-    my $quoted_alt = $alt_names ? $dbh->quote($alt_names) : "''";
-    my $quoted_parent = $parent_elt ? $dbh->quote($parent_elt) : "''";
-    my $quoted_hasnum = $has_number ? "1" : "0";
-    my $quoted_neo = $dbh->quote($neotoma_no);
-    my $quoted_neotype = $dbh->quote($neotoma_type_no);
+#     my $quoted_name = $dbh->quote($elt_name);
+#     my $quoted_alt = $alt_names ? $dbh->quote($alt_names) : "''";
+#     my $quoted_parent = $parent_elt ? $dbh->quote($parent_elt) : "''";
+#     my $quoted_hasnum = $has_number ? "1" : "0";
+#     my $quoted_neo = $dbh->quote($neotoma_no);
+#     my $quoted_neotype = $dbh->quote($neotoma_type_no);
     
-    # Insert the record into the database.
+#     # Insert the record into the database.
     
-    my $sql = "	INSERT INTO $SPEC_ELEMENTS (element_name, alternate_names, orig_no, parent_elt_name,
-			has_number, neotoma_element_id, neotoma_element_type_id)
-		VALUES ($quoted_name, $quoted_alt, $orig_no, $quoted_parent,
-			$quoted_hasnum, $quoted_neo, $quoted_neotype)";
+#     my $sql = "	INSERT INTO $SPEC_ELEMENTS (element_name, alternate_names, orig_no, parent_elt_name,
+# 			has_number, neotoma_element_id, neotoma_element_type_id)
+# 		VALUES ($quoted_name, $quoted_alt, $orig_no, $quoted_parent,
+# 			$quoted_hasnum, $quoted_neo, $quoted_neotype)";
     
-    print STDERR "$sql\n\n" if $options->{debug};
+#     print STDERR "$sql\n\n" if $options->{debug};
     
-    my $result = $dbh->do($sql);
+#     my $result = $dbh->do($sql);
     
-    my $insert_id = $dbh->last_insert_id(undef, undef, $SPEC_ELEMENTS, undef);
+#     my $insert_id = $dbh->last_insert_id(undef, undef, $SPEC_ELEMENTS, undef);
     
-    unless ( $insert_id )
-    {
-	print STDERR "Error: element not inserted\n";
-	next;
-    }
+#     unless ( $insert_id )
+#     {
+# 	print STDERR "Error: element not inserted\n";
+# 	next;
+#     }
     
-    # If we know the taxon number, also insert a record into the element map.
+#     # If we know the taxon number, also insert a record into the element map.
     
-    # if ( $orig_no )
-    # {
-    # 	$sql = "	INSERT INTO $SPEC_ELT_MAP (spec_elt_no, lft, rgt)
-    # 		VALUES ($insert_id, $lft, $rgt)";
+#     # if ( $orig_no )
+#     # {
+#     # 	$sql = "	INSERT INTO $SPEC_ELT_MAP (spec_elt_no, lft, rgt)
+#     # 		VALUES ($insert_id, $lft, $rgt)";
 	
-    # 	print STDERR "$sql\n\n" if $options->{debug};
+#     # 	print STDERR "$sql\n\n" if $options->{debug};
 	
-    # 	$result = $dbh->do($sql);
-    # }
+#     # 	$result = $dbh->do($sql);
+#     # }
     
-    return $result;
-}
-
-
-sub line_value {
-    
-    my ($column, $fields_ref) = @_;
-    
-    my $i = $FIELD_MAP{$column};
-    croak "Column '$column' not found.\n" unless defined $i;
-    
-    return $fields_ref->[$i];
-}
+#     return $result;
+# }
 
 
-sub lookup_taxon {
+# sub line_value {
     
-    my ($dbh, $taxon_name) = @_;
+#     my ($column, $fields_ref) = @_;
     
-    unless ( $TAXON_CACHE{$taxon_name} )
-    {
-	my $quoted = $dbh->quote($taxon_name);
-	
-	my $sql = "	SELECT orig_no, lft, rgt, name FROM $TREE_TABLE_LIST[0]
-			WHERE name = $quoted";
-	
-	my ($orig_no, $lft, $rgt, $name) = $dbh->selectrow_array($sql);
-	
-	$orig_no ||= 0;
-	
-	print STDERR "WARNING: could not find taxon '$taxon_name'\n" unless $orig_no;
-	
-	$TAXON_CACHE{$taxon_name} = [ $orig_no, $lft, $rgt, $name ];
-    }
+#     my $i = $FIELD_MAP{$column};
+#     croak "Column '$column' not found.\n" unless defined $i;
     
-    return @{$TAXON_CACHE{$taxon_name}};
-}
+#     return $fields_ref->[$i];
+# }
+
+
+# sub lookup_taxon {
+    
+#     my ($dbh, $taxon_name) = @_;
+    
+#     unless ( $TAXON_CACHE{$taxon_name} )
+#     {
+# 	my $quoted = $dbh->quote($taxon_name);
+	
+# 	my $sql = "	SELECT orig_no, lft, rgt, name FROM $TREE_TABLE_LIST[0]
+# 			WHERE name = $quoted";
+	
+# 	my ($orig_no, $lft, $rgt, $name) = $dbh->selectrow_array($sql);
+	
+# 	$orig_no ||= 0;
+	
+# 	print STDERR "WARNING: could not find taxon '$taxon_name'\n" unless $orig_no;
+	
+# 	$TAXON_CACHE{$taxon_name} = [ $orig_no, $lft, $rgt, $name ];
+#     }
+    
+#     return @{$TAXON_CACHE{$taxon_name}};
+# }
 
 
 # # init_specimen_element_tables ( dbh )
