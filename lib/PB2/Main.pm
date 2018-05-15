@@ -933,6 +933,12 @@ use PB2::CombinedData;
 	"and there are modifiers that you can add in order to precisely specify",
 	"which taxa you are interested in.");
     
+    $ds2->define_node({ path => 'general/ecotaph',
+			title => 'Ecological and taphonomic vocabulary',
+			place => 1 },
+	"The ecology of organisms and the taphonomy of their fossil remains are described",
+	"by several different data fields with an associated vocabulary.");
+    
     $ds2->define_node({ path => 'general/datetime',
 		      title => 'Specifying dates and times',
 		      place => 2 },
