@@ -18,8 +18,7 @@ use Try::Tiny;
 use Text::CSV_XS;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC
-		 $SPECIMENS $OCCURRENCES $LOCALITIES $WOF_PLACES $COLL_EVENTS);
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
