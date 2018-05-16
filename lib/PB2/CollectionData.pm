@@ -1670,6 +1670,11 @@ sub summary {
     
     my $filter_string = join(' and ', @filters);
     
+    unless ( $filter_string =~ qr{ \bs.interval_no \s* = }xs )
+    {
+	$filter_string .= ' and s.interval_no = 0';
+    }
+    
     # If we want the containing interval numbers, we have to specify this as
     # an inner and an outer query.
     
