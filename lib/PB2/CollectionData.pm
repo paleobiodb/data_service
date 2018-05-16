@@ -3328,7 +3328,7 @@ sub generateMainFilters {
     # If only latitude bounds were specified then create a bounding box
     # with longitude ranging from -180 to 180.
     
-    elsif ( $y1 ne '' || $y2 ne '' && ! ( $y1 == -90 && $y2 == 90 ) )
+    elsif ( ($y1 ne '' || $y2 ne '') && ! ( $y1 == -90 && $y2 == 90 ) )
     {
 	# If one of the bounds was not specified, set it to -90 or 90.
 	
@@ -3863,7 +3863,20 @@ sub generateMainFilters {
 	$tables_ref->{cs} = 1;
 	$tables_ref->{non_summary} = 1;
     }
-       
+    
+    # Now we need to figure out if the 'c' table is needed.
+
+    if ( $tables_ref->{o} || $tables_ref->{t} || $tables_ref->{tf} || $tables_ref->{v} )
+    {
+	$tables_ref->{o} = 1;
+	$tables_ref->{c} = 1;
+    }
+
+    elsif ( $tables_ref->{cc} )
+    {
+	$tables_ref->{c} = 1;
+    }
+    
     # Check for interval parameters. If no time rule is specified, it defaults to 'major'.
     
     my $time_rule = $request->clean_param('timerule') || 'major';
@@ -3875,6 +3888,7 @@ sub generateMainFilters {
 
     if ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
 	 ( $time_rule eq 'major' ) &&
+	 ( ! $tables_ref->{c} ) && 
 	 ( ! $early_interval_no && ! $early_age && ! $late_age ) )
     {
 	push @filters, "s.interval_no = 0";
@@ -3884,8 +3898,9 @@ sub generateMainFilters {
     # single interval, then we can just query on the appropriate interval_no.
     
     elsif ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
-	 ( $time_rule eq 'major' ) &&
-	 ( $early_interval_no && ( ! $late_interval_no || $early_interval_no == $late_interval_no ) ) )
+	    ( $time_rule eq 'major' ) &&
+	    ( ! $tables_ref->{c} ) && 
+	    ( $early_interval_no && ( ! $late_interval_no || $early_interval_no == $late_interval_no ) ) )
     {
 	push @filters, "s.interval_no = $early_interval_no";
     }
@@ -3900,6 +3915,8 @@ sub generateMainFilters {
 	
 	$request->{early_age} = $early_age;
 	$request->{late_age} = $late_age;
+
+	push @filters, "s.interval_no = 0" if $op eq 'summary' || $op eq 'prevalence';
 	
 	if ( $time_rule eq 'contain' )
 	{
