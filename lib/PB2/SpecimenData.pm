@@ -521,7 +521,7 @@ sub initialize {
     
     $ds->define_block('1.2:specs:element' => 
 	{ select => ['e.specelt_no', 'e.element_name', 'e.parent_name', 'e.taxon_name', 
-		     'm.exclude'] },
+		     'e.alternate_names', 'm.exclude'] },
 	{ set => '*', code => \&process_element_record },
 	{ output => 'specelt_no', com_name => 'oid' },
 	    "The unique identifier of this specimen element in the database",
@@ -533,6 +533,8 @@ sub initialize {
 	    "The name of the parent element, if any. This can be used to display",
 	    "the elements in a collapsed list where individual elements can be",
 	    "expanded to show their children.",
+	{ output => 'alternate_names', com_name => 'alt' },
+	    "Alternate names for this element, if any.",	      
 	{ output => 'taxon_name', com_name => 'tna' },
 	    "The name of the base taxon for which this element is defined.");
     
@@ -574,8 +576,10 @@ sub initialize {
 	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TXN') },
 	    "Return only elements that are valid for the specified taxon,",
 	    "given by its identifier in the database.",
+	{ param => 'name_re', valid => ANY_VALUE },
+	    "Return only elements whose name or alternate name matches the given regular expression.",
 	{ at_most_one => ['all_records', 'taxon_name', 'taxon_id'] });
-
+    
     $ds->define_ruleset('1.2:specs:element_display' =>
 	{ optional => 'show', list => q{,}, valid => '1.2:specs:element_map' },
 	    "This parameter is used to select additional information to be returned",
@@ -1447,6 +1451,7 @@ sub list_elements {
     my @filters;
     my $tables_hash = $request->tables_hash;
     my $ignore_exclude;
+    my $taxon;
     
     if ( $request->clean_param('all_records') )
     {
@@ -1456,7 +1461,7 @@ sub list_elements {
     
     elsif ( my $taxon_no = $request->clean_param('taxon_id') )
     {
-	my ($taxon) = $taxonomy->list_taxa_simple($taxon_no, { fields => 'SEARCH' });
+	($taxon) = $taxonomy->list_taxa_simple($taxon_no, { fields => 'SEARCH' });
 	
 	    # $dbh->selectrow_array("
 	    # 	SELECT t.lft FROM taxon_trees as t
@@ -1469,11 +1474,18 @@ sub list_elements {
     
     elsif ( my $taxon_name = $request->clean_param('taxon_name') )
     {
-	my ($taxon) = $taxonomy->resolve_names($taxon_name, { fields => 'SEARCH' });
+	($taxon) = $taxonomy->resolve_names($taxon_name, { fields => 'SEARCH' });
 	
 	die $request->exception(404, "Not found") unless $taxon;
 	
 	push @filters, "$taxon->{lft} between m.lft and m.rgt";
+    }
+    
+    if ( my $name_re = $request->clean_param('name_re') )
+    {
+	my $quoted = $dbh->quote($name_re);
+
+	push @filters, "(e.element_name rlike $quoted or e.alternate_names rlike $quoted)";
     }
     
     # Do a final check to make sure that all records are only returned if
@@ -1482,6 +1494,14 @@ sub list_elements {
     if ( @filters == 0 )
     {
 	die $request->exception(400, "You must specify 'all_records' if you want to retrieve the entire set of records.");
+    }
+    
+    push @filters, "not m.exclude";
+
+    if ( $taxon )
+    {
+	push @filters, "m.specelt_no not in (SELECT specelt_no 
+		FROM $SPECELT_MAP as exc WHERE exc.exclude and $taxon->{lft} between exc.lft and exc.rgt)"
     }
     
     my $filter_string = join(' and ', @filters);
@@ -1539,6 +1559,7 @@ sub list_elements {
 	SELECT $calc $fields
 	FROM $SPECELT_MAP as m join $SPECELT_DATA as e using (specelt_no)
         WHERE $filter_string
+	GROUP BY specelt_no
 	ORDER BY $order_clause
 	$limit";
     
