@@ -68,7 +68,7 @@ sub validate_action {
 	    
 	    if ( $result && $result->{orig_no} )
 	    {
-		$record->{taxon_id} = $result->{taxon_no};
+		$record->{taxon_id} = $result->{taxon_no} + 0;
 	    }
 	    
 	    else

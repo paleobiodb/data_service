@@ -3748,9 +3748,10 @@ sub validate_against_schema {
 		$record_col = $alt;
 		$special = $action->get_special($alt);
 	    }
-
+	    
 	    else
 	    {
+		$record_col = $alt if $cr->{ALTERNATE_ONLY};
 		$value = undef;
 	    }
 	}
@@ -4115,8 +4116,9 @@ sub validate_against_schema {
 		    if ( ref $value eq 'PBDB::ExtIdent' )
 		    {
 			$EXTID_CHECK{$extid_type} ||= qr{$IDP{$extid_type}};
+			my $type = $value->type;
 			
-			unless ( $value->type =~ $EXTID_CHECK{$extid_type} )
+			unless ( $type eq 'unk' || $type =~ $EXTID_CHECK{$extid_type} )
 			{
 			    $edt->add_condition($action, 'E_EXTTYPE', $record_col,
 						"wrong type for external identifier: must be '$IDP{$extid_type}'");

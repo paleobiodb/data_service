@@ -51,9 +51,10 @@ subtest 'add simple' => sub {
     
     my $record1 = { record_label => 'a1',
 		    specimen_code => 'TEST.1',
-		    # taxon_id => 'txn:69296',
+		    # taxon_id => '71894',
 		    taxon_name => 'Dascillidae',
-		    reference_id => 'ref:5041' };
+		    reference_id => 'ref:5041'
+		  };
     
     my (@r1) = $T->send_records("/specs/addupdate.json", "superuser add", json => $record1);
     
