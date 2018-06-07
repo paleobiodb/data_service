@@ -2418,6 +2418,7 @@ sub list_occs_associated {
     # Get a database handle by which we can make queries.
     
     my $dbh = $request->get_connection;
+    my $tables = $request->tables_hash;
     
     $request->substitute_select( mt => 'r', cd => 'r' );
     
@@ -2445,7 +2446,9 @@ sub list_occs_associated {
     my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
+    push @filters, $request->generate_ref_filters($tables);
+    push @filters, $request->generate_refno_filter('o');
+    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'r' } );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     # Figure out what information we need to determine access permissions.  We
