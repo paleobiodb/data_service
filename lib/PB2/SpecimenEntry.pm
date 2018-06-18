@@ -112,7 +112,7 @@ sub initialize {
 	    "to accurately indicate which records generated errors or warnings.",
 	    "You may specify any string, but if you submit multiple records in",
 	    "one call each record should have a unique value.",
-	{ optional => 'measurement_id', valid => VALID_IDENTIFIER('SPM') },
+	{ optional => 'measurement_id', valid => VALID_IDENTIFIER('MEA') },
 	    "The identifier of the measurement to be updated. If empty,",
 	    "a new measurement record will be created.",
 	{ optional => 'specimen_id', valid => VALID_IDENTIFIER('SPM') },
