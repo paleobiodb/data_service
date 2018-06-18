@@ -89,8 +89,27 @@ sub unpack_input_records {
     
     my ($request, $main_params_ref, $entry_ruleset, $main_key) = @_;
     
-    my (@raw_records, @records);
+    my (@raw_records, @records, @rulesets);
     my ($body, $error);
+    
+    # If we were given one or more listrefs indicating multiple rulesets, unpack them.
+    
+    if ( ref $entry_ruleset eq 'ARRAY' )
+    {
+	my ($foo, $bar, @args) = @_;
+
+	foreach my $list (@args)
+	{
+	    croak "argument must be a listref, was $list" unless ref $list eq 'ARRAY';
+
+	    push @rulesets, $list;
+	}
+    }
+    
+    elsif ( $entry_ruleset )
+    {
+	push @rulesets, [$entry_ruleset, $main_key, 'DEFAULT'];
+    }
     
     # If the method is GET, then we don't expect any body. Assume that the main parameters
     # constitute the only input record.
@@ -196,11 +215,34 @@ sub unpack_input_records {
 	# written) does not properly handle parameters with empty values. So
 	# a quick hack fills these in.
 	
-	if ( $entry_ruleset )
+	# If there is more than one ruleset, we try them one at a time.
+
+	my ($ruleset, $main_key, $check_key);
+	
+      RULESET:
+	foreach my $list ( @rulesets )
 	{
+	    ($ruleset, $main_key, $check_key) = @$list;
+	    
+	    # Check to see if this ruleset is the proper one to apply.
+
+	    my $ok;
+
+	    if ( $check_key && ($check_key eq 'DEFAULT' || exists $r->{$check_key}) )
+	    {
+		$ok = 1;
+	    }
+	    
+	    elsif ( $main_key && exists $r->{$main_key} )
+	    {
+		$ok = 1;
+	    }
+
+	    next RULESET unless $ok;
+	    
 	    # Validate the input record against the specified ruleset.
 	    
-	    my $result = $request->validate_params($entry_ruleset, $r);
+	    my $result = $request->validate_params($ruleset, $r);
 	    
 	    # Fill in any parameters that were included with empty values.
 	    
@@ -218,7 +260,7 @@ sub unpack_input_records {
 	    # If any errors or warnings were generated, add them to the
 	    # current request.
 	    
-	    my $label = $r->{record_id} || ($main_key && $r->{main_key}) || '';
+	    my $label = $r->{record_id} || ($main_key && $r->{$main_key}) || '';
 	    my $lstr = $label ? " ($label)" : "";
 	    
 	    foreach my $e ( $result->errors )
@@ -235,12 +277,10 @@ sub unpack_input_records {
 	    # records to add or update.
 	    
 	    push @records, $result->values;
+	    last;
 	}
-	
-	else
-	{
-	    push @records, $r;
-	}
+
+	croak "no ruleset found for record" unless $ruleset;
     }
     
     if ( $request->debug )

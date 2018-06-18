@@ -271,7 +271,7 @@ sub initialize {
 			arg => 'add',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
-	"This operation allows you to add new educational resource records to the database and/or",
+	"This operation allows you to add new specimen records to the database and/or",
 	"update the attributes of existing records.");
     
     $ds2->list_node({ path => 'specs/addupdate',
@@ -286,6 +286,29 @@ sub initialize {
 	"Otherwise, a new record will be created, owned by you.",
 	">By default, this operation returns the new or updated record(s).");
     
+    $ds2->define_node({ path => 'specs/addupdate_measurements',
+			title => 'Add measurement records or update existing records',
+			place => 2,
+			allow_method => 'GET,PUT,POST',
+			doc_template => 'entry_operation.tt',
+			role => 'PB2::SpecimenEntry',
+			method => 'update_measurements',
+			arg => 'add',
+			output => '1.2:measure:basic' },
+	"This operation allows you to add new specimen measurement records to the database and/or",
+	"update the attributes of existing records.");
+    
+    $ds2->list_node({ path => 'specs/addupdate_measurements',
+		      list => 'entry/specs',
+		      place => 2 });
+    
+    $ds2->extended_doc({ path => 'specs/addupdate_measurements' },
+	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
+	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
+	"you may specify multiple records. Any records which specify an eduresource identifier",
+	"will update the attributes of that record if you have permission to do so.",
+	"Otherwise, a new record will be created, owned by you.",
+	">By default, this operation returns the new or updated record(s).");
 }
 
 

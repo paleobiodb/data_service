@@ -39,7 +39,7 @@ our (%COMMON_FIELD_IDSUB);
 our (%SCHEMA_CACHE);
 
 our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
-				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR);
+				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR IGNORE);
 
 our (%PREFIX_SIZE) = ( tiny => 255,
 		       regular => 65535,
@@ -434,6 +434,10 @@ sub complete_output_block {
 	
 	next if $block_has_field{$field_name};
 	
+	# If this field has the 'IGNORE' attribute set, skip it as well.
+
+	next if $schema->{$field_name}{IGNORE};
+	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
 	
@@ -534,17 +538,24 @@ sub complete_ruleset {
     {
 	next if $COMMON_FIELD_SPECIAL{$column_name};
 	
+	my $field_record = $schema->{$column_name};
+	my $type = $field_record->{Type};
+	
+	next if $field_record->{IGNORE};
+	
 	my $field_name = $column_name;
 	
-	if ( $field_name =~ /(.*)_no/ )
+	if ( $field_record->{ALTERNATE_NAME} )
+	{
+	    $field_name = $field_record->{ALTERNATE_NAME};
+	}
+	
+	elsif ( $field_name =~ /(.*)_no/ )
 	{
 	    $field_name = $1 . '_id';
 	}
 	
 	next if $ruleset_has_field{$field_name};
-	
-	my $field_record = $schema->{$field_name};
-	my $type = $field_record->{Type};
 	
 	my $rr = { optional => $field_name };
 	my $doc = "This parameter sets the value of C<$field_name> in the table.";

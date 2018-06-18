@@ -72,6 +72,7 @@ our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 			    VALIDATOR => 1,
 			    REQUIRED => 1,
 			    ADMIN_SET => 1,
+			    IGNORE => 1,
 			    COLUMN_COMMENT => 1 );
 
 

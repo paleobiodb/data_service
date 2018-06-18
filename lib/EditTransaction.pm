@@ -4126,6 +4126,7 @@ sub validate_against_schema {
 			}
 			
 			$value = $value->stringify;
+			$record->{$record_col} = $value;
 		    }
 		    
 		    # If it is a number, then leave it alone. We'll have to change this check if
@@ -4141,11 +4142,16 @@ sub validate_against_schema {
 		    elsif ( $value =~ $IDRE{$extid_type} )
 		    {
 			$value = $2;
+
+			if ( $value > 0 )
+			{
+			    $record->{$record_col} = $value;
+			}
 			
 			# If the value is 0, or ERROR, or something else not valid, add an error
 			# condition.
 			
-			unless ( $value > 0 )
+			else
 			{
 			    $edt->add_condition($action, 'E_RANGE', $record_col,
 						"value does not specify a valid record");
@@ -4271,10 +4277,16 @@ sub validate_against_schema {
 		    elsif ( $type eq 'geometry' )
 		    {
 			$value = $edt->validate_geometry_value($action, $schema->{$col}, $record_col, $value);
+			next if ref $value;
 		    }
 		    
 		    # If the data type is anything else, we just throw up our hands and accept
 		    # whatever they give us. This might not be wise.
+
+		    # Now store the cleaned value back into the record, so that before_action and
+		    # after_action routines will have access to it.
+		    
+		    $record->{$record_col} = $value;
 		}
 	    }
 	    
