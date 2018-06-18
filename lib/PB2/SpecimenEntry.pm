@@ -451,15 +451,19 @@ sub update_measurements {
     {
 	my $return_what = $request->clean_param('return') || 'specimen';
 	my $id_string = '';
-
-	if ( $return_what eq 'updated' )
+	
+	$id_string = join(',', $edt->inserted_keys, $edt->updated_keys);
+	
+	if ( $return_what eq 'specimen' )
 	{
-	    $id_string = join(',', $edt->inserted_keys, $edt->updated_keys);
-	}
+	    my $sql = "SELECT distinct specimen_no FROM $TABLE{MEASUREMENT_DATA}
+		WHERE measurement_no in ($id_string)";
+	    
+	    print STDERR "$sql\n\n" if $request->debug;
 
-	elsif ( $return_what eq 'specimen' )
-	{
-	    $id_string = join(',', $edt->get_attr_keys('updated_specimen'));
+	    my $result = $dbh->selectcol_arrayref($sql);
+
+	    $id_string = ref $result eq 'ARRAY' ? join(',', @$result) : '';
 	}
 	
 	$request->list_updated_measurements($dbh, $return_what, $id_string, $edt->key_labels) if $id_string;

@@ -585,7 +585,7 @@ sub check_record_permission {
     {
 	$record = $perms->get_record_authinfo($table_specifier, $key_expr);
 	
-	unless ( ref $record )
+	unless ( ref $record eq 'HASH' && %$record )
 	{
 	    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' : NOT FOUND\n" );
 	    
@@ -714,9 +714,15 @@ sub get_record_authinfo {
     
     my $auth_fields = get_authinfo_fields($perms->{dbh}, $table_specifier, $perms->{debug});
     
-    # If it is empty, then return an empty record.
+    # If it is empty, then just fetch the key value. This will allow us to check that the record
+    # actually exists. If the table has no primary key, then just return an empty record.
     
-    return { } unless $auth_fields;
+    unless ( $auth_fields )
+    {
+	$auth_fields = get_table_property($table_specifier, 'PRIMARY_KEY');
+
+	return { } unless $auth_fields;
+    }
     
     # Otherwise, construct an SQL statement to get the values of these fields.
     

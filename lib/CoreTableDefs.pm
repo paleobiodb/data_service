@@ -41,6 +41,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('SPECIMEN_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('SPECIMEN_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('SPECIMEN_DATA', PRIMARY_KEY => "specimen_no");
+    set_table_property('SPECIMEN_DATA', PRIMARY_ATTR => "specimen_id");
     
     set_column_property('SPECIMEN_DATA', 'specimen_no', EXTID_TYPE => 'SPM');
     set_column_property('SPECIMEN_DATA', 'taxon_no', EXTID_TYPE => 'TID');
@@ -58,6 +59,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('MEASUREMENT_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('MEASUREMENT_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('MEASUREMENT_DATA', PRIMARY_KEY => 'measurement_no');
+    set_table_property('MEASUREMENT_DATA', PRIMARY_ATTR => 'measurement_id');
     
     set_column_property('MEASUREMENT_DATA', 'specimen_no', REQUIRED => 1);
     set_column_property('MEASUREMENT_DATA', 'measurement_type', REQUIRED => 1);

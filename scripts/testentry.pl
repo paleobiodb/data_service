@@ -8,28 +8,53 @@ use strict;
 
 use lib '../lib', 'lib';
 use Getopt::Long;
+use Pod::Usage;
 use Term::ReadLine;
 use Data::Dump qw(dd);
 use Test::More;
 
 use Tester;
 
-my $T = Tester->new({ prefix => 'data1.2' });
 
-my ($perm_a, $perm_e);
+my ($opt_real_tables, $opt_cookie, $opt_debug, $opt_help, $opt_man, $opt_verbose);
+
+GetOptions("real-tables" => \$opt_real_tables,
+	   "cookie=s" => \$opt_cookie,
+	   "debug" => \$opt_debug,
+	   "help|h" => \$opt_help,
+	   "man" => \$opt_man,
+	   "verbose|v" => \$opt_verbose)
+    or pod2usage(2);
+
+# Check for documentation requests
+
+pod2usage(1) if $opt_help;
+pod2usage(-exitval => 0, -verbose => 2) if $opt_man;
+
+
+# Initialize a Tester object which will allow us to make requests.
+
+my $T = Tester->new({ prefix => 'data1.2' });
 
 # Then check to MAKE SURE that the server is in test mode and the test timescale tables are
 # enabled. This is very important, because we DO NOT WANT to change the data in the main
 # tables. If we don't get the proper response back, we need to bail out. These count as the first
 # two tests in this file.
 
-$T->test_mode('session_data', 'enable') || BAIL_OUT("could not select test session data");
-# $T->test_mode('specimen_data', 'enable') || BAIL_OUT("could not select test specimen data");
+if ( $opt_real_tables )
+{
+    print "\n  !!!! WARNING: YOU WILL BE MODIFYING THE REAL DATABASE TABLES !!!!\n\n";
+}
 
+else
+{
+    $T->test_mode('session_data', 'enable') || BAIL_OUT("could not select test session data");
+    # $T->test_mode('specimen_data', 'enable') || BAIL_OUT("could not select test specimen data");
+}
 
 # We start as the test superuser.
 
-$T->set_cookie("session_id", "SESSION-SUPERUSER");
+$T->set_cookie("session_id", $opt_cookie || "SESSION-SUPERUSER");
 
 # Then loop, asking for an operation and then data.
 
@@ -189,23 +214,39 @@ while ( $state ne 'DONE' )
 	    next;
 	}
 	
-	elsif ( $input =~ qr{ ^ (\w+) \s* (?: : | => ) \s* ["] ( [^"]* ) ["] \s* $ }xs )
+	elsif ( $input =~ qr{ ^ \s* (\w+) \s* (?: : | => | = ) \s* ( ["']? ) (.*) $ }xs )
 	{
-	    $record->{$1} = $2;
+	    my $key = $1;
+	    my $quote = $2;
+	    my $value = $3;
+
+	    $value =~ s/[\s,]+$//;
+
+	    if ( $quote )
+	    {
+		$value =~ s/$quote$//;
+	    }
+	    
+	    $value =~ s/\\./$1/g;
+	    
+	    $record->{$key} = $value;
 	    next;
 	}
 	
-	elsif ( $input =~ qr{ ^ (\w+) \s* (?: : | => )  \s* ['] ( [^']* ) ['] \s* $ }xs )
-	{
-	    $record->{$1} = $2;
-	    next;
-	}
+	# elsif ( $input =~ qr{ ^ \s* (\w+) \s* (?: : | => | = )  \s* ['] ( [^']* ) ['] [\s,]* $ }xs )
+	# {
+	#     $record->{$1} = $2;
+	#     next;
+	# }
 	
-	elsif ( $input =~ qr{ ^ (\w+) \s* (?: : | => )  \s* (.*) }xs )
-	{
-	    $record->{$1} = $2;
-	    next;
-	}
+	# elsif ( $input =~ qr{ ^ \s* (\w+) \s* (?: : | => | = )  \s* (.*) }xs )
+	# {
+	#     my $key = $1;
+	#     my $val = $2;
+	#     $val =~ s/[\s,]+$//;
+	#     $record->{$key} = $val;
+	#     next;
+	# }
 
 	else
 	{
