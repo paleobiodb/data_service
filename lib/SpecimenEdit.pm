@@ -105,11 +105,19 @@ sub validate_specimen {
     
     # If we have neither a collection_no nor a taxon_no, then we cannot store this specimen.
 
-    unless ( $record->{collection_id} || $record->{taxon_id} )
+    if ( $operation eq 'insert' )
     {
-	$edt->add_condition($action, 'E_UNREGISTERED_TAXON');
+	unless ( $record->{collection_id} || $record->{taxon_id} )
+	{
+	    $edt->add_condition($action, 'E_UNREGISTERED_TAXON');
+	}
     }
 
+    elsif ( $operation eq 'update' && $record->{taxon_name} )
+    {
+	# This needs to be added $$$
+    }
+    
     # If we do have a collection_id, check to make sure it exists. Also check to see if that
     # collection already has an occurrence of that taxon. If not, we will need to create one.
 
