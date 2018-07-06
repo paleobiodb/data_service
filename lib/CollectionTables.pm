@@ -488,8 +488,17 @@ sub buildCollectionTables {
 			LEFT JOIN $COUNTRY_MAP as ccmap using (cc)
 		WHERE bin_id > 0 and interval_no = 0
 		GROUP BY bin_id, cc";
-	
-	$result = $dbh->do($sql);
+
+	try {
+	    $result = $dbh->do($sql);
+	}
+
+	catch {
+	    if ( $_ !~ /error on delete/si )
+	    {
+		die $_;
+	    }
+	};
 	
 	logMessage(2, "        generated $result rows");
     }
@@ -567,6 +576,8 @@ sub buildCollectionTables {
     
     activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS,
 		         $COLL_INTS_WORK => $COLL_INTS);
+    
+    $dbh->do("REPLACE INTO last_build (name) values ('collections')");
     
     $dbh->do("DROP TABLE IF EXISTS protected_aux");
     

@@ -188,6 +188,8 @@ sub buildOccurrenceTables {
     buildReferenceSummaryTable($dbh, $options);
     buildOccIntervalMaps($dbh, $options);
     
+    $dbh->do("REPLACE INTO last_build (name) values ('occurrences')");
+    
     my $a = 1;	# we can stop here when debugging
 }
 
