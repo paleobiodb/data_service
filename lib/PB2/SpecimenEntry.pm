@@ -73,18 +73,33 @@ sub initialize {
 	{ value => 'mult' },
 	    "The specimen consists of more than one paratype.");
     
+    # We need an extra output block for the result of deletion operations.
+
+    $ds->define_block('1.2:specs:deleted' =>
+	{ set => '*', code => \&PB2::SpecimenData::process_measurement_ids },
+	{ output => 'specimen_no', com_name => 'oid' },
+	    "The unique identifier of this specimen in the database",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{SPM} },
+	    "The type of this object: C<$IDP{SPM}> for a specimen.",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with each record.");	
+    
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:specs:basic_entry' =>
-	{ optional => 'record_label', valid => ANY_VALUE },
-	    "You may provide a value for this attribute in any record",
-	    "submitted for entry or update. This allows the data service",
-	    "to accurately indicate which records generated errors or warnings.",
-	    "You may specify any string, but if you submit multiple records in",
-	    "one call each record should have a unique value.",
 	{ optional => 'specimen_id', valid => VALID_IDENTIFIER('SPM') },
 	    "The identifier of the specimen to be updated. If empty,",
 	    "a new specimen record will be created.",
+	{ optional => '_label', valid => ANY_VALUE },
+	    "You may provide a value for this attribute in any record",
+	    "submitted for entry or update. This label will be included with",
+	    "any errors or warnings generated from this record.",
+	    "You may specify any string, but if you submit multiple records in",
+	    "one call each record should have a unique value.",
+	{ optional => '_operation', valid => '1.2:common:entry_ops' },
+	    "This field is optional. You can use it to indicate the",
+	    "operation to be performed on this record. Values include:",
 	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL') },
 	    "The identifier of a collection record representing the site from",
 	    "which the specimen was collected.",
@@ -106,7 +121,7 @@ sub initialize {
 	    "The identifier of the reference with which this specimen is identified.");
     
     $ds->define_ruleset('1.2:specs:measurement_entry' =>
-	{ optional => 'record_label', valid => ANY_VALUE },
+	{ optional => '_label', valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted for entry or update. This allows the data service",
 	    "to accurately indicate which records generated errors or warnings.",
@@ -158,6 +173,8 @@ sub initialize {
 	{ allow => '1.2:specs:ret_mod' });
     
     $ds->define_ruleset('1.2:specs:addupdate_body' =>
+	">>The body of the request should contain one or more records containing the following",
+	"fields:",
 	{ allow => '1.2:specs:basic_entry' });
     
     $ds->define_ruleset('1.2:specs:update' =>
@@ -176,7 +193,7 @@ sub initialize {
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ param => 'spec_id', valid => VALID_IDENTIFIER('SPM'), list => ',' },
+	{ optional => 'specimen_id', valid => VALID_IDENTIFIER('SPM'), list => ',' },
 	    "The identifier(s) of the specimen(s) to delete.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
@@ -190,6 +207,9 @@ sub initialize {
     
     $ds->define_ruleset('1.2:specs:addupdate_measurements_body' =>
 	{ allow => '1.2:specs:measurement_entry' });
+
+    $ds->define_ruleset('1.2:specs:addupdate_body_2' =>
+	{ allow => '1.2:specs:addupdate_measurements_body' });
     
     $ds->define_ruleset('1.2:specs:update_measurements' =>
 	">>The following parameters may be given either in the URL or in",
@@ -216,12 +236,14 @@ sub update_specimens {
     
     my $dbh = $request->get_connection;
     
-    # First get the parameters from the URL, and/or from the body if it is from a web form. In the
-    # latter case, it will necessarily specify a single timescale only.
+    my %allowances;
     
-    my %allowances = ( IMMEDIATE_MODE => 1 );
+    # If we are adding new records, as opposed to only updating existing ones, then we allow
+    # record creation.
     
     $allowances{CREATE} = 1 if $arg && $arg eq 'add';
+    
+    # Now get the parameters from the URL and/or from the request body.
     
     my $main_params = $request->get_main_params(\%allowances, '1.2:specs:basic_entry');
     my $perms = $request->require_authentication('SPECIMEN_DATA');
@@ -249,14 +271,19 @@ sub update_specimens {
 
     foreach my $r (@records)
     {
-	if ( exists $r->{measurement_type} )
+	if ( exists $r->{measurement_type} || exists $r->{measurement_no} || exists $r->{measurement_id} )
 	{
-	    $edt->insert_update_record('MEASUREMENT_DATA', $r);
+	    $edt->process_record('MEASUREMENT_DATA', $r);
+	}
+	
+	elsif ( exists $r->{specimen_code} || exists $r->{specimen_no} || exists $r->{specimen_id} )
+	{
+	    $edt->process_record('SPECIMEN_DATA', $r);
 	}
 
 	else
 	{
-	    $edt->insert_update_record('SPECIMEN_DATA', $r);
+	    $edt->bad_record('SPECIMEN_DATA', $r);
 	}
     }
     
@@ -292,9 +319,19 @@ sub update_specimens {
     
     # Return all inserted or updated records.
     
-    my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
+    my (@results, $id_string);
     
-    $request->list_updated_specimens($dbh, $id_string, $edt->key_labels) if $id_string;
+    $id_string = join(',', $edt->inserted_keys('SPECIMEN_DATA'), $edt->updated_keys('SPECIMEN_DATA'));
+    
+    push @results, $request->list_updated_specimens($dbh, $id_string, $edt->key_labels('SPECIMEN_DATA'))
+	if $id_string;
+    
+    $id_string = join(',', $edt->inserted_keys('MEASUREMENT_DATA'), $edt->updated_keys('MEASUREMENT_DATA'));
+    
+    push @results, $request->list_updated_measurements($dbh, 'aux', $id_string, $edt->key_labels('MEASUREMENT_DATA'))
+	if $id_string;
+
+    $request->list_result(\@results);
 }
 
 
@@ -310,11 +347,11 @@ sub list_updated_specimens {
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $request->sql_limit_clause(1);
+    # my $limit = $request->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $request->sql_count_clause;
+    # my $calc = $request->sql_count_clause;
 
     # Determine the fields to be selected.
 
@@ -330,7 +367,7 @@ sub list_updated_specimens {
     my $join_list = $request->PB2::SpecimenData::generateJoinList('c', $tables);
     
     $request->{main_sql} = "
-	SELECT $calc $fields
+	SELECT $fields
 	FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 		LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $TABLE{COLLECTION_MATRIX} as c on o.collection_no = c.collection_no
@@ -338,8 +375,7 @@ sub list_updated_specimens {
 		$join_list
         WHERE ss.specimen_no in ($id_list)
 	GROUP BY ss.specimen_no
-	ORDER BY ss.specimen_no
-	$limit";
+	ORDER BY ss.specimen_no";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
@@ -347,24 +383,24 @@ sub list_updated_specimens {
     
     # If we were asked to get the count, then do so
     
-    $request->sql_count_rows;
+    # $request->sql_count_rows;
     
     # If we got some results, go through them and substitute in the record labels.
     
-    if ( ref $results eq 'ARRAY' && @$results )
+    return () unless ref $results eq 'ARRAY' && @$results;
+    
+    if ( ref $label_ref eq 'HASH' )
     {
 	foreach my $r ( @$results )
 	{
-	    my $keyval = $r->{specimen_no};
-	    
-	    if ( ref $label_ref eq 'HASH' && $label_ref->{$keyval} )
+	    if ( my $keyval = $r->{specimen_no} )
 	    {
-		$r->{record_label} = $label_ref->{$keyval};
+		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
 	    }
 	}
-	
-	$request->list_result($results);
     }
+    
+    return @$results;
 }
 
 
@@ -372,6 +408,98 @@ sub delete_specimens {
     
     my ($request) = @_;
     
+    my $dbh = $request->get_connection;
+
+    my %allowances;
+    
+    my $main_params = $request->get_main_params(\%allowances, '1.2:specs:delete');
+    my $perms = $request->require_authentication('SPECIMEN_DATA');
+
+    # If a specimen_id value was provided in the main parameters, just use that. Otherwise, unpack
+    # the input body.
+    
+    my @records;
+    
+    if ( $main_params->{specimen_id} )
+    {
+	if ( ref $main_params->{specimen_id} eq 'ARRAY' )
+	{
+	    push @records, @{$main_params->{specimen_id}};
+	}
+
+	else
+	{
+	    push @records, $main_params->{specimen_id};
+	}
+    }
+    
+    else
+    {
+	@records = $request->unpack_input_records($main_params, '1.2:specs:addupdate_body', 'specimen_id');
+    }
+
+    # If any errors were found in the parameters, stop now and return an HTTP 400 response.
+
+    if ( $request->errors )
+    {
+	die $request->exception(400, "Bad request");
+    }
+
+    # Otherwise, start a new transaction.
+
+    my $edt = SpecimenEdit->new($request, $perms, 'SPECIMEN_DATA', \%allowances);
+
+    # Now go through the records and handle each one in turn.
+
+    foreach my $r (@records)
+    {
+	$edt->delete_record('SPECIMEN_DATA', $r);
+    }
+
+    # If no errors have been detected so far, execute the queued actions inside a database
+    # transaction. If any errors occur during that process, the transaction will be automatically
+    # rolled back. Otherwise, it will be automatically committed.
+    
+    $edt->commit;
+    
+    # If any warnings (non-fatal conditions) were detected, add them to the
+    # request record so they will be communicated back to the user.
+    
+    $request->collect_edt_warnings($edt);
+    
+    # If we completed the procedure without any exceptions, but error conditions were detected
+    # nonetheless, these should be reported. In this case, the transaction will have automatically
+    # been rolled back.
+    
+    if ( $edt->errors )
+    {
+    	$request->collect_edt_errors($edt);
+	
+	if ( $edt->has_condition_code('E_EXECUTE') )
+	{
+	    die $request->exception(500, "Internal error");
+	}
+	
+	else
+	{
+	    die $request->exception(400, "Bad request");
+	}
+    }
+    
+    # Return a list of records indicating the deletions, with labels if they were specified in the input.
+    
+    $request->extid_check;
+    
+    my @output;
+    my $labels = $edt->key_labels('SPECIMEN_DATA') || { };
+    
+    foreach my $k ( $edt->deleted_keys )
+    {
+	push @output, { specimen_no => $k };
+	$output[-1]{_label} = $labels->{$k} if $labels->{$k} && $labels->{$k} !~ /^[#]/;
+    }
+    
+    $request->list_result(\@output);
 }
 
 
@@ -486,15 +614,20 @@ sub list_updated_measurements {
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $request->sql_limit_clause(1);
+    # my $limit = $request->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $request->sql_count_clause;
+    # my $calc = $request->sql_count_clause;
 
     # Determine the fields to be selected.
 
     my $fields = $request->select_string;
+
+    if ( $return_type eq 'aux' )
+    {
+	$fields = join(',', @{$request->ds->{block}{'1.2:measure:basic'}{output_list}[0]{select}});
+    }
     
     # Determine the necessary joins.
     
@@ -503,55 +636,47 @@ sub list_updated_measurements {
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
     
-    my $join_list = $request->PB2::SpecimenData::generateJoinList('c', $tables);
+    # my $join_list = $request->PB2::SpecimenData::generateJoinList('c', $tables);
     
     $request->{main_sql} = "
-	SELECT $calc $fields
+	SELECT $fields
 	FROM $TABLE{MEASUREMENT_DATA} as ms join $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
         WHERE $filter_string
 	GROUP BY ms.measurement_no
-	ORDER BY ms.specimen_no, ms.measurement_no
-	$limit";
+	ORDER BY ms.specimen_no, ms.measurement_no";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     my $results = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
     
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
-    
     # If we got some results, go through them and substitute in the record labels.
     
-    if ( ref $results eq 'ARRAY' && @$results )
+    return () unless ref $results eq 'ARRAY' && @$results;
+    
+    if ( ref $label_ref eq 'HASH' )
     {
 	foreach my $r ( @$results )
 	{
-	    my $keyval = $r->{measurement_no};
-	    
-	    if ( ref $label_ref eq 'HASH' && $label_ref->{$keyval} )
+	    if ( my $keyval = $r->{measurement_no} )
 	    {
-		$r->{record_label} = $label_ref->{$keyval};
+		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
 	    }
 	}
-	
-	$request->list_result($results);
     }
+    
+    return @$results;
 }
 
 
+sub my_select_output_block {
 
+    my ($request, $record) = @_;
 
-# sub update_collevents {
-
-
-# }
-
-
-# sub delete_collevents {
-
-
-# }
+    if ( $record->{measurement_no} )
+    {
+	$request->alternate_output_block('1.2:measure:basic');
+    }
+}
 
 
 1;

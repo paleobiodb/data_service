@@ -91,6 +91,11 @@ sub unpack_input_records {
     
     my (@raw_records, @records, @rulesets);
     my ($body, $error);
+
+    # Mark this request as a "data entry request" so that the external identifier validator knows
+    # to accept label references.
+
+    $request->{is_data_entry} = 1;
     
     # If we were given one or more listrefs indicating multiple rulesets, unpack them.
     
@@ -216,7 +221,7 @@ sub unpack_input_records {
 	# a quick hack fills these in.
 	
 	# If there is more than one ruleset, we try them one at a time.
-
+	
 	my ($ruleset, $main_key, $check_key);
 	
       RULESET:
@@ -227,7 +232,7 @@ sub unpack_input_records {
 	    # Check to see if this ruleset is the proper one to apply.
 
 	    my $ok;
-
+	    
 	    if ( $check_key && ($check_key eq 'DEFAULT' || exists $r->{$check_key}) )
 	    {
 		$ok = 1;
@@ -237,7 +242,7 @@ sub unpack_input_records {
 	    {
 		$ok = 1;
 	    }
-
+	    
 	    next RULESET unless $ok;
 	    
 	    # Validate the input record against the specified ruleset.
@@ -260,7 +265,7 @@ sub unpack_input_records {
 	    # If any errors or warnings were generated, add them to the
 	    # current request.
 	    
-	    my $label = $r->{record_id} || ($main_key && $r->{$main_key}) || '';
+	    my $label = $r->{_label} || ($main_key && $r->{$main_key}) || '';
 	    my $lstr = $label ? " ($label)" : "";
 	    
 	    foreach my $e ( $result->errors )
@@ -279,7 +284,7 @@ sub unpack_input_records {
 	    push @records, $result->values;
 	    last;
 	}
-
+	
 	croak "no ruleset found for record" unless $ruleset;
     }
     

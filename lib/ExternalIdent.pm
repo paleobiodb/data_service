@@ -88,7 +88,7 @@ $IDRE{UNKTXN} = qr{ ^ (?: (?: $IDP{URN} )? txn [:] )? ( U [A-Z] \d* ) $ }xsi;
 $IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? ( $key_expr ) [:] )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
 $IDVALID{ANY} = sub { return valid_identifier(shift, shift, 'ANY') };
 
-$IDRE{LOOSE} = qr{ ^  (?: (?: $IDP{URN} )? ( \w+ ) [:] )? ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
+$IDRE{LOOSE} = qr{ ^ (?: $IDP{URN} )? ( \w+ ) [:] ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
 
 # valid_ident ( value, context, type )
 # 
@@ -118,6 +118,16 @@ sub valid_identifier {
 	my $idnum = $1;
 
 	return { value => PBDB::ExtIdent->new($idtype, $idnum) };
+    }
+
+    # If this request is marked as a 'data entry' request, then accept label references as well.
+
+    if ( ref $context eq 'HASH' && $context->{request}{is_data_entry} )
+    {
+	if ( $value =~ qr{ ^ [@] (.*) }xs )
+	{
+	    return { value => $value };
+	}
     }
     
     # Otherwise, attempt to provide a useful error message.  If the value

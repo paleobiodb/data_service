@@ -718,7 +718,6 @@ use PB2::MainEntry;
 	"If multiple images are available for a particular taxon, one has been arbitrarily selected.",
 	"You can obtain image identifiers by including C<$show=img> with any taxonomic",
 	"name query.");
-    
     $ds2->define_node({ path => 'taxa/icon',
 			place => 11,
 			title => 'Icon images of lifeforms',

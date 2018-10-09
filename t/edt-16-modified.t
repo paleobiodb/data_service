@@ -367,12 +367,12 @@ subtest 'crmod admin' => sub {
     $edt->insert_record('EDT_TEST', { string_req => 'explicit set without alter_trail',
 				     created => '2011-06-24', modified => '2011-06-25' });
     
-    $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
+    $T->ok_has_error('current', 'D_ALTER_TRAIL', "found ALTER_TRAIL caution");
     
     $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated no alter_trail',
 				     created => '2011-06-26', modified => '2011-06-27' });
     
-    $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
+    $T->ok_has_error('current', 'D_ALTER_TRAIL', "found ALTER_TRAIL caution");
 };
 
 
@@ -626,7 +626,7 @@ subtest 'authent admin' => sub {
     is( $new->{enterer_no}, $orig->{enterer_no}, "replace did not change enterer_no" );
     is( $new->{modifier_no}, $orig->{modifier_no}, "replace did not change modifier_no" );
     is( $new->{modified}, $orig->{modified}, "replace did not change modified date" );
-
+    
     # Now do a double-check by creating another transaction without FIXUP_MODE and checking that
     # the modifier_no does change. Note that every time we create a new transaction the
     # previous one is automatically rolled back since it was never explicitly committed.
@@ -690,17 +690,17 @@ subtest 'authent admin' => sub {
     $edt->insert_record('EDT_TEST', { string_req => 'explicit set without alter_trail',
 				     authorizer_no => $person_s, enterer_no => $person_s });
     
-    $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
+    $T->ok_has_error('current', 'D_ALTER_TRAIL', "found ALTER_TRAIL caution");
     
     $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated no alter_trail',
 				     modifier_no => 'UNCHANGED' });
     
-    $T->ok_has_error('D_ALTER_TRAIL', "found ALTER_TRAIL caution");
+    $T->ok_has_error('current', 'D_ALTER_TRAIL', "found ALTER_TRAIL caution");
 
     $edt->update_record('EDT_TEST', { $primary => $k1, string_req => 'updated 2 no altera_trail',
 				     authorizer_no => 'UNCHANGED', enterer_no => 'UNCHANGED' });
 
-    $T->ok_no_conditions("no ALTER_TRAIl caution with 'UNCHANGED' for authorizer_no, enterer_no");
+    $T->ok_no_conditions('current', "no ALTER_TRAIl caution with 'UNCHANGED' for authorizer_no, enterer_no");
 };
 
 
@@ -708,7 +708,7 @@ subtest 'authent superuser' => sub {
     
     pass('placeholder');
     
-    
+    diag("still need to add superuser test");
 };
 
 

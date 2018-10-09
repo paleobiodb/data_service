@@ -57,7 +57,6 @@ sub new {
 	init_table_names(configData, 1);
 	enable_test_mode('session_data');
 	enable_test_mode('edt_test');
-	# EditTest->enable_test_mode('edt_test', $options->{debug});
     };
     
     if ( $@ )
@@ -96,9 +95,17 @@ sub new {
 	diag("Could not enable test mode for 'EDT_TEST'.");
 	BAIL_OUT;
     }
+
+    my $id_bound;
+    
+    eval {
+	($id_bound) = $dbh->selectrow_array("
+		SELECT min(enterer_no) FROM $TABLE{SESSION_DATA} WHERE enterer_no > 0");
+    };
     
     my $instance = { dbh => $dbh,
 		     debug => $options->{debug},
+		     id_bound => $id_bound,
 		     notsilent => $options->{notsilent}
 		   };
     
@@ -174,17 +181,28 @@ sub establish_session_data {
 
     my $dbh = $T->dbh;
     
-    croak "The table name $TABLE{SESSION_DATA} is not correct. You must establish a test database."
+    BAIL_OUT "The table name $TABLE{SESSION_DATA} is not correct. You must establish a test database."
 	unless $TABLE{SESSION_DATA} =~ /test[.]/i;
     
-    croak "The table name $TABLE{PERSON_DATA} is not correct. You must establish a test database."
+    BAIL_OUT "The table name $TABLE{PERSON_DATA} is not correct. You must establish a test database."
 	unless $TABLE{PERSON_DATA} =~ /test[.]/i;
     
-    croak "The table name $TABLE{WING_USERS} is not correct. You must establish a test database."
+    BAIL_OUT "The table name $TABLE{WING_USERS} is not correct. You must establish a test database."
 	unless $TABLE{WING_USERS} =~ /test[.]/i;
     
-    croak "The table name $TABLE{TABLE_PERMS} is not correct. You must establish a test database."
+    BAIL_OUT "The table name $TABLE{TABLE_PERMS} is not correct. You must establish a test database."
 	unless $TABLE{TABLE_PERMS} =~ /test[.]/i;
+
+    my ($person_count);
+    
+    eval {
+	($person_count) = $dbh->do("SELECT count(*) FROM $TABLE{PERSON_DATA}");
+    };
+    
+    if ( $person_count && $person_count > 100 )
+    {
+	BAIL_OUT "There are more than 100 rows in the table '$TABLE{PERSON_DATA}'. You must establish a test database.";
+    }
     
     eval {
 	
@@ -211,14 +229,14 @@ sub establish_session_data {
 	$dbh->do("DELETE FROM $TABLE{SESSION_DATA}");
 
 	$dbh->do("INSERT INTO $TABLE{SESSION_DATA} (session_id, user_id, authorizer_no, enterer_no, role, superuser)
-		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','3998','3998','authorizer',0),
-			('SESSION-ENTERER','USERID-ENTERER','3998','3997','enterer',0),
+		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','39998','39998','authorizer',0),
+			('SESSION-ENTERER','USERID-ENTERER','39998','39997','enterer',0),
 			('SESSION-GUEST','USERID-GUEST','0','0','guest',0),
-			('SESSION-STUDENT','USERID-STUDENT','3999','3996','student',0),
-			('SESSION-OTHER', 'USERID-OTHER', '3999', '3995', 'enterer', 0),
-			('SESSION-UNAUTH', 'USERID-UNAUTH', '0', '3994', 'enterer', 0),
-			('SESSION-SUPERUSER','USERID-SUPERUSER','3999','3999','authorizer', 1),
-			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','3999','3991','enterer', 0)");
+			('SESSION-STUDENT','USERID-STUDENT','39999','39996','student',0),
+			('SESSION-OTHER', 'USERID-OTHER', '39999', '39995', 'enterer', 0),
+			('SESSION-UNAUTH', 'USERID-UNAUTH', '0', '39994', 'enterer', 0),
+			('SESSION-SUPERUSER','USERID-SUPERUSER','39999','39999','authorizer', 1),
+			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','39999','39991','enterer', 0)");
 
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PERSON_DATA} (
   `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -252,13 +270,13 @@ sub establish_session_data {
 	$dbh->do("DELETE FROM $TABLE{PERSON_DATA} WHERE institution = 'Test'");
 
 	$dbh->do("INSERT INTO $TABLE{PERSON_DATA} (person_no, name, reversed_name, institution)
-		VALUES	(3999,'A. Superuser','Superuser, A.','Test'),
-			(3998,'A. Authorizer','Authorizer, A.','Test'),
-			(3997,'A. Enterer','Enterer, A.','Test'),
-			(3996,'A. Student','Student, A.','Test'),
-			(3995,'B. Enterer','Enterer, B.','Test'),
-			(3994,'C. Enterer','Enterer, C.','Test'),
-			(3991,'A. Admin','Admin, A.','Test')");
+		VALUES	(39999,'A. Superuser','Superuser, A.','Test'),
+			(39998,'A. Authorizer','Authorizer, A.','Test'),
+			(39997,'A. Enterer','Enterer, A.','Test'),
+			(39996,'A. Student','Student, A.','Test'),
+			(39995,'B. Enterer','Enterer, B.','Test'),
+			(39994,'C. Enterer','Enterer, C.','Test'),
+			(39991,'A. Admin','Admin, A.','Test')");
 
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{WING_USERS} (
   `id` char(36) COLLATE utf8_unicode_ci NOT NULL,
@@ -297,13 +315,13 @@ sub establish_session_data {
 	
 	$dbh->do("INSERT INTO $TABLE{WING_USERS} (id, person_no, username, role,
 						  real_name, first_name, last_name, institution)
-		VALUES	('USERID-SUPERUSER','3999','sua','authorizer','A. Superuser','A.','Superuser','Test'),
-			('USERID-AUTHORIZER','3998','aua','authorizer','A. Authorizer','A.','Authorizer','Test'),
-			('USERID-ENTERER','3997','ena','enterer','A. Enterer','A.','Enterer','Test'),
-			('USERID-STUDENT','3996','sta','student','A. Student','A.','Student','Test'),
-			('USERID-OTHER','3995','enb','enterer','B. Enterer','B.','Enterer','Test'),
-			('USERID-UNAUTH','3994','enc','enterer','C. Enterer','C.','Enterer','Test'),
-			('USERID-WITH-ADMIN','3991','adm','enterer','A. Admin','A.','Admin','Test'),
+		VALUES	('USERID-SUPERUSER','39999','sua','authorizer','A. Superuser','A.','Superuser','Test'),
+			('USERID-AUTHORIZER','39998','aua','authorizer','A. Authorizer','A.','Authorizer','Test'),
+			('USERID-ENTERER','39997','ena','enterer','A. Enterer','A.','Enterer','Test'),
+			('USERID-STUDENT','39996','sta','student','A. Student','A.','Student','Test'),
+			('USERID-OTHER','39995','enb','enterer','B. Enterer','B.','Enterer','Test'),
+			('USERID-UNAUTH','39994','enc','enterer','C. Enterer','C.','Enterer','Test'),
+			('USERID-WITH-ADMIN','39991','adm','enterer','A. Admin','A.','Admin','Test'),
 			('USERID-GUEST','0','gua','guest','A. Guest','A.','Guest','Test')");
 	
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{TABLE_PERMS} (
@@ -320,6 +338,21 @@ sub establish_session_data {
 	diag("Could not establish session data. Message was: $msg");
 	BAIL_OUT;
     }
+
+    my ($id_bound) = $dbh->selectrow_array("SELECT min(enterer_no) FROM $TABLE{SESSION_DATA}");
+
+    unless ( $id_bound > 3000 )
+    {
+	BAIL_OUT "Could not establish a proper boundary between test person_no values and real ones.";
+    }
+}
+
+
+sub start_test_mode {
+    
+    my ($T, $table_group) = @_;
+
+    return enable_test_mode($table_group);
 }
 
 
@@ -385,6 +418,17 @@ sub clear_specific_permissions {
     $T->debug_skip;
 
     $T->dbh->do($sql);
+}
+
+
+sub get_session_authinfo {
+    
+    my ($T, $session_id) = @_;
+
+    croak "you must specify a session id" unless $session_id;
+    
+    return $T->dbh->selectrow_array("SELECT authorizer_no, enterer_no, user_id FROM $TABLE{SESSION_DATA}
+		WHERE session_id = " . $T->dbh->quote($session_id));
 }
 
 
@@ -540,142 +584,6 @@ sub new_perm {
 	return;
     }
 }
-
-
-# The following routines wrap the basic editing calls
-# ---------------------------------------------------
-
-# sub do_insert_records {
-    
-#     my ($T, $perm, $options, $label, $table, @records) = @_;
-    
-#     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-#     croak "you must specify at least one record" unless @records && ref $records[0] eq 'HASH';
-    
-#     $options ||= { };
-#     $options->{CREATE} = 1;
-    
-#     my $edt = $T->get_new_edt($perm, $options);
-    
-#     return $T->do_one_operation($edt, $options, 'insert_record', $label, $table, @records);
-# }
-
-
-# sub do_update_records {
-
-#     my ($T, $perm, $options, $label, $table, @records) = @_;
-    
-#     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-#     croak "you must specify at least one record" unless @records && ref $records[0] eq 'HASH';
-    
-#     my $edt = $T->get_new_edt($perm, $options);
-    
-#     return $T->do_one_operation($edt, $options, 'update_record', $label, $table, @records);
-# }
-
-
-# sub do_replace_records {
-
-#     my ($T, $perm, $options, $label, $table, @records) = @_;
-    
-#     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-#     croak "you must specify at least one record" unless @records && ref $records[0] eq 'HASH';
-    
-#     my $edt = $T->get_new_edt($perm, $options);
-    
-#     return $T->do_one_operation($edt, $options, 'replace_record', $label, $table, @records);
-# }
-
-
-# sub do_delete_records {
-
-#     my ($T, $perm, $options, $label, $table, @records) = @_;
-    
-#     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-#     croak "you must specify at least one record" unless @records && $records[0];
-    
-#     my $edt = $T->get_new_edt($perm, $options);
-    
-#     return $T->do_one_operation($edt, $options, 'delete_record', $label, $table, @records);
-# }
-
-
-# sub do_one_operation {
-
-#     my ($T, $edt, $options, $operation, $label, $table, @records) = @_;
-    
-#     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-#     unless ( $edt )
-#     {
-# 	if ( $options && $options->{nocheck} )
-# 	{
-# 	    pass($label);
-# 	}
-
-# 	else
-# 	{
-# 	    fail($label);
-# 	}
-
-# 	return;
-#     }
-    
-#     $T->{last_exception} = undef;
-    
-#     my $result;
-    
-#     eval {
-# 	foreach my $r ( @records )
-# 	{
-# 	    $edt->$operation($table, $r);
-# 	}
-	
-# 	$result = $edt->execute;
-#     };
-    
-#     if ( $@ )
-#     {
-# 	my $msg = trim_exception($@);
-# 	diag("EXCEPTION: $msg");
-	
-# 	if ( $options && $options->{nocheck} )
-# 	{
-# 	    pass($label);
-# 	}
-
-# 	else
-# 	{
-# 	    fail($label);
-# 	}
-	
-# 	$T->{last_exception} = $msg;
-# 	return;
-#     }
-    
-#     if ( $options && $options->{nocheck} )
-#     {
-# 	pass($label);
-# 	return 1;
-#     }
-    
-#     elsif ( $result )
-#     {
-# 	pass($label);
-# 	return 1;
-#     }
-
-#     else
-#     {
-# 	$T->diag_errors($edt);
-# 	fail($label);
-# 	return;
-#     }
-# }
 
 
 # test_permissions ( table, insert_perm, [check_perm,] test, result, label )
@@ -911,7 +819,7 @@ sub ok_result {
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     my $result = shift;
 
-    my $selector = 'current';
+    my $selector = 'any';
     
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
@@ -944,7 +852,7 @@ sub ok_no_errors {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'current';
+    my $selector = 'any';
     
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
@@ -993,7 +901,7 @@ sub ok_has_error {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'current';
+    my $selector = 'any';
     
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
@@ -1052,7 +960,7 @@ sub ok_has_one_error {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'current';
+    my $selector = 'any';
     
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
@@ -1118,7 +1026,7 @@ sub diag_errors {
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
-    my $selector = shift || 'current';
+    my $selector = shift || 'any';
     
     unless ( $selector eq 'any' || $selector eq 'main' || $selector eq 'current' )
     {
@@ -1160,8 +1068,8 @@ sub ok_no_warnings {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'current';
-
+    my $selector = 'any';
+    
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
 	$selector = shift;
@@ -1209,7 +1117,7 @@ sub ok_has_warning {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'current';
+    my $selector = 'any';
 
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
@@ -1269,7 +1177,7 @@ sub ok_has_one_warning {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'current';
+    my $selector = 'any';
 
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
@@ -1337,7 +1245,7 @@ sub ok_no_conditions {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'current';
+    my $selector = 'any';
 
     if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
     {
@@ -1387,7 +1295,7 @@ sub diag_warnings {
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
-    my $selector = shift || 'current';
+    my $selector = shift || 'any';
     
     unless ( $selector eq 'any' || $selector eq 'main' || $selector eq 'current' )
     {
@@ -1545,10 +1453,30 @@ sub ok_count_records {
 }
 
 
+sub count_records {
+
+    my ($T, $table, $expr) = @_;
+    
+    my $dbh = $T->dbh;
+    
+    croak "you must specify a table" unless $table;
+    
+    $expr ||= 'TRUE';
+    
+    my $sql = "SELECT count(*) FROM $TABLE{$table} WHERE $expr";
+    
+    $T->debug_line($sql);
+    
+    my ($result) = $dbh->selectrow_array($sql);
+    
+    return $result;
+}
+
+
 sub clear_table {
     
     my ($T, $table) = @_;
-
+    
     $T->clear_edt;
     
     my $dbh = $T->dbh;
@@ -1559,7 +1487,12 @@ sub clear_table {
     
     $T->debug_line($sql);
     
-    my $results = $dbh->do($sql);
+    my $result = $dbh->do($sql);
+    
+    if ( $result )
+    {
+	$T->debug_line("Deleted $result rows");
+    }
     
     $sql = "ALTER TABLE $TABLE{$table} AUTO_INCREMENT = 1";
 
@@ -1569,14 +1502,95 @@ sub clear_table {
 	$dbh->do($sql);
     };
     
-    if ( $results )
-    {
-	$T->debug_line("Deleted $results rows");
-    }
-    
     $T->debug_skip;
     
     return;
+}
+
+
+sub safe_clear_table {
+    
+    my ($T, $table, $field, $base_table, $link_field) = @_;
+    
+    $T->clear_edt;
+    
+    my $dbh = $T->dbh;
+    
+    my ($sql, $result);
+    
+    croak "you must specify a table" unless $table;
+
+    if ( defined $base_table )
+    {
+	croak "you must specify a base table" unless $base_table;
+	croak "you must specify a link field" unless $link_field;
+	
+	$sql = "DELETE $TABLE{$table} FROM $TABLE{$table} join $TABLE{$base_table} USING ($link_field) WHERE " .
+	    $T->test_entry_filter($field, $base_table);
+    }
+    
+    else
+    {
+	$sql = "DELETE FROM $TABLE{$table} WHERE " . $T->test_entry_filter($field);
+    }
+    
+    $T->debug_line($sql);
+    
+    $result = $dbh->do($sql);
+    
+    if ( $result )
+    {
+	$T->debug_line("Deleted $result rows");
+    }
+    
+    my ($remaining) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{$table}");
+
+    # If the table is now empty, reset its auto_increment count to 1.
+    
+    if ( defined $remaining && $remaining == 0 )
+    {
+	$sql = "ALTER TABLE $TABLE{$table} AUTO_INCREMENT = 1";
+	
+	$T->debug_line($sql);
+	
+	eval {
+	    $dbh->do($sql);
+	};
+    }
+}
+
+
+sub test_entry_filter {
+    
+    my ($T, $field, $base_table) = @_;
+    
+    croak "you must specify an identifier field, must be either authorizer_no, enterer_no, user_id" unless $field;
+    
+    # First make sure we have a dividing line between real and test person_no values.
+    
+    unless ( $T->{id_bound} && $T->{id_bound} > 3000 )
+    {
+	BAIL_OUT "Could not establish the boundary between real person_no values and test values";
+    }
+    
+    # Then clear all test entries from the specified table.
+
+    my $expr = $base_table ? "$TABLE{$base_table}.$field" : $field;
+    
+    if ( $field eq 'user_id' )
+    {
+	return "$expr like 'USERID-%'";
+    }
+    
+    elsif ( $field eq 'authorizer_no' || $field eq 'enterer_no' )
+    {
+	return "$expr >= $T->{id_bound}";
+    }
+    
+    else
+    {
+	croak "unrecognized identifier field '$field'";
+    }
 }
 
 

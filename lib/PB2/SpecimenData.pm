@@ -14,7 +14,7 @@ package PB2::SpecimenData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS
+use TableDefs qw(%TABLE $OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $SPECELT_DATA $SPECELT_MAP
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
@@ -66,6 +66,9 @@ sub initialize {
 	    "The unique identifier of this specimen in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{SPM} },
 	    "The type of this object: C<$IDP{SPM}> for a specimen.",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
 	{ output => 'flags', com_name => 'flg' },
 	    "This field will be empty for most records.  Otherwise, it will contain one or more",
 	    "of the following letters:", "=over",
@@ -270,6 +273,9 @@ sub initialize {
 	{ set => '*', code => \&process_measurement_ids },
 	{ output => 'measurement_no', com_name => 'oid' },
 	    "The unique identifier of this measurement in the database",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
 	{ output => 'specimen_no', com_name => 'sid' },
 	    "The identifier of the specimen with which this measurement is associated",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{MEA} },
@@ -673,6 +679,7 @@ sub get_specimen {
     $fields .= $access_fields if $access_fields;
     
     $request->delete_output_field('permissions') unless $access_fields;
+    $request->delete_output_field('_label');
     
     # Determine the necessary joins.
     
@@ -682,7 +689,7 @@ sub get_specimen {
     
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
-	FROM $SPEC_MATRIX as ss JOIN specimens as sp using (specimen_no)
+	FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $COLL_MATRIX as c on c.collection_no = o.collection_no
 		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
@@ -761,6 +768,7 @@ sub list_specimens {
     my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
     
     $request->delete_output_field('permissions') unless $access_fields;
+    $request->delete_output_field('_label');
     
     push @filters, "(ss.occurrence_no = 0 or $access_filter)";
     
@@ -856,7 +864,7 @@ sub list_specimens {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $SPEC_MATRIX as ss JOIN specimens as sp using (specimen_no)
+	FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
@@ -893,7 +901,7 @@ sub list_specimens_associated {
     
     $request->substitute_select( mt => 'r', cd => 'r' );
     
-    # $request->delete_output_field('n_opinions');
+    $request->delete_output_field('_label');
     
     # First figure out if we just want occurrence/collection references, or if
     # we also want taxonomy references.
@@ -970,8 +978,8 @@ sub list_specimens_associated {
 	try {
 	    $sql = "
 		INSERT IGNORE INTO spec_list
-		SELECT ss.specimen_no, ss.occurrence_no, ss.taxon_no, ss.orig_no FROM $SPEC_MATRIX as ss
-			JOIN specimens as sp using (specimen_no)
+		SELECT ss.specimen_no, ss.occurrence_no, ss.taxon_no, ss.orig_no FROM $TABLE{SPECIMEN_MATRIX} as ss
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 			JOIN $OCC_MATRIX as o using (occurrence_no)
 			JOIN $COLL_MATRIX as c using (collection_no)
 			LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
@@ -1108,8 +1116,8 @@ sub list_specimens_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, NULL as occurrence_no, 
 			ss.specimen_no, null as collection_no
-		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
-			JOIN specimens as sp using (specimen_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 			LEFT JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
@@ -1124,8 +1132,8 @@ sub list_specimens_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, 'O' as ref_type, ss.taxon_no, o.occurrence_no, 
 			null as specimen_no, null as collection_no
-		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
-			JOIN specimens as sp using (specimen_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 			LEFT JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
@@ -1140,8 +1148,8 @@ sub list_specimens_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
 			null as occurrence_no, null as specimen_no, c.collection_no
-		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
-			JOIN specimens as sp using (specimen_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 			LEFT JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
@@ -1246,6 +1254,8 @@ sub list_measurements {
     $request->strict_check;
     $request->extid_check;
     
+    $request->delete_output_field('_label');
+    
     # If a query limit has been specified, modify the query accordingly.
     
     my $limit = $request->sql_limit_clause(1);
@@ -1315,8 +1325,8 @@ sub list_measurements {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM measurements as ms JOIN $SPEC_MATRIX as ss using (specimen_no)
-		JOIN specimens as sp using (specimen_no)
+	FROM $TABLE{MEASUREMENT_DATA} as ms JOIN $TABLE{SPECIMEN_MATRIX} as ss using (specimen_no)
+		JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
 		LEFT JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no

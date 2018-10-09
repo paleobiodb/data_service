@@ -52,6 +52,10 @@ sub new {
     my $timeout = $options->{timeout} || $ENV{PBDB_TEST_TIMEOUT} || 0;
     my $data_method = $options->{data_method} || 'put';
     
+    my $debug;
+    $debug = 1 if $DIAG_URLS || $ENV{PBDB_TEST_SHOW_URLS};
+    $debug = 1 if @ARGV && $ARGV[0] eq 'debug';
+    
     my $instance = { ua => $ua,
 		     csv => Text::CSV_XS->new({ binary => 1 }),
 		     json => JSON->new,
@@ -59,7 +63,8 @@ sub new {
 		     prefix => $prefix,
 		     timeout => $timeout,
 		     data_method => $data_method,
-		     base_url => $base_url };
+		     base_url => $base_url,
+		     debug => $debug };
     
     if ( $server =~ /(.*):(\d+)/ )
     {
@@ -230,7 +235,7 @@ sub fetch_url {
     
     my $method = $options->{http_method} || $default_method;
     
-    if ( $DIAG_URLS || $ENV{PBDB_TEST_SHOW_URLS}    )
+    if ( $tester->{debug} )
     {
 	if ( $method eq 'get' )
 	{
@@ -1397,8 +1402,10 @@ sub request_records {
 sub send_records {
     
     my ($tester, $path_and_args, $message, $body_type, $body, $options) = @_;
-    
+
     local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $options ||= { };
     
     my $type = $tester->type_option($body_type);
     
@@ -1406,6 +1413,8 @@ sub send_records {
 				  { $type => $body,
 				    ref $options eq 'HASH' ? %$options : () });
     return unless $response;
+    
+    return $response if $options->{no_check};
     
     return $tester->extract_records($response, "$message: extract records", $options);    
 }

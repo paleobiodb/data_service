@@ -394,17 +394,23 @@ sub change_table_name {
 
     my ($table_specifier, $new_name) = @_;
 
-    my $orig_name = original_table($TABLE{$table_specifier});
+    if ( exists $TABLE{$table_specifier} )
+    {
+	my $orig_name = original_table($TABLE{$table_specifier});
+	
+	$TABLE_NAME_MAP{$new_name} = $orig_name;
+	
+	unlock_value(%TABLE, $table_specifier);
+	$TABLE{$table_specifier} = $new_name;
+	lock_value(%TABLE, $table_specifier);
+	
+	return $new_name;
+    }
     
-    croak "no table name has been set for '$table_specifier'" unless $orig_name;
-    
-    $TABLE_NAME_MAP{$new_name} = $orig_name;
-    
-    unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
-    $TABLE{$table_specifier} = $new_name;
-    lock_value(%TABLE, $table_specifier);
-    
-    return $new_name;
+    else
+    {
+	croak "no table name has been set for '$table_specifier'";
+    }
 }
 
 
@@ -413,35 +419,49 @@ sub change_table_db {
     my ($table_specifier, $new_db) = @_;
     
     croak "you must specify an alternate database name" unless $new_db;
+
+    if ( exists $TABLE{$table_specifier} )
+    {
+	my $table_name = $TABLE{$table_specifier};
+	my $orig_name = original_table($table_name);
+	
+	$table_name =~ s/^.+[.]//;
+	
+	my $new_name = "$new_db.$table_name";
+	
+	$TABLE_NAME_MAP{$new_name} = $orig_name;
+	
+	unlock_value(%TABLE, $table_specifier);
+	$TABLE{$table_specifier} = $new_name;
+	lock_value(%TABLE, $table_specifier);
+	
+	return $new_name;
+    }
     
-    my $table_name = $TABLE{$table_specifier};
-    my $orig_name = original_table($table_name);
-    
-    croak "no table name has been set for '$table_specifier'" unless $table_name;
-    
-    $table_name =~ s/^.+[.]//;
-    
-    my $new_name = "$new_db.$table_name";
-    
-    $TABLE_NAME_MAP{$new_name} = $orig_name;
-    
-    unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
-    $TABLE{$table_specifier} = $new_name;
-    lock_value(%TABLE, $table_specifier);
-    
-    return $new_name;
+    else
+    {
+	croak "no table name has been set for '$table_specifier'";
+    }
 }
 
 
 sub restore_table_name {
 
     my ($table_specifier) = @_;
+
+    if ( exists $TABLE{$table_specifier} )
+    {
+	unlock_value(%TABLE, $table_specifier);
+	$TABLE{$table_specifier} = original_table($TABLE{$table_specifier});
+	lock_value(%TABLE, $table_specifier);
+	
+	return $TABLE{$table_specifier};
+    }
     
-    unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
-    $TABLE{$table_specifier} = original_table($TABLE{$table_specifier});
-    lock_value(%TABLE, $table_specifier);
-    
-    return $TABLE{$table_specifier};
+    else
+    {
+	croak "no table name has been set for '$table_specifier'";
+    }
 }
 
 

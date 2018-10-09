@@ -55,7 +55,7 @@ sub initialize {
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:eduresources:entry' =>
-	{ param => 'record_label', valid => ANY_VALUE },
+	{ param => '_label', valid => ANY_VALUE },
 	    "This parameter is only necessary in body records, and then only if",
 	    "more than one record is included in a given request. This allows",
 	    "you to associate any returned error messages with the records that",
@@ -147,7 +147,7 @@ sub initialize {
 }
 
 
-our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, 'record_label' => 1 );
+our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, '_label' => 1 );
 
 
 sub update_resources {
@@ -262,7 +262,7 @@ sub list_updated_resources {
 	    
 	    if ( $label_ref && $label_ref->{$keyval} )
 	    {
-		$r->{record_label} = $label_ref->{$keyval};
+		$r->{_label} = $label_ref->{$keyval};
 	    }
 	}
 	

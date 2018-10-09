@@ -270,6 +270,10 @@ sub get_table_permissions {
 	    {
 		my @list = split qr{,}, $permission;
 		$perms->{table_permission}{$table_specifier} = { map { $_ => 1 } @list };
+
+		# The permission 'modify' also implies 'post'.
+		$perms->{table_permission}{$table_specifier}{post} = 1 if
+		    $perms->{table_permission}{$table_specifier}{modify};
 	    }
 	    
 	    # Otherwise, compute the permissions from the authorization info and table properties.
@@ -334,6 +338,8 @@ sub default_table_permissions {
     # Otherwise, initialize the permission hash for this table.
     
     my $tp = $perms->{table_permission}{$table_specifier} = { };
+    
+    # Do we need to add 'CAN_ADMIN' ???
     
     # If this table allows posting for certain classes of people, check to see
     # if the current user falls into one of them.
@@ -449,7 +455,7 @@ sub check_table_permission {
     }
 
     # If the user has the permission 'none', then they do not have any permission on this
-    # table. This overrides any other attribute.
+    # table. This overrides any other attribute except 'admin' or superuser.
     
     elsif ( $tp->{none} )
     {
@@ -559,7 +565,7 @@ sub check_record_permission {
     
     # If the requested permission is 'view' and the table permissions allow this, then we are done.
     
-    if ( $permission eq 'view' && $tp->{$permission} )
+    if ( $permission eq 'view' && $tp->{view} )
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from TABLE_PERMS\n" );
 	

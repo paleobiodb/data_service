@@ -303,6 +303,28 @@ sub initialize {
     	{ select => ['$cd.enterer_id'] },
     	{ set => '*', code => \&process_enterer_id });
     
+    $ds->define_set('1.2:common:entry_ops' =>
+	{ value => 'insert' },
+	    "Insert this record into the database. This is only valid",
+	    "if the record does not specify a primary key value.",
+	{ value => 'update' },
+	    "Update the matching record in the database. All specified columns",
+	    "will be changed to the specified values, while those not specified",
+	    "are left unchanged. This operation is only valid",
+	    "if the record specifies a primary key value and if a matching",
+	    "record exists and you have permission to modify it.",
+	{ value => 'replace' },
+	    "Replace the matching record in the database. The existing record",
+	    "is completely replaced by this record, and all columns not given",
+	    "a value will be set to their default values. This operation is",
+	    "only valid if the record specifies a primary key value and if a",
+	    "matching record exists and you have permission to modify it.",
+	{ value => 'delete' },
+	    "Delete the matching record in the database. This operation is",
+	    "only valid if the record specifies a primary key value and if a",
+	    "matching record exists and you have permission to delete it.",
+	    "All other column values are ignored.");
+    
     # $ds->define_block('1.2:common:entname_guest' =>
     # 	{ select => ['$cd.enterer_id', 'wu.real_name'], tables => 'wu' },
     # 	{ set => '*', code => \&process_entnames },

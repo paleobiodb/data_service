@@ -143,32 +143,31 @@ subtest 'errors' => sub {
     }
     
     # Now add another record with no error conditions. Check that the error condition testing
-    # methods still work properly. In particular, the most recent action should show no errors,
-    # but using 'any' should still indicate that errors are present.
+    # methods with 'current' properly report no errors. Using 'any' should still indicate that
+    # errors are present.
     
     $edt->insert_record('EDT_TEST', { string_req => 'def' });
     
-    $T->ok_no_errors("ok_no_errors passes test");
-    $T->ok_no_conditions("ok_no_conditions passes test");
+    $T->ok_no_errors('current', "ok_no_errors passes test");
+    $T->ok_no_conditions('current', "ok_no_conditions passes test");
     $T->ok_no_errors('main', "ok_no_errors with 'main' passes test");
     $T->ok_no_conditions('main', "ok_no_conditions with 'main' passes test");
-    $T->ok_no_errors('current', "ok_no_errors with 'current' passes test");
-    $T->ok_no_conditions('current', "ok_no_conditions with 'current' passes test");
     
     {
 	local($EditTester::TEST_MODE) = 1;
-	$T->ok_has_error('E_EXECUTE', "ok_has_error with no selector properly fails test");
 	$T->ok_no_errors('any', "ok_no_errors with 'any' properly fails test");
 	$T->ok_no_conditions('any', "ok_no_conditions with 'any' properly fails test");
     }
     
+    $T->ok_has_error('E_EXECUTE', "ok_has_error with no selector passes test");
+    $T->ok_has_one_error('E_EXECUTE', "ok_has_one_error with no selector passes test");
     $T->ok_has_error('any', 'E_EXECUTE', "ok_has_error with 'any' passes test");
     $T->ok_has_one_error('any', 'E_EXECUTE', "ok_has_one_error with 'any' passes test");
     
     # Now check again with regexes.
 
-    $T->ok_has_error('any', qr{E_EXECUTE.*test}, "ok_has_error with regex passes test");
-    $T->ok_has_one_error('any', qr{E_EXECUTE.*test}, "ok_has_one_error with regex passes test");
+    $T->ok_has_error(qr{E_EXECUTE.*test}, "ok_has_error with regex passes test");
+    $T->ok_has_one_error(qr{E_EXECUTE.*test}, "ok_has_one_error with regex passes test");
     
     # Now add a third record, with two errors. This time, "has one error" should fail.
     
@@ -187,17 +186,19 @@ subtest 'errors' => sub {
 	ok( $EditTester::TEST_DIAG =~ /E_PERM/, "found diagnostic for E_PERM" );
 	ok( $EditTester::TEST_DIAG =~ /C_CREATE/, "found diagnostic for C_CREATE" );
 	$T->ok_has_one_error('any', 'E_PERM', "ok_has_one_error with 'any' properly fails");
+	$T->ok_has_one_error('current', 'E_PERM', "ok_has_one_error with 'any' properly fails");
+	$T->ok_has_one_error('main', 'E_PERM', "ok_has_one_error with 'any' properly fails");
 	$T->ok_has_error('main', 'E_PERM', "ok_has_error with 'main' properly fails");
-
+	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
 	$T->diag_warnings;
 	ok( $EditTester::TEST_DIAG eq '', "diag_warnings did not generate any output" );
 	$T->diag_errors('main');
 	ok( $EditTester::TEST_DIAG eq '', "diag_errors('main') did not generate any output");
-	$T->diag_errors;
-	ok( $EditTester::TEST_DIAG =~ /E_PERM/, "found E_PERM from diag_errors" );
-	ok( $EditTester::TEST_DIAG !~ /E_EXECUTE/, "did not find E_EXECUTE from diag_errors");
+	$T->diag_errors('current');
+	ok( $EditTester::TEST_DIAG =~ /E_PERM/, "found E_PERM from diag_errors ('current')" );
+	ok( $EditTester::TEST_DIAG !~ /E_EXECUTE/, "did not find E_EXECUTE from diag_errors('current')");
 	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
@@ -207,9 +208,9 @@ subtest 'errors' => sub {
 	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
-	$T->diag_errors('current');
-	ok( $EditTester::TEST_DIAG =~ /E_PERM/, "found E_PERM from diag_errors('current')" );
-	ok( $EditTester::TEST_DIAG !~ /E_EXECUTE/, "did not find E_EXECUTE from diag_errors('current')");
+	$T->diag_errors();
+	ok( $EditTester::TEST_DIAG =~ /E_PERM/, "found E_PERM from diag_errors()" );
+	ok( $EditTester::TEST_DIAG =~ /E_EXECUTE/, "found E_EXECUTE from diag_errors()");
     }
     
     # Now create a second edt. Add an error not associated with any action.
@@ -248,7 +249,7 @@ subtest 'errors' => sub {
     $T->ok_has_error($edt, 'C_CREATE', "found C_CREATE from first edt");
     $T->ok_has_error($edt, 'any', 'E_EXECUTE', "found E_EXECUTE from first edt with 'any'");
     $T->ok_no_conditions($edt, 'main', "no conditions for first edt with 'main'");
-    $T->ok_has_one_error($edt2, 'E_REQUIRED', "found E_REQUIRED as one error from second edt");
+    $T->ok_has_one_error($edt2, 'current', 'E_REQUIRED', "found E_REQUIRED as one error from second edt");
     $T->ok_has_error($edt2, 'main', 'C_CREATE', "found C_CREATE from second edt");
 
     {
@@ -258,7 +259,7 @@ subtest 'errors' => sub {
 
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
-	$T->diag_errors($edt2);
+	$T->diag_errors($edt2, 'current');
 	ok( $EditTester::TEST_DIAG =~ /E_REQUIRED/, "found E_REQUIRED from diag_errors(\$edt2)" );
 	ok( $EditTester::TEST_DIAG !~ /C_CREATE/, "did not find C_CREATE from diag_errors(\$edt2)");
 	
@@ -266,7 +267,7 @@ subtest 'errors' => sub {
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
 	$T->diag_errors($edt);
 	ok( $EditTester::TEST_DIAG =~ /E_PERM/, "found E_PERM from diag_errors(\$edt)" );
-	ok( $EditTester::TEST_DIAG !~ /E_EXECUTE/, "did not find E_EXECUTE from diag_errors(\$edt)" );
+	ok( $EditTester::TEST_DIAG =~ /E_EXECUTE/, "found E_EXECUTE from diag_errors(\$edt)" );
 	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
@@ -282,7 +283,7 @@ subtest 'errors' => sub {
 	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
-	$T->ok_result(0, "ok_result properly failed with a false argument");
+	$T->ok_result(0, 'current', "ok_result properly failed with a false argument");
 	ok( $EditTester::TEST_DIAG =~ /E_REQUIRED/, "found E_REQUIRED from ok_result" );	
 	ok( $EditTester::TEST_DIAG !~ /C_CREATE/, "did not find C_CREATE from ok_result" );
 	
@@ -290,7 +291,7 @@ subtest 'errors' => sub {
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
 	$T->ok_result($edt, 0, "ok_result edt properly failed with a false argument");
 	ok( $EditTester::TEST_DIAG =~ /E_PERM/, "found E_PERM from ok_result edt" );	
-	ok( $EditTester::TEST_DIAG !~ /E_EXECUTE/, "did not find E_EXECUTE from ok_result edt" );
+	ok( $EditTester::TEST_DIAG =~ /E_EXECUTE/, "found E_EXECUTE from ok_result edt" );
     }
 };
 
@@ -355,34 +356,35 @@ subtest 'warnings' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'def' });
     
-    $T->ok_no_warnings("ok_no_warnings passes test");
-    $T->ok_no_conditions("ok_no_conditions passes test");
     $T->ok_no_warnings('main', "ok_no_warnings with 'main' passes test");
     $T->ok_no_conditions('main', "ok_no_conditions with 'main' passes test");
     $T->ok_no_warnings('current', "ok_no_warnings with 'current' passes test");
     $T->ok_no_conditions('current', "ok_no_conditions with 'current' passes test");
+    $T->ok_has_warning('W_TEST', "ok_has_warning with no selector passes test");
+    $T->ok_has_one_warning('W_TEST', "ok_has_one_warning with no selector passes test");
     
     {
 	local($EditTester::TEST_MODE) = 1;
-	$T->ok_has_warning('W_TEST', "ok_has_warning with no selector properly fails test");
+	$T->ok_no_warnings("ok_no_warnings properly fails test");
+	$T->ok_no_conditions("ok_no_conditions properly fails test");
 	$T->ok_no_warnings('any', "ok_no_warnings with 'any' properly fails test");
 	$T->ok_no_conditions('any', "ok_no_conditions with 'any' properly fails test");
     }
     
     $T->ok_has_warning('any', 'W_TEST', "ok_has_warning with 'any' passes test");
     $T->ok_has_one_warning('any', 'W_TEST', "ok_has_one_warning with 'any' passes test");
-
-    # Now add a second warning, and test the 'ok_has_one_warning' now fails with 'any'.
+    
+    # Now add a second warning, and test the 'ok_has_one_warning' now fails with 'current'.
     
     $edt->add_condition('W_EXECUTE', 'foobar');
 
-    $T->ok_has_warning('W_EXECUTE', "ok_has_warning passes test");
-    $T->ok_has_one_warning('W_EXECUTE', "ok_has_one_warning passes test");
+    $T->ok_has_warning('current', 'W_EXECUTE', "ok_has_warning passes test");
+    $T->ok_has_one_warning('current', 'W_EXECUTE', "ok_has_one_warning passes test");
     
     {
 	local($EditTester::TEST_MODE) = 1;
-	$T->ok_no_warnings("ok_no_warnings properly fails test");
-	$T->ok_has_one_warning('W_TEST', "did not find W_TEST without selector");
+	$T->ok_no_warnings('current', "ok_no_warnings properly fails test");
+	$T->ok_has_one_warning('current', 'W_TEST', "did not find W_TEST without selector");
 	$T->ok_has_one_warning('any', 'W_TEST', "ok_has_one_warning fails with 'any'");
 	$T->ok_has_warning('current', 'W_TEST', "ok_has_warning did not find W_TEST with 'current'");
     }
@@ -405,8 +407,8 @@ subtest 'warnings' => sub {
 	$T->diag_warnings('main');
 	ok( $EditTester::TEST_DIAG eq '', "diag_warnings('main') did not generate any output");
 	$T->diag_warnings;
-	ok( $EditTester::TEST_DIAG =~ /W_EXECUTE/, "found W_EXECUTE from diag_warnings" );
-	ok( $EditTester::TEST_DIAG !~ /W_TEST/, "did not find W_TEST from diag_warnings");
+	ok( $EditTester::TEST_DIAG =~ /W_EXECUTE/, "found W_EXECUTE from diag_warnings with no selector" );
+	ok( $EditTester::TEST_DIAG =~ /W_TEST/, "found W_TEST from diag_warnings with no selector");
 	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
@@ -465,7 +467,7 @@ subtest 'warnings' => sub {
     $T->ok_has_warning($edt, 'W_TEST', "found W_TEST from first edt");
     $T->ok_has_warning($edt, 'any', 'W_EXECUTE', "found W_EXECUTE from first edt with 'any'");
     $T->ok_no_conditions($edt, 'main', "no conditions for first edt with 'main'");
-    $T->ok_has_one_warning($edt2, 'W_TRUNC', "found W_TRUNC as one warning from second edt");
+    $T->ok_has_one_warning($edt2, 'current', 'W_TRUNC', "found W_TRUNC as one warning from second edt");
     $T->ok_has_warning($edt2, 'main', 'W_EXECUTE', "found W_EXECUTE from second edt");
     
     {
@@ -474,7 +476,7 @@ subtest 'warnings' => sub {
 	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
-	$T->diag_warnings($edt2);
+	$T->diag_warnings($edt2, 'current');
 	ok( $EditTester::TEST_DIAG =~ /W_TRUNC/, "found W_TRUNC from diag_warnings(\$edt2)" );
 	ok( $EditTester::TEST_DIAG !~ /W_EXECUTE/, "did not find W_EXECUTE from diag_warnings(\$edt2)");
 	
@@ -525,7 +527,7 @@ subtest 'warnings' => sub {
 	
 	$EditTester::TEST_DIAG = '';
 	ok( $EditTester::TEST_DIAG eq '', "properly cleared TEST_DIAG" );
-	$T->ok_result(0, "ok_result properly failed with a false argument");
+	$T->ok_result(0, 'current', "ok_result properly failed with a false argument");
 	ok( $EditTester::TEST_DIAG =~ /E_EXECUTE.*bazbaz/, "found E_EXECUTE from ok_result" );	
 	ok( $EditTester::TEST_DIAG =~ /W_TRUNC/, "found W_TRUNC from ok_result" );	
 	ok( $EditTester::TEST_DIAG !~ /W_EXECUTE/, "did not find W_EXECUTE from ok_result" );

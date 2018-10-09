@@ -339,8 +339,9 @@ sub after_action {
     if ( $operation eq 'insert' && $table eq 'SPECIMEN_DATA' )
     {
 	# Add a record to the specimen matrix, derived from the new record in the specimen table.
+	# Ignore any previous record that might have been left there in error.
 	
-	$sql = "INSERT INTO $TABLE{SPECIMEN_MATRIX}
+	$sql = "REPLACE INTO $TABLE{SPECIMEN_MATRIX}
 		       (specimen_no, occurrence_no, reid_no, latest_ident, taxon_no, orig_no,
 			reference_no, authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT s.specimen_no, s.occurrence_no, o.reid_no, ifnull(o.latest_ident, 1), 
@@ -373,6 +374,26 @@ sub after_action {
     elsif ( $operation eq 'update' && $table eq 'SPECIMEN_DATA' )
     {
 	$edt->set_attr('last_specimen_key', $keyval);
+    }
+    
+    # If we have deleted one or more records in the SPECIMEN_DATA table, then we need to delete the
+    # corresponding records in the SPECIMEN_MATRIX and MEASUREMENT_DATA tables.
+
+    elsif ( $operation eq 'delete' && $table eq 'SPECIMEN_DATA' )
+    {
+	my $keyexpr = $action->keyexpr;
+
+	$sql = "DELETE FROM $TABLE{SPECIMEN_MATRIX} WHERE $keyexpr";
+	
+	$edt->debug_line($sql);
+	
+	$count = $dbh->do($sql);
+	
+	$sql = "DELETE FROM $TABLE{MEASUREMENT_DATA} WHERE $keyexpr";
+
+	$edt->debug_line($sql);
+
+	$count = $dbh->do($sql);
     }
     
     # If we are acting on the MEASUREMENT_DATA table, then we need to record the specimenid.

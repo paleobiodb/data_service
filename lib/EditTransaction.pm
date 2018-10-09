@@ -56,10 +56,10 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		C_LOCKED => "Allow 'LOCKED' to update locked records",
 		C_NO_RECORDS => "Allow 'NO_RECORDS' to allow transactions with no records",
 		C_ALTER_TRAIL => "Allow 'ALTER_TRAIL' to explicitly set crmod and authent fields",
-  		E_EXECUTE => "%1",
 		E_NO_KEY => "The %1 operation requires a primary key value",
 		E_HAS_KEY => "You may not specify a primary key value for the %1 operation",
 		E_KEY_NOT_FOUND => "Field '%1': no record was found with key '%2'",
+		E_LABEL_NOT_FOUND => "Field '%1': no record was found with label '%2'",
 		E_NOT_FOUND => "No record was found with key '%1'",
 		E_LOCKED => "This record is locked",
 		E_PERM => { insert => "You do not have permission to insert a record into this table",
@@ -71,6 +71,8 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    delete => "You do not have permission to delete this record",
 			    delete_many => "You do not have permission to delete records from this table",
 			    default => "You do not have permission for this operation" },
+		E_BAD_OPERATION => "Invalid operation '%1'",
+		E_BAD_RECORD => "%1",
 		E_PERM_COL => "You do not have permission to set the value of the field '%1'",
 		E_REQUIRED => "Field '%1': must have a nonempty value",
 		E_RANGE => "Field '%1': %2",
@@ -78,6 +80,8 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_FORMAT => "Field '%1': %2",
 		E_EXTTYPE => "Field '%1': %2",
 		E_PARAM => "%1",
+  		E_EXECUTE => "%1",
+		E_DUPLICATE => "Duplicate entry '%1' for key '%2'",
 		W_ALLOW => "Unknown allowance '%1'",
 		W_EXECUTE => "%1",
 		W_TRUNC => "Field '$1': %2",
@@ -141,6 +145,8 @@ sub new {
 		errors => [ ],
 		warnings => [ ],
 		condition_code => { },
+		tables => { },
+		label_found => { },
 		current_action => undef,
 		proceed => undef,
 		record_count => 0,
@@ -413,18 +419,18 @@ sub get_attr_hash {
 sub error_line {
 
     return if ref $_[0] && $_[0]->{silent};
-
+    
     my ($edt, $line) = @_;
+    
+    # if ( $edt->{request} )
+    # {
+    # 	$edt->{request}->debug_line($line);
+    # }
 
-    if ( $edt->{request} )
-    {
-	$edt->{request}->debug_line($line);
-    }
-
-    else
-    {
+    # else
+    # {
 	$edt->write_debug_output($line);
-    }
+    # }
 }
 
 
@@ -696,7 +702,7 @@ sub add_condition {
 	
 	my $condition = EditTransaction::Condition->new($action, $code, @_);
 	push @{$edt->{errors}}, $condition;
-
+	
 	return $condition;
     }
     
@@ -882,7 +888,7 @@ sub specific_warnings {
 	# reach the warning count recorded for that action.
 	
 	if ( $edt->{warnings}[-$i][0] == $search &&
-	     $edt->{warnings}[-$i][1] && $edt->{warnings}[-$i][1] =~ /^W/ )
+	     $edt->{warnings}[-$i][1] && $edt->{warnings}[-$i][1] =~ /^[DFW]/ )
 	{
 	    unshift @specific_list, $edt->{warnings}[-$i];
 	}
@@ -1231,7 +1237,9 @@ sub _new_record {
     croak "no record specified" unless ref $record eq 'HASH' ||
 	$operation eq 'delete' && defined $record && $record ne '';
     
-    croak "unknown table '$table'" unless $TABLE{$table};
+    croak "unknown table '$table'" unless exists $TABLE{$table};
+    
+    $edt->{tables}{$table} = 1;
     
     # # If there are any errors and warnings pending from the previous record, move them to the main
     # # lists.
@@ -1239,15 +1247,16 @@ sub _new_record {
     # $edt->_finish_record;
     
     # Then determine a label for this record. If one is specified, use that. Otherwise, keep count
-    # of how many records we have seen so far and use that prepended by '#'.
+    # of how many records we have seen so far and use that prepended by '#'. Create an entry
+    # in the 'label_found' hash so that we know what table this label refers to.
     
     my $label;
     
     $edt->{record_count}++;
     
-    if ( ref $record && defined $record->{record_label} && $record->{record_label} ne '' )
+    if ( ref $record && defined $record->{_label} && $record->{_label} ne '' )
     {
-	$label = $record->{record_label};
+	$label = $record->{_label};
     }
     
     else
@@ -1255,22 +1264,24 @@ sub _new_record {
 	$label = '#' . $edt->{record_count};
     }
     
+    $edt->{label_found}{$label} = $table;
+    
     # Then create a new EditTransaction::Action object.
     
     $edt->{current_action} = EditTransaction::Action->new($table, $operation, $record, $label);
-
-    # If there are special actions already set for this table, copy them in.
+    
+    # If there are special column instructions already set for this table, copy them in.
     
     if ( my $s = $SPECIAL_BY_CLASS{ref $edt}{$table} )
     {
 	$edt->{current_action}->column_special($s);
     }
-
+    
     if ( my $s = $edt->{column_special}{$table} )
     {
 	$edt->{current_action}->column_special($s);
     }
-
+    
     # Return the new action.
     
     return $edt->{current_action};
@@ -1469,8 +1480,6 @@ sub _rollback_transaction {
     
     my $dbh = $edt->dbh;
     
-    $edt->{current_action} = undef;    
-    
     if ( $reason )
     {
 	$reason = uc $reason;
@@ -1485,7 +1494,7 @@ sub _rollback_transaction {
     try {
 	
 	$TRANSACTION_INTERLOCK{$dbh} = undef;
-	$dbh->do("ROLLBACK");
+	$dbh->do("ROLLBACK") if defined $dbh;
     }
     
     catch {
@@ -1621,7 +1630,7 @@ sub update_record {
     
     # We can only update a record if a primary key value is specified.
     
-    if ( my $keyexpr = $edt->get_keyexpr($action) )
+    if ( my $keyexpr = $edt->generate_keyexpr($action) )
     {
 	try {
 
@@ -1769,7 +1778,7 @@ sub replace_record {
     
     # We can only replace a record if a primary key value is specified.
     
-    if ( my $keyexpr = $edt->get_keyexpr($action) )
+    if ( my $keyexpr = $edt->generate_keyexpr($action) )
     {
 	try {
 	    
@@ -1898,7 +1907,7 @@ sub delete_record {
     
     # A record can only be deleted if a primary key value is specified.
     
-    if ( my $keyexpr = $edt->get_keyexpr($action) )
+    if ( my $keyexpr = $edt->generate_keyexpr($action) )
     {
 	try {
 	    
@@ -1981,7 +1990,7 @@ sub delete_record {
 # executed later. The selector may indicate a set of keys, or it may include some expression that
 # selects all matching records.
 
-sub update_many {
+sub delete_many {
     
     my ($edt, $table, $selector) = @_;
     
@@ -2018,16 +2027,46 @@ sub update_many {
 }
 
 
-# insert_update_record ( table, record )
+# process_record ( table, record )
 # 
 # Call either 'insert_record' or 'update_record', depending on whether the record has a value for
-# the primary key attribute. This is a convenient shortcut for use by operation methods.
+# the primary key attribute. This is a convenient shortcut for use by operation methods. If the
+# record contains the field '_operation', then call the method indicated by the field value.
 
-sub insert_update_record {
+sub process_record {
     
     my ($edt, $table, $record) = @_;
     
-    if ( $edt->get_record_key($table, $record) )
+    if ( $record->{_operation} )
+    {
+	if ( $record->{_operation} eq 'delete' )
+	{
+	    return $edt->delete_record($table, $record);
+	}
+
+	elsif ( $record->{_operation} eq 'replace' )
+	{
+	    return $edt->replace_record($table, $record);
+	}
+
+	elsif ( $record->{_operation} eq 'insert' )
+	{
+	    return $edt->replace_record($table, $record);
+	}
+
+	elsif ( $record->{_operation} eq 'update' )
+	{
+	    return $edt->update_record($table, $record);
+	}
+	
+	else
+	{
+	    my $action = $edt->_new_record($table, 'bad', $record);
+	    $edt->add_condition($action, 'E_BAD_OPERATION', $record->{_operation});
+	}
+    }
+    
+    elsif ( $edt->get_record_key($table, $record) )
     {
 	return $edt->update_record($table, $record);
     }
@@ -2036,6 +2075,41 @@ sub insert_update_record {
     {
 	return $edt->insert_record($table, $record);
     }
+}
+
+
+sub insert_update_record {
+
+    my ($edt, $table, $record) = @_;
+
+    $edt->process_record($table, $record);
+}
+
+
+# bad_record ( record )
+#
+# Create an action for this record, and immediately attach an error condition to it. This method
+# should be called when an input record lacks the proper fields and the client code cannot figure
+# out how to process it.
+
+sub bad_record {
+
+    my ($edt, $table, $record, $message) = @_;
+    
+    # Move any accumulated record error or warning conditions to the main lists, and determine the
+    # key expression and label for the record being updated.
+    
+    my $action = $edt->_new_record($table, 'update', $record);
+    
+    # Then attach an error condition to this action.
+
+    $message ||= "Bad record, necessary fields could not be found";
+    
+    $edt->add_condition($action, 'E_BAD_RECORD', $message);
+    
+    # Since the action now has an error condition, it will be placed on the 'bad' list.
+    
+    return $edt->_handle_action($action);
 }
 
 
@@ -2097,7 +2171,7 @@ sub abort_action {
     # Return without doing anything unless there is a current action.
     
     my $action = $edt->{current_action} || return;
-
+    
     # Return also if the current action has already been executed or abandoned.
     
     return if $action->status;
@@ -2187,7 +2261,7 @@ sub authorize_action {
     my ($edt, $action, $operation, $table, $keyexpr) = @_;
     
     die "TEST AUTHORIZE" if $TEST_PROBLEM{authorize};
-
+    
     my $permission;
     
     sswitch ( $operation )
@@ -2208,7 +2282,7 @@ sub authorize_action {
 	case 'delete': {
 	    $permission = $edt->check_record_permission($table, 'delete', $keyexpr);
 	}
-
+	
 	case 'delete_many': {
 	    $permission = $edt->check_many_permission($table, 'delete', $keyexpr);
 	}
@@ -2251,15 +2325,27 @@ sub _handle_action {
     }
     
     # If any errors were already generated for the record currently being processed, put this
-    # action on the 'bad action' list and otherwise do nothing.
+    # action on the 'bad action' list and update the counts and key lists. We then immediately
+    # return without doing anything more.
     
     if ( $action->has_errors )
     {
 	push @{$edt->{bad_list}}, $action;
 	$edt->{fail_count}++;
 	
-	my $keyval = $action->keyval;
-	push @{$edt->{failed_keys}}, $keyval if defined $keyval && $keyval ne '';
+	my $table = $action->table;
+	
+	# For a multiple action, all of the failed keys are put on the list.
+	
+	if ( $action->is_multiple )
+	{
+	    push @{$edt->{failed_keys}{$table}}, $action->all_keys;
+	}
+	
+	elsif ( my $keyval = $action->keyval )
+	{
+	    push @{$edt->{failed_keys}{$table}}, $keyval;
+	}
 	
 	return;
     }
@@ -2455,8 +2541,6 @@ sub execute {
     
     try {
 	
-	$edt->{current_action} = undef;
-	
 	# If errors have occurred, then call the 'cleanup_transaction' method, which is designed to
 	# be overridden by subclasses. The default does nothing.
 	
@@ -2471,6 +2555,7 @@ sub execute {
 	
 	else
 	{
+	    $edt->{current_action} = undef;
 	    $culprit = 'execution';
 	    $edt->finalize_transaction($edt->{main_table});
 	}
@@ -2628,7 +2713,8 @@ sub _execute_action_list {
 			
 			if ( @additional )
 			{
-			    $action->_coalesce(@additional);
+			    $action->_coalesce($edt->{label_keys}, @additional);
+			    $edt->generate_keyexpr($action);
 			}
 		    }
 		    
@@ -2662,39 +2748,112 @@ sub _execute_action_list {
 }
 
 
-# get_keyexpr ( action )
+# generate_keyexpr ( action )
 # 
 # Generate a key expression for the specified action, that will select the particular record being
 # acted on. If the action has no key value (i.e. is an 'insert' operation) or if no key column is
 # known for this table then return '0'. The reason for returning this value is that it can be
 # substituted into an SQL 'WHERE' clause and will be syntactically correct but always false.
 
-sub get_keyexpr {
+sub generate_keyexpr {
     
     my ($edt, $action) = @_;
     
     my $keycol = $action->keycol;
     my $keyval = $action->keyval;
+    my $keyexpr;
+
+    # If we have computed a key expression, even if it is 0, return it.
     
-    return '0' unless $keycol;
+    if ( defined($keyexpr = $action->keyexpr) )
+    {
+	return $keyexpr;
+    }
+
+    # Otherwise, if there is no key column then the key expression is just 0.
+    
+    elsif ( ! $keycol )
+    {
+	$action->_set_keyexpr('0');
+	return '0';
+    }
+
+    # If we get here, then we need to compute the key expression.
     
     if ( $action->is_multiple )
     {
 	my $dbh = $edt->dbh;
 	my @keys = map { $dbh->quote($_) } $action->all_keys;
 	
-	return '0' unless @keys;
+	unless ( @keys )
+	{
+	    $action->_set_keyexpr('0');
+	    return '0';
+	}
 	
-	return "$keycol in (" . join(',', @keys) . ")";
+	$keyexpr = "$keycol in (" . join(',', @keys) . ")";
     }
     
     elsif ( defined $keyval && $keyval ne '' && $keyval ne '0' )
     {
-	return "$keycol=" . $edt->dbh->quote($keyval);
+	if ( $keyval =~ /^@(.*)/ )
+	{
+	    my $label = $1;
+	    
+	    if ( $keyval = $edt->{label_keys}{$label} )
+	    {
+		$action->_set_keyval($keyval);
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition($action, 'E_LABEL_NOT_FOUND', $keycol, $label);
+	    }
+	}
+
+	elsif ( $keyval =~ /^[0-9+]$/ )
+	{
+	    # do nothing
+	}
+
+	elsif ( $keyval =~ $IDRE{LOOSE} )
+	{
+	    my $type = $1;
+	    my $num = $2;
+	    
+	    my $exttype = $COMMON_FIELD_IDTYPE{$keycol};
+	    
+	    if ( $exttype )
+	    {
+		if ( $type eq $exttype )
+		{
+		    $keyval = $num;
+		}
+
+		else
+		{
+		    $edt->add_condition($action, 'E_EXTTYPE', $keycol, "external identifier must be of type '$exttype'");
+		}
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition($action, 'E_EXTTYPE', $keycol, "no external identifier is defined for this primary key");
+	    }
+	}
+	
+	$keyexpr = "$keycol=" . $edt->dbh->quote($keyval);
     }
     
+    if ( $keyexpr )
+    {
+	$action->_set_keyexpr($keyexpr);
+	return $keyexpr;
+    }
+
     else
     {
+	$action->_set_keyexpr('0');
 	return '0';
     }
 }
@@ -2712,19 +2871,19 @@ sub get_keylist {
     if ( $action->is_multiple )
     {
 	my $dbh = $edt->dbh;
-	my @keys = map { $dbh->quote($_) } $action->all_keys;
+	my @keys = $action->all_keys;
 	
 	return join(',', @keys);
     }
     
     elsif ( defined $keyval && $keyval ne '' )
     {
-	return $edt->dbh->quote($keyval);
+	return $keyval;
     }
     
     else
     {
-	return '';
+	return;
     }
 }
 
@@ -2736,6 +2895,8 @@ sub get_keylist {
 sub get_old_values {
 
     my ($edt, $action, $table, $fields) = @_;
+    
+    croak "get_old_values cannot be called on a multiple action" if $action->is_multiple;
     
     $table ||= $action->table;
     
@@ -2770,43 +2931,43 @@ sub fetch_old_record {
 # 
 # Determine the current user's permission to do the specified action.
 
-sub check_permission {
+# sub check_permission {
     
-    my ($edt, $action, $keyexpr) = @_;
+#     my ($edt, $action, $keyexpr) = @_;
     
-    my $table = $action->table;
+#     my $table = $action->table;
 
-    sswitch ( $action->operation )
-    {
-	case 'insert': {
-	    return $action->_set_permission($edt->check_table_permission($table, 'post'))
-	}
+#     sswitch ( $action->operation )
+#     {
+# 	case 'insert': {
+# 	    return $action->_set_permission($edt->check_table_permission($table, 'post'))
+# 	}
 	
-	case 'update': {
-	    $keyexpr ||= $edt->get_keyexpr($action);
-	    return $action->_set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
-	}
+# 	case 'update': {
+# 	    $keyexpr ||= $action->keyexpr;
+# 	    return $action->_set_permission($edt->check_record_permission($table, 'edit', $keyexpr));
+# 	}
         
-        case 'replace': {
-	    $keyexpr ||= $edt->get_keyexpr($action);
-	    my $permission = $edt->check_record_permission($table, 'edit', $keyexpr);
-	    if ( $permission eq 'notfound' )
-	    {
-		$permission = $edt->check_table_permission($table, 'insert_key');
-	    }
-	    return $action->_set_permission($permission);
-	}
+#         case 'replace': {
+# 	    $keyexpr ||= $edt->get_keyexpr($action);
+# 	    my $permission = $edt->check_record_permission($table, 'edit', $keyexpr);
+# 	    if ( $permission eq 'notfound' )
+# 	    {
+# 		$permission = $edt->check_table_permission($table, 'insert_key');
+# 	    }
+# 	    return $action->_set_permission($permission);
+# 	}
 	
-	case 'delete': {
-	    $keyexpr ||= $edt->get_keyexpr($action);
-	    return $action->_set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
-	}
+# 	case 'delete': {
+# 	    $keyexpr ||= $edt->get_keyexpr($action);
+# 	    return $action->_set_permission($edt->check_record_permission($table, 'delete', $keyexpr));
+# 	}
 	
-      default: {
-	    croak "bad operation '$_'";
-	}
-    }
-}
+#       default: {
+# 	    croak "bad operation '$_'";
+# 	}
+#     }
+# }
 
 
 # _execute_insert ( action )
@@ -2825,6 +2986,13 @@ sub _execute_insert {
 
     $edt->{current_action} = $action;
     
+    # If we need to substitute any key values for labels, do that now.
+    
+    if ( $action->label_sub )
+    {
+	$edt->_substitute_labels($action) || return;
+    }
+    
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
     
@@ -2836,7 +3004,7 @@ sub _execute_insert {
 	$edt->add_condition($action, 'E_EXECUTE', 'column/value mismatch on insert');
 	return;
     }
-
+    
     # If the following flag is set, deliberately generate an SQL error for
     # testing purposes.
     
@@ -2904,7 +3072,18 @@ sub _execute_insert {
     }
     
     catch {
-	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	if ( /duplicate entry '(.*)' for key '(.*)' at/i )
+	{
+	    my $value = $1;
+	    my $key = $2;
+	    $edt->add_condition($action, 'E_DUPLICATE', $value, $key);
+	}
+
+	else
+	{
+	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	}
+	
 	$edt->error_line($_);
 	
 	$action->_set_status('exception') unless $action->status;
@@ -2928,9 +3107,16 @@ sub _execute_insert {
     if ( $new_keyval )
     {
 	$edt->{action_count}++;
-	push @{$edt->{inserted_keys}}, $new_keyval;
+	push @{$edt->{inserted_keys}{$table}}, $new_keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($new_keyval, $action);
-	$edt->{key_labels}{$new_keyval} = $action->label;
+	
+	my $label = $action->label;
+	if ( defined $label && $label ne '' )
+	{
+	    $edt->{label_keys}{$label} = $new_keyval;
+	    $edt->{key_labels}{$table}{$new_keyval} = $label;
+	}
+	
 	return $new_keyval;
     }
     
@@ -2957,6 +3143,13 @@ sub _execute_replace {
     # Set this as the current action.
 
     $edt->{current_action} = $action;
+    
+    # If we need to substitute any key values for labels, do that now.
+    
+    if ( $action->label_sub )
+    {
+	$edt->_substitute_labels($action) || return;
+    }
     
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
@@ -3038,7 +3231,18 @@ sub _execute_replace {
     }
     
     catch {	
-	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	if ( /duplicate entry '(.*)' for key '(.*)' at/i )
+	{
+	    my $value = $1;
+	    my $key = $2;
+	    $edt->add_condition($action, 'E_DUPLICATE', $value, $key);
+	}
+
+	else
+	{
+	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	}
+	
 	$edt->error_line($_);
 	$action->_set_status('exception') unless $action->status;
 	
@@ -3059,13 +3263,18 @@ sub _execute_replace {
     # mapping between key value and record label.
     
     my $keyval = $action->keyval;
+    my $label = $action->label;
     
-    $edt->{key_labels}{$keyval} = $action->label;
+    if ( defined $label && $label ne '' )
+    {
+	$edt->{label_keys}{$label} = $keyval;
+	$edt->{key_labels}{$table}{$keyval} = $label;
+    }
     
     if ( $result && ! $action->has_errors )
     {
 	$edt->{action_count}++;
-	push @{$edt->{replaced_keys}}, $keyval;
+	push @{$edt->{replaced_keys}{$table}}, $keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
 	return $result;
     }
@@ -3073,7 +3282,7 @@ sub _execute_replace {
     else
     {
 	$edt->{fail_count}++;
-	push @{$edt->{failed_keys}}, $keyval;
+	push @{$edt->{failed_keys}{$table}}, $keyval;
 	return undef;
     }
 }
@@ -3093,6 +3302,13 @@ sub _execute_update {
     # Set this as the current action.
 
     $edt->{current_action} = $action;
+    
+    # If we need to substitute any key values for labels, do that now.
+    
+    if ( $action->label_sub )
+    {
+	$edt->_substitute_labels($action) || return;
+    }
     
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
@@ -3125,7 +3341,7 @@ sub _execute_update {
 	$set_list .= "$cols->[$i]=$vals->[$i]";
     }
     
-    my $key_expr = $edt->get_keyexpr($action);
+    my $key_expr = $action->keyexpr;
     
     my $sql = "	UPDATE $TABLE{$table} SET $set_list
 		WHERE $key_expr";
@@ -3180,7 +3396,18 @@ sub _execute_update {
     }
     
     catch {
-	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	if ( /duplicate entry '(.*)' for key '(.*)' at/i )
+	{
+	    my $value = $1;
+	    my $key = $2;
+	    $edt->add_condition($action, 'E_DUPLICATE', $value, $key);
+	}
+
+	else
+	{
+	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	}
+	
 	$edt->error_line($_);
 	$action->_set_status('exception') unless $action->status;
 	
@@ -3201,13 +3428,18 @@ sub _execute_update {
     # mapping between key value and record label.
     
     my $keyval = $action->keyval;
-    
-    $edt->{key_labels}{$keyval} = $action->label;
+    my $label = $action->label;
+
+    if ( defined $label && $label ne '' )
+    {
+	$edt->{label_keys}{$label} = $keyval;
+	$edt->{key_labels}{$table}{$keyval} = $label;
+    }
     
     if ( $result && ! $action->has_errors )
     {
 	$edt->{action_count}++;
-	push @{$edt->{updated_keys}}, $keyval;
+	push @{$edt->{updated_keys}{$table}}, $keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
 	return $result;
     }
@@ -3215,7 +3447,7 @@ sub _execute_update {
     else
     {
 	$edt->{fail_count}++;
-	push @{$edt->{failed_keys}}, $keyval;
+	push @{$edt->{failed_keys}{$table}}, $keyval;
 	return undef;
     }
 }
@@ -3249,7 +3481,7 @@ sub _execute_delete {
     
     my $dbh = $edt->dbh;
     
-    my $key_expr = $edt->get_keyexpr($action);
+    my $key_expr = $action->keyexpr;
     
     # Set this as the current action.
     
@@ -3347,7 +3579,7 @@ sub _execute_delete {
 	
 	foreach my $i ( 0..$#keys )
 	{
-	    $edt->{key_labels}{$keys[$i]} = $labels[$i] if defined $labels[$i] && $labels[$i] ne '';
+	    $edt->{key_labels}{$table}{$keys[$i]} = $labels[$i] if defined $labels[$i] && $labels[$i] ne '';
 	    push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keys[$i], $action);
 	}
     }
@@ -3355,9 +3587,11 @@ sub _execute_delete {
     else
     {
 	$count = 1;
-	
 	@keys = $action->keyval;
-	$edt->{key_labels}{$keys[0]} = $action->label;
+	my $label = $action->label;
+	$edt->{key_labels}{$table}{$keys[0]} = $label if defined $label && $label ne '';
+	# There is no need to set label_keys, because the record has now vanished and no longer
+	# has a key.
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keys[0], $action);
     }
     
@@ -3365,15 +3599,15 @@ sub _execute_delete {
     
     if ( $result && ! $action->has_errors )
     {
-	$edt->{action_count} += $count;
-	push @{$edt->{deleted_keys}}, @keys;
+	$edt->{action_count} += 1;
+	push @{$edt->{deleted_keys}{$table}}, @keys;
 	return $result;
     }
     
     else
     {
-	$edt->{fail_count} += $count;
-	push @{$edt->{failed_keys}}, @keys;
+	$edt->{fail_count} += 1;
+	push @{$edt->{failed_keys}{$table}}, @keys;
 	return undef;
     }
 }
@@ -3391,6 +3625,48 @@ sub _execute_delete_many {
     my $table = $action->table;
     
     croak "operation 'delete_many' is not yet implemented";
+}
+
+
+# _substitute_labels ( action )
+#
+# Substitute the values in the columns marked for substitution with the key value associated with
+# the corresponding labels.
+
+sub _substitute_labels {
+    
+    my ($edt, $action) = @_;
+    
+    my $has_label = $action->label_sub;
+    my $columns = $action->column_list;
+    my $values = $action->value_list;
+    my $ok = 1;
+    
+    # Step through the columns, checking to see which ones have labels that must be substituted.
+    
+    foreach my $index ( 0..$#$columns )
+    {
+	next unless $columns->[$index] && $has_label->{$columns->[$index]};
+	next unless defined $values->[$index];
+	
+	$values->[$index] =~ /^'\@(.*)'$/;
+	
+	my $label = $1;
+	my $key = defined $1 && $1 ne '' && $edt->{label_keys}{$1};
+	
+	if ( $key )
+	{
+	    $values->[$index] = $edt->dbh->quote($key);
+	}
+	
+	else
+	{
+	    $edt->add_condition($action, 'E_LABEL_NOT_FOUND', $columns->[$index], '@' . $label);
+	    $ok = undef;
+	}
+    }
+    
+    return $ok;
 }
 
 
@@ -3451,7 +3727,7 @@ sub cleanup_transaction {
 sub before_action {
 
     my ($edt, $action, $operation, $table) = @_;
-
+    
     my $a = 1;	# We can stop here when debugging.
 }
 
@@ -3491,39 +3767,123 @@ sub cleanup_action {
 # the EditTransaction and carry out auxiliary actions such as inserts to or deletes from other
 # tables that are tied to the main one by foreign keys.
 
+sub tables {
+    
+    return keys %{$_[0]->{tables}};
+}
+
+
 sub inserted_keys {
 
-    return $_[0]->{inserted_keys} ? @{$_[0]->{inserted_keys}} : ();
+    my ($edt, $table) = @_;
+
+    if ( $table )
+    {
+	return $edt->{inserted_keys}{$table} ? @{$edt->{inserted_keys}{$table}} : wantarray ? ( ) : 0;
+    }
+
+    else
+    {
+	return map { $edt->{inserted_keys}{$_} ? @{$edt->{inserted_keys}{$_}} : ( ) } keys %{$edt->{tables}};
+    }
 }
 
 
 sub updated_keys {
 
-    return $_[0]->{updated_keys} ? @{$_[0]->{updated_keys}} : ();
+    my ($edt, $table) = @_;
+    
+    if ( $table )
+    {
+	return $edt->{updated_keys}{$table} ? @{$edt->{updated_keys}{$table}} : wantarray ? ( ) : 0;
+    }
+
+    else
+    {
+	return map { $edt->{updated_keys}{$_} ? @{$edt->{updated_keys}{$_}} : ( ) } keys %{$edt->{tables}};
+    }
 }
 
 
 sub replaced_keys {
 
-    return $_[0]->{replaced_keys} ? @{$_[0]->{replaced_keys}} : ();
+    my ($edt, $table) = @_;
+    
+    if ( $table )
+    {
+	return $edt->{replaced_keys}{$table} ? @{$edt->{replaced_keys}{$table}} : wantarray ? ( ) : 0;
+    }
+    
+    else
+    {
+	return map { $edt->{replaced_keys}{$_} ? @{$edt->{replaced_keys}{$_}} : ( ) } keys %{$edt->{tables}};
+    }
 }
 
 
 sub deleted_keys {
 
-    return $_[0]->{deleted_keys} ? @{$_[0]->{deleted_keys}} : ();
+    my ($edt, $table) = @_;
+    
+    if ( $table )
+    {
+	return $edt->{deleted_keys}{$table} ? @{$edt->{deleted_keys}{$table}} : wantarray ? ( ) : 0;
+    }
+
+    else
+    {
+	return map { $edt->{deleted_keys}{$_} ? @{$edt->{deleted_keys}{$_}} : ( ) } keys %{$edt->{tables}};
+    }
 }
 
 
 sub failed_keys {
 
-    return keys @{$_[0]->{failed_keys}} if $_[0]->{failed_keys};
+    my ($edt, $table) = @_;
+    
+    if ( $table )
+    {
+	return $edt->{failed_keys}{$table} ? @{$edt->{failed_keys}{$table}} : ();
+    }
+
+    else
+    {
+	return map { $edt->{failed_keys}{$_} ? @{$edt->{failed_keys}{$_}} : () } keys %{$edt->{tables}};
+    }
 }
 
 
 sub key_labels {
 
-    return $_[0]{key_labels} if $_[0]->{key_labels};
+    my ($edt, $table) = @_;
+
+    if ( $table )
+    {
+	return $_[0]->{key_labels}{$table} if $table && $_[0]->{key_labels}{$table};
+    }
+
+    else
+    {
+	return $_[0]->{key_labels};
+    }
+}
+
+
+sub label_keys {
+
+    return $_[0]->{label_keys};
+}
+
+
+sub label_key {
+
+    return $_[0]->{label_keys}{$_[1]};
+}
+
+
+sub label_table {
+
+    return $_[0]->{label_found}{$_[1]};
 }
 
 
@@ -3571,6 +3931,12 @@ sub check_record_permission {
     return $edt->{perms}->check_record_permission($table, $permission, $key_expr, $record);
 }
 
+sub check_many_permission {
+
+    my ($edt, $table, $permission, $key_expr, $record) = @_;
+
+    return $edt->{perms}->check_many_permission($table, $permission, $key_expr, $record);
+}
 
 # Action validation
 # -----------------
@@ -3723,17 +4089,25 @@ sub validate_against_schema {
 	
 	next COLUMN if $special eq 'ignore';
 
-	# Skip the primary key for any operation except 'replace'.
-	
-	next COLUMN if $col eq $keycol && $operation ne 'replace';
-	
-	# If a value for this column is found in the record, then use that. If not, then check
-	# to see if the column has an alternate name.
+	# If a value for this column is found in the record, then use that.
 	
 	my $value = $record->{$col};
 	my $record_col = $col;
-	
 	my $quote_this_value;
+	
+	# Skip the primary key for any operation except 'replace'. For 'replace' operations, we
+	# use the cleaned key value and pass on all checks.
+	
+	if ( $col eq $keycol )
+	{
+	    next COLUMN unless $operation eq 'replace';
+	    
+	    $value = $action->keyval;
+	    $special = 'pass';
+	}
+
+	# If the column name is not mentioned in the record but an alternate name is defined,
+	# then check that.
 	
 	if ( $cr->{ALTERNATE_ONLY} || ! exists $record->{$col} )
 	{
@@ -4129,10 +4503,10 @@ sub validate_against_schema {
 			$record->{$record_col} = $value;
 		    }
 		    
-		    # If it is a number, then leave it alone. We'll have to change this check if
-		    # we ever add non-integer keys.
+		    # If it is a number or a label reference, then leave it alone. We'll have to change
+		    # this check if we ever add non-integer keys.
 		    
-		    elsif ( $value =~ /^\d+$/ )
+		    elsif ( $value =~ /^\d+$|^@/ )
 		    {
 			# do nothing
 		    }
@@ -4181,9 +4555,9 @@ sub validate_against_schema {
 		    }
 		}
 		
-		# Throw an exception (a real one) if we are handed a value which is an anonymous
-		# hash or array ref. In fact, the only reference type we accept is a PBDB external
-		# identifier.
+		# At this point, throw an exception (a real one) if we are handed a value which is
+		# an anonymous hash or array ref. In fact, the only reference type we accept is a
+		# PBDB external identifier.
 		
 		if ( ref $value && reftype $value ne 'SCALAR' )
 		{
@@ -4192,13 +4566,25 @@ sub validate_against_schema {
 		}
 		
 		# Handle references to keys from other PBDB tables by checking them
-		# against the specified table. We use a symbolic reference because the system of
-		# table names is based on global variables, whose values might change. Yes, I know
-		# this is not the cleanest way to do it.
+		# against the specified table.
 		
 		if ( my $foreign_table = $cr->{FOREIGN_TABLE} || $FOREIGN_KEY_TABLE{$col} )
 		{
-		    if ( $value )
+		    if ( $value =~ /^@(.*)/ )
+		    {
+			my $check_table = $edt->{label_found}{$1};
+
+			unless ( $check_table && $check_table eq $foreign_table )
+			{
+			    $edt->add_condition($action, 'E_LABEL_NOT_FOUND', $record_col, $value);
+			    next;
+			}
+			
+			$quote_this_value = 1;
+			$action->substitute_label($col);
+		    }
+		    
+		    elsif ( $value )
 		    {
 			no strict 'refs';
 			
@@ -4369,6 +4755,14 @@ sub validate_against_schema {
 	elsif ( ! exists $record->{$record_col} )
 	{
 	    next;
+	}
+	
+	# If this column has the ADMIN_SET property, then throw an exception unless
+	# the user has 'admin' privilege.
+	
+	if ( $cr->{ADMIN_SET} && $action->permission ne 'admin' )
+	{
+	    $edt->add_condition($action, 'E_PERM_COL', $record_col);
 	}
 	
 	# If we get here, then we have a good value! Push the column and value on the respective

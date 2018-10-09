@@ -54,6 +54,7 @@ use namespace::clean;
     
     set_table_property(EDT_AUX => CAN_POST => 'AUTHORIZED');
     set_table_property(EDT_AUX => CAN_MODIFY => 'AUTHORIZED');
+    set_table_property(EDT_AUX => ALLOW_DELETE => 1);
     set_table_property(EDT_AUX => PRIMARY_KEY => 'aux_no');
     
     set_column_property(EDT_AUX => test_no => FOREIGN_TABLE => 'EDT_TEST');
@@ -149,6 +150,17 @@ sub authorize_action {
 	    $edt->{save_authorize_table} = $table;
 	    $edt->{save_authorize_keyexpr} = $keyexpr;
 	}
+
+	elsif ( $record->{string_req} eq 'authorize methods' )
+	{
+	    my $keyexpr = $action->keyexpr;
+	    my @keylist = $edt->get_keylist($action);
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
+	}
     }
     
     return EditTransaction::authorize_action(@_);
@@ -186,9 +198,48 @@ sub validate_action {
 	    $edt->{save_validate_keyexpr} = $keyexpr;
 	    $edt->{save_validate_errors} = $action->has_errors;
 	}
+	
+	elsif ( $record->{string_req} eq 'validate methods' )
+	{
+	    my $keyexpr = $action->keyexpr;
+	    my @keylist = $edt->get_keylist($action);
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
+	}
+    }
+
+    if ( $record && $record->{name} )
+    {
+	if ( $record->{name} =~ /validate label (.*)/i )
+	{
+	    $edt->{save_validate_label} = $edt->label_table($1);
+	}
     }
     
     return EditTransaction::validate_action(@_);
+}
+
+
+sub test_old_values {
+
+    my ($edt, $action, $table) = @_;
+
+    my @values;
+    
+    if ( $table eq 'EDT_TEST' )
+    {
+	@values = $edt->get_old_values($action, $table, 'string_req, string_val');
+    }
+    
+    elsif ( $table eq 'EDT_AUX' )
+    {
+	@values = $edt->get_old_values($action, $table, 'name');
+    }
+    
+    return @values;
 }
 
 
@@ -312,6 +363,17 @@ sub before_action {
 	{
 	    $edt->abort_action;
 	}
+
+	elsif ( $record->{string_req} eq 'before methods' )
+	{
+	    my $keyexpr = $action->keyexpr;
+	    my @keylist = $edt->get_keylist($action);
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
+	}
     }
     
     if ( my $value = $edt->get_attr('before add') )
@@ -355,6 +417,18 @@ sub after_action {
 	{
 	    $edt->{save_after_attr} = $action->get_attr('test');
 	}
+	
+	elsif ( $record->{string_req} eq 'after methods' )
+	{
+	    my $keyexpr = $edt->generate_keyexpr($action);
+	    my @keylist = $edt->get_keylist($action);
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyval} = $keyval;
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
+	}
     }
     
     if ( $edt->get_attr('after delete') )
@@ -362,6 +436,17 @@ sub after_action {
 	my $value = $edt->get_attr('before add');
 	my $quoted = $edt->dbh->quote($value);
 	$edt->dbh->do("DELETE FROM $table WHERE string_req=$quoted");
+    }
+
+    if ( $operation eq 'delete' && $table eq 'EDT_TEST' )
+    {
+	my $keylist = $edt->get_keylist($action);
+	
+	if ( $keylist )
+	{
+	    $edt->dbh->do("DELETE FROM $TABLE{EDT_AUX} WHERE test_no in ($keylist)");
+	    $edt->{save_delete_aux} = $keylist;
+	}
     }
     
     $edt->{save_after_count}++;

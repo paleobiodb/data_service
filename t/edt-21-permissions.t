@@ -222,8 +222,16 @@ subtest 'can_post' => sub {
     $T->test_permissions('EDT_ANY', $perm_g, 'basic', 'fails', "guest failed");
     $T->test_permissions('EDT_ANY', $perm_n, 'basic', 'fails', "no login failed");
 
+    # Check that 'modify' also allows posting.
+    
+    $T->set_specific_permission('EDT_ANY', $perm_e, 'modify');
+    
+    $perm_e->clear_cached_permissions;
+    
+    $T->test_permissions('EDT_ANY', $perm_e, 'basic', 'succeeds', "enterer succeeded with specific permission");
+    
     # And check that an 'admin' permission works too.
-
+    
     $T->set_specific_permission('EDT_ANY', $perm_e, 'admin');
     
     $perm_e->clear_cached_permissions;
@@ -406,9 +414,9 @@ subtest 'allow_delete' => sub {
 
     # Check that a specific 'delete' privilege can also override this.
 
-    $T->set_specific_permission('EDT_TEST', $perm_a, 'post,modify,delete');
+    # $T->set_specific_permission('EDT_TEST', $perm_a, 'post,modify,delete');
     
-    $T->test_permissions('EDT_TEST', $perm_a, 'D', 'succeeds', "can delete with specific permission");
+    # $T->test_permissions('EDT_TEST', $perm_a, 'D', 'succeeds', "can delete with specific permission");
     
     # Then turn deletion back on and test that it works.
     
@@ -462,11 +470,11 @@ subtest 'allow_insert_key' => sub {
     
     # Check that a specific permission can override this.
     
-    $T->set_specific_permission('EDT_TEST', $perm_e, 'post,insert_key');
+    # $T->set_specific_permission('EDT_TEST', $perm_e, 'post,insert_key');
     
-    $perm_e->clear_cached_permissions;
+    # $perm_e->clear_cached_permissions;
     
-    $T->test_permissions('EDT_TEST', $perm_e, 'K', 'succeeds', "specific permission allows insert key");
+    # $T->test_permissions('EDT_TEST', $perm_e, 'K', 'succeeds', "specific permission allows insert key");
     
     # Now turn ALLOW_INSERT_KEY on and re-test.
 

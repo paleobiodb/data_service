@@ -117,7 +117,7 @@ subtest 'basic' => sub {
     # Now add a condition after an action, ane make sure that it is properly attached to that
     # action.
     
-    $edt->insert_record('EDT_TEST', { record_label => 'abc1', string_req => 'def' });
+    $edt->insert_record('EDT_TEST', { _label => 'abc1', string_req => 'def' });
     $edt->add_condition('E_EXECUTE', 'ghi');
     
     is( $edt->errors, 2, "now there are two errors" );
@@ -165,7 +165,7 @@ subtest 'basic' => sub {
     
     # Now add another action, another error, and a warning, and check that the counts add up.
 
-    $edt->insert_record('EDT_TEST', { record_label => 'abc2', string_req => 'jkl' });
+    $edt->insert_record('EDT_TEST', { _label => 'abc2', string_req => 'jkl' });
     $edt->add_condition('E_TEST');
     $edt->add_condition('W_TEST');
     
@@ -365,7 +365,7 @@ subtest 'notfound' => sub {
     
     # Add an action that will generate E_NOT_FOUND.
 
-    $edt->update_record('EDT_TEST', { record_label => 'f1', $primary => 99999, signed_val => 32 });
+    $edt->update_record('EDT_TEST', { _label => 'f1', $primary => 99999, signed_val => 32 });
 
     is( $edt->specific_errors, 1, "one specific error" );
     is( $edt->errors, 0, "no general errors" );
@@ -383,7 +383,7 @@ subtest 'notfound' => sub {
 	is( $d, 99999, "error had proper parameter" );
     }
     
-    $edt->insert_record('EDT_TEST', { record_label => 'f2', signed_val => 'abc' });
+    $edt->insert_record('EDT_TEST', { _label => 'f2', signed_val => 'abc' });
     
     is( $edt->specific_errors, 2, "two specific errors" );
     is( $edt->errors, 2, "two general errors" );

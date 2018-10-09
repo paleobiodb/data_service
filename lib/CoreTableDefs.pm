@@ -35,11 +35,12 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(SPECELT_DATA => 'specelt_data');
     set_table_name(SPECELT_MAP => 'specelt_map');
     
-    set_table_group('specimen_data' => 'SPECIMENTS', 'SPEC_MATRIX');
+    set_table_group('specimen_data' => 'SPECIMEN_DATA', 'SPECIMEN_MATRIX', 'MEASUREMENT_DATA');
     set_table_group('specimen_elements' => 'SPECELT_DATA', 'SPECELT_MAP');
     
     set_table_property('SPECIMEN_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('SPECIMEN_DATA', CAN_MODIFY => 'AUTHORIZED');
+    set_table_property('SPECIMEN_DATA', ALLOW_DELETE => 1);
     set_table_property('SPECIMEN_DATA', PRIMARY_KEY => "specimen_no");
     set_table_property('SPECIMEN_DATA', PRIMARY_ATTR => "specimen_id");
     
@@ -58,6 +59,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_property('MEASUREMENT_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('MEASUREMENT_DATA', CAN_MODIFY => 'AUTHORIZED');
+    set_table_property('MEASUREMENT_DATA', ALLOW_DELETE => 1);
     set_table_property('MEASUREMENT_DATA', PRIMARY_KEY => 'measurement_no');
     set_table_property('MEASUREMENT_DATA', PRIMARY_ATTR => 'measurement_id');
     

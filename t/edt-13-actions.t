@@ -57,7 +57,7 @@ subtest 'basic' => sub {
     
     # Add an action, then retrieve a reference to it.
     
-    $edt->insert_record('EDT_TEST', { string_req => 'abc', record_label => 'a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc', _label => 'a1' });
     
     my $a1 = $edt->current_action;
     
@@ -81,9 +81,9 @@ subtest 'basic' => sub {
 	
 	is( ref $r1, 'HASH', "record returns a hash ref" ) &&
 	    is( $r1->{string_req}, 'abc', "record returns proper hash" );
-	is( $a1->record_value('record_label'), 'a1', "check record_value" );
+	is( $a1->record_value('_label'), 'a1', "check record_value" );
 	is( $a1->record_value('xxx'), undef, "check record_value with bad field" );
-	ok( $a1->has_field('record_label'), "check has_field" );
+	ok( $a1->has_field('_label'), "check has_field" );
 	ok( ! $a1->has_field('xxx'), "check has_field with bad field" );
     }
 
@@ -202,7 +202,7 @@ subtest 'delete' => sub {
     
     # Then try a delete action with a record but no primary key.
     
-    $edt->delete_record('EDT_TEST', { string_req => 'abc', record_label => 'r1' });
+    $edt->delete_record('EDT_TEST', { string_req => 'abc', _label => 'r1' });
     
     my $a2 = $edt->current_action;
 

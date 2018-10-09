@@ -23,7 +23,7 @@ use namespace::clean;
 
 
 our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record', delete => 'single',
-		        update_many => 'selector', delete_many => 'selector' );
+		        update_many => 'selector', delete_many => 'selector', bad => 'record' );
 
 
 # Create a new action record with the specified information.
@@ -52,58 +52,52 @@ sub new {
     
     # If the record has a primary key and a non-empty key attribute, store these in the action
     # record. This will be used to fetch information about the record, such as the authorization
-    # fields.
-    
-    my ($key_column, $key_attr);
-    
-    if ( $key_column = get_table_property($table, 'PRIMARY_KEY') )
+    # fields. If the operation is 'delete' then we accept a single key value in lieu of a hashref
+    # representing a record.
+
+    if ( my $key_column = get_table_property($table, 'PRIMARY_KEY') )
     {
 	$action->{keycol} = $key_column;
-    }
-    
-    if ( $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
-    {
-	if ( ref $record eq 'HASH' && defined $record->{$key_attr} && $record->{$key_attr} ne '' )
-	{
-	    $action->{keyval} = $record->{$key_attr};
-	}
-    }
-
-    elsif ( $key_attr = $key_column )
-    {
-	if ( ref $record eq 'HASH' )
-	{
-	    if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
-	    {
-		$action->{keyval} = $record->{$key_column};
-	    }
-	    
-	    else
-	    {
-		$key_attr =~ s/_no$/_id/;
-
-		if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
-		{
-		    $action->{keyval} = $record->{$key_attr};
-		}
-	    }
-	}
-    }
-    
-    # If the operation is 'delete' then we accept a key value in lieu of a hash ref. Otherwise, if
-    # we haven't found a key value under the usual attribute then check to see if one is found
-    # under the primary key column name.
-    
-    unless ( $action->{keyval} )
-    {
+	
+	# The delete operation cann accept a single key value rather than a record hash.
+	
 	if ( $operation eq 'delete' && ref $record ne 'HASH' )
 	{
 	    $action->{keyval} = $record;
 	}
 	
-	elsif ( ref $record eq 'HASH' && defined $record->{$key_column} && $record->{$key_column} ne '' )
+	# In all other cases, there will be no key value unless $record points to a hash.
+	
+	elsif ( ref $record eq 'HASH' )
 	{
-	    $action->{keyval} = $record->{$key_column};
+	    # First check to see if the record contains a value under the key column name.
+	    
+	    if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
+	    {
+		$action->{keyval} = $record->{$key_column};
+	    }
+
+	    # If not, check to see if the table has a 'PRIMARY_ATTR' property and if so whether
+	    # the record contains a value under that name.
+	    
+	    elsif ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
+	    {
+		if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
+		{
+		    $action->{keyval} = $record->{$key_attr};
+		}
+	    }
+
+	    # As a fallback, if the key column name ends in _no, change that to _id and check to
+	    # see if the record contains a value under that name.
+	    
+	    elsif ( $key_column =~ s/_no$/_id/ )
+	    {
+		if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
+		{
+		    $action->{keyval} = $record->{$key_column};
+		}
+	    }
 	}
     }
     
@@ -210,9 +204,21 @@ sub column_list {
 }
 
 
+sub keyexpr {
+
+    return $_[0]{key_expr};
+}
+
+
 sub value_list {
 
     return $_[0]{values};
+}
+
+
+sub label_sub {
+
+    return $_[0]{label_sub};
 }
 
 
@@ -283,6 +289,14 @@ sub _set_permission {
 }
 
 
+sub _set_keyexpr {
+
+    my ($action, $key_expr) = @_;
+
+    $action->{key_expr} = $key_expr;
+}
+
+
 sub _set_keyval {
 
     my ($action, $keyval) = @_;
@@ -309,6 +323,14 @@ sub set_column_values {
     
     $action->{columns} = $cols;
     $action->{values} = $vals;
+}
+
+
+sub substitute_label {
+
+    my ($action, $col) = @_;
+    
+    $action->{label_sub}{$col} = 1;
 }
 
 
@@ -405,13 +427,14 @@ sub get_attr {
 }
 
 
-# Finally, we can coalesce multiple actions into one. This method should not
-# be called except by EditTransaction.pm.
+# Finally, we can coalesce multiple actions into one. This method should not be called except by
+# EditTransaction.pm. The argument $label_keys should be a map from all record labels that have been
+# processed so far into the corresponding keys.
 
 sub _coalesce {
 
-    my ($action, @additional) = @_;
-
+    my ($action, $label_keys, @additional) = @_;
+    
     my $operation = $action->operation;
     
     if ( $operation eq 'delete' )
@@ -426,10 +449,21 @@ sub _coalesce {
 	{
 	    next unless $a && defined $a->{keyval} && $a->{keyval} ne '';
 	    
+	    if ( $label_keys && $a->{keyval} =~ /^@(.*)/ )
+	    {
+		my $label = $1;
+		
+		$a->{keyval} = $label_keys->{$label} if $label_keys->{$label};
+	    }
+	    
 	    push @{$action->{all_keys}}, $a->{keyval};
 	    push @{$action->{all_labels}}, $a->{label};
 	    push @{$action->{additional}}, $a;
 	}
+
+	# Now delete the old key expression. A new one will need to be generated if necessary.
+	
+	$action->{key_expr} = undef;
     }
 
     elsif ( $operation eq 'insert' )

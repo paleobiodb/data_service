@@ -55,7 +55,7 @@ subtest 'basic' => sub {
     
     # Add some records, with and without record labels. Use 'ignore_record' to skip some.
     
-    $edt->insert_record('EDT_TEST', { string_req => 'abc', record_label => 'a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc', _label => 'a1' });
     
     is( $edt->current_action && $edt->current_action->label, 'a1',
 	"first action has proper label" );

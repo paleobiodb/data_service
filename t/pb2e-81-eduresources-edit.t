@@ -85,7 +85,7 @@ subtest 'add simple' => sub {
     
     $T->set_cookie("session_id", "SESSION-SUPERUSER");
     
-    my $record1 = { record_label => 'a1',
+    my $record1 = { _label => 'a1',
 		    title => 'Test Record 1',
 		    tags => 'api,tutorial',
 		    description => 'Test record with \'é\'.',

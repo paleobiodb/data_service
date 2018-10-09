@@ -263,28 +263,79 @@ sub initialize {
     
     $ds2->define_node({ path => 'specs/addupdate',
 			title => 'Add specimen records or update existing records',
-			place => 0,
+			place => 1,
 			allow_method => 'GET,PUT,POST',
 			doc_template => 'entry_operation.tt',
 			role => 'PB2::SpecimenEntry',
 			method => 'update_specimens',
 			arg => 'add',
+			before_record_hook => 'my_select_output_block',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
-	"This operation allows you to add new specimen records to the database and/or",
-	"update the attributes of existing records.");
+	"This operation allows you to add new specimen and measurement records",
+	"to the database and/or update the attributes of existing records.");
     
     $ds2->list_node({ path => 'specs/addupdate',
 		      list => 'entry/specs',
 		      place => 1 });
     
     $ds2->extended_doc({ path => 'specs/addupdate' },
-	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
-	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
-	"you may specify multiple records. Any records which specify an eduresource identifier",
-	"will update the attributes of that record if you have permission to do so.",
-	"Otherwise, a new record will be created, owned by you.",
-	">By default, this operation returns the new or updated record(s).");
+	"This operation allows you to add new specimen and measurement records",
+	"to the database and/or update the attributes of existing records.",
+	"The records to be added and/or updated should appear in the request body,",
+	"in JSON format, as a list of objects.",
+	">Any record which includes either C<specimen_id> (and not C<measurement_type>) or",
+	"C<measurement_id> will update the specified attributes of the specified",
+	"record, provided it exists and you have permission to do so. Any attributes",
+	"not included in the record will be left unchanged. Any record",
+	"that contains C<measurement_type> but not C<measurement_id> will be added",
+	"to the database as a new row in the B<measurements> table. Any record that",
+	"contains C<specimen_code> but not C<specimen_id> will be added to the",
+	"database as a new row in the B<specimens> table. Any other record will",
+	"generate an error. The new records will be owned by you.",
+        ">By default, this operation returns the new or updated record(s).");
+    
+    $ds2->define_node({ path => 'specs/update',
+			title => 'Update existing specimen records',
+			place => 1,
+			allow_method => 'GET,PUT,POST',
+			doc_template => 'entry_operation.tt',
+			role => 'PB2::SpecimenEntry',
+			method => 'update_specimens',
+			before_record_hook => 'my_select_output_block',
+			output => '1.2:specs:basic',
+			optional_output => '1.2:specs:basic_map' },
+	"This operation allows you to update existing specimen and measurement records");
+    
+    $ds2->list_node({ path => 'specs/update',
+		      list => 'entry/specs',
+		      place => 1 });
+    
+    $ds2->extended_doc({ path => 'specs/update' },
+	"This operation allows you to update specimen and measurement records",
+	"in the database. The records to be updated should appear in the request body,",
+	"in JSON format, as a list of objects.",
+	">Any record which includes C<measurement_id> will update the specified attributes",
+	"of the specified measurement record, provided it exists and you have permission to do so.",
+	"Any record which includes C<specimen_id> but not C<measurement_id> will",
+	"update the specified attributes of the specified specimen record, provided it",
+	"exists and you have permission to do so. Any attributes not included in the",
+	"record will be left unchanged.",
+        ">By default, this operation returns the updated record(s).");
+    
+    $ds2->define_node({ path => 'specs/delete',
+			title => 'Delete specimen records',
+			place => 0,
+			allow_method => 'GET,PUT,POST',
+			doc_template => 'entry_operation.tt',
+			role => 'PB2::SpecimenEntry',
+			method => 'delete_specimens',
+			output => '1.2:specs:deleted' },
+	"This operation allows you to delete specimen records from the database."); 
+    
+    $ds2->list_node({ path =>'specs/delete',
+		      list => 'entry/specs',
+		      place => 2 });
     
     $ds2->define_node({ path => 'specs/addupdate_measurements',
 			title => 'Add measurement records or update existing records',
