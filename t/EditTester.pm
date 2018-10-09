@@ -193,13 +193,14 @@ sub establish_session_data {
     BAIL_OUT "The table name $TABLE{TABLE_PERMS} is not correct. You must establish a test database."
 	unless $TABLE{TABLE_PERMS} =~ /test[.]/i;
 
-    my ($person_count);
+    my ($person_count, $user_count);
     
     eval {
-	($person_count) = $dbh->do("SELECT count(*) FROM $TABLE{PERSON_DATA}");
+	($person_count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{PERSON_DATA}");
+	($user_count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{WING_USERS}");
     };
     
-    if ( $person_count && $person_count > 100 )
+    if ( ($person_count && $person_count > 100) || ($user_count && $user_count > 100) )
     {
 	BAIL_OUT "There are more than 100 rows in the table '$TABLE{PERSON_DATA}'. You must establish a test database.";
     }
@@ -339,7 +340,7 @@ sub establish_session_data {
 	BAIL_OUT;
     }
 
-    my ($id_bound) = $dbh->selectrow_array("SELECT min(enterer_no) FROM $TABLE{SESSION_DATA}");
+    my ($id_bound) = $dbh->selectrow_array("SELECT min(enterer_no) FROM $TABLE{SESSION_DATA} WHERE enterer_no > 0");
 
     unless ( $id_bound > 3000 )
     {
