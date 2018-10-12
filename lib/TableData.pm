@@ -75,9 +75,23 @@ sub get_table_schema {
     
     # Otherwise construct an SQL statement to get the schema from the appropriate database.
 
-    croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+    my $table_name;
+
+    if ( $table_specifier =~ /^==(.*)/ )
+    {
+	croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+	
+	$table_name = $TABLE{$table_specifier};
+	$table_specifier = $1;
+	# $table_name =~ s/^\w+[.]//;
+    }
     
-    my $table_name = $TABLE{$table_specifier};
+    else
+    {
+	croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+	
+	$table_name = $TABLE{$table_specifier};
+    }
     
     my ($sql, $check_table, %schema, $quoted_table);
     
@@ -451,7 +465,8 @@ sub complete_output_block {
 	    $r->{com_name} = $COMMON_FIELD_COM{$field_name};
 	}
 	
-	elsif ( $field_name =~ /(.*)_no/ )
+	elsif ( $field_name =~ /(.*)_no/ )	# $$$ need to replace this with a hash mapping _no
+                                                # => _id
 	{
 	    if ( $block_needs_oid )
 	    {

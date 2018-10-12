@@ -100,8 +100,9 @@ our (%FOREIGN_KEY_COL) = ( authorizer_no => 'person_no',
 			   enterer_no => 'person_no',
 			   modifier_no => 'person_no' );
 
-our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TXN',
-			       resource_no => 'RES',
+our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TID',
+			       orig_no => 'TXN',
+			       reference_no => 'REF',
 			       collection_no => 'COL',
 			       occurrence_no => 'OCC',
 			       specimen_no => 'SPM',
@@ -431,9 +432,12 @@ sub change_table_db {
 	
 	$TABLE_NAME_MAP{$new_name} = $orig_name;
 	
-	unlock_value(%TABLE, $table_specifier);
-	$TABLE{$table_specifier} = $new_name;
-	lock_value(%TABLE, $table_specifier);
+	# unlock_value(%TABLE, $table_specifier);
+	# $TABLE{$table_specifier} = $new_name;
+	# lock_value(%TABLE, $table_specifier);
+
+	set_table_name($table_specifier, $new_name);
+	set_table_name("==$table_specifier", $orig_name);
 	
 	return $new_name;
     }

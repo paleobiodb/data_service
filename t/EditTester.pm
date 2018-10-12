@@ -17,6 +17,7 @@ use base 'Exporter';
 
 use CoreFunction qw(connectDB configData);
 use TableDefs qw(%TABLE init_table_names enable_test_mode get_table_name get_table_property get_column_properties);
+use TableData qw(get_table_schema);
 
 use EditTest;
 
@@ -1419,7 +1420,7 @@ sub ok_count_records {
     my ($T, $count, $table, $expr, $label) = @_;
     
     my $dbh = $T->dbh;
-
+    
     croak "invalid count '$count'" unless defined $count && $count =~ /^\d+$/;
     croak "you must specify a table" unless $table;
     croak "you must specify a valid SQL expression" unless $expr;
@@ -1595,6 +1596,30 @@ sub test_entry_filter {
 }
 
 
+
+# Make sure that the schema of the specified table in the test database matches that of the
+# specified table in the main database. Warn if not.
+
+sub check_test_schema {
+
+    my ($T, $table_specifier) = @_;
+
+    my $test_name = exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+    my $base_name = exists $TABLE{"==$table_specifier"} && $TABLE{"==$table_specifier"};
+    
+    unless ( $test_name && $base_name )
+    {
+	diag "CANNOT CHECK SCHEMA FOR TABLE '$table_specifier'";
+	return;
+    }
+    
+    my $test_schema = get_table_schema($T->dbh, $table_specifier);
+    my $base_schema = get_table_schema($T->dbh, "==$table_specifier");
+    
+    return is_deeply($test_schema, $base_schema, "schema for '$test_name' matches schema for '$base_name'");
+}
+
+
 sub fetch_records_by_key {
     
     my ($T, $table, @keys) = @_;
@@ -1617,6 +1642,7 @@ sub fetch_records_by_key {
     {
 	next unless defined $k;
 	croak "keys cannot be refs" if ref $k;
+	$k =~ s/^\w+[:]//;
 	push @key_list, $dbh->quote($k);
     }
     

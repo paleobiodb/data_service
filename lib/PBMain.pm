@@ -34,8 +34,23 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     {
 	die "500 Server is not in test mode\n";
     }
+
+    if ( $tablename eq 'debug' )
+    {
+	if ( $operation eq 'enable' )
+	{
+	    $Web::DataService::DEBUG = 1;
+	    return "debug enabled";
+	}
+
+	else
+	{
+	    $Web::DataService::DEBUG = undef;
+	    return "debug disabled";
+	}
+    }
     
-    if ( $operation eq 'enable' )
+    elsif ( $operation eq 'enable' )
     {
 	($result) = enable_test_mode($tablename, $ds);
 	
@@ -53,16 +68,6 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     elsif ( $operation eq 'disable' )
     {
 	($result) = disable_test_mode($tablename, $ds);
-	
-	# if ( $tablename =~ /eduresources/i )
-	# {
-	#     ($result) = ResourceDefs->disable_test_mode($tablename, $ds);
-	# }
-
-	# else
-	# {
-	#     ($result) = select_test_tables($tablename, 0, $ds);
-	# }
 	
 	if ( $result && $result eq '2' )
 	{
@@ -143,6 +148,7 @@ any qr{.*} => sub {
     # the parameter validation.
     
     delete params->{_};
+    delete params('query')->{_};
     
     # If the path ends in a string of digits with a format suffix, we treat this as if it were a
     # request for the object whose identifier corresponds to the digit string. To do this, we

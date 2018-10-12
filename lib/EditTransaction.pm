@@ -4510,6 +4510,13 @@ sub validate_against_schema {
 		    {
 			# do nothing
 		    }
+
+		    # If it is the empty string, set it to zero.
+		    
+		    elsif ( $value eq '' )
+		    {
+			$value = 0;
+		    }
 		    
 		    # If it looks like an external identifier of the proper type, unpack it.
 		    
@@ -4517,12 +4524,14 @@ sub validate_against_schema {
 		    {
 			$value = $2;
 
-			if ( $value > 0 )
+			# If the value is a positive integer, do nothing
+			
+			if ( $value =~ /^\d+$/ )
 			{
-			    $record->{$record_col} = $value;
+			    # do nothing
 			}
 			
-			# If the value is 0, or ERROR, or something else not valid, add an error
+			# If the value is ERROR, or something else not valid, add an error
 			# condition.
 			
 			else
@@ -4722,7 +4731,12 @@ sub validate_against_schema {
 	    
 	    elsif ( $cr->{REQUIRED} && ( $operation ne 'update' || exists $record->{$record_col} ) )
 	    {
-		$edt->add_condition($action, 'E_REQUIRED', $record_col);
+		my $col_name;
+
+		if ( $record_col ne $col ) { $col_name = $record_col; }
+		else { $col_name = $cr->{ALTERNATE_NAME} || $record_col; }
+		
+		$edt->add_condition($action, 'E_REQUIRED', $col_name);
 		next;
 	    }
 	    

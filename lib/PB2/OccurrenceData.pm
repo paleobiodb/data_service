@@ -16,7 +16,7 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL
+use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
@@ -1272,7 +1272,7 @@ sub get_occ {
     {
 	if ( ref $id eq 'PBDB::ExtIdent' && $id->{type} eq 'rei' )
 	{
-	    my $sql = "SELECT occurrence_no FROM $OCC_MATRIX WHERE reid_no = $id";
+	    my $sql = "SELECT occurrence_no FROM $TABLE{OCCURRENCE_MATRIX} WHERE reid_no = $id";
 	    
 	    $request->{ds}->debug_line("$sql\n") if $request->debug;
 	    
@@ -1335,7 +1335,7 @@ sub get_occ {
     
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $specifier
 	GROUP BY o.occurrence_no";
@@ -1504,7 +1504,7 @@ sub list_occs {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr
@@ -1666,7 +1666,7 @@ sub diversity {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr";
@@ -2118,7 +2118,7 @@ sub list_occs_taxa {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr";
@@ -2328,7 +2328,7 @@ sub prevalence {
 	
 	$request->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY ph.phylum_no, ph.class_no, ph.order_no
@@ -2474,7 +2474,7 @@ sub list_occs_associated {
 	try {
 	    $sql = "
 		INSERT IGNORE INTO occ_list
-		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $OCC_MATRIX as o
+		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $TABLE{OCCURRENCE_MATRIX} as o
 			JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
@@ -2609,7 +2609,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, 'O' as ref_type, o.taxon_no, o.occurrence_no, 
 			null as specimen_no, null as collection_no
-		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -2623,7 +2623,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
 			null as occurrence_no, null as specimen_no, c.collection_no
-		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -2637,7 +2637,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, null as occurrence_no,
 			ss.specimen_no, null as collection_no
-		FROM $SPEC_MATRIX as ss JOIN $OCC_MATRIX as o using (occurrence_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
 			JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
@@ -2757,7 +2757,7 @@ sub list_occs_strata {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 		JOIN $COLL_STRATA as cs using (collection_no)
 		$join_list
         WHERE $filter_string
@@ -2800,7 +2800,7 @@ sub generateOccFilters {
     
     if ( my @occs = $request->safe_param_list('occ_id') )
     {
-	my $id_list = $request->check_values($dbh, \@occs, 'occurrence_no', 'occurrences', 
+	my $id_list = $request->check_values($dbh, \@occs, 'occurrence_no', $TABLE{OCCURRENCE_DATA}, 
 					     "Unknown occurrence '%'");
 	
 	push @filters, "$tn.occurrence_no in ($id_list)";
@@ -3300,7 +3300,7 @@ sub generateJoinList {
     
     $join_list .= "JOIN collections as cc on c.collection_no = cc.collection_no\n"
 	if $tables->{cc};
-    $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
+    $join_list .= "JOIN $TABLE{OCCURRENCE_DATA} as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
@@ -3447,8 +3447,8 @@ sub process_identification {
     # fields from the occurrence record.  Also build 'taxon_name' using just
     # the '_name' fields.
     
-    my $ident_name = combine_modifier($record->{genus_name}, $record->{genus_reso}) || 'UNKNOWN';
-    my $taxon_name = $record->{genus_name} || 'UNKNOWN';
+    my $ident_name = combine_modifier($record->{genus_name}, $record->{genus_reso}) || '';
+    my $taxon_name = $record->{genus_name} || '';
     
     # $ident_name .= " $record->{genus_reso}" if $record->{genus_reso};
     
@@ -3470,8 +3470,8 @@ sub process_identification {
 	$taxon_name =~ s/[ ]?[?]$//;
     }
     
-    $record->{identified_name} = $ident_name;
-    $record->{taxon_name} = $taxon_name;
+    $record->{identified_name} ||= $ident_name || $taxon_name || 'UNKNOWN';
+    $record->{taxon_name} ||= $taxon_name || $record->{identified_name} || 'UNKNOWN';
     
     # If the 'identified_rank' field is not set properly, try to determine it.
     

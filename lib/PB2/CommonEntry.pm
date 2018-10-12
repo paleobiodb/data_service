@@ -270,7 +270,20 @@ sub unpack_input_records {
 	    
 	    foreach my $e ( $result->errors )
 	    {
-		$request->add_error("E_PARAM$lstr: $e");
+		if ( $e =~ /identifier must have type/ )
+		{
+		    $request->add_error("E_EXTTYPE$lstr: $e");
+		}
+
+		elsif ( $e =~ /may not specify/ )
+		{
+		    $request->add_error("E_PARAM$lstr: $e");
+		}
+		
+		else
+		{
+		    $request->add_error("E_FORMAT$lstr: $e");
+		}
 	    }
 	    
 	    foreach my $w ( $result->warnings )

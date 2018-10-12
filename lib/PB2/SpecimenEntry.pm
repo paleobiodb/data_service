@@ -101,8 +101,11 @@ sub initialize {
 	    "This field is optional. You can use it to indicate the",
 	    "operation to be performed on this record. Values include:",
 	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL') },
-	    "The identifier of a collection record representing the site from",
-	    "which the specimen was collected.",
+	    "The identifier of an existing collection record with which the specimen",
+	    "will be associated.",
+	{ optional => 'occurrence_id', valid => VALID_IDENTIFIER('OCC') },
+	    "The identifier of an existing occurrence record with which the specimen ",
+	    "will be associated.",
 	# { optional => 'inst_code', value => ANY_VALUE },
 	#     "The acronym or abbreviation of the institution holding the specimen.",
 	# { optional => 'instcoll_code', value => ANY_VALUE },
@@ -166,10 +169,6 @@ sub initialize {
     
     $ds->define_ruleset('1.2:specs:addupdate' =>
 	{ allow => '1.2:specs:op_mod' },
-	">>The following parameters may be given either in the URL or in",
-	"the request body, or some in either place. If they are given",
-	"in the URL, they apply to every specimen specified in the body.",
-	{ allow => '1.2:specs:basic_entry' },
 	{ allow => '1.2:specs:ret_mod' });
     
     $ds->define_ruleset('1.2:specs:addupdate_body' =>
@@ -179,13 +178,11 @@ sub initialize {
     
     $ds->define_ruleset('1.2:specs:update' =>
 	{ allow => '1.2:specs:op_mod' },
-	">>The following parameters may be given either in the URL or in",
-	"the request body, or some in either place. If they are given",
-	"in the URL, they apply to every specimen specified in the body.",
-	{ allow => '1.2:specs:basic_entry' },
 	{ allow => '1.2:specs:ret_mod' });
     
     $ds->define_ruleset('1.2:specs:update_body' =>
+	">>The body of the request should contain one or more records containing the following",
+	"fields:",
 	{ allow => '1.2:specs:basic_entry' });
     
     $ds->define_ruleset('1.2:specs:delete' =>
@@ -193,16 +190,13 @@ sub initialize {
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ optional => 'specimen_id', valid => VALID_IDENTIFIER('SPM'), list => ',' },
+	{ optional => 'specimen_id', alias => 'spec_id', 
+	  valid => VALID_IDENTIFIER('SPM'), list => ',' },
 	    "The identifier(s) of the specimen(s) to delete.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
     $ds->define_ruleset('1.2:specs:addupdate_measurements' =>
-	">>The following parameters may be given either in the URL or in",
-	"the request body, or some in either place. If they are given",
-	"in the URL, they apply to every measurement specified in the body.",
-	{ allow => '1.2:specs:measurement_entry' },
 	{ allow => '1.2:specs:meas_mod' });
     
     $ds->define_ruleset('1.2:specs:addupdate_measurements_body' =>
@@ -276,7 +270,9 @@ sub update_specimens {
 	    $edt->process_record('MEASUREMENT_DATA', $r);
 	}
 	
-	elsif ( exists $r->{specimen_code} || exists $r->{specimen_no} || exists $r->{specimen_id} )
+	elsif ( exists $r->{specimen_code} || exists $r->{specimen_no} || exists $r->{specimen_id} ||
+		exists $r->{taxon_id} || exists $r->{taxon_name} || exists $r->{occurrence_id} ||
+	        exists $r->{collection_id} )
 	{
 	    $edt->process_record('SPECIMEN_DATA', $r);
 	}

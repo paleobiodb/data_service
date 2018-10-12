@@ -1204,7 +1204,10 @@ sub cmp_ok_errors {
 	return;
     }
     
-    cmp_ok( @{$response->{__ERRORS}}, $operation, $compvalue, $message );
+    cmp_ok( @{$response->{__ERRORS}}, $operation, $compvalue, $message ) && return;
+
+    $tester->diag_errors($response);
+    return ();
 }
 
 
@@ -1354,6 +1357,7 @@ sub ok_no_records {
     {
 	fail("response had code 200");
 	diag("status was: " . $extract_from->status_line);
+	$tester->diag_errors($response);
     }
     
     my @r = $tester->extract_records( $extract_from, $message, { no_records_ok => 1 } );

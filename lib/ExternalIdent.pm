@@ -141,29 +141,29 @@ sub valid_identifier {
     
     if ( $value =~ /,/ )
     {
-	$msg = "the value of {param} must be a single identifier";
+	$msg = "Field {param}: must be a single value";
     }
     
     elsif ( $value =~ $IDRE{LOOSE} )
     {
-	$msg = "the value of {param} must be an identifier of type $IDP{$type}$insert (type '$1' is not allowed with this operation)";
+	$msg = "Field {param}: external identifier must have type $IDP{$type}$insert";
     }
     
     elsif ( $type eq 'ANY' )
     {
-	$msg = "each value of {param} must be either a valid identifier of the form 'type:nnnn' " .
+	$msg = "Field {param}: value must be either a valid identifier of the form 'type:nnnn' " .
 	    "where nnnn is an integer$insert, or a nonnegative integer (was {value})";
     }
     
     elsif ( $IDP{$type} =~ qr{(\w+)[|](\w+)} )
     {
-	$msg = "each value of {param} must be either a valid identifier of the form '$1:nnnn' or " .
+	$msg = "Field {param}: value must be either a valid identifier of the form '$1:nnnn' or " .
 	   "'$2:nnnn' where nnnn is an integer$insert, or a nonnegative integer (was {value})";
     }
     
     else
     {
-	$msg = "each value of {param} must be either a valid identifier or a nonnegative integer (was {value})";
+	$msg = "Field {param}: value must be either a valid identifier or a nonnegative integer";
     }
     
     return { error => $msg };
