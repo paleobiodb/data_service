@@ -243,7 +243,8 @@ sub initialize {
 	{ value => 'compendium' },
 	{ value => 'news article' },
 	{ value => 'Ph.D. thesis' },
-	{ value => 'M.S. thesis' });
+	{ value => 'M.S. thesis' },
+	{ value => 'museum collection' });
     
     $ds->define_ruleset('1.2:refs:display' =>
 	{ optional => 'show', valid => '1.2:refs:output_map', list => ',' },
