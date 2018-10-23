@@ -135,12 +135,12 @@ any qr{.*} => sub {
     
     if ( exists params->{noheader} )
     {
-	params->{header} = "no";
+	params('query')->{header} = "no";
     }
     
     if ( exists params->{textresult} )
     {
-	params->{save} = "no";
+	params('query')->{save} = "no";
     }
     
     # A parameter named _ sometimes shows up. It appears to be added by certain javascript
@@ -159,7 +159,7 @@ any qr{.*} => sub {
 	my $newpath = "$1/single.$3";
 	my $id = $2;
 	
-	params->{id} = $id;
+	params('query')->{id} = $id;
 	forward($newpath);
     }
     

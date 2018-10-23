@@ -1775,7 +1775,7 @@ sub list_associated {
 	    # disjoint from the one produced by the "inner query for classification opinions"
 	    # above.  That is important so that we can accurately compute the rows_found count.
 	    
-	    $sql = "INSERT INTO op_collect
+	    $sql = "INSERT IGNORE INTO op_collect
 		SELECT $count_expr DISTINCT o.opinion_no, $type as opinion_type, 
 			o.child_spelling_no as taxon_no, t.orig_no
 		FROM $query_core

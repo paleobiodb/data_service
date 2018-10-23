@@ -19,6 +19,9 @@ use Carp qw(croak);
 use Test::More;
 use base 'Exporter';
 
+use lib 'lib';
+use ExternalIdent qw(%IDRE);
+
 use namespace::clean;
 
 
@@ -171,7 +174,7 @@ sub fetch_url {
 	}
 	
 	push @headers_and_body, 'Content-Type', 'application/json';
-	push @headers_and_body, 'Content', $tester->{json}->encode($options->{json_body});
+	push @headers_and_body, 'Content', JSON::encode_json($options->{json_body});
 	$default_method = $tester->{data_method};
     }
     
@@ -647,7 +650,7 @@ sub extract_errwarn {
 	unless ( $json )
 	{
 	    eval {
-		$json = $response->{__JSON} = $tester->{json}->decode( $body );
+		$json = $response->{__JSON} = JSON::decode_json( $body );
 	    };
 	    
 	    if ( $@ )
@@ -1142,8 +1145,6 @@ sub ok_warning_like {
     
     $response ||= $tester->{last_response};
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
     unless ( reftype $response eq 'HASH' && ref $response->{__WARNINGS} eq 'ARRAY' )
     {
 	fail($message);
@@ -1193,8 +1194,6 @@ sub cmp_ok_errors {
     
     croak "You must specify a message" unless defined $message;
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-
     $response ||= $tester->{last_response};
     
     unless ( reftype $response eq 'HASH' && ref $response->{__ERRORS} eq 'ARRAY' )
@@ -1204,7 +1203,7 @@ sub cmp_ok_errors {
 	return;
     }
     
-    cmp_ok( @{$response->{__ERRORS}}, $operation, $compvalue, $message ) && return;
+    cmp_ok( @{$response->{__ERRORS}}, $operation, $compvalue, $message ) && return 1;
 
     $tester->diag_errors($response);
     return ();
@@ -1226,8 +1225,6 @@ sub cmp_ok_warnings {
     my ($operation, $compvalue, $message) = @_;
     
     croak "You must specify a message" unless defined $message;
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     $response ||= $tester->{last_response};
     
@@ -1302,8 +1299,6 @@ sub cmp_ok_meta {
     
     croak "You must specify a message" unless defined $message;
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
     $response ||= $tester->{last_response};
     
     my $value = $tester->get_meta($response, $field);
@@ -1324,43 +1319,24 @@ sub ok_no_records {
     my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($message) = @_;
     
-    if ( ! defined $message )
+    $message ||= "no records were returned";
+    
+    $response ||= $tester->{last_response};
+    
+    unless ( ref $response )
     {
-	fail("no message");
-	diag("    No response was found");
+	fail("no response is available to be tested");
 	return;
     }
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    my $extract_from;
-    
-    if ( ref $response eq 'HTTP::Response' )
-    {
-	$extract_from = $response;
-    }
-    
-    elsif ( ! defined $response || lc $response eq 'last' )
-    {
-	$extract_from = $tester->{last_response};
-    }
-    
-    else
-    {
-	my $type = ref $response;
-	croak "First argument must be an HTTP response object, was type '$type'";
-    }
-    
-    my $code = $tester->get_response_code($extract_from);
+    my $code = $tester->get_response_code($response);
     
     unless ( $code && $code eq '200' )
     {
-	fail("response had code 200");
-	diag("status was: " . $extract_from->status_line);
-	$tester->diag_errors($response);
+	pass($message);
     }
     
-    my @r = $tester->extract_records( $extract_from, $message, { no_records_ok => 1 } );
+    my @r = $tester->extract_records( $response, $message, { no_records_ok => 1 } );
     
     my $count = scalar(@r);
     
@@ -1406,7 +1382,7 @@ sub request_records {
 sub send_records {
     
     my ($tester, $path_and_args, $message, $body_type, $body, $options) = @_;
-
+    
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     $options ||= { };
@@ -1519,7 +1495,7 @@ sub extract_records_json {
     unless ( $body )
     {
 	eval {
-	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
+	    $body = $response->{__JSON} = JSON::decode_json( $response->content );
 	};
 	
 	if ( $@ )
@@ -1926,7 +1902,7 @@ sub extract_info_json {
     unless ( $body )
     {
 	eval {
-	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
+	    $body = $response->{__JSON} = JSON::decode_json( $response->content );
 	};
 	
 	if ( $@ )
@@ -2376,7 +2352,7 @@ sub decode_json_response {
     my $json;
     
     eval {
-	$json = $tester->{json}->decode( $response->content );
+	$json = JSON::decode_json( $response->content );
     };
     
     if ( $@ )
@@ -2899,6 +2875,217 @@ sub generate_value_expr {
     croak "no field names were specified\n" unless @field_list && $field_list[0];
     
     return join(', ', @field_list);
+}
+
+
+# Additional value testing functions, these are aiming to replace 'check_values', et. al.
+
+sub generate_from_pattern {
+
+    my ($tester, $pattern, @values) = @_;
+
+    my @result;
+
+    while ( @values )
+    {
+	my $string = $pattern;
+	$string =~ s/@@/shift @values/eg;
+	push @result, $string;
+    }
+    
+    return @result;
+}
+
+
+sub test_block_output {
+
+    my ($tester, $block_name, $urls, $label, $fields, $primary, $tests, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $options ||= { };
+    
+    my @urls = ref $urls eq 'ARRAY' ? @$urls : $urls;
+    
+    my $tc = Test::Conditions->new;
+    
+    # if ( $extra_block{$k} )
+    # {
+    # 	$block = $extra_block{$k};
+    # 	$show = $extra_show{$k};
+    # 	$field_options->{skip} = $extra_skip{$k} if $extra_skip{$k};
+    # }
+    
+    # unless ( $block )
+    # {
+    #     diag "could not find block '$k'";
+    #     next KEY;
+    # }
+    
+    # my @com_fields = $W->list_fields($block, $k, 'com', $field_options);
+    # my @pbdb_fields = $W->list_fields($block, $k, 'pbdb', $field_options);
+    # my @extra_shows = $W->list_if_blocks($block);
+    
+    # $show .= ',' . join(',', @extra_shows) if @extra_shows;
+    
+    my %not_found = map { $_ => 1 } @$fields;
+    my %check_list;
+    
+  URL:
+    foreach my $url ( @urls )
+    {
+	my (@r1) = $tester->fetch_records($url, "fetched url '$url'");
+	
+	next URL unless @r1;
+	
+	my $index = 1;
+	
+	foreach my $r (@r1)
+	{
+	    my $key = $r->{$primary} || ("#" . $index++);
+	    
+	    foreach my $f ( keys %$r )
+	    {
+		if ( defined $r->{$f} && $r->{$f} ne '' )
+		{
+		    if ( $tests && $tests->{$f} )
+		    {
+			my $result = $tester->test_field_value($r->{$f}, $tests->{$f});
+			$tc->flag($f, "$key : $result") if $result;
+			$check_list{$f} = 1;
+		    }
+		    
+		    delete $not_found{$f};
+		}
+	    }
+
+	    if ( $tests && $tests->{_nonempty} )
+	    {
+		foreach my $f ( split /\s*,\s*/, $tests->{_nonempty} )
+		{
+		    $tc->flag($f, "$key : nonempty") unless defined $r->{$f} && $r->{$f} ne '';
+		}
+	    }
+
+	    if ( $tests && $tests->{_record} )
+	    {
+		if ( ref $tests->{_record} eq 'CODE' )
+		{
+		    unless ( $tests->{_record}->($r) )
+		    {
+			my $label = $tests->{_record}->('_label');
+			$tc->flag('record', "$key : $label");
+		    }
+		}
+
+		elsif ( ref $tests->{_record} eq 'ARRAY' )
+		{
+		    my @fails;
+
+		    foreach my $t ( @{$tests->{_record}} )
+		    {
+			push @fails, $t->('_label') unless $t->($r);
+		    }
+		    
+		    if ( @fails )
+		    {
+			my $list = join(', ', @fails);
+			$tc->flag('record', "$key : $list");
+		    }
+		}
+	    }
+	}
+	
+	# last URL unless %not_found;
+    }
+    
+    if ( my @not_found = grep { $not_found{$_} } @$fields )
+    {
+	my $list = join("', '", @not_found);
+	fail("found output fields '$list' with '$label'");
+    }
+    
+    else
+    {
+	my $list = join("', '", @$fields);
+	pass("found output fields '$list' with '$label'");
+    }
+    
+    if ( $tests )
+    {
+	my $list = join("', '", keys %check_list);
+	$tc->ok_all("passed value checks '$list' with '$label'")
+    }
+}
+
+
+sub test_field_value {
+    
+    my ($tester, $value, $expr) = @_;
+
+    # If we were given a code ref, use it to test the value. The testing functions should return a
+    # label string in response to the input '_label'.
+    
+    if ( ref $expr eq 'CODE' )
+    {
+	return $expr->('_label') unless $expr->($value);
+	return;
+    }
+
+    # Otherwise, assume that the argument names one or more tests.
+    
+    my @tests = split /\s*,\s*/, $expr;
+    my @fails;
+    
+    foreach my $t ( @tests )
+    {
+	if ( $t =~ /^extid:(\w+)/ )
+	{
+	    push @fails, $t unless $value =~ $IDRE{$1};
+	}
+	
+	elsif ( $t eq 'posint' or $t eq 'poszeroint' or $t eq 'int' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ (-)? [0-9]+ $ }xs &&
+		($t ne 'posint' || $value > 0) &&
+		($t eq 'int' || $1 eq '');
+	}
+	
+	elsif ( $t eq 'posnum' or $t eq 'poszeronum' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ (-)? (?: [0-9]+ (?:[.][0-9]*)?
+							  | [.][0-9]+ )
+						 $ }xs &&
+		($t ne 'posnum' || $value > 0) &&
+		($t eq 'num' || $1 eq '');
+	}
+	
+	elsif ( $t eq 'taxonname' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ [A-Z][a-z]+
+						   (?: \s [(] [A-Z][a-z]+ [)] )?
+						   (?: \s [a-z]+ | \s [a-z]+ \s [a-z]+ )?
+						 $ }xs;
+	}
+
+	elsif ( $t eq 'datetime' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ \d\d\d\d-\d\d-\d\d \s \d\d:\d\d:\d\d $ }xs;
+	}
+	
+	elsif ( $t eq 'boolean' )
+	{
+	    push @fails, $t unless $value =~ /^(?:1|0|yes|no|true|false)$/i;
+	}	
+	
+	else
+	{
+	    croak "unknown test '$t'";
+	}
+    }
+
+    return join(',', @fails) if @fails;
+    return
 }
 
 

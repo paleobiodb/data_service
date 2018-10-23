@@ -260,9 +260,9 @@ sub list_updated_resources {
 	{
 	    my $keyval = $r->{eduresource_no};
 	    
-	    if ( $label_ref && $label_ref->{$keyval} )
+	    if ( $label_ref && $label_ref->{RESOURCE_QUEUE}{$keyval} )
 	    {
-		$r->{_label} = $label_ref->{$keyval};
+		$r->{_label} = $label_ref->{RESOURCE_QUEUE}{$keyval};
 	    }
 	}
 	

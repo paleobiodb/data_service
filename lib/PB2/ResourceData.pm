@@ -276,7 +276,7 @@ sub list_resources {
     
     unless ( $active )
     {
-	$perms = $request->require_authentication($TABLE{RESOURCE_QUEUE}, "Login Required");
+	$perms = $request->require_authentication('RESOURCE_QUEUE', "Login Required");
     }
     
     # Generate a list of filter expressions.

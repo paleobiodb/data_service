@@ -29,6 +29,7 @@ sub choose_subtests {
     
     foreach my $name ( @testnames )
     {
+	next if $name eq 'debug';
 	$SELECTED_TEST{$name} = 1;
     }
 }

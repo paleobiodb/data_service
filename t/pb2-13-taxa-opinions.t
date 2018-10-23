@@ -229,7 +229,7 @@ subtest 'subtree other output blocks' => sub {
 			       "show=attr,refattr,ref,basis,ent,entname,crmod", "subtree opinions show");
     
     my $tc = Test::Conditions->new;
-    $tc->set_limit(atp => 50);
+    $tc->limit_max(atp => 50);
     
     my $aut_diff;
     
@@ -581,7 +581,7 @@ subtest 'list by ref info' => sub {
 	    if $r->{opy} eq $pick_opy && ! $o2e{$r->{oid}};
     }
     
-    $tc->set_limit( 'missing aut with ref_author filter' => 20 );
+    $tc->limit_max( 'missing aut with ref_author filter' => 20 );
     
     $tc->ok_all("opinion filters don't miss any records");
     
@@ -684,7 +684,7 @@ subtest 'list by ref info' => sub {
     # 	    if $r->{ref} =~ /$a1|$a2/o && ! $oid4b{$r->{oid}};
     # }
     
-    # $tc->set_limit('missed record with one of the authors' => 10);
+    # $tc->limit_max('missed record with one of the authors' => 10);
     
     # $tc->ok_all("two ref_author values");
     

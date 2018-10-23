@@ -10,7 +10,7 @@
 use strict;
 use feature 'unicode_strings';
 
-use Test::Most tests => 34;
+use Test::Most tests => 33;
 
 use lib 't';
 
@@ -896,8 +896,6 @@ subtest 'base_name with modifiers' => sub {
 
 sub check_exclusion {
     
-    select_subtest || return;
-    
     my ($base_ref, $remainder_ref, $exclusion_ref) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
@@ -1252,7 +1250,7 @@ subtest 'bad ids' => sub {
     $T->ok_no_records( $m1d, "bad id d found no records" );
     
     $T->ok_warning_like( $m1a, qr{must be.*a valid identifier}i, "bad id a got proper warning" );
-    $T->ok_warning_like( $m1b, qr{type 'int' is not allowed}i, "bad id b got proper warning" );
+    $T->ok_warning_like( $m1b, qr{must have type.*txn}i, "bad id b got proper warning" );
     $T->ok_warning_like( $m1c, qr{must be.*a valid identifier}i, "bad id c got proper warning" );
     $T->ok_warning_like( $m1d, qr{unknown taxon}i, "bad id d got proper warning" );
     
@@ -1800,6 +1798,13 @@ subtest 'synonyms, senior, accepted' => sub {
 };
 
 
+subtest 'acconly' => sub {
+    
+    diag "TODO: acconly";
+    pass('placeholder');
+};
+
+
 subtest 'children and parents' => sub {
     
     select_subtest || return;
@@ -1933,112 +1938,6 @@ subtest 'common' => sub {
 	diag("Common ancestor is '$name{$has_multiple[0]}'");
 	is( $r1[0]{nam}, $name{$has_multiple[0]}, "rel common found proper record" );
     }
-};
-
-
-# We already tested the output blocks for the operation 'taxa/single', so now we test that
-# 'taxa/list' produces the same records for the same names. Also test that a bad value for 'show'
-# gets a proper warning.
-
-subtest 'output blocks' => sub {
-    
-    select_subtest || return;
-    
-    my $NAME_1a = 'Felis';
-    my $NAME_1b = 'Canis';
-    
-    # Start by comparing the output of taxa/single.json and taxa/list.json
-    
-    my ($single1a) = $T->fetch_records("/taxa/single.json?name=$NAME_1a&show=full", "single json a");
-    my ($single1b) = $T->fetch_records("/taxa/single.json?name=$NAME_1b&show=full", "single json b");
-    
-    my (@r1) = $T->fetch_records("/taxa/list.json?name=$NAME_1a,$NAME_1b&show=full", "list json a+b");
-    
-    unless ( @r1 )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
-    
-    cmp_ok( @r1, '==', 2, "list json a+b found two records" );
-    
-    foreach my $r ( @r1 )
-    {
-	if ( $r->{nam} eq $single1a->{nam} )
-	{
-	    is_deeply( $r, $single1a, "list json a matches single json a" );
-	}
-	
-	elsif ( $r->{nam} eq $single1b->{nam} )
-	{
-	    is_deeply( $r, $single1b, "list json b matches single1 json b" );
-	}
-	
-	else
-	{
-	    fail("list json a+b found unexpected record '$r->{nam}'");
-	}
-    }
-    
-    # Then do the same for taxa/single.csv vs. taxa/list.csv and taxa/list.tsv
-    
-    my ($single2a) = $T->fetch_records("/taxa/single.csv?name=$NAME_1a&show=full", "single csv a");
-    my ($single2b) = $T->fetch_records("/taxa/single.csv?name=$NAME_1b&show=full", "single csv b");
-    
-    my (@r2) = $T->fetch_records("/taxa/list.csv?name=$NAME_1a,$NAME_1b&show=full", "list csv a+b");
-    my (@r3) = $T->fetch_records("/taxa/list.tsv?name=$NAME_1a,$NAME_1b&show=full", "list tsv a+b");
-    
-    cmp_ok( @r2, '==', 2, "list csv a+b found two records" );
-    cmp_ok( @r3, '==', 2, "list tsv a+b found two records" );
-    
-    foreach my $r ( @r2 )
-    {
-	if ( $r->{taxon_name} eq $single2a->{taxon_name} )
-	{
-	    is_deeply( $r, $single2a, "list csv a matches single csv a" );
-	}
-	
-	elsif ( $r->{taxon_name} eq $single2b->{taxon_name} )
-	{
-	    is_deeply( $r, $single2b, "list csv b matches single csv b" );
-	}
-	
-	else
-	{
-	    fail("list json a+b csv unexpected record '$r->{taxon_name}'");
-	}
-    }
-    
-    foreach my $r ( @r3 )
-    {
-	if ( $r->{taxon_name} eq $single2a->{taxon_name} )
-	{
-	    is_deeply( $r, $single2a, "list tsv a matches single json a" );
-	}
-	
-	elsif ( $r->{taxon_name} eq $single2b->{taxon_name} )
-	{
-	    is_deeply( $r, $single2b, "list tsv b matches single1 json b" );
-	}
-	
-	else
-	{
-	    fail("list json a+b tsv unexpected record '$r->{taxon_name}'");
-	}
-    }
-    
-    # Test bad value for show=
-    
-    my ($m4) = $T->fetch_url("/taxa/list.json?name=$NAME_1a&show=foo", "bad show=",
-			 { no_diag => 1 });
-    
-    $T->ok_response_code( $m4, '200', "bad show= got 200 response" );
-    $T->ok_warning_like( $m4, qr{bad value.*show}i, "bad show= got proper warning" );
-    
-    my @m4 = $T->extract_records($m4, "bad show=");
-    
-    cmp_ok( @m4, '==', 1, "bad show= found one record" ) &&
-	is( $m4[0]{nam}, $NAME_1a, "bad show= found proper record" );
 };
 
 
@@ -3489,226 +3388,46 @@ subtest 'authent' => sub {
     cmp_ok( $eni_count{$eni_max}, '>', 0, "entered_by multiple gets at least one entered by eni_max" );
 };
 
-# Now we test all of the output blocks that haven't been tested above, to make
-# sure they produce the proper results under the compact vocabulary.
-
-subtest 'output blocks 1 com' => sub {
-    
-    select_subtest || return;
-    
-    my $NAME_1 = 'Marsupialia';
-    my $OID_1 = 'txn:39937';
-    
-    # We have already checked common, parent, immparent, class, classext, crmod, ent, entname above.
-    
-    # First check basic fields + app, size, subcounts, seq
-    
-    my @r1a = $T->fetch_records("/taxa/list.json?base_id=$OID_1&show=app,size,subcounts,seq",
-				"output blocks 1 json");
-    
-    unless ( @r1a )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
-    
-    my (%record, $base_flag);
-    my $tc = Test::Conditions->new;
-    
-    foreach my $r ( @r1a )
-    {
-	if ( $r->{oid} && $r->{oid} =~ /^txn:\d+$/ ) 
-	{ 
-	    $record{$r->{oid}} = $r;
-	    
-	    $base_flag = $r->{flg} if $r->{oid} eq $OID_1;
-	}
-	
-	else
-	{
-	    $tc->flag('oid', $r->{nam});
-	}
-	
-	# $tc->flag('typ', $r->{nam}) unless defined $r->{typ} && $r->{typ} eq 'txn';
-	$tc->flag('rnk', $r->{nam}) unless defined $r->{rnk} && $r->{rnk} =~ /^\d+$/;
-	$tc->flag('noc', $r->{nam}) unless defined $r->{noc} && $r->{noc} =~ /^\d+$/;
-	$tc->flag('rid', $r->{nam}) unless defined $r->{rid} && $r->{rid} =~ /^ref:\d+$/;
-	$tc->flag('ext', $r->{nam}) unless ! defined $r->{ext} || $r->{ext} =~ /^[01]$/;
-	$tc->flag('flg', $r->{nam}) if defined $r->{flg} && $r->{flg} =~ /[BVE]/ && $r->{oid} ne $OID_1;
-    }
-    
-    $tc->ok_all("all records have proper values for basic fields");
-    
-    ok( $base_flag && $base_flag =~ /B/, "base record has flag 'B'" );
-    
-    # Now, for each record, compare its field values to those of its parent.  Ignore the base
-    # record, and compare synonyms of the base to the base (using the 'acc' field).  Ignore this
-    # test if we have one or more records with improper oids, which will have alreayd been flagged
-    # and is much more severe.
-    
-    $tc->limit_max('fea' => 20, 'fla' => 20, 'lea' => 20, 'lla' => 20);
-    
-    unless ( $tc->is_set('oid') )
-    {
-	foreach my $r ( @r1a )
-	{
-	    next if $r->{oid} eq $OID_1;
-	    my $p = $record{$r->{par}} ? $record{$r->{par}} : $record{$r->{acc}};
-	    
-	    # Check sequence numbers against the parent record
-	    
-	    $tc->flag('lsq', $r->{nam}) unless $r->{lsq} > $p->{lsq};
-	    $tc->flag('rsq', $r->{nam}) unless $r->{rsq} <= $p->{rsq};
-	    
-	    # Check subcounts for proper values and against the parent record
-	    
-	    if ( $r->{rnk} > 3 )
-	    {
-		$tc->flag('spc', $r->{nam}) unless defined $r->{spc} && $r->{spc} =~ /^\d+$/;
-		    # && defined $p->{spc} && $r->{spc} <= $p->{spc};
-		
-		if ( $r->{rnk} > 5 )
-		{   
-		    $tc->flag('gnc', $r->{nam}) unless defined $r->{gnc} && $r->{gnc} =~ /^\d+$/;
-			# && defined $p->{gnc} && $r->{gnc} <= $p->{gnc};
-		}
-		
-		else
-		{
-		    $tc->flag('gnc', $r->{nam}) if defined $r->{gnc} && ! $r->{tdf};
-		}
-	    }
-	    
-	    else
-	    {
-		$tc->flag('gnc', $r->{nam}) if defined $r->{gnc};
-		$tc->flag('spc', $r->{nam}) if defined $r->{spc};
-	    }
-	    
-	    # Check size and extsize for proper values and against the parent record
-	    
-	    $tc->flag('siz', $r->{nam}) unless defined $r->{siz} && $r->{siz} =~ /^\d+$/;
-		# && defined $p->{siz} && $r->{siz} <= $p->{siz};
-	    $tc->flag('exs', $r->{nam}) unless defined $r->{exs} && $r->{exs} =~ /^\d+$/;
-	        # && defined $p->{exs} && $r->{exs} <= $p->{exs};
-	    
-	    # $tc->flag('exs', $r->{nam}) if $r->{ext} && $r->{exs} eq '0' && ! $r->{tdf};
-	    # $tc->flag('exs', $r->{nam}) if defined $r->{ext} && $r->{ext} eq '0' && $r->{exs} ne '0';
-	    
-	    # Check first and last appearances for proper values and against the parent record,
-	    # unless n_occs is zero in which case there should be no values for those fields.
-	    
-	    if ( $r->{noc} )
-	    {
-		# $tc->flag('noc', $r->{nam}) unless defined $p->{noc} && $p->{noc} >= $r->{noc};
-		
-		$tc->flag('fea', $r->{nam}) unless defined $r->{fea} && $r->{fea} =~ /^\d+(?:[.]\d+)?$/;
-		    # && defined $p->{fea} && $p->{fea} >= $r->{fea};
-		$tc->flag('fla', $r->{nam}) unless defined $r->{fla} && $r->{fla} =~ /^\d+(?:[.]\d+)?$/;
-		    # && defined $r->{fea} && $r->{fea} > $r->{fla};
-		
-		$tc->flag('lla', $r->{nam}) unless defined $r->{lla} && $r->{lla} =~ /^\d+(?:[.]\d+)?$/;
-		    # && defined $p->{lla} && $p->{lla} <= $r->{lla};
-		$tc->flag('lea', $r->{nam}) unless defined $r->{lea} && $r->{lea} =~ /^\d+(?:[.]\d+)?$/;
-		    # && defined $r->{lla} && $r->{lea} > $r->{lla};
-	    }
-	    
-	    else
-	    {
-		# $tc->flag('fea', $r->{nam}) if defined $r->{fea} && $r->{fea} ne '';
-		# $tc->flag('fla', $r->{nam}) if defined $r->{fea} && $r->{fla} ne '';
-		# $tc->flag('lea', $r->{nam}) if defined $r->{fea} && $r->{lea} ne '';
-		# $tc->flag('lla', $r->{nam}) if defined $r->{fea} && $r->{lla} ne '';
-	    }
-	}
-
-	$tc->ok_all("all records have proper value for blocks 'app', 'size', 'subcounts', 'seq'" );
-    }
-};
-
-
-# Now test the rest of the output blocks to make sure they produce the proper
-# results under the compact vocabulary.
-
-subtest 'output blocks 2 com' => sub {
-    
-    select_subtest || return;
-    
-    my $NAME_1 = 'Mammalia';
-    my $OID_1 = 'txn:36651';
-    
-    # Test 'attr,img,ref,refattr'
-    
-    my @r2a = $T->fetch_records("/taxa/list.json?base_id=$OID_1&show=img,attr,ref,refattr",
-				"output blocks 2 json");
-    
-    unless ( @r2a )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
-    
-    my $tc = Test::Conditions->new;
-    $tc->set_limit( DEFAULT => 10, att => 1000 );
-    
-    foreach my $r ( @r2a )
-    {
-	$tc->flag('img', $r->{nam}) unless $r->{img} && $r->{img} =~ /^php:\d+$/;
-	
-	$tc->flag('att', $r->{nam}) unless $r->{att} && $r->{att} =~ /\w\w/ && $r->{att} =~ /\d\d\d\d/;
-	
-	$tc->flag('pby', $r->{nam}) unless $r->{pby} && $r->{pby} =~ /^\d\d\d\d$/;
-	
-	$tc->flag('aut', $r->{nam}) unless $r->{aut} && $r->{aut} =~ /\w\w/;
-	
-	$tc->flag('ref', $r->{nam}) unless $r->{ref} && $r->{ref} =~ /\w\w\w\w/ && $r->{ref} =~ /\d\d\d\d/;
-    }
-
-    $tc->ok_all("all records have proper value for 'img', 'attr', 'ref', 'refattr'");
-};
-
-__END__
-
 
 # Then test taxon references, both json and ris formats.
 
-subtest 'list refs json' => sub {
+# subtest 'list refs json' => sub {
 
-    select_subtest || return;
+#     select_subtest || return;
     
-    my %found = $T->fetch_record_values("/data1.2/taxa/refs.json?base_name=$TEST_NAME_7", 'al1',
-					   "list refs json");
+#     my %found = $T->fetch_record_values("/data1.2/taxa/refs.json?base_name=$TEST_NAME_7", 'al1',
+# 					   "list refs json");
     
-    unless ( keys %found && ! $found{NO_RECORDS} )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
+#     unless ( keys %found && ! $found{NO_RECORDS} )
+#     {
+# 	diag("skipping remainder of subtest");
+# 	return;
+#     }
     
-    ok($T->found_all(\%found, @TEST_AUTHOR_7a), "list refs json found a sample of records");
-};
+#     ok($T->found_all(\%found, @TEST_AUTHOR_7a), "list refs json found a sample of records");
+# };
 
 
-subtest 'list refs ris' => sub {
+# subtest 'list refs ris' => sub {
 
-    select_subtest || return;
+#     select_subtest || return;
     
-    my $response = $T->fetch_url("/data1.2/taxa/refs.ris?base_name=$TEST_NAME_7&datainfo",
-				 "list refs ris request OK");
+#     my $response = $T->fetch_url("/data1.2/taxa/refs.ris?base_name=$TEST_NAME_7&datainfo",
+# 				 "list refs ris request OK");
     
-    unless ( $response )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
+#     unless ( $response )
+#     {
+# 	diag("skipping remainder of subtest");
+# 	return;
+#     }
     
-    my $body = $response->content;
+#     my $body = $response->content;
     
-    ok($body =~ qr{^UR  - http://.+/data1.2/taxa/refs.ris\?base_name=$TEST_NAME_7&datainfo}m,
-       "list refs ris has datainfo UR line");
-    ok($body =~ qr{^KW  - base_name = $TEST_NAME_7}m, "list refs ris has datasource KW line");
-    ok($body =~ qr{^T2  - $TEST_TITLE_7a}m, "list refs ris found at least one of the proper records");
-};
+#     ok($body =~ qr{^UR  - http://.+/data1.2/taxa/refs.ris\?base_name=$TEST_NAME_7&datainfo}m,
+#        "list refs ris has datainfo UR line");
+#     ok($body =~ qr{^KW  - base_name = $TEST_NAME_7}m, "list refs ris has datasource KW line");
+#     ok($body =~ qr{^T2  - $TEST_TITLE_7a}m, "list refs ris found at least one of the proper records");
+# };
 
 
 subtest 'auto json' => sub {
@@ -3720,7 +3439,7 @@ subtest 'auto json' => sub {
     my $TEST_AUTO_2 = 't.rex';
     my @TEST_AUTO_2a = ("Tyrannosaurus rex", "Telmatornis rex");
     
-    my %found = $T->fetch_record_values("/data1.2/taxa/auto.json?name=$TEST_AUTO_1&limit=10", 'nam',
+    my %found = $T->fetch_record_values("/taxa/auto.json?name=$TEST_AUTO_1&limit=10", 'nam',
 					"auto json '$TEST_AUTO_1'");
     
     unless ( keys %found && ! $found{NO_RECORDS} )
@@ -3731,29 +3450,10 @@ subtest 'auto json' => sub {
     
     ok($T->found_all(\%found, @TEST_AUTO_1a), "auto json found a sample of records");
     
-    %found = $T->fetch_record_values("/data1.2/taxa/auto.json?name=$TEST_AUTO_2&limit=10", 'nam',
+    %found = $T->fetch_record_values("/taxa/auto.json?name=$TEST_AUTO_2&limit=10", 'nam',
 			     "auto json $TEST_AUTO_2'");
     
     ok($T->found_all(\%found, @TEST_AUTO_2a), "auto json found a sample of records");
 };
 
-
-subtest 'images' => sub {
-    
-    select_subtest || return;
-    
-    my $thumb = $T->fetch_url("/data1.2/taxa/thumb.png?id=$TEST_IMAGE_1",
-			      "image thumb request OK") || return;
-    
-    my $thumb_length = length($thumb->content) || 0;
-    
-    cmp_ok($thumb_length, '==', $TEST_IMAGE_SIZE_1a, 'image thumb size');
-    
-    my $icon = $T->fetch_url("/data1.2/taxa/icon.png?id=910",
-			     "image icon request OK") || return;
-    
-    my $icon_length = length($icon->content) || 0;
-    
-    cmp_ok($icon_length, '==', $TEST_IMAGE_SIZE_1b, 'image icon size');
-};
 

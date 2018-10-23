@@ -54,7 +54,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_column_property(RESOURCE_QUEUE => 'eduresource_no', EXTID_TYPE => 'EDR');
     set_column_property(RESOURCE_QUEUE => 'title', REQUIRED => 1);
-    set_column_property(RESOURCE_QUEUE => 'status', ADMIN_SET => 1);
+    # set_column_property(RESOURCE_QUEUE => 'status', ADMIN_SET => 1);
     
     set_table_property(RESOURCE_ACTIVE => PRIMARY_KEY => 'id');
 }

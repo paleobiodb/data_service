@@ -15,7 +15,7 @@ package Permissions;
 
 use strict;
 
-use TableDefs qw(%TABLE get_table_property);
+use TableDefs qw(%TABLE get_table_property original_table);
 use TableData qw(get_authinfo_fields);
 
 use Carp qw(carp croak);
@@ -68,8 +68,10 @@ sub new {
 	
 	if ( $table_specifier )
 	{
-	    my $lookup_name = $table_specifier;
-	    $lookup_name =~ s/^\w+[.]//;
+	    croak "unknown table '$table_specifier'" unless exists $TABLE{$table_specifier};
+	    
+	    my $lookup_name = original_table($TABLE{$table_specifier});
+	    # $lookup_name =~ s/^\w+[.]//;
 	    
 	    my $quoted_table = $dbh->quote($lookup_name);
 	    

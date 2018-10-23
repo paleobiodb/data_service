@@ -4094,6 +4094,7 @@ sub validate_against_schema {
 	my $value = $record->{$col};
 	my $record_col = $col;
 	my $quote_this_value;
+	my $is_default;
 	
 	# Skip the primary key for any operation except 'replace'. For 'replace' operations, we
 	# use the cleaned key value and pass on all checks.
@@ -4750,6 +4751,7 @@ sub validate_against_schema {
 		{
 		    $value = $cr->{Default};
 		    $quote_this_value = 1;
+		    $is_default = 1;
 		}
 	    }
 	    
@@ -4774,7 +4776,7 @@ sub validate_against_schema {
 	# If this column has the ADMIN_SET property, then throw an exception unless
 	# the user has 'admin' privilege.
 	
-	if ( $cr->{ADMIN_SET} && $action->permission ne 'admin' )
+	if ( $cr->{ADMIN_SET} && ! $is_default && $action->permission ne 'admin' )
 	{
 	    $edt->add_condition($action, 'E_PERM_COL', $record_col);
 	}
