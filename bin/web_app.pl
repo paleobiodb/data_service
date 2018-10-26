@@ -23,6 +23,8 @@ use Web::DataService;
 BEGIN {
 
     Web::DataService->VERSION(0.3);
+
+    my $test_mode;
     
     # If we were given a command-line argument, figure out what to do with it.
     
@@ -87,6 +89,32 @@ BEGIN {
 	{
 	    Web::DataService->set_mode('debug');
 	    $Web::DataService::ONE_PROCESS = 1 if defined $ARGV[1] and lc $ARGV[1] eq 'oneproc';
+	}
+	
+	# If the command is 'test' then we run in the regular mode (accepting requests from a
+	# network port) but with two differences. First, the port to be listened on is the 'test
+	# port' instead of the regular one. Second, we set a variable in the TableDefs module to
+	# indicate that test table names should be used instead of the real ones. This will enable
+	# us to test the data entry and editing functions of this data service without affecting
+	# real data.
+
+	elsif ( $cmd eq 'test' )
+	{
+	    my $test_port = setting('test_port');
+	    set port => $test_port if $test_port;
+
+	    $test_mode = 1;
+	    
+	    # Also check for the 'debug' command following this one.
+
+	    Web::DataService->set_mode('debug') if defined $ARGV[1] and lc $ARGV[1] eq 'debug';
+	}
+
+	# If we do not recognize the command, complain and exit.
+
+	else
+	{
+	    die "Unrecognized command '$ARGV[0]'";
 	}
     }
 }

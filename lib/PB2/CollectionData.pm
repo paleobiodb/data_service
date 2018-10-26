@@ -3866,6 +3866,7 @@ sub generateMainFilters {
     {
 	push @filters, $request->generate_stratname_filter('cs', \@strata);
 	$tables_ref->{cs} = 1;
+	$tables_ref->{c} = 1;
 	$tables_ref->{non_summary} = 1;
     }
     
