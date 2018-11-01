@@ -33,57 +33,57 @@ our ($TIMESCALE_KEY) = 'timescale_no';
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
 
-# authorize_action ( action, operation, table, keyexpr )
-#
-# If the table being acted on is TIMESCALE_BOUNDS, then the action must be authorized by checking
-# the corresponding timescale record for TIMESCALE_DATA instead.
+# # authorize_action ( action, operation, table, keyexpr )
+# #
+# # If the table being acted on is TIMESCALE_BOUNDS, then the action must be authorized by checking
+# # the corresponding timescale record for TIMESCALE_DATA instead.
 
-sub authorize_action {
+# sub authorize_action {
     
-    my ($edt, $action, $operation, $table, $keyexpr) = @_;
+#     my ($edt, $action, $operation, $table, $keyexpr) = @_;
     
-    # Operations regarding 'TIMESCALE_DATA' are authorized as usual.
+#     # Operations regarding 'TIMESCALE_DATA' are authorized as usual.
     
-    if ( $table eq 'TIMESCALE_DATA' )
-    {
-	return $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
-    }
+#     if ( $table eq 'TIMESCALE_DATA' )
+#     {
+# 	return $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
+#     }
 
-    # Operations regarding 'TIMESCALE_BOUNDS' and 'TIMESCALE_REFS' must be authorized with respect
-    # to the 'TIMESCALE_DATA' table. They count as updates on the corresponding timescale record.
+#     # Operations regarding 'TIMESCALE_BOUNDS' and 'TIMESCALE_REFS' must be authorized with respect
+#     # to the 'TIMESCALE_DATA' table. They count as updates on the corresponding timescale record.
     
-    elsif ( $table eq 'TIMESCALE_BOUNDS' || $table eq 'TIMESCALE_REFS' )
-    {
-	my $record = $action->record;
-	my $keyval = $record->{timescale_id} || $record->{timescale_no};
+#     elsif ( $table eq 'TIMESCALE_BOUNDS' || $table eq 'TIMESCALE_REFS' )
+#     {
+# 	my $record = $action->record;
+# 	my $keyval = $record->{timescale_id} || $record->{timescale_no};
 	
-	# Unless a timescale was specified in which to add this boundary, add an error condition
-	# and return an innocuous permission code so that no additional error condition will be
-	# attached to this action.
+# 	# Unless a timescale was specified in which to add this boundary, add an error condition
+# 	# and return an innocuous permission code so that no additional error condition will be
+# 	# attached to this action.
 	
-	unless ( $keyval )
-	{
-	    $edt->add_condition($action, 'E_REQUIRED', 'timescale_no');
-	    return 'post';
-	}
+# 	unless ( $keyval )
+# 	{
+# 	    $edt->add_condition($action, 'E_REQUIRED', 'timescale_no');
+# 	    return 'post';
+# 	}
 	
-	return $edt->SUPER::authorize_action($action, 'update', 'TIMESCALE_DATA', "timescale_no=$keyval");
-    }
+# 	return $edt->SUPER::authorize_action($action, 'update', 'TIMESCALE_DATA', "timescale_no=$keyval");
+#     }
     
-    # User-initiated operations regarding 'TIMESCALE_INTS' are only allowed with admin permission.
+#     # User-initiated operations regarding 'TIMESCALE_INTS' are only allowed with admin permission.
 
-    elsif ( $table eq 'TIMESCALE_INTS' )
-    {
-	my $permission = $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
+#     elsif ( $table eq 'TIMESCALE_INTS' )
+#     {
+# 	my $permission = $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
 
-	return $permission eq 'admin' ? 'admin' : 'none';
-    }
+# 	return $permission eq 'admin' ? 'admin' : 'none';
+#     }
 
-    else
-    {
-	croak "Invalid table '$table'";
-    }
-}
+#     else
+#     {
+# 	croak "Invalid table '$table'";
+#     }
+# }
 
 
 # Before we execute certain actions, we must check for conditions specific to this data type and

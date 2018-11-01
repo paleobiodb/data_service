@@ -17,6 +17,8 @@ pass('placeholder');
 # BY_AUTHORIZER [edt-21-permissions.t 'by_authorizer']
 # PRIMARY_KEY [edt-01-basic.t 'create objects']
 # PRIMARY_ATTR [edt-14-records.t 'primary_attr']
+# PERMISSION_TABLE [$$$]
+# PERMISSION_KEY [$$$]
 # TABLE_COMMENT [EditTest.pm, line 39]
 
 # 2. Column properties: [$$$]
@@ -29,7 +31,8 @@ pass('placeholder');
 # VALUE_SEPARATOR [edt-23-datatypes.t 'sets']
 # VALIDATOR [edt-22-validate.t 'validators']
 # REQUIRED [edt-22-validate.t 'required']
-# ADMIN_SET [$$$]
+# ADMIN_SET [edt-17-admin.t 'admin_set']
+# IGNORE [$$$]
 # COLUMN_COMMENT [EditTest.pm, line 42]
 
 # 3. Table permissions: [$$$]

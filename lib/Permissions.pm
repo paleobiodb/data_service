@@ -609,10 +609,12 @@ sub check_record_permission {
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
-	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from " . 
+	my $p = $record->{admin_lock} ? 'unlock' : 'admin';
+	
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$p' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
 	
-	return $record->{admin_locked} ? 'unlock' : 'admin';
+	return $p;
     }
     
     # If the user does not have 'admin' permission, then the 'delete' permission is only allowed
@@ -638,11 +640,11 @@ sub check_record_permission {
     # approved above. We return 'locked' instead of the requested permission, if they would
     # otherwise have that permission.
     
-    if ( $record->{admin_locked} )
+    if ( $record->{admin_lock} )
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' DENIED : LOCKED\n" );
 	
-	$permission = 'locked';
+	return 'locked';
     }
     
     # If the requested permission is 'edit' or 'delete' and the user has 'modify' permission on

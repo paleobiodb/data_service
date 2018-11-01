@@ -77,7 +77,7 @@ subtest 'text' => sub {
     
     $result = $edt->insert_record('EDT_TEST', { string_req => $long_value });
     
-    $T->ok_has_one_error('current', qr/F_WIDTH.*no more than/, "could not insert record with string value too long");
+    $T->ok_has_one_error('latest', qr/F_WIDTH.*no more than/, "could not insert record with string value too long");
     
     # Set the table column property ALLOW_TRUNCATE, and try again.
     
@@ -114,7 +114,7 @@ subtest 'text' => sub {
     
     $result = $edt->insert_record('EDT_TEST', { string_req => $wide_value });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     ($r) = $T->fetch_records_by_expr('EDT_TEST', "string_req like 'wide chars: %'");
     
@@ -135,12 +135,12 @@ subtest 'text' => sub {
     $edt->update_record('EDT_TEST', { $primary => $key1, text_val => '' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and text_val = ''");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, text_val => undef });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and text_val is null");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     ($r) = $T->fetch_records_by_expr('EDT_TEST', "$primary = $key1");
     
@@ -153,7 +153,7 @@ subtest 'text' => sub {
     $edt->update_record('EDT_TEST', { $primary => $key1, string_val => undef });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and string_val = ''");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     ($r) = $T->fetch_records_by_expr('EDT_TEST', "$primary = $key1");
     
@@ -162,7 +162,7 @@ subtest 'text' => sub {
     
     # Make sure we had no errors overall.
     
-    $T->ok_no_errors( 'any' );
+    $T->ok_no_errors;
 };
 
 
@@ -195,64 +195,64 @@ subtest 'boolean' => sub {
     ok( $key1, "inserted test record" ) || return;
 
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and boolean_val", "column value is true");    
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => 0 });
 
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and not boolean_val", "column value is false");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
 
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => undef });
 
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and boolean_val is null", "column value is null");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     # Now try 'true', 'false', 'yes', 'no'.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => 'TRUE' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and boolean_val", "column value is true");    
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => 'false' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and not boolean_val", "column value is false");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
 
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => undef });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and boolean_val is null", "column value is null");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => '  yES' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and boolean_val", "column value is true");    
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val =>   'No   ' });
 
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and not boolean_val", "column value is false");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => '' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and boolean_val is null", "column value is null");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => '   1    ' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and boolean_val = 1", "column value is true");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     # Check that there are no errors or warnings at all.
     
-    $T->ok_no_conditions( 'any' );
+    $T->ok_no_conditions;
     
     # Now try a bad value and make sure it gets rejected.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, boolean_val => 'true_but_bad' });
     
-    $T->ok_has_one_error('current',  'F_FORMAT', "got parameter error for bad boolean value" );
+    $T->ok_has_one_error('latest',  'F_FORMAT', "got parameter error for bad boolean value" );
 };
 
 
@@ -280,42 +280,42 @@ subtest 'integer' => sub {
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => 0 });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 0", "column value is 0");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => '0005' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 5", "column value is 5");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => '' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 0", "column value defaults to 0");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
 
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => '10000  ' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 10000", "column value is 10000");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => undef });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 0", "column value is 0 after stored null");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
 
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => "+17" });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 17", "column value is 17");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
 
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => "+ 028  " });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 28", "column value is 28");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => "16777215" });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsigned_val = 16777215", "column value is maximum for medium int");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     # Now try the same with a signed value. This column allows null values, so we check for
     # them. We also check negative values, zero, and the empty string.
@@ -323,123 +323,123 @@ subtest 'integer' => sub {
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '0030' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = 30", "column value is 30");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val is null", "column value is null");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '-024' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = -24", "column value is -24");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => undef });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val is null", "column value is null");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => 0 });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = 0", "column value is 0");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '1' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = 1", "column value is 1");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '-0' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = 0", "column value is 0");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '-    0110   ' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = -110", "column value is -110");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '+22   ' });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = 22", "column value is 22");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => "8388607" });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = 8388607", "column value is maximum for medium int");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => "-8388608" });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and signed_val = -8388608", "column value is maximum for medium int");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     # Now try a different-sized integer.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, tiny_val => 255 });
     
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and tiny_val = 255", "column value is maximum for tiny int");
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     
     # Check that there are no errors or warnings at all.
     
-    $T->ok_no_conditions( 'any' );
+    $T->ok_no_conditions;
     
     # Now try some bad values and check that we get the proper errors. We start with values that
     # are not in the proper format, then check range errors.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => 'abc' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "parameter error for non-integer value");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "parameter error for non-integer value");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '12a' });
 
-    $T->ok_has_one_error('current', 'F_FORMAT', "parameter error for non-integer ending");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "parameter error for non-integer ending");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '-' });
 
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for single minus sign");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for single minus sign");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => "8388608" });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "signed int exceeds bound");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "signed int exceeds bound");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => "-8388609" });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "signed int exceeds negative bound");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "signed int exceeds negative bound");
+    $T->ok_no_warnings('latest');
     
     # Now try for unsigned integers.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => "16777216" });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "unsigned int exceeds bound");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "unsigned int exceeds bound");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => "  - 23 " });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "unsigned int must be nonnegative");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "unsigned int must be nonnegative");
+    $T->ok_no_warnings('latest');
 
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => "  14    b" });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for non-digit suffix");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for non-digit suffix");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsigned_val => "-0" });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "value -0 not accepted for unsigned integer");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "value -0 not accepted for unsigned integer");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, tiny_val => 256 });
 
-    $T->ok_has_one_error('current', 'F_RANGE', "value 256 out of range for tinyint unsigned");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "value 256 out of range for tinyint unsigned");
+    $T->ok_no_warnings('latest');
 };
 
 
@@ -461,181 +461,181 @@ subtest 'fixed' => sub {
     
     ok( $key1, "inserted test record" ) || return;
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = 3.14", "column value is 3.14");
     
     # Now try various acceptable input values including zero, the empty string, undefined, etc.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => 0 });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '  - 00.0200  ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = -0.02", "column value is -0.02");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val is null", "column value is null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '+5.04 e2' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = 504", "column value is 504");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => undef });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val is null", "column value is null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => ' - 1.3 e - 1   ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = -0.13", "column value is -0.13");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '0.' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '999.99' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = 999.99", "column value is max allowed for decimal(5,2)");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '-099.9990 e 1  ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = -999.99", "column value is min allowed for decimal(5,2)");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '     ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val is null", "column value is null");
     
     # Now check the results with a column that is unsigned decimal not null.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '54.030' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = 54.03", "column value is 54.03");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '.0' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => ' + 2.0 E + 2 ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = 200", "column value is 200");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => ' + 2.0 E - 2 ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = .02", "column value is .02");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => undef });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = 0", "column value is 0 after stored null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '999.99' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = 999.99", "column value is max allowed for decimal(5,2)");
     
     # Now try some bad values ane make sure we get the proper errors.
 
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => 'abc' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for non-number");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for non-number");
+    $T->ok_no_warnings('latest');
         
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => ' -2.03a5  ' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for non-numeric suffix");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_no_warnings('latest');
         
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '2. 03' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for space in the middle of the number");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for space in the middle of the number");
+    $T->ok_no_warnings('latest');
         
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '-' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for single minus sign");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for single minus sign");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '.' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for single decimal point");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for single decimal point");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '1000.0' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding bound");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding bound");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '-1000.0' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding lower bound");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding lower bound");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '1000.2345' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '1.2345' });
     
-    $T->ok_has_one_error('current', 'F_WIDTH', "length error for exceeding precision");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_WIDTH', "length error for exceeding precision");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '-1.2345' });
     
-    $T->ok_has_one_error('current', 'F_WIDTH', "length error for exceeding precision");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_WIDTH', "length error for exceeding precision");
+    $T->ok_no_warnings('latest');
     
     # Now try some incorrect values on the unsigned column.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '1e3' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for value that is too large");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for value that is too large");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '-1.23456' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for value that is negative");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for value that is negative");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '1.23456' });
     
-    $T->ok_has_one_error('current', 'F_WIDTH', "length error for exceeding precision");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_WIDTH', "length error for exceeding precision");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '10000.2345' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '10000.2345-' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for non-numeric suffix");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '-0' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for -0");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for -0");
+    $T->ok_no_warnings('latest');
     
     # Now set the column property ALLOW_TRUNCATE to true, and check that we get W_TRUNC warnings
     # instead of E_WIDTH errors.
@@ -647,22 +647,22 @@ subtest 'fixed' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsdecimal_val => '123.456789000' });
     
-    $T->ok_has_warning('W_TRUNC', "got truncation warning");
-    $T->ok_no_errors;
+    $T->ok_has_warning('latest', 'W_TRUNC', "got truncation warning");
+    $T->ok_no_errors('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsdecimal_val = 123.45", "column value is 123.45");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => ' -999.002347 ' });
     
-    $T->ok_has_warning('W_TRUNC', "got truncation warning");
-    $T->ok_no_errors;
+    $T->ok_has_warning('latest', 'W_TRUNC', "got truncation warning");
+    $T->ok_no_errors('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and decimal_val = -999", "column value is -999");
 
     # Make sure that range checks still function.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, decimal_val => '-1e5' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error with ALLOW_TRUNCATE");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error with ALLOW_TRUNCATE");
+    $T->ok_no_warnings('latest');
         
 };
 
@@ -685,19 +685,19 @@ subtest 'float' => sub {
     
     ok( $key1, "inserted test record" ) || return;
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = 3.14", "column value is 3.14");
     
     # Now try various acceptable input values including zero, the empty string, undefined, etc.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => 0 });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '  - 00.0200  ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = -0.02", "column value is -0.02");
 
     $edt->commit;
@@ -705,96 +705,96 @@ subtest 'float' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val is null", "column value is null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '+5.04 e2' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = 504", "column value is 504");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => undef });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val is null", "column value is null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => ' - 1.3 e - 1   ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = -0.13", "column value is -0.13");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '0.' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '2.53e+100' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = 2.53e100", "column value is enormously positive");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '-4.56 E +200' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val = -4.56e200", "column value is enormously negative");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '     ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and double_val is null", "column value is null");
     
     # Now check the results with a column that is unsigned float not null.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '54.030' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 54.03", "column value is 54.03");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '.0' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => ' + 2.0 E + 2 ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 200", "column value is 200");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 0", "column value is 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => ' + 2.0 E - 2 ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = .02", "column value is .02");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => undef });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 0", "column value is 0 after stored null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '001e38' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 1e38", "column value is max we will accept for float");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '1.2345e-38' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 0", "large negative exponent gives a value of 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '1.2345e-38' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and unsfloat_val = 0", "large negative exponent gives a value of 0");
 
     my $long_digit_string = '1.23456789012345678901234567890123456789000';
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => $long_digit_string });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     my ($r) = $T->fetch_record_by_key('EDT_TEST', $key1);
 
     if ( ok( $r && $r->{unsfloat_val}, "found record with proper field" ) )
@@ -807,85 +807,85 @@ subtest 'float' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => 'abc' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for non-number");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for non-number");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => ' -2.03a5  ' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for non-numeric suffix");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_no_warnings('latest');
         
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '2. 03' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for space in the middle of the number");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for space in the middle of the number");
+    $T->ok_no_warnings('latest');
         
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '-' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for single minus sign");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for single minus sign");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '.' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for single decimal point");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for single decimal point");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '2e500' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding bound");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding bound");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '-2e500' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding lower bound");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding lower bound");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '1.2345' });
     
-    $T->ok_has_one_error('current', 'F_WIDTH', "length error for exceeding precision");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_WIDTH', "length error for exceeding precision");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '-1.2345' });
     
-    $T->ok_has_one_error('current', 'F_WIDTH', "length error for exceeding precision");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_WIDTH', "length error for exceeding precision");
+    $T->ok_no_warnings('latest');
     
     # Now try some incorrect values on the unsigned column.
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '1e3' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for value that is too large");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for value that is too large");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '-1.23456' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for value that is negative");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for value that is negative");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '1.23456' });
     
-    $T->ok_has_one_error('current', 'F_WIDTH', "length error for exceeding precision");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_WIDTH', "length error for exceeding precision");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '10000.2345' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for exceeding bound, even though precision is also too high");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '10000.2345-' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "format error for non-numeric suffix");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_FORMAT', "format error for non-numeric suffix");
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, unsfloat_val => '-0' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error for -0");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error for -0");
+    $T->ok_no_warnings('latest');
     
     # Now set the column property ALLOW_TRUNCATE to true, and check that we get W_TRUNC warnings
     # instead of E_WIDTH errors.
@@ -911,8 +911,8 @@ subtest 'float' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, double_val => '-1e5' });
     
-    $T->ok_has_one_error('current', 'F_RANGE', "range error with ALLOW_TRUNCATE");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "range error with ALLOW_TRUNCATE");
+    $T->ok_no_warnings('latest');
         
 };
 
@@ -942,19 +942,19 @@ subtest 'enumerated' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => 'aBC' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and enum_val = 'abc'",
 			"enum value with variant case was inserted successfully");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => undef });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and enum_val is null",
 			"null enum value was inserted successfully");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => "'jkl'" });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and enum_val = '''jkl'''",
 			"enum value containing single quotes was inserted successfully");
     
@@ -963,25 +963,25 @@ subtest 'enumerated' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => $non_ascii_value });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and enum_val = '$non_ascii_value'",
 			"enum value containing non-ascii characters was inserted successfully");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => $non_ascii_upcase });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and enum_val = '$non_ascii_value'",
 			"enum value containing non-ascii characters with different case was inserted successfully");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => '' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and enum_val is null",
 			"empty enum value was inserted as a null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => 'ghi' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and enum_val = 'ghi'",
 			"a different allows value was successfully inserted");   
     
@@ -989,18 +989,18 @@ subtest 'enumerated' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => 'xxx' });
     
-    $T->ok_has_one_error('current',  'F_RANGE', "got 'E_RANGE' error for unrecognized enum value" );
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest',  'F_RANGE', "got 'E_RANGE' error for unrecognized enum value" );
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => 'abc,ghi' });
     
-    $T->ok_has_one_error('current',  'F_RANGE', "got 'E_RANGE' error for combination of correct values" );
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest',  'F_RANGE', "got 'E_RANGE' error for combination of correct values" );
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, enum_val => 'abc\'' });
     
-    $T->ok_has_one_error('current',  'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest',  'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
+    $T->ok_no_warnings('latest');
 };
 
 
@@ -1029,31 +1029,31 @@ subtest 'sets' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'aBC' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val = 'abc'",
 			"set value with variant case was inserted successfully");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => undef });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val is null",
 			"set value of null is inserted properly");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'ghi,abc' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val = 'abc,ghi'",
 			"set value with multiples was inserted successfully");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => '' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val is null",
 			"empty set value is changed to null");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'abc , ghi, \'jkl\'' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val like 'abc%'",
 			"spaces around commas are removed");
     
@@ -1062,13 +1062,13 @@ subtest 'sets' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => "GHI,$non_ascii_upcase,ABC" });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val = 'abc,$non_ascii_value,ghi'",
 			"set value with multiples was inserted successfully");
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => ' abc,, ghi , ' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val = 'abc,ghi'",
 			"extra commas and spaces are ignored");
     
@@ -1076,18 +1076,18 @@ subtest 'sets' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'xxx' });
     
-    $T->ok_has_one_error('current',  'F_RANGE', "got 'E_RANGE' error for unrecognized set value" );
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest',  'F_RANGE', "got 'E_RANGE' error for unrecognized set value" );
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'abc,xxx,ghi' });
     
-    $T->ok_has_one_error('current',  'F_RANGE', "got 'E_RANGE' error for bad value among good ones" );
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest',  'F_RANGE', "got 'E_RANGE' error for bad value among good ones" );
+    $T->ok_no_warnings('latest');
     
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'abc\'' });
     
-    $T->ok_has_one_error('current',  'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest',  'F_RANGE', "got 'E_RANGE' error for value containing one quote character" );
+    $T->ok_no_warnings('latest');
 
     # Now try setting the property VALUE_SEPARATOR and check that it is properly applied.
 
@@ -1096,11 +1096,11 @@ subtest 'sets' => sub {
 
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'abc/\'jkl\'' });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and set_val = 'abc,''jkl'''");
 
     $edt->update_record('EDT_TEST', { $primary => $key1, set_val => 'abc,ghi' });
 
-    $T->ok_has_one_error('current', 'F_RANGE', "got 'E_RANGE' error for improperly separated values");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_RANGE', "got 'E_RANGE' error for improperly separated values");
+    $T->ok_no_warnings('latest');
 };

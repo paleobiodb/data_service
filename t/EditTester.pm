@@ -820,12 +820,20 @@ sub ok_result {
     my $T = shift;
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     my $result = shift;
-
-    my $selector = 'any';
     
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
+    my $selector = 'all';
+    
+    if ( $_[0] )
     {
-	$selector = shift;
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     my $label = shift || "operation succeeded";
@@ -854,11 +862,19 @@ sub ok_no_errors {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'any';
+    my $selector = 'all';
     
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
+    if ( $_[0] )
     {
-	$selector = shift;
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     my $label = shift;
@@ -866,31 +882,38 @@ sub ok_no_errors {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    if ( $selector eq 'any' && $edt->errors )
-    {
-	$T->diag_errors($edt, 'any');
-	ok($TEST_MODE, $label);
-	return;
-    }
+    # if ( $selector eq 'all' && $edt->errors('internal') )
+    # {
+    # 	$T->diag_errors($edt, 'all');
+    # 	ok($TEST_MODE, $label);
+    # 	return $TEST_MODE;
+    # }
     
-    elsif ( $selector eq 'current' && $edt->specific_errors )
-    {
-	$T->diag_errors($edt, 'current');
-	ok($TEST_MODE, $label);
-	return;
-    }
+    # elsif ( $selector eq 'latest' && $edt->errors('internal') )
+    # {
+    # 	$T->diag_errors($edt, 'latest');
+    # 	ok($TEST_MODE, $label);
+    # 	return $TEST_MODE;
+    # }
 
-    elsif ( $selector eq 'main' && $edt->specific_errors('main') )
+    # elsif ( $selector eq 'main' && $edt->specific_errors('main') )
+    # {
+    # 	$T->diag_errors($edt, 'main');
+    # 	ok($TEST_MODE, $label);
+    # 	return $TEST_MODE;
+    # }
+
+    if ( $edt->conditions($selector, 'errors') )
     {
-	$T->diag_errors($edt, 'main');
+	$T->diag_errors($edt, $selector);
 	ok($TEST_MODE, $label);
-	return;
+	return $TEST_MODE;
     }
     
     else
     {
 	ok(!$TEST_MODE, $label);
-	return 1;
+	return !$TEST_MODE;
     }
 }
 
@@ -902,19 +925,47 @@ sub ok_has_error {
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
     croak "no EditTransaction found" unless $edt;
+
+    my $selector = 'all';
     
-    my $selector = 'any';
-    
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
+    if ( $_[0] )
     {
-	$selector = shift;
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     my $check = shift;
     
-    unless ( $check && ( ref $check eq 'Regexp' || $check =~ /^[A-Z0-9_]+$/ ) )
+    if ( ref $check eq 'Regexp' )
     {
-	croak "you must specify either a condition code or regexp";
+	# do nothing;
+    }
+
+    elsif ( $check && $check =~ qr{ ^ [EF]_ ([A-Z0-9_]+) $ }xs )
+    {
+	$check = qr{ ^ [EF]_ $1 \b }xs;
+    }
+    
+    elsif ( $check && $check =~ qr{ ^ [CD]_ ([A-Z0-9_]+) $ }xs )
+    {
+	$check = qr{ ^ [CD]_ $1 \b }xs;
+    }
+    
+    elsif ( $check && $check =~ qr{ ^ [DF]_[A-Z0-9_]+ $ }xs )
+    {
+	$check = qr{ ^ $check \b }xs;
+    }
+    
+    else
+    {
+	croak "you must specify either an error or caution code or a regexp";
     }
     
     my $label = shift;
@@ -922,31 +973,21 @@ sub ok_has_error {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my @errors = ($selector eq 'current' ? $edt->specific_errors :
-		  $selector eq 'main'    ? $edt->specific_errors('main') :
-					   $edt->errors);
-    
-    foreach my $e ( @errors )
+    foreach my $e ( $edt->conditions($selector, 'errors') )
     {
-	if ( ref $check eq 'Regexp' )
-	{
-	    my $msg = $e->code;
-	    $msg .= ' (' . $e->label . ')' if $e->label;
-	    $msg .= ': ' . $edt->generate_msg($e);
-	    
-	    if ( $msg =~ $check )
-	    {
-		ok(!$TEST_MODE, $label);
-		return 1;
-	    }
-	}
+	my $msg = $e->code;
+	$msg .= ' (' . $e->label . ')' if $e->label;
+	$msg .= ': ' . $edt->generate_msg($e);
 	
-	elsif ( $check eq $e->code )
+	if ( $msg =~ $check )
 	{
 	    ok(!$TEST_MODE, $label);
 	    return 1;
 	}
     }
+
+    # If we get here then we didn't find the expected code. So list all of the errors that were
+    # found to help with debugging, and fail the test (unless $TEST_MODE is true).
     
     $T->diag_errors($edt, $selector);
     ok($TEST_MODE, $label);
@@ -962,63 +1003,83 @@ sub ok_has_one_error {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'any';
+    my $selector = 'all';
     
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
+    if ( $_[0] )
     {
-	$selector = shift;
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     my $check = shift;
     
-    unless ( $check && ( ref $check eq 'Regexp' || $check =~ /^[A-Z0-9_]+$/ ) )
+    if ( ref $check eq 'Regexp' )
     {
-	croak "you must specify either a condition code or regexp";
+	# do nothing;
+    }
+
+    elsif ( $check && $check =~ qr{ ^ E_ ([A-Z0-9_]+) $ }xs )
+    {
+	$check = qr{ ^ [EF]_ $1 \b }xs;
+    }
+
+    elsif ( $check && $check =~ qr{ ^ C_ ([A-Z0-9_]+) $ }xs )
+    {
+	$check = qr{ ^ [CD]_ $1 \b }xs;
+    }
+
+    elsif ( $check && $check =~ qr{ ^ [DF]_[A-Z0-9_]+ $ }xs )
+    {
+	$check = qr{ ^ $check \b }xs;
+    }
+    
+    else
+    {
+	croak "you must specify either an error or caution code or a regexp";
     }
     
     my $label = shift;
-    $label ||= "found matching error";
+    $label ||= "found one matching error";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my @errors = ($selector eq 'current' ? $edt->specific_errors :
-		  $selector eq 'main'    ? $edt->specific_errors('main') :
-					   $edt->errors);
+    my @errors = $edt->conditions($selector, 'errors');
     
     if ( scalar(@errors) == 1 )
     {
 	my $e = $errors[0];
 	
-	if ( ref $check eq 'Regexp' )
-	{
-	    my $msg = $e->code;
-	    $msg .= ' (' . $e->label . ')' if $e->label;
-	    $msg .= ': ' . $edt->generate_msg($e);
-	    
-	    if ( $msg =~ $check )
-	    {
-		ok(!$TEST_MODE, $label);
-		return 1;
-	    }
-	}
+	my $msg = $e->code;
+	$msg .= ' (' . $e->label . ')' if $e->label;
+	$msg .= ': ' . $edt->generate_msg($e);
 	
-	elsif ( $check eq $e->code )
+	if ( $msg =~ $check )
 	{
 	    ok(!$TEST_MODE, $label);
-	    return 1;
+	    return !$TEST_MODE;
 	}
     }
-
+    
     elsif ( ! @errors )
     {
 	diag("no errors found") unless $TEST_MODE;
 	ok($TEST_MODE, $label);
-	return;
+	return $TEST_MODE;
     }
-    
-    $T->diag_errors($edt, $selector);
-    ok($TEST_MODE, $label);
-    return;
+
+    else
+    {
+	$T->diag_errors($edt, $selector);
+	ok($TEST_MODE, $label);
+	return $TEST_MODE;
+    }
 }
 
 
@@ -1028,32 +1089,38 @@ sub diag_errors {
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
-    my $selector = shift || 'any';
+    croak "no EditTransaction found" unless ref $edt;
     
-    unless ( $selector eq 'any' || $selector eq 'main' || $selector eq 'current' )
+    my $selector = 'all';
+    
+    if ( $_[0] )
     {
-	croak "invalid selector '$selector'";
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    croak "no EditTransaction found" unless ref $edt;
-    
-    my @errors = ($selector eq 'current' ? $edt->specific_errors :
-		  $selector eq 'main'    ? $edt->specific_errors('main') :
-					   $edt->errors);
+    my @errors = $edt->conditions($selector, 'errors');
     
     foreach my $e ( @errors )
     {
 	my $msg = $e->code;
 	$msg .= ' (' . $e->label . ')' if $e->label;
 	$msg .= ': ' . $edt->generate_msg($e);
-
+	
 	if ( $TEST_MODE )
 	{
 	    $TEST_DIAG .= "$msg\n";
 	}
-
+	
 	else
 	{
 	    diag($msg);
@@ -1070,44 +1137,66 @@ sub ok_no_warnings {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'any';
+    my $selector = 'all';
     
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
+    if ( $_[0] )
     {
-	$selector = shift;
-    }
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
 
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
+    }
+    
     my $label = shift;
     $label ||= "no warnings found";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    if ( $selector eq 'any' && $edt->warnings )
-    {
-	$T->diag_warnings($edt, 'any');
-	ok($TEST_MODE, $label);
-	return;
-    }
+    # if ( $selector eq 'any' && $edt->warnings )
+    # {
+    # 	$T->diag_warnings($edt, 'any');
+    # 	ok($TEST_MODE, $label);
+    # 	return $TEST_MODE;
+    # }
 
-    elsif ( $selector eq 'current' && $edt->specific_warnings )
-    {
-	$T->diag_warnings($edt, 'current');
-	ok($TEST_MODE, $label);
-	return;
-    }
+    # elsif ( $selector eq 'current' && $edt->specific_warnings )
+    # {
+    # 	$T->diag_warnings($edt, 'current');
+    # 	ok($TEST_MODE, $label);
+    # 	return $TEST_MODE;
+    # }
     
-    elsif ( $selector eq 'main' && $edt->specific_warnings('main') )
+    # elsif ( $selector eq 'main' && $edt->specific_warnings('main') )
+    # {
+    # 	$T->diag_warnings($edt, 'main');
+    # 	ok($TEST_MODE, $label);
+    # 	return $TEST_MODE;
+    # }
+    
+    # else
+    # {
+    # 	ok(!$TEST_MODE, $label);
+    # 	return !$TEST_MODE;
+    # }
+
+    if ( $edt->conditions($selector, 'warnings') )
     {
-	$T->diag_warnings($edt, 'main');
+	$T->diag_warnings($edt, $selector);
 	ok($TEST_MODE, $label);
-	return;
+	return $TEST_MODE;
     }
     
     else
     {
 	ok(!$TEST_MODE, $label);
-	return 1;
+	return !$TEST_MODE;
     }
+
 }
 
 
@@ -1119,18 +1208,36 @@ sub ok_has_warning {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'any';
-
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
+    my $selector = 'all';
+    
+    if ( $_[0] )
     {
-	$selector = shift;
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     my $check = shift;
     
-    unless ( $check && ( ref $check eq 'Regexp' || $check =~ /^[A-Z0-9_]+$/ ) )
+    if ( ref $check eq 'Regexp' )
     {
-	croak "you must specify either a condition code or regexp";
+	# do nothing;
+    }
+
+    elsif ( $check && $check =~ qr{ ^ W_[A-Z0-9_]+ $ }xs )
+    {
+	$check = qr{ ^ $check \b }xs;
+    }
+    
+    else
+    {
+	croak "you must specify either an error or caution code or a regexp";
     }
     
     my $label = shift;
@@ -1139,35 +1246,25 @@ sub ok_has_warning {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my @warnings = ($selector eq 'current' ? $edt->specific_warnings :
-		    $selector eq 'main'    ? $edt->specific_warnings('main') :
-					     $edt->warnings);
-    
-    foreach my $w ( @warnings )
+    foreach my $w ( $edt->conditions($selector, 'warnings') )
     {
-	if ( ref $check eq 'Regexp' )
-	{
-	    my $msg = $w->code;
-	    $msg .= ' (' . $w->label . ')' if $w->label;
-	    $msg .= ': ' . $edt->generate_msg($w);
-	    
-	    if ( $msg =~ $check )
-	    {
-		ok(!$TEST_MODE, $label);
-		return 1;
-	    }
-	}
-
-	elsif ( $check eq $w->code )
+	my $msg = $w->code;
+	$msg .= ' (' . $w->label . ')' if $w->label;
+	$msg .= ': ' . $edt->generate_msg($w);
+	
+	if ( $msg =~ $check )
 	{
 	    ok(!$TEST_MODE, $label);
-	    return 1;
+	    return !$TEST_MODE;
 	}
     }
-
+    
+    # If we get here then we didn't find the expected code. So list all of the warnings that were
+    # found to help with debugging, and fail the test (unless $TEST_MODE is true).
+    
     $T->diag_warnings($edt, $selector);
     ok($TEST_MODE, $label);
-    return;
+    return $TEST_MODE;
 }
 
 
@@ -1179,18 +1276,36 @@ sub ok_has_one_warning {
     
     croak "no EditTransaction found" unless $edt;
     
-    my $selector = 'any';
-
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
+    my $selector = 'all';
+    
+    if ( $_[0] )
     {
-	$selector = shift;
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     my $check = shift;
     
-    unless ( $check && ( ref $check eq 'Regexp' || $check =~ /^[A-Z0-9_]+$/ ) )
+    if ( ref $check eq 'Regexp' )
     {
-	croak "you must specify either a condition code or regexp";
+	# do nothing;
+    }
+
+    elsif ( $check && $check =~ qr{ ^ W_[A-Z0-9_]+ $ }xs )
+    {
+	$check = qr{ ^ $check \b }xs;
+    }
+    
+    else
+    {
+	croak "you must specify either an error or caution code or a regexp";
     }
     
     my $label = shift;
@@ -1198,31 +1313,20 @@ sub ok_has_one_warning {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my @warnings = ($selector eq 'current' ? $edt->specific_warnings :
-		    $selector eq 'main'    ? $edt->specific_warnings('main') :
-					     $edt->warnings);
+    my @warnings = $edt->conditions($selector, 'warnings');
     
     if ( scalar(@warnings) == 1 )
     {
 	my $w = $warnings[0];
 	
-	if ( ref $check eq 'Regexp' )
-	{
-	    my $msg = $w->code;
-	    $msg .= ' (' . $w->label . ')' if $w->label;
-	    $msg .= ': ' . $edt->generate_msg($w);
-	    
-	    if ( $msg =~ $check )
-	    {
-		ok(!$TEST_MODE, $label);
-		return 1;
-	    }
-	}
-
-	elsif ( $check eq $w->code )
+	my $msg = $w->code;
+	$msg .= ' (' . $w->label . ')' if $w->label;
+	$msg .= ': ' . $edt->generate_msg($w);
+	
+	if ( $msg =~ $check )
 	{
 	    ok(!$TEST_MODE, $label);
-	    return 1;
+	    return !$TEST_MODE;
 	}
     }
 
@@ -1230,64 +1334,12 @@ sub ok_has_one_warning {
     {
 	diag("no warnings found") unless $TEST_MODE;
 	ok($TEST_MODE, $label);
-	return;
+	return $TEST_MODE;
     }
     
     $T->diag_warnings($edt, $selector);
     ok($TEST_MODE, $label);
-    return;
-}
-
-
-sub ok_no_conditions {
-    
-    my $T = shift;
-    
-    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
-    
-    croak "no EditTransaction found" unless $edt;
-    
-    my $selector = 'any';
-
-    if ( $_[0] && ($_[0] eq 'current' || $_[0] eq 'any' || $_[0] eq 'main') )
-    {
-	$selector = shift;
-    }
-
-    my $label = shift;
-    $label ||= "no error or warning conditions found";
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    if ( $selector eq 'any' && ($edt->errors || $edt->warnings ) )
-    {
-	$T->diag_errors($edt, 'any') if $edt->errors;
-	$T->diag_warnings($edt, 'any') if $edt->warnings;
-	ok($TEST_MODE, $label);
-	return;
-    }
-    
-    elsif ( $selector eq 'current' && ($edt->specific_errors || $edt->specific_warnings) )
-    {
-	$T->diag_errors($edt, 'current') if $edt->specific_errors;
-	$T->diag_warnings($edt, 'current') if $edt->specific_warnings;
-	ok($TEST_MODE, $label);
-	return;
-    }
-    
-    elsif ( $selector eq 'main' && ($edt->specific_errors('main') || $edt->specific_warnings('main')) )
-    {
-	$T->diag_errors($edt, 'main') if $edt->specific_errors;
-	$T->diag_warnings($edt, 'main') if $edt->specific_warnings;
-	ok($TEST_MODE, $label);
-	return;
-    }
-    
-    else
-    {
-	ok(!$TEST_MODE, $label);
-	return 1;
-    }
+    return $TEST_MODE;
 }
 
 
@@ -1297,24 +1349,26 @@ sub diag_warnings {
     
     my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
     
-    my $selector = shift || 'any';
+    croak "no EditTransaction found" unless $edt;
     
-    unless ( $selector eq 'any' || $selector eq 'main' || $selector eq 'current' )
+    my $selector = 'all';
+    
+    if ( $_[0] )
     {
-	croak "invalid selector '$selector'";
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
     }
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    croak "no EditTransaction found" unless ref $edt;
-    
-    $edt //= $T->{last_edt};
-
-    croak "no EditTransaction found" unless ref $edt;
-    
-    my @warnings = ($selector eq 'current' ? $edt->specific_warnings :
-		    $selector eq 'main'    ? $edt->specific_warnings('main') :
-					     $edt->warnings);
+    my @warnings = $edt->conditions($selector, 'warnings');
     
     foreach my $w ( @warnings )
     {
@@ -1331,6 +1385,50 @@ sub diag_warnings {
 	{
 	    diag($msg);
 	}
+    }
+}
+
+
+sub ok_no_conditions {
+    
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    croak "no EditTransaction found" unless $edt;
+    
+    my $selector = 'all';
+    
+    if ( $_[0] )
+    {
+	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
+    }
+    
+    my $label = shift;
+    $label ||= "no error or warning conditions found";
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    if ( $edt->conditions($selector, 'all') )
+    {
+	$T->diag_errors($edt, $selector);
+	$T->diag_warnings($edt, $selector);
+	ok($TEST_MODE, $label);
+	return $TEST_MODE;
+    }
+    
+    else
+    {
+	ok(!$TEST_MODE, $label);
+	return !$TEST_MODE;
     }
 }
 

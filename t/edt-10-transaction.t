@@ -718,7 +718,5 @@ subtest 'multiple tables' => sub {
     
     pass('placeholder');
 
-    # $$$
-    
-    
+    # This is actually tested in edt-30-insert.t.
 };

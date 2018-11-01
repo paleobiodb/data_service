@@ -210,7 +210,7 @@ subtest 'test exceptions' => sub {
 	$edt->insert_record('EDT_TEST', { string_req => 'should not be inserted' });
     }
     
-    $T->ok_has_error( 'any', 'E_EXECUTE' );
+    $T->ok_has_error( 'all', 'E_EXECUTE' );
     $T->clear_edt;
     
     eval {
@@ -221,7 +221,7 @@ subtest 'test exceptions' => sub {
 	$edt->insert_record('EDT_TEST', { string_req => 'should not be inserted' });
     };
     
-    $T->ok_has_error( 'any', 'E_EXECUTE' );
+    $T->ok_has_error( 'all', 'E_EXECUTE' );
 };
 
 

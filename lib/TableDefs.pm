@@ -54,9 +54,11 @@ our (%TABLE_PROP_NAME) = ( CAN_POST => 1,		# specifies who is allowed to add new
 			   CAN_MODIFY => 1,		# specifies who is allowed to modify existing records
 			   ALLOW_DELETE => 1,		# if true, then deletion is allowed without admin
 			   ALLOW_INSERT_KEY => 1,	# if true, then insertion allowed with specified primary key
+			   CASCADE_DELETE => 1,		# specifies additional tables whose entries should be deleted
+                                                        # when a record in this table is deleted.
 			   BY_AUTHORIZER => 1,		# if true, then editing permission by authorizer_no
 			   PERMISSION_TABLE => 1,	# specifies table which controls permissions for this one
-			   PERMISSION_KEY => 1,		# specifies foreign key for the permission table, if different
+			   PERMISSION_KEY => 1,		# specifies a field to be matched to the p.t. primary key
 			   PRIMARY_KEY => 1,		# specifies the primary key column(s) for this table
 			   PRIMARY_ATTR => 1,		# specifies the primary key record field for this table
 			   NO_LOG => 1,			# specifies that changes to this table should not be logged
@@ -125,7 +127,7 @@ our (%COMMON_FIELD_SPECIAL) = ( authorizer_no => 'authent',
 				enterer_id => 'authent',
 				created => 'crmod',
 				modified => 'crmod',
-				admin_locked => 'admin' );
+				admin_lock => 'admin' );
 
 
 # Define the mechanism for substituting test tables instead of real ones.

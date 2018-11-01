@@ -62,7 +62,7 @@ subtest 'basic' => sub {
 
     $edt->add_condition('E_TEST');
     
-    $T->ok_has_error( 'any', qr/^E_TEST \(a1\):/, "first condition has proper label" );
+    $T->ok_has_error( qr/^E_TEST \(a1\):/, "first condition has proper label" );
     
     $edt->insert_record('EDT_TEST', { string_req => 'no label' });
 
@@ -78,7 +78,7 @@ subtest 'basic' => sub {
     
     $edt->add_condition('W_TEST');
     
-    $T->ok_has_warning('any', qr/^W_TEST \(#4\):/, "second condition has proper label");
+    $T->ok_has_warning( qr/^W_TEST \(#4\):/, "second condition has proper label");
 
     # Now call 'abort_action' and check that the status has changed.
 
@@ -125,7 +125,7 @@ subtest 'primary_attr' => sub {
     ok( ! $edt->update_record('EDT_TEST', { not_the_key => $key, signed_val => 4 }),
 	"record was not updated using field name 'not_the_key'" );
 
-    $T->ok_has_warning('any', 'F_NO_KEY', "got F_NO_KEY warning" );
+    $T->ok_has_error( 'F_NO_KEY', "got F_NO_KEY warning" );
 
     # Then set this field name as the PRIMARY_ATTR, and check that it succeeds.
 

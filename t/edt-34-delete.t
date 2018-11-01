@@ -128,7 +128,7 @@ subtest 'basic' => sub {
 		SELECT count(*) FROM $TABLE{EDT_AUX}");
 	
 	is($aux_count, 0, "no records remain in $TABLE{EDT_AUX} after deletions including after_action subroutine");	
-	like($edt->{save_delete_aux}, qr{^ \d+ , \s* \d+ $}xs, "get_keylist returned two values");
+	like($edt->{save_delete_aux}, qr{ \d+ ' , \s* ' \d+ }xs, "keyexpr returned two values");
     }
     
     # Check keys and counts.
@@ -170,39 +170,39 @@ subtest 'errors' => sub {
     $edt = $T->new_edt($perm_a, { PROCEED => 1, IMMEDIATE_MODE => 1 });
     
     $result = $edt->delete_record('EDT_TEST', $test_keys[0]);
-
+    
     ok( $result, "first deletion succeeded" );
     
     $result = $edt->delete_record('EDT_TEST', { test_no => 9999 });
     
     ok( !$result, "second deletion failed" );
-    $T->ok_has_error('current', 'F_NOT_FOUND');
+    $T->ok_has_error('latest', 'F_NOT_FOUND');
     
     $result = $edt->delete_record('EDT_TEST', { test_no => $test_keys[0] });
     
     ok( !$result, "third deletion failed" );
-    $T->ok_has_error('current', 'F_NOT_FOUND');
+    $T->ok_has_error('latest', 'F_NOT_FOUND');
     
     $result = $edt->delete_record('EDT_TEST', { });
     
     ok( !$result, "fourth deletion failed" );
-    $T->ok_has_error('current', 'F_NO_KEY');
+    $T->ok_has_error('latest', 'F_NO_KEY');
     
     $result = $edt->delete_record('EDT_TEST', 0);
     
     ok( !$result, "fifth deletion failed" );
-    $T->ok_has_error('current', 'F_NO_KEY');
+    $T->ok_has_error('latest', 'F_NO_KEY');
 
     $result = $edt->delete_record('EDT_AUX', 9999);
     
     ok( !$result, "sixth deletion failed" );
-    $T->ok_has_error('current', 'F_NOT_FOUND');
+    $T->ok_has_error('latest', 'F_NOT_FOUND');
     
     # Check keys and counts.
     
     cmp_ok( $edt->action_count, '==', 1, "found proper action_count" );
     cmp_ok( $edt->record_count, '==', 6, "found proper record_count" );
-    cmp_ok( $edt->fail_count, '==', 5, "fail_count returns 0" );
+    cmp_ok( $edt->fail_count, '==', 5, "fail_count returns 5" );
     cmp_ok( $edt->skip_count, '==', 0, "skip_count returns 0" );
     
     cmp_ok( ($edt->inserted_keys), '==', 0, "inserted_keys returns empty list" );
@@ -210,8 +210,8 @@ subtest 'errors' => sub {
     cmp_ok( ($edt->replaced_keys('EDT_TEST')), '==', 0, "replaced_keys returns proper count for EDT_TEST" );
     cmp_ok( ($edt->replaced_keys('EDT_AUX')), '==', 0, "replaced_keys returns proper count for EDT_AUX" );
     cmp_ok( ($edt->replaced_keys), '==', 0, "replaced_keys returns proper count for all tables" );
-    cmp_ok( ($edt->deleted_keys), '==', 1, "deleted_keys returns empty list" );
-    cmp_ok( ($edt->failed_keys), '==', 3, "failed_keys returns empty list" );
+    cmp_ok( ($edt->deleted_keys), '==', 1, "deleted_keys returns one entry" );
+    cmp_ok( ($edt->failed_keys), '==', 3, "failed_keys returns three entries" );
     
     # Check for the proper exception if an invalid table is specified, or if no record is given.
     
@@ -244,7 +244,7 @@ subtest 'errors' => sub {
 	
 	$edt->delete_record('EDT_TEST', { test_no => $test_keys[1] });
 	
-	$T->ok_has_error('current', 'E_EXECUTE');
+	$T->ok_has_error('latest', 'E_EXECUTE');
     }
 };
 

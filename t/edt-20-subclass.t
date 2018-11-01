@@ -179,7 +179,7 @@ subtest 'initialize and finalize' => sub {
     $edt->set_attr('initialize add' => $random_string);
     $edt->start_execution;
     
-    $T->ok_no_errors('any', "no errors on initialize add");
+    $T->ok_no_errors("no errors on initialize add");
     $T->ok_found_record('EDT_AUX', "name='$random_string'");
     is($edt->{save_init_table}, 'EDT_TEST', "table argument was correct" );
     
@@ -204,8 +204,8 @@ subtest 'initialize and finalize' => sub {
     is( $edt->{save_init_count}, 1, "not called again from execute" );
     is( $edt->{save_final_count}, 1, "finalized on commit" );
     ok( ! $edt->{save_final_rollback}, "finalization second argument was false" );
-    $T->ok_has_warning('any', qr/W_TEST/, "finalization warning" );
-    $T->ok_no_errors('any', "no errors on finalization");
+    $T->ok_has_warning( qr/W_TEST/, "finalization warning" );
+    $T->ok_no_errors("no errors on finalization");
     $T->ok_found_record('EDT_TEST', "string_req='init test 1'");
     is( $edt->transaction, 'committed', "transaction was committed" );
     
@@ -220,7 +220,7 @@ subtest 'initialize and finalize' => sub {
     $result = $edt->execute;
     
     ok( ! $result, "transaction was aborted" );
-    $T->ok_has_error( 'any', qr/E_TEST/, "finalization error");
+    $T->ok_has_error(qr/E_TEST/, "finalization error");
     $T->ok_no_record('EDT_TEST', "string_req='final test 1'");
     is( $edt->{save_final_count}, 1, "finalization completed" );
     ok( ! $edt->{save_final_rollback}, "finalization second argument was false" );
@@ -236,7 +236,7 @@ subtest 'initialize and finalize' => sub {
     $result = $edt->execute;
     
     ok( ! $result, "finalization error caused transaction to fail" );
-    $T->ok_has_error( 'any', qr/E_EXECUTE/, "finalization error");
+    $T->ok_has_error(qr/E_EXECUTE/, "finalization error");
     $T->ok_no_record('EDT_TEST', "string_req='final test 2'");
     is( $edt->transaction, 'aborted', "transaction was aborted" );
     
@@ -251,7 +251,7 @@ subtest 'initialize and finalize' => sub {
     $result = $edt->execute;
     
     ok( ! $result, "deliberate error caused transaction to fail" );
-    $T->ok_has_error( 'any', qr/E_EXECUTE/, "found error");
+    $T->ok_has_error(qr/E_EXECUTE/, "found error");
     $T->ok_no_record('EDT_TEST', "string_req='final test 3'");
     is( $edt->transaction, 'aborted', "transaction was aborted" );
     ok( ! $edt->{save_final_count}, "no finalization" );
@@ -271,8 +271,8 @@ subtest 'initialize and finalize' => sub {
     
     ok( ! $result, "deliberate error caused transaction to fail" );
     is( $edt->errors, 2, "two errors were generated" );
-    $T->ok_has_error( 'any', qr/E_EXECUTE.*deliberate error/, "found deliberate error");
-    $T->ok_has_error( 'any', qr/E_EXECUTE.*cleanup/, "found error from cleanup exception");
+    $T->ok_has_error(qr/E_EXECUTE.*deliberate error/, "found deliberate error");
+    $T->ok_has_error(qr/E_EXECUTE.*cleanup/, "found error from cleanup exception");
     $T->ok_no_record('EDT_TEST', "string_req='final test 3a'");
     ok( ! $edt->{save_cleanup_count}, "cleanup was not completed" );
     
@@ -301,7 +301,7 @@ subtest 'initialize and finalize' => sub {
     $result = $edt->execute;
     
     ok( ! $result, "deliberate error caused transaction to fail" );
-    $T->ok_has_error( 'any', qr/E_EXECUTE/, "found error");
+    $T->ok_has_error(qr/E_EXECUTE/, "found error");
     $T->ok_no_record('EDT_TEST', "string_req='final test 4'");
     is( $edt->transaction, 'finished', "transaction was never started" );
     ok( ! $edt->{save_init_count}, "initialize_transaction was not called" );
@@ -328,11 +328,11 @@ subtest 'before and after' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'before exception', string_val => 'test 1' });
     
-    $T->ok_no_errors('any', "no error before execution");
+    $T->ok_no_errors("no error before execution");
     
     $result = $edt->execute;
     
-    $T->ok_has_error('any', qr/E_EXECUTE/, "error from exception");
+    $T->ok_has_error(qr/E_EXECUTE/, "error from exception");
     ok( ! $result, "transaction failed" );
     is( $edt->errors, 1, "found just one error" );
     $T->ok_no_record('EDT_TEST', "string_val='test 1'");
@@ -352,8 +352,8 @@ subtest 'before and after' => sub {
     is( $edt->transaction, 'committed', "transaction committed" );
     $T->ok_found_record('EDT_TEST', "string_req='before warning'");
     $T->ok_found_record('EDT_AUX', "name='test record before'");
-    $T->ok_no_errors('any');
-    $T->ok_has_warning('any', qr/W_TEST.*before/, "found test warning");
+    $T->ok_no_errors;
+    $T->ok_has_warning(qr/W_TEST.*before/, "found test warning");
     is( $edt->{save_before_count}, 1, "before_action finished" );
     isa_ok( $edt->{save_before_action}, 'EditTransaction::Action', "action record" ) &&
 	is( $edt->{save_before_action}->record->{string_req}, 'before warning', "correct action record" );
@@ -387,7 +387,7 @@ subtest 'before and after' => sub {
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
     is( $edt->{save_after_count}, 1, "after_action was not called again" );
     is( $edt->{save_cleanup_action_count}, 1, "cleanup_action was called" );
-    $T->ok_has_error( 'any', qr/E_EXECUTE/, "found error" );
+    $T->ok_has_error(qr/E_EXECUTE/, "found error" );
     
     # Check that an exception thrown by after_action will abort the transaction, but that a
     # warning will be passed along.
@@ -401,8 +401,8 @@ subtest 'before and after' => sub {
     ok( ! $result, "transaction failed" );
     is( $edt->transaction, 'aborted', "transaction was aborted" );
     $T->ok_no_record('EDT_TEST', "string_req='after exception'");
-    $T->ok_has_warning('any', qr/W_TEST.*after/, "found warning");
-    $T->ok_has_error('any', qr/E_EXECUTE/, "found error");
+    $T->ok_has_warning(qr/W_TEST.*after/, "found warning");
+    $T->ok_has_error(qr/E_EXECUTE/, "found error");
     is( $edt->errors, 1, "found just one error" );
     if ( is( $edt->{save_cleanup_action_count}, 1, "cleanup routine was called" ) )
     {
@@ -423,9 +423,9 @@ subtest 'before and after' => sub {
     ok( ! $result, "transaction failed" );
     is( $edt->transaction, 'aborted', "transaction was aborted" );
     is( $edt->errors, 2, "found two errors" );
-    $T->ok_has_error('any', qr/E_EXECUTE.*execution/, "found execution error");
-    $T->ok_has_error('any', qr/E_EXECUTE.*cleanup/, "found cleanup error");
-    $T->ok_has_warning('any', qr/W_TEST.*cleanup/, "found warning");
+    $T->ok_has_error(qr/E_EXECUTE.*execution/, "found execution error");
+    $T->ok_has_error(qr/E_EXECUTE.*cleanup/, "found cleanup error");
+    $T->ok_has_warning(qr/W_TEST.*cleanup/, "found warning");
 
     # Now make sure that before_action and after_action are all passed the proper operation and
     # action with all four operation types. We set IMMEDIATE_MODE so that each action will be
@@ -487,8 +487,8 @@ subtest 'before and after' => sub {
     $result = $edt->commit;
 
     ok( $result, "transaction succeeded" );
-    $T->ok_no_errors('any');
-    $T->ok_no_warnings('any');
+    $T->ok_no_errors;
+    $T->ok_no_warnings;
     is( $edt->transaction, 'committed', "transaction committed" );
     
     # Now test the same for the routine cleanup_action. We need to set special variables to
@@ -541,7 +541,7 @@ subtest 'before and after' => sub {
     ok( $result, "transaction succeeded" );
     is( $edt->action_count, 1, "one action succeeded" );
     is( $edt->fail_count, 4, "four actions failed" );
-    $T->ok_no_errors('any', "all errors were converted to warnings");
+    $T->ok_has_error(qr/^F_/, "errors were converted to warnings");
     is( $edt->warnings, 4, "found 4 warnings" );
     is( $edt->transaction, 'committed', "transaction committed" );
     

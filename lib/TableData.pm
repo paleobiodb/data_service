@@ -357,7 +357,7 @@ sub reset_cached_column_properties {
 # Return a list of the fields from the specified table that record who created each record. If
 # there are none, return false.
 
-our (%IS_AUTH) = (authorizer_no => 1, enterer_no => 1, enterer_id => 1);
+our (%IS_AUTH) = (authorizer_no => 1, enterer_no => 1, enterer_id => 1, admin_lock => 1);
 our (%AUTH_FIELD_CACHE);
 
 sub get_authinfo_fields {

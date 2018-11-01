@@ -12,9 +12,10 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 7;
+use Test::More tests => 8;
 
-use TableDefs qw(get_table_property);
+use TableDefs qw(get_table_property set_column_property);
+use TableData qw(reset_cached_column_properties);
 
 use EditTest;
 use EditTester;
@@ -79,26 +80,23 @@ subtest 'basic' => sub {
     is( $data[0], 'AAA', "element 1 is ok");
     is( $data[1], 'BBB', "element 2 is ok");
     
-    # Now make sure that 'specific_errors' returns the same error condition record.
-    
-    my ($s) = $edt->specific_errors;
-
-    is( $s, $e, "specific_errors returns the same record" );
-    
     # Add a warning, and make sure that the error count doesn't change.
-
+    
     $edt->add_condition('W_EXECUTE');
     
     is( $edt->errors, 1, "still only one error" );
     is( $edt->warnings, 1, "also has one warning" );
-    is( $edt->specific_warnings, 1, "specific_warnings also returns 1" );
+    is( $edt->conditions, 2, "two conditions" );
+    is( $edt->conditions('main', 'errors'), 1, "one error with 'main'");
+    is( $edt->conditions('main', 'warnings'), 1, "one warning with 'main'");
     
     # Make sure that warnings also have the proper class and return the proper values.
     
     my (@w) = $edt->warnings;
-    my (@sw) = $edt->specific_warnings;
-    
-    is( $w[0], $sw[0], "warnings and specific_warnings return the same record" );
+    my (@sw) = $edt->conditions('all', 'warnings');
+
+    is( @w, @sw, "warnings and conditions return same number of entries");
+    is( $w[0], $sw[0], "warnings and conditions return the same record" );
     
     unless ( isa_ok( $w[0], 'EditTransaction::Condition', "warning has proper class" ) )
     {
@@ -111,7 +109,7 @@ subtest 'basic' => sub {
     ok( ! $w[0]->data, "warning has no parameters");
     
     ($msg) = $edt->warning_strings;
-
+    
     is( $msg, 'W_EXECUTE: UNKNOWN', "warning message has proper format with no parameters" );
     
     # Now add a condition after an action, ane make sure that it is properly attached to that
@@ -121,13 +119,13 @@ subtest 'basic' => sub {
     $edt->add_condition('E_EXECUTE', 'ghi');
     
     is( $edt->errors, 2, "now there are two errors" );
-    is( $edt->specific_errors, 1, "one error for the most recent action" );
-
+    is( $edt->conditions('latest', 'errors'), 1, "one error for the most recent action" );
+    
     my @e = $edt->errors;
-    my @s = $edt->specific_errors;
-
+    my @s = $edt->conditions('latest', 'errors');
+    
     is( $e[1], $s[0], "most recent error record is in both lists" );
-
+    
     unless ( isa_ok( $s[0], 'EditTransaction::Condition', "error has proper class" ) )
     {
 	return;
@@ -142,25 +140,29 @@ subtest 'basic' => sub {
     is( $d[0], 'ghi', "condition has proper parameter" );
     
     $edt->add_condition('main', 'E_EXECUTE', 'qxyz');
-
+    
     is( $edt->errors, 3, "now there are three errors" );
-    is( $edt->specific_errors, 1, "still only one error for the most recent action" );
-    is( $edt->specific_errors('main'), 2, "two errors not associated with any action" );
-    is( $edt->specific_warnings('main'), 1, "one warning not associated with any action" );
+    is( $edt->conditions('latest', 'errors'), 1, "still only one error for the most recent action" );
+    is( $edt->conditions('main', 'errors'), 2, "two errors not associated with any action" );
+    is( $edt->conditions, 4, "four conditions in total");
+    is( $edt->conditions('all'), 4, "four conditions also with argument 'all'" );
+    is( $edt->warnings('main'), 1, "one warning not associated with any action" );
     
     @e = $edt->errors;
-    @s = $edt->specific_errors('main');
-
+    @s = $edt->conditions('main', 'errors');
+    
     is( $e[-1], $s[-1], "last condition is the same on both lists" );
-
+    
     is( $s[-1]->code, 'E_EXECUTE', "last condition has proper code" );
     is( $s[-1]->label, '', "last condition has empty label" );
     is( $s[-1]->table, '', "last condition has empty table" );
-
+    
+    is( @s, 2, "conditions method returned a proper list" );
+    
     # Check that we can get ahold of the current action.
-
+    
     my $save_action = $edt->current_action;
-
+    
     ok( $save_action, "got current action" );
     
     # Now add another action, another error, and a warning, and check that the counts add up.
@@ -169,31 +171,115 @@ subtest 'basic' => sub {
     $edt->add_condition('E_TEST');
     $edt->add_condition('W_TEST');
     
-    (@s) = $edt->specific_errors;
-
+    (@s) = $edt->conditions('latest', 'errors');
+    
     is( @s, 1, "one error for this action" ) &&
+	isa_ok( $s[0], 'EditTransaction::Condition' ) &&
 	is( $s[0]->code, 'E_TEST', "error has proper code" );
     
-    (@sw) = $edt->specific_warnings;
-
+    (@sw) = $edt->conditions('latest', 'warnings');
+    
     is ( @sw, 1, "one warning for this action" ) &&
+	isa_ok( $s[0], 'EditTransaction::Condition' ) &&
 	is( $sw[0]->code, 'W_TEST', "warning has proper code" );
-
+    
     is( $edt->errors, 4, "now there are four errors" );
     is( $edt->warnings, 2, "now there are two warnings" );
-    is( $edt->specific_errors('main'), 2, "still two errors on 'main'" );
-    is( $edt->specific_warnings('main'), 1, "still one warning on 'main'");
+    is( $edt->conditions('main', 'errors'), 2, "still two errors on 'main'" );
+    is( $edt->conditions('main', 'warnings'), 1, "still one warning on 'main'");
+    
+    my $action2 = $edt->current_action;
+    
+    # Check that we can grab the conditions associated with the saved action.
 
+    my @sa = $edt->conditions($save_action);
+
+    if ( is(@sa, 1, "found one entry from saved action" ) &&
+	 isa_ok($sa[0], 'EditTransaction::Condition', "entry was a condition object") )
+    {
+	is( $sa[0]->code, 'E_EXECUTE', "condition has proper code" );
+	is( $sa[0]->label, 'abc1', "condition has proper label" );
+	is( $sa[0]->table, 'EDT_TEST', "condition has proper table" );
+    }
+
+    my @wa = $edt->conditions($save_action, 'warnings');
+    
+    is( @wa, 0, "no warnings from saved action" );
+
+    my @wa2 = $edt->conditions($action2, 'warnings');
+
+    is( @wa2, 1, "found one warning from second saved action" ) &&
+	isa_ok( $wa2[0], 'EditTransaction::Condition', "found proper condition object" );
+    
     # Check that we can add a condition to the previously saved action, and the counts still add
     # up.
-
+    
     if ( $save_action )
     {
 	$edt->add_condition($save_action, 'E_REQUIRED', 'foo');
-	is( $edt->specific_errors($save_action), 2, "now two errors on saved action" );
+	is( $edt->conditions($save_action, 'errors'), 2, "now two errors on saved action" );
 	is( $edt->errors, 5, "now there are five errors" );
-	is( $edt->specific_errors('main'), 2, "still two errors on 'main'" );
+	is( $edt->conditions('main', 'errors'), 2, "still two errors on 'main'" );
     }
+};
+
+
+# Now test the routines that return error and warning strings.
+
+subtest 'strings' => sub {
+    
+    set_column_property('EDT_TEST', 'string_req', ALLOW_TRUNCATE => 1);
+    reset_cached_column_properties('EDT_TEST', 'string_req');
+    
+    my $edt = $T->new_edt($perm_a) || return;
+    
+    $edt->add_condition('E_EXECUTE', 'foobar');
+    $edt->add_condition('C_CREATE');
+    $edt->add_condition('W_EXECUTE', 'grex');
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'abc', _label => 'a1', signed_val => 'def' });
+    $edt->insert_record('EDT_TEST', { string_req => 'def' x 100, _label => 'a2' });
+    
+    is( $edt->error_strings, 3, "got three error strings" );
+    
+    my @errors = $edt->error_strings;
+    
+    if ( is( @errors, 3, "got three error strings in list context" ) )
+    {
+	is( $errors[0], "E_EXECUTE: foobar", "error message 1" );
+	like( $errors[1], qr{^C_CREATE: .*}, "error message 2" );
+	like( $errors[2], qr{^E_FORMAT \(a1\): .*integer}, "error message 3" );
+    }
+    
+    else
+    {
+	$T->diag_errors;
+    }
+    
+    is( $edt->warning_strings, 2, "got two warning strings" );
+
+    my @warnings = $edt->warning_strings;
+
+    if ( is( @warnings, 2, "got three warning strings in list context" ) )
+    {
+	is( $warnings[0], 'W_EXECUTE: grex', "warning message 1" );
+	like( $warnings[1], qr{W_TRUNC \(a2\): .*truncated}, "warning message 2" );
+    }
+
+    # Now test that demoted errors are reported as warning strings instead of error strings.
+    
+    $edt = $T->new_edt($perm_a, { NOT_FOUND => 1 });
+    
+    $edt->update_record('EDT_TEST', { test_id => 9999, string_val => 'abc', _label => 'def:2' });
+    $edt->add_condition('E_EXECUTE', 'foobar');
+    $edt->add_condition('C_CREATE');
+    
+    is( $edt->error_strings, 2, "got two error strings" );
+    is( $edt->warning_strings, 1, "got one warning string" );
+    
+    my ($w) = $edt->warning_strings;
+    
+    like( $w, qr{F_NOT_FOUND \(def:2\): .*9999}, "warning message 1" );
 };
 
 
@@ -255,21 +341,22 @@ subtest 'register' => sub {
 	return;
     }
     
-    $T->ok_has_error( 'any', 'E_TEST_2' );
-    $T->ok_has_error( 'any', qr/C_TEST_2: xxx/, "found caution with default" );
+    $T->ok_has_error( 'E_TEST_2' );
+    $T->ok_has_error( qr/C_TEST_2: xxx/, "found caution with default" );
     $T->ok_has_warning( qr/W_TEST_2/, "found warning" );
 
     $edt->add_condition('C_TEST_2', 'abc', 'def');
 
-    $T->ok_has_error( 'any', qr/C_TEST_2: test caution def/, "found caution with template" );
+    $T->ok_has_error( qr/C_TEST_2: test caution def/, "found caution with template" );
 
     $edt->add_condition('C_TEST_2', 'qrs');
 
-    $T->ok_has_error( 'any', qr/C_TEST_2: xxx/, "found caution with default 2" );
+    $T->ok_has_error( qr/C_TEST_2: xxx/, "found caution with default 2" );
 };
 
 
-# Check that invalid calls to  generate errors.
+# Check that invalid calls to add_condition throw exceptions, and also invalid calls to the
+# conditions method.
 
 subtest 'invalid' => sub {
 
@@ -280,23 +367,39 @@ subtest 'invalid' => sub {
     eval {
 	$edt->add_condition( { }, 'E_EXECUTE' );
     };
-
+    
     ok( $@, "exception on non-action reference" );
-
+    
     # Check that starting the argument list with undef is okay.
 
     eval {
 	$edt->add_condition( undef, 'E_EXECUTE' );
     };
-
+    
     ok( ! $@, "first undefined is okay" );
-    is( $edt->specific_errors('main'), 1, "undefined is the same as 'main'" );
-
+    is( $edt->conditions('main', 'errors'), 1, "undefined is the same as 'main'" );
+    
     # Check that missing parameters are filled in with UNKNOWN.
-
+    
     $edt->add_condition('E_FORMAT');
 
-    $T->ok_has_error( 'any', qr/E_FORMAT.*UNKNOWN.*UNKNOWN/, "found both UNKNOWN substitutions" );
+    $T->ok_has_error( qr/E_FORMAT.*UNKNOWN.*UNKNOWN/, "found both UNKNOWN substitutions" );
+
+    # Now check that invalid calls to 'conditions' throw exceptions.
+
+    eval {
+	$edt->conditions('ack');
+    };
+
+    ok( $@, "exception on bad first argument to 'conditions'" ) &&
+	like( $@, qr{selector}, "exception contained word 'selector'" );
+    
+    eval {
+	$edt->conditions('main', 'ack');
+    };
+    
+    ok( $@, "exception on bad second argument to 'conditions'" ) &&
+	like( $@, qr{type}, "exception contained word 'type'" );
 };
 
 
@@ -320,23 +423,23 @@ subtest 'proceed' => sub {
     
     $edt->insert_record('EDT_TEST', { signed_val => 'abc' });
     
-    is( $edt->errors, 1, "still one error" ) || $T->diag_errors('any');
-    is( $edt->warnings, 2, "two errors demoted to warnings" ) || $T->diag_warnings('any');
-    is( $edt->specific_errors, 2, "errors still count when checked for this action" ) || $T->diag_errors;
-    ok( ! $edt->specific_warnings, "no specific warnings for this action" ) || $T->diag_warnings;
+    is( $edt->errors, 1, "still one error" ) || $T->diag_errors;
+    is( $edt->warnings, 2, "two errors demoted to warnings" ) || $T->diag_warnings;
+    is( $edt->conditions('latest', 'errors'), 2, "errors still count when checked for this action" ) || $T->diag_errors;
+    ok( ! $edt->conditions('latest', 'warnings'), "no specific warnings for this action" ) || $T->diag_warnings;
     
-    my ($e) = $edt->specific_errors;
-
+    my ($e) = $edt->conditions('latest', 'errors');
+    
     ok( $e, "found one specific error" ) &&
 	like( $e->code, qr/^F_/, "code starts with F_" );
     
     # Now add a record with a warning, and test that the counts add up.
-
+    
     $edt->insert_record('EDT_TEST', { string_req => 'validate warning' });
     
     is( $edt->warnings, 3, "now there are three warnings" );
-    is( $edt->specific_errors, 0, "no specific errors" );
-    is( $edt->specific_warnings, 1, "one specific warning" );
+    is( $edt->conditions('latest', 'errors'), 0, "no specific errors" );
+    is( $edt->conditions('latest', 'warnings'), 1, "one specific warning" );
     
     # Now try a caution.
     
@@ -346,8 +449,8 @@ subtest 'proceed' => sub {
     
     is( $edt->warnings, 1, "caution was demoted to warning" );
 
-    ($e) = $edt->specific_errors;
-
+    ($e) = $edt->conditions('latest', 'errors');
+    
     ok( $e, "found one specific error" ) &&
 	like( $e->code, qr/^D_/, "code starts with D_" );
 };
@@ -367,15 +470,15 @@ subtest 'notfound' => sub {
 
     $edt->update_record('EDT_TEST', { _label => 'f1', $primary => 99999, signed_val => 32 });
 
-    is( $edt->specific_errors, 1, "one specific error" );
+    is( $edt->conditions('latest', 'errors'), 1, "one specific error" );
     is( $edt->errors, 0, "no general errors" );
-    is( $edt->specific_warnings, 0, "no specific warnings" );
+    is( $edt->conditions('latest', 'warnings'), 0, "no specific warnings" );
     is( $edt->warnings, 1, "one general warning" );
     ok( $edt->can_proceed, "transaction can proceed" );
     
-    my ($e) = $edt->specific_errors;
+    my ($e) = $edt->conditions('latest', 'errors');
     
-    if ( ok( $e, "found error" ) )
+    if ( isa_ok( $e, 'EditTransaction::Condition', "found error" ) )
     {
 	is( $e->code, 'F_NOT_FOUND', "error had proper code" );
 	is( $e->label, 'f1', "error had proper label" );
@@ -385,9 +488,9 @@ subtest 'notfound' => sub {
     
     $edt->insert_record('EDT_TEST', { _label => 'f2', signed_val => 'abc' });
     
-    is( $edt->specific_errors, 2, "two specific errors" );
+    is( $edt->conditions('latest', 'errors'), 2, "two specific errors" );
     is( $edt->errors, 2, "two general errors" );
-    is( $edt->specific_warnings, 0, "no specific warnings" );
+    is( $edt->conditions('latest', 'warnings'), 0, "no specific warnings" );
     is( $edt->warnings, 1, "one general warning" );
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
 };

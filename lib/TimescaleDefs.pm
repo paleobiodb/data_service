@@ -48,8 +48,10 @@ my (%MACROSTRAT_TABLES) = ( MACROSTRAT_LITHS => 'macrostrat.liths',
     set_table_property('TIMESCALE_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('TIMESCALE_DATA', ALLOW_DELETE => 1);
     set_table_property('TIMESCALE_DATA', PRIMARY_KEY => "timescale_no");
+    set_table_property('TIMESCALE_DATA', CASCADE_DELETE => ['TIMESCALE_BOUNDS',
+							    'TIMESCALE_INTS',
+							    'TIMESCALE_REFS']);
     
-    set_column_property('TIMESCALE_DATA', 'timescale_no', EXTID_TYPE => 'TSC');
     set_column_property('TIMESCALE_DATA', 'is_active', ADMIN_SET => 1);
     set_column_property('TIMESCALE_DATA', 'has_error', ADMIN_SET => 1);
     set_column_property('TIMESCALE_DATA', 'authority', ADMIN_SET => 1);
@@ -58,23 +60,20 @@ my (%MACROSTRAT_TABLES) = ( MACROSTRAT_LITHS => 'macrostrat.liths',
     set_table_property('TIMESCALE_BOUNDS', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('TIMESCALE_BOUNDS', ALLOW_DELETE => 1);
     set_table_property('TIMESCALE_BOUNDS', PRIMARY_KEY => "bound_no");
-    
-    set_column_property('TIMESCALE_BOUNDS', 'bound_no', EXTID_TYPE => 'BND');
-    set_column_property('TIMESCALE_BOUNDS', 'interval_no', EXTID_TYPE => 'INT');
-    set_column_property('TIMESCALE_BOUNDS', 'reference_no', EXTID_TYPE => 'REF');
+    set_table_property('TIMESCALE_BOUNDS', PERMISSION_TABLE => 'TIMESCALE_DATA');
     
     set_table_property('TIMESCALE_INTS', CAN_POST => 'AUTHORIZED');
     set_table_property('TIMESCALE_INTS', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('TIMESCALE_INTS', PRIMARY_KEY => "interval_no");
-    
-    set_column_property('TIMESCALE_INTS', 'interval_no', EXTID_TYPE => 'INT');
+    set_table_property('TIMESCALE_INTS', PERMISSION_TABLE => 'TIMESCALE_DATA');
     
     set_table_property('TIMESCALE_REFS', CAN_POST => 'AUTHORIZED');
     set_table_property('TIMESCALE_REFS', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('TIMESCALE_REFS', ALLOW_DELETE => 1);
+    set_table_property('TIMESCALE_REFS', PERMISSION_TABLE => 'TIMESCALE_DATA');
     
-    set_column_property('TIMESCALE_REFS', 'timescale_no', EXTID_TYPE => 'TSC');
-    set_column_property('TIMESCALE_REFS', 'reference_no', EXTID_TYPE => 'REF');
+    set_column_property('TIMESCALE_REFS', 'timescale_no', REQUIRED => 1);
+    set_column_property('TIMESCALE_REFS', 'reference_no', REQUIRED => 1);
 }
 
 

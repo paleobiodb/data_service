@@ -40,6 +40,7 @@ our ($MULTI_INSERT_LIMIT) = 100;
 
 our (%ALLOW_BY_CLASS) = ( EditTransaction => { 
 		CREATE => 1,
+		LOCKED => 1,
 		MULTI_DELETE => 1,
 		ALTER_TRAIL => 1,
 		NOT_FOUND => 1,
@@ -59,7 +60,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_NO_KEY => "The %1 operation requires a primary key value",
 		E_HAS_KEY => "You may not specify a primary key value for the %1 operation",
 		E_KEY_NOT_FOUND => "Field '%1': no record was found with key '%2'",
-		E_LABEL_NOT_FOUND => "Field '%1': no record was found with label '%2'",
+		E_LABEL_NOT_FOUND => "Field '%1': no record of the proper type was found with label '%2'",
 		E_NOT_FOUND => "No record was found with key '%1'",
 		E_LOCKED => "This record is locked",
 		E_PERM => { insert => "You do not have permission to insert a record into this table",
@@ -73,6 +74,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    default => "You do not have permission for this operation" },
 		E_BAD_OPERATION => "Invalid operation '%1'",
 		E_BAD_RECORD => "%1",
+		E_BAD_UPDATE => "You cannot change the value of '%1' once a record has been created",
 		E_PERM_COL => "You do not have permission to set the value of the field '%1'",
 		E_REQUIRED => "Field '%1': must have a nonempty value",
 		E_RANGE => "Field '%1': %2",
@@ -144,6 +146,7 @@ sub new {
 		bad_list => [ ],
 		errors => [ ],
 		warnings => [ ],
+		demoted => [ ],
 		condition_code => { },
 		tables => { },
 		label_found => { },
@@ -690,7 +693,7 @@ sub add_condition {
 		$edt->{condition_code}{$code}++;
 		
 		my $condition = EditTransaction::Condition->new($action, $code, @_);
-		push @{$edt->{warnings}}, $condition;
+		push @{$edt->{demoted}}, $condition;
 		
 		return $condition;
 	    }
@@ -736,11 +739,6 @@ sub add_condition {
 }
 
 
-# demote_condition ( action )
-#
-# 
-
-
 # errors ( )
 # 
 # Return the list of error and caution condition records for the current EditTransaction. In
@@ -759,142 +757,103 @@ sub errors {
 # Return the list of warning condition records for the current EditTransaction. See &errors above.
 
 sub warnings {
-    
-    return @{$_[0]->{warnings}};
+
+    if ( wantarray )
+    {
+	return @{$_[0]->{demoted}}, @{$_[0]->{warnings}};
+    }
+
+    else
+    {
+	return @{$_[0]->{demoted}} + @{$_[0]->{warnings}};
+    }
 }
 
 
-# specific_errors ( [action] )
+# conditions ( [selector], [type] )
 # 
-# Return the list of error and caution condition records for the current action, or for a
-# specified action, or those not associated with any action. For the latter case, the argument
-# 'main' should be provided.
-
-sub specific_errors {
-    
-    my ($edt, $search) = @_;
-    
-    # If a specific action was given, look for that one unless the argument 'main' was given, in
-    # which case we look for no action at all. If no action was given, we just use the current
-    # action, which may be empty.
-    
-    if ( $search eq 'main' )
-    {
-	$search = undef;
-    }
-    
-    else
-    {
-	$search ||= $edt->{current_action};
-    }
-    
-    # If we are looking for a specific action, then we can return immediately under either of the
-    # following conditions: if this routine was called in scalar context, or if this action was
-    # not associated with any errors. In either case, we need only check the action's error count.
-    
-    my @specific_list;
-    
-    if ( $search )
-    {
-	unless ( $search->{error_count} && wantarray )
-	{
-	    return wantarray ? () : $search->{error_count} || 0;
-	}
-	
-	# If PROCEED or NOT_FOUND is allowed, then we have to check the warning list first,
-	# because errors for this action may have been demoted to warnings.
-
-	if ( $edt->{proceed} && $search->{error_count} )
-	{
-	    foreach my $i ( 1..@{$edt->{warnings}} )
-	    {
-		last if $search->{error_count} == @specific_list;
-		
-		if ( $edt->{warnings}[-$i][0] == $search &&
-		     $edt->{warnings}[-$i][1] && $edt->{warnings}[-$i][1] =~ /^[DF]/ )
-		{
-		    unshift @specific_list, $edt->{warnings}[-$i];
-		}
-	    }
-	}
-    }
-    
-    # Otherwise, go through the error list backwards looking for errors that match the specified
-    # action. Note the negation operator on the array index. The reason we search backwards is that we
-    # are most likely to be looking for errors associated with the most recent action.
-    
-    foreach my $i ( 1..@{$edt->{errors}} )
-    {
-	# If we are looking for a specific action, then stop when we have found as many errors as are
-	# recorded for this action.
-	
-	last if $search && $search->{error_count} == @specific_list;
-	
-	# The first field of each condition record indicates the action (if any) that it was
-	# attached to.
-	
-	if ( $edt->{errors}[-$i][0] == $search )
-	{
-	    unshift @specific_list, $edt->{errors}[-$i];
-	}
-    }
-    
-    return @specific_list;
-}
-
-
-# specific_warnings ( [action] )
+# Returns the list of condition records associated with the current action, or with a specified action, or
+# those not associated with any action, or all conditions associated with this transaction.
+# 
+# The parameter $selector may be any of the following, defaulting to 'all':
+# 
+# 'all'		returns all conditions associated with this EditTransaction
+# 'latest'	returns all conditions associated with the most recent action
+# 'main'	returns all conditions not associated with any action
+# Action ref	returns all conditions associated with the specified action
 #
-# Do the same for warnings.
+# The parameter $type may be any of the following, defaulting to 'all':
+#
+# 'all'		returns all types of conditions
+# 'errors'	returns only errors and demoted errors
+# 'warnings'	returns only warnings
 
-sub specific_warnings {
+sub conditions {
     
-    my ($edt, $search) = @_;
+    my ($edt, $selector, $type) = @_;
     
-    # If a specific action was given, look for that one unless the argument 'main' was given, in
-    # which case we look for no action at all. If no action was given, we just use the current
-    # action, which may be empty.
+    # The selector and type default to 'all' if not specified.
     
-    if ( $search eq 'main' )
+    $selector ||= 'all';
+    $type ||= 'all';
+    
+    my @conditions;
+    
+    # If $selector is 'all', then we just need to return the appropriate list(s).
+    
+    if ( $selector eq 'all' )
     {
-	$search = undef;
-    }
-    
-    else
-    {
-	$search ||= $edt->{current_action};
-    }
-    
-    # If we are looking for a specific action, then we can return immediately under either of the
-    # following conditions: if this routine was called in scalar context, or if this action was
-    # not associated with any warnings. In either case, we need only check the action's warning count.
-    
-    if ( $search && ! ( $search->{warning_count} && wantarray ) )
-    {
-	return wantarray ? () : $search->{warning_count} || 0;
-    }
-    
-    # Otherwise, go through the warning list backwards looking for warnings that match the specified
-    # action. Note the negation operator on the array index. The reason we search backwards is that we
-    # are most likely to be looking for warnings associated with the most recent action.
-    
-    my @specific_list;
-    
-    foreach my $i ( 1..@{$edt->{warnings}} )
-    {
-	last if $search && $search->{warning_count} == @specific_list;
-	
-	# If we are looking for a specific action, as opposed to no action, then stop when we
-	# reach the warning count recorded for that action.
-	
-	if ( $edt->{warnings}[-$i][0] == $search &&
-	     $edt->{warnings}[-$i][1] && $edt->{warnings}[-$i][1] =~ /^[DFW]/ )
+	if ( $type eq 'all' )
 	{
-	    unshift @specific_list, $edt->{warnings}[-$i];
+	    return (@{$edt->{errors}}, @{$edt->{demoted}}, @{$edt->{warnings}}) if wantarray;
+	    return (@{$edt->{errors}} + @{$edt->{demoted}} + @{$edt->{warnings}}); # otherwise
+	}
+	
+	elsif ( $type eq 'errors' )
+	{
+	    return (@{$edt->{errors}}, @{$edt->{demoted}}) if wantarray;
+	    return (@{$edt->{errors}} + @{$edt->{demoted}}); # otherwise
+	}
+	
+	elsif ( $type eq 'warnings' )
+	{
+	    return @{$edt->{warnings}};
+	}
+	
+	else
+	{
+	    croak "invalid type '$type'";
 	}
     }
+    
+    # Otherwise, we need to search the individual lists.
+    
+    foreach my $c ( $type eq 'all' ? (@{$edt->{errors}}, @{$edt->{demoted}}, @{$edt->{warnings}}) :
+		    $type eq 'errors' ? (@{$edt->{errors}}, @{$edt->{demoted}}) :
+		    $type eq 'warnings' ? @{$edt->{warnings}} : croak "invalid type '$type'" )
+    {
+	if ( $selector eq 'main' )
+	{
+	    push @conditions, $c unless $c->[0];
+	}
 
-    return @specific_list;
+	elsif ( $selector eq 'latest' )
+	{
+	    push @conditions, $c if $c->[0] == $edt->{current_action};
+	}
+	
+	elsif ( ref $selector eq 'EditTransaction::Action' )
+	{
+	    push @conditions, $c if $c->[0] == $selector;
+	}
+	
+	else
+	{
+	    croak "bad selector '$selector'";
+	}
+    }
+    
+    return @conditions;
 }
 
 
@@ -988,7 +947,7 @@ sub error_strings {
     
     my ($edt) = @_;
     
-    return $edt->_generate_strings('errors');
+    return $edt->_generate_strings(@{$edt->{errors}});
 }
 
 
@@ -996,25 +955,25 @@ sub warning_strings {
 
     my ($edt) = @_;
 
-    return $edt->_generate_strings('warnings');
+    return $edt->_generate_strings(@{$edt->{demoted}}, @{$edt->{warnings}});
 }
 
 
 sub _generate_strings {
 
-    my ($edt, $field) = @_;
+    my $edt = shift;
     
     my %message;
     my @messages;
     
-    foreach my $e ( @{$edt->{$field}} )
+    foreach my $e ( @_ )
     {
 	my $str = $e->code . ': ' . $edt->generate_msg($e);
 	
 	push @messages, $str unless $message{$str};
 	push @{$message{$str}}, $e->label;
     }
-
+    
     my @strings;
     
     foreach my $m ( @messages )
@@ -1264,7 +1223,7 @@ sub _new_record {
 	$label = '#' . $edt->{record_count};
     }
     
-    $edt->{label_found}{$label} = $table;
+    $edt->{label_found}{$label} = $operation eq 'delete' ? '_DELETED_' : $table;
     
     # Then create a new EditTransaction::Action object.
     
@@ -1568,9 +1527,17 @@ sub insert_record {
 	    
 	    my $permission = $edt->authorize_action($action, 'insert', $table);
 	    
+	    # If errors occurred during authorization, then we need not check further but can
+	    # proceed to the next action.
+	    
+	    if ( $permission eq 'error' && $action->has_errors )
+	    {
+		return;
+	    }
+	    
 	    # If the user does not have permission to add a record, add an error condition.
 	    
-	    if ( $permission ne 'post' && $permission ne 'admin' )
+	    elsif ( $permission ne 'post' && $permission ne 'admin' )
 	    {
 		$edt->add_condition($action, 'E_PERM', 'insert');
 	    }
@@ -1630,7 +1597,7 @@ sub update_record {
     
     # We can only update a record if a primary key value is specified.
     
-    if ( my $keyexpr = $edt->generate_keyexpr($action) )
+    if ( my $keyexpr = $edt->_set_keyexpr($action) )
     {
 	try {
 
@@ -1638,13 +1605,21 @@ sub update_record {
 	    # override this method, if it needs to make different checks than the default ones.
 	    
 	    my $permission = $edt->authorize_action($action, 'update', $table, $keyexpr);
+
+	    # If errors occurred during authorization, then we need not check further but can
+	    # proceed to the next action.
+	    
+	    if ( $permission eq 'error' && $action->has_errors )
+	    {
+		return;
+	    }
 	    
 	    # If no such record is found in the database, add an E_NOT_FOUND condition. If this
 	    # EditTransaction has been created with the 'PROCEED' or 'NOT_FOUND' allowance, it
 	    # will automatically be turned into a warning and will not cause the transaction to be
 	    # aborted.
 	    
-	    if ( $permission eq 'notfound' )
+	    elsif ( $permission eq 'notfound' )
 	    {
 		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
 	    }
@@ -1660,15 +1635,19 @@ sub update_record {
 	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
 	    # record is actually being unlocked by this operation, or the transaction allows
 	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
-	    # that the user does have permission to update the record if the lock is disregarded.
+	    # that the user does have permission to update the record if the lock is disregarded,
+	    # and it implies 'admin' permission. So we proceed as if we had 'admin' permission,
+	    # but add a caution unless the abovementioned conditions are met.
 	    
 	    elsif ( $permission eq 'unlock' )
 	    {
 		unless ( (defined $record->{admin_lock} && $record->{admin_lock} == 0) ||
-			 $edt->allows('LOCKED') )
+		     $edt->allows('LOCKED') )
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
+
+		$action->_set_permission('admin');
 	    }
 	    
 	    # If the user does not have permission to edit the record, add an E_PERM condition. 
@@ -1733,6 +1712,14 @@ sub update_many {
 	
 	my $permission = $edt->authorize_action($action, 'update_many', $table);
 	
+	# If errors occurred during authorization, then we need not check further but can
+	# proceed to the next action.
+	
+	if ( $permission eq 'error' && $action->has_errors )
+	{
+	    return;
+	}
+	
 	# If the user does not have permission to edit the record, add an E_PERM condition. 
 	
 	if ( $permission ne 'edit' && $permission ne 'admin' )
@@ -1778,7 +1765,7 @@ sub replace_record {
     
     # We can only replace a record if a primary key value is specified.
     
-    if ( my $keyexpr = $edt->generate_keyexpr($action) )
+    if ( my $keyexpr = $edt->_set_keyexpr($action) )
     {
 	try {
 	    
@@ -1787,13 +1774,21 @@ sub replace_record {
 	    
 	    my $permission = $edt->authorize_action($action, 'replace', $table, $keyexpr);
 	    
+	    # If errors occurred during authorization, then we need not check further but can
+	    # proceed to the next action.
+	    
+	    if ( $permission eq 'error' && $action->has_errors )
+	    {
+		return;
+	    }
+	    
 	    # If no such record is found in the database, check to see if this EditTransaction
 	    # allows CREATE. If this is the case, and if the user also has 'admin' permission on
 	    # this table, or if the user has 'post' and the table property ADMIN_INSERT_KEY is NOT
 	    # set, then a new record will be created with the specified primary key
 	    # value. Otherwise, an appropriate error condition will be added.
 	    
-	    if ( $permission eq 'notfound' )
+	    elsif ( $permission eq 'notfound' )
 	    {
 		if ( $edt->allows('CREATE') )
 		{
@@ -1802,8 +1797,7 @@ sub replace_record {
 		    if ( $permission eq 'admin' || $permission eq 'insert_key' )
 		    {
 			$action->_set_permission($permission);
-			# $$$ we need to mark that the replace is actually an insert in this case,
-			# so that modifier_no can be properly set.
+			$action->{_no_modifier} = 1;
 		    }
 		    
 		    elsif ( $edt->allows('NOT_FOUND') )
@@ -1907,7 +1901,7 @@ sub delete_record {
     
     # A record can only be deleted if a primary key value is specified.
     
-    if ( my $keyexpr = $edt->generate_keyexpr($action) )
+    if ( my $keyexpr = $edt->_set_keyexpr($action) )
     {
 	try {
 	    
@@ -1916,12 +1910,20 @@ sub delete_record {
 	    
 	    my $permission = $edt->authorize_action($action, 'delete', $table, $keyexpr);
 	    
+	    # If errors occurred during authorization, then we need not check further but can
+	    # proceed to the next action.
+	    
+	    if ( $permission eq 'error' && $action->has_errors )
+	    {
+		return;
+	    }
+	    
 	    # If no such record is found in the database, add an error condition. If this
 	    # EditTransaction has been created with the 'PROCEED' or 'NOT_FOUND' allowance, it
 	    # will automatically be turned into a warning and will not cause the transaction to be
 	    # aborted.
 	    
-	    if ( $permission eq 'notfound' )
+	    elsif ( $permission eq 'notfound' )
 	    {
 		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
 	    }
@@ -2007,9 +2009,17 @@ sub delete_many {
 	
 	my $permission = $edt->authorize_action($action, 'delete_many', $table);
 	
+	# If errors occurred during authorization, then we need not check further but can
+	# proceed to the next action.
+	
+	if ( $permission eq 'error' && $action->has_errors )
+	{
+	    return $edt->_handle_action($action);
+	}
+	
 	# If the user does not have permission to edit the record, add an E_PERM condition. 
 	
-	if ( $permission ne 'delete' && $permission ne 'admin' )
+	elsif ( $permission ne 'delete' && $permission ne 'admin' )
 	{
 	    $edt->add_condition($action, 'E_PERM', 'delete_many');
 	}
@@ -2264,35 +2274,263 @@ sub authorize_action {
     
     my $permission;
     
-    sswitch ( $operation )
+    # First check whether the PERMISSION_TABLE property is set for the specified table. If so,
+    # then the authorization check needs to be done on this other table first.
+    
+    if ( my $alt_table = get_table_property($table, 'PERMISSION_TABLE') )
     {
-	case 'insert': {
-	    $permission = $edt->check_table_permission($table, 'post');
-	}
-	
-	case 'update':
-	case 'replace': {
-	    $permission = $edt->check_record_permission($table, 'edit', $keyexpr);
-	}
+	$permission = $edt->authorize_action_subordinate($action, $operation, $table, $alt_table, $keyexpr);
+    }
+    
+    # Otherwise carry out the appropriate check for this operation directly on its own table.
 
-	case 'update_many': {
-	    $permission = $edt->check_many_permission($table, 'edit', $keyexpr);
-	}
-	
-	case 'delete': {
-	    $permission = $edt->check_record_permission($table, 'delete', $keyexpr);
-	}
-	
-	case 'delete_many': {
-	    $permission = $edt->check_many_permission($table, 'delete', $keyexpr);
-	}
-	
-        default: {
-	    croak "bad operation '$operation'";
-	}
-    };
+    else
+    {
+	sswitch ( $operation )
+	{
+	    case 'insert': {
+		$permission = $edt->check_table_permission($table, 'post');
+	    }
+	    
+	    case 'update':
+	    case 'replace': {
+		$permission = $edt->check_record_permission($table, 'edit', $keyexpr);
+	    }
+	    
+	    case 'update_many': {
+		$permission = $edt->check_many_permission($table, 'edit', $keyexpr);
+	    }
+	    
+	    case 'delete': {
+		$permission = $edt->check_record_permission($table, 'delete', $keyexpr);
+	    }
+	    
+	    case 'delete_many': {
+		$permission = $edt->check_many_permission($table, 'delete', $keyexpr);
+	    }
+	    
+	default: {
+		croak "bad operation '$operation'";
+	    }
+	};
+    }
+    
+    # If any errors have been generated for this action, then set the permission to 'error'. This
+    # will keep additional redundant errors from being added to the action.
+    
+    if ( $action->has_errors )
+    {
+	$permission = 'error';
+    }
+
+    # Store the permission with the action and return it.
     
     return $action->_set_permission($permission);
+}
+
+
+# authorize_action_subordinate ( action, operation, table, alt_table, keyexpr )
+#
+# Carry out the authorization operation where the actual table to be checked ($alt_table) is
+# different from the one on which the action is being executed ($table).
+
+sub authorize_action_subordinate {
+
+    my ($edt, $action, $operation, $table, $alt_table, $keyexpr) = @_;
+    
+    if ( $operation eq 'update_many' || $operation eq 'delete_many' )
+    {
+	croak "Operation '$operation' is not yet implemented on subordinate tables.";
+    }
+    
+    # If the action table is subordinate to another table, the action table must contain a column
+    # that links records in this table to records in the superior table (permission table). We need to
+    # start by determining what that column is.
+    
+    my $linkcol = get_table_property($table, 'PERMISSION_KEY');
+    my $alt_keycol = get_table_property($alt_table, 'PRIMARY_KEY');
+    
+    # If no linking column was specified, assume that it is named the same as the primary key
+    # of the permission table.
+    
+    croak "PERMISSION_TABLE was specified as '$alt_table' but no key column was found"
+	unless $linkcol || $alt_keycol;
+    
+    $linkcol ||= $alt_keycol;
+    
+    # If we were given a key expression for this record, fetch the current value for the
+    # linking column from that row.
+    
+    my ($keyval, $linkval, $new_linkval, $record_col);
+    
+    if ( $keyexpr )
+    {
+	($linkval) = $edt->get_old_values($table, $keyexpr, $linkcol);
+
+	unless ( $linkval )
+	{
+	    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec || $action->keycol);
+	    return 'error';
+	}
+    }
+    
+    # Then fetch the new value, if any, from the action record.
+    
+    my ($new_linkval, $record_col) = $edt->record_col($action, $table, $linkcol);
+    
+    # If we don't have one or the other value, that is an error.
+
+    unless ( $linkval || $new_linkval )
+    {
+	$edt->add_condition($action, 'E_REQUIRED', $record_col);
+	return 'error';
+    }
+    
+    # If we have both and they differ, that is also an error. It is disallowed to use an 'update'
+    # operation to switch the association of a subordinate record to a different superior record.
+
+    if ( $linkval && $new_linkval && $linkval ne $new_linkval )
+    {
+	$edt->add_condition($action, 'E_BAD_UPDATE', $record_col);
+	return 'error';
+    }
+    
+    # Now that these two conditions have been checked, we make sure that $linkval has the proper
+    # value in it regardless of whether it is new (i.e. for an 'insert') or old (for other operations).
+    
+    $linkval ||= $new_linkval;
+    
+    # If we have a cached permission result for this linkval, then just return that. There is no
+    # reason to look up the same superior record multiple times in the course of a single
+    # transaction.
+    
+    if ( $edt->{linkval_cache}{$linkval} )
+    {
+	return $edt->{linkval_cache}{$linkval};
+    }
+
+    # If the link value is a label, then it must represent a record either updated or inserted
+    # into the proper table by the current user earlier in the transaction. So all we need to do
+    # is check that it represents the proper type of record, and if so we return the indicated
+    # permission.
+    
+    if ( $linkval =~ /^@(.*)/ )
+    {
+	my $label = $1;
+	
+	# If the 'label_found' entry for this label exists and matches $alt_table, then we are
+	# okay as far as authorization of this action goes. If the action corresponding to the
+	# label failed its own authorization check, then it will never be executed and the
+	# corresponding key value will not be recorded. Therefore, execution of the current action
+	# will fail with a 'E_LABEL_NOT_FOUND' error. So this has left no security hole (I think.)
+	
+	if ( $edt->{label_found}{$label} && $edt->{label_found}{$label} eq $alt_table )
+	{
+	    my $permission;
+	    
+	    # If we have 'admin' permission on the superior table, then we return 'admin'.
+	    
+	    if ( $edt->check_table_permission($alt_table, 'edit') eq 'admin' )
+	    {
+		$permission = 'admin';
+	    }
+	    
+	    # Otherwise, we return the proper permission for the operation we are doing.
+	    
+	    elsif ( $operation eq 'insert' )
+	    {
+		$permission = 'post';
+	    }
+	    
+	    elsif ( $operation eq 'delete' )
+	    {
+		$permission = 'delete';
+	    }
+	    
+	    else
+	    {
+		$permission = 'edit';
+	    }
+
+	    $edt->{linkval_cache}{$linkval} = $permission;
+	    return $permission;
+	}
+	
+	else
+	{
+	    $edt->add_condition($action, 'E_LABEL_NOT_FOUND', $record_col, $label);
+	    return 'error';
+	}
+    }
+    
+    # Otherwise, we generate a key expression for the superior record so that we can check permissions
+    # on that. If we cannot generate one, then we return with an error. The 'aux_keyexpr'
+    # routine will already have added one or more error conditions in this case.
+    
+    my $alt_keyexpr = $edt->aux_keyexpr($action, $alt_table, $alt_keycol, $linkval, $record_col);
+    
+    unless ( $alt_keyexpr )
+    {
+	return 'error';
+    }
+    
+    # Now we carry out the permission check on the permission table. The permission check is for
+    # modifying the superior record, since that is essentially what we are doing. Whether we are
+    # inserting, updating, or deleting subordinate records, that essentially counts as modifying
+    # the superior record.
+    
+    my $permission = $edt->check_record_permission($alt_table, 'edit', $alt_keyexpr);
+    
+    # If the returned permission is 'edit' or 'admin', then we need to return the actual
+    # permission appropriate for the operation we are being asked to authorize. In the case of
+    # 'update' or 'replace', we need to check whether the action record acutally exists. We do
+    # this by checking for a non-empty value for $linkval.
+    
+    if ( $permission eq 'admin' )
+    {
+	if ( $operation eq 'update' || $operation eq 'replace' )
+	{
+	    $permission = $linkval ? 'admin' : 'notfound';
+	}
+    }
+    
+    elsif ( $permission eq 'edit' )
+    {
+	if ( $operation eq 'insert' )
+	{
+	    $permission = 'post';
+	}
+	
+	elsif ( $operation eq 'delete' )
+	{
+	    $permission = 'delete';
+	}
+	
+	elsif ( $operation eq 'update' || $operation eq 'replace' )
+	{
+	    $permission = $linkval ? 'edit' : 'notfound';
+	}
+    }
+    
+    # If the returned permission is 'notfound', then the record that is supposed to be linked do
+    # does not exist. This should generate an E_KEY_NOT_FOUND.
+    
+    elsif ( $permission eq 'notfound' )
+    {
+	$record_col ||= '';
+	$edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $linkval);
+	return 'error';
+    }
+    
+    # Otherwise, the permission returned should be 'none'. So return that.
+    
+    else
+    {
+	$permission = 'none';
+    }
+
+    $edt->{linkval_cache}{$linkval} = $permission;
+    return $permission;
 }
 
 
@@ -2714,7 +2952,7 @@ sub _execute_action_list {
 			if ( @additional )
 			{
 			    $action->_coalesce($edt->{label_keys}, @additional);
-			    $edt->generate_keyexpr($action);
+			    $edt->_set_keyexpr($action);
 			}
 		    }
 		    
@@ -2748,14 +2986,14 @@ sub _execute_action_list {
 }
 
 
-# generate_keyexpr ( action )
+# _set_keyexpr ( action )
 # 
 # Generate a key expression for the specified action, that will select the particular record being
 # acted on. If the action has no key value (i.e. is an 'insert' operation) or if no key column is
 # known for this table then return '0'. The reason for returning this value is that it can be
 # substituted into an SQL 'WHERE' clause and will be syntactically correct but always false.
 
-sub generate_keyexpr {
+sub _set_keyexpr {
     
     my ($edt, $action) = @_;
     
@@ -2763,13 +3001,13 @@ sub generate_keyexpr {
     my $keyval = $action->keyval;
     my $keyexpr;
 
-    # If we have computed a key expression, even if it is 0, return it.
+    # If we have already computed a key expression, even if it is 0, return it.
     
     if ( defined($keyexpr = $action->keyexpr) )
     {
 	return $keyexpr;
     }
-
+    
     # Otherwise, if there is no key column then the key expression is just 0.
     
     elsif ( ! $keycol )
@@ -2859,33 +3097,225 @@ sub generate_keyexpr {
 }
 
 
-sub get_keylist {
+# get_keyexpr ( action )
+#
+# If the action already has a key expression, return it. Otherwise, generate one and return it.
 
+sub get_keyexpr {
+    
     my ($edt, $action) = @_;
-    
-    my $keycol = $action->keycol;
-    my $keyval = $action->keyval;
-    
-    return '' unless $keycol;
-    
-    if ( $action->is_multiple )
+
+    if ( my $keyexpr = $action->keyexpr )
     {
-	my $dbh = $edt->dbh;
-	my @keys = $action->all_keys;
+	return $keyexpr;
+    }
+
+    else
+    {
+	return $edt->_set_keyexpr($action);
+    }
+}
+
+
+# aux_keyexpr ( table, keycol, keyval )
+#
+# Generate a key expression that will select the indicated record from the table.
+
+sub aux_keyexpr {
+    
+    my ($edt, $action, $table, $keycol, $keyval, $record_col) = @_;
+
+    if ( $action )
+    {
+	$table ||= $action->table;
+	$keycol ||= $action->keycol;
+	$keyval ||= $action->keyval;
+	$record_col ||= $action->keyrec;
+    }
+    
+    # If we are given an empty key value, or '0', then we cannot generate a key expression. Add an
+    # E_REQUIRED error condition to the action, and return.
+    
+    if ( ! defined $keyval || $keyval eq '0' || $keyval eq '' )
+    {
+	$edt->add_condition($action, 'E_REQUIRED', $record_col) if $action;
+	return 0;
+    }
+
+    # If we are given a positive integer value, we can use that directly.
+    
+    elsif ( $keyval =~ /^[0-9]+$/ && $keyval > 0 )
+    {
+	return "$keycol='$keyval'";
+    }
+
+    # If we are given a label, we need to look it up and find the key value to which the label
+    # refers. We also need to check to make sure that this label refers to a key value in the
+    # proper table.
+    
+    elsif ( $keyval =~ /^@(.*)/ )
+    {
+	my $label = $1;
+	my $lookup_val = $edt->{label_keys}{$label};
 	
-	return join(',', @keys);
+	if ( $lookup_val && $edt->{label_found}{$label} eq $table )
+	{
+	    return "$keycol='$lookup_val'";
+	}
+	
+	else
+	{
+	    $edt->add_condition($action, 'E_LABEL_NOT_FOUND', $record_col, $label) if $action;
+	    return 0;
+	}
+    }
+
+    # Otherwise, check if this column supports external identifiers. If it matches the pattern for
+    # an external identifier of the proper type, then we can use the extracted numeric value to
+    # generate a key expression.
+    
+    elsif ( my $exttype = $COMMON_FIELD_IDTYPE{$keycol} || get_column_property($table, $keycol, 'EXTID_TYPE') )
+    {
+	if ( $keyval =~ $IDRE{$exttype} )
+	{
+	    if ( defined $2 && $2 > 0 )
+	    {
+		return "$keycol='$2'";
+	    }
+
+	    else
+	    {
+		$edt->add_condition($action, 'E_RANGE', $record_col,
+				    "value does not specify a valid record") if $action;
+		
+		return 0;
+	    }
+	}
     }
     
-    elsif ( defined $keyval && $keyval ne '' )
-    {
-	return $keyval;
-    }
+    # Otherwise, we weren't given a valid value.
     
     else
     {
-	return;
+	$edt->add_condition($action, 'E_FORMAT', $record_col,
+			    "value does not correspond to a record identifier") if $action;
+	return 0;
     }
 }
+
+
+# record_col ( action, table, column )
+# 
+# Return a list of two values. The first is the value from the specified action's record that
+# corresponds to the specified column in the database, or undef if no matching value found. The
+# second is the key under which that value was found in the action record.
+
+sub record_col {
+    
+    my ($edt, $action, $table, $col) = @_;
+    
+    # First we need to grab the schema for this table, if we don't already have it.
+    
+    my $schema;
+    
+    unless ( $schema = $TableData::SCHEMA_CACHE{$table} )
+    {
+	my $dbh = $edt->dbh;
+	$schema = get_table_schema($dbh, $table, $edt->debug);
+    }
+    
+    # If the action record is not a hashref, then we can return a value only if the operation is
+    # 'delete' and the column being asked for is the primary key. Otherwise, we must return
+    # undef. In either case, we return no second value because there is no column.
+    
+    my $record = $action->{record};
+    
+    unless ( ref $record eq 'HASH' )
+    {
+        if ( $action->{operation} eq 'delete' && $col eq $action->{keycol} &&
+	     defined $record )
+	{
+	    return $record;
+	}
+	
+	else
+	{
+	    return;
+	}
+    }
+    
+    # Otherwise, we need to check for a value under the column name. If there isn't one, then we need to
+    # check the alternate name if any.
+
+    my $cr = $schema->{$col};
+
+    if ( exists $record->{$col} && ! $cr->{ALTERNATE_ONLY} )
+    {
+	return ($record->{$col}, $col);
+    }
+    
+    elsif ( my $alt = $cr->{ALTERNATE_NAME} )
+    {
+	if ( exists $record->{$alt} )
+	{
+	    (return $record->{$alt}, $alt);
+	}
+    }
+    
+    # Otherwise, we must return undefined.
+
+    return;
+}
+
+
+# # record_has_col ( action, table, column )
+# #
+# # This is like the previous routine, except that it returns true if the specified column is
+# # mentioned in the action record, and false otherwise. The value specified for the column is not
+# # checked.
+
+# sub record_has_col {
+    
+#     my ($edt, $action, $table, $col) = @_;
+    
+#     # First we need to grab the schema for this table, if we don't already have it.
+    
+#     unless ( my $schema = $TableData::SCHEMA_CACHE{$table} )
+#     {
+# 	my $dbh = $edt->dbh;
+# 	$schema = get_table_schema($dbh, $table, $edt->debug);
+#     }
+    
+#     # If the action record is not a hashref, then we can return a true only if the operation is
+#     # 'delete' and the column being asked for is the primary key. Otherwise, we must return undef.
+    
+#     my $record = $action->{record};
+    
+#     unless ( ref $record eq 'HASH' )
+#     {
+#         return $action->{operation} eq 'delete' && $col eq $action->{keycol} && defined $record;
+#     }
+    
+#     # Otherwise, we need to check for the existence of the column name in the record hash. If it
+#     # isn't there, then we need to check the alternate name if any.
+    
+#     my $cr = $schema->{$col};
+
+#     if ( exists $record->{$col} && ! $cr->{ALTERNATE_ONLY} )
+#     {
+# 	return 1;
+#     }
+
+#     elsif ( $cr->{ALTERNATE_NAME} )
+#     {
+# 	return exists $record->{$cr->{ALTERNATE_NAME}};
+#     }
+    
+#     else
+#     {
+# 	return;
+#     }
+# }
 
 
 # get_old_values ( action, table, fields )
@@ -2894,18 +3324,13 @@ sub get_keylist {
 
 sub get_old_values {
 
-    my ($edt, $action, $table, $fields) = @_;
+    my ($edt, $table, $keyexpr, $fields) = @_;
     
-    croak "get_old_values cannot be called on a multiple action" if $action->is_multiple;
+    # croak "get_old_values cannot be called on a multiple action" if $action->is_multiple;
     
-    $table ||= $action->table;
+    return () unless $keyexpr;
     
-    my $keycol = $action->keycol;
-    my $keyval = $action->keyval;
-    
-    return () unless $keycol && $keyval;
-    
-    my $sql = "SELECT $fields FROM $TABLE{$table} WHERE $keycol=" . $edt->dbh->quote($keyval);
+    my $sql = "SELECT $fields FROM $TABLE{$table} WHERE $keyexpr";
     
     $edt->debug_line("$sql\n");
     
@@ -4427,7 +4852,15 @@ sub validate_against_schema {
 		    
 		    elsif ( $col eq 'modifier_no' && $operation ne 'insert' )
 		    {
-			$value = $edt->{perms}->enterer_no;
+			if ( $action->{_no_modifier} )
+			{
+			    $value = 0;
+			}
+
+			else
+			{
+			    $value = $edt->{perms}->enterer_no;
+			}
 		    }
 		    
 		    elsif ( $col eq 'modifier_id' && $operation ne 'insert' )
@@ -4453,19 +4886,17 @@ sub validate_against_schema {
 		    next unless defined $value && $value ne '';
 		    
 		    # Otherwise, check to make sure the user has permission to set a specific value.
-		    
+
 		    unless ( $permission eq 'admin' )
 		    {
 			$edt->add_condition($action, 'E_PERM_COL', $col);
-			next;
 		    }
 		    
 		    # If so, make sure the value is correct.
 		    
 		    if ( $col eq 'admin_lock' && not ( $value eq '1' || $value eq '0' ) )
 		    {
-			$edt->add_condition($action, 'E_FORMAT', $col, $value, 'value must be 1 or 0');
-			next;
+			$edt->add_condition($action, 'E_FORMAT', $col, 'value must be 1 or 0');
 		    }
 		}
 		
@@ -4774,7 +5205,7 @@ sub validate_against_schema {
 	}
 	
 	# If this column has the ADMIN_SET property, then throw an exception unless
-	# the user has 'admin' privilege.
+	# the user has 'admin' privilege, or unless the value being set is the default.
 	
 	if ( $cr->{ADMIN_SET} && ! $is_default && $action->permission ne 'admin' )
 	{
@@ -4808,7 +5239,7 @@ sub validate_against_schema {
 	
 	if ( @copy_columns )
 	{
-	    my (@copy_values) = $edt->get_old_values($action, $table, join(',', @copy_columns));
+	    my (@copy_values) = $edt->get_old_values($table, $action->keyexpr, join(',', @copy_columns));
 	    
 	    my (%copy_values, $substitution_count);
 	    
@@ -5276,10 +5707,10 @@ sub validate_datetime_value {
     {
 	if ( $value !~ qr{ ^ \d\d : \d\d : \d\d $ }xs )
 	{
-	    $edt->add_condition($action, 'E_FORMAT', $record_col, $value, 'invalid time format');
+	    $edt->add_condition($action, 'E_FORMAT', $record_col, "invalid time format '$value'");
 	    return { };
 	}
-
+	
 	return ($value, 1);
     }
     
@@ -5287,7 +5718,7 @@ sub validate_datetime_value {
     {
 	if ( $value !~ qr{ ^ ( \d\d\d\d - \d\d - \d\d ) ( \s+ \d\d : \d\d : \d\d ) ? $ }xs )
 	{
-	    $edt->add_condition($action, 'E_FORMAT', $record_col, $value, 'invalid datetime format');
+	    $edt->add_condition($action, 'E_FORMAT', $record_col, "invalid datetime format '$value'");
 	    return { };
 	}
 	

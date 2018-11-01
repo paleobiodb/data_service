@@ -162,8 +162,8 @@ subtest 'foreign keys' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'foreign key test', interval_no => $int_bad });
     
-    $T->ok_has_one_error('current', 'F_KEY_NOT_FOUND', "bad key is recognized");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_KEY_NOT_FOUND', "bad key is recognized");
+    $T->ok_no_warnings('latest');
     
     # Now try generating PBDB:ExtIdent objects instead of integer keys.
     
@@ -177,13 +177,13 @@ subtest 'foreign keys' => sub {
 
     $key2 = $edt->insert_record('EDT_TEST', { string_req => 'external ident test', interval_no => $ext_good });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good") || return;
     
     $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $ext_bad });
     
-    $T->ok_has_one_error('current', 'F_KEY_NOT_FOUND', "bad external identifier is recognized");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_KEY_NOT_FOUND', "bad external identifier is recognized");
+    $T->ok_no_warnings('latest');
     
     # Try a PBDB::ExtIdent with the wrong type.
     
@@ -193,8 +193,8 @@ subtest 'foreign keys' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $ext_wrong });
 
-    $T->ok_has_one_error('current', 'F_EXTTYPE', "bad external identifier type is recognized");
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_EXTTYPE', "bad external identifier type is recognized");
+    $T->ok_no_warnings('latest');
     
     # Now do the same with unparsed external identifiers.
 
@@ -205,22 +205,22 @@ subtest 'foreign keys' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_good });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
     $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_bad });
     
-    $T->ok_has_one_error('current', 'F_KEY_NOT_FOUND', "bad urn key value is recognized");
+    $T->ok_has_one_error('latest', 'F_KEY_NOT_FOUND', "bad urn key value is recognized");
     $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
     $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_ugly });
     
-    $T->ok_has_one_error('current', 'F_EXTTYPE', "bad urn type is recognized");
+    $T->ok_has_one_error('latest', 'F_EXTTYPE', "bad urn type is recognized");
     $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
     $edt->update_record('EDT_TEST', { $primary => $key2, interval_no => $urn_hideous });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "bad urn format is recognized");
+    $T->ok_has_one_error('latest', 'F_FORMAT', "bad urn format is recognized");
     $T->ok_found_record('EDT_TEST', "$primary = $key2 and interval_no = $int_good");
     
     # Now try overriding the identifier type.
@@ -238,31 +238,31 @@ subtest 'foreign keys' => sub {
     
     $edt->update_record('EDT_TEST', { $primary => $key3, interval_no => "int:$int_alt" });
     
-    $T->ok_has_one_error('current', 'F_EXTTYPE', "override of external ident type is recognized");
+    $T->ok_has_one_error('latest', 'F_EXTTYPE', "override of external ident type is recognized");
     $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = $int_good");
     
     # Now test that we can set field values using _id in place of _no.
     
     $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => "txn:$int_alt" });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = $int_alt");
     
     # Now test that we can set the field to zero, and to null.
     
     $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => 0 });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = 0");
     
     $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => $int_alt });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = $int_alt");
     
     $edt->update_record('EDT_TEST', { $primary => $key3, interval_id => undef });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_TEST', "$primary = $key3 and interval_no = 0");
 };
 
@@ -311,8 +311,8 @@ subtest 'foreign_table' => sub {
     
     $edt->update_record('EDT_AUX', { aux_no => $key3, test_id => $int_good });
     
-    $T->ok_has_one_error('current', 'F_KEY_NOT_FOUND', "error condition for bad foreign key value" );
-    $T->ok_no_warnings('current');
+    $T->ok_has_one_error('latest', 'F_BAD_UPDATE', "error condition for link value change" );
+    $T->ok_no_warnings('latest');
     $T->ok_no_record('EDT_AUX', "aux_no = $key3 and test_no = $int_good");
     
     # Now specifically redirect this column to a different table/key combination. The same key
@@ -320,12 +320,13 @@ subtest 'foreign_table' => sub {
     
     set_column_property('EDT_AUX', 'test_no', FOREIGN_TABLE => 'INTERVAL_DATA');
     set_column_property('EDT_AUX', 'test_no', FOREIGN_KEY => 'interval_no');
+    set_table_property('EDT_AUX', PERMISSION_TABLE => undef);
     
     reset_cached_column_properties('EDT_AUX', 'test_no');
     
     $edt->update_record('EDT_AUX', { aux_no => $key3, test_id => $int_good });
     
-    $T->ok_no_conditions('current');
+    $T->ok_no_conditions('latest');
     $T->ok_found_record('EDT_AUX', "aux_no = $key3 and test_no = $int_good");
 };
 
@@ -351,6 +352,6 @@ subtest 'validators' => sub {
     $edt->update_record('EDT_TEST', { $primary => $key1, string_req => 'validator test',
 				     string_val => 'abcdefghij' });
     
-    $T->ok_has_one_error('current', 'F_FORMAT', "found error condition from validator");
-    $T->ok_has_one_error('current',  qr{string_val.*EditTransaction::Action}xs, "error condition had proper info" );
+    $T->ok_has_one_error('latest', 'F_FORMAT', "found error condition from validator");
+    $T->ok_has_one_error('latest',  qr{string_val.*EditTransaction::Action}xs, "error condition had proper info" );
 };

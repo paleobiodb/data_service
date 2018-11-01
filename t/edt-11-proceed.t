@@ -78,15 +78,15 @@ subtest 'proceed_mode' => sub {
     ok( ! $edt->errors, "transaction has no errors" );
     is( $edt->warnings, 2, "transaction has two warnings" );
     
-    $T->ok_has_warning('any', 'W_TEST', "found warning W_TEST");
-    $T->ok_has_warning('any', 'F_TEST', "found warning F_TEST");
+    $T->ok_has_warning('W_TEST', "found warning W_TEST");
+    $T->ok_has_error('F_TEST', "found warning F_TEST");
     
     ok( $edt->can_proceed, "transaction can proceed" );
     
     my $result = $edt->commit;
     
     is( $edt->warnings, 3, "transaction has three warnings" );
-    $T->ok_has_warning('any', qr/F_EXECUTE/, "found warning F_EXECUTE");
+    $T->ok_has_error(qr/F_EXECUTE/, "found warning F_EXECUTE");
     
     # Check that the transaction actually committed and that the record with a warning was
     # inserted while the record with an error was not.
@@ -133,9 +133,9 @@ subtest 'proceed_mode' => sub {
     ok( $result, "transaction succeeded in PROCEED" ) || $T->diag_errors;
     is( $edt->warning_strings, 4, "got 4 warnings" ) || $T->diag_warnings;
     
-    $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");
-    $T->ok_has_warning('any', 'F_EXECUTE', "got 'F_EXECUTE'");
-    $T->ok_has_warning('any', 'F_PERM', "got 'F_PERM'");
+    $T->ok_has_error('F_NOT_FOUND', "got 'F_NOT_FOUND'");
+    $T->ok_has_error('F_EXECUTE', "got 'F_EXECUTE'");
+    $T->ok_has_error('F_PERM', "got 'F_PERM'");
     
     $T->ok_found_record('EDT_TEST', "signed_val=8");
     $T->ok_no_record('EDT_TEST', "signed_val=9");
@@ -196,7 +196,7 @@ subtest 'not_found' => sub {
     
     ok( $result, "transaction succeeded with NOT_FOUND" ) || $T->diag_errors;
     is( $edt->warnings, 3, "got 3 warnings" ) || $T->diag_warnings;
-    $T->ok_has_warning('any', 'F_NOT_FOUND', "got 'F_NOT_FOUND'");
+    $T->ok_has_error('F_NOT_FOUND', "got 'F_NOT_FOUND'");
     
     $T->ok_found_record('EDT_TEST', "signed_val=21");
     $T->ok_no_record('EDT_TEST', "signed_val=22");

@@ -75,6 +75,7 @@ sub new {
 	    if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
 	    {
 		$action->{keyval} = $record->{$key_column};
+		$action->{keyrec} = $key_column;
 	    }
 
 	    # If not, check to see if the table has a 'PRIMARY_ATTR' property and if so whether
@@ -85,6 +86,7 @@ sub new {
 		if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
 		{
 		    $action->{keyval} = $record->{$key_attr};
+		    $action->{keyrec} = $key_attr;
 		}
 	    }
 
@@ -96,6 +98,7 @@ sub new {
 		if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
 		{
 		    $action->{keyval} = $record->{$key_column};
+		    $action->{keyrec} = $key_column;
 		}
 	    }
 	}
@@ -197,6 +200,33 @@ sub keyval {
     return $_[0]{keyval};
 }
 
+
+sub keyrec {
+
+    return $_[0]{keyrec} // '';
+}
+
+
+sub keylist {
+
+    my ($action) = @_;
+    
+    if ( $action->is_multiple )
+    {
+	return $action->all_keys;
+    }
+    
+    elsif ( defined $action->{keyval} && $action->{keyval} ne '' )
+    {
+	return $action->{keyval};
+    }
+    
+    else
+    {
+	return;
+    }
+}
+    
 
 sub column_list {
     

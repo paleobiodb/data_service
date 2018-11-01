@@ -172,17 +172,17 @@ subtest 'insert with labels' => sub {
     
     $result = $edt->insert_record('EDT_TEST', { string_req => 'abc', _label => 'foo' });
     
-    ok( $result, "first record valid" ) || $T->diag_errors('current');
+    ok( $result, "first record valid" ) || $T->diag_errors('latest');
     
     # Now insert two into the auxiliary table, using the label from the first.
     
     $result = $edt->insert_record('EDT_AUX', { name => 'def', test_no => '@foo', _label => 'bar' });
     
-    ok( $result, "second record valid" ) || $T->diag_errors('current');
+    ok( $result, "second record valid" ) || $T->diag_errors('latest');
     
     $result = $edt->insert_record('EDT_AUX', { name => 'validate label foo', test_no => '@foo', _label => 'baz' });
     
-    ok( $result, "third record valid") || $T->diag_errors('current');
+    ok( $result, "third record valid") || $T->diag_errors('latest');
     
     is( $edt->{save_validate_label}, 'EDT_TEST', "method 'label_table' works from validation" );
     
@@ -263,6 +263,16 @@ subtest 'insert with labels' => sub {
 	is( $label_keys->{baz}, $inserted_aux[1], "found key corresponding to label 'baz'" );
 	is( $edt->label_key('baz'), $inserted_aux[1], "label_key returned proper key for 'baz'" );
     }
+
+    # Finally, make sure that the records properly made it into EDT_AUX with the proper test_no
+    # value.
+
+    if ( $inserted_test[0] )
+    {
+	my $insert_count = $T->count_records('EDT_AUX', "test_no=$inserted_test[0]");
+
+	is($insert_count, '2', "found two inserted records in EDT_AUX");
+    }
 };
 
 
@@ -284,7 +294,7 @@ subtest 'execution errors' => sub {
     $edt->insert_record('EDT_TEST', { string_req => 'test b1', _label => 'b1' });
     $edt->insert_record('EDT_AUX', { name => 'abc', test_no => '@b1' });
 
-    $T->ok_no_errors('any', "no errors on initial inserts");
+    $T->ok_no_errors("no errors on initial inserts");
     
     $edt->insert_record('EDT_AUX', { name => 'abc', test_no => '@b1' });
 

@@ -51,13 +51,16 @@ use namespace::clean;
     set_column_property(EDT_TEST => string_req => COLUMN_COMMENT => 'This is a test comment.');
     set_column_property(EDT_TEST => string_val => ALTERNATE_NAME => 'alt_val');
     set_column_property(EDT_TEST => string_val => VALIDATOR => 'test_validator');
+    set_column_property(EDT_TEST => admin_str => ADMIN_SET => 1);
     
+    set_table_property(EDT_AUX => PERMISSION_TABLE => 'EDT_TEST');
     set_table_property(EDT_AUX => CAN_POST => 'AUTHORIZED');
     set_table_property(EDT_AUX => CAN_MODIFY => 'AUTHORIZED');
     set_table_property(EDT_AUX => ALLOW_DELETE => 1);
     set_table_property(EDT_AUX => PRIMARY_KEY => 'aux_no');
     
     set_column_property(EDT_AUX => test_no => FOREIGN_TABLE => 'EDT_TEST');
+    set_column_property(EDT_AUX => test_no => ALTERNATE_NAME => 'test_id');
     set_column_property(EDT_AUX => name => REQUIRED => 1);
     
     set_table_property(EDT_ANY => CAN_POST => 'LOGGED_IN');
@@ -154,7 +157,7 @@ sub authorize_action {
 	elsif ( $record->{string_req} eq 'authorize methods' )
 	{
 	    my $keyexpr = $action->keyexpr;
-	    my @keylist = $edt->get_keylist($action);
+	    my @keylist = $action->keylist;
 	    my @values = $edt->test_old_values($action, $table);
 	    
 	    $edt->{save_method_keyexpr} = $keyexpr;
@@ -202,7 +205,7 @@ sub validate_action {
 	elsif ( $record->{string_req} eq 'validate methods' )
 	{
 	    my $keyexpr = $action->keyexpr;
-	    my @keylist = $edt->get_keylist($action);
+	    my @keylist = $action->keylist;
 	    my @values = $edt->test_old_values($action, $table);
 	    
 	    $edt->{save_method_keyexpr} = $keyexpr;
@@ -231,12 +234,12 @@ sub test_old_values {
     
     if ( $table eq 'EDT_TEST' )
     {
-	@values = $edt->get_old_values($action, $table, 'string_req, string_val');
+	@values = $edt->get_old_values($table, $action->keyexpr, 'string_req, string_val');
     }
     
     elsif ( $table eq 'EDT_AUX' )
     {
-	@values = $edt->get_old_values($action, $table, 'name');
+	@values = $edt->get_old_values($table, $action->keyexpr, 'name');
     }
     
     return @values;
@@ -249,7 +252,7 @@ sub test_validator {
     
     if ( defined $value && length($value) == 10 )
     {
-	return ('E_FORMAT', "args: $field $action");
+	return ('E_FORMAT', "test validator args: $field $action");
     }
     
     else
@@ -367,7 +370,7 @@ sub before_action {
 	elsif ( $record->{string_req} eq 'before methods' )
 	{
 	    my $keyexpr = $action->keyexpr;
-	    my @keylist = $edt->get_keylist($action);
+	    my @keylist = $action->keylist;
 	    my @values = $edt->test_old_values($action, $table);
 	    
 	    $edt->{save_method_keyexpr} = $keyexpr;
@@ -420,8 +423,8 @@ sub after_action {
 	
 	elsif ( $record->{string_req} eq 'after methods' )
 	{
-	    my $keyexpr = $edt->generate_keyexpr($action);
-	    my @keylist = $edt->get_keylist($action);
+	    my $keyexpr = $edt->get_keyexpr($action);
+	    my @keylist = $action->keylist;
 	    my @values = $edt->test_old_values($action, $table);
 	    
 	    $edt->{save_method_keyval} = $keyval;
@@ -440,12 +443,12 @@ sub after_action {
 
     if ( $operation eq 'delete' && $table eq 'EDT_TEST' )
     {
-	my $keylist = $edt->get_keylist($action);
+	my $keyexpr = $action->keyexpr;
 	
-	if ( $keylist )
+	if ( $keyexpr )
 	{
-	    $edt->dbh->do("DELETE FROM $TABLE{EDT_AUX} WHERE test_no in ($keylist)");
-	    $edt->{save_delete_aux} = $keylist;
+	    $edt->dbh->do("DELETE FROM $TABLE{EDT_AUX} WHERE $keyexpr");
+	    $edt->{save_delete_aux} = $keyexpr;
 	}
     }
     
@@ -567,6 +570,8 @@ sub establish_tables {
 		boolean_val boolean,
 		enum_val enum('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
+		admin_str varchar(40) not null default '',
+		admin_lock boolean not null default 0,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp)");
     

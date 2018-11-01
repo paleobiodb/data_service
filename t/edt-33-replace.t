@@ -99,22 +99,23 @@ subtest 'basic' => sub {
     
     $result = $edt->replace_record('EDT_TEST', { test_no => $test_keys[0], string_req => 'test x1', _label => 'x1' }); 
     
-    ok( $result, "first replace was valid" ) || $T->diag_errors('current');
+    ok( $result, "first replace was valid" ) || $T->diag_errors('latest');
     
-    $result = $edt->replace_record('EDT_AUX', { aux_no => $aux_keys[1], name => 'replaced a', test_no => '@x1' });
+    $result = $edt->replace_record('EDT_AUX', { aux_no => $aux_keys[1], name => 'replaced a', test_no => $test_keys[1] });
     
-    ok( $result, "second replace was valid" ) || $T->diag_errors('current');
+    ok( $result, "second replace was valid, setting test_no to the value it previously had" ) ||
+	$T->diag_errors('latest');
     
     $result = $edt->replace_record('EDT_AUX', { aux_no => $aux_keys[2], name => 'replaced b' });
     
-    ok( $result, "third replace was valid" ) || $T->diag_errors('current');
+    ok( $result, "third replace was valid" ) || $T->diag_errors('latest');
     
     $T->ok_result( $edt->execute, "replace executed successfully" );
     
     my ($count1) = $edt->dbh->selectrow_array("
-		SELECT count(*) FROM $TABLE{EDT_AUX} WHERE test_no = $test_keys[0]");
+		SELECT count(*) FROM $TABLE{EDT_AUX} WHERE name = 'replaced a'");
 
-    cmp_ok( $count1, '==', 2, "found two records pointing to first test record" );    
+    is( $count1, 1, "found record with updated name" );    
     
     $T->ok_found_record('EDT_AUX', "name = 'replaced a'", "found record with replaced name");
     $T->ok_no_record('EDT_AUX', "name = 'ghi'", "no record with name 'ghi'");
@@ -181,6 +182,17 @@ subtest 'basic' => sub {
     }
 
     is( $bad_keys, undef, "label_keys returns undefined for unused table name" );
+    
+    # Now check that trying to change test_no in an EDT_AUX record fails.
+
+    $edt = $T->new_edt($perm_a);
+    
+    $result = $edt->replace_record('EDT_AUX', { aux_no => $aux_keys[1], test_no => $test_keys[0],
+						name => "replaced again" });
+    
+    ok( ! $result, "changing the link key in a subordinate record fails" );
+    
+    $T->ok_has_error('E_BAD_UPDATE', "got 'E_BAD_UPDATE' error");
 };
 
 
@@ -307,7 +319,7 @@ subtest 'execution errors' => sub {
     # $edt->insert_record('EDT_AUX', { name => 'abc', test_no => '@b1' });
     # $edt->insert_record('EDT_AUX', { name => 'def', test_no => '@b1', _label => 'x1' });
     
-    # $T->ok_no_errors('any', "no errors on initial inserts");
+    # $T->ok_no_errors("no errors on initial inserts");
     
     # $edt->replace_record('EDT_AUX', { name => 'abc', aux_no => '@x1' });
     
@@ -329,7 +341,7 @@ subtest 'execution errors' => sub {
 	
 	$edt->replace_record('EDT_TEST', { test_no => $key, string_req => 'replaced' });
 
-	$T->ok_has_error('any', 'E_EXECUTE');
+	$T->ok_has_error('E_EXECUTE');
     }
 
 };

@@ -161,7 +161,7 @@ sub validate_specimen {
     {
 	if ( exists $record->{occurrence_id} || exists $record->{collection_id} )
 	{
-	    my ($occurrence_no) = $edt->get_old_values($action, 'SPECIMEN_DATA', 'occurrence_no');
+	    my ($occurrence_no) = $edt->get_old_values('SPECIMEN_DATA', $keyexpr, 'occurrence_no');
 	    
 	    print STDERR "UPDATE occ = $occurrence_no / $record->{occurrence_id}\n" if $edt->debug;
 	    
@@ -589,7 +589,7 @@ sub after_action {
     
     elsif ( $table eq 'MEASUREMENT_DATA' )
     {
-	my $specimen_no = $action->record_value('specimen_no') || $action->record_value('specimen_id');
+	my $specimen_no = $action->record_value('specimen_no');
 	$specimen_no = $specimen_no + 0 if ref $specimen_no;
 
 	$edt->set_attr_key('updated_specimen', $specimen_no, 1);
