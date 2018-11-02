@@ -19,6 +19,7 @@ use PB2::OccurrenceData;
 use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
+use PB2::ArchiveData;
 use PB2::PersonData;
 use PB2::CombinedData;
 
@@ -912,6 +913,35 @@ use PB2::CombinedData;
 		      title => 'References for taxonomic names' },
 	"This operation returns information about the references from which",
 	"the selected taxonomic names were entered.");
+
+    # Now routes for data archives
+
+    $ds2->define_node({ path => 'archives',
+			place => 20,
+			title => 'Data archives',
+			role => 'PB2::ArchiveData',
+			output => '1.2:archives:basic',
+		        optional_output => '1.2:archives:output_map' },
+	"Database contributors are able to create data archives, in which the results",
+	"of significant database queries are saved and can be retrieved later. These",
+	"can later have DOIs associated with them, so that they are viewable by the",
+	"public as auxiliary materials to research publications.");
+    
+    $ds2->define_node({ path => 'archives/single',
+			place => 1,
+			title => 'Single data archive record',
+			usage => "archives/single.json?id=23",
+			method => 'get_archive' },
+	"This operation returns information about a single data archive,",
+	"selected by its identifier");
+    
+    $ds2->define_node({ path => 'archives/list',
+			place => 2,
+			title => 'Lists of data archive records',
+			usage => "archives/list.txt?enterer=me",
+			method => 'list_archives' },
+	"This operation returns information about one or more data archives,",
+	"selected according to the parameters you provide");
     
     # The following paths are used for miscellaneous documentation
     

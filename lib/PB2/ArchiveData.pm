@@ -14,8 +14,8 @@ package PB2::ArchiveData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw(%TABLE);
-use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
+use TableDefs;
+use ExternalIdent qw(%IDRE VALID_IDENTIFIER generate_identifier);
 # use TableData qw(complete_output_block);
 
 use Carp qw(carp croak);
@@ -24,7 +24,7 @@ use Try::Tiny;
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::Authentication);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
 
 sub initialize {
@@ -36,6 +36,8 @@ sub initialize {
     $ds->define_set('1.2:archives:status' =>
 	{ value => 'complete' },
 	    "The archive has been properly constructed and is ready for use.",
+	{ value => 'deleted' },
+	    "The archive has been deleted, and is no longer accessible.",
 	{ value => 'fail' },
 	    "An error occurred during the construction of the archive.",
 	{ value => 'loading' },
@@ -52,7 +54,7 @@ sub initialize {
     
     # Optional output
     
-    $ds->define_output_map('1.2:archives:optional_output' =>
+    $ds->define_output_map('1.2:archives:output_map' =>
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
@@ -71,25 +73,48 @@ sub initialize {
 	    "label value, if any, that was submitted with each record.",
 	{ output => 'status', com_name => 'sta' },
 	    "The status will be one of the following codes:",
-	    $ds->document_set('1.2:archives:status'));
+	    $ds->document_set('1.2:archives:status'),
+	{ output => 'title', com_name => 'tit' },
+	    "The title assigned to this data achive by its creator",
+	{ output => 'authors', com_name => 'oau' },
+	    "The list of author names assigned to this data archive by its creator",
+	{ output => 'description', com_name => 'dsc' },
+	    "The description text written by the data archive's creator",
+	{ output => 'doi', com_name => 'doi' },
+	    "The DOI (if any) assigned to this data archive.",
+	{ output => 'orcid', com_name => 'orc' },
+	    "A list of one or more ORCIDs associated with this archive.",
+	    "These should in most cases correspond to the listed authors.",
+	{ output => 'uri', com_name => 'uri' },
+	    "The URI of the API call that was used to generate this",
+	    "data archive.",
+	{ output => 'fetched', com_name => 'dft' },
+	    "The date and time at which the API call used to generate this",
+	    "archive was made.");
     
     # Rulesets
     
     $ds->define_ruleset('1.2:archives:specifier' =>
 	{ param => 'archive_id', valid => VALID_IDENTIFIER('DAR'), alias => 'id' },
-	    "Return the data archive record corresponding to the specified identifier");
+	    "Return the data archive record corresponding to the specified identifier",
+	{ param => 'doi', valid => ANY_VALUE },
+	    "Return the data archive record corresponding to the specified DOI.",
+	{ at_most_one => ['archive_id', 'doi'] });
     
     $ds->define_ruleset('1.2:archives:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "If this parameter is specified, then all records in the database",
 	    "will be returned, subject to any other parameters that are also specified.",
 	{ param => 'archive_id', valid => VALID_IDENTIFIER('DAR'), alias => 'id', list => ',' },
-	    "Return the educational resource record(s) corresponding to the specified",
+	    "Return the data archive record(s) corresponding to the specified",
 	    "identifier(s). You can specify more than one, as a comma-separated list.",
-	{ param => 'status', valid => '1.2:eduresources:status', list => ',' },
-	    "Return only resource records with the specified status or statuses.",
+	{ param => 'status', valid => '1.2:archives:status', list => ',' },
+	    "Return only data archive records with the specified status or statuses.",
+	{ param => 'doi', valid => ANY_VALUE, list => ',' },
+	    "Return only data archive records associated with one of the specified DOIs.",
+	    "You may specify more than one, as a comma-separated list.",
 	{ param => 'enterer', valid => ANY_VALUE, list => ',' },
-	    "If this parameter is specified, then only resources created by the specified",
+	    "If this parameter is specified, then only data archives created by the specified",
 	    "person are shown. Only archives that have a DOI assigned to them are viewable",
 	    "by anyone except their creator and his or her authorizer group, and the",
 	    "database administrators. The value of this parameter may be the",
@@ -100,24 +125,25 @@ sub initialize {
     
     $ds->define_ruleset('1.2:archives:single' =>
 	{ require => '1.2:archives:specifier' },
-	{ optional => 'SPECIAL(show)', valid => '1.2:archives:optional_output' },
+	{ optional => 'SPECIAL(show)', valid => '1.2:archives:output_map' },
 	    "Include one or more of the following optional output blocks in the result:",
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:archives:list' =>
 	{ require => '1.2:archives:selector' },
-	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
+	{ optional => 'SPECIAL(show)', valid => '1.2:archives:output_map' },
+	    "Include one or more of the following optional output blocks in the result:",
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    my $dbh = $ds->get_connection;
+    # my $dbh = $ds->get_connection;
     
-    complete_output_block($ds, $dbh, '1.2:archives:basic', 'DATA_ARCHIVES');
+    # complete_output_block($ds, $dbh, '1.2:archives:basic', 'DATA_ARCHIVES');
 }
 
 
-sub get_resource {
+sub get_archive {
     
     my ($request) = @_;
     
@@ -125,40 +151,54 @@ sub get_resource {
     
     my $dbh = $request->get_connection;
     
-    # Make sure we have a valid id number.
+    # Make sure we have a valid id number or DOI.
+
+    my $filter;
+    my $session_id = '';
+    my $authorizer_no;
+    my $show_notfound;
     
-    my $id = $request->clean_param('eduresource_id');
-    
-    die "400 Bad identifier '$id'\n" unless $id and $id =~ /^\d+$/;
-    
-    # Determine if we are asked to show the active version of the resource record or the master
-    # version.
-    
-    my $active = $request->clean_param('active');
-    
-    # If the user is not logged in, only show information about the active version.
-    
-    unless ( $active )
+    if ( my $id = $request->clean_param('archive_id') )
     {
-	my $perms = $request->authenticate;
-	$active = 1 unless $perms->role ne 'none';
+	die "400 Bad identifier '$id'\n" unless $id and $id =~ /^\d+$/;
+	$filter = "dar.archive_no = '$id'";
+	
+	if ( my $cookie_id = Dancer::cookie('session_id') )
+	{
+	    $session_id = $dbh->quote($cookie_id);
+	    
+	    my $sql = "
+		SELECT authorizer_no, enterer_no FROM session_data
+		WHERE session_id = $session_id";
+	    
+	    ($authorizer_no) = $dbh->selectrow_array($sql);
+
+	    $show_notfound = 1 if $authorizer_no;
+	}
+	
+	unless ( $authorizer_no )
+	{
+	    $filter .= " and (dar.doi <> '' or dar.is_public)";
+	}
     }
     
-    # Delete unnecessary output fields, and select the enterer id if appropriate.
-    
-    $request->delete_output_field('record_label');
-    
-    if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
+    elsif ( my $doi = $request->clean_param('doi') )
     {
-	my $ds = $request->ds;
-	$ds->add_output_block($request, { }, '1.2:common:ent_guest');
+	my $quoted = $dbh->quote($doi);
+	$filter = "dar.doi = $quoted and dar.doi <> ''";
+	$show_notfound = 1;
     }
+    
+    print STDERR "session_id = $session_id,  authorizer_no = $authorizer_no\n";
+    
+    # Delete unnecessary output fields.
+    
+    $request->delete_output_field('_label');
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $request->substitute_select( cd => 'edr' );
-    # $request->check_entname($TABLE{RESOURCE_QUEUE} => 'edr');
+    $request->substitute_select( cd => 'dar' );
     
     my $tables = $request->tables_hash;
     
@@ -170,48 +210,42 @@ sub get_resource {
     
     # Determine the necessary joins.
     
-    my ($join_list) = $request->generate_join_list($request->tables_hash, $active);
+    my ($join_list) = $request->generate_join_list;
     
     my $extra_fields = $request->select_string;
     $extra_fields = ", $extra_fields" if $extra_fields;
     
     # Generate the main query.
     
-    if ( $active )
-    {
-	$request->{main_sql} = "
-	SELECT edr.*, group_concat(tg.tag_id) as tags $extra_fields FROM $TABLE{RESOURCE_ACTIVE} as edr
-		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
+    $request->{main_sql} = "
+	SELECT dar.* $extra_fields FROM data_archives as dar
 		$join_list
-        WHERE edr.$RESOURCE_IDFIELD = $id
-	GROUP BY edr.$RESOURCE_IDFIELD";
-    }
-    
-    else
-    {
-	$request->{main_sql} = "
-	SELECT edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
-	FROM $TABLE{RESOURCE_QUEUE} as edr
-		left join $TABLE{RESOURCE_IMAGES} as edi using (eduresource_no)
-		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
-		$join_list
-        WHERE edr.eduresource_no = $id
-	GROUP BY edr.eduresource_no";
-    }
+        WHERE $filter";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
     
     # Return an error response if we couldn't retrieve the record.
-    
-    die "404 Not found\n" unless $request->{main_record};
+
+    unless ( $request->{main_record} )
+    {
+	if ( $show_notfound )
+	{
+	    die "404 Not found\n";
+	}
+
+	else
+	{
+	    die "403 Permission denied\n";
+	}
+    }
     
     return 1;
 }
 
 
-sub list_resources {
+sub list_archives {
     
     my ($request, $arg) = @_;
     
@@ -219,161 +253,74 @@ sub list_resources {
     
     my $dbh = $request->get_connection;
     
-    my $active; $active = 1 if ($arg && $arg eq 'active') || $request->clean_param('active');
-    
-    my $tables = $request->tables_hash;
-    
-    # If the user is not logged in, only show information about active resources. If we are asked
-    # for anything but active resources, return a 401 error.
-    
-    my $perms;
-    
-    unless ( $active )
-    {
-	$perms = $request->require_authentication('RESOURCE_QUEUE', "Login Required");
-    }
-    
     # Generate a list of filter expressions.
     
     my @filters;
     
-    if ( my @id_list = $request->safe_param_list('eduresource_id') )
+    if ( my @id_list = $request->safe_param_list('archive_id') )
     {
-	my $primary_key = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
 	my $id_string = join(',', @id_list);
-	push @filters, "edr.$primary_key in ($id_string)";
+
+	if ( $id_string && $id_string =~ /^[\d\s,]+$/ )
+	{
+	    push @filters, "dar.archive_no in ($id_string)";
+	}
+
+	else
+	{
+	    push @filters, "dar.archive_no = 0";
+	    $request->add_warning("bad value '$id_string' for 'archive_no'");
+	}
     }
     
     if ( my @status_list = $request->safe_param_list('status', 'SELECT_NONE') )
     {
 	my $status_string = join("','", @status_list);
-	my $status_table = $active ? 'edq' : 'edr';
-	push @filters, "$status_table.status in ('$status_string')";
+	push @filters, "dar.status in ('$status_string')";
     }
 
-    # If we have 'post' but not 'view' permission on the table, then implicitly select only those
-    # records entered by the user.
-    
-    my $enterer = $request->clean_param('enterer');
-    $enterer = 'me' if $perms && $perms->check_table_permission($TABLE{RESOURCE_QUEUE}, 'view') eq 'own';
-    
-    if ( $enterer )
+    if ( my $search_re = $request->clean_param('search_re') )
     {
-	$perms ||= $request->authenticate($TABLE{RESOURCE_QUEUE});
-	
-	if ( $enterer eq 'me' )
-	{
-	    my $enterer_no = $dbh->quote($perms->enterer_no);
-	    my $user_id = $dbh->quote($perms->user_id);
-	    
-	    my @clauses;
-	    
-	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
-	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
-	    push @clauses, "edr.enterer_no = -1" unless @clauses;
-	    
-	    my $filter_str = join(' or ', @clauses);
-	    push @filters, $filter_str;
-	}
-	
-	elsif ( $enterer eq 'auth' )
-	{
-	    my $enterer_no = $dbh->quote($perms->enterer_no);
-	    my $user_id = $dbh->quote($perms->user_id);
-	    
-	    my @clauses;
-	    
-	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
-	    push @clauses, "edr.authorizer_no = $enterer_no" if $enterer_no;
-	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
-	    push @clauses, "edr.enterer_no = -1" unless @clauses;
-	    
-	    my $filter_str = join(' or ', @clauses);
-	    push @filters, $filter_str;
-	}
-	
-	else
-	{
-	    push @filters, "edr.authorizer_no = -1";	# select nothing
-	}
+	my $quoted = $dbh->quote($search_re);
+	push @filters, "(dar.title rlike $quoted or dar.description rlike $quoted)";
     }
-    
-    # Check for other filter parameters.
-    
-    if ( my $title = $request->clean_param('title') )
-    {
-	my $quoted = $dbh->quote("${title}");
-	push @filters, "edr.title like $quoted";
-    }
-    
-    if ( my @tags = $request->clean_param_list('tag') )
-    {
-	$request->cache_tag_values();
-	my @tag_ids;
-	
-	foreach my $t ( @tags )
-	{
-	    if ( $t =~ /^\d+$/ )
-	    {
-		push @tag_ids, $t;
-	    }
-	    
-	    elsif ( $TAG_VALUE{lc $t} )
-	    {
-		push @tag_ids, $TAG_VALUE{lc $t};
-	    }
-	    
-	    else
-	    {
-		$request->add_warning("unknown resource tag '$t'");
-	    }
-	}
-	
-	my $id_string = join(',', @tag_ids) || '-1';
-	
-	push @filters, "edt.tag_id in ($id_string)";
-	$tables->{edt} = 1;
-    }
-    
-    if ( my @keywords = $request->clean_param_list('keyword') )
-    {
-	my @kwfilters;
-	
-	foreach my $k (@keywords)
-	{
-	    push @kwfilters, "edr.title rlike '\\\\b$k\\\\b'";
-	    push @kwfilters, "edr.description rlike '\\\\b$k\\\\b'";
-	}
-	
-	push @kwfilters, "edr.title = 'SELECT_NOTHING'" unless @kwfilters;
 
-	push @filters, '(' . join(' or ', @kwfilters) . ')';
+    if ( my @doi = $request->clean_param_list('doi') )
+    {
+	my @list;
+	
+	foreach my $d ( @doi )
+	{
+	    push @list, $dbh->quote($d) if $d;
+	}
+
+	push @list, "'SELECT_NONE'" unless @list;
+
+	my $doi_string = join(',', @list);
+
+	push @filters, "dar.doi in ($doi_string)";
     }
     
-    # Make sure that we have either one filter expression or 'all_records' was selected or else
-    # that we are listing active resources.
+    push @filters, $request->generate_enterer_filters;
     
-    unless ( @filters || $request->clean_param('all_records') || ($arg && $arg eq 'active') )
+    # Make sure that we have either one filter expression or 'all_records' was selected.
+    
+    unless ( @filters || $request->clean_param('all_records') )
     {
+	$request->add_warning("you must include the parameter 'all_records' unless you specify another filtering parameter");
 	die $request->exception(400, "Bad request");
     }
     
     push @filters, "1=1" unless @filters;
     
-    # Delete unnecessary output fields, and select the enterer id if appropriate.
+    # Delete unnecessary output fields.
     
-    $request->delete_output_field('record_label');
-
-    if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
-    {
-	my $ds = $request->ds;
-	$ds->add_output_block($request, { }, '1.2:common:ent_guest');
-    }
+    $request->delete_output_field('_label');
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $request->substitute_select( mt => 'edr', cd => 'edr' );
+    $request->substitute_select( mt => 'dat', cd => 'dar' );
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. Also check whether we should generate external identifiers.
@@ -391,45 +338,20 @@ sub list_resources {
     
     # Determine the necessary joins.
     
-    my ($join_list) = $request->generate_join_list($tables, $active);
+    my ($join_list) = $request->generate_join_list;
     
     my $filter_string = join( q{ and }, @filters );
     
     my $extra_fields = $request->select_string;
     $extra_fields = ", $extra_fields" if $extra_fields;
-
-    # Remove fields that don't exist in the active table, if we are doing an active-table query.
-
-    if ( $active && $extra_fields )
-    {
-	$extra_fields =~ s/, *edr.(?:modifier_no|enterer_no)//g;
-    }
     
     # Generate the main query.
     
-    if ( $active )
-    {
-	$request->{main_sql} = "
-	SELECT $calc edr.*, group_concat(tg.tag_id) as tags $extra_fields
-	FROM $TABLE{RESOURCE_ACTIVE} as edr
-		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
-		left join $TABLE{RESOURCE_QUEUE} as edq on edr.$RESOURCE_IDFIELD = edq.eduresource_no
+    $request->{main_sql} = "
+	SELECT $calc dar.* $extra_fields
+	FROM data_archives as dar
 		$join_list
-        WHERE $filter_string
-	GROUP BY edr.$RESOURCE_IDFIELD $limit";
-    }
-    
-    else
-    {
-	$request->{main_sql} = "
-	SELECT $calc edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
-	FROM $TABLE{RESOURCE_QUEUE} as edr
-		left join $TABLE{RESOURCE_IMAGES} as edi using (eduresource_no)
-		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
-		$join_list
-        WHERE $filter_string
-	GROUP BY edr.eduresource_no";
-    }
+        WHERE $filter_string $limit";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
@@ -444,128 +366,150 @@ sub list_resources {
 }
 
 
-sub generate_join_list {
+sub generate_enterer_filters {
+
+    my ($request) = @_;
     
-    my ($request, $tables_ref, $active) = @_;
+    my $dbh = $request->get_connection;
     
-    my $joins = '';
-    my $idfield = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
+    # If an 'enterer' parameter was given, we first have to check if this API call was made by a
+    # logged-in user. If not, then only publicly viewable records will be returned. Those are ones
+    # which either have a DOI or have the is_public flag set.
+
+    my @filters;
+    my ($authorizer_no, $enterer_no);
     
-    if ( $tables_ref->{edi} && $active )
+    if ( my $cookie_id = Dancer::cookie('session_id') )
     {
-	$joins .= "left join $TABLE{RESOURCE_IMAGES} as edi on edi.eduresource_no = edr.$idfield\n";
+	my $session_id = $dbh->quote($cookie_id);
+	
+	my $sql = "
+		SELECT authorizer_no, enterer_no FROM session_data
+		WHERE session_id = $session_id";
+	
+	($authorizer_no, $enterer_no) = $dbh->selectrow_array($sql);
     }
     
-    if ( $tables_ref->{edt} )
+    unless ( $authorizer_no )
     {
-	$joins .= "left join $TABLE{RESOURCE_TAGS} as edt on edt.resource_id = edr.$idfield\n";
+	push @filters, "(dar.doi <> '' or dar.is_public)";
     }
     
-    return $joins;
+    # If no 'enterer' parameter was given, we do not filter.
+    
+    my @enterers = $request->clean_param_list('enterer');
+    
+    if ( @enterers )
+    {
+	my (@ef, @eid, @bad);
+
+	foreach my $e ( @enterers )
+	{
+	    if ( $e eq 'me' )
+	    {
+		$enterer_no ||= 0;
+		push @ef, "dar.enterer_no = '$enterer_no'";
+	    }
+
+	    elsif ( $e eq 'auth' )
+	    {
+		$authorizer_no ||= 0;
+		push @ef, "dar.authorizer_no = '$authorizer_no'";
+	    }
+	    
+	    elsif ( $e =~ $IDRE{PRS} )
+	    {
+		push @eid, $2;
+	    }
+
+	    elsif ( $e =~ /^(\d+)$/ )
+	    {
+		push @eid, $1;
+	    }
+	    
+	    else
+	    {
+		push @bad, $e;
+	    }
+	}
+
+	if ( @bad )
+	{
+	    my $bad_list = join("', '", @bad);
+	    $request->add_warning("Field 'enterers': bad values '$bad_list'");
+	}
+
+	if ( @eid )
+	{
+	    my $good_list = join("', '", @eid);
+	    push @ef, "dar.enterer_no in ('$good_list')";
+	}
+
+	if ( @ef )
+	{
+	    push @filters, @ef;
+	}
+
+	else
+	{
+	    push @filters, "dar.enterer_no = 'SELECT_NONE'";
+	}
+    }
+    
+    return @filters;
 }
 
 
-sub cache_tag_values {
+sub generate_join_list {
     
-    my ($request, $dbh) = @_;
+    my ($request) = @_;
     
-    # If the contents of this hash have been updated within the past 10 minutes, assume they are good.
+    my $tables = $request->tables_hash;
     
-    return if $TAG_VALUE{_timestamp} && $TAG_VALUE{_timestamp} > (time - 600);
+    my $join_list = '';
     
-    # Otherwise, fill in the hash from the database.
+    $join_list .= "LEFT JOIN person as ppa on ppa.person_no = dar.authorizer_no\n"
+	if $tables->{ppa};
+    $join_list .= "LEFT JOIN person as ppe on ppe.person_no = dar.enterer_no\n"
+	if $tables->{ppe};
+    $join_list .= "LEFT JOIN person as ppm on ppm.person_no = dar.modifier_no\n"
+	if $tables->{ppm};
     
-    $dbh ||= $request->get_connection;
-    
-    my $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{RESOURCE_TAG_NAMES}", { Slice => { } });
-    
-    if ( $result && ref $result eq 'ARRAY' )
-    {
-	foreach my $r ( @$result )
-	{
-	    if ( defined $r->{id} && $r->{id} ne '' && $r->{name} )
-	    {
-		$TAG_VALUE{lc $r->{name}} = $r->{id};
-		$TAG_NAME{$r->{id}} = $r->{name};
-	    }
-	}
-	
-	$TAG_VALUE{_timestamp} = time;
-    }
+    return $join_list;
 }
 
 
 # process_record ( request, record )
 # 
 # This procedure is called automatically for each record that is expressed via the output block
-# '1.2:eduresources:basic'. It cleans up some of the data fields.
+# '1.2:archives:basic'. It cleans up some of the data fields.
 
 sub process_record {
     
     my ($request, $record) = @_;
     
-    # If we have an 'id' field instead of an 'eduresource_no' field, copy the
-    # value over.
-    
-    if ( ! $record->{eduresource_no} && $record->{id} )
-    {
-	$record->{eduresource_no} = $record->{id};
-    }
-    
     # If we have a record label hash, fill in those values.
     
-    if ( my $label = $request->{my_record_label}{$record->{eduresource_no}} )
+    if ( my $label = $request->{my_record_label}{$record->{archive_no}} )
     {
-	$record->{record_label} = $label;
+	$record->{_label} = $label;
     }
     
     # Generate the proper external identifiers.
     
     if ( $request->{block_hash}{extids} )
     {
-	$record->{eduresource_no} = generate_identifier('EDR', $record->{eduresource_no})
-	    if $record->{eduresource_no};
+	$record->{archive_no} = generate_identifier('DAR', $record->{archive_no})
+	    if $record->{archive_no};
     }
     
-	# { set => 'eduresource_no', code => sub {
-	#       my ($request, $value) = @_;
-	# 	    return $value unless $request->{block_hash}{extids};
-	# 	    return generate_identifier('EDR', $value);
-	# 	} },
+    # Assemble the URI field from uri_path and uri_args
     
-    # The 'image' filename might be in either of these fields. Append it to the proper path, read
-    # from the configuration file.
+    my $uri = $record->{uri_path} || '';
     
-    $record->{image} = $record->{active_image} if $record->{active_image};
-    
-    if ( $record->{image} && $RESOURCE_IMG_PATH )
+    if ( $record->{uri_path} && $record->{uri_args} )
     {
-	$record->{image} = "$RESOURCE_IMG_PATH/$record->{image}";
-    }
-    
-    # If we don't have an image name, just us '1' to indicate that there is an image but it is not
-    # stored in a file.
-    
-    elsif ( $record->{has_image} )
-    {
-	$record->{image} ||= 1;
-    }
-    
-    # If we have tags, run through the numbers and convert them to names.
-    
-    if ( my $tag_list = $record->{tags} )
-    {
-	$request->cache_tag_values();
-	
-	my @id_list = split(/\s*,\s*/, $tag_list);
-	my @tag_names;
-	
-	foreach my $id (@id_list)
-	{
-	    push @tag_names, $TAG_NAME{$id} if $TAG_NAME{$id};
-	}
-	
-	$record->{tags} = join(', ', @tag_names);
+	$uri .= "?$record->{uri_args}";
     }
 }
 
