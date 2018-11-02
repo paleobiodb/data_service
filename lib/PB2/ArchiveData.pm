@@ -511,6 +511,8 @@ sub process_record {
     {
 	$uri .= "?$record->{uri_args}";
     }
+
+    $record->{uri} = $uri;
 }
 
 
