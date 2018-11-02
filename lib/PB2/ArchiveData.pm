@@ -189,7 +189,7 @@ sub get_archive {
 	$show_notfound = 1;
     }
     
-    print STDERR "session_id = $session_id,  authorizer_no = $authorizer_no\n";
+    # print STDERR "session_id = $session_id,  authorizer_no = $authorizer_no\n";
     
     # Delete unnecessary output fields.
     

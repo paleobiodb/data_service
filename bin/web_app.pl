@@ -27,8 +27,6 @@ BEGIN {
 
     my $test_mode;
     
-    my $test_mode;
-    
     # If we were given a command-line argument, figure out what to do with it.
     
     if ( defined $ARGV[0] )

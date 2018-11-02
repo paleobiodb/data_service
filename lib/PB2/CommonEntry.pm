@@ -181,7 +181,7 @@ sub unpack_input_records {
 	
 	else
 	{
-	    die $request->exception("E_REQUEST_BODY: Badly formatted request body: no record found");
+	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: no record found");
 	}
     }
     

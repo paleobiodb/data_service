@@ -14,7 +14,7 @@ package PB2::SpecimenData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw(%TABLE $COLL_BINS
+use TableDefs qw(%TABLE $COLL_BINS $SPECELT_MAP
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
