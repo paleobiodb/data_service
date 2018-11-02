@@ -204,10 +204,10 @@ sub initialize {
 	{ value => 'ecospace', maps_to => '1.2:taxa:ecospace' },
 	    "Information about ecological space that this organism occupies or occupied.",
 	    "This has only been filled in for a relatively few taxa.  Here is a",
-	    "L<list of values|node:taxa/ecotaph_values>.",
+	    "L<list of values|node:general/ecotaph#Ecospace>.",
 	{ value => 'taphonomy', maps_to => '1.2:taxa:taphonomy' },
 	    "Information about the taphonomy of this organism.  Here is a",
-	    "L<list of values|node:taxa/ecotaph_values>.",
+	    "L<list of values|node:general/ecotaph#Taphonomy>.",
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
 	    "taxonomic level each piece of information was entered.",
@@ -263,6 +263,25 @@ sub initialize {
         { value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the specimen record");
     
+    $ds->define_block( '1.2:specs:full_info' =>
+	{ include => '1.2:occs:attr' },
+	{ include => '1.2:occs:class' },
+	{ include => '1.2:occs:plant' },
+	{ include => '1.2:taxa:ecospace' },
+	{ include => '1.2:taxa:taphonomy' },
+	{ include => '1.2:occs:abund' },
+	{ include => '1.2:colls:name' },
+	{ include => '1.2:occs:coords' },
+	{ include => '1.2:colls:loc' },
+	{ include => '1.2:colls:paleoloc' },
+	{ include => '1.2:colls:prot' },
+	{ include => '1.2:colls:stratext' },
+	{ include => '1.2:colls:lithext' },
+	{ include => '1.2:colls:geo' },
+	{ include => '1.2:colls:methods' },
+	{ include => '1.2:colls:rem' },
+	{ include => '1.2:refs:attr' });
+    
     # Output blocks for measurements
     
     $ds->define_block('1.2:measure:basic' =>
@@ -292,7 +311,221 @@ sub initialize {
 	{ output => 'max', com_name => 'mvu' },
 	    "The maximum measured value, if recorded");
     
-    $ds->define_block( '1.2:specs:full_info' =>
+    $ds->define_output_map('1.2:measure:output_map' =>
+	{ value => 'full', maps_to => '1.2:measure:full_info' },
+	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
+	    "includes the following blocks: B<spec>, B<attr>, B<class>, B<plant>, B<ecospace>, B<taphonomy>",
+	    "B<abund>, B<coll>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
+	    "B<geo>, B<methods>, B<rem>, B<refattr>.  If we subsequently add new data fields to the",
+	    "specimen record or the measurement record, then B<full> will include those as well.  If you are publishing a URL",
+	    "you could include this block, or you could publish two URLs: one to download all of the",
+	    "specimen information, and one to download all the measurements.  Users would then use the",
+	    "B<C<specimen_no>> field to match up the two downloads, preventing an enormous duplication",
+	    "of information in each measurement row.",
+	{ value => 'spec', maps_to => '1.2:measure:spec_info' },
+	    "Includes all of the core fields describing the specimen from which this measurement was taken.",
+	{ value => 'acconly' },
+	    "Suppress the exact taxonomic identification of each specimen,",
+	    "and show only the accepted name.",
+	{ value => 'attr', maps_to => '1.2:occs:attr' },
+	    "The attribution (author and year) of the accepted name for this specimen.",
+	{ value => 'class', maps_to => '1.2:occs:class' },
+	    "The taxonomic classification of the specimen: phylum, class, order, family,",
+	    "genus.",
+	{ value => 'classext', maps_to => '1.2:occs:class' },
+	    "Like C<class>, but also includes the relevant taxon identifiers.",
+	{ value => 'phylo', maps_to => '1.2:occs:class', undocumented => 1 },
+	{ value => 'genus', maps_to => '1.2:occs:genus' },
+	    "The genus corresponding to each specimen, if the specimen has been",
+	    "identified to the genus level.  This block is redundant if C<class> or",
+	    "C<classext> are used.",
+	{ value => 'subgenus', maps_to => '1.2:occs:genus' },
+	    "The genus corresponding to each specimen, plus the subgenus if any.",
+	    "This can be added to C<class> or C<classext> in order to display",
+	    "subgenera, or used instead of C<genus> to display both the genus",
+	    "and the subgenus if any.",
+	{ value => 'plant', maps_to => '1.2:occs:plant' },
+	    "The plant organ(s), if any, associated with this specimen.  These fields",
+	    "will be empty unless the specimen is a plant fossil.",
+	{ value => 'abund', maps_to => '1.2:occs:abund' },
+	    "Information about the abundance of the associated occurrence,",
+	    "if any, in its collection",
+	{ value => 'ecospace', maps_to => '1.2:taxa:ecospace' },
+	    "Information about ecological space that this organism occupies or occupied.",
+	    "This has only been filled in for a relatively few taxa.  Here is a",
+	    "L<list of values|node:general/ecotaph#Ecospace>.",
+	{ value => 'taphonomy', maps_to => '1.2:taxa:taphonomy' },
+	    "Information about the taphonomy of this organism.  Here is a",
+	    "L<list of values|node:general/ecotaph#Taphonomy>.",
+	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
+	    "Annotates the output block C<ecospace>, indicating at which",
+	    "taxonomic level each piece of information was entered.",
+	{ value => 'pres', undocumented => 1 },
+	    # "Indicates whether the identification of this specimen is a regular",
+	    # "taxon, a form taxon, or an ichnotaxon.",
+	{ value => 'coll', maps_to => '1.2:colls:name' },
+	    "The name of the collection in which the associated occurrence was found, plus any",
+	    "additional remarks entered about it.",
+	{ value => 'coords', maps_to => '1.2:occs:coords' },
+	     "The latitude and longitude of the associated occurrence, if any.",
+        { value => 'loc', maps_to => '1.2:colls:loc' },
+	    "Additional information about the geographic locality of the",
+	    "associated occurrence, if any.",
+	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
+	    "Information about the paleogeographic locality of the associated occurrence,",
+	    "evaluated according to the model specified by the parameter C<pgm>.",
+	{ value => 'strat', maps_to => '1.2:colls:strat' },
+	    "Basic information about the stratigraphic context of the associated",
+	    "occurrence.",
+	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
+	    "Detailed information about the stratigraphic context of the associated",
+	    "occurrence.",
+	    "This includes all of the information from C<strat> plus extra fields.",
+	{ value => 'lith', maps_to => '1.2:colls:lith' },
+	    "Basic information about the lithological context of the associated",
+	    "occurrence.",
+	{ value => 'lithext', maps_to => '1.2:colls:lithext' },
+	    "Detailed information about the lithological context of the occurrence.",
+	    "This includes all of the information from C<lith> plus extra fields.",
+	{ value => 'methods', maps_to => '1.2:colls:methods' },
+	    "Information about the collection methods used",
+	{ value => 'env', maps_to => '1.2:colls:env' },
+	    "The paleoenvironment associated with the associated collection, if any.",
+	{ value => 'geo', maps_to => '1.2:colls:geo' },
+	    "Information about the geological context of the associated occurrence (includes C<env>).",
+        { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
+	    "Any additional remarks that were entered about the associated collection.",
+        { value => 'ref', maps_to => '1.2:refs:primary' },
+	    "The reference from which the specimen data was entered, as formatted text.",
+	    "If no reference is recorded for this specimen, the primary reference for its",
+	    "associated occurrence or collection is returned instead.",
+        { value => 'refattr', maps_to => '1.2:refs:attr' },
+	    "The author(s) and year of publication of the reference from which this data",
+	    "was entered.  If no reference is recorded for this specimen, the information from",
+	    "the associated occurrence or collection reference is returned instead.",
+	{ value => 'resgroup', maps_to => '1.2:colls:group' },
+	    "The research group(s), if any, associated with the associated collection.",
+	{ value => 'ent', maps_to => '1.2:common:ent' },
+	    "The identifiers of the people who authorized, entered and modified this record",
+	{ value => 'entname', maps_to => '1.2:common:entname' },
+	    "The names of the people who authorized, entered and modified this record",
+        { value => 'crmod', maps_to => '1.2:common:crmod' },
+	    "The C<created> and C<modified> timestamps for the specimen record");
+    
+    $ds->define_block('1.2:measure:spec_info' =>
+	{ select => [ 'ss.specimen_no', 'sp.is_type', 'sp.specimen_side',
+		      'sp.specimen_part', 'sp.sex as specimen_sex', 'sp.specimens_measured as n_measured',
+		      'sp.measurement_source', 'sp.magnification', 'sp.comments',
+		      'sp.occurrence_no', 'ss.reid_no', 'ss.taxon_no as identified_no',
+		      'a.taxon_name as identified_name', 'a.orig_no as spec_orig_no',
+		      't.rank as identified_rank', 't.status as taxon_status', 't.orig_no',
+		      'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
+		      't.spelling_no', 't.accepted_no',
+		      'tv.spelling_no as accepted_spelling', 'tv.name as accepted_name', 'tv.rank as accepted_rank',
+		      'ei.interval_name as early_interval', 'li.interval_name as late_interval',
+		      'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
+		      'o.species_name', 'o.species_reso', 'v.is_form', 'v.is_trace',
+		      'o.early_age', 'o.late_age', 'sp.reference_no'],
+	  tables => [ 'ss', 'o', 't', 'nm', 'ns', 'tv', 'ei', 'li', 'o', 'v' ] },
+	{ set => '*', from => '*', code => \&process_basic_record },
+	{ set => '*', code => \&PB2::OccurrenceData::process_occ_ids },
+	{ output => 'flags', com_name => 'flg' },
+	    "This field will be empty for most records.  Otherwise, it will contain one or more",
+	    "of the following letters:", "=over",
+	    "=item N", "This specimen is not associated with an occurrence.",
+	    "=item D", "The identification entered for this specimen is different from the",
+	        "identification entered for the corresponding occurrence.",
+	    "=item R", "This identification has been superceded by a more recent one.",
+		"In other words, this specimen has been reidentified.",
+	    "=item I", "This identification is an ichnotaxon",
+	    "=item F", "This identification is a form taxon",
+	    "This field will be empty for most records.  A record representing a specimen",
+	    "not associated with an occurrence will have an C<N> in this field.  A record",
+	    "representing a specimen whose identification is different than its associated",
+	    "occurrence will have an C<I> in this field.",
+	{ output => 'occurrence_no', com_name => 'qid' },
+	    "The identifier of the occurrence, if any, with which this specimen is associated",
+	{ output => 'reid_no', com_name => 'eid' },
+	    "If the associated occurrence was reidentified, a unique identifier for the",
+	    "reidentification.",
+	{ output => 'collection_no', com_name => 'cid' },
+	    "The identifier of the collection, if any, with which this specimen is associated",
+	{ output => 'permissions', com_name => 'prm' },
+	    "The accessibility of this record.  If empty, then the record is",
+	    "public.  Otherwise, the value of this record will be one",
+	    "of the following:", "=over",
+	    "=item members", "The record is accessible to database members only.",
+	    "=item authorizer", "The record is accessible to its authorizer group,",
+	    "and to any other authorizer groups given permission.",
+	    "=item group(...)", "The record is accessible to",
+	    "members of the specified research group(s) only.",
+	    "=back",
+	{ set => 'permissions', from => '*', code => \&PB2::CollectionData::process_permissions },
+	{ output => 'specimen_id', com_name => 'smi', data_type => 'str' },
+	    "The identifier for this specimen according to its custodial institution",
+	{ output => 'is_type', com_name => 'smt' },
+	    "Indicates whether this specimen is a holotype or paratype",
+	{ output => 'specimen_side', com_name => 'sms' },
+	    "The side of the body to which the specimen part corresponds",
+	{ output => 'specimen_part', com_name => 'smp' },
+	    "The part of the body of which this specimen consists",
+	{ output => 'specimen_sex', com_name => 'smx' },
+	    "The sex of the specimen, if known",
+	{ output => 'measurement_source', com_name => 'mms' },
+	    "How the measurements were obtained, if known",
+	{ output => 'magnification', com_name => 'mmg' },
+	    "The magnification used in the measurement, if known",
+	{ output => 'comments', com_name => 'smc' },
+	    "Comments on this specimen, often author and publication year",
+	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', not_block => 'acconly' },
+	    "The taxonomic name by which this occurrence was identified.  This field will",
+	    "be omitted for responses in the compact voabulary if it is identical",
+	    "to the value of C<accepted_name>.",
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', not_block => 'acconly' },
+	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
+	    "be omitted for responses in the compact voabulary if it is identical",
+	    "to the value of C<accepted_rank>.",
+	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', not_block => 'acconly' },
+	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly' },
+	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
+	    "the name was never entered into the taxonomic hierarchy stored in this database and",
+	    "we have no further information about the classification of this occurrence.  In some cases,",
+	    "the genus has been entered into the taxonomic hierarchy but not the species.  This field will",
+	    "be omitted for responses in the compact voabulary if it is identical",
+	    "to the value of C<accepted_no>.",
+	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
+	    "If the identified name is different from the accepted name, this field gives",
+	    "the reason why.  This field will be present if, for example, the identified name",
+	    "is a junior synonym or nomen dubium, or if the species has been recombined, or",
+	    "if the identification is misspelled.",
+	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
+	    "The value of this field will be the accepted taxonomic name corresponding",
+	    "to the identified name.",
+	{ output => 'accepted_attr', if_block => 'attr', dwc_name => 'scientificNameAuthorship', com_name => 'att' },
+	    "The attribution (author and year) of the accepted taxonomic name",
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
+	    "The taxonomic rank of the accepted name.  This may be different from the",
+	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
+	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
+	    "of this database.",
+	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
+	    "The unique identifier of the accepted taxonomic name in this database.",
+	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	    "The attribution of the specimen: the author name(s) from",
+	    "the specimen reference, and the year of publication.",
+	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
+	    "The year of publication of the reference from which this data was entered",
+	{ output => 'reference_no', com_name => 'rid' },
+	    "The identifier of the reference from which this data was entered");
+    
+    $ds->define_block( '1.2:measure:full_info' =>
+	{ include => '1.2:measure:spec_info' },
 	{ include => '1.2:occs:attr' },
 	{ include => '1.2:occs:class' },
 	{ include => '1.2:occs:plant' },
@@ -306,7 +539,6 @@ sub initialize {
 	{ include => '1.2:colls:prot' },
 	{ include => '1.2:colls:stratext' },
 	{ include => '1.2:colls:lithext' },
-	# { include => '1.2:taxa:pres' },
 	{ include => '1.2:colls:geo' },
 	{ include => '1.2:colls:methods' },
 	{ include => '1.2:colls:rem' },
@@ -535,6 +767,14 @@ sub initialize {
 	{ allow => '1.2:common:select_occs_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can also use the following parameter to include additional information about the specimen",
+	"from which each measurement was taken. However, in many situations you may want instead to download",
+	"the specimen information separately and use the B<C<specimen_no>> field to match up the two",
+	"downloads. That method avoids an enormous duplication of information in each measurement row.",
+	{ optional => 'show', list => q{,}, valid => '1.2:measure:output_map' },
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each occurrence.  Its value should be",
+	    "one or more of the following, separated by commas:",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -542,7 +782,7 @@ sub initialize {
     
     $ds->define_block('1.2:specs:element' => 
 	{ select => ['e.specelt_no', 'e.element_name', 'e.parent_name', 'e.taxon_name', 
-		     'm.exclude'] },
+		     'e.alternate_names', 'm.exclude'] },
 	{ set => '*', code => \&process_element_record },
 	{ output => 'specelt_no', com_name => 'oid' },
 	    "The unique identifier of this specimen element in the database",
@@ -554,6 +794,8 @@ sub initialize {
 	    "The name of the parent element, if any. This can be used to display",
 	    "the elements in a collapsed list where individual elements can be",
 	    "expanded to show their children.",
+	{ output => 'alternate_names', com_name => 'alt' },
+	    "Alternate names for this element, if any.",	      
 	{ output => 'taxon_name', com_name => 'tna' },
 	    "The name of the base taxon for which this element is defined.");
     
@@ -595,8 +837,10 @@ sub initialize {
 	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TXN') },
 	    "Return only elements that are valid for the specified taxon,",
 	    "given by its identifier in the database.",
+	{ param => 'name_re', valid => ANY_VALUE },
+	    "Return only elements whose name or alternate name matches the given regular expression.",
 	{ at_most_one => ['all_records', 'taxon_name', 'taxon_id'] });
-
+    
     $ds->define_ruleset('1.2:specs:element_display' =>
 	{ optional => 'show', list => q{,}, valid => '1.2:specs:element_map' },
 	    "This parameter is used to select additional information to be returned",
@@ -1296,8 +1540,8 @@ sub list_measurements {
     
     my $fields = join(', ', @fields);
     
-    # $request->adjustCoordinates(\$fields);
-    # $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->adjustCoordinates(\$fields);
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
     
     # Determine the order in which the results should be returned.
     
@@ -1561,6 +1805,7 @@ sub list_elements {
     my @filters;
     my $tables_hash = $request->tables_hash;
     my $ignore_exclude;
+    my $taxon;
     
     if ( $request->clean_param('all_records') )
     {
@@ -1570,7 +1815,7 @@ sub list_elements {
     
     elsif ( my $taxon_no = $request->clean_param('taxon_id') )
     {
-	my ($taxon) = $taxonomy->list_taxa_simple($taxon_no, { fields => 'SEARCH' });
+	($taxon) = $taxonomy->list_taxa_simple($taxon_no, { fields => 'SEARCH' });
 	
 	    # $dbh->selectrow_array("
 	    # 	SELECT t.lft FROM taxon_trees as t
@@ -1583,11 +1828,18 @@ sub list_elements {
     
     elsif ( my $taxon_name = $request->clean_param('taxon_name') )
     {
-	my ($taxon) = $taxonomy->resolve_names($taxon_name, { fields => 'SEARCH' });
+	($taxon) = $taxonomy->resolve_names($taxon_name, { fields => 'SEARCH' });
 	
 	die $request->exception(404, "Not found") unless $taxon;
 	
 	push @filters, "$taxon->{lft} between m.lft and m.rgt";
+    }
+    
+    if ( my $name_re = $request->clean_param('name_re') )
+    {
+	my $quoted = $dbh->quote($name_re);
+
+	push @filters, "(e.element_name rlike $quoted or e.alternate_names rlike $quoted)";
     }
     
     # Do a final check to make sure that all records are only returned if
@@ -1596,6 +1848,14 @@ sub list_elements {
     if ( @filters == 0 )
     {
 	die $request->exception(400, "You must specify 'all_records' if you want to retrieve the entire set of records.");
+    }
+    
+    push @filters, "not m.exclude";
+
+    if ( $taxon )
+    {
+	push @filters, "m.specelt_no not in (SELECT specelt_no 
+		FROM $SPECELT_MAP as exc WHERE exc.exclude and $taxon->{lft} between exc.lft and exc.rgt)"
     }
     
     my $filter_string = join(' and ', @filters);
@@ -1653,6 +1913,7 @@ sub list_elements {
 	SELECT $calc $fields
 	FROM $TABLE{SPECELT_MAP} as m join $TABLE{SPECELT_DATA} as e using (specelt_no)
         WHERE $filter_string
+	GROUP BY specelt_no
 	ORDER BY $order_clause
 	$limit";
     

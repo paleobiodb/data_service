@@ -154,7 +154,7 @@ sub build_specelt_map {
 		check_value tinyint unsigned not null,
     		lft int unsigned not null,
     		rgt int unsigned not null,
-    		KEY (lft, rgt))");
+    		KEY (lft, rgt, exclude))");
     
     my ($sql, $result);
     
@@ -164,7 +164,7 @@ sub build_specelt_map {
 	    SELECT e.specelt_no, t.orig_no, count(distinct t.orig_no), t.lft, t.rgt
 	    FROM $SPECELT_DATA as e join $tree_table as t1 on t1.name = e.taxon_name
 		join $tree_table as t on t.orig_no = t1.accepted_no
-	    WHERE t.rank > 5 GROUP BY e.specelt_no";
+	    WHERE t.rank > 5 and e.status = 'active' GROUP BY e.specelt_no";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
@@ -173,10 +173,11 @@ sub build_specelt_map {
     # Then add any exclusions.
     
     $sql = "INSERT INTO $SPECELT_MAP_WORK (specelt_no, base_no, exclude, check_value, lft, rgt)
-	    SELECT e.specelt_no, t.orig_no, 1, count(distinct t.orig_no), t.lft, t.rgt
-	    FROM $SPECELT_EXC as e join $tree_table as t1 on t1.name = e.taxon_name
+	    SELECT x.specelt_no, t.orig_no, 1, count(distinct t.orig_no), t.lft, t.rgt
+	    FROM $SPECELT_EXC as x join $SPECELT_DATA as e using (specelt_no)
+		join $tree_table as t1 on t1.name = x.taxon_name
 		join $tree_table as t on t.orig_no = t1.accepted_no
-	    WHERE t.rank > 5 GROUP BY e.specelt_no, e.taxon_name";
+	    WHERE t.rank > 5 and e.status = 'active' GROUP BY x.specelt_no, x.taxon_name";
 
     print STDERR "$sql\n\n" if $options->{debug};
     
@@ -404,12 +405,13 @@ sub establish_spec_element_tables {
     $dbh->do("CREATE TABLE $SPECELT_WORK (
 		specelt_no int unsigned PRIMARY KEY AUTO_INCREMENT,
 		element_name varchar(80) not null,
-		parent_name varchar(80) not null,
+		alternate_names varchar(255) not null default '',
+		parent_name varchar(80) not null default '',
 		taxon_name varchar(80) not null,
 		status enum ('active', 'inactive') not null default 'active',
-		has_number boolean not null,
-		neotoma_element_id int unsigned not null,
-		neotoma_element_type_id int unsigned not null,
+		has_number boolean not null default 0,
+		neotoma_element_id int unsigned not null default 0,
+		neotoma_element_type_id int unsigned not null default 0,
 		comments varchar(255) null,
 		KEY (element_name),
 		KEY (neotoma_element_id),
@@ -419,7 +421,7 @@ sub establish_spec_element_tables {
 
 
 sub add_element_line {
-
+    
     my ($dbh, $line, $options) = @_;
     
     my @fields = split /\s*,\s*/, $line;
@@ -453,6 +455,15 @@ sub add_element_line {
     my $quoted_neotype = $dbh->quote($neotoma_type_no);
     
     # Insert the record into the database.
+=======
+    my $inserter = "
+	INSERT INTO $SPECELT_DATA (element_name, alternate_names, parent_name, status, taxon_name,
+		has_number, neotoma_element_id, neotoma_element_type_id, comments)
+	VALUES (";
+    
+    my @columns = qw(element_name alternate_names parent_name inactive taxon_name
+		     has_number neotoma_element_id neotoma_element_type_id comments exclude_names);
+>>>>>>> bd99c85b36d762ea4a97b55f2b23d76e5b83a821
     
     my $sql = "	INSERT INTO $SPEC_ELEMENTS (element_name, alternate_names, orig_no, parent_elt_name,
 			has_number, neotoma_element_id, neotoma_element_type_id)
