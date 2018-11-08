@@ -17,8 +17,8 @@ pass('placeholder');
 # BY_AUTHORIZER [edt-21-permissions.t 'by_authorizer']
 # PRIMARY_KEY [edt-01-basic.t 'create objects']
 # PRIMARY_ATTR [edt-14-records.t 'primary_attr']
-# PERMISSION_TABLE [$$$]
-# PERMISSION_KEY [$$$]
+# SUPERIOR_TABLE [EditTest.pm, $$$]
+# SUPERIOR_KEY [$$$]
 # TABLE_COMMENT [EditTest.pm, line 39]
 
 # 2. Column properties: [$$$]
@@ -46,8 +46,9 @@ pass('placeholder');
 
 # 4. Allowances: [$$$]
 # 
-# CREATE
-# MULTI_DELETE
+# CREATE [edt-01-basic 'create objects']
+# LOCKED [edt-17-admin.t 'admin_lock admin']
+# MULTI_DELETE [edt-34-delete.t 'basic']
 # ALTER_TRAIL [edt-16-modified.t 'crmod admin', 'authent admin']
 # DEBUG_MODE [edt-01-basic.t 'debug output']
 # SILENT_MODE [edt-01-basic.t 'debug output']
@@ -102,12 +103,11 @@ pass('placeholder');
 #
 #  $edt->register_condition [edt-12-conditions.t 'register']
 #  - throws exception if code does not match proper pattern [edt-12-conditions.t 'register']
-# 
+#
 #  $edt->errors [edt-12-conditions.t 'basic']
-#  $edt->specific_errors [edt-12-conditions.t 'basic']
-#  $edt->error_strings [edt-12-conditions.t 'basic']
 #  $edt->warnings [edt-12-conditions.t 'basic']
-#  $edt->specific_warnings [edt-12-conditions.t 'basic']
+#  $edt->conditions [edt-12-conditions.t 'basic']
+#  $edt->error_strings [edt-12-conditions.t 'basic']
 #  $edt->warning_strings [edt-12-conditions.t 'basic']
 #  $edt->generate_msg [edt-12-conditions.t 'generate_msg']
 #
@@ -129,7 +129,8 @@ pass('placeholder');
 #  - record label is carried through properly to conditions and messages [edt-12-condition.t 'basic']
 #  - labels are properly generated for unlabeled records [edt-14-records.t 'basic']
 #  - $edt->key_labels [edt-30-insert.t 'insert with labels'; $$$]
-#  - labels can be referred to in subsequent records [edt-30-insert.t 'insert with labels'; $$$]
+#  - labels can be referred to in subsequent insertions [edt-30-insert.t 'insert with labels']
+#  - labels can be referred to in subsequent updates [$$$]
 
 # 11. transaction control [DONE]
 # 
@@ -206,39 +207,50 @@ pass('placeholder');
 #  - check for authorize_action and validate_action (by overriding) [edt-31-update.t 'subclass']
 #  - in validate_action, check $action->get_keyexpr and $action->get_keylist [edt-31-update.t 'subclass']
 #  - check for exception if a bad table name is given [edt-31-update.t 'bad']
-#  - check for E_EXECUTE on an SQL statement deliberately created to fail [edt-31-update.t 'execute errors']
+#  - check for E_EXECUTE on an SQL statement deliberately created to fail [edt-31-update.t 'execution errors']
 #  - check for E_DUPLICATE if an update causes a duplicate key error [edt-31-update.t 'execution errors']
 
 # 14. replace_record [$$$]
 # 
-#  - can replace with a key
-#  - check for E_NO_KEY without one
-#  - check for E_NOT_FOUND if key does not exist in table and INSERT_KEY is not set
-#  - can replace with key if INSERT_KEY is set
-#  - can replace own records
-#  - can replace with 'modify' permission and key found
-#  - can replace with 'admin' permission and key found
-#  - check for E_PERM without one of these permissions
-#  - check for authorize_action and validate_action (by overriding)
-#  - in validate_action, check $action->get_keyexpr and $action->get_keylist
-#  - check for E_EXECUTE on an SQL statement deliberately created to crash
-#  - check for E_EXECUTE on an SQL statement deliberately created to fail
+#  - can replace with a key [edt-33-replace.t 'basic']
+#  - check for E_NO_KEY without one [edt-33-replace.t 'basic']
+#  - check for E_NOT_FOUND if key does not exist in table and INSERT_KEY is not set [$$$]
+#  - can replace with key if INSERT_KEY is set [$$$]
+#  - can replace own records [edt-33-replace.t 'basic']
+#  - can replace with 'modify' permission and key found [$$$]
+#  - can replace with 'admin' permission and key found [$$$]
+#  - check for E_PERM without one of these permissions [$$$]
+#  - check for authorize_action and validate_action (by overriding) [edt-33-replace.t 'subclass']
+#  - in validate_action, check $action->get_keyexpr and $action->get_keylist [edt-33-replace.t 'subclass']
+#  - check for E_EXECUTE on an SQL statement deliberately created to crash [edt-33-replace.t 'execution errors']
+#  - check for E_EXECUTE on an SQL statement deliberately created to fail [$$$]
 
 # 15. delete_record [$$$]
 #
-#  - can delete with a key
-#  - check for E_NO_KEY without one
-#  - check for E_NOT_FOUND if key does not exist in table
-#  - can delete with 'delete' permission
-#  - can delete with 'admin' permission
-#  - check for E_PERM without one of these permissions
-#  - check for authorize_action and validate_action (by overriding)
-#  - in validate_action, check $edt->get_keyexpr and $edt->get_keylist
-#  - can delete multiple with MULTI_DELETE
-#  - can delete multiple with MULTI_DELETE and some keys that are not found
-#  - in validate_action, check $edt->get_keylist with MULTI_DELETE
-#  - check for E_EXECUTE on an SQL statement deliberately created to crash
+#  - can delete with a key [edt-34-delete.t 'basic']
+#  - check for E_NO_KEY without one [edt-34-delete.t 'errors']
+#  - check for E_NOT_FOUND if key does not exist in table [edt-34-delete.t 'errors']
+#  - can delete with 'delete' permission [$$$]
+#  - can delete with 'admin' permission [$$$]
+#  - check for E_PERM without one of these permissions [$$$]
+#  - check for authorize_action and validate_action (by overriding) [edt-34-delete.t 'subclass']
+#  - in validate_action, check $edt->get_keyexpr and $edt->get_keylist [edt-34-delete.t 'subclass']
+#  - can delete multiple with MULTI_DELETE [edt-34-delete.t 'basic']
+#  - can delete multiple with MULTI_DELETE and some keys that are not found [$$$]
+#  - check for E_EXECUTE on an SQL statement deliberately created to crash [edt-34-delete.t 'errors']
 #  - check for E_EXECUTE on an SQL statement deliberately created to fail
+
+# 15a. delete_cleanup [$$$]
+#
+# - properly deletes untouched records [edt-35-delete-cleanup.t 'basic']
+# - properly deletes no records without error if everything matching the selector has been touched [$$$]
+# - check for E_BAD_SELECTOR if no selector is given [$$$]
+# - works with 'delete' permission [$$$]
+# - works with 'admin' permission [$$$]
+# - check for E_PERM without one of these permissions [$$$]
+# - check for authorize_action and validate_action (by overriding) [$$$]
+# - in before_action, check $edt->get_keyexpr and $edt->get_keylist
+# - check for E_EXECUTE on an SQL statement deliberately created to crash [$$$]
 
 # 16. process_record [$$$]
 #
@@ -264,6 +276,8 @@ pass('placeholder');
 #  - $edt->specific_warnings [edt-12-conditions.t 'basic']
 
 # 17b. aux_action [$$$]
+
+# 17c. subordinate tables [$$$]
 
 # 18. check_permission [$$$]
 #

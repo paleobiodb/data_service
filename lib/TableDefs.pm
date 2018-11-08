@@ -57,8 +57,8 @@ our (%TABLE_PROP_NAME) = ( CAN_POST => 1,		# specifies who is allowed to add new
 			   CASCADE_DELETE => 1,		# specifies additional tables whose entries should be deleted
                                                         # when a record in this table is deleted.
 			   BY_AUTHORIZER => 1,		# if true, then editing permission by authorizer_no
-			   PERMISSION_TABLE => 1,	# specifies table which controls permissions for this one
-			   PERMISSION_KEY => 1,		# specifies a field to be matched to the p.t. primary key
+			   SUPERIOR_TABLE => 1,	# specifies table which controls permissions for this one
+			   SUPERIOR_KEY => 1,		# specifies a field to be matched to the p.t. primary key
 			   PRIMARY_KEY => 1,		# specifies the primary key column(s) for this table
 			   PRIMARY_ATTR => 1,		# specifies the primary key record field for this table
 			   NO_LOG => 1,			# specifies that changes to this table should not be logged

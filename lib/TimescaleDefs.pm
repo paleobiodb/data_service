@@ -60,17 +60,17 @@ my (%MACROSTRAT_TABLES) = ( MACROSTRAT_LITHS => 'macrostrat.liths',
     set_table_property('TIMESCALE_BOUNDS', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('TIMESCALE_BOUNDS', ALLOW_DELETE => 1);
     set_table_property('TIMESCALE_BOUNDS', PRIMARY_KEY => "bound_no");
-    set_table_property('TIMESCALE_BOUNDS', PERMISSION_TABLE => 'TIMESCALE_DATA');
+    set_table_property('TIMESCALE_BOUNDS', SUPERIOR_TABLE => 'TIMESCALE_DATA');
     
     set_table_property('TIMESCALE_INTS', CAN_POST => 'AUTHORIZED');
     set_table_property('TIMESCALE_INTS', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('TIMESCALE_INTS', PRIMARY_KEY => "interval_no");
-    set_table_property('TIMESCALE_INTS', PERMISSION_TABLE => 'TIMESCALE_DATA');
+    set_table_property('TIMESCALE_INTS', SUPERIOR_TABLE => 'TIMESCALE_DATA');
     
     set_table_property('TIMESCALE_REFS', CAN_POST => 'AUTHORIZED');
     set_table_property('TIMESCALE_REFS', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('TIMESCALE_REFS', ALLOW_DELETE => 1);
-    set_table_property('TIMESCALE_REFS', PERMISSION_TABLE => 'TIMESCALE_DATA');
+    set_table_property('TIMESCALE_REFS', SUPERIOR_TABLE => 'TIMESCALE_DATA');
     
     set_column_property('TIMESCALE_REFS', 'timescale_no', REQUIRED => 1);
     set_column_property('TIMESCALE_REFS', 'reference_no', REQUIRED => 1);

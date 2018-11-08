@@ -33,7 +33,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
 our (%ETVALUE, %EZVALUE);
-our (%LITH_VALUE, %LITHTYPE_VALUE);
+our (%LITH_VALUE, %LITH_QUOTED, %LITHTYPE_VALUE);
 
 
 # initialize ( )
@@ -1336,10 +1336,21 @@ sub initialize {
     {
 	foreach my $record ( @$PB2::ConfigData::LITHOLOGIES )
 	{
-	    $LITH_VALUE{$record->{lithology}} = 1;
-	    $LITHTYPE_VALUE{$record->{lith_type}} = 1;
+	    my $lithology = $record->{lithology};
+	    my $lith_type = $record->{lith_type};
+	    
+	    if ( $lithology =~ /^"/ )
+	    {
+		$lithology =~ s/"//g;
+		$LITH_QUOTED{$lithology} = 1;
+	    }
+	    
+	    $LITH_VALUE{$lithology} = 1;
+	    $LITHTYPE_VALUE{$lith_type} = 1;
 	}
     }
+
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -3446,12 +3457,22 @@ sub generateMainFilters {
     
     foreach my $lith ( @lithology )
     {
+	# First parse out the exclusion symbol ^ and quote marks, and note whether they were
+	# present. Skip any value that is empty after this point.
+	
 	my $lith_exclude;
+	my $lith_quoted;
 	
 	if ( $lith =~ qr{ ^ \^ \s* (.*) }xs )
 	{
 	    $lith = $1;
 	    $lith_exclude = 1;
+	}
+	
+	if ( $lith =~ qr{ ^ " (.*) " $ }xs )
+	{
+	    $lith = $1;
+	    $lith_quoted = 1;
 	}
 	
 	next unless $lith;
@@ -3463,7 +3484,7 @@ sub generateMainFilters {
 	    $lith_unknown = $lith_exclude ? 'exclude' : 'include';
 	}
 	
-	elsif ( $LITHTYPE_VALUE{$lith} )
+	elsif ( $LITHTYPE_VALUE{$lith} && ! $lith_quoted )
 	{
 	    if ( $lith_exclude )
 	    {
@@ -3497,8 +3518,8 @@ sub generateMainFilters {
     }
     
     my $type_string = join(q{','}, keys %lt_values);
-    my $lith_string = join(q{','}, keys %lith_values);
-    my $exlith_string = join(q{','}, keys %exlith_values);
+    my $lith_string = join(q{','}, map { $LITH_QUOTED{$_} ? "\"$_\"" : $_ } keys %lith_values);
+    my $exlith_string = join(q{','}, map { $LITH_QUOTED{$_} ? "\"$_\"" : $_ } keys %exlith_values);
     
     if ( $type_string || $lith_string || $exlith_string || $lith_unknown )
     {

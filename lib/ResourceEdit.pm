@@ -209,7 +209,7 @@ sub after_action {
     else
     {
 	my $dbh = $edt->dbh;
-	my $keylist = $edt->get_keylist($action);
+	my $keylist = $action->keylist($action);
 	
 	# First find and delete the image files, if any
 	

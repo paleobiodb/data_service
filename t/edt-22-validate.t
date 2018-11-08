@@ -320,7 +320,7 @@ subtest 'foreign_table' => sub {
     
     set_column_property('EDT_AUX', 'test_no', FOREIGN_TABLE => 'INTERVAL_DATA');
     set_column_property('EDT_AUX', 'test_no', FOREIGN_KEY => 'interval_no');
-    set_table_property('EDT_AUX', PERMISSION_TABLE => undef);
+    set_table_property('EDT_AUX', SUPERIOR_TABLE => undef);
     
     reset_cached_column_properties('EDT_AUX', 'test_no');
     

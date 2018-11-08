@@ -53,7 +53,7 @@ use namespace::clean;
     set_column_property(EDT_TEST => string_val => VALIDATOR => 'test_validator');
     set_column_property(EDT_TEST => admin_str => ADMIN_SET => 1);
     
-    set_table_property(EDT_AUX => PERMISSION_TABLE => 'EDT_TEST');
+    set_table_property(EDT_AUX => SUPERIOR_TABLE => 'EDT_TEST');
     set_table_property(EDT_AUX => CAN_POST => 'AUTHORIZED');
     set_table_property(EDT_AUX => CAN_MODIFY => 'AUTHORIZED');
     set_table_property(EDT_AUX => ALLOW_DELETE => 1);
@@ -379,6 +379,13 @@ sub before_action {
 	}
     }
     
+    elsif ( $operation eq 'delete_cleanup' )
+    {
+	my $keyexpr = $action->keyexpr;
+	
+	$edt->{save_before_keyexpr} = $keyexpr;
+    }
+    
     if ( my $value = $edt->get_attr('before add') )
     {
 	my $quoted = $edt->dbh->quote($value);
@@ -432,6 +439,13 @@ sub after_action {
 	    $edt->{save_method_keylist} = \@keylist;
 	    $edt->{save_method_values} = \@values;
 	}
+    }
+    
+    elsif ( $operation eq 'delete_cleanup' )
+    {
+	my $keyexpr = $action->keyexpr;
+	
+	$edt->{save_after_keyexpr} = $keyexpr;
     }
     
     if ( $edt->get_attr('after delete') )

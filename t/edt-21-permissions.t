@@ -14,7 +14,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 use TableDefs qw(get_table_property set_table_property);
 
@@ -532,3 +532,42 @@ subtest 'by_authorizer' => sub {
 			 "enterer cannot modify records from different authorizer group");
 };
 
+
+# Now check permissions for subordinate tables.
+
+subtest 'subordinate' => sub {
+    
+    # Clear the tables so we can check for proper record insertion.
+    
+    $T->clear_table('EDT_TEST');
+    $T->clear_table('EDT_AUX');
+    $T->clear_table('EDT_ANY');
+    
+    # Clear all table permissions, so we know where we are starting from.
+    
+    $T->clear_specific_permissions;
+    
+    # First change the properties for 'EDT_TEST' to set CAN_POST to AUTHORIZED and CAN_MODIFY to
+    # AUTHORIZED. Check that this means that records can be modified by a different user.
+    
+    set_table_property('EDT_TEST', CAN_POST => 'AUTHORIZED');
+    set_table_property('EDT_TEST', CAN_MODIFY => 'AUTHORIZED');
+    
+    $perm_a->clear_cached_permissions;
+    $perm_e2->clear_cached_permissions;
+    
+    $T->test_subordinate_permissions('EDT_AUX', $perm_a, $perm_a, 'basic', 'succeeds', "self can modify");
+    $T->test_subordinate_permissions('EDT_AUX', $perm_a, $perm_e2, 'basic', 'succeeds', "other can modify"); 
+    
+    # Now set CAN_MODIFY to nobody, and check that a second person cannot modify unless they have
+    # admin privilege.
+    
+    set_table_property('EDT_TEST', CAN_MODIFY => 'NOBODY');
+    
+    $perm_a->clear_cached_permissions;
+    $perm_e2->clear_cached_permissions;
+    
+    $T->test_subordinate_permissions('EDT_AUX', $perm_a, $perm_a, 'basic', 'succeeds', "self can modify");
+    $T->test_subordinate_permissions('EDT_AUX', $perm_a, $perm_e2, 'basic', 'fails', "other cannot modify");
+    $T->test_subordinate_permissions('EDT_AUX', $perm_a, $perm_s, 'basic', 'succeeds', "superuser can modify");
+};

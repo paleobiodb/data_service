@@ -131,8 +131,8 @@ sub establish_timescale_tables {
 		source_timescale_no int unsigned not null default 0,
 		authority_level tinyint unsigned not null default 0,
 		min_age decimal(9,5),
-		max_age decimal(9,5),
 		min_age_prec tinyint,
+		max_age decimal(9,5),
 		max_age_prec tinyint,
 		reference_no int unsigned not null default 0,
 		timescale_type enum('', 'other', 'eon', 'era', 'period', 'epoch', 'stage', 'substage', 
@@ -194,8 +194,8 @@ sub establish_timescale_tables {
 		interval_name varchar(80) not null,
 		authority_timescale_no int unsigned not null,
 		early_age decimal(9,5),
-		late_age decimal(9,5),
 		early_age_prec tinyint,
+		late_age decimal(9,5),
 		late_age_prec tinyint,
 		abbrev varchar(10) not null,
 		color varchar(10) not null,
@@ -216,7 +216,7 @@ sub establish_timescale_tables {
     $dbh->do("CREATE TABLE $TS_BOUNDS_WORK (
 		bound_no int unsigned primary key auto_increment,
 		timescale_no int unsigned not null,
-		interval_no int unsigned not null,
+		interval_name varchar(80) not null default '',
 		bound_type enum('absolute', 'spike', 'same', 'percent'),
 		top_no int unsigned not null default 0,
 		base_no int unsigned not null default 0,
@@ -224,12 +224,12 @@ sub establish_timescale_tables {
 		color_no int unsigned not null default 0,
 		refsource_no int unsigned not null default 0,
 		age decimal(9,5),
-		age_error decimal(9,5),
-		percent decimal(9,5),
-		percent_error decimal(9,5),
 		age_prec tinyint,
+		age_error decimal(9,5),
 		age_error_prec tinyint,
+		percent decimal(9,5),
 		percent_prec tinyint,
+		percent_error decimal(9,5),
 		percent_error_prec tinyint,
 		has_error boolean not null default 0,
 		is_updated boolean not null default 0,
@@ -477,13 +477,13 @@ sub copy_international_timescales {
 	
 	# Then add the lower bounds of each interval in turn.
 	
-	$sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, interval_no, age, reference_no, color)
-	SELECT $timescale_no as timescale_no, 'absolute' as bound_type, interval_no, tsi.orig_early, orig_refno,
+	$sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, interval_name, age, reference_no, color)
+	SELECT $timescale_no as timescale_no, 'absolute' as bound_type, tsi.interval_name, tsi.orig_early, orig_refno,
 		if(tsi.macrostrat_color <> '', tsi.macrostrat_color, tsi.orig_color)
 	FROM scale_map as sm join $TABLE{TIMESCALE_INTS} as tsi using (interval_no)
 	WHERE sm.scale_level = $level_no and sm.scale_no = 1
 	ORDER BY tsi.orig_early asc";
-
+	
 	# "((SELECT i2.orig_early as age, i2.interval_name, i2.interval_no,
 	# 	if(i2.macrostrat_color <> '', i2.macrostrat_color, i2.orig_color) as color, i2.orig_refno)
 	# 	join $TABLE{TIMESCALE_INTS} as i1 on i1.interval_no = sm1.interval_no
@@ -537,14 +537,14 @@ sub copy_international_timescales {
     
     # $result = $dbh->do($sql);
     
-    $sql = "UPDATE $TABLE{TIMESCALE_BOUNDS}
-	    SET interval_no = if(interval_no = 3002, 32, if(interval_no = 3001, 59, interval_no))";
+    # $sql = "UPDATE $TABLE{TIMESCALE_BOUNDS}
+    # 	    SET interval_no = if(interval_no = 3002, 32, if(interval_no = 3001, 59, interval_no))";
     
-    print STDERR "$sql\n\n" if $options->{debug};
+    # print STDERR "$sql\n\n" if $options->{debug};
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "    Updated $result bad interval numbers from PBDB") if $result and $result > 0;
+    # logMessage(2, "    Updated $result bad interval numbers from PBDB") if $result and $result > 0;
     
     $sql = "DELETE FROM $TABLE{TIMESCALE_INTS} WHERE interval_no > 3000";
     
@@ -924,7 +924,7 @@ sub process_one_timescale {
     # @pending_bound_nos keeps track of alias bounds whose lower_no values need updating.
     
     my ($last_early, $last_late, $link_bound_no, @pending_bound_nos, $last_interval);
-    my (%bound_by_age);
+    my (%bound_by_age, %top_bound_count, %base_bound_count);
     
  INTERVAL:
     foreach my $i ( @$interval_list )
@@ -940,11 +940,15 @@ sub process_one_timescale {
 	my $reference_no = $i->{reference_no} || 'NULL';
 	# my $authorizer_no = $i->{authorizer_no} || $auth_quoted || '0';
 	# my $enterer_no = $i->{enterer_no} || $i->{authorizer_no} || $auth_quoted || '0';
-
+	
 	my $top_age = $i->{top_age};
 	my $base_age = $i->{base_age};
 	my $interval_no = $i->{interval_no};
+	my $interval_name = $dbh->quote($i->{interval_name});
 
+	$top_bound_count{$top_age}++;
+	$base_bound_count{$base_age}++;
+	
 	# If the base age and top age are the same, then skip this interval.
 	
 	if ( $base_age == $top_age )
@@ -957,22 +961,22 @@ sub process_one_timescale {
 	my $top_prec = get_precision($top_age);
 	my $base_prec = get_precision($base_age);
 	my $top_bound_no;
-
+	
 	# If we have already created a bound in this timescale for the top age, use
 	# that. Otherwise, create one. As this bound is not the bottom of any interval in this
-	# timescale, we set the interval_no to 0.
+	# timescale, we set the interval_name to ''.
 	
 	unless ( $top_bound_no = $bound_by_age{$top_age} )
 	{
 	    $sql = "
 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, top_no,
-			interval_no, age, age_prec, reference_no)
-		VALUES ($timescale_no, 'absolute', 0, 0, $top_age, $top_prec, $reference_no)";
+			interval_name, age, age_prec, reference_no)
+		VALUES ($timescale_no, 'absolute', 0, '', $top_age, $top_prec, $reference_no)";
 	    
 	    print STDERR "\n$sql\n\n" if $options->{debug};
 	    
 	    $result = $dbh->do($sql);
-
+	    
 	    $top_bound_no = $dbh->last_insert_id(undef, undef, undef, undef);
 	    $bound_by_age{$top_age} = $top_bound_no;
 	}
@@ -981,8 +985,8 @@ sub process_one_timescale {
 	
 	$sql = "
 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, top_no,
-			interval_no, age, age_prec, reference_no)
-		VALUES ($timescale_no, 'absolute', $top_bound_no, $interval_no, $base_age, $base_prec, $reference_no)";
+			interval_name, age, age_prec, reference_no)
+		VALUES ($timescale_no, 'absolute', $top_bound_no, $interval_name, $base_age, $base_prec, $reference_no)";
 	
 	print STDERR "\n$sql\n\n" if $options->{debug};
 	
@@ -991,347 +995,32 @@ sub process_one_timescale {
 	my $base_bound_no = $dbh->last_insert_id(undef, undef, undef, undef);
 	$bound_by_age{$base_age} ||= $base_bound_no;
     }
-	
-	# # If the top of this interval matches the bottom of the previous one, we add a new
-	# # boundary to mark the bottom of the interval and update the lower_no value of the
-	# # last main boundary plus any pending ones. This will be the most common case.
-	
-	# if ( defined $last_early && abs($i->{top_age} - $last_early) < 1 )
-	# {
-	#     # my $bound_list = join(',', $link_bound_no, @pending_bound_nos);
-	    
-	#     # $sql = "
-	#     # 	UPDATE $TABLE{TIMESCALE_BOUNDS} SET lower_no = $i->{interval_no}
-	#     # 	WHERE bound_no in ($bound_list) and timescale_no = $timescale_no";
-	    
-	#     # print STDERR "\n$sql\n\n" if $options->{debug};
-	    
-	#     # $result = $dbh->do($sql);
-	    
-	#     # @pending_bound_nos = ();
-	    
-	#     my $base_prec = get_precision($i->{base_age});
-	    
-	#     $sql = "
-	# 	INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, bound_mode,
-	# 		interval_no, age, age_prec, reference_no)
-	# 	VALUES ($timescale_no, 'absolute', 'sequence',
-	# 		$i->{interval_no}, $i->{base_age}, $base_prec, $reference_no)";
-	    
-	#     print STDERR "\n$sql\n\n" if $options->{debug};
-	    
-	#     $result = $dbh->do($sql);
-	    
-	#     $last_early = $i->{base_age};
-	#     $last_late = $i->{top_age};
-	#     $link_bound_no = $dbh->last_insert_id(undef, undef, undef, undef);
-	#     $bound_by_age{$i->{base_age}} = $link_bound_no;
-	#     $last_interval = $i;
-	    
-	#     next INTERVAL;
-	# }
-	
-	# If the bottom of this interval corresponds with the previous one, then this represents
-	# an alternate name for an interval or interval range. We need to add a new boundary, with
-	# a type of 'same' and a mode of 'overlap'.
-	
-	# elsif ( defined $last_early && $i->{base_age} == $last_early )
-	# {
-	#     my $range_no;
-	    
-	#     if ( $i->{top_age} == $last_late )
-	#     {
-	# 	$range_no = '0';
-	#     }
-	    
-	#     elsif ( $bound_by_age{$i->{top_age}} )
-	#     {
-	# 	$range_no = $bound_by_age{$i->{top_age}};
-	#     }
-	    
-	#     else
-	#     {
-	# 	my $top_prec = get_precision($i->{top_age});
-		
-	# 	$sql = "
-	# 	INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type,
-	# 		bound_mode, interval_no, age, age_prec, reference_no)
-	# 	VALUES ($timescale_no, 'absolute', 'overlap',
-	# 		0, $i->{top_age}, $top_prec, $reference_no)";
-		
-	# 	print STDERR "\n$sql\n\n" if $options->{debug};
-		
-	# 	$result = $dbh->do($sql);
 
-	# 	$range_no = $dbh->last_insert_id(undef, undef, undef, undef);
-	# 	$bound_by_age{$i->{top_age}} = $range_no;
-	#     }
-	    
-	#     my $base_prec = get_precision($i->{base_age});
-	    
-	#     $sql = "
-	# 	INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type,
-	# 		bound_mode, interval_no, age, age_prec, base_no, range_no,
-	# 		reference_no)
-	# 	VALUES ($timescale_no, 'range', 'overlap',
-	# 		$i->{interval_no}, $i->{base_age}, $base_prec, $link_bound_no, $range_no, $reference_no)";
-	    
-	#     print STDERR "\n$sql\n\n" if $options->{debug};
-	    
-	#     $result = $dbh->do($sql);
-	    
-	#     # push @pending_bound_nos, $dbh->last_insert_id(undef, undef, undef, undef);
-	    
-	#     next INTERVAL;
-	# }
-	
-	# # If this interval overlaps with the previous one, we insert the top boundary as an alternate.
-	
-	# elsif ( defined $last_early && $i->{top_age} < $last_early )
-	# {
-	#     my $range_no;
-	    
-	#     if ( $bound_by_age{$i->{top_age}} )
-	#     {
-	# 	$range_no = $bound_by_age{$i->{top_age}};
-	#     }
+    # Now check to see if multiple intervals hit at least one bound. If so, then this timescale
+    # contains at least one overlap. (It is, I suppose, possible that the timescale contains
+    # overlaps none of which actually end at the same bounds, but this does not occur in
+    # practice.)
 
-	#     else
-	#     {
-	# 	my $top_prec = get_precision($i->{top_age});
-		
-	# 	$sql = "
-	# 	INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type,
-	# 		interval_no, age, age_prec, reference_no)
-	# 	VALUES ($timescale_no, 'alternate', 0, $i->{top_age}, $top_prec, $reference_no)";
-		
-	# 	print STDERR "\n$sql\n\n" if $options->{debug};
-		
-	# 	$result = $dbh->do($sql);
+    my ($overlap_count);
 
-	# 	$range_no = $dbh->last_insert_id(undef, undef, undef, undef);
-	# 	$bound_by_age{$i->{top_age}} = $range_no;
-	#     }
-	    
-	#     my $base_prec = get_precision($i->{base_age});
-	    
-	#     $sql = "
-	# 	INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type,
-	# 		interval_no, age, age_prec, range_no, reference_no)
-	# 	VALUES ($timescale_no, 'alternate',
-	# 		$i->{interval_no}, $i->{base_age}, $base_prec, $range_no, $reference_no)";
-	    
-	#     print STDERR "\n$sql\n\n" if $options->{debug};
-	    
-	#     $result = $dbh->do($sql);
+    foreach my $k ( keys %top_bound_count )
+    {
+	$overlap_count++ if $top_bound_count{$k} && $top_bound_count{$k} > 1;
+    }
+    
+    foreach my $k ( keys %top_bound_count )
+    {
+	$overlap_count++ if $top_bound_count{$k} && $top_bound_count{$k} > 1;
+    }
 
-	#     my $new_bound = $dbh->last_insert_id(undef, undef, undef, undef);
-	#     $bound_by_age{$i->{base_age}} ||= $new_bound;
-	    
-	#     next INTERVAL;
-	# }
-
-	# # If this interval has the same base_age and top_age, skip it.
-
-	# elsif ( $i->{base_age} == $i->{top_age} )
-	# {
-	#     next INTERVAL;
-	# }
-	
-	# # Otherwise, there is either a gap in the timescale or this is the top boundary. In either
-	# # case, we need to add both a top and a bottom boundary for the next interval.
-	
-	# else
-	# {
-	#     # if ( defined $last_early )
-	#     # {
-	#     # 	my $diff = $i->{top_age} - $last_early;
-	#     # 	logMessage(2, "    gap: $i->{interval_name} ($i->{interval_no}) to $last_interval->{interval_name} ($last_interval->{interval_no}): $diff");
-	#     # }
-	    
-	#     my $top_prec = get_precision($i->{top_age});
-	#     my $base_prec = get_precision($i->{base_age});
-	    
-	#     $sql = "
-	# 	INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type,
-	# 		interval_no, age, age_prec, reference_no)
-	# 	VALUES ($timescale_no, 'absolute', $i->{interval_no}, $i->{top_age}, $top_prec, $reference_no)";
-	    
-	#     print STDERR "\n$sql\n\n" if $options->{debug};
-	    
-	#     $result = $dbh->do($sql);
-	    
-	#     $bound_by_age{$i->{top_age}} = $dbh->last_insert_id(undef, undef, undef, undef);
-	    
-	#     $sql = "
-	# 	INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type,
-	# 		interval_no, age, age_prec, reference_no)
-	# 	VALUES ($timescale_no, 'absolute', $i->{interval_no}, $i->{base_age}, $base_prec, $reference_no)";
-	    
-	#     print STDERR "\n$sql\n\n" if $options->{debug};
-	    
-	#     $result = $dbh->do($sql);
-	    
-	#     $last_early = $i->{base_age};
-	#     $last_late = $i->{top_age};
-	#     $link_bound_no = $dbh->last_insert_id(undef, undef, undef, undef);
-	#     $bound_by_age{$i->{base_age}} = $link_bound_no;
-	#     $last_interval = $i;
-	    
-	#     @pending_bound_nos = ();
-	    
-	#     next INTERVAL;
-	# }
-	
-    # }
+    if ( $overlap_count )
+    {
+	logMessage(2, "    This timescale has at least $overlap_count overlaps");
+    }
     
     my $a = 1; # we can stop here when debugging
 }
-    
-#     # Then update the timescale age range
-    
-#     $sql = "CALL update_timescale_ages($timescale_no)";
-    
-#     print STDERR "$sql\n\n" if $options->{debug};
-    
-#     $dbh->do($sql);
 
-    
-# INTERVAL:
-#     foreach my $i ( @$interval_list )
-#     {
-# 	my $prec = get_precision($i->{base_age});
-	
-# 	unless ( $last_early )
-# 	{
-# 	    my $reference_no = $i->{reference_no} || '0';
-	    
-# 	    $sql = "
-# 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type,
-# 			lower_no, interval_no, age, orig_age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 0,
-# 			$i->{interval_no}, $i->{base_age}, $prec, $reference_no)";
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    $first_early = $i->{base_age};
-# 	    $first_early_prec = $prec;
-# 	    $last_early = $i->{base_age};
-# 	    $last_late = $i->{top_age};
-# 	    $last_late_prec = $prec;
-# 	    $last_interval = $i;
-	    
-# 	    next INTERVAL;
-# 	}
-	
-# 	elsif ( $i->{base_age} == $last_late )
-# 	{
-# 	    $sql = "
-# 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type,
-# 			lower_no, interval_no, age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', $last_interval->{interval_no},
-# 			$i->{interval_no}, $i->{base_age}, $prec, $i->{reference_no})";
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    $last_early = $i->{base_age};
-# 	    $last_late = $i->{top_age};
-# 	    $last_late_prec = get_precision($i->{top_age});
-# 	    $last_interval = $i;
-	    
-# 	    next INTERVAL;
-# 	}
-	
-# 	elsif ( $i->{base_age} == $last_early && $i->{top_age} == $last_late )
-# 	{
-# 	    $sql = "
-# 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type,
-# 			lower_no, interval_no, age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $i->{authorizer_no}, 'alias', $last_interval->{interval_no},
-# 			$i->{interval_no}, $i->{base_age}, $prec, $i->{reference_no})";
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    next INTERVAL;
-# 	}
-	
-# 	elsif ( $i->{base_age} == $last_early )
-# 	{
-# 	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) matches bottom of previous");
-	    
-# 	    $sql = "
-# 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type, is_error,
-# 			lower_no, interval_no, age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-# 			$i->{interval_no}, $i->{base_age}, $prec, $i->{reference_no})";
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    next INTERVAL;
-# 	}
-	
-# 	elsif ( $i->{top_age} == $last_late )
-# 	{
-# 	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) matches top of previous");
-	    
-# 	    $sql = "
-# 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type, is_error,
-# 			lower_no, interval_no, age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-# 			$i->{interval_no}, $i->{base_age}, $prec, $i->{reference_no})";
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    next INTERVAL;
-# 	}
-	
-# 	elsif ( $i->{base_age} > $last_late )
-# 	{
-# 	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) overlaps top");
-	    
-# 	    $sql = "
-# 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type, is_error,
-# 			lower_no, interval_no, age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', 1, $last_interval->{interval_no},
-# 			$i->{interval_no}, $i->{base_age}, $prec, $i->{reference_no})";
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    next INTERVAL;
-# 	}
-	
-# 	else
-# 	{
-# 	    my $gap = $last_late - $i->{base_age};
-# 	    logMessage(2, "  ERROR: $i->{interval_name} ($i->{interval_no}) has a gap of $gap Ma");
-	    
-# 	    $sql = "
-# 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type,
-# 			lower_no, interval_no, age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $i->{authorizer_no}, 'absolute', $last_interval->{interval_no},
-# 			$i->{interval_no}, $i->{base_age}, $prec, $i->{reference_no})";
-	    
-# 	    # print "\n$sql\n\n" if $options->{debug};
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    $last_early = $i->{base_age};
-# 	    $last_late = $i->{top_age};
-# 	    $last_late_prec = get_precision($i->{top_age});
-# 	    $last_interval = $i;	
-# 	}
-#     }
-    
-#     # Now we need to process the upper boundary of the last interval.
-    
-#     $sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, authorizer_no, bound_type,
-# 			lower_no, interval_no, age, age_prec, reference_no)
-# 		VALUES ($timescale_no, $last_interval->{authorizer_no}, 'absolute',
-# 			$last_interval->{interval_no}, 0, $last_late, $last_late_prec, 
-# 			$last_interval->{reference_no})";
-    
-#     $result = $dbh->do($sql);
-    
 
 # get_precision ( value )
 #
@@ -1397,9 +1086,10 @@ sub add_timescale_chunk {
 	$filter = "WHERE " . join( ' and ', @filters );
     }
     
-    $sql = "SELECT bound_no, age, age_prec, age_error, age_error_prec, interval_no, is_spike,
+    $sql = "SELECT bound_no, age, age_prec, age_error, age_error_prec, interval_no, interval_name, is_spike,
 		timescale_type, timescale_extent
-	    FROM $TABLE{TIMESCALE_BOUNDS} join $TABLE{TIMESCALE_DATA} using (timescale_no)
+	    FROM $TABLE{TIMESCALE_BOUNDS} left join $TABLE{TIMESCALE_INTS} using (interval_name) 
+		join $TABLE{TIMESCALE_DATA} using (timescale_no)
 	    $filter ORDER BY age asc";
     
     my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
@@ -1448,7 +1138,7 @@ sub set_timescale_boundaries {
     my ($dbh, $timescale_no, $boundary_list, $options) = @_;
     
     my $result;
-    my $sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, interval_no, base_no,
+    my $sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, interval_name, base_no,
 		age, age_prec, age_error, age_error_prec, is_spike, interval_type) VALUES\n";
     
     my @values;
@@ -1458,9 +1148,8 @@ sub set_timescale_boundaries {
     
     foreach my $b (@$boundary_list)
     {
-	# my $lower_quoted = $dbh->quote($b->{lower_no});
-	my $upper_quoted = $dbh->quote($b->{interval_no});
-	my $source_quoted = $dbh->quote($b->{base_no} // $b->{bound_no});
+	my $interval_quoted = $dbh->quote($b->{interval_name});
+	my $base_quoted = $dbh->quote($b->{base_no} // $b->{bound_no});
 	my $age_quoted = $dbh->quote($b->{age});
 	my $age_prec_quoted = $dbh->quote($b->{age_prec});
 	my $age_error_quoted = $dbh->quote($b->{age_error});
@@ -1468,7 +1157,7 @@ sub set_timescale_boundaries {
 	my $spike_quoted = $dbh->quote($b->{is_spike});
 	my $type_quoted = $dbh->quote($b->{timescale_type} // '');
 	
-	push @values, "($ts_quoted, 'same', $upper_quoted, $source_quoted, " .
+	push @values, "($ts_quoted, 'same', $interval_quoted, $base_quoted, " .
 	    "$age_quoted, $age_prec_quoted, $age_error_quoted, $age_error_prec_quoted, $spike_quoted, $type_quoted)";
     }
     
@@ -1490,10 +1179,10 @@ sub check_timescale_integrity {
     
     my ($sql);
     
-    $sql = "	SELECT bound_no, age, upper.interval_no, upper.interval_name
+    $sql = "	SELECT bound_no, age, interval_name
 		FROM $TABLE{TIMESCALE_BOUNDS} as tsb
-			left join $TABLE{TIMESCALE_INTS} as upper on upper.interval_no = tsb.interval_no
-		WHERE timescale_no = $timescale_no";
+		WHERE timescale_no = $timescale_no
+		ORDER BY age asc";
     
     my ($results) = $dbh->selectall_arrayref($sql, { Slice => { } });
     my (@results);
@@ -1512,7 +1201,7 @@ sub check_timescale_integrity {
     
     # Make sure that the first and last intervals have the correct properties.
     
-    if ( $results[0]{interval_no} )
+    if ( $results[0]{interval_name} )
     {
 	my $bound_no = $results[0]{bound_no};
 	push @errors, "Error in bound $bound_no: should be upper boundary but has interval_no = $results[0]{interval_no}";
@@ -1706,11 +1395,11 @@ sub complete_bound_updates {
     
     logMessage(2, "Completing bound updates...");
     
-    # $dbh->do("CALL complete_bound_updates");
+    $dbh->do("CALL complete_bound_updates");
     # $dbh->do("CALL check_updated_bounds");
     $dbh->do("CALL unmark_updated_bounds");
     
-    print STDERR "CALL complete_bound_updates\nCALL check_updated_bounds\nCALL unmark_updated\n\n"
+    print STDERR "CALL complete_bound_updates\nCALL unmark_updated\n\n"
 	if $options->{debug};
     
     logMessage(2, "Done.");
@@ -1733,7 +1422,7 @@ sub update_international_bounds {
     my $sql = "	SELECT fix.timescale_no, fix.interval_name
 		FROM $TIMESCALE_FIX as fix left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name)
 			left join $TABLE{TIMESCALE_BOUNDS} as tsb on tsb.timescale_no = fix.timescale_no
-			and tsb.interval_no = tsi.interval_no
+			and tsb.interval_name = tsi.interval_name
 		WHERE tsb.bound_no is null";
     
     print STDERR "$sql\n\n" if $options->{debug};
@@ -1756,8 +1445,7 @@ sub update_international_bounds {
     
     # Then use this table to update the international timescale boundaries.
     
-    $sql = "	UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb join $TABLE{TIMESCALE_INTS} as tsi using (interval_no)
-			join $TIMESCALE_FIX as fix using (timescale_no, interval_name)
+    $sql = "	UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb join $TIMESCALE_FIX as fix using (timescale_no, interval_name)
 		SET tsb.bound_type = coalesce(fix.bound_type, tsb.bound_type),
 		    tsb.age = coalesce(fix.age, tsb.age),
 		    tsb.age_prec = coalesce(fix.age_prec, tsb.age_prec),
@@ -1808,17 +1496,16 @@ sub model_timescale {
     # Then query all of the boundaries for the specified timescale.
     
     my $sql = " SELECT tsb.*, tsi.interval_name FROM $TABLE{TIMESCALE_BOUNDS} as tsb 
-			left join $TABLE{TIMESCALE_INTS} as tsi using (interval_no)
 		WHERE timescale_no = $timescale_no ORDER BY age";
-
+    
     my $ts_res = $dbh->selectall_arrayref($sql, { Slice => {} });
-
+    
     unless ( ref $ts_res eq 'ARRAY' && @$ts_res )
     {
 	logMessage(2, "No boundaries found for timescale '$timescale_no'");
 	return;
     }
-
+    
     # Now query all of the international boundaries.
     
     my (@INTERNATIONAL, %INT, %INT_BY_AGE, @AGES);
@@ -2283,7 +1970,7 @@ sub establish_triggers {
 	BEFORE UPDATE ON $TABLE{TIMESCALE_BOUNDS} FOR EACH ROW
 	BEGIN
 	    IF OLD.bound_type <> NEW.bound_type or
-		OLD.interval_no <> NEW.interval_no or
+		OLD.interval_name <> NEW.interval_name or
 		OLD.top_no <> NEW.top_no or OLD.base_no <> NEW.base_no or
 		OLD.range_no <> NEW.range_no or OLD.color_no <> NEW.color_no or
 		OLD.refsource_no <> NEW.refsource_no or OLD.age <> NEW.age or

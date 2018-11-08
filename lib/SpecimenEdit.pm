@@ -315,6 +315,12 @@ sub validate_collection {
 	$insert_fields = 'genus_name,subgenus_name,species_name';
 	$insert_values = $dbh->quote($genus) . ',' . $dbh->quote($subgenus || '') . ',' . $dbh->quote($species || '');
     }
+
+    else
+    {
+	$edt->add_condition($action, 'E_REQUIRED', "if a collection is specified, then a taxon name or identifier must be as well");
+	return;
+    }
     
     $edt->debug_line("$sql\n\n");
     

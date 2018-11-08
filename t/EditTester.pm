@@ -641,15 +641,17 @@ sub test_permissions {
     }
     
     my $primary = get_table_property($table, 'PRIMARY_KEY') or
-	die "cannot fetch primary key for table '$table'";
+	croak "cannot fetch primary key for table '$table'";
     
-    my $string = $table =~ /edt_aux/ ? 'name' : 'string_req';
+    my $string = $table =~ /EDT_AUX/ ? 'name' : 'string_req';
     
     # First test insertion. We use the first specified permission to do this. We must insert no
     # matter which tests are being done, so that we have records to replace, update, and/or
     # delete.
     
-    my ($insert_result, @insert_errors, $perm_count);
+    my @insert_errors;
+    my $perm_count = 0;
+    
     my ($key1, $key2, $key3);
     
     my $edt = $T->new_edt($insert_perm, { IMMEDIATE_MODE => 1 });
@@ -799,6 +801,277 @@ sub test_permissions {
 }
 
 
+our ($UNIQ_B) = 0;
+
+# test_subordinate_permissions ( table, insert_perm, [check_perm,] test, result, label )
+# 
+# This subroutine does the same thing as 'test_permissions' above, but on subordinate tables.
+# This subroutine will pass or fail a test depending on the result of the selected operations.
+
+sub test_subordinate_permissions {
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    # First check the arguments.
+
+    my $T = shift;
+    my $table = shift;
+    my $insert_perm = shift;
+    my $edit_perm = $insert_perm;
+    
+    croak "bad insert permission '" . ref $insert_perm . "'"
+	unless ref $insert_perm eq 'Permissions';
+    
+    if ( ref $_[0] eq 'Permissions' )
+    {
+	$edit_perm = shift;
+    }
+    
+    elsif ( ref $_[0] )
+    {
+	croak "bad check permission '" . ref $_[0] . "'";
+    }
+    
+    my ($test, $result, $label) = @_;
+    
+    croak "bad test '$test'" unless $test &&
+	($test eq 'basic' || $test =~ qr{ ^ [IDRUK]+ $ }xs );
+    
+    $test = 'IDRU' if $test eq 'basic';
+    
+    if ( $result && $result eq 'succeeds' )
+    {
+	$label ||= 'transaction succeeded';
+    }
+    
+    elsif ( $result && $result eq 'fails' )
+    {
+	$label ||= 'transaction failed with E_PERM';
+    }
+    
+    else
+    {
+	croak "bad check '$result', must be one of 'succeeds', 'fails'";
+    }
+    
+    my $sup_table = get_table_property($table, 'SUPERIOR_TABLE') or
+	croak "cannot fetch superior table for '$table'";
+    
+    my $primary = get_table_property($table, 'PRIMARY_KEY') or
+	croak "cannot fetch primary key for table '$table'";
+    
+    my $linkcol = get_table_property($sup_table, 'PRIMARY_KEY') or
+	croak "cannot fetch primary key for table '$sup_table'";
+    
+    my $string = $table =~ /EDT_AUX/ ? 'name' : 'string_req';
+    my $sup_string = 'string_req'; # there is currently only one superior table in use: EDT_TEST
+    
+    $UNIQ_B++;
+    
+    # First insert a record into both the superior and subordinate table. We use the first specified
+    # permission to do this. We must insert no matter which tests are being done, so that we have
+    # a record with which to associate the subordinate records we are inserting, updating,
+    # replacing, and deleting, and a subordinate record to test.
+    
+    my ($keyA, $keyB1, $keyB2, $keyB3, $keyC1, $keyC2, $keyC3);
+    
+    my $edt = $T->new_edt($insert_perm, { IMMEDIATE_MODE => 1 });
+    
+    $keyA = $edt->insert_record($sup_table, { $sup_string => 'permission test record' });
+
+    if ( $test =~ /[IR]/ )
+    {
+	$keyB1 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 1.$UNIQ_B" });
+    }
+
+    if ( $test =~ /U/ )
+    {
+	$keyB2 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 2.$UNIQ_B" });
+    }
+
+    if ( $test =~ /D/ )
+    {
+	$keyB3 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 3.$UNIQ_B" });
+    }
+    
+    unless ( $edt->commit )
+    {
+	foreach my $e ( $edt->errors )
+	{
+	    diag($e->code . ': ' . $edt->generate_msg($e));
+	}
+	
+	return fail($label);
+    }
+    
+    # Now create a second edt with the second permission, with which to test the specified
+    # operations on the subordinate table.
+
+    my $operation_count = 0;
+    
+    $edt = $T->new_edt($edit_perm, { IMMEDIATE_MODE => 1 });
+    
+    # First test insertion of subordinate records.
+    
+    if ( $test =~ /[IR]/ )
+    {
+	$keyC1 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 1.$UNIQ_B" });
+	$operation_count++;
+    }
+    
+    if ( $test =~ /U/ )
+    {
+	$keyC2 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 2.$UNIQ_B" });
+	$operation_count++;
+    }
+    
+    if ( $test =~ /D/ )
+    {
+	$keyC3 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 3.$UNIQ_B" });
+	$operation_count++;
+    }
+        
+    if ( $test =~ /R/ )
+    {
+	if ( $keyB1 )
+	{
+	    $edt->replace_record($table, { $primary => $keyB1, $string => "replace B1.$UNIQ_B" });
+	    $operation_count++;
+	}
+	
+	if ( $keyC1 )
+	{
+	    $edt->replace_record($table, { $primary => $keyC1, $string => "replace C1.$UNIQ_B" }) if $keyC1;
+	    $operation_count++;
+	}
+
+	ok( $keyB1 || $keyC1, "got at least one key to test for replace" );
+    }
+    
+    if ( $test =~ /U/ )
+    {
+	if ( $keyB2 )
+	{
+	    $edt->update_record($table, { $primary => $keyB2, $string => "update B2.$UNIQ_B" });
+	    $operation_count++;
+	}
+
+	if ( $keyC2 )
+	{
+	    $edt->update_record($table, { $primary => $keyC2, $string => "update C2.$UNIQ_B" });
+	    $operation_count++;
+	}
+
+	ok( $keyB2 || $keyC2, "got at least one key to test for update" );
+    }
+    
+    if ( $test =~ /D/ )
+    {
+	if ( $keyB3 )
+	{
+	    my ($delete_check) = $T->fetch_records_by_key($table, $keyB3);
+	    
+	    unless ( $delete_check && $delete_check->{$string} eq "subordinate test 3.$UNIQ_B" )
+	    {
+		diag("Expected record was not found for deletion");
+		fail($label);
+		$edt->rollback;
+		return;
+	    }
+	    
+	    $edt->delete_record($table, $keyB3);
+	    $operation_count++;
+	}
+
+	if ( $keyC3 )
+	{
+	    my ($delete_check) = $T->fetch_records_by_key($table, $keyC3);
+	    
+	    unless ( $delete_check && $delete_check->{$string} eq "subordinate check 3.$UNIQ_B" )
+	    {
+		diag("Expected record was not found for deletion");
+		fail($label);
+		$edt->rollback;
+		return;
+	    }
+	    
+	    $edt->delete_record($table, $keyC3);
+	    $operation_count++;
+	}
+
+	ok( $keyB3 || $keyC3, "got at least one key to test for delete" );
+    }
+
+    if ( $test =~ /K/ )
+    {
+	my ($max) = $T->dbh->selectrow_array("SELECT max($primary) FROM $TABLE{$table}");
+	
+	$edt->replace_record($table, { $primary => $max + 1, $string => 'specific key permission' });
+	$operation_count++;
+    }
+    
+    # Now commit the second transaction. If it succeeds, then return the proper
+    # result.
+    
+    if ( $edt->commit )
+    {
+	# If the transaction was supposed to succeed, then the test passes. Otherwise, it fails.
+	
+	return ok( $result eq 'succeeds', $label );
+    }
+    
+    # If the transaction fails, we have to look at the reasons behind the failure.
+    
+    my ($e_perm_count, $bad_code);
+    
+    foreach my $e ( $edt->errors )
+    {
+	if ( $e->code eq 'E_PERM' )
+	{
+	    $e_perm_count++;
+	    diag($e->code . ': ' . $edt->generate_msg($e)) if $result eq 'succeeds';
+	}
+	
+	else
+	{
+	    $bad_code = 1;
+	    diag($e->code . ': ' . $edt->generate_msg($e));
+	}
+    }
+    
+    # If we have any errors other than E_PERM, then the test fails regardless of what the fourth
+    # argument was.
+    
+    if ( $bad_code )
+    {
+	return fail( $label );
+    }
+    
+    # If the test was supposed to succeed, we fail if we have even one E_PERM.
+    
+    elsif ( $result eq 'succeeds' )
+    {
+	return fail( $label );
+    }
+    
+    # Otherwise, if we have exactly one E_PERM for each operation we counted, then the test succeeds if the
+    # transaction was supposed to fail.
+    
+    elsif ( $e_perm_count && $operation_count && $e_perm_count == $operation_count )
+    {
+	return pass( $label );
+    }
+    
+    # If we don't get at least one E_PERM or other error, something has gone very wrong.
+    
+    else
+    {
+	diag( "The transaction failed, but the wrong number of E_PERM errors was found." );
+	return fail( $label );
+    }
+}
+
+
 sub last_edt {
 
     my ($T) = @_;
@@ -843,6 +1116,7 @@ sub ok_result {
     if ( $result )
     {
 	ok(!$TEST_MODE, $label);
+	return !$TEST_MODE;
     }
     
     else
@@ -850,6 +1124,7 @@ sub ok_result {
 	$T->diag_warnings($edt, $selector);
 	$T->diag_errors($edt, $selector);
 	ok($TEST_MODE, $label);
+	return $TEST_MODE;
     }
 }
 

@@ -71,9 +71,11 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    replace_existing => "You do not have permission to replace this record",
 			    delete => "You do not have permission to delete this record",
 			    delete_many => "You do not have permission to delete records from this table",
+			    delete_cleanup => "You do not have permission to delete these records",
 			    default => "You do not have permission for this operation" },
 		E_BAD_OPERATION => "Invalid operation '%1'",
 		E_BAD_RECORD => "%1",
+		E_BAD_SELECTOR => "%1",
 		E_BAD_UPDATE => "You cannot change the value of '%1' once a record has been created",
 		E_PERM_COL => "You do not have permission to set the value of the field '%1'",
 		E_REQUIRED => "Field '%1': must have a nonempty value",
@@ -2037,6 +2039,83 @@ sub delete_many {
 }
 
 
+# delete_cleanup ( table, selector )
+# 
+# Create an action that will cause all records from the specified table that match the specified
+# selector to be deleted UNLESS they have been inserted, updated, or replaced during the current
+# transaction. This action is designed to be used by a transaction that wishes to completely
+# replace the set of records in a subsidiary table that are tied to one or more records in a
+# superior table. Of course, it should be called as the last action in the transaction.
+#
+# This action is invalid on a main table.
+
+sub delete_cleanup {
+    
+    my ($edt, $table, $selector) = @_;
+    
+    # Create a new action record for this operation.
+    
+    my $action = $edt->_new_record($table, 'delete_cleanup', { });
+
+    # Make sure we have a non-empty selector, although we will need to do more checks on it later.
+    
+    unless ( $selector && ! ref $selector )
+    {
+	croak "'$selector' is not a valid selector";
+    }
+    
+    $action->_set_selector($selector);
+    
+    try {
+	# First check to make sure we have permission to delete records in this table. A subclass
+	# may override this method, if it needs to make different checks than the default ones.
+	
+	my $permission = $edt->authorize_action($action, 'delete_cleanup', $table, $selector);
+	
+	# If errors occurred during authorization, then we need not check further but can
+	# proceed to the next action.
+	
+	if ( $permission eq 'error' && $action->has_errors )
+	{
+	    return $edt->_handle_action($action);
+	}
+	
+	# If the user does not have permission to edit the record, add an E_PERM condition. 
+	
+	elsif ( $permission ne 'delete' && $permission ne 'admin' )
+	{
+	    $edt->add_condition($action, 'E_PERM', 'delete_cleanup');
+	}
+    }
+    
+    catch {
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
+	$edt->error_line($_);
+    };
+    
+    # If the selector does not mention the linking column, throw an exception rather than adding
+    # an error condition. These are static errors that should not be occurring because of bad
+    # end-user input.
+    
+    my $linkcol = $action->linkcol;
+    
+    unless ( $linkcol )
+    {
+	croak "could not find linking column for table $table";
+    }
+    
+    unless ( $selector =~ /\b$linkcol\b/ )
+    {
+	croak "'$selector' is not a valid selector, must mention $linkcol";
+    }
+    
+    # Otherwise, either execute the action immediately or add it to the appropriate list depending on
+    # whether or not any error conditions are found.
+    
+    return $edt->_handle_action($action);
+}
+
+
 # process_record ( table, record )
 # 
 # Call either 'insert_record' or 'update_record', depending on whether the record has a value for
@@ -2274,18 +2353,23 @@ sub authorize_action {
     
     my $permission;
     
-    # First check whether the PERMISSION_TABLE property is set for the specified table. If so,
+    # First check whether the SUPERIOR_TABLE property is set for the specified table. If so,
     # then the authorization check needs to be done on this other table first.
     
-    if ( my $alt_table = get_table_property($table, 'PERMISSION_TABLE') )
+    if ( my $alt_table = get_table_property($table, 'SUPERIOR_TABLE') )
     {
-	$permission = $edt->authorize_action_subordinate($action, $operation, $table, $alt_table, $keyexpr);
+	$permission = $edt->authorize_subordinate_action($action, $operation, $table, $alt_table, $keyexpr);
     }
     
     # Otherwise carry out the appropriate check for this operation directly on its own table.
 
     else
     {
+	if ( $operation eq 'delete_cleanup' )
+	{
+	    croak "the action 'delete_cleanup' is only valid on a subordinate table";
+	}
+	
 	sswitch ( $operation )
 	{
 	    case 'insert': {
@@ -2304,9 +2388,13 @@ sub authorize_action {
 	    case 'delete': {
 		$permission = $edt->check_record_permission($table, 'delete', $keyexpr);
 	    }
-	    
+
 	    case 'delete_many': {
 		$permission = $edt->check_many_permission($table, 'delete', $keyexpr);
+	    }
+
+	    case 'delete_cleanup': {
+		croak "the operation '$operation' can only be done on a subordinate table";
 	    }
 	    
 	default: {
@@ -2329,14 +2417,14 @@ sub authorize_action {
 }
 
 
-# authorize_action_subordinate ( action, operation, table, alt_table, keyexpr )
+# authorize_subordinate_action ( action, operation, table, alt_table, keyexpr )
 #
 # Carry out the authorization operation where the actual table to be checked ($alt_table) is
 # different from the one on which the action is being executed ($table).
 
-sub authorize_action_subordinate {
+sub authorize_subordinate_action {
 
-    my ($edt, $action, $operation, $table, $alt_table, $keyexpr) = @_;
+    my ($edt, $action, $operation, $table, $sup_table, $keyexpr) = @_;
     
     if ( $operation eq 'update_many' || $operation eq 'delete_many' )
     {
@@ -2347,16 +2435,18 @@ sub authorize_action_subordinate {
     # that links records in this table to records in the superior table (permission table). We need to
     # start by determining what that column is.
     
-    my $linkcol = get_table_property($table, 'PERMISSION_KEY');
-    my $alt_keycol = get_table_property($alt_table, 'PRIMARY_KEY');
+    my $linkcol = get_table_property($table, 'SUPERIOR_KEY');
+    my $sup_keycol = get_table_property($sup_table, 'PRIMARY_KEY');
     
     # If no linking column was specified, assume that it is named the same as the primary key
     # of the permission table.
     
-    croak "PERMISSION_TABLE was specified as '$alt_table' but no key column was found"
-	unless $linkcol || $alt_keycol;
+    croak "SUPERIOR_TABLE was specified as '$sup_table' but no key column was found"
+	unless $linkcol || $sup_keycol;
     
-    $linkcol ||= $alt_keycol;
+    $linkcol ||= $sup_keycol;
+
+    $action->_set_linkcol($linkcol);
     
     # If we were given a key expression for this record, fetch the current value for the
     # linking column from that row.
@@ -2365,8 +2455,17 @@ sub authorize_action_subordinate {
     
     if ( $keyexpr )
     {
-	($linkval) = $edt->get_old_values($table, $keyexpr, $linkcol);
+	# $$$ This needs to be updated to allow for multiple $linkval keys!!!
 
+	try {
+	    ($linkval) = $edt->get_old_values($table, $keyexpr, $linkcol);
+	}
+	
+	catch {
+	    $edt->add_condition($action, 'E_EXECUTE', "bad selector '$keyexpr'");
+	    $edt->error_line($_);
+	};
+	
 	unless ( $linkval )
 	{
 	    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec || $action->keycol);
@@ -2374,21 +2473,25 @@ sub authorize_action_subordinate {
 	}
     }
     
-    # Then fetch the new value, if any, from the action record.
+    # Then fetch the new value, if any, from the action record. But not for a 'delete_cleanup'
+    # operation, for which that is not applicable.
     
-    my ($new_linkval, $record_col) = $edt->record_col($action, $table, $linkcol);
+    if ( $operation eq 'insert' || $operation eq 'update' || $operation eq 'replace' )
+    {
+	($new_linkval, $record_col) = $edt->record_col($action, $table, $linkcol);
+    }
     
     # If we don't have one or the other value, that is an error.
-
+    
     unless ( $linkval || $new_linkval )
     {
-	$edt->add_condition($action, 'E_REQUIRED', $record_col);
+	$edt->add_condition($action, 'E_REQUIRED', $linkcol);
 	return 'error';
     }
     
     # If we have both and they differ, that is also an error. It is disallowed to use an 'update'
     # operation to switch the association of a subordinate record to a different superior record.
-
+    
     if ( $linkval && $new_linkval && $linkval ne $new_linkval )
     {
 	$edt->add_condition($action, 'E_BAD_UPDATE', $record_col);
@@ -2403,57 +2506,65 @@ sub authorize_action_subordinate {
     # If we have a cached permission result for this linkval, then just return that. There is no
     # reason to look up the same superior record multiple times in the course of a single
     # transaction.
+
+    # $$$ this is messed up and needs to be fixed.
+    
+    my $alt_permission;
     
     if ( $edt->{linkval_cache}{$linkval} )
     {
-	return $edt->{linkval_cache}{$linkval};
+	$alt_permission = $edt->{linkval_cache}{$linkval};
     }
-
+    
     # If the link value is a label, then it must represent a record either updated or inserted
     # into the proper table by the current user earlier in the transaction. So all we need to do
     # is check that it represents the proper type of record, and if so we return the indicated
     # permission.
     
-    if ( $linkval =~ /^@(.*)/ )
+    elsif ( $linkval =~ /^@(.*)/ )
     {
 	my $label = $1;
 	
-	# If the 'label_found' entry for this label exists and matches $alt_table, then we are
+	# If the 'label_found' entry for this label exists and matches $sup_table, then we are
 	# okay as far as authorization of this action goes. If the action corresponding to the
 	# label failed its own authorization check, then it will never be executed and the
 	# corresponding key value will not be recorded. Therefore, execution of the current action
 	# will fail with a 'E_LABEL_NOT_FOUND' error. So this has left no security hole (I think.)
 	
-	if ( $edt->{label_found}{$label} && $edt->{label_found}{$label} eq $alt_table )
+	if ( $edt->{label_found}{$label} && $edt->{label_found}{$label} eq $sup_table )
 	{
-	    my $permission;
+	    $alt_permission = $edt->check_table_permission($sup_table, 'post');
+	    $edt->{linkval_cache}{$linkval} = $alt_permission;
 	    
-	    # If we have 'admin' permission on the superior table, then we return 'admin'.
+	    # # If we have 'admin' permission on the superior table, then we return 'admin'.
 	    
-	    if ( $edt->check_table_permission($alt_table, 'edit') eq 'admin' )
-	    {
-		$permission = 'admin';
-	    }
+	    # if (  eq 'admin' )
+	    # {
+	    # 	$permission = 'admin';
+	    # 	$edt->{linkval_cache}{$linkval} = $permission;
+	    # }
 	    
-	    # Otherwise, we return the proper permission for the operation we are doing.
+	    # # Otherwise, we return the proper permission for the operation we are doing.
 	    
-	    elsif ( $operation eq 'insert' )
-	    {
-		$permission = 'post';
-	    }
+	    # elsif ( $operation eq 'insert' )
+	    # {
+	    # 	$permission = 'post';
+	    # 	$edt->{linkval_cache}{$linkval} = 'edit';
+	    # }
 	    
-	    elsif ( $operation eq 'delete' )
-	    {
-		$permission = 'delete';
-	    }
+	    # elsif ( $operation eq 'delete' )
+	    # {
+	    # 	$permission = 'delete';
+	    # 	$edt->{linkval_cache}{$linkval} = 'edit';
+	    # }
 	    
-	    else
-	    {
-		$permission = 'edit';
-	    }
-
-	    $edt->{linkval_cache}{$linkval} = $permission;
-	    return $permission;
+	    # else
+	    # {
+	    # 	$permission = 'edit';
+	    # 	$edt->{linkval_cache}{$linkval} = 'edit';
+	    # }
+	    
+	    # return $permission;
 	}
 	
 	else
@@ -2467,55 +2578,61 @@ sub authorize_action_subordinate {
     # on that. If we cannot generate one, then we return with an error. The 'aux_keyexpr'
     # routine will already have added one or more error conditions in this case.
     
-    my $alt_keyexpr = $edt->aux_keyexpr($action, $alt_table, $alt_keycol, $linkval, $record_col);
-    
-    unless ( $alt_keyexpr )
+    else
     {
-	return 'error';
-    }
-    
-    # Now we carry out the permission check on the permission table. The permission check is for
-    # modifying the superior record, since that is essentially what we are doing. Whether we are
-    # inserting, updating, or deleting subordinate records, that essentially counts as modifying
-    # the superior record.
-    
-    my $permission = $edt->check_record_permission($alt_table, 'edit', $alt_keyexpr);
-    
-    # If the returned permission is 'edit' or 'admin', then we need to return the actual
-    # permission appropriate for the operation we are being asked to authorize. In the case of
-    # 'update' or 'replace', we need to check whether the action record acutally exists. We do
-    # this by checking for a non-empty value for $linkval.
-    
-    if ( $permission eq 'admin' )
-    {
-	if ( $operation eq 'update' || $operation eq 'replace' )
+	my $alt_keyexpr = $edt->aux_keyexpr($action, $sup_table, $sup_keycol, $linkval, $record_col);
+	
+	unless ( $alt_keyexpr )
 	{
-	    $permission = $linkval ? 'admin' : 'notfound';
+	    return 'error';
 	}
+	
+	# Now we carry out the permission check on the permission table. The permission check is for
+	# modifying the superior record, since that is essentially what we are doing. Whether we are
+	# inserting, updating, or deleting subordinate records, that essentially counts as modifying
+	# the superior record.
+	
+	$alt_permission = $edt->check_record_permission($sup_table, 'edit', $alt_keyexpr);
+	$edt->{linkval_cache}{$linkval} = $alt_permission;
     }
     
-    elsif ( $permission eq 'edit' )
+    # Now, if the alt permission is 'admin', then the subordinate permission must be as well.
+    
+    if ( $alt_permission eq 'admin' )
+    {
+	return 'admin';
+    }
+
+    # If the alt permission is 'edit', then we need to figure out what subordinate permission we
+    # are being asked for and return that.
+    
+    elsif ( $alt_permission eq 'edit' || $alt_permission eq 'post' )
     {
 	if ( $operation eq 'insert' )
 	{
-	    $permission = 'post';
+	    return 'post';
 	}
 	
-	elsif ( $operation eq 'delete' )
+	elsif ( $operation eq 'delete' || $operation eq 'delete_many' || $operation eq 'delete_cleanup' )
 	{
-	    $permission = 'delete';
+	    return 'delete';
 	}
 	
-	elsif ( $operation eq 'update' || $operation eq 'replace' )
+	elsif ( $operation eq 'update' || $operation eq 'update_many' || $operation eq 'replace' )
 	{
-	    $permission = $linkval ? 'edit' : 'notfound';
+	    return 'edit';
+	}
+
+	else
+	{
+	    croak "bad subordinate operation '$operation'";
 	}
     }
     
     # If the returned permission is 'notfound', then the record that is supposed to be linked do
     # does not exist. This should generate an E_KEY_NOT_FOUND.
     
-    elsif ( $permission eq 'notfound' )
+    elsif ( $alt_permission eq 'notfound' )
     {
 	$record_col ||= '';
 	$edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $linkval);
@@ -2526,11 +2643,8 @@ sub authorize_action_subordinate {
     
     else
     {
-	$permission = 'none';
+	return 'none';
     }
-
-    $edt->{linkval_cache}{$linkval} = $permission;
-    return $permission;
 }
 
 
@@ -2681,6 +2795,10 @@ sub _execute_action {
 	
 	case 'delete': {
 	    $result = $edt->_execute_delete($action);
+	}
+
+	case 'delete_cleanup': {
+	    $result = $edt->_execute_delete_cleanup($action);
 	}
 
 	case 'delete_many': {
@@ -2959,6 +3077,10 @@ sub _execute_action_list {
 		    # Now execute the action.
 		    
 		    $edt->_execute_delete($action);
+		}
+		
+		case 'delete_cleanup' : {
+		    $edt->_execute_delete_cleanup($action);
 		}
 		
 		case 'delete_many': {
@@ -4033,6 +4155,159 @@ sub _execute_delete {
     {
 	$edt->{fail_count} += 1;
 	push @{$edt->{failed_keys}{$table}}, @keys;
+	return undef;
+    }
+}
+
+
+# _execute_delete_cleanup ( action )
+# 
+# Perform a delete operation on the database. The records to be deleted are those that match the
+# action selector and were not either inserted, updated, or replaced during this transaction.
+
+sub _execute_delete_cleanup {
+
+    my ($edt, $action) = @_;
+    
+    my $table = $action->table;
+    
+    my $dbh = $edt->dbh;
+    
+    my $selector = $action->selector;
+    my $keycol = $action->keycol;
+    
+    # Set this as the current action.
+    
+    $edt->{current_action} = $action;
+    
+    # Come up with the list of keys to preserve. If there aren't any entries, add a 0 to avoid a
+    # syntax error. This will not match any records under the Paleobiology Database convention
+    # that 0 is never a valid key.
+    
+    my @preserve;
+    
+    push @preserve, @{$edt->{inserted_keys}{$table}} if ref $edt->{inserted_keys}{$table} eq 'ARRAY';
+    push @preserve, @{$edt->{replaced_keys}{$table}} if ref $edt->{replaced_keys}{$table} eq 'ARRAY';
+    push @preserve, @{$edt->{updated_keys}{$table}} if ref $edt->{updated_keys}{$table} eq 'ARRAY';
+    
+    push @preserve, '0' unless @preserve;
+    
+    my $key_list = join(',', @preserve);
+    
+    my $keyexpr = "$selector and not $keycol in ($key_list)";
+    
+    # Figure out which keys will be deleted, so that we can list them later.
+
+    my $init_sql = "	SELECT $keycol FROM $TABLE{$table} WHERE $keyexpr";
+    
+    $edt->debug_line( "$init_sql\n" );
+
+    my $deleted_keys = $dbh->selectcol_arrayref($init_sql);
+    
+    # If the following flag is set, deliberately generate an SQL error for
+    # testing purposes.
+    
+    if ( $TEST_PROBLEM{delete_sql} )
+    {
+	$keyexpr .= 'XXXX';
+    }
+    
+    # Then construct the DELETE statement.
+    
+    $action->_set_keyexpr($keyexpr);
+    
+    my $sql = "	DELETE FROM $TABLE{$table} WHERE $keyexpr";
+    
+    $edt->debug_line( "$sql\n" );
+    
+    # Execute the statement inside a try block. If it fails, add either an error or a warning
+    # depending on whether this EditTransaction allows PROCEED.
+    
+    my ($result, $cleanup_called);
+    
+    try {
+	
+	# If we are logging this action, then fetch the existing record.
+	
+	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table, 'NO_LOG') )
+	# {
+	#     $edt->fetch_old_record($action, $table, $keyexpr);
+	# }
+	
+	# Start by calling the 'before_action' method. This is designed to be overridden by
+	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
+	# default method does nothing.    
+	
+	$edt->before_action($action, 'delete_cleanup', $table);
+	
+	# Then execute the delete statement itself, provided there are no errors and the action
+	# has not been aborted.
+	
+	unless ( $action->status )
+	{
+	    $result = $dbh->do($sql);
+	    $action->_set_status('executed');
+	}
+	
+	# Finally, call the 'after_action' method. This is designed to be overridden by
+	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
+	# default method does nothing. If the delete failed, then 'cleanup_action' is called
+	# instead.
+	
+	if ( $result )
+	{
+	    $edt->after_action($action, 'delete_cleanup', $table);
+	}
+	
+	else
+	{
+	    $cleanup_called = 1;
+	    $edt->add_condition($action, 'W_EXECUTE', 'delete failed');
+	    $edt->cleanup_action($action, 'delete_cleanup', $table);
+	}
+    }
+    
+    catch {
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	$edt->error_line($_);
+	$action->_set_status('exception') unless $action->status;	
+	
+	unless ( $cleanup_called )
+	{
+	    try {
+		$edt->cleanup_action($action, 'delete_cleanup', $table);
+	    }
+	    
+	    catch {
+		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
+		$edt->error_line($_);
+	    };
+	}
+    };
+    
+    # Record the number of records deleted, along with the mapping between key values and record labels.
+    
+    if ( ref $deleted_keys eq 'ARRAY' )
+    {
+	foreach my $i ( 0..$#$deleted_keys )
+	{
+	    push @{$edt->{datalog}}, EditTransaction::LogEntry->new($deleted_keys->[$i], $action);
+	}
+    }
+    
+    # If the delete succeeded, return true. Otherwise, return false.
+    
+    if ( $result && ! $action->has_errors )
+    {
+	$edt->{action_count} += 1;
+	push @{$edt->{deleted_keys}{$table}}, @$deleted_keys if ref $deleted_keys eq 'ARRAY';
+	return $result;
+    }
+    
+    else
+    {
+	$edt->{fail_count} += 1;
+	push @{$edt->{failed_keys}{$table}}, @$deleted_keys if ref $deleted_keys eq 'ARRAY';
 	return undef;
     }
 }

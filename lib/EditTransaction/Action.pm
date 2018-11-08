@@ -22,8 +22,10 @@ use Carp qw(carp croak);
 use namespace::clean;
 
 
-our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record', delete => 'single',
-		        update_many => 'selector', delete_many => 'selector', bad => 'record' );
+our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record',
+			update_many => 'selector', 
+			delete => 'single', delete_cleanup => 'selector',
+			delete_many => 'selector', bad => 'record' );
 
 
 # Create a new action record with the specified information.
@@ -240,6 +242,12 @@ sub keyexpr {
 }
 
 
+sub linkcol {
+
+    return $_[0]{linkcol};
+}
+
+
 sub value_list {
 
     return $_[0]{values};
@@ -336,10 +344,18 @@ sub _set_keyval {
 }
 
 
+sub _set_linkcol {
+
+    my ($action, $linkcol) = @_;
+
+    $action->{linkcol} = $linkcol;
+}
+
+
 sub _set_selector {
 
-    my ($action, $selector);
-
+    my ($action, $selector) = @_;
+    
     $action->{selector} = $selector;
 }
 
