@@ -14,7 +14,7 @@ package PB2::TimescaleEntry;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($TIMESCALE_DATA $TIMESCALE_INTS $TIMESCALE_BOUNDS);
+use TableDefs qw(%TABLE);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use TimescaleEdit;
@@ -54,40 +54,35 @@ sub initialize {
     
     $ds->define_set('1.2:timescales:bounds_return' =>
 	{ value => 'updated' },
-	    "Return just the new or updated interval boundary records.",
-	{ value => 'timescale' },
+	    "Return just the new or updated records. This is the default when no bounds are specified.",
+	{ value => 'full' },
 	    "Return the full list of interval boundaries for every updated timescale.",
-	    "This is the default.",
+	    "This is the default when bounds are specified.",
 	{ value => 'none' },
 	    "Return nothing except the status code and any warnings or",
 	    "cautions that were generated.");
-    
-    $ds->define_set('1.2:timescales:interval_types' =>
-	{ value => 'eon' },
-	{ value => 'era' },
-	{ value => 'period' },
-	{ value => 'stage' },
-	{ value => 'substage' },
-	{ value => 'zone' },
-	{ value => 'chron' },
-	{ value => 'other' });
-    
+        
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:timescales:entry' =>
-	{ optional => 'record_label', valid => ANY_VALUE },
+	{ optional => '_label', valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted for entry or update. This allows the data service",
 	    "to accurately indicate which records generated errors or warnings.",
 	    "You may specify any string, but if you submit multiple records in",
 	    "one call each record should have a unique value.",
+	{ optional => '_operation', valid => ANY_VALUE },
+	    "You may provide a value for this attribute in any record",
+	    "submitted to this data service. This specifies the operation.",
+	    "to be performed using this record, overriding the automatic",
+	    "determination.",
 	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC') },
 	    "The identifier of the timescale to be updated. If it is",
 	    "empty, a new timescale will be created.",
 	{ param => 'timescale_name', valid => ANY_VALUE },
 	    "The name of the timescale.",
 	{ optional => 'timescale_type', valid => '1.2:timescales:interval_types' },
-	    "The type of interval this timescale contains. The value muse be one of:",
+	    "The type of interval this timescale contains. The value must be one of:",
 	{ optional => 'timescale_extent', valid => ANY_VALUE },
 	    "The geographic extent over which the timescale is valid, which",
 	    "can be any string but should be expressed as an adjective. For",
@@ -99,12 +94,18 @@ sub initialize {
 	    "The taxonomic group with respect to which the timescale is",
 	    "defined, if any. This should be expressed as a common name",
 	    "rather than a scientific one. Examples: C<conodont>, C<mammal>.",
+	{ optional => 'timescale_comments', valid => ANY_VALUE },
+	    "This field can be used to store an arbitrary string of text",
+	    "associated with each timescale.",
 	{ optional => 'is_active', valid => BOOLEAN_VALUE },
 	    "If set to true, then this timescale will be visible to all database",
 	    "users and will be available for use in entering and downloading data.",
 	    "This value can only be set by a user with administrative privilege on",
 	    "the timescale tables.",
-	{ optional => 'authority_level', valid => POS_VALUE },
+	{ optional => 'admin_lock', valid => BOOLEAN_VALUE },
+	    "When set to true, then the attributes and boundaries of this timescale",
+	    "are locked and cannot be modified until this value is set to false.",
+	{ optional => 'priority', valid => POS_VALUE },
 	    "This value is used whenever more than one timescale mentions",
 	    "a particular interval. The one with the higher value for this",
 	    "attribute will be taken to specify the boundaries of the interval.",
@@ -121,12 +122,17 @@ sub initialize {
 	    "bibliographic reference for this timescale.");
     
     $ds->define_ruleset('1.2:bounds:entry' =>
-	{ optional => 'record_label', valid => ANY_VALUE },
+	{ optional => '_label', valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted to this data service. This allows the data service",
 	    "to accurately indicate which records generated errors or warnings.",
 	    "You may specify any string, as long as it is non-empty and unique",
 	    "among all of the records in this request.",
+	{ optional => '_operation', valid => ANY_VALUE },
+	    "You may provide a value for this attribute in any record",
+	    "submitted to this data service. This specifies the operation.",
+	    "to be performed using this record, overriding the automatic",
+	    "determination.",
 	{ optional => 'bound_id', valid => VALID_IDENTIFIER('BND') },
 	    "The identifier of the boundary to be updated. If empty,",
 	    "a new boundary will be created.",
@@ -143,35 +149,38 @@ sub initialize {
 	    "The age of this boundary, in Ma",
 	{ optional => 'age_error', valid => \&valid_age },
 	    "The uncertainty in the age, in Ma",
-	{ optional => 'interval_id', valid => VALID_IDENTIFIER('INT') },
-	    "The identifier of the interval (if any) for which this is the lower",
-	    "boundary. Boundary attributes such as C<B<color>>, C<B<reference_no>>,",
-	    "C<B<interval_extent>>, and C<B<interval_taxon>> are taken to apply",
-	    "to this interval.",
 	{ optional => 'interval_name', valid => ANY_VALUE },
-	    "If you do not specify C<B<interval_id>>, you may instead specify",
-	    "this attribute. If the named interval does not exist in the database",
-	    "a record will be created for it provided that B<C<CREATE_INTERVALS>> is",
-	    "also specified with this request.",
-	{ at_most_one => [ 'interval_id', 'interval_name' ] },
+	    "The name of the interval lying B<above> this boundary. If this",
+	    "field is blank, then the boundary is either a top boundary with",
+	    "nothing above it or else the interval above it represents a hole in",
+	    "this timescale.",
+	# { optional => 'interval_id', valid => VALID_IDENTIFIER('INT') },
+	#     "The identifier of the interval (if any) for which this is the lower",
+	#     "boundary. Boundary attributes such as C<B<color>>, C<B<reference_no>>,",
+	#     "C<B<interval_extent>>, and C<B<interval_taxon>> are taken to apply",
+	#     "to this interval.",
+	# { at_most_one => [ 'interval_id', 'interval_name' ] },
 	{ optional => 'top_id', valid => VALID_IDENTIFIER('BND') },
 	    "If this value is specified, then the interval of which this bound is",
 	    "the bottom end will be taken to end at the specified bound. Otherwise,",
 	    "it will be taken to end at the next bound up in order by age.",
 	{ optional => 'base_id', valid => VALID_IDENTIFIER('BND') },
-	    "If the B<C<bound_type>> is C<B<same>>, C<B<offset>>, or C<B<percent>>,",
+	    "If the B<C<bound_type>> is either C<B<same>> or C<B<fraction>>,",
 	    "then you must also specify a reference bound using this parameter.",
+	{ optional => 'color_id', valid => VALID_IDENTIFIER('BND') },
+	    "If this value is non-empty, then the color for the current boundary",
+	    "will be taken from the boundary identified by this value.",
 	{ optional => 'range_id', valid => VALID_IDENTIFIER('BND') },
-	    "If the B<C<bound_type>> is C<B<percent>>, then you must specify a",
+	    "If the B<C<bound_type>> is C<B<fraction>>, then you must specify a",
 	    "second reference bound using this parameter. The value of B<C<offset>>",
-	    "is then taken to indicate a percentage of the difference between the",
+	    "is then taken to indicate a fraction of the difference between the",
 	    "ages of the two reference bounds.",
-	{ optional => 'percent', valid => \&valid_age },
-	    "If the boundary type is C<B<percent>>, then the age of this boundary",
-	    "is derived as the specified percentage of the difference between",
+	{ optional => 'fraction', valid => \&valid_age },
+	    "If the boundary type is C<B<fraction>>, then the age of this boundary",
+	    "is derived as the specified fraction of the difference between",
 	    "the base and range boundaries.",
-	{ optional => 'percent_error', valid => \&valid_age },
-	    "The value of this attribute gives the uncertainty in the percentage.",
+	{ optional => 'fraction_error', valid => \&valid_age },
+	    "The value of this attribute gives the uncertainty in the fraction.",
 	{ optional => 'color_id', valid => VALID_IDENTIFIER('BND') },
 	    "If this parameter is specified, then the color of the upper",
 	    "interval will be taken from the specified bound.",
@@ -192,20 +201,26 @@ sub initialize {
 	{ optional => 'allow', valid => '1.2:timescales:conditions' },
 	    "This parameter specifies a list of actions that will",
 	    "be allowed to occur during processing of this request, and",
-	    "not block it from completing. B<Important:> for many applications,",
+	    "not block it from completing. B<Important:> for interactive applications,",
 	    "it is best to allow the request to block, get confirmation from",
 	    "the user for each flagged condition, and if confirmed then repeat the request",
 	    "with these specific actions allowed using this parameter. Accepted",
-	    "values include:");
+	    "values include:",
+	{ optional => 'cleanup', valid => 'FLAG_VALUE' },
+	    "If this parameter is given along with at least one bound",
+	    "record in the request body, then for each timescale for which",
+	    "one or more bound addition or updates was specified, all bound",
+	    "records not added or updated during this operation will be",
+	    "deleted.");
+    
+    # $ds->define_ruleset('1.2:timescales:ret_mod' =>
+    # 	">>The following parameters specify what should be returned from this",
+    # 	"operation:",
+    # 	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_basic' },
+    # 	{ allow => '1.2:special_params' },
+    # 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
     $ds->define_ruleset('1.2:timescales:ret_mod' =>
-	">>The following parameters specify what should be returned from this",
-	"operation:",
-    	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_basic' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special>  with this request");
-    
-    $ds->define_ruleset('1.2:bounds:ret_mod' =>
 	">>The following parameters specify what should be returned from this",
 	"operation:",
 	{ optional => 'return', valid => '1.2:timescales:bounds_return' },
@@ -218,44 +233,34 @@ sub initialize {
     
     $ds->define_ruleset('1.2:timescales:addupdate' =>
 	{ allow => '1.2:timescales:op_mod' }, 
-	">>The following parameters may be given either in the URL or in",
-	"the request body, or some in either place. If they are given",
-	"in the URL, they apply to every boundary specified in the body.",
-	{ allow => '1.2:timescales:entry' },
-	{ allow => '1.2:timescales:ret_mod' });
-    
-    $ds->define_ruleset('1.2:timescales:update' =>
-	{ allow => '1.2:timescales:op_mod' }, 
-	">>The following parameters may be given either in the URL or in",
-	"the request body, or some in either place. If they are given",
-	"in the URL, they apply to every boundary specified in the body.",
-	{ allow => '1.2:timescales:entry' },
-	{ allow => '1.2:timescales:ret_mod' });
+	{ allow => '1.2:timescales:ret_mod' },
+       	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special>  with this request");
     
     $ds->define_ruleset('1.2:timescales:delete' =>
 	{ allow => '1.2:timescales:op_mod' }, 
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',' },
+	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',', alias => 'id' },
 	    "The identifier(s) of the timescale(s) to delete.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $ds->define_ruleset('1.2:bounds:addupdate' =>
-	{ allow => '1.2:timescales:op_mod' }, 
-	">>The following parameters may be given either in the URL or in",
-	"the request body, or some in either place. If they are given",
-	"in the URL, they apply to every boundary specified in the body.",
-	{ allow => '1.2:bounds:entry' },
-	{ allow => '1.2:bounds:ret_mod' });
+    # $ds->define_ruleset('1.2:bounds:addupdate' =>
+    # 	{ allow => '1.2:timescales:op_mod' }, 
+    # 	">>The following parameters may be given either in the URL or in",
+    # 	"the request body, or some in either place. If they are given",
+    # 	"in the URL, they apply to every boundary specified in the body.",
+    # 	{ allow => '1.2:bounds:entry' },
+    # 	{ allow => '1.2:bounds:ret_mod' });
     
-    $ds->define_ruleset('1.2:bounds:update' => 
-	">>The following parameters may be given either in the URL or in",
-	"the request body, or some in either place. If they are given",
-	"in the URL, they apply to every bound specified in the body.",
-	{ allow => '1.2:bounds:entry' },
-	{ allow => '1.2:bounds:ret_mod' });
+    # $ds->define_ruleset('1.2:bounds:update' => 
+    # 	">>The following parameters may be given either in the URL or in",
+    # 	"the request body, or some in either place. If they are given",
+    # 	"in the URL, they apply to every bound specified in the body.",
+    # 	{ allow => '1.2:bounds:entry' },
+    # 	{ allow => '1.2:bounds:ret_mod' });
 
     $ds->define_ruleset('1.2:bounds:delete' =>
 	{ allow => '1.2:timescales:op_mod' }, 
@@ -265,7 +270,7 @@ sub initialize {
 	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC') },
 	    "The identifier of a timescale. If specified, all bounds",
 	    "from this timescale will be deleted.",
-	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',' },
+	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',', alias => 'id' },
 	    "The identifier(s) of the interval boundary or boundaries to delete.",
 	{ at_most_one => ['timescale_id', 'bound_id'] },
 	{ allow => '1.2:special_params' },
@@ -275,7 +280,7 @@ sub initialize {
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',' },
+	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'id' },
 	    "The identifier(s) of the interval(s) to delete.",
 	{ param => 'interval_name', valid => ANY_VALUE, list => ',' },
 	    "The names(s) of the interval(s) delete.",
@@ -290,7 +295,7 @@ sub initialize {
 our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, 'record_label' => 1 );
 
 
-sub update_timescales {
+sub update_records {
 
     my ($request, $arg) = @_;
     
@@ -299,17 +304,17 @@ sub update_timescales {
     # First get the parameters from the URL, and/or from the body if it is from a web form. In the
     # latter case, it will necessarily specify a single timescale only.
     
-    my %allowances;
+    my %allowances = ( CREATE => 1, IMMEDIATE_MODE => 1 );
     
-    $allowances{CREATE} = 1 if $arg && $arg eq 'add';
-    
-    my $main_params = $request->get_main_params(\%allowances, '1.2:timescales:entry');
+    my $main_params = $request->get_main_params(\%allowances);
     my $perms = $request->require_authentication('TIMESCALE_DATA');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->unpack_input_records($main_params, '1.2:timescales:entry', 'timescale_id');
+    my (@records) = $request->unpack_input_records({ },
+						   ['1.2:bounds:entry', 'bound_id', 'bound_type'],
+						   ['1.2:timescales:entry', 'timescale_id', 'DEFAULT']);
     
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
     
@@ -318,28 +323,72 @@ sub update_timescales {
 	die $request->exception(400, "Bad request");
     }
     
-    # If no input records were found, return a warning.
-    
-    # elsif ( @records == 0 )
-    # {
-    # 	$request->add_warning("W_EMPTY: no input records were found");
-    # 	return;
-    # }
-    
-    # Now go through and try to actually update each of the timescales. This needs to be inside a
-    # transaction, so that if any errors are generated the entire update can be aborted. We start
-    # by creating a new TimescaleEdit object, which automatically starts a transaction. This
-    # object will also keep track of any errors or other conditions that are generated by any of
-    # the update operations.
+    # Now go through and try to actually execute the operation specified by each input record. This
+    # needs to be inside a transaction, so that if any errors are generated the entire update can
+    # be aborted. We start by creating a new TimescaleEdit object, which automatically starts a
+    # transaction. This object will also keep track of any errors or other conditions that are
+    # generated by any of the update operations.
     
     my $edt = TimescaleEdit->new($request, $perms, 'TIMESCALE_DATA', \%allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
 
+    my (%cleanup_timescale, %cleanup_bound);
+    
     foreach my $r (@records)
     {
-	$edt->insert_update_record('TIMESCALE_DATA', $r);
+	if ( exists $r->{bound_type} || exists $r->{bound_no} || exists $r->{bound_id} )
+	{
+	    # my $timescale_no = $r->{timescale_id} || $r->{timescale_no};
+
+	    # $cleanup_timescale{$timescale_no + 0} = 1 if $timescale_no + 0;
+	    
+	    # my $bound_no = $r->{bound_id} || $r->{bound_no};
+
+	    # $cleanup_bound{$bound_no + 0} = 1 if $bound_no + 0;
+	    
+	    $edt->process_record('TIMESCALE_BOUNDS', $r);
+	}
+	
+	elsif ( exists $r->{timescale_name} || exists $r->{timescale_no} || exists $r->{timescale_id} )
+	{
+	    $edt->process_record('TIMESCALE_DATA', $r);
+	}
+	
+	else
+	{
+	    $edt->bad_record('TIMESCALE_DATA', $r);
+	}
+
+    }
+
+    # Figure out the list of timescales that were referred to in any of the bound records.
+    
+    my $bound_timescale_list = join(',', $edt->superior_keys('TIMESCALE_BOUNDS'));
+    
+    # if ( %cleanup_timescale || %cleanup_bound )
+    # {
+    # 	my $timescale_list = join(',', keys %cleanup_timescale);
+	
+    # 	if ( %cleanup_bound )
+    # 	{
+    # 	    my $bound_list = join(',', keys %cleanup_bound);
+	    
+    # 	    my ($timescales_by_bound) = $edt->dbh->selectrow_array("
+    # 		SELECT group_concat(distinct timescale_no)
+    # 		FROM $TABLE{TIMESCALE_BOUNDS} WHERE bound_no in ($bound_list)");
+
+    # 	    if ( $timescales_by_bound )
+    # 	    {
+    # 		$timescale_list = join(',', $timescale_list, $timescales_by_bound);
+    # 	    }
+    # 	}
+    # }
+    
+    if ( $bound_timescale_list && $request->clean_param('cleanup') )
+    {
+	$edt->delete_cleanup('TIMESCALE_BOUNDS', "timescale_no in ($bound_timescale_list)");
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -347,43 +396,6 @@ sub update_timescales {
     # rolled back. Otherwise, it will be automatically committed.
     
     $edt->commit;
-    
-    # try {
-
-    # 	foreach my $r ( @records )
-    # 	{
-    # 	    my $record_id = $r->{record_label} || $r->{timescale_id} || '';
-	    
-    # 	    if ( $r->{timescale_id} )
-    # 	    {
-    # 		print STDERR "UPDATING record '$record_id'\n" if $request->debug;
-		
-    # 		$edt->update_timescale($r);
-    # 	    }
-	    
-    # 	    else
-    # 	    {
-    # 		print STDERR "ADDING record '$record_id'\n" if $request->debug;
-		
-    # 		$edt->add_timescale($r);
-    # 	    }
-    # 	}
-	
-    # 	# Now we need to recompute the attributes of any updated boundaries plus any boundaries
-    # 	# that depend on them, update the min and max ages of the associated timescales, and then
-    # 	# clear all is_updated flags.
-	
-    # 	$edt->complete_bound_updates;
-    # }
-    
-    # # If an exception is caught, we roll back the transaction before re-throwing it as an internal
-    # # error. This will generate an HTTP 500 response.
-    
-    # catch {
-
-    # 	$edt->rollback;
-    # 	die $_;
-    # };
     
     # If any warnings (non-fatal conditions) were detected, add them to the
     # request record so they will be communicated back to the user.
@@ -410,43 +422,55 @@ sub update_timescales {
     
     # Return all inserted or updated records.
     
-    my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
+    $request->extid_check;
     
-    $request->list_timescales_for_update($dbh, $edt->key_labels, $id_string) if $id_string;
+    # my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
     
-    # # If the parameter 'strict' was given and warnings were generated, also roll back the
-    # # transaction.
+    # $request->list_timescales_after_update($dbh, $edt->key_labels, $id_string) if $id_string;
     
-    # elsif ( $request->clean_param('strict') && $request->warnings )
-    # {
-    # 	$edt->rollback;
-    # 	die $request->exceptions(400, "E_STRICT: warnings were generated");
-    # }
+    my (@results);
     
-    # # If we get here, we're good to go! Yay!!!
+    my $return = $request->clean_param('return') || '';
     
-    # else
-    # {
-    # 	$edt->commit;
+    if ( my $key_list = join(',', $edt->inserted_keys('TIMESCALE_DATA'), $edt->updated_keys('TIMESCALE_DATA'),
+			    $edt->replaced_keys('TIMESCALE_DATA')) )
+    {
+	push @results, $request->list_timescales_after_update($dbh, $key_list, $edt->key_labels('TIMESCALE_DATA'))
+	    unless $return eq 'none';
+    }
+    
+    # if ( $id_string = join(',', $edt->inserted_keys('TIMESCALE_BOUNDS'), $edt->updated_keys('TIMESCALE_BOUNDS')) )
+
+    if ( $bound_timescale_list && $return ne 'none' )
+    {
+	if ( $return eq 'updated' )
+	{
+	    my $key_list = join(',', $edt->inserted_keys('TIMESCALE_BOUNDS'), $edt->updated_keys('TIMESCALE_BOUNDS'));
+	    
+	    push @results, $request->list_bounds_after_update($dbh, 'updated', $key_list,
+							      $edt->key_labels('TIMESCALE_BOUNDS'));
+	}
 	
-    # 	# Return the indicated information. This will generally be one or more timescale records.
-	
-    # 	my $list = join(',', $edt->timescales_updated);
-	
-    # 	$request->list_timescales_for_update($dbh, undef, $list) if $list;
-    # }
+	else
+	{
+	    push @results, $request->list_bounds_after_update($dbh, 'full', $bound_timescale_list,
+							      $edt->key_labels('TIMESCALE_BOUNDS'));
+	}
+    }
+    
+    $request->list_result(\@results);
 }
 
 
-sub delete_timescales {
+sub delete_records {
     
-    my ($request) = @_;
+    my ($request, $arg) = @_;
     
     my $dbh = $request->get_connection;
     
     # Get the resources to delete from the URL paramters. This operation takes no body.
 
-    my (@id_list) = $request->clean_param_list('eduresource_id');
+    my (@id_list) = $request->clean_param_list('timescale_id');
     
     # First get the parameters from the URL, the permissions, and create a transaction object.
     
@@ -490,482 +514,326 @@ sub delete_timescales {
     }
     
     # Then return one result record for each deleted database record.
-    # foreach my $r ( @records )
-    # {
-    # 	my @ids = ref $r->{timescale_id} eq 'ARRAY' ? @{$r->{timescale_id}} : $r->{timescale_id};
-	
-    # 	foreach my $id ( @ids )
-    # 	{
-    # 	    my $validated = $request->validate_extident('TSC', $id, 'eduresource_id');
-    # 	    $delete_records{$validated} = 1 if $validated;
-    # 	}
-    # }
-    
-    # # Now go through and try to actually delete each of the timescales. This needs to be inside a
-    # # transaction, so that if any errors are generated the entire update can be aborted. We start
-    # # by creating a new TimescaleEdit object, which automatically starts a transaction. This
-    # # object will also keep track of any errors or other conditions that are generated by any of
-    # # the update operations.
-    
-    # my $edt = TimescaleEdit->new($dbh, { debug => $request->debug,
-    # 					 auth_info => $auth_info });
-    
-    # # $request->check_edt($edt);
-    
-    # try {
-
-    # 	my $list = join(',', keys %delete_records);
-	
-    # 	if ( $list )
-    # 	{
-    # 	    $edt->delete_timescale($list, \%conditions);
-    # 	}
-
-    # 	foreach my $e ( $edt->conditions )
-    # 	{
-    # 	    if ( $e =~ /^[EC]/ )
-    # 	    {
-    # 		$request->add_error($e);
-    # 	    }
-	    
-    # 	    else
-    # 	    {
-    # 		$request->add_warning($e);
-    # 	    }
-    # 	}
-	
-    # 	# Now we need to recompute the attributes of any updated boundaries plus any boundaries
-    # 	# that depend on them, update the min and max ages of the associated timescales, and then
-    # 	# clear all is_updated flags.
-	
-    # 	$edt->complete_bound_updates;
-    # }
-    
-    # # If an exception is caught, we roll back the transaction before re-throwing it as an internal
-    # # error. This will generate an HTTP 500 response.
-    
-    # catch {
-
-    # 	$edt->rollback;
-    # 	die $_;
-    # };
-    
-    # # If we completed the procedure without any exceptions, but error conditions were detected
-    # # nonetheless, we also roll back the transaction.
-    
-    # if ( $edt->errors_occurred )
-    # {
-    # 	$edt->rollback;
-    # 	die $request->exception(400, "Bad request");
-    # }
-    
-    # # If the parameter 'strict' was given and warnings were generated, also roll back the
-    # # transaction.
-    
-    # elsif ( $request->clean_param('strict') && $request->warnings )
-    # {
-    # 	$edt->rollback;
-    # 	die $request->exceptions(400, "E_STRICT: warnings were generated");
-    # }
-    
-    # else
-    # {
-    # 	# If we get here, we're good to go! Yay!!!
-	
-    # 	$edt->commit;
-	
-    # 	# Perhaps we should return something, but for now we don't.
-    # }
-}
-
-
-sub update_bounds {
-    
-    my ($request, $arg) = @_;
-    
-    my $dbh = $request->get_connection;
-    
-    # First get the parameters from the URL, and/or from the body if it is from a web form. In the
-    # latter case, it will necessarily specify a single boundary only.
-    
-    my %conditions;
-    
-    $conditions{CREATE_RECORDS} = 1 if $arg && ($arg eq 'add' or $arg eq 'replace');
-    
-    my $main_params = $request->get_main_params(\%conditions, '1.2:timescales:entry');
-    my $auth_info = $request->get_auth_info($dbh);
-
-    # foreach my $k ( @request_keys )
-    # {
-    # 	my @list = $request->clean_param_list($k);
-	
-    # 	if ( $k eq 'show' || $k eq 'return' )
-    # 	{
-    # 	    next;
-    # 	}
-	
-    # 	elsif ( $k eq 'allow' )
-    # 	{
-    # 	    $conditions{$_} = 1 foreach @list;
-    # 	}
-	
-    # 	elsif ( @list == 1 )
-    # 	{
-    # 	    $main_params{$k} = $list[0];
-    # 	}
-	
-    # 	else {
-    # 	    $main_params{$k} = \@list;
-    # 	}
-    # }
-    
-    # Then decode the body, and extract parameters from it. If an error occured, return an
-    # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
-    
-    my (@records) = $request->unpack_input_records($main_params, '1.2:bounds:entry', 'bound_id');
-    
-    # my ($body, $error) = $request->decode_body;
-    
-    # if ( $error )
-    # {
-    # 	die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: $error");
-    # }
-    
-    # if ( ref $body eq 'HASH' && ref $body->{all} eq 'HASH' )
-    # {
-    # 	foreach my $k ( keys %{$body->{all}} )
-    # 	{
-    # 	    $main_params{$k} = $body->{all}{$k};
-    # 	}
-	
-    # 	my $result = $request->validate_params('1.2:bounds:entry', \%main_params);
-	
-    # 	if ( $result->errors )
-    # 	{
-    # 	    foreach my $e ( $result->errors )
-    # 	    {
-    # 		$request->add_error("E_PARAM: $e");
-    # 	    }
-	    
-    # 	    foreach my $w ( $result->warnings )
-    # 	    {
-    # 		$request->add_warning("W_PARAM: $w");
-    # 	    }
-	    
-    # 	    die $request->exception(400, "Invalid request");
-    # 	}
-    # }
-    
-    # # Then look for a list of records under the key 'records'. Or if the body decodes to a
-    # # top-level array then assume each entry in the array is a record.
-    
-    # my $record_list;
-    
-    # if ( ref $body eq 'ARRAY' )
-    # {
-    # 	$record_list = $body;
-    # }
-    
-    # elsif ( ref $body eq 'HASH' && ref $body->{records} eq 'ARRAY' )
-    # {
-    # 	$record_list = $body->{records};
-    # }
-    
-    # elsif ( defined $body && $body ne '' && ref $body ne 'HASH' )
-    # {
-    # 	$request->add_error("E_BODY: Badly formatted request body: must be a hash or an array");
-    # 	die $request->exception(400, "Invalid request");
-    # }
-    
-    # elsif ( $main_params{bound_id} && $main_params{bound_id} > 0 )
-    # {
-    # 	$record_list = [ { bound_id => $main_params{bound_id}, record_id => $main_params{record_id} } ];
-    # }
-    
-    # else
-    # {
-    # 	die $request->exception(400, "E_NO_UPDATE: no record to update");
-    # }
-    
-    # Now go through the records and validate each one in turn.
-    
-    # my %record_id;
-    
-    # foreach my $r ( @$record_list )
-    # {
-    # 	my $record_id = $r->{record_label} || $r->{bound_id} || '';
-	
-    # 	foreach my $k ( keys %main_params )
-    # 	{
-    # 	    $r->{$k} = $main_params{$k} unless defined $r->{$k} || $IGNORE_PARAM{$k};
-    # 	}
-	
-    # 	my $result = $request->validate_params('1.2:bounds:entry', $r);
-	
-    # 	foreach my $e ( $request->errors )
-    # 	{
-    # 	    my $msg = $record_id ? "E_PARAM ($record_id): $e" : "E_PARAM: $e";
-    # 	    $request->add_error($msg);
-    # 	}
-    # }
-    
-    # If any errors were found in the parameters, stop now and return an HTTP 400 response.
-    
-    if ( $request->errors )
-    {
-	die $request->exception(400, "Bad request");
-    }
-    
-    # If no input records were found, return a warning.
-    
-    elsif ( @records == 0 )
-    {
-	$request->add_warning("W_EMPTY: no input records were found");
-	return;
-    }
-    
-    # Now go through and try to actually update each of the bounds. This needs to be inside a
-    # transaction, so that if any errors are generated the entire update can be aborted. We start
-    # by creating a new TimescaleEdit object, which automatically starts a transaction. This
-    # object will also keep track of any errors or other conditions that are generated by any of
-    # the update operations.
-    
-    my $edt = TimescaleEdit->new($dbh, { conditions => \%conditions,
-					 debug => $request->debug,
-					 auth_info => $auth_info });
-    
-    try {
-
-	foreach my $r ( @records )
-	{
-	    my $record_id = $r->{record_id} || $r->{bound_id} || '';
-	    
-	    if ( $r->{bound_id} )
-	    {
-		print STDERR "UPDATING record '$record_id'\n" if $request->debug;
-		
-		$edt->update_boundary($r);
-	    }
-	    
-	    else
-	    {
-		print STDERR "ADDING record '$record_id'\n" if $request->debug;
-		
-		$edt->add_boundary($r);
-	    }
-	    
-	    # # Then process all conditions (errors, cautions, warnings) generated by this
-	    # # operation.
-	    
-	    # foreach my $e ( $edt->conditions )
-	    # {
-	    # 	if ( $record_id ne '' )
-	    # 	{
-	    # 	    $e =~ s/^(\w+)[:]\s*/$1 ($record_id): /;
-	    # 	}
-		
-	    # 	if ( $e =~ /^[EC]/ )
-	    # 	{
-	    # 	    $request->add_error($e);
-	    # 	}
-		
-	    # 	else
-	    # 	{
-	    # 	    $request->add_warning($e);
-	    # 	}
-	    # }
-	    
-	    # $edt->clear_conditions;
-	}
-	
-	# If this routine was called as 'bounds/replace', then we need to delete all bounds from
-	# updated timescales that were not explicitly added or updated by this operation.
-	
-	if ( $arg && $arg eq 'replace' )
-	{
-	    foreach my $timescale_id ( $edt->timescales_updated )
-	    {
-		$edt->delete_boundary('unupdated', $timescale_id);
-		
-		# foreach my $e ( $edt->conditions )
-		# {
-		#     $e =~ s/^(\w+)[:]\s*/$1 ($timescale_id): /;
-		    
-		#     if ( $e =~ /^[EC]/ )
-		#     {
-		# 	$request->add_error($e);
-		#     }
-		    
-		#     else
-		#     {
-		# 	$request->add_warning($e);
-		#     }
-		# }
-	    }
-	    
-	    # foreach my $t ( @timescale_list )
-	    # {
-	    # 	$edt->delete_boundary( { timescale_id => $t, un_updated => 1 } ) if $t;
-	    # }
-	}
-	
-	# Now we need to recompute the attributes of any updated boundaries plus any boundaries
-	# that depend on them, update the min and max ages of the associated timescales, and then
-	# clear all is_updated flags.
-	
-	$edt->complete_bound_updates;
-    }
-	
-    # If an exception is caught, we roll back the transaction before re-throwing it as an internal
-    # error. This will generate an HTTP 500 response.
-    
-    catch {
-
-	$edt->rollback;
-	die $_;
-    };
-    
-    # If any warnings (non-fatal conditions) were detected, add them to the
-    # request record so they will be communicated back to the user.
-    
-    $request->add_edt_warnings($edt);
-    
-    # If we completed the procedure without any exceptions, but error conditions were detected
-    # nonetheless, we also roll back the transaction.
-    
-    if ( $edt->errors )
-    {
-	$edt->rollback;
-	$request->add_edt_errors($edt);
-	die $request->exception(400, "Bad request");
-    }
-    
-    # If the parameter 'strict' was given and warnings were generated, also roll back the
-    # transaction.
-    
-    elsif ( $request->clean_param('strict') && $request->warnings )
-    {
-	$edt->rollback;
-	die $request->exceptions(400, "E_STRICT: warnings were generated");
-    }
-    
-    # If we get here, we're good to go! Yay!!!
-    
-    else
-    {
-	$edt->commit;
-	
-	# Return the indicated information. This will generally be one or more boundary records.
-	
-	my $return_what = $request->clean_param('return') || 'timescale';
-	my $list = '';
-	
-	if ( $return_what eq 'timescale' )
-	{
-	    $list = join(',', $edt->timescales_updated);
-	}
-	
-	elsif ( $return_what eq 'updated' )
-	{
-	    $list = join(',', $edt->bounds_updated);
-	}
-	
-	$request->list_bounds_for_update($dbh, $return_what, $list) if $list;
-    }
-}
-
-
-sub delete_bounds {
-
 
 }
 
 
-# sub check_record {
+# sub update_bounds {
+    
+#     my ($request, $arg) = @_;
+    
+#     my $dbh = $request->get_connection;
+    
+#     # First get the parameters from the URL, and/or from the body if it is from a web form. In the
+#     # latter case, it will necessarily specify a single boundary only.
+    
+#     my %conditions;
+    
+#     $conditions{CREATE_RECORDS} = 1 if $arg && ($arg eq 'add' or $arg eq 'replace');
+    
+#     my $main_params = $request->get_main_params(\%conditions, '1.2:timescales:entry');
+#     my $auth_info = $request->get_auth_info($dbh);
 
-#     my ($request, $record) = @_;
+#     # foreach my $k ( @request_keys )
+#     # {
+#     # 	my @list = $request->clean_param_list($k);
+	
+#     # 	if ( $k eq 'show' || $k eq 'return' )
+#     # 	{
+#     # 	    next;
+#     # 	}
+	
+#     # 	elsif ( $k eq 'allow' )
+#     # 	{
+#     # 	    $conditions{$_} = 1 foreach @list;
+#     # 	}
+	
+#     # 	elsif ( @list == 1 )
+#     # 	{
+#     # 	    $main_params{$k} = $list[0];
+#     # 	}
+	
+#     # 	else {
+#     # 	    $main_params{$k} = \@list;
+#     # 	}
+#     # }
     
-#     # If any records are missing a value for 'bound_id' (meaning that new
-#     # bounds hould be created) then throw an error unless 'create_records' was
-#     # specified. 
+#     # Then decode the body, and extract parameters from it. If an error occured, return an
+#     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-#     unless ( ($record->{bound_id} && $record->{bound_id} > 0) || $record->{create_records} )
+#     my (@records) = $request->unpack_input_records($main_params, '1.2:bounds:entry', 'bound_id');
+    
+#     # my ($body, $error) = $request->decode_body;
+    
+#     # if ( $error )
+#     # {
+#     # 	die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: $error");
+#     # }
+    
+#     # if ( ref $body eq 'HASH' && ref $body->{all} eq 'HASH' )
+#     # {
+#     # 	foreach my $k ( keys %{$body->{all}} )
+#     # 	{
+#     # 	    $main_params{$k} = $body->{all}{$k};
+#     # 	}
+	
+#     # 	my $result = $request->validate_params('1.2:bounds:entry', \%main_params);
+	
+#     # 	if ( $result->errors )
+#     # 	{
+#     # 	    foreach my $e ( $result->errors )
+#     # 	    {
+#     # 		$request->add_error("E_PARAM: $e");
+#     # 	    }
+	    
+#     # 	    foreach my $w ( $result->warnings )
+#     # 	    {
+#     # 		$request->add_warning("W_PARAM: $w");
+#     # 	    }
+	    
+#     # 	    die $request->exception(400, "Invalid request");
+#     # 	}
+#     # }
+    
+#     # # Then look for a list of records under the key 'records'. Or if the body decodes to a
+#     # # top-level array then assume each entry in the array is a record.
+    
+#     # my $record_list;
+    
+#     # if ( ref $body eq 'ARRAY' )
+#     # {
+#     # 	$record_list = $body;
+#     # }
+    
+#     # elsif ( ref $body eq 'HASH' && ref $body->{records} eq 'ARRAY' )
+#     # {
+#     # 	$record_list = $body->{records};
+#     # }
+    
+#     # elsif ( defined $body && $body ne '' && ref $body ne 'HASH' )
+#     # {
+#     # 	$request->add_error("E_BODY: Badly formatted request body: must be a hash or an array");
+#     # 	die $request->exception(400, "Invalid request");
+#     # }
+    
+#     # elsif ( $main_params{bound_id} && $main_params{bound_id} > 0 )
+#     # {
+#     # 	$record_list = [ { bound_id => $main_params{bound_id}, record_id => $main_params{record_id} } ];
+#     # }
+    
+#     # else
+#     # {
+#     # 	die $request->exception(400, "E_NO_UPDATE: no record to update");
+#     # }
+    
+#     # Now go through the records and validate each one in turn.
+    
+#     # my %record_id;
+    
+#     # foreach my $r ( @$record_list )
+#     # {
+#     # 	my $record_id = $r->{record_label} || $r->{bound_id} || '';
+	
+#     # 	foreach my $k ( keys %main_params )
+#     # 	{
+#     # 	    $r->{$k} = $main_params{$k} unless defined $r->{$k} || $IGNORE_PARAM{$k};
+#     # 	}
+	
+#     # 	my $result = $request->validate_params('1.2:bounds:entry', $r);
+	
+#     # 	foreach my $e ( $request->errors )
+#     # 	{
+#     # 	    my $msg = $record_id ? "E_PARAM ($record_id): $e" : "E_PARAM: $e";
+#     # 	    $request->add_error($msg);
+#     # 	}
+#     # }
+    
+#     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
+    
+#     if ( $request->errors )
 #     {
-# 	$request->add_error("E_NO_CREATE: you must specify 'create_records' if you include records with no identifier");
+# 	die $request->exception(400, "Bad request");
+#     }
+    
+#     # If no input records were found, return a warning.
+    
+#     elsif ( @records == 0 )
+#     {
+# 	$request->add_warning("W_EMPTY: no input records were found");
+# 	return;
+#     }
+    
+#     # Now go through and try to actually update each of the bounds. This needs to be inside a
+#     # transaction, so that if any errors are generated the entire update can be aborted. We start
+#     # by creating a new TimescaleEdit object, which automatically starts a transaction. This
+#     # object will also keep track of any errors or other conditions that are generated by any of
+#     # the update operations.
+    
+#     my $edt = TimescaleEdit->new($dbh, { conditions => \%conditions,
+# 					 debug => $request->debug,
+# 					 auth_info => $auth_info });
+    
+#     try {
+
+# 	foreach my $r ( @records )
+# 	{
+# 	    my $record_id = $r->{record_id} || $r->{bound_id} || '';
+	    
+# 	    if ( $r->{bound_id} )
+# 	    {
+# 		print STDERR "UPDATING record '$record_id'\n" if $request->debug;
+		
+# 		$edt->update_boundary($r);
+# 	    }
+	    
+# 	    else
+# 	    {
+# 		print STDERR "ADDING record '$record_id'\n" if $request->debug;
+		
+# 		$edt->add_boundary($r);
+# 	    }
+	    
+# 	    # # Then process all conditions (errors, cautions, warnings) generated by this
+# 	    # # operation.
+	    
+# 	    # foreach my $e ( $edt->conditions )
+# 	    # {
+# 	    # 	if ( $record_id ne '' )
+# 	    # 	{
+# 	    # 	    $e =~ s/^(\w+)[:]\s*/$1 ($record_id): /;
+# 	    # 	}
+		
+# 	    # 	if ( $e =~ /^[EC]/ )
+# 	    # 	{
+# 	    # 	    $request->add_error($e);
+# 	    # 	}
+		
+# 	    # 	else
+# 	    # 	{
+# 	    # 	    $request->add_warning($e);
+# 	    # 	}
+# 	    # }
+	    
+# 	    # $edt->clear_conditions;
+# 	}
+	
+# 	# If this routine was called as 'bounds/replace', then we need to delete all bounds from
+# 	# updated timescales that were not explicitly added or updated by this operation.
+	
+# 	if ( $arg && $arg eq 'replace' )
+# 	{
+# 	    foreach my $timescale_id ( $edt->timescales_updated )
+# 	    {
+# 		$edt->delete_boundary('unupdated', $timescale_id);
+		
+# 		# foreach my $e ( $edt->conditions )
+# 		# {
+# 		#     $e =~ s/^(\w+)[:]\s*/$1 ($timescale_id): /;
+		    
+# 		#     if ( $e =~ /^[EC]/ )
+# 		#     {
+# 		# 	$request->add_error($e);
+# 		#     }
+		    
+# 		#     else
+# 		#     {
+# 		# 	$request->add_warning($e);
+# 		#     }
+# 		# }
+# 	    }
+	    
+# 	    # foreach my $t ( @timescale_list )
+# 	    # {
+# 	    # 	$edt->delete_boundary( { timescale_id => $t, un_updated => 1 } ) if $t;
+# 	    # }
+# 	}
+	
+# 	# Now we need to recompute the attributes of any updated boundaries plus any boundaries
+# 	# that depend on them, update the min and max ages of the associated timescales, and then
+# 	# clear all is_updated flags.
+	
+# 	$edt->complete_bound_updates;
+#     }
+	
+#     # If an exception is caught, we roll back the transaction before re-throwing it as an internal
+#     # error. This will generate an HTTP 500 response.
+    
+#     catch {
+
+# 	$edt->rollback;
+# 	die $_;
+#     };
+    
+#     # If any warnings (non-fatal conditions) were detected, add them to the
+#     # request record so they will be communicated back to the user.
+    
+#     $request->add_edt_warnings($edt);
+    
+#     # If we completed the procedure without any exceptions, but error conditions were detected
+#     # nonetheless, we also roll back the transaction.
+    
+#     if ( $edt->errors )
+#     {
+# 	$edt->rollback;
+# 	$request->add_edt_errors($edt);
+# 	die $request->exception(400, "Bad request");
+#     }
+    
+#     # If the parameter 'strict' was given and warnings were generated, also roll back the
+#     # transaction.
+    
+#     elsif ( $request->clean_param('strict') && $request->warnings )
+#     {
+# 	$edt->rollback;
+# 	die $request->exceptions(400, "E_STRICT: warnings were generated");
+#     }
+    
+#     # If we get here, we're good to go! Yay!!!
+    
+#     else
+#     {
+# 	$edt->commit;
+	
+# 	# Return the indicated information. This will generally be one or more boundary records.
+	
+# 	my $return_what = $request->clean_param('return') || 'timescale';
+# 	my $list = '';
+	
+# 	if ( $return_what eq 'timescale' )
+# 	{
+# 	    $list = join(',', $edt->timescales_updated);
+# 	}
+	
+# 	elsif ( $return_what eq 'updated' )
+# 	{
+# 	    $list = join(',', $edt->bounds_updated);
+# 	}
+	
+# 	$request->list_bounds_for_update($dbh, $return_what, $list) if $list;
 #     }
 # }
 
 
-sub list_bounds_for_update {
+# sub delete_bounds {
+
+
+# }
+
+
+sub list_timescales_after_update {
     
-    my ($request, $dbh, $return_type, $list) = @_;
+    my ($request, $dbh, $key_list, $label_ref) = @_;
     
     my $tables = $request->tables_hash;
     
-    $request->substitute_select( mt => 'tsb', cd => 'tsb' );
+    $request->substitute_select( cd => 'ts' );
     
-    my @filters = $return_type eq 'timescale' ? "tsb.timescale_no in ($list)" : "tsb.bound_no in ($list)";
-    my $filter_string = join(' and ', @filters);
-    
-    $request->extid_check;
-
-    # If a query limit has been specified, modify the query accordingly.
+    # If a query limit has been specified, return if the
+    # limit is 0. That would be another way of specifying a return type of 'none'.
     
     my $limit = $request->sql_limit_clause(1);
     
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $request->sql_count_clause;
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    my $fields = $request->select_string;
-    
-    # Determine the order in which the results should be returned.
-    
-    my $order_expr = 'ORDER BY tsb.age';
-    
-    # Determine the necessary joins.
-    
-    my ($join_list) = $request->generate_join_list('tsb', $tables);
-    
-    # Then query for bounds.
-    
-    $request->{main_sql} = "
-	SELECT $calc $fields
-	FROM $TIMESCALE_BOUNDS as tsb $join_list
-        WHERE $filter_string
-	GROUP BY tsb.bound_no $order_expr";
-    
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
-    
-    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
-    
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
-}
-
-
-sub list_timescales_for_update {
-    
-    my ($request, $dbh, $return_type, $list) = @_;
-    
-    my $tables = $request->tables_hash;
-    
-    $request->substitute_select( mt => 'ts', cd => 'ts' );
-    
-    $request->extid_check;
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $request->sql_limit_clause(1);
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $request->sql_count_clause;
+    return if defined $limit && $limit eq '0';
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -980,22 +848,103 @@ sub list_timescales_for_update {
     
     my ($join_list) = $request->generate_join_list('ts', $tables);
     
-    # Then query for bounds.
+    # Then query for timescales.
     
     $request->{main_sql} = "
-	SELECT $calc $fields
-	FROM $TIMESCALE_DATA as ts $join_list
-        WHERE timescale_no in ($list)
+	SELECT $fields
+	FROM $TABLE{TIMESCALE_DATA} as ts $join_list
+        WHERE timescale_no in ($key_list)
 	GROUP BY ts.timescale_no $order_expr";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
+    my $results = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
+    
+    # Now add the labels to the return records.
+    
+    return () unless ref $results eq 'ARRAY' && @$results;
+    
+    if ( ref $label_ref eq 'HASH' )
+    {
+	foreach my $r ( @$results )
+	{
+	    if ( my $keyval = $r->{timescale_no} )
+	    {
+		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
+	    }
+	}
+    }
+
+    return @$results;
+}
+
+
+sub list_bounds_after_update {
+    
+    my ($request, $dbh, $return_type, $key_list, $label_ref) = @_;
+    
+    my $tables = $request->tables_hash;
+    
+    $request->substitute_select( cd => 'ts' );
+    
+    my $filter_string = $return_type eq 'full' ? "tsb.timescale_no in ($key_list)"
+					       : "tsb.bound_no in ($key_list)";
+    
+    # If a query limit has been specified, return if the
+    # limit is 0. That would be another way of specifying a return type of 'none'.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    return if defined $limit && $limit eq '0';
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = join(',', @{$request->ds->{block}{'1.2:timescales:bound'}{output_list}[0]{select}});
+
+    $tables->{tsi} = 1;
+    $tables->{tsb} = 1;
+    
+    # Determine the order in which the results should be returned.
+    
+    my $order_expr = 'ORDER BY tsb.timescale_no, tsb.age';
+    
+    # Determine the necessary joins.
+    
+    my ($join_list) = $request->generate_join_list('tsb', $tables);
+    
+    # Then query for bounds.
+    
+    $request->{main_sql} = "
+	SELECT $fields
+	FROM $TABLE{TIMESCALE_BOUNDS} as tsb $join_list
+        WHERE $filter_string
+	GROUP BY tsb.bound_no $order_expr";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
     
-    # If we were asked to get the count, then do so
+    my $results = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
     
-    $request->sql_count_rows;
+    # Now add the labels to the return records, and select the proper output block.
+    
+    return () unless ref $results eq 'ARRAY' && @$results;
+    
+    if ( ref $label_ref eq 'HASH' )
+    {
+	foreach my $r ( @$results )
+	{
+	    if ( my $keyval = $r->{bound_no} )
+	    {
+		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
+	    }
+	    
+	    $request->select_output_block($r, '1.2:timescales:bound');
+	}
+    }
+    
+    return @$results;
 }
 
 
@@ -1015,7 +964,6 @@ sub valid_age {
     
     return { value => $value };
 }
-
 
 
 1;

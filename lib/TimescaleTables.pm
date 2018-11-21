@@ -26,49 +26,11 @@ our(@EXPORT_OK) = qw(establish_timescale_tables copy_international_timescales
 
 our ($TIMESCALE_FIX) = 'timescale_fix';
 
+# $$$ need to write procedure for defining interavals using bounds and priority
 
-# our (%TIMESCALE_ATTRS) = 
-#     ( timescale_id => 'IGNORE',
-#       timescale_name => 'varchar80',
-#       timescale_type => { eon => 1, era => 1, period => 1, epoch => 1, stage => 1,
-# 			  substage => 1, zone => 1, chron => 1, other => 1, multi => 1 },
-#       timescale_extent => 'varchar80',
-#       timescale_taxon => 'varchar80',
-#       authority_level => 'range0-255',
-#       source_timescale_id => 'timescale_no',
-#       reference_id => 'reference_no',
-#       is_active => 'boolean' );
-    
-# our (%TIMESCALE_BOUND_ATTRS) = 
-#     ( bound_id => 'IGNORE',
-#       bound_type => { absolute => 1, spike => 1, same => 1, percent => 1, alternate => 1, error => 1 },
-#       interval_type => { eon => 1, era => 1, period => 1, epoch => 1, stage => 1,
-# 			 substage => 1, zone => 1, chron => 1, other => 1 },
-#       interval_extent => 'varchar80',
-#       interval_taxon => 'varchar80',
-#       timescale_id => 'timescale_no',
-#       interval_id => 'interval_no',
-#       lower_id => 'interval_no',
-#       interval_name => 'varchar80',
-#       lower_name => 'varchar80',
-#       base_id => 'bound_no',
-#       range_id => 'bound_no',
-#       color_id => 'bound_no',
-#       refsource_id => 'bound_no',
-#       age => 'pos_decimal',
-#       age_error => 'pos_decimal',
-#       percent => 'pos_decimal',
-#       percent_error => 'pos_decimal',
-#       color => 'colorhex',
-#       reference_no => 'reference_no' );
+our (%INT_BOUND);
+our (%BOUND_BY_AGE);
 
-# our (%TIMESCALE_REFDEF) = 
-#     ( timescale_no => [ 'TSC', $TIMESCALE_DATA, 'timescale' ],
-#       interval_no => [ 'INT', $TIMESCALE_INTS, 'interval' ],
-#       bound_no => [ 'BND', $TABLE{TIMESCALE_BOUNDS}, 'interval boundary' ],
-#       reference_no => [ 'REF', $REFERENCES, 'bibliographic reference' ] );
-    
-    
 # Table and file names
 
 our $TIMESCALE_WORK = 'tsw';
@@ -124,27 +86,29 @@ sub establish_timescale_tables {
     $dbh->do("DROP TABLE IF EXISTS $TIMESCALE_WORK");
     
     $dbh->do("CREATE TABLE $TIMESCALE_WORK (
-		timescale_no int unsigned primary key auto_increment,
+		timescale_no int unsigned PRIMARY KEY AUTO_INCREMENT,
 		pbdb_id int unsigned not null default 0,
 		macrostrat_id int unsigned not null default 0,
 		timescale_name varchar(80) not null,
-		source_timescale_no int unsigned not null default 0,
-		authority_level tinyint unsigned not null default 0,
+		priority tinyint unsigned not null default 0,
 		min_age decimal(9,5),
 		min_age_prec tinyint,
 		max_age decimal(9,5),
 		max_age_prec tinyint,
-		reference_no int unsigned not null default 0,
-		timescale_type enum('', 'other', 'eon', 'era', 'period', 'epoch', 'stage', 'substage', 
+		source_timescale_no int unsigned not null default 0,
+		timescale_type enum('', 'supereon', 'eon', 'era', 'period',
+			'superepoch', 'epoch', 'subepoch', 'stage', 'substage', 
 			'zone', 'chron') not null default '',
 		timescale_extent varchar(80) not null default '',
 		timescale_taxon varchar(80) not null default '',
+		timescale_comments text not null default '',
 		has_error boolean not null default 0,
 		is_active boolean not null default 0,
 		is_updated boolean not null default 0,
 		admin_lock boolean not null default 0,
-		authorizer_no int unsigned not null,
-		enterer_no int unsigned not null,
+		reference_no int unsigned not null default 0,
+		authorizer_no int unsigned not null default 0,
+		enterer_no int unsigned not null default 0,
 		modifier_no int unsigned not null default 0,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp,
@@ -156,92 +120,40 @@ sub establish_timescale_tables {
 		key (is_active),
 		key (is_updated))");
     
-    # $dbh->do("DROP TABLE IF EXISTS $TIMESCALE_ARCHIVE");
-    
-    # $dbh->do("CREATE TABLE $TIMESCALE_ARCHIVE (
-    # 		timescale_no int unsigned,
-    # 		revision_no int unsigned auto_increment,
-    # 		authorizer_no int unsigned not null,
-    # 		timescale_name varchar(80) not null,
-    # 		source_timescale_no int unsigned,
-    # 		max_age decimal(9,5),
-    # 		late_age decimal(9,5),
-    # 		reference_no int unsigned not null,
-    # 		interval_type enum('eon', 'era', 'period', 'epoch', 'stage', 'zone'),
-    # 		is_active boolean,
-    # 		created timestamp default current_timestamp,
-    # 		modified timestamp default current_timestamp,
-    # 		key (reference_no),
-    # 		key (authorizer_no),
-    # 		primary key (timescale_no, revision_no))");
-    
-    # The table 'timescale_refs' stores secondary references for timescales.
-    
-    $dbh->do("DROP TABLE IF EXISTS $TS_REFS_WORK");
-    
-    $dbh->do("CREATE TABLE $TS_REFS_WORK (
-		timescale_no int unsigned not null,
-		reference_no int unsigned not null,
-		primary key (timescale_no, reference_no))");
-    
-    # The table 'timescale_ints' associates interval names with unique identifiers.
-    
-    $dbh->do("DROP TABLE IF EXISTS $TS_INTS_WORK");
-    
-    $dbh->do("CREATE TABLE $TS_INTS_WORK (
-		interval_no int unsigned primary key,
-		macrostrat_id int unsigned not null default 0,
-		interval_name varchar(80) not null,
-		authority_timescale_no int unsigned not null,
-		early_age decimal(9,5),
-		early_age_prec tinyint,
-		late_age decimal(9,5),
-		late_age_prec tinyint,
-		abbrev varchar(10) not null,
-		color varchar(10) not null,
-		reference_no int unsigned not null,
-		orig_early decimal(9,5),
-		orig_late decimal(9,5),
-		orig_color varchar(10) not null,
-		orig_refno int unsigned not null,
-		macrostrat_color varchar(10) not null,
-		KEY (macrostrat_id),
-		KEY (authority_timescale_no),
-		KEY (interval_name))");
-    
     # The table 'timescale_bounds' defines boundaries between intervals.
     
     $dbh->do("DROP TABLE IF EXISTS $TS_BOUNDS_WORK");
     
     $dbh->do("CREATE TABLE $TS_BOUNDS_WORK (
-		bound_no int unsigned primary key auto_increment,
+		bound_no int unsigned PRIMARY KEY AUTO_INCREMENT,
 		timescale_no int unsigned not null,
 		interval_name varchar(80) not null default '',
-		bound_type enum('absolute', 'spike', 'same', 'percent'),
+		bound_type enum('absolute', 'spike', 'same', 'fraction') not null,
 		top_no int unsigned not null default 0,
 		base_no int unsigned not null default 0,
 		range_no int unsigned not null default 0,
 		color_no int unsigned not null default 0,
-		refsource_no int unsigned not null default 0,
 		age decimal(9,5),
 		age_prec tinyint,
 		age_error decimal(9,5),
 		age_error_prec tinyint,
-		percent decimal(9,5),
-		percent_prec tinyint,
-		percent_error decimal(9,5),
-		percent_error_prec tinyint,
+		fraction decimal(9,5),
+		fraction_prec tinyint,
+		fraction_error decimal(9,5),
+		fraction_error_prec tinyint,
 		has_error boolean not null default 0,
 		is_updated boolean not null default 0,
 		is_modeled boolean not null default 0,
 		is_spike boolean not null default 0,
 		color varchar(10) not null default '',
-		reference_no int unsigned,
-		interval_type enum('', 'other', 'eon', 'era', 'period', 'epoch', 'stage', 'substage', 
-			'zone', 'chron') null,
+		interval_type enum('', 'other', 'supereon', 'eon', 'era', 'period',
+			'superepoch', 'epoch', 'subepoch', 'stage', 'substage', 
+			'zone', 'chron') not null default '',
 		interval_extent varchar(80) null,
 		interval_taxon varchar(255) null,
 		orig_age decimal(9,5),
+		pbdb_no int unsigned not null default 0,
+		macrostrat_no int unsigned not null default 0,
 		updated timestamp default current_timestamp on update current_timestamp,
 		key (timescale_no),
 		key (base_no),
@@ -249,29 +161,43 @@ sub establish_timescale_tables {
 		key (range_no),
 		key (color_no),
 		key (age),
-		key (reference_no),
 		key (is_updated))");
     
-    # The table 'timescale_perms' stores viewing and editing permission for timescales.
+    # The table 'timescale_ints' associates interval names with unique identifiers.
     
-    # $dbh->do("DROP TABLE IF EXISTS $TS_PERMS_WORK");
+    $dbh->do("DROP TABLE IF EXISTS $TS_INTS_WORK");
     
-    # $dbh->do("CREATE TABLE $TS_PERMS_WORK (
-    # 		timescale_no int unsigned not null,
-    # 		person_no int unsigned,
-    # 		group_no int unsigned,
-    # 		access enum ('none', 'view', 'edit'),
-    # 		key (timescale_no),
-    # 		key (person_no),
-    # 		key (group_no))");
-    
+    $dbh->do("CREATE TABLE $TS_INTS_WORK (
+		interval_no int unsigned PRIMARY KEY,
+		macrostrat_id int unsigned not null default 0,
+		interval_name varchar(80) not null,
+		interval_type enum('', 'other', 'supereon', 'eon', 'era', 'period',
+			'superepoch', 'epoch', 'subepoch', 'stage', 'substage', 
+			'zone', 'chron') not null default '',
+		abbrev varchar(10) not null default '',
+		timescale_no int unsigned not null,
+		priority tinyint unsigned not null,
+		early_age decimal(9,5) not null,
+		early_age_prec tinyint,
+		late_age decimal(9,5) not null,
+		late_age_prec tinyint,
+		color varchar(10) not null default '',
+		reference_no int unsigned not null default 0,
+		orig_early decimal(9,5) null,
+		orig_late decimal(9,5) null,
+		orig_color varchar(10) null,
+		orig_refno int unsigned null,
+		macrostrat_color varchar(10) null,
+		KEY (macrostrat_id),
+		KEY (timescale_no),
+		UNIQUE KEY (interval_name))");
+       
     activateTables($dbh, $TIMESCALE_WORK => $TABLE{TIMESCALE_DATA},
-		         $TS_REFS_WORK => $TABLE{TIMESCALE_REFS},
 			 $TS_INTS_WORK => $TABLE{TIMESCALE_INTS},
 			 $TS_BOUNDS_WORK => $TABLE{TIMESCALE_BOUNDS});
     
     # Now establish the necessary triggers on the new tables.
-
+    
     establish_triggers($dbh, $options);
     
     # Now make sure the timescale_fix table is properly initialized.
@@ -327,6 +253,7 @@ sub establish_timescale_tables {
 		(1, 'Pliensbachian', 'spike', '190.8', 1, '1.0', 1),
 		(1, 'Sinemurian', 'spike', '199.3', 1, '0.3', 1),
 		(1, 'Hettangian', 'spike', '201.3', 1, '0.2', 1),
+		(1, 'Norian', 'absolute', '227', 0, null, null),
 		(1, 'Carnian', 'spike', '237', 0, null, null),
 		(1, 'Ladinian', 'spike', '242', 0, null, null),
 		(1, 'Anisian', 'absolute', '247.2', 1, null, null),
@@ -339,10 +266,11 @@ sub establish_timescale_tables {
 		(1, 'Roadian', 'spike', '272.95', 2, '0.11', 2),
 		(1, 'Kungurian', 'absolute', '283.5', 1, '0.6', 1),
 		(1, 'Artinskian', 'absolute', '290.1', 1, '0.26', 1),
-		(1, 'Sakmarian', 'absolute', '295.0', 1, '0.18', 2),
+		(1, 'Sakmarian', 'spike', '293.52', 2, '0.17', 2),
 		(1, 'Asselian', 'spike', '298.9', 1, '0.15', 2),
 		(1, 'Gzhelian', 'absolute', '303.7', 1, '0.1', 1),
 		(1, 'Kasimovian', 'absolute', '307.0', 1, '0.1', 1),
+		(1, 'Moscovian', 'absolute', '315.2', 1, '0.2', 1),
 		(1, 'Bashkirian', 'spike', '323.2', 1, '0.4', 1),
 		(1, 'Serpukhovian', 'absolute', '330.9', 1, '0.2', 1),
 		(1, 'Visean', 'spike', '346.7', 1, '0.4', 1),
@@ -365,7 +293,7 @@ sub establish_timescale_tables {
 		(1, 'Hirnantian', 'spike', '445.2', 1, '1.4', 1),
 		(1, 'Katian', 'spike', '453.0', 1, '0.7', 1),
 		(1, 'Sandbian', 'spike', '458.4', 1, '0.9', 1),
-		(1, 'Darriwilian', 'spike', '458.4', 1, '0.9', 1),
+		(1, 'Darriwilian', 'spike', '467.3', 1, '1.1', 1),
 		(1, 'Dapingian', 'spike', '470.0', 1, '1.4', 1),
 		(1, 'Floian', 'spike', '477.7', 1, '1.4', 1),
 		(1, 'Tremadocian', 'spike', '485.4', 1, '1.9', 1),
@@ -402,12 +330,12 @@ sub copy_international_timescales {
     # First establish the international timescales.
     
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, authorizer_no, enterer_no, timescale_name,
-	timescale_type, timescale_extent, authority_level, is_active) VALUES
-	(1, $auth_quoted, $auth_quoted, 'ICS Stages', 'stage', 'ics', 10, 1),
-	(2, $auth_quoted, $auth_quoted, 'ICS Epochs', 'epoch', 'ics', 10, 1),
-	(3, $auth_quoted, $auth_quoted, 'ICS Periods', 'period', 'ics', 10, 1),
-	(4, $auth_quoted, $auth_quoted, 'ICS Eras', 'era', 'ics', 10, 1),
-	(5, $auth_quoted, $auth_quoted, 'ICS Eons', 'eon', 'ics', 10, 1)";
+	timescale_type, timescale_extent, priority, is_active) VALUES
+	(1, $auth_quoted, $auth_quoted, 'ICS Stages', 'stage', 'global', 10, 1),
+	(2, $auth_quoted, $auth_quoted, 'ICS Epochs', 'epoch', 'global', 10, 1),
+	(3, $auth_quoted, $auth_quoted, 'ICS Periods', 'period', 'global', 10, 1),
+	(4, $auth_quoted, $auth_quoted, 'ICS Eras', 'era', 'global', 10, 1),
+	(5, $auth_quoted, $auth_quoted, 'ICS Eons', 'eon', 'global', 10, 1)";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
@@ -415,10 +343,10 @@ sub copy_international_timescales {
     
     # Then copy the interval data from the old tables for scale_no 1.
     
-    $sql = "REPLACE INTO $TABLE{TIMESCALE_INTS} (interval_no, interval_name, abbrev,
-		orig_early, orig_late, orig_color, orig_refno)
-	SELECT i.interval_no, i.interval_name, i.abbrev, i.early_age, i.late_age, 
-		sm.color, i.reference_no
+    $sql = "REPLACE INTO $TABLE{TIMESCALE_INTS} (interval_no, interval_name, abbrev, timescale_no, 
+		orig_early, orig_late, color, orig_color, orig_refno)
+	SELECT i.interval_no, i.interval_name, i.abbrev, 6 - scale_level, i.early_age, i.late_age, 
+		sm.color, sm.color, i.reference_no
 	FROM $INTERVAL_DATA as i join $SCALE_MAP as sm using (interval_no)
 	WHERE scale_no = 1
 	GROUP BY interval_no";
@@ -477,23 +405,13 @@ sub copy_international_timescales {
 	
 	# Then add the lower bounds of each interval in turn.
 	
-	$sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, interval_name, age, reference_no, color)
-	SELECT $timescale_no as timescale_no, 'absolute' as bound_type, tsi.interval_name, tsi.orig_early, orig_refno,
-		if(tsi.macrostrat_color <> '', tsi.macrostrat_color, tsi.orig_color)
+	$sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, interval_name, age, 
+		orig_age, color)
+	SELECT $timescale_no as timescale_no, 'absolute' as bound_type, tsi.interval_name,
+		tsi.orig_early, tsi.orig_early, if(tsi.macrostrat_color <> '', tsi.macrostrat_color, tsi.orig_color)
 	FROM scale_map as sm join $TABLE{TIMESCALE_INTS} as tsi using (interval_no)
 	WHERE sm.scale_level = $level_no and sm.scale_no = 1
 	ORDER BY tsi.orig_early asc";
-	
-	# "((SELECT i2.orig_early as age, i2.interval_name, i2.interval_no,
-	# 	if(i2.macrostrat_color <> '', i2.macrostrat_color, i2.orig_color) as color, i2.orig_refno)
-	# 	join $TABLE{TIMESCALE_INTS} as i1 on i1.interval_no = sm1.interval_no
-	# 	join $TABLE{TIMESCALE_INTS} as i2 on i2.interval_no = sm2.interval_no
-	# WHERE (i1.orig_late = i2.orig_early) and sm1.scale_level = $level_no GROUP BY i1.interval_no)
-	# UNION
-	# (SELECT i1.orig_late as age, null as interval_name, null as interval_no, null as color, null as orig_refno
-	# FROM scale_map as sm1 join $TABLE{TIMESCALE_INTS} as i1 using (interval_no)
-	# WHERE sm1.scale_level = $level_no ORDER BY i1.orig_late asc LIMIT 1)
-	# ORDER BY age asc) as innerquery";
 	
 	print STDERR "$sql\n\n" if $options->{debug};
 	
@@ -597,6 +515,20 @@ sub copy_international_timescales {
     # Then update the international bounds to their currently accepted values and attributes.
     
     update_international_bounds($dbh, $options);
+
+    # Finally, copy the interval start and end ages to the interval records.
+
+    $sql = "UPDATE $TABLE{TIMESCALE_INTS} as tsi join $TABLE{TIMESCALE_BOUNDS} as tsb using (interval_name)
+			join $TABLE{TIMESCALE_BOUNDS} as btp on btp.bound_no = tsb.top_no
+		SET tsi.early_age = tsb.age, tsi.early_age_prec = tsb.age_prec,
+		    tsi.late_age = btp.age, tsi.late_age_prec = btp.age_prec
+		WHERE tsb.timescale_no in (1,2,3,4,5)";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "    Initialized the ages of $result intervals");
     
     # Finally, we knit pieces of these together into a single timescale, for demonstration
     # purposes. 
@@ -606,7 +538,7 @@ sub copy_international_timescales {
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, authorizer_no, timescale_name,
 	is_active, timescale_type, timescale_extent) VALUES
 	($test_timescale_no, $auth_quoted, 'Time Ruler', 1,
-	 'multi', 'international')";
+	 'multi', 'global')";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
@@ -717,10 +649,12 @@ sub copy_pbdb_timescales {
     # copied by 'copy_international_timescales' above.
     
     $sql = "INSERT IGNORE INTO $TABLE{TIMESCALE_INTS} (interval_no, interval_name, abbrev,
-		orig_early, orig_late, orig_refno)
-	SELECT interval_no, interval_name, abbrev, early_age, late_age, reference_no
+		timescale_no, orig_early, orig_late, orig_refno)
+	SELECT interval_no, interval_name, abbrev, min(c.scale_no) + 100, early_age, late_age, i.reference_no
 	FROM $INTERVAL_DATA as i left join scale_map as sm using (interval_no)
-	WHERE scale_no is null";
+		left join correlations as c using (interval_no)
+	WHERE sm.scale_no is null
+	GROUP BY interval_no";
     
     print STDERR "\n$sql\n\n" if $options->{debug};
     
@@ -793,10 +727,10 @@ sub copy_macrostrat_timescales {
     
     # Add any new intervals that are not already in the table.
     
-    $sql = "INSERT INTO $TABLE{TIMESCALE_INTS} (interval_no, macrostrat_id, interval_name, abbrev, orig_early, orig_late,
-    	    orig_color, macrostrat_color)
-	SELECT msi.id+2000 as interval_no, msi.id, msi.interval_name, msi.interval_abbrev, msi.age_bottom, msi.age_top,
-    		msi.interval_color, msi.orig_color
+    $sql = "INSERT INTO $TABLE{TIMESCALE_INTS} (interval_no, macrostrat_id, interval_name, abbrev, timescale_no,
+		orig_early, orig_late, orig_color, macrostrat_color)
+	SELECT msi.id+2000 as interval_no, msi.id, msi.interval_name, msi.interval_abbrev, min(im.timescale_id) + 50,
+		msi.age_bottom, msi.age_top, msi.interval_color, msi.orig_color
 	FROM $TABLE{MACROSTRAT_INTERVALS} as msi join $TABLE{MACROSTRAT_SCALES_INTS} as im on im.interval_id = msi.id
 		left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name)
 	WHERE tsi.interval_name is null and im.timescale_id not in ($skip_list)
@@ -873,7 +807,8 @@ sub process_one_timescale {
     {
 	# my $order = $is_chron ? 'i.top_age, i.base_age' : 'i.base_age, i.top_age desc';
 	
-    	$sql = "SELECT interval_no, i.base_age, i.top_age, c.authorizer_no, c.reference_no, ir.interval_name
+    	$sql = "SELECT interval_no, i.base_age, i.top_age, c.authorizer_no, 
+			ir.eml_interval, ir.interval_name
     		FROM interval_lookup as i join correlations as c using (interval_no)
     			join intervals as ir using (interval_no)
     		WHERE scale_no = $pbdb_id
@@ -887,7 +822,8 @@ sub process_one_timescale {
 	# my $order = $is_chron ? 'i.age_top, i.age_bottom' : 'i.age_bottom, i.age_top desc';
 
     	$sql = "SELECT tsi.interval_no, i.age_bottom as base_age, i.age_top as top_age,
-    			0 as authorizer_no, 0 as reference_no, i.interval_name, i.id as macrostrat_no
+    			0 as authorizer_no, i.interval_name, i.interval_type,
+			i.id as macrostrat_no
     		FROM $TABLE{MACROSTRAT_SCALES_INTS} as im
     			join $TABLE{MACROSTRAT_INTERVALS} as i on i.id = im.interval_id
     			join $TABLE{TIMESCALE_INTS} as tsi on tsi.macrostrat_id = im.interval_id
@@ -937,15 +873,44 @@ sub process_one_timescale {
 	# If no reference number is given for this interval, we should store a null value so it
 	# will default to the reference number for the timescale.
 	
-	my $reference_no = $i->{reference_no} || 'NULL';
+	# my $reference_no = $i->{reference_no} || 'NULL';
 	# my $authorizer_no = $i->{authorizer_no} || $auth_quoted || '0';
 	# my $enterer_no = $i->{enterer_no} || $i->{authorizer_no} || $auth_quoted || '0';
 	
 	my $top_age = $i->{top_age};
 	my $base_age = $i->{base_age};
-	my $interval_no = $i->{interval_no};
-	my $interval_name = $dbh->quote($i->{interval_name});
+	
+	my $interval_no = $i->{interval_no} || 0;
+	my $macrostrat_no = $i->{macrostrat_no} || 0;
+	my $interval_name;
+	
+	if ( my $modifier = $i->{eml_interval} )
+	{
+	    if ( $modifier eq 'Late/Upper' )
+	    {
+		$modifier = 'Late';
+	    }
 
+	    elsif ( $modifier eq 'Early/Lower' )
+	    {
+		$modifier = 'Early';
+	    }
+
+	    else
+	    {
+		$modifier =~ s/^([el])/uc($1)/e;
+	    }
+
+	    $interval_name = $dbh->quote("$modifier $i->{interval_name}");
+	}
+
+	else
+	{
+	    $interval_name = $dbh->quote($i->{interval_name});
+	}
+
+	my $interval_type = $i->{interval_type} ? $dbh->quote($i->{interval_type}) : "''";
+	
 	$top_bound_count{$top_age}++;
 	$base_bound_count{$base_age}++;
 	
@@ -970,8 +935,9 @@ sub process_one_timescale {
 	{
 	    $sql = "
 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, top_no,
-			interval_name, age, age_prec, reference_no)
-		VALUES ($timescale_no, 'absolute', 0, '', $top_age, $top_prec, $reference_no)";
+			interval_name, age, age_prec, orig_age, pbdb_no, macrostrat_no)
+		VALUES ($timescale_no, 'absolute', 0, '', $top_age, $top_prec, 
+			$top_age, $interval_no, $macrostrat_no)";
 	    
 	    print STDERR "\n$sql\n\n" if $options->{debug};
 	    
@@ -985,8 +951,11 @@ sub process_one_timescale {
 	
 	$sql = "
 		INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, top_no,
-			interval_name, age, age_prec, reference_no)
-		VALUES ($timescale_no, 'absolute', $top_bound_no, $interval_name, $base_age, $base_prec, $reference_no)";
+			interval_name, age, age_prec, interval_type, orig_age, 
+			pbdb_no, macrostrat_no)
+		VALUES ($timescale_no, 'absolute', $top_bound_no, $interval_name, 
+			$base_age, $base_prec, $interval_type, $base_age, 
+			$interval_no, $macrostrat_no)";
 	
 	print STDERR "\n$sql\n\n" if $options->{debug};
 	
@@ -1017,6 +986,10 @@ sub process_one_timescale {
     {
 	logMessage(2, "    This timescale has at least $overlap_count overlaps");
     }
+
+    # Now model this timescale against the international intervals.
+
+    model_one_timescale($dbh, $timescale_no, { silent => 1, debug => $options->{debug} });
     
     my $a = 1; # we can stop here when debugging
 }
@@ -1060,7 +1033,7 @@ sub add_timescale_chunk {
     # specified bounds.
     
     my $source_quoted = $dbh->quote($source_no);
-    my @filters = "timescale_no = $source_quoted";
+    my @filters = "tsb.timescale_no = $source_quoted";
     
     if ( $max_age )
     {
@@ -1088,8 +1061,8 @@ sub add_timescale_chunk {
     
     $sql = "SELECT bound_no, age, age_prec, age_error, age_error_prec, interval_no, interval_name, is_spike,
 		timescale_type, timescale_extent
-	    FROM $TABLE{TIMESCALE_BOUNDS} left join $TABLE{TIMESCALE_INTS} using (interval_name) 
-		join $TABLE{TIMESCALE_DATA} using (timescale_no)
+	    FROM $TABLE{TIMESCALE_BOUNDS} as tsb left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name) 
+		join $TABLE{TIMESCALE_DATA} as ts on ts.timescale_no = tsb.timescale_no
 	    $filter ORDER BY age asc";
     
     my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
@@ -1370,7 +1343,7 @@ sub update_timescale_descriptions {
 	logMessage(2, "    extent = '$extent' - $result") if $result && $result > 0;
     }
     
-    # Now copy these to the intervals boundaries.
+    # Now copy these to the boundaries and intervals.
     
     $sql = "UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb join $TABLE{TIMESCALE_DATA} as ts using (timescale_no)
 		SET tsb.interval_type = ts.timescale_type
@@ -1381,6 +1354,16 @@ sub update_timescale_descriptions {
     $result = $dbh->do($sql);
     
     logMessage(2, "Updated attributes of $result boundaries to match their timescales") if $result && $result > 0;
+    
+    $sql = "UPDATE $TABLE{TIMESCALE_INTS} as tsi join $TABLE{TIMESCALE_DATA} as ts using (timescale_no)
+		SET tsi.interval_type = ts.timescale_type
+		WHERE tsi.interval_type = '' or tsi.interval_type is null";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "Updated attributes of $result intervals to match their timescales") if $result && $result > 0;    
 }
 
 
@@ -1478,13 +1461,189 @@ sub update_international_bounds {
 }
 
 
+# Load the international boundaries, if this hasn't already been done.
+
+sub load_international_boundaries {
+    
+    my ($dbh) = @_;
+
+    return if %INT_BOUND;
+    
+    my $sql = "	SELECT * FROM $TABLE{TIMESCALE_BOUNDS}
+		WHERE timescale_no in (1,2,3,4,5) ORDER BY age, timescale_no";
+    
+    my $bounds = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    foreach my $r ( @$bounds )
+    {
+	$BOUND_BY_AGE{$r->{age}} ||= $r->{bound_no};
+	$INT_BOUND{$r->{bound_no}} = $r;
+    }
+}
+
+
+# Model one timescale by linking any of its bounds that match the international timescale, and
+# expressing the others as fractions.
+
+sub model_one_timescale {
+    
+    my ($dbh, $timescale_no, $options) = @_;
+    
+    $options ||= { };
+    
+    # Fetch the list of international boundaries, if that has not already been done.
+    
+    load_international_boundaries($dbh);
+    
+    # Start by querying all of the boundaries for the specified timescale.
+
+    my $sql = " SELECT bound_no, age, interval_name FROM $TABLE{TIMESCALE_BOUNDS}
+		WHERE timescale_no = $timescale_no ORDER BY age";
+
+    my $bounds = $dbh->selectall_arrayref($sql, { Slice => { } });
+
+    unless ( ref $bounds eq 'ARRAY' && @$bounds )
+    {
+	logMessage(2, "No boundaries found for timescale '$timescale_no'") unless $options->{silent};
+	return;	
+    }
+    
+    my @int_bound_ages = sort { $a <=> $b } keys %BOUND_BY_AGE;
+    
+    # Then go through the timescale bounds and see which if any match up to any of the
+    # international bounds.
+    
+ BOUND:
+    foreach my $r ( @$bounds )
+    {
+	my $bound_age = $r->{age};
+	my $prev_age;
+	my $prev_no;
+
+	# Go through every international bound, looking for the best fit.
+
+    AGE:
+	foreach my $i ( 0..$#int_bound_ages )
+	{
+	    my $this_age = $int_bound_ages[$i];
+	    my $this_no = $BOUND_BY_AGE{$this_age};
+	    my $diff = abs($bound_age - $this_age);
+	    
+	    # If we found an exact match, then we have finished with this bound.
+	    
+	    if ( $diff == 0 )
+	    {
+		$r->{match_no} = $this_no;
+		
+		my $r1 = $INT_BOUND{$this_no};
+		logMessage(2, "Exact match: $r->{age} ($r->{interval_name}) to $r1->{age} ($r1->{interval_name})")
+		    unless $options->{silent};
+		last AGE;
+	    }
+
+	    # Ditto if we found one that is a close match. But skip Olenekian unless the interval
+	    # name matches as well. The current lower bound on the Olenekian is very close to an
+	    # obsolete value for the lower bound on the Triassic.
+	    
+	    elsif ( $bound_age > 0 && $diff < 2.0 && $diff < 0.05 * $this_age &&
+		    ( $INT_BOUND{$this_no}{interval_name} ne 'Olenekian' ||
+		      ( defined $r->{interval_name} && $r->{interval_name} eq 'Olenekian' ) ) )
+	    {
+		$r->{match_no} = $this_no;
+		$r->{is_modeled} = 1;
+		
+		my $r1 = $INT_BOUND{$this_no};
+		logMessage(2, "Close match: $r->{age} ($r->{interval_name}) to $r1->{age} ($r1->{interval_name})")
+		    unless $options->{silent};
+		last AGE;
+	    }
+
+	    # If we find ourselves in the middle of an interval, then compute how much of the way
+	    # through the interval it lies.
+	    
+	    elsif ( $bound_age > $prev_age && $bound_age < $this_age )
+	    {
+		$r->{base_no} = $this_no;
+		$r->{top_no} = $prev_no;
+
+		my $fraction = ($this_age - $bound_age) / ($this_age - $prev_age);
+		$r->{fraction} = sprintf("%.4f", $fraction);
+		$r->{fraction_prec} = 4;
+		$r->{is_modeled} = 1;
+		
+		my $rt = $INT_BOUND{$prev_no};
+		my $rb = $INT_BOUND{$this_no};
+		logMessage(2, "Fraction: $r->{age} ($r->{interval_name}) is $r->{fraction} between $rb->{age} ($rb->{interval_name}) and $rt->{age} ($rt->{interval_name})")
+		    unless $options->{silent};
+		last AGE;
+	    }
+	    
+	    # Otherwise, go on to the next.
+	    
+	    else
+	    {
+		$prev_no = $this_no;
+		$prev_age = $this_age;
+	    }
+	}
+
+	# If we didn't find a match, something is wrong. Otherwise, update the bound.
+	
+	if ( $r->{match_no} || $r->{fraction} )
+	{
+	    update_modeled_bound($dbh, $r, $options);
+	}
+
+	else
+	{
+	    logMessage(2, "ERROR: no match for $r->{age} ($r->{interval_name})!!!");
+	}
+    }
+    
+}
+
+
+sub update_modeled_bound {
+    
+    my ($dbh, $r, $options) = @_;
+    
+    my $sql;
+    
+    if ( $r->{match_no} )
+    {
+	my $values = "bound_type = 'same', base_no = $r->{match_no}";
+	$values .= ", is_modeled = 1" if $r->{is_modeled};
+	
+	$sql = "UPDATE $TABLE{TIMESCALE_BOUNDS} SET $values
+		WHERE bound_no = $r->{bound_no}";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$dbh->do($sql);
+    }
+    
+    elsif ( $r->{fraction} )
+    {
+	$sql = "UPDATE $TABLE{TIMESCALE_BOUNDS} SET bound_type = 'fraction', 
+			base_no = $r->{base_no}, range_no = $r->{top_no}, is_modeled = 1,
+			fraction = $r->{fraction}, fraction_prec = $r->{fraction_prec}
+		WHERE bound_no = $r->{bound_no}";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$dbh->do($sql);
+    }
+}
+
+
+
 # Given a timescale number, check to see which of the boundaries might correspond to international
-# interval boundaries, and model the rest as percentages.
+# interval boundaries, and model the rest as fractions.
 
 sub model_timescale {
     
     my ($dbh, $timescale_no, $options) = @_;
-
+    
     # Check that the argument is in the proper range.
     
     unless ( $timescale_no && $timescale_no =~ /^\d+$/ )
@@ -1508,7 +1667,7 @@ sub model_timescale {
     
     # Now query all of the international boundaries.
     
-    my (@INTERNATIONAL, %INT, %INT_BY_AGE, @AGES);
+    my (@INTERNATIONAL, %INT, %BOUND_BY_AGE, @AGES);
     
     $sql = "	SELECT tsb.*, tsi.interval_name FROM $TABLE{TIMESCALE_BOUNDS} as tsb 
 			left join $TABLE{TIMESCALE_INTS} as tsi using (interval_no)
@@ -1519,11 +1678,11 @@ sub model_timescale {
     foreach my $r ( @$int_res )
     {
 	push @INTERNATIONAL, $r;
-	push @{$INT_BY_AGE{$r->{age}}}, $r;
+	push @{$BOUND_BY_AGE{$r->{age}}}, $r;
 	$INT{$r->{bound_no}} = $r;
     }
 
-    @AGES = sort { $a <=> $b } keys %INT_BY_AGE;
+    @AGES = sort { $a <=> $b } keys %BOUND_BY_AGE;
     
     # Then go through the interval bounds and see which if any match up to international bounds.
 
@@ -1533,7 +1692,7 @@ sub model_timescale {
 	foreach my $a1 ( @AGES )
 	{
 	    my $diff = abs($r->{age} - $a1);
-	    my $r1 = match_age($a1, \%INT_BY_AGE);
+	    my $r1 = match_age($a1, \%BOUND_BY_AGE);
 	    
 	    if ( $r->{age} == $a1 )
 	    {
@@ -1555,7 +1714,7 @@ sub model_timescale {
 	}
     }
 
-    # Now go back through them again. For each one that doesn't match, compute a percentage offset based on
+    # Now go back through them again. For each one that doesn't match, compute a fractional offset based on
     # the ORIGINAL ages (not the matched ones).
     
     my ($base_age, $base_no);
@@ -1592,8 +1751,8 @@ sub model_timescale {
 
 	if ( $r->{base_no} && $r->{top_no} )
 	{
-	    my $percent = 100 * ($r->{base_age} - $r->{age}) / ($r->{base_age} - $r->{top_age});
-	    $r->{percent} = sprintf("%.1f", $percent);
+	    my $fraction = ($r->{base_age} - $r->{age}) / ($r->{base_age} - $r->{top_age});
+	    $r->{fraction} = sprintf("%.1f", $fraction);
 	}
     }
     
@@ -1610,9 +1769,9 @@ sub model_timescale {
 	    logMessage(2, "$r->{age} ($r->{interval_name}) : matches $name [$r->{match}]");
 	}
 
-	elsif ( defined $r->{percent} )
+	elsif ( defined $r->{fraction} )
 	{
-	    logMessage(2, "$r->{age} ($r->{interval_name}) : $r->{percent}\% : $r->{base_age} ($r->{base_no}) - $r->{top_age} ($r->{top_no})");
+	    logMessage(2, "$r->{age} ($r->{interval_name}) : $r->{fraction}\% : $r->{base_age} ($r->{base_no}) - $r->{top_age} ($r->{top_no})");
 	}
 
 	else
@@ -1681,11 +1840,11 @@ sub update_modeled {
 	    $dbh->do($sql);
 	}
 
-	elsif ( $r->{percent} )
+	elsif ( $r->{fraction} )
 	{
 	    $sql = "
-		UPDATE $TABLE{TIMESCALE_BOUNDS} SET bound_type = 'percent', base_no = $r->{base_no},
-			range_no = $r->{top_no}, offset = $r->{percent}, is_modeled = 1
+		UPDATE $TABLE{TIMESCALE_BOUNDS} SET bound_type = 'fraction', base_no = $r->{base_no},
+			range_no = $r->{top_no}, offset = $r->{fraction}, is_modeled = 1
 		WHERE bound_no = $r->{bound_no}";
 
 	    print STDERR "$sql\n\n" if $options->{debug};
@@ -1733,11 +1892,11 @@ sub establish_procedures {
 	SET age_prec = coalesce(age_prec, length(regexp_substr(age, '(?<=[.])\\\\d*?(?=0*\$)'))),
 	    age_error_prec = coalesce(age_error_prec, 
 				length(regexp_substr(age_error, '(?<=[.])\\\\d*?(?=0*\$)'))),
-	    percent_prec = coalesce(percent_prec, length(regexp_substr(percent, '(?<=[.])\\\\d*?(?=0*\$)'))),
-	    percent_error_prec = coalesce(percent_error_prec,
-				length(regexp_substr(percent_error, '(?<=[.])\\\\d*?(?=0*\$)')))
+	    fraction_prec = coalesce(fraction_prec, length(regexp_substr(fraction, '(?<=[.])\\\\d*?(?=0*\$)'))),
+	    fraction_error_prec = coalesce(fraction_error_prec,
+				length(regexp_substr(fraction_error, '(?<=[.])\\\\d*?(?=0*\$)')))
 	WHERE is_updated and (age_prec is null or age_error_prec is null or
-			      percent_prec is null or percent_error_prec is null);
+			      fraction_prec is null or fraction_error_prec is null);
 	
 	# Now update the ages and flags on all bounds that are marked as is_updated.  If
 	# this results in any updated records, repeat the process until no
@@ -1757,27 +1916,30 @@ sub establish_procedures {
 		tsb.age = case tsb.bound_type
 			when 'same' then base.age
 			when 'alias' then base.age
-			when 'percent' then base.age - (tsb.percent / 100) * ( base.age - top.age )
+			when 'fraction' then round(base.age - tsb.fraction * ( base.age - top.age ),
+					           greatest(least(coalesce(base.age_prec, 0), 
+						                  coalesce(top.age_prec, 0)),
+							    if(base.age > 600, 0, 1)))
 			else tsb.age
 			end,
 		tsb.age_prec = case tsb.bound_type
 			when 'same' then base.age_prec
 			when 'alias' then base.age_prec
-			when 'percent' then least(coalesce(base.age_prec, 0),
-						  coalesce(top.age_prec, 0))
+			when 'fraction' then least(coalesce(base.age_prec, 0),
+						   coalesce(top.age_prec, 0))
 			else tsb.age_prec
 			end,
 		tsb.age_error = case tsb.bound_type
 			when 'same' then base.age_error
 			when 'alias' then base.age_error
-			when 'percent' then coalesce(greatest(base.age_error, top.age_error),
+			when 'fraction' then coalesce(greatest(base.age_error, top.age_error),
 						     base.age_error, top.age_error)
 			else tsb.age_error
 			end,
 		tsb.age_error_prec = case tsb.bound_type
 			when 'same' then base.age_error_prec
 			when 'alias' then base.age_error_prec
-			when 'percent' then least(coalesce(base.age_error_prec, 0),
+			when 'fraction' then least(coalesce(base.age_error_prec, 0),
 						  coalesce(top.age_error_prec, 0))
 			else tsb.age_error_prec
 			end,
@@ -1796,7 +1958,7 @@ sub establish_procedures {
 	    
 	END WHILE;
 	
-	# Then do the same thing for the color and reference_no attributes
+	# Then do the same thing for the color attribute
 	
 	SET \@row_count = 1;
 	SET \@attr_iterations = 0;
@@ -1806,11 +1968,9 @@ sub establish_procedures {
 	    UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb
 		join $TABLE{TIMESCALE_DATA} as ts using (timescale_no)
 		left join $TABLE{TIMESCALE_BOUNDS} as csource on csource.bound_no = tsb.color_no
-		left join $TABLE{TIMESCALE_BOUNDS} as rsource on rsource.bound_no = tsb.refsource_no
 	    SET tsb.is_updated = 1,
-		tsb.color = if(tsb.color_no > 0, csource.color, tsb.color),
-		tsb.reference_no = if(tsb.refsource_no > 0, rsource.reference_no, tsb.reference_no)
-	    WHERE tsb.is_updated or csource.is_updated or rsource.is_updated;
+		tsb.color = if(tsb.color_no > 0, csource.color, tsb.color)
+	    WHERE tsb.is_updated or csource.is_updated;
 	    
 	    SET \@row_count = ROW_COUNT();
 	    SET \@attr_iterations = \@attr_iterations + 1;
@@ -1973,12 +2133,10 @@ sub establish_triggers {
 		OLD.interval_name <> NEW.interval_name or
 		OLD.top_no <> NEW.top_no or OLD.base_no <> NEW.base_no or
 		OLD.range_no <> NEW.range_no or OLD.color_no <> NEW.color_no or
-		OLD.refsource_no <> NEW.refsource_no or OLD.age <> NEW.age or
-		OLD.age_error <> NEW.age_error or OLD.percent <> NEW.percent or
-		OLD.percent_error <> NEW.percent_error or OLD.age_prec <> NEW.age_prec or
-		OLD.age_error_prec <> NEW.age_error_prec or OLD.percent_prec <> NEW.percent_prec or
-		OLD.percent_error_prec <> NEW.percent_error_prec or
-		OLD.color <> NEW.color or OLD.reference_no <> NEW.reference_no
+		OLD.age_error <> NEW.age_error or OLD.fraction <> NEW.fraction or
+		OLD.fraction_error <> NEW.fraction_error or OLD.age_prec <> NEW.age_prec or
+		OLD.age_error_prec <> NEW.age_error_prec or OLD.fraction_prec <> NEW.fraction_prec or
+		OLD.fraction_error_prec <> NEW.fraction_error_prec or OLD.color <> NEW.color
 		 THEN
 	    SET NEW.is_updated = 1; END IF;
 	END;");

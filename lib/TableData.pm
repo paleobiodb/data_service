@@ -519,9 +519,15 @@ sub complete_output_block {
 }
 
 
+# complete_ruleset ( dbh, ruleset_name, table_specifier )
+#
+# Complete the definition of the specified ruleset by reading the table schema corresponding to
+# $table_identifier and iterating through the columns. For each table column, add a new parameter
+# to the ruleset unless an existing ruleset parameter already corresponds to that column.
+
 sub complete_ruleset {
     
-    my ($ds, $dbh, $ruleset_name, $table_specifier) = @_;
+    my ($ds, $dbh, $ruleset_name, $table_specifier, @definitions) = @_;
     
     # First get a hash of table column definitions
     

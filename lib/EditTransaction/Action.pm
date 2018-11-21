@@ -179,6 +179,12 @@ sub record_value {
 }
 
 
+sub old_record {
+    
+    return $_[0]{old_record};
+}
+
+
 sub has_field {
 
     return exists $_[0]{record}{$_[1]};
@@ -228,7 +234,28 @@ sub keylist {
 	return;
     }
 }
-    
+
+
+sub keystring {
+
+    my ($action) = @_;
+
+    if ( $action->is_multiple )
+    {
+	return "'" . join("','", $action->all_keys) . "'";
+    }
+
+    elsif ( defined $action->{keyval} && $action->{keyval} ne '' )
+    {
+	return "'" . $action->{keyval} . "'";
+    }
+
+    else
+    {
+	return '';
+    }
+}
+
 
 sub column_list {
     
@@ -245,6 +272,12 @@ sub keyexpr {
 sub linkcol {
 
     return $_[0]{linkcol};
+}
+
+
+sub linkval {
+
+    return $_[0]{linkval};
 }
 
 
@@ -352,11 +385,27 @@ sub _set_linkcol {
 }
 
 
+sub _set_linkval {
+
+    my ($action, $linkval) = @_;
+
+    $action->{linkval} = $linkval;
+}
+
+
 sub _set_selector {
 
     my ($action, $selector) = @_;
     
     $action->{selector} = $selector;
+}
+
+
+sub _set_old_record {
+
+    my ($action, $old_record) = @_;
+
+    $action->{old_record} = $old_record;
 }
 
 
@@ -440,6 +489,22 @@ sub column_special {
 	    $action->{column_special}{$col} = $special if $col;
 	}
     }
+}
+
+
+sub ignore_column {
+    
+    my ($action, $col) = @_;
+
+    $action->{column_special}{$col} = 'ignore';
+}
+
+
+sub pass_column {
+
+    my ($action, $col) = @_;
+
+    $action->{column_special}{$col} = 'pass';
 }
 
 

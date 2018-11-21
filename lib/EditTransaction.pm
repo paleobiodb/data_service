@@ -61,7 +61,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_HAS_KEY => "You may not specify a primary key value for the %1 operation",
 		E_KEY_NOT_FOUND => "Field '%1': no record was found with key '%2'",
 		E_LABEL_NOT_FOUND => "Field '%1': no record of the proper type was found with label '%2'",
-		E_NOT_FOUND => "No record was found with key '%1'",
+		E_NOT_FOUND => "No record was found with value '%2' for key '%1'",
 		E_LOCKED => "This record is locked",
 		E_PERM => { insert => "You do not have permission to insert a record into this table",
 			    update => "You do not have permission to update this record",
@@ -1623,7 +1623,7 @@ sub update_record {
 	    
 	    elsif ( $permission eq 'notfound' )
 	    {
-		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
+		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec, $action->keyval);
 	    }
 
 	    # If the record has been found but is locked, then add an E_LOCKED condition. The user
@@ -1804,7 +1804,7 @@ sub replace_record {
 		    
 		    elsif ( $edt->allows('NOT_FOUND') )
 		    {
-			$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
+			$edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec, $action->keyval);
 		    }
 		    
 		    else
@@ -1820,7 +1820,7 @@ sub replace_record {
 		
 		else
 		{
-		    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
+		    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec, $action->keyval);
 		}
 	    }
 	    
@@ -1927,7 +1927,7 @@ sub delete_record {
 	    
 	    elsif ( $permission eq 'notfound' )
 	    {
-		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyval);
+		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec, $action->keyval);
 	    }
 	    
 	    # If the record has been found but is locked, then add an E_LOCKED condition. The user
@@ -2212,10 +2212,12 @@ sub bad_record {
 sub get_record_key {
 
     my ($edt, $table, $record) = @_;
+
+    return unless ref $record eq 'HASH';
     
     if ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
     {
-	if ( ref $record eq 'HASH' && defined $record->{$key_attr} && $record->{$key_attr} ne '' )
+	if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
 	{
 	    return $record->{$key_attr};
 	}
@@ -2223,9 +2225,19 @@ sub get_record_key {
     
     if ( my $key_column = get_table_property($table, 'PRIMARY_KEY') )
     {
-	if ( ref $record eq 'HASH' && defined $record->{$key_column} && $record->{$key_column} ne '' )
+	if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
 	{
 	    return $record->{$key_column};
+	}
+	
+	elsif ( $key_column =~ /(.*)_no$/ )
+	{
+	    my $check_attr = "$1_id";
+
+	    if ( defined $record->{$check_attr} && $record->{$check_attr} ne '' )
+	    {
+		return $record->{$check_attr};
+	    }
 	}
     }
     
@@ -2468,7 +2480,7 @@ sub authorize_subordinate_action {
 	
 	unless ( $linkval )
 	{
-	    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec || $action->keycol);
+	    $edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec || $action->keycol, $action->keyval);
 	    return 'error';
 	}
     }
@@ -2503,11 +2515,13 @@ sub authorize_subordinate_action {
     
     $linkval ||= $new_linkval;
     
+    # Now store this value in the action, for later record-keeping.
+    
+    $action->_set_linkval($linkval);
+    
     # If we have a cached permission result for this linkval, then just return that. There is no
     # reason to look up the same superior record multiple times in the course of a single
     # transaction.
-
-    # $$$ this is messed up and needs to be fixed.
     
     my $alt_permission;
     
@@ -3467,10 +3481,22 @@ sub get_old_values {
 sub fetch_old_record {
     
     my ($edt, $action, $table, $keyexpr) = @_;
-    
-    # return if $action->old_record;
 
+    if ( my $old = $action->old_record )
+    {
+	return $old;
+    }
     
+    $table ||= $action->table;
+    $keyexpr ||= $action->keyexpr;
+    
+    return unless $table && $keyexpr;
+    
+    my $sql = "SELECT * FROM $TABLE{$table} WHERE $keyexpr";
+    
+    $edt->debug_line("$sql\n");
+    
+    return $edt->dbh->selectrow_hashref($sql);
 }
 
 
@@ -3657,6 +3683,11 @@ sub _execute_insert {
 	push @{$edt->{inserted_keys}{$table}}, $new_keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($new_keyval, $action);
 	
+	if ( my $linkval = $action->linkval )
+	{
+	    $edt->{superior_keys}{$table}{$linkval} = 1;
+	}
+	
 	my $label = $action->label;
 	if ( defined $label && $label ne '' )
 	{
@@ -3809,7 +3840,7 @@ sub _execute_replace {
     # If the replace succeeded, return true. Otherwise, return false. In either case, record the
     # mapping between key value and record label.
     
-    my $keyval = $action->keyval;
+    my $keyval = $action->keyval + 0;
     my $label = $action->label;
     
     if ( defined $label && $label ne '' )
@@ -3823,6 +3854,12 @@ sub _execute_replace {
 	$edt->{action_count}++;
 	push @{$edt->{replaced_keys}{$table}}, $keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
+	
+	if ( my $linkval = $action->linkval )
+	{
+	    $edt->{superior_keys}{$table}{$linkval} = 1;
+	}
+	
 	return $result;
     }
     
@@ -3974,7 +4011,7 @@ sub _execute_update {
     # If the update succeeded, return true. Otherwise, return false. In either case, record the
     # mapping between key value and record label.
     
-    my $keyval = $action->keyval;
+    my $keyval = $action->keyval + 0;
     my $label = $action->label;
 
     if ( defined $label && $label ne '' )
@@ -3988,6 +4025,12 @@ sub _execute_update {
 	$edt->{action_count}++;
 	push @{$edt->{updated_keys}{$table}}, $keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
+	
+	if ( my $linkval = $action->linkval )
+	{
+	    $edt->{superior_keys}{$table}{$linkval} = 1;
+	}
+	
 	return $result;
     }
     
@@ -4134,7 +4177,7 @@ sub _execute_delete {
     else
     {
 	$count = 1;
-	@keys = $action->keyval;
+	@keys = $action->keyval + 0;
 	my $label = $action->label;
 	$edt->{key_labels}{$table}{$keys[0]} = $label if defined $label && $label ne '';
 	# There is no need to set label_keys, because the record has now vanished and no longer
@@ -4148,6 +4191,12 @@ sub _execute_delete {
     {
 	$edt->{action_count} += 1;
 	push @{$edt->{deleted_keys}{$table}}, @keys;
+	
+	if ( my $linkval = $action->linkval )
+	{
+	    $edt->{superior_keys}{$table}{$linkval} = 1;
+	}
+	
 	return $result;
     }
     
@@ -4481,7 +4530,7 @@ sub inserted_keys {
     {
 	return $edt->{inserted_keys}{$table} ? @{$edt->{inserted_keys}{$table}} : wantarray ? ( ) : 0;
     }
-
+    
     else
     {
 	return map { $edt->{inserted_keys}{$_} ? @{$edt->{inserted_keys}{$_}} : ( ) } keys %{$edt->{tables}};
@@ -4497,7 +4546,7 @@ sub updated_keys {
     {
 	return $edt->{updated_keys}{$table} ? @{$edt->{updated_keys}{$table}} : wantarray ? ( ) : 0;
     }
-
+    
     else
     {
 	return map { $edt->{updated_keys}{$_} ? @{$edt->{updated_keys}{$_}} : ( ) } keys %{$edt->{tables}};
@@ -4529,10 +4578,31 @@ sub deleted_keys {
     {
 	return $edt->{deleted_keys}{$table} ? @{$edt->{deleted_keys}{$table}} : wantarray ? ( ) : 0;
     }
-
+    
     else
     {
 	return map { $edt->{deleted_keys}{$_} ? @{$edt->{deleted_keys}{$_}} : ( ) } keys %{$edt->{tables}};
+    }
+}
+
+
+sub superior_keys {
+
+    my ($edt, $table) = @_;
+
+    if ( $table )
+    {
+	return $edt->{superior_keys}{$table} ? keys %{$edt->{superior_keys}{$table}} : wantarray ? ( ) : 0;
+    }
+    
+    elsif ( $edt->{superior_keys} )
+    {
+	return map { $edt->{superior_keys}{$_} ? keys %{$edt->{superior_keys}{$_}} : ( ) } keys %{$edt->{superior_keys}};
+    }
+    
+    else
+    {
+	return;
     }
 }
 
@@ -4545,7 +4615,7 @@ sub failed_keys {
     {
 	return $edt->{failed_keys}{$table} ? @{$edt->{failed_keys}{$table}} : ();
     }
-
+    
     else
     {
 	return map { $edt->{failed_keys}{$_} ? @{$edt->{failed_keys}{$_}} : () } keys %{$edt->{tables}};
@@ -4561,7 +4631,7 @@ sub key_labels {
     {
 	return $_[0]->{key_labels}{$table} if $table && $_[0]->{key_labels}{$table};
     }
-
+    
     else
     {
 	return $_[0]->{key_labels};
@@ -4797,7 +4867,7 @@ sub validate_against_schema {
 	my $is_default;
 	
 	# Skip the primary key for any operation except 'replace'. For 'replace' operations, we
-	# use the cleaned key value and pass on all checks.
+	# use the cleaned key value without checking it.
 	
 	if ( $col eq $keycol )
 	{
@@ -4805,12 +4875,19 @@ sub validate_against_schema {
 	    
 	    $value = $action->keyval;
 	    $special = 'pass';
-	}
 
-	# If the column name is not mentioned in the record but an alternate name is defined,
-	# then check that.
+	    my $alt = $cr->{ALTERNATE_NAME};
+	    
+	    if ( $alt && ! exists $record->{$col} )
+	    {
+		$record_col = $alt;
+	    }
+	}
 	
-	if ( $cr->{ALTERNATE_ONLY} || ! exists $record->{$col} )
+	# Otherwise, if the column name is not mentioned in the record but an alternate name is
+	# defined, then check that.
+	
+	elsif ( $cr->{ALTERNATE_ONLY} || ! exists $record->{$col} )
 	{
 	    my $alt = $cr->{ALTERNATE_NAME};
 	    
@@ -4819,9 +4896,8 @@ sub validate_against_schema {
 	    
 	    if ( $alt && exists $record->{$alt} && $action->get_special($alt) ne 'ignore' )
 	    {
-		$value = $record->{$alt};
 		$record_col = $alt;
-		$special = $action->get_special($alt);
+		$value = $record->{$alt};
 	    }
 	    
 	    else
@@ -5278,7 +5354,17 @@ sub validate_against_schema {
 		if ( ref $value && reftype $value ne 'SCALAR' )
 		{
 		    my $type = ref $value;
-		    croak "invalid value type '$type'";
+
+		    if ( $type eq 'PBDB::ExtIdent' )
+		    {
+			$edt->add_condition($action, 'E_EXTTYPE', $record_col,
+					    "no external identifier type was defined for this field");
+		    }
+
+		    else
+		    {
+			croak "invalid value type '$type' for col '$col'";
+		    }
 		}
 		
 		# Handle references to keys from other PBDB tables by checking them
@@ -5473,7 +5559,7 @@ sub validate_against_schema {
 	
 	# If we were directed not to validate this column, we still need to check whether it is
 	# mentioned in the record. If not, we skip it.
-
+	
 	elsif ( ! exists $record->{$record_col} )
 	{
 	    next;

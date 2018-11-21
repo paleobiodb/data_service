@@ -14,7 +14,7 @@ package PB2::TimescaleData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($TIMESCALE_DATA $TIMESCALE_INTS $TIMESCALE_BOUNDS);
+use TableDefs qw(%TABLE);
 
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
@@ -26,7 +26,7 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData);
 
-our ($INTERVAL_ATTRS_ABSOLUTE, $INTERVAL_ATTRS_RELATIVE);
+our ($INTERVAL_ATTRS, $INT_BOUND_ATTRS);
 
 # initialize ( )
 # 
@@ -39,33 +39,82 @@ sub initialize {
     
     # We start with the basic output blocks for timescales, intervals, and bounds.
     
+    $ds->define_set('1.2:timescales:bound_types' =>
+	{ value => 'absolute' },
+	    "A boundary whose age is specified absolutely, in Ma",
+	{ value => 'spike' },
+	    "An absolute boundary which is fixed by a GSSP",
+	{ value => 'same' },
+	    "A boundary whose age is defined to be the same as some other boundary. For",
+	    "example, the beginning of the Triassic is defined to be the same as",
+	    "the beginning of the Induan.",
+	{ value => 'fraction' },
+	    "A boundary whose age is specified as a fraction of the age span between",
+	    "two other boundaries.");
+    
     $ds->define_set('1.2:timescales:interval_types' =>
+	{ value => 'supereon' },
 	{ value => 'eon' },
 	{ value => 'era' },
 	{ value => 'period' },
+	{ value => 'superepoch' },
 	{ value => 'epoch' },
+	{ value => 'subepoch' },
 	{ value => 'stage' },
 	{ value => 'substage' },
 	{ value => 'zone' },
 	{ value => 'chron' },
-	{ value => 'multi' }, "used for timescales containing multiple interval types",
 	{ value => 'other' });
     
     $ds->define_block('1.2:timescales:basic' =>
-	{ select => [ 'ts.timescale_no', 'ts.timescale_name',
-		      'ts.timescale_extent', 'ts.timescale_taxon', 'ts.timescale_type',
-		      'ts.source_timescale_no', 'ts.max_age', 'ts.min_age',
-		      'ts.is_active', 'ts.authority_level', 'ts.reference_no' ],
-	  tables => 'ts' },
+	{ select => [ 'ts.timescale_no', 'ts.timescale_name', 'ts.max_age', 'ts.min_age',
+		      'ts.has_error', 'ts.is_active', 'ts.admin_lock', 'ts.priority', 'ts.reference_no' ] },
 	{ set => '*', code => \&process_ids },
+	{ set => '*', code => \&process_timescale_ages },
 	{ output => 'timescale_no', com_name => 'oid' },
 	    "The unique identifier of this timescale in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{TSC} },
 	    "The type of this object: C<$IDP{TSC}> for a timescale. This",
 	    "field will only appear if the object identifier is",
 	    "being returned as a number.",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with the record.",
 	{ output => 'timescale_name', com_name => 'nam' },
 	    "The name of this timescale",
+	{ output => 'min_age', com_name => 'lag', data_type => 'str' },
+	    "The late bound of this timescale, in Ma",
+	{ output => 'max_age', com_name => 'eag', data_type => 'str' },
+	    "The early bound of this timescale, in Ma",
+	{ output => 'has_error', com_name => 'err' },
+	    "True if the set of boundaries associated with this timescale is inconsistent.",
+	{ output => 'is_active', com_name => 'act' },
+	    "True if this timescale is active for general use, false otherwise.",
+	{ output => 'admin_lock', com_name => 'lck' },
+	    "True if the attributes and bounds of this timescale are locked.",
+	{ output => 'priority', com_name => 'pri' },
+	    "If non-zero, this represents the priority used when an interval",
+	    "appears in more than one timescale with different age bounds. The",
+	    "bounds defined by the timescale with the highest value for this",
+	    "attribute are considered to be definitive.",
+	{ output => 'reference_no', com_name => 'rid' },
+	    "The unique identifier of the main bibliographic reference for this",
+	    "timescale, if any.");
+    
+    $ds->define_output_map('1.2:timescales:optional_basic' =>
+	{ value => 'desc', maps_to => '1.2:timescales:desc' },
+	    "The geographic and taxonomic extent of this timescale, and the",
+	    "type of intervals it contains",
+	{ value => 'ent', maps_to => '1.2:common:ent' },
+	    "The identifier of the person who authorized this record",
+	{ value => 'entname', maps_to => '1.2:common:entname' },
+	    "The name of the person who authorized this record",
+        { value => 'crmod', maps_to => '1.2:common:crmod' },
+	    "The C<created> and C<modified> timestamps for the timescale record");
+
+    $ds->define_block('1.2:timescales:desc' =>
+	{ select => [ 'ts.timescale_extent', 'ts.timescale_taxon', 'ts.timescale_type', 'ts.timescale_comments' ],
+	  tables => 'ts' },
 	{ output => 'timescale_extent', com_name => 'ext' },
 	    "The geographic extent over which the timescale is valid.",
 	    "This will typically be 'global', but could also be the name",
@@ -77,36 +126,88 @@ sub initialize {
 	{ output => 'timescale_type', com_name => 'typ' },
 	    "The type of interval defined by this time scale, which will be one of the following:",
 	    $ds->document_set('1.2:timescales:interval_types'),
-	{ output => 'source_timescale_no', com_name => 'bid' },
-	    "Identifier of the timescale from which this one was derived, if any",
-	{ output => 'min_age', com_name => 'lag' },
-	    "The late bound of this timescale, in Ma",
-	{ output => 'max_age', com_name => 'eag' },
-	    "The early bound of this timescale, in Ma",
-	{ output => 'is_active', com_name => 'vsb' },
-	    "True if this timescale is active for general use, false otherwise.",
-	{ output => 'authority_level', com_name => 'ath' },
-	    "If non-zero, this represents the priority used when an interval",
-	    "appears in more than one timescale with different age bounds. The",
-	    "bounds defined by the timescale with the highest value for this",
-	    "attribute are considered to be definitive.",
-	{ output => 'reference_no', com_name => 'rid' },
-	    "The unique identifier of the main bibliographic reference for this",
-	    "timescale, if any.");
+	{ output => 'timescale_comments', com_name => 'tsc' },
+	    "Comments about this timescale, if any");
     
-    $ds->define_output_map('1.2:timescales:optional_basic' =>
-	{ value => 'ent', maps_to => '1.2:common:ent' },
-	    "The identifier of the person who authorized this record",
-	{ value => 'entname', maps_to => '1.2:common:entname' },
-	    "The name of the person who authorized this record",
-        { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the timescale record");
+    $ds->define_block('1.2:timescales:bound' =>
+	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.age', 'tsb.age_error', 'tsb.age_prec', 'tsb.age_error_prec',
+		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
+		      'tsb.fraction', 'tsb.fraction_error', 'tsb.fraction_prec', 'tsb.fraction_error_prec',
+		      'tsb.interval_name', 'tsb.base_no', 'tsb.top_no', 'tsb.range_no',
+		      'tsb.color_no', 'tsb.has_error', 'tsb.is_modeled', 'tsb.is_spike',
+		      'tsb.color', 'tsi.early_age as int_early' ],
+	  tables => ['tsb', 'ts', 'tsi'] },
+	{ set => '*', code => \&process_ids },
+	{ set => '*', code => \&process_bound_ages },
+	{ output => 'bound_no', com_name => 'oid' },
+	    "The unique identifier of this boundary in the database",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{BND} },
+	    "The type of this object: C<$IDP{BND}> for an interval boundary. This",
+	    "field will only appear if the object identifier is",
+	    "being returned as a number.",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with the record.",
+	{ output => 'timescale_no', com_name => 'sid' },
+	    "The identifier of the timescale which this bound partially defines.",
+	{ output => 'interval_name', com_name => 'inm' },
+	    "The name of the interval lying immediately above this boundary. If",
+	    "empty, then this boundary marks the top of one segment of this timescale.",
+	{ output => 'interval_type', com_name => 'itp', if_block => 'desc' },
+	    "The interval type. This will be one of the following:", $ds->document_set(''),
+	{ output => 'age', com_name => 'age', data_type => 'str' },
+	    "The age at which this boundary is fixed or calculated, in Ma",
+	{ output => 'age_error', com_name => 'ger', data_type => 'str' },
+	    "The uncertainty (+/-) if any associated with this age",
+	{ output => 'bound_type', com_name => 'btp' },
+	    "The boundary type, which will be one of the following:",
+		      $ds->document_set('1.2:timescales:bound_types'),
+	{ output => 'is_modeled', com_name => 'mdl' },
+	    "True if this boundary was modeled relative to the international",
+	    "chronostratigraphic intervals.",
+	{ output => 'is_spike', com_name => 'spk' },
+	    "True if this boundary is a GSSP.",
+	# { output => 'interval_no', com_name => 'iid' },
+	#     "If the interval name is not empty and this timescale is active,",
+	#     "then this field contains the identifier corresponding to this interval name.",
+	{ output => 'top_no', com_name => 'uid' },
+	    "The identifier of the top boundary of the interval lying immediately",
+	    "above this boundary.",
+	{ output => 'base_no', com_name => 'bid' },
+	    "If the boundary type is C<B<same> or C<B<fraction>>, this specifies",
+	    "the identifier of the base boundary with respect to which this boundary is",
+	    "being defined.",
+	{ output => 'range_no', com_name => 'tid' },
+	    "If the boundary type is C<B<fraction>>, this specifies",
+	    "the top boundary of the pair between which this boundary lies. The",
+	    "C<B<base_no>> field specifies the bottom boundary.",
+	{ output => 'color_no', com_name => 'cid' },
+	    "If this field is non-empty, it indicates a boundary in another",
+	    "timescale from which the color for this boundary is taken.",
+	{ output => 'fraction', com_name => 'frc', data_type => 'str' },
+	    "For boundaries of type 'fraction', the boundary lies this much",
+	    "of the way through the age span indicated by the base and range",
+	    "boundaries.",
+	{ output => 'fraction_error', com_name => 'fer', data_type => 'str' },
+	    "The uncertainty (+/-) if any associated with the fraction value",
+	{ output => 'has_error', com_name => 'err' },
+	    "True if this boundary is inconsistent with the other boundaries in",
+	    "its timescale, for example in overlapping with another boundary.",
+	{ output => 'is_different', com_name => 'dif' },
+	    "This field will contain a true value if the bound age is different from the",
+	    "bottom age of the corresponding interval in the active interval table.",
+	{ output => 'color', com_name => 'col' },
+	    "The standard color (if any) that should be assigned to the upper",
+	    "interval associated with this boundary.");
+
+    $ds->define_output_map('1.2:timescales:optional_bound' =>
+	{ value => 'desc' },
+	    "Additional descriptive attributes for this bound");
     
     $ds->define_block('1.2:timescales:interval' =>
-	{ select => [ 'tsi.interval_no', 'tsi.interval_name', 'tsi.abbrev',
-		      'INTERVAL_ATTRS' ],
-	  tables => 'tsi' },
+	{ select => [ 'INTERVAL_ATTRS' ] },
 	{ set => '*', code => \&process_ids },
+	{ set => '*', code => \&process_int_ages },
 	{ output => 'interval_no', com_name => 'oid' },
 	    "The unique identifier of this interval in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{INT} },
@@ -114,170 +215,97 @@ sub initialize {
 	    "field will only appear if the object identifier is",
 	    "being returned as a number.",
 	{ output => 'timescale_no', com_name => 'sid' },
-	    "The unique identifier of the timescale in which this interval is contained.",
+	    "The identifier of the timescale from which this interval definition is taken.",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of the interval",
+	{ output => 'interval_type', com_name => 'itp', if_block => 'type, desc' },
+	    "The type of interval, e.g. stage, epoch, zone",
 	{ output => 'abbrev', com_name => 'abr' },
 	    "The standard abbreviation for the interval, if any",
-	{ output => 'late_age', com_name => 'lag' },
+	{ output => 'late_age', com_name => 'lag', data_type => 'str' },
 	    "The late age bound for this interval, according to the",
 	    "most authoritative timescale in which it is contained",
-	{ output => 'early_age', com_name => 'eag' },
+	{ output => 'early_age', com_name => 'eag', data_type => 'str' },
 	    "The early age bound for this interval, according to the",
 	    "most authoritative timescale in which it is contained",
-	{ output => 'has_error', com_name => 'err' },
-	    "True if this boundary is inconsistent with the other boundaries in",
-	    "its timescale, for example in overlapping with another boundary.",
+	{ output => 'is_different', com_name => 'dif' },
+	    "This field will contain a true value if the early and/or late ages for this",
+	    "interval as expressed in the selected timescale are different from the ones",
+	    "specified for this interval in the active interval table.",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color for this interval, if any");
     
-    $ds->define_block('1.2:timescales:interval_desc' =>
-	{ select => [ 'ts.timescale_extent', 'tsb.interval_taxon', 'tsb.interval_type' ], tables => ['tsb', 'ts'] },
-	{ output => 'interval_extent', com_name => 'iex' },
-	    "The geographic extent of the timescale, if any",
-	{ output => 'interval_taxon', com_name => 'itx' },
-	    "The taxonomic group on which the timescale is based, if any (e.g. ammonite, mammal)",
-	{ output => 'interval_type', com_name => 'itp' },
-	    "The type of interval contained in the timescale, e.g. stage, epoch, zone");
-    
-    $ds->define_block('1.2:timescales:interval_scale' =>
-	{ select => [ 'ts.timescale_name' ], tables => 'ts' },
-	{ output => 'timescale_name', com_name => 'tsn' },
-	    "The name of the timescale in which this interval or bound is contained.");
-    
-    $INTERVAL_ATTRS_RELATIVE = "tsb.age as early_age, tsbu.age as late_age, tsb.color, " .
-	"tsb.has_error, tsb.timescale_no";
-    $INTERVAL_ATTRS_ABSOLUTE = "tsi.early_age, tsi.late_age, tsi.color";
+    $INTERVAL_ATTRS = "tsi.interval_name, tsi.interval_type, tsi.timescale_no, tsi.interval_no, 
+		tsi.abbrev, tsi.early_age, tsi.early_age_prec, tsi.late_age, tsi.late_age_prec, tsi.color";
+    $INT_BOUND_ATTRS = "tsb.interval_name, tsi.interval_no, tsi.abbrev, tsb.timescale_no, tsb.interval_type, 
+		tsb.age as early_age, tsb.age_prec as early_age_prec, btp.age as late_age, btp.age_prec as late_age_prec,
+		tsi.early_age as int_early, tsi.late_age as int_late, if(tsb.color <> '', tsb.color, tsi.color) as color";
     
     $ds->define_output_map('1.2:timescales:optional_interval' =>
+	{ value => 'type' },
+	    "The interval type",
 	{ value => 'desc', maps_to => '1.2:timescales:interval_desc' },
-	    "Descriptive attributes for this interval",
-	{ value => 'scale', maps_to => '1.2:timescales:interval_scale' },
-	    "Descriptive attributes for the timescale",
-	{ value => 'ent', maps_to => '1.2:common:ent' },
-	    "The identifier of the person who authorized this record",
-	{ value => 'entname', maps_to => '1.2:common:entname' },
-	    "The name of the person who authorized this record",
-        { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the timescale record");
+	    "Additional descriptive attributes for this interval");
     
-    $ds->define_set('1.2:timescales:bound_types' =>
-	{ value => 'absolute' },
-	    "A boundary which is specified absolutely, in Ma",
-	{ value => 'spike' },
-	    "An absolute boundary which is fixed by a GSSP",
-	{ value => 'same' },
-	    "A boundary which has the same value as some other base boundary. For",
-	    "example, the beginning of the Triassic is defined to be the same as",
-	    "the beginning of the Induan.",
-	{ value => 'percent' },
-	    "A boundary which is specified as a percentage of the span of some",
-	    "interval, or as a percentage of the span between two other boundaries.");
-    
-    $ds->define_block('1.2:timescales:bound' =>
-	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.age', 'tsb.age_error', 'tsb.age_prec', 'tsb.age_error_prec',
-		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
-		      'tsb.percent', 'tsb.percent_error', 'tsb.percent_prec', 'tsb.percent_error_prec',
-		      'tsb.interval_no', 'tsb.base_no', 'tsb.top_no', 'tsb.range_no', 'tsb.color_no', 'tsb.refsource_no',
-		      'tsb.has_error', 'tsb.is_modeled', 'tsb.is_spike',
-		      'tsb.color', 'tsb.reference_no', 'tsi.interval_name' ],
-	  tables => [ 'tsb', 'tsi' ] },
-	{ set => '*', code => \&process_ids },
-	{ set => '*', code => \&process_ages },
-	{ output => 'bound_no', com_name => 'oid' },
-	    "The unique identifier of this boundary in the database",
-	{ output => 'record_type', com_name => 'typ', value => $IDP{BND} },
-	    "The type of this object: C<$IDP{BND}> for an interval boundary. This",
-	    "field will only appear if the object identifier is",
-	    "being returned as a number.",
-	{ output => 'timescale_no', com_name => 'sid' },
-	    "The identifier of the timescale containing this bound",
-	{ output => 'age', com_name => 'age', data_type => 'str' },
-	    "The age at which this boundary is fixed or calculated, in Ma",
-	{ output => 'age_error', com_name => 'ger', data_type => 'str' },
-	    "The error (+/-) associated with the age",
-	{ output => 'bound_type', com_name => 'btp' },
-	    "The boundary type, which will be one of the following:",
-		      $ds->document_set('1.2:timescales:bound_types'),
-	{ output => 'interval_no', com_name => 'iid' },
-	    "The identifier of the upper interval bounded by this boundary.",
-	    "If this field is empty, then the boundary lies at the top of",
-	    "its timescale, or else there is a gap above it.",
-	{ output => 'interval_name', com_name => 'inm' },
-	    "The name of the upper interval bounded by this boundary.",
-	{ output => 'interval_type', com_name => 'typ' },
-	    "The type of the upper interval, if any",
-	# { output => 'lower_name', com_name => 'lnm' },
-	#     "The name of the lower interval bounded by this boundary.",
-	{ output => 'top_no', com_name => 'uid' },
-	    "The identifier of the top boundary of the interval corresponding to this one.",
-	{ output => 'base_no', com_name => 'bid' },
-	    "If the boundary type is 'same', 'percent', or 'alias', this field specifies",
-	    "the identifier of the base boundary with respect to which",
-	    "this boundary is defined.",
-	{ output => 'range_no', com_name => 'tid' },
-	    "If the boundary type is 'percent', and this field is not empty, it specifies",
-	    "the top boundary of the pair between which this boundary lies.",
-	{ output => 'percent', com_name => 'pct', data_type => 'str' },
-	    "For boundaries of type 'percent', the boundary lies this percent",
-	    "of the way through the span indicated by the base and range",
-	    "boundaries.",
-	{ output => 'percent_error', com_name => 'oer', data_type => 'str' },
-	    "The error (+/-) associated with the percent value",
-	{ output => 'has_error', com_name => 'err' },
-	    "True if this boundary is inconsistent with the other boundaries in",
-	    "its timescale, for example in overlapping with another boundary.",
-	{ output => 'is_modeled', com_name => 'mdl' },
-	    "True if this boundary was modeled relative to the international",
-	    "chronostratigraphic intervals.",
-	{ output => 'is_spike', com_name => 'spk' },
-	    "True if this boundary is a GSSP.",
-	{ output => 'color', com_name => 'col' },
-	    "The standard color (if any) that should be assigned to the upper",
-	    "interval associated with this boundary.",
-	{ output => 'reference_no', com_name => 'rid' },
-	    "The identifier of the bibliographic reference for this",
-	    "boundary, if any. If this field is empty, the reference",
-	    "should be taken to be the main reference for the timescale",
-	    "in which this boundary is contained.");
-    
-	# { output => 'color_no', com_name => 'cid' },
-	#     "If this field is not empty, it specifies the identifier of a boundary",
-	#     "from which the color for this boundary is taken. Note that this might",
-	#     "be different than the base boundary.",
-	# { output => 'refsource_no', com_name => 'fid' },
-	#     "If this field is not empty, it specifies the identifier of a boundary",
-	#     "from which the reference identifier for this boundary is taken.",
-	#     "Note that this might be different than the base boundary.",
+    $ds->define_block('1.2:timescales:interval_desc' =>
+	{ select => [ 'ts.timescale_name', 'ts.timescale_extent', 'ts.timescale_taxon', 'tsb.interval_type' ],
+	  tables => ['tsb', 'ts'] },
+	{ output => 'timescale_name', com_name => 'tsn' },
+	    "The name of the timescale in which this interval is defined.",
+	{ output => 'timescale_extent', com_name => 'ext' },
+	    "The geographic extent of the timescale in which this interval is defined, if any",
+	{ output => 'timescale_taxon', com_name => 'txn' },
+	    "The taxonomic group associated with the timescale in which this interval is defined,",
+	    "if any (e.g. ammonite, condont, mammal)");
 
-    $ds->define_output_map('1.2:timescales:optional_bound' =>
-	{ value => 'ent', maps_to => '1.2:common:ent' },
-	    "The identifiers of the people who authorized, entered, and modified this record",
-	{ value => 'entname', maps_to => '1.2:common:entname' },
-	    "The names of the people who authorized, entered, and modified this record",
-        { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the boundary record");
+    # Now define ruleset building blocks that are used in defining the operation rulesets.
     
     $ds->define_ruleset('1.2:timescales:specifier' =>
 	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), alias => 'id' },
 	    "The unique identifier of the timescale you wish to retrieve (REQIRED).",
 	    "You may instead use the parameter name B<C<id>>.");
     
-    $ds->define_ruleset('1.2:timescales:int_specifier' =>
-	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), alias => 'id' },
-	    "The unique identifier of the interval you wish to retrieve (REQIRED).",
-	    "You may instead use the parameter name B<C<id>>.",
-	{ optional => 'timescale_id', valid => VALID_IDENTIFIER('TSC') },
-	    "The unique identifier of a timescale in which this interval is",
-	    "mentioned. The reported interval attributes, including age bounds, will be taken from",
-	    "the specified timescale.");
+    # $ds->define_ruleset('1.2:timescales:bound_specifier' =>
+    # 	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), alias => 'id' },
+    # 	    "The unique identifier of the bound you wish to retrieve (REQIRED).",
+    # 	    "You may instead use the parameter name B<C<id>>.");
     
-    $ds->define_ruleset('1.2:timescales:bound_specifier' =>
-	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), alias => 'id' },
-	    "The unique identifier of the bound you wish to retrieve (REQIRED).",
-	    "You may instead use the parameter name B<C<id>>.");
+    $ds->define_ruleset('1.2:timescales:ts_selector' =>
+	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',', alias => 'id' },
+	    "Return only the specified timescales. You may provide one or more",
+	    "timescale identifiers, separated by commas.",
+	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',' },
+	    "Return only timescales containing the specified bounds. You may provide one or more",
+	    "bound identifiers, separated by commas.",
+	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',' },
+	    "Return only timescales containing the specified intervals. You may provide one or more",
+	    "interval identifiers, separated by commas.");
+    
+    $ds->define_ruleset('1.2:timescales:tsb_selector' =>
+	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',', alias => 'id' },
+	    "Return only the specified bounds. You may provide one or more",
+	    "bound identifiers, separated by commas.",
+	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',' },
+	    "Return only bounds contained in the specified timescales. You may provide one or more",
+	    "timescale identifiers, separated by commas.",
+	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',' },
+	    "Return only bounds corresponding to the specified intervals. You may provide one or more",
+	    "interval identifiers, separated by commas.");
+    
+    $ds->define_ruleset('1.2:timescales:tsi_selector' =>
+	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'id' },
+	    "Return only the specified intervals. You may provide one or more",
+	    "interval identifiers, separated by commas.",
+	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',' },
+	    "Return only intervals corresponding to the specified bounds. You may provide one or more",
+	    "bound identifiers, separated by commas.",
+	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',' },
+	    "Return only intervals contained in the specified timescales. You may provide one or more",
+	    "timescale identifiers, separated by commas.");
     
     $ds->define_ruleset('1.2:timescales:common_selector' =>
+	{ optional => 'active', valid => FLAG_VALUE },
+	    "If specified, return only records associated with active timescales.",
 	{ param => 'type', valid => '1.2:timescales:interval_types', list => ',', bad_value => '_' },
 	    "Return only timescales, intervals, or bounds of the specified type(s).",
 	    "Accepted values include:",
@@ -294,10 +322,6 @@ sub initialize {
 	    "or intervals or bounds contained within them.",
 	    "You may specify more than one value separated by commas,",
 	    "and you may use the wildcards C<%> and C<_>.",
-	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',' },
-	    "Return only timescales with the specified identifier(s), or intervals",
-	    "or bounds contained within them. You may specify more",
-	    "than one value, separated by commas.",
 	{ param => 'interval_name', valid => ANY_VALUE, list => ',' },
 	    "Return only intervals whose name one of the specified string(s),
 	     or timescales or bounds that contain or refer to them.",
@@ -306,18 +330,24 @@ sub initialize {
 	    "or timescales or bounds that contain or refer to them.",
 	    "You may specify more than one value separated by commas,",
 	    "and you may use the wildcards C<%> and C<_>.",
-	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), list => ',' },
-	    "Return only intervals with the specified identifier(s), or timescales",
-	    "or bounds that contain or refer to them. You may specify more",
-	    "than one value, separated by commas.",
-	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',' },
-	    "Return only bounds with the specified identifier(s), or timescales",
-	    "or intervals that contain or refer to them. You may specify more",
-	    "than one value, separated by commas.",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
 	    "Return only timescales, intervals, or bounds whose lower bound is at most this old.",
 	{ param => 'min_ma', valid => DECI_VALUE(0) },
 	    "Return only timescales, intervals, or bounds whose upper bound is at least this old.");
+    
+    $ds->define_ruleset('1.2:timescales:tsi_specifier' =>
+	{ param => 'interval_id', valid => VALID_IDENTIFIER('INT'), alias => 'id' },
+	    "The identifier of the interval you wish to retrieve.",
+	    "You may instead use the parameter name B<C<id>>.",
+	{ param => 'interval_name', valid => ANY_VALUE, alias => 'name' },
+	    "The name of the interval you wish to retrieve. You may specify either this",
+	    "parameter or B<C<interval_id>>, but not both.",
+	{ at_most_one => ['interval_id', 'interval_name'] });
+	# { optional => 'timescale_id', valid => VALID_IDENTIFIER('TSC') },
+	#     "You may optinally specify the identifier of a timescale in which this interval is",
+	#     "defined. The reported interval attributes, including age bounds, will be taken from",
+	#     "the specified timescale, even if they are otherwise superseded by the definition",
+	#     "of this interval in some other timescale with higher priority.");
     
     $ds->define_ruleset('1.2:timescales:all_records' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
@@ -325,53 +355,69 @@ sub initialize {
 	    "subject to any other parameters you may specify.",
 	    "This parameter does not require any value.");
     
+    # Now define rulesets for the operations defined in this module.
+    
     $ds->define_ruleset('1.2:timescales:single' =>
 	{ require => '1.2:timescales:specifier' },
     	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_basic' },
 	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special>  with this request");
+	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:timescales:list' =>
 	{ allow => '1.2:timescales:all_records' },
+	{ allow => '1.2:timescales:ts_selector' },
 	{ allow => '1.2:timescales:common_selector' },
-	{ require_one => ['1.2:timescales:all_records', '1.2:timescales:common_selector'] },
+	{ require_one => ['1.2:timescales:all_records', '1.2:timescales:ts_selector',
+			  '1.2:timescales:common_selector'] },
 	{ allow => '1.2:common:select_crmod' },
     	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_basic' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $ds->define_ruleset('1.2:intervals2:single' =>
-	{ require => '1.2:timescales:int_specifier' },
-    	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_interval' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special>  with this request");
-
-    $ds->define_ruleset('1.2:intervals2:list' =>
-	{ allow => '1.2:timescales:all_records' },
-	{ optional => 'absolute', valid => 'FLAG_VALUE' },
-	    "Return the age bounds for each interval computed from the highest priority",
-	    "timescale.",
-	{ allow => '1.2:timescales:common_selector' },
-	{ require_one => ['1.2:timescales:all_records', '1.2:timescales:common_selector'] },
-	{ allow => '1.2:common:select_crmod' },
-    	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_interval' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special>  with this request");
+    # $ds->define_ruleset('1.2:bounds:single' =>
+    # 	{ require => '1.2:timescales:bound_specifier' },
+    # 	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_bound' },
+    # 	{ allow => '1.2:special_params' },
+    # 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    $ds->define_ruleset('1.2:bounds:single' =>
-	{ require => '1.2:timescales:bound_specifier' },
-    	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_bound' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special>  with this request");
-    
-    $ds->define_ruleset('1.2:bounds:list' =>
+    $ds->define_ruleset('1.2:timescales:bounds' =>
 	{ allow => '1.2:timescales:all_records' },
+	{ allow => '1.2:timescales:tsb_selector' },
 	{ allow => '1.2:timescales:common_selector' },
-	{ require_one => ['1.2:timescales:all_records', '1.2:timescales:common_selector'] },
+	{ require_one => ['1.2:timescales:all_records', '1.2:timescales:tsb_selector',
+			  '1.2:timescales:common_selector'] },
 	{ allow => '1.2:common:select_crmod' },
     	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_bound' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
+    
+    $ds->define_ruleset('1.2:timescales:intervals' =>
+	{ allow => '1.2:timescales:all_records' },
+	{ allow => '1.2:timescales:tsi_selector' },
+	{ allow => '1.2:timescales:common_selector' },
+	{ require_one => ['1.2:timescales:all_records', '1.2:timescales:tsi_selector',
+			  '1.2:timescales:common_selector'] },
+	{ allow => '1.2:common:select_crmod' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_bound' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special>  with this request");
+    
+    $ds->define_ruleset('1.2:tsi:single' =>
+	{ require => '1.2:timescales:tsi_specifier' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_interval' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:tsi:list' =>
+	{ allow => '1.2:timescales:all_records' },
+	{ allow => '1.2:timescales:tsi_selector' },
+	{ allow => '1.2:timescales:common_selector' },
+	{ require_one => ['1.2:timescales:all_records', '1.2:timescales:tsi_selector',
+			  '1.2:timescales:common_selector'] },
+	{ allow => '1.2:common:select_crmod' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:timescales:optional_interval' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
     
 }
 
@@ -392,34 +438,32 @@ sub get_record {
     
     # Make sure we have a valid id number.
     
-    my ($id, $timescale_id, $mt);
+    my ($id, $name, $timescale_id, $mt);
     
     if ( $type eq 'timescales' )
     {
 	$id = $request->clean_param('timescale_id');
-	$mt = 'ts';
-    }
-    
-    elsif ( $type eq 'intervals' )
-    {
-	$id = $request->clean_param('interval_id');
-	$mt = 'tsi';
-	
-	$timescale_id = $request->clean_param('timescale_id');
     }
     
     elsif ( $type eq 'bounds' )
     {
 	$id = $request->clean_param('bound_id');
-	$mt = 'tsb';
     }
     
-    die "400 Bad identifier '$id'\n" unless $id and $id =~ /^\d+$/;
+    elsif ( $type eq 'intervals' || $type eq 'tsi' )
+    {
+	$id = $request->clean_param('interval_id');
+	$name = $request->clean_param('interval_name');
+	$timescale_id = $request->clean_param('timescale_id');
+    }
+
+    $id ||= '';
+    die "400 Bad identifier '$id'\n" unless ($id and $id =~ /^\d+$/) or $name;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $request->substitute_select( mt => $mt, cd => ($mt eq 'tsi' ? 'tsb' : $mt) );
+    $request->substitute_select( mt => 'ts', cd => 'ts' );
     
     my @fields = $request->select_list;
     
@@ -431,52 +475,64 @@ sub get_record {
     $request->strict_check;
     $request->extid_check;
     
-    # Determine the necessary joins.
-    
-    my ($join_list) = $request->generate_join_list($mt, $request->tables_hash);
+    $request->delete_output_field('_label');
     
     # Generate the main query. We will already have thrown an error above if $type is not one of
     # the following values.
     
     if ( $type eq 'timescales' )
     {
+	my $join_list = $request->generate_join_list('ts', $tables);
+	
 	$request->{main_sql} = "
 	SELECT $fields
-	FROM $TIMESCALE_DATA as ts $join_list
+	FROM $TABLE{TIMESCALE_DATA} as ts
         WHERE ts.timescale_no = $id
 	GROUP BY ts.timescale_no";
     }
     
     elsif ( $type eq 'bounds' )
     {
+	my $join_list = $request->generate_join_list('tsb', $tables);
+	
 	$request->{main_sql} = "
 	SELECT $fields
-	FROM $TIMESCALE_BOUNDS as tsb $join_list
+	FROM $TABLE{TIMESCALE_BOUNDS} as tsb $join_list
         WHERE tsb.bound_no = $id
 	GROUP BY tsb.bound_no";
     }
     
     elsif ( $type eq 'intervals' && $timescale_id )
     {
-	$fields =~ s/INTERVAL_ATTRS/$INTERVAL_ATTRS_RELATIVE/;
+	$fields =~ s/INTERVAL_ATTRS/$INT_BOUND_ATTRS/;
+
+	my $filter = $name ? "tsb.interval_name = " . $dbh->quote($name)
+			   : "tsi.interval_no = $id";
+
+	my $join_list = $request->generate_join_list('tsb', $tables);
 	
 	$request->{main_sql} = "
 	SELECT $fields
-	FROM $TIMESCALE_INTS as tsi
-	    join $TIMESCALE_BOUNDS as tsb on (tsb.interval_no = tsi.interval_no)
-	    left join $TIMESCALE_BOUNDS as tsbu on (tsbu.lower_no = tsi.interval_no and tsbu.timescale_no = tsb.timescale_no)
-	WHERE tsi.interval_no = $id and tsb.timescale_no = $timescale_id
-	GROUP BY tsi.interval_no, tsb.timescale_no";
+	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
+		left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name)
+		left join $TABLE{TIMESCALE_BOUNDS} as btp on btp.bound_no = tsb.top_no $join_list
+	WHERE $filter and tsb.timescale_no = $timescale_id and tsb.interval_name <> ''
+	GROUP BY tsb.interval_name, tsb.timescale_no";
     }
     
-    elsif ( $type eq 'intervals' )
+    elsif ( $type eq 'tsi' || $type eq 'intervals' )
     {
-	$fields =~ s/INTERVAL_ATTRS/$INTERVAL_ATTRS_ABSOLUTE/;
+	$fields =~ s/INTERVAL_ATTRS/$INTERVAL_ATTRS/;
+	
+	my $join_list = $request->generate_join_list('tsi', $tables);
+	
+	my $filter = $name ? "tsi.interval_name = " . $dbh->quote($name)
+			   : "tsi.interval_no = $id";
 	
 	$request->{main_sql} = "
 	SELECT $fields
-	FROM $TIMESCALE_INTS as tsi $join_list
-        WHERE tsi.interval_no = $id
+	FROM $TABLE{TIMESCALE_INTS} as tsi $join_list
+        WHERE $filter
 	GROUP BY tsi.interval_no";
     }
     
@@ -515,39 +571,42 @@ sub list_records {
     if ( $type eq 'timescales' )
     {
 	$mt = 'ts';
-	$index = 'ts.timescale_no';
-    }
-    
-    elsif ( $type eq 'intervals' )
-    {
-	$mt = 'tsi';
-	$index = 'tsi.interval_no';
     }
     
     elsif ( $type eq 'bounds' )
     {
 	$mt = 'tsb';
-	$index = 'tsb.bound_no';
+    }
+
+    elsif ( $type eq 'intervals' )
+    {
+	$mt = 'tsb';
+	$tables->{btp} = 1;
+	$tables->{tsi} = 1;
+    }
+    
+    elsif ( $type eq 'tsi' )
+    {
+	$mt = 'tsi';
     }
     
     die "unknown record type '$type'\n" unless $mt;
     
-    $request->substitute_select( mt => $mt, cd => ($mt eq 'tsi' ? 'tsb' : $mt) );
+    $request->substitute_select( mt => $mt, cd => $mt );
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my @filters = $request->generate_timescale_filters($mt, $type, $tables);
-    push @filters, $request->generate_common_filters( { bare => $mt } );
+    push @filters, $request->generate_common_filters( { bare => 'ts' } );
     
-    # If we are querying for intervals, figure out if we are doing so absolutely or relative to
-    # the timescales in which they are contained.
+    # # If we are querying for intervals, figure out if we are doing so absolutely or relative to
+    # # the timescales in which they are contained.
     
-    if ( $type eq 'intervals' && ! $request->clean_param('absolute') )
-    {
-	$tables->{tsb} = 1;
-	$relative = 1;
-    }
+    # if ( $type eq 'intervals' && ! $request->clean_param('absolute') )
+    # {
+    # 	$tables->{tsb} = 1;
+    # }
     
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.
@@ -565,6 +624,8 @@ sub list_records {
     
     $request->strict_check;
     $request->extid_check;
+    
+    $request->delete_output_field('_label');
     
     my $filter_string = join(' and ', @filters);
     
@@ -594,50 +655,50 @@ sub list_records {
     
     if ( $type eq 'timescales' )
     {
-	$order_expr ||= 'order by ts.min_age';
+	$order_expr ||= 'order by ts.timescale_no';
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $TIMESCALE_DATA as ts $join_list
+	FROM $TABLE{TIMESCALE_DATA} as ts $join_list
         WHERE $filter_string
-	GROUP BY $index $order_expr";
+	GROUP BY ts.timescale_no $order_expr";
     }
     
     elsif ( $type eq 'bounds' )
     {
-	$order_expr ||= 'order by tsb.age';
+	$order_expr ||= 'order by tsb.timescale_no, tsb.age';
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $TIMESCALE_BOUNDS as tsb $join_list
+	FROM $TABLE{TIMESCALE_BOUNDS} as tsb $join_list
         WHERE $filter_string
-	GROUP BY $index $order_expr";
-    }
-    
-    elsif ( $type eq 'intervals' && $relative )
-    {
-	$order_expr ||= 'order by early_age';
-	
-	$fields =~ s/INTERVAL_ATTRS/$INTERVAL_ATTRS_RELATIVE/;
-	
-	$request->{main_sql} = "
-	SELECT $calc $fields
-	FROM $TIMESCALE_INTS as tsi $join_list
-	WHERE $filter_string
-	GROUP BY tsi.interval_no, tsb.timescale_no $order_expr";
+	GROUP BY tsb.bound_no $order_expr";
     }
     
     elsif ( $type eq 'intervals' )
     {
-	$order_expr ||= 'order by early_age';
+	$order_expr ||= 'order by tsb.age';
 	
-	$fields =~ s/INTERVAL_ATTRS/$INTERVAL_ATTRS_ABSOLUTE/;
+	$fields =~ s/INTERVAL_ATTRS/$INT_BOUND_ATTRS/;
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $TIMESCALE_INTS as tsi $join_list
+	FROM $TABLE{TIMESCALE_BOUNDS} as tsb $join_list
+	WHERE $filter_string and tsb.interval_name <> ''
+	GROUP BY tsb.interval_name, tsb.timescale_no $order_expr";
+    }
+    
+    elsif ( $type eq 'tsi' )
+    {
+	$order_expr ||= 'order by early_age';
+	
+	$fields =~ s/INTERVAL_ATTRS/$INTERVAL_ATTRS/;
+	
+	$request->{main_sql} = "
+	SELECT $calc $fields
+	FROM $TABLE{TIMESCALE_INTS} as tsi $join_list
         WHERE $filter_string
-	GROUP BY $index $order_expr";
+	GROUP BY tsi.interval_name $order_expr";
     }
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
@@ -663,65 +724,72 @@ sub generate_timescale_filters {
     
     if ( my @timescale_nos = $request->safe_param_list('timescale_id') )
     {
-	my $id_list = $request->check_values($dbh, \@timescale_nos, 'timescale_no', $TIMESCALE_DATA, 
+	my $id_list = $request->check_values($dbh, \@timescale_nos, 'timescale_no', $TABLE{TIMESCALE_DATA}, 
 					     "Unknown timescale 'tsc:%'");
 	
 	$request->add_warning("no valid timescale identifiers were given") if $id_list eq '-1';
+
+	push @filters, "$mt.timescale_no in ($id_list)";
 	
-	if ( $type eq 'timescales' )
-	{
-	    push @filters, "ts.timescale_no in ($id_list)";
-	}
+	# if ( $type eq 'timescales' )
+	# {
+	#     push @filters, "ts.timescale_no in ($id_list)";
+	# }
 	
-	else
-	{
-	    push @filters, "tsb.timescale_no in ($id_list)";
-	    $tables->{tsb} = 1;
-	}
+	# else
+	# {
+	#     push @filters, "tsb.timescale_no in ($id_list)";
+	#     $tables->{tsb} = 1;
+	# }
     }
     
     if ( my @bound_nos = $request->clean_param_list('bound_id') )
     {
-	my $id_list = $request->check_values($dbh, \@bound_nos, 'bound_no', $TIMESCALE_BOUNDS, 
+	my $id_list = $request->check_values($dbh, \@bound_nos, 'bound_no', $TABLE{TIMESCALE_BOUNDS}, 
 					     "Unknown timescale bound 'bnd:%'");
 	
 	$request->add_warning("no valid bound identifiers were given") if $id_list eq '-1';
-	push @filters, "tsb.bound_no in ($id_list)";
 	
+	push @filters, "tsb.bound_no in ($id_list)";
 	$tables->{tsb} = 1;
     }
     
     if ( my @interval_nos = $request->clean_param_list('interval_id') )
     {
-	my $id_list = $request->check_values($dbh, \@interval_nos, 'interval_no', $TIMESCALE_INTS, 
+	my $id_list = $request->check_values($dbh, \@interval_nos, 'interval_no', $TABLE{TIMESCALE_INTS}, 
 					     "Unknown timescale interval 'int:%'");
 	
 	$request->add_warning("no valid interval identifiers were given") if $id_list eq '-1';
 	
-	if ( $type eq 'intervals' )
-	{
-	    push @filters, "tsi.interval_no in ($id_list)";
-	}
+	push @filters, "tsi.interval_no in ($id_list)";
+	$tables->{tsi} = 1;
 	
-	else
-	{	
-	    push @filters, "tsb.interval_no in ($id_list)";
-	    $tables->{tsb} = 1;
-	}
+	# if ( $type eq 'intervals' )
+	# {
+	#     push @filters, "tsi.interval_no in ($id_list)";
+	# }
+	
+	# else
+	# {	
+	#     push @filters, "tsb.interval_no in ($id_list)";
+	#     $tables->{tsb} = 1;
+	# }
     }
     
     # Check for name matches
     
     if ( my @names = $request->clean_param_list('interval_name') )
     {
-	push @filters, $request->generate_match_like($dbh, 'tsi.interval_name', \@names);
-	$tables->{tsi} = 1;
+	my $tbl = $type eq 'tsi' ? 'tsi' : 'tsb';
+	push @filters, $request->generate_match_like($dbh, "$tbl.interval_name", \@names);
+	$tables->{$tbl} = 1;
     }
     
     if ( my @names = $request->clean_param_list('interval_match') )
     {
-	push @filters, $request->generate_match_regex($dbh, 'tsi.interval_name', \@names);
-	$tables->{tsi} = 1;
+	my $tbl = $type eq 'tsi' ? 'tsi' : 'tsb';
+	push @filters, $request->generate_match_regex($dbh, "$tbl.interval_name", \@names);
+	$tables->{$tbl} = 1;
     }
     
     if ( my @names = $request->clean_param_list('timescale_match') )
@@ -739,10 +807,15 @@ sub generate_timescale_filters {
 	    push @filters, "ts.max_age <= $max_ma";
 	}
 	
-	else
+	elsif ( $type eq 'bounds' )
 	{
 	    push @filters, "tsb.age <= $max_ma";
 	    $tables->{tsb} = 1;
+	}
+
+	else
+	{
+	    push @filters, "tsi.early_age <= $max_ma";
 	}
     }
     
@@ -753,16 +826,15 @@ sub generate_timescale_filters {
 	    push @filters, "ts.min_age >= $min_ma";
 	}
 	
-	elsif ( $type eq 'intervals' )
+	elsif ( $type eq 'bounds' )
 	{
-	    push @filters, "tsbu.age >= $min_ma";
-	    $tables->{tsbu} = 1;
+	    push @filters, "btp.age >= $min_ma";
+	    $tables->{btp} = 1;
 	}
 	
 	else
 	{
-	    push @filters, "tsb.age >= $min_ma";
-	    $tables->{tsb} = 1;
+	    push @filters, "tsi.late_age >= $min_ma";
 	}
     }
     
@@ -779,8 +851,7 @@ sub generate_timescale_filters {
 	
 	else
 	{
-	    $field = "tsb.interval_type";
-	    $tables->{tsb} = 1;
+	    $field = "$mt.interval_type";
 	}
 	
 	# foreach my $t ( @types )
@@ -793,43 +864,19 @@ sub generate_timescale_filters {
     
     if ( my @names = $request->clean_param_list('taxon') )
     {
-	my $field;
-	
-	if ( $type eq 'timescales' )
-	{
-	    $field = "ts.timescale_taxon";
-	}
-	
-	else
-	{
-	    $field = "tsb.interval_taxon";
-	    $tables->{tsb} = 1;
-	}
-	
-	push @filters, $request->generate_match_list($dbh, $field, \@names);
+	push @filters, $request->generate_match_list($dbh, "ts.timescale_taxon", \@names);
+	$tables->{ts} = 1;
     }
     
     if ( my @extents = $request->clean_param_list('extent') )
     {
-	my $field;
-	
-	if ( $type eq 'timescales' )
-	{
-	    $field = "ts.timescale_extent";
-	}
-	
-	else
-	{
-	    $field = "tsb.interval_extent";
-	    $tables->{tsb} = 1;
-	}
-	
 	foreach my $e ( @extents )
 	{
 	    $e = 'global|international' if $e eq 'global';
 	}
 	
-	push @filters, $request->generate_match_regex($dbh, $field, \@extents);
+	push @filters, $request->generate_match_regex($dbh, "ts.timescale_extent", \@extents);
+	$tables->{ts} = 1;
     }
     
     return @filters;
@@ -844,29 +891,28 @@ sub generate_join_list {
     
     if ( $mt eq 'ts' )
     {
-	$joins .= "\tjoin $TIMESCALE_BOUNDS as tsb using (timescale_no)\n"
-	    if $tables->{tsb} || $tables->{tsi};
-	$joins .= "\tjoin $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n"
+	$joins .= "\tleft join $TABLE{TIMESCALE_BOUNDS} as tsb on tsb.timescale_no = ts.timescale_no\n"
+	    if $tables->{tsi} || $tables->{tsb};
+	$joins .= "\tleft join $TABLE{TIMESCALE_INTS} as tsi on tsi.interval_name = tsb.interval_name\n"
 	    if $tables->{tsi};
     }
     
     elsif ( $mt eq 'tsb' )
     {
-	$joins .= "\tjoin $TIMESCALE_DATA as ts using (timescale_no)\n";
-	$joins .= "\tleft join $TIMESCALE_INTS as tsi on tsi.interval_no = tsb.interval_no\n";
-	# $joins .= "\tleft join $TIMESCALE_INTS as tsil on tsil.interval_no = tsb.lower_no\n"
-	#     if $tables->{tsil};
-	$joins .= "\tleft join $TIMESCALE_BOUNDS as tsbb on tsbb.bound_no = tsb.base_no\n";
+	$joins .= "\tjoin $TABLE{TIMESCALE_DATA} as ts on ts.timescale_no = $mt.timescale_no\n"
+	    if $tables->{ts};
+	$joins .= "\tleft join $TABLE{TIMESCALE_BOUNDS} as btp on btp.bound_no = tsb.top_no\n"
+	    if $tables->{btp};
+	$joins .= "\tleft join $TABLE{TIMESCALE_INTS} as tsi on tsi.interval_name = $mt.interval_name\n"
+	    if $tables->{tsi};
     }
     
     elsif ( $mt eq 'tsi' )
     {
-	$joins .= "\tjoin $TIMESCALE_BOUNDS as tsb on tsb.interval_no = tsi.interval_no\n"
-	    if $tables->{tsb} || $tables->{ts};
-	$joins .= "\tjoin $TIMESCALE_DATA as ts using (timescale_no)\n"
+	$joins .= "\tjoin $TABLE{TIMESCALE_DATA} as ts on ts.timescale_no = $mt.timescale_no\n"
 	    if $tables->{ts};
-	# $joins .= "\tleft join $TIMESCALE_BOUNDS as tsbu on tsbu.lower_no = tsi.interval_no and tsbu.timescale_no = tsb.timescale_no\n"
-	#     if $tables->{tsb};
+	$joins .= "\tjoin $TABLE{TIMESCALE_BOUNDS} as tsb on tsb.interval_name = $mt.interval_name and tsb.timescale_no = $mt.timescale_no\n"
+	    if $tables->{tsb};
     }
     
     return $joins;
@@ -878,13 +924,6 @@ sub process_ids {
     my ($request, $record) = @_;
     
     return unless $request->{block_hash}{extids};
-    
-    # my $make_ids = $request->clean_param('extids');
-    # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
-    
-    # return unless $make_ids;
-        
-    # $request->delete_output_field('record_type');
     
     foreach my $k ( qw(timescale_no source_timescale_no base_timescale_no) )
     {
@@ -898,7 +937,7 @@ sub process_ids {
 	    if defined $record->{$k} && $record->{$k} ne '';
     }
     
-    foreach my $k ( qw(bound_no base_no range_no color_no) )
+    foreach my $k ( qw(bound_no base_no top_no range_no color_no refsource_no) )
     {
 	$record->{$k} = generate_identifier('BND', $record->{$k})
 	    if defined $record->{$k} && $record->{$k} ne '';
@@ -910,26 +949,59 @@ sub process_ids {
 	    if defined $record->{$k} && $record->{$k} ne '';
     }
     
-    # foreach my $k ( qw(authorizer_no enterer_no modifier_no) )
-    # {
-    # 	$record->{$k} = generate_identifier('PRS', $record->{$k})
-    # 	    if defined $record->{$k} && $record->{$k} ne '';
-    # }
+    foreach my $k ( qw(authorizer_no enterer_no modifier_no) )
+    {
+    	$record->{$k} = generate_identifier('PRS', $record->{$k})
+    	    if defined $record->{$k} && $record->{$k} ne '';
+    }
 }
 
 
-sub process_ages {
+sub process_timescale_ages {
+    
+    my ($request, $record) = @_;
+    
+    $record->{min_age} = precise_value($record->{min_age}, $record->{min_age_prec});
+    $record->{max_age} = precise_value($record->{max_age}, $record->{max_age_prec});
+
+    delete $record->{is_active} unless $record->{is_active};
+    delete $record->{has_error} unless $record->{has_error};
+    delete $record->{admin_lock} unless $record->{admin_lock};
+}
+
+
+sub process_bound_ages {
     
     my ($request, $record) = @_;
 
+    if ( (defined $record->{int_early} && defined $record->{age} && $record->{int_early} ne $record->{age}) )
+    {
+	$record->{is_different} = 1;
+    }
+    
     $record->{age} = precise_value($record->{age}, $record->{age_prec});
     $record->{age_error} = precise_value($record->{age_error}, $record->{age_error_prec});
-    $record->{percent} = precise_value($record->{percent}, $record->{percent_prec});
-    $record->{percent_error} = precise_value($record->{percent_error_prec});
+    $record->{fraction} = precise_value($record->{fraction}, $record->{fraction_prec});
+    $record->{fraction_error} = precise_value($record->{fraction_error_prec});
     
     delete $record->{is_modeled} unless $record->{is_modeled};
     delete $record->{is_spike} unless $record->{is_spike};
     delete $record->{has_error} unless $record->{has_error};
+}
+
+
+sub process_int_ages {
+
+    my ($request, $record) = @_;
+
+    if ( (defined $record->{int_early} && defined $record->{early_age} && $record->{int_early} ne $record->{early_age}) ||
+	 (defined $record->{int_late} && defined $record->{late_age} && $record->{int_late} ne $record->{late_age}) )
+    {
+	$record->{is_different} = 1;
+    }
+    
+    $record->{early_age} = precise_value($record->{early_age}, $record->{early_age_prec});
+    $record->{late_age} = precise_value($record->{late_age}, $record->{late_age_prec});
 }
 
 

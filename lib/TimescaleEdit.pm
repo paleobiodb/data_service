@@ -25,7 +25,7 @@ our ($TIMESCALE_KEY) = 'timescale_no';
 
 {
     TimescaleEdit->register_conditions(
-	C_CREATE_INTERVALS => "The interval '%1' was not found. Allow CREATE_INTERVALS to create it.",
+	C_CREATE_INTERVALS => "'%1' was not found. Allow CREATE_INTERVALS to create it.",
 	C_BREAK_DEPENDENCIES => "There are intervals in other timescales dependent on this one. Allow BREAK_DEPENDENCIES to break these dependencies.");
 }
 
@@ -33,57 +33,93 @@ our ($TIMESCALE_KEY) = 'timescale_no';
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
 
-# # authorize_action ( action, operation, table, keyexpr )
-# #
-# # If the table being acted on is TIMESCALE_BOUNDS, then the action must be authorized by checking
-# # the corresponding timescale record for TIMESCALE_DATA instead.
+# We need to include a precision along with every numeric attribute that is being set.
 
-# sub authorize_action {
-    
-#     my ($edt, $action, $operation, $table, $keyexpr) = @_;
-    
-#     # Operations regarding 'TIMESCALE_DATA' are authorized as usual.
-    
-#     if ( $table eq 'TIMESCALE_DATA' )
-#     {
-# 	return $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
-#     }
+sub validate_action {
 
-#     # Operations regarding 'TIMESCALE_BOUNDS' and 'TIMESCALE_REFS' must be authorized with respect
-#     # to the 'TIMESCALE_DATA' table. They count as updates on the corresponding timescale record.
+    my ($edt, $action, $operation, $table) = @_;
+
+    # If the action does not include a record, we have nothing to do.
     
-#     elsif ( $table eq 'TIMESCALE_BOUNDS' || $table eq 'TIMESCALE_REFS' )
-#     {
-# 	my $record = $action->record;
-# 	my $keyval = $record->{timescale_id} || $record->{timescale_no};
+    my $record = $action->record || return;
+    
+    # If the table is 'TIMESCALE_BOUNDS', then check the bound attributes for consistency.
+    #
+    # If the bound type is 'absolute' or 'spike', then we must have an age. If the bound type is
+    # 'same' or 'fraction', then we must have a 'base_no' and possibly a 'range_no'.
+    #
+    # If the interval name is not empty, then we must have a 'top_no'.
+
+    if ( $table eq 'TIMESCALE_BOUNDS' )
+    {
+	my $v = { };
 	
-# 	# Unless a timescale was specified in which to add this boundary, add an error condition
-# 	# and return an innocuous permission code so that no additional error condition will be
-# 	# attached to this action.
+	# For an 'update' operation, fetch the old values first. Any column not mentioned in the action
+	# record will of course retain its old value.
 	
-# 	unless ( $keyval )
-# 	{
-# 	    $edt->add_condition($action, 'E_REQUIRED', 'timescale_no');
-# 	    return 'post';
-# 	}
+	if ( $operation eq 'update' )
+	{
+	    $v = $edt->fetch_old_record($action);
+	}
 	
-# 	return $edt->SUPER::authorize_action($action, 'update', 'TIMESCALE_DATA', "timescale_no=$keyval");
-#     }
-    
-#     # User-initiated operations regarding 'TIMESCALE_INTS' are only allowed with admin permission.
-
-#     elsif ( $table eq 'TIMESCALE_INTS' )
-#     {
-# 	my $permission = $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
-
-# 	return $permission eq 'admin' ? 'admin' : 'none';
-#     }
-
-#     else
-#     {
-# 	croak "Invalid table '$table'";
-#     }
-# }
+	$v->{bound_type} = $record->{bound_type} if exists $record->{bound_type};
+	$v->{interval_name} = $record->{interval_name} if exists $record->{interval_name};
+	$v->{age} = $record->{age} if exists $record->{age};
+	$v->{base_no} = $record->{base_id} || $record->{base_no} if exists $record->{base_id} || exists $record->{base_no};
+	$v->{range_no} = $record->{range_id} || $record->{range_no} if exists $record->{range_id} || exists $record->{range_no};
+	$v->{top_no} = $record->{top_id} || $record->{top_no} if exists $record->{top_id} || $record->{top_no};
+	
+	# Now check the required fields that depend on the value of bound_type.
+	
+	unless ( $v->{bound_type} )
+	{
+	    $edt->add_condition('E_REQUIRED', 'bound_type');
+	    $action->ignore_column('bound_type');
+	}
+	
+	elsif ( $v->{bound_type} eq 'same' )
+	{
+	    $edt->add_condition('E_REQUIRED', 'base_id') unless $v->{base_no};
+	}
+	
+	elsif ( $v->{bound_type} eq 'fraction' )
+	{
+	    $edt->add_condition('E_REQUIRED', 'base_id') unless $v->{base_no};
+	    $edt->add_condition('E_REQUIRED', 'range_id') unless $v->{range_no};
+	}
+	
+	else
+	{
+	    $edt->add_condition('E_REQUIRED', 'age') unless defined $v->{age} && $v->{age} ne '';
+	}
+	
+	# Then check for 'top_id' if the interval name is not empty.
+	
+	if ( defined $v->{interval_name} && $v->{interval_name} ne '' )
+	{
+	    $edt->add_condition('E_REQUIRED', 'top_id') unless $v->{top_no};
+	}
+	
+	# Look for any of the following fields in the action record. If they are specified, then set
+	# the corresponding _prec field.
+	
+	foreach my $f ( 'age', 'age_error', 'fraction', 'fraction_error' )
+	{
+	    if ( defined $record->{$f} && $record->{$f} ne '' )
+	    {
+		if ( $record->{$f} =~ qr{ [.] (\d*) $ }xs )
+		{
+		    $record->{"${f}_prec"} = length($1);
+		}
+		
+		else
+		{
+		    $record->{"${f}_prec"} = 0;
+		}
+	    }
+	}
+    }
+}
 
 
 # Before we execute certain actions, we must check for conditions specific to this data type and
@@ -92,21 +128,51 @@ our ($TIMESCALE_KEY) = 'timescale_no';
 sub before_action {
     
     my ($edt, $action, $operation, $table) = @_;
-            
+
+    # Keep track of which timescales were touched in any way. We will use this at finalization.
+    
+    if ( my $record = $action->record )
+    {
+	if ( ref $record eq 'HASH' )
+	{
+	    if ( my $timescale_no = $record->{timescale_no} || $record->{timescale_id} )
+	    {
+		$edt->set_attr_key('updated_timescale', $timescale_no, 1);
+	    }
+	    
+	    elsif ( my $bound_no = $record->{bound_no} || $record->{bound_id} )
+	    {
+		$edt->set_attr_key('updated_bound', $bound_no, 1);
+	    }	    
+	}
+    }
+
+    # Now carry out necessary checks before deletion.
+    
     if ( $operation eq 'delete' && $table eq 'TIMESCALE_DATA' )
     {
 	return $edt->before_delete_timescale($action);
     }
-
-    elsif ( $operation eq 'update' && $table eq 'TIMESCALE_DATA' )
+    
+    elsif ( $operation eq 'delete' && $table eq 'TIMESCALE_BOUNDS' )
     {
-	return $edt->before_update_timescale($action, $operation);
+	return $edt->before_delete_bounds($action);
     }
     
-    elsif ( $operation eq 'replace' && $table eq 'TIMESCALE_DATA' )
+    elsif ( $operation eq 'delete_cleanup' && $table eq 'TIMESCALE_BOUNDS' )
     {
-	return $edt->before_update_timescale($action, $operation);
+	return $edt->before_delete_bounds($action);
     }
+    
+    # elsif ( $operation eq 'update' && $table eq 'TIMESCALE_DATA' )
+    # {
+    # 	return $edt->before_update_timescale($action, $operation);
+    # }
+    
+    # elsif ( $operation eq 'replace' && $table eq 'TIMESCALE_DATA' )
+    # {
+    # 	return $edt->before_update_timescale($action, $operation);
+    # }
 }
 
 
@@ -119,26 +185,129 @@ sub before_action {
 sub finalize_transaction {
 
     my ($edt, $table) = @_;
-
+    
     my $dbh = $edt->dbh;
     my $result;
-    
-    my @timescales = $edt->get_attr_keys('update_bound_list');
+    my $sql;
 
+    # $$$ if bounds were updated, update 'modified' and 'modifier_no' on the corresponding timescales
+    
+    my @timescale_list = $edt->get_attr_keys('updated_timescale');
+    my @bound_list = $edt->get_attr_keys('updated_bound');
+    my $active_str;
+
+    if ( @bound_list )
+    {
+	my $bound_str = join(',', @bound_list);
+	
+	$sql = "SELECT group_concat(distinct timescale_no) FROM $TABLE{TIMESCALE_BOUNDS}
+		WHERE bound_no in ($bound_str)";
+	
+	$edt->debug_line("$sql\n\n");
+	
+	my ($other_ts) = $dbh->selectrow_array($sql);
+	
+	push @timescale_list, $other_ts if ref $other_ts eq 'ARRAY';
+    }
+
+    if ( @timescale_list )
+    {
+	my $timescale_str = join(',', @timescale_list);
+	
+	$sql = "SELECT group_concat(distinct timescale_no) FROM $TABLE{TIMESCALE_DATA}
+		WHERE timescale_no in ($timescale_str) and is_active";
+	
+	$edt->debug_line("$sql\n\n");
+
+	($active_str) = $dbh->selectcol_arrayref($sql);
+    }
+    
+    return unless $active_str;
+    return;
+    # If we get here, then we have updated at least one active timescale. So check to see if any
+    # of its interval names do not correspond to an existing record. If so, they will need to be
+    # created.
+
+    $sql = "SELECT distinct interval_name FROM $TABLE{TIMESCALE_BOUNDS} as tsb
+		left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name)
+		WHERE timescale_no in ($active_str) and tsi.interval_name is null";
+    
+    $edt->debug_line("$sql\n\n");
+
+    my $missing_intervals = $dbh->selectcol_arrayref($sql);
+
+    if ( ref $missing_intervals eq 'ARRAY' )
+    {
+	foreach my $name ( @$missing_intervals )
+	{
+	    if ( $edt->allows('CREATE_INTERVALS') )
+	    {
+		my $quoted = $dbh->quote($name);
+		
+		$sql = "INSERT INTO $TABLE{TIMESCALE_INTS} (interval_name) VALUES ($quoted)";
+
+		$edt->debug_line("$sql\n\n");
+
+		$dbh->do($sql);
+	    }
+
+	    else
+	    {
+		$edt->add_condition('main', 'C_CREATE_INTERVALS', $name);
+	    }
+	}
+    }
+
+    # Now make sure that all of the interval records corresponding to intervals in any of the
+    # active timescales are updated to match the values in the most authoritative timescale.
+
+    $sql = "UPDATE $TABLE{TIMESCALE_INTS} as tsi join (
+	WITH a2 as (SELECT interval_name, authority_level, timescale_no, 
+		max((authority_level+1)*10000) - max((authority_level+1)*10000 - timescale_no) as ts 
+		FROM timescale_bounds join timescales using (timescale_no)
+		WHERE interval_name <> '' and interval_name in 
+			(SELECT distinct interval_name FROM timescale_bounds where timescale_no in ($active_str))
+		GROUP by interval_name)
+	SELECT lower.interval_name, lower.age as early_age, lower.age_prec as early_age_prec,
+		upper.age as late_age, upper.age_prec as late_age_prec, lower.timescale_no, lower.color
+	FROM a2 join timescale_bounds as lower using (interval_name, timescale_no)
+		join timescale_bounds as upper on upper.bound_no = lower.top_no) as a using (interval_name)
+	SET tsi.early_age = a.early_age,
+	    tsi.early_age_prec = a.early_age_prec,
+	    tsi.late_age = a.late_age,
+	    tsi.late_age_prec = a.late_age_prec,
+	    tsi.color = a.color,
+	    tsi.authority_timescale_no = a.timescale_no";
+    
+    $edt->debug_line("$sql\n\n");
+
+    $result = $dbh->do($sql);
+    
+    # update timescale_ints as tsi join (with a2 as (select interval_name, authority_level, timescale_no, max((authority_level+1)*10000) - max((authority_level+1)*10000 - timescale_no) as ts from timescale_bounds join timescales using (timescale_no) where interval_name <> '' and interval_name in (select distinct interval_name from timescale_bounds where timescale_no = 1) group by interval_name) select lower.interval_name, lower.age as early_age, lower.age_prec as early_age_prec, upper.age as late_age, upper.age_prec as late_age_prec, lower.timescale_no, lower.color from a2 join timescale_bounds as lower using (interval_name, timescale_no) join timescale_bounds as upper on upper.bound_no = lower.top_no) as a using (interval_name) set tsi.early_age = a.early_age, tsi.early_age_prec = a.early_age_prec, tsi.late_age = a.late_age, tsi.late_age_prec = a.late_age_prec, tsi.color = a.color, tsi.authority_timescale_no = a.timescale_no;	
+    
+    
+    
+    # my @timescales = $edt->get_attr_keys('update_bound_list');
+    
+    # foreach my $t ( @timescales )
+    # {
+    # 	$result = $dbh->do("CALL check_bound_list($t)");
+    # 	# $result = $dbh->do("CALL update_bound_list($t)");
+    # }
+    
+    my @timescales = $edt->get_attr_keys('update_authority');
+    
     foreach my $t ( @timescales )
     {
-	$result = $dbh->do("CALL check_bound_list($t)");
-	# $result = $dbh->do("CALL update_bound_list($t)");
+	$edt->update_authority($t);
     }
     
-    my @intervals = $edt->get_attr_keys('update_intervals');
-    
-    while ( @intervals )
-    {
-	my $interval_nos = join(',', splice(@intervals,0,100));
+    # while ( @timescales )
+    # {
+    # 	my $interval_nos = join(',', splice(@intervals,0,100));
 	
-	$result = $dbh->do("CALL update_interval_definitions($interval_nos)");
-    }
+    # 	$result = $dbh->do("CALL update_interval_definitions($interval_nos)");
+    # }
 }
 
 
@@ -155,19 +324,26 @@ sub before_update_timescale {
     return if $action eq 'update' && ! ( $action->has_field('authority_level') ||
 					 $action->has_field('is_active') );
     
-    my $dbh = $edt->dbh;
-    my $keyexpr = $action->keyexpr;
+    my (@ids) = $action->keylist;
     
-    my $auth = $dbh->selectcol_arrayref("SELECT interval_no
-		FROM $TABLE{TIMESCALE_BOUNDS} WHERE timescale_no in ($keyexpr)");
-    
-    if ( ref $auth eq 'ARRAY' && @$auth )
+    foreach my $id ( @ids )
     {
-	foreach my $i ( @$auth )
-	{
-	    $edt->set_attr_key('update_intervals', $i, 1);
-	}
+	$edt->set_attr_key('update_authority', $id, 1);
     }
+    
+    # my $dbh = $edt->dbh;
+    # my $keyexpr = $action->keyexpr;
+    
+    # my $auth = $dbh->selectcol_arrayref("SELECT interval_name
+    # 		FROM $TABLE{TIMESCALE_BOUNDS} WHERE timescale_no in ($keyexpr)");
+    
+    # if ( ref $auth eq 'ARRAY' && @$auth )
+    # {
+    # 	foreach my $i ( @$auth )
+    # 	{
+    # 	    $edt->set_attr_key('update_intervals', $i, 1);
+    # 	}
+    # }
 }
 
 
@@ -183,72 +359,164 @@ sub before_update_timescale {
 sub before_delete_timescale {
 
     my ($edt, $action) = @_;
+
+    my $keystring = $action->keystring;
     
-    my $dbh = $edt->dbh;
-    my $keylist = $edt->get_keylist($action);
-    my $result;
+    # If we have no key expression, something is very wrong.
     
-    # If we don't have an actual timescale_no, there is no point in continuing with a delete operation.
-    
-    unless ( $keylist )
+    unless ( $keystring )
     {
-	$edt->add_condition('E_NO_KEY', 'delete');
+	$edt->add_condition($action, 'E_EXECUTE', "E0001");
 	return;
     }
     
-    # Now we query for any bounds *in other timescales* that depend on this one.
+    # Otherwise, we need to check whether there are any bounds dependent on the ones being
+    # deleted.
     
-    my $keyexpr = "timescale_no in ($keylist)";
+    $edt->check_dependencies($action, "base.timescale_no in ($keystring)");
+}
+
+
+sub before_delete_bounds {
+
+    my ($edt, $action) = @_;
     
-    my $link = "$TABLE{TIMESCALE_BOUNDS} as base JOIN $TABLE{TIMESCALE_BOUNDS} as dep on base.timescale_no <> dep.timescale_no and base.bound_no =";
-    
-    my ($has_deps) = $dbh->selectrow_array("SELECT count(*) FROM (
-	SELECT dep.bound_no FROM $link dep.top_no WHERE base.$keyexpr UNION ALL
-	SELECT dep.bound_no FROM $link dep.base_no WHERE base.$keyexpr UNION ALL
-	SELECT dep.bound_no FROM $link dep.range_no WHERE base.$keyexpr UNION ALL
-	SELECT dep.bound_no FROM $link dep.color_no WHERE base.$keyexpr UNION ALL
-	SELECT dep.bound_no FROM $link dep.refsource_no WHERE base.$keyexpr) as deps");
-    
-    # If we find any, then we must either return a caution or break the dependencies.
-    
-    if ( $has_deps )
+    my $keyexpr = $action->keyexpr;
+
+    # If we have no key expression, something is very wrong.
+
+    unless ( $keyexpr )
     {
-	unless ( $edt->allows('BREAK_DEPENDENCIES') )
+	$edt->add_condition($action, 'E_EXECUTE', "E0002");
+	return;
+    }
+
+    # Otherwise, we need to check whether there are any bounds dependent on the ones being
+    # deleted.
+    
+    $keyexpr =~ s/(\w+_no)/"base.$1"/g;
+    
+    $edt->check_dependencies($action, $keyexpr);
+}
+
+
+# check_dependencies ( action, selector )
+#
+# If this transaction allows BREAK_DEPENDENCIES, then set any bound references that refer to
+# bounds matching $selector to 0. Otherwise, check if there are any and if so, set the
+# BREAK_DEPENDENCIES caution.
+
+sub check_dependencies {
+
+    my ($edt, $action, $selector) = @_;
+
+    my $dbh = $edt->dbh;
+    my $result;
+    
+    my $link = "$TABLE{TIMESCALE_BOUNDS} as base join $TABLE{TIMESCALE_BOUNDS} as dep
+		on base.timescale_no <> dep.timescale_no and base.bound_no =";
+    
+    if ( $edt->allows('BREAK_DEPENDENCIES') )
+    {
+	$result = $dbh->do("UPDATE $link dep.top_no WHERE $selector SET dep.top_no = 0");
+	$result = $dbh->do("UPDATE $link dep.base_no WHERE $selector SET dep.base_no = 0");
+	$result = $dbh->do("UPDATE $link dep.range_no WHERE $selector SET dep.range_no = 0");
+	$result = $dbh->do("UPDATE $link dep.color_no WHERE $selector SET dep.color_no = 0");
+	
+	$edt->debug_line("UPDATE $link dep.top_no WHERE $selector SET dep.top_no = 0");
+	$edt->debug_line("   [and same for base_no, range_no, color_no]");
+    }
+    
+    # Otherwise, we need to check if there are any such bounds and if so, report a caution.
+
+    else
+    {
+	my ($has_deps) = $dbh->selectrow_array("SELECT count(*) FROM (
+    	SELECT dep.bound_no FROM $link dep.top_no WHERE $selector UNION ALL
+    	SELECT dep.bound_no FROM $link dep.base_no WHERE $selector UNION ALL
+    	SELECT dep.bound_no FROM $link dep.range_no WHERE $selector UNION ALL
+    	SELECT dep.bound_no FROM $link dep.color_no WHERE $selector) as deps");
+	
+	if ( $has_deps )
 	{
 	    $edt->add_condition('C_BREAK_DEPENDENCIES');
-	    return;
-	}
-	
-	my $result = $dbh->do("UPDATE $link dep.top_no WHERE base.$keyexpr SET dep.top_no = 0");
-	my $result = $dbh->do("UPDATE $link dep.base_no WHERE base.$keyexpr SET dep.base_no = 0");
-	my $result = $dbh->do("UPDATE $link dep.range_no WHERE base.$keyexpr SET dep.range_no = 0");
-	my $result = $dbh->do("UPDATE $link dep.color_no WHERE base.$keyexpr SET dep.color_no = 0");
-	my $result = $dbh->do("UPDATE $link dep.refsource_no WHERE base.$keyexpr SET dep.refsource_no = 0");
-    }
-    
-    # If any intervals have this timescale as their authority, add them to the list of intervals
-    # to recompute at the end of the transaction.
-    
-    my ($auth) = $dbh->selectcol_arrayref("SELECT interval_no FROM $TABLE{TIMESCALE_INTS}
-	WHERE authority_timescale_no in ($keylist)");
-    
-    if ( ref $auth eq 'ARRAY' && @$auth )
-    {
-	foreach my $i ( @$auth )
-	{
-	    $edt->set_attr_key('update_intervals', $i, 1);
 	}
     }
-    
-    # Now we must delete all of the bounds in the timescale.
-    
-    $result = $dbh->do("DELETE FROM $TABLE{TIMESCALE_BOUNDS} WHERE $keyexpr");
-    
-    # And finally, if any other timescale uses this one as its source_no, set that to zero.
-    
-    $result = $dbh->do("UPDATE $TABLE{TIMESCALE_DATA} SET source_timescale_no = 0
-	WHERE source_timescale_no in ($keylist)");
 }
+
+
+# update_authority ( )
+#
+# This still needs to be written.
+
+sub update_authority {
+
+
+
+
+}
+
+
+
+    # my $dbh = $edt->dbh;
+    # my $keylist = $edt->get_keylist($action);
+    # my $result;
+    
+    # # If we don't have an actual timescale_no, there is no point in continuing with a delete operation.
+    
+    # unless ( $keylist )
+    # {
+    # 	$edt->add_condition('E_NO_KEY', 'delete');
+    # 	return;
+    # }
+    
+    # # Now we query for any bounds *in other timescales* that depend on this one.
+    
+    # my $keyexpr = "timescale_no in ($keylist)";
+    
+    # my $link = "$TABLE{TIMESCALE_BOUNDS} as base JOIN $TABLE{TIMESCALE_BOUNDS} as dep on base.timescale_no <> dep.timescale_no and base.bound_no =";
+    
+    
+    # # If we find any, then we must either return a caution or break the dependencies.
+    
+    # if ( $has_deps )
+    # {
+    # 	unless ( $edt->allows('BREAK_DEPENDENCIES') )
+    # 	{
+    # 	    $edt->add_condition('C_BREAK_DEPENDENCIES');
+    # 	    return;
+    # 	}
+	
+    # 	my $result = $dbh->do("UPDATE $link dep.top_no WHERE base.$keyexpr SET dep.top_no = 0");
+    # 	my $result = $dbh->do("UPDATE $link dep.base_no WHERE base.$keyexpr SET dep.base_no = 0");
+    # 	my $result = $dbh->do("UPDATE $link dep.range_no WHERE base.$keyexpr SET dep.range_no = 0");
+    # 	my $result = $dbh->do("UPDATE $link dep.color_no WHERE base.$keyexpr SET dep.color_no = 0");
+    # 	my $result = $dbh->do("UPDATE $link dep.refsource_no WHERE base.$keyexpr SET dep.refsource_no = 0");
+    # }
+    
+    # # If any intervals have this timescale as their authority, add them to the list of intervals
+    # # to recompute at the end of the transaction.
+    
+    # my ($auth) = $dbh->selectcol_arrayref("SELECT interval_no FROM $TABLE{TIMESCALE_INTS}
+    # 	WHERE authority_timescale_no in ($keylist)");
+    
+    # if ( ref $auth eq 'ARRAY' && @$auth )
+    # {
+    # 	foreach my $i ( @$auth )
+    # 	{
+    # 	    $edt->set_attr_key('update_intervals', $i, 1);
+    # 	}
+    # }
+    
+    # # Now we must delete all of the bounds in the timescale.
+    
+    # $result = $dbh->do("DELETE FROM $TABLE{TIMESCALE_BOUNDS} WHERE $keyexpr");
+    
+    # # And finally, if any other timescale uses this one as its source_no, set that to zero.
+    
+    # $result = $dbh->do("UPDATE $TABLE{TIMESCALE_DATA} SET source_timescale_no = 0
+    # 	WHERE source_timescale_no in ($keylist)");
+#   }
 
 
 # sub add_timescale {

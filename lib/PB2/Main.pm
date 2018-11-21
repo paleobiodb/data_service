@@ -950,13 +950,13 @@ use PB2::MainEntry;
 	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
 	"(L<2013-01|http://www.stratigraphy.org/ICSchart/ChronostratChart2013-01.jpg>).");
     
-    $ds2->define_node({ path => 'intervals2',
-		       place => 0,
-		       role => 'PB2::TimescaleData' });
-    
     $ds2->define_node({ path => 'bounds',
-		       place => 0,
-		       role => 'PB2::TimescaleData' });
+			place => 0,
+			role => 'PB2::TimescaleData' });
+    
+    $ds2->define_node({ path => 'tsi',
+			place => 0,
+			role => 'PB2::TimescaleData' });
     
     $ds2->define_node({ path => 'timescales/single',
 			title => 'Single geological timescale',
@@ -977,63 +977,56 @@ use PB2::MainEntry;
 			arg => 'timescales',
 			output => '1.2:timescales:basic',
 			optional_output => '1.2:timescales:optional_basic' },
-	"This operation returns information about a list of timescales, selected",
+	"This operation returns information about one or more timescales, selected",
 	"according to the query parameters.");
     
-    $ds2->define_node({ path => 'bounds/single',
-			title => 'Single geological time interval boundary',
-			usage => [ 'bounds/single.json?id=10' ],
-			method => 'get_record',
-			arg => 'bounds',
-			output => '1.2:timescales:bound',
-		        optional_output => '1.2:timescales:optional_bound' },
-	"This operation returns information about a single time interval boundary, specified by",
-	"its unique identifier in the database.");
-    
-    $ds2->list_node({ path => 'bounds/single',
-		      list => 'timescales',
-		      place => 2 });
-
-    $ds2->define_node({ path => 'bounds/list',
+    $ds2->define_node({ path => 'timescales/bounds',
 			title => 'Lists of geological time interval bounds',
 			usage => [ 'bounds/list.json?timescale_id=1', 'bounds/list.json?interval_name=cretaceous' ],
 			method => 'list_records',
 			arg => 'bounds',
 			output => '1.2:timescales:bound',
 			optional_output => '1.2:timescales:optional_bound' },
-	"This operation returns information about a list of time interval bounds,",
-	"selected according to the query parameters.");
+	"This operation returns information about the interval bounds defined by",
+	"one or more timescales, selected according to the query parameters.");
     
-    $ds2->list_node({ path => 'bounds/list',
-		      list => 'timescales',
-		      place => 2 });
+    $ds2->define_node({ path => 'timescales/intervals',
+			title => 'Intervals from geological timescales',
+			place => 1,
+			usage => [ 'timescales/intervals.json?id=1' ],
+			method => 'list_records',
+			arg => 'intervals',
+			output => '1.2:timescales:interval',
+			optional_output => '1.2:timescales:optional_interval' },
+	"This operation returns information about the intervals defined by one or",
+	"more timescales, selected according to the query parameters.");
     
-    $ds2->define_node({ path => 'intervals2/single',
-			title => 'Single geological time interval',
+    $ds2->define_node({ path => 'tsi/single',
+ 			title => 'Single geological time interval',
 			usage => [ 'intervals2/single.json?id=3', 'intervals2/single.json?id=3&timescale_id=4' ],
 			method => 'get_record',
-			arg => 'intervals',
+			arg => 'tsi',
 			output => '1.2:timescales:interval',
 		        optional_output => '1.2:timescales:optional_interval' },
 	"This operation returns information about a single time interval, specified by",
 	"its unique identifier in the database.");
     
-    $ds2->list_node({ path => 'intervals2/single',
+    $ds2->list_node({ path => 'tsi/single',
 		      list => 'timescales',
 		      place => 3 });
     
-    $ds2->define_node({ path => 'intervals2/list',
+    $ds2->define_node({ path => 'tsi/list',
 			title => 'Lists of geological time intervals',
 			usage => [ 'intervals2/list.json?timescale_id=5', 'intervals2/list.json?interval_name=cretaceous',
 				   'intervals2/list.json?interval_name=cretaceous&absolute' ],
 			method => 'list_records',
-			arg => 'intervals',
+			arg => 'tsi',
 			output => '1.2:timescales:interval',
 			optional_output => '1.2:timescales:optional_interval' },
 	"This operation returns information about a list of time intervals,",
 	"selected according to the query parameters.");
     
-    $ds2->list_node({ path => 'intervals2/list',
+    $ds2->list_node({ path => 'tsi/list',
 		      list => 'timescales',
 		      place => 3 });
     
