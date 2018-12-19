@@ -609,13 +609,9 @@ sub initialize {
 	#   if_block => 'etbasis', if_format => 'json' },
 	{ output => 'life_habit', com_name => 'jlh' },
 	    "The general life mode and locality of this organism.",
-<<<<<<< HEAD
-	{ output => 'life_habit_basis', com_name => 'jhc', if_block => 'etbasis' },
-=======
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
 	{ output => 'life_habit_basis', com_name => 'jhc',
 	  if_block => 'etbasis' }, # , if_format => ['txt', 'csv', 'tsv']
->>>>>>> master
 	    "Specifies the taxon for which the life habit information was set.",
 	    "See B<motility_basis> above.  These fields are only included if the",
 	    "C<ecospace> block is also included.",
@@ -632,13 +628,9 @@ sub initialize {
 	    "C<ecospace> block is also included.",
 	{ output => 'diet', com_name => 'jdt' },
 	    "The general diet or feeding mode of this organism.",
-<<<<<<< HEAD
-	{ output => 'diet_basis', com_name => 'jdc', if_block => 'etbasis' },
-=======
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
 	{ output => 'diet_basis', com_name => 'jdc',
 	  if_block => 'etbasis' }, # , if_format => ['txt', 'csv', 'tsv']
->>>>>>> master
 	    "Specifies the taxon for which the diet information was set.",
 	    "See B<motility_basis> above.  These fields are only included if the",
 	    "C<ecospace> block is also included.",
