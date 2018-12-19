@@ -767,23 +767,25 @@ sub process_interval_params {
 	if ( !defined $max_ma || $new_max >= $max_ma )
 	{
 	    $max_ma = $new_max;
+	    $early_interval_no = $interval_no + 0;
 	    
-	    if ( !$early_duration || ($i->{early_age} - $i->{late_age}) < $early_duration )
-	    {
-		$early_interval_no = $interval_no;
-		$early_duration = $i->{early_age} - $i->{late_age};
-	    }
+	    # if ( !$early_duration || ($i->{early_age} - $i->{late_age}) < $early_duration )
+	    # {
+	    # 	$early_interval_no = $interval_no + 0;
+	    # 	$early_duration = $i->{early_age} - $i->{late_age};
+	    # }
 	}
 	
 	if ( !defined $min_ma || $new_min <= $min_ma )
 	{
 	    $min_ma = $new_min;
+	    $late_interval_no = $interval_no + 0;
 	    
-	    if ( !$late_duration || ($i->{early_age} - $i->{late_age}) < $late_duration )
-	    {
-		$late_interval_no = $interval_no;
-		$late_duration = $i->{early_age} - $i->{late_age};
-	    }
+	    # if ( !$late_duration || ($i->{early_age} - $i->{late_age}) < $late_duration )
+	    # {
+	    # 	$late_interval_no = $interval_no + 0;
+	    # 	$late_duration = $i->{early_age} - $i->{late_age};
+	    # }
 	}
     }
     

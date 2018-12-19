@@ -1552,7 +1552,7 @@ sub summary {
     my $tables = $request->tables_hash;
     
     # Figure out which bin level we are being asked for.  The default is 1.    a
-
+    
     my $bin_level = $request->clean_param('level') || 1;
     
     # Construct a list of filter expressions that must be added to the query
@@ -1591,14 +1591,14 @@ sub summary {
     
     $request->adjustCoordinates(\$fields);
     
-    if ( $tables->{tf} )
-    {
-	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
-	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
-	$tables->{c} = 1;
-    }
+    # if ( $tables->{tf} )
+    # {
+    # 	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
+    # 	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
+    # 	$tables->{c} = 1;
+    # }
     
-    elsif ( $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} )
+    if ( $tables->{cc} || $tables->{t} || $tables->{tf} || $tables->{o} || $tables->{oc} )
     {
 	$tables->{c} = 1;
     }
@@ -1614,7 +1614,7 @@ sub summary {
 	{
 	    $fields =~ s{ im[.]cx_int_no}{s.early_age, s.late_age}xs;
 	}
-
+	
 	delete $tables->{im};
     }
     
@@ -1622,6 +1622,12 @@ sub summary {
     {
 	$fields =~ s{ \bs.n_colls\b }{count(distinct o.collection_no) as n_colls}xs;
 	$fields =~ s{ \bs.n_occs\b }{count(distinct o.occurrence_no) as n_occs}xs;
+    }
+
+    elsif ( $tables->{c} )
+    {
+	$fields =~ s{ \bs.n_colls\b }{count(distinct c.collection_no) as n_colls}xs;
+	$fields =~ s{ \bs.n_occs\b }{sum(c.n_occs) as n_occs}xs;
     }
     
     if ( $request->has_block('bin') )
@@ -1674,6 +1680,11 @@ sub summary {
     push @filters, "s.bin_level = $bin_level and s.bin_id > 0";
     
     my $filter_string = join(' and ', @filters);
+    
+    unless ( $filter_string =~ qr{ \bs.interval_no \s* = }xs )
+    {
+	$filter_string .= ' and s.interval_no = 0';
+    }
     
     # If we want the containing interval numbers, we have to specify this as
     # an inner and an outer query.
@@ -3333,7 +3344,7 @@ sub generateMainFilters {
     # If only latitude bounds were specified then create a bounding box
     # with longitude ranging from -180 to 180.
     
-    elsif ( $y1 ne '' || $y2 ne '' && ! ( $y1 == -90 && $y2 == 90 ) )
+    elsif ( ($y1 ne '' || $y2 ne '') && ! ( $y1 == -90 && $y2 == 90 ) )
     {
 	# If one of the bounds was not specified, set it to -90 or 90.
 	
@@ -3879,146 +3890,60 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
-    # If no time rule was given, it defaults to 'buffer'.
+    # Now we need to figure out if the 'c' table is needed.
+
+    if ( $tables_ref->{o} || $tables_ref->{t} || $tables_ref->{tf} || $tables_ref->{v} )
+    {
+	$tables_ref->{o} = 1;
+	$tables_ref->{c} = 1;
+    }
+
+    elsif ( $tables_ref->{cc} )
+    {
+	$tables_ref->{c} = 1;
+    }
+    
+    # Check for interval parameters. If no time rule is specified, it defaults to 'major'.
     
     my $time_rule = $request->clean_param('timerule') || 'major';
-    # my $summary_interval = 0;
-    # my ($early_age, $late_age, $early_bound, $late_bound);
-    # my $interval_no = $request->clean_param('interval_id') + 0;
-    # my $interval_name = $request->clean_param('interval');
-    # my $earlybuffer = $request->clean_param('earlybuffer');
-    # my $latebuffer = $request->clean_param('latebuffer');
-    
-    # Check for interval parameters.
     
     my ($early_age, $late_age, $early_interval_no, $late_interval_no) = $request->process_interval_params;
     
-    my $early_bound = $early_age;
-    my $late_bound = $late_age;
-    my $buffer;
-    
-    if ( $early_age )
+    # If this is a summary or prevalence operation and no interval bounds were given at all, then
+    # we can just query on interval_no = 0 in the summary bin table.
+
+    if ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
+	 ( $time_rule eq 'major' ) &&
+	 ( ! $tables_ref->{c} ) && 
+	 ( ! $early_interval_no && ! $early_age && ! $late_age ) )
     {
-	$buffer = $early_age > 66 ? 12 : 5;
-	$early_bound = $early_age + $buffer;
-	$late_bound = $late_age || 0;
-	$late_bound -= $buffer;
-	$late_bound = 0 if $late_bound < 0;
+	push @filters, "s.interval_no = 0";
     }
     
-    my $summary_interval = 0;
+    # If this is a summary or prevalence operation using the 'major' time rule and covering a
+    # single interval, then we can just query on the appropriate interval_no.
     
-    # If the requestor wants to override the time bounds, do that.
-    
-    if ( my $earlybuffer = $request->clean_param('timebuffer') )
+    elsif ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
+	    ( $time_rule eq 'major' ) &&
+	    ( ! $tables_ref->{c} ) && 
+	    ( $early_interval_no && ( ! $late_interval_no || $early_interval_no == $late_interval_no ) ) )
     {
-	if ( defined $early_age )
-	{
-	    $early_bound = $early_age + $earlybuffer;
-	}
-	
-	if ( defined $late_age && $late_age > 0 )
-	{
-	    $late_bound = $late_age - $earlybuffer;
-	    $late_bound = 0 if $late_bound < 0;
-	}
+	push @filters, "s.interval_no = $early_interval_no";
     }
     
-    if ( my $latebuffer = $request->clean_param('latebuffer') )
+    # Otherwise, if age bounds were given we need to join to the collection table and filter on
+    # actual collection ages.
+    
+    elsif ( $early_age || $late_age )
     {
-	if ( defined $late_age && $late_age > 0 )
-	{
-	    $late_bound = $late_age - $latebuffer;
-	    $late_bound = 0 if $late_bound < 0;
-	}
-    }
-    
-    # If $late_bound is less than zero, correct it to zero.
-    
-    $late_bound = 0 if defined $late_bound && $late_bound < 0;
-    
-    # If we are querying for summary clusters, and only one interval was
-    # specified, we can use the cluster table row corresponding to that
-    # interval number.  But only if timerule is the default value of 'buffer'.
-    # Otherwise, we need the unrestricted cluster table row (the one for
-    # interval_no = 0) plus additional filters.
-    
-    if ($op eq 'summary' || $op eq 'prevalence')
-    {
-	if ( $time_rule eq 'major' && $early_interval_no && $late_interval_no && 
-	     $early_interval_no == $late_interval_no)
-	{
-	    push @filters, "s.interval_no = $summary_interval";
-	}
-	
-	else
-	{
-	    push @filters, "s.interval_no = 0";
-	}
-    }
-    
-    # Otherwise, if a range of years was specified, use that.
-    
-    # else
-    # {
-    # 	my $max_ma = $request->clean_param('max_ma');
-    # 	my $min_ma = $request->clean_param('min_ma');
-	
-    # 	if ( $max_ma && $min_ma )
-    # 	{
-    # 	    my $range = $max_ma - $min_ma;
-    # 	    my $buffer = $range * 0.5;
-	    
-    # 	    $early_age = $max_ma + 0;
-    # 	    $early_bound = defined $earlybuffer ? 
-    # 		$early_age + $earlybuffer :
-    # 		    $early_age + $buffer;
-	
-    # 	    $late_age = $max_ma + 0;
-    # 	    $late_bound = defined $latebuffer ?
-    # 		$late_age - $latebuffer :
-    # 		    $late_age - $buffer;
-	
-    # 	    $late_bound = 0 if $late_bound < 0;
-    # 	}
-	
-    # 	# Otherwise, handle either a min or max filter alone.
-	
-    # 	elsif ( $max_ma )
-    # 	{
-    # 	    $early_age = $max_ma + 0;
-    # 	    $early_bound = $early_age;
-    # 	}
-	
-    # 	if ( $max_ma )
-    # 	{
-    # 	    $late_age = $min_ma + 0;
-    # 	    $late_bound = $late_age;
-    # 	}
-    # }
-    
-    # Then, if a time filter was specified and we need one, apply it.  If we
-    # are were given a summary interval and no non-geographic filters were
-    # specified, then we don't need one because the necessary filtering has
-    # already been done by selecting the appropriate interval_no in the summary table.
-    
-    if ( $early_age || $late_age )
-    {
-	# if ( $op eq 'summary' || $op eq 'prevalence' )
-	# {
-	#     push @filters, "s.interval_no = 0";
-	# }
-	
-	# unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'major') or
-	#          $tables_ref->{ds} or $op eq 'prevalence' )
-	# {
-	
 	$tables_ref->{c} = 1;
+	$tables_ref->{non_summary} = 1;
+	
+	$request->{early_age} = $early_age;
+	$request->{late_age} = $late_age;
 
-	# The exact filter we use will depend upon the time rule that was
-	# selected.
-
+	push @filters, "s.interval_no = 0" if $op eq 'summary' || $op eq 'prevalence';
+	
 	if ( $time_rule eq 'contain' )
 	{
 	    if ( defined $late_age and $late_age > 0 )
@@ -4057,6 +3982,34 @@ sub generateMainFilters {
 
 	else # $time_rule eq 'buffer'
 	{
+	    my $early_buffer = $request->clean_param('timebuffer');
+	    my $late_buffer = $request->clean_param('latebuffer');
+	    
+	    my ($early_bound, $late_bound);
+	    
+	    if ( $early_age )
+	    {
+		unless ( $early_buffer )
+		{
+		    $early_buffer = $early_age > 66 ? 12 : 5;
+		}
+
+		$early_bound = $early_age + $early_buffer;
+	    }
+
+	    if ( $late_age )
+	    {
+		$late_buffer ||= $early_buffer;
+		
+		unless ( $late_buffer )
+		{
+		    $late_buffer = $late_age > 66 ? 12 : 5;
+		}
+
+		$late_bound = $late_age - $late_buffer;
+		$late_bound = 0 if $late_bound < 0;
+	    }
+	    
 	    if ( defined $late_age and defined $early_age and 
 		 defined $late_bound and defined $early_bound )
 	    {
@@ -4079,15 +4032,6 @@ sub generateMainFilters {
 		}
 	    }
 	}
-	
-	$request->{early_age} = $early_age;
-	$request->{late_age} = $late_age;
-	$tables_ref->{non_summary} = 1;
-    }
-    
-    elsif ( $op eq 'summary' )
-    {
-	push @filters, "s.interval_no = 0";
     }
     
     # Return the list
