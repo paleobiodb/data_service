@@ -271,7 +271,7 @@ sub initialize {
 			role => 'PB2::SpecimenEntry',
 			method => 'update_specimens',
 			arg => 'add',
-			before_record_hook => 'my_select_output_block',
+			# before_record_hook => 'my_select_output_block',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
 	"This operation allows you to add new specimen and measurement records",
@@ -304,7 +304,7 @@ sub initialize {
 			doc_template => 'entry_operation.tt',
 			role => 'PB2::SpecimenEntry',
 			method => 'update_specimens',
-			before_record_hook => 'my_select_output_block',
+			# before_record_hook => 'my_select_output_block',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
 	"This operation allows you to update existing specimen and measurement records");

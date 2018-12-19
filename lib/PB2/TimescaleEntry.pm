@@ -75,37 +75,40 @@ sub initialize {
 	    "You may provide a value for this attribute in any record",
 	    "submitted to this data service. This specifies the operation.",
 	    "to be performed using this record, overriding the automatic",
-	    "determination.",
-	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC') },
+	    "determination. The main use of this field is with the value 'delete',",
+	    "which causes this record to be deleted from the database.",
+	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), alias => 'oid' },
 	    "The identifier of the timescale to be updated. If it is",
 	    "empty, a new timescale will be created.",
-	{ param => 'timescale_name', valid => ANY_VALUE },
+	{ param => 'timescale_name', valid => ANY_VALUE, alias => 'nam' },
 	    "The name of the timescale.",
-	{ optional => 'timescale_type', valid => '1.2:timescales:interval_types' },
+	{ optional => 'timescale_type', valid => '1.2:timescales:interval_types', alias => 'typ' },
 	    "The type of interval this timescale contains. The value must be one of:",
-	{ optional => 'timescale_extent', valid => ANY_VALUE },
+	{ optional => 'timescale_extent', valid => ANY_VALUE, alias => 'ext' },
 	    "The geographic extent over which the timescale is valid, which",
 	    "can be any string but should be expressed as an adjective. For",
 	    "example, C<North American>. If the interval is part of the",
 	    "international chronostratographic system, the value should be",
 	    "C<international>. Otherwise, if the interval is valid globally",
 	    "then the value should be C<global>.",
-	{ optional => 'timescale_taxon', valid => ANY_VALUE },
+	{ optional => 'timescale_taxon', valid => ANY_VALUE, alias => 'txn' },
 	    "The taxonomic group with respect to which the timescale is",
 	    "defined, if any. This should be expressed as a common name",
 	    "rather than a scientific one. Examples: C<conodont>, C<mammal>.",
-	{ optional => 'timescale_comments', valid => ANY_VALUE },
+	{ optional => 'timescale_comments', valid => ANY_VALUE, alias => 'tsc' },
 	    "This field can be used to store an arbitrary string of text",
 	    "associated with each timescale.",
-	{ optional => 'is_active', valid => BOOLEAN_VALUE },
-	    "If set to true, then this timescale will be visible to all database",
-	    "users and will be available for use in entering and downloading data.",
-	    "This value can only be set by a user with administrative privilege on",
-	    "the timescale tables.",
-	{ optional => 'admin_lock', valid => BOOLEAN_VALUE },
+	{ optional => 'is_visible', valid => BOOLEAN_VALUE, alias => 'vis' },
+	    "If set to true, then this timescale will be visible to all database users.",
+	{ optional => 'is_enterable', valid => BOOLEAN_VALUE, alias => 'enc' },
+	    "If set to true, then this timescale can be used when entering collections.",
+	# { optional => 'is_private', valid => BOOLEAN_VALUE },
+	#     "If set to true, then this timescale can be modified only by its owner or",
+	#     "by someone with administrative privileges.",
+	{ optional => 'admin_lock', valid => BOOLEAN_VALUE, alias => 'lck' },
 	    "When set to true, then the attributes and boundaries of this timescale",
 	    "are locked and cannot be modified until this value is set to false.",
-	{ optional => 'priority', valid => POS_VALUE },
+	{ optional => 'priority', valid => INT_VALUE, alias => 'pri' },
 	    "This value is used whenever more than one timescale mentions",
 	    "a particular interval. The one with the higher value for this",
 	    "attribute will be taken to specify the boundaries of the interval.",
@@ -133,61 +136,47 @@ sub initialize {
 	    "submitted to this data service. This specifies the operation.",
 	    "to be performed using this record, overriding the automatic",
 	    "determination.",
-	{ optional => 'bound_id', valid => VALID_IDENTIFIER('BND') },
+	{ optional => 'bound_id', valid => VALID_IDENTIFIER('BND'), alias => 'oid' },
 	    "The identifier of the boundary to be updated. If empty,",
 	    "a new boundary will be created.",
-	{ optional => 'timescale_id', valid => VALID_IDENTIFIER('TSC') },
+	{ optional => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), alias => 'sid' },
 	    "The identifier of the timescale in which bound(s)",
 	    "are located. This is optional, but can be used to make",
 	    "sure that the proper bounds are being updated.",
-	{ optional => 'bound_type', valid => '1.2:timescales:bound_types' },
+	{ optional => 'bound_type', valid => '1.2:timescales:bound_types', alias => 'btp' },
 	    "The bound type, which must be one of the following:",
-	{ optional => 'interval_type', valid => '1.2:timescales:interval_types' },
+	{ optional => 'interval_type', valid => '1.2:timescales:interval_types', alias => 'typ' },
 	    "The interval type. If not given, it defaults to the type specified",
 	    "in the timescale. The value muse be one of:",
 	{ optional => 'age', valid => \&valid_age },
 	    "The age of this boundary, in Ma",
-	{ optional => 'age_error', valid => \&valid_age },
+	{ optional => 'age_error', valid => \&valid_age, alias => 'ger' },
 	    "The uncertainty in the age, in Ma",
-	{ optional => 'interval_name', valid => ANY_VALUE },
+	{ optional => 'interval_name', valid => ANY_VALUE, alias => 'inm' },
 	    "The name of the interval lying B<above> this boundary. If this",
 	    "field is blank, then the boundary is either a top boundary with",
 	    "nothing above it or else the interval above it represents a hole in",
 	    "this timescale.",
-	# { optional => 'interval_id', valid => VALID_IDENTIFIER('INT') },
-	#     "The identifier of the interval (if any) for which this is the lower",
-	#     "boundary. Boundary attributes such as C<B<color>>, C<B<reference_no>>,",
-	#     "C<B<interval_extent>>, and C<B<interval_taxon>> are taken to apply",
-	#     "to this interval.",
-	# { at_most_one => [ 'interval_id', 'interval_name' ] },
-	{ optional => 'top_id', valid => VALID_IDENTIFIER('BND') },
+	{ optional => 'top_id', valid => VALID_IDENTIFIER('BND'), alias => 'uid' },
 	    "If this value is specified, then the interval of which this bound is",
 	    "the bottom end will be taken to end at the specified bound. Otherwise,",
 	    "it will be taken to end at the next bound up in order by age.",
-	{ optional => 'base_id', valid => VALID_IDENTIFIER('BND') },
+	{ optional => 'base_id', valid => VALID_IDENTIFIER('BND'), alias => 'bid' },
 	    "If the B<C<bound_type>> is either C<B<same>> or C<B<fraction>>,",
 	    "then you must also specify a reference bound using this parameter.",
-	{ optional => 'color_id', valid => VALID_IDENTIFIER('BND') },
+	{ optional => 'color_id', valid => VALID_IDENTIFIER('BND'), alias => 'cid' },
 	    "If this value is non-empty, then the color for the current boundary",
 	    "will be taken from the boundary identified by this value.",
-	{ optional => 'range_id', valid => VALID_IDENTIFIER('BND') },
+	{ optional => 'range_id', valid => VALID_IDENTIFIER('BND'), alias => 'tid' },
 	    "If the B<C<bound_type>> is C<B<fraction>>, then you must specify a",
 	    "second reference bound using this parameter. The value of B<C<offset>>",
 	    "is then taken to indicate a fraction of the difference between the",
 	    "ages of the two reference bounds.",
-	{ optional => 'fraction', valid => \&valid_age },
+	{ optional => 'fraction', valid => \&valid_age, alias => 'frc' },
 	    "If the boundary type is C<B<fraction>>, then the age of this boundary",
 	    "is derived as the specified fraction of the difference between",
 	    "the base and range boundaries.",
-	{ optional => 'fraction_error', valid => \&valid_age },
-	    "The value of this attribute gives the uncertainty in the fraction.",
-	{ optional => 'color_id', valid => VALID_IDENTIFIER('BND') },
-	    "If this parameter is specified, then the color of the upper",
-	    "interval will be taken from the specified bound.",
-	{ optional => 'refsource_id', valid => VALID_IDENTIFIER('BND') },
-	    "If this parameter is specified, then the bibliographic reference",
-	    "for this bound will be taken from the specified bound.",
-	{ optional => 'color', valid => ANY_VALUE },
+	{ optional => 'color', valid => ANY_VALUE, alias => 'col' },
 	    "If this parameter is specified, then it gives a color in which",
 	    "to display the upper interval.",
 	{ optional => 'reference_id', valid => VALID_IDENTIFIER('REF') },
@@ -314,6 +303,7 @@ sub update_records {
     
     my (@records) = $request->unpack_input_records({ },
 						   ['1.2:bounds:entry', 'bound_id', 'bound_type'],
+						   ['1.2:bounds:entry', 'bound_id', 'btp'],
 						   ['1.2:timescales:entry', 'timescale_id', 'DEFAULT']);
     
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
@@ -333,58 +323,32 @@ sub update_records {
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
-
-    my (%cleanup_timescale, %cleanup_bound);
+    
+    my ($timescales_deleted, $bounds_deleted);
     
     foreach my $r (@records)
     {
 	if ( exists $r->{bound_type} || exists $r->{bound_no} || exists $r->{bound_id} )
 	{
-	    # my $timescale_no = $r->{timescale_id} || $r->{timescale_no};
-
-	    # $cleanup_timescale{$timescale_no + 0} = 1 if $timescale_no + 0;
-	    
-	    # my $bound_no = $r->{bound_id} || $r->{bound_no};
-
-	    # $cleanup_bound{$bound_no + 0} = 1 if $bound_no + 0;
-	    
 	    $edt->process_record('TIMESCALE_BOUNDS', $r);
+	    $bounds_deleted = 1 if $r->{_operation} && $r->{_operation} eq 'delete';
 	}
 	
 	elsif ( exists $r->{timescale_name} || exists $r->{timescale_no} || exists $r->{timescale_id} )
 	{
 	    $edt->process_record('TIMESCALE_DATA', $r);
+	    $timescales_deleted = 1 if $r->{_operation} && $r->{_operation} eq 'delete';
 	}
 	
 	else
 	{
 	    $edt->bad_record('TIMESCALE_DATA', $r);
 	}
-
     }
 
     # Figure out the list of timescales that were referred to in any of the bound records.
     
     my $bound_timescale_list = join(',', $edt->superior_keys('TIMESCALE_BOUNDS'));
-    
-    # if ( %cleanup_timescale || %cleanup_bound )
-    # {
-    # 	my $timescale_list = join(',', keys %cleanup_timescale);
-	
-    # 	if ( %cleanup_bound )
-    # 	{
-    # 	    my $bound_list = join(',', keys %cleanup_bound);
-	    
-    # 	    my ($timescales_by_bound) = $edt->dbh->selectrow_array("
-    # 		SELECT group_concat(distinct timescale_no)
-    # 		FROM $TABLE{TIMESCALE_BOUNDS} WHERE bound_no in ($bound_list)");
-
-    # 	    if ( $timescales_by_bound )
-    # 	    {
-    # 		$timescale_list = join(',', $timescale_list, $timescales_by_bound);
-    # 	    }
-    # 	}
-    # }
     
     if ( $bound_timescale_list && $request->clean_param('cleanup') )
     {
@@ -438,6 +402,12 @@ sub update_records {
 	push @results, $request->list_timescales_after_update($dbh, $key_list, $edt->key_labels('TIMESCALE_DATA'))
 	    unless $return eq 'none';
     }
+
+    if ( $timescales_deleted )
+    {
+	my @keys = $edt->deleted_keys('TIMESCALE_DATA');
+	push @results, $request->list_deleted_records('timescales', \@keys);
+    }
     
     # if ( $id_string = join(',', $edt->inserted_keys('TIMESCALE_BOUNDS'), $edt->updated_keys('TIMESCALE_BOUNDS')) )
 
@@ -456,6 +426,12 @@ sub update_records {
 	    push @results, $request->list_bounds_after_update($dbh, 'full', $bound_timescale_list,
 							      $edt->key_labels('TIMESCALE_BOUNDS'));
 	}
+    }
+    
+    if ( $bounds_deleted )
+    {
+	my @keys = $edt->deleted_keys('TIMESCALE_BOUNDS');
+	push @results, $request->list_deleted_records('bounds', \@keys);
     }
     
     $request->list_result(\@results);
@@ -479,13 +455,31 @@ sub delete_records {
     my $main_params = $request->get_main_params(\%allowances);
     my $perms = $request->require_authentication('TIMESCALE_DATA');
     
-    my $edt = ResourceEdit->new($request, $perms, 'TIMESCALE_DATA', \%allowances);
+    my $edt = TimescaleEdit->new($request, $perms, 'TIMESCALE_DATA', \%allowances);
+
+    my $table;
+    
+    if ( $arg eq 'timescales' )
+    {
+	$table = 'TIMESCALE_DATA';
+    }
+
+    elsif ( $arg eq 'bounds' )
+    {
+	$table = 'TIMESCALE_BOUNDS';
+    }
+
+    else
+    {
+	print STDERR "ERROR: invalid argument to 'delete_records'\n";
+	die $request->exception(500, "Internal error");
+    }
     
     # Then go through the records and handle each one in turn.
     
     foreach my $id (@id_list)
     {
-	$edt->delete_record('TIMESCALE_DATA', $id);
+	$edt->delete_record($table, $id);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -515,6 +509,10 @@ sub delete_records {
     
     # Then return one result record for each deleted database record.
 
+    my @keys = $edt->deleted_keys($table);
+    my @results = $request->list_deleted_records($arg, \@keys);
+
+    $request->list_result(\@results);
 }
 
 
@@ -820,6 +818,12 @@ sub delete_records {
 # }
 
 
+# list_timescales_after_update ( dbh, key_list, label_ref )
+#
+# Return a list of all timescale records that were added or updated by the current operation. The
+# $key_list argument must contain a list of all inserted, deleted, and replaced keys. If
+# $label_ref is specified, it must be a hash mapping keys to record labels.
+
 sub list_timescales_after_update {
     
     my ($request, $dbh, $key_list, $label_ref) = @_;
@@ -879,6 +883,16 @@ sub list_timescales_after_update {
 }
 
 
+# list_bounds_after_update ( dbh, return_type, key_list, label_ref )
+#
+# Return a list of bound records to be returned by an addupdate operation. The $key_list argument
+# must contain a list of all inserted, deleted, and replaced keys. The $return_type argument must
+# be either 'full' or 'updated'. In the former case, $key_list must be a list of keys indicating
+# the timescales that were touched by this operation. All current bounds from these timescales
+# will be returned. In the latter case, $key_list must be a list of all inserted, updated, and
+# replaced bound keys. If $label_ref is specified, it must be a hash mapping keys to record
+# labels.
+
 sub list_bounds_after_update {
     
     my ($request, $dbh, $return_type, $key_list, $label_ref) = @_;
@@ -904,6 +918,7 @@ sub list_bounds_after_update {
 
     $tables->{tsi} = 1;
     $tables->{tsb} = 1;
+    $tables->{ts} = 1;
     
     # Determine the order in which the results should be returned.
     
@@ -945,6 +960,40 @@ sub list_bounds_after_update {
     }
     
     return @$results;
+}
+
+
+# list_deleted_records ( record_type, key_list )
+# 
+# Return a list of hashes representing deleted records. The $key_list argument must be a list of
+# deleted keys of the appropriate record type. If $label_ref is specified, it must be a hash mapping keys to record
+# labels.
+
+sub list_deleted_records {
+    
+    my ($request, $record_type, $key_list, $label_ref) = @_;
+
+    my @result;
+    
+    foreach my $keyval ( @$key_list )
+    {
+	my $record;
+	
+	if ( $record_type eq 'bounds' )
+	{
+	    $record = { bound_no => $keyval, status => 'deleted' };
+	}
+	
+	else
+	{
+	    $record = { timescale_no => $keyval, status => 'deleted' };
+	}
+	
+	$record->{_label} = $label_ref->{$keyval} if ref $label_ref eq 'HASH' && $label_ref->{$keyval};
+	push @result, $record;
+    }
+
+    return @result;
 }
 
 

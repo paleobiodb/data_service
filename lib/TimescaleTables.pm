@@ -92,19 +92,17 @@ sub establish_timescale_tables {
 		timescale_name varchar(80) not null,
 		priority tinyint unsigned not null default 0,
 		min_age decimal(9,5),
-		min_age_prec tinyint,
 		max_age decimal(9,5),
-		max_age_prec tinyint,
 		source_timescale_no int unsigned not null default 0,
 		timescale_type enum('', 'supereon', 'eon', 'era', 'period',
 			'superepoch', 'epoch', 'subepoch', 'stage', 'substage', 
-			'zone', 'chron') not null default '',
+			'zone', 'chron', 'multi') not null default '',
 		timescale_extent varchar(80) not null default '',
 		timescale_taxon varchar(80) not null default '',
 		timescale_comments text not null default '',
 		has_error boolean not null default 0,
-		is_active boolean not null default 0,
-		is_updated boolean not null default 0,
+		is_enterable boolean not null default 0,
+		is_visible boolean not null default 0,
 		admin_lock boolean not null default 0,
 		reference_no int unsigned not null default 0,
 		authorizer_no int unsigned not null default 0,
@@ -113,11 +111,14 @@ sub establish_timescale_tables {
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp,
 		updated timestamp default current_timestamp on update current_timestamp,
+		bounds_updated timestamp default current_timestamp on update current_timestamp,
+		is_updated boolean not null default 0,
 		key (reference_no),
 		key (authorizer_no),
 		key (min_age),
 		key (max_age, min_age),
-		key (is_active),
+		key (is_enterable),
+		key (is_visible),
 		key (is_updated))");
     
     # The table 'timescale_bounds' defines boundaries between intervals.
@@ -139,22 +140,19 @@ sub establish_timescale_tables {
 		age_error_prec tinyint,
 		fraction decimal(9,5),
 		fraction_prec tinyint,
-		fraction_error decimal(9,5),
-		fraction_error_prec tinyint,
 		has_error boolean not null default 0,
-		is_updated boolean not null default 0,
 		is_modeled boolean not null default 0,
 		is_spike boolean not null default 0,
 		color varchar(10) not null default '',
 		interval_type enum('', 'other', 'supereon', 'eon', 'era', 'period',
 			'superepoch', 'epoch', 'subepoch', 'stage', 'substage', 
 			'zone', 'chron') not null default '',
-		interval_extent varchar(80) null,
-		interval_taxon varchar(255) null,
 		orig_age decimal(9,5),
 		pbdb_no int unsigned not null default 0,
 		macrostrat_no int unsigned not null default 0,
 		updated timestamp default current_timestamp on update current_timestamp,
+		age_updated boolean not null default 0,
+		is_updated boolean not null default 0,
 		key (timescale_no),
 		key (base_no),
 		key (top_no),
@@ -330,12 +328,12 @@ sub copy_international_timescales {
     # First establish the international timescales.
     
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, authorizer_no, enterer_no, timescale_name,
-	timescale_type, timescale_extent, priority, is_active) VALUES
-	(1, $auth_quoted, $auth_quoted, 'ICS Stages', 'stage', 'global', 10, 1),
-	(2, $auth_quoted, $auth_quoted, 'ICS Epochs', 'epoch', 'global', 10, 1),
-	(3, $auth_quoted, $auth_quoted, 'ICS Periods', 'period', 'global', 10, 1),
-	(4, $auth_quoted, $auth_quoted, 'ICS Eras', 'era', 'global', 10, 1),
-	(5, $auth_quoted, $auth_quoted, 'ICS Eons', 'eon', 'global', 10, 1)";
+	timescale_type, timescale_extent, priority, is_enterable, is_visible, admin_lock) VALUES
+	(1, $auth_quoted, $auth_quoted, 'ICS Stages', 'stage', 'global', 10, 1, 1, 1),
+	(2, $auth_quoted, $auth_quoted, 'ICS Epochs', 'epoch', 'global', 10, 1, 1, 1),
+	(3, $auth_quoted, $auth_quoted, 'ICS Periods', 'period', 'global', 10, 1, 1, 1),
+	(4, $auth_quoted, $auth_quoted, 'ICS Eras', 'era', 'global', 10, 1, 1, 1),
+	(5, $auth_quoted, $auth_quoted, 'ICS Eons', 'eon', 'global', 10, 1, 1, 1)";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
@@ -536,8 +534,8 @@ sub copy_international_timescales {
     my $test_timescale_no = 10;
     
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, authorizer_no, timescale_name,
-	is_active, timescale_type, timescale_extent) VALUES
-	($test_timescale_no, $auth_quoted, 'Time Ruler', 1,
+	is_visible, admin_lock, timescale_type, timescale_extent) VALUES
+	($test_timescale_no, $auth_quoted, 'Time Ruler', 1, 1,
 	 'multi', 'global')";
     
     print STDERR "$sql\n\n" if $options->{debug};
@@ -626,8 +624,8 @@ sub copy_pbdb_timescales {
     # First copy the timescales from the PBDB.
     
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, reference_no, pbdb_id, timescale_name,
-		timescale_type, is_active, authorizer_no, enterer_no, modifier_no, created, modified)
-	SELECT scale_no + 100, reference_no, scale_no, scale_name, null, 0,
+		timescale_type, authorizer_no, enterer_no, modifier_no, created, modified)
+	SELECT scale_no + 100, reference_no, scale_no, scale_name, null, 
 		authorizer_no, enterer_no, modifier_no, created, modified
 	FROM scales";
     
@@ -692,8 +690,8 @@ sub copy_macrostrat_timescales {
     my $skip_list = "1,2,3,11,13,14";
     
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, reference_no, macrostrat_id, timescale_name,
-		timescale_type, is_active, authorizer_no, enterer_no)
-	SELECT id + 50, 0, id, timescale, null, 0, $auth_quoted as authorizer_no, $auth_quoted as enterer_no
+		timescale_type, authorizer_no, enterer_no)
+	SELECT id + 50, 0, id, timescale, null, $auth_quoted as authorizer_no, $auth_quoted as enterer_no
 	FROM $TABLE{MACROSTRAT_SCALES}
 	WHERE id not in ($skip_list)";
     
@@ -1379,12 +1377,16 @@ sub complete_bound_updates {
     logMessage(2, "Completing bound updates...");
     
     $dbh->do("CALL complete_bound_updates");
-    # $dbh->do("CALL check_updated_bounds");
+    
+    logMessage(2, "    complete_bound_updates");
+    
+    $dbh->do("CALL check_updated_timescales");
+
+    logMessage(2, "    check_updated_timescales");
+    
     $dbh->do("CALL unmark_updated_bounds");
     
-    print STDERR "CALL complete_bound_updates\nCALL unmark_updated\n\n"
-	if $options->{debug};
-    
+    logMessage(2, "    unmark_updated_bounds");
     logMessage(2, "Done.");
 }
 
@@ -1545,18 +1547,18 @@ sub model_one_timescale {
 	    # name matches as well. The current lower bound on the Olenekian is very close to an
 	    # obsolete value for the lower bound on the Triassic.
 	    
-	    elsif ( $bound_age > 0 && $diff < 2.0 && $diff < 0.05 * $this_age &&
-		    ( $INT_BOUND{$this_no}{interval_name} ne 'Olenekian' ||
-		      ( defined $r->{interval_name} && $r->{interval_name} eq 'Olenekian' ) ) )
-	    {
-		$r->{match_no} = $this_no;
-		$r->{is_modeled} = 1;
+	    # elsif ( $bound_age > 0 && $diff < 0.1 && $diff < 0.05 * $this_age &&
+	    # 	    ( $INT_BOUND{$this_no}{interval_name} ne 'Olenekian' ||
+	    # 	      ( defined $r->{interval_name} && $r->{interval_name} eq 'Olenekian' ) ) )
+	    # {
+	    # 	$r->{match_no} = $this_no;
+	    # 	$r->{is_modeled} = 1;
 		
-		my $r1 = $INT_BOUND{$this_no};
-		logMessage(2, "Close match: $r->{age} ($r->{interval_name}) to $r1->{age} ($r1->{interval_name})")
-		    unless $options->{silent};
-		last AGE;
-	    }
+	    # 	my $r1 = $INT_BOUND{$this_no};
+	    # 	logMessage(2, "Close match: $r->{age} ($r->{interval_name}) to $r1->{age} ($r1->{interval_name})")
+	    # 	    unless $options->{silent};
+	    # 	last AGE;
+	    # }
 
 	    # If we find ourselves in the middle of an interval, then compute how much of the way
 	    # through the interval it lies.
@@ -1599,7 +1601,8 @@ sub model_one_timescale {
 	    logMessage(2, "ERROR: no match for $r->{age} ($r->{interval_name})!!!");
 	}
     }
-    
+
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -1876,14 +1879,6 @@ sub establish_procedures {
 	SET \@row_count = 1;
 	SET \@age_iterations = 0;
 	
-	# Mark all timescales that have updated bounds as updated, plus all
-	# other bounds in those timescales.
-	
-	# UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb join $TABLE{TIMESCALE_DATA} as ts using (timescale_no)
-	# 	join $TABLE{TIMESCALE_BOUNDS} as base using (timescale_no)
-	# SET ts.is_updated = 1, tsb.is_updated = 1
-	# WHERE base.is_updated;
-	
 	# For all updated records where the precision fields have not been
 	# set, set them to the position of the last nonzero digit after the
 	# decimal place.
@@ -1892,11 +1887,8 @@ sub establish_procedures {
 	SET age_prec = coalesce(age_prec, length(regexp_substr(age, '(?<=[.])\\\\d*?(?=0*\$)'))),
 	    age_error_prec = coalesce(age_error_prec, 
 				length(regexp_substr(age_error, '(?<=[.])\\\\d*?(?=0*\$)'))),
-	    fraction_prec = coalesce(fraction_prec, length(regexp_substr(fraction, '(?<=[.])\\\\d*?(?=0*\$)'))),
-	    fraction_error_prec = coalesce(fraction_error_prec,
-				length(regexp_substr(fraction_error, '(?<=[.])\\\\d*?(?=0*\$)')))
-	WHERE is_updated and (age_prec is null or age_error_prec is null or
-			      fraction_prec is null or fraction_error_prec is null);
+	    fraction_prec = coalesce(fraction_prec, length(regexp_substr(fraction, '(?<=[.])\\\\d*?(?=0*\$)')))
+	WHERE is_updated and (age_prec is null or age_error_prec is null or fraction_prec is null);
 	
 	# Now update the ages and flags on all bounds that are marked as is_updated.  If
 	# this results in any updated records, repeat the process until no
@@ -1905,81 +1897,94 @@ sub establish_procedures {
 	WHILE \@row_count > 0 AND \@age_iterations < 20 DO
 	    
 	    UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb
-		left join $TABLE{TIMESCALE_BOUNDS} as base on base.bound_no = tsb.base_no
-		left join $TABLE{TIMESCALE_BOUNDS} as top on top.bound_no = tsb.range_no
+		left join $TABLE{TIMESCALE_BOUNDS} as `base` on base.bound_no = tsb.base_no
+		left join $TABLE{TIMESCALE_BOUNDS} as `range` on range.bound_no = tsb.range_no
+		left join $TABLE{TIMESCALE_BOUNDS} as `csource` on csource.bound_no = tsb.color_no
 	    SET tsb.is_updated = 1,
 		tsb.is_spike = case tsb.bound_type
 			when 'same' then base.is_spike
-			when 'alias' then base.is_spike
 			else tsb.is_spike
 			end,
 		tsb.age = case tsb.bound_type
 			when 'same' then base.age
-			when 'alias' then base.age
-			when 'fraction' then round(base.age - tsb.fraction * ( base.age - top.age ),
-					           greatest(least(coalesce(base.age_prec, 0), 
-						                  coalesce(top.age_prec, 0)),
-							    if(base.age > 600, 0, 1)))
+			when 'fraction' then if(tsb.age_updated, tsb.age,
+						round(base.age - tsb.fraction * ( base.age - range.age ),
+						      tsb.age_prec))
+					           # greatest(least(coalesce(base.age_prec, 0), 
+						   #                coalesce(range.age_prec, 0)),
+						   # 	    if(base.age > 600, 0, 1)))
 			else tsb.age
 			end,
 		tsb.age_prec = case tsb.bound_type
 			when 'same' then base.age_prec
-			when 'alias' then base.age_prec
-			when 'fraction' then least(coalesce(base.age_prec, 0),
-						   coalesce(top.age_prec, 0))
+			# when 'fraction' then least(coalesce(base.age_prec, 0),
+			# 			   coalesce(range.age_prec, 0))
 			else tsb.age_prec
 			end,
 		tsb.age_error = case tsb.bound_type
 			when 'same' then base.age_error
-			when 'alias' then base.age_error
-			when 'fraction' then coalesce(greatest(base.age_error, top.age_error),
-						     base.age_error, top.age_error)
+			# when 'fraction' then coalesce(greatest(base.age_error, range.age_error),
+			# 			     base.age_error, range.age_error)
 			else tsb.age_error
 			end,
 		tsb.age_error_prec = case tsb.bound_type
 			when 'same' then base.age_error_prec
-			when 'alias' then base.age_error_prec
-			when 'fraction' then least(coalesce(base.age_error_prec, 0),
-						  coalesce(top.age_error_prec, 0))
+			# when 'fraction' then least(coalesce(base.age_error_prec, 0),
+			# 			  coalesce(range.age_error_prec, 0))
 			else tsb.age_error_prec
 			end,
 		tsb.is_spike = case tsb.bound_type
 			when 'spike' then 1
 			when 'same' then base.is_spike
-			when 'alias' then base.is_spike
 			else 0
-			end
-	    WHERE base.is_updated or top.is_updated or tsb.is_updated;
+			end,
+		tsb.color = coalesce(csource.color, tsb.color)
+	    WHERE base.is_updated or range.is_updated or tsb.is_updated;
 	    
 	    SET \@row_count = ROW_COUNT();
 	    SET \@age_iterations = \@age_iterations + 1;
 	    
 	    # SET \@debug = concat(\@debug, \@cnt, ' : ');
 	    
+	    # Now make sure that every fractional bound that explicitly had its age set has the
+	    # proper fraction set. We do this step last so that if the base and/or range bound are
+	    # also being updated then they will attain their final values before we do this
+	    # computation. As part of this step, we clear the 'age_updated' flag.
+	    
+	    UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb
+		left join $TABLE{TIMESCALE_BOUNDS} as `base` on base.bound_no = tsb.base_no
+		left join $TABLE{TIMESCALE_BOUNDS} as `range` on range.bound_no = tsb.range_no
+	    SET tsb.fraction = if(base.age is not null and range.age is not null and tsb.age is not null and
+					base.age <> range.age,
+				  round((base.age - tsb.age) / (base.age - range.age), 4),
+				  null),
+		tsb.age_updated = 0
+	    WHERE tsb.age_updated;
+	    
 	END WHILE;
 	
 	# Then do the same thing for the color attribute
 	
-	SET \@row_count = 1;
-	SET \@attr_iterations = 0;
+	# SET \@row_count = 1;
+	# SET \@attr_iterations = 0;
 
-	WHILE \@row_count > 0 AND \@attr_iterations < 20 DO
+	# WHILE \@row_count > 0 AND \@attr_iterations < 20 DO
 	
-	    UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb
-		join $TABLE{TIMESCALE_DATA} as ts using (timescale_no)
-		left join $TABLE{TIMESCALE_BOUNDS} as csource on csource.bound_no = tsb.color_no
-	    SET tsb.is_updated = 1,
-		tsb.color = if(tsb.color_no > 0, csource.color, tsb.color)
-	    WHERE tsb.is_updated or csource.is_updated;
+	#     UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb
+	# 	join $TABLE{TIMESCALE_DATA} as ts using (timescale_no)
+	# 	left join $TABLE{TIMESCALE_BOUNDS} as csource on csource.bound_no = tsb.color_no
+	#     SET tsb.is_updated = 1,
+	# 	tsb.color = if(tsb.color_no > 0, csource.color, tsb.color)
+	#     WHERE tsb.is_updated or csource.is_updated;
 	    
-	    SET \@row_count = ROW_COUNT();
-	    SET \@attr_iterations = \@attr_iterations + 1;
+	#     SET \@row_count = ROW_COUNT();
+	#     SET \@attr_iterations = \@attr_iterations + 1;
 	    
-	END WHILE;
+	# END WHILE;
 	
 	# Then check all of the bounds in the specified timescales for errors.
 	
-	CALL check_updated_bounds;
+	# CALL check_updated_timescales;
 	
 	END;");
     
@@ -1990,64 +1995,64 @@ sub establish_procedures {
     $dbh->do("CREATE PROCEDURE update_timescale_ages ( t int unsigned )
 	BEGIN
 	
-	UPDATE $TABLE{TIMESCALE_DATA} as ts join
+	UPDATE $TABLE{TIMESCALE_DATA} as `ts` join
 	    (SELECT age, age_prec, timescale_no FROM $TABLE{TIMESCALE_BOUNDS}
 	     WHERE timescale_no = t
-	     ORDER BY age LIMIT 1) as min using (timescale_no)
-	SET ts.min_age = min.age, ts.min_age_prec = min.age_prec
+	     ORDER BY age LIMIT 1) as `min` using (timescale_no)
+	SET ts.min_age = min.age
 	WHERE timescale_no = t;
 	
-	UPDATE $TABLE{TIMESCALE_DATA} as ts join
+	UPDATE $TABLE{TIMESCALE_DATA} as `ts` join
 	    (SELECT age, age_prec, timescale_no FROM $TABLE{TIMESCALE_BOUNDS}
 	     WHERE timescale_no = t
-	     ORDER BY age desc LIMIT 1) as max using (timescale_no)
-	SET ts.max_age = max.age, ts.max_age_prec = max.age_prec
+	     ORDER BY age desc LIMIT 1) as `max` using (timescale_no)
+	SET ts.max_age = max.age
 	WHERE timescale_no = t;
 	
 	END;");
     
-    logMessage(2, "    check_updated_bounds");
+    logMessage(2, "    check_updated_timescales");
     
     $dbh->do("DROP PROCEDURE IF EXISTS check_updated_bounds");
+    $dbh->do("DROP PROCEDURE IF EXISTS check_updated_timescales");
     
-    $dbh->do("CREATE PROCEDURE check_updated_bounds ( )
+    $dbh->do("CREATE PROCEDURE check_updated_timescales ( )
 	BEGIN
 	
-	UPDATE $TABLE{TIMESCALE_DATA} as ts join
-	    (SELECT timescale_no, min(b.age) as min, max(b.age) as max FROM
-		$TABLE{TIMESCALE_BOUNDS} as b join $TABLE{TIMESCALE_BOUNDS} as base using (timescale_no)
-	     WHERE base.is_updated GROUP BY timescale_no) as all_bounds using (timescale_no)
-	SET ts.min_age = all_bounds.min,
-	    ts.max_age = all_bounds.max;
+	UPDATE $TABLE{TIMESCALE_BOUNDS} as `tsb` join $TABLE{TIMESCALE_DATA} as `ts` using (timescale_no)
+	SET ts.is_updated = 1 WHERE tsb.is_updated;
 	
-	# UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb join $TABLE{TIMESCALE_DATA} as ts using (timescale_no) join
-	# 	(SELECT b1.bound_no,
-	# 	    if(b1.is_top, 1, b1.age_this > b1.age_prev) as age_ok,
-	# 	    if(b1.is_top, b1.interval_no = 0, b1.interval_no = b1.lower_prev) as bound_ok,
-	# 	    (b1.interval_no = 0 or b1.upper_int > 0) as interval_ok,
-	# 	    (b1.lower_this = 0 or b1.lower_int > 0) as lower_ok,
-	# 	    (b1.duplicate_no is null) as unique_ok
-	# 	 FROM
-	# 	  (SELECT b0.bound_no, b0.timescale_no, (\@ts_prev:=\@ts_this) as ts_prev, (\@ts_this:=timescale_no) as ts_this,
-	# 		(\@ts_prev is null or \@ts_prev <> \@ts_this) as is_top, b0.interval_no, upper_int, lower_int,
-	# 		(\@lower_prev:=\@lower_this) as lower_prev, (\@lower_this:=lower_no) as lower_this,
-	# 		(\@age_prev:=\@age_this) as age_prev, (\@age_this:=b0.age) as age_this, b0.duplicate_no
-	# 	   FROM (SELECT b.bound_no, b.timescale_no, b.age, b.interval_no, b.lower_no,
-	# 		upper.interval_no as upper_int, lower.interval_no as lower_int,
-	# 		duplicate.bound_no as duplicate_no
-	# 	   FROM $TABLE{TIMESCALE_BOUNDS} as b
-	# 		join $TABLE{TIMESCALE_BOUNDS} as base using (timescale_no)
-	# 		left join $TABLE{TIMESCALE_BOUNDS} as duplicate on duplicate.timescale_no = b.timescale_no and
-	# 			duplicate.interval_no = b.interval_no and duplicate.bound_no <> b.bound_no and
-	# 			duplicate.bound_no > 0
-	# 	        left join timescale_ints as upper on upper.interval_no = b.interval_no
-	# 	        left join timescale_ints as lower on lower.interval_no = b.lower_no
-	# 		join (SELECT \@lower_this:=null, \@lower_prev:=null, \@age_this:=null, \@age_prev:=null,
-	# 			\@ts_prev:=0, \@ts_this:=0) as initializer
-	# 	   WHERE base.is_updated GROUP BY b.bound_no ORDER BY b.timescale_no, b.age) as b0) as b1) as b2 using (bound_no)
-		 
-	#       SET tsb.is_error = not(bound_ok and age_ok and interval_ok and lower_ok and unique_ok),
-	# 	  ts.is_error = not(bound_ok and age_ok and interval_ok and lower_ok and unique_ok);
+	UPDATE $TABLE{TIMESCALE_BOUNDS} as `tsb` join $TABLE{TIMESCALE_DATA} as `ts` using (timescale_no)
+		left join $TABLE{TIMESCALE_BOUNDS} as `upper` on upper.bound_no = tsb.top_no
+		left join $TABLE{TIMESCALE_BOUNDS} as `base` on base.bound_no = tsb.base_no
+		left join $TABLE{TIMESCALE_BOUNDS} as `range` on range.bound_no = tsb.range_no
+	SET tsb.has_error =
+		if((tsb.age is null) or
+		   (upper.age is not null and tsb.age <= upper.age) or
+		   (upper.timescale_no <> tsb.timescale_no) or
+		   (tsb.bound_type = 'fraction' and (range.bound_no is null or
+						     tsb.fraction is null or 
+						     not tsb.fraction between 0 and 1)) or
+		   (tsb.bound_type in ('base', 'fraction') and base.bound_no is null),
+		   1, 0)
+	WHERE ts.is_updated;
+	
+	UPDATE $TABLE{TIMESCALE_BOUNDS} as `tsb` join
+	    (SELECT timescale_no, b.interval_name, count(*) as `c`
+	     FROM $TABLE{TIMESCALE_BOUNDS} as `b` join $TABLE{TIMESCALE_DATA} as `ts` using (timescale_no)
+	     WHERE b.interval_name <> '' and ts.is_updated
+	     GROUP BY timescale_no, interval_name HAVING `c`>1) as `duplicate_bounds` using (timescale_no, interval_name) 
+	SET tsb.has_error = 1;
+	
+	UPDATE $TABLE{TIMESCALE_DATA} as `ts` join
+	    (SELECT timescale_no, min(b.age) as `min`, max(b.age) as `max`, max(b.has_error) as `has_error`
+	     FROM $TABLE{TIMESCALE_BOUNDS} as `b` join $TABLE{TIMESCALE_DATA} as `t` using (timescale_no)
+	     WHERE t.is_updated GROUP BY timescale_no) as `all_bounds` using (timescale_no)
+	SET ts.min_age = all_bounds.min,
+	    ts.max_age = all_bounds.max,
+	    ts.has_error = all_bounds.has_error,
+	    ts.bounds_updated = now();
+	
 	END;");
     
     logMessage(2, "    link_timescale_bounds");
@@ -2055,37 +2060,39 @@ sub establish_procedures {
     $dbh->do("DROP PROCEDURE IF EXISTS link_timescale_bounds");
     
     $dbh->do("CREATE PROCEDURE link_timescale_bounds ( t int unsigned )
-	BEGIN
+    	BEGIN
 	
-	SET \@last_bound := 0, \@save_bound := 0;
+    	SET \@last_bound := 0, \@save_bound := 0;
 	
-	UPDATE $TABLE{TIMESCALE_BOUNDS}
-	SET top_no = last_value(\@save_bound := \@last_bound, \@last_bound := bound_no, \@save_bound)
-	WHERE timescale_no = t ORDER BY age;
+    	UPDATE $TABLE{TIMESCALE_BOUNDS}
+    	SET top_no = last_value(\@save_bound := \@last_bound, \@last_bound := bound_no, \@save_bound)
+    	WHERE timescale_no = t ORDER BY age;
 	
-	END;");
+    	END;");
     
-    logMessage(2, "    unmark_updated");
+    logMessage(2, "    unmark_updated (dropped)");
     
     $dbh->do("DROP PROCEDURE IF EXISTS unmark_updated");
     
-    $dbh->do("CREATE PROCEDURE unmark_updated ( )
-	BEGIN
+    # $dbh->do("CREATE PROCEDURE unmark_updated ( )
+    # 	BEGIN
 	
-	UPDATE $TABLE{TIMESCALE_BOUNDS} SET is_updated = 0;
+    # 	UPDATE $TABLE{TIMESCALE_BOUNDS} SET is_updated = 0;
+    # 	# UPDATE $TABLE{TIMESCALE_DATA} SET is_updated = 0;
 	
-	END;");
+    # 	END;");
     
     logMessage(2, "    unmark_updated_bounds");
     
     $dbh->do("DROP PROCEDURE IF EXISTS unmark_updated_bounds");
     
     $dbh->do("CREATE PROCEDURE unmark_updated_bounds ( )
-	BEGIN
+    	BEGIN
 	
-	UPDATE $TABLE{TIMESCALE_BOUNDS} SET is_updated = 0;
+    	UPDATE $TABLE{TIMESCALE_BOUNDS} SET is_updated = 0;
+	UPDATE $TABLE{TIMESCALE_DATA} SET is_updated = 0;
 	
-	END;");
+    	END;");
     
     logMessage(1, "Done.");
 }
@@ -2129,18 +2136,18 @@ sub establish_triggers {
     $dbh->do("CREATE TRIGGER update_bound
 	BEFORE UPDATE ON $TABLE{TIMESCALE_BOUNDS} FOR EACH ROW
 	BEGIN
-	    IF OLD.bound_type <> NEW.bound_type or
-		OLD.interval_name <> NEW.interval_name or
-		OLD.top_no <> NEW.top_no or OLD.base_no <> NEW.base_no or
+	    IF  OLD.bound_type <> NEW.bound_type or
+	        OLD.interval_name <> NEW.interval_name or
+	        OLD.top_no <> NEW.top_no or OLD.base_no <> NEW.base_no or
 		OLD.range_no <> NEW.range_no or OLD.color_no <> NEW.color_no or
-		OLD.age_error <> NEW.age_error or OLD.fraction <> NEW.fraction or
-		OLD.fraction_error <> NEW.fraction_error or OLD.age_prec <> NEW.age_prec or
-		OLD.age_error_prec <> NEW.age_error_prec or OLD.fraction_prec <> NEW.fraction_prec or
-		OLD.fraction_error_prec <> NEW.fraction_error_prec or OLD.color <> NEW.color
-		 THEN
-	    SET NEW.is_updated = 1; END IF;
+		OLD.age <> NEW.age or OLD.age_prec <> NEW.age_prec or
+		OLD.age_error <> NEW.age_error or OLD.age_error_prec <> NEW.age_error_prec or
+		OLD.fraction <> NEW.fraction or OLD.fraction_prec <> NEW.fraction_prec or 
+		OLD.is_spike <> NEW.is_spike or OLD.color <> NEW.color
+	    THEN
+	        SET NEW.is_updated = 1; END IF;
 	END;");
-
+    
     logMessage(1, "Done.");
 }
 

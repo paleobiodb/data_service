@@ -50,7 +50,7 @@ sub validate_action {
     #
     # If the interval name is not empty, then we must have a 'top_no'.
 
-    if ( $table eq 'TIMESCALE_BOUNDS' )
+    if ( $table eq 'TIMESCALE_BOUNDS' && $operation ne 'delete' )
     {
 	my $v = { };
 	
@@ -69,7 +69,9 @@ sub validate_action {
 	$v->{range_no} = $record->{range_id} || $record->{range_no} if exists $record->{range_id} || exists $record->{range_no};
 	$v->{top_no} = $record->{top_id} || $record->{top_no} if exists $record->{top_id} || $record->{top_no};
 	
-	# Now check the required fields that depend on the value of bound_type.
+	# Now check the required fields that depend on the value of bound_type. In the case of
+	# type 'fraction', if the age is being set then we compute the fraction that will generate
+	# that and ignore any fraction that was provided.
 	
 	unless ( $v->{bound_type} )
 	{
@@ -86,6 +88,11 @@ sub validate_action {
 	{
 	    $edt->add_condition('E_REQUIRED', 'base_id') unless $v->{base_no};
 	    $edt->add_condition('E_REQUIRED', 'range_id') unless $v->{range_no};
+	    
+	    if ( defined $record->{age} && $record->{age} =~ /\d/ )
+	    {
+		$record->{age_updated} = 1;
+	    }
 	}
 	
 	else
@@ -103,7 +110,7 @@ sub validate_action {
 	# Look for any of the following fields in the action record. If they are specified, then set
 	# the corresponding _prec field.
 	
-	foreach my $f ( 'age', 'age_error', 'fraction', 'fraction_error' )
+	foreach my $f ( 'age', 'age_error', 'fraction' )
 	{
 	    if ( defined $record->{$f} && $record->{$f} ne '' )
 	    {
@@ -189,99 +196,108 @@ sub finalize_transaction {
     my $dbh = $edt->dbh;
     my $result;
     my $sql;
-
-    # $$$ if bounds were updated, update 'modified' and 'modifier_no' on the corresponding timescales
     
-    my @timescale_list = $edt->get_attr_keys('updated_timescale');
-    my @bound_list = $edt->get_attr_keys('updated_bound');
-    my $active_str;
+    # Complete and propagate all bound updates, and check all bounds in any timescale that has at
+    # least one updated bound.
 
-    if ( @bound_list )
-    {
-	my $bound_str = join(',', @bound_list);
-	
-	$sql = "SELECT group_concat(distinct timescale_no) FROM $TABLE{TIMESCALE_BOUNDS}
-		WHERE bound_no in ($bound_str)";
-	
-	$edt->debug_line("$sql\n\n");
-	
-	my ($other_ts) = $dbh->selectrow_array($sql);
-	
-	push @timescale_list, $other_ts if ref $other_ts eq 'ARRAY';
-    }
+    $dbh->do("CALL complete_bound_updates");
+    $dbh->do("CALL check_updated_timescales");
+    $dbh->do("CALL unmark_updated_bounds");
 
-    if ( @timescale_list )
-    {
-	my $timescale_str = join(',', @timescale_list);
-	
-	$sql = "SELECT group_concat(distinct timescale_no) FROM $TABLE{TIMESCALE_DATA}
-		WHERE timescale_no in ($timescale_str) and is_active";
-	
-	$edt->debug_line("$sql\n\n");
-
-	($active_str) = $dbh->selectcol_arrayref($sql);
-    }
-    
-    return unless $active_str;
     return;
-    # If we get here, then we have updated at least one active timescale. So check to see if any
-    # of its interval names do not correspond to an existing record. If so, they will need to be
-    # created.
-
-    $sql = "SELECT distinct interval_name FROM $TABLE{TIMESCALE_BOUNDS} as tsb
-		left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name)
-		WHERE timescale_no in ($active_str) and tsi.interval_name is null";
     
-    $edt->debug_line("$sql\n\n");
+    # # Start by keeping track of which timescales were updated.
+    
+    # my @timescale_list = $edt->get_attr_keys('updated_timescale');
+    # my @bound_list = $edt->get_attr_keys('updated_bound');
+    # my $active_str;
 
-    my $missing_intervals = $dbh->selectcol_arrayref($sql);
+    # if ( @bound_list )
+    # {
+    # 	my $bound_str = join(',', @bound_list);
+	
+    # 	$sql = "SELECT group_concat(distinct timescale_no) FROM $TABLE{TIMESCALE_BOUNDS}
+    # 		WHERE bound_no in ($bound_str)";
+	
+    # 	$edt->debug_line("$sql\n\n");
+	
+    # 	my ($other_ts) = $dbh->selectrow_array($sql);
+	
+    # 	push @timescale_list, $other_ts if ref $other_ts eq 'ARRAY';
+    # }
+    
+    # if ( @timescale_list )
+    # {
+    # 	my $timescale_str = join(',', @timescale_list);
+	
+    # 	$sql = "SELECT group_concat(distinct timescale_no) FROM $TABLE{TIMESCALE_DATA}
+    # 		WHERE timescale_no in ($timescale_str) and is_visible";
+	
+    # 	$edt->debug_line("$sql\n\n");
+	
+    # 	($active_str) = $dbh->selectcol_arrayref($sql);
+    # }
+    
+    # return unless $active_str;
+    # return;
+    # # If we get here, then we have updated at least one active timescale. So check to see if any
+    # # of its interval names do not correspond to an existing record. If so, they will need to be
+    # # created.
 
-    if ( ref $missing_intervals eq 'ARRAY' )
-    {
-	foreach my $name ( @$missing_intervals )
-	{
-	    if ( $edt->allows('CREATE_INTERVALS') )
-	    {
-		my $quoted = $dbh->quote($name);
+    # $sql = "SELECT distinct interval_name FROM $TABLE{TIMESCALE_BOUNDS} as tsb
+    # 		left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name)
+    # 		WHERE timescale_no in ($active_str) and tsi.interval_name is null";
+    
+    # $edt->debug_line("$sql\n\n");
+
+    # my $missing_intervals = $dbh->selectcol_arrayref($sql);
+
+    # if ( ref $missing_intervals eq 'ARRAY' )
+    # {
+    # 	foreach my $name ( @$missing_intervals )
+    # 	{
+    # 	    if ( $edt->allows('CREATE_INTERVALS') )
+    # 	    {
+    # 		my $quoted = $dbh->quote($name);
 		
-		$sql = "INSERT INTO $TABLE{TIMESCALE_INTS} (interval_name) VALUES ($quoted)";
+    # 		$sql = "INSERT INTO $TABLE{TIMESCALE_INTS} (interval_name) VALUES ($quoted)";
 
-		$edt->debug_line("$sql\n\n");
+    # 		$edt->debug_line("$sql\n\n");
 
-		$dbh->do($sql);
-	    }
+    # 		$dbh->do($sql);
+    # 	    }
 
-	    else
-	    {
-		$edt->add_condition('main', 'C_CREATE_INTERVALS', $name);
-	    }
-	}
-    }
+    # 	    else
+    # 	    {
+    # 		$edt->add_condition('main', 'C_CREATE_INTERVALS', $name);
+    # 	    }
+    # 	}
+    # }
 
-    # Now make sure that all of the interval records corresponding to intervals in any of the
-    # active timescales are updated to match the values in the most authoritative timescale.
+    # # Now make sure that all of the interval records corresponding to intervals in any of the
+    # # active timescales are updated to match the values in the most authoritative timescale.
 
-    $sql = "UPDATE $TABLE{TIMESCALE_INTS} as tsi join (
-	WITH a2 as (SELECT interval_name, authority_level, timescale_no, 
-		max((authority_level+1)*10000) - max((authority_level+1)*10000 - timescale_no) as ts 
-		FROM timescale_bounds join timescales using (timescale_no)
-		WHERE interval_name <> '' and interval_name in 
-			(SELECT distinct interval_name FROM timescale_bounds where timescale_no in ($active_str))
-		GROUP by interval_name)
-	SELECT lower.interval_name, lower.age as early_age, lower.age_prec as early_age_prec,
-		upper.age as late_age, upper.age_prec as late_age_prec, lower.timescale_no, lower.color
-	FROM a2 join timescale_bounds as lower using (interval_name, timescale_no)
-		join timescale_bounds as upper on upper.bound_no = lower.top_no) as a using (interval_name)
-	SET tsi.early_age = a.early_age,
-	    tsi.early_age_prec = a.early_age_prec,
-	    tsi.late_age = a.late_age,
-	    tsi.late_age_prec = a.late_age_prec,
-	    tsi.color = a.color,
-	    tsi.authority_timescale_no = a.timescale_no";
+    # $sql = "UPDATE $TABLE{TIMESCALE_INTS} as tsi join (
+    # 	WITH a2 as (SELECT interval_name, authority_level, timescale_no, 
+    # 		max((authority_level+1)*10000) - max((authority_level+1)*10000 - timescale_no) as ts 
+    # 		FROM timescale_bounds join timescales using (timescale_no)
+    # 		WHERE interval_name <> '' and interval_name in 
+    # 			(SELECT distinct interval_name FROM timescale_bounds where timescale_no in ($active_str))
+    # 		GROUP by interval_name)
+    # 	SELECT lower.interval_name, lower.age as early_age, lower.age_prec as early_age_prec,
+    # 		upper.age as late_age, upper.age_prec as late_age_prec, lower.timescale_no, lower.color
+    # 	FROM a2 join timescale_bounds as lower using (interval_name, timescale_no)
+    # 		join timescale_bounds as upper on upper.bound_no = lower.top_no) as a using (interval_name)
+    # 	SET tsi.early_age = a.early_age,
+    # 	    tsi.early_age_prec = a.early_age_prec,
+    # 	    tsi.late_age = a.late_age,
+    # 	    tsi.late_age_prec = a.late_age_prec,
+    # 	    tsi.color = a.color,
+    # 	    tsi.authority_timescale_no = a.timescale_no";
     
-    $edt->debug_line("$sql\n\n");
+    # $edt->debug_line("$sql\n\n");
 
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
     # update timescale_ints as tsi join (with a2 as (select interval_name, authority_level, timescale_no, max((authority_level+1)*10000) - max((authority_level+1)*10000 - timescale_no) as ts from timescale_bounds join timescales using (timescale_no) where interval_name <> '' and interval_name in (select distinct interval_name from timescale_bounds where timescale_no = 1) group by interval_name) select lower.interval_name, lower.age as early_age, lower.age_prec as early_age_prec, upper.age as late_age, upper.age_prec as late_age_prec, lower.timescale_no, lower.color from a2 join timescale_bounds as lower using (interval_name, timescale_no) join timescale_bounds as upper on upper.bound_no = lower.top_no) as a using (interval_name) set tsi.early_age = a.early_age, tsi.early_age_prec = a.early_age_prec, tsi.late_age = a.late_age, tsi.late_age_prec = a.late_age_prec, tsi.color = a.color, tsi.authority_timescale_no = a.timescale_no;	
     
@@ -295,12 +311,12 @@ sub finalize_transaction {
     # 	# $result = $dbh->do("CALL update_bound_list($t)");
     # }
     
-    my @timescales = $edt->get_attr_keys('update_authority');
+    # my @timescales = $edt->get_attr_keys('update_authority');
     
-    foreach my $t ( @timescales )
-    {
-	$edt->update_authority($t);
-    }
+    # foreach my $t ( @timescales )
+    # {
+    # 	$edt->update_authority($t);
+    # }
     
     # while ( @timescales )
     # {
@@ -321,15 +337,15 @@ sub before_update_timescale {
     
     my ($edt, $action, $operation) = @_;
     
-    return if $action eq 'update' && ! ( $action->has_field('authority_level') ||
-					 $action->has_field('is_active') );
+    # return if $action eq 'update' && ! ( $action->has_field('authority_level') ||
+    # 					 $action->has_field('is_active') );
     
-    my (@ids) = $action->keylist;
+    # my (@ids) = $action->keylist;
     
-    foreach my $id ( @ids )
-    {
-	$edt->set_attr_key('update_authority', $id, 1);
-    }
+    # foreach my $id ( @ids )
+    # {
+    # 	$edt->set_attr_key('update_authority', $id, 1);
+    # }
     
     # my $dbh = $edt->dbh;
     # my $keyexpr = $action->keyexpr;

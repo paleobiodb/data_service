@@ -482,8 +482,9 @@ subtest 'notfound' => sub {
     {
 	is( $e->code, 'F_NOT_FOUND', "error had proper code" );
 	is( $e->label, 'f1', "error had proper label" );
-	my ($d) = $e->data;
-	is( $d, 99999, "error had proper parameter" );
+	my ($p, $v) = $e->data;
+	is( $p, 'test_no', "error had proper parameter name" );
+	is( $v, 99999, "error had proper parameter value" );
     }
     
     $edt->insert_record('EDT_TEST', { _label => 'f2', signed_val => 'abc' });

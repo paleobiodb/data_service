@@ -657,6 +657,8 @@ sub list_updated_measurements {
 	    {
 		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
 	    }
+
+	    $request->select_output_block($r, '1.2:measure:basic');
 	}
     }
     
@@ -664,15 +666,15 @@ sub list_updated_measurements {
 }
 
 
-sub my_select_output_block {
+# sub my_select_output_block {
 
-    my ($request, $record) = @_;
+#     my ($request, $record) = @_;
 
-    if ( $record->{measurement_no} )
-    {
-	$request->alternate_output_block('1.2:measure:basic');
-    }
-}
+#     if ( $record->{measurement_no} )
+#     {
+# 	$request->alternate_output_block('1.2:measure:basic');
+#     }
+# }
 
 
 1;

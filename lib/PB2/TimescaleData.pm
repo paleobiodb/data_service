@@ -64,11 +64,16 @@ sub initialize {
 	{ value => 'substage' },
 	{ value => 'zone' },
 	{ value => 'chron' },
-	{ value => 'other' });
+	{ value => 'other' },
+	{ value => 'multi' });
+    
+    # $ds->define_set('1.2:timescales:status' => 
+    # 	{ value => 'deleted' }, "The database row corresponding to this record has been deleted");
     
     $ds->define_block('1.2:timescales:basic' =>
 	{ select => [ 'ts.timescale_no', 'ts.timescale_name', 'ts.max_age', 'ts.min_age',
-		      'ts.has_error', 'ts.is_active', 'ts.admin_lock', 'ts.priority', 'ts.reference_no' ] },
+		      'ts.has_error', 'ts.is_visible', 'ts.is_enterable', 'ts.admin_lock',
+		      'ts.priority', 'ts.reference_no' ] },
 	{ set => '*', code => \&process_ids },
 	{ set => '*', code => \&process_timescale_ages },
 	{ output => 'timescale_no', com_name => 'oid' },
@@ -80,6 +85,9 @@ sub initialize {
 	{ output => '_label', com_name => 'rlb' },
 	    "For newly added or updated records, this field will report the record",
 	    "label value, if any, that was submitted with the record.",
+	{ output => 'status', com_name => 'sta' },
+	    "In the output of a deletion operation, each deleted record will have the value",
+	    "'deleted'.",
 	{ output => 'timescale_name', com_name => 'nam' },
 	    "The name of this timescale",
 	{ output => 'min_age', com_name => 'lag', data_type => 'str' },
@@ -88,8 +96,10 @@ sub initialize {
 	    "The early bound of this timescale, in Ma",
 	{ output => 'has_error', com_name => 'err' },
 	    "True if the set of boundaries associated with this timescale is inconsistent.",
-	{ output => 'is_active', com_name => 'act' },
-	    "True if this timescale is active for general use, false otherwise.",
+	{ output => 'is_visible', com_name => 'vis' },
+	    "True if this timescale is visible to all users, false otherwise.",
+	{ output => 'is_enterable', com_name => 'enc' },
+	    "True if this timescale can be used when entering collections, false otherwise.",
 	{ output => 'admin_lock', com_name => 'lck' },
 	    "True if the attributes and bounds of this timescale are locked.",
 	{ output => 'priority', com_name => 'pri' },
@@ -132,10 +142,9 @@ sub initialize {
     $ds->define_block('1.2:timescales:bound' =>
 	{ select => [ 'tsb.bound_no', 'tsb.bound_type', 'tsb.age', 'tsb.age_error', 'tsb.age_prec', 'tsb.age_error_prec',
 		      'tsb.timescale_no', 'coalesce(tsb.interval_type, ts.timescale_type) as interval_type',
-		      'tsb.fraction', 'tsb.fraction_error', 'tsb.fraction_prec', 'tsb.fraction_error_prec',
-		      'tsb.interval_name', 'tsb.base_no', 'tsb.top_no', 'tsb.range_no',
-		      'tsb.color_no', 'tsb.has_error', 'tsb.is_modeled', 'tsb.is_spike',
-		      'tsb.color', 'tsi.early_age as int_early' ],
+		      'tsb.fraction','tsb.fraction_prec', 'tsb.interval_name',
+		      'tsb.base_no', 'tsb.range_no', 'tsb.top_no', 'tsb.color_no',
+		      'tsb.has_error', 'tsb.is_modeled', 'tsb.is_spike', 'tsb.color', 'tsi.early_age as int_early' ],
 	  tables => ['tsb', 'ts', 'tsi'] },
 	{ set => '*', code => \&process_ids },
 	{ set => '*', code => \&process_bound_ages },
@@ -148,6 +157,9 @@ sub initialize {
 	{ output => '_label', com_name => 'rlb' },
 	    "For newly added or updated records, this field will report the record",
 	    "label value, if any, that was submitted with the record.",
+	{ output => 'status', com_name => 'sta' },
+	    "In the output of a deletion operation, each newly deleted record will have",
+	    "the value 'deleted'.",
 	{ output => 'timescale_no', com_name => 'sid' },
 	    "The identifier of the timescale which this bound partially defines.",
 	{ output => 'interval_name', com_name => 'inm' },
@@ -188,8 +200,6 @@ sub initialize {
 	    "For boundaries of type 'fraction', the boundary lies this much",
 	    "of the way through the age span indicated by the base and range",
 	    "boundaries.",
-	{ output => 'fraction_error', com_name => 'fer', data_type => 'str' },
-	    "The uncertainty (+/-) if any associated with the fraction value",
 	{ output => 'has_error', com_name => 'err' },
 	    "True if this boundary is inconsistent with the other boundaries in",
 	    "its timescale, for example in overlapping with another boundary.",
@@ -476,6 +486,7 @@ sub get_record {
     $request->extid_check;
     
     $request->delete_output_field('_label');
+    $request->delete_output_field('status');
     
     # Generate the main query. We will already have thrown an error above if $type is not one of
     # the following values.
@@ -626,6 +637,7 @@ sub list_records {
     $request->extid_check;
     
     $request->delete_output_field('_label');
+    $request->delete_output_field('status');
     
     my $filter_string = join(' and ', @filters);
     
@@ -666,7 +678,7 @@ sub list_records {
     
     elsif ( $type eq 'bounds' )
     {
-	$order_expr ||= 'order by tsb.timescale_no, tsb.age';
+	$order_expr ||= 'order by tsb.timescale_no, tsb.age, if(tsb.top_no = 0, 0, 1), tsb.bound_no';
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
@@ -961,9 +973,12 @@ sub process_timescale_ages {
     
     my ($request, $record) = @_;
     
-    $record->{min_age} = precise_value($record->{min_age}, $record->{min_age_prec});
-    $record->{max_age} = precise_value($record->{max_age}, $record->{max_age_prec});
-
+    # $record->{min_age} = precise_value($record->{min_age}, $record->{min_age_prec});
+    # $record->{max_age} = precise_value($record->{max_age}, $record->{max_age_prec});
+    
+    $record->{min_age} =~ s/0+$//;
+    $record->{max_age} =~ s/0+$//;
+    
     delete $record->{is_active} unless $record->{is_active};
     delete $record->{has_error} unless $record->{has_error};
     delete $record->{admin_lock} unless $record->{admin_lock};
@@ -982,7 +997,7 @@ sub process_bound_ages {
     $record->{age} = precise_value($record->{age}, $record->{age_prec});
     $record->{age_error} = precise_value($record->{age_error}, $record->{age_error_prec});
     $record->{fraction} = precise_value($record->{fraction}, $record->{fraction_prec});
-    $record->{fraction_error} = precise_value($record->{fraction_error_prec});
+    # $record->{fraction_error} = precise_value($record->{fraction_error_prec});
     
     delete $record->{is_modeled} unless $record->{is_modeled};
     delete $record->{is_spike} unless $record->{is_spike};
