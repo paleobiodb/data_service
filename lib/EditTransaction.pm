@@ -1262,9 +1262,9 @@ sub _new_record {
 sub start_transaction {
     
     my ($edt) = @_;
-
+    
     # If this transaction has already committed, throw an exception.
-
+    
     if ( $edt->has_committed )
     {
 	croak "this transaction has already committed";
@@ -3206,7 +3206,7 @@ sub _set_keyexpr {
 
 		else
 		{
-		    $edt->add_condition($action, 'E_EXTTYPE', $keycol, "external identifier must be of type '$exttype'");
+		    $edt->add_condition($action, 'E_EXTTYPE', $keycol, "external identifier must be of type '$exttype', was '$type'");
 		}
 	    }
 	    
@@ -3685,6 +3685,12 @@ sub _execute_insert {
 	
 	if ( my $linkval = $action->linkval )
 	{
+	    if ( $linkval =~ /^[@](.*)/ )
+	    {
+		$linkval = $edt->{label_keys}{$1};
+		$edt->add_condition($action, 'E_EXECUTE', 'link value label was not found') unless $linkval;
+	    }
+	    
 	    $edt->{superior_keys}{$table}{$linkval} = 1;
 	}
 	
@@ -3857,6 +3863,12 @@ sub _execute_replace {
 	
 	if ( my $linkval = $action->linkval )
 	{
+	    if ( $linkval =~ /^[@](.*)/ )
+	    {
+		$linkval = $edt->{label_keys}{$1};
+		$edt->add_condition($action, 'E_EXECUTE', 'link value label was not found') unless $linkval;
+	    }
+	    
 	    $edt->{superior_keys}{$table}{$linkval} = 1;
 	}
 	
@@ -4028,6 +4040,12 @@ sub _execute_update {
 	
 	if ( my $linkval = $action->linkval )
 	{
+	    if ( $linkval =~ /^[@](.*)/ )
+	    {
+		$linkval = $edt->{label_keys}{$1};
+		$edt->add_condition($action, 'E_EXECUTE', 'link value label was not found') unless $linkval;
+	    }
+	    
 	    $edt->{superior_keys}{$table}{$linkval} = 1;
 	}
 	
@@ -4110,31 +4128,30 @@ sub _execute_delete {
 	# default method does nothing.    
 	
 	$edt->before_action($action, 'delete', $table);
-
-	# Then execute the delete statement itself, provided there are no errors and the action
-	# has not been aborted.
 	
-	unless ( $action->status )
+	# Then execute the delete statement itself, provided the action has not been aborted.
+	
+	unless ( $action->status || $action->has_errors )
 	{
 	    $result = $dbh->do($sql);
 	    $action->_set_status('executed');
-	}
-	
-	# Finally, call the 'after_action' method. This is designed to be overridden by
-	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
-	# default method does nothing. If the delete failed, then 'cleanup_action' is called
-	# instead.
-	
-	if ( $result )
-	{
-	    $edt->after_action($action, 'delete', $table);
-	}
-	
-	else
-	{
-	    $cleanup_called = 1;
-	    $edt->add_condition($action, 'W_EXECUTE', 'delete failed');
-	    $edt->cleanup_action($action, 'delete', $table);
+	    
+	    # Then call the 'after_action' method. This is designed to be overridden by
+	    # subclasses, and can be used to do any necessary auxiliary actions to the database. The
+	    # default method does nothing. If the delete failed, then 'cleanup_action' is called
+	    # instead.
+	    
+	    if ( $result )
+	    {
+		$edt->after_action($action, 'delete', $table);
+	    }
+	    
+	    else
+	    {
+		$cleanup_called = 1;
+		$edt->add_condition($action, 'W_EXECUTE', 'delete failed');
+		$edt->cleanup_action($action, 'delete', $table);
+	    }
 	}
     }
     
@@ -4170,7 +4187,6 @@ sub _execute_delete {
 	foreach my $i ( 0..$#keys )
 	{
 	    $edt->{key_labels}{$table}{$keys[$i]} = $labels[$i] if defined $labels[$i] && $labels[$i] ne '';
-	    push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keys[$i], $action);
 	}
     }
     
@@ -4182,18 +4198,24 @@ sub _execute_delete {
 	$edt->{key_labels}{$table}{$keys[0]} = $label if defined $label && $label ne '';
 	# There is no need to set label_keys, because the record has now vanished and no longer
 	# has a key.
-	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keys[0], $action);
     }
     
-    # If the delete succeeded, return true. Otherwise, return false.
+    # If the delete succeeded, log it and return true. Otherwise, return false.
     
     if ( $result && ! $action->has_errors )
     {
 	$edt->{action_count} += 1;
 	push @{$edt->{deleted_keys}{$table}}, @keys;
+	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($_, $action) foreach @keys;
 	
 	if ( my $linkval = $action->linkval )
 	{
+	    if ( $linkval =~ /^[@](.*)/ )
+	    {
+		$linkval = $edt->{label_keys}{$1};
+		$edt->add_condition($action, 'E_EXECUTE', 'link value label was not found') unless $linkval;
+	    }
+	    
 	    $edt->{superior_keys}{$table}{$linkval} = 1;
 	}
 	

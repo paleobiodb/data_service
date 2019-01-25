@@ -357,7 +357,7 @@ sub fetch_url {
 	fail($message);
 	
 	my $status = $response->status_line;
-	diag("request was: $url") if $url;
+	diag("request was: $path_and_args") if $path_and_args;
 	diag("status was: $status") if $status;
 	
 	# Extract any error or warning messages that the response contained,
@@ -1333,7 +1333,9 @@ sub ok_no_records {
     
     unless ( $code && $code eq '200' )
     {
-	pass($message);
+	fail($message);
+	diag("result code '$code' for '$message'");
+	return;
     }
     
     my @r = $tester->extract_records( $response, $message, { no_records_ok => 1 } );

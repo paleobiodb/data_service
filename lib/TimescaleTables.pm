@@ -19,7 +19,7 @@ use ConsoleLog qw(logMessage logQuestion);
 
 use base 'Exporter';
 
-our(@EXPORT_OK) = qw(establish_timescale_tables copy_international_timescales
+our(@EXPORT_OK) = qw(establish_timescale_tables copy_international_timescales set_interval_bounds
 		   copy_pbdb_timescales copy_macrostrat_timescales process_one_timescale
 		   update_timescale_descriptions model_timescale complete_bound_updates 
 		   establish_procedures establish_triggers);
@@ -90,7 +90,7 @@ sub establish_timescale_tables {
 		pbdb_id int unsigned not null default 0,
 		macrostrat_id int unsigned not null default 0,
 		timescale_name varchar(80) not null,
-		priority tinyint unsigned not null default 0,
+		priority tinyint unsigned not null default 1,
 		min_age decimal(9,5),
 		max_age decimal(9,5),
 		source_timescale_no int unsigned not null default 0,
@@ -174,6 +174,7 @@ sub establish_timescale_tables {
 			'zone', 'chron') not null default '',
 		abbrev varchar(10) not null default '',
 		timescale_no int unsigned not null,
+		bound_no int unsigned not null,
 		priority tinyint unsigned not null,
 		early_age decimal(9,5) not null,
 		early_age_prec tinyint,
@@ -214,7 +215,7 @@ sub establish_timescale_tables {
     
     $dbh->do("REPLACE INTO $TIMESCALE_FIX (timescale_no, interval_name, bound_type, age, age_prec,
 			age_error, age_error_prec) VALUES
-		(1, 'Holocene', 'spike', '0.0117', 4, null, null),
+		(2, 'Holocene', 'spike', '0.0117', 4, null, null),
 		(1, 'Calabrian', 'spike', '1.80', 2, null, null),
 		(1, 'Gelasian', 'spike', '2.58', 2, null, null),
 		(1, 'Piacenzian', 'spike', '3.600', 3, null, null),
@@ -280,7 +281,7 @@ sub establish_timescale_tables {
 		(1, 'Emsian', 'spike', '407.6', 1, '2.6', 1),
 		(1, 'Pragian', 'spike', '410.8', 1, '2.8', 1),
 		(1, 'Lochkovian', 'spike', '419.2', 1, '3.2', 1),
-		(1, 'Pridoli', 'spike', '423.0', 1, '2.3', 1),
+		(2, 'Pridoli', 'spike', '423.0', 1, '2.3', 1),
 		(1, 'Ludfordian', 'spike', '425.6', 1, '0.9', 1),
 		(1, 'Gorstian', 'spike', '427.4', 1, '0.5', 1),
 		(1, 'Homerian', 'spike', '430.5', 1, '0.7', 1),
@@ -324,6 +325,15 @@ sub copy_international_timescales {
     my $authorizer_no = $options->{authorizer_no} || 0;
     my $auth_quoted = $dbh->quote($authorizer_no);
     my ($sql, $result);
+
+    # Use the appropriate prefix for all database procedure calls.
+    
+    my $dbstring = '';
+    
+    if ( $TABLE{TIMESCALE_BOUNDS} =~ /^([^.]+[.])/ )
+    {
+	$dbstring = $1;
+    }
     
     # First establish the international timescales.
     
@@ -346,7 +356,7 @@ sub copy_international_timescales {
 	SELECT i.interval_no, i.interval_name, i.abbrev, 6 - scale_level, i.early_age, i.late_age, 
 		sm.color, sm.color, i.reference_no
 	FROM $INTERVAL_DATA as i join $SCALE_MAP as sm using (interval_no)
-	WHERE scale_no = 1
+	WHERE scale_no = 1 and interval_no < 3000
 	GROUP BY interval_no";
     
     print STDERR "$sql\n\n" if $options->{debug};
@@ -401,14 +411,22 @@ sub copy_international_timescales {
 	
 	$dbh->do($sql);
 	
-	# Then add the lower bounds of each interval in turn.
+	# Then add the lower bounds of each interval in turn. We have to patch in Holocene and
+	# Pridoli, which appear levels 1 and 2.
+
+	my $level_expr = "sm.scale_level = $level_no";
+
+	if ( $level_no == 5 )
+	{
+	    $level_expr = "(sm.scale_level = 5 or sm.interval_no in (32,59))";
+	}
 	
 	$sql = "INSERT INTO $TABLE{TIMESCALE_BOUNDS} (timescale_no, bound_type, interval_name, age, 
 		orig_age, color)
 	SELECT $timescale_no as timescale_no, 'absolute' as bound_type, tsi.interval_name,
 		tsi.orig_early, tsi.orig_early, if(tsi.macrostrat_color <> '', tsi.macrostrat_color, tsi.orig_color)
 	FROM scale_map as sm join $TABLE{TIMESCALE_INTS} as tsi using (interval_no)
-	WHERE sm.scale_level = $level_no and sm.scale_no = 1
+	WHERE sm.scale_no = 1 and $level_expr
 	ORDER BY tsi.orig_early asc";
 	
 	print STDERR "$sql\n\n" if $options->{debug};
@@ -417,7 +435,7 @@ sub copy_international_timescales {
 	
 	# Link the newly added bounds together into a single sequence.
 	
-	$sql = "CALL link_timescale_bounds($timescale_no);";
+	$sql = "CALL ${dbstring}link_timescale_bounds($timescale_no);";
 	
 	print STDERR "$sql\n\n" if $options->{debug};
 	
@@ -437,7 +455,7 @@ sub copy_international_timescales {
 	
 	# Then set the min and max age for each timescale.
 	
-	$sql = "CALL update_timescale_ages($timescale_no)";
+	$sql = "CALL ${dbstring}update_timescale_ages($timescale_no)";
 	
 	print STDERR "$sql\n\n" if $options->{debug};
 	
@@ -462,11 +480,11 @@ sub copy_international_timescales {
     
     # logMessage(2, "    Updated $result bad interval numbers from PBDB") if $result and $result > 0;
     
-    $sql = "DELETE FROM $TABLE{TIMESCALE_INTS} WHERE interval_no > 3000";
+    # $sql = "DELETE FROM $TABLE{TIMESCALE_INTS} WHERE interval_no > 3000";
     
-    print STDERR "$sql\n\n" if $options->{debug};
+    # print STDERR "$sql\n\n" if $options->{debug};
     
-    $dbh->do($sql);
+    # $dbh->do($sql);
     
     # Set the other interval attributes, which are attached to the lower bound
     # record. 
@@ -552,13 +570,13 @@ sub copy_international_timescales {
     
     set_timescale_boundaries($dbh, $test_timescale_no, \@boundaries, $options);
     
-    $sql = "CALL link_timescale_bounds($test_timescale_no)";
+    $sql = "CALL ${dbstring}link_timescale_bounds($test_timescale_no)";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
     $dbh->do($sql);
     
-    $sql = "CALL update_timescale_ages($test_timescale_no)";
+    $sql = "CALL ${dbstring}update_timescale_ages($test_timescale_no)";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
@@ -1057,7 +1075,7 @@ sub add_timescale_chunk {
 	$filter = "WHERE " . join( ' and ', @filters );
     }
     
-    $sql = "SELECT bound_no, age, age_prec, age_error, age_error_prec, interval_no, interval_name, is_spike,
+    $sql = "SELECT tsb.bound_no, age, age_prec, age_error, age_error_prec, interval_no, interval_name, is_spike,
 		timescale_type, timescale_extent
 	    FROM $TABLE{TIMESCALE_BOUNDS} as tsb left join $TABLE{TIMESCALE_INTS} as tsi using (interval_name) 
 		join $TABLE{TIMESCALE_DATA} as ts on ts.timescale_no = tsb.timescale_no
@@ -1365,6 +1383,33 @@ sub update_timescale_descriptions {
 }
 
 
+# set_interval_bounds ( dbh, options )
+# 
+# Update the interval records to note the corresponding bound id.
+
+sub set_interval_bounds {
+
+    my ($dbh, $options) = @_;
+    
+    my $sql = "
+		UPDATE $TABLE{TIMESCALE_INTS} as tsi 
+		    join $TABLE{TIMESCALE_BOUNDS} as tsb using (interval_name, timescale_no)
+		    join $TABLE{TIMESCALE_BOUNDS} as upper on upper.bound_no = tsb.top_no
+		SET tsi.bound_no = tsb.bound_no,
+		    tsi.timescale_no = tsb.timescale_no, 
+		    tsi.priority = tsb.priority,
+		    tsi.color = tsb.color,
+		    tsi.early_age = tsb.age, tsi.early_age_prec = tsb.age_prec,
+		    tsi.late_age = upper.age, tsi.late_age_prec = upper.age_prec";
+
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    my $result = $dbh->do($sql);
+
+    logMessage(2, "Updated bound_no and ages for $result intervals");
+}
+
+
 # complete_bound_updates ( dbh, options )
 # 
 # Make sure that all changes to bound updates are propagated to referring bounds, and check for
@@ -1374,17 +1419,24 @@ sub complete_bound_updates {
     
     my ($dbh, $options) = @_;
     
+    my $dbstring = '';
+    
+    if ( $TABLE{TIMESCALE_BOUNDS} =~ /^([^.]+[.])/ )
+    {
+	$dbstring = $1;
+    }
+    
     logMessage(2, "Completing bound updates...");
     
-    $dbh->do("CALL complete_bound_updates");
+    $dbh->do("CALL ${dbstring}complete_bound_updates");
     
     logMessage(2, "    complete_bound_updates");
     
-    $dbh->do("CALL check_updated_timescales");
+    $dbh->do("CALL ${dbstring}check_updated_timescales");
 
     logMessage(2, "    check_updated_timescales");
     
-    $dbh->do("CALL unmark_updated_bounds");
+    $dbh->do("CALL ${dbstring}unmark_updated_bounds");
     
     logMessage(2, "    unmark_updated_bounds");
     logMessage(2, "Done.");
@@ -1867,13 +1919,26 @@ sub establish_procedures {
     
     my ($dbh, $options) = @_;
 
+    # If these procedures are being established in a database other than the main one, adjust the procedure
+    # names accordingly. We test this by checking whether the name of the bounds table is qualified
+    # with a database name. If that is the case, then all triggers will be created in the same database.
+    
+    my $dbstring = '';
+    
+    if ( $TABLE{TIMESCALE_BOUNDS} =~ /^([^.]+[.])/ )
+    {
+	$dbstring = $1;
+    }
+    
+    # Now create or replace the necessary triggers.
+    
     logMessage(1, "Creating or replacing stored procedures...");
     
-    logMessage(2, "    complete_bound_updates");
+    logMessage(2, "    ${dbstring}complete_bound_updates");
     
-    $dbh->do("DROP PROCEDURE IF EXISTS complete_bound_updates");
+    $dbh->do("DROP PROCEDURE IF EXISTS ${dbstring}complete_bound_updates");
     
-    $dbh->do("CREATE PROCEDURE complete_bound_updates ( )
+    $dbh->do("CREATE PROCEDURE ${dbstring}complete_bound_updates ( )
 	BEGIN
 
 	SET \@row_count = 1;
@@ -1963,36 +2028,13 @@ sub establish_procedures {
 	    
 	END WHILE;
 	
-	# Then do the same thing for the color attribute
-	
-	# SET \@row_count = 1;
-	# SET \@attr_iterations = 0;
-
-	# WHILE \@row_count > 0 AND \@attr_iterations < 20 DO
-	
-	#     UPDATE $TABLE{TIMESCALE_BOUNDS} as tsb
-	# 	join $TABLE{TIMESCALE_DATA} as ts using (timescale_no)
-	# 	left join $TABLE{TIMESCALE_BOUNDS} as csource on csource.bound_no = tsb.color_no
-	#     SET tsb.is_updated = 1,
-	# 	tsb.color = if(tsb.color_no > 0, csource.color, tsb.color)
-	#     WHERE tsb.is_updated or csource.is_updated;
-	    
-	#     SET \@row_count = ROW_COUNT();
-	#     SET \@attr_iterations = \@attr_iterations + 1;
-	    
-	# END WHILE;
-	
-	# Then check all of the bounds in the specified timescales for errors.
-	
-	# CALL check_updated_timescales;
-	
 	END;");
     
-    logMessage(2, "    update_timescale_ages");
+    logMessage(2, "    ${dbstring}update_timescale_ages");
     
-    $dbh->do("DROP PROCEDURE IF EXISTS update_timescale_ages");
+    $dbh->do("DROP PROCEDURE IF EXISTS ${dbstring}update_timescale_ages");
     
-    $dbh->do("CREATE PROCEDURE update_timescale_ages ( t int unsigned )
+    $dbh->do("CREATE PROCEDURE ${dbstring}update_timescale_ages ( t int unsigned )
 	BEGIN
 	
 	UPDATE $TABLE{TIMESCALE_DATA} as `ts` join
@@ -2011,12 +2053,12 @@ sub establish_procedures {
 	
 	END;");
     
-    logMessage(2, "    check_updated_timescales");
+    logMessage(2, "    ${dbstring}check_updated_timescales");
     
-    $dbh->do("DROP PROCEDURE IF EXISTS check_updated_bounds");
-    $dbh->do("DROP PROCEDURE IF EXISTS check_updated_timescales");
+    $dbh->do("DROP PROCEDURE IF EXISTS ${dbstring}check_updated_bounds");
+    $dbh->do("DROP PROCEDURE IF EXISTS ${dbstring}check_updated_timescales");
     
-    $dbh->do("CREATE PROCEDURE check_updated_timescales ( )
+    $dbh->do("CREATE PROCEDURE ${dbstring}check_updated_timescales ( )
 	BEGIN
 	
 	UPDATE $TABLE{TIMESCALE_BOUNDS} as `tsb` join $TABLE{TIMESCALE_DATA} as `ts` using (timescale_no)
@@ -2055,11 +2097,11 @@ sub establish_procedures {
 	
 	END;");
     
-    logMessage(2, "    link_timescale_bounds");
+    logMessage(2, "    ${dbstring}link_timescale_bounds");
     
-    $dbh->do("DROP PROCEDURE IF EXISTS link_timescale_bounds");
+    $dbh->do("DROP PROCEDURE IF EXISTS ${dbstring}link_timescale_bounds");
     
-    $dbh->do("CREATE PROCEDURE link_timescale_bounds ( t int unsigned )
+    $dbh->do("CREATE PROCEDURE ${dbstring}link_timescale_bounds ( t int unsigned )
     	BEGIN
 	
     	SET \@last_bound := 0, \@save_bound := 0;
@@ -2070,9 +2112,9 @@ sub establish_procedures {
 	
     	END;");
     
-    logMessage(2, "    unmark_updated (dropped)");
+    logMessage(2, "    ${dbstring}unmark_updated (dropped)");
     
-    $dbh->do("DROP PROCEDURE IF EXISTS unmark_updated");
+    $dbh->do("DROP PROCEDURE IF EXISTS ${dbstring}unmark_updated");
     
     # $dbh->do("CREATE PROCEDURE unmark_updated ( )
     # 	BEGIN
@@ -2082,11 +2124,11 @@ sub establish_procedures {
 	
     # 	END;");
     
-    logMessage(2, "    unmark_updated_bounds");
+    logMessage(2, "    ${dbstring}unmark_updated_bounds");
     
-    $dbh->do("DROP PROCEDURE IF EXISTS unmark_updated_bounds");
+    $dbh->do("DROP PROCEDURE IF EXISTS ${dbstring}unmark_updated_bounds");
     
-    $dbh->do("CREATE PROCEDURE unmark_updated_bounds ( )
+    $dbh->do("CREATE PROCEDURE ${dbstring}unmark_updated_bounds ( )
     	BEGIN
 	
     	UPDATE $TABLE{TIMESCALE_BOUNDS} SET is_updated = 0;
@@ -2107,13 +2149,26 @@ sub establish_triggers {
     
     my ($dbh, $options) = @_;
 
+    # If these triggers are being established in a database other than the main one, adjust the trigger
+    # name accordingly. We test this by checking whether the name of the bounds table is qualified
+    # with a database name. If that is the case, then all triggers will be creatd in the same database.
+    
+    my $dbstring = '';
+    
+    if ( $TABLE{TIMESCALE_BOUNDS} =~ /^([^.]+[.])/ )
+    {
+	$dbstring = $1;
+    }
+    
+    # Now create or replace the necessary triggers.
+    
     logMessage(1, "Creating or replacing triggers...");
     
-    logMessage(2, "    insert_bound on $TABLE{TIMESCALE_BOUNDS}");
+    logMessage(2, "    ${dbstring}insert_bound on $TABLE{TIMESCALE_BOUNDS}");
     
-    $dbh->do("DROP TRIGGER IF EXISTS insert_bound");
+    $dbh->do("DROP TRIGGER IF EXISTS ${dbstring}insert_bound");
     
-    $dbh->do("CREATE TRIGGER insert_bound
+    $dbh->do("CREATE TRIGGER ${dbstring}insert_bound
 	BEFORE INSERT ON $TABLE{TIMESCALE_BOUNDS} FOR EACH ROW
 	BEGIN
 	    DECLARE ts_interval_type varchar(10);
@@ -2129,11 +2184,11 @@ sub establish_triggers {
 	    SET NEW.is_updated = 1;
 	END;");
     
-    logMessage(2, "    update_bound on $TABLE{TIMESCALE_BOUNDS}");
+    logMessage(2, "    ${dbstring}update_bound on $TABLE{TIMESCALE_BOUNDS}");
     
-    $dbh->do("DROP TRIGGER IF EXISTS update_bound");
+    $dbh->do("DROP TRIGGER IF EXISTS ${dbstring}update_bound");
     
-    $dbh->do("CREATE TRIGGER update_bound
+    $dbh->do("CREATE TRIGGER ${dbstring}update_bound
 	BEFORE UPDATE ON $TABLE{TIMESCALE_BOUNDS} FOR EACH ROW
 	BEGIN
 	    IF  OLD.bound_type <> NEW.bound_type or

@@ -23,7 +23,7 @@ use TableDefs qw(%TABLE $TEST_DB %FOREIGN_KEY_COL set_table_group set_table_prop
     set_table_name(TIMESCALE_BOUNDS => 'timescale_bounds');
     set_table_name(TIMESCALE_INTS => 'timescale_ints');
 
-    set_table_group(timescales => 'TIMESCALE_DATA', 'TIMESCALE_BOUNDS', 'TIMESCALE_INTS');
+    set_table_group(timescale_data => 'TIMESCALE_DATA', 'TIMESCALE_BOUNDS', 'TIMESCALE_INTS');
 
     set_table_name(MACROSTRAT_LITHS => 'macrostrat.liths');
     set_table_name(MACROSTRAT_INTERVALS => 'macrostrat.intervals');
@@ -40,7 +40,7 @@ use TableDefs qw(%TABLE $TEST_DB %FOREIGN_KEY_COL set_table_group set_table_prop
     set_table_property('TIMESCALE_DATA', CASCADE_DELETE => ['TIMESCALE_BOUNDS']);
     
     set_column_property('TIMESCALE_DATA', 'timescale_name', REQUIRED => 1);
-    set_column_property('TIMESCALE_DATA', 'priority', ADMIN_SET => 1);
+    # set_column_property('TIMESCALE_DATA', 'priority', ADMIN_SET => 1);
     set_column_property('TIMESCALE_DATA', 'has_error', ADMIN_SET => 1);
     set_column_property('TIMESCALE_DATA', 'min_age', IGNORE => 1);
     set_column_property('TIMESCALE_DATA', 'max_age', IGNORE => 1);

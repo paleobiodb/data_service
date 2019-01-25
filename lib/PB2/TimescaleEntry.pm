@@ -39,10 +39,6 @@ sub initialize {
     # Value sets for specifying data entry options.
     
     $ds->define_set('1.2:timescales:conditions' =>
-	{ value => 'CREATE_INTERVALS' },
-	    "If any interval names are encountered during this operation which",
-	    "do not correspond to interval records already in the database, then",
-	    "create new interval records rather than blocking the request",
 	{ value => 'BREAK_DEPENDENCIES' },
 	    "When deleting interval bonundaries, if other boundaries depend on",
 	    "the boundaries to be deleted then the dependency is broken.",
@@ -65,6 +61,10 @@ sub initialize {
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:timescales:entry' =>
+	">>Any body record that does not specify a timescale identifier will be interpreted as a",
+	"new timescale record. Any body record that does specify a timescale identifier but",
+	"neither a bound identifier nor a bound type will be interpreted as an update timescale",
+	"record.",
 	{ optional => '_label', valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted for entry or update. This allows the data service",
@@ -125,6 +125,10 @@ sub initialize {
 	    "bibliographic reference for this timescale.");
     
     $ds->define_ruleset('1.2:bounds:entry' =>
+	">>Any body record that specifies a timescale identifier and a bound type but not a",
+	"bound identifier will be interpreted as a new bound record. Any body record specifies",
+	"a timescale identifier and a bound identifier will be interpreted as an update bound",
+	"record.",
 	{ optional => '_label', valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted to this data service. This allows the data service",
@@ -226,13 +230,26 @@ sub initialize {
        	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
+    $ds->define_ruleset('1.2:timescales:defineintervals' =>
+	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',', alias => 'id' },
+	    "The identifier(s) of the timescale(s) whose boundaries will be used to define",
+	    "intervals.",
+	{ optional => 'preview', valid => FLAG_VALUE },
+	    "If this parameter is specified then the list of new and updated intervals",
+	    "is returned, without any change actually being made to the database. No",
+	    "parameter value is needed.",
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special>  with this request");
+    
     $ds->define_ruleset('1.2:timescales:delete' =>
 	{ allow => '1.2:timescales:op_mod' }, 
-	">>The following parameter may be given either in the URL or in",
-	"the request body. Either way, you may specify more than one value,",
-	"as a comma-separated list.",
+	">>You may specify either of the following two parameters, but not both.",
+	"Either way, you may specify more than one value, as a comma-separated list.",
 	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC'), list => ',', alias => 'id' },
 	    "The identifier(s) of the timescale(s) to delete.",
+	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',' },
+	    "The identifier(s) of the interval boundary or boundaries to delete.",
+	{ at_most_one => ['timescale_id', 'bound_id'] },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
@@ -259,9 +276,6 @@ sub initialize {
 	{ param => 'timescale_id', valid => VALID_IDENTIFIER('TSC') },
 	    "The identifier of a timescale. If specified, all bounds",
 	    "from this timescale will be deleted.",
-	{ param => 'bound_id', valid => VALID_IDENTIFIER('BND'), list => ',', alias => 'id' },
-	    "The identifier(s) of the interval boundary or boundaries to delete.",
-	{ at_most_one => ['timescale_id', 'bound_id'] },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
 
@@ -394,26 +408,27 @@ sub update_records {
     
     my (@results);
     
-    my $return = $request->clean_param('return') || '';
+    my $return_mod = $request->clean_param('return');
+    
+    return if $return_mod eq 'none';
     
     if ( my $key_list = join(',', $edt->inserted_keys('TIMESCALE_DATA'), $edt->updated_keys('TIMESCALE_DATA'),
 			    $edt->replaced_keys('TIMESCALE_DATA')) )
     {
-	push @results, $request->list_timescales_after_update($dbh, $key_list, $edt->key_labels('TIMESCALE_DATA'))
-	    unless $return eq 'none';
+	push @results, $request->list_timescales_after_update($dbh, $key_list, $edt->key_labels('TIMESCALE_DATA'));
     }
-
+    
     if ( $timescales_deleted )
     {
 	my @keys = $edt->deleted_keys('TIMESCALE_DATA');
-	push @results, $request->list_deleted_records('timescales', \@keys);
+	push @results, $request->list_deleted_records('TIMESCALE_DATA', \@keys);
     }
     
     # if ( $id_string = join(',', $edt->inserted_keys('TIMESCALE_BOUNDS'), $edt->updated_keys('TIMESCALE_BOUNDS')) )
 
-    if ( $bound_timescale_list && $return ne 'none' )
+    if ( $bound_timescale_list )
     {
-	if ( $return eq 'updated' )
+	if ( $return_mod eq 'updated' )
 	{
 	    my $key_list = join(',', $edt->inserted_keys('TIMESCALE_BOUNDS'), $edt->updated_keys('TIMESCALE_BOUNDS'));
 	    
@@ -431,7 +446,7 @@ sub update_records {
     if ( $bounds_deleted )
     {
 	my @keys = $edt->deleted_keys('TIMESCALE_BOUNDS');
-	push @results, $request->list_deleted_records('bounds', \@keys);
+	push @results, $request->list_deleted_records('TIMESCALE_BOUNDS', \@keys);
     }
     
     $request->list_result(\@results);
@@ -444,9 +459,10 @@ sub delete_records {
     
     my $dbh = $request->get_connection;
     
-    # Get the resources to delete from the URL paramters. This operation takes no body.
-
-    my (@id_list) = $request->clean_param_list('timescale_id');
+    # Get the identifiers of records to delete from the URL paramters. This operation takes no body.
+    
+    my (@tsc_list) = $request->clean_param_list('timescale_id');
+    my (@bnd_list) = $request->clean_param_list('bound_id');
     
     # First get the parameters from the URL, the permissions, and create a transaction object.
     
@@ -459,38 +475,43 @@ sub delete_records {
 
     my $table;
     
-    if ( $arg eq 'timescales' )
+    # If we were given one or more timescale identifiers, delete the corresponding records. If we
+    # were given one or more bound identifiers, delete the corresponding records. This operation
+    # should not be called with both at once, and the ruleset should prevent this.
+    
+    if ( @tsc_list )
     {
 	$table = 'TIMESCALE_DATA';
+	
+	foreach my $id ( @tsc_list )
+	{
+	    $edt->delete_record('TIMESCALE_DATA', $id);
+	}
     }
-
-    elsif ( $arg eq 'bounds' )
+    
+    elsif ( @bnd_list )
     {
 	$table = 'TIMESCALE_BOUNDS';
-    }
-
-    else
-    {
-	print STDERR "ERROR: invalid argument to 'delete_records'\n";
-	die $request->exception(500, "Internal error");
-    }
-    
-    # Then go through the records and handle each one in turn.
-    
-    foreach my $id (@id_list)
-    {
-	$edt->delete_record($table, $id);
+	
+	foreach my $id ( @bnd_list )
+	{
+	    $edt->delete_record('TIMESCALE_BOUNDS', $id);
+	}
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
     # transaction. If any errors occur during that process, the transaction will be automatically
     # rolled back. Otherwise, it will be automatically committed.
     
-    $edt->execute;
+    $edt->commit;
     
-    # Now handle any errors or warnings that may have been generated.
+    # If any warnings (non-fatal conditions) were detected, add them to the
+    # request record so they will be communicated back to the user.
     
     $request->collect_edt_warnings($edt);
+    
+    # If we completed the procedure without any exceptions, but error conditions were detected
+    # nonetheless, we also roll back the transaction.
     
     if ( $edt->errors )
     {
@@ -500,18 +521,76 @@ sub delete_records {
 	{
 	    die $request->exception(500, "Internal error");
 	}
-	
+
 	else
 	{
 	    die $request->exception(400, "Bad request");
 	}
     }
     
+    # Otherwise, return all deleted records.
+    
+    $request->extid_check;
+    
+    my $return_mod = $request->clean_param('return');
+
+    return if $return_mod eq 'none';
+
+    # my $table;
+    
+    # if ( $arg eq 'timescales' )
+    # {
+    # 	$table = 'TIMESCALE_DATA';
+    # }
+
+    # elsif ( $arg eq 'bounds' )
+    # {
+    # 	$table = 'TIMESCALE_BOUNDS';
+    # }
+
+    # else
+    # {
+    # 	print STDERR "ERROR: invalid argument to 'delete_records'\n";
+    # 	die $request->exception(500, "Internal error");
+    # }
+    
+    # # Then go through the records and handle each one in turn.
+    
+    # foreach my $id (@id_list)
+    # {
+    # 	$edt->delete_record($table, $id);
+    # }
+    
+    # # If no errors have been detected so far, execute the queued actions inside a database
+    # # transaction. If any errors occur during that process, the transaction will be automatically
+    # # rolled back. Otherwise, it will be automatically committed.
+    
+    # $edt->execute;
+    
+    # # Now handle any errors or warnings that may have been generated.
+    
+    # $request->collect_edt_warnings($edt);
+    
+    # if ( $edt->errors )
+    # {
+    # 	$request->collect_edt_errors($edt);
+
+    # 	if ( $edt->has_condition_code('E_EXECUTE') )
+    # 	{
+    # 	    die $request->exception(500, "Internal error");
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    die $request->exception(400, "Bad request");
+    # 	}
+    # }
+    
     # Then return one result record for each deleted database record.
 
     my @keys = $edt->deleted_keys($table);
-    my @results = $request->list_deleted_records($arg, \@keys);
-
+    my @results = $request->list_deleted_records($table, \@keys);
+    
     $request->list_result(\@results);
 }
 
@@ -979,9 +1058,10 @@ sub list_deleted_records {
     {
 	my $record;
 	
-	if ( $record_type eq 'bounds' )
+	if ( $record_type eq 'TIMESCALE_BOUNDS' )
 	{
 	    $record = { bound_no => $keyval, status => 'deleted' };
+	    $request->select_output_block($record, '1.2:timescales:bound');
 	}
 	
 	else

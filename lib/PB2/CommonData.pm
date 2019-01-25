@@ -1029,7 +1029,7 @@ sub generate_match_regex {
     {
 	next unless defined $n && $n ne '';
 	
-	$n =~ s/([()|{}])/\\$1/g;
+	$n =~ s/([(){}])/\\$1/g;
 	$n =~ s/\s+/\\s+/g;
 	$n =~ s/%/.*/g;
 	$n =~ s/_/./g;
