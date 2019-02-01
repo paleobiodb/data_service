@@ -26,7 +26,8 @@ our ($TIMESCALE_KEY) = 'timescale_no';
 
 {
     TimescaleEdit->register_conditions(
-	C_BREAK_DEPENDENCIES => "There are intervals in other timescales dependent on this one. Allow BREAK_DEPENDENCIES to break these dependencies.");
+	C_BREAK_DEPENDENCIES => "There are intervals in other timescales dependent on this one. Allow BREAK_DEPENDENCIES to break these dependencies.",
+	E_TIMESCALE_HAS_ERRORS => "The timescale '%1' has inconsistencies in its bounds.");
 
     TimescaleEdit->register_allowances('BREAK_DEPENDENCIES');
 }
@@ -516,28 +517,49 @@ sub check_dependencies {
 }
 
 
-# define_intervals ( timescale_id )
-#
+# define_intervals ( action, table, record )
+# 
 # For every interval name defined in this timescale, copy the interval definition to the intervals
 # table, unless that interval is already defined by a timescale of higher priority. This will involve
 # some combination of creating new intervals or updating existing ones.
+# 
+# If the record includes the key 'preview' with a true value, then return a list of the interval
+# records that would be created, but do not actually create them.
 
-sub define_intervals {
+sub define_intervals_action {
     
-    my ($edt, $timescale_id, $check_only) = @_;
+    my ($edt, $action, $table, $record) = @_;
     
     my $dbh = $edt->dbh;
-
+    my $timescale_id = $record->{timescale_id};
+    
     my $sql;
     
     # First make sure that we have a valid timescale_no.
     
     my $timescale_no = $edt->check_timescale_id($timescale_id) || return;
-    
-    # Then get a list of the updates that would be done.
 
-    $sql = "
-	SELECT tsb.bound_no, tsb.timescale_no, tsb.interval_name, tsi.interval_no, 
+    # If this timescale has errors, this operations must fail.
+
+    my ($error_flag) = $dbh->selectrow_array("
+	SELECT has_error FROM $TABLE{TIMESCALE_DATA}
+	WHERE timescale_no in ($timescale_no)");
+
+    if ( $error_flag )
+    {
+	$edt->add_condition('E_TIMESCALE_HAS_ERRORS', $timescale_no);
+	return;
+    }
+    
+    # If the 'preview' flag was specified, we query to find what would be done if the full
+    # operation were to be carried out.
+    
+    if ( $record->{preview} )
+    {
+	# First list out all of the intervals that would be updated or inserted.
+	
+	$sql = "
+	SELECT tsi.interval_no, tsb.timescale_no, tsb.interval_name, tsb.bound_no,
 		tsb.age as early_age, tsb.age_prec as early_age_prec,
 		upper.age as late_age, upper.age_prec as late_age_prec,
 		tsb.interval_type, tsb.color, ts.reference_no, ts.priority
@@ -546,29 +568,53 @@ sub define_intervals {
 		join $TABLE{TIMESCALE_BOUNDS} as upper on upper.bound_no = tsb.top_no
 		join $TABLE{TIMESCALE_DATA} as ts on ts.timescale_no = tsb.timescale_no
 	WHERE tsb.timescale_no in ($timescale_no) and tsb.interval_name <> '' and 
-		(tsi.interval_no is null or ts.priority >= tsi.priority)\n";
-    
-    $edt->debug_line($sql);
-    
-    my $check_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+		(tsi.interval_no is null or ts.priority >= tsi.priority)
+	ORDER BY tsb.timescale_no, upper.age\n";
+	
+	$edt->debug_line($sql);
+	
+	my $preview_list = $dbh->selectall_arrayref($sql, { Slice => { } });
 
-    $check_list ||= [ ];
-    
-    my $check_count = scalar(@$check_list);
-    
-    # If we are being asked only to check, or if there is nothing to update, then return this
-    # list.
-    
-    if ( $check_only || $check_count == 0 )
-    {
-	return $check_list;
+	if ( ref $preview_list eq 'ARRAY' && @$preview_list )
+	{
+	    foreach my $r ( @$preview_list )
+	    {
+		$r->{status} = $r->{interval_no} ? 'update' : 'insert';
+		push @{$edt->{my_result}}, $r;
+	    }
+	}
+	
+	# Then figure out all of the intervals that are currently defined by this timescale but
+	# would be deleted because they no longer correspond to a bound in this timescale.
+	
+	$sql = "
+	SELECT tsi.timescale_no, tsi.interval_name, tsi.interval_no,
+		tsi.early_age, tsi.early_age_prec, tsi.late_age, tsi.late_age_prec,
+		tsi.interval_type, tsi.reference_no, tsi.color, tsi.priority
+	FROM $TABLE{TIMESCALE_INTS} as tsi
+		left join $TABLE{TIMESCALE_BOUNDS} as tsb using (interval_name, timescale_no) 
+	WHERE tsi.timescale_no in ($timescale_no) and tsb.timescale_no is null
+	ORDER BY tsi.timescale_no, tsi.late_age\n";
+	
+	my $delete_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+	
+	if ( ref $delete_list eq 'ARRAY' && @$delete_list )
+	{
+	    foreach my $r ( @$delete_list )
+	    {
+		$r->{status} = 'delete';
+		push @{$edt->{my_result}}, $r;
+	    }
+	}
+	
+	return;
     }
     
     # Otherwise, start the transaction if it hasn't already been started.
     
     $edt->start_execution;
-    
-    # Then update all of the matching interval definitions that aren't overridden by a
+
+    # Update all of the matching interval definitions that are not already defined by a
     # higher-priority timescale.
     
     $sql = "
@@ -586,12 +632,13 @@ sub define_intervals {
 	    tsi.interval_type = tsb.interval_type,
 	    tsi.reference_no = ts.reference_no,
 	    tsi.priority = ts.priority
-	WHERE tsb.timescale_no in ($timescale_no) and ts.priority >= tsi.priority\n";
+	WHERE tsb.timescale_no in ($timescale_no) and
+              (tsb.timescale_no = tsi.timescale_no or ts.priority >= tsi.priority)\n";
     
     $edt->debug_line($sql);
     
     my $update_count = $dbh->do($sql);
-
+    
     # Then insert new intervals corresponding to any interval names that don't already appear in
     # the table.
     
@@ -609,187 +656,268 @@ sub define_intervals {
 	WHERE tsb.timescale_no in ($timescale_no) and tsi.interval_no is null\n";
     
     $edt->debug_line($sql);
-
-    my $insert_count = $dbh->do($sql);
     
-    return $check_list, $update_count, $insert_count;
+    my $insert_count = $dbh->do($sql);
+
+    # Now query and return all interval records that are defined from this timescale, plus those
+    # that will be deleted because they no longer do. We need to do the query before the deletion,
+    # but the deletion will be the next step.
+    
+    $sql = "
+	SELECT tsi.interval_no, tsi.timescale_no, tsi.interval_name, tsb.bound_no,
+		tsi.early_age, tsi.early_age_prec, tsi.late_age, tsi.late_age_prec,
+		tsi.interval_type, tsi.reference_no, tsi.color, tsi.priority,
+		tsb.timescale_no as is_defined
+	FROM $TABLE{TIMESCALE_INTS} as tsi
+		left join $TABLE{TIMESCALE_BOUNDS} as tsb using (interval_name, timescale_no) 
+	WHERE tsi.timescale_no in ($timescale_no)
+	ORDER BY tsi.timescale_no, tsi.late_age\n";
+    
+    $edt->debug_line($sql);
+
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $result_list eq 'ARRAY' && @$result_list )
+    {
+	foreach my $r ( @$result_list )
+	{
+	    $r->{status} = $r->{is_defined} ? 'defined' : 'deleted';
+	    push @{$edt->{my_result}}, $r;
+	}
+    }
+    
+    # Finally, delete all of those intervals that were formerly defined by this timescale and no
+    # longer are.
+    
+    $sql = "
+	DELETE $TABLE{TIMESCALE_INTS}
+	FROM $TABLE{TIMESCALE_INTS} 
+		left join $TABLE{TIMESCALE_BOUNDS} using (interval_name, timescale_no)
+	WHERE $TABLE{TIMESCALE_INTS}.timescale_no in ($timescale_no) and $TABLE{TIMESCALE_BOUNDS}.timescale_no is null\n";
+    
+    $edt->debug_line($sql);
+
+    my $delete_count = $dbh->do($sql);
 }
 
 
-sub undefine_intervals {
+sub undefine_intervals_action {
 
-    my ($edt, $timescale_id, $check_only) = @_;
+    my ($edt, $action, $table, $record) = @_;
     
     my $dbh = $edt->dbh;
-
-    my ($sql, $updates);
+    my $timescale_id = $record->{timescale_id};
+    
+    my $sql;
     
     # First make sure that we have a valid timescale_no.
     
     my $timescale_no = $edt->check_timescale_id($timescale_id) || return;
 
-    # First get a list of the interval names that are defined by this timescale.
+    # If this timescale has errors, this operation is still possible.
+
+    # First figure out all of the intervals that are currently defined by this timescale and thus
+    # would be deleted.
 
     $sql = "
-	SELECT tsb.bound_no, tsb.timescale_no, tsi.interval_name, tsi.early_age, tsi.early_age_prec,
-		tsi.late_age, tsi.late_age_prec, tsi.interval_type, tsi.color, tsi.priority, tsi.reference_no
-	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
-		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
-	WHERE tsb.timescale_no in ($timescale_no)\n";
+	SELECT tsi.timescale_no, tsi.interval_name, tsi.interval_no,
+		tsi.early_age, tsi.early_age_prec, tsi.late_age, tsi.late_age_prec,
+		tsi.interval_type, tsi.reference_no, tsi.color, tsi.priority
+	FROM $TABLE{TIMESCALE_INTS} as tsi
+	WHERE tsi.timescale_no in ($timescale_no)
+	ORDER BY tsi.timescale_no, tsi.late_age\n";
     
-    $edt->debug_line($sql);
-
-    my $interval_list = $dbh->selectall_arrayref($sql, { Slice => { } });
-
-    $interval_list ||= [ ];
-    
-    my $interval_count = scalar(@$interval_list);
-    
-    # If there are none, then return.
-
-    return $interval_count unless $interval_count;
-
-    # Otherwise, list any definitions for the matching intervals that occur in other timescales.
-    
-    $sql = "
-	SELECT tsi.interval_no, tsi.interval_name, other.bound_no, other.timescale_no, 
-		other.age as early_age,	other.age_prec as early_age_prec,
-		upper.age as late_age, upper.age_prec as late_age_prec,
-		other.interval_type, other.color, otherts.priority, otherts.reference_no
-	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
-		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
-		join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = tsi.interval_name and 
-			other.timescale_no <> tsb.timescale_no
-		join $TABLE{TIMESCALE_BOUNDS} as upper on upper.bound_no = other.top_no
-		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
-	WHERE tsb.timescale_no in ($timescale_no)
-	ORDER BY other.timescale_no\n";
-
-    $edt->debug_line($sql);
-
-    my $other_list = $dbh->selectall_arrayref($sql, { Slice => { } });
-
-    $other_list ||= [ ];
-    
-    # Now collect up the highest priority definition for each of those other intervals, listed by
-    # interval name. In the case of priority ties, the lowest timescale_no wins.
-    
-    my %definition;
-    
-    foreach my $r ( @$other_list )
+    my $delete_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+	
+    if ( ref $delete_list eq 'ARRAY' && @$delete_list )
     {
-	my $interval_name = $r->{interval_name};
-	
-	if ( ! $definition{$interval_name} )
+	foreach my $r ( @$delete_list )
 	{
-	    $definition{$interval_name} = $r;
-	}
-	
-	elsif ( defined $r->{priority} && defined $definition{$interval_name}{priority} &&
-	     $r->{priority} > $definition{$interval_name}{priority} )
-	{
-	    $definition{$interval_name} = $r;
+	    $r->{status} = 'delete';
+	    push @{$edt->{my_result}}, $r;
 	}
     }
-    
-    # For each of these definitions, execute an update statement that will update the
-    # corresponding interval record.
-    
-    foreach my $r ( values %definition )
-    {
-	my $interval_no = $dbh->quote($r->{interval_no});
-	my $timescale_no = $dbh->quote($r->{timescale_no});
-	my $bound_no = $dbh->quote($r->{bound_no});
-	my $early_age = $dbh->quote($r->{early_age});
-	my $early_age_prec = defined $r->{early_age_prec} ? $dbh->quote($r->{early_age_prec}) : 'NULL';
-	my $late_age = $dbh->quote($r->{late_age});
-	my $late_age_prec = defined $r->{late_age_prec} ? $dbh->quote($r->{late_age_prec}) : 'NULL';
-	my $color = $r->{color} ? $dbh->quote($r->{color}) : "''";
-	my $reference_no = $r->{reference_no} ? $dbh->quote($r->{reference_no}) : 'NULL';
-	my $priority = defined $r->{priority} ? $dbh->quote($r->{priority}) : 'NULL';
-	
-	my $sql = "UPDATE $TABLE{TIMESCALE_INTS}
-		SET timescale_no = $timescale_no,
-		    bound_no = $bound_no,
-		    early_age = $early_age, early_age_prec = $early_age_prec,
-		    late_age = $late_age, late_age_prec = $late_age_prec,
-		    color = $color, reference_no = $reference_no, priority = $priority
-		WHERE interval_no = $interval_no\n";
 
-	my $result = $dbh->do($sql);
-
-	# $$$
-    }
+    # If the 'preview' flag was specified, then just return this list (via my_result above).
     
-    # Then get a list of the interval names that are not mentioned in any other timescale that has
-    # a non-zero priority.
-    
-    $sql = "
-	SELECT tsb.bound_no, tsb.timescale_no, tsi.interval_name, tsi.early_age, tsi.early_age_prec,
-		tsi.late_age, tsi.late_age_prec, tsi.interval_type, tsi.color, tsi.priority, tsi.reference_no
-	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
-		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
-		left join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = tsi.interval_name and 
-			other.timescale_no <> tsb.timescale_no and other.top_no <> 0
-		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
-	WHERE (other.bound_no is null or otherts.priority = 0) and tsb.timescale_no in ($timescale_no)\n";
-    
-    $edt->debug_line($sql);
-    
-    my $check_list = $dbh->selectall_arrayref($sql, { Slice => { } });
-    
-    $check_list ||= [ ];
-    
-    my $check_count = scalar(@$check_list);
-    
-    # If we are being asked only to check, or if there is nothing to update, then return this
-    # list.
-    
-    if ( $check_only || $check_count == 0 )
+    if ( $record->{preview} )
     {
-	return $check_list;
+	return;
     }
     
     # Otherwise, start the transaction if it hasn't already been started.
     
     $edt->start_execution;
-    
-    # Then select all matching definitions in other timescales that have non-zero priority.
+
+    # Then actually delete all of the intervals defined by this timescale.
     
     $sql = "
-	SELECT other.*, otherts.priority
-	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
-		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
-		join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = tsi.interval_name and 
-			other.timescale_no <> tsb.timescale_no and other.top_no <> 0
-		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
-	WHERE tsb.timescale_no in ($timescale_no) and otherts.priority > 0\n";
-
-    $edt->debug_line($sql);
-
-    my $matches = $dbh->selectall_arrayref($sql, { Slice => { } });
-
+	DELETE FROM $TABLE{TIMESCALE_INTS} 
+	WHERE $TABLE{TIMESCALE_INTS}.timescale_no in ($timescale_no)\n";
     
-    
-
-    $sql = "
-	DELETE $TABLE{TIMESCALE_INTS}
-	FROM $TABLE{TIMESCALE_BOUNDS}
-		join $TABLE{TIMESCALE_INTS} using (interval_name, timescale_no)
-		left join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = 
-			$TABLE{TIMESCALE_INTS}.interval_name and other.timescale_no <> tsb.timescale_no and
-			other.top_no <> 0
-		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
-	WHERE (other.bound_no is null or otherts.priority = 0) and tsb.timescale_no in ($timescale_no)\n";
-
     $edt->debug_line($sql);
-
+    
     my $delete_count = $dbh->do($sql);
+}
+    
+    # # $$$    # First get a list of the interval names that are defined by this timescale.
+
+    # $sql = "
+    # 	SELECT tsb.bound_no, tsb.timescale_no, tsi.interval_name, tsi.early_age, tsi.early_age_prec,
+    # 		tsi.late_age, tsi.late_age_prec, tsi.interval_type, tsi.color, tsi.priority, tsi.reference_no
+    # 	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
+    # 		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
+    # 	WHERE tsb.timescale_no in ($timescale_no)\n";
+    
+    # $edt->debug_line($sql);
+
+    # my $interval_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+
+    # $interval_list ||= [ ];
+    
+    # my $interval_count = scalar(@$interval_list);
+    
+    # # If there are none, then return.
+
+    # return $interval_count unless $interval_count;
+
+    # # Otherwise, list any definitions for the matching intervals that occur in other timescales.
+    
+    # $sql = "
+    # 	SELECT tsi.interval_no, tsi.interval_name, other.bound_no, other.timescale_no, 
+    # 		other.age as early_age,	other.age_prec as early_age_prec,
+    # 		upper.age as late_age, upper.age_prec as late_age_prec,
+    # 		other.interval_type, other.color, otherts.priority, otherts.reference_no
+    # 	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
+    # 		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
+    # 		join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = tsi.interval_name and 
+    # 			other.timescale_no <> tsb.timescale_no
+    # 		join $TABLE{TIMESCALE_BOUNDS} as upper on upper.bound_no = other.top_no
+    # 		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
+    # 	WHERE tsb.timescale_no in ($timescale_no)
+    # 	ORDER BY other.timescale_no\n";
+
+    # $edt->debug_line($sql);
+
+    # my $other_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+
+    # $other_list ||= [ ];
+    
+    # # Now collect up the highest priority definition for each of those other intervals, listed by
+    # # interval name. In the case of priority ties, the lowest timescale_no wins.
+    
+    # my %definition;
+    
+    # foreach my $r ( @$other_list )
+    # {
+    # 	my $interval_name = $r->{interval_name};
+	
+    # 	if ( ! $definition{$interval_name} )
+    # 	{
+    # 	    $definition{$interval_name} = $r;
+    # 	}
+	
+    # 	elsif ( defined $r->{priority} && defined $definition{$interval_name}{priority} &&
+    # 	     $r->{priority} > $definition{$interval_name}{priority} )
+    # 	{
+    # 	    $definition{$interval_name} = $r;
+    # 	}
+    # }
+    
+    # # For each of these definitions, execute an update statement that will update the
+    # # corresponding interval record.
+    
+    # foreach my $r ( values %definition )
+    # {
+    # 	my $interval_no = $dbh->quote($r->{interval_no});
+    # 	my $timescale_no = $dbh->quote($r->{timescale_no});
+    # 	my $bound_no = $dbh->quote($r->{bound_no});
+    # 	my $early_age = $dbh->quote($r->{early_age});
+    # 	my $early_age_prec = defined $r->{early_age_prec} ? $dbh->quote($r->{early_age_prec}) : 'NULL';
+    # 	my $late_age = $dbh->quote($r->{late_age});
+    # 	my $late_age_prec = defined $r->{late_age_prec} ? $dbh->quote($r->{late_age_prec}) : 'NULL';
+    # 	my $color = $r->{color} ? $dbh->quote($r->{color}) : "''";
+    # 	my $reference_no = $r->{reference_no} ? $dbh->quote($r->{reference_no}) : 'NULL';
+    # 	my $priority = defined $r->{priority} ? $dbh->quote($r->{priority}) : 'NULL';
+	
+    # 	my $sql = "UPDATE $TABLE{TIMESCALE_INTS}
+    # 		SET timescale_no = $timescale_no,
+    # 		    bound_no = $bound_no,
+    # 		    early_age = $early_age, early_age_prec = $early_age_prec,
+    # 		    late_age = $late_age, late_age_prec = $late_age_prec,
+    # 		    color = $color, reference_no = $reference_no, priority = $priority
+    # 		WHERE interval_no = $interval_no\n";
+
+    # 	my $result = $dbh->do($sql);
+
+    # 	# $$$
+    # }
+    
+    # # Then get a list of the interval names that are not mentioned in any other timescale that has
+    # # a non-zero priority.
+    
+    # $sql = "
+    # 	SELECT tsb.bound_no, tsb.timescale_no, tsi.interval_name, tsi.early_age, tsi.early_age_prec,
+    # 		tsi.late_age, tsi.late_age_prec, tsi.interval_type, tsi.color, tsi.priority, tsi.reference_no
+    # 	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
+    # 		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
+    # 		left join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = tsi.interval_name and 
+    # 			other.timescale_no <> tsb.timescale_no and other.top_no <> 0
+    # 		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
+    # 	WHERE (other.bound_no is null or otherts.priority = 0) and tsb.timescale_no in ($timescale_no)\n";
+    
+    # $edt->debug_line($sql);
+    
+    # my $check_list = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    # $check_list ||= [ ];
+    
+    # my $check_count = scalar(@$check_list);
+    
+    # # If we are being asked only to check, or if there is nothing to update, then return this
+    # # list.
+    
+    # if ( $preview || $check_count == 0 )
+    # {
+    # 	return $check_list;
+    # }
+    
+    # # Otherwise, start the transaction if it hasn't already been started.
+    
+    # $edt->start_execution;
+    
+    # # Then select all matching definitions in other timescales that have non-zero priority.
+    
+    # $sql = "
+    # 	SELECT other.*, otherts.priority
+    # 	FROM $TABLE{TIMESCALE_BOUNDS} as tsb
+    # 		join $TABLE{TIMESCALE_INTS} as tsi using (interval_name, timescale_no)
+    # 		join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = tsi.interval_name and 
+    # 			other.timescale_no <> tsb.timescale_no and other.top_no <> 0
+    # 		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
+    # 	WHERE tsb.timescale_no in ($timescale_no) and otherts.priority > 0\n";
+
+    # $edt->debug_line($sql);
+
+    # my $matches = $dbh->selectall_arrayref($sql, { Slice => { } });
+
+    
     
 
+    # $sql = "
+    # 	DELETE $TABLE{TIMESCALE_INTS}
+    # 	FROM $TABLE{TIMESCALE_BOUNDS}
+    # 		join $TABLE{TIMESCALE_INTS} using (interval_name, timescale_no)
+    # 		left join $TABLE{TIMESCALE_BOUNDS} as other on other.interval_name = 
+    # 			$TABLE{TIMESCALE_INTS}.interval_name and other.timescale_no <> tsb.timescale_no and
+    # 			other.top_no <> 0
+    # 		join $TABLE{TIMESCALE_DATA} as otherts on otherts.timescale_no = other.timescale_no
+    # 	WHERE (other.bound_no is null or otherts.priority = 0) and tsb.timescale_no in ($timescale_no)\n";
 
+    # $edt->debug_line($sql);
 
-}
+    # my $delete_count = $dbh->do($sql);
+    
 
 
 sub check_timescale_id {

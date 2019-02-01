@@ -361,25 +361,301 @@ subtest 'intervals' => sub {
     
     # First add a timescale and some bounds.
     
-    my $new_js = [ { timescale_name => 'EDIT TEST E', _label => 't1', priority => 1 },
+    my $new_js = [ { timescale_name => 'EDIT TEST E', _label => 't1', priority => 2 },
 		   { timescale_id => '@t1', bound_type => 'absolute', age => '98.8', _label => 'b1' },
 		   { timescale_id => '@t1', bound_type => 'same', base_id => $ALBIAN->{bid},
-		     top_id => '@b1', interval_name => 'INT ABC', _label => 'b2' },
+		     top_id => '@b1', interval_name => 'Albian', _label => 'b2' },
 		   { timescale_id => '@t1', bound_type => 'same', base_id => $APTIAN->{bid},
-		     top_id => '@b2', interval_name => 'INT DEF', _label => 'b3' },
+		     top_id => '@b2', interval_name => 'INT ABC', _label => 'b3' },
 		   { timescale_id => '@t1', bound_type => 'absolute', age => '150.20',
-		     top_id => '@b3', interval_name => 'INT GHI', _label => 'b4' } ];
+		     top_id => '@b3', interval_name => 'INT DEF', _label => 'b4' } ];
     
     my (@t1) = $T->send_records("/timescales/addupdate.json", "add timescale and bounds",
 				json => $new_js);
     
     return unless @t1;
+
+    my $TS1 = $t1[0]{oid};
     
     cmp_ok( @t1, '==', 5, "got five records back from add" );
     
-    # Now 
+    # Now check what intervals would be created from this timescale. The 'preview' parameter is
+    # supposed to keep them from actually being created.
     
+    my (@d1) = $T->fetch_records("/timescales/define.json?timescale_id=$TS1&preview",
+				 "preview interval definitions");
+
+    # We should get 'INT ABC' and 'INT DEF' back, but not 'Albian' because that is already defined
+    # by a higher priority timescale: the International Stages.
     
+    if ( cmp_ok( @d1, '==', 2, "got two records back from preview" ) )
+    {
+	if ( is( $d1[0]{nam}, 'INT ABC', "got first interval" ) )
+	{
+	    is( $d1[0]{eag}, $APTIAN->{eag}, "first interval had proper early age" );
+	    is( $d1[0]{lag}, $ALBIAN->{eag}, "first interval had proper late age" );
+	    is( $d1[0]{sid}, $TS1, "first interval had proper timescale id" );
+	    is( $d1[0]{sta}, 'insert', "first interval had proper status" );
+	    ok( ! $d1[0]{oid}, "first interval had no interval id" );
+	}
+
+	if ( is( $d1[1]{nam}, 'INT DEF', "got second interval" ) )
+	{
+	    is( $d1[1]{eag}, '150.20', "second interval had proper early age" );
+	    is( $d1[1]{lag}, $APTIAN->{eag}, "second interval had proper late age" );
+	    is( $d1[1]{sid}, $TS1, "second interval had proper timescale id" );
+	    is( $d1[1]{sta}, 'insert', "second interval had proper status" );
+	    ok( ! $d1[1]{oid}, "second interval had no interval id" );
+	}
+    }
+    
+    # Now make sure that neither of these records actually were created in the database.
+    
+    my ($timescale_no) = $TS1 =~ /(\d+)/;
+
+    ok( $timescale_no, "got numeric id for created timescale" ) &&
+	$ET->ok_count_records(0, 'TIMESCALE_INTS', "timescale_no=$timescale_no",
+			      "no intervals were created for timescale '$TS1'");
+
+    # Then actually create the intervals.
+    
+    my (@d2) = $T->fetch_records("/timescales/define.json?timescale_id=$TS1",
+				 "actually define the intervals");
+
+    if ( cmp_ok( @d2, '==', 2, "got two records back from defineintervals" ) )
+    {
+	if ( is( $d2[0]{nam}, 'INT ABC', "defined first interval" ) )
+	{
+	    is( $d2[0]{eag}, $APTIAN->{eag}, "first interval had proper early age" );
+	    is( $d2[0]{lag}, $ALBIAN->{eag}, "first interval had proper late age" );
+	    is( $d2[0]{sid}, $TS1, "first interval had proper timescale id" );
+	    is( $d2[0]{sta}, 'defined', "first interval had proper status" );
+	    like( $d2[0]{oid}, $IDRE{INT}, "first interval had a proper interval id" );
+	}
+
+	if ( is( $d2[1]{nam}, 'INT DEF', "defined second interval" ) )
+	{
+	    is( $d2[1]{eag}, '150.20', "second interval had proper early age" );
+	    is( $d2[1]{lag}, $APTIAN->{eag}, "second interval had proper late age" );
+	    is( $d2[1]{sid}, $TS1, "second interval had proper timescale id" );
+	    is( $d2[1]{sta}, 'defined', "second interval had proper status" );
+	    like( $d2[1]{oid}, $IDRE{INT}, "second interval had a proper interval id" );
+	}
+    }
+    
+    # Check that they really have been added to the database.
+    
+    ok( $timescale_no, "got numeric id for created timescale" ) &&
+	$ET->ok_count_records(2, 'TIMESCALE_INTS', "timescale_no=$timescale_no",
+			      "two intervals were created for timescale '$TS1'");
+    
+    # Now add a second timescale with an overlapping name.
+    
+    my $add_js = [ { timescale_name => 'EDIT TEST F', _label => 't1', priority => 1 },
+		   { timescale_id => '@t1', bound_type => 'absolute', age => '100.8', _label => 'b1' },
+	           { timescale_id => '@t1', bound_type => 'absolute', age => '110.10', 
+		     top_id => '@b1', interval_name => 'INT QQQ', _label => 'b2' },
+	           { timescale_id => '@t1', bound_type => 'absolute', age => '125',
+		     top_id => '@b2', interval_name => 'INT GHI', _label => 'b3' },
+		   { timescale_id => '@t1', bound_type => 'absolute', age => '140.55',
+		     top_id => '@b3', interval_name => 'INT DEF', _label => 'b4' } ];
+    
+    my (@t2) = $T->send_records("/timescales/addupdate.json", "add timescale and bounds",
+				json => $add_js);
+    
+    return unless @t2;
+
+    my $TS2 = $t2[0]{oid};
+    
+    cmp_ok( @t2, '==', 5, "got five records back from second add" );
+    
+    # Now check what intervals would be created from this timescale. The 'preview' parameter is
+    # supposed to keep them from actually being created.
+    
+    my (@d3) = $T->fetch_records("/timescales/define.json?timescale_id=$TS2&preview",
+				 "preview interval definitions 2");
+    
+    if ( cmp_ok( @d3, '==', 2, "got two records back from defineintervals" ) )
+    {
+	if ( is( $d3[0]{nam}, 'INT QQQ', "defined first interval" ) )
+	{
+	    is( $d3[0]{lag}, '100.8', "first interval had proper late age" );
+	    is( $d3[0]{eag}, '110.10', "first interval had proper early age" );
+	    is( $d3[0]{sid}, $TS2, "first interval had proper timescale id" );
+	    like( $d3[0]{bid}, $IDRE{BND}, "first interval had a proper bound id" );
+	    is( $d3[0]{sta}, 'insert', "first interval had proper status" );
+	    ok( ! $d3[0]{oid}, "first interval had no interval id" );
+	}
+
+	if ( is( $d3[1]{nam}, 'INT GHI', "defined second interval" ) )
+	{
+	    is( $d3[1]{lag}, '110.10', "second interval had proper late age" );
+	    is( $d3[1]{eag}, '125', "second interval had proper early age" );
+	    is( $d3[1]{sid}, $TS2, "second interval had proper timescale id" );
+	    like( $d3[1]{bid}, $IDRE{BND}, "second interval had a proper bound id" );
+	    is( $d3[1]{sta}, 'insert', "second interval had proper status" );
+	    ok( ! $d3[1]{oid}, "second interval had no interval id" );
+	}
+    }
+    
+    # Now make sure that neither of these records actually were created in the database.
+    
+    my ($timescale2_no) = $TS2 =~ /(\d+)/;
+
+    ok( $timescale2_no, "got numeric id for created timescale" ) &&
+	$ET->ok_count_records(0, 'TIMESCALE_INTS', "timescale_no=$timescale2_no",
+			      "no intervals were created for timescale '$TS2'");
+    
+    # Then actually create the intervals.
+    
+    my (@d4) = $T->fetch_records("/timescales/define.json?timescale_id=$TS2",
+				 "actually define the intervals");
+    
+    if ( cmp_ok( @d4, '==', 2, "got two records back from defineintervals" ) )
+    {
+	if ( is( $d4[0]{nam}, 'INT QQQ', "defined first interval" ) )
+	{
+	    is( $d4[0]{lag}, '100.8', "first interval had proper late age" );
+	    is( $d4[0]{eag}, '110.10', "first interval had proper early age" );
+	    is( $d4[0]{sid}, $TS2, "first interval had proper timescale id" );
+	    is( $d4[0]{sta}, 'defined', "first interval had proper status" );
+	    like( $d4[0]{bid}, $IDRE{BND}, "first interval had a proper bound id" );
+	    like( $d4[0]{oid}, $IDRE{INT}, "first interval had a proper interval id" );
+	}
+	
+	if ( is( $d4[1]{nam}, 'INT GHI', "defined second interval" ) )
+	{
+	    is( $d4[1]{lag}, '110.10', "second interval had proper late age" );
+	    is( $d4[1]{eag}, '125', "second interval had proper early age" );
+	    is( $d4[1]{sid}, $TS2, "second interval had proper timescale id" );
+	    is( $d4[1]{sta}, 'defined', "second interval had proper status" );
+	    like( $d4[1]{bid}, $IDRE{BND}, "second interval had a proper interval id" );
+	    like( $d4[1]{oid}, $IDRE{INT}, "second interval had a proper interval id" );
+	}
+    }
+    
+    # Check that they really have been added to the database.
+    
+    ok( $timescale2_no, "got numeric id for created timescale" ) &&
+	$ET->ok_count_records(2, 'TIMESCALE_INTS', "timescale_no=$timescale2_no",
+			      "two intervals were created for timescale '$TS2'");
+    
+    # Now change the priority of the second timescale to '2' and redo the 'define intervals'
+    # operation. This time, three intervals should be defined.
+    
+    my $update_js = [ { timescale_id => $TS2, priority => 2 } ];
+
+    my (@t3) = $T->send_records("/timescales/addupdate.json", "update timescale 2",
+				json => $update_js);
+    
+    is( $t3[0]{pri}, '2', "priority was updated properly" );
+
+    my (@d5p) = $T->fetch_records("/timescales/define.json?timescale_id=$TS2&preview",
+				 "preview redefine intervals at higher priority");
+
+    if ( cmp_ok( @d5p, '==', 3, "got three records back from preview" ) )
+    {
+	is( $d5p[0]{sta}, 'update', "first record has 'update' status" );
+	is( $d5p[1]{sta}, 'update', "second record has 'update' status" );
+	is( $d5p[2]{sta}, 'update', "third record has 'update' status" );	
+    }
+    
+    my (@d5) = $T->fetch_records("/timescales/define.json?timescale_id=$TS2",
+				 "redefine intervals at higher priority");
+    
+    if ( cmp_ok( @d5, '==', 3, "got three records back at higher priority" ) )
+    {
+	is( $d5[0]{nam}, 'INT QQQ', "found 'INT QQQ'" );
+	is( $d5[1]{nam}, 'INT GHI', "found 'INT GHI'" );
+
+	if ( is( $d5[2]{nam}, 'INT DEF', "found 'INT DEF'" ) )
+	{
+	    is( $d5[2]{lag}, '125', "DEF had updated late age" );
+	    is( $d5[2]{eag}, '140.55', "DEF had updated early age" );
+	    is( $d5[2]{sid}, $TS2, "DEF had updated timescale id" );
+	    is( $d5[2]{sta}, 'defined', "DEF had proper status" );
+	}
+    }
+    
+    # Check that only one interval is now associated with timescale 1, and three with timescale 2.
+    
+    ok( $timescale_no, "got numeric id for created timescale" ) &&
+	$ET->ok_count_records(1, 'TIMESCALE_INTS', "timescale_no=$timescale_no",
+			      "one interval remains for timescale '$TS1'");
+
+    ok( $timescale2_no, "got numeric id for created timescale 2" ) &&
+	$ET->ok_count_records(3, 'TIMESCALE_INTS', "timescale_no=$timescale2_no",
+			      "three intervals for timescale '$TS2'");
+    
+    # Now preview undefining timescale 2. Make sure the records weren't really deleted yet.
+    
+    my (@d6p) = $T->fetch_records("/timescales/undefine.json?timescale_id=$TS2&preview",
+				  "preview undefining intervals");
+    
+    if ( cmp_ok( @d6p, '==', 3, "got three records from undefine preview" ) )
+    {
+	is( $d6p[0]{sta}, 'delete', "got proper status" );
+    }
+    
+    ok( $timescale2_no, "got numeric id for created timescale 2" ) &&
+	$ET->ok_count_records(3, 'TIMESCALE_INTS', "timescale_no=$timescale2_no",
+			      "three intervals remain for timescale '$TS2'");    
+    
+    # Then undefine for real.
+
+    my (@d6) = $T->fetch_records("/timescales/undefine.json?timescale_id=$TS2",
+				 "preview undefining intervals");
+    
+    if ( cmp_ok( @d6, '==', 3, "got three records from undefine" ) )
+    {
+	is( $d6[0]{sta}, 'delete', "got proper status again" );
+    }
+
+    ok( $timescale2_no, "got numeric id for created timescale 2" ) &&
+	$ET->ok_count_records(0, 'TIMESCALE_INTS', "timescale_no=$timescale2_no",
+			      "no intervals remain for timescale '$TS2'");    
+
+    # Now re-define intervals from timescale 1.
+
+    my (@d7) = $T->fetch_records("/timescales/define.json?timescale_id=$TS1",
+				 "define timescales from '$TS1' again");
+
+    cmp_ok( @d7, '==', 2, "defined two intervals" );
+    
+    ok( $timescale_no, "got numeric id for created timescale" ) &&
+	$ET->ok_count_records(2, 'TIMESCALE_INTS', "timescale_no=$timescale_no",
+			      "back to two intervals for timescale '$TS1'");
+
+    # Now we change the names of two of the intervals in timescale 1, and re-define. This should
+    # cause two insertions and one deletion.
+
+    my $change_js = [ { bound_id => $t1[2]{oid}, interval_name => 'INT AAA' },
+		      { bound_id => $t1[3]{oid}, interval_name => 'INT BBB' }];
+
+    my (@t8) = $T->send_records("/timescales/addupdate.json?return=updated",
+				"update timescale 1 interval names", json => $change_js);
+
+    cmp_ok( @t8, '==', 2, "got two records back from interval name update" );
+    
+    # print STDERR pp(\@t8);
+    
+    my (@d8) = $T->fetch_records("/timescales/define.json?timescale_id=$TS1",
+				 "redefine timescale 1 with new interval names");
+    
+    if ( cmp_ok( @d8, '==', 4, "got four records back from redefine" ) )
+    {
+	my $defined = 0;
+	my $deleted = 0;
+
+	foreach my $r ( @d8 )
+	{
+	    $defined++ if $r->{sta} eq 'defined';
+	    $deleted++ if $r->{sta} eq 'deleted';
+	}
+
+	is($defined, 3, "defined three intervals");
+	is($deleted, 1, "deleted one interval");
+    }
 };
 
 

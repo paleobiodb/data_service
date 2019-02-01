@@ -67,6 +67,39 @@ sub initialize {
     	"timescales(s) or bound(s) to be deleted, then the operation will be blocked unless you also",
 	"include the parameter C<B<allow=BREAK_DEPENDENCIES>>.",
    	">By default, this operation returns a list of new or updated record(s).");
+
+    $ds2->define_node({ path => 'timescales/define',
+			title => 'Define intervals from timescale bounds',
+			place => 0,
+			allow_method => 'GET',
+			role => 'PB2::TimescaleEntry',
+			method => 'define_intervals',
+			output => '1.2:timescales:interval' },
+	"This operation defines intervals based on the bounds in the specified timescale.");
+    
+    $ds2->list_node({ path => 'timescales/define',
+    		      list => 'entry/timescales',
+    		      place => 1 });
+    
+    $ds2->extended_doc({ path => 'timescales/define' },
+	"This needs to be written...");
+
+    $ds2->define_node({ path => 'timescales/undefine',
+			title => 'Remove interval definitions',
+			place => 0,
+			allow_method => 'GET',
+			role => 'PB2::TimescaleEntry',
+			method => 'define_intervals',
+			arg => 'undefine',
+			output => '1.2:timescales:interval' },
+	"This operation removes interval definitions corresponding to the specified timescale.");
+    
+    $ds2->list_node({ path => 'timescales/undefine',
+		      list => 'entry/timescales',
+		      place => 1 });
+
+    $ds2->extended_doc({ path => 'timescales/undefine' },
+	"This needs to be written...");
     
     $ds2->define_node({ path => 'timescales/delete',
     			title => 'Delete timescales',

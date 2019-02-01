@@ -166,7 +166,7 @@ sub establish_timescale_tables {
     $dbh->do("DROP TABLE IF EXISTS $TS_INTS_WORK");
     
     $dbh->do("CREATE TABLE $TS_INTS_WORK (
-		interval_no int unsigned PRIMARY KEY,
+		interval_no int unsigned PRIMARY KEY AUTO_INCREMENT,
 		macrostrat_id int unsigned not null default 0,
 		interval_name varchar(80) not null,
 		interval_type enum('', 'other', 'supereon', 'eon', 'era', 'period',
@@ -1395,9 +1395,10 @@ sub set_interval_bounds {
 		UPDATE $TABLE{TIMESCALE_INTS} as tsi 
 		    join $TABLE{TIMESCALE_BOUNDS} as tsb using (interval_name, timescale_no)
 		    join $TABLE{TIMESCALE_BOUNDS} as upper on upper.bound_no = tsb.top_no
+		    join $TABLE{TIMESCALE_DATA} as ts on ts.timescale_no = tsb.timescale_no
 		SET tsi.bound_no = tsb.bound_no,
 		    tsi.timescale_no = tsb.timescale_no, 
-		    tsi.priority = tsb.priority,
+		    tsi.priority = ts.priority,
 		    tsi.color = tsb.color,
 		    tsi.early_age = tsb.age, tsi.early_age_prec = tsb.age_prec,
 		    tsi.late_age = upper.age, tsi.late_age_prec = upper.age_prec";

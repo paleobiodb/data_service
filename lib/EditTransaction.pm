@@ -1196,7 +1196,7 @@ sub _new_record {
     my ($edt, $table, $operation, $record) = @_;
     
     croak "no record specified" unless ref $record eq 'HASH' ||
-	$operation eq 'delete' && defined $record && $record ne '';
+	$operation =~ /delete|other/ && defined $record && $record ne '';
     
     croak "unknown table '$table'" unless exists $TABLE{$table};
     
@@ -2175,6 +2175,121 @@ sub insert_update_record {
 }
 
 
+# other_action ( table, method, record )
+# 
+# An action not defined by this module is to be carried out. The argument $method must be a method
+# name defined in a subclass of this module, which will be called to carry out the action. The
+# method name will be passed as the operation when calling subclass methods for authoriation and validation.
+
+sub other_action {
+    
+    my ($edt, $table, $method, $record) = @_;
+    
+    # Move any accumulated record error or warning conditions to the main lists, and determine the
+    # key expression and label for the record being updated.
+    
+    my $action = $edt->_new_record($table, 'other', $record);
+    
+    $action->_set_method($method);
+    
+    # If we have a primary key value, we can authorize against that record. This may be a
+    # limitation in future, but for now the action is authorized if they have 'update' privilege
+    # on that record.
+    
+    if ( my $keyexpr = $edt->_set_keyexpr($action) )
+    {
+	try {
+
+	    # First check to make sure we have permission to update this record. A subclass may
+	    # override this method, if it needs to make different checks than the default ones.
+	    
+	    my $permission = $edt->authorize_action($action, 'other', $table, $keyexpr);
+
+	    # If errors occurred during authorization, then we need not check further but can
+	    # proceed to the next action.
+	    
+	    if ( $permission eq 'error' && $action->has_errors )
+	    {
+		return;
+	    }
+	    
+	    # If no such record is found in the database, add an E_NOT_FOUND condition. If this
+	    # EditTransaction has been created with the 'PROCEED' or 'NOT_FOUND' allowance, it
+	    # will automatically be turned into a warning and will not cause the transaction to be
+	    # aborted.
+	    
+	    elsif ( $permission eq 'notfound' )
+	    {
+		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec, $action->keyval);
+	    }
+
+	    # If the record has been found but is locked, then add an E_LOCKED condition. The user
+	    # would have had permission to update this record, except for the lock.
+	    
+	    elsif ( $permission eq 'locked' )
+	    {
+		$edt->add_condition($action, 'E_LOCKED', $action->keyval);
+	    }
+	    
+	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
+	    # record is actually being unlocked by this operation, or the transaction allows
+	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
+	    # that the user does have permission to update the record if the lock is disregarded,
+	    # and it implies 'admin' permission. So we proceed as if we had 'admin' permission,
+	    # but add a caution unless the abovementioned conditions are met.
+	    
+	    elsif ( $permission eq 'unlock' )
+	    {
+		unless ( (defined $record->{admin_lock} && $record->{admin_lock} == 0) ||
+		     $edt->allows('LOCKED') )
+		{
+		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
+		}
+
+		$action->_set_permission('admin');
+	    }
+	    
+	    # If the user does not have permission to edit the record, add an E_PERM condition. 
+	    
+	    elsif ( $permission ne 'edit' && $permission ne 'admin' )
+	    {
+		$edt->add_condition($action, 'E_PERM', $method);
+	    }
+	    
+	    # Then check the new record values, to make sure that the column values meet all of the
+	    # criteria for this table. If any error or warning conditions are detected, they are added
+	    # to the current transaction. A subclass may override this method, if it needs to make
+	    # additional checks or perform additional work.
+	    
+	    $edt->validate_action($action, 'other', $table, $keyexpr);
+	    # $edt->validate_against_schema($action, 'other', $table);
+	}
+	
+	catch {
+	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
+	    $edt->error_line($_);
+	};
+    }
+    
+    # If no primary key value was specified for this record, add an error condition. This will, of
+    # course, have to be reported under the record label that was passed in as part of the record
+    # (if one was in fact given) or else the index of the record in the input set.
+
+    # $$$ At some point in the future, we may add the ability to carry out operations using table
+    # rather than record authentication.
+    
+    else
+    {
+	$edt->add_condition($action, 'E_NO_KEY', 'update');
+    }
+    
+    # Either execute the action immediately or add it to the appropriate list depending on whether
+    # or not any error conditions are found.
+    
+    return $edt->_handle_action($action);
+}
+
+
 # bad_record ( record )
 #
 # Create an action for this record, and immediately attach an error condition to it. This method
@@ -2408,8 +2523,12 @@ sub authorize_action {
 	    case 'delete_cleanup': {
 		croak "the operation '$operation' can only be done on a subordinate table";
 	    }
+
+	    case 'other': {
+		$permission = $edt->check_record_permission($table, 'edit', $keyexpr);
+	    }
 	    
-	default: {
+	    default: {
 		croak "bad operation '$operation'";
 	    }
 	};
@@ -2488,7 +2607,7 @@ sub authorize_subordinate_action {
     # Then fetch the new value, if any, from the action record. But not for a 'delete_cleanup'
     # operation, for which that is not applicable.
     
-    if ( $operation eq 'insert' || $operation eq 'update' || $operation eq 'replace' )
+    if ( $operation eq 'insert' || $operation eq 'update' || $operation eq 'replace' || $operation eq 'other' )
     {
 	($new_linkval, $record_col) = $edt->record_col($action, $table, $linkcol);
     }
@@ -2632,7 +2751,7 @@ sub authorize_subordinate_action {
 	    return 'delete';
 	}
 	
-	elsif ( $operation eq 'update' || $operation eq 'update_many' || $operation eq 'replace' )
+	elsif ( $operation eq 'update' || $operation eq 'update_many' || $operation eq 'replace' || $operation eq 'other' )
 	{
 	    return 'edit';
 	}
@@ -2643,7 +2762,7 @@ sub authorize_subordinate_action {
 	}
     }
     
-    # If the returned permission is 'notfound', then the record that is supposed to be linked do
+    # If the returned permission is 'notfound', then the record that is supposed to be linked to
     # does not exist. This should generate an E_KEY_NOT_FOUND.
     
     elsif ( $alt_permission eq 'notfound' )
@@ -2817,6 +2936,10 @@ sub _execute_action {
 
 	case 'delete_many': {
 	    $result = $edt->_execute_delete_many($action);
+	}
+
+	case 'other': {
+	    $result = $edt->_execute_other($action);
 	}
 	
         default: {
@@ -3099,6 +3222,10 @@ sub _execute_action_list {
 		
 		case 'delete_many': {
 		    $edt->_execute_delete_many($action);
+		}
+
+		case 'other': {
+		    $edt->_execute_other($action);
 		}
 		
 	        default: {
@@ -4399,6 +4526,102 @@ sub _execute_delete_many {
 }
 
 
+# _execute_update ( action )
+# 
+# Actually perform an update operation on the database. The keys and values have been checked
+# previously.
+
+sub _execute_other {
+
+    my ($edt, $action) = @_;
+    
+    my $table = $action->table;
+    my $record = $action->record;
+    
+    # Set this as the current action.
+    
+    $edt->{current_action} = $action;
+    
+    # Determine the method to be called.
+    
+    my $method = $action->method;
+    
+    # Call the specified method inside a try block. If it fails, add either an error or
+    # a warning depending on whether this EditTransaction allows PROCEED.
+    
+    my ($result, $cleanup_called);
+    
+    try {
+	
+	# Call the method specified for this action, provided there are no errors and the action
+	# has not been aborted.
+	
+	unless ( $action->status )
+	{
+	    $result = $edt->$method($action, $table, $record);
+	    $action->_set_status('executed');
+	}
+    }
+    
+    catch {
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+	$edt->error_line($_);
+	$action->_set_status('exception') unless $action->status;
+	
+	unless ( $cleanup_called )
+	{
+	    try {
+		$edt->cleanup_action($action, 'other', $table);
+	    }
+	    
+	    catch {
+		$edt->add_condition($action, 'E_EXECUTE', 'an exception was thrown during cleanup');
+		$edt->debug_line($_);
+	    };
+	}
+    };
+    
+    # If the operation succeeded, return true. Otherwise, return false. In either case, record the
+    # mapping between key value and record label.
+    
+    my $keyval = $action->keyval + 0;
+    my $label = $action->label;
+    
+    if ( defined $label && $label ne '' )
+    {
+	$edt->{label_keys}{$label} = $keyval;
+	$edt->{key_labels}{$table}{$keyval} = $label;
+    }
+    
+    if ( $result && ! $action->has_errors )
+    {
+	$edt->{action_count}++;
+	push @{$edt->{other_keys}{$table}}, $keyval;
+	# push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
+	
+	if ( my $linkval = $action->linkval )
+	{
+	    if ( $linkval =~ /^[@](.*)/ )
+	    {
+		$linkval = $edt->{label_keys}{$1};
+		$edt->add_condition($action, 'E_EXECUTE', 'link value label was not found') unless $linkval;
+	    }
+	    
+	    $edt->{superior_keys}{$table}{$linkval} = 1;
+	}
+	
+	return $result;
+    }
+    
+    else
+    {
+	$edt->{fail_count}++;
+	push @{$edt->{failed_keys}{$table}}, $keyval;
+	return undef;
+    }
+}
+
+
 # _substitute_labels ( action )
 #
 # Substitute the values in the columns marked for substitution with the key value associated with
@@ -4604,6 +4827,22 @@ sub deleted_keys {
     else
     {
 	return map { $edt->{deleted_keys}{$_} ? @{$edt->{deleted_keys}{$_}} : ( ) } keys %{$edt->{tables}};
+    }
+}
+
+
+sub other_keys {
+
+    my ($edt, $table) = @_;
+    
+    if ( $table )
+    {
+	return $edt->{other_keys}{$table} ? @{$edt->{other_keys}{$table}} : wantarray ? ( ) : 0;
+    }
+    
+    else
+    {
+	return map { $edt->{other_keys}{$_} ? @{$edt->{other_keys}{$_}} : ( ) } keys %{$edt->{tables}};
     }
 }
 

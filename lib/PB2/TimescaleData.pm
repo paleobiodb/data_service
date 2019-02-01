@@ -232,6 +232,12 @@ sub initialize {
 	    "The type of this object: C<$IDP{INT}> for an interval. This",
 	    "field will only appear if the object identifier is",
 	    "being returned as a number.",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with the record.",
+	{ output => 'status', com_name => 'sta' },
+	    "In the output of a deletion operation, each newly deleted record will have",
+	    "the value 'deleted'.",
 	{ output => 'timescale_no', com_name => 'sid' },
 	    "The identifier of the timescale from which this interval definition is taken.",
 	{ output => 'bound_no', com_name => 'bid' },
@@ -1043,7 +1049,7 @@ sub process_bound_ages {
 sub process_int_ages {
 
     my ($request, $record) = @_;
-
+    
     if ( (defined $record->{int_early} && defined $record->{early_age} && $record->{int_early} ne $record->{early_age}) ||
 	 (defined $record->{int_late} && defined $record->{late_age} && $record->{int_late} ne $record->{late_age}) )
     {

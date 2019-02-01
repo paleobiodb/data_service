@@ -25,7 +25,7 @@ use namespace::clean;
 our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record',
 			update_many => 'selector', 
 			delete => 'single', delete_cleanup => 'selector',
-			delete_many => 'selector', bad => 'record' );
+			delete_many => 'selector', bad => 'record', other => 'record' );
 
 
 # Create a new action record with the specified information.
@@ -54,16 +54,16 @@ sub new {
     
     # If the record has a primary key and a non-empty key attribute, store these in the action
     # record. This will be used to fetch information about the record, such as the authorization
-    # fields. If the operation is 'delete' then we accept a single key value in lieu of a hashref
-    # representing a record.
-
+    # fields. If the operation is 'delete' or 'other' then we accept a single key value in lieu of a
+    # hashref representing a record.
+    
     if ( my $key_column = get_table_property($table, 'PRIMARY_KEY') )
     {
 	$action->{keycol} = $key_column;
 	
-	# The delete operation cann accept a single key value rather than a record hash.
+	# The 'delete' and 'other' operations can accept a single key value rather than a record hash.
 	
-	if ( $operation eq 'delete' && ref $record ne 'HASH' )
+	if ( ($operation eq 'delete' || $operation eq 'other' ) && ref $record ne 'HASH' )
 	{
 	    $action->{keyval} = $record;
 	}
@@ -269,6 +269,12 @@ sub keyexpr {
 }
 
 
+sub method {
+
+    return $_[0]{method};
+}
+
+
 sub linkcol {
 
     return $_[0]{linkcol};
@@ -390,6 +396,14 @@ sub _set_linkval {
     my ($action, $linkval) = @_;
 
     $action->{linkval} = $linkval;
+}
+
+
+sub _set_method {
+
+    my ($action, $method) = @_;
+
+    $action->{method} = $method;
 }
 
 

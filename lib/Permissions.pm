@@ -70,10 +70,10 @@ sub new {
 	{
 	    croak "unknown table '$table_specifier'" unless exists $TABLE{$table_specifier};
 	    
-	    my $lookup_name = original_table($TABLE{$table_specifier});
+	    # my $lookup_name = original_table($TABLE{$table_specifier});
 	    # $lookup_name =~ s/^\w+[.]//;
 	    
-	    my $quoted_table = $dbh->quote($lookup_name);
+	    my $quoted_table = $dbh->quote($table_specifier);
 	    
 	    my $sql = "
 		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, 
@@ -609,7 +609,7 @@ sub check_record_permission {
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
-	my $p = $record->{admin_lock} ? 'unlock' : 'admin';
+	my $p = ($record->{admin_lock} || $record->{owner_lock}) ? 'unlock' : 'admin';
 	
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$p' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
