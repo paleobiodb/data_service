@@ -586,6 +586,7 @@ sub establish_tables {
 		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		admin_str varchar(40) not null default '',
 		admin_lock boolean not null default 0,
+		owner_lock boolean not null default 0,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp)");
     

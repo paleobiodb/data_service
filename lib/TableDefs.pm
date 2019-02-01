@@ -127,7 +127,8 @@ our (%COMMON_FIELD_SPECIAL) = ( authorizer_no => 'authent',
 				enterer_id => 'authent',
 				created => 'crmod',
 				modified => 'crmod',
-				admin_lock => 'admin' );
+				admin_lock => 'admin',
+			        owner_lock => 'owner' );
 
 
 # Define the mechanism for substituting test tables instead of real ones.

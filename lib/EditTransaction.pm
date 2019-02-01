@@ -1539,7 +1539,7 @@ sub insert_record {
 	    
 	    # If the user does not have permission to add a record, add an error condition.
 	    
-	    elsif ( $permission ne 'post' && $permission ne 'admin' )
+	    elsif ( $permission !~ /post|admin/ )
 	    {
 		$edt->add_condition($action, 'E_PERM', 'insert');
 	    }
@@ -1625,11 +1625,11 @@ sub update_record {
 	    {
 		$edt->add_condition($action, 'E_NOT_FOUND', $action->keyrec, $action->keyval);
 	    }
-
+	    
 	    # If the record has been found but is locked, then add an E_LOCKED condition. The user
 	    # would have had permission to update this record, except for the lock.
 	    
-	    elsif ( $permission eq 'locked' )
+	    elsif ( $permission =~ /locked/ )
 	    {
 		$edt->add_condition($action, 'E_LOCKED', $action->keyval);
 	    }
@@ -1641,20 +1641,19 @@ sub update_record {
 	    # and it implies 'admin' permission. So we proceed as if we had 'admin' permission,
 	    # but add a caution unless the abovementioned conditions are met.
 	    
-	    elsif ( $permission eq 'unlock' )
+	    elsif ( $permission =~ /unlock/ )
 	    {
-		unless ( (defined $record->{admin_lock} && $record->{admin_lock} == 0) ||
-		     $edt->allows('LOCKED') )
+		unless ( $edt->allows('LOCKED') )
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
-
+		
 		$action->_set_permission('admin');
 	    }
 	    
 	    # If the user does not have permission to edit the record, add an E_PERM condition. 
 	    
-	    elsif ( $permission ne 'edit' && $permission ne 'admin' )
+	    elsif ( $permission !~ /edit|admin/ )
 	    {
 		$edt->add_condition($action, 'E_PERM', 'update');
 	    }
@@ -1724,13 +1723,13 @@ sub update_many {
 	
 	# If the user does not have permission to edit the record, add an E_PERM condition. 
 	
-	if ( $permission ne 'edit' && $permission ne 'admin' )
+	if ( $permission !~ /edit|admin/ )
 	{
 	    $edt->add_condition($action, 'E_PERM', 'update_many');
 	}
-
+	
 	# The update record must not include a key value.
-
+	
 	if ( $action->keyval )
 	{
 	    $edt->add_condition($action, 'E_HAS_KEY', 'update_many');
@@ -1837,10 +1836,9 @@ sub replace_record {
 	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
 	    # that the user does have permission to update the record if the lock is disregarded.
 	    
-	    elsif ( $permission eq 'unlock' )
+	    elsif ( $permission =~ /unlock/ )
 	    {
-		unless ( (defined $record->{admin_lock} && $record->{admin_lock} == 0) ||
-			 $edt->allows('LOCKED') )
+		unless ( $edt->allows('LOCKED') )
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
@@ -1848,7 +1846,7 @@ sub replace_record {
 	    
 	    # If the user does not have permission to edit the record, add an error condition. 
 	    
-	    elsif ( $permission ne 'edit' && $permission ne 'admin' )
+	    elsif ( $permission !~ /edit|admin/ )
 	    {
 		$edt->add_condition($action, 'E_PERM', 'replace_existing');
 	    }
@@ -1945,10 +1943,7 @@ sub delete_record {
 	    
 	    elsif ( $permission eq 'unlock' )
 	    {
-		unless ( (ref $record eq 'HASH' &&
-			  defined $record->{admin_lock} &&
-			  $record->{admin_lock} == 0) ||
-			 $edt->allows('LOCKED') )
+		unless ( $edt->allows('LOCKED') )
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
@@ -1956,7 +1951,7 @@ sub delete_record {
 	    
 	    # If we do not have permission to delete the record, add an error condition.
 	    
-	    elsif ( $permission ne 'admin' && $permission ne 'delete' )
+	    elsif ( $permission !~ /delete|admin/ )
 	    {
 		$edt->add_condition($action, 'E_PERM', 'delete');
 	    }
@@ -2021,7 +2016,7 @@ sub delete_many {
 	
 	# If the user does not have permission to edit the record, add an E_PERM condition. 
 	
-	elsif ( $permission ne 'delete' && $permission ne 'admin' )
+	elsif ( $permission !~ /delete|admin/ )
 	{
 	    $edt->add_condition($action, 'E_PERM', 'delete_many');
 	}
@@ -2082,7 +2077,7 @@ sub delete_cleanup {
 	
 	# If the user does not have permission to edit the record, add an E_PERM condition. 
 	
-	elsif ( $permission ne 'delete' && $permission ne 'admin' )
+	elsif ( $permission !~ /delete|admin/ )
 	{
 	    $edt->add_condition($action, 'E_PERM', 'delete_cleanup');
 	}
@@ -2240,18 +2235,17 @@ sub other_action {
 	    
 	    elsif ( $permission eq 'unlock' )
 	    {
-		unless ( (defined $record->{admin_lock} && $record->{admin_lock} == 0) ||
-		     $edt->allows('LOCKED') )
+		unless ( $edt->allows('LOCKED') )
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
-
+		
 		$action->_set_permission('admin');
 	    }
 	    
 	    # If the user does not have permission to edit the record, add an E_PERM condition. 
 	    
-	    elsif ( $permission ne 'edit' && $permission ne 'admin' )
+	    elsif ( $permission !~ /edit|admin/ )
 	    {
 		$edt->add_condition($action, 'E_PERM', $method);
 	    }
@@ -2731,16 +2725,18 @@ sub authorize_subordinate_action {
     
     # Now, if the alt permission is 'admin', then the subordinate permission must be as well.
     
-    if ( $alt_permission eq 'admin' )
+    if ( $alt_permission =~ /admin/ )
     {
-	return 'admin';
+	return $alt_permission;
     }
-
+    
     # If the alt permission is 'edit', then we need to figure out what subordinate permission we
     # are being asked for and return that.
     
-    elsif ( $alt_permission eq 'edit' || $alt_permission eq 'post' )
+    elsif ( $alt_permission =~ /edit|post/ )
     {
+	my $unlock = $alt_permission =~ /unlock/ ? ',unlock' : '';
+	
 	if ( $operation eq 'insert' )
 	{
 	    return 'post';
@@ -2748,14 +2744,14 @@ sub authorize_subordinate_action {
 	
 	elsif ( $operation eq 'delete' || $operation eq 'delete_many' || $operation eq 'delete_cleanup' )
 	{
-	    return 'delete';
+	    return "delete$unlock";
 	}
 	
 	elsif ( $operation eq 'update' || $operation eq 'update_many' || $operation eq 'replace' || $operation eq 'other' )
 	{
-	    return 'edit';
+	    return "edit$unlock";
 	}
-
+	
 	else
 	{
 	    croak "bad subordinate operation '$operation'";
@@ -5084,6 +5080,8 @@ sub validate_against_schema {
     my $permission = $action->permission;
     my $keycol = $action->keycol;
     
+    my $is_owner;
+    
     # Grab the table schema, or throw an exception if it is not available. This information is cached, so
     # the database will only need to be asked for this information once per process per table.
     
@@ -5209,7 +5207,7 @@ sub validate_against_schema {
 		    {
 			my $error;
 			
-			unless ( $permission eq 'admin' )
+			unless ( $permission =~ /admin/ )
 			{
 			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
 			    $error = 1;
@@ -5251,7 +5249,7 @@ sub validate_against_schema {
 		    elsif ( $operation ne 'insert' && $col eq 'modified' && $edt->{fixup_mode} &&
 			    ! exists $record->{$col} )
 		    {
-			if ( $permission ne 'admin' )
+			if ( $permission !~ /admin/ )
 			{
 			    $edt->add_condition($action, 'E_PERM_COL', $col);
 			    next;
@@ -5326,7 +5324,7 @@ sub validate_against_schema {
 		    {
 			my $error;
 			
-			unless ( $permission eq 'admin' )
+			unless ( $permission =~ /admin/ )
 			{
 			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
 			    $error = 1;
@@ -5415,7 +5413,7 @@ sub validate_against_schema {
 		    elsif ( $operation ne 'insert' && $col eq 'modifier_no' && $edt->{fixup_mode} &&
 			    ! exists $record->{$col} )
 		    {
-			if ( $permission ne 'admin' )
+			if ( $permission !~ /admin/ )
 			{
 			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
 			    next;
@@ -5499,7 +5497,7 @@ sub validate_against_schema {
 		    
 		    # Otherwise, check to make sure the user has permission to set a specific value.
 
-		    unless ( $permission eq 'admin' )
+		    unless ( $permission =~ /admin/ )
 		    {
 			$edt->add_condition($action, 'E_PERM_COL', $col);
 		    }
@@ -5507,6 +5505,35 @@ sub validate_against_schema {
 		    # If so, make sure the value is correct.
 		    
 		    if ( $col eq 'admin_lock' && not ( $value eq '1' || $value eq '0' ) )
+		    {
+			$edt->add_condition($action, 'E_FORMAT', $col, 'value must be 1 or 0');
+		    }
+		}
+
+		# The 'owner' fields specify attributes that can only be controlled by owners.
+		# For now, this includes only 'owner_lock'.
+		
+		elsif ( $type eq 'owner' )
+		{
+		    # If the value is empty, skip it and let it be filled in by the database engine.
+		    
+		    next unless defined $value && $value ne '';
+		    
+		    # Otherwise, check to make sure the current user is the owner or administrator.
+		    
+		    unless ( defined $is_owner )
+		    {
+			$is_owner = $edt->{perms}->check_if_owner($table, $action->keyexpr);
+		    }
+		    
+		    unless ( $is_owner)
+		    {
+			$edt->add_condition($action, 'E_PERM_COL', $col);
+		    }
+		    
+		    # If so, make sure the value is correct.
+		    
+		    if ( $col eq 'owner_lock' && not ( $value eq '1' || $value eq '0' ) )
 		    {
 			$edt->add_condition($action, 'E_FORMAT', $col, 'value must be 1 or 0');
 		    }

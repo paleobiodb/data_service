@@ -12,7 +12,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 6;
+use Test::More tests => 7;
 
 use TableDefs qw(get_table_property set_table_property);
 
@@ -33,7 +33,7 @@ my $T = EditTester->new;
 # session key 'SESSION-AUTHORIZER' does not appear in the session_data table, then run the test
 # 'edt-01-basic.t' first.
 
-my ($perm_a, $perm_e, $perm_s, $perm_m, $primary);
+my ($perm_a, $perm_e, $perm_s, $perm_m, $perm_o, $primary);
 
 subtest 'setup' => sub {
     
@@ -51,6 +51,9 @@ subtest 'setup' => sub {
     
     $perm_m = $T->new_perm('SESSION-WITH-ADMIN');
     ok( $perm_m && $perm_m->role eq 'enterer', "found admin permission" ) || BAIL_OUT;
+    
+    $perm_o = $T->new_perm('SESSION-OTHER');
+    ok( $perm_o && $perm_o->role eq 'enterer', "found other permission" ) || BAIL_OUT;
     
     $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
@@ -148,10 +151,23 @@ subtest 'admin_lock admin' => sub {
     
     $T->ok_found_record('EDT_TEST', "test_no = $key[0] and admin_lock = 1", "lock was actually set");
     
+    $edt->insert_record('EDT_TEST', { string_req => 'test locked', admin_lock => 1 });
+    
+    $T->ok_no_errors('latest', "no error inserting a record with admin_lock set");
+
+    $T->ok_found_record('EDT_TEST', "string_req = 'test locked' and admin_lock = 1", "record was inserted with lock");
+    
+    $T->ok_result( $edt->commit, "committed admin changes okay" );
+
+    # Now try a transaction with the LOCKED allowance, which should let us clear the flag on a
+    # locked record.
+
+    $edt = $T->new_edt($perm_m, { IMMEDIATE_MODE => 1, PROCEED => 1, LOCKED => 1 });
+    
     $edt->update_record('EDT_TEST', { test_id => $key[0], admin_lock => '' });
     
     $T->ok_no_errors('latest', "no error setting admin_lock to empty");
-
+    
     $T->ok_found_record('EDT_TEST', "test_no = $key[0] and admin_lock = 1", "lock is unchanged");
     
     $edt->update_record('EDT_TEST', { test_id => $key[0], admin_lock => 0 });
@@ -164,19 +180,13 @@ subtest 'admin_lock admin' => sub {
     
     $T->ok_has_one_error('latest', 'E_FORMAT', "format error setting admin_lock to an invalid value");
 
-    $edt->insert_record('EDT_TEST', { string_req => 'test locked', admin_lock => 1 });
-    
-    $T->ok_no_errors('latest', "no error inserting a record with admin_lock set");
-
-    $T->ok_found_record('EDT_TEST', "string_req = 'test locked' and admin_lock = 1", "record was inserted with lock");
-    
     $edt->update_record('EDT_TEST', { test_id => $key[0], admin_lock => '1' });
 
     $T->ok_no_errors('latest', "no error setting admin_lock again");
 
     $T->ok_found_record('EDT_TEST', "test_no = $key[0] and admin_lock = 1", "lock is now set again");    
-    
-    $T->ok_result( $edt->commit, "committed admin changes okay" );
+
+    $T->ok_result( $edt->commit, "committed admin changes okay with LOCKED" );
     
     # Try again with superuser privileges.
     
@@ -390,53 +400,169 @@ subtest 'admin_lock operation ' => sub {
     $T->ok_count_records(5, 'EDT_TEST', "string_val = 'mod s1'", "modified five records with LOCKED");
     
     # Then try again without LOCKED but with explicitly unlocking the record. Check that
-    # explicitly setting admin_lock to 0 allows a modification, but not setting it to 1.
+    # explicitly setting admin_lock to 0 allows a modification, but not setting it to 1.  UPDATE:
+    # this behavior has been removed. It is now necessary to allow LOCKED in order to modify or
+    # unlock a record.
 
-    $edt = $T->new_edt($perm_m, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    # $edt = $T->new_edt($perm_m, { IMMEDIATE_MODE => 1, PROCEED => 1 });
     
-    $edt->update_record('EDT_TEST', { test_no => $test[0], admin_lock => 0, string_val => 'mod m2' });
+    # $edt->update_record('EDT_TEST', { test_no => $test[0], admin_lock => 0, string_val => 'mod m2' });
     
-    $T->ok_no_errors('latest', "could update record 0");
+    # $T->ok_no_errors('latest', "could update record 0");
     
-    $edt->update_record('EDT_TEST', { test_no => $test[1], admin_lock => 0, string_val => 'mod m2' });
+    # $edt->update_record('EDT_TEST', { test_no => $test[1], admin_lock => 0, string_val => 'mod m2' });
     
-    $T->ok_no_errors('latest', "could update record 1");
+    # $T->ok_no_errors('latest', "could update record 1");
     
-    $edt->update_record('EDT_TEST', { test_no => $test[2], admin_lock => 0, string_val => 'mod m2' });
+    # $edt->update_record('EDT_TEST', { test_no => $test[2], admin_lock => 0, string_val => 'mod m2' });
     
-    $T->ok_no_errors('latest', "could update record 2");
+    # $T->ok_no_errors('latest', "could update record 2");
     
-    $edt->update_record('EDT_TEST', { test_no => $test[3], admin_lock => 1, string_val => 'mod m2' });
+    # $edt->update_record('EDT_TEST', { test_no => $test[3], admin_lock => 1, string_val => 'mod m2' });
     
-    $T->ok_has_error('latest', 'C_LOCKED', "could not update record 3 while setting admin_lock to 1, already locked");
+    # $T->ok_has_error('latest', 'C_LOCKED', "could not update record 3 while setting admin_lock to 1, already locked");
     
-    $edt->update_record('EDT_TEST', { test_no => $test[4], admin_lock => 1, string_val => 'mod m2' });
+    # $edt->update_record('EDT_TEST', { test_no => $test[4], admin_lock => 1, string_val => 'mod m2' });
     
-    $T->ok_no_errors('latest', "could update record 4 while setting admin_lock to 1, not already locked");
+    # $T->ok_no_errors('latest', "could update record 4 while setting admin_lock to 1, not already locked");
     
-    $T->ok_count_records(4, 'EDT_TEST', "string_val = 'mod m2'", "modified four records while setting admin_lock to 0");
+    # $T->ok_count_records(4, 'EDT_TEST', "string_val = 'mod m2'", "modified four records while setting admin_lock to 0");
     
     # Now we let the admin unlock a record, and check that the non-admin user can now edit it.
 
+    # $edt = $T->new_edt($perm_m, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+
+    # $edt->update_record('EDT_TEST', { test_no => $test[0], admin_lock => 0 });
+
+    # $T->ok_result( $edt->commit, "unlock record 0 committed" );
+
+    # $edt = $T->new_edt($perm_e, { PROCEED => 1 });
+    
+    # $edt->update_record('EDT_TEST', { test_no => $test[0], string_val => 'mod e' });
+    
+    # $T->ok_no_errors('latest', "modification of newly unlocked record worked fine");
+
+    # $edt->update_record('EDT_TEST', { test_no => $test[2], string_val => 'mod e' });
+    
+    # $T->ok_has_error('latest', 'E_LOCKED', "modification of still locked record got E_LOCKED");
+    
+    # $T->ok_result( $edt->commit, "modification of newly unlocked record committed" );
+    
+    # $T->ok_count_records(1, 'EDT_TEST', "string_val='mod e'", "found one modified record");
+};
+
+
+# Check the function of the 'owner_lock' field.
+
+subtest 'owner_lock' => sub {
+    
+    my ($edt, $result);
+    
+    # Check that the 'owner_lock' field can be set and cleared by the owner.
+    
+    $edt = $T->new_edt($perm_e, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'owner1', unsigned_val => 3 });
+    $edt->insert_record('EDT_TEST', { string_req => 'owner2', unsigned_val => 4 });
+    $edt->insert_record('EDT_TEST', { string_req => 'owner3', unsigned_val => 5 });
+
+    my @keys = $edt->inserted_keys;
+    
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 1' });
+    
+    $T->ok_no_errors('latest', "baseline update of record");
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], owner_lock => 0 });
+    
+    $T->ok_no_errors('latest', "clear owner lock");
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], owner_lock => '' });
+    
+    $T->ok_no_errors('latest', "owner lock empty");
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], owner_lock => 'abc' });
+
+    $T->ok_has_error('latest', 'F_FORMAT', "format error setting owner_lock to an invalid value");
+    
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], owner_lock => 1 });
+    
+    $T->ok_no_errors('latest', "set owner lock");
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 2' });
+    
+    $T->ok_has_error('latest', 'D_LOCKED', "got 'LOCKED' condition");
+
+    $T->ok_result( $edt->commit, "committed the record lock" );
+
+    $edt = $T->new_edt($perm_e, { IMMEDIATE_MODE => 1, PROCEED => 1, LOCKED => 1 });
+    
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 3' });
+    
+    $T->ok_no_errors('latest', "modified locked record with LOCKED");
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 4', owner_lock => 0 });
+
+    $T->ok_no_errors('latest', "modified locked record and cleared lock with LOCKED");
+
+    $T->ok_result( $edt->commit, "committed the record unlock" );
+
+    $edt = $T->new_edt($perm_e, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 5' });
+    
+    $T->ok_no_errors('latest', "updated record after being locked and then unlocked");
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], owner_lock => 1 });
+
+    $T->ok_no_errors('latest', "locked the record again");
+    
+    $T->ok_result( $edt->commit, "committed modifications" );
+    
+    # Now make sure that a user who is not the owner cannot modify a locked record.
+    
+    $edt = $T->new_edt($perm_o, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 6' });
+    
+    $T->ok_has_error('latest', "F_LOCKED", "got error trying to modify locked record");
+
+    $edt = $T->new_edt($perm_o, { IMMEDIATE_MODE => 1, PROCEED => 1, LOCKED => 1 });
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 7' });
+
+    $T->ok_has_error('latest', "F_LOCKED", "got error even allowing LOCKED");
+    
+    $edt->update_record('EDT_TEST', { test_id => $keys[1], owner_lock => 1 });
+
+    $T->ok_has_error('latest', "F_PERM_COL", "permission error trying to set owner_lock for a non-owned record");
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[1], string_val => 'owner test 8' });
+
+    $T->ok_no_errors('latest', "updating other fields succeeds");
+
+    # Now check that an administrator can override the lock.
+
     $edt = $T->new_edt($perm_m, { IMMEDIATE_MODE => 1, PROCEED => 1 });
 
-    $edt->update_record('EDT_TEST', { test_no => $test[0], admin_lock => 0 });
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 9' });
 
-    $T->ok_result( $edt->commit, "unlock record 0 committed" );
+    $T->ok_has_error('latest', "D_LOCKED", "got LOCKED caution");
 
-    $edt = $T->new_edt($perm_e, { PROCEED => 1 });
-    
-    $edt->update_record('EDT_TEST', { test_no => $test[0], string_val => 'mod e' });
-    
-    $T->ok_no_errors('latest', "modification of newly unlocked record worked fine");
+    $edt = $T->new_edt($perm_m, { IMMEDIATE_MODE => 1, PROCEED => 1, LOCKED => 1 });
 
-    $edt->update_record('EDT_TEST', { test_no => $test[2], string_val => 'mod e' });
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 10', owner_lock => 0 });
     
-    $T->ok_has_error('latest', 'E_LOCKED', "modification of still locked record got E_LOCKED");
-    
-    $T->ok_result( $edt->commit, "modification of newly unlocked record committed" );
-    
-    $T->ok_count_records(1, 'EDT_TEST', "string_val='mod e'", "found one modified record");
+    $T->ok_no_errors('latest', "admin can update and unlock an owner-locked record");
+
+    $T->ok_result( $edt->commit, "commit unlock of record" );
+
+    # Now that the admin has unlocked the record, check that it can be updated by a non-owner.
+
+    $edt = $T->new_edt($perm_o, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+
+    $edt->update_record('EDT_TEST', { test_id => $keys[0], string_val => 'owner test 11' });
+
+    $T->ok_no_errors('latest', "record is now unlocked and can be updated");
 };
 
 

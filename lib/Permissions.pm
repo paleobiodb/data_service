@@ -455,7 +455,7 @@ sub check_table_permission {
 	
 	return 'admin';
     }
-
+    
     # If the user has the permission 'none', then they do not have any permission on this
     # table. This overrides any other attribute except 'admin' or superuser.
     
@@ -483,7 +483,7 @@ sub check_table_permission {
     	    return 'none';
     	}
     }
-
+    
     # If the user does not have 'admin' permission, then the 'insert_key' permission is only allowed
     # if they also have 'post' and if table has the ALLOW_INSERT_KEY property.
     
@@ -609,7 +609,7 @@ sub check_record_permission {
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
-	my $p = ($record->{admin_lock} || $record->{owner_lock}) ? 'unlock' : 'admin';
+	my $p = ($record->{admin_lock} || $record->{owner_lock}) ? 'admin,unlock' : 'admin';
 	
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$p' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
@@ -626,7 +626,7 @@ sub check_record_permission {
 	{
 	    $tp->{delete} = get_table_property($table_specifier, 'ALLOW_DELETE') ? 1 : 0;
 	}
-
+	
 	unless ( $tp->{delete} )
     	{
     	    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' DENIED : TABLE PROPERTY\n" );
@@ -650,9 +650,9 @@ sub check_record_permission {
     # If the requested permission is 'edit' or 'delete' and the user has 'modify' permission on
     # the table as a whole, then they can edit or delete this particular record regardless of who
     # owns it. Otherwise, they only have permission to edit or delete records that they entered or
-    # authorized.
+    # authorized. But a locked record can only be unlocked by the owner or by an administrator.
     
-    if ( $tp->{modify} && ( $permission eq 'edit' || $permission eq 'delete' ) )
+    if ( $tp->{modify} && ( $permission eq 'edit' || $permission eq 'delete' ) && ! $record->{owner_lock} )
     {
 	my $diag = $perms->{auth_diag}{$table_specifier} || 'DEFAULT';
 	
@@ -669,7 +669,7 @@ sub check_record_permission {
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from enterer_no\n" );
 	
-	return $permission;
+	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
     if ( $record->{authorizer_no} && $perms->{enterer_no} &&
@@ -677,7 +677,7 @@ sub check_record_permission {
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from authorizer_no\n" );
 	
-	return $permission;
+	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
     if ( $record->{enterer_id} && $perms->{user_id} &&
@@ -685,7 +685,7 @@ sub check_record_permission {
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from enterer_id\n" );
 	
-	return $permission;
+	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
     # If the user has the same authorizer as the person who originally created the record, then
@@ -699,15 +699,114 @@ sub check_record_permission {
 	{
 	    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from BY_AUTHORIZER\n" );
 	    
-	    return $permission;
+	    return $record->{owner_lock} ? "$permission,unlock" : $permission;
 	}
     }
     
-    # Otherwise, the requestor has no permission on this record.
+    # Otherwise, the requestor has no permission on this record. If they would have been able to
+    # modify it except that the record was locked, return 'locked'. Otherwise, return 'none'.
     
     $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' DENIED : NO PERMISSION\n" );
     
-    return 'none';
+    if ( $tp->{modify} && ( $permission eq 'edit' || $permission eq 'delete' ) )
+    {
+	return 'locked';
+    }
+    
+    else
+    {
+	return 'none';
+    }
+}
+
+
+# check_if_owner ( table_specifier, permission, key_expr )
+#
+# Return 1 if the current user has owner rights to the record, 0 otherwise. Superusers and table
+# administrators count as owners.
+
+sub check_if_owner {
+    
+    my ($perms, $table_specifier, $key_expr, $record) = @_;
+    
+    croak "check_record_permission: no table name specified" unless $table_specifier;
+    croak "check_record_permission: no key expr specified" unless $key_expr;
+    
+    # Start by fetching the user's permissions for the table as a whole.
+    
+    my $tp = $perms->get_table_permissions($table_specifier);
+    
+    # If the table permission is 'admin' or if the user has superuser privileges, then return
+    # true.
+    
+    if ( $perms->is_superuser || $tp->{admin} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from " . 
+			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
+	
+	return 1;
+    }
+
+    # Otherwise, we need to fetch the information necessary to tell whether the user is the person
+    # who created or authorized it. Unless we were given the current contents of the record, fetch
+    # the info necessary to determine permissions.  If the record was not found, then return
+    # 0.
+    
+    unless ( ref $record eq 'HASH' )
+    {
+	$record = $perms->get_record_authinfo($table_specifier, $key_expr);
+	
+	unless ( ref $record eq 'HASH' && %$record )
+	{
+	    $perms->debug_line( "    Owner of $table_specifier ($key_expr) : NOT FOUND\n" );
+	    
+	    return 0;
+	}
+    }
+    
+    # If the user is the person who originally created or authorized the record, then they are the owner.
+    
+    if ( $record->{enterer_no} && $perms->{enterer_no} &&
+	 $record->{enterer_no} eq $perms->{enterer_no} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from enterer_no\n" );
+	
+	return 1;
+    }
+    
+    if ( $record->{authorizer_no} && $perms->{enterer_no} &&
+	 $record->{authorizer_no} eq $perms->{enterer_no} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from authorizer_no\n" );
+	
+	return 1;
+    }
+    
+    if ( $record->{enterer_id} && $perms->{user_id} &&
+	 $record->{enterer_id} eq $perms->{user_id} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from enterer_id\n" );
+	
+	return 1;
+    }
+    
+    # If the user has the same authorizer as the person who originally created the record, then
+    # that counts too if the table has the 'BY_AUTHORIZER' property.
+    
+    if ( $record->{authorizer_no} && $perms->{authorizer_no} &&
+	 $record->{authorizer_no} eq $perms->{authorizer_no} )
+    {
+	if ( $tp->{by_authorizer} //= get_table_property($table_specifier, 'BY_AUTHORIZER') )
+	{
+	    $perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from BY_AUTHORIZER\n" );
+	    
+	    return 1;
+	}
+    }
+    
+    # Otherwise, the current user is not the owner of the record.
+
+    return 0;
 }
 
 
@@ -730,7 +829,7 @@ sub get_record_authinfo {
     unless ( $auth_fields )
     {
 	$auth_fields = get_table_property($table_specifier, 'PRIMARY_KEY');
-
+	
 	return { } unless $auth_fields;
     }
     
