@@ -167,14 +167,15 @@ sub get_table_schema {
 	    }
 	}
 	
-	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
-	# as REQUIRED. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column.
+	# If the column is Not Null and has neither a default value nor auto_increment, then mark
+	# it as REQUIRED. Otherwise, a database error will be generated when we try to insert or
+	# update a record with a null value for this column. But not if the column type is BLOB or
+	# TEXT, because of an issue with MariaDB 10.0-10.1.
 	
 	if ( $c->{Null} && $c->{Null} eq 'NO' && not ( defined $c->{Default} ) &&
 	     not ( $c->{Extra} && $c->{Extra} =~ /auto_increment/i ) )
 	{
-	    $c->{REQUIRED} = 1;
+	    $c->{REQUIRED} = 1 unless $c->{Type} =~ /blob|text/i;
 	}
 	
 	# If the name of the field ends in _no, then record its alternate as the same name with
