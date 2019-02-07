@@ -339,11 +339,11 @@ sub copy_international_timescales {
     
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, authorizer_no, enterer_no, timescale_name,
 	timescale_type, timescale_extent, priority, is_enterable, is_visible, admin_lock) VALUES
-	(1, $auth_quoted, $auth_quoted, 'ICS Stages', 'stage', 'global', 10, 1, 1, 1),
-	(2, $auth_quoted, $auth_quoted, 'ICS Epochs', 'epoch', 'global', 10, 1, 1, 1),
-	(3, $auth_quoted, $auth_quoted, 'ICS Periods', 'period', 'global', 10, 1, 1, 1),
-	(4, $auth_quoted, $auth_quoted, 'ICS Eras', 'era', 'global', 10, 1, 1, 1),
-	(5, $auth_quoted, $auth_quoted, 'ICS Eons', 'eon', 'global', 10, 1, 1, 1)";
+	(1, $auth_quoted, $auth_quoted, 'ICS Stages', 'stage', 'Global', 10, 1, 1, 1),
+	(2, $auth_quoted, $auth_quoted, 'ICS Epochs', 'epoch', 'Global', 10, 1, 1, 1),
+	(3, $auth_quoted, $auth_quoted, 'ICS Periods', 'period', 'Global', 10, 1, 1, 1),
+	(4, $auth_quoted, $auth_quoted, 'ICS Eras', 'era', 'Global', 10, 1, 1, 1),
+	(5, $auth_quoted, $auth_quoted, 'ICS Eons', 'eon', 'Global', 10, 1, 1, 1)";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
@@ -554,7 +554,7 @@ sub copy_international_timescales {
     $sql = "REPLACE INTO $TABLE{TIMESCALE_DATA} (timescale_no, authorizer_no, timescale_name,
 	is_visible, admin_lock, timescale_type, timescale_extent) VALUES
 	($test_timescale_no, $auth_quoted, 'Time Ruler', 1, 1,
-	 'multi', 'global')";
+	 'multi', 'Global')";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
