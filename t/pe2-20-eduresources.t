@@ -60,7 +60,7 @@ my $T = Tester->new({ prefix => 'data1.2' });
 # Create a second instance of Tester for making requests on the main web
 # server. 
 
-my $TT = Tester->new({ server => '127.0.0.1:80' });
+my $TT; # = Tester->new({ server => '127.0.0.1:80' });
 
 # Then check to MAKE SURE that the server is in test mode and the test eduresources tables are
 # enabled. This is very important, because we DO NOT WANT to change the data in the main
@@ -517,6 +517,12 @@ subtest 'image data' => sub {
     my $image_dir = `grep eduresources_img_dir config.yml`;
     chomp $image_dir;
     $image_dir =~ s/^.*:\s+//;
+
+    my $image_host = `grep eduresources_img_host config.yml`;
+    chomp $image_host;
+    $image_host =~ s/^.*:\s+//;
+    
+    $TT = Tester->new({ server => $image_host });
     
     my ($m4a) = $TT->fetch_url($img1a, "fetch image 1a", { no_check => 1 });
     my ($m4b) = $TT->fetch_url($img1b, "fetch image 1b", { no_check => 1 });
