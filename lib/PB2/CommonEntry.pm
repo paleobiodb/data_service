@@ -181,7 +181,7 @@ sub unpack_input_records {
 	
 	else
 	{
-	    die $request->exception("E_REQUEST_BODY: Badly formatted request body: no record found");
+	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: no record found");
 	}
     }
     
@@ -192,8 +192,7 @@ sub unpack_input_records {
     {
 	unless ( ref $r eq 'HASH' )
 	{
-	    $request->add_error("E_BODY: Invalid body element '$r'");
-	    die $request->exception(400, "Invalid request");
+	    die $request->exception(400, "E_REQUEST_BODY: Invalid body element '$r'");
 	}
 	
 	unless ( keys %$r )
