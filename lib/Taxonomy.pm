@@ -1919,21 +1919,30 @@ sub list_associated {
 	    ? "if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNSEL)"
 	    : $TYPE_CLASS;
 	
-	my $join_condition = $select{refs_ops}
-	    ? 'o.opinion_no = t.opinion_no or o.orig_no = t.orig_no'
-	    : 'o.opinion_no = t.opinion_no';
+	my @join_conditions = 'o.opinion_no = t.opinion_no';
+
+	if ( $select{refs_ops} )
+	{
+	    push @join_conditions, 'o.orig_no = t.orig_no';
+	}
 	
-	my $query_core = $rel eq 'all_taxa'
-	    ? "$refs_table as r
+	# my $join_condition = $select{refs_ops}
+	#     ? 'o.opinion_no = t.opinion_no or o.orig_no = t.orig_no'
+	#     : 'o.opinion_no = t.opinion_no';
+
+	foreach my $join_condition ( @join_conditions )
+	{
+	    my $query_core = $rel eq 'all_taxa'
+		? "$refs_table as r
 			JOIN $op_cache as o using (reference_no)
 			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
 			JOIN $tree_table as t on t.orig_no = o.orig_no"
-	    : "$taxon_joins
+		: "$taxon_joins
 			JOIN $op_cache as o on $join_condition
 			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
 			JOIN $refs_table as r on r.reference_no = o.reference_no";
-	
-	$sql = "INSERT IGNORE INTO ref_collect
+	    
+	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, $type as ref_type, o.child_spelling_no as taxon_no, t.orig_no,
 			null as auth_no, null as var_no,
 			max(if(o.opinion_no = t.opinion_no, null, o.opinion_no)) as unclass_no,
@@ -1942,26 +1951,26 @@ sub list_associated {
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY o.reference_no, o.opinion_no";
-       
-	if ( ref $options->{debug_out} eq 'CODE' )
-	{
-	    &{$options->{debug_out}}("$sql\n");
-	}
-	
-	$dbh->do($sql);
-	# push @sql_strings, $sql;
-	
-	my $query_core_2 = $rel eq 'all_taxa'
-	    ? "$refs_table as r
+	    
+	    if ( ref $options->{debug_out} eq 'CODE' )
+	    {
+		&{$options->{debug_out}}("$sql\n");
+	    }
+	    
+	    $dbh->do($sql);
+	    # push @sql_strings, $sql;
+	    
+	    my $query_core_2 = $rel eq 'all_taxa'
+		? "$refs_table as r
 			JOIN $op_cache as o using (reference_no)
 			JOIN $auth_table as a on a.orig_no = o.orig_no and a.reference_no = o.reference_no
 			JOIN $tree_table as t on t.orig_no = o.orig_no"
-	    : "$taxon_joins
+		: "$taxon_joins
 			JOIN $op_cache as o on $join_condition
 			JOIN $auth_table as a on a.orig_no = o.orig_no and a.reference_no = o.reference_no
 			JOIN $refs_table as r on r.reference_no = o.reference_no";
-	
-	$sql = "INSERT IGNORE INTO ref_collect
+	    
+	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, $type as ref_type, o.child_spelling_no as taxon_no, t.orig_no,
 			null as auth_no, null as var_no,
 			max(if(o.opinion_no = t.opinion_no, null, o.opinion_no)) as unclass_no,
@@ -1970,14 +1979,15 @@ sub list_associated {
 		FROM $query_core
 		WHERE $inner_filters
 		GROUP BY o.reference_no, o.opinion_no";
-       
-	if ( ref $options->{debug_out} eq 'CODE' )
-	{
-	    &{$options->{debug_out}}("$sql\n");
+	    
+	    if ( ref $options->{debug_out} eq 'CODE' )
+	    {
+		&{$options->{debug_out}}("$sql\n");
+	    }
+	    
+	    $dbh->do($sql);
+	    # push @sql_strings, $sql;
 	}
-	
-	$dbh->do($sql);
-	# push @sql_strings, $sql;
     }
     
     if ( $select{refs_occs} )
