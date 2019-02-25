@@ -88,6 +88,10 @@ sub initialize {
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:specs:basic_entry' =>
+	">>Any body record that does not specify a specimen identifier will be interpreted as a",
+	"new specimen record. Any body record that does specify a specimen identifier but",
+	"neither a measurement type nor a measurement id will be interpreted as an update specimen",
+	"record.",
 	{ optional => 'specimen_id', valid => VALID_IDENTIFIER('SPM') },
 	    "The identifier of the specimen to be updated. If empty,",
 	    "a new specimen record will be created.",
@@ -100,30 +104,30 @@ sub initialize {
 	{ optional => '_operation', valid => '1.2:common:entry_ops' },
 	    "This field is optional. You can use it to indicate the",
 	    "operation to be performed on this record. Values include:",
-	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL') },
+	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'), alias => 'cid' },
 	    "The identifier of an existing collection record with which the specimen",
 	    "will be associated.",
-	{ optional => 'occurrence_id', valid => VALID_IDENTIFIER('OCC') },
+	{ optional => 'occurrence_id', valid => VALID_IDENTIFIER('OCC'), alias => 'qid', },
 	    "The identifier of an existing occurrence record with which the specimen ",
 	    "will be associated.",
-	# { optional => 'inst_code', value => ANY_VALUE },
-	#     "The acronym or abbreviation of the institution holding the specimen.",
-	# { optional => 'instcoll_code', value => ANY_VALUE },
-	#     "The acronym or abbreviation for the institutional collection of which",
-	#     "the specimen is a part.",
-	{ optional => 'specimen_code', valid => ANY_VALUE },
+	{ optional => 'specimen_code', valid => ANY_VALUE, alias => 'smi' },
 	    "The specimen code or identifier as assigned by its holding institution.",
-	{ optional => 'taxon_name', valid => ANY_VALUE },
+	{ optional => 'taxon_name', valid => ANY_VALUE, alias => 'idn' },
 	    "The name of the taxon to which this specimen is identified.",
 	    "You must either specify this OR B<C<taxon_id>>.",
-	{ optional => 'taxon_id', valid => VALID_IDENTIFIER('TXN') },
+	{ optional => 'taxon_id', valid => VALID_IDENTIFIER('TXN'), alias => 'iid', },
 	    "The identifier of the taxon to which this specimen is identified.",
 	    "You must either specify this OR B<C<taxon_name>>.",
 	{ at_most_one => [ 'taxon_name', 'taxon_id' ] },
-	{ optional => 'reference_id', valid => VALID_IDENTIFIER('REF') },
-	    "The identifier of the reference with which this specimen is identified.");
+	{ optional => 'reference_id', valid => VALID_IDENTIFIER('REF'), alias => 'rid' },
+	    "The identifier of the reference with which this specimen is identified.",
+	{ optional => 'specelt_id', valid => VALID_IDENTIFIER('ELS'), alias => 'els' },
+	    "The identifier of the specimen element that most closely describes this specimen.");
     
     $ds->define_ruleset('1.2:specs:measurement_entry' =>
+	">>Any body record that specifies a specimen identifier and a measurement type but not a",
+	"measurement identifier will be interpreted as a new measurement record. Any body record that",
+	"specifies a measurement identifier will be interpreted as an update measurement record.",
 	{ optional => '_label', valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted for entry or update. This allows the data service",
@@ -217,10 +221,8 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    complete_ruleset($ds, $dbh, '1.2:specs:addupdate_body', 'SPECIMEN_DATA');
-    complete_ruleset($ds, $dbh, '1.2:specs:update_body', 'SPECIMEN_DATA');
-    complete_ruleset($ds, $dbh, '1.2:specs:addupdate_measurements_body', 'MEASUREMENT_DATA');
-    complete_ruleset($ds, $dbh, '1.2:specs:update_measurements_body', 'MEASUREMENT_DATA');
+    complete_ruleset($ds, $dbh, '1.2:specs:basic_entry', 'SPECIMEN_DATA');
+    complete_ruleset($ds, $dbh, '1.2:specs:measurement_entry', 'MEASUREMENT_DATA');
 }
 
 
@@ -246,8 +248,8 @@ sub update_specimens {
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
     my (@records) = $request->unpack_input_records($main_params,
-						   ['1.2:specs:addupdate_measurements_body', 'measurement_id', 'measurement_type'],
-						   ['1.2:specs:addupdate_body', 'specimen_id', 'DEFAULT']);
+						   ['1.2:specs:measurement_entry', 'measurement_id', 'measurement_type'],
+						   ['1.2:specs:basic_entry', 'specimen_id', 'DEFAULT']);
     
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
     

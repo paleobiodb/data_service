@@ -304,6 +304,7 @@ sub initialize {
 			place => 1,
 			allow_method => 'GET,PUT,POST',
 			doc_template => 'entry_operation.tt',
+			body_ruleset => '1.2:specs:basic_entry,1.2:specs:measurement_entry',
 			role => 'PB2::SpecimenEntry',
 			method => 'update_specimens',
 			arg => 'add',

@@ -2716,6 +2716,8 @@ sub list_occs_strata {
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { occs => 'o' } );
+    push @filters, $request->generate_ref_filters($inner_tables);
+    push @filters, $request->generate_refno_filter('o');
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
     push @filters, $request->generateOccFilters($inner_tables, 'o');
