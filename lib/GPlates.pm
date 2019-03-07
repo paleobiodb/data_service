@@ -187,6 +187,12 @@ sub updatePaleocoords {
 
     else
     {
+	# Lock the tables $PALEOCOORDS and $COLL_MATRIX, to avoid deadlock with other processes.
+
+	$sql = "LOCK TABLES $PALEOCOORDS as p WRITE, $COLL_MATRIX as c READ";
+
+	$count = $dbh->do($sql);
+	
 	# Now delete any rows in $PALEOCOORDS corresponding to collections whose
 	# coordinates have been made invalid.  This should not happen very often,
 	# but is a boundary case that we need to take care of.
@@ -258,6 +264,8 @@ sub updatePaleocoords {
 	    $self->initMessage($options);
 	    logMessage(2, "    cleared $count entries whose ages did not correspond to their collections");
 	}
+
+	$dbh->do("UNLOCK TABLES");
     }
     
     # Now query for all collections whose paleocoordinates need updating.  This includes:
