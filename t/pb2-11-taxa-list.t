@@ -1122,12 +1122,12 @@ subtest 'base_id and exclude_id' => sub {
     my $TEST_NAME_3a = 'Felinae';
     my $TEST_NAME_3b = 'Machairodontinae';
     my $TEST_NAME_3c = 'Felis catus';
-    my $TEST_NAME_3d = 'Dinofelis palaeoonca';
+    # my $TEST_NAME_3d = 'Dinofelis palaeoonca';
     
     my $TEST_TXN_3 = 'txn:41045';
     my $TEST_TXN_3b = 'txn:65494';
     my $TEST_TXN_3c = 'txn:104159';
-    my $TEST_TXN_3d = 'txn:49736';
+    # my $TEST_TXN_3d = 'txn:49736';
     
     # Make sure that base_id works.
     
@@ -1158,6 +1158,13 @@ subtest 'base_id and exclude_id' => sub {
     
     cmp_ok( keys %base1, '==', 2, "base_id multiple found 2 'B' flags" );
     ok( $base1{$TEST_NAME_1a} && $base1{$TEST_NAME_1b} , "base_id multiple found proper 'B' flags" );
+    
+    # Then find a species subordinate to one of the taxa we will be excluding.
+
+    my ($t1) = $T->fetch_records("/taxa/list.json?base_id=$TEST_TXN_3b&rank=species&limit=1", 'fetch species');
+
+    my $TEST_NAME_3d = $t1->{nam};
+    my $TEST_TXN_3d = $t1->{oid};
     
     # Now check the 'exclude_id' parameter.
     
@@ -2122,13 +2129,14 @@ subtest 'taxon status' => sub {
     $T->ok_is_subset( \%invalid_acn, \%accepted_nam, "invalid 'acn' are subset of accepted 'oid'" );
     
     # Make sure that the parent of each of the valid taxa is in the accepted set, except for the
-    # base taxon and any synonyms it may have.  The parent of an invalid taxon may itself be invalid.
+    # base taxon and any synonyms it may have, and excluding species whose genera may be invalid.  The
+    # parent of an invalid taxon may itself be invalid.
     
     my ($bad_parent_oid, $bad_invalid_parent_oid);
     
     foreach my $r ( @r3j, @r3s )
     {
-	unless ( $accepted_oid{$r->{par}} || ($r->{acn} && $r->{acn} eq $OID_2) || $r->{oid} eq $OID_2 )
+	unless ( $accepted_oid{$r->{par}} || ($r->{acn} && $r->{acn} eq $OID_2) || $r->{oid} eq $OID_2 || $r->{rnk} eq '3' )
 	{
 	    $bad_parent_oid = 1;
 	    diag("    Found: '$r->{nam}' with parent '$r->{par}'");
