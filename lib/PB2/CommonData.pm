@@ -11,7 +11,7 @@ use strict;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
-use TableDefs qw($PERSON_DATA $WING_USERS);
+use TableDefs qw(%TABLE);
 use ExternalIdent qw(extract_identifier generate_identifier);
 
 use Moo::Role;
@@ -303,6 +303,28 @@ sub initialize {
     	{ select => ['$cd.enterer_id'] },
     	{ set => '*', code => \&process_enterer_id });
     
+    $ds->define_set('1.2:common:entry_ops' =>
+	{ value => 'insert' },
+	    "Insert this record into the database. This is only valid",
+	    "if the record does not specify a primary key value.",
+	{ value => 'update' },
+	    "Update the matching record in the database. All specified columns",
+	    "will be changed to the specified values, while those not specified",
+	    "are left unchanged. This operation is only valid",
+	    "if the record specifies a primary key value and if a matching",
+	    "record exists and you have permission to modify it.",
+	{ value => 'replace' },
+	    "Replace the matching record in the database. The existing record",
+	    "is completely replaced by this record, and all columns not given",
+	    "a value will be set to their default values. This operation is",
+	    "only valid if the record specifies a primary key value and if a",
+	    "matching record exists and you have permission to modify it.",
+	{ value => 'delete' },
+	    "Delete the matching record in the database. This operation is",
+	    "only valid if the record specifies a primary key value and if a",
+	    "matching record exists and you have permission to delete it.",
+	    "All other column values are ignored.");
+    
     # $ds->define_block('1.2:common:entname_guest' =>
     # 	{ select => ['$cd.enterer_id', 'wu.real_name'], tables => 'wu' },
     # 	{ set => '*', code => \&process_entnames },
@@ -313,7 +335,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $PERSON_DATA",
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $TABLE{PERSON_DATA}",
 					  { Columns => [1, 2] });
     
     %PERSON_NAME = @$values;
@@ -326,7 +348,7 @@ sub update_person_name_cache {
     
     my $dbh = $ds->get_connection;
     
-    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $PERSON_DATA",
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, name FROM $TABLE{PERSON_DATA}",
 					  { Columns => [1, 2] });
     
     my %new_names = @$values;
@@ -563,7 +585,7 @@ sub ent_filter {
 	{
 	    my $quoted = $dbh->quote("$p%");
 	    my $values = $dbh->selectcol_arrayref("
-		SELECT person_no, name FROM $PERSON_DATA
+		SELECT person_no, name FROM $TABLE{PERSON_DATA}
 		WHERE name like $quoted or reversed_name like $quoted", { Columns => [1, 2] });
 	    
 	    if ( defined $values && @$values < 3 && defined $values->[0] && $values->[0] ne '' )
@@ -811,7 +833,7 @@ sub process_entnames {
 	{
 	    my $dbh = $request->get_connection;
 	    my $quoted_id = $dbh->quote($record->{enterer_id});
-	    my ($name) = $dbh->selectrow_array("SELECT real_name FROM $WING_USERS WHERE id = $quoted_id");
+	    my ($name) = $dbh->selectrow_array("SELECT real_name FROM $TABLE{WING_USERS} WHERE id = $quoted_id");
 
 	    $name ||= 'unknown';
 
@@ -1007,7 +1029,7 @@ sub generate_match_regex {
     {
 	next unless defined $n && $n ne '';
 	
-	$n =~ s/([()|{}])/\\$1/g;
+	$n =~ s/([(){}])/\\$1/g;
 	$n =~ s/\s+/\\s+/g;
 	$n =~ s/%/.*/g;
 	$n =~ s/_/./g;

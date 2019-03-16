@@ -6,17 +6,16 @@
 # Definitions and properties necessary for working with the Educational Resource tables.
 # 
 
-package ResourceDefs;
+package ResourceTables;
 
 use strict;
 
 use Carp qw(croak);
 
-use TableDefs qw(%TABLE $TEST_DB set_table_property set_column_property
-		 set_table_name change_table_db restore_table_name);
+use TableDefs qw(set_table_name set_table_group set_table_property set_column_property);
 
-our (@TABLES) = qw($RESOURCE_QUEUE $RESOURCE_IMAGES
-		   $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE);
+# our (@TABLES) = qw($RESOURCE_QUEUE $RESOURCE_IMAGES
+# 		   $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE);
 
 # our (@EXPORT_OK) = qw($RESOURCE_QUEUE $RESOURCE_IMAGES
 # 		   $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE);
@@ -43,18 +42,21 @@ our (@TABLES) = qw($RESOURCE_QUEUE $RESOURCE_IMAGES
     set_table_name(RESOURCE_ACTIVE => 'eduresources' );
     set_table_name(RESOURCE_TAG_NAMES => 'edutags' );
     set_table_name(RESOURCE_TAGS => 'eduresource_tags' );
+
+    set_table_group('eduresources' => 'RESOURCE_QUEUE', 'RESOURCE_IMAGES', 'RESOURCE_ACTIVE',
+				      'RESOURCE_TAG_NAMES', 'RESOURCE_TAGS');
     
-    set_table_property($TABLE{RESOURCE_QUEUE}, CAN_POST => 'LOGGED_IN');
-    set_table_property($TABLE{RESOURCE_QUEUE}, CAN_VIEW => 'LOGGED_IN');
-    set_table_property($TABLE{RESOURCE_QUEUE}, ALLOW_DELETE => 1);
-    set_table_property($TABLE{RESOURCE_QUEUE}, PRIMARY_KEY => "eduresource_no");
-    set_table_property($TABLE{RESOURCE_QUEUE}, PRIMARY_ATTR => "eduresource_id");
+    set_table_property(RESOURCE_QUEUE => CAN_POST => 'LOGGED_IN');
+    set_table_property(RESOURCE_QUEUE => CAN_VIEW => 'LOGGED_IN');
+    set_table_property(RESOURCE_QUEUE => ALLOW_DELETE => 1);
+    set_table_property(RESOURCE_QUEUE => PRIMARY_KEY => "eduresource_no");
+    set_table_property(RESOURCE_QUEUE => PRIMARY_ATTR => "eduresource_id");
     
-    set_column_property($TABLE{RESOURCE_QUEUE}, 'eduresource_no', EXTID_TYPE => 'EDR');
-    set_column_property($TABLE{RESOURCE_QUEUE}, 'title', REQUIRED => 1);
-    set_column_property($TABLE{RESOURCE_QUEUE}, 'status', ADMIN_SET => 1);
+    set_column_property(RESOURCE_QUEUE => 'eduresource_no', EXTID_TYPE => 'EDR');
+    set_column_property(RESOURCE_QUEUE => 'title', REQUIRED => 1);
+    # set_column_property(RESOURCE_QUEUE => 'status', ADMIN_SET => 1);
     
-    set_table_property($TABLE{RESOURCE_ACTIVE}, PRIMARY_KEY => 'id');
+    set_table_property(RESOURCE_ACTIVE => PRIMARY_KEY => 'id');
 }
 
 
@@ -64,56 +66,56 @@ our (@TABLES) = qw($RESOURCE_QUEUE $RESOURCE_IMAGES
 # database. If $ds is either 1 or a reference to a Web::DataService object with the debug flag
 # set, then print out a debugging message.
 
-sub enable_test_mode {
+# sub enable_test_mode {
     
-    my ($class, $table, $ds) = @_;
+#     my ($class, $table, $ds) = @_;
     
-    croak "You must define 'test_db' in the configuration file" unless $TEST_DB;
+#     croak "You must define 'test_db' in the configuration file" unless $TEST_DB;
     
-    change_table_db('RESOURCE_QUEUE', $TEST_DB);
-    change_table_db('RESOURCE_IMAGES', $TEST_DB);
-    change_table_db('RESOURCE_TAG_NAMES', $TEST_DB);
-    change_table_db('RESOURCE_TAGS', $TEST_DB);
-    change_table_db('RESOURCE_ACTIVE', $TEST_DB);
+#     change_table_db('RESOURCE_QUEUE', $TEST_DB);
+#     change_table_db('RESOURCE_IMAGES', $TEST_DB);
+#     change_table_db('RESOURCE_TAG_NAMES', $TEST_DB);
+#     change_table_db('RESOURCE_TAGS', $TEST_DB);
+#     change_table_db('RESOURCE_ACTIVE', $TEST_DB);
     
-    # $RESOURCE_QUEUE = substitute_table("$TEST_DB.eduresource_queue", "eduresource_queue");
-    # $RESOURCE_IMAGES = substitute_table("$TEST_DB.eduresource_images", "eduresource_images");
-    # $RESOURCE_TAG_NAMES = substitute_table("$TEST_DB.edutags", "edutags");
-    # $RESOURCE_TAGS = substitute_table("$TEST_DB.eduresource_tags", 'eduresource_tags');
-    # $RESOURCE_ACTIVE = substitute_table("$TEST_DB.eduresources", 'eduresources');
+#     # $RESOURCE_QUEUE = substitute_table("$TEST_DB.eduresource_queue", "eduresource_queue");
+#     # $RESOURCE_IMAGES = substitute_table("$TEST_DB.eduresource_images", "eduresource_images");
+#     # $RESOURCE_TAG_NAMES = substitute_table("$TEST_DB.edutags", "edutags");
+#     # $RESOURCE_TAGS = substitute_table("$TEST_DB.eduresource_tags", 'eduresource_tags');
+#     # $RESOURCE_ACTIVE = substitute_table("$TEST_DB.eduresources", 'eduresources');
 
-    if ( $ds && $ds == 1 || ref $ds && $ds->debug )
-    {
-	$ds->debug_line("TEST MODE: enable 'eduresources'\n");
-    }
+#     if ( $ds && $ds == 1 || ref $ds && $ds->debug )
+#     {
+# 	$ds->debug_line("TEST MODE: enable 'eduresources'\n");
+#     }
     
-    return 1;
-}
+#     return 1;
+# }
 
 
-sub disable_test_mode {
+# sub disable_test_mode {
 
-    my ($class, $table, $ds) = @_;
+#     my ($class, $table, $ds) = @_;
     
-    restore_table_name('RESOURCE_QUEUE');
-    restore_table_name('RESOURCE_IMAGES');
-    restore_table_name('RESOURCE_TAG_NAMES');
-    restore_table_name('RESOURCE_TAGS');
-    restore_table_name('RESOURCE_ACTIVE');
+#     restore_table_name('RESOURCE_QUEUE');
+#     restore_table_name('RESOURCE_IMAGES');
+#     restore_table_name('RESOURCE_TAG_NAMES');
+#     restore_table_name('RESOURCE_TAGS');
+#     restore_table_name('RESOURCE_ACTIVE');
     
-    # $RESOURCE_QUEUE = original_table($RESOURCE_QUEUE);
-    # $RESOURCE_IMAGES = original_table($RESOURCE_IMAGES);
-    # $RESOURCE_TAG_NAMES = original_table($RESOURCE_TAG_NAMES);
-    # $RESOURCE_TAGS = original_table($RESOURCE_TAGS);
-    # $RESOURCE_ACTIVE = original_table($RESOURCE_ACTIVE);
+#     # $RESOURCE_QUEUE = original_table($RESOURCE_QUEUE);
+#     # $RESOURCE_IMAGES = original_table($RESOURCE_IMAGES);
+#     # $RESOURCE_TAG_NAMES = original_table($RESOURCE_TAG_NAMES);
+#     # $RESOURCE_TAGS = original_table($RESOURCE_TAGS);
+#     # $RESOURCE_ACTIVE = original_table($RESOURCE_ACTIVE);
     
-    if ( $ds && $ds == 1 || ref $ds && $ds->debug )
-    {
-	$ds->debug_line("TEST MODE: disable 'eduresources'\n");
-    }
+#     if ( $ds && $ds == 1 || ref $ds && $ds->debug )
+#     {
+# 	$ds->debug_line("TEST MODE: disable 'eduresources'\n");
+#     }
     
-    return 2;
-}
+#     return 2;
+# }
 
 
 1;

@@ -11,7 +11,7 @@ use strict;
 
 package PB2::PersonData;
 
-use TableDefs qw($PERSON_DATA $WING_USERS);
+use TableDefs qw(%TABLE);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use HTTP::Validate qw(:validators);
@@ -227,7 +227,7 @@ sub get_person {
 	
 	$request->{main_sql} = "
 	SELECT $fields, wu.person_no
-	FROM $WING_USERS as wu
+	FROM $TABLE{WING_USERS} as wu
 	WHERE id = $wing_id";
     }
     
@@ -242,7 +242,7 @@ sub get_person {
 	$request->{main_sql} = "
 	SELECT p.name as p_name, p.role as p_role, p.institution as p_institution,
 		p.country as p_country, p.active as p_active, p.person_no, $fields 
-	FROM $PERSON_DATA as p left join $WING_USERS as wu using (person_no)
+	FROM $TABLE{PERSON_DATA} as p left join $TABLE{WING_USERS} as wu using (person_no)
 	WHERE person_no = $person_no";
     }
     

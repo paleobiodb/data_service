@@ -81,8 +81,8 @@ sub initialize {
 	{ output => 'eduresource_no', com_name => 'oid' },
 	    "The unique identifier of this record in the database.",
 	{ set => '*', code => \&process_record},
-	{ output => 'record_label', com_name => 'rlb' },
-	    "For newly submitted records, this field will report the record",
+	{ output => '_label', com_name => 'rlb' },
+	    "For all data entry operations, this field will report the record",
 	    "label value, if any, that was submitted with each record.",
 	{ output => 'status', com_name => 'sta' },
 	    "The status will be one of the following codes:",
@@ -156,10 +156,10 @@ sub initialize {
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
 	unless $TABLE{RESOURCE_ACTIVE} && $TABLE{RESOURCE_TAGS};
-
+    
     my $dbh = $ds->get_connection;
     
-    complete_output_block($ds, $dbh, '1.2:eduresources:basic', $TABLE{RESOURCE_QUEUE});
+    complete_output_block($ds, $dbh, '1.2:eduresources:basic', 'RESOURCE_QUEUE');
 }
 
 
@@ -276,7 +276,7 @@ sub list_resources {
     
     unless ( $active )
     {
-	$perms = $request->require_authentication($TABLE{RESOURCE_QUEUE}, "Login Required");
+	$perms = $request->require_authentication('RESOURCE_QUEUE', "Login Required");
     }
     
     # Generate a list of filter expressions.

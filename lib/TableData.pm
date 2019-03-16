@@ -10,7 +10,7 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(get_table_property get_column_properties list_column_properties
+use TableDefs qw(%TABLE get_table_property get_column_properties list_column_properties
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
 
 use Carp qw(croak);
@@ -21,6 +21,7 @@ use base 'Exporter';
 our (@EXPORT_OK) = qw(complete_output_block complete_ruleset
 		      get_table_schema reset_cached_column_properties get_authinfo_fields);
 
+our (@CARP_NOT) = qw(EditTransaction Try::Tiny);
 
 our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 			    resource_no => 'rid',
@@ -37,8 +38,8 @@ our (%COMMON_FIELD_IDSUB);
 
 our (%SCHEMA_CACHE);
 
-our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALLOW_TRUNCATE VALUE_SEPARATOR
-				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR);
+our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
+				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR IGNORE);
 
 our (%PREFIX_SIZE) = ( tiny => 255,
 		       regular => 65535,
@@ -66,13 +67,31 @@ our (%UNSIGNED_BOUND) = ( tiny => 255,
 
 sub get_table_schema {
     
-    my ($dbh, $table_name, $debug) = @_;
+    my ($dbh, $table_specifier, $debug) = @_;
     
     # If we already have the schema cached, just return it.
     
-    return $SCHEMA_CACHE{$table_name} if ref $SCHEMA_CACHE{$table_name} eq 'HASH';
+    return $SCHEMA_CACHE{$table_specifier} if ref $SCHEMA_CACHE{$table_specifier} eq 'HASH';
     
     # Otherwise construct an SQL statement to get the schema from the appropriate database.
+
+    my $table_name;
+
+    if ( $table_specifier =~ /^==(.*)/ )
+    {
+	croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+	
+	$table_name = $TABLE{$table_specifier};
+	$table_specifier = $1;
+	# $table_name =~ s/^\w+[.]//;
+    }
+    
+    else
+    {
+	croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+	
+	$table_name = $TABLE{$table_specifier};
+    }
     
     my ($sql, $check_table, %schema, $quoted_table);
     
@@ -94,7 +113,7 @@ sub get_table_schema {
 	($check_table) = $dbh->selectrow_array($sql);
     };
     
-    croak "unknown table '$table_name'" unless $check_table;
+    croak "unknown table '$table_specifier'" unless $check_table;
     
     print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $debug;
     
@@ -103,13 +122,13 @@ sub get_table_schema {
     
     # Figure out which columns from this table have had properties set for them.
     
-    my %has_properties = list_column_properties($table_name);
+    my %has_properties = list_column_properties($table_specifier);
     
     # Now go through the columns one by one. Find the primary key if there is one, and also parse
     # the column datatypes. Collect up the list of field names for easy access later.
     
     my @field_list;
-
+    
     foreach my $c ( @$columns_ref )
     {
 	# Each field definition comes to us as a hash. The name is in 'Field'.
@@ -135,7 +154,7 @@ sub get_table_schema {
 	
 	if ( $has_properties{$field} )
 	{
-	    my %properties = get_column_properties($table_name, $field);
+	    my %properties = get_column_properties($table_specifier, $field);
 	    
 	    foreach my $p ( @SCHEMA_COLUMN_PROPS )
 	    {
@@ -148,14 +167,15 @@ sub get_table_schema {
 	    }
 	}
 	
-	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
-	# as REQUIRED. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column.
+	# If the column is Not Null and has neither a default value nor auto_increment, then mark
+	# it as REQUIRED. Otherwise, a database error will be generated when we try to insert or
+	# update a record with a null value for this column. But not if the column type is BLOB or
+	# TEXT, because of an issue with MariaDB 10.0-10.1.
 	
 	if ( $c->{Null} && $c->{Null} eq 'NO' && not ( defined $c->{Default} ) &&
 	     not ( $c->{Extra} && $c->{Extra} =~ /auto_increment/i ) )
 	{
-	    $c->{REQUIRED} = 1;
+	    $c->{REQUIRED} = 1 unless $c->{Type} =~ /text|blob/i;
 	}
 	
 	# If the name of the field ends in _no, then record its alternate as the same name with
@@ -257,7 +277,7 @@ sub get_table_schema {
     
     $schema{_column_list} = \@field_list;
     
-    $SCHEMA_CACHE{$table_name} = \%schema;
+    $SCHEMA_CACHE{$table_specifier} = \%schema;
     
     return \%schema;
 }
@@ -299,11 +319,11 @@ sub unpack_enum {
 
 sub reset_cached_column_properties {
     
-    my ($table_name, $column_name) = @_;
+    my ($table_specifier, $column_name) = @_;
     
-    if ( my $col = $SCHEMA_CACHE{$table_name}{$column_name} )
+    if ( my $col = $SCHEMA_CACHE{$table_specifier}{$column_name} )
     {
-	my %properties = get_column_properties($table_name, $column_name);
+	my %properties = get_column_properties($table_specifier, $column_name);
 	
 	foreach my $p ( @SCHEMA_COLUMN_PROPS )
 	{
@@ -338,26 +358,26 @@ sub reset_cached_column_properties {
 # Return a list of the fields from the specified table that record who created each record. If
 # there are none, return false.
 
-our (%IS_AUTH) = (authorizer_no => 1, enterer_no => 1, enterer_id => 1);
+our (%IS_AUTH) = (authorizer_no => 1, enterer_no => 1, enterer_id => 1, admin_lock => 1, owner_lock => 1);
 our (%AUTH_FIELD_CACHE);
 
 sub get_authinfo_fields {
 
-    my ($dbh, $table_name, $debug) = @_;
+    my ($dbh, $table_specifier, $debug) = @_;
     
     # If we already have this info cached, just return it.
     
-    return $AUTH_FIELD_CACHE{$table_name} if exists $AUTH_FIELD_CACHE{$table_name};
+    return $AUTH_FIELD_CACHE{$table_specifier} if exists $AUTH_FIELD_CACHE{$table_specifier};
     
     # Otherwise, get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_name, $debug);
+    my $schema = get_table_schema($dbh, $table_specifier, $debug);
     
     # If we don't have one, then barf.
     
     unless ( $schema && $schema->{_column_list} )
     {
-	croak "Cannot retrieve schema for table '$table_name'";
+	croak "Cannot retrieve schema for table '$table_specifier'";
     }
     
     # Then scan through the columns and collect up the names that are significant.
@@ -370,7 +390,7 @@ sub get_authinfo_fields {
     }
     
     my $fields = join(', ', @authinfo_fields);
-    $AUTH_FIELD_CACHE{$table_name} = $fields;
+    $AUTH_FIELD_CACHE{$table_specifier} = $fields;
     
     return $fields;
 }
@@ -378,11 +398,11 @@ sub get_authinfo_fields {
 
 sub complete_output_block {
     
-    my ($ds, $dbh, $block_name, $table_name) = @_;
+    my ($ds, $dbh, $block_name, $table_specifier) = @_;
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_name, $ds->debug);
+    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
     
     # Then get the existing contents of the block and create a hash of the field names that are
     # already defined. If no block by this name is yet defined, create an empty one.
@@ -429,6 +449,10 @@ sub complete_output_block {
 	
 	next if $block_has_field{$field_name};
 	
+	# If this field has the 'IGNORE' attribute set, skip it as well.
+
+	next if $schema->{$field_name}{IGNORE};
+	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
 	
@@ -442,7 +466,8 @@ sub complete_output_block {
 	    $r->{com_name} = $COMMON_FIELD_COM{$field_name};
 	}
 	
-	elsif ( $field_name =~ /(.*)_no/ )
+	elsif ( $field_name =~ /(.*)_no/ )	# $$$ need to replace this with a hash mapping _no
+                                                # => _id
 	{
 	    if ( $block_needs_oid )
 	    {
@@ -495,13 +520,19 @@ sub complete_output_block {
 }
 
 
+# complete_ruleset ( dbh, ruleset_name, table_specifier )
+#
+# Complete the definition of the specified ruleset by reading the table schema corresponding to
+# $table_identifier and iterating through the columns. For each table column, add a new parameter
+# to the ruleset unless an existing ruleset parameter already corresponds to that column.
+
 sub complete_ruleset {
     
-    my ($ds, $dbh, $ruleset_name, $table_name) = @_;
+    my ($ds, $dbh, $ruleset_name, $table_specifier, @definitions) = @_;
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_name, $ds->debug);
+    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
     
     # Then get the existing ruleset documentation and create a hash of the field names that are
     # already defined. If no ruleset by this name is yet defined, croak.
@@ -523,23 +554,30 @@ sub complete_ruleset {
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
     my $field_list = $schema->{_column_list};
-    my %has_properties = list_column_properties($table_name);
+    my %has_properties = list_column_properties($table_specifier);
     
     foreach my $column_name ( @$field_list )
     {
 	next if $COMMON_FIELD_SPECIAL{$column_name};
 	
+	my $field_record = $schema->{$column_name};
+	my $type = $field_record->{Type};
+	
+	next if $field_record->{IGNORE};
+	
 	my $field_name = $column_name;
 	
-	if ( $field_name =~ /(.*)_no/ )
+	if ( $field_record->{ALTERNATE_NAME} )
+	{
+	    $field_name = $field_record->{ALTERNATE_NAME};
+	}
+	
+	elsif ( $field_name =~ /(.*)_no/ )
 	{
 	    $field_name = $1 . '_id';
 	}
 	
 	next if $ruleset_has_field{$field_name};
-	
-	my $field_record = $schema->{$field_name};
-	my $type = $field_record->{Type};
 	
 	my $rr = { optional => $field_name };
 	my $doc = "This parameter sets the value of C<$field_name> in the table.";
@@ -551,7 +589,7 @@ sub complete_ruleset {
 	
 	if ( $has_properties{$column_name} )
 	{
-	    my %properties = get_column_properties($table_name, $column_name);
+	    my %properties = get_column_properties($table_specifier, $column_name);
 	    
 	    if ( my $type = $properties{EXTID_TYPE} )
 	    {

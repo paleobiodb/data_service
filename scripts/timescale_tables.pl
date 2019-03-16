@@ -18,12 +18,13 @@ use CoreFunction qw(connectDB
 use ConsoleLog qw(initMessages
 		  logMessage
 		  logTimestamp);
-use TimescaleTables qw(establish_timescale_tables copy_international_timescales
+use TableDefs qw(init_table_names enable_test_mode);
+use TimescaleTables qw(establish_timescale_tables copy_international_timescales set_interval_bounds
 		       copy_pbdb_timescales process_one_timescale copy_macrostrat_timescales
 		       update_timescale_descriptions model_timescale complete_bound_updates
 		       establish_procedures establish_triggers);
-use TimescaleEdit qw(add_boundary update_boundary);
-use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
+# use TimescaleEdit qw(add_boundary update_boundary);
+# use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
 
 # First parse option switches.  If we were given an argument, then use that as
@@ -31,10 +32,11 @@ use CommonEdit qw(start_transaction commit_transaction rollback_transaction);
 
 my ($opt_init_tables, $opt_copy_old, $opt_authorizer_no, $opt_help, $opt_man, $opt_verbose, $opt_debug);
 my ($opt_copy_from_pbdb, $opt_copy_from_macro, $opt_copy_international, $opt_update_one, $opt_update_desc);
-my ($opt_init_procedures, $opt_init_triggers, $opt_ub, $opt_copy_one, $opt_model_one);
+my ($opt_init_procedures, $opt_init_triggers, $opt_ub, $opt_copy_one, $opt_model_one, $opt_use_test_db);
 my $options = { };
 
-GetOptions("init-tables" => \$opt_init_tables,
+GetOptions("test-db" => \$opt_use_test_db,
+	   "init-tables" => \$opt_init_tables,
 	   "init-procedures" => \$opt_init_procedures,
 	   "init-triggers" => \$opt_init_triggers,
 	   "copy-old" => \$opt_copy_old,
@@ -64,13 +66,24 @@ pod2usage(-exitval => 0, -verbose => 2) if $opt_man;
 
 # If we get here, then we have stuff to do. So get a database handle.
 
-my $cmd_line_db_name = shift;
-my $dbh = connectDB("config.yml", $cmd_line_db_name);
+# my $cmd_line_db_name = shift;
+# my $dbh = connectDB("config.yml", $cmd_line_db_name);
+
+my $dbh = connectDB("config.yml");
 
 initMessages(2, 'Timescale tables');
 logTimestamp();
 
-# Then process the options and execute the necessary functions.
+# If we are supposed to be using the test database instead of the real one, then switch the relevant
+# database table names.
+
+if ( $opt_use_test_db )
+{
+    init_table_names(configData, 1);
+    enable_test_mode('timescale_data', $opt_debug);
+}
+
+# Now process the options.
 
 $options->{verbose} = $opt_verbose ? 3 : 2;
 $options->{authorizer_no} = $opt_authorizer_no if $opt_authorizer_no;
@@ -104,6 +117,7 @@ if ( $opt_copy_old )
     copy_pbdb_timescales($dbh, $options);
     copy_macrostrat_timescales($dbh, $options);
     update_timescale_descriptions($dbh, undef, $options);
+    set_interval_bounds($dbh, $options);
     complete_bound_updates($dbh);
 }
 
@@ -126,7 +140,8 @@ elsif ( $opt_copy_international || $opt_copy_from_pbdb || $opt_copy_from_macro )
 	copy_macrostrat_timescales($dbh, $options);
     }
 
-    complete_bound_updates($dbh);
+    set_interval_bounds($dbh, $options);
+    complete_bound_updates($dbh, $options);
 }
 
 elsif ( $opt_copy_one )

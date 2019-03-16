@@ -164,6 +164,7 @@ sub emit_record {
     my $pubtitle = $record->{r_pubtitle} || '';
     my $pubyr = $record->{r_pubyr} || '';
     my $misc = '';
+    my $acronym = '';
     
     # First, figure out what type of publication the reference refers to.
     # Depending upon publication type, generate the proper RIS data record.
@@ -205,6 +206,13 @@ sub emit_record {
     {
 	$output .= $class->emit_line('TY', 'NEWS');
     }
+
+    elsif ( $pubtype eq 'museum collection' )
+    {
+	$output .= $class->emit_line('TY', 'CTLG');
+	$acronym = $record->{r_al1};
+	delete $record->{r_al1};
+    }
     
     elsif ( $pubtype eq 'unpublished' )
     {
@@ -233,6 +241,7 @@ sub emit_record {
     $output .= $class->emit_line('TI', $reftitle);
     $output .= $class->emit_line('T2', $pubtitle);
     $output .= $class->emit_line('M3', $misc) if $misc;
+    $output .= $class->emit_line('LB', $acronym) if $acronym;
     $output .= $class->emit_line('VL', $record->{r_pubvol}) if $record->{r_pubvol};
     $output .= $class->emit_line('IS', $record->{r_pubno}) if $record->{r_pubno};
     $output .= $class->emit_line('PB', $record->{r_publisher}) if $record->{r_publisher};

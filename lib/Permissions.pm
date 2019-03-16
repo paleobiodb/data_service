@@ -15,7 +15,7 @@ package Permissions;
 
 use strict;
 
-use TableDefs qw($SESSION_DATA $TABLE_PERMS get_table_property);
+use TableDefs qw(%TABLE get_table_property original_table);
 use TableData qw(get_authinfo_fields);
 
 use Carp qw(carp croak);
@@ -36,7 +36,7 @@ our (%PERMISSION_NAME) = ( view => 1, post => 1, edit => 1, delete => 1, insert_
 
 sub new {
     
-    my ($class, $request_or_dbh, $session_id, $table_name, $options) = @_;
+    my ($class, $request_or_dbh, $session_id, $table_specifier, $options) = @_;
     
     $options ||= { };
     
@@ -66,17 +66,19 @@ sub new {
 	# If we were also given a table name, then check to see if this user has any special
 	# permissions on that table. Otherwise, just get the login information.
 	
-	if ( $table_name )
+	if ( $table_specifier )
 	{
-	    my $lookup_name = $table_name;
-	    $lookup_name =~ s/^\w+[.]//;
+	    croak "unknown table '$table_specifier'" unless exists $TABLE{$table_specifier};
 	    
-	    my $quoted_table = $dbh->quote($lookup_name);
+	    # my $lookup_name = original_table($TABLE{$table_specifier});
+	    # $lookup_name =~ s/^\w+[.]//;
+	    
+	    my $quoted_table = $dbh->quote($table_specifier);
 	    
 	    my $sql = "
 		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, 
 		       s.role, p.permission
-		FROM $SESSION_DATA as s left join $TABLE_PERMS as p
+		FROM $TABLE{SESSION_DATA} as s left join $TABLE{TABLE_PERMS} as p
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
 		WHERE session_id = $quoted_id";
 	    
@@ -89,7 +91,7 @@ sub new {
 	{
 	    my $sql = "
 		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, role
-		FROM $SESSION_DATA WHERE session_id = $quoted_id";
+		FROM $TABLE{SESSION_DATA} WHERE session_id = $quoted_id";
 	    
 	    print STDERR "$sql\n\n" if $options->{debug};
 	    
@@ -107,27 +109,27 @@ sub new {
 	
 	else
 	{
-	    return Permissions->no_login($dbh, $table_name, $options);
+	    return Permissions->no_login($dbh, $table_specifier, $options);
 	}
 	
 	# If a table name was specified and we retrieved a specific table permission, add it into
 	# the new object. Otherwise, add the default permission for the specified table.
 	
-	if ( $table_name )
+	if ( $table_specifier )
 	{
 	    if ( $perms->{permission} )
 	    {
 		my @list = grep $_, (split qr{,}, $perms->{permission});
 		
-		$perms->{table_permission}{$table_name}{$_} = 1 foreach @list;
-		$perms->{auth_diag}{$table_name} = 'PERMISSIONS';
+		$perms->{table_permission}{$table_specifier}{$_} = 1 foreach @list;
+		$perms->{auth_diag}{$table_specifier} = 'TABLE_PERMS';
 		
 		delete $perms->{permission};
 	    }
 	    
 	    else
 	    {
-		$perms->default_table_permissions($table_name);
+		$perms->default_table_permissions($table_specifier);
 	    }
 	}
 		
@@ -158,7 +160,7 @@ sub new {
     
     else
     {
-	return Permissions->no_login($dbh, $table_name, $options);
+	return Permissions->no_login($dbh, $table_specifier, $options);
     }
 }
 
@@ -170,11 +172,11 @@ sub new {
 
 sub no_login {
     
-    my ($class, $dbh, $table_name, $options) = @_;
+    my ($class, $dbh, $table_specifier, $options) = @_;
     
     my $no_perms = { authorizer_no => 0, enterer_no => 0, user_id => '', role => 'none' };
     
-    $no_perms->{table_permission}{$table_name} = { } if $table_name;
+    $no_perms->{table_permission}{$table_specifier} = { } if $table_specifier;
     
     $no_perms->{dbh} = $dbh;
     weaken $no_perms->{dbh};
@@ -221,9 +223,9 @@ sub is_superuser {
 sub debug_line {
     
     return unless ref $_[0] && $_[0]->{debug};
-
+    
     my ($perms, $line) = @_;
-
+    
     print STDERR "$line\n" if $perms->{debug};
 }
 
@@ -235,18 +237,18 @@ sub debug_line {
 
 sub get_table_permissions {
     
-    my ($perms, $table_name) = @_;
+    my ($perms, $table_specifier) = @_;
     
     # If we don't already have the permissions for this table cached, retrieve them.
     
-    unless ( ref $perms->{table_permission}{$table_name} eq 'HASH' )
+    unless ( ref $perms->{table_permission}{$table_specifier} eq 'HASH' )
     {
 	# If the current user is a database member, check for explicitly granted permissions. If
 	# the table name has a database prefix, strip it off (see 'new' above).
 	
 	if ( $perms->{enterer_no} )
 	{
-	    my $lookup_name = $table_name;
+	    my $lookup_name = $table_specifier;
 	    $lookup_name =~ s/^\w+[.]//;
 	    
 	    my $dbh = $perms->{dbh};
@@ -255,7 +257,7 @@ sub get_table_permissions {
 	    my $quoted_table = $dbh->quote($lookup_name);
 	    
 	    my $sql = "
-		SELECT permission FROM $TABLE_PERMS
+		SELECT permission FROM $TABLE{TABLE_PERMS}
 		WHERE person_no = $quoted_person and table_name = $quoted_table";
 	    
 	    my $permission;
@@ -269,14 +271,18 @@ sub get_table_permissions {
 	    if ( $permission )
 	    {
 		my @list = split qr{,}, $permission;
-		$perms->{table_permission}{$table_name} = { map { $_ => 1 } @list };
+		$perms->{table_permission}{$table_specifier} = { map { $_ => 1 } @list };
+
+		# The permission 'modify' also implies 'post'.
+		$perms->{table_permission}{$table_specifier}{post} = 1 if
+		    $perms->{table_permission}{$table_specifier}{modify};
 	    }
 	    
 	    # Otherwise, compute the permissions from the authorization info and table properties.
 	    
 	    else
 	    {
-		$perms->default_table_permissions($table_name);
+		$perms->default_table_permissions($table_specifier);
 	    }
 	}
 	
@@ -285,11 +291,11 @@ sub get_table_permissions {
 	
 	else
 	{
-	    $perms->default_table_permissions($table_name);
+	    $perms->default_table_permissions($table_specifier);
 	}
     }
     
-    return $perms->{table_permission}{$table_name};
+    return $perms->{table_permission}{$table_specifier};
 }
 
 
@@ -301,13 +307,13 @@ sub get_table_permissions {
 
 sub clear_cached_permissions {
     
-    my ($perms, $table_name) = @_;
+    my ($perms, $table_specifier) = @_;
     
     # If a table name was given, then clear its permissions. Otherwise, clear all of them.
 
-    if ( $table_name )
+    if ( $table_specifier )
     {
-	delete $perms->{table_permission}{$table_name};
+	delete $perms->{table_permission}{$table_specifier};
     }
     
     else
@@ -324,37 +330,39 @@ sub clear_cached_permissions {
 
 sub default_table_permissions {
     
-    my ($perms, $table_name) = @_;
+    my ($perms, $table_specifier) = @_;
     
     # Return if we have already determined the permissions for the specified table.
     
-    return $perms->{table_permission}{$table_name}
-	if ref $perms->{table_permission}{$table_name} eq 'HASH';
+    return $perms->{table_permission}{$table_specifier}
+	if ref $perms->{table_permission}{$table_specifier} eq 'HASH';
     
     # Otherwise, initialize the permission hash for this table.
     
-    my $tp = $perms->{table_permission}{$table_name} = { };
+    my $tp = $perms->{table_permission}{$table_specifier} = { };
+    
+    # Do we need to add 'CAN_ADMIN' ???
     
     # If this table allows posting for certain classes of people, check to see
     # if the current user falls into one of them.
     
-    if ( my $allow_post = get_table_property($table_name, 'CAN_POST') )
+    if ( my $allow_post = get_table_property($table_specifier, 'CAN_POST') )
     {
 	if ( $allow_post eq 'LOGGED_IN' && $perms->{user_id} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'LOGGED_IN';
+	    $perms->{auth_diag}{$table_specifier} = 'LOGGED_IN';
 	    $tp->{post} = 1;
 	}
 	
 	elsif ( $allow_post eq 'MEMBERS' && $perms->{enterer_no} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'MEMBERS';
+	    $perms->{auth_diag}{$table_specifier} = 'MEMBERS';
 	    $tp->{post} = 1;
 	}
 	
 	elsif ( $allow_post eq 'AUTHORIZED' && $perms->{authorizer_no} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'AUTHORIZED';
+	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
 	    $tp->{post} = 1;
 	}
     }
@@ -362,23 +370,29 @@ sub default_table_permissions {
     # If this table allows viewing for certain classes of people, check to see if the current user
     # falls into one of them.
     
-    if ( my $allow_view = get_table_property($table_name, 'CAN_VIEW') )
+    if ( my $allow_view = get_table_property($table_specifier, 'CAN_VIEW') )
     {
 	if ( $allow_view eq 'LOGGED_IN' && $perms->{user_id} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'LOGGED_IN';
+	    $perms->{auth_diag}{$table_specifier} = 'LOGGED_IN';
 	    $tp->{view} = 1;
 	}
 	
 	elsif ( $allow_view eq 'MEMBERS' && $perms->{enterer_no} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'MEMBERS';
+	    $perms->{auth_diag}{$table_specifier} = 'MEMBERS';
 	    $tp->{view} = 1;
 	}
 	
 	elsif ( $allow_view eq 'AUTHORIZED' && $perms->{enterer_no} && $perms->{authorizer_no} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'AUTHORIZED';
+	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
+	    $tp->{view} = 1;
+	}
+
+	elsif ( $allow_view eq 'ANY' )
+	{
+	    $perms->{auth_aig}{$table_specifier} = 'ANY';
 	    $tp->{view} = 1;
 	}
     }
@@ -386,23 +400,23 @@ sub default_table_permissions {
     # If this table allows modification of records owned by others for certain classes of people, check
     # to see if the current user falls into one of them.
     
-    if ( my $allow_modify = get_table_property($table_name, 'CAN_MODIFY') )
+    if ( my $allow_modify = get_table_property($table_specifier, 'CAN_MODIFY') )
     {
 	if ( $allow_modify eq 'LOGGED_IN' && $perms->{user_id} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'LOGGED_IN';
+	    $perms->{auth_diag}{$table_specifier} = 'LOGGED_IN';
 	    $tp->{modify} = 1;
 	}
 	
 	elsif ( $allow_modify eq 'MEMBERS' && $perms->{enterer_no} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'MEMBERS';
+	    $perms->{auth_diag}{$table_specifier} = 'MEMBERS';
 	    $tp->{modify} = 1;
 	}
 	
 	elsif ( $allow_modify eq 'AUTHORIZED' && $perms->{enterer_no} && $perms->{authorizer_no} )
 	{
-	    $perms->{auth_diag}{$table_name} = 'AUTHORIZED';
+	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
 	    $tp->{modify} = 1;
 	}
     }
@@ -422,32 +436,32 @@ sub default_table_permissions {
 
 sub check_table_permission {
     
-    my ($perms, $table_name, $permission) = @_;
+    my ($perms, $table_specifier, $permission) = @_;
     
     croak "bad call to 'check_table_permission': no permission specified" unless $permission;
-    croak "bad call to 'check_table_permission': no table name specified" unless $table_name;
+    croak "bad call to 'check_table_permission': no table name specified" unless $table_specifier;
     croak "bad call to 'check_table_permission': bad permission '$permission'"
 	unless $PERMISSION_NAME{$permission};
     
-    my $tp = $perms->get_table_permissions($table_name);
+    my $tp = $perms->get_table_permissions($table_specifier);
     
     # If the user has the superuser privilege, or the 'admin' permission on this table, then they
     # have any requested permission.
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
-	$perms->debug_line( "    Permission for $table_name : '$permission' from " . 
+	$perms->debug_line( "    Permission for $table_specifier : '$permission' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
 	
 	return 'admin';
     }
-
+    
     # If the user has the permission 'none', then they do not have any permission on this
-    # table. This overrides any other attribute.
+    # table. This overrides any other attribute except 'admin' or superuser.
     
     elsif ( $tp->{none} )
     {
-	$perms->debug_line( "    Permission for $table_name : '$permission' DENIED by PERMISSIONS\n");
+	$perms->debug_line( "    Permission for $table_specifier : '$permission' DENIED by TABLE_PERMS\n");
 	
 	return 'none';
     }
@@ -459,17 +473,17 @@ sub check_table_permission {
     {
 	unless ( defined $tp->{delete} )
 	{
-	    $tp->{delete} = get_table_property($table_name, 'ALLOW_DELETE') ? 1 : 0;
+	    $tp->{delete} = get_table_property($table_specifier, 'ALLOW_DELETE') ? 1 : 0;
 	}
 	
 	unless ( $tp->{delete} )
     	{
-    	    $perms->debug_line( "    Permission for $table_name : '$permission' DENIED by TABLE PROPERTY\n" );
+    	    $perms->debug_line( "    Permission for $table_specifier : '$permission' DENIED by TABLE PROPERTY\n" );
 	    
     	    return 'none';
     	}
     }
-
+    
     # If the user does not have 'admin' permission, then the 'insert_key' permission is only allowed
     # if they also have 'post' and if table has the ALLOW_INSERT_KEY property.
     
@@ -477,19 +491,19 @@ sub check_table_permission {
     {
 	unless ( $tp->{post} )
 	{
-	    $perms->debug_line( "   Permission for $table_name : '$permission' DENIED : NO PERMISSION\n" );
+	    $perms->debug_line( "   Permission for $table_specifier : '$permission' DENIED : NO PERMISSION\n" );
 	    
 	    return 'none';
 	}
 	
 	unless ( defined $tp->{insert_key} )
 	{
-	    $tp->{insert_key} = get_table_property($table_name, 'ALLOW_INSERT_KEY') ? 1 : 0;
+	    $tp->{insert_key} = get_table_property($table_specifier, 'ALLOW_INSERT_KEY') ? 1 : 0;
 	}
 	
 	unless ( $tp->{insert_key} )
     	{
-    	    $perms->debug_line( "    Permission for $table_name : '$permission' DENIED by TABLE PROPERTY\n" );
+    	    $perms->debug_line( "    Permission for $table_specifier : '$permission' DENIED by TABLE PROPERTY\n" );
 	    
     	    return 'none';
     	}
@@ -499,9 +513,9 @@ sub check_table_permission {
     
     if ( $tp->{$permission} )
     {
-	my $diag = $perms->{auth_diag}{$table_name} || 'DEFAULT';
+	my $diag = $perms->{auth_diag}{$table_specifier} || 'DEFAULT';
 	
-	$perms->debug_line( "    Permission for $table_name : '$permission' from $diag\n" );
+	$perms->debug_line( "    Permission for $table_specifier : '$permission' from $diag\n" );
 	
 	return $permission;
     }
@@ -511,16 +525,16 @@ sub check_table_permission {
     
     elsif ( $permission eq 'view' && $tp->{post} )
     {
-	my $diag = $perms->{auth_diag}{$table_name} || 'DEFAULT';
+	my $diag = $perms->{auth_diag}{$table_specifier} || 'DEFAULT';
 	
-	$perms->debug_line( "    Permission for $table_name : '$permission' from $diag\n" );
+	$perms->debug_line( "    Permission for $table_specifier : '$permission' from $diag\n" );
 	
 	return 'own';
     }
     
     # Otherwise, they have no privileges whatsoever to this table.
     
-    $perms->debug_line( "   Permission for $table_name : '$permission' DENIED : NO PERMISSION\n" );
+    $perms->debug_line( "   Permission for $table_specifier : '$permission' DENIED : NO PERMISSION\n" );
     
     return 'none';
 }
@@ -539,23 +553,23 @@ sub check_table_permission {
 
 sub check_record_permission {
     
-    my ($perms, $table_name, $permission, $key_expr, $record) = @_;
+    my ($perms, $table_specifier, $permission, $key_expr, $record) = @_;
     
     croak "check_record_permission: no permission specified" unless $permission;
-    croak "check_record_permission: no table name specified" unless $table_name;
+    croak "check_record_permission: no table name specified" unless $table_specifier;
     croak "check_record_permission: no key expr specified" unless $key_expr;
     croak "check_record_permission: bad permission '$permission'"
 	unless $PERMISSION_NAME{$permission};
     
     # Start by fetching the user's permissions for the table as a whole.
     
-    my $tp = $perms->get_table_permissions($table_name);
+    my $tp = $perms->get_table_permissions($table_specifier);
     
     # If the requested permission is 'view' and the table permissions allow this, then we are done.
     
-    if ( $permission eq 'view' && $tp->{$permission} )
+    if ( $permission eq 'view' && $tp->{view} )
     {
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from PERMISSIONS\n" );
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from TABLE_PERMS\n" );
 	
 	return $permission;
     }
@@ -564,7 +578,7 @@ sub check_record_permission {
     
     if ( $perms->{role} eq 'none' )
     {
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : NOT LOGGED IN\n" );
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' DENIED : NOT LOGGED IN\n" );
 	
 	return 'none';
     }
@@ -577,11 +591,11 @@ sub check_record_permission {
     
     unless ( ref $record eq 'HASH' )
     {
-	$record = $perms->get_record_authinfo($table_name, $key_expr);
+	$record = $perms->get_record_authinfo($table_specifier, $key_expr);
 	
-	unless ( ref $record )
+	unless ( ref $record eq 'HASH' && %$record )
 	{
-	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' : NOT FOUND\n" );
+	    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' : NOT FOUND\n" );
 	    
 	    return 'notfound';
 	}
@@ -595,10 +609,12 @@ sub check_record_permission {
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from " . 
+	my $p = ($record->{admin_lock} || $record->{owner_lock}) ? 'admin,unlock' : 'admin';
+	
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$p' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
 	
-	return $record->{admin_locked} ? 'unlock' : 'admin';
+	return $p;
     }
     
     # If the user does not have 'admin' permission, then the 'delete' permission is only allowed
@@ -608,12 +624,12 @@ sub check_record_permission {
     {
     	unless ( defined $tp->{delete} )
 	{
-	    $tp->{delete} = get_table_property($table_name, 'ALLOW_DELETE') ? 1 : 0;
+	    $tp->{delete} = get_table_property($table_specifier, 'ALLOW_DELETE') ? 1 : 0;
 	}
-
+	
 	unless ( $tp->{delete} )
     	{
-    	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : TABLE PROPERTY\n" );
+    	    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' DENIED : TABLE PROPERTY\n" );
 	    
     	    return 'none';
     	}
@@ -624,23 +640,23 @@ sub check_record_permission {
     # approved above. We return 'locked' instead of the requested permission, if they would
     # otherwise have that permission.
     
-    if ( $record->{admin_locked} )
+    if ( $record->{admin_lock} )
     {
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : LOCKED\n" );
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' DENIED : LOCKED\n" );
 	
-	$permission = 'locked';
+	return 'locked';
     }
     
     # If the requested permission is 'edit' or 'delete' and the user has 'modify' permission on
     # the table as a whole, then they can edit or delete this particular record regardless of who
     # owns it. Otherwise, they only have permission to edit or delete records that they entered or
-    # authorized.
+    # authorized. But a locked record can only be unlocked by the owner or by an administrator.
     
-    if ( $tp->{modify} && ( $permission eq 'edit' || $permission eq 'delete' ) )
+    if ( $tp->{modify} && ( $permission eq 'edit' || $permission eq 'delete' ) && ! $record->{owner_lock} )
     {
-	my $diag = $perms->{auth_diag}{$table_name} || 'DEFAULT';
+	my $diag = $perms->{auth_diag}{$table_specifier} || 'DEFAULT';
 	
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from $diag\n" );
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from $diag\n" );
 	
 	return $permission;
     }
@@ -651,25 +667,25 @@ sub check_record_permission {
     if ( $record->{enterer_no} && $perms->{enterer_no} &&
 	 $record->{enterer_no} eq $perms->{enterer_no} )
     {
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from enterer_no\n" );
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from enterer_no\n" );
 	
-	return $permission;
+	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
     if ( $record->{authorizer_no} && $perms->{enterer_no} &&
 	 $record->{authorizer_no} eq $perms->{enterer_no} )
     {
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from authorizer_no\n" );
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from authorizer_no\n" );
 	
-	return $permission;
+	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
     if ( $record->{enterer_id} && $perms->{user_id} &&
 	 $record->{enterer_id} eq $perms->{user_id} )
     {
-	$perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from enterer_id\n" );
+	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from enterer_id\n" );
 	
-	return $permission;
+	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
     # If the user has the same authorizer as the person who originally created the record, then
@@ -679,19 +695,118 @@ sub check_record_permission {
     if ( $record->{authorizer_no} && $perms->{authorizer_no} &&
 	 $record->{authorizer_no} eq $perms->{authorizer_no} )
     {
-	if ( $tp->{by_authorizer} //= get_table_property($table_name, 'BY_AUTHORIZER') )
+	if ( $tp->{by_authorizer} //= get_table_property($table_specifier, 'BY_AUTHORIZER') )
 	{
-	    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' from BY_AUTHORIZER\n" );
+	    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from BY_AUTHORIZER\n" );
 	    
-	    return $permission;
+	    return $record->{owner_lock} ? "$permission,unlock" : $permission;
 	}
     }
     
-    # Otherwise, the requestor has no permission on this record.
+    # Otherwise, the requestor has no permission on this record. If they would have been able to
+    # modify it except that the record was locked, return 'locked'. Otherwise, return 'none'.
     
-    $perms->debug_line( "    Permission for $table_name ($key_expr) : '$permission' DENIED : NO PERMISSION\n" );
+    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' DENIED : NO PERMISSION\n" );
     
-    return 'none';
+    if ( $tp->{modify} && ( $permission eq 'edit' || $permission eq 'delete' ) )
+    {
+	return 'locked';
+    }
+    
+    else
+    {
+	return 'none';
+    }
+}
+
+
+# check_if_owner ( table_specifier, permission, key_expr )
+#
+# Return 1 if the current user has owner rights to the record, 0 otherwise. Superusers and table
+# administrators count as owners.
+
+sub check_if_owner {
+    
+    my ($perms, $table_specifier, $key_expr, $record) = @_;
+    
+    croak "check_record_permission: no table name specified" unless $table_specifier;
+    croak "check_record_permission: no key expr specified" unless $key_expr;
+    
+    # Start by fetching the user's permissions for the table as a whole.
+    
+    my $tp = $perms->get_table_permissions($table_specifier);
+    
+    # If the table permission is 'admin' or if the user has superuser privileges, then return
+    # true.
+    
+    if ( $perms->is_superuser || $tp->{admin} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from " . 
+			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
+	
+	return 1;
+    }
+
+    # Otherwise, we need to fetch the information necessary to tell whether the user is the person
+    # who created or authorized it. Unless we were given the current contents of the record, fetch
+    # the info necessary to determine permissions.  If the record was not found, then return
+    # 0.
+    
+    unless ( ref $record eq 'HASH' )
+    {
+	$record = $perms->get_record_authinfo($table_specifier, $key_expr);
+	
+	unless ( ref $record eq 'HASH' && %$record )
+	{
+	    $perms->debug_line( "    Owner of $table_specifier ($key_expr) : NOT FOUND\n" );
+	    
+	    return 0;
+	}
+    }
+    
+    # If the user is the person who originally created or authorized the record, then they are the owner.
+    
+    if ( $record->{enterer_no} && $perms->{enterer_no} &&
+	 $record->{enterer_no} eq $perms->{enterer_no} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from enterer_no\n" );
+	
+	return 1;
+    }
+    
+    if ( $record->{authorizer_no} && $perms->{enterer_no} &&
+	 $record->{authorizer_no} eq $perms->{enterer_no} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from authorizer_no\n" );
+	
+	return 1;
+    }
+    
+    if ( $record->{enterer_id} && $perms->{user_id} &&
+	 $record->{enterer_id} eq $perms->{user_id} )
+    {
+	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from enterer_id\n" );
+	
+	return 1;
+    }
+    
+    # If the user has the same authorizer as the person who originally created the record, then
+    # that counts too if the table has the 'BY_AUTHORIZER' property.
+    
+    if ( $record->{authorizer_no} && $perms->{authorizer_no} &&
+	 $record->{authorizer_no} eq $perms->{authorizer_no} )
+    {
+	if ( $tp->{by_authorizer} //= get_table_property($table_specifier, 'BY_AUTHORIZER') )
+	{
+	    $perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from BY_AUTHORIZER\n" );
+	    
+	    return 1;
+	}
+    }
+    
+    # Otherwise, the current user is not the owner of the record.
+
+    return 0;
 }
 
 
@@ -702,20 +817,26 @@ sub check_record_permission {
 
 sub get_record_authinfo {
     
-    my ($perms, $table_name, $key_expr) = @_;
+    my ($perms, $table_specifier, $key_expr) = @_;
     
     # First get a list of the authorization fields for this table.
     
-    my $auth_fields = get_authinfo_fields($perms->{dbh}, $table_name, $perms->{debug});
+    my $auth_fields = get_authinfo_fields($perms->{dbh}, $table_specifier, $perms->{debug});
     
-    # If it is empty, then return an empty record.
+    # If it is empty, then just fetch the key value. This will allow us to check that the record
+    # actually exists. If the table has no primary key, then just return an empty record.
     
-    return { } unless $auth_fields;
+    unless ( $auth_fields )
+    {
+	$auth_fields = get_table_property($table_specifier, 'PRIMARY_KEY');
+	
+	return { } unless $auth_fields;
+    }
     
     # Otherwise, construct an SQL statement to get the values of these fields.
     
     my $sql = "
-	SELECT $auth_fields FROM $table_name
+	SELECT $auth_fields FROM $TABLE{$table_specifier}
 	WHERE $key_expr LIMIT 1";
     
     $perms->debug_line( "$sql\n" );
@@ -733,7 +854,7 @@ sub get_record_authinfo {
 
 sub record_filter {
     
-    my ($perms, $table_name) = @_;
+    my ($perms, $table_specifier) = @_;
     
     # This still needs to be implemented... $$$
 }

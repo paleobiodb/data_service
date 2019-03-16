@@ -19,48 +19,55 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw(set_table_property set_column_property alternate_table $TEST_DB);
+use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
 
 use base 'EditTransaction';
-use base 'Exporter';
 
 use namespace::clean;
 
-our (@EXPORT_OK) = qw($EDT_TEST $EDT_AUX $EDT_ANY);
-
 # Table names
 
-our $EDT_TEST = 'edt_test';
-our $EDT_AUX = 'edt_aux';
-our $EDT_ANY = 'edt_any';
+# our $EDT_TEST = 'edt_test';
+# our $EDT_AUX = 'edt_aux';
+# our $EDT_ANY = 'edt_any';
 
 
 # At runtime, set column properties for our test table
 # ----------------------------------------------------
 
 {
-    set_table_property($EDT_TEST, CAN_POST => 'AUTHORIZED');
-    set_table_property($EDT_TEST, ALLOW_DELETE => 1);
-    set_table_property($EDT_TEST, PRIMARY_KEY => 'test_no');
-    set_table_property($EDT_TEST, TABLE_COMMENT => 'This table is used for testing EditTransaction.pm and its subclass EditTest.pm');
+    set_table_name(EDT_TEST => 'edt_test');
+    set_table_name(EDT_AUX => 'edt_aux');
+    set_table_name(EDT_ANY => 'edt_any');
     
-    set_column_property($EDT_TEST, 'string_req', REQUIRED => 1);
-    set_column_property($EDT_TEST, 'string_req', COLUMN_COMMENT => 'This is a test comment.');
-    set_column_property($EDT_TEST, 'string_val', ALTERNATE_NAME => 'alt_val');
-    set_column_property($EDT_TEST, 'string_val', VALIDATOR => 'test_validator');
+    set_table_group('edt_test' => 'EDT_TEST', 'EDT_AUX', 'EDT_ANY');
     
-    set_table_property($EDT_AUX, CAN_POST => 'AUTHORIZED');
-    set_table_property($EDT_AUX, CAN_MODIFY => 'AUTHORIZED');
-    set_table_property($EDT_AUX, PRIMARY_KEY => 'aux_no');
+    set_table_property(EDT_TEST => CAN_POST => 'AUTHORIZED');
+    set_table_property(EDT_TEST => ALLOW_DELETE => 1);
+    set_table_property(EDT_TEST => PRIMARY_KEY => 'test_no');
+    set_table_property(EDT_TEST => TABLE_COMMENT => 'This table is used for testing EditTransaction.pm and its subclass EditTest.pm');
     
-    set_column_property($EDT_AUX, 'test_no', FOREIGN_TABLE => 'EditTest::EDT_TEST');
-    set_column_property($EDT_AUX, 'name', REQUIRED => 1);
+    set_column_property(EDT_TEST => string_req => REQUIRED => 1);
+    set_column_property(EDT_TEST => string_req => COLUMN_COMMENT => 'This is a test comment.');
+    set_column_property(EDT_TEST => string_val => ALTERNATE_NAME => 'alt_val');
+    set_column_property(EDT_TEST => string_val => VALIDATOR => 'test_validator');
+    set_column_property(EDT_TEST => admin_str => ADMIN_SET => 1);
     
-    set_table_property($EDT_ANY, CAN_POST => 'LOGGED_IN');
-    set_table_property($EDT_ANY, ALLOW_DELETE => 1);
-    set_table_property($EDT_ANY, PRIMARY_KEY => 'any_no');
+    set_table_property(EDT_AUX => SUPERIOR_TABLE => 'EDT_TEST');
+    set_table_property(EDT_AUX => CAN_POST => 'AUTHORIZED');
+    set_table_property(EDT_AUX => CAN_MODIFY => 'AUTHORIZED');
+    set_table_property(EDT_AUX => ALLOW_DELETE => 1);
+    set_table_property(EDT_AUX => PRIMARY_KEY => 'aux_no');
     
-    set_column_property($EDT_ANY, 'string_req', REQUIRED => 1);
+    set_column_property(EDT_AUX => test_no => FOREIGN_TABLE => 'EDT_TEST');
+    set_column_property(EDT_AUX => test_no => ALTERNATE_NAME => 'test_id');
+    set_column_property(EDT_AUX => name => REQUIRED => 1);
+    
+    set_table_property(EDT_ANY => CAN_POST => 'LOGGED_IN');
+    set_table_property(EDT_ANY => ALLOW_DELETE => 1);
+    set_table_property(EDT_ANY => PRIMARY_KEY => 'any_no');
+    
+    set_column_property(EDT_ANY => string_req => REQUIRED => 1);
     
     EditTest->register_allowances('TEST_DEBUG');
     EditTest->register_conditions(E_TEST => "TEST ERROR '%1'",
@@ -77,40 +84,40 @@ our $EDT_ANY = 'edt_any';
 # database. If $ds is either 1 or a reference to a Web::DataService object with the debug flag
 # set, then print out a debugging message.
 
-sub enable_test_mode {
+# sub enable_test_mode {
     
-    my ($class, $table, $ds) = @_;
+#     my ($class, $table, $ds) = @_;
     
-    croak "You must define 'test_db' in the configuration file" unless $TEST_DB;
+#     croak "You must define 'test_db' in the configuration file" unless $TEST_DB;
     
-    $EDT_TEST = alternate_table($TEST_DB, $EDT_TEST);
-    $EDT_AUX = alternate_table($TEST_DB, $EDT_AUX);
-    $EDT_ANY = alternate_table($TEST_DB, $EDT_ANY);
+#     $EDT_TEST = alternate_table($TEST_DB, $EDT_TEST);
+#     $EDT_AUX = alternate_table($TEST_DB, $EDT_AUX);
+#     $EDT_ANY = alternate_table($TEST_DB $EDT_ANY);
     
-    if ( $ds && $ds == 1 || ref $ds && $ds->debug )
-    {
-	$ds->debug_line("TEST MODE: enable 'edt_test'\n");
-    }
+#     if ( $ds && $ds == 1 || ref $ds && $ds->debug )
+#     {
+# 	$ds->debug_line("TEST MODE: enable 'edt_test'\n");
+#     }
     
-    return 1;
-}
+#     return 1;
+# }
 
 
-sub disable_test_mode {
+# sub disable_test_mode {
 
-    my ($class, $table, $ds) = @_;
+#     my ($class, $table, $ds) = @_;
     
-    $EDT_TEST = original_table($EDT_TEST);
-    $EDT_AUX = original_table($EDT_AUX);
-    $EDT_ANY = original_table($EDT_ANY);
+#     $EDT_TEST = original_table($EDT_TEST);
+#     $EDT_AUX = original_table($EDT_AUX);
+#     $EDT_ANY = original_table($EDT_ANY);
     
-    if ( $ds && $ds == 1 || ref $ds && $ds->debug )
-    {
-	$ds->debug_line("TEST MODE: disable 'edt_test'\n");
-    }
+#     if ( $ds && $ds == 1 || ref $ds && $ds->debug )
+#     {
+# 	$ds->debug_line("TEST MODE: disable 'edt_test'\n");
+#     }
     
-    return 2;
-}
+#     return 2;
+# }
 
 
 # The following methods override methods from EditTransaction.pm:
@@ -145,6 +152,17 @@ sub authorize_action {
 	    $edt->{save_authorize_operation} = $operation;
 	    $edt->{save_authorize_table} = $table;
 	    $edt->{save_authorize_keyexpr} = $keyexpr;
+	}
+
+	elsif ( $record->{string_req} eq 'authorize methods' )
+	{
+	    my $keyexpr = $action->keyexpr;
+	    my @keylist = $action->keylist;
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
 	}
     }
     
@@ -183,9 +201,48 @@ sub validate_action {
 	    $edt->{save_validate_keyexpr} = $keyexpr;
 	    $edt->{save_validate_errors} = $action->has_errors;
 	}
+	
+	elsif ( $record->{string_req} eq 'validate methods' )
+	{
+	    my $keyexpr = $action->keyexpr;
+	    my @keylist = $action->keylist;
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
+	}
+    }
+
+    if ( $record && $record->{name} )
+    {
+	if ( $record->{name} =~ /validate label (.*)/i )
+	{
+	    $edt->{save_validate_label} = $edt->label_table($1);
+	}
     }
     
     return EditTransaction::validate_action(@_);
+}
+
+
+sub test_old_values {
+
+    my ($edt, $action, $table) = @_;
+
+    my @values;
+    
+    if ( $table eq 'EDT_TEST' )
+    {
+	@values = $edt->get_old_values($table, $action->keyexpr, 'string_req, string_val');
+    }
+    
+    elsif ( $table eq 'EDT_AUX' )
+    {
+	@values = $edt->get_old_values($table, $action->keyexpr, 'name');
+    }
+    
+    return @values;
 }
 
 
@@ -195,7 +252,7 @@ sub test_validator {
     
     if ( defined $value && length($value) == 10 )
     {
-	return ('E_FORMAT', "args: $field $action");
+	return ('E_FORMAT', "test validator args: $field $action");
     }
     
     else
@@ -222,7 +279,7 @@ sub initialize_transaction {
     elsif ( my $value = $edt->get_attr('initialize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $EDT_AUX (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_AUX} (name) values ($quoted)");
     }
     
     $edt->{save_init_count}++;
@@ -253,7 +310,7 @@ sub finalize_transaction {
     elsif ( my $value = $edt->get_attr('finalize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $EDT_AUX (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_AUX} (name) values ($quoted)");
     }
     
     $edt->{save_final_count}++;
@@ -309,12 +366,30 @@ sub before_action {
 	{
 	    $edt->abort_action;
 	}
+
+	elsif ( $record->{string_req} eq 'before methods' )
+	{
+	    my $keyexpr = $action->keyexpr;
+	    my @keylist = $action->keylist;
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
+	}
+    }
+    
+    elsif ( $operation eq 'delete_cleanup' )
+    {
+	my $keyexpr = $action->keyexpr;
+	
+	$edt->{save_before_keyexpr} = $keyexpr;
     }
     
     if ( my $value = $edt->get_attr('before add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $EDT_AUX (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_AUX} (name) values ($quoted)");
     }
     
     $edt->{save_before_count}++;
@@ -352,6 +427,25 @@ sub after_action {
 	{
 	    $edt->{save_after_attr} = $action->get_attr('test');
 	}
+	
+	elsif ( $record->{string_req} eq 'after methods' )
+	{
+	    my $keyexpr = $edt->get_keyexpr($action);
+	    my @keylist = $action->keylist;
+	    my @values = $edt->test_old_values($action, $table);
+	    
+	    $edt->{save_method_keyval} = $keyval;
+	    $edt->{save_method_keyexpr} = $keyexpr;
+	    $edt->{save_method_keylist} = \@keylist;
+	    $edt->{save_method_values} = \@values;
+	}
+    }
+    
+    elsif ( $operation eq 'delete_cleanup' )
+    {
+	my $keyexpr = $action->keyexpr;
+	
+	$edt->{save_after_keyexpr} = $keyexpr;
     }
     
     if ( $edt->get_attr('after delete') )
@@ -359,6 +453,17 @@ sub after_action {
 	my $value = $edt->get_attr('before add');
 	my $quoted = $edt->dbh->quote($value);
 	$edt->dbh->do("DELETE FROM $table WHERE string_req=$quoted");
+    }
+
+    if ( $operation eq 'delete' && $table eq 'EDT_TEST' )
+    {
+	my $keyexpr = $action->keyexpr;
+	
+	if ( $keyexpr )
+	{
+	    $edt->dbh->do("DELETE FROM $TABLE{EDT_AUX} WHERE $keyexpr");
+	    $edt->{save_delete_aux} = $keyexpr;
+	}
     }
     
     $edt->{save_after_count}++;
@@ -456,9 +561,9 @@ sub establish_tables {
     
     # Create, or re-create, the table 'edt_test'.
     
-    $dbh->do("DROP TABLE IF EXISTS $EDT_TEST");
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_TEST}");
     
-    $dbh->do("CREATE TABLE $EDT_TEST (
+    $dbh->do("CREATE TABLE $TABLE{EDT_TEST} (
 		test_no int unsigned primary key auto_increment,
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,
@@ -479,20 +584,23 @@ sub establish_tables {
 		boolean_val boolean,
 		enum_val enum('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
+		admin_str varchar(40) not null default '',
+		admin_lock boolean not null default 0,
+		owner_lock boolean not null default 0,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp)");
     
-    $dbh->do("DROP TABLE IF EXISTS $EDT_AUX");
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUX}");
     
-    $dbh->do("CREATE TABLE $EDT_AUX (
+    $dbh->do("CREATE TABLE $TABLE{EDT_AUX} (
 		aux_no int unsigned primary key auto_increment,
 		name varchar(255) not null default '',
 		test_no int unsigned not null default 0,
 		unique key (name))");
 
-    $dbh->do("DROP TABLE IF EXISTS $EDT_ANY");
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_ANY}");
     
-    $dbh->do("CREATE TABLE $EDT_ANY (
+    $dbh->do("CREATE TABLE $TABLE{EDT_ANY} (
 		any_no int unsigned primary key auto_increment,
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,

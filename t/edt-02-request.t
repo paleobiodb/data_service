@@ -15,9 +15,7 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 1;
 
-use TableDefs;
-
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -44,10 +42,10 @@ subtest 'request' => sub {
 
 	my $debug = $T->debug;
 	
-	$edt = EditTest->new($request, $perm_a, $EDT_TEST,
+	$edt = EditTest->new($request, $perm_a, 'EDT_TEST',
 			     { CREATE => 1, DEBUG_MODE => $debug });
 
-	$edt->insert_record($EDT_TEST, { string_req => 'request test' });
+	$edt->insert_record('EDT_TEST', { string_req => 'request test' });
 	$result = $edt->execute;
     };
     
@@ -59,7 +57,7 @@ subtest 'request' => sub {
     }
     
     ok( $result, "inserted one record using request edt" );
-    $T->ok_found_record($EDT_TEST, "string_req='request test'");
+    $T->ok_found_record('EDT_TEST', "string_req='request test'");
     
     cmp_ok( $edt->request, '==', $request, "fetch request ref" );
 };

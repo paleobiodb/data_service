@@ -10,7 +10,7 @@ use strict;
 
 use Dancer qw(:syntax);
 use PBLogger;
-use TableDefs qw(init_table_names select_test_tables is_test_mode);
+use TableDefs qw(init_table_names enable_test_mode disable_test_mode is_test_mode);
 use ResourceDefs;
 
 my $logger = PBLogger->new;
@@ -34,40 +34,49 @@ get '/:prefix/testmode/:tablename/:op' => sub {
     {
 	die "500 Server is not in test mode\n";
     }
-    
-    if ( $operation eq 'enable' )
+
+    if ( $tablename eq 'debug' )
     {
-	if ( $tablename eq 'eduresources' )
+	if ( $operation eq 'enable' )
 	{
-	    ($result) = ResourceDefs->enable_test_mode($tablename, $ds);
+	    $Web::DataService::DEBUG = 1;
+	    return "debug enabled";
 	}
-	
+
 	else
 	{
-	    ($result) = select_test_tables($tablename, 1, $ds);
+	    $Web::DataService::DEBUG = undef;
+	    return "debug disabled";
 	}
+    }
+    
+    elsif ( $operation eq 'enable' )
+    {
+	($result) = enable_test_mode($tablename, $ds);
 	
 	if ( $result && $result eq '1' )
 	{
 	    return "$tablename enabled";
 	}
+
+	else
+	{
+	    die "400 Unknown table group '$tablename'";
+	}
     }
     
     elsif ( $operation eq 'disable' )
     {
-	if ( $tablename =~ /eduresources/i )
-	{
-	    ($result) = ResourceDefs->disable_test_mode($tablename, $ds);
-	}
-
-	else
-	{
-	    ($result) = select_test_tables($tablename, 0, $ds);
-	}
+	($result) = disable_test_mode($tablename, $ds);
 	
 	if ( $result && $result eq '2' )
 	{
 	    return "$tablename disabled";
+	}
+	
+	else
+	{
+	    die "400 Unknown table group '$tablename'";
 	}
     }
     
@@ -126,12 +135,12 @@ any qr{.*} => sub {
     
     if ( exists params->{noheader} )
     {
-	params->{header} = "no";
+	params('query')->{header} = "no";
     }
     
     if ( exists params->{textresult} )
     {
-	params->{save} = "no";
+	params('query')->{save} = "no";
     }
     
     # A parameter named _ sometimes shows up. It appears to be added by certain javascript
@@ -139,6 +148,7 @@ any qr{.*} => sub {
     # the parameter validation.
     
     delete params->{_};
+    delete params('query')->{_};
     
     # If the path ends in a string of digits with a format suffix, we treat this as if it were a
     # request for the object whose identifier corresponds to the digit string. To do this, we
@@ -149,7 +159,7 @@ any qr{.*} => sub {
 	my $newpath = "$1/single.$3";
 	my $id = $2;
 	
-	params->{id} = $id;
+	params('query')->{id} = $id;
 	forward($newpath);
     }
     

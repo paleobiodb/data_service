@@ -13,9 +13,9 @@ use YAML;
 use Term::ReadKey;
 use Carp qw(carp croak);
 
-use ConsoleLog qw(logMessage);
+use ConsoleLog 'logMessage';
 
-use base qw(Exporter);
+use Exporter 'import';
 
 our (@EXPORT_OK) = qw(connectDB loadConfig configData loadSQLFile activateTables new_tables_safe);
 

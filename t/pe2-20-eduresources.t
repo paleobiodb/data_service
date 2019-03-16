@@ -23,7 +23,7 @@ use TaxonDefs;
 
 use lib 't';
 use Tester;
-use Test::Conditions;
+
 use Test::Selection;
 
 
@@ -60,7 +60,7 @@ my $T = Tester->new({ prefix => 'data1.2' });
 # Create a second instance of Tester for making requests on the main web
 # server. 
 
-my $TT = Tester->new({ server => '127.0.0.1:80' });
+my $TT; # = Tester->new({ server => '127.0.0.1:80' });
 
 # Then check to MAKE SURE that the server is in test mode and the test eduresources tables are
 # enabled. This is very important, because we DO NOT WANT to change the data in the main
@@ -77,6 +77,8 @@ $T->test_mode('eduresources', 'enable') || BAIL_OUT("could not select test edure
 # and reported back.
 
 subtest 'add simple' => sub {
+
+    use utf8;
     
     select_subtest || return;
     
@@ -85,7 +87,7 @@ subtest 'add simple' => sub {
     
     $T->set_cookie("session_id", "SESSION-SUPERUSER");
     
-    my $record1 = { record_label => 'a1',
+    my $record1 = { _label => 'a1',
 		    title => 'Test Record 1',
 		    tags => 'api,tutorial',
 		    description => 'Test record with \'é\'.',
@@ -114,11 +116,16 @@ subtest 'add simple' => sub {
 	{
 	    like($r1[0]{tags}, qr{API.*tutorial|tutorial.*API}, "added record has tags 'API' and 'tutorial'");
 	}
+
+	elsif ( $k eq '_label' )
+	{
+	    is($r1[0]{rlb}, $record1->{$k}, "added record has correct label");
+	}
 	
 	else
 	{
 	    my $f = $FIELD_MAP{$k} || $k;
-	    cmp_ok($r1[0]{$f}, 'eq', $record1->{$k}, "added record has correct value for '$k'");
+	    is($r1[0]{$f}, $record1->{$k}, "added record has correct value for '$k'");
 	}
     }
     
@@ -170,7 +177,7 @@ subtest 'add by role' => sub {
     
     $T->set_cookie("session_id", "SESSION-AUTHORIZER");
     
-    my $record2a = { record_label => '2a',
+    my $record2a = { _label => '2a',
 		    title => 'Test Record 2a' };
     
     my (@r2a) = $T->send_records("/eduresources/addupdate.json", "enterer add", json => $record2a);
@@ -179,7 +186,7 @@ subtest 'add by role' => sub {
     
     $T->set_cookie("session_id", "SESSION-STUDENT");
     
-    my $record2b = { record_label => '2b',
+    my $record2b = { _label => '2b',
 		    title => $TEST_TITLE_1 };
     
     my (@r2b) = $T->send_records("/eduresources/addupdate.json", "student add", json => $record2b);
@@ -190,7 +197,7 @@ subtest 'add by role' => sub {
     
     $T->set_cookie("session_id", "SESSION-WITH-ADMIN");
     
-    my $record2c = { record_label => '2c',
+    my $record2c = { _label => '2c',
 		    title => 'Test Record 2c' };
     
     my (@r2c) = $T->send_records("/eduresources/addupdate.json", "table permission add", json => $record2c);
@@ -199,14 +206,14 @@ subtest 'add by role' => sub {
     
     $T->set_cookie("session_id", "SESSION-GUEST");
     
-    my $record2d = { record_label => '2c',
+    my $record2d = { _label => '2c',
 		    title => 'Test Record 2d' };
     
     my (@r2d) = $T->send_records("/eduresources/addupdate.json", "guest add", json => $record2d);
     
     $T->set_cookie("session_id", "");
     
-    my $record2e = { record_label => '2e',
+    my $record2e = { _label => '2e',
 		    title => 'Test Record 2e' };
     
     my ($m) = $T->send_data_nocheck("/eduresources/addupdate.json", "no login add", json => $record2e);
@@ -230,8 +237,8 @@ subtest 'update admin' => sub {
     
     unless ( @r1 )
     {
-	diag("skipping remainder of subtest");
-	return;
+    	diag("skipping remainder of subtest");
+    	return;
     }
     
     # Now try to update this record as the superuser. Make sure we can change all of the fields
@@ -259,8 +266,8 @@ subtest 'update admin' => sub {
     
     unless ( @r2 )
     {
-	diag("skipping remainder of subtest");
-	return;
+    	diag("skipping remainder of subtest");
+    	return;
     }
     
     foreach my $k ( keys %$update1 )
@@ -416,7 +423,7 @@ subtest 'image data' => sub {
 
     $T->set_cookie("session_id", "SESSION-ENTERER");
     
-    my $image1a = { record_label => 'a1',
+    my $image1a = { _label => 'a1',
 		   title => 'Test With Image 1',
 		   image_data => &image1 };
     
@@ -427,7 +434,7 @@ subtest 'image data' => sub {
     
     # 2. create a new record without image data
     
-    my $image1b = { record_label => 'a2',
+    my $image1b = { _label => 'a2',
 		   title => 'Test With Image 2' };
 
     my (@r2) = $T->send_records("/eduresources/addupdate.json", "insert for update test",
@@ -446,7 +453,7 @@ subtest 'image data' => sub {
     
     # 4. try an image with a different file type, that is too big and requires resizing.
     
-    my $image2 = { record_label => 'a2',
+    my $image2 = { _label => 'a2',
 		   title => 'Test With Image 2',
 		   image_data => &image2 };
     
@@ -510,6 +517,12 @@ subtest 'image data' => sub {
     my $image_dir = `grep eduresources_img_dir config.yml`;
     chomp $image_dir;
     $image_dir =~ s/^.*:\s+//;
+
+    my $image_host = `grep eduresources_img_host config.yml`;
+    chomp $image_host;
+    $image_host =~ s/^.*:\s+//;
+    
+    $TT = Tester->new({ server => $image_host });
     
     my ($m4a) = $TT->fetch_url($img1a, "fetch image 1a", { no_check => 1 });
     my ($m4b) = $TT->fetch_url($img1b, "fetch image 1b", { no_check => 1 });
@@ -608,7 +621,7 @@ subtest 'delete permissions' => sub {
     
     $T->set_cookie("session_id", "SESSION-WITH-ADMIN");
     
-    my $test1 = { record_label => '1a',
+    my $test1 = { _label => '1a',
 		  title => 'Delete Test 1' };
     
     my (@r1) = $T->send_records("/eduresources/addupdate.json", "insert for delete test 1",
@@ -622,9 +635,9 @@ subtest 'delete permissions' => sub {
     
     $T->set_cookie("session_id", "SESSION-AUTHORIZER");
     
-    my $test2 = { records => [ { record_label => '2a',
+    my $test2 = { records => [ { _label => '2a',
 				 title => 'Delete Test 2' },
-			       { record_label => '3a',
+			       { _label => '3a',
 				 title =>'Delete Test 3' } ] };
     
     my (@r2) = $T->send_records("/eduresources/addupdate.json", "insert for delete test 2,3",
@@ -668,17 +681,17 @@ subtest 'invalid' => sub {
     
     # Try to insert several records with errors, and check that we get back the right messages.
     
-    my $errors = [ { record_label => 'e1', author => 'somebody' },	# 'title' not specified
-		   { record_label => 'e2', title => 'Error 2',		# 'author' too long
+    my $errors = [ { _label => 'e1', author => 'somebody' },	# 'title' not specified
+		   { _label => 'e2', title => 'Error 2',		# 'author' too long
 		     author => 'abcdefg' x 100 },
-		   { record_label => 'e3', title => 'Error 3',		# bad value for 'orcid'
+		   { _label => 'e3', title => 'Error 3',		# bad value for 'orcid'
 		     orcid => '1234-5678-9012-345',			# and for 'is_video'
 		     is_video => 'foo' },
-		   { record_label => 'e4', title => 'Error 4',		# bad tags
+		   { _label => 'e4', title => 'Error 4',		# bad tags
 		     tags => 'foo, bar, api' },
-		   { record_label => 'e5', title => 'Error 5',		# bad image data
+		   { _label => 'e5', title => 'Error 5',		# bad image data
 		     image_data => 'foobar' },
-		   { record_label => 'e6', title => 'Error 6',		# this one is good
+		   { _label => 'e6', title => 'Error 6',		# this one is good
 		     author => 'abcd' } ];
     
     my ($m1) = $T->send_data_nocheck("/eduresources/addupdate.json", "insert with errors",

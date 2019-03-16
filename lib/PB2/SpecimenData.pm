@@ -14,10 +14,9 @@ package PB2::SpecimenData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS
+use TableDefs qw(%TABLE $COLL_BINS
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
-		 $SPECELT_DATA $SPECELT_MAP
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
+		 $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use Taxonomy;
 
@@ -49,7 +48,7 @@ sub initialize {
 	{ select => [ 'ss.specimen_no', 'sp.specimen_id', 'sp.is_type', 'sp.specimen_side',
 		      'sp.specimen_part', 'sp.sex as specimen_sex', 'sp.specimens_measured as n_measured',
 		      'sp.measurement_source', 'sp.magnification', 'sp.comments',
-		      'sp.occurrence_no', 'ss.reid_no', 'ss.taxon_no as identified_no',
+		      'sp.occurrence_no', 'o.collection_no', 'ss.reid_no', 'ss.taxon_no as identified_no',
 		      'a.taxon_name as identified_name', 'a.orig_no as spec_orig_no',
 		      't.rank as identified_rank', 't.status as taxon_status', 't.orig_no',
 		      'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
@@ -66,6 +65,9 @@ sub initialize {
 	    "The unique identifier of this specimen in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{SPM} },
 	    "The type of this object: C<$IDP{SPM}> for a specimen.",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
 	{ output => 'flags', com_name => 'flg' },
 	    "This field will be empty for most records.  Otherwise, it will contain one or more",
 	    "of the following letters:", "=over",
@@ -99,9 +101,11 @@ sub initialize {
 	    "=back",
 	{ set => 'permissions', from => '*', code => \&PB2::CollectionData::process_permissions },
 	{ output => 'specimen_id', com_name => 'smi', data_type => 'str' },
-	    "The identifier for this specimen according to its custodial institution",
+	    "The identification label for this specimen according to its custodial institution",
 	{ output => 'is_type', com_name => 'smt' },
 	    "Indicates whether this specimen is a holotype or paratype",
+	{ output => 'specelt_no', com_name => 'els' },
+	    "The identifier from the specimen element hierarchy that best describes this specimen",
 	{ output => 'specimen_side', com_name => 'sms' },
 	    "The side of the body to which the specimen part corresponds",
 	{ output => 'specimen_part', com_name => 'smp' },
@@ -284,11 +288,14 @@ sub initialize {
     
     $ds->define_block('1.2:measure:basic' =>
 	{ select => [ 'ms.measurement_no', 'ms.specimen_no', 'sp.specimens_measured as n_measured',
-		      'ms.position', 'ms.measurement_type as measurement', 'ms.average',
+		      'ms.position', 'ms.measurement_type', 'ms.average',
 		      'ms.min', 'ms.max' ] },
 	{ set => '*', code => \&process_measurement_ids },
 	{ output => 'measurement_no', com_name => 'oid' },
 	    "The unique identifier of this measurement in the database",
+	{ output => '_label', com_name => 'rlb' },
+	    "For newly added or updated records, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
 	{ output => 'specimen_no', com_name => 'sid' },
 	    "The identifier of the specimen with which this measurement is associated",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{MEA} },
@@ -297,7 +304,7 @@ sub initialize {
 	    "The number of items measured",
 	{ output => 'position', com_name => 'mpo' },
 	    "The position of the measured item(s), if recorded",
-	{ output => 'measurement', com_name => 'mty' },
+	{ output => 'measurement_type', com_name => 'mty' },
 	    "The actual measurement performed",
 	{ output => 'average', com_name => 'mva' },
 	    "The average measured value, or the single value if only one item was measured",
@@ -542,11 +549,11 @@ sub initialize {
     # Output blocks for specimen elements
     
     # $ds->define_block('1.2:specs:element' => 
-    # 	{ select => [ 'elt.spec_elt_no', 'elt.element_name', 'elt.orig_no',
+    # 	{ select => [ 'elt.specelt_no', 'elt.element_name', 'elt.orig_no',
     # 		      'elt.parent_elt_name as parent_name', 'elt.has_number',
     # 		      't.name as taxon_name' ] },
     # 	{ set => '*', code => \&process_element_ids },
-    # 	{ output => 'spec_elt_no', com_name => 'oid' },
+    # 	{ output => 'specelt_no', com_name => 'oid' },
     # 	{ output => 'element_name', com_name => 'nam' },
     # 	{ output => 'parent_name', com_name => 'par' },
     # 	{ output => 'has_number', com_name => 'hnm' },
@@ -917,6 +924,7 @@ sub get_specimen {
     $fields .= $access_fields if $access_fields;
     
     $request->delete_output_field('permissions') unless $access_fields;
+    $request->delete_output_field('_label');
     
     # Determine the necessary joins.
     
@@ -926,10 +934,10 @@ sub get_specimen {
     
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
-	FROM $SPEC_MATRIX as ss JOIN specimens as sp using (specimen_no)
-		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
-		LEFT JOIN $COLL_MATRIX as c on c.collection_no = o.collection_no
-		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
+	FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+		LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
+		LEFT JOIN $TABLE{COLLECTION_MATRIX} as c on c.collection_no = o.collection_no
+		LEFT JOIN $TABLE{AUTHORITY_DATA} as a on a.taxon_no = ss.taxon_no
 		$join_list
         WHERE ss.specimen_no = $id and (c.access_level = 0 or o.occurrence_no is null)
 	GROUP BY ss.specimen_no";
@@ -1005,6 +1013,7 @@ sub list_specimens {
     my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
     
     $request->delete_output_field('permissions') unless $access_fields;
+    $request->delete_output_field('_label');
     
     push @filters, "(ss.occurrence_no = 0 or $access_filter)";
     
@@ -1100,10 +1109,10 @@ sub list_specimens {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $SPEC_MATRIX as ss JOIN specimens as sp using (specimen_no)
-		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
-		LEFT JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
-		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
+	FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+		LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
+		LEFT JOIN $TABLE{COLLECTION_MATRIX} as c on o.collection_no = c.collection_no
+		LEFT JOIN $TABLE{AUTHORITY_DATA} as a on a.taxon_no = ss.taxon_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr
@@ -1137,7 +1146,7 @@ sub list_specimens_associated {
     
     $request->substitute_select( mt => 'r', cd => 'r' );
     
-    # $request->delete_output_field('n_opinions');
+    $request->delete_output_field('_label');
     
     # First figure out if we just want occurrence/collection references, or if
     # we also want taxonomy references.
@@ -1214,11 +1223,11 @@ sub list_specimens_associated {
 	try {
 	    $sql = "
 		INSERT IGNORE INTO spec_list
-		SELECT ss.specimen_no, ss.occurrence_no, ss.taxon_no, ss.orig_no FROM $SPEC_MATRIX as ss
-			JOIN specimens as sp using (specimen_no)
-			JOIN $OCC_MATRIX as o using (occurrence_no)
-			JOIN $COLL_MATRIX as c using (collection_no)
-			LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
+		SELECT ss.specimen_no, ss.occurrence_no, ss.taxon_no, ss.orig_no FROM $TABLE{SPECIMEN_MATRIX} as ss
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+			JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+			JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+			LEFT JOIN $TABLE{AUTHORITY_DATA} as a on a.taxon_no = ss.taxon_no
 			$inner_join_list
 		WHERE $filter_string";
 	
@@ -1352,9 +1361,9 @@ sub list_specimens_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, NULL as occurrence_no, 
 			ss.specimen_no, null as collection_no
-		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
-			JOIN specimens as sp using (specimen_no)
-			LEFT JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+			LEFT JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -1368,9 +1377,9 @@ sub list_specimens_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, 'O' as ref_type, ss.taxon_no, o.occurrence_no, 
 			null as specimen_no, null as collection_no
-		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
-			JOIN specimens as sp using (specimen_no)
-			LEFT JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+			LEFT JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -1384,9 +1393,9 @@ sub list_specimens_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
 			null as occurrence_no, null as specimen_no, c.collection_no
-		FROM $SPEC_MATRIX as ss LEFT JOIN $OCC_MATRIX as o using (occurrence_no)
-			JOIN specimens as sp using (specimen_no)
-			LEFT JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+			LEFT JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -1490,6 +1499,8 @@ sub list_measurements {
     $request->strict_check;
     $request->extid_check;
     
+    $request->delete_output_field('_label');
+    
     # If a query limit has been specified, modify the query accordingly.
     
     my $limit = $request->sql_limit_clause(1);
@@ -1559,11 +1570,11 @@ sub list_measurements {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM measurements as ms JOIN $SPEC_MATRIX as ss using (specimen_no)
-		JOIN specimens as sp using (specimen_no)
-		LEFT JOIN $OCC_MATRIX as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
-		LEFT JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
-		LEFT JOIN authorities as a on a.taxon_no = ss.taxon_no
+	FROM $TABLE{MEASUREMENT_DATA} as ms JOIN $TABLE{SPECIMEN_MATRIX} as ss using (specimen_no)
+		JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
+		LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = ss.occurrence_no and o.reid_no = ss.reid_no
+		LEFT JOIN $TABLE{COLLECTION_MATRIX} as c on o.collection_no = c.collection_no
+		LEFT JOIN $TABLE{AUTHORITY_DATA} as a on a.taxon_no = ss.taxon_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr
@@ -1656,7 +1667,7 @@ sub list_measurements {
     
 #     $request->{main_sql} = "
 # 	SELECT $calc $fields
-# 	FROM $SPECELT_DATA as elt left join taxon_trees as t using (orig_no)
+# 	FROM $TABLE{SPECELT_DATA} as elt left join taxon_trees as t using (orig_no)
 # 	WHERE $filter_string $limit";
     
 #     print STDERR "$request->{main_sql}\n\n" if $request->debug;
@@ -1724,9 +1735,9 @@ sub generateJoinList {
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
-    $join_list .= "LEFT JOIN collections as cc on c.collection_no = cc.collection_no\n"
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as cc on c.collection_no = cc.collection_no\n"
 	if $tables->{cc};
-    $join_list .= "LEFT JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
+    $join_list .= "LEFT JOIN $TABLE{OCCURRENCE_DATA} as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
     $join_list .= "LEFT JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
@@ -1761,9 +1772,9 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN $INTERVAL_MAP as im on im.early_age = $mt.early_age and im.late_age = $mt.late_age and scale_no = 1\n"
 	if $tables->{im};
     
-    $join_list .= "LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no\n"
+    $join_list .= "LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no\n"
 	if $tables->{ei};
-    $join_list .= "LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no\n"
+    $join_list .= "LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no\n"
 	if $tables->{li};
     $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
 	if $tables->{ccmap};
@@ -1902,7 +1913,7 @@ sub list_elements {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $SPECELT_MAP as m join $SPECELT_DATA as e using (specelt_no)
+	FROM $TABLE{SPECELT_MAP} as m join $TABLE{SPECELT_DATA} as e using (specelt_no)
         WHERE $filter_string
 	GROUP BY specelt_no
 	ORDER BY $order_clause
@@ -2022,8 +2033,8 @@ sub process_element_record {
     
 #     return unless $request->{block_hash}{extids};
     
-#     $record->{spec_elt_no} = generate_identifier('ELS', $record->{spec_elt_no})
-# 	if defined $record->{spec_elt_no} && $record->{spec_elt_no} ne '';
+#     $record->{specelt_no} = generate_identifier('ELS', $record->{specelt_no})
+# 	if defined $record->{specelt_no} && $record->{specelt_no} ne '';
 
 #     $record->{orig_no} = generate_identifier('TXN', $record->{orig_no})
 # 	if defined $record->{orig_no} && $record->{orig_no} ne '';

@@ -14,7 +14,7 @@ use lib '..';
 package PB2::ResourceEntry;
 
 use TableDefs qw(%TABLE);
-use ResourceDefs; # qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
+# use ResourceDefs; # qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAGS);
 use ResourceEdit;
 
 use ExternalIdent qw(generate_identifier VALID_IDENTIFIER);
@@ -55,7 +55,7 @@ sub initialize {
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:eduresources:entry' =>
-	{ param => 'record_label', valid => ANY_VALUE },
+	{ param => '_label', valid => ANY_VALUE },
 	    "This parameter is only necessary in body records, and then only if",
 	    "more than one record is included in a given request. This allows",
 	    "you to associate any returned error messages with the records that",
@@ -142,12 +142,12 @@ sub initialize {
     
     ResourceEdit->configure($dbh, Dancer::config);
     
-    complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', $TABLE{RESOURCE_QUEUE});
-    complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', $TABLE{RESOURCE_QUEUE});
+    complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', 'RESOURCE_QUEUE');
+    complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', 'RESOURCE_QUEUE');
 }
 
 
-our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, 'record_label' => 1 );
+our (%IGNORE_PARAM) = ( 'allow' => 1, 'return' => 1, '_label' => 1 );
 
 
 sub update_resources {
@@ -164,7 +164,7 @@ sub update_resources {
     $allowances->{CREATE} = 1 if $arg && $arg eq 'add';
     
     my $main_params = $request->get_main_params($allowances);
-    my $perms = $request->require_authentication($TABLE{RESOURCE_QUEUE});
+    my $perms = $request->require_authentication('RESOURCE_QUEUE');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
@@ -180,14 +180,14 @@ sub update_resources {
     # handle this operation. ResourceEdit is a subclass of EditTransaction, specialized for this
     # table.
     
-    my $edt = ResourceEdit->new($request, $perms, $TABLE{RESOURCE_QUEUE}, $allowances);
+    my $edt = ResourceEdit->new($request, $perms, 'RESOURCE_QUEUE', $allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
     
     foreach my $r (@records)
     {
-	$edt->insert_update_record($TABLE{RESOURCE_QUEUE}, $r);
+	$edt->insert_update_record('RESOURCE_QUEUE', $r);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -260,9 +260,9 @@ sub list_updated_resources {
 	{
 	    my $keyval = $r->{eduresource_no};
 	    
-	    if ( $label_ref && $label_ref->{$keyval} )
+	    if ( $label_ref && $label_ref->{RESOURCE_QUEUE}{$keyval} )
 	    {
-		$r->{record_label} = $label_ref->{$keyval};
+		$r->{_label} = $label_ref->{RESOURCE_QUEUE}{$keyval};
 	    }
 	}
 	
@@ -293,15 +293,15 @@ sub delete_resources {
     
     # Determine our authentication info, and then create an EditTransaction object.
     
-    my $perms = $request->require_authentication($TABLE{RESOURCE_QUEUE});
+    my $perms = $request->require_authentication('RESOURCE_QUEUE');
     
-    my $edt = ResourceEdit->new($request, $perms, $TABLE{RESOURCE_QUEUE}, $allowances);
+    my $edt = ResourceEdit->new($request, $perms, 'RESOURCE_QUEUE', $allowances);
 
     # Then go through the records and handle each one in turn.
     
     foreach my $id (@id_list)
     {
-	$edt->delete_record($TABLE{RESOURCE_QUEUE}, $id);
+	$edt->delete_record('RESOURCE_QUEUE', $id);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database

@@ -22,8 +22,10 @@ use Carp qw(carp croak);
 use namespace::clean;
 
 
-our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record', delete => 'single',
-		        update_many => 'selector', delete_many => 'selector' );
+our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record',
+			update_many => 'selector', 
+			delete => 'single', delete_cleanup => 'selector',
+			delete_many => 'selector', bad => 'record', other => 'record' );
 
 
 # Create a new action record with the specified information.
@@ -52,58 +54,55 @@ sub new {
     
     # If the record has a primary key and a non-empty key attribute, store these in the action
     # record. This will be used to fetch information about the record, such as the authorization
-    # fields.
+    # fields. If the operation is 'delete' or 'other' then we accept a single key value in lieu of a
+    # hashref representing a record.
     
-    my ($key_column, $key_attr);
-    
-    if ( $key_column = get_table_property($table, 'PRIMARY_KEY') )
+    if ( my $key_column = get_table_property($table, 'PRIMARY_KEY') )
     {
 	$action->{keycol} = $key_column;
-    }
-    
-    if ( $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
-    {
-	if ( ref $record eq 'HASH' && defined $record->{$key_attr} && $record->{$key_attr} ne '' )
-	{
-	    $action->{keyval} = $record->{$key_attr};
-	}
-    }
-
-    elsif ( $key_attr = $key_column )
-    {
-	if ( ref $record eq 'HASH' )
-	{
-	    if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
-	    {
-		$action->{keyval} = $record->{$key_column};
-	    }
-	    
-	    else
-	    {
-		$key_attr =~ s/_no$/_id/;
-
-		if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
-		{
-		    $action->{keyval} = $record->{$key_attr};
-		}
-	    }
-	}
-    }
-    
-    # If the operation is 'delete' then we accept a key value in lieu of a hash ref. Otherwise, if
-    # we haven't found a key value under the usual attribute then check to see if one is found
-    # under the primary key column name.
-    
-    unless ( $action->{keyval} )
-    {
-	if ( $operation eq 'delete' && ref $record ne 'HASH' )
+	
+	# The 'delete' and 'other' operations can accept a single key value rather than a record hash.
+	
+	if ( ($operation eq 'delete' || $operation eq 'other' ) && ref $record ne 'HASH' )
 	{
 	    $action->{keyval} = $record;
 	}
 	
-	elsif ( ref $record eq 'HASH' && defined $record->{$key_column} && $record->{$key_column} ne '' )
+	# In all other cases, there will be no key value unless $record points to a hash.
+	
+	elsif ( ref $record eq 'HASH' )
 	{
-	    $action->{keyval} = $record->{$key_column};
+	    # First check to see if the record contains a value under the key column name.
+	    
+	    if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
+	    {
+		$action->{keyval} = $record->{$key_column};
+		$action->{keyrec} = $key_column;
+	    }
+
+	    # If not, check to see if the table has a 'PRIMARY_ATTR' property and if so whether
+	    # the record contains a value under that name.
+	    
+	    elsif ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
+	    {
+		if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
+		{
+		    $action->{keyval} = $record->{$key_attr};
+		    $action->{keyrec} = $key_attr;
+		}
+	    }
+
+	    # As a fallback, if the key column name ends in _no, change that to _id and check to
+	    # see if the record contains a value under that name.
+	    
+	    elsif ( $key_column =~ s/_no$/_id/ )
+	    {
+		if ( defined $record->{$key_column} && $record->{$key_column} ne '' )
+		{
+		    $action->{keyval} = $record->{$key_column};
+		    $action->{keyrec} = $key_column;
+		}
+	    }
 	}
     }
     
@@ -180,6 +179,12 @@ sub record_value {
 }
 
 
+sub old_record {
+    
+    return $_[0]{old_record};
+}
+
+
 sub has_field {
 
     return exists $_[0]{record}{$_[1]};
@@ -204,15 +209,93 @@ sub keyval {
 }
 
 
+sub keyrec {
+
+    return $_[0]{keyrec} // '';
+}
+
+
+sub keylist {
+
+    my ($action) = @_;
+    
+    if ( $action->is_multiple )
+    {
+	return $action->all_keys;
+    }
+    
+    elsif ( defined $action->{keyval} && $action->{keyval} ne '' )
+    {
+	return $action->{keyval};
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+sub keystring {
+
+    my ($action) = @_;
+
+    if ( $action->is_multiple )
+    {
+	return "'" . join("','", $action->all_keys) . "'";
+    }
+
+    elsif ( defined $action->{keyval} && $action->{keyval} ne '' )
+    {
+	return "'" . $action->{keyval} . "'";
+    }
+
+    else
+    {
+	return '';
+    }
+}
+
+
 sub column_list {
     
     return $_[0]{columns};
 }
 
 
+sub keyexpr {
+
+    return $_[0]{key_expr};
+}
+
+
+sub method {
+
+    return $_[0]{method};
+}
+
+
+sub linkcol {
+
+    return $_[0]{linkcol};
+}
+
+
+sub linkval {
+
+    return $_[0]{linkval};
+}
+
+
 sub value_list {
 
     return $_[0]{values};
+}
+
+
+sub label_sub {
+
+    return $_[0]{label_sub};
 }
 
 
@@ -283,6 +366,14 @@ sub _set_permission {
 }
 
 
+sub _set_keyexpr {
+
+    my ($action, $key_expr) = @_;
+
+    $action->{key_expr} = $key_expr;
+}
+
+
 sub _set_keyval {
 
     my ($action, $keyval) = @_;
@@ -292,11 +383,43 @@ sub _set_keyval {
 }
 
 
+sub _set_linkcol {
+
+    my ($action, $linkcol) = @_;
+
+    $action->{linkcol} = $linkcol;
+}
+
+
+sub _set_linkval {
+
+    my ($action, $linkval) = @_;
+
+    $action->{linkval} = $linkval;
+}
+
+
+sub _set_method {
+
+    my ($action, $method) = @_;
+
+    $action->{method} = $method;
+}
+
+
 sub _set_selector {
 
-    my ($action, $selector);
-
+    my ($action, $selector) = @_;
+    
     $action->{selector} = $selector;
+}
+
+
+sub _set_old_record {
+
+    my ($action, $old_record) = @_;
+
+    $action->{old_record} = $old_record;
 }
 
 
@@ -309,6 +432,14 @@ sub set_column_values {
     
     $action->{columns} = $cols;
     $action->{values} = $vals;
+}
+
+
+sub substitute_label {
+
+    my ($action, $col) = @_;
+    
+    $action->{label_sub}{$col} = 1;
 }
 
 
@@ -375,6 +506,22 @@ sub column_special {
 }
 
 
+sub ignore_column {
+    
+    my ($action, $col) = @_;
+
+    $action->{column_special}{$col} = 'ignore';
+}
+
+
+sub pass_column {
+
+    my ($action, $col) = @_;
+
+    $action->{column_special}{$col} = 'pass';
+}
+
+
 # get_special ( column_name )
 # 
 # Return the special column instruction for this column name, or the default if there are none.
@@ -405,13 +552,14 @@ sub get_attr {
 }
 
 
-# Finally, we can coalesce multiple actions into one. This method should not
-# be called except by EditTransaction.pm.
+# Finally, we can coalesce multiple actions into one. This method should not be called except by
+# EditTransaction.pm. The argument $label_keys should be a map from all record labels that have been
+# processed so far into the corresponding keys.
 
 sub _coalesce {
 
-    my ($action, @additional) = @_;
-
+    my ($action, $label_keys, @additional) = @_;
+    
     my $operation = $action->operation;
     
     if ( $operation eq 'delete' )
@@ -426,10 +574,21 @@ sub _coalesce {
 	{
 	    next unless $a && defined $a->{keyval} && $a->{keyval} ne '';
 	    
+	    if ( $label_keys && $a->{keyval} =~ /^@(.*)/ )
+	    {
+		my $label = $1;
+		
+		$a->{keyval} = $label_keys->{$label} if $label_keys->{$label};
+	    }
+	    
 	    push @{$action->{all_keys}}, $a->{keyval};
 	    push @{$action->{all_labels}}, $a->{label};
 	    push @{$action->{additional}}, $a;
 	}
+
+	# Now delete the old key expression. A new one will need to be generated if necessary.
+	
+	$action->{key_expr} = undef;
     }
 
     elsif ( $operation eq 'insert' )

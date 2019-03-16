@@ -3535,6 +3535,9 @@ sub generateMainFilters {
     
     foreach my $lith ( @lithology )
     {
+	# First parse out the exclusion symbol ^ and quote marks, and note whether they were
+	# present. Skip any value that is empty after this point.
+	
 	my $lith_exclude;
 	my $lith_quoted;
 	

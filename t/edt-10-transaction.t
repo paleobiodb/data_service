@@ -15,9 +15,9 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
-use TableDefs qw(get_table_property);
+use TableDefs qw(%TABLE get_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -36,7 +36,7 @@ subtest 'setup' => sub {
 
     ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
 
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 };
 
@@ -50,16 +50,16 @@ subtest 'execute' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then run through a transaction that creates two records. We need to execute this one first so
     # that we can find out the keys of the newly inserted records.
 
     $edt = $T->new_edt($perm_a);
     
-    $edt->insert_record($EDT_TEST, { string_req => 'execute test', signed_val => '3' });
-    $edt->insert_record($EDT_TEST, { string_req => 'update test', signed_val => '3' });
-    $edt->insert_record($EDT_TEST, { string_req => 'delete test' });
+    $edt->insert_record('EDT_TEST', { string_req => 'execute test', signed_val => '3' });
+    $edt->insert_record('EDT_TEST', { string_req => 'update test', signed_val => '3' });
+    $edt->insert_record('EDT_TEST', { string_req => 'delete test' });
 
     ok( $edt->execute, "transaction succeeded" ) || $T->diag_errors;
     
@@ -82,10 +82,10 @@ subtest 'execute' => sub {
     ok( ! $edt->{save_init_count}, "initialize_transaction has not yet run" );
     ok( ! $edt->{save_final_count}, "finalize_transaction has not yet run" );
     
-    ok( $edt->insert_record($EDT_TEST, { string_req => 'insert test' }), "insert succeeded" );
-    ok( $edt->replace_record($EDT_TEST, { $primary => $key1, string_req => 'execute updated' }), "replace succeeded" );
-    ok( $edt->update_record($EDT_TEST, { $primary => $key2, string_req => 'also updated' }), "update succeeded" );
-    ok( $edt->delete_record($EDT_TEST, $key3), "delete succeeded" );
+    ok( $edt->insert_record('EDT_TEST', { string_req => 'insert test' }), "insert succeeded" );
+    ok( $edt->replace_record('EDT_TEST', { $primary => $key1, string_req => 'execute updated' }), "replace succeeded" );
+    ok( $edt->update_record('EDT_TEST', { $primary => $key2, string_req => 'also updated' }), "update succeeded" );
+    ok( $edt->delete_record('EDT_TEST', $key3), "delete succeeded" );
     
     ok( ! $edt->inserted_keys, "insert not yet done" );
     ok( ! $edt->replaced_keys, "replace not yet done" );
@@ -125,17 +125,17 @@ subtest 'execute' => sub {
     is( @dkeys, 1, "deleted one key" ) && is( $dkeys[0], $key3, "deleted proper key" );
     
     my( $check1 ) = $edt->dbh->selectrow_array("
-	SELECT $primary FROM $EDT_TEST WHERE string_req='insert test'");
+	SELECT $primary FROM $TABLE{EDT_TEST} WHERE string_req='insert test'");
 
     is( $check1, $ikeys[0], "found inserted record" );
-    $T->ok_found_record($EDT_TEST, "string_req='execute updated'");
-    $T->ok_no_record($EDT_TEST, "string_req='execute test'");
-    $T->ok_found_record($EDT_TEST, "string_req='also updated'");
-    $T->ok_no_record($EDT_TEST, "string_req='update test'");
-    $T->ok_no_record($EDT_TEST, "string_req='delete test'");
+    $T->ok_found_record('EDT_TEST', "string_req='execute updated'");
+    $T->ok_no_record('EDT_TEST', "string_req='execute test'");
+    $T->ok_found_record('EDT_TEST', "string_req='also updated'");
+    $T->ok_no_record('EDT_TEST', "string_req='update test'");
+    $T->ok_no_record('EDT_TEST', "string_req='delete test'");
 
-    my ($r1) = $T->fetch_records_by_key($EDT_TEST, $key1);
-    my ($r2) = $T->fetch_records_by_key($EDT_TEST, $key2);
+    my ($r1) = $T->fetch_records_by_key('EDT_TEST', $key1);
+    my ($r2) = $T->fetch_records_by_key('EDT_TEST', $key2);
 
     # Now check that 'replace' and 'update' each do their proper thing.
     
@@ -148,7 +148,7 @@ subtest 'execute' => sub {
     # committed.
     
     eval {
-	$edt->insert_record($EDT_TEST, { string_req => 'good record' });
+	$edt->insert_record('EDT_TEST', { string_req => 'good record' });
     };
 
     like( $@, qr/committed/, "error message after commit" );
@@ -194,7 +194,7 @@ subtest 'immediate' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction in IMMEDIATE_MODE, which causes all operations to be executed immediately.
 
@@ -208,32 +208,32 @@ subtest 'immediate' => sub {
     is( $edt->{save_init_count}, 1, "initialize_transaction has run once" );
     ok( ! $edt->{save_final_count}, "finalize_transaction has not yet run" );
     
-    $edt->insert_record($EDT_TEST, { string_req => 'first record' });
+    $edt->insert_record('EDT_TEST', { string_req => 'first record' });
 
     # The following key will not be 1, because it is not the first record inserted.
     
-    my $key1 = $edt->insert_record($EDT_TEST, { string_req => 'insert immediate' });
+    my $key1 = $edt->insert_record('EDT_TEST', { string_req => 'insert immediate' });
     
     if ( cmp_ok( $key1, '>', 1, "insert_record returned a valid key" ) )
     {
-	my ($r1) = $T->fetch_records_by_key($EDT_TEST, $key1);
+	my ($r1) = $T->fetch_records_by_key('EDT_TEST', $key1);
 	$r1 && is( $r1->{string_req}, 'insert immediate', "found proper record" );
 	
-	$result = $edt->replace_record($EDT_TEST, { $primary => $key1, string_req => 'new value',
+	$result = $edt->replace_record('EDT_TEST', { $primary => $key1, string_req => 'new value',
 						    signed_val => '-8' });
 	
 	ok( $result eq '1' || $result eq '2', "replace_record returned 1 or 2 for success" ) ||
 	    diag("result was " . $result // 'undef');
 	
-	$result = $edt->update_record($EDT_TEST, { $primary => $key1, signed_val => '-7' });
+	$result = $edt->update_record('EDT_TEST', { $primary => $key1, signed_val => '-7' });
 	
 	is( $result, 1, "update_record returned 1 for success" ) || $T->diag_errors;
 
-	$result = $edt->delete_record($EDT_TEST, { $primary => $key1 });
+	$result = $edt->delete_record('EDT_TEST', { $primary => $key1 });
 
 	is( $result, 1, "delete_record returnd 1 for success" ) || $T->diag_errors;
 
-	$T->ok_no_record($EDT_TEST, "$primary=$key1", "record was deleted");
+	$T->ok_no_record('EDT_TEST', "$primary=$key1", "record was deleted");
     }
 
     is( $edt->transaction, 'active', "transaction status is still active" );
@@ -263,7 +263,7 @@ subtest 'start' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction, and check its initial conditions.
     
@@ -295,12 +295,12 @@ subtest 'start' => sub {
     
     # Try inserting a record.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'insert test' });
+    $edt->insert_record('EDT_TEST', { string_req => 'insert test' });
     
     # The record should not have been inserted yet, because we have started the transaction but
     # have not started execution of operations.
     
-    $T->ok_no_record($EDT_TEST, "string_req='insert test'");
+    $T->ok_no_record('EDT_TEST', "string_req='insert test'");
     
     ok( $edt->start_execution, "start_execution returns true" );
 
@@ -309,13 +309,13 @@ subtest 'start' => sub {
     
     # Now the inserted record should actually be in the table.
     
-    $T->ok_found_record($EDT_TEST, "string_req='insert test'");
+    $T->ok_found_record('EDT_TEST', "string_req='insert test'");
     
     # Insert another record, and check that it goes into the table as well.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'second insert' });
+    $edt->insert_record('EDT_TEST', { string_req => 'second insert' });
     
-    $T->ok_found_record($EDT_TEST, "string_req='second insert'");
+    $T->ok_found_record('EDT_TEST', "string_req='second insert'");
     
     # Check that calling start_execution again is harmless.
 
@@ -335,7 +335,7 @@ subtest 'start' => sub {
     ok( $edt->has_finished, "transaction has finished" );
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
     is( $edt->transaction, 'committed', "transaction has committed" );
-    $T->ok_found_record($EDT_TEST, "string_req='second insert'");
+    $T->ok_found_record('EDT_TEST', "string_req='second insert'");
     
     is( $edt->{save_init_count}, 1, "initialize_transaction ran once" );
     is( $edt->{save_final_count}, 1, "finalize_transaction ran once" );
@@ -351,7 +351,7 @@ subtest 'errors' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction, and generate an error on the second
     # insertion. This error will be there before the transaction even
@@ -359,9 +359,9 @@ subtest 'errors' => sub {
     
     $edt = $T->new_edt($perm_a);
     
-    ok( $edt->insert_record($EDT_TEST, { string_req => 'insert okay' }), "insert succeeded" );
-    ok( ! $edt->insert_record($EDT_TEST, { string_val => 'string_req is empty' }), "insert failed" );
-    ok( ! $edt->insert_record($EDT_TEST, { string_req => 'after error' }), "insert failed" );
+    ok( $edt->insert_record('EDT_TEST', { string_req => 'insert okay' }), "insert succeeded" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_val => 'string_req is empty' }), "insert failed" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_req => 'after error' }), "insert failed" );
     
     is( $edt->errors, 1, "one error was generated" );
     ok( ! $edt->has_started, "transaction has not started" );
@@ -390,15 +390,15 @@ subtest 'errors' => sub {
     is( $edt->record_count, 3, "received 3 records" );
     is( $edt->fail_count, 1, "one action failed" );
     is( $edt->action_count, 0, "no actions succeeded" );
-    $T->ok_no_record($EDT_TEST, "string_req='insert okay'");
+    $T->ok_no_record('EDT_TEST', "string_req='insert okay'");
     
     # Check that we can continue to do operations on a transaction that has failed. Records that
     # fail validation will be added to 'fail_count', but those that pass validation will not.
 
     eval {
-	ok( ! $edt->insert_record($EDT_TEST, { string_req => 'good record' }), "insert failed" );
+	ok( ! $edt->insert_record('EDT_TEST', { string_req => 'good record' }), "insert failed" );
 	is( $edt->fail_count, 1, "fail count was not incremented" );
-	ok( ! $edt->insert_record($EDT_TEST, { string_val => 'bad record!' }), "insert failed" );
+	ok( ! $edt->insert_record('EDT_TEST', { string_val => 'bad record!' }), "insert failed" );
 	is( $edt->fail_count, 2, "fail count was incremented" );
 	is( $edt->errors, 2, "two errors were generated" ) || $T->diag_errors($edt, 'any');
 	is( $edt->record_count, 5, "received 5 records in total" );
@@ -428,9 +428,9 @@ subtest 'errors' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    ok( $edt->insert_record($EDT_TEST, { string_req => 'insert okay' }), "insert succeeded" );
-    ok( ! $edt->insert_record($EDT_TEST, { string_val => 'string_req is empty' }), "insert failed" );
-    ok( ! $edt->insert_record($EDT_TEST, { string_req => 'after error' }), "insert failed" );
+    ok( $edt->insert_record('EDT_TEST', { string_req => 'insert okay' }), "insert succeeded" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_val => 'string_req is empty' }), "insert failed" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_req => 'after error' }), "insert failed" );
     
     is( $edt->transaction, 'active', "transaction is active" );
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
@@ -449,15 +449,15 @@ subtest 'errors' => sub {
     is( $edt->action_count, 1, "one action succeeded although transaction failed" );
     is( $edt->fail_count, 1, "one action failed" );
     is( $edt->skip_count, 1, "one action was skipped" );
-    $T->ok_no_record($EDT_TEST, "string_req='insert okay'");
+    $T->ok_no_record('EDT_TEST', "string_req='insert okay'");
     
     # Now we try again, but reverse the order of the final two inserts.
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    ok( $edt->insert_record($EDT_TEST, { string_req => 'insert okay' }), "insert succeeded" );
-    ok( ! $edt->insert_record($EDT_TEST, { string_req => 'after error' }), "insert failed though SQL succeeded" );
-    ok( ! $edt->insert_record($EDT_TEST, { string_val => 'string_req is empty' }), "insert failed" );
+    ok( $edt->insert_record('EDT_TEST', { string_req => 'insert okay' }), "insert succeeded" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_req => 'after error' }), "insert failed though SQL succeeded" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_val => 'string_req is empty' }), "insert failed" );
     
     is( $edt->transaction, 'active', "transaction is active" );
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
@@ -474,7 +474,7 @@ subtest 'errors' => sub {
     is( $edt->fail_count, 1, "one action failed" );
     is( $edt->skip_count, 0, "no actions were skipped" );
     is( $edt->{save_cleanup_count}, 1, "cleanup_transaction executed once" );
-    $T->ok_no_record($EDT_TEST, "string_req='insert okay'");
+    $T->ok_no_record('EDT_TEST', "string_req='insert okay'");
     
     # Check that we can call 'commit' and 'rollback' on this failed transaction. The first should
     # return false, the second true since the transaction was in fact rolled back.
@@ -502,14 +502,14 @@ subtest 'rollback' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction, and add some records.
     
     $edt = $T->new_edt($perm_a);
     
-    $edt->insert_record($EDT_TEST, { string_req => 'test a1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'test a2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test a2' });
 
     # Check the status, and then roll it back.
 
@@ -527,7 +527,7 @@ subtest 'rollback' => sub {
     
     # Check that the transaction really was rolled back.
     
-    $T->ok_no_record($EDT_TEST, "string_req in ('test a1', 'test a2')");
+    $T->ok_no_record('EDT_TEST', "string_req in ('test a1', 'test a2')");
     
     # Check that calling rollback a second time is okay, and that commit is
     # okay too. Both should return false.
@@ -544,15 +544,15 @@ subtest 'rollback' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'test b1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'test b2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test b1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test b2' });
 
     ok( $edt->is_active, "transaction is active" );
     ok( $edt->can_proceed, "transaction can proceed" );
 
     # Check that the records are in the table.
 
-    $T->ok_found_record($EDT_TEST, "string_req in ('test b1', 'test b2')");
+    $T->ok_found_record('EDT_TEST', "string_req in ('test b1', 'test b2')");
     
     # Then roll back the transaction.
     
@@ -567,14 +567,14 @@ subtest 'rollback' => sub {
 
     # Check that the transaction really was rolled back.
     
-    $T->ok_no_record($EDT_TEST, "string_req in ('test b1', 'test b2')");
+    $T->ok_no_record('EDT_TEST', "string_req in ('test b1', 'test b2')");
     
     # Now try the same thing after an error condition has been added.
 
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'test c1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'test c2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test c1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test c2' });
     $edt->add_condition(undef, 'E_EXECUTE', 'test error');
     
     ok( $edt->is_active, "transaction is active" );
@@ -582,7 +582,7 @@ subtest 'rollback' => sub {
     
     # Check that the records are in the table.
 
-    $T->ok_found_record($EDT_TEST, "string_req in ('test c1', 'test c2')");
+    $T->ok_found_record('EDT_TEST', "string_req in ('test c1', 'test c2')");
     
     # Then roll back the transaction.
     
@@ -597,7 +597,7 @@ subtest 'rollback' => sub {
     
     # Check that the transaction really was rolled back.
     
-    $T->ok_no_record($EDT_TEST, "string_req in ('test c1', 'test c2')");
+    $T->ok_no_record('EDT_TEST', "string_req in ('test c1', 'test c2')");
     
     # Check that calling rollback a second time is okay, and that commit is
     # okay too. Both should return false.
@@ -620,7 +620,7 @@ subtest 'abort_action' => sub {
     
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Then create a transaction, and add some records.
     
@@ -630,14 +630,14 @@ subtest 'abort_action' => sub {
 
     ok( ! $result, "early call to 'abort_action' failed" );
     
-    $edt->insert_record($EDT_TEST, { string_req => 'test a1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'test a2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test a2' });
     
     ok( $edt->can_proceed, "transaction can proceed" );
     
     # Now try adding an error, then abandoning the record.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'abandon a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abandon a1' });
     $edt->add_condition('E_TEST');
     $edt->add_condition('W_TEST');
     
@@ -652,8 +652,8 @@ subtest 'abort_action' => sub {
     
     ok( $result, "transaction succeeded" ) || $T->diag_errors;
     
-    $T->ok_found_record($EDT_TEST, "string_req='test a1'");
-    $T->ok_no_record($EDT_TEST, "string_req='abandon a1'");
+    $T->ok_found_record('EDT_TEST', "string_req='test a1'");
+    $T->ok_no_record('EDT_TEST', "string_req='abandon a1'");
     is( $edt->action_count, 2, "two actions succeeded" );
     is( $edt->fail_count, 0, "no actions failed" );
     $T->ok_no_warnings("warning from abandoned record was removed");
@@ -662,15 +662,15 @@ subtest 'abort_action' => sub {
 
     $edt = $T->new_edt($perm_a);
 
-    $edt->insert_record($EDT_TEST, { string_req => 'test b1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'before abandon' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test b1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'before abandon' });
 
     $result = $edt->execute;
     
     ok( $result, "transaction succeeded" ) || $T->diag_errors;
     
-    $T->ok_found_record($EDT_TEST, "string_req='test b1'");
-    $T->ok_no_record($EDT_TEST, "string_req='before abandon'");
+    $T->ok_found_record('EDT_TEST', "string_req='test b1'");
+    $T->ok_no_record('EDT_TEST', "string_req='before abandon'");
     is( $edt->action_count, 1, "one action succeeded" );
     is( $edt->fail_count, 1, "one action failed" );
 
@@ -678,8 +678,8 @@ subtest 'abort_action' => sub {
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'test c1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'test c2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test c1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test c2' });
 
     $result = $edt->abort_action;
 
@@ -688,16 +688,16 @@ subtest 'abort_action' => sub {
     $result = $edt->commit;
     
     ok( $result, "transaction succeeded" ) || $T->diag_errors;
-    $T->ok_found_record($EDT_TEST, "string_req='test c1'");
-    $T->ok_found_record($EDT_TEST, "string_req='test c2'");
+    $T->ok_found_record('EDT_TEST', "string_req='test c1'");
+    $T->ok_found_record('EDT_TEST', "string_req='test c2'");
 
     # And once again to test that errors added to an already executed record will not be removed
     # by 'abort_action'.
 
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
-    $edt->insert_record($EDT_TEST, { string_req => 'test d1' });
-    $edt->insert_record($EDT_TEST, { string_req => 'test d2' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test d1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'test d2' });
     $edt->add_condition('E_TEST');
     
     $result = $edt->abort_action;
@@ -707,8 +707,8 @@ subtest 'abort_action' => sub {
     $result = $edt->commit;
     
     ok( ! $result, "transaction failed" );
-    $T->ok_no_record($EDT_TEST, "string_req='test d1'");
-    $T->ok_no_record($EDT_TEST, "string_req='test d2'");
+    $T->ok_no_record('EDT_TEST', "string_req='test d1'");
+    $T->ok_no_record('EDT_TEST', "string_req='test d2'");
 };
 
 
@@ -718,7 +718,5 @@ subtest 'multiple tables' => sub {
     
     pass('placeholder');
 
-    # $$$
-    
-    
+    # This is actually tested in edt-30-insert.t.
 };

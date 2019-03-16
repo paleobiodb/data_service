@@ -23,7 +23,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TableDefs qw(%TABLE is_test_mode);
-use ResourceDefs; # qw($RESOURCE_ACTIVE $RESOURCE_QUEUE $RESOURCE_IMAGES $RESOURCE_TAG_NAMES $RESOURCE_TAGS);
+use ResourceDefs;
 
 use base 'EditTransaction';
 
@@ -44,30 +44,6 @@ our (%TAG_ID);
 
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
-
-# get_condition_template ( code, table, selector )
-#
-# Return the proper template for error and warning conditions defined by this subclass. If no
-# matching template can be found, we call the parent method. Other subclasses of EditTransaction
-# should do something similar.
-
-# sub get_condition_template {
-    
-#     my ($edt, $code, $table, $selector) = @_;
-    
-#     if ( ref $CONDITION_TEMPLATE{$code} eq 'HASH' )
-#     {
-# 	return $CONDITION_TEMPLATE{$code}{$selector} if $CONDITION_TEMPLATE{$code}{$selector};
-#     }
-    
-#     elsif ( $CONDITION_TEMPLATE{$code} )
-#     {
-# 	return $CONDITION_TEMPLATE{$code};
-#     }
-    
-#     return $edt->SUPER::get_condition_template($code, $table, $selector);
-# }
-
 
 # validate_action ( table, operation, action )
 # 
@@ -189,7 +165,7 @@ sub validate_action {
     
     # Then call the regular validation routine.
     
-    $edt->validate_against_schema($action, $operation, $table);
+    # $edt->validate_against_schema($action, $operation, $table);
 }
 
 
@@ -233,7 +209,7 @@ sub after_action {
     else
     {
 	my $dbh = $edt->dbh;
-	my $keylist = $edt->get_keylist($action);
+	my $keylist = $action->keylist($action);
 	
 	# First find and delete the image files, if any
 	
@@ -497,7 +473,7 @@ sub activate_resource {
 	# that the user has admin permission on $RESOURCE_QUEUE, so we record them as having admin
 	# permission for this action as well.
 	
-	my $activation_action = $edt->aux_action($TABLE{RESOURCE_ACTIVE}, 'replace', $r);
+	my $activation_action = $edt->aux_action('RESOURCE_ACTIVE', 'replace', $r);
 	
 	$activation_action->_set_permission('admin');
 	$edt->validate_against_schema($activation_action);

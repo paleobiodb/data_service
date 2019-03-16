@@ -17,7 +17,7 @@ use Test::More tests => 5;
 
 use TableDefs qw(get_table_property);
 
-use EditTest qw($EDT_TEST);
+use EditTest;
 use EditTester;
 
 
@@ -38,7 +38,7 @@ subtest 'setup' => sub {
     
     ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
     
-    $primary = get_table_property($EDT_TEST, 'PRIMARY_KEY');
+    $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 };
 
@@ -57,7 +57,7 @@ subtest 'basic' => sub {
     
     # Add an action, then retrieve a reference to it.
     
-    $edt->insert_record($EDT_TEST, { string_req => 'abc', record_label => 'a1' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc', _label => 'a1' });
     
     my $a1 = $edt->current_action;
     
@@ -70,7 +70,7 @@ subtest 'basic' => sub {
     
     if ( can_ok( $a1, 'table', 'operation', 'label' ) )
     {
-	is( $a1->table, $EDT_TEST, "check table" );
+	is( $a1->table, 'EDT_TEST', "check table" );
 	is( $a1->operation, 'insert', "check operation" );
 	is( $a1->label, 'a1', "check label" );
     }
@@ -81,9 +81,9 @@ subtest 'basic' => sub {
 	
 	is( ref $r1, 'HASH', "record returns a hash ref" ) &&
 	    is( $r1->{string_req}, 'abc', "record returns proper hash" );
-	is( $a1->record_value('record_label'), 'a1', "check record_value" );
+	is( $a1->record_value('_label'), 'a1', "check record_value" );
 	is( $a1->record_value('xxx'), undef, "check record_value with bad field" );
-	ok( $a1->has_field('record_label'), "check has_field" );
+	ok( $a1->has_field('_label'), "check has_field" );
 	ok( ! $a1->has_field('xxx'), "check has_field with bad field" );
     }
 
@@ -174,7 +174,7 @@ subtest 'attrs' => sub {
     
     my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 }) || return;
 
-    $edt->insert_record($EDT_TEST, { string_req => 'before set_attr' });
+    $edt->insert_record('EDT_TEST', { string_req => 'before set_attr' });
     
     is( $edt->{save_after_attr}, 'abc',
 	"attribute value preserved between before_action and after_action" );
@@ -190,7 +190,7 @@ subtest 'delete' => sub {
 
     # First try a delete action with a record.
     
-    $edt->delete_record($EDT_TEST, { $primary => 99999, string_req => 'abc' });
+    $edt->delete_record('EDT_TEST', { $primary => 99999, string_req => 'abc' });
     
     my $a1 = $edt->current_action;
     
@@ -202,7 +202,7 @@ subtest 'delete' => sub {
     
     # Then try a delete action with a record but no primary key.
     
-    $edt->delete_record($EDT_TEST, { string_req => 'abc', record_label => 'r1' });
+    $edt->delete_record('EDT_TEST', { string_req => 'abc', _label => 'r1' });
     
     my $a2 = $edt->current_action;
 
@@ -213,7 +213,7 @@ subtest 'delete' => sub {
     
     # Then try a delete action with a bare key value.
 
-    $edt->delete_record($EDT_TEST, 99998);
+    $edt->delete_record('EDT_TEST', 99998);
 
     my $a3 = $edt->current_action;
 
@@ -231,15 +231,15 @@ subtest 'multiple' => sub {
 
     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table($EDT_TEST);
+    $T->clear_table('EDT_TEST');
     
     # Add some records.
 
     my $edt = $T->new_edt($perm_a) || return;
 
-    $edt->insert_record($EDT_TEST, { string_req => 'abc' });
-    $edt->insert_record($EDT_TEST, { string_req => 'def' });
-    $edt->insert_record($EDT_TEST, { string_req => 'ghi' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc' });
+    $edt->insert_record('EDT_TEST', { string_req => 'def' });
+    $edt->insert_record('EDT_TEST', { string_req => 'ghi' });
 
     $edt->execute;
 
@@ -251,7 +251,7 @@ subtest 'multiple' => sub {
     
     foreach my $k (@keys)
     {
-	$edt->delete_record($EDT_TEST, $k);
+	$edt->delete_record('EDT_TEST', $k);
     }
     
     $edt->execute;

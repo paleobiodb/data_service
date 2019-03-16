@@ -250,7 +250,8 @@ sub initialize {
 	{ value => 'compendium' },
 	{ value => 'news article' },
 	{ value => 'Ph.D. thesis' },
-	{ value => 'M.S. thesis' });
+	{ value => 'M.S. thesis' },
+	{ value => 'museum collection' });
     
     $ds->define_ruleset('1.2:refs:display' =>
 	{ optional => 'show', valid => '1.2:refs:output_map', list => ',' },
@@ -307,6 +308,12 @@ sub initialize {
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references from publications whose title matches the specified",
 	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'title_re', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references where the specified regular expression matches either the",
+	    "reference title, the publication title, or the primary author last name. This", 
+	    "is particularly useful when searching for organization names. Note that this",
+	    "parameter will be processed as a regular expression rather than using the",
+	    "SQL wildcard syntax.",
 	{ param => 'pub_type', valid => '1.2:refs:pubtype', list => ',', bad_value => 'NOTHING' },
 	    "Select only references of the indicated type or types.  You can specify",
 	    "one or more from the following list, separated by commas:",
@@ -619,20 +626,16 @@ sub generate_ref_filters {
 	{
 	    die "400 invalid value '$year' for parameter 'ref_pubyr'\n";
 	}
-	
-	$tables_hash->{r} = 1;
     }
     
     if ( my $authorname = $request->clean_param('ref_author') )
     {
 	push @filters, $request->generate_auth_filter($authorname, 'author');
-	$tables_hash->{r} = 1;
     }
     
     if ( my $authorname = $request->clean_param('ref_primary') )
     {
 	push @filters, $request->generate_auth_filter($authorname, 'primary');
-	$tables_hash->{r} = 1;
     }
     
     if ( my $reftitle = $request->clean_param('ref_title') )
@@ -654,7 +657,6 @@ sub generate_ref_filters {
 	my $quoted = $dbh->quote("^$reftitle");
 	
 	push @filters, "coalesce(r.reftitle, r.pubtitle) $op $quoted";
-	$tables_hash->{r} = 1;
     }
     
     if ( my $pubtitle = $request->clean_param('pub_title') )
@@ -676,7 +678,15 @@ sub generate_ref_filters {
 	my $quoted = $dbh->quote("^$pubtitle");
 	
 	push @filters, "r.pubtitle $op $quoted";
-	$tables_hash->{r} = 1;
+    }
+
+    if ( my $title_re = $request->clean_param('title_re') )
+    {
+	my $op = 'rlike';
+	
+	my $quoted = $dbh->quote($title_re);
+
+	push @filters, "(r.reftitle $op $quoted or r.pubtitle $op $quoted or r.author1last $op $quoted)";
     }
     
     if ( my @doi_list = $request->clean_param_list('ref_doi') )
@@ -732,6 +742,11 @@ sub generate_ref_filters {
 	    my $quoted = join( ',', map { $dbh->quote($_) } @type_list );
 	    push @filters, "r.publication_type $op ($quoted)";
 	}
+    }
+    
+    if ( @filters )
+    {
+	$tables_hash->{r} = 1;
     }
     
     return @filters;

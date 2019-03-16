@@ -5,7 +5,7 @@
 
 <% PARAMETER_SECTION(opt_force=1) %>
 
-<% BODY_SECTION(opt_force=1) %>
+<% BODY_SECTION(opt_force=1,content="You may include one or more records in the body of the request, in JSON form. The body must be either a single JSON object, or an array of objects. The fields in each object must be as specified below, or else they must match the corresponding fields in the database table being modified.") %>
 
 <% METHOD_SECTION(opt_force=1) %>
 
