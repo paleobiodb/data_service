@@ -24,6 +24,8 @@ use Web::DataService;
 BEGIN {
 
     Web::DataService->VERSION(0.3);
+
+    my $test_mode;
     
     my $test_mode;
     

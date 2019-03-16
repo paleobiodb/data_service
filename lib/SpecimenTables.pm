@@ -334,17 +334,17 @@ sub establish_extra_specimen_tables {
     my ($spec_columns) = $dbh->selectall_arrayref("SHOW COLUMNS FROM $SPECIMENS", { Slice => { } });
     my (%spec_column);
     
-    my (@new_columns) = qw(instcoll_no inst_code coll_code spec_elt_no);
+    my (@new_columns) = qw(specelt_no);
     
     my (%new_column) = ( instcoll_no => 'int unsigned not null',
 			 inst_code => 'varchar(20) not null',
 			 coll_code => 'varchar(20) not null',
-			 spec_elt_no => 'int unsigned not null' );
+			 specelt_no => 'int unsigned not null' );
     
     my (%new_after) = ( instcoll_no => 'specimen_coverage',
 			inst_code => 'instcoll_no',
 			coll_code => 'inst_code',
-			spec_elt_no => 'specimen_id' );
+			specelt_no => 'specimen_id' );
     
     if ( ref $spec_columns eq 'ARRAY' )
     {
@@ -382,7 +382,7 @@ sub establish_extra_specimen_tables {
 # occurrence_no
 # inst_code
 # coll_code
-# spec_elt_no
+# specelt_no
     
 }
 
@@ -415,332 +415,6 @@ sub establish_spec_element_tables {
 		KEY (neotoma_element_id),
 		KEY (neotoma_element_type_id))");
     
-# <<<<<<< HEAD
-#     $dbh->do("DROP TABLE IF EXISTS $SPECELT_EXCLUSIONS_WORK");
-    
-#     $dbh->do("CREATE TABLE $SPECELT_EXCLUSIONS_WORK (
-# 		specelt_no int unsigned not null,
-# 		taxon_name varchar(80) not null,
-# 		KEY (specelt_no))");
-    
-#     # $dbh->do("DROP TABLE IF EXISTS $SPECELT_MAP_WORK");
-    
-#     # $dbh->do("CREATE TABLE $SPECELT_MAP_WORK (
-#     # 		specelt_no int unsigned not null,
-#     # 		base_no int unsigned not null,
-#     # 		exclude boolean,
-#     # 		lft int unsigned not null,
-#     # 		rgt int unsigned not null,
-#     # 		KEY (lft, rgt))");
-    
-#     activateTables($dbh, $SPECELT_WORK => $SPECELT_DATA,
-# 			 # $SPECELT_MAP_WORK => $SPECELT_MAP,
-# 			 $SPECELT_EXCLUSIONS_WORK => $SPECELT_EXC);
-# }
-
-
-# our (%COLUMN_MAP) = (Taxon => 'taxon_name',
-# 		     ExcludeTaxa => 'exclude_names',
-# 		     SpecimenElement => 'element_name',
-# 		     ParentElement => 'parent_name',
-# 		     HasNumber => 'has_number',
-# 		     Inactive => 'inactive',
-# 		     NeotomaElementID => 'neotoma_element_id',
-# 		     NeotomaElementTypeID => 'neotoma_element_type_id',
-# 		     Comments => 'comments');
-
-# our (%TAXON_FIX) = (Eukarya => 'Eukaryota');
-
-# sub load_specelt_tables {
-
-#     my ($dbh, $filename, $options) = @_;
-    
-#     $options ||= { };
-    
-#     my ($sql, $insert_line, $result);
-    
-#     my $csv = Text::CSV_XS->new();
-#     my ($fh, $count, $header, @rows, %column, %taxon_no_cache);
-    
-#     if ( $filename eq '-' )
-#     {
-# 	open $fh, "<&STDIN" or die "cannot read standard input: $!";
-#     }
-    
-#     else
-#     {
-# 	open $fh, "<", $filename or die "cannot read '$filename': $!";
-#     }
-    
-#     while ( my $row = $csv->getline($fh) )
-#     {
-# 	unless ( $header )
-# 	{
-# 	    $header = $row;
-# 	}
-	
-# 	else
-# 	{
-# 	    push @rows, $row;
-# 	    $count++;
-# 	}
-#     }
-    
-#     logMessage(2, "    read $count lines from '$filename'");
-    
-#     foreach my $i ( 0..$#$header )
-#     {
-# 	my $load_col = $COLUMN_MAP{$header->[$i]};
-# 	$column{$load_col} = $i if $load_col;
-#     }
-    
-#     my $inserter = "
-# 	INSERT INTO $SPECELT_DATA (element_name, parent_name, taxon_name,
-# 		has_number, neotoma_element_id, neotoma_element_type_id, comments)
-# 	VALUES (";
-    
-#     my @columns = qw(inactive exclude_names element_name parent_name taxon_name has_number
-# 		     neotoma_element_id neotoma_element_type_id comments);
-    
-#     foreach my $k (@columns)
-#     {
-# 	croak "could not find column for '$k' in input"
-# 	    unless defined $column{$k};
-#     }
-    
-#     my $rowcount = 0;
-    
-#   ROW:
-#     foreach my $r ( @rows )
-#     {
-# 	$rowcount++;
-	
-# 	# my $taxon_name = $r->[$column{taxon_name}];
-# 	# my $base_no;
-	
-# 	# unless ( $taxon_name )
-# 	# {
-# 	#     logMessage(2, "    WARNING: no taxon name for row $rowcount");
-# 	#     next ROW;
-# 	# }
-	
-# 	# if ( $TAXON_FIX{$taxon_name} )
-# 	# {
-# 	#     $taxon_name = $TAXON_FIX{$taxon_name};
-# 	# }
-	
-# 	# unless ( $base_no = $taxon_no_cache{$taxon_name} )
-# 	# {
-# 	#     next ROW if defined $base_no && $base_no == 0;
-	    
-# 	#     my $quoted_name = $dbh->quote($taxon_name);
-# 	#     ($base_no) = $dbh->selectrow_array("
-# 	# 	SELECT accepted_no FROM $TREE_TABLE WHERE name = $quoted_name");
-	    
-# 	#     $taxon_no_cache{$taxon_name} = $base_no || 0;
-	    
-# 	#     unless ( $base_no )
-# 	#     {
-# 	# 	logMessage(2, "    WARNING: could not find taxon name '$taxon_name'");
-# 	# 	next ROW;
-# 	#     }
-# 	# }
-	
-# 	my @values;
-# 	my @exclude_names;
-	
-# 	foreach my $k (@columns)
-# 	{
-# 	    my $v = $r->[$column{$k}];
-	    
-# 	    # if ( $k eq 'taxon_name' )
-# 	    # {
-# 	    # 	push @values, $dbh->quote($base_no);
-# 	    # 	next;
-# 	    # }
-	    
-# 	    if ( $k eq 'inactive' )
-# 	    {
-# 		next ROW if $v;
-# 	    }
-	    
-# 	    elsif ( $k eq 'taxon_name' )
-# 	    {
-# 		$v = $TAXON_FIX{$v} if $TAXON_FIX{$v};
-
-# 		unless ( $v )
-# 		{
-# 		    logMessage(2, "    WARNING: no taxon name for row $rowcount");
-# 		    next ROW;
-# 		}
-		
-# 		push @values, $dbh->quote($v);
-# 	    }
-	    
-# 	    elsif ( $k eq 'exclude_names' )
-# 	    {
-# 		@exclude_names = split(/\s*[,;]\s*/, $v) if $v;
-# 	    }
-	    
-# 	    elsif ( defined $v )
-# 	    {
-# 		push @values, $dbh->quote($v);
-# 	    }
-	    
-# 	    else
-# 	    {
-# 		if ( $k eq 'element_name' )
-# 		{
-# 		    logMessage(2, "    WARNING: empty element name in row $rowcount");
-# 		    next ROW;
-# 		}
-		
-# 		push @values, 'NULL';
-# 	    }
-# 	}
-	
-# 	$sql = $inserter . join(',', @values) . ")";
-	
-# 	print STDERR "$sql\n\n" if $options->{debug};
-	
-# 	$result = $dbh->do($sql);
-	
-# 	unless ( $result )
-# 	{
-# 	    my $errstr = $dbh->errstr;
-# 	    logMessage(2, "    ERROR inserting row $rowcount: $errstr");
-# 	}
-	
-# 	my $id = $dbh->last_insert_id(undef, undef, undef, undef);
-	
-# 	if ( $id && @exclude_names )
-# 	{
-# 	    $sql = "INSERT INTO $SPECELT_EXC (specelt_no, taxon_name) VALUES ";
-	    
-# 	    my @excludes;
-	    
-# 	    foreach my $n (@exclude_names)
-# 	    {
-# 		push @excludes, "($id," . $dbh->quote($n) . ")";
-# 	    }
-	    
-# 	    $sql .= join(',', @excludes);
-	    
-# 	    print STDERR "$sql\n\n" if $options->{debug};
-	    
-# 	    $result = $dbh->do($sql);
-	    
-# 	    unless ( $result )
-# 	    {
-# 		my $errstr = $dbh->errstr;
-# 		logMessage(2, "    ERROR inserting excludes for row $rowcount: $errstr");
-# 	    }
-# 	}
-#     }
-    
-#     my ($count1) = $dbh->selectrow_array("SELECT count(*) FROM $SPECELT_DATA");
-#     my ($count2) = $dbh->selectrow_array("SELECT count(*) FROM $SPECELT_EXC");
-    
-#     logMessage(2, "    inserted $count1 elements, $count2 exclusions");
-# =======
-#     # $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS");
-    
-#     # $dbh->do("CREATE TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS (
-#     # 		spec_elt_no int unsigned not null,
-#     # 		taxon_no int unsigned not null,
-#     # 		KEY (spec_elt_no)");
-    
-#     # $dbh->do("DROP TABLE IF EXISTS $ELT_MAP_WORK");
-    
-#     # $dbh->do("CREATE TABLE $ELT_MAP_WORK (
-#     # 		spec_elt_no int unsigned not null,
-#     # 		lft int unsigned not null,
-#     # 		rgt int unsigned not null,
-#     # 		KEY (lft, rgt))");
-    
-#     # Then activate the new tables.
-    
-#     activateTables($dbh, $SPEC_ELTS_WORK => $SPEC_ELEMENTS);
-# }
-
-
-# my %TAXON_CACHE;
-# my %FIELD_MAP;
-
-# # load_spec_element_tables
-# # 
-# # 
-
-# sub load_spec_element_tables {
-
-#     my ($dbh, $new_contents, $options) = @_;
-    
-#     my ($sql, $result, $header);
-    
-#     $options ||= { };
-    
-#     # First grab and parse the header line
-    
-#     if ( ref $new_contents eq 'ARRAY' )
-#     {
-# 	$header = shift @$new_contents;
-# 	chomp $header;
-#     }
-    
-#     elsif ( ref $new_contents eq 'GLOB' )
-#     {
-# 	$header = <$new_contents>;
-# 	chomp $header;
-#     }
-    
-#     else
-#     {
-# 	croak "new contents must be an array ref or file handle\n";
-#     }
-    
-#     my @fields = split /\s*,\s*/, $header;
-#     %FIELD_MAP = ( );
-    
-#     foreach my $i ( 0 .. $#fields )
-#     {
-# 	$FIELD_MAP{$fields[$i]} = $i;
-#     }
-    
-#     # Delete existing contents of the specimen elements table and the map table.
-    
-#     $result = $dbh->do("TRUNCATE TABLE $SPEC_ELEMENTS");
-#     # $result = $dbh->do("TRUNCATE TABLE $SPEC_ELT_MAP");
-    
-#     # Then go through the lines one by one and add the contents to these tables.
-    
-#     if ( ref $new_contents eq 'ARRAY' )
-#     {
-# 	foreach my $line ( @$new_contents )
-# 	{
-# 	    chomp $line;
-# 	    next unless defined $line && $line ne '';
-	    
-# 	    add_element_line($dbh, $line, $options);
-# 	}
-#     }
-    
-#     elsif ( ref $new_contents eq 'GLOB' )
-#     {
-# 	my $line;
-	
-# 	logMessage(2, "    Reading data from standard input...");
-	
-# 	while ( defined( $line = <$new_contents> ) )
-# 	{
-# 	    chomp $line;
-# 	    next if $line eq '';
-	    
-# 	    add_element_line($dbh, $line, $options);
-# 	}
-	
-# 	logMessage(2, "    done.");
-#     }
-# >>>>>>> editing
 }
 
 
@@ -797,18 +471,6 @@ sub add_element_line {
 	next;
     }
     
-    # If we know the taxon number, also insert a record into the element map.
-    
-    # if ( $orig_no )
-    # {
-    # 	$sql = "	INSERT INTO $SPEC_ELT_MAP (spec_elt_no, lft, rgt)
-    # 		VALUES ($insert_id, $lft, $rgt)";
-	
-    # 	print STDERR "$sql\n\n" if $options->{debug};
-	
-    # 	$result = $dbh->do($sql);
-    # }
-    
     return $result;
 }
 
@@ -846,47 +508,5 @@ sub lookup_taxon {
     
     return @{$TAXON_CACHE{$taxon_name}};
 }
-
-
-# # init_specimen_element_tables ( dbh )
-# # 
-# # Create the tables for specimen elements.
-
-# sub init_specimen_element_tables {
-    
-#     my ($dbh) = @_;
-    
-#     my ($sql, $result);
-    
-#     $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_WORK");
-    
-#     $dbh->do("CREATE TABLE $SPEC_ELT_WORK (
-# 		spec_elt_no int unsigned PRIMARY KEY,
-# 		element_name varchar(80) not null,
-# 		parent_elt_no int unsigned not null,
-# 		base_no int unsigned not null,
-# 		neotoma_element_id int unsigned not null,
-# 		neotoma_element_type_id int unsigned not null,
-# 		KEY (element_name),
-# 		KEY (neotoma_element_id),
-# 		KEY (neotoma_element_type_id))");
-    
-#     $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK");
-    
-#     $dbh->do("CREATE TABLE IF EXISTS $SPEC_ELT_EXCLUSIONS_WORK (
-# 		spec_elt_no int unsigned not null,
-# 		taxon_no int unsigned not null,
-# 		KEY (spec_elt_no)");
-    
-#     $dbh->do("DROP TABLE IF EXISTS $SPEC_ELT_MAP_WORK");
-    
-#     $dbh->do("CREATE TABLE $SPEC_ELT_MAP_WORK (
-# 		spec_elt_no int unsigned not null,
-# 		lft int unsigned not null,
-# 		rgt int unsigned not null,
-# 		KEY (lft, rgt))");
-    
-    
-# }
 
 1;

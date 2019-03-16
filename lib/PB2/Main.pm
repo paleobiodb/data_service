@@ -575,7 +575,8 @@ use PB2::MainEntry;
 			place => 5,
 			title => 'Measurements of specimens',
 			method => 'list_measurements',
-			output => '1.2:measure:basic'},
+			output => '1.2:measure:basic',
+		        optional_output => '1.2:measure:output_map' },
 	"This operation returns information about the measurements associated with selected",
 	"specimens.");
     
@@ -1121,6 +1122,12 @@ use PB2::MainEntry;
 	"The data service accepts taxonomic names using several different parameters,",
 	"and there are modifiers that you can add in order to precisely specify",
 	"which taxa you are interested in.");
+    
+    $ds2->define_node({ path => 'general/ecotaph',
+			title => 'Ecological and taphonomic vocabulary',
+			place => 1 },
+	"The ecology of organisms and the taphonomy of their fossil remains are described",
+	"by several different data fields with an associated vocabulary.");
     
     $ds2->define_node({ path => 'general/datetime',
 		      title => 'Specifying dates and times',

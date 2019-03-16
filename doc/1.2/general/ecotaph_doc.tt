@@ -1,0 +1,470 @@
+
+=for wds_node title=Ecology and taphonomy vocabulary
+
+=head2 DESCRIPTION
+
+This page describes the vocabulary and interface relating to ecological and taphonomic information
+in this database.
+
+=head2 PARAMETERS
+
+The ecology and taphonomy information for a given taxon or occurrence is returned in the following
+output blocks, which you can select using the common parameter B<C<show>>. These are available
+when returning both occurrence records and taxa records.
+
+=over
+
+=item ecospace
+
+Returns a set of fields describing the ecospace occupied by the organism.
+
+=item ttaph
+
+Returns a set of fields describing the taphonomy of the organism.
+
+=item etbasis
+
+Returns a set of fields describing the base taxon for which the ecospace and taphonomy
+information for this organism was specified. This information is automatically propagated down
+the taxonomic tree, so that subtaxa inherit information from their parents.
+
+=back
+
+=head2 VOCABULARY
+
+This section includes a list of fields and the vocabulary used by each one. In there are multiple
+values, they will be separated by commas.
+
+=head3 Ecospace
+
+=for wds_table_header Field name*/2 | Block | Description
+
+=over
+
+=item pbdb / com
+
+=item taxon_environment / jev ( ecospace )
+
+The general environment or environments in which this life form is found. Values include:
+
+=over
+
+=item lagoonal
+
+=item coastal
+
+=item inner shelf
+
+=item outer shelf
+
+=item oceanic
+
+=item oligotrophic
+
+=item mesotrophic
+
+=item eutrophic
+
+=item hypersaline
+
+=item marine
+
+=item brackish
+
+=item freshwater
+
+=item terrestrial
+
+=back
+
+=item motility / jmo ( ecospace )
+
+Whether the organism is motile, attached and/or epibiont, and its mode of locomotion if any. This
+field combines the values from the database columns B<C<locomotion>>, B<C<attached>>,
+B<C<epibiont>>. Values include:
+
+=over
+
+=item stationary
+
+=item facultatively mobile
+
+=item passively mobile
+
+=item actively mobile
+
+=item fast-moving
+
+=item slow-moving
+
+=item attached
+
+=item epibiont
+
+=back
+
+=item life_habit / jlh ( ecospace )
+
+The general life mode and locality of this organism. This field combines the values from the
+database columns B<C<life_habit>>, B<C<grouping>>, B<C<clonal>>, B<C<polymorph>>, B<C<depth_habitat>>.
+Values include:
+
+=over
+
+=item boring
+
+=item infaunal
+
+=item shallow infaunal
+
+=item deep infaunal
+
+=item semi-infaunal
+
+=item epifaunal
+
+=item low-level epifaunal
+
+=item intermediate-level epifaunal
+
+=item upper-level epifaunal
+
+=item nektobenthic
+
+=item nektonic
+
+=item planktonic
+
+=item fossorial
+
+=item semifossorial
+
+=item ground dwelling
+
+=item cursorial
+
+=item saltatorial
+
+=item scansorial
+
+=item arboreal
+
+=item gliding
+
+=item volant
+
+=item amphibious
+
+=item herbaceous
+
+=item arborescent
+
+=item aquatic
+
+=item colonial
+
+=item gregarious
+
+=item solitary
+
+=item clonal
+
+=item polymorph
+
+=item depth=surface
+
+=item depth=thermocline
+
+=item depth=subthermocline
+
+=item depth=deep
+
+=back
+
+=item vision / jvs ( ecospace )
+
+The degree of vision possessed by this organism. Values include:
+
+=over
+
+=item blind
+
+=item limited
+
+=item well-developed
+
+=back
+
+=item diet / jdt ( ecospace )
+
+The general diet or feeding mode of this organism. This field combines the values of the 
+database columns B<C<diet1>> and B<C<diet2>>. Values include:
+
+=over
+
+=item chemoautotroph
+
+=item "photoautotroph"
+
+=item C3 autotroph
+
+=item C4 autotroph
+
+=item CAM autotroph
+
+=item chemosymbiotic
+
+=item photosymbiotic
+
+=item herbivore
+
+=item frugivore
+
+=item folivore
+
+=item browser
+
+=item grazer
+
+=item granivore
+
+=item omnivore
+
+=item insectivore
+
+=item carnivore
+
+=item microcarnivore
+
+=item piscivore
+
+=item durophage
+
+=item parasite
+
+=item suspension feeder
+
+=item osmotroph
+
+=item deposit feeder
+
+=item detritivore
+
+=item saprophage
+
+=item coprophage
+
+=back
+
+=item reproduction / jre ( ecospace )
+
+The mode of reproduction of this organism. This field combines the values of the database columns 
+B<C<reproduction>>, B<C<asexual>>, B<C<brooding>>, B<C<dispersal1>>, B<C<dispersal2>>. Values include:
+
+=over
+
+=item oviparous
+
+=item ovoviviparous
+
+=item viviparous
+
+=item alternating
+
+=item homosporous
+
+=item heterosporous
+
+=item seeds
+
+=item fruits
+
+=item asexual
+
+=item brooding
+
+=item direct/internal
+
+=item water
+
+=item wind
+
+=item animal
+
+=back
+
+=item ontogeny / jon ( ecospace )
+
+Briefly describes the ontogeny of this organism. Values include:
+
+=over
+
+=item accretion
+
+=item molting
+
+=item addition of parts
+
+=item modification of parts
+
+=item replacement of parts
+
+=back
+
+=back
+
+=head3 Taphonomy
+
+=for wds_table_header Field name*/2 | Block | Description
+
+=over
+
+=item pbdb / com
+
+=item composition / jco ( ttaph )
+
+The composition of the skeletal parts of this organism. This field combines the values
+of the database columns B<C<composition1>>, B<C<composition2>>. Values include:
+
+=over
+
+=item aragonite
+
+=item "calcite"
+
+=item high Mg calcite
+
+=item intermediate Mg calcite
+
+=item low Mg calcite
+
+=item hydroxyapatite
+
+=item phosphatic
+
+=item calcified cartilage
+
+=item silica
+
+=item agglutinated
+
+=item chitin
+
+=item lignin
+
+=item "sclero-protein"
+
+=item cutan/cutin
+
+=item other
+
+=item no hard parts
+
+=back
+
+=item architecture / jsa ( ttaph )
+
+An indication of the internal skeletal architecture. Values include:
+
+=over
+
+=item porous
+
+=item compact or dense
+
+=back
+
+=item thickness / jth ( ttaph )
+
+An indication of the relative thickness of the skeleton. Values include:
+
+=over
+
+=item thin
+
+=item intermediate
+
+=item thick
+
+=back
+
+=item reinforcement / jsr ( ttaph )
+
+An indication of the skeletal reinforcement, if any. This field combines the values
+of the database fields B<C<folds>>, B<C<ribbing>>, B<C<spines>>, B<C<internal_reinforcement>>.
+Values include:
+
+=over
+
+=item none
+
+=item minor folds
+
+=item major folds
+
+=item minor ribbing
+
+=item major ribbing
+
+=item minor spines
+
+=item major spines
+
+=item minor internal reinforcement
+
+=item major internal reinforcement
+
+=back
+
+=back
+
+=head3 Basis
+
+The fields listed in this section document which taxon each part of the ecospace and taphanomic
+information is associated with. It may be either the taxon that was directly queried, or it may
+be one of its supertaxa. In general, this information is carried down the taxonomic hierarchy unless
+overridden for specific subtaxa.
+
+=for wds_table_header Field name*/2 | Block | Description
+
+=over
+
+=item pbdb / com
+
+=item environment_basis / jec ( ecospace )
+
+This field reports the basis taxon for B<C<taxon_environment>>.
+
+=item motility_basis / jmc ( etbasis )
+
+This field reports the basis taxon for B<C<motility>>.
+
+=item life_habit_basis / jhc ( etbasis )
+
+This field reports the basis taxon for B<C<life_habit>>.
+
+=item vision_basis / jvc ( etbasis )
+
+This field reports the basis taxon for B<C<vision_basis>>.
+
+=item diet_basis / jdc ( etbasis )
+
+This field reports the basis taxon for B<C<diet>>.
+
+=item reproduction_basis / jrc ( etbasis )
+
+This field reports the basis taxon for B<C<reproduction>>.
+
+=item ontogeny_basis / joc ( etbasis )
+
+This field reports the basis taxon for B<C<ontogeny>>.
+
+=item taphonomy_basis / jtc ( etbasis )
+
+This field reports the basis taxon for the fields B<C<composition>>,
+B<C<architecture>>, B<C<thickness>>, B<C<reinforcement>>. If these come
+from different basis taxa, the one that is lowest (closest to the taxon
+being queried) is reported.
+
+=back
+

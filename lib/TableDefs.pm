@@ -192,6 +192,7 @@ our $AUTHORITIES = "authorities";
 our $OPINIONS = "opinions";
 our $REFERENCES = "refs";
 our $OCCURRENCES = "occurrences";
+our $SPECIMENS = "specimens";
 our $REIDS = "reidentifications";
 our $SPECIMENS = "specimens";
 our $MEASUREMENTS = "measurements";

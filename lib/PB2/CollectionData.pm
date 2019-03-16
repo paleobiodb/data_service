@@ -33,7 +33,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
 our (%ETVALUE, %EZVALUE);
-our (%LITH_VALUE, %LITHTYPE_VALUE);
+our (%LITH_VALUE, %LITH_QUOTED, %LITHTYPE_VALUE);
 
 
 # initialize ( )
@@ -1006,6 +1006,17 @@ sub initialize {
 	    "=item ATA,AU", "Select occurrences from Antarctica and Australia",
 	    "=item NOA,SOA,^AR,^BO", "Select occurrences from North and South America, but not Argentina or Bolivia",
 	    "=item !EUR,^IS", "Exclude occurrences from Europe, except those from Iceland", "=back",
+	{ param => 'state', valid => ANY_VALUE, list => ',', bad_value => '_' },
+	    "Return only records from collections that are indicated as falling within the specified",
+	    "state or province. This information is not recorded for all collections, and has not",
+	    "been checked for accuracy. Given that state names are sometimes duplicated between",
+	    "countries, it is recommended to also specify the country using the B<C<cc>> parameter.",
+	{ param => 'county', valid => ANY_VALUE, list => ',', bad_value => '_' },
+	    "Return only records from collections that are indicated as falling within the specified",
+	    "county or other sub-state administrative division. This information is not recorded",
+	    "for all collections, and has not been checked for accuracy. Given that county names are",
+	    "often duplicated between states and countries, it is recommended that you also specify",
+	    "the state using the B<C<state>> parameter and the country using the B<C<cc>> parameter.",
 	{ param => 'continent', valid => \&valid_continent, list => qr{[\s,]+}, bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified continent or continents.",
 	    "The value of this parameter should be a comma-separated list of ",
@@ -1336,10 +1347,21 @@ sub initialize {
     {
 	foreach my $record ( @$PB2::ConfigData::LITHOLOGIES )
 	{
-	    $LITH_VALUE{$record->{lithology}} = 1;
-	    $LITHTYPE_VALUE{$record->{lith_type}} = 1;
+	    my $lithology = $record->{lithology};
+	    my $lith_type = $record->{lith_type};
+	    
+	    if ( $lithology =~ /^"/ )
+	    {
+		$lithology =~ s/"//g;
+		$LITH_QUOTED{$lithology} = 1;
+	    }
+	    
+	    $LITH_VALUE{$lithology} = 1;
+	    $LITHTYPE_VALUE{$lith_type} = 1;
 	}
     }
+
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -1541,7 +1563,7 @@ sub summary {
     my $tables = $request->tables_hash;
     
     # Figure out which bin level we are being asked for.  The default is 1.    a
-
+    
     my $bin_level = $request->clean_param('level') || 1;
     
     # Construct a list of filter expressions that must be added to the query
@@ -1580,14 +1602,14 @@ sub summary {
     
     $request->adjustCoordinates(\$fields);
     
-    if ( $tables->{tf} )
-    {
-	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
-	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
-	$tables->{c} = 1;
-    }
+    # if ( $tables->{tf} )
+    # {
+    # 	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
+    # 	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
+    # 	$tables->{c} = 1;
+    # }
     
-    elsif ( $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} )
+    if ( $tables->{cc} || $tables->{t} || $tables->{tf} || $tables->{o} || $tables->{oc} )
     {
 	$tables->{c} = 1;
     }
@@ -1603,7 +1625,7 @@ sub summary {
 	{
 	    $fields =~ s{ im[.]cx_int_no}{s.early_age, s.late_age}xs;
 	}
-
+	
 	delete $tables->{im};
     }
     
@@ -1611,6 +1633,12 @@ sub summary {
     {
 	$fields =~ s{ \bs.n_colls\b }{count(distinct o.collection_no) as n_colls}xs;
 	$fields =~ s{ \bs.n_occs\b }{count(distinct o.occurrence_no) as n_occs}xs;
+    }
+
+    elsif ( $tables->{c} )
+    {
+	$fields =~ s{ \bs.n_colls\b }{count(distinct c.collection_no) as n_colls}xs;
+	$fields =~ s{ \bs.n_occs\b }{sum(c.n_occs) as n_occs}xs;
     }
     
     if ( $request->has_block('bin') )
@@ -1663,6 +1691,11 @@ sub summary {
     push @filters, "s.bin_level = $bin_level and s.bin_id > 0";
     
     my $filter_string = join(' and ', @filters);
+    
+    unless ( $filter_string =~ qr{ \bs.interval_no \s* = }xs )
+    {
+	$filter_string .= ' and s.interval_no = 0';
+    }
     
     # If we want the containing interval numbers, we have to specify this as
     # an inner and an outer query.
@@ -3240,20 +3273,76 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    # if ( my @continents = $request->clean_param_list('continent') )
-    # {
-    # 	if ( $continents[0] eq '_' )
-    # 	{
-    # 	    push @filters, "c.collection_no = 0";
-    # 	}
-    # 	else
-    # 	{
-    # 	    my $cont_list = "'" . join("','", @continents) . "'";
-    # 	    push @filters, "ccmap.continent in ($cont_list)";
-    # 	    $tables_ref->{ccmap} = 1;
-    # 	}
-    # 	$tables_ref->{non_summary} = 1;
-    # }
+    # Check for parameter 'state'
+    
+    my @states = $request->clean_param_list('state');
+    
+    if ( @states )
+    {
+	my $invert;
+	
+	# Look for an ! flag at the beginning, signalling that the user wants to invert this
+	# filter.
+	
+	if ( $states[0] =~ qr{ ^ ! (.*) }xs )
+	{
+	    $states[0] = $1;
+	    $invert = 1;
+	}
+
+	# Construct a quoted list using the parameter values, and add warnings for each value that
+	# does not appear in the database.
+
+	my $state_list = $request->verify_coll_param($dbh, 'state', \@states, 'state');
+	
+	if ( $invert )
+	{
+	    push @filters, "cc.state not in ($state_list)";
+	}
+	
+	else
+	{
+	    push @filters, "cc.state in ($state_list)";
+	}
+	
+	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
+    }
+    
+    # Check for parameter 'county'
+    
+    my @counties = $request->clean_param_list('county');
+    
+    if ( @counties )
+    {
+	my $invert;
+	
+	# Look for an ! flag at the beginning, signalling that the user wants to invert this
+	# filter.
+	
+	if ( $counties[0] =~ qr{ ^ ! (.*) }xs )
+	{
+	    $counties[0] = $1;
+	    $invert = 1;
+	}
+
+	# Construct a quoted list using the parameter values.
+	
+	my $county_list = $request->verify_coll_param($dbh, 'county', \@counties, 'county');
+	
+	if ( $invert )
+	{
+	    push @filters, "cc.county not in ($county_list)";
+	}
+	
+	else
+	{
+	    push @filters, "cc.county in ($county_list)";
+	}
+	
+	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
+    }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
     
@@ -3322,7 +3411,7 @@ sub generateMainFilters {
     # If only latitude bounds were specified then create a bounding box
     # with longitude ranging from -180 to 180.
     
-    elsif ( $y1 ne '' || $y2 ne '' && ! ( $y1 == -90 && $y2 == 90 ) )
+    elsif ( ($y1 ne '' || $y2 ne '') && ! ( $y1 == -90 && $y2 == 90 ) )
     {
 	# If one of the bounds was not specified, set it to -90 or 90.
 	
@@ -3447,11 +3536,18 @@ sub generateMainFilters {
     foreach my $lith ( @lithology )
     {
 	my $lith_exclude;
+	my $lith_quoted;
 	
 	if ( $lith =~ qr{ ^ \^ \s* (.*) }xs )
 	{
 	    $lith = $1;
 	    $lith_exclude = 1;
+	}
+	
+	if ( $lith =~ qr{ ^ " (.*) " $ }xs )
+	{
+	    $lith = $1;
+	    $lith_quoted = 1;
 	}
 	
 	next unless $lith;
@@ -3463,7 +3559,7 @@ sub generateMainFilters {
 	    $lith_unknown = $lith_exclude ? 'exclude' : 'include';
 	}
 	
-	elsif ( $LITHTYPE_VALUE{$lith} )
+	elsif ( $LITHTYPE_VALUE{$lith} && ! $lith_quoted )
 	{
 	    if ( $lith_exclude )
 	    {
@@ -3497,8 +3593,8 @@ sub generateMainFilters {
     }
     
     my $type_string = join(q{','}, keys %lt_values);
-    my $lith_string = join(q{','}, keys %lith_values);
-    my $exlith_string = join(q{','}, keys %exlith_values);
+    my $lith_string = join(q{','}, map { $LITH_QUOTED{$_} ? "\"$_\"" : $_ } keys %lith_values);
+    my $exlith_string = join(q{','}, map { $LITH_QUOTED{$_} ? "\"$_\"" : $_ } keys %exlith_values);
     
     if ( $type_string || $lith_string || $exlith_string || $lith_unknown )
     {
@@ -3855,149 +3951,64 @@ sub generateMainFilters {
     {
 	push @filters, $request->generate_stratname_filter('cs', \@strata);
 	$tables_ref->{cs} = 1;
+	$tables_ref->{c} = 1;
 	$tables_ref->{non_summary} = 1;
     }
     
-    # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
-    # If no time rule was given, it defaults to 'buffer'.
+    # Now we need to figure out if the 'c' table is needed.
+
+    if ( $tables_ref->{o} || $tables_ref->{t} || $tables_ref->{tf} || $tables_ref->{v} )
+    {
+	$tables_ref->{o} = 1;
+	$tables_ref->{c} = 1;
+    }
+
+    elsif ( $tables_ref->{cc} )
+    {
+	$tables_ref->{c} = 1;
+    }
+    
+    # Check for interval parameters. If no time rule is specified, it defaults to 'major'.
     
     my $time_rule = $request->clean_param('timerule') || 'major';
-    # my $summary_interval = 0;
-    # my ($early_age, $late_age, $early_bound, $late_bound);
-    # my $interval_no = $request->clean_param('interval_id') + 0;
-    # my $interval_name = $request->clean_param('interval');
-    # my $earlybuffer = $request->clean_param('earlybuffer');
-    # my $latebuffer = $request->clean_param('latebuffer');
-    
-    # Check for interval parameters.
     
     my ($early_age, $late_age, $early_interval_no, $late_interval_no) = $request->process_interval_params;
     
-    my $early_bound = $early_age;
-    my $late_bound = $late_age;
-    my $buffer;
-    
-    if ( $early_age )
+    # If this is a summary or prevalence operation and no interval bounds were given at all, then
+    # we can just query on interval_no = 0 in the summary bin table.
+
+    if ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
+	 ( $time_rule eq 'major' ) &&
+	 ( ! $tables_ref->{c} ) && 
+	 ( ! $early_interval_no && ! $early_age && ! $late_age ) )
     {
-	$buffer = $early_age > 66 ? 12 : 5;
-	$early_bound = $early_age + $buffer;
-	$late_bound = $late_age || 0;
-	$late_bound -= $buffer;
-	$late_bound = 0 if $late_bound < 0;
+	push @filters, "s.interval_no = 0";
     }
     
-    my $summary_interval = 0;
+    # If this is a summary or prevalence operation using the 'major' time rule and covering a
+    # single interval, then we can just query on the appropriate interval_no.
     
-    # If the requestor wants to override the time bounds, do that.
-    
-    if ( my $earlybuffer = $request->clean_param('timebuffer') )
+    elsif ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
+	    ( $time_rule eq 'major' ) &&
+	    ( ! $tables_ref->{c} ) && 
+	    ( $early_interval_no && ( ! $late_interval_no || $early_interval_no == $late_interval_no ) ) )
     {
-	if ( defined $early_age )
-	{
-	    $early_bound = $early_age + $earlybuffer;
-	}
-	
-	if ( defined $late_age && $late_age > 0 )
-	{
-	    $late_bound = $late_age - $earlybuffer;
-	    $late_bound = 0 if $late_bound < 0;
-	}
+	push @filters, "s.interval_no = $early_interval_no";
     }
     
-    if ( my $latebuffer = $request->clean_param('latebuffer') )
+    # Otherwise, if age bounds were given we need to join to the collection table and filter on
+    # actual collection ages.
+    
+    elsif ( $early_age || $late_age )
     {
-	if ( defined $late_age && $late_age > 0 )
-	{
-	    $late_bound = $late_age - $latebuffer;
-	    $late_bound = 0 if $late_bound < 0;
-	}
-    }
-    
-    # If $late_bound is less than zero, correct it to zero.
-    
-    $late_bound = 0 if defined $late_bound && $late_bound < 0;
-    
-    # If we are querying for summary clusters, and only one interval was
-    # specified, we can use the cluster table row corresponding to that
-    # interval number.  But only if timerule is the default value of 'buffer'.
-    # Otherwise, we need the unrestricted cluster table row (the one for
-    # interval_no = 0) plus additional filters.
-    
-    if ($op eq 'summary' || $op eq 'prevalence')
-    {
-	if ( $time_rule eq 'major' && $early_interval_no && $late_interval_no && 
-	     $early_interval_no == $late_interval_no)
-	{
-	    push @filters, "s.interval_no = $summary_interval";
-	}
-	
-	else
-	{
-	    push @filters, "s.interval_no = 0";
-	}
-    }
-    
-    # Otherwise, if a range of years was specified, use that.
-    
-    # else
-    # {
-    # 	my $max_ma = $request->clean_param('max_ma');
-    # 	my $min_ma = $request->clean_param('min_ma');
-	
-    # 	if ( $max_ma && $min_ma )
-    # 	{
-    # 	    my $range = $max_ma - $min_ma;
-    # 	    my $buffer = $range * 0.5;
-	    
-    # 	    $early_age = $max_ma + 0;
-    # 	    $early_bound = defined $earlybuffer ? 
-    # 		$early_age + $earlybuffer :
-    # 		    $early_age + $buffer;
-	
-    # 	    $late_age = $max_ma + 0;
-    # 	    $late_bound = defined $latebuffer ?
-    # 		$late_age - $latebuffer :
-    # 		    $late_age - $buffer;
-	
-    # 	    $late_bound = 0 if $late_bound < 0;
-    # 	}
-	
-    # 	# Otherwise, handle either a min or max filter alone.
-	
-    # 	elsif ( $max_ma )
-    # 	{
-    # 	    $early_age = $max_ma + 0;
-    # 	    $early_bound = $early_age;
-    # 	}
-	
-    # 	if ( $max_ma )
-    # 	{
-    # 	    $late_age = $min_ma + 0;
-    # 	    $late_bound = $late_age;
-    # 	}
-    # }
-    
-    # Then, if a time filter was specified and we need one, apply it.  If we
-    # are were given a summary interval and no non-geographic filters were
-    # specified, then we don't need one because the necessary filtering has
-    # already been done by selecting the appropriate interval_no in the summary table.
-    
-    if ( $early_age || $late_age )
-    {
-	# if ( $op eq 'summary' || $op eq 'prevalence' )
-	# {
-	#     push @filters, "s.interval_no = 0";
-	# }
-	
-	# unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'major') or
-	#          $tables_ref->{ds} or $op eq 'prevalence' )
-	# {
-	
 	$tables_ref->{c} = 1;
+	$tables_ref->{non_summary} = 1;
+	
+	$request->{early_age} = $early_age;
+	$request->{late_age} = $late_age;
 
-	# The exact filter we use will depend upon the time rule that was
-	# selected.
-
+	push @filters, "s.interval_no = 0" if $op eq 'summary' || $op eq 'prevalence';
+	
 	if ( $time_rule eq 'contain' )
 	{
 	    if ( defined $late_age and $late_age > 0 )
@@ -4036,6 +4047,34 @@ sub generateMainFilters {
 
 	else # $time_rule eq 'buffer'
 	{
+	    my $early_buffer = $request->clean_param('timebuffer');
+	    my $late_buffer = $request->clean_param('latebuffer');
+	    
+	    my ($early_bound, $late_bound);
+	    
+	    if ( $early_age )
+	    {
+		unless ( $early_buffer )
+		{
+		    $early_buffer = $early_age > 66 ? 12 : 5;
+		}
+
+		$early_bound = $early_age + $early_buffer;
+	    }
+
+	    if ( $late_age )
+	    {
+		$late_buffer ||= $early_buffer;
+		
+		unless ( $late_buffer )
+		{
+		    $late_buffer = $late_age > 66 ? 12 : 5;
+		}
+
+		$late_bound = $late_age - $late_buffer;
+		$late_bound = 0 if $late_bound < 0;
+	    }
+	    
 	    if ( defined $late_age and defined $early_age and 
 		 defined $late_bound and defined $early_bound )
 	    {
@@ -4058,21 +4097,74 @@ sub generateMainFilters {
 		}
 	    }
 	}
-	
-	$request->{early_age} = $early_age;
-	$request->{late_age} = $late_age;
-	$tables_ref->{non_summary} = 1;
-    }
-    
-    elsif ( $op eq 'summary' )
-    {
-	push @filters, "s.interval_no = 0";
     }
     
     # Return the list
     
     return @filters;
 }
+
+
+sub verify_coll_param {
+
+    my ($request, $dbh, $api_field, $values_ref, $db_field) = @_;
+    
+    $db_field ||= $api_field;
+    
+    # Construct a list of quoted values.
+    
+    my $value_list = '';
+    my $sep = '';
+    
+    foreach my $v ( @$values_ref )
+    {
+	$value_list .= $sep;
+	$value_list .= $dbh->quote($v);
+	$sep = ',';
+    }
+    
+    # Now verify that these values actually appear in the database, and add warnings for
+    # those which do not.
+    
+    my $sql = "
+	SELECT distinct $db_field FROM collections
+	WHERE $db_field in ($value_list)";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result = $dbh->selectcol_arrayref($sql);
+    
+    my %verified;
+    my @bad;
+    
+    if ( ref $result eq 'ARRAY' )
+    {
+	%verified = map { lc $_ => 1 } @$result;
+    }
+    
+    foreach my $v ( @$values_ref )
+    {
+	push @bad, $v unless $verified{lc $v};
+    }
+
+    if ( @bad )
+    {
+	my $bad_list = join("', '", @bad);
+
+	if ( @bad == 1 )
+	{
+	    $request->add_warning("Field '$api_field': the value '$bad_list' was not found in the database");
+	}
+
+	else
+	{
+	    $request->add_warning("Field '$api_field': the values '$bad_list' were not found in the database");
+	}
+    }
+    
+    return $value_list;
+}
+	
 
 
 # adjustCoordinates ( fields_ref )

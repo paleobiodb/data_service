@@ -830,6 +830,8 @@ sub buildTaxonTables {
     
     logMessage(1, "done building tree tables for '$tree_table'");
     
+    $dbh->do("REPLACE INTO last_build (name) values ('taxa')");
+    
     my $a = 1;		# we can stop here when debugging
 }
 
@@ -5090,7 +5092,8 @@ sub computeEcotaphTable {
 			ADD COLUMN diet varchar(255) null after diet2,
 			ADD COLUMN skeletal_reinforcement varchar(255) null after internal_reinforcement,
 			ADD COLUMN motility varchar(255) null after epibiont,
-			ADD COLUMN repro_new varchar(255) null after reproduction");
+			ADD COLUMN repro_new varchar(255) null after reproduction,
+			ADD COLUMN life_habit_new varchar(255) null after life_habit");
     
     $result = $dbh->do("UPDATE $ECOTAPH_WORK SET
 			composition =
@@ -5147,6 +5150,14 @@ sub computeEcotaphTable {
     $result = $dbh->do("UPDATE $ECOTAPH_WORK
 			SET ontogeny = NULL WHERE ontogeny = ''");
     
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET life_habit_new = concat_ws(', ',
+				life_habit,
+				if(grouping is not null, grouping, null),
+				if(clonal is not null, 'clonal', null),
+				if(polymorph is not null, 'polymorph', null),
+				if(depth_habitat is not null, concat('depth=',depth_habitat), null))");
+    
     $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
 			DROP COLUMN reinforcement,
 			DROP COLUMN folds,
@@ -5160,7 +5171,13 @@ sub computeEcotaphTable {
 			DROP COLUMN asexual,
 			DROP COLUMN brooding,
 			DROP COLUMN dispersal1,
-			DROP COLUMN dispersal2");
+			DROP COLUMN dispersal2,
+			CHANGE COLUMN life_habit life_habit_old varchar(80) null,
+			CHANGE COLUMN life_habit_new life_habit varchar(255) null,
+			DROP COLUMN grouping,
+			DROP COLUMN clonal,
+			DROP COLUMN polymorph,
+			DROP COLUMN depth_habitat");
     
     # Then fill in null entries for all other senior synonyms
     

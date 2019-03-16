@@ -46,9 +46,10 @@ sub initialize {
     $ds->define_output_map('1.2:occs:basic_map' =>
 	{ value => 'full', maps_to => '1.2:occs:full_info' },
 	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: B<attr>, B<class>, B<plant>, B<ecospace>, B<otaph>,",
-	    "B<abund>, B<coll>, B<coords>, B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
-	    "B<geo>, B<methods>, B<refattr>.  If we subsequently add new data fields to this record",
+	    "includes the following blocks: B<attr>, B<class>, B<plant>, B<abund>, B<coords>, B<coll>",
+	    "B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
+	    "B<geo>, B<comps>, B<methods>, B<ctaph>, B<ecospace>, B<ttaph>, B<refattr>.",
+	    "If we subsequently add new data fields to this record",
 	    "then B<full> will include those as well.  So if you are publishing a URL,",
 	    "it might be a good idea to include C<show=full>.",
 	{ value => 'acconly' },
@@ -75,7 +76,9 @@ sub initialize {
 	    "Show the individual components of the taxonomic identification of the occurrence.",
 	    "These values correspond to the value of F<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
-	{ value => 'img', maps_to => '1.2:taxa:img' },
+        { value => 'rem', maps_to => '1.2:occs:rem' },
+	    "Any additional remarks that were entered about the occurrence.",
+ 	{ value => 'img', maps_to => '1.2:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
 	    "These images are sourced from L<phylopic.org>.",
 	{ value => 'plant', maps_to => '1.2:occs:plant' },
@@ -86,11 +89,11 @@ sub initialize {
 	{ value => 'ecospace', maps_to => '1.2:taxa:ecospace' },
 	    "Information about ecological space that this organism occupies or occupied.",
 	    "This has only been filled in for a relatively few taxa.  Here is a",
-	    "L<list of values|node:taxa/ecotaph_values>.",
+	    "L<list of values|node:general/ecotaph#Ecospace>.",
 	{ value => 'ttaph', maps_to => '1.2:taxa:taphonomy' },
 	    "Information about the taphonomy of this organism.  You can also use",
 	    "the alias C<B<taphonomy>>.  Here is a",
-	    "L<list of values|node:taxa/ecotaph_values>.",
+	    "L<list of values|node:general/ecotaph#Taphonomy>.",
 	{ value => 'taphonomy', maps_to => '1.2:taxa:taphonomy', undocumented => 1 },
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block F<ecospace>, indicating at which",
@@ -143,9 +146,7 @@ sub initialize {
 	{ value => 'comps', maps_to => '1.2:colls:components' },
 	    "Information about the various kinds of body parts and other things",
 	    "found as part of the associated collection.",
-        { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
-	    "Any additional remarks that were entered about the containing collection.",
-        { value => 'ref', maps_to => '1.2:refs:primary' },
+	{ value => 'ref', maps_to => '1.2:refs:primary' },
 	    "The reference from which the occurrence was entered, as formatted text.",
 	    "If no reference is recorded for this occurrence, the primary reference for its",
 	    "associated collection is returned.",
@@ -350,12 +351,18 @@ sub initialize {
 	{ output => 'abund_unit', com_name => 'abu' },
 	    "The unit in which this abundance is expressed");
     
+    $ds->define_block('1.2:occs:rem' =>
+	{ select => ['oc.comments'], tables => ['oc'] },
+	{ output => 'comments', pbdb_name => 'occurrence_comments', com_name => 'ocm' },
+	    "Additional comments about this occurrence, if any.");
+    
     $ds->define_block( '1.2:occs:full_info' =>
 	{ include => '1.2:occs:attr' },
 	{ include => '1.2:occs:class' },
 	{ include => '1.2:occs:plant' },
 	{ include => '1.2:occs:abund' },
 	{ include => '1.2:occs:coords' },
+	{ include => '1.2:occs:rem' },
 	{ include => '1.2:colls:name' },
 	{ include => '1.2:colls:loc' },
 	{ include => '1.2:colls:paleoloc' },
@@ -2411,6 +2418,7 @@ sub list_occs_associated {
     # Get a database handle by which we can make queries.
     
     my $dbh = $request->get_connection;
+    my $tables = $request->tables_hash;
     
     $request->substitute_select( mt => 'r', cd => 'r' );
     
@@ -2438,7 +2446,9 @@ sub list_occs_associated {
     my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'ignore' } );
+    push @filters, $request->generate_ref_filters($tables);
+    push @filters, $request->generate_refno_filter('o');
+    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'r' } );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     # Figure out what information we need to determine access permissions.  We
@@ -2709,6 +2719,8 @@ sub list_occs_strata {
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_common_filters( { occs => 'o' } );
+    push @filters, $request->generate_ref_filters($inner_tables);
+    push @filters, $request->generate_refno_filter('o');
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o');
     push @filters, $request->generateOccFilters($inner_tables, 'o');
