@@ -2352,7 +2352,7 @@ sub generate_taxa_list {
     # genera, add those genera to the list.  This would include occurrences
     # identified to the species or subgenus level.
     
-    $sql = "INSERT IGNORE ckP1INTO taxa_list
+    $sql = "INSERT IGNORE INTO taxa_list
 		SELECT t.spelling_no, t.orig_no, count(*)
 		FROM $occs_table as list JOIN $lower_table as pl using (orig_no)
 			JOIN $tree_table as t on t.orig_no = pl.genus_no
