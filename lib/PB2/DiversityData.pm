@@ -13,7 +13,7 @@ use lib '..';
 
 package PB2::DiversityData;
 
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING %UNS_NAME);
 use TableDefs qw($INTERVAL_MAP);
 use Taxonomy;
 use ExternalIdent qw(extract_num);
@@ -537,13 +537,13 @@ sub generate_diversity_table {
 
 my (%taxon_node, %uns_counter, %lower_taxon_nos, $container_was_set);
 
-my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
-		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
-		 17 => 'NO_CLASS_SPECIFIED', 20 => 'NO_PHYLUM_SPECIFIED',
-		 23 => 'NO_KINGDOM_SPECIFIED', 0 => 'NO_TAXON_SPECIFIED' );
+# my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
+# 		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
+# 		 17 => 'NO_CLASS_SPECIFIED', 20 => 'NO_PHYLUM_SPECIFIED',
+# 		 23 => 'NO_KINGDOM_SPECIFIED', 0 => 'NO_TAXON_SPECIFIED' );
 
-my %uns_prefix = ( 3 => 'US', 5 => 'UG', 9 => 'UF', 13 => 'UO', 17 => 'UC',
-		   20 => 'UP', 23 => 'NK', 0 => 'UU' );
+my %uns_prefix = ( 3 => 'NS', 5 => 'NG', 9 => 'NF', 13 => 'NO', 17 => 'NC',
+		   20 => 'NP', 23 => 'NK', 0 => 'NT' );
 
 sub generate_taxon_table_ints {
 
@@ -1562,7 +1562,7 @@ sub add_result_records {
     
     unless ( $node->{orig_no} )
     {
-	$node->{taxon_name} = $uns_name{$rank || 0};
+	$node->{taxon_name} = $UNS_NAME{$rank || 0};
 	#unless $node->{taxon_name} && $node->{taxon_name} ne '~';
 	$node->{orig_no} = $taxon_no;
     }

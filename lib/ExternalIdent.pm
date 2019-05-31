@@ -78,7 +78,7 @@ foreach my $key ( keys %IDP )
     $key_expr .= $IDP{$key};
 }
 
-$IDRE{UNKTXN} = qr{ ^ (?: (?: $IDP{URN} )? txn [:] )? ( U [A-Z] \d* ) $ }xsi;
+$IDRE{UNKTXN} = qr{ ^ (?: (?: $IDP{URN} )? txn [:] )? ( [UN] [A-Z] \d* ) $ }xsi;
 
 $IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? ( $key_expr ) [:] )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
 $IDVALID{ANY} = sub { return valid_identifier(shift, shift, 'ANY') };
@@ -111,6 +111,7 @@ sub valid_identifier {
     {
 	my $idtype = 'txn';
 	my $idnum = $1;
+	$idnum =~ s/^U/N/;
 
 	return { value => PBDB::ExtIdent->new($idtype, $idnum) };
     }
@@ -220,7 +221,7 @@ sub generate_identifier {
 	return '';
     }
     
-    elsif ( defined $value && $value =~ qr{ ^ U[A-Z] \d* $ }xs )
+    elsif ( defined $value && $value =~ qr{ ^ [UN][A-Z] \d* $ }xs )
     {
 	return "$IDP{$type}:$value";
     }
