@@ -232,7 +232,7 @@ sub update_specimens {
     
     my $dbh = $request->get_connection;
     
-    my %allowances;
+    my %allowances = ( UNKNOWN_TAXON => 1 );
     
     # If we are adding new records, as opposed to only updating existing ones, then we allow
     # record creation.
