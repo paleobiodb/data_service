@@ -231,8 +231,10 @@ subtest 'match_name basic' => sub {
     # First try a generic abbreviation, both lowercase and uppercase, and with
     # and without whitespace.
     
-    my @r1 = $T->fetch_records("/taxa/list.json?match_name=$WC_1a&show=class", "generic abbreviation lowercase");
-    my @r2 = $T->fetch_records("/taxa/list.json?match_name=$WC_1b&show=class", "generic abbreviation uppercase whitspace");
+    my @r1 = $T->fetch_records("/taxa/list.json?match_name=$WC_1a&show=class&order=name",
+			       "generic abbreviation lowercase");
+    my @r2 = $T->fetch_records("/taxa/list.json?match_name=$WC_1b&show=class&order=name",
+			       "generic abbreviation uppercase whitspace");
     
     unless ( @r1 )
     {
@@ -1124,7 +1126,7 @@ subtest 'base_id and exclude_id' => sub {
     my $TEST_NAME_3c = 'Felis catus';
     my $TEST_NAME_3d = 'Dinofelis palaeoonca';
     
-    my $TEST_TXN_3 = 'txn:41045';
+    my $TEST_TXN_3 = 'txn:41045';	# Felidae
     my $TEST_TXN_3b = 'txn:65494';
     my $TEST_TXN_3c = 'txn:104159';
     my $TEST_TXN_3d = 'txn:49736';
@@ -1159,57 +1161,108 @@ subtest 'base_id and exclude_id' => sub {
     cmp_ok( keys %base1, '==', 2, "base_id multiple found 2 'B' flags" );
     ok( $base1{$TEST_NAME_1a} && $base1{$TEST_NAME_1b} , "base_id multiple found proper 'B' flags" );
     
-    # Now check the 'exclude_id' parameter.
+    # Now check the 'exclude_id' parameter. We fetch some taxa, and find two subtrees of rank 6,7,
+    # or 8 (subtribe, tribe, subfamily) that each include more than one species. We then check
+    # that all of the names contained in these trees are actually excluded.
     
-    my (%all) = $T->fetch_record_values("/taxa/list.json?base_id=$TEST_TXN_3", 'nam', "no exclusion");
+    my (@all) = $T->fetch_records("/taxa/list.json?base_id=$TEST_TXN_3&show=subcounts", "list all taxa in subtree");
     
-    my (%allbut) = $T->fetch_record_values("/taxa/list.json?base_id=$TEST_TXN_3&exclude_id=" .
-					   "$TEST_TXN_3b , $TEST_TXN_3c", 'nam', "exclude by id");
+    my %all_names;
+    my @exclusions;
+    my %all_but;
+    my %all_but2;
+    my %excl;
     
-    ok ( keys %allbut > 1, "exclude by id found records" );
-    
-    my (%excl) = $T->fetch_record_values("/taxa/list.json?base_id=$TEST_TXN_3b , $TEST_TXN_3c", 'nam',
-					 "excluded subtrees");
-    
-    if ( keys %allbut > 1 )
+    foreach my $r (@all)
     {
-	ok( ! $allbut{$TEST_NAME_3b}, "excluded '$TEST_NAME_3b'" );
-	ok( ! $allbut{$TEST_NAME_3c}, "excluded '$TEST_NAME_3c'" );
-	ok( ! $allbut{$TEST_NAME_3d}, "excluded '$TEST_NAME_3d'" );
+	$all_names{$r->{nam}} = 1;
+
+	if ( $r->{rnk} && $r->{rnk} <= 8 && $r->{rnk} >= 6 && $r->{spc} && $r->{spc} >= 2 )
+	{
+	    push @exclusions, $r->{oid};
+	}
     }
     
-    if ( keys %all > 1 )
+    if ( cmp_ok ( @exclusions, '>', 1, "found at least two taxa to exclude" ) )
     {
-	ok( $all{$TEST_NAME_3b}, "all found '$TEST_NAME_3b'" );
-	ok( $all{$TEST_NAME_3c}, "all found '$TEST_NAME_3c'" );
-	ok( $all{$TEST_NAME_3d}, "all found '$TEST_NAME_3d'" );
+	# Now fetch the same tree with exclusions. Use both base_id and base_name
+	
+	%all_but = $T->fetch_record_values("/taxa/list.json?base_id=$TEST_TXN_3&exclude_id=" .
+					   "$exclusions[0] , $exclusions[1]", 'nam', "exclude by id");
+	
+	%all_but2 = $T->fetch_record_values("/taxa/list.json?base_name=$TEST_NAME_3&exclude_id=" .
+					    "$exclusions[0],$exclusions[1]", 'nam', "exclude by id with base_name");
+	
+	# Then fetch the excluded subtrees.
+	
+	%excl = $T->fetch_record_values("/taxa/list.json?base_id=$exclusions[0] , $exclusions[1]", 'nam',
+					"excluded subtrees");
     }
     
-    if ( keys %excl > 1 )
+    if ( cmp_ok( keys %excl, '>', 1, "exclude by id found records" ) )
     {
-	ok( $excl{$TEST_NAME_3b}, "excl found '$TEST_NAME_3b'" );
-	ok( $excl{$TEST_NAME_3c}, "excl found '$TEST_NAME_3c'" );
-	ok( $excl{$TEST_NAME_3d}, "excl found '$TEST_NAME_3d'" );
+	if ( cmp_ok( keys %all_but, '>', 1, "excluded subtrees returned records" ) )
+	{
+	    cmp_ok( keys(%all_names), '==', keys(%all_but) + keys(%excl), 
+		    "record counts match between base_id with exclusion and inclusion" );
+	    
+	    my $tc = Test::Conditions->new;
+	    
+	    foreach my $n ( keys %excl )
+	    {
+		$tc->flag('not_excluded', $n) if $all_but{$n};
+		$tc->flag('not_in_all_names', $n) unless $all_names{$n};
+	    }
+	    
+	    foreach my $n ( keys %all_but )
+	    {
+		$tc->flag('not_returned', $n) if $excl{$n};
+	    }
+	    
+	    foreach my $n ( keys %all_names )
+	    {
+		$tc->flag('not_in_either', $n) unless $all_but{$n} || $excl{$n};
+	    }
+	    
+	    $tc->ok_all("excluded names and remainder match up");
+	}
+    
+	if ( cmp_ok( keys %all_but2, '>', 1, "excluded subtrees with base_name returned records" ) )
+	{
+	    cmp_ok( keys(%all_names), '==', keys(%all_but2) + keys(%excl), 
+		    'record counts match between base_name with exclusion and exclusion' );    
+	}
     }
     
-    cmp_ok( keys(%all), '==', keys(%allbut) + keys(%excl), 
-	    'record counts match between base_id with exclusion and exclusion' );
+    # if ( keys %allbut > 1 )
+    # {
+    # 	ok( ! $allbut{$TEST_NAME_3b}, "excluded '$TEST_NAME_3b'" );
+    # 	ok( ! $allbut{$TEST_NAME_3c}, "excluded '$TEST_NAME_3c'" );
+    # 	ok( ! $allbut{$TEST_NAME_3d}, "excluded '$TEST_NAME_3d'" );
+    # }
     
-    # Now test base_name with exclude_id, to make sure that those two
-    # parameters also work with each other.
+    # if ( keys %all > 1 )
+    # {
+    # 	ok( $all{$TEST_NAME_3b}, "all found '$TEST_NAME_3b'" );
+    # 	ok( $all{$TEST_NAME_3c}, "all found '$TEST_NAME_3c'" );
+    # 	ok( $all{$TEST_NAME_3d}, "all found '$TEST_NAME_3d'" );
+    # }
     
-    my (%allbut2) = $T->fetch_record_values("/taxa/list.json?base_name=$TEST_NAME_3&exclude_id=" .
-					    "$TEST_TXN_3b,$TEST_TXN_3c", 'nam', "base_name + exclude_id");
+    # if ( keys %excl > 1 )
+    # {
+    # 	ok( $excl{$TEST_NAME_3b}, "excl found '$TEST_NAME_3b'" );
+    # 	ok( $excl{$TEST_NAME_3c}, "excl found '$TEST_NAME_3c'" );
+    # 	ok( $excl{$TEST_NAME_3d}, "excl found '$TEST_NAME_3d'" );
+    # }
     
-    if ( keys %allbut2 > 1 )
-    {
-	ok( ! $allbut2{$TEST_NAME_3b}, "excluded '$TEST_NAME_3b'" );
-	ok( ! $allbut2{$TEST_NAME_3c}, "excluded '$TEST_NAME_3c'" );
-	ok( ! $allbut2{$TEST_NAME_3d}, "excluded '$TEST_NAME_3d'" );
-    }
-    
-    cmp_ok( keys(%all), '==', keys(%allbut2) + keys(%excl), 
-	    'record counts match between base_name with exclusion and exclusion' );    
+    # if ( cmp_ok( keys %allbut2, '>', 1, "exclude by id with base_name found records" ) )
+    # {
+    # 	ok( ! $allbut2{$TEST_NAME_3b}, "excluded '$TEST_NAME_3b'" );
+    # 	ok( ! $allbut2{$TEST_NAME_3c}, "excluded '$TEST_NAME_3c'" );
+    # 	ok( ! $allbut2{$TEST_NAME_3d}, "excluded '$TEST_NAME_3d'" );
+    # }
+
+    my $a = 1;	# we can stop here when debugging
 };
 
 
@@ -2128,7 +2181,7 @@ subtest 'taxon status' => sub {
     
     foreach my $r ( @r3j, @r3s )
     {
-	unless ( $accepted_oid{$r->{par}} || ($r->{acn} && $r->{acn} eq $OID_2) || $r->{oid} eq $OID_2 )
+	unless ( $accepted_oid{$r->{par}} || $invalid_oid{$r->{par}} || ($r->{acn} && $r->{acn} eq $OID_2) || $r->{oid} eq $OID_2 )
 	{
 	    $bad_parent_oid = 1;
 	    diag("    Found: '$r->{nam}' with parent '$r->{par}'");

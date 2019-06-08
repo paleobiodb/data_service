@@ -2974,7 +2974,7 @@ sub generate_query_options {
 	
 	elsif ( $prefix eq 'taxa' )
 	{
-	    $options->{$selector} = $value;
+	    $options->{"taxa_$selector"} = $value;
 	}
 	
 	else
