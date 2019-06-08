@@ -1124,12 +1124,12 @@ subtest 'base_id and exclude_id' => sub {
     my $TEST_NAME_3a = 'Felinae';
     my $TEST_NAME_3b = 'Machairodontinae';
     my $TEST_NAME_3c = 'Felis catus';
-    my $TEST_NAME_3d = 'Dinofelis palaeoonca';
+    # my $TEST_NAME_3d = 'Dinofelis palaeoonca';
     
     my $TEST_TXN_3 = 'txn:41045';	# Felidae
     my $TEST_TXN_3b = 'txn:65494';
     my $TEST_TXN_3c = 'txn:104159';
-    my $TEST_TXN_3d = 'txn:49736';
+    # my $TEST_TXN_3d = 'txn:49736';
     
     # Make sure that base_id works.
     
@@ -2175,7 +2175,8 @@ subtest 'taxon status' => sub {
     $T->ok_is_subset( \%invalid_acn, \%accepted_nam, "invalid 'acn' are subset of accepted 'oid'" );
     
     # Make sure that the parent of each of the valid taxa is in the accepted set, except for the
-    # base taxon and any synonyms it may have.  The parent of an invalid taxon may itself be invalid.
+    # base taxon and any synonyms it may have, and excluding species whose genera may be invalid.  The
+    # parent of an invalid taxon may itself be invalid.
     
     my ($bad_parent_oid, $bad_invalid_parent_oid);
     
