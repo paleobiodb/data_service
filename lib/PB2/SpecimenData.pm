@@ -597,8 +597,10 @@ sub initialize {
 	{ param => 'taxon_id', valid => VALID_IDENTIFIER('TXN') },
 	    "Return only elements that are valid for the specified taxon,",
 	    "given by its identifier in the database.",
-	{ at_most_one => ['all_records', 'taxon_name', 'taxon_id'] });
-
+	{ at_most_one => ['all_records', 'taxon_name', 'taxon_id'] },
+	{ optional => 'prefix', valid => ANY_VALUE },
+	    "Return only elements whose names match the specified prefix");
+    
     $ds->define_ruleset('1.2:specs:element_display' =>
 	{ optional => 'show', list => q{,}, valid => '1.2:specs:element_map' },
 	    "This parameter is used to select additional information to be returned",
@@ -1599,6 +1601,16 @@ sub list_elements {
     {
 	die $request->exception(400, "You must specify 'all_records' if you want to retrieve the entire set of records.");
     }
+    
+    # Add filters for optional parameters
+
+    if ( my $string = $request->clean_param('prefix') )
+    {
+	my $prefix_quoted = $dbh->quote("${string}%");
+	push @filters, "e.element_name like $prefix_quoted";
+    }
+    
+    # Now put together the filter string.
     
     my $filter_string = join(' and ', @filters);
     
