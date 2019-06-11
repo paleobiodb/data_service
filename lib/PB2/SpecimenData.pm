@@ -598,8 +598,8 @@ sub initialize {
 	    "Return only elements that are valid for the specified taxon,",
 	    "given by its identifier in the database.",
 	{ at_most_one => ['all_records', 'taxon_name', 'taxon_id'] },
-	{ optional => 'prefix', valid => ANY_VALUE },
-	    "Return only elements whose names match the specified prefix");
+	{ optional => 'name_re', valid => ANY_VALUE },
+	    "Return only elements whose names match the specified regular expression");
     
     $ds->define_ruleset('1.2:specs:element_display' =>
 	{ optional => 'show', list => q{,}, valid => '1.2:specs:element_map' },
@@ -1604,10 +1604,10 @@ sub list_elements {
     
     # Add filters for optional parameters
 
-    if ( my $string = $request->clean_param('prefix') )
+    if ( my $string = $request->clean_param('name_re') )
     {
-	my $prefix_quoted = $dbh->quote("${string}%");
-	push @filters, "e.element_name like $prefix_quoted";
+	my $quoted = $dbh->quote($string);
+	push @filters, "e.element_name rlike $quoted";
     }
     
     # Now put together the filter string.
