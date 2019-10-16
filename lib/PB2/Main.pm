@@ -575,7 +575,8 @@ use PB2::MainEntry;
 			place => 5,
 			title => 'Measurements of specimens',
 			method => 'list_measurements',
-			output => '1.2:measure:basic'},
+			output => '1.2:measure:basic',
+		        optional_output => '1.2:measure:output_map' },
 	"This operation returns information about the measurements associated with selected",
 	"specimens.");
     

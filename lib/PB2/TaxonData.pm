@@ -1,3 +1,4 @@
+
 #  
 # TaxonData
 # 
@@ -17,7 +18,8 @@ use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS);
+use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
+		 %UNS_NAME %UNS_RANK);
 use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
@@ -31,15 +33,14 @@ our (%DB_FIELD);
 
 our (@BASIC_1, @BASIC_2, @BASIC_3);
 
+our (%UNS_FIELD) = ( 'NG' => 'genus', 'NF' => 'family',
+		     'NO' => 'order', 'NC', => 'class', 'NP' => 'phylum' );
+
+our (%UNS_ID) = ( 'NG' => 'genus_no', 'NF' => 'family_no',
+		  'NO' => 'order_no', 'NC' => 'class_no', 'NP' => 'phylum_no' );
+
+
 our (%LANGUAGE) = ( 'S' => 1 );
-
-our (%UNK_NAME) = ( 'UG' => 'UNKNOWN GENUS',
-		    'UF' => 'UNKNOWN FAMILY',
-		    'UO' => 'UNKNOWN ORDER',
-		    'UC' => 'UNKNOWN CLASS',
-		    'UP' => 'UNKNOWN PHYLUM' );
-
-our (%UNK_RANK) = ( 'UG' => 5, 'UF' => 9, 'UO' => 13, 'UC' => 17, 'UP' => 20 );
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -407,6 +408,7 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:class' =>
 	{ select => [ 'CLASS', 'GENUS', 'TYPE_TAXON' ] },
+	{ set => '*', code => \&process_classification },
 	#{ output => 'kingdom', com_name => 'kgl' },
 	#    "The name of the kingdom in which this taxon occurs",
 	{ output => 'phylum', com_name => 'phl' },
@@ -1890,7 +1892,7 @@ sub get_taxon {
     if ( $taxon_no = $request->clean_param('taxon_id') )
     {
 	die $request->exception(400, "Invalid taxon id '$taxon_no'")
-	    unless $taxon_no > 0 || $taxon_no =~ qr{ ^ U[A-Z] \d* $ }xs;
+	    unless $taxon_no > 0 || $taxon_no =~ qr{ ^ [UN][A-Z] \d* $ }xs;
 	
 	if ( ! ref $taxon_no || $taxon_no->{type} eq 'unk' )
 	{
@@ -1989,7 +1991,7 @@ sub get_taxon {
     
     # If this is an 'unknown taxon', return a synthesized record.
 
-    if ( $taxon_no && $taxon_no =~ qr{ ^ ( U[A-Z] ) }xs )
+    if ( $taxon_no && $taxon_no =~ qr{ ^ ( [UN][A-Z] \d* ) }xs )
     {
 	$request->single_result( generate_unknown_taxon($1) );
 	return;
@@ -3277,7 +3279,7 @@ sub generate_query_base {
 
 	if ( $rel eq 'exact' || $rel eq 'current' )
 	{
-	    my @unknown_ids = grep { /^U/ } @taxon_ids;
+	    my @unknown_ids = grep { /^[UN]/ } @taxon_ids;
 	    @unknown_taxa = map { generate_unknown_taxon($_) } @unknown_ids;
 	}
     }
@@ -3880,9 +3882,10 @@ sub generate_unknown_taxon {
     my ($taxon_no) = @_;
     
     my $code = substr($taxon_no, 0, 2);
+    $code =~ s/^U/N/;
     
-    return { orig_no => $taxon_no, taxon_rank => $UNK_RANK{$code},
-	     taxon_name => $UNK_NAME{$code} };
+    return { orig_no => $taxon_no, taxon_rank => $UNS_RANK{$code},
+	     taxon_name => $UNS_NAME{$code} };
 };
 
 
@@ -4322,10 +4325,43 @@ sub process_ages {
 sub process_image_ids {
     
     my ($request, $record) = @_;
-
+    
     if ( $request->{block_hash}{extids} )
     {
 	$record->{image_no} = generate_identifier('PHP', $record->{image_no});
+    }
+}
+
+
+sub process_classification {
+    
+    my ($request, $record) = @_;
+    
+    return unless $record->{taxon_rank};
+    
+    foreach my $u ( qw(NP NC NO NF NG) )
+    {
+	if ( $record->{taxon_rank} =~ /^\d/ )
+	{
+	    last if $record->{taxon_rank} >= $UNS_RANK{$u};
+	}
+
+	else
+	{
+	    last if $TAXON_RANK{$record->{taxon_rank}} >= $UNS_RANK{$u};
+	}
+	
+	$record->{$UNS_FIELD{$u}} ||= $UNS_NAME{$u};
+	
+	if ( $request->{block_hash}{extids} )
+	{
+	    $record->{$UNS_ID{$u}} ||= generate_identifier('TXN', $u);
+	}
+
+	else
+	{
+	    $record->{$UNS_ID{$u}} ||= $u;
+	}
     }
 }
 

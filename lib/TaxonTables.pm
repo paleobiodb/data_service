@@ -830,6 +830,8 @@ sub buildTaxonTables {
     
     logMessage(1, "done building tree tables for '$tree_table'");
     
+    $dbh->do("REPLACE INTO last_build (name) values ('taxa')");
+    
     my $a = 1;		# we can stop here when debugging
 }
 

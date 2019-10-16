@@ -1006,6 +1006,17 @@ sub initialize {
 	    "=item ATA,AU", "Select occurrences from Antarctica and Australia",
 	    "=item NOA,SOA,^AR,^BO", "Select occurrences from North and South America, but not Argentina or Bolivia",
 	    "=item !EUR,^IS", "Exclude occurrences from Europe, except those from Iceland", "=back",
+	{ param => 'state', valid => ANY_VALUE, list => ',', bad_value => '_' },
+	    "Return only records from collections that are indicated as falling within the specified",
+	    "state or province. This information is not recorded for all collections, and has not",
+	    "been checked for accuracy. Given that state names are sometimes duplicated between",
+	    "countries, it is recommended to also specify the country using the B<C<cc>> parameter.",
+	{ param => 'county', valid => ANY_VALUE, list => ',', bad_value => '_' },
+	    "Return only records from collections that are indicated as falling within the specified",
+	    "county or other sub-state administrative division. This information is not recorded",
+	    "for all collections, and has not been checked for accuracy. Given that county names are",
+	    "often duplicated between states and countries, it is recommended that you also specify",
+	    "the state using the B<C<state>> parameter and the country using the B<C<cc>> parameter.",
 	{ param => 'continent', valid => \&valid_continent, list => qr{[\s,]+}, bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified continent or continents.",
 	    "The value of this parameter should be a comma-separated list of ",
@@ -3262,20 +3273,76 @@ sub generateMainFilters {
 	$tables_ref->{non_summary} = 1;
     }
     
-    # if ( my @continents = $request->clean_param_list('continent') )
-    # {
-    # 	if ( $continents[0] eq '_' )
-    # 	{
-    # 	    push @filters, "c.collection_no = 0";
-    # 	}
-    # 	else
-    # 	{
-    # 	    my $cont_list = "'" . join("','", @continents) . "'";
-    # 	    push @filters, "ccmap.continent in ($cont_list)";
-    # 	    $tables_ref->{ccmap} = 1;
-    # 	}
-    # 	$tables_ref->{non_summary} = 1;
-    # }
+    # Check for parameter 'state'
+    
+    my @states = $request->clean_param_list('state');
+    
+    if ( @states )
+    {
+	my $invert;
+	
+	# Look for an ! flag at the beginning, signalling that the user wants to invert this
+	# filter.
+	
+	if ( $states[0] =~ qr{ ^ ! (.*) }xs )
+	{
+	    $states[0] = $1;
+	    $invert = 1;
+	}
+
+	# Construct a quoted list using the parameter values, and add warnings for each value that
+	# does not appear in the database.
+
+	my $state_list = $request->verify_coll_param($dbh, 'state', \@states, 'state');
+	
+	if ( $invert )
+	{
+	    push @filters, "cc.state not in ($state_list)";
+	}
+	
+	else
+	{
+	    push @filters, "cc.state in ($state_list)";
+	}
+	
+	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
+    }
+    
+    # Check for parameter 'county'
+    
+    my @counties = $request->clean_param_list('county');
+    
+    if ( @counties )
+    {
+	my $invert;
+	
+	# Look for an ! flag at the beginning, signalling that the user wants to invert this
+	# filter.
+	
+	if ( $counties[0] =~ qr{ ^ ! (.*) }xs )
+	{
+	    $counties[0] = $1;
+	    $invert = 1;
+	}
+
+	# Construct a quoted list using the parameter values.
+	
+	my $county_list = $request->verify_coll_param($dbh, 'county', \@counties, 'county');
+	
+	if ( $invert )
+	{
+	    push @filters, "cc.county not in ($county_list)";
+	}
+	
+	else
+	{
+	    push @filters, "cc.county in ($county_list)";
+	}
+	
+	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
+    }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
     
@@ -3887,6 +3954,7 @@ sub generateMainFilters {
     {
 	push @filters, $request->generate_stratname_filter('cs', \@strata);
 	$tables_ref->{cs} = 1;
+	$tables_ref->{c} = 1;
 	$tables_ref->{non_summary} = 1;
     }
     
@@ -4038,6 +4106,68 @@ sub generateMainFilters {
     
     return @filters;
 }
+
+
+sub verify_coll_param {
+
+    my ($request, $dbh, $api_field, $values_ref, $db_field) = @_;
+    
+    $db_field ||= $api_field;
+    
+    # Construct a list of quoted values.
+    
+    my $value_list = '';
+    my $sep = '';
+    
+    foreach my $v ( @$values_ref )
+    {
+	$value_list .= $sep;
+	$value_list .= $dbh->quote($v);
+	$sep = ',';
+    }
+    
+    # Now verify that these values actually appear in the database, and add warnings for
+    # those which do not.
+    
+    my $sql = "
+	SELECT distinct $db_field FROM collections
+	WHERE $db_field in ($value_list)";
+    
+    print STDERR "$sql\n\n" if $request->debug;
+    
+    my $result = $dbh->selectcol_arrayref($sql);
+    
+    my %verified;
+    my @bad;
+    
+    if ( ref $result eq 'ARRAY' )
+    {
+	%verified = map { lc $_ => 1 } @$result;
+    }
+    
+    foreach my $v ( @$values_ref )
+    {
+	push @bad, $v unless $verified{lc $v};
+    }
+
+    if ( @bad )
+    {
+	my $bad_list = join("', '", @bad);
+
+	if ( @bad == 1 )
+	{
+	    $request->add_warning("Field '$api_field': the value '$bad_list' was not found in the database");
+	}
+
+	else
+	{
+	    $request->add_warning("Field '$api_field': the values '$bad_list' were not found in the database");
+	}
+    }
+    
+    return $value_list;
+}
+	
 
 
 # adjustCoordinates ( fields_ref )

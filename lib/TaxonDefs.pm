@@ -11,6 +11,7 @@ use strict;
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING
+		      %UNS_NAME %UNS_RANK
 		      %AUTH_TABLE %OPINION_TABLE %OPINION_CACHE %REFS_TABLE
 		      %ATTRS_TABLE %INTS_TABLE %SEARCH_TABLE
 		      %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
@@ -72,6 +73,20 @@ our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom'
 		       14 => 'superorder', 13 => 'order', 12 => 'suborder', 11 => 'infraorder',
 		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 
 		       6 => 'subtribe', 5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies');
+
+# Unspecified taxonomic classifications have their own codes.
+
+our (%UNS_NAME) = ( 'NS' => 'NO_SPECIES_SPECIFIED',
+		    'NG' => 'NO_GENUS_SPECIFIED',
+		    'NF' => 'NO_FAMILY_SPECIFIED',
+		    'NO' => 'NO_ORDER_SPECIFIED',
+		    'NC' => 'NO_CLASS_SPECIFIED',
+		    'NP' => 'NO_PHYLUM_SPECIFIED',
+		    'NK' => 'NO_KINGDOM_SPECIFIED',
+		    'NT' => 'NO_TAXON_SPECIFIED' );
+
+our (%UNS_RANK) = ( 'NF' => 3, 'NG' => 5, 'NF' => 9, 'NO' => 13, 'NC' => 17, 'NP' => 20,
+		    'NK' => 23, 'NT' => 0 );
 
 # The status codes and various subsets
 

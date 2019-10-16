@@ -80,7 +80,8 @@ sub initialize {
       { select => ['r.reference_no', 'r.comments as r_comments',
 		   'r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
-		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
+		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle',
+		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
@@ -132,6 +133,10 @@ sub initialize {
 	  "The title of the publication in which the document appears",
       { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', not_block => 'formatted' },
 	  "Names of the editors, if any",
+      { output => 'r_publisher', com_name => 'pbl', pbdb_name => 'publisher', not_block => 'formatted' },
+	  "Name of the publisher, if this data has been entered",
+      { output => 'r_pubcity', com_name => 'pbc', pbdb_name => 'pubcity', not_block => 'formatted' },
+	  "City of publication, if this data has been entered",
       { output => 'r_pubvol', com_name => 'vol', pbdb_name => 'pubvol', not_block => 'formatted', data_type => 'str' },
 	  "The volume number, if any",
       { output => 'r_pubno', com_name => 'vno', pbdb_name => 'pubno', not_block => 'formatted', data_type => 'str' },
@@ -161,7 +166,8 @@ sub initialize {
     $ds->define_block('1.2:refs:primary' =>
       { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
-		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
+		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle',
+		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
@@ -176,6 +182,7 @@ sub initialize {
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
 		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
@@ -1189,6 +1196,17 @@ sub format_reference {
 	}
 	
 	$longref .= $pubstring . " ";
+    }
+    
+    my $publisher = $row->{r_publisher};
+    my $pubcity = $row->{r_pubcity};
+
+    if ( $publisher )
+    {
+	$longref =~ s/\s+$//;
+	$longref .= ". ";
+	$longref .= "$pubcity: " if $pubcity;
+	$longref .= $publisher . ". ";
     }
     
     # Now add volume and page number information if available
