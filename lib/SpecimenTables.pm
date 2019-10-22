@@ -19,13 +19,14 @@ use Text::CSV_XS;
 
 use CoreFunction qw(activateTables);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC
-		 $OCCURRENCES $LOCALITIES $WOF_PLACES $COLL_EVENTS);
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECIMENS $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC
+		 $OCCURRENCES $LOCALITIES $WOF_PLACES $COLL_EVENTS $REFERENCES);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables
-		      establish_specelt_tables load_specelt_tables build_specelt_map);
+our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables 
+		      establish_extra_specimen_tables establish_specelt_tables 
+		      load_specelt_tables build_specelt_map load_museum_refs);
 
 our $SPEC_MATRIX_WORK = "smw";
 our $SPEC_ELTS_WORK = "sew";
@@ -392,7 +393,7 @@ sub establish_extra_specimen_tables {
 # 
 # Create the tables for specimen elements.
 
-sub establish_spec_element_tables {
+sub establish_specelt_tables {
     
     my ($dbh, $options) = @_;
 
@@ -639,6 +640,128 @@ sub load_specelt_tables {
     my ($count2) = $dbh->selectrow_array("SELECT count(*) FROM $SPECELT_EXC");
     
     logMessage(2, "    inserted $count1 elements, $count2 exclusions");
+}
+
+
+our ($REFS_TEMP) = 'refs_temp';
+
+# load_museum_refs ( dbh, filename, options )
+# 
+# Load 'museum collection' references from an input file into the database.
+
+sub load_museum_refs {
+    
+    my ($dbh, $filename, $options) = @_;
+    
+    $options ||= { };
+    
+    # First read the initial line of the file, and generate a loading template using the column
+    # names.
+
+    open(my $infile, "<$filename");
+
+    my $firstline = <$infile>;
+    $firstline =~ s/\w*$//;
+    
+    my (@fields) = split(/, */, $firstline);
+    
+    my (@fieldmap) = ( 'Institution or' => 'mainname',
+		       'Parent' => 'parent',
+		       'English' => 'engname',
+		       'Previous' => 'altnames',
+		       'Collection name' => 'collname',
+		       'Private' => 'private',
+		       'Institution ab' => 'instabbr',
+		       'Collection ab' => 'collabbr',
+		       'City' => 'city',
+		       'State' => 'state',
+		       'Country' => 'country',
+		       'comments' => 'comments' );
+    
+    my %fieldmap = @fieldmap;
+
+    my (@variables, $i);
+    
+ FIELD:
+    foreach my $f (@fields)
+    {
+	foreach my $p (@fieldmap)
+	{
+	    if ( defined $fieldmap{$p} && $f =~ /^$p/ )
+	    {
+		push @variables, '@' . $fieldmap{$p};
+		next FIELD;
+	    }
+	}
+    }
+    
+    my $varstring = join(', ', @variables);
+    
+    my ($sql, $result);
+    
+    $sql = "DROP TABLE IF EXISTS $REFS_TEMP";
+
+    $result = $dbh->do($sql);
+
+    $sql = "CREATE TABLE $REFS_TEMP LIKE $REFERENCES";
+
+    $result = $dbh->do($sql);
+
+    my $quoted = $dbh->quote($filename);
+    
+    $sql = "LOAD DATA INFILE $quoted INTO TABLE $REFS_TEMP character set utf8 fields optionally enclosed by '\"' terminated by ',' lines terminated by '\r\n' ignore 1 lines ($varstring) set publication_type = 'museum collection', upload = 'YES', pubtitle = if(\@mainname rlike '[a-zA-Z]', \@mainname, \@engname), pubtitle = if(\@instabbr <> '', concat(pubtitle, ' (', \@instabbr, ')'), pubtitle), publisher = \@parent, author1last = 'Institutional collection', pubyr = '', reftitle = if(\@collname <> '', if(\@collabbr <> '', concat(\@collname, ' (', \@collabbr, ')'), \@collname), \@collabbr), pubcity = concat_ws(', ', \@city, \@state, \@country), pubvol = if(\@private <> '', 'PRIVATE', NULL), editors = if(\@mainname not rlike '[a-zA-Z]', if(\@altnames, concat(\@mainname, '; ', \@altnames), \@mainname), \@altnames), comments = \@comments, authorizer = 'System', enterer = 'System', authorizer_no = 185, enterer_no = 185, created = now(), modified = now()";
+    
+    print STDOUT "Command to be run is:\n\n$sql\n\n";
+    
+    print STDOUT "Load data? ";
+    
+    my $answer = <STDIN>;
+    
+    unless ( $answer && $answer =~ /^[yY]/ )
+    {
+	print STDOUT "Aborted.\n\n";
+	return;
+    }
+
+    print STDOUT "Loading...\n\n";
+    
+    $result = $dbh->do($sql);
+    
+    print "Read $result records into temporary table. Copy to permanent table? ";
+
+    $answer = <STDIN>;
+
+    unless ( $answer && $answer =~ /^[yY]/ )
+    {
+	print STDOUT "Leaving records in temporary table '$REFS_TEMP'.\n\n";
+	return;
+    }
+    
+    $sql = "ALTER TABLE $REFS_TEMP modify column reference_no int unsigned null";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
+    
+    $sql = "ALTER TABLE $REFS_TEMP drop primary key";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
+    
+    $sql = "UPDATE $REFS_TEMP SET reference_no = null";
+
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
+
+    $sql = "INSERT INTO $REFERENCES SELECT * FROM $REFS_TEMP";
+
+    print STDERR "$sql\n\n" if $options->{debug};
+
+    $result = $dbh->do($sql);
+
+    print STDOUT "Copied $result records into table '$REFERENCES'.\n\n";
 }
 
 1;
