@@ -1651,7 +1651,7 @@ sub list_associated {
 	    
 	    # Now execute the "inner query".
 	    
-	    $sql = "INSERT INTO op_collect
+	    $sql = "INSERT IGNORE INTO op_collect
 		SELECT $count_expr o.opinion_no, $type as opinion_type, 
 			o.child_spelling_no as taxon_no, t.orig_no
 		FROM $query_core
@@ -1714,7 +1714,7 @@ sub list_associated {
 	    
 	    # Now execte the "inner query for classification opinions".
 	    
-	    $sql = "INSERT INTO op_collect
+	    $sql = "INSERT IGNORE INTO op_collect
 		SELECT $count_expr DISTINCT o.opinion_no, $type as opinion_type, 
 			o.child_spelling_no as taxon_no, t.orig_no
 		FROM $query_core
@@ -1774,7 +1774,7 @@ sub list_associated {
 	    # disjoint from the one produced by the "inner query for classification opinions"
 	    # above.  That is important so that we can accurately compute the rows_found count.
 	    
-	    $sql = "INSERT INTO op_collect
+	    $sql = "INSERT IGNORE INTO op_collect
 		SELECT $count_expr DISTINCT o.opinion_no, $type as opinion_type, 
 			o.child_spelling_no as taxon_no, t.orig_no
 		FROM $query_core
@@ -2312,7 +2312,7 @@ sub generate_taxa_list {
 	# Add the accepted names, where they differ from the identified names (note
 	# the WHERE clause).
 	
-	$sql = "INSERT INTO taxa_list
+	$sql = "INSERT IGNORE INTO taxa_list
 		SELECT t.spelling_no, t.orig_no, count(*)
 		FROM $occs_table as ot JOIN $tree_table as t1 using (orig_no)
 			JOIN $tree_table as t on t.orig_no = t1.accepted_no
@@ -2333,7 +2333,7 @@ sub generate_taxa_list {
     
     else
     {
-	$sql = "INSERT INTO taxa_list
+	$sql = "INSERT IGNORE INTO taxa_list
 		SELECT t.spelling_no, t.orig_no, count(*)
 		FROM $occs_table JOIN $tree_table as t1 using (orig_no)
 			JOIN $tree_table as t on t.orig_no = t1.accepted_no
@@ -2352,7 +2352,7 @@ sub generate_taxa_list {
     # genera, add those genera to the list.  This would include occurrences
     # identified to the species or subgenus level.
     
-    $sql = "INSERT INTO taxa_list
+    $sql = "INSERT IGNORE INTO taxa_list
 		SELECT t.spelling_no, t.orig_no, count(*)
 		FROM $occs_table as list JOIN $lower_table as pl using (orig_no)
 			JOIN $tree_table as t on t.orig_no = pl.genus_no
@@ -2370,7 +2370,7 @@ sub generate_taxa_list {
     
     # Same for subgenera.
     
-    $sql = "INSERT INTO taxa_list
+    $sql = "INSERT IGNORE INTO taxa_list
 		SELECT t.spelling_no, t.orig_no, count(*)
 		FROM $occs_table JOIN $lower_table as pl using (orig_no)
 			JOIN $tree_table as t on t.orig_no = pl.subgenus_no

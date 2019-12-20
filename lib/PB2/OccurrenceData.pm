@@ -21,7 +21,7 @@ use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS $COLL_LITH $PV
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
-use TaxonDefs qw(%RANK_STRING);
+use TaxonDefs qw(%RANK_STRING %TAXON_RANK %UNS_RANK %UNS_NAME);
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -284,6 +284,7 @@ sub initialize {
 		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
 		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
 	  tables => ['ph', 't', 'pl'] },
+	{ set => '*', code => \&process_classification },
 	{ output => 'phylum', com_name => 'phl' },
 	    "The name of the phylum in which this occurrence is classified.",
 	{ output => 'phylum_no', com_name => 'phn', if_block => 'classext' },
@@ -3778,6 +3779,39 @@ sub process_occ_ids {
     else
     {
 	$record->{identified_no} = generate_identifier('TXN', $record->{identified_no});
+    }
+}
+
+
+sub process_classification {
+    
+    my ($request, $record) = @_;
+    
+    return unless $record->{accepted_rank};
+    
+    foreach my $u ( qw(NP NC NO NF NG) )
+    {
+	if ( $record->{accepted_rank} =~ /^\d/ )
+	{
+	    last if $record->{accepted_rank} >= $UNS_RANK{$u};
+	}
+	
+	else
+	{
+	    last if $TAXON_RANK{$record->{accepted_rank}} >= $UNS_RANK{$u};
+	}
+	
+	$record->{$PB2::TaxonData::UNS_FIELD{$u}} ||= $PB2::TaxonData::UNS_NAME{$u};
+	
+	if ( $request->{block_hash}{extids} )
+	{
+	    $record->{$PB2::TaxonData::UNS_ID{$u}} ||= generate_identifier('TXN', $u);
+	}
+	
+	else
+	{
+	    $record->{$PB2::TaxonData::UNS_ID{$u}} ||= $u;
+	}
     }
 }
 
