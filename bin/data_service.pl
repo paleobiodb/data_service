@@ -1,4 +1,4 @@
-#!/opt/local/bin/perl
+#!/usr/bin/env perl
 # 
 # Paleobiology Database Data Service
 # 
@@ -34,7 +34,9 @@ open($pid_file, ">", "logs/starman.pid");
 print $pid_file $$;
 close $pid_file;
 
-exec('/opt/local/bin/starman', 
+sleep(5);
+
+exec('/usr/local/bin/starman', 
      '--listen', ":$PORT", '--workers', $WORKERS, '--access-log', $ACCESS_LOG, 
      'bin/web_app.pl')
     

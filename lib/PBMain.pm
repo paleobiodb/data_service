@@ -34,6 +34,7 @@ any qr{.*} => sub {
     }
     
     delete params->{_};
+    delete params('query')->{_};
     
     if ( $r->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
     {
