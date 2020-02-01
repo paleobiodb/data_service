@@ -14,7 +14,7 @@ plugins:
     Database:
       driver: 'mysql'
       database: 'pbdb'
-      host: 'localhost:mysql_socket=/var/mysql/mysql.sock'
+      host: 'db'
       port: 3306
       username: 'pbdbuser'
       password: 'pbdbpwd'
