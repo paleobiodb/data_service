@@ -1,7 +1,7 @@
 # 
 # Paleobiology Database - Main API
 
-FROM perl:5.26-threaded AS paleobiodb_api_loaded
+FROM perl:5.26-threaded AS paleobiodb_api_preload
 
 RUN apt-get update && \
     apt-get -y install mariadb-client && \
@@ -22,7 +22,9 @@ RUN cpanm HTTP::Validate && \
 
 RUN cpanm --force Term::ReadLine::Gnu
 
-FROM paleobiodb_api_loaded
+RUN apt-get -y install vim
+
+FROM paleobiodb_api_preload
 
 COPY pbdb-new /var/paleobiodb/pbdb-new/
 
@@ -36,9 +38,9 @@ CMD perl bin/data_service.pl
 
 LABEL maintainer="mmcclenn@geology.wisc.edu"
 LABEL version="1.0"
-LABEL description="Paleobiology Database data service"
+LABEL description="Paleobiology Database Main API"
 
-LABEL buildcheck="bin/web_app.pl GET /data1.0/"
+LABEL buildcheck="bin/web_app.pl GET /data1.2/"
 
 
 
