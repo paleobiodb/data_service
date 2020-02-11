@@ -1,28 +1,8 @@
 # 
-# Paleobiology Database - Main API
-
-FROM perl:5.26-threaded AS paleobiodb_api_preload
-
-RUN apt-get update && \
-    apt-get -y install mariadb-client && \
-    cpanm DBI && \
-    cpanm DBD::mysql && \
-    cpanm Dancer && \
-    cpanm Moo && \
-    cpanm namespace::clean && \
-    cpanm YAML && \
-    cpanm Template && \
-    cpanm Dancer::Template::Tiny && \
-    cpanm Dancer::Plugin::Database && \
-    cpanm Dancer::Plugin::StreamData && \
-    cpanm Starman
-    
-RUN cpanm HTTP::Validate && \
-    cpanm Web::DataService
-
-RUN cpanm --force Term::ReadLine::Gnu
-
-RUN apt-get -y install vim
+# Paleobiology Database - main API image
+# 
+# The image 'paleobiodb_api_preload' can be built using the file 'Dockerfile-preload'.
+# See that file for more information.
 
 FROM paleobiodb_api_preload
 
