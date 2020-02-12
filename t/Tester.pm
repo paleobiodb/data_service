@@ -9,7 +9,7 @@ use feature 'fc';
 
 use LWP::UserAgent;
 use Text::CSV_XS;
-use Encode qw(decode_utf8);
+use Encode qw(encode_utf8 decode_utf8);
 use JSON;
 
 package Tester;
@@ -18,6 +18,9 @@ use Scalar::Util qw(looks_like_number reftype);
 use Carp qw(croak);
 use Test::More;
 use base 'Exporter';
+
+use lib 'lib';
+use ExternalIdent qw(%IDRE);
 
 use namespace::clean;
 
@@ -28,69 +31,75 @@ our (@EXPORT_OK) = qw(cmp_sets_ok ok_checkpoint);
 
 our ($DIAG_URLS);
 
-# new ( server_name )
+# new ( options )
 # 
 # Create a new tester instance.  If no server is specified, the value of the
 # environment variable PBDB_TEST_SERVER is used instead.  If this is not set,
-# the default is "127.0.0.1:3000".
+# the default is "127.0.0.1:3999".
 
 sub new {
     
     my ($class, $options) = @_;
     
-    my $ua = LWP::UserAgent->new(agent => "PBDB Tester/0.1")
+    my $ua = LWP::UserAgent->new(agent => "PBDB Tester/0.9")
 	or die "Could not create user agent: $!\n";
     
     $options ||= { };
     
-    my $server = $options->{server} || $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
+    my $server = $options->{server} || $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3999';
+    my $protocol = $options->{protocol} || 'http';
     my $prefix = $options->{prefix} || '';
-    my $base_url = "http://$server";
-    $base_url = "$base_url/$prefix" if $prefix ne '';
+    my $base_url = $server =~ qr{://} ? $server : "$protocol://$server";
+    $base_url = "$base_url/" unless $base_url =~ qr{/$};
+    $base_url = "$base_url$prefix" if $prefix ne '';
     my $timeout = $options->{timeout} || $ENV{PBDB_TEST_TIMEOUT} || 0;
+    my $data_method = $options->{data_method} || 'put';
+    
+    my $debug;
+    $debug = 1 if $DIAG_URLS || $ENV{PBDB_TEST_SHOW_URLS};
+    $debug = 1 if @ARGV && $ARGV[0] eq 'debug';
     
     my $instance = { ua => $ua,
 		     csv => Text::CSV_XS->new({ binary => 1 }),
-		     json => JSON->new->utf8,
+		     json => JSON->new,
 		     server => $server,
 		     prefix => $prefix,
 		     timeout => $timeout,
-		     base_url => $base_url };
+		     data_method => $data_method,
+		     base_url => $base_url,
+		     debug => $debug };
+    
+    if ( $server =~ /(.*):(\d+)/ )
+    {
+	$instance->{host} = $1;
+	$instance->{port} = $2;
+    }
     
     bless $instance, $class;
     
     # See if we recognize any arguments to the test from which this method was called
 
-    foreach my $arg ( @ARGV )
-    {
-	if ( $arg =~ /^--subtest=(.*)/si )
-	{
-	    $instance->{subtest_select} = $1;
-	}
-    }
+    # foreach my $arg ( @ARGV )
+    # {
+    # 	if ( $arg =~ /^--subtest=(.*)/si )
+    # 	{
+    # 	    $instance->{subtest_select} = $1;
+    # 	}
+    # }
     
     return $instance;
 }
 
 
-# set_url_check ( regex )
-# 
-# The specified regex will be applied to all URLs subsequently tested with
-# this object, and an error will be thrown if it does not match.  This can be
-# used to catch errors in the test suite, which may be introduced when code is
-# copied from a test file intended for one data service version into a test
-# file intended for another version.
-
-# sub set_url_check {
+sub set_data_method {
     
-#     my ($tester, $key, $regex) = @_;
+    my ($tester, $http_method) = @_;
     
-#     $tester->{url_key} = $key;
-#     $tester->{url_check} = $regex;
-# }
+    $tester->{data_method} = $http_method if $http_method;
+}
 
 
-# fetch_url ( path_and_args, message )
+# fetch_url ( path_and_args, message, options )
 # 
 # Try to carry out the operation given by path_and_args on the server
 # associated with this Tester instance.  If it succeeds, return the
@@ -98,6 +107,9 @@ sub new {
 # 
 # If it fails, then call Test::More::fail with the specified message and
 # return undefined.
+# 
+# Options allow for specifying HTTP method, content, content type, and also
+# for suppressing error checking and diagnostics.
 
 sub fetch_url {
 
@@ -136,14 +148,111 @@ sub fetch_url {
     
     my $timeout = $options->{timeout} || $tester->{timeout};
     
-    # Create the full URL and execute a 'GET' request on the server being tested.
+    my $default_method = 'get';
+    
+    # Now start putting together the request. If we have one or more cookies
+    # currently set, add them first.
+    
+    my @headers_and_body;
+    
+    if ( defined $tester->{cookie_line} && $tester->{cookie_line} ne '' )
+    {
+	push @headers_and_body, 'Cookie', $tester->{cookie_line};
+    }
+    
+    # If content was specified, create the request body.
+    
+    my $check;
+    
+    if ( $options->{json_body} )
+    {
+	$check++;
+	
+	unless ( ref $options->{json_body} eq 'HASH' || ref $options->{json_body} eq 'ARRAY' )
+	{
+	    croak "The value of 'json_body' must be an array or hash reference.";
+	}
+	
+	push @headers_and_body, 'Content-Type', 'application/json';
+	push @headers_and_body, 'Content', JSON::encode_json($options->{json_body});
+	$default_method = $tester->{data_method};
+    }
+    
+    if ( defined $options->{text_body} && $options->{text_body} ne '' )
+    {
+	$check++;
+	my $body;
+	
+	if ( ref $options->{text_body} eq 'ARRAY' )
+	{
+	    $body = join("\r\n", @{$options->{text_body}});
+	}
+	
+	elsif ( ref $options->{text_body} )
+	{
+	    croak "The value of 'text_body' must be a scalar or an array of lines.";
+	}
+	
+	else
+	{
+	    $body = $options->{text_body}
+	}
+	
+	push @headers_and_body, 'Content-Type', 'text/plain; charset=utf8';
+	push @headers_and_body, 'Content', encode_utf8($body);
+	$default_method = $tester->{data_method};
+    }
+    
+    if ( $options->{form_body} )
+    {
+	$check++;
+	
+	if ( ref $options->{form_body} eq 'ARRAY' || ref $options->{form_body} eq 'HASH' )
+	{
+	    push @headers_and_body, 'Content', $options->{form_body};
+	    $default_method = $tester->{data_method};
+	}
+	
+	else
+	{
+	    croak "The value of 'form_body' must be either a hash or array ref.";
+	}
+    }
+    
+    if ( defined $options->{data_body} && $options->{data_body} ne '' )
+    {
+	$check++;
+	
+	# need to add this later $$$
+    }
+    
+    if ( $check && $check > 1 )
+    {
+	croak "You may only specify one of 'json_body', 'text_body', 'form_body'.";
+    }
+    
+    # Generate the full URL and determine the request method to be
+    # used. Optionally print these out.
     
     my $url = $tester->make_url($path_and_args);
     
-    if ( $DIAG_URLS || $ENV{PBDB_TEST_SHOW_URLS}    )
+    my $method = $options->{http_method} || $default_method;
+    
+    if ( $tester->{debug} )
     {
-	diag("Fetching: $url");
+	if ( $method eq 'get' )
+	{
+	    diag("Fetching: $url");
+	}
+	
+	else
+	{
+	    my $METHOD = uc $method;
+	    diag("Sending with $METHOD: $url");
+	}
     }
+    
+    # Now send off the request and wait synchronously for a response.
     
     my $response;
     
@@ -152,7 +261,7 @@ sub fetch_url {
 	local($SIG{ALRM}) = sub { die "timeout\n" };	# \n is required, see perldoc -f alarm
 	alarm $timeout if $timeout;
 	
-	$response = $tester->{ua}->get($url);
+	$response = $tester->{ua}->$method($url, @headers_and_body);
 	
 	alarm 0;
     };
@@ -248,7 +357,7 @@ sub fetch_url {
 	fail($message);
 	
 	my $status = $response->status_line;
-	diag("request was: $url") if $url;
+	diag("request was: $path_and_args") if $path_and_args;
 	diag("status was: $status") if $status;
 	
 	# Extract any error or warning messages that the response contained,
@@ -267,41 +376,122 @@ sub fetch_url {
 }
 
 
-# fetch_nocheck ( path_and_args )
+# fetch_nocheck ( path_and_args, message )
 # 
-# Works just like fetch_url, but does not check to make sure the response is a
-# success. 
+# Works just like fetch_url, but the internal test always passes regardless of
+# whether the request succeeded or not. You would use this, for example, to
+# test that a bad request returns the expected error code. This routine only
+# fails if we do not get a response at all.
 
 sub fetch_nocheck {
 
-    my ($tester, $path_and_args, $message) = @_;
+    my ($tester, $path_and_args, $message, $options) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    return $tester->fetch_url($path_and_args, $message, { no_check => 1, no_diag => 1 });
+    return $tester->fetch_url($path_and_args, $message, 
+			  { no_check => 1, 
+			    no_diag => 1,
+			    ref $options eq 'HASH' ? %$options : () });
+}
+
+
+# server_request ( http_method, path_and_args, message, options )
+# 
+# This is a wrapper method around fetch_url, to send a request with a
+# different HTTP method. The subroutine 'server_request_nocheck' does the
+# same, but the internal test always passes regardless of whether the response
+# succeeded or not.
+
+sub server_request {
     
-    # my $url = $tester->make_url($path_and_args);
+    my ($tester, $http_method, $path_and_args, $message, $options) = @_;
     
-    # my $response;
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    # eval {
-    # 	$response = $tester->{ua}->get($url);
-    # };
+    return $tester->fetch_url($path_and_args, $message, 
+			  { http_method => $http_method,
+			    ref $options eq 'HASH' ? %$options : () });
+}
     
-    # if ( $response )
-    # {
-    # 	$tester->extract_errwarn($response, 0, $message);
-    # 	$response->{__URLPATH} = $path_and_args;
-    # 	return $response;
-    # }
+
+sub server_request_nocheck {
+
+    my ($tester, $http_method, $path_and_args, $message, $options) = @_;
     
-    # else
-    # {
-    # 	fail($message);
-    # 	diag("no response");
-    # 	diag("request was: $url") if $url;
-    # 	return;
-    # }
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    return $tester->fetch_url($path_and_args, $message, 
+			  { no_check => 1, no_diag => 1,
+			    http_method => $http_method,
+			    ref $options eq 'HASH' ? %$options : () });
+}
+
+
+# send_data ( path_and_args, message, body_type, body, options )
+# 
+# Send a request that contains a body. The $body_type parameter specifies what
+# kind, and the $body parameter specifies the content. The subroutines
+# 'send_data_nocheck' does the same, but the internal test always passes
+# regardless of whether the response succeeded or not.
+
+sub send_data {
+    
+    my ($tester, $path_and_args, $message, $body_type, $body, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $type = $tester->type_option($body_type);
+    
+    return $tester->fetch_url($path_and_args, $message, 
+			  { $type => $body,
+			    ref $options eq 'HASH' ? %$options : () });
+}
+
+
+sub send_data_nocheck {
+
+    my ($tester, $path_and_args, $message, $body_type, $body, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $type = $tester->type_option($body_type);
+    
+    return $tester->fetch_url($path_and_args, $message, 
+			  { no_check => 1, no_diag => 1,
+			    $type => $body,
+			    ref $options eq 'HASH' ? %$options : () });
+}
+
+
+sub type_option {
+    
+    my ($tester, $body_type) = @_;
+    
+    if ( $body_type eq 'json' )
+    {
+	return 'json_body';
+    }
+    
+    elsif ( $body_type eq 'text' )
+    {
+	return 'text_body';
+    }
+    
+    elsif ( $body_type eq 'form' )
+    {
+	return 'form_body';
+    }
+    
+    elsif ( $body_type eq '' )
+    {
+	croak "You must specify a body type";
+    }
+    
+    else
+    {
+	croak "Unsupported type '$body_type'";
+    }   
 }
 
 
@@ -319,6 +509,117 @@ sub make_url {
     $url .= $path_and_args;
     
     return $url;
+}
+
+
+# set_cookie ( key, value )
+#
+# Set a cookie, which will be sent with all subsequent requests to the server. This will typically
+# be a session identifier.
+
+sub set_cookie {
+    
+    my ($tester, $key, $value) = @_;
+    
+    my $domain = $tester->{host} || $tester->{server};
+    
+    # $tester->{cj}->set_cookie(undef, $key, $value, '/', $domain);
+    
+    $tester->{cookie}{$key} = $value;
+    $tester->generate_cookie_line;
+}
+
+
+# clear_cookies ( )
+#
+# Clear all cookies that have been set.
+
+sub clear_cookies {
+
+    my ($tester) = @_;
+    
+    # $tester->{cj}->clear();
+    
+    $tester->{cookie} = {};
+    $tester->generate_cookie_line;
+}
+
+
+sub generate_cookie_line {
+
+    my ($tester) = @_;
+    
+    $tester->{cookie_line} = undef;
+    return unless ref $tester->{cookie} eq 'HASH';
+    
+    my @cookies;
+    
+    foreach my $k ( keys %{$tester->{cookie}} )
+    {
+	my $value = $tester->{cookie}{$k};
+	push @cookies, "$k=$value" if defined $value && $value ne '';
+    }
+    
+    $tester->{cookie_line} = join('; ', @cookies);
+}
+
+
+# test_mode ( tablename, operation )
+#
+# Try to enable or disable a particular set of test tables on the server. This
+# will fail if the server is not running in TEST_MODE.
+# 
+# Operation can be either of 'enable', 'disable'.
+
+sub test_mode {
+
+    my ($tester, $tablename, $operation, $options) = @_;
+    
+    $options ||= { };
+    
+    croak "unknown operation '$operation'"
+	unless $operation eq 'enable' || $operation eq 'disable';
+    
+    croak "you must specify a table name" unless $tablename;
+    
+    my $response = $tester->fetch_url("/testmode/$tablename/$operation", 
+				      "test mode $operation $tablename", $options);
+    
+    return unless $response;
+    
+    if ( $tester->get_response_code eq '200' )
+    {
+	my ($content) = $response->content;
+	
+	if ( $content )
+	{
+	    diag("*** TEST MODE: $content ***");
+	}
+	
+	else
+	{
+	    diag("!!! TEST MODE: no response !!!");
+	}
+	
+	return $content;
+    }
+    
+    else
+    {
+	my ($msg) = $tester->get_errors;
+	diag("!!! TEST MODE: $msg !!!");
+	return;
+    }
+}
+
+
+sub test_mode_nocheck {
+    
+    my ($tester, $tablename, $operation) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    return $tester->test_mode($tablename, $operation, { no_check => 1, no_diag => 1 });
 }
 
 
@@ -349,7 +650,7 @@ sub extract_errwarn {
 	unless ( $json )
 	{
 	    eval {
-		$json = $response->{__JSON} = $tester->{json}->decode( $body );
+		$json = $response->{__JSON} = JSON::decode_json( $body );
 	    };
 	    
 	    if ( $@ )
@@ -515,10 +816,18 @@ sub get_content_type {
 
 sub ok_content_type {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($type, $charset, $message) = @_;
+    
+    if ( ! defined $type )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }
     
     croak "No message specified" unless $message && ! ref $message;
     
@@ -562,7 +871,7 @@ sub get_response_code {
     
     if ( ref $response && $response->isa('HTTP::Response') )
     {
-	return $response->code;
+	return $response->code || '';
     }
     
     # If no object was provided (or a scalar argument such as 'last'), extract
@@ -573,7 +882,7 @@ sub get_response_code {
     {
 	return $tester->{last_response}->code
 	    if defined $tester->{last_response};
-	return;
+	return '';
     }
     
     # If some other kind of object was passed to use, throw an exception.
@@ -594,10 +903,18 @@ sub get_response_code {
 
 sub ok_response_code {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($code, $message) = @_;
+    
+    if ( ! defined $code )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }
     
     croak "No message specified" unless $message && ! ref $message;
     
@@ -757,17 +1074,23 @@ sub has_warning_like {
 
 sub ok_error_like {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($regex, $message) = @_;
+        
+    if ( ! defined $regex )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }    
     
     croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
     croak "You must specify a message" unless $message;
     
     $response ||= $tester->{last_response};
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     unless ( reftype $response eq 'HASH' && ref $response->{__ERRORS} eq 'ARRAY' )
     {
@@ -804,17 +1127,23 @@ sub diag_errors {
 
 sub ok_warning_like {
 
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($regex, $message) = @_;
+    
+    if ( ! defined $regex )
+    {
+	fail($message);
+	diag("    No response was found");
+	return;
+    }
     
     croak "You must specify a regular expression" unless ref $regex eq 'Regexp';
     croak "You must specify a message" unless $message;
     
     $response ||= $tester->{last_response};
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     unless ( reftype $response eq 'HASH' && ref $response->{__WARNINGS} eq 'ARRAY' )
     {
@@ -856,6 +1185,8 @@ sub diag_warnings {
 
 sub cmp_ok_errors {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
@@ -863,8 +1194,6 @@ sub cmp_ok_errors {
     
     croak "You must specify a message" unless defined $message;
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-
     $response ||= $tester->{last_response};
     
     unless ( reftype $response eq 'HASH' && ref $response->{__ERRORS} eq 'ARRAY' )
@@ -874,7 +1203,10 @@ sub cmp_ok_errors {
 	return;
     }
     
-    cmp_ok( @{$response->{__ERRORS}}, $operation, $compvalue, $message );
+    cmp_ok( @{$response->{__ERRORS}}, $operation, $compvalue, $message ) && return 1;
+
+    $tester->diag_errors($response);
+    return ();
 }
 
 
@@ -885,14 +1217,14 @@ sub cmp_ok_errors {
 
 sub cmp_ok_warnings {
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($operation, $compvalue, $message) = @_;
     
     croak "You must specify a message" unless defined $message;
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     $response ||= $tester->{last_response};
     
@@ -958,14 +1290,14 @@ sub get_meta {
 
 sub cmp_ok_meta {
 
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $tester = shift @_;
     my $response;
     $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
     my ($field, $operation, $compvalue, $message) = @_;
     
     croak "You must specify a message" unless defined $message;
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     $response ||= $tester->{last_response};
     
@@ -981,53 +1313,38 @@ sub cmp_ok_meta {
 
 sub ok_no_records {
     
-    my $tester = shift @_;
-    my $response;
-    $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
-    my ($message) = @_;
-    
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $extract_from;
+    my $tester = shift @_;
+    my $response; $response = shift @_ if ref $_[0] && $_[0]->isa('HTTP::Response');
+    my ($message) = @_;
     
-    if ( ref $response eq 'HTTP::Response' )
+    $message ||= "no records were returned";
+    
+    $response ||= $tester->{last_response};
+    
+    unless ( ref $response )
     {
-	$extract_from = $response;
+	fail("no response is available to be tested");
+	return;
     }
     
-    elsif ( ! defined $response || lc $response eq 'last' )
+    my $code = $tester->get_response_code($response);
+    
+    unless ( $code && $code eq '200' )
     {
-	$extract_from = $tester->{last_response};
+	fail($message);
+	diag("result code '$code' for '$message'");
+	return;
     }
     
-    else
-    {
-	my $type = ref $response;
-	croak "First argument must be an HTTP response object, was type '$type'";
-    }
-    
-    my @r = $tester->extract_records( $extract_from, $message, { no_records_ok => 1 } );
+    my @r = $tester->extract_records( $response, $message, { no_records_ok => 1 } );
     
     my $count = scalar(@r);
     
     ok( $count == 0, $message ) ||
 	diag( "    got: $count records" );
 }
-
-
-# get_metadata ( response )
-# 
-# Return any metadata that was included with the response. $$$
-
-# sub get_metadata {
-    
-#     my ($tester, $response) = @_;
-    
-#     croak "First argument must be a response object" unless ref($response) =~ /^HTTP/;
-    
-#     return $response->{__METADATA} if ref $response->{__METADATA} eq 'HASH';
-#     return {};
-# }
 
 
 # fetch_records ( path_and_args, options, message )
@@ -1046,6 +1363,42 @@ sub fetch_records {
     return unless $response;
     
     return $tester->extract_records($response, "$message: extract records", $options);
+}
+
+
+sub request_records {
+    
+    my ($tester, $http_method, $path_and_args, $message, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $response = $tester->fetch_url($path_and_args, $message, 
+				  { http_method => $http_method,
+				    ref $options eq 'HASH' ? %$options : () });
+    return unless $response;
+    
+    return $tester->extract_records($response, "$message: extract records", $options);    
+}
+
+
+sub send_records {
+    
+    my ($tester, $path_and_args, $message, $body_type, $body, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $options ||= { };
+    
+    my $type = $tester->type_option($body_type);
+    
+    my $response = $tester->fetch_url($path_and_args, $message, 
+				  { $type => $body,
+				    ref $options eq 'HASH' ? %$options : () });
+    return unless $response;
+    
+    return $response if $options->{no_check};
+    
+    return $tester->extract_records($response, "$message: extract records", $options);    
 }
 
 
@@ -1073,13 +1426,6 @@ sub fetch_record_values {
     return ( NO_RECORDS => 1 ) unless @r;
     
     return $tester->extract_values( \@r, $field );
-    
-    # foreach my $r (@r)
-    # {
-    # 	$found{$r->{$field}} = 1 if defined $r->{$field} && $r->{$field} ne '';
-    # }
-    
-    # return %found;
 }
 
 
@@ -1151,7 +1497,7 @@ sub extract_records_json {
     unless ( $body )
     {
 	eval {
-	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
+	    $body = $response->{__JSON} = JSON::decode_json( $response->content );
 	};
 	
 	if ( $@ )
@@ -1175,7 +1521,7 @@ sub extract_records_json {
     else
     {
 	fail($message);
-	diag('no records found');
+	diag('no records were returned');
 	if ( $response->{__URLPATH} )
 	{
 	    my $url = $tester->make_url($response->{__URLPATH});
@@ -1355,7 +1701,7 @@ sub extract_records_text {
     else
     {
 	fail($message);
-	diag('no records found');
+	diag('no records were returned');
 	if ( $response->{__URLPATH} )
 	{
 	    my $url = $tester->make_url($response->{__URLPATH});
@@ -1499,7 +1845,7 @@ sub extract_records_ris {
     else
     {
 	fail($message);
-	diag('no records found');
+	diag('no records were returned');
 	if ( $response->{__URLPATH} )
 	{
 	    my $url = $tester->make_url($response->{__URLPATH});
@@ -1558,7 +1904,7 @@ sub extract_info_json {
     unless ( $body )
     {
 	eval {
-	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
+	    $body = $response->{__JSON} = JSON::decode_json( $response->content );
 	};
 	
 	if ( $@ )
@@ -2008,7 +2354,7 @@ sub decode_json_response {
     my $json;
     
     eval {
-	$json = $tester->{json}->decode( $response->content );
+	$json = JSON::decode_json( $response->content );
     };
     
     if ( $@ )
@@ -2531,6 +2877,217 @@ sub generate_value_expr {
     croak "no field names were specified\n" unless @field_list && $field_list[0];
     
     return join(', ', @field_list);
+}
+
+
+# Additional value testing functions, these are aiming to replace 'check_values', et. al.
+
+sub generate_from_pattern {
+
+    my ($tester, $pattern, @values) = @_;
+
+    my @result;
+
+    while ( @values )
+    {
+	my $string = $pattern;
+	$string =~ s/@@/shift @values/eg;
+	push @result, $string;
+    }
+    
+    return @result;
+}
+
+
+sub test_block_output {
+
+    my ($tester, $block_name, $urls, $label, $fields, $primary, $tests, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $options ||= { };
+    
+    my @urls = ref $urls eq 'ARRAY' ? @$urls : $urls;
+    
+    my $tc = Test::Conditions->new;
+    
+    # if ( $extra_block{$k} )
+    # {
+    # 	$block = $extra_block{$k};
+    # 	$show = $extra_show{$k};
+    # 	$field_options->{skip} = $extra_skip{$k} if $extra_skip{$k};
+    # }
+    
+    # unless ( $block )
+    # {
+    #     diag "could not find block '$k'";
+    #     next KEY;
+    # }
+    
+    # my @com_fields = $W->list_fields($block, $k, 'com', $field_options);
+    # my @pbdb_fields = $W->list_fields($block, $k, 'pbdb', $field_options);
+    # my @extra_shows = $W->list_if_blocks($block);
+    
+    # $show .= ',' . join(',', @extra_shows) if @extra_shows;
+    
+    my %not_found = map { $_ => 1 } @$fields;
+    my %check_list;
+    
+  URL:
+    foreach my $url ( @urls )
+    {
+	my (@r1) = $tester->fetch_records($url, "fetched url '$url'");
+	
+	next URL unless @r1;
+	
+	my $index = 1;
+	
+	foreach my $r (@r1)
+	{
+	    my $key = $r->{$primary} || ("#" . $index++);
+	    
+	    foreach my $f ( keys %$r )
+	    {
+		if ( defined $r->{$f} && $r->{$f} ne '' )
+		{
+		    if ( $tests && $tests->{$f} )
+		    {
+			my $result = $tester->test_field_value($r->{$f}, $tests->{$f});
+			$tc->flag($f, "$key : $result") if $result;
+			$check_list{$f} = 1;
+		    }
+		    
+		    delete $not_found{$f};
+		}
+	    }
+
+	    if ( $tests && $tests->{_nonempty} )
+	    {
+		foreach my $f ( split /\s*,\s*/, $tests->{_nonempty} )
+		{
+		    $tc->flag($f, "$key : nonempty") unless defined $r->{$f} && $r->{$f} ne '';
+		}
+	    }
+
+	    if ( $tests && $tests->{_record} )
+	    {
+		if ( ref $tests->{_record} eq 'CODE' )
+		{
+		    unless ( $tests->{_record}->($r) )
+		    {
+			my $label = $tests->{_record}->('_label');
+			$tc->flag('record', "$key : $label");
+		    }
+		}
+
+		elsif ( ref $tests->{_record} eq 'ARRAY' )
+		{
+		    my @fails;
+
+		    foreach my $t ( @{$tests->{_record}} )
+		    {
+			push @fails, $t->('_label') unless $t->($r);
+		    }
+		    
+		    if ( @fails )
+		    {
+			my $list = join(', ', @fails);
+			$tc->flag('record', "$key : $list");
+		    }
+		}
+	    }
+	}
+	
+	# last URL unless %not_found;
+    }
+    
+    if ( my @not_found = grep { $not_found{$_} } @$fields )
+    {
+	my $list = join("', '", @not_found);
+	fail("found output fields '$list' with '$label'");
+    }
+    
+    else
+    {
+	my $list = join("', '", @$fields);
+	pass("found output fields '$list' with '$label'");
+    }
+    
+    if ( $tests )
+    {
+	my $list = join("', '", keys %check_list);
+	$tc->ok_all("passed value checks '$list' with '$label'")
+    }
+}
+
+
+sub test_field_value {
+    
+    my ($tester, $value, $expr) = @_;
+
+    # If we were given a code ref, use it to test the value. The testing functions should return a
+    # label string in response to the input '_label'.
+    
+    if ( ref $expr eq 'CODE' )
+    {
+	return $expr->('_label') unless $expr->($value);
+	return;
+    }
+
+    # Otherwise, assume that the argument names one or more tests.
+    
+    my @tests = split /\s*,\s*/, $expr;
+    my @fails;
+    
+    foreach my $t ( @tests )
+    {
+	if ( $t =~ /^extid:(\w+)/ )
+	{
+	    push @fails, $t unless $value =~ $IDRE{$1};
+	}
+	
+	elsif ( $t eq 'posint' or $t eq 'poszeroint' or $t eq 'int' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ (-)? [0-9]+ $ }xs &&
+		($t ne 'posint' || $value > 0) &&
+		($t eq 'int' || $1 eq '');
+	}
+	
+	elsif ( $t eq 'posnum' or $t eq 'poszeronum' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ (-)? (?: [0-9]+ (?:[.][0-9]*)?
+							  | [.][0-9]+ )
+						 $ }xs &&
+		($t ne 'posnum' || $value > 0) &&
+		($t eq 'num' || $1 eq '');
+	}
+	
+	elsif ( $t eq 'taxonname' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ [A-Z][a-z]+
+						   (?: \s [(] [A-Z][a-z]+ [)] )?
+						   (?: \s [a-z]+ | \s [a-z]+ \s [a-z]+ )?
+						 $ }xs;
+	}
+
+	elsif ( $t eq 'datetime' )
+	{
+	    push @fails, $t unless $value =~ qr{ ^ \d\d\d\d-\d\d-\d\d \s \d\d:\d\d:\d\d $ }xs;
+	}
+	
+	elsif ( $t eq 'boolean' )
+	{
+	    push @fails, $t unless $value =~ /^(?:1|0|yes|no|true|false)$/i;
+	}	
+	
+	else
+	{
+	    croak "unknown test '$t'";
+	}
+    }
+
+    return join(',', @fails) if @fails;
+    return
 }
 
 

@@ -134,6 +134,57 @@
     MACRO PARAMETERS INCLUDE PARAMETERS;
     
     #
+    # BODY_SECTION, BODY: Document the body record fields accepted by this URL path
+    # -------------------------------------------------------------------------------------
+    
+    BLOCK BODY_SECTION;
+        IF block_done.body; RETURN; ELSE; SET block_done.body = 1; END;
+	SET body_ruleset = ds.node_attr(request, 'body_ruleset');
+	IF body_ruleset;
+	    "\n=head2 $section_label.body\n\n";
+	    IF content; GET content FILTER trim; "\n\n";
+            END;
+	    FOREACH rs IN body_ruleset.split('\s*,\s*');
+	        request.document_params(rs);
+		"\n\n";
+	    END;
+        ELSIF opt_force;
+            "\n=head2 $section_label.body\n\n";
+            GET sub_message("MSG_BODY_NONE_DEFINED"); "\n\n";
+        END;
+    END;
+    
+    MACRO BODY_SECTION INCLUDE BODY_SECTION;
+    
+    BLOCK BODY;
+	SET body_ruleset = ds.node_attr(request, 'body_ruleset');
+	IF body_ruleset;
+	    "\n=head2 $section_label.body\n\n";
+	    IF content; GET content FILTER trim; "\n\n";
+            END;
+	    FOREACH rs IN body_ruleset.split(',');
+	        request.document_params(rs);
+		"\n\n";
+	    END;
+ 	ELSIF opt_force; sub_message("MSG_BODY_NONE_DEFINED"); "\n\n";
+        END;
+    END;
+    
+    MACRO BODY INCLUDE BODY;
+    
+# 	SET ruleset_name = ds.determine_ruleset(request.node_path);
+# 	SET body_doc = request.document_params(ruleset_name _ '_body');
+# 	IF body_doc;
+#     	    "\n=head2 $section_label.body\n\n";
+# 	    IF content; GET content FILTER trim; "\n\n";
+#             END;
+#             GET body_doc;
+#         ELSIF opt_force;
+#             "\n=head2 $section_label.body\n\n";
+#             GET sub_message("MSG_BODY_NONE_DEFINED"); "\n\n";
+#         END;
+	
+    #
     # METHOD_SECTION, METHODS: Document the HTTP methods accepted by this URL path
     # ----------------------------------------------------------------------------
     

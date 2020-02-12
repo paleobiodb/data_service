@@ -11,7 +11,8 @@
 package Taxonomy;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
-use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX %IDP);
+use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX);
+use ExternalIdent qw(%IDP);
 use Carp qw(carp croak);
 use Try::Tiny;
 
@@ -121,15 +122,15 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       min_modyr => 1, 
 		       max_modyr => 1,
 		       reference_no => 1,
-		       created_after => 1,
-		       created_before => 1,
-		       modified_after =>1,
-		       modified_before => 1,
-		       authorized_by => 1,
-		       entered_by => 1,
-		       modified_by => 1,
-		       authent_by => 1,
-		       touched_by => 1, );
+		       taxa_authorized_by => 1,
+		       taxa_entered_by => 1,
+		       taxa_modified_by => 1,
+		       taxa_authent_by => 1,
+		       taxa_touched_by => 1,
+		       taxa_created_after => 1,
+		       taxa_created_before => 1,
+		       taxa_modified_after =>1,
+		       taxa_modified_before => 1,);
 
 my (%RESOLVE_OPTION) = ( all_names => 1,
 			 common => 1 );
@@ -172,15 +173,15 @@ my (%REF_OPTION) = ( ref_type => 1,
 		     ref_authent_by => 1,
 		     ref_touched_by => 1 );
 
-my (%COMMON_OPTION) = ( created_after => 1,
-			created_before => 1,
-			modified_after =>1,
-			modified_before => 1,
-			authorized_by => 1,
-			entered_by => 1,
-			modified_by => 1,
-			authent_by => 1,
-			touched_by => 1,
+my (%COMMON_OPTION) = ( taxa_created_after => 1,
+			taxa_created_before => 1,
+			taxa_modified_after =>1,
+			taxa_modified_before => 1,
+			taxa_authorized_by => 1,
+			taxa_entered_by => 1,
+			taxa_modified_by => 1,
+			taxa_authent_by => 1,
+			taxa_touched_by => 1,
 			op_created_after => 1,
 			op_created_before => 1,
 			op_modified_after =>1,
@@ -431,6 +432,7 @@ sub list_taxa_simple {
     
     my @filters = "base.taxon_no in ($base_string)";
     push @filters, $taxonomy->taxon_filters($options, $tables);
+    push @filters, $taxonomy->common_filters($options, $tables, 'a');
     push @filters, $taxonomy->refno_filter($options, 'a');
     my $filters = join( q{ and }, @filters);
     
@@ -552,6 +554,7 @@ sub list_subtree {
     
     my @filters = "base.taxon_no in ($base_string)";
     push @filters, $taxonomy->taxon_filters($options, $tables);
+    push @filters, $taxonomy->common_filters($options, $tables, 'a');
     push @filters, $taxonomy->exclusion_filters($base_nos);
     push @filters, $taxonomy->refno_filter($options, 'a');
     my $filters = @filters ? join ' and ', @filters : '1=1';
@@ -773,6 +776,7 @@ sub list_taxa {
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
@@ -806,6 +810,7 @@ sub list_taxa {
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
@@ -853,6 +858,7 @@ sub list_taxa {
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->exclusion_filters($base_nos);
 	
 	push @filters, "t.lft > tb.lft and t.lft <= tb.rgt" if $rel eq 'juniors';
@@ -894,6 +900,7 @@ sub list_taxa {
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->exclusion_filters($base_nos);
 	push @filters, $taxonomy->refno_filter($options, 'a');
 	
@@ -943,6 +950,7 @@ sub list_taxa {
 	#$fields =~ s{t\.senpar_no}{t.immpar_no};
 	
 	my @filters = $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	$filters ||= '1=1';
@@ -973,6 +981,7 @@ sub list_taxa {
 	
 	my @filters = "t.orig_no in ($common_string)";
 	push @filters, $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->refno_filter($options, 'a');
 	my $filters = join( q{ and }, @filters);
 	
@@ -993,6 +1002,7 @@ sub list_taxa {
 	my $fields = join ', ', @fields;
 	
 	my @filters = $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->refno_filter($options, 'a');
 	push @filters, '1=1' unless @filters;
 	my $filters = join( q{ and }, @filters);
@@ -1032,6 +1042,7 @@ sub list_taxa {
 	    'a.taxon_no = list.taxon_no';
 	
 	my @filters = $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
 	push @filters, $taxonomy->range_filter($base_string);
 	push @filters, $taxonomy->exclusion_filters($base_nos);
 	push @filters, '1=1' unless @filters;
@@ -1404,6 +1415,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables)
 	    if $record_type eq 'opinions';
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
 	
 	$taxon_joins = "$auth_table as base JOIN $tree_table as t using (orig_no)\n";
 	$taxon_joins .= $taxonomy->taxon_joins('t', $inner_tables);
@@ -1416,6 +1428,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables)
 	    if $record_type eq 'opinions';
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
 	
 	if ( $rel eq 'parent' )
 	{
@@ -1437,6 +1450,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables)
 	    if $record_type eq 'opinions';
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
 	
 	my ($sel_field, $rel_field);
 	
@@ -1473,6 +1487,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables)
 	    if $record_type eq 'opinions';
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
 	
 	if ( $options->{immediate} )
 	{
@@ -1504,6 +1519,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables)
 	    if $record_type eq 'opinions';
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
 	push @inner_filters, '1=1' unless @inner_filters;
 	
 	$taxon_joins = "ancestry_temp as base JOIN $tree_table as t using (orig_no)\n";
@@ -1515,6 +1531,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->taxon_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables);
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
 	push @inner_filters, '1=1' unless @inner_filters;
 	
 	$other_joins = $taxonomy->opinion_joins('o', $inner_tables);
@@ -1525,6 +1542,7 @@ sub list_associated {
     {
 	push @inner_filters, $taxonomy->taxon_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r');	
 	push @inner_filters, '1=1' unless @inner_filters;
 	
 	$other_joins = $taxonomy->ref_joins('r', $inner_tables);
@@ -1547,6 +1565,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->exclusion_filters($base_nos);
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables);
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
 	push @inner_filters, "1=1" unless @inner_filters;
 	
 	$taxon_joins = "taxa_list as list JOIN $tree_table as t using (orig_no)\n";
@@ -4093,7 +4112,7 @@ sub taxon_filters {
 	}
     }
     
-    push @filters, $taxonomy->common_filters('a', 'taxa', $options);
+    # push @filters, $taxonomy->common_filters('a', 'taxa', $options, $tables_ref);
     
     return @filters;
 }
@@ -4254,7 +4273,7 @@ sub ref_filters {
 	push @filters, "r.pubtitle like $pubtitle";
     }
     
-    push @filters, $taxonomy->common_filters('r', 'refs', $options);
+    # push @filters, $taxonomy->common_filters('r', 'refs', $options, $tables_ref);
     
     $tables_ref->{r} = 1 if @filters;
     
@@ -4350,7 +4369,7 @@ sub opinion_filters {
 	push @filters, '(' . join(' or ', @author_filters) . ')';
     }
     
-    push @filters, $taxonomy->common_filters('oo', 'ops', $options);
+    # push @filters, $taxonomy->common_filters('oo', 'ops', $options, $tables_ref);
     
     return @filters;
 }
@@ -4358,40 +4377,43 @@ sub opinion_filters {
 
 sub common_filters {
 
-    my ($taxonomy, $t, $opt_type, $options, $tables) = @_;
+    my ($taxonomy, $options, $tables, $taxa_table, $refs_table, $ops_table) = @_;
     
     my @filters;
     my $dbh = $taxonomy->{dbh};
     
-    # Go through all of the options passed to this Taxonomy request.
+    # Go through all of the options passed to this Taxonomy request. Any that are found in
+    # %COMMON_OPTIONS and have a non-empty value are processed by this routine.
     
     foreach my $key ( keys %$options )
     {
-	# Check to see if any of them is a common option which matches the
-	# given $opt_type.
-	
 	next unless $COMMON_OPTION{$key};
 	
 	my $value = $options->{$key};
 	
 	next unless defined $value && $value ne '';
+
+	# Select the appropriate table to which to apply this filter based on the option
+	# prefix. If no matching table was passed to this routine, throw an exception.
 	
-	if ( $key =~ qr{^ref} )
+	my $t;
+
+	if ( $key =~ qr{^taxa} )
 	{
-	    next unless $opt_type eq 'refs';
+	    $t = $taxa_table || croak "common_filters: invalid option '$key', no taxa table specified";
 	}
 	
-	elsif ( $key =~ qr{^op} )
+	elsif ( $key =~ qr{^ref} )
 	{
-	    next unless $opt_type eq 'ops';
+	    $t = $refs_table || croak "common_filters: invalid option '$key', no refs table specified";
 	}
-	
+
 	else
 	{
-	    next unless $opt_type eq 'taxa';
+	    $t = $ops_table || croak "common_filters: invalid option '$key', no ops table specified";
 	}
 	
-	# If so, then create the appropriate SQL filter expression and add it
+	# Now create the appropriate SQL filter expression and add it
 	# to the list.
 	
 	if ( $key =~ qr{created_after$} )

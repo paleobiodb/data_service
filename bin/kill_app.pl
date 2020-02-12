@@ -9,9 +9,15 @@ open $ps_cmd, "ps -ef |";
 
 while ( <$ps_cmd> )
 {
-    if ( m{ ^ \s+ \d+ \s+ (\d+) .* perl \s bin/web_app.pl }x )
+    if ( m{ ^ \s+ \d+ \s+ (\d+) .* perl \s ( bin/web_app.pl \s .* test .* ) }x )
     {
-	print "killing process $1\n";
+	print "killing test process $1 $2\n";
+	system("kill $1");
+    }
+    
+    elsif ( m{ ^ \s+ \d+ \s+ (\d+) .* perl \s ( bin/web_app.pl ) }x )
+    {
+	print "killing process $1 $2\n";
 	system("kill $1");
     }
 }

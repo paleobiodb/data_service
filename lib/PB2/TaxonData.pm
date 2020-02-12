@@ -224,16 +224,16 @@ sub initialize {
 	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
 	  if_block => 'immparent', dedup => 'senpar_name' },
 	    "The name of the immediate parent taxon, even if it is a junior synonym.",
-	{ output => 'container_no', com_name => 'ctn', dedup => 'senpar_no' },
+	{ output => 'container_no', com_name => 'ctn', pbdb_name => 'container_no', dedup => 'senpar_no' },
 	    "The identifier of a taxon from the result set containing this one, which",
 	    "may or may not be the parent.  This field will only appear in the result",
 	    "of the L<occs/taxa|node:occs/taxa> operation, where no base taxon is",
 	    "specified.  The taxa reported in this case are the \"classical\" ranks,",
 	    "rather than the full taxonomic hierarcy.",
-	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => 'refattr,1.2:refs:attr' },
 	    "The author(s) of the reference from which this name was entered.  Note that",
 	    "the author of the name itself may be different if the reference is a secondary source.",
-	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
+	{ output => 'ref_pubyr', com_name => 'pby', if_block => 'refattr,1.2:refs:attr' },
 	    "The year of publication of the reference from which this name was entered.  Note that",
 	    "the publication year of the name itself may be different if the reference is a secondary source.",
 	{ output => 'reference_no', com_name => 'rid' },
@@ -328,10 +328,10 @@ sub initialize {
 	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
 	  if_block => 'immparent', dedup => 'senpar_name' },
 	    "The name of the immediate parent taxon, even if it is a junior synonym.",
-	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => 'refattr,1.2:refs:attr' },
 	    "The author(s) of the reference from which this name was entered.  Note that",
 	    "the author of the name itself may be different if the reference is a secondary source.",
-	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
+	{ output => 'ref_pubyr', com_name => 'pby', if_block => 'refattr,1.2:refs:attr' },
 	    "The year of publication of the reference from which this name was entered.  Note that",
 	    "the publication year of the name itself may be different if the reference is a secondary source.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
@@ -807,10 +807,10 @@ sub initialize {
 	    "The author of the opinion.",
 	{ output => 'pubyr', com_name => 'opy' },
 	    "The year in which the opinion was published.",
-	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => 'refattr,1.2:refs:attr' },
 	    "The author(s) of the reference from which this opinion was entered.  Note that",
 	    "the author of the opinion itself may be different if the reference is a secondary source.",
-	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
+	{ output => 'ref_pubyr', com_name => 'pby', if_block => 'refattr,1.2:refs:attr' },
 	    "The year of publication of the reference from which this opinion was entered.  Note that",
 	    "the year of the opinion itself may be different if the reference is a secondary source.",
 	{ output => 'reference_no', com_name => 'rid' },
@@ -2976,7 +2976,7 @@ sub generate_query_options {
 	
 	elsif ( $prefix eq 'taxa' )
 	{
-	    $options->{$selector} = $value;
+	    $options->{"taxa_$selector"} = $value;
 	}
 	
 	else
