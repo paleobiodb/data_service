@@ -22,7 +22,7 @@ RUN apt-get update && \
     cpanm Starman
     
 RUN cpanm HTTP::Validate && \
-    cpanm Web::DataService
+    cpanm Switch::Plain
 
 RUN cpanm --force Term::ReadLine::Gnu
 
