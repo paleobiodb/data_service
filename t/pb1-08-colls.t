@@ -19,7 +19,7 @@ use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # First define the values we will be using to check the collection operations.
@@ -53,9 +53,9 @@ my $c1j = { oid => $COLL_ID_1,
 	    gsc => $LOC_GSC_1,
 	    lng => '!numeric',
 	    lat => '!numeric',
-	    pln => '!numeric',
-	    pla => '!numeric',
-	    gpl => '!numeric',
+	    # pln => '!numeric',
+	    # pla => '!numeric',
+	    # gpl => '!numeric',
 	    cxi => '!numeric',
 	    ein => '!numeric',
 	    lin => '!numeric',
@@ -107,7 +107,7 @@ my $r1j = { oid => $REF_ID_1,
 
 subtest 'single json' => sub {
     
-    my $single_json = $T->fetch_url("/data1.1/colls/single.json?id=$COLL_ID_1&show=loc,paleoloc,time,attr",
+    my $single_json = $T->fetch_url("colls/single.json?id=$COLL_ID_1&show=loc,paleoloc,time,attr",
 				    "single json request OK");
     
     unless ( $single_json )
@@ -128,7 +128,7 @@ subtest 'single json' => sub {
 
 subtest 'single txt' => sub {
 
-    my $single_txt = $T->fetch_url("/data1.1/colls/single.txt?id=$COLL_ID_1&show=ref,entname,crmod",
+    my $single_txt = $T->fetch_url("colls/single.txt?id=$COLL_ID_1&show=ref,entname,crmod",
 				    "single txt request OK");
     
     unless ( $single_txt )
@@ -149,7 +149,7 @@ subtest 'single txt' => sub {
 
 subtest 'list json' => sub {
     
-    my $list_coll = $T->fetch_url("/data1.1/colls/list.json?coll_id=$COLL_ID_1,$COLL_ID_2,$COLL_ID_3&show=loc,paleoloc,time,attr",
+    my $list_coll = $T->fetch_url("colls/list.json?coll_id=$COLL_ID_1,$COLL_ID_2,$COLL_ID_3&show=loc,paleoloc,time,attr",
 				  "list coll request OK");
     
     unless ( $list_coll )
@@ -181,7 +181,7 @@ subtest 'list json' => sub {
 
 subtest 'refs json' => sub {
     
-    my $refs_json = $T->fetch_url("/data1.1/colls/refs.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
+    my $refs_json = $T->fetch_url("colls/refs.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
 				  "refs json request OK");
     
     unless ( $refs_json )
@@ -212,7 +212,7 @@ subtest 'refs json' => sub {
 
 subtest 'summary bins' => sub {
 
-    my $summary_json = $T->fetch_url("/data1.1/colls/summary.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&level=1&limit=5",
+    my $summary_json = $T->fetch_url("colls/summary.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&level=1&limit=5",
 				     "summary request OK");
     
     unless ( $summary_json )

@@ -16,7 +16,7 @@ use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # First define the values we will be using to check the strata operations.
@@ -72,7 +72,7 @@ my $ta = { typ => 'str',
 
 subtest 'list json' => sub {
     
-    my $list_json = $T->fetch_url("/data1.1/strata/list.json?name=$TEST_NAME_1&rank=$TEST_RANK_1",
+    my $list_json = $T->fetch_url("strata/list.json?name=$TEST_NAME_1&rank=$TEST_RANK_1",
 				  "list json request OK");
     
     unless ( $list_json )
@@ -102,7 +102,7 @@ subtest 'list json' => sub {
     
     # Now check that we get no results with a bad rank.
     
-    my $list_bad = $T->fetch_url("/data1.1/strata/list.json?name=$TEST_NAME_1&rank=$TEST_BADRANK_1",
+    my $list_bad = $T->fetch_url("strata/list.json?name=$TEST_NAME_1&rank=$TEST_BADRANK_1",
 				  "list bad request OK");
     
     eval {
@@ -115,7 +115,7 @@ subtest 'list json' => sub {
 
 subtest 'list txt' => sub {
     
-    my $list_txt = $T->fetch_url("/data1.1/strata/list.txt?name=$TEST_NAME_2&rank=$TEST_RANK_2",
+    my $list_txt = $T->fetch_url("strata/list.txt?name=$TEST_NAME_2&rank=$TEST_RANK_2",
 				  "list txt request OK");
     
     unless ( $list_txt )
@@ -147,7 +147,7 @@ subtest 'list txt' => sub {
 
 subtest 'list coords' => sub {
 
-    my $list_coords = $T->fetch_url("/data1.1/strata/list.json?$COORDS&rank=$COORDS_RANK",
+    my $list_coords = $T->fetch_url("strata/list.json?$COORDS&rank=$COORDS_RANK",
 				  "list coords request OK");
     
     unless ( $list_coords )
@@ -175,7 +175,7 @@ subtest 'list coords' => sub {
 
 subtest 'auto' => sub {
 
-    my $auto_json = $T->fetch_url("/data1.1/strata/auto.json?name=$AUTO_NAME&limit=$AUTO_LIMIT");
+    my $auto_json = $T->fetch_url("strata/auto.json?name=$AUTO_NAME&limit=$AUTO_LIMIT");
 
     unless ( $auto_json )
     {
