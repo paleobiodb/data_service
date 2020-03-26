@@ -38,7 +38,7 @@ our (%COMMON_FIELD_IDSUB);
 
 our (%SCHEMA_CACHE);
 
-our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
+our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED NOT_NULL ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
 				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR IGNORE);
 
 our (%PREFIX_SIZE) = ( tiny => 255,
@@ -115,10 +115,10 @@ sub get_table_schema {
     
     croak "unknown table '$table_specifier'" unless $check_table;
     
-    print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $debug;
+    print STDERR "	SHOW FULL COLUMNS FROM $quoted_table\n\n" if $debug;
     
     my $columns_ref = $dbh->selectall_arrayref("
-	SHOW COLUMNS FROM $quoted_table", { Slice => { } });
+	SHOW FULL COLUMNS FROM $quoted_table", { Slice => { } });
     
     # Figure out which columns from this table have had properties set for them.
     
@@ -168,15 +168,21 @@ sub get_table_schema {
 	}
 	
 	# If the column is Not Null and has neither a default value nor auto_increment, then mark
-	# it as REQUIRED. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column. But not if the column type is BLOB or
-	# TEXT, because of an issue with MariaDB 10.0-10.1.
+	# it as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
+	# update a record with a null value for this column. [But not if the column type is BLOB or
+	# TEXT, because of an issue with MariaDB 10.0-10.1. - taken out 2020-03-06 mjm]
 	
 	if ( $c->{Null} && $c->{Null} eq 'NO' && not ( defined $c->{Default} ) &&
 	     not ( $c->{Extra} && $c->{Extra} =~ /auto_increment/i ) )
 	{
-	    $c->{REQUIRED} = 1 unless $c->{Type} =~ /text|blob/i;
+	    $c->{NOT_NULL} = 1; # unless $c->{Type} =~ /text|blob/i;
 	}
+	
+	# We discard the Privileges and Comment fields, because we don't use them. The only reason
+	# for retrieving the full column output is to get the Collation information.
+
+	delete $c->{Privileges};
+	delete $c->{Comments};
 	
 	# If the name of the field ends in _no, then record its alternate as the same name with
 	# _id substituted unless there is already a field with that name.
@@ -200,14 +206,17 @@ sub get_table_schema {
 	{
 	    my $type = $2 eq 'char' ? 'text' : 'data';
 	    my $mode = $1 ? 'variable' : 'fixed';
-	    $c->{TypeParams} = [ $type, $3, $mode ];
+	    my $size = $3;
+	    my ($charset) = $c->{Collation} =~ qr{ ^ ([^_]+) }xs;
+	    $c->{TypeParams} = [ $type, $size, $mode, $charset ];
 	}
 	
 	elsif ( $type =~ qr{ ^ ( tiny | medium | long )? ( text | blob ) (?: [(] ( \d+ ) )? }xs )
 	{
 	    my $type = $2 eq 'text' ? 'text' : 'data';
 	    my $size = $3 || $PREFIX_SIZE{$1 || 'regular'};
-	    $c->{TypeParams} = [ $type, $size, 'variable' ];
+	    my ($charset) = $c->{Collation} =~ qr{ ^ ([^_]+) }xs;
+	    $c->{TypeParams} = [ $type, $size, 'variable', $charset ];
 	}
 	
 	elsif ( $type =~ qr{ ^ tinyint [(] 1 [)] }xs )
@@ -332,13 +341,13 @@ sub reset_cached_column_properties {
 	}
 	
 	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
-	# as REQUIRED. Otherwise, a database error will be generated when we try to insert or
+	# as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
 	# update a record with a null value for this column.
 	
 	if ( $col->{Null} && $col->{Null} eq 'NO' && not ( defined $col->{Default} ) &&
 	     not ( $col->{Extra} && $col->{Extra} =~ /auto_increment/i ) )
 	{
-	    $col->{REQUIRED} = 1;
+	    $col->{NOT_NULL} = 1;
 	}
 	
 	# If the name of the field ends in _no, then record its alternate as the same name with

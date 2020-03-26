@@ -17,10 +17,6 @@ use CoreFunction qw(new_tables_safe);
 use ResourceDefs;
 use TableDefs qw(%TABLE);
 
-# use ResourceDefs qw($RESOURCE_QUEUE $RESOURCE_IMAGES
-# 		    $RESOURCE_TAG_NAMES $RESOURCE_TAGS $RESOURCE_ACTIVE);
-
-
 # establish_tables ( class, dbh, options )
 # 
 # This class method creates database tables necessary to use this class for testing purposes, or

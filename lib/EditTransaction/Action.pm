@@ -80,10 +80,10 @@ sub new {
 		$action->{keyrec} = $key_column;
 	    }
 
-	    # If not, check to see if the table has a 'PRIMARY_ATTR' property and if so whether
+	    # If not, check to see if the table has a 'PRIMARY_FIELD' property and if so whether
 	    # the record contains a value under that name.
 	    
-	    elsif ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
+	    elsif ( my $key_attr = get_table_property($table, 'PRIMARY_FIELD') )
 	    {
 		if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
 		{
@@ -519,6 +519,14 @@ sub pass_column {
     my ($action, $col) = @_;
 
     $action->{column_special}{$col} = 'pass';
+}
+
+
+sub ignore_field {
+
+    my ($action, $field) = @_;
+
+    $action->{ignore_field}{$field} = 1;
 }
 
 
