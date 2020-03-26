@@ -13,8 +13,7 @@ use Try::Tiny;
 
 # The following modules are all part of the "new" pbdb.
 
-use CoreFunction qw(connectDB
-		    configData);
+use CoreFunction qw(connectDB loadConfig configData);
 use ConsoleLog qw(initMessages
 		  logMessage
 		  logTimestamp);
@@ -33,12 +32,14 @@ use TimescaleTables qw(establish_timescale_tables copy_international_timescales 
 my ($opt_init_tables, $opt_copy_old, $opt_authorizer_no, $opt_help, $opt_man, $opt_verbose, $opt_debug);
 my ($opt_copy_from_pbdb, $opt_copy_from_macro, $opt_copy_international, $opt_update_one, $opt_update_desc);
 my ($opt_init_procedures, $opt_init_triggers, $opt_ub, $opt_copy_one, $opt_model_one, $opt_use_test_db);
+my ($opt_outfile);
 my $options = { };
 
 GetOptions("test-db" => \$opt_use_test_db,
 	   "init-tables" => \$opt_init_tables,
 	   "init-procedures" => \$opt_init_procedures,
 	   "init-triggers" => \$opt_init_triggers,
+	   "outfile=s" => \$opt_outfile,
 	   "copy-old" => \$opt_copy_old,
 	   "copy-international|ci" => \$opt_copy_international,
 	   "copy-from-pbdb|cp" => \$opt_copy_from_pbdb,
@@ -69,7 +70,7 @@ pod2usage(-exitval => 0, -verbose => 2) if $opt_man;
 # my $cmd_line_db_name = shift;
 # my $dbh = connectDB("config.yml", $cmd_line_db_name);
 
-my $dbh = connectDB("config.yml");
+my $dbh = connectDB("config.yml") unless $opt_outfile;
 
 initMessages(2, 'Timescale tables');
 logTimestamp();
@@ -85,8 +86,15 @@ if ( $opt_use_test_db )
 
 # Now process the options.
 
+if ( $opt_outfile )
+{
+    my $config = loadConfig("config.yml");
+    $options->{test_db} = $config->{test_db};
+}
+
 $options->{verbose} = $opt_verbose ? 3 : 2;
 $options->{authorizer_no} = $opt_authorizer_no if $opt_authorizer_no;
+$options->{outfile} = $opt_outfile if $opt_outfile;
 $options->{debug} = 1 if $opt_debug;
 
 # First check for the init-tables and init-triggers options. The second is only relevant if the
