@@ -55,6 +55,8 @@ sub new {
 	$dbh = connectDB("config.yml");
 	$dbh->{mysql_enable_utf8} = 1;
 	$dbh->do('SET @@SQL_MODE = CONCAT(@@SQL_MODE, ",STRICT_TRANS_TABLES")');
+	$dbh->do('SET CHARACTER SET utf8');
+	$dbh->do('SET NAMES utf8');
 	init_table_names(configData, 1);
 	enable_test_mode('session_data');
 	enable_test_mode('edt_test');
@@ -165,7 +167,7 @@ sub establish_test_tables {
     {
 	my $msg = trim_exception($@);
 	diag("Could not establish tables. Message was: $msg");
-	BAIL_OUT;
+	BAIL_OUT("Cannot proceed without the proper test tables.");
     }
 }
 
@@ -1735,8 +1737,19 @@ sub ok_found_record {
     my $sql = "SELECT COUNT(*) FROM $TABLE{$table} WHERE $expr";
     
     $T->debug_line($sql);
-    
-    my ($count) = $dbh->selectrow_array($sql);
+
+    my $count;
+
+    eval {
+	($count) = $dbh->selectrow_array($sql);
+    };
+
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
+    }
     
     $T->debug_line("Returned $count rows");
     $T->debug_skip;
@@ -1777,7 +1790,19 @@ sub ok_no_record {
     
     $T->debug_line($sql);
     
-    my ($count) = $dbh->selectrow_array($sql);
+    my $count;
+
+    eval {
+	($count) = $dbh->selectrow_array($sql);
+    };
+
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
+	$count = 1; # to trigger a failure on this test
+    }	
     
     $T->debug_line("Returned $count rows");
     $T->debug_skip;
@@ -1806,8 +1831,22 @@ sub ok_count_records {
     
     $T->debug_line($sql);
     
-    my ($result) = $dbh->selectrow_array($sql);
+    my $result;
+
+    eval {
+	($result) = $dbh->selectrow_array($sql);
+    };
     
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
+	fail("query failed");
+	return;
+    }
+    
+
     if ( defined $result && $result == $count )
     {
 	ok(!$TEST_MODE, $label);
@@ -2030,7 +2069,18 @@ sub fetch_records_by_key {
 
     $T->debug_line($sql);
     
-    my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+    my $results;
+    
+    eval {
+	$results = $dbh->selectall_arrayref($sql, { Slice => { } });
+    };
+
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
+    }
     
     if ( ref $results eq 'ARRAY' )
     {
@@ -2075,7 +2125,18 @@ sub fetch_records_by_expr {
     
     $T->debug_line($sql);
     
-    my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+    my $results;
+    
+    eval {
+	$results = $dbh->selectall_arrayref($sql, { Slice => { } });
+    };
+
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
+    }
     
     if ( ref $results eq 'ARRAY' )
     {
@@ -2124,7 +2185,18 @@ sub fetch_keys_by_expr {
     
     $T->debug_line($sql);
     
-    my $results = $dbh->selectcol_arrayref($sql);
+    my $results;
+    
+    eval {
+	$results = $dbh->selectcol_arrayref($sql, { Slice => { } });
+    };
+
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
+    }
     
     if ( ref $results eq 'ARRAY' )
     {
@@ -2181,7 +2253,18 @@ sub fetch_row_by_expr {
     
     $T->debug_line($sql);
     
-    my @values = $dbh->selectrow_array($sql);
+    my @values;
+    
+    eval {
+	@values = $dbh->selectrow_array($sql);
+    };
+    
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag("EXCEPTION: $msg");
+	$T->{last_exception} = $msg;
+    }
     
     if ( @values )
     {
