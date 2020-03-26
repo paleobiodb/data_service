@@ -6,8 +6,6 @@
 -- 
 -- Compute an attribution string using the specified last names.
 
-USE pbdb;
-
 DELIMITER //
 
 CREATE OR REPLACE FUNCTION compute_attr (last1 varchar(80), last2 varchar(80), others varchar(80))

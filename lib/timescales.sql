@@ -3,8 +3,6 @@
 -- rather edit TimescaleTables.pl and re-run the script.
 -- 
 
-use pbdb;
-
 delimiter //
 
 CREATE OR REPLACE PROCEDURE complete_bound_updates ( )
