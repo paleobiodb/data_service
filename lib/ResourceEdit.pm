@@ -160,7 +160,8 @@ sub validate_action {
     
     if ( $record->{image_data} )
     {
-	$record->{image_data} = $edt->convert_image($action, $record->{image_data})
+	$record->{image_data} = $edt->convert_image($action, $record->{image_data});
+	$action->ignore_field('image_data');
     }
     
     # Then call the regular validation routine.
@@ -636,8 +637,8 @@ sub configure {
     
     $RESOURCE_IMG_DIR = $config->{eduresources_img_dir};
     
-    $IMAGE_IDENTIFY_COMMAND = $config->{image_identify_cmd} || '/opt/local/bin/identify';
-    $IMAGE_CONVERT_COMMAND = $config->{image_convert_cmd} || '/opt/local/bin/convert';
+    $IMAGE_IDENTIFY_COMMAND = $config->{image_identify_cmd} || 'identify';
+    $IMAGE_CONVERT_COMMAND = $config->{image_convert_cmd} || 'convert';
     $IMAGE_MAX = $config->{image_max_dimension} || 150;
     
     $RESOURCE_IDFIELD = 'id';
