@@ -7240,7 +7240,7 @@ sub computeAncestry {
     try
     {
 	my $taxon_nos = join(',', keys %$base_nos);
-	$result = $dbh->do("CALL compute_ancestry('$auth_table','$tree_table', '$taxon_nos')");
+	$result = $dbh->do("CALL compute_ancestry('$auth_table','$tree_table', '$taxon_nos', '')");
 	
 	# Finally, copy the information out of $scratch_table to a
 	# temporary table so that we can release the locks.

@@ -4345,10 +4345,11 @@ sub process_classification {
 	{
 	    last if $record->{taxon_rank} >= $UNS_RANK{$u};
 	}
-
+	
 	else
 	{
-	    last if $TAXON_RANK{$record->{taxon_rank}} >= $UNS_RANK{$u};
+	    last if $TAXON_RANK{$record->{taxon_rank}} &&
+		$TAXON_RANK{$record->{taxon_rank}} >= $UNS_RANK{$u};
 	}
 	
 	$record->{$UNS_FIELD{$u}} ||= $UNS_NAME{$u};

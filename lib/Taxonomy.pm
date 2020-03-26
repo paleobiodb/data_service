@@ -2414,7 +2414,7 @@ sub generate_taxa_list {
     {
 	$taxonomy->add_ancestry('taxa_list');
 	
-	push @$sql_listref, "# call compute_ancestry_2";
+	# push @$sql_listref, "# call compute_ancestry_2";
 	
 	$sql = "UPDATE taxa_list as tl JOIN $tree_table as t using (orig_no)
 		SET tl.taxon_no = t.spelling_no
@@ -5502,9 +5502,9 @@ sub compute_ancestry {
     
     # Generate the SQL string to fill the scratch table, and output it as a debug line if necessary.
     
-    my $imm = $immediate ? '_immediate' : '';
+    my $imm = $immediate ? 'immediate' : '';
     
-    my $sql = "CALL compute_ancestry$imm('$AUTH_TABLE','$TREE_TABLE', '$base_string')";
+    my $sql = "CALL compute_ancestry('$AUTH_TABLE','$TREE_TABLE', '$base_string', '$imm')";
     
     if ( ref $options->{debug_out} eq 'CODE' )
     {
