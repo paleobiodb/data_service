@@ -40,7 +40,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TEST_DB %TABLE
 		      %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL 
 		      init_table_names enable_test_mode disable_test_mode is_test_mode
-		      get_table_name set_table_name set_table_group
+		      get_table_name set_table_name set_table_group get_table_group
 		      change_table_db change_table_name restore_table_name original_table
 		      set_table_property get_table_property
 		      set_column_property get_column_properties list_column_properties
@@ -60,7 +60,7 @@ our (%TABLE_PROP_NAME) = ( CAN_POST => 1,		# specifies who is allowed to add new
 			   SUPERIOR_TABLE => 1,	# specifies table which controls permissions for this one
 			   SUPERIOR_KEY => 1,		# specifies a field to be matched to the p.t. primary key
 			   PRIMARY_KEY => 1,		# specifies the primary key column(s) for this table
-			   PRIMARY_ATTR => 1,		# specifies the primary key record field for this table
+			   PRIMARY_FIELD => 1,		# specifies the primary key record field for this table
 			   NO_LOG => 1,			# specifies that changes to this table should not be logged
 			   TABLE_COMMENT => 1 );	# specifies a comment relating to the table
 
@@ -73,6 +73,7 @@ our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
 			    VALUE_SEPARATOR => 1,
 			    VALIDATOR => 1,
 			    REQUIRED => 1,
+			    NOT_NULL => 1,
 			    ADMIN_SET => 1,
 			    IGNORE => 1,
 			    COLUMN_COMMENT => 1 );
@@ -159,41 +160,6 @@ sub is_test_mode
 }
 
 
-# select_test_tables ( tablename, enable, ds )
-# 
-# If $enable is true, then set the table name(s) associated with $tablename to their test values,
-# as opposed to their regular ones. If $enable is false, switch them back. The argument $ds should
-# be a data service object if this is run from a data service process. If run from a command-line
-# script, then the argument should be '1' to enable debugging output.
-
-sub select_test_tables
-{
-    my ($tablename, $enable, $ds) = @_;
-    
-    my $debug = defined $ds ? (ref $ds && $ds->debug || $ds eq '1') : 0;
-    
-    if ( $tablename eq 'session_data' )
-    {
-	return test_session_data($enable, $ds, $debug);
-    }
-    
-    # elsif ( $tablename eq 'eduresources' )
-    # {
-    # 	return test_eduresources($enable, $ds, $debug);
-    # }
-    
-    # elsif ( $tablename eq 'edt_test' )
-    # {
-    # 	return test_edt($enable, $ds, $debug);
-    # }
-    
-    else
-    {
-	die "500 unknown tablename '$tablename'"
-    }
-}
-
-
 # classic tables
 
 our $COLLECTIONS = "collections";
@@ -232,42 +198,6 @@ set_table_group('session_data' => 'PERSON_DATA', 'TABLE_PERMS', 'SESSION_DATA', 
 set_table_property(PERSON_DATA => PRIMARY_KEY => 'person_no');
 set_table_property(SESSION_DATA => PRIMARY_KEY => 'session_id');
 set_table_property(WING_USERS => PRIMARY_KEY => 'id');
-
-# If we are being run in test mode, substitute table names as indicated by the configuration file.
-
-# sub test_session_data {
-    
-#     my ($enable, $ds, $debug) = @_;
-    
-#     if ( $enable )
-#     {
-# 	die "You must define 'test_db' in the configuration file and call 'init_table_names'" unless $TEST_DB;
-	
-# 	$SESSION_DATA = substitute_table("$TEST_DB.session_data", "session_data");
-# 	$TABLE_PERMS = substitute_table("$TEST_DB.table_permissions", "table_permissions");
-# 	$PERSON_DATA = substitute_table("$TEST_DB.person", "person");
-	
-# 	eval {
-# 	    PB2::CommonData->update_person_name_cache($ds) if ref $ds;
-# 	};
-	
-# 	print STDERR "TEST MODE: enable 'session_data'\n\n" if $debug;
-	
-# 	return 1;
-#     }
-    
-#     else
-#     {
-# 	$SESSION_DATA = "session_data";
-# 	$TABLE_PERMS = "table_permissions";
-# 	$PERSON_DATA = "person";
-	
-# 	print STDERR "TEST MODE: disable 'session_data'\n\n" if $debug;
-	
-# 	return 2;
-#     }
-# }
-
 
 # new collection tables
 
@@ -357,6 +287,38 @@ our $TIMESCALE_INTS = 'timescale_ints';
 our $TIMESCALE_BOUNDS = 'timescale_bounds';
 our $TIMESCALE_QUEUE = 'timescale_queue';
 our $TIMESCALE_PERMS = 'timescale_perms';
+
+
+# Define a routine to print debugging output.
+
+# debug_line ( line, debug )
+#
+# Print out the specified line according to the parameter $debug. If the value is 'test', then we
+# are running under the Test::More framework and should use the 'diag' routine from that
+# module. If the value is an object with a 'debug_line' method, call that method. An example of
+# such an object would be a Web::DataService request.
+
+sub debug_line {
+
+    my ($line, $debug) = @_;
+    
+    return unless $debug;
+    
+    if ( $debug eq 'test' )
+    {
+	Test::More::diag($line);
+    }
+    
+    elsif ( ref $debug && $debug->can('debug_line') )
+    {
+	$debug->debug_line($line) if $debug->debug;
+    }
+    
+    else
+    {
+	print STDERR $line;
+    }
+}
 
 
 # Define global hash variables to hold table properties and column properties, in a way that can
@@ -487,6 +449,15 @@ sub set_table_group {
 }
 
 
+sub get_table_group {
+
+    my ($group_name) = @_;
+
+    return @{$TABLE_GROUP{$group_name}} if $TABLE_GROUP{$group_name};
+    return;
+}
+
+
 sub enable_test_mode {
     
     my ($group_name, $debug) = @_;
@@ -500,25 +471,7 @@ sub enable_test_mode {
 	change_table_db($t, $TEST_DB);
     }
     
-    if ( $debug )
-    {
-	my $line = "TEST MODE: enable '$group_name'\n";
-	
-	if ( $debug eq 'test' )
-	{
-	    Test::More::diag($line);
-	}
-
-	elsif ( ref $debug && $debug->can('debug_line') )
-	{
-	    $debug->debug_line($line) if $debug->debug;
-	}
-	
-	elsif ( $debug eq 'stderr' )
-	{
-	    print STDERR $line;
-	}
-   }
+    debug_line("TEST MODE: enable '$group_name'\n", $debug) if $debug;
     
     return 1;
 }
@@ -535,26 +488,8 @@ sub disable_test_mode {
 	restore_table_name($t);
     }
     
-    if ( $debug )
-    {
-	my $line = "TEST MODE: disable '$group_name'\n";
-
-	if ( $debug eq 'test' )
-	{
-	    Test::More::diag($line);
-	}
-
-	elsif ( ref $debug && $debug->can('debug_line') )
-	{
-	    $debug->debug_line($line) if $debug->debug;
-	}
-	
-	elsif ( $debug eq 'stderr' )
-	{
-	    print STDERR $line;
-	}
-    }
-    
+    debug_line("TEST MODE: enable '$group_name'\n", $debug) if $debug;
+        
     return 2;
 }
 
@@ -584,29 +519,6 @@ sub get_table_property {
     {
 	return;
     }
-    
-    # if ( defined $TABLE_PROPERTIES{$table_name}{$property} )
-    # {
-    # 	return $TABLE_PROPERTIES{$table_name}{$property}
-    # }
-    
-    # elsif ( $TABLE_NAME_MAP{$table_name} &&
-    # 	    defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property} )
-    # {
-    # 	return $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property};
-    # }
-    
-    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
-    # {
-    # 	return;
-    # }
-    
-    # elsif ( $TABLE_PROPERTIES{$table_name} )
-    # {
-    # 	$TABLE_NAME_MAP{$table_name} = $table_name;
-    # 	return $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$property};
-    # }
     
     else
     {
@@ -654,23 +566,6 @@ sub get_column_property {
 	return;
     }
     
-    # if ( defined $COLUMN_PROPERTIES{$table_name}{$column_name}{$property} )
-    # {
-    # 	return $COLUMN_PROPERTIES{$table_name}{$column_name}{$property};
-    # }
-
-    # elsif ( $TABLE_NAME_MAP{$table_name} &&
-    # 	    defined $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}{$property} )
-    # {
-    # 	return $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}{$property};
-    # }
-    
-    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
-    # {
-    # 	return;
-    # }
-    
     else
     {
 	carp "No properties set for table '$table_specifier'";	
@@ -692,33 +587,6 @@ sub get_column_properties {
 	return;
     }
     
-    # if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name} )
-    # {
-    # 	my %props = %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}{$column_name}};
-	
-    # 	if ( $COLUMN_PROPERTIES{$table_name}{$column_name} )
-    # 	{
-    # 	    foreach my $k ( %{$COLUMN_PROPERTIES{$table_name}{$column_name}} )
-    # 	    {
-    # 		$props{$k} = $COLUMN_PROPERTIES{$table_name}{$column_name}{$k} if
-    # 		    defined $COLUMN_PROPERTIES{$table_name}{$column_name}{$k};
-    # 	    }
-    # 	}
-	
-    # 	return %props;
-    # }
-    
-    # elsif ( $COLUMN_PROPERTIES{$table_name}{$column_name} )
-    # {
-    # 	return %{$COLUMN_PROPERTIES{$table_name}{$column_name}};
-    # }
-    
-    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
-    # {
-    # 	return;
-    # }
-    
     else
     {
 	carp "No properties set for table '$table_specifier'";	
@@ -739,33 +607,6 @@ sub list_column_properties {
     {
 	return;
     }
-    
-    # if ( $TABLE_NAME_MAP{$table_name} && $COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
-    # {
-    # 	my %props = map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$TABLE_NAME_MAP{$table_name}}};
-	
-    # 	if ( $COLUMN_PROPERTIES{$table_name} )
-    # 	{
-    # 	    foreach my $k ( %{$COLUMN_PROPERTIES{$table_name}} )
-    # 	    {
-    # 		$props{$k} = 1 if
-    # 		    defined $COLUMN_PROPERTIES{$table_name}{$k};
-    # 	    }
-    # 	}
-	
-    # 	return %props;
-    # }
-    
-    # elsif ( $COLUMN_PROPERTIES{$table_name} )
-    # {
-    # 	return map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$table_name}};
-    # }
-    
-    # elsif ( defined $TABLE_PROPERTIES{$table_name} ||
-    # 	    $TABLE_NAME_MAP{$table_name} && defined $TABLE_PROPERTIES{$TABLE_NAME_MAP{$table_name}} )
-    # {
-    # 	return;
-    # }
     
     else
     {
