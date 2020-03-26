@@ -77,12 +77,12 @@ subtest 'insert and delete' => sub {
 
     my $edt = $T->new_edt($perm_a);
     
-    $edt->insert_record('EDT_TEST', { signed_req => 123, string_req => 'abc' });
+    $edt->insert_record('EDT_TEST', { string_req => 'abc' });
     
     unless ( ok( $edt->commit, "insert record transaction succeeded" ) )
     {
-	$T->diag_errors('any');
-	$T->diag_warnings('any');
+	$T->diag_errors('all');
+	$T->diag_warnings('all');
 	BAIL_OUT;
     }
     
@@ -90,8 +90,8 @@ subtest 'insert and delete' => sub {
     
     unless ( cmp_ok( @inserted, '==', 1, "inserted one record" ) )
     {
-	$T->diag_errors('any');
-	$T->diag_warnings('any');
+	$T->diag_errors('all');
+	$T->diag_warnings('all');
 	BAIL_OUT;
     }
     
@@ -108,8 +108,8 @@ subtest 'insert and delete' => sub {
     
     unless ( ok( $edt->commit, "delete record transaction succeeded" ) )
     {
-	$T->diag_errors('any');
-	$T->diag_warnings('any');
+	$T->diag_errors('all');
+	$T->diag_warnings('all');
 	BAIL_OUT;
     }
     
@@ -129,8 +129,7 @@ subtest 'update and replace' => sub {
 
     my $edt = $T->new_edt($perm_a);
 
-    $edt->insert_record('EDT_TEST', { signed_req => 123, signed_val => 456,
-				     string_req => 'test for update' });
+    $edt->insert_record('EDT_TEST', { signed_val => 456, string_req => 'test for update' });
 
     ok( $edt->commit, "insert record transaction succeeded" ) || BAIL_OUT;
     
@@ -150,8 +149,8 @@ subtest 'update and replace' => sub {
 
     unless ( ok( $result2, "update record succeeded" ) )
     {
-	$T->diag_errors('any');
-	$T->diag_warnings('any');
+	$T->diag_errors('all');
+	$T->diag_warnings('all');
 	BAIL_OUT;
     }
     
@@ -165,14 +164,12 @@ subtest 'update and replace' => sub {
     
     # Check that we can replace records.
     
-    my $result3 = $edt->replace_record('EDT_TEST',
-				   { test_id => $test_key, string_req => 'replaced',
-				     signed_req => 789 });
-
+    my $result3 = $edt->replace_record('EDT_TEST', { test_id => $test_key, string_req => 'replaced' });
+    
     unless ( ok( $result3, "replace record succeeded" ) )
     {
-	$T->diag_errors('any');
-	$T->diag_warnings('any');
+	$T->diag_errors('all');
+	$T->diag_warnings('all');
 	BAIL_OUT;
     }
     

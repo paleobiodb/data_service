@@ -274,8 +274,8 @@ subtest 'strings' => sub {
     $edt->add_condition('E_EXECUTE', 'foobar');
     $edt->add_condition('C_CREATE');
     
-    is( $edt->error_strings, 2, "got two error strings" );
-    is( $edt->warning_strings, 1, "got one warning string" );
+    is( $edt->error_strings, 2, "got two error strings" ) || $T->diag_errors('latest');
+    is( $edt->warning_strings, 1, "got one warning string" ) || $T->diag_warnings('latest');
     
     my ($w) = $edt->warning_strings;
     

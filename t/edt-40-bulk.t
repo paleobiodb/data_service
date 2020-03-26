@@ -65,9 +65,16 @@ subtest 'bulk insert' => sub {
     
     $edt = $T->new_edt($perm_a);
     
+    my $short_string = "This is a string less than 40 chars...";
+    my $long_string = $short_string x 500;
+    
     for ( my $i = 1; $i <= $BASE_COUNT; $i++ )
     {
-	$result = $edt->insert_record('EDT_TEST', { string_req => "insert test $i" });
+	$result = $edt->insert_record('EDT_TEST', { string_req => "insert test $i",
+						    string_val => $short_string,
+						    text_val => $long_string,
+						    signed_val => -12145,
+						    decimal_val => 999.23 });
 	last unless $result;
     }
     

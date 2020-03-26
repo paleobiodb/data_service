@@ -127,12 +127,13 @@ subtest 'primary_attr' => sub {
 
     $T->ok_has_error( 'F_NO_KEY', "got F_NO_KEY warning" );
 
-    # Then set this field name as the PRIMARY_ATTR, and check that it succeeds.
-
-    set_table_property('EDT_TEST', PRIMARY_ATTR => 'not_the_key');
-
+    # Then set this field name as the PRIMARY_FIELD, and check that it succeeds.
+    
+    set_table_property('EDT_TEST', PRIMARY_FIELD => 'not_the_key');
+    
     ok( $edt->update_record('EDT_TEST', { not_the_key => $key, signed_val => 5 }),
-	"record was updated using field name 'not_the_key'" );
+	"record was updated using field name 'not_the_key'" ) ||
+	    $T->diag_errors('latest');
     
     # Make sure that the record was in fact updated in the table.
     
@@ -141,7 +142,8 @@ subtest 'primary_attr' => sub {
     # Then check that we can still use the primary key name.
 
     ok( $edt->update_record('EDT_TEST', { $primary => $key, signed_val => 6 }),
-	"record was updated again using primary key field name" );
+	"record was updated again using primary key field name" ) ||
+	    $T->diag_errors('latest');
     
     $T->ok_found_record('EDT_TEST', "signed_val=6");
 };
@@ -179,3 +181,8 @@ subtest 'alternate_name' => sub {
     $T->ok_no_conditions;
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and string_val = ''");
 };
+
+
+# Then test that bad keys are properly recognized.
+
+# $$$ test for W_BAD_KEY, E_BAD_KEY, and the BAD_KEYS allowance.

@@ -14,6 +14,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
+use open ':std', ':encoding(utf8)';
 use Test::More tests => 9;
 
 use TableDefs qw(get_table_property set_column_property);
@@ -64,13 +65,13 @@ subtest 'text' => sub {
     use utf8;
     
     # Clear the table, so that we can track record insertions.
-
+    
     $T->clear_table('EDT_TEST');
-
+    
     # Then try inserting a record which is too long.
     
     my ($edt, $result, $key1);
-
+    
     my $long_value = "a string which is too long to fit inside the database table into which it must be stored";
     
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
@@ -94,7 +95,7 @@ subtest 'text' => sub {
     # Make sure that the string value was actually truncated to 40 characters.
     
     my ($r) = $T->fetch_records_by_expr('EDT_TEST', "string_req like 'a string %'");
-
+    
     if ( ok( $r && $r->{string_req}, "found value for 'string_req'" ) )
     {
 	is( length($r->{string_req}), 40, "value of 'string_req' is 40 characters long" );
@@ -106,7 +107,7 @@ subtest 'text' => sub {
     # bytes long. We check that this value is not truncated, and that it comes back as the same
     # string that was inserted.
     
-    # This test also checks that non-ascii text can be properly inserted and retrieved.
+    # This test also checks that non-ascii text can be properly inserted and retrieved. 
     
     my $wide_value = "wide chars: αβγδεζηθικλμνξοπρςστυφχψω";
     
@@ -125,9 +126,46 @@ subtest 'text' => sub {
 	is( $r->{string_req}, $wide_value, "value was not corrupted" );
     }
     
+    # Make sure that wide-character values inserted into latin1 columns are properly converted.
+    
+    $result = $edt->insert_record('EDT_TEST', { string_req => 'latin1 test', latin1_val => $wide_value });
+    
+    $T->ok_no_conditions('latest');
+
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "string_req like 'latin1 test'");
+
+    if( ok( $r && $r->{latin1_val}, "found value for 'latin1_val'" ) )
+    {
+	like( $r->{latin1_val}, qr/wide chars:.*[?]/, "latin1 value contains '?'" );
+    }
+    
+    # Also make sure that we can store single-byte character data into a latin1 column.
+    
+    $result = $edt->insert_record('EDT_TEST', { string_req => 'abc', latin1_val => 'goes in' });
+
+    $T->ok_no_conditions('latest');
+    
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "latin1_val like 'goes in'");
+    
+    # Finally, make sure we can store and retrieve data in columns with other character sets. We
+    # are using 'greek' for our test.
+
+    $result = $edt->insert_record('EDT_TEST', { string_req => 'greek test', greek_val => $wide_value });
+
+    $T->ok_no_conditions('latest');
+
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "string_req like 'greek test'");
+
+    if( ok( $r && $r->{greek_val}, "found value for 'greek_val'" ) )
+    {
+	is( $r->{greek_val}, $wide_value, "value retrieved was same as stored" );
+    }
+    
     # Make sure we can set text columns as well as char columns. The particular column in the test
     # table is also set to allow null values, so we can check this as well.
-
+    
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
     $key1 = $edt->insert_record('EDT_TEST', { string_req => 'text test', text_val => 'some text' });
     
     ok( $key1, "inserted one record" ) || return;
@@ -170,9 +208,119 @@ subtest 'text' => sub {
 
 subtest 'binary' => sub {
 
-    pass('placeholder');
-    diag("\$\$\$ need to add binary data tests");
+    # Clear the table, so that we can track record insertions.
     
+    $T->clear_table('EDT_TEST');
+    
+    # Then try inserting a record which is too long.
+    
+    my ($edt, $result);
+    
+    my $long_value = "a string which is too long to fit inside the database table into which it must be stored";
+    
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
+    $result = $edt->insert_record('EDT_TEST', { string_req => 'abc', binary_val => $long_value });
+    
+    $T->ok_has_one_error('latest', qr/F_WIDTH.*no more than/, "could not insert record with binary value too long");
+    
+    # Set the table column property ALLOW_TRUNCATE, and try again.
+    
+    set_column_property('EDT_TEST', 'binary_val', ALLOW_TRUNCATE => 1);
+    reset_cached_column_properties('EDT_TEST', 'binary_val');
+    
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
+    $result = $edt->insert_record('EDT_TEST', { string_req => 'abc', binary_val => $long_value });
+    
+    $T->ok_no_errors("inserted test record with long value");
+    $T->ok_has_warning( qr/W_TRUNC.*truncated/ );
+
+    # Make sure that the string value was actually truncated to 40 characters.
+    
+    my ($r) = $T->fetch_records_by_expr('EDT_TEST', "binary_val like 'a string %'");
+    
+    if ( ok( $r && $r->{binary_val}, "found value for 'binary_val'" ) )
+    {
+	is( length($r->{binary_val}), 40, "value of 'binary_val' is 40 characters long" );
+	is( $r->{binary_val}, substr($long_value, 0, 40),
+	    "value of 'binary_val' is first 40 characters of specified value");
+    }
+    
+    # Now try again with a value that contains non-ascii data and is exactly 40 bytes long.
+    # This test also checks that non-ascii data can be properly inserted and retrieved. 
+    
+    my $bin_value = "\00\01\02\03\04\05\06\07\010\011" x 4;
+    
+    cmp_ok( length($bin_value), '==', 40, "binary value is properly encoded" );
+    
+    my $bin_key = $edt->insert_record('EDT_TEST', { string_req => 'bin test', binary_val => $bin_value });
+    
+    $T->ok_no_conditions('latest');
+    
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "string_req like 'bin test'");
+    
+    if( ok( $r && $r->{binary_val}, "found value for 'binary_val'" ) )
+    {
+	is( $r->{binary_val}, $bin_value, "fetched value of 'binary_val' is same as stored value" );
+    }
+    
+    # Make sure we can set blob columns as well as binary columns.
+    
+    my $really_big = $bin_value x 1000;
+    
+    my $blob_key = $edt->insert_record('EDT_TEST', { string_req => 'blob test', blob_val => $really_big });
+    
+    ok( $result, "inserted record with a big blob value" ) || return;
+    
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "string_req like 'blob test'");
+    
+    if( ok( $r && $r->{blob_val}, "found value for 'blob_val'" ) )
+    {
+	is( $r->{blob_val}, $really_big, "fetched value of 'blob_val' is same as stored value" );
+    }
+    
+    # Now check that we can set a binary column and a blob column to null.
+    
+    $edt->update_record('EDT_TEST', { $primary => $bin_key, binary_val => '' });
+    
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "$primary = $bin_key");
+
+    if( ok( $r && exists $r->{binary_val}, "found value for 'binary_val'" ) )
+    {
+	is( $r->{binary_val}, '', "fetched value of 'binary_val' is same as stored" );
+    }
+    
+    $edt->update_record('EDT_TEST', { $primary => $bin_key, binary_val => undef });
+    
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "$primary = $bin_key");
+
+    if( ok( $r && exists $r->{binary_val}, "found value for 'binary_val'" ) )
+    {
+	is( $r->{binary_val}, undef, "fetched value of 'binary_val' is null" );
+    }
+    
+    $edt->update_record('EDT_TEST', { $primary => $blob_key, blob_val => undef });
+    
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "$primary = $blob_key");
+    
+    if( ok( $r && exists $r->{blob_val}, "found value for 'blob_val'" ) )
+    {
+	is( $r->{blob_val}, undef, "fetched value of 'blob_val' is null" );
+    }
+    
+    $edt->update_record('EDT_TEST', { $primary => $blob_key, blob_val => '' });
+    
+    ($r) = $T->fetch_records_by_expr('EDT_TEST', "$primary = $blob_key");
+    
+    if( ok( $r && exists $r->{blob_val}, "found value for 'blob_val'" ) )
+    {
+	is( $r->{blob_val}, '', "fetched value of 'blob_val' is same as stored" );
+    }
+    
+    # Make sure we had no errors overall.
+    
+    $T->ok_no_errors;
 };
 
 
