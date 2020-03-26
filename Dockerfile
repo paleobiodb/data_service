@@ -20,7 +20,7 @@ LABEL maintainer="mmcclenn@geology.wisc.edu"
 LABEL version="1.0"
 LABEL description="Paleobiology Database Main API"
 
-LABEL buildcheck="bin/web_app.pl GET /data1.2/"
+LABEL buildcheck="bin/web_app.pl GET /data1.2/ | head -20"
 
 
 
