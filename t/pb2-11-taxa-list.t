@@ -164,16 +164,16 @@ subtest 'taxon_name with wildcards' => sub {
 
     select_subtest || return;
     
-    my $TEST_WC_1 = 'Pantherin.';
-    my $TEST_WC_2 = 'Pantherin%';
-    my $TEST_WC_3 = 'Pant%rinae';
-    my $TEST_WC_4 = 'Pant_erinae';
+    my $TEST_WC_1 = 'Felin.';
+    my $TEST_WC_2 = 'Felin%';
+    my $TEST_WC_3 = 'Fe%inae';
+    my $TEST_WC_4 = 'Fe_inae';
     my $TEST_WC_5 = 'F.catus';
     my $TEST_WC_6 = 'F.    catus';
     
-    my $PAT_WC_1 = qr{^Pantherin};
-    my $PAT_WC_3 = qr{^Pant.*rinae$};
-    my $PAT_WC_4 = qr{^Pant.erinae$};
+    my $PAT_WC_1 = qr{^Felinae};
+    my $PAT_WC_3 = qr{^Felinae$};
+    my $PAT_WC_4 = qr{^Felinae$};
     my $PAT_WC_5 = qr{^F.* catus$};
     
     # Check that wildcard characters . % _ will actually return matching
