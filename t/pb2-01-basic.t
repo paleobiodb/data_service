@@ -25,7 +25,7 @@
 use strict;
 
 use open ':std', ':encoding(utf8)';
-use Test::Most tests => 8;
+use Test::Most tests => 11;
 
 use lib 't';
 use Tester;
@@ -34,6 +34,13 @@ use Tester;
 # We start by creating a Tester instance that we will use for the subsequent tests:
 
 my $T = Tester->new({ prefix => 'data1.2' });
+
+
+# Then set the server out of test mode, so that we are actually checking the main tables.
+
+$T->test_mode('session_data', 'disable') || BAIL_OUT("could not deselect test session data");
+$T->test_mode('specimen_data', 'disable') || BAIL_OUT("could not deselect test specimen tables");
+$T->test_mode('occurrence_data', 'disable') || BAIL_OUT("could not deselect test occurrence tables");
 
 
 # We first test the 'json' format.  We include in this test:
