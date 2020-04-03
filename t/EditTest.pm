@@ -549,12 +549,12 @@ sub has_debug_output {
 }
 
 
-# establish_tables ( class, dbh, options )
+# establish_test_tables ( class, dbh, options )
 # 
 # This class method creates database tables necessary to use this class for testing purposes, or
 # replaces the existing ones.
 
-sub establish_tables {
+sub establish_test_tables {
     
     my ($class, $dbh, $options) = @_;
     

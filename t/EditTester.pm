@@ -1,5 +1,5 @@
 #
-# Tester.pm: a class for running tests on EditTransaction.pm and its subclasses.
+# EditTester.pm: a class for running tests on EditTransaction.pm and its subclasses.
 # 
 
 
@@ -18,9 +18,8 @@ use base 'Exporter';
 use CoreFunction qw(connectDB configData);
 use TableDefs qw(%TABLE init_table_names enable_test_mode get_table_name get_table_property get_column_properties);
 use TableData qw(get_table_schema);
-
-use EditTest;
-
+use Permissions;
+use TestTables;
 
 use namespace::clean;
 
@@ -44,10 +43,34 @@ sub new {
     
     my ($class, $options) = @_;
     
-    $options ||= { };
+    if ( $options && ! ref $options )
+    {
+	$options = { subclass => $options };
+    }
+
+    else
+    {
+	$options ||= { };
+    }
     
     $options->{debug} = 1 if @ARGV && $ARGV[0] eq 'debug';
     $options->{notsilent} = 1 if @ARGV && $ARGV[0] eq 'notsilent';
+    
+    # If a subclass was specified, make sure the corresponding module is available.
+    
+    if ( $options->{subclass} )
+    {
+	my $subclass = $options->{subclass};
+	$subclass =~ s{::}{/}g;
+	
+	require "${subclass}.pm";
+    }
+
+    # Then make sure that we can connect directly to the database. We use the parameters from the
+    # file config.yml in the main directory. If this is done successfully, make sure that the
+    # connection uses STRICT_TRANS_TABLES mode and also that all communication is done using
+    # utf8. Finally, switch over to using the session_data and related tables from the test
+    # database rather than the real one.
     
     my ($dbh);
     
@@ -59,7 +82,6 @@ sub new {
 	$dbh->do('SET NAMES utf8');
 	init_table_names(configData, 1);
 	enable_test_mode('session_data');
-	enable_test_mode('edt_test');
     };
     
     if ( $@ )
@@ -85,6 +107,9 @@ sub new {
 	BAIL_OUT;
     }
     
+    # Double check to make sure that the session_data table has actually been switched over to the
+    # test database.
+    
     my $test_db = configData->{test_db};
     
     unless ( $test_db && $TABLE{SESSION_DATA} =~ /$test_db/ )
@@ -92,13 +117,21 @@ sub new {
 	diag("Could not enable test mode for 'SESSION_DATA'.");
 	BAIL_OUT;
     }
-    
-    unless ( $test_db && $TABLE{EDT_TEST} =~ /$test_db/ )
-    {
-	diag("Could not enable test mode for 'EDT_TEST'.");
-	BAIL_OUT;
-    }
 
+    # If we are using the subclass EditTest, then switch over the edt_test table and related
+    # tables to the test database. Then double-check that this has been done.
+    
+    if ( $options->{subclass} && $options->{subclass} eq 'EditTest' )
+    {
+	enable_test_mode('edt_test');
+	
+	unless ( $test_db && $TABLE{EDT_TEST} =~ /$test_db/ )
+	{
+	    diag("Could not enable test mode for 'EDT_TEST'.");
+	    BAIL_OUT;
+	}
+    }
+    
     my $id_bound;
     
     eval {
@@ -109,7 +142,8 @@ sub new {
     my $instance = { dbh => $dbh,
 		     debug => $options->{debug},
 		     id_bound => $id_bound,
-		     notsilent => $options->{notsilent}
+		     subclass => $options->{subclass},
+		     notsilent => $options->{notsilent},
 		   };
     
     bless $instance, $class;
@@ -153,21 +187,80 @@ sub set_table {
 
 # establish_test_tables ( )
 # 
-# Create or re-create the tables necessary for testing EditTransaction.pm using its subclass EditTest.pm.
+# Create or re-create the tables necessary for the tests we want to run. If the subclass of
+# EditTransaction that we are using has an 'establish_test_tables' method, then call
+# it. Otherwise, call TestTables::establish_test_tables, which copies the schemas for the
+# specified table group from the main database to the test database.
 
 sub establish_test_tables {
     
-    my ($T) = @_;
+    my ($T) = shift;
     
-    eval {
-	EditTest->establish_tables($T->dbh);
-    };
-    
-    if ( $@ )
+    if ( $T->{subclass} && $T->{subclass}->can('establish_test_tables') )
     {
-	my $msg = trim_exception($@);
-	diag("Could not establish tables. Message was: $msg");
-	BAIL_OUT("Cannot proceed without the proper test tables.");
+	diag("Establishing test tables for class '$T->{subclass}'.");
+	
+	eval {
+	    $T->{subclass}->establish_test_tables($T->dbh);
+	};
+	
+	if ( $@ )
+	{
+	    my $msg = trim_exception($@);
+	    diag("Could not establish tables. Message was: $msg");
+	    BAIL_OUT("Cannot proceed without the proper test tables.");
+	}
+    }
+
+    else
+    {
+	my ($table_group, $debug) = @_;
+
+	$debug = 'test' if $T->{debug};
+	
+	TestTables::establish_test_tables($T->dbh, $table_group, $debug);
+    }
+}
+
+
+# fill_test_table ( )
+#
+# Fill the specified table in the test database with the contents of the same table in the main
+# database, optionally filtered by some expression.
+
+sub fill_test_table {
+
+    my ($T, $table_specifier, $expr, $debug) = @_;
+    
+    $debug = 'test' if $T->{debug};
+    
+    TestTables::fill_test_table($T->dbh, $table_specifier, $expr, $debug);
+}
+
+
+# complete_test_table ( )
+#
+# Complete the specified table in the test database (or any database) by calling an
+# EditTransaction object's complete_table method. This is designed to be used for the
+# establishment of database triggers that are necessary for the specified table to properly
+# function. But it may be used for other purposes in the future. The $arg argument is currently
+# unused, but is put in place in case it might be needed in the future.
+
+sub complete_test_table {
+    
+    my ($T, $table_specifier, $arg, $debug) = @_;
+    
+    $debug = 'test' if $T->{debug};
+    my $subclass = $T->{subclass} || 'EditTransaction';
+    
+    if ( $subclass->can('complete_table_definition') )
+    {
+	$subclass->complete_table_definition($T->dbh, $table_specifier, $arg, $debug);
+    }
+    
+    else
+    {
+	diag "Warning: method 'complete_table_definition' not found in class $subclass";
     }
 }
 
@@ -521,19 +614,19 @@ sub get_new_edt {
 	    }
 	}
     }
+
+    my $edt_class = $T->{subclass} || 'EditTransaction';
     
-    my $edt = EditTest->new($T->dbh, $perm, $T->{table}, $allow);
+    my $edt = $edt_class->new($T->dbh, $perm, $T->{table}, $allow);
     
     if ( $edt )
     {
-	# pass("created edt");
 	$T->{last_edt} = $edt;
 	return $edt;
     }
     
     else
     {
-	# fail("created edt");
 	$T->{last_edt} = undef;
 	return;
     }
