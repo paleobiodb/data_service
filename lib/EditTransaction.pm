@@ -5143,12 +5143,14 @@ sub validate_against_schema {
 	my $is_default;
 	
 	# Skip the primary key for any operation except 'replace'. For 'replace' operations, we
-	# use the cleaned key value without checking it.
+	# use the cleaned key value without checking it. In all cases, the primary key value has
+	# already been validated by the routine that called this one. The primary key may be
+	# referred to in the action record under its alternate name, as specified by the
+	# PRIMARY_FIELD property of the table. The ALTERNATE_NAME property should not be used for
+	# primary keys.
 	
 	if ( $col eq $keycol )
 	{
-	    my $alt;
-	    
 	    if ( exists $record->{$col} )
 	    {
 		$used{$col} = 1;

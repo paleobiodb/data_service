@@ -5,7 +5,7 @@
 # Definitions and properties necessary for working with the core Paleobiology Database tables.
 # 
 
-package CoreTables;
+package CoreTableDefs;
 
 use strict;
 
