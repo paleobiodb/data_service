@@ -21,7 +21,7 @@ use EditTester;
 
 # The following call establishes a connection to the database, using EditTester.pm.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 
 

@@ -22,7 +22,7 @@ use EditTester;
 
 # The following call establishes a connection to the database, using EditTester.pm.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 
 # Start by getting the variable values that we need to execute the remainder of the test. If the
@@ -124,9 +124,9 @@ subtest 'primary_attr' => sub {
     
     ok( ! $edt->update_record('EDT_TEST', { not_the_key => $key, signed_val => 4 }),
 	"record was not updated using field name 'not_the_key'" );
-
+    
     $T->ok_has_error( 'F_NO_KEY', "got F_NO_KEY warning" );
-
+    
     # Then set this field name as the PRIMARY_FIELD, and check that it succeeds.
     
     set_table_property('EDT_TEST', PRIMARY_FIELD => 'not_the_key');

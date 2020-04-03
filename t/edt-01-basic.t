@@ -23,7 +23,7 @@ use EditTester;
 # The following calls establish a connection to the database, then create or re-create the
 # necessary tables.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 $T->establish_session_data;
 $T->establish_test_tables;

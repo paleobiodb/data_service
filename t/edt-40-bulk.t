@@ -24,7 +24,7 @@ our ($BASE_COUNT) = 10000;
 
 # The following call establishes a connection to the database, using EditTester.pm.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 
 # Start by getting the variable values that we need to execute the remainder of the test. If the
@@ -54,6 +54,14 @@ subtest 'setup' => sub {
 subtest 'bulk insert' => sub {
     
     my ($edt, $result);
+    
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk insert");
+	return;
+    }
     
     # Clear the table so we can check for proper record insertion.
     
@@ -98,6 +106,14 @@ subtest 'bulk update' => sub {
     
     my ($edt, $result);
     
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk update");
+	return;
+    }
+    
     my $starttime = time;
     
     $edt = $T->new_edt($perm_a);
@@ -130,6 +146,14 @@ subtest 'bulk update' => sub {
 subtest 'bulk replace' => sub {
     
     my ($edt, $result);
+    
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk replace");
+	return;
+    }
     
     my $starttime = time;
     
@@ -166,6 +190,14 @@ subtest 'bulk replace' => sub {
 subtest 'bulk delete' => sub {
     
     my ($edt, $result);
+    
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk delete");
+	return;
+    }
     
     my $starttime = time;
     
