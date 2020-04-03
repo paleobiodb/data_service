@@ -1,4 +1,4 @@
-# -*- mode: CPerl -*-
+# -*- mode: cperl -*-
 # 
 # PBDB 1.2
 # --------
@@ -22,7 +22,7 @@ use CoreTableDefs;
 use Tester;
 use EditTester;
 
-use Data::Dumper::Concise;
+# use Data::Dumper::Concise;
 
 
 # Use the following values from the database in test instances. If these ever become invalid, they
@@ -56,69 +56,88 @@ $T->test_mode('occurrence_data', 'enable') || BAIL_OUT("could not select test oc
 # Finally, grab a database connection and check to make sure that we are actually looking at the
 # test tables. That will give us confidence to clear the tables between tests.
 
-my $ET = EditTester->new;
+my $ET = EditTester->new('SpecimenEdit');
 
-$ET->start_test_mode('specimen_data') || BAIL_OUT "could not select test specimen tables locally";
-$ET->start_test_mode('occurrence_data') || BAIL_OUT "could not select test occurrence tables locally";
+
+# The first testing task it so establish the specimen tables in the test database and select
+# them.
+
+subtest 'establish tables' => sub {
+
+    $ET->establish_test_tables('specimen_data', 'test') ||
+	BAIL_OUT("could not establish test tables for 'specimen_data'");
+
+    $ET->establish_test_tables('occurrence_data', 'test') ||
+	BAIL_OUT("could not establish test tables for 'occurrence_data'");
+    
+    $ET->fill_test_table('OCCURRENCE_DATA', "taxon_no = $TAXON_NO_2", 'test');
+    $ET->fill_test_table('OCCURRENCE_MATRIX', "taxon_no = $TAXON_NO_2", 'test');
+    
+    $ET->start_test_mode('specimen_data') || BAIL_OUT "could not select test specimen tables locally";
+    $ET->start_test_mode('occurrence_data') || BAIL_OUT "could not select test occurrence tables locally";
+    
+    pass('test tables established');
+};
+
 
 # First check that the table schemas for specimens and measurements in the test database match the
 # corresponding schemas in the main database.
 
-subtest 'check schemas' => sub {
+# subtest 'check schemas' => sub {
 
-    $ET->check_test_schema('SPECIMEN_DATA');
-    $ET->check_test_schema('MEASUREMENT_DATA');
+#     $ET->check_test_schema('SPECIMEN_DATA');
+#     $ET->check_test_schema('MEASUREMENT_DATA');
 
-    # # Double check to make sure we aren't pointing at the main occurrence table.
+#     # # Double check to make sure we aren't pointing at the main occurrence table.
 
-    # my ($count) = $ET->dbh->selectrow_array("SELECT count(*) FROM $TABLE{OCCURRENCE_DATA}");
+#     # my ($count) = $ET->dbh->selectrow_array("SELECT count(*) FROM $TABLE{OCCURRENCE_DATA}");
 
-    # if ( $count > 1000 )
-    # {
-    # 	BAIL_OUT "test occurrence table contains too many entries - is it the real one?";
-    # }
+#     # if ( $count > 1000 )
+#     # {
+#     # 	BAIL_OUT "test occurrence table contains too many entries - is it the real one?";
+#     # }
 
-    # # If it is okay, then clear the table.
+#     # # If it is okay, then clear the table.
     
-    my ($sql, $result);
+#     my ($sql, $result);
     
-    # $sql = "DELETE FROM $TABLE{OCCURRENCE_DATA}";
+#     # $sql = "DELETE FROM $TABLE{OCCURRENCE_DATA}";
     
-    # print STDERR "$sql\n\n" if $ET->debug;
+#     # print STDERR "$sql\n\n" if $ET->debug;
     
-    # $result = $ET->dbh->do($sql);
+#     # $result = $ET->dbh->do($sql);
     
-    # $sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX}";
+#     # $sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX}";
     
-    # print STDERR "$sql\n\n" if $ET->debug;
+#     # print STDERR "$sql\n\n" if $ET->debug;
     
-    # $result = $ET->dbh->do($sql);
+#     # $result = $ET->dbh->do($sql);
     
-    # Safely clear the occurrence data and matrix tables.
+#     # Safely clear the occurrence data and matrix tables.
 
-    $ET->safe_clear_table('OCCURRENCE_DATA', 'enterer_no');
-    $ET->safe_clear_table('OCCURRENCE_MATRIX', 'enterer_no');
+#     $ET->safe_clear_table('OCCURRENCE_DATA', 'enterer_no');
+#     $ET->safe_clear_table('OCCURRENCE_MATRIX', 'enterer_no');
     
-    # Copy over some occurrences from the main table to the test table.
+#     # Copy over some occurrences from the main table to the test table.
     
-    $sql = "REPLACE INTO $TABLE{OCCURRENCE_DATA}
-		SELECT * FROM $TABLE{'==OCCURRENCE_DATA'} WHERE taxon_no = $TAXON_NO_2";
+#     $sql = "REPLACE INTO $TABLE{OCCURRENCE_DATA}
+# 		SELECT * FROM $TABLE{'==OCCURRENCE_DATA'} WHERE taxon_no = $TAXON_NO_2";
     
-    print STDERR "$sql\n\n" if $ET->debug;
+#     print STDERR "$sql\n\n" if $ET->debug;
     
-    $result = $ET->dbh->do($sql);
+#     $result = $ET->dbh->do($sql);
     
-    diag("Replaced $result items into test occurrence table");
+#     diag("Replaced $result items into test occurrence table");
     
-    $sql = "REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
-		SELECT * FROM $TABLE{'==OCCURRENCE_MATRIX'} WHERE taxon_no = $TAXON_NO_2";
+#     $sql = "REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
+# 		SELECT * FROM $TABLE{'==OCCURRENCE_MATRIX'} WHERE taxon_no = $TAXON_NO_2";
     
-    print STDERR "$sql\n\n" if $ET->debug;
+#     print STDERR "$sql\n\n" if $ET->debug;
     
-    $result = $ET->dbh->do($sql);
+#     $result = $ET->dbh->do($sql);
     
-    diag("Replaced $result items into test occurrence matrix");
-};
+#     diag("Replaced $result items into test occurrence matrix");
+# };
 
 
 # Check that we can add records, and that the returned records contain proper identifiers and
