@@ -22,9 +22,10 @@ use Moo::Role;
 
 sub has_block {
     
-    my ($request, $key_or_name) = @_;
-    
-    return 1 if $request->{block_hash}{$key_or_name};
+    my ($request, $key_or_name, $config_name) = @_;
+
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
+    return 1 if $oc->{block_hash}{$key_or_name};
 }
 
 
@@ -34,7 +35,10 @@ sub has_block {
 
 sub block_selected {
 
-    return $_[0]->{block_hash}{$_[1]};
+    my ($request, $key_or_name, $config_name) = @_;
+
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
+    return $oc->{block_hash}{$key_or_name};
 }
 
 
@@ -71,9 +75,11 @@ sub substitute_select {
     
     # Then substitute the field values, if there are any for this request.
     
-    if ( ref $request->{select_list} eq 'ARRAY' )
+    my $oc = $request->{$request->{current_output}};
+    
+    if ( ref $oc->{select_list} eq 'ARRAY' )
     {
-	foreach my $f ( @{$request->{select_list}} )
+	foreach my $f ( @{$oc->{select_list}} )
 	{
 	    $f =~ s/\$(\w+)/$subst->{$1}||"\$$1"/eog and $count++;
 	}
@@ -81,14 +87,14 @@ sub substitute_select {
     
     # Then substitute the table keys, if there are any for this request.
     
-    if ( ref $request->{tables_hash} eq 'HASH' )
+    if ( ref $oc->{tables_hash} eq 'HASH' )
     {
-	foreach my $k ( keys %{$request->{tables_hash}} )
+	foreach my $k ( keys %{$oc->{tables_hash}} )
 	{
 	    if ( $k =~ qr{ ^ \$ (\w+) $ }xs )
 	    {
-		$request->{tables_hash}{$subst->{$1}} = $request->{tables_hash}{$k};
-		delete $request->{tables_hash}{$k};
+		$oc->{tables_hash}{$subst->{$1}} = $oc->{tables_hash}{$k};
+		delete $oc->{tables_hash}{$k};
 		$count++;
 	    }
 	}
@@ -108,9 +114,11 @@ sub substitute_select {
 
 sub select_list {
     
-    my ($request, $subst) = @_;
+    my ($request, $subst, $config_name) = @_;
     
-    my @fields = @{$request->{select_list}} if ref $request->{select_list} eq 'ARRAY';
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
+    
+    my @fields = @{$oc->{select_list}} if ref $oc->{select_list} eq 'ARRAY';
     
     if ( defined $subst && ref $subst eq 'HASH' )
     {
@@ -130,9 +138,9 @@ sub select_list {
 
 sub select_hash {
 
-    my ($request, $subst) = @_;
+    my ($request, $subst, $config_name) = @_;
     
-    return map { $_ => 1} $request->select_list($subst);
+    return map { $_ => 1} $request->select_list($subst, $config_name);
 }
 
 
@@ -142,9 +150,9 @@ sub select_hash {
 
 sub select_string {
     
-    my ($request, $subst) = @_;
+    my ($request, $subst, $config_name) = @_;
     
-    return join(', ', $request->select_list($subst));    
+    return join(', ', $request->select_list($subst, $config_name));    
 }
 
 
@@ -155,9 +163,11 @@ sub select_string {
 
 sub tables_hash {
     
-    my ($request) = @_;
+    my ($request, $config_name) = @_;
+
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
     
-    return $request->{tables_hash};
+    return $oc->{tables_hash};
 }
 
 
@@ -167,18 +177,20 @@ sub tables_hash {
 
 sub add_table {
 
-    my ($request, $table_name, $real_name) = @_;
+    my ($request, $table_name, $real_name, $config_name) = @_;
+    
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
     
     if ( defined $real_name )
     {
-	if ( $request->{tables_hash}{"\$$table_name"} )
+	if ( $oc->{tables_hash}{"\$$table_name"} )
 	{
-	    $request->{tables_hash}{$real_name} = 1;
+	    $oc->{tables_hash}{$real_name} = 1;
 	}
     }
     else
     {
-	$request->{tables_hash}{$table_name} = 1;
+	$oc->{tables_hash}{$table_name} = 1;
     }
 }
 
@@ -189,9 +201,11 @@ sub add_table {
 
 sub filter_hash {
     
-    my ($request) = @_;
+    my ($request, $config_name) = @_;
     
-    return $request->{filter_hash};
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
+    
+    return $oc->{filter_hash};
 }
 
 
@@ -322,24 +336,53 @@ sub decode_body {
     
     my ($request, $section) = @_;
     
-    # First grab (and cache) the undecoded request body.
+    # First grab (and cache) the request body. If the content type is
+    # application/x-www-form-urlencoded, it will be unpacked into a hash. Otherwise, it will be
+    # unprocessed.
     
     unless ( defined $request->{raw_body} )
     {
-	$request->{raw_body} = $request->{ds}{backend_plugin}->get_request_body() // '';
+	$request->{raw_body} = $Web::DataService::FOUNDATION->get_request_body($request) // '';
     }
     
-    # If this is empty, return the undefined value.
+    # If the body is empty, return the undefined value.
     
     return undef unless defined $request->{raw_body} && $request->{raw_body} ne '';
     
     # Get the submitted content type.
     
-    my $content_type = $request->{ds}{backend_plugin}->get_content_type() // '';
+    my $content_type = $Web::DataService::FOUNDATION->get_content_type($request) // '';
     
-    # If the body starts with '{' or '[', assume the format is JSON regardless of content type.
+    # If the content type is application/x-www-form-urlencoded, then the body has already been
+    # unpacked into a hash of parameter values. Process them to unpack javascript-like field names
+    # into a hierarchical data structure.
     
-    if ( $request->{raw_body} =~ / ^ [{\[] /xsi )
+    if ( ref $request->{raw_body} eq 'HASH' )
+    {
+	my $raw = $request->{raw_body};
+	my $decoded = { };
+	my $errmsg;
+
+	foreach my $key ( sort keys %$raw )
+	{
+	    if ( $key =~ qr{ [[] }xs && $key =~ qr{ ^ ( [^[]+) ( [[] .+ ) }xs )
+	    {
+		set_key($decoded, $1, $2, $raw->{$key}, \$errmsg);
+	    }
+	    
+	    else
+	    {
+		$decoded->{$key} = $raw->{$key};
+	    }
+	}
+
+	return ($decoded, $errmsg);
+    }
+    
+    # Otherwise, if the body starts with '{' or '[' then assume the format is JSON regardless of
+    # content type.
+    
+    elsif ( $request->{raw_body} =~ / ^ [{\[] /xsi )
     {
 	try {
 	    unless ( defined $request->{decoded_body} )
@@ -360,23 +403,10 @@ sub decode_body {
 	return ($request->{decoded_body}, $request->{body_error});
     }
     
-    # If the backend already unpacked the body into a hash ref, just return that.
+    # Otherwise, if the backend already unpacked the body into a hash ref, just return that.
     
     elsif ( ref $request->{raw_body} eq 'HASH' )
     {
-	# my @chunks = split(/&/, $request->{raw_body});
-	# $request->{decoded_body} = { };
-	
-	# foreach my $chunk ( @chunks )
-	# {
-	#     my ($var, $value) = split(/=/, $chunk, 2);
-
-	#     $var =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
-	#     $value =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
-
-	#     $request->{decoded_body}{$var} = $value;
-	# }
-	
 	$request->{decoded_body} = $request->{raw_body};
 	
 	return $request->{decoded_body};
@@ -390,6 +420,77 @@ sub decode_body {
 	$request->{decoded_body} = \@lines;
 	
 	return $request->{decoded_body};
+    }
+    
+    sub set_key {
+	
+	my ($struct, $key, $rest, $value, $errmsg_ref) = @_;
+	
+	my $this_struct = $struct;
+	my $this_key = $key // '';
+	my $remainder = $rest // '';
+	my $this_value;
+	my $next_key;
+	my $completed;
+	
+	eval {
+	  COMPONENT:
+	    while ( $this_key ne '' )
+	    {
+		if ( $remainder =~ qr{ ^ [[] ( [^]]* ) []] (.*) }xs )
+		{
+		    $next_key = $1;
+		    $remainder = $2;
+		    
+		    if ( $next_key eq '' )
+		    {
+			die "Invalid key suffix []$remainder\n" unless $remainder eq '';
+			$this_value = ref $value eq 'ARRAY' ? $value : [ $value ];
+			$completed = 1;
+		    }
+		    
+		    elsif ( $next_key =~ /^\d+$/ )
+		    {
+			$this_value = [ ];
+		    }
+		    
+		    else
+		    {
+			$this_value = { };
+		    }
+		}
+		
+		else
+		{
+		    die "Invalid key suffix $remainder\n" unless $remainder eq '';
+		    $next_key = '';
+		    $this_value = $value;
+		    $completed = 1;
+		}
+		
+		if ( ref $this_struct eq 'HASH' )
+		{
+		    $this_struct->{$this_key} ||= $this_value;
+		    $this_struct = $this_struct->{$this_key};
+		    $this_key = $next_key;
+		    next COMPONENT;
+		}
+		
+		else
+		{
+		    $this_struct->[$this_key] ||= $this_value;
+		    $this_struct = $this_struct->[$this_key];
+		    $this_key = $next_key;
+		    next COMPONENT;
+		}
+	    }
+	};
+
+	unless ( $completed )
+	{
+	    $struct->{"$key$rest"} = $value;
+	    $$errmsg_ref ||= $@ || "Invalid key '$key$rest'";
+	}
     }
 }
 
@@ -436,8 +537,11 @@ sub exception {
 
 sub output_field_list {
     
-    my ($request) = @_;
-    return $request->{field_list};
+    my ($request, $config_name) = @_;
+
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
+    
+    return $oc->{field_list};
 }
 
 
@@ -449,16 +553,17 @@ sub output_field_list {
 
 sub delete_output_field {
     
-    my ($request, $field_name) = @_;
+    my ($request, $field_name, $config_name) = @_;
     
     return unless defined $field_name && $field_name ne '';
     
-    my $list = $request->{field_list};
+    my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
+    my $list = $oc->{field_list};
     
     foreach my $i ( 0..$#$list )
     {
 	no warnings 'uninitialized';
-	if ( $request->{field_list}[$i]{field} eq $field_name )
+	if ( $oc->{field_list}[$i]{field} eq $field_name )
 	{
 	    splice(@$list, $i, 1);
 	    return;
@@ -1087,15 +1192,28 @@ sub sth_result {
 
 sub add_result {
     
-    my $request = shift;
+    my ($request, @records) = @_;
     
     $request->clear_result unless ref $request->{main_result} eq 'ARRAY';
     return unless @_;
-    
-    croak "add_result: arguments must be hashrefs\n"
-	unless ref $_[0] && reftype $_[0] eq 'HASH';
-    
-    push @{$request->{main_result}}, @_;
+
+    foreach my $r ( @records )
+    {
+	if ( ref $r eq 'ARRAY' )
+	{
+	    push @{$request->{main_result}}, @$r;
+	}
+
+	elsif ( ref $r eq 'HASH' )
+	{
+	    push @{$request->{main_result}}, $r;
+	}
+
+	elsif ( defined $r )
+	{
+	    croak "add_result: arguments must be records or arrays of records\n";
+	}
+    }
 }
 
 
@@ -1114,10 +1232,124 @@ sub clear_result {
 }
 
 
+# init_output ( config_name )
+#
+# Create an initialize an output configuration under the specified name. An output configuration
+# called 'main' is automatically created for each request and initialized from the node
+# attributes. This method can be used to create alternate configurations for different kinds of
+# records.
+
+sub init_output {
+
+    my ($request, $config_name) = @_;
+
+    $request->{ds}->init_output($request, $config_name);
+}
+
+
+# add_output_blocks ( config_name, output_list )
+#
+# Add the specified output blocks to the specified output configuration. This should either be
+# 'main' or else a configuration that has already been initialized by a call to init_output. Each
+# of the remaining parameters should be either the name of an output block or else a hash with the
+# following keys:
+# 
+# map_name	The name of a map created with define_set or define_output_map.
+# keys		A list of key values to be looked up in the map.
+
+sub add_output_blocks {
+    
+    my ($request, $config_name, @output_list) = @_;
+    
+    $request->{ds}->add_output_blocks($request, $config_name, @output_list);
+}
+
+
+# add_header ( config_name )
+#
+# This method specifies that a subsequent header line should be output at the beginning of the
+# response, after the header line corresponding to the selected output configuration (default
+# 'main'). This can be used if the request will consist of a mixture of records in two different
+# configurations.
+
+sub add_header {
+    
+    my ($request, $config_name) = @_;
+    
+    $request->{ds}->add_header($request, $config_name);
+}
+
+
+# configure_block ( block_name )
+#
+# Prepare the specified block to be used as an output configuration for individual
+# records or as an additional output header.
+
+sub configure_block {
+
+    my ($request, $block_name) = @_;
+
+    $request->{ds}->configure_block($request, $block_name);
+}
+
+
+# select_output ( config_name )
+#
+# The specified output configuration will be used for all records output subsequently, unless
+# overridden on a per-record basis. The $config_name parameter should be the name of a
+# configuration that was already initialized using the init_output method and had blocks added to
+# it with add_output_blocks.
+
+sub select_output {
+
+    my ($request, $config_name) = @_;
+    
+    $request->{ds}->select_output($request, $config_name);
+}
+
+
+# select_record_output ( record, output_name )
+#
+# This method should be called from a before_record hook or else from a record processing
+# subroutine. It overrides the currently selected output configuration for the specified
+# record. The second parameter should be either a block name, in which case the record will be
+# output using just that block, or else an output configuration name that was previously
+# initialized with a call to init_output and had blocks added to it with add_output_blocks.
+
+sub select_record_output {
+
+    my ($request, $record, $output_name) = @_;
+    
+    if ( $request->{"output_${output_name}"} )
+    {
+	$record->{_output_config} = "output_${output_name}";
+    }
+
+    elsif ( $request->{ds}{block}{$output_name} )
+    {
+	$record->{_output_block} = $output_name;
+	
+	unless ( exists $request->{block_field_list}{$output_name} )
+	{
+	    $request->{ds}->configure_block($request, $output_name);
+	}
+    }
+    
+    else
+    {
+	unless ( $request->{has_output_warning}{$output_name} )
+	{
+	    $request->add_warning("Unknown output block or configuration '$output_name'");
+	    $request->{has_output_warning}{$output_name} = 1;
+	}
+    }
+}
+
+
 # skip_output_record
 #
-# This method should only be called from a before_record_hook. It directs that the record about to
-# be output should be skipped.
+# This method should be called from a before_record_hook or else from a record processing
+# subroutine. It directs that the specified record should be skipped.
 
 sub skip_output_record {
 
@@ -1127,41 +1359,6 @@ sub skip_output_record {
 }
 
 
-# alternate_output_block ( block_name )
-# 
-# Call this method from a before_record_hook routine to select an alternate output block for the
-# record.
-
-sub alternate_output_block {
-
-    my ($request, $block_name) = @_;
-
-    croak "'alternate_output_block' is obsolete.";
-    
-    # croak "unknown block '$block_name'" unless $request->{ds}{block}{$block_name};
-    
-    # $request->{_alternate_block} = $block_name;
-
-    # unless ( exists $request->{block_field_list}{$block_name} )
-    # {
-    # 	$request->{ds}->configure_block($request, $block_name);
-    # }
-}
-
-
-sub select_output_block {
-    
-    my ($request, $record, $block_name) = @_;
-    
-    croak "unknown block '$block_name'" unless $request->{ds}{block}{$block_name};
-    
-    $record->{_output_block} = $block_name;
-
-    unless ( exists $request->{block_field_list}{$block_name} )
-    {
-	$request->{ds}->configure_block($request, $block_name);
-    }
-}
 
 
 1;

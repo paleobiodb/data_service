@@ -167,10 +167,18 @@ sub get_content_type {
 sub get_params {
     
     my ($plugin, $request, @rest) = @_;
-    
-    my $params = Dancer::params(@rest);
-    delete $params->{splat};
-    return $params;
+
+    if ( wantarray() )
+    {
+	return Dancer::params(@rest);
+    }
+
+    else
+    {
+	my $params = Dancer::params(@rest);
+	delete $params->{splat};
+	return $params;
+    }
 }
 
 
@@ -194,10 +202,10 @@ sub get_request_body {
 
     my ($plugin, $request) = @_;
 
-    if ( Dancer::request->content_type eq 'application/x-www-form-urlencoded' && Dancer::request->params('body') )
+    if ( Dancer::request->content_type =~ qr{ application/x-www-form-urlencoded }xsi &&
+	 Dancer::request->params('body') )
     {
-	my $body = Dancer::request->params('body');
-	return $body;
+	return Dancer::request->params('body');
     }
     
     elsif ( Dancer::request->body() )

@@ -58,6 +58,8 @@ has output_format => ( is => 'rw' );
 
 has output_vocab => ( is => 'rw' );
 
+has is_single_result => ( is => 'ro' );
+
 has output_linebreak => ( is => 'rw' );
 
 has result_limit => ( is => 'rw' );

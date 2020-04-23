@@ -113,9 +113,9 @@ sub emit_header {
     {
 	my $counts = $request->result_counts;
 	
-	$output .= '"records_found":' . json_clean($counts->{found} || '0') . ",\n";
-	$output .= '"records_returned":' . json_clean($counts->{returned} || '0') . ",\n";
-	$output .= '"record_offset":' . json_clean($counts->{offset}) . ",\n"
+	$output .= '"records_found":' . json_clean($counts->{found} || '0', 'pos') . ",\n";
+	$output .= '"records_returned":' . json_clean($counts->{returned} || '0', 'pos') . ",\n";
+	$output .= '"record_offset":' . json_clean($counts->{offset}, 'pos') . ",\n"
 	    if defined $counts->{offset} && $counts->{offset} > 0;
     }
     
@@ -474,12 +474,23 @@ sub json_clean {
     
     return '""' unless defined $string and $string ne '';
     
-    # Do a quick check for numbers.  If it matches, return the value as-is
-    # unless the data_type is 'str'.  In that case, the field value is
-    # intended to be a string so we should quote it even if it looks like a number.
+    # If the data type is numeric, do a quick check to make sure that the value looks matches the
+    # JSON number format. If so, return it as-is without quote marks. If the data type is 'json'
+    # then also return it as-is. This data type should be pre-checked (see Output.pm) to see that
+    # it decodes properly.
     
-    return $string if $string =~ qr{ ^ -? (?: [1-9][0-9]* | 0 ) (?: \. [0-9]+ )? (?: [Ee] -? [0-9]+ )? $ }x
-	and not (defined $data_type && $data_type eq 'str');
+    if ( defined $data_type && $data_type ne 'str' )
+    {
+	if ( $data_type =~ /^int|^pos|^dec|^sci|^mix/ )
+	{
+	    return $string if $string =~ qr{ ^ -? (?: [1-9][0-9]* | 0 ) (?: \. [0-9]+ )? (?: [Ee] -? [0-9]+ )? $ }x;
+	}
+	
+	elsif ( $data_type eq 'json' )
+	{
+	    return $string;
+	}
+    }
     
     # Do another quick check for okay characters.  If there's nothing exotic,
     # just return the quoted value.

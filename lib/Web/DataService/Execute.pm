@@ -697,11 +697,14 @@ sub generate_result {
     
     if ( ref $request->{main_record} )
     {
+	$ds->_check_output_config($request);
 	return $ds->_generate_single_result($request);
     }
     
     elsif ( ref $request->{main_sth} or ref $request->{main_result} )
     {
+	$ds->_check_output_config($request);
+	
 	my $threshold = $ds->node_attr($path, 'streaming_threshold')
 	    unless $request->{do_not_stream};
 	
@@ -733,6 +736,7 @@ sub generate_result {
     
     else
     {
+	$ds->_check_output_config($request);
 	return $ds->_generate_empty_result($request);
     }
 }
@@ -1194,7 +1198,7 @@ sub error_result {
     else
     {
 	$code = 500;
-	print STDERR warn $error;
+	warn $error;
 	@errors = "A server error occurred.  Please contact the server administrator.";
     }
     
