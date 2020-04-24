@@ -1196,7 +1196,7 @@ sub add_result {
     
     $request->clear_result unless ref $request->{main_result} eq 'ARRAY';
     return unless @_;
-
+    
     foreach my $r ( @records )
     {
 	if ( ref $r eq 'ARRAY' )
@@ -1204,11 +1204,11 @@ sub add_result {
 	    push @{$request->{main_result}}, @$r;
 	}
 
-	elsif ( ref $r eq 'HASH' )
+	elsif ( ref $r && reftype $r eq 'HASH' )
 	{
 	    push @{$request->{main_result}}, $r;
 	}
-
+	
 	elsif ( defined $r )
 	{
 	    croak "add_result: arguments must be records or arrays of records\n";
