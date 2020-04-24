@@ -1,0 +1,14 @@
+=head2 DESCRIPTION
+
+This page describes the Larkin response format in detail.
+
+=head2 SYNOPSIS
+
+This response format is written to be compatible with the now-deprecated auxiliary API called
+'Larkin', used by the frontend web service. There is probably no need for anybody to consult this
+documentation page, so it is minimal.
+
+The Larkin format outputs JSON, but constructed somewhat differently from what the usual JSON
+output format produces. A single result produces a bare JSON object, and a multiple result
+produces a bare JSON list of objects. No metadata is included in either case. An error result
+produces a bare JSON object conveying the error message. That's about it.
