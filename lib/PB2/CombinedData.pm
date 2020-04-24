@@ -57,7 +57,7 @@ sub initialize {
 	{ output => 'taxon_no', com_name => 'vid', dedup => 'record_id' },
 	    "For taxonomic names: the identifier of the actual matching name, if this",
 	    "is different from the identifier of the corresponding accepted name.",
-	{ output => 'taxon_rank', com_name => 'rnk' },
+	{ output => 'taxon_rank', com_name => 'rnk', data_type => 'mix' },
 	    "For taxonomic names: this field specifies the taxonomic rank of the actual matching name.",
 	{ output => 'difference', com_name => 'tdf' },
 	    "For taxonomic names: if the name is either a junior synonym or is invalid for some reason,",
@@ -66,7 +66,7 @@ sub initialize {
 	{ output => 'accepted_name', com_name => 'acn', dedup => 'name' },
 	    "For taxonomic names: if the name is not valid, this field gives the",
 	    "corresponding accepted name.",
-	{ output => 'accepted_rank', com_name => 'acr', dedup => 'taxon_rank' },
+	{ output => 'accepted_rank', com_name => 'acr', dedup => 'taxon_rank', data_type => 'mix' },
 	    "For taxonomic names: if the accepted name has a different rank, this",
 	    "field gives the rank of that name.",
 	{ output => 'higher_taxon', com_name => 'htn' },
@@ -87,9 +87,9 @@ sub initialize {
 	# intervals
 	{ output => 'abbrev', com_name => 'abr' },
 	    "For intervals: the standard abbreviation, if any",
-	{ output => 'early_age', pbdb_name => 'max_ma', com_name => 'eag' },
+	{ output => 'early_age', pbdb_name => 'max_ma', com_name => 'eag', data_type => 'dec' },
 	    "For intervals: the early age boundary in Ma",
-	{ output => 'late_age', pbdb_name => 'min_ma', com_name => 'lag' },
+	{ output => 'late_age', pbdb_name => 'min_ma', com_name => 'lag', data_type => 'dec' },
 	    "For intervals: the late age boundary in Ma",
 	# people
 	{ output => 'institution', com_name => 'ist' },
@@ -99,7 +99,7 @@ sub initialize {
 	# count fields
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	    "For strata: the number of fossil collections associated with this record in the database.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "For strata and taxa: the number of fossil occurrences associated with this record in the database.");
     
     $ds->define_set('1.2:combined:auto_types' =>
