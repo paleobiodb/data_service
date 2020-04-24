@@ -602,16 +602,13 @@ sub complete_ruleset {
 	    $field_name = $field_record->{ALTERNATE_NAME};
 	}
 	
-	elsif ( $field_name =~ /(.*)_no/ )
-	{
-	    $field_name = $1 . '_id';
-	}
-
 	# If the ruleset already has a rule corresponding to this field name, skip it. This allows
 	# you to specifically include certain fields in the ruleset with documentation strings and
 	# attributes, without them being duplicated by this routine.
 	
 	next if $ruleset_has_field{$field_name};
+	
+	next if $ruleset_has_field{$column_name} && ! $field_record->{ALTERNATE_ONLY};
 	
 	# If there is an entry for this field in the $override hash with the IGNORE attribute,
 	# ignore it. Also ignore any field for which the column property IGNORE was set.
@@ -625,6 +622,11 @@ sub complete_ruleset {
 	my $doc = "This parameter sets the value of C<$field_name> in the C<$TABLE{$table_specifier}> table.";
 	
 	my ($type, @type_param) = $field_record->{TypeParams}[0];
+	
+	if ( $field_name ne $column_name && ! $field_record->{ALTERNATE_ONLY} )
+	{
+	    $rr->{alias} = $column_name;
+	}
 	
 	# Add documentation depending on the data type of this field.
 	
@@ -653,7 +655,6 @@ sub complete_ruleset {
 	elsif ( $type eq 'boolean' )
 	{
 	    $doc .= " It accepts a boolean value.";
-	    $rr->{valid} = BOOLEAN_VALUE;
 	}
 	
 	elsif ( $type eq 'integer' )
