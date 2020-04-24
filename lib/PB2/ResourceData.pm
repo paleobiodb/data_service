@@ -601,7 +601,7 @@ sub cache_tag_values {
     
     my $result = $dbh->selectall_arrayref("
 	SELECT tag.id, tag.name, count(res.tag_id) as resources
-	FROM $TABLE{RESOURCE_TAG_NAMES} as tag JOIN $TABLE{RESOURCE_TAGS} as res on tag.id = res.tag_id
+	FROM $TABLE{RESOURCE_TAG_NAMES} as tag LEFT JOIN $TABLE{RESOURCE_TAGS} as res on tag.id = res.tag_id
 	GROUP BY tag.id", { Slice => { } });
     
     if ( $result && ref $result eq 'ARRAY' )
