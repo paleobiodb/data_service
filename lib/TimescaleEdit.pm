@@ -517,7 +517,7 @@ sub check_dependencies {
 }
 
 
-# define_intervals ( action, table, record )
+# define_intervals_action ( action, table, record )
 # 
 # For every interval name defined in this timescale, copy the interval definition to the intervals
 # table, unless that interval is already defined by a timescale of higher priority. This will involve
