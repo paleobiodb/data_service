@@ -1,0 +1,8 @@
+=head2 DESCRIPTION
+
+The operations in this category return various statistics about the database and its contents.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>
+

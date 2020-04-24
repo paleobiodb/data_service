@@ -21,9 +21,11 @@ use PB2::OccurrenceData;
 use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
+use PB2::PublicationData;
 use PB2::PersonData;
 use PB2::CombinedData;
 use PB2::ResourceData;
+use PB2::Statistics;
 use PB2::Authentication;
 use PB2::MainEntry;
 
@@ -117,6 +119,13 @@ use PB2::MainEntry;
 	#   module => 'Template', disabled => 1 },
 	#     "The HTML format returns formatted web pages describing the selected",
 	#     "object or objects from the database.",
+	{ name => 'larkin', content_type => 'application/json; charset=utf-8',
+	  doc_node => 'formats/larkin', title => 'Larkin', default_vocab => '',
+	  module => 'Larkin' },
+	    "This format is used for operations that replace the old Larkin data service,",
+	    "written in Javascript,",
+	    "that was used to provide data to the frontend website. This format is",
+	    "designed to produce the same output as the old data service.",
 	{ name => 'ris', content_type => 'application/x-research-info-systems',
 	  doc_node => 'formats/ris', title => 'RIS', disposition => 'attachment',
 	  encode_as_text => 1, default_vocab => '', module => 'RISFormat'},
@@ -1089,10 +1098,84 @@ use PB2::MainEntry;
     			place => 3,
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
+			output_override => 'larkin',
+			allow_format => '+larkin',
     			method => 'list_resources',
     		        arg => 'active' },
     	"This operation returns a list of active educational resource records,",
-    	"selected according to the query parameters.");
+	"selected according to the query parameters.");
+    
+    # Functions that used to be carried out by the larkin data service.
+    
+    $ds2->define_node({ path => 'stats',
+			title => 'Database statistics',
+			place => 13,
+			role => 'PB2::Statistics' },
+	"Statistical summaries of database information");
+    
+    $ds2->define_node({ path => 'stats/frontend',
+			title => 'Statistics for the frontend website',
+			place => 1,
+			ruleset => '1.2:larkin_stats',
+			default_format => 'larkin',
+			allow_format => 'larkin,json,csv,tsv,txt',
+			method => 'larkin_stats' },
+	"This operation replaces the /larkin/stats/ operations handled by the",
+	"old larkin dataservice. It provides information in the legacy format, for",
+	"use by the frontend website code.");
+
+    $ds2->define_node({ path => 'eduresources/tags',
+			title => 'Educational Resource Tags',
+			place => 4,
+			output => '1.2:eduresources:tag',
+			allow_format => '+larkin',
+			method => 'list_tags' },
+	"This operation returns a list of the tags available to categorize",
+	"educational resources.");
+
+    $ds2->define_node({ path => 'frontend',
+			title => 'Support for frontend application',
+			place => 12,
+			role => 'PB2::Statistics' },
+	"Auxiliary operations to support the frontend B<Navigator> application.");
+
+    $ds2->define_node({ path => 'frontend/app-state',
+			title => 'Save or retrieve Navigator application state',
+			place => 1,
+			allow_format => '+larkin',
+			allow_method => '+POST',
+			method => 'app_state' },
+	"This operation can be used to save (with POST) or retrieve (with GET)",
+	"the application state for Navigator. In fact, it can be used to save",
+	"state for any frontend application.");
+    
+    $ds2->define_node({ path => 'pubs',
+			title => 'Research Publications',
+			place => 8,
+			role => 'PB2::PublicationData' },
+	"Research papers that make major use of data from this database",
+	"can be submitted for consideration as official publications. The",
+	"operations in this section provide a list of official publication",
+	"records and information about individual records.");
+    
+    $ds2->define_node({ path => 'pubs/single',
+			title => 'Single research publication',
+			place => 1,
+			output => '1.2:pubs:basic',
+			allow_format => '+larkin',
+			method => 'get_publication' },
+	"This operation provides information about a single research publication",
+	"specified by its identifier.");
+    
+    $ds2->define_node({ path => 'pubs/list',
+			title => 'Lists of research publications',
+			place => 2,
+			output => '1.2:pubs:basic',
+			optional_output => '1.2:pubs:optional_output',
+			allow_format => '+larkin',
+			method => 'list_publications' },
+	"This operation provides information about lists of research publications.",
+	"The default is to return the entire official publication list.");
     
     # The following paths are used for miscellaneous documentation
     
@@ -1159,9 +1242,9 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'formats/json',
 			title => 'JSON format' });
-    
-    $ds2->define_node({ path => 'formats/xml',
-			title => 'XML format' });
+
+    # $ds2->define_node({ path => 'formats/xml',
+    # 			title => 'XML format' });
     
     $ds2->define_node({ path => 'formats/text',
 			title => 'Text formats' });
@@ -1171,6 +1254,9 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'formats/png',
 			title => 'PNG format' });
+    
+    $ds2->define_node( { path => 'formats/larkin',
+			 title => 'Larkin format' });
     
     
     # And finally, stylesheets and such

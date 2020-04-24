@@ -76,6 +76,13 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('SPECIMEN_MATRIX', PRIMARY_KEY => "specimen_no");
     set_table_property(SPEC_MATRIX => TABLE_COMMENT =>
 		       "This table should not be modified directly, but only through automatic processes");
+
+    set_table_name(PUBLICATIONS => 'pubs');
+    set_table_property('PUBLICATIONS', PRIMARY_KEY => 'pub_no');
+    set_table_property('PUBLICATIONS', PRIMARY_FIELD => 'pub_id');
+
+    set_table_name(APP_STATE => 'navigator_states');
+    set_table_property('APP_STATE', PRIMARY_KEY => 'id');
 }
 
 

@@ -20,29 +20,31 @@ our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier ex
 
 # List the identifier prefixes:
 
-our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',
-	     TID => 'txn|var',
-	     TXN => 'txn',
-	     VAR => 'var',
-	     OPN => 'opn',
-	     REF => 'ref',
-	     OCC => 'occ',
-	     REI => 'rei',
-	     OID => 'occ|rei',
-	     SPM => 'spm',
-	     MEA => 'mea',
-	     ELS => 'els',
-	     COL => 'col',
-	     LOC => 'loc',
-	     WOF => 'wof',
-	     PLC => 'col|loc|wof',
-	     INT => 'int',
-	     BND => 'bnd',
-	     TSC => 'tsc',
-	     CLU => 'clu',
-	     PHP => 'php',
-	     EDR => 'edr',
-	     PRS => 'prs' );
+our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',	# standard prefixes
+	     TID => 'txn|var',		# taxonomic names
+	     TXN => 'txn',		# primary taxonomic names
+	     VAR => 'var',		# spelling variants
+	     OPN => 'opn',		# taxonomic opinions
+	     REF => 'ref',		# bibliographic references
+	     PUB => 'pub',		# research publications
+	     OCC => 'occ',		# fossil occurrences
+	     REI => 'rei',		# fossil occurrence reidentifications
+	     OID => 'occ|rei',		# fossil identification events
+	     SPM => 'spm',		# fossil specimens
+	     MEA => 'mea',		# measurements of fossil specimens
+	     ELS => 'els',		# specimen elements
+	     COL => 'col',		# fossil collections
+	     LOC => 'loc',		# geographic locations by coordinate
+	     GNM => 'gnm',		# geographic names
+	     CLU => 'clu',		# geographic clusters of fossil occurrence locations
+	     PLC => 'col|loc|gnm',	# locations in general
+	     INT => 'int',		# geologic time intervals
+	     BND => 'bnd',		# geologic time interval boundaries
+	     TSC => 'tsc',		# geologic time scales
+	     PHP => 'php',		# phylopic image identifiers
+	     EDR => 'edr',		# educational resources
+	     ETG => 'etg',		# educational resource tags
+	     PRS => 'prs' );		# database members and guests
 
 our %IDRE;
 our %IDVALID;
