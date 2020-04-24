@@ -753,7 +753,7 @@ sub list_bounds_after_update {
 		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
 	    }
 	    
-	    $request->select_output_block($r, '1.2:timescales:bound');
+	    $request->select_record_output($r, '1.2:timescales:bound');
 	}
     }
     
@@ -780,7 +780,7 @@ sub list_deleted_records {
 	if ( $record_type eq 'TIMESCALE_BOUNDS' )
 	{
 	    $record = { bound_no => $keyval, status => 'deleted' };
-	    $request->select_output_block($record, '1.2:timescales:bound');
+	    $request->select_record_output($record, '1.2:timescales:bound');
 	}
 	
 	else

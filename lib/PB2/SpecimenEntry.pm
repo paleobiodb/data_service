@@ -660,7 +660,7 @@ sub list_updated_measurements {
 		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
 	    }
 
-	    $request->select_output_block($r, '1.2:measure:basic');
+	    $request->select_record_output($r, '1.2:measure:basic');
 	}
     }
     
