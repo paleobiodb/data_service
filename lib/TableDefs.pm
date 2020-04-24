@@ -501,6 +501,11 @@ sub set_table_property {
     croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
     
     $TABLE_PROPERTIES{$table_specifier}{$property} = $value;
+
+    if ( $property eq 'PRIMARY_KEY' && $value =~ / (.*) _no $ /xs )
+    {
+	$TABLE_PROPERTIES{$table_specifier}{PRIMARY_FIELD} = "${1}_id";
+    }
 }
 
 
