@@ -80,6 +80,7 @@ sub new {
 		       s.role, p.permission
 		FROM $TABLE{SESSION_DATA} as s left join $TABLE{TABLE_PERMS} as p
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
+			and p.permission <> ''
 		WHERE session_id = $quoted_id";
 	    
 	    print STDERR "$sql\n\n" if $options->{debug};
@@ -258,7 +259,7 @@ sub get_table_permissions {
 	    
 	    my $sql = "
 		SELECT permission FROM $TABLE{TABLE_PERMS}
-		WHERE person_no = $quoted_person and table_name = $quoted_table";
+		WHERE person_no = $quoted_person and table_name = $quoted_table and permission <> ''";
 	    
 	    my $permission;
 	    

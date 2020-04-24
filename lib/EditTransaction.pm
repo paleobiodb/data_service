@@ -1208,12 +1208,7 @@ sub _new_record {
     
     $edt->{tables}{$table} = 1;
     
-    # # If there are any errors and warnings pending from the previous record, move them to the main
-    # # lists.
-    
-    # $edt->_finish_record;
-    
-    # Then determine a label for this record. If one is specified, use that. Otherwise, keep count
+    # Determine a label for this record. If one is specified, use that. Otherwise, keep count
     # of how many records we have seen so far and use that prepended by '#'. Create an entry
     # in the 'label_found' hash so that we know what table this label refers to.
     
@@ -1238,6 +1233,7 @@ sub _new_record {
     $edt->{current_action} = EditTransaction::Action->new($table, $operation, $record, $label);
     
     # If there are special column instructions already set for this table, copy them in.
+    # $$$ this needs to be changed so that these instructions are only accessed if needed.
     
     if ( my $s = $SPECIAL_BY_CLASS{ref $edt}{$table} )
     {
@@ -2285,6 +2281,36 @@ sub other_action {
     
     # Either execute the action immediately or add it to the appropriate list depending on whether
     # or not any error conditions are found.
+    
+    return $edt->_handle_action($action);
+}
+
+
+# do_sql ( stmt, options )
+# 
+# Create an action that will execute the specified SQL statement, and do nothing else. The
+# execution is protected by a try block, and an E_EXECUTE condition will be added if it fails. The
+# appropriate cleanup methods will be called in this case. If an options hash is provided with the
+# key 'result' and a scalar reference, the result code returned by the statement execution will be
+# written to that reference. 
+
+sub do_sql {
+
+    my ($edt, $sql, $options) = @_;
+    
+    # Substitute any table specifiers in the statement for the actual table names.
+    
+    $sql =~ s{ << (\w+) >> }{ $TABLE{$1} }xseg;
+    
+    my $record = { sql => $sql };
+    $record->{result} = $options->{result} if ref $options eq 'HASH' && $options->{result};
+    
+    # Move any accumulated record error or warning conditions to the main lists, and determine the
+    # key expression and label for the record being updated.
+    
+    my $action = EditTransaction::Action->new('<SQL>', 'other', $record);
+    
+    $action->_set_method('_do_sql');
     
     return $edt->_handle_action($action);
 }
@@ -4677,6 +4703,23 @@ sub _substitute_labels {
 }
 
 
+# _do_sql ( action, table, record )
+#
+# Execute the specified SQL statement.
+
+sub _do_sql {
+    
+    my ($edt, $action, $table, $record) = @_;
+    
+    my $result = $edt->{dbh}->do($record->{sql});
+
+    if ( ref $record->{result} eq 'SCALAR' )
+    {
+	${$record->{$result}} = $result;
+    }
+}
+
+
 # Methods to be overridden
 # ------------------------
 
@@ -6094,11 +6137,25 @@ sub validate_boolean_value {
 # If the value is good, this routine will return a canonical version suitable for storing into the
 # column. An undefined return value will indicate a null.
 
+our (%SIGNED_BOUND) = ( tiny => 127,
+			small => 32767,
+			medium => 8388607,
+			regular => 2147483647,
+			big => 9223372036854775807 );
+
+our (%UNSIGNED_BOUND) = ( tiny => 255,
+			  small => 65535,
+			  medium => 16777215,
+			  regular => 4294967295,
+			  big => 18446744073709551615 );
+
 sub validate_integer_value {
     
     my ($edt, $action, $column_defn, $record_col, $value) = @_;
     
-    my ($type, $unsigned, $max) = @{$column_defn->{TypeParams}};
+    my ($type, $unsigned, $size) = @{$column_defn->{TypeParams}};
+
+    my $max = $unsigned ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
     
     # First make sure that the value is either empty or matches the proper format. A value which
     # is empty or contains only whitespace will be treated as a NULL.

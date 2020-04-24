@@ -14,6 +14,7 @@ use TableDefs qw(%TABLE get_table_property get_column_properties list_column_pro
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
 
 use Carp qw(croak);
+use HTTP::Validate qw(:validators);
 use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
@@ -46,17 +47,11 @@ our (%PREFIX_SIZE) = ( tiny => 255,
 		       medium => 16777215,
 		       large => 4294967295 );
 
-our (%SIGNED_BOUND) = ( tiny => 127,
-			small => 32767,
-			medium => 8388607,
-			regular => 2147483647,
-			big => 9223372036854775807 );
-
-our (%UNSIGNED_BOUND) = ( tiny => 255,
-			  small => 65535,
-			  medium => 16777215,
-			  regular => 4294967295,
-			  big => 18446744073709551615 );
+our (%INT_SIZE) = ( tiny => 'one byte integer',
+		    small => 'two byte integer',
+		    medium => 'three byte integer',
+		    regular => 'four byte integer',
+		    big => 'eight byte integer');
 
 
 # get_table_scheme ( table_name, debug_flag )
@@ -107,7 +102,7 @@ sub get_table_schema {
 	$quoted_table = $dbh->quote_identifier($table_name);
     }
     
-    print STDERR "$sql\n\n" if $debug;
+    print STDERR "$sql\n" if $debug;
     
     eval {
 	($check_table) = $dbh->selectrow_array($sql);
@@ -115,7 +110,7 @@ sub get_table_schema {
     
     croak "unknown table '$table_specifier'" unless $check_table;
     
-    print STDERR "	SHOW FULL COLUMNS FROM $quoted_table\n\n" if $debug;
+    print STDERR "SHOW FULL COLUMNS FROM $quoted_table\n" if $debug;
     
     my $columns_ref = $dbh->selectall_arrayref("
 	SHOW FULL COLUMNS FROM $quoted_table", { Slice => { } });
@@ -226,7 +221,7 @@ sub get_table_schema {
 	
 	elsif ( $type =~ qr{ ^ (tiny|small|medium|big)? int [(] (\d+) [)] \s* (unsigned)? }xs )
 	{
-	    my $bound = $3 ? $UNSIGNED_BOUND{$1 || 'regular'} : $SIGNED_BOUND{$1 || 'regular'};
+	    my $bound = $1 || 'regular';
 	    my $unsigned = $3 ? 'unsigned' : '';
 	    $c->{TypeParams} = [ 'integer', $unsigned, $bound, $2 ];
 	}
@@ -259,8 +254,9 @@ sub get_table_schema {
 	elsif ( $type =~ qr{ ^ ( enum | set ) [(] (.+) [)] $ }xs )
 	{
 	    my $type = $1;
+	    my $list = $2;
 	    my $value_hash = unpack_enum($2);
-	    $c->{TypeParams} = [ $type, $value_hash ];
+	    $c->{TypeParams} = [ $type, $value_hash, $list ];
 	}
 	
 	elsif ( $type =~ qr{ ^ ( date | time | datetime | timestamp ) \b }xs )
@@ -308,7 +304,7 @@ sub unpack_enum {
     {
 	my $value = $1;
 	$string = $2;
-
+	
 	$value =~ s/''/'/g;
 	$value_hash->{fc $value} = 1;
     }
@@ -407,7 +403,9 @@ sub get_authinfo_fields {
 
 sub complete_output_block {
     
-    my ($ds, $dbh, $block_name, $table_specifier) = @_;
+    my ($ds, $dbh, $block_name, $table_specifier, $override) = @_;
+    
+    $override = { } unless ref $override eq 'HASH';
     
     # First get a hash of table column definitions
     
@@ -438,7 +436,9 @@ sub complete_output_block {
     
     # Then go through the field list from the schema and add any fields that aren't already in the
     # output list. We need to translate names that end in '_no' to '_id', and we can substitute
-    # compact vocabulary names where known.
+    # compact vocabulary names where known. If an override hash was defined, look up the field
+    # name in that hash and apply any specified attributes. If the _ignore key is present with a
+    # true value, skip that field entirely.
     
     my $field_list = $schema->{_column_list};
     
@@ -458,9 +458,10 @@ sub complete_output_block {
 	
 	next if $block_has_field{$field_name};
 	
-	# If this field has the 'IGNORE' attribute set, skip it as well.
+	# If this field has the 'IGNORE' attribute set, skip it as well. Check for an override
+	# entry as well.
 
-	next if $schema->{$field_name}{IGNORE};
+	next if $schema->{$field_name}{IGNORE} || $override->{$field_name}{IGNORE};
 	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
@@ -494,7 +495,7 @@ sub complete_output_block {
 	    $r->{com_name} = $field_name;
 	}
 	
-	my $doc = "The contents of field C<$field_name> from the table.";
+	my $doc = "The contents of field C<$field_name> from the table C<$TABLE{$table_specifier}>.";
 	
 	if ( $type =~ /int\(/ )
 	{
@@ -502,6 +503,27 @@ sub complete_output_block {
 	}
 	
 	$block_needs_oid = 0;
+
+	# If there are any attribute overrides specified for this field, apply them now.
+
+	if ( my $ov = $override->{$field_name} )
+	{
+	    foreach my $attr ( keys %$ov )
+	    {
+		if ( defined $ov->{$attr} )
+		{
+		    $r->{$attr} = $ov->{$attr};
+		}
+
+		else
+		{
+		    delete $r->{$attr};
+		}
+	    }
+	}
+	
+	# Add the record for this field to the output list for the block we are completing, and
+	# add it to the documentation list as well along with a default documentation string.
 	
 	push @$output_list, $r;
 	$ds->add_doc($block, $r);
@@ -537,7 +559,9 @@ sub complete_output_block {
 
 sub complete_ruleset {
     
-    my ($ds, $dbh, $ruleset_name, $table_specifier, @definitions) = @_;
+    my ($ds, $dbh, $ruleset_name, $table_specifier, $override) = @_;
+
+    $override = { } unless ref $override eq 'HASH';
     
     # First get a hash of table column definitions
     
@@ -570,9 +594,6 @@ sub complete_ruleset {
 	next if $COMMON_FIELD_SPECIAL{$column_name};
 	
 	my $field_record = $schema->{$column_name};
-	my $type = $field_record->{Type};
-	
-	next if $field_record->{IGNORE};
 	
 	my $field_name = $column_name;
 	
@@ -585,15 +606,92 @@ sub complete_ruleset {
 	{
 	    $field_name = $1 . '_id';
 	}
+
+	# If the ruleset already has a rule corresponding to this field name, skip it. This allows
+	# you to specifically include certain fields in the ruleset with documentation strings and
+	# attributes, without them being duplicated by this routine.
 	
 	next if $ruleset_has_field{$field_name};
 	
-	my $rr = { optional => $field_name };
-	my $doc = "This parameter sets the value of C<$field_name> in the table.";
+	# If there is an entry for this field in the $override hash with the IGNORE attribute,
+	# ignore it. Also ignore any field for which the column property IGNORE was set.
 	
-	if ( $type =~ /int\(/ )
+	next if $field_record->{IGNORE} || $override->{$field_name}{IGNORE};
+	
+	# Now create a record to represent this field, along with a documentation string and
+	# whatever other attributes we can glean from the table definition.
+	
+	my $rr = { optional => $field_name };
+	my $doc = "This parameter sets the value of C<$field_name> in the C<$TABLE{$table_specifier}> table.";
+	
+	my ($type, @type_param) = $field_record->{TypeParams}[0];
+	
+	# Add documentation depending on the data type of this field.
+	
+	if ( $type eq 'text' )
 	{
-	    $doc .= " The value must be an integer.";
+	    $doc .= " It accepts a string of length at most $type_param[0]";
+	    
+	    if ( $type_param[2] && $type_param[2] =~ /latin1/ )
+	    {
+		$doc .= " in the latin1 character set";
+	    }
+
+	    elsif ( $type_param[2] && $type_param[2] =~ /utf\d/ )
+	    {
+		$doc .= " in utf-8";
+	    }
+	    
+	    $doc .= ".";
+	}
+	
+	elsif ( $type eq 'data' )
+	{
+	    $doc .= " It accepts binary data of length at most $type_param[0].";
+	}
+	
+	elsif ( $type eq 'boolean' )
+	{
+	    $doc .= " It accepts a boolean value.";
+	    $rr->{valid} = BOOLEAN_VALUE;
+	}
+	
+	elsif ( $type eq 'integer' )
+	{
+	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    my $size = $INT_SIZE{$type_param[1]} || 'integer';
+	    $prefix = 'an' if $size eq 'integer';
+	    
+	    $doc .= " It accepts $prefix $size value.";
+	}
+	
+	elsif ( $type eq 'fixed' )
+	{
+	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    $doc .= " It accepts $prefix decimal value with at most $type_param[1] digits before the decimal and at most $type_param[2] digits after.";
+	}
+	
+	elsif ( $type eq 'floating' )
+	{
+	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    my $size = $type_param[2] eq 'double' ? 'double precision' : 'single precision';
+	    $doc .= " It accepts $prefix decimal value that can be stored in $size floating point.";
+	}
+
+	elsif ( $type eq 'enum' || $type eq 'set' )
+	{
+	    my $prefix = $type eq 'enum' ? 'a value' : 'one or more values';
+	    $doc .= " It accepts $prefix from the following list: C<$type_param[1]>.";
+	}
+	
+	elsif ( $type eq 'date' )
+	{
+	    $doc .= " It accepts a $type_param[0] in any format acceptable to MariaDB.\n";
+	}
+	
+	else
+	{
+	    $doc .= " The value is not checked before being sent to the database, and will throw an exception if the database does not accept it.";
 	}
 	
 	if ( $has_properties{$column_name} )
