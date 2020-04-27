@@ -60,7 +60,7 @@ DROP TABLE IF EXISTS ancestry_scratch //
 CREATE TABLE ancestry_scratch (orig_no int unsigned primary key, is_base tinyint unsigned) Engine=MyISAM //
 
 CREATE OR REPLACE PROCEDURE compute_ancestry (auth_table varchar(80), tree_table varchar(80),
-                                              taxon_nos varchar(32000), option varchar(80))
+                                              taxon_nos varchar(1024), option varchar(80))
     BEGIN
         -- Clear the scratch table
         DELETE FROM ancestry_scratch;
