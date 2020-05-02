@@ -50,7 +50,7 @@ sub initialize {
 	{ output => 'scale_no', com_name => 'tsc' },
 	    "The time scale in which this interval lies.  An interval may be reported more than",
 	    "once, as a member of different time scales",
-	{ output => 'scale_level', com_name => 'lvl' },
+	{ output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
 	    "The level within the time scale to which this interval belongs.  For example,",
 	    "the default time scale is organized into the following levels:",
 	    "=over", "=item Level 1", "Eons",
@@ -86,13 +86,13 @@ sub initialize {
 	    "The type of this object: 'tsc' for a time scale",
 	{ output => 'scale_name', com_name => 'nam' },
 	    "The name of this time scale",
-	{ output => 'num_levels', com_name => 'nlv' },
+	{ output => 'num_levels', com_name => 'nlv', data_type => 'pos' },
 	    "The number of levels into which this time scale is organized",
 	{ output => 'level_list', com_name => 'lvs', sub_record => '1.2:scales:level',
 	  if_format => 'json' },
 	    "A list of levels associated with this time scale, if more than one.",
 	    "This field will only be present in C<json> responses.",
-	{ output => 'scale_level', com_name => 'lvl', not_format => 'json' },
+	{ output => 'scale_level', com_name => 'lvl', not_format => 'json', data_type => 'pos' },
 	    "Level number.",
 	{ output => 'level_name', com_name => 'nam', not_format => 'json' },
 	    "Level name",
@@ -106,7 +106,7 @@ sub initialize {
 	{ set => '*', code => \&process_int_ids });
     
     $ds->define_block('1.2:scales:level' =>
-	{ output => 'scale_level', com_name => 'lvl' },
+	{ output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
 	    "Level number",
 	{ output => 'level_name', com_name => 'nam' },
 	    "Level name");
