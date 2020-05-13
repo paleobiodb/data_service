@@ -10,7 +10,7 @@ use strict;
 
 use lib '..';
 
-package PB2::PublicationData;
+package PB2::ArchiveData;
 
 use HTTP::Validate qw(:validators);
 

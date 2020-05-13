@@ -21,8 +21,9 @@ use PB2::OccurrenceData;
 use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
-use PB2::PublicationData;
 use PB2::PersonData;
+use PB2::PublicationData;
+use PB2::ArchiveData;
 use PB2::CombinedData;
 use PB2::ResourceData;
 use PB2::Statistics;
@@ -1105,7 +1106,8 @@ use PB2::MainEntry;
     	"This operation returns a list of active educational resource records,",
 	"selected according to the query parameters.");
     
-    # Functions that used to be carried out by the larkin data service.
+    # Functions that used to be carried out by the larkin data service and the archiver data
+    # service.
     
     $ds2->define_node({ path => 'stats',
 			title => 'Database statistics',
@@ -1162,9 +1164,10 @@ use PB2::MainEntry;
 			title => 'Single research publication',
 			place => 1,
 			output => '1.2:pubs:basic',
+			optional_output => '1.2:pubs:optional_output',
 			allow_format => '+larkin',
 			method => 'get_publication' },
-	"This operation provides information about a single research publication",
+	"This operation returns information about a single research publication",
 	"specified by its identifier.");
     
     $ds2->define_node({ path => 'pubs/list',
@@ -1174,8 +1177,38 @@ use PB2::MainEntry;
 			optional_output => '1.2:pubs:optional_output',
 			allow_format => '+larkin',
 			method => 'list_publications' },
-	"This operation provides information about lists of research publications.",
+	"This operation returns information about lists of research publications.",
 	"The default is to return the entire official publication list.");
+    
+    $ds2->define_node({ path => 'archives',
+			title => 'Data Archives',
+			place => 9,
+			role => 'PB2::ArchiveData' },
+	"Database members can archive data downloads, preserving them on",
+	"the server so that they or others can later retrieve the exact same",
+	"result set. This facility can be used to document the research process.",
+	"Additionally, you can request that a DOI be generated for significant",
+	"archives so that they can be quoted in research papers.");
+    
+    $ds2->define_node({ path => 'archives/single',
+			title => 'Single data archive',
+			place => 1,
+			output => '1.2:archives:basic',
+			optional_output => '1.2:archives:optional_output',
+			allow_format => '+larkin',
+			method => 'get_archive' },
+	"This operation returns information about a single data archive,",
+		      "specified by its identifier");
+    
+    $ds2->define_node({ path => 'archives/list',
+			title => 'Lists of data archives',
+			place => 2,
+			output => '1.2:archives:basic',
+			optional_output => '1.2:archives:optional_output',
+			allow_format => '+larkin',
+			method => 'list_archives' },
+	"This operation returns information about lists of data archives,",
+	"selected according to the request parameters.");
     
     # The following paths are used for miscellaneous documentation
     

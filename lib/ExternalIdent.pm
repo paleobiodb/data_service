@@ -27,6 +27,7 @@ our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',	# standard prefix
 	     OPN => 'opn',		# taxonomic opinions
 	     REF => 'ref',		# bibliographic references
 	     PUB => 'pub',		# research publications
+	     DAR => 'dar',              # data archives
 	     OCC => 'occ',		# fossil occurrences
 	     REI => 'rei',		# fossil occurrence reidentifications
 	     OID => 'occ|rei',		# fossil identification events
