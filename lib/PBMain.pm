@@ -11,7 +11,6 @@ use strict;
 use Dancer qw(:syntax);
 use PBLogger;
 use TableDefs qw(init_table_names enable_test_mode disable_test_mode is_test_mode);
-use ResourceDefs;
 
 my $logger = PBLogger->new;
 
@@ -154,7 +153,7 @@ any qr{.*} => sub {
     # request for the object whose identifier corresponds to the digit string. To do this, we
     # rewrite the request as if it had been .../single.<format>?id=<digits>
     
-    if ( $r->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
+    if ( $r->path =~ qr{ ^ ([\S]+) / ([\d]+) [.] (\w+) $ }xs )
     {
 	my $newpath = "$1/single.$3";
 	my $id = $2;
