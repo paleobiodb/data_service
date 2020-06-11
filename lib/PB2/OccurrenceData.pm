@@ -773,6 +773,7 @@ sub initialize {
 	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_colls_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
@@ -1387,7 +1388,7 @@ sub list_occs {
     push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.
@@ -1574,7 +1575,7 @@ sub diversity {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -2095,7 +2096,7 @@ sub list_occs_taxa {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o');
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -2285,7 +2286,7 @@ sub prevalence {
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     # push @filters, $request->generate_crmod_filters('o', $tables);
     # push @filters, $request->generate_ent_filters('o', $tables);
     
@@ -2308,7 +2309,7 @@ sub prevalence {
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
 	push @filters, $request->generateOccFilters($tables, 'o', 1);
-	push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+	push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
 	# push @filters, $request->generate_crmod_filters('o', $tables);
 	# push @filters, $request->generate_ent_filters('o', $tables);
 	
@@ -2449,7 +2450,7 @@ sub list_occs_associated {
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'r' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r' }, $inner_tables );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     # Figure out what information we need to determine access permissions.  We
@@ -2719,7 +2720,7 @@ sub list_occs_strata {
     my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { occs => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc' }, $inner_tables );
     push @filters, $request->generate_ref_filters($inner_tables);
     push @filters, $request->generate_refno_filter('o');
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
