@@ -217,9 +217,9 @@ sub initialize {
 	    "standard interval), or the interval that begins the range if C<late_interval> is also given",
 	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	    "The interval that ends the specific geologic time range associated with the collection",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with this collection (in Ma)",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with this collection (in Ma)",
 	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
 	    "The attribution (author and year) of the collection",
@@ -568,10 +568,10 @@ sub initialize {
 	    "The stratigraphic member associated with this stratum, if any.",
 	{ output => 'lithology', com_name => 'lth' },
 	    "The litholog(ies) recorded for this stratum in the database, if any.",
-        { output => 'max_ma', com_name => 'eag' },
+        { output => 'max_ma', com_name => 'eag', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with the selected",
 	    "occurrences (in Ma)",
-	{ output => 'min_ma', com_name => 'lag' },
+	{ output => 'min_ma', com_name => 'lag', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with the selected",
 	    "occurrences (in Ma)",
 	{ set => '*', code => \&fixTimeOutput },
@@ -602,9 +602,9 @@ sub initialize {
 	    "The name of the member in which occurrences were found",
 	{ output => 'lithology', com_name => 'lth' },
 	    "The litholog(ies) recorded for this stratum in the database, if any.",
-	{ output => 'max_ma', com_name => 'eag' },
+	{ output => 'max_ma', com_name => 'eag', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with the selected occurrences (in Ma)",
-	{ output => 'min_ma', com_name => 'lag' },
+	{ output => 'min_ma', com_name => 'lag', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with the selected occurrences (in Ma)",
 	{ set => '*', code => \&fixTimeOutput },
 	{ output => 'cc_list', com_name => 'cc2' },
@@ -620,13 +620,13 @@ sub initialize {
     $ds->define_block('1.2:strata:coords' =>
 	{ select => [ 'min(c.lat) as min_lat', 'min(c.lng) as min_lng',
 		      'max(c.lat) as max_lat', 'max(c.lng) as max_lng' ] },
-	{ output => 'min_lng', com_name => 'lx1', pbdb_name => 'lng_min' },
+	{ output => 'min_lng', com_name => 'lx1', pbdb_name => 'lng_min', data_type => 'dec' },
 	    "The minimum longitude for selected occurrences in this stratum",
-	{ output => 'max_lng', com_name => 'lx2', pbdb_name => 'lng_max' },
+	{ output => 'max_lng', com_name => 'lx2', pbdb_name => 'lng_max', data_type => 'dec' },
 	    "The maximum longitude for selected occurrences in this stratum",
-	{ output => 'min_lat', com_name => 'ly1', pbdb_name => 'lat_min' },
+	{ output => 'min_lat', com_name => 'ly1', pbdb_name => 'lat_min', data_type => 'dec' },
 	    "The minimum latitude for selected occurrences in this stratum",
-	{ output => 'max_lat', com_name => 'ly2', pbdb_name => 'lat_max' },
+	{ output => 'max_lat', com_name => 'ly2', pbdb_name => 'lat_max', data_type => 'dec' },
 	    "The maximum latitude for selected occurrences in this stratum");
     
     $ds->define_block('1.2:strata:gplates' =>
@@ -3535,6 +3535,9 @@ sub generateMainFilters {
     
     foreach my $lith ( @lithology )
     {
+	# First parse out the exclusion symbol ^ and quote marks, and note whether they were
+	# present. Skip any value that is empty after this point.
+	
 	my $lith_exclude;
 	my $lith_quoted;
 	

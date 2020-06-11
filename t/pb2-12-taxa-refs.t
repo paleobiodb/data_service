@@ -189,7 +189,9 @@ subtest 'subtree basic with output' => sub {
 				  "subtree refs ris with counts,both,comments");
     
     my $tc = Test::Conditions->new;
-    $tc->set_limit( 'ref' => 10, 'AU' => 10, 'formatted' => 10 );
+    $tc->limit_max( 'ref' => 10 );
+    $tc->limit_max( 'AU' => 10 );
+    $tc->limit_max( 'formatted' => 10 );
     
     foreach my $i ( 0..$#r1j )
     {
@@ -207,7 +209,7 @@ subtest 'subtree basic with output' => sub {
 	$tc->flag('ID', $rr->{ID}) unless $rr->{ID} eq $rj->{oid};
 	
 	my $al1 = $rj->{al1};
-	my $ai1 = $rj->{ai1}; my $ai1_1 = substr($ai1,0,1);
+	my $ai1 = $rj->{ai1} || ''; my $ai1_1 = substr($ai1,0,1);
 	my $tit = $rj->{tit} || $rj->{pbt};
 	
 	$tc->flag('al1', $rj->{oid}) unless $al1;

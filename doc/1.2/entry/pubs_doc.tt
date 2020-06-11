@@ -1,0 +1,7 @@
+=head2 DESCRIPTION
+
+Entry operations for official publication records.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>

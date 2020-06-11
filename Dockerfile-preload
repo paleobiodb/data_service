@@ -1,0 +1,35 @@
+#
+# Paleobiology Database - main API image
+# 
+# This file builds the preload image, which has a bunch of necessary packages and
+# takes 45 minutes or more to build. The main Dockerfile then uses this to build
+# the final image by copying in the source code and other local content.
+
+FROM perl:5.26-threaded AS paleobiodb_api_preload
+
+RUN apt-get update && \
+    apt-get -y install mariadb-client && \
+    cpanm DBI && \
+    cpanm DBD::mysql && \
+    cpanm Dancer && \
+    cpanm Moo && \
+    cpanm namespace::clean && \
+    cpanm YAML && \
+    cpanm Template && \
+    cpanm Dancer::Template::Tiny && \
+    cpanm Dancer::Plugin::Database && \
+    cpanm Dancer::Plugin::StreamData && \
+    cpanm Starman
+    
+RUN cpanm HTTP::Validate && \
+    cpanm Switch::Plain
+
+RUN cpanm --force Term::ReadLine::Gnu && \
+    cpanm --force Text::CSV_XS && \
+    cpanm --force Test::Conditions && \
+    cpanm --force Term::ReadKey
+
+RUN apt-get -y install vim && \
+    apt-get -y install curl
+
+

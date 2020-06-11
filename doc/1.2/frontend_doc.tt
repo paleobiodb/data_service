@@ -1,0 +1,10 @@
+=head2 DESCRIPTION
+
+This category includes several miscellaneous operations necessary for the function of
+the frontend website. These operations were previously provided by the auxiliary Larkin
+API, but now are provided by this data service.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>
+

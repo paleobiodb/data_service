@@ -77,7 +77,7 @@ sub initialize {
 	    "The configuration section: 'trn' for taxonomic ranks",
 	{ output => 'taxonomic_rank', com_name => 'rnk' },
 	    "Taxonomic rank",
-	{ output => 'rank_code', com_name => 'cod' },
+	{ output => 'rank_code', com_name => 'cod', data_type => 'pos' },
 	    "Numeric code representing this rank in responses using the 'com' vocabulary,",
 	    "which is the default for C<json> format");
     
@@ -106,11 +106,11 @@ sub initialize {
 	{ output => 'lith_type', com_name => 'ltp' });
     
     $ds->define_block('1.2:config:all' =>
-	{ include => 'clusters' },
-	{ include => 'ranks' },
-	{ include => 'continents' },
-	{ include => 'countries' },
-	{ include => 'lithologies' });
+	{ include => '1.2:config:geosum' },
+	{ include => '1.2:config:ranks' },
+	{ include => '1.2:config:continents' },
+	{ include => '1.2:config:countries' },
+	{ include => '1.2:config:lithologies' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.

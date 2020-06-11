@@ -15,6 +15,10 @@ use Test::Most tests => 11;
 use lib 't';
 use Tester;
 use Test::Conditions;
+use Test::Selection;
+
+
+choose_subtests(@ARGV);
 
 # Start by creating an instance of the Tester class, with which to conduct the
 # following tests.
@@ -100,89 +104,7 @@ my $t1t = { 'taxon_name' => $TEST_NAME_1,
 	    "taxon_size" =>'!pos_int',
 	    "extant_size" => '!pos_int' };
 
-my $OB_NAME_1 = "Dascillus elongatus";
-my $OB_BLOCKS_1 = "classext,parent,seq,img,ref,refattr,crmod";
 
-my $ob_j1 = { 'par' => 'txn:71894',
-	      'prl' => 'Dascillus',
-	      'phl' => 'Arthropoda',
-	      'phn' => 'txn:18891',
-	      'cll' => 'Insecta',
-	      'cln' => 'txn:56637',
-	      'odl' => 'Coleoptera',
-	      'odn' => 'txn:69148',
-	      'fml' => 'Dascillidae',
-	      'fmn' => 'txn:69296',
-	      'gnl' => 'Dascillus',
-	      'gnn' => 'txn:71894',
-	      'lsq' => '!pos_int',
-	      'rsq' => '!pos_int',
-	      'img' => '!extid(php)',
-	      'dcr' => '2012-07-09 04:49:25',
-	      'dmd' => '!date' };
-
-my $ob_t1 = { 'parent_no' => '71894',
-	      'parent_name' => 'Dascillus',
-	      'phylum' => 'Arthropoda',
-	      'phylum_no' => '18891',
-	      'class' => 'Insecta',
-	      'class_no' => '56637',
-	      'order' => 'Coleoptera',
-	      'order_no' => '69148',
-	      'family' => 'Dascillidae',
-	      'family_no' => '69296',
-	      'genus' => 'Dascillus',
-	      'genus_no' => '71894',
-	      'lft' => '!pos_int',
-	      'rgt' => '!pos_int',
-	      'image_no' => '!pos_int',
-	      'created' => '2012-07-09 04:49:25',
-	      'modified' => '!date' };
-
-
-my $OB_NAME_2 = "Aves";
-my $OB_BLOCKS_2 = "subcounts,ecospace,taphonomy,etbasis,ent,entname";
-
-my $ob_j2 = { 'noc' => '!>=:4000',
-	      'odc' => '!>=:80',
-	      'fmc' => '!>=:200',
-	      'gnc' => '!>=:900',
-	      'spc' => '!>=:1200',
-	      'jmo' => qr{mobile}i,
-	      'jmc' => '!nonempty',
-	      'jlh' => '!nonempty',
-	      'jhc' => '!nonempty',
-	      'jdt' => '!nonempty',
-	      'jdc' => '!nonempty',
-	      'jco' => 'hydroxyapatite',
-	      'jsa' => qr{compact},
-	      'jtc' => '!nonempty',
-	      'ati' => '!extid(prs)',
-	      'eni' => '!extid(prs)',
-	      'mdi' => '!extid(prs)',
-	      'ath' => '!nonempty',
-	      'ent' => '!nonempty',
-	      'mdf' => '!nonempty' };
-
-my $ob_t2 = { 'n_occs' => '!>=:4000',
-	      'n_orders' => '!>=:80',
-	      'n_families' => '!>=:200',
-	      'n_genera' => '!>=:900',
-	      'n_species' => '!>=:1200',
-	      'motility' => qr{mobile}i,
-	      'motility_basis' => '!nonempty',
-	      'life_habit' => '!nonempty',
-	      'life_habit_basis' => '!nonempty',
-	      'diet' => '!nonempty',
-	      'diet_basis' => '!nonempty',
-	      'composition' => 'hydroxyapatite',
-	      'taphonomy_basis' => '!nonempty',
-	      'authorizer_no' => '!pos_int',
-	      'enterer_no' => '!pos_int',
-	      'modifier_no' => '!pos_int',
-	      'authorizer' => '!nonempty',
-	      'enterer' => '!nonempty',
-	      'modifier' => '!nonempty' };
 
 
 my $NAME_WC_1 = "T. rex";
@@ -205,6 +127,8 @@ my $NAME_WC_5 = 'Tyrannos%rex';
 my ($taxon_id, $parent_id);
 
 subtest 'single json by name' => sub {
+
+    select_subtest || return;
     
     my ($r, $s) = $T->fetch_records("/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,class,common",
 				    "single json by name request OK");
@@ -250,6 +174,8 @@ subtest 'single json by name' => sub {
 
 
 subtest 'single txt by name' => sub {
+
+    select_subtest || return;
     
     my ($r) = $T->fetch_records("/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,class,common",
 				"single txt by name");
@@ -266,129 +192,6 @@ subtest 'single txt by name' => sub {
 };
 
 
-# The subtests above test the output blocks 'basic', 'attr', 'app', 'size',
-# 'class', 'common'.
-
-# Now we need to test the rest of the output blocks available for taxa:
-# 'classext', 'parent', 'immparent', 'seq', 'img', 'ref', 'refattr', 'crmod',
-# 'subcounts', 'ecospace', 'taphonomy', 'etbasis', 'ent', 'entname'
-
-subtest 'other output blocks' => sub {
-    
-    # Make sure we can fetch the appropriate output blocks
-    
-    my ($r_j1) = $T->fetch_records("/taxa/single.json?name=$OB_NAME_1&show=$OB_BLOCKS_1", 
-				  'output blocks 1 json');
-    
-    unless ( $r_j1 )
-    {
-	diag("skipping remainder of subtest");
-	return;
-    }
-    
-    my ($r_t1) = $T->fetch_records("/taxa/single.txt?name=$OB_NAME_1&show=$OB_BLOCKS_1",
-				  'output blocks 1 txt');
-    
-    my ($r_j2) = $T->fetch_records("/taxa/single.json?name=$OB_NAME_2&show=$OB_BLOCKS_2",
-				   'output blocks 2 json');
-    
-    my ($r_t2) = $T->fetch_records("/taxa/single.txt?name=$OB_NAME_2&show=$OB_BLOCKS_2",
-    				  'output blocks 2 txt');
-    
-    # Check the data fields in the JSON response.  Skip the tests if we didn't
-    # get any record, because this subtest will already have failed above.
-    
-    if ( $r_j1 )
-    {
-	$T->check_fields($r_j1, $ob_j1, 'output blocks 1 json');
-    }
-    
-    # Check the data fields in the TXT response, and add some other checks as
-    # well.  Again, skip the tests if we didn't get any record, because this
-    # subtest will already have failed above.
-    
-    if ( $r_t1 )
-    {
-	$T->check_fields($r_t1, $ob_t1, 'output blocks 1 txt');
-	
-	# Make sure that the value of phylum_no matches up to phylum, and so
-	# on for the other ranks returned by classext.
-	
-	foreach my $f ( qw(phylum class order family) )
-	{
-	    my $taxon_no = $r_t1->{"${f}_no"};
-	    my $taxon_name = $r_t1->{$f};
-	    
-	    ok( $taxon_no, "classext found '${f}_no'" ) || next;
-	    ok( $taxon_name, "classext found '$f'" ) || next;
-	    
-	    my ($rr) = $T->fetch_records("/taxa/single.txt?id=$taxon_no");
-	    
-	    is( $rr->{taxon_name}, $taxon_name, "classext '${f}_no' matches '$f'" );
-	}
-	
-	# Check that the modified date is later than the created date.
-	
-	cmp_ok( $r_t1->{modified}, 'ge', $r_t1->{created}, "crmod 'modified' ge 'created'" );
-	
-	# Check that the rgt value is equal to lft if $OB_NAME_2 is a species,
-	# or > if it is a higher taxon.
-	
-	if ( $r_t1->{taxon_rank} eq 'species' )
-	{
-	    cmp_ok( $r_t1->{rgt}, '==', $r_t1->{lft}, "seq 'rgt' == 'lft'" );
-	}
-	else
-	{
-	    cmp_ok( $r_t1->{rgt}, '>', $r_t1->{lft}, "seq 'rgt' >= 'lft'" );
-	}
-    }
-    
-    # Now check the JSON fields for the second set of output blocks, same as
-    # above.
-    
-    if ( $r_j2 )
-    {
-    	$T->check_fields($r_j2, $ob_j2, 'output blocks 2 json');
-    }
-    
-    # Check the TXT fields for the second set of output blocks, and do some
-    # additional checks as well.
-    
-    if ( $r_t2 )
-    {
-	$T->check_fields($r_t2, $ob_t2, 'output blocks 2 txt');
-	
-	# Check that the ecospace and taphonomy basis fields actually have the
-	# attribute values that are attributed to them.
-	
-	foreach my $f ( qw(motility life_habit diet) )
-	{
-	    my $basis = $r_t2->{"${f}_basis"};
-	    
-	    ok( $r_t2->{$f}, "ecospace found '$f'" ) || next;
-	    ok( $basis, "ecospace found '${f}_basis'" ) || next;
-	    
-	    my ($rr) = $T->fetch_records("/taxa/single.txt?name=$basis&show=ecospace");
-	    
-	    is( $rr->{$f}, $r_t2->{$f}, "classext '$f' matches '${f}_basis'" );
-	}
-	
-	my $basis = $r_t2->{taphonomy_basis};
-	
-	if ( ok( $basis, "taphonomy found 'taphonomy_basis'" ) )
-	{
-	    my ($rr) = $T->fetch_records("/taxa/single.txt?name=$basis&show=taphonomy");
-	    
-	    is( $rr->{composition}, $r_t2->{composition},
-		"taphonomy 'composition' matches 'taphonomy_basis'" );
-	    is( $rr->{architecture}, $r_t2->{architecture},
-		"taphonomy 'architecture' matches 'taphonomy_basis'" );
-	}
-    }
-};
-
-
 # Now we fetch the same taxon using the identifier retrieved above.  We check
 # the two parameter aliases 'id' and 'taxon_id'.  We don't do a separate check
 # for .txt; because the implementation of Web::DataService separates parameter
@@ -397,6 +200,8 @@ subtest 'other output blocks' => sub {
 # parameters.
 
 subtest 'single json by id' => sub {
+    
+    select_subtest || return;
     
     my ($r) = $T->fetch_records("/taxa/single.json?id=$taxon_id", "single json by id");
     
@@ -426,6 +231,8 @@ subtest 'single json by id' => sub {
 # with the prefix 'var' is presented or the 'exact' parameter is included.
 
 subtest 'single json name variants' => sub {
+    
+    select_subtest || return;
     
     my ($r_txn) = $T->fetch_records("/taxa/single.json?id=$VT_TXN_1", 
 				    'single variant txn');
@@ -551,6 +358,8 @@ subtest 'single json name variants' => sub {
 
 subtest 'parent json' => sub {
     
+    select_subtest || return;
+    
     my ($r) = $T->fetch_records("/taxa/single.json?id=$parent_id", 'parent json');
     
     unless ( $r )
@@ -568,6 +377,8 @@ subtest 'parent json' => sub {
 # Check that wildcards work in names.
 
 subtest 'single by name with wildcards' => sub {
+    
+    select_subtest || return;
     
     # Check names with wildcards to make sure they give the expected response.
     
@@ -625,6 +436,8 @@ subtest 'single by name with wildcards' => sub {
 # Now test the 'nav' block of single taxon output.
 
 subtest 'nav block' => sub {
+    
+    select_subtest || return;
     
     my ($r1) = $T->fetch_records("/taxa/single.json?name=$TEST_NAME_1&show=nav,parent", "single with nav block");
     my ($r1c) = $T->fetch_records("/taxa/single.json?name=$TEST_NAME_1&show=classext", "single with classext block");
@@ -693,12 +506,33 @@ subtest 'nav block' => sub {
 	    $tc->flag('rnk', $oid) unless $t->{rnk} && $t->{rnk} > 0;
 	    $tc->flag('siz', $oid) unless $t->{siz} && $t->{siz} > 0;
 	    $tc->flag('exs', $oid) unless defined $t->{exs} && $t->{exs} >= 0;
-	    $tc->flag('fea', $oid) unless $t->{fea} && $t->{fea} > 0;
+	    # $tc->flag('fea', $oid) unless $t->{fea} && $t->{fea} > 0;
 	}
     }
     
     $tc->ok_all("chl and gns records are correct");
 };
+
+
+subtest 'images' => sub {
+    
+    select_subtest || return;
+    
+    my $thumb = $T->fetch_url("/taxa/thumb.png?id=$TEST_IMAGE_1",
+			      "image thumb request OK") || return;
+    
+    my $thumb_length = length($thumb->content) || 0;
+    
+    cmp_ok($thumb_length, '==', $TEST_IMAGE_SIZE_1a, 'image thumb size');
+    
+    my $icon = $T->fetch_url("/taxa/icon.png?id=910",
+			     "image icon request OK") || return;
+    
+    my $icon_length = length($icon->content) || 0;
+    
+    cmp_ok($icon_length, '==', $TEST_IMAGE_SIZE_1b, 'image icon size');
+};
+
 
 # Some of the special parameters have already been tested above: 'limit',
 # 'offset', 'rowcount', 'datainfo'.
@@ -707,6 +541,8 @@ subtest 'nav block' => sub {
 # 'noheader', 'lb', 'header'.
 
 subtest 'special params' => sub {
+    
+    select_subtest || return;
     
     # First test 'strict'. Compare the results of two queries, one with
     # strict and one without.
@@ -725,8 +561,7 @@ subtest 'special params' => sub {
     $T->cmp_ok_warnings($strict, '==', 1, "special 'strict' returns one warning" );
     $T->ok_warning_like($strict, qr{badtaxon}, "special 'strict' proper warning" );
     
-    $T->cmp_ok_errors($loose, '==', 1, "special 'strict=no' returns one error" ) ||
-	$T->diag_errors($loose);
+    $T->cmp_ok_errors($loose, '==', 1, "special 'strict=no' returns one error" );
     $T->cmp_ok_warnings($loose, '<', 2, "special 'strict=no' returns at most one warning" );
     $T->ok_warning_like($loose, qr{badtaxon}, "special 'strict=no' proper warning" );
     
@@ -854,6 +689,8 @@ subtest 'special params' => sub {
 
 subtest 'bad params' => sub {
     
+    select_subtest || return;
+    
     # Then try an unrecognized parameter
     
     my $m2 = $T->fetch_nocheck( "/taxa/single.json?id=abc_def&foo=bar", "bad param 'foo'" );
@@ -879,7 +716,7 @@ subtest 'bad params' => sub {
     my $m3 = $T->fetch_nocheck( "/taxa/single.json?id=txn:234,txn:345", "multiple ids" );
     
     $T->ok_response_code( $m3, '400', "multiple ids got 400 response" );
-    $T->ok_error_like( $m3, qr{single identifier}i, "multiple ids got proper error" );
+    $T->ok_error_like( $m3, qr{single}i, "multiple ids got proper error" );
     
     # Then try multiple valid names
     
@@ -947,10 +784,12 @@ subtest 'bad params' => sub {
 
 subtest 'unknown taxon' => sub {
     
-    my $ID1 = 'txn:UF1';
-    my $ID2 = 'txn:UF';
-    my $ID3 = 'UF1';
-    my $ID4 = 'UF';
+    select_subtest || return;
+    
+    my $ID1 = 'txn:NF1';
+    my $ID2 = 'txn:NF';
+    my $ID3 = 'NF1';
+    my $ID4 = 'NF';
     
     my ($r1) = $T->fetch_records("/taxa/single.json?id=$ID1", "id1");
     
@@ -970,7 +809,7 @@ subtest 'unknown taxon' => sub {
     {
 	$tc->flag('oid', $r->{oid}) unless $r->{oid} eq $ID1 || $r->{oid} eq $ID2;
 	$tc->flag('rnk', $r->{rnk}) unless $r->{rnk} eq '9';
-	$tc->flag('nam', $r->{nam}) unless $r->{nam} eq 'UNKNOWN FAMILY';
+	$tc->flag('nam', $r->{nam}) unless $r->{nam} eq 'NO_FAMILY_SPECIFIED' || $r->{nam} eq 'UNKNOWN FAMILY';
     }
     
     $tc->ok_all('unknown taxon records');

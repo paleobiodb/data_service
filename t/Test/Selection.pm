@@ -16,62 +16,22 @@ use Exporter 'import';
 
 our (@EXPORT) = qw(choose_subtests select_subtest select_final check_result);
 
-our (%SELECTED_TEST, %PERFORMED_TEST);
-
-
-# sub import {
-
-#     my ($pkg, $selector) = @_;
-    
-#     my $callpkg = caller(0);
-    
-#     *{"$callpkg\::choose_subtests"} = \&choose_subtests;
-#     *{"$callpkg\::select_subtest"} = \&select_subtest;
-#     *{"$callpkg\::select_final"} = \&select_final;
-# }
+our (%SELECTED_TEST, %PERFORMED_TEST, $SKIPPED_TESTS);
 
 
 sub choose_subtests {
     
     my (@testnames) = @_;
     
+    %SELECTED_TEST = ();
+    %PERFORMECE_TEST = ();
+    $SKIPPED_TESTS = 0;
+    
     foreach my $name ( @testnames )
     {
+	next if $name eq 'debug';
 	$SELECTED_TEST{$name} = 1;
     }
-    
-    # if ( $selector eq ':args' )
-    # {
-    # 	foreach my $arg ( @ARGV )
-    # 	{
-    # 	    $SELECTED_TEST{$arg} = 1;
-    # 	}
-    # }
-    
-    # If we were called with an argument starting with '--', i.e. '--select',
-    # then look for arguments of the form "--select=testname".  If no
-    # arguments of this form are found, then all subtests will be selected implicitly.
-    
-    # elsif ( $selector && $selector =~ qr{ ^ -- (\w+) }xs )
-    # {
-    # 	my $argname = $1;
-	
-    # 	foreach my $arg ( @ARGV )
-    # 	{
-    # 	    if ( $arg =~ qr{ ^ $argname = (.*) }xso )
-    # 	    {
-    # 		$SELECTED_TEST{$1};
-    # 	    }
-    # 	}
-    # }
-    
-    # else
-    # {
-    # 	foreach my $name ( $selector, @testnames )
-    # 	{
-    # 	    $SELECTED_TEST{$name} = 1;
-    # 	}
-    # }
 }
 
 
@@ -86,32 +46,19 @@ sub select_subtest {
     my $name = shift;
     
     my $tb = Test::Builder->new;
-    my $in_subtest;
     
-    # if ( $tb->{Parent} )
-    # {
     $name ||= $tb->name || $tb->{Stack}[0]{_meta}{Test::Builder}{child};
-    # 	$in_subtest = 1;
-    # }
     
-    # elsif ( ! $name )
-    # {
-    # 	croak "select_subtest must have an argument if called outside of a subtest\n";
-    # }
+    # If we can't figure out the name of the test, throw an exception.
+    
+    unless ( defined $name )
+    {
+	croak "Could not determine name of subtest";
+    }
     
     # If no subtests are selected, just return true.
     
-    if ( ! keys %SELECTED_TEST )
-    {
-	return 1;
-    }
-    
-    # If we can't figure out the name of the test, just return true.
-
-    unless ( defined $name )
-    {
-	return 1;
-    }
+    return 1 unless %SELECTED_TEST;
     
     # If this subtest is selected then output a special diag line and return true.
     
@@ -129,6 +76,8 @@ sub select_subtest {
     # subroutine was called from being flagged with "No tests run!"
     
     Test::More::pass('test not selected');
+    $SKIPPED_TESTS++;
+    
     return;
 }
 
@@ -143,6 +92,17 @@ sub select_final {
     
     my @not_found;
     
+    # If no subtests are selected, just pass.
+    
+    unless ( %SELECTED_TEST )
+    {
+	ok("Test::Select: No tests were selected, so all were run");
+	return;
+    }
+    
+    # Go through all the list of selected tests and see if we actually did
+    # them.
+    
     foreach my $t ( keys %SELECTED_TEST )
     {
 	push @not_found, $t unless $PERFORMED_TEST{$t};
@@ -156,8 +116,19 @@ sub select_final {
 	
 	foreach my $t ( @not_found )
 	{
-	    fail("$t: not found");
+	    diag("**** $t: not found ****");
 	}
+	
+	fail("Test::Select: Not all of the specified tests were run");
+    }
+    
+    else
+    {
+	my $selected_tests = keys %SELECTED_TEST;
+	my $plural = keys %SELECTED_TEST > 1 ? 's' : '';
+	
+	diag("**** Ran $selected_tests test${plural}, skipped $SKIPPED_TESTS ****");
+	ok("Test::Select: Ran all of the specified tests");
     }
 }
 

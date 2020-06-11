@@ -18,7 +18,7 @@ use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # SEE ALSO: pb1-07-occs.t - tests txt and ris formats
@@ -96,9 +96,9 @@ my $r2t = { reference_no => $REF_ID_2,
 
 subtest 'single json' => sub {
     
-    my $single_json = $T->fetch_url("/data1.1/refs/single.json?id=$REF_ID_1&show=ent,crmod",
+    my $single_json = $T->fetch_url("refs/single.json?id=$REF_ID_1&show=ent,crmod",
 				    "single json request OK");
-    my $single_form = $T->fetch_url("/data1.1/refs/single.json?id=$REF_ID_1&show=formatted",
+    my $single_form = $T->fetch_url("refs/single.json?id=$REF_ID_1&show=formatted",
 				    "single formatted request OK");
     
     unless ( $single_json && $single_form )
@@ -126,7 +126,7 @@ subtest 'single json' => sub {
 
 subtest 'comments' => sub {
 
-    my $single_txt = $T->fetch_url("/data1.1/refs/single.txt?id=$REF_ID_2&show=comments",
+    my $single_txt = $T->fetch_url("refs/single.txt?id=$REF_ID_2&show=comments",
 				    "comments request OK");
     
     unless ( $single_txt )
@@ -143,7 +143,7 @@ subtest 'comments' => sub {
 
 subtest 'single txt' => sub {
 
-    my $single_txt = $T->fetch_url("/data1.1/refs/single.txt?id=$REF_ID_1",
+    my $single_txt = $T->fetch_url("refs/single.txt?id=$REF_ID_1",
 				    "single txt request OK");
     
     unless ( $single_txt )
@@ -164,9 +164,9 @@ subtest 'single txt' => sub {
 
 subtest 'author' => sub {
     
-    my $list_auth = $T->fetch_url("/data1.1/refs/list.json?author=$AUTH_NAME_1&limit=500",
+    my $list_auth = $T->fetch_url("refs/list.json?author=$AUTH_NAME_1&limit=500",
 				  "list author request OK");
-    my $list_prim = $T->fetch_url("/data1.1/refs/list.json?primary=$AUTH_NAME_1&limit=500",
+    my $list_prim = $T->fetch_url("refs/list.json?primary=$AUTH_NAME_1&limit=500",
 				  "list primary request OK");
     
     unless ( $list_auth && $list_prim )
@@ -204,7 +204,7 @@ subtest 'author' => sub {
 
 subtest 'year' => sub {
 
-    my $list_txt = $T->fetch_url("/data1.1/refs/list.json?year=$YEAR_1&limit=500",
+    my $list_txt = $T->fetch_url("refs/list.json?year=$YEAR_1&limit=500",
 				  "list year request OK");
     
     unless ( $list_txt )
@@ -228,7 +228,7 @@ subtest 'year' => sub {
 
 # subtest 'refs json' => sub {
     
-#     my $refs_json = $T->fetch_url("/data1.1/colls/refs.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
+#     my $refs_json = $T->fetch_url("colls/refs.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
 # 				  "refs json request OK");
     
 #     unless ( $refs_json )
@@ -259,7 +259,7 @@ subtest 'year' => sub {
 
 # subtest 'summary bins' => sub {
 
-#     my $summary_json = $T->fetch_url("/data1.1/colls/summary.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&level=1&limit=5",
+#     my $summary_json = $T->fetch_url("colls/summary.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&level=1&limit=5",
 # 				     "summary request OK");
     
 #     unless ( $summary_json )

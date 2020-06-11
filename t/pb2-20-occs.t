@@ -11,7 +11,7 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::Most tests => 15;
+use Test::Most tests => 16;
 
 # use CoreFunction qw(connectDB configData);
 # use Taxonomy;
@@ -424,13 +424,13 @@ subtest 'single and list with bad arguments' => sub {
     my $m2c = $T->fetch_nocheck("/occs/list.json?id=col:1003", "list wrong id type");
     
     $T->ok_response_code($m2a, '200', "list bad ids got 200 response");
-    $T->ok_warning_like($m2a, qr{each value of 'id'}i, "list bad ids got proper warning");
+    $T->ok_warning_like($m2a, qr{'id'.*valid identifier}i, "list bad ids got proper warning");
     $T->ok_warning_like($m2a, qr{no valid .*identifier}i, "list bad ids got second warning");
     $T->ok_response_code($m2b, '200', "list not found got 200 response");
     $T->ok_warning_like($m2b, qr{unknown occurrence}i, "list not found got proper warning");
     $T->ok_warning_like($m2b, qr{no valid .*identifier}i, "list not found got second warning");
     $T->ok_response_code($m2c, '200', "list wrong id type got 200 response");
-    $T->ok_warning_like($m2c, qr{identifier of type occ}i, "list wrong id type got proper warning");
+    $T->ok_warning_like($m2c, qr{external identifier.*occ}i, "list wrong id type got proper warning");
     $T->ok_warning_like($m2c, qr{no valid .*identifier}i, "list wrong id type got second warning");
     
     my $m3a = $T->fetch_nocheck("/occs/list.json?coll_id=abc", "list bad coll ids");
@@ -449,7 +449,7 @@ subtest 'single and list with bad arguments' => sub {
     $T->ok_error_like($m4a, qr{you must specify .*occurrence identifier}i,
 		      "single no arguments got proper error");
     $T->ok_response_code($m4b, '400', "single bad id got 400 response");
-    $T->ok_error_like($m4b, qr{each value of 'id'}i, "single bad id got proper error");
+    $T->ok_error_like($m4b, qr{'id'.*valid identifier}i, "single bad id got proper error");
     $T->ok_response_code($m4c, '404', "single not found got 404 response");
     $T->ok_error_like($m4c, qr{not found}i, "single not found got proper error");
 };

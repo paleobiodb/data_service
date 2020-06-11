@@ -86,8 +86,9 @@ sub initialize {
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
-      { set => 'formatted', from => '*', code => \&format_reference },
+      { set => 'formatted', from => '*', code => \&format_reference, if_block => 'formatted,both' },
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
+      { set => '*', code => \&process_acronyms, not_block => 'formatted' },
       { output => 'reference_no', com_name => 'oid' }, 
 	  "Numeric identifier for this document reference in the database",
       { output => 'record_type', com_name => 'typ', value => $IDP{REF}, not_block => 'extids' },
@@ -97,21 +98,29 @@ sub initialize {
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
-      { output => 'n_reftaxa', pbdb_name => 'n_taxa', com_name => 'ntx', if_block => 'counts' },
+      { output => 'n_reftaxa', pbdb_name => 'n_taxa', com_name => 'ntx', 
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of distinct taxa associated with this reference",
-      { output => 'n_refauth', pbdb_name => 'n_auth', com_name => 'nau', if_block => 'counts' },
+      { output => 'n_refauth', pbdb_name => 'n_auth', com_name => 'nau',
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of taxa for which this reference gives the authority for the current name variant",
-      { output => 'n_refvar', pbdb_name => 'n_var', com_name => 'nva', if_block => 'counts' },
+      { output => 'n_refvar', pbdb_name => 'n_var', com_name => 'nva', 
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of non-current name variants for which this reference gives the authority",
-      { output => 'n_refclass', pbdb_name => 'n_class', com_name => 'ncl', if_block => 'counts' },
+      { output => 'n_refclass', pbdb_name => 'n_class', com_name => 'ncl', 
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of classification opinions entered from this reference",
-      { output => 'n_refunclass', pbdb_name => 'n_unclass', com_name => 'nuc', if_block => 'counts' },
+      { output => 'n_refunclass', pbdb_name => 'n_unclass', com_name => 'nuc', 
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of opinions not selected for classification entered from this reference",
-      { output => 'n_refoccs', pbdb_name => 'n_occs', com_name => 'noc', if_block => 'counts' },
+      { output => 'n_refoccs', pbdb_name => 'n_occs', com_name => 'noc', 
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of occurrences entered from this reference",
-      { output => 'n_refspecs', pbdb_name => 'n_specs', com_name => 'nsp', if_block => 'counts' },
+      { output => 'n_refspecs', pbdb_name => 'n_specs', com_name => 'nsp', 
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of specimens entered from this reference",
-      { output => 'n_refcolls', pbdb_name => 'n_colls', com_name => 'nco', if_block => 'counts' },
+      { output => 'n_refcolls', pbdb_name => 'n_colls', com_name => 'nco', 
+	if_block => 'counts', data_type => 'pos' },
 	  "The number of collections for which this is the primary reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
 	  "Formatted reference",
@@ -129,8 +138,14 @@ sub initialize {
 	  "The year in which the document was published",
       { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', not_block => 'formatted' },
 	  "The title of the document",
+      { output => 'r_refabbr', com_name => 'abr', pbdb_name => 'refabbr', not_block => 'formatted' },
+	  "An abbreviation that represents the title, if any. In the case of museum collections,",
+	  "this field holds the collection abbreviation.",
       { output => 'r_pubtitle', com_name => 'pbt', pbdb_name => 'pubtitle', not_block => 'formatted' },
 	  "The title of the publication in which the document appears",
+      { output => 'r_pubabbr', com_name => 'abp', pbdb_name => 'pubabbr', not_block => 'formatted' },
+	  "An abbreviation that represents the publication, if any. In the case of museum collections,",
+	  "this field holds the institution abbreviation.",
       { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', not_block => 'formatted' },
 	  "Names of the editors, if any",
       { output => 'r_publisher', com_name => 'pbl', pbdb_name => 'publisher', not_block => 'formatted' },
@@ -250,7 +265,8 @@ sub initialize {
 	{ value => 'compendium' },
 	{ value => 'news article' },
 	{ value => 'Ph.D. thesis' },
-	{ value => 'M.S. thesis' });
+	{ value => 'M.S. thesis' },
+	{ value => 'museum collection' });
     
     $ds->define_ruleset('1.2:refs:display' =>
 	{ optional => 'show', valid => '1.2:refs:output_map', list => ',' },
@@ -307,9 +323,31 @@ sub initialize {
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references from publications whose title matches the specified",
 	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'ref_abbr', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references whose abbreviation matches the specified word or words.  You can",
+	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	    "This is especially useful when searching for museum collections by collection acronym.",
+    	{ param => 'pub_abbr', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references from publications whose abbreviation matches the specified",
+	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	    "This is especially useful when searching for museum collections by institution acronym.",
+	{ param => 'title_re', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references where the specified regular expression matches either the",
+	    "reference title, the publication title, or the primary author last name. This", 
+	    "is particularly useful when searching for organization names. Note that this",
+	    "parameter will be processed as a regular expression rather than using the",
+	    "SQL wildcard syntax.",
 	{ param => 'pub_type', valid => '1.2:refs:pubtype', list => ',', bad_value => 'NOTHING' },
 	    "Select only references of the indicated type or types.  You can specify",
 	    "one or more from the following list, separated by commas:",
+	{ param => 'pub_city', valid => ANY_VALUE },
+	    "Select only references associated with the specified city. This is particularly",
+	    "useful for museum collection references, where the field always contains at least",
+	    "a country name and possibly a city and/or state/province as well. The format is",
+	    "'city, state/province, country' where one or both of the first two may be empty.",
+	{ param => 'is_private', valid => FLAG_VALUE },
+	    "Select only museum collection references that are marked as being private collections,",
+	    "or exclude these if the value 'no' is specified.",
 	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
 	    "Select only records entered from references with any of the specified DOIs.",
 	    "You may specify one or more, separated by commas.");
@@ -347,9 +385,20 @@ sub initialize {
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only records entered from references in publications whose title matches the specified",
 	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'ref_abbr', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references whose abbreviation matches the specified word or words.  You can",
+	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	    "This is especially useful when searching for museum collections by collection acronym.",
+    	{ param => 'pub_abbr', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select only references from publications whose abbreviation matches the specified",
+	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	    "This is especially useful when searching for museum collections by institution acronym.",
 	{ param => 'pub_type', valid => '1.2:refs:pubtype', list => ',', bad_value => 'NOTHING' },
 	    "Select only references of the indicated type or types.  You can specify",
 	    "one or more from the following list, separated by commas:", 
+	{ param => 'is_private', valid => FLAG_VALUE },
+	    "Select only museum collection references that are marked as being private collections,",
+	    "or exclude these if the value 'no' is specified.",
 	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
 	    "Select only records entered from references with any of the specified DOIs.",
 	    "You may specify one or more, separated by commas.");
@@ -619,20 +668,16 @@ sub generate_ref_filters {
 	{
 	    die "400 invalid value '$year' for parameter 'ref_pubyr'\n";
 	}
-	
-	$tables_hash->{r} = 1;
     }
     
     if ( my $authorname = $request->clean_param('ref_author') )
     {
 	push @filters, $request->generate_auth_filter($authorname, 'author');
-	$tables_hash->{r} = 1;
     }
     
     if ( my $authorname = $request->clean_param('ref_primary') )
     {
 	push @filters, $request->generate_auth_filter($authorname, 'primary');
-	$tables_hash->{r} = 1;
     }
     
     if ( my $reftitle = $request->clean_param('ref_title') )
@@ -654,7 +699,6 @@ sub generate_ref_filters {
 	my $quoted = $dbh->quote("^$reftitle");
 	
 	push @filters, "coalesce(r.reftitle, r.pubtitle) $op $quoted";
-	$tables_hash->{r} = 1;
     }
     
     if ( my $pubtitle = $request->clean_param('pub_title') )
@@ -668,7 +712,7 @@ sub generate_ref_filters {
 	}
 	
 	$pubtitle =~ s/%/.*/g;
-	$pubtitle =~ s/_/.*/g;
+	$pubtitle =~ s/_/./g;
 	$pubtitle =~ s/\s+/\\s+/g;
 	$pubtitle =~ s/\(/\\(/g;
 	$pubtitle =~ s/\)/\\)/g;
@@ -676,7 +720,82 @@ sub generate_ref_filters {
 	my $quoted = $dbh->quote("^$pubtitle");
 	
 	push @filters, "r.pubtitle $op $quoted";
-	$tables_hash->{r} = 1;
+    }
+
+    if ( my $refabbr = $request->clean_param('ref_abbr') )
+    {
+	my $op = 'rlike';
+
+	if ( $refabbr =~ qr{ ^ [!] \s* (.*) }x )
+	{
+	    $refabbr = $1;
+	    $op = 'not rlike';
+	}
+	
+	$refabbr =~ s/%/[a-zA-Z]*/g;
+	$refabbr =~ s/_/[a-zA-Z]/g;
+	$refabbr =~ s/\s*,\s*/|/g;
+	
+	my $quoted = $dbh->quote("[(].*($refabbr).*[)]");
+	
+	push @filters, "r.reftitle $op $quoted";
+    }
+    
+    if ( my $pubabbr = $request->clean_param('pub_abbr') )
+    {
+	my $op = 'rlike';
+
+	if ( $pubabbr =~ qr{ ^ [!] \s* (.*) }x )
+	{
+	    $pubabbr = $1;
+	    $op = 'not rlike';
+	}
+	
+	$pubabbr =~ s/%/[a-zA-Z]*/g;
+	$pubabbr =~ s/_/[a-zA-Z]/g;
+	$pubabbr =~ s/\s*,\s*/|/g;
+	
+	my $quoted = $dbh->quote("[(].*($pubabbr).*[)]");
+	
+	push @filters, "r.pubtitle $op $quoted";
+    }
+    
+    if ( my $pubcity = $request->clean_param('pub_city') )
+    {
+	my $op = 'rlike';
+	
+	if ( $pubcity =~ qr{ ^ [!] \s* (.*) }x )
+	{
+	    $pubcity = $1;
+	    $op = 'not rlike';
+	}
+	
+	$pubcity =~ s/%/.*/g;
+	$pubcity =~ s/_/./g;
+	$pubcity =~ s/\s+/\\s+/g;
+	
+	my $quoted = $dbh->quote($pubcity);
+	
+	push @filters, "r.pubcity $op $quoted";
+    }
+    
+    if ( $request->clean_param('is_private') )
+    {
+	push @filters, "r.pubvol = 'PRIVATE'";
+    }
+    
+    elsif ( $request->param_given('is_private') )
+    {
+	push @filters, "(r.pubvol is null or r.pubvol <> 'PRIVATE')";
+    }
+    
+    if ( my $title_re = $request->clean_param('title_re') )
+    {
+	my $op = 'rlike';
+	
+	my $quoted = $dbh->quote($title_re);
+
+	push @filters, "(r.reftitle $op $quoted or r.pubtitle $op $quoted or r.author1last $op $quoted)";
     }
     
     if ( my @doi_list = $request->clean_param_list('ref_doi') )
@@ -732,6 +851,11 @@ sub generate_ref_filters {
 	    my $quoted = join( ',', map { $dbh->quote($_) } @type_list );
 	    push @filters, "r.publication_type $op ($quoted)";
 	}
+    }
+    
+    if ( @filters )
+    {
+	$tables_hash->{r} = 1;
     }
     
     return @filters;
@@ -1160,8 +1284,17 @@ sub format_reference {
     if ( $reftitle ne '' )
     {
 	$longref .= $reftitle;
-	$longref .= '.' unless $reftitle =~ /\.$/;
-	$longref .= ' ';
+
+	if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'museum collection' )
+	{
+	    $longref .= ', ';
+	}
+
+	else
+	{
+	    $longref .= '.' unless $reftitle =~ /\.$/;
+	    $longref .= ' ';
+	}
     }
     
     my $pubtitle = $row->{r_pubtitle} || '';
@@ -1170,14 +1303,17 @@ sub format_reference {
     if ( $pubtitle ne '' )
     {
 	my $pubstring = $markup ? "<i>$pubtitle</i>" : $pubtitle;
-	
-	if ( $editors =~ /,| and / )
+
+	unless ( $row->{r_pubtype} && $row->{r_pubtype} eq 'museum collection' )
 	{
-	    $pubstring = " In $editors (eds.), $pubstring";
-	}
-	elsif ( $editors )
-	{
-	    $pubstring = " In $editors (ed.), $pubstring";
+	    if ( $editors =~ /,| and / )
+	    {
+		$pubstring = " In $editors (eds.), $pubstring";
+	    }
+	    elsif ( $editors )
+	    {
+		$pubstring = " In $editors (ed.), $pubstring";
+	    }
 	}
 	
 	$longref .= $pubstring . " ";
@@ -1186,7 +1322,19 @@ sub format_reference {
     my $publisher = $row->{r_publisher};
     my $pubcity = $row->{r_pubcity};
 
-    if ( $publisher )
+    if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'museum collection' )
+    {
+	if ( $pubcity )
+	{
+	    $pubcity =~ s/^(, )+//;
+	    $pubcity =~ s/, , /, /;
+	    $longref =~ s/\s+$//;
+	    $longref .= ". " unless $longref =~ /[.]$/;
+	    $longref .= "$pubcity. ";
+	}
+    }
+    
+    elsif ( $publisher )
     {
 	$longref =~ s/\s+$//;
 	$longref .= ". ";
@@ -1203,6 +1351,7 @@ sub format_reference {
     {
 	$longref .= '<b>' if $markup;
 	$longref .= $pubvol if $pubvol ne '';
+	$longref .= "." if $pubvol eq 'PRIVATE';
 	$longref .= "($pubno)" if $pubno ne '';
 	$longref .= '</b>' if $markup;
     }
@@ -1217,6 +1366,8 @@ sub format_reference {
 	$longref .= '-' if $fp ne '' && $lp ne '';
 	$longref .= $lp if $lp ne '';
     }
+    
+    $longref =~ s/\s+$//;
     
     return $longref if $longref ne '';
     return;
@@ -1320,6 +1471,36 @@ sub set_reference_type {
     push @types, 'ref' unless @types;
     
     return join(',', @types);
+}
+
+
+# process_acronyms (request, record )
+#
+# This function is called for every record. For those of type 'museum collection', 'journal
+# article' or 'serial monograph', any parenthesized expression on the end of the pubtitle field is
+# split off into the pubabbr field. For 'museum collection' entries, any parenthesized expression
+# on the end of the reftitle field is split off into refabbr.
+
+sub process_acronyms {
+    
+    my ($request, $record) = @_;
+    
+    return unless $record->{r_pubtype} && $record->{r_pubtype} =~ /^museum|^journal|^serial/;
+    
+    if ( $record->{r_pubtype} =~ /^museum/ )
+    {
+	if ( $record->{r_reftitle} && $record->{r_reftitle} =~ /(.*?) \s* \( ( [^)]+ ) \) $/xs )
+	{
+	    $record->{r_reftitle} = $1;
+	    $record->{r_refabbr} = $2;
+	}
+    }
+
+    if ( $record->{r_pubtitle} && $record->{r_pubtitle} =~ /(.*?) \s* \( ( [^)]+ ) \) $/xs )
+    {
+	$record->{r_pubtitle} = $1;
+	$record->{r_pubabbr} = $2;
+    }
 }
 
 

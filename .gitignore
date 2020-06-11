@@ -1,0 +1,5 @@
+# .gitignore for pbdb-new
+
+*~
+.tramp_history
+*.ttc

@@ -16,7 +16,7 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL
+use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
@@ -209,11 +209,13 @@ sub initialize {
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of F<accepted_name>.",
-	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', not_block => 'acconly' },
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', 
+	  not_block => 'acconly', data_type => 'mix' },
 	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of F<accepted_rank>.",
-	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', not_block => 'acconly' },
+	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', 
+	  not_block => 'acconly', data_type => 'mix' },
 	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
@@ -232,12 +234,12 @@ sub initialize {
 	{ output => 'accepted_attr', if_block => '1.2:occs:attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of the accepted name",
-	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no', data_type => 'mix' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
 	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
 	    "of this database.",
-	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', data_type => 'mix' },
 	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
@@ -247,9 +249,9 @@ sub initialize {
 	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	    "The interval that ends the specific geologic time range associated with this occurrence,",
 	    "if different from the value of F<early_interval>",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
 	    "The author(s) of the reference from which this data was entered.",
@@ -385,11 +387,11 @@ sub initialize {
 	    "The identifier of the time interval represented by this record",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of the time interval represented by this record",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The beginning age of this interval, in Ma",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The ending age of this interval, in Ma",
-	{ output => 'originations', pbdb_name => 'X_Ft', com_name => 'xft' },
+	{ output => 'originations', pbdb_name => 'X_Ft', com_name => 'xft', data_type => 'pos' },
 	    "The number of distinct taxa whose first known occurrence lies in this interval,",
 	    "and whose range crosses the top boundary of the interval:",
 	    "either species, genera, families, or orders,",
@@ -398,22 +400,22 @@ sub initialize {
 	    "M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
 	    "I<Paleobiology>, Vol. 26(4). 2000.",
 	    "pp. 74-102. L<http://www.jstor.org/stable/1571654>.",
-	{ output => 'extinctions', pbdb_name =>'X_bL', com_name => 'xbl' },
+	{ output => 'extinctions', pbdb_name =>'X_bL', com_name => 'xbl', data_type => 'pos' },
 	    "The number of distinct taxa whose last known occurrence lies in this interval,",
 	    "and whose range crosses the bottom boundary of the interval.",
-	{ output => 'singletons', pbdb_name => 'X_FL', com_name => 'xfl' },
+	{ output => 'singletons', pbdb_name => 'X_FL', com_name => 'xfl', data_type => 'pos' },
 	    "The number of distinct taxa that are found only in this interval, so",
 	    "that their range of occurrence does not cross either boundary.",
-	{ output => 'range_throughs', pbdb_name => 'X_bt', com_name => 'xbt' },
+	{ output => 'range_throughs', pbdb_name => 'X_bt', com_name => 'xbt', data_type => 'pos' },
 	    "The number of distinct taxa whose first occurrence falls before",
 	    "this interval and whose last occurrence falls after it, so that",
 	    "the range of occurrence crosses both boundaries.  Note that",
 	    "these taxa may or may not actually occur within the interval.",
-	{ output => 'sampled_in_bin', com_name => 'dsb' },
+	{ output => 'sampled_in_bin', com_name => 'dsb', data_type => 'pos' },
 	    "The number of distinct taxa found in this interval.  This is",
 	    "equal to the sum of the previous four fields, minus the number",
 	    "of taxa from Xbt that do not actually occur in this interval.",
-	{ output => 'implied_in_bin', com_name => 'dib' },
+	{ output => 'implied_in_bin', com_name => 'dib', data_type => 'pos' },
 	    "The number of additional distinct taxa implied in this interval,",
 	    "as a result of imprecisely identified occurrences. For example, if",
 	    "you are counting species, an occurrence identified only to the genus level",
@@ -421,30 +423,30 @@ sub initialize {
 	    "to this count. This is an experimental feature, and the number reported",
 	    "in this field does not affect the other statistics. You can feel free",
 	    "to ignore it if you want.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The total number of occurrences that are resolved to this interval");
     
     # The following block specifies the summary output for diversity plots.
     
     $ds->define_block('1.2:occs:diversity:summary' =>
-	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
+	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences that were scanned in the process of",
 	    "computing this diversity result.",
-	{ output => 'bin_count', pbdb_name => 'bin_total', com_name => 'tbn' },
+	{ output => 'bin_count', pbdb_name => 'bin_total', com_name => 'tbn', data_type => 'pos' },
 	    "The sum of occurrence counts in all of the bins.  This value may be larger than",
 	    "the number of occurrences scanned, since some may be counted in multiple",
 	    "bins (see F<timerule>).  This value might also be smaller",
 	    "than the number of occurrences scanned, since some occurrences may",
 	    "not have a temporal locality that is precise enough to put in any bin.",
-	{ output => 'imprecise_time', com_name => 'itm' },
+	{ output => 'imprecise_time', com_name => 'itm', data_type => 'pos' },
 	    "The number of occurrences skipped because their temporal locality",
 	    "was not sufficiently precise.  You can adjust this number by selecting",
 	    "a different time rule and/or a different level of temporal resolution.",
-	{ output => 'imprecise_taxon', com_name => 'itx' },
+	{ output => 'imprecise_taxon', com_name => 'itx', data_type => 'pos' },
 	    "The number of occurrences skipped because their taxonomic identification",
 	    "was not sufficiently precise.  You can adjust this number by",
 	    "counting at a higher or lower taxonomic level.",
-	{ output => 'missing_taxon', com_name => 'mtx' },
+	{ output => 'missing_taxon', com_name => 'mtx', data_type => 'pos' },
 	    "The number of occurrences skipped because the taxonomic hierarchy",
 	    "in this database is incomplete.  For example, some genera have not",
 	    "been placed in their proper family, so occurrences in these genera",
@@ -457,15 +459,15 @@ sub initialize {
 	    "The identifier of the time interval represented by this record",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of the time interval represented by this record",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The beginning age of this interval, in Ma",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The ending age of this interval, in Ma",
-	{ output => 'sampled_in_bin', com_name => 'dsb' },
+	{ output => 'sampled_in_bin', com_name => 'dsb', data_type => 'pos' },
 	    "The number of distinct taxa found in this interval.  By default,",
 	    "distinct genera are counted.  You can override this using the",
 	    "parameter F<count>.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The total number of occurrences that are resolved to this interval");
     
     # The following block specifies the output for taxon records representing
@@ -515,10 +517,10 @@ sub initialize {
 	@PB2::TaxonData::BASIC_3);
     
     $ds->define_block('1.2:occs:taxa_summary' =>
-	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
+	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences that were scanned in the process of",
 	    "computing this taxonomic tree.",
-	{ output => 'missing_taxon', com_name => 'mtx' },
+	{ output => 'missing_taxon', com_name => 'mtx', data_type => 'pos' },
 	    "The number of occurrences skipped because the taxonomic hierarchy",
 	    "in this database is incomplete.  For example, some genera have not",
 	    "been placed in their proper family, so occurrences in these genera",
@@ -530,7 +532,7 @@ sub initialize {
 	{ output => 'name', com_name => 'nam', pbdb_name => 'taxon_name' },
 	    "The scientific name of the taxon.",
 	{ set => 'rank', if_vocab => 'pbdb,dwc', lookup => \%PB2::TaxonData::RANK_STRING },
-	{ output => 'rank', com_name => 'rnk', pbdb_name => 'taxon_rank' },
+	{ output => 'rank', com_name => 'rnk', pbdb_name => 'taxon_rank', data_type => 'mix' },
 	    "The rank of the taxon.",
 	{ output => 'image_no', com_name => 'img' },
     	    "If this value is non-zero, you can use it to construct image URLs",
@@ -541,7 +543,7 @@ sub initialize {
 	{ output => 'phylum_no', com_name => 'phn' },
 	    "The phylum (if any) to which this taxon belongs.  This will let you",
 	    "exclude a class or order from the list if its phylum has already been listed.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences of this taxon that match the specified",
 	    "parameters.  The list is sorted on this field, from highest",
 	    "to lowest.");
@@ -568,9 +570,9 @@ sub initialize {
 	         "genera are being counted and this occurrence was only identified to the family level.",
 	    "=item missing taxon", "This occurrence was not counted because it was not identified to",
 	         "a taxon represented in the taxonomic tree.",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early end of the age range for this occurrence.",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late end of the age ragne for this occurrence.",
 	{ output => 'orig_no', com_name => 'tid' },
 	    "The identifier of a taxon from the database.",
@@ -1280,7 +1282,7 @@ sub get_occ {
     {
 	if ( ref $id eq 'PBDB::ExtIdent' && $id->{type} eq 'rei' )
 	{
-	    my $sql = "SELECT occurrence_no FROM $OCC_MATRIX WHERE reid_no = $id";
+	    my $sql = "SELECT occurrence_no FROM $TABLE{OCCURRENCE_MATRIX} WHERE reid_no = $id";
 	    
 	    $request->{ds}->debug_line("$sql\n") if $request->debug;
 	    
@@ -1343,7 +1345,7 @@ sub get_occ {
     
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $specifier
 	GROUP BY o.occurrence_no";
@@ -1512,7 +1514,7 @@ sub list_occs {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr
@@ -1674,7 +1676,7 @@ sub diversity {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr";
@@ -2126,7 +2128,7 @@ sub list_occs_taxa {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr";
@@ -2336,7 +2338,7 @@ sub prevalence {
 	
 	$request->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY ph.phylum_no, ph.class_no, ph.order_no
@@ -2485,7 +2487,7 @@ sub list_occs_associated {
 	try {
 	    $sql = "
 		INSERT IGNORE INTO occ_list
-		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $OCC_MATRIX as o
+		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $TABLE{OCCURRENCE_MATRIX} as o
 			JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
@@ -2620,7 +2622,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, 'O' as ref_type, o.taxon_no, o.occurrence_no, 
 			null as specimen_no, null as collection_no
-		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -2634,7 +2636,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
 			null as occurrence_no, null as specimen_no, c.collection_no
-		FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -2648,7 +2650,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, null as occurrence_no,
 			ss.specimen_no, null as collection_no
-		FROM $SPEC_MATRIX as ss JOIN $OCC_MATRIX as o using (occurrence_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
 			JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
@@ -2770,7 +2772,7 @@ sub list_occs_strata {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
 		JOIN $COLL_STRATA as cs using (collection_no)
 		$join_list
         WHERE $filter_string
@@ -2813,7 +2815,7 @@ sub generateOccFilters {
     
     if ( my @occs = $request->safe_param_list('occ_id') )
     {
-	my $id_list = $request->check_values($dbh, \@occs, 'occurrence_no', 'occurrences', 
+	my $id_list = $request->check_values($dbh, \@occs, 'occurrence_no', $TABLE{OCCURRENCE_DATA}, 
 					     "Unknown occurrence '%'");
 	
 	push @filters, "$tn.occurrence_no in ($id_list)";
@@ -3313,7 +3315,7 @@ sub generateJoinList {
     
     $join_list .= "JOIN collections as cc on c.collection_no = cc.collection_no\n"
 	if $tables->{cc};
-    $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
+    $join_list .= "JOIN $TABLE{OCCURRENCE_DATA} as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
@@ -3460,8 +3462,8 @@ sub process_identification {
     # fields from the occurrence record.  Also build 'taxon_name' using just
     # the '_name' fields.
     
-    my $ident_name = combine_modifier($record->{genus_name}, $record->{genus_reso}) || 'UNKNOWN';
-    my $taxon_name = $record->{genus_name} || 'UNKNOWN';
+    my $ident_name = combine_modifier($record->{genus_name}, $record->{genus_reso}) || '';
+    my $taxon_name = $record->{genus_name} || '';
     
     # $ident_name .= " $record->{genus_reso}" if $record->{genus_reso};
     
@@ -3483,8 +3485,8 @@ sub process_identification {
 	$taxon_name =~ s/[ ]?[?]$//;
     }
     
-    $record->{identified_name} = $ident_name;
-    $record->{taxon_name} = $taxon_name;
+    $record->{identified_name} ||= $ident_name || $taxon_name || 'UNKNOWN';
+    $record->{taxon_name} ||= $taxon_name || $record->{identified_name} || 'UNKNOWN';
     
     # If the 'identified_rank' field is not set properly, try to determine it.
     

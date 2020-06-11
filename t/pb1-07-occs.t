@@ -21,7 +21,7 @@ use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # First define the values we will be using to check the occurrences operations.
@@ -160,7 +160,7 @@ my $TAXON_NAME_1 = 'Balaenoptera rostrata';
 
 subtest 'single json' => sub {
     
-    my $single_json = $T->fetch_url("/data1.1/occs/single.json?id=$OCC_ID_1&show=loc,coords,phylo,paleoloc,time",
+    my $single_json = $T->fetch_url("occs/single.json?id=$OCC_ID_1&show=loc,coords,phylo,paleoloc,time",
 				    "single json request OK");
     
     unless ( $single_json )
@@ -186,7 +186,7 @@ subtest 'single json' => sub {
 
 subtest 'single txt' => sub {
 
-    my $single_txt = $T->fetch_url("/data1.1/occs/single.txt?id=$OCC_ID_1&show=genus,stratext,lithext,geo,ref,entname,crmod",
+    my $single_txt = $T->fetch_url("occs/single.txt?id=$OCC_ID_1&show=genus,stratext,lithext,geo,ref,entname,crmod",
 				    "single txt request OK");
     
     unless ( $single_txt )
@@ -212,7 +212,7 @@ subtest 'single txt' => sub {
 
 subtest 'list json' => sub {
     
-    my $list_coll = $T->fetch_url("/data1.1/occs/list.json?coll_id=$COLL_ID_1",
+    my $list_coll = $T->fetch_url("occs/list.json?coll_id=$COLL_ID_1",
 				  "list coll request OK");
     
     unless ( $list_coll )
@@ -225,7 +225,7 @@ subtest 'list json' => sub {
     
     cmp_ok( scalar(@r), '>', $COLL_OCC_COUNT, "list coll returned at least $COLL_OCC_COUNT results" );
     
-    my $list_occs = $T->fetch_url("/data1.1/occs/list.json?id=$OCC_ID_1,$OCC_ID_2,$OCC_ID_3",
+    my $list_occs = $T->fetch_url("occs/list.json?id=$OCC_ID_1,$OCC_ID_2,$OCC_ID_3",
 				  "list occs request OK");
     
     my (%found) = $T->scan_records($list_occs, 'oid', 'list occs');
@@ -237,7 +237,7 @@ subtest 'list json' => sub {
 
 subtest 'list json 2' => sub {
     
-    my $list_json = $T->fetch_url("/data1.1/occs/list.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&limit=100",
+    my $list_json = $T->fetch_url("occs/list.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&limit=100",
 				  "list json request OK");
     
     unless ( $list_json )
@@ -254,7 +254,7 @@ subtest 'list json 2' => sub {
 
 subtest 'list other taxon params' => sub {
     
-    my $list_occs = $T->fetch_url("/data1.1/occs/list.json?taxon_name=$TAXON_NAME_B&limit=5",
+    my $list_occs = $T->fetch_url("occs/list.json?taxon_name=$TAXON_NAME_B&limit=5",
 				  "list taxon_name request OK");
     
     if ( $list_occs )
@@ -265,7 +265,7 @@ subtest 'list other taxon params' => sub {
 	cmp_ok( $r[0]{tid}, 'eq', $TAXON_ID_B, 'list taxon_name returned proper tid' );
     }
     
-    $list_occs = $T->fetch_url("/data1.1/occs/list.json?taxon_id=$TAXON_ID_B&limit=5",
+    $list_occs = $T->fetch_url("occs/list.json?taxon_id=$TAXON_ID_B&limit=5",
 			       "list taxon_id request OK");
     
     if ( $list_occs )
@@ -276,7 +276,7 @@ subtest 'list other taxon params' => sub {
 	cmp_ok( $r[0]{tid}, 'eq', $TAXON_ID_B, "list taxon_id returned proper 'tid'" );
     }
     
-    $list_occs = $T->fetch_url("/data1.1/occs/list.json?base_id=$TAXON_ID_B&limit=5",
+    $list_occs = $T->fetch_url("occs/list.json?base_id=$TAXON_ID_B&limit=5",
 			       "list base_id request OK");
     
     if ( $list_occs )
@@ -291,7 +291,7 @@ subtest 'list other taxon params' => sub {
 
 subtest 'refs json' => sub {
     
-    my $refs_json = $T->fetch_url("/data1.1/occs/refs.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
+    my $refs_json = $T->fetch_url("occs/refs.json?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
 				  "refs json request OK");
     
     unless ( $refs_json )
@@ -322,7 +322,7 @@ subtest 'refs json' => sub {
 
 subtest 'refs txt' => sub {
     
-    my $refs_txt = $T->fetch_url("/data1.1/occs/refs.txt?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
+    my $refs_txt = $T->fetch_url("occs/refs.txt?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
 				  "refs txt request OK");
     
     unless ( $refs_txt )
@@ -351,7 +351,7 @@ subtest 'refs txt' => sub {
 
 subtest 'refs ris' => sub {
 
-    my $refs_ris = $T->fetch_url("/data1.1/occs/refs.ris?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
+    my $refs_ris = $T->fetch_url("occs/refs.ris?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&year=1879",
 				  "refs ris request OK");
     
     unless ( $refs_ris )
@@ -380,7 +380,7 @@ subtest 'refs ris' => sub {
 
 subtest 'occs taxa' => sub {
 
-    my $occs_taxa = $T->fetch_url("/data1.1/occs/taxa.txt?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&limit=1000",
+    my $occs_taxa = $T->fetch_url("occs/taxa.txt?base_name=$BASE_NAME_1&interval=$INTERVAL_1a&limit=1000",
 				  "list json request OK");
 
     unless ( $occs_taxa )

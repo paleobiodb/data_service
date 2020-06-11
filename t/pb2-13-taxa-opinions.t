@@ -229,7 +229,7 @@ subtest 'subtree other output blocks' => sub {
 			       "show=attr,refattr,ref,basis,ent,entname,crmod", "subtree opinions show");
     
     my $tc = Test::Conditions->new;
-    $tc->set_limit(atp => 50);
+    $tc->limit_max(atp => 50);
     
     my $aut_diff;
     
@@ -581,7 +581,7 @@ subtest 'list by ref info' => sub {
 	    if $r->{opy} eq $pick_opy && ! $o2e{$r->{oid}};
     }
     
-    $tc->set_limit( 'missing aut with ref_author filter' => 20 );
+    $tc->limit_max( 'missing aut with ref_author filter' => 20 );
     
     $tc->ok_all("opinion filters don't miss any records");
     
@@ -684,7 +684,7 @@ subtest 'list by ref info' => sub {
     # 	    if $r->{ref} =~ /$a1|$a2/o && ! $oid4b{$r->{oid}};
     # }
     
-    # $tc->set_limit('missed record with one of the authors' => 10);
+    # $tc->limit_max('missed record with one of the authors' => 10);
     
     # $tc->ok_all("two ref_author values");
     
@@ -1073,7 +1073,7 @@ sub check_order_hierarchy {
 # AAA
 
 subtest 'list by authent' => sub {
-
+    
     my $NAME_1 = 'Felidae';
     
     # First fetch a set of base records regardless of authorizer, enterer or modifier.
@@ -1120,15 +1120,26 @@ subtest 'list by authent' => sub {
     my %ent = $T->count_values( \@r1, 'ent' );
     my %mdf = $T->count_values( \@r1, 'mdf' );
     
-    my ($ath_max, $ath_count) = $T->find_max( \%ath ); delete $ent{$ath_max}; delete $mdf{$ath_max};
-    my ($ent_max, $ent_count) = $T->find_max( \%ent ); delete $mdf{$ent_max};
-    my ($mdf_max, $mdf_count) = $T->find_max( \%mdf );
-    
-    diag("   ath: $ath_max  ent: $ent_max  mdf: $mdf_max");
-    
     my ($ati_max, $ati_count) = $T->find_max( \%ati ); delete $eni{$ati_max}; delete $mdi{$ati_max};
     my ($eni_max, $eni_count) = $T->find_max( \%eni ); delete $mdi{$eni_max};
     my ($mdi_max, $mdi_count) = $T->find_max( \%mdi );
+
+    my ($ath_max);
+    my ($ent_max);
+    my ($mdf_max);
+    
+    # my ($ath_max, $ath_count) = $T->find_max( \%ath ); delete $ent{$ath_max}; delete $mdf{$ath_max};
+    # my ($ent_max, $ent_count) = $T->find_max( \%ent ); delete $mdf{$ent_max};
+    # my ($mdf_max, $mdf_count) = $T->find_max( \%mdf );
+
+    foreach my $r ( @r1 )
+    {
+	$ath_max ||= $r->{ath} if $r->{ati} && $r->{ati} eq $ati_max;
+	$ent_max ||= $r->{ent} if $r->{eni} && $r->{eni} eq $eni_max;
+	$mdf_max ||= $r->{mdf} if $r->{mdi} && $r->{mdi} eq $mdi_max;
+    }
+    
+    diag("   ath: $ath_max  ent: $ent_max  mdf: $mdf_max");
     
     # Select all the records authorized and not authorized by that person, and make sure the
     # totals add up.
@@ -1435,13 +1446,13 @@ subtest 'list by authent' => sub {
     # Then we test that fetching opinions according to who entered the taxa works okay.  We check
     # this by matching up with the equivalent query to /taxa/list.
     
-    my @r12a = $T->fetch_records("/taxa/opinions.json?base_name=$NAME_1&taxa_entered_by=$ati_max",
-				 "opinions on taxa entered_by");
-    my @t12a = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxa_entered_by=$ati_max",
-				 "taxa entered_by");
+    # my @r12a = $T->fetch_records("/taxa/opinions.json?base_name=$NAME_1&taxa_entered_by=$ati_max",
+    # 				 "opinions on taxa entered_by");
+    # my @t12a = $T->fetch_records("/taxa/list.json?base_name=$NAME_1&taxa_entered_by=$ati_max",
+    # 				 "taxa entered_by");
     
-    my %ops_names = $T->extract_values( \@r12a, 'nam' );
-    my %taxa_names = $T->extract_values( \@t12a, 'nam' );
+    # my %ops_names = $T->extract_values( \@r12a, 'nam' );
+    # my %taxa_names = $T->extract_values( \@t12a, 'nam' );
     
-    $T->cmp_sets_ok( \%ops_names, '==', \%taxa_names, "opinions on taxa entered_by matches taxa entered_by" );
+    # $T->cmp_sets_ok( \%ops_names, '==', \%taxa_names, "opinions on taxa entered_by matches taxa entered_by" );
 };

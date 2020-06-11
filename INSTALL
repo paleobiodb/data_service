@@ -1,0 +1,22 @@
+
+Notes for installing the Paleobiology Database API
+
+
+Under Macports, the following packages need to be installed:
+
+perl5.xx
+p5-dancer
+p5-dancer-plugin-database
+p5-template-toolkit
+p5-moo
+p5-namespace-clean
+p5-json
+p5-term-readkey
+p5-dbd-mysql
+p5-test-most
+
+Dancer::Plugin::StreamData
+Text::CSV_XS
+
+
+

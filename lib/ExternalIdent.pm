@@ -20,24 +20,32 @@ our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier ex
 
 # List the identifier prefixes:
 
-our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',
-	     TID => 'txn|var',
-	     TXN => 'txn',
-	     VAR => 'var',
-	     OPN => 'opn',
-	     REF => 'ref',
-	     OCC => 'occ',
-	     REI => 'rei',
-	     OID => 'occ|rei',
-	     SPM => 'spm',
-	     MEA => 'mea',
-	     ELT => 'elt',
-	     COL => 'col',
-	     INT => 'int',
-	     TSC => 'tsc',
-	     CLU => 'clu',
-	     PHP => 'php',
-	     PRS => 'prs' );
+our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',	# standard prefixes
+	     TID => 'txn|var',		# taxonomic names
+	     TXN => 'txn',		# primary taxonomic names
+	     VAR => 'var',		# spelling variants
+	     OPN => 'opn',		# taxonomic opinions
+	     REF => 'ref',		# bibliographic references
+	     PUB => 'pub',		# research publications
+	     DAR => 'dar',              # data archives
+	     OCC => 'occ',		# fossil occurrences
+	     REI => 'rei',		# fossil occurrence reidentifications
+	     OID => 'occ|rei',		# fossil identification events
+	     SPM => 'spm',		# fossil specimens
+	     MEA => 'mea',		# measurements of fossil specimens
+	     ELS => 'els',		# specimen elements
+	     COL => 'col',		# fossil collections
+	     LOC => 'loc',		# geographic locations by coordinate
+	     GNM => 'gnm',		# geographic names
+	     CLU => 'clu',		# geographic clusters of fossil occurrence locations
+	     PLC => 'col|loc|gnm',	# locations in general
+	     INT => 'int',		# geologic time intervals
+	     BND => 'bnd',		# geologic time interval boundaries
+	     TSC => 'tsc',		# geologic time scales
+	     PHP => 'php',		# phylopic image identifiers
+	     EDR => 'edr',		# educational resources
+	     ETG => 'etg',		# educational resource tags
+	     PRS => 'prs' );		# database members and guests
 
 our %IDRE;
 our %IDVALID;
@@ -83,7 +91,7 @@ $IDRE{UNKTXN} = qr{ ^ (?: (?: $IDP{URN} )? txn [:] )? ( [UN] [A-Z] \d* ) $ }xsi;
 $IDRE{ANY} = qr{ ^ (?: (?: $IDP{URN} )? ( $key_expr ) [:] )? ( [0] | [1-9][0-9]* | ERROR ) $ }xsi;
 $IDVALID{ANY} = sub { return valid_identifier(shift, shift, 'ANY') };
 
-$IDRE{LOOSE} = qr{ ^  (?: (?: $IDP{URN} )? ( \w+ ) [:] )? ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
+$IDRE{LOOSE} = qr{ ^ (?: $IDP{URN} )? ( \w+ ) [:] ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
 
 # valid_ident ( value, context, type )
 # 
@@ -115,6 +123,16 @@ sub valid_identifier {
 
 	return { value => PBDB::ExtIdent->new($idtype, $idnum) };
     }
+
+    # If this request is marked as a 'data entry' request, then accept label references as well.
+
+    if ( ref $context eq 'HASH' && $context->{request}{is_data_entry} )
+    {
+	if ( $value =~ qr{ ^ [@] (.*) }xs )
+	{
+	    return { value => $value };
+	}
+    }
     
     # Otherwise, attempt to provide a useful error message.  If the value
     # contains a comma, note that we only accept a single identifier.  Any
@@ -127,29 +145,29 @@ sub valid_identifier {
     
     if ( $value =~ /,/ )
     {
-	$msg = "the value of {param} must be a single identifier";
+	$msg = "Field {param}: must be a single value";
     }
     
     elsif ( $value =~ $IDRE{LOOSE} )
     {
-	$msg = "the value of {param} must be an identifier of type $IDP{$type}$insert (type '$1' is not allowed with this operation)";
+	$msg = "Field {param}: external identifier must have type $IDP{$type}$insert";
     }
     
     elsif ( $type eq 'ANY' )
     {
-	$msg = "each value of {param} must be either a valid identifier of the form 'type:nnnn' " .
+	$msg = "Field {param}: value must be either a valid identifier of the form 'type:nnnn' " .
 	    "where nnnn is an integer$insert, or a nonnegative integer (was {value})";
     }
     
     elsif ( $IDP{$type} =~ qr{(\w+)[|](\w+)} )
     {
-	$msg = "each value of {param} must be either a valid identifier of the form '$1:nnnn' or " .
+	$msg = "Field {param}: value must be either a valid identifier of the form '$1:nnnn' or " .
 	   "'$2:nnnn' where nnnn is an integer$insert, or a nonnegative integer (was {value})";
     }
     
     else
     {
-	$msg = "each value of {param} must be either a valid identifier or a nonnegative integer (was {value})";
+	$msg = "Field {param}: value must be either a valid identifier or a nonnegative integer";
     }
     
     return { error => $msg };
@@ -208,9 +226,9 @@ sub generate_identifier {
     
     if ( ref $value eq 'ARRAY' )
     {
-	map { $_ = defined $_ && $_ > 0 ? "$IDP{$type}:$_" : "$IDP{$type}:ERROR" } @$value;
+	map { $_ = generate_identifier($type, $_) } @$value;
     }
-    
+
     elsif ( defined $value && $value > 0 )
     {
 	return "$IDP{$type}:$value";
@@ -224,6 +242,11 @@ sub generate_identifier {
     elsif ( defined $value && $value =~ qr{ ^ [UN][A-Z] \d* $ }xs )
     {
 	return "$IDP{$type}:$value";
+    }
+    
+    elsif ( $value =~ $IDRE{ANY} )
+    {
+	return $value;
     }
     
     elsif ( defined $value )
@@ -279,6 +302,14 @@ sub regenerate {
     {
 	return "$id->{type}:$id->{num}";
     }
+}
+
+
+sub type {
+    
+    my ($id) = @_;
+    
+    return $id->{type};
 }
 
 1;

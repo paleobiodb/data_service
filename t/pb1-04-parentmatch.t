@@ -17,7 +17,7 @@ use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # First define the values we will be using to check the taxonomy operations.
@@ -38,7 +38,7 @@ subtest 'all_children' => sub {
  NAME:
     foreach my $base_name ( @TEST_NAMES )
     {
-	my $json_result = $T->fetch_url("/data1.1/taxa/list.json?vocab=pbdb&base_name=$base_name&status=all&limit=999999",
+	my $json_result = $T->fetch_url("taxa/list.json?vocab=pbdb&base_name=$base_name&status=all&limit=999999",
 					"base name '$base_name' request ok");
 	
 	next NAME unless $json_result;

@@ -56,7 +56,8 @@ our $RANK_MAP = "rank_map";
 
 # This rank hierarchy has not changed from paleobiodb classic, and probably will not change in the future.
 
-our (%TAXON_RANK) = ( 'max' => 26, 26 => 26, 'informal' => 26, 'unranked_clade' => 25, 'unranked' => 25, 25 => 25,
+our (%TAXON_RANK) = ( 'max' => 26, 26 => 26, 'informal' => 26,
+		      'unranked_clade' => 25, 'unranked clade' => 25, 'unranked' => 25, 25 => 25,
 		      'kingdom' => 23, 23 => 23, 'subkingdom' => 22, 22 => 22,
 		      'superphylum' => 21, 21 => 21, 'phylum' => 20, 20 => 20, 'subphylum' => 19, 19 => 19,
 		      'superclass' => 18, 18 => 18, 'class' => 17, 17 => 17, 'subclass' => 16, 16 => 16,
