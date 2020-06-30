@@ -6,13 +6,13 @@
 
 FROM paleobiodb_api_preload
 
-COPY pbdb-new /var/paleobiodb/pbdb-new/
+COPY pbdb-new /var/paleomacro/pbdb-new/
 
-VOLUME /var/paleobiodb/pbdb-new/logs
+VOLUME /var/paleomacro/pbdb-new/logs
 
 EXPOSE 3000 3999
 
-WORKDIR /var/paleobiodb/pbdb-new/
+WORKDIR /var/paleomacro/pbdb-new/
 
 CMD perl bin/data_service.pl
 
