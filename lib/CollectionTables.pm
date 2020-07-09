@@ -22,7 +22,7 @@ use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $CO
 		 $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $COLL_LITH $COLL_ENV);
 use CoreFunction qw(activateTables);
-use ConsoleLog qw(logMessage);
+use ConsoleLog qw(logMessage logTimestamp);
 
 our $COLL_MATRIX_WORK = "cmw";
 our $COLL_BINS_WORK = "cbw";
@@ -86,6 +86,8 @@ sub buildCollectionTables {
     
     # Now create a clean working table which will become the new collection
     # matrix.
+    
+    logTimestamp();
     
     logMessage(1, "Building collection tables");
     

@@ -20,7 +20,7 @@ use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST
 use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
-use ConsoleLog qw(initMessages logMessage);
+use ConsoleLog qw(initMessages logMessage logTimestamp);
 use TableDefs qw($OCC_MATRIX $OCC_TAXON);
 
 use base 'Exporter';
@@ -736,6 +736,8 @@ sub buildTaxonTables {
     $options ||= {};
     my $steps = $options->{taxon_steps};
     my $step_control;
+    
+    logTimestamp();
     
     # First, determine which tables will be computed.
     
@@ -5492,6 +5494,8 @@ sub buildTaxaCacheTables {
     my $result;
     
     # Create a new working table for taxa_tree_cache
+
+    logTimestamp();
     
     logMessage(2, "computing tree cache and list cache tables");
     
@@ -5947,38 +5951,38 @@ sub populateOrig {
     
     # Populate all unset orig_no entries.  This algorithm is taken from
     # TaxonInfo::getOriginalCombination() in the old code.
-    
-    print STDERR "Populating 'orig_no' field...\n";
+
+    logMessage(1, "Populating 'orig_no' field...");
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_spelling_no
 	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
     
-    print STDERR "   child_spelling_no: $count\n";
+    logMessage(2, "   child_spelling_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_no
 	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
     
-    print STDERR "   child_no: $count\n";
+    logMessage(2, "   child_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_spelling_no
 	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
-        
-    print STDERR "   parent_spelling_no: $count\n";
+    
+    logMessage(2, "   parent_spelling_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_no
 	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
     
-    print STDERR "   parent_no: $count\n";
+    logMessage(2, "   parent_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a
 	SET a.orig_no = a.taxon_no WHERE a.orig_no = 0");
     
-    print STDERR "   self: $count\n";
+    logMessage(2, "   self: $count");
     
     # Index the field, unless there is already an index.
     
@@ -5995,10 +5999,10 @@ sub populateOrig {
     {
 	$count = $dbh->do("UPDATE authorities set refauth = if(ref_is_authority='YES', 1, 0)");
 	
-	print STDERR "Updating 'refauth': $count\n";
+	logMessage(2, "Updating 'refauth': $count");
     }
     
-    print STDERR "  done.\n";
+    # print STDERR "  done.\n";
 }
 
 

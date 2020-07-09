@@ -20,7 +20,7 @@ use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_TAXON $REF_SUMMARY
 		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		 $INTERVAL_DATA $SCALE_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
-use ConsoleLog qw(logMessage);
+use ConsoleLog qw(logMessage logTimestamp);
 
 our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildDiversityTables updateOccurrenceMatrix
 		      buildOccIntervalMaps);
@@ -46,6 +46,8 @@ sub buildOccurrenceTables {
     
     # Create a clean working table which will become the new occurrence
     # matrix.
+    
+    logTimestamp();
     
     logMessage(1, "Building occurrence tables");
     
