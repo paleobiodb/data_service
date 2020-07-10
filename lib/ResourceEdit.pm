@@ -150,23 +150,21 @@ sub validate_action {
     
     if ( defined $record->{orcid} && $record->{orcid} ne '' )
     {
-	unless ( $record->{orcid} =~ qr{ ^ \d\d\d\d - \d\d\d\d - \d\d\d\d - \d\d\d\d $ }xs )
+	unless ( $record->{orcid} =~ qr{ ^ \d\d\d\d -? \d\d\d\d -? \d\d\d\d -? \d\d\d\d $ }xs )
 	{
 	    $edt->add_condition('E_FORMAT', 'orcid', 'not a valid ORCID');
 	}
     }
     
-    # If image data was specified, check if it needs resizing.
+    # If image data was specified, check if it needs resizing. The field must be ignored in any
+    # case, or else it will trigger an E_BAD_FIELD error.
     
     if ( $record->{image_data} )
     {
 	$record->{image_data} = $edt->convert_image($action, $record->{image_data});
-	$action->ignore_field('image_data');
     }
     
-    # Then call the regular validation routine.
-    
-    # $edt->validate_against_schema($action, $operation, $table);
+    $action->ignore_field('image_data');
 }
 
 
