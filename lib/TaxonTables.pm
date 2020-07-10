@@ -1187,8 +1187,7 @@ sub populateOpinionCache {
     my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
-    $result = $dbh->do("
-		INSERT INTO $table_name (opinion_no, orig_no, child_rank, child_spelling_no,
+    my $sql = "INSERT INTO $table_name (opinion_no, orig_no, child_rank, child_spelling_no,
 					 parent_no, parent_spelling_no, ri, pubyr,
 					 status, spelling_reason, reference_no, author, suppress)
 		SELECT o.opinion_no, a1.orig_no, a1.taxon_rank,
@@ -1218,7 +1217,9 @@ sub populateOpinionCache {
 			LEFT JOIN $auth_table as a2
 				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
 		$filter_clause
-		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
+		ORDER BY ri DESC, pubyr DESC, opinion_no DESC";
+    
+    $result = $dbh->do($sql);
     
     return;
 }
