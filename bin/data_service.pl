@@ -21,7 +21,7 @@ use Dancer ':script';
 
 my $PORT = config->{port}|| 3000;
 my $WORKERS = config->{workers} || 5;
-my $ACCESS_LOG = config->{access_log} || 'access_log';
+my $ACCESS_LOG = config->{access_log} || 'pbapi_log';
 
 unless ( $ACCESS_LOG =~ qr{/} )
 {
@@ -30,7 +30,7 @@ unless ( $ACCESS_LOG =~ qr{/} )
 
 my $pid_file;
 
-open($pid_file, ">", "logs/starman.pid");
+open($pid_file, ">", "starman.pid");
 print $pid_file $$;
 close $pid_file;
 

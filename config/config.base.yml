@@ -46,7 +46,7 @@ plugins:
     Database:
       driver: 'mysql'
       database: 'pbdb'
-      host: 'mysql'
+      host: 'mariadb'
       port: 3306
       username: 'pbdbuser'
       password: 'pbdbpwd'
