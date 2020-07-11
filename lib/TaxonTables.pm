@@ -1093,17 +1093,17 @@ sub buildOpinionCache {
     
     $result = $dbh->do("DROP TABLE ${OPINION_CACHE}_bak");
     
-    # Add columns 'child_orig_no' and 'parent_orig_no' to opinions table unless they are already
-    # there.
+    # # Add columns 'child_orig_no' and 'parent_orig_no' to opinions table unless they are already
+    # # there.
     
-    my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
-    my ($table, $def) = $dbh->selectrow_array("SHOW CREATE TABLE $ops_table");
+    # my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
+    # my ($table, $def) = $dbh->selectrow_array("SHOW CREATE TABLE $ops_table");
     
-    unless ( $def =~ qr{`child_orig_no`} )
-    {
-	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `child_orig_no` int unsigned not null AFTER `pubyr`");
-	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `parent_orig_no` int unsigned not null AFTER `child_orig_no`");
-    }
+    # unless ( $def =~ qr{`child_orig_no`} )
+    # {
+    # 	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `child_orig_no` int unsigned not null AFTER `pubyr`");
+    # 	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `parent_orig_no` int unsigned not null AFTER `child_orig_no`");
+    # }
     
     # Also add a key 'created' to the opinions table, unless it already exists.
     
