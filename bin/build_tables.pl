@@ -38,12 +38,13 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 Getopt::Long::Configure("bundling");
 
-my ($opt_nightly, $opt_logfile, $opt_test,
+my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
     $taxon_tables, $collection_tables, $occurrence_tables, $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
 	    "log=s" => \$opt_logfile,
 	    "test" => \$opt_test,
+	    "error" => \$opt_error,
 	    "taxonomy|t" => \$taxon_tables,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
@@ -67,25 +68,15 @@ if ( $opt_nightly )
 if ( $opt_logfile )
 {
     open(STDOUT, '>>', $opt_logfile) || die "Could not append to $opt_logfile: $!\n";
-    select(STDOUT);
-    $|=1;
 }
 
-# If the option --test was given, just write a test message and stop.
-
-if ( $opt_test )
-{
-    initMessages(2, 'Build test');
-    logTimestamp();
-    logMessage(1, 'Test is done');
-    print STDERR "Build test\n";
-    exit;
-}
+select(STDOUT);
+$|=1;
 
 # If the argument 'log' was specified, run the specified table builds inside an eval. If an error occurs,
 # print it to the log and then re-throw it so it gets printed to STDERR as well.
 
-elsif ( $opt_logfile )
+if ( $opt_logfile )
 {
     eval {
 	BuildTables();
@@ -111,9 +102,22 @@ else
 
 sub BuildTables {
     
+    # If either option --test or --error was given, just write a test message and stop.
+    
+    if ( $opt_test || $opt_error )
+    {
+	initMessages(2, 'Build test');
+	logMessage(1, '------------------------------------------------------------');
+	logTimestamp();
+	logMessage(1, 'Test log message');
+	die "ERROR: Build test\n" if $opt_error;
+	exit;
+    }
+    
     # Initialize the output-message subsystem
     
     initMessages(2, 'Build');
+    logMessage(1, '------------------------------------------------------------');
     logTimestamp();
     
     # Get a database handle and a taxonomy object.
