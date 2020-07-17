@@ -5,7 +5,7 @@
 # takes 45 minutes or more to build. The main Dockerfile then uses this to build
 # the final image by copying in the source code and other local content.
 
-FROM perl:5.32-threaded AS paleobiodb_pbapi_preload
+FROM perl:5.32-threaded AS paleomacro_pbapi_preload
 
 RUN apt-get update && \
     apt-get -y install mariadb-client && \

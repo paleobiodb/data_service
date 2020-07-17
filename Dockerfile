@@ -4,7 +4,7 @@
 # The image 'paleobiodb_api_preload' can be built using the file 'Dockerfile-preload'.
 # See that file for more information.
 
-FROM paleobiodb_pbapi_preload
+FROM paleomacro_pbapi_preload
 
 COPY pbdb-new /var/paleomacro/pbdb-new/
 
