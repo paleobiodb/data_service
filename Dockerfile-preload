@@ -27,7 +27,8 @@ RUN cpanm HTTP::Validate && \
 RUN cpanm --force Term::ReadLine::Gnu && \
     cpanm --force Text::CSV_XS && \
     cpanm --force Test::Conditions && \
-    cpanm --force Term::ReadKey
+    cpanm --force Term::ReadKey && \
+    cpanm --force LWP::Protocol::https
 
 RUN apt-get -y install vim && \
     apt-get -y install curl
