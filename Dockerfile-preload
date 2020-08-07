@@ -25,9 +25,8 @@ RUN apt-get update && \
     cpanm Starman
     
 RUN cpanm HTTP::Validate && \
-    cpanm Switch::Plain
-
-RUN cpanm --force Term::ReadLine::Gnu && \
+    cpanm Switch::Plain && \
+    cpanm --force Term::ReadLine::Gnu && \
     cpanm --force Text::CSV_XS && \
     cpanm --force Test::Conditions && \
     cpanm --force Term::ReadKey && \
@@ -36,7 +35,12 @@ RUN cpanm --force Term::ReadLine::Gnu && \
 RUN apt-get -y install vim && \
     apt-get -y install curl && \
     apt-get -y install locales && \
-    apt-get -y install tzdata && \
-    locale-gen --purge en_US.UTF-8
+    apt-get -y install tzdata
 
+ARG LANG=en_US.UTF-8
+
+ENV LANG=$LANG
+
+RUN echo "$LANG UTF-8" > "/etc/locale.gen" && \
+    locale-gen
 
