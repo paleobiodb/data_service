@@ -1,14 +1,29 @@
 # 
-# Paleobiology Database - main API image
+# Paleobiology Database - Main API image
 # 
-# The image 'paleobiodb_api_preload' can be built using the file 'Dockerfile-preload'.
-# See that file for more information.
+# The image 'paleomacro_pbapi_preload' is built from the file 'Dockerfile-preload'
+# in this directory. You can pull the latest version of that image from the remote
+# container repository associated with this project using the command 'pbdb pull api'.
+# Alternatively, you can build it using the command 'pbdb build api preload'.
+# See the file Dockerfile-preload for more information.
+# 
+# Once you have the preload image, you can build the Main API container image using
+# the command 'pbdb build api'.
 
 FROM paleomacro_pbapi_preload
 
 COPY pbdb-new /var/paleomacro/pbdb-new/
 
-VOLUME /var/paleomacro/pbdb-new/logs
+# To build this container with the proper timezone setting, use --build-arg TZ=xxx
+# where xxx is the timezone in which the server is located. The 'pbdb build' command
+# will do this automatically. Without any argument it will default to UTC, with no
+# local time available. 
+
+ARG TZ=Etc/UTC
+
+RUN echo $TZ > /etc/timezone && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
 
 EXPOSE 3000 3999
 
