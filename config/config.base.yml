@@ -11,7 +11,8 @@ contact_name:    "the database administrator"
 
 charset: "utf-8"
 show_errors: 0
-log: "warning"
+log: "error"
+log_file: "pbapi_error_log"
 request_log: 1
 
 port: 3000
