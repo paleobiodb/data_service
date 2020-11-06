@@ -29,7 +29,7 @@ RUN echo $TZ > /etc/timezone && \
 
 COPY pbdb-new /var/paleomacro/pbdb-new/
 
-CMD perl bin/data_service.pl
+CMD ["perl", "bin/data_service.pl"]
 
 LABEL maintainer="mmcclenn@geology.wisc.edu"
 LABEL version="1.0"

@@ -32,6 +32,9 @@ RUN cpanm HTTP::Validate && \
     cpanm --force Term::ReadKey && \
     cpanm --force LWP::Protocol::https
 
+RUN cpanm Server::Starter && \
+    cpanm Net::Server::SS::PreFork
+
 RUN apt-get -y install vim && \
     apt-get -y install curl && \
     apt-get -y install locales && \
