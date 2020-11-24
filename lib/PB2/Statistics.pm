@@ -143,7 +143,7 @@ sub larkin_summary {
 	(SELECT COUNT(*) FROM opinions) AS 'opinions',
 	(SELECT COUNT(*) FROM collections) AS 'collections',
 	(SELECT COUNT(*) FROM occurrences) AS 'occurrences',
-	(SELECT COUNT(*) FROM person WHERE hours_ever > 0) AS 'scientists'";
+	(SELECT COUNT(*) FROM pbdb_wing.users WHERE role = 'authorizer' or role = 'enterer') AS 'scientists'";
     
     $request->{ds}->debug_line("$sql\n") if $request->debug;
     
