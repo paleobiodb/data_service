@@ -146,8 +146,16 @@ any qr{.*} => sub {
     # libraries when they send AJAX requests. We need to delete this so that it doesn't mess up
     # the parameter validation.
     
-    delete params->{_};
-    delete params('query')->{_};
+    if ( params->{_} )
+    {
+	delete params->{_};
+	delete params('query')->{_};
+
+	if ( $r->env->{REQUEST_URI} )
+	{
+	    $r->env->{REQUEST_URI} =~ s/&_=[^&]*//;
+	}
+    }
     
     # If the path ends in a string of digits with a format suffix, we treat this as if it were a
     # request for the object whose identifier corresponds to the digit string. To do this, we
