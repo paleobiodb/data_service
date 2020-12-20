@@ -6489,6 +6489,11 @@ sub validate_datetime_value {
     {
 	return 'NOW()';
     }
+
+    elsif ( $value =~ qr{ ^ \d\d\d\d\d\d\d\d\d\d+ $ }xs )
+    {
+	return "FROM_UNIXTIME($value)";
+    }
     
     elsif ( $specific eq 'time' )
     {

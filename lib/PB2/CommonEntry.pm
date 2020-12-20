@@ -70,10 +70,10 @@ sub get_main_params {
 	    next;
 	}
 	
-	next if $k eq 'record_label';
-	next if $entry_ruleset && ! $RULESET_HAS_PARAM{$entry_ruleset}{$k};
-	
-	$main_params->{$k} = $request->clean_param($k);
+	if ( $entry_ruleset && $RULESET_HAS_PARAM{$entry_ruleset}{$k} )
+	{
+	    $main_params->{$k} = $request->clean_param($k);
+	}
     }
     
     if ( $request->debug )
