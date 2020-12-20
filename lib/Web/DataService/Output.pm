@@ -2045,7 +2045,7 @@ sub _generate_compound_result {
 
     my ($ds, $request, $streaming_threshold) = @_;
     
-    Dancer::error "Generating compound result\n";
+    # Dancer::error "Generating compound result\n";
     
     # Determine the output format and figure out which class implements it.
     
@@ -2180,7 +2180,7 @@ sub _generate_compound_result {
 	    $request->{stashed_output} = $output;
 	    $request->{header_lists} = \@header_lists;
 	    
-	    Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
+	    # Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
 	    
 	    if ( $request->{out_fh} && $request->{response_hook} )
 	    {
@@ -2548,13 +2548,13 @@ sub _stream_compound_result {
     {
 	if ( $output_charset && $format_is_text )
 	{
-	    Dancer::error "Writing stashed output encoded as $output_charset\n";
+	    # Dancer::error "Writing stashed output encoded as $output_charset\n";
 	    $writer->write( encode($output_charset, $request->{stashed_output}) );
 	}
 	
 	else
 	{
-	    Dancer::error "Writing stashed output\n";
+	    # Dancer::error "Writing stashed output\n";
 	    $writer->write( $request->{stashed_output} );
 	}
     }
@@ -2564,7 +2564,7 @@ sub _stream_compound_result {
     
     if ( $request->{out_fh} )
     {
-	Dancer::error "Writing stashed output to filehandle\n";
+	# Dancer::error "Writing stashed output to filehandle\n";
 	print $request->{stashed_output};
     }
     
