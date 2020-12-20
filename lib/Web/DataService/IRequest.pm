@@ -239,6 +239,31 @@ sub clean_param {
 }
 
 
+sub clean_param_boolean {
+    
+    my ($request, $name) = @_;
+    
+    if ( ref $request->{valid} && exists $request->{valid}{raw}{$name} )
+    {
+	if ( exists $request->{valid}{clean}{$name} &&
+	     $request->{valid}{clean}{$name} eq '0' )
+	{
+	    return 0;
+	}
+
+	else
+	{
+	    return 1;
+	}
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
 # clean_param_list ( name )
 # 
 # Return a list of all the cleaned values of the named parameter, or the empty

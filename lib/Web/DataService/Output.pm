@@ -1889,6 +1889,49 @@ sub check_field_type {
 }
 
 
+# output_to_file ( filehandle, response_hook )
+# 
+# If the response_hook argument is given, it must be either a method name or a code ref. All
+# output is directed to the specified filehandle, and the response_hook is called to generate the
+# response content. If no response_hook, is given, then output is copied to the filehandle in
+# addition to being returned to the client.
+#
+# In either case, the first argument must be a filehandle that is open for writing.
+
+sub output_to_file {
+    
+    my ($ds, $request, $filehandle, $response_hook) = @_;
+    
+    # Store the filehandle as an attribute of the request.
+    
+    $request->{out_fh} = $filehandle;
+    
+    # If an output character set is defined, add a the proper layer to the filehandle.
+    
+    if ( my $charset = $ds->{_config}{charset} )
+    {
+	my $layer = $charset =~ /^utf-?8$/ ? ":utf8" : ":encoding($charset)";
+	binmode($request->{out_fh}, $layer);
+    }
+
+    # If $response_hook is defined and is a code ref, store it as an attribute of the request. 
+    
+    if ( $response_hook )
+    {
+	croak "response_hook parameter is not a code ref\n" unless ref $response_hook eq 'CODE';
+	$request->{response_hook} = $response_hook;
+	$request->{file_only} = 1;
+    }
+    
+    # Otherwise, indicate that we are duplicating the output.
+    
+    else
+    {
+	$request->{tee_output} = 1;
+    }
+}
+
+
 # _check_output_config ( request )
 #
 # If the current output configuration has no output fields, add a warning.
@@ -2001,6 +2044,8 @@ sub _generate_single_result {
 sub _generate_compound_result {
 
     my ($ds, $request, $streaming_threshold) = @_;
+    
+    Dancer::error "Generating compound result\n";
     
     # Determine the output format and figure out which class implements it.
     
@@ -2134,7 +2179,21 @@ sub _generate_compound_result {
 	{
 	    $request->{stashed_output} = $output;
 	    $request->{header_lists} = \@header_lists;
-	    Dancer::Plugin::StreamData::stream_data($request, &_stream_compound_result);
+	    
+	    Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
+	    
+	    if ( $request->{out_fh} && $request->{response_hook} )
+	    {
+		$request->_stream_compound_result();
+
+		my $response_hook = $request->{response_hook};
+		return $request->$response_hook();
+	    }
+	    
+	    else
+	    {
+		Dancer::Plugin::StreamData::stream_data($request, &_stream_compound_result);
+	    }
 	}
     }
     
@@ -2167,10 +2226,25 @@ sub _generate_compound_result {
     
     $output .= $footer;
     
-    # Determine if we need to encode the output into the proper character set.
-    # Usually Dancer does this for us, but only if it recognizes the content
-    # type as text.  For these formats, the definition should set the
-    # attribute 'encode_as_text' to true.
+    # If we are directing output to a file, write it now and then close the file. The proper encoding
+    # should already have been set up. If a response_hook has been established, call it and return
+    # as output whatever it returns. Otherwise, continue and return the output to the client as
+    # normal.
+    
+    if ( my $fh = $request->{out_fh} )
+    {
+	print $fh $output;
+	close $fh;
+	
+	if ( my $response_hook = $request->{response_hook} )
+	{
+	    return $request->$response_hook();
+	}
+    }
+    
+    # Determine if we need to encode the output into the proper character set.  Usually Dancer
+    # does this for us, but only if it recognizes the content type as text.  For these formats,
+    # the definition should set the attribute 'encode_as_text' to true.
     
     my $output_charset = $ds->{_config}{charset};
     my $must_encode;
@@ -2351,7 +2425,19 @@ sub _generate_processed_result {
 	    $request->{stashed_output} = $output;
 	    $request->{stashed_results} = \@results;
 	    $request->{processing_complete} = 1;
-	    Dancer::Plugin::StreamData::stream_data($request, &_stream_compound_result);
+	    
+	    if ( $request->{out_fh} && $request->{response_hook} )
+	    {
+		$request->_stream_compound_result();
+		
+		my $response_hook = $request->{response_hook};
+		return $request->$response_hook();
+	    }
+	    
+	    else
+	    {
+		Dancer::Plugin::StreamData::stream_data($request, &_stream_compound_result);
+	    }
 	}
     }
     
@@ -2384,6 +2470,22 @@ sub _generate_processed_result {
     
     $output .= $footer;
     
+    # If we are directing output to a file, write it now and then close the file. The proper encoding
+    # should already have been set up. If a response_hook has been established, call it and return
+    # as output whatever it returns. Otherwise, continue and return the output to the client as
+    # normal.
+    
+    if ( my $out_fh = $request->{out_fh} )
+    {
+	print $out_fh $output;
+	close $out_fh;
+	
+	if ( my $response_hook = $request->{response_hook} )
+	{
+	    return $request->$response_hook();
+	}
+    }
+    
     # Determine if we need to encode the output into the proper character set.
     # Usually Dancer does this for us, but only if it recognizes the content
     # type as text.  For these formats, the definition should set the
@@ -2405,16 +2507,14 @@ sub _generate_processed_result {
 
 # _stream_compound_result ( )
 # 
-# Continue to generate a compound query result from where
-# generate_compound_result() left off, and stream it to the client
-# record-by-record.
+# Continue to generate a compound query result from where generate_compound_result() left off, and
+# stream it to the client or write it to an output file record-by-record.
 # 
-# This routine must be passed a Plack 'writer' object, to which will be
-# written in turn the stashed output from generate_compound_result(), each
-# subsequent record, and then the footer.  Each of these chunks of data will
-# be immediately sent off to the client, instead of being marshalled together
-# in memory.  This allows the server to send results up to hundreds of
-# megabytes in length without bogging down.
+# If the second argument is defined, it must be a Plack 'writer' object. This object's 'write'
+# method will be called to send in turn the previously stashed output, each subsequent record, and
+# then the footer.  Each of these chunks of data will be immediately sent off to the client,
+# instead of being marshalled together in memory.  This allows the server to send results up to
+# hundreds of megabytes in length without bogging down.
 
 sub _stream_compound_result {
     
@@ -2441,17 +2541,31 @@ sub _stream_compound_result {
     
     #return $must_encode ? encode($output_charset, $output) : $output;
     
-    # First send out the partial output previously stashed by
+    # If we have a writer object, send out the partial output previously stashed by
     # generate_compound_result().
-    
-    if ( $output_charset && $format_is_text )
+
+    if ( $writer )
     {
-	$writer->write( encode($output_charset, $ds->{stashed_output}) );
+	if ( $output_charset && $format_is_text )
+	{
+	    Dancer::error "Writing stashed output encoded as $output_charset\n";
+	    $writer->write( encode($output_charset, $request->{stashed_output}) );
+	}
+	
+	else
+	{
+	    Dancer::error "Writing stashed output\n";
+	    $writer->write( $request->{stashed_output} );
+	}
     }
     
-    else
+    # If we have an output filehandle, write the stashed output to it. The proper encoding layer
+    # should have been established already.
+    
+    if ( $request->{out_fh} )
     {
-	$writer->write( $ds->{stashed_output} );
+	Dancer::error "Writing stashed output to filehandle\n";
+	print $request->{stashed_output};
     }
     
     # Then process the remaining rows.
@@ -2517,15 +2631,23 @@ sub _stream_compound_result {
 	{
 	    # do nothing
 	}
-	
-	elsif ( $output_charset && $format_is_text )
+
+	if ( $writer )
 	{
-	    $writer->write( encode($output_charset, $output) );
+	    if ( $output_charset && $format_is_text )
+	    {
+		$writer->write( encode($output_charset, $output) );
+	    }
+	    
+	    else
+	    {
+		$writer->write( $output );
+	    }
 	}
-	
-	else
+
+	if ( my $out_fh = $request->{out_fh} )
 	{
-	    $writer->write( $output );
+	    print $out_fh $output;
 	}
 	
 	# Keep count of the output records, and stop if we have exceeded the
@@ -2535,14 +2657,7 @@ sub _stream_compound_result {
 	    ++$request->{actual_count} >= $request->{result_limit};
     }
     
-    # finish output...
-    
-    # my $final = $ds->finishOutput();
-    # $writer->write( encode_utf8($final) ) if defined $final and $final ne '';
-    
-    # Finally, send out the footer and then close the writer object.
-    
-    # Generate the final part of the output, after the last record.
+    # Finally, send out the footer and then close the writer object and/or filehandle.
     
     my @header_lists; @header_lists = @{$request->{header_lists}}
 	if ref $request->{header_lists} eq 'ARRAY';
@@ -2554,22 +2669,35 @@ sub _stream_compound_result {
 	$ds->_call_hooks($request, 'after_serialize_hook', 'footer', \$footer);
     }
     
-    if ( ! defined $footer or $footer eq '' )
+    if ( $writer )
     {
-	# do nothing
+	if ( ! defined $footer or $footer eq '' )
+	{
+	    # do nothing
+	}
+	
+	elsif ( $output_charset && $format_is_text )
+	{
+	    $writer->write( encode($output_charset, $footer) );
+	}
+	
+	else
+	{
+	    $writer->write( $footer );
+	}
+	
+	$writer->close();
     }
-    
-    elsif ( $output_charset && $format_is_text )
+
+    if ( my $out_fh = $request->{out_fh} )
     {
-	$writer->write( encode($output_charset, $footer) );
+	if ( defined $footer && $footer ne '' )
+	{
+	    print $out_fh $footer;
+	}
+
+	close $out_fh;
     }
-    
-    else
-    {
-	$writer->write( $footer );
-    }
-    
-    $writer->close();
 }
 
 

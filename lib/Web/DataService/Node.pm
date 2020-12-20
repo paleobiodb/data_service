@@ -742,7 +742,7 @@ sub _lookup_node_attr {
     
     my $inherited_value;
     
-    if ( ! exists $ds->{node_attrs}{$path}{$key} || $ds->{path_compose}{$path}{$key} )
+    if ( ! exists $ds->{node_attrs}{$path}{$key} || $NODE_DEF{$key} eq 'hook' || $ds->{path_compose}{$path}{$key} )
     {
 	my $parent = $ds->path_parent($path);
 	

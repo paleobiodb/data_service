@@ -63,6 +63,7 @@ sub new_request {
     $attrs->{outer} = $outer;
     $attrs->{ds} = $ds;
     $attrs->{http_method} = $Web::DataService::FOUNDATION->get_http_method($outer) || 'UNKNOWN';
+    $attrs->{datainfo_url} = $Web::DataService::FOUNDATION->get_request_url($outer);
     
     my $request = Web::DataService::Request->new($attrs);
     
@@ -757,20 +758,36 @@ sub _call_hooks {
     
     my $hook_list = $request->{hook_enabled}{$hook_name} || return;
     
-    # Then call each hook in turn. The return value will be the return value of the hook last
-    # called, which will be the one that is defined furthest down in the hierarchy.
-    
-    foreach my $hook ( @$hook_list )
+    # If a list of hooks is defined, then call each hook in turn. The return value will be the return
+    # value of the hook last called, which will be the one that is defined furthest down in the
+    # hierarchy.
+
+    if ( ref $hook_list eq 'ARRAY' )
     {
-	if ( ref $hook eq 'CODE' )
+	foreach my $hook ( @$hook_list )
 	{
-	    &$hook($request, @args);
+	    if ( ref $hook eq 'CODE' )
+	    {
+		&$hook($request, @args);
+	    }
+	    
+	    elsif ( defined $hook )
+	    {
+		$request->$hook(@args);
+	    }
 	}
-	
-	elsif ( defined $hook )
-	{
-	    $request->$hook(@args);
-	}
+    }
+
+    # Otherwise, if we have one hook then just call it.
+    
+    elsif ( ref $hook_list eq 'CODE' )
+    {
+	&$hook_list($request, @args);
+    }
+
+    elsif ( defined $hook_list )
+    {
+	$request->$hook_list(@args);
     }
 }
 

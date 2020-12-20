@@ -78,6 +78,8 @@ has save_filename => ( is => 'rw' );
 
 has do_not_stream => ( is => 'rw' );
 
+has datainfo_url => ( is => 'rw' );
+
 # The following attributes will be determined automatically by
 # Web::DataService and should not be overridden.
 
@@ -401,7 +403,7 @@ sub datainfo {
     
     my $doc_url = $self->generate_url({ node => $node_path });
     $doc_url =~ s{^/}{};
-    my $data_url = $self->request_url;
+    my $data_url = $self->datainfo_url;
     $data_url =~ s{^/}{};
     
     $info->{documentation_url} = $base_url . $doc_url if $ds->{feature}{documentation};
@@ -882,7 +884,14 @@ Returns (or sets) the HTTP method associated with the request.
 
 =head3 request_url
 
-Returns the complete request URL.
+Returns the complete original request URL.
+
+=head3 datainfo_url
+
+This attribute is initialized from request_url, but can be modified by the application
+code. Its value is included in the datainfo block as the "request_url". This allows the
+application to remove or alter parameters that are irrelevant to selecting the returned
+dataset.
 
 =head3 base_url
 
