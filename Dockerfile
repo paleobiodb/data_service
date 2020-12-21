@@ -12,9 +12,9 @@
 
 FROM paleomacro_pbapi_preload
 
-EXPOSE 3000 3999
+EXPOSE 3000 3003 3999
 
-WORKDIR /var/paleomacro/pbdb-new/
+WORKDIR /var/paleomacro/pbapi/
 
 # To build this container with the proper timezone setting, use --build-arg TZ=xxx
 # where xxx specifies the timezone in which the server is located, for example
@@ -27,7 +27,7 @@ RUN echo $TZ > /etc/timezone && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata
 
-COPY pbdb-new /var/paleomacro/pbdb-new/
+COPY pbapi /var/paleomacro/pbapi/
 
 CMD ["perl", "bin/data_service.pl"]
 
