@@ -1242,6 +1242,18 @@ sub add_result {
 }
 
 
+# file_result ( filename, attributes... )
+#
+# Send the specified file.
+
+sub file_result {
+    
+    my ($request, $filename, %attrs) = @_;
+    
+    return $Web::DataService::FOUNDATION->send_file($request->outer, $filename, %attrs);
+}
+
+
 # clear_result
 # 
 # Clear all results that have been specified for this operation.

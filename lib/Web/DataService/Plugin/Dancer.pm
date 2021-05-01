@@ -317,14 +317,38 @@ sub file_exists {
 }
 
 
-# send_file ( outer, filename )
+# send_file ( outer, filename, attributes... )
 # 
-# Send as the response the contents of the specified file.  For Dancer, the path
-# is always evaluated relative to the 'public' directory.
+# Send as the response the contents of the specified file. Attributes can include:
+# 
+# system_path		Unless true, the filename is evaluated with respect to the
+#                       public directory.
+# 
+# streaming		If true, the file is sent using PSGI streaming instead of
+#			being read into memory in its entirety.
+# 
+# content_type		Overrides the content type. This is otherwise set by
+#                       the filename.
+# 
+# content_disposition	Overrides the content disposition.
 
 sub send_file {
     
-    return Dancer::send_file($_[2]);
+    my ($class, $outer, $filename, %attrs) = @_;
+    
+    if ( $attrs{content_disposition} )
+    {
+	Dancer::header 'Content-Disposition', $attrs{content_disposition};
+	delete $attrs{content_disposition};
+    }
+
+    if ( $attrs{content_encoding} )
+    {
+	Dancer::header 'Content-Encoding', $attrs{content_encoding};
+	delete $attrs{content_encoding};
+    }
+    
+    return Dancer::send_file($filename, %attrs);
 }
 
 

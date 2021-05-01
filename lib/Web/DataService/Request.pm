@@ -279,9 +279,11 @@ sub _match_node {
     $self->{is_node_path} //= 1;
     
     # We save all of the characters removed from the raw path as $rest_path,
-    # so that (for example) we can send a requested file.
+    # so that (for example) we can send a requested file. Remove any sequence
+    # of / from the beginning of $rest_path.
     
     $self->{rest_path} = substr($raw_path, length($node_path));
+    $self->{rest_path} =~ s/^\/+//;
     
     # If we got an empty path, turn it into the root node path '/'.
     
@@ -408,6 +410,14 @@ sub datainfo {
     
     $info->{documentation_url} = $base_url . $doc_url if $ds->{feature}{documentation};
     $info->{data_url} = $base_url . $data_url;
+    $info->{title} = $self->{title} if $self->{title};
+    
+    # If this request is being archived, note that in the title.
+    
+    if ( $self->{archive_info}{archive_no} )
+    {
+	$info->{title} .= " (Data Archive)";
+    }
     
     return $info;
 }

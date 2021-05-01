@@ -1219,6 +1219,10 @@ sub error_result {
 	@errors = "A server error occurred.  Please contact the server administrator.";
     }
     
+    # Cancel any content encoding that had been set.
+
+    $Web::DataService::FOUNDATION->set_header($outer, 'Content-Encoding' => '');
+    
     # If we know the format and if the corresponding format class knows how to
     # generate error messages, then take advantage of that functionality.
     

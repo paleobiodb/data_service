@@ -10,7 +10,6 @@ use strict;
 package Web::DataService::Plugin::JSON;
 
 use JSON;
-use Encode;
 use Scalar::Util qw(reftype);
 use Carp qw(croak);
 
@@ -82,11 +81,9 @@ sub emit_header {
 		my $value = $request->extra_datainfo($key);
 		next unless defined $value;
 		
-		$output .= $sep; $sep = ",\n";
-		
 		if ( ref $value && reftype $value eq 'HASH' )
 		{
-		    # not implemented yet
+		    $value = json_object($value);
 		}
 
 		elsif ( ref $value && reftype $value eq 'ARRAY' )
@@ -332,6 +329,13 @@ sub emit_object {
 	    }
 	}
 	
+	# Otherwise, if the value is a hashref then we output it as a regular JSON object.
+	
+	elsif ( ref $value && reftype $value eq 'HASH' )
+	{
+	    $value = json_object($value);
+	}
+	
 	# Otherwise, if the value is an arrayref then we generate output for
 	# an array.  If the field is marked "show_as_list", then do this even
 	# if there is only one value.
@@ -398,10 +402,10 @@ sub emit_array {
     # Go through the elements of the specified arrayref, applying the
     # specified rule to each one.
     
-    my $value = '';
-    
     foreach my $elt ( @$arrayref )
     {
+	my $value = '';
+	
 	if ( reftype $elt && reftype $elt eq 'ARRAY' )
 	{
 	    $value = $class->emit_array($request, $elt, $field_list);
@@ -409,8 +413,15 @@ sub emit_array {
 	
 	elsif ( reftype $elt && reftype $elt eq 'HASH' )
 	{
-	    next unless $field_list;
-	    $value = $class->emit_object($request, $elt, $field_list);
+	    if ( $field_list )
+	    {
+		$value = $class->emit_object($request, $elt, $field_list);
+	    }
+
+	    else
+	    {
+		$value = json_object($elt);
+	    }
 	}
 	
 	elsif ( ref $elt )
@@ -433,6 +444,25 @@ sub emit_array {
     $outrec .= ']';
     
     return $outrec;
+}
+
+
+# json_object ( hashref )
+#
+# Return a string representing a generic hash as a JSON object. If an exception occurs during the
+# processing, return an indicative value.
+
+sub json_object {
+
+    my ($hashref) = @_;
+    
+    my $encoded;
+    
+    eval {
+	$encoded = to_json($hashref);
+    };
+    
+    return $encoded // "# JSON encoding error #";
 }
 
 
@@ -504,7 +534,7 @@ sub json_clean {
     
     # WARNING: this decoding needs to be checked. $$$
     
-    $string =~ s/&\#(\d)+;/decode_utf8(pack("U", $1))/eg;
+    $string =~ s/&\#(\d)+;/chr($1)/eg;
     
     # Next, escape all backslashes, double-quotes and whitespace control characters
     
