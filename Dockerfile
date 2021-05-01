@@ -27,9 +27,9 @@ RUN echo $TZ > /etc/timezone && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata
 
-COPY pbapi /var/paleomacro/pbapi/
-
 CMD ["perl", "bin/data_service.pl"]
+
+COPY pbapi /var/paleomacro/pbapi/
 
 LABEL maintainer="mmcclenn@geology.wisc.edu"
 LABEL version="1.0"
