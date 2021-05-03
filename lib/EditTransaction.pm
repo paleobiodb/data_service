@@ -1637,20 +1637,22 @@ sub update_record {
 	    }
 	    
 	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
-	    # record is actually being unlocked by this operation, or the transaction allows
-	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
-	    # that the user does have permission to update the record if the lock is disregarded,
-	    # and it implies 'admin' permission. So we proceed as if we had 'admin' permission,
-	    # but add a caution unless the abovementioned conditions are met.
+	    # transaction allows 'LOCKED'. In that case, we can proceed. A permission
+	    # of 'unlock' means that the user does have permission to update the record if the
+	    # lock is disregarded.
 	    
-	    elsif ( $permission =~ /unlock/ )
+	    elsif ( $permission =~ /,unlock/ )
 	    {
-		unless ( $edt->allows('LOCKED') )
+		if ( $edt->allows('LOCKED') )
+		{
+		    $permission =~ s/,unlock//;
+		    $action->_set_permission($permission);
+		}
+		
+		else
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
-		
-		$action->_set_permission('admin');
 	    }
 	    
 	    # If the user does not have permission to edit the record, add an E_PERM condition. 
@@ -1834,13 +1836,19 @@ sub replace_record {
 	    }
 	    
 	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
-	    # record is actually being unlocked by this operation, or the transaction allows
-	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
-	    # that the user does have permission to update the record if the lock is disregarded.
+	    # transaction allows 'LOCKED'. In this case, we can proceed. A permission of 'unlock'
+	    # means that the user does have permission to update the record if the lock is
+	    # disregarded.
 	    
-	    elsif ( $permission =~ /unlock/ )
+	    elsif ( $permission =~ /,unlock/ )
 	    {
-		unless ( $edt->allows('LOCKED') )
+		if ( $edt->allows('LOCKED') )
+		{
+		    $permission =~ s/,unlock//;
+		    $action->_set_permission($permission);
+		}
+		
+		else
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
@@ -2229,20 +2237,22 @@ sub other_action {
 	    }
 	    
 	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
-	    # record is actually being unlocked by this operation, or the transaction allows
-	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
-	    # that the user does have permission to update the record if the lock is disregarded,
-	    # and it implies 'admin' permission. So we proceed as if we had 'admin' permission,
-	    # but add a caution unless the abovementioned conditions are met.
+	    # transaction allows 'LOCKED'. In that case, we can proceed. A permission of 'unlock'
+	    # means that the user does have permission to update the record if the lock is
+	    # disregarded.
 	    
-	    elsif ( $permission eq 'unlock' )
+	    elsif ( $permission =~ /,unlock/ )
 	    {
-		unless ( $edt->allows('LOCKED') )
+		if ( $edt->allows('LOCKED') )
+		{
+		    $permission =~ s/,unlock//;
+		    $action->_set_permission($permission);
+		}
+
+		else
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
-		
-		$action->_set_permission('admin');
 	    }
 	    
 	    # If the user does not have permission to edit the record, add an E_PERM condition. 

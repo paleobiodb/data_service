@@ -22,7 +22,7 @@ use Carp qw(carp croak);
 use Scalar::Util qw(weaken blessed);
 
 
-our (%PERMISSION_NAME) = ( view => 1, post => 1, edit => 1, delete => 1, insert_key => 1 );
+our (%PERMISSION_NAME) = ( view => 1, post => 1, edit => 1, delete => 1, insert_key => 1, admin => 1 );
 
 
 # new ( dbh, session_id, table_name, options )
@@ -447,14 +447,15 @@ sub check_table_permission {
     my $tp = $perms->get_table_permissions($table_specifier);
     
     # If the user has the superuser privilege, or the 'admin' permission on this table, then they
-    # have any requested permission.
+    # have any requested permission. We return 'view' if that was the requested permission,
+    # 'admin' otherwise.
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
 	$perms->debug_line( "    Permission for $table_specifier : '$permission' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
 	
-	return 'admin';
+	return $permission eq 'view' ? 'view' : 'admin';
     }
     
     # If the user has the permission 'none', then they do not have any permission on this
@@ -541,7 +542,7 @@ sub check_table_permission {
 }
 
 
-# check_record_permission ( table_name, permission, key_expr, record )
+# Check_record_permission ( table_name, permission, key_expr, record )
 # 
 # Check whether the current user has the specified permission on the specified table name, for the
 # record indicated by $record. This last parameter should either be a record hash containing the
@@ -603,14 +604,17 @@ sub check_record_permission {
     }
     
     # If the table permission is 'admin' or if the user has superuser privileges, then they have
-    # all privileges on this record including 'delete'. Return 'admin' to indicate that they have
-    # the requested permission and also administrative permission. But if the record is locked,
-    # then return 'unlock' instead. The operation method should, in this case, allow the user to
-    # modify or delete the record only if they are also unlocking it.
+    # all privileges on this record including 'delete'. Return 'view' if that is the requested
+    # permission, otherwise return 'admin' to indicate that they have the requested permission and
+    # also administrative permission. But if the record is locked, then return 'unlock'
+    # instead. The operation method should, in this case, allow the user to modify or delete the
+    # record only if they are also unlocking it.
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
-	my $p = ($record->{admin_lock} || $record->{owner_lock}) ? 'admin,unlock' : 'admin';
+	my $p = $permission eq 'view' ? 'view'
+	    : ($record->{admin_lock} || $record->{owner_lock}) ? "admin,unlock"
+	    : "admin";
 	
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$p' from " . 
 			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
@@ -648,12 +652,14 @@ sub check_record_permission {
 	return 'locked';
     }
     
-    # If the requested permission is 'edit' or 'delete' and the user has 'modify' permission on
-    # the table as a whole, then they can edit or delete this particular record regardless of who
-    # owns it. Otherwise, they only have permission to edit or delete records that they entered or
-    # authorized. But a locked record can only be unlocked by the owner or by an administrator.
+    # If the requested permission is 'view', 'edit' or 'delete' and the user has 'modify'
+    # permission on the table as a whole, then they can edit or delete this particular record
+    # regardless of who owns it. Otherwise, they only have permission to edit or delete records
+    # that they entered or authorized. But a locked record can only be unlocked by the owner or by
+    # an administrator.
     
-    if ( $tp->{modify} && ( $permission eq 'edit' || $permission eq 'delete' ) && ! $record->{owner_lock} )
+    if ( $tp->{modify} && $permission =~ /^edit$|^delete$|^view$/ &&
+	 ( $permission eq 'view' || ! $record->{owner_lock} ) )
     {
 	my $diag = $perms->{auth_diag}{$table_specifier} || 'DEFAULT';
 	
@@ -669,7 +675,7 @@ sub check_record_permission {
 	 $record->{enterer_no} eq $perms->{enterer_no} )
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from enterer_no\n" );
-	
+	return 'view' if $permission eq 'view';
 	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
@@ -678,6 +684,7 @@ sub check_record_permission {
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from authorizer_no\n" );
 	
+	return 'view' if $permission eq 'view';
 	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
@@ -686,6 +693,7 @@ sub check_record_permission {
     {
 	$perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from enterer_id\n" );
 	
+	return 'view' if $permission eq 'view';
 	return $record->{owner_lock} ? "$permission,unlock" : $permission;
     }
     
@@ -700,6 +708,7 @@ sub check_record_permission {
 	{
 	    $perms->debug_line( "    Permission for $table_specifier ($key_expr) : '$permission' from BY_AUTHORIZER\n" );
 	    
+	    return 'view' if $permission eq 'view';
 	    return $record->{owner_lock} ? "$permission,unlock" : $permission;
 	}
     }
