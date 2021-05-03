@@ -84,6 +84,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(ARCHIVES => 'data_archives');
     set_table_property('ARCHIVES', PRIMARY_KEY => 'archive_no');
     set_table_property('ARCHIVES', PRIMARY_FIELD => 'archive_id');
+    set_table_property('ARCHIVES', BY_AUTHORIZER => 1);
     
     set_table_name(APP_STATE => 'navigator_states');
     set_table_property('APP_STATE', PRIMARY_KEY => 'id');

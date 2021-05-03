@@ -325,6 +325,25 @@ sub initialize {
 	    "matching record exists and you have permission to delete it.",
 	    "All other column values are ignored.");
     
+    $ds->define_ruleset('1.2:common:archive_params' =>
+	{ param => 'archive_title', valid => ANY_VALUE },
+	    "A value for this parameter directs that an archive be created",
+	    "with the specified title unless one already exists.",
+	{ param => 'archive_replace', valid => BOOLEAN_VALUE },
+	    "A true value for this parameter directs that if there is an",
+	    "existing archive with the specified title then its contents",
+	    "should be replaced by the output of the current request.",
+	    "Without this parameter, the error code E_EXISTING will be returned",
+            "if the specified title matches an existing record. If the existing",
+	    "record has a DOI, the error E_IMMUTABLE will be returned and this",
+	    "cannot be overridden.",
+	{ param => 'archive_authors', valid => ANY_VALUE },
+	    "The value of this parameter, if any, is put into the 'authors'",
+	    "field of the created or updated archive record.",
+	{ param => 'archive_desc', valid => ANY_VALUE },
+	    "The value of this parameter, if any, is put into the 'description'",
+	    "field of the created or updated archive record.");
+    
     # $ds->define_block('1.2:common:entname_guest' =>
     # 	{ select => ['$cd.enterer_id', 'wu.real_name'], tables => 'wu' },
     # 	{ set => '*', code => \&process_entnames },

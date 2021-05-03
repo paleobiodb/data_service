@@ -1,0 +1,11 @@
+=head2 DESCRIPTION
+
+Database members can archive data downloads, preserving them on the server so that they or others can later retrieve the exact same result set. This facility can be used to document the research process. Additionally, you can request that a DOI be generated for significant archives so that they can be quoted in research papers.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>
+
+The following operations provide for entry, editing, and deletion of these records:
+
+<% NODELIST(opt_usage=1, opt_list='entry/archives') %>

@@ -1,0 +1,23 @@
+
+<% DESCRIPTION_SECTION(opt_force=1) %>
+
+<% USAGE_SECTION %>
+
+<% PARAMETER_SECTION(opt_force=1) %>
+
+<% METHOD_SECTION(opt_force=1) %>
+
+=head2 RESPONSE
+
+The response to this operation is the content of the specified data archive.
+Data archive content always includes full metadata, including a documentation URL
+that describes the response format for whatever operation was used to generate
+the archived data.
+
+=head2 FORMAT
+
+The data format and vocabulary were set by the person who created the archive.
+
+=head2 VOCAB
+
+The data format and vocabulary were set by the person who created the archive.

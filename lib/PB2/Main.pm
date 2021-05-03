@@ -151,6 +151,7 @@ use PB2::MainEntry;
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
 			default_save_filename => 'pbdb_data',
+			before_operation_hook => \&PB2::ArchiveEntry::check_archive,
 			title => 'Documentation' });
     
     # If a default_limit value was defined in the configuration file, get that
@@ -1205,7 +1206,16 @@ use PB2::MainEntry;
 	"This operation returns information about a single data archive,",
 	"specified by its identifier.");
     
+    $ds2->define_node({ path => 'archives/retrieve',
+			title => 'Content of a data archive',
+			place => 1,
+			method => 'retrieve_archive' },
+	"This operation returns the content of a data archive,",
+	"specified by its identifier. The content, format, and vocabulary of",
+	"each archive is set when the archive is created.");
+    
     $ds2->define_node({ path => 'archives/list',
+			arg => 'all',
 			title => 'List of data archives',
 			place => 2,
 			output => '1.2:archives:basic',
@@ -1215,6 +1225,17 @@ use PB2::MainEntry;
 	"This operation returns information about lists of data archives,",
 	"selected according to the request parameters.");
     
+    $ds2->define_node({ path => 'archives/public',
+			arg => 'public',
+			title => 'List of public data archives',
+			place => 3,
+			output => '1.2:archives:basic',
+			optional_output => '1.2:archives:optional_output',
+			allow_format => '+larkin',
+			method => 'list_archives'},
+	"This operation returns information about public data archives,",
+	"selected according to the request parameters.");
+		      
     # The following paths are used for miscellaneous documentation
     
     $ds2->define_node({ path => 'general',

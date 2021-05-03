@@ -161,13 +161,20 @@ any qr{.*} => sub {
     # request for the object whose identifier corresponds to the digit string. To do this, we
     # rewrite the request as if it had been .../single.<format>?id=<digits>
     
-    if ( $r->path =~ qr{ ^ ([\S]+) / ([\d]+) [.] (\w+) $ }xs )
+    if ( $r->path =~ qr{ ^ ([\S]+) / (\d+) [.] (\w+) $ }xs )
     {
-	my $newpath = "$1/single.$3";
-	my $id = $2;
-	
-	params('query')->{id} = $id;
-	forward($newpath);
+	params('query')->{id} = $2;
+	forward("$1/single.$3");
+    }
+    
+    # The archives/retrieve method takes its format from the content of the stored archive. So any
+    # format suffix will be ignored. If none was given in the request, add a '.txt' suffix so that
+    # we will get data rather than documentation.
+    
+    elsif ( $r->path =~ qr{ ^ ([\S]+/archives/retrieve) / (\d+) $ }xs )
+    {
+	params('query')->{id} = $2;
+	forward("$1.txt");
     }
     
     # Now pass the request off to Web::DataService to handle according to the configuration
@@ -183,6 +190,11 @@ any qr{.*} => sub {
 
 hook on_handler_exception => sub {
     
+    var(error => $_[0]);
+};
+
+hook on_route_exception => sub {
+
     var(error => $_[0]);
 };
 
