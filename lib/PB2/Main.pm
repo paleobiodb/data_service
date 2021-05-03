@@ -68,10 +68,14 @@ use PB2::MainEntry;
 	    "the size of the response message.  This is the default for L<JSON format|node:formats/json>",
 	    "responses. Some of the field values are similarly abbreviated, while others are conveyed",
 	    "in their entirety. For details, see the documentation for the individual response fields.",
+	{ name => 'bibjson', title => 'BibJSON field names' },
+	    "The BibJSON vocabulary uses the field names and value formats defined for ",
+	    "L<BibTeX|https://en.wikipedia.org/wiki/BibTeX#Bibliographic_information_file>, ",
+	    "which is the vocabulary used for BibJSON.",
 	{ name => 'dwc', title => 'Darwin Core', disabled => 1 },
-	    "The Darwin Core vocabulary follows the L<Darwin Core standard|http://www.tdwg.org/standards/450/>",
-	    "set by the L<TDWG|http://www.tdwg.org/>.  This includes both the field names and field values.",
-	    "Because the Darwin Core standard is XML-based, it is very strict.  Many",
+	    "The Darwin Core vocabulary follows the L<Darwin Core standard|https://github.com/tdwg/dwc>",
+	    "set by the L<TDWG|https://www.tdwg.org/>.  This includes both the field names and field",
+	    "values. Because the Darwin Core standard is XML-based, it is very strict.  Many",
 	    "but not all of the fields can be expressed in this vocabulary; those that",
 	    "cannot are unavoidably left out of the response.");
     
@@ -227,7 +231,7 @@ use PB2::MainEntry;
 			before_operation_hook => 'prune_field_list',
 			output => '1.2:occs:basic',
 			optional_output => '1.2:occs:basic_map',
-			title => 'Lists of fossil occurrences' },
+			title => 'List of fossil occurrences' },
 	"This operation returns information about multiple occurrences, selected according to the parameters you provide.",
 	"You can select occurrences by taxonomy, geography, age, environment, and many other criteria.",
 	"If you select the C<csv> or C<tsv> output format, the output you get will be very similar to the Classic",
@@ -435,7 +439,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'colls/list',
 			place => 2,
-			title => 'Lists of fossil collections',
+			title => 'List of fossil collections',
 			usage => [ "colls/list.txt?base_name=Cetacea&interval=Miocene&show=ref,loc,stratext" ],
 			before_operation_hook => 'prune_field_list',
 			method => 'list_colls',
@@ -503,7 +507,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'strata/list',
 			place => 1,
-			title => 'Lists of geological strata',
+			title => 'List of geological strata',
 			usage => [ "strata/list.txt?lngmin=0&lngmax=15&latmin=0&latmax=15&rank=formation" ],
 			method => 'list_coll_strata',
 			output => '1.2:strata:basic',
@@ -546,7 +550,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'specs/list',
 			place => 2,
-			title => 'Lists of specimens',
+			title => 'List of specimens',
 			usage => [ "specs/list.txt?base_name=stegosauria" ],
 			method => 'list_specimens',
 			output => '1.2:specs:basic',
@@ -630,7 +634,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'taxa/list',
 			place => 2,
-			title => 'Lists of taxa',
+			title => 'List of taxa',
 			usage => [ "taxa/list.txt?id=69296&rel=all_children&show=ref",
 				   "taxa/list.json?name=Dascillidae&rel=all_parents" ],
 			method => 'list_taxa',
@@ -775,7 +779,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'opinions/list',
 			place => 2,
-			title =>'Lists of opinions',
+			title =>'List of opinions',
 			usage => [ "opinions/list.json?created_since=7d",
 				   "opinions/list.json?author=Osborn" ],
 			method => 'list_opinions',
@@ -814,7 +818,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'intervals/list',
 			place => 2,
-			title => 'Lists of geological time intervals',
+			title => 'List of geological time intervals',
 			usage => "intervals/list.txt?scale=1",
 			method => 'list' },
 	"This operation returns information about multiple intervals, selected according to",
@@ -843,7 +847,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'scales/list',
 			place => 2,
-			title => 'Lists of geological time scales',
+			title => 'List of geological time scales',
 			usage => "scales/list.json",
 			method => 'list_scales' },
 	"This operation returns information about multiple time scales.  To get a list of all of the available",
@@ -898,6 +902,7 @@ use PB2::MainEntry;
 			title => 'Bibliographic references',
 			role => 'PB2::ReferenceData',
 			allow_format => '+ris',
+			allow_vocab => '+bibjson',
 			default_limit => $ref_limit,
 			output => '1.2:refs:basic',
 		        optional_output => '1.2:refs:output_map' },
@@ -915,7 +920,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'refs/list',
 			place => 2,
-			title => 'Lists of bibliographic references',
+			title => 'List of bibliographic references',
 			usage => "refs/list.txt?ref_author=Sepkoski",
 			method => 'list' },
 	"This operation returns information about lists of bibliographic references,",
@@ -981,7 +986,7 @@ use PB2::MainEntry;
 	"its unique identifier in the database.");
     
     $ds2->define_node({ path => 'timescales/list',
-			title => 'Lists of geological timescales',
+			title => 'List of geological timescales',
 			place => 1,
 			usage => [ 'timescales/list.json?all_records', 'timescales/list.json?timescale_match=gradstein' ],
 			method => 'list_records',
@@ -992,7 +997,7 @@ use PB2::MainEntry;
 	"according to the query parameters.");
     
     $ds2->define_node({ path => 'timescales/bounds',
-			title => 'Lists of geological time interval bounds',
+			title => 'List of geological time interval bounds',
 			usage => [ 'bounds/list.json?timescale_id=1', 'bounds/list.json?interval_name=cretaceous' ],
 			method => 'list_records',
 			arg => 'bounds',
@@ -1027,7 +1032,7 @@ use PB2::MainEntry;
 		      place => 3 });
     
     $ds2->define_node({ path => 'tsi/list',
-			title => 'Lists of geological time intervals',
+			title => 'List of geological time intervals',
 			usage => [ 'intervals2/list.json?timescale_id=5', 'intervals2/list.json?interval_name=cretaceous',
 				   'intervals2/list.json?interval_name=cretaceous&absolute' ],
 			method => 'list_records',
@@ -1060,7 +1065,7 @@ use PB2::MainEntry;
 	"by its unique identifier.");
     
     $ds2->define_node({ path => 'places/list',
-			title => 'Lists of geographic places',
+			title => 'List of geographic places',
 			place => 2,
 			method => 'list_places',
 			output => '1.2:places:basic' },
@@ -1084,16 +1089,16 @@ use PB2::MainEntry;
     			method => 'get_resource' },
     	"This operation returns information about a single educational resource record",
     	"specified by identifier.");
-
+    
     $ds2->define_node({ path => 'eduresources/list',
-    			title => "Lists of educational resources",
+    			title => "List of educational resources",
     			place => 2,
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
     			method => 'list_resources' },
     	"This operation returns information about a list of educational resource",
     	"records, selected according to the query parameters.");
-
+    
     $ds2->define_node({ path => 'eduresources/active',
     			title => "Active educational resources",
     			place => 3,
@@ -1171,7 +1176,7 @@ use PB2::MainEntry;
 	"specified by its identifier.");
     
     $ds2->define_node({ path => 'pubs/list',
-			title => 'Lists of research publications',
+			title => 'List of research publications',
 			place => 2,
 			output => '1.2:pubs:basic',
 			optional_output => '1.2:pubs:optional_output',
@@ -1198,10 +1203,10 @@ use PB2::MainEntry;
 			allow_format => '+larkin',
 			method => 'get_archive' },
 	"This operation returns information about a single data archive,",
-		      "specified by its identifier");
+	"specified by its identifier.");
     
     $ds2->define_node({ path => 'archives/list',
-			title => 'Lists of data archives',
+			title => 'List of data archives',
 			place => 2,
 			output => '1.2:archives:basic',
 			optional_output => '1.2:archives:optional_output',

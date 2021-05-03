@@ -1106,9 +1106,11 @@ sub strict_check {
 sub extid_check {
     
     my ($request) = @_;
+
+    my $default_extids = $request->output_vocab =~ /^com$|^bibjson$/;
     
     if ( $request->clean_param('extids') || ( ! $request->param_given('extids') &&
-					      $request->output_vocab eq 'com' ) )
+					      $default_extids ) )
     {
 	$request->{block_hash}{extids} = 1;
 	$request->delete_output_field('record_type');

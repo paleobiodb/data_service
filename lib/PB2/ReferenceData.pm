@@ -88,86 +88,118 @@ sub initialize {
 	tables => ['r'] },
       { set => 'formatted', from => '*', code => \&format_reference, if_block => 'formatted,both' },
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
+      { set => '*', code => \&format_bibjson, if_vocab => 'bibjson' },
       { set => '*', code => \&process_acronyms, not_block => 'formatted' },
-      { output => 'reference_no', com_name => 'oid' }, 
+      { output => 'reference_no', com_name => 'oid', bibjson_name => 'id' }, 
 	  "Numeric identifier for this document reference in the database",
       { output => 'record_type', com_name => 'typ', value => $IDP{REF}, not_block => 'extids' },
 	  "The type of this object: C<$IDP{REF}> for a document reference.",
-      { output => 'ref_type', com_name => 'rtp' },
+      { output => 'r_pubtype', com_name => 'pty', pbdb_name => 'publication_type', 
+	bibjson_name => 'type',	not_block => 'formatted' },
+	  "The type of publication this entry represents. Examples include: article, book,",
+	  "unpublished, etc.",
+      { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', bibjson_name => 'title',
+	not_block => 'formatted' },
+	  "The title of the document",
+      { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', bibjson_name => 'year',
+	not_block => 'formatted', data_type => 'str' },
+	  "The year in which the document was published",
+      { output => 'r_authors', bibjson_name => 'author', if_vocab => 'bibjson' },
+	  "This field appears in responses generated with the BibJSON vocabulary,",
+	  "and the other author fields are suppressed.",
+      { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', 
+	not_block => 'formatted', not_vocab => 'bibjson' },
+	  "First initial of the first author",
+      { output => 'r_al1', com_name => 'al1', pbdb_name => 'author1last', 
+	not_block => 'formatted', not_vocab => 'bibjson' },
+	  "Last name of the second author",
+      { output => 'r_ai2', com_name => 'ai2', pbdb_name => 'author2init', 
+	not_block => 'formatted', not_vocab => 'bibjson' },
+	  "First initial of the second author",
+      { output => 'r_al2', com_name => 'al2', pbdb_name => 'author2last', 
+	not_block => 'formatted', not_vocab => 'bibjson' },
+	  "Last name of the second author",
+      { output => 'r_oa', com_name => 'oau', pbdb_name => 'otherauthors', 
+	not_block => 'formatted', not_vocab => 'bibjson' },
+	  "The names of the remaining authors",
+      { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', bibjson_name => 'editor',
+	not_block => 'formatted' },
+	  "Names of the editors, if any",
+      { output => 'r_refabbr', com_name => 'abr', pbdb_name => 'refabbr', not_block => 'formatted' },
+	  "An abbreviation that represents the title, if any. In the case of institutional",
+	  "collections, this field holds the collection abbreviation.",
+      { output => 'r_pubtitle', com_name => 'pbt', pbdb_name => 'pubtitle', not_block => 'formatted' },
+	  "The title of the publication in which the document appears",
+      { output => 'r_pubabbr', com_name => 'abp', pbdb_name => 'pubabbr', not_block => 'formatted' },
+	  "An abbreviation that represents the publication, if any. In the case of institutional",
+	  "collections, this field holds the institution abbreviation.",
+      { output => 'r_journal', bibjson_name => 'journal' },
+	  "This field appears in BibJSON responses in records of type 'article'.",
+      { output => 'r_booktitle', bibjson_name => 'booktitle' },
+	  "This field appears in BibJSON responses in records of type 'incollection'.",
+      { output => 'r_school', bibjson_name => 'school' },
+	  "This field appears in BibJSON responses in records of type 'mastersthesis' and 'phdthesis'.",
+      { output => 'r_publisher', com_name => 'pbl', pbdb_name => 'publisher', 
+	bibjson_name => 'publisher', not_block => 'formatted' },
+	  "Name of the publisher, if this data has been entered",
+      { output => 'r_pubcity', com_name => 'pbc', pbdb_name => 'pubcity', bibjson_name => 'address',
+	not_block => 'formatted' },
+	  "City of publication, if this data has been entered",
+      { output => 'r_pubvol', com_name => 'vol', pbdb_name => 'pubvol', bibjson_name => 'volume',
+	not_block => 'formatted', data_type => 'str' },
+	  "The volume number, if any",
+      { output => 'r_pubno', com_name => 'vno', pbdb_name => 'pubno', bibjson_name => 'number',
+	not_block => 'formatted', data_type => 'str' },
+	  "The series number within the volume, if any",
+      { output => 'r_pages', bibjson_name => 'pages', if_vocab => 'bibjson' },
+	  "This field holds page numbers in responses generated with the BibJSON vocabulary,",
+	  "and the other page number fields are suppressed.", 
+      { output => 'r_fp', com_name => 'pgf', pbdb_name => 'firstpage', 
+	not_block => 'formatted', not_vocab => 'bibjson', data_type => 'str' },
+	  "First page number",
+      { output => 'r_lp', com_name => 'pgl', pbdb_name => 'lastpage', 
+	not_block => 'formatted', not_vocab => 'bibjson', data_type => 'str' },
+	  "Last page number",
+      { output => 'r_language', com_name => 'lan', pbdb_name => 'language', bibjson_name => 'language',
+	not_block => 'formatted' },
+	  "The language in which the document is written.",
+      { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi', bibjson_name => 'identifier' },
+	  "The DOI for this document, if known",
+      { output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', bibjson_name => '_comments',
+	if_block => 'comments' },
+	  "Additional comments about this reference, if any",
+      { output => 'ref_type', com_name => 'rtp', bibjson_name => '_reftype' },
 	  "The role(s) played by this reference in the database.  This field will only appear",
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
-      { output => 'n_reftaxa', pbdb_name => 'n_taxa', com_name => 'ntx', 
+      { output => 'n_reftaxa', pbdb_name => 'n_taxa', com_name => 'ntx', bibjson_name => '_n_taxa',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of distinct taxa associated with this reference",
-      { output => 'n_refauth', pbdb_name => 'n_auth', com_name => 'nau',
+      { output => 'n_refauth', pbdb_name => 'n_auth', com_name => 'nau', bibjson_name => '_n_auth',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of taxa for which this reference gives the authority for the current name variant",
-      { output => 'n_refvar', pbdb_name => 'n_var', com_name => 'nva', 
+      { output => 'n_refvar', pbdb_name => 'n_var', com_name => 'nva', bibjson_name => '_n_var',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of non-current name variants for which this reference gives the authority",
-      { output => 'n_refclass', pbdb_name => 'n_class', com_name => 'ncl', 
+      { output => 'n_refclass', pbdb_name => 'n_class', com_name => 'ncl', bibjson_name => '_n_class',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of classification opinions entered from this reference",
-      { output => 'n_refunclass', pbdb_name => 'n_unclass', com_name => 'nuc', 
+      { output => 'n_refunclass', pbdb_name => 'n_unclass', com_name => 'nuc', bibjson_name => '_n_unclass',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of opinions not selected for classification entered from this reference",
-      { output => 'n_refoccs', pbdb_name => 'n_occs', com_name => 'noc', 
+      { output => 'n_refoccs', pbdb_name => 'n_occs', com_name => 'noc', bibjson_name => '_n_occs',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of occurrences entered from this reference",
-      { output => 'n_refspecs', pbdb_name => 'n_specs', com_name => 'nsp', 
+      { output => 'n_refspecs', pbdb_name => 'n_specs', com_name => 'nsp', bibjson_name => '_n_specs',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of specimens entered from this reference",
-      { output => 'n_refcolls', pbdb_name => 'n_colls', com_name => 'nco', 
+      { output => 'n_refcolls', pbdb_name => 'n_colls', com_name => 'nco', bibjson_name => '_n_colls',
 	if_block => 'counts', data_type => 'pos' },
 	  "The number of collections for which this is the primary reference",
-      { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
+      { output => 'formatted', com_name => 'ref', bibjson_name => '_formatted',
+	if_block => 'formatted,both' },
 	  "Formatted reference",
-      { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', not_block => 'formatted' },
-	  "First initial of the first author",
-      { output => 'r_al1', com_name => 'al1', pbdb_name => 'author1last', not_block => 'formatted' },
-	  "Last name of the second author",
-      { output => 'r_ai2', com_name => 'ai2', pbdb_name => 'author2init', not_block => 'formatted' },
-	  "First initial of the second author",
-      { output => 'r_al2', com_name => 'al2', pbdb_name => 'author2last', not_block => 'formatted' },
-	  "Last name of the second author",
-      { output => 'r_oa', com_name => 'oau', pbdb_name => 'otherauthors', not_block => 'formatted' },
-	  "The names of the remaining authors",
-      { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', not_block => 'formatted', data_type => 'str' },
-	  "The year in which the document was published",
-      { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', not_block => 'formatted' },
-	  "The title of the document",
-      { output => 'r_refabbr', com_name => 'abr', pbdb_name => 'refabbr', not_block => 'formatted' },
-	  "An abbreviation that represents the title, if any. In the case of museum collections,",
-	  "this field holds the collection abbreviation.",
-      { output => 'r_pubtitle', com_name => 'pbt', pbdb_name => 'pubtitle', not_block => 'formatted' },
-	  "The title of the publication in which the document appears",
-      { output => 'r_pubabbr', com_name => 'abp', pbdb_name => 'pubabbr', not_block => 'formatted' },
-	  "An abbreviation that represents the publication, if any. In the case of museum collections,",
-	  "this field holds the institution abbreviation.",
-      { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', not_block => 'formatted' },
-	  "Names of the editors, if any",
-      { output => 'r_publisher', com_name => 'pbl', pbdb_name => 'publisher', not_block => 'formatted' },
-	  "Name of the publisher, if this data has been entered",
-      { output => 'r_pubcity', com_name => 'pbc', pbdb_name => 'pubcity', not_block => 'formatted' },
-	  "City of publication, if this data has been entered",
-      { output => 'r_pubvol', com_name => 'vol', pbdb_name => 'pubvol', not_block => 'formatted', data_type => 'str' },
-	  "The volume number, if any",
-      { output => 'r_pubno', com_name => 'vno', pbdb_name => 'pubno', not_block => 'formatted', data_type => 'str' },
-	  "The series number within the volume, if any",
-      { output => 'r_fp', com_name => 'pgf', pbdb_name => 'firstpage', not_block => 'formatted', data_type => 'str' },
-	  "First page number",
-      { output => 'r_lp', com_name => 'pgl', pbdb_name => 'lastpage', not_block => 'formatted', data_type => 'str' },
-	  "Last page number",
-      { output => 'r_pubtype', com_name => 'pty', pbdb_name => 'publication_type', not_block => 'formatted' },
-	  "Publication type",
-      { output => 'r_language', com_name => 'lan', pbdb_name => 'language', not_block => 'formatted' },
-	  "Language",
-      { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi' },
-	  "The DOI for this document, if known",
-      { output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', if_block => 'comments' },
-	  "Additional comments about this reference, if any",
       { set => '*', code => \&process_ref_ids });
     
     $ds->define_block('1.2:refs:counts' =>
@@ -266,7 +298,7 @@ sub initialize {
 	{ value => 'news article' },
 	{ value => 'Ph.D. thesis' },
 	{ value => 'M.S. thesis' },
-	{ value => 'museum collection' });
+	{ value => 'instcoll' });
     
     $ds->define_ruleset('1.2:refs:display' =>
 	{ optional => 'show', valid => '1.2:refs:output_map', list => ',' },
@@ -1197,7 +1229,7 @@ sub generate_join_list {
 
 # format_reference ( )
 # 
-# Generate a reference string for the given record.  This relies on the
+# Generate a string for the given reference.  This relies on the
 # fields "r_al1", "r_ai1", "r_al2", "r_ai2", "r_oa", "r_pubyr", "r_reftitle",
 # "r_pubtitle", "r_pubvol", "r_pubno".
 # 
@@ -1285,7 +1317,7 @@ sub format_reference {
     {
 	$longref .= $reftitle;
 
-	if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'museum collection' )
+	if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'instcoll' )
 	{
 	    $longref .= ', ';
 	}
@@ -1304,7 +1336,7 @@ sub format_reference {
     {
 	my $pubstring = $markup ? "<i>$pubtitle</i>" : $pubtitle;
 
-	unless ( $row->{r_pubtype} && $row->{r_pubtype} eq 'museum collection' )
+	unless ( $row->{r_pubtype} && $row->{r_pubtype} eq 'instcoll' )
 	{
 	    if ( $editors =~ /,| and / )
 	    {
@@ -1322,7 +1354,7 @@ sub format_reference {
     my $publisher = $row->{r_publisher};
     my $pubcity = $row->{r_pubcity};
 
-    if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'museum collection' )
+    if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'instcoll' )
     {
 	if ( $pubcity )
 	{
@@ -1476,30 +1508,30 @@ sub set_reference_type {
 
 # process_acronyms (request, record )
 #
-# This function is called for every record. For those of type 'museum collection', 'journal
+# This function is called for every record. For those of type 'instcoll', 'journal
 # article' or 'serial monograph', any parenthesized expression on the end of the pubtitle field is
-# split off into the pubabbr field. For 'museum collection' entries, any parenthesized expression
+# split off into the pubabbr field. For 'instcoll' entries, any parenthesized expression
 # on the end of the reftitle field is split off into refabbr.
 
 sub process_acronyms {
     
     my ($request, $record) = @_;
     
-    return unless $record->{r_pubtype} && $record->{r_pubtype} =~ /^museum|^journal|^serial/;
+    # return unless $record->{r_pubtype} && $record->{r_pubtype} =~ /^museum|^journal|^serial/;
     
-    if ( $record->{r_pubtype} =~ /^museum/ )
+    if ( $record->{r_pubtype} && $record->{r_pubtype} =~ /^instcoll|^museum/ )
     {
 	if ( $record->{r_reftitle} && $record->{r_reftitle} =~ /(.*?) \s* \( ( [^)]+ ) \) $/xs )
 	{
 	    $record->{r_reftitle} = $1;
 	    $record->{r_refabbr} = $2;
 	}
-    }
-
-    if ( $record->{r_pubtitle} && $record->{r_pubtitle} =~ /(.*?) \s* \( ( [^)]+ ) \) $/xs )
-    {
-	$record->{r_pubtitle} = $1;
-	$record->{r_pubabbr} = $2;
+	
+	if ( $record->{r_pubtitle} && $record->{r_pubtitle} =~ /(.*?) \s* \( ( [^)]+ ) \) $/xs )
+	{
+		$record->{r_pubtitle} = $1;
+		$record->{r_pubabbr} = $2;
+	}
     }
 }
 
@@ -1529,6 +1561,248 @@ sub adjust_ref_counts {
     elsif ( defined $record->{n_unclass} && ! defined $record->{n_opinions} )
     {
 	$record->{n_opinions} = $record->{n_class} + $record->{n_unclass};
+    }
+}
+
+
+# format_bibjson ( )
+#
+# Format the specified record for output in the BibJSON format.
+
+sub format_bibjson {
+    
+    my ($request, $record) = @_;
+    
+    # Construct a list of author names.
+    
+    my @author;
+    push @author, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
+    push @author, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
+    push @author, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
+    
+    $record->{r_authors} = \@author if @author;
+    
+    # Construct a list of editor names.
+    
+    my @editor = bibjson_name_list($record->{r_editors}) if $record->{r_editors};
+
+    $record->{r_editors} = @editor ? \@editor : undef;
+
+    # Reformat the DOI, if any.
+
+    $record->{r_doi} = bibjson_doi($record->{r_doi}) if $record->{r_doi};
+
+    # Reformat the page numbers, if any.
+
+    $record->{r_pages} = bibjson_pages($record->{r_fp}, $record->{r_lp});
+
+    # Map the publication type to one of the recognized BibJSON types, and alter other fields to
+    # match. If no publication type is given, punt.
+    
+    unless ( $record->{r_pubtype} )
+    {
+	$record->{r_pubtype} = 'misc';
+    }
+    
+    if ( $record->{r_pubtype} =~ /article/ )
+    {
+	$record->{r_pubtype} = 'article';
+	$record->{r_journal} = $record->{r_pubtitle};
+    }
+    
+    elsif ( $record->{r_pubtype} =~ /book|compendium/ )
+    {
+	if ( $record->{r_reftitle} && $record->{r_pubtitle} )
+	{
+	    $record->{r_pubtype} = 'incollection';
+	    $record->{r_booktitle} = $record->{r_pubtitle};
+	}
+	
+	else
+	{
+	    $record->{r_pubtype} = 'book';
+	    $record->{r_reftitle} ||= $record->{r_pubtitle};
+	}
+    }
+    
+    elsif ( $record->{r_pubtype} =~ /chapter|monograph|abstract/ )
+    {
+	$record->{r_pubtype} = 'incollection';
+	$record->{r_booktitle} = $record->{r_pubtitle};
+    }
+
+    elsif ( $record->{r_pubtype} =~ /thesis/ )
+    {
+	$record->{r_pubtype} = $record->{r_pubtype} =~ /Ph/ ? 'phdthesis' : 'mastersthesis';
+	$record->{r_school} = $record->{r_publisher} || $record->{r_pubtitle};
+    }
+
+    elsif ( $record->{r_pubtype} !~ /unpublished/ )
+    {
+	$record->{r_pubtype} = 'misc';
+    }
+}
+
+
+sub bibjson_name_record {
+
+    my ($first, $last, $id) = @_;
+    
+    return () unless $last;
+
+    # Decode any numeric character references.
+    
+    $last =~ s/&\#(\d+);/chr($1)/eg;
+    $first =~ s/&\#(\d+);/chr($1)/eg;
+    
+    # Construct a name record.
+    
+    my $record = $first ? { firstname => $first, lastname => $last }
+	: { lastname => $last };
+
+    return $record;
+}
+
+
+sub bibjson_name_list {
+    
+    my ($list) = @_;
+    
+    return () unless $list;
+    
+    # Decode any numeric character references.
+    
+    $list =~ s/&\#(\d+);/chr($1)/eg;
+    
+    # Check whether the entries in the list initial-first or initial-last.
+    
+    my $initial_first = $list =~ qr{ ^ \w\w?[.] }xs;
+    
+    # Then split the list into entries and go through them one by one.
+    
+    my @names = split qr{ , \s* | ,? \s+ (?:and|&) \s+ }xs, $list;
+    
+    my @records;
+    my $held_initial;
+    
+    foreach my $name ( @names )
+    {
+	# Trim whitespace from front and back.
+	
+	$name =~ s/^\s+//;
+	$name =~ s/\s+$//;
+	
+	# An entry of 'others' or 'et al.' is added as a separate name record.
+	
+	if ( $name =~ qr{ ^others$ | ^et al[.]?$ }xsi )
+	{
+	    push @records, { name => "et al." };
+	    next;
+	}
+	
+	# 'jr.' or 'iii' must be appended to the lastname of the previous record.
+	
+	if ( $name =~ qr{ (jr[.] | iii) }xsi && @records )
+	{
+	    $records[-1]{lastname} .= ", $1";
+	    next;
+	}
+	
+	# If this is an initial-first list, look for entries with initials followed by the rest of
+	# the name.
+	
+	if ( $initial_first )
+	{
+	    if ( $name =~ qr{ ( \w\w?[.] (?: \s* \w\w?[.] )* ) \s+ (.*) }xsi )
+	    {
+		push @records, { firstname => $1, lastname => $2 };
+		next;
+	    }
+
+	    # If we find a single letter, that is an initial with a comma mistakenly entered for a
+	    # period.
+
+	    elsif ( $name =~ qr{ ^ \w $ }xsi )
+	    {
+		$held_initial = $name;
+		next;
+	    }
+
+	    # Anything else is assumed to be just a last name. If there is a held initial from the
+	    # previous entry, use that as the first name.
+	    
+	    elsif ( $held_initial )
+	    {
+		push @records, { firstname => "$held_initial.", lastname => $name };
+	    }
+	    
+	    else
+	    {
+		push @records, { lastname => $name };
+	    }
+	}
+	
+	# If this is an initial-last list, then initials are added to the previous entry as the
+	# firstname.
+
+	else
+	{
+	    if ( $name =~ qr{ ^ \w\w?[.] (?: \s* \w\w?[.] )* $ }xsi && @records )
+	    {
+		$records[-1]{firstname} = $name;
+	    }
+
+	    elsif ( $name =~ qr{ ^ \w $ }xsi )
+	    {
+		$records[-1]{firstname} = "$name.";
+	    }
+
+	    else
+	    {
+		push @records, { lastname => $name };
+	    }
+	}
+    }
+    
+    # Return all records.
+
+    return @records;
+}
+
+
+sub bibjson_doi {
+
+    my ($doi) = @_;
+
+    if ( $doi =~ qr{ ^ \s* https? : // .*? / (.*) }xsi )
+    {
+	return { id => $1, type => 'doi' };
+    }
+
+    else
+    {
+	return { id => $doi, type => 'doi' };
+    }
+}
+
+
+sub bibjson_pages {
+
+    my ($first, $last) = @_;
+
+    if ( defined $first && $first ne '' && defined $last && $last ne '' )
+    {
+	return join '--', $first, $last;
+    }
+    
+    elsif ( defined $first && $first ne '' )
+    {
+	return $first;
+    }
+
+    else
+    {
+	return $last;
     }
 }
 
