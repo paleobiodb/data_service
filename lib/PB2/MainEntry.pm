@@ -341,7 +341,7 @@ sub initialize {
 		      list => 'entry/pubs',
 		      place => 1 });
     
-    $ds2->extended_doc({ path => 'eduresources/delete' },
+    $ds2->extended_doc({ path => 'pubs/delete' },
 	"You may provide the necessary parameters in the URL (with method C<B<GET>> or C<B<DELETE>>)",
 	"or in the request body in JSON format (with method C<B<PUT>> or C<B<POST>>). With the latter,",
 	"you may specify multiple records. All records must specify a publication identifier,",
