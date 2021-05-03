@@ -170,9 +170,8 @@ sub validate_action {
 
 # after_action ( action, operation, table, result )
 #
-# This method is called from EditTransaction.pm after each action, whether or not it is
-# successful.  We override it to handle adding and removing records from the active resource table
-# as appropriate.
+# This method is called from EditTransaction.pm after each successful action.  We override it to handle
+# adding and removing records from the active resource table as appropriate.
 
 sub after_action {
     
@@ -181,7 +180,7 @@ sub after_action {
     # For insert and update operations, we need to deal with image data and
     # record activation.
     
-    if ( $operation ne 'delete' )
+    if ( $operation eq 'insert' || $operation eq 'update' || $operation eq 'replace' )
     {
 	my $keyval = $action->keyval;
 	my $record = $action->record;
@@ -365,7 +364,8 @@ sub store_image {
     
     my $dbh = $edt->dbh;
     
-    my $sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} (eduresource_no, image_data) values ($eduresource_no, ?)";
+    my $sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} (eduresource_no, image_data) 
+		values ($eduresource_no, ?)";
     
     print STDERR "$sql\n\n" if $edt->debug;
     
@@ -397,6 +397,8 @@ sub activate_resource {
 	my $sql = "
 		SELECT image FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $edt->debug;
 	
 	my ($filename) = $dbh->selectrow_array($sql);
 	

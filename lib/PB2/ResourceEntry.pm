@@ -54,12 +54,7 @@ sub initialize {
     
     # Rulesets for entering and updating data.
     
-    $ds->define_ruleset('1.2:eduresources:entry' =>
-	{ param => '_label', valid => ANY_VALUE },
-	    "This parameter is only necessary in body records, and then only if",
-	    "more than one record is included in a given request. This allows",
-	    "you to associate any returned error messages with the records that",
-	    "generated them. You may provide any non-empty value.",
+    $ds->define_ruleset('1.2:eduresources:urlparams' =>
 	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
 	    "The identifier of the educational resource record to be updated. If it is",
 	    "empty, a new record will be created. You can also use the alias B<C<id>>.",
@@ -72,13 +67,7 @@ sub initialize {
 	    "status is automatically changed to C<B<changes>>. If the record's status",
 	    "is later set to C<B<active>> once again, the new values will be copied",
 	    "over to the table that drives the Resources page. Accepted values for",
-	    "this parameter are:",
-	{ optional => 'tags', valid => ANY_VALUE },
-	    "The value of this parameter should be a list of tag names, identifying",
-	    "the tags/headings with which this resource should be associated. You",
-	    "can specify this as either a comma-separated list in a string, or as a",
-	    "JSON list of strings. Alternatively, you can use the integer identifiers",
-	    "corresponding to the tags.");
+	    "this parameter are:");
     
     $ds->define_ruleset('1.2:eduresources:allow' =>
 	{ optional => 'allow', valid => '1.2:eduresources:allowances', list => ',' },
@@ -88,41 +77,40 @@ sub initialize {
 	">>The following parameters may be given either in the URL or in",
 	"the request body, or some in either place. If they are given",
 	"in the URL, they apply to every resource specified in the body.",
-	{ allow => '1.2:eduresources:entry' },
+	{ allow => '1.2:eduresources:urlparams' },
 	{ optional => 'allow', valid => '1.2:eduresources:allowances', list => ',' },
 	    "Allow the operation to proceed with certain conditions or properties.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
-    
-    $ds->define_ruleset('1.2:eduresources:addupdate_body' =>
-	">>You may include one or more records in the body of the request, in JSON form.",
-	"The body must be either a single JSON object, or an array of objects. The fields",
-	"in each object must be as specified below. If no specific documentation is given",
-	"the value must match the corresponding column in the C<B<$TABLE{RESOURCE_QUEUE}>> table",
-	"in the database.",
-	{ allow => '1.2:eduresources:entry' },
-	{ optional => 'image_data', valid => ANY_VALUE },
-	    "An image to be associated with this record, encoded into base64. The",
-	    "data may begin with the HTML prefix C<data:image/[type]; base64,>.");
     
     $ds->define_ruleset('1.2:eduresources:update' =>
 	">>The following parameters may be given either in the URL or in",
 	"the request body, or some in either place. If they are given",
 	"in the URL, they apply to every resource specified in the body.",
-	{ allow => '1.2:eduresources:entry' },
+	{ allow => '1.2:eduresources:urlparams' },
 	{ optional => 'allow', valid => '1.2:eduresources:allowances', list => ',' },
 	    "Allow the operation to proceed with certain conditions or properties.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $ds->define_ruleset('1.2:eduresources:update_body' =>
+    $ds->define_ruleset('1.2:eduresources:bodyparams' =>
 	">>You may include one or more records in the body of the request, in JSON form.",
 	"The body must be either a single JSON object, or an array of objects. The fields",
 	"in each object must be as specified below. If no specific documentation is given",
-	"the value must match the corresponding column in the C<B<eduresources>> table",
-	"in the database. For this operation, every record must include a value for",
-	"B<C<eduresource_id>>.",
-	{ allow => '1.2:eduresources:entry' },
+	"the value must match the corresponding column in the C<B<$TABLE{RESOURCE_QUEUE}>> table",
+	"in the database.",
+	{ allow => '1.2:eduresources:urlparams' },
+	{ optional => '_label', valid => ANY_VALUE },
+	    "This parameter is only necessary in body records, and then only if",
+	    "more than one record is included in a given request. This allows",
+	    "you to associate any returned error messages with the records that",
+	    "generated them. You may provide any non-empty value.",
+	{ optional => 'tags', valid => ANY_VALUE },
+	    "The value of this parameter should be a list of tag names, identifying",
+	    "the tags/headings with which this resource should be associated. You",
+	    "can specify this as either a comma-separated list in a string, or as a",
+	    "JSON list of strings. Alternatively, you can use the integer identifiers",
+	    "corresponding to the tags.",
 	{ optional => 'image_data', valid => ANY_VALUE },
 	    "An image to be associated with this record, encoded into base64. The",
 	    "data may begin with the HTML prefix C<data:image/[type]; base64,>.");
@@ -142,8 +130,7 @@ sub initialize {
     
     ResourceEdit->configure($dbh, Dancer::config);
     
-    complete_ruleset($ds, $dbh, '1.2:eduresources:addupdate_body', 'RESOURCE_QUEUE');
-    complete_ruleset($ds, $dbh, '1.2:eduresources:update_body', 'RESOURCE_QUEUE');
+    complete_ruleset($ds, $dbh, '1.2:eduresources:bodyparams', 'RESOURCE_QUEUE');
 }
 
 
@@ -163,7 +150,7 @@ sub update_resources {
     
     $allowances->{CREATE} = 1 if $arg && $arg eq 'add';
     
-    my $main_params = $request->get_main_params($allowances);
+    my $main_params = $request->get_main_params($allowances, '1.2:eduresources:basicentry');
     my $perms = $request->require_authentication('RESOURCE_QUEUE');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
