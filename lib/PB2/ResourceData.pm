@@ -29,7 +29,7 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::Authentication);
 
 our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
 
-our (%TAG_VALUE, %TAG_NAME);
+our (%TAG_VALUE, %TAG_NAME, %TAG_COUNT);
 
 sub initialize {
 
@@ -87,6 +87,24 @@ sub initialize {
 	{ output => 'status', com_name => 'sta' },
 	    "The status will be one of the following codes:",
 	    $ds->document_set('1.2:eduresources:status'));
+    
+    $ds->define_block('1.2:eduresources:larkin' =>
+	{ output => 'id', data_type => 'pos' },
+	    "The unique identifier of this record in the database.",
+	{ set => '*', code => \&process_larkin},
+	{ output => 'title' },
+	{ output => 'description' },
+	{ output => 'url' },
+	{ output => 'is_video', data_type => 'pos' },
+	{ output => 'author' },
+	{ output => 'created_on' },
+	{ output => 'image', always => 1 },
+	{ output => 'tags' });
+    
+    $ds->define_block('1.2:eduresources:tag' =>
+	{ output => 'id', com_name => 'oid', data_type => 'mix' },
+	{ output => 'name', com_name => 'nam' },
+	{ output => 'resources', com_name => 'nrs', data_type => 'pos' });
     
     $ds->define_block('1.2:eduresources:image_data' =>
 	{ select => 'edi.image_data', tables => 'edi' },
@@ -192,12 +210,11 @@ sub get_resource {
     
     # Delete unnecessary output fields, and select the enterer id if appropriate.
     
-    $request->delete_output_field('record_label');
+    $request->delete_output_field('_label');
     
     if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
     {
-	my $ds = $request->ds;
-	$ds->add_output_block($request, { }, '1.2:common:ent_guest');
+	$request->add_output_blocks('main', '1.2:common:ent_guest');
     }
     
     # Determine which fields and tables are needed to display the requested
@@ -267,7 +284,12 @@ sub list_resources {
     
     my $active; $active = 1 if ($arg && $arg eq 'active') || $request->clean_param('active');
     
-    my $tables = $request->tables_hash;
+    # If this is a larkin request, then call the appropriate method.
+
+    if ( $active && $request->output_format eq 'larkin' )
+    {
+	return $request->larkin_resources($dbh);
+    }
     
     # If the user is not logged in, only show information about active resources. If we are asked
     # for anything but active resources, return a 401 error.
@@ -280,6 +302,8 @@ sub list_resources {
     }
     
     # Generate a list of filter expressions.
+    
+    my $tables = $request->tables_hash;
     
     my @filters;
     
@@ -408,12 +432,11 @@ sub list_resources {
     
     # Delete unnecessary output fields, and select the enterer id if appropriate.
     
-    $request->delete_output_field('record_label');
+    $request->delete_output_field('_label');
 
     if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
     {
-	my $ds = $request->ds;
-	$ds->add_output_block($request, { }, '1.2:common:ent_guest');
+	$request->add_output_blocks('main', '1.2:common:ent_guest');
     }
     
     # Determine which fields and tables are needed to display the requested
@@ -511,6 +534,59 @@ sub generate_join_list {
 }
 
 
+sub larkin_resources {
+    
+    my ($request, $dbh) = @_;
+    
+    $dbh ||= $request->get_connection();
+    
+    $request->add_output_blocks('main', '1.2:eduresources:larkin');
+    
+    my $filter_string = "1=1";
+    my $limit = "";
+    
+    $request->{main_sql} = "
+    	SELECT edr.*, group_concat(tg.tag_id) as tags
+	FROM $TABLE{RESOURCE_ACTIVE} as edr
+		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.id
+        WHERE $filter_string
+	GROUP BY edr.id $limit";
+    
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    
+    # Then prepare and execute the main query.
+    
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
+}
+
+
+sub list_tags {
+    
+    my ($request) = @_;
+    
+    $request->cache_tag_values();
+    
+    $request->extid_check;
+    
+    my @result;
+    
+    foreach my $id ( sort { $a <=> $b } keys %TAG_NAME )
+    {
+	my $record = { id => $id, name => $TAG_NAME{$id}, resources => $TAG_COUNT{$id} || 0 };
+	
+	if ( $request->{block_hash}{extids} )
+	{
+	    $record->{id} = generate_identifier('ETG', $record->{id});
+	}
+	
+	push @result, $record;
+    }
+    
+    $request->list_result(@result);
+}
+
+
 sub cache_tag_values {
     
     my ($request, $dbh) = @_;
@@ -523,7 +599,10 @@ sub cache_tag_values {
     
     $dbh ||= $request->get_connection;
     
-    my $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{RESOURCE_TAG_NAMES}", { Slice => { } });
+    my $result = $dbh->selectall_arrayref("
+	SELECT tag.id, tag.name, count(res.tag_id) as resources
+	FROM $TABLE{RESOURCE_TAG_NAMES} as tag LEFT JOIN $TABLE{RESOURCE_TAGS} as res on tag.id = res.tag_id
+	GROUP BY tag.id", { Slice => { } });
     
     if ( $result && ref $result eq 'ARRAY' )
     {
@@ -533,6 +612,7 @@ sub cache_tag_values {
 	    {
 		$TAG_VALUE{lc $r->{name}} = $r->{id};
 		$TAG_NAME{$r->{id}} = $r->{name};
+		$TAG_COUNT{$r->{id}} = $r->{resources};
 	    }
 	}
 	
@@ -549,7 +629,7 @@ sub cache_tag_values {
 sub process_record {
     
     my ($request, $record) = @_;
-    
+
     # If we have an 'id' field instead of an 'eduresource_no' field, copy the
     # value over.
     
@@ -562,7 +642,7 @@ sub process_record {
     
     if ( my $label = $request->{my_record_label}{$record->{eduresource_no}} )
     {
-	$record->{record_label} = $label;
+	$record->{_label} = $label;
     }
     
     # Generate the proper external identifiers.
@@ -573,14 +653,8 @@ sub process_record {
 	    if $record->{eduresource_no};
     }
     
-	# { set => 'eduresource_no', code => sub {
-	#       my ($request, $value) = @_;
-	# 	    return $value unless $request->{block_hash}{extids};
-	# 	    return generate_identifier('EDR', $value);
-	# 	} },
-    
     # The 'image' filename might be in either of these fields. Append it to the proper path, read
-    # from the configuration file.
+    # from the configuration file. But not for larkin-style requests.
     
     $record->{image} = $record->{active_image} if $record->{active_image};
     
@@ -612,6 +686,48 @@ sub process_record {
 	}
 	
 	$record->{tags} = join(', ', @tag_names);
+    }
+}
+
+
+# process_larkin ( request, record )
+#
+# Process a record if the request format is 'larkin'.
+
+sub process_larkin {
+
+    my ($request, $record) = @_;
+
+    # If we have an eduresource_no field, copy it over.
+
+    if ( ! $record->{id} && $record->{eduresource_no} )
+    {
+	$record->{id} = $record->{eduresource_no};
+    }
+    
+    # Truncate the created_on field so that it just contains the date.
+    
+    $record->{created_on} =~ s{\s.*}{} if $record->{created_on};
+    
+    # The 'image' filename might be in either of these fields.
+    
+    $record->{image} = $record->{active_image} if $record->{active_image};
+    
+    # If we have tags, run through the numbers and convert them to names.
+    
+    if ( my $tag_list = $record->{tags} )
+    {
+	$request->cache_tag_values();
+	
+	my @id_list = split(/\s*,\s*/, $tag_list);
+	my @tag_names;
+	
+	foreach my $id (@id_list)
+	{
+	    push @tag_names, $TAG_NAME{$id} if $TAG_NAME{$id};
+	}
+
+	$record->{tags} = \@tag_names;
     }
 }
 

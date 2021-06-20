@@ -786,10 +786,10 @@ subtest 'unknown taxon' => sub {
     
     select_subtest || return;
     
-    my $ID1 = 'txn:UF1';
-    my $ID2 = 'txn:UF';
-    my $ID3 = 'UF1';
-    my $ID4 = 'UF';
+    my $ID1 = 'txn:NF1';
+    my $ID2 = 'txn:NF';
+    my $ID3 = 'NF1';
+    my $ID4 = 'NF';
     
     my ($r1) = $T->fetch_records("/taxa/single.json?id=$ID1", "id1");
     
@@ -809,7 +809,7 @@ subtest 'unknown taxon' => sub {
     {
 	$tc->flag('oid', $r->{oid}) unless $r->{oid} eq $ID1 || $r->{oid} eq $ID2;
 	$tc->flag('rnk', $r->{rnk}) unless $r->{rnk} eq '9';
-	$tc->flag('nam', $r->{nam}) unless $r->{nam} eq 'UNKNOWN FAMILY';
+	$tc->flag('nam', $r->{nam}) unless $r->{nam} eq 'NO_FAMILY_SPECIFIED' || $r->{nam} eq 'UNKNOWN FAMILY';
     }
     
     $tc->ok_all('unknown taxon records');

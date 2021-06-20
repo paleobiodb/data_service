@@ -2,10 +2,10 @@
 # PBDB Data Service
 # -----------------
 #
-# This file should be run ON THE DATA SERVICE HOST before running any of the pb2e-8*.t files. It
+# This file should be run ON THE DATA SERVICE HOST before running any of the pb2e-*.t files. It
 # will ensure proper table permissions for the test users.
 # 
-# pb2e-80-session-data.t : Set up test user permissions for use by other test files.
+# pb2e-10-session-data.t : Set up test user permissions for use by other test files.
 # 
 
 

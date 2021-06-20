@@ -21,7 +21,7 @@ use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOB
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
-use TaxonDefs qw(%RANK_STRING);
+use TaxonDefs qw(%RANK_STRING %TAXON_RANK %UNS_RANK %UNS_NAME);
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -209,11 +209,13 @@ sub initialize {
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of F<accepted_name>.",
-	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', not_block => 'acconly' },
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', 
+	  not_block => 'acconly', data_type => 'mix' },
 	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of F<accepted_rank>.",
-	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', not_block => 'acconly' },
+	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', 
+	  not_block => 'acconly', data_type => 'mix' },
 	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
@@ -232,12 +234,12 @@ sub initialize {
 	{ output => 'accepted_attr', if_block => '1.2:occs:attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of the accepted name",
-	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no', data_type => 'mix' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
 	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
 	    "of this database.",
-	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', data_type => 'mix' },
 	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
@@ -247,9 +249,9 @@ sub initialize {
 	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	    "The interval that ends the specific geologic time range associated with this occurrence,",
 	    "if different from the value of F<early_interval>",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
 	    "The author(s) of the reference from which this data was entered.",
@@ -284,6 +286,7 @@ sub initialize {
 		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
 		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
 	  tables => ['ph', 't', 'pl'] },
+	{ set => '*', code => \&process_classification },
 	{ output => 'phylum', com_name => 'phl' },
 	    "The name of the phylum in which this occurrence is classified.",
 	{ output => 'phylum_no', com_name => 'phn', if_block => 'classext' },
@@ -384,11 +387,11 @@ sub initialize {
 	    "The identifier of the time interval represented by this record",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of the time interval represented by this record",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The beginning age of this interval, in Ma",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The ending age of this interval, in Ma",
-	{ output => 'originations', pbdb_name => 'X_Ft', com_name => 'xft' },
+	{ output => 'originations', pbdb_name => 'X_Ft', com_name => 'xft', data_type => 'pos' },
 	    "The number of distinct taxa whose first known occurrence lies in this interval,",
 	    "and whose range crosses the top boundary of the interval:",
 	    "either species, genera, families, or orders,",
@@ -397,22 +400,22 @@ sub initialize {
 	    "M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
 	    "I<Paleobiology>, Vol. 26(4). 2000.",
 	    "pp. 74-102. L<http://www.jstor.org/stable/1571654>.",
-	{ output => 'extinctions', pbdb_name =>'X_bL', com_name => 'xbl' },
+	{ output => 'extinctions', pbdb_name =>'X_bL', com_name => 'xbl', data_type => 'pos' },
 	    "The number of distinct taxa whose last known occurrence lies in this interval,",
 	    "and whose range crosses the bottom boundary of the interval.",
-	{ output => 'singletons', pbdb_name => 'X_FL', com_name => 'xfl' },
+	{ output => 'singletons', pbdb_name => 'X_FL', com_name => 'xfl', data_type => 'pos' },
 	    "The number of distinct taxa that are found only in this interval, so",
 	    "that their range of occurrence does not cross either boundary.",
-	{ output => 'range_throughs', pbdb_name => 'X_bt', com_name => 'xbt' },
+	{ output => 'range_throughs', pbdb_name => 'X_bt', com_name => 'xbt', data_type => 'pos' },
 	    "The number of distinct taxa whose first occurrence falls before",
 	    "this interval and whose last occurrence falls after it, so that",
 	    "the range of occurrence crosses both boundaries.  Note that",
 	    "these taxa may or may not actually occur within the interval.",
-	{ output => 'sampled_in_bin', com_name => 'dsb' },
+	{ output => 'sampled_in_bin', com_name => 'dsb', data_type => 'pos' },
 	    "The number of distinct taxa found in this interval.  This is",
 	    "equal to the sum of the previous four fields, minus the number",
 	    "of taxa from Xbt that do not actually occur in this interval.",
-	{ output => 'implied_in_bin', com_name => 'dib' },
+	{ output => 'implied_in_bin', com_name => 'dib', data_type => 'pos' },
 	    "The number of additional distinct taxa implied in this interval,",
 	    "as a result of imprecisely identified occurrences. For example, if",
 	    "you are counting species, an occurrence identified only to the genus level",
@@ -420,30 +423,30 @@ sub initialize {
 	    "to this count. This is an experimental feature, and the number reported",
 	    "in this field does not affect the other statistics. You can feel free",
 	    "to ignore it if you want.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The total number of occurrences that are resolved to this interval");
     
     # The following block specifies the summary output for diversity plots.
     
     $ds->define_block('1.2:occs:diversity:summary' =>
-	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
+	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences that were scanned in the process of",
 	    "computing this diversity result.",
-	{ output => 'bin_count', pbdb_name => 'bin_total', com_name => 'tbn' },
+	{ output => 'bin_count', pbdb_name => 'bin_total', com_name => 'tbn', data_type => 'pos' },
 	    "The sum of occurrence counts in all of the bins.  This value may be larger than",
 	    "the number of occurrences scanned, since some may be counted in multiple",
 	    "bins (see F<timerule>).  This value might also be smaller",
 	    "than the number of occurrences scanned, since some occurrences may",
 	    "not have a temporal locality that is precise enough to put in any bin.",
-	{ output => 'imprecise_time', com_name => 'itm' },
+	{ output => 'imprecise_time', com_name => 'itm', data_type => 'pos' },
 	    "The number of occurrences skipped because their temporal locality",
 	    "was not sufficiently precise.  You can adjust this number by selecting",
 	    "a different time rule and/or a different level of temporal resolution.",
-	{ output => 'imprecise_taxon', com_name => 'itx' },
+	{ output => 'imprecise_taxon', com_name => 'itx', data_type => 'pos' },
 	    "The number of occurrences skipped because their taxonomic identification",
 	    "was not sufficiently precise.  You can adjust this number by",
 	    "counting at a higher or lower taxonomic level.",
-	{ output => 'missing_taxon', com_name => 'mtx' },
+	{ output => 'missing_taxon', com_name => 'mtx', data_type => 'pos' },
 	    "The number of occurrences skipped because the taxonomic hierarchy",
 	    "in this database is incomplete.  For example, some genera have not",
 	    "been placed in their proper family, so occurrences in these genera",
@@ -456,15 +459,15 @@ sub initialize {
 	    "The identifier of the time interval represented by this record",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of the time interval represented by this record",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The beginning age of this interval, in Ma",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The ending age of this interval, in Ma",
-	{ output => 'sampled_in_bin', com_name => 'dsb' },
+	{ output => 'sampled_in_bin', com_name => 'dsb', data_type => 'pos' },
 	    "The number of distinct taxa found in this interval.  By default,",
 	    "distinct genera are counted.  You can override this using the",
 	    "parameter F<count>.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The total number of occurrences that are resolved to this interval");
     
     # The following block specifies the output for taxon records representing
@@ -514,10 +517,10 @@ sub initialize {
 	@PB2::TaxonData::BASIC_3);
     
     $ds->define_block('1.2:occs:taxa_summary' =>
-	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
+	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences that were scanned in the process of",
 	    "computing this taxonomic tree.",
-	{ output => 'missing_taxon', com_name => 'mtx' },
+	{ output => 'missing_taxon', com_name => 'mtx', data_type => 'pos' },
 	    "The number of occurrences skipped because the taxonomic hierarchy",
 	    "in this database is incomplete.  For example, some genera have not",
 	    "been placed in their proper family, so occurrences in these genera",
@@ -529,7 +532,7 @@ sub initialize {
 	{ output => 'name', com_name => 'nam', pbdb_name => 'taxon_name' },
 	    "The scientific name of the taxon.",
 	{ set => 'rank', if_vocab => 'pbdb,dwc', lookup => \%PB2::TaxonData::RANK_STRING },
-	{ output => 'rank', com_name => 'rnk', pbdb_name => 'taxon_rank' },
+	{ output => 'rank', com_name => 'rnk', pbdb_name => 'taxon_rank', data_type => 'mix' },
 	    "The rank of the taxon.",
 	{ output => 'image_no', com_name => 'img' },
     	    "If this value is non-zero, you can use it to construct image URLs",
@@ -540,7 +543,7 @@ sub initialize {
 	{ output => 'phylum_no', com_name => 'phn' },
 	    "The phylum (if any) to which this taxon belongs.  This will let you",
 	    "exclude a class or order from the list if its phylum has already been listed.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of occurrences of this taxon that match the specified",
 	    "parameters.  The list is sorted on this field, from highest",
 	    "to lowest.");
@@ -567,9 +570,9 @@ sub initialize {
 	         "genera are being counted and this occurrence was only identified to the family level.",
 	    "=item missing taxon", "This occurrence was not counted because it was not identified to",
 	         "a taxon represented in the taxonomic tree.",
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early end of the age range for this occurrence.",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late end of the age ragne for this occurrence.",
 	{ output => 'orig_no', com_name => 'tid' },
 	    "The identifier of a taxon from the database.",
@@ -772,8 +775,12 @@ sub initialize {
 	"listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ allow => '1.2:common:select_colls_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ allow => '1.2:occs:display' },
@@ -812,6 +819,9 @@ sub initialize {
 	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can also be used to further filter the selection based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameter to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ allow => '1.2:occs:display' },
@@ -853,6 +863,9 @@ sub initialize {
 	">>The following parameters can be used to further filter the selection, based on the",
 	"taxonomy of the selected occurrences.",
 	{ allow => '1.2:taxa:occ_list_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameter to request additional information",
 	"beyond the basic summary cluster records.",
    	{ allow => '1.2:summary_display' },
@@ -884,6 +897,9 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_aux_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
@@ -959,6 +975,9 @@ sub initialize {
 	    "of the following values as a list:",
 	{ ignore => 'level' },
 	{ ignore => 'show' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -1086,6 +1105,9 @@ sub initialize {
 	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can also be used to further filter the selection based on taxonomy:",
 	{ allow => '1.2:taxa:occ_aux_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	"You can also specify any of the following parameters:",
 	{ allow => '1.2:refs:display' },
 	{ allow => '1.2:special_params' },
@@ -1128,6 +1150,9 @@ sub initialize {
 	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can also be used to further filter the selection based on taxonomy:",
 	{ allow => '1.2:taxa:occ_aux_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	"You can also specify any of the following parameters:",
 	{ allow => '1.2:taxa:show' },
 	{ allow => '1.2:taxa:order' },
@@ -1170,6 +1195,9 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_ent' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters specify what information should be returned about each",
 	"resulting opinion, and the order in which the results should be returned:",
 	{ allow => '1.2:opinions:display' },
@@ -1227,6 +1255,9 @@ sub initialize {
 	{ require_any => ['1.2:occs:id', '1.2:main_selector', '1.2:interval_selector',
 			  '1.2:ma_selector', '1.2:refs:aux_selector',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>The following parameters can be used to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ allow => '1.2:strata:display' },
@@ -1386,7 +1417,7 @@ sub list_occs {
     push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.
@@ -1573,7 +1604,7 @@ sub diversity {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -2094,7 +2125,7 @@ sub list_occs_taxa {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o');
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -2284,7 +2315,7 @@ sub prevalence {
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
     # push @filters, $request->generate_crmod_filters('o', $tables);
     # push @filters, $request->generate_ent_filters('o', $tables);
     
@@ -2307,7 +2338,7 @@ sub prevalence {
 	
 	@filters = $request->generateMainFilters('list', 'c', $tables);
 	push @filters, $request->generateOccFilters($tables, 'o', 1);
-	push @filters, $request->generate_common_filters( { occs => 'o', bare => 'o' } );
+	push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
 	# push @filters, $request->generate_crmod_filters('o', $tables);
 	# push @filters, $request->generate_ent_filters('o', $tables);
 	
@@ -2448,7 +2479,7 @@ sub list_occs_associated {
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', refs => 'r' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r' }, $inner_tables );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     # Figure out what information we need to determine access permissions.  We
@@ -2718,7 +2749,7 @@ sub list_occs_strata {
     my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_common_filters( { occs => 'o' } );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc' }, $inner_tables );
     push @filters, $request->generate_ref_filters($inner_tables);
     push @filters, $request->generate_refno_filter('o');
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o');
@@ -3778,6 +3809,39 @@ sub process_occ_ids {
     else
     {
 	$record->{identified_no} = generate_identifier('TXN', $record->{identified_no});
+    }
+}
+
+
+sub process_classification {
+    
+    my ($request, $record) = @_;
+    
+    return unless $record->{accepted_rank};
+    
+    foreach my $u ( qw(NP NC NO NF NG) )
+    {
+	if ( $record->{accepted_rank} =~ /^\d/ )
+	{
+	    last if $record->{accepted_rank} >= $UNS_RANK{$u};
+	}
+	
+	else
+	{
+	    last if $TAXON_RANK{$record->{accepted_rank}} >= $UNS_RANK{$u};
+	}
+	
+	$record->{$PB2::TaxonData::UNS_FIELD{$u}} ||= $PB2::TaxonData::UNS_NAME{$u};
+	
+	if ( $request->{block_hash}{extids} )
+	{
+	    $record->{$PB2::TaxonData::UNS_ID{$u}} ||= generate_identifier('TXN', $u);
+	}
+	
+	else
+	{
+	    $record->{$PB2::TaxonData::UNS_ID{$u}} ||= $u;
+	}
     }
 }
 

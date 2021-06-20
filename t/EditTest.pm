@@ -45,6 +45,7 @@ use namespace::clean;
     set_table_property(EDT_TEST => CAN_POST => 'AUTHORIZED');
     set_table_property(EDT_TEST => ALLOW_DELETE => 1);
     set_table_property(EDT_TEST => PRIMARY_KEY => 'test_no');
+    set_table_property(EDT_TEST => PRIMARY_FIELD => 'test_id');
     set_table_property(EDT_TEST => TABLE_COMMENT => 'This table is used for testing EditTransaction.pm and its subclass EditTest.pm');
     
     set_column_property(EDT_TEST => string_req => REQUIRED => 1);
@@ -58,9 +59,9 @@ use namespace::clean;
     set_table_property(EDT_AUX => CAN_MODIFY => 'AUTHORIZED');
     set_table_property(EDT_AUX => ALLOW_DELETE => 1);
     set_table_property(EDT_AUX => PRIMARY_KEY => 'aux_no');
+    set_table_property(EDT_AUX => PRIMARY_FIELD => 'aux_id');
     
     set_column_property(EDT_AUX => test_no => FOREIGN_TABLE => 'EDT_TEST');
-    set_column_property(EDT_AUX => test_no => ALTERNATE_NAME => 'test_id');
     set_column_property(EDT_AUX => name => REQUIRED => 1);
     
     set_table_property(EDT_ANY => CAN_POST => 'LOGGED_IN');
@@ -548,12 +549,12 @@ sub has_debug_output {
 }
 
 
-# establish_tables ( class, dbh, options )
+# establish_test_tables ( class, dbh, options )
 # 
 # This class method creates database tables necessary to use this class for testing purposes, or
 # replaces the existing ones.
 
-sub establish_tables {
+sub establish_test_tables {
     
     my ($class, $dbh, $options) = @_;
     
@@ -571,6 +572,8 @@ sub establish_tables {
 		interval_no int unsigned not null default 0,
 		string_val varchar(40) not null default '',
 		string_req varchar(40) not null default '',
+		latin1_val varchar(40) charset latin1 not null default '',
+		greek_val varchar(40) charset greek not null default '',
 		binary_val varbinary(40),
 		text_val text,
 		blob_val blob,
@@ -588,7 +591,7 @@ sub establish_tables {
 		admin_lock boolean not null default 0,
 		owner_lock boolean not null default 0,
 		created timestamp default current_timestamp,
-		modified timestamp default current_timestamp)");
+		modified timestamp default current_timestamp) default charset utf8");
     
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUX}");
     
@@ -596,7 +599,7 @@ sub establish_tables {
 		aux_no int unsigned primary key auto_increment,
 		name varchar(255) not null default '',
 		test_no int unsigned not null default 0,
-		unique key (name))");
+		unique key (name)) default charset utf8");
 
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_ANY}");
     
@@ -605,7 +608,7 @@ sub establish_tables {
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,
 		enterer_id varchar(36) not null,
-		string_req varchar(255) not null default '')");
+		string_req varchar(255) not null default '') default charset utf8");
 		
 }
 

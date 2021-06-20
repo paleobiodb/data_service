@@ -11,18 +11,20 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::More tests => 11;
+use Test::More tests => 12;
 
-# use CoreFunction qw(connectDB configData);
-# use Taxonomy;
+# use CoreFunction qw(loadConfig configData);
 
 use lib 'lib', '../lib';
 
 use ExternalIdent qw(%IDRE);
+use TestTables qw(establish_test_tables fill_test_table);
 use TaxonDefs;
 
 use lib 't';
 use Tester;
+use EditTester;
+use ResourceTables;
 
 use Test::Selection;
 
@@ -52,10 +54,13 @@ if ( $ARGV[0] eq '--no-cleanup' )
 
 choose_subtests(@ARGV);
 
-# Start by creating an instance of the Tester class, with which to conduct the
-# following tests.
+# Start by creating an instance of the Tester class, with which to conduct the following tests. We
+# also create an instance of the EditTester class, which allows us to create the necessary tables
+# in the test database and also to check that records that are supposed to have been inserted
+# actually were.
 
 my $T = Tester->new({ prefix => 'data1.2' });
+my $E = EditTester->new;
 
 # Create a second instance of Tester for making requests on the main web
 # server. 
@@ -65,10 +70,26 @@ my $TT; # = Tester->new({ server => '127.0.0.1:80' });
 # Then check to MAKE SURE that the server is in test mode and the test eduresources tables are
 # enabled. This is very important, because we DO NOT WANT to change the data in the main
 # tables. If we don't get the proper response back, we need to bail out. These count as the first
-# two tests i this file.
+# two tests in this file.
 
 $T->test_mode('session_data', 'enable') || BAIL_OUT("could not select test session data");
 $T->test_mode('eduresources', 'enable') || BAIL_OUT("could not select test eduresource tables");
+
+
+# The first actual testing task is to create the necessary tables in the test database.
+
+subtest 'establish tables' => sub {
+
+    establish_test_tables($E->dbh, 'eduresources', 'test') ||
+	BAIL_OUT("could not establish test tables");
+
+    fill_test_table($E->dbh, 'RESOURCE_TAG_NAMES', 1, 'test') ||
+	BAIL_OUT("could not copy values to test table 'edutags'");
+    
+    pass('test tables established');
+
+    $E->start_test_mode('eduresources') || BAIL_OUT "could not select test eduresources tables locally";
+};
 
 
 # Test adding a new resource record. We start by testing under a userid with the superuser
@@ -517,10 +538,12 @@ subtest 'image data' => sub {
     my $image_dir = `grep eduresources_img_dir config.yml`;
     chomp $image_dir;
     $image_dir =~ s/^.*:\s+//;
-
+    $image_dir ||= '/var/paleobiodb/pbdb-main/build/img';
+    
     my $image_host = `grep eduresources_img_host config.yml`;
     chomp $image_host;
     $image_host =~ s/^.*:\s+//;
+    $image_host ||= 'nginx';
     
     $TT = Tester->new({ server => $image_host });
     

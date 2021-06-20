@@ -1,4 +1,4 @@
-#!/opt/local/bin/perl
+#!/usr/bin/env perl
 # 
 # Paleobiology Data Services
 # 
@@ -25,8 +25,6 @@ BEGIN {
 
     Web::DataService->VERSION(0.3);
 
-    my $test_mode;
-    
     my $test_mode;
     
     # If we were given a command-line argument, figure out what to do with it.

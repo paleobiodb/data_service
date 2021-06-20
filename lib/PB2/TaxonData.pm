@@ -1,3 +1,4 @@
+
 #  
 # TaxonData
 # 
@@ -17,7 +18,8 @@ use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS);
+use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
+		 %UNS_NAME %UNS_RANK);
 use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
@@ -31,15 +33,14 @@ our (%DB_FIELD);
 
 our (@BASIC_1, @BASIC_2, @BASIC_3);
 
+our (%UNS_FIELD) = ( 'NG' => 'genus', 'NF' => 'family',
+		     'NO' => 'order', 'NC', => 'class', 'NP' => 'phylum' );
+
+our (%UNS_ID) = ( 'NG' => 'genus_no', 'NF' => 'family_no',
+		  'NO' => 'order_no', 'NC' => 'class_no', 'NP' => 'phylum_no' );
+
+
 our (%LANGUAGE) = ( 'S' => 1 );
-
-our (%UNK_NAME) = ( 'UG' => 'UNKNOWN GENUS',
-		    'UF' => 'UNKNOWN FAMILY',
-		    'UO' => 'UNKNOWN ORDER',
-		    'UC' => 'UNKNOWN CLASS',
-		    'UP' => 'UNKNOWN PHYLUM' );
-
-our (%UNK_RANK) = ( 'UG' => 5, 'UF' => 9, 'UO' => 13, 'UC' => 17, 'UP' => 20 );
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -173,7 +174,7 @@ sub initialize {
 	    "=item F", "This taxon is a form taxon.",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ set => 'accepted_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
-	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
+	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk', data_type => 'mix' },
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
 	    "The scientific name of this taxon",
@@ -200,7 +201,7 @@ sub initialize {
 	    "the identifier of the accepted name to be used in its place.  Otherwise, its value",
 	    "will be the same as C<orig_no>.  In the compact vocabulary, this field",
 	    "will be omitted in that case.",
-	{ output => 'accepted_rank', com_name => 'acr', not_block => 'acconly' },
+	{ output => 'accepted_rank', com_name => 'acr', not_block => 'acconly', data_type => 'mix' },
 	    "If C<accepted_no> is different from C<orig_no>, this field",
 	    "gives the rank of the accepted name.  Otherwise, its value will",
 	    "be the same as C<taxon_rank>.  In the compact voabulary, this field",
@@ -239,7 +240,7 @@ sub initialize {
 	    "The identifier of the reference from which this name was entered.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
 	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of fossil occurrences in this database that are identified",
 	    "as belonging to this taxon or any of its subtaxa.");
     
@@ -276,7 +277,7 @@ sub initialize {
 	    "C<variant=all> was given.",
 	{ set => 'taxon_rank', if_vocab => 'com', lookup => \%TAXON_RANK },
 	{ set => 'accepted_rank', if_vocab => 'pbdb', lookup => \%RANK_STRING },
-	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
+	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk', data_type => 'mix' },
 	    "The rank of this taxon as mentioned in the reference, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
 	    "The taxonomic name actually mentioned in the reference.",
@@ -303,7 +304,7 @@ sub initialize {
 	    "the identifier of the accepted name to be used in its place.  Otherwise, its value",
 	    "will be the same as C<orig_no>.  In the compact vocabulary, this field",
 	    "will be omitted in that case.",
-	{ output => 'accepted_rank', com_name => 'acr' },
+	{ output => 'accepted_rank', com_name => 'acr', data_type => 'mix' },
 	    "If C<accepted_no> is different from C<orig_no>, this field",
 	    "gives the rank of the accepted name.  Otherwise, its value will",
 	    "be the same as C<taxon_rank>.  In the compact voabulary, this field",
@@ -335,7 +336,7 @@ sub initialize {
 	    "the publication year of the name itself may be different if the reference is a secondary source.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
 	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of fossil occurrences in this database that are identified",
 	    "as belonging to this taxon or any of its subtaxa.");
     
@@ -350,25 +351,25 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:size' =>
 	{ select => 'SIZE' },
-	{ output => 'taxon_size', com_name => 'siz' },
+	{ output => 'taxon_size', com_name => 'siz', data_type => 'pos' },
 	    "The total number of taxa in the database that are contained within this taxon, including itself",
-	{ output => 'extant_size', com_name => 'exs' },
+	{ output => 'extant_size', com_name => 'exs', data_type => 'pos' },
 	    "The total number of extant taxa in the database that are contained within this taxon, including itself");
     
     $ds->define_block('1.2:taxa:app' =>
 	{ select => 'APP' },
 	{ set => '*', code => \&process_ages },
-	{ output => 'firstapp_ea', name => 'firstapp_max_ma', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
-	  if_block => 'app' },
+	{ output => 'firstapp_ea', name => 'firstapp_max_ma', com_name => 'fea', 
+	  dwc_name => 'firstAppearanceEarlyAge', if_block => 'app', data_type => 'dec' },
 	    "The early age bound for the first appearance of this taxon in the database",
-	{ output => 'firstapp_la', name => 'firstapp_min_ma', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
-	  if_block => 'app' }, 
+	{ output => 'firstapp_la', name => 'firstapp_min_ma', com_name => 'fla', 
+	  dwc_name => 'firstAppearanceLateAge', if_block => 'app', data_type => 'dec' }, 
 	    "The late age bound for the first appearance of this taxon in the database",
-	{ output => 'lastapp_ea', name => 'lastapp_max_ma', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
-	  if_block => 'app' },
+	{ output => 'lastapp_ea', name => 'lastapp_max_ma', com_name => 'lea', 
+	  dwc_name => 'lastAppearanceEarlyAge', if_block => 'app', data_type => 'dec' },
 	    "The early age bound for the last appearance of this taxon in the database",
-	{ output => 'lastapp_la', name => 'lastapp_min_ma', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
-	  if_block => 'app' }, 
+	{ output => 'lastapp_la', name => 'lastapp_min_ma', com_name => 'lla', 
+	  dwc_name => 'lastAppearanceLateAge', if_block => 'app', data_type => 'dec' }, 
 	    "The late age bound for the last appearance of this taxon in the database",
 	{ output => 'early_interval', com_name => 'tei' },
 	    "The name of the interval in which this taxon first appears, or the start of its range.",
@@ -377,16 +378,20 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:occapp' =>
 	{ set => '*', code => \&process_ages },
-	{ output => 'firstocc_ea', name => 'firstocc_max_ma', com_name => 'foa', dwc_name => 'firstAppearanceEarlyAge' },
+	{ output => 'firstocc_ea', name => 'firstocc_max_ma', com_name => 'foa', 
+	  dwc_name => 'firstAppearanceEarlyAge', data_type => 'dec' },
 	    "The early age bound for the first appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'firstocc_la', name => 'firstocc_min_ma', com_name => 'fpa', dwc_name => 'firstAppearanceLateAge' }, 
+	{ output => 'firstocc_la', name => 'firstocc_min_ma', com_name => 'fpa', 
+	  dwc_name => 'firstAppearanceLateAge', data_type => 'dec' }, 
 	    "The late age bound for the first appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'lastocc_ea', name => 'lastocc_max_ma', com_name => 'loa', dwc_name => 'lastAppearanceEarlyAge' },
+	{ output => 'lastocc_ea', name => 'lastocc_max_ma', com_name => 'loa', 
+	  dwc_name => 'lastAppearanceEarlyAge', data_type => 'dec' },
 	    "The early age bound for the last appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'lastocc_la', name => 'lastocc_min_ma', com_name => 'lpa', dwc_name => 'lastAppearanceLateAge' }, 
+	{ output => 'lastocc_la', name => 'lastocc_min_ma', com_name => 'lpa', 
+	  dwc_name => 'lastAppearanceLateAge', data_type => 'dec' }, 
 	    "The late age bound for the last appearance of this taxon in the set of",
 	    "occurrences being analyzed.");
 	# { output => 'occ_early_interval', com_name => 'oei' },
@@ -398,15 +403,16 @@ sub initialize {
 	{ output => 'orig_no', com_name => 'oid', dwc_name => 'taxonID' },
 	{ output => 'taxon_no', com_name => 'vid', not_field => 'no_variant' },
 	{ output => 'record_type', com_name => 'typ', com_value => 'txn', not_field => 'no_recordtype' },
-	{ output => 'taxon_rank', com_name => 'rnk', dwc_name => 'taxonRank' },
+	{ output => 'taxon_rank', com_name => 'rnk', dwc_name => 'taxonRank', data_type => 'mix' },
 	{ output => 'taxon_name', com_name => 'nam', dwc_name => 'scientificName' },
 	{ output => 'accepted_no', com_name => 'acc', dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
-	{ output => 'taxon_size', com_name => 'siz' },
-	{ output => 'extant_size', com_name => 'exs' },
+	{ output => 'taxon_size', com_name => 'siz', data_type => 'pos' },
+	{ output => 'extant_size', com_name => 'exs', data_type => 'pos' },
 	{ output => 'firstapp_ea', pbdb_name => 'firstapp_max_ma', com_name => 'fea' });
     
     $ds->define_block('1.2:taxa:class' =>
 	{ select => [ 'CLASS', 'GENUS', 'TYPE_TAXON' ] },
+	{ set => '*', code => \&process_classification },
 	#{ output => 'kingdom', com_name => 'kgl' },
 	#    "The name of the kingdom in which this taxon occurs",
 	{ output => 'phylum', com_name => 'phl' },
@@ -456,18 +462,18 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:subcounts' => 
 	{ select => 'COUNTS' },
-	{ output => 'n_orders', com_name => 'odc' },
+	{ output => 'n_orders', com_name => 'odc', data_type => 'pos' },
 	    "The number of orders within this taxon.  For lists of taxa derived",
 	    "from a set of occurrences, this will be the number of orders that",
 	    "appear within that set.  Otherwise, this will be the total number",
 	    "of orders within this taxon that are known to the database.",
-	{ output => 'n_families', com_name => 'fmc' },
+	{ output => 'n_families', com_name => 'fmc', data_type => 'pos' },
 	    "The number of families within this taxon, according to the same rules",
 	    "as C<n_orders> above.",
-	{ output => 'n_genera', com_name => 'gnc' },
+	{ output => 'n_genera', com_name => 'gnc', data_type => 'pos' },
 	    "The number of genera within this taxon, according to the same rules",
 	    "as C<n_orders> above.",
-	{ output => 'n_species', com_name => 'spc' },
+	{ output => 'n_species', com_name => 'spc', data_type => 'pos' },
 	    "The number of species within this taxon, according to the same rules",
 	    "as C<n_orders> above.");
     
@@ -475,7 +481,7 @@ sub initialize {
 	{ select => ['SENPAR', 'IMMPAR', 'CLASS', 'COUNTS'] },
 	{ output => 'senpar_name', com_name => 'prl' },
 	    "The name of the parent taxon or its senior synonym if any",
-	{ output => 'senpar_rank', com_name => 'prr' },
+	{ output => 'senpar_rank', com_name => 'prr', data_type => 'mix' },
 	    "The rank of the parent taxon or its senior synonym if any",
 	{ output => 'immpar_name', com_name => 'ipl', dedup => 'prl' },
 	    "The name of the immediate parent taxon if it is a junior synonym",
@@ -490,30 +496,30 @@ sub initialize {
 	{ output => 'phylum', com_name => 'phl' },
 	    "The name of the phylum in which this taxon occurs",
 	{ output => 'phylum_txn', com_name => 'pht', sub_record => '1.2:taxa:subtaxon' },
-	{ output => 'phylum_count', com_name => 'phc' },
+	{ output => 'phylum_count', com_name => 'phc', data_type => 'pos' },
 	    "The number of phyla within this taxon",
 	{ output => 'class_no', com_name => 'cln' },
 	    "The identifier of the class in which this taxon occurs",
 	{ output => 'class', com_name => 'cll' },
 	    "The name of the class in which this taxon occurs",
 	{ output => 'class_txn', com_name => 'clt', sub_record => '1.2:taxa:subtaxon' },
-	{ output => 'class_count', com_name => 'clc' },
+	{ output => 'class_count', com_name => 'clc', data_type => 'pos' },
 	    "The number of classes within this taxon",
 	{ output => 'order_no', com_name => 'odn' },
 	    "The identifier of the order in which this taxon occurs",
 	{ output => 'order', com_name => 'odl' },
 	    "The name of the order in which this taxon occurs",
 	{ output => 'order_txn', com_name => 'odt', sub_record => '1.2:taxa:subtaxon' },
-	{ output => 'order_count', com_name => 'odc' },
+	{ output => 'order_count', com_name => 'odc', data_type => 'pos' },
 	    "The number of orders within this taxon",
 	{ output => 'family_no', com_name => 'fmn' },
 	    "The identifier of the family in which this taxon occurs",
 	{ output => 'family', com_name => 'fml' },
 	    "The name of the family in which this taxon occurs",
 	{ output => 'family_txn', com_name => 'fmt', sub_record => '1.2:taxa:subtaxon' },
-	{ output => 'family_count', com_name => 'fmc' },
+	{ output => 'family_count', com_name => 'fmc', data_type => 'pos' },
 	    "The number of families within this taxon",
-	{ output => 'genus_count', com_name => 'gnc' },
+	{ output => 'genus_count', com_name => 'gnc', data_type => 'pos' },
 	    "The number of genera within this taxon",
     
 	{ output => 'children', com_name => 'chl', sub_record => '1.2:taxa:subtaxon' },
@@ -767,7 +773,7 @@ sub initialize {
 	    "classification opinion, B<U> for an opinion which was not selected",
 	    "as a classification opinion.",
 	{ set => 'opinion_type', lookup => \%pbdb_opinion_code, if_vocab => 'pbdb' },
-	{ output => 'taxon_rank', com_name => 'rnk' },
+	{ output => 'taxon_rank', com_name => 'rnk', data_type => 'mix' },
 	    "The rank to which this opinion assigns the taxonomic name that is the subject of",
 	    "this opinion.",
 	{ output => 'taxon_name', com_name => 'nam' },
@@ -1573,6 +1579,9 @@ sub initialize {
 	{ allow => '1.2:taxa:filter' },
 	{ allow => '1.2:common:select_taxa_crmod' },
 	{ allow => '1.2:common:select_taxa_ent' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>The following parameters indicate which information should be returned about each resulting name,",
 	"and the order in which you wish the records to be returned.",
 	{ allow => '1.2:taxa:show' }, 
@@ -1626,6 +1635,9 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_ent' },
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters specify what information should be returned about each",
 	"resulting reference, and the order in which the results should be returned:",
 	{ allow => '1.2:refs:display' },
@@ -1689,6 +1701,9 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_ent' },
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters specify what information should be returned about each resulting name,",
 	"and the order in which the results should be returned:",
 	{ allow => '1.2:taxa:show' },
@@ -1730,6 +1745,9 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_ent' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters specify what information should be returned about each",
 	"resulting opinion, and the order in which the results should be returned:",
 	{ allow => '1.2:opinions:display' },
@@ -1837,6 +1855,10 @@ sub initialize {
 	{ optional => 'op_type', valid => '1.2:opinions:select', alias => 'select', default => 'all' },
 	    "You can use this parameter to retrieve all opinions, or only the classification opinions,",
 	    "or only certain kinds of opinions.  The default is all opinions.  Accepted values include:",
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
+	">>You can use the following parameters to select extra information to return.",
 	{ allow => '1.2:opinions:display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
@@ -1890,7 +1912,7 @@ sub get_taxon {
     if ( $taxon_no = $request->clean_param('taxon_id') )
     {
 	die $request->exception(400, "Invalid taxon id '$taxon_no'")
-	    unless $taxon_no > 0 || $taxon_no =~ qr{ ^ U[A-Z] \d* $ }xs;
+	    unless $taxon_no > 0 || $taxon_no =~ qr{ ^ [UN][A-Z] \d* $ }xs;
 	
 	if ( ! ref $taxon_no || $taxon_no->{type} eq 'unk' )
 	{
@@ -1989,7 +2011,7 @@ sub get_taxon {
     
     # If this is an 'unknown taxon', return a synthesized record.
 
-    if ( $taxon_no && $taxon_no =~ qr{ ^ ( U[A-Z] ) }xs )
+    if ( $taxon_no && $taxon_no =~ qr{ ^ ( [UN][A-Z] \d* ) }xs )
     {
 	$request->single_result( generate_unknown_taxon($1) );
 	return;
@@ -2974,7 +2996,7 @@ sub generate_query_options {
 	
 	elsif ( $prefix eq 'taxa' )
 	{
-	    $options->{$selector} = $value;
+	    $options->{"taxa_$selector"} = $value;
 	}
 	
 	else
@@ -3277,7 +3299,7 @@ sub generate_query_base {
 
 	if ( $rel eq 'exact' || $rel eq 'current' )
 	{
-	    my @unknown_ids = grep { /^U/ } @taxon_ids;
+	    my @unknown_ids = grep { /^[UN]/ } @taxon_ids;
 	    @unknown_taxa = map { generate_unknown_taxon($_) } @unknown_ids;
 	}
     }
@@ -3880,9 +3902,10 @@ sub generate_unknown_taxon {
     my ($taxon_no) = @_;
     
     my $code = substr($taxon_no, 0, 2);
+    $code =~ s/^U/N/;
     
-    return { orig_no => $taxon_no, taxon_rank => $UNK_RANK{$code},
-	     taxon_name => $UNK_NAME{$code} };
+    return { orig_no => $taxon_no, taxon_rank => $UNS_RANK{$code},
+	     taxon_name => $UNS_NAME{$code} };
 };
 
 
@@ -4322,10 +4345,44 @@ sub process_ages {
 sub process_image_ids {
     
     my ($request, $record) = @_;
-
+    
     if ( $request->{block_hash}{extids} )
     {
 	$record->{image_no} = generate_identifier('PHP', $record->{image_no});
+    }
+}
+
+
+sub process_classification {
+    
+    my ($request, $record) = @_;
+    
+    return unless $record->{taxon_rank};
+    
+    foreach my $u ( qw(NP NC NO NF NG) )
+    {
+	if ( $record->{taxon_rank} =~ /^\d/ )
+	{
+	    last if $record->{taxon_rank} >= $UNS_RANK{$u};
+	}
+	
+	else
+	{
+	    last if $TAXON_RANK{$record->{taxon_rank}} &&
+		$TAXON_RANK{$record->{taxon_rank}} >= $UNS_RANK{$u};
+	}
+	
+	$record->{$UNS_FIELD{$u}} ||= $UNS_NAME{$u};
+	
+	if ( $request->{block_hash}{extids} )
+	{
+	    $record->{$UNS_ID{$u}} ||= generate_identifier('TXN', $u);
+	}
+
+	else
+	{
+	    $record->{$UNS_ID{$u}} ||= $u;
+	}
     }
 }
 

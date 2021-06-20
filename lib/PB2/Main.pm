@@ -22,8 +22,11 @@ use PB2::SpecimenData;
 use PB2::DiversityData;
 use PB2::ReferenceData;
 use PB2::PersonData;
+use PB2::PublicationData;
+use PB2::ArchiveData;
 use PB2::CombinedData;
 use PB2::ResourceData;
+use PB2::Statistics;
 use PB2::Authentication;
 use PB2::MainEntry;
 
@@ -65,10 +68,14 @@ use PB2::MainEntry;
 	    "the size of the response message.  This is the default for L<JSON format|node:formats/json>",
 	    "responses. Some of the field values are similarly abbreviated, while others are conveyed",
 	    "in their entirety. For details, see the documentation for the individual response fields.",
+	{ name => 'bibjson', title => 'BibJSON field names' },
+	    "The BibJSON vocabulary uses the field names and value formats defined for ",
+	    "L<BibTeX|https://en.wikipedia.org/wiki/BibTeX#Bibliographic_information_file>, ",
+	    "which is the vocabulary used for BibJSON.",
 	{ name => 'dwc', title => 'Darwin Core', disabled => 1 },
-	    "The Darwin Core vocabulary follows the L<Darwin Core standard|http://www.tdwg.org/standards/450/>",
-	    "set by the L<TDWG|http://www.tdwg.org/>.  This includes both the field names and field values.",
-	    "Because the Darwin Core standard is XML-based, it is very strict.  Many",
+	    "The Darwin Core vocabulary follows the L<Darwin Core standard|https://github.com/tdwg/dwc>",
+	    "set by the L<TDWG|https://www.tdwg.org/>.  This includes both the field names and field",
+	    "values. Because the Darwin Core standard is XML-based, it is very strict.  Many",
 	    "but not all of the fields can be expressed in this vocabulary; those that",
 	    "cannot are unavoidably left out of the response.");
     
@@ -117,6 +124,13 @@ use PB2::MainEntry;
 	#   module => 'Template', disabled => 1 },
 	#     "The HTML format returns formatted web pages describing the selected",
 	#     "object or objects from the database.",
+	{ name => 'larkin', content_type => 'application/json; charset=utf-8',
+	  doc_node => 'formats/larkin', title => 'Larkin', default_vocab => '',
+	  module => 'Larkin' },
+	    "This format is used for operations that replace the old Larkin data service,",
+	    "written in Javascript,",
+	    "that was used to provide data to the frontend website. This format is",
+	    "designed to produce the same output as the old data service.",
 	{ name => 'ris', content_type => 'application/x-research-info-systems',
 	  doc_node => 'formats/ris', title => 'RIS', disposition => 'attachment',
 	  encode_as_text => 1, default_vocab => '', module => 'RISFormat'},
@@ -137,6 +151,7 @@ use PB2::MainEntry;
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
 			default_save_filename => 'pbdb_data',
+			before_operation_hook => \&PB2::ArchiveEntry::check_archive,
 			title => 'Documentation' });
     
     # If a default_limit value was defined in the configuration file, get that
@@ -217,7 +232,7 @@ use PB2::MainEntry;
 			before_operation_hook => 'prune_field_list',
 			output => '1.2:occs:basic',
 			optional_output => '1.2:occs:basic_map',
-			title => 'Lists of fossil occurrences' },
+			title => 'List of fossil occurrences' },
 	"This operation returns information about multiple occurrences, selected according to the parameters you provide.",
 	"You can select occurrences by taxonomy, geography, age, environment, and many other criteria.",
 	"If you select the C<csv> or C<tsv> output format, the output you get will be very similar to the Classic",
@@ -425,7 +440,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'colls/list',
 			place => 2,
-			title => 'Lists of fossil collections',
+			title => 'List of fossil collections',
 			usage => [ "colls/list.txt?base_name=Cetacea&interval=Miocene&show=ref,loc,stratext" ],
 			before_operation_hook => 'prune_field_list',
 			method => 'list_colls',
@@ -493,7 +508,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'strata/list',
 			place => 1,
-			title => 'Lists of geological strata',
+			title => 'List of geological strata',
 			usage => [ "strata/list.txt?lngmin=0&lngmax=15&latmin=0&latmax=15&rank=formation" ],
 			method => 'list_coll_strata',
 			output => '1.2:strata:basic',
@@ -536,7 +551,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'specs/list',
 			place => 2,
-			title => 'Lists of specimens',
+			title => 'List of specimens',
 			usage => [ "specs/list.txt?base_name=stegosauria" ],
 			method => 'list_specimens',
 			output => '1.2:specs:basic',
@@ -620,7 +635,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'taxa/list',
 			place => 2,
-			title => 'Lists of taxa',
+			title => 'List of taxa',
 			usage => [ "taxa/list.txt?id=69296&rel=all_children&show=ref",
 				   "taxa/list.json?name=Dascillidae&rel=all_parents" ],
 			method => 'list_taxa',
@@ -765,7 +780,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'opinions/list',
 			place => 2,
-			title =>'Lists of opinions',
+			title =>'List of opinions',
 			usage => [ "opinions/list.json?created_since=7d",
 				   "opinions/list.json?author=Osborn" ],
 			method => 'list_opinions',
@@ -804,7 +819,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'intervals/list',
 			place => 2,
-			title => 'Lists of geological time intervals',
+			title => 'List of geological time intervals',
 			usage => "intervals/list.txt?scale=1",
 			method => 'list' },
 	"This operation returns information about multiple intervals, selected according to",
@@ -833,7 +848,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'scales/list',
 			place => 2,
-			title => 'Lists of geological time scales',
+			title => 'List of geological time scales',
 			usage => "scales/list.json",
 			method => 'list_scales' },
 	"This operation returns information about multiple time scales.  To get a list of all of the available",
@@ -888,6 +903,7 @@ use PB2::MainEntry;
 			title => 'Bibliographic references',
 			role => 'PB2::ReferenceData',
 			allow_format => '+ris',
+			allow_vocab => '+bibjson',
 			default_limit => $ref_limit,
 			output => '1.2:refs:basic',
 		        optional_output => '1.2:refs:output_map' },
@@ -905,7 +921,7 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'refs/list',
 			place => 2,
-			title => 'Lists of bibliographic references',
+			title => 'List of bibliographic references',
 			usage => "refs/list.txt?ref_author=Sepkoski",
 			method => 'list' },
 	"This operation returns information about lists of bibliographic references,",
@@ -971,7 +987,7 @@ use PB2::MainEntry;
 	"its unique identifier in the database.");
     
     $ds2->define_node({ path => 'timescales/list',
-			title => 'Lists of geological timescales',
+			title => 'List of geological timescales',
 			place => 1,
 			usage => [ 'timescales/list.json?all_records', 'timescales/list.json?timescale_match=gradstein' ],
 			method => 'list_records',
@@ -982,7 +998,7 @@ use PB2::MainEntry;
 	"according to the query parameters.");
     
     $ds2->define_node({ path => 'timescales/bounds',
-			title => 'Lists of geological time interval bounds',
+			title => 'List of geological time interval bounds',
 			usage => [ 'bounds/list.json?timescale_id=1', 'bounds/list.json?interval_name=cretaceous' ],
 			method => 'list_records',
 			arg => 'bounds',
@@ -1017,7 +1033,7 @@ use PB2::MainEntry;
 		      place => 3 });
     
     $ds2->define_node({ path => 'tsi/list',
-			title => 'Lists of geological time intervals',
+			title => 'List of geological time intervals',
 			usage => [ 'intervals2/list.json?timescale_id=5', 'intervals2/list.json?interval_name=cretaceous',
 				   'intervals2/list.json?interval_name=cretaceous&absolute' ],
 			method => 'list_records',
@@ -1050,7 +1066,7 @@ use PB2::MainEntry;
 	"by its unique identifier.");
     
     $ds2->define_node({ path => 'places/list',
-			title => 'Lists of geographic places',
+			title => 'List of geographic places',
 			place => 2,
 			method => 'list_places',
 			output => '1.2:places:basic' },
@@ -1074,26 +1090,152 @@ use PB2::MainEntry;
     			method => 'get_resource' },
     	"This operation returns information about a single educational resource record",
     	"specified by identifier.");
-
+    
     $ds2->define_node({ path => 'eduresources/list',
-    			title => "Lists of educational resources",
+    			title => "List of educational resources",
     			place => 2,
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
     			method => 'list_resources' },
     	"This operation returns information about a list of educational resource",
     	"records, selected according to the query parameters.");
-
+    
     $ds2->define_node({ path => 'eduresources/active',
     			title => "Active educational resources",
     			place => 3,
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
+			output_override => 'larkin',
+			allow_format => '+larkin',
     			method => 'list_resources',
     		        arg => 'active' },
     	"This operation returns a list of active educational resource records,",
-    	"selected according to the query parameters.");
+	"selected according to the query parameters.");
     
+    # Functions that used to be carried out by the larkin data service and the archiver data
+    # service.
+    
+    $ds2->define_node({ path => 'stats',
+			title => 'Database statistics',
+			place => 13,
+			role => 'PB2::Statistics' },
+	"Statistical summaries of database information");
+    
+    $ds2->define_node({ path => 'stats/frontend',
+			title => 'Statistics for the frontend website',
+			place => 1,
+			ruleset => '1.2:larkin_stats',
+			default_format => 'larkin',
+			allow_format => 'larkin,json,csv,tsv,txt',
+			method => 'larkin_stats' },
+	"This operation replaces the /larkin/stats/ operations handled by the",
+	"old larkin dataservice. It provides information in the legacy format, for",
+	"use by the frontend website code.");
+
+    $ds2->define_node({ path => 'eduresources/tags',
+			title => 'Educational Resource Tags',
+			place => 4,
+			output => '1.2:eduresources:tag',
+			allow_format => '+larkin',
+			method => 'list_tags' },
+	"This operation returns a list of the tags available to categorize",
+	"educational resources.");
+
+    $ds2->define_node({ path => 'frontend',
+			title => 'Support for frontend application',
+			place => 12,
+			role => 'PB2::Statistics' },
+	"Auxiliary operations to support the frontend B<Navigator> application.");
+
+    $ds2->define_node({ path => 'frontend/app-state',
+			title => 'Save or retrieve Navigator application state',
+			place => 1,
+			allow_format => '+larkin',
+			allow_method => '+POST',
+			method => 'app_state' },
+	"This operation can be used to save (with POST) or retrieve (with GET)",
+	"the application state for Navigator. In fact, it can be used to save",
+	"state for any frontend application.");
+    
+    $ds2->define_node({ path => 'pubs',
+			title => 'Research Publications',
+			place => 8,
+			role => 'PB2::PublicationData' },
+	"Research papers that make major use of data from this database",
+	"can be submitted for consideration as official publications. The",
+	"operations in this section provide a list of official publication",
+	"records and information about individual records.");
+    
+    $ds2->define_node({ path => 'pubs/single',
+			title => 'Single research publication',
+			place => 1,
+			output => '1.2:pubs:basic',
+			optional_output => '1.2:pubs:optional_output',
+			allow_format => '+larkin',
+			method => 'get_publication' },
+	"This operation returns information about a single research publication",
+	"specified by its identifier.");
+    
+    $ds2->define_node({ path => 'pubs/list',
+			title => 'List of research publications',
+			place => 2,
+			output => '1.2:pubs:basic',
+			optional_output => '1.2:pubs:optional_output',
+			allow_format => '+larkin',
+			method => 'list_publications' },
+	"This operation returns information about lists of research publications.",
+	"The default is to return the entire official publication list.");
+    
+    $ds2->define_node({ path => 'archives',
+			title => 'Data Archives',
+			place => 9,
+			role => 'PB2::ArchiveData' },
+	"Database members can archive data downloads, preserving them on",
+	"the server so that they or others can later retrieve the exact same",
+	"result set. This facility can be used to document the research process.",
+	"Additionally, you can request that a DOI be generated for significant",
+	"archives so that they can be quoted in research papers.");
+    
+    $ds2->define_node({ path => 'archives/single',
+			title => 'Single data archive',
+			place => 1,
+			output => '1.2:archives:basic',
+			optional_output => '1.2:archives:optional_output',
+			allow_format => '+larkin',
+			method => 'get_archive' },
+	"This operation returns information about a single data archive,",
+	"specified by its identifier.");
+    
+    $ds2->define_node({ path => 'archives/retrieve',
+			title => 'Content of a data archive',
+			place => 1,
+			method => 'retrieve_archive' },
+	"This operation returns the content of a data archive,",
+	"specified by its identifier. The content, format, and vocabulary of",
+	"each archive is set when the archive is created.");
+    
+    $ds2->define_node({ path => 'archives/list',
+			arg => 'all',
+			title => 'List of data archives',
+			place => 2,
+			output => '1.2:archives:basic',
+			optional_output => '1.2:archives:optional_output',
+			allow_format => '+larkin',
+			method => 'list_archives' },
+	"This operation returns information about lists of data archives,",
+	"selected according to the request parameters.");
+    
+    $ds2->define_node({ path => 'archives/public',
+			arg => 'public',
+			title => 'List of public data archives',
+			place => 3,
+			output => '1.2:archives:basic',
+			optional_output => '1.2:archives:optional_output',
+			allow_format => '+larkin',
+			method => 'list_archives'},
+	"This operation returns information about public data archives,",
+	"selected according to the request parameters.");
+		      
     # The following paths are used for miscellaneous documentation
     
     $ds2->define_node({ path => 'general',
@@ -1159,9 +1301,9 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'formats/json',
 			title => 'JSON format' });
-    
-    $ds2->define_node({ path => 'formats/xml',
-			title => 'XML format' });
+
+    # $ds2->define_node({ path => 'formats/xml',
+    # 			title => 'XML format' });
     
     $ds2->define_node({ path => 'formats/text',
 			title => 'Text formats' });
@@ -1171,6 +1313,9 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'formats/png',
 			title => 'PNG format' });
+    
+    $ds2->define_node( { path => 'formats/larkin',
+			 title => 'Larkin format' });
     
     
     # And finally, stylesheets and such

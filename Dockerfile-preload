@@ -1,0 +1,49 @@
+#
+# Paleobiology Database - Main API preload image
+# 
+# This file is used to build the preload image for the Paleobiology Database API.
+# It installs a long list of necessary packages, and takes 45 minutes or more to
+# build. The Dockerfile found in this directory then uses the preload image as a
+# base to build the API container image very quickly by copying in the source code,
+# configuration file and other local content. You can build this preload image
+# using the command 'pbdb build preload api'.
+
+FROM perl:5.32-threaded AS paleomacro_pbapi_preload
+
+RUN apt-get update && \
+    apt-get -y install mariadb-client && \
+    cpanm DBI && \
+    cpanm DBD::mysql && \
+    cpanm Dancer && \
+    cpanm Moo && \
+    cpanm namespace::clean && \
+    cpanm YAML && \
+    cpanm Template && \
+    cpanm Dancer::Template::Tiny && \
+    cpanm Dancer::Plugin::Database && \
+    cpanm Dancer::Plugin::StreamData && \
+    cpanm Starman
+    
+RUN cpanm HTTP::Validate && \
+    cpanm Switch::Plain && \
+    cpanm --force Term::ReadLine::Gnu && \
+    cpanm --force Text::CSV_XS && \
+    cpanm --force Test::Conditions && \
+    cpanm --force Term::ReadKey && \
+    cpanm --force LWP::Protocol::https
+
+RUN cpanm Server::Starter && \
+    cpanm Net::Server::SS::PreFork
+
+RUN apt-get -y install vim && \
+    apt-get -y install curl && \
+    apt-get -y install locales && \
+    apt-get -y install tzdata
+
+ARG LANG=en_US.UTF-8
+
+ENV LANG=$LANG
+
+RUN echo "$LANG UTF-8" > "/etc/locale.gen" && \
+    locale-gen
+

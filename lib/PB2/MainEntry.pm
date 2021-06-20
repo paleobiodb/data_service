@@ -14,7 +14,8 @@ use PB2::CommonEntry;
 use PB2::SpecimenEntry;
 use PB2::TimescaleEntry;
 use PB2::ResourceEntry;
-
+use PB2::PublicationEntry;
+use PB2::ArchiveEntry;
 
 sub initialize {
 
@@ -290,6 +291,122 @@ sub initialize {
 	"and will delete the specified record if you have permission to do so.",
 	">Nothing will be returned except a result code indicating success or failure,",
 	"plus any errors or warnings that were generated.");
+    
+    # Entry operations for publications.
+    
+    $ds2->define_node({ path => 'entry/pubs',
+			title => 'Official publications' });
+    
+    $ds2->list_node({ path => 'entry/pubs',
+		      list => 'entry',
+		      place => 3 },
+	"Data entry operations for official publication records.");
+    
+    $ds2->define_node({ path => 'pubs/addupdate',
+			title => 'Add official publications or update existing records',
+			place => 0,
+			allow_method => 'PUT,POST',
+			doc_template => 'entry_operation.tt',
+			body_ruleset => '1.2:pubs:addupdate_body',
+			role => 'PB2::PublicationEntry',
+			allow_format => '+larkin',
+			method => 'update_publications',
+			output => '1.2:pubs:basic',
+			optional_output => '1.2:pubs:optional_output' },
+	"This operation allows you to add new official publication records to the database and/or",
+	"update the attributes of existing records.");
+    
+    $ds2->list_node({ path => 'pubs/addupdate',
+		      list => 'entry/pubs',
+		      place => 1 });
+    
+    $ds2->extended_doc({ path => 'pubs/addupdate' },
+	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
+	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
+	"you may specify multiple records. Any records which specify a publication identifier",
+	"will update the attributes of that record if you have permission to do so.",
+	"Otherwise, a new record will be created, owned by you.",
+	">By default, this operation returns the new or updated record(s).");
+    
+    $ds2->define_node({ path => 'pubs/delete',
+			title => 'Delete official publications',
+			place => 0,
+			allow_method => 'GET,PUT,POST,DELETE',
+			role => 'PB2::PublicationEntry',
+			method => 'delete_publications',
+			output => '1.2:pubs:basic'},
+	"This operation allows you to delete one or more existing official publications.");
+    
+    $ds2->list_node({ path => 'pubs/delete',
+		      list => 'entry/pubs',
+		      place => 1 });
+    
+    $ds2->extended_doc({ path => 'pubs/delete' },
+	"You may provide the necessary parameters in the URL (with method C<B<GET>> or C<B<DELETE>>)",
+	"or in the request body in JSON format (with method C<B<PUT>> or C<B<POST>>). With the latter,",
+	"you may specify multiple records. All records must specify a publication identifier,",
+	"and will delete the specified record if you have permission to do so.",
+	">Nothing will be returned except a result code indicating success or failure,",
+	"plus any errors or warnings that were generated.");
+    
+    # Entry operations for data archives.
+    
+    $ds2->define_node({ path => 'entry/archives',
+			title => 'Data archives' });
+    
+    $ds2->list_node({ path => 'entry/archives',
+		      list => 'entry',
+		      place => 3 },
+	"Data entry operations for data archive records.");
+    
+    $ds2->define_node({ path => 'archives/addupdate',
+			title => 'Add data archive records or update existing records',
+			place => 0,
+			allow_method => 'PUT,POST',
+			doc_template => 'entry_operation.tt',
+			body_ruleset => '1.2:archives:addupdate_body',
+			role => 'PB2::ArchiveEntry',
+			allow_format => '+larkin',
+			method => 'update_archives',
+			output => '1.2:archives:basic',
+			optional_output => '1.2:archives:optional_output' },
+	"This operation allows you to add new data archive records to the database and/or",
+	"update the attributes of existing records.");
+    
+    $ds2->list_node({ path => 'archives/addupdate',
+		      list => 'entry/archives',
+		      place => 1 });
+    
+    $ds2->extended_doc({ path => 'archives/addupdate' },
+	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
+	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
+	"you may specify multiple records. Any records which specify a data archive record",
+	"will update the attributes of that record if you have permission to do so.",
+	"Otherwise, a new record will be created, owned by you.",
+	">By default, this operation returns the new or updated record(s).");
+    
+    $ds2->define_node({ path => 'archives/delete',
+			title => 'Delete data archives',
+			place => 0,
+			allow_method => 'GET,PUT,POST,DELETE',
+			role => 'PB2::ArchiveEntry',
+			method => 'delete_archives',
+			output => '1.2:archives:basic'},
+	"This operation allows you to delete one or more existing data archives.");
+    
+    $ds2->list_node({ path => 'archives/delete',
+		      list => 'entry/archives',
+		      place => 1 });
+    
+    $ds2->extended_doc({ path => 'archives/delete' },
+	"You may provide the necessary parameters in the URL (with method C<B<GET>> or C<B<DELETE>>)",
+	"or in the request body in JSON format (with method C<B<PUT>> or C<B<POST>>). With the latter,",
+	"you may specify multiple records. All records must specify a data archive identifier,",
+	"and will delete the specified record if you have permission to do so.",
+	">Nothing will be returned except a result code indicating success or failure,",
+	"plus any errors or warnings that were generated.");
+    
+    # Entry operations for specimens and measurements.
     
     $ds2->define_node({ path => 'entry/specs',
 			title => 'Specimens and Measurements' });

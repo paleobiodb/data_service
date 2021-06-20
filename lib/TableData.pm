@@ -14,6 +14,7 @@ use TableDefs qw(%TABLE get_table_property get_column_properties list_column_pro
 		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
 
 use Carp qw(croak);
+use HTTP::Validate qw(:validators);
 use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
@@ -38,7 +39,7 @@ our (%COMMON_FIELD_IDSUB);
 
 our (%SCHEMA_CACHE);
 
-our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
+our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED NOT_NULL ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
 				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR IGNORE);
 
 our (%PREFIX_SIZE) = ( tiny => 255,
@@ -46,17 +47,11 @@ our (%PREFIX_SIZE) = ( tiny => 255,
 		       medium => 16777215,
 		       large => 4294967295 );
 
-our (%SIGNED_BOUND) = ( tiny => 127,
-			small => 32767,
-			medium => 8388607,
-			regular => 2147483647,
-			big => 9223372036854775807 );
-
-our (%UNSIGNED_BOUND) = ( tiny => 255,
-			  small => 65535,
-			  medium => 16777215,
-			  regular => 4294967295,
-			  big => 18446744073709551615 );
+our (%INT_SIZE) = ( tiny => 'one byte integer',
+		    small => 'two byte integer',
+		    medium => 'three byte integer',
+		    regular => 'four byte integer',
+		    big => 'eight byte integer');
 
 
 # get_table_scheme ( table_name, debug_flag )
@@ -107,7 +102,7 @@ sub get_table_schema {
 	$quoted_table = $dbh->quote_identifier($table_name);
     }
     
-    print STDERR "$sql\n\n" if $debug;
+    print STDERR "$sql\n" if $debug;
     
     eval {
 	($check_table) = $dbh->selectrow_array($sql);
@@ -115,10 +110,10 @@ sub get_table_schema {
     
     croak "unknown table '$table_specifier'" unless $check_table;
     
-    print STDERR "	SHOW COLUMNS FROM $quoted_table\n\n" if $debug;
+    print STDERR "SHOW FULL COLUMNS FROM $quoted_table\n" if $debug;
     
     my $columns_ref = $dbh->selectall_arrayref("
-	SHOW COLUMNS FROM $quoted_table", { Slice => { } });
+	SHOW FULL COLUMNS FROM $quoted_table", { Slice => { } });
     
     # Figure out which columns from this table have had properties set for them.
     
@@ -168,15 +163,21 @@ sub get_table_schema {
 	}
 	
 	# If the column is Not Null and has neither a default value nor auto_increment, then mark
-	# it as REQUIRED. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column. But not if the column type is BLOB or
-	# TEXT, because of an issue with MariaDB 10.0-10.1.
+	# it as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
+	# update a record with a null value for this column. [But not if the column type is BLOB or
+	# TEXT, because of an issue with MariaDB 10.0-10.1. - taken out 2020-03-06 mjm]
 	
 	if ( $c->{Null} && $c->{Null} eq 'NO' && not ( defined $c->{Default} ) &&
 	     not ( $c->{Extra} && $c->{Extra} =~ /auto_increment/i ) )
 	{
-	    $c->{REQUIRED} = 1 unless $c->{Type} =~ /text|blob/i;
+	    $c->{NOT_NULL} = 1; # unless $c->{Type} =~ /text|blob/i;
 	}
+	
+	# We discard the Privileges and Comment fields, because we don't use them. The only reason
+	# for retrieving the full column output is to get the Collation information.
+
+	delete $c->{Privileges};
+	delete $c->{Comments};
 	
 	# If the name of the field ends in _no, then record its alternate as the same name with
 	# _id substituted unless there is already a field with that name.
@@ -200,14 +201,17 @@ sub get_table_schema {
 	{
 	    my $type = $2 eq 'char' ? 'text' : 'data';
 	    my $mode = $1 ? 'variable' : 'fixed';
-	    $c->{TypeParams} = [ $type, $3, $mode ];
+	    my $size = $3;
+	    my ($charset) = $c->{Collation} =~ qr{ ^ ([^_]+) }xs;
+	    $c->{TypeParams} = [ $type, $size, $mode, $charset ];
 	}
 	
 	elsif ( $type =~ qr{ ^ ( tiny | medium | long )? ( text | blob ) (?: [(] ( \d+ ) )? }xs )
 	{
 	    my $type = $2 eq 'text' ? 'text' : 'data';
 	    my $size = $3 || $PREFIX_SIZE{$1 || 'regular'};
-	    $c->{TypeParams} = [ $type, $size, 'variable' ];
+	    my ($charset) = $c->{Collation} =~ qr{ ^ ([^_]+) }xs;
+	    $c->{TypeParams} = [ $type, $size, 'variable', $charset ];
 	}
 	
 	elsif ( $type =~ qr{ ^ tinyint [(] 1 [)] }xs )
@@ -217,7 +221,7 @@ sub get_table_schema {
 	
 	elsif ( $type =~ qr{ ^ (tiny|small|medium|big)? int [(] (\d+) [)] \s* (unsigned)? }xs )
 	{
-	    my $bound = $3 ? $UNSIGNED_BOUND{$1 || 'regular'} : $SIGNED_BOUND{$1 || 'regular'};
+	    my $bound = $1 || 'regular';
 	    my $unsigned = $3 ? 'unsigned' : '';
 	    $c->{TypeParams} = [ 'integer', $unsigned, $bound, $2 ];
 	}
@@ -250,8 +254,9 @@ sub get_table_schema {
 	elsif ( $type =~ qr{ ^ ( enum | set ) [(] (.+) [)] $ }xs )
 	{
 	    my $type = $1;
+	    my $list = $2;
 	    my $value_hash = unpack_enum($2);
-	    $c->{TypeParams} = [ $type, $value_hash ];
+	    $c->{TypeParams} = [ $type, $value_hash, $list ];
 	}
 	
 	elsif ( $type =~ qr{ ^ ( date | time | datetime | timestamp ) \b }xs )
@@ -299,7 +304,7 @@ sub unpack_enum {
     {
 	my $value = $1;
 	$string = $2;
-
+	
 	$value =~ s/''/'/g;
 	$value_hash->{fc $value} = 1;
     }
@@ -332,13 +337,13 @@ sub reset_cached_column_properties {
 	}
 	
 	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
-	# as REQUIRED. Otherwise, a database error will be generated when we try to insert or
+	# as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
 	# update a record with a null value for this column.
 	
 	if ( $col->{Null} && $col->{Null} eq 'NO' && not ( defined $col->{Default} ) &&
 	     not ( $col->{Extra} && $col->{Extra} =~ /auto_increment/i ) )
 	{
-	    $col->{REQUIRED} = 1;
+	    $col->{NOT_NULL} = 1;
 	}
 	
 	# If the name of the field ends in _no, then record its alternate as the same name with
@@ -398,7 +403,9 @@ sub get_authinfo_fields {
 
 sub complete_output_block {
     
-    my ($ds, $dbh, $block_name, $table_specifier) = @_;
+    my ($ds, $dbh, $block_name, $table_specifier, $override) = @_;
+    
+    $override = { } unless ref $override eq 'HASH';
     
     # First get a hash of table column definitions
     
@@ -429,7 +436,9 @@ sub complete_output_block {
     
     # Then go through the field list from the schema and add any fields that aren't already in the
     # output list. We need to translate names that end in '_no' to '_id', and we can substitute
-    # compact vocabulary names where known.
+    # compact vocabulary names where known. If an override hash was defined, look up the field
+    # name in that hash and apply any specified attributes. If the _ignore key is present with a
+    # true value, skip that field entirely.
     
     my $field_list = $schema->{_column_list};
     
@@ -449,9 +458,10 @@ sub complete_output_block {
 	
 	next if $block_has_field{$field_name};
 	
-	# If this field has the 'IGNORE' attribute set, skip it as well.
+	# If this field has the 'IGNORE' attribute set, skip it as well. Check for an override
+	# entry as well.
 
-	next if $schema->{$field_name}{IGNORE};
+	next if $schema->{$field_name}{IGNORE} || $override->{$field_name}{IGNORE};
 	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
@@ -485,7 +495,7 @@ sub complete_output_block {
 	    $r->{com_name} = $field_name;
 	}
 	
-	my $doc = "The contents of field C<$field_name> from the table.";
+	my $doc = "The contents of field C<$field_name> from the table C<$TABLE{$table_specifier}>.";
 	
 	if ( $type =~ /int\(/ )
 	{
@@ -493,6 +503,27 @@ sub complete_output_block {
 	}
 	
 	$block_needs_oid = 0;
+
+	# If there are any attribute overrides specified for this field, apply them now.
+
+	if ( my $ov = $override->{$field_name} )
+	{
+	    foreach my $attr ( keys %$ov )
+	    {
+		if ( defined $ov->{$attr} )
+		{
+		    $r->{$attr} = $ov->{$attr};
+		}
+
+		else
+		{
+		    delete $r->{$attr};
+		}
+	    }
+	}
+	
+	# Add the record for this field to the output list for the block we are completing, and
+	# add it to the documentation list as well along with a default documentation string.
 	
 	push @$output_list, $r;
 	$ds->add_doc($block, $r);
@@ -528,7 +559,9 @@ sub complete_output_block {
 
 sub complete_ruleset {
     
-    my ($ds, $dbh, $ruleset_name, $table_specifier, @definitions) = @_;
+    my ($ds, $dbh, $ruleset_name, $table_specifier, $override) = @_;
+
+    $override = { } unless ref $override eq 'HASH';
     
     # First get a hash of table column definitions
     
@@ -561,9 +594,6 @@ sub complete_ruleset {
 	next if $COMMON_FIELD_SPECIAL{$column_name};
 	
 	my $field_record = $schema->{$column_name};
-	my $type = $field_record->{Type};
-	
-	next if $field_record->{IGNORE};
 	
 	my $field_name = $column_name;
 	
@@ -572,19 +602,97 @@ sub complete_ruleset {
 	    $field_name = $field_record->{ALTERNATE_NAME};
 	}
 	
-	elsif ( $field_name =~ /(.*)_no/ )
-	{
-	    $field_name = $1 . '_id';
-	}
+	# If the ruleset already has a rule corresponding to this field name, skip it. This allows
+	# you to specifically include certain fields in the ruleset with documentation strings and
+	# attributes, without them being duplicated by this routine.
 	
 	next if $ruleset_has_field{$field_name};
 	
-	my $rr = { optional => $field_name };
-	my $doc = "This parameter sets the value of C<$field_name> in the table.";
+	next if $ruleset_has_field{$column_name} && ! $field_record->{ALTERNATE_ONLY};
 	
-	if ( $type =~ /int\(/ )
+	# If there is an entry for this field in the $override hash with the IGNORE attribute,
+	# ignore it. Also ignore any field for which the column property IGNORE was set.
+	
+	next if $field_record->{IGNORE} || $override->{$field_name}{IGNORE};
+	
+	# Now create a record to represent this field, along with a documentation string and
+	# whatever other attributes we can glean from the table definition.
+	
+	my $rr = { optional => $field_name };
+	my $doc = "This parameter sets the value of C<$field_name> in the C<$TABLE{$table_specifier}> table.";
+	
+	my ($type, @type_param) = $field_record->{TypeParams}[0];
+	
+	if ( $field_name ne $column_name && ! $field_record->{ALTERNATE_ONLY} )
 	{
-	    $doc .= " The value must be an integer.";
+	    $rr->{alias} = $column_name;
+	}
+	
+	# Add documentation depending on the data type of this field.
+	
+	if ( $type eq 'text' )
+	{
+	    $doc .= " It accepts a string of length at most $type_param[0]";
+	    
+	    if ( $type_param[2] && $type_param[2] =~ /latin1/ )
+	    {
+		$doc .= " in the latin1 character set";
+	    }
+
+	    elsif ( $type_param[2] && $type_param[2] =~ /utf\d/ )
+	    {
+		$doc .= " in utf-8";
+	    }
+	    
+	    $doc .= ".";
+	}
+	
+	elsif ( $type eq 'data' )
+	{
+	    $doc .= " It accepts binary data of length at most $type_param[0].";
+	}
+	
+	elsif ( $type eq 'boolean' )
+	{
+	    $doc .= " It accepts a boolean value.";
+	}
+	
+	elsif ( $type eq 'integer' )
+	{
+	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    my $size = $INT_SIZE{$type_param[1]} || 'integer';
+	    $prefix = 'an' if $size eq 'integer';
+	    
+	    $doc .= " It accepts $prefix $size value.";
+	}
+	
+	elsif ( $type eq 'fixed' )
+	{
+	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    $doc .= " It accepts $prefix decimal value with at most $type_param[1] digits before the decimal and at most $type_param[2] digits after.";
+	}
+	
+	elsif ( $type eq 'floating' )
+	{
+	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    my $size = $type_param[2] eq 'double' ? 'double precision' : 'single precision';
+	    $doc .= " It accepts $prefix decimal value that can be stored in $size floating point.";
+	}
+
+	elsif ( $type eq 'enum' || $type eq 'set' )
+	{
+	    my $prefix = $type eq 'enum' ? 'a value' : 'one or more values';
+	    $doc .= " It accepts $prefix from the following list: C<$type_param[1]>.";
+	}
+	
+	elsif ( $type eq 'date' )
+	{
+	    $doc .= " It accepts a $type_param[0] in any format acceptable to MariaDB.\n";
+	}
+	
+	else
+	{
+	    $doc .= " The value is not checked before being sent to the database, and will throw an exception if the database does not accept it.";
 	}
 	
 	if ( $has_properties{$column_name} )

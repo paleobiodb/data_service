@@ -15,7 +15,7 @@ package PB2::SpecimenData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw(%TABLE $COLL_BINS
-		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
+		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA $SPECELT_MAP
 		 $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use Taxonomy;
@@ -112,7 +112,7 @@ sub initialize {
 	    "The part of the body of which this specimen consists",
 	{ output => 'specimen_sex', com_name => 'smx' },
 	    "The sex of the specimen, if known",
-	{ output => 'n_measured', com_name => 'smn' },
+	{ output => 'n_measured', com_name => 'smn', data_type => 'pos' },
 	    "The number of specimens measured",
 	{ output => 'measurement_source', com_name => 'mms' },
 	    "How the measurements were obtained, if known",
@@ -124,7 +124,8 @@ sub initialize {
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_name>.",
-	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', not_block => 'acconly' },
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', 
+	  not_block => 'acconly', data_type => 'mix' },
 	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_rank>.",
@@ -146,7 +147,7 @@ sub initialize {
 	    "to the identified name.",
 	{ output => 'accepted_attr', if_block => 'attr', dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of the accepted taxonomic name",
-	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no' },
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no', data_type => 'mix' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
 	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
@@ -155,9 +156,9 @@ sub initialize {
 	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
 	    "The attribution of the specimen: the author name(s) from",
@@ -483,7 +484,8 @@ sub initialize {
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_name>.",
-	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', not_block => 'acconly' },
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', 
+	  not_block => 'acconly', data_type => 'mix' },
 	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of C<accepted_rank>.",
@@ -514,9 +516,9 @@ sub initialize {
 	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
-	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
-	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
 	    "The attribution of the specimen: the author name(s) from",
@@ -654,6 +656,9 @@ sub initialize {
 	{ allow => '1.2:common:select_occs_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ allow => '1.2:specs:display' },
@@ -690,6 +695,9 @@ sub initialize {
 	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ allow => '1.2:specs:display' },
@@ -734,6 +742,9 @@ sub initialize {
 	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_aux_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can use the following parameters to select extra information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ allow => '1.2:refs:display' },
@@ -769,6 +780,9 @@ sub initialize {
 	{ allow => '1.2:common:select_occs_ent' },
 	">>The following parameters can also be used to filter the result list based on taxonomy:",
 	{ allow => '1.2:taxa:occ_list_filter' },
+	">>The following parameters can be used to generate data archives. The easiest way to",
+	"do this is by using the download generator form.",
+	{ allow => '1.2:common:archive_params' },
 	">>You can also use the following parameter to include additional information about the specimen",
 	"from which each measurement was taken. However, in many situations you may want instead to download",
 	"the specimen information separately and use the B<C<specimen_no>> field to match up the two",
@@ -1852,8 +1866,8 @@ sub list_elements {
 	die $request->exception(400, "You must specify 'all_records' if you want to retrieve the entire set of records.");
     }
     
-    push @filters, "not m.exclude";
-
+    push @filters, "not m.exclude" unless $ignore_exclude;
+    
     if ( $taxon )
     {
 	push @filters, "m.specelt_no not in (SELECT specelt_no 

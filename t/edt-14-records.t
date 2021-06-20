@@ -12,7 +12,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 4;
+use Test::More tests => 5;
 
 use TableDefs qw(get_table_property set_table_property);
 
@@ -22,7 +22,7 @@ use EditTester;
 
 # The following call establishes a connection to the database, using EditTester.pm.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 
 # Start by getting the variable values that we need to execute the remainder of the test. If the
@@ -100,7 +100,7 @@ subtest 'basic' => sub {
 };
 
 
-# Test the PRIMARY_ATTR table property, by setting it and then using the new field name.
+# Test the PRIMARY_FIELD table property, by setting it and then using the new field name.
 
 subtest 'primary_attr' => sub {
 
@@ -124,15 +124,16 @@ subtest 'primary_attr' => sub {
     
     ok( ! $edt->update_record('EDT_TEST', { not_the_key => $key, signed_val => 4 }),
 	"record was not updated using field name 'not_the_key'" );
-
+    
     $T->ok_has_error( 'F_NO_KEY', "got F_NO_KEY warning" );
-
-    # Then set this field name as the PRIMARY_ATTR, and check that it succeeds.
-
-    set_table_property('EDT_TEST', PRIMARY_ATTR => 'not_the_key');
-
+    
+    # Then set this field name as the PRIMARY_FIELD, and check that it succeeds.
+    
+    set_table_property('EDT_TEST', PRIMARY_FIELD => 'not_the_key');
+    
     ok( $edt->update_record('EDT_TEST', { not_the_key => $key, signed_val => 5 }),
-	"record was updated using field name 'not_the_key'" );
+	"record was updated using field name 'not_the_key'" ) ||
+	    $T->diag_errors('latest');
     
     # Make sure that the record was in fact updated in the table.
     
@@ -141,7 +142,8 @@ subtest 'primary_attr' => sub {
     # Then check that we can still use the primary key name.
 
     ok( $edt->update_record('EDT_TEST', { $primary => $key, signed_val => 6 }),
-	"record was updated again using primary key field name" );
+	"record was updated again using primary key field name" ) ||
+	    $T->diag_errors('latest');
     
     $T->ok_found_record('EDT_TEST', "signed_val=6");
 };
@@ -179,3 +181,57 @@ subtest 'alternate_name' => sub {
     $T->ok_no_conditions;
     $T->ok_found_record('EDT_TEST', "$primary = $key1 and string_val = ''");
 };
+
+
+# Then test that bad fields are properly recognized.
+
+subtest 'bad fields' => sub {
+
+    # First check that bad fields are recognized and that an error is thrown for each one.
+    
+    my $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, PROCEED => 1 });
+    
+    my $key = $edt->insert_record('EDT_TEST', { string_req => 'bad field test',
+						abc => 1,
+						def => 1 });
+    
+    ok(!$key, "record with bad fields was not inserted");
+    $T->ok_has_error(qr/F_BAD_FIELD.*abc/, "got F_BAD_FIELD for 'abc'");
+    $T->ok_has_error(qr/F_BAD_FIELD.*def/, "got F_BAD_FIELD for 'def'");
+    
+    is($edt->conditions, 2, "got exactly 2 errors");
+    
+    # Then check that fields beginning with an underscore do not throw an error.
+    
+    $key = $edt->insert_record('EDT_TEST', { string_req => 'good field test',
+					     _abc => 1,
+					     _def => 1 });
+    
+    ok($key, "record with _abc and _def inserted correctly");
+    
+    # Now create another transaction which allows BAD_FIELDS, and check that insertion happens
+    # correctly with warnings.
+    
+    $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1, BAD_FIELDS => 1 });
+
+    $key = $edt->insert_record('EDT_TEST', { string_req => 'bad field warnings',
+					     abc => 1,
+					     def => 1 });
+
+    ok($key, "record with bad fields inserted correctly under BAD_FIELDS allowance");
+    $T->ok_has_warning(qr/W_BAD_FIELD.*abc/, "got W_BAD_FIELD for 'abc'");
+    $T->ok_has_warning(qr/W_BAD_FIELD.*def/, "got W_BAD_FIELD for 'def'");
+    
+    is($edt->conditions, 2, "got exactly 2 warnings");
+
+    # Check that fields beginning with an underscore do not throw warnings.
+
+    $key = $edt->insert_record('EDT_TEST', { string_req => 'good field warnings',
+					     _abc => 1,
+					     _def => 1 });
+
+    ok($key, "record with _abc and _def inserted correctly");
+    $T->ok_no_warnings('latest');
+    $T->ok_no_errors('latest');
+};
+

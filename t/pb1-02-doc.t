@@ -23,7 +23,7 @@ use JSON;
 
 my $ua = LWP::UserAgent->new(agent => "PBDB Tester/0.1");
 
-my $SERVER = $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
+my $SERVER = $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3999';
 
 diag("TESTING SERVER: $SERVER");
 

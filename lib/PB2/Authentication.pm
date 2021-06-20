@@ -72,8 +72,8 @@ sub require_authentication {
 	
 	$request->{my_perms} = Permissions->new($dbh, $session_id, $table_name, $options);
     }
-    
-    else
+
+    unless ( $request->{my_perms} && $request->{my_perms}{authorizer_no} && $request->{my_perms}{enterer_no} )
     {
 	die $request->exception(401, $errmsg || "You must be logged in to perform this operation");
     }

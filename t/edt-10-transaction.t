@@ -21,9 +21,10 @@ use EditTest;
 use EditTester;
 
 
-# The following call establishes a connection to the database, using EditTester.pm.
+# The following call establishes a connection to the database, using EditTester.pm and selecting
+# EditTest as the subclass of EditTransaction to instantiate.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 
 

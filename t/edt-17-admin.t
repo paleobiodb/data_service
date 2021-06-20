@@ -26,7 +26,7 @@ set_table_property('EDT_TEST', CAN_MODIFY => 'AUTHORIZED');
 
 # The following call establishes a connection to the database, using EditTester.pm.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 
 # Start by getting the variable values that we need to execute the remainder of the test. If the

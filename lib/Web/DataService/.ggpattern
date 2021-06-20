@@ -1,0 +1,2 @@
+pm: *.pm *.pod ../DataService.pm */*.pm */*.pod
+pod: *.pod */*.pod

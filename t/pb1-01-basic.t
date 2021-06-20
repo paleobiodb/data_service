@@ -34,7 +34,7 @@ use Tester;
 
 # We start by creating a Tester instance that we will use for the subsequent tests:
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # We first test the 'json' format.  We include in this test:
@@ -57,7 +57,7 @@ subtest 'config.json' => sub {
 
     bail_on_fail;
     
-    my $config_json = $T->fetch_url("/data1.1/config.json?show=all&count", "config.json fetch");
+    my $config_json = $T->fetch_url("config.json?show=all&count", "config.json fetch");
     
     restore_fail;
     
@@ -116,7 +116,7 @@ subtest 'config.json' => sub {
 
 subtest 'config.txt' => sub {
 
-    my $config_txt = $T->fetch_url("/data1.1/config.txt?show=all&count", "config.txt fetch");
+    my $config_txt = $T->fetch_url("config.txt?show=all&count", "config.txt fetch");
     
     unless ( $config_txt )
     {
@@ -157,7 +157,7 @@ subtest 'config.txt' => sub {
 
 subtest 'config.csv' => sub {
     
-    my $config_csv = $T->fetch_url("/data1.1/config.csv?show=all&count", "config.csv fetch");
+    my $config_csv = $T->fetch_url("config.csv?show=all&count", "config.csv fetch");
     
     unless ( $config_csv )
     {
@@ -198,7 +198,7 @@ subtest 'config.csv' => sub {
 
 subtest 'config.tsv' => sub {
     
-    my $config_tsv = $T->fetch_url("/data1.1/config.tsv?show=all&count", "config.tsv fetch");
+    my $config_tsv = $T->fetch_url("config.tsv?show=all&count", "config.tsv fetch");
     
     unless ( $config_tsv )
     {
@@ -241,8 +241,8 @@ subtest 'config.tsv' => sub {
 
 subtest 'vocab' => sub {
 
-    my $config_pbdb = $T->fetch_url("/data1.1/config.json?show=clusters&vocab=pbdb", 'config pbdb');
-    my $config_com = $T->fetch_url("/data1.1/config.txt?show=clusters&vocab=com", 'config com');
+    my $config_pbdb = $T->fetch_url("config.json?show=clusters&vocab=pbdb", 'config pbdb');
+    my $config_com = $T->fetch_url("config.txt?show=clusters&vocab=com", 'config com');
     
     unless ( $config_pbdb && $config_com )
     {
@@ -264,7 +264,7 @@ subtest 'vocab' => sub {
 
 subtest 'config.foo' => sub {
     
-    my $config_bad = $T->fetch_nocheck("/data1.1/config.foo?show=all&count", "config.foo fetch");
+    my $config_bad = $T->fetch_nocheck("config.foo?show=all&count", "config.foo fetch");
     
     unless ( $config_bad )
     {
@@ -280,7 +280,7 @@ subtest 'config.foo' => sub {
 
 subtest 'config.json bad show' => sub {
 
-    my $config_json = $T->fetch_nocheck("/data1.1/config.json?show=foo", "config.json bad show");
+    my $config_json = $T->fetch_nocheck("config.json?show=foo", "config.json bad show");
     
     unless ( $config_json )
     {

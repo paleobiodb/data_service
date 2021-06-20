@@ -13,7 +13,7 @@ use feature 'fc';
 
 use Data::Dump qw(pp);
 
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 use lib qw(lib ../lib t);
 
@@ -32,10 +32,13 @@ use Test::Conditions;
 
 choose_subtests(@ARGV);
 
-# Start by creating an instance of the Tester class, with which to conduct the
-# following tests.
+# Start by creating an instance of the Tester class, with which to conduct the following tests. We
+# also create an instance of the EditTester class, which allows us to create the necessary tables
+# in the test database and also to check that records that are supposed to have been inserted
+# actually were.
 
 my $T = Tester->new({ prefix => 'data1.2' });
+my $ET = EditTester->new('TimescaleEdit');
 
 # Then check to MAKE SURE that the server is in test mode and the test timescale tables are
 # enabled. This is very important, because we DO NOT WANT to change the data in the main
@@ -45,19 +48,32 @@ my $T = Tester->new({ prefix => 'data1.2' });
 $T->test_mode('session_data', 'enable') || BAIL_OUT "could not select test session data";
 $T->test_mode('timescale_data', 'enable') || BAIL_OUT "could not select test timescale tables";
 
-# Then grab a database connection and check to make sure that we are actually looking at the
-# test tables. That will give us confidence to clear the tables between tests.
 
-my $ET = EditTester->new;
+# The first testing task it so establish the timescale tables in the test database and select
+# them.
 
-$ET->start_test_mode('timescale_data') || BAIL_OUT "could not select test timescale tables locally";
+subtest 'establish tables' => sub {
+
+    $ET->establish_test_tables('timescale_data', 'test') ||
+	BAIL_OUT("could not establish test tables");
+    
+    $ET->start_test_mode('timescale_data') || BAIL_OUT "could not select test timescale tables locally";
+    
+    $ET->fill_test_table('TIMESCALE_DATA', '', 'test');
+    $ET->fill_test_table('TIMESCALE_BOUNDS', '', 'test');
+    $ET->fill_test_table('TIMESCALE_INTS', '', 'test');
+    
+    $ET->complete_test_table('TIMESCALE_BOUNDS', '', 'test');
+    
+    pass('test tables established');
+};
+
 
 # The following variables save state that is necessary for proper cleanup.
 
 my $TS1;
 my $ALBIAN;
 my $APTIAN;
-
 
 
 # Start by checking that we can actually add a new timescale using admin privileges. If this
@@ -291,7 +307,7 @@ subtest 'dependencies' => sub {
     # Now we update the base bounds and check that the dependent ones update properly. Check
     # colors, too.
 
-    unless ( $ALBIAN )
+    unless ( $ALBIAN && $ALBIAN->{bid} )
     {
 	fail("Fetch of interval record for 'Albian' succeeded in 'basic' subtest");
 	return;
@@ -353,7 +369,7 @@ subtest 'intervals' => sub {
     
     select_subtest || return;
     
-    unless ( $ALBIAN && $APTIAN )
+    unless ( $ALBIAN && $APTIAN && $ALBIAN->{bid} && $APTIAN->{bid} )
     {
 	fail("Fetch of interval records for 'Albian' and 'Aptian' succeeded in 'basic' subtest");
 	return;
@@ -670,7 +686,7 @@ subtest cleanup => sub {
     my ($test_idlist) = $dbh->selectrow_array("
 	SELECT group_concat(timescale_no) FROM $TABLE{TIMESCALE_DATA}
 	WHERE timescale_name like 'EDIT TEST%'");
-
+    
     my $result;
 
     diag("Cleanup:");

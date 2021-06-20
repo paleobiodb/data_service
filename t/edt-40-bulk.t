@@ -24,7 +24,7 @@ our ($BASE_COUNT) = 10000;
 
 # The following call establishes a connection to the database, using EditTester.pm.
 
-my $T = EditTester->new;
+my $T = EditTester->new({ subclass => 'EditTest' });
 
 
 # Start by getting the variable values that we need to execute the remainder of the test. If the
@@ -55,6 +55,14 @@ subtest 'bulk insert' => sub {
     
     my ($edt, $result);
     
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk insert");
+	return;
+    }
+    
     # Clear the table so we can check for proper record insertion.
     
     $T->clear_table('EDT_TEST');
@@ -65,9 +73,16 @@ subtest 'bulk insert' => sub {
     
     $edt = $T->new_edt($perm_a);
     
+    my $short_string = "This is a string less than 40 chars...";
+    my $long_string = $short_string x 500;
+    
     for ( my $i = 1; $i <= $BASE_COUNT; $i++ )
     {
-	$result = $edt->insert_record('EDT_TEST', { string_req => "insert test $i" });
+	$result = $edt->insert_record('EDT_TEST', { string_req => "insert test $i",
+						    string_val => $short_string,
+						    text_val => $long_string,
+						    signed_val => -12145,
+						    decimal_val => 999.23 });
 	last unless $result;
     }
     
@@ -90,6 +105,14 @@ subtest 'bulk insert' => sub {
 subtest 'bulk update' => sub {
     
     my ($edt, $result);
+    
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk update");
+	return;
+    }
     
     my $starttime = time;
     
@@ -123,6 +146,14 @@ subtest 'bulk update' => sub {
 subtest 'bulk replace' => sub {
     
     my ($edt, $result);
+    
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk replace");
+	return;
+    }
     
     my $starttime = time;
     
@@ -159,6 +190,14 @@ subtest 'bulk replace' => sub {
 subtest 'bulk delete' => sub {
     
     my ($edt, $result);
+    
+    # Skip this test if PBDB_TEST_NO_BULK is true.
+    
+    if ( $ENV{PBDB_TEST_NO_BULK} )
+    {
+	pass("skipped bulk delete");
+	return;
+    }
     
     my $starttime = time;
     

@@ -1,4 +1,4 @@
-# -*- mode: CPerl -*-
+# -*- mode: cperl -*-
 # 
 # PBDB 1.2
 # --------
@@ -22,7 +22,7 @@ use CoreTableDefs;
 use Tester;
 use EditTester;
 
-use Data::Dumper::Concise;
+# use Data::Dumper::Concise;
 
 
 # Use the following values from the database in test instances. If these ever become invalid, they
@@ -56,69 +56,88 @@ $T->test_mode('occurrence_data', 'enable') || BAIL_OUT("could not select test oc
 # Finally, grab a database connection and check to make sure that we are actually looking at the
 # test tables. That will give us confidence to clear the tables between tests.
 
-my $ET = EditTester->new;
+my $ET = EditTester->new('SpecimenEdit');
 
-$ET->start_test_mode('specimen_data') || BAIL_OUT "could not select test specimen tables locally";
-$ET->start_test_mode('occurrence_data') || BAIL_OUT "could not select test occurrence tables locally";
+
+# The first testing task it so establish the specimen tables in the test database and select
+# them.
+
+subtest 'establish tables' => sub {
+
+    $ET->establish_test_tables('specimen_data', 'test') ||
+	BAIL_OUT("could not establish test tables for 'specimen_data'");
+
+    $ET->establish_test_tables('occurrence_data', 'test') ||
+	BAIL_OUT("could not establish test tables for 'occurrence_data'");
+    
+    $ET->fill_test_table('OCCURRENCE_DATA', "taxon_no = $TAXON_NO_2", 'test');
+    $ET->fill_test_table('OCCURRENCE_MATRIX', "taxon_no = $TAXON_NO_2", 'test');
+    
+    $ET->start_test_mode('specimen_data') || BAIL_OUT "could not select test specimen tables locally";
+    $ET->start_test_mode('occurrence_data') || BAIL_OUT "could not select test occurrence tables locally";
+    
+    pass('test tables established');
+};
+
 
 # First check that the table schemas for specimens and measurements in the test database match the
 # corresponding schemas in the main database.
 
-subtest 'check schemas' => sub {
+# subtest 'check schemas' => sub {
 
-    $ET->check_test_schema('SPECIMEN_DATA');
-    $ET->check_test_schema('MEASUREMENT_DATA');
+#     $ET->check_test_schema('SPECIMEN_DATA');
+#     $ET->check_test_schema('MEASUREMENT_DATA');
 
-    # # Double check to make sure we aren't pointing at the main occurrence table.
+#     # # Double check to make sure we aren't pointing at the main occurrence table.
 
-    # my ($count) = $ET->dbh->selectrow_array("SELECT count(*) FROM $TABLE{OCCURRENCE_DATA}");
+#     # my ($count) = $ET->dbh->selectrow_array("SELECT count(*) FROM $TABLE{OCCURRENCE_DATA}");
 
-    # if ( $count > 1000 )
-    # {
-    # 	BAIL_OUT "test occurrence table contains too many entries - is it the real one?";
-    # }
+#     # if ( $count > 1000 )
+#     # {
+#     # 	BAIL_OUT "test occurrence table contains too many entries - is it the real one?";
+#     # }
 
-    # # If it is okay, then clear the table.
+#     # # If it is okay, then clear the table.
     
-    my ($sql, $result);
+#     my ($sql, $result);
     
-    # $sql = "DELETE FROM $TABLE{OCCURRENCE_DATA}";
+#     # $sql = "DELETE FROM $TABLE{OCCURRENCE_DATA}";
     
-    # print STDERR "$sql\n\n" if $ET->debug;
+#     # print STDERR "$sql\n\n" if $ET->debug;
     
-    # $result = $ET->dbh->do($sql);
+#     # $result = $ET->dbh->do($sql);
     
-    # $sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX}";
+#     # $sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX}";
     
-    # print STDERR "$sql\n\n" if $ET->debug;
+#     # print STDERR "$sql\n\n" if $ET->debug;
     
-    # $result = $ET->dbh->do($sql);
+#     # $result = $ET->dbh->do($sql);
     
-    # Safely clear the occurrence data and matrix tables.
+#     # Safely clear the occurrence data and matrix tables.
 
-    $ET->safe_clear_table('OCCURRENCE_DATA', 'enterer_no');
-    $ET->safe_clear_table('OCCURRENCE_MATRIX', 'enterer_no');
+#     $ET->safe_clear_table('OCCURRENCE_DATA', 'enterer_no');
+#     $ET->safe_clear_table('OCCURRENCE_MATRIX', 'enterer_no');
     
-    # Copy over some occurrences from the main table to the test table.
+#     # Copy over some occurrences from the main table to the test table.
     
-    $sql = "REPLACE INTO $TABLE{OCCURRENCE_DATA}
-		SELECT * FROM $TABLE{'==OCCURRENCE_DATA'} WHERE taxon_no = $TAXON_NO_2";
+#     $sql = "REPLACE INTO $TABLE{OCCURRENCE_DATA}
+# 		SELECT * FROM $TABLE{'==OCCURRENCE_DATA'} WHERE taxon_no = $TAXON_NO_2";
     
-    print STDERR "$sql\n\n" if $ET->debug;
+#     print STDERR "$sql\n\n" if $ET->debug;
     
-    $result = $ET->dbh->do($sql);
+#     $result = $ET->dbh->do($sql);
     
-    diag("Replaced $result items into test occurrence table");
+#     diag("Replaced $result items into test occurrence table");
     
-    $sql = "REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
-		SELECT * FROM $TABLE{'==OCCURRENCE_MATRIX'} WHERE taxon_no = $TAXON_NO_2";
+#     $sql = "REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
+# 		SELECT * FROM $TABLE{'==OCCURRENCE_MATRIX'} WHERE taxon_no = $TAXON_NO_2";
     
-    print STDERR "$sql\n\n" if $ET->debug;
+#     print STDERR "$sql\n\n" if $ET->debug;
     
-    $result = $ET->dbh->do($sql);
+#     $result = $ET->dbh->do($sql);
     
-    diag("Replaced $result items into test occurrence matrix");
-};
+#     diag("Replaced $result items into test occurrence matrix");
+# };
 
 
 # Check that we can add records, and that the returned records contain proper identifiers and
@@ -160,28 +179,38 @@ subtest 'add simple' => sub {
 		 min => '1.0 mm' },
 	       ];
     
-    my (@r1) = $T->send_records("/specs/addupdate.json", "simple insert 1", json => $record1);
+    my (@r1) = $T->send_records("/specs/addupdate.json?show=crmod,ent", "simple insert 1", json => $record1);
     
     unless ( @r1 )
     {
 	BAIL_OUT("adding new records failed");
     }
     
-    like($r1[0]{oid}, qr{^spm:\d+$}, "added specimen record has properly formatted oid") &&
+    like( $r1[0]{oid}, qr{^spm:\d+$}, "added specimen record has properly formatted oid" ) &&
 	diag("New specimen oid: $r1[0]{oid}");
-    is($r1[0]{rlb}, 'a1', "added specimen record has proper label");
+    is( $r1[0]{rlb}, 'a1', "added specimen record has proper label" );
     
     # print STDERR $T->{last_response}->content;
     
-    like($r1[1]{oid}, qr{^mea:\d+$}, "added measurement record has properly formatted oid") &&
+    like( $r1[1]{oid}, qr{^mea:\d+$}, "added measurement record has properly formatted oid" ) &&
     	diag("New measurement oid: $r1[1]{oid}");
-    is($r1[1]{rlb}, "m1", "added measurement record has proper label");
-
+    is( $r1[1]{rlb}, "m1", "added measurement record has proper label" );
+    
+    # Make sure the inserted specimen record has non-zero values in all of the following fields:
+    # authorizer_no, enterer_no, created, modified
+    
+    ok( $r1[0]{ati}, "added specimen record has non-empty authorizer id" );
+    ok( $r1[0]{eni}, "added specimen record has non-empty enterer id" );
+    ok( $r1[0]{dcr}, "added specimen record has non-empty creation date" ) &&
+	cmp_ok( $r1[0]{dcr}, 'gt', "2019-01-01", "added specimen record has non-zero creation date" );
+    ok( $r1[0]{dmd}, "added specimen record has non-empty modification date" ) &&
+	cmp_ok( $r1[0]{dmd}, 'gt', "2019-01-01", "added specimen record has non-zero modification date" );    
+    
     # Check the inserted records against the output of the data retrieval operation.
     
     my ($authorizer_no, $enterer_no) = $ET->get_session_authinfo('SESSION-AUTHORIZER');
     
-    my (@check1) = $T->fetch_records("/specs/list.json?all_records&specs_entered_by=$enterer_no",
+    my (@check1) = $T->fetch_records("/specs/list.json?all_records&specs_entered_by=$enterer_no&show=crmod,ent",
 				     "fetch entered specimens");
     
     # Delete the label from the record returned by the insertion operation, and also the record
@@ -889,19 +918,22 @@ subtest 'unknown taxon' => sub {
 
     pass('placeholder');
     
-    # my $record2 = { _label => 'a1',
-    # 		    specimen_code => 'TEST.2',
-    # 		    taxon_name => 'Foo (baff) bazz',
-    # 		    reference_id => 'ref:5041',
-    # 		    collection_id => 1003
-    # 		  };
+    my $record2 = { _label => 'a1',
+    		    specimen_code => 'TEST.2',
+    		    taxon_name => 'Foo (baff) bazz',
+    		    reference_id => 'ref:5041',
+    		    collection_id => 1003
+    		  };
     
-    # my (@r2) = $T->send_records("/specs/addupdate.json?allow=UNKNOWN_TAXON", "superuser add", json => $record2);
-    
-    # my $oid = @r2 ? $r2[0]{oid} : '';
-    
-    # like($oid, qr{^spm:\d+$}, "added record has properly formatted oid") &&
-    # 	diag("New specimen oid: $oid");
-    
+    my (@r2) = $T->send_records("/specs/addupdate.json?allow=UNKNOWN_TAXON", "add with unknown taxon",
+				json => $record2);
 
+    if ( @r2 )
+    {
+	like($r2[0]{oid}, qr{^spm:\d+$}, "added record has properly formatted oid") &&
+	    diag("New specimen oid: $r2[0]{oid}");
+	
+	is( $r2[0]{idn}, "Foo (baff) bazz", "added record has proper identified name" );
+	is( $r2[0]{cid}, 'col:1003' );
+    }
 };

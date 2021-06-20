@@ -13,7 +13,7 @@ use lib '..';
 
 package PB2::DiversityData;
 
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING %UNS_NAME);
 use TableDefs qw($INTERVAL_MAP);
 use Taxonomy;
 use ExternalIdent qw(extract_num);
@@ -537,13 +537,13 @@ sub generate_diversity_table {
 
 my (%taxon_node, %uns_counter, %lower_taxon_nos, $container_was_set);
 
-my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
-		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
-		 17 => 'NO_CLASS_SPECIFIED', 20 => 'NO_PHYLUM_SPECIFIED',
-		 23 => 'NO_KINGDOM_SPECIFIED', 0 => 'NO_TAXON_SPECIFIED' );
+# my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
+# 		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
+# 		 17 => 'NO_CLASS_SPECIFIED', 20 => 'NO_PHYLUM_SPECIFIED',
+# 		 23 => 'NO_KINGDOM_SPECIFIED', 0 => 'NO_TAXON_SPECIFIED' );
 
-my %uns_prefix = ( 3 => 'US', 5 => 'UG', 9 => 'UF', 13 => 'UO', 17 => 'UC',
-		   20 => 'UP', 23 => 'NK', 0 => 'UU' );
+my %uns_prefix = ( 3 => 'NS', 5 => 'NG', 9 => 'NF', 13 => 'NO', 17 => 'NC',
+		   20 => 'NP', 23 => 'NK', 0 => 'NT' );
 
 sub generate_taxon_table_ints {
 
@@ -1482,7 +1482,10 @@ sub generate_occs_taxa_options {
 	    }
 	}
 	
-	$options->{sel_rank} = \%sel_rank;
+	if ( keys %sel_rank )
+	{
+	    $options->{sel_rank} = [ keys %sel_rank ];
+	}
 	
 	foreach my $min (@min_rank)
 	{
@@ -1548,7 +1551,7 @@ sub add_result_records {
     
     # Skip any taxon that falls below the minimum specified rank.
     
-    if ( $options->{min_rank} )
+    if ( $options->{min_rank} && $node->{max_rank} )
     {
 	return if $node->{max_rank} < $options->{min_rank};
     }
@@ -1559,7 +1562,7 @@ sub add_result_records {
     
     unless ( $node->{orig_no} )
     {
-	$node->{taxon_name} = $uns_name{$rank || 0};
+	$node->{taxon_name} = $UNS_NAME{$rank || 0};
 	#unless $node->{taxon_name} && $node->{taxon_name} ne '~';
 	$node->{orig_no} = $taxon_no;
     }
@@ -1614,7 +1617,7 @@ sub add_result_records {
     
     return if $rank == $request->{my_reso_rank};
     
-    if ( $options->{min_rank} )
+    if ( $options->{min_rank} && $node->{max_rank} )
     {
 	return if $node->{max_rank} == $options->{min_rank};
     }
@@ -1686,6 +1689,8 @@ sub check_record {
     
     my ($request, $node, $options) = @_;
     
+    print STDERR "Node: $node->{taxon_name}\n";
+    
     if ( my $status = $options->{status} )
     {
 	if ( $status eq 'accepted' || $status eq 'senior' )
@@ -1719,18 +1724,31 @@ sub check_record {
 			$node->{status} eq 'replaced by';
 	}
     }
-    
-    unless ( ref $options eq 'HASH' && $options->{sel_rank} && $options->{sel_rank}{$node->{taxon_rank}} )
+
+    if ( ref $options->{sel_rank} eq 'ARRAY' )
     {
-	if ( $options->{max_rank} && defined $node->{min_rank} )
+	my $selected;
+	
+	foreach my $r ( @{$options->{sel_rank}} )
 	{
-	    return unless $node->{min_rank} <= $options->{max_rank};
+	    if ( $node->{taxon_rank} == $r )
+	    {
+		$selected = 1;
+		last;
+	    }
 	}
 	
-	elsif ( ref $options->{sel_rank} eq 'HASH' )
-	{
-	    return;
-	}
+	return unless $selected;
+    }
+    
+    if ( $options->{max_rank} && $node->{min_rank} )
+    {
+	return unless $node->{min_rank} <= $options->{max_rank};
+    }
+
+    elsif ( $options->{max_rank} && $node->{taxon_rank} )
+    {
+	return unless $node->{taxon_rank} <= $options->{max_rank};
     }
     
     if ( defined $options->{extant} )
@@ -1745,6 +1763,8 @@ sub check_record {
 	    return if $node->{is_extant};
 	}
     }
+    
+    print STDERR "Selected\n";
     
     return 1;
 }

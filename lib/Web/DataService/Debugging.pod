@@ -1,0 +1,120 @@
+
+=head1 NAME
+
+Web::DataService::Debugging - debugging applications built using Web::DataService
+
+=head1 SYNOPSIS
+
+This file explains the features available to you for debugging your
+Web::DataService application.
+
+=head1 COMMAND LINE
+
+When debugging your application, it is generally best to run a single process
+directly from the command line.  If you have built your application starting
+from the example installed by this package, you can run it as follows:
+
+    cd path/to/your/application
+    perl bin/dataservice.pl
+
+This program will accept requests on port 3000, unless a different port number
+is specified in the configuration file.  If you want it to print out
+additional information about each request, you can enable 'debug mode' as
+follows: 
+
+    perl bin/dataservice.pl debug
+
+This will serve all requests normally, and will also print out some diagnostic
+information to STDERR.  Alternatively, you can also run the application under
+the perl debugger.  This will allow you to set breakpoints and trace your way
+through the code:
+
+    perl -d bin/dataservice.pl
+
+=head2 Single request
+
+You can also run a single request at a time, from the command line.  This can
+be done with or without the perl debugger, as follows:
+
+    perl [-d] bin/dataservice.pl GET <path> <params>
+
+The first argument must be an HTTP method such as GET.  The second is the path
+for the operation you wish to execute.  The third argument is the URL
+parameter string, which must be quoted so that metacharacters ('&' in
+particular) are not interpreted by the shell.
+
+For example, the following will allow you to debug one of the example data
+service operations:
+
+    perl -d bin/dataservice.pl GET /data1.0/list.json 'region=ne&show=total'
+
+=head2 Diagnostics
+
+The Web::DataService pacakge also enables some diagnostics, which the example
+application allows you to generate from the command line.  These are triggered
+by the argument DIAG, for example:
+
+    perl -d bin/dataservice.pl DIAG /data1.0/ 'show=fields'
+
+Each such invocation will print a single diagnostic report and then exit.  The
+diagnostic you wish to run should be specified as the value of the parameter
+C<show>.  Each diagnostic also takes other parameters that further specify the
+information to be produced.  The remainder of this section lists the available
+diagnostics.
+
+=head3 fields
+
+The C<fields> diagnostic lists the data fields produced by the various data
+service operations.  This can be used to check the mapping between visible
+field names and the underlying data fields, and to ensure vocabulary
+consistency.  The output is plain text.
+
+You can also specify any of the following parameters:
+
+=over
+
+=item doc
+
+Including this parameter will report the documentation string for each
+field. If the value is "short", then only the first line will be produced.  If
+"long", then the full string will be output.
+
+=item vocab
+
+You can use this parameter if your data service specifies more than one
+vocabulary.  The output will only include field names from that vocabulary.
+
+=item name
+
+The value of this parameter should be a pattern using the shell wildcards '*'
+and '?'. Only fields whose visible name matches this pattern will be listed.
+
+=item data
+
+The value of this parameter should be a pattern using the shell wildcards '*'
+and '?'. Only fields whose underlying name matches this pattern will be
+listed. 
+
+=back
+
+For example:
+
+    perl bin/dataservice.pl diag /data1.0/ 'show=fields&doc=short&data=pop*'
+
+=head3 digest
+
+This diagnostic produces output in YAML format, summarizing all of the data
+service attributes, nodes, sets, rulesets, output blocks, etc. defined for the
+data service.  You will usually want to save this output to a file.
+
+If you do this whenever you make a change to the configuration of your data
+service, you can then use the program C<wdsdiff> to compare the different
+versions.  This can be helpful for generating change logs and making sure that
+the documentation is correct.
+
+For example:
+
+    perl bin/dataservice.pl diag /data1.0 'show=digest' > version1.yaml
+
+
+

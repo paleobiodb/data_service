@@ -8,6 +8,7 @@ package ConsoleLog;
 
 use strict;
 
+use POSIX qw(tzname);
 use base qw(Exporter);
 
 our (@EXPORT_OK) = qw(initMessages logMessage logTimestamp logQuestion);
@@ -83,11 +84,14 @@ sub logTimestamp {
     my $param = lc $_[0];
     
     my $now = $param eq 'gmt' ? gmtime : localtime;
+    my ($tz) = tzname;
+    
+    $tz = 'UTC' if $tz eq 'GMT';
     
     my $elapsed = time - $START_TIME;    
     my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
     
-    print STDOUT "$MSG_TAG: [ $elapsed_str ]  $now\n";
+    print STDOUT "$MSG_TAG: [ $elapsed_str ]  $now $tz\n";
 }
 
 1;

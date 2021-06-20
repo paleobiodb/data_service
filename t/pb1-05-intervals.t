@@ -21,7 +21,7 @@ use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # First define the values we will be using to check the interval operations.
@@ -71,7 +71,7 @@ my ($interval_id, $parent_id);
 
 subtest 'single json' => sub {
     
-    my $single_json = $T->fetch_url("/data1.1/intervals/single.json?id=$TEST_ID_1",
+    my $single_json = $T->fetch_url("intervals/single.json?id=$TEST_ID_1",
 				    "single json request OK");
     
     unless ( $single_json )
@@ -106,7 +106,7 @@ subtest 'single json' => sub {
 
 subtest 'single txt' => sub {
 
-    my $single_txt = $T->fetch_url("/data1.1/intervals/single.txt?id=$TEST_ID_1",
+    my $single_txt = $T->fetch_url("intervals/single.txt?id=$TEST_ID_1",
 				    "single txt request OK");
     
     unless ( $single_txt )
@@ -141,7 +141,7 @@ subtest 'single txt' => sub {
 
 subtest 'list intervals' => sub {
 
-    my $list_json = $T->fetch_url("/data1.1/intervals/list.json?vocab=pbdb&scale=1&max_ma=$EARLY_BOUND&min_ma=$LATE_BOUND",
+    my $list_json = $T->fetch_url("intervals/list.json?vocab=pbdb&scale=1&max_ma=$EARLY_BOUND&min_ma=$LATE_BOUND",
 				  "list json request OK");
     
     unless ( $list_json )
@@ -173,7 +173,7 @@ subtest 'list intervals' => sub {
     # Now fetch the intervals in reverse order and check to make sure the
     # interval numbers match.
     
-    my $list_txt = $T->fetch_url("/data1.1/intervals/list.txt?scale=1&max_ma=$EARLY_BOUND&min_ma=$LATE_BOUND&order=older");
+    my $list_txt = $T->fetch_url("intervals/list.txt?scale=1&max_ma=$EARLY_BOUND&min_ma=$LATE_BOUND&order=older");
     
     unless ( $list_txt )
     {
@@ -209,7 +209,7 @@ subtest 'list intervals' => sub {
 
 subtest 'list specific' => sub {
 
-    my $list_json = $T->fetch_url("/data1.1/intervals/list.json?id=2,3,4",
+    my $list_json = $T->fetch_url("intervals/list.json?id=2,3,4",
 				  "list json request OK");
     
     unless ( $list_json )
@@ -237,13 +237,13 @@ subtest 'list specific' => sub {
 
 subtest 'time scales' => sub {
     
-    my $single_resp = $T->fetch_url("/data1.1/scales/single.json?id=1",
+    my $single_resp = $T->fetch_url("scales/single.json?id=1",
 				  "single scale request OK");
     
-    my $list_resp = $T->fetch_url("/data1.1/scales/list.json?id=1",
+    my $list_resp = $T->fetch_url("scales/list.json?id=1",
 				  "scale list request OK");
     
-    my $bad_resp = $T->fetch_url("/data1.1/scales/list.json?id=998,999",
+    my $bad_resp = $T->fetch_url("scales/list.json?id=998,999",
 				 "bad scales request OK");
     
     unless ( $single_resp && $list_resp && $bad_resp )

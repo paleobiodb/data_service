@@ -20,7 +20,7 @@ use lib 't';
 use Tester;
 
 
-my $T = Tester->new();
+my $T = Tester->new({ prefix => 'data1.1' });
 
 
 # First define the values we will be using to check the taxonomy operations.
@@ -146,8 +146,8 @@ my $ss = { "data_provider" => 1,
 	   "data_source" => 1,
 	   "data_license" => 1,
 	   "license_url" => 1,
-	   "documentation_url" => $T->make_url("/data1.1/taxa/single_doc.html"),
-	   "data_url" => $T->make_url("/data1.1/taxa/single.json?name=$t1->{nam}&show=attr,app,size,phylo&showsource"),
+	   "documentation_url" => $T->make_url("taxa/single_doc.html"),
+	   "data_url" => $T->make_url("taxa/single.json?name=$t1->{nam}&show=attr,app,size,phylo&showsource"),
 	   "access_time" => 1,
 	   "title" => 1 };
 
@@ -155,8 +155,8 @@ my $sst = { "Data Provider" => 1,
 	    "Data Source" => 1,
 	    "Data License" => 1,
 	    "License URL" => 1,
-	    "Documentation URL" => $T->make_url("/data1.1/taxa/single_doc.html"),
-	    "Data URL" => $T->make_url("/data1.1/taxa/single.txt?name=$t1->{nam}&show=attr,app,size,phylo&showsource"),
+	    "Documentation URL" => $T->make_url("taxa/single_doc.html"),
+	    "Data URL" => $T->make_url("taxa/single.txt?name=$t1->{nam}&show=attr,app,size,phylo&showsource"),
 	    "Access Time" => 1,
 	    "Title" => 1 };
 
@@ -173,7 +173,7 @@ my ($taxon_id, $parent_id);
 
 subtest 'single json by name' => sub {
     
-    my $single_json = $T->fetch_url("/data1.1/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
+    my $single_json = $T->fetch_url("taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
 				    "single json request OK");
     
     unless ( $single_json )
@@ -242,7 +242,7 @@ subtest 'single json nav' => sub {
     
     diag("checking taxon '$TEST_NAME_1'");
     
-    my $single_json = $T->fetch_url("/data1.1/taxa/single.json?name=$TEST_NAME_1&show=nav",
+    my $single_json = $T->fetch_url("taxa/single.json?name=$TEST_NAME_1&show=nav",
 				    "single json nav request OK");
     
     unless ( $single_json )
@@ -273,7 +273,7 @@ subtest 'single json nav' => sub {
     
     diag("checking taxon '$TEST_NAME_8'");
     
-    my $higher_json = $T->fetch_url("/data1.1/taxa/single.json?name=$TEST_NAME_8&show=nav",
+    my $higher_json = $T->fetch_url("taxa/single.json?name=$TEST_NAME_8&show=nav",
 				    "single json nav request OK") || return;
     
     ($r) = $T->extract_records($higher_json, "single json nav extract records");
@@ -300,7 +300,7 @@ subtest 'single json nav' => sub {
 
 subtest 'single txt by name' => sub {
     
-    my $single_txt = $T->fetch_url("/data1.1/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
+    my $single_txt = $T->fetch_url("taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
 				   "single txt request OK");
     
     unless ( $single_txt )
@@ -361,7 +361,7 @@ subtest 'single txt by name' => sub {
 
 subtest 'single json by id' => sub {
     
-    my $response = $T->fetch_url("/data1.1/taxa/single.json?id=$taxon_id",
+    my $response = $T->fetch_url("taxa/single.json?id=$taxon_id",
 				 "single json by id request OK");
     
     unless ( $response )
@@ -383,7 +383,7 @@ subtest 'single json by id' => sub {
 
 subtest 'parent json' => sub {
     
-    my $response = $T->fetch_url("/data1.1/taxa/single.json?id=$parent_id",
+    my $response = $T->fetch_url("taxa/single.json?id=$parent_id",
 			    "parent json request OK");
     
     my ($r) = $T->extract_records($response, "parent json extract records");
@@ -400,7 +400,7 @@ subtest 'parent json' => sub {
 
 subtest 'list self' => sub {
     
-    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4",
+    my $response = $T->fetch_url("taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4",
 			    "list self request OK");
     
     my %found = $T->scan_records($response, 'nam', "list self extract records");
@@ -413,7 +413,7 @@ subtest 'list self' => sub {
 
 subtest 'list synonyms' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=Sirenia&rel=synonyms",
+    my $response = $T->fetch_url("taxa/list.json?name=Sirenia&rel=synonyms",
 				 "list synonyms request OK");
     
     my %found = $T->scan_records($response, 'nam', "list synonyms extract records");
@@ -428,7 +428,7 @@ my ($num_children, $num_all_children);
 
 subtest 'list children' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3&rel=children",
+    my $response = $T->fetch_url("taxa/list.json?name=$TEST_NAME_3&rel=children",
 			    "list children request OK");
     
     my %found = $T->scan_records($response, 'nam', "list children extract records");
@@ -443,7 +443,7 @@ subtest 'list children' => sub {
 
 subtest 'list all children' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3&rel=all_children",
+    my $response = $T->fetch_url("taxa/list.json?name=$TEST_NAME_3&rel=all_children",
 			    "list all children request OK");
     
     my %found = $T->scan_records($response, 'nam', "list all children extract records");
@@ -461,7 +461,7 @@ cmp_ok($num_children, '<', $num_all_children, "all children count greater than i
 
 subtest 'list parents' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=parents",
+    my $response = $T->fetch_url("taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=parents",
 			    "list parents request OK");
     
     my %found = $T->scan_records($response, 'nam', "list parents extract records");
@@ -474,7 +474,7 @@ subtest 'list parents' => sub {
 
 subtest 'list all parents' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=all_parents",
+    my $response = $T->fetch_url("taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=all_parents",
 			    "list all parents request OK");
     
     my %found = $T->scan_records($response, 'nam', "list all parents extract records");
@@ -494,7 +494,7 @@ subtest 'list all parents' => sub {
 
 subtest 'list common ancestor' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=common_ancestor",
+    my $response = $T->fetch_url("taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=common_ancestor",
 				 "list all parents request OK");
     
     my %found = $T->scan_records($response, 'nam', "list all parents extract records");
@@ -509,22 +509,22 @@ subtest 'list common ancestor' => sub {
 
 subtest 'list status' => sub {
 
-    my $all_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=all&limit=100000",
+    my $all_resp = $T->fetch_url("taxa/list.json?base_name=$TEST_NAME_5&status=all&limit=100000",
 				 "list status all request OK") || return;
     
     my $all_count = $T->extract_records($all_resp, "list status all extract records") || return;
     
-    my $valid_resp = $T->fetch_url("data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=valid&limit=100000",
+    my $valid_resp = $T->fetch_url("taxa/list.json?base_name=$TEST_NAME_5&status=valid&limit=100000",
 				   "list status valid request OK") || return;
     
     my $valid_count = $T->extract_records($valid_resp, "list status valid extract records") || return;
     
-    my $invalid_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=invalid&limit=100000",
+    my $invalid_resp = $T->fetch_url("taxa/list.json?base_name=$TEST_NAME_5&status=invalid&limit=100000",
 				     "list status invalid request OK") || return;
     
     my $invalid_count = $T->extract_records($invalid_resp, "list status invalid extract records") || return;
     
-    my $senior_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=senior&limit=100000",
+    my $senior_resp = $T->fetch_url("taxa/list.json?base_name=$TEST_NAME_5&status=senior&limit=100000",
 				    "list status senior request OK") || return;
     
     my $senior_count = $T->extract_records($senior_resp, "list status senior extract records") || return;
@@ -541,7 +541,7 @@ subtest 'list status' => sub {
 
 subtest 'list status 2' => sub {
     
-    my $invalid_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_6&status=invalid",
+    my $invalid_resp = $T->fetch_url("taxa/list.json?base_name=$TEST_NAME_6&status=invalid",
 				     "list status 2 invalid request OK");
     
     my %status = $T->scan_records($invalid_resp, 'sta', 'list status 2 invalid scan status codes');
@@ -557,7 +557,7 @@ subtest 'list status 2' => sub {
 
 subtest 'list refs json' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/refs.json?base_name=$TEST_NAME_7",
+    my $response = $T->fetch_url("taxa/refs.json?base_name=$TEST_NAME_7",
 				 "list refs json request OK") || return;
     
     my %found = $T->scan_records($response, 'al1', "list refs json extract records");
@@ -570,14 +570,14 @@ subtest 'list refs json' => sub {
 
 subtest 'list refs ris' => sub {
 
-    my $response = $T->fetch_url("/data1.1/taxa/refs.ris?base_name=$TEST_NAME_7&showsource",
+    my $response = $T->fetch_url("taxa/refs.ris?base_name=$TEST_NAME_7&showsource",
 				 "list refs ris request OK") || return;
     
     my $body = $response->content;
     
     ok($body =~ qr{^Provider:\s+\w}m, "list refs ris has 'provider:'");
     ok($body =~ qr{^Content: text/plain; charset="utf-8"}m, "list refs ris has proper content type");
-    ok($body =~ qr{^UR  - http://.+/data1.1/taxa/refs.ris\?base_name=$TEST_NAME_7&showsource}m,
+    ok($body =~ qr{^UR  - http://.+taxa/refs.ris\?base_name=$TEST_NAME_7&showsource}m,
        "list refs ris has showsource UR line");
     ok($body =~ qr{^KW  - base_name = $TEST_NAME_7}m, "list refs ris has datasource KW line");
     ok($body =~ qr{^T2  - $TEST_TITLE_7a}m, "list refs ris found at least one of the proper records");
@@ -586,7 +586,7 @@ subtest 'list refs ris' => sub {
 
 subtest 'auto json' => sub {
 
-    my $cani = $T->fetch_url("/data1.1/taxa/auto.json?name=$TEST_AUTO_1&limit=10",
+    my $cani = $T->fetch_url("taxa/auto.json?name=$TEST_AUTO_1&limit=10",
 			     "auto json '$TEST_AUTO_1' request OK") || return;
     
     my %found = $T->scan_records($cani, 'nam', "auto json extract records");
@@ -595,7 +595,7 @@ subtest 'auto json' => sub {
     
     ok($T->found_all(\%found, @TEST_AUTO_1a), "auto json found a sample of records");
     
-    my $trex = $T->fetch_url("/data1.1/taxa/auto.json?name=$TEST_AUTO_2&limit=10",
+    my $trex = $T->fetch_url("taxa/auto.json?name=$TEST_AUTO_2&limit=10",
 			     "auto json $TEST_AUTO_2' request OK") || return;
     
     %found = $T->scan_records($trex, 'nam', "auto json extract records");
@@ -608,14 +608,14 @@ subtest 'auto json' => sub {
 
 subtest 'images' => sub {
     
-    my $thumb = $T->fetch_url("/data1.1/taxa/thumb.png?id=$TEST_IMAGE_1",
+    my $thumb = $T->fetch_url("taxa/thumb.png?id=$TEST_IMAGE_1",
 			      "image thumb request OK") || return;
     
     my $thumb_length = length($thumb->content) || 0;
     
     cmp_ok($thumb_length, '==', $TEST_IMAGE_SIZE_1a, 'image thumb size');
     
-    my $icon = $T->fetch_url("/data1.1/taxa/icon.png?id=910",
+    my $icon = $T->fetch_url("taxa/icon.png?id=910",
 			     "image icon request OK") || return;
     
     my $icon_length = length($icon->content) || 0;

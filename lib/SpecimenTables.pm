@@ -19,13 +19,14 @@ use Text::CSV_XS;
 
 use CoreFunction qw(activateTables);
 
-use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC
-		 $OCCURRENCES $LOCALITIES $WOF_PLACES $COLL_EVENTS);
+use TableDefs qw($OCC_MATRIX $SPEC_MATRIX $SPECIMENS $SPECELT_DATA $SPECELT_MAP $SPECELT_EXC
+		 $OCCURRENCES $LOCALITIES $WOF_PLACES $COLL_EVENTS $REFERENCES);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables
-		      establish_specelt_tables load_specelt_tables build_specelt_map);
+our (@EXPORT_OK) = qw(buildSpecimenTables buildMeasurementTables 
+		      establish_extra_specimen_tables establish_specelt_tables 
+		      load_specelt_tables build_specelt_map load_museum_refs);
 
 our $SPEC_MATRIX_WORK = "smw";
 our $SPEC_ELTS_WORK = "sew";
@@ -391,7 +392,7 @@ sub establish_extra_specimen_tables {
 # 
 # Create the tables for specimen elements.
 
-sub establish_spec_element_tables {
+sub establish_specelt_tables {
     
     my ($dbh, $options) = @_;
 
@@ -418,95 +419,347 @@ sub establish_spec_element_tables {
 }
 
 
-sub add_element_line {
+our (%COLUMN_MAP) = (Taxon => 'taxon_name',
+		     ExcludeTaxa => 'exclude_names',
+		     SpecimenElement => 'element_name',
+		     AlternateNames => 'alternate_names',
+		     ParentElement => 'parent_name',
+		     HasNumber => 'has_number',
+		     Inactive => 'inactive',
+		     NeotomaElementID => 'neotoma_element_id',
+		     NeotomaElementTypeID => 'neotoma_element_type_id',
+		     Comments => 'comments');
 
-    my ($dbh, $line, $options) = @_;
+our (%TAXON_FIX) = (Eukarya => 'Eukaryota', Nympheaceae => 'Nymphaeaceae');
+
+sub load_specelt_tables {
+
+    my ($dbh, $filename, $options) = @_;
     
-    my @fields = split /\s*,\s*/, $line;
+    $options ||= { };
     
-    my $taxon_name = line_value('Taxon', \@fields);
-    my $elt_name = line_value('SpecimenElement', \@fields);
-    my $alt_names = line_value('AlternateNames', \@fields);
-    my $parent_elt = line_value('ParentElement', \@fields);
-    my $neotoma_no = line_value('NeotomaElementID', \@fields) || "0";
-    my $neotoma_type_no = line_value('NeotomaElementTypeID', \@fields) || "0";
-    my $has_number = line_value('HasNumber', \@fields);
-    my $inactive = line_value('Inactive', \@fields);
+    my ($sql, $insert_line, $result);
     
-    next if $inactive;
+    my $csv = Text::CSV_XS->new();
+    my ($fh, $count, $header, @rows, %column, %taxon_no_cache);
     
-    $alt_names = '' if $alt_names eq $elt_name;
+    if ( $filename eq '-' )
+    {
+	open $fh, "<&STDIN" or die "cannot read standard input: $!";
+    }
     
-    # Fix Eukarya
+    else
+    {
+	open $fh, "<", $filename or die "cannot read '$filename': $!";
+    }
     
-    $taxon_name = 'Eukaryota' if $taxon_name eq 'Eukarya';
+    while ( my $row = $csv->getline($fh) )
+    {
+	unless ( $header )
+	{
+	    $header = $row;
+	}
+	
+	else
+	{
+	    push @rows, $row;
+	    $count++;
+	}
+    }
     
-    # Look up the taxon name in the database.
+    logMessage(2, "    read $count lines from '$filename'");
     
-    my ($orig_no, $lft, $rgt) = lookup_taxon($dbh, $taxon_name);
+    foreach my $i ( 0..$#$header )
+    {
+	my $load_col = $COLUMN_MAP{$header->[$i]};
+	$column{$load_col} = $i if $load_col;
+    }
     
-    my $quoted_name = $dbh->quote($elt_name);
-    my $quoted_alt = $alt_names ? $dbh->quote($alt_names) : "''";
-    my $quoted_parent = $parent_elt ? $dbh->quote($parent_elt) : "''";
-    my $quoted_hasnum = $has_number ? "1" : "0";
-    my $quoted_neo = $dbh->quote($neotoma_no);
-    my $quoted_neotype = $dbh->quote($neotoma_type_no);
+    my $inserter = "
+	INSERT INTO $SPECELT_DATA (element_name, alternate_names, parent_name, status, taxon_name,
+		has_number, neotoma_element_id, neotoma_element_type_id, comments)
+	VALUES (";
     
-    # Insert the record into the database.
+    my @columns = qw(element_name alternate_names parent_name inactive taxon_name
+		     has_number neotoma_element_id neotoma_element_type_id comments exclude_names);
     
-    my $sql = "	INSERT INTO $SPEC_ELEMENTS (element_name, alternate_names, orig_no, parent_elt_name,
-			has_number, neotoma_element_id, neotoma_element_type_id)
-		VALUES ($quoted_name, $quoted_alt, $orig_no, $quoted_parent,
-			$quoted_hasnum, $quoted_neo, $quoted_neotype)";
+    foreach my $k (@columns)
+    {
+	croak "could not find column for '$k' in input"
+	    unless defined $column{$k};
+    }
+    
+    my $rowcount = 0;
+    
+  ROW:
+    foreach my $r ( @rows )
+    {
+	$rowcount++;
+	
+	my $taxon_name = $r->[$column{taxon_name}];
+	my $base_no;
+	
+	unless ( $taxon_name )
+	{
+	    logMessage(2, "    WARNING: no taxon name for row $rowcount");
+	    next ROW;
+	}
+	
+	unless ( $base_no = $taxon_no_cache{$taxon_name} )
+	{
+	    next ROW if defined $base_no && $base_no == 0;
+	    
+	    my $quoted_name = $dbh->quote($taxon_name);
+	    my $alternate = '';
+
+	    if ( $TAXON_FIX{$taxon_name} )
+	    {
+		$alternate = 'or name = ' . $dbh->quote($TAXON_FIX{$taxon_name});
+	    }
+	    
+	    ($base_no) = $dbh->selectrow_array("
+		SELECT accepted_no FROM $TREE_TABLE WHERE name = $quoted_name $alternate");
+	    
+	    $taxon_no_cache{$taxon_name} = $base_no || 0;
+	    
+	    unless ( $base_no )
+	    {
+		logMessage(2, "    WARNING: could not find taxon name '$taxon_name'");
+		next ROW;
+	    }
+	}
+	
+	my @values;
+	my @exclude_names;
+	
+	foreach my $k (@columns)
+	{
+	    my $v = $r->[$column{$k}];
+	    
+	    # if ( $k eq 'taxon_name' )
+	    # {
+	    # 	push @values, $dbh->quote($base_no);
+	    # 	next;
+	    # }
+	    
+	    if ( $k eq 'inactive' )
+	    {
+		my $enum = $v ? 'inactive' : 'active';
+		push @values, $dbh->quote($enum);
+	    }
+	    
+	    elsif ( $k eq 'taxon_name' )
+	    {
+		$v = $TAXON_FIX{$v} if $TAXON_FIX{$v};
+
+		unless ( $v )
+		{
+		    logMessage(2, "    WARNING: no taxon name for row $rowcount");
+		    next ROW;
+		}
+		
+		push @values, $dbh->quote($v);
+	    }
+	    
+	    elsif ( $k eq 'exclude_names' )
+	    {
+		@exclude_names = split(/\s*[,;]\s*/, $v) if $v;
+	    }
+	    
+	    elsif ( $k eq 'alternate_names' )
+	    {
+		my $main = $r->[$column{element_name}];
+		my @names;
+		
+		@names = grep { $_ ne $main } split(/\s*[,;]\s*/, $v) if $v;
+
+		my $list = join('; ', @names);
+		
+		push @values, $dbh->quote($list || '');
+	    }
+	    
+	    elsif ( defined $v )
+	    {
+		push @values, $dbh->quote($v);
+	    }
+	    
+	    else
+	    {
+		if ( $k eq 'element_name' )
+		{
+		    logMessage(2, "    WARNING: empty element name in row $rowcount");
+		    next ROW;
+		}
+		
+		push @values, 'NULL';
+	    }
+	}
+	
+	$sql = $inserter . join(',', @values) . ")";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$result = $dbh->do($sql);
+	
+	unless ( $result )
+	{
+	    my $errstr = $dbh->errstr;
+	    logMessage(2, "    ERROR inserting row $rowcount: $errstr");
+	}
+	
+	my $id = $dbh->last_insert_id(undef, undef, undef, undef);
+	
+	if ( $id && @exclude_names )
+	{
+	    $sql = "INSERT INTO $SPECELT_EXC (specelt_no, taxon_name) VALUES ";
+	    
+	    my @excludes;
+	    
+	    foreach my $n (@exclude_names)
+	    {
+		push @excludes, "($id," . $dbh->quote($n) . ")";
+	    }
+	    
+	    $sql .= join(',', @excludes);
+	    
+	    print STDERR "$sql\n\n" if $options->{debug};
+	    
+	    $result = $dbh->do($sql);
+	    
+	    unless ( $result )
+	    {
+		my $errstr = $dbh->errstr;
+		logMessage(2, "    ERROR inserting excludes for row $rowcount: $errstr");
+	    }
+	}
+    }
+    
+    my ($count1) = $dbh->selectrow_array("SELECT count(*) FROM $SPECELT_DATA");
+    my ($count2) = $dbh->selectrow_array("SELECT count(*) FROM $SPECELT_EXC");
+    
+    logMessage(2, "    inserted $count1 elements, $count2 exclusions");
+}
+
+
+our ($REFS_TEMP) = 'refs_temp';
+
+# load_museum_refs ( dbh, filename, options )
+# 
+# Load 'museum collection' references from an input file into the database.
+
+sub load_museum_refs {
+    
+    my ($dbh, $filename, $options) = @_;
+    
+    $options ||= { };
+    
+    # First read the initial line of the file, and generate a loading template using the column
+    # names.
+
+    open(my $infile, "<$filename");
+
+    my $firstline = <$infile>;
+    $firstline =~ s/\w*$//;
+    
+    my (@fields) = split(/, */, $firstline);
+    
+    my (@fieldmap) = ( 'Institution or' => 'mainname',
+		       'Parent' => 'parent',
+		       'English' => 'engname',
+		       'Previous' => 'altnames',
+		       'Collection name' => 'collname',
+		       'Private' => 'private',
+		       'Institution ab' => 'instabbr',
+		       'Collection ab' => 'collabbr',
+		       'City' => 'city',
+		       'State' => 'state',
+		       'Country' => 'country',
+		       'comments' => 'comments' );
+    
+    my %fieldmap = @fieldmap;
+
+    my (@variables, $i);
+    
+ FIELD:
+    foreach my $f (@fields)
+    {
+	foreach my $p (@fieldmap)
+	{
+	    if ( defined $fieldmap{$p} && $f =~ /^$p/ )
+	    {
+		push @variables, '@' . $fieldmap{$p};
+		next FIELD;
+	    }
+	}
+    }
+    
+    my $varstring = join(', ', @variables);
+    
+    my ($sql, $result);
+    
+    $sql = "DROP TABLE IF EXISTS $REFS_TEMP";
+
+    $result = $dbh->do($sql);
+
+    $sql = "CREATE TABLE $REFS_TEMP LIKE $REFERENCES";
+
+    $result = $dbh->do($sql);
+
+    my $quoted = $dbh->quote($filename);
+    
+    $sql = "LOAD DATA INFILE $quoted INTO TABLE $REFS_TEMP character set utf8 fields optionally enclosed by '\"' terminated by ',' lines terminated by '\r\n' ignore 1 lines ($varstring) set publication_type = 'museum collection', upload = 'YES', pubtitle = if(\@mainname rlike '[a-zA-Z]', \@mainname, \@engname), pubtitle = if(\@instabbr <> '', concat(pubtitle, ' (', \@instabbr, ')'), pubtitle), publisher = \@parent, author1last = 'Institutional collection', pubyr = '', reftitle = if(\@collname <> '', if(\@collabbr <> '', concat(\@collname, ' (', \@collabbr, ')'), \@collname), \@collabbr), pubcity = concat_ws(', ', \@city, \@state, \@country), pubvol = if(\@private <> '', 'PRIVATE', NULL), editors = if(\@mainname not rlike '[a-zA-Z]', if(\@altnames, concat(\@mainname, '; ', \@altnames), \@mainname), \@altnames), comments = \@comments, authorizer = 'System', enterer = 'System', authorizer_no = 185, enterer_no = 185, created = now(), modified = now()";
+    
+    print STDOUT "Command to be run is:\n\n$sql\n\n";
+    
+    print STDOUT "Load data? ";
+    
+    my $answer = <STDIN>;
+    
+    unless ( $answer && $answer =~ /^[yY]/ )
+    {
+	print STDOUT "Aborted.\n\n";
+	return;
+    }
+
+    print STDOUT "Loading...\n\n";
+    
+    $result = $dbh->do($sql);
+    
+    print "Read $result records into temporary table. Copy to permanent table? ";
+
+    $answer = <STDIN>;
+
+    unless ( $answer && $answer =~ /^[yY]/ )
+    {
+	print STDOUT "Leaving records in temporary table '$REFS_TEMP'.\n\n";
+	return;
+    }
+    
+    $sql = "ALTER TABLE $REFS_TEMP modify column reference_no int unsigned null";
     
     print STDERR "$sql\n\n" if $options->{debug};
     
-    my $result = $dbh->do($sql);
+    $result = $dbh->do($sql);
     
-    my $insert_id = $dbh->last_insert_id(undef, undef, $SPEC_ELEMENTS, undef);
+    $sql = "ALTER TABLE $REFS_TEMP drop primary key";
     
-    unless ( $insert_id )
-    {
-	print STDERR "Error: element not inserted\n";
-	next;
-    }
+    print STDERR "$sql\n\n" if $options->{debug};
     
-    return $result;
-}
+    $result = $dbh->do($sql);
+    
+    $sql = "UPDATE $REFS_TEMP SET reference_no = null";
 
+    print STDERR "$sql\n\n" if $options->{debug};
+    
+    $result = $dbh->do($sql);
 
-sub line_value {
-    
-    my ($column, $fields_ref) = @_;
-    
-    my $i = $FIELD_MAP{$column};
-    croak "Column '$column' not found.\n" unless defined $i;
-    
-    return $fields_ref->[$i];
-}
+    $sql = "INSERT INTO $REFERENCES SELECT * FROM $REFS_TEMP";
 
+    print STDERR "$sql\n\n" if $options->{debug};
 
-sub lookup_taxon {
-    
-    my ($dbh, $taxon_name) = @_;
-    
-    unless ( $TAXON_CACHE{$taxon_name} )
-    {
-	my $quoted = $dbh->quote($taxon_name);
-	
-	my $sql = "	SELECT orig_no, lft, rgt, name FROM $TREE_TABLE_LIST[0]
-			WHERE name = $quoted";
-	
-	my ($orig_no, $lft, $rgt, $name) = $dbh->selectrow_array($sql);
-	
-	$orig_no ||= 0;
-	
-	print STDERR "WARNING: could not find taxon '$taxon_name'\n" unless $orig_no;
-	
-	$TAXON_CACHE{$taxon_name} = [ $orig_no, $lft, $rgt, $name ];
-    }
-    
-    return @{$TAXON_CACHE{$taxon_name}};
+    $result = $dbh->do($sql);
+
+    print STDOUT "Copied $result records into table '$REFERENCES'.\n\n";
 }
 
 1;

@@ -11,7 +11,6 @@ use strict;
 use Dancer qw(:syntax);
 use PBLogger;
 use TableDefs qw(init_table_names enable_test_mode disable_test_mode is_test_mode);
-use ResourceDefs;
 
 my $logger = PBLogger->new;
 
@@ -147,20 +146,35 @@ any qr{.*} => sub {
     # libraries when they send AJAX requests. We need to delete this so that it doesn't mess up
     # the parameter validation.
     
-    delete params->{_};
-    delete params('query')->{_};
+    if ( params->{_} )
+    {
+	delete params->{_};
+	delete params('query')->{_};
+
+	if ( $r->env->{REQUEST_URI} )
+	{
+	    $r->env->{REQUEST_URI} =~ s/&_=[^&]*//;
+	}
+    }
     
     # If the path ends in a string of digits with a format suffix, we treat this as if it were a
     # request for the object whose identifier corresponds to the digit string. To do this, we
     # rewrite the request as if it had been .../single.<format>?id=<digits>
     
-    if ( $r->path =~ qr{^([\S]+)/([\d]+)[.](\w+)$}xs )
+    if ( $r->path =~ qr{ ^ ([\S]+) / (\d+) [.] (\w+) $ }xs )
     {
-	my $newpath = "$1/single.$3";
-	my $id = $2;
-	
-	params('query')->{id} = $id;
-	forward($newpath);
+	params('query')->{id} = $2;
+	forward("$1/single.$3");
+    }
+    
+    # The archives/retrieve method takes its format from the content of the stored archive. So any
+    # format suffix will be ignored. If none was given in the request, add a '.txt' suffix so that
+    # we will get data rather than documentation.
+    
+    elsif ( $r->path =~ qr{ ^ ([\S]+/archives/retrieve) / (\d+) $ }xs )
+    {
+	params('query')->{id} = $2;
+	forward("$1.txt");
     }
     
     # Now pass the request off to Web::DataService to handle according to the configuration
@@ -176,6 +190,11 @@ any qr{.*} => sub {
 
 hook on_handler_exception => sub {
     
+    var(error => $_[0]);
+};
+
+hook on_route_exception => sub {
+
     var(error => $_[0]);
 };
 

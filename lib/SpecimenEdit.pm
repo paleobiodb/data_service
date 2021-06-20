@@ -88,6 +88,8 @@ sub validate_specimen {
     
     if ( $record->{taxon_name} )
     {
+	$action->ignore_field('taxon_name');
+	
 	if ( $record->{taxon_id} )
 	{
 	    $edt->add_condition('E_PARAM', "you may not specify both 'taxon_name' and 'taxon_id' in the same record");
@@ -157,7 +159,7 @@ sub validate_specimen {
     
     # If we are updating a specimen, we cannot change either the collection_id or occurrence_id.
     
-    elsif ( $operation eq 'update' )
+    elsif ( $operation eq 'update' || $operation eq 'replace' )
     {
 	if ( exists $record->{occurrence_id} || exists $record->{collection_id} )
 	{
@@ -174,7 +176,7 @@ sub validate_specimen {
 	    {
 		$edt->add_condition($action, 'E_CANNOT_CHANGE', 'occurence_id');
 	    }
-	
+	    
 	    if ( $occurrence_no )
 	    {
 		my ($collection_no) = $edt->dbh->selectrow_array("
@@ -199,10 +201,19 @@ sub validate_specimen {
     
     # If we do have a collection_id, check to make sure it exists. Also check to see if that
     # collection already has an occurrence of that taxon. If not, we will need to create one.
-
-    if ( $record->{collection_id} && $operation ne 'delete' )
+    
+    if ( $record->{collection_id} )
     {
-	$edt->validate_collection($action, $operation, $record);
+	$edt->validate_collection($action, $operation, $record) unless $operation eq 'delete';
+
+	# We need to ignore the field 'collection_id' if it was specified, because it does not
+	# correspond to any column in the database table. We also need to ignore 'occurrence_id',
+	# because the validate_collection routine may add an 'occurrence_no' key to the record
+	# based on it. In that case, the 'occurrence_id' field will be ignored, and will throw an
+	# improper BAD_FIELD error unless we make this call.
+	
+	$action->ignore_field('collection_id');
+	$action->ignore_field('occurrence_id');
     }
     
     # $$$ IMPORTANT!!!
@@ -462,6 +473,11 @@ sub validate_measurement {
 # This method is called from EditTransaction.pm before each action. For specimen deletion, we
 # check to see if an occurrence record was auto-generated. If so, then we decrement its count and
 # delete it if the count reaches zero.
+#
+# $$$ IMPORTANT: we must also do this if a specimen was updated to change its taxonomic identification.
+#
+# $$$ IMPORTANT: if a specimen is updated to change its taxonomic identification, we may need to
+# add a new occurrence record. In fact, we should move auto-generation of occurrence records to here.
 
 sub before_action {
     

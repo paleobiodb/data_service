@@ -1,0 +1,13 @@
+=head2 DESCRIPTION
+
+This project maintains a list of research publications that make
+substantial use of data from our database. The operations described here provide access
+to the records describing these publications, and allow them to be entered and edited.
+
+=head2 SYNOPSIS
+
+<% NODELIST(opt_usage=1) %>
+
+The following operations provide for entry, editing, and deletion of these records:
+
+<% NODELIST(opt_usage=1, opt_list='entry/pubs') %>

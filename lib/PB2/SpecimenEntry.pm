@@ -232,7 +232,7 @@ sub update_specimens {
     
     my $dbh = $request->get_connection;
     
-    my %allowances;
+    my %allowances = ( UNKNOWN_TAXON => 1 );
     
     # If we are adding new records, as opposed to only updating existing ones, then we allow
     # record creation.
@@ -660,7 +660,7 @@ sub list_updated_measurements {
 		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
 	    }
 
-	    $request->select_output_block($r, '1.2:measure:basic');
+	    $request->select_record_output($r, '1.2:measure:basic');
 	}
     }
     

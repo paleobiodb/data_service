@@ -19,9 +19,11 @@ use Permissions;
 use Carp qw(carp croak);
 use Try::Tiny;
 use Scalar::Util qw(weaken blessed reftype);
-use Encode qw(encode_utf8);
+use Encode qw(encode);
 
 use Switch::Plain;
+
+use feature 'unicode_strings';
 
 use namespace::clean;
 
@@ -45,7 +47,8 @@ our (%ALLOW_BY_CLASS) = ( EditTransaction => {
 		ALTER_TRAIL => 1,
 		NOT_FOUND => 1,
 		NO_RECORDS => 1,
-		PROCEED => 1, 
+		PROCEED => 1,
+		BAD_FIELDS => 1,
 		DEBUG_MODE => 1,
 		SILENT_MODE => 1,
 		IMMEDIATE_MODE => 1,
@@ -86,9 +89,11 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_PARAM => "%1",
   		E_EXECUTE => "%1",
 		E_DUPLICATE => "Duplicate entry '%1' for key '%2'",
+		E_BAD_FIELD => "Field '%1' does not correspond to any column",
 		W_ALLOW => "Unknown allowance '%1'",
 		W_EXECUTE => "%1",
-		W_TRUNC => "Field '$1': %2",
+		W_TRUNC => "Field '%1': %2",
+		W_BAD_FIELD => "Field '%1' does not correspond to any column",
 		UNKNOWN => "MISSING ERROR MESSAGE" });
 
 our (%SPECIAL_BY_CLASS);
@@ -819,7 +824,8 @@ sub conditions {
 	
 	elsif ( $type eq 'warnings' )
 	{
-	    return @{$edt->{warnings}};
+	    return (@{$edt->{warnings}}, @{$edt->{demoted}}) if wantarray;
+	    return (@{$edt->{warnings}} + @{$edt->{demoted}}); # otherwise
 	}
 	
 	else
@@ -1202,12 +1208,7 @@ sub _new_record {
     
     $edt->{tables}{$table} = 1;
     
-    # # If there are any errors and warnings pending from the previous record, move them to the main
-    # # lists.
-    
-    # $edt->_finish_record;
-    
-    # Then determine a label for this record. If one is specified, use that. Otherwise, keep count
+    # Determine a label for this record. If one is specified, use that. Otherwise, keep count
     # of how many records we have seen so far and use that prepended by '#'. Create an entry
     # in the 'label_found' hash so that we know what table this label refers to.
     
@@ -1232,6 +1233,7 @@ sub _new_record {
     $edt->{current_action} = EditTransaction::Action->new($table, $operation, $record, $label);
     
     # If there are special column instructions already set for this table, copy them in.
+    # $$$ this needs to be changed so that these instructions are only accessed if needed.
     
     if ( my $s = $SPECIAL_BY_CLASS{ref $edt}{$table} )
     {
@@ -1635,20 +1637,22 @@ sub update_record {
 	    }
 	    
 	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
-	    # record is actually being unlocked by this operation, or the transaction allows
-	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
-	    # that the user does have permission to update the record if the lock is disregarded,
-	    # and it implies 'admin' permission. So we proceed as if we had 'admin' permission,
-	    # but add a caution unless the abovementioned conditions are met.
+	    # transaction allows 'LOCKED'. In that case, we can proceed. A permission
+	    # of 'unlock' means that the user does have permission to update the record if the
+	    # lock is disregarded.
 	    
-	    elsif ( $permission =~ /unlock/ )
+	    elsif ( $permission =~ /,unlock/ )
 	    {
-		unless ( $edt->allows('LOCKED') )
+		if ( $edt->allows('LOCKED') )
+		{
+		    $permission =~ s/,unlock//;
+		    $action->_set_permission($permission);
+		}
+		
+		else
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
-		
-		$action->_set_permission('admin');
 	    }
 	    
 	    # If the user does not have permission to edit the record, add an E_PERM condition. 
@@ -1832,13 +1836,19 @@ sub replace_record {
 	    }
 	    
 	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
-	    # record is actually being unlocked by this operation, or the transaction allows
-	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
-	    # that the user does have permission to update the record if the lock is disregarded.
+	    # transaction allows 'LOCKED'. In this case, we can proceed. A permission of 'unlock'
+	    # means that the user does have permission to update the record if the lock is
+	    # disregarded.
 	    
-	    elsif ( $permission =~ /unlock/ )
+	    elsif ( $permission =~ /,unlock/ )
 	    {
-		unless ( $edt->allows('LOCKED') )
+		if ( $edt->allows('LOCKED') )
+		{
+		    $permission =~ s/,unlock//;
+		    $action->_set_permission($permission);
+		}
+		
+		else
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
@@ -2227,20 +2237,22 @@ sub other_action {
 	    }
 	    
 	    # If the record can be unlocked by the user, then add a C_LOCKED condition UNLESS the
-	    # record is actually being unlocked by this operation, or the transaction allows
-	    # 'LOCKED'. In either of those cases, we can proceed. A permission of 'unlock' means
-	    # that the user does have permission to update the record if the lock is disregarded,
-	    # and it implies 'admin' permission. So we proceed as if we had 'admin' permission,
-	    # but add a caution unless the abovementioned conditions are met.
+	    # transaction allows 'LOCKED'. In that case, we can proceed. A permission of 'unlock'
+	    # means that the user does have permission to update the record if the lock is
+	    # disregarded.
 	    
-	    elsif ( $permission eq 'unlock' )
+	    elsif ( $permission =~ /,unlock/ )
 	    {
-		unless ( $edt->allows('LOCKED') )
+		if ( $edt->allows('LOCKED') )
+		{
+		    $permission =~ s/,unlock//;
+		    $action->_set_permission($permission);
+		}
+
+		else
 		{
 		    $edt->add_condition($action, 'C_LOCKED', $action->keyval);
 		}
-		
-		$action->_set_permission('admin');
 	    }
 	    
 	    # If the user does not have permission to edit the record, add an E_PERM condition. 
@@ -2284,6 +2296,36 @@ sub other_action {
 }
 
 
+# do_sql ( stmt, options )
+# 
+# Create an action that will execute the specified SQL statement, and do nothing else. The
+# execution is protected by a try block, and an E_EXECUTE condition will be added if it fails. The
+# appropriate cleanup methods will be called in this case. If an options hash is provided with the
+# key 'result' and a scalar reference, the result code returned by the statement execution will be
+# written to that reference. 
+
+sub do_sql {
+
+    my ($edt, $sql, $options) = @_;
+    
+    # Substitute any table specifiers in the statement for the actual table names.
+    
+    $sql =~ s{ << (\w+) >> }{ $TABLE{$1} }xseg;
+    
+    my $record = { sql => $sql };
+    $record->{result} = $options->{result} if ref $options eq 'HASH' && $options->{result};
+    
+    # Move any accumulated record error or warning conditions to the main lists, and determine the
+    # key expression and label for the record being updated.
+    
+    my $action = EditTransaction::Action->new('<SQL>', 'other', $record);
+    
+    $action->_set_method('_do_sql');
+    
+    return $edt->_handle_action($action);
+}
+
+
 # bad_record ( record )
 #
 # Create an action for this record, and immediately attach an error condition to it. This method
@@ -2314,7 +2356,7 @@ sub bad_record {
 # get_record_key ( table, record )
 # 
 # Return the key value (if any) specified in this record. Look first to see if the table has a
-# 'PRIMARY_ATTR' property. If so, check to see if we have a value for the named
+# 'PRIMARY_FIELD' property. If so, check to see if we have a value for the named
 # attribute. Otherwise, check to see if the table has a 'PRIMARY_KEY' property and check under
 # that name as well. If no non-empty value is found, return undefined.
 
@@ -2324,7 +2366,7 @@ sub get_record_key {
 
     return unless ref $record eq 'HASH';
     
-    if ( my $key_attr = get_table_property($table, 'PRIMARY_ATTR') )
+    if ( my $key_attr = get_table_property($table, 'PRIMARY_FIELD') )
     {
 	if ( defined $record->{$key_attr} && $record->{$key_attr} ne '' )
 	{
@@ -3503,6 +3545,17 @@ sub record_col {
 	}
     }
     
+    # If the column is the key column, then we need to check both that column name and the primary
+    # attribute if any.
+
+    if ( $col eq $action->{keycol} && ! exists $record->{$col} )
+    {
+	if ( my $alt = get_table_property($table, 'PRIMARY_FIELD') )
+	{
+	    return ($record->{$alt}, $alt);
+	}
+    }
+    
     # Otherwise, we need to check for a value under the column name. If there isn't one, then we need to
     # check the alternate name if any.
 
@@ -3719,7 +3772,7 @@ sub _execute_insert {
     my $sql = "	INSERT INTO $TABLE{$table} ($column_list)
 		VALUES ($value_list)";
     
-    $edt->debug_line( encode_utf8("$sql\n") );
+    $edt->debug_line("$sql\n");
     
     my ($result, $cleanup_called, $new_keyval);
     
@@ -3888,7 +3941,7 @@ sub _execute_replace {
     my $sql = "	REPLACE INTO $TABLE{$table} ($column_list)
 		VALUES ($value_list)";
     
-    $edt->debug_line( encode_utf8("$sql\n") );
+    $edt->debug_line("$sql\n");
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
@@ -4065,7 +4118,7 @@ sub _execute_update {
     my $sql = "	UPDATE $TABLE{$table} SET $set_list
 		WHERE $key_expr";
     
-    $edt->debug_line( encode_utf8("$sql\n") );
+    $edt->debug_line("$sql\n");
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
@@ -4660,6 +4713,23 @@ sub _substitute_labels {
 }
 
 
+# _do_sql ( action, table, record )
+#
+# Execute the specified SQL statement.
+
+sub _do_sql {
+    
+    my ($edt, $action, $table, $record) = @_;
+    
+    my $result = $edt->{dbh}->do($record->{sql});
+
+    if ( ref $record->{result} eq 'SCALAR' )
+    {
+	${$record->{$result}} = $result;
+    }
+}
+
+
 # Methods to be overridden
 # ------------------------
 
@@ -5103,7 +5173,7 @@ sub validate_against_schema {
     # Start by going through the list of field names, and constructing a list of values to be
     # inserted.
     
-    my (@columns, @values);
+    my (@columns, @values, %used);
 
   COLUMN:
     foreach my $col ( @{$schema->{_column_list}} )
@@ -5126,21 +5196,29 @@ sub validate_against_schema {
 	my $is_default;
 	
 	# Skip the primary key for any operation except 'replace'. For 'replace' operations, we
-	# use the cleaned key value without checking it.
+	# use the cleaned key value without checking it. In all cases, the primary key value has
+	# already been validated by the routine that called this one. The primary key may be
+	# referred to in the action record under its alternate name, as specified by the
+	# PRIMARY_FIELD property of the table. The ALTERNATE_NAME property should not be used for
+	# primary keys.
 	
 	if ( $col eq $keycol )
 	{
+	    if ( exists $record->{$col} )
+	    {
+		$used{$col} = 1;
+	    }
+	    
+	    elsif ( my $alt = get_table_property($table, 'PRIMARY_FIELD') )
+	    {
+		$used{$alt} = 1;
+		$record_col = $alt;
+	    }
+	    
 	    next COLUMN unless $operation eq 'replace';
 	    
 	    $value = $action->keyval;
 	    $special = 'pass';
-
-	    my $alt = $cr->{ALTERNATE_NAME};
-	    
-	    if ( $alt && ! exists $record->{$col} )
-	    {
-		$record_col = $alt;
-	    }
 	}
 	
 	# Otherwise, if the column name is not mentioned in the record but an alternate name is
@@ -5165,6 +5243,11 @@ sub validate_against_schema {
 		$value = undef;
 	    }
 	}
+	
+	# Record the keys that correspond to values from the record. We will use this info later
+	# to throw error or warning conditions for any record keys that we do not recognize.
+	
+	$used{$record_col} = 1 if exists $record->{$record_col};
 	
 	# Don't check any columns we are directed to ignore. These were presumably checked by code
 	# from a subclass that has called this method. Columns that have a type assigned by
@@ -5702,11 +5785,10 @@ sub validate_against_schema {
 		    
 		    if ( $type eq 'text' || $type eq 'data' )
 		    {
-			$value = $edt->validate_character_value($action, $schema->{$col}, $record_col, $value);
-			$quote_this_value = 1;
+			($value, $quote_this_value) = $edt->validate_character_value($action, $schema->{$col}, $record_col, $value);
 			next if ref $value;
 		    }
-		    
+		    		    
 		    elsif ( $type eq 'boolean' )
 		    {
 			$value = $edt->validate_boolean_value($action, $schema->{$col}, $record_col, $value);
@@ -5810,10 +5892,11 @@ sub validate_against_schema {
 	    # record. Any columns not explicitly given a value in an update operation are left
 	    # with whatever value was previously stored in the table.
 	    
-	    elsif ( $cr->{REQUIRED} && ( $operation ne 'update' || exists $record->{$record_col} ) )
+	    elsif ( ($cr->{REQUIRED} || $cr->{NOT_NULL} ) &&
+		    ( $operation ne 'update' || exists $record->{$record_col} ) )
 	    {
 		my $col_name;
-
+		
 		if ( $record_col ne $col ) { $col_name = $record_col; }
 		else { $col_name = $cr->{ALTERNATE_NAME} || $record_col; }
 		
@@ -5879,7 +5962,31 @@ sub validate_against_schema {
 	    push @values, 'NULL';
 	}
     }
-
+    
+    # If this is a primary action (not auxiliary) and there are any unrecognized keys in this
+    # record, add an error or a warning depending on whether BAD_FIELDS is allowed for this
+    # transaction.
+    
+    unless ( $action->is_aux )
+    {
+	foreach my $key ( keys %$record )
+	{
+	    next if $used{$key};
+	    next if $key =~ /^_/;
+	    next if $action->{ignore_field}{$key};
+	    
+	    if ( $edt->allows('BAD_FIELDS') )
+	    {
+		$edt->add_condition($action, 'W_BAD_FIELD', $key);
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition($action, 'E_BAD_FIELD', $key);
+	    }
+	}
+    }
+    
     # If the action has no errors, then we save the column values to it.
     
     unless ( $action->has_errors )
@@ -5931,13 +6038,40 @@ sub validate_character_value {
     
     my ($edt, $action, $column_defn, $record_col, $value) = @_;
     
-    my ($type, $size, $variable) = @{$column_defn->{TypeParams}};
+    my ($type, $size, $variable, $charset) = @{$column_defn->{TypeParams}};
     
-    # If the type is char or data, we only need to check the maximum length.
-
-    my $actual = length($value);
+    my $value_size = length($value);
+    my $quote_this_value = 1;
     
-    if ( defined $size && $actual > $size )
+    # If the character set of a text/char column is not utf8, then encode it into the proper
+    # character set before checking the length.
+    
+    if ( $type eq 'text' && $charset && $charset ne 'utf8' )
+    {
+	# If the column is latin1, we can do the conversion in Perl.
+	
+	if ( $charset eq 'latin1' )
+	{
+	    $value = encode('cp1252', $value);
+	    $value_size = length($value);
+	}
+	
+	# Otherwise, we must let the database do the conversion.
+	
+	else
+	{
+	    my $dbh = $edt->dbh;
+	    my $quoted = $dbh->quote($value);
+	    $value = "convert($quoted using $charset)";
+	    ($value_size) = $dbh->selectrow_array("SELECT length($value)");
+	    $quote_this_value = 0;
+	}
+    }
+    
+    # If the size of the value exceeds the size of the column, then we either truncate the data if
+    # the column has the ALLOW_TRUNCATE attribute or else reject the value.
+    
+    if ( defined $size && $value_size > $size )
     {
 	my $word = $type eq 'text' ? 'characters' : 'bytes';
 	
@@ -5945,13 +6079,13 @@ sub validate_character_value {
 	{
 	    $value = substr($value, 0, $size);
 	    $edt->add_condition($action, 'W_TRUNC', $record_col,
-				"value was truncated to a length of $size");
+				"value was truncated to a length of $size $word");
 	}
 	
 	else
 	{
 	    $edt->add_condition($action, 'E_WIDTH', $record_col,
-				"value must be no more than $size $word in length, was $actual");
+				"value must be no more than $size $word in length, was $value_size");
 	    return { };
 	}
     }
@@ -5964,7 +6098,7 @@ sub validate_character_value {
 	return { };
     }
     
-    return $value;
+    return ($value, $quote_this_value);
 }
 
 
@@ -6013,11 +6147,25 @@ sub validate_boolean_value {
 # If the value is good, this routine will return a canonical version suitable for storing into the
 # column. An undefined return value will indicate a null.
 
+our (%SIGNED_BOUND) = ( tiny => 127,
+			small => 32767,
+			medium => 8388607,
+			regular => 2147483647,
+			big => 9223372036854775807 );
+
+our (%UNSIGNED_BOUND) = ( tiny => 255,
+			  small => 65535,
+			  medium => 16777215,
+			  regular => 4294967295,
+			  big => 18446744073709551615 );
+
 sub validate_integer_value {
     
     my ($edt, $action, $column_defn, $record_col, $value) = @_;
     
-    my ($type, $unsigned, $max) = @{$column_defn->{TypeParams}};
+    my ($type, $unsigned, $size) = @{$column_defn->{TypeParams}};
+
+    my $max = $unsigned ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
     
     # First make sure that the value is either empty or matches the proper format. A value which
     # is empty or contains only whitespace will be treated as a NULL.
@@ -6350,6 +6498,11 @@ sub validate_datetime_value {
     if ( $value =~ qr{ ^ now (?: [(] [)] ) ? $ }xsi )
     {
 	return 'NOW()';
+    }
+
+    elsif ( $value =~ qr{ ^ \d\d\d\d\d\d\d\d\d\d+ $ }xs )
+    {
+	return "FROM_UNIXTIME($value)";
     }
     
     elsif ( $specific eq 'time' )

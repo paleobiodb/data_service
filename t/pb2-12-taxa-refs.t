@@ -209,7 +209,7 @@ subtest 'subtree basic with output' => sub {
 	$tc->flag('ID', $rr->{ID}) unless $rr->{ID} eq $rj->{oid};
 	
 	my $al1 = $rj->{al1};
-	my $ai1 = $rj->{ai1}; my $ai1_1 = substr($ai1,0,1);
+	my $ai1 = $rj->{ai1} || ''; my $ai1_1 = substr($ai1,0,1);
 	my $tit = $rj->{tit} || $rj->{pbt};
 	
 	$tc->flag('al1', $rj->{oid}) unless $al1;

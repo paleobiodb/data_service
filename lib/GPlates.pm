@@ -531,7 +531,9 @@ sub makeGPlatesRequest {
     # 		    'Content-Length' => length($$request_ref) );
     
     # my $req = HTTP::Request->new(POST => $uri, \@headers, $$request_ref);
-
+    
+    print STDERR "GET $uri?$request_params\n" if $self->{debug};
+    
     my $req = HTTP::Request->new(GET => "$uri?$request_params");
     
     my ($resp, $content_ref);
@@ -598,7 +600,7 @@ sub makeGPlatesRequest {
 	    open(OUTFILE, ">gpfail.$self->{debug_count}.html");
 	    print OUTFILE $resp->content;
 	    close OUTFILE;
-	    logMessage(2, "      DEBUG FILE 'gpfail.$self->{debug_count}.html' created");
+	    print STDERR "DEBUG FILE 'gpfail.$self->{debug_count}.html' created\n";
 	}
 	
 	return;
