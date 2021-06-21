@@ -31,7 +31,21 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
     
     set_table_name(REFERENCE_DATA => 'refs');
-
+    
+    set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
+    set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
+    set_table_property('REFERENCE_DATA', PRIMARY_KEY => 'reference_no');
+    set_table_property('REFERENCE_DATA', PRIMARY_FIELD => 'reference_id');
+    
+    set_column_property('REFERENCE_DATA', 'reftitle', REQUIRED => 1);
+    set_column_property('REFERENCE_DATA', 'publication_type', REQUIRED => 1);
+    
+    set_table_name(REFERENCE_SOURCES => 'ref_sources');
+    
+    set_table_property('REFERENCE_SOURCES', PRIMARY_KEY => 'refsource_no');
+    
+    set_table_name ('REFERENCE_SCORES' => 'ref_scores');
+    
     set_table_name(INTERVAL_DATA => 'interval_data');
     
     set_table_name(SPECIMEN_DATA => 'specimens');
