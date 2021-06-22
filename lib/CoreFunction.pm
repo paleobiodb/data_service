@@ -89,6 +89,7 @@ sub connectDB {
     }
     
     $dsn .= ";mysql_client_found_rows=0";
+    $dsn .= ";mysql_enable_utf8=1";
     
     my $dbh = DBI->connect($dsn, $DB_USER, $DB_PASSWD, $DBI_PARAMS);
     
