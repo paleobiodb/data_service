@@ -9,6 +9,8 @@ package ReferenceMatch;
 
 use strict;
 
+use feature 'unicode_strings';
+
 use Unicode::Collate;
 use Algorithm::Diff qw(sdiff);
 use Text::Levenshtein::Damerau qw(edistance);
@@ -30,7 +32,7 @@ our $IgnoreCaseAccents = Unicode::Collate->new(
 # Reference matching
 # ------------------
 
-# ref_similarity ( r, m, incomplete )
+# ref_similarity ( r, m, options )
 # 
 # Return a matrix of scores from 0 to 100 (stored as a hashref) that represents the degree of
 # similarity and conflict between the bibliographic reference attributes specified in r and those
@@ -40,13 +42,12 @@ our $IgnoreCaseAccents = Unicode::Collate->new(
 # source such as crossref. The goal of this function is to determine whether the already existing
 # record m is a good match.
 # 
-# The arguments $r and $m should both be hashrefs. If the third argument $incomplete is true, then
-# $r is assumed not to contain the complete set of attributes for the reference but is rather just
-# a partial set used in a query.
+# The arguments $r and $m should both be hashrefs. If a third argument is given, it should be a
+# hashref of option values.
 
 sub ref_similarity {
     
-    my ($r, $m, $incomplete) = @_;
+    my ($r, $m, $options) = @_;
     
     # The basic idea is to compute a similarity score and a conflict score for each of the most
     # important field values. Similarity scores are all normalized to the range 0-100, with 100
@@ -928,26 +929,40 @@ sub author_similarity {
     
     my ($init_a) = $first_a =~ qr{ ([[:alpha:]]) }xs;
     my ($init_b) = $first_b =~ qr{ ([[:alpha:]]) }xs;
-
-    # If the two last names have different numbers of words, check to see if they fit the pattern
-    # of 'a. b.' 'smith' vs. 'a.' 'bob smith'.
     
-    my @words_a = $last_a =~ /(\S+)/g;
-    my @words_b = $last_b =~ /(\S+)/g;
+    # Remove suffixes such as jr. and iii from the ends of last names. If the names are otherwise
+    # identical and one has such a suffix while the other doesn't, we assume it was left off from
+    # the other entry by mistake.
     
-    # If $last_a has more words than $last_b, remove the first word of $last_a. The remaining last
-    # name will be compared to $last_b.
-    
-    if ( @words_a > @words_b && $last_a =~ qr{ ^ \S+ \s+ (.*) }xs )
+    if ( $last_a =~ qr{ ^ (.*?) [\s,]+ (jr|iii) [.]? $ }xsi )
     {
 	$last_a = $1;
     }
     
-    # If $last_b has more words than $last_a, do the opposite.
-
-    elsif ( @words_b > @words_a && $last_b =~ qr{ ^ \S+ \s+ (.*) }xs )
+    if ( $last_b =~ qr{ ^ (.*?) [\s,]+ (jr|iii) [.]? $ }xsi )
     {
 	$last_b = $1;
+    }
+    
+    # If the two last names have different numbers of words, check to see if they fit the pattern
+    # of 'a. b.' 'smith' vs. 'a.' 'bob smith'. If one has more words than the other, remove enough
+    # from the beginning to even them out.
+    
+    my @words_a = $last_a =~ /(\S+)/g;
+    my @words_b = $last_b =~ /(\S+)/g;
+    
+    if ( @words_a > @words_b )
+    {
+	my $difference = @words_a - @words_b;
+	splice(@words_a, 0, $difference);
+	$last_a = join(' ', @words_a);
+    }
+
+    elsif ( @words_b > @words_a )
+    {
+	my $difference = @words_b - @words_a;
+	splice(@words_b, 0, $difference);
+	$last_b = join(' ', @words_b);
     }
     
     # Then check if the last names are equal when case and accents are ignored.

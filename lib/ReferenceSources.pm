@@ -9,20 +9,18 @@ package ReferenceSources;
 
 use strict;
 
+use feature 'unicode_strings';
+
 use Carp qw(croak);
 use LWP::UserAgent;
 use URI::Escape;
 use JSON;
+use Encode;
 use Scalar::Util qw(reftype blessed);
 
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use ReferenceMatch qw(get_reftitle get_pubtitle get_authornames get_pubyr @SCORE_VARS);
-
-use Exporter 'import';
-
-our (@EXPORT_OK) = qw(format_ref);
-
 
 our ($UA);
 
@@ -284,7 +282,7 @@ sub metadata_query {
     
     if ( $source eq 'crossref' )
     {
-	$query_text = ref $attrs ? format_ref($attrs) : $attrs;
+	$query_text = ref $attrs ? $datasource->format_ref($attrs) : $attrs;
 	
 	if ( $query_text =~ /[[:alpha:]]{5}/ )
 	{
@@ -653,7 +651,7 @@ sub update_match_scores {
 	
 	my $sql = "UPDATE $TABLE{REFERENCE_SCORES} SET $update_string
 		WHERE refsource_no = $quoted";
-
+	
 	print STDERR "$sql\n\n" if $datasource->{debug};
 
 	my $result;
@@ -1051,167 +1049,295 @@ sub compare_list_scores {
 }
 
 
-sub format_scored_match {
+# format_match ( match_record )
+#
+# Given a hashref of attributes representing a potential match for a paleobiodb reference from an
+# external source, Generate human-readable bibliographic reference text items representing both
+# sets of data: the paleobiodb record and the externally fetched record.
+# 
+# The hashref passed to this method should have been generated originally by
+# 'list_matching_scores', which ensures that it includes all of the necessary fields from the
+# paleobiodb REFERENCE_DATA table (as r.* in the SELECT statement from 'list_matching_scores', see
+# above). It will be augmented with fields 'ref_formatted' and 'match_formatted'.
 
-    my ($datasource, $r) = @_;
+sub format_match {
     
-    # Make sure we have a refsource_no value.
+    my ($datasource, $m) = @_;
     
-    unless ( $r->{refsource_no} )
+    # Make sure we have a hashref that includes a refsource_no value and an rs_index value. This
+    # identifies exactly which scored match we are working with, and causes processing to be
+    # aborted if we have been handed a bad argument.
+    
+    unless ( ref $m eq 'HASH' && $m->{refsource_no} )
     {
-	print STDERR "ERROR: no refsource_no\n";
-	return;
+	croak "ERROR: no refsource_no\n";
+    }
+
+    unless ( defined $m->{rs_index} && $m->{rs_index} ne '' )
+    {
+	croak "ERROR: no rs_index\n";
     }
     
-    my $dbh = $datasource->{dbh};
+    # Generate bibliographic reference text using the attributes from the corresponding record in
+    # the paleobiodb REFERENCE_DATA table.
     
-    # Format the paleobiodb reference using the attributes r.* from this result row.
+    $m->{ref_formatted} = $datasource->format_ref($m);
     
-    $r->{ref_formatted} = $datasource->format_ref($r);
+    # If bibliographic reference text has already been generated and stored for the external data
+    # to be matched, it will be included under the key 'formatted'. In that case, simply rename
+    # this field to 'match_formatted'.
     
-    # If this result row doesn't already have a value for 'formatted', generate one from the
-    # response_data field.
-    
-    if ( $r->{response_data} && ! defined $r->{formatted} )
+    if ( $m->{formatted} )
     {
-	my ($data);
-	
-	eval {
-	    $data = decode_json($r->{response_data});
-	};
-	
-	if ( $@ )
-	{
-	    $r->{formatted} = "JSON decoding error: $@";
-	    return;
-	}
+	$m->{match_formatted} = $m->{formatted};
+	delete $m->{formatted};
+    }
 
-	my @items = $datasource->extract_items($data);
-	my $item_count = scalar(@items);
+    # If we have already processed this record and already have a value in match_formatted,
+    # nothing else needs to be done. Otherwise, decode the response_data associated with this
+    # scored match and use the extracted attributes to generate bibliographic reference text.
+    
+    elsif ( ! $m->{match_formatted} )
+    {
+	# Start by decoding the response_data for this match and extracting the bibliographic
+	# reference items from the it. If $m->{response_data} is empty, the
+	# extract_response_items method will make a query for the corresponding data.
 	
-	# Now that we know the number of items, we can store that back to the ref_sources
-	# record if that information isn't already there.
+	my @items = $datasource->extract_response_items($m);
 	
-	if ( ! defined $r->{items} )
+	# Now that we know the item count, we can store that number in the REFERENCE_SOURCES table if
+	# it isn't already there.
+	
+	my $dbh = $datasource->{dbh};
+	
+	if ( ! defined $m->{items} || $m->{items} != @items )
 	{
-	    my $sql_u = "UPDATE $TABLE{REFERENCE_SOURCES} SET items=$item_count
-		WHERE refsource_no = $r->{refsource_no} LIMIT 1";
+	    $m->{items} = scalar(@items);
+	    
+	    my $quoted_id = $dbh->quote($m->{refsource_no});
+	    my $quoted_count = $dbh->quote($m->{items});
+	    
+	    my $sql_u = "UPDATE $TABLE{REFERENCE_SOURCES} SET items=$quoted_count
+		WHERE refsource_no=$quoted_id LIMIT 1";
 	    
 	    print STDERR "$sql_u\n\n" if $datasource->{debug};
+
+	    # If an error occurs while storing the data, just print it out and don't throw an
+	    # exception.
+	    
+	    local $dbh->{RaiseError};
+	    local $dbh->{PrintError} = 1;
 	    
 	    $dbh->do($sql_u);
 	}
-
-	# If we found some items, pick the selected item and format it.
 	
-	if ( @items )
+	# If we found some items, pick the selected item and generate a formatted bibliographic
+	# reference text from the item data.
+	
+	my $index = $m->{rs_index} > 0 ? $m->{rs_index} : 0;
+	
+	if ( @items && $index < @items )
 	{
-	    my $i = $r->{rs_index} || 0;
+	    $m->{match_formatted} = $datasource->format_ref($items[$index]);
 	    
-	    $r->{formatted} = $datasource->format_ref($items[$i]);
+	    # Store the generated text in the 'formatted' column of the score record.
 	    
-	    # Store the formatted reference in the score record.
+	    my $quoted_text = $dbh->quote($m->{match_formatted});
+	    my $quoted_id = $dbh->quote($m->{refsource_no});
 	    
-	    my $quoted_string = $dbh->quote($r->{formatted});
-	    my $sql_s = "UPDATE $TABLE{REFERENCE_SCORES} SET formatted=$quoted_string
-		WHERE refsource_no = $r->{refsource_no} and rs_index = $i LIMIT 1";
+	    my $sql_s = "UPDATE $TABLE{REFERENCE_SCORES} SET formatted=$quoted_text
+		WHERE refsource_no=$quoted_id and rs_index=$index LIMIT 1";
 	    
-	    print STDERR "$sql_s\n\n" if $datasource->{debug};
+	    print STDERR $sql_s . "\n\n" if $datasource->{debug};
+	    
+	    # If an error occurs while storing the data, just print it out and don't throw an
+	    # exception.
+	    
+	    local $dbh->{RaiseError};
+	    local $dbh->{PrintError} = 1;
 	    
 	    $dbh->do($sql_s);
+	}
+	
+	# If there aren't enough items, throw an exception.
+	
+	else
+	{
+	    my $item_count = scalar(@items);
+	    die "item '$m->{rs_index}' requested for refsource_no='$m->{refsource_no}', $item_count items were found";
 	}
     }
 }
 
 
-sub scored_match_data {
+# get_match_data ( match_record )
+#
+# Return the bibliographic reference data corresponding to the specified match record. Much of
+# this code is quite similar to 'format_match' above.
+
+sub get_match_data {
     
-    my ($datasource, $r) = @_;
+    my ($datasource, $m) = @_;
     
-    # Make sure we have a refsource_no value and an rs_index value.
+    # Make sure we have a hashref that includes a refsource_no value and an rs_index value. This
+    # identifies exactly which scored match we are working with, and causes processing to be
+    # aborted if we have been handed a bad argument.
     
-    unless ( $r->{refsource_no} )
+    unless ( ref $m eq 'HASH' && $m->{refsource_no} )
     {
-	print STDERR "ERROR: no refsource_no\n";
-	return;
-    }
-    
-    unless ( defined $r->{rs_index} )
-    {
-	print STDERR "ERROR: no rs_index\n";
-    }
-    
-    my $dbh = $datasource->{dbh};
-    
-    # If this record doesn't include a value for response_data, fetch that data from the
-    # REFERENCE_SOURCES table.
-    
-    my $data = $r->{response_data};
-    
-    unless ( $data )
-    {
-	my $quoted = $dbh->quote($r->{refsource_no});
-	
-	my $sql = "SELECT response_data FROM $TABLE{REFERENCE_SOURCES}
-		WHERE refsource_no = $quoted";
-	
-	print STDERR "$sql\n\n" if $datasource->{debug};
-	
-	($data) = $dbh->selectrow_array($sql);
+	croak "ERROR: no refsource_no\n";
     }
 
-    # Decode the data.
-    
-    eval {
-	$data = decode_json($r->{response_data});
-    };
-    
-    if ( $@ )
+    unless ( defined $m->{rs_index} && $m->{rs_index} ne '' )
     {
-	print STDERR "JSON decoding error: $@\n";
-	return;
+	croak "ERROR: no rs_index\n";
     }
     
-    my @items = $datasource->extract_items($data);
-
-    return $items[$r->{rs_index}];
+    # Start by decoding the response_data for this match and extracting the bibliographic
+    # reference items from the it. If $m->{response_data} is empty, the extract_response_items
+    # method will make a query for the corresponding data.
+    
+    my @items = $datasource->extract_response_items($m);
+    
+    # Now that we know the item count, we can store that number in the REFERENCE_SOURCES table if
+    # it isn't already there.
+    
+    if ( ! defined $m->{items} || $m->{items} != @items )
+    {
+	$m->{items} = scalar(@items);
+	
+	my $dbh = $datasource->{dbh};
+	my $quoted_id = $dbh->quote($m->{refsource_no});
+	my $quoted_count = $dbh->quote($m->{items});
+	
+	my $sql_u = "UPDATE $TABLE{REFERENCE_SOURCES} SET items=$quoted_count
+		WHERE refsource_no=$quoted_id LIMIT 1";
+	
+	print STDERR "$sql_u\n\n" if $datasource->{debug};
+	
+	# If an error occurs while storing the data, just print it out and don't throw an
+	# exception.
+	
+	local $dbh->{RaiseError};
+	local $dbh->{PrintError} = 1;
+	
+	$dbh->do($sql_u);
+    }
+    
+    # If we found some items, return the selected item.
+    
+    my $index = $m->{rs_index} > 0 ? $m->{rs_index} : 0;
+    
+    if ( @items && $index < @items )
+    {
+        return $items[$index];
+    }
+    
+    # If there aren't enough items, throw an exception.
+    
+    else
+    {
+	my $item_count = scalar(@items);
+	die "item '$m->{rs_index}' requested for refsource_no='$m->{refsource_no}', $item_count items were found";
+    }
 }
 
 
-sub extract_items {
+# extract_response_items ( match_record )
+# 
+# Decode the specified response data and return the list of bibliographic reference items it
+# includes. If 'response_data' is not provided, query for it using the value of 'refsource_no'.
+
+sub extract_response_items {
+
+    my ($datasource, $m) = @_;
     
-    my ($datasource, $data) = @_;
+    my $response_data = $m->{response_data};
+    
+    # If we weren't given any value for $response_data, fill it in by querying the database.
+    
+    unless ( $response_data )
+    {
+	my $dbh = $datasource->{dbh};
+	my $quoted_id = $dbh->quote($m->{refsource_no});
+	
+	my $sql = "SELECT response_data FROM $TABLE{REFERENCE_SOURCES} WHERE refsource_no=$quoted_id";
+	
+	print STDERR "$sql\n\n" if $datasource->{debug};
+	
+	($response_data) = $dbh->selectrow_array($sql);
+	
+	unless ( $response_data )
+	{
+	    die "empty response_data for refsource_no=$quoted_id\n";
+	}
+    }
+    
+    # Decode $response_data, whose content should be encoded in JSON. If the raw data includes the
+    # sequence \uxxxx where x is a hexadecimal digit, that means the data was stored
+    # incorrectly. Those sequences represent non-ascii unicode characters which should have been
+    # translated into utf-8 and stored in the database as such. We fix this by substituting each
+    # one with the correspondingly numbered character and then running the result through
+    # encode_utf8. If we don't find any of those sequences, we assume that the raw data is either
+    # already encoded into utf8 or else contains only ASCII characters. In either case, no
+    # encoding is needed. The end result will be a decoded data structure with all character data
+    # encoded in utf8 or ascii which for our purposes is equivalent. This allows each reference
+    # attribute to be properly compared with utf8 character data retrieved from the paleobiodb
+    # REFERENCE_DATA table.
+    
+    if ( $response_data =~ s/\\u([0-9a-zA-Z]{4})/chr(hex($1))/ge )
+    {
+	$response_data = encode_utf8($response_data);
+    }
+    
+    # If an error is thrown during JSON decoding, it will be caught by the caller.
+    
+    my $data = from_json($response_data);
+    
+    # The rest of our task is to identify and return just the list of bibliographic reference
+    # items, ignoring the status info and other stuff that isn't useful to us.
+
+    # Responses from the Crossref API contain the items as an array under the key 'items' inside
+    # 'message'.
     
     if ( ref $data eq 'HASH' && ref $data->{message}{items} eq 'ARRAY' )
     {
 	return @{$data->{message}{items}};
     }
     
+    # Responses from the Xdd API contain the items as an array under the key 'data' inside 'success'.
+    
     elsif ( ref $data eq 'HASH' && ref $data->{success}{data} eq 'ARRAY' )
     {
 	return @{$data->{success}{data}};
     }
+    
+    # If the entire response is a JSON array, and the first item contains the key 'deposited' or
+    # 'title', assume that these are bibliographic reference items and just return the array contents.
     
     elsif ( ref $data eq 'ARRAY' && ( $data->[0]{deposited} || $data->[0]{title} ) )
     {
 	return @$data;
     }
     
-    return;
+    # Otherwise, throw an exception.
+    
+    else
+    {
+	die "ERROR: unrecognized response format for refsource_no='$m->{refsource_no}'\n";
+    }
 }
 
-
+    
 # format_ref ( attrs )
 #
-# Return a single string, formatted in Chicago B style, representing this bibliographic
-# reference. This routine handles both the pbdb reference attributes and the crossref reference
-# attributes.
+# Return a string of text, formatted in Chicago B style, representing the bibliographic reference
+# data contained in the given record. This routine handles both the pbdb reference attributes and
+# the crossref reference attributes.
 
 sub format_ref {
 
-    shift @_ if blessed $_[0] && $_[0]->isa('ReferenceSources');
-    
-    my ($r, $style) = @_;
+    my ($datasource, $r) = @_;
     
     # First format the author string. If there is an 'author' attribute that is a non-empty list,
     # use that. In Chicago B style, the first author goes "family, given" while all the other
@@ -1727,6 +1853,34 @@ sub format_scores_horizontal {
 sub fixed_width {
     
     return $_[0] . (' ' x ($_[1] - length($_[0])));
+}
+
+
+sub strcontent {
+
+    my ($string, $start, $end) = @_;
+    
+    if ( $start =~ /^(\d+)..(\d+)$/ )
+    {
+	$start = $1;
+	$end = $2;
+    }
+
+    $start ||= 0;
+    $end ||= length($string) - 1;
+
+    my $output = '';
+
+    foreach my $i ( $start .. $end )
+    {
+	my $c = substr($string, $i, 1);
+	my $l = $i < 10 ? " $i" : $i;
+	my $o = ord($c);
+
+	$output .= "$l '$c' $o\n";
+    }
+
+    return $output;
 }
 
 
