@@ -22,13 +22,31 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(AUTHORITY_DATA => 'authorities');
     set_table_name(OPINION_DATA => 'opinions');
     
-    set_table_name(OCCURRENCE_DATA => 'occurrences');
-    set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
-    
-    set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX');
-    
     set_table_name(COLLECTION_DATA => 'collections');
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
+    set_table_name(COLLECTION_STRATA => 'coll_strata');
+    set_table_name(COLLECTION_LITHOLOGIES => 'coll_lith');
+    set_table_name(COLLECTION_LOCATION => 'coll_loc');
+    set_table_name(COLLECTION_BIN_DATA => 'coll_bins');
+    set_table_name(COLLECTION_BIN_LOCATION => 'bin_loc');
+    set_table_name(COUNTRY_MAP => 'country_map');
+    set_table_name(ENVIRONMENT_MAP => 'environment_map');
+    set_table_name(MACROSTRAT_LITHS => 'macrostrat.liths');
+    set_table_name(PALEOCOORD_DATA => 'paleocoords');
+    set_table_name(STRATUM_DATA => 'strata_names');
+    set_table_name(CONTINENT_DATA => 'continent_data');
+    
+    set_table_name(OCCURRENCE_DATA => 'occurrences');
+    set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
+    set_table_name(OCCURRENCE_TAXON_SUMMARY => 'occ_taxon');
+    set_table_name(OCCURRENCE_REF_SUMMARY => 'ref_summary');
+
+    set_table_name(TAXON_COLLECTION_COUNTS => 'taxon_colls');
+    
+    set_table_name(INTERVAL_DATA => 'interval_data');
+    set_table_name(SCALE_MAP => 'scale_map');
+    
+    set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX');
     
     set_table_name(REFERENCE_DATA => 'refs');
     

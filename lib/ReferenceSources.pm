@@ -20,7 +20,7 @@ use Scalar::Util qw(reftype blessed);
 
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
-use ReferenceMatch qw(get_reftitle get_pubtitle get_authornames get_pubyr @SCORE_VARS);
+use ReferenceMatch qw(get_reftitle get_pubtitle get_authorname get_authorlist get_pubyr @SCORE_VARS);
 
 our ($UA);
 
@@ -53,6 +53,10 @@ sub new {
     
     my $datasource = { dbh => $dbh,
 		       source => $source };
+    
+    # Turn on auto_reconnect.
+    
+    $dbh->{mariadb_auto_reconnect} = 1;
     
     # Create a LWP::UserAgent object to use for making queries.
     
@@ -542,7 +546,7 @@ sub select_events {
     print STDERR "$sql\n\n" if $datasource->{debug};
     
     my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-
+    
     return $result && ref $result eq 'ARRAY' ? @$result : ();
 }
 
@@ -592,7 +596,7 @@ sub store_scores {
 }
 
 
-# update_match_scores ( match, new_scores )
+# update_match_scores ( match_record, new_scores )
 #
 # Given a match record and a hashref of new scores, check to see if any of the new scores are
 # different from the current ones. If so, update the corresponding record in the REFERENCE_SCORES
@@ -653,18 +657,14 @@ sub update_match_scores {
 		WHERE refsource_no = $quoted";
 	
 	print STDERR "$sql\n\n" if $datasource->{debug};
-
-	my $result;
 	
-	eval {
-	    $result = $dbh->do($sql);
-	};
+	local $dbh->{RaiseError};
+	local $dbh->{PrintError} = 1;
 	
-	if ( $@ )
-	{
-	    print STDERR "$@\n";
-	    print STDERR "Failed to update $update_count score variables\n";
-	}
+	my $result = $dbh->do($sql);
+	
+	# If the update succeeded, actually update the corresponding values in the match record
+	# and then return the number of scores that were updated.
 	
 	if ( $result )
 	{
@@ -680,6 +680,54 @@ sub update_match_scores {
     # If no update was made, or if it was not successful, return undef.
     
     return;
+}
+
+
+# update_match_formatted ( match_record, reference_text )
+#
+# Given a match record and a formatted bibliographic reference text, store the latter in the
+# REFERENCE_SCORES record corresponding to the former.
+
+sub update_match_formatted {
+    
+    my ($datasource, $m, $formatted) = @_;
+    
+    # Make sure we have a refsource_no.
+    
+    unless ( $m->{refsource_no} )
+    {
+	print STDERR "ERROR: no refsource_no found for score update\n";
+	return;
+    }
+    
+    # If $m->{match_formatted} exists and has the same value as $formatted, nothing needs to be
+    # done. Otherwise, construct and execute an UPDATE statement.
+    
+    if ( $m->{match_formatted} ne $formatted )
+    {
+	my $dbh = $datasource->{dbh};
+	
+	my $quoted_id = $dbh->quote($m->{refsource_no});
+	
+	my $quoted_text = $dbh->quote($formatted);
+	
+	my $sql = "UPDATE $TABLE{REFERENCE_SCORES} SET formatted=$quoted_text
+		WHERE refsource_no=$quoted_id";
+	
+	print "$sql\n\n" if $datasource->{debug};
+	
+	my $result;
+	
+	local $dbh->{RaiseError};
+	local $dbh->{PrintError} = 1;
+	
+	$dbh->do($sql);
+    }
+    
+    else
+    {
+	return;
+    }
 }
 
 
@@ -910,6 +958,56 @@ sub list_matching_scores {
     {
 	return @$result;
     }
+    
+    return;
+}
+
+
+# select_matching_scores ( expr, include_rd )
+# 
+# Select all the reference score records matching the specified SQL expression, and store the
+# statement handle where it can be read by 'get_next'. If $include_rd is true, include the
+# response_data field in each record.
+# 
+# The given expression should be enclosed in parentheses unless it is okay as-is to conjoin with
+# one or more simple clauses.
+
+sub select_matching_scores {
+
+    my ($datasource, $expr, $include_rd) = @_;
+    
+    $datasource->{sth} = undef;
+    
+    unless ( $expr && $expr ne '()' )
+    {
+	croak "No sql expression specified\n";
+    }
+    
+    my $dbh = $datasource->{dbh};
+    my $source_select = '';
+    
+    if ( $datasource->{source} && $datasource->{source} ne 'all' )
+    {
+	$source_select = " and sc.source = " . $dbh->quote($datasource->{source});
+    }
+    
+    # Generate and execute the relevant SQL expression.
+    
+    my $rd = $include_rd ? ', s.response_data' : '';
+    
+    my $sql = "SELECT sc.*, r.*, s.items $rd
+	FROM $TABLE{REFERENCE_SCORES} as sc
+	    join $TABLE{REFERENCE_DATA} as r using (reference_no)
+	    join $TABLE{REFERENCE_SOURCES} as s using (refsource_no)
+	WHERE $expr$source_select";
+    
+    print STDERR "$sql\n\n" if $datasource->{debug};
+
+    my $sth = $dbh->prepare($sql);
+    
+    $sth->execute();
+    
+    $datasource->{sth} = $sth;
     
     return;
 }
@@ -1287,7 +1385,7 @@ sub extract_response_items {
     
     if ( $response_data =~ s/\\u([0-9a-zA-Z]{4})/chr(hex($1))/ge )
     {
-	$response_data = encode_utf8($response_data);
+	utf8::upgrade($response_data);
     }
     
     # If an error is thrown during JSON decoding, it will be caught by the caller.
@@ -1716,11 +1814,22 @@ sub format_authorlist {
     my ($authorlist, $field) = @_;
 
     my @names;
+
+    my $family_field = $authorlist->[0]{family} ? 'family' :
+	$authorlist->[0]{last} ? 'last' :
+	$authorlist->[0]{lastname} ? 'lastname' : '';
     
     foreach my $a ( @$authorlist )
     {
 	my $family = $a->{family} || $a->{last} || $a->{lastname} || '';
 	my $given = $a->{given} || $a->{first} || $a->{firstname} || '';
+	
+	# Some crossref authorlists are formatted incorrectly, interleaving author names with
+	# author affiliations as separate items in the list. So we skip any entries that don't
+	# have the same family name field as the first entry. Those are assumed to represent author
+	# affiliations.
+	
+	next if $family_field && ! $a->{$family_field};
 	
 	# In the given name, transform each capitalized word into an initial.
 	

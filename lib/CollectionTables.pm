@@ -15,23 +15,19 @@ our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables buildLithTables
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS $STRATA_NAMES
-		 $MACROSTRAT_LITHS
-		 $BIN_KEY $BIN_LOC $BIN_CONTAINER
-		 $COUNTRY_MAP $CONTINENT_DATA
-		 $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $COLL_LITH $COLL_ENV);
+use TableDefs qw(%TABLE $BIN_KEY);
+use CoreTableDefs;
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(logMessage logTimestamp);
 
 our $COLL_MATRIX_WORK = "cmw";
 our $COLL_BINS_WORK = "cbw";
+our $BIN_LOC_WORK = "blw";
 our $COLL_STRATA_WORK = "csw";
 our $STRATA_NAMES_WORK = "snw";
-our $COLL_INTS_WORK = "ciw";
+# our $COLL_INTS_WORK = "ciw";
 
 our $COLL_LITH_WORK = 'clw';
-our $COLL_ENV_WORK = 'cew';
 
 our $CLUST_AUX = "clust_aux";
 
@@ -43,12 +39,10 @@ our $PROTECTED_WORK = "pln";
 my $MOVE_THRESHOLD = 300;
 my $MAX_ROUNDS = 15;
 
-# buildCollectionTables ( dbh, cluster_flag, bin_list )
+# buildCollectionTables ( dbh, bin_list, options )
 # 
 # Compute the collection matrix.  If the $bin_list argument is not empty,
-# also compute collection bin tables at the specified resolutions.  If
-# $cluster_flag is true, then execute k-means clustering on any bin level
-# for which that attribute is specified.
+# also compute collection bin tables at the specified resolutions.
 
 sub buildCollectionTables {
 
@@ -56,9 +50,7 @@ sub buildCollectionTables {
     
     my ($result, $sql);
     
-    # Make sure that the country code lookup table is in the database.
-    
-    createCountryMap($dbh);
+    $options ||= { };
     
     # If we were given a list of bins, make sure it is formatted properly.
     
@@ -84,26 +76,34 @@ sub buildCollectionTables {
 	}
     }
     
-    # Now create a clean working table which will become the new collection
-    # matrix.
-    
     logTimestamp();
     
     logMessage(1, "Building collection tables");
     
     logMessage(2, "    copying enumerations from collections table...");
     
-    my (@create) = $dbh->selectrow_array("SHOW CREATE TABLE `collections`");
+    my (@create) = $dbh->selectrow_array("SHOW CREATE TABLE `$TABLE{COLLECTION_DATA}`");
     
     my ($env_enum) = $create[1] =~ qr{ `environment` \s+ ( enum [(] .*? [)] ) \s+ DEFAULT \s+ NULL }xmi;
     
     $env_enum ||= 'varchar(30)';
     
+    # Make sure that the country code lookup table is in the database.
+    
+    createCountryMap($dbh, $options);
+    
+    # Make sure that the environment lookup table is in the database.
+    
+    createEnvironmentMap($dbh, $env_enum, $options);
+    
+    # Now create a clean working table which will become the new collection
+    # matrix.
+    
     logMessage(2, "    creating collection matrix...");
     
-    $dbh->do("DROP TABLE IF EXISTS $COLL_MATRIX_WORK");
+    doStmt($dbh, "DROP TABLE IF EXISTS $COLL_MATRIX_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $COLL_MATRIX_WORK (
+    doStmt($dbh, "CREATE TABLE $COLL_MATRIX_WORK (
 		collection_no int unsigned primary key,
 		$bin_lines
 		clust_id int unsigned not null,
@@ -119,21 +119,22 @@ sub buildCollectionTables {
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
 		environment $env_enum default null,
+		marine boolean null,
 		n_occs int unsigned not null,
 		reference_no int unsigned not null,
-		access_level tinyint unsigned not null) Engine=MYISAM");
+		access_level tinyint unsigned not null) Engine=MYISAM", $options->{debug});
     
     logMessage(2, "    inserting collections...");
     
     $sql = "	INSERT INTO $COLL_MATRIX_WORK
 		       (collection_no, lng, lat, loc, cc,
-			early_int_no, late_int_no, environment,
+			early_int_no, late_int_no, environment, marine,
 			reference_no, access_level)
 		SELECT c.collection_no, c.lng, c.lat,
 			if(c.lng is null or c.lat is null, point(1000.0, 1000.0), point(c.lng, c.lat)), 
-			map.cc,
+			cmap.cc,
 			c.max_interval_no, if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no),
-			c.environment,
+			c.environment, emap.marine,
 			c.reference_no,
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
@@ -141,8 +142,11 @@ sub buildCollectionTables {
 				when 'authorizer only' then if(c.release_date < now(), 0, 2)
 				else 0
 			end
-		FROM collections as c
-			LEFT JOIN $COUNTRY_MAP as map on map.name = c.country";
+		FROM $TABLE{COLLECTION_DATA} as c
+			LEFT JOIN $TABLE{COUNTRY_MAP} as cmap on cmap.name = c.country
+			LEFT JOIN $TABLE{ENVIRONMENT_MAP} as emap using (environment)";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
     
     my $count = $dbh->do($sql);
     
@@ -154,8 +158,10 @@ sub buildCollectionTables {
     
     $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN
 		(SELECT collection_no, count(*) as n_occs
-		FROM occurrences GROUP BY collection_no) as sum using (collection_no)
+		FROM $TABLE{OCCURRENCE_DATA} GROUP BY collection_no) as sum using (collection_no)
 	    SET m.n_occs = sum.n_occs";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -164,23 +170,27 @@ sub buildCollectionTables {
     logMessage(2, "    setting age ranges...");
     
     $sql = "UPDATE $COLL_MATRIX_WORK as m
-		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
-		JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
+		JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = m.early_int_no
+		JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = m.late_int_no
 	    SET m.early_age = ei.early_age,
 		m.late_age = li.late_age
 	    WHERE ei.early_age >= li.early_age";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
     # Interchange the early/late intervals if they were given in the wrong order.
     
     $sql = "UPDATE $COLL_MATRIX_WORK as m
-		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
-		JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
+		JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = m.early_int_no
+		JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = m.late_int_no
 	    SET m.early_int_no = (\@tmp := early_int_no), early_int_no = late_int_no, late_int_no = \@tmp,
 		m.early_age = li.early_age,
 		m.late_age = ei.late_age
 	    WHERE ei.early_age < li.early_age";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -196,9 +206,8 @@ sub buildCollectionTables {
 	
 	updateLocationTable($dbh);
 	
-	$result = $dbh->do("
-		UPDATE $COLL_MATRIX_WORK as m JOIN $COLL_LOC as cl using (collection_no)
-		SET m.protected = cl.protected");
+	doStmt($dbh, "UPDATE $COLL_MATRIX_WORK as m JOIN $TABLE{COLLECTION_LOCATION} as cl using (collection_no)
+		SET m.protected = cl.protected", $options->{debug});
     }
     
     else
@@ -210,30 +219,34 @@ sub buildCollectionTables {
     
     logMessage(2, "    setting geoplates using Scotese model...");
     
-    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $COLLECTIONS as cc using (collection_no)
+    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $TABLE{COLLECTION_DATA} as cc using (collection_no)
 	    SET m.s_plate_no = cc.plate";
+    
+    print STDERR "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
     # Setting paleocoordinates using GPlates, if available
     
     my ($paleo_available) = eval {
-	$dbh->selectrow_array("SELECT count(*) from $PALEOCOORDS");
+	$dbh->selectrow_array("SELECT count(*) from $TABLE{PALEOCOORD_DATA}");
     };
     
     if ( $paleo_available )
     {
 	logMessage(2, "    setting geoplates using GPlates...");
 	
-	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $PALEOCOORDS as pc using (collection_no)
+	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $TABLE{PALEOCOORD_DATA} as pc using (collection_no)
 		SET m.g_plate_no = pc.plate_no";
 	
+	print STDERR "$sql\n\n" if $options->{debug};
+    
 	$result = $dbh->do($sql);
     }
     
     else
     {
-	logMessage(2, "    skipping geoplates from GPlates: table '$PALEOCOORDS' not found");
+	logMessage(2, "    skipping geoplates from GPlates: table '$TABLE{PALEOCOORD_DATA}' not found");
     }
     
     # Assign the collections to bins at the various binning levels.
@@ -265,6 +278,8 @@ sub buildCollectionTables {
 			$id_base + $lng_base * floor((lng+180.0)/$reso) + floor((lat+90.0)/$reso), 0)\n";
 	}
 	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
 	$result = $dbh->do($sql);
     }
     
@@ -280,31 +295,31 @@ sub buildCollectionTables {
 	
 	logMessage(2, "    indexing by bin level $level...");
 	
-	$result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (bin_id_$level)");
+	doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (bin_id_$level)", $options->{debug});
     }
     
     logMessage(2, "    indexing by geographic coordinates (spatial)...");
     
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)");
+    doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)", $options->{debug});
     
     logMessage(2, "    indexing by country...");
     
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)");
+    doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)", $options->{debug});
     
     logMessage(2, "    indexing by reference_no...");
     
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (reference_no)");
+    doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (reference_no)", $options->{debug});
     
     logMessage(2, "    indexing by early and late age...");
     
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_age)");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_age)");
+    doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_age)", $options->{debug});
+    doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_age)", $options->{debug});
     
-    logMessage(2, "    indexing by environment...");
+    # logMessage(2, "    indexing by environment...");
     
-    $result = $dbh->do("UPDATE $COLL_MATRIX_WORK SET environment = null
-			WHERE environment = ''");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (environment)");
+    doStmt($dbh, "UPDATE $COLL_MATRIX_WORK SET environment = null
+		WHERE environment = ''", $options->{debug});
+    # doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (environment)", $options->{debug});
     
     # We then create summary table for each binning level, counting the
     # number of collections and occurrences in each bin and computing the
@@ -312,9 +327,9 @@ sub buildCollectionTables {
     
     logMessage(2, "    creating geography/time summary tables...");
     
-    $dbh->do("DROP TABLE IF EXISTS $COLL_BINS_WORK");
+    doStmt($dbh, "DROP TABLE IF EXISTS $COLL_BINS_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $COLL_BINS_WORK (
+    doStmt($dbh, "CREATE TABLE $COLL_BINS_WORK (
 		bin_id int unsigned not null,
 		bin_level tinyint unsigned,
 		$bin_lines
@@ -332,13 +347,13 @@ sub buildCollectionTables {
 		lat_max decimal(9,6),
 		std_dev float,
 		access_level tinyint unsigned not null,
-		primary key (bin_id, interval_no)) Engine=MyISAM");
+		primary key (bin_id, interval_no)) Engine=MyISAM", $options->{debug});
     
-    $dbh->do("DROP TABLE IF EXISTS $COLL_INTS_WORK");
+    # doStmt($dbh, "DROP TABLE IF EXISTS $COLL_INTS_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $COLL_INTS_WORK (
-		collection_no int unsigned not null,
-		interval_no int unsigned not null) Engine=MyISAM");
+    # doStmt($dbh, "CREATE TABLE $COLL_INTS_WORK (
+    # 		collection_no int unsigned not null,
+    # 		interval_no int unsigned not null) Engine=MyISAM", $options->{debug});
     
     my $set_lines = '';
     my @index_stmts;
@@ -402,6 +417,8 @@ sub buildCollectionTables {
 	# 	FROM $COLL_MATRIX_WORK as m
 	# 	GROUP BY bin_id_$level";
 	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");
@@ -412,6 +429,8 @@ sub buildCollectionTables {
 	
 	$sql = "REPLACE INTO $COLL_BINS_WORK (bin_id, interval_no, bin_level, n_colls)
 		VALUES ($level, $BIN_KEY, $level, $coded_reso)";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
 	
 	$result = $dbh->do($sql);
 	
@@ -430,9 +449,7 @@ sub buildCollectionTables {
 		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
 		       min(access_level)
-		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i
-			JOIN $SCALE_MAP as s using (interval_no)
-			JOIN $INTERVAL_BUFFER as ib using (interval_no)
+		FROM $COLL_MATRIX_WORK as m JOIN $TABLE{INTERVAL_DATA} as i
 		WHERE if(m.late_age >= i.late_age,
 			if(m.early_age <= i.early_age, m.early_age - m.late_age, i.early_age - m.late_age),
 			if(m.early_age > i.early_age, i.early_age - i.late_age, m.early_age - i.late_age)) / (m.early_age - m.late_age) >= 0.5
@@ -441,7 +458,9 @@ sub buildCollectionTables {
 		# WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
 		# 	and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
 		# 	and (m.early_age > i.late_age and m.late_age < i.early_age)
-
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");
@@ -452,23 +471,25 @@ sub buildCollectionTables {
     $sql = "UPDATE $COLL_BINS_WORK set loc =
 		if(lng is null or lat is null, point(1000.0, 1000.0), point(lng, lat))";
     
+    print STDERR "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     # Now index the table just created
     
     logMessage(2, "    indexing summary table...");
     
-    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)");
-    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD INDEX (interval_no, lng, lat)");
+    doStmt($dbh, "ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)", $options->{debug});
+    doStmt($dbh, "ALTER TABLE $COLL_BINS_WORK ADD INDEX (interval_no, lng, lat)", $options->{debug});
     
     # Then create a table that maps each bin to the set of countries and
     # continents that it overlaps.
     
     logMessage(2, "    mapping summary clusters to countries and continents");
     
-    $dbh->do("DROP TABLE IF EXISTS $BIN_LOC");
+    doStmt($dbh, "DROP TABLE IF EXISTS $BIN_LOC_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $BIN_LOC (
+    doStmt($dbh, "CREATE TABLE $BIN_LOC_WORK (
 		bin_id int unsigned not null,
 		bin_level tinyint unsigned,
 		cc char(2),
@@ -476,7 +497,7 @@ sub buildCollectionTables {
 		loc geometry not null,
 		PRIMARY KEY (bin_id, cc),
 		KEY (cc),
-		KEY (continent)) Engine=MyISAM");
+		KEY (continent)) Engine=MyISAM", $options->{debug});
     
     foreach my $i (0..$#bin_reso)
     {
@@ -484,13 +505,15 @@ sub buildCollectionTables {
 	
 	logMessage(2, "      mapping bin level $level...");
 	
-	$sql = "INSERT INTO $BIN_LOC
+	$sql = "INSERT INTO $BIN_LOC_WORK
 		SELECT bin_id, bin_level, cc, continent, s.loc
 		FROM $COLL_BINS_WORK as s JOIN $COLL_MATRIX_WORK as c on s.bin_id = c.bin_id_$level
-			LEFT JOIN $COUNTRY_MAP as ccmap using (cc)
+			LEFT JOIN $TABLE{COUNTRY_MAP} as ccmap using (cc)
 		WHERE bin_id > 0 and interval_no = 0
 		GROUP BY bin_id, cc";
-
+	
+	print "$sql\n\n" if $options->{debug};
+	
 	try {
 	    $result = $dbh->do($sql);
 	}
@@ -507,81 +530,89 @@ sub buildCollectionTables {
     
     logMessage(2, "    indexing summary cluster location table spatially");
     
-    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)");
+    doStmt($dbh, "ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)", $options->{debug});
     
     # Then create a table to map bins to containing bins.
     
-    $bin_lines =~ s/,$//;
+    # $bin_lines =~ s/,$//;
     
-    $dbh->do("DROP TABLE IF EXISTS $BIN_CONTAINER");
+    # doStmt($dbh, "DROP TABLE IF EXISTS $BIN_CONTAINER", $options->{debug});
     
-    $dbh->do("CREATE TABLE $BIN_CONTAINER (
-		bin_id int unsigned not null PRIMARY KEY,
-		$bin_lines) Engine=MyISAM");
+    # doStmt($dbh, "CREATE TABLE $BIN_CONTAINER (
+    # 		bin_id int unsigned not null PRIMARY KEY,
+    # 		$bin_lines) Engine=MyISAM", $options->{debug});
     
-    logMessage(2, "    mapping bin containership");
+    # logMessage(2, "    mapping bin containership");
     
-    my $bin_string = "";
+    # my $bin_string = "";
     
-    foreach my $i (0..$#bin_reso)
-    {
-	my $level = $i + 1;
+    # foreach my $i (0..$#bin_reso)
+    # {
+    # 	my $level = $i + 1;
 	
-	$bin_string .= ", bin_id_${level}";
+    # 	$bin_string .= ", bin_id_${level}";
 	
-	logMessage(2, "      bin level $level...");
+    # 	logMessage(2, "      bin level $level...");
 	
-	$sql = "INSERT INTO $BIN_CONTAINER (bin_id${bin_string})
-		SELECT distinct bin_id_${level}${bin_string}
-		FROM $COLL_MATRIX WHERE bin_id_${level} > 0";
+    # 	$sql = "INSERT INTO $BIN_CONTAINER (bin_id${bin_string})
+    # 		SELECT distinct bin_id_${level}${bin_string}
+    # 		FROM $COLL_MATRIX WHERE bin_id_${level} > 0";
 	
-	$result = $dbh->do($sql);
-    }
+    # 	print "$sql\n\n" if $options->{debug};
+	
+    # 	$result = $dbh->do($sql);
+    # }
     
     # We then create a mapping table which allows us to look up, for each
     # collection, the time intervals which it encompasses (with the usual
     # buffer rule applied).
     
-    logMessage(2, "    creating collection interval map...");
+    # logMessage(2, "    creating collection interval map...");
     
-    $sql = "
-    		INSERT IGNORE INTO $COLL_INTS_WORK (collection_no, interval_no)
-    		SELECT collection_no, interval_no
-    		FROM $COLL_MATRIX as m JOIN $INTERVAL_DATA as i
-    			JOIN $SCALE_MAP as s using (interval_no)
-    			JOIN $INTERVAL_BUFFER as ib using (interval_no)
-    		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
-    			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
-    			and (m.early_age > i.late_age and m.late_age < i.early_age)
-    			and m.access_level = 0";
-	
-    $result = $dbh->do($sql);
+    # $sql = "
+    # 		INSERT IGNORE INTO $COLL_INTS_WORK (collection_no, interval_no)
+    # 		SELECT collection_no, interval_no
+    # 		FROM $COLL_MATRIX as m JOIN $TABLE{INTERVAL_DATA} as i
+    # 			JOIN $TABLE{SCALE_MAP} as s using (interval_no)
+    # 			JOIN $INTERVAL_BUFFER as ib using (interval_no)
+    # 		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
+    # 			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
+    # 			and (m.early_age > i.late_age and m.late_age < i.early_age)
+    # 			and m.access_level = 0";
     
-    logMessage(2, "      generated $result rows.");
+    # print "$sql\n\n" if $options->{debug};
+    
+    # $result = $dbh->do($sql);
+    
+    # logMessage(2, "      generated $result rows.");
 
-    logMessage(2, "    indexing interval/bin/collection map...");
+    # logMessage(2, "    indexing interval/bin/collection map...");
     
-    $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD KEY (collection_no)");
-    $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD KEY (interval_no)");
+    # doStmt($dbh, "ALTER TABLE $COLL_INTS_WORK ADD KEY (collection_no)", $options->{debug});
+    # doStmt($dbh, "ALTER TABLE $COLL_INTS_WORK ADD KEY (interval_no)", $options->{debug});
     
     # If we were asked to apply the K-means clustering algorithm, do so now.
     
     # applyClustering($dbh, $bin_list) if $options->{colls_cluster} and @bin_reso;
     
-    # Then we build a table listing all of the different geological strata.
+    # Then we build a table listing all of the different geological strata, and one for
+    # lithologies.
     
     buildStrataTables($dbh);
     buildLithTables($dbh);
-    buildEnvTables($dbh);
+    # buildEnvTables($dbh);
     
     # Finally, we swap in the new tables for the old ones.
     
-    activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS,
-		         $COLL_INTS_WORK => $COLL_INTS);
+    activateTables($dbh, $COLL_MATRIX_WORK => $TABLE{COLLECTION_MATRIX},
+		   $COLL_BINS_WORK => $TABLE{COLLECTION_BIN_DATA},
+		   $BIN_LOC_WORK => $TABLE{COLLECTION_BIN_LOCATION});
     
-    $dbh->do("REPLACE INTO last_build (name) values ('collections')");
+    # $COLL_INTS_WORK => $COLL_INTS);
     
-    $dbh->do("DROP TABLE IF EXISTS protected_aux");
+    doStmt($dbh, "REPLACE INTO last_build (name) values ('collections')", $options->{debug});
+    
+    doStmt($dbh, "DROP TABLE IF EXISTS protected_aux", $options->{debug});
     
     my $a = 1;		# We can stop here when debugging
 }
@@ -589,26 +620,31 @@ sub buildCollectionTables {
 
 sub updateLocationTable {
     
-    my ($dbh) = @_;
+    my ($dbh, $options) = @_;
     
     my ($sql, $result, $count);
     
+    $options ||= { };
+    
     # Make sure that we have a clean table in which to store lookup results.
     
-    $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_LOC (
+    doStmt($dbh, "CREATE TABLE IF NOT EXISTS $TABLE{COLLECTION_LOCATION} (
 		collection_no int unsigned primary key,
 		lng decimal(9,6),
 		lat decimal(9,6),
 		cc char(2),
-		protected varchar(255)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		protected varchar(255)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci",
+	  $options->{debug});
     
     # If there is anything in the table, delete from it any row corresponding
     # to a collection whose coordinates have been nulled out.  This will occur
     # exceedingly rarely if ever, but is a boundary case we need to check.
     
-    $sql =     "DELETE cl FROM $COLLECTIONS as c JOIN $COLL_LOC as cl using (collection_no)
+    $sql =     "DELETE cl FROM $TABLE{COLLECTION_DATA} as c JOIN $TABLE{COLLECTION_LOCATION} as cl using (collection_no)
 		WHERE c.lng not between -180.0 and 180.0 or c.lng is null or
 		      c.lat not between -90.0 and 90.0 or c.lat is null";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -623,13 +659,15 @@ sub updateLocationTable {
     # as it is not valid any more (i.e. its collection's longitude and/or
     # latitude have been modified).
     
-    $sql = "	REPLACE INTO $COLL_LOC (collection_no, cc, lat, lng)
+    $sql = "	REPLACE INTO $TABLE{COLLECTION_LOCATION} (collection_no, cc, lat, lng)
 		SELECT c.collection_no, c.cc, c.lat, c.lng
-		FROM $COLL_MATRIX_WORK as c LEFT JOIN $COLL_LOC as cl using (collection_no)
+		FROM $COLL_MATRIX_WORK as c LEFT JOIN $TABLE{COLLECTION_LOCATION} as cl using (collection_no)
 		WHERE c.lng between -180.0 and 180.0 and c.lng is not null and
 		      c.lat between -90.0 and 90.0 and c.lat is not null and
 		      (c.lng <> cl.lng or cl.lng is null or
 		       c.lat <> cl.lat or cl.lat is null)";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -644,14 +682,14 @@ sub updateLocationTable {
 		WHERE st_within(point(?,?), p.shape)");
     
     my $update_sth = $dbh->prepare("
-		UPDATE $COLL_LOC SET protected = ?
+		UPDATE $TABLE{COLLECTION_LOCATION} SET protected = ?
 		WHERE collection_no = ?");
     
     # Then search for records where 'protection' is null.  These have
     # been newly added, and need to be looked up.
     
     my $fetch_sth = $dbh->prepare("
-		SELECT collection_no, lng, lat FROM $COLL_LOC
+		SELECT collection_no, lng, lat FROM $TABLE{COLLECTION_LOCATION}
 		WHERE protected is null");
     
     $fetch_sth->execute();
@@ -689,7 +727,7 @@ sub buildStrataTables {
     
     my ($dbh, $options) = @_;
     
-    $options ||= {};
+    $options ||= { };
     
     # Check for the existence of working tables.
     
@@ -699,13 +737,13 @@ sub buildStrataTables {
 	($cmw_count) = $dbh->selectrow_array("SELECT count(*) FROM $COLL_MATRIX_WORK");
     };
     
-    $coll_matrix = $cmw_count ? $COLL_MATRIX_WORK : $COLL_MATRIX;
+    $coll_matrix = $cmw_count ? $COLL_MATRIX_WORK : $TABLE{COLLECTION_MATRIX};
     
     # Create a new working table.
     
-    $dbh->do("DROP TABLE IF EXISTS $COLL_STRATA_WORK");
+    doStmt($dbh, "DROP TABLE IF EXISTS $COLL_STRATA_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $COLL_STRATA_WORK (
+    doStmt($dbh, "CREATE TABLE $COLL_STRATA_WORK (
 		grp varchar(255) not null,
 		formation varchar(255) not null,
 		member varchar(255) not null,
@@ -719,7 +757,7 @@ sub buildStrataTables {
 		lng decimal(9,6),
 		g_plate_no smallint unsigned not null,
 		s_plate_no smallint unsigned not null,
-		loc geometry not null) Engine=MyISAM");
+		loc geometry not null) Engine=MyISAM", $options->{debug});
     
     $DB::single = 1;
     
@@ -738,7 +776,9 @@ sub buildStrataTables {
 			    if(lithology1 <> '' and lithology1 <> 'not reported', lithology1, null)),
 			collection_no, c.access_level, c.n_occs, c.cc, c.lat, c.lng,
 			c.g_plate_no, c.s_plate_no, c.loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)";
+		FROM $coll_matrix as c JOIN $TABLE{COLLECTION_DATA} as cc using (collection_no)";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -759,6 +799,8 @@ sub buildStrataTables {
 		SET member = left(member, length(member)-3)
 		WHERE member like '\%Mb.'";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     logMessage(2, "      removed $result final 'Mb.'");
@@ -766,6 +808,8 @@ sub buildStrataTables {
     $sql = "    UPDATE $COLL_STRATA_WORK
 		SET formation = left(formation, length(formation)-3)
 		WHERE formation like '\%Fm.'";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -775,6 +819,8 @@ sub buildStrataTables {
 		SET formation = left(formation, length(formation)-9)
 		WHERE formation like '\%Formation'";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     logMessage(2, "      removed $result final 'Formation'");
@@ -782,6 +828,8 @@ sub buildStrataTables {
     $sql = "    UPDATE $COLL_STRATA_WORK
 		SET grp = left(grp, length(grp)-5)
 		WHERE grp like '\%Group'";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result = $dbh->do($sql);
     
@@ -794,17 +842,23 @@ sub buildStrataTables {
 		SET member = substring(member, 2), maybe = true
 		WHERE member like '?%'";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     $sql = "    UPDATE $COLL_STRATA_WORK
 		SET formation = substring(formation, 2), maybe = true
 		WHERE formation like '?%'";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result += $dbh->do($sql);
     
     $sql = "    UPDATE $COLL_STRATA_WORK
 		SET grp = substring(grp, 2), maybe = true
 		WHERE grp like '?%'";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result += $dbh->do($sql);
     
@@ -814,11 +868,15 @@ sub buildStrataTables {
 		SET member = left(member, length(member)-1), maybe = true
 		WHERE member like '%?'";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     $sql = "	UPDATE $COLL_STRATA_WORK
 		SET formation = left(formation, length(formation)-1), maybe = true
 		WHERE formation like '%?'";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result += $dbh->do($sql);
     
@@ -826,11 +884,15 @@ sub buildStrataTables {
 		SET grp = left(grp, length(grp)-1), maybe = true
 		WHERE grp like '%?'";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result += $dbh->do($sql);
     
     $sql = "	UPDATE $COLL_STRATA_WORK
 		SET member = left(member, length(member)-3), maybe = true
 		WHERE member like '%(?)'";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result += $dbh->do($sql);
     
@@ -838,11 +900,15 @@ sub buildStrataTables {
 		SET formation = left(formation, length(formation)-3), maybe = true
 		WHERE formation like '%(?)'";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result += $dbh->do($sql);
     
     $sql = "	UPDATE $COLL_STRATA_WORK
 		SET grp = left(grp, length(grp)-3), maybe = true
 		WHERE grp like '%(?)'";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $result += $dbh->do($sql);
     
@@ -869,32 +935,34 @@ sub buildStrataTables {
 		    formation = trim(formation),
 		    grp = trim(grp)";
     
+    print "$sql\n\n" if $options->{debug};
+    
     $result = $dbh->do($sql);
     
     logMessage(2, "    trimmed $result names");
     
     logMessage(2, "    indexing by member, formation, and group...");
     
-    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (member)");
-    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (formation)");
-    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (grp)");
+    doStmt($dbh, "ALTER TABLE $COLL_STRATA_WORK ADD INDEX (member)", $options->{debug});
+    doStmt($dbh, "ALTER TABLE $COLL_STRATA_WORK ADD INDEX (formation)", $options->{debug});
+    doStmt($dbh, "ALTER TABLE $COLL_STRATA_WORK ADD INDEX (grp)", $options->{debug});
     
     logMessage(2, "    indexing by collection_no...");
     
-    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (collection_no)");
+    doStmt($dbh, "ALTER TABLE $COLL_STRATA_WORK ADD INDEX (collection_no)", $options->{debug});
     
     logMessage(2, "    indexing by geographic location...");
     
-    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD SPATIAL INDEX (loc)");
+    doStmt($dbh, "ALTER TABLE $COLL_STRATA_WORK ADD SPATIAL INDEX (loc)", $options->{debug});
     
     # Now create a separate table just listing all of the names, primarily for use in
     # auto-completion.
     
     logMessage(2, "    creating strata names table...");
     
-    $dbh->do("DROP TABLE IF EXISTS $STRATA_NAMES_WORK");
+    doStmt($dbh, "DROP TABLE IF EXISTS $STRATA_NAMES_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $STRATA_NAMES_WORK (
+    doStmt($dbh, "CREATE TABLE $STRATA_NAMES_WORK (
 		name varchar(255) not null,
 		type enum('group', 'formation', 'member'),
 		cc_list varchar(255) not null,
@@ -905,32 +973,32 @@ sub buildStrataTables {
 		lng_max decimal(9,6),
 		lat_min decimal(9,6),
 		lat_max decimal(9,6),
-		UNIQUE KEY (name, type)) Engine=MyISAM");
+		UNIQUE KEY (name, type)) Engine=MyISAM", $options->{debug});
     
     logMessage(2, "    inserting groups...");
     
-    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
+    $result = doStmt($dbh, "INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
 			country_list, lng_min, lng_max, lat_min, lat_max)
 		SELECT grp, 'group', count(*), sum(n_occs), group_concat(distinct cc),
 		       group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
-		FROM $COLL_STRATA_WORK join $COUNTRY_MAP as cm using (cc)
-		WHERE grp <> ''	and grp not like 'unnamed' GROUP BY grp");
+		FROM $COLL_STRATA_WORK join $TABLE{COUNTRY_MAP} as cm using (cc)
+		WHERE grp <> ''	and grp not like 'unnamed' GROUP BY grp", $options->{debug});
     
     logMessage(2, "      $result groups");
     
     logMessage(2, "    inserting formations...");
     
-    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
+    $result = doStmt($dbh, "INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
 			country_list, lng_min, lng_max, lat_min, lat_max)
 		SELECT formation, 'formation', count(*), sum(n_occs), group_concat(distinct cc),
 			group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
-		FROM $COLL_STRATA_WORK join $COUNTRY_MAP as cm using (cc)
-		WHERE formation <> '' and formation not like 'unnamed' GROUP BY formation");
+		FROM $COLL_STRATA_WORK join $TABLE{COUNTRY_MAP} as cm using (cc)
+		WHERE formation <> '' and formation not like 'unnamed' GROUP BY formation", $options->{debug});
     
     logMessage(2, "      $result formations");
     
-    activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA,
-			 $STRATA_NAMES_WORK => $STRATA_NAMES);
+    activateTables($dbh, $COLL_STRATA_WORK => $TABLE{COLLECTION_STRATA},
+			 $STRATA_NAMES_WORK => $TABLE{STRATUM_DATA});
 }
 
 
@@ -946,24 +1014,26 @@ sub buildLithTables {
 
     logMessage(2, "    building collection lithology table...");
     
-    $dbh->do("DROP TABLE IF EXISTS $COLL_LITH_WORK");
+    doStmt($dbh, "DROP TABLE IF EXISTS $COLL_LITH_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $COLL_LITH_WORK (
+    doStmt($dbh, "CREATE TABLE $COLL_LITH_WORK (
 	collection_no int unsigned not null,
 	lithology varchar(30) not null,
 	macros_lith varchar(30) not null,
 	lith_type varchar(30) not null,
 	UNIQUE KEY (collection_no, lithology),
 	KEY (lithology),
-	KEY (macros_lith)) ENGINE=MYISAM");
+	KEY (macros_lith)) ENGINE=MYISAM", $options->{debug});
     
     my ($sql, $count);
     
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
 	SELECT collection_no, lithology1, lith, lith_type
-	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology1 = lith
+	FROM $TABLE{COLLECTION_DATA} join $TABLE{MACROSTRAT_LITHS} on lithology1 = lith
 	WHERE fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $count = $dbh->do($sql);
     
@@ -972,8 +1042,10 @@ sub buildLithTables {
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
 	SELECT collection_no, lithology1, lith, lith_type
-	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology1 = concat('\"',lith,'\"')
+	FROM $TABLE{COLLECTION_DATA} join $TABLE{MACROSTRAT_LITHS} on lithology1 = concat('\"',lith,'\"')
 	WHERE fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $count = $dbh->do($sql);
     
@@ -982,7 +1054,7 @@ sub buildLithTables {
     # $sql = "
     # 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
     # 	SELECT collection_no, lithology1, 'other'
-    # 	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology1 = lith
+    # 	FROM $TABLE{COLLECTION_DATA} left join $TABLE{MACROSTRAT_LITHS} on lithology1 = lith
     # 	WHERE lithology1 is not null and lithology1 <> ''
     # 		and lithology1 not like '\"%' and lith is null
     # 		and (fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null)";
@@ -990,9 +1062,11 @@ sub buildLithTables {
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
 	SELECT collection_no, lithology1, 'other'
-	FROM $COLLECTIONS
+	FROM $TABLE{COLLECTION_DATA}
 	WHERE lithology1 is not null and lithology1 <> '' and lithology1 <> 'not reported'
 		and (fossilsfrom1 = 'Y' or fossilsfrom2 = '' or fossilsfrom2 is null)";
+    
+    print "$sql\n\n" if $options->{debug};
     
     $count = $dbh->do($sql);
     
@@ -1001,27 +1075,27 @@ sub buildLithTables {
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
 	SELECT collection_no, lithology2, lith, lith_type
-	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology2 = lith
+	FROM $TABLE{COLLECTION_DATA} join $TABLE{MACROSTRAT_LITHS} on lithology2 = lith
 	WHERE fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null";
     
-    $count = $dbh->do($sql);
+    $count = doStmt($dbh, $sql, $options->{debug});
     
     logMessage(2, "      found $count matches for lithology2");
     
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, macros_lith, lith_type)
 	SELECT collection_no, lithology2, lith, lith_type
-	FROM $COLLECTIONS join $MACROSTRAT_LITHS on lithology2 = concat('\"',lith,'\"')
+	FROM $TABLE{COLLECTION_DATA} join $TABLE{MACROSTRAT_LITHS} on lithology2 = concat('\"',lith,'\"')
 	WHERE fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null";
     
-    $count = $dbh->do($sql);
+    $count = doStmt($dbh, $sql, $options->{debug});
     
     logMessage(2, "      found $count matches for lithology2 with \"\"");
     
     # $sql = "
     # 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
     # 	SELECT collection_no, lithology2, 'other'
-    # 	FROM $COLLECTIONS left join $MACROSTRAT_LITHS on lithology2 = lith
+    # 	FROM $TABLE{COLLECTION_DATA} left join $TABLE{MACROSTRAT_LITHS} on lithology2 = lith
     # 	WHERE lithology2 is not null and lithology2 <> '' 
     # 		and lithology2 not like '\"%' and lith is null
     # 		and (fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null)";
@@ -1029,11 +1103,11 @@ sub buildLithTables {
     $sql = "
 	INSERT IGNORE INTO $COLL_LITH_WORK (collection_no, lithology, lith_type)
 	SELECT collection_no, lithology2, 'other'
-	FROM $COLLECTIONS
+	FROM $TABLE{COLLECTION_DATA}
 	WHERE lithology2 is not null and lithology2 <> '' and lithology2 <> 'not reported'
 		and (fossilsfrom2 = 'Y' or fossilsfrom1 = '' or fossilsfrom1 is null)";
     
-    $count = $dbh->do($sql);
+    $count = doStmt($dbh, $sql, $options->{debug});
     
     logMessage(2, "      found $count collections with no match for lithology2");
     
@@ -1041,17 +1115,13 @@ sub buildLithTables {
 	UPDATE $COLL_LITH_WORK SET lith_type = 'mixed'
 	WHERE lithology like '\%carbonate%' and lithology like '\%siliciclastic%' or lithology = 'marl'";
     
-    $count = $dbh->do($sql);
+    $count = doStmt($dbh, $sql, $options->{debug});
     
     logMessage(2, "      updated lith_type to 'mixed' on $count rows");
     
-    activateTables($dbh, $COLL_LITH_WORK => $COLL_LITH);
+    activateTables($dbh, $COLL_LITH_WORK => $TABLE{COLLECTION_LITHOLOGIES});
 }
 
-
-sub buildEnvTables {
-
-}
 
 # applyClustering ( bin_list )
 # 
@@ -1060,18 +1130,18 @@ sub buildEnvTables {
 
 sub applyClustering {
     
-    my ($dbh, $bin_list) = @_;
+    my ($dbh, $bin_list, $options) = @_;
     
     my ($sql, $result);
     
     # Start by creating an auxiliary table for use in computing cluster
     # assignments.
     
-    $dbh->do("DROP TABLE IF EXISTS $CLUST_AUX");
+    doStmt($dbh, "DROP TABLE IF EXISTS $CLUST_AUX", $options->{debug});
     
-    $dbh->do("CREATE TABLE $CLUST_AUX (
+    doStmt($dbh, "CREATE TABLE $CLUST_AUX (
 		bin_id int unsigned primary key,
-		clust_id int unsigned not null) ENGINE=MYISAM");
+		clust_id int unsigned not null) ENGINE=MYISAM", $options->{debug});
     
     # Go through the bin levels, skipping any that don't specify clustering.
     # We will need to cluster the finer bins first, then go to coarser.  Thus
@@ -1108,7 +1178,7 @@ sub applyClustering {
 	
 	$sql = "UPDATE $CHILD_WORK SET clust_id = $CLUSTER_FIELD";
 	
-	my $rows_changed = $dbh->do($sql);
+	my $rows_changed = doStmt($dbh, $sql);
 	my $rounds_executed = 0;
 	
 	# The initial cluster assignments ("seeds") have already been made on
@@ -1124,7 +1194,7 @@ sub applyClustering {
 	
 	    logMessage(2, "      recomputing cluster assignments...");
 	    
-	    $dbh->do("DELETE FROM $CLUST_AUX");
+	    doStmt($dbh, "DELETE FROM $CLUST_AUX");
 	    
 	    $sql = "INSERT IGNORE INTO $CLUST_AUX
 		SELECT b.bin_id, k.bin_id
@@ -1136,14 +1206,18 @@ sub applyClustering {
 			# and k.clust_lat between floor(bin_lat * $bin_ratio)-1
 			# 	and floor(bin_lat * $bin_ratio)+1
 	    
+	    print "$sql\n\n" if $options->{debug};
+	    
 	    $result = $dbh->do($sql);
 	    
 	    $sql = "UPDATE $CHILD_WORK as cb JOIN $CLUST_AUX as k using (bin_id)
 		    SET cb.clust_id = k.clust_id";
-	
+	    
 	    # $sql = "UPDATE $COLL_BINS_WORK as c SET c.clust_no = 
 	    # 	(SELECT k.clust_no from $COLL_CLUST_WORK as k 
 	    # 	 ORDER BY POW(k.lat-c.lat,2)+POW(k.lng-c.lng,2) ASC LIMIT 1)";
+	    
+	    print "$sql\n\n" if $options->{debug};
 	    
 	    ($rows_changed) = $dbh->do($sql);
 	    
@@ -1160,6 +1234,8 @@ sub applyClustering {
 			on k.bin_id = cluster.clust_id
 		SET k.lng = cluster.lng_avg, k.lat = cluster.lat_avg";
 	    
+	    print "$sql\n\n" if $options->{debug};
+	    
 	    $result = $dbh->do($sql);
 	    
 	    $rounds_executed++;
@@ -1168,8 +1244,8 @@ sub applyClustering {
 	# Now we need to index the cluster assignments, for both the child
 	# bins and the collection matrix.
 	
-	$result = $dbh->do("ALTER TABLE $CHILD_WORK ADD INDEX (clust_id)");
-	$result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (clust_id)");
+	$result = doStmt($dbh, "ALTER TABLE $CHILD_WORK ADD INDEX (clust_id)");
+	$result = doStmt($dbh, "ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (clust_id)");
  	
 	# Finally we recompute the summary fields for the cluster table
 	# (except the centroid, which has already been computed above).
@@ -1192,49 +1268,53 @@ sub applyClustering {
 		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
 		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
 		    k.lat_min = agg.lat_min, k.lat_max = agg.lat_max";
-    
+	
+	print "$sql\n\n" if $options->{debug};
+	
 	$result = $dbh->do($sql);
     }
     
     # Clean up the auxiliary table.
     
-    $dbh->do("DROP TABLE IF EXISTS $CLUST_AUX");
+    doStmt($dbh, "DROP TABLE IF EXISTS $CLUST_AUX", $options->{debug});
     
     my $a = 1;	# we can stop here when debugging
 }
 
 
-# Createcountrymap ( dbh, force )
+# createCountryMap ( dbh, options, force )
 # 
 # Create the country_map table if it does not already exist.
 
 sub createCountryMap {
 
-    my ($dbh, $force) = @_;
+    my ($dbh, $options, $force) = @_;
+    
+    $options ||= { };
     
     # First make sure we have a clean table.
     
-    if ( $force )
+    if ( $force || $options->{force} )
     {
-	$dbh->do("DROP TABLE IF EXISTS $COUNTRY_MAP");
+	doStmt($dbh, "DROP TABLE IF EXISTS $TABLE{COUNTRY_MAP}", $options->{debug});
     }
     
-    $dbh->do("CREATE TABLE IF NOT EXISTS $COUNTRY_MAP (
+    doStmt($dbh, "CREATE TABLE IF NOT EXISTS $TABLE{COUNTRY_MAP} (
 		cc char(2) primary key,
 		continent char(3),
 		name varchar(80) not null,
 		INDEX (name),
-		INDEX (continent)) Engine=MyISAM");
+		INDEX (continent)) Engine=MyISAM", $options->{debug});
     
     # Then populate it if necessary.
     
-    my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $COUNTRY_MAP");
+    my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{COUNTRY_MAP}");
     
     return if $count;
     
-    logMessage(2, "    rebuilding country map");
+    logMessage(2, "    rebuilding country map...");
     
-    $dbh->do("INSERT INTO $COUNTRY_MAP (cc, continent, name) VALUES
+    doStmt($dbh, "INSERT INTO $TABLE{COUNTRY_MAP} (cc, continent, name) VALUES
 	('AU', 'AUS', 'Australia'),
 	('DZ', 'AFR', 'Algeria'),
 	('AO', 'AFR', 'Angola'),
@@ -1427,18 +1507,18 @@ sub createCountryMap {
 	('MV', 'IOC', 'Maldives'),
 	('MU', 'IOC', 'Mauritius'),
 	('YT', 'IOC', 'Mayotte'),
-	('SC', 'IOC', 'Seychelles')");
+	('SC', 'IOC', 'Seychelles')", $options->{debug});
     
     # Now the continents.
 
-    $dbh->do("DROP TABLE IF EXISTS $CONTINENT_DATA");
+    doStmt($dbh, "DROP TABLE IF EXISTS $TABLE{CONTINENT_DATA}", $options->{debug});
     
-    $dbh->do("CREATE TABLE IF NOT EXISTS $CONTINENT_DATA (
+    doStmt($dbh, "CREATE TABLE IF NOT EXISTS $TABLE{CONTINENT_DATA} (
 		continent char(3) primary key,
 		name varchar(80) not null,
-		INDEX (name)) Engine=MyISAM");
+		INDEX (name)) Engine=MyISAM", $options->{debug});
     
-    $dbh->do("INSERT INTO $CONTINENT_DATA (continent, name) VALUES
+    doStmt($dbh, "INSERT INTO $TABLE{CONTINENT_DATA} (continent, name) VALUES
 	('ATA', 'Antarctica'),
 	('AFR', 'Africa'),
 	('ASI', 'Asia'),
@@ -1447,9 +1527,60 @@ sub createCountryMap {
 	('IOC', 'Indian Ocean'),
 	('NOA', 'North America'),
 	('OCE', 'Oceania'),
-	('SOA', 'South America')");
+	('SOA', 'South America')", $options->{debug});
     
     my $a = 1;		# we can stop here when debugging
+}
+
+
+# createEnvironmentMap ( dbh, env_enum, options, force )
+# 
+# Create the environment map table if it does not already exist.
+
+sub createEnvironmentMap {
+    
+    my ($dbh, $env_enum, $options, $force) = @_;
+    
+    $options ||= { };
+    
+    # First make sure we have a clean table.
+    
+    if ( $force || $options->{force} )
+    {
+	doStmt($dbh, "DROP TABLE IF EXISTS $TABLE{ENVIRONMENT_MAP}", $options->{debug});
+    }
+    
+    doStmt($dbh, "CREATE TABLE IF NOT EXISTS $TABLE{ENVIRONMENT_MAP} (
+		environment $env_enum NOT NULL,
+		marine boolean NULL,
+		PRIMARY KEY (environment)) Engine=MyISAM", $options->{debug});
+    
+    # Then populate it if necessary.
+    
+    my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{ENVIRONMENT_MAP}");
+    
+    unless ( $count )
+    {
+	logMessage(2, "    rebuilding environment map...");
+	
+	doStmt($dbh, "INSERT INTO $TABLE{ENVIRONMENT_MAP} (environment)
+		SELECT distinct environment FROM $TABLE{COLLECTION_DATA}
+		WHERE environment <> ''",
+	       $options->{debug});
+
+	doStmt($dbh, "UPDATE $TABLE{ENVIRONMENT_MAP} SET marine = 1
+		WHERE environment in (SELECT environ FROM macrostrat.environs WHERE environ_class='marine')
+		or environment in ('marine indet.','carbonate indet.','shallow subtidal indet.',
+			'reef, buildup or bioherm','perireef or subreef','basinal (carbonate)',
+			'basinal (siliceous)','basinal (siliciclastic)','marginal marine indet.')",
+	       $options->{debug});
+
+	doStmt($dbh, "UPDATE $TABLE{ENVIRONMENT_MAP} SET marine = 0
+		WHERE environment in (SELECT environ FROM macrostrat.environs WHERE environ_class='non-marine')
+		or environment in ('terrestrial indet.','glacial')
+		or environment like '%channel%' or environment like '%floodplain%'",
+	       $options->{debug});
+    }
 }
 
 
@@ -1461,7 +1592,9 @@ sub createCountryMap {
 
 sub deleteProtLandData {
     
-    my ($dbh, $cc, $category) = @_;
+    my ($dbh, $cc, $category, $options) = @_;
+    
+    $options ||= { };
     
     # Make sure we have a proper country code.
     
@@ -1475,13 +1608,13 @@ sub deleteProtLandData {
     # Disable the index, then delete the data, then re-enable it.  This will
     # be much faster than deleting the rows from the index one at a time.
     
-    $result = $dbh->do("ALTER TABLE $PROTECTED_LAND DISABLE KEYS");
+    $result = doStmt($dbh, "ALTER TABLE $PROTECTED_LAND DISABLE KEYS", $options->{debug});
     
     # If the country code was given as 'all', just delete every record.
     
     if ( $cc eq 'all' )
     {
-	$result = $dbh->do("DELETE FROM $PROTECTED_LAND");
+	$result = doStmt($dbh, "DELETE FROM $PROTECTED_LAND", $options->{debug});
     }
     
     # If a category was given, delete all records whose cc and category match
@@ -1489,19 +1622,19 @@ sub deleteProtLandData {
     
     elsif ( $quoted_cat )
     {
-	$result = $dbh->do("DELETE FROM $PROTECTED_LAND
-			    WHERE cc=$quoted_cc and category=$quoted_cat");
+	$result = doStmt($dbh, "DELETE FROM $PROTECTED_LAND
+			    WHERE cc=$quoted_cc and category=$quoted_cat", $options->{debug});
     }
     
     # Otherwise, delete all records whose cc matches the specified argument.
     
     else
     {
-	$result = $dbh->do("DELETE FROM $PROTECTED_LAND
-			    WHERE cc=$quoted_cc");
+	$result = doStmt($dbh, "DELETE FROM $PROTECTED_LAND
+			    WHERE cc=$quoted_cc", $options->{debug});
     }
     
-    $result = $dbh->do("ALTER TABLE $PROTECTED_LAND ENABLE KEYS");
+    $result = doStmt($dbh, "ALTER TABLE $PROTECTED_LAND ENABLE KEYS", $options->{debug});
 }
 
 
@@ -1515,18 +1648,20 @@ my (%PROT_LAND_CC, %PROT_LAND_CAT, $BAD_COUNT);
 
 sub startProtLandInsert {
     
-    my ($dbh) = @_;
+    my ($dbh, $options) = @_;
     
     my ($result);
     
+    $options ||= { };
+    
     # Create a working table.
     
-    $dbh->do("DROP TABLE IF EXISTS $PROTECTED_WORK");
+    doStmt($dbh, "DROP TABLE IF EXISTS $PROTECTED_WORK", $options->{debug});
     
-    $dbh->do("CREATE TABLE $PROTECTED_WORK (
+    doStmt($dbh, "CREATE TABLE $PROTECTED_WORK (
 		shape GEOMETRY not null,
 		cc char(2) not null,
-		category varchar(10) not null) Engine=MyISAM");
+		category varchar(10) not null) Engine=MyISAM", $options->{debug});
     
     # Empty the hash that keeps track of what countries we are loading data
     # for. 
@@ -1546,9 +1681,11 @@ sub startProtLandInsert {
 
 sub insertProtLandRecord {
     
-    my ($dbh, $cc, $category, $wkt) = @_;
+    my ($dbh, $cc, $category, $wkt, $options) = @_;
     
     my ($result, $sql);
+    
+    $options ||= { };
     
     # Suppress warning messages when inserting records.
     
@@ -1590,9 +1727,11 @@ sub insertProtLandRecord {
 
 sub finishProtLandInsert {
     
-    my ($dbh, $cc_list, $category_list) = @_;
+    my ($dbh, $cc_list, $category_list, $options) = @_;
     
     my ($result, $sql, @where);
+    
+    $options ||= { };
     
     logMessage(2, "    skipped $BAD_COUNT bad polygons.") if $BAD_COUNT > 0;
     
@@ -1646,6 +1785,8 @@ sub finishProtLandInsert {
 		FROM $PROTECTED_LAND
 		$where";
 	
+	print "$sql\n\n" if $options->{debug};
+	
 	$result = $dbh->do($sql);
     }
     
@@ -1653,15 +1794,32 @@ sub finishProtLandInsert {
     
     logMessage(2, "indexing by coordinates...");
     
-    $result = $dbh->do("ALTER TABLE $PROTECTED_WORK ADD SPATIAL INDEX (shape)");
+    $result = doStmt($dbh, "ALTER TABLE $PROTECTED_WORK ADD SPATIAL INDEX (shape)", $options->{debug});
     
     logMessage(2, "indexing by cc and category...");
     
-    $result = $dbh->do("ALTER TABLE $PROTECTED_WORK ADD INDEX (cc, category)");
+    $result = doStmt($dbh, "ALTER TABLE $PROTECTED_WORK ADD INDEX (cc, category)", $options->{debug});
     
     # Now activate the working table as the new protected land table.
     
     activateTables($dbh, $PROTECTED_WORK => $PROTECTED_LAND);
 }
+
+
+# doStmt ( dbh, sql, debug )
+#
+# Execute the specified sql statement, and also print it out to STDERR if the third argument is
+# true.
+
+sub doStmt {
     
+    my ($dbh, $sql, $debug) = @_;
+
+    print STDERR "$sql\n\n" if $debug;
+    
+    my $result = $dbh->do($sql);
+
+    return $result;
+}
+
 1;

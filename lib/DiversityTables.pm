@@ -17,10 +17,9 @@ use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK);
 
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
-use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_INTS $BIN_KEY $OCC_MATRIX $OCC_TAXON
-		 $DIV_MATRIX $DIV_GLOBAL $PVL_MATRIX $PVL_GLOBAL
-		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP
-		 $INTERVAL_DATA $INTERVAL_BUFFER $SCALE_LEVEL_DATA $SCALE_DATA $SCALE_MAP $INTERVAL_MAP);
+use TableDefs qw(%TABLE);
+use CoreTableDefs;
+use DiversityDefs;
 
 use base 'Exporter';
 
@@ -54,7 +53,35 @@ sub buildDiversityTables {
     
     logMessage(1, "Building diversity tables");
     
-    my ($MBL) = $dbh->selectrow_array("SELECT max(bin_level) FROM $COLL_BINS");
+    my ($MBL) = $dbh->selectrow_array("SELECT max(bin_level) FROM $TABLE{COLLECTION_BIN_DATA}");
+    
+    logMessage(2, "    generating occurrence interval map...");
+    
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{OCCURRENCE_MAJOR_MAP}");
+    
+    $dbh->do("
+    	CREATE TABLE $TABLE{OCCURRENCE_MAJOR_MAP} (
+    		scale_no smallint unsigned not null,
+    		scale_level smallint unsigned not null,
+    		early_age decimal(9,5),
+    		late_age decimal(9,5),
+    		interval_no int unsigned not null,
+    		PRIMARY KEY (early_age, late_age)) Engine=MyISAM");
+    
+    $sql = "
+    	INSERT INTO $TABLE{OCCURRENCE_MAJOR_MAP} (scale_no, scale_level, early_age, late_age, interval_no)
+    	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
+    	FROM (SELECT distinct early_age, late_age FROM $TABLE{OCCURRENCE_MATRIX}) as i
+    		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
+    		      FROM $TABLE{SCALE_MAP} JOIN $TABLE{INTERVAL_DATA} using (interval_no)) as m
+    	WHERE i.early_age > i.late_age and
+    		if(i.late_age >= m.late_age,
+    			if(i.early_age <= m.early_age, i.early_age - i.late_age, m.early_age - i.late_age),
+    			if(i.early_age > m.early_age, m.early_age - m.late_age, i.early_age - m.late_age)) / (i.early_age - i.late_age) >= 0.5";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      generated $result rows with majority rule");
     
     logMessage(2, "    generating diversity matrix by geographic cluster, interval, and taxonomy...");
     
@@ -71,8 +98,9 @@ sub buildDiversityTables {
     
     $sql = "INSERT INTO $DIV_MATRIX_WORK (bin_id, interval_no, ints_no, genus_no, n_occs, not_trace)
 		SELECT SQL_NO_CACHE c.bin_id_${MBL}, m.interval_no, ta.ints_no, pl.genus_no, 1, not(is_trace)
-		FROM occ_matrix as o JOIN $OCC_BUFFER_MAP as m using (early_age, late_age)
-			JOIN coll_matrix as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o
+			JOIN $TABLE{OCCURRENCE_MAJOR_MAP} as m using (early_age, late_age)
+			JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 			JOIN $TREE_TABLE as t using (orig_no)
 			JOIN $TREE_TABLE as ta on ta.orig_no = t.accepted_no
 			JOIN $ATTRS_TABLE as v on v.orig_no = t.accepted_no
@@ -98,8 +126,9 @@ sub buildDiversityTables {
     
     $sql = "INSERT INTO $DIV_GLOBAL_WORK (interval_no, ints_no, genus_no, n_occs, not_trace)
 		SELECT SQL_NO_CACHE m.interval_no, ta.ints_no, pl.genus_no, 1, not(is_trace)
-		FROM occ_matrix as o JOIN $OCC_BUFFER_MAP as m using (early_age, late_age)
-			JOIN coll_matrix as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o
+			JOIN $TABLE{OCCURRENCE_MAJOR_MAP} as m using (early_age, late_age)
+			JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 			JOIN $TREE_TABLE as t using (orig_no)
 			JOIN $TREE_TABLE as ta on ta.orig_no = t.accepted_no
 			JOIN $ATTRS_TABLE as v on v.orig_no = t.accepted_no
@@ -117,8 +146,8 @@ sub buildDiversityTables {
     $dbh->do("ALTER TABLE $DIV_MATRIX_WORK ADD KEY (bin_id)");
     $dbh->do("ALTER TABLE $DIV_GLOBAL_WORK ADD KEY (ints_no)");
     
-    activateTables($dbh, $DIV_MATRIX_WORK => $DIV_MATRIX,
-		         $DIV_GLOBAL_WORK => $DIV_GLOBAL);
+    activateTables($dbh, $DIV_MATRIX_WORK => $TABLE{DIVERSITY_MATRIX},
+		         $DIV_GLOBAL_WORK => $TABLE{DIVERSITY_GLOBAL_MATRIX});
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -139,7 +168,7 @@ sub buildPrevalenceTables {
     
     logMessage(1, "Building prevalence tables");
     
-    my ($MBL) = $dbh->selectrow_array("SELECT max(bin_level) FROM $COLL_BINS");
+    my ($MBL) = $dbh->selectrow_array("SELECT max(bin_level) FROM $TABLE{COLLECTION_BIN_DATA}");
     
     # Create the prevalence matrix, which tabulates taxonomic diversity across
     # space and time.
@@ -159,8 +188,9 @@ sub buildPrevalenceTables {
     $sql = "
     	INSERT INTO $PVL_MATRIX_WORK (bin_id, interval_no, order_no, class_no, phylum_no, n_occs)
     	SELECT bin_id_${MBL}, interval_no, order_no, class_no, phylum_no, count(*)
-    	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		JOIN $COLL_INTS as i using (collection_no)
+    	FROM $TABLE{OCCURRENCE_MATRIX} as o
+		JOIN $TABLE{OCCURRENCE_MAJOR_MAP} as i using (early_age, late_age)
+		JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
     		JOIN $TREE_TABLE as t using (orig_no)
     		JOIN $INTS_TABLE as ph using (ints_no)
     	WHERE o.latest_ident = 1 and c.access_level = 0 and bin_id_${MBL} > 0 
@@ -200,7 +230,8 @@ sub buildPrevalenceTables {
     $sql = "
 	INSERT INTO $PVL_GLOBAL_WORK (interval_no, order_no, class_no, phylum_no, n_occs)
 	SELECT interval_no, order_no, class_no, phylum_no, count(*)
-      	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
+      	FROM $TABLE{OCCURRENCE_MATRIX} as o
+		JOIN $TABLE{OCCURRENCE_MAJOR_MAP} as i using (early_age, late_age)
     		JOIN $TREE_TABLE as t using (orig_no)
     		JOIN $INTS_TABLE as ph using (ints_no)
     	WHERE o.latest_ident = 1 and (order_no <> 0 or class_no <> 0 or phylum_no <> 0)
@@ -217,8 +248,8 @@ sub buildPrevalenceTables {
     
     # Finally, we swap in the new tables for the old ones.
     
-    activateTables($dbh, $PVL_MATRIX_WORK => $PVL_MATRIX,
-			 $PVL_GLOBAL_WORK => $PVL_GLOBAL);
+    activateTables($dbh, $PVL_MATRIX_WORK => $TABLE{PREVALENCE_MATRIX},
+			 $PVL_GLOBAL_WORK => $TABLE{PREVALENCE_GLOBAL_MATRIX});
     
     my $a = 1;		# We can stop here when debugging.
 }

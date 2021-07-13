@@ -5538,90 +5538,92 @@ sub buildTaxaCacheTables {
     
     # Create a new working table for taxa_list_cache
     
-    logMessage(2, "    creating list cache");
+    # logMessage(2, "    creating list cache");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
     
-    $result = $dbh->do("
-	CREATE TABLE $LIST_CACHE_WORK
-	       (parent_no int unsigned not null,
-		child_no int unsigned not null,
-		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
+    # $result = $dbh->do("
+    # 	CREATE TABLE $LIST_CACHE_WORK
+    # 	       (parent_no int unsigned not null,
+    # 		child_no int unsigned not null,
+    # 		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
     
-    # Populate it using the taxon_trees table, 
+    # # Populate it using the taxon_trees table, 
     
-    logMessage(2, "    populating list cache");
+    # logMessage(2, "    populating list cache");
     
-    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
+    # my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
     
-    foreach my $depth (reverse 2..$max_depth)
-    {
-	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+    # foreach my $depth (reverse 2..$max_depth)
+    # {
+    # 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
-	$result = $dbh->do("
-		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT t.immpar_no, l.child_no
-		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
-		WHERE t.depth = $depth");
+    # 	$result = $dbh->do("
+    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
+    # 		SELECT t.immpar_no, l.child_no
+    # 		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
+    # 		WHERE t.depth = $depth");
 	
-	$result = $dbh->do("
-		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT t.immpar_no, t.orig_no
-		FROM $tree_table as t
-		WHERE t.depth = $depth");
-    }
+    # 	$result = $dbh->do("
+    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
+    # 		SELECT t.immpar_no, t.orig_no
+    # 		FROM $tree_table as t
+    # 		WHERE t.depth = $depth");
+    # }
     
-    # Update it to show spelling_no values instead of the corresponding
-    # orig_no values.
+    # # Update it to show spelling_no values instead of the corresponding
+    # # orig_no values.
     
-    logMessage(2, "    setting parent spelling_no values");
+    # logMessage(2, "    setting parent spelling_no values");
     
-    $result = $dbh->do("
-		UPDATE IGNORE $LIST_CACHE_WORK as l
-			JOIN $tree_table as pt on pt.orig_no = l.parent_no
-		SET l.parent_no = pt.spelling_no");
+    # $result = $dbh->do("
+    # 		UPDATE IGNORE $LIST_CACHE_WORK as l
+    # 			JOIN $tree_table as pt on pt.orig_no = l.parent_no
+    # 		SET l.parent_no = pt.spelling_no");
     
-    logMessage(2, "    adding entries for child spellings");
+    # logMessage(2, "    adding entries for child spellings");
     
-    $result = $dbh->do("
-		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT l.parent_no, a.taxon_no
-		FROM $auth_table as a JOIN $LIST_CACHE_WORK as l on l.child_no = a.orig_no");
+    # $result = $dbh->do("
+    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
+    # 		SELECT l.parent_no, a.taxon_no
+    # 		FROM $auth_table as a JOIN $LIST_CACHE_WORK as l on l.child_no = a.orig_no");
     
-    logMessage(2, "      $result new entries.");
+    # logMessage(2, "      $result new entries.");
     
-    # Add the necessary indices
+    # # Add the necessary indices
     
-    logMessage(2, "    indexing list cache");
+    # logMessage(2, "    indexing list cache");
     
-    $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
+    # $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
     
-    # Now swap in the new tables.
+    # # Now swap in the new tables.
     
-    logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
+    # logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
     
-    # Compute the backup names of all the tables to be activated
+    # # Compute the backup names of all the tables to be activated
     
-    my $tree_bak = "${CLASSIC_TREE_CACHE}_bak";
-    my $list_bak = "${CLASSIC_LIST_CACHE}_bak";
+    # my $tree_bak = "${CLASSIC_TREE_CACHE}_bak";
+    # my $list_bak = "${CLASSIC_LIST_CACHE}_bak";
     
-    # Drop those tables if any are still around
+    # # Drop those tables if any are still around
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $list_bak");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $list_bak");
     
-    # Recreate any of the existing tables that may not exist for some reason
+    # # Recreate any of the existing tables that may not exist for some reason
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
+    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
+    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
     
-    # Now swap in the new tables
+    # # Now swap in the new tables
     
-    $result = $dbh->do("RENAME TABLE
-		$CLASSIC_TREE_CACHE to $tree_bak,
-		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE,
-		$CLASSIC_LIST_CACHE to $list_bak,
-		$LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
+    # $result = $dbh->do("RENAME TABLE
+    # 		$CLASSIC_TREE_CACHE to $tree_bak,
+    # 		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE,
+    # 		$CLASSIC_LIST_CACHE to $list_bak,
+    # 		$LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
+
+    activateTables($TREE_CACHE_WORK => $CLASSIC_TREE_CACHE);
     
     my $a = 1;	# We can stop here when debugging
 }

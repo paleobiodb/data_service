@@ -17,7 +17,7 @@ use ConsoleLog 'logMessage';
 
 use Exporter 'import';
 
-our (@EXPORT_OK) = qw(connectDB loadConfig configData loadSQLFile activateTables new_tables_safe);
+our (@EXPORT_OK) = qw(connectDB loadConfig configData loadSQLFile activateTables new_tables_safe doStmt);
 
 
 
@@ -88,8 +88,11 @@ sub connectDB {
 	$dsn .= ";port=$DB_PORT";
     }
     
-    $dsn .= ";mysql_client_found_rows=0";
-    $dsn .= ";mysql_enable_utf8=1";
+    # $dsn .= ";mysql_client_found_rows=0";
+    # $dsn .= ";mysql_enable_utf8=1";
+
+    # $DBI_PARAMS->{mysql_client_found_rows} = 0;
+    # $DBI_PARAMS->{mysql_enable_utf8} = 1;
     
     my $dbh = DBI->connect($dsn, $DB_USER, $DB_PASSWD, $DBI_PARAMS);
     
@@ -362,5 +365,21 @@ sub new_tables_safe {
     return $result;
 }
 
+
+# doStmt ( dbh, sql, debug )
+#
+# Execute the specified sql statement, and also print it out to STDERR if the third argument is
+# true.
+
+sub doStmt {
+    
+    my ($dbh, $sql, $debug) = @_;
+
+    print STDERR "$sql\n\n" if $debug;
+    
+    my $result = $dbh->do($sql);
+
+    return $result;
+}
 
 1;

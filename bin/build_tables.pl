@@ -10,58 +10,146 @@ use strict;
 
 use lib 'lib';
 use Getopt::Long;
-use Try::Tiny;
 
 # The following modules are all part of the "new" pbdb.
 
-use CoreFunction qw(connectDB
-		    configData);
-use ConsoleLog qw(initMessages
-		  logMessage
-		  logTimestamp);
-use IntervalTables qw(loadIntervalData
-		      buildIntervalMap);
+use CoreFunction qw(connectDB configData);
+use ConsoleLog qw(initMessages logMessage logTimestamp);
+use IntervalTables qw(loadIntervalData buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables buildLithTables);
-use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
+use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildTaxonCollectionsTable);
 use SpecimenTables qw(buildSpecimenTables);
-use TaxonTables qw(populateOrig
-		   buildTaxonTables rebuildAttrsTable
-		   buildTaxaCacheTables computeGenSp);
-# use TimescaleTables qw(establishTimescaleTables);
+use TaxonTables qw(populateOrig buildTaxonTables rebuildAttrsTable buildTaxaCacheTables);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 
-# First parse option switches.  If we were given an argument, then use that as
-# the database name overriding what was in the configuration file.
+# First parse option switches.
 
 Getopt::Long::Configure("bundling");
 
-my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
-    $taxon_tables, $collection_tables, $occurrence_tables, $old_taxon_tables, $taxon_steps);
+my ($opt_logfile, $opt_test, $opt_error, $opt_debug, $opt_force, $opt_database,
+    $opt_nightly, $opt_weekly, $opt_collections, $opt_occurrences, $opt_taxonomy, $opt_taxa_cache,
+    $opt_diversity, $opt_prevalence, $opt_occ_summary, $opt_taxon_colls, $opt_taxon_pics,
+    $opt_occurrence_reso, $opt_taxon_steps, $opt_interval_data);
 
-GetOptions( "nightly" => \$opt_nightly,
-	    "log=s" => \$opt_logfile,
+GetOptions( "log=s" => \$opt_logfile,
 	    "test" => \$opt_test,
 	    "error" => \$opt_error,
-	    "taxonomy|t" => \$taxon_tables,
-	    "collections|c" => \$collection_tables,
-	    "occurrences|m" => \$occurrence_tables,
-	    "listcache|y" => \$old_taxon_tables,
-	    "steps|T=s" => \$taxon_steps );
+	    "debug" => \$opt_debug,
+	    "database=s" => \$opt_database,
+	    "nightly" => \$opt_nightly,
+	    "weekly" => \$opt_weekly,
+	    "collections|c" => \$opt_collections,
+	    "occurrences|m" => \$opt_occurrences,
+	    "taxonomy|t" => \$opt_taxonomy,
+	    "taxa-cache|y" => \$opt_taxa_cache,
+	    "diversity|d" => \$opt_diversity,
+	    "prevalence|v" => \$opt_prevalence,
+	    "occ-summary" => \$opt_occ_summary,
+	    "taxon-colls" => \$opt_taxon_colls,
+	    "resolution|R" => \$opt_occurrence_reso,
+	    "taxon-steps|T=s" => \$opt_taxon_steps,
+	    "interval-data|I" => \$opt_interval_data,
+	    "steps|T=s" => \$opt_taxon_steps );
 
-my $cmd_line_db_name = shift;
+# Script actions can be selected by arguments of the same name as well as by options.
 
-# The argument 'nightly' is the same as -cmty. 
+while ( my $arg = shift @ARGV )
+{
+    if ( $arg =~ /^[cmtydv]+$/ )
+    {
+	$opt_collections = 1 if $arg =~ /c/;
+	$opt_occurrences = 1 if $arg =~ /m/;
+	$opt_taxonomy = 1 if $arg =~ /t/;
+	$opt_taxa_cache = 1 if $arg =~ /y/;
+	$opt_diversity = 1 if $arg =~ /d/;
+	$opt_prevalence = 1 if $arg =~ /v/;
+    }
+    
+    elsif ( $arg =~ /^(collections|colls)$/ )
+    {
+	$opt_collections = 1;
+    }
+
+    elsif ( $arg =~ /^(occurrences|occs)$/ )
+    {
+	$opt_occurrences = 1;
+    }
+
+    elsif ( $arg =~ /^(taxonomy|taxa)$/ )
+    {
+	$opt_taxonomy = 1;
+    }
+
+    elsif ( $arg =~ /^(taxacache|taxa-cache)$/ )
+    {
+	$opt_taxa_cache = 1;
+    }
+
+    elsif ( $arg =~ /^(diversity|div)$/ )
+    {
+	$opt_diversity = 1;
+    }
+
+    elsif ( $arg =~ /^(prevalence|prev)$/ )
+    {
+	$opt_prevalence = 1;
+    }
+
+    elsif ( $arg =~ /^(occsummary|occ-summary)$/ )
+    {
+	$opt_occ_summary = 1;
+    }
+
+    elsif ( $arg =~ /^(taxoncolls|taxon-colls)$/ )
+    {
+	$opt_taxon_colls = 1;
+    }
+    
+    elsif ( $arg =~ /^(intervaldata|interval-data)$/ )
+    {
+	$opt_interval_data = 1;
+    }
+    
+    elsif ( $arg =~ /^nightly$/ )
+    {
+	$opt_collections = 1;
+	$opt_occurrences = 1;
+	$opt_taxonomy = 1;
+	$opt_taxa_cache = 1;
+    }
+    
+    elsif ( $arg =~ /^weekly$/ )
+    {
+	$opt_diversity = 1;
+	$opt_prevalence = 1;
+    }
+    
+    else
+    {
+	die "Invalid argument '$arg'";
+    }
+}
+
+
+# The option 'nightly' is the same as -cmty, and 'weekly' is the same as -dv.
 
 if ( $opt_nightly )
 {
-    $taxon_tables = 1;
-    $collection_tables = 1;
-    $occurrence_tables = 1;
-    $old_taxon_tables = 1;
+    $opt_collections = 1;
+    $opt_occurrences = 1;
+    $opt_taxonomy = 1;
+    $opt_taxa_cache = 1;
 }
+
+if ( $opt_weekly )
+{
+    $opt_diversity = 1;
+    $opt_prevalence = 1;
+}
+
 
 # The argument 'log' specifies that output should be written to the specified file.
 
@@ -72,6 +160,7 @@ if ( $opt_logfile )
 
 select(STDOUT);
 $|=1;
+
 
 # If the argument 'log' was specified, run the specified table builds inside an eval. If an error occurs,
 # print it to the log and then re-throw it so it gets printed to STDERR as well.
@@ -97,10 +186,16 @@ else
     exit;
 }
 
-# getopts('tT:OmR:bcKUuIivrydqspfAMSL', \%options);
 
+# BuildTables ( )
+# 
+# Do the build actions specified by the options and arguments passed to this script.
 
 sub BuildTables {
+
+    # The table 'taxon_trees' is currently the only tree table there is.
+    
+    my $tree_table = 'taxon_trees';
     
     # If either option --test or --error was given, just write a test message and stop.
     
@@ -120,9 +215,10 @@ sub BuildTables {
     logMessage(1, '------------------------------------------------------------');
     logTimestamp();
     
-    # Get a database handle and a taxonomy object.
+    # Get a database handle and a taxonomy object. The database name can be overridden using the
+    # '--database' option on the command line.
     
-    my $dbh = connectDB("config.yml", $cmd_line_db_name);
+    my $dbh = connectDB("config.yml", $opt_database);
     
     # Verify the database that we are rebuilding.
     
@@ -135,140 +231,104 @@ sub BuildTables {
 	logMessage(1, "Using connect string: $dbh->{Name}");
     }
     
-    my $t = Taxonomy->new($dbh, 'taxon_trees');
+    my $t = Taxonomy->new($dbh, $tree_table);
     
-    # Call the routines that build the various caches, depending upon the options
-    # that were specified.
-    
-    my %options;
-    
-    my $force = $options{f};
-    my $interval_data = $options{I};
-    my $interval_map = $options{U};
-    my $rank_map = $options{r};
-    my $taxon_pics = $options{p};
-    
-    # my $collection_tables = $options{c};
-    # my $occurrence_tables = $options{m};
-    my $occurrence_int_maps = $options{M};
-    my $occurrence_reso = $options{R};
-    my $diversity_tables = $options{d};
-    my $prevalence_tables = $options{q};
-    my $timescale_tables = $options{S};
+    # my $force = $options{f};
+    # my $interval_data = $options{I};
+    # my $interval_map = $options{U};
+    # my $rank_map = $options{r};
+    # my $taxon_pics = $options{p};
+    # my $occurrence_int_maps = $options{M};
+    # my $occurrence_reso = $options{R};
     
     # my $taxon_tables = 1 if $options{t} || $options{T};
     # my $taxon_steps = $options{T};
-    # my $old_taxon_tables = $options{y};
-    my $strata_tables = $options{s};
-    my $lith_tables = $options{L};
     
-    # my $options = { taxon_steps => $options{T},
-    # 		colls_cluster => $options{k},
-    # 		no_rebuild_cache => $options{O},
-    # 		no_rebuild_div => $options{A} };
-    
-    my $options = { taxon_steps => $taxon_steps };
+    my $options = { taxon_steps => $opt_taxon_steps,
+		    debug => $opt_debug, };
     
     # The option -i causes a forced reload of the interval data from the source
     # data files.  Otherwise, do a (non-forced) call to LoadIntervalData if any
     # function has been selected that requires it.
     
-    if ( $interval_data )
+    if ( $opt_interval_data )
     {
 	loadIntervalData($dbh, 1);
     }
     
-    elsif ( $interval_map || $collection_tables || $occurrence_tables )
+    elsif ( $opt_collections || $opt_occurrences || $opt_taxonomy )
     {
 	loadIntervalData($dbh);
     }
     
-    # The option -u causes the interval map tables to be (re)computed.
+    # # The option -r causes the taxon rank map to be (re)generated.
     
-    if ( $interval_map )
-    {
-	buildIntervalMap($dbh);
-    }
+    # if ( $rank_map )
+    # {
+    # 	TaxonTables::createRankMap($dbh);
+    # 	CollectionTables::createCountryMap($dbh, 1);
+    # }
+
+    # Main build actions
+    # ------------------
     
-    # The option -r causes the taxon rank map to be (re)generated.
-    
-    if ( $rank_map )
-    {
-	TaxonTables::createRankMap($dbh);
-	CollectionTables::createCountryMap($dbh, 1);
-    }
-    
-    # The option -c causes the collection tables to be (re)computed.
-    
-    if ( $collection_tables )
+    if ( $opt_collections )
     {
 	my $bins = configData('bins');
 	buildCollectionTables($dbh, $bins, $options);
     }
     
-    if ( $lith_tables && ! $collection_tables )
+    # if ( $lith_tables && ! $collection_tables )
+    # {
+    # 	buildLithTables($dbh);
+    # }
+    
+    if ( $opt_occurrence_reso )
     {
-	buildLithTables($dbh);
-    }
-    
-    # The option -m causes the occurrence tables to be (re)computed.  -R also
-    # triggers this.
-    
-    my ($occ_options);
-    
-    if ( $occurrence_reso )
-    {
-	$occurrence_reso //= '';
-	
-	if ( $occurrence_reso =~ qr{p}x )
+	if ( $opt_occurrence_reso =~ qr{p}x )
 	{
-	    $occ_options->{accept_periods} = 1;
+	    $options->{accept_periods} = 1;
 	}
 	
-	if ( $occurrence_reso =~ qr{^[^/\d]*(\d+)}x )
+	if ( $opt_occurrence_reso =~ qr{^[^/\d]*(\d+)}x )
 	{
-	    $occ_options->{epoch_bound} = $1;
+	    $options->{epoch_bound} = $1;
 	}
 	
-	if ( $occurrence_reso =~ qr{/(\d+)}x )
+	if ( $opt_occurrence_reso =~ qr{/(\d+)}x )
 	{
-	    $occ_options->{interval_bound} = $1;
+	    $options->{interval_bound} = $1;
 	}
     }
     
-    if ( $occurrence_tables )
+    if ( $opt_occurrences || $opt_occurrence_reso )
     {
 	populateOrig($dbh);
-	buildOccurrenceTables($dbh, $occ_options);
+	buildOccurrenceTables($dbh, $tree_table, $options);
     }
     
-    elsif ( $occurrence_reso )
+    elsif ( $opt_occ_summary )
+    {
+	buildTaxonSummaryTable($dbh, $tree_table, $options);
+    }
+    
+    if ( $opt_taxon_colls )
+    {
+	buildTaxonCollectionsTable($dbh, $tree_table, $options);
+    }
+    
+    # elsif ( $occurrence_int_maps )
+    # {
+    # 	buildOccIntervalMaps($dbh);
+    # }
+    
+    if ( $opt_taxonomy )
     {
 	populateOrig($dbh);
-	buildTaxonSummaryTable($dbh, $occ_options);
-	rebuildAttrsTable($dbh, 'taxon_trees');
+	buildTaxonTables($dbh, $tree_table, $options);
     }
     
-    elsif ( $occurrence_int_maps )
-    {
-	buildOccIntervalMaps($dbh);
-    }
-    
-    
-    # The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
-    # was specified, its value should be a sequence of steps (a-h) to be carried
-    # out. 
-    
-    if ( $taxon_tables )
-    {
-	populateOrig($dbh);
-	buildTaxonTables($dbh, 'taxon_trees', $options);
-    }
-    
-    
-    # The option -y causes the "classic" taxa_tree_cache table to be computed.
-    
-    if ( $old_taxon_tables )
+    if ( $opt_taxa_cache )
     {
 	# First make sure that nothing else is updating the taxa_tree_cache table
 	# while we work.
@@ -305,7 +365,7 @@ sub BuildTables {
 	# Then update the cache tables.
 	
 	eval {
-	    buildTaxaCacheTables($dbh, 'taxon_trees');
+	    buildTaxaCacheTables($dbh, $tree_table);
 	};
 	
 	my $error = $@;
@@ -320,43 +380,36 @@ sub BuildTables {
 	logMessage(1, "Released lock on tc_mutex");
     }
     
-    
-    # The option -d causes the diversity tables to be (re)computed.
-    
-    if ( $diversity_tables )
+    if ( $opt_diversity )
     {
-	buildDiversityTables($dbh, 'taxon_trees', $options);
+	buildDiversityTables($dbh, $tree_table, $options);
     }
     
-    if ( $prevalence_tables )
+    if ( $opt_prevalence )
     {
-	buildPrevalenceTables($dbh, 'taxon_trees', $options);
+	buildPrevalenceTables($dbh, $tree_table, $options);
     }
     
-    # The option -p causes taxon pictures to be fetched from phylopic.org
-    
-    if ( $taxon_pics )
+    if ( $opt_taxon_pics )
     {
-	getPics($dbh, 'taxon_trees', $force);
-	selectPics($dbh, 'taxon_trees');
+	getPics($dbh, $tree_table, $opt_force);
+	selectPics($dbh, $tree_table);
     }
     
-    # temp
+    # if ( $strata_tables )
+    # {
+    # 	buildStrataTables($dbh);
+    # }
     
-    if ( $strata_tables )
-    {
-	buildStrataTables($dbh);
-    }
-    
-    if ( $occurrence_tables )
+    if ( $opt_occurrences )
     {
 	buildSpecimenTables($dbh);
     }
     
-    if ( $timescale_tables )
-    {
-	establishTimescaleTables($dbh);
-    }
+    # if ( $timescale_tables )
+    # {
+    # 	establishTimescaleTables($dbh);
+    # }
     
     logTimestamp();
     logMessage(1, "Done rebuilding tables.");
