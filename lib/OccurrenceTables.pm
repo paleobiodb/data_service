@@ -115,13 +115,13 @@ sub buildOccurrenceTables {
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso,
 			species_name, species_reso, plant_organ,
-			early_age, late_age, reference_no, access_level,
+			early_age, late_age, reference_no,
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT re.occurrence_no, re.reid_no, if(re.most_recent = 'YES', 1, 0),
 			re.collection_no, re.taxon_no, a.orig_no, 
 			re.genus_name, re.genus_reso, re.subgenus_name, re.subgenus_reso,
 			re.species_name, re.species_reso, re.plant_organ,
-			ei.early_age, li.late_age, re.reference_no, c.access_level,
+			ei.early_age, li.late_age, re.reference_no,
 			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
 		FROM reidentifications as re
 			JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
@@ -230,13 +230,13 @@ sub updateOccurrenceMatrix {
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso, 
 			species_name, species_reso, plant_organ, plant_organ2,
-			early_age, late_age, reference_no, access_level,
+			early_age, late_age, reference_no,
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT o.occurrence_no, 0, true, o.collection_no, o.taxon_no, a.orig_no, 
 			o.genus_name, o.genus_reso, o.subgenus_name, o.subgenus_reso,
 			o.species_name, o.species_reso, o.plant_organ, o.plant_organ2,
 			ei.early_age, li.late_age,
-			if(o.reference_no > 0, o.reference_no, c.reference_no), c.access_level,
+			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no, o.modifier_no, o.created, o.modified
 		FROM $TABLE{OCCURRENCE_DATA} as o
 			JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
@@ -255,12 +255,12 @@ sub updateOccurrenceMatrix {
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso,
 			species_name, species_reso, plant_organ,
-			early_age, late_age, reference_no, access_level,
+			early_age, late_age, reference_no,
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT re.occurrence_no, re.reid_no, if(re.most_recent = 'YES', 1, 0), re.collection_no, re.taxon_no, a.orig_no, 
 			re.genus_name, re.genus_reso, re.subgenus_name, re.subgenus_reso,
 			re.species_name, re.species_reso, re.plant_organ,
-			ei.early_age, li.late_age, re.reference_no, c.access_level,
+			ei.early_age, li.late_age, re.reference_no,
 			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
 		FROM reidentifications as re
 			JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
@@ -653,7 +653,7 @@ sub buildTaxonCollectionsTable {
 		count(*), count(if(marine=1,1,null)), count(if(marine=0,1,null)),
     		count(distinct collection_no), 
 		count(distinct if(marine=1,collection_no,null)),
-		count(distinct if(marine=0,collection_no,null)),
+		count(distinct if(marine=0,collection_no,null))
     	FROM $TREE_TABLE as base 
 		STRAIGHT_JOIN $TREE_TABLE as t on t.lft between base.lft and base.rgt
     		STRAIGHT_JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.orig_no = t.orig_no
