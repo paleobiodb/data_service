@@ -369,16 +369,34 @@ sub new_tables_safe {
 # doStmt ( dbh, sql, debug )
 #
 # Execute the specified sql statement, and also print it out to STDERR if the third argument is
-# true.
+# true. If an error occurs, correct 
 
 sub doStmt {
     
     my ($dbh, $sql, $debug) = @_;
-
+    
     print STDERR "$sql\n\n" if $debug;
     
-    my $result = $dbh->do($sql);
+    my $result;
+    
+    eval {
+	$result = $dbh->do($sql);
+    };
+    
+    if ( $@ )
+    {
+	foreach my $i ( 0..5 )
+	{
+	    my ($package, $filename, $line) = caller($i);
+	    next if $package eq __PACKAGE__ || $package eq 'DB';
+	    my $new = "at $filename line $line.";
+	    $@ =~ s/at \S+ line \S+[.]?$/$new/;
+	    last;
+	}
 
+	die $@;
+    }
+    
     return $result;
 }
 

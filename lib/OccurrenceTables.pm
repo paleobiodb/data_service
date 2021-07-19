@@ -72,6 +72,7 @@ sub buildOccurrenceTables {
 				plant_organ2 varchar(255),
 				early_age decimal(9,5),
 				late_age decimal(9,5),
+				envtype enum('marine', 'terrestrial', 'marine_x', 'terrestrial_x') null,
 				reference_no int unsigned not null,
 				authorizer_no int unsigned not null,
 				enterer_no int unsigned not null,
@@ -89,12 +90,12 @@ sub buildOccurrenceTables {
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso, 
 			species_name, species_reso, plant_organ, plant_organ2,
-			early_age, late_age, reference_no, 
+			early_age, late_age, envtype, reference_no, 
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT o.occurrence_no, 0, true, o.collection_no, o.taxon_no, a.orig_no, 
 			o.genus_name, o.genus_reso, o.subgenus_name, o.subgenus_reso,
 			o.species_name, o.species_reso, o.plant_organ, o.plant_organ2,
-			ei.early_age, li.late_age,
+			ei.early_age, li.late_age, c.envtype,
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no, o.modifier_no, o.created, o.modified
 		FROM $TABLE{OCCURRENCE_DATA} as o 
@@ -150,6 +151,29 @@ sub buildOccurrenceTables {
     $count = $dbh->do($sql);
     
     logMessage(2, "      $count superceded identifications");
+    
+    # Mark occurrences from terrestrial species found in a marine environment, and vice versa. It
+    # would probably be better to make these updates after the taxonomy tables are rebuilt.
+    # Possibly we should have an option to indicate the next two statements should be postponed
+    # until after the taxonomy rebuild if that is also taking place.
+    
+    $sql = "UPDATE $TABLE{OCCURRENCE_MATRIX} as o
+    		join $TABLE{COLLECTION_MATRIX} as c
+    		join taxon_ecotaph as et using (orig_no)
+    	SET o.envtype = 'marine_x'
+    	WHERE c.envtype = 'marine' and taxon_environment <> '' and
+		taxon_environment not rlike 'coastal|lagoonal|brackish|marine|shelf|oceanic'";
+    
+    doStmt($dbh, $sql, $options->{debug});
+    
+    $sql = "UPDATE $TABLE{OCCURRENCE_MATRIX} as o
+    		join $TABLE{COLLECTION_MATRIX} as c
+    		join join taxon_ecotaph as et using (orig_no)
+    	SET o.envtype = 'terrestrial_x'
+	WHERE c.envtype = 'terrestrial' and taxon_environment <> '' and
+    		and taxon_environment not rlike 'terrestrial|freshwater|brackish'";
+    
+    doStmt($dbh, $sql, $options->{debug});
     
     # Now add some indices to the main occurrence relation, which is more
     # efficient to do now that the table is populated.

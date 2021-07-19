@@ -22,7 +22,7 @@ use SpecimenTables qw(buildSpecimenTables);
 use TaxonTables qw(populateOrig buildTaxonTables rebuildAttrsTable buildTaxaCacheTables);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
-use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
+use DiversityTables qw(buildDiversityTables buildTotalDiversityTables buildPrevalenceTables);
 
 
 # First parse option switches.
@@ -32,7 +32,7 @@ Getopt::Long::Configure("bundling");
 my ($opt_logfile, $opt_test, $opt_error, $opt_debug, $opt_force, $opt_database,
     $opt_nightly, $opt_weekly, $opt_collections, $opt_occurrences, $opt_taxonomy, $opt_taxa_cache,
     $opt_diversity, $opt_prevalence, $opt_occ_summary, $opt_taxon_colls, $opt_taxon_pics,
-    $opt_occurrence_reso, $opt_taxon_steps, $opt_interval_data);
+    $opt_occurrence_reso, $opt_taxon_steps, $opt_interval_data, $opt_diagnostic);
 
 GetOptions( "log=s" => \$opt_logfile,
 	    "test" => \$opt_test,
@@ -52,6 +52,7 @@ GetOptions( "log=s" => \$opt_logfile,
 	    "resolution|R" => \$opt_occurrence_reso,
 	    "taxon-steps|T=s" => \$opt_taxon_steps,
 	    "interval-data|I" => \$opt_interval_data,
+	    "diagnostic|D=s" => \$opt_diagnostic,
 	    "steps|T=s" => \$opt_taxon_steps );
 
 # Script actions can be selected by arguments of the same name as well as by options.
@@ -247,6 +248,8 @@ sub BuildTables {
     my $options = { taxon_steps => $opt_taxon_steps,
 		    debug => $opt_debug, };
     
+    $options->{diagnostic} = $opt_diagnostic if $opt_diagnostic;
+    
     # The option -i causes a forced reload of the interval data from the source
     # data files.  Otherwise, do a (non-forced) call to LoadIntervalData if any
     # function has been selected that requires it.
@@ -382,7 +385,7 @@ sub BuildTables {
     
     if ( $opt_diversity )
     {
-	buildDiversityTables($dbh, $tree_table, $options);
+	buildTotalDiversityTables($dbh, $tree_table, $options);
     }
     
     if ( $opt_prevalence )

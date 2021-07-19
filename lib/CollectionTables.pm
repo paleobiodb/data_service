@@ -119,7 +119,7 @@ sub buildCollectionTables {
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
 		environment $env_enum default null,
-		marine boolean null,
+		envtype enum('marine', 'terrestrial') null,
 		n_occs int unsigned not null,
 		reference_no int unsigned not null,
 		access_level tinyint unsigned not null) Engine=MYISAM", $options->{debug});
@@ -128,13 +128,13 @@ sub buildCollectionTables {
     
     $sql = "	INSERT INTO $COLL_MATRIX_WORK
 		       (collection_no, lng, lat, loc, cc,
-			early_int_no, late_int_no, environment, marine,
+			early_int_no, late_int_no, environment, envtype,
 			reference_no, access_level)
 		SELECT c.collection_no, c.lng, c.lat,
 			if(c.lng is null or c.lat is null, point(1000.0, 1000.0), point(c.lng, c.lat)), 
 			cmap.cc,
 			c.max_interval_no, if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no),
-			c.environment, emap.marine,
+			c.environment, emap.envtype,
 			c.reference_no,
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
@@ -1551,8 +1551,8 @@ sub createEnvironmentMap {
     }
     
     doStmt($dbh, "CREATE TABLE IF NOT EXISTS $TABLE{ENVIRONMENT_MAP} (
-		environment $env_enum NOT NULL,
-		marine boolean NULL,
+		environment $env_enum not null,
+		envtype enum('marine', 'terrestrial') null,
 		PRIMARY KEY (environment)) Engine=MyISAM", $options->{debug});
     
     # Then populate it if necessary.
@@ -1568,14 +1568,14 @@ sub createEnvironmentMap {
 		WHERE environment <> ''",
 	       $options->{debug});
 
-	doStmt($dbh, "UPDATE $TABLE{ENVIRONMENT_MAP} SET marine = 1
+	doStmt($dbh, "UPDATE $TABLE{ENVIRONMENT_MAP} SET envtype = 'marine'
 		WHERE environment in (SELECT environ FROM macrostrat.environs WHERE environ_class='marine')
 		or environment in ('marine indet.','carbonate indet.','shallow subtidal indet.',
 			'reef, buildup or bioherm','perireef or subreef','basinal (carbonate)',
 			'basinal (siliceous)','basinal (siliciclastic)','marginal marine indet.')",
 	       $options->{debug});
 
-	doStmt($dbh, "UPDATE $TABLE{ENVIRONMENT_MAP} SET marine = 0
+	doStmt($dbh, "UPDATE $TABLE{ENVIRONMENT_MAP} SET envtype = 'terrestrial'
 		WHERE environment in (SELECT environ FROM macrostrat.environs WHERE environ_class='non-marine')
 		or environment in ('terrestrial indet.','glacial')
 		or environment like '%channel%' or environment like '%floodplain%'",
