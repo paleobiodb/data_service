@@ -32,7 +32,7 @@ Getopt::Long::Configure("bundling");
 my ($opt_logfile, $opt_test, $opt_error, $opt_debug, $opt_force, $opt_database,
     $opt_nightly, $opt_weekly, $opt_collections, $opt_occurrences, $opt_taxonomy, $opt_taxa_cache,
     $opt_diversity, $opt_prevalence, $opt_occ_summary, $opt_taxon_colls, $opt_taxon_pics,
-    $opt_occurrence_reso, $opt_taxon_steps, $opt_interval_data, $opt_diagnostic);
+    $opt_occurrence_reso, $opt_global_only, $opt_taxon_steps, $opt_interval_data, $opt_diagnostic);
 
 GetOptions( "log=s" => \$opt_logfile,
 	    "test" => \$opt_test,
@@ -50,6 +50,7 @@ GetOptions( "log=s" => \$opt_logfile,
 	    "occ-summary" => \$opt_occ_summary,
 	    "taxon-colls" => \$opt_taxon_colls,
 	    "resolution|R" => \$opt_occurrence_reso,
+	    "global-only|G" => \$opt_global_only,
 	    "taxon-steps|T=s" => \$opt_taxon_steps,
 	    "interval-data|I" => \$opt_interval_data,
 	    "diagnostic|D=s" => \$opt_diagnostic,
@@ -249,6 +250,7 @@ sub BuildTables {
 		    debug => $opt_debug, };
     
     $options->{diagnostic} = $opt_diagnostic if $opt_diagnostic;
+    $options->{global_only} = 1 if $opt_global_only;
     
     # The option -i causes a forced reload of the interval data from the source
     # data files.  Otherwise, do a (non-forced) call to LoadIntervalData if any
