@@ -93,7 +93,7 @@ sub validate_action {
 	    
 	    elsif ( $record->{status} && $record->{status} ne 'changes' )
 	    {
-		$action->set_attr(activation => 'delete');
+		$action->set_attr(activation => 'remove');
 	    }
 	    
 	    else
@@ -204,31 +204,18 @@ sub after_action {
     # records in the $RESOURCE_QUEUE table. We also delete any corresponding image files from 
     # the active image directory.
     
-    else
+    elsif ( $operation eq 'delete' )
     {
 	my $dbh = $edt->dbh;
 	my $keylist = $action->keylist($action);
 	
-	# First find and delete the image files, if any
+	# First get the names of the image files, if any
 	
 	my $sql = "
 		SELECT image FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD in ($keylist) AND image <> ''";
 	
 	my $images = $dbh->selectcol_arrayref($sql);
-	
-	if ( ref $images eq 'ARRAY' && @$images )
-	{
-	    foreach my $i ( @$images )
-	    {
-		my $msg = $edt->delete_image_file($i);
-		if ( $msg )
-		{
-		    print STDERR "$msg\n";
-		    $edt->add_condition('E_EXECUTE', 'delete image file');
-		}
-	    }
-	}
 	
 	# Then delete the active records, if any
 	
@@ -240,7 +227,7 @@ sub after_action {
 	
 	my $res = $dbh->do($sql);
 	
-	# Then delete the tag assignments, if any
+	# Then delete the tag assignments, if any.
 	
 	$sql = "
 		DELETE FROM $TABLE{RESOURCE_TAGS}
@@ -250,7 +237,7 @@ sub after_action {
 	
 	$res = $dbh->do($sql);
 	
-	# Then delete the images, if any
+	# Then delete the image data, if any.
 	
 	$sql = "
 		DELETE FROM $TABLE{RESOURCE_IMAGES}
@@ -259,11 +246,18 @@ sub after_action {
 	print STDERR "$sql\n\n" if $edt->debug;
 	
 	$res = $dbh->do($sql);
+
+	# Then unlink the image files, if any.
 	
-	foreach my $k ( split /\s*,\s*/, $keylist )
+	if ( ref $images eq 'ARRAY' && @$images )
 	{
-	    next unless $k;
-	    $edt->delete_image_file($k);
+	    foreach my $image_file ( @$images )
+	    {
+		if ( $image_file && $image_file =~ qr{ ^ T? eduresource_ \d+ }xs )
+		{
+		    $edt->delete_image_file($image_file);
+		}
+	    }
 	}
     }
 }
@@ -390,7 +384,7 @@ sub activate_resource {
     
     # If we are directed to delete this resource from the active table, do so.
     
-    if ( $operation eq 'delete' )
+    if ( $operation eq 'remove' )
     {
 	# Start by deleting the image file, if any.
 	
@@ -402,15 +396,9 @@ sub activate_resource {
 	
 	my ($filename) = $dbh->selectrow_array($sql);
 	
-	if ( $filename )
+	if ( $filename && $filename =~ qr{ ^ T? eduresource_ \d+ }xs )
 	{
-	    my $msg = $edt->delete_image_file($filename);
-	    
-	    if ( $msg )
-	    {
-		print STDERR "$msg\n";
-		$edt->add_condition("W_EXECUTE", 'delete image file');
-	    }
+	    $edt->delete_image_file($filename);
 	}
 	
 	# Then delete the active resource record and the tag assignments.
@@ -531,7 +519,6 @@ sub write_image_file {
     
     my ($edt, $record_id, $image_data) = @_;
     
-    return unless $RESOURCE_IMG_DIR;
     return unless $image_data;
     
     # First, decode the image and determine the type.
@@ -579,7 +566,7 @@ sub write_image_file {
     
     if ( is_test_mode ) { $filename = "T$filename"; }
     
-    my $filepath = "$RESOURCE_IMG_DIR/$filename";
+    my $filepath = "../images/$filename";
 
     my $result = open( my $fout, ">", $filepath );
 
@@ -595,6 +582,8 @@ sub write_image_file {
     print $fout $raw_data;
     
     close $fout || warn "ERROR: could not write '$filename': $!";
+
+    print STDERR "\nWrote image file '$filepath'\n\n" if $edt->debug;
     
     return $filename;
 }
@@ -604,29 +593,29 @@ sub write_image_file {
 sub delete_image_file {
 
     # my ($edt, $record_id) = @_;
-    
     # my $filename = "Teduresource_$record_id.png";
     
     my ($edt, $filename) = @_;
-    
-    my $filepath = "$RESOURCE_IMG_DIR/$filename";
+
+    my $filepath = "../images/$filename";
     
     if ( -e $filepath )
     {
 	if ( unlink($filepath) )
 	{
-	    return undef;
+	    print STDERR "\nDeleted image file '$filepath'\n\n" if $edt->debug;
 	}
 	
 	else
 	{
-	    return "ERROR: could not unlink '$filepath': $!";
+	    print STDERR "ERROR: could not unlink '$filepath': $!\n";
+	    $edt->add_condition('E_EXECUTE', 'delete image file');
 	}
     }
-    
-    else
+
+    elsif ( $edt->debug )
     {
-	return "ERROR: could not unlink '$filepath': not found";
+	print STDERR "\nCould not find image file '$filepath'\n\n";
     }
 }
 
@@ -635,7 +624,7 @@ sub configure {
     
     my ($class, $dbh, $config) = @_;
     
-    $RESOURCE_IMG_DIR = $config->{eduresources_img_dir};
+    $RESOURCE_IMG_DIR = $config->{eduresource_img_dir};
     
     $IMAGE_IDENTIFY_COMMAND = $config->{image_identify_cmd} || 'identify';
     $IMAGE_CONVERT_COMMAND = $config->{image_convert_cmd} || 'convert';
