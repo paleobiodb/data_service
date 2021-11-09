@@ -150,13 +150,13 @@ sub update_resources {
     
     $allowances->{CREATE} = 1 if $arg && $arg eq 'add';
     
-    my $main_params = $request->get_main_params($allowances, '1.2:eduresources:basicentry');
+    my $main_params = $request->get_main_params($allowances, '1.2:eduresources:urlparams');
     my $perms = $request->require_authentication('RESOURCE_QUEUE');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->unpack_input_records($main_params, '1.2:eduresources:addupdate_body');
+    my (@records) = $request->unpack_input_records($main_params, '1.2:eduresources:bodyparams');
     
     if ( $request->errors )
     {
