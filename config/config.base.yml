@@ -45,7 +45,7 @@ template_toolkit:
 
 plugins:
     Database:
-      driver: 'mysql'
+      driver: 'MariaDB'
       database: 'pbdb'
       host: 'mariadb'
       port: 3306
@@ -54,3 +54,7 @@ plugins:
       dbi_params:
         RaiseError: 1
         AutoCommit: 1
+        mysql_client_found_rows: 0
+        mariadb_client_found_rows: 0
+        mariadb_auto_reconnect: 1
+
