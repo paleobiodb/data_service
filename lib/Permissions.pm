@@ -393,7 +393,7 @@ sub default_table_permissions {
 
 	elsif ( $allow_view eq 'ANY' )
 	{
-	    $perms->{auth_aig}{$table_specifier} = 'ANY';
+	    $perms->{auth_diag}{$table_specifier} = 'ANY';
 	    $tp->{view} = 1;
 	}
     }

@@ -1,0 +1,31 @@
+
+
+5041
+72288: pubyr values differ by 1
+72291: original article and “answer to reply” both in same volume of same publication.
+72298: missing title
+72300: missing spaces in title (appear to be missing rather than undisplayed #160s)
+72304: Musavu Moussavou, B. should match Moussavou, B. M.
+72311: match except for missing author names in one of them
+72312: match except for title and publication title
+72317: match except for title and publication title
+72360: does not match, but first author and pubyr are a match. This must be excluded.
+72363: not a match, the two refer to different volumes of a multi-volume work. This must be excluded.
+
+
+49456: same as the following
+49457
+
+1186 @1166: actually missing characters in a taxonomic name where we usually would find nonbreaking spaces.
+
+59754 @59714: 2nd author first initial mismatch.
+
+59823 @59783: author2last has accented characters
+
+42976 @42952: author2last has an HTML entity
+
+63215 @63200: title has an extra suffix in one of the two records
+
+25772 @25746: author2 last name has an extra hyphenated part in one of the two records.
+
+4575    @4538: title has missing characters where we would find nonbreaking spaces.

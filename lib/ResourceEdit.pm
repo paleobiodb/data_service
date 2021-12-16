@@ -34,12 +34,14 @@ our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
 
 our (%TAG_ID);
 
-
 {
     ResourceEdit->register_conditions(
 	E_PERM => { status => "You do not have permission to change the status of this record" },
+	E_REVERT => "Nothing to revert",
 	W_TAG_NOT_FOUND => "Unrecognized resource tag '%1'",
 	W_PERM => { status => "The status of this record has been set to 'pending'" });
+
+    $RESOURCE_IDFIELD = 'eduresource_no';
 }
 
 # The following methods override methods from EditTransaction.pm:
@@ -57,7 +59,9 @@ sub validate_action {
     my $record = $action->record;
     my $permission = $action->permission;
     
-    # First, handle the status.
+    # First, handle the status. For an insert operation, a status of 'active' or 'inactive' copies
+    # the resource to the active table. An insert by a user without 'admin' privilege always sets
+    # the status to 'pending'.
     
     if ( $operation eq 'insert' )
     {
@@ -65,7 +69,7 @@ sub validate_action {
 	{
 	    $record->{status} ||= 'pending';
 	    
-	    if ( $record->{status} eq 'active' )
+	    if ( $record->{status} eq 'active' || $record->{status} eq 'inactive' )
 	    {
 		$action->set_attr(activation => 'copy');
 	    }
@@ -82,37 +86,83 @@ sub validate_action {
 	}
     }
     
+    # For an update operation, we first need to check whether this resource exists in the active
+    # table.
+    
     elsif ( $operation eq 'update' )
     {
+	my $keyval = $action->keyval;
+	my $sql = "SELECT $RESOURCE_IDFIELD, status FROM $TABLE{RESOURCE_ACTIVE}
+		WHERE $RESOURCE_IDFIELD in ($keyval)";
+	my $dbh = $edt->dbh;
+	
+	$edt->debug_line("$sql\n") if $edt->debug;
+	
+	my ($active, $active_status) = $dbh->selectrow_array($sql);
+	
+	# A user with 'admin' permission can activate or inactivate a record. They can also revert
+	# the editable record to the active record, discarding all changes.
+	
 	if ( $permission eq 'admin' )
 	{
-	    if ( $record->{status} && $record->{status} eq 'active' )
+	    if ( $record->{status} && ($record->{status} eq 'active' ||
+				       $record->{status} eq 'inactive') )
 	    {
 		$action->set_attr(activation => 'copy');
 	    }
 	    
-	    elsif ( $record->{status} && $record->{status} ne 'changes' )
+	    elsif ( $record->{status} && $record->{status} eq 'revert' )
 	    {
-		$action->set_attr(activation => 'remove');
+		if ( $active )
+		{
+		    $action->set_attr(activation => 'revert');
+		    $record->{status} = $active_status;
+		}
+		
+		else
+		{
+		    $edt->add_condition('E_REVERT');
+		}
+	    }
+	    
+	    # Any other update will set the status to 'changed' if there is also an active version
+	    # of this record, and 'pending' otherwise.
+	    
+	    elsif ( $active )
+	    {
+		$record->{status} = 'changed';
 	    }
 	    
 	    else
 	    {
-		$record->{status} = 'changes';
+		$record->{status} = 'pending';
 	    }
 	}
 	
+	# Any other user can only set the status to 'changed' or 'pending'. Both values are
+	# accepted, but the status will be set to 'changed' if there is an active version of this
+	# record and 'pending' otherwise.
+	
 	else
 	{
-	    if ( $record->{status} && $record->{status} ne 'changes' )
+	    if ( $record->{status} && $record->{status} ne 'changed' &&
+		 $record->{status} ne 'pending' )
 	    {
 		$edt->add_condition('E_PERM', 'status');
 	    }
 	    
-	    $record->{status} = 'changes';
+	    elsif ( $active )
+	    {
+		$record->{status} = 'changed';
+	    }
+
+	    else
+	    {
+		$record->{status} = 'pending';
+	    }
 	}
     }
-
+    
     elsif ( $operation eq 'delete' )
     {
 	return;
@@ -211,42 +261,57 @@ sub after_action {
 	
 	# First get the names of the image files, if any
 	
-	my $sql = "
-		SELECT image FROM $TABLE{RESOURCE_ACTIVE}
+	my $sql = "SELECT image FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD in ($keylist) AND image <> ''";
 	
 	my $images = $dbh->selectcol_arrayref($sql);
 	
 	# Then delete the active records, if any
 	
-	my $sql = "
-		DELETE FROM $TABLE{RESOURCE_ACTIVE}
+	my $sql = "DELETE FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD in ($keylist)";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	$edt->debug_line("$sql\n") if $edt->debug;
 	
 	my $res = $dbh->do($sql);
 	
 	# Then delete the tag assignments, if any.
 	
-	$sql = "
-		DELETE FROM $TABLE{RESOURCE_TAGS}
+	$sql = "DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id in ($keylist)";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	$edt->debug_line("$sql\n") if $edt->debug;
 	
 	$res = $dbh->do($sql);
 	
 	# Then delete the image data, if any.
 	
-	$sql = "
-		DELETE FROM $TABLE{RESOURCE_IMAGES}
+	$sql = "DELETE FROM $TABLE{RESOURCE_IMAGES}
 		WHERE eduresource_no in ($keylist)";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	$edt->debug_line("$sql\n") if $edt->debug;
 	
 	$res = $dbh->do($sql);
+	
+	# my @keylist = split(/\s*,\s*/, $keylist);
+	
+	# foreach (@keylist)
+	# {
+	#     $_ += 1000000;
+	# }
 
+	# my $altlist = join(',', $keylist);
+
+	# $sql = "DELETE FROM $TABLE{RESOURCE_IMAGES}
+	# 	WHERE eduresource_no in ($altlist)";
+	
+	$sql = "DELETE FROM $TABLE{RESOURCE_IMAGES_ACTIVE}
+		WHERE eduresource_no in ($keylist)";
+	
+	$edt->debug_line("$sql\n") if $edt->debug;
+	
+	$res = $dbh->do($sql);
+	
 	# Then unlink the image files, if any.
 	
 	if ( ref $images eq 'ARRAY' && @$images )
@@ -269,21 +334,20 @@ sub convert_image {
     
     # return unless $eduresource_no && $r->{image_data};
     
-    print STDERR "Converting image:\n" if $edt->debug;
+    $edt->debug_line("Converting image:") if $edt->debug;
     
     my $fh = File::Temp->new( UNLINK => 1 );
     
     unless ( $fh )
     {
-	print STDERR "ERROR: could not create temporary file for image\n"
-	    if $edt->debug;
+	$edt->debug_line("ERROR: could not create temporary file for image") if $edt->debug;
 	$edt->add_condition('E_EXECUTE', 'convert image');
 	return;
     }
     
     my $filename = $fh->filename;
     
-    print STDERR "Writing image to $filename\n" if $edt->debug;
+    $edt->debug_line("Writing image to $filename") if $edt->debug;
     
     binmode($fh);
     
@@ -300,7 +364,7 @@ sub convert_image {
     
     my $output = `$IMAGE_IDENTIFY_COMMAND $filename`;
     
-    print STDERR "Executing: $IMAGE_IDENTIFY_COMMAND $filename\nOutput: $output\n" if $edt->debug;
+    $edt->debug_line("Executing: $IMAGE_IDENTIFY_COMMAND $filename\nOutput: $output") if $edt->debug;
     
     if ( $output =~ qr{ \s (\w+) \s (\d+) x (\d+) }xs )
     {
@@ -324,7 +388,7 @@ sub convert_image {
 	    my $newsize = $width >= $height ? $IMAGE_MAX : "x$IMAGE_MAX";
 	    my $resize_cmd = "convert $filename -resize $newsize -";
 	    
-	    print STDERR "Executing: $resize_cmd\n" if $edt->debug;
+	    $edt->debug_line("Executing: $resize_cmd") if $edt->debug;
 	    
 	    my $converted_data = `$resize_cmd`;
 	    
@@ -336,7 +400,8 @@ sub convert_image {
 	    
 	    $store_data = "data:image/$format;base64," . MIME::Base64::encode_base64($converted_data);
 	    
-	    print STDERR 'Output: [' . length($store_data) . " chars converted to base64]\n" if $edt->debug;
+	    $edt->debug_line('Output: [' . length($store_data) . " chars converted to base64]")
+		if $edt->debug;
 	    
 	    return $store_data;
 	}
@@ -361,7 +426,7 @@ sub store_image {
     my $sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} (eduresource_no, image_data) 
 		values ($eduresource_no, ?)";
     
-    print STDERR "$sql\n\n" if $edt->debug;
+    $edt->debug_line("$sql\n") if $edt->debug;
     
     my $result = $dbh->do($sql, { }, $store_data);
     
@@ -375,79 +440,203 @@ sub activate_resource {
     
     my $dbh = $edt->dbh;
     
-    my $quoted_id = $dbh->quote($eduresource_no);
+    my ($sql, $res);
     
     unless ( $eduresource_no && $eduresource_no =~ /^\d+$/ )
     {
 	die "error activating or inactivating resource: bad resource id";
     }
     
-    # If we are directed to delete this resource from the active table, do so.
+    my $quoted_id = $dbh->quote($eduresource_no);
     
-    if ( $operation eq 'remove' )
+    # # The 'remove' operation deletes the resource from the active table.
+    
+    # if ( $operation eq 'remove' )
+    # {
+    # 	# Start by deleting the image file, if any.
+	
+    # 	$sql = "SELECT image FROM $TABLE{RESOURCE_ACTIVE}
+    # 		WHERE $RESOURCE_IDFIELD = $quoted_id";
+	
+    # 	$edt->debug_line("$sql\n") if $edt->debug;
+	
+    # 	my ($filename) = $dbh->selectrow_array($sql);
+	
+    # 	if ( $filename && $filename =~ qr{ ^ T? eduresource_ \d+ }xs )
+    # 	{
+    # 	    $edt->delete_image_file($filename);
+    # 	}
+	
+    # 	# Then delete the active resource record, the active image record if any, and the tag
+    # 	# assignments.
+	
+    # 	$sql = "DELETE FROM $TABLE{RESOURCE_ACTIVE}
+    # 		WHERE $RESOURCE_IDFIELD = $quoted_id";
+	
+    # 	$edt->debug_line("$sql\n") if $edt->debug;
+	
+    # 	my $result = $dbh->do($sql);
+	
+    # 	$sql = "DELETE FROM $TABLE{RESOURCE_TAGS}
+    # 		WHERE resource_id = $quoted_id";
+	
+    # 	$edt->debug_line("$sql\n") if $edt->debug;
+	
+    # 	$result = $dbh->do($sql);
+	
+    # 	$sql = "DELETE FROM $TABLE{RESOURCE_IMAGES_ACTIVE}
+    # 		WHERE eduresource_no = $quoted_id";
+	
+    # 	$edt->debug_line("$sql\n") if $edt->debug;
+	
+    # 	$result = $dbh->do($sql);
+	
+    # 	my $a = 1;	# we can stop here when debugging
+    # }
+    
+    # The 'activate' and 'inactivate' operations change the status in the active record table.
+
+    if ( $operation eq 'activate' || $operation eq 'inactivate' )
     {
-	# Start by deleting the image file, if any.
+	my $newstatus = $operation eq 'activate' ? 'active' : 'inactive';
+
+	$sql = "UPDATE $TABLE{RESOURCE_ACTIVE} SET status = '$newstatus'
+		WHERE eduresource_no = $quoted_id";
 	
-	my $sql = "
-		SELECT image FROM $TABLE{RESOURCE_ACTIVE}
-		WHERE $RESOURCE_IDFIELD = $quoted_id";
+	$edt->debug_line("$sql\n") if $edt->debug;
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	$res = $dbh->do($sql);
 	
-	my ($filename) = $dbh->selectrow_array($sql);
-	
-	if ( $filename && $filename =~ qr{ ^ T? eduresource_ \d+ }xs )
-	{
-	    $edt->delete_image_file($filename);
-	}
-	
-	# Then delete the active resource record and the tag assignments.
-	
-	my $sql = "
-		DELETE FROM $TABLE{RESOURCE_ACTIVE}
-		WHERE $RESOURCE_IDFIELD = $quoted_id";
-	
-	print STDERR "$sql\n\n" if $edt->debug;
-	
-	my $result = $dbh->do($sql);
-	
-	$sql = "	DELETE FROM $TABLE{RESOURCE_TAGS}
-		WHERE resource_id = $quoted_id";
-	
-	print STDERR "$sql\n\n" if $edt->debug;
-	
-	$result = $dbh->do($sql);
-	
-	my $a = 1;	# we can stop here when debugging
+	my $a = 1; # we can stop here when debugging
     }
     
-    # If the action is 'copy', then we copy the record from the queue table to the active
-    # table. The active table has a somewhat different set of fields.
+    # The 'revert' operation reverts the editable record to the attributes in the active record
+    # table, discarding any changes.
+    
+    elsif ( $operation eq 'revert' )
+    {
+	$sql = "REPLACE INTO $TABLE{RESOURCE_QUEUE} SELECT * FROM $TABLE{RESOURCE_ACTIVE}
+		WHERE eduresource_no = $quoted_id";
+	
+	$edt->debug_line("$sql\n") if $edt->debug;
+	
+	$res = $dbh->do($sql);
+	
+	$sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} SELECT * FROM $TABLE{RESOURCE_IMAGES_ACTIVE}
+		WHERE eduresource_no = $quoted_id";
+	
+	$edt->debug_line("$sql\n") if $edt->debug;
+
+	$res = $dbh->do($sql);
+	
+	# my ($r) = $dbh->selectrow_hashref($sql);
+	
+	# # Grab the attributes for this resource from the active table.
+	
+	# $sql = "SELECT id as eduresource_no, title, description, url, is_video, author, image
+	# 	FROM $TABLE{RESOURCE_ACTIVE} WHERE id = $eduresource_no";
+	
+	# $edt->debug_line("$sql\n") if $edt->debug;
+	
+	# my ($r) = $dbh->selectrow_hashref($sql);
+	
+	# # If we can't find the requested resource, throw an exception.
+	
+	# unless ( ref $r eq 'HASH' )
+	# {
+	#     die "resource reversion error";
+	# }
+	
+	# # Then rebuild the tag list from the active tags table.
+	
+	# $sql = "SELECT group_concat(tag_id) FROM $TABLE{RESOURCE_TAGS}
+	# 	WHERE resource_id = $eduresource_no";
+	
+	# $edt->debug_line("$sql\n") if $edt->debug;
+	
+	# my ($tags) = $dbh->selectrow_array($sql);
+	
+	# $r->{tags} = ($tags || '');
+	
+	# # If the image filename starts with eduresource_, we set the corresponding value in the
+	# # reverted record to 1.
+	
+	# if ( $r->{image} =~ /^eduresource_/ )
+	# {
+	#     $r->{image} = 1
+	# }
+
+	# # Then create and execute a new action to revert the record.
+	
+	# my $reversion = $edt->aux_action('RESOURCE_QUEUE', 'update', $r);
+	
+	# $edt->validate_against_schema($reversion);
+	# $edt->execute_action($reversion);
+	
+	# # If we have a stored image data record corresponding to the active image, it will have
+	# # as its key the eduresource_no + 1,000,000. If found, copy it back over the original.
+	
+	# my $aux_no = $eduresource_no + 1000000;
+	
+	# $sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} (eduresource_no, image_data)
+	# 	SELECT ($eduresource_no, image_data) FROM $TABLE{RESOURCE_IMAGES}
+	# 	WHERE eduresource_no = $aux_no";
+	
+	# $edt->debug_line("$sql\n") if $edt->debug;
+	
+	# $res = $dbh->do($sql);
+    }
+    
+    # The 'copy' operation copies the record from the queue table to the active
+    # table.
     
     elsif ( $operation eq 'copy' )
     {
-	# First get the record values to copy.
-	
-	my $sql = "
-		SELECT e.eduresource_no as id, i.image_data, e.*
-		FROM $TABLE{RESOURCE_QUEUE} as e left join $TABLE{RESOURCE_IMAGES} as i using (eduresource_no)
+	$sql = "REPLACE INTO $TABLE{RESOURCE_ACTIVE} SELECT * FROM $TABLE{RESOURCE_QUEUE}
 		WHERE eduresource_no = $quoted_id";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	$edt->debug_line("$sql\n") if $edt->debug;
+	
+	$res = $dbh->do($sql);
+	
+	$sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} SELECT * FROM $TABLE{RESOURCE_IMAGES_ACTIVE}
+		WHERE eduresource_no = $quoted_id";
+	
+	$edt->debug_line("$sql\n") if $edt->debug;
+	
+	$res = $dbh->do($sql);
+	
+	# # First get the record values to copy.
+	
+	# $sql = "SELECT e.eduresource_no as id, i.image_data, e.*
+	# 	FROM $TABLE{RESOURCE_QUEUE} as e left join $TABLE{RESOURCE_IMAGES} as i using (eduresource_no)
+	# 	WHERE eduresource_no = $quoted_id";
+	
+	# $edt->debug_line("$sql\n") if $edt->debug;
+	
+	# my ($r) = $dbh->selectrow_hashref($sql);
+	
+	# # If we can't find the requested resource, throw an exception.
+	
+	# unless ( ref $r eq 'HASH' )
+	# {
+	#     die "resource activation error";
+	# }
+	
+	# # We want the 'authorizer_no' and 'created' fields to be filled in automatically.
+	
+	# delete $r->{authorizer_no};
+	# delete $r->{created};
+
+	# Now fetch the tag and image information, because that needs to be handled separately.
+	
+	$sql = "SELECT image, image_data, tags FROM $TABLE{RESOURCE_ACTIVE}
+			left join $TABLE{RESOURCE_IMAGES_ACTIVE} using (eduresource_no)
+		WHERE eduresource_no = $quoted_id";
+	
+	$edt->debug_line("$sql\n") if $edt->debug;
 	
 	my ($r) = $dbh->selectrow_hashref($sql);
-	
-	# If we can't find the requested resource, throw an exception.
-	
-	unless ( ref $r eq 'HASH' )
-	{
-	    die "resource activation error";
-	}
-	
-	# We want the 'authorizer_no' and 'created' fields to be filled in automatically.
-	
-	delete $r->{authorizer_no};
-	delete $r->{created};
 	
 	# Then handle the image, if any. We need to decode the image data and write it to a file
 	# in the proper directory, then stuff the file name into the 'image' field of the mirrored
@@ -458,26 +647,26 @@ sub activate_resource {
 	    $r->{image} = $edt->write_image_file($r->{id}, $r->{image_data});
 	}
 	
-	# Now create a new action for this activation, and check the field values. We already know
-	# that the user has admin permission on $RESOURCE_QUEUE, so we record them as having admin
-	# permission for this action as well.
+	# # Now create a new action for this activation, and check the field values. We already know
+	# # that the user has admin permission on $RESOURCE_QUEUE, so we record them as having admin
+	# # permission for this action as well.
 	
-	my $activation_action = $edt->aux_action('RESOURCE_ACTIVE', 'replace', $r);
+	# my $activation_action = $edt->aux_action('RESOURCE_ACTIVE', 'replace', $r);
 	
-	$activation_action->_set_permission('admin');
-	$edt->validate_against_schema($activation_action);
+	# $activation_action->_set_permission('admin');
+	# $edt->validate_against_schema($activation_action);
 	
-	# Then copy the record over to the active table.
+	# # Then copy the record over to the active table.
 	
-	$edt->execute_action($activation_action);
+	# $edt->execute_action($activation_action);
 	
 	# Then handle the tags. We first delete any which are there, then create new records for
 	# the ones we know are supposed to be there.
 	
-	$sql =  "	DELETE FROM $TABLE{RESOURCE_TAGS}
+	$sql =  "DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id = $quoted_id";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	$edt->debug_line("$sql\n") if $edt->debug;
 	
 	my $result = $dbh->do($sql);
 	
@@ -499,7 +688,7 @@ sub activate_resource {
 		
 		$sql = "	INSERT INTO $TABLE{RESOURCE_TAGS} (resource_id, tag_id) VALUES $insert_str";
 		
-		print STDERR "$sql\n\n" if $edt->debug;
+		$edt->debug_line("$sql\n") if $edt->debug;
 		
 		my $result = $dbh->do($sql);
 		
@@ -557,7 +746,7 @@ sub write_image_file {
     
     else
     {
-	print STDERR "ERROR: cannot decode image format\n";
+	$edt->debug_line("ERROR: cannot decode image format") if $edt->debug;
 	$edt->add_condition('E_EXECUTE', 'store image');
 	return;
     }
@@ -572,7 +761,7 @@ sub write_image_file {
 
     unless ( $result )
     {
-	print STDERR "ERROR: could not open '$filepath' for writing: $!\n";
+	$edt->debug_line("ERROR: could not open '$filepath' for writing: $!") if $edt->debug;
 	$edt->add_condition("E_EXECUTE", 'store image');
 	return;
     }
@@ -583,7 +772,7 @@ sub write_image_file {
     
     close $fout || warn "ERROR: could not write '$filename': $!";
 
-    print STDERR "\nWrote image file '$filepath'\n\n" if $edt->debug;
+    $edt->debug_line("\nWrote image file '$filepath'\n") if $edt->debug;
     
     return $filename;
 }
@@ -630,7 +819,7 @@ sub configure {
     $IMAGE_CONVERT_COMMAND = $config->{image_convert_cmd} || 'convert';
     $IMAGE_MAX = $config->{image_max_dimension} || 150;
     
-    $RESOURCE_IDFIELD = 'id';
+    # $RESOURCE_IDFIELD = 'id';
     
     # For now, we execute the following in an eval block, so that if something goes wrong it
     # doesn't prevent the entire data service from running.

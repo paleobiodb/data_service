@@ -52,22 +52,39 @@ sub initialize {
 	    "be added or updated to proceed. Otherwise, the entire operation",
 	    "will be aborted if any errors occur.");
     
+    $ds->define_set('1.2:eduresources:status:entry' =>
+	{ value => 'active' },
+	    "Approve any submitted changes, and make the resource active.",
+	{ value => 'inactive' },
+	    "Approve any submitted changes, and make the resource inactive.",
+	{ value => 'pending' },
+	    "Save changes to the queue record for this resource, but do not change",
+	    "the active record if any.",
+	{ value => 'changed' },
+	    "Save changes to the queue record for this resource, but do not change",
+	    "the active record if any.",
+	{ value => 'activate' },
+	    "If this record has an active version, set its status to 'active' but",
+	    "do not approve any changes.",
+	{ value => 'inactivate' },
+	    "If this record has an active version, set its status to 'inactive' but",
+	    "do not approve any changes.",
+	{ value => 'revert' },
+	    "Setting a resource to this status will discard the record in the queue table",
+	    "along with any changed field values it may contain. The active version",
+	    "of this record will be copied to the queue table, replacing the record there.");
+    
     # Rulesets for entering and updating data.
     
     $ds->define_ruleset('1.2:eduresources:urlparams' =>
 	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
 	    "The identifier of the educational resource record to be updated. If it is",
 	    "empty, a new record will be created. You can also use the alias B<C<id>>.",
-	{ optional => 'status', valid => '1.2:eduresources:status' },
+	{ optional => 'status', valid => '1.2:eduresources:status:entry' },
 	    "This parameter should only be given if the logged-in user has administrator",
 	    "privileges on the educational resources table. It allows the resource to be",
-	    "activated or inactivated, controlling whether or not it appears on the",
-	    "Resources page of the website. Newly added resources are given the status",
-	    "C<B<pending>> by default. If an active resource is later updated, its",
-	    "status is automatically changed to C<B<changes>>. If the record's status",
-	    "is later set to C<B<active>> once again, the new values will be copied",
-	    "over to the table that drives the Resources page. Accepted values for",
-	    "this parameter are:");
+	    "activated or inactivated, or for changes to be saved or discarded.",
+	    "Accepted values for this parameter are:");
     
     $ds->define_ruleset('1.2:eduresources:allow' =>
 	{ optional => 'allow', valid => '1.2:eduresources:allowances', list => ',' },
@@ -99,7 +116,14 @@ sub initialize {
 	"in each object must be as specified below. If no specific documentation is given",
 	"the value must match the corresponding column in the C<B<$TABLE{RESOURCE_QUEUE}>> table",
 	"in the database.",
-	{ allow => '1.2:eduresources:urlparams' },
+	{ optional => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
+	    "The identifier of the educational resource record to be updated. If it is",
+	    "empty, a new record will be created. You can also use the alias B<C<id>>.",
+	{ optional => 'status', valid => '1.2:eduresources:status' },
+	    "This parameter should only be given if the logged-in user has administrator",
+	    "privileges on the educational resources table. It allows the resource to be",
+	    "activated or inactivated, or for changes to be saved or discarded.",
+	    "Accepted values for this parameter are:",
 	{ optional => '_label', valid => ANY_VALUE },
 	    "This parameter is only necessary in body records, and then only if",
 	    "more than one record is included in a given request. This allows",
@@ -152,15 +176,37 @@ sub update_resources {
     
     my $main_params = $request->get_main_params($allowances, '1.2:eduresources:urlparams');
     my $perms = $request->require_authentication('RESOURCE_QUEUE');
+
+    my $method = $request->http_method;
+    my $status = $main_params->{status} || '';
     
-    # Then decode the body, and extract input records from it. If an error occured, return an
-    # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
+    # If $main_params includes a status of 'activate' or 'inactivate', the operation is invalid
+    # for any method other than GET.
     
-    my (@records) = $request->unpack_input_records($main_params, '1.2:eduresources:bodyparams');
+    if ( $status eq 'activate' || $status eq 'inactivate' || $status eq 'revert' )
+    {
+	die $request->exception(400, "status '$status' is only allowed with GET")
+	    unless $method eq 'GET';
+    }
+    
+    # If the method was 'POST' or 'PUT', decode the body and extract input records from it. If an error
+    # occured, return an HTTP 400 result. For now, we will look for the global parameters under
+    # the key 'all'.
+    
+    my @records = $request->unpack_input_records($main_params, '1.2:eduresources:bodyparams');
     
     if ( $request->errors )
     {
 	die $request->exception(400);
+    }
+    
+    # If the first record has a status of activate/inactivate/revert, that means it is the only
+    # record because this request must have been submitted as a GET operation. This case is
+    # handled by a separate subroutine.
+    
+    if ( $records[0]{status} eq 'activate' || $records[0]{status} eq 'inactivate' )
+    {
+	return $request->change_active_status($perms, $records[0], $dbh);
     }
     
     # If we get here without any errors being detected so far, create a new ResourceEdit object to
@@ -196,18 +242,98 @@ sub update_resources {
     # Return all inserted or updated records.
     
     my ($id_string) = join(',', $edt->inserted_keys, $edt->updated_keys);
-	
+    
     $request->list_updated_resources($dbh, $id_string, $edt->key_labels) if $id_string;
+}
+
+
+sub change_active_status {
+
+    my ($request, $perms, $r, $dbh) = @_;
+    
+    # Check that the user has permission to do this operation, and also check that we have an
+    # eduresource_id.
+    
+    my $check = $perms->check_table_permission('RESOURCE_QUEUE', 'admin');
+    
+    unless ( $check eq 'admin' )
+    {
+	die $request->exception(401, "E_PERM: You do not have permission to change " .
+				"the status of this record");
+    }
+    
+    unless ( $r->{eduresource_id} )
+    {
+	die $request->exception(400, "E_NO_KEY: You must include a value for 'eduresource_id' " .
+				"with this request");
+    }
+
+    # Get the correct status and modifier.
+    
+    my $newstatus;
+    
+    if ( $r->{status} eq 'inactivate' )
+    {
+	$newstatus = 'inactive';
+    }
+    
+    elsif ( $r->{status} eq 'activate' )
+    {
+	$newstatus = 'active';
+    }
+
+    else
+    {
+	die $request->exception(400, "E_PARAM: '$r->{status}' is not a valid value for 'status'");
+    }
+    
+    my $modifier_no = $perms->enterer_no;
+    
+    # Now create an EDT and an action to make the status change.
+    
+    my $edt = ResourceEdit->new($request, $perms, 'RESOURCE_ACTIVE');
+    
+    $edt->do_sql("UPDATE $TABLE{RESOURCE_ACTIVE}
+		SET status='$newstatus', modifier_no='$modifier_no'
+		WHERE eduresource_no='$r->{eduresource_id}' LIMIT 1");
+    
+    # If no errors have been detected so far, execute the queued actions inside a database
+    # transaction. If any errors occur during that process, the transaction will be automatically
+    # rolled back. Otherwise, it will be automatically committed.
+    
+    $edt->commit;
+    
+    # Now handle any errors or warnings that may have been generated.
+    
+    $request->collect_edt_warnings($edt);
+    
+    if ( $edt->errors )
+    {
+    	$request->collect_edt_errors($edt);
+    	die $request->exception(400, "Bad request");
+    }
+    
+    # Return all inserted or updated records.
+    
+    $dbh ||= $request->get_connection();
+    
+    $request->extid_check;
+    
+    $request->{main_sql} = "
+	SELECT * FROM $TABLE{RESOURCE_ACTIVE}
+	WHERE eduresource_no in ($r->{eduresource_id})";
+    
+    $request->debug_line("$request->{main_sql}\n") if $request->debug;
+    
+    my $results = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
+    
+    $request->list_result($results);
 }
 
 
 sub list_updated_resources {
     
     my ($request, $dbh, $id_list, $label_ref) = @_;
-    
-    $request->substitute_select( mt => 'edr', cd => 'edr' );
-    
-    my $tables = $request->tables_hash;
     
     $request->extid_check;
     
@@ -219,19 +345,19 @@ sub list_updated_resources {
     
     my $calc = $request->sql_count_clause;
     
-    # Determine the necessary joins.
-    
-    # my ($join_list) = $request->generate_join_list('tsb', $tables);
-    
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $calc edr.*, if(edr.status = 'active', act.image, null) as active_image FROM $TABLE{RESOURCE_QUEUE} as edr
-		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$ResourceEdit::RESOURCE_IDFIELD
-	WHERE edr.eduresource_no in ($id_list)
-	GROUP BY edr.eduresource_no";
+	SELECT $calc * FROM $TABLE{RESOURCE_QUEUE}
+	WHERE eduresource_no in ($id_list)";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    # $request->{main_sql} = "
+    # 	SELECT $calc edr.*, if(edr.status = 'active', act.image, null) as active_image FROM $TABLE{RESOURCE_QUEUE} as edr
+    # 		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$ResourceEdit::RESOURCE_IDFIELD
+    # 	WHERE edr.eduresource_no in ($id_list)
+    # 	GROUP BY edr.eduresource_no";
+    
+    $request->debug_line("$request->{main_sql}\n") if $request->debug;
     
     my $results = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
     
@@ -319,6 +445,65 @@ sub delete_resources {
     
     $request->{main_result} = \@results;
     $request->{result_count} = scalar(@results);
+}
+
+
+
+sub revert_resources {
+
+    my ($request) = @_;
+
+    my $dbh = $request->get_connection;
+
+    # Get the identifier of the resource to revert from the URL paramters. This operation takes no
+    # body.
+    
+    my (@id_list) = $request->clean_param_list('eduresource_id');
+    
+    # Check for any allowances.
+
+    my $allowances;
+    
+    if ( my @allowances = $request->clean_param_list('allow') )
+    {
+	$allowances->{$_} = 1 foreach @allowances;
+    }
+    
+    # Determine our authentication info, and then create an EditTransaction object.
+    
+    my $perms = $request->require_authentication('RESOURCE_QUEUE');
+    
+    my $edt = ResourceEdit->new($request, $perms, 'RESOURCE_QUEUE', $allowances);
+
+    # Then go through the records and handle each one in turn.
+    
+    foreach my $id (@id_list)
+    {
+	my $revert = { eduresource_id => $id, status => 'revert' };
+	$edt->update_record('RESOURCE_QUEUE', $revert);
+    }
+    
+    # If no errors have been detected so far, execute the queued actions inside a database
+    # transaction. If any errors occur during that process, the transaction will be automatically
+    # rolled back. Otherwise, it will be automatically committed.
+    
+    $edt->execute;
+    
+    # Now handle any errors or warnings that may have been generated.
+    
+    $request->collect_edt_warnings($edt);
+    
+    if ( $edt->errors )
+    {
+    	$request->collect_edt_errors($edt);
+    	die $request->exception(400, "Bad request");
+    }
+    
+    # Then all reverted records.
+    
+    my ($id_string) = join(',', $edt->updated_keys);
+    
+    $request->list_updated_resources($dbh, $id_string, $edt->key_labels) if $id_string;
 }
 
 1;

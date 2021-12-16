@@ -1085,6 +1085,7 @@ use PB2::MainEntry;
     $ds2->define_node({ path => 'eduresources/single',
     			title => "Single educational resource",
     			place => 1,
+			usage => [ "eduresources/single.json?id=edr:1" ],
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
     			method => 'get_resource' },
@@ -1094,6 +1095,7 @@ use PB2::MainEntry;
     $ds2->define_node({ path => 'eduresources/list',
     			title => "List of educational resources",
     			place => 2,
+			usage => [ "eduresources/list.json" ],
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
     			method => 'list_resources' },
@@ -1103,6 +1105,7 @@ use PB2::MainEntry;
     $ds2->define_node({ path => 'eduresources/active',
     			title => "Active educational resources",
     			place => 3,
+			usage => [ "eduresources/active.json" ],
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
 			output_override => 'larkin',
@@ -1111,6 +1114,17 @@ use PB2::MainEntry;
     		        arg => 'active' },
     	"This operation returns a list of active educational resource records,",
 	"selected according to the query parameters.");
+    
+    $ds2->define_node({ path => 'eduresources/inactive',
+			title => "Inactive educational resources",
+			place => 3,
+			usage => [ "eduresources/inactive.json" ],
+			output => '1.2:eduresources:basic',
+			optional_output => '1.2:eduresources:optional_output',
+			method => 'list_resources',
+			arg => 'inactive' },
+	"This operation returns a list of inactive educational resource records,",
+		      "selected according to the query parameters.");
     
     # Functions that used to be carried out by the larkin data service and the archiver data
     # service.

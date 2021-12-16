@@ -538,6 +538,11 @@ sub exception {
 	{
 	    $message = 'Parameter error';
 	}
+
+	elsif ( $code eq '401' )
+	{
+	    $message = 'Permission denied';
+	}
 	
 	elsif ( $code eq '404' )
 	{

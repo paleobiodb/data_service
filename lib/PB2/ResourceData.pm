@@ -27,7 +27,7 @@ use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::Authentication);
 
-our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR, $RESOURCE_IMG_PATH);
+our ($RESOURCE_IMG_PATH);
 
 our (%TAG_VALUE, %TAG_NAME, %TAG_COUNT);
 
@@ -39,19 +39,18 @@ sub initialize {
     
     $ds->define_set('1.2:eduresources:status' =>
 	{ value => 'active' },
-	    "An active resource is one that is visible on the Resources page",
-	    "of this website.",
-	{ value => 'changes' },
-	    "A resource with this status is active, but changes have been made to the",
-	    "record in the queue table that have not been copied to the active table.",
-	    "The status of an active record is set to this value automatically if any",
-	    "changes are made to it.",
-	{ value => 'pending' },
-	    "A pending resource is one that is not currently active on the Resources page,",
-	    "and has not yet been reviewed for possible activation.",
+	    "An active resource is visible on the Resources page of this website.",
 	{ value => 'inactive' },
-	    "An inactive resource is one that has been reviewed, and the reviewer did",
-	    "not choose to activate it.",
+	    "An inactive resource is one that is available for future use, but not",
+	    "currently visible on the Resources page.",
+	{ value => 'pending' },
+	    "A pending resource is one that is newly submitted,",
+	    "and has not yet been reviewed.",
+	{ value => 'changed' },
+	    "A resource with this status has a version that is either active or inactive,",
+	    "and either the submitter or a reviewer has updated one or more of the fields.",
+	    "When these changes are approved, they will be applied to the active or inactive",
+	    "record.",
 	{ value => 'deleted' },
 	    "A resource that has just been deleted from the database is reported",
 	    "with this status code. Subsequent queries will return a Not Found error.");
@@ -118,6 +117,18 @@ sub initialize {
 	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
 	    "Return the educational resource record corresponding to the specified identifier");
     
+    $ds->define_ruleset('1.2:eduresources:single' =>
+	{ require => '1.2:eduresources:specifier' },
+	{ optional => 'active', valid => FLAG_VALUE },
+	    "If this parameter is included, then the version of the record in the active",
+	    "table is returned if one exists, and a 'not found' error otherwise. If this",
+	    "parameter is not included, or is included with the value C<B<no>>, then the",
+	    "queue version of the record is returned if one exists, and a 'not found' error",
+	    "otherwise.",
+	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
+    	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
     $ds->define_ruleset('1.2:eduresources:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "If this parameter is specified, then all records in the database",
@@ -140,24 +151,19 @@ sub initialize {
 	    "specify more than one, as a comma-separated list. Only records",
 	    "with all of the listed keywords will be returned.");
     
-    $ds->define_ruleset('1.2:eduresources:single' =>
-	{ require => '1.2:eduresources:specifier' },
-	{ optional => 'active', valid => FLAG_VALUE },
-	    "If this parameter is included, then the active version of the record is",
-	    "returned if one exists, and a 'not found' error otherwise. If this parameter",
-	    "is not included, or is included with the value C<B<no>>, then the master",
-	    "version of the record is returned (if one exists).",
-	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
-    	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request");
-    
     $ds->define_ruleset('1.2:eduresources:list' =>
-	{ require => '1.2:eduresources:selector' },
+	{ allow => '1.2:eduresources:selector' },
 	{ optional => 'active', valid => FLAG_VALUE },
-	    "If this parameter is included, then the active version of the record is",
-	    "returned if one exists, and a 'not found' error otherwise. If this parameter",
-	    "is not included, or is included with the value C<B<no>>, then the master",
-	    "version of the record is returned (if one exists).",
+	    "If this parameter is included, then the active record table is queried.",
+	    "All records with a status of 'active' are returned, unless the 'status'",
+	    "parameter is also given.",
+	    "If it is not included, or is included with the value C<B<no>>, then the",
+	    "queue table is queried. This will by default return all records regardless",
+	    "of status.",
+	{ optional => 'queue', valid => FLAG_VALUE },
+	    "If this parameter is included, then the queue table is queried and only",
+	    "records with a status of 'pending' or 'changed' are returned.",
+	{ at_most_one => [ 'active', 'queue' ] },
 	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -168,8 +174,12 @@ sub initialize {
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    $RESOURCE_IDFIELD = $ds->config_value('eduresources_idfield') || 'id';
-    $RESOURCE_IMG_DIR = $ds->config_value('eduresources_img_dir');
+    $ds->define_ruleset('1.2:eduresources:inactive' =>
+	{ allow => '1.2:eduresources:selector' },
+	{ optional => 'SPECIAL(show)', valid => '1.2:eduresources:optional_output' },
+    	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
     $RESOURCE_IMG_PATH = $ds->config_value('eduresources_img_path');
     
     die "You must provide a configuration value for 'eduresources_active' and 'eduresources_tags'"
@@ -185,30 +195,19 @@ sub get_resource {
     
     my ($request) = @_;
     
-    # Get a database handle by which we can make queries.
-    
-    my $dbh = $request->get_connection;
-    
-    # Make sure we have a valid id number.
+    # Make sure we have a valid id number, or throw an exception.
     
     my $id = $request->clean_param('eduresource_id');
     
-    die "400 Bad identifier '$id'\n" unless $id and $id =~ /^\d+$/;
+    die $request->exception("400", "Bad identifier '$id'") unless $id and $id =~ /^\d+$/;
     
-    # Determine if we are asked to show the active version of the resource record or the master
-    # version.
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. Also check whether we should generate external identifiers.
     
-    my $active = $request->clean_param('active');
-    
-    # If the user is not logged in, only show information about the active version.
-    
-    unless ( $active )
-    {
-	my $perms = $request->authenticate;
-	$active = 1 unless $perms->role ne 'none';
-    }
-    
-    # Delete unnecessary output fields, and select the enterer id if appropriate.
+    $request->strict_check;
+    $request->extid_check;
+
+    # Delete unnecessary output fields, and process the enterer_id if necessary.
     
     $request->delete_output_field('_label');
     
@@ -217,119 +216,261 @@ sub get_resource {
 	$request->add_output_blocks('main', '1.2:common:ent_guest');
     }
     
-    # Determine which fields and tables are needed to display the requested
-    # information.
+    # Select the proper tables from which to draw the resource records.
+
+    my $RESOURCE_TABLE = $TABLE{RESOURCE_QUEUE};
+    my $IMAGE_TABLE = $TABLE{RESOURCE_IMAGES};
     
-    $request->substitute_select( cd => 'edr' );
-    # $request->check_entname($TABLE{RESOURCE_QUEUE} => 'edr');
+    # If the parameter 'active' was given, use the active tables.
     
-    my $tables = $request->tables_hash;
+    if ( $request->clean_param('active') )
+    {
+	$RESOURCE_TABLE = $TABLE{RESOURCE_ACTIVE};
+	$IMAGE_TABLE = $TABLE{RESOURCE_IMAGES_ACTIVE};
+    }
     
-    # If the 'strict' parameter was given, make sure we haven't generated any
-    # warnings. Also check whether we should generate external identifiers.
+    # Otherwise, the user must be logged in and must have permission to view the record.
     
-    $request->strict_check;
-    $request->extid_check;
+    else
+    {
+	my $perms = $request->require_authentication('RESOURCE_QUEUE', "Login Required");
+	
+	unless ( $perms->check_record_permission('RESOURCE_QUEUE', 'view',
+						 'eduresource_no', $id) eq 'view' )
+	{
+	    die $request->exception('401', 'Permission denied');
+	}
+    }
     
-    # Determine the necessary joins.
+    # Get a database handle by which we can make queries.
     
-    my ($join_list) = $request->generate_join_list($request->tables_hash, $active);
+    my $dbh = $request->get_connection;
+    
+    # Make sure we have correct tag information.
+    
+    $request->cache_tag_values($dbh);
+    
+    # Determine the necessary extra fields.
     
     my $extra_fields = $request->select_string;
     $extra_fields = ", $extra_fields" if $extra_fields;
     
     # Generate the main query.
     
-    if ( $active )
-    {
-	$request->{main_sql} = "
-	SELECT edr.*, group_concat(tg.tag_id) as tags $extra_fields FROM $TABLE{RESOURCE_ACTIVE} as edr
-		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
-		$join_list
-        WHERE edr.$RESOURCE_IDFIELD = $id
-	GROUP BY edr.$RESOURCE_IDFIELD";
-    }
+    $request->{main_sql} = "
+	SELECT edr.*, edi.eduresource_no as has_image $extra_fields
+	FROM $RESOURCE_TABLE as edr left join $IMAGE_TABLE as edi using (eduresource_no)
+        WHERE edr.eduresource_no = $id";
     
-    else
-    {
-	$request->{main_sql} = "
-	SELECT edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
-	FROM $TABLE{RESOURCE_QUEUE} as edr
-		left join $TABLE{RESOURCE_IMAGES} as edi using (eduresource_no)
-		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
-		$join_list
-        WHERE edr.eduresource_no = $id
-	GROUP BY edr.eduresource_no";
-    }
-    
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    $request->debug_line("$request->{main_sql}\n") if $request->debug;
     
     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
     
     # Return an error response if we couldn't retrieve the record.
     
-    die "404 Not found\n" unless $request->{main_record};
+    die $request->exception('404') unless $request->{main_record};
     
     return 1;
 }
+
+
+# sub get_active {
+    
+#     my ($request, $id) = @_;
+    
+#     my $dbh = $request->get_connection;
+    
+#     # Make sure we have correct tag information.
+    
+#     $request->cache_tag_values($dbh);
+    
+#     # Determine the necessary extra fields.
+    
+#     my $extra_fields = $request->select_string;
+#     $extra_fields = ", $extra_fields" if $extra_fields;
+    
+#     # Generate the main query.
+    
+#     $request->{main_sql} = "
+# 	SELECT edr.*, edi.eduresource_no as has_image $extra_fields
+# 	FROM $TABLE{RESOURCE_ACTIVE} as edr
+# 		left join $TABLE{RESOURCE_IMAGES_ACTIVE} as edi using (eduresource_no)
+#         WHERE edr.eduresource_no = $id and edr.status = 'active'";
+    
+#     $request->debug_line("$request->{main_sql}\n") if $request->debug;
+    
+#     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+    
+#     # Return an error response if we couldn't retrieve the record.
+    
+#     die $request->exception('404') unless $request->{main_record};
+    
+#     return 1;
+# }
 
 
 sub list_resources {
     
     my ($request, $arg) = @_;
     
+    my ($active_table, $show_queue, $perms);
+    
+    $arg ||= '';
+    
+    # If the request is for active resources, no authentication is required.
+    
+    if ( $arg eq 'active' || $request->clean_param('active') )
+    {
+	$active_table = 1;
+	
+	# If the requested output format is 'larkin', we can execute a much simpler query.
+	
+	if ( $request->output_format eq 'larkin' )
+	{
+	    return $request->larkin_resources();
+	}
+    }
+
+    elsif ( $arg eq 'inactive' )
+    {
+	$active_table = 1;
+    }
+    
+    # Otherwise, the user must be logged in. If the parameter 'queue' is included in the
+    # request, note that for use below.
+    
+    else
+    {
+	$perms = $request->require_authentication('RESOURCE_QUEUE');
+
+	$show_queue = $request->clean_param('queue');
+    }
+    
     # Get a database handle by which we can make queries.
     
     my $dbh = $request->get_connection;
     
-    my $active; $active = 1 if ($arg && $arg eq 'active') || $request->clean_param('active');
+    # Make sure we have good tag values.
     
-    # If this is a larkin request, then call the appropriate method.
-
-    if ( $active && $request->output_format eq 'larkin' )
-    {
-	return $request->larkin_resources($dbh);
-    }
-    
-    # If the user is not logged in, only show information about active resources. If we are asked
-    # for anything but active resources, return a 401 error.
-    
-    my $perms;
-    
-    unless ( $active )
-    {
-	$perms = $request->require_authentication('RESOURCE_QUEUE', "Login Required");
-    }
+    $request->cache_tag_values();
     
     # Generate a list of filter expressions.
-    
-    my $tables = $request->tables_hash;
     
     my @filters;
     
     if ( my @id_list = $request->safe_param_list('eduresource_id') )
     {
-	my $primary_key = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
 	my $id_string = join(',', @id_list);
-	push @filters, "edr.$primary_key in ($id_string)";
+	push @filters, "edr.eduresource_no in ($id_string)";
     }
     
     if ( my @status_list = $request->safe_param_list('status', 'SELECT_NONE') )
     {
 	my $status_string = join("','", @status_list);
-	my $status_table = $active ? 'edq' : 'edr';
-	push @filters, "$status_table.status in ('$status_string')";
+	push @filters, "edr.status in ('$status_string')";
     }
 
-    # If we have 'post' but not 'view' permission on the table, then implicitly select only those
-    # records entered by the user.
+    elsif ( $active_table && $arg eq 'inactive' )
+    {
+	push @filters, "edr.status = 'inactive'";
+    }
+    
+    elsif ( $active_table )
+    {
+	push @filters, "edr.status = 'active'";
+    }
+
+    elsif ( $show_queue )
+    {
+	push @filters, "edr.status in ('pending','changed')";
+    }
+    
+    if ( my $title = $request->clean_param('title') )
+    {
+	my $quoted = $dbh->quote("${title}");
+	push @filters, "edr.title like $quoted";
+    }
+    
+    if ( my @tags = $request->clean_param_list('tag') )
+    {
+	my @tag_ids;
+	
+	foreach my $t ( @tags )
+	{
+	    if ( $t =~ /^\d+$/ )
+	    {
+		push @tag_ids, "\\\\b$t\\\\b";
+	    }
+	    
+	    elsif ( $TAG_VALUE{lc $t} )
+	    {
+		push @tag_ids, "\\\\b$TAG_VALUE{lc $t}\\\\b";
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("unknown resource tag '$t'");
+	    }
+	}
+	
+	my $regexp = join('|', @tag_ids) || 'SELECT_NOTHING';
+	
+	push @filters, "edr.tags rlike '$regexp'";
+    }
+    
+    if ( my @keywords = $request->clean_param_list('keyword') )
+    {
+	my (@kwfilters, @matches);
+	
+	foreach my $k (@keywords)
+	{
+	    if ( $k )
+	    {
+		push @matches, "\\\\b$k\\\\b";
+	    }
+	}
+	
+	if ( @matches )
+	{
+	    my $regexp = join('|', @matches);
+	    push @kwfilters, "edr.title rlike '$regexp'";
+	    push @kwfilters, "edr.description rlike '$regexp'";
+	    push @kwfilters, "edr.topics rlike '$regexp'";
+	}
+
+	else
+	{
+	    push @kwfilters, "edr.title = 'SELECT_NOTHING'";
+	}
+	
+	# {	    
+	#     push @kwfilters, "edr.title rlike '\\\\b$k\\\\b'";
+	#     push @kwfilters, "edr.description rlike '\\\\b$k\\\\b'";
+	# }
+	
+	# push @kwfilters, "edr.title = 'SELECT_NOTHING'" unless @kwfilters;
+
+	push @filters, '(' . join(' or ', @kwfilters) . ')';
+    }
     
     my $enterer = $request->clean_param('enterer');
-    $enterer = 'me' if $perms && $perms->check_table_permission($TABLE{RESOURCE_QUEUE}, 'view') eq 'own';
+    
+    # If we are returning queue records instead of active ones, and if the user has 'post' but
+    # not 'view' permission on the table, then implicitly select only those records entered by the
+    # user.
+    
+    if ( $perms && $perms->check_table_permission('RESOURCE_QUEUE', 'view') eq 'own' )
+    {
+	die $request->exception('401', 'Permission denied') if $enterer &&
+	    $enterer ne 'me' && $enterer ne 'auth';
+	$enterer ||= 'me';
+    }
+    
+    # If we have an enterer filter, apply it.
     
     if ( $enterer )
     {
-	$perms ||= $request->authenticate($TABLE{RESOURCE_QUEUE});
+	$perms ||= $request->authenticate('RESOURCE_QUEUE');
 	
 	if ( $enterer eq 'me' )
 	{
@@ -340,10 +481,9 @@ sub list_resources {
 	    
 	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
 	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
-	    push @clauses, "edr.enterer_no = -1" unless @clauses;
 	    
-	    my $filter_str = join(' or ', @clauses);
-	    push @filters, $filter_str;
+	    my $filter_str = join(' or ', @clauses) || "edr.enterer_no = -1";
+	    push @filters, "($filter_str)";
 	}
 	
 	elsif ( $enterer eq 'auth' )
@@ -356,10 +496,9 @@ sub list_resources {
 	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
 	    push @clauses, "edr.authorizer_no = $enterer_no" if $enterer_no;
 	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
-	    push @clauses, "edr.enterer_no = -1" unless @clauses;
 	    
-	    my $filter_str = join(' or ', @clauses);
-	    push @filters, $filter_str;
+	    my $filter_str = join(' or ', @clauses) || "edr.enterer_no = -1";
+	    push @filters, "($filter_str)";
 	}
 	
 	else
@@ -368,87 +507,44 @@ sub list_resources {
 	}
     }
     
-    # Check for other filter parameters.
-    
-    if ( my $title = $request->clean_param('title') )
-    {
-	my $quoted = $dbh->quote("${title}");
-	push @filters, "edr.title like $quoted";
-    }
-    
-    if ( my @tags = $request->clean_param_list('tag') )
-    {
-	$request->cache_tag_values();
-	my @tag_ids;
-	
-	foreach my $t ( @tags )
-	{
-	    if ( $t =~ /^\d+$/ )
-	    {
-		push @tag_ids, $t;
-	    }
-	    
-	    elsif ( $TAG_VALUE{lc $t} )
-	    {
-		push @tag_ids, $TAG_VALUE{lc $t};
-	    }
-	    
-	    else
-	    {
-		$request->add_warning("unknown resource tag '$t'");
-	    }
-	}
-	
-	my $id_string = join(',', @tag_ids) || '-1';
-	
-	push @filters, "edt.tag_id in ($id_string)";
-	$tables->{edt} = 1;
-    }
-    
-    if ( my @keywords = $request->clean_param_list('keyword') )
-    {
-	my @kwfilters;
-	
-	foreach my $k (@keywords)
-	{
-	    push @kwfilters, "edr.title rlike '\\\\b$k\\\\b'";
-	    push @kwfilters, "edr.description rlike '\\\\b$k\\\\b'";
-	}
-	
-	push @kwfilters, "edr.title = 'SELECT_NOTHING'" unless @kwfilters;
-
-	push @filters, '(' . join(' or ', @kwfilters) . ')';
-    }
-    
     # Make sure that we have either one filter expression or 'all_records' was selected or else
     # that we are listing active resources.
     
-    unless ( @filters || $request->clean_param('all_records') || ($arg && $arg eq 'active') )
+    unless ( @filters || $request->clean_param('all_records') )
     {
 	die $request->exception(400, "Bad request");
     }
     
-    push @filters, "1=1" unless @filters;
-    
     # Delete unnecessary output fields, and select the enterer id if appropriate.
     
     $request->delete_output_field('_label');
-
+    
     if ( $request->has_block('1.2:common:ent') || $request->has_block('1.2:common:entname') )
     {
 	$request->add_output_blocks('main', '1.2:common:ent_guest');
     }
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    $request->substitute_select( mt => 'edr', cd => 'edr' );
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. Also check whether we should generate external identifiers.
     
     $request->strict_check;
     $request->extid_check;
+    
+    # Make sure we are querying the right tables.
+
+    my ($RESOURCE_TABLE, $IMAGE_TABLE);
+
+    if ( $active_table )
+    {
+	$RESOURCE_TABLE = $TABLE{RESOURCE_ACTIVE};
+	$IMAGE_TABLE = $TABLE{RESOURCE_IMAGES_ACTIVE};
+    }
+
+    else
+    {
+	$RESOURCE_TABLE = $TABLE{RESOURCE_QUEUE};
+	$IMAGE_TABLE = $TABLE{RESOURCE_IMAGES};
+    }
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -458,51 +554,21 @@ sub list_resources {
     
     my $calc = $request->sql_count_clause;
     
-    # Determine the necessary joins.
-    
-    my ($join_list) = $request->generate_join_list($tables, $active);
-    
-    my $filter_string = join( q{ and }, @filters );
+    my $filter_string = join(' and ', @filters) || '1=1';
     
     my $extra_fields = $request->select_string;
     $extra_fields = ", $extra_fields" if $extra_fields;
-
-    # Remove fields that don't exist in the active table, if we are doing an active-table query.
-
-    if ( $active && $extra_fields )
-    {
-	$extra_fields =~ s/, *edr.(?:modifier_no|enterer_no)//g;
-    }
     
     # Generate the main query.
     
-    if ( $active )
-    {
-	$request->{main_sql} = "
-	SELECT $calc edr.*, group_concat(tg.tag_id) as tags $extra_fields
-	FROM $TABLE{RESOURCE_ACTIVE} as edr
-		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.$RESOURCE_IDFIELD
-		left join $TABLE{RESOURCE_QUEUE} as edq on edr.$RESOURCE_IDFIELD = edq.eduresource_no
-		$join_list
-        WHERE $filter_string
-	GROUP BY edr.$RESOURCE_IDFIELD $limit";
-    }
+    $request->{main_sql} = "
+	SELECT $calc edr.*, edi.eduresource_no as has_image $extra_fields
+	FROM $RESOURCE_TABLE as edr left join $IMAGE_TABLE as edi using (eduresource_no)
+        WHERE $filter_string $limit";
     
-    else
-    {
-	$request->{main_sql} = "
-	SELECT $calc edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
-	FROM $TABLE{RESOURCE_QUEUE} as edr
-		left join $TABLE{RESOURCE_IMAGES} as edi using (eduresource_no)
-		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
-		$join_list
-        WHERE $filter_string
-	GROUP BY edr.eduresource_no";
-    }
+    $request->debug_line("$request->{main_sql}\n") if $request->debug;
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
-    
-    # Then prepare and execute the main query and the secondary query.
+    # Then prepare and execute the query.
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
@@ -513,48 +579,42 @@ sub list_resources {
 }
 
 
-sub generate_join_list {
+# sub generate_join_list {
     
-    my ($request, $tables_ref, $active) = @_;
+#     my ($request, $tables_ref, $active) = @_;
     
-    my $joins = '';
-    my $idfield = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
+#     my $joins = '';
+#     my $idfield = $active ? $RESOURCE_IDFIELD : 'eduresource_no';
     
-    if ( $tables_ref->{edi} && $active )
-    {
-	$joins .= "left join $TABLE{RESOURCE_IMAGES} as edi on edi.eduresource_no = edr.$idfield\n";
-    }
+#     if ( $tables_ref->{edi} && $active )
+#     {
+# 	$joins .= "left join $TABLE{RESOURCE_IMAGES} as edi on edi.eduresource_no = edr.$idfield\n";
+#     }
     
-    if ( $tables_ref->{edt} )
-    {
-	$joins .= "left join $TABLE{RESOURCE_TAGS} as edt on edt.resource_id = edr.$idfield\n";
-    }
+#     if ( $tables_ref->{edt} )
+#     {
+# 	$joins .= "left join $TABLE{RESOURCE_TAGS} as edt on edt.resource_id = edr.$idfield\n";
+#     }
     
-    return $joins;
-}
+#     return $joins;
+# }
 
 
 sub larkin_resources {
     
-    my ($request, $dbh) = @_;
+    my ($request) = @_;
     
-    $dbh ||= $request->get_connection();
+    my $dbh = $request->get_connection();
     
     $request->add_output_blocks('main', '1.2:eduresources:larkin');
     
-    my $filter_string = "1=1";
-    my $limit = "";
+    my $limit = $request->sql_limit_clause(1);
     
     $request->{main_sql} = "
-    	SELECT edr.*, group_concat(tg.tag_id) as tags
-	FROM $TABLE{RESOURCE_ACTIVE} as edr
-		left join $TABLE{RESOURCE_TAGS} as tg on tg.resource_id = edr.id
-        WHERE $filter_string
-	GROUP BY edr.id $limit";
+    	SELECT * FROM $TABLE{RESOURCE_ACTIVE} $limit
+	WHERE status = 'active'";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
-    
-    # Then prepare and execute the main query.
+    $request->debug_line("$request->{main_sql}\n") if $request->debug;
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
