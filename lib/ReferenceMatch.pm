@@ -10,7 +10,9 @@ package ReferenceMatch;
 use strict;
 
 use feature 'unicode_strings';
+use feature 'fc';
 
+use Unicode::Normalize;
 use Unicode::Collate;
 use Algorithm::Diff qw(sdiff);
 use Text::Levenshtein::Damerau qw(edistance);
@@ -245,115 +247,183 @@ sub ref_similarity {
     # Now we consider some special cases.
     # -----------------------------------
     
-    # If the publication year is similar and at least one of
-    # title and publication is similar and at least one of volume and pages is similar, the author
-    # similarity may need to be overridden. We also require that at least one of these scores be a
-    # perfect 100.
+    # If the publication year is similar and at least one of title and publication is similar and
+    # at least one of volume and pages is similar, but either the first or the second authors are
+    # dissimilar, we may need to revise the author similarity scores. To be on the safe side, we
+    # require that at least one of the other similarity scores be a perfect 100. That is a good
+    # indication that the two works are actually the same.
     
-    if ( $pubyr_similar && ( $title_similar || $pub_similar ) &&
+    if ( $pubyr_similar && ( $title_similar >= 80 || $pub_similar >= 80 ) &&
 	 ( $vol_similar == 100 || $pages_similar ) &&
          ( $pubyr_similar == 100 || $title_similar == 100 || $pages_similar == 100 ) )
     {
-	# If there are at least two authors but the first and second authors don't match, we check
-	# to see if the first and second authors match each other in the opposite order. If so, we
-	# assume this was a data entry mistake and set the author similarity scores to reflect the
-	# cross match. In almost all such cases, both records actually represent the same work. We
-	# might occasionally get false positives if these two authors published more than one work
-	# together, but hopefully the additional similarity requirements in the clause above will
-	# filter those out.
+	# If there are at least two authors and the first authors are not at least 60% similar,
+	# see if each first author matches some other author in the other list. If so, set the
+	# first author similarity to the average of the two similarity scores, with a maximum of
+	# 80 points because they are in the wrong place. Set the first author conflict to the
+	# maximum of the two conflict scores.
 	
-	if ( $auth2last_a && $auth2last_b && ! $auth1_similar && ! $auth2_similar )
+	my (@authors_a, @authors_b);
+	
+	if ( $auth2last_a && $auth2last_b && $auth1_similar < 60 )
 	{
-	    my ($a1b2_similar, $a1b2_conflict) =
-		author_similarity($auth1last_a, $auth1first_a, $auth2last_b, $auth2first_b);
+	    @authors_a = get_authorlist($r);
+	    @authors_b = get_authorlist($m);
 	    
-	    if ( $a1b2_similar )
+	    # There is no need to match against the first authors, because we already know they are
+	    # dissimilar.
+	    
+	    my ($alt_similar_a, $alt_conflict_a) =
+		match_names($auth1last_a, $auth1first_a, @authors_b[1..$#authors_b]);
+	    
+	    my ($alt_similar_b, $alt_conflict_b) =
+		match_names($auth1last_b, $auth1first_b, @authors_a[1..$#authors_a]);
+	    
+	    my $avg_sim = int(($alt_similar_a + $alt_similar_b) / 2);
+	    my $avg_con = int(($alt_conflict_a + $alt_conflict_b) / 2);
+	    
+	    if ( $avg_sim > $auth1_similar )
 	    {
-		my ($a2b1_similar, $a2b1_conflict) =
-		    author_similarity($auth2last_a, $auth2first_a, $auth1last_b, $auth1first_b);
-		
-		if ( $a2b1_similar )
-		{
-		    if ( $a1b2_similar >= $a2b1_similar )
-		    {
-			$auth1_similar = $a1b2_similar;
-			$auth2_similar = $a2b1_similar;
-		    }
-
-		    else
-		    {
-			$auth1_similar = $a2b1_similar;
-			$auth2_similar = $a1b2_similar;
-		    }
-		    
-		    $auth1_conflict = 100 - $auth1_similar;
-		    $auth2_conflict = 100 - $auth2_similar;
-		}
+		$auth1_similar = min_score(80, $avg_sim);
+		$auth1_conflict = min_score(100 - $auth1_similar, $avg_con);
 	    }
 	}
 	
-	# If the first authors are similar but the second are not, check to see if each of the
-	# second authors appears elsewhere in the other record's author list. If this is true for
-	# both second authors, and if both records have the same number of authors, and given that
-	# the similarities checked above also hold, we assume that one of the author lists was
-	# entered incorrectly and that the two records do in fact refer to the same work.
-
-	elsif ( $auth2last_a && $auth2last_b && $auth1_similar && ! $auth2_similar )
+	# If there are at least two authors and the second authors are not at least 60% similar,
+	# do the same for them.
+	
+	if ( $auth2last_a && $auth2last_b && $auth2_similar < 60 )
 	{
-	    my @authorlist_a = get_authorlist($r, 3);
-	    my @authorlist_b = get_authorlist($m, 3);
-
-	    my $found_a = 0;
-	    my $found_b = 0;
-
-	    # Search for author2_a in the authorlist of record b, starting at place 3. Stop if we
-	    # find a name with a similarity score above 90, and otherwise store the maximum
-	    # similarity score we find.
+	    # If we have already computed the author lists, there is no need to do so again.
 	    
-	    foreach my $entry ( @authorlist_b )
-	    {
-		if ( my ($similarity) = author_similarity($auth2last_a, $auth2first_a,
-							$entry->[0], $entry->[1]) )
-		{
-		    $found_a = $similarity if $similarity > $found_a;
-		    last if $found_a > 90;
-		}
-	    }
+	    @authors_a = get_authorlist($r) unless @authors_a;
+	    @authors_b = get_authorlist($m) unless @authors_b;
 	    
-	    # Search for author2_b in the authorlist of record a, starting at place 3. Stop if we
-	    # find a name with a similarity score above 90, and otherwise store the maximum
-	    # similarity score we find.
+	    # There is no need to match against the second authors, because we already know they
+	    # are dissimilar.
 	    
-	    foreach my $entry ( @authorlist_a )
-	    {
-		if ( my ($similarity) = author_similarity($auth2last_b, $auth2first_b,
-							$entry->[0], $entry->[1]) )
-		{
-		    $found_b = $similarity if $similarity > $found_b;
-		    last if $found_b > 90;
-		}
-	    }
+	    my ($alt_similar_a, $alt_conflict_a) =
+		match_names($auth2last_a, $auth2first_a, @authors_b[0], @authors_b[2..$#authors_b]);
 	    
-	    # Set the author2 similarity score to the average of the two search results, and the
-	    # conflict to the complement of that.
+	    my ($alt_similar_b, $alt_conflict_b) =
+		match_names($auth2last_b, $auth2first_b, @authors_a[0], @authors_a[2..$#authors_a]);
 	    
-	    $auth2_similar = int(($found_a + $found_b)/2);
-	    $auth2_conflict = 100 - $auth2_similar;
+	    my $avg_sim = int(($alt_similar_a + $alt_similar_b) / 2);
+	    my $avg_con = int(($alt_conflict_a + $alt_conflict_b) / 2);
+	    
+	    $auth2_similar = min_score(80, $avg_sim);
+	    $auth2_conflict = min_score(100 - $auth1_similar, $avg_con); 
+	    
+	    # if ( $alt_similar_a - 20 > $auth1_similar && $alt_similar_b - 20 > $auth1_similar )
+	    # {
+	    # 	$auth2_similar = min_score($alt_similar_a - 20, $alt_similar_b - 20);
+	    # 	$auth2_conflict = max_score($alt_conflict_a, $alt_conflict_b);
+	    # }
 	}
 	
 	# If the first authors are similar but one record has two or more authors while the other
 	# lists only one author, it is quite possible that one of the two records was incorrectly
 	# entered. Unfortunately, there are many records in both the Paleobiology Database and
 	# Crossref in which only the first author is listed and subsequent authors are left
-	# out. In this situation, given that the similarities checked above also hold, we assume
-	# that the second and subsequent authors were simply left out of the other record.
+	# out. In this situation, given that the similarities checked above also hold, assume that
+	# the second and subsequent authors were probably left out of the other record.  Give the
+	# second authors a similarity of 70, to reflect that likelihood.
 	
-	elsif ( $auth1_similar && ( $auth2last_a && ! $auth2last_b ||
-				    $auth2last_b && ! $auth2last_a ) )
+	if ( $auth1_similar && ( $auth2last_a && ! $auth2last_b ||
+				 $auth2last_b && ! $auth2last_a ) )
 	{
-	    $auth2_similar = 100;
+	    $auth2_similar = 70;
 	    $auth2_conflict = 0;
 	}
+	
+	# # If there are at least two authors but the first and/or second authors don't match, we check
+	# # to see if the first and second authors match each other in the opposite order. If so, we
+	# # assume this was a data entry mistake and set the author similarity scores to reflect the
+	# # cross match. In almost all such cases, both records actually represent the same work. We
+	# # might occasionally get false positives if these two authors published more than one work
+	# # together, but hopefully the additional similarity requirements in the clause above will
+	# # filter those out.
+	
+	# if ( $auth2last_a && $auth2last_b && ! $auth1_similar && ! $auth2_similar )
+	# {
+	#     my ($a1b2_similar, $a1b2_conflict) =
+	# 	author_similarity($auth1last_a, $auth1first_a, $auth2last_b, $auth2first_b);
+	    
+	#     if ( $a1b2_similar && $a2b1_similar )
+	#     {
+	# 	my ($a2b1_similar, $a2b1_conflict) =
+	# 	    author_similarity($auth2last_a, $auth2first_a, $auth1last_b, $auth1first_b);
+		
+	# 	if ( $a2b1_similar >= 80 )
+	# 	{
+	# 	    if ( $a1b2_similar >= $a2b1_similar )
+	# 	    {
+	# 		$auth1_similar = $a1b2_similar;
+	# 		$auth1_conflict = $a1b2_conflict;
+	# 		$auth2_similar = $a2b1_similar;
+	# 		$auth2_similar = $a2b1_conflict;
+	# 	    }
+
+	# 	    else
+	# 	    {
+	# 		$auth1_similar = $a2b1_similar;
+	# 		$auth1_conflict = $a2b1_conflict;
+	# 		$auth2_similar = $a1b2_similar;
+	# 		$auth2_conflict = $a1b2_conflict;
+	# 	    }
+	# 	}
+	#     }
+	# }
+	
+	# # If the first authors are similar but the second are not, check to see if each of the
+	# # second authors appears elsewhere in the other record's author list. If this is true for
+	# # both second authors, and if both records have the same number of authors, and given that
+	# # the similarities checked above also hold, we assume that one of the author lists was
+	# # entered incorrectly and that the two records do in fact refer to the same work.
+
+	# elsif ( $auth2last_a && $auth2last_b && $auth1_similar && ! $auth2_similar )
+	# {
+	#     my @authorlist_a = get_authorlist($r, 3);
+	#     my @authorlist_b = get_authorlist($m, 3);
+
+	#     my $found_a = 0;
+	#     my $found_b = 0;
+
+	#     # Search for author2_a in the authorlist of record b, starting at place 3. Stop if we
+	#     # find a name with a similarity score above 90, and otherwise store the maximum
+	#     # similarity score we find.
+	    
+	#     foreach my $entry ( @authorlist_b )
+	#     {
+	# 	if ( my ($similarity) = author_similarity($auth2last_a, $auth2first_a,
+	# 						$entry->[0], $entry->[1]) )
+	# 	{
+	# 	    $found_a = $similarity if $similarity > $found_a;
+	# 	    last if $found_a > 90;
+	# 	}
+	#     }
+	    
+	#     # Search for author2_b in the authorlist of record a, starting at place 3. Stop if we
+	#     # find a name with a similarity score above 90, and otherwise store the maximum
+	#     # similarity score we find.
+	    
+	#     foreach my $entry ( @authorlist_a )
+	#     {
+	# 	if ( my ($similarity) = author_similarity($auth2last_b, $auth2first_b,
+	# 						$entry->[0], $entry->[1]) )
+	# 	{
+	# 	    $found_b = $similarity if $similarity > $found_b;
+	# 	    last if $found_b > 90;
+	# 	}
+	#     }
+	    
+	#     # Set the author2 similarity score to the average of the two search results, and the
+	#     # conflict to the complement of that.
+	    
+	#     $auth2_similar = int(($found_a + $found_b)/2);
+	#     $auth2_conflict = 100 - $auth2_similar;
+	# }
+	
     }
     
     # Compute the second-level score variables 'complete', 'count', and 'sum'.
@@ -619,21 +689,29 @@ sub get_authorname {
     {
 	if ( $index == 1 )
 	{
-	    return (clean_string($r->{author1last} || ''), clean_string($r->{author1init} || ''));
+	    return (clean_string($r->{author1last}), clean_string($r->{author1init}));
 	}
 	
 	elsif ( $index == 2 )
 	{
-	    return (clean_string($r->{author2last} || ''), clean_string($r->{author2init} || ''));
+	    return (clean_string($r->{author2last}), clean_string($r->{author2init}));
 	}
 	
 	elsif ( $r->{otherauthors} )
 	{
-	    my @names = clean_string(split_authorlist($r->{otherauthors}));
-
+	    my @names = split_authorlist(clean_string($r->{otherauthors}));
+	    
 	    if ( $index - 3 < @names )
 	    {
 		$selected = $names[$index - 3];
+
+		# There are a few paleobiodb entries that mistakenly have / instead of . after the
+		# initial. Fix them now.
+		
+		if ( $selected =~ qr{/} )
+		{
+		    $selected =~ s{ ( ^ \pL\pM* | \s \pL\pM* ) [/] }{\1.}gx;
+		}
 	    }
 	}
     }
@@ -641,7 +719,7 @@ sub get_authorname {
     # Otherwise, the authors will be listed under 'author'. Both BibJSON and Crossref use this
     # fieldname. If it is an array, select the specified element.
     
-    if ( $r->{author} && ref $r->{author} eq 'ARRAY' )
+    elsif ( $r->{author} && ref $r->{author} eq 'ARRAY' )
     {
 	# Some Crossref entries list author affiliations incorrectly by interleaving them with the
 	# author entries. In order to check for this, if the entries are hashrefs we look for a
@@ -666,8 +744,17 @@ sub get_authorname {
 	{
 	    next if $family_field && ! $entry->{$family_field};
 	    next if ++$count < $index;
+
+	    if ( ref $entry )
+	    {
+		$selected = $entry;
+	    }
+
+	    else
+	    {
+		$selected = clean_string($entry);
+	    }
 	    
-	    $selected = $entry;
 	    last;
 	}
     }
@@ -677,16 +764,23 @@ sub get_authorname {
     
     elsif ( $r->{author} && ! ref $r->{author} )
     {
-	my @names = split_authorlist($r->{author});
+	my @names = split_authorlist(clean_string($r->{author}));
 	
 	$selected = $names[$index];
     }
 
-    # If we have selected a name, return its last and first components.
-
-    if ( $selected )
+    # If we have selected a hashref, extract the first and last components and clean them.
+    
+    if ( ref $selected )
     {
 	return clean_string(parse_authorname($selected));
+    }
+
+    # If we have selected a string, it has already been cleaned.
+
+    elsif ( $selected )
+    {
+	return parse_authorname($selected);
     }
     
     # Otherwise, return empty strings.
@@ -704,6 +798,10 @@ sub get_authorname {
 # [last, first] or [last, first, affiliation]. The result starts at position $index in the author
 # list, defaulting to 1. Each returned element will have a nonempty value for the last name.  If
 # no authors are found, the result will be empty.
+
+our($CONTAINS_INITIALS) = qr{ \b \pL\pM*[.] | ^ \pL\pM* \s | \s \pL\pM* $ }xs;
+
+our($NAME_SUFFIX) = qr{ ^ (?:jr|ii|iii|iv|2nd|3rd|4th) [.] $ }xsi;
 
 sub get_authorlist {
     
@@ -724,37 +822,56 @@ sub get_authorlist {
 	
 	if ( $index == 1 )
 	{
-	    push @result, [ $r->{author1last}, ($r->{author1init} || '') ];
+	    push @result, [ clean_string($r->{author1last}),
+			    clean_string($r->{author1init}) ];
 	}
 	
 	# If $index is 1 or 2, look at the author2 fields. If author2last is empty,
-	# assume there is only one author.
+	# skip it.
 	
-	if ( $index <= 2 )
+	if ( $index <= 2 && $r->{author2last} )
 	{
-	    return @result unless $r->{author2last};
-	    push @result, [ $r->{author2last}, ($r->{author2init} || '') ];
+	    push @result, [ clean_string($r->{author2last}),
+			    clean_string($r->{author2init}) ];
+	}
+
+	elsif ( ! $r->{author2last} )
+	{
+	    $index--;
 	}
 	
 	# Then split up otherauthors. If $index is greater than 3, skip some of the resulting
 	# entries.
-	
-	my @othernames = split_authorlist($r->{otherauthors});
-	
-	if ( $index > 3 )
-	{
-	    splice(@othernames, 0, $index - 3);
-	}
-	
-	# Parse each entry and add a listref of name components to the result list.
-	
-	foreach my $name ( @othernames )
-	{
-	    my @components = parse_authorname($name);
 
-	    if ( $components[0] )
+	if ( $r->{otherauthors} )
+	{
+	    my $otherlist = clean_string($r->{otherauthors});
+	    
+	    # There are a few paleobiodb entries that mistakenly have / instead of . after the
+	    # initial. So substitute the latter for the former.
+	    
+	    if ( $otherlist =~ qr{/} )
 	    {
-		push @result, \@components;
+		$otherlist =~ s{ ( ^ \pL\pM* | \s \pL\pM* ) [/] }{\1.}gx;
+	    }
+	    
+	    my @othernames = split_authorlist($otherlist);
+	    
+	    if ( $index > 3 )
+	    {
+		splice(@othernames, 0, $index - 3);
+	    }
+	    
+	    # Parse each entry and add a listref of name components to the result list.
+	    
+	    foreach my $name ( @othernames )
+	    {
+		my @components = parse_authorname($name);
+		
+		if ( $components[0] )
+		{
+		    push @result, \@components;
+		}
 	    }
 	}
     }
@@ -809,11 +926,22 @@ sub get_authorlist {
 	    
 	    elsif ( ++$count >= $index )
 	    {
-		my @components = parse_authorname($entry);
+		# If the entry is a hashref or an array, parse it and then clean the individual
+		# components. If we get a list with a non-empty first component (last name) then
+		# add it to the results.
 		
-		if ( $components[0] )
+		if ( ref $entry )
 		{
-		    push @result, \@components;
+		    my @components = clean_string(parse_authorname($entry));
+		    push @result, \@components if $components[0];
+		}
+		
+		# If the entry is a non-empty string, clean it and then parse it.
+		
+		elsif ( $entry )
+		{
+		    my @components = parse_authorname(clean_string($entry));
+		    push @result, \@components if $components[0];
 		}
 	    }
 	}
@@ -823,33 +951,25 @@ sub get_authorlist {
 
     elsif ( ref $r->{author} eq 'HASH' )
     {
-	my @components = parse_authorname($r->{author});
-
-	if ( $components[0] )
-	{
-	    push @result, \@components;
-	}
+	my @components = clean_string(parse_authorname($r->{author}));
+	push @result, \@components if $components[0];
     }
     
     # If the 'author' field is a simple string, we must split it into individual names.
     
     elsif ( $r->{author} && ! ref $r->{author} )
     {
-	my @names = split_authorlist($r->{author});
+	my @names = split_authorlist(clean_string($r->{author}));
 	
 	if ( $index > 1 )
 	{
 	    splice(@names, 0, $index - 1);
 	}
-
+	
 	foreach my $name ( @names )
 	{
 	    my @components = parse_authorname($name);
-
-	    if ( $components[0] )
-	    {
-		push @result, \@components;
-	    }
+	    push @result, \@components if $components[0];
 	}
     }
     
@@ -862,21 +982,17 @@ sub get_authorlist {
 # split_authorlist ( authorlist )
 #
 # Given a string composed of one or more author names, split it up into individual names as
-# correctly as we can manage.
+# correctly as we can manage. The argument string must be normalized to Unicode NFD before it is
+# passed in, which can be carried out by passing it through clean_string() first.
 
 sub split_authorlist {
 
     my ($authorlist) = @_;
     
-    # The following declaration appears at the top of the file as well, but it is so important
-    # that I am repeating it here in case some misguided person removes the one at the top.
+    # If the authorlist does not contain at least two alphabetic characters in a row, possibly
+    # with marks in between, return the empty list.
     
-    use feature 'unicode_strings';
-    
-    # If the authorlist does not contain at least two alphabetic characters in a row, return the
-    # empty list.
-    
-    return () unless $authorlist =~ /[[:alpha:]][[:alpha:]]/;
+    return () unless $authorlist =~ /\pL\pM*\pL/;
     
     # Start by removing initial and final whitespace, and then splitting the list on commas. The
     # word 'and' following a comma is included, but only if it is all lowercase or all
@@ -894,10 +1010,10 @@ sub split_authorlist {
     # If the last item includes the word 'and' with at least two words before and two after it,
     # split on that word.
     
-    if ( $items[-1] =~ qr{ ^ (.* \S \s+ \S+) \s+ ( and | AND ) \s+ (\S+ \s+ \S .*) $ }xs )
+    if ( $items[-1] =~ qr{ ^ (.* \S \s+ \S+) \s+ (?: and | AND ) \s+ (\S+ \s+ \S .*) $ }xs )
     {
 	$items[-1] = $1;
-	push @items, $3;
+	push @items, $2;
     }
     
     # Then go through the list one by one and merge the items into names as necessary. Names that
@@ -908,10 +1024,10 @@ sub split_authorlist {
     
     foreach my $item ( @items )
     {
-	# If the item is 'jr.', 'ii', 'iii', or 'iv', add it to the previous name. If there is no
+	# If the item is 'jr.', 'ii', 'iii', etc. add it to the previous name. If there is no
 	# previous name, discard it.
 	
-	if ( $item =~ qr { ^ ( jr[.]? | iii?[.]? | iv[.]? ) $ }xsi )
+	if ( $item =~ $NAME_SUFFIX )
 	{
 	    if ( @names )
 	    {
@@ -922,7 +1038,7 @@ sub split_authorlist {
 	# If the item contains at least three alphabetic characters in a row, it is almost certainly a
 	# name. Add it to the name list.
 	
-	elsif ( $item =~ /[[:alpha:]]{3}/ )
+	elsif ( $item =~ qr{ \pL\pM* \pL\pM* \pL }xs )
 	{
 	    push @names, $item;
 	}
@@ -932,9 +1048,9 @@ sub split_authorlist {
 	# end, it probably represents initials associated with the previous item. If the previous
 	# item doesn't contain initials, add this item to it. Otherwise, discard this item.
 	
-	elsif ( $item =~ qr{ \b [[:alpha:]][.] | ^ [[:alpha:]] \s | \s [[:alpha:]] $ | ^ [[:alpha:]] $ }xs )
+	elsif ( $item =~ qr{ \b \pL\pM*[.] | ^ \pL\pM* \s | \s \pL\pM* $ | ^ \pL\pM* $ }xs )
 	{
-	    if ( @names && $names[-1] !~ qr{ \b [[:alpha:]][.] | ^ [[:alpha:]] \s | \s [[:alpha:]] $ }xs )
+	    if ( @names && $names[-1] !~ $CONTAINS_INITIALS )
 	    {
 		$names[-1] .= ", $item";
 	    }
@@ -945,17 +1061,17 @@ sub split_authorlist {
 	# such as 'Wu' and also initials such as 'A. de B.'. So we check for initials first and
 	# then check for two-letter names.
 
-	elsif ( $item =~ /[[:alpha:]]{2}/ )
+	elsif ( $item =~ qr{ \pL\pM* \pL }xs )
 	{
 	    push @names, $item;
 	}
-
+	
 	# If the item has at least one alphabetic character and the previous name has no initials,
 	# add this item to it. Otherwise, discard this item.
 
-	elsif ( $item =~ /[[:alpha:]]/ )
+	elsif ( $item =~ /\pL/ )
 	{
-	    if ( @names && $names[-1] !~ qr{ \b [[:alpha:]][.] | ^ [[:alpha:]] \s | \s [[:alpha:]] $ }xs )
+	    if ( @names && $names[-1] !~ $CONTAINS_INITIALS )
 	    {
 		$names[-1] .= ", $item";
 	    }
@@ -969,15 +1085,19 @@ sub split_authorlist {
 # parse_authorname ( entry )
 #
 # Given a single entry representing an author name, extract first and last names from it. The
-# entry may either be a hashref, an arrayref, or a string.
+# argument may either be a hashref, an arrayref, or a string. If it is a string, it should be
+# processed by &clean_string before being passed in. This will normalize it to Unicode
+# NFD. If it is a reference, the result should be processed by &clean_string.
 
 sub parse_authorname {
 
     my ($entry) = @_;
     
+    my ($last, $first, $affiliation);
+    
     # If the selected entry is an arrayref, return the contents as-is. This is most likely to
     # happen if an arrayref of already parsed name components is passed to this routine again.
-
+    
     if ( ref $entry eq 'ARRAY' )
     {
 	return @$entry;
@@ -987,17 +1107,17 @@ sub parse_authorname {
     # names. Only return the first name if we have found a non-empty last name. If don't find a
     # separate last name but we do find a 'name' field, fall through to the next section.
     
-    if ( ref $entry eq 'HASH' )
+    elsif ( ref $entry eq 'HASH' )
     {
-	my $last = $entry->{last} || $entry->{lastname} || $entry->{family};
-	my $first = $entry->{first} || $entry->{firstname} || $entry->{given};
-	my $affiliation = $entry->{affiliation} || $entry->{institution};
-
+	$last = $entry->{last} || $entry->{lastname} || $entry->{family};
+	$first = $entry->{first} || $entry->{firstname} || $entry->{given};
+	$affiliation = $entry->{affiliation} || $entry->{institution};
+	
 	if ( ref $affiliation eq 'ARRAY' )
 	{
 	    $affiliation = $affiliation->[0];
 	}
-
+	
 	elsif ( ref $affiliation eq 'HASH' )
 	{
 	    $affiliation = $affiliation->{name};
@@ -1019,10 +1139,14 @@ sub parse_authorname {
 	}
     }
     
-    # If the entry is anything other than a nonempty string, return.
+    # If the entry is anything other than a nonempty string, return the empty list.
     
-    return unless $entry || ! ref $entry;
-
+    return unless $entry && ! ref $entry;
+    
+    # Otherwise, we parse the string into a first and last name. Note that $affiliation may have
+    # been set above if the original entry was a hashref with both 'name' and 'affiliation'
+    # as keys. Otherwise, it will be undefined.
+    
     # If the full name contains a comma, split it on commas. The last name is always the first
     # component.
     
@@ -1030,26 +1154,34 @@ sub parse_authorname {
     {
 	my @components = split /\s*,\s*/, $entry;
 	
-	my $last = shift @components;
+	$last = shift @components;
 	
-	# If we have a 'jr' or 'iii' suffix (optionally followed by a period) then add that to the
-	# last name.
+	# If the last name is followed by a component such as 'jr', 'ii', 'iii', etc. optionally
+	# followed by a period, then add that to the last name.
+	
+	if ( @components && $components[0] =~ $NAME_SUFFIX )
+	{
+	    $last .= " " . shift @components;
+	}
 
-	if ( $components[0] =~ qr{ ^ ( jr[.]? | iii?[.]? | iv[.]? ) .* $ }xsi )
+	# Otherwise, if we have at least two more components and the last component looks like that,
+	# add it to the last name.
+
+	elsif ( @components > 1 && $components[-1] =~ $NAME_SUFFIX )
 	{
-	    my $suffix = shift @components;
-	    $last .= ", $suffix";
+	    $last .= " " . pop @components;
+	}
+
+	# If we have one or more remaining components, take the first non-empty one as the first
+	# name and return. If they are all empty, then the first name will be empty.
+	
+	if ( @components )
+	{
+	    shift @components while @components > 1 && $components[0] eq '';
+	    return ($last, $components[0], $affiliation);
 	}
 	
-	# If we have at least one more component that contains one or more alphabetic characters,
-	# take the first of those as the first name and discard the rest.
-	
-	if ( @components && $components[0] =~ /[[:alpha:]]/ )
-	{
-	    return ($last, $components[0]);
-	}
-	
-	# Otherwise, fall through to the next step.
+	# Otherwise, take the last name we have extracted and fall through to the next step.
 	
 	else
 	{
@@ -1057,174 +1189,62 @@ sub parse_authorname {
 	}
     }
     
-    # If we get here, we have a name that looks like either "B. Smith" or "Smith B."; we start by
-    # looking for initials at the front of the name. As a very first step, there are a few
-    # paleobiodb entries that mistakenly have / instead of . after the initial. So substitute the
-    # latter for the former.
+    # If we get here, we have a name that looks like either "B. Smith", "Smith B." or "Bob Smith".
     
-    $entry =~ s{ ( ^ [[:alpha:]] | \s [[:alpha:]] ) / }{\1.}gx;
+    # First look for any of the following patterns: "B. Smith", "B Smith", "B-C Smith",
+    # "B.-C. Smith", "B. C. D. Smith", "B C D Smith", etc. Note that .* is greedy by default. We
+    # want to match everything up to the very last letter that is preceded by a non-letter and
+    # followed by an optional period and then a space.
     
-    # Patterns we are looking for include "B. Smith", 
-    # "B Smith", "B-C Smith", "B.-C. Smith", "B. C. D. Smith", "B C D Smith", etc. Note that
-    # .* is greedy by default. We want to match up to the very last letter that is preceded
-    # by a non-letter and followed by an optional period and then a space.
-    
-    if ( $entry =~ qr{ ^ ( [[:alpha:]][.]? | [[:alpha:]][-. ][[:alpha:]][.]? |
-			   [[:alpha:]][-. ].*[^[:alpha:]][[:alpha:]][.]? ) \s+ (\S .*) }xs )
+    if ( $entry =~ qr{ ^ ( \pL\pM* \b .* \b \pL\pM* [.]? | \pL\pM* [.]? ) \s+ (\S .*) }xs )
     {
-	my $first = $1;
-	my $last = $2;
+	$first = $1;
+	$last = $2;
 	
-	return ($last, $first);
+	return ($last, $first, $affiliation);
+    }
+
+    # If the name contains any initial followed by a period and ends with at least two letters in
+    # a row, break after the initial. This will properly parse names such as "Bob A. Smith".
+    
+    if ( $entry =~ qr{ ( .* \b \pL\pM* [.] ) \s* ( \S .* \pL\pM*\pL\pM* | \pL\pM*\pL\pM* ) $ }xs )
+    {
+	$first = $1;
+	$last = $2;
+
+	return ($last, $first, $affiliation);
     }
     
     # Otherwise, look for initials at the end. The first name starts with the first letter that is
-    # preceded by a space and followed by . - or space or the end of the string. Note that in this
-    # case we use .*? for a non-greedy match because we want to capture all of the initials rather
-    # than just the last one.
+    # preceded by a space and followed by a word boundary. In this case we use .*? for a
+    # non-greedy match because we want to capture all of the initials rather than just the last
+    # one.
     
-    if ( $entry =~ qr{ (.*? \S) \s+ ( [[:alpha:]][-. ] .* | [[:alpha:]] $ ) }xs )
+    if ( $entry =~ qr{ (.*? \S) \s+ ( \pL\pM*[-. ] .* | \pL\pM* $ ) }xs )
     {
-	my $last = $1;
-	my $first = $2;
+	$last = $1;
+	$first = $2;
 
-	return ($last, $first);
+	return ($last, $first, $affiliation);
     }
 
-    # If we don't find either of these patterns, split off everything up to the last word not
-    # followed by a comma as the first name.
+    # If we don't find either of these patterns, split off the last word as the last name. But if
+    # the second-to-last word is 'de' or 'van', then include it.
     
-    if ( $entry =~ qr{ ^ (.+) (?<! ,) \s ( [[:alpha:]] .* ) }xs )
+    if ( $entry =~ qr{ ^ (.*) \s+ ( (?: van \s+ | de \s+ )? \S* ) $ }xsi )
     {
-	my $first = $1;
-	my $last = $2;
-
-	return ($last, $first);
+	$first = $1;
+	$last = $2;
+	
+	return ($last, $first, $affiliation);
     }
     
     # If the name doesn't have multiple words, return the whole thing as the last name.
     
     else
     {
-	return ($entry, '');
+	return ($entry, '', $affiliation);
     }
-}
-
-
-# find_authorname ( r, index, last, first )
-# 
-# Return a similarity score (no conflict score) if the specified name is found in the author list
-# of $r. If $index is 1 (or not specified) then all authors are searched. If $index is 2, the
-# second and subsequent authors are searched, etc.
-
-sub find_authorname {
-    
-    my ($r, $last, $first, $index) = @_;
-
-    # # If $index is not given, assume 1. Return 0 unless a last name is given.
-    
-    # $index ||= 1;
-    
-    # return 0 unless $last;
-    
-    # # If this is a paleobiodb record, we check the relevant fields directly.
-    
-    # if ( $r->{author1last} )
-    # {
-    # 	# If index is not greater than 1, check author1. If the score is greater than zero, return
-    # 	# it. Same for author2 and index 2.
-	
-    # 	unless ( $index > 1 )
-    # 	{
-    # 	    my $score = check_authorname($r->{author1last}, $r->{author1init},
-    # 					 $last, $first);
-	    
-    # 	    return $score if $score;
-    # 	}
-	
-    # 	unless ( $index > 2 )
-    # 	{
-    # 	    my $score = check_authorname($r->{author2last}, $r->{author2init},
-    # 					 $last, $first);
-	    
-    # 	    return $score if $score;
-    # 	}
-	
-    # 	# If we get here, we need to check otherauthors. Grab the last sequence of 2 more more
-    # 	# alphabetic characters from $last, and see if it occurs somewhere in the list.
-	
-    # 	return 0 unless $last =~ qr{ ([[:alpha:]][[:alpha:]]+) $ }xs;
-	
-    # 	my $lastword = $1;
-	
-    # 	return 0 unless $r->{otherauthors} =~ /$lastword/;
-	
-    # 	# First determine if the otherauthors value has initials first or not.
-	
-    # 	my $initfirst = $r->{otherauthors} =~ qr{ ^ [[:alpha:]] [-. ] }xs;
-	
-    # 	# If we have a first initial, try searching with it first.
-	
-    # 	if ( $first =~ qr{ ^ ([[:alpha:]]) }xs )
-    # 	{
-    # 	    my $init = $1;
-	    
-    # 	    # First look for the entire last name with first initial. If we find it, return a
-    # 	    # 100% match.
-	    
-    # 	    if ( $initfirst && $r->{otherauthors} =~ qr{ (^|,\s*) $init \b [^,]+ \b $last (,|$) }xsi )
-    # 	    {
-    # 		return 100;
-    # 	    }
-	    
-    # 	    elsif ( !$initfirst && $r->{otherauthors} =~ qr{ \b $last, \s* $init \b }xsi )
-    # 	    {
-    # 		return 100;
-    # 	    }
-	    
-    # 	    # Then try just the last word with the first initial. If we find it, return a 90% match.
-	    
-    # 	    elsif ( $initfirst && $r->{otherauthors} =~ qr{ (^|,\s*) $init \b [^,]+ \b $lastword (,|$) }xsi )
-    # 	    {
-    # 		return 90;
-    # 	    }
-	    
-    # 	    elsif ( !$initfirst && $r->{otherauthors} =~ qr{ \b $lastword, \s* $init \b }xsi )
-    # 	    {
-    # 		return 90;
-    # 	    }
-    # 	}
-	
-    # 	# Without an initial, we return at best an 80% match.
-	
-    # 	elsif ( $initfirst && $r->{otherauthors} =~ qr{ \b $last (,|$) }xsi )
-    # 	{
-    # 	    return 80;
-    # 	}
-	
-    # 	elsif ( !$initfirst && $r->{otherauthors} =~ qr{ \b $last, }xsi )
-    # 	{
-    # 	    return 80;
-    # 	}
-	
-    # 	# If we match just the last word, return a 50% match.
-	
-    # 	elsif ( $initfirst && $r->{otherauthors} =~ qr{ \b $lastword (,|$) }xsi )
-    # 	{
-    # 	    return 50;
-    # 	}
-	
-    # 	elsif ( !$initfirst && $r->{otherauthors} =~ qr{ \b $lastword, }xsi )
-    # 	{
-    # 	    return 50;
-    # 	}
-
-    # 	# If nothing matches, return 0.
-	
-    # 	return 0;
-    # }
-
-    # Otherwise, if there is an 'authors' field, search through it one by one.
 }
 
 
@@ -1400,19 +1420,26 @@ sub extract_json_year {
 
 # clean_string ( string... )
 #
-# With each argument, replace HTML character entity sequences with the corresponding characters.
+# For each nonempty argument, replace any HTML character entity sequences with the corresponding
+# characters and then normalize to NFD. We choose the decomposed normalization so that we can easily
+# compare letters without regard to accent marks.
 
 sub clean_string {
     
-    foreach ( @_ )
+    my (@values) = @_;
+    
+    foreach ( @values )
     {
-	if ( defined $_ && $_ =~ /[[:alpha:]]/ )
+	if ( defined $_ && $_ ne '' )
 	{
 	    $_ =~ s{ &\#(\d+); }{ chr($1) }xsge;
+	    $_ = NFD($_);
 	}
+	
+	$_ //= '';
     }
-
-    return @_;
+    
+    return wantarray ? @values : $values[0];
 }
 
 
@@ -1423,121 +1450,472 @@ sub clean_string {
 # 
 # Compute a fuzzy match score between $title_a and $title_b, doing our best to allow for both
 # mistyping and leaving out a word or two. This routine returns a list of two numbers. The first
-# is a similarity score, normalized to 0-100 with 100 representing equality (case and accent marks
-# are ignored). The second is a conflict score, also normalized to 0-100 with 100 representing no
-# possibility that these values were originally the same.
+# is a similarity score from 0-100, with 100 representing near-certainty that the two titles are
+# the same. The second is a conflict score from 0-100, with 100 representing no possibility that
+# these values were originally the same. The two scores need not add up to 100. If there is no
+# evidence for either similarity or conflict, a result of (0, 0) is returned.
+#
+# In order for this function to work correctly, the arguments must be normalized to Unicode NFD
+# before being passed in. The clean_string() function will accomplish this.
 
-our %STOPWORD = ( a => 1, an => 1, and => 1, the => 1, at => 1, for => 1, on => 1, of => 1 );
+our %STOPWORD = ( '' => 1, a => 1, an => 1, and => 1, or => 1, in => 1,
+		  the => 1, at => 1, for => 1, on => 1, of => 1 );
+
+our $THREE_LETTERS = qr{ \pL\pM*\pL\pM*\pL }xs;
 
 sub title_similarity {
     
-    my ($title_a, $title_b, $title_type) = @_;
+    my ($title_a, $title_b) = @_;
 
-    # If one or both arguments are empty, we return (0, 0). In that case we do not have enough
+    # If one or both arguments are empty, return (0, 0). In that case we do not have enough
     # information to tell us that the records are similar, nor that they are dissimilar. We
-    # consider a title to be empty if it doesn't have at least 3 alphabetic characters in a row.
+    # consider a title to be empty if it doesn't have at least 3 alphabetic characters in a
+    # row. The letters may have marks in between.
     
-    return (0, 0) unless $title_a && $title_a =~ /[[:alpha:]]{3}/ &&
-	$title_b && $title_b =~ /[[:alpha:]]{3}/;
-
+    return (0, 0) unless $title_a && $title_a =~ $THREE_LETTERS &&
+	$title_b && $title_b =~ $THREE_LETTERS;
+    
     # If the two titles are equal when case and accents are ignored, return (100, 0). We ignore
     # accent marks because these are often mistyped or omitted.
-
+    
     if ( eq_insensitive($title_a, $title_b) )
     {
 	return (100, 0);
     }
     
-    # Otherwise, we start by removing HTML tags, which do occasionally appear in Crossref titles.
+    # Otherwise, start by removing HTML tags, which occasionally appear in Crossref titles.
     
     $title_a =~ s{ &lt; .*? &gt; | < .*? > }{}xsg;
     $title_b =~ s{ &lt; .*? &gt; | < .*? > }{}xsg;
+
+    # Continue by removing accent marks and then splitting each title into words. Any sequence of
+    # letters and numbers counts as a word, and any sequences of other characters (punctuation and
+    # spacing) counts as a word boundary. Stopwords are also removed, since they occasionally get
+    # left out of a title by mistake.
     
-    # Continue by removing everything else except alphanumerics and spaces. We are primarily
-    # interested in comparing the set of words in the two titles. All other characters or
-    # sequences of such are converted into a single space to preserve word boundaries.
+    $title_a =~ s/\pM//g;
+    $title_b =~ s/\pM//g;
     
-    $title_a =~ s/[^[:alnum:][:space:]]+/ /g;
-    $title_b =~ s/[^[:alnum:][:space:]]+/ /g;
+    my @words_a = grep { ! $STOPWORD{$_} } map { fc } split /[^\pL\pN]+/, $title_a;
+    my @words_b = grep { ! $STOPWORD{$_} } map { fc } split /[^\pL\pN]+/, $title_b;
     
-    # For work titles, if one of the two is a prefix of the other then return a match. It is
-    # likely that extra cruft was accidentally appended to the other title in one of the entries,
-    # or that ending words were accidentally left out. For efficiency, we only do this detailed check
-    # if the two titles start with the five letters.
+    # If one title starts with "<section heading>, in ..." where the ... matches the other title,
+    # that will still count as a match. In particular, some PBDB reference titles were entered in
+    # that form. The variable name suffix _wc means "word count".
     
-    if ( eq_insensitive(substr($title_a, 0, 5), substr($title_b, 0, 5)) &&
-	 length($title_a) != length($title_b) )
+    my $initial_wca = check_for_section_prefix($title_a);
+    my $initial_wcb = check_for_section_prefix($title_b);
+    
+    # Similarity check #1:
+    #
+    # If the two caseless and accentless word sequences are identical, return a similarity of
+    # 100. If one word sequence is a prefix of the other, and the extra stuff at the end of the
+    # other one is not too long, also return a match. Sometimes a subtitle is mistakenly left out,
+    # and sometimes extra cruft is appended for various reasons. This is a very inexpensive check
+    # to make.
+
+    my ($longer_wc, $shorter_wc);
+    
+    # Try the full titles first.
+    
+    if ( $shorter_wc = prefix_match(\@words_a, \@words_b) )
     {
-	my $greater = length($title_a) > length($title_b) ? $title_a : $title_b;
-	my $lesser = length($title_a) > length($title_b) ? $title_b : $title_a;
-	my $reduced = substr($greater, 0, length($lesser));
-	my $len_greater = length($greater);
-	my $len_lesser = length($lesser);
-	my $diff = $len_greater - $len_lesser;
-	
-	# For publication titles, return a 50% match if the greater exceeds the lesser by less
-	# than 20% and the lesser is at least 5 characters.
-	
-	if ( $title_type eq 'pub' )
-	{
-	    if ( $diff * 5 <= $len_lesser && $len_lesser >= 5 )
-	    {
-		return (50, 50);
-	    }
-	}
-
-	# For work titles, return a 100% match if the lesser is at least 20 characters and the
-	# greater is less than twice as long, an 80% match if it is greater than twice.
-
-	elsif ( $title_type eq 'work' && $len_lesser >= 20 )
-	{
-	    if ( $len_greater / $len_lesser <= 2 )
-	    {
-		return (100, 0);
-	    }
-
-	    else
-	    {
-		return (80, 20);
-	    }
-	}
-	
-	# # If $title_a is longer, compare its initial sequence to $title_b. If the two are equal,
-	# # return a match if the difference in length is not too great.
-	
-	# if ( $length_a > $length_b && $length_b >= 5 )
-	# {
-	#     my $reduced_a = substr($title_a, 0, $length_b);
-	    
-	#     if ( eq_insensitive($reduced_a, $title_b) )
-	#     {
-	# 	if ( $title_type eq 'work' && $length_b >= 20 
-		
-	# 	return ($sim, $con);
-	#     }
-	# }
-	
-	# # If $title_b is longer, compare its initial sequence to $title_a. Under ordinary
-	# # circumstances we don't need to consider the case where they are equal, because then they
-	# # would have already matched above. But just in case some code is later added that breaks
-	# # this, we include the case where the two are equal in length here.
-	
-	# elsif ( $length_b >= $length_a && $length_a >= 20 )
-	# {
-	#     my $reduced_b = substr($title_b, 0, $length_a);
-	    
-	#     if ( eq_insensitive($reduced_b, $title_a) )
-	#     {
-	# 	return ($sim, $con);
-	#     }
-	# }
+	$longer_wc = max_score(scalar(@words_a), scalar(@words_b));
     }
     
-    # Then we split each title into words and remove stopwords. The stopword list contains words
-    # that are often left out of titles.
+    # If those don't match, and one or both have possible initial section headings, try again with
+    # those skipped.
     
-    my @title_a = grep { !$STOPWORD{lc $_} } split /[[:space:]]+/, $title_a;
-    my @title_b = grep { !$STOPWORD{lc $_} } split /[[:space:]]+/, $title_b;
+    elsif ( $initial_wca || $initial_wcb )
+    {
+	if ( $shorter_wc = prefix_match(\@words_a, \@words_b, $initial_wca, $initial_wcb) )
+	{
+	    $longer_wc = max_score(scalar(@words_a) - $initial_wca,
+				   scalar(@words_b) - $initial_wcb);
+	}
+    }
+    
+    # If we have a match either way, return it.
+    
+    if ( $shorter_wc )
+    {
+	if ( $longer_wc == $shorter_wc || $shorter_wc > 3 && $longer_wc < $shorter_wc * 2 )
+	{
+	    return (100, 0);
+	}
+	
+	elsif ( $shorter_wc > 3 )
+	{
+	    return (70, 0);
+	}
+
+	else
+	{
+	    return (50, 0);
+	}
+    }
+    
+    # Similarity check #2
+    # 
+    # If the prefix match failed, check to see if two or more of the early words in each title
+    # appear early in the other title. This is an inexpensive check which can reject non-matching
+    # titles easily. If successful, fall through to the next check. Otherwise, return a conflict
+    # of 100.
+
+    my $initial_match;
+    
+    if ( initial_words_match(\@words_a, \@words_b, 5, 2) )
+    {
+	$initial_match = 1;		# fall through and continue to the next check
+    }
+    
+    # As above, if there is an initial heading sequence on either or both titltes then repeat the
+    # check with this sequence skipped. If this test succeeds, remove the initial sequence(s)
+    # before falling through to the subsequent checks.
+    
+    elsif ( $initial_wca || $initial_wcb )
+    {
+	splice(@words_a, 0, $initial_wca);
+	splice(@words_b, 0, $initial_wca);
+	
+	if ( initial_words_match(\@words_a, \@words_b, 5, 2) )
+	{
+	    $initial_match = 1;		# fall through and continue to the next check
+	}
+	
+	else
+	{
+	    return (0, 100);
+	}
+    }
+    
+    else
+    {
+	return (0, 100);
+    }
+    
+    # Similarity check #3
+    #
+    # There is a chance that the two titles are similar, so the next step is to compare them using
+    # a more comprehensive and more expensive procedure. We use Algorithm::Diff to compute the
+    # difference between the two word lists, looking for the following special cases:
+    # 
+    # a) Differing words that have only a small difference, making it likely that one of
+    # the two was mis-entered.
+    # 
+    # b) One title contains a word which is the same as several words from the other one
+    # concatenated without any spaces, in the same place in the sequence. Unfortunately, we
+    # sometimes find this error in crossref titles. Apparently, some of the spaces in certain
+    # titles were at some point entered as "nonbreaking spaces" and a subsequent processing step
+    # dropped them entirely.
+    # 
+    # c) Two titles that are similar except for an extra set of words on the end of one of them.
+    # This probably means either one of them accidentally had its final part left off or else the
+    # other one had some cruft added to the end of it. We still have to consider this case despite
+    # the prefix check above, because that check will have failed if either (a) or (b) is true for
+    # this set of titles.
+    
+    my @diff = sdiff(\@words_a, \@words_b);
+    
+    my (@extra_a, @extra_b, @suffix_a, @suffix_b, $misspell_count, $min_words);
+    
+    my $sim = 100;
+    my $con = 0;
+    
+    # Go through the diff segments one by one. The value of $op generated by the sdiff subroutine
+    # from Algorithm::Diff is as follows:
+    # 
+    #   'u' means that both lists have the same word at this position.
+    #   'c' means that the lists differ at this position.
+    #   '-' means that list a has an insertion (or list b has a deletion).
+    #   '+' means that list b has an insertion (or list a has a deletion).
+    
+    while ( @diff )
+    {
+	my $segment = shift @diff;
+	
+	my ($op, $word_a, $word_b) = $segment->@*;
+	
+	# Any op other than a '+' means that any accumulated @suffix_b must be moved to @extra_b
+	# because it is not actually a suffix. The greatest-common-subsequence algorithm used by
+	# Algorithm::Diff ensures that.
+	
+	if ( @suffix_b && $op ne '+' )
+	{
+	    push @extra_b, @suffix_b;
+	    @suffix_b = ();
+	}
+	
+	# Likewise, any op other than a '-' means that any accumulated @suffix_a must be
+	# moved to @extra_a because it is not actually a suffix.
+	
+	if ( @suffix_a && $op ne '-' )
+	{
+	    push @extra_a, @suffix_a;
+	    @suffix_a = ();
+	}
+	
+	# Words that are unchanged between the two lists are ignored.
+	
+	next if $op eq 'u';
+	
+	# Words that are changed but with a very short edit distance are considered to be possibly
+	# identical. We keep track of how many there are. Words that are very different go on
+	# the difference lists.
+	
+	if ( $op eq 'c' )
+	{
+	    my $len_a = length($word_a);
+	    my $len_b = length($word_b);
+	    
+	    # If the two words are close in length, compute their edit distance. If the edit
+	    # distance is small, increment the misspell count and go on to the next segment.
+	    
+	    if ( abs($len_a - $len_b) < 3 )
+	    {
+		my $edist = edistance($word_a, $word_b, 3);
+		
+		# The allowable edit distance varies depending on the length of the shorter word.
+		
+		my $len = min_score($len_a, $len_b);
+		
+		my $max_distance = $len > 9 ? 3
+				 : $len > 5 ? 2
+					    : 1;
+		
+		# If the edit distance is within the allowable range, increment the misspelling
+		# count and go on to the next segment.
+		
+		if ( $edist >= 0 && $edist <= $max_distance )
+		{
+		    $misspell_count++;
+		    next;
+		}
+	    }
+	    
+	    # Otherwise, check to see if the larger of the two words is similar to the smaller one
+	    # concatenated with one or more subsequent words from its sequence.
+	    
+	    elsif ( $len_a > $len_b )
+	    {
+		# If the the next segment is a sequence b insertion and the sequence a word is
+		# longer than the sequence b word plus the next word following, with a margin of 2
+		# for possible entry mistakes, then do a more thorough test using the
+		# match_squashed subroutine. If that test is positive, then skip to the next
+		# segment. The subroutine removes the segments corresponding to the extra words in
+		# sequence b, so we don't need to deal with them here.
+		
+		if ( $diff[0][0] eq '+' && $len_a > $len_b + length($diff[0][2]) - 2 )
+		{
+		    my $edist = match_squashed_word($word_a, $word_b, 'b', \@diff);
+		    
+		    if ( $edist >= 0 && $edist < 4 )
+		    {
+			$misspell_count++ if $edist;
+			next;
+		    }
+		}
+	    }
+	    
+	    elsif ( $len_b > $len_a )
+	    {
+		# Similarly, if the the next segment is a sequence a insertion and the sequence b
+		# word is longer than the sequence a word plus the next word following, with a
+		# margin of 2 for possible entry mistakes, then do a more thorough test using the
+		# match_squashed subroutine. If that test is positive, then skip to the next
+		# segment. The subroutine removes the segments corresponding to the extra words in
+		# sequence a, so we don't need to deal with them here.
+		
+		if ( $diff[0][0] eq '-' && $len_b > $len_a + length($diff[0][1]) - 2 )
+		{
+		    my $edist = match_squashed_word($word_b, $word_a, 'a', \@diff);
+
+		    if ( $edist > 0 && $edist < 4 )
+		    {
+			$misspell_count if $edist;
+			next;
+		    }
+		}
+	    }
+	    
+	    # Otherwise, both words go on the word difference lists.
+	    
+	    push @extra_a, $word_a;
+	    push @extra_b, $word_b;
+	}
+	
+	# Words that are insertions are also potential suffix words. If they aren't actually
+	# suffixes they will be moved to the corresponding extra list on a subsequent iteration.
+	
+	elsif ( $op eq '-' )
+	{
+	    push @suffix_a, $word_a;
+	}
+	
+	elsif ( $op eq '+' )
+	{
+	    push @suffix_b, $word_b;
+	}
+    }
+    
+    # Now that we have gone through the entire sequence, consider the suffixes if any. If one of
+    # the titles has a suffix then drop it if the other title has at least 4 words and the suffix
+    # length is less than half of the title length. As noted above, it is a common entry error for
+    # the last part of a title to be left off, and also common for extra cruft to be added at the
+    # end of a title. As the above code is written, it is impossible for both titles to have a suffix.
+    
+    if ( @suffix_a || @suffix_b )
+    {
+	# Compute the number of words in the shorter title, which will almost always be the one
+	# that doesn't have a suffix.
+
+	my $length_a = scalar(@words_a) - scalar(@suffix_a);
+	my $length_b = scalar(@words_b) - scalar(@suffix_b);
+	
+	$min_words = min_score($length_a, $length_b);
+	
+	# Deduct similarity points if the shorter title has three or fewer words.
+	
+	if ( $min_words < 4 )
+	{
+	    $sim = $sim - 15;
+	}
+	
+	# Deduct similarity points if the suffix is more than half the length of the remaining
+	# title.
+	
+	if ( scalar(@suffix_a) * 2 >= $length_a ||
+	     scalar(@suffix_b) * 2 >= $length_b )
+	{
+	    $sim = $sim - 15;
+	}
+    }
+
+    else
+    {
+	$min_words = min(scalar(@words_a), scalar(@words_b));
+    }
+    
+    # For a long title, if there are more than more than 4 words in one title but not the other
+    # then return a conflict. For shorter titles, the threshold is smaller.
+    
+    my $threshold = $min_words > 10 ? 4
+		  : $min_words > 6  ? 3
+	          : $min_words > 4  ? 2
+	          :                   1;
+    
+    if ( @extra_a > $threshold || @extra_b > $threshold )
+    {
+	return (0, 100);
+    }
+    
+    # Otherwise, deduct 10 points for each distinct word that doesn't appear in the other title
+    # and 3 points for each misspelling. These points are also added to the conflict score, since
+    # they provide evidence that the titles may not be the same.
+    
+    my $distinct_count = scalar(@extra_a) + scalar(@extra_b);
+    
+    my $sim = $sim - 10 * $distinct_count - 3 * $misspell_count;
+    my $con = $con + 10 * $distinct_count + 3 * $misspell_count;
+    
+    if ( $sim <= 0 )
+    {
+	return (0, 100);
+    }
+    
+    else
+    {
+	return ($sim, $con);
+    }
+}
+    
+    # ========================
+    
+    # # Continue by removing everything else except alphanumerics and spaces. We are primarily
+    # # interested in comparing the set of words in the two titles. All other characters or
+    # # sequences of such are converted into a single space to preserve word boundaries.
+    
+    # $title_a =~ s/[^\pL\pM\pN]+/ /g;
+    # $title_b =~ s/[^\pL\pM\pN]+/ /g;
+    
+    # # For work titles, if one of the two is a prefix of the other then return a match. It is
+    # # likely that extra cruft was accidentally appended to the other title in one of the entries,
+    # # or that ending words were accidentally left out. For efficiency, we only do this detailed check
+    # # if the two titles start with the five letters.
+    
+    # if ( eq_insensitive(substr($title_a, 0, 5), substr($title_b, 0, 5)) &&
+    # 	 length($title_a) != length($title_b) )
+    # {
+    # 	my $greater = length($title_a) > length($title_b) ? $title_a : $title_b;
+    # 	my $lesser = length($title_a) > length($title_b) ? $title_b : $title_a;
+    # 	my $reduced = substr($greater, 0, length($lesser));
+    # 	my $len_greater = length($greater);
+    # 	my $len_lesser = length($lesser);
+    # 	my $diff = $len_greater - $len_lesser;
+	
+    # 	# For publication titles, return a 50% match if the greater exceeds the lesser by less
+    # 	# than 20% and the lesser is at least 5 characters.
+	
+    # 	if ( $title_type eq 'pub' )
+    # 	{
+    # 	    if ( $diff * 5 <= $len_lesser && $len_lesser >= 5 )
+    # 	    {
+    # 		return (50, 50);
+    # 	    }
+    # 	}
+
+    # 	# For work titles, return a 100% match if the lesser is at least 20 characters and the
+    # 	# greater is less than twice as long, an 80% match if it is greater than twice.
+
+    # 	elsif ( $title_type eq 'work' && $len_lesser >= 20 )
+    # 	{
+    # 	    if ( $len_greater / $len_lesser <= 2 )
+    # 	    {
+    # 		return (100, 0);
+    # 	    }
+
+    # 	    else
+    # 	    {
+    # 		return (80, 20);
+    # 	    }
+    # 	}
+	
+    # 	# # If $title_a is longer, compare its initial sequence to $title_b. If the two are equal,
+    # 	# # return a match if the difference in length is not too great.
+	
+    # 	# if ( $length_a > $length_b && $length_b >= 5 )
+    # 	# {
+    # 	#     my $reduced_a = substr($title_a, 0, $length_b);
+	    
+    # 	#     if ( eq_insensitive($reduced_a, $title_b) )
+    # 	#     {
+    # 	# 	if ( $title_type eq 'work' && $length_b >= 20 
+		
+    # 	# 	return ($sim, $con);
+    # 	#     }
+    # 	# }
+	
+    # 	# # If $title_b is longer, compare its initial sequence to $title_a. Under ordinary
+    # 	# # circumstances we don't need to consider the case where they are equal, because then they
+    # 	# # would have already matched above. But just in case some code is later added that breaks
+    # 	# # this, we include the case where the two are equal in length here.
+	
+    # 	# elsif ( $length_b >= $length_a && $length_a >= 20 )
+    # 	# {
+    # 	#     my $reduced_b = substr($title_b, 0, $length_a);
+	    
+    # 	#     if ( eq_insensitive($reduced_b, $title_a) )
+    # 	#     {
+    # 	# 	return ($sim, $con);
+    # 	#     }
+    # 	# }
+    # }
+    
+    # # Then we split each title into words and remove stopwords. The stopword list contains words
+    # # that are often left out of titles.
+    
+    # my @title_a = grep { !$STOPWORD{lc $_} } split /[[:space:]]+/, $title_a;
+    # my @title_b = grep { !$STOPWORD{lc $_} } split /[[:space:]]+/, $title_b;
     
     # # Then we compare the two lists of words under case- and accent-insensitive comparison. We
     # # compute a partial prefix, and will then see how that compares to the two word lists.
@@ -1599,72 +1977,72 @@ sub title_similarity {
     # five places, or a word of at least six characters in one of the first five places of either
     # title that appears in one of the first three places of the other one.
     
-    my $found_word;
+    # my $found_word;
     
-    foreach my $i ( 0..4 )
-    {
-	if ( length($title_a[$i]) >= 6 && eq_insensitive($title_a[$i], $title_b[$i]) )
-	{
-	    $found_word = 1;
-	    last;
-	}
-    }    
+    # foreach my $i ( 0..4 )
+    # {
+    # 	if ( length($title_a[$i]) >= 6 && eq_insensitive($title_a[$i], $title_b[$i]) )
+    # 	{
+    # 	    $found_word = 1;
+    # 	    last;
+    # 	}
+    # }    
 
-    unless ( $found_word )
-    {
-      WORD:
-	foreach my $i ( 0..4 )
-	{
-	    if ( length($title_a[$i]) >= 6 )
-	    {
-		foreach my $j ( 0..2 )
-		{
-		    if ( eq_insensitive($title_a[$i], $title_b[$j]) )
-		    {
-			$found_word = 1;
-			last WORD;
-		    }
-		}
-	    }
+    # unless ( $found_word )
+    # {
+    #   WORD:
+    # 	foreach my $i ( 0..4 )
+    # 	{
+    # 	    if ( length($title_a[$i]) >= 6 )
+    # 	    {
+    # 		foreach my $j ( 0..2 )
+    # 		{
+    # 		    if ( eq_insensitive($title_a[$i], $title_b[$j]) )
+    # 		    {
+    # 			$found_word = 1;
+    # 			last WORD;
+    # 		    }
+    # 		}
+    # 	    }
 	    
-	    if ( length($title_b[$i]) >= 6 )
-	    {
-		foreach my $j ( 0..2 )
-		{
-		    if ( eq_insensitive($title_b[$i], $title_a[$j]) )
-		    {
-			$found_word = 1;
-			last WORD;
-		    }
-		}
-	    }
-	}
-    }
+    # 	    if ( length($title_b[$i]) >= 6 )
+    # 	    {
+    # 		foreach my $j ( 0..2 )
+    # 		{
+    # 		    if ( eq_insensitive($title_b[$i], $title_a[$j]) )
+    # 		    {
+    # 			$found_word = 1;
+    # 			last WORD;
+    # 		    }
+    # 		}
+    # 	    }
+    # 	}
+    # }
     
-    # Unless we find such a matching word, we declare a complete mismatch.
+    # # Unless we find such a matching word, we declare a complete mismatch.
     
-    unless ( $found_word )
-    {
-	return (0, 100);
-    }
+    # unless ( $found_word )
+    # {
+    # 	return (0, 100);
+    # }
     
-    # If a match has not been ruled out, compute the number of words in the shorter of the two
-    # word lists.
+    # # If a match has not been ruled out, compute the number of words in the shorter of the two
+    # # word lists.
     
-    my $min_words = min_score(scalar(@title_a), scalar(@title_b));
+    # my $min_words = min_score(scalar(@title_a), scalar(@title_b));
 
-    # Then run through both word lists and strip off any accents. Create a new Unaccent object if
-    # we don't already have one. Run through them a second time and put them into fold case.
+    # # Then run through both word lists and strip off any accents. Create a new Unaccent object if
+    # # we don't already have one. Run through them a second time and put them into fold case.
     
-    $Unaccent ||= Text::Transliterator::Unaccent->new(script => 'Latin');
+    # $Unaccent ||= Text::Transliterator::Unaccent->new(script => 'Latin');
     
-    $Unaccent->(@title_a);
-    $Unaccent->(@title_b);
+    # $Unaccent->(@title_a);
+    # $Unaccent->(@title_b);
     
-    foreach (@title_a, @title_b)
-    {
-	$_ = CORE::fc($_);
-    }
+    # foreach (@title_a, @title_b)
+    # {
+    # 	$_ = CORE::fc($_);
+    # }
     
     # Now use Algorithm::Diff to compute the difference between the two word lists, looking for
     # the following special cases:
@@ -1681,175 +2059,6 @@ sub title_similarity {
     # sometimes find this error in crossref titles. Apparently, some of the spaces in certain
     # titles were at some point entered as "nonbreaking spaces" and a subsequent processing step
     # dropped them entirely.
-    
-    my @diff = sdiff(\@title_a, \@title_b);
-    
-    my (@extra_a, @extra_b, @suffix_a, @suffix_b, $misspell_count);
-
-    my $deduction = 0;
-    
-    # Go through the diff segments one by one. The value of $op generated by the sdiff subroutine
-    # from Algorithm::Diff is as follows:
-    # 
-    #   'u' means that both lists have the same word at this position.
-    #   'c' means that the lists differ at this position.
-    #   '-' means that list a has an insertion (or list b has a deletion).
-    #   '+' means that list b has an insertion (or list a has a deletion).
-    
-    while ( @diff )
-    {
-	my $segment = shift @diff;
-	
-	my ($op, $word_a, $word_b) = $segment->@*;
-	
-	# Any op other than a '+' means that any accumulated @suffix_b must be moved to @extra_b
-	# because it is not actually a suffix. The greatest-common-subsequence algorithm used by
-	# Algorithm::Diff ensures that.
-	
-	if ( @suffix_b && $op ne '+' )
-	{
-	    push @extra_b, @suffix_b;
-	    @suffix_b = ();
-	}
-	
-	# Likewise, any op other than a '-' means that any accumulated @suffix_a must be
-	# moved to @extra_a because it is not actually a suffix.
-	
-	if ( @suffix_a && $op ne '-' )
-	{
-	    push @extra_a, @suffix_a;
-	    @suffix_a = ();
-	}
-	
-	# Words that are unchanged between the two lists are ignored.
-	
-	next if $op eq 'u';
-	
-	# Words that are changed but with a very short edit distance are considered to be possibly
-	# identical. We keep track of how many there are. Words that are very different go on
-	# the difference lists.
-	
-	if ( $op eq 'c' )
-	{
-	    my $len_a = length($word_a);
-	    my $len_b = length($word_b);
-	    
-	    # If the two words are close in length, compute their edit distance. If the edit
-	    # distance is small, increment the misspell count and go on to the next segment.
-	    
-	    if ( abs($len_a - $len_b) < 3 )
-	    {
-		my $edist = edistance($word_a, $word_b, 3, \&eq_insensitive);
-		
-		# The allowable edit distance varies depending on the length of the shorter word.
-		
-		my $len = min_score($len_a, $len_b);
-		
-		my $max = $len > 6 ? 3
-		    : $len > 4 ? 2
-		    : 1;
-		
-		# If the edit distance is within the allowable range, increment the misspelling
-		# count and go on to the next segment.
-		
-		if ( $edist >= 0 && $edist <= $max )
-		{
-		    $misspell_count++;
-		    next;
-		}
-	    }
-	    
-	    # Otherwise, check to see if the larger of the two words is similar to the smaller
-	    # concatenated with one or more subsequent words. This code is written to do some
-	    # inexpensive checks first to rule out obvious mismatches before we do a more thorough
-	    # and expensive check to confirm.
-	    
-	    elsif ( $len_a > $len_b )
-	    {
-		# If the the next segment is a sequence b insertion and the sequence a word is
-		# longer than the sequence b word plus the next word following, with a margin of 2
-		# for possible entry mistakes, then do a more thorough test using the
-		# match_squashed subroutine. If that test is positive, then skip to the next
-		# segment. The subroutine removes the segments corresponding to the extra words in
-		# sequence b, so we don't need to deal with them here.
-		
-		if ( $diff[0][0] eq '+' && $len_a > $len_b + length($diff[0][2]) - 2 )
-		{
-		    my $edist = match_squashed($word_a, $word_b, 'b', \@diff);
-		    
-		    if ( $edist < 4 )
-		    {
-			$misspell_count++ if $edist;
-			next;
-		    }
-		}
-	    }
-	    
-	    elsif ( $len_b > $len_a )
-	    {
-		# Similarly, if the the next segment is a sequence a insertion and the sequence b
-		# word is longer than the sequence a word plus the next word following, with a
-		# margin of 2 for possible entry mistakes, then do a more thorough test using the
-		# match_squashed subroutine. If that test is positive, then skip to the next
-		# segment. The subroutine removes the segments corresponding to the extra words in
-		# sequence a, so we don't need to deal with them here.
-		
-		if ( $diff[0][0] eq '-' && $len_b > $len_a + length($diff[0][1]) - 2 )
-		{
-		    my $edist = match_squashed($word_b, $word_a, 'a', \@diff);
-
-		    if ( $edist < 4 )
-		    {
-			$misspell_count++ if $edist;
-			next;
-		    }
-		}
-	    }
-	    
-	    # Otherwise, both words go on the word difference lists.
-	    
-	    push @extra_a, $word_a;
-	    push @extra_b, $word_b;
-	}
-	
-	# Words that are insertions are also potential suffix words. If they aren't actually
-	# suffixes they will be moved to the corresponding extra list on a subsequent iteration.
-	
-	elsif ( $op eq '-' )
-	{
-	    push @suffix_a, $word_a;
-	}
-	
-	elsif ( $op eq '+' )
-	{
-	    push @suffix_b, $word_b;
-	}
-    }
-    
-    # Now that we have gone through the entire sequence, if one or the other title has a suffix we
-    # ignore it completely if the other title has at least 3 words. If the minimum word length is
-    # smaller, we deduct similarity points.
-    
-    if ( @suffix_a || @suffix_b )
-    {
-	if ( $min_words < 3 )
-	{
-	    $deduction = 20;
-	}
-    }
-    
-    # For a long title, if either sequence has more than 4 words not in the other one, we declare the
-    # two titles to be completely different. For shorter titles, the threshold is smaller.
-    
-    my $threshold = $min_words > 10 ? 4
-		  : $min_words > 6  ? 3
-	          : $min_words > 4  ? 2
-	          :                   1;
-    
-    if ( @extra_a > $threshold || @extra_b > $threshold )
-    {
-	return (0, 100);
-    }
     
     # # Otherwise, look for pairs of words with a short edit difference. If we find a pair, deduct
     # # them from the counts.
@@ -1891,16 +2100,86 @@ sub title_similarity {
 	# 	}
 	#     }
 	# }
+
+
+# check_for_section_prefix ( title )
+#
+# If the argument contains the sequence ', in ' then it may start with a section heading
+# prefix. Split everything up to the match into words in the same way that title_similarity()
+# does, and return the number of words. A return value of 0 means that no such prefix was found.
+
+sub check_for_section_prefix {
     
-    # Otherwise, we start with 100 and deduct 10 points for each distinct word that doesn't appear
-    # in the other title and 3 points for each misspelling. Return that number as the similarity
-    # score, and its difference from 100 as the conflict score.
+    # If we find a the sequence ", in " in the original title string, we have a possible section
+    # heading prefix. Split everything before the match into words in the same way as the title is
+    # split, and count them. We ignore the word 'in' because it is a stopword.
     
-    my $distinct_count = scalar(@extra_a) + scalar(@extra_b);
+    if ( $_[0] =~ qr{ ^ (.*) , \s in \s \S }xsi )
+    {
+	my $prefix = $1;
+	my @prefix_words = grep { ! $STOPWORD{$_} } split /[^\pL\pN]+/, $prefix;
+	
+	return scalar(@prefix_words);
+    }
     
-    my $score = 100 - 10 * $distinct_count - 3 * $misspell_count;
+    # Otherwise, return zero.
     
-    return ($score, 100 - $score);
+    return 0;
+}
+
+
+# prefix_match ( words_a, words_b, skip_a, skip_b )
+#
+# If the shorter of the two sequences is a prefix of the longer, then return the shorter length
+# (which is the number of matching words). If either of the 'skip' parameters have a nonzero
+# value, skip that number of words at the start of the corresponding sequence. A return value of 0
+# means that neither of the two sequences is a prefix of the other.
+
+sub prefix_match {
+
+    my ($words_ref_a, $words_ref_b, $skip_a, $skip_b) = @_;
+
+    $skip_a ||= 0; $skip_b ||= 0;
+    
+    my $shorter_length = min_score(scalar(@$words_ref_a) - $skip_a,
+				   scalar(@$words_ref_b) - $skip_b);
+    
+    my $i;
+    
+    for ($i=0; $i<$shorter_length; $i++ )
+    {
+	return 0 if $words_ref_a->[$i + $skip_a] ne $words_ref_b->[$i + $skip_b];
+    }
+    
+    return $i;
+}
+
+
+# initial_words_match ( words_a, words_b, span, min )
+# 
+# Count how many words in the initial sequences of words_a and words_b also appear in the other
+# initial sequence. The initial sequence length is given by `span`. Return true if we find at
+# least `min` matches.
+
+sub initial_words_match {
+
+    my ($words_ref_a, $words_ref_b, $span, $min) = @_;
+    
+    my ($match_count, $i, $j);
+    
+    for ($i=0; $i<$span; $i++)
+    {
+	for ($j=0; $j<$span; $j++)
+	{
+	    if ( $words_ref_a->[$i] eq $words_ref_b->[$j] )
+	    {
+		$match_count++;
+		return 1 if $match_count >= $min;
+	    }
+	}
+    }
+
+    return 0;
 }
 
 
@@ -1913,16 +2192,16 @@ sub title_similarity {
 #
 # Returns the edit distance between the two if it is small, 100 otherwise.
 
-sub match_squashed {
+sub match_squashed_word {
 
     my ($longer, $shorter, $seq_select, $segments_ref) = @_;
     
-    # First see if the shorter word is a prefix of the longer. Accept it if the TLD
-    # distance is 2 or less. Otherwise, return a rejection.
+    # First see if the shorter word is a prefix of the longer, or a very close match. Accept it if
+    # the Levenshtein-Damerau edit distance is 2 or less. Otherwise, return a rejection.
     
     my $reduced = substr($longer, 0, length($shorter));
     
-    my $edist = edistance($reduced, $shorter, 2, \&eq_insensitive);
+    my $edist = edistance($reduced, $shorter, 2);
     
     return 100 unless $edist >= 0 && $edist <= 2;
     
@@ -1936,7 +2215,7 @@ sub match_squashed {
     my $words_ahead = 0;
     my $concatenated = $shorter;
     
-    while ( $words_ahead < 100 && $segments_ref->[$words_ahead] &&
+    while ( $words_ahead < 10 && $segments_ref->[$words_ahead] &&
 	    $segments_ref->[$words_ahead][0] eq $op_select &&
 	    length($concatenated) < length($longer) - 2 )
     {
@@ -1948,17 +2227,17 @@ sub match_squashed {
 
     if ( abs( length($concatenated) - length($longer) ) < 3 )
     {
-	my $edist = edistance($concatenated, $longer, 3, \&eq_insensitive);
+	$edist = edistance($concatenated, $longer, 3);
 	
 	# The allowable edit distance varies depending on the length of the shorter word.
 	
 	my $len = min_score($concatenated, $longer);
 	
-	my $max = $len > 6 ? 3
-	    : $len > 4 ? 2
+	my $max = $len > 9 ? 3
+	    : $len > 5 ? 2
 	    : 1;
 	
-	# If the TLD editing distance is within the allowable range, return it and remove all the
+	# If the edit distance is within the allowable range, return it and remove all the
 	# segments corresponding to the concatenated words.
 	
 	if ( $edist >= 0 && $edist <= $max )
@@ -2039,152 +2318,80 @@ sub title_multimatch {
 # is a similarity score, normalized to 0-100 with 100 representing equality (case and accent marks
 # are ignored). The second is a conflict score, also normalized to 0-100 with 100 representing no
 # possibility that these values were originally the same.
+#
+# IMPORTANT: In order for this function to return proper results, all arguments must be in Unicode
+# Normalization Form D.
+
+
+our $FIRST_WORD = qr{ ^ \PL* ( \pL\pM* [\pL\pN] [\pL\pN\pM]* ) }xs;
+
+our $FIRST_INITIAL = qr{ (\pL) }xs;
+
+our $SECOND_INITIAL = qr{ ^ \PL* \pL .*? [^\pL\pM\pN] .*? (\pL) }xs;
+
+our $LAST_TWO_LETTERS = qr{ (\pL) \PL* (\pL) \PL* $ }xs;
+
 
 sub author_similarity {
     
     my ($last_a, $first_a, $last_b, $first_b) = @_;
     
-    # If one or both last names are empty, we return (0, 0). In that case we do not have enough
-    # information to tell us that the records are similar, nor that they are dissimilar. We
-    # consider a last name to be empty if it doesn't have at least one alphabetic character.
+    my $sim = 0;
+    my $con = 0;
+    my $try_LD;
     
-    return (0, 0) unless $last_a && $last_a =~ /[[:alpha:]]/ &&
-	$last_b && $last_b =~ /[[:alpha:]]/;
-
-    # If either last name has no more than one alphabetic character in a row while the
-    # corresponding first name has more than one, that means the two were accidentally entered
-    # into the wrong fields. So swap them.
-
-    if ( $last_a !~ /[[:alpha:]]{2}/ && $first_a && $first_a =~ /[[:alpha:]]{2}/ )
+    # If one or both last names are empty, return (0, 0). There is not enough information to
+    # conclude that the names are similar, nor enough to conclude that they are dissimilar. A last
+    # name is considered to be empty if it doesn't contain at least one letter.
+    
+    return (0, 0) unless $last_a && $last_a =~ /[\pL]/ &&
+	$last_b && $last_b =~ /[\pL]/;
+    
+    # If either last name has no more than one letter in a row while the corresponding first name
+    # has more than one, that means the two were accidentally entered into the wrong fields. So
+    # swap them. When counting letters, we skip over any marks (but not punctuation) that may
+    # occur between them.
+    
+    if ( $last_a !~ /\pL\pM*\pL/ && $first_a && $first_a =~ /\pL\pM*\pL/ )
     {
 	my $temp = $last_a;
 	$last_a = $first_a;
 	$first_a = $temp;
     }
     
-    if ( $last_b !~ /[[:alpha:]]{2}/ && $first_b && $first_b =~ /[[:alpha:]]{2}/ )
+    if ( $last_b !~ /\pL\pM*\pL/ && $first_b && $first_b =~ /\pL\pM*\pL/ )
     {
 	my $temp = $last_b;
 	$last_b = $first_b;
 	$first_b = $temp;
     }
     
-    # Extract the initial letters from the first one or two words of each first name. Many of them
-    # are stored as initials anyway, so we simplify by only considering the first letter. If there
-    # are more than two initials, we ignore the rest.
+    # Now extract the first letter of each first and last name and convert them into foldcase. We
+    # will use these during the comparison algorithm below.
     
-    my ($init_a, $init2_a) =
-	$first_a =~ qr{ ([[:alpha:]]) [[:alpha:]]* (?: [^[:alpha:]]+ ([[:alpha:]]))? }xs;
-    
-    my ($init_b, $init2_b) =
-	$first_a =~ qr{ ([[:alpha:]]) [[:alpha:]]* (?: [^[:alpha:]]+ ([[:alpha:]]))? }xs;
-    
-    # If either last name has spurious initials at the end, remove them.
-    
-    $last_a =~ s{ ( \s [[:alpha:]][-.\s]* )+ $ }{}x;
-    $last_b =~ s{ ( \s [[:alpha:]][-.\s]* )+ $ }{}x;
-    
-    # Remove suffixes such as jr. and iii from the ends of last names. If the names are otherwise
-    # identical and one has such a suffix while the other doesn't, we assume it was left off from
-    # the other entry by mistake.
-    
-    if ( $last_a =~ qr{ ^ (.*?) [\s,]+ (jr|ii|iii|iv|2nd|3rd|4th) [.]? $ }xsi )
-    {
-	$last_a = $1;
-    }
-    
-    if ( $last_b =~ qr{ ^ (.*?) [\s,]+ (jr|ii|iii|iv|2nd|3rd|4th) [.]? $ }xsi )
-    {
-	$last_b = $1;
-    }
-    
-    # If the last names are now equal when case and accents are ignored, then we consider the the
-    # names to be a match.
-    
-    if ( eq_insensitive($last_a, $last_b) )
-    {
-	# If the first two initials are equal or both empty, return a similarity of 100. If the
-	# first two initials match but the second two do not, return a similarity of 90.
-	
-	if ( $init_a eq $init_b || eq_insensitive($init_a, $init_b) )
-	{
-	    if ( $init2_a eq $init2_b || eq_insensitive($init2_a, $init2_b) )
-	    {
-		return (100, 0);
-	    }
-	    
-	    else
-	    {
-		return (90, 0);
-	    }
-	}
-	
-	# If one of the first names is empty and the other is not, also return a similarity of 90.
-	
-	if ( ! $init_a || ! $init_b )
-	{
-	    return (90, 0);
-	}
-	
-	# If the first initials differ, return a similarity of 80 with a difference of 20.
-	
-	else
-	{
-	    return (80, 20);
-	}
-    }
-    
-    # Otherwise, we split both names up into words.  If the two last names have different numbers
-    # of words, check to see if one has one or more words missing at the end or if they fit the
-    # pattern of 'a. b.' 'smith' vs. 'a.' 'bob smith'. Generate both an initial segment and a
-    # final segment for both names that have the same number of 
-    
-    # $last_a =~ s/-/ /g;
-    # $last_b =~ s/-/ /g;
-    
-    my @words_a = $last_a =~ /([[:alpha:]]+)/g;
-    my @words_b = $last_b =~ /([[:alpha:]]+)/g;
-    
-    my ($last_final_a, $last_initial_a, $last_final_b, $last_initial_b);
-    
-    if ( @words_a > @words_b )
-    {
-	my $count = @words_b;
-	$last_initial_a = join(' ', @words_a[0..$count-1]);
-	$last_final_a = join(' ', @words_a[$count..-1]);
-	$last_initial_b = $last_final_b = join(' ', @words_b);
-	# splice(@words_a, 0, $difference);
-	# $orig_a = $last_a;
-	# $last_a = join(' ', @words_a);
-    }
+    my ($first_init_a) = map { fc($_) } $first_a =~ $FIRST_INITIAL;
+    my ($first_init_b) = map { fc($_) } $first_b =~ $FIRST_INITIAL;
 
-    elsif ( @words_b > @words_a )
-    {
-	my $count = @words_a;
-	my $last_initial_b = join(' ', @words_b[0..$count-1]);
-	my $last_final_b = join(' ', @words_b[$count..-1]);
-	$last_initial_a = $last_final_a = join(' ', @words_a);
-	# my $difference = @words_b - @words_a;
-	# splice(@words_b, 0, $difference);
-	# $orig_b = $last_b;
-	# $last_b = join(' ', @words_b);
-    }
-    
+    my ($last_init_a) = map { fc($_) } $last_a =~ $FIRST_INITIAL;
+    my ($last_init_b) = map { fc($_) } $last_b =~ $FIRST_INITIAL;
+
+    # Similarity check #1:
+    # 
     # If the first letters of $first_a and $last_a cross-match the first letters of $first_b and
-    # $last_b, it may be an East Asian name where the data enterer was confused about first/last
-    # order. But we can only make that determination if the two pairs of letters differ.
+    # $last_b, it may be an East Asian name where one of the data enterers was confused about
+    # first/last order. But we can only make that determination if the two pairs of letters differ.
     
-    if ( substr($last_a, 0, 1) eq $init_b && substr($last_b, 0, 1) eq $init_a &&
-	 substr($last_a, 0, 1) ne $init_a )
+    if ( $first_init_a eq $last_init_b && $first_init_b eq $last_init_a &&
+	 $first_init_a ne $last_init_a )
     {
 	# If either first name is given in full (not as initials) and if its first full word
 	# matches the first full word of the other last name, return a similarity of 100. We
 	# might have a very occasional false positive, but most of these will be correct matches.
-	
-	my ($firstname_word_a) = $first_a =~ qr{ ^ ([[:alpha:]][[:alpha:]]+) }xs;
-	my ($firstname_word_b) = $first_b =~ qr{ ^ ([[:alpha:]][[:alpha:]]+) }xs;
-	my ($lastname_word_a) = $last_a =~ qr{ ^ ([[:alpha:]][[:alpha:]]+) }xs;
-	my ($lastname_word_b) = $last_b =~ qr{ ^ ([[:alpha:]][[:alpha:]]+) }xs;
+
+	my ($firstname_word_a) = $first_a =~ $FIRST_WORD;
+	my ($lastname_word_a) = $last_a =~ $FIRST_WORD;
+	my ($firstname_word_b) = $first_b =~ $FIRST_WORD;
+	my ($lastname_word_b) = $last_b =~ $FIRST_WORD;
 	
 	if ( $firstname_word_a && $lastname_word_b &&
 	     eq_insensitive($firstname_word_a, $lastname_word_b) )
@@ -2198,85 +2405,373 @@ sub author_similarity {
 	    return (100, 0);
 	}
 	
-	# If both first names are given as initials, we cannot confirm the match absolutely. But
-	# it has some chance of being correct, so return an 80% match if there are two initials
-	# and they both match up, or 50% match otherwise. $$$ check both initials if present
+	# If both first names are given as initials, the match cannot be confirmed absolutely. But
+	# it has some chance of being correct, so return similarity of 80 if there are two initials
+	# and they both match up, or a similarity of 50 otherwise.
 	
-	if ( $first_a =~ qr{ ^ [[:alpha:]] \b }xs && $first_b =~ qr{ ^ [[:alpha:]] \b }xs )
+	if ( $first_a =~ qr{ ^ \pM*\pL\pM* \b }xs && $first_b =~ qr{ ^ \pM*\pL\pM* \b }xs )
 	{
-	    if ( $init2_a && @words_b > 1 )
+	    my ($first2_a) = $first_a =~ $SECOND_INITIAL;
+	    my ($last2_b) = $last_b =~ $SECOND_INITIAL;
+	    
+	    if ( $first2_a && fc($first2_a) eq fc($last2_b) )
 	    {
-		my $last2_b = substr($words_b[1], 0, 1);
-		
-		if ( eq_insensitive($init2_a, $last2_b) )
-		{
-		    return (80, 0);
-		}
+		return (80, 0);
 	    }
-
-	    if ( $init2_b && @words_a > 1 )
+	    
+	    my ($first2_b) = $first_b =~ $SECOND_INITIAL;
+	    my ($last2_a) = $last_a =~ $SECOND_INITIAL;
+	    
+	    if ( $first2_b && fc($first2_b) eq fc($last2_a) )
 	    {
-		my $last2_a = substr($words_a[1], 0, 1);
-		
-		if ( eq_insensitive($init2_b, $last2_a) )
-		{
-		    return (80, 0);
-		}
+		return (80, 0);
 	    }
 	    
 	    return (50, 0);
 	}
-
-	# Otherwise, we fall through and apply the normal matching rules.
+	
+	# Otherwise, fall through and apply the normal matching rules.
     }
     
-    # If we get to here, compute the Levenshtein-Damerau editing difference between the two last
-    # names. Deduct 15 points per difference, for up to 2 differences. If the names are very
-    # short, allow fewer differences.
+    # Split the two last names up into words, by which we mean sequences of letters, numbers, and
+    # marks. All whitespace and punctuation is ignored.
     
-    my $min_length = min_score(length($last_a), length($last_b));
+    my @words_a = $last_a =~ /([\pL\pN\pM]+)/g;
+    my @words_b = $last_b =~ /([\pL\pN\pM]+)/g;
     
-    my $limit = $min_length > 5 ? 2 : 1;
+    # If either name has spurious intials at the end, discard them. A final initial is a letter
+    # possibly followed by some marks.
     
-	      # : $min_length > 3 ? 2
-	      # :                   1;
+    while ( $words_a[-1] =~ qr{ ^ \pL\pM* $ }xs )
+    {
+	pop @words_a;
+    }
     
-    my $tld = Text::Levenshtein::Damerau->new($last_a, { max_distance => 3,
-							 eq_function => \&eq_insensitive });
-    my $distance = $tld->dld($last_b);
+    while ( $words_b[-1] =~ qr{ ^ \pL\pM* $ }xs )
+    {
+	pop @words_b;
+    }
     
-    # If the distance exceeds our limit, return a similarity of 0.
+    # If the last word of either name is 'jr', 'ii', etc. then discard it. These are sometimes
+    # left off by data enterers, so it makes sense to just ignore them.
     
-    unless ( $distance >= 1 && $distance <= $limit )
+    pop @words_a if $words_a[-1] =~ qr{ ^ (?: jr|ii|iii|iv|2nd|3rd|4th ) $ }xs;
+    pop @words_b if $words_b[-1] =~ qr{ ^ (?: jr|ii|iii|iv|2nd|3rd|4th ) $ }xs;
+    
+    # If the two last names have different numbers of words, we construct two different
+    # sequences: one that drops words from the end of the longer one to even them out, and one
+    # that drops words from the beginning of the longer one to even them out. We see both patterns
+    # in mis-entered names.
+    
+    my ($last_initial_a, $last_initial_b,
+	$last_final_a, $last_final_b,
+	$lf_init_a, $lf_init_b,
+	$different_lengths);
+    
+    if ( @words_a > @words_b )
+    {
+	$different_lengths = 1;
+	my $count = @words_b;
+	$last_initial_a = join(' ', @words_a[0..$count-1]);
+	$last_final_a = join(' ', @words_a[-$count..-1]);
+	$last_initial_b = $last_final_b = join(' ', @words_b);
+    }
+
+    elsif ( @words_b > @words_a )
+    {
+	$different_lengths = 1;
+	my $count = @words_a;
+	$last_initial_b = join(' ', @words_b[0..$count-1]);
+	$last_final_b = join(' ', @words_b[-$count..-1]);
+	$last_initial_a = $last_final_a = join(' ', @words_a);
+    }
+    
+    else
+    {
+	$last_initial_a = join(' ', @words_a);
+	$last_initial_b = join(' ', @words_b);
+    }
+    
+    # Both sequences are then cleaned of all non-letter characters and converted into
+    # foldcase. This allows them to be compared on a solely alphabetic basis.
+    
+    $last_initial_a = fc($last_initial_a =~ s/\PL//gr);
+    $last_initial_b = fc($last_initial_b =~ s/\PL//gr);
+
+    if ( $different_lengths )
+    {
+	$last_final_a = fc($last_final_a =~ s/\PL//gr);
+	$last_final_b = fc($last_final_b =~ s/\PL//gr);
+	$lf_init_a = substr($last_final_a, 0, 1);
+	$lf_init_b = substr($last_final_b, 0, 1);
+    }	
+    
+    # # Extract the initial letters from the first one or two words of each first name. Many of them
+    # # are stored as initials anyway, so we simplify by only considering the first letter. If there
+    # # are more than two initials, we ignore the rest.
+    
+    # my ($first_init_a, $init2_a) =
+    # 	$first_a =~ qr{ ([[:alpha:]]) [[:alpha:]]* (?: [^[:alpha:]]+ ([[:alpha:]]))? }xs;
+    
+    # my ($first_init_b, $init2_b) =
+    # 	$first_a =~ qr{ ([[:alpha:]]) [[:alpha:]]* (?: [^[:alpha:]]+ ([[:alpha:]]))? }xs;
+    
+    # # If either last name has spurious initials at the end, remove them.
+    
+    # $last_a =~ s{ ( \s [[:alpha:]][-.\s]* )+ $ }{}x;
+    # $last_b =~ s{ ( \s [[:alpha:]][-.\s]* )+ $ }{}x;
+    
+    # # Remove suffixes such as jr. and iii from the ends of last names. If the names are otherwise
+    # # identical and one has such a suffix while the other doesn't, we assume it was left off from
+    # # the other entry by mistake.
+    
+    # if ( $last_a =~ qr{ ^ (.*?) [\s,]+ (jr|ii|iii|iv|2nd|3rd|4th) [.]? $ }xsi )
+    # {
+    # 	$last_a = $1;
+    # }
+    
+    # if ( $last_b =~ qr{ ^ (.*?) [\s,]+ (jr|ii|iii|iv|2nd|3rd|4th) [.]? $ }xsi )
+    # {
+    # 	$last_b = $1;
+    # }
+
+    # Similarity check #2:
+    # 
+    # If the last names are equal when case and accents are ignored, the base similarity is
+    # 100. First compare the the initial sequences, which are the entire names in cases where the
+    # number of words are the same. If the number of words is different, compare the final
+    # sequences too. If either one matches, the names are similar.
+    
+    if ( $last_initial_a eq $last_initial_b ||
+	 $different_lengths && $last_final_a eq $last_final_b )
+    {
+	$sim = 100;
+    }
+    
+    # Similarity check #3:
+    #
+    # If the last names do not match exactly, there is a chance that one or both have been entered
+    # with misspellings. We can catch cases with just one or two misspellings by using the
+    # Levenshtein-Damerau algorithm to compare the edit distance between the two names. This can
+    # be somewhat slow, so we only do it if *either* the first letters of the two names match or
+    # the last two letters of the two names match.
+    
+    elsif ( $last_init_a eq $last_init_b ||
+	    substr($last_initial_a,-2,2) eq substr($last_initial_b,-2,2) ||
+	    $different_lengths && $lf_init_a eq $lf_init_b ||
+	    $different_lengths && substr($last_final_a,-2,2) eq substr($last_final_b,-2,2) )
+    {
+	my $max = 2;
+	my $lnthr = 8;
+	my $long_names = length($last_initial_a) >= $lnthr && length($last_initial_b) >= $lnthr;
+	my $distance = edistance( $last_initial_a, $last_initial_b, $max );
+	
+	# If the distance was too large and the two names are of different lengths, try the final
+	# sequences too.
+	
+	if ( $different_lengths && ( $distance < 0 || $distance > $max ) )
+	{
+	    $long_names = length($last_final_a) >= $lnthr && length($last_final_b) >= $lnthr;
+	    $distance = edistance( $last_final_a, $last_final_b, $max );
+	}
+	
+	# If the edit distance between the names is 1, the base similarity is 85 with a conflict
+	# of 15.
+	
+	if ( $distance == 1 )
+	{
+	    $sim = 85;
+	    $con = 15;
+	}
+	
+	# If the edit distance between the names is 2 and both names exceed the threshold length,
+	# the base similarity is 70 with a conflict of 30.
+	
+	elsif ( $distance == 2 && $long_names )
+	{
+	    $sim = 70;
+	    $con = 30;
+	}
+	
+	# Otherwise, return a conflict of 100.
+	
+	else
+	{
+	    return (0, 100);
+	}
+    }
+
+    # If the two names weren't equal and we didn't try the fuzzy match at all, return a conflict
+    # of 100.
+    
+    else
     {
 	return (0, 100);
     }
     
+    # If the two last names have different numbers of words, deduct 20 points from the similarity.
+    
+    if ( $different_lengths )
+    {
+	$sim = $sim - 20;
+    }
+
+    # Add a 20 point conflict if the first initials are different.
+    
+    if ( $first_init_a && $first_init_b && $first_init_a ne $first_init_b )
+    {
+	$sim = $sim - 20;
+	$con = $con + 20;
+    }
+    
+    # If one first initial is empty and the other is not, deduct 10 points.
+    
+    elsif ( $first_init_a && ! $first_init_b || $first_init_b && ! $first_init_a )
+    {
+	$sim = $sim - 10;
+    }
+
+    # Return the similarity and conflict scores, making sure they are between 0 and 100.
+    
+    $sim = 0 if $sim < 0;
+    $con = 100 if $con > 100;
+    
+    return (max_score($sim, 0), min_score($con, 100));
+}
+
+    # my $min_length = min_score(length($last_a), length($last_b));
+    
+    # my $limit = $min_length > 5 ? 2 : 1;
+        
+    # my $tld = TLD_Modified->new($last_a, { max_distance => 3, eq_function => \&eq_insensitive });
+    # my $distance = $tld->dld($last_b);
+    
+    # If the distance exceeds our limit, return a similarity of 0.
+    
+    # unless ( $distance >= 1 && $distance <= $limit )
+    # {
+    # 	return (0, 100);
+    # }
+    
     # Otherwise, compute the deduction and compare the first names.
     
-    my $deduction = $distance ? $distance * 15 : 0;
+    # my $deduction = $distance ? $distance * 15 : 0;
     
-    # If both first initials are equal, return a similarity of 100 minus the last name
-    # deduction. This includes both first names being empty.
+    # # If both first initials are equal, return a similarity of 100 minus the last name
+    # # deduction. This includes both first names being empty.
     
-    if ( $init_a eq $init_b || eq_insensitive($init_a, $init_b) )
+    # if ( $first_init_a eq $first_init_b || eq_insensitive($first_init_a, $first_init_b) )
+    # {
+    # 	return (100 - $deduction, $deduction);
+    # }
+    
+    # # If one of the first names is empty and the other is not, deduct 10 more points.
+    
+    # if ( ! $first_a || ! $first_b )
+    # {
+    # 	return (90 - $deduction, 10 + $deduction);
+    # }
+    
+    # # If the first two initials differ, deduct 20 more points.
+    
+    # else
+    # {
+    # 	return (80 - $deduction, 10 + $deduction);
+    # }
+
+
+# match_names ( last, first, name... )
+# 
+# Return the best similarity score and associated conflict score for the specified last and first
+# name when matched against the subsequent list of names. The third return value gives the
+# position of the matching name in the list, starting with 1. If no name matches, the returned
+# position is zero.
+# 
+# The third and subsequent arguments may be either an array of [last, first], or else the last and
+# first names will be extracted by parse_authorname(). All of the argument values must be
+# normalized to Unicode NFD before being passed in. Any results returned by get_authorname and
+# get_authorlist are normalized, and can be passed as they are. Otherwise, clean_string() can be
+# used.
+#
+# The author_similarity procedure is run only for pairs of names where the first initials are
+# equal. This considerably speeds up the execution of this subroutine, but may cause a small
+# number of false negatives.
+
+sub match_names {
+    
+    my ($last, $first, @match_list) = @_;
+    
+    # Extract the initial letters from the first and last names. These will be used to speed up
+    # the search.
+    
+    my ($last_init) = $last =~ $FIRST_INITIAL;
+    my ($first_init) = $first =~ $FIRST_INITIAL;
+    
+    # Iterate through the entries to be matched against, looking for the best match. Start by
+    # checking the initial letters, and only run the full similarity procedure if they match.
+    
+    my $selected_similarity = 0;
+    my $selected_conflict = 0;
+    my $selected_pos = 0;
+    
+    for ( my $i=0; $i<@match_list; $i++ )
     {
-	return (100 - $deduction, $deduction);
+	my ($last_i, $first_i);
+	
+	# If the entry is an array, pull out the two name components. Otherwise, use
+	# parse_authorname().
+	
+	if ( ref $match_list[$i] eq 'ARRAY' )
+	{
+	    ($last_i, $first_i) = $match_list[$i]->@[0..1];
+	}
+
+	else
+	{
+	    ($last_i, $first_i) = parse_authorname($match_list[$i]);
+	}
+	
+	# Extract the initial letters, and compare them to the initial letters of the name we are
+	# trying to match. The last initials must be the same and must not be empty. The first
+	# initials must either be the same or both be empty.
+	
+	my ($last_init_i) = $last_i =~ $FIRST_INITIAL;
+	my ($first_init_i) = $first_i =~ $FIRST_INITIAL;
+	
+	my $straight_match = $last_init && $last_init_i &&
+			     $last_init eq $last_init_i &&
+			     $first_init eq $first_init_i;
+	
+	# If the first and last initials are both present and are different, also check for a
+	# cross-match between the two names. This is necessary because East Asian names are
+	# sometimes incorrectly entered with the first and last switched. One entry might have the
+	# two names entered correctly while the other has them switched. If the first and last
+	# initials are the same we cannot do this, which will cause a small number of false
+	# negatives.
+	
+	my $cross_match = $last_init && $last_init_i &&
+			  $first_init && $first_init_i &&
+			  $last_init ne $first_init &&
+			  $last_init eq $first_init_i &&
+			  $first_init eq $last_init_i;
+
+	# If we get either kind of match, run the full similarity algorithm on this pair of
+	# names. If the similarity is better than any we have found so far, select these numbers.
+	
+	if ( $straight_match || $cross_match )
+	{
+	    my ($similarity, $conflict) = author_similarity($last, $first, $last_i, $first_i);
+	    
+	    if ( $similarity > $selected_similarity )
+	    {
+		$selected_similarity = $similarity;
+		$selected_conflict = $conflict;
+		$selected_pos = $i + 1;
+	    }
+	}
     }
     
-    # If one of the first names is empty and the other is not, deduct 10 more points.
-    
-    if ( ! $first_a || ! $first_b )
-    {
-	return (90 - $deduction, 10 + $deduction);
-    }
-    
-    # If the first two initials differ, deduct 20 more points.
-    
-    else
-    {
-	return (80 - $deduction, 10 + $deduction);
-    }
+    return ($selected_similarity, $selected_conflict, $selected_pos);
 }
 
 
