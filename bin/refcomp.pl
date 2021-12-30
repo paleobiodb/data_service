@@ -45,6 +45,8 @@ my ($DONE, $INTERRUPT, $STOP, $WAITING);
 
 our (%VARMAP, %MODMAP, %OPMAP);
 
+our (%HELPMSG, %HELPTEXT, @HELPLIST, @TOPICLIST);
+
 # Handle an interrupt according to how we are running. If the debugger is active, set the $STOP
 # flag to drop us into the debugger at an appropriate part of the code. Otherwise, set the $DONE
 # flag which will cause the program to terminate gracefully.
@@ -211,12 +213,12 @@ eval {
 };
 
 save_state("$base_dir/$state_file");
-print_msg "Done.";
+print_msg "Application state saved.";
 exit;
 
 
 # handle_command ( input_line )
-#
+# 
 # Handle a command entered on the terminal.
 
 sub handle_command {
@@ -262,6 +264,29 @@ sub handle_command {
 # $argstring. Currently, the valid arguments are 'sql' and 'nosql', which set and clear the
 # 'sql' debug flag respectively.
 
+BEGIN { push @HELPLIST, 'debug';
+$HELPMSG{debug} = "Set or clear a debugging flag.";
+$HELPTEXT{debug} = <<HelpDebug;
+
+Usage: debug <flag> | debug no<flag>
+
+To set a debugging flag, execute 'debug <flag>'. To clear it, execute 
+'debug no<flag>'.
+
+Available flags include:
+
+  sql       Display the SQL statement(s) that are generated in the process
+            of selecting records.
+
+  scoring   Stop at a breakpoint before any reference is scored.
+
+  display   Stop at a breakpoint before any formatted reference is displayed.
+
+  test      Stop at a breakpoint before each execution of a 'test' command.
+
+HelpDebug
+};
+
 sub do_debug {
 
     my ($command, $argstring) = @_;
@@ -303,13 +328,30 @@ sub do_debug {
 # color:        on, off
 # history:      maximum number of history lines to save
 
+BEGIN { push @HELPLIST, 'set';
+$HELPMSG{set} = "Change the value of a setting.";
+$HELPTEXT{set} = <<HelpSet;
+
+Usage: set <setting> <value> | set <setting>=<value>
+
+The following settings are available:
+
+  source    Change the default source. Values are: xdd, crossref, all.
+
+  color     Turn color output on or off. Values are: on, off.
+
+  history   Set the maximum number of history lines to save.
+
+HelpSet
+};
+
 sub do_set {
     
     my ($command, $argstring) = @_;
     
     $DB::single = 1 if $STOP;
     
-    if ( $argstring =~ qr{ ^ (\w+) \s+ (.+) }xs )
+    if ( $argstring =~ qr{ ^ (\w+) (?: \s+ | \s* = \s* ) (.+) }xs )
     {
 	my $setting = $1;
 	my $value = $2;
@@ -364,6 +406,33 @@ sub do_set {
 # do_show ( argstring )
 #
 # Execute the 'show' command, showing whatever information is specified by $argstring.
+
+BEGIN { push @HELPLIST, 'show';
+$HELPMSG{show} = "Display setting values and other information.";
+$HELPTEXT{show} = <<HelpShow;
+
+Usage: show <argument>
+
+Accepted arguments are:
+
+  selection   Displays the current selection expression and number of records
+              selected.
+
+  expr        Displays the table of active selections. If 'sql' is appended,
+              displays the expanded SQL statement corresponding to each one.
+
+  vars        Displays the table of active variable values.
+
+  debug       Displays the values of the debugging flags.
+
+  source      Displays the default source for scoring information.
+
+  color       Displays whether color output is on or off.
+
+  history     Displays the maximum number of history lines to save.
+
+HelpShow
+};
 
 sub do_show {
 
@@ -614,6 +683,23 @@ sub do_show_vars {
 # of references that match it. Also sets the %SELECTION variables, to provide a basis for
 # subsequent commands such as 'list', 'add', etc.
 
+BEGIN { push @HELPLIST, 'select';
+$HELPMSG{select} = "Select records according to a specified expression.";
+$HELPTEXT{select} = <<HelpSelect;
+
+Usage: select <n> | select E<n> | select '<name> | select . | select <expr>
+
+The first two forms select records using the nth entry in the active expression table. You
+can list these using the 'show expr' command. The next form uses the first entry whose
+name matches the argument. You can use * as a wildcard. The third re-computes the current
+selection.
+
+Otherwise, you may specify an expression directly. The syntax is given under the help
+topic 'selecting'.
+
+HelpSelect
+};
+
 sub do_select {
 
     my ($command, $argstring) = @_;
@@ -622,7 +708,7 @@ sub do_select {
     
     # If the expression is empty, there is nothing to add.
 
-    unless ( defined $argstring && ($argstring =~ /[A-Za-z]/ || $argstring eq '.' ) )
+    unless ( defined $argstring && ($argstring =~ /[A-Za-z0-9]/ || $argstring eq '.' ) )
     {
 	print_msg "You must specify an expression.";
 	return;
@@ -894,6 +980,17 @@ sub fill_variables {
 #
 # Carry out the 'clear' command. This clears the selection completely.
 
+BEGIN { push @HELPLIST, 'clear';
+$HELPMSG{clear} = "Clear the current selection.";
+$HELPTEXT{clear} = <<HelpClear;
+
+Usage: clear
+
+After this command is executed, the selection will be empty.
+
+HelpClear
+};
+
 sub do_clear {
 
     $DB::single = 1 if $STOP;
@@ -1013,10 +1110,319 @@ sub search_active {
 }
 
 
+# do_list ( argstring )
+#
+# Carry out the 'list' operation, listing score records that match the current selection
+# expression. Depending on the arguments and the current position in the list, either continue
+# where the previous 'list' operation left off, or fetch another batch of records and start
+# listing them, or start from the beginning of the list of positive matches, negative matches,
+# unassigned matches, or all matches.
+
+BEGIN { push @HELPLIST, 'list';
+$HELPMSG{list} = "List records from the current selection.";
+$HELPTEXT{list} = <<HelpList;
+
+Usage: list | list <match_type> | list @<n>[,<n>...] | list %<n>[,<n>...]
+
+If no arguments are given, list another batch of records from the current selection using
+the current match type. If a match type is given and it is different from the current one,
+list a new batch of records using the specified match type. The match type can be
+abbreviated to the first letter. The match types are:
+
+  pos     List records from the selection where the match has been accepted.
+  neg     List records from the selection where the match has been rejected.
+  un      List records from the selection that are still unevaluated.
+  all     List a random batch of records from the selection.
+
+If the argument starts with @, select the records with the specified refsource numbers.
+
+If the argument starts with %, select the records with the specified reference numbers.
+
+HelpList
+};
+
+sub do_list {
+    
+    my ($command, $argstring) = @_;
+    
+    $DB::single = 1 if $STOP;
+    
+    # Unless we have a current selection, let the user know they have to select something first
+    # unless we were given an argument that starts with @ or %.
+    
+    unless ( $SELECTION{EXPR} || $argstring =~ /^[@%]/ )
+    {
+	print_msg "Nothing selected.";
+	return;
+    }
+    
+    # Now parse the argument and determine what to list.
+    
+    my $record_expr;
+    
+    # If no argument was given and we have reached the end of the current batch of records, empty
+    # it so that another batch of matching records will be fetched. They will be fetched using the
+    # current match type unless that is overridden below.
+    
+    if ( ! defined $argstring || $argstring eq '' )
+    {
+	if ( ref $SELECTION{MATCHES} eq 'ARRAY' &&
+	     $SELECTION{MATCH_INDEX} == $SELECTION{MATCHES}->@* )
+	{
+	    set_selection_matches($SELECTION{MATCH_TYPE}, 0);
+	}
+
+	elsif ( ref $SELECTION{MATCHES} ne 'ARRAY' || ! $SELECTION{MATCHES}->@* )
+	{
+	    set_selection_matches('a', 0);
+	}
+    }
+    
+    # If the argument is 'm' or 'more', empty the current batch of records so that a new random
+    # batch will be fetched. If the current batch is already empty, there is no need to print a
+    # message to the user.
+    
+    elsif ( $argstring =~ qr{ ^ m (ore|$) }xsi )
+    {
+	set_selection_matches($SELECTION{MATCH_TYPE}, 0);
+    }
+    
+    # If the argument starts with 'pr' or 'prev', put the previous list of matches back into the
+    # current list. If the current list is not empty, swap the two.
+    
+    elsif ( $argstring =~ qr{ ^ pr (ev|$) }xsi )
+    {
+	swap_selection_matches();
+    }
+    
+    # If the argument starts with 'n', 'p', 'u', or 'a', then fetch records using the
+    # corresponding match type. If the specified match type is different from the current one,
+    # empty the current batch of records. Otherwise, just keep going where we left off.
+    
+    elsif ( $argstring =~ qr{ ^ n (eg|egative|) $ }xsi )
+    {
+	set_selection_matches('n', 0) unless $SELECTION{MATCH_TYPE} eq 'n';
+    }
+
+    elsif ( $argstring =~ qr{ ^ p (os|ositive|) $ }xsi )
+    {
+	set_selection_matches('p', 0) unless $SELECTION{MATCH_TYPE} eq 'p';
+    }
+    
+    elsif ( $argstring =~ qr{ ^ u (n|na|nassigned|) $ }xsi )
+    {
+	set_selection_matches('u', 0) unless $SELECTION{MATCH_TYPE} eq 'u';
+    }
+    
+    elsif ( $argstring =~ qr{ ^ a (ll|) $ }xsi )
+    {
+	set_selection_matches('a', 0) unless $SELECTION{MATCH_TYPE} eq 'a';
+    }
+    
+    # If the argument starts with @, then fetch records using the specified refsource_no value(s).
+    
+    elsif ( $argstring =~ qr{ ^ ([?])? [@] ( \d [\d\s,@]* ) }xs )
+    {
+	my $type = $1 ? 'r' : 'l';
+	my $valstring = $2;
+	my @values = split /[\s,@]+/, $valstring;
+	$valstring = join "','", @values;
+	set_selection_matches($type, 0);
+	set_selection_restriction("sc.refsource_no in ('$valstring')");
+    }
+    
+    # If the argument starts with %, then fetch records using the specified reference_no value(s).
+    
+    elsif ( $argstring =~ qr{ ^ ([?])? [%] ( \d [\d\s,%]* ) }xs )
+    {
+	my $type = $1 ? 'r' : 'l';
+	my $valstring = $2;
+	my @values = split /[\s,%]+/, $valstring;
+	$valstring = join "','", @values;
+	set_selection_matches($type, 0);
+	set_selection_restriction("sc.reference_no in ('$valstring')");
+    }
+    
+    # Anything else is an error.
+    
+    else
+    {
+	print_msg "Unknown argument '$argstring'";
+	return;
+    }
+    
+    # If the current selection is generated from an active expression slot, generate a label for
+    # it. Otherwise, the label will be the empty string.
+    
+    my $label = generate_label($SELECTION{SLOT});
+        
+    # Unless we have match counts for the current selection expression, compute them now. To be on
+    # the safe side we regenerate the SQL, and then run count_matching_scores.
+    
+    unless ( defined $SELECTION{COUNT} )
+    {
+	count_selection($label) || return;
+    }
+    
+    # If we don't have a cached batch of score records, fetch some. 
+    
+    unless ( @{$SELECTION{MATCHES}} )
+    {
+	my ($count, $posneg);
+	
+	my $limit = $SETTINGS{listsize} || 20;
+	my $typelabel = $SELECTION{MATCH_TYPE} eq 'n' ? 'rejected'
+	    : $SELECTION{MATCH_TYPE} eq 'p' ? 'accepted'
+	    : $SELECTION{MATCH_TYPE} eq 'u' ? 'unassigned'
+	    : $SELECTION{MATCH_TYPE} eq 'l' ? 'listed'
+	    : $SELECTION{MATCH_TYPE} eq 'r' ? 'selected'
+	    : 'unfiltered';
+	
+	if ( $SELECTION{MATCH_TYPE} eq 'n' )
+	{
+	    $count = $SELECTION{COUNT_NEG};
+	    $posneg = "sc.manual = 0";
+	}
+	
+	elsif ( $SELECTION{MATCH_TYPE} eq 'p' )
+	{
+	    $count = $SELECTION{COUNT_POS};
+	    $posneg = "sc.manual = 1";
+	}
+
+	elsif ( $SELECTION{MATCH_TYPE} eq 'u' )
+	{
+	    $count = $SELECTION{COUNT} - $SELECTION{COUNT_POS} - $SELECTION{COUNT_NEG};
+	    $posneg = "sc.manual is null";
+	}
+	
+	elsif ( $SELECTION{MATCH_TYPE} eq 'a' || $SELECTION{MATCH_TYPE} eq 'r' || $SELECTION{MATCH_TYPE} eq 'l' )
+	{
+	    $count = $SELECTION{COUNT};
+	    $posneg = "";
+	}
+	
+	else
+	{
+	    print_msg "Assuming 'all'.";
+	    
+	    $count = $SELECTION{COUNT};
+	    $posneg = "";
+	}
+	
+	unless ( $count )
+	{
+	    if ( $SELECTION{COUNT} == 0 )
+	    {
+		print_msg "Selection is empty.";
+	    }
+
+	    else
+	    {
+		print_msg "No $typelabel matches in the selection.";
+	    }
+	    
+	    return;
+	}
+	
+	# List either the first chunk or a random selection of matching score entries.
+	
+	my $mode = $SETTINGS{listmode} || 'random';
+	my $sql = $SELECTION{SQL};
+	
+	if ( $posneg )
+	{
+	    $sql .= " and $posneg";
+	}
+
+	if ( $SELECTION{RESTRICTION} )
+	{
+	    if ( $SELECTION{MATCH_TYPE} eq 'l' )
+	    {
+		$sql = $SELECTION{RESTRICTION};
+	    }
+	    else
+	    {
+		$sql .= " and $SELECTION{RESTRICTION}";
+	    }
+	    $mode = 'sequential';
+	}
+	
+	print_msg "Fetching $limit $typelabel records";
+	
+	# Now fetch the matching score records.
+
+	my @matches;
+	
+	eval {
+	    @matches = $rs->list_matching_scores($sql, $mode, $count, $limit);
+	};
+	
+	# If an error is thrown indicating that the server has gone away, reconnect to the database and
+	# retry the operation.
+	
+	if ( $@ =~ /server has gone away/i )
+	{
+	    print_msg "Server has gone away, reconnecting...";
+	    
+	    my $dbh = connectDB("$base_dir/$config_file", "pbdb");
+	    
+	    $rs->set_dbh($dbh);
+	    
+	    eval {
+		@matches = $rs->list_matching_scores($sql, $mode, $count, $limit);
+	    };
+	}
+	
+	# If any other error occurs, the constructed SQL expression is not valid. Since
+	# count_matching_scores already succeeded, it is most likely one of the modifications done
+	# by list_matching_scores that is the problem. So leave the selection as-is and just
+	# return.
+	
+	if ( $@ )
+	{
+	    print_msg "$label$@";
+	    return;
+	}
+
+	set_selection_matches($SELECTION{MATCH_TYPE}, 0, @matches);
+	
+	if ( $SELECTION{RESTRICTION} && ! @matches )
+	{
+	    print_msg "The specified record(s) are not in the selection";
+	}
+    }
+    
+    # Display the first match, before returning to the command loop.
+
+    my $i = $SELECTION{MATCH_INDEX};
+    my $m = $SELECTION{MATCHES}[$i];
+    
+    display_match($m);
+}
+
+
 # do_add ( name )
 #
 # Add the current expression to the ACTIVE table with the given name. If we already have a
 # selected slot, change the name.
+
+BEGIN { push @HELPLIST, 'add';
+$HELPMSG{add} = "Add the current selection expression to the active expression table.";
+$HELPTEXT{add} = <<HelpAdd;
+
+Usage: add | add <name>
+
+If a name is specified and the current selection is associated with an active expression
+entry, you will be asked if you wish to rename that entry. If the current selection
+expression is different from that entry's expression, you will be asked if you wish to
+substitute it.
+
+If the current selection is not associated with an active expression entry, a new entry
+will be created. If a name is specified it will be given that name.
+
+HelpAdd
+};
 
 sub do_add {
     
@@ -1121,6 +1527,26 @@ sub do_add {
 }
 
 
+# do_delete ( argument )
+#
+# Delete the specified entry from the active expression table.
+
+BEGIN { push @HELPLIST, 'delete';
+$HELPMSG{delete} = "Delete the specified entry from the active expression table.";
+$HELPTEXT{delete} = <<HelpDelete;
+
+Usage: delete <n> | delete E<n> | delete '<name> | delete .
+
+The first two forms delete the nth entry from the active expression table. The third form
+deletes the first entry whose name matches the argument. You can use * as a wildcard. If
+the argument is '.' and the current selection is associated with an active expression
+entry, that entry is deleted.
+
+If the entry associated with the current selection is deleted, the selection is cleared.
+
+HelpDelete
+};
+
 sub do_delete {
     
     my ($command, $argstring) = @_;
@@ -1143,10 +1569,6 @@ sub do_delete {
 	else
 	{
 	    print_msg "Nothing to delete.";
-	    $SELECTION{SLOT} = undef;
-	    $SELECTION{EXPR} = undef;
-	    $SELECTION{SQL} = undef;
-	    return;
 	}
     }
     
@@ -1195,9 +1617,15 @@ sub do_delete {
 	splice @ACTIVE, $to_delete-1, 1;
 	my $label = '';
 	$label = " [$name]" if $name;
-	print_msg "Deleted E$to_delete$label";
-    }
+	print_msg "Deleted E$to_delete$label.";
 
+	if ( $to_delete == $SELECTION{SLOT} )
+	{
+	    set_selection();
+	    print_msg "Selection cleared.";
+	}
+    }
+    
     else
     {
 	print_msg "Nothing to delete.";
@@ -1205,283 +1633,6 @@ sub do_delete {
     }
     
     return;
-}
-
-
-# do_list ( argstring )
-#
-# Carry out the 'list' operation, listing score records that match the current selection
-# expression. Depending on the arguments and the current position in the list, either continue
-# where the previous 'list' operation left off, or fetch another batch of records and start
-# listing them, or start from the beginning of the list of positive matches, negative matches,
-# unassigned matches, or all matches.
-
-sub do_list {
-    
-    my ($command, $argstring) = @_;
-    
-    $DB::single = 1 if $STOP;
-    
-    # Unless we have a current selection, let the user know they have to select something first
-    # unless we were given an argument that starts with @ or %.
-    
-    unless ( $SELECTION{EXPR} || $argstring =~ /^[@%]/ )
-    {
-	print_msg "Nothing selected.";
-	return;
-    }
-    
-    # Now parse the argument and determine what to list.
-    
-    my $record_expr;
-    
-    # If no argument was given and we have reached the end of the current batch of records, empty
-    # it so that another batch of matching records will be fetched. They will be fetched using the
-    # current match type unless that is overridden below.
-    
-    if ( ! defined $argstring || $argstring eq '' )
-    {
-	if ( ref $SELECTION{MATCHES} eq 'ARRAY' &&
-	     $SELECTION{MATCH_INDEX} == $SELECTION{MATCHES}->@* )
-	{
-	    set_selection_matches($SELECTION{MATCH_TYPE}, 0);
-	}
-
-	elsif ( ref $SELECTION{MATCHES} ne 'ARRAY' || ! $SELECTION{MATCHES}->@* )
-	{
-	    set_selection_matches('a', 0);
-	}
-    }
-    
-    # If the argument starts with 'r', reset our position to the beginning of the current batch.
-    
-    elsif ( $argstring =~ qr{ ^ r }xsi )
-    {
-	$SELECTION{MATCH_INDEX} = 0;
-	print_msg "Starting from the beginning of the current batch";
-    }
-    
-    # If the argument starts with 'm', empty the current batch of records so that a new random
-    # batch will be fetched. If the current batch is already empty, there is no need to print a
-    # message to the user.
-    
-    elsif ( $argstring =~ qr{ ^ m }xsi )
-    {
-	set_selection_matches($SELECTION{MATCH_TYPE}, 0);
-    }
-
-    # If the argument starts with 'pr' or 'prev', put the previous list of matches back into the
-    # current list. If the current list is not empty, swap the two.
-    
-    elsif ( $argstring =~ qr{ ^ pr (ev|$) }xsi )
-    {
-	swap_selection_matches();
-    }
-    
-    # If the argument starts with 'n', 'p', 'u', or 'a', then fetch records using the
-    # corresponding match type. If the specified match type is different from the current one,
-    # empty the current batch of records. Otherwise, just keep going where we left off.
-    
-    elsif ( $argstring =~ qr{ ^ n (eg|$) }xsi )
-    {
-	set_selection_matches('n', 0) unless $SELECTION{MATCH_TYPE} eq 'n';
-    }
-
-    elsif ( $argstring =~ qr{ ^ p (os|$) }xsi )
-    {
-	set_selection_matches('p', 0) unless $SELECTION{MATCH_TYPE} eq 'p';
-    }
-    
-    elsif ( $argstring =~ qr{ ^ u (n|a|$) }xsi )
-    {
-	set_selection_matches('u', 0) unless $SELECTION{MATCH_TYPE} eq 'u';
-    }
-    
-    elsif ( $argstring =~ qr{ ^ a (ll)? $ }xsi )
-    {
-	set_selection_matches('a', 0) unless $SELECTION{MATCH_TYPE} eq 'a';
-    }
-    
-    # If the argument starts with @, then fetch records using the specified refsource_no value(s).
-    
-    elsif ( $argstring =~ qr{ ^ ([?])? [@] ( \d [\d\s,@]* ) }xs )
-    {
-	my $type = $1 ? 'r' : 'l';
-	my $valstring = $2;
-	my @values = split /[\s,@]+/, $valstring;
-	$valstring = join "','", @values;
-	set_selection_matches($type, 0);
-	set_selection_restriction("sc.refsource_no in ('$valstring')");
-    }
-    
-    # If the argument starts with %, then fetch records using the specified reference_no value(s).
-    
-    elsif ( $argstring =~ qr{ ^ ([?])? [%] ( \d [\d\s,%]* ) }xs )
-    {
-	my $type = $1 ? 'r' : 'l';
-	my $valstring = $2;
-	my @values = split /[\s,%]+/, $valstring;
-	$valstring = join "','", @values;
-	set_selection_matches($type, 0);
-	set_selection_restriction("sc.reference_no in ('$valstring')");
-    }
-    
-    # Anything else is an error.
-    
-    else
-    {
-	print_msg "Unknown argument '$argstring'";
-	return;
-    }
-    
-    # If the current selection is generated from an active expression slot, generate a label for
-    # it. Otherwise, the label will be the empty string.
-    
-    my $label = generate_label($SELECTION{SLOT});
-        
-    # Unless we have match counts for the current selection expression, compute them now. To be on
-    # the safe side we regenerate the SQL, and then run count_matching_scores.
-    
-    unless ( defined $SELECTION{COUNT} )
-    {
-	count_selection($label) || return;
-    }
-    
-    # If we don't have a cached batch of score records, fetch some. 
-    
-    unless ( @{$SELECTION{MATCHES}} )
-    {
-	my ($count, $posneg);
-	
-	my $limit = $SETTINGS{listsize} || 20;
-	my $typelabel = $SELECTION{MATCH_TYPE} eq 'n' ? 'rejected'
-	    : $SELECTION{MATCH_TYPE} eq 'p' ? 'accepted'
-	    : $SELECTION{MATCH_TYPE} eq 'u' ? 'unassigned'
-	    : $SELECTION{MATCH_TYPE} eq 'l' ? 'listed'
-	    : $SELECTION{MATCH_TYPE} eq 'r' ? 'selected'
-	    : 'unfiltered';
-	
-	if ( $SELECTION{MATCH_TYPE} eq 'n' )
-	{
-	    $count = $SELECTION{COUNT_NEG};
-	    $posneg = "sc.manual = 0";
-	}
-	
-	elsif ( $SELECTION{MATCH_TYPE} eq 'p' )
-	{
-	    $count = $SELECTION{COUNT_POS};
-	    $posneg = "sc.manual = 1";
-	}
-
-	elsif ( $SELECTION{MATCH_TYPE} eq 'u' )
-	{
-	    $count = $SELECTION{COUNT} - $SELECTION{COUNT_POS} - $SELECTION{COUNT_NEG};
-	    $posneg = "sc.manual is null";
-	}
-	
-	elsif ( $SELECTION{MATCH_TYPE} eq 'a' || $SELECTION{MATCH_TYPE} eq 'r' || $SELECTION{MATCH_TYPE} eq 'l' )
-	{
-	    $count = $SELECTION{COUNT};
-	    $posneg = "";
-	}
-	
-	else
-	{
-	    print_msg "Assuming 'all'.";
-	    
-	    $count = $SELECTION{COUNT};
-all	    $posneg = "";
-	}
-	
-	unless ( $count )
-	{
-	    if ( $SELECTION{COUNT} == 0 )
-	    {
-		print_msg "Selection is empty.";
-	    }
-
-	    else
-	    {
-		print_msg "No $typelabel matches in the selection.";
-	    }
-	    
-	    return;
-	}
-	
-	# List either the first chunk or a random selection of matching score entries.
-	
-	my $mode = $SETTINGS{listmode} || 'random';
-	my $sql = $SELECTION{SQL};
-	
-	if ( $posneg )
-	{
-	    $sql .= " and $posneg";
-	}
-
-	if ( $SELECTION{RESTRICTION} )
-	{
-	    if ( $SELECTION{MATCH_TYPE} eq 'l' )
-	    {
-		$sql = $SELECTION{RESTRICTION};
-	    }
-	    else
-	    {
-		$sql .= " and $SELECTION{RESTRICTION}";
-	    }
-	    $mode = 'sequential';
-	}
-	
-	print_msg "Fetching $limit $typelabel records";
-	
-	# Now fetch the matching score records.
-
-	my @matches;
-	
-	eval {
-	    @matches = $rs->list_matching_scores($sql, $mode, $count, $limit);
-	};
-	
-	# If an error is thrown indicating that the server has gone away, reconnect to the database and
-	# retry the operation.
-	
-	if ( $@ =~ /server has gone away/i )
-	{
-	    print_msg "Server has gone away, reconnecting...";
-	    
-	    my $dbh = connectDB("$base_dir/$config_file", "pbdb");
-	    
-	    $rs->set_dbh($dbh);
-	    
-	    eval {
-		@matches = $rs->list_matching_scores($sql, $mode, $count, $limit);
-	    };
-	}
-	
-	# If any other error occurs, the constructed SQL expression is not valid. Since
-	# count_matching_scores already succeeded, it is most likely one of the modifications done
-	# by list_matching_scores that is the problem. So leave the selection as-is and just
-	# return.
-	
-	if ( $@ )
-	{
-	    print_msg "$label$@";
-	    return;
-	}
-
-	set_selection_matches($SELECTION{MATCH_TYPE}, 0, @matches);
-	
-	if ( $SELECTION{RESTRICTION} && ! @matches )
-	{
-	    print_msg "The specified record(s) are not in the selection";
-	}
-    }
-    
-    # Display the first match, before returning to the command loop.
-
-    my $i = $SELECTION{MATCH_INDEX};
-    my $m = $SELECTION{MATCHES}[$i];
-    
-    display_match($m);
 }
 
 
@@ -1569,6 +1720,26 @@ sub count_selection {
 # do_match ( command )
 #
 # Handle the commands for manual marking and scoring of match records.
+
+BEGIN { push @TOPICLIST, 'navigation';
+$HELPMSG{navigation} = "Commands for navigating the current list.";
+$HELPTEXT{navigation} = <<HelpNav;
+
+You can use the following commands to navigate the current list and accept
+or reject matches:
+
+  a       Accept the current match and display the next one.
+  r       Reject the current match and display the next one.
+  s       Re-score and redisplay the current match.
+  n       Display the next match.
+  p       Display the previous match.
+  ^       Display the first match in the current list.
+  \$       Display the last match in the current list.
+  .       Redisplay the current match.
+  0-9     Display the numbered match from the current list.
+
+HelpNav
+};
 
 sub do_match {
     
@@ -1744,104 +1915,6 @@ sub do_match {
 }
 
 
-# list_current_matches ( )
-#
-# Interactively display the current match list one by one, and ask the user what to do with each
-# one. Valid responses include:
-#
-#   a	Mark the match as accepted.
-#   r   Mark the match as rejected.
-#   u   Mark the match as unassigned.
-#   s   Re-score the match.
-#   n   Go on to the next match.
-#   p   Return to the previous match.
-#   q   Return to the main command line.
-#   x   Quit this program entirely.
-
-sub list_current_matches {
-
-  MATCH:
-    while ( $SELECTION{MATCH_INDEX} < @{$SELECTION{MATCHES}} )
-    {
-	display_match($SELECTION{MATCHES}[$SELECTION{MATCH_INDEX}]);
-	
-	my $response;
-	
-	# Prompt for user input until a valid response is received.
-	
-	while ( 1 )
-	{
-	    $response = $TERM->readline("Match $SELECTION{MATCH_INDEX} [arus|np|qx]: ");
-	    
-	    next if $response =~ /^p/ && ! ($SELECTION{MATCH_INDEX} > 0);
-	    last if ! defined $response || $response =~ /^(a|r|u|s|n|p|q|x)/i;
-	}
-	
-	if ( ! defined $response || $response =~ /^(q|x)/i )
-	{
-	    $DONE = 1 unless $response =~ /^q/;
-	    return;
-	}
-	
-	elsif ( $response =~ /^p/i )
-	{
-	    $SELECTION{MATCH_INDEX}-- if $SELECTION{MATCH_INDEX} > 0;
-	    next MATCH;
-	}
-	
-	elsif ( $response =~ /^n/i )
-	{
-	    $SELECTION{MATCH_INDEX}++;
-	    next MATCH;
-	}
-	
-	my ($new, $set, $stay);
-	
-	eval {
-	    if ( $response =~ /^a/i )
-	    {
-		$new = $rs->set_manual($SELECTION{MATCHES}[$SELECTION{MATCH_INDEX}], 1);
-		$set = 1;
-	    }
-	    
-	    elsif ( $response =~ /^r/i )
-	    {
-		$new = $rs->set_manual($SELECTION{MATCHES}[$SELECTION{MATCH_INDEX}], 0);
-		$set = 1;
-	    }
-	    
-	    elsif ( $response =~ /^u/i )
-	    {
-		$new = $rs->set_manual($SELECTION{MATCHES}[$SELECTION{MATCH_INDEX}], undef);
-		$set = 1;
-	    }
-
-	    elsif ( $response =~ /^s/i )
-	    {
-		$stay = 1;
-		rescore_match($SELECTION{MATCHES}[$SELECTION{MATCH_INDEX}]);
-	    }
-	};
-	
-	if ( $@ )
-	{
-	    print STDERR "$@\n";
-	}
-	
-	elsif ( $set )
-	{
-	    my $match_label = match_label($new);
-	    
-	    print_msg "Above match is $match_label";
-	}
-	
-	$SELECTION{MATCH_INDEX}++ unless $stay;
-    }
-
-    print_msg "Done with the current list of matches.";
-}
-
-
 # display_match ( match_record )
 #
 # Display the specified match. Display formatted text representing both the original paleobiodb
@@ -1876,7 +1949,9 @@ sub display_match {
     print_line "REF $m->{reference_no}    \@$m->{refsource_no}:    $match_label\n";
     print_line $m->{ref_formatted}, "\n";
     print_line $m->{match_formatted}, "\n";
-    print_line $rs->format_scores_horizontal($m, $color_output), "\n";
+    print_line $rs->format_scores_horizontal($m, $color_output);
+    print_line "debug:    ", $m->{debugstr}, "\n" if $m->{debugstr};
+    print_line "";
     
     return;
 }
@@ -1950,7 +2025,10 @@ sub rescore_match {
     if ( my $count = $rs->update_match_scores($m, $scores) )
     {
 	print_msg "$count score variables updated";
-	print_line $rs->format_scores_horizontal($m, $color_output), "\n";
+	print_line $rs->format_scores_horizontal($m, $color_output);
+	print_line "debug:    ", $m->{debugstr}, "\n" if $m->{debugstr};
+	
+	print_line "";
     }
     
     # Otherwise, inform the user that the re-scoring operation produced the same set of scores
@@ -1988,7 +2066,7 @@ sub rescore_match {
 sub do_score {
     
     my ($command, $argstring) = @_;
-
+    
     $DB::single = 1 if $STOP;
     
     unless ( $argstring )
@@ -1996,9 +2074,9 @@ sub do_score {
 	print_msg "You must specify either 'negative', 'positive', 'unassigned' or 'all'";
 	return;
     }
-
+    
     my $commandlabel;
-
+    
     if ( $command eq 'score' )
     {
 	$commandlabel = 'Scored';
@@ -2316,14 +2394,48 @@ sub do_interrupt {
 #
 # Display documentation about this program or any of its subcommands, plus some other topics.
 
+BEGIN { $HELPTEXT{main} = <<HelpMain;
+
+The purpose of this program is to compare stored bibliographic references with
+with data fetched from CrossRef and other sources. Available commands are:
+
+HelpMain
+};
+
 sub do_help {
 
     my ($command, $argstring) = @_;
     
-    if ( $argstring !~ /\S/ )
+    if ( $HELPTEXT{$argstring} )
     {
-	print "\nThe purpose of this program is to compare stored bibliographic references\n" .
-	    "with data fetched from CrossRef and other sources.\n\n";
+	print $HELPTEXT{$argstring};
+    }
+
+    elsif ( $argstring )
+    {
+	print "\nUnrecognized command or topic: $argstring\n\n";
+    }
+    
+    else
+    {
+	print $HELPTEXT{main};
+
+	foreach my $cmd ( @HELPLIST )
+	{
+	    print sprintf("  %-10s \%s\n", $cmd, $HELPMSG{cmd});
+	}
+
+	if ( @TOPICLIST )
+	{
+	    print "\n";
+	    
+	    foreach my $topic ( @TOPICLIST )
+	    {
+		print sprintf("  %-10s \%s\n", $topic, $HELPMSG{topic});
+	    }
+	}
+
+	print "\n";
     }
 }
 
@@ -2758,431 +2870,6 @@ sub score_value {
 }
 
 
-# # If the action is 'compare', do a score comparison. First query for differential counts and
-# # display that info to the user. Ask the user if they want to see the actual lists of reference matches.
-
-# if ( $action eq 'compare' )
-# {
-#     # First get the counts.
-    
-#     my ($count_a, $count_b) = $rs->compare_scores($expr_a, $expr_b);
-
-#     # Print them out.
-
-#     if ( $expr_b )
-#     {
-# 	print "Matched A: $count_a\n\n";
-
-# 	print "Matched B: $count_b\n\n";
-#     }
-
-#     else
-#     {
-# 	print "Matched: $count_a\n\n";
-#     }
-    
-#     # Now loop, asking for a response.
-    
-#     my $answer;
-#     my $matchlist_a;
-#     my $matchlist_b;
-    
-#     while (1)
-#     {
-# 	print "See match list? ";
-# 	my $answer = <STDIN>;
-# 	chomp $answer;
-	
-# 	last if $answer =~ /^[nq]/i;
-# 	next unless $answer =~ /^[aby]/i;
-	
-# 	my @matches;
-	
-# 	if ( $answer =~ /^[ay]/i )
-# 	{
-# 	    if ( ref $matchlist_a eq 'ARRAY' )
-# 	    {
-# 		@matches = @$matchlist_a;
-# 	    }
-
-# 	    else
-# 	    {
-# 		@matches = $rs->compare_list_scores($expr_a, $expr_b, 50);
-# 		$matchlist_a = \@matches;
-# 	    }
-# 	}
-	
-# 	else
-# 	{
-# 	    if ( ref $matchlist_b eq 'ARRAY' )
-# 	    {
-# 		@matches = @$matchlist_b;
-# 	    }
-
-# 	    else
-# 	    {
-# 		@matches = $rs->compare_list_scores($expr_b, $expr_a, 50);
-# 		$matchlist_b = \@matches;
-# 	    }
-# 	}
-	
-# 	open(my $outfile, '>', "/var/tmp/refcheck$$.output");
-	
-# 	my $sep = '';
-	
-# 	foreach my $m ( @matches )
-# 	{
-# 	    print $outfile $sep;
-# 	    print $outfile "REF $m->{reference_no}    \@$m->{refsource_no}:\n\n";
-# 	    print $outfile $m->{ref_formatted}, "\n\n";
-# 	    print $outfile $m->{formatted}, "\n\n";
-# 	    print $outfile format_scores_horizontal($m), "\n";
-	    
-# 	    $sep = "===================================================\n";
-# 	}
-
-# 	close $outfile;
-
-# 	system("less", "/var/tmp/refcheck$$.output");
-#     }
-    
-#     unlink "/var/tmp/refcheck$$.output";
-    
-#     exit;
-# }
-
-
-# elsif ( $action eq 'history' )
-#     {
-# 	my @events = $rs->select_events($r, 'history');
-# 	printout_history($r, \@events);
-#     }
-    
-#     elsif ( $action eq 'dump' )
-#     {
-# 	my ($event) = $rs->select_events($r, 'latest');
-# 	my @items = get_event_content($r, $event, $opt_which);
-# 	printout_event_attrs($event);
-	
-# 	foreach my $i (@items)
-# 	{
-# 	    printout_item_source($i);
-# 	}
-#     }
-    
-#     elsif ( $action eq 'show' )
-#     {
-# 	my ($event) = $rs->select_events($r, 'latest');
-# 	my @items = get_event_content($r, $event, $opt_which);
-# 	printout_event_attrs($event);
-	
-# 	foreach my $i (@items)
-# 	{
-# 	    printout_item_formatted($i);
-# 	}
-#     }
-    
-#     elsif ( $action eq 'score' )
-#     {
-# 	my ($event) = $rs->select_events($r, 'latest');
-# 	my @items = get_event_content($r, $event, $opt_which);
-# 	printout_event_attrs($event) unless $NO_PRINT;
-# 	printout_item_formatted($r) unless $NO_PRINT;
-# 	my $index = $opt_which eq 'all' ? 0 : $opt_which > 0 ? $opt_which-1 : 0;
-	
-# 	foreach my $item (@items)
-# 	{
-# 	    my $scores = ref_similarity($r, $item);
-# 	    printout_item_formatted($item) unless $NO_PRINT;
-# 	    printout_item_scores($scores) unless $NO_PRINT;
-# 	    my $result = $rs->store_scores($event, $scores, $index);
-# 	    $index++;
-# 	    if ( $result ) { $score_count++; }
-# 	    else { $error_count++; }
-# 	}
-#     }
-
-#     elsif ( $action eq 'recount' )
-#     {
-# 	$rs->recount_scores($r->{reference_no});
-#     }
-    
-#     elsif ( $action eq 'match' )
-#     {
-# 	my ($event) = $rs->select_events($r, 'latest');
-# 	# my @items = get_event_content($r, $event, $opt_which);
-# 	# if ( my $f = get_eventdata($r, $event, $opt_which) )
-# 	# {
-# 	#     printout_data($r, $f, 'match') unless $NO_PRINT;
-# 	# }
-#     }
-    
-
-# sub stop_loop {
-
-#     $END_LOOP = 'interrupt';
-# }
-
-# # =============================================
-# #
-# # reference actions
-# #
-# # =============================================
-
-# sub printout_ref {
-    
-#     my ($r) = @_;
-    
-#     my $string = encode_utf8(format_ref($r));
-    
-#     my $score = defined $r->{score} ? " [$r->{score}]" : "";
-    
-#     print STDOUT "$r->{reference_no} :$score $string\n";
-# }
-
-
-# sub fetch_check {
-
-#     if ( rand > 0.45 ) { print STDERR "200 OK\n"; return "200 OK"; }
-#     else { print STDERR "400 Bad request\n"; return "400 Bad Request"; }
-# }
-
-
-# sub fetch_ref {
-
-#     my ($rs, $r, $action) = @_;
-    
-#     my $string = format_ref($r);
-    
-#     print STDERR "Fetching refno $r->{reference_no} from $source:\n$string\n\n";
-    
-#     my ($status, $query_text, $query_url, $response_data) = $rs->metadata_query($r, 2);
-    
-#     if ( $action eq 'fetch' && $status && $r->{reference_no} )
-#     {
-# 	my $result = $rs->store_result($r->{reference_no}, $status,
-# 				       $query_text, $query_url, $response_data);
-	
-# 	if ( $result )
-# 	{
-# 	    print STDERR "Result: $status; refsource_no = $result\n\n";
-# 	}
-	
-# 	else
-# 	{
-# 	    print STDERR "Result $status; DATABASE ERROR, no record inserted.\n\n";
-# 	    return "500 No record inserted";
-# 	}
-#     }
-    
-#     elsif ( $status && $r->{reference_no} )
-#     {
-# 	print STDERR "Result: $status\n\n";
-#     }
-    
-#     elsif ( $status )
-#     {
-# 	print STDERR "Query text: $query_text\n\n";
-# 	print STDERR "Result: $status\n\n";
-#     }
-    
-#     else
-#     {
-# 	print STDERR "FETCH ERROR, no status returned.\n\n";
-#     }
-    
-#     if ( $opt_print && $response_data )
-#     {
-# 	print STDOUT $response_data;
-	
-# 	unless ( $response_data =~ /\n$/ )
-# 	{
-# 	    print STDOUT "\n";
-# 	}
-#     }
-
-#     return $status || "500 No status returned";
-# }
-
-
-# sub printout_event_history {
-
-#     my ($r, $eventlist) = @_;
-    
-#     # If there aren't any, print an error message and exit.
-    
-#     unless ( ref $eventlist eq 'ARRAY' && @$eventlist )
-#     {
-# 	if ( ref $r && $r->{reference_no} )
-# 	{
-# 	    print STDERR "No events found for refno $r->{reference_no}";
-# 	    exit;
-# 	}
-
-# 	else
-# 	{
-# 	    print STDERR "No refno found";
-# 	    exit;
-# 	}
-#     }
-    
-#     # Otherwise, print out the results.
-    
-#     my @rows = ['id', 'refno', 'source', 'eventtype', 'eventtime', 'status', 'data'];
-    
-#     foreach my $e ( @$eventlist )
-#     {
-# 	push @rows, [$e->{refsource_no}, $e->{reference_no}, $e->{source},
-# 		     $e->{eventtype}, $e->{eventtime}, $e->{status}, $e->{data} ? 'yes' : 'no'];
-#     }
-    
-#     print_table(@rows);
-# }
-    
-
-# sub get_event_content {
-    
-#     my ($r, $e, $which) = @_;
-    
-#     # If there isn't any data, print an error message and exit.
-    
-#     unless ( $e && ref $e eq 'HASH' )
-#     {
-# 	if ( ref $r && $r->{reference_no} )
-# 	{
-# 	    print STDERR "No fetched data found for refno $r->{reference_no}";
-# 	    return;
-# 	}
-
-# 	else
-# 	{
-# 	    print STDERR "No refno found";
-# 	    return;
-# 	}
-#     }
-    
-#     my ($data, @items);
-    
-#     unless ( $e->{response_data} )
-#     {
-# 	print STDERR "ERROR: no response data found in event $e->{refsource_no} ($e->{reference_no})\n";
-# 	return;
-#     }
-    
-#     eval {
-# 	$data = decode_json($e->{response_data});
-#     };
-    
-#     if ( $@ )
-#     {
-# 	print STDERR "An error occurred while decoding \@$e->{refsource_no}: $@\n";
-# 	return;
-#     }
-    
-#     if ( ref $data eq 'HASH' && ref $data->{message}{items} eq 'ARRAY' )
-#     {
-# 	@items = @{$data->{message}{items}};
-#     }
-
-#     elsif ( ref $data eq 'ARRAY' && ( $data->[0]{deposited} || $data->[0]{title} ) )
-#     {
-# 	@items = @$data;
-#     }
-
-#     if ( $which eq 'all' )
-#     {
-# 	return @items;
-#     }
-
-#     elsif ( $which > 0 )
-#     {
-# 	return $items[$which-1];
-#     }
-
-#     else
-#     {
-# 	return $items[0];
-#     }
-# }
-
-
-# sub printout_event_attrs {
-    
-#     my ($e) = @_;
-    
-#     my @rows = ['id', 'refno', 'source', 'eventtype', 'eventtime', 'status'];
-    
-#     push @rows, [$e->{refsource_no}, $e->{reference_no}, $e->{source},
-# 		 $e->{eventtype}, $e->{eventtime}, $e->{status}];
-    
-#     print_table(@rows);
-    
-#     print "\n";
-# }
-
-
-# sub printout_item_formatted {
-    
-#     my ($r) = @_;
-    
-#     print encode_utf8($rs->format_ref($r));
-#     print "\n\n";
-# }
-
-
-# sub printout_item_source {
-    
-#     my ($i) = @_;
-    
-#     print JSON->new->pretty->utf8->encode($i);
-#     print "\n";
-# }
-
-
-# sub printout_item_scores {
-    
-#     my ($scores) = @_;
-    
-#     foreach my $key ( qw(title pub auth1 auth2 pubyr volume pages pblshr) )
-#     {
-# 	my $key1 = $key . '_s';
-# 	my $key2 = $key . '_c';
-# 	my $line = sprintf("%-15s %5d %5d\n", $key, $scores->{$key1}, $scores->{$key2});
-	
-# 	print $line;
-#     }
-    
-#     print "\n";
-# }
-
-
-# sub format_scores_horizontal {
-
-#     my ($scores) = @_;
-    
-#     my $line1 = "stat      ";
-#     my $line2 = "similar   ";
-#     my $line3 = "conflict  ";
-
-#     foreach my $key ( qw(complete count sun title pub auth1 auth2 pubyr volume pages pblshr) )
-#     {
-# 	my $key1 = $key . '_s';
-# 	my $key2 = $key . '_c';
-# 	$line1 .= fixed_width($key, 10);
-# 	$line2 .= fixed_width($scores->{$key1}, 10);
-# 	$line3 .= fixed_width($scores->{$key2}, 10);
-#     }
-
-#     return "$line1\n\n$line2\n$line3\n";
-# }
-
-
-# sub fixed_width {
-    
-#     return $_[0] . (' ' x ($_[1] - length($_[0])));
-# }
-
-
 sub print_table (@) {
     
     my $options = ref $_[0] eq 'HASH' ? shift @_ : { };
@@ -3291,527 +2978,6 @@ sub string_width {
     $string =~ s/\033\[[\d;]+m//g;
     return length($string);
 }
-
-
-# # # If --fulltitle was specified, do a full text search on each nonempty reftitle.
-
-# # elsif ( $opt_fulltitle )
-# # {
-# #     read_input();
-# #     fulltitle_proc();
-# # }
-
-# # # If --fullpub was specified, the same on each nonempty pubtitle.
-
-# # elsif ( $opt_fullpub )
-# # {
-# #     read_input();
-# #     fullpub_proc();
-# # }
-
-# # exit;
-
-
-# sub ref_from_args {
-    
-#     my ($arg) = @_;
-    
-#     my $ref = { };
-    
-#     while ( $arg =~ qr{ ^ (\w+) [:] \s* (.*?) (?= \w+ [:] | $) (.*) }xs )
-#     {
-# 	my $field = $1;
-# 	my $value = $2;
-# 	$arg = $3;
-	
-# 	$value =~ s/\s+$//;
-	
-# 	if ( $field eq 'author' || $field eq 'au' )
-# 	{
-# 	    my $key = $ref->{author1last} ? 'author2last' : 'author1last';
-# 	    $ref->{$key} = $value;
-# 	}
-	
-# 	elsif ( $field eq 'author1' || $field eq 'a1' || $field eq 'author1last' )
-# 	{
-# 	    $ref->{author1last} = $value;
-# 	}
-	
-# 	elsif ( $field eq 'author2' || $field eq 'a2' || $field eq 'author2last' )
-# 	{
-# 	    $ref->{author2last} = $value;
-# 	}
-	
-# 	elsif ( $field eq 'title' || $field eq 'ti' || $field eq 'reftitle' )
-# 	{
-# 	    $ref->{reftitle} = $value;
-# 	}
-	
-# 	elsif ( $field eq 'pub' || $field eq 'pu' || $field eq 'pubtitle' || $field eq 'publication' )
-# 	{
-# 	    $ref->{pubtitle} = $value;
-# 	}
-	
-# 	elsif ( $field eq 'pubyr' || $field eq 'py' || $field eq 'year' )
-# 	{
-# 	    $ref->{pubyr} = $value;
-# 	}
-	
-# 	elsif ( $field eq 'pubtype' || $field eq 'ty' || $field eq 'type' || $field eq 'publication_type' )
-# 	{
-# 	    $ref->{pubtype} = $value;
-# 	}
-
-# 	elsif ( $field eq 'label' || $field eq 'lb' )
-# 	{
-# 	    $ref->{label} = $value;
-# 	}
-#     }
-    
-#     if ( $arg )
-#     {
-# 	print "WARNING: unparsed remainder '$arg'\n\n";
-#     }
-    
-#     return $ref;
-# }
-
-
-# sub ref_from_refno {
-    
-#     my ($dbh, $reference_no) = @_;
-    
-#     return unless $reference_no && $reference_no =~ /^\d+$/;
-    
-#     my $sql = "SELECT * FROM $TABLE{REFERENCE_DATA} WHERE reference_no = $reference_no";
-
-#     print STDERR "$sql\n\n" if $opt_debug;
-    
-#     my $result = $dbh->selectrow_hashref($sql);
-    
-#     return $result && $result->{reference_no} ? $result : ();
-# }
-
-
-# sub ref_from_sourceno {
-
-#     my ($dbh, $refsource_no) = @_;
-
-#     return unless $refsource_no && $refsource_no =~ /^\d+$/;
-    
-#     my $sql = "SELECT r.*, s.refsource_no
-# 	FROM $TABLE{REFERENCE_DATA} as r join $TABLE{REFERENCE_SOURCES} as s using (reference_no)
-# 	WHERE s.refsource_no = $refsource_no";
-    
-#     print STDERR "$sql\n\n" if $opt_debug;
-    
-#     my $result = $dbh->selectrow_hashref($sql);
-    
-#     return $result && $result->{reference_no} ? $result : ();
-# }
-    
-
-# # find_matches ( reference_attrs )
-# # 
-# # Return a list of matches for the specified reference attributes in the REFERENCE_DATA (refs)
-# # table. The attributes must be given as a hashref.
-
-# sub ref_match {
-    
-#     my ($dbh, $r) = @_;
-    
-#     my @matches;
-    
-#     # If a doi was given, find all references with that doi. Compare them all to the given
-#     # attributes; if no other attributes were given, each one gets a score of 90 plus the number
-#     # of important attributes with a non-empty value. The idea is to select the matching reference
-#     # record that has the greatest amount of information filled in.
-    
-#     if ( $r->{doi} )
-#     {
-# 	my $quoted = $dbh->quote($r->{doi});
-	
-# 	my $sql = "SELECT * FROM refs WHERE doi = $quoted";
-	
-# 	print STDERR "$sql\n\n" if $opt_debug;
-	
-# 	my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-	
-# 	@matches = @$result if $result && ref $result eq 'ARRAY';
-	
-# 	# Assign match scores.
-	
-# 	foreach my $m ( @matches )
-# 	{
-# 	    my $score = match_score($r, $m);
-
-# 	    $m->{score} = $score;
-# 	}	
-#     }
-    
-#     # If no doi was given or if no references with that doi were found, look for references that
-#     # match some combination of reftitle, pubtitle, pubyr, author1last, author2last.
-    
-#     unless ( @matches )
-#     {
-# 	my $base;
-# 	my $having;
-
-# 	# If we have a reftitle or a pubtitle, use the refsearch table for full-text matching.
-	
-# 	if ( $r->{reftitle} )
-# 	{
-# 	    my $quoted = $dbh->quote($r->{reftitle});
-	    
-# 	    $base = "SELECT refs.*, match(refsearch.reftitle) against($quoted) as score
-# 		FROM refs join refsearch using (reference_no)";
-	    
-# 	    $having = "score > 5";
-# 	}
-	
-# 	elsif ( $r->{pubtitle} )
-# 	{
-# 	    my $quoted = $dbh->quote($r->{pubtitle});
-	    
-# 	    $base = "SELECT refs.*, match(refsearch.pubtitle) against($quoted) as score
-# 		FROM refs join refsearch using (reference_no)";
-	    
-# 	    $having = "score > 0";
-# 	}
-	
-# 	else
-# 	{
-# 	    $base = "SELECT * FROM refs";
-# 	}
-	
-# 	# Then add clauses to restrict the selection based on pubyr and author names.
-	
-# 	my @clauses;
-	
-# 	if ( $r->{pubyr} )
-# 	{
-# 	    my $quoted = $dbh->quote($r->{pubyr});
-# 	    push @clauses, "refs.pubyr = $quoted";
-# 	}
-	
-# 	if ( $r->{author1last} && $r->{author2last} )
-# 	{
-# 	    my $quoted1 = $dbh->quote($r->{author1last});
-# 	    my $quoted2 = $dbh->quote($r->{author2last});
-	    
-# 	    push @clauses, "(refs.author1last sounds like $quoted1 and refs.author2last sounds like $quoted2)";
-# 	}
-	
-# 	elsif ( $r->{author1last} )
-# 	{
-# 	    my $quoted1 = $dbh->quote($r->{author1last});
-	    
-# 	    push @clauses, "refs.author1last sounds like $quoted1";
-# 	}
-
-# 	if ( $r->{anyauthor} )
-# 	{
-# 	    my $quoted1 = $dbh->quote($r->{anyauthor});
-# 	    my $quoted2 = $dbh->quote('%' . $r->{anyauthor} . '%');
-	    
-# 	    push @clauses, "(refs.author1last sounds like $quoted1 or refs.author2last sounds like $quoted1 or refs.otherauthors like $quoted2)";
-# 	}
-	
-# 	# Now put the pieces together into a single SQL statement and execute it.
-	
-# 	my $sql = $base;
-	
-# 	if ( @clauses )
-# 	{
-# 	    $sql .= "\n\t\tWHERE " . join(' and ', @clauses);
-# 	}
-	
-# 	if ( $having )
-# 	{
-# 	    $sql .= "\n\t\tHAVING $having";
-# 	}
-	
-# 	print STDERR "$sql\n\n" if $opt_debug;
-	
-# 	my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-	
-# 	# If we get results, look through them and keep any that have even a slight chance of
-# 	# matching.
-	
-# 	if ( $result && ref $result eq 'ARRAY' )
-# 	{
-# 	    foreach my $m ( @$result )
-# 	    {
-# 		my $score = match_score($r, $m);
-		
-# 		if ( $score > 20 )
-# 		{
-# 		    $m->{score} = $score;
-# 		    push @matches, $m;
-# 		}
-# 	    }
-# 	}
-#     }
-    
-#     # Now sort the matches in descending order by score.
-    
-#     my @sorted = sort { $b->{score} <=> $a->{score} } @matches;
-    
-#     return @sorted;
-# }
-
-
-# our ($PCHARS);
-
-# sub Progress {
-
-#     my ($message) = @_;
-    
-#     if ( $PCHARS )
-#     {
-# 	print STDOUT chr(8) x $PCHARS;
-#     }
-    
-#     print STDOUT $message;
-#     $PCHARS = length($message);
-# }
-
-
-
-
-	# my $refcount;
-	
-	# while (<>)
-	# {
-	#     chomp;
-	#     next unless $_ =~ /[[:alnum:]]{3}/;
-	    
-	#     $refcount++;
-	    
-	#     my $r = ref_from_args($_);
-	    
-	#     my @matches = ref_match($dbh, $r);
-
-	#     my $matchcount = scalar(@matches);
-	#     my $matchphrase = $matchcount == 1 ? "1 match" : "$matchcount matches";
-	    
-	#     print "Reference $r: $matchphrase\n";
-	    
-	#     foreach my $i ( 0..$#matches )
-	#     {
-	# 	my $m = $matches[$i];
-	# 	my $r = $m->{label} || $refcount;
-	# 	my $n = $i + 1;
-	# 	my $s = $m->{score} || 'no score';
-		
-	# 	print "  Match $n: [$s]\n\n";
-		
-	# 	print format_ref($m, '    ') . "\n\n";
-	#     }
-	# }
-
-	# unless ( $refcount )
-	# {
-	#     print "You must specify at least one reference either on the command line\nor through standard input.\n\n";
-	#     exit(2);
-	# }
-
-
-
-# sub read_input {
-    
-#     while (<>)
-#     {
-# 	$_ =~ s/[\n\r]+$//;
-# 	my @cols = split /\t/;
-	
-# 	unless ( $LINE_NO++ )
-# 	{
-# 	    /reference_no/ || die "The first line must be a list of field names.\n";
-# 	    @FIELD_LIST = @cols;
-# 	    next;
-# 	}
-	
-# 	my $r = { };
-	
-# 	foreach my $i ( 0..$#cols )
-# 	{
-# 	    $r->{$FIELD_LIST[$i]} = $cols[$i];
-# 	}
-	
-# 	my $reference_no = $r->{reference_no};
-	
-# 	$REF{$reference_no} = $r;
-# 	push @REF_LIST, $reference_no;
-	
-# 	if ( ! ( $LINE_NO % 100 ) )
-# 	{
-# 	    Progress($LINE_NO);
-# 	}
-#     }
-    
-#     Progress('');
-#     print STDOUT "Read $LINE_NO lines.\n";
-# }
-
-
-# sub read_table {
-
-#     my $sql = "SELECT * FROM refsearch";
-    
-#     my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-#     my $lines;
-    
-#     if ( $result && @$result )
-#     {
-# 	foreach my $r ( @$result )
-# 	{
-# 	    my $reference_no = $r->{reference_no};
-# 	    $REF{$reference_no} = $r;
-# 	    push @REF_LIST, $reference_no;
-	    
-# 	    if ( ! ( ++$lines % 100 ) )
-# 	    {
-# 		Progress($lines);
-# 	    }
-# 	}
-	
-# 	Progress('');
-# 	print STDOUT "Read $lines lines.\n";
-#     }
-
-#     else
-#     {
-# 	print "No data read.\n";
-#     }
-# }
-
-
-# sub fulltitle_proc {
-    
-#     my $reftitle_sth = $dbh->prepare("
-# 	SELECT reference_no, reftitle, match(reftitle) against (?) as score
-# 	FROM refsearch HAVING score > 0 ORDER BY score desc LIMIT 3");
-    
-#     my $refupdate_sth = $dbh->prepare("
-# 	UPDATE refsearch SET selfmatch = ?, maxmatch = ?, match_no = ?
-# 	WHERE reference_no = ? LIMIT 1");
-    
-#     my $count;
-    
-#     foreach my $ref_no ( @REF_LIST )
-#     {
-# 	$count++;
-# 	my $reftitle = $REF{$ref_no}{reftitle};
-
-# 	next if $REF{$ref_no}{maxmatch};
-	
-# 	if ( $reftitle )
-# 	{
-# 	    $reftitle_sth->execute($reftitle);
-	    
-# 	    my $result = $reftitle_sth->fetchall_arrayref({ });
-	    
-# 	    if ( $result && @$result )
-# 	    {
-# 		$MATCH{$ref_no} = $result;
-		
-# 		foreach my $r ( @$result )
-# 		{
-# 		    if ( $r->{reference_no} eq $ref_no )
-# 		    {
-# 			$REF{$ref_no}{selfmatch} = $r->{score};
-# 		    }
-
-# 		    elsif ( $r->{score} && ( ! $REF{$ref_no}{maxmatch} ||
-# 					     $r->{score} > $REF{$ref_no}{maxmatch} ) )
-# 		    {
-# 			$REF{$ref_no}{maxmatch} = $r->{score};
-# 			$REF{$ref_no}{match_no} = $r->{reference_no};
-# 		    }
-
-# 		    else
-# 		    {
-# 			last;
-# 		    }
-# 		}
-
-# 		my $result = $refupdate_sth->execute($REF{$ref_no}{selfmatch}, $REF{$ref_no}{maxmatch},
-# 						     $REF{$ref_no}{match_no}, $ref_no);
-
-# 		my $a = 1; # we can stop here when debugging
-# 	    }
-# 	}
-	
-# 	Progress($count) unless $count % 100;
-#     }
-
-#     Progress('');
-#     print STDOUT "Queried for $count entries.\n";
-# }
-
-
-# sub fullpub_proc {
-    
-#     my $pubtitle_sth = $dbh->prepare("
-# 	SELECT match(pubtitle) against (?) as score
-# 	FROM refsearch WHERE reference_no = ?");
-    
-#     my $refupdate_sth = $dbh->prepare("
-# 	UPDATE refsearch SET pselfmatch = ? WHERE reference_no = ? LIMIT 1");
-    
-#     my $count;
-    
-#     foreach my $ref_no ( @REF_LIST )
-#     {
-# 	$count++;
-# 	my $pubtitle = $REF{$ref_no}{pubtitle};
-	
-# 	next if $REF{$ref_no}{pselfmatch};
-	
-# 	if ( $pubtitle )
-# 	{
-# 	    $pubtitle_sth->execute($pubtitle, $ref_no);
-	    
-# 	    my ($score) = $pubtitle_sth->fetchrow_array();
-	    
-# 	    if ( $score )
-# 	    {
-# 		$REF{$ref_no}{pselfmatch} = $score;
-# 	    }
-	    
-# 	    my $result = $refupdate_sth->execute($score, $ref_no);
-	    
-# 	    my $a = 1; # we can stop here when debugging
-# 	}
-	
-# 	Progress($count) unless $count % 100;
-#     }
-    
-#     Progress('');
-#     print STDOUT "Queried for $count entries.\n";
-# }
-
-
-# sub match_doi {
-
-#     my ($dbh, $r) = @_;
-    
-#     if ( $r->{doi} )
-#     {
-# 	my $quoted = $dbh->quote($r->{doi});
-	
-# 	my $sql = "SELECT * FROM refs WHERE doi = $quoted";
-	
-# 	print STDERR "$sql\n\n" if $opt_debug;
-	
-# 	my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-	
-# 	return @$result if $result && ref $result eq 'ARRAY';
-#     }
-    
-#     return;	# otherwise
-# }
 
 
 sub ask_value {

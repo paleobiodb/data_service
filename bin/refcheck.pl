@@ -6,6 +6,8 @@
 
 use strict;
 
+use open ':std', ':encoding(UTF-8)';
+
 use lib 'lib', '../lib';
 use Getopt::Long;
 
@@ -16,7 +18,7 @@ use TableDefs qw(%TABLE);
 use ReferenceSources;
 use ReferenceMatch qw(ref_similarity);
 
-use Encode;
+use Encode qw(decode decode_utf8 encode_utf8);
 # use Algorithm::Diff qw(sdiff);
 # use Text::Levenshtein::Damerau qw(edistance);
 use JSON;
@@ -28,6 +30,17 @@ use JSON;
 my $starttime = time;
 
 STDOUT->autoflush(1);
+
+our ($DYNAMIC) = '';
+
+# Configure the terminal I/O. If the debugger is running, add the UTF8 encoding layer to its
+# output. Why doesn't "use open :std" do this???
+
+if ( $DB::OUT )
+{
+    binmode($DB::OUT, ':encoding(UTF8)');
+}
+
 
 
 # Option and argument handling
@@ -205,6 +218,7 @@ else
 
 my @REF_LIST;
 my $END_LOOP = 'no loop';
+my $STOP;
 my $NO_PRINT;
 
 $SIG{INT} = \&stop_loop;
@@ -504,6 +518,13 @@ elsif ( ! @REF_LIST )
     exit;
 }
 
+# If we are rescoring a bunch of references, zero out the counts.
+
+if ( $action eq 'score' )
+{
+    %ReferenceMatch::COUNT = ();
+}
+
 # Then loop through either the specified references or all unchecked references. We stop either
 # when we have handled all of the available references, or when 10 or more of the last 20 queries
 # have failed. This allows us to handle some degree of query failure but stop if almost every
@@ -513,6 +534,7 @@ my $action_count = 0;
 my $score_count = 0;
 my $success_count = 0;
 my $error_count = 0;
+my $empty_count = 0;
 my @status_queue;
 
 while ( @REF_LIST || ! $END_LOOP )
@@ -541,10 +563,16 @@ while ( @REF_LIST || ! $END_LOOP )
 	last;
     }
     
+    if ( $STOP )
+    {
+	$STOP = undef;
+	$DB::single = 1;
+    }
+    
     # If the action is 'print', print the info for the specified reference. If this is not the
     # first print, add an extra newline first to separate the output records from each other.
     
-    elsif ( $action eq 'print' )
+    if ( $action eq 'print' )
     {
 	print STDOUT "\n" if $action_count;
 	printout_ref($r);
@@ -627,16 +655,32 @@ while ( @REF_LIST || ! $END_LOOP )
 	
 	foreach my $item (@items)
 	{
-	    my $scores = ref_similarity($r, $item);
-	    printout_item_formatted($item) unless $NO_PRINT;
-	    printout_item_scores($scores) unless $NO_PRINT;
-	    my $result = $rs->store_scores($event, $scores, $index);
-	    $index++;
-	    if ( $result ) { $score_count++; }
-	    else { $error_count++; }
+	    if ( $item )
+	    {
+		my $scores = ref_similarity($r, $item);
+		printout_item_formatted($item) unless $NO_PRINT;
+		printout_item_scores($scores) unless $NO_PRINT;
+		my $result = $rs->store_scores($event, $scores, $index);
+		$index++;
+		if ( $result ) { $score_count++; }
+		else { $error_count++; }
+	    }
+
+	    else
+	    {
+		$empty_count++;
+		$index++;
+	    }
+	}
+	
+	if ( $NO_PRINT && ($score_count % 100 == 0 ||
+			   $error_count > 0 && $error_count % 100 == 0 ||
+			   $empty_count > 0 && $empty_count % 100 == 0 ) ) 
+	{
+	    show_dynamic_count($score_count, $error_count, $empty_count, $rs->{refs_found});
 	}
     }
-
+    
     elsif ( $action eq 'recount' )
     {
 	$rs->recount_scores($r->{reference_no});
@@ -666,6 +710,12 @@ while ( @REF_LIST || ! $END_LOOP )
     }
 }
 
+if ( $action eq 'score' && $NO_PRINT )
+{
+    show_dynamic_count($score_count, $error_count, $empty_count, $rs->{refs_found});
+}
+
+if ( $DYNAMIC ) { print "\n\n"; }
 
 # If we finished because we processed the records we were asked to process, let the user know we
 # are done.
@@ -691,7 +741,7 @@ elsif ( $END_LOOP eq 'interrupt' )
 
 # Print out totals, and then exit.
 
-my $elapsed = $starttime - time;
+my $elapsed = time - $starttime;
 my $h = int($elapsed / 3600);
 my $minsec = $elapsed % 3600;
 my $m = int($minsec / 60);
@@ -722,13 +772,61 @@ print STDERR "Stored $score_count scores$timestring.\n" if $score_count;
 print STDERR "Got $error_count error responses.\n" if $error_count;
 print STDERR "\n";
 
+if ( $score_count )
+{
+    print "Counts for score debugging:\n\n";
+    
+    foreach my $k ( sort keys %ReferenceMatch::COUNT )
+    {
+	print " $k: $ReferenceMatch::COUNT{$k}\n";
+    }
+
+    print "\n";
+}
+
 exit;
 
 
 sub stop_loop {
 
-    $END_LOOP = 'interrupt';
+    if ( $DB::OUT )
+    {
+	$STOP = 1;
+    }
+
+    else
+    {
+	$END_LOOP = 'interrupt';
+    }
 }
+
+
+sub show_dynamic_count {
+    
+    my ($score_count, $error_count, $empty_count, $total) = @_;
+    
+    clear_dynamic_count();
+    
+    if ( $error_count || $empty_count )
+    {
+	$DYNAMIC = "$score_count out of $total    ($error_count errors, $empty_count empty)";
+    }
+
+    else
+    {
+	$DYNAMIC = "$score_count out of $total";
+    }
+    
+    print $DYNAMIC;
+}
+
+
+sub clear_dynamic_count {
+    
+    print chr(8) x length($DYNAMIC) if $DYNAMIC;
+    $DYNAMIC = '';
+}
+
 
 # =============================================
 #
@@ -740,7 +838,7 @@ sub printout_ref {
     
     my ($r) = @_;
     
-    my $string = encode_utf8($rs->format_ref($r));
+    my $string = $rs->format_ref($r);
     
     my $score = defined $r->{score} ? " [$r->{score}]" : "";
     
@@ -755,6 +853,14 @@ sub fetch_check {
 }
 
 
+# fetch_ref ( rs, reference, action )
+#
+# If the action is 'fetch', then make a query on the external source associated with $rs
+# that tries to match the reference attributes in $r. If the query is successful, store
+# the result.
+#
+# If the action is 'test', fetch the data but do not store it.
+
 sub fetch_ref {
 
     my ($rs, $r, $action) = @_;
@@ -763,12 +869,27 @@ sub fetch_ref {
     
     print STDERR "Fetching refno $r->{reference_no} from $source:\n$string\n\n";
     
-    my ($status, $query_text, $query_url, $response_data) = $rs->metadata_query($r, 2);
+    my ($status, $query_text, $query_url, $response_data, $charset) = $rs->metadata_query($r, 2);
     
-    if ( $action eq 'fetch' && $status && $r->{reference_no} )
+    # If the action is 'fetch' and we have an associated PBDB reference number, store the
+    # result. If the result isn't already in Perl's internal format, decode it.
+    
+    if ( $action eq 'fetch' && $r->{reference_no} )
     {
+	if ( $charset )
+	{
+	    eval {
+		$response_data = decode($charset, $response_data);
+	    };
+
+	    if ( $@ )
+	    {
+		$status = "500 Unknown character set '$charset'"; 
+	    }
+	}
+	
 	my $result = $rs->store_result($r->{reference_no}, $status,
-				       $query_text, $query_url, $response_data);
+				       $query_text, $query_url,$response_data);
 	
 	if ( $result )
 	{
@@ -880,6 +1001,13 @@ sub get_event_content {
 	$data = decode_json($e->{response_data});
     };
     
+    if ( $@ =~ /^Wide char/ )
+    {
+	eval {
+	    $data = from_json($e->{response_data});
+	};
+    }
+    
     if ( $@ )
     {
 	print STDERR "An error occurred while decoding \@$e->{refsource_no}: $@\n";
@@ -888,9 +1016,14 @@ sub get_event_content {
     
     if ( ref $data eq 'HASH' && ref $data->{message}{items} eq 'ARRAY' )
     {
-	@items = @{$data->{message}{items}};
+	@items = $data->{message}{items}->@*;
     }
 
+    elsif ( ref $data eq 'HASH' && ref $data->{success}{data} eq 'ARRAY' )
+    {
+	@items = $data->{success}{data}->@*;
+    }
+    
     elsif ( ref $data eq 'ARRAY' && ( $data->[0]{deposited} || $data->[0]{title} ) )
     {
 	@items = @$data;
@@ -898,16 +1031,19 @@ sub get_event_content {
 
     if ( $which eq 'all' )
     {
+	foreach (@items) { $_->{had_widechar} = 1 }
 	return @items;
     }
-
+    
     elsif ( $which > 0 )
     {
+	$items[$which-1]{had_widechar} = 1;
 	return $items[$which-1];
     }
 
     else
     {
+	$items[0]{had_widechar} = 1;
 	return $items[0];
     }
 }
@@ -932,7 +1068,7 @@ sub printout_item_formatted {
     
     my ($r) = @_;
     
-    print encode_utf8($rs->format_ref($r));
+    print $rs->format_ref($r);
     print "\n\n";
 }
 
@@ -941,7 +1077,7 @@ sub printout_item_source {
     
     my ($i) = @_;
     
-    print JSON->new->pretty->utf8->encode($i);
+    print JSON->new->pretty->encode($i);
     print "\n";
 }
 

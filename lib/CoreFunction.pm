@@ -88,7 +88,7 @@ sub connectDB {
 	$dsn .= ";port=$DB_PORT";
     }
     
-    $dsn .= ";mysql_client_found_rows=0";
+    # $dsn .= ";mysql_client_found_rows=0";
     
     my $dbh = DBI->connect($dsn, $DB_USER, $DB_PASSWD, $DBI_PARAMS);
     
