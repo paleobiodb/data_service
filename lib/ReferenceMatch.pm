@@ -23,14 +23,15 @@ use Text::Levenshtein::Damerau qw(edistance);
 
 use Exporter 'import';
 
-our (@EXPORT_OK) = qw(ref_similarity get_reftitle get_pubtitle get_authorname get_authorlist
-		      split_authorlist parse_authorname get_pubyr @SCORE_VARS);
+our (@EXPORT_OK) = qw(ref_similarity get_reftitle get_pubtitle get_publisher
+		      get_authorname get_authorlist split_authorlist parse_authorname
+		      get_pubyr get_doi title_words @SCORE_VARS);
 
 our $IgnoreCaseAccents = Unicode::Collate->new(
      level         => 1,
      normalization => undef);
 
-our (@SCORE_VARS) = qw(complete count sum title pub auth1 auth2 pubyr volume pages pblshr);
+our (@SCORE_VARS) = qw(sum complete count title pub auth1 auth2 pubyr volume pages pblshr);
 
 our (%DEBUG, %COUNT);
 
@@ -56,6 +57,8 @@ sub ref_similarity {
     my ($r, $m, $options) = @_;
     
     %DEBUG = ();
+    
+    $options ||= { };
     
     # The basic idea is to compute a similarity score and a conflict score for each of the most
     # important field values. Similarity scores are all normalized to the range 0-100, with 100
@@ -119,41 +122,6 @@ sub ref_similarity {
 	}
     }
     
-    # Then compute the similarity and conflict scores for the publication titles.
-    # ---------------------------------------------------------------------------
-    
-    my ($pub_a, @pub_alt_a) = get_pubtitle($r);
-    my ($pub_b, @pub_alt_b) = get_pubtitle($m);
-    
-    my ($pub_similar, $pub_conflict) = short_similarity($pub_a, $pub_b);
-    
-    save_debug('sh', 'pt');
-    
-    # If the publication similarity score is less than 80 and we also have one or more alternate
-    # publication titles in either record, try matching all combinations and take the highest
-    # similarity score we find.
-    
-    if ( $pub_similar < 80 && (@pub_alt_a || @pub_alt_b) )
-    {
-	my ($multi_similar, $multi_conflict) =
-	    title_multimatch( [$pub_a, @pub_alt_a], undef,
-			      [$pub_b, @pub_alt_b], undef, 'pub' );
-	
-	save_debug('sh', 'pa');
-	
-	if ( $multi_similar > $pub_similar )
-	{
-	    $pub_similar = $multi_similar;
-	    $pub_conflict = $multi_conflict;
-	    $DEBUG{ptmms} = 1;
-	}
-	
-	else
-	{
-	    $DEBUG{ptmmf} = 1;
-	}
-    }
-    
     # Then compute the similarity and conflict scores for the first and second authors. For now,
     # we ignore the rest of the author list.
     # --------------------------------------
@@ -191,13 +159,23 @@ sub ref_similarity {
 	}
 	
 	# If one record has two authors and the other doesn't, the second author similarity is set
-	# to (0, 100), though it may be overridden below.
+	# to (0, 50), though it may be overridden below.
 	
 	else
 	{
 	    $auth2_similar = 0;
-	    $auth2_conflict = 100;
+	    $auth2_conflict = 50;
 	}
+    }
+    
+    # If a conflict threshold was specified and has been exceeded, abort.
+    # -------------------------------------------------------------------
+    
+    my $conflict_check = $title_conflict + $auth1_conflict + $auth2_conflict;
+    
+    if ( $options->{max_c} && $conflict_check > $options->{max_c} )
+    {
+	return { abort => 1, sum_c => $conflict_check };
     }
     
     # Then compute the similarity and conflict scores for the publication years.
@@ -234,6 +212,52 @@ sub ref_similarity {
     
     my ($vol_similar, $vol_conflict) = vol_similarity($vol_a, $issue_a, $vol_b, $issue_b);
     my ($pages_similar, $pages_conflict) = vol_similarity($fp_a, $lp_a, $fp_b, $lp_b);
+    
+    # If a conflict threshold was specified and has been exceeded, abort.
+    # -------------------------------------------------------------------
+
+    $conflict_check = $title_conflict + $auth1_conflict + $auth2_conflict +
+	$pubyr_conflict + $vol_conflict;
+    
+    if ( $options->{max_c} && $conflict_check > $options->{max_c} )
+    {
+	return { abort => 1, sum_c => $conflict_check };
+    }
+    
+    # Then compute the similarity and conflict scores for the publication titles.
+    # ---------------------------------------------------------------------------
+    
+    my ($pub_a, @pub_alt_a) = get_pubtitle($r);
+    my ($pub_b, @pub_alt_b) = get_pubtitle($m);
+    
+    my ($pub_similar, $pub_conflict) = short_similarity($pub_a, $pub_b);
+    
+    save_debug('sh', 'pt');
+    
+    # If the publication similarity score is less than 80 and we also have one or more alternate
+    # publication titles in either record, try matching all combinations and take the highest
+    # similarity score we find.
+    
+    if ( $pub_similar < 80 && (@pub_alt_a || @pub_alt_b) )
+    {
+	my ($multi_similar, $multi_conflict) =
+	    title_multimatch( [$pub_a, @pub_alt_a], undef,
+			      [$pub_b, @pub_alt_b], undef, 'pub' );
+	
+	save_debug('sh', 'pa');
+	
+	if ( $multi_similar > $pub_similar )
+	{
+	    $pub_similar = $multi_similar;
+	    $pub_conflict = $multi_conflict;
+	    $DEBUG{ptmms} = 1;
+	}
+	
+	else
+	{
+	    $DEBUG{ptmmf} = 1;
+	}
+    }
     
     # Then compute similarity and conflict scores for the publisher.
     # --------------------------------------------------------------
@@ -348,6 +372,16 @@ sub ref_similarity {
 	    $auth2_conflict = 0;
 	    $DEBUG{a2def}++;
 	}
+    }
+    
+    # Make one last conflict check.
+    
+    $conflict_check = $title_conflict + $auth1_conflict + $auth2_conflict +
+	$pubyr_conflict + $vol_conflict + $pub_conflict + $publish_conflict;
+    
+    if ( $options->{max_c} && $conflict_check > $options->{max_c} )
+    {
+	return { abort => 1, sum_c => $conflict_check };
     }
     
     # Compute the debug string for this record, and increment the global counts.
@@ -1337,7 +1371,7 @@ sub get_publisher {
 sub get_doi {
     
     my ($r) = @_;
-
+    
     my $doi = $r->{doi} || $r->{DOI};
     
     # If the doi is stored in URL form, strip off the protocol and hostname.
@@ -1346,8 +1380,18 @@ sub get_doi {
     {
 	$doi = $1;
     }
+    
+    # Make sure it contains at least one / between two other characters.
+    
+    if ( $doi && $doi =~ qr{ [^/] / [^/] }xs )
+    {
+	return $doi;
+    }
 
-    return $doi;
+    else
+    {
+	return '';
+    }
 }
 
 
@@ -1832,19 +1876,47 @@ sub title_similarity {
 	return ($sim, $con);
     }
 }
+
+
+# title_words ( title )
+#
+# Perform the same normalization procedure as title_similarity above on the specified
+# string. Return a list of words in foldcase without whitespace, punctuation, or accent
+# marks.
+
+sub title_words {
+
+    my ($title, $keep_accents) = @_;
     
+    # Start by removing any HTML tags that might be in the title.
+    
+    $title =~ s{ &lt; .*? &gt; | < .*? > }{}xsg;
+    
+    # Continue by removing accent marks and then splitting each title into words. Any
+    # sequence of letters and numbers counts as a word, and any sequences of other
+    # characters (punctuation and spacing) counts as a word boundary. Stopwords are also
+    # removed, since they occasionally get left out of a title by mistake. All of the
+    # words are put into foldcase.
+    
+    $title =~ s/\pM//g unless $keep_accents;
+    
+    return grep { ! $STOPWORD{$_} } map { fc } split /[^\pL\pN\pM]+/, $title;
+}
+
 
 # check_for_section_prefix ( title )
 #
 # If the argument contains the sequence ', in ' then it may start with a section heading
-# prefix. Split everything up to the match into words in the same way that title_similarity()
-# does, and return the number of words. A return value of 0 means that no such prefix was found.
+# prefix. Split everything up to the match into words in the same way that
+# title_similarity() does, and return the number of words. A return value of 0 means that
+# no such prefix was found.
 
 sub check_for_section_prefix {
     
-    # If we find a the sequence ", in " in the original title string, we have a possible section
-    # heading prefix. Split everything before the match into words in the same way as the title is
-    # split, and count them. We ignore the word 'in' because it is a stopword.
+    # If we find a the sequence ", in " in the original title string, we have a possible
+    # section heading prefix. Split everything before the match into words in the same way
+    # as the title is split, and count them. We ignore the word 'in' because it is a
+    # stopword.
     
     if ( $_[0] =~ qr{ ^ (.*) , \s in \s \S }xsi )
     {
@@ -1862,10 +1934,10 @@ sub check_for_section_prefix {
 
 # prefix_match ( words_a, words_b, skip_a, skip_b )
 #
-# If the shorter of the two sequences is a prefix of the longer, then return the shorter length
-# (which is the number of matching words). If either of the 'skip' parameters have a nonzero
-# value, skip that number of words at the start of the corresponding sequence. A return value of 0
-# means that neither of the two sequences is a prefix of the other.
+# If the shorter of the two sequences is a prefix of the longer, then return the shorter
+# length (which is the number of matching words). If either of the 'skip' parameters have
+# a nonzero value, skip that number of words at the start of the corresponding sequence. A
+# return value of 0 means that neither of the two sequences is a prefix of the other.
 
 sub prefix_match {
 
