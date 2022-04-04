@@ -377,8 +377,8 @@ sub initialize {
     
     $ds->define_block('1.2:colls:stratext' =>
 	{ include => '1.2:colls:strat' },
-	{ select => [ qw(cc.zone cc.localsection cc.localbed cc.localorder
-		         cc.regionalsection cc.regionalbed cc.regionalorder
+	{ select => [ qw(cc.zone cc.localsection cc.localbed cc.localbedunit cc.localorder
+		         cc.regionalsection cc.regionalbed cc.regionalbedunit cc.regionalorder
 		         cc.stratscale cc.stratcomments) ], tables => 'cc' },
 	{ output => 'stratscale', com_name => 'ssc' },
 	    "The stratigraphic range covered by this collection",
@@ -388,12 +388,16 @@ sub initialize {
 	    "The local section in which the collection is located, if known",
 	{ output => 'localbed', com_name => 'slb' },
 	    "The local bed in which the collection is located, if known",
+	{ output => 'localbedunit', com_name => 'slu' },
+	    "The unit of measurement used in the designation of the local bed",
 	{ output => 'localorder', com_name => 'slo' },
 	    "The order in which local beds were described, if known",
 	{ output => 'regionalsection', com_name => 'srs' },
 	    "The regional section in which the collection is located, if known",
 	{ output => 'regionalbed', com_name => 'srb' },
 	    "The regional bed in which the collection is located, if known",
+	{ output => 'regionalbedunit', com_name => 'sru' },
+	    "The unit of measurement used in the designation of the regional bed",
 	{ output => 'regionalorder', com_name => 'sro' },
 	    "The order in which regional beds were described, if known",
 	{ output => 'stratcomments', com_name => 'scm' },
