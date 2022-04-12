@@ -30,6 +30,9 @@ our ($XDD_BASE) = "https://xdd.wisc.edu/api/articles";
 
 our ($JSON_ENCODER) = JSON->new->canonical;
 
+our ($GOOD_MATCH_MIN) = 500;
+our ($PARTIAL_MATCH_MIN) = 300;
+
 # Constructor
 # -----------
 
@@ -121,147 +124,273 @@ sub dbh {
 # Select all references that meet a specified criterion, and store the statement handle
 # where it can be read by `get_next`. Available values for $selector are:
 # 
-#   fetched, unfetched, checked, unchecked, matched, unmatched
+#   fetched, unfetched, checked, unchecked, scored, unscored, matched, unmatched
 # 
 # If $filter is specified, it must be a valid SQL expression. This is conjoined to the WHERE
 # clause in the SELECT statement. It may reference the 'refs' table as 'r', the REFERENCE_SOURCES
 # table as 's', and the REFERENCE_SCORES table as 'sc'.
-#
+# 
 # If $options is specified, it must be a hashref. Accepted options are 'limit', 'offset'.
 
 sub select_refs {
     
-    my ($datasource, $selector, $filter_clause, $options) = @_;
+    my ($ds, $selector, $filter_clause, $options) = @_;
+    
+    $options ||= { };
+    
+    $ds->clear_selection;
+    
+    my $fields = "SQL_CALC_FOUND_ROWS r.*";
+    
+    my $sql = $ds->generate_ref_base($selector, $fields, $filter_clause, $options);
+    
+    return $ds->select_records($sql, 'sth', $options);
+}
 
-    $datasource->clear_selection;
+
+sub count_refs {
+
+    my ($ds, $selector, $filter_clause, $options) = @_;
+
+    $options ||= { };
     
-    my $dbh = $datasource->{dbh};
-    my $source_select = '';
-    my $score_select = '';
-    my $filter = '';
-    my $sourcefilter = '';
+    my $sql = $ds->generate_ref_base($selector, 'count(distinct r.reference_no)',
+				     $filter_clause, $options);
     
-    if ( $datasource->{source} && $datasource->{source} ne 'all' )
+    return $ds->count_records($selector, $sql, $options);
+}
+
+
+sub select_matching_refs {
+    
+    my ($ds, $selector, $attrs, $options) = @_;
+    
+    $ds->clear_selection;
+
+    my $fields = 'r.*';
+    my $dbh = $ds->{dbh};
+    
+    my @matches;
+    
+    # If a doi was given, find all references with that doi. Compare them all to the given
+    # attributes; if no other attributes were given, each one gets a score of 90 plus the number
+    # of important attributes with a non-empty value. The idea is to select the matching reference
+    # record that has the greatest amount of information filled in.
+    
+    if ( $attrs->{doi} )
     {
-	$sourcefilter = " and s.source=" . $dbh->quote($datasource->{source});
+	my $quoted = $dbh->quote($attrs->{doi});
+	my $filter = "doi=$quoted";
+	$filter .= " and ($attrs->{filter})" if $attrs->{filter};
+	
+	my $sql = $ds->generate_ref_base($selector, $fields, $filter, $options);
+
+	push @matches, $ds->select_records($sql, 'return', $options);
+	
+	# Assign match scores.
+	
+	foreach my $m ( @matches )
+	{
+	    my $score = 90;
+	    $score++ if $m->{reftitle};
+	    $score++ if $m->{pubtitle};
+	    $score++ if $m->{author1last};
+	    $score++ if $m->{author2last};
+	    $score++ if $m->{pubvol};
+	    $score++ if $m->{pubno};
+	    $score++ if $m->{firstpage};
+	    $score++ if $m->{lastpage};
+	    
+	    $m->{score} = $score;
+	}
     }
     
-    my ($sql, $sth);
+    # If no doi was given or if no references with that doi were found, look for references that
+    # match some combination of reftitle, pubtitle, pubyr, author1last, author2last.
     
-    if ( $filter_clause)
+    unless ( @matches )
     {
-	$filter = " and ($filter_clause)";
+	my $having;
+
+	# If we have a reftitle or a pubtitle, use the refsearch table for full-text matching.
+	
+	if ( $attrs->{reftitle} && $attrs->{pubtitle} )
+	{
+	    my $refquoted = $dbh->quote($attrs->{reftitle});
+	    my $pubquoted = $dbh->quote($attrs->{pubtitle});
+
+	    $fields = "r.*, match(refsearch.reftitle) against($refquoted) as score1,
+		  match(refsearch.pubtitle) against ($pubquoted) as score2";
+	    $having = "score1 > 5 and score2 > 5";
+	}
+	
+	elsif ( $attrs->{reftitle} )
+	{
+	    my $quoted = $dbh->quote($attrs->{reftitle});
+
+	    $fields = "r.*, match(refsearch.reftitle) against($quoted) as score";
+	    $having = "score > 5";
+	}
+	
+	elsif ( $attrs->{pubtitle} )
+	{
+	    my $quoted = $dbh->quote($attrs->{pubtitle});
+	    
+	    $fields = "r.*, match(refsearch.pubtitle) against($quoted) as score";
+	    $having = "score > 0";
+	}
+	
+	# Then add clauses to restrict the selection based on pubyr and author names.
+	
+	my @clauses;
+	
+	if ( $attrs->{pubyr} )
+	{
+	    my $quoted = $dbh->quote($attrs->{pubyr});
+	    push @clauses, "refs.pubyr = $quoted";
+	}
+	
+	if ( $attrs->{author1last} && $attrs->{author2last} )
+	{
+	    my $quoted1 = $dbh->quote($attrs->{author1last});
+	    my $quoted2 = $dbh->quote($attrs->{author2last});
+	    
+	    push @clauses, "(refs.author1last sounds like $quoted1 and " .
+		"refs.author2last sounds like $quoted2)";
+	}
+	
+	elsif ( $attrs->{author1last} )
+	{
+	    my $quoted1 = $dbh->quote($attrs->{author1last});
+	    
+	    push @clauses, "refs.author1last sounds like $quoted1";
+	}
+
+	if ( $attrs->{anyauthor} )
+	{
+	    my $quoted1 = $dbh->quote($attrs->{anyauthor});
+	    my $quoted2 = $dbh->quote('%' . $attrs->{anyauthor} . '%');
+	    
+	    push @clauses, "(refs.author1last sounds like $quoted1 or " .
+		"refs.author2last sounds like $quoted1 or refs.otherauthors like $quoted2)";
+	}
+	
+	# Now put the pieces together into a single SQL statement and execute it.
+
+	push @clauses, "($attrs->{filter})" if $attrs->{filter};
+
+	my $filter = join(' and ', @clauses);
+
+	my $sql = $ds->generate_ref_base($selector, $fields, $filter, $options);
+	
+	$sql .= "\n\tHAVING $having" if $having;
+	
+	my @other, $ds->select_records($sql, 'return', $options);
+	
+	$ds->{selection_sql} = $sql;
+	
+	# If we get results, look through them and keep any that have even a slight chance of
+	# matching.
+	
+	foreach my $m ( @other )
+	{
+	    if ( $m->{score1} || $m->{score2} )
+	    {
+		$m->{score} = $m->{score1} + $m->{score2};
+	    }
+	    
+	    push @matches, $m;
+	}
     }
+    
+    # Now sort the matches in descending order by score.
+    
+    my @sorted = sort { $b->{score} <=> $a->{score} } @matches;
+
+    $ds->{selection_list} = \@sorted;
+    $ds->{selection_count} = scalar(@sorted);
+}
+
+
+sub generate_ref_base {
+
+    my ($ds, $selector, $fields, $filter_clause, $options) = @_;
+    
+    my $filter = $ds->generate_recordfilter($filter_clause, $selector, $options);
+    my $sourcefilter = $ds->generate_sourcefilter($selector, $options);
+    my $scorefilter = $ds->generate_scorefilter($selector, $options);
+    
+    my $mainjoin = "$TABLE{REFERENCE_DATA} as r";
+    $mainjoin .= " join $TABLE{REFERENCE_SEARCH} as ft using (reference_no)"
+	if $options->{refsearch};
+
+    my $groupby = "\n\tGROUP BY r.reference_no";
+    $groupby = "" if $fields =~ /^count[(]/;
+    
+    my $sql;
     
     if ( $selector eq 'all' )
     {
-	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-	    left join $TABLE{REFERENCE_SOURCES} as s using (reference_no)
-	    left join $TABLE{REFERENCE_SCORES} as sc using (refsource_no)
-	WHERE 1=1 $filter GROUP BY reference_no";
+	$sql = "SELECT $fields
+	FROM $mainjoin
+	WHERE 1=1 $filter";
     }
     
     elsif ( $selector eq 'unfetched' )
     {
-	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-	    left join $TABLE{REFERENCE_SOURCES} as s on s.reference_no = r.reference_no
-		$source_select and s.eventtype = 'fetch' and s.status rlike '^2..'
+	$sql = "SELECT $fields
+	FROM $mainjoin left join $TABLE{REFERENCE_SOURCES} as s
+	    on s.reference_no = r.reference_no $sourcefilter and s.eventtype = 'fetch'
+	    and s.status rlike '^2..'
 	WHERE s.reference_no is null $filter";
     }
     
     elsif ( $selector eq 'fetched' )
     {
-	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-	    join $TABLE{REFERENCE_SOURCES} as s on r.reference_no = s.reference_no
-		$source_select and s.eventtype = 'fetch' and s.status rlike '^2..'
-	    left join $TABLE{REFERENCE_SCORES} as sc using (refsource_no)
-	WHERE 1=1 $filter GROUP BY reference_no";
+	$sql = "SELECT $fields
+	FROM $mainjoin join $TABLE{REFERENCE_SOURCES} as s
+	    on s.reference_no = r.reference_no $sourcefilter
+	WHERE s.eventtype = 'fetch' and s.status rlike '^2..' $filter $groupby";
     }
-
+    
     elsif ( $selector eq 'unchecked' )
     {
-	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-	    left join $TABLE{REFERENCE_SOURCES} as s on r.reference_no = s.reference_no
-		$source_select and s.eventtype = 'fetch'
+	$sql = "SELECT $fields
+	FROM $mainjoin left join $TABLE{REFERENCE_SOURCES} as s
+	    on s.reference_no = r.reference_no $sourcefilter and s.eventtype = 'fetch'
 	WHERE s.reference_no is null $filter";
     }
 
     elsif ( $selector eq 'checked' )
     {
-	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-	    join $TABLE{REFERENCE_SOURCES} as s on r.reference_no = s.reference_no
-		$source_select and s.eventtype = 'fetch'
-	    left join $TABLE{REFERENCE_SCORES} as sc using (refsource_no)
-	WHERE 1=1 $filter GROUP BY reference_no";
+	$sql = "SELECT $fields
+	FROM $mainjoin join $TABLE{REFERENCE_SOURCES} as s
+	    on s.reference_no = r.reference_no $sourcefilter
+	WHERE s.eventtype = 'fetch' $filter $groupby";
     }
     
-    # elsif ( $selector eq 'unscored' )
-    # {
-    # 	$sql = "SELECT r.* FROM $TABLE{REFERENCE_DATA} as r
-    # 		left join $TABLE{REFERENCE_SCORES} as sc on r.reference_no = sc.reference_no
-    # 	WHERE sc.reference_no is null";
-    # }
-    
-    # elsif ( $selector eq 'scored' )
-    # {
-    # 	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-    # 		join $TABLE{REFERENCE_SCORES} as sc on r.reference_no = sc.reference_no
-    # 	WHERE 1=1";
-    # }
-    
-    elsif ( $selector eq 'unmatched' )
+    elsif ( $selector eq 'unscored' || $selector eq 'unmatched' )
     {
-	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-		left join $TABLE{REFERENCE_SCORES} as sc using (reference_no)
-	WHERE sc.matched is null or sc.matched = 0 GROUP BY reference_no";
+	$sql = "SELECT $fields
+	FROM $mainjoin left join $TABLE{REFERENCE_SCORES} as sc
+	    on sc.reference_no = r.reference_no $sourcefilter
+    	WHERE (sc.reference_no is null or not($scorefilter)) $filter $groupby";
     }
     
-    elsif ( $selector eq 'matched' )
+    elsif ( $selector eq 'scored' || $selector eq 'matched' )
     {
-	$sql = "SELECT SQL_CALC_FOUND_ROWS r.* FROM $TABLE{REFERENCE_DATA} as r
-		join $TABLE{REFERENCE_SCORES} as sc on r.reference_no = sc.reference_no and sc.matched
-	WHERE 1=1";
+	$sql = "SELECT $fields
+	FROM $mainjoin join $TABLE{REFERENCE_SCORES} as sc
+	    on sc.reference_no = r.reference_no $sourcefilter
+    	WHERE ($scorefilter) $filter $groupby";
     }
     
     else
     {
 	croak "ERROR: unknown selector '$selector'\n";
     }
-    
-    if ( ref $options eq 'HASH' && $options->{offset} > 0 )
-    {
-	my $offset = $options->{offset};
-	croak "ERROR: invalid offset '$offset'\n" unless $offset =~ /^\d+$/;
-	
-	$sql .= " OFFSET $offset";
-    }
 
-    if ( ref $options eq 'HASH' && defined $options->{limit} && $options->{limit} ne '' )
-    {
-	my $limit = $options->{limit};
-	croak "ERROR: invalid limit '$limit'\n" unless $limit =~ /^\d+$/;
-	
-	$sql .= " LIMIT $limit";
-    }
-    
-    $datasource->{selection_sql} = $sql;
-    
-    print STDERR "$sql\n\n" if $datasource->{debug};
-    
-    eval {
-	$sth = $dbh->prepare($sql);
-	$sth->execute();
-    };
-    
-    if ( $@ )
-    {
-	print STDERR "ERROR: $@\n";
-	return;
-    }
-    
-    $datasource->{selection_sth} = $sth;
-    
-    ($datasource->{selection_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
+    return $sql;
 }
 
 
@@ -276,28 +405,24 @@ sub select_refs {
 
 sub select_sources {
     
-    my ($datasource, $selector, $filter_clause, $options) = @_;
+    my ($ds, $selector, $filter_clause, $options) = @_;
 
-    $datasource->clear_selection('latest');
-    
-    my $dbh = $datasource->{dbh};
-    my $sth;
-    my $source_select = '';
-    my $filter = '';
-    
-    if ( $filter_clause && $filter_clause ne '()' )
+    $options ||= { };
+
+    if ( $options->{all} )
     {
-	$filter = ($filter_clause =~ /^[(]/) ? " and $filter_clause" : " and ($filter_clause)";
+	$ds->clear_selection;
+    }
+
+    else
+    {
+	$ds->clear_selection('latest');
     }
     
-    if ( $datasource->{source} && $datasource->{source} ne 'all' )
-    {
-	$source_select = " and s.source = " . $dbh->quote($datasource->{source});
-    }
+    my $fields = 'SQL_CALC_FOUND_ROWS s.refsource_no, s.source, s.reference_no, ' .
+	's.status, s.eventtype, s.eventtime';
     
-    my $fields = 's.refsource_no, s.source, s.reference_no, s.status';
-    
-    if ( ref $options eq 'HASH' && $options->{include} )
+    if ( $options->{include} )
     {
 	my $include = $options->{include};
 	
@@ -305,71 +430,271 @@ sub select_sources {
 	{
 	    $fields .= ', s.eventtype, s.eventtime, s.query_url, s.query_text';
 	}
-
+	
 	if ( $include =~ /data/ )
 	{
 	    $fields .= ', s.response_data';
 	}
-
+	
 	if ( $include =~ /ref/ )
 	{
 	    $fields .= ', r.*';
 	}
+	
+	if ( $include =~ /score/ )
+	{
+	    $fields .= ', sc.*';
+	}
+    }
+    
+    my $sql = $ds->generate_source_base($selector, $fields, $filter_clause, $options);
+    
+    $sql .= " ORDER BY s.reference_no, s.eventtime desc";
+    
+    return $ds->select_records($sql, 'sth', $options);
+}
+
+
+sub count_sources {
+
+    my ($ds, $selector, $filter_clause, $options) = @_;
+
+    $options ||= { };
+    
+    my $sql = $ds->generate_source_base($selector, 'count(*)', $filter_clause, $options);
+    
+    return $ds->count_records($selector, $sql, $options);
+}
+
+
+sub generate_source_base {
+    
+    my ($ds, $selector, $fields, $filter_clause, $options) = @_;
+    
+    my $filter = $ds->generate_recordfilter($filter_clause, $selector, $options);
+    my $sourcefilter = $ds->generate_sourcefilter($selector, $options);
+    my $scorefilter = $ds->generate_scorefilter($selector, $options);
+    my $refjoin = '';
+    my $scorejoin = '';
+    
+    if ( $options->{include} =~ /ref/ || $filter_clause =~ /\br[.]/ )
+    {
+	$refjoin = "left join $TABLE{REFERENCE_DATA} as r using (reference_no)";
     }
 
-    $fields .= ', sc.*';
-    
-    # Generate and execute the relevant SQL expression.
-    
-    my $sql = "SELECT $fields
-	FROM $TABLE{REFERENCE_SOURCES} as s
-	    left join $TABLE{REFERENCE_DATA} as r using (reference_no)
-	    left join $TABLE{REFERENCE_SCORES} as sc using (refsource_no)
-	WHERE $filter $source_select
-	ORDER BY s.reference_no, s.eventtime desc";
-    
-    if ( ref $options eq 'HASH' )
+    if ( $options->{include} =~ /score/ || $filter_clause =~ /\bsc[.]/ )
     {
-	if ( $options->{offset} > 0 )
+	$scorejoin = "left join $TABLE{REFERENCE_SCORES} as sc using (refsource_no)";
+    }
+    
+    my $sql;
+    
+    if ( $selector eq 'all' || $selector eq 'checked' )
+    {
+	$sql = "SELECT $fields
+	FROM $TABLE{REFERENCE_SOURCES} as s $refjoin $scorejoin
+	WHERE 1=1 $sourcefilter $filter";
+    }
+
+    elsif ( $selector eq 'unchecked' )
+    {
+	$sql = "SELECT $fields
+	FROM $TABLE{REFERENCE_SOURCES} as s
+	WHERE s.status is null";
+    }
+    
+    elsif ( $selector eq 'unfetched' )
+    {
+	$sql = "SELECT $fields
+	FROM $TABLE{REFERENCE_SOURCES} as s $refjoin $scorejoin
+	WHERE s.status not rlike '^2..' $sourcefilter $filter";
+    }
+    
+    elsif ( $selector eq 'fetched' )
+    {
+	$sql = "SELECT $fields
+	FROM $TABLE{REFERENCE_SOURCES} as s $refjoin $scorejoin
+	WHERE s.status rlike '^2..' $sourcefilter $filter";
+    }
+    
+    elsif ( $selector eq 'unscored' || $selector eq 'unmatched' )
+    {
+	$sql = "SELECT $fields
+	FROM $TABLE{REFERENCE_SOURCES} as s $refjoin
+	    left join $TABLE{REFERENCE_SCORES} as sc on s.refsource_no = sc.refsource_no $sourcefilter
+    	WHERE (sc.reference_no is null or not($scorefilter)) $filter";
+    }
+    
+    elsif ( $selector eq 'scored' || $selector eq 'matched' )
+    {
+	my $sql = "SELECT $fields
+	FROM $TABLE{REFERENCE_SOURCES} as s $refjoin
+	    join $TABLE{REFERENCE_SCORES} as sc on s.refsource_no = sc.refsource_no $sourcefilter
+    	WHERE ($scorefilter) $filter";
+    }
+    
+    else
+    {
+	croak "ERROR: unknown selector '$selector'\n";
+    }
+
+    return $sql;
+}
+
+
+sub generate_recordfilter {
+
+    my ($ds, $filter_clause) = @_;
+    
+    if ( $filter_clause && $filter_clause ne '()' )
+    {
+	return ($filter_clause =~ /^[(]/) ? " and $filter_clause" : " and ($filter_clause)";
+    }
+
+    else
+    {
+	return '';
+    }
+}
+
+
+sub generate_sourcefilter {
+    
+    my ($ds, $selector, $options) = @_;
+    
+    my $source = $options->{source} || $ds->{source};
+
+    if ( $source eq 'crossref' || $source eq 'xdd' )
+    {
+	return " and s.source='$source'";
+    }
+
+    else
+    {
+	return '';
+    }
+}
+
+
+sub generate_scorefilter {
+    
+    my ($ds, $selector, $options) = @_;
+    
+    if ( $selector eq 'matched' || $selector eq 'unmatched' )
+    {
+	my @clauses;
+	
+	if ( $options->{good} )
 	{
-	    my $offset = $options->{offset};
-	    croak "ERROR: invalid offset '$offset'\n" unless $offset =~ /^\d+$/;
+	    my ($min_sum, $min_count, $min_complete) = split /:/, $options->{good};
 	    
-	    $sql .= " OFFSET $offset";
+	    push @clauses, "sc.sum_s >= $min_sum" if $min_sum;
+	}
+
+	if ( $options->{bad} )
+	{
+	    my ($max_sum, $max_count, $max_complete) = split /:/, $options->{bad};
+	    
+	    push @clauses, "sc.sum_c < $max_sum" if $max_sum;
 	}
 	
-	if ( defined $options->{limit} && $options->{limit} ne '' )
+	if ( @clauses )
 	{
-	    my $limit = $options->{limit};
-	    croak "ERROR: invalid limit '$limit'\n" unless $limit =~ /^\d+$/;
-	    
-	    $sql .= " LIMIT $limit";
+	    return join(' and ', @clauses);
 	}
 	
-	if ( $options->{all} )
+	else
 	{
-	    $datasource->{selection_mode} = undef;
+	    return "sc.sum_s >= $GOOD_MATCH_MIN";
 	}
     }
     
-    $datasource->{selection_sql} = $sql;
+    elsif ( $selector eq 'scored' || $selector eq 'unscored' )
+    {
+	return "sc.sum_s > 0 and sc.sum_c > 0";
+    }
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    else
+    {
+	return '';
+    }
+}
+
+
+# select_records ( selector, sql, options )
+
+sub select_records {
+    
+    my ($ds, $sql, $disposition, $options) = @_;
+    
+    my $dbh = $ds->{dbh};
+    
+    if ( $options->{offset} )
+    {
+	my $offset = $options->{offset} + 0;
+	croak "ERROR: invalid offset '$offset'\n" unless $offset =~ /^\d+$/;
+	
+	$sql .= " OFFSET $offset";
+    }
+    
+    if ( defined $options->{limit} && $options->{limit} ne '' )
+    {
+	my $limit = $options->{limit} + 0;
+	croak "ERROR: invalid limit '$limit'\n" unless $limit =~ /^\d+$/;
+	
+	$sql .= " LIMIT $limit";
+    }
+    
+    $ds->{selection_sql} = $sql;
+    
+    print STDERR "$sql\n\n" if $ds->{debug};
+
+    my $result;
     
     eval {
-	$sth = $dbh->prepare($sql);
-	$sth->execute();
+	if ( $disposition eq 'return' )
+	{
+	    $result = $dbh->selectall_arrayref($sql, { Slice => { } });
+	}
+
+	else
+	{
+	    my $sth = $dbh->prepare($sql);
+	    $sth->execute();
+	    $ds->{selection_sth} = $sth;
+	    ($ds->{selection_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
+	}
     };
     
     if ( $@ )
     {
-	print STDERR "ERROR: $@\n";
+	print STDERR "$@\n\n";
 	return;
     }
     
-    $datasource->{selection_sth} = $sth;
+    elsif ( ref $result eq 'ARRAY' )
+    {
+	$ds->{selection_count} = scalar(@$result);
+	return @$result;
+    }
+}
+
+
+# count_records ( selector, sql, options )
+#
+# Count the number of records that match the specified SQL expression.
+
+sub count_records {
+
+    my ($ds, $selector, $sql, $options) = @_;
     
-    ($datasource->{selection_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
+    print STDERR "$sql\n\n" if $ds->{debug};
+    
+    my $dbh = $ds->{dbh};
+    
+    my ($count) = $dbh->selectrow_array($sql);
+
+    return $count;
 }
 
 
@@ -378,14 +703,14 @@ sub select_sources {
 
 sub clear_selection {
 
-    my ($datasource, $mode) = @_;
+    my ($ds, $mode) = @_;
 
-    $datasource->{selection_sth} = undef;
-    $datasource->{selection_sql} = undef;
-    $datasource->{selection_count} = undef;
-    $datasource->{selection_mode} = $mode;
-    $datasource->{selection_list} = undef;
-    $datasource->{last_refno} = undef;
+    $ds->{selection_sth} = undef;
+    $ds->{selection_sql} = undef;
+    $ds->{selection_count} = undef;
+    $ds->{selection_mode} = $mode;
+    $ds->{selection_list} = undef;
+    $ds->{last_refno} = undef;
 }
 
 
@@ -394,9 +719,9 @@ sub clear_selection {
 
 sub selection_count {
 
-    my ($datasource) = @_;
+    my ($ds) = @_;
 
-    return $datasource->{selection_count};
+    return $ds->{selection_count};
 }
 
 
@@ -408,36 +733,36 @@ sub selection_count {
 
 sub get_next {
     
-    my ($datasource) = @_;
+    my ($ds) = @_;
     
-    if ( $datasource->{selection_sth} )
+    if ( $ds->{selection_sth} )
     {
-	if ( $datasource->{selection_mode} eq 'latest' )
+	if ( $ds->{selection_mode} eq 'latest' )
 	{
 	    my ($r, $reference_no);
 	    
-	    while ( $r = $datasource->{selection_sth}->fetchrow_hashref )
+	    while ( $r = $ds->{selection_sth}->fetchrow_hashref )
 	    {
 		$reference_no = $r && $r->{reference_no};
 		
-		last unless $reference_no && $datasource->{last_refno} &&
-		    $reference_no eq $datasource->{last_refno};
+		last unless $reference_no && $ds->{last_refno} &&
+		    $reference_no eq $ds->{last_refno};
 	    }
 	    
-	    $datasource->{last_refno} = $reference_no;
+	    $ds->{last_refno} = $reference_no;
 	    
 	    return $r;
 	}
 	
 	else
 	{
-	    return $datasource->{selection_sth}->fetchrow_hashref;
+	    return $ds->{selection_sth}->fetchrow_hashref;
 	}
     }
     
-    elsif ( ref $datasource->{selection_list} eq 'ARRAY' )
+    elsif ( ref $ds->{selection_list} eq 'ARRAY' )
     {
-	return shift $datasource->{selection_list}->@*;
+	return shift $ds->{selection_list}->@*;
     }
 }
 
@@ -450,15 +775,15 @@ sub get_next {
 
 sub metadata_query {
     
-    my ($datasource, $attrs, $source) = @_;
+    my ($ds, $attrs, $source) = @_;
     
     # If the attrs parameter is a reference, it must be a hashref.
     
     croak "first argument must be a hashref" unless ref($attrs) && reftype($attrs) eq 'HASH';
     
-    # If the source isn't specified, use the one from $datasource.
+    # If the source isn't specified, use the one from $ds.
 
-    $source ||= $datasource->source;
+    $source ||= $ds->source;
     
     # # The max_items parameter, if specified, must be a positive integer.
     
@@ -473,7 +798,7 @@ sub metadata_query {
     
     # Prepare to generate a query.
     
-    my $ua = $datasource->{ua};
+    my $ua = $ds->{ua};
     
     # This operation will involve one or more requests on the datasource. We may need to
     # try several different requests before we are satisfied that no matching record can
@@ -490,7 +815,7 @@ sub metadata_query {
     # method stops returning new URLs, or until we exceed a set number of requests.
     
   REQUEST:
-    while ( $request_url = $datasource->generate_request_url($source, $progress, $attrs) )
+    while ( $request_url = $ds->generate_request_url($source, $progress, $attrs) )
     {
 	# Abort if we exceed a set number of requests.
 	
@@ -500,16 +825,16 @@ sub metadata_query {
 	# second. If it took at least 10 seconds to complete, wait an additional 5
 	# seconds. This helps to keep the server from getting overloaded.
 	
-	if ( $datasource->{last_latency} >= 5 )
+	if ( $ds->{last_latency} >= 5 )
 	{
-	    my $delay = $datasource->{last_latency} >= 10 ? 5 : 1;
+	    my $delay = $ds->{last_latency} >= 10 ? 5 : 1;
 	    sleep($delay);
 	}
 	
 	# Send the request and wait for the response. Record how long it takes.
 
-	print STDERR "Request Text: $progress->{query_text}\n" if $datasource->{debug};
-	print STDERR "Request URL: $request_url\n" if $datasource->{debug};
+	print STDERR "Request Text: $progress->{query_text}\n" if $ds->{debug};
+	print STDERR "Request URL: $request_url\n" if $ds->{debug};
 	
 	my $inittime = time;
 	
@@ -518,19 +843,19 @@ sub metadata_query {
 	$response_code = $response->code;
 	$response_status = $response->status_line;
 	
-	$datasource->{last_url} = $request_url;
-	$datasource->{last_code} = $response_code;
-	$datasource->{last_latency} = time - $inittime;
+	$ds->{last_url} = $request_url;
+	$ds->{last_code} = $response_code;
+	$ds->{last_latency} = time - $inittime;
 	
-	print STDERR "Response status: $response_status\n\n" if $datasource->{debug};
+	print STDERR "Response status: $response_status\n\n" if $ds->{debug};
 	
 	# If the request is successful, decode the content and score all of the items it
 	# contains.
 	
 	if ( $response_code =~ /^2../ )
 	{
-	    my $decoded_content = $datasource->decode_response_json($response);
-	    my @items = $datasource->extract_source_records($source, $decoded_content, $attrs);
+	    my $decoded_content = $ds->decode_response_json($response);
+	    my @items = $ds->extract_source_records($source, $decoded_content, $attrs);
 	    
 	    # Loop through the items and score them one by one. Ignore any item with a
 	    # conflict sum of 300 or more. If we find an item with a similarity sum of 500
@@ -539,16 +864,16 @@ sub metadata_query {
 	    
 	    foreach my $item ( @items )
 	    {
-		my $score = ref_similarity($attrs, $item, { max_c => 299 });
+		my $score = ref_similarity($attrs, $item, { max_c => $PARTIAL_MATCH_MIN - 1 });
 		
-		if ( $score->{sum_s} && $score->{sum_s} >= 500 )
+		if ( $score->{sum_s} && $score->{sum_s} >= $GOOD_MATCH_MIN )
 		{
 		    $match_item = $item;
 		    $match_score = $score;
 		    last REQUEST;
 		}
 		
-		elsif ( $score->{sum_s} && $score->{sum_s} >= 300 )
+		elsif ( $score->{sum_s} && $score->{sum_s} >= $PARTIAL_MATCH_MIN )
 		{
 		    push @possible_matches, [$item, $score, $request_url,
 					     $progress->{query_text}];
@@ -669,7 +994,7 @@ sub metadata_query {
 
 sub decode_response_json {
     
-    my ($datasource, $response) = @_;
+    my ($ds, $response) = @_;
     
     my $content = $response->decoded_content;
     
@@ -686,16 +1011,16 @@ sub decode_response_json {
 
 sub extract_source_records {
 
-    my ($datasource, $source, $response_data, $attrs) = @_;
+    my ($ds, $source, $response_data, $attrs) = @_;
     
     if ( $source eq 'crossref' )
     {
-	return $datasource->extract_crossref_records($response_data, $attrs);
+	return $ds->extract_crossref_records($response_data, $attrs);
     }
     
     elsif ( $source eq 'xdd' )
     {
-	return $datasource->extract_xdd_records($response_data, $attrs);
+	return $ds->extract_xdd_records($response_data, $attrs);
     }
     
     else
@@ -713,27 +1038,27 @@ sub extract_source_records {
 
 sub generate_request_url {
     
-    my ($datasource, $source, $progress, $attrs) = @_;
+    my ($ds, $source, $progress, $attrs) = @_;
     
     # If the previous request returned a server error, try the same request again. The
     # calling method is responsible for waiting an appropriate amount of time between
     # requests.
     
-    if ( $datasource->{last_code} =~ /^5../ )
+    if ( $ds->{last_code} =~ /^5../ )
     {
-	return $datasource->{last_url};
+	return $ds->{last_url};
     }
     
     # Otherwise, call the method appropriate to this datasource.
     
     elsif ( $source eq 'crossref' )
     {
-	return $datasource->generate_crossref_request($progress, $attrs);
+	return $ds->generate_crossref_request($progress, $attrs);
     }
     
     elsif ( $source eq 'xdd' )
     {
-	return $datasource->generate_xdd_request($progress, $attrs);
+	return $ds->generate_xdd_request($progress, $attrs);
     }
     
     else
@@ -751,7 +1076,7 @@ sub generate_request_url {
 
 sub generate_crossref_request {
     
-    my ($datasource, $progress, $attrs) = @_;
+    my ($ds, $progress, $attrs) = @_;
 
     # If the attributes include a DOI, try that first.
     
@@ -767,7 +1092,7 @@ sub generate_crossref_request {
 	    return "$CROSSREF_BASE/$encoded";
 	}
 
-	print STDERR "Attributes lack a doi.\n" if $datasource->{debug};
+	print STDERR "Attributes lack a doi.\n" if $ds->{debug};
     }
     
     # If the attributes do not include a DOI, or if we have already tried that, then try a
@@ -864,7 +1189,7 @@ sub generate_crossref_request {
 	}
 
 	print STDERR "Attributes do not contain enough bibliographic information.\n"
-	    if $datasource->{debug};
+	    if $ds->{debug};
     }
     
     # If we have tried both of these, return nothing.
@@ -880,26 +1205,26 @@ sub generate_crossref_request {
 
 sub extract_crossref_records {
 
-    my ($datasource, $data, $attrs) = @_;
+    my ($ds, $data, $attrs) = @_;
     
     if ( ref $data eq 'HASH' && ref $data->{message}{items} eq 'ARRAY' )
     {
-	return map { $datasource->clean_crossref_item($_) } @{$data->{message}{items}};
+	return map { $ds->clean_crossref_item($_) } @{$data->{message}{items}};
     }
     
     elsif ( ref $data eq 'HASH' && $data->{message}{deposited} )
     {
-	return $datasource->clean_crossref_item($data->{message});
+	return $ds->clean_crossref_item($data->{message});
     }
     
     elsif ( ref $data eq 'ARRAY' && $data->[0]{deposited} || $data->[0]{indexed} )
     {
-	return $datasource->clean_crossref_item($data);
+	return $ds->clean_crossref_item($data);
     }
 
     elsif ( $data->{deposited} || $data->{indexed} )
     {
-	return $datasource->clean_crossref_item($data);
+	return $ds->clean_crossref_item($data);
     }
 
     return;
@@ -908,7 +1233,7 @@ sub extract_crossref_records {
 
 sub clean_crossref_item {
     
-    my ($datasource, $data) = @_;
+    my ($ds, $data) = @_;
 
     delete $data->{reference};
     delete $data->{license};
@@ -941,7 +1266,7 @@ sub clean_crossref_item {
 
 sub generate_xdd_request {
     
-    my ($datasource, $progress, $attrs) = @_;
+    my ($ds, $progress, $attrs) = @_;
     
     # If the attributes include a DOI, try that first.
     
@@ -1153,7 +1478,7 @@ sub xdd_simple_request {
 
 sub extract_xdd_records {
 
-    my ($datasource, $data, $attrs) = @_;
+    my ($ds, $data, $attrs) = @_;
 
     if ( ref $data->{success}{data} eq 'ARRAY' )
     {
@@ -1184,7 +1509,7 @@ sub extract_xdd_records {
 
 sub store_source_data {
     
-    my ($datasource, $r, $data) = @_;
+    my ($ds, $r, $data) = @_;
     
     my $reference_no;
     
@@ -1210,7 +1535,7 @@ sub store_source_data {
 	croak "cannot store source data $label: missing attributes\n";
     }
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
 
     my $sql;
     my $result;
@@ -1243,7 +1568,7 @@ sub store_source_data {
 	  query_url = $quoted_url
 	ORDER BY eventtime desc LIMIT 1";
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
     
     my ($refsource_no, $previous_data) = $dbh->selectrow_array($sql);
     
@@ -1252,28 +1577,31 @@ sub store_source_data {
     # then update the record with the new eventtime, query_text, and response_data.
 
     my $update;
-    
-    if ( $encoded_item ne '' && $data->{source} eq 'crossref' )
+
+    if ( $refsource_no )
     {
-	my $check_data = $encoded_item;
+	if ( $encoded_item ne '' && $data->{source} eq 'crossref' )
+	{
+	    my $check_data = $encoded_item;
+	    
+	    $check_data =~ s/"score":["'\w\s.-]+//;
+	    $previous_data =~ s/"score":["'\w\s.-]+//;
+	    
+	    $check_data =~ s/"indexed":["'\w\s.-:]+//;
+	    $previous_data =~ s/"indexed":["'\w\s.-:]+//;
+	    
+	    $update = 1 if $check_data eq $previous_data;
+	}
 	
-	$check_data =~ s/"score":["'\w\s.-]+//;
-	$previous_data =~ s/"score":["'\w\s.-]+//;
+	elsif ( $encoded_item ne '' && $data->{source} eq 'xdd' )
+	{
+	    $update = 1 if $encoded_item eq $previous_data;
+	}
 	
-	$check_data =~ s/"indexed":["'\w\s.-:]+//;
-	$previous_data =~ s/"indexed":["'\w\s.-:]+//;
-	
-	$update = 1 if $check_data eq $previous_data;
-    }
-    
-    elsif ( $encoded_item ne '' && $data->{source} eq 'xdd' )
-    {
-	$update = 1 if $encoded_item eq $previous_data;
-    }
-    
-    elsif ( $encoded_item eq '' && $previous_data eq '' )
-    {
-	$update = 1;
+	elsif ( $encoded_item eq '' && $previous_data eq '' )
+	{
+	    $update = 1;
+	}
     }
     
     # If the record is to be updated, do so.
@@ -1284,7 +1612,7 @@ sub store_source_data {
 		SET eventtime=now(), query_text=$quoted_text
 		WHERE refsource_no = $refsource_no LIMIT 1";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 
 	eval {
 	    $result = $dbh->do($sql);
@@ -1292,6 +1620,7 @@ sub store_source_data {
 	
 	if ( $@ )
 	{
+	    print STDERR "$sql\n\n" unless $ds->{debug};
 	    return 'error', $@;
 	}
 	
@@ -1310,7 +1639,7 @@ sub store_source_data {
 		VALUES ($quoted_source, $reference_no, 'fetch', $quoted_status,
 		$quoted_text, $quoted_url, $quoted_item)";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 
 	eval {
 	    $result = $dbh->do($sql);
@@ -1318,6 +1647,7 @@ sub store_source_data {
 	
 	if ( $@ )
 	{
+	    print STDERR "$sql\n\n" unless $ds->{debug};
 	    return 'error', $@;
 	}
 	
@@ -1340,7 +1670,7 @@ sub store_source_data {
 
 sub store_score_data {
 
-    my ($datasource, $attrs, $scores, $formatted) = @_;
+    my ($ds, $attrs, $scores, $formatted) = @_;
     
     # Make sure the necessary information was specified.
     
@@ -1367,7 +1697,7 @@ sub store_score_data {
     
     # Generate values needed for the SQL statements.
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     my $quoted_sourceno = $dbh->quote($attrs->{refsource_no});
     my $quoted_refno = $dbh->quote($attrs->{reference_no});
     my $quoted_source = $dbh->quote($attrs->{source});
@@ -1439,7 +1769,7 @@ sub store_score_data {
 	    $sql = "UPDATE $TABLE{REFERENCE_SCORES} SET $update_string
 	    WHERE refsource_no = $quoted_sourceno LIMIT 1";
 	    
-	    print STDERR "$sql\n\n" if $datasource->{debug};
+	    print STDERR "$sql\n\n" if $ds->{debug};
 
 	    eval {
 		$result = $dbh->do($sql);
@@ -1447,6 +1777,7 @@ sub store_score_data {
 
 	    if ( $@ )
 	    {
+		print STDERR "$sql\n\n" unless $ds->{debug};
 		return 'error', $@;
 	    }
 
@@ -1504,7 +1835,7 @@ sub store_score_data {
 	$auth1_s, $auth1_c, $auth2_s, $auth2_c, $pubyr_s, $pubyr_c, $volume_s, $volume_c,
 	$pages_s, $pages_c, $pblshr_s, $pblshr_c)";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	my $result;
 	
@@ -1514,6 +1845,7 @@ sub store_score_data {
 	
 	if ( $@ )
 	{
+	    print STDERR "$sql\n\n" unless $ds->{debug};
 	    return 'error', $@;
 	}
 
@@ -1537,7 +1869,7 @@ sub store_score_data {
 
 sub store_result {
 
-    my ($datasource, $reference_no, $status, $query_text, $query_url, $data) = @_;
+    my ($ds, $reference_no, $status, $query_text, $query_url, $data) = @_;
     
     # The reference_no value must be a positive integer.
     
@@ -1546,8 +1878,8 @@ sub store_result {
 	croak "reference_no must be a positive integer";
     }
 
-    my $dbh = $datasource->{dbh};
-    my $source = $datasource->{source};
+    my $dbh = $ds->{dbh};
+    my $source = $ds->{source};
     
     # Quote the text attributes.
     
@@ -1572,7 +1904,7 @@ sub store_result {
 
 	print STDERR "SELECT refsource_no FROM $TABLE{REFERENCE_SOURCES} 
 		WHERE reference_no = $reference_no and response_data = $short_data
-		ORDER BY eventtime desc LIMIT 1\n\n" if $datasource->{debug};
+		ORDER BY eventtime desc LIMIT 1\n\n" if $ds->{debug};
 	
 	my ($refsource_no) = $dbh->selectrow_array($sql);
 	
@@ -1585,7 +1917,7 @@ sub store_result {
 		(reference_no, eventtype, source, previous_no, status, query_text, query_url)
 		VALUES ($reference_no, 'fetch', $quoted_source, $refsource_no, $quoted_status, $quoted_text, $quoted_url)";
 	    
-	    print STDERR "$sql\n\n"if $datasource->{debug};
+	    print STDERR "$sql\n\n"if $ds->{debug};
 	    
 	    $result = $dbh->do($sql);
 	}
@@ -1611,7 +1943,7 @@ sub store_result {
 	    print STDERR "INSERT INTO $TABLE{REFERENCE_SOURCES}
 		(reference_no, eventtype, source, status, query_text, query_url, items, response_data)
 		VALUES ($reference_no, 'fetch', $quoted_source, $quoted_status, 
-		$quoted_text, $quoted_url, $items, $short_data)" if $datasource->{debug};
+		$quoted_text, $quoted_url, $items, $short_data)" if $ds->{debug};
 	    
 	    $result = $dbh->do($sql);
 	}
@@ -1626,7 +1958,7 @@ sub store_result {
 		VALUES ($reference_no, 'fetch', $quoted_source, $quoted_status,
 		$quoted_text, $quoted_url)";
 
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	$result = $dbh->do($sql);
     }
@@ -1658,9 +1990,9 @@ sub store_result {
 
 sub list_events {
 
-    my ($datasource, $r, $source, $selector) = @_;
+    my ($ds, $r, $source, $selector) = @_;
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     
     my ($basefilter, @filters);
     
@@ -1733,11 +2065,11 @@ sub list_events {
 	FROM $TABLE{REFERENCE_SOURCES} as s
 	    left join $TABLE{REFERENCE_SCORES} as sc using (refsource_no)
 	WHERE $expr
-	GROUP BY refsource_no ORDER BY eventtime desc";
+	GROUP BY s.refsource_no ORDER BY eventtime desc";
 	
 	$sql .= " LIMIT 1" if $selector eq 'latest';
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 
 	eval {
 	    $result = $dbh->selectall_arrayref($sql, { Slice => { } });
@@ -1764,9 +2096,9 @@ sub list_events {
 
 sub store_scores {
     
-    my ($datasource, $e, $s, $index) = @_;
+    my ($ds, $e, $s, $index) = @_;
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
 
     my $refno = $dbh->quote($e->{reference_no});
     my $sourceno = $dbh->quote($e->{refsource_no});
@@ -1805,7 +2137,7 @@ sub store_scores {
 	$auth1_s, $auth1_c, $auth2_s, $auth2_c, $pubyr_s, $pubyr_c, $volume_s, $volume_c,
 	$pages_s, $pages_c, $pblshr_s, $pblshr_c)";
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
     
     my $result;
     
@@ -1815,7 +2147,7 @@ sub store_scores {
     
     if ( $@ )
     {
-	print STDERR "$sql\n\n" unless $datasource->{debug};
+	print STDERR "$sql\n\n" unless $ds->{debug};
     }
     
     return $result;
@@ -1831,7 +2163,7 @@ sub store_scores {
 
 sub update_match_scores {
     
-    my ($datasource, $m, $scores) = @_;
+    my ($ds, $m, $scores) = @_;
     
     # Make sure we have a refsource_no.
     
@@ -1844,7 +2176,7 @@ sub update_match_scores {
     # Run through all the possible scores, and accumulate a list of update clauses in each case
     # where $s has a defined value that is different from $m.
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     
     my (@update_list, %update);
     
@@ -1888,7 +2220,7 @@ sub update_match_scores {
 	my $sql = "UPDATE $TABLE{REFERENCE_SCORES} SET $update_string
 		WHERE refsource_no = $quoted";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	local $dbh->{RaiseError};
 	local $dbh->{PrintError} = 1;
@@ -1922,7 +2254,7 @@ sub update_match_scores {
 
 sub update_match_formatted {
     
-    my ($datasource, $m, $formatted) = @_;
+    my ($ds, $m, $formatted) = @_;
     
     # Make sure we have a refsource_no.
     
@@ -1937,7 +2269,7 @@ sub update_match_formatted {
     
     if ( $m->{match_formatted} ne $formatted )
     {
-	my $dbh = $datasource->{dbh};
+	my $dbh = $ds->{dbh};
 	
 	my $quoted_id = $dbh->quote($m->{refsource_no});
 	
@@ -1946,7 +2278,7 @@ sub update_match_formatted {
 	my $sql = "UPDATE $TABLE{REFERENCE_SCORES} SET formatted=$quoted_text
 		WHERE refsource_no=$quoted_id";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	my $result;
 	
@@ -1969,7 +2301,7 @@ sub update_match_formatted {
 
 sub recount_scores {
     
-    my ($datasource, $selector) = @_;
+    my ($ds, $selector) = @_;
     
     unless ( $selector =~ qr{ ^ \d+ $ | ^ all $ }xs )
     {
@@ -1977,7 +2309,7 @@ sub recount_scores {
 	return;
     }
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
 
     my $sql;
 
@@ -1987,7 +2319,7 @@ sub recount_scores {
     
     $sql .= "\nWHERE reference_no = $selector" if $selector ne 'all';
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
 
     $dbh->do($sql);
 
@@ -1999,7 +2331,7 @@ sub recount_scores {
     
     $sql .= "\nWHERE reference_no = $selector" if $selector ne 'all';
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
     
     $dbh->do($sql);
 
@@ -2013,7 +2345,7 @@ sub recount_scores {
     
     $sql .= "\nWHERE reference_no = $selector" if $selector ne 'all';
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
 
     $dbh->do($sql);
 
@@ -2029,9 +2361,9 @@ sub recount_scores {
 
 sub set_manual {
     
-    my ($datasource, $score, $is_match) = @_;
+    my ($ds, $score, $is_match) = @_;
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     my $sql;
     
     my $mark_value = $is_match                        ? '1'
@@ -2046,7 +2378,7 @@ sub set_manual {
 	$sql = "UPDATE $TABLE{REFERENCE_SCORES} SET manual = $mark_value
 		WHERE refsource_no = $score_id";
 
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 
 	my $result = $dbh->do($sql);
 
@@ -2075,7 +2407,7 @@ sub set_manual {
 
 sub count_matching_scores {
     
-    my ($datasource, $expr) = @_;
+    my ($ds, $expr) = @_;
     
     unless ( $expr && $expr ne '()' )
     {
@@ -2087,12 +2419,12 @@ sub count_matching_scores {
 	$expr = "($expr)";
     }
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     my $source_select = '';
     
-    if ( $datasource->{source} && $datasource->{source} ne 'all' )
+    if ( $ds->{source} && $ds->{source} ne 'all' )
     {
-	$source_select = " and sc.source = " . $dbh->quote($datasource->{source});
+	$source_select = " and sc.source = " . $dbh->quote($ds->{source});
     }
     
     my ($sql, $matches, $positive, $negative);
@@ -2103,7 +2435,7 @@ sub count_matching_scores {
 		count(if(manual=0,1,null)) as negative FROM $TABLE{REFERENCE_SCORES} as sc
 	WHERE $expr$source_select";
 	
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
     
     ($matches, $positive, $negative) = $dbh->selectrow_array($sql);
     
@@ -2127,7 +2459,7 @@ sub count_matching_scores {
 
 sub list_matching_scores {
 
-    my ($datasource, $expr, $mode, $count, $limit) = @_;
+    my ($ds, $expr, $mode, $count, $limit) = @_;
     
     unless ( $expr && $expr ne '()' )
     {
@@ -2136,12 +2468,12 @@ sub list_matching_scores {
 
     $limit ||= 20;
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     my $source_select = '';
     
-    if ( $datasource->{source} && $datasource->{source} ne 'all' )
+    if ( $ds->{source} && $ds->{source} ne 'all' )
     {
-	$source_select = " and sc.source = " . $dbh->quote($datasource->{source});
+	$source_select = " and sc.source = " . $dbh->quote($ds->{source});
     }
     
     my ($sql, $matches, $positive, $negative);
@@ -2182,7 +2514,7 @@ sub list_matching_scores {
 	$sql .= " LIMIT $limit";
     }
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
     
     my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
     
@@ -2202,19 +2534,19 @@ sub list_matching_scores {
 
 sub compare_scores {
     
-    my ($datasource, $expr_a, $expr_b) = @_;
+    my ($ds, $expr_a, $expr_b) = @_;
     
     unless ( $expr_a )
     {
 	croak "No sql expression specified\n";
     }
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     my $source_select = '';
     
-    if ( $datasource->{source} && $datasource->{source} ne 'all' )
+    if ( $ds->{source} && $ds->{source} ne 'all' )
     {
-	$source_select = " and sc.source = " . $dbh->quote($datasource->{source});
+	$source_select = " and sc.source = " . $dbh->quote($ds->{source});
     }
 
     my ($sql_a, $sql_b);
@@ -2228,14 +2560,14 @@ sub compare_scores {
 	$sql_a = "SELECT count(*) FROM $TABLE{REFERENCE_SCORES} as sc
 	WHERE ($expr_a) and not ($expr_b)$source_select";
 	
-	print STDERR "$sql_a\n\n" if $datasource->{debug};
+	print STDERR "$sql_a\n\n" if $ds->{debug};
 	
 	($count_a) = $dbh->selectrow_array($sql_a);
 	
 	$sql_b = "SELECT count(*) FROM $TABLE{REFERENCE_SCORES} as sc
 	WHERE ($expr_b) and not ($expr_a)$source_select";
 
-	print STDERR "$sql_b\n\n" if $datasource->{debug};
+	print STDERR "$sql_b\n\n" if $ds->{debug};
 
 	($count_b) = $dbh->selectrow_array($sql_b);
     }
@@ -2245,7 +2577,7 @@ sub compare_scores {
 	$sql_a = "SELECT count(*) FROM $TABLE{REFERENCE_SCORES} as sc
 	WHERE ($expr_a)$source_select";
 	
-	print STDERR "$sql_a\n\n" if $datasource->{debug};
+	print STDERR "$sql_a\n\n" if $ds->{debug};
 	
 	($count_a) = $dbh->selectrow_array($sql_a);
     }
@@ -2258,7 +2590,7 @@ sub compare_scores {
 
 sub compare_list_scores {
 
-    my ($datasource, $expr_a, $expr_b, $limit) = @_;
+    my ($ds, $expr_a, $expr_b, $limit) = @_;
     
     unless ( $limit && $limit =~ /^\d+$/ )
     {
@@ -2270,12 +2602,12 @@ sub compare_list_scores {
 	croak "No SQL expression specified\n";
     }
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     my $source_select = '';
     
-    if ( $datasource->{source} && $datasource->{source} ne 'all' )
+    if ( $ds->{source} && $ds->{source} ne 'all' )
     {
-	$source_select = " and sc.source = " . $dbh->quote($datasource->{source});
+	$source_select = " and sc.source = " . $dbh->quote($ds->{source});
     }
     
     my ($sql, $result);
@@ -2291,7 +2623,7 @@ sub compare_list_scores {
 	    join $TABLE{REFERENCE_SOURCES} as s using (refsource_no)
 	WHERE ($expr_a) and not ($expr_b)$source_select LIMIT $limit";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	$result = $dbh->selectall_arrayref($sql, { Slice => { } });
     }
@@ -2305,7 +2637,7 @@ sub compare_list_scores {
 	    join $TABLE{REFERENCE_SOURCES} as s using (refsource_no)
 	WHERE ($expr_a)$source_select LIMIT $limit";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	$result = $dbh->selectall_arrayref($sql, { Slice => { } });
     }
@@ -2320,7 +2652,7 @@ sub compare_list_scores {
   ROW:
     foreach my $r ( @$result )
     {
-	$datasource->format_scored_match($r);
+	$ds->format_scored_match($r);
     }
 
     # Then return the list.
@@ -2342,7 +2674,7 @@ sub compare_list_scores {
 
 sub format_match {
     
-    my ($datasource, $m) = @_;
+    my ($ds, $m) = @_;
     
     # Make sure we have a hashref that includes a refsource_no value and an rs_index value. This
     # identifies exactly which scored match we are working with, and causes processing to be
@@ -2361,7 +2693,7 @@ sub format_match {
     # Generate bibliographic reference text using the attributes from the corresponding record in
     # the paleobiodb REFERENCE_DATA table.
     
-    $m->{ref_formatted} = $datasource->format_ref($m);
+    $m->{ref_formatted} = $ds->format_ref($m);
     
     # If bibliographic reference text has already been generated and stored for the external data
     # to be matched, it will be included under the key 'formatted'. In that case, simply rename
@@ -2383,12 +2715,12 @@ sub format_match {
 	# reference items from the it. If $m->{response_data} is empty, the
 	# extract_response_items method will make a query for the corresponding data.
 	
-	my @items = $datasource->extract_response_items($m);
+	my @items = $ds->extract_response_items($m);
 	
 	# Now that we know the item count, we can store that number in the REFERENCE_SOURCES table if
 	# it isn't already there.
 	
-	my $dbh = $datasource->{dbh};
+	my $dbh = $ds->{dbh};
 	
 	if ( ! defined $m->{items} || $m->{items} != @items )
 	{
@@ -2400,7 +2732,7 @@ sub format_match {
 	    my $sql_u = "UPDATE $TABLE{REFERENCE_SOURCES} SET items=$quoted_count
 		WHERE refsource_no=$quoted_id LIMIT 1";
 	    
-	    print STDERR "$sql_u\n\n" if $datasource->{debug};
+	    print STDERR "$sql_u\n\n" if $ds->{debug};
 
 	    # If an error occurs while storing the data, just print it out and don't throw an
 	    # exception.
@@ -2418,7 +2750,7 @@ sub format_match {
 	
 	if ( @items && $index < @items )
 	{
-	    $m->{match_formatted} = $datasource->format_ref($items[$index]);
+	    $m->{match_formatted} = $ds->format_ref($items[$index]);
 	    
 	    # Store the generated text in the 'formatted' column of the score record.
 	    
@@ -2428,7 +2760,7 @@ sub format_match {
 	    my $sql_s = "UPDATE $TABLE{REFERENCE_SCORES} SET formatted=$quoted_text
 		WHERE refsource_no=$quoted_id and rs_index=$index LIMIT 1";
 	    
-	    print STDERR $sql_s . "\n\n" if $datasource->{debug};
+	    print STDERR $sql_s . "\n\n" if $ds->{debug};
 	    
 	    # If an error occurs while storing the data, just print it out and don't throw an
 	    # exception.
@@ -2457,7 +2789,7 @@ sub format_match {
 
 sub get_match_data {
     
-    my ($datasource, $m) = @_;
+    my ($ds, $m) = @_;
     
     # Make sure we have a hashref that includes a refsource_no value and an rs_index value. This
     # identifies exactly which scored match we are working with, and causes processing to be
@@ -2477,7 +2809,7 @@ sub get_match_data {
     # reference items from the it. If $m->{response_data} is empty, the extract_response_items
     # method will make a query for the corresponding data.
     
-    my @items = $datasource->extract_response_items($m);
+    my @items = $ds->extract_response_items($m);
     
     # Now that we know the item count, we can store that number in the REFERENCE_SOURCES table if
     # it isn't already there.
@@ -2486,14 +2818,14 @@ sub get_match_data {
     {
 	$m->{items} = scalar(@items);
 	
-	my $dbh = $datasource->{dbh};
+	my $dbh = $ds->{dbh};
 	my $quoted_id = $dbh->quote($m->{refsource_no});
 	my $quoted_count = $dbh->quote($m->{items});
 	
 	my $sql_u = "UPDATE $TABLE{REFERENCE_SOURCES} SET items=$quoted_count
 		WHERE refsource_no=$quoted_id LIMIT 1";
 	
-	print STDERR "$sql_u\n\n" if $datasource->{debug};
+	print STDERR "$sql_u\n\n" if $ds->{debug};
 	
 	# If an error occurs while storing the data, just print it out and don't throw an
 	# exception.
@@ -2530,7 +2862,7 @@ sub get_match_data {
 
 sub extract_response_items {
 
-    my ($datasource, $m) = @_;
+    my ($ds, $m) = @_;
     
     my $response_data = $m->{response_data};
     
@@ -2538,12 +2870,12 @@ sub extract_response_items {
     
     unless ( $response_data )
     {
-	my $dbh = $datasource->{dbh};
+	my $dbh = $ds->{dbh};
 	my $quoted_id = $dbh->quote($m->{refsource_no});
 	
 	my $sql = "SELECT response_data FROM $TABLE{REFERENCE_SOURCES} WHERE refsource_no=$quoted_id";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	($response_data) = $dbh->selectrow_array($sql);
 	
@@ -2614,14 +2946,14 @@ sub extract_response_items {
 # Select matches for the specified reference attributes from the REFERENCE_DATA (refs)
 # table. The attributes must be given as a hashref.
 
-sub select_matching_refs {
+sub select_matching_refs_old {
     
-    my ($datasource, $selector, $attrs, $options) = @_;
+    my ($ds, $selector, $attrs, $options) = @_;
     
-    $datasource->clear_selection;
+    $ds->clear_selection;
 
-    my $dbh = $datasource->{dbh};
-    my $source = ref $options eq 'HASH' && $options->{source} || $datasource->{source};
+    my $dbh = $ds->{dbh};
+    my $source = ref $options eq 'HASH' && $options->{source} || $ds->{source};
     
     my @matches;
     
@@ -2689,13 +3021,13 @@ sub select_matching_refs {
 	
 	my $sql = "SELECT * FROM refs $join WHERE doi = $quoted $filter $group $limit";
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
 	
 	@matches = @$result if $result && ref $result eq 'ARRAY';
 
-	$datasource->{selection_sql} = $sql;
+	$ds->{selection_sql} = $sql;
 	
 	# Assign match scores.
 	
@@ -2819,11 +3151,11 @@ sub select_matching_refs {
 	    $sql .= " $limit";
 	}
 	
-	print STDERR "$sql\n\n" if $datasource->{debug};
+	print STDERR "$sql\n\n" if $ds->{debug};
 	
 	my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
 	
-	$datasource->{selection_sql} = $sql;
+	$ds->{selection_sql} = $sql;
 	
 	# If we get results, look through them and keep any that have even a slight chance of
 	# matching.
@@ -2846,22 +3178,22 @@ sub select_matching_refs {
     
     my @sorted = sort { $b->{score} <=> $a->{score} } @matches;
 
-    $datasource->{selection_list} = \@sorted;
-    $datasource->{selection_count} = scalar(@sorted);
+    $ds->{selection_list} = \@sorted;
+    $ds->{selection_count} = scalar(@sorted);
 }
 
 
 sub ref_from_refno {
     
-    my ($datasource, $reference_no) = @_;
+    my ($ds, $reference_no) = @_;
     
     return unless $reference_no && $reference_no =~ /^\d+$/;
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     
     my $sql = "SELECT * FROM $TABLE{REFERENCE_DATA} WHERE reference_no = $reference_no";
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
     
     my $result = $dbh->selectrow_hashref($sql);
     
@@ -2871,17 +3203,17 @@ sub ref_from_refno {
 
 sub ref_from_sourceno {
 
-    my ($datasource, $refsource_no) = @_;
+    my ($ds, $refsource_no) = @_;
 
     return unless $refsource_no && $refsource_no =~ /^\d+$/;
     
-    my $dbh = $datasource->{dbh};
+    my $dbh = $ds->{dbh};
     
     my $sql = "SELECT r.*, s.refsource_no
 	FROM $TABLE{REFERENCE_DATA} as r join $TABLE{REFERENCE_SOURCES} as s using (reference_no)
 	WHERE s.refsource_no = $refsource_no";
     
-    print STDERR "$sql\n\n" if $datasource->{debug};
+    print STDERR "$sql\n\n" if $ds->{debug};
     
     my $result = $dbh->selectrow_hashref($sql);
     
@@ -2897,7 +3229,7 @@ sub ref_from_sourceno {
 
 sub format_ref {
 
-    my ($datasource, $r) = @_;
+    my ($ds, $r) = @_;
     
     # First format the author string. If there is an 'author' attribute that is a non-empty list,
     # use that. In Chicago B style, the first author goes "family, given" while all the other
@@ -3396,7 +3728,7 @@ sub extract_json_year {
 
 sub format_scores_horizontal {
 
-    my ($datasource, $scores, $color_output) = @_;
+    my ($ds, $scores, $color_output) = @_;
     
     my $line1 = "stat      ";
     my $line2 = "similar   ";
@@ -3472,194 +3804,4 @@ sub init_tables {
 }
 
 1;
-
-
-
-#     # Now start building the reference with authorstring, publication year,
-#     # reference title and publication title
-    
-#     my $longref = $authorstring;
-#     my $pubtype = $r->{pubtype} || $r->{publication_type};
-    
-#     if ( $authorstring ne '' )
-#     {
-# 	$longref .= '.' unless $authorstring =~ /\.$/;
-# 	$longref .= ' ';
-#     }
-    
-    
-#     if ( $pubyr ne '' )
-#     {
-# 	$longref .= "$pubyr. ";
-#     }
-    
-#     my $reftitle;
-
-#     if ( $r->{title} && ref $r->{title} eq 'ARRAY' && @{$r-{title}} )
-#     {
-# 	$reftitle = $r->{title}[0];
-#     }
-
-#     elsif ( $r->{title} && ! ref $r->{title} )
-#     {
-# 	$reftitle = $r->{title};
-#     }
-
-#     elsif ( $r->{reftitle} )
-#     {
-# 	$reftitle = $r->{reftitle};
-#     }
-
-#     else
-#     {
-# 	$reftitle = 'unknown';
-#     }
-    
-#     if ( $reftitle ne '' )
-#     {
-# 	$longref .= $reftitle;
-
-# 	if ( $pubtype && $pubtype eq 'instcoll' )
-# 	{
-# 	    $longref .= ', ';
-# 	}
-
-# 	else
-# 	{
-# 	    $longref .= '.' unless $reftitle =~ /\.$/;
-# 	    $longref .= ' ';
-# 	}
-#     }
-    
-#     my $pubtitle = $r->{pubtitle} || '';
-#     my $editors = $r->{editors} || '';
-    
-#     if ( $pubtitle ne '' )
-#     {
-# 	my $pubstring = $pubtitle;
-
-# 	unless ( $pubtype && $pubtype eq 'instcoll' )
-# 	{
-# 	    if ( $editors =~ /,| and / )
-# 	    {
-# 		$pubstring = " In $editors (eds.), $pubstring";
-# 	    }
-# 	    elsif ( $editors )
-# 	    {
-# 		$pubstring = " In $editors (ed.), $pubstring";
-# 	    }
-# 	}
-	
-# 	$longref .= $pubstring . " ";
-#     }
-    
-#     my $publisher = $r->{publisher};
-#     my $pubcity = $r->{pubcity};
-
-#     if ( $pubtype && $pubtype eq 'instcoll' )
-#     {
-# 	if ( $pubcity )
-# 	{
-# 	    $pubcity =~ s/^(, )+//;
-# 	    $pubcity =~ s/, , /, /;
-# 	    $longref =~ s/\s+$//;
-# 	    $longref .= ". " unless $longref =~ /[.]$/;
-# 	    $longref .= "$pubcity. ";
-# 	}
-#     }
-    
-#     elsif ( $publisher )
-#     {
-# 	$longref =~ s/\s+$//;
-# 	$longref .= ". ";
-# 	$longref .= "$pubcity: " if $pubcity;
-# 	$longref .= $publisher . ". ";
-#     }
-    
-#     # Now add volume and page number information if available
-    
-#     my $pubvol = $r->{pubvol} || '';
-#     my $pubno = $r->{pubno} || '';
-    
-#     if ( $pubvol ne '' || $pubno ne '' )
-#     {
-# 	$longref .= $pubvol if $pubvol ne '';
-# 	$longref .= "." if $pubvol eq 'PRIVATE';
-# 	$longref .= "($pubno)" if $pubno ne '';
-#     }
-    
-#     my $fp = $r->{firstpage} || '';
-#     my $lp = $r->{lastpage} || '';
-    
-#     if ( ($pubvol ne '' || $pubno ne '') && ($fp ne '' || $lp ne '') )
-#     {
-# 	$longref .= ':';
-# 	$longref .= $fp if $fp ne '';
-# 	$longref .= '-' if $fp ne '' && $lp ne '';
-# 	$longref .= $lp if $lp ne '';
-#     }
-    
-#     $longref =~ s/\s+$//;
-    
-#     return $longref || 'ERROR';
-# }
-
-
-
-# # get_eligible ( type )
-# # 
-# # Return the reference_no of a Paleobiology Database reference record that has not been the subject
-# # of a query of the specified type from this source. If there are none, return undefined. Type
-# # defaults to 'fetch' if not specified. If a second parameter is given, it must be an array of
-# # reference_no values. References with these values are skipped.
-
-# sub get_eligible {
-    
-#     my ($datasource, $type) = @_;
-    
-#     my $dbh = $datasource->{dbh};
-#     my $quoted_source = $dbh->quote($datasource->{source});
-#     my $quoted_type = $dbh->quote($type || 'fetch');
-    
-#     # If we don't already have one, create a temporary table that lets us return each reference
-#     # only once per session.
-    
-#     unless ( $datasource->{session_table} )
-#     {
-# 	$datasource->create_session_table;
-#     }
-    
-#     my $sql = "SELECT r.* FROM $TABLE{REFERENCE_DATA} as r left join refcheck using (reference_no)
-# 		left join $TABLE{REFERENCE_SOURCES} as s on r.reference_no = s.reference_no 
-# 			and s.source = $quoted_source and s.eventtype = $quoted_type
-# 		WHERE refcheck.reference_no is null and s.reference_no is null LIMIT 1";
-    
-#     print STDERR "$sql\n\n" if $datasource->{debug};
-
-#     my ($r) = $dbh->selectrow_hashref($sql);
-
-#     if ( $r && $r->{reference_no} )
-#     {
-# 	$dbh->do("INSERT IGNORE INTO refcheck (reference_no) VALUES ($r->{reference_no})");
-#     }
-    
-#     return $r;
-# }
-
-
-# # create_session_table ( )
-
-# sub create_session_table {
-    
-#     my ($datasource) = @_;
-    
-#     my $dbh = $datasource->{dbh};
-
-#     my $result = $dbh->do("CREATE TEMPORARY TABLE refcheck (
-# 		reference_no int unsigned not null primary key ) ENGINE=MEMORY");
-    
-#     die "ERROR: could not create temporary table\n" unless $result;
-#     $datasource->{session_table} = 'refcheck';
-# }
-
 

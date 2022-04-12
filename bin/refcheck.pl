@@ -55,27 +55,30 @@ if ( $ARGV[0] eq '-d' )
 
 # Parse option switches, then the remaining command-line arguments.
 
-my ($opt_since, $opt_limit, $opt_events, $opt_crossref, $opt_xdd,
-    $opt_write_scores, $opt_verbose);
+Getopt::Long::Configure('require_order');
 
-GetOptions("since=s" => \$opt_since,
+my ($opt_after, $opt_before, $opt_limit, $opt_full, $opt_crossref, $opt_xdd,
+    $opt_good, $opt_bad, $opt_sources, $opt_write_scores, $opt_verbose);
+
+GetOptions("a|after=s" => \$opt_after,
+	   "b|before=s" => \$opt_before,
 	   "l|limit=i" => \$opt_limit,
-	   "e|events" => \$opt_events,
+	   "g|good=s" => \$opt_good,
+	   "b|bad=s" => \$opt_bad,
+	   "f|full" => \$opt_full,
 	   "C|crossref" => \$opt_crossref,
 	   "X|xdd" => \$opt_xdd,
 	   "w|write-stats=s" => \$opt_write_scores,
 	   "verbose|debug|v|d" => \$opt_verbose);
 
-my $action;
-my $selector;
-my $source;
-my $match_attrs;
+my ($action, $selector, $modifier, $source, $match_attrs);
 my @item_list;
 my @REF_LIST;
 my @REFSOURCE_LIST;
 
-my %ACCEPTED_ACTION = ( print => 'R', fetch => 'R', test => 'R', testrefs => 'R',
-			score => 'RS', showscore => 'RS', history => 'R', dump => 'RS' );
+my %ACCEPTED_ACTION = ( print => 'RS', count => 'RS', history => 'RS',
+			fetch => 'R', test => 'R', testrefs => 'R', rescore => 'RS',
+		        delete => 'S' );
 
 my $opt_source = $opt_crossref && $opt_xdd ? 'all'
     : $opt_crossref ? 'crossref'
@@ -160,25 +163,32 @@ while ( @ARGV )
 	shift @ARGV;
     }
     
-    # A selector specifies a class of references to scan. Only one is allowed.
+    # A selector specifies a class of references or sources to scan. Only one is allowed.
     
-    elsif ( $ARGV[0] =~ /^(all|unfetched|fetched|unchecked|checked|unscored|scored)$/ )
+    elsif ( $ARGV[0] =~ qr { ^ (?: all | (?:un)? (?: fetched|checked|scored|matched )) $ }xsi )
     {
-	die "You may only specify one selector\n" if $selector;
+	die "You may only specify one selector: '$selector' or '$ARGV[0]'\n"
+	    if $selector && $selector ne lc $ARGV[0];
 	
-	$selector = $1;
-	shift @ARGV;
-
-	if ( $ARGV[0] eq 'events' )
-	{
-	    $opt_events = 1;
-	    shift @ARGV;
-	}
+	$selector = lc shift @ARGV;
     }
-
+    
+    # A modifier specifies which kinds of records to work on. Only one is allowed.
+    
+    elsif ( $ARGV[0] =~ qr{ ^ (?: refs?|sources?|latest|both|full ) $ }xsi )
+    {
+	my $newmod = lc shift @ARGV;
+	$newmod =~ s/s$//;
+	
+	die "You may only specify one modifier: '$modifier' or '$ARGV[0]'\n"
+	    if $modifier && $modifier ne $newmod;
+	
+	$modifier = $newmod;
+    }
+    
     # A source argument specifies which source(s) to query.
 
-    elsif ( $ARGV[0] =~ /^(crossref|cr)$/ )
+    elsif ( $ARGV[0] =~ /^(crossref|cross|cr)$/ )
     {
 	$source = ($source && $source eq 'xdd') ? 'all' : 'crossref';
 	shift @ARGV;
@@ -204,9 +214,37 @@ while ( @ARGV )
 
 $source ||= $opt_source;
 
-# If a limit was specified, add it to the options to be used for selection.
+# If a limit was specified, add it to the options to be used for selection. Also add
+# 'good' and 'bad' if specified.
 
-my $options = $opt_limit ? { limit => $opt_limit } : { };
+my $options = { };
+$options->{limit} = $opt_limit if defined $opt_limit && $opt_limit ne '';
+$options->{good} = $opt_good if $opt_good;
+$options->{bad} = $opt_bad if $opt_bad;
+
+# If no selector was specified and no limit was specified, set a default limit of 5 and
+# change the selector to 'all'.
+
+if ( ! $selector && ! defined $options->{limit} )
+{
+    $options->{limit} = 5;
+    $selector = 'all';
+}
+
+# If the action was 'testrefs', we can now reset it to 'test' because argument processing
+# is complete.
+
+if ( $action eq 'testrefs' )
+{
+    $action = 'test';
+}
+
+# If the action was count, individual reference and source numbers are ignored.
+
+if ( $action eq 'count' && @item_list )
+{
+    print STDERR "WARNING: individual reference or source identifiers will be ignored\n";
+}
 
 
 # Database connection
@@ -237,14 +275,6 @@ else
     print STDERR "Using connect string: $dbh->{Name}\n\n" if $opt_verbose;
 }
 
-# If no action was specified, default to 'all' with a limit of 5.
-
-unless ( $action )
-{
-    $action = 'all';
-    $opt_limit = 5;
-}
-
 
 # Select references to process
 # ----------------------------
@@ -252,8 +282,7 @@ unless ( $action )
 # Create a new ReferenceSources object with which we can make queries and interact with the
 # REFERENCE_SOURCES table.
 
-my $rs = ReferenceSources->new($dbh, $source, { debug => $opt_verbose,
-					        since => $opt_since });
+my $rs = ReferenceSources->new($dbh, $source, { debug => $opt_verbose });
 
 # The following variables control processing of references. If a list of references is given
 # either by explicitly identifying them or by matching against a set of attributes, the matching
@@ -292,13 +321,45 @@ foreach my $item ( @item_list )
     # For each reference_no value specified, fetch the reference attributes from the
     # corresponding entry in the refs table and add an entry to @REF_LIST.
     
-    else
+    elsif ( $ACCEPTED_ACTION{$action} ne 'S' )
     {
 	push @REF_LIST, $rs->ref_from_refno($item);
     }
 }
 
-# If we have a set of attributes to match, do so now.
+# If the action is 'count', then count the matching references or sources instead of
+# selecting them. The program terminates here in that case.
+
+if ( $action eq 'count' )
+{
+    my $count;
+    
+    if ( $match_attrs )
+    {
+	
+    }
+
+    elsif ( $selector && ($modifier eq 'source' || $modifier eq 'full') )
+    {
+	$count = $rs->count_sources($selector, '', $options);
+	print "$count reference sources\n\n";
+    }
+    
+    elsif ( $selector )
+    {
+	$count = $rs->count_refs($selector, '', $options);
+	print "$count references\n\n";
+    }
+    
+    else
+    {
+	print "Nothing to count\n\n";
+    }
+
+    exit;
+}
+
+# Otherwise, if we have a set of attributes to match, do so now.
 
 if ( $match_attrs )
 {
@@ -318,58 +379,9 @@ elsif ( $selector )
 
 unless ( $rs->selection_count || @REF_LIST || @REFSOURCE_LIST )
 {
-    print STDERR "No matching references found\n";
+    print STDERR "No matching references found\n\n";
     exit;
 }
-
-
-
-# if ( $opt_unchecked || $opt_since )
-# {
-#     $NO_PRINT = 1;
-    
-#     if ( $action eq 'fetch' || $action eq 'print' )
-#     {
-# 	my $verbing = $action eq 'fetch' ? 'Fetching' : 'Printing';
-# 	my $since = $opt_since ? ' since $opt_since' : '';
-# 	print STDERR "$verbing references unchecked $since from $source:\n\n";
-# 	$rs->select_refs('unfetched');
-# 	$END_LOOP = undef;
-#     }
-    
-    # elsif ( $action eq 'score' )
-    # {
-    # 	print STDERR "Rescoring all unscored references from $source:\n\n";
-    # 	$rs->select_refs('unscored');
-    # 	$END_LOOP = undef;
-    # }
-    
-    # elsif ( $action eq 'match' )
-    # {
-    # 	print STDERR "Matching all unmatched references from $source:\n\n";
-    # 	$rs->select_refs('unmatched');
-    # 	$END_LOOP = undef;
-    # }
-    
-# elsif ( $opt_all )
-# {
-#     $NO_PRINT = 1;
-    
-#     if ( $action eq 'fetch' || $action eq 'print' )
-#     {
-# 	my $verbing = $action eq 'fetch' ? 'Fetching' : 'Printing';
-# 	print STDERR "$verbing all references from $source:\n\n";
-# 	$rs->select_refs('all');
-# 	$END_LOOP = undef;
-#     }
-
-#     elsif ( $action eq 'score' || $action eq 'match' )
-#     {
-# 	my $verbing = $action eq 'score' ? 'Rescoring' : 'Matching';
-# 	print STDERR "$verbing all references from $source:\n\n";
-# 	$rs->select_refs('fetched');
-# 	$END_LOOP = undef;
-#     }
 
 
 # Main Loop
@@ -433,7 +445,7 @@ while ( @REFSOURCE_LIST || @REF_LIST || ! $END_LOOP )
     
     if ( $action eq 'print' )
     {
-	print STDOUT "Reference # $r->{reference_no}\n";
+	print STDOUT "Reference # $r->{reference_no}\n\n";
 	print STDOUT $rs->format_ref($r) . "\n\n";
 	$action_count++;
     }
@@ -454,33 +466,6 @@ while ( @REFSOURCE_LIST || @REF_LIST || ! $END_LOOP )
     	}
     }
     
-	# # Keep track of the last 20 status codes. If an error occurs, check to see if at least 10
-	# # of those are errors and abort if that is the case.
-	
-	# push @status_queue, $status;
-	# shift @status_queue if scalar(@status_queue) > 20;
-	
-	# if ( $status =~ /^400 Invalid/ )
-	# {
-	#     # ignore these
-	# }
-	
-	# elsif ( $status =~ /^[45]/ )
-	# {
-	#     $error_count++;
-	    
-	#     if ( scalar(grep /^[45]/, @status_queue) >= 10 )
-	#     {
-	# 	$END_LOOP = 'errors';
-	# 	last;
-	#     }
-	# }
-	
-	# else
-	# {
-	#     # $success_count++;
-	# }
-    
     elsif ( $action eq 'history' || $action eq 'dump' )
     {
 	my $which = $r || { refsource_no => $refsource_no };
@@ -492,7 +477,7 @@ while ( @REFSOURCE_LIST || @REF_LIST || ! $END_LOOP )
 	
 	if ( $action eq 'dump' )
 	{
-	    $evsel = $opt_events ? 'full' : 'latest';
+	    $evsel = $opt_full ? 'full' : 'latest';
 	}
 
 	else
@@ -503,106 +488,7 @@ while ( @REFSOURCE_LIST || @REF_LIST || ! $END_LOOP )
 	my @events = $rs->list_events($which, $source, $evsel);
 	printout_event_history($label, $evsel, \@events);
     }
-    
-    # elsif ( $action eq 'dump' && $refsource_no )
-    # {
-    # 	my @events = $rs->select_events($refsource_no, 'source');
-    # 	printout_event_history($ref
-    # }
-    
-    # elsif ( $action eq 'dump' )
-    # {
-    # 	my ($event) = $rs->select_events($r, 'latest');
-    # 	my @items = get_event_content($r, $event, $opt_which);
-    # 	printout_event_attrs($event);
-	
-    # 	foreach my $i (@items)
-    # 	{
-    # 	    printout_item_source($i);
-    # 	}
-    # }
-    
-    # elsif ( $action eq 'show' )
-    # {
-    # 	my ($event) = $rs->select_events($r, 'latest');
-    # 	my @items = get_event_content($r, $event, $opt_which);
-    # 	printout_event_attrs($event);
-	
-    # 	foreach my $i (@items)
-    # 	{
-    # 	    printout_item_formatted($i);
-    # 	}
-    # }
-    
-    # elsif ( $action eq 'score' )
-    # {
-    # 	my ($event) = $rs->select_events($r, 'latest');
-    # 	my @items = get_event_content($r, $event, $opt_which);
-    # 	printout_event_attrs($event) unless $NO_PRINT;
-    # 	printout_item_formatted($r) unless $NO_PRINT;
-    # 	my $index = $opt_which eq 'all' ? 0 : $opt_which > 0 ? $opt_which-1 : 0;
-	
-    # 	foreach my $item (@items)
-    # 	{
-    # 	    if ( $item )
-    # 	    {
-    # 		my $scores = ref_similarity($r, $item);
-    # 		printout_item_formatted($item) unless $NO_PRINT;
-    # 		printout_item_scores($scores) unless $NO_PRINT;
-    # 		my $result = $rs->store_scores($event, $scores, $index);
-    # 		$index++;
-    # 		if ( $result ) { $score_count++; }
-    # 		else { $error_count++; }
-    # 	    }
-
-    # 	    else
-    # 	    {
-    # 		$empty_count++;
-    # 		$index++;
-    # 	    }
-    # 	}
-    
-    # if ( $NO_PRINT && ($score_count % 100 == 0 ||
-    # 			   $error_count > 0 && $error_count % 100 == 0 ||
-    # 			   $empty_count > 0 && $empty_count % 100 == 0 ) ) 
-    # 	{
-    # 	    show_dynamic_count($score_count, $error_count, $empty_count, $rs->{refs_found});
-    # 	}
-    # }
-    
-    # elsif ( $action eq 'recount' )
-    # {
-    # 	$rs->recount_scores($r->{reference_no});
-    # }
-    
-    # elsif ( $action eq 'match' )
-    # {
-    # 	my ($event) = $rs->select_events($r, 'latest');
-    # 	# my @items = get_event_content($r, $event, $opt_which);
-    # 	# if ( my $f = get_eventdata($r, $event, $opt_which) )
-    # 	# {
-    # 	#     printout_data($r, $f, 'match') unless $NO_PRINT;
-    # 	# }
-    # }
-    
-    # else
-    # {
-    # 	die "Invalid action: $action\n";
-    # }
-    
-    # If we have reached the specified limit on the number of actions, then stop.
-    
-    # if ( $opt_limit && ++$action_count >= $opt_limit )
-    # {
-    # 	$END_LOOP = 'limit';
-    # 	last;
-    # }
 }
-
-# if ( $action eq 'score' && $NO_PRINT )
-# {
-#     show_dynamic_count($score_count, $error_count, $empty_count, $rs->{refs_found});
-# }
 
 if ( $DYNAMIC ) { print "\n\n"; }
 
@@ -974,68 +860,6 @@ sub fetch_ref {
 	    $END_LOOP = 'errors';
 	}
     }
-    
-    # my ($status, $query_text, $query_url, $response_data, $charset) = $rs->metadata_query($r);
-    
-    # # If the action is 'fetch' and we have an associated PBDB reference number, store the
-    # # result. If the result isn't already in Perl's internal format, decode it.
-    
-    # if ( $action eq 'fetch' && $r->{reference_no} )
-    # {
-    # 	if ( $charset )
-    # 	{
-    # 	    eval {
-    # 		$response_data = decode($charset, $response_data);
-    # 	    };
-
-    # 	    if ( $@ )
-    # 	    {
-    # 		$status = "500 Unknown character set '$charset'"; 
-    # 	    }
-    # 	}
-	
-    # 	my $result = $rs->store_result($r->{reference_no}, $status,
-    # 				       $query_text, $query_url,$response_data);
-	
-    # 	if ( $result )
-    # 	{
-    # 	    print STDERR "Result: $status; refsource_no = $result\n\n" if $opt_verbose;
-    # 	}
-	
-    # 	else
-    # 	{
-    # 	    print STDERR "Result $status; DATABASE ERROR, no record inserted.\n\n" if $opt_verbose;
-    # 	    return "500 No record inserted";
-    # 	}
-    # }
-    
-    # elsif ( $status && $r->{reference_no} )
-    # {
-    # 	print STDERR "Result: $status\n\n" if $opt_verbose;
-    # }
-    
-    # elsif ( $status )
-    # {
-    # 	print STDERR "Query text: $query_text\n\n" if $opt_verbose;
-    # 	print STDERR "Result: $status\n\n" if $opt_verbose;
-    # }
-    
-    # else
-    # {
-    # 	print STDERR "FETCH ERROR, no status returned.\n\n" if $opt_verbose;
-    # }
-    
-    # if ( $opt_print && $response_data )
-    # {
-    # 	print STDOUT $response_data;
-	
-    # 	unless ( $response_data =~ /\n$/ )
-    # 	{
-    # 	    print STDOUT "\n";
-    # 	}
-    # }
-
-    # return $status || "500 No status returned";
 }
 
 
@@ -1096,137 +920,6 @@ sub printout_event_history {
     
     print "\n" if ref $rows[-1] eq 'ARRAY';
 }
-
-
-# sub get_event_content {
-    
-#     my ($r, $e, $which) = @_;
-    
-#     # If there isn't any data, print an error message and exit.
-    
-#     unless ( $e && ref $e eq 'HASH' )
-#     {
-# 	if ( ref $r && $r->{reference_no} )
-# 	{
-# 	    print STDERR "No fetched data found for refno $r->{reference_no}";
-# 	    return;
-# 	}
-
-# 	else
-# 	{
-# 	    print STDERR "No refno found";
-# 	    return;
-# 	}
-#     }
-    
-#     my ($data, @items);
-    
-#     unless ( $e->{response_data} )
-#     {
-# 	print STDERR "ERROR: no response data found in event $e->{refsource_no} ($e->{reference_no})\n";
-# 	return;
-#     }
-    
-#     eval {
-# 	$data = decode_json($e->{response_data});
-#     };
-    
-#     if ( $@ =~ /^Wide char/ )
-#     {
-# 	eval {
-# 	    $data = from_json($e->{response_data});
-# 	};
-#     }
-    
-#     if ( $@ )
-#     {
-# 	print STDERR "An error occurred while decoding \@$e->{refsource_no}: $@\n";
-# 	return;
-#     }
-    
-#     if ( ref $data eq 'HASH' && ref $data->{message}{items} eq 'ARRAY' )
-#     {
-# 	@items = $data->{message}{items}->@*;
-#     }
-
-#     elsif ( ref $data eq 'HASH' && ref $data->{success}{data} eq 'ARRAY' )
-#     {
-# 	@items = $data->{success}{data}->@*;
-#     }
-    
-#     elsif ( ref $data eq 'ARRAY' && ( $data->[0]{deposited} || $data->[0]{title} ) )
-#     {
-# 	@items = @$data;
-#     }
-
-#     if ( $which eq 'all' )
-#     {
-# 	foreach (@items) { $_->{had_widechar} = 1 }
-# 	return @items;
-#     }
-    
-#     elsif ( $which > 0 )
-#     {
-# 	$items[$which-1]{had_widechar} = 1;
-# 	return $items[$which-1];
-#     }
-
-#     else
-#     {
-# 	$items[0]{had_widechar} = 1;
-# 	return $items[0];
-#     }
-# }
-
-
-# sub printout_event_attrs {
-    
-#     my ($e) = @_;
-    
-#     my @rows = ['id', 'refno', 'source', 'eventtype', 'eventtime', 'status'];
-    
-#     push @rows, [$e->{refsource_no}, $e->{reference_no}, $e->{source},
-# 		 $e->{eventtype}, $e->{eventtime}, $e->{status}];
-    
-#     print_table(@rows);
-    
-#     print "\n";
-# }
-
-
-# sub printout_item_formatted {
-    
-#     my ($r) = @_;
-    
-#     print $rs->format_ref($r);
-#     print "\n\n";
-# }
-
-
-# sub printout_item_source {
-    
-#     my ($i) = @_;
-    
-#     print JSON->new->pretty->encode($i);
-#     print "\n";
-# }
-
-
-# sub printout_item_scores {
-    
-#     my ($scores) = @_;
-    
-#     foreach my $key ( qw(title pub auth1 auth2 pubyr volume pages pblshr) )
-#     {
-# 	my $key1 = $key . '_s';
-# 	my $key2 = $key . '_c';
-# 	my $line = sprintf("%-15s %5d %5d\n", $key, $scores->{$key1}, $scores->{$key2});
-	
-# 	print $line;
-#     }
-    
-#     print "\n";
-# }
 
 
 sub format_scores_horizontal {
@@ -1305,27 +998,8 @@ sub print_table {
 	}
     }
     
-    # # Create a format string.
-    
-    # $format = '%s';
-    
-    # foreach my $c ( 0..$#columns )
-    # {
-    #     my $mod = $options->{format}[$c] && $options->{format}[$c] =~ /R/ ? '' : '-';
-    #     $format .= "%$mod$width[$c]s  ";
-    # }
-    
-    # $format =~ s/\s*$/\n/;
-    
-    # print "format: $format\n" if $DEBUG;
-    
-    # If we were given a header list, print out the header followed by a separator line.
-    
     if ( ref $header eq 'ARRAY' && @$header )
     {
-	# print sprintf($format, '', @$header);
-	# print sprintf($format, '', @separator);
-	
 	PrintLine(@$header);
 	PrintLine(@separator);
     }
@@ -1377,25 +1051,6 @@ sub string_width {
     $string =~ s/\033\[[\d;]+m//g;
     return length($string);
 }
-
-
-# # If --fulltitle was specified, do a full text search on each nonempty reftitle.
-
-# elsif ( $opt_fulltitle )
-# {
-#     read_input();
-#     fulltitle_proc();
-# }
-
-# # If --fullpub was specified, the same on each nonempty pubtitle.
-
-# elsif ( $opt_fullpub )
-# {
-#     read_input();
-#     fullpub_proc();
-# }
-
-# exit;
 
 
 sub attrs_from_args {
@@ -1466,242 +1121,5 @@ sub attrs_from_args {
     
     return $ref;
 }
-
-
-
-
-	# my $refcount;
-	
-	# while (<>)
-	# {
-	#     chomp;
-	#     next unless $_ =~ /[[:alnum:]]{3}/;
-	    
-	#     $refcount++;
-	    
-	#     my $r = ref_from_args($_);
-	    
-	#     my @matches = ref_match($dbh, $r);
-
-	#     my $matchcount = scalar(@matches);
-	#     my $matchphrase = $matchcount == 1 ? "1 match" : "$matchcount matches";
-	    
-	#     print "Reference $r: $matchphrase\n";
-	    
-	#     foreach my $i ( 0..$#matches )
-	#     {
-	# 	my $m = $matches[$i];
-	# 	my $r = $m->{label} || $refcount;
-	# 	my $n = $i + 1;
-	# 	my $s = $m->{score} || 'no score';
-		
-	# 	print "  Match $n: [$s]\n\n";
-		
-	# 	print format_ref($m, '    ') . "\n\n";
-	#     }
-	# }
-
-	# unless ( $refcount )
-	# {
-	#     print "You must specify at least one reference either on the command line\nor through standard input.\n\n";
-	#     exit(2);
-	# }
-
-
-
-# sub read_input {
-    
-#     while (<>)
-#     {
-# 	$_ =~ s/[\n\r]+$//;
-# 	my @cols = split /\t/;
-	
-# 	unless ( $LINE_NO++ )
-# 	{
-# 	    /reference_no/ || die "The first line must be a list of field names.\n";
-# 	    @FIELD_LIST = @cols;
-# 	    next;
-# 	}
-	
-# 	my $r = { };
-	
-# 	foreach my $i ( 0..$#cols )
-# 	{
-# 	    $r->{$FIELD_LIST[$i]} = $cols[$i];
-# 	}
-	
-# 	my $reference_no = $r->{reference_no};
-	
-# 	$REF{$reference_no} = $r;
-# 	push @REF_LIST, $reference_no;
-	
-# 	if ( ! ( $LINE_NO % 100 ) )
-# 	{
-# 	    Progress($LINE_NO);
-# 	}
-#     }
-    
-#     Progress('');
-#     print STDOUT "Read $LINE_NO lines.\n";
-# }
-
-
-# sub read_table {
-
-#     my $sql = "SELECT * FROM refsearch";
-    
-#     my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-#     my $lines;
-    
-#     if ( $result && @$result )
-#     {
-# 	foreach my $r ( @$result )
-# 	{
-# 	    my $reference_no = $r->{reference_no};
-# 	    $REF{$reference_no} = $r;
-# 	    push @REF_LIST, $reference_no;
-	    
-# 	    if ( ! ( ++$lines % 100 ) )
-# 	    {
-# 		Progress($lines);
-# 	    }
-# 	}
-	
-# 	Progress('');
-# 	print STDOUT "Read $lines lines.\n";
-#     }
-
-#     else
-#     {
-# 	print "No data read.\n";
-#     }
-# }
-
-
-# sub fulltitle_proc {
-    
-#     my $reftitle_sth = $dbh->prepare("
-# 	SELECT reference_no, reftitle, match(reftitle) against (?) as score
-# 	FROM refsearch HAVING score > 0 ORDER BY score desc LIMIT 3");
-    
-#     my $refupdate_sth = $dbh->prepare("
-# 	UPDATE refsearch SET selfmatch = ?, maxmatch = ?, match_no = ?
-# 	WHERE reference_no = ? LIMIT 1");
-    
-#     my $count;
-    
-#     foreach my $ref_no ( @REF_LIST )
-#     {
-# 	$count++;
-# 	my $reftitle = $REF{$ref_no}{reftitle};
-
-# 	next if $REF{$ref_no}{maxmatch};
-	
-# 	if ( $reftitle )
-# 	{
-# 	    $reftitle_sth->execute($reftitle);
-	    
-# 	    my $result = $reftitle_sth->fetchall_arrayref({ });
-	    
-# 	    if ( $result && @$result )
-# 	    {
-# 		$MATCH{$ref_no} = $result;
-		
-# 		foreach my $r ( @$result )
-# 		{
-# 		    if ( $r->{reference_no} eq $ref_no )
-# 		    {
-# 			$REF{$ref_no}{selfmatch} = $r->{score};
-# 		    }
-
-# 		    elsif ( $r->{score} && ( ! $REF{$ref_no}{maxmatch} ||
-# 					     $r->{score} > $REF{$ref_no}{maxmatch} ) )
-# 		    {
-# 			$REF{$ref_no}{maxmatch} = $r->{score};
-# 			$REF{$ref_no}{match_no} = $r->{reference_no};
-# 		    }
-
-# 		    else
-# 		    {
-# 			last;
-# 		    }
-# 		}
-
-# 		my $result = $refupdate_sth->execute($REF{$ref_no}{selfmatch}, $REF{$ref_no}{maxmatch},
-# 						     $REF{$ref_no}{match_no}, $ref_no);
-
-# 		my $a = 1; # we can stop here when debugging
-# 	    }
-# 	}
-	
-# 	Progress($count) unless $count % 100;
-#     }
-
-#     Progress('');
-#     print STDOUT "Queried for $count entries.\n";
-# }
-
-
-# sub fullpub_proc {
-    
-#     my $pubtitle_sth = $dbh->prepare("
-# 	SELECT match(pubtitle) against (?) as score
-# 	FROM refsearch WHERE reference_no = ?");
-    
-#     my $refupdate_sth = $dbh->prepare("
-# 	UPDATE refsearch SET pselfmatch = ? WHERE reference_no = ? LIMIT 1");
-    
-#     my $count;
-    
-#     foreach my $ref_no ( @REF_LIST )
-#     {
-# 	$count++;
-# 	my $pubtitle = $REF{$ref_no}{pubtitle};
-	
-# 	next if $REF{$ref_no}{pselfmatch};
-	
-# 	if ( $pubtitle )
-# 	{
-# 	    $pubtitle_sth->execute($pubtitle, $ref_no);
-	    
-# 	    my ($score) = $pubtitle_sth->fetchrow_array();
-	    
-# 	    if ( $score )
-# 	    {
-# 		$REF{$ref_no}{pselfmatch} = $score;
-# 	    }
-	    
-# 	    my $result = $refupdate_sth->execute($score, $ref_no);
-	    
-# 	    my $a = 1; # we can stop here when debugging
-# 	}
-	
-# 	Progress($count) unless $count % 100;
-#     }
-    
-#     Progress('');
-#     print STDOUT "Queried for $count entries.\n";
-# }
-
-
-# sub match_doi {
-
-#     my ($dbh, $r) = @_;
-    
-#     if ( $r->{doi} )
-#     {
-# 	my $quoted = $dbh->quote($r->{doi});
-	
-# 	my $sql = "SELECT * FROM refs WHERE doi = $quoted";
-	
-# 	print STDERR "$sql\n\n" if $opt_verbose;
-	
-# 	my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-	
-# 	return @$result if $result && ref $result eq 'ARRAY';
-#     }
-    
-#     return;	# otherwise
-# }
 
 

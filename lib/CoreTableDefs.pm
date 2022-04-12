@@ -33,6 +33,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(REFERENCE_DATA => 'refs');
     set_table_name(REFERENCE_SOURCES => 'ref_sources');
     set_table_name(REFERENCE_SCORES => 'ref_scores');
+    set_table_name(REFERENCE_SEARCH => 'ref_search');
     
     set_table_name(INTERVAL_DATA => 'interval_data');
     
