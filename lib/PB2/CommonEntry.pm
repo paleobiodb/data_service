@@ -11,13 +11,16 @@ use strict;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
+use Scalar::Util qw(reftype);
 
-use TableDefs qw(get_table_property);
+use TableDefs qw(%TABLE);
 
 use ExternalIdent qw(extract_identifier generate_identifier %IDP %IDRE);
-use TableData qw(get_table_schema);
+use TableData qw(get_table_schema get_table_property);
 
 use Moo::Role;
+
+use namespace::clean;
 
 our (@REQUIRES_ROLE) = qw(PB2::TableData PB2::Authentication);
 
@@ -27,9 +30,65 @@ our (@REQUIRES_ROLE) = qw(PB2::TableData PB2::Authentication);
 
 our (%RULESET_HAS_PARAM);
 
+# Methods
+# -------
+
+# initialize ( )
+#
+# This routine is called once by Web::DataService, to initialize this role.
+
+sub initialize {
+    
+    my ($class, $ds) = @_;
+
+    $ds->define_valueset('1.2:common:entry_ops',
+	{ value => 'insert' },
+	    "Insert this record into the database, and return the newly",
+	    "generated primary key value. This is the default operation for any",
+	    "record that does not include an identifier/primary key value.",
+	{ value => 'update' },
+	    "If a record is found in the database whose identifier matches",
+	    "the one included in this record, use the attributes of this record",
+	    "to update that one. This is the default operation for any record",
+	    "that includes an identifier/primary key value.",
+	{ value => 'replace' },
+	    "If a record is found in the database whose identifier matches",
+	    "the one included in this record, replace that record with this one.",
+	{ value => 'delete' },
+	    "If a record is found in the database whose primary key value matches",
+	    "the one included in this record, delete that record. All other",
+	    "attributes of this record are ignored.");
+
+    $ds->define_ruleset('1.2:common:entry_fields',
+	{ optional => '_label', valid => ANY_VALUE },
+	    "If you provide a non-empty value for this parameter, that value",
+	    "will be included in any response associated with this record.",
+	    "Otherwise, a label will be generated according to the following",
+	    "pattern: '#1' for the first submitted record, '#2' for the second,",
+	    "etc.",
+	{ optional => '_operation', valid => '1.2:common:entry_ops' },
+	    "You may include this parameter in any submitted record. It specifies",
+	    "the database operation to be performed, overriding the default operation.",
+			"Accepted values are:");
+    
+    $ds->define_valueset('1.2:common:std_allowances',
+	{ value => 'CREATE' },
+	    "This allowance enables new records to be inserted. Without it, a",
+	    "caution will be thrown for any record that does not include an",
+	    "identifier. This feature is present as a failsafe to make sure",
+	    "that new records are not added accidentally due to bad client code",
+	    "that omits a record identifier where one should appear. The argument",
+	    "C<B<allow=CREATE>> should be included with every request that is",
+	    "expected to insert new records.",
+	{ value => 'PROCEED' },
+	    "If some of the submitted records generate cautions or,",
+	    "errors, this allowance will enable any database operations that do",
+	    "B<not> generate cautions or errors to complete. Without it, the",
+	    "entire operation will be rolled back if any cautions or errors are generated.");
+}
 
 
-# get_main_params ( conditions_ref, entry_ruleset )
+# get_main_params ( allowances_ref, url_ruleset )
 # 
 # Go through the main parameters to this request, looking for the following. If the parameter
 # 'allow' is found, then enter all of the specified conditions as hash keys into
@@ -38,98 +97,87 @@ our (%RULESET_HAS_PARAM);
 # in $entry_ruleset should be copied into a hash which is then returned as the result. These
 # parameters will be used as defaults for all records speified in the request body.
 
-sub get_main_params {
+sub parse_main_params {
     
-    my ($request, $allowances_ref, $entry_ruleset) = @_;
+    my ($request, $url_ruleset) = @_;
     
-    # First grab a list of the parameters that were specified in the request URL. Also allocate a
-    # new hash which will end up being the return value of this routine.
+    # First grab a list of the parameters that were specified in the request URL. Also allocate
+    # two hashes which will end up being the return value of this routine.
     
-    my @request_keys = $request->param_keys;
+    my $allowances = { };
     my $main_params = { };
     
     # If we have not already extracted the list of parameters corresponding to the named ruleset,
     # do that now.
     
-    if ( $entry_ruleset && ! defined $RULESET_HAS_PARAM{$entry_ruleset} )
+    if ( $url_ruleset && ! defined $RULESET_HAS_PARAM{$url_ruleset} )
     {
-	my @ruleset_params = $request->ds->list_ruleset_params($entry_ruleset);
-	
-	foreach my $p ( @ruleset_params )
+	foreach my $p ( $request->{ds}->list_ruleset_params($url_ruleset) )
 	{
-	    $RULESET_HAS_PARAM{$entry_ruleset}{$p} = 1 if $p;
+	    $RULESET_HAS_PARAM{$url_ruleset}{$p} = 1 if $p;
 	}
     }
     
-    foreach my $k ( @request_keys )
+    # Now process the request parameters one by one.
+    
+    foreach my $k ( $request->param_keys )
     {
 	if ( $k eq 'allow' )
 	{
 	    my @list = $request->clean_param_list($k);
-	    $allowances_ref->{$_} = 1 foreach @list;
-	    next;
+	    $allowances->{$_} = 1 foreach @list;
 	}
 	
-	if ( $entry_ruleset && $RULESET_HAS_PARAM{$entry_ruleset}{$k} )
+	elsif ( $url_ruleset && $RULESET_HAS_PARAM{$url_ruleset}{$k} )
 	{
 	    $main_params->{$k} = $request->clean_param($k);
 	}
     }
     
-    if ( $request->debug )
-    {
-	$request->debug_out($main_params);
-    }
+    $request->debug_out($main_params);
+    $request->debug_out($allowances);
     
-    return $main_params;
+    return ($allowances, $main_params);
 }
 
 
-sub unpack_input_records {
+sub parse_body_records {
     
-    my ($request, $main_params_ref, $entry_ruleset, $main_key) = @_;
+    my ($request, $allows, $main_params, @ruleset_patterns) = @_;
     
-    my (@raw_records, @records, @rulesets);
-    my ($body, $error);
-
+    my (@raw_records, @records);
+    
     # Mark this request as a "data entry request" so that the external identifier validator knows
     # to accept label references.
-
+    
     $request->{is_data_entry} = 1;
-    
-    # If we were given one or more listrefs indicating multiple rulesets, unpack them.
-    
-    if ( ref $entry_ruleset eq 'ARRAY' )
-    {
-	my ($foo, $bar, @args) = @_;
 
-	foreach my $list (@args)
-	{
-	    croak "argument must be a listref, was $list" unless ref $list eq 'ARRAY';
-
-	    push @rulesets, $list;
-	}
-    }
-    
-    elsif ( $entry_ruleset )
-    {
-	push @rulesets, [$entry_ruleset, $main_key, 'DEFAULT'];
-    }
+    my $PROCEED  = $allows->{PROCEED};
     
     # If the method is GET, then we don't expect any body. Assume that the main parameters
-    # constitute the only input record.
+    # constitute the only input record. They have already been validated during request
+    # processing, and have already been cleaned by parse_main_params. So there is no need to
+    # process them further. However, we do need to throw an error if they are empty.
     
     if ( Dancer::request->method eq 'GET' )
     {
-	push @raw_records, $main_params_ref;
+	if ( $main_params_ref->%* )
+	{
+	    push @records, $main_params_ref;
+	}
+
+	else
+	{
+	    die $request->exception(400, "E_PARAM: Method is 'GET' and no data parameters were recognized");
+	}
     }
     
-    # Otherwise decode the body and extract input records from it. If an error occured, return an
+    # Otherwise decode the body and extract input records from it. If an error occurs, return an
     # HTTP 400 result.
     
     else
     {
-	($body, $error) = $request->decode_body;
+	my ($body, $error) = $request->decode_body;
 	
 	if ( $error )
 	{
@@ -140,7 +188,7 @@ sub unpack_input_records {
 	
 	elsif ( ! defined $body || $body eq '' )
 	{
-	    die $request->exception(400, "E_REQUEST_BODY: Request body must not be empty with PUT or POST");
+	    die $request->exception(400, "E_REQUEST_BODY: Request body must not be empty");
 	}
 	
 	# Otherwise, if the request body is an object with the key 'records' and an array value,
@@ -150,11 +198,11 @@ sub unpack_input_records {
 	
 	if ( ref $body eq 'HASH' && ref $body->{records} eq 'ARRAY' )
 	{
-	    push @raw_records, @{$body->{records}};
+	    push @raw_records, $body->{records}->@*;
 	    
 	    if ( ref $body->{all} eq 'HASH' )
 	    {
-		foreach my $k ( keys %{$body->{all}} )
+		foreach my $k ( keys $body->{all}->%* )
 		{
 		    $main_params_ref->{$k} = $body->{all}{$k};
 		}
@@ -169,10 +217,10 @@ sub unpack_input_records {
 	    push @raw_records, $body;
 	}
 	
-	# If the body is in fact an array, and that array is either empty or contains at least one
-	# object, then assume its elements are records.
+	# If the body is an array, and that array contains at least one object, then assume its
+	# elements are records.
 	
-	elsif ( ref $body eq 'ARRAY' && ( @$body == 0 || ref $body->[0] eq 'HASH'  ) )
+	elsif ( ref $body eq 'ARRAY' && $body->@* && ref $body->[0] eq 'HASH' )
 	{
 	    push @raw_records, @$body;
 	}
@@ -185,28 +233,38 @@ sub unpack_input_records {
 	}
     }
     
-    # Now, for each record, substitute any missing parameters with the values
-    # given by $main_params_ref. Then validate it according to the specified ruleset.
+    # Then validate the records one by one.
     
+    my $INDEX = 0;
+
+  RECORD:
     foreach my $r ( @raw_records )
     {
+	$INDEX++;
+	
+	# Any item that is not an object will generate an error, or else a warning if PROCEED is
+	# allowed. In the latter case, a dummy record will be added to the list to keep the record
+	# index consistent.
+	
 	unless ( ref $r eq 'HASH' )
 	{
-	    die $request->exception(400, "E_REQUEST_BODY: Invalid body element '$r'");
+	    my $val = ref $r ? uc reftype $r : "'$r'";
+	    
+	    push @records, { _skip => 1 };
+	    $request->errwarn($PROCEED, "E_REQUEST_BODY (#$INDEX): element is invalid ($val)");
 	}
+	
+	# An empty item generates a warning, and a dummy record.
 	
 	unless ( keys %$r )
 	{
-	    next;
+	    push @records, { _skip => 1 };
+	    $request->add_warning("W_REQUEST_BODY: Body item #$INDEX is empty");
 	}
 	
-	if ( $r == $main_params_ref )
-	{
-	    push @records, $r;
-	    next;
-	}
+	# If $main_params_ref is not empty, its attributes provide defaults for every record.
 	
-	foreach my $k ( keys %$main_params_ref )
+	foreach my $k ( keys $main_params_ref->%* )
 	{
 	    unless ( exists $r->{$k} )
 	    {
@@ -214,90 +272,115 @@ sub unpack_input_records {
 	    }
 	}
 	
-	# If a ruleset was specified for validating the parameters, then apply
-	# it. Unfortunately, HTTP::Validate (at the time this code was
-	# written) does not properly handle parameters with empty values. So
-	# a quick hack fills these in.
+	# Now choose a ruleset for this record. If more than one pattern was given, iterate
+	# through them until a matching one is found. The value 'NO_MATCH' will cause the record
+	# to be rejected. Otherwise, the ruleset from the last pattern will be selected whether or
+	# not it matches.
 	
-	# If there is more than one ruleset, we try them one at a time.
-	
-	my ($ruleset, $main_key, $check_key);
+	my $rs_name = 'NO_MATCH';
+	my $key_name;
 	
       RULESET:
-	foreach my $list ( @rulesets )
+	foreach my $rs_arg ( @ruleset_patterns )
 	{
-	    ($ruleset, $main_key, $check_key) = @$list;
+	    # If the ruleset includes a list of keys to check, choose this ruleset if the record
+	    # contains any of them with a non-empty, non-zero value. Also choose it if it is the
+	    # last one in the list.
 	    
-	    # Check to see if this ruleset is the proper one to apply.
-
-	    my $ok;
-	    
-	    if ( $check_key && ($check_key eq 'DEFAULT' || exists $r->{$check_key}) )
+	    if ( ref $rs_arg eq 'ARRAY' )
 	    {
-		$ok = 1;
+		($rs_name, $key_name, @check_keys) = $rs->@*;
+		
+		foreach my $k ( $key_name, @check_keys )
+		{
+		    last RULESET if $r->{$k};
+		}
 	    }
 	    
-	    elsif ( $main_key && exists $r->{$main_key} )
+	    # Any other reference value is a configuration error.
+	    
+	    elsif ( ref $rs_arg )
 	    {
-		$ok = 1;
+		my $type = reftype $rs_arg;
+		croak "Invalid ruleset pattern ($type)";
 	    }
 	    
-	    next RULESET unless $ok;
+	    # A bare ruleset name causes that ruleset to be chosen by default. The value
+	    # 'NO_MATCH' rejects the record.
 	    
-	    # Validate the input record against the specified ruleset.
+	    elsif ( $rs_arg )
+	    {
+		$rs_name = $rs_arg;
+		last RULESET;
+	    }
+	}
+	
+	# If a ruleset was selected, use it to validate the record.
+	
+	if ( $rs_name && $rs_name ne 'NO_MATCH' )
+	{
+	    my $result = $request->validate_params($rs_name, $r);
 	    
-	    my $result = $request->validate_params($ruleset, $r);
-	    
-	    # Fill in any parameters that were included with empty values.
+	    # HTTP::Validate (at the time this code was written) does not properly handle
+	    # parameters with empty values. So fill in any parameters that were given with
+	    # empty values.
 	    
 	    my $raw = $result->raw;
 	    
 	    foreach my $k ( keys %$raw )
 	    {
-		if ( defined $raw->{$k} && $raw->{$k} eq '' )
+		if ( defined $raw->{$k} && $raw->{$k} eq '' && ! defined $result->{clean}{$k} )
 		{
 		    $result->{clean}{$k} = '';
 		    push @{$result->{clean_list}}, $k;
 		}
 	    }
 	    
-	    # If any errors or warnings were generated, add them to the
-	    # current request.
+	    # If any errors or warnings were generated, add them to the current request.
 	    
-	    my $label = $r->{_label} || ($main_key && $r->{$main_key}) || '';
-	    my $lstr = $label ? " ($label)" : "";
+	    my $label = $r->{_label} || ($key_name && $r->{$key_name}) || "#$INDEX";
 	    
 	    foreach my $e ( $result->errors )
 	    {
 		if ( $e =~ /identifier must have type/ )
 		{
-		    $request->add_error("E_EXTTYPE$lstr: $e");
+		    $request->errwarn($PROCEED, "E_EXTTYPE ($label): $e");
+		    $r->{_skip} = 1;
 		}
-
+		
 		elsif ( $e =~ /may not specify/ )
 		{
-		    $request->add_error("E_PARAM$lstr: $e");
+		    $request->errwarn($PROCEED, "E_PARAM ($label): $e");
+		    $r->{_skip} = 1;
 		}
 		
 		else
 		{
-		    $request->add_error("E_FORMAT$lstr: $e");
+		    $request->errwarn($PROCEED, "E_FORMAT ($label): $e");
+		    $r->{_skip} = 1;
 		}
 	    }
 	    
 	    foreach my $w ( $result->warnings )
 	    {
-		$request->add_warning("W_PARAM$lstr: $w");
+		$request->add_warning("W_PARAM ($label): $w");
 	    }
 	    
 	    # Then add the hash of cleaned parameter values to the list of
 	    # records to add or update.
 	    
 	    push @records, $result->values;
-	    last;
 	}
 	
-	croak "no ruleset found for record" unless $ruleset;
+	# If no ruleset was selected, throw an error (or a warning with PROCEED).
+	
+	else
+	{
+	    my $label = $r->{_label} || "#$INDEX";
+	    
+	    $request->errwarn($PROCEED, "E_UNRECOGNIZED ($label): Could not validate record, no matching ruleset");
+	    $r->{_skip} = 1;
+	}
     }
     
     if ( $request->debug )
@@ -314,255 +397,338 @@ sub unpack_input_records {
 }
 
 
-sub debug_line {
+sub errwarn {
     
-    my ($request, $line) = @_;
-    
-    print STDERR "$line\n";
+    my ($request, $proceed, $errmsg) = @_;
+
+    if ( $proceed )
+    {
+	$errmsg =~ s/^E/F/;
+	$request->add_warning($errmsg);
+    }
+
+    else
+    {
+	$request->add_error($errmsg);
+    }
 }
 
-# sub validate_against_table {
-    
-#     my ($request, $dbh, $table_name, $op, $record, $primary_key, $ignore_keys) = @_;
-    
-#     croak "bad record" unless ref $record eq 'HASH';
-#     croak "bad value '$op' for op" unless $op eq 'add' || $op eq 'update' || $op eq 'mirror';
-    
-#     my (@fields, @values);
-    
-#     $dbh ||= $request->get_connection;
-    
-#     # Get the schema for the requested table.
-    
-#     my $schema = get_table_schema($request, $dbh, $table_name);
-    
-#     croak "no schema found for table '$table_name'" unless $schema;
-    
-#     # Determine the name of the table without any database prefix.
-    
-#     my $lookup_name = $table_name;
-#     $lookup_name =~ s/^\w+[.]//;
-    
-#     # First go through all of the fields in the record and validate their values.
-    
-#     foreach my $k ( keys %$record )
-#     {
-# 	# Skip any field called 'record_label', because that is only used by the data service and
-# 	# has no relevance to the backend database.
-	
-# 	next if $k eq 'record_label';
-	
-# 	# If we were given a hash of keys to ignore, then ignore them.
-	
-# 	next if ref $ignore_keys && $ignore_keys->{$k};
-	
-# 	# For each field in the record, fetch the correspondingly named field from the schema.
-	
-# 	my $value = $record->{$k};
-# 	my $field_record = $schema->{$k};
-# 	my $field = $field_record->{Field};
-# 	my $type = $field_record->{Type};
-# 	my $key = $field_record->{Key};
-	
-# 	# If no such field is found, skip this one. Add a warning to the request unless the
-# 	# operation is 'mirror', in which case the mirror table may be missing some of the fields
-# 	# of the original one.
-	
-# 	unless ( $field_record && $field)
-# 	{
-# 	    $request->add_record_warning('W_PARAM', $record->{record_label} || $record->{$primary_key}, 
-# 					 "field '$k' does not match any column in the table for this data type")
-# 		unless $op eq 'mirror';
-	    
-# 	    next;
-# 	}
-	
-# 	# The following set of fields is handled automatically, and are skipped if they appear in
-# 	# the record.
-	
-# 	if ( $field eq 'modified_no' || $field eq 'authorizer_no' || $field eq 'enterer_no' ||
-# 	     $field eq 'modified' || $field eq 'modified_on' || $field eq 'enterer_id' )
-# 	{
-# 	    next;
-# 	}
-	
-# 	# The following set of fields are skipped automatically unless the operation is 'mirror'
-# 	# and the field has a value in the source record. This includes the primary key for the
-# 	# table, if one was specified. For add operations there is no primary key value yet, and
-# 	# for updates it is handled separately.
-	
-# 	if ( $field eq 'created' || $field eq 'created_on' || ($primary_key && $field eq $primary_key) )
-# 	{
-# 	    next unless $op eq 'mirror' && defined $value && $value ne '';
-# 	}
-	
-# 	# Now we add the field and its value to their respective lists. These can be used later to
-# 	# construct an SQL insert or update statement.
-	
-# 	# If the field value is undefined, set it to "NULL". We need to do this because the user
-# 	# may specifically want to null out that field in the record.
-	
-# 	if ( ! defined $value )
-# 	{
-# 	    push @fields, $field;
-# 	    push @values, "NULL";
-# 	}
-	
-# 	# Otherwise, if the field has an integer type then make sure the corresponding value is an
-# 	# integer. Record an error otherwise.
-	
-# 	elsif ( $type =~ /int\(/ )
-# 	{
-# 	    unless ( defined $value && $value =~ /^\d+$/ )
-# 	    {
-# 		$request->add_record_error('E_PARAM', $record->{record_label} || $record->{$primary_key}, 
-# 					   "field '$k' must have an integer value (was '$value')");
-# 		next;
-# 	    }
-	    
-# 	    push @fields, $field;
-# 	    push @values, $value;
-# 	}
-	
-# 	# elsif other types ...
-	
-# 	# Otherwise, treat this as a string value. If the value we get is an array, just
-# 	# concatenate the items with commas. (This will probably have to be revisited later, and
-# 	# made into a more general mechanism).
-	
-# 	else
-# 	{
-# 	    if ( ref $value eq 'ARRAY' )
-# 	    {
-# 		$value = join(',', @$value);
-# 	    }
-	    
-# 	    my $quoted = $dbh->quote($value);
-	    
-# 	    push @fields, $field;
-# 	    push @values, $quoted;
-# 	}
-#     }
-    
-#     # Now add the appropriate values for any of the built-in fields.
-    
-#     foreach my $k ( qw(authorizer_no enterer_no modifier_no modified modified_on enterer_id) )
-#     {
-# 	next unless $schema->{$k};
-	
-# 	my $new_value;
-	
-# 	# We don't set 'authorizer_no' and 'enterer_no' on update, the values given when the
-# 	# record was created are retained. If we are mirroring from another record, then we copy
-# 	# the value from that record if there is one. Otherwise, we use the authorizer_no and
-# 	# enterer_no associated with the requestor.
-	
-# 	if ( $k eq 'authorizer_no' || $k eq 'enterer_no' )
-# 	{
-# 	    next if $op eq 'update';
-	    
-# 	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
-# 		$dbh->quote($record->{$k}) : 
-# 		$request->{my_auth_info}{$k};
-	    
-# 	    # If the table has an authorizer_no or enterer_no field, then we need to be providing
-# 	    # a value for them. If no value can be found, then bomb.
-	    
-# 	    unless ( $new_value || ( $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} &&
-# 				     $TABLE_PROPERTIES{$lookup_name}{ALLOW_POST} eq 'LOGGED_IN' ) )
-# 	    {
-# 		croak "no value was found for '$k'";
-# 	    }
-	    
-# 	    # unless ( $new_value )
-# 	    # {
-# 	    # 	if ( $request->{my_auth_info}{guest_no} && $TABLE_PROPERTIES{$table_name}{ALLOW_POST} &&
-# 	    # 	     $TABLE_PROPERTIES{$table_name}{ALLOW_POST} eq 'LOGGED_IN' )
-# 	    # 	{
-# 	    # 	    $new_value = $k eq 'enterer_no' ? $request->{my_auth_info}{guest_no} : 0;
-# 	    # 	}
 
-# 	    # 	else
-# 	    # 	{
-# 	    # 	    croak "no value was found for '$k'";
-# 	    # 	}
-# 	    # }
-# 	}
-	
-# 	# We only set 'enterer_id' on record creation, not on update.
-	
-# 	elsif ( $k eq 'enterer_id' )
-# 	{
-# 	    next if $op eq 'update';
-	    
-# 	    $new_value = $dbh->quote($request->{my_auth_info}{user_id} || '');
-# 	}
-	
-# 	# The modifier_no field is in some sense the opposite of authorizer_no and enterer_no,
-# 	# since it is set on update but not when we are adding a new record. If we are mirroring
-# 	# from another record, use the value from that record if there is one. Otherwise, set this
-# 	# field to the enterer_no associated with the requestor.
-	
-# 	elsif ( $k eq 'modifier_no' )
-# 	{
-# 	    next if $op eq 'add';
-	    
-# 	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ? 
-# 		$dbh->quote($record->{$k}) : 
-# 		$request->{my_auth_info}{enterer_no};
-# 	}
-	
-# 	# The modification timestamp is copied if the record is being mirrored, and otherwise set
-# 	# to the current timestamp unless the operation is 'add'.
-	
-# 	elsif ( $k eq 'modified' || $k eq 'modified_on' )
-# 	{
-# 	    next if $op eq 'add';
-	    
-# 	    $new_value = $op eq 'mirror' && defined $record->{$k} && $record->{$k} ne '' ?
-# 		$dbh->quote($record->{$k}) :
-# 		'NOW()';
-# 	}
-	
-# 	push @fields, $k;
-# 	push @values, $new_value;
-#     }
+sub addupdate_common {
+
+    my ($request, $config, @extra) = @_;
     
-#     # We stuff the fields and values into special record keys, so they will be available for use
-#     # in constructing subsequent SQL statements.
+    croak "addupdate_simple: first parameter must be a configuration hash"
+	unless ref $config eq 'HASH';
     
-#     $record->{_fields} = \@fields;
-#     $record->{_values} = \@values;
-# }
+    my $class = $config->{class} || 'EditTransaction';
+    my $main_table = $config->{main_table};
+    my $url_ruleset = $config->{url_ruleset};
+    
+    croak "addupdate_common: configuration must include a valid internal table name under 'main_table'"
+	unless $main_table && $TABLE{$main_table};
+    
+    croak "addupdate_common: the value of 'class' must be either 'EditTransaction' or a subclass"
+	if $config->{class} && ! $config->{class}->isa('EditTransaction');
+    
+    croak "addupdate_common: you cannot specify 'record_handler' and 'table_selector' together"
+	if $config->{record_handler} && $config->{table_selector};
+    
+    croak "addupdate_common: the value of 'table_sequence' must be a list of table names"
+	if $config->{table_sequence} && ref $config->{table_sequence} ne 'ARRAY';
+    
+    my @ruleset_patterns;
+    
+    if ( ref $config->{entry_ruleset} eq 'ARRAY' && $config->{entry_ruleset}->@* )
+    {
+	my $rs_name = $config->{entry_ruleset}[0];
+
+	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+	
+	push @ruleset_patterns, $config->{entry_ruleset};
+    }
+    
+    elsif ( $config->{entry_ruleset} )
+    {
+	my $rs_name = $config->{entry_ruleset};
+	
+	croak "entry_ruleset must be a list or a scalar" if ref $config->{entry_ruleset};
+	croak "you cannot specify 'entry_ruleset' and 'entry_list' together" if $config->{entry_list};
+	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+	
+	if ( $config->{entry_key} )
+	{
+	    push @ruleset_patterns, [ $rs_name, $config->{entry_key}, 'DEFAULT' ];
+	}
+	
+	else
+	{
+	    push @ruleset_patterns, $rs_name;
+	}
+    }
+    
+    elsif ( $config->{entry_list} )
+    {
+	croak "entry_list must be a list of lists" unless ref $config->{entry_list} eq 'ARRAY' &&
+	    $config->{entry_list}->@* && ref $config->{entry_list}[0] eq 'ARRAY' && $config->{entry_list}[0]->@*;
+	
+	foreach my $list ( $config->{entry_list}->@* )
+	{
+	    my $rs_name = ref $list eq 'ARRAY' ? $list->[0] : $list;
+	    
+	    croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+	    
+	    push @ruleset_patterns, $list;
+	}
+    }
+    
+    else
+    {
+	croak "no ruleset specified";
+    }
+    
+    # Authenticate the user who made this request, and check that they have write permission on
+    # the main table. 
+    
+    my $perms = $request->require_authentication($main_table);
+    
+    # Parse the URL parameters, and return a hash of allowances and another one with the rest of
+    # the parameter values. If $url_ruleset is empty, the second return value will be an empty
+    # hash. The url parameters will already have been validated against the ruleset before this
+    # method is called, and if they are invalid an error response will already have been returned.
+    
+    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset);
+    
+    # If extra allowances were specified, add them now. They can be specified either through the
+    # configuration or as additional arguments.
+
+    foreach my $value ( $config->{allowances}->@*, @extra )
+    {
+	croak "addupdate_common: invalid allowance '$value'" unless $class->has_allowance($value);
+	$allowances->{$value} = 1;
+    }
+    
+    # Then decode the body, and extract input records from it. Any attribute values specified in
+    # $main_params override those in the individual records. If a parameter error is encountered,
+    # throw a code 400 exception unless the PROCEED allowance was given. In that case, the record
+    # will be skipped.
+    
+    my (@records) = $request->parse_body_records($allowances, $main_params, @ruleset_patterns);
+    
+    if ( $request->errors )
+    {
+	die $request->exception(400, "Bad request body");
+    }
+    
+    # If we get here without any errors being detected so far, create a new object to handle this
+    # operation. This will be of class EditTransaction unless a subclass was specified in the
+    # configuration.
+    
+    my $edt = $class->new($request, $perms, $main_table, $allowances);
+    
+    # The next step is to iterate through the records extracted from the request body and process
+    # each one in turn. Every record will be validated against the corresponding database table,
+    # and if no errors are detected it will be queued up for insertion, updating, replacement,
+    # deletion, or some auxiliary operation.
+    
+    my $record_cleaner = $config->{record_cleaner};
+    my $record_handler = $config->{record_handler};
+    my $table_list = $config->{table_list};
+    
+    croak "the value of 'record_cleaner' must be a code ref or a method name"
+	if $record_cleaner && ref $record_cleaner && ref $record_cleaner ne 'CODE';
+    
+    croak "the value of 'record_handler' must be a code ref or a method name"
+        if $record_handler && ref $record_handler && ref $record_handler ne 'CODE';
+    
+    croak "the value of 'table_list' must be a list of lists" if $table_list &&
+	! ( ref $table_list eq 'ARRAY' && $table_list->@* &&
+	    ref $table_list->[0] eq 'ARRAY' && $table_list->[0]->@* );
+    
+    my (%TABLE_USED, @AUX_TABLES);
+    
+    foreach my $r ( @records )
+    {
+	# If a record cleaning routine was specified, call it first. The purpose of such routines
+	# is to modify record values prior to insertion or update. For example, the interface
+	# developer may wish to allow certain attributes to be specified in ways that don't match
+	# the database structure and must be converted first.
+	
+	if ( $record_cleaner )
+	{
+	    $request->$record_cleaner($edt, $r, $main_table, $perms);
+	}
+	
+	# For maximal control, a record handler may be specified. If so, it is expected to call
+	# either $edt->process_record or $edt->skip_record for every record it is given. It should
+	# return the name of the table in which this record was processed.
+	
+	if ( $record_handler )
+	{
+	    my $table_name = $request->$record_handler($edt, $r, $main_table, $perms);
+	    
+	    push @AUX_TABLES, $table_name unless $TABLE_USED{$table_name} || $table_name eq $main_table;
+	    $TABLE_USED{$table_name}++;
+	}
+	
+	# Otherwise, if the record includes the key _skip then call $edt->skip_record.
+	
+	elsif ( $r->{_skip} )
+	{
+	    $edt->skip_record($r);
+	}
+	
+	# Otherwise, if a table selector list is specified then use it to select the table that
+	# best matches this record. Each item in the list must be a list, in a format similar to
+	# the table-selection arguments to &parse_body_records. The first item must be a table
+	# name, and the remaining items the names of keys. If the record has a non-empty, non-zero
+	# value for any of these keys, that table will be selected. In most circumstances, the two
+	# lists will match. The ruleset selected for validating a record should correspond to the
+	# table in which that record will be stored. The last item can be a simple table name,
+	# which will select that table regardless, or 'NO_MATCH', which will reject the record.
+	
+	elsif ( $table_list )
+	{
+	    my ($table_name, @check_keys);
+	    
+	  PATTERN:
+	    foreach my $item ( $table_list->@* )
+	    {
+		if ( ref $item eq 'ARRAY' )
+		{
+		    ($table_name, @check_keys) = $item->@*;
+		    
+		    foreach $k ( @check_keys )
+		    {
+			last PATTERN if $r->{$k};
+		    }
+		}
+
+		elsif ( ref $item )
+		{
+		    my $type = reftype $item;
+		    croak "Invalid table_list pattern ($type)";
+		}
+
+		elsif ( $item )
+		{
+		    $table_name = $item;
+		    last PATTERN;
+		}
+	    }
+	    
+	    if ( $table_name && $table_name ne 'NO_MATCH' )
+	    {
+		$edt->process_record($table_name, $r);
+		push @AUX_TABLES, $table_name unless $TABLE_USED{$table_name} || $table_name eq $main_table;
+		$TABLE_USED{$table_name}++;
+	    }
+	    
+	    else
+	    {
+		my $label = $r->{_label} || "#$INDEX";
+		$request->errwarn($PROCEED, "E_UNRECOGNIZED ($label): Could not process record, no matching table");
+		$edt->skip_record($r);
+	    }
+	}
+	
+	# If none of these conditions hold, then call $edt->process_record with $main_table.
+	
+	else
+	{
+	    $edt->process_record($main_table, $r);
+	    $TABLE_USED{$main_table}++;
+	}
+    }
+        
+    # Now attempt to execute the queued actions inside a database transaction. If no database
+    # errors occur, and none occurred above, the transaction will be automatically committed. If
+    # any errors occurred, the transaction will be rolled back unless the PROCEED allowance was
+    # given. In that case, it will be committed after skipping any records that generated errors.
+    
+    $edt->commit;
+    
+    # Handle any errors or warnings that may have been generated.
+    
+    $request->collect_edt_errors($edt);
+    $request->collect_edt_warnings($edt);
+    
+    if ( $edt->errors )
+    {
+    	die $request->exception(400, "Bad request");
+    }
+    
+    # The final step is to generate a list of results for this operation to indicate which
+    # database records have been affected and how. We start with the list of records from the main
+    # table. Deleted records are listed first, in order by primary key, followed by all inserted
+    # or altered records in order by primary key. Auxiliary records that contain the main table's
+    # primary key as a foreign key are listed in the aux_records hash, under the primary key
+    # value. That allows the auxiliary records to be interleaved with the main table records, and
+    # for auxiliary records associated with the same main table record to be grouped together. Any
+    # records that don't contain any known key go on the other_records list.
+    
+    my %table_records;
+    
+    # The main key defaults to the primary key of the main table. This can be overridden in the
+    # configuration.
+    
+    my $main_key = $config->{main_key} || get_table_property($tn, 'PRIMARY_KEY');
+    
+    # One or more additional keys can also be specified, which allows record chains of more than
+    # one link.
+    
+    my @aux_keys;
+    
+    if ( $config->{aux_keys} && ref $config->{aux_keys} eq 'ARRAY' )
+    {
+	@aux_keys = $config->{aux_keys}->@*;
+    }
+
+    elsif ( $config->{aux_keys} )
+    {
+	carp "addupdate_common: the value of 'aux_keys' must be an array of key names";
+    }
+    
+    # Now go through the tables that have been touched, starting with the main table, and grab the
+    # keys for each one.
+    
+    foreach $tn ( $main_table, @AUX_TABLES )
+    {
+	my $key_labels = $edt->key_labels($tn);
+	my $display_key = get_table_property($tn, 'PRIMARY_KEY') || 'oid';
+	
+	$table_records{$tn} = [ ];
+	
+	# If any records have been deleted, those are listed first by means of placeholder records.
+	
+	if ( my @deleted_keys = $edt->deleted_keys($tn) )
+	{
+	    foreach my $key_value ( sort { $a <=> $b} @deleted_keys )
+	    {
+		my $record = { $primary_key => $key_value, status => 'deleted',
+			       _operation => 'delete', _label => $key_label->{$key_value} };
+
+		push $table_records{$tn}->@*, $record;
+	    }
+	}
+	
+	# $$$ EditTranasction needs to generate records corresponding to the input ones, conveying
+	# all the information necessary to produce a result: key, label, operation, action,
+	# result, etc. 
+    
+    my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
+    
+    $request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
 
 
-# sub add_edt_warnings {
+}
+
+
+# sub debug_line {
     
-#     my ($request, $edt) = @_;
+#     my ($request, $line) = @_;
     
-#     my (@warnings) = $edt->warnings;
-    
-#     return unless @warnings;
-#     my %added;
-    
-#     foreach my $w ( @warnings )
-#     {
-#     	my $code = $w->code;
-# 	my $label = $w->label;
-# 	my $table = $w->table;
-# 	my $explanation = $edt->generate_msg($w);
-# 	# my $explanation = join('; ', $w->data);
-	
-# 	my $str = $code;
-# 	$str .= " ($label)" if defined $label && $label ne '';
-# 	$str .= ": $explanation" if defined $explanation && $explanation ne '';
-	
-# 	unless ( $added{$str} )
-# 	{
-# 	    $request->add_warning($str);
-# 	    $added{$str} = 1;
-# 	}
-#     }
+#     print STDERR "$line\n";
 # }
 
 
@@ -592,243 +758,11 @@ sub collect_edt_errors {
 }
 
 
-sub add_edt_errors {
-    
-    my ($request, $edt) = @_;
-    
-    my (@errors) = $edt->errors;
-    
-    return unless @errors;
-    my %added;
-    
-    foreach my $e ( @errors )
-    {
-    	my $code = $e->code;
-	my $label = $e->label;
-	my $table = $e->table;
-	my $explanation = $edt->generate_msg($e);
-	# my $explanation = join('; ', $e->data);
-	
-	my $str = $code;
-	$str .= " ($label)" if defined $label && $label ne '';
-	$str .= ": $explanation" if defined $explanation && $explanation ne '';
-	
-	unless ( $added{$str} )
-	{
-	    $request->add_error($str);
-	    $added{$str} = 1;
-	}
-    }
-}
-
-
-sub validate_extident {
-
-    my ($request, $type, $value, $param) = @_;
-    
-    $param ||= '';
-    
-    if ( defined $value && $value =~ $IDRE{$type} )
-    {
-	return $2;
-    }
-    
-    elsif ( $1 && $1 ne $IDP{$type} )
-    {
-	$request->add_error("E_PARAM: the value of '$param' must be an identifier of type '$IDP{$type}' (type '$1' is not allowed for this operation)");
-    }
-    
-    else
-    {
-	$request->add_error("E_PARAM: the value of '$param' must be a valid external identifier of type '$IDP{$type}'");
-    }
-}
-
-
-# sub do_add {
-    
-#     my ($request, $dbh, $table_name, $r) = @_;
-    
-#     $dbh ||= $request->get_connection;
-    
-#     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
-#     croak "empty record" unless @{$r->{_fields}};
-    
-#     my $field_string = join(',', @{$r->{_fields}});
-#     my $value_string = join(',', @{$r->{_values}});
-    
-#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
-    
-#     my $sql = "INSERT INTO $quoted_table ($field_string) VALUES ($value_string)";
-    
-#     print STDERR "$sql\n\n" if $request->debug;
-    
-#     my $result = $dbh->do($sql);
-    
-#     my $insert_id = $dbh->last_insert_id(undef, undef, undef, undef);
-#     print STDERR "RESULT: 0\n" unless $insert_id;
-    
-#     return $insert_id;
-# }
-
-
-# sub do_replace {
-    
-#     my ($request, $dbh, $table_name, $r) = @_;
-    
-#     $dbh ||= $request->get_connection;
-    
-#     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
-#     croak "empty record" unless @{$r->{_fields}};
-    
-#     my $field_string = join(',', @{$r->{_fields}});
-#     my $value_string = join(',', @{$r->{_values}});
-    
-#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
-    
-#     my $sql = "REPLACE INTO $quoted_table ($field_string) VALUES ($value_string)";
-    
-#     print STDERR "$sql\n\n" if $request->debug;
-    
-#     my $result = $dbh->do($sql);
-    
-#     return $result;
-# }
-
-
-# sub do_update {
-
-#     my ($request, $dbh, $table_name, $key_expr, $r) = @_;
-
-#     $dbh ||= $request->get_connection;
-    
-#     croak "bad record" unless ref $r eq 'HASH' && ref $r->{_fields} eq 'ARRAY';
-#     croak "empty record" unless @{$r->{_fields}};
-#     croak "empty key expr" unless $key_expr;
-    
-#     my @exprs;
-    
-#     foreach my $i ( 0..$#{$r->{_fields}} )
-#     {
-# 	push @exprs, "$r->{_fields}[$i] = $r->{_values}[$i]";
-#     }
-    
-#     my $set_string = join(",\n", @exprs);
-#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
-    
-#     my $sql = " UPDATE $quoted_table
-# 		SET $set_string
-# 		WHERE $key_expr LIMIT 1";
-    
-#     print STDERR "$sql\n\n" if $request->debug;
-    
-#     my $result = $dbh->do($sql);
-    
-#     return $result;
-# }
-
-
-# sub fetch_record {
-    
-#     my ($request, $dbh, $table_name, $key_expr, $field_expr) = @_;
-    
-#     $dbh ||= $request->get_connection;
-    
-#     croak "empty key expr" unless $key_expr;
-#     croak "empty field expr" unless $field_expr;
-    
-#     my $quoted_table = $table_name; # $dbh->quote_identifier($table_name);
-    
-#     my $sql = "	SELECT $field_expr FROM $quoted_table
-# 		WHERE $key_expr LIMIT 1";
-    
-#     print STDERR "$sql\n\n" if $request->debug;
-    
-#     return $dbh->selectrow_hashref($sql, { Slice => { } });
-# }
-
-
-# sub fetch_record_permission {
-    
-#     my ($request, $dbh, $table_name, $permission, $id_field, $record_no, $auth_fields) = @_;
-    
-#     # If we need to determine what permissions the requestor has to this
-#     # particular record. If no record was given, return 'notfound'.
-    
-#     unless ( $record_no && $record_no =~ /^\d+$/ )
-#     {
-# 	print STDERR "ERROR: no record number was given\n\n" if $request->debug;
-# 	return (undef, 'notfound');
-#     }
-    
-#     # The first thing to do is to fetch the specified fields from the record.
-    
-#     my $sql = "	SELECT $auth_fields FROM $table_name
-# 		WHERE $id_field = $record_no LIMIT 1";
-    
-#     print STDERR "$sql\n\n" if $request->debug;
-    
-#     my ($record) = $dbh->selectrow_hashref($sql);
-    
-#     # If no record is found, then we return 'notfound'. Otherwise, set the status if there is
-#     # one. 
-    
-#     my $status;
-    
-#     if ( $record )
-#     {
-# 	my $permission = $request->check_fetched_permission($table_name, $permission, $record, $id_field)
-# 	return ($permission, $record->{status} || '');
-#     }
-    
-#     else
-#     {
-# 	return (undef, 'notfound');
-#     }
-# }
-
-
-sub add_record_error {
-    
-    my ($request, $code, $label, $string) = @_;
-    
-    my $err = $code;
-    $err .= " ($label)" if defined $label && $label ne '';
-    $err .= ": $string" if defined $string && $string ne '';
-    
-    unless ( $request->{my_err_hash}{$err} )
-    {
-	$request->{my_err_hash}{$err} = 1;
-	$request->add_error($err);
-    }
-    
-    return;
-}
-
-
-sub add_record_warning {
-    
-    my ($request, $code, $label, $string) = @_;
-    
-    my $err = $code;
-    $err .= " ($label)" if defined $label && $label ne '';
-    $err .= ": $string" if defined $string && $string ne '';
-    
-    unless ( $request->{my_warning_hash}{$err} )
-    {
-	$request->{my_warning_hash}{$err} = 1;
-	$request->add_warning($err);
-    }
-    
-    return;
-}
-
-
 sub debug_out {
 
     my ($request, $record, $prefix) = @_;
     
-    return unless ref $record eq 'HASH';
+    return unless ref $record eq 'HASH' && $request->debug;
     
     $prefix ||= '';
     
@@ -845,5 +779,7 @@ sub debug_out {
     
     $request->{ds}->debug_line("");
 }
+
+
 
 1;
