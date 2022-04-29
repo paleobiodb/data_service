@@ -19,6 +19,7 @@ use Permissions;
 use Carp qw(carp croak);
 use Try::Tiny;
 use Scalar::Util qw(weaken blessed reftype);
+use List::Util qw(sum reduce);
 use Encode qw(encode);
 
 use Switch::Plain;
@@ -538,7 +539,7 @@ sub silent_mode {
 # Allowed conditions must be specified for each EditTransaction object when it is created.
 
 
-# register_allows ( condition... )
+# register_allowances ( name... )
 # 
 # Register the names of extra allowances for transactions in a particular subclass. This class
 # method is designed to be called at startup from modules that subclasses this one.
@@ -551,6 +552,18 @@ sub register_allowances {
     {
 	$ALLOW_BY_CLASS{$class}{$n} = 1;
     }
+}
+
+
+# has_allowance ( name )
+#
+# Return true if the specified class or object has the specified allowance.
+
+sub has_allowance {
+
+    my ($class, $name) = @_;
+    
+    return $ALLOW_BY_CLASS{$class}{$name} || $ALLOW_BY_CLASS{EditTransaction}{$name};
 }
 
 
@@ -2130,8 +2143,13 @@ sub delete_cleanup {
 sub process_record {
     
     my ($edt, $table, $record) = @_;
+
+    if ( $record->{_skip} )
+    {
+	return $edt->skip_record($record);
+    }
     
-    if ( $record->{_operation} )
+    elsif ( $record->{_operation} )
     {
 	if ( $record->{_operation} eq 'delete' )
 	{
@@ -2159,6 +2177,11 @@ sub process_record {
 	    $edt->add_condition($action, 'E_BAD_OPERATION', $record->{_operation});
 	}
     }
+
+    elsif ( $record->{_action} )
+    {
+	return $edt->other_action($table, $record->{_action}, $record);
+    }
     
     elsif ( $edt->get_record_key($table, $record) )
     {
@@ -2175,10 +2198,24 @@ sub process_record {
 sub insert_update_record {
 
     my ($edt, $table, $record) = @_;
-
+    
     $edt->process_record($table, $record);
 }
 
+
+# skip_record ( )
+# 
+# Increment the record count, but ignore the record itself. This should be called for records that
+# have been determined to be invalid before they are passed to this module. The record count is
+# used in generating labels for subsequent records.
+
+sub skip_record {
+
+    my ($edt, $record) = @_;
+    
+    $edt->{record_count}++;
+}
+    
 
 # other_action ( table, method, record )
 # 
@@ -2393,20 +2430,6 @@ sub get_record_key {
     }
     
     return;
-}
-
-
-# ignore_record ( )
-# 
-# Indicates that a particular record should be ignored. This will keep the
-# record count up-to-date for generating record labels with which to tag
-# subsequent error and warning messages.
-
-sub ignore_record {
-
-    my ($edt, $table, $record) = @_;
-    
-    $edt->{record_count}++;
 }
 
 
@@ -3856,7 +3879,7 @@ sub _execute_insert {
     if ( $new_keyval )
     {
 	$edt->{action_count}++;
-	push @{$edt->{inserted_keys}{$table}}, $new_keyval;
+	push @{$edt->{updated_keys}{$table}}, $new_keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($new_keyval, $action);
 	
 	if ( my $linkval = $action->linkval )
@@ -4034,7 +4057,7 @@ sub _execute_replace {
     if ( $result && ! $action->has_errors )
     {
 	$edt->{action_count}++;
-	push @{$edt->{replaced_keys}{$table}}, $keyval;
+	push @{$edt->{updated_keys}{$table}}, $keyval;
 	push @{$edt->{datalog}}, EditTransaction::LogEntry->new($keyval, $action);
 	
 	if ( my $linkval = $action->linkval )
@@ -4433,8 +4456,8 @@ sub _execute_delete_cleanup {
     
     my @preserve;
     
-    push @preserve, @{$edt->{inserted_keys}{$table}} if ref $edt->{inserted_keys}{$table} eq 'ARRAY';
-    push @preserve, @{$edt->{replaced_keys}{$table}} if ref $edt->{replaced_keys}{$table} eq 'ARRAY';
+    push @preserve, @{$edt->{updated_keys}{$table}} if ref $edt->{updated_keys}{$table} eq 'ARRAY';
+    push @preserve, @{$edt->{updated_keys}{$table}} if ref $edt->{updated_keys}{$table} eq 'ARRAY';
     push @preserve, @{$edt->{updated_keys}{$table}} if ref $edt->{updated_keys}{$table} eq 'ARRAY';
     
     push @preserve, '0' unless @preserve;
@@ -4575,10 +4598,10 @@ sub _execute_delete_many {
 }
 
 
-# _execute_update ( action )
+# _execute_other ( action )
 # 
-# Actually perform an update operation on the database. The keys and values have been checked
-# previously.
+# Actually perform an operation other than insert, replace, update, or delete on the database. The keys
+# and values have been checked previously.
 
 sub _execute_other {
 
@@ -4829,70 +4852,62 @@ sub cleanup_action {
 
 sub tables {
     
-    return keys %{$_[0]->{tables}};
-}
-
-
-sub inserted_keys {
-
-    my ($edt, $table) = @_;
-
-    if ( $table )
-    {
-	return $edt->{inserted_keys}{$table} ? @{$edt->{inserted_keys}{$table}} : wantarray ? ( ) : 0;
-    }
+    my ($edt) = @_;
     
-    else
-    {
-	return map { $edt->{inserted_keys}{$_} ? @{$edt->{inserted_keys}{$_}} : ( ) } keys %{$edt->{tables}};
-    }
-}
-
-
-sub updated_keys {
-
-    my ($edt, $table) = @_;
-    
-    if ( $table )
-    {
-	return $edt->{updated_keys}{$table} ? @{$edt->{updated_keys}{$table}} : wantarray ? ( ) : 0;
-    }
-    
-    else
-    {
-	return map { $edt->{updated_keys}{$_} ? @{$edt->{updated_keys}{$_}} : ( ) } keys %{$edt->{tables}};
-    }
-}
-
-
-sub replaced_keys {
-
-    my ($edt, $table) = @_;
-    
-    if ( $table )
-    {
-	return $edt->{replaced_keys}{$table} ? @{$edt->{replaced_keys}{$table}} : wantarray ? ( ) : 0;
-    }
-    
-    else
-    {
-	return map { $edt->{replaced_keys}{$_} ? @{$edt->{replaced_keys}{$_}} : ( ) } keys %{$edt->{tables}};
-    }
+    return keys $edt->{tables}->%*;
 }
 
 
 sub deleted_keys {
 
     my ($edt, $table) = @_;
-    
-    if ( $table )
+
+    if ( wantarray && $table )
     {
-	return $edt->{deleted_keys}{$table} ? @{$edt->{deleted_keys}{$table}} : wantarray ? ( ) : 0;
+	return $edt->{deleted_keys}{$table} ? $edt->{deleted_keys}{$table}->@* : ( );
     }
     
+    elsif ( wantarray )
+    {
+	return map { $edt->{deleted_keys}{$_} ? $edt->{deleted_keys}{$_}->@* : ( ) } keys $edt->{tables}->%*;
+    }
+    
+    elsif ( $table )
+    {
+	return $edt->{deleted_keys}{$table} ? $edt->{deleted_keys}{$table}->@* : 0;
+    }
+
     else
     {
-	return map { $edt->{deleted_keys}{$_} ? @{$edt->{deleted_keys}{$_}} : ( ) } keys %{$edt->{tables}};
+	return reduce { $a + ($edt->{deleted_keys}{$_} ? $edt->{deleted_keys}{$_}->@* : 0) }
+	    0, keys $edt->{tables}->%*;
+    }
+}
+
+
+sub mutated_keys {
+
+    my ($edt, $table) = @_;
+    
+    if ( wantarray && $table )
+    {
+	return $edt->{updated_keys}{$table} ? $edt->{updated_keys}{$table}->@* : ( );
+    }
+    
+    elsif ( wantarray )
+    {
+	return map { $edt->{updated_keys}{$_} ? $edt->{updated_keys}{$_}->@* : ( ) } keys $edt->{tables}->%*;
+    }
+    
+    elsif ( $table )
+    {
+	return $edt->{updated_keys}{$table} ? $edt->{updated_keys}{$table}->@* : 0;
+    }
+
+    else
+    {
+	return reduce { $a + ($edt->{updated_keys}{$_} ? $edt->{updated_keys}{$_}->@* : 0) }
+	    0, keys $edt->{tables}->%*;
     }
 }
 
@@ -4901,35 +4916,25 @@ sub other_keys {
 
     my ($edt, $table) = @_;
     
-    if ( $table )
+    if ( wantarray && $table )
     {
-	return $edt->{other_keys}{$table} ? @{$edt->{other_keys}{$table}} : wantarray ? ( ) : 0;
+	return $edt->{other_keys}{$table} ? $edt->{other_keys}{$table}->@* : ( );
     }
     
+    elsif ( wantarray )
+    {
+	return map { $edt->{other_keys}{$_} ? $edt->{other_keys}{$_}->@* : ( ) } keys $edt->{tables}->%*;
+    }
+    
+    elsif ( $table )
+    {
+	return $edt->{other_keys}{$table} ? $edt->{other_keys}{$table}->@* : 0;
+    }
+
     else
     {
-	return map { $edt->{other_keys}{$_} ? @{$edt->{other_keys}{$_}} : ( ) } keys %{$edt->{tables}};
-    }
-}
-
-
-sub superior_keys {
-
-    my ($edt, $table) = @_;
-
-    if ( $table )
-    {
-	return $edt->{superior_keys}{$table} ? keys %{$edt->{superior_keys}{$table}} : wantarray ? ( ) : 0;
-    }
-    
-    elsif ( $edt->{superior_keys} )
-    {
-	return map { $edt->{superior_keys}{$_} ? keys %{$edt->{superior_keys}{$_}} : ( ) } keys %{$edt->{superior_keys}};
-    }
-    
-    else
-    {
-	return;
+	return reduce { $a + ($edt->{other_keys}{$_} ? $edt->{other_keys}{$_}->@* : 0) }
+	    0, keys $edt->{tables}->%*;
     }
 }
 
@@ -4938,15 +4943,71 @@ sub failed_keys {
 
     my ($edt, $table) = @_;
     
-    if ( $table )
+    if ( wantarray && $table )
     {
-	return $edt->{failed_keys}{$table} ? @{$edt->{failed_keys}{$table}} : ();
+	return $edt->{failed_keys}{$table} ? $edt->{failed_keys}{$table}->@* : ( );
     }
     
+    elsif ( wantarray )
+    {
+	return map { $edt->{failed_keys}{$_} ? $edt->{failed_keys}{$_}->@* : ( ) } keys $edt->{tables}->%*;
+    }
+    
+    elsif ( $table )
+    {
+	return $edt->{failed_keys}{$table} ? $edt->{failed_keys}{$table}->@* : 0;
+    }
+
     else
     {
-	return map { $edt->{failed_keys}{$_} ? @{$edt->{failed_keys}{$_}} : () } keys %{$edt->{tables}};
+	return reduce { $a + ($edt->{failed_keys}{$_} ? $edt->{failed_keys}{$_}->@* : 0) }
+	    0, keys $edt->{tables}->%*;
     }
+}
+
+
+sub superior_keys {
+
+    my ($edt, $table) = @_;
+    
+    if ( wantarray && $table )
+    {
+	return $edt->{superior_keys}{$table} ? $edt->{superior_keys}{$table}->@* : ( );
+    }
+    
+    elsif ( wantarray )
+    {
+	return map { $edt->{superior_keys}{$_} ? $edt->{superior_keys}{$_}->@* : ( ) } keys $edt->{tables}->%*;
+    }
+    
+    elsif ( $table )
+    {
+	return $edt->{superior_keys}{$table} ? $edt->{superior_keys}{$table}->@* : 0;
+    }
+
+    else
+    {
+	return reduce { $a + ($edt->{superior_keys}{$_} ? $edt->{superior_keys}{$_}->@* : 0) }
+	    0, keys $edt->{tables}->%*;
+    }
+}
+
+
+sub inserted_keys {
+    
+    return &mutated_keys;
+}
+
+
+sub updated_keys {
+
+    return;
+}
+
+
+sub replaced_keys {
+
+    return;
 }
 
 
