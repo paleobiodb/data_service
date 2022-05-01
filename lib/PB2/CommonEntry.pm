@@ -12,6 +12,7 @@ use strict;
 use HTTP::Validate qw(:validators);
 use Carp qw(croak);
 use Scalar::Util qw(reftype);
+use List::Util qw(any);
 
 use TableDefs qw(%TABLE);
 
@@ -88,7 +89,7 @@ sub initialize {
 }
 
 
-# get_main_params ( allowances_ref, url_ruleset )
+# parse_main_params ( allowances_ref, url_ruleset )
 # 
 # Go through the main parameters to this request, looking for the following. If the parameter
 # 'allow' is found, then enter all of the specified conditions as hash keys into
@@ -99,7 +100,7 @@ sub initialize {
 
 sub parse_main_params {
     
-    my ($request, $url_ruleset) = @_;
+    my ($request, $url_ruleset, @extra_flags) = @_;
     
     # First grab a list of the parameters that were specified in the request URL. Also allocate
     # two hashes which will end up being the return value of this routine.
@@ -133,6 +134,13 @@ sub parse_main_params {
 	    $main_params->{$k} = $request->clean_param($k);
 	}
     }
+
+    # Then add any extra flags that were specified.
+
+    $allowances->{$_} = 1 foreach @extra_flags;
+    
+    # Print out the main parameters and allowances if we are in debug mode, then return the two
+    # hashes.
     
     $request->debug_out($main_params);
     $request->debug_out($allowances);
@@ -143,7 +151,7 @@ sub parse_main_params {
 
 sub parse_body_records {
     
-    my ($request, $allows, $main_params, @ruleset_patterns) = @_;
+    my ($request, $main_params, @ruleset_patterns) = @_;
     
     my (@raw_records, @records);
     
@@ -152,8 +160,6 @@ sub parse_body_records {
     
     $request->{is_data_entry} = 1;
 
-    my $PROCEED  = $allows->{PROCEED};
-    
     # If the method is GET, then we don't expect any body. Assume that the main parameters
     # constitute the only input record. They have already been validated during request
     # processing, and have already been cleaned by parse_main_params. So there is no need to
@@ -178,13 +184,14 @@ sub parse_body_records {
     else
     {
 	my ($body, $error) = $request->decode_body;
+
+	# If an error occurred while decoding the request body, or if the request body was empty,
+	# return a 400 response immediately.
 	
 	if ( $error )
 	{
 	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: $error");
 	}
-	
-	# If there was no request body at all, throw an exception.
 	
 	elsif ( ! defined $body || $body eq '' )
 	{
@@ -229,7 +236,7 @@ sub parse_body_records {
 	
 	else
 	{
-	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: no record found");
+	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: no records found");
 	}
     }
     
@@ -242,24 +249,19 @@ sub parse_body_records {
     {
 	$INDEX++;
 	
-	# Any item that is not an object will generate an error, or else a warning if PROCEED is
-	# allowed. In the latter case, a dummy record will be added to the list to keep the record
-	# index consistent.
+	# Any item that is not an object will generate a dummy record. So will an empty object,
+	# but those get warnings rather than errors.
 	
 	unless ( ref $r eq 'HASH' )
 	{
 	    my $val = ref $r ? uc reftype $r : "'$r'";
 	    
-	    push @records, { _skip => 1 };
-	    $request->errwarn($PROCEED, "E_REQUEST_BODY (#$INDEX): element is invalid ($val)");
+	    push @records, { _errors => [ "E_REQUEST_BODY: item is not a valid record ($val)" ] };
 	}
-	
-	# An empty item generates a warning, and a dummy record.
 	
 	unless ( keys %$r )
 	{
-	    push @records, { _skip => 1 };
-	    $request->add_warning("W_REQUEST_BODY: Body item #$INDEX is empty");
+	    push @records, { _skip => 1, _warnings => [ "W_REQUEST_BODY: item is empty" ] };
 	}
 	
 	# If $main_params_ref is not empty, its attributes provide defaults for every record.
@@ -335,8 +337,13 @@ sub parse_body_records {
 		    push @{$result->{clean_list}}, $k;
 		}
 	    }
+
+	    # Generate a record with the cleaned parameter values. If any errors or warnings were
+	    # generated, add them to the record.
 	    
-	    # If any errors or warnings were generated, add them to the current request.
+	    my $cleanded = $result->values;
+	    
+	    my (@record_errors, @record_warnings);
 	    
 	    my $label = $r->{_label} || ($key_name && $r->{$key_name}) || "#$INDEX";
 	    
@@ -344,86 +351,104 @@ sub parse_body_records {
 	    {
 		if ( $e =~ /identifier must have type/ )
 		{
-		    $request->errwarn($PROCEED, "E_EXTTYPE ($label): $e");
-		    $r->{_skip} = 1;
+		    push @record_errors, "E_EXTTYPE ($label): $e";
 		}
 		
 		elsif ( $e =~ /may not specify/ )
 		{
-		    $request->errwarn($PROCEED, "E_PARAM ($label): $e");
-		    $r->{_skip} = 1;
+		    push @record_errors, "E_PARAM ($label): $e";
 		}
 		
 		else
 		{
-		    $request->errwarn($PROCEED, "E_FORMAT ($label): $e");
-		    $r->{_skip} = 1;
+		    push @record_errors, "E_FORMAT ($label): $e";
 		}
+	    }
+
+	    if ( @record_errors )
+	    {
+		$cleaned->{_errors} = \@record_errors;
 	    }
 	    
 	    foreach my $w ( $result->warnings )
 	    {
-		$request->add_warning("W_PARAM ($label): $w");
+		push @record_warnings, "W_PARAM ($label): $w";
 	    }
 	    
-	    # Then add the hash of cleaned parameter values to the list of
-	    # records to add or update.
+	    if ( @record_warnings )
+	    {
+		$cleaned->{_warnings} = \@record_warnings;
+	    }
 	    
-	    push @records, $result->values;
+	    # Add the cleaned record to the list of records to process.
+	    
+	    push @records, $cleaned;
 	}
 	
-	# If no ruleset was selected, throw an error (or a warning with PROCEED).
+	# If no ruleset was selected, add a validation error to the record.
 	
 	else
 	{
 	    my $label = $r->{_label} || "#$INDEX";
 	    
-	    $request->errwarn($PROCEED, "E_UNRECOGNIZED ($label): Could not validate record, no matching ruleset");
-	    $r->{_skip} = 1;
+	    $r->{_errors} = [ "E_UNRECOGNIZED ($label): could not validate record, no matching ruleset" ];
+	    
+	    push @records, $r;
 	}
     }
     
-    if ( $request->debug )
-    {
-	foreach my $r ( @records )
-	{
-	    $request->debug_out($r, '    ');
-	}
-    }
-    
-    # Now, return the list of records, which might be empty.
-    
+    # Return the list of cleaned records, which may be empty.
+
     return @records;
-}
-
-
-sub errwarn {
     
-    my ($request, $proceed, $errmsg) = @_;
-
-    if ( $proceed )
-    {
-	$errmsg =~ s/^E/F/;
-	$request->add_warning($errmsg);
-    }
-
-    else
-    {
-	$request->add_error($errmsg);
-    }
+    # # If validation errors occurred and the PROCEED allowance was not specified, add an error
+    # # condition to the request.
+    
+    # if ( $validation_errors && ! $allows->{PROCEED} )
+    # {
+    # 	$request->add_error('E_REQUEST_BODY: errors were detected in one or more records');
+    # }
+    
+    # if ( $request->debug )
+    # {
+    # 	foreach my $r ( @records )
+    # 	{
+    # 	    $request->debug_out($r, '    ');
+    # 	}
+    # }
 }
+
+
+# sub validation_error {
+    
+#     my ($request, $proceed, $errmsg) = @_;
+
+#     if ( $proceed )
+#     {
+# 	$errmsg =~ s/^E/F/;
+# 	$request->add_warning($errmsg);
+#     }
+
+#     else
+#     {
+# 	$request->add_error($errmsg);
+#     }
+# }
 
 
 sub addupdate_common {
 
-    my ($request, $config, @extra) = @_;
+    my ($request, $config, @extra_flags) = @_;
     
     croak "addupdate_simple: first parameter must be a configuration hash"
 	unless ref $config eq 'HASH';
     
-    my $class = $config->{class} || 'EditTransaction';
+    my $ETclass = $config->{class} || 'EditTransaction';
     my $main_table = $config->{main_table};
+    my $main_ruleset = $config->{main_ruleset};
     my $url_ruleset = $config->{url_ruleset};
+    my $table_selector = $config->{table_selector};
+    my $record_cleaner = $config->{record_cleaner};
     
     croak "addupdate_common: configuration must include a valid internal table name under 'main_table'"
 	unless $main_table && $TABLE{$main_table};
@@ -431,61 +456,113 @@ sub addupdate_common {
     croak "addupdate_common: the value of 'class' must be either 'EditTransaction' or a subclass"
 	if $config->{class} && ! $config->{class}->isa('EditTransaction');
     
-    croak "addupdate_common: you cannot specify 'record_handler' and 'table_selector' together"
-	if $config->{record_handler} && $config->{table_selector};
+    croak "the value of 'record_cleaner' must be a code ref or a method name"
+	if $record_cleaner && ref $record_cleaner && ref $record_cleaner ne 'CODE';
     
-    croak "addupdate_common: the value of 'table_sequence' must be a list of table names"
-	if $config->{table_sequence} && ref $config->{table_sequence} ne 'ARRAY';
-    
-    my @ruleset_patterns;
-    
-    if ( ref $config->{entry_ruleset} eq 'ARRAY' && $config->{entry_ruleset}->@* )
-    {
-	my $rs_name = $config->{entry_ruleset}[0];
+    # If 'table_selector' is given, its value must match one of the accepted patterns.
 
-	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
-	
-	push @ruleset_patterns, $config->{entry_ruleset};
-    }
+    my @table_list;
     
-    elsif ( $config->{entry_ruleset} )
+    if ( $table_selector )
     {
-	my $rs_name = $config->{entry_ruleset};
-	
-	croak "entry_ruleset must be a list or a scalar" if ref $config->{entry_ruleset};
-	croak "you cannot specify 'entry_ruleset' and 'entry_list' together" if $config->{entry_list};
-	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
-	
-	if ( $config->{entry_key} )
+	if ( ref $table_selector eq 'HASH' && $table_selector->%* )
 	{
-	    push @ruleset_patterns, [ $rs_name, $config->{entry_key}, 'DEFAULT' ];
+	    push @table_list, $request->validate_tabsel($table_selector);
+	}
+	
+	elsif ( ref $table_selector eq 'ARRAY' && $table_selector->[0] )
+	{
+	    if ( ref $table_selector->[0] )
+	    {
+		push @table_list, $request->validate_tabsel($_) foreach $table_selector->@*;
+	    }
+
+	    else
+	    {
+		push @table_list, $request->validate_tabsel($table_selector);
+	    }
+	}
+	
+	elsif ( ref $table_selector eq 'CODE' )
+	{
+	    push @table_list, $table_selector;
+	}
+	
+	elsif ( $table_selector eq 'NO_MATCH' )
+	{
+	    push @table_list, ['NO_MATCH', 'NO_MATCH'];
 	}
 	
 	else
 	{
-	    push @ruleset_patterns, $rs_name;
+	    my $val = ref $table_selector || $table_selector;
+	    croak "addupdate_common: the value of 'table_selector' is not valid ($val)";
 	}
     }
     
-    elsif ( $config->{entry_list} )
+    unless ( @table_list && $table_list[-1] eq 'NO_MATCH' )
     {
-	croak "entry_list must be a list of lists" unless ref $config->{entry_list} eq 'ARRAY' &&
-	    $config->{entry_list}->@* && ref $config->{entry_list}[0] eq 'ARRAY' && $config->{entry_list}[0]->@*;
+	croak "addupdate_common: you must specify a value for 'main_ruleset'" unless $main_ruleset;
+	push @table_list, $request->validate_tabsel([ $main_table, $main_ruleset ]);
+    }
+    
+    # If extra flags or allowances are given, make sure they are all valid.
+    
+    foreach my $flag ( @extra_flags )
+    {
+	croak "addupdate_common: unrecognized flag '$flag'"
+	    unless $class->has_allowance($flag);
+    }
+    
+    # my @ruleset_patterns;
+    
+    # if ( ref $config->{entry_ruleset} eq 'ARRAY' && $config->{entry_ruleset}->@* )
+    # {
+    # 	my $rs_name = $config->{entry_ruleset}[0];
+    
+    # 	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+    
+    # 	push @ruleset_patterns, $config->{entry_ruleset};
+    # }
+    
+    # elsif ( $config->{entry_ruleset} )
+    # {
+    # 	my $rs_name = $config->{entry_ruleset};
 	
-	foreach my $list ( $config->{entry_list}->@* )
-	{
-	    my $rs_name = ref $list eq 'ARRAY' ? $list->[0] : $list;
-	    
-	    croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
-	    
-	    push @ruleset_patterns, $list;
-	}
-    }
+    # 	croak "entry_ruleset must be a list or a scalar" if ref $config->{entry_ruleset};
+    # 	croak "you cannot specify 'entry_ruleset' and 'entry_list' together" if $config->{entry_list};
+    # 	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+	
+    # 	if ( $config->{entry_key} )
+    # 	{
+    # 	    push @ruleset_patterns, [ $rs_name, $config->{entry_key}, 'DEFAULT' ];
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    push @ruleset_patterns, $rs_name;
+    # 	}
+    # }
     
-    else
-    {
-	croak "no ruleset specified";
-    }
+    # elsif ( $config->{entry_list} )
+    # {
+    # 	croak "entry_list must be a list of lists" unless ref $config->{entry_list} eq 'ARRAY' &&
+    # 	    $config->{entry_list}->@* && ref $config->{entry_list}[0] eq 'ARRAY' && $config->{entry_list}[0]->@*;
+	
+    # 	foreach my $list ( $config->{entry_list}->@* )
+    # 	{
+    # 	    my $rs_name = ref $list eq 'ARRAY' ? $list->[0] : $list;
+	    
+    # 	    croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+	    
+    # 	    push @ruleset_patterns, $list;
+    # 	}
+    # }
+    
+    # else
+    # {
+    # 	croak "no ruleset specified";
+    # }
     
     # Authenticate the user who made this request, and check that they have write permission on
     # the main table. 
@@ -497,154 +574,93 @@ sub addupdate_common {
     # hash. The url parameters will already have been validated against the ruleset before this
     # method is called, and if they are invalid an error response will already have been returned.
     
-    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset);
+    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset, @extra_flag);
     
-    # If extra allowances were specified, add them now. They can be specified either through the
-    # configuration or as additional arguments.
-
-    foreach my $value ( $config->{allowances}->@*, @extra )
+    # Then decode the body, and extract input records from it. The variable @table_list specifies
+    # which ruleset to use for different kinds of records, if there is more than one kind
+    # accepted. Any attribute values specified in $main_params override those in the individual
+    # records. If any validation errors are found, they are attached to the individual records
+    # under the key _errors.
+    
+    my (@records) = $request->parse_body_records($main_params, @table_list);
+    
+    # The next step is to create an object of class EditTransaction or one of its subclasses, to
+    # carry out this request.
+    
+    # If any records have validation errors, we cannot complete the request unless the allowance
+    # PROCEED was given. In that case, create the EditTransaction object in validation mode. This
+    # will validate the rest of the records against the database and do nothing else. This allows
+    # us to return a comprehensive result showing which of the submitted records were valid and
+    # which were not. Otherwise, create a regular EditTransaction object which will complete the
+    # request if possible.
+    
+    my $invalid_records = any { $_->{_errors} } @records;
+    
+    if ( $invalid_records && ! $allowances->{PROCEED} )
     {
-	croak "addupdate_common: invalid allowance '$value'" unless $class->has_allowance($value);
-	$allowances->{$value} = 1;
+	$allowances->{VALIDATION_MODE} = 1;
     }
-    
-    # Then decode the body, and extract input records from it. Any attribute values specified in
-    # $main_params override those in the individual records. If a parameter error is encountered,
-    # throw a code 400 exception unless the PROCEED allowance was given. In that case, the record
-    # will be skipped.
-    
-    my (@records) = $request->parse_body_records($allowances, $main_params, @ruleset_patterns);
-    
-    if ( $request->errors )
-    {
-	die $request->exception(400, "Bad request body");
-    }
-    
-    # If we get here without any errors being detected so far, create a new object to handle this
-    # operation. This will be of class EditTransaction unless a subclass was specified in the
-    # configuration.
     
     my $edt = $class->new($request, $perms, $main_table, $allowances);
     
-    # The next step is to iterate through the records extracted from the request body and process
-    # each one in turn. Every record will be validated against the corresponding database table,
-    # and if no errors are detected it will be queued up for insertion, updating, replacement,
-    # deletion, or some auxiliary operation.
-    
-    my $record_cleaner = $config->{record_cleaner};
-    my $record_handler = $config->{record_handler};
-    my $table_list = $config->{table_list};
-    
-    croak "the value of 'record_cleaner' must be a code ref or a method name"
-	if $record_cleaner && ref $record_cleaner && ref $record_cleaner ne 'CODE';
-    
-    croak "the value of 'record_handler' must be a code ref or a method name"
-        if $record_handler && ref $record_handler && ref $record_handler ne 'CODE';
-    
-    croak "the value of 'table_list' must be a list of lists" if $table_list &&
-	! ( ref $table_list eq 'ARRAY' && $table_list->@* &&
-	    ref $table_list->[0] eq 'ARRAY' && $table_list->[0]->@* );
+    # Now iterate through the records. The @AUX_TABLES list will collect the names of all tables
+    # used other than the main one. We use three different loops, depending on which of the table
+    # selection options was specified. If a record cleaning routine was specified, it is called
+    # for each record. The purpose of such a routine is to modify record values prior to insertion
+    # or update. For example, the interface developer may wish to allow certain attributes to be
+    # specified in ways that don't match the database structure and must be converted first. It
+    # can also select the table to be used by altering _table.
     
     my (%TABLE_USED, @AUX_TABLES);
     
     foreach my $r ( @records )
     {
-	# If a record cleaning routine was specified, call it first. The purpose of such routines
-	# is to modify record values prior to insertion or update. For example, the interface
-	# developer may wish to allow certain attributes to be specified in ways that don't match
-	# the database structure and must be converted first.
+	# If a record cleaner routine was defined, call it.
 	
-	if ( $record_cleaner )
+	$request->$record_cleaner($edt, $r, $main_table, $perms) if $record_cleaner;
+	
+	# If the key _table has a nonempty value, process this record with this table. Otherwise,
+	# use the main table.
+	
+	my $selected_table = $r->{_table} || $main_table;
+	delete $r->{_table};
+	
+	if ( $selected_table ne $main_table && ! $TABLE_USED{$selected_table} )
 	{
-	    $request->$record_cleaner($edt, $r, $main_table, $perms);
+	    croak "addupdate_common: bad table '$selected_table'" unless $TABLE{$selected_table};
+	    push @AUX_TABLES, $selected_table;
+	    $TABLE_USED{$selected_table} = 1;
 	}
 	
-	# For maximal control, a record handler may be specified. If so, it is expected to call
-	# either $edt->process_record or $edt->skip_record for every record it is given. It should
-	# return the name of the table in which this record was processed.
-	
-	if ( $record_handler )
-	{
-	    my $table_name = $request->$record_handler($edt, $r, $main_table, $perms);
-	    
-	    push @AUX_TABLES, $table_name unless $TABLE_USED{$table_name} || $table_name eq $main_table;
-	    $TABLE_USED{$table_name}++;
-	}
-	
-	# Otherwise, if the record includes the key _skip then call $edt->skip_record.
-	
-	elsif ( $r->{_skip} )
-	{
-	    $edt->skip_record($r);
-	}
-	
-	# Otherwise, if a table selector list is specified then use it to select the table that
-	# best matches this record. Each item in the list must be a list, in a format similar to
-	# the table-selection arguments to &parse_body_records. The first item must be a table
-	# name, and the remaining items the names of keys. If the record has a non-empty, non-zero
-	# value for any of these keys, that table will be selected. In most circumstances, the two
-	# lists will match. The ruleset selected for validating a record should correspond to the
-	# table in which that record will be stored. The last item can be a simple table name,
-	# which will select that table regardless, or 'NO_MATCH', which will reject the record.
-	
-	elsif ( $table_list )
-	{
-	    my ($table_name, @check_keys);
-	    
-	  PATTERN:
-	    foreach my $item ( $table_list->@* )
-	    {
-		if ( ref $item eq 'ARRAY' )
-		{
-		    ($table_name, @check_keys) = $item->@*;
-		    
-		    foreach $k ( @check_keys )
-		    {
-			last PATTERN if $r->{$k};
-		    }
-		}
-
-		elsif ( ref $item )
-		{
-		    my $type = reftype $item;
-		    croak "Invalid table_list pattern ($type)";
-		}
-
-		elsif ( $item )
-		{
-		    $table_name = $item;
-		    last PATTERN;
-		}
-	    }
-	    
-	    if ( $table_name && $table_name ne 'NO_MATCH' )
-	    {
-		$edt->process_record($table_name, $r);
-		push @AUX_TABLES, $table_name unless $TABLE_USED{$table_name} || $table_name eq $main_table;
-		$TABLE_USED{$table_name}++;
-	    }
-	    
-	    else
-	    {
-		my $label = $r->{_label} || "#$INDEX";
-		$request->errwarn($PROCEED, "E_UNRECOGNIZED ($label): Could not process record, no matching table");
-		$edt->skip_record($r);
-	    }
-	}
-	
-	# If none of these conditions hold, then call $edt->process_record with $main_table.
-	
-	else
-	{
-	    $edt->process_record($main_table, $r);
-	    $TABLE_USED{$main_table}++;
-	}
+	$edt->process_record($selected_table, $r);
     }
-        
-    # Now attempt to execute the queued actions inside a database transaction. If no database
-    # errors occur, and none occurred above, the transaction will be automatically committed. If
-    # any errors occurred, the transaction will be rolled back unless the PROCEED allowance was
-    # given. In that case, it will be committed after skipping any records that generated errors.
+    
+    # if ( $record_handler )
+    # {
+    # 	foreach my $r ( @records )
+    # 	{
+    # 	    $request->$record_cleaner($edt, $r, $main_table, $perms) if $record_cleaner;
+	    
+    # 	    my $table_name = $request->$record_handler($edt, $r, $main_table, $perms);
+
+    # 	    if ( $table_name )
+    # 	    {
+    # 		push @AUX_TABLES, $table_name unless $TABLE_USED{$table_name} || $table_name eq $main_table;
+    # 		$TABLE_USED{$table_name}++;
+    # 	    }
+    # 	}
+    # }
+	# # Otherwise, if the record includes either _skip or _errors then call $edt->skip_record.
+	
+	# elsif ( $r->{_skip} || $r->{_errors} )
+	# {
+	#     $edt->skip_record($r);
+	# }
+    
+    # 
+    
+    # Attempt to commit the database transaction. If any errors have occurred and PROCEED was not
+    # specified, it is automatically rolled back instead.
     
     $edt->commit;
     
@@ -719,8 +735,47 @@ sub addupdate_common {
     my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
     
     $request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+    }
+
+}
 
 
+sub validate_tabsel {
+
+    my ($request, $selector) = @_;
+
+    my ($table_name, $ruleset_name, $primary_key, @keylist);
+    
+    if ( ref $selector eq 'HASH' )
+    {
+	$table_name = $selector->{table} || '';
+	$ruleset_name = $selector->{ruleset} || '';
+	
+	if ( ref $selector->{keys} eq 'ARRAY' )
+	{
+	    @keylist = grep $selector->{keys}->@*;
+	}
+	
+	elsif ( ! ref $selector->{keys} )
+	{
+	    @keylist = grep split /,\s*/, $selector->{$keys};
+	}
+
+	unshift @keylist, $selector->{primary_key} if $selector->{primary_key};
+    }
+    
+    elsif ( ref $selector eq 'ARRAY' )
+    {
+	($table_name, $ruleset_name, @keylist) = $selector->@*;
+    }
+    
+    croak "addupdate_common: table name '$table_name' invalid in 'table_selector'"
+	unless $table_name && $TABLE{$table_name};
+    
+    croak "addupdate_common: ruleset name '$ruleset_name' invalid in 'table_selector'"
+	unless $ruleset_name && $request->{ds}->has_ruleset($ruleset_name);
+
+    return [$table_name, $ruleset_name, @keylist];
 }
 
 

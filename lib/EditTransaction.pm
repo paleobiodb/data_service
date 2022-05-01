@@ -54,7 +54,8 @@ our (%ALLOW_BY_CLASS) = ( EditTransaction => {
 		SILENT_MODE => 1,
 		IMMEDIATE_MODE => 1,
 		FIXUP_MODE => 1,
-		NO_LOG_MODE => 1 } );
+		NO_LOG_MODE => 1,
+		VALIDATE_MODE => 1 } );
 
 our (%CONDITION_BY_CLASS) = ( EditTransaction => {		     
 		C_CREATE => "Allow 'CREATE' to create records",
@@ -181,9 +182,9 @@ sub new {
 	weaken $edt->{request};
 	
 	$edt->{dbh} = $request_or_dbh->get_connection;
-	$edt->{debug} = $request_or_dbh->debug if $request_or_dbh->can('debug');
+	$edt->{debug_mode} = $request_or_dbh->debug if $request_or_dbh->can('debug');
 
-	$edt->{debug} = 0 if ref $allows eq 'HASH' &&
+	$edt->{debug_mode} = 0 if ref $allows eq 'HASH' &&
 	    defined $allows->{DEBUG_MODE} && ! $allows->{DEBUG_MODE};
 	
 	die "TEST NO CONNECT" if $TEST_PROBLEM{no_connect};
@@ -226,13 +227,6 @@ sub new {
 	if ( $ALLOW_BY_CLASS{$class}{$k} || $ALLOW_BY_CLASS{EditTransaction}{$k} )
 	{
 	    $edt->{allows}{$k} = 1;
-
-	    if ( $k eq 'PROCEED' ) { $edt->{proceed} = 1 }
-	    elsif ( $k eq 'NOT_FOUND' ) { $edt->{proceed} ||= 2 }
-	    elsif ( $k eq 'DEBUG_MODE' ) { $edt->{debug} = 1; $edt->{silent} = undef }
-	    elsif ( $k eq 'SILENT_MODE' ) { $edt->{silent} = 1 unless $edt->{debug} }
-	    elsif ( $k eq 'IMMEDIATE_MODE' ) { $edt->{execute_immediately} = 1 }
-	    elsif ( $k eq 'FIXUP_MODE' ) { $edt->{fixup_mode} = 1; }
 	}
 	
 	else
@@ -241,8 +235,24 @@ sub new {
 	}
     }
     
+    if ( $edt->{allows}->%* )
+    {
+	if ( $edt->{allows}{DEBUG_MODE} )
+	{
+	    $edt->{debug_mode} = 1;
+	    $edt->{silent_mode} = undef;
+	}
+
+	elsif ( $edt->{allows}{SILENT_MODE} )
+	{
+	    $edt->{silent_mode} = 1;
+	}
+
+	$edt->{execute_immediately} = 1 if $edt->{allows}{IMMEDIATE_MODE};
+    }	
+    
     # Throw an exception if we don't have a valid database handle. Otherwise, rollback any
-    # uncommitted work, since if there is previous work on THIS DATABASE CONNECTION that qwasn't
+    # uncommitted work, since if there is previous work on THIS DATABASE CONNECTION that wasn't
     # explicitly committed before creating this new transaction then something is wrong.
     
     croak "missing dbh" unless ref $edt->{dbh};
@@ -250,7 +260,7 @@ sub new {
     # Now set the database handle attributes properly.
     
     $edt->{dbh}->{RaiseError} = 1;
-    $edt->{dbh}->{PrintError} = 0; # $edt->{debug};
+    $edt->{dbh}->{PrintError} = 0; # $edt->{debug_mode};
     
     # If IMMEDIATE_MODE was specified, then immediately start a new transaction. The same effect
     # can be provided by calling the method 'start_execution' on this new object.
@@ -339,7 +349,7 @@ sub perms {
 
 sub debug {
     
-    return $_[0]->{debug};
+    return $_[0]->{debug_mode};
 }
 
 
@@ -429,7 +439,7 @@ sub get_attr_hash {
 
 sub error_line {
 
-    return if ref $_[0] && $_[0]->{silent};
+    return if ref $_[0] && $_[0]->{silent_mode};
     
     my ($edt, $line) = @_;
     
@@ -452,7 +462,7 @@ sub error_line {
     
 sub debug_line {
     
-    return unless ref $_[0] && $_[0]->{debug} && ! $_[0]->{silent};
+    return unless ref $_[0] && $_[0]->{debug_mode} && ! $_[0]->{silent_mode};
     
     my ($edt, $line) = @_;
     
@@ -488,7 +498,7 @@ sub debug_mode {
 
     my ($edt, $new_value) = @_;
 
-    $edt->{debug} = $new_value;
+    $edt->{debug_mode} = $new_value;
 }
 
 
@@ -501,7 +511,7 @@ sub silent_mode {
     
     my ($edt, $new_value) = @_;
 
-    $edt->{silent} = $new_value;
+    $edt->{silent_mode} = $new_value;
 }
 
 
@@ -706,7 +716,8 @@ sub add_condition {
 	    # If this transaction allows either PROCEED or NOT_FOUND, then we demote this
 	    # error to a warning. But in the latter case, only if it is E_NOT_FOUND.
 	    
-	    if ( $edt->{proceed} && ( $edt->{proceed} == 1 || $code eq 'E_NOT_FOUND' ) )
+	    # if ( $edt->{proceed} && ( $edt->{proceed} == 1 || $code eq 'E_NOT_FOUND' ) )
+	    if ( $edt->{allows}{PROCEED} || $edt->{allows}{NOT_FOUND} && $code eq 'E_NOT_FOUND' )
 	    {
 		substr($code,0,1) =~ tr/CE/DF/;
 		
@@ -2134,6 +2145,22 @@ sub delete_cleanup {
 }
 
 
+# skip_record ( )
+# 
+# Increment the record count, but ignore the record itself. This should be called for records that
+# have been determined to be invalid before they are passed to this module. The record count is
+# used in generating labels for subsequent records.
+
+sub skip_record {
+
+    my ($edt, $record) = @_;
+    
+    my $action = $edt->_new_record($table, 'skip', $record);
+
+    return $edt->_handle_action($action);
+}
+    
+
 # process_record ( table, record )
 # 
 # Call either 'insert_record' or 'update_record', depending on whether the record has a value for
@@ -2144,7 +2171,7 @@ sub process_record {
     
     my ($edt, $table, $record) = @_;
 
-    if ( $record->{_skip} )
+    if ( $record->{_skip} || $record->{_errors} )
     {
 	return $edt->skip_record($record);
     }
@@ -2202,20 +2229,6 @@ sub insert_update_record {
     $edt->process_record($table, $record);
 }
 
-
-# skip_record ( )
-# 
-# Increment the record count, but ignore the record itself. This should be called for records that
-# have been determined to be invalid before they are passed to this module. The record count is
-# used in generating labels for subsequent records.
-
-sub skip_record {
-
-    my ($edt, $record) = @_;
-    
-    $edt->{record_count}++;
-}
-    
 
 # other_action ( table, method, record )
 # 
@@ -5474,7 +5487,7 @@ sub validate_against_schema {
 			    $error = 1;
 			}
 			
-			unless ( $edt->{fixup_mode} || $edt->allows('ALTER_TRAIL') )
+			unless ( $edt->{allows}{FIXUP_MODE} || $edt->{allows}{ALTER_TRAIL} )
 			{
 			    $edt->add_condition($action, 'C_ALTER_TRAIL');
 			    $error = 1;
@@ -5554,7 +5567,7 @@ sub validate_against_schema {
 		    # question. If 'modifier_no' is specifically a key in the action, with an undefined
 		    # value, then skip this section because the user wants it treated normally.
 		    
-		    elsif ( $operation ne 'insert' && $col eq 'modifier_no' && $edt->{fixup_mode} &&
+		    elsif ( $operation ne 'insert' && $col eq 'modifier_no' && $edt->{allows}{FIXUP_MODE} &&
 			    ! exists $record->{$col} )
 		    {
 			if ( $permission !~ /admin/ )
