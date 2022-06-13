@@ -1,7 +1,7 @@
 # 
 # The Paleobiology Database
 # 
-#   TestEdit.pm - a class for use in testing EditTransaction.pm
+#   EditTest.pm - a class for use in testing EditTransaction.pm
 #   
 #   This class is a subclass of EditTransaction, and is used by the unit tests
 #   for EditTransaction and its related classes.
@@ -21,9 +21,9 @@ use Try::Tiny;
 
 use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
 
-use base 'EditTransaction';
+use parent 'EditTransaction';
 
-use namespace::clean;
+# use namespace::clean;
 
 # Table names
 
@@ -167,7 +167,7 @@ sub authorize_action {
 	}
     }
     
-    return EditTransaction::authorize_action(@_);
+    return $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
 }
 
 
@@ -223,7 +223,7 @@ sub validate_action {
 	}
     }
     
-    return EditTransaction::validate_action(@_);
+    return $edt->SUPER::validate_action($action, $operation, $table, $keyexpr);
 }
 
 
@@ -285,7 +285,7 @@ sub initialize_transaction {
     
     $edt->{save_init_count}++;
     $edt->{save_init_table} = $table;
-    $edt->{save_init_status} = $edt->transaction;
+    $edt->{save_init_status} = $edt->status;
 }
 
 
@@ -316,7 +316,7 @@ sub finalize_transaction {
     
     $edt->{save_final_count}++;
     $edt->{save_final_table} = $table;
-    $edt->{save_final_status} = $edt->transaction;
+    $edt->{save_final_status} = $edt->status;
 }
 
 
@@ -331,7 +331,7 @@ sub cleanup_transaction {
     
     $edt->{save_cleanup_count}++;
     $edt->{save_cleanup_table} = $table;
-    $edt->{save_cleanup_status} = $edt->transaction;
+    $edt->{save_cleanup_status} = $edt->status;
 }
 
 

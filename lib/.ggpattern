@@ -1,4 +1,7 @@
-pm: <$> *.pm PB2/*.pm
+pm: *.pm EditTransaction/*.pm PB2/*.pm
 edt: *.pm EditTransaction/*.pm
-wds: <$> Web/DataService/*.pm Web/DataService/*/*.pm
-wdspod: <$>  Web/DataService/*.pod Web/DataService/*/*.pod
+pmt: *.pm EditTransaction/*.pm PB2/*.pm ../t/*.t ../t/*.pm
+edtt: *.pm EditTransaction/*.pm ../t/*.t ../t/*.pm
+t: ../t/*.t ../t/*.pm
+wds: Web/DataService/*.pm Web/DataService/*/*.pm
+wdspod: Web/DataService/*.pod Web/DataService/*/*.pod

@@ -18,17 +18,19 @@ use TableDefs qw(get_table_property);
 
 use EditTransaction;
 use Carp qw(carp croak);
+use Scalar::Util qw(reftype);
 
 use namespace::clean;
 
 
-our %OPERATION_TYPE = ( insert => 'record', update => 'record', replace => 'record',
+our %OPERATION_TYPE = ( skip => 'record',
+			insert => 'record', update => 'record', replace => 'record',
 			update_many => 'selector', 
-			delete => 'single', delete_cleanup => 'selector',
-			delete_many => 'selector', bad => 'record', other => 'record' );
+			delete => 'keys', delete_cleanup => 'keys',
+			delete_many => 'selector', other => 'keys' );
 
 
-# Create a new action record with the specified information.
+# Create a new action object with the specified information.
 
 sub new {
     
@@ -36,41 +38,45 @@ sub new {
     
     # Start by checking that we have the required attributes.
     
-    croak "a non-empty table name is required" unless $table;
-    
     unless ( $operation && $OPERATION_TYPE{$operation} )
     {
 	$operation ||= '';
 	croak "unknown operation '$operation'";
     }
     
-    # Create an action object.
+    # Create a basic object to represent this action.
     
-    my ($action) = { table => $table,
-		     operation => $operation,
-		     record => $record,
-		     label => $label,
-		     status => '' };
+    my $action = { table => $table,
+		   operation => $operation,
+		   record => $record,
+		   label => $label,
+		   status => '' };
+
+    bless $action, $class;
     
-    # If the record has a primary key and a non-empty key attribute, store these in the action
+    # If the operation is 'skip', return the new object immediately.
+    
+    if ( $operation eq 'skip' )
+    {
+	return $action;
+    }
+    
+    # A valid table name is not required for a skipped action, but is required for every other kind of action. It is # important to note that for the 'other' operation, the table name is not required to be the # one actually used to construct database statements.
+    
+    # If the we are given a key value or a list of key values, store these in the action
     # record. This will be used to fetch information about the record, such as the authorization
-    # fields. If the operation is 'delete' or 'other' then we accept a single key value in lieu of a
-    # hashref representing a record.
+    # fields. This step is only taken if the specified table has a non-empty PRIMARY_KEY
+    # attribute.
+
+    my ($key_column, $key_value);
     
-    if ( my $key_column = get_table_property($table, 'PRIMARY_KEY') )
+    if ( $key_column = get_table_property($table, 'PRIMARY_KEY') )
     {
 	$action->{keycol} = $key_column;
 	
-	# The 'delete' and 'other' operations can accept a single key value rather than a record hash.
+	# If the $record parameter is a hash ref, look for key values there.
 	
-	if ( ($operation eq 'delete' || $operation eq 'other' ) && ref $record ne 'HASH' )
-	{
-	    $action->{keyval} = $record;
-	}
-	
-	# In all other cases, there will be no key value unless $record points to a hash.
-	
-	elsif ( ref $record eq 'HASH' )
+	if ( ref $record && reftype $record eq 'HASH' )
 	{
 	    # First check to see if the record contains a value under the key column name.
 	    
@@ -106,7 +112,14 @@ sub new {
 	}
     }
     
-    return bless $action, $class;
+    return $action;
+}
+
+
+sub _simple {
+
+    my ($class, $table, $operation, $record, $label) = @_;
+
 }
 
 
@@ -114,39 +127,44 @@ sub new {
 
 sub table {
 
-    return $_[0]{table};
+    return $_[0]->{table};
 }
 
 
 sub operation {
     
-    return $_[0]{operation};
+    return $_[0]->{operation};
 }
 
 
 sub record {
     
-    unless ( ref $_[0]{record} eq 'HASH' )
+    unless ( ref $_[0]->{record} eq 'HASH' )
     {
-	return unless $_[0]{operation} eq 'delete' && defined $_[0]{record};
-	# croak "no record defined for this action" unless $_[0]->{operation} eq 'delete' && defined $_[0]->{record};
-	# croak "record must be a hash ref or scalar" if ref $_[0]->{record};
-	return { $_[0]{keycol} => $_[0]{record} };
+	if ( $_[0]->{operation} eq 'delete' && defined $_[0]->{record} )
+	{
+	    return { $_[0]->{keycol} => $_[0]->{record} };
+	}
+
+	else
+	{
+	    return;
+	}
     }
     
-    return $_[0]{record};
+    return $_[0]->{record};
 }
 
 
 sub selector {
 
-    return $_[0]{selector};
+    return $_[0]->{selector};
 }
 
 
 sub label {
     
-    return $_[0]{label};
+    return $_[0]->{label};
 }
 
 
@@ -156,26 +174,76 @@ sub status {
 }
 
 
-sub root {
+sub can_proceed {
 
-    return $_[0]{root};
+    return ! $_[0]{status} && ! ($_[0]{errors} && $_[0]{errors}->@*);
 }
 
 
-sub is_aux {
+sub has_completed {
 
-    return $_[0]{is_aux};
+    return $_[0]{status};
+}
+
+
+sub has_succeeded {
+    
+    return $_[0]{status} eq 'executed' && ! ($_[0]{errors} && $_[0]{errors}->@*);
+}
+
+
+sub errors {
+
+    return unless $_[0]->{errors};
+    return $_[0]->{errors}->@*;
+}
+
+
+sub warnings {
+
+    return unless $_[0]->{warnings};
+    return $_[0]->{warnings}->@*;
+}
+
+
+sub parent {
+
+    return $_[0]->{parent};
+}
+
+
+sub is_child {
+
+    return $_[0]->{is_child};
 }
 
 
 sub record_value {
-
-    unless ( ref $_[0]{record} eq 'HASH' )
-    {
-	return $_[0]{operation} eq 'delete' && $_[1] eq $_[0]{keycol} && defined $_[0]{record} ? $_[0]{record} : undef;
-    }
     
-    return defined $_[1] ? $_[0]{record}{$_[1]} : undef;
+    if ( ref $_[0]{record} eq 'HASH' )
+    {
+	return defined $_[1] ? $_[0]{record}{$_[1]} : undef;
+    }
+
+    elsif ( $_[0]{operation} eq 'delete' )
+    {
+	return $_[1] eq $_[0]{keycol} && defined $_[0]{record} ? $_[0]{record} : undef;
+    }
+
+    return;
+}
+
+
+sub record_value_alt {
+    
+    my ($action, @fields) = @_;
+    
+    foreach my $f ( @fields )
+    {
+	return $action->{record}{$f} if defined $action->{record}{$f};
+    }
+
+    return;
 }
 
 
@@ -305,6 +373,12 @@ sub is_multiple {
 }
 
 
+sub is_single {
+
+    return ! $_[0]{additional};
+}
+
+
 sub action_count {
     
     return $_[0]{additional} ? scalar(@{$_[0]{additional}}) + 1 : 1;
@@ -325,19 +399,49 @@ sub all_labels {
 }
 
 
-sub has_errors {
+# Public mutator methods.
 
-    return $_[0]{error_count};
+# attr ( attr, [value] )
+# 
+# If a value is provided, attach the specified attribute to this action if it isn't already
+# there. Set the attribute to the value provided, including the undefined value. If only the first
+# argument is given, return the current value of the attribute if it exists, undefined otherwise.
+
+sub attr {
+    
+    my ($action, $attr, $value) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    
+    if ( @_ == 3 )
+    {
+	$action->{attrs}{$attr} = $value;
+    }
+    
+    return $action->{attrs}{$attr};
 }
 
 
-sub has_warnings {
+# errors_are_fatal ( [value] )
+# 
+# If a true value is specified, subsequent errors added to this action will be fatal even if this
+# transaction allows PROCEED. If a false value is specified, subsequent errors will again be
+# eligible for demotion to warnings. If no value is provided, the current value is returned.
 
-    return $_[0]{warning_count};
+sub errors_are_fatal {
+
+    my ($action, $arg) = @_;
+    
+    if ( defined $arg )
+    {
+	$action->{errors_are_fatal} = ($arg ? 1 : undef);
+    }
+
+    return $action->{errors_are_fatal};
 }
 
 
-# We have very few mutator methods, because almost all the attributes of an action are immutable.
+# The following methods are non-public. They should only be called from EditTransaction.pm and Validate.pm
 
 sub _set_status {
 
@@ -347,13 +451,16 @@ sub _set_status {
 }
 
 
-sub _set_auxiliary {
+sub _add_child {
     
-    my ($action, $root) = @_;
+    my ($action, $aux_action) = @_;
     
-    $action->{root} = $root;
-    $action->{label} ||= $root->{label};
-    $action->{is_aux} = 1;
+    push $action->{child}->@*, $aux_action;
+    $aux_action->{parent} = $action;
+    $aux_action->{label} ||= $action->{label};
+    $aux_action->{is_child} = 1;
+
+    return $aux_action;
 }
 
 
@@ -363,6 +470,16 @@ sub _set_permission {
     
     croak "you must specify a non-empty permission" unless defined $permission;
     $action->{permission} = $permission;
+}
+
+
+sub _authorize_later {
+
+    my ($action, $linkref, $move) = @_;
+
+    $action->{permission} = 'later';
+    $action->{linkref} = $linkref;
+    $action->{c_move} = 1 if $move;
 }
 
 
@@ -443,120 +560,35 @@ sub substitute_label {
 }
 
 
-sub add_error {
+sub _add_error {
 
-    $_[0]{error_count}++;
+    my ($action, $condition) = @_;
+    
+    $action->{error} = [ ] unless ref $action->{errors} eq 'ARRAY';
+    push $action->{errors}->@*, $condition;
 }
 
 
-sub add_warning {
+sub _add_warning {
 
-    $_[0]{warning_count}++;
+    my ($action, $condition) = @_;
+
+    $action->{warnings} = [ ] unless ref $action->{errors} eq 'ARRAY';
+    push $action->{warnings}->@*, $condition;
 }
 
 
-# Actions also need to keep track of special instructions for various table columns. The following
-# instructions are available for any given column, and specify how any value that may be present
-# in the action's record should be treated:
-#
-#  ignore	Skip this column value entirely, and do not use it to construct SQL statements.
-#		This can be used to mark hash keys that exist in the action record for some other
-#		purpose and do not correspond to table columns.
-#  
-#  pass		Use this column value, but do not add the automatic checks. Assume that the value
-#		has passed all necessary checks.
-#  
-#  validate	Run the automatic validation checks on this column value. This is the same as no
-#		special instruction at all.
-#  
-# These instructions can be given both for table column names and for alternate field names.
+# sub ignore_column {
 
-# column_special ( arg, column_name... )
-#
-# If the first argument is a hashref, then assume that its keys are column names and its values
-# are instructions. Otherwise, record the special instruction given by $arg for each of the given
-# column names.
+#     my ($action, $column_name) = @_;
+
+#     $action->{colspec}{$column_name} = 'ignore' if $column_name;
+# }
+
 
 sub column_special {
-    
-    my ($action, $special, @cols) = @_;
 
-    # If the first argument is a hashref, just copy in the contents.
-
-    if ( ref $special eq 'HASH' )
-    {
-	foreach my $col ( keys %$special )
-	{
-	    $action->{column_special}{$col} = $special->{$col};
-	}
-    }
-    
-    # Otherwise, set the special treatment of the indicated columns to the indicated value.
-
-    else
-    {
-	croak "the first argument must be either 'pass' or 'ignore' or 'validate'"
-	    unless $special && ($special eq 'pass' || $special eq 'ignore' || $special eq 'validate');
-	
-	foreach my $col ( @cols )
-	{
-	    $action->{column_special}{$col} = $special if $col;
-	}
-    }
-}
-
-
-sub ignore_column {
-    
-    my ($action, $col) = @_;
-
-    $action->{column_special}{$col} = 'ignore';
-}
-
-
-sub pass_column {
-
-    my ($action, $col) = @_;
-
-    $action->{column_special}{$col} = 'pass';
-}
-
-
-sub ignore_field {
-
-    my ($action, $field) = @_;
-
-    $action->{ignore_field}{$field} = 1;
-}
-
-
-# get_special ( column_name )
-# 
-# Return the special column instruction for this column name, or the default if there are none.
-
-sub get_special {
-    
-    my ($action, $column_name) = @_;
-    
-    return $action->{column_special}{$column_name} || 'validate';
-}
-
-
-# We also have a facility to set and get general action attributes.
-
-sub set_attr {
-
-    my ($action, $attr, $value) = @_;
-    
-    croak "you must specify an attribute name" unless $attr;
-    $action->{attrs}{$attr} = $value;
-}
-
-
-sub get_attr {
-
-    croak "you must specify an attribute name" unless $_[1];
-    return $_[0]->{attrs} ? $_[0]->{attrs}{$_[1]} : undef;
+    return $_[0]->{colspec} && $_[0]->{colspec}{$_[1]};
 }
 
 
@@ -565,50 +597,55 @@ sub get_attr {
 # processed so far into the corresponding keys.
 
 sub _coalesce {
-
-    my ($action, $label_keys, @additional) = @_;
     
-    my $operation = $action->operation;
-    
-    if ( $operation eq 'delete' )
-    {
-	return unless @additional;
-	
-	$action->{all_keys} = [ $action->{keyval} ];
-	$action->{all_labels} = [ $action->{label} ];
-	$action->{additional} = [ ];
-	
-	foreach my $a ( @additional )
-	{
-	    next unless $a && defined $a->{keyval} && $a->{keyval} ne '';
-	    
-	    if ( $label_keys && $a->{keyval} =~ /^@(.*)/ )
-	    {
-		my $label = $1;
-		
-		$a->{keyval} = $label_keys->{$label} if $label_keys->{$label};
-	    }
-	    
-	    push @{$action->{all_keys}}, $a->{keyval};
-	    push @{$action->{all_labels}}, $a->{label};
-	    push @{$action->{additional}}, $a;
-	}
+    my ($action, $additional) = @_;
 
-	# Now delete the old key expression. A new one will need to be generated if necessary.
-	
-	$action->{key_expr} = undef;
-    }
-
-    elsif ( $operation eq 'insert' )
-    {
-	...
-    }
-
-    else
-    {
-	croak "you cannot coalesce a '$operation' operation";
-    }
+    $action->{additional} = $additional;
 }
+    
+    # my ($action, $label_keys, @additional) = @_;
+    
+#     my $operation = $action->operation;
+    
+#     if ( $operation eq 'delete' )
+#     {
+# 	return unless @additional;
+	
+# 	$action->{all_keys} = [ $action->{keyval} ];
+# 	$action->{all_labels} = [ $action->{label} ];
+# 	$action->{additional} = [ ];
+	
+# 	foreach my $a ( @additional )
+# 	{
+# 	    next unless $a && defined $a->{keyval} && $a->{keyval} ne '';
+	    
+# 	    if ( $label_keys && $a->{keyval} =~ /^@(.*)/ )
+# 	    {
+# 		my $label = $1;
+		
+# 		$a->{keyval} = $label_keys->{$label} if $label_keys->{$label};
+# 	    }
+	    
+# 	    push @{$action->{all_keys}}, $a->{keyval};
+# 	    push @{$action->{all_labels}}, $a->{label};
+# 	    push @{$action->{additional}}, $a;
+# 	}
+
+# 	# Now delete the old key expression. A new one will need to be generated if necessary.
+	
+# 	$action->{key_expr} = undef;
+#     }
+
+#     elsif ( $operation eq 'insert' )
+#     {
+# 	...
+#     }
+
+#     else
+#     {
+# 	croak "you cannot coalesce a '$operation' operation";
+#     }
+# }
 
 
 1;

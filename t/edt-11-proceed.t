@@ -13,13 +13,14 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 4;
+use Test::More tests => 3;
 
 use TableDefs qw(%TABLE get_table_property);
 
 use EditTest;
 use EditTester;
 
+$DB::single = 1;
 
 # The following call establishes a connection to the database, using EditTester.pm.
 
@@ -131,7 +132,13 @@ subtest 'proceed_mode' => sub {
     $result = $edt->execute;
     
     ok( $result, "transaction succeeded in PROCEED" ) || $T->diag_errors;
-    is( $edt->warning_strings, 4, "got 4 warnings" ) || $T->diag_warnings;
+    is( $T->conditions('nonfatal'), 4, "got 4 demoted errors" ) || $T->diag_warnings;
+    is( $edt->record_count, 7, "record_count of 7 with PROCEED" );
+    is( $edt->action_count, 3, "action_count of 3 with PROCEED" );
+    is( $edt->fail_count, 4, "fail_count of 4 with PROCEED" );
+    is( $edt->actions('executed'), 3, "got 3 executed action records with PROCEED" );
+    is( $edt->actions('notex'), 4, "got 4 failed action records with PROCEED" );
+    is( $edt->actions('all'), 7, "got 7 total action records with PROCEED" );
     
     $T->ok_has_error('F_NOT_FOUND', "got 'F_NOT_FOUND'");
     $T->ok_has_error('F_EXECUTE', "got 'F_EXECUTE'");
@@ -141,7 +148,7 @@ subtest 'proceed_mode' => sub {
     $T->ok_no_record('EDT_TEST', "signed_val=9");
     $T->ok_found_record('EDT_TEST', "signed_val=10");
     $T->ok_no_record('EDT_TEST', "signed_val=11");
-
+    
     $T->ok_no_record('EDT_TEST', "string_req='proceed test delete'");
 };
 
@@ -195,7 +202,13 @@ subtest 'not_found' => sub {
     $result = $edt->commit;
     
     ok( $result, "transaction succeeded with NOT_FOUND" ) || $T->diag_errors;
-    is( $edt->warnings, 3, "got 3 warnings" ) || $T->diag_warnings;
+    is( $T->conditions('nonfatal'), 3, "got 3 demoted errors" ) || $T->diag_warnings;
+    is( $edt->record_count, 6, "record_count of 6 with NOT_FOUND" );
+    is( $edt->action_count, 3, "action_count of 3 with NOT_FOUND" );
+    is( $edt->fail_count, 3, "fail_count of 3 with NOT_FOUND" );
+    is( $edt->actions('executed'), 3, "got 3 executed action records with NOT_FOUND" );
+    is( $edt->actions('notex'), 3, "got 3 failed action records with NOT_FOUND" );
+    is( $edt->actions('all'), 6, "got 6 total action records with NOT_FOUND" );
     $T->ok_has_error('F_NOT_FOUND', "got 'F_NOT_FOUND'");
     
     $T->ok_found_record('EDT_TEST', "signed_val=21");
@@ -231,44 +244,44 @@ subtest 'not_found' => sub {
 };
 
 
-# Then test the NO_RECORDS allowance. This allows a transaction to be committed even if there are
-# no valid completed actions.
+# # Then test the NO_RECORDS allowance. This allows a transaction to be committed even if there are
+# # no valid completed actions.
 
-subtest 'no_records' => sub {
+# subtest 'no_records' => sub {
     
-    my ($edt, $result);
+#     my ($edt, $result);
     
-    # Clear the table so we can check for proper record insertion.
+#     # Clear the table so we can check for proper record insertion.
     
-    $T->clear_table('EDT_TEST');
+#     $T->clear_table('EDT_TEST');
     
-    # Then create a transaction and execute it without any actions.
+#     # Then create a transaction and execute it without any actions.
 
-    $edt = $T->new_edt($perm_a);
-    $edt->start_transaction;
+#     $edt = $T->new_edt($perm_a);
+#     $edt->start_transaction;
     
-    $result = $edt->execute;
+#     $result = $edt->execute;
     
-    ok( ! $result, "transaction failed" );
-    is( $edt->transaction, 'aborted', "transaction was rolled back" );
-    $T->ok_has_error( 'C_NO_RECORDS', "found no records caution" );
+#     ok( ! $result, "transaction failed" );
+#     is( $edt->transaction, 'aborted', "transaction was rolled back" );
+#     $T->ok_has_error( 'C_NO_RECORDS', "found no records caution" );
     
-    is( $edt->{save_init_count}, 1, "initialize_transaction was called" );
-    ok( ! $edt->{save_final_count}, "finalize_transaction was not called" );
-    is( $edt->{save_cleanup_count}, 1, "cleanup_transaction was called" );
+#     is( $edt->{save_init_count}, 1, "initialize_transaction was called" );
+#     ok( ! $edt->{save_final_count}, "finalize_transaction was not called" );
+#     is( $edt->{save_cleanup_count}, 1, "cleanup_transaction was called" );
     
-    # Then create a transaction with NO_RECORDS mode and start it immediately. Check that it
-    # commits properly.
+#     # Then create a transaction with NO_RECORDS mode and start it immediately. Check that it
+#     # commits properly.
     
-    $edt = $T->new_edt($perm_a, { NO_RECORDS => 1 });
-    $edt->start_transaction;
+#     $edt = $T->new_edt($perm_a, { NO_RECORDS => 1 });
+#     $edt->start_transaction;
     
-    $result = $edt->execute;
+#     $result = $edt->execute;
     
-    ok( $result, "transaction succeeded with NO_RECORDS" ) || $T->diag_errors;
-    is( $edt->transaction, 'committed', "transaction committed" );
-    ok( ! $edt->errors, "no errors were generated" );
+#     ok( $result, "transaction succeeded with NO_RECORDS" ) || $T->diag_errors;
+#     is( $edt->transaction, 'committed', "transaction committed" );
+#     ok( ! $edt->errors, "no errors were generated" );
     
-    is( $edt->{save_init_count}, 1, "initialize_transaction was called" );
-    is( $edt->{save_final_count}, 1, "finalize_transaction was called" );
-};
+#     is( $edt->{save_init_count}, 1, "initialize_transaction was called" );
+#     is( $edt->{save_final_count}, 1, "finalize_transaction was called" );
+# };

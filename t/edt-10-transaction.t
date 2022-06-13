@@ -21,12 +21,12 @@ use EditTest;
 use EditTester;
 
 
+$DB::single = 1;
+
 # The following call establishes a connection to the database, using EditTester.pm and selecting
 # EditTest as the subclass of EditTransaction to instantiate.
 
 my $T = EditTester->new({ subclass => 'EditTest' });
-
-
 
 my ($perm_a, $primary);
 
@@ -181,9 +181,9 @@ subtest 'execute' => sub {
 
     $edt = $T->new_edt($perm_a);
 
-    ok( ! $edt->commit, "commit returns false if called before transaction start" );
+    ok( $edt->commit, "commit returns true if called before transaction start" );
     ok( $edt->has_finished, 'transaction has finished' );
-    is( $edt->transaction, 'finished', "status is 'finished'" );
+    is( $edt->transaction, 'committed', "status is 'committed'" );
 };
 
 
@@ -362,9 +362,12 @@ subtest 'errors' => sub {
     
     ok( $edt->insert_record('EDT_TEST', { string_req => 'insert okay' }), "insert succeeded" );
     ok( ! $edt->insert_record('EDT_TEST', { string_val => 'string_req is empty' }), "insert failed" );
-    ok( ! $edt->insert_record('EDT_TEST', { string_req => 'after error' }), "insert failed" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_req => 'not executed' }),
+		"insert failed due to prior error" );
+    ok( ! $edt->insert_record('EDT_TEST', { string_req => 'foobar', _errwarn => ['E_PARAM', "parameter error"] }),
+		"insert failed with included error");
     
-    is( $edt->errors, 1, "one error was generated" );
+    is( $edt->errors, 2, "one error was generated" );
     ok( ! $edt->has_started, "transaction has not started" );
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
     
@@ -383,14 +386,16 @@ subtest 'errors' => sub {
     ok( $edt->has_started, "transaction has started" );
     ok( $edt->has_finished, "transaction has finished" );
     ok( ! $edt->can_proceed, "transaction cannot proceed" );
-    is( $edt->transaction, 'finished', "transaction neither committed nor aborted" );
+    is( $edt->transaction, 'aborted', "transaction has aborted" );
     ok( ! $edt->{save_init_count}, "initialize_transaction did not run" );
     ok( ! $edt->{save_init_count}, "finalize_transaction did not run" );
     ok( ! $edt->{save_init_count}, "cleanup_transaction did not run" );
     ok( ! $edt->failed_keys, "insertion did not leave a failed key" );
-    is( $edt->record_count, 3, "received 3 records" );
-    is( $edt->fail_count, 1, "one action failed" );
+    is( $edt->record_count, 4, "received 4 records" );
+    is( $edt->fail_count, 3, "three actions failed" );
+    is( $edt->skip_count, 1, "one action skipped" );
     is( $edt->action_count, 0, "no actions succeeded" );
+    is( $edt->errors, 2, "two errors were generated" );
     $T->ok_no_record('EDT_TEST', "string_req='insert okay'");
     
     # Check that we can continue to do operations on a transaction that has failed. Records that
@@ -398,20 +403,20 @@ subtest 'errors' => sub {
 
     eval {
 	ok( ! $edt->insert_record('EDT_TEST', { string_req => 'good record' }), "insert failed" );
-	is( $edt->fail_count, 1, "fail count was not incremented" );
+	is( $edt->fail_count, 3, "fail count was not incremented" );
 	ok( ! $edt->insert_record('EDT_TEST', { string_val => 'bad record!' }), "insert failed" );
-	is( $edt->fail_count, 2, "fail count was incremented" );
-	is( $edt->errors, 2, "two errors were generated" ) || $T->diag_errors($edt, 'any');
-	is( $edt->record_count, 5, "received 5 records in total" );
+	is( $edt->fail_count, 4, "fail count was incremented" );
+	is( $edt->errors, 3, "three errors were generated" ) || $T->diag_errors($edt);
+	is( $edt->record_count, 6, "received 6 records in total" );
     };
-
+    
     ok( !$@, "no errors on inserts after failure" ) || diag("message was: $@");    
     
-    # Check that we can call 'commit' and 'rollback' on this failed transaction. Both should
-    # return false.
-
+    # Check that we can call 'commit' and 'rollback' on this failed transaction. The first should
+    # return false, the second true.
+    
     my ($commit, $rollback);
-
+    
     eval {
 	$commit = $edt->commit;
 	$rollback = $edt->rollback;
@@ -420,8 +425,8 @@ subtest 'errors' => sub {
     ok( !$@, "no errors on commit and rollback" ) || diag("message was: $@");
     
     ok( ! $commit, "commit returns false, because transaction did succeed" );
-    ok( ! $rollback, "rollback returns false, because it is too late to roll back" );
-    is( $edt->transaction, 'finished', "transaction status is still 'finished'" );
+    ok( $rollback, "rollback returns false, because it is too late to roll back" );
+    is( $edt->transaction, 'aborted', "transaction status is still 'aborted'" );
     
     # Now create another transaction, but this time start execution. Do the same sequence of
     # operations. The third insertion should not actually be done, since the second one already
@@ -457,7 +462,7 @@ subtest 'errors' => sub {
     $edt = $T->new_edt($perm_a, { IMMEDIATE_MODE => 1 });
     
     ok( $edt->insert_record('EDT_TEST', { string_req => 'insert okay' }), "insert succeeded" );
-    ok( ! $edt->insert_record('EDT_TEST', { string_req => 'after error' }), "insert failed though SQL succeeded" );
+    ok( $edt->insert_record('EDT_TEST', { string_req => 'after error' }), "insert succeeded, but error was added" );
     ok( ! $edt->insert_record('EDT_TEST', { string_val => 'string_req is empty' }), "insert failed" );
     
     is( $edt->transaction, 'active', "transaction is active" );
@@ -467,7 +472,8 @@ subtest 'errors' => sub {
     ok( ! $edt->{save_cleanup_count}, "cleanup_transaction has not executed" );
     
     $result = $edt->execute;
-    
+
+    ok( ! $result, "execution failed" );
     is( $edt->transaction, 'aborted', "transaction aborted" );
     is( $edt->errors, 2, "error count did not change" );
     is( $edt->record_count, 3, "received 3 records" );
@@ -519,11 +525,11 @@ subtest 'rollback' => sub {
     
     $result = $edt->rollback;
     
-    ok( ! $result, "rollback returned false because the transaction was not yet active" );
+    ok( $result, "rollback returned true although the transaction was not yet active" );
     ok( ! $edt->is_active, "transaction is still not active" );
     ok( ! $edt->can_proceed, "transaction can not proceed" );
     ok( $edt->has_finished, "transaction has finished" );
-    is( $edt->transaction, 'finished', "transaction status is 'finished'" );
+    is( $edt->transaction, 'abandoned', "transaction status is 'abandoned'" );
     ok( ! $edt->errors, "no errors on this transaction" );
     
     # Check that the transaction really was rolled back.
@@ -534,12 +540,12 @@ subtest 'rollback' => sub {
     # okay too. Both should return false.
     
     eval {
-	ok( ! $edt->rollback, "rollback returned false a second time" );
+	ok( $edt->rollback, "rollback returned true a second time" );
 	ok( ! $edt->commit, "commit returned false after rollback" );
     };
     
     ok( !$@, "no error message on commit or rollback" ) || diag("message was: $@");
-    is( $edt->transaction, 'finished', "transaction status is unchanged" );
+    is( $edt->transaction, 'abandoned', "transaction status is unchanged" );
     
     # Now try the same thing under IMMEDIATE_MODE.
     

@@ -4,7 +4,12 @@
 #
 # This file contains unit tests for the EditTransaction class.
 #
-# edt-01-basic.t : Test that an EditTransaction object can be created, and that basic operations work.
+# edt-01-basic.t : Test that an EditTransaction object can be created, and that basic operations
+# work.
+#
+# This test file should be run before any of the others, the first time that testing is done. Its
+# first task is to establish the database tables needed for the rest of the tests. After that, the
+# tests can all be run independently and in any order.
 #
 
 
@@ -28,6 +33,7 @@ my $T = EditTester->new({ subclass => 'EditTest' });
 $T->establish_session_data;
 $T->establish_test_tables;
 
+$DB::single = 1;
 
 # Test creation of both Permissions objects and an EditTest object. The Permissions objects are
 # made available to subsequent tests. If we cannot create EditTest objects without an error
@@ -237,34 +243,40 @@ subtest 'allowances' => sub {
     $T->ok_no_warnings("no warnings with CREATE");
     
     ok( $edt = $T->new_edt($perm_a, { CREATE => 1,
+				      LOCKED => 1,
 				      MULTI_DELETE => 1,
-				      NO_RECORDS => 1,
+				      ALTER_TRAIL => 1,
 				      NOT_FOUND => 1,
 				      PROCEED => 1,
-				      ALTER_TRAIL => 1,
+				      BAD_FIELDS => 1,
 				      DEBUG_MODE => 1,
 				      SILENT_MODE => 1,
 				      IMMEDIATE_MODE => 1,
+				      FIXUP_MODE => 1,
+				      NO_LOG_MODE => 1,
+				      VALIDATION_ONLY => 1,
 				      TEST_DEBUG => 1,
-				      BAD_ALLOW => 1,
+				      UNKNOWN_MODE => 1,
 				      NO_ALLOW => 0 }), "new edt with many allowances" );
+    
     if ( $edt )
     {
 	ok( $edt->allows('CREATE'), "allowance CREATE accepted" );
+	ok( $edt->allows('LOCKED'), "allowance LOCKED accepted" );
 	ok( $edt->allows('MULTI_DELETE'), "allowance MULTI_DELETE accepted" );
-	ok( $edt->allows('NO_RECORDS'), "allowance NO_RECORDS accepted" );
-	ok( $edt->allows('NOT_FOUND'), "allowance NOT_FOUND accepted" );
 	ok( $edt->allows('ALTER_TRAIL'), "allowance ALTER_TRAIL accepted" );
+	ok( $edt->allows('NOT_FOUND'), "allowance NOT_FOUND accepted" );
+	ok( $edt->allows('PROCEED'), "allowance PROCEED accepted" );
+	ok( $edt->allows('BAD_FIELDS'), "allowance BAD_FIELDS accepted" );
 	ok( $edt->allows('DEBUG_MODE'), "allowance DEBUG_MODE accepted" );
 	ok( $edt->allows('SILENT_MODE'), "allowance SILENT_MODE accepted" );
-	ok( $edt->allows('IMMEDIATE_MODE'), "allowance DEBUG_MODE accepted" );
-	ok( $edt->allows('PROCEED'), "allowance PROCEED accepted" );
+	ok( $edt->allows('IMMEDIATE_MODE'), "allowance IMMEDIATE_MODE accepted" );
 	ok( $edt->allows('TEST_DEBUG'), "allowance TEST_DEBUG accepted" );
-	ok( ! $edt->allows('BAD_ALLOW'), "allowance BAD_ALLOW not accepted" );
+	ok( ! $edt->allows('UNKNOWN_MODE'), "allowance UNKNOWN_MODE not accepted" );
 	ok( ! $edt->allows('NO_ALLOW'), "allowance NO_ALLOW not accepted" );
 	
 	cmp_ok( $edt->warnings, '==', 1, "return one warning" );
-	$T->ok_has_warning( qr/BAD_ALLOW/, "warning about BAD_ALLOW" );
+	$T->ok_has_warning( qr/UNKNOWN_MODE/, "warning about UNKNOWN_MODE" );
     }
 
     # Now try to create an EditTransaction using the array form for
