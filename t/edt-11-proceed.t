@@ -13,7 +13,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 use TableDefs qw(%TABLE get_table_property);
 
@@ -31,14 +31,14 @@ my $T = EditTester->new({ subclass => 'EditTest' });
 # session key 'SESSION-AUTHORIZER' does not appear in the session_data table, then run the test
 # 'edt-01-basic.t' first.
 
-my ($perm_a, $primary);
+my ($perm_a, $perm_b, $primary);
 
 subtest 'setup' => sub {
     
     $perm_a = $T->new_perm('SESSION-AUTHORIZER');
-
+    
     ok( $perm_a && $perm_a->role eq 'authorizer', "found authorizer permission" ) || BAIL_OUT;
-
+    
     $primary = get_table_property('EDT_TEST', 'PRIMARY_KEY');
     ok( $primary, "found primary key field" ) || BAIL_OUT;
 
@@ -76,24 +76,25 @@ subtest 'proceed_mode' => sub {
     
     # Now check that we have the proper errors and warnings.
     
-    ok( ! $edt->errors, "transaction has no errors" );
-    is( $edt->warnings, 2, "transaction has two warnings" );
+    is( $edt->errors, 1, "transaction has one error" );
+    is( $edt->warnings, 1, "transaction has one warning" );
+    is( $edt->conditions('fatal'), 0, "transaction has no fatal conditions" );
+    is( $edt->conditions('nonfatal'), 2, "transaction has two non-fatal conditions" );
+    ok( $edt->can_proceed, "transaction can proceed" );
     
-    $T->ok_has_warning('W_TEST', "found warning W_TEST");
-    $T->ok_has_error('F_TEST', "found warning F_TEST");
+    $T->ok_has_condition('W_TEST', "found warning W_TEST");
+    $T->ok_has_condition('F_TEST', "found demoted error F_TEST");
     
     ok( $edt->can_proceed, "transaction can proceed" );
     
-    my $result = $edt->commit;
+    ok( $edt->commit, "transaction succeeded" );
     
-    is( $edt->warnings, 3, "transaction has three warnings" );
-    $T->ok_has_error(qr/F_EXECUTE/, "found warning F_EXECUTE");
+    is( $edt->errors, 2, "transaction has two errors" );
+    $T->ok_has_condition('F_EXECUTE', "found condition F_EXECUTE");
     
     # Check that the transaction actually committed and that the record with a warning was
     # inserted while the record with an error was not.
     
-    ok( $result, "transaction succeeded" ) || $T->diag_errors;
-    ok( $edt->has_finished, "transaction has finished" );
     $T->ok_found_record('EDT_TEST', "string_req='proceed test a1'");
     $T->ok_found_record('EDT_TEST', "string_req='validate warning'");
     $T->ok_no_record('EDT_TEST', "string_req='validate error'");
@@ -129,12 +130,12 @@ subtest 'proceed_mode' => sub {
     
     ok( $edt->can_proceed, "transaction can proceed" );
     
-    $result = $edt->execute;
+    my $result = $edt->commit;
     
     ok( $result, "transaction succeeded in PROCEED" ) || $T->diag_errors;
     is( $T->conditions('nonfatal'), 4, "got 4 demoted errors" ) || $T->diag_warnings;
     is( $edt->record_count, 7, "record_count of 7 with PROCEED" );
-    is( $edt->action_count, 3, "action_count of 3 with PROCEED" );
+    is( $edt->exec_count, 3, "action_count of 3 with PROCEED" );
     is( $edt->fail_count, 4, "fail_count of 4 with PROCEED" );
     is( $edt->actions('executed'), 3, "got 3 executed action records with PROCEED" );
     is( $edt->actions('notex'), 4, "got 4 failed action records with PROCEED" );
@@ -166,14 +167,14 @@ subtest 'not_found' => sub {
     $T->clear_table('EDT_TEST');
     
     # Then create a transaction and add some records.
-
+    
     $edt = $T->new_edt($perm_a);
     
     $edt->insert_record('EDT_TEST', { string_req => 'notfound test a1' });
     $edt->insert_record('EDT_TEST', { string_req => 'notfound test a2' });
     $edt->insert_record('EDT_TEST', { string_req => 'notfound test delete' });
     
-    ok( $edt->execute, "initial transaction succeeded" ) || $T->diag_errors;
+    ok( $edt->commit, "initial transaction succeeded" ) || $T->diag_errors;
     
     # Now try a transaction with some "not found" errors.
     
@@ -204,7 +205,7 @@ subtest 'not_found' => sub {
     ok( $result, "transaction succeeded with NOT_FOUND" ) || $T->diag_errors;
     is( $T->conditions('nonfatal'), 3, "got 3 demoted errors" ) || $T->diag_warnings;
     is( $edt->record_count, 6, "record_count of 6 with NOT_FOUND" );
-    is( $edt->action_count, 3, "action_count of 3 with NOT_FOUND" );
+    is( $edt->exec_count, 3, "action_count of 3 with NOT_FOUND" );
     is( $edt->fail_count, 3, "fail_count of 3 with NOT_FOUND" );
     is( $edt->actions('executed'), 3, "got 3 executed action records with NOT_FOUND" );
     is( $edt->actions('notex'), 3, "got 3 failed action records with NOT_FOUND" );
@@ -240,9 +241,91 @@ subtest 'not_found' => sub {
     $result = $edt->commit;
     
     ok( ! $result, "transaction failed" );
-    is( $edt->transaction, 'aborted', "transaction was rolled back" );
+    is( $edt->transaction, 'failed', "transaction was rolled back" );
 };
 
+
+# Then test the NOT_PERMITTED allowance. This requires the use of a different set of permissions
+# from the usual 'SESSION-AUTHORIZER'.
+
+subtest 'not_permitted' => sub {
+
+    my ($edt);
+    
+    # Make sure we have a record in the table created by 'SESSION-AUTHORIZER'. If we can't find
+    # the one created by subtest 'not_found' above, create one now.
+    
+    $perm_b = $T->new_perm('SESSION-OTHER');
+    
+    ok( $perm_b && $perm_b->role eq 'enterer', "found other permission" ) || return;
+    
+    my ($test_no) = $T->fetch_keys_by_expr('EDT_TEST', "string_req='notfound test a1'");
+    
+    unless ( $test_no )
+    {
+	$edt = $T->new_edt($perm_a);
+	$edt->insert_record('EDT_TEST', { string_req => 'notfound test a1' });
+	ok( $edt->commit, "successfully inserted test record" );
+	$test_no = $edt->action_keyval;
+    }
+
+    # Then create a transaction with the 'SESSION-OTHER' permission. This set of permissions does
+    # not allow updating of records created by 'SESSION-AUTHORIZER'. This transaction is created
+    # with the allowance 'NOT_PERMITTED', which causes permission errors to be demoted.
+    
+    $edt = $T->new_edt($perm_b, { NOT_PERMITTED => 1 });
+    
+    # Attempt to update the record, which should generate an F_PERM condition.
+    
+    $edt->update_record('EDT_TEST', { $primary => $test_no, signed_val => 23 });
+
+    ok( $edt->has_condition('F_PERM'), "found F_PERM with NOT_PERMITTED" );
+    
+    # Check that the transaction can proceed, then insert a record and commit.
+    
+    if ( ok( $edt->can_proceed, "transaction can proceed" ) )
+    {
+	$edt->insert_record('EDT_TEST', { string_req => 'insert test not_permitted' });
+
+	ok( $edt->commit, "transaction committed" );
+
+	$T->ok_found_record('EDT_TEST', "string_req = 'insert test not_permitted'");
+    }
+    
+    # Try the same thing again, but make sure that NOT_FOUND and NOT_PERMITTED each work properly
+    # when both are specified.
+
+    $edt = $T->new_edt($perm_b, { NOT_FOUND => 1, NOT_PERMITTED => 1 });
+
+    # Attempt to update a nonexistent record, which should generate an F_NOT_FOUND condition.
+
+    $edt->update_record('EDT_TEST', { $primary => 999999, string_req => 'not found' });
+
+    # Attempt to update the same record as above, which should generate an F_PERM condition.
+
+    $edt->update_record('EDT_TEST', { $primary => $test_no, signed_val => 24 });
+
+    ok( $edt->can_proceed, "transaction can proceed" );
+
+    # Now add a record that is lacking the required field. This should generate an E_REQUIRED
+    # error which is not demoted.
+
+    $edt->insert_record('EDT_TEST', { signed_val => 25 });
+
+    ok( ! $edt->can_proceed, "transaction cannot proceed after error" );
+
+    # Make sure it has the proper condition codes and counts.
+    
+    ok( $edt->has_condition('F_NOT_FOUND'), "found F_NOT_FOUND" );
+    ok( $edt->has_condition('F_PERM'), "found F_PERM" );
+    ok( $edt->has_condition('E_REQUIRED'), "found E_REQUIRED" );
+    
+    is( $edt->fatals, 1, "one fatal condition" );
+    is( $edt->nonfatals, 2, "two nonfatal conditions" );
+    is( $edt->errors, 3, "three errors total" );
+    is( $edt->warnings, 0, "no warnings" );
+};
+    
 
 # # Then test the NO_RECORDS allowance. This allows a transaction to be committed even if there are
 # # no valid completed actions.

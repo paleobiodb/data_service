@@ -39,11 +39,11 @@ use parent 'EditTransaction';
     set_table_name(EDT_TEST => 'edt_test');
     set_table_name(EDT_AUX => 'edt_aux');
     set_table_name(EDT_ANY => 'edt_any');
+    set_table_name(EDT_SIMPLE => 'edt_simple');
     
-    set_table_group('edt_test' => 'EDT_TEST', 'EDT_AUX', 'EDT_ANY');
+    set_table_group('edt_test' => 'EDT_TEST', 'EDT_AUX', 'EDT_ANY', 'EDT_SIMPLE');
     
     set_table_property(EDT_TEST => CAN_POST => 'AUTHORIZED');
-    set_table_property(EDT_TEST => ALLOW_DELETE => 1);
     set_table_property(EDT_TEST => PRIMARY_KEY => 'test_no');
     set_table_property(EDT_TEST => PRIMARY_FIELD => 'test_id');
     set_table_property(EDT_TEST => TABLE_COMMENT => 'This table is used for testing EditTransaction.pm and its subclass EditTest.pm');
@@ -51,28 +51,28 @@ use parent 'EditTransaction';
     set_column_property(EDT_TEST => string_req => REQUIRED => 1);
     set_column_property(EDT_TEST => string_req => COLUMN_COMMENT => 'This is a test comment.');
     set_column_property(EDT_TEST => string_val => ALTERNATE_NAME => 'alt_val');
-    set_column_property(EDT_TEST => string_val => VALIDATOR => 'test_validator');
     set_column_property(EDT_TEST => admin_str => ADMIN_SET => 1);
     
     set_table_property(EDT_AUX => SUPERIOR_TABLE => 'EDT_TEST');
     set_table_property(EDT_AUX => CAN_POST => 'AUTHORIZED');
     set_table_property(EDT_AUX => CAN_MODIFY => 'AUTHORIZED');
-    set_table_property(EDT_AUX => ALLOW_DELETE => 1);
     set_table_property(EDT_AUX => PRIMARY_KEY => 'aux_no');
     set_table_property(EDT_AUX => PRIMARY_FIELD => 'aux_id');
     
-    set_column_property(EDT_AUX => test_no => FOREIGN_TABLE => 'EDT_TEST');
+    set_column_property(EDT_AUX => test_no => FOREIGN_KEY => 'EDT_TEST');
     set_column_property(EDT_AUX => name => REQUIRED => 1);
     
     set_table_property(EDT_ANY => CAN_POST => 'LOGGED_IN');
-    set_table_property(EDT_ANY => ALLOW_DELETE => 1);
     set_table_property(EDT_ANY => PRIMARY_KEY => 'any_no');
     
     set_column_property(EDT_ANY => string_req => REQUIRED => 1);
     
+    set_table_property(EDT_SIMPLE => CAN_MODIFY => 'ALL');
+    set_table_property(EDT_SIMPLE => PRIMARY_KEY => 'test_no');
+    
     EditTest->register_allowances('TEST_DEBUG');
-    EditTest->register_conditions(E_TEST => "TEST ERROR '%1'",
-				  W_TEST => "TEST WARNING '%1'");
+    EditTest->register_conditions(E_TEST => ["TEST ERROR '&1'", "TEST ERROR"],
+				  W_TEST => ["TEST WARNING '&1'", "TEST WARNING"]);
 }
 
 
@@ -244,22 +244,6 @@ sub test_old_values {
     }
     
     return @values;
-}
-
-
-sub test_validator {
-    
-    my ($edt, $value, $field, $action) = @_;
-    
-    if ( defined $value && length($value) == 10 )
-    {
-	return ('E_FORMAT', "test validator args: $field $action");
-    }
-    
-    else
-    {
-	return;
-    }	
 }
 
 
@@ -532,6 +516,22 @@ sub clear_debug_output {
 }
 
 
+sub debug_output {
+
+    my ($edt) = @_;
+
+    if ( ref $edt->{debug_output} eq 'ARRAY' )
+    {
+	return join "\n", $edt->{debug_output}->@*;
+    }
+
+    else
+    {
+	return '';
+    }
+}
+
+
 sub has_debug_output {
 
     my ($edt, $regex) = @_;
@@ -566,8 +566,50 @@ sub establish_test_tables {
     
     $dbh->do("CREATE TABLE $TABLE{EDT_TEST} (
 		test_no int unsigned primary key auto_increment,
+		interval_no int unsigned not null default 0,
+		string_val varchar(40) not null default '',
+		string_req varchar(40) not null default '',
+		latin1_val varchar(40) charset latin1 not null default '',
+		greek_val varchar(40) charset greek not null default '',
+		binary_val varbinary(40),
+		text_val text,
+		blob_val blob,
+		signed_val mediumint,
+		unsigned_val mediumint unsigned not null default 0,
+		tiny_val tinyint unsigned,
+		decimal_val decimal(5,2),
+		unsdecimal_val decimal(5,2) unsigned not null default 0,
+		double_val double,
+		unsfloat_val float unsigned not null default 0,
+		boolean_val boolean,
+		enum_val enum('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
+		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
+		dcr timestamp default current_timestamp,
+		dmd timestamp default current_timestamp,
+		dmdauto timestmp default current_timestamp on update current_timestamp)
+		default charset utf8");
+    
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUX}");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDT_AUX} (
+		aux_no int unsigned primary key auto_increment,
+		name varchar(255) not null default '',
+		test_no int unsigned not null default 0,
+		unique key (name)) default charset utf8");
+
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_ANY}");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDT_ANY} (
+		any_no int unsigned primary key auto_increment,
 		authorizer_no int unsigned not null,
 		enterer_no int unsigned not null,
+		enterer_id varchar(36) not null,
+		string_req varchar(255) not null default '') default charset utf8");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDT_AUTH} (
+		test_no int unsigned primary key auto_increment,
+		authorizer_no int unsigned not null default 0,
+		enterer_no int unsigned not null default 0,
 		modifier_no int unsigned not null default 0,
 		interval_no int unsigned not null default 0,
 		string_val varchar(40) not null default '',
@@ -592,24 +634,6 @@ sub establish_test_tables {
 		owner_lock boolean not null default 0,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp) default charset utf8");
-    
-    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUX}");
-    
-    $dbh->do("CREATE TABLE $TABLE{EDT_AUX} (
-		aux_no int unsigned primary key auto_increment,
-		name varchar(255) not null default '',
-		test_no int unsigned not null default 0,
-		unique key (name)) default charset utf8");
-
-    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_ANY}");
-    
-    $dbh->do("CREATE TABLE $TABLE{EDT_ANY} (
-		any_no int unsigned primary key auto_increment,
-		authorizer_no int unsigned not null,
-		enterer_no int unsigned not null,
-		enterer_id varchar(36) not null,
-		string_req varchar(255) not null default '') default charset utf8");
-		
 }
 
 

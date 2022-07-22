@@ -19,11 +19,11 @@ use EditTest;
 use EditTester;
 
 
+$DB::single = 1;
+
 # The following call establishes a connection to the database, using EditTester.pm.
 
 my $T = EditTester->new({ subclass => 'EditTest' });
-
-
 
 my ($perm_a);
 
@@ -40,10 +40,10 @@ subtest 'request' => sub {
     
     eval {
 
-	my $debug = $T->debug;
+	my $debug_mode = $T->debug_mode;
 	
 	$edt = EditTest->new($request, $perm_a, 'EDT_TEST',
-			     { CREATE => 1, DEBUG_MODE => $debug });
+			     { CREATE => 1, DEBUG_MODE => $debug_mode });
 
 	$edt->insert_record('EDT_TEST', { string_req => 'request test' });
 	$result = $edt->execute;

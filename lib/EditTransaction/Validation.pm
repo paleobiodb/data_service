@@ -7,10 +7,7 @@
 
 package EditTransaction::Validation;
 
-use Moo::Role;
-
 use strict;
-no warnings 'uninitialized';
 
 use Carp qw(carp croak);
 use ExternalIdent qw(%IDP %IDRE);
@@ -18,6 +15,16 @@ use TableDefs qw(get_table_property %TABLE
 		 %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 use TableData qw(get_table_schema);
 use Permissions;
+
+use Moo::Role;
+
+no warnings 'uninitialized';
+
+
+UNITCHECK {
+    EditTransaction->register_directive('ts_created', \&validate_special_column, 'DEFAULT');
+    EditTransaction->register_directive('ts_modified', \&validate_special_column, 'DEFAULT');
+};
 
 
 # Permission checking
@@ -39,13 +46,17 @@ sub check_table_permission {
 
 sub check_record_permission {
     
-    my ($edt, $table, $permission, $key_expr, $record) = @_;
+    my ($edt, $table, $requested, $key_expr) = @_;
     
-    unless ( $edt->{permission_record_cache}{$table}{$key_expr}{$permission} )
-    {
-	$edt->{permission_record_cache}{$table}{$key_expr}{$permission} = 
-	    $edt->{perms}->check_record_permission($table, $permission, $key_expr, $record);
-    }
+    return $edt->{perms}->check_multiple_permission($table, $requested, $key_expr);
+    
+    # unless ( $edt->{permission_record_cache}{$table}{$key_expr}{$requested} )
+    # {
+    # 	$edt->{permission_record_cache}{$table}{$key_expr}{$requested} = 
+    # 	    [ $edt->{perms}->check_multiple_permission($table, $requested, $key_expr, $record) ];
+    # }
+
+    # return $edt->{permission_record_cache}{$table}{$key_expr}{$requested}->@*;
 }
 
 sub check_many_permission {
@@ -68,7 +79,7 @@ sub check_many_permission {
 # corresponding table definition.
 
 
-# validate_action ( action, operation, table, keyexpr )
+# validate_action ( action, operation, table, flag )
 #
 # Call the validate_record method to check that the new field values to be added or updated in the
 # database are consistent with the corresponding table definition. The $keyexpr parameter is
@@ -82,15 +93,20 @@ sub check_many_permission {
 # well, because it provides comprehensive checks to make sure that all record values can be
 # properly stored in the database. Specific columns can be exempted from validation checks by
 # calling 'column_skip_validate' on the action object and providing one or more column names.
+#
+# When this routine is called the first time, it may put off completion by calling the action
+# method 'validate_later' and then returning. In this case, it will be called a second time with
+# the flag 'COMPLETE'. The routine should then complete whatever work it needs to do.
 
 sub validate_action {
     
-    my ($edt, $action, $operation, $table, $keyexpr) = @_;
+    my ($edt, $action, $operation, $table, $flag) = @_;
+    
+    # This is used for testing purposes.
     
     if ( $EditTransaction::TEST_PROBLEM{validate} )
     {
-	$edt->add_condition($action, 'E_EXECUTE', 'TEST VALIDATE');
-	return;
+	die "TEST VALIDATE";
     }
 }
 
@@ -131,17 +147,15 @@ sub validate_action {
 # }
 
 
-# validate_against_schema ( action, operation, table, special )
+# validate_against_schema ( action, operation, table, flag )
 # 
 # Check the field values to be stored in the database against the corresponding table definition,
 # and call 'add_condition' to record any error or warning conditions that are detected. The
 # column names and corresponding values to be stored are added to the action record using
 # 'set_column_values', for later use by the action execution methods.
 # 
-# If the argument $special is given, it must be a hash ref whose keys are column names. Currently
-# the only accepted value is 'skip', indicating that this field should be skipped. This is
-# available for use when this method is called from within a subclass method that overrides
-# 'validate_action'.
+# If the $flag argument is present, it should have the value 'FINAL' to indicate that we should
+# now complete a pending validation.
 
 our $DECIMAL_NUMBER_RE = qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
 			     (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs;
@@ -150,16 +164,40 @@ our %EXTID_CHECK;
 
 sub validate_against_schema {
 
-    my ($edt, $action, $operation, $table) = @_;
+    my ($edt, $action, $operation, $table, $flag) = @_;
     
-    $operation ||= $action->operation;
-    $table ||= $action->table;
+    no warnings 'uninitialized';
+    
+    # If the validation status is 'COMPLETE', then return immediately without doing anything.
+    
+    my $vstatus = $action->validation_status;
+    
+    return if $vstatus eq 'COMPLETE';
+    
+    # If the status is 'PENDING', then return unless this method was called with the 'FINAL'
+    # flag. In this case, complete the validation process and set the status to reflect it.
+    
+    unless ( $flag && $flag eq 'FINAL' )
+    {
+	return if $vstatus eq 'PENDING';
+    }
+    
+    # Otherwise, complete the validation unless the status is 'COMPLETE' or 'PENDING'. These are
+    # the only two status codes, so return if 'validation' returns a non-empty value. This
+    # typically happens when a 'validate_action' override method calls 'validate_later'. The
+    # result is to postpone validation until just before execution, when this method will be
+    # called with the 'COMPLETE' flag.
+    
+    else
+    {
+	return if $action->validation_status;
+    }
+    
+    # Grab some extra attributes to be used in the validation process.
     
     my $record = $action->record;
     my $permission = $action->permission;
     my $keycol = $action->keycol;
-    
-    my $is_owner;
     
     # Grab the table schema, or throw an exception if it is not available. This information is cached, so
     # the database will only need to be asked for this information once per process per table.
@@ -167,892 +205,512 @@ sub validate_against_schema {
     my $dbh = $edt->dbh;
     my $schema = get_table_schema($dbh, $table, $edt->{debug_mode});
     
-    # If we haven't yet copied over the 
+    # Get all column directives for this action.
     
-    # If the operation is 'replace', then get the current created/modified timestamps from the old
-    # record.
+    my %directives = $action->all_directives;
     
-    my (@copy_columns);
+    # Iterate through the list of table columns and construct a list of column names and values
+    # for insertion, update, or replacement.
     
-    # if ( $operation eq 'replace' )
-    # {
-    # 	($old_values{created}, $old_values{modified},
-    # 	 $old_values{authorizer_no}, $old_values{enterer_no}, $old_values{modifier_no}) =
-    # 	    $edt->get_old_values($action, $table, 'created, modified, authorizer_no, enterer_no, modifier_no');
-    # }
+    my (@column_names, @column_values, %used, @unchanged);
     
-    # Start by going through the list of field names, and constructing a list of values to be
-    # inserted.
-    
-    my (@columns, @values, %used);
-
   COLUMN:
-    foreach my $col ( @{$schema->{_column_list}} )
+    foreach my $colname ( @{$schema->{_column_list}} )
     {
-	my $cr = $schema->{$col};
+	# Get the description record for this column.
 	
-	# Start by checking to see if there are special handling instructions for this column.
+	my $cr = $schema->{$colname};
 	
-	my $special = $action->column_special($col);
+	# The following variables keep track of the value found in the record and the hash key
+	# under which it was found, plus some other attributes.
 	
-	# If we are supposed to ignore this column, then do so.
+	my ($value, $fieldname, $special, $additional, $no_quote, $is_default);
 	
-	next COLUMN if $special eq 'ignore';
-
-	# If a value for this column is found in the record, then use that.
+	# Check to see if this column has a directive. If none was explicitly assigned, certain
+	# specially named columns default to specific handling directives.
 	
-	my $value = $record->{$col};
-	my $record_col = $col;
-	my $quote_this_value;
-	my $is_default;
+	my $directive = $directives{$colname} || $COMMON_FIELD_SPECIAL{$colname} || '';
 	
-	# Skip the primary key for any operation except 'replace'. For 'replace' operations, we
-	# use the cleaned key value without checking it. In all cases, the primary key value has
-	# already been validated by the routine that called this one. The primary key may be
-	# referred to in the action record under its alternate name, as specified by the
-	# PRIMARY_FIELD property of the table. The ALTERNATE_NAME property should not be used for
-	# primary keys.
+	# If we are directed to ignore this column, skip it unless it is the primary key.
 	
-	if ( $col eq $keycol )
+	if ( $directive eq 'ignore' )
 	{
-	    if ( exists $record->{$col} )
-	    {
-		$used{$col} = 1;
-	    }
-	    
-	    elsif ( my $alt = get_table_property($table, 'PRIMARY_FIELD') )
-	    {
-		$used{$alt} = 1;
-		$record_col = $alt;
-	    }
-	    
-	    next COLUMN unless $operation eq 'replace';
-	    
-	    $value = $action->keyval;
-	    $special = 'pass';
+	    next COLUMN unless $colname eq $keycol;
 	}
 	
-	# Otherwise, if the column name is not mentioned in the record but an alternate name is
-	# defined, then check that.
+	# The primary key column is handled differently from all the others. Its fieldname and
+	# value were previously determined, and its value has either already been checked or will
+	# be when authentication completes.
 	
-	elsif ( $cr->{ALTERNATE_ONLY} || ! exists $record->{$col} )
+	if ( $colname eq $keycol )
 	{
-	    my $alt = $cr->{ALTERNATE_NAME};
+	    # Count the field name as having been used in this record. It might not be the same as
+	    # the column name.
 	    
-	    # If an alternate name for this column is known, and this name appears as a key in the
-	    # record, use that name and value. But not if we have been told to ignore it.
-	    
-	    if ( $alt && exists $record->{$alt} && $action->get_special($alt) ne 'ignore' )
+	    if ( $fieldname = $action->keyfield )
 	    {
-		$record_col = $alt;
-		$value = $record->{$alt};
+		$used{$fieldname} = 1;
 	    }
+	    
+	    # If the operation is 'replace', use the already determined key value and set the
+	    # directive to 'pass' to disable any further checking.
+	    
+	    if ( $operation eq 'replace' )
+	    {
+		$value = $action->keyval;
+		$directive = 'pass';
+	    }
+	    
+	    # For all other operations, the primary key should not appear in the column/value
+	    # lists.
 	    
 	    else
 	    {
-		$record_col = $alt if $cr->{ALTERNATE_ONLY};
-		$value = undef;
+		next COLUMN;
 	    }
 	}
 	
-	# Record the keys that correspond to values from the record. We will use this info later
-	# to throw error or warning conditions for any record keys that we do not recognize.
+	# For all other columns, if the column name appears in the record then use the
+	# corresponding value unless the ALTERNATE_ONLY property is set for this column.
 	
-	$used{$record_col} = 1 if exists $record->{$record_col};
-	
-	# Don't check any columns we are directed to ignore. These were presumably checked by code
-	# from a subclass that has called this method. Columns that have a type assigned by
-	# %COMMON_FIELD_SPECIAL cannot be passed.
-	
-	my $type = $COMMON_FIELD_SPECIAL{$col};
-	
-	if ( $type || $special ne 'pass' )
+	elsif ( exists $record->{$colname} && not $cr->{ALTERNATE_ONLY} )
 	{
-	    # Handle special columns in the appropriate ways.
-	    
-	    if ( $type )
+	    $fieldname = $colname;
+	    $value = $record->{$colname};
+	    $used{$fieldname} = 1;
+	}
+	
+	# Otherwise, if an alternate field name appears in the record, use the corresponding
+	# value.
+	
+	elsif ( $cr->{ALTERNATE_NAME} && exists $record->{$cr->{ALTERNATE_NAME}} )
+	{
+	    $fieldname = $cr->{ALTERNATE_NAME};
+	    $value = $record->{$fieldname};
+	    $used{$fieldname} = 1;
+	}
+	
+	# Otherwise, the column has no assigned value.
+	
+	# Determine how to handle this column
+	# -----------------------------------
+	
+	# If the directive is either 'pass' or 'unquoted', skip all value checking. Ignore the
+	# column unless it has an assigned value.
+	
+	if ( $directive eq 'pass' || $directive eq 'unquoted' )
+	{
+	    $no_quote = 1 if $directive eq 'unquoted';
+	    next COLUMN unless $fieldname;
+	}
+	
+	# If the directive is 'copy', the response depends on the operation.
+	
+	elsif ( $directive eq 'copy' )
+	{
+	    # For 'update', set the column value to itself.
+
+	    if ( $operation eq 'updated' )
 	    {
-		# The 'crmod' fields store the record creation and modification dates. These cannot be
-		# specified explicitly except by a user with administrative permission, and then only
-		# if this EditTransaction allows the condition 'ALTER_TRAIL'. In that case, check to
-		# make sure that they have the proper format. But always ignore empty values.
-		
-		if ( $type eq 'crmod' )
+		$value = $colname;
+		$no_quote = 1;
+	    }
+	    
+	    # For 'replace', add this column to the @unchanged list. For 'insert', skip the column
+	    # entirely.
+	    
+	    else
+	    {
+		push @unchanged, $colname if $operation eq 'replace';
+		next COLUMN;
+	    }
+	}
+	
+	# If the column has one of the special handling directives, then check the value according
+	# that directive. This is done even if there is no assigned value, because some column values
+	# are assigned by the special handler.
+	
+	elsif ( $directive && $directive ne 'validate' )
+	{
+	    my $type = $cr->{TypeParams};
+	    
+	    if ( defined $value && $value ne '' || $edt->{allows}{FIXUP_MODE} )
+	    {
+		($value, $additional, $no_quote) =
+		    $edt->call_app_hook('validate_special_column', $directive, $type, $permission,
+					$fieldname, $value);
+	    }
+	    
+	    elsif ( $directive =~ /^ad/ )
+	    {
+		if ( defined $value && $value ne '' )
 		{
-		    # If the value of 'modified' is 'NORMAL', that overrides everything else. Just
-		    # treat all of the 'crmod' and 'authent' fields normally, which means "as if a
-		    # null value was given". It is also okay to specify 'UNCHANGED' for 'created'
-		    # since this is the normal behavior.
-		    
-		    if ( $record->{modified} && $record->{modified} eq 'NORMAL' )
-		    {
-			$value = undef;
-		    }
-		    
-		    elsif ( $col eq 'created' && defined $value && $value eq 'UNCHANGED' )
-		    {
-			$value = undef;
-		    }
-		    
-		    # Now, if a value is specified for any of the crmod fields, then add an error
-		    # condition unless the user has permission to explicitly set these fields.
-		    
-		    if ( defined $value && $value ne '' )
-		    {
-			my $error;
-			
-			unless ( $permission =~ /admin/ )
-			{
-			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
-			    $error = 1;
-			}
-			
-			unless ( $edt->{fixup_mode} || $edt->allows('ALTER_TRAIL') )
-			{
-			    $edt->add_condition($action, 'C_ALTER_TRAIL');
-			    $error = 1;
-			}
-			
-			# If the value is explicitly 'UNCHANGED', then leave it unchanged. This
-			# requires copying the old value if the operation is 'replace'.
-			
-			if ( $value eq 'UNCHANGED' )
-			{
-			    next COLUMN unless $operation eq 'replace';
-			    
-			    push @copy_columns, $col;
-			    $value = undef;
-			}
-			
-			# Otherwise, check that the value matches the required format.
-			
-			else
-			{
-			    ($value, $quote_this_value) =
-				$edt->validate_datetime_value($action, $schema->{$col}, $record_col, $value);
-			    
-			    next if $error || ref $value;
-			}
-		    }
-		    
-		    # Otherwise, if we are working under FIXUP_MODE, then leave no record of the
-		    # modification. This is only allowed with 'admin' privilege on the table in
-		    # question. If 'modified' is specifically a key in the action, with an undefined
-		    # value, then skip this section because the user wants it treated normally.
-		    
-		    elsif ( $operation ne 'insert' && $col eq 'modified' && $edt->{fixup_mode} &&
-			    ! exists $record->{$col} )
-		    {
-			if ( $permission !~ /admin/ )
-			{
-			    $edt->add_condition($action, 'E_PERM_COL', $col);
-			    next;
-			}
-			
-			elsif ( $operation eq 'replace' )
-			{
-			    push @copy_columns, 'modified';
-			    $value = undef;
-			}
-			
-			else
-			{
-			    next;
-			}
-		    }
-		    
-		    # Otherwise, if the operation is 'update' then set the modification time to
-		    # the present. This is handled by specifying an explicit null value. The creation
-		    # time will be unchanged, unless explicitly specified above.
-		    
-		    elsif ( $operation eq 'update' && $col eq 'modified' )
-		    {
-			$value = undef;
-		    }
-		    
-		    # If the operation is 'replace', then copy the creation time from the old
-		    # record. The modification time will be null unless specifically specified
-		    # above, which will cause it to be set to the current time.
-		    
-		    elsif ( $operation eq 'replace' && $col eq 'created' )
-		    {
-			push @copy_columns, $col;
-			$value = undef;
-		    }
-		    
-		    # Otherwise, we skip the column. For a newly inserted record, this will cause
-		    # the 'created' and 'modified' times to be set to the current timestamp.
-		    
-		    else
-		    {
-			next;
-		    }
+		    ($value, $additional, $no_quote) =
+			$edt->validate_special_admin($directive, $type, $permission, $fieldname, $value);
 		}
-		
-		# The 'authent' fields store the identifiers of the record authorizer, enterer, and
-		# modifier. These are subject to the same conditions as the 'crmod' fields if
-		# specified explicitly. But empty values get filled in according to the values for the
-		# current user.
-		
-		elsif ( $type eq 'authent' )
+	    }
+	    
+	    elsif ( $directive =~ /^ow/ )
+	    {
+		if ( defined $value && $value ne '' )
 		{
-		    # If the value of 'modified' is 'NORMAL', that overrides everything else. Just
-		    # treat all of the 'crmod' and 'authent' fields normally, which means "as if a
-		    # null value was given". It is also okay to specify 'UNCHANGED' for
-		    # 'authorizer_no' and 'enterer_no' since this is the normal behavior.
-		    
-		    if ( $record->{modified} && $record->{modified} eq 'NORMAL' )
-		    {
-			$value = undef;
-		    }
-		    
-		    elsif ( $col =~ /^auth|^ent/ && defined $value && $value eq 'UNCHANGED' )
-		    {
-			$value = undef;
-		    }
-		    
-		    # Now, If the value is not empty, check to make sure the user has permission
-		    # to set a specific value.
-		    
-		    if ( defined $value && $value ne '' )
-		    {
-			my $error;
-			
-			unless ( $permission =~ /admin/ )
-			{
-			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
-			    $error = 1;
-			}
-			
-			unless ( $edt->{allows}{FIXUP_MODE} || $edt->{allows}{ALTER_TRAIL} )
-			{
-			    $edt->add_condition($action, 'C_ALTER_TRAIL');
-			    $error = 1;
-			}
-			
-			# If the value is explicitly 'UNCHANGED', then leave it unchanged. This
-			# requires copying the old value if the operation is 'replace'.
-			
-			if ( $value eq 'UNCHANGED' )
-			{
-			    next COLUMN unless $operation eq 'replace';
-			    
-			    push @copy_columns, $col;
-			    $value = undef;
-			}
-						
-			# Now check to make sure the value is properly formatted.
-			
-			if ( ref $value eq 'PBDB::ExtIdent' )
-			{
-			    unless ( $value->{type} eq $IDP{PRS} )
-			    {
-				$edt->add_condition($action, 'E_EXTTYPE', $record_col, $value,
-						    "must be an external identifier of type '$IDP{PRS}'");
-				next;
-			    }
-			    
-			    $value = $value->stringify;
-			}
-			
-			elsif ( $value =~ $IDRE{PRS} )
-			{
-			    $value = $2;
-			    
-			    # If the value is 0, or ERROR, or something else not valid, add an error
-			    # condition.
-			    
-			    unless ( $value > 0 )
-			    {
-				$edt->add_condition($action, 'E_RANGE', $record_col,
-						    "value does not specify a valid record");
-				next;
-			    }
-			}
-			
-			elsif ( $value =~ $IDRE{LOOSE} )
-			{
-			    $edt->add_condition($action, 'E_EXTTYPE', $record_col,
-						"external id type '$1' is not valid for this field");
-			    next;
-			}
-			
-			# Otherwise, if it looks like an external identifier but is not of the right
-			# type, then add an error condition.
-			
-			elsif ( ref $value || $value !~ qr{ ^ \d+ $ }xs )
-			{
-			    $edt->add_condition($action, 'E_FORMAT', $record_col, 
-						'must be an external identifier or an unsigned integer');
-			    next;
-			}
-			
-			# Now make sure that the specific person actually exists.
-			
-			unless ( $edt->check_key('PERSON_DATA', $col, $value) )
-			{
-			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
-			    next;
-			}
-			
-			next if $error;
-		    }
-		    
-		    # Otherwise, if we are working under FIXUP_MODE or this action was
-		    # specifically directed to leave no record of the modification, then do
-		    # that. But this is only allowed with 'admin' privilege on the table in
-		    # question. If 'modifier_no' is specifically a key in the action, with an undefined
-		    # value, then skip this section because the user wants it treated normally.
-		    
-		    elsif ( $operation ne 'insert' && $col eq 'modifier_no' && $edt->{allows}{FIXUP_MODE} &&
-			    ! exists $record->{$col} )
-		    {
-			if ( $permission !~ /admin/ )
-			{
-			    $edt->add_condition($action, 'E_PERM_COL', $record_col);
-			    next;
-			}
-			
-			elsif ( $operation eq 'replace' )
-			{
-			    push @copy_columns, $col;
-			    $value = undef;
-			}
-			
-			else
-			{
-			    next;
-			}
-		    }
-		    
-		    # If (as is generally supposed to happen) no value is specified for this
-		    # column, then fill it in from the known information. The 'authorizer_no',
-		    # 'enterer_no', and 'enterer_id' fields are filled in on record insertion, and
-		    # 'modifier_no' on record update. If this is a 'replace' operation, then
-		    # specify that this value should be replaced by the one in the old record.
-		    
-		    elsif ( $col eq 'authorizer_no' && $operation ne 'update' )
-		    {
-			$value = $edt->{perms}->authorizer_no;
-			
-			push @copy_columns, $col if $operation eq 'replace';
-		    }
-		    
-		    elsif ( $col eq 'enterer_no' && $operation ne 'update' )
-		    {
-			$value = $edt->{perms}->enterer_no;
-			
-			push @copy_columns, $col if $operation eq 'replace';
-		    }
-		    
-		    elsif ( $col eq 'enterer_id' && $operation ne 'update' )
-		    {
-			$value = $edt->{perms}->user_id;
-			$quote_this_value = 1;
-			
-			push @copy_columns, $col if $operation eq 'replace';
-			
-		    }
-		    
-		    elsif ( $col eq 'modifier_no' && $operation ne 'insert' )
-		    {
-			if ( $action->{_no_modifier} )
-			{
-			    $value = 0;
-			}
-
-			else
-			{
-			    $value = $edt->{perms}->enterer_no;
-			}
-		    }
-		    
-		    elsif ( $col eq 'modifier_id' && $operation ne 'insert' )
-		    {
-			$value = $edt->{perms}->user_id;
-		    }
-		    
-		    # Otherwise, we skip this column.
-		    
-		    else
-		    {
-			next;
-		    }
+		    ($value, $additional, $no_quote) =
+			$edt->validate_special_owner($directive, $type, $permission, $fieldname, $value);
 		}
-		
-		# The 'admin' fields specify attributes that can only be controlled by users with
-		# administrative privilege. For now, this includes only 'admin_lock'. 
-		
-		elsif ( $type eq 'admin' )
+	    }
+	    
+	    # If an 'E_PERM_LOCK' was returned, fill in the message.
+	    
+	    if ( ref $value eq 'ARRAY' && $value->[0] eq 'E_PERM_LOCK' )
+	    {
+		if ( $action->keymult )
 		{
-		    # If the value is empty, skip it and let it be filled in by the database engine.
-		    
-		    next unless defined $value && $value ne '';
-		    
-		    # Otherwise, check to make sure the user has permission to set a specific value.
-
-		    unless ( $permission =~ /admin/ )
-		    {
-			$edt->add_condition($action, 'E_PERM_COL', $col);
-		    }
-		    
-		    # If so, make sure the value is correct.
-		    
-		    if ( $col eq 'admin_lock' && not ( $value eq '1' || $value eq '0' ) )
-		    {
-			$edt->add_condition($action, 'E_FORMAT', $col, 'value must be 1 or 0');
-		    }
+		    push @$value, '_multiple_';
+		}
+	    }
+	    
+	    # If the value is undefined, fill in the proper default value if any.
+	    
+	    unless ( $value )
+	    {
+		($value, $additional, $no_quote) = $edt->special_default_value($directive, $cr, $operation);
+	    }
+	    
+	    # If the value is 'UNCHANGED', handle it according to the operation. For 'update', set
+	    # the value to the column name and continue. For 'replace', put the column on the
+	    # @unchanged list. For 'insert', ignore this column.
+	    
+	    if ( $value eq 'UNCHANGED' )
+	    {
+		if ( $operation eq 'update' )
+		{
+		    $value = $colname;
 		}
 
-		# The 'owner' fields specify attributes that can only be controlled by owners.
-		# For now, this includes only 'owner_lock'.
-		
-		elsif ( $type eq 'owner' )
-		{
-		    # If the value is empty, skip it and let it be filled in by the database engine.
-		    
-		    next unless defined $value && $value ne '';
-		    
-		    # Otherwise, check to make sure the current user is the owner or administrator.
-		    
-		    unless ( defined $is_owner )
-		    {
-			$is_owner = $edt->{perms}->check_if_owner($table, $action->keyexpr);
-		    }
-		    
-		    unless ( $is_owner)
-		    {
-			$edt->add_condition($action, 'E_PERM_COL', $col);
-		    }
-		    
-		    # If so, make sure the value is correct.
-		    
-		    if ( $col eq 'owner_lock' && not ( $value eq '1' || $value eq '0' ) )
-		    {
-			$edt->add_condition($action, 'E_FORMAT', $col, 'value must be 1 or 0');
-		    }
-		}
-		
 		else
 		{
-		    croak "bad internal field type";
+		    push @unchanged, $colname if $operation eq 'replace';
+		    next COLUMN;
+		}
+	    }
+	}
+	
+	# For a column that has no special handling directive and a non-empty value, validate the
+	# value according to the column attributes.
+	
+	elsif ( defined $value && $value ne '' )
+	{
+	    # If the column allows external identifiers, check to see if the value is one. If so,
+	    # the raw value will be unpacked and the clean value substituted.
+	    
+	    if ( my $expected = $cr->{EXTID_TYPE} || $COMMON_FIELD_IDTYPE{$colname} )
+	    {
+		if ( looks_like_extid($value) )
+		{
+		    ($value, $additional, $no_quote) = 
+			$edt->validate_extid_value($expected, $fieldname, $value);
 		}
 	    }
 	    
-	    # Otherwise, if the value is defined then validate against the column definition.
+	    # Add an error or warning condition if we are given an external identifier for a
+	    # column that doesn't accept them.
 	    
-	    elsif ( defined $value )
+	    elsif ( ref $value eq 'PBDB::ExtIdent' )
 	    {
-		# If the column allows external identifiers, and if the value is one, then unpack
-		# it. If the value is already a PBDB::ExtIdent object, we assume that type checking has
-		# already been done.
-		
-		if ( my $extid_type = $cr->{EXTID_TYPE} || $COMMON_FIELD_IDTYPE{$col} )
+		$value = [ 'E_EXTID', $fieldname,
+			   "this field does not accept external identifiers" ];
+	    }
+	    
+	    # If this column is a foreign key, and the value is neither empty or 0 nor an error
+	    # condition, mark the value to be checked against the specified table at execution
+	    # time. If the value is an action reference, first check that the reference is valid.
+	    
+	    if ( my $foreign_table = $cr->{FOREIGN_KEY} )
+	    {
+		if ( $value && ! ref $value eq 'ARRAY' )
 		{
-		    # If the external identifier has already been parsed, make sure it has the
-		    # proper type.
-		    
-		    if ( ref $value eq 'PBDB::ExtIdent' )
+		    if ( $value =~ /^&/ )
 		    {
-			$EXTID_CHECK{$extid_type} ||= qr{$IDP{$extid_type}};
-			my $type = $value->type;
+			$no_quote = 1;
+
+			my $ref_action = $edt->{action_ref}{$value};
 			
-			unless ( $type eq 'unk' || $type =~ $EXTID_CHECK{$extid_type} )
+			unless ( $ref_action )
 			{
-			    $edt->add_condition($action, 'E_EXTTYPE', $record_col,
-						"wrong type for external identifier: must be '$IDP{$extid_type}'");
-			    next;
+			    $value = [ 'E_BAD_REFERENCE', '_unresolved_', $fieldname, $value ];
 			}
 			
-			$value = $value->stringify;
-			$record->{$record_col} = $value;
-		    }
-		    
-		    # If it is a number or a label reference, then leave it alone. We'll have to change
-		    # this check if we ever add non-integer keys.
-		    
-		    elsif ( $value =~ /^\d+$|^@/ )
-		    {
-			# do nothing
-		    }
-
-		    # If it is the empty string, set it to zero.
-		    
-		    elsif ( $value eq '' )
-		    {
-			$value = 0;
-		    }
-		    
-		    # If it looks like an external identifier of the proper type, unpack it.
-		    
-		    elsif ( $value =~ $IDRE{$extid_type} )
-		    {
-			$value = $2;
-
-			# If the value is a positive integer, do nothing
-			
-			if ( $value =~ /^\d+$/ )
+			unless ( $ref_action->table eq $foreign_table )
 			{
-			    # do nothing
-			}
-			
-			# If the value is ERROR, or something else not valid, add an error
-			# condition.
-			
-			else
-			{
-			    $edt->add_condition($action, 'E_RANGE', $record_col,
-						"value does not specify a valid record");
-			    next;
+			    $value = [ 'E_BAD_REFERENCE', '_mismatch_', $fieldname, $value ];
 			}
 		    }
 		    
-		    # Otherwise, if it looks like an external identifier but is not of the right
-		    # type, then add an error condition.
-		    
-		    elsif ( $value =~ $IDRE{LOOSE} )
-		    {
-			$edt->add_condition($action, 'E_EXTTYPE', $record_col,
-					    "external id type '$1' is not valid for this field");
-			next;
-		    }
-		    
-		    # Otherwise, add an error condition if we are expecting an integer. If we ever
-		    # add non-integer keys, we'll have to come up with some other check.
-		    
-		    elsif ( $cr->{TypeParams}[0] && $cr->{TypeParams}[0] eq 'integer' )
-		    {
-			$edt->add_condition($action, 'E_FORMAT', $record_col,
-					    "value must be an unsigned integer or an external " .
-					    "identifier of type '$IDP{$extid_type}'");
-			next;
-		    }
-		}
-		
-		# At this point, throw an exception (a real one) if we are handed a value which is
-		# an anonymous hash or array ref. In fact, the only reference type we accept is a
-		# PBDB external identifier.
-		
-		if ( ref $value && reftype $value ne 'SCALAR' )
-		{
-		    my $type = ref $value;
-
-		    if ( $type eq 'PBDB::ExtIdent' )
-		    {
-			$edt->add_condition($action, 'E_EXTTYPE', $record_col,
-					    "no external identifier type was defined for this field");
-		    }
-
-		    else
-		    {
-			croak "invalid value type '$type' for col '$col'";
-		    }
-		}
-		
-		# Handle references to keys from other PBDB tables by checking them
-		# against the specified table.
-		
-		if ( my $foreign_table = $cr->{FOREIGN_TABLE} || $FOREIGN_KEY_TABLE{$col} )
-		{
-		    if ( $value =~ /^@(.*)/ )
-		    {
-			my $check_table = $edt->{label_found}{$1};
-
-			unless ( $check_table && $check_table eq $foreign_table )
-			{
-			    $edt->add_condition($action, 'E_LABEL_NOT_FOUND', $record_col, $value);
-			    next;
-			}
-			
-			$quote_this_value = 1;
-			$action->substitute_label($col);
-		    }
-		    
-		    elsif ( $value )
-		    {
-			no strict 'refs';
-			
-			# my $f_table = ${$foreign_table};
-			my $foreign_col = $cr->{FOREIGN_KEY} || $FOREIGN_KEY_COL{$col} || $col;
-			
-			unless ( $edt->check_key($foreign_table, $foreign_col, $value) )
-			{
-			    $edt->add_condition($action, 'E_KEY_NOT_FOUND', $record_col, $value);
-			    next;
-			}
-		    }
-		    
-		    else
-		    {
-			$value = undef;
-		    }
-		}
-		
-		# Otherwise, check the value according to the column type.
-		
-		elsif ( ref $cr->{TypeParams} )
-		{
-		    my ($type, @param) = @{$schema->{$col}{TypeParams}};
-		    
-		    if ( $type eq 'text' || $type eq 'data' )
-		    {
-			($value, $quote_this_value) = $edt->validate_character_value($action, $schema->{$col}, $record_col, $value);
-			next if ref $value;
-		    }
-		    		    
-		    elsif ( $type eq 'boolean' )
-		    {
-			$value = $edt->validate_boolean_value($action, $schema->{$col}, $record_col, $value);
-			
-			next if ref $value;
-		    }
-		    
-		    elsif ( $type eq 'integer' )
-		    {
-			$value = $edt->validate_integer_value($action, $schema->{$col}, $record_col, $value);
-
-			next if ref $value;
-		    }
-		    
-		    elsif ( $type eq 'fixed' )
-		    {
-			$value = $edt->validate_fixed_value($action, $schema->{$col}, $record_col, $value);
-			
-			next if ref $value;
-		    }
-		    
-		    elsif ( $type eq 'floating' )
-		    {
-			$value = $edt->validate_float_value($action, $schema->{$col}, $record_col, $value);
-			
-			next if ref $value;
-		    }
-		    		    
-		    elsif ( $type eq 'enum' || $type eq 'set' )
-		    {
-			$value = $edt->validate_enum_value($action, $schema->{$col}, $record_col, $value);
-			$quote_this_value = 1;
-			next if ref $value;
-		    }
-
-		    elsif ( $type eq 'date' )
-		    {
-			($value, $quote_this_value) =
-			    $edt->validate_datetime_value($action, $schema->{$col}, $record_col, $value);
-			
-			next if ref $value;
-		    }
-
-		    elsif ( $type eq 'geometry' )
-		    {
-			$value = $edt->validate_geometry_value($action, $schema->{$col}, $record_col, $value);
-			next if ref $value;
-		    }
-		    
-		    # If the data type is anything else, we just throw up our hands and accept
-		    # whatever they give us. This might not be wise.
-
-		    # Now store the cleaned value back into the record, so that before_action and
-		    # after_action routines will have access to it.
-		    
-		    $record->{$record_col} = $value;
+		    $action->add_precheck('foreign_key', $colname, $fieldname,
+					  $foreign_table, $cr->{FOREIGN_COL});
 		}
 	    }
 	    
-	    # Now we have to re-check whether we have a defined value or not. Some of the data
-	    # types checked above turn whitespace into null, for example. If we have a value, then
-	    # if a validator function has been defined for this column, call it. If the function
-	    # returns a condition code, then add the specified error or warning condition.
+	    # Otherwise, check the value according to the column type.
 	    
-	    if ( defined $value )
+	    elsif ( ref $cr->{TypeParams} eq 'ARRAY' )
 	    {
-		if ( $cr->{VALIDATOR} )
+		my $type = $cr->{TypeParams};
+		my $maintype = $type->[0] || 'unknown';
+		
+		if ( $maintype eq 'text' || $maintype eq 'data' )
 		{
-		    my $v = $cr->{VALIDATOR};
-		    
-		    my ($code, @error_params) = ref $v eq 'CODE' ?
-			&$v($edt, $value, $record_col, $action) :
-			$edt->$v($value, $record_col, $action);
-		    
-		    if ( $code )
-		    {
-			$error_params[0] ||= 'value is not valid for this field';
-			$edt->add_condition($action, $code, $record_col, @error_params);
-			next;
-		    }
+		    ($value, $additional, $no_quote) =
+			$edt->validate_char_value($type, $fieldname, $value, $cr->{ALLOW_TRUNCATE});
+		}
+		
+		elsif ( $maintype eq 'boolean' )
+		{
+		    ($value, $additional) = $edt->validate_boolean_value($type, $fieldname, $value);
+		}
+		
+		elsif ( $maintype eq 'integer' )
+		{
+		    ($value, $additional) = $edt->validate_integer_value($type, $fieldname, $value);
+		}
+		
+		elsif ( $maintype eq 'fixed' )
+		{
+		    ($value, $additional) 
+			= $edt->validate_fixed_value($type, $fieldname, $value, $cr->{ALLOW_TRUNCATE});
+		}
+		
+		elsif ( $maintype eq 'floating' )
+		{
+		    ($value, $additional) = $edt->validate_float_value($type, $fieldname, $value);
+		}
+		
+		elsif ( $maintype eq 'enum' || $maintype eq 'set' )
+		{
+		    ($value, $additional) = $edt->validate_enum_value($type, $fieldname, $value);
+		}
+		
+		elsif ( $maintype eq 'date' )
+		{
+		    ($value, $additional) = $edt->validate_datetime_value($type, $fieldname, $value);
+		}
+		
+		elsif ( $maintype eq 'geometry' )
+		{
+		    ($value, $additional) = $edt->validate_geometry_value($type, $fieldname, $value);
+		}
+		
+		# If the data type is anything else, stringify the value and go with it. This
+		# might cause problems in occasional situations.
+		
+		elsif ( defined $value )
+		{
+		    $value = '' . $value;
 		}
 	    }
-	    
-	    # Otherwise, we don't have a defined value for this column. If the column name is
-	    # 'modified' and this is an 'update' or 'replace' operation, or 'created' on a
-	    # 'replace' operation, then let it go through as a null. This will cause the current
-	    # timestamp to be stored.
-	    
-	    elsif ( $col eq 'modified' && $operation ne 'insert' )
+	}
+	
+	# If the operation is 'update' and there is no assigned value, skip this column entirely.
+	
+	elsif ( $operation eq 'update' && not $fieldname )
+	{
+	    next COLUMN;
+	}
+	
+	# Otherwise, a column that is NOT_NULL without a default value must be given a defined value.
+	
+	elsif ( $cr->{NOT_NULL} && ! defined $value && ! defined $cr->{Default} )
+	{
+	    if ( $directive )
 	    {
-		# let this column go through with a value of NULL
+		$edt->add_condition($action, 'E_EXECUTE', "null value for directive '$directive'");
 	    }
-	    
-	    elsif ( $col eq 'created' && $operation eq 'replace' )
-	    {
-		# let this column go through with a value of NULL
-	    }
-	    
-	    # Otherwise, if this column is required to have a value, then throw an exception
-	    # unless this is an update operation and the column does not appear in the action
-	    # record. Any columns not explicitly given a value in an update operation are left
-	    # with whatever value was previously stored in the table.
-	    
-	    elsif ( ($cr->{REQUIRED} || $cr->{NOT_NULL} ) &&
-		    ( $operation ne 'update' || exists $record->{$record_col} ) )
-	    {
-		my $col_name;
-		
-		if ( $record_col ne $col ) { $col_name = $record_col; }
-		else { $col_name = $cr->{ALTERNATE_NAME} || $record_col; }
-		
-		$edt->add_condition($action, 'E_REQUIRED', $col_name);
-		next;
-	    }
-	    
-	    # If this column does appear in the action record, then it should be explicitly
-	    # included in the SQL statement. If it has a default value, we substitute
-	    # that. Otherwise, we will let its value be NULL.
-	    
-	    elsif ( exists $record->{$record_col} )
-	    {
-		if ( defined $cr->{Default} )
-		{
-		    $value = $cr->{Default};
-		    $quote_this_value = 1;
-		    $is_default = 1;
-		}
-	    }
-	    
-	    # If we get here, then the column does not appear in the action record, is not
-	    # explicitly required, and is not implicitly required for this operation
-	    # (i.e. 'modified' with an 'update' or 'replace' operation). So we skip it.
-	    
+
 	    else
 	    {
-		next;
+		$edt->add_condition($action, 'E_REQUIRED', $fieldname, "value cannot be null");
 	    }
 	}
 	
-	# If we were directed not to validate this column, we still need to check whether it is
-	# mentioned in the record. If not, we skip it.
+	# Additional error checking
+	# -------------------------
 	
-	elsif ( ! exists $record->{$record_col} )
+	# At this point, the column value has been generated. If the value has been changed to an
+	# error condition, add that condition and go on to the next column. If $additional is a
+	# condition, add it too. This one might be a warning instead of an error.
+	
+	if ( ref $additional eq 'ARRAY' )
 	{
-	    next;
+	    unshift @$additional, $action unless $additional->[0] eq 'main';
+	    $edt->add_condition(@$additional);
 	}
 	
-	# If this column has the ADMIN_SET property, then throw an exception unless
-	# the user has 'admin' privilege, or unless the value being set is the default.
-	
-	if ( $cr->{ADMIN_SET} && ! $is_default && $action->permission ne 'admin' )
+	if ( ref $value eq 'ARRAY' )
 	{
-	    $edt->add_condition($action, 'E_PERM_COL', $record_col);
+	    unshift @$value, $action unless $value->[0] eq 'main';
+	    $edt->add_condition(@$value);
+	    next COLUMN;
 	}
 	
-	# If we get here, then we have a good value! Push the column and value on the respective
-	# lists. An undefined value is pushed as NULL, otherwise the value is quoted. The default
-	# behavior for mariadb when given the empty string as a value for a numeric column is to
-	# store zero. So we'll go with that.
+	# If there was no special handling directive, do some additional checks.
 	
-	push @columns, $col;
-	
-	if ( defined $value )
+	unless ( $directive && $directive ne 'validate' )
 	{
-	    $value = $dbh->quote($value) if $quote_this_value;
-	    push @values, $value;
+	    # If we have an assigned value and this column has the ADMIN_SET property, add an
+	    # error condition unless we have administrative privilege.
+	    
+	    if ( $fieldname && $cr->{ADMIN_SET} && $permission !~ /admin/ )
+	    {
+		$edt->add_condition($action, 'E_PERM_COL', $fieldname);
+	    }
+	    
+	    # A column that has the REQUIRED property must have a non-empty value.
+	    
+	    if ( $cr->{REQUIRED} )
+	    {
+		my $value_ok;
+		
+		# If the column is also a FOREIGN_KEY, the value must be non-zero. An
+		# action reference counts as non-zero, because it will be required to
+		# have a non-zero value later when it is resolved.
+		
+		if ( $cr->{FOREIGN_KEY} )
+		{
+		    $value_ok = 1 if $value;
+		}
+		
+		# If the value is not defined but the column has a non-empty default, it is okay.
+		
+		elsif ( ! defined $value && defined $cr->{Default} && $cr->{Default} ne '' )
+		{
+		    $value_ok = 1;
+		}
+			    
+		# Otherwise, any non-empty value is okay.
+		
+		elsif ( defined $value && $value ne '' )
+		{
+		    $value_ok = 1;
+		}
+		
+		# Add an error condition for values that are not okay.
+		
+		unless ( $value_ok )
+		{
+		    $edt->add_condition($action, 'E_REQUIRED', $fieldname, "must have a non-empty value")
+		}
+	    }
+	}
+	
+	# Go on to the next column if any error conditions have been added.
+	
+	next COLUMN if $action->has_errors;
+	
+	# If the value is still undefined, skip this column unless it was an assigned value.
+	
+	next COLUMN unless defined $value || $fieldname;
+	
+	# Use the value
+	# -------------
+	
+	# If we get here, then we are going to use this value in executing the operation.  All
+	# defined values are quoted, unless the $no_quote flag is set. The only exception is a
+	# value of 'NULL' for one of the special columns.
+	
+	if ( defined $value && not ($directive && $value eq 'NULL') )
+	{
+	    $value = $dbh->quote($value) unless $no_quote;
 	}
 	
 	else
 	{
-	    push @values, 'NULL';
+	    $value = 'NULL';
 	}
+	
+	push @column_names, $colname;
+	push @column_values, $value;
     }
+    
+    # Complete the validation
+    # -----------------------
     
     # If this is a primary action (not auxiliary) and there are any unrecognized keys in this
     # record, add an error or a warning depending on whether BAD_FIELDS is allowed for this
     # transaction.
     
-    unless ( $action->is_child )
+    if ( ! $action->parent )
     {
 	foreach my $key ( keys %$record )
 	{
-	    next if $used{$key};
-	    next if $key =~ /^_/;
-	    next if $action->{ignore_field}{$key};
-	    
-	    if ( $edt->allows('BAD_FIELDS') )
+	    unless ( $used{$key} ||
+		     $key =~ /^_/ ||
+		     %directives && $directives{_FIELD_}{$key} eq 'ignore' )
 	    {
-		$edt->add_condition($action, 'W_BAD_FIELD', $key);
-	    }
-	    
-	    else
-	    {
-		$edt->add_condition($action, 'E_BAD_FIELD', $key);
-	    }
-	}
-    }
-    
-    # If the action has no errors, then we save the column values to it.
-    
-    unless ( $action->errors )
-    {    
-	# If we were directed to copy any old column values, do this first.
-	
-	if ( @copy_columns )
-	{
-	    my (@copy_values) = $edt->get_old_values($table, $action->keyexpr, join(',', @copy_columns));
-	    
-	    my (%copy_values, $substitution_count);
-	    
-	    foreach my $i ( 0..$#copy_columns )
-	    {
-		$copy_values{$copy_columns[$i]} = $dbh->quote($copy_values[$i]) if defined $copy_values[$i];
-	    }
-	    
-	    foreach my $i ( 0..$#columns )
-	    {
-		if ( defined $copy_values{$columns[$i]} )
+		if ( $edt->allows('BAD_FIELDS') )
 		{
-		    $values[$i] = $copy_values{$columns[$i]};
-		    $substitution_count++;
+		    $edt->add_condition($action, 'W_BAD_FIELD', $key, $table);
 		}
 		
-		last if $substitution_count == scalar(keys %copy_values);
+		else
+		{
+		    $edt->add_condition($action, 'E_BAD_FIELD', $key, $table);
+		}
+	    }
+	}
+    }
+    
+    # If the action has no errors, finish processing the column names and values.
+    
+    if ( not $action->has_errors )
+    {
+	# If some columns are to remain unchanged in a 'replace' operation, download their values
+	# from the old record. Add the columns and values to the end of the respective lists.
+ 	
+	if ( @unchanged )
+	{
+	    my $column_string = join ',', @unchanged;
+	    
+	    my (@old_values) = $edt->get_old_values($table, $action->keyexpr, $column_string);
+	
+	    foreach my $i ( 0..$#unchanged )
+	    {
+		my $quoted = defined $old_values[$i] ? $dbh->quote($old_values[$i]) : 'NULL';
+		
+		push @column_names, $unchanged[$i];
+		push @column_values, $quoted;
 	    }
 	}
 	
-	# Now store our column and value lists for subsequent use in constructing SQL statements.
+	# Now store the column list and value hash for subsequent use in constructing SQL statements.
 	
-	$action->set_column_values(\@columns, \@values);
+	$action->set_column_values(\@column_names, \@column_values);
     }
     
-    return;
+    # Mark the validation as complete.
+    
+    $action->validation_complete;
 }
 
 
-# validate_character_value ( action, column_defn, record_col, value )
+# validate_char_value ( type, fieldname, value )
 # 
 # Check that the specified value is suitable for storing into a boolean column in the
-# database. If it is not, add an error condition and return a non-scalar value as a flag to
-# indicate that no further processing should be done on it.
+# database. If it is not, return an error condition as a listref.
 # 
-# If the value is good, this routine will return a canonical version suitable for storing into the
-# column. An undefined return value will indicate a null.
+# If the value is good, return a canonical version suitable for storing into the column. An
+# undefined return value will indicate a null. The second return value, if present, will be a
+# warning condition as a listref. The third return value, if present, will indicate that the
+# returned value has already been quoted.
 
-sub validate_character_value {
+sub validate_char_value {
     
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value, $can_truncate) = @_;
     
-    my ($type, $size, $variable, $charset) = @{$column_defn->{TypeParams}};
+    my ($type, $size, $variable, $charset) = ref $arg eq 'ARRAY' ? $arg->@* : $arg;
     
     my $value_size = length($value);
-    my $quote_this_value = 1;
+    my $is_quoted;
+    my $additional;
     
     # If the character set of a text/char column is not utf8, then encode it into the proper
     # character set before checking the length.
@@ -1075,7 +733,7 @@ sub validate_character_value {
 	    my $quoted = $dbh->quote($value);
 	    $value = "convert($quoted using $charset)";
 	    ($value_size) = $dbh->selectrow_array("SELECT length($value)");
-	    $quote_this_value = 0;
+	    $is_quoted = 1;
 	}
     }
     
@@ -1086,34 +744,25 @@ sub validate_character_value {
     {
 	my $word = $type eq 'text' ? 'characters' : 'bytes';
 	
-	if ( $column_defn->{ALLOW_TRUNCATE} )
+	if ( $can_truncate )
 	{
 	    $value = substr($value, 0, $size);
-	    $edt->add_condition($action, 'W_TRUNC', $record_col,
-				"value was truncated to a length of $size $word");
+	    $additional = [ 'W_TRUNC', $fieldname,
+			    "value was truncated to a length of $size $word" ];
 	}
 	
 	else
 	{
-	    $edt->add_condition($action, 'E_WIDTH', $record_col,
-				"value must be no more than $size $word in length, was $value_size");
-	    return { };
+	    return [ 'E_WIDTH', $fieldname,
+		     "value must be no more than $size $word in length, was $value_size" ];
 	}
     }
     
-    # If this column is required and the value is empty, add an error condition.
-    
-    if ( $value eq '' && $column_defn->{REQUIRED} )
-    {
-	$edt->add_condition($action, 'E_REQUIRED', $record_col);
-	return { };
-    }
-    
-    return ($value, $quote_this_value);
+    return ($value, $additional, $is_quoted);
 }
 
 
-# validate_boolean_value ( action, column_defn, record_col, value )
+# validate_boolean_value ( type, fieldname, value )
 # 
 # Check that the specified value is suitable for storing into a boolean column in the
 # database. If it is not, add an error condition and return a non-scalar value as a flag to
@@ -1124,32 +773,30 @@ sub validate_character_value {
 
 sub validate_boolean_value {
     
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value) = @_;
     
-    # If the type is boolean, the value must be either 1 or 0. But we allow 'yes', 'no', 'true',
-    # and 'false' as synonyms. A string that is empty or has only whitespace is turned into a
-    # null.
+    # For a boolean column, the value must be either 1 or 0. But we allow 'yes', 'no', 'true', and
+    # 'false' as synonyms. A string that is empty or has only whitespace is turned into a null.
     
     if ( $value =~ qr{ ^ \s* $ }xs )
     {
 	return undef;
     }
     
+    elsif ( $value =~ qr{ ^ \s* (?: ( 1 | true | yes | on ) | 
+				    ( 0 | false | no | off ) ) \s* $ }xsi )
+    {
+	return $1 ? '1' : '0';
+    }
+    
     else
     {
-	unless ( $value =~ qr{ ^ \s* (?: ( 1 | true | yes ) | ( 0 | false | no ) ) \s* $ }xsi )
-	{
-	    $edt->add_condition($action, 'E_FORMAT', $record_col,
-				"value must be one of: 1, 0, true, false, yes, no");
-	    return { };
-	}
-	
-	return $1 ? 1 : 0;
+	return [ 'E_FORMAT', $fieldname, "value must be one of: 1, 0, true, false, yes, no, on, off" ];
     }
 }
 
 
-# validate_integer_value ( action, column_defn, record_col, value )
+# validate_integer_value ( type, fieldnme, value )
 # 
 # Check that the specified value is suitable for storing into an integer column in the
 # database. If it is not, add an error condition and return a non-scalar value as a flag to
@@ -1172,10 +819,10 @@ our (%UNSIGNED_BOUND) = ( tiny => 255,
 
 sub validate_integer_value {
     
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value) = @_;
     
-    my ($type, $unsigned, $size) = @{$column_defn->{TypeParams}};
-
+    my ($type, $unsigned, $size) = ref $arg eq 'ARRAY' ? $arg->@* : $arg;
+    
     my $max = $unsigned ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
     
     # First make sure that the value is either empty or matches the proper format. A value which
@@ -1188,11 +835,17 @@ sub validate_integer_value {
     
     elsif ( $value !~ qr{ ^ \s* ( [-+]? ) \s* ( \d+ ) \s* $ }xs )
     {
-	my $phrase = $unsigned ? 'an unsigned' : 'an';
-	
-	$edt->add_condition($action, 'E_FORMAT', $record_col,
-			    "value must be $phrase integer");
-	return { };
+	if ( $value =~ $IDRE{LOOSE} )
+	{
+	    return [ 'E_EXTID', $fieldname, "external identifiers are not accepted for this field" ];
+	}
+
+	else
+	{
+	    my $phrase = $unsigned ? 'an unsigned' : 'an';
+	    
+	    return [ 'E_FORMAT', $fieldname, "value must be $phrase integer" ];
+	}
     }
     
     elsif ( $unsigned )
@@ -1201,16 +854,12 @@ sub validate_integer_value {
 	
 	if ( $1 && $1 eq '-' )
 	{
-	    $edt->add_condition($action, 'E_RANGE', $record_col, 
-				"value must an unsigned decimal number");
-	    return { };
+	    return [ 'E_RANGE', $fieldname, "value must an unsigned integer" ];
 	}
 	
-	elsif ( $value > $max )
+	elsif ( defined $max && $value > $max )
 	{
-	    $edt->add_condition($action, 'E_RANGE', $record_col,
-				"value must be less than or equal to $max");
-	    return { };
+	    return [ 'E_RANGE', $fieldname, "value must be less than or equal to $max" ];
 	}
 	
 	else
@@ -1222,25 +871,23 @@ sub validate_integer_value {
     else
     {
 	$value = ($1 && $1 eq '-') ? "-$2" : $2;
-	
-	my $lower = $max + 1;
-	
-	if ( $value > $max || (-1 * $value) > $lower )
+
+	if ( defined $max )
 	{
-	    $edt->add_condition($action, 'E_RANGE', $record_col, 
-				"value must lie between -$lower and $max");
-	    return { };
+	    my $lower = $max + 1;
+	    
+	    if ( $value > $max || (-1 * $value) > $lower )
+	    {
+		return [ 'E_RANGE', $fieldname, "value must lie between -$lower and $max" ];
+	    }
 	}
 	
-	else
-	{
-	    return $value;
-	}
+	return $value; # otherwise
     }
 }
 
 
-# validate_fixed_value ( action, column_defn, record_col, value )
+# validate_fixed_value ( type, fieldname, value )
 # 
 # Check that the specified value is suitable for storing into a fixed-point decimal column in the
 # database. If it is not, add an error condition and return a non-scalar value as a flag to
@@ -1251,9 +898,11 @@ sub validate_integer_value {
 
 sub validate_fixed_value {
 
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value, $can_truncate) = @_;
     
-    my ($type, $unsigned, $whole, $precision) = @{$column_defn->{TypeParams}};
+    my ($type, $unsigned, $whole, $precision) = ref $arg eq 'ARRAY' ? $arg->@* : $arg;
+    
+    my $additional;
     
     # First make sure that the value is either empty or matches the proper format.  A value which
     # is empty or contains only whitespace is turned into NULL.
@@ -1267,9 +916,7 @@ sub validate_fixed_value {
     {
 	my $phrase = $unsigned ? 'an unsigned' : 'a';
 	
-	$edt->add_condition($action, 'E_FORMAT', $record_col,
-			    "value must be $phrase decimal number");
-	return { };
+	return ['E_FORMAT', $fieldname, "value must be $phrase decimal number" ];
     }
     
     else
@@ -1278,9 +925,7 @@ sub validate_fixed_value {
 	
 	if ( $unsigned && defined $1 && $1 eq '-' )
 	{
-	    $edt->add_condition($action, 'E_RANGE', $record_col,
-				"value must be an unsigned decimal number");
-	    return { };
+	    return [ 'E_RANGE', $fieldname, "value must be an unsigned decimal number" ];
 	}
 	
 	# Now put the number back together from the regex captures. If there is an
@@ -1309,26 +954,23 @@ sub validate_fixed_value {
 	{
 	    my $total = $whole + $precision;
 	    
-	    $edt->add_condition($action, 'E_RANGE', $record_col,
-				"value is too large for decimal($total,$precision)");
-	    return { };
+	    return [ 'E_RANGE', $fieldname, "value is too large for decimal($total,$precision)" ];
 	}
 	
 	if ( $fracpart && length($fracpart) > $precision )
 	{
 	    my $total = $whole + $precision;
 	    
-	    if ( $column_defn->{ALLOW_TRUNCATE} )
+	    if ( $can_truncate )
 	    {
-		$edt->add_condition($action, 'W_TRUNC', $record_col,
-				    "value has been truncated to decimal($total,$precision)");
+		$additional = [ 'W_TRUNC', $fieldname,
+				"value has been truncated to decimal($total,$precision)" ];
 	    }
 	    
 	    else
 	    {
-		$edt->add_condition($action, 'E_WIDTH', $record_col,
-				    "too many decimal digits for decimal($total,$precision)");
-		return { };
+		return [ 'E_WIDTH', $fieldname,
+			 "too many decimal digits for decimal($total,$precision)" ];
 	    }
 	}
 	
@@ -1338,12 +980,12 @@ sub validate_fixed_value {
 	$value .= $intpart || '0';
 	$value .= '.' . substr($fracpart, 0, $precision);
 	
-	return $value;
+	return ($value, $additional);
     }
 }
 
 
-# validate_float_value ( action, column_defn, record_col, value )
+# validate_float_value ( type, fieldname, value )
 # 
 # Check that the specified value is suitable for storing into a floating-point decimal column in the
 # database. If it is not, add an error condition and return a non-scalar value as a flag to
@@ -1354,9 +996,9 @@ sub validate_fixed_value {
 
 sub validate_float_value {
 
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value) = @_;
     
-    my ($type, $unsigned, $precision) = @{$column_defn->{TypeParams}};
+    my ($type, $unsigned, $precision) = ref $arg eq 'ARRAY' ? $arg->@* : $arg;
     
     # First make sure that the value is either empty or matches the proper format. A value which
     # is empty or contains only whitespace will be treated as a NULL.
@@ -1370,9 +1012,7 @@ sub validate_float_value {
     {
 	my $phrase = $unsigned ? 'an unsigned' : 'a';
 	
-	$edt->add_condition($action, 'E_FORMAT', $record_col,
-			    "value must be $phrase floating point number");
-	return { };
+	return [ 'E_FORMAT', $fieldname, "value must be $phrase floating point number" ];
     }
     
     else
@@ -1383,9 +1023,7 @@ sub validate_float_value {
 	
 	if ( $unsigned && $sign eq '-' )
 	{
-	    $edt->add_condition($action, 'E_RANGE', $record_col,
-				"value must be an unsigned floating point number");
-	    return { };
+	    return [ 'E_RANGE', $fieldname, "value must be an unsigned floating point number" ];
 	}
 	
 	# Put the pieces of the value back together.
@@ -1409,9 +1047,7 @@ sub validate_float_value {
 	
 	if ( $value > $bound || ( $value < 0 && -$value > $bound ) )
 	{
-	    $edt->add_condition($action, 'E_RANGE', $record_col,
-				"magnitude is too large for $word-precision floating point");
-	    return { };
+	    return [ 'E_RANGE', $fieldname, "magnitude is too large for $word-precision floating point" ];
 	}
 
 	return $value;
@@ -1419,7 +1055,7 @@ sub validate_float_value {
 }
 
 
-# validate_enum_value ( action, column_defn, record_col, value )
+# validate_enum_value ( type, fieldname, value )
 # 
 # Check that the specified value is suitable for storing into an enumerated or set valued column in the
 # database. If it is not, add an error condition and return a non-scalar value as a flag to
@@ -1430,9 +1066,9 @@ sub validate_float_value {
 
 sub validate_enum_value {
 
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value) = @_;
     
-    my ($type, $good_values) = @{$column_defn->{TypeParams}};
+    my ($type, $good_values) = ref $arg eq 'ARRAY' ? $arg->@* : $arg;
     
     # If the data type is either 'set' or 'enum', then we check to make sure that the value is one
     # of the allowable ones. We always match without regard to case, using the Unicode 'fold case'
@@ -1445,19 +1081,24 @@ sub validate_enum_value {
     
     my @raw = $value;
     
-    if ( $type eq 'set' )
-    {
-	my $sep = $column_defn->{VALUE_SEPARATOR} || qr{ \s* , \s* }xs;
-	@raw = split $sep, $value;
-    }
+    # if ( $type eq 'set' )
+    # {
+    # 	my $sep = $column_defn->{VALUE_SEPARATOR} || qr{ \s* , \s* }xs;
+    # 	@raw = split $sep, $value;
+    # }
     
     my (@good, @bad);
     
     foreach my $v ( @raw )
     {
 	next unless defined $v && $v ne '';
+
+	if ( ! $good_values )
+	{
+	    push @good, $v;
+	}
 	
-	if ( $good_values->{fc $v} )
+	elsif ( $good_values->{fc $v} )
 	{
 	    push @good, $v;
 	}
@@ -1474,12 +1115,10 @@ sub validate_enum_value {
 	my $word = @bad > 1 ? 'values' : 'value';
 	my $word2 = @bad > 1 ? 'are' : 'is';
 	
-	$edt->add_condition($action, 'E_RANGE', $record_col,
-			    "$word '$value_string' $word2 not allowed for this table column");
-	return { };
+	return [ 'E_RANGE', $fieldname, "$word '$value_string' $word2 not allowed for this table column" ];
     }
     
-    if ( @good )
+    elsif ( @good )
     {
 	return join(',', @good);
     }
@@ -1491,7 +1130,7 @@ sub validate_enum_value {
 }
 
 
-# validate_datetime_value ( action, column_defn, record_col, value )
+# validate_datetime_value ( type, fieldname, value )
 # 
 # Check that the specified value is suitable for storing into a time or date or datetime valued
 # column in the database. If it is not, add an error condition and return a non-scalar value as a
@@ -1502,37 +1141,38 @@ sub validate_enum_value {
 
 sub validate_datetime_value {
     
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value) = @_;
     
-    my ($type, $specific) = @{$column_defn->{TypeParams}};
+    my ($type, $specific) = ref $arg eq 'ARRAY' ? $arg->@* : $arg;
     
     if ( $value =~ qr{ ^ now (?: [(] [)] ) ? $ }xsi )
     {
-	return 'NOW()';
+	return ('NOW()', undef, 1);
     }
-
+    
     elsif ( $value =~ qr{ ^ \d\d\d\d\d\d\d\d\d\d+ $ }xs )
     {
-	return "FROM_UNIXTIME($value)";
+	return ("FROM_UNIXTIME($value)", undef, 1);
     }
     
     elsif ( $specific eq 'time' )
     {
 	if ( $value !~ qr{ ^ \d\d : \d\d : \d\d $ }xs )
 	{
-	    $edt->add_condition($action, 'E_FORMAT', $record_col, "invalid time format '$value'");
-	    return { };
+	    return [ 'E_FORMAT', $fieldname, "invalid time '$value'" ];
 	}
-	
-	return ($value, 1);
+
+	else
+	{
+	    return $value;
+	}
     }
     
     else
     {
 	if ( $value !~ qr{ ^ ( \d\d\d\d - \d\d - \d\d ) ( \s+ \d\d : \d\d : \d\d ) ? $ }xs )
 	{
-	    $edt->add_condition($action, 'E_FORMAT', $record_col, "invalid datetime format '$value'");
-	    return { };
+	    return [ 'E_FORMAT', $fieldname, "invalid datetime '$value'" ];
 	}
 	
 	unless ( defined $2 && $2 ne '' )
@@ -1540,12 +1180,12 @@ sub validate_datetime_value {
 	    $value .= ' 00:00:00';
 	}
 	
-	return ($value, 1);
+	return $value;
     }
 }
 
 
-# validate_geometry_value ( action, column_defn, record_col, value )
+# validate_geometry_value ( type, fieldname, value )
 # 
 # Check that the specified value is suitable for storing into a geometry valued column in the
 # database. If it is not, add an error condition and return a non-scalar value as a flag to
@@ -1556,9 +1196,9 @@ sub validate_datetime_value {
 
 sub validate_geometry_value {
     
-    my ($edt, $action, $column_defn, $record_col, $value) = @_;
+    my ($edt, $arg, $fieldname, $value) = @_;
     
-    my ($type, $specific) = @{$column_defn->{TypeParams}};
+    my ($type, $specific) = ref $arg eq 'ARRAY' ? $arg->@* : $arg;
     
     # $$$ we still need to write some code to validate these.
     
@@ -1566,29 +1206,209 @@ sub validate_geometry_value {
 }
 
 
-# check_key ( table, value )
+# looks_like_extid ( value )
 #
-# Make sure that the specified key exists in the specified table.
+
+sub looks_like_extid {
+
+    my ($value) = @_;
+
+    return ref $value eq 'PBDB::ExtIdent' || $value =~ $IDRE{LOOSE};
+}
+
+
+# validate_extid_value ( type, fieldname, value )
+#
+# 
+
+sub validate_extid_value {
+
+    my ($edt, $type, $fieldname, $value) = @_;
+    
+    # If the external identifier has already been parsed and turned into an object, make sure it
+    # has the proper type and return the stringified value.
+    
+    if ( ref $value eq 'PBDB::ExtIdent' )
+    {
+	my $value_type = $value->type;
+	
+	# If the value matches the proper type, stringify it and return it.
+	
+	$EXTID_CHECK{$type} ||= qr/$IDP{$type}/;
+	
+	if ( $value_type =~ $EXTID_CHECK{$type} )
+	{
+	    return '' . $value;
+	}
+	
+	# Otherwise, return an error condition.
+	
+	else
+	{
+	    return [ 'E_EXTID', $fieldname,
+		     "external identifier must be of type '$IDP{$type}', was '$value_type'" ];
+	}
+    }
+    
+    # If the value is a string that looks like an unparsed external identifier of the proper type,
+    # unpack it and return the extracted value.
+    
+    elsif ( $value =~ $IDRE{$type} )
+    {
+	return $2;
+    }
+    
+    # If it looks like an external identifier but is not of the right type, return an error
+    # condition.
+    
+    elsif ( $value =~ $IDRE{LOOSE} )
+    {
+	$value = [ 'E_EXTID', $fieldname,
+		   "external identifier must be of type '$IDP{$type}', was '$1'" ];
+    }
+    
+    # Otherise, return undef to indicate that the value isn't an external identifier.
+    
+    else
+    {
+	return undef;
+    }
+}
+
 
 sub check_key {
     
-    my ($edt, $table_specifier, $col, $value) = @_;
+    my ($edt, $check_table, $check_col, $value) = @_;
     
-    if ( $FOREIGN_KEY_COL{$col} )
-    {
-	$col = $FOREIGN_KEY_COL{$col};
-    }
-    
+    return unless $check_table && $check_col && $value;
+
     my $quoted = $edt->dbh->quote($value);
     
-    my $sql = "SELECT $col FROM $TABLE{$table_specifier} WHERE $col=$quoted";
-
+    my $sql = "SELECT $check_col FROM $TABLE{$check_table} WHERE $check_col=$quoted LIMIT 1";
+    
     $edt->debug_line( "$sql\n" );
     
     my ($found) = $edt->dbh->selectrow_array($sql);
-
-    return $found;
+    
+    return $found;    
 }
+
+
+# validate_special_column ( directive, cr, permission, fieldname, value )
+# 
+# This method is called once for each of the following column types that occurs in the table
+# currently being operated on. The column names will almost certainly be different.
+# 
+# The parameter $directive must be one of the following:
+# 
+# ts_created      Records the date and time at which this record was created.
+# ts_modified     Records the date and time at which this record was last modified.
+# au_creater      Records the person_no or user_id of the person who created this record.
+# au_authorizer   Records the person_no or user_id of the person who authorized its creation.
+# au_modifier     Records the person_no or user_id of the person who last modified this record.
+# 
+# Values for these columns cannot be specified explicitly except by a user with administrative
+# permission, and then only if this EditTransaction allows the condition 'ALTER_TRAIL'.
+# 
+# If this transaction is in FIXUP_MODE, both field values will be left unchanged if the user has
+# administrative privilege. Otherwise, a permission error will be returned.
+#
+# The parameter $cr must contain the column description record.
+
+sub validate_special_column {
+
+    my ($edt, $directive, $cr, $permission, $fieldname, $value) = @_;
+    
+    # If the value is empty, return undef. The only exception is for the modifier/modified fields
+    # if the transaction is in FIXUP_MODE.
+    
+    unless ( defined $value && $value eq '' )
+    {
+	if ( $edt->{allows}{FIXUP_MODE} && $directive eq 'ts_modified' )
+	{
+	    if ( $permission =~ /[*]|admin/ )
+	    {
+		return 'UNCHANGED';
+	    }
+	    
+	    else
+	    {
+		return [ 'main', 'E_PERM', 'fixup_mode' ];
+	    }
+	}
+	
+	else
+	{
+	    return undef;
+	}
+    }
+    
+    # Otherwise, a non-empty value has been specified for this field. Check that the value matches
+    # the required format.
+    
+    my ($additional, $no_quote);
+    
+    # The ts fields take datetime values, which are straightforward to validate.
+    
+    if ( $directive =~ /^ts/ )
+    {
+	($value, $additional, $no_quote) = $edt->validate_datetime_value('datetime', $fieldname, $value);
+    }
+    
+    # The au fields take key values as specified in the column description. The ones that have
+    # integer values accept external identifiers of type PRS.
+    
+    else
+    {
+	# If we don't have any type parameters for some reason, default to integer.
+	
+	my $type = ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams} : 'integer';
+	my $maintype = ref $type eq 'ARRAY' ? $type->[0] : $type;
+	
+	# If the column type is 'integer', check to see if the value is an external identifier of
+	# the specified type (defaulting to 'PRS').
+	
+	if ( $maintype eq 'integer' && looks_like_extid($value) )
+	{
+	    ($value) = $edt->validate_extid_value($cr->{EXTID_TYPE} || 'PRS', $fieldname, $value);
+	}
+	
+	# If we don't already have an error condition, check if the key value is present in the
+	# proper table. If not, set an error condition.
+	
+	unless ( ref $value eq 'ARRAY' || $edt->check_foreign_key($cr, $value) )
+	{
+	    $value = [ 'E_KEY_NOT_FOUND', $fieldname, $value ];
+	}
+    }
+    
+    # If the user has administrative permission on this table, check to see if the ALTER_TRAIL
+    # allowance is present and add a caution if it is not. If we already have an error condition
+    # related to the value, bump it into second place.
+    
+    # $$$ check for ENABLE_ALTER_TRAIL or require superuser.
+
+    if ( $permission =~ /admin/ )
+    {
+	unless ( $edt->{allows}{ALTER_TRAIL} )
+	{
+	    $additional = $value if ref $value eq 'ARRAY';
+	    $value = [ 'C_ALTER_TRAIL', $fieldname ];
+	}
+    }
+    
+    # Otherwise, add a permission error. If we already have an error condition related to the
+    # value, bump it into second place.
+    
+    else
+    {
+	$additional = $value if ref $value eq 'ARRAY';
+	$value = [ 'E_PERM_COL', $fieldname ];
+    }
+    
+    return ($value, $additional, $no_quote);
+}
+
 
 1;
 

@@ -409,7 +409,8 @@ sub open_archive {
     # allowance lets us create a new record if we don't already have an archive_no for this
     # request.
     
-    my $edt = EditTransaction->new($request, $perms, 'ARCHIVES', { CREATE => 1, IMMEDIATE_MODE => 1 });
+    my $edt = EditTransaction->new($request, $perms, 'ARCHIVES', { CREATE => 1,
+								   IMMEDIATE_EXECUTION => 1 });
     
     # If we are replacing the contents of an existing archive record, the user can also update the
     # 'authors' and 'description' fields. A new record can have both of those fields and must also

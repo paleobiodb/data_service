@@ -1,5 +1,5 @@
 t: *.pm *.t
-edt: ../lib/EditTransaction.pm ../lib/EditTransaction/*.pm
-edtt: *.pm *.t ../lib/EditTransaction.pm ../lib/EditTransaction/*.pm
+edt: ../lib/EditTransaction.pm ../lib/Permissions.pm ../lib/TableDefs.pm ../lib/EditTransaction/*.pm
+edtt: *.pm *.t ../lib/EditTransaction.pm ../lib/Permissions.pm ../lib/TableDefs.pm ../lib/EditTransaction/*.pm
 wds: ../lib/Web/DataService/*.pm ../lib/Web/DataService/*/*.pm
 wdspod: ../lib/Web/DataService/*.pod ../lib/Web/DataService/*/*.pod

@@ -38,7 +38,7 @@ use namespace::clean;
 	C_UNKNOWN_TAXON => "The specified taxon name is not in the database. Add 'allow=UNKNOWN_TAXON' to continue.",
 	E_MISSING_IDENTIFICATION => "A specimen record requires either 'taxon_name', 'taxon_id' or 'occurrence_id'.",
 	E_UNREGISTERED_TAXON => "A specimen record requires either 'taxon_id' or a 'taxon_name' that is known to the database, unless it is tied to an existing collection or occurrence.",
-	E_CANNOT_CHANGE => "The field '%1' cannot be modified once created. Delete the specimen and add another.");
+	E_CANNOT_CHANGE => "The field '&1' cannot be modified once created. Delete the specimen and add another.");
     
     SpecimenEdit->register_allowances('UNKNOWN_TAXON');
 }

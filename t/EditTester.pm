@@ -20,6 +20,7 @@ use CoreFunction qw(connectDB configData);
 use TableDefs qw(%TABLE init_table_names enable_test_mode get_table_name get_table_property get_column_properties);
 use TableData qw(get_table_schema);
 use Permissions;
+use EditTransaction;
 use TestTables;
 
 use namespace::clean;
@@ -29,37 +30,42 @@ our $LAST_BANNER = '';
 our (@EXPORT_OK) = qw();
 
 
-# If the following variable is set to true, then reverse the outcome of certain tests. We use this
-# to check that tests will fail under certain circumstances.
+# If the $TEST_MODE is set to true, the outcome of certain tests is reversed. We use this to check
+# that tests will fail under certain circumstances. $TEST_DIAG collects diagnostic output if
+# $TEST_MODE is true.
 
 our $TEST_MODE = 0;
 our $TEST_DIAG = '';
 
 
-# new ( options )
+# new ( options ) or new ( subclass, default_table, options... )
 # 
 # Create a new EditTester instance.
 
 sub new {
     
-    my ($class, $options) = @_;
+    my ($class, $options, $extra) = @_;
     
     if ( $options && ! ref $options )
     {
 	$options = { subclass => $options };
+	$options->{table} = $extra if $extra;
     }
-
+    
     else
     {
 	$options ||= { };
     }
     
-    $options->{debug} = 1 if @ARGV && $ARGV[0] eq 'debug';
-    $options->{notsilent} = 1 if @ARGV && $ARGV[0] eq 'notsilent';
+    $options->{debug_mode} = 1 if @ARGV && $ARGV[0] eq 'debug';
+    $options->{errlog_mode} = 1 if @ARGV && $ARGV[0] eq 'errlog';
+    
+    $options->{debug_mode} = 1 if $ENV{DEBUG};
+    $options->{errlog_mode} = 1 if $ENV{PRINTERR};
     
     # If a subclass was specified, make sure the corresponding module is available.
     
-    if ( $options->{subclass} )
+    if ( $options->{subclass} && $options->{subclass} ne 'EditTransaction' )
     {
 	my $subclass = $options->{subclass};
 	$subclass =~ s{::}{/}g;
@@ -123,6 +129,8 @@ sub new {
     
     if ( $options->{subclass} && $options->{subclass} eq 'EditTest' )
     {
+	$options->{table} ||= 'EDT_TEST';
+	
 	enable_test_mode('edt_test');
 	
 	unless ( $test_db && $TABLE{EDT_TEST} =~ /$test_db/ )
@@ -140,10 +148,11 @@ sub new {
     };
     
     my $instance = { dbh => $dbh,
-		     debug => $options->{debug},
+		     edt_class => $options->{subclass} || 'EditTransaction',
+		     edt_table => $options->{table},
+		     debug_mode => $options->{debug_mode},
+		     errlog_mode => $options->{errlog_mode},
 		     id_bound => $id_bound,
-		     subclass => $options->{subclass},
-		     notsilent => $options->{notsilent},
 		   };
     
     bless $instance, $class;
@@ -162,13 +171,19 @@ sub dbh {
 }
 
 
-# debug ( )
+# debug ( [value ] )
 #
-# Return the status of the debug flag on this object.
+# Return the status of the debug flag on this object. If a true or false value is given, set the
+# flag accordingly.
 
-sub debug {
+sub debug_mode {
 
-    return $_[0]->{debug};
+    if ( @_ > 1 )
+    {
+	$_[0]->{debug_mode} = ( $_[1] ? 1 : 0 );
+    }
+    
+    return $_[0]->{debug_mode};
 }
 
 
@@ -196,12 +211,12 @@ sub establish_test_tables {
     
     my ($T) = shift;
     
-    if ( $T->{subclass} && $T->{subclass}->can('establish_test_tables') )
+    if ( $T->{edt_class} && $T->{edt_class}->can('establish_test_tables') )
     {
-	diag("Establishing test tables for class '$T->{subclass}'.");
+	diag("Establishing test tables for class '$T->{edt_class}'.");
 	
 	eval {
-	    $T->{subclass}->establish_test_tables($T->dbh);
+	    $T->{edt_class}->establish_test_tables($T->dbh);
 	};
 	
 	if ( $@ )
@@ -216,7 +231,7 @@ sub establish_test_tables {
     {
 	my ($table_group, $debug) = @_;
 
-	$debug = 'test' if $T->{debug};
+	$debug = 'test' if $T->{debug_mode};
 	
 	TestTables::establish_test_tables($T->dbh, $table_group, $debug);
     }
@@ -232,7 +247,7 @@ sub fill_test_table {
 
     my ($T, $table_specifier, $expr, $debug) = @_;
     
-    $debug = 'test' if $T->{debug};
+    $debug = 'test' if $T->{debug_mode};
     
     TestTables::fill_test_table($T->dbh, $table_specifier, $expr, $debug);
 }
@@ -250,17 +265,17 @@ sub complete_test_table {
     
     my ($T, $table_specifier, $arg, $debug) = @_;
     
-    $debug = 'test' if $T->{debug};
-    my $subclass = $T->{subclass} || 'EditTransaction';
+    $debug = 'test' if $T->{debug_mode};
+    my $edt_class = $T->{edt_class} || 'EditTransaction';
     
-    if ( $subclass->can('complete_table_definition') )
+    if ( $edt_class->can('complete_table_definition') )
     {
-	$subclass->complete_table_definition($T->dbh, $table_specifier, $arg, $debug);
+	$edt_class->complete_table_definition($T->dbh, $table_specifier, $arg, $debug);
     }
     
     else
     {
-	diag "Warning: method 'complete_table_definition' not found in class $subclass";
+	diag "Warning: method 'complete_table_definition' not found in class $edt_class";
     }
 }
 
@@ -541,7 +556,7 @@ sub debug_line {
     
     my ($T, $line) = @_;
 
-    print STDERR " ### $line\n" if $T->{debug};
+    print STDERR " ### $line\n" if $T->{debug_mode};
 }
 
 
@@ -549,7 +564,7 @@ sub debug_skip {
 
     my ($T) = @_;
     
-    print STDERR "\n" if $T->{debug};
+    print STDERR "\n" if $T->{debug_mode};
 }
 
 
@@ -559,14 +574,74 @@ sub debug_skip {
 
 sub new_edt {
     
-    my ($T, $perm, $options) = @_;
+    my ($T, $perm, @options) = @_;
+
+    croak "You must specify a permission as the first argument" unless $perm;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $options ||= { };
-    $options->{CREATE} = 1 unless exists $options->{CREATE};
+    my @allowances;
+    my $CREATE = 1;
+
+    my $edt_table = $T->{edt_table};
+    my $edt_class = $T->{edt_class};
     
-    if ( my $edt = $T->get_new_edt($perm, $options) )
+    foreach my $entry ( @options )
+    {
+	if ( ref $entry eq 'HASH' )
+	{
+	    foreach my $k ( keys $entry->%* )
+	    {
+		# Special case 'subclass' and 'table'.
+		
+		if ( $k =~ /^subclass$|^table$/ )
+		{
+		    $edt_class = $entry->{$k} if $k eq 'subclass';
+		    $edt_table = $entry->{$k} if $k eq 'table';
+		}
+		
+		# Otherwise, if the hash key has a true value then add that allowance.
+		
+		elsif ( $entry->{$k} )
+		{
+		    push @allowances, $k;
+		}
+		
+		# If the hash key has a false value, add the negation or remove the default.
+		
+		elsif ( $k eq 'CREATE' )
+		{
+		    $CREATE = 0;
+		}
+		
+		else
+		{
+		    push @allowances, "NO_$k";
+		}
+	    }
+	}
+	
+	elsif ( $entry eq 'NO_CREATE' )
+	{
+	    $CREATE = 0;
+	}
+	
+	elsif ( $entry )
+	{
+	    push @allowances, $entry;
+	}
+    }
+    
+    # Add the default CREATE unless it was turned off.
+    
+    unshift @allowances, 'CREATE' if $CREATE;
+    
+    # Turn on debug mode if 'debug' was given as an argument to the entire test.
+    
+    push @allowances, 'DEBUG_MODE' if $T->{debug_mode};
+    push @allowances, 'NO_SILENT_MODE' if $T->{errlog_mode};
+    
+    if ( my $edt = $T->get_new_edt($edt_class, $edt_table, $perm, @allowances) )
     {
 	pass("created edt");
 	return $edt;
@@ -586,38 +661,14 @@ sub new_edt {
 
 sub get_new_edt {
     
-    my ($T, $perm, $options) = @_;
+    my ($T, $edt_class, $edt_table, $perm, @allowances) = @_;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     $T->{last_edt} = undef;
     $T->{last_exception} = undef;
     
-    # Turn on debug mode if 'debug' was given as an argument to the entire test, and turn off
-    # silent mode if 'notsilent' was given. Otherwise, silent mode is on by default.
-    
-    $options->{DEBUG_MODE} = 1 if $T->{debug} && ! exists $options->{DEBUG_MODE};
-    # $options->{SILENT_MODE} = 1 unless $T->{debug} || $T->{notsilent} || exists $options->{SILENT_MODE};
-    
-    # Now process all of the specified options, and apply all those which are in upper case as
-    # allowances.
-    
-    my $allow = { };
-    
-    if ( ref $options eq 'HASH' )
-    {
-	foreach my $k ( keys %$options )
-	{
-	    if ( $k =~ /^[A-Z_]+$/ )
-	    {
-		$allow->{$k} = $options->{$k} ? 1 : 0;
-	    }
-	}
-    }
-
-    my $edt_class = $T->{subclass} || 'EditTransaction';
-    
-    my $edt = $edt_class->new($T->dbh, $perm, $T->{table}, $allow);
+    my $edt = $edt_class->new($T->dbh, $perm, $edt_table, @allowances);
     
     if ( $edt )
     {
@@ -656,7 +707,7 @@ sub new_perm {
     
     my ($perm, $options);
 
-    $options = { debug => 1 } if $T->debug;
+    $options = { debug => 1 } if $T->debug_mode;
     
     eval {
 	$perm = Permissions->new($T->dbh, $session_id, $table_name, $options);
@@ -753,18 +804,22 @@ sub test_permissions {
     
     if ( $test =~ /[IR]/ )
     {
-	$key1 = $edt->insert_record($table, { $string => 'insert permission' });
+	$key1 = $edt->insert_record($table, { $string => 'insert permission' }, 'keyval')
+	    && $edt->get_keyval;
+	
 	$perm_count++ if $test =~ /I/;
     }
     
     if ( $test =~ /U/ )
     {
-	$key2 = $edt->insert_record($table, { $string => 'insert permission 2' });
+	$key2 = $edt->insert_record($table, { $string => 'insert permission 2' }, 'keyval') &&
+	    $edt->get_keyval;
     }
     
     if ( $test =~ /D/ )
     {
-	$key3 = $edt->insert_record($table, { $string => 'insert permission 3' });
+	$key3 = $edt->insert_record($table, { $string => 'insert permission 3' }, 'keyval')
+	    && $edt->get_keyval;
     }
     
     # If we are using a different permission for the rest of the tests, then commit the first
@@ -788,7 +843,7 @@ sub test_permissions {
 	$edt = $T->new_edt($edit_perm, { IMMEDIATE_MODE => 1 });
 	$perm_count = 0;
     }
-
+    
     elsif ( $result eq 'fails' && $edt->errors )
     {
 	$edt->rollback;
@@ -797,13 +852,13 @@ sub test_permissions {
     
     if ( $test =~ /R/ && $key1 )
     {
-	$edt->replace_record($table, { $primary => $key1, $string => 'replace permission' });
+	$edt->replace_record($table, { _primary => $key1, $string => 'replace permission' });
 	$perm_count++;
     }
     
     if ( $test =~ /U/ && $key2 )
     {
-	$edt->update_record($table, { $primary => $key2, $string => 'update permission' });
+	$edt->update_record($table, { _primary => $key2, $string => 'update permission' });
 	$perm_count++;
     }
     
@@ -972,21 +1027,25 @@ sub test_subordinate_permissions {
     
     my $edt = $T->new_edt($insert_perm, { IMMEDIATE_MODE => 1 });
     
-    $keyA = $edt->insert_record($sup_table, { $sup_string => 'permission test record' });
+    $keyA = $edt->insert_record($sup_table, { $sup_string => 'permission test record' })
+	&& $edt->get_keyval;
 
     if ( $test =~ /[IR]/ )
     {
-	$keyB1 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 1.$UNIQ_B" });
+	$keyB1 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 1.$UNIQ_B" })
+	    && $edt->get_keyval;
     }
 
     if ( $test =~ /U/ )
     {
-	$keyB2 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 2.$UNIQ_B" });
+	$keyB2 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 2.$UNIQ_B" })
+	    && $edt->get_keyval;
     }
 
     if ( $test =~ /D/ )
     {
-	$keyB3 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 3.$UNIQ_B" });
+	$keyB3 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate test 3.$UNIQ_B" })
+	    && $edt->get_keyval;
     }
     
     unless ( $edt->commit )
@@ -1010,19 +1069,22 @@ sub test_subordinate_permissions {
     
     if ( $test =~ /[IR]/ )
     {
-	$keyC1 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 1.$UNIQ_B" });
+	$keyC1 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 1.$UNIQ_B" })
+	    && $edt->get_keyval;
 	$operation_count++;
     }
     
     if ( $test =~ /U/ )
     {
-	$keyC2 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 2.$UNIQ_B" });
+	$keyC2 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 2.$UNIQ_B" })
+	    && $edt->get_keyval;
 	$operation_count++;
     }
     
     if ( $test =~ /D/ )
     {
-	$keyC3 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 3.$UNIQ_B" });
+	$keyC3 = $edt->insert_record($table, { $linkcol => $keyA, $string => "subordinate check 3.$UNIQ_B" })
+	    && $edt->get_keyval;
 	$operation_count++;
     }
         
@@ -1030,7 +1092,7 @@ sub test_subordinate_permissions {
     {
 	if ( $keyB1 )
 	{
-	    $edt->replace_record($table, { $primary => $keyB1, $string => "replace B1.$UNIQ_B" });
+	    $edt->replace_record($table, { _primary => $keyB1, $string => "replace B1.$UNIQ_B" });
 	    $operation_count++;
 	}
 	
@@ -1183,47 +1245,6 @@ sub clear_edt {
 }
 
 
-sub ok_result {
-    
-    my $T = shift;
-    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
-    my $result = shift;
-    
-    my $selector = 'all';
-    
-    if ( $_[0] )
-    {
-	if ( $_[0] eq 'latest' || $_[0] eq 'all' || $_[0] eq 'main' )
-	{
-	    $selector = shift;
-	}
-
-	elsif ( $_[0] =~ /^[a-z]+$/ )
-	{
-	    croak "invalid selector '$_[0]'";
-	}
-    }
-    
-    my $label = shift || "operation succeeded";
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    if ( $result )
-    {
-	ok(!$TEST_MODE, $label);
-	return !$TEST_MODE;
-    }
-    
-    else
-    {
-	$T->diag_warnings($edt, $selector);
-	$T->diag_errors($edt, $selector);
-	ok($TEST_MODE, $label);
-	return $TEST_MODE;
-    }
-}
-
-
 # Methods for testing error and warning conditions
 # ------------------------------------------------
 
@@ -1292,21 +1313,15 @@ sub condition_args {
 	    $filter = shift;
 	}
 	
-	elsif ( $_[0] && $_[0] =~ qr{ ^ [EF]_ ([A-Z0-9_]+) $ }xs )
+	elsif ( $_[0] && $_[0] =~ qr{ ^ ([CEFW]_[A-Z0-9_]+) $ }xs )
+	{
+	    $filter = qr{ ^ $1 \b }xs;
+	    shift;
+	}
+	
+	elsif ( $_[0] && $_[0] =~ qr{ ^ EF_ ([A-Z0-9_]+) $ }xs )
 	{
 	    $filter = qr{ ^ [EF]_ $1 \b }xs;
-	    shift;
-	}
-	
-	elsif ( $_[0] && $_[0] =~ qr{ ^ [CD]_ ([A-Z0-9_]+) $ }xs )
-	{
-	    $filter = qr{ ^ [CD]_ $1 \b }xs;
-	    shift;
-	}
-	
-	elsif ( $_[0] && $_[0] =~ qr{ ^ W_ ([A-Z0-9_]+) $ }xs )
-	{
-	    $filter = qr{ ^ W_ $1 \b }xs;
 	    shift;
 	}
 	
@@ -1451,7 +1466,7 @@ sub ok_has_condition {
 sub _ok_has_condition {
 
     my ($T, $edt, $selector, $type, $filter, $label) = @_;
-        
+    
     # If we find any matching conditions, pass the test and return true. Invert this if $TEST_MODE
     # is true.
     
@@ -2101,6 +2116,237 @@ sub diag_warnings {
 #     }
 # }
 
+# Methods for testing the success or failure of transactions and actions
+# ----------------------------------------------------------------------
+
+sub ok_action {
+
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift @_ : $T->{last_edt};
+    
+    croak "no EditTransaction found" unless $edt;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $label;
+
+    unless ( $label = shift )
+    {
+	my $operation = $edt->action_operation;
+
+	$label = $operation ? "$operation succeeded" : "action succeeded";
+    }
+    
+    if ( $edt->action_ok )
+    {
+	ok(!$TEST_MODE, $label);
+	return !$TEST_MODE;
+    }
+    
+    else
+    {
+	ok($TEST_MODE, $label);
+	my $status = $edt->action_status;
+	diag_lines("action status is '$status'");
+	$T->diag_errors($edt, 'latest');
+	$T->diag_warnings($edt, 'latest');
+	return $TEST_MODE;
+    }
+}
+
+
+sub ok_failed_action {
+    
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift @_ : $T->{last_edt};
+    
+    croak "no EditTransaction found" unless $edt;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $operation = $edt->action_operation || 'action';
+    $operation = 'action' if $operation eq 'other';
+    
+    my $check_status;
+    my $label;
+    my $result;
+    
+    if ( $_[0] =~ /^\w+$/ )
+    {
+	$check_status = shift;
+    }
+    
+    if ( $check_status )
+    {
+	$label = shift || "$operation status is '$check_status'";
+	$result = $edt->action_status eq $check_status;
+    }
+    
+    else
+    {
+	$label = shift || "$operation failed";
+	$result = not $edt->action_ok;
+    }
+    
+    if ( $result )
+    {
+	ok(!$TEST_MODE, $label);
+	return !$TEST_MODE;
+    }
+    
+    else
+    {
+	ok($TEST_MODE, $label);
+	my $status = $edt->action_status;
+	diag_lines("action status is '$status'");
+	$T->diag_errors($edt, 'latest');
+	$T->diag_warnings($edt, 'latest');
+	return $TEST_MODE;
+    }
+}
+
+
+sub ok_commit {
+
+    my $T = shift;
+    
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift @_ : $T->{last_edt};
+    
+    croak "no EditTransaction found" unless $edt;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $label = shift || "transaction committed successfully";
+    
+    if ( $edt->commit )
+    {
+	ok(!$TEST_MODE, $label);
+	return !$TEST_MODE;
+    }
+
+    else
+    {
+	my $status = $edt->status;
+	diag_lines("transaction status is '$status'");
+	$T->diag_errors($edt);
+	$T->diag_warnings($edt);
+	ok($TEST_MODE, $label);
+	return $TEST_MODE;
+    }
+}
+
+
+sub ok_diag {
+    
+    my $T = shift;
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    croak "not enough arguments" unless @_;
+    
+    my $result = shift;
+    
+    my $selector = 'all';
+    
+    if ( $_[0] )
+    {
+	if ( $_[0] =~ /^latest$|^all$|^main$|^:/ )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
+    }
+    
+    my $label = shift || "operation succeeded";
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    if ( $result )
+    {
+	ok(!$TEST_MODE, $label);
+	return !$TEST_MODE;
+    }
+    
+    else
+    {
+	$T->diag_errors($edt, $selector);
+	$T->diag_warnings($edt, $selector);
+	ok($TEST_MODE, $label);
+	return $TEST_MODE;
+    }
+}
+
+
+sub ok_result {
+
+    goto &ok_diag;
+}
+
+
+sub is_diag {
+    
+    my $T = shift;
+    my $edt = ref $_[0] && $_[0]->isa('EditTransaction') ? shift : $T->{last_edt};
+    
+    croak "not enough arguments" unless @_ >= 2;
+    
+    my $arg1 = shift;
+    my $arg2 = shift;
+    
+    my $selector = 'all';
+    
+    if ( $_[0] )
+    {
+	if ( $_[0] =~ /^latest$|^all$|^main$|^:/ )
+	{
+	    $selector = shift;
+	}
+
+	elsif ( $_[0] =~ /^[a-z]+$/ )
+	{
+	    croak "invalid selector '$_[0]'";
+	}
+    }
+    
+    my $label = shift || "operation succeeded";
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    if ( $TEST_MODE && isnt($arg1, $arg2, $label) )
+    {
+	$T->diag_errors($edt, $selector);
+	$T->diag_warnings($edt, $selector);
+	return 1;
+    }
+    
+    elsif ( $TEST_MODE )
+    {
+	return 0;
+    }
+    
+    elsif ( is($arg1, $arg2, $label) )
+    {
+	return 1;
+    }
+    
+    else
+    {
+	$T->diag_errors($edt, $selector);
+	$T->diag_warnings($edt, $selector);
+	return 0;
+    }
+}
+
+
+
+
+# Methods for testing the existence or nonexistence of records in the database
+# -----------------------------------------------------------------------------
 
 sub ok_found_record {
     
@@ -2267,16 +2513,37 @@ sub count_records {
     
     croak "you must specify a table" unless $table;
     
-    $expr ||= 'TRUE';
+    my $where_clause = $expr ? "WHERE $expr" : "";
     
-    my $sql = "SELECT count(*) FROM $TABLE{$table} WHERE $expr";
+    my $sql = "SELECT count(*) FROM $TABLE{$table} $where_clause";
     
-    $T->debug_line($sql);
+    $T->debug_line($sql) if $T->{debug_mode};
     
     my ($result) = $dbh->selectrow_array($sql);
     
     return $result;
 }
+
+
+sub find_record_values {
+
+    my ($T, $table, $colname, $expr) = @_;
+    
+    my $dbh = $T->dbh;
+    
+    croak "you must specify a table" unless $table;
+    croak "you must specify a column name" unless $colname;
+    
+    my $where_clause = $expr ? "WHERE $expr" : "";
+    
+    my $sql = "SELECT `$colname` FROM $TABLE{$table} $where_clause LIMIT 50";
+    
+    $T->debug_line($sql) if $T->{debug_mode};
+
+    my $result = $dbh->selectrow_arrayref($sql);
+
+    return ref $result eq 'ARRAY' ? $result->@* : ();
+}    
 
 
 sub clear_table {

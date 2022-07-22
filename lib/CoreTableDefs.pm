@@ -19,21 +19,35 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
 
 {
     set_table_name(TAXON_TREES => 'taxon_trees');
+    
     set_table_name(AUTHORITY_DATA => 'authorities');
     set_table_name(OPINION_DATA => 'opinions');
+
+    set_table_property('AUTHORITY_DATA', DISABLE_DELETE => 1);
+    set_table_property('OPINION_DATA', DISABLE_DELETE => 1);
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
     set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
+
+    set_table_property('OCCURRENCE_DATA', DISABLE_DELETE => 1);
     
     set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX');
     
     set_table_name(COLLECTION_DATA => 'collections');
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
     
+    set_table_property('COLLECTION_DATA', DISABLE_DELETE => 1);
+    
     set_table_name(REFERENCE_DATA => 'refs');
     set_table_name(REFERENCE_SOURCES => 'ref_sources');
     set_table_name(REFERENCE_SCORES => 'ref_scores');
     set_table_name(REFERENCE_SEARCH => 'ref_search');
+    
+    set_table_property('REFERENCE_DATA', PRIMARY_KEY => 'reference_no');
+    set_table_property('REFERENCE_DATA', PRIMARY_FIELD => 'reference_id');
+    set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
+    set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
+    set_table_property('REFERENCE_DATA', DISABLE_DELETE => 1);
     
     set_table_name(INTERVAL_DATA => 'interval_data');
     
@@ -48,9 +62,9 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_property('SPECIMEN_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('SPECIMEN_DATA', CAN_MODIFY => 'AUTHORIZED');
-    set_table_property('SPECIMEN_DATA', ALLOW_DELETE => 1);
     set_table_property('SPECIMEN_DATA', PRIMARY_KEY => "specimen_no");
     set_table_property('SPECIMEN_DATA', PRIMARY_FIELD => "specimen_id");
+    set_table_property('SPECIMEN_DATA', CASCADE_DELETE => [ 'MEASUREMENT_DATA' ]);
     
     set_column_property('SPECIMEN_DATA', 'specimen_id', REQUIRED => 1);
     set_column_property('SPECIMEN_DATA', 'specimen_id', ALTERNATE_NAME => 'specimen_code');
@@ -63,7 +77,6 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_property('MEASUREMENT_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('MEASUREMENT_DATA', CAN_MODIFY => 'AUTHORIZED');
-    set_table_property('MEASUREMENT_DATA', ALLOW_DELETE => 1);
     set_table_property('MEASUREMENT_DATA', PRIMARY_KEY => 'measurement_no');
     set_table_property('MEASUREMENT_DATA', PRIMARY_FIELD => 'measurement_id');
     

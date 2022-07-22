@@ -1,7 +1,7 @@
 pm: *.pm EditTransaction/*.pm PB2/*.pm
-edt: *.pm EditTransaction/*.pm
+edt: EditTransaction.pm Permissions.pm TableDefs.pm EditTransaction/*.pm
 pmt: *.pm EditTransaction/*.pm PB2/*.pm ../t/*.t ../t/*.pm
-edtt: *.pm EditTransaction/*.pm ../t/*.t ../t/*.pm
+edtt: EditTransaction.pm Permissions.pm TableDefs.pm EditTransaction/*.pm ../t/*.t ../t/*.pm
 t: ../t/*.t ../t/*.pm
 wds: Web/DataService/*.pm Web/DataService/*/*.pm
 wdspod: Web/DataService/*.pod Web/DataService/*/*.pod

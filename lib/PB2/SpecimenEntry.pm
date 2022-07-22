@@ -510,7 +510,7 @@ sub update_measurements {
     # First get the parameters from the URL, and/or from the body if it is from a web form. In the
     # latter case, it will necessarily specify a single timescale only.
     
-    my %allowances = ( IMMEDIATE_MODE => 1 );
+    my %allowances = ( IMMEDIATE_EXECUTION => 1 );
     
     $allowances{CREATE} = 1 if $arg && $arg eq 'add';
     

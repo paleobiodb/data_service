@@ -10,14 +10,12 @@ package PB2::CommonEntry;
 use strict;
 
 use HTTP::Validate qw(:validators);
-use Carp qw(croak);
+use Carp qw(carp croak);
 use Scalar::Util qw(reftype);
 use List::Util qw(any);
 
-use TableDefs qw(%TABLE);
-
+use TableDefs qw(get_table_property %TABLE);
 use ExternalIdent qw(extract_identifier generate_identifier %IDP %IDRE);
-use TableData qw(get_table_schema get_table_property);
 
 use Moo::Role;
 
@@ -167,9 +165,9 @@ sub parse_body_records {
     
     if ( Dancer::request->method eq 'GET' )
     {
-	if ( $main_params_ref->%* )
+	if ( $main_params->%* )
 	{
-	    push @records, $main_params_ref;
+	    push @records, $main_params;
 	}
 
 	else
@@ -211,7 +209,7 @@ sub parse_body_records {
 	    {
 		foreach my $k ( keys $body->{all}->%* )
 		{
-		    $main_params_ref->{$k} = $body->{all}{$k};
+		    $main_params->{$k} = $body->{all}{$k};
 		}
 	    }
 	}
@@ -256,21 +254,21 @@ sub parse_body_records {
 	{
 	    my $val = ref $r ? uc reftype $r : "'$r'";
 	    
-	    push @records, { _errors => [ "E_REQUEST_BODY: item is not a valid record ($val)" ] };
+	    push @records, { _errors => 1, _errwarn => ['E_BAD_RECORD', "record content cannot be decoded ($val)"] };
 	}
 	
 	unless ( keys %$r )
 	{
-	    push @records, { _skip => 1, _warnings => [ "W_REQUEST_BODY: item is empty" ] };
+	    push @records, { _skip => 1, _errwarn => ['W_EMPTY_RECORD'] };
 	}
 	
-	# If $main_params_ref is not empty, its attributes provide defaults for every record.
+	# If $main_params is not empty, its attributes provide defaults for every record.
 	
-	foreach my $k ( keys $main_params_ref->%* )
+	foreach my $k ( keys $main_params->%* )
 	{
 	    unless ( exists $r->{$k} )
 	    {
-		$r->{$k} = $main_params_ref->{$k};
+		$r->{$k} = $main_params->{$k};
 	    }
 	}
 	
@@ -280,7 +278,6 @@ sub parse_body_records {
 	# not it matches.
 	
 	my $rs_name = 'NO_MATCH';
-	my $key_name;
 	
       RULESET:
 	foreach my $rs_arg ( @ruleset_patterns )
@@ -291,11 +288,16 @@ sub parse_body_records {
 	    
 	    if ( ref $rs_arg eq 'ARRAY' )
 	    {
-		($rs_name, $key_name, @check_keys) = $rs->@*;
+		my ($table_name, $ruleset_name, $key_name, @check_keys) = $rs_arg->@*;
 		
 		foreach my $k ( $key_name, @check_keys )
 		{
-		    last RULESET if $r->{$k};
+		    if ( $r->{$k} )
+		    {
+			$rs_name = $ruleset_name;
+			$r->{_table} = $table_name; # $$$ need to check for main_table
+			last RULESET;
+		    }
 		}
 	    }
 	    
@@ -341,43 +343,42 @@ sub parse_body_records {
 	    # Generate a record with the cleaned parameter values. If any errors or warnings were
 	    # generated, add them to the record.
 	    
-	    my $cleanded = $result->values;
+	    my $cleaned = $result->values;
 	    
-	    my (@record_errors, @record_warnings);
+	    # my (@record_errors, @record_warnings);
 	    
-	    my $label = $r->{_label} || ($key_name && $r->{$key_name}) || "#$INDEX";
+	    # my $label = $r->{_label} || ($key_name && $r->{$key_name}) || "#$INDEX";
 	    
 	    foreach my $e ( $result->errors )
 	    {
-		if ( $e =~ /identifier must have type/ )
+		if ( $e =~ /^Field (.*?): (.*)/ )
 		{
-		    push @record_errors, "E_EXTTYPE ($label): $e";
-		}
-		
-		elsif ( $e =~ /may not specify/ )
-		{
-		    push @record_errors, "E_PARAM ($label): $e";
+		    my $field = $1;
+		    my $msg = $2;
+
+		    if ( $msg =~ /identifier must have type/ )
+		    {
+			push $cleaned->{_errwarn}->@*, ['E_EXTID', $field, $msg];
+			$cleaned->{_errors} = 1;
+		    }
+
+		    else
+		    {
+			push $cleaned->{_errwarn}->@*, ['E_PARAM', $field, $msg];
+			$cleaned->{_errors} = 1;
+		    }
 		}
 		
 		else
 		{
-		    push @record_errors, "E_FORMAT ($label): $e";
+		    push $cleaned->{_errwarn}->@*, ['E_PARAM', $e];
+		    $cleaned->{_errors} = 1;
 		}
-	    }
-
-	    if ( @record_errors )
-	    {
-		$cleaned->{_errors} = \@record_errors;
 	    }
 	    
 	    foreach my $w ( $result->warnings )
 	    {
-		push @record_warnings, "W_PARAM ($label): $w";
-	    }
-	    
-	    if ( @record_warnings )
-	    {
-		$cleaned->{_warnings} = \@record_warnings;
+		push $cleaned->{_errwarn}->@*, ['W_PARAM', $w];
 	    }
 	    
 	    # Add the cleaned record to the list of records to process.
@@ -389,9 +390,8 @@ sub parse_body_records {
 	
 	else
 	{
-	    my $label = $r->{_label} || "#$INDEX";
-	    
-	    $r->{_errors} = [ "E_UNRECOGNIZED ($label): could not validate record, no matching ruleset" ];
+	    $r->{_errwarn} = ['E_UNRECOGNIZED'];
+	    $r->{_errors} = 1;
 	    
 	    push @records, $r;
 	}
@@ -511,7 +511,7 @@ sub addupdate_common {
     foreach my $flag ( @extra_flags )
     {
 	croak "addupdate_common: unrecognized flag '$flag'"
-	    unless $class->has_allowance($flag);
+	    unless $ETclass->has_allowance($flag);
     }
     
     # my @ruleset_patterns;
@@ -574,7 +574,7 @@ sub addupdate_common {
     # hash. The url parameters will already have been validated against the ruleset before this
     # method is called, and if they are invalid an error response will already have been returned.
     
-    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset, @extra_flag);
+    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset, @extra_flags);
     
     # Then decode the body, and extract input records from it. The variable @table_list specifies
     # which ruleset to use for different kinds of records, if there is more than one kind
@@ -598,10 +598,10 @@ sub addupdate_common {
     
     if ( $invalid_records && ! $allowances->{PROCEED} )
     {
-	$allowances->{VALIDATION_MODE} = 1;
+	$allowances->{VALIDATION_ONLY} = 1;
     }
     
-    my $edt = $class->new($request, $perms, $main_table, $allowances);
+    my $edt = $ETclass->new($request, $perms, $main_table, $allowances);
     
     # Now iterate through the records. The @AUX_TABLES list will collect the names of all tables
     # used other than the main one. We use three different loops, depending on which of the table
@@ -688,7 +688,7 @@ sub addupdate_common {
     # The main key defaults to the primary key of the main table. This can be overridden in the
     # configuration.
     
-    my $main_key = $config->{main_key} || get_table_property($tn, 'PRIMARY_KEY');
+    my $main_key = $config->{main_key} || get_table_property($main_table, 'PRIMARY_KEY');
     
     # One or more additional keys can also be specified, which allows record chains of more than
     # one link.
@@ -708,9 +708,9 @@ sub addupdate_common {
     # Now go through the tables that have been touched, starting with the main table, and grab the
     # keys for each one.
     
-    foreach $tn ( $main_table, @AUX_TABLES )
+    foreach my $tn ( $main_table, @AUX_TABLES )
     {
-	my $key_labels = $edt->key_labels($tn);
+	my $key_label = $edt->key_labels($tn);
 	my $display_key = get_table_property($tn, 'PRIMARY_KEY') || 'oid';
 	
 	$table_records{$tn} = [ ];
@@ -721,7 +721,7 @@ sub addupdate_common {
 	{
 	    foreach my $key_value ( sort { $a <=> $b} @deleted_keys )
 	    {
-		my $record = { $primary_key => $key_value, status => 'deleted',
+		my $record = { $display_key => $key_value, status => 'deleted',
 			       _operation => 'delete', _label => $key_label->{$key_value} };
 
 		push $table_records{$tn}->@*, $record;
@@ -732,13 +732,14 @@ sub addupdate_common {
 	# all the information necessary to produce a result: key, label, operation, action,
 	# result, etc. 
     
-    my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
+    # my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
     
-    $request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+    # $request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
     }
 
 }
 
+# $$$ add primary key if it can be determined from the table name
 
 sub validate_tabsel {
 
@@ -758,7 +759,7 @@ sub validate_tabsel {
 	
 	elsif ( ! ref $selector->{keys} )
 	{
-	    @keylist = grep split /,\s*/, $selector->{$keys};
+	    @keylist = grep split /,\s*/, $selector->{keys};
 	}
 
 	unshift @keylist, $selector->{primary_key} if $selector->{primary_key};

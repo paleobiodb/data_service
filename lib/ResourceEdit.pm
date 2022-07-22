@@ -38,7 +38,7 @@ our (%TAG_ID);
     ResourceEdit->register_conditions(
 	E_PERM => { status => "You do not have permission to change the status of this record" },
 	E_REVERT => "Nothing to revert",
-	W_TAG_NOT_FOUND => "Unrecognized resource tag '%1'",
+	W_TAG_NOT_FOUND => "Unrecognized resource tag '&1'",
 	W_PERM => { status => "The status of this record has been set to 'pending'" });
 
     $RESOURCE_IDFIELD = 'eduresource_no';

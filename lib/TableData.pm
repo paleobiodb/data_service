@@ -10,8 +10,9 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(%TABLE get_table_property get_column_properties list_column_properties
-		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
+use TableDefs qw(%TABLE get_table_property get_column_properties columns_with_properties
+		 column_property_names
+		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 
 use Carp qw(croak);
 use HTTP::Validate qw(:validators);
@@ -39,8 +40,8 @@ our (%COMMON_FIELD_IDSUB);
 
 our (%SCHEMA_CACHE);
 
-our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED NOT_NULL ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
-				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR IGNORE);
+# our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED NOT_NULL ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
+# 				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR IGNORE);
 
 our (%PREFIX_SIZE) = ( tiny => 255,
 		       regular => 65535,
@@ -54,7 +55,7 @@ our (%INT_SIZE) = ( tiny => 'one byte integer',
 		    big => 'eight byte integer');
 
 
-# get_table_scheme ( table_name, debug_flag )
+# get_table_schema ( table_name, debug_flag )
 # 
 # Fetch the schema for the specified table, and return it as a hash ref. This information is
 # cached, so that subsequent queries can be satisfied without hitting the database again. The key
@@ -64,14 +65,17 @@ sub get_table_schema {
     
     my ($dbh, $table_specifier, $debug) = @_;
     
-    # If we already have the schema cached, just return it.
-    
-    return $SCHEMA_CACHE{$table_specifier} if ref $SCHEMA_CACHE{$table_specifier} eq 'HASH';
+    # If we already have the schema cached, just return it. Otherwise, generate one and cache it.
+
+    if ( ref $SCHEMA_CACHE{$table_specifier} eq 'HASH' )
+    {
+	return $SCHEMA_CACHE{$table_specifier};
+    }
     
     # Otherwise construct an SQL statement to get the schema from the appropriate database.
-
+    
     my $table_name;
-
+    
     if ( $table_specifier =~ /^==(.*)/ )
     {
 	croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
@@ -117,21 +121,21 @@ sub get_table_schema {
     
     # Figure out which columns from this table have had properties set for them.
     
-    my %has_properties = list_column_properties($table_specifier);
+    my %has_properties = columns_with_properties($table_specifier);
     
     # Now go through the columns one by one. Find the primary key if there is one, and also parse
     # the column datatypes. Collect up the list of field names for easy access later.
     
-    my @field_list;
+    my @column_list;
     
     foreach my $c ( @$columns_ref )
     {
 	# Each field definition comes to us as a hash. The name is in 'Field'.
 	
-	my $field = $c->{Field};
+	my $colname = $c->{Field};
 	
-	$schema{$field} = $c;
-	push @field_list, $field;
+	$schema{$colname} = $c;
+	push @column_list, $colname;
 	
 	# if ( $c->{Key} =~ 'PRI' && ! $schema{_primary} )
 	# {
@@ -139,58 +143,27 @@ sub get_table_schema {
 	# }
     }
     
-    # Then go through the list again and add the proper attributes to each column.
-
+    # Then go through the list again and add the proper attributes to each column. The code in
+    # this loop will sometimes use information from other columns, which is why we have to do this
+    # after all of the columns have been added to the schema hash.
+    
     foreach my $c ( @$columns_ref )
     {
-	my $field = $c->{Field};
+	my $colname = $c->{Field};
 	
-	# If the column has properties, then record those we are interested in.
+	# If the column has properties specified in the table definition system, record them in
+	# the column record.
 	
-	if ( $has_properties{$field} )
+	if ( $has_properties{$colname} || $COMMON_FIELD_SPECIAL{$colname} || $COMMON_FIELD_IDTYPE{$colname} )
 	{
-	    my %properties = get_column_properties($table_specifier, $field);
-	    
-	    foreach my $p ( @SCHEMA_COLUMN_PROPS )
-	    {
-		$c->{$p} = $properties{$p} if defined $properties{$p};
-	    }
-
-	    if ( ref $c->{VALIDATOR} && ref $c->{VALIDATOR} ne 'code' )
-	    {
-		croak "the value of VALIDATOR must be a code ref";
-	    }
+	    set_column_properties($c, $table_specifier, $colname, \%schema);
 	}
 	
-	# If the column is Not Null and has neither a default value nor auto_increment, then mark
-	# it as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column. [But not if the column type is BLOB or
-	# TEXT, because of an issue with MariaDB 10.0-10.1. - taken out 2020-03-06 mjm]
-	
-	if ( $c->{Null} && $c->{Null} eq 'NO' && not ( defined $c->{Default} ) &&
-	     not ( $c->{Extra} && $c->{Extra} =~ /auto_increment/i ) )
-	{
-	    $c->{NOT_NULL} = 1; # unless $c->{Type} =~ /text|blob/i;
-	}
-	
-	# We discard the Privileges and Comment fields, because we don't use them. The only reason
+	# Discard the Privileges and Comment fields, because we don't use them. The only reason
 	# for retrieving the full column output is to get the Collation information.
-
+	
 	delete $c->{Privileges};
 	delete $c->{Comments};
-	
-	# If the name of the field ends in _no, then record its alternate as the same name with
-	# _id substituted unless there is already a field with that name.
-	
-	if ( ! $c->{ALTERNATE_NAME} && $field =~ qr{ ^ (.*) _no }xs )
-	{
-	    my $alt = $1 . '_id';
-	    
-	    unless ( $schema{$alt} )
-	    {
-		$c->{ALTERNATE_NAME} = $alt;
-	    }
-	}
 	
 	# The type definition is in 'Type'. We parse each type, for easy access by validation
 	# routines later, and store the parsed values in TypeParams.
@@ -280,7 +253,7 @@ sub get_table_schema {
 	}
     }
     
-    $schema{_column_list} = \@field_list;
+    $schema{_column_list} = \@column_list;
     
     $SCHEMA_CACHE{$table_specifier} = \%schema;
     
@@ -318,6 +291,91 @@ sub unpack_enum {
 }
 
 
+# set_column_properties ( column_record, table_specifier, colname )
+#
+#
+
+sub set_column_properties {
+
+    my ($column_record, $table_specifier, $colname, $schema) = @_;
+    
+    # Make sure that the set of properties in the column record matches the set specified in the
+    # table definition system.
+    
+    my %properties = get_column_properties($table_specifier, $colname);
+    
+    foreach my $p ( keys %properties )
+    {
+	if ( defined $properties{$p} )
+	{
+	    $column_record->{$p} = $properties{$p};
+	}
+	
+	else
+	{
+	    delete $column_record->{$p};
+	}
+    }
+    
+    # Adjust the FOREIGN_KEY property if necessary by checking %FOREIGN_KEY_TABLE.
+    
+    if ( my $fk = $column_record->{FOREIGN_KEY} )
+    {
+	if ( $fk =~ qr{ (.*?) / (.*) }xs )
+	{
+	    $column_record->{FOREIGN_KEY} = $1;
+	    $column_record->{FOREIGN_COL} = $2;
+	}
+    }
+    
+    elsif ( $FOREIGN_KEY_TABLE{$colname} )
+    {
+	$column_record->{FOREIGN_KEY} = $FOREIGN_KEY_TABLE{$colname};
+	$column_record->{FOREIGN_COL} = $FOREIGN_KEY_COL{$colname} if $FOREIGN_KEY_COL{$colname};
+    }
+    
+    # If the column does not have an EDT_DIRECTIVE property, check for a special handler based on
+    # the column name.
+    
+    if ( $COMMON_FIELD_SPECIAL{$colname} && ! defined $column_record->{EDT_DIRECTIVE} )
+    {
+	$column_record->{EDT_DIRECTIVE} = $COMMON_FIELD_SPECIAL{$colname};
+    }
+    
+    # If the column does not have an EXTID_TYPE property, check for an external identifier type
+    # based on the column name.
+
+    if ( $COMMON_FIELD_IDTYPE{$colname} && ! defined $column_record->{EXTID_TYPE} )
+    {
+	$column_record->{EXTID_TYPE} = $COMMON_FIELD_IDTYPE{$colname};
+    }
+    
+    # If the column is Not Null and has neither a default value nor auto_increment, then mark
+    # it as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
+    # update a record with a null value for this column.
+    
+    if ( $column_record->{Null} && $column_record->{Null} eq 'NO' &&
+	 not ( defined $column_record->{Default} ) &&
+	 not ( $column_record->{Extra} && $column_record->{Extra} =~ /auto_increment/i ) )
+    {
+	$column_record->{NOT_NULL} = 1;
+    }
+    
+    # If the name of the field ends in _no, then record its alternate as the same name with
+    # _id substituted unless there is already a field with that name.
+    
+    if ( ! $column_record->{ALTERNATE_NAME} && $colname =~ qr{ ^ (.*) _no }xs )
+    {
+	my $alt = $1 . '_id';
+
+	unless ( $schema->{$alt} )
+	{
+	    $column_record->{ALTERNATE_NAME} = $alt;
+	}
+    }
+}
+
+
 # reset_cached_column_properties ( table_name, column_name )
 #
 # This routine is intended primarily for for testing purposes.
@@ -326,34 +384,12 @@ sub reset_cached_column_properties {
     
     my ($table_specifier, $column_name) = @_;
     
-    if ( my $col = $SCHEMA_CACHE{$table_specifier}{$column_name} )
+    if ( my $cr = $SCHEMA_CACHE{$table_specifier}{$column_name} )
     {
-	my %properties = get_column_properties($table_specifier, $column_name);
+	delete $cr->{$_} foreach column_property_names;
 	
-	foreach my $p ( @SCHEMA_COLUMN_PROPS )
-	{
-	    delete $col->{$p};
-	    $col->{$p} = $properties{$p} if defined $properties{$p};
-	}
-	
-	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
-	# as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column.
-	
-	if ( $col->{Null} && $col->{Null} eq 'NO' && not ( defined $col->{Default} ) &&
-	     not ( $col->{Extra} && $col->{Extra} =~ /auto_increment/i ) )
-	{
-	    $col->{NOT_NULL} = 1;
-	}
-	
-	# If the name of the field ends in _no, then record its alternate as the same name with
-	# _id substituted unless there is already a field with that name.
-	
-	if ( ! $col->{ALTERNATE_NAME} && $column_name =~ qr{ ^ (.*) _no }xs )
-	{
-	    my $alt = $1 . '_id';
-	    $col->{ALTERNATE_NAME} = $alt;
-	}
+	set_column_properties($cr, $table_specifier, $column_name,
+			      $SCHEMA_CACHE{$table_specifier});
     }
 }
 
@@ -587,7 +623,7 @@ sub complete_ruleset {
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
     my $field_list = $schema->{_column_list};
-    my %has_properties = list_column_properties($table_specifier);
+    my %has_properties = columns_with_properties($table_specifier);
     
     foreach my $column_name ( @$field_list )
     {

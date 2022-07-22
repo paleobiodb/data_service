@@ -25,15 +25,15 @@ use EditTest;
 use EditTester;
 
 
+$DB::single = 1;
+
 # The following calls establish a connection to the database, then create or re-create the
 # necessary tables.
 
-my $T = EditTester->new({ subclass => 'EditTest' });
+my $T = EditTester->new('EditTest', 'EDT_TEST');
 
 $T->establish_session_data;
 $T->establish_test_tables;
-
-$DB::single = 1;
 
 # Test creation of both Permissions objects and an EditTest object. The Permissions objects are
 # made available to subsequent tests. If we cannot create EditTest objects without an error
@@ -85,39 +85,31 @@ subtest 'insert and delete' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'abc' });
     
-    unless ( ok( $edt->commit, "insert record transaction succeeded" ) )
-    {
-	$T->diag_errors('all');
-	$T->diag_warnings('all');
-	BAIL_OUT;
-    }
+    $T->ok_commit( "insert record transaction succeeded" ) || BAIL_OUT;
     
     my @inserted = $edt->inserted_keys;
     
-    unless ( cmp_ok( @inserted, '==', 1, "inserted one record" ) )
-    {
-	$T->diag_errors('all');
-	$T->diag_warnings('all');
-	BAIL_OUT;
-    }
+    is( @inserted, 1, "inserted one record" ) || BAIL_OUT;
     
     my ($r) = $T->fetch_records_by_key('EDT_TEST', $inserted[0]);
-
+    
     ok( $r, "record was in the table" ) &&
 	cmp_ok( $r->{string_req}, 'eq', 'abc', "record had proper string value" );
-
+    
     # Check that we can delete records.
-
+    
     $edt = $T->new_edt($perm_a);
     
     $edt->delete_record('EDT_TEST', $inserted[0]);
     
-    unless ( ok( $edt->commit, "delete record transaction succeeded" ) )
-    {
-	$T->diag_errors('all');
-	$T->diag_warnings('all');
-	BAIL_OUT;
-    }
+    $T->ok_commit( "delete record transaction succeeded" ) || BAIL_OUT;
+    
+    # unless ( ok( $edt->commit, "delete record transaction succeeded" ) )
+    # {
+    # 	$T->diag_errors('all');
+    # 	$T->diag_warnings('all');
+    # 	BAIL_OUT;
+    # }
     
     my @deleted = $edt->deleted_keys;
     
@@ -136,8 +128,10 @@ subtest 'update and replace' => sub {
     my $edt = $T->new_edt($perm_a);
 
     $edt->insert_record('EDT_TEST', { signed_val => 456, string_req => 'test for update' });
-
-    ok( $edt->commit, "insert record transaction succeeded" ) || BAIL_OUT;
+    
+    $T->ok_commit( "insert record transaction succeeded" ) || BAIL_OUT;
+    
+    # ok( $edt->commit, "insert record transaction succeeded" ) || BAIL_OUT;
     
     my ($test_key) = $edt->inserted_keys;
     
@@ -152,13 +146,8 @@ subtest 'update and replace' => sub {
     
     my $result2 = $edt->update_record('EDT_TEST',
 				 { test_id => $test_key, string_req => 'updated' });
-
-    unless ( ok( $result2, "update record succeeded" ) )
-    {
-	$T->diag_errors('all');
-	$T->diag_warnings('all');
-	BAIL_OUT;
-    }
+    
+    $T->ok_action || BAIL_OUT;
     
     my ($r2) = $T->fetch_records_by_key('EDT_TEST', $test_key);
     
@@ -172,12 +161,7 @@ subtest 'update and replace' => sub {
     
     my $result3 = $edt->replace_record('EDT_TEST', { test_id => $test_key, string_req => 'replaced' });
     
-    unless ( ok( $result3, "replace record succeeded" ) )
-    {
-	$T->diag_errors('all');
-	$T->diag_warnings('all');
-	BAIL_OUT;
-    }
+    $T->ok_action || BAIL_OUT;
     
     my ($r3) = $T->fetch_records_by_key('EDT_TEST', $test_key);
     
@@ -186,8 +170,10 @@ subtest 'update and replace' => sub {
 	cmp_ok( $r3->{string_req}, 'eq', 'replaced', "string value was changed" );
 	ok( ! defined $r3->{signed_val}, "int value was replaced by nothing" );
     }
+
+    $T->ok_commit( "update and replace transaction committed" );
     
-    ok( $edt->commit, "transaction committed" );
+    # ok( $edt->commit, "transaction committed" );
 };
 
 
@@ -206,10 +192,10 @@ subtest 'test exceptions' => sub {
     ok( $@ && $@ =~ /TEST NO CONNECT/, "test exception for no database connection" );
     
     {
-	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
-
+	local $EditTransaction::TEST_PROBLEM{sql_error} = 1;
+	
 	$edt = $T->new_edt($perm_a, { SILENT_MODE => 1, IMMEDIATE_MODE => 1 });
-
+	
 	$edt->insert_record('EDT_TEST', { string_req => 'should not be inserted' });
     }
     
@@ -244,26 +230,25 @@ subtest 'allowances' => sub {
     
     ok( $edt = $T->new_edt($perm_a, { CREATE => 1,
 				      LOCKED => 1,
-				      MULTI_DELETE => 1,
-				      ALTER_TRAIL => 1,
 				      NOT_FOUND => 1,
+				      NOT_PERMITTED => 1,
 				      PROCEED => 1,
+				      MOVE_SUBORDINATES => 1,
 				      BAD_FIELDS => 1,
 				      DEBUG_MODE => 1,
 				      SILENT_MODE => 1,
 				      IMMEDIATE_MODE => 1,
 				      FIXUP_MODE => 1,
-				      NO_LOG_MODE => 1,
+				      ALTER_TRAIL => 1,
+				      SKIP_LOGGING => 1,
 				      VALIDATION_ONLY => 1,
 				      TEST_DEBUG => 1,
-				      UNKNOWN_MODE => 1,
-				      NO_ALLOW => 0 }), "new edt with many allowances" );
+				      UNKNOWN_MODE => 1 }), "new edt with many allowances" );
     
     if ( $edt )
     {
 	ok( $edt->allows('CREATE'), "allowance CREATE accepted" );
 	ok( $edt->allows('LOCKED'), "allowance LOCKED accepted" );
-	ok( $edt->allows('MULTI_DELETE'), "allowance MULTI_DELETE accepted" );
 	ok( $edt->allows('ALTER_TRAIL'), "allowance ALTER_TRAIL accepted" );
 	ok( $edt->allows('NOT_FOUND'), "allowance NOT_FOUND accepted" );
 	ok( $edt->allows('PROCEED'), "allowance PROCEED accepted" );
@@ -275,15 +260,15 @@ subtest 'allowances' => sub {
 	ok( ! $edt->allows('UNKNOWN_MODE'), "allowance UNKNOWN_MODE not accepted" );
 	ok( ! $edt->allows('NO_ALLOW'), "allowance NO_ALLOW not accepted" );
 	
-	cmp_ok( $edt->warnings, '==', 1, "return one warning" );
+	cmp_ok( $edt->warnings, '==', 1, "got one warning" ) || $T->diag_warnings;
 	$T->ok_has_warning( qr/UNKNOWN_MODE/, "warning about UNKNOWN_MODE" );
     }
 
     # Now try to create an EditTransaction using the array form for
     # allowances.
-
-    $edt = EditTest->new($T->dbh, $perm_a, 'EDT_TEST', [ 'CREATE', 'NOT_FOUND', 'TEST_DEBUG' ]);
-
+    
+    $edt = EditTest->new($T->dbh, $perm_a, [ 'CREATE', 'NOT_FOUND', 'TEST_DEBUG' ]);
+    
     ok( $edt, "EditTransaction was created" );
     ok( $edt->allows('CREATE'), "allows 'CREATE'" );
     ok( $edt->allows('NOT_FOUND'), "allows 'NOT_FOUND'" );
@@ -307,27 +292,28 @@ subtest 'accessors' => sub {
     
     ok( $edt, "created edt" ) || return;
 
-    if ( can_ok( 'EditTransaction', 'dbh', 'perms', 'role', 'debug' ) )
+    if ( can_ok( 'EditTransaction', 'dbh', 'perms', 'role', 'debug_mode' ) )
     {    
 	is( $edt->dbh, $T->dbh, "fetch dbh" );
 	is( $edt->perms, $perm_a, "fetch perm_a" );
 	is( $edt->role, 'authorizer', "fetch role a" );
-	ok( $edt->debug, "fetch debug" );
+	ok( $edt->debug_mode, "fetch debug mode" );
     }
     
     $edt = $T->new_edt($perm_g);
 
-    if ( can_ok( 'EditTransaction', 'transaction', 'has_started', 'has_finished', 'is_active',
-	         'has_committed', 'can_proceed' ) )
+    if ( can_ok( 'EditTransaction', 'transaction', 'status', 'can_proceed',
+		 'has_started', 'has_finished', 'is_active', 'has_committed' ) )
     {
-	is( $edt->transaction, '', "fetch transaction before start" );
+	is( $edt->transaction, '', "transaction before start" );
+	is( $edt->status, 'init', "status before start" );
 	ok( ! $edt->has_started, "transaction has not started" );
 	ok( ! $edt->has_finished, "transaction has not finished" );
 	ok( ! $edt->is_active, "transaction is not active" );
 	ok( $edt->can_proceed, "transaction can proceed" );
 	is( $edt->perms, $perm_g, "fetch perm_g" );
 	is( $edt->role, 'guest', "fetch role g" );
-	ok( $T->debug || ! $edt->debug, "fetch debug 2" );
+	ok( $T->debug_mode || ! $edt->debug_mode, "fetch debug 2" );
 	
 	$edt->start_transaction;
 	
@@ -367,11 +353,11 @@ subtest 'debug output' => sub {
 
     $edt->start_execution;
     
-    ok( ! $edt->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
+    ok( ! $edt->has_debug_output( qr/START TRANSACTION/ ),
 	"did not capture debug output without DEBUG_MODE" );
     
     {
-	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
+	local $EditTransaction::TEST_PROBLEM{sql_error} = 1;
 	
 	$edt->insert_record('EDT_TEST', { string_req => 'abc' });
 	
@@ -393,11 +379,11 @@ subtest 'debug output' => sub {
     
     $edt = $T->new_edt($perm_a, { SILENT_MODE => 0, TEST_DEBUG => 1, IMMEDIATE_MODE => 1 });
 
-    ok ( ! $edt->has_debug_output( qr/START TRANSACTION/ ) || $T->debug,
+    ok ( ! $edt->has_debug_output( qr/START TRANSACTION/ ),
 	 "did not capture debug output without DEBUG_MODE" );
     
     {
-	local $EditTransaction::TEST_PROBLEM{insert_sql} = 1;
+	local $EditTransaction::TEST_PROBLEM{sql_error} = 1;
 	
 	$edt->insert_record('EDT_TEST', { string_req => 'abc' });
 	

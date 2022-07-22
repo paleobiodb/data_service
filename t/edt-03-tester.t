@@ -43,7 +43,7 @@ subtest 'basic' => sub {
     
     ok( ref $dbh && ref($dbh) =~ /DBI/, "got proper dbh" ) || BAIL_OUT;
     
-    my $debug = $T->debug;	# this will cause the script to fail if the method isn't implemented
+    my $debug = $T->debug_mode;	# this will cause the script to fail if the method isn't implemented
 };
 
 
@@ -777,7 +777,7 @@ subtest 'diag errors' => sub {
     
     like( $lines[0], qr/E_FORMAT\b.*\bCCC/, "diag_errors output contains first error" );
     like( $lines[1], qr/E_FORMAT\b.*\bDDD/, "diag_errors output contains second error" );
-    like( $lines[1], qr/^E_FORMAT \(#2\): .*'DDD'/, "diag_errors output has proper format" );
+    like( $lines[1], qr/^E_FORMAT \(#2\): .*\bDDD\b/, "diag_errors output has proper format" );
     
     # Test that 'clear_test_output' works properly.
     

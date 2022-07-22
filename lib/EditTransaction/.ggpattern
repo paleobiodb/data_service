@@ -1,7 +1,7 @@
-pm: *.pm ../EditTransaction.pm ../PB2/*.pm
-edt: *.pm ../EditTransaction.pm
-pmt: *.pm ../EditTransaction.pm ../PB2/*.pm ../../t/*.t ../../t/*.pm
-edtt: *.pm ../EditTransaction.pm ../../t/*.t ../../t/*.pm
-t: ../../t/*.t
+pm: *.pm ../*.pm ../PB2/*.pm
+edt: *.pm ../EditTransaction.pm ../Permissions.pm ../TableDefs.pm
+pmt: *.pm ../*.pm ../PB2/*.pm ../../t/*.t ../../t/*.pm
+edtt: *.pm ../EditTransaction.pm ../Permissions.pm ../TableDefs.pm ../../t/*.t ../../t/*.pm
+t: ../../t/*.t ../../t/*.pm
 wds: ../Web/DataService/*.pm ../Web/DataService/*/*.pm
 wdspod: ../Web/DataService/*.pod ../Web/DataService/*/*.pod
