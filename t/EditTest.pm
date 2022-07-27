@@ -37,21 +37,38 @@ use parent 'EditTransaction';
 
 {
     set_table_name(EDT_TEST => 'edt_test');
-    set_table_name(EDT_AUX => 'edt_aux');
+    set_table_name(EDT_TYPES => 'edt_extended');
+    set_table_name(EDT_AUTH => 'edt_auth');
+    set_table_name(EDT_SUB => 'edt_sub');
     set_table_name(EDT_ANY => 'edt_any');
-    set_table_name(EDT_SIMPLE => 'edt_simple');
     
-    set_table_group('edt_test' => 'EDT_TEST', 'EDT_AUX', 'EDT_ANY', 'EDT_SIMPLE');
+    set_table_group('edt_test' => 'EDT_TEST', 'EDT_TYPES', 'EDT_AUTH', 'EDT_SUB', 'EDT_ANY');
     
-    set_table_property(EDT_TEST => CAN_POST => 'AUTHORIZED');
-    set_table_property(EDT_TEST => PRIMARY_KEY => 'test_no');
-    set_table_property(EDT_TEST => PRIMARY_FIELD => 'test_id');
-    set_table_property(EDT_TEST => TABLE_COMMENT => 'This table is used for testing EditTransaction.pm and its subclass EditTest.pm');
+    # Set properties for EDT_TEST
+    
+    set_column_property(EDT_TEST => string_req => REQUIRED => 1);
+    set_column_property(EDT_TEST => string_val => ALTERNATE_NAME => 'alt_val');
+    
+    # Set properties for EDT_TYPES
+    
+    set_table_property(EDT_TYPES => CAN_MODIFY => 'ALL');
+    set_table_property(EDT_TYPES => PRIMARY_KEY => 'test_no');
+    set_table_property(EDT_TEST => TABLE_COMMENT => 'Test comment');
     
     set_column_property(EDT_TEST => string_req => REQUIRED => 1);
     set_column_property(EDT_TEST => string_req => COLUMN_COMMENT => 'This is a test comment.');
     set_column_property(EDT_TEST => string_val => ALTERNATE_NAME => 'alt_val');
-    set_column_property(EDT_TEST => admin_str => ADMIN_SET => 1);
+    
+    # Set properties for EDT_AUTH
+    
+    set_table_property(EDT_AUTH => CAN_POST => 'AUTHORIZED');
+    set_table_property(EDT_AUTH => PRIMARY_KEY => 'test_no');
+    set_table_property(EDT_AUTH => PRIMARY_FIELD => 'test_id');
+    
+    set_column_property(EDT_AUTH => string_req => REQUIRED => 1);
+    set_column_property(EDT_AUTH => string_req => COLUMN_COMMENT => 'This is a test comment.');
+    set_column_property(EDT_AUTH => string_val => ALTERNATE_NAME => 'alt_val');
+    set_column_property(EDT_AUTH => admin_str => ADMIN_SET => 1);
     
     set_table_property(EDT_AUX => SUPERIOR_TABLE => 'EDT_TEST');
     set_table_property(EDT_AUX => CAN_POST => 'AUTHORIZED');
@@ -66,9 +83,6 @@ use parent 'EditTransaction';
     set_table_property(EDT_ANY => PRIMARY_KEY => 'any_no');
     
     set_column_property(EDT_ANY => string_req => REQUIRED => 1);
-    
-    set_table_property(EDT_SIMPLE => CAN_MODIFY => 'ALL');
-    set_table_property(EDT_SIMPLE => PRIMARY_KEY => 'test_no');
     
     EditTest->register_allowances('TEST_DEBUG');
     EditTest->register_conditions(E_TEST => ["TEST ERROR '&1'", "TEST ERROR"],
@@ -566,6 +580,16 @@ sub establish_test_tables {
     
     $dbh->do("CREATE TABLE $TABLE{EDT_TEST} (
 		test_no int unsigned primary key auto_increment,
+		string_val varchar(40) not null default '',
+		string_req varchar(40) not null default '',
+		signed_val mediumint)
+		
+		default charset utf8");
+    
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_TYPES}");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDT_TYPES} (
+		test_no int unsigned primary key auto_increment,
 		interval_no int unsigned not null default 0,
 		string_val varchar(40) not null default '',
 		string_req varchar(40) not null default '',
@@ -585,8 +609,9 @@ sub establish_test_tables {
 		enum_val enum('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		dcr timestamp default current_timestamp,
-		dmd timestamp default current_timestamp,
+		dmdplain timestamp default current_timestamp,
 		dmdauto timestmp default current_timestamp on update current_timestamp)
+		
 		default charset utf8");
     
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUX}");

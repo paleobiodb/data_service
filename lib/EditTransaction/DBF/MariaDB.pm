@@ -13,9 +13,16 @@ use EditTransaction qw($REGISTERED_APP);
 
 use TableDefs qw(%TABLE get_table_defn get_table_column_defn set_table_name list_column_property_names);
 
+use Encode qw(encode);
 use Carp qw(croak);
 
 our (@CARP_NOT) = qw(EditTransaction);
+
+use feature 'unicode_strings', 'postderef';
+
+
+our $DECIMAL_NUMBER_RE = qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
+			     (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs;
 
 
 # The following variables cache retrieved table and column information.
@@ -36,7 +43,16 @@ UNITCHECK {
     EditTransaction->register_hook('get_column_property', \&get_column_property);
     EditTransaction->register_hook('alter_column_property', \&alter_column_property);
     
-    EditTransaction->register_hook('validate_data_value', \&validate_data_value);
+    EditTransaction->register_hook_value('validate_data_column', 'text', \&validate_char_value);
+    EditTransaction->register_hook_value('validate_data_column', 'data', \&validate_char_value);
+    EditTransaction->register_hook_value('validate_data_column', 'boolean', \&validate_boolean_value);
+    EditTransaction->register_hook_value('validate_data_column', 'integer', \&validate_integer_value);
+    EditTransaction->register_hook_value('validate_data_column', 'fixed', \&validate_fixed_value);
+    EditTransaction->register_hook_value('validate_data_column', 'floating', \&validate_float_value);
+    EditTransaction->register_hook_value('validate_data_column', 'enum', \&validate_enum_value);
+    EditTransaction->register_hook_value('validate_data_column', 'set', \&validate_enum_value);
+    EditTransaction->register_hook_value('validate_data_column', 'geometry', \&validate_geometry_value);
+    EditTransaction->register_hook_value('validate_data_column', 'datetime', \&validate_datetime_value);
     
     EditTransaction->register_hook('execute_insert', \&execute_insert);
     EditTransaction->register_hook('execute_replace', \&execute_replace);
@@ -45,8 +61,8 @@ UNITCHECK {
 };
 
 
-# Public hooks and auxiliary routines
-# -----------------------------------
+# Schemas and properties for tables and columns
+# ---------------------------------------------
 
 # get_table_description ( table_specifier )
 #
@@ -572,5 +588,554 @@ sub alter_column_property {
     }
 }
 
+
+# Data column validation routines
+# -------------------------------
+
+# validate_char_value ( type, fieldname, value )
+# 
+# Check that the specified value is suitable for storing into a boolean column in the
+# database. If it is not, return an error condition as a listref.
+# 
+# If the value is good, return a canonical version suitable for storing into the column. An
+# undefined return value will indicate a null. The second return value, if present, will be a
+# warning condition as a listref. The third return value, if present, will indicate that the
+# returned value has already been quoted.
+
+sub validate_char_value {
+    
+    my ($edt, $cr, $value, $fieldname) = @_;
+
+    my ($type, $size, $var, $charset) =
+	ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams}->@* : $cr->{TypeParams} || 'unknown';
+    
+    my ($value_size, $no_quote, $additional);
+    
+    # If the character set of a text/char column is not utf8, then encode the value into the
+    # proper character set before checking the length.
+    
+    if ( $type eq 'text' && $charset && $charset ne 'utf8' )
+    {
+	# If the column is latin1, we can do the conversion in Perl.
+	
+	if ( $charset eq 'latin1' )
+	{
+	    $value = encode('cp1252', $value);
+	    $value_size = length($value);
+	}
+	
+	# Otherwise, we must let the database do the conversion.
+	
+	else
+	{
+	    my $dbh = $edt->dbh;
+	    my $quoted = $dbh->quote($value);
+	    $value = "convert($quoted using $charset)";
+	    ($value_size) = $dbh->selectrow_array("SELECT length($value)");
+	    $no_quote = 1;
+	}
+    }
+    
+    else
+    {
+	$value_size = length(encode('UTF-8', $value));
+    }
+    
+    # If the size of the value exceeds the size of the column, then we either truncate the data if
+    # the column has the ALLOW_TRUNCATE attribute or else reject the value.
+    
+    if ( defined $size && $value_size > $size )
+    {
+	my $word = $type eq 'text' ? 'characters' : 'bytes';
+	
+	if ( $cr->{ALLOW_TRUNCATION} )
+	{
+	    $value = substr($value, 0, $size);
+	    $additional = [ 'W_TRUNC', $fieldname,
+			    "value was truncated to a length of $size $word" ];
+	}
+	
+	else
+	{
+	    return [ 'E_WIDTH', $fieldname,
+		     "value exceeds column size of $size $word, was $value_size" ];
+	}
+    }
+    
+    return ($value, $additional, $no_quote);
+}
+
+
+# validate_boolean_value ( type, fieldname, value )
+# 
+# Check that the specified value is suitable for storing into a boolean column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_boolean_value {
+    
+    my ($edt, $cr, $value, $fieldname) = @_;
+    
+    # For a boolean column, the value must be either 1 or 0. But we allow 'yes', 'no', 'true',
+    # 'false', 'on', 'off' as case-insensitive synonyms. A string that is empty or has only
+    # whitespace is turned into a null.
+    
+    if ( $value =~ qr{ ^ \s* $ }xs )
+    {
+	return undef;
+    }
+    
+    elsif ( $value =~ qr{ ^ \s* (?: ( 1 | true | yes | on ) | 
+				    ( 0 | false | no | off ) ) \s* $ }xsi )
+    {
+	return $1 ? '1' : '0';
+    }
+    
+    else
+    {
+	return [ 'E_FORMAT', $fieldname, "value must be one of: 1, 0, true, false, yes, no, on, off" ];
+    }
+}
+
+
+# validate_integer_value ( type, fieldnme, value )
+# 
+# Check that the specified value is suitable for storing into an integer column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+our (%SIGNED_BOUND) = ( tiny => 127,
+			small => 32767,
+			medium => 8388607,
+			regular => 2147483647,
+			big => 9223372036854775807 );
+
+our (%UNSIGNED_BOUND) = ( tiny => 255,
+			  small => 65535,
+			  medium => 16777215,
+			  regular => 4294967295,
+			  big => 18446744073709551615 );
+
+sub validate_integer_value {
+    
+    my ($edt, $cr, $value, $fieldname) = @_;
+    
+    my ($type, $unsigned, $size) =
+	ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams}->@* : $cr->{TypeParams} || 'unknown';
+    
+    my $max = $unsigned ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
+    
+    # First make sure that the value is either empty or matches the proper format. A value which
+    # is empty or contains only whitespace will be treated as a NULL.
+    
+    if ( $value =~ qr{ ^ \s* $ }xs )
+    {
+	return undef;
+    }
+    
+    elsif ( $value !~ qr{ ^ \s* ( [-+]? ) \s* ( \d+ ) \s* $ }xs )
+    {
+	my $phrase = $unsigned ? 'an unsigned' : 'an';
+	
+	return [ 'E_FORMAT', $fieldname, "value must be $phrase integer" ];
+    }
+    
+    elsif ( $unsigned )
+    {
+	$value = $2;
+	
+	if ( $1 && $1 eq '-' )
+	{
+	    return [ 'E_RANGE', $fieldname, "value must an unsigned integer" ];
+	}
+	
+	elsif ( defined $max && $value > $max )
+	{
+	    return [ 'E_RANGE', $fieldname, "value must be less than or equal to $max" ];
+	}
+	
+	else
+	{
+	    return $value;
+	}
+    }
+    
+    else
+    {
+	$value = ($1 && $1 eq '-') ? "-$2" : $2;
+
+	if ( defined $max )
+	{
+	    my $lower = $max + 1;
+	    
+	    if ( $value > $max || (-1 * $value) > $lower )
+	    {
+		return [ 'E_RANGE', $fieldname, "value must lie between -$lower and $max" ];
+	    }
+	}
+	
+	return $value; # otherwise
+    }
+}
+
+
+# validate_fixed_value ( type, fieldname, value )
+# 
+# Check that the specified value is suitable for storing into a fixed-point decimal column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_fixed_value {
+
+    my ($edt, $cr, $value, $fieldname) = @_;
+    
+    my ($type, $unsigned, $whole, $precision) =
+	ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams}->@* : $cr->{TypeParams} || 'unknown';
+    
+    my $additional;
+    
+    # First make sure that the value is either empty or matches the proper format.  A value which
+    # is empty or contains only whitespace is turned into NULL.
+    
+    if ( $value =~ qr{ ^ \s* $ }xs )
+    {
+	return undef;
+    }
+    
+    elsif ( $value !~ $DECIMAL_NUMBER_RE )
+    {
+	my $phrase = $unsigned ? 'an unsigned' : 'a';
+	
+	return ['E_FORMAT', $fieldname, "value must be $phrase decimal number" ];
+    }
+    
+    else
+    {
+	# If the column is unsigned, make sure there is no minus sign.
+	
+	if ( $unsigned && defined $1 && $1 eq '-' )
+	{
+	    return [ 'E_RANGE', $fieldname, "value must be an unsigned decimal number" ];
+	}
+	
+	# Now put the number back together from the regex captures. If there is an
+	# exponent, reformat it as a fixed point.
+	
+	my $sign = $1 && $1 eq '-' ? '-' : '';
+	my $intpart = $2 // '';
+	my $fracpart = $3 // $4 // '';
+	
+	if ( $6 )
+	{
+	    my $exponent = ($5 && $5 eq '-' ? "-$6" : $6);
+	    my $formatted = sprintf("%.10f", "${intpart}.${fracpart}E${exponent}");
+	    
+	    ($intpart, $fracpart) = split(/[.]/, $formatted);
+	}
+	
+	# Check that the number of digits is not exceeded, either before or after the decimal. In
+	# the latter case, we add an error unless the column property ALLOW_TRUNCATE is set in
+	# which case we add a warning.
+	
+	$intpart =~ s/^0+//;
+	$fracpart =~ s/0+$//;
+	
+	if ( $intpart && length($intpart) > $whole )
+	{
+	    my $total = $whole + $precision;
+	    
+	    return [ 'E_RANGE', $fieldname, "value is too large for decimal($total,$precision)" ];
+	}
+	
+	if ( $fracpart && length($fracpart) > $precision )
+	{
+	    my $total = $whole + $precision;
+	    
+	    if ( $cr->{ALLOW_TRUNCATION} )
+	    {
+		$additional = [ 'W_TRUNC', $fieldname,
+				"value has been truncated to decimal($total,$precision)" ];
+	    }
+	    
+	    else
+	    {
+		return [ 'E_WIDTH', $fieldname,
+			 "too many decimal digits for decimal($total,$precision)" ];
+	    }
+	}
+	
+	# Rebuild the value, with the fracional part trimmed.
+	
+	$value = $sign;
+	$value .= $intpart || '0';
+	$value .= '.' . substr($fracpart, 0, $precision);
+	
+	return ($value, $additional);
+    }
+}
+
+
+# validate_float_value ( type, fieldname, value )
+# 
+# Check that the specified value is suitable for storing into a floating-point decimal column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_float_value {
+
+    my ($edt, $cr, $value, $fieldname) = @_;
+    
+    my ($type, $unsigned, $precision) = 
+	ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams}->@* : $cr->{TypeParams} || 'unknown';
+    
+    # First make sure that the value is either empty or matches the proper format. A value which
+    # is empty or contains only whitespace will be treated as a NULL.
+    
+    if ( $value =~ qr{ ^ \s* $ }xs )
+    {
+	return undef;
+    }
+    
+    elsif ( $value !~ $DECIMAL_NUMBER_RE )
+    {
+	my $phrase = $unsigned ? 'an unsigned' : 'a';
+	
+	return [ 'E_FORMAT', $fieldname, "value must be $phrase floating point number" ];
+    }
+    
+    else
+    {
+	my $sign = (defined $1 && $1 eq '-') ? '-' : '';
+	
+	# If the column is unsigned, make sure there is no minus sign.
+	
+	if ( $unsigned && $sign eq '-' )
+	{
+	    return [ 'E_RANGE', $fieldname, "value must be an unsigned floating point number" ];
+	}
+	
+	# Put the pieces of the value back together.
+	
+	$value = $sign . ( $2 // '' ) . '.';
+	$value .= ( $3 // $4 // '' );
+	
+	if ( $6 )
+	{
+	    my $esign = $5 eq '-' ? '-' : '';
+	    $value .= 'E' . $esign . $6;
+	}
+	
+	# Then check that the number is not too large to be represented, given the size of the
+	# field. We are conservative in the bounds we check. We do not check for the number of
+	# decimal places being exceeded, because floating point is naturally inexact. Also, if
+	# maximum digits were specified we ignore these.
+			    
+	my $bound = $precision eq 'double' ? 1E308 : 1E38;
+	my $word = $precision eq 'float' ? 'single' : 'double';
+	
+	if ( $value > $bound || ( $value < 0 && -$value > $bound ) )
+	{
+	    return [ 'E_RANGE', $fieldname, "magnitude is too large for $word-precision floating point" ];
+	}
+
+	return $value;
+    }
+}
+
+
+# validate_enum_value ( type, fieldname, value )
+# 
+# Check that the specified value is suitable for storing into an enumerated or set valued column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_enum_value {
+
+    my ($edt, $cr, $value, $fieldname) = @_;
+    
+    my ($type, $good_values) =
+	ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams}->@* : $cr->{TypeParams} || 'unknown';
+    
+    # If the data type is either 'set' or 'enum', then we check to make sure that the value is one
+    # of the allowable ones. We always match without regard to case, using the Unicode 'fold case'
+    # function (fc).
+    
+    use feature 'fc';
+    
+    $value =~ s/^\s+//;
+    $value =~ s/\s+$//;
+    
+    my @raw = $value;
+    
+    # if ( $type eq 'set' )
+    # {
+    # 	my $sep = $column_defn->{VALUE_SEPARATOR} || qr{ \s* , \s* }xs;
+    # 	@raw = split $sep, $value;
+    # }
+    
+    my (@good, @bad);
+    
+    foreach my $v ( @raw )
+    {
+	next unless defined $v && $v ne '';
+
+	if ( ! $good_values )
+	{
+	    push @good, $v;
+	}
+	
+	elsif ( $good_values->{fc $v} )
+	{
+	    push @good, $v;
+	}
+	
+	else
+	{
+	    push @bad, $v;
+	}
+    }
+    
+    if ( @bad )
+    {
+	my $value_string = join(', ', @bad);
+	my $word = @bad > 1 ? 'values' : 'value';
+	my $word2 = @bad > 1 ? 'are' : 'is';
+	
+	return [ 'E_RANGE', $fieldname, "$word '$value_string' $word2 not allowed for this table column" ];
+    }
+    
+    elsif ( @good )
+    {
+	return join(',', @good);
+    }
+    
+    else
+    {
+	return undef;
+    }
+}
+
+
+# validate_datetime_value ( type, fieldname, value )
+# 
+# Check that the specified value is suitable for storing into a time or date or datetime valued
+# column in the database. If it is not, add an error condition and return a non-scalar value as a
+# flag to indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_datetime_value {
+    
+    my ($edt, $cr, $value, $fieldname) = @_;
+    
+    my ($type, $specific) = 
+	ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams}->@* : $cr->{TypeParams} || 'unknown';
+    
+    if ( $value =~ qr{ ^ now (?: [(] [)] ) ? $ }xsi )
+    {
+	return ('NOW()', undef, 1);
+    }
+    
+    elsif ( $value =~ qr{ ^ \d\d\d\d\d\d\d\d\d\d+ $ }xs )
+    {
+	return ("FROM_UNIXTIME($value)", undef, 1);
+    }
+    
+    elsif ( $specific eq 'time' )
+    {
+	if ( $value !~ qr{ ^ \d\d : \d\d : \d\d $ }xs )
+	{
+	    return [ 'E_FORMAT', $fieldname, "invalid time '$value'" ];
+	}
+
+	else
+	{
+	    return $value;
+	}
+    }
+    
+    else
+    {
+	if ( $value !~ qr{ ^ ( \d\d\d\d - \d\d - \d\d ) ( \s+ \d\d : \d\d : \d\d ) ? $ }xs )
+	{
+	    return [ 'E_FORMAT', $fieldname, "invalid datetime '$value'" ];
+	}
+	
+	unless ( defined $2 && $2 ne '' )
+	{
+	    $value .= ' 00:00:00';
+	}
+	
+	return $value;
+    }
+}
+
+
+# validate_geometry_value ( type, fieldname, value )
+# 
+# Check that the specified value is suitable for storing into a geometry valued column in the
+# database. If it is not, add an error condition and return a non-scalar value as a flag to
+# indicate that no further processing should be done on it.
+# 
+# If the value is good, this routine will return a canonical version suitable for storing into the
+# column. An undefined return value will indicate a null.
+
+sub validate_geometry_value {
+    
+    my ($edt, $cr, $value, $fieldname) = @_;
+    
+    my ($type, $specific) = 
+	ref $cr->{TypeParams} eq 'ARRAY' ? $cr->{TypeParams}->@* : $cr->{TypeParams} || 'unknown';
+    
+    # $$$ we still need to write some code to validate these.
+    
+    return $value;
+}
+
+
+# Action execution routines
+# -------------------------
+
+sub execute_insert {
+
+
+}
+
+
+sub execute_replace {
+
+
+
+}
+
+
+sub execute_update {
+
+
+
+}
+
+
+sub execute_delete {
+
+
+
+}
 
 1;

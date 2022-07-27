@@ -40,7 +40,6 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $TEST_DB %TABLE
-		      %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL 
 		      init_table_names enable_test_mode disable_test_mode is_test_mode
 		      change_table_name change_table_db restore_table_name original_table_name
 		      set_table_name get_table_name set_table_group get_table_group
@@ -83,61 +82,6 @@ our (%COLUMN_PROP_NAME) = (
     IGNORE => 1,            # this column will be ignored as if it didn't exist (bool)
     COLUMN_COMMENT => 1     # provides a comment or documentation string for this column
 );
-
-
-# Define the properties of certain fields that are common to many tables in the PBDB.
-
-our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITY_DATA',
-			     resource_no => 'REFERENCE_DATA',
-			     collection_no => 'COLLECTION_DATA',
-			     occurrence_no => 'OCCURRENCE_DATA',
-			     specimen_no => 'SPECIMEN_DATA',
-			     measurement_no => 'MEASUREMENT_DATA',
-			     specelt_no => 'SPECELT_DATA',
-			     reid_no => 'REID_DATA',
-			     opinion_no => 'OPINION_DATA',
-			     interval_no => 'INTERVAL_DATA',
-			     timescale_no => 'TIMESCALE_DATA',
-			     bound_no => 'TIMESCALE_BOUNDS',
-			     eduresource_no => 'RESOURCE_QUEUE',
-			     person_no => 'WING_USERS',
-			     authorizer_no => 'WING_USERS',
-			     enterer_no => 'WING_USERS',
-			     modifier_no => 'WING_USERS');
-
-our (%FOREIGN_KEY_COL) = ( authorizer_no => 'person_no',
-			   enterer_no => 'person_no',
-			   modifier_no => 'person_no' );
-
-our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TID',
-			       orig_no => 'TXN',
-			       reference_no => 'REF',
-			       collection_no => 'COL',
-			       occurrence_no => 'OCC',
-			       specimen_no => 'SPM',
-			       measurement_no => 'MEA',
-			       specelt_no => 'ELS',
-			       reid_no => 'REI',
-			       opinion_no => 'OPN',
-			       interval_no => 'INT',
-			       timescale_no => 'TSC',
-			       bound_no => 'BND',
-			       eduresource_no => 'EDR',
-			       person_no => 'PRS',
-			       authorizer_no => 'PRS',
-			       enterer_no => 'PRS',
-			       modifier_no => 'PRS' );
-
-our (%COMMON_FIELD_SPECIAL) = ( authorizer_no => 'en_authorizer',
-				authorizer_id => 'en_authorizer',
-				enterer_no => 'en_creater',
-				enterer_id => 'en_creater',
-				modifier_no => 'en_modifier',
-				modifier_id => 'en_modifier',
-				created => 'ts_created',
-				modified => 'ts_modified',
-				admin_lock => 'ad_lock',
-			        owner_lock => 'ow_lock' );
 
 
 # Define the mechanism for substituting test tables instead of real ones.

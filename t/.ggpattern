@@ -1,5 +1,22 @@
-t: *.pm *.t
-edt: ../lib/EditTransaction.pm ../lib/Permissions.pm ../lib/TableDefs.pm ../lib/EditTransaction/*.pm
-edtt: *.pm *.t ../lib/EditTransaction.pm ../lib/Permissions.pm ../lib/TableDefs.pm ../lib/EditTransaction/*.pm
+# GG patterns for t/
+
+basedir = ../lib/
+edtdir = ../lib/EditTransaction/
+appdir = ../lib/EditTransaction/APP/
+dbfdir = ../lib/EditTransaction/DBF/
+testdir = 
+
+pm: [edtdir]*.pm [appdir]*.pm [dbfdir]*.pm [basedir]*.pm [basedir]PB2/*.pm
+edt: [edtdir]*.pm [appdir]*.pm [dbfdir]*.pm [basedir]EditTransaction.pm [basedir]Permissions.pm [basedir]TableDefs.pm
+t: [testdir]*.pm [testdir]*.t
+pmt: [pm] [t]
+edtt: [edt] [t]
 wds: ../lib/Web/DataService/*.pm ../lib/Web/DataService/*/*.pm
 wdspod: ../lib/Web/DataService/*.pod ../lib/Web/DataService/*/*.pod
+
+# t: *.pm *.t
+# edt: ../lib/EditTransaction.pm ../lib/Permissions.pm ../lib/TableDefs.pm ../lib/EditTransaction/*.pm
+# edtt: *.pm *.t ../lib/EditTransaction.pm ../lib/Permissions.pm ../lib/TableDefs.pm ../lib/EditTransaction/*.pm
+# wds: ../lib/Web/DataService/*.pm ../lib/Web/DataService/*/*.pm
+# wdspod: ../lib/Web/DataService/*.pod ../lib/Web/DataService/*/*.pod
+

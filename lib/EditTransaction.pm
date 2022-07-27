@@ -168,10 +168,11 @@ our ($TRANSACTION_COUNT) = 1;
 # Interfaces with other modules
 # -----------------------------
 
-our (%DBF_PACKAGE, $DBF_NAME, $DBF_PKGNAME);
-our (%APP_PACKAGE, $APP_NAME, $APP_PKGNAME);
+our (%DBF_PACKAGE, $DBF_NAME);
+our (%APP_PACKAGE, $APP_NAME);
+our (%DEFAULT_PLUGIN);
 
-our (%PACKAGE_HOOK, %DIRECTIVE_HOOK);
+our (%PACKAGE_HOOK);
 
 our (%DIRECTIVES_BY_CLASS);
 
@@ -411,8 +412,8 @@ sub DESTROY {
 }
 
 
-# Registration of database and application plug-ins
-# -------------------------------------------------
+# Database and application plug-ins and hooks
+# -------------------------------------------
 
 # The following methods can all be called as class methods. Under most circumstances they will be
 # called just after the calling package has compiled.
@@ -432,18 +433,18 @@ sub register_dbf {
     $package ||= caller;
     
     $DBF_PACKAGE{$name} = $package;
-
+    
     # If we have only a single registered DBF module, select that one.
     
     my @names = keys %DBF_PACKAGE;
     
     $DBF_NAME = @names == 1 ? $names[0] : undef;
-    $DBF_PKGNAME = $DBF_NAME ? $DBF_PACKAGE{$DBF_NAME} : undef;
+    $DEFAULT_PLUGIN{DBF} = $DBF_NAME ? $DBF_PACKAGE{$DBF_NAME} : undef;
 }
 
 
-# register_dbf ( name, package )
-#
+# register_app ( name, package )
+# 
 # Register the package from which this call originates as an APP module. A canonical name must be
 # specified for this module. That name can be used by clients to select which application
 # semantics to use for a new EditTransaction, if more than one is APP module is registered. If
@@ -464,7 +465,7 @@ sub register_app {
     my @names = keys %APP_PACKAGE;
     
     $APP_NAME = @names == 1 ? $names[0] : undef;
-    $APP_PKGNAME = $APP_NAME ? $APP_PACKAGE{$APP_NAME} : undef;
+    $DEFAULT_PLUGIN{APP} = $APP_NAME ? $APP_PACKAGE{$APP_NAME} : undef;
 }
 
 
@@ -474,24 +475,189 @@ sub register_app {
 # which this call originates. The package name need only be provided if it is different from the
 # calling package.
 
+our (%HOOK_TYPE) = ( app_finish_table_definition => 'APP',
+		     app_validate_data_column => 'APP',
+		     app_validate_special_column => 'APP',
+		     
+		     table_schema_present => 'DBF',
+		     get_table_property => 'DBF',
+		     get_column_property => 'DBF',
+		     alter_column_property => 'DBF',
+		     validate_data_column => 'DBF' );
+
+our (%IS_VALUE_HOOK) = ( app_validate_data_column => 1,
+			 app_validate_special_column => 1,
+			 validate_data_column => 1,
+			 execute_database_operation => 1 );
+
 sub register_hook {
 
-    my ($edt, $name, $ref, $package) = @_;
+    my ($edt, $name, $coderef, $package) = @_;
+    
+    croak "hook value must be a code reference" unless ref $coderef eq 'CODE';
     
     $package ||= caller;
     
-    $PACKAGE_HOOK{$package}{$name} = $ref;
+    if ( ! $HOOK_TYPE{$name} )
+    {
+	croak "unknown hook name '$name'";
+    }
+    
+    elsif ( $IS_VALUE_HOOK{$name} )
+    {
+	$PACKAGE_HOOK{$name}{$package}{_default_} = $coderef;
+    }
+    
+    else
+    {
+	$PACKAGE_HOOOK{$name}{$package} = $coderef;
+    }
 }
 
 
-sub register_directive_hook {
+sub register_hook_value {
 
-    my ($edt, $directive, $ref, $package) = @_;
+    my ($edt, $name, $value, $coderef, $package) = @_;
+    
+    croak "hook value must be a code reference" unless ref $coderef eq 'CODE';
     
     $package ||= $caller;
     
-    $DIRECTIVE_HOOK{$package}{$name} = $ref;
+    if ( ! $HOOK_TYPE{$name} )
+    {
+	croak "unknown hook name '$name'";
+    }
+    
+    elsif ( $IS_VALUE_HOOK{$name} )
+    {
+	if ( ref $value eq 'ARRAY' )
+	{
+	    foreach my $v ( @$value )
+	    {
+		$PACKAGE_HOOK{$name}{$package}{$v} = $coderef if defined $v;
+	    }
+	}
+	
+	elsif ( defined $value )
+	{
+	    $PACKAGE_HOOK{$name}{$package}{$value} = $coderef;
+	}
+
+	else
+	{
+	    $PACKAGE_HOOK{$name}{$package}{_default_} = $coderef;
+	}
+    }
+
+    else
+    {
+	croak "the hook '$name' is not routed by value";
+    }
 }
+
+
+# The following methods must be called on an EditTransaction instance.
+
+sub has_hook {
+
+    my ($edt, $hook_name, $value) = @_;
+    
+    if ( defined $value && $edt->{HOOK_MULTI}{$hook_name}{$value} )
+    {
+	return $edt->{HOOK_MULTI}{$hook_name}{$value};
+    }
+
+    elsif ( $edt->{HOOK_CACHE}{$hook_name} )
+    {
+	return $edt->{HOOK_CACHE}{$hook_name};
+    }
+        
+    my $hooktype = $HOOK_TYPE{$hook_name} || croak "unknown hook name '$name'";
+    
+    my $package = $edt->{$hooktype} || $DEFAULT_PLUGIN{$hooktype} || return;
+    
+    my $hook;
+    
+    if ( ref $PACKAGE_HOOK{$hook_name}{$package} eq 'HASH' )
+    {
+	if ( defined $value )
+	{
+	    $hook = $PACKAGE_HOOK{$hook_name}{$package}{$value} ||
+		$PACKAGE_HOOK{$hook_name}{$package}{_default_} ||
+		$PACKAGE_HOOK{$hook_name}{DEFAULT}{$value} ||
+		$PACKAGE_HOOK{$hook_name}{DEFAULT}{_default_};
+	    
+	    return $edt->{HOOK_MULTI}{$hook_name}{$value} = $hook;
+	}
+
+	else
+	{
+	    $hook = $PACKAGE_HOOK{$hook_name}{$package}{_default_} ||
+		$PACKAGE_HOOK{$hook_name}{DEFAULT}{_default_};
+
+	    return $edt->{HOOK_CACHE}{$hook_name} = $hook;
+	}
+    }
+    
+    else
+    {
+	$hook = $PACKAGE_HOOK{$hook_name}{$package} ||
+	    $PACKAGE_HOOK{$hook_name}{DEFAULT};
+	
+	return $edt->{HOOK_CACHE}{$hook_name} = $hook;
+    }
+    
+    return;	# otherwise
+}
+
+
+sub call_hook {
+
+    if ( my $hook = &has_hook)
+    {
+	if ( ref $hook eq 'CODE' )
+	{
+	    goto &$hook;
+	}
+	
+	else
+	{
+	    die "bad hook value '$hook'";
+	}
+    }
+    
+    return;	# otherwise
+}
+
+
+# sub has_dbf_hook {
+
+#     my ($edt, $hook_name) = @_;
+    
+#     my $package = $edt->{DBF} || $DBF_PKGNAME || '';
+    
+#     return $PACKAGE_HOOK{$package}{$hook_name} || $PACKAGE_HOOK{DEFAULT}{$hook_name} || '';
+# }
+
+
+# sub call_dbf_hook {
+
+#     my ($edt, $hook_name) = @_;
+
+#     my $package = $edt->{DBF} || $DBF_PKGNAME || '';
+    
+#     if ( my $hook = $PACKAGE_HOOK{$package}{$hook_name} || $PACKAGE_HOOK{DEFAULT}{$hook_name} )
+#     {
+# 	if ( ref $hook )
+# 	{
+# 	    goto &$hook;
+# 	}
+#     }
+    
+#     # Otherwise
+    
+#     return;
+# }
 
 
 # Basic accessor methods
@@ -782,97 +948,6 @@ sub allows {
 	return ref $_[0]{allows} eq 'HASH' && keys $_[0]{allows}->%*;
     }
 }
-
-
-# Plug-in module hooks
-# --------------------
-
-sub has_app_hook {
-
-    my ($edt, $hook_name) = @_;
-    
-    my $package = $edt->{APP} || $APP_PKGNAME || '';
-    
-    return $PACKAGE_HOOK{$package}{$hook_name} || $PACKAGE_HOOK{DEFAULT}{$hook_name} || '';
-}
-
-
-sub call_app_hook {
-    
-    my ($edt, $hook_name) = @_;
-    
-    my $package = $edt->{APP} || $APP_PKGNAME || '';
-    
-    if ( my $hook = $PACKAGE_HOOK{$package}{$hook_name} || $PACKAGE_HOOK{DEFAULT}{$hook_name} )
-    {
-	if ( ref $hook )
-	{
-	    goto &$hook;
-	}
-    }
-    
-    # Otherwise
-    
-    return;
-}
-
-
-sub has_dbf_hook {
-
-    my ($edt, $hook_name) = @_;
-    
-    my $package = $edt->{DBF} || $DBF_PKGNAME || '';
-    
-    return $PACKAGE_HOOK{$package}{$hook_name} || $PACKAGE_HOOK{DEFAULT}{$hook_name} || '';
-}
-
-
-sub call_dbf_hook {
-
-    my ($edt, $hook_name) = @_;
-
-    my $package = $edt->{DBF} || $DBF_PKGNAME || '';
-    
-    if ( my $hook = $PACKAGE_HOOK{$package}{$hook_name} || $PACKAGE_HOOK{DEFAULT}{$hook_name} )
-    {
-	if ( ref $hook )
-	{
-	    goto &$hook;
-	}
-    }
-    
-    # Otherwise
-    
-    return;
-}
-
-
-sub has_directive_hook {
-
-    my ($edt, $directive) = @_;
-
-    my $package = $edt->{APP} || $APP_PKGNAME || '';
-    
-    return $DIRECTIVE_HOOK{$package}{$directive} || $DIRECTIVE_HOOK{DEFAULT}{$directive} || '';
-}
-
-
-sub call_directive_hook {
-    
-    my $package = $edt->{APP} || $APP_PKGNAME || '';
-    
-    if ( my $hook = $PACKAGE_HOOK{$package}{$hook_name} || $PACKAGE_HOOK{DEFAULT}{$hook_name} )
-    {
-	if ( ref $hook )
-	{
-	    goto &$hook;
-	}
-    }
-    
-    # Otherwise
-    
-    return;
-}    
 
 
 # Error, caution, and warning conditions

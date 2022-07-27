@@ -1,10 +1,10 @@
-# GG patterns for lib/
+# GG patterns for lib/EditTransaction/DBF
 
-basedir = 
-edtdir = EditTransaction/
-appdir = EditTransaction/APP/
-dbfdir = EditTransaction/DBF/
-testdir = ../t/
+basedir = ../../
+edtdir = ../
+appdir = ../APP/
+dbfdir = 
+testdir = ../../../t/
 
 pm: [edtdir]*.pm [appdir]*.pm [dbfdir]*.pm [basedir]*.pm [basedir]PB2/*.pm
 edt: [edtdir]*.pm [appdir]*.pm [dbfdir]*.pm [basedir]EditTransaction.pm [basedir]Permissions.pm [basedir]TableDefs.pm
@@ -13,3 +13,4 @@ pmt: [pm] [t]
 edtt: [edt] [t]
 wds: [basedir]Web/DataService/*.pm [basedir]Web/DataService/*/*.pm
 wdspod: [basedir]Web/DataService/*.pod [basedir]Web/DataService/*/*.pod
+

@@ -27,18 +27,18 @@ our (%COMMON_FIELD_SPECIAL) = ( authorizer_no => 'auth_authorizer',
 			        owner_lock => 'own_lock' );
 
 
-
 # After this module is compiled, register it with EditTransaction.pm.
 # -------------------------------------------------------------------
 
 UNITCHECK {
     EditTransaction->register_app('PBDB');
-    EditTransaction->register_hook('check_table_definition', \&check_table_definition);
-    EditTransaction->register_value_hook('validate_special_column', 'auth_authorizer', \&validate_special_column);
-    EditTransaction->register_value_hook('validate_special_column', 'auth_creater', \&validate_special_column);
-    EditTransaction->register_value_hook('validate_special_column', 'auth_modifier', \&validate_special_column);
-    EditTransaction->register_value_hook('validate_special_column', 'adm_lock', \&validate_special_column);
-    EditTransaction->register_value_hook('validate_special_column', 'own_lock', \&validate_special_column);
+    EditTransaction->register_hook('finish_table_definition', \&finish_table_definition);
+    
+    EditTransaction->register_hook('check_data_column', \&check_data_column);
+    
+    EditTransaction->register_value_hook('validate_special_column',
+		['auth_authorizer', 'auth_creater', 'auth_modifier', 'adm_lock', 'own_lock'], 
+		\&validate_special_column);
     
     set_table_property_name('BY_AUTHORIZER', 1);
     set_column_property_name('EXTID_TYPE', 1);
@@ -48,12 +48,12 @@ UNITCHECK {
 # Hooks and auxiliary routines
 # ----------------------------
 
-# check_table_definition ( $table_defn, $column_defn, $column_list )
+# finish_table_definition ( $table_defn, $column_defn, $column_list )
 #
-# This hook is called whenever the database module loads a table schema. It gives this application
+# This hook is called whenever the database module loads a table schema. It gives the application
 # the chance to modify the definition and add extra properties.
 
-sub check_table_definition {
+sub finish_table_definition {
 
     my ($edt, $table_defn, $column_defn, $column_list) = @_;
     
@@ -409,3 +409,122 @@ our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TID',
 			       enterer_no => 'PRS',
 			       modifier_no => 'PRS' );
 
+
+
+sub check_data_column {
+
+	    # If the column allows external identifiers, check to see if the value is one. If so,
+	    # the raw value will be unpacked and the clean value substituted.
+	    
+	    if ( my $expected = $cr->{EXTID_TYPE} || $COMMON_FIELD_IDTYPE{$colname} )
+	    {
+		if ( looks_like_extid($value) )
+		{
+		    ($value, $additional, $no_quote) = 
+			$edt->validate_extid_value($expected, $fieldname, $value);
+		}
+	    }
+	    
+	    # Add an error or warning condition if we are given an external identifier for a
+	    # column that doesn't accept them.
+	    
+	    elsif ( ref $value eq 'PBDB::ExtIdent' )
+	    {
+		$value = [ 'E_EXTID', $fieldname,
+			   "this field does not accept external identifiers" ];
+	    }
+	    
+
+	}
+}
+
+# looks_like_extid ( value )
+#
+
+sub looks_like_extid {
+
+    my ($value) = @_;
+
+    return ref $value eq 'PBDB::ExtIdent' || $value =~ $IDRE{LOOSE};
+}
+
+
+# validate_extid_value ( type, fieldname, value )
+#
+# 
+
+sub validate_extid_value {
+
+    my ($edt, $type, $fieldname, $value) = @_;
+    
+    # If the external identifier has already been parsed and turned into an object, make sure it
+    # has the proper type and return the stringified value.
+    
+    if ( ref $value eq 'PBDB::ExtIdent' )
+    {
+	my $value_type = $value->type;
+	
+	# If the value matches the proper type, stringify it and return it.
+	
+	$EXTID_CHECK{$type} ||= qr/$IDP{$type}/;
+	
+	if ( $value_type =~ $EXTID_CHECK{$type} )
+	{
+	    return '' . $value;
+	}
+	
+	# Otherwise, return an error condition.
+	
+	else
+	{
+	    return [ 'E_EXTID', $fieldname,
+		     "external identifier must be of type '$IDP{$type}', was '$value_type'" ];
+	}
+    }
+    
+    # If the value is a string that looks like an unparsed external identifier of the proper type,
+    # unpack it and return the extracted value.
+    
+    elsif ( $value =~ $IDRE{$type} )
+    {
+	return $2;
+    }
+    
+    # If it looks like an external identifier but is not of the right type, return an error
+    # condition.
+    
+    elsif ( $value =~ $IDRE{LOOSE} )
+    {
+	$value = [ 'E_EXTID', $fieldname,
+		   "external identifier must be of type '$IDP{$type}', was '$1'" ];
+    }
+    
+    # Otherise, return undef to indicate that the value isn't an external identifier.
+    
+    else
+    {
+	return undef;
+    }
+}
+
+
+sub check_key {
+    
+    my ($edt, $check_table, $check_col, $value) = @_;
+    
+    return unless $check_table && $check_col && $value;
+
+    my $quoted = $edt->dbh->quote($value);
+    
+    my $sql = "SELECT $check_col FROM $TABLE{$check_table} WHERE $check_col=$quoted LIMIT 1";
+    
+    $edt->debug_line( "$sql\n" );
+    
+    my ($found) = $edt->dbh->selectrow_array($sql);
+    
+    return $found;    
+}
+
+
+
+    1;
