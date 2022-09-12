@@ -1,7 +1,7 @@
 # 
-# The Paleobiology Database
+# EditTransaction project
 # 
-#   EditTest.pm - a class for use in testing EditTransaction.pm
+#   ETBasicTest.pm - a class for use in testing EditTransaction.pm
 #   
 #   This class is a subclass of EditTransaction, and is used by the unit tests
 #   for EditTransaction and its related classes.
@@ -11,17 +11,20 @@
 #   transaction depending on the results of the checks. If the object is destroyed, the transaction will
 #   be rolled back.
 
-
-package EditTest;
-
 use strict;
 
-use Carp qw(carp croak);
-use Try::Tiny;
+package ETBasicTest;
+
+use parent 'EditTransaction';
 
 use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
 
-use parent 'EditTransaction';
+use Carp qw(carp croak);
+
+use Role::Tiny::With;
+
+with 'EditTransaction::Mod::MariaDB';
+
 
 # use namespace::clean;
 
@@ -53,11 +56,11 @@ use parent 'EditTransaction';
     
     set_table_property(EDT_TYPES => CAN_MODIFY => 'ALL');
     set_table_property(EDT_TYPES => PRIMARY_KEY => 'test_no');
-    set_table_property(EDT_TEST => TABLE_COMMENT => 'Test comment');
+    set_table_property(EDT_TYPES => TABLE_COMMENT => 'Test comment');
     
-    set_column_property(EDT_TEST => string_req => REQUIRED => 1);
-    set_column_property(EDT_TEST => string_req => COLUMN_COMMENT => 'This is a test comment.');
-    set_column_property(EDT_TEST => string_val => ALTERNATE_NAME => 'alt_val');
+    set_column_property(EDT_TYPES => string_req => REQUIRED => 1);
+    set_column_property(EDT_TYPES => string_req => COLUMN_COMMENT => 'This is a test comment.');
+    set_column_property(EDT_TYPES => string_val => ALTERNATE_NAME => 'alt_val');
     
     # Set properties for EDT_AUTH
     
@@ -68,25 +71,24 @@ use parent 'EditTransaction';
     set_column_property(EDT_AUTH => string_req => REQUIRED => 1);
     set_column_property(EDT_AUTH => string_req => COLUMN_COMMENT => 'This is a test comment.');
     set_column_property(EDT_AUTH => string_val => ALTERNATE_NAME => 'alt_val');
-    set_column_property(EDT_AUTH => admin_str => ADMIN_SET => 1);
     
-    set_table_property(EDT_AUX => SUPERIOR_TABLE => 'EDT_TEST');
-    set_table_property(EDT_AUX => CAN_POST => 'AUTHORIZED');
-    set_table_property(EDT_AUX => CAN_MODIFY => 'AUTHORIZED');
-    set_table_property(EDT_AUX => PRIMARY_KEY => 'aux_no');
-    set_table_property(EDT_AUX => PRIMARY_FIELD => 'aux_id');
+    set_table_property(EDT_SUB => SUPERIOR_TABLE => 'EDT_TEST');
+    set_table_property(EDT_SUB => CAN_POST => 'AUTHORIZED');
+    set_table_property(EDT_SUB => CAN_MODIFY => 'AUTHORIZED');
+    set_table_property(EDT_SUB => PRIMARY_KEY => 'aux_no');
+    set_table_property(EDT_SUB => PRIMARY_FIELD => 'aux_id');
     
-    set_column_property(EDT_AUX => test_no => FOREIGN_KEY => 'EDT_TEST');
-    set_column_property(EDT_AUX => name => REQUIRED => 1);
+    set_column_property(EDT_SUB => test_no => FOREIGN_KEY => 'EDT_TEST');
+    set_column_property(EDT_SUB => name => REQUIRED => 1);
     
     set_table_property(EDT_ANY => CAN_POST => 'LOGGED_IN');
     set_table_property(EDT_ANY => PRIMARY_KEY => 'any_no');
     
     set_column_property(EDT_ANY => string_req => REQUIRED => 1);
     
-    EditTest->register_allowances('TEST_DEBUG');
-    EditTest->register_conditions(E_TEST => ["TEST ERROR '&1'", "TEST ERROR"],
-				  W_TEST => ["TEST WARNING '&1'", "TEST WARNING"]);
+    __PACKAGE__->register_allowances('TEST_DEBUG');
+    __PACKAGE__->register_conditions(E_TEST => ["TEST ERROR '&1'", "TEST ERROR"],
+				     W_TEST => ["TEST WARNING '&1'", "TEST WARNING"]);
 }
 
 
@@ -106,7 +108,7 @@ use parent 'EditTransaction';
 #     croak "You must define 'test_db' in the configuration file" unless $TEST_DB;
     
 #     $EDT_TEST = alternate_table($TEST_DB, $EDT_TEST);
-#     $EDT_AUX = alternate_table($TEST_DB, $EDT_AUX);
+#     $EDT_SUB = alternate_table($TEST_DB, $EDT_SUB);
 #     $EDT_ANY = alternate_table($TEST_DB $EDT_ANY);
     
 #     if ( $ds && $ds == 1 || ref $ds && $ds->debug )
@@ -123,7 +125,7 @@ use parent 'EditTransaction';
 #     my ($class, $table, $ds) = @_;
     
 #     $EDT_TEST = original_table($EDT_TEST);
-#     $EDT_AUX = original_table($EDT_AUX);
+#     $EDT_SUB = original_table($EDT_SUB);
 #     $EDT_ANY = original_table($EDT_ANY);
     
 #     if ( $ds && $ds == 1 || ref $ds && $ds->debug )
@@ -252,7 +254,7 @@ sub test_old_values {
 	@values = $edt->get_old_values($table, $action->keyexpr, 'string_req, string_val');
     }
     
-    elsif ( $table eq 'EDT_AUX' )
+    elsif ( $table eq 'EDT_SUB' )
     {
 	@values = $edt->get_old_values($table, $action->keyexpr, 'name');
     }
@@ -278,7 +280,7 @@ sub initialize_transaction {
     elsif ( my $value = $edt->get_attr('initialize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $TABLE{EDT_AUX} (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_SUB} (name) values ($quoted)");
     }
     
     $edt->{save_init_count}++;
@@ -309,7 +311,7 @@ sub finalize_transaction {
     elsif ( my $value = $edt->get_attr('finalize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $TABLE{EDT_AUX} (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_SUB} (name) values ($quoted)");
     }
     
     $edt->{save_final_count}++;
@@ -388,7 +390,7 @@ sub before_action {
     if ( my $value = $edt->get_attr('before add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $TABLE{EDT_AUX} (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_SUB} (name) values ($quoted)");
     }
     
     $edt->{save_before_count}++;
@@ -460,7 +462,7 @@ sub after_action {
 	
 	if ( $keyexpr )
 	{
-	    $edt->dbh->do("DELETE FROM $TABLE{EDT_AUX} WHERE $keyexpr");
+	    $edt->dbh->do("DELETE FROM $TABLE{EDT_SUB} WHERE $keyexpr");
 	    $edt->{save_delete_aux} = $keyexpr;
 	}
     }
@@ -609,14 +611,14 @@ sub establish_test_tables {
 		enum_val enum('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		dcr timestamp default current_timestamp,
-		dmdplain timestamp default current_timestamp,
-		dmdauto timestmp default current_timestamp on update current_timestamp)
+		dmd timestamp default current_timestamp,
+		dmdauto timestamp default current_timestamp on update current_timestamp)
 		
 		default charset utf8");
     
-    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUX}");
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_SUB}");
     
-    $dbh->do("CREATE TABLE $TABLE{EDT_AUX} (
+    $dbh->do("CREATE TABLE $TABLE{EDT_SUB} (
 		aux_no int unsigned primary key auto_increment,
 		name varchar(255) not null default '',
 		test_no int unsigned not null default 0,
@@ -630,6 +632,8 @@ sub establish_test_tables {
 		enterer_no int unsigned not null,
 		enterer_id varchar(36) not null,
 		string_req varchar(255) not null default '') default charset utf8");
+    
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUTH}");
     
     $dbh->do("CREATE TABLE $TABLE{EDT_AUTH} (
 		test_no int unsigned primary key auto_increment,
@@ -659,6 +663,8 @@ sub establish_test_tables {
 		owner_lock boolean not null default 0,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp) default charset utf8");
+    
+    return 1;
 }
 
 

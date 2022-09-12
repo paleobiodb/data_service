@@ -2,12 +2,11 @@
 
 basedir =  ../
 edtdir =
-appdir = APP/
-dbfdir = DBF/
+moddir = Mod/
 testdir = ../../t/
 
-pm: *.pm [edtdir]APP/*.pm [edtdir]DBF/*.pm [basedir]*.pm [basedir]PB2/*.pm
-edt: *.pm [edtdir]APP/*.pm [edtdir]DBF/*.pm [basedir]EditTransaction.pm [basedir]Permissions.pm [basedir]TableDefs.pm
+pm: [edtdir]*.pm [moddir]*.pm [basedir]*.pm [basedir]PB2/*.pm
+edt: [edtdir]*.pm [moddir]*.pm [basedir]EditTransaction.pm [basedir]Permissions.pm [basedir]TableDefs.pm
 t: [testdir]*.t [testdir]*.pm
 pmt: [pm] [t]
 edtt: [edt] [t]

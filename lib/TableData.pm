@@ -10,9 +10,8 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(%TABLE get_table_property get_column_properties columns_with_properties
-		 column_property_names
-		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
+use TableDefs qw(%TABLE get_column_properties);
+use PBDBFields qw(%COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 
 use Carp qw(croak);
 use HTTP::Validate qw(:validators);
@@ -20,8 +19,7 @@ use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block complete_ruleset
-		      get_table_schema reset_cached_column_properties get_authinfo_fields);
+our (@EXPORT_OK) = qw(complete_output_block complete_ruleset);
 
 our (@CARP_NOT) = qw(EditTransaction Try::Tiny);
 
@@ -38,48 +36,11 @@ our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 
 our (%COMMON_FIELD_IDSUB);
 
-# get_authinfo_fields ( dbh, table_name, debug )
-# 
-# Return a list of the fields from the specified table that record who created each record. If
-# there are none, return false.
-
-our (%IS_AUTH) = (authorizer_no => 1, enterer_no => 1, enterer_id => 1, admin_lock => 1, owner_lock => 1);
-our (%AUTH_FIELD_CACHE);
-
-sub get_authinfo_fields {
-
-    my ($dbh, $table_specifier, $debug) = @_;
-    
-    # If we already have this info cached, just return it.
-    
-    return $AUTH_FIELD_CACHE{$table_specifier} if exists $AUTH_FIELD_CACHE{$table_specifier};
-    
-    # Otherwise, get a hash of table column definitions
-    
-    my $schema = get_table_schema($dbh, $table_specifier, $debug);
-    
-    # If we don't have one, then barf.
-    
-    unless ( $schema && $schema->{_column_list} )
-    {
-	croak "Cannot retrieve schema for table '$table_specifier'";
-    }
-    
-    # Then scan through the columns and collect up the names that are significant.
-    
-    my @authinfo_fields;
-    
-    foreach my $col ( @{$schema->{_column_list}} )
-    {
-	push @authinfo_fields, $col if $IS_AUTH{$col};
-    }
-    
-    my $fields = join(', ', @authinfo_fields);
-    $AUTH_FIELD_CACHE{$table_specifier} = $fields;
-    
-    return $fields;
-}
-
+our (%INT_SIZE) = ( tiny => 'one byte integer',
+		    small => 'two byte integer',
+		    medium => 'three byte integer',
+		    regular => 'four byte integer',
+		    big => 'eight byte integer');
 
 sub complete_output_block {
     
@@ -267,7 +228,7 @@ sub complete_ruleset {
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
     my $field_list = $schema->{_column_list};
-    my %has_properties = columns_with_properties($table_specifier);
+    my %column_properties = get_column_properties($table_specifier);
     
     foreach my $column_name ( @$field_list )
     {
@@ -375,14 +336,9 @@ sub complete_ruleset {
 	    $doc .= " The value is not checked before being sent to the database, and will throw an exception if the database does not accept it.";
 	}
 	
-	if ( $has_properties{$column_name} )
+	if ( my $type = $column_properties{$column_name}{EXTID_TYPE} )
 	{
-	    my %properties = get_column_properties($table_specifier, $column_name);
-	    
-	    if ( my $type = $properties{EXTID_TYPE} )
-	    {
-		$rr->{valid} = VALID_IDENTIFIER($type);
-	    }
+	    $rr->{valid} = VALID_IDENTIFIER($type);
 	}
 	
 	push @{$ds->{my_param_records}}, $rr;

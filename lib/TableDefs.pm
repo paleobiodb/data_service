@@ -44,8 +44,9 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      change_table_name change_table_db restore_table_name original_table_name
 		      set_table_name get_table_name set_table_group get_table_group
 		      set_table_property get_table_property set_column_property get_column_property
-		      set_table_property_name list_table_property_names get_table_defn
-		      set_column_property_name list_column_property_names get_table_column_defns);
+		      set_table_property_name list_table_property_names get_table_properties
+		      set_column_property_name list_column_property_names get_column_properties
+		      is_table_property is_column_property);
 
 
 # List the properties that can be specified for tables.
@@ -317,7 +318,7 @@ sub change_table_name {
     
     if ( exists $TABLE{$table_specifier} )
     {
-	my $orig_name = original_table($TABLE{$table_specifier});
+	my $orig_name = original_table_name($TABLE{$table_specifier});
 	
 	$TABLE_NAME_MAP{$new_name} = $orig_name;
 	
@@ -344,7 +345,7 @@ sub change_table_db {
     if ( exists $TABLE{$table_specifier} )
     {
 	my $table_name = $TABLE{$table_specifier};
-	my $orig_name = original_table($table_name);
+	my $orig_name = original_table_name($table_name);
 	
 	$table_name =~ s/^.+[.]//;
 	
@@ -376,7 +377,7 @@ sub restore_table_name {
     if ( exists $TABLE{$table_specifier} )
     {
 	unlock_value(%TABLE, $table_specifier);
-	$TABLE{$table_specifier} = original_table($TABLE{$table_specifier});
+	$TABLE{$table_specifier} = original_table_name($TABLE{$table_specifier});
 	lock_value(%TABLE, $table_specifier);
 	
 	return $TABLE{$table_specifier};
@@ -457,6 +458,12 @@ sub list_table_property_names {
 }
 
 
+sub is_table_property {
+
+    return $_[0] && $TABLE_PROP_NAME{$_[0]} ? 1 : '';
+}
+
+
 sub set_table_property_name {
     
     my ($property_name, $status) = @_;
@@ -468,7 +475,7 @@ sub set_table_property_name {
 
     else
     {
-	$TABLE_PROP_NAME{$property_name} = undef;
+	$TABLE_PROP_NAME{$property_name} = '';
     }
 }
 
@@ -503,7 +510,7 @@ sub get_table_property {
     # {
     # 	carp "No properties set for table '$table_specifier'";
     # }
-
+    
     else
     {
 	return undef;
@@ -511,7 +518,7 @@ sub get_table_property {
 }
 
 
-sub get_table_defn {
+sub get_table_properties {
     
     my ($table_specifier) = @_;
     
@@ -522,7 +529,6 @@ sub get_table_defn {
     
     else
     {
-	# carp "No table properties set for '$table_specifier'";
 	return ();
     }
 }
@@ -537,6 +543,12 @@ sub list_column_property_names {
 }
 
 
+sub is_column_property {
+
+    return $_[0] && $COLUMN_PROP_NAME{$_[0]} ? 1 : '';
+}
+
+
 sub set_column_property_name {
     
     my ($property_name, $status) = @_;
@@ -548,7 +560,7 @@ sub set_column_property_name {
 
     else
     {
-	$COLUMN_PROP_NAME{$property_name} = undef;
+	$COLUMN_PROP_NAME{$property_name} = '';
     }
 }
 
@@ -589,37 +601,71 @@ sub get_column_property {
 
     else
     {
+	return undef;
+    }
+}
+
+
+sub has_column_properties {
+
+    my ($table_specifier) = @_;
+
+    return $COLUMN_PROPERTIES{$table_specifier} ? 1 : '';
+}
+
+
+sub get_column_properties {
+
+    my ($table_specifier, $column_name) = @_;
+    
+    if ( defined $column_name )
+    {
+	if ( my $column_ref = $COLUMN_PROPERTIES{$table_specifier}{$column_name} )
+	{
+	    return map { $_ => copy_property_value($column_ref->{$_}) } keys $column_ref->%*;
+	}
+    }
+    
+    elsif ( my $cols_ref = $COLUMN_PROPERTIES{$table_specifier} )
+    {
+	my @result;
+	
+	foreach my $colname ( keys $cols_ref->%* )
+	{
+	    if ( ref $cols_ref->{$colname} eq 'HASH' )
+	    {
+		push @result, $colname;
+		my %propvals = map { $_ => copy_property_value($cols_ref->{$colname}{$_}) }
+		    keys $cols_ref->{$colname}->%*;
+		push @result, \%propvals;
+	    }
+	}
+	
+	return @result;
+    }
+    
+    else
+    {
 	return ();
     }
 }
 
 
-sub get_table_column_defns {
+sub copy_property_value {
 
-    my ($table_specifier, $column_name) = @_;
-    
-    if ( defined $COLUMN_PROPERTIES{$table_specifier} )
+    if ( ref $_[0] eq 'HASH' )
     {
-	if ( defined $column_name )
-	{
-	    return $COLUMN_PROPERTIES{$table_specifier}{$column_name}->%*;
-	}
-	
-	else
-	{
-	    return map { $_ => { $COLUMN_PROPERTIES{$table_specifier}{$_} } },
-		keys $COLUMN_PROPERTIES{$table_specifier}->%*;
-	}
+	return { $_[0]->%* };
     }
     
-    # elsif ( ! defined $TABLE_PROPERTIES{$table_specifier} )
-    # {
-    # 	carp "No table properties set for '$table_specifier'";
-    # }
-
+    elsif ( ref $_[0] eq 'ARRAY' )
+    {
+	return [ $_[0]->@* ];
+    }
+    
     else
     {
-	return ();
+	return $_[0];
     }
 }
 

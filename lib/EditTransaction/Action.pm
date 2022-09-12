@@ -14,10 +14,7 @@ package EditTransaction::Action;
 
 use strict;
 
-use TableDefs qw(get_table_property);
-
 use EditTransaction;
-use TableDefs qw(get_table_property %TABLE %COMMON_FIELD_IDTYPE);
 
 use Carp qw(carp croak);
 use Scalar::Util qw(reftype);
@@ -43,10 +40,15 @@ sub new {
     die "unknown operation '$operation'" unless $operation && $OPERATION_TYPE{$operation};
     die "missing action label" unless $label;
     
+    # A valid table name is not required for a skipped action, but is required for every other
+    # kind of action.
+
+    die "missing tablename" unless $tablename || $operation eq 'skip';
+    
     # Create a basic object to represent this action.
     
-    my $action = { table => $tablename // '',
-		   operation => $operation // '',
+    my $action = { table => $tablename,
+		   operation => $operation,
 		   record => $record,
 		   label => $label,
 		   status => '',
@@ -54,17 +56,6 @@ sub new {
 		   validation => '' };
     
     bless $action, $class;
-    
-    # A valid table name is not required for a skipped action, but is required for every other
-    # kind of action. It is important to note that for the 'other' operation, the table name is
-    # not required to be the one actually used to construct database statements. It must only be a
-    # table that is known to the table definition system.
-    
-    unless ( $tablename && $TABLE{$tablename} || $operation eq 'skip' || $operation eq 'other' )
-    {
-	croak ($tablename ? "'$tablename' is not a valid table name" :
-	       "a valid table name is required");
-    }
     
     # For any operation other than 'skip', 'other', or 'sql', fetch all column directives for the
     # table we are using. The second call to 'all_directives' is guaranteed to be very cheap once
@@ -575,6 +566,32 @@ sub set_permission {
 sub authorize_later {
 
     $_[0]{permission} = 'PENDING';
+}
+
+
+# requires_unlock ( )
+#
+# If an argument is given, set an unlock requirement or clear it. Otherwise, return true if the
+# requirement has been set and false otherwise.
+
+sub requires_unlock {
+    
+    my ($action, $arg) = @_;
+
+    if ( $arg )
+    {
+	$action->{require_unlock} = 1;
+    }
+
+    elsif ( defined $arg )
+    {
+	$action->{require_unlock} = 0;
+    }
+    
+    else
+    {
+	return $action->{require_unlock} || '';
+    }
 }
 
 

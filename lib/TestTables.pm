@@ -15,7 +15,7 @@ use strict;
 
 use Carp qw(carp croak);
 
-use TableDefs qw(%TABLE $TEST_DB original_table);
+use TableDefs qw(%TABLE $TEST_DB original_table_name);
 
 use base 'Exporter';
 
@@ -43,7 +43,7 @@ sub establish_test_tables {
     foreach my $table_specifier ( @{$TableDefs::TABLE_GROUP{$group_name}} )
     {
 	my $table_name = $TABLE{$table_specifier};
-	my $orig_name = original_table($table_name);
+	my $orig_name = original_table_name($table_name);
 	my $test_name = $orig_name;
 	
 	if ( $orig_name =~ /^\w+[.]/ )
@@ -75,7 +75,7 @@ sub fill_test_table {
     croak "unknown table specifier '$table_specifier'" unless $TABLE{$table_specifier};
     croak "you must specify a test database name in the configuration file under 'test_db'" unless $TEST_DB;
     
-    my $orig_name = original_table($TABLE{$table_specifier});
+    my $orig_name = original_table_name($TABLE{$table_specifier});
     my $test_name = $orig_name;
     
     if ( $orig_name =~ /^\w+[.]/ )

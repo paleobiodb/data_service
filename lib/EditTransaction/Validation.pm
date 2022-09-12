@@ -1,7 +1,5 @@
 # 
-# The Paleobiology Database
-# 
-#   EditTransaction::Validation - role for checking permissions and validating actions.
+# EditTransaction::Validation - role for validating actions.
 # 
 
 
@@ -10,61 +8,12 @@ package EditTransaction::Validation;
 use strict;
 
 use Carp qw(carp croak);
-use ExternalIdent qw(%IDP %IDRE);
-use TableDefs qw(get_table_property %TABLE
-		 %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
-use TableData qw(get_table_schema);
 use Permissions;
 
 use Moo::Role;
 
 no warnings 'uninitialized';
 
-
-UNITCHECK {
-    EditTransaction->register_hook_value('validate_special_column', ['ts_created', 'ts_modified'],
-					 \&validate_special_column, 'DEFAULT');
-};
-
-
-# Permission checking
-# -------------------
-
-# The methods listed below call the equivalent methods of the Permissions object that
-# was used to initialize this EditTransaction.
-
-sub check_table_permission {
-
-    my ($edt, $table, $permission) = @_;
-    
-    unless ( $edt->{permission_table_cache}{$table}{$permission} )
-    {
-	$edt->{permission_table_cache}{$table}{$permission} = 
-	    $edt->{perms}->check_table_permission($table, $permission);
-    }
-}
-
-sub check_record_permission {
-    
-    my ($edt, $table, $requested, $key_expr) = @_;
-    
-    return $edt->{perms}->check_multiple_permission($table, $requested, $key_expr);
-    
-    # unless ( $edt->{permission_record_cache}{$table}{$key_expr}{$requested} )
-    # {
-    # 	$edt->{permission_record_cache}{$table}{$key_expr}{$requested} = 
-    # 	    [ $edt->{perms}->check_multiple_permission($table, $requested, $key_expr, $record) ];
-    # }
-    
-    # return $edt->{permission_record_cache}{$table}{$key_expr}{$requested}->@*;
-}
-
-sub check_many_permission {
-
-    my ($edt, $table, $permission, $key_expr, $record) = @_;
-    
-    return $edt->{perms}->check_many_permission($table, $permission, $key_expr, $record);
-}
 
 # Action validation
 # -----------------
@@ -77,6 +26,12 @@ sub check_many_permission {
 # Subclasses may override this method, to add additional checks. It is recommended that they call
 # this method as a SUPER, because it comprehensively checks every field value against the
 # corresponding table definition.
+
+
+sub validate_action {
+
+    die "TEST VALIDATE" if $EditTransaction::TEST_PROBLEM{validate};
+}
 
 
 # validate_against_schema ( action, operation, table, flag )
@@ -93,9 +48,7 @@ our %EXTID_CHECK;
 
 sub validate_against_schema {
 
-    my ($edt, $action, $operation, $table, $flag) = @_;
-    
-    no warnings 'uninitialized';
+    my ($edt, $action, $operation, $tablename, $flag) = @_;
     
     # If the validation status is 'COMPLETE', then return immediately without doing anything.
     
@@ -117,15 +70,28 @@ sub validate_against_schema {
     my $permission = $action->permission;
     my $keycol = $action->keycol;
     
-    # Grab the table schema, or throw an exception if it is not available. This information is cached, so
-    # the database will only need to be asked for this information once per process per table.
+    # Grab the table schema, or add an error condition if it is not available. This information is
+    # cached, so the database will only need to be asked for this information once per process per
+    # table.
     
     my $dbh = $edt->dbh;
-    my ($table_desc, $column_desc) = $edt->call_hook('get_table_description', $table);
+    my $tableinfo = $edt->table_info_ref($tablename);
+    my $columninfo = $edt->table_column_ref($tablename);
+    
+    unless ( ref $tableinfo eq 'HASH' && $tableinfo->%* &&
+	     ref $columninfo eq 'HASH' && $columninfo->%* )
+    {
+	$edt->add_condition($action, 'E_EXECUTE', "an error occurred while fetching the table schema");
+	return;
+    }
     
     # Get all column directives for this action.
     
     my %directives = $action->all_directives;
+    
+    # Figure out which extra methods to call.
+    
+    my $app_call = $edt->can('before_data_column');
     
     # Iterate through the list of table columns and construct a list of column names and values
     # for insertion, update, or replacement.
@@ -133,16 +99,16 @@ sub validate_against_schema {
     my (@column_names, @column_values, %used, @unchanged);
     
   COLUMN:
-    foreach my $colname ( $table_desc->{COLUMN_LIST}->@* )
+    foreach my $colname ( $tableinfo->{COLUMN_LIST}->@* )
     {
 	# Get the description record for this column.
 	
-	my $cr = $schema->{$colname};
+	my $cr = $columninfo->{$colname};
 	
 	# The following variables keep track of the value found in the record and the hash key
 	# under which it was found, plus some other attributes.
 	
-	my ($value, $fieldname, $special, $additional, $no_quote, $is_default);
+	my ($value, $fieldname, $special, $result, $clean_value, $additional, $no_quote);
 	
 	# Check to see if this column has a directive. If none was explicitly assigned, certain
 	# specially named columns default to specific handling directives.
@@ -156,9 +122,12 @@ sub validate_against_schema {
 	    next COLUMN unless $colname eq $keycol;
 	}
 	
-	# The primary key column is handled differently from all the others. Its fieldname and
-	# value were previously determined, and its value has either already been checked or will
-	# be when authentication completes.
+	# Determine the assigned value, if any
+	# ------------------------------------
+	
+	# The key column is handled differently from all the others. Its fieldname and value were
+	# previously determined, and its value has either already been checked or will be when
+	# authentication completes.
 	
 	if ( $colname eq $keycol )
 	{
@@ -210,24 +179,28 @@ sub validate_against_schema {
 	
 	# Otherwise, the column has no assigned value.
 	
-	# Determine how to handle this column
+	# Determine the value for this column
 	# -----------------------------------
 	
-	# If the directive is either 'pass' or 'unquoted', skip all value checking. Ignore the
-	# column unless it has an assigned value.
+	# Case 1: If the directive is either 'pass' or 'unquoted', skip all value checking. Ignore
+	# the column if there is no assigned value. If the directive is 'unquoted', set $no_quote.
 	
 	if ( $directive eq 'pass' || $directive eq 'unquoted' )
 	{
-	    $no_quote = 1 if $directive eq 'unquoted';
 	    next COLUMN unless $fieldname;
+	    $no_quote = 1 if $directive eq 'unquoted';
 	}
 	
-	# If the directive is 'copy', the response depends on the operation.
+	# Case 2: If the directive is 'copy', the column value should be unchanged after this
+	# operation is complete.
 	
 	elsif ( $directive eq 'copy' )
 	{
-	    # For 'update', set the column value to itself.
-
+	    # $$$ shouldn't be able to override special column directives without admin permission.
+	    
+	    # For 'update', set the column value to itself. This will override any 'on update'
+	    # clause in the column definition.
+	    
 	    if ( $operation eq 'update' )
 	    {
 		$value = $colname;
@@ -244,90 +217,112 @@ sub validate_against_schema {
 	    }
 	}
 	
-	# If the column has one of the special handling directives, then check the value according
-	# that directive. This is done even if there is no assigned value, because some column values
-	# are assigned by the special handler.
+	# Case 3: If the column has one of the special handling directives, check the value
+	# according that directive. This is done even if there is no assigned value, because some
+	# special column values (i.e. modification time) are assigned by the special handler.
 	
 	elsif ( $directive && $directive ne 'validate' )
 	{
-	    # If the current EditTransaction uses an application module that implements an
-	    # 'app_validate_special_column' hook, call that hook. This module provides a default
-	    # that handles only the 'ts_created' and 'ts_modified' directives. Everything else
-	    # must be handled by the application module.
+	    $special = $directive;
 	    
-	    if ( my $hook = $edt->has_hook('validate_special_column', $directive) )
+	    # Validate this column, even if there is no assigned value.
+	    
+	    my ($result, $clean_value, $additional, $clean_no_quote) =
+		$edt->validate_special_column($directive, $cr, $action, $value, $fieldname);
+	    
+	    # If any conditions were generated, add them to the action. If $result is a condition
+	    # then it will be an error, so there is no point in checking this column further.
+	    
+	    if ( ref $result eq 'ARRAY' || ref $additional eq 'ARRAY' )
 	    {
-		($value, $additional, $no_quote) =
-		    &$hook($edt, $directive, $cr, $operation, $permission, $value, $fieldname);
+		$edt->add_validation_condition($action, $result, $additional);
+		next COLUMN if ref $result;
 	    }
 	    
-	    # If no hook was found for this directive, add an error.
+	    # If the result is 'UNCHANGED', handle it the same way as 'copy'.
 	    
-	    else
-	    {
-		my $message = $fieldname ? "Field '$fieldname': no validation hook for '$directive'" :
-		    "Column '$colname': no validation hook for '$directive'";
-		
-		$edt->add_condition($action, 'E_EXECUTE', $message);
-		next COLUMN;
-	    }
-	    
-	    # If an 'E_PERM_LOCK' was returned, fill in the message.
-	    
-	    if ( ref $value eq 'ARRAY' && $value->[0] eq 'E_PERM_LOCK' )
-	    {
-		if ( $action->keymult )
-		{
-		    push @$value, '_multiple_';
-		}
-	    }
-	    
-	    # If the value is 'UNCHANGED', handle it according to the operation. For 'update', set
-	    # the value to the column name and continue. For 'replace', put the column on the
-	    # @unchanged list. For 'insert', ignore this column.
-	    
-	    if ( $value eq 'UNCHANGED' )
+	    if ( $result eq 'UNCHANGED' )
 	    {
 		if ( $operation eq 'update' )
 		{
 		    $value = $colname;
+		    $no_quote = 1;
 		}
-
+		
 		else
 		{
 		    push @unchanged, $colname if $operation eq 'replace';
 		    next COLUMN;
 		}
 	    }
+	    
+	    # If a new value is returned, substitute it for the original one.
+	    
+	    elsif ( $result )
+	    {
+		$value = $clean_value;
+		$no_quote = $clean_no_quote;
+	    }
 	}
 	
-	# For a column that has no special handling directive and a non-empty value, validate the
-	# value according to the column attributes.
+	# Case 4: For any other column that has a non-null assigned value, check that value
+	# against the column properties.
 	
-	elsif ( defined $value && $value ne '' )
+	elsif ( defined $value )
 	{
-	    # If the current EditTransaction uses an application module that implements the
-	    # 'check_data_column' hook, call that hook. This allows the application module to
-	    # check and possibly modify the assigned value before it is validated against the
-	    # database schema. If the $no_quote return parameter is true, the returned value is
-	    # passed to the database with no further validation except for the foreign key
-	    # check. For example, this feature can be used to substitute an SQL expression for the
-	    # assigned value.
+	    # If this column has the ADMIN_SET property, add an error condition unless we have
+	    # administrative privilege or universal privilege.
 	    
-	    if ( my $hook = $edt->has_hook('check_data_column') )
+	    if ( $fieldname && $cr->{ADMIN_SET} && $permission !~ /admin|univ/ )
 	    {
-		($value, $additional, $no_quote) =
-		    &$hook($edt, $cr, $operation, $permission, $value, $fieldname);
+		$edt->add_condition($action, 'E_PERM_COL', $fieldname);
 	    }
 	    
-	    # If this column is a foreign key, and the value is neither empty or 0 nor an error
-	    # condition, mark the value to be checked against the specified table at execution
-	    # time. If the value is an action reference, first check that the reference is valid.
+	    # If the current EditTransaction includes an application role that implements the
+	    # 'before_data_column' method, call that method. This allows the role to check
+	    # and possibly modify the assigned value before it is validated against the database
+	    # schema. If the $no_quote return parameter is true, the returned value is passed to
+	    # the database with no further validation except for the foreign key check. For
+	    # example, this feature can be used to substitute an SQL expression for the assigned
+	    # value.
+	    
+	    if ( $app_call )
+	    {
+		my ($result, $clean_value, $additional, $clean_no_quote) =
+		    $edt->before_data_column($cr, $action, $value, $fieldname);
+		
+		# If any conditions were generated, add them to the action. If $result is a
+		# condition then it will be an error, so there is no point in checking this column
+		# further.
+		
+		if ( ref $result eq 'ARRAY' || ref $additional eq 'ARRAY' )
+		{
+		    $edt->add_validation_condition($action, $result, $additional);
+		    next COLUMN if ref $result;
+		}
+		
+		# If a new value was returned, substitute it for the original.
+		
+		if ( $result )
+		{
+		    $value = $clean_value;
+		    $no_quote = $clean_no_quote;
+		}
+	    }
+	    
+	    # If this column is a foreign key, validation cannot be completed until execution time.
 	    
 	    if ( my $foreign_table = $cr->{FOREIGN_KEY} )
 	    {
-		if ( $value && ! ref $value eq 'ARRAY' )
+		# An assigned value that is not empty or zero will be checked against the
+		# specified table at execution time. If at that time it does not correspond to any
+		# in the foreign table, an error condition will be added.
+		
+		if ( $value )
 		{
+		    # If the value is an action reference, check to make sure that the reference
+		    # is resolvable and that the referenced action uses the proper table.
+		    
 		    if ( $value =~ /^&/ )
 		    {
 			$no_quote = 1;
@@ -336,158 +331,151 @@ sub validate_against_schema {
 			
 			unless ( $ref_action )
 			{
-			    $value = [ 'E_BAD_REFERENCE', '_unresolved_', $fieldname, $value ];
+			    $edt->add_condition($action, 'E_BAD_REFERENCE', '_unresolved_', $fieldname, $value);
 			}
 			
 			unless ( $ref_action->table eq $foreign_table )
 			{
-			    $value = [ 'E_BAD_REFERENCE', '_mismatch_', $fieldname, $value ];
+			    $edt->add_condition($action, 'E_BAD_REFERENCE', '_mismatch_', $fieldname, $value);
 			}
 		    }
 		    
-		    $action->add_precheck('foreign_key', $colname, $fieldname,
+		    # Add a pre-execution check for this column, and go on to the next.
+		    
+		    $action->add_precheck($colname, $fieldname, 'foreign_key',
 					  $foreign_table, $cr->{FOREIGN_COL});
+		    next COLUMN;
+		}
+		
+		# If the assigned value is empty or zero and the column has the REQUIRED
+		# attribute, add an error condition.
+		
+		elsif ( $cr->{REQUIRED} )
+		{
+		    $edt->add_condition($action, 'E_REQUIRED', "this column requires a non-empty value");
+		    next COLUMN;
 		}
 	    }
 	    
-	    # Otherwise, check the value according to the column type. Validation of column values
-	    # is performed by the database interface module through the 'validate_data_column' hook.
+	    # For all columns other than foreign keys, if $no_quote has not been set then check the
+	    # value according to the column type. A true value for $no_quote means that the value
+	    # was already changed to something other than a literal.
 	    
-	    elsif ( ref $cr->{TypeParams} eq 'ARRAY' and not $no_quote )
+	    elsif ( defined $value && ! $no_quote )
 	    {
-		my $datatype = $cr->{TypeParams}[0];
+		my ($result, $clean_value, $additional, $clean_no_quote) =
+		    $edt->validate_data_column($cr, $value, $fieldname);
 		
-		if ( my $hook = $edt->has_hook('validate_data_column', $datatype) )
+		# If any conditions were generated, add them to the action. If $result is a
+		# condition then it will be an error, so there is no point in checking this column
+		# further.
+		
+		if ( ref $result eq 'ARRAY' || ref $additional eq 'ARRAY' )
 		{
-		    ($value, $additional, $no_quote) =
-			&$hook($edt, $cr, $value, $fieldname);
+		    $edt->add_validation_condition($action, $result, $additional);
+		    next COLUMN if ref $result;
 		}
 		
-		# If the data type of this column is not recognized by the database module,
-		# stringify the value and continue. This might cause problems.
+		# If a cleaned value was returned, substitute it for the value that we had so far.
 		
-		elsif ( defined $value )
+		if ( $result )
 		{
-		    $value = '' . $value;
+		    $value = $clean_value;
+		    $no_quote = $clean_no_quote;
 		}
+	    }
+	    
+	    # If the column has the REQUIRED property and the value is empty, add an error
+	    # condition. A zero value is okay here, whereas it is not for a foreign key.
+	    
+	    if ( $cr->{REQUIRED} && defined $value && $value eq '' )
+	    {
+		$edt->add_condition($action, 'E_REQUIRED', "this column requires a non-empty value");
+		next COLUMN;
 	    }
 	}
 	
-	# If the operation is 'update' and there is no assigned value, skip this column entirely.
+	# Case 5: If there is no assigned value and the operation is 'update', skip this column
+	# entirely.
 	
 	elsif ( $operation eq 'update' && not $fieldname )
 	{
 	    next COLUMN;
 	}
 	
-	# Otherwise, a column that is NOT_NULL without a default value must be given a defined value.
+	# Handle null values
+	# ------------------
 	
-	elsif ( $cr->{NOT_NULL} && ! defined $value && ! defined $cr->{Default} )
+	unless ( defined $value )
 	{
-	    # For a special column, this will only happen if a bug occurs in the
-	    # 'app_validate_special_column' routine.
+	    # If the column is NOT_NULL, add an error condition.
 	    
-	    if ( $directive && $directive ne 'validate' )
+	    if ( $cr->{NOT_NULL} )
 	    {
-		$edt->add_condition($action, 'E_EXECUTE', "Column '$colname': value cannot be null");
-	    }
-	    
-	    # For a data column add an error condition only if this column does not also have the
-	    # REQUIRED property. In that case, an error will be added below.
-	    
-	    elsif ( ! $cr->{REQUIRED} )
-	    {
-		$edt->add_condition($action, 'E_REQUIRED', $fieldname, "value cannot be null");
-	    }
-	}
-	
-	# Additional error checking
-	# -------------------------
-	
-	# At this point, the column value has been generated. If the value has been changed to an
-	# error condition, add that condition and go on to the next column. If $additional is a
-	# condition, add it too. This one might be a warning instead of an error.
-	
-	if ( ref $additional eq 'ARRAY' )
-	{
-	    unshift @$additional, $action unless $additional->[0] eq 'main';
-	    $edt->add_condition(@$additional);
-	}
-	
-	if ( ref $value eq 'ARRAY' )
-	{
-	    unshift @$value, $action unless $value->[0] eq 'main';
-	    $edt->add_condition(@$value);
-	    next COLUMN;
-	}
-	
-	# If there was no special handling directive, do some additional checks.
-	
-	unless ( $directive && $directive ne 'validate' )
-	{
-	    # If we have an assigned value and this column has the ADMIN_SET property, add an
-	    # error condition unless we have administrative privilege or universal privilege.
-	    
-	    if ( $fieldname && $cr->{ADMIN_SET} && $permission !~ /admin|univ/ )
-	    {
-		$edt->add_condition($action, 'E_PERM_COL', $fieldname);
-	    }
-	    
-	    # A column that has the REQUIRED property must have a non-empty value.
-	    
-	    if ( $cr->{REQUIRED} )
-	    {
-		my $value_ok;
+		# For a special column, this will only happen if a bug occurs in the
+		# 'validate_special_column' routine. So add an E_EXECUTE in this case.
 		
-		# If the column is also a FOREIGN_KEY, the value must be non-zero. An
-		# action reference counts as non-zero, because it will be required to
-		# have a non-zero value later when it is resolved.
-		
-		if ( $cr->{FOREIGN_KEY} )
+		if ( $special )
 		{
-		    $value_ok = 1 if $value;
+		    $edt->add_condition($action, 'E_EXECUTE', "Column '$colname': value cannot be null");
 		}
 		
-		# Otherwise, any non-empty value is okay.
+		# Otherwise, add an E_REQUIRED. If the column also has the REQUIRED property, tell the
+		# client that the value must be non-empty instead of just non-null. If this column
+		# doesn't have an assigned value, use the column name because we don't have a field name.
 		
-		elsif ( defined $value && $value ne '' )
+		else
 		{
-		    $value_ok = 1;
+		    my $message = $cr->{REQUIRED} ? "this column requires a non-empty value"
+			: "this column requires a non-null value";
+		    
+		    my $field = $fieldname || $colname;
+		    
+		    $edt->add_condition($action, 'E_REQUIRED', $field, $message);
 		}
-		
-		# Add an error condition for values that are not okay.
-		
-		unless ( $value_ok )
-		{
-		    $edt->add_condition($action, 'E_REQUIRED', $fieldname, "must have a non-empty value")
-		}
+	    }
+	    
+	    # Otherwise, skip the column entirely unless the null value is specifically assigned.
+	    
+	    elsif ( ! $fieldname )
+	    {
+		next COLUMN;
 	    }
 	}
 	
-	# Go on to the next column if any error conditions have been added.
+	# Handle error conditions
+	# -----------------------
+	
+	# Go on to the next column if any error conditions have been added, either to this column
+	# or any previous ones. The action will never be executed, so there is no point in
+	# continuing further. We still want to keep processing the rest of the columns, so the
+	# client will get an accurate report of any other validation errors that may occur.
 	
 	next COLUMN if $action->has_errors;
-	
-	# If the value is still undefined, skip this column unless it was an assigned value.
-	
-	next COLUMN unless defined $value || $fieldname;
 	
 	# Use the value
 	# -------------
 	
 	# If we get here, then we are going to use this value in executing the operation.  All
-	# defined values are quoted, unless the $no_quote flag is set. The only exception is a
-	# value of 'NULL' for one of the special columns.
+	# defined values are quoted, unless the $no_quote flag is set.
 	
-	if ( defined $value && not ($directive && $value eq 'NULL') )
+	if ( defined $value )
 	{
 	    $value = $dbh->quote($value) unless $no_quote;
 	}
+	
+	# Undefined values are translated into NULL.
 	
 	else
 	{
 	    $value = 'NULL';
 	}
+	
+	# Column names are quoted unless they consist entirely of word characters.
+	
+	$colname = $dbh->quote_identifier($colname) if $colname =~ /[^\w]/;
+	
+	# Store the column names and values in parallel lists.
 	
 	push @column_names, $colname;
 	push @column_values, $value;
@@ -496,27 +484,25 @@ sub validate_against_schema {
     # Complete the validation
     # -----------------------
     
-    # If this is a primary action (not auxiliary) and there are any unrecognized keys in this
-    # record, add an error or a warning depending on whether BAD_FIELDS is allowed for this
-    # transaction.
+    # If there are any unrecognized keys in this record, add an error or a warning depending on
+    # whether BAD_FIELDS is allowed for this transaction.
     
-    if ( ! $action->parent )
+    # $$$ we need to restore the 'ignore_field' action method.
+    
+    foreach my $key ( keys %$record )
     {
-	foreach my $key ( keys %$record )
+	unless ( $used{$key} ||
+		 $key =~ /^_/ ||
+		 %directives && $directives{_FIELD_}{$key} eq 'ignore' )
 	{
-	    unless ( $used{$key} ||
-		     $key =~ /^_/ ||
-		     %directives && $directives{_FIELD_}{$key} eq 'ignore' )
+	    if ( $edt->allows('BAD_FIELDS') )
 	    {
-		if ( $edt->allows('BAD_FIELDS') )
-		{
-		    $edt->add_condition($action, 'W_BAD_FIELD', $key, $table);
-		}
-		
-		else
-		{
-		    $edt->add_condition($action, 'E_BAD_FIELD', $key, $table);
-		}
+		$edt->add_condition($action, 'W_BAD_FIELD', $key, $tablename);
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition($action, 'E_BAD_FIELD', $key, $tablename);
 	    }
 	}
     }
@@ -532,7 +518,7 @@ sub validate_against_schema {
 	{
 	    my $column_string = join ',', @unchanged;
 	    
-	    my (@old_values) = $edt->get_old_values($table, $action->keyexpr, $column_string);
+	    my (@old_values) = $edt->get_old_values($tablename, $action->keyexpr, $column_string);
 	
 	    foreach my $i ( 0..$#unchanged )
 	    {
@@ -554,109 +540,66 @@ sub validate_against_schema {
 }
 
 
-# validate_special_column ( directive, cr, operation, permission, fieldname, value )
-# 
-# This method is called once for each of the following column types that occurs in the table
-# currently being operated on. The column names will almost certainly be different.
-# 
-# The parameter $directive must be one of the following:
-# 
-# ts_created      Records the date and time at which this record was created.
-# ts_modified     Records the date and time at which this record was last modified.
-# 
-# Values for these columns cannot be specified explicitly except by a user with administrative
-# permission, and then only if this EditTransaction allows the condition 'ALTER_TRAIL'.
-# 
-# If this transaction is in FIXUP_MODE, both field values will be left unchanged if the user has
-# administrative privilege. Otherwise, a permission error will be returned.
+# add_validation_condition ( action, error, additional )
 #
-# The parameter $cr must contain the column description record.
+# If $error is a listref, add it to the action as an error condition. If $additional is a listref, add
+# it too. The latter might be either a second error or a warning.
 
-my %CACHE_MODIFIED_EXPR;
+sub add_validation_condition {
 
-sub validate_special_column {
-
-    my ($edt, $directive, $cr, $operation, $permission, $fieldname, $value) = @_;
+    my ($edt, $action, $error, $additional) = @_;
     
-    # If the value is non-empty, check that it matches the required format.
-    
-    if ( defined $value && $value ne '' )
+    if ( ref $error eq 'ARRAY' )
     {
-	my ($additional, $no_quote);
-	
-	# The ts fields take datetime values, which are straightforward to validate.
-	
-	if ( my $hook = $edt->has_dbf_hook('validate_value') )
-	{
-	    ($value, $additional, $no_quote) =
-		$edt->call_hook('validate_value', $cr, $fieldname, $value);
-	}
-	
-	else
-	{
-	    ($value, $additional, $no_quote) =
-		$edt->validate_datetime_value($cr->{Type}, $fieldname, $value);
-	    
-	    # $edt->add_condition('W_EXECUTE', "no 'validate_value' hook was found");
-	}
-	
-	# If we have admin permission or general permission, add an ALTER_TRAIL caution unless the
-	# ALTER_TRAIL allowance is present.
-	
-	if ( $permission =~ /univ|admin/ )
-	{
-	    unless ( $edt->{allows}{ALTER_TRAIL} )
-	    {
-		$additional = $value if ref $value eq 'ARRAY';
-		$value = [ 'C_ALTER_TRAIL', $fieldname ];
-	    }
-	}
-	
-	# Otherwise, add a permission error. If we already have an error condition related to the
-	# value format, bump it into second place.
-	
-	else
-	{
-	    $additional = $value if ref $value eq 'ARRAY';
-	    $value = [ 'E_PERM_COL', $fieldname ];
-	}
-	
-	return ($value, $additional, $no_quote);
+	unshift @$error, $action unless $error->[0] eq 'main';
+	$edt->add_condition(@$error);
     }
     
-    # For ts_modified, an empty value is replaced by the current timestamp unless the transaction
-    # is in FIXUP_MODE.
-    
-    elsif ( $directive eq 'ts_modified' && $edt->{allows}{FIXUP_MODE} )
+    if ( ref $additional eq 'ARRAY' )
     {
-	if ( $permission =~ /[*]|admin/ )
-	{
-	    return 'UNCHANGED';
-	}
-	
-	else
-	{
-	    return [ 'main', 'E_PERM', 'fixup_mode' ];
-	}
+	unshift @$additional, $action unless $additional->[0] eq 'main';
+	$edt->add_condition(@$additional);
     }
-    
-    # Otherwise, fill the necessary value if the column doesn't have have a default and/or update clause.
-    
-    elsif ( $operation eq 'insert' && $cr->{INSERT_FILL} )
-    {
-	return ($cr->{INSERT_FILL}, undef, 1);
-    }
+}
 
-    elsif ( $operation =~ /^update|^replace/ && $cr->{UPDATE_FILL} )
-    {
-	return ($cr->{UPDATE_FILL}, undef, 1);
-    }
+
+# has_directive ( directive )
+#
+# Return true if the current class has the specified directive, false otherwise.
+
+our %BASE_DIRECTIVE = ( ignore => 1, pass => 1, unquoted => 1, copy => 1, validate => 1 );
+
+sub has_directive {
+
+    my ($edt, $directive) = @_;
     
-    # If no value is necessary, return undefined for everything.
+    if ( $BASE_DIRECTIVE{$directive} || $edt->has_app_directive($directive) )
+    {
+	return 1;
+    }
     
     else
     {
-	return ();
+	return '';
+    }
+}
+
+
+# The default has_app_directive method accepts only 'ts_created' and 'ts_modified'. This is only
+# called if not overridden by an application module.
+
+sub has_app_directive {
+
+    my ($edt, $directive) = @_;
+
+    if ( $directive eq 'ts_created' || $directive eq 'ts_modified' )
+    {
+	return 1;
+    }
+
+    else
+    {
+	return '';
     }
 }
 

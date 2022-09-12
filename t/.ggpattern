@@ -2,12 +2,11 @@
 
 basedir = ../lib/
 edtdir = ../lib/EditTransaction/
-appdir = ../lib/EditTransaction/APP/
-dbfdir = ../lib/EditTransaction/DBF/
+moddir = ../lib/EditTransaction/Mod/
 testdir = 
 
-pm: [edtdir]*.pm [appdir]*.pm [dbfdir]*.pm [basedir]*.pm [basedir]PB2/*.pm
-edt: [edtdir]*.pm [appdir]*.pm [dbfdir]*.pm [basedir]EditTransaction.pm [basedir]Permissions.pm [basedir]TableDefs.pm
+pm: [edtdir]*.pm [moddir]*.pm [basedir]*.pm [basedir]PB2/*.pm
+edt: [basedir]EditTransaction.pm [edtdir]*.pm [moddir]*.pm [basedir]Permissions.pm [basedir]TableDefs.pm
 t: [testdir]*.pm [testdir]*.t
 pmt: [pm] [t]
 edtt: [edt] [t]
