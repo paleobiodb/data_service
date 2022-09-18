@@ -21,7 +21,10 @@ use EditTester qw(ok_eval ok_exception last_result connect_to_database);
 $DB::single = 1;
 
 
-subtest 'check ok_eval' => sub {
+# Check the 'ok_eval' construct for catching and reporting unexpected
+# exceptions, and 'last_result' for examining the result of a successful call.
+
+subtest 'ok_eval' => sub {
     
     ok_eval( sub { 1 + 1 }, "true result" );
     
@@ -37,7 +40,7 @@ subtest 'check ok_eval' => sub {
     
     ok_eval( $T, sub { 23 }, "called with instance argument" );
     
-    local $EditTester::TEST_MODE = 1;
+    invert_mode(1);
     
     ok_eval( sub { die "test exception" }, "exception result" );
     
@@ -48,6 +51,8 @@ subtest 'check ok_eval' => sub {
     is( last_result, '0', "last_result produces proper value for '0'");
     
     ok_eval( sub { }, "nil result" );
+    
+    invert_mode(0);
     
     ok( ! defined last_result, "last_result produces undef after empty subroutine" );
 };
@@ -71,7 +76,9 @@ subtest 'ok_eval bad arguments' => sub {
 };
 
 
-subtest 'check ok_exception' => sub {
+# Check the 'ok_exception' construct for catching and testing expected exceptions.
+
+subtest 'ok_exception' => sub {
     
     ok_exception( sub { die "test exception xyxxy" }, qr/xyxxy/, "matching exception" );
     
@@ -85,7 +92,7 @@ subtest 'check ok_exception' => sub {
     
     ok_exception($T, sub { die "foobar" }, qr/foobar/, "called with an instance argument" );
     
-    local $EditTester::TEST_MODE = 1;
+    invert_mode(1);
     
     ok_exception( sub { die "test exception xyxxy" }, qr/foobar/, "non matching exception" );
     
@@ -100,6 +107,8 @@ subtest 'check ok_exception' => sub {
     is( last_result, 0, "last_result returns 0 if no exception" );
     
     ok_exception( sub { }, qr/foobar/, "no exception, nil result" );
+    
+    invert_mode(0);
     
     ok( ! defined last_result, "last_result undefined with empty subroutine" );
 };
@@ -129,7 +138,10 @@ subtest 'ok_exception bad arguments' => sub {
 };
 
 
-subtest 'check connect_to_database' => sub {
+# Make sure the 'connect_to_database' method returns a proper result. If it does
+# not, there is no point in continuing any farther.
+
+subtest 'connect_to_database' => sub {
     
     my $dbh = connect_to_database();
     
@@ -138,6 +150,8 @@ subtest 'check connect_to_database' => sub {
 };
 
 
+# Check the various ways of creating EditTester instances via the 'new' method.
+
 subtest 'constructor' => sub {
     
     ok_eval( sub { EditTester->new('ETBasicTest', 'EDT_TEST') },
@@ -145,8 +159,8 @@ subtest 'constructor' => sub {
     
     my $T = last_result;
     
-    is( $T->{edt_class}, 'ETBasicTest', "class assigned correctly" );
-    is( $T->{edt_table}, 'EDT_TEST', "table assigned correctly" );
+    is( $T->target_class, 'ETBasicTest', "class assigned correctly" );
+    is( $T->default_table, 'EDT_TEST', "table assigned correctly" );
     like( ref $T->dbh, qr/DBI::/, "dbh method returns a DBI database handle" );
     
     my $x = bless { }, 'XYZ';
@@ -158,19 +172,19 @@ subtest 'constructor' => sub {
     
     $T = last_result;
     
-    is( $T->{edt_class}, 'ETBasicTest', "class assigned correctly" );
-    is( $T->{edt_table}, 'EDT_TEST', "table assigned correctly" );
-    is( $T->{debug_mode}, 1, "debug_mode assigned correctly" );
-    is( $T->{errlog_mode}, 1, "debug_mode assigned correctly" );
+    is( $T->target_class, 'ETBasicTest', "class assigned correctly" );
+    is( $T->default_table, 'EDT_TEST', "table assigned correctly" );
+    is( $T->debug_mode, 1, "debug_mode assigned correctly" );
+    is( $T->errlog_mode, 1, "debug_mode assigned correctly" );
     is( $T->dbh, $x, "dbh assigned correctly" );
     
     $T->set_table('EDT_AUX');
     
-    is( $T->{edt_table}, 'EDT_AUX', "set_table method" );
+    is( $T->default_table, 'EDT_AUX', "set_table method functions properly" );
     
     $T = EditTester->new('ETBasicTest');
     
-    ok( ! $T->{edt_table}, "no table assigned" );
+    ok( ! $T->default_table, "no table assigned" );
 };
 
 
