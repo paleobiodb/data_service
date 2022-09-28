@@ -8,47 +8,140 @@ package EditTransaction::Conditions;
 
 use strict;
 
-use EditTransaction qw(%CONDITION_BY_CLASS);
+use EditTransaction;
 use Carp qw(croak);
+use Scalar::Util qw(reftype blessed);
 
 use Moo::Role;
 
 no warnings 'uninitialized';
 
+use parent qw(Exporter);
 
-# Error, caution, and warning conditions
-# --------------------------------------
 
-# Error and warning conditions are indicated by codes, all composed of upper case word symbols. Those
-# that start with 'E_' represent errors, those that start with 'C_' represent cautions, and those
-# that start with 'W_' represent warnings. In general, errors cause the operation to be aborted
-# while warnings do not. Cautions cause the operation to be aborted unless specifically allowed.
+# Default condition codes and templates
+# -------------------------------------
+
+# Condition codes are classified based on their first letter:
 # 
-# Codes that start with 'C_' indicate cautions that may be allowed, so that the operation proceeds
-# despite them. A canonical example is 'C_CREATE', which is returned if records are to be
-# created. If the data service operation method knows that records are to be created, it can
-# explicitly allow 'CREATE', which will allow the records to be created. Alternatively, it can
-# return 'C_CREATE' as an error code to the client-side application, which can ask the user if
-# they really want to create new records. If they answer affirmatively, the operation can be
-# re-tried with 'CREATE' specifically allowed. The same can be done with other cautions.
+#  C      Codes beginning with C_ represent cautions. Cautions are blocking
+#         conditions, preventing a transaction from completing. They provide
+#         feedback to the client code that is intended to be passed on to
+#         the end user. For example, C_LOCKED indicates that one or more of the
+#         records to be updated are locked. The client interface may choose to
+#         respond by asking the user something like "Some of these records are
+#         locked.  Update them anyway?" If the user responds in the affirmative,
+#         the response can be repeated verbatim with the additional option
+#         "allow=LOCKED". Each caution has a corresponding allowance that can be
+#         used to bypass it.
 # 
-# Codes that start with 'E_' indicate conditions that prevent the operation from proceeding. For
-# example, 'E_PERM' indicates that the user does not have permission to operate on the specified
-# record or table. 'E_NOT_FOUND' indicates that a record to be updated is not in the
-# database. Unlike cautions, these conditions cannot be specifically allowed. However, the special
-# allowance 'PROCEED' specifies that whatever parts of the operation are able to succeed
-# should be carried out, even if some record operations fail. The special allowance 'NOT_FOUND'
-# indicates that E_NOT_FOUND should be demoted to a warning, and that particular record skipped,
-# but other errors will still block the operation from proceeding.
+#  E      Codes beginning with E_ represent errors. Errors are also blocking
+#         conditions. An error condition represents a problem that prevents the
+#         transaction from completing, such as a column value that is too large
+#         for the column, a table specifier representing a nonexistent table,
+#         etc.
 # 
-# Codes that start with 'W_' indicate warnings that should be passed back to the client but do not
-# prevent the operation from proceeding.
+#  F      Codes beginning with F_ represent errors that have been "demoted" to
+#         be non-blocking. The allowances 'PROCEED', 'NOT_FOUND', and
+#         'NOT_PERMITTED' allow a transaction to continue if certain error
+#         conditions are generated. The particular action that generated the
+#         condition will not be performed, but the rest of the transaction will
+#         complete if no other errors occur. For example, a transaction with
+#         "allow=NOT_FOUND" will not perform updates or deletes on records that
+#         are not in the table, but other actions in the same transaction will
+#         continue to be executed.  The transaction will be committed unless
+#         other errors not covered by the allowance are generated.  Errors that
+#         are covered by an allowance will be demoted to nonfatal conditions.
+#         For example: E_NOT_FOUND => F_NOT_FOUND.
 # 
-# Codes that start with 'D_' and 'F_' indicate conditions that would otherwise have been cautions
-# or errors, under the 'PROCEED', 'NOT_FOUND', or 'NOT_PERMITTED' allowances. These are treated as
-# warnings.
-# 
-# Allowed conditions must be specified for each EditTransaction object when it is created.
+#  W      Codes beginning with W_ represent warnings. They are non-blocking.
+#         They serve to inform the client that the result of the transaction may
+#         not be as desired. For example, W_TRUNC is generated when an oversized
+#         value is assigned to a database column that allows truncation. This
+#         condition code  indicates that the assigned value is not what was
+#         actually stored into the database.
+
+our (@EXPORT_OK) = qw(%CONDITION_BY_CLASS);
+
+our (%CONDITION_BY_CLASS) = ( EditTransaction => {		     
+		C_CREATE => "Allow 'CREATE' to create records",
+		C_LOCKED => "Allow 'LOCKED' to update locked records",
+		C_ALTER_TRAIL => "Allow 'ALTER_TRAIL' to explicitly set crmod and authent fields",
+		C_CHANGE_PARENT => "Allow 'CHANGE_PARENT' to allow subordinate link values to be changed",
+		E_BAD_CONNECTION => ["&1", "Database connection failed"],
+		E_BAD_TABLE => "'&1' does not correspond to any known database table",
+		E_NO_KEY => "The &1 operation requires a primary key value",
+		E_HAS_KEY => "You may not specify a primary key value for the &1 operation",
+		E_MULTI_KEY => "You may only specify a single primary key value for the &1 operation",
+		E_BAD_KEY => ["Field '&1': Invalid key value(s): &2",
+			      "Invalid key value(s): &2",
+			      "Invalid key value(s): &1"],
+		E_BAD_SELECTOR => ["Field '&1': &2", "&2"],
+		E_BAD_REFERENCE => { _multiple_ => ["Field '&2': found multiple keys for '&3'",
+						    "Found multiple keys for '&3'",
+						    "Found multiple keys for '&2'"],
+				     _unresolved_ => ["Field '&2': no key value found for '&3'",
+						      "No key value found for '&3'",
+						      "No key value found for '&2'"],
+				     _mismatch_ => ["Field '&2': the reference '&3' has the wrong type",
+						    "Reference '&3' has the wrong type",
+						    "Reference '&2' has the wrong type"],
+				     default => ["Field '&1': no record with the proper type matches '&2'",
+						 "No record with the proper type matches '&2'",
+						 "No record with the proper type matches '&1'"] },
+		E_NOT_FOUND => ["No record was found with key '&1'", 
+				"No record was found with this key"],
+		E_LOCKED => { multiple => ["Found &2 locked record(s)",
+					   "One or more of these records is locked"],
+			      default => "This record is locked" },
+		E_PERM_LOCK => { _multiple_ => 
+				["You do not have permission to lock/unlock &2 of these records",
+				 "You do not have permission to lock/unlock one or more of these records"],
+				 default => "You do not have permission to lock/unlock this record" },
+		E_PERM => { insert => "You do not have permission to insert a record into this table",
+			    update => "You do not have permission to update this record",
+			    update_many => "You do not have permission to update records in this table",
+			    replace_new => "No record was found with key '&2', ".
+				"and you do not have permission to insert one",
+			    replace_existing => "You do not have permission to replace this record",
+			    delete => "You do not have permission to delete this record",
+			    delete_many => "You do not have permission to delete records from this table",
+			    delete_cleanup => "You do not have permission to delete these records",
+			    fixup_mode => "You do not have permission for fixup mode on this table",
+			    default => "You do not have permission for this operation" },
+		E_BAD_OPERATION => ["Invalid operation '&1'", "Invalid operation"],
+		E_BAD_RECORD => "",
+		E_BAD_CONDITION => "&1 '&2'",
+		E_PERM_COL => "You do not have permission to set the value of '&1'",
+		E_REQUIRED => "Field '&1': must have a nonempty value",
+		E_RANGE => ["Field '&1': &2", "&2", "Field '&1'"],
+		E_WIDTH => ["Field '&1': &2", "&2", "Field '&1'"],
+		E_FORMAT => ["Field '&1': &2", "&2", "Field '&1'"],
+		E_EXTID => ["Field '&1': &2", "Field '&1': bad external identifier",
+			    "Bad external identifier"],
+			    # "Field '&1': external identifier must be of type '&2'",
+			    # "External identifier must be of type '&2', was '&3'",
+			    # "External identifier must be of type '&2'",
+			    # "No external identifier type is defined for field '&1'"],
+		E_PARAM => "",
+  		E_EXECUTE => ["&1", "Unknown"],
+		E_DUPLICATE => "Duplicate entry '&1' for key '&2'",
+		E_BAD_FIELD => "Field '&1' does not correspond to any column in '&2'",
+		E_UNRECOGNIZED => "This record not match any record type accepted by this operation",
+		E_IMPORTED => "",
+		W_BAD_ALLOWANCE => "Unknown allowance '&1'",
+		W_EXECUTE => ["&1", "Unknown"],
+		W_UNCHANGED => "",
+		W_NOT_FOUND => "",
+		W_PARAM => "",
+		W_TRUNC => ["Field '&1': &2", "Field '&1'"],
+		W_EXTID => ["Field '&1' : &2", 
+			    "Field '&1': column does not accept external identifiers, value looks like one"],
+		W_BAD_FIELD => "Field '&1' does not correspond to any column in '&2'",
+		W_EMPTY_RECORD => "Item is empty",
+		W_IMPORTED => "",
+		UNKNOWN => "Unknown condition code" });
+
 
 our ($CONDITION_CODE_STRICT) = qr{ ^ [CEW]_ [A-Z0-9_-]+ $ }x;
 our ($CONDITION_CODE_LOOSE) =  qr{ ^ [CEFW]_ [A-Z0-9_-]+ $ }x;
@@ -69,6 +162,8 @@ sub register_conditions {
     
     # Process the arguments in pairs.
     
+    my $count;
+    
     while ( @_ )
     {
 	my $code = shift;
@@ -81,11 +176,33 @@ sub register_conditions {
 	# the empty string, but it must be given.
 	
 	croak "bad condition code '$code'" unless $code =~ $CONDITION_CODE_STRICT;
-	croak "bad condition template '$template'" unless defined $template;
+	croak "condition template cannot be undefined" unless defined $template;
 	
 	$CONDITION_BY_CLASS{$class}{$code} = $template;
+	
+	$count++;
     }
+    
+    return $count;
 };
+
+
+sub is_valid_condition {
+    
+    my ($class, $name) = @_;
+    
+    if ( ref $class )
+    {
+	return $CONDITION_BY_CLASS{ref $class}{$name} || $CONDITION_BY_CLASS{EditTransaction}{$name}
+	    ? 1 : '';
+    }
+    
+    else
+    {
+	return $CONDITION_BY_CLASS{$class}{$name} || $CONDITION_BY_CLASS{EditTransaction}{$name}
+	    ? 1 : '';
+    }
+}
 
 
 # add_condition ( [action], code, param... )
@@ -119,10 +236,9 @@ sub add_condition {
     {
 	$action = shift @params;
 	
-	unless ( $action->isa('EditTransaction::Action') )
+	unless ( blessed $action && $action->isa('EditTransaction::Action') )
 	{
-	    my $ref_string = ref $action;
-	    croak "'$ref_string' is not an action reference";
+	    croak "'$action' is not an action reference";
 	}
     }
     
@@ -135,7 +251,7 @@ sub add_condition {
     }
     
     # If the first parameter starts with '&', look it up as an action reference. Calls of
-    # this kind will always come from outside code.
+    # this kind will always come from client code.
     
     elsif ( $params[0] =~ /^&./ )
     {
@@ -149,18 +265,13 @@ sub add_condition {
     
     # Otherwise, default to the current action. Depending on when this method is called,
     # it may be empty, in which case the condition will be attached to the transaction as
-    # a whole. If the first parameter is 'latest', remove it.
+    # a whole. If the first parameter is '_', remove it.
     
     else
     {
 	$action = $edt->{current_action};
-
-	if ( $action && ! ( ref $action && $action->isa('EditTransaction::Action') ) )
-	{
-	    die "current_action is not a valid action reference";
-	}
 	
-	shift @params if $params[0] eq 'latest';
+	shift @params if $params[0] eq '_';
     }
     
     # There must be at least one remaining parameter, and it must match the syntax of a
@@ -178,9 +289,14 @@ sub add_condition {
 	}
     }
     
-    else
+    elsif ( $params[0] )
     {
 	croak "'$params[0]' is not a valid selector or condition code";
+    }
+    
+    else
+    {
+	croak "you must specify a condition code";
     }
     
     # If this condition belongs to an action, add it to that action. Adjust the condition counts
@@ -209,12 +325,6 @@ sub add_condition {
 	
 	if ( $action->add_condition($code, @params) && $action->status ne 'skipped' )
 	{
-	    # This code in this block includes guard statements that reset any invalid
-	    # counts to zero before incrementing them. If the guard statement triggers, it
-	    # means that any prior count has already been lost. So we start again from zero,
-	    # rather than losing the count anyway or throwing an exception that will probably
-	    # not be caught.
-
 	    $edt->{condition_code}{$code}++;
 	    
 	    # If the code starts with E or C then it represents an error or caution.
@@ -270,9 +380,9 @@ sub add_condition {
 	{
 	    $edt->{warning_count}++;
 	}
-
+	
 	# Return 1 to indicate that the condition was attached.
-
+	
 	return 1;
     }
     
@@ -284,7 +394,7 @@ sub add_condition {
 
 
 # has_condition ( [selector], code, [arg1, arg2, arg3] )
-#
+# 
 # Return true if this transaction contains a condition with the specified code. If 1-3 extra
 # arguments are also given, return true only if each argument value matches the
 # corresponding condition parameter. The code may be specified either as a string or a regex.
@@ -301,7 +411,7 @@ sub has_condition {
     
     # If the first argument is a valid selector, remap the arguments.
     
-    if ( $code =~ /^main|^all|^latest|^&./ )
+    if ( $code =~ /^main$|^all$|^_$|^&./ )
     {
 	($edt, $selector, $code, @v) = @_;
     }
@@ -332,13 +442,13 @@ sub has_condition {
 		return 1 if $action->has_condition($code, @v);
 	    }
 	}
-
-	return 0;
+	
+	return '';
     }
     
-    # If the selector is 'latest', check the current action.
+    # If the selector is '_', check the current action.
     
-    elsif ( $selector eq 'latest' )
+    elsif ( $selector eq '_' )
     {
 	if ( $edt->{current_action} )
 	{
@@ -354,28 +464,29 @@ sub has_condition {
 	{
 	    return $action->has_condition($code, @v);
 	}
-
-	else
-	{
-	    croak "no matching action found for '$selector'";
-	}
+	
+	# else
+	# {
+	#     croak "no matching action found for '$selector'";
+	# }
     }
-
+    
     else
     {
 	croak "'$selector' is not a valid selector";
     }
     
-    # If we didn't find a matching condition, return false.
+    # If we get here, we were either given a refstring that does not match any
+    # action or else '_' with no current action. In either case, return undef.
     
-    return 0;
+    return undef;
 }
 
 
 sub _has_main_condition {
 
     my ($edt, $code, @v) = @_;
-
+    
     my $is_regexp = ref $code && reftype $code eq 'REGEXP';
     
     if ( ref $edt->{conditions} eq 'ARRAY' )
@@ -397,45 +508,6 @@ sub _has_main_condition {
 }
 
 
-# # add_condition_simple ( code, param... )
-# #
-# # Attach the specified condition to the current action, or to the transaction as a whole
-# # if the current action is undefined. This method is designed to be called only from this
-# # class or a subclass. It does not do any argument checking, so it is risky to call it
-# # from interface code. However, it is more robust. Unlike add_condition, it should never
-# # throw an exception as long as the first parameter is a string.
-
-# sub add_condition_simple {
-    
-#     my ($edt, $code, @params) = @_;
-
-#     my $action;
-    
-#     # If current_action is defined and is a reference to an action, attach the condition
-#     # to it. If the condition is an error and the transaction allows PROCEED or NOT_FOUND,
-#     # demote the error to a warning.
-    
-#     if ( $edt->{current_action} && ref $edt->{current_action} &&
-# 	 $edt->{current_action}->isa('EditTransaction::Action') )
-#     {
-# 	$action = $edt->{current_action};
-	
-# 	if ( $code =~ /^E/ && ref $edt->{allows} eq 'HASH' &&
-# 	     ( $edt->{allows}{PROCEED} || $edt->{allows}{NOT_FOUND} && $code eq 'E_NOT_FOUND' ) )
-# 	{
-# 	    substr($code,0,1) =~ 'F';
-# 	}
-#     }
-    
-#     # Create a condition object using these parameters, and attach it to the action or to
-#     # the transaction as a whole.
-    
-#     my $condition = EditTransaction::Condition->new($action, $code, @params);
-    
-#     $edt->_attach_condition($action, $condition, $code);
-# }
-
-
 # conditions ( [selector], [type] )
 # 
 # In list context, return a list of stringified error and/or warning conditions recorded
@@ -444,8 +516,8 @@ sub _has_main_condition {
 # to 'all':
 # 
 #     main		Return conditions that are attached to the transaction as a whole.
-#     latest		Return conditions that are attached to the latest action.
-#     :...              Return conditions that are attached to the referenced action.
+#     _ 		Return conditions that are attached to the latest action.
+#     &...              Return conditions that are attached to the referenced action.
 #     all		Return all conditions.
 # 
 # The type can be any of the following, also defaulting to 'all':
@@ -457,7 +529,7 @@ sub _has_main_condition {
 #     all		Return all conditions.
 #
 # The types 'fatal' and 'nonfatal' are the same as 'errors' and 'warnings' respectively when used
-# with any selector other than 'all'. 
+# with 'main'.
 
 my %TYPE_RE = ( errors => qr/^[EFC]/,
 		fatal => qr/^[EC]/,
@@ -465,8 +537,8 @@ my %TYPE_RE = ( errors => qr/^[EFC]/,
 		warnings => qr/^W/,
 		all => qr/^[EFCW]/ );
 
-my $csel_pattern = qr{ ^ (?: main$|latest$|all$|:. ) }xs;
-my $ctyp_pattern = qr{ ^ (?: errors$|fatal$|nonfatal$|warnings$ ) }xs;
+my $csel_pattern = qr{ ^ (?: main$|_$|all$|& ) }xs;
+my $ctyp_pattern = qr{ ^ (?: errors|fatal|nonfatal|warnings ) $ }xs;
 
 sub conditions {
     
@@ -486,18 +558,18 @@ sub conditions {
 	{
 	    $selector = $params[0];
 	}
-
+	
 	elsif ( $params[0] =~ $ctyp_pattern )
 	{
 	    $type = $params[0];
 	}
-
+	
 	elsif ( $params[0] ne 'all' )
 	{
 	    croak "'$params[0]' is not a valid selector or condition type";
 	}
     }
-
+    
     if ( $params[1] )
     {
 	if ( $params[1] =~ $csel_pattern && $selector eq 'all' )
@@ -520,9 +592,11 @@ sub conditions {
     
     my $filter = $TYPE_RE{$type} || $TYPE_RE{all};
     
-    # If the selector is 'main', grep through the main conditions list.
+    # If the selector is 'main', grep through the main conditions list. If the
+    # selector is '_' and there are no actions yet, return the main
+    # conditions because those are the latest ones to be added.
     
-    if ( $selector eq 'main' )
+    if ( $selector eq 'main' || $selector eq '_' && $edt->_action_list == 0 )
     {
     	if ( wantarray )
     	{
@@ -537,27 +611,10 @@ sub conditions {
     	}
     }
     
-    # my @keys = $TYPE_KEYS{$type}->@*;
-    
-    # # For 'main', we return either or both of the 'errors' and 'warnings' lists from $edt.
-    
-    # if ( $selector eq 'main' )
-    # {
-    # 	if ( wantarray )
-    # 	{
-    # 	    return map( $edt->condition_string($_), map( $edt->{$_} && $edt->{$_}->@*, @keys ));
-    # 	}
-	
-    # 	else
-    # 	{
-    # 	    return sum( map( scalar($edt->{$_} && $edt->{$_}->@*), @keys ));
-    # 	}
-    # }
-    
-    # For 'latest', we return either or both of the 'errors' and 'warning' lists from
+    # For '_', we return either or both of the 'errors' and 'warning' lists from
     # the current action. For an action reference, we use the corresponding action.
     
-    elsif ( $selector =~ /^latest|^&./ )
+    elsif ( $selector =~ /^_$|^&/ )
     {
 	my $action;
 	
@@ -568,7 +625,7 @@ sub conditions {
 	
 	else
 	{
-	    $action = $edt->{action_ref}{$selector} || croak "no matching action found for '$selector'";
+	    $action = $edt->{action_ref}{$selector} || return;
 	}
 	
 	if ( wantarray )
@@ -595,31 +652,6 @@ sub conditions {
 	    map { $_->status ne 'skipped' ? $_->conditions : () } $edt->_action_list;
     }
     
-	# if ( wantarray && ( $type eq 'all' || $type eq 'nonfatal' ) )
-	# {
-	#     my $filter = '!EC' if $type eq 'nonfatal';
-	    
-	#     return map { $edt->condition_string($_, $filter) }
-	# 	$edt->{errors} ? $edt->{errors}->@* : (),
-	# 	$edt->{warnings} ? $edt->{warnings}->@* : (),
-	# 	map { ( $_->{errors} ? $_->{errors}->@* : () ,
-	# 		$_->{warnings} ? $_->{warnings}->@* : () ) }
-	# 	grep { $_->{status} ne 'skipped' } $edt->{action_list}->@*;
-	# }
-	
-	# # With any other type, there is just one key to check.
-	
-	# elsif ( wantarray )
-	# {
-	#     my $key = $keys[0];
-	#     my $filter = 'EC' if $type eq 'fatal';
-	    
-	#     return map { $edt->condition_string($_, $filter) }
-	# 	$edt->{$key} ? $edt->{$key}->@* : (),
-	# 	map { $_->{$key} ? $_->{$key}->@* : () }
-	# 	grep { $_->{status} ne 'skipped' } $edt->{action_list}->@*;
-	# }
-	
     # For 'all' in scalar context, return the count(s) that correspond to $type.
     
     elsif ( $type eq 'errors' )

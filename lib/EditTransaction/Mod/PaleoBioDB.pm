@@ -23,13 +23,17 @@ use Moo::Role;	# switch to Role::Tiny?
 
 
 # Register the extra property names used by this module with the table definition system, and
-# register extra allowances that are used by this module.
+# register extra allowances and directives that are used by this module.
 
 BEGIN {
     set_table_property_name('BY_AUTHORIZER', 1);
     set_column_property_name('EXTID_TYPE', 1);
     
     EditTransaction->register_allowances('SKIP_LOGGING');
+    
+    EditTransaction->register_directives('au_authorizer', 'au_creater', 'au_modifier',
+					 'adm_lock', 'own_lock');
+    
 };
 
 
@@ -319,9 +323,12 @@ sub validate_extid_value {
 # au_creater      Records the person_no or user_id of the person who created this record.
 # au_authorizer   Records the person_no or user_id of the person who authorized its creation.
 # au_modifier     Records the person_no or user_id of the person who last modified this record.
+# adm_lock        If true, indicates that this record is administratively locked.
+# own_lock        If true, indicates that this record is locked by its owner.
 # 
-# Values for these columns cannot be specified explicitly except by a user with administrative
-# permission, and then only if this EditTransaction allows the condition 'ALTER_TRAIL'.
+# Values for these columns (except for own_lock) cannot be specified explicitly
+# except by a user with administrative permission, and then only if this
+# EditTransaction allows the condition 'ALTER_TRAIL'.
 # 
 # If this transaction is in FIXUP_MODE, both field values will be left unchanged if the user has
 # administrative privilege. Otherwise, a permission error will be returned.

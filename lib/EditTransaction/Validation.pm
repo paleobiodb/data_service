@@ -85,10 +85,6 @@ sub validate_against_schema {
 	return;
     }
     
-    # Get all column directives for this action.
-    
-    my %directives = $action->all_directives;
-    
     # Figure out which extra methods to call.
     
     my $app_call = $edt->can('before_data_column');
@@ -110,10 +106,9 @@ sub validate_against_schema {
 	
 	my ($value, $fieldname, $special, $result, $clean_value, $additional, $no_quote);
 	
-	# Check to see if this column has a directive. If none was explicitly assigned, certain
-	# specially named columns default to specific handling directives.
+	# Check to see if this column has a handling directive. The default is 'validate'.
 	
-	my $directive = $directives{$colname};
+	my $directive = $action->{directives}{$colname} || $edt->{directives}{$colname} || 'validate';
 	
 	# If we are directed to ignore this column, skip it unless it is the primary key.
 	
@@ -221,7 +216,7 @@ sub validate_against_schema {
 	# according that directive. This is done even if there is no assigned value, because some
 	# special column values (i.e. modification time) are assigned by the special handler.
 	
-	elsif ( $directive && $directive ne 'validate' )
+	elsif ( $directive ne 'validate' )
 	{
 	    $special = $directive;
 	    
@@ -265,8 +260,8 @@ sub validate_against_schema {
 	    }
 	}
 	
-	# Case 4: For any other column that has a non-null assigned value, check that value
-	# against the column properties.
+	# Case 4: The default directive is 'validate'. For any column that has a
+	# non-null assigned value, check that value against the column properties.
 	
 	elsif ( defined $value )
 	{
@@ -487,15 +482,27 @@ sub validate_against_schema {
     # If there are any unrecognized keys in this record, add an error or a warning depending on
     # whether BAD_FIELDS is allowed for this transaction.
     
-    # $$$ we need to restore the 'ignore_field' action method.
-    
     foreach my $key ( keys %$record )
     {
-	unless ( $used{$key} ||
-		 $key =~ /^_/ ||
-		 %directives && $directives{_FIELD_}{$key} eq 'ignore' )
+	# Ignore any key whose name starts with an underscore, and also those
+	# which have been marked using handle_column.
+	
+	unless ( $used{$key} || $key =~ /^_/ )
 	{
-	    if ( $edt->allows('BAD_FIELDS') )
+	    # If we have been told to ignore this field, skip it. The //
+	    # operator is used because a 'USE_FIELD' on the action should
+	    # override an 'IGNORE_FIELD' on the transaction.
+	    
+	    if ( ($action->{directives}{"FIELD:$key"} || $edt->{directives}{"FIELD:$key"}) 
+		 eq 'ignore' )
+	    {
+		next;
+	    }
+	    
+	    # Otherwise, add an error or warning condition according to whether
+	    # or not the 'BAD_FIELDS' allowance was specified.
+	    
+	    elsif ( $edt->allows('BAD_FIELDS') )
 	    {
 		$edt->add_condition($action, 'W_BAD_FIELD', $key, $tablename);
 	    }

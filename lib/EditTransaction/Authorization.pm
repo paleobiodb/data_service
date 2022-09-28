@@ -210,7 +210,7 @@ sub authorize_action {
     {
 	return if $action->permission eq 'PENDING';
     }
-
+    
     # Get a reference to the information record for this table.
     
     my $tableinfo = $edt->table_info_ref($table_specifier);
@@ -239,6 +239,7 @@ sub authorize_action {
 	    }
 	    
 	    case 'update':
+	    case 'insupdate':
 	    case 'replace': {
 	        @permcounts = $edt->check_record_permission($table_specifier, 'modify', $keyexpr);
 	    }
@@ -267,38 +268,47 @@ sub authorize_action {
     my $result = shift @permcounts;
     my $count = shift @permcounts;
     
-    # If the 'notfound' result is first, that means no records at all were found. The only
-    # difficult case is the 'replace' operation, which 'notfound' does not necessarily block.
+    # If the 'notfound' result is first, that means no records at all were found
+    # for the specified key expression. This blocks the action unless the operation is
+    # 'replace' or 'insupdate', which can possibly proceed.
     
     if ( $result eq 'notfound' )
     {
-	# A replace operation can turn into an insert if the table permissions include
-	# 'insert_key'.
+	# An 'insupdate' operation can turn into an insert if the table
+	# permissions include 'insert_key' and this transaction has the CREATE
+	# allowance. A 'replace' operation is allowed to proceed under the same
+	# circumstances. 
 	
-	my $can_insert = $operation eq 'replace' &&
-	    $edt->check_table_permission($table_specifier, 'insert_key');
-	
-	# If record insertion is allowed, the action is authorized if this transaction has the
-	# CREATE allowance. Otherwise, add the caution condition 'C_CREATE'.
-	
-	if ( $can_insert && $can_insert ne 'none' )
+	if ( $operation eq 'replace' || $operation eq 'insupdate')
 	{
-	    if ( $edt->{allows}{CREATE} )
+	    my $can_insert = $edt->check_table_permission($table_specifier, 'insert_key');
+	    
+	    if ( $can_insert && $can_insert ne 'none' )
 	    {
-		$result = 'granted';
+		unless ( $edt->{allows}{CREATE} )
+		{
+		    $edt->add_condition($action, 'C_CREATE');
+		}
+		
+		$action->set_permission($can_insert);
+		return 'insert';
 	    }
 	    
 	    else
 	    {
-		$edt->add_condition($action, 'C_CREATE');
+		$edt->add_condition($action, 'E_PERM', 'insert');
+		$action->set_permission('none');
+		return 'insert';
 	    }
 	}
 	
-	# In all other situations, report E_NOT_FOUND.
+	# In all other situations, add an E_NOT_FOUND condition and return
+	# 'notfound'.
 	
 	else
 	{
 	    $edt->add_condition($action, 'E_NOT_FOUND');
+	    return $action->set_permission('notfound');
 	}
     }
     
@@ -309,6 +319,7 @@ sub authorize_action {
     elsif ( $result eq 'none' )
     {
 	$edt->add_condition($action, 'E_PERM', $operation, $count);
+	return $action->set_permission('none');
     }
     
     # If the primary permission is 'locked', that means the user is authorized to operate on all
@@ -326,6 +337,8 @@ sub authorize_action {
 	{
 	    $edt->add_condition($action, 'E_LOCKED');
 	}
+	
+	return $action->set_permission('locked');
     }
     
     # If the primary permission includes '_unlock', that means some of the records were locked by
@@ -342,13 +355,14 @@ sub authorize_action {
 	
 	else
 	{
-	    $action->requires_unlock(1);
+	    $edt->add_condition($action, 'C_LOCKED');
+	    # $action->requires_unlock(1);
 	}
     }
     
     # Store the permission with the action and return it.
     
-    $action->set_permission($result);
+    return $action->set_permission($result);
 }
 
 

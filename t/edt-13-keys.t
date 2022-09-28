@@ -12,11 +12,12 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 6;
+use Test::More tests => 7;
 
 use ETBasicTest;
 use ETTrivialClass;
-use EditTester qw(ok_eval ok_exception);
+use EditTester qw(ok_eval ok_exception 
+		  ok_no_conditions ok_has_condition ok_has_one_condition);
 
 
 # Establish an EditTester instance.
@@ -47,9 +48,9 @@ subtest 'key values' => sub {
     
     my $edt = $T->new_edt( table => 'EDT_TEST' );
     
-    $edt->new_action('replace', { _primary => "15", abc => "def" });
+    $edt->_test_action( 'replace', { _primary => "15", abc => "def" } );
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     my @keyvalues = $edt->action_keyvalues('&#1');
     
@@ -59,9 +60,9 @@ subtest 'key values' => sub {
     is( $edt->action_keyval('&#1'), "15", "single key keyval" );
     is( $edt->action_keymult('&#1'), '', "single key keymult" );
     
-    $edt->new_action('update', { _primary => "18,2" });
+    $edt->_test_action('update', { _primary => "18,2" });
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( ref $edt->action_keyval, 'ARRAY', "comma-separated key values" );
     
@@ -81,9 +82,9 @@ subtest 'key values' => sub {
 	is( $keyval->[1], $keyvalues[1], "keyval second element" );
     }
     
-    $edt->new_action('update', { _primary => [30, '45', 0, 8] });
+    $edt->_test_action('update', { _primary => [30, '45', 0, 8] });
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( ref $edt->action_keyval, 'ARRAY', "list of key values" ) &&
 	is( $edt->action_keyval->[2], 8, "keyval third element" );
@@ -97,12 +98,16 @@ subtest 'key values' => sub {
     
     is( $edt->action_keymult, 1, "list keymult" );
     
-    $edt->new_action('delete', { _primary => [28] } );
+    $edt->_test_action('delete', { _primary => [28] } );
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyval, "28", "solitaire list keyval" );
     is( $edt->action_keymult, '', "solitaire list keymult" );
+    
+    # is( $action->keyval, "18", "key recognized" );
+    # is( ref $action->keyval, 'ARRAY', "key list recognized" ) &&
+    # is( scalar $action->keyval->@*, '3', "key list has three elements" );
 };
 
 
@@ -112,15 +117,15 @@ subtest 'odd values' => sub {
     
     my $edt = $T->new_edt( table => 'EDT_TEST' );
     
-    $edt->new_action('replace', { _primary => " ,,0   ,  ,72,, ," });
+    $edt->_test_action('replace', { _primary => " ,,0   ,  ,72,, ," });
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyval, "72", "one valid key value" );
     
-    $edt->new_action('delete', { _primary => ", '53' , \"26\"  ,, '', "});
+    $edt->_test_action('delete', { _primary => ", '53' , \"26\"  ,, '', "});
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyvalues, 2, "two valid quoted key values" );
 };
@@ -132,13 +137,13 @@ subtest 'bad values' => sub {
     
     my $edt = $T->new_edt( table => 'EDT_TEST' );
     
-    $edt->new_action('update', { _primary => ["abc", "16"] });
+    $edt->_test_action('update', { _primary => ["abc", "16"] });
     
-    $T->ok_has_one_condition('latest', 'E_BAD_KEY');
+    ok_has_one_condition('E_BAD_KEY');
     
-    $edt->new_action('delete', { _primary => " 84 , -5, 16 " });
+    $edt->_test_action('delete', { _primary => " 84 , -5, 16 " });
     
-    $T->ok_has_one_condition('latest', 'E_BAD_KEY');
+    ok_has_one_condition('E_BAD_KEY');
 };
 
 
@@ -148,32 +153,32 @@ subtest 'key references' => sub {
     
     my $edt = $T->new_edt( table => 'EDT_TEST' );
     
-    $edt->new_action('update', { _primary => "16", ghi => "abc" });
+    $edt->_test_action('update', { _primary => "16", ghi => "abc" });
     
-    $edt->new_action('insert', { foo => "baz" });
+    $edt->_test_action('insert', { foo => "baz" });
     
-    $edt->new_action('replace', { _primary => "&#1", ghi => "jkl" });
+    $edt->_test_action('replace', { _primary => "&#1", ghi => "jkl" });
     
-    $T->ok_no_conditions;
+    ok_no_conditions;
     
     is( $edt->action_keyval, "16", "simple reference resolved" );
     
-    $edt->new_action('update', { _primary => "&#2", ghi => 0 });
+    $edt->_test_action('update', { _primary => "&#2", ghi => 0 });
     
-    $T->ok_no_conditions;
+    ok_no_conditions;
     
     my @keyvalues = $edt->action_keyvalues;
     
     is( $keyvalues[0], "&#2", "reference unresolved");
     is( $edt->action_ref->permission, "PENDING", "authorization postponed");
     
-    $edt->new_action('delete', { _primary => "&fazz" });
+    $edt->_test_action('delete', { _primary => "&fazz" });
     
-    $T->ok_has_one_condition('latest', 'E_BAD_REFERENCE');
+    ok_has_one_condition('E_BAD_REFERENCE');
     
-    $edt->new_action('update', { _primary => "&" });
+    $edt->_test_action('update', { _primary => "&" });
     
-    $T->ok_has_one_condition('latest', 'E_BAD_REFERENCE');
+    ok_has_one_condition('E_BAD_REFERENCE');
 };
 
 
@@ -184,33 +189,33 @@ subtest 'key fields' => sub {
     
     my $edt = $T->new_edt( table => 'EDT_TEST' );
     
-    $edt->new_action('update', { test_no => "16", ghi => "abc" });
+    $edt->_test_action('update', { test_no => "16", ghi => "abc" });
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyval, "16", "test_no keyval" );
     
-    $edt->new_action('replace', { test_id => "22" });
+    $edt->_test_action('replace', { test_id => "22" });
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyval, "22", "test_id keyval" );
     
-    $edt->new_action('insert', { foo => "bar" });
+    $edt->_test_action('insert', { foo => "bar" });
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyval, undef, "no key value" );
     
-    $edt->new_action('delete', "23, 15, 88");
+    $edt->_test_action('delete', "23, 15, 88");
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyvalues, 3, "three key values for delete" );
     
-    $edt->new_action('delete', [15]);
+    $edt->_test_action('delete', [15]);
     
-    $T->ok_no_conditions('latest');
+    ok_no_conditions;
     
     is( $edt->action_keyval, "15", "one key value for delete" );
 };
@@ -222,15 +227,15 @@ subtest 'multiple fields' => sub {
     
     my $edt = $T->new_edt( table => 'EDT_TEST' );
     
-    $edt->new_action('update', { test_no => "3", _primary => "3" });
+    $edt->_test_action('update', { test_no => "3", _primary => "3" });
     
-    $T->ok_has_one_condition( 'latest', qr/E_EXECUTE.*_primary/, "caught test_no and _primary" );
+    ok_has_one_condition( qr/E_EXECUTE.*_primary/, "caught test_no and _primary" );
     
-    $edt->new_action('update', { test_no => "4", test_id => [5, 6] });
+    $edt->_test_action('update', { test_no => "4", test_id => [5, 6] });
     
-    $T->ok_has_one_condition( 'latest', qr/E_EXECUTE.*test_id/, "caught test_no and test_id" );
+    ok_has_one_condition( qr/E_EXECUTE.*test_id/, "caught test_no and test_id" );
     
-    $edt->new_action('update', { test_id => "66", _primary => "xxx" });
+    $edt->_test_action('update', { test_id => "66", _primary => "xxx" });
     
-    $T->ok_has_condition( 'latest', qr/E_EXECUTE.*test_id/, "caught test_id and _primary" );
+    ok_has_condition( qr/E_EXECUTE.*test_id/, "caught test_id and _primary" );
 };

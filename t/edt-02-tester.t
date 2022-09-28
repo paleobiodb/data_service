@@ -15,7 +15,7 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 7;
 
-use EditTester qw(ok_eval ok_exception last_result connect_to_database);
+use EditTester qw(ok_eval ok_exception last_result connect_to_database invert_mode);
 
 
 $DB::single = 1;
@@ -178,7 +178,7 @@ subtest 'constructor' => sub {
     is( $T->errlog_mode, 1, "debug_mode assigned correctly" );
     is( $T->dbh, $x, "dbh assigned correctly" );
     
-    $T->set_table('EDT_AUX');
+    $T->set_default_table('EDT_AUX');
     
     is( $T->default_table, 'EDT_AUX', "set_table method functions properly" );
     
@@ -197,3 +197,5 @@ subtest 'constructor bad arguments' => sub {
 		  "not subclass exception" );
 };
 
+
+diag "TO DO: test ok_output and ok_no_output";

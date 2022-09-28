@@ -22,7 +22,7 @@ use Scalar::Util qw(reftype);
 use namespace::clean;
 
 
-our %OPERATION_TYPE = ( skip => 'record',
+our %OPERATION_TYPE = ( skip => 'record', test => 'record',
 			insert => 'record', update => 'record', replace => 'record',
 			update_many => 'selector', 
 			delete => 'keys', delete_cleanup => 'keys',
@@ -42,7 +42,7 @@ sub new {
     
     # A valid table name is not required for a skipped action, but is required for every other
     # kind of action.
-
+    
     die "missing tablename" unless $tablename || $operation eq 'skip';
     
     # Create a basic object to represent this action.
@@ -57,18 +57,18 @@ sub new {
     
     bless $action, $class;
     
-    # For any operation other than 'skip', 'other', or 'sql', fetch all column directives for the
-    # table we are using. The second call to 'all_directives' is guaranteed to be very cheap once
-    # the first call in scalar context has been made, because the answer is cached in the
-    # transaction instance.
+    # # For any operation other than 'skip', 'other', or 'sql', fetch all column directives for the
+    # # table we are using. The second call to 'all_directives' is guaranteed to be very cheap once
+    # # the first call in scalar context has been made, because the answer is cached in the
+    # # transaction instance.
     
-    unless ( $operation =~ /^skip|^other|^sql/ )
-    {
-	if ( $edt->all_directives($tablename) )
-	{
-	    $action->{directives} = { $edt->all_directives($tablename) };
-	}
-    }
+    # unless ( $operation =~ /^skip|^other|^sql/ )
+    # {
+    # 	if ( $edt->all_directives($tablename) )
+    # 	{
+    # 	    $action->{directives} = { $edt->all_directives($tablename) };
+    # 	}
+    # }
     
     # Return a reference to the new action object.
     
@@ -134,6 +134,14 @@ sub set_result {
     my ($action, $result) = @_;
     
     $action->{result} = $result;
+}
+
+
+sub set_operation {
+    
+    my ($action, $operation) = @_;
+    
+    $action->{operation} = $operation;
 }
 
 
@@ -230,7 +238,7 @@ sub add_child {
 sub set_keyinfo {
 
     my ($action, $keycol, $keyfield, $keyval, $keyexpr) = @_;
-
+    
     $action->{keycol} = $keycol;
     $action->{keyfield} = $keyfield;
     $action->{keyval} = $keyval if @_ > 3;
@@ -309,7 +317,7 @@ sub keyvalues {
 
 sub keymult {
 
-    return (ref $_[0]{keyval} eq 'ARRAY' && $_[0]{keyval}->@* > 1 ? 1 : 0);
+    return (ref $_[0]{keyval} eq 'ARRAY' && $_[0]{keyval}->@* > 1 ? 1 : '');
 }
 
 
@@ -404,7 +412,7 @@ sub has_condition {
     
     # If we haven't found a matching condition, return false.
     
-    return 0;
+    return '';
 }
 
 
@@ -477,9 +485,9 @@ sub record_value {
     
     if ( ref $action->{record} && reftype $action->{record} eq 'HASH' && defined $fieldname )
     {
-	$action->{record}{$fieldname};
+	return $action->{record}{$fieldname};
     }
-
+    
     else
     {
 	return undef;
@@ -660,58 +668,45 @@ sub value_list {
 }
 
 
-# handle_column ( column_name, directive )
-#
-# Apply the specified directive to the specified column, for use in the final validation step. The
-# accepted values are documented with the 'handle_column' method of EditTransaction. If the column
-# name you supply does not appear in the database table associated with this action, the directive
-# will have no effect. This method must be called before validation occurs, or it will have no
-# effect.
+# # handle_column ( column_name, directive )
+# #
+# # Apply the specified directive to the specified column, for use in the final validation step. The
+# # accepted values are documented with the 'handle_column' method of EditTransaction. If the column
+# # name you supply does not appear in the database table associated with this action, the directive
+# # will have no effect. This method must be called before validation occurs, or it will have no
+# # effect.
 
-sub handle_column {
+# sub handle_column {
 
-    my ($action, $column_name, $directive) = @_;
+#     my ($action, $column_name, $directive) = @_;
     
-    croak "you must specify a column name" unless $column_name;
+#     croak "you must specify a column name" unless $column_name;
     
-    croak "invalid directive" unless $EditTransaction::VALID_DIRECTIVE{$directive};
+#     # croak "invalid directive" unless $EditTransaction::VALID_DIRECTIVE{$directive};
     
-    # If the specified directive is 'validate', delete any existing directive. This works because
-    # 'validate' is the default.
-    
-    if ( $directive eq 'validate' )
-    {
-	delete $action->{directive}{$column_name} if $action->{directive};
-    }
-    
-    else
-    {
-	$action->{directive}{$column_name} = $directive;
-    }
-    
-    return $directive;
-}
+#     $action->{directive}{$column_name} = $directive;
+# }
 
 
-# directive ( column_name )
-# 
-# Return the directive, if any, for the specified column.
+# # directive ( column_name )
+# # 
+# # Return the directive, if any, for the specified column.
 
-sub directive {
+# sub directive {
 
-    return $_[0]{directive} && $_[1] ? $_[0]{directive}{$_[1]} : undef;
-}
+#     return $_[0]{directive} && $_[1] ? $_[0]{directive}{$_[1]} : undef;
+# }
 
 
-# all_directives ( )
-#
-# In list context, return a list of column names and directives, suitable for assigning to a
-# hash. In scalar context, return the number of columns that have directives.
+# # all_directives ( )
+# #
+# # In list context, return a list of column names and directives, suitable for assigning to a
+# # hash. In scalar context, return the number of columns that have directives.
 
-sub all_directives {
+# sub all_directives {
 
-    return $_[0]{directive} ? $_[0]{directive}->%* : ();
-}
+#     return $_[0]{directive} ? $_[0]{directive}->%* : ();
+# }
 
 
 # add_precheck ( column_name, check_type, params... )

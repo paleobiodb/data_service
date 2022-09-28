@@ -72,13 +72,13 @@ subtest 'registration bad input' => sub {
 };
 
 
-# Check the 'copy_allowances_from' method.
+# Check the 'copy_from' method.
 
 subtest 'copy allowances' => sub {
     
     ETBasicTest->register_allowances('A-3');
     
-    ETTrivialClass->copy_allowances_from('ETBasicTest');
+    ETTrivialClass->copy_from('ETBasicTest');
     
     ETBasicTest->register_allowances('NEW_ALLOWANCE');
     

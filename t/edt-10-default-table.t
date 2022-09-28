@@ -32,10 +32,10 @@ subtest 'EditTester default table' => sub {
     is( $T->default_table, 'EDT_TEST', "default table produces correct result" );
     ok( ! $TN->default_table, "no default table produces correct result");
     
-    $TN->set_table('EDT_TEST');
+    $TN->set_default_table('EDT_TEST');
     is( $TN->default_table, 'EDT_TEST', "default table changed correctly");
 
-    $T->set_table('EDT_TYPES');
+    $T->set_default_table('EDT_TYPES');
     is( $T->default_table, 'EDT_TYPES', "default table changed correctly 2");
 };
 
@@ -56,7 +56,7 @@ subtest 'EditTransaction default table' => sub {
     
     ok( ! $edtn->default_table, "new edt inherits empty default table");
     
-    $T->set_table('EDT_TYPES');
+    $T->set_default_table('EDT_TYPES');
     
     $edt = $T->new_edt;
     

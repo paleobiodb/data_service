@@ -162,18 +162,34 @@ sub table_directives_list {
 }
 
 
-# table_info_present ( table_specifier )
+# table_info_present ( table_specifier, [column_name] )
 # 
 # Return true if the information for the specified table is cached by this module, false
 # otherwise. This method will NOT cause the information to be fetched if it is not in the cache.
+# 
+# If a column name is specified, return true if the specified column is known to
+# be part of the table and false otherwise.
 
 sub table_info_present {
 
-    my ($edt, $table_specifier) = @_;
+    my ($edt, $table_specifier, $column_name) = @_;
     
     my $class = ref $edt || $edt;
     
-    return $TABLE_INFO_CACHE{$class}{$table_specifier} || '';
+    if ( @_ == 3 )
+    {
+	if ( $table_specifier && $column_name )
+	{
+	    return $COLUMN_INFO_CACHE{$class}{$table_specifier}{$column_name} ? 1 : '';
+	}
+    }
+    
+    elsif ( $table_specifier )
+    {
+	return $TABLE_INFO_CACHE{$class}{$table_specifier} ? 1 : '';
+    }
+    
+    return undef;
 }
 
 
@@ -497,9 +513,9 @@ sub unpack_column_type {
     elsif ( $typeinfo =~ qr{ ^ (tiny|small|medium|big)? int [(] (\d+) [)] \s* (unsigned)? }xs )
     {
 	my $bound = $1 || 'regular';
-	my $unsigned = $3 ? 'unsigned' : '';
-	$cr->{TypeMain} = 'integer';
-	$cr->{TypeParams} = [ $unsigned, $bound, $2 ];
+	my $type = $3 ? 'unsigned' : 'signed';
+	$cr->{TypeMain} = $type;
+	$cr->{TypeParams} = [ $type, $bound, $2 ];
     }
     
     elsif ( $typeinfo =~ qr{ ^ decimal [(] (\d+) , (\d+) [)] \s* (unsigned)? }xs )
@@ -687,7 +703,7 @@ sub validate_data_column {
 	return $edt->validate_boolean_value($cr->{TypeParams}, $value, $fieldname);
     }
     
-    elsif ( $maintype eq 'integer' )
+    elsif ( $maintype eq 'integer' || $maintype eq 'unsigned' )
     {
 	return $edt->validate_integer_value($cr->{TypeParams}, $value, $fieldname);
     }
@@ -873,7 +889,7 @@ sub validate_integer_value {
     
     my ($unsigned, $size) = ref $type eq 'ARRAY' ? $type->@* : $type;
     
-    my $max = $unsigned ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
+    my $max = $type eq 'unsigned' ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
     
     # First make sure that the value is either empty or matches the proper format. A value which
     # is empty or contains only whitespace will be treated as a NULL.
@@ -885,12 +901,12 @@ sub validate_integer_value {
     
     elsif ( $value !~ qr{ ^ \s* ( [-+]? ) \s* ( \d+ ) \s* $ }xs )
     {
-	my $phrase = $unsigned ? 'an unsigned' : 'an';
+	my $phrase = $type eq 'unsigned' ? 'an unsigned' : 'an';
 	
 	return [ 'E_FORMAT', $fieldname, "value must be $phrase integer" ];
     }
     
-    elsif ( $unsigned )
+    elsif ( $type eq 'unsigned' )
     {
 	$value = $2;
 	
@@ -919,7 +935,7 @@ sub validate_integer_value {
 	    }
 	}
     }
-
+    
     # If the value is valid as-is, return the empty list.
 
     return;

@@ -16,7 +16,7 @@ use Test::More tests => 3;
 
 use ETBasicTest;
 use ETTrivialClass;
-use EditTester qw(ok_eval ok_exception last_result);
+use EditTester qw(ok_eval ok_exception last_result last_edt ok_new_edt ok_has_condition);
 
 
 $DB::single = 1;
@@ -28,9 +28,11 @@ my $T = EditTester->new('ETBasicTest');
 
 subtest 'new_edt' => sub {
     
-    ok_eval( sub { $T->new_edt() }, "created new edt" ) || BAIL_OUT "new_edt failed";
+    ok_eval( sub { ok_new_edt }, "created new edt" ) || BAIL_OUT "ok_new_edt failed";
     
-    my $edt = last_result;
+    my $edt = last_edt;
+    
+    is( $edt, last_result, "last_edt and last_result return the same value" );
     
     is( ref $edt, 'ETBasicTest', "new_edt produces instance of default class" );
     is( $edt->dbh, $T->dbh, "new_edt set proper database handle" );
@@ -120,8 +122,8 @@ subtest 'new_edt bad arguments' => sub {
     ok_exception( sub { $T->new_edt(class => 'Test::More') }, qr/invalid class/,
 		  "exception when class is not a subclass of EditTransaction" );
     
-    ok_eval( sub { $T->new_edt(table => 'XYZ') }, "bad table name" );
+    ok_eval( sub { $T->new_edt(table => 'XYZ') }, "bad table name" ) &&
     
-    ok( $T->has_condition('E_BAD_TABLE'), "bad table name generated an error" );
+	ok_has_condition( 'E_BAD_TABLE', "bad table name generated E_BAD_TABLE" );
 };
 

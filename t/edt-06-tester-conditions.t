@@ -26,7 +26,8 @@ use Test::More tests => 9;
 use ETBasicTest;
 use ETTrivialClass;
 
-use EditTester qw(ok_new_edt last_edt clear_edt invert_mode ok_invert_output clear_invert_output
+use EditTester qw(ok_new_edt last_edt clear_edt invert_mode diag_mode
+		  ok_output ok_no_output clear_output
 		  ok_condition_count ok_no_conditions ok_has_condition ok_has_one_condition
 		  ok_no_errors ok_no_warnings ok_has_one_error ok_has_one_warning
 		  ok_eval ok_exception ok_diag is_diag
@@ -95,7 +96,7 @@ subtest 'main conditions' => sub {
     ok_has_condition( qr/foobar$/, "ok_has_condition with regexp" );
     ok_has_condition( 'errors', "ok_has_condition with 'errors'" );
     ok_has_condition( 'fatal', "ok_has_condition with 'fatal'" );
-    ok_has_condition( 'latest', "ok_has_condition with 'latest'" );
+    ok_has_condition( '_', "ok_has_condition with '_'" );
     ok_has_condition( 'main', "ok_has_condition with 'main'" );
     ok_has_condition( 'main', 'errors', "ok_has_condition with 'main' and 'errors'" );
     ok_has_condition( 'errors', 'main', "ok_has_condition with 'errors' and 'main'" );
@@ -179,13 +180,11 @@ subtest 'action conditions' => sub {
     
     my $edt = ok_new_edt;
     
-    $edt->new_action('insert', 'EDT_TEST', { string_req => "abc" });
+    $edt->insert_record('EDT_TEST', { string_req => "abc" });
     
-    my $action1 = $edt->current_action;
+    $edt->add_condition('E_FORMAT', "string_req", "foobar");
     
-    $edt->add_condition($action1, 'E_FORMAT', "abc", "foobar");
-    
-    ok_has_one_condition( 'latest', qr/foobar/, "found condition attached to action" );
+    ok_has_one_condition( '_', qr/foobar/, "found condition attached to action" );
     ok_has_one_condition( 'all', "one condition in total" );
     
     ok_no_conditions( 'main', "no main conditions" );
@@ -193,17 +192,15 @@ subtest 'action conditions' => sub {
     $edt->add_condition('C_LOCKED');
     
     ok_condition_count( 2, "two conditions total" );
-    ok_condition_count( 2, 'latest', "two conditions on latest action" );
+    ok_condition_count( 2, '_', "two conditions on latest action" );
     
-    {
-	invert_mode(1);
+    invert_mode(1);
 	
-	ok_has_one_condition( qr/foobar/, "no longer the only condition" );
-	
-	invert_mode(0);
-    }
+    ok_has_one_condition( qr/foobar/, "no longer the only condition" );
     
-    $edt->new_action('insert', 'EDT_TEST', { signed_val => 82 });
+    invert_mode(0);
+    
+    $edt->insert_record('EDT_TEST', { signed_val => 82, string_req => '23' });
     
     $edt->add_condition('E_FORMAT', "signed_val", "xyzzy");
     
@@ -214,7 +211,7 @@ subtest 'action conditions' => sub {
     $edt->add_condition('main', 'C_CREATE');
     
     ok_has_one_condition( 'main', 'C_CREATE', "C_CREATE is the only condition on main" );
-    ok_has_one_condition( 'latest', "just one condition on latest action" );
+    ok_has_one_condition( '_', "just one condition on latest action" );
     ok_has_condition( '&#2', qr/xyzzy/, "found condition by action reference" );
 };
 
@@ -235,14 +232,14 @@ subtest 'condition bad arguments' => sub {
     ok_exception( sub { ok_has_condition('main', '&#1', 'C_LOCKED'); },
 		  qr/conflicting selector/, "selector conflict throws an exception" );
     
-    ok_exception( sub { ok_has_condition('errors', 'latest', 'nonfatal', 'C_LOCKED'); },
+    ok_exception( sub { ok_has_condition('errors', '_', 'nonfatal', 'C_LOCKED'); },
 		  qr/conflicting type/, "type conflict throws an exception" );
     
     ok_exception( sub { ok_has_condition('latst', 'C_LOCKED'); },
-		  qr/invalid selector/, "misspelled selector throws an exception" );
+		  qr/unknown selector/, "misspelled selector throws an exception" );
     
-    ok_exception( sub { ok_has_condition('latest', 'errs', 'C_LOCKED'); },
-		  qr/invalid selector/, "misspelled type throws an exception" );
+    ok_exception( sub { ok_has_condition('_', 'errs', 'C_LOCKED'); },
+		  qr/unknown selector/, "misspelled type throws an exception" );
     
     ok_exception( sub { ok_has_condition( '&#1', "bad action reference" ); },
 		  qr/no matching action/, "bad action reference throws an exception" );
@@ -279,10 +276,14 @@ subtest 'condition bad arguments' => sub {
 # The tests 'ok_diag' and 'is_diag' mirror the corresponding tests from
 # Test::More, but when they fail they also list all conditions from the latest
 # (or specified) EditTransaction that match the specified type, selector, and/or
-# filter. If none are given, the selector defaults to 'latest'.
+# filter. If none are given, the selector defaults to '_'.
 
 subtest 'ok_diag and is_diag' => sub {
-
+    
+    diag_mode(1);
+    
+    clear_output;
+    
     my $edt = ok_new_edt;
     
     $edt->add_condition('E_EXECUTE');
@@ -293,36 +294,36 @@ subtest 'ok_diag and is_diag' => sub {
     ok_diag( $test_A, "test value true" );
     is_diag( $test_B, "abc", "test value is expected value" );
     
-    {
-	invert_mode(1);
-	
-	my $test_A1 = undef;
-	my $test_B1 = "def";
-	
-	ok_diag( $test_A1, "test value false" );
-	
-	ok_invert_output( qr/E_EXECUTE/, "first condition was listed");
-	
-	$edt->add_condition('C_LOCKED');
-	
-	is_diag( $test_B1, "abc", "test value is not expected value" );
-	
-	ok_invert_output( qr/C_LOCKED/, "second condition was listed" );
-	
-	clear_invert_output;
-	
-	$edt->new_action( 'insert', 'EDT_TEST', { abc => 'def' } );
-	
-	$edt->add_condition( 'W_PARAM', "foobar" );
-	
-	ok_diag( $test_A1, "test value false 2" );
-	
-	ok_invert_output( qr/W_PARAM/, "most recent condition was listed" );
-	
-	invert_mode(0);
-    }
+    ok_no_output;
     
+    invert_mode(1);
+    
+    my $test_A1 = undef;
+    my $test_B1 = "def";
+    
+    ok_diag( $test_A1, "test value false" );
+    
+    ok_output( qr/E_EXECUTE/, "first condition was listed");
+    
+    $edt->add_condition('C_LOCKED');
+    
+    is_diag( $test_B1, "abc", "test value is not the expected value" );
+    
+    ok_output( qr/C_LOCKED/, "second condition was listed" );
+    
+    clear_output;
+    
+    $edt->skip_record( 'EDT_TEST', { abc => 'def' } );
+    
+    $edt->add_condition( 'W_PARAM', "foobar" );
+    
+    ok_diag( $test_A1, "test value false 2" );
+    
+    ok_output( qr/W_PARAM/, "most recent condition was listed" );
+    
+    invert_mode(0);
 };
+
 
 subtest 'ok_diag bad arguments' => sub {
 
@@ -356,11 +357,11 @@ subtest 'multiple EditTransaction instances' => sub {
     
     ok_condition_count( 1, 'C_CREATE', "ok_condition_count" );
     
-    {
-	invert_mode(1);
-	ok_has_condition( 'E_BAD_REFERENCE', "confirm default to last edt" );
-	invert_mode(0);
-    }
+    invert_mode(1);
+    
+    ok_has_condition( 'E_BAD_REFERENCE', "confirm default to last edt" );
+    
+    invert_mode(0);
     
     ok_has_condition( $edt1, 'E_BAD_REFERENCE', "accepts explicit edt argument" );
     $T->ok_has_condition( $edt1, 'E_BAD_REFERENCE', "same when called as a method" );

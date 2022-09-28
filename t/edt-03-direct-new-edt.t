@@ -97,10 +97,8 @@ subtest 'constructor bad arguments' => sub {
     
     my $bad_indirect = TestIndirect->new({ });
     
-    ok_eval( sub { $edt = ETBasicTest->new($bad_indirect) },
-	     "new with bad indirect" ) &&
-		 
-		 ok( $edt->has_condition('E_BAD_CONNECTION'), "bad connection recognized" );
+    ok_exception( sub { $edt = ETBasicTest->new($bad_indirect) },
+		  qr/database handle/i, "new with bad indirect throws an exception" );
 };
 
 
@@ -110,25 +108,38 @@ subtest 'accessors' => sub {
     
     my $edt = ETBasicTest->new($dbh);
     
-    is( $edt->dbh, $dbh, "dbh method" );
-    is( $edt->status, 'init', "status method" );
-    is( $edt->transaction, '', "transaction method" );
-    is( $edt->permission, 'unrestricted', "permission method" );
-    ok( ! $edt->has_started, "has_started method" );
-    ok( ! $edt->is_active, "is_active method" );
-    ok( ! $edt->is_executing, "is_executing method" );
-    ok( ! $edt->has_finished, "has_finished method" );
-    ok( ! $edt->has_committed, "has_committed method" );
-    ok( ! $edt->has_failed, "has_failed method" );
-    ok( $edt->can_accept, "can_accept method" );
-    ok( $edt->can_proceed, "can_proceed method" );
+    can_ok($edt, 'dbh') && is( $edt->dbh, $dbh, "dbh method" );
+    
+    can_ok($edt, 'status') && is( $edt->status, 'init', "status method" );
+    
+    can_ok($edt, 'transaction') && is( $edt->transaction, '', "transaction method" );
+    
+    can_ok($edt, 'permission') &&
+	is( $edt->permission, 'unrestricted', "permission method" );
+    
+    can_ok($edt, 'has_started') && ok( ! $edt->has_started, "has_started method" );
+    
+    can_ok($edt, 'is_active') && ok( ! $edt->is_active, "is_active method" );
+    
+    can_ok($edt, 'is_executing') && ok( ! $edt->is_executing, "is_executing method" );
+    
+    can_ok($edt, 'has_finished') && ok( ! $edt->has_finished, "has_finished method" );
+    
+    can_ok($edt, 'has_committed') && ok( ! $edt->has_committed, "has_committed method" );
+    
+    can_ok($edt, 'has_failed') && ok( ! $edt->has_failed, "has_failed method" );
+    
+    can_ok($edt, 'can_accept') && ok( $edt->can_accept, "can_accept method" );
+    
+    can_ok($edt, 'can_proceed') && ok( $edt->can_proceed, "can_proceed method" );
     
     my $indirect = TestIndirect->new($dbh);
     
     $edt = ETBasicTest->new($indirect);
     
-    is( $edt->request, $indirect, "request method" );
-    is( $edt->dbh, $dbh, "dbh method with indirect" );
+    can_ok($edt, 'request') && is( $edt->request, $indirect, "request method" );
+    
+    can_ok($edt, 'dbh') && is( $edt->dbh, $dbh, "dbh method with indirect" );
 };
 
 
@@ -141,15 +152,23 @@ subtest 'immediate mode' => sub {
     
     my $edt = ETBasicTest->new($dbh, { allows => 'IMMEDIATE_MODE' });
     
-    is( $edt->transaction, 'active', "transaction method" );
-    ok( $edt->has_started, "has_started method" );
-    ok( $edt->is_active, "is_active method" );
-    ok( $edt->is_executing, "is_executing method" );
-    ok( ! $edt->has_finished, "has_finished method" );
-    ok( ! $edt->has_committed, "has_committed method" );
-    ok( ! $edt->has_failed, "has_failed method" );
-    ok( $edt->can_accept, "can_accept method" );
-    ok( $edt->can_proceed, "can_proceed method" );
+    can_ok($edt, 'transaction') && is( $edt->transaction, 'active', "transaction method" );
+    
+    can_ok($edt, 'has_started') && ok( $edt->has_started, "has_started method" );
+    
+    can_ok($edt, 'is_active') && ok( $edt->is_active, "is_active method" );
+    
+    can_ok($edt, 'is_executing') && ok( $edt->is_executing, "is_executing method" );
+    
+    can_ok($edt, 'has_finished') && ok( ! $edt->has_finished, "has_finished method" );
+    
+    can_ok($edt, 'has_committed') && ok( ! $edt->has_committed, "has_committed method" );
+    
+    can_ok($edt, 'has_failed') && ok( ! $edt->has_failed, "has_failed method" );
+    
+    can_ok($edt, 'can_accept') && ok( $edt->can_accept, "can_accept method" );
+    
+    can_ok($edt, 'can_proceed') && ok( $edt->can_proceed, "can_proceed method" );
 };
 
 

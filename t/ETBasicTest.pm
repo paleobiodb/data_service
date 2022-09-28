@@ -21,6 +21,7 @@ use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_co
 
 use Carp qw(carp croak);
 
+use Role::Tiny;
 use Role::Tiny::With;
 
 with 'EditTransaction::Mod::MariaDB';
@@ -49,15 +50,27 @@ with 'EditTransaction::Mod::MariaDB';
     
     # Set properties for EDT_TEST
     
+    set_table_property(EDT_TEST => PRIMARY_KEY => 'test_no');
+    set_table_property(EDT_TEST => PRIMARY_FIELD => 'test_id');
+    set_table_property(EDT_TEST => TABLE_COMMENT => 'Test comment');
+    
     set_column_property(EDT_TEST => string_req => REQUIRED => 1);
     set_column_property(EDT_TEST => string_val => ALTERNATE_NAME => 'alt_val');
+    
+    # Set properties for EDT_SUB
+    
+    set_table_property(EDT_SUB => SUPERIOR_TABLE => 'EDT_TEST');
+    set_table_property(EDT_SUB => CAN_POST => 'AUTHORIZED');
+    set_table_property(EDT_SUB => CAN_MODIFY => 'AUTHORIZED');
+    set_table_property(EDT_SUB => PRIMARY_KEY => 'aux_no');
+    set_table_property(EDT_SUB => PRIMARY_FIELD => 'aux_id');
+    
+    set_column_property(EDT_SUB => test_no => FOREIGN_KEY => 'EDT_TEST');
+    set_column_property(EDT_SUB => name => REQUIRED => 1);
     
     # Set properties for EDT_TYPES
     
     set_table_property(EDT_TYPES => CAN_MODIFY => 'ALL');
-    set_table_property(EDT_TYPES => PRIMARY_KEY => 'test_no');
-    set_table_property(EDT_TYPES => TABLE_COMMENT => 'Test comment');
-    
     set_column_property(EDT_TYPES => string_req => REQUIRED => 1);
     set_column_property(EDT_TYPES => string_req => COLUMN_COMMENT => 'This is a test comment.');
     set_column_property(EDT_TYPES => string_val => ALTERNATE_NAME => 'alt_val');
@@ -71,15 +84,6 @@ with 'EditTransaction::Mod::MariaDB';
     set_column_property(EDT_AUTH => string_req => REQUIRED => 1);
     set_column_property(EDT_AUTH => string_req => COLUMN_COMMENT => 'This is a test comment.');
     set_column_property(EDT_AUTH => string_val => ALTERNATE_NAME => 'alt_val');
-    
-    set_table_property(EDT_SUB => SUPERIOR_TABLE => 'EDT_TEST');
-    set_table_property(EDT_SUB => CAN_POST => 'AUTHORIZED');
-    set_table_property(EDT_SUB => CAN_MODIFY => 'AUTHORIZED');
-    set_table_property(EDT_SUB => PRIMARY_KEY => 'aux_no');
-    set_table_property(EDT_SUB => PRIMARY_FIELD => 'aux_id');
-    
-    set_column_property(EDT_SUB => test_no => FOREIGN_KEY => 'EDT_TEST');
-    set_column_property(EDT_SUB => name => REQUIRED => 1);
     
     set_table_property(EDT_ANY => CAN_POST => 'LOGGED_IN');
     set_table_property(EDT_ANY => PRIMARY_KEY => 'any_no');
@@ -140,7 +144,7 @@ with 'EditTransaction::Mod::MariaDB';
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
 
-sub authorize_action {
+before 'authorize_action' => sub {
     
     my ($edt, $action, $operation, $table, $keyexpr) = @_;
     
@@ -182,9 +186,7 @@ sub authorize_action {
 	    $edt->{save_method_values} = \@values;
 	}
     }
-    
-    return $edt->SUPER::authorize_action($action, $operation, $table, $keyexpr);
-}
+};
 
 
 sub validate_action {
@@ -588,10 +590,18 @@ sub establish_test_tables {
 		
 		default charset utf8");
     
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_SUB}");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDT_SUB} (
+		aux_no int unsigned primary key auto_increment,
+		name varchar(255) not null default '',
+		test_no int unsigned not null default 0,
+		unique key (name)) default charset utf8");
+
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_TYPES}");
     
     $dbh->do("CREATE TABLE $TABLE{EDT_TYPES} (
-		test_no int unsigned primary key auto_increment,
+		name varchar(40) not null primary key,
 		interval_no int unsigned not null default 0,
 		string_val varchar(40) not null default '',
 		string_req varchar(40) not null default '',
@@ -616,14 +626,6 @@ sub establish_test_tables {
 		
 		default charset utf8");
     
-    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_SUB}");
-    
-    $dbh->do("CREATE TABLE $TABLE{EDT_SUB} (
-		aux_no int unsigned primary key auto_increment,
-		name varchar(255) not null default '',
-		test_no int unsigned not null default 0,
-		unique key (name)) default charset utf8");
-
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_ANY}");
     
     $dbh->do("CREATE TABLE $TABLE{EDT_ANY} (
