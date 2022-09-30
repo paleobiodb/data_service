@@ -49,7 +49,7 @@ subtest 'successful action' => sub {
     
     my $edt = ok_new_edt;
     
-    $edt->insert_record('EDT_TEST', { string_req => 'abc' });
+    $edt->_test_action('insert', 'EDT_TEST', { string_req => 'abc' });
     
     diag_mode(1);
     
@@ -107,7 +107,7 @@ subtest 'failed action' => sub {
     
     my $edt = ok_new_edt;
     
-    $edt->insert_record('EDT_TEST', { string_req => 'abc' });
+    $edt->_test_action('insert', 'EDT_TEST', { string_req => 'abc' });
     
     $edt->add_condition('E_FORMAT', "foobar");
     

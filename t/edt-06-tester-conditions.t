@@ -180,7 +180,7 @@ subtest 'action conditions' => sub {
     
     my $edt = ok_new_edt;
     
-    $edt->insert_record('EDT_TEST', { string_req => "abc" });
+    $edt->_test_action('insert', 'EDT_TEST', { string_req => "abc" });
     
     $edt->add_condition('E_FORMAT', "string_req", "foobar");
     
@@ -195,12 +195,12 @@ subtest 'action conditions' => sub {
     ok_condition_count( 2, '_', "two conditions on latest action" );
     
     invert_mode(1);
-	
+    
     ok_has_one_condition( qr/foobar/, "no longer the only condition" );
     
     invert_mode(0);
     
-    $edt->insert_record('EDT_TEST', { signed_val => 82, string_req => '23' });
+    $edt->_test_action('insert', 'EDT_TEST', { signed_val => 82, string_req => '23' });
     
     $edt->add_condition('E_FORMAT', "signed_val", "xyzzy");
     
@@ -235,14 +235,21 @@ subtest 'condition bad arguments' => sub {
     ok_exception( sub { ok_has_condition('errors', '_', 'nonfatal', 'C_LOCKED'); },
 		  qr/conflicting type/, "type conflict throws an exception" );
     
-    ok_exception( sub { ok_has_condition('latst', 'C_LOCKED'); },
+    ok_exception( sub { ok_has_condition('mainn', 'C_LOCKED'); },
 		  qr/unknown selector/, "misspelled selector throws an exception" );
     
     ok_exception( sub { ok_has_condition('_', 'errs', 'C_LOCKED'); },
 		  qr/unknown selector/, "misspelled type throws an exception" );
     
-    ok_exception( sub { ok_has_condition( '&#1', "bad action reference" ); },
-		  qr/no matching action/, "bad action reference throws an exception" );
+    clear_output;
+    
+    invert_mode(1);
+    
+    ok_has_condition( '&#1', "bad action reference" );
+    
+    invert_mode(0);
+    
+    ok_output( qr/action.*[&][#]/, "ok_has_condition diag no matching action");
     
     ok_exception( sub { ok_has_condition( 'errors', 'CLOCKED'); },
 		  qr/unrecognized filter/, "misspelled filter throws an exception" );
@@ -313,7 +320,7 @@ subtest 'ok_diag and is_diag' => sub {
     
     clear_output;
     
-    $edt->skip_record( 'EDT_TEST', { abc => 'def' } );
+    $edt->_test_action( 'skip', 'EDT_TEST', { abc => 'def' } );
     
     $edt->add_condition( 'W_PARAM', "foobar" );
     

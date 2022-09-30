@@ -5,20 +5,66 @@
 # This file contains unit tests for the ETBasicTest class, a subclass of
 # EditTransaction whose purpose is to implement these tests.
 # 
-# tester.t : Check that the EditTester module can create new instances and
-#            edts, and that exported subs needed for the other tests work
+# tester.t : Check that the EditTester module can create new instances and edts,
+#            and that exported subroutines needed for the other tests work
 #            properly.
 # 
 
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 7;
+use Test::More tests => 8;
 
-use EditTester qw(ok_eval ok_exception last_result connect_to_database invert_mode);
+use EditTester qw(ok_eval ok_exception last_result last_result_list
+		  connect_to_database
+		  invert_mode diag_mode diag_lines clear_output diag_output
+		  ok_output ok_no_output);
 
 
 $DB::single = 1;
+
+
+# Check the 'ok_output' and 'ok_no_output' constructs for checking for the
+# presence or absence of diagnostic output.
+
+subtest 'ok_output' => sub {
+    
+    clear_output;
+    
+    ok_no_output( "ok_no_output after clear_output" );
+    
+    diag_mode(1);
+    
+    diag_lines("foobar", "biffbaff 23");
+    
+    diag_mode(0);
+    
+    ok_output( qr/foo/, "ok_output 1" );
+    
+    ok_output( qr/biff.*23/, "ok_output 2" );
+    
+    invert_mode('output');
+    
+    ok_no_output( "invert: ok_no_output, output is present" );
+    
+    like( diag_output, qr/^\s*diagnostic output was *:.*23/si, 
+	  "ok_no_output diag & clears output on failure" );
+    
+    clear_output;
+    
+    diag_mode(1);
+    
+    diag_lines("bananarama");
+    
+    diag_mode(0);
+    
+    ok_output( qr/razzamatazz/, "invert: ok_output, output does not match" );
+    
+    like( diag_output, qr/was *:.*banana.*expected *:.*razz/si, 
+	  "invert: ok_output diag" );
+    
+    invert_mode(0);
+};
 
 
 # Check the 'ok_eval' construct for catching and reporting unexpected
@@ -26,31 +72,47 @@ $DB::single = 1;
 
 subtest 'ok_eval' => sub {
     
-    ok_eval( sub { 1 + 1 }, "true result" );
+    ok_eval( sub { 1 + 1 }, "ok_eval true result" );
     
     is( last_result, 2, "last_result produces proper value for 1+1" );
     
-    ok_eval( sub { 'xyz' } );
+    ok_eval( sub { ['xyz', 'foo'] }, "ok_eval listref result" );
     
-    is( last_result, 'xyz', "last_result produces proper value for 'xyz'" );
+    is( ref(last_result), 'ARRAY', "last_result produces listref" ) &&
+	is( last_result->[0], 'xyz', "last_result list value 1" ) &&
+	is( last_result->[1], 'foo', "last_result list value 2" );
+    
+    ok_eval( sub { ('xyz', 'foo') }, "ok_eval list result" );
+    
+    is( last_result, 'xyz', "last_result produces first value" );
+    
+    is( last_result_list, 2, "last_result_list has 2 values" );
+    is( last_result_list(0), 'xyz', "last_result_list value 1" );
+    is( last_result_list(1), 'foo', "last_result_list value 2" );
+    
+    ok_eval( sub { 0 }, 'IGNORE', "ok_eval false result with 'IGNORE'" );
     
     my $T = { }; bless $T, 'EditTester';
     
-    $T->ok_eval( sub { 'pqr' }, "called as method" );
+    $T->ok_eval( sub { 'pqr' }, "ok_eval called as method" );
     
-    ok_eval( $T, sub { 23 }, "called with instance argument" );
+    ok_eval( $T, sub { 23 }, "ok_eval called with instance argument" );
     
-    invert_mode(1);
+    invert_mode('eval');
     
-    ok_eval( sub { die "test exception" }, "exception result" );
+    clear_output;
+    
+    ok_eval( sub { die "test exception" }, "invert: ok_eval exception thrown" );
     
     ok( ! defined last_result, "last_result produces undef after exception" );
     
-    ok_eval( sub { 0 }, "false result" );
+    ok_output( qr/exception *:.*test exception/si, "invert: ok_eval diag" );
+    
+    ok_eval( sub { 0 }, "invert: ok_eval false result" );
     
     is( last_result, '0', "last_result produces proper value for '0'");
     
-    ok_eval( sub { }, "nil result" );
+    ok_eval( sub { }, "invert: ok_eval empty subroutine" );
     
     invert_mode(0);
     
@@ -64,15 +126,15 @@ subtest 'ok_eval bad arguments' => sub {
 	ok_eval( "no subroutine" );
     };
     
-    ok( $@ =~ /subroutine reference/i, "no subroutine" );
+    ok( $@ =~ /subroutine reference/i, "ok_eval no subroutine" );
     
     my $B = { }; bless $B, 'XYZ';
     
     eval {
-	ok_eval( $B, sub { 4-5 }, "bad method call" );
+	ok_eval( $B, sub { 4-5 }, "not a subroutine" );
     };
     
-    ok( $@ =~ /subroutine reference/i, "bad method call" );
+    ok( $@ =~ /subroutine reference/i, "ok_eval not a subroutine" );
 };
 
 
@@ -80,33 +142,46 @@ subtest 'ok_eval bad arguments' => sub {
 
 subtest 'ok_exception' => sub {
     
-    ok_exception( sub { die "test exception xyxxy" }, qr/xyxxy/, "matching exception" );
+    ok_exception( sub { die "test exception xyxxy" }, qr/xyxxy/, 
+		  "ok_exception with matching exception" );
     
     ok_exception( sub { die "foobar" }, qr/foobar/ );
     
-    ok_exception( sub { die "biffbaff" }, 1, "any exception" );
+    ok_exception( sub { die "biffbaff" }, '*', "ok_exception with '*'" );
     
     my $T = { }; bless $T, 'EditTester';
     
-    $T->ok_exception( sub { die "foobar" }, qr/foobar/, "called as a method" );
+    $T->ok_exception( sub { die "foobar" }, qr/foobar/, 
+		      "ok_exception called as a method" );
     
-    ok_exception($T, sub { die "foobar" }, qr/foobar/, "called with an instance argument" );
+    ok_exception($T, sub { die "foobar" }, qr/foobar/,
+		 "ok_exception called with instance argument" );
     
-    invert_mode(1);
+    invert_mode('eval');
     
-    ok_exception( sub { die "test exception xyxxy" }, qr/foobar/, "non matching exception" );
+    clear_output;
+    
+    ok_exception( sub { die "test exception xyzzy" }, qr/foobar/, 
+		  "invert: ok_exception with non matching exception" );
     
     ok( ! defined last_result, "last_result undefined after exception" );
     
-    ok_exception( sub { 1 }, qr/foobar/, "no exception at all" );
+    ok_output( qr/exception *:.*xyzzy.*expected *:.*foobar/si,
+	       "invert: ok_exception diag" );
+    
+    clear_output;
+    
+    ok_exception( sub { 1 }, qr/foobar/, "invert: ok_exception with no exception" );
     
     is( last_result, 1, "last_result returns subroutine value if no exception" );
     
-    ok_exception( sub { 0 }, qr/foobar/, "no exception, false result" );
+    ok_output( qr/no exception/i, "invert: ok_exception diag" );
+    
+    ok_exception( sub { 0 }, qr/foobar/, "ok_exception with no exception, false result" );
     
     is( last_result, 0, "last_result returns 0 if no exception" );
     
-    ok_exception( sub { }, qr/foobar/, "no exception, nil result" );
+    ok_exception( sub { }, qr/foobar/, "ok_exception with no exception, nil result" );
     
     invert_mode(0);
     
@@ -120,21 +195,21 @@ subtest 'ok_exception bad arguments' => sub {
 	ok_exception( "no subroutine" );
     };
     
-    ok( $@ =~ /subroutine reference/i, "no subroutine" );
+    ok( $@ =~ /subroutine reference/i, "ok_exception no subroutine" );
     
     eval {
 	ok_exception( sub { die "foobar" }, "no regexp" );
     };
     
-    ok( $@ =~ /regexp reference/i, "no regexp" );
+    ok( $@ =~ /regexp reference/i, "ok_exception no regexp" );
     
     my $B = { }; bless $B, 'XYZ';
     
     eval {
-	ok_exception( $B, sub { die "foobar" }, qr/foobar/, "bad method call" );
+	ok_exception( $B, sub { die "foobar" }, qr/foobar/, "not a subroutine" );
     };
     
-    ok( $@ =~ /subroutine reference/i, "bad method call" );
+    ok( $@ =~ /subroutine reference/i, "ok_exception not a subroutine" );
 };
 
 
@@ -198,4 +273,3 @@ subtest 'constructor bad arguments' => sub {
 };
 
 
-diag "TO DO: test ok_output and ok_no_output";

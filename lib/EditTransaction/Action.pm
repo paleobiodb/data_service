@@ -24,7 +24,7 @@ use namespace::clean;
 
 our %OPERATION_TYPE = ( skip => 'record', test => 'record',
 			insert => 'record', update => 'record', replace => 'record',
-			update_many => 'selector', 
+			update_many => 'selector', insupdate => 'record',
 			delete => 'keys', delete_cleanup => 'keys',
 			delete_many => 'selector', sql => 'selector', other => 'keys' );
 

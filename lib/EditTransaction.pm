@@ -970,6 +970,13 @@ sub _new_action {
 }
 
 
+# _test_action ( operation, table_specifier, parameters )
+# 
+# This routine is intended only for use by the test suite for this module. It
+# returns a Perl reference to the action instead of a refstring. It does not do
+# authentication nor validation, and it does not call _handle_action. It does,
+# however, unpack key values and import conditions.
+
 sub _test_action {
     
     my ($edt, $operation, @rest) = @_;
@@ -979,6 +986,13 @@ sub _test_action {
     my ($table_specifier, $parameters) = $edt->_action_args($operation, @rest);
     
     my $action = $edt->_new_action($operation, $table_specifier, $parameters);
+    
+    if ( my $ew = $action->record_value('_errwarn') )
+    {
+	$edt->import_conditions($action, $ew);
+    }
+    
+    return $action;
 }
 
 
@@ -2572,7 +2586,8 @@ sub insert_record {
 	if ( $@ )
         {
 	    $edt->error_line($@);
-	    $edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
+	    $edt->add_condition($action, 'E_EXECUTE', 
+				'an exception occurred during authorizatio or validation');
 	}
     }
     
@@ -4997,8 +5012,8 @@ sub key_labels {
 
 
 sub action_count {
-
-    return $_[0]{action_count} || 0;
+    
+    return ref $_[0]{action_list} eq 'ARRAY' ? scalar($_[0]{action_list}->@*) : 0;
 }
 
 

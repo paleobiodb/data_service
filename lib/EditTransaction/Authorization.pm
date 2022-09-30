@@ -199,7 +199,7 @@ sub authorize_action {
     
     # The following statement is used for testing purposes.
     
-    die "TEST AUTHORIZE" if $EditTransaction::TEST_PROBLEM{authorize};
+    die "TEST AUTHORIZE" if $EditTransaction::TEST_PROBLEM{authorize_action};
     
     # If the authorization cannot be resolved yet, return immediately. In this case, authorization
     # will be completed just before the action is executed. This typically happens when an action
@@ -214,6 +214,12 @@ sub authorize_action {
     # Get a reference to the information record for this table.
     
     my $tableinfo = $edt->table_info_ref($table_specifier);
+    
+    unless ( $tableinfo )
+    {
+	$edt->add_condition($action, 'E_BAD_TABLE', $table_specifier);
+	return $action->set_permission('none');
+    }
     
     # Check whether the SUPERIOR_TABLE property is set for the specified table. If so, then the
     # authorization check needs to be done on this other table instead of the specified one.
@@ -298,7 +304,7 @@ sub authorize_action {
 	    {
 		$edt->add_condition($action, 'E_PERM', 'insert');
 		$action->set_permission('none');
-		return 'insert';
+		return 'none';
 	    }
 	}
 	
@@ -360,9 +366,11 @@ sub authorize_action {
 	}
     }
     
-    # Store the permission with the action and return it.
+    # Store the permission with the action and return it along with the counts.
     
-    return $action->set_permission($result);
+    $action->set_permission($result);
+    
+    return ($result, $count, @permcounts);
 }
 
 
@@ -382,7 +390,7 @@ sub authorize_subordinate_action {
     local ($_);
     
     # Start by fetching information about the link between the subordinate table and the superior table.
-
+    
     ($linkcol, $supcol, $altfield) = $edt->get_linkinfo($table_specifier, $suptable);
     
     # For an insert operation, the link value is given in the record to be inserted. If it is not
@@ -391,7 +399,7 @@ sub authorize_subordinate_action {
     if ( $operation eq 'insert' )
     {
 	@linkval = $edt->input_record_value($action, $linkcol, $altfield);
-
+	
 	unless ( @linkval )
 	{
 	    $edt->add_condition($action, 'E_REQUIRED', $linkcol);
@@ -435,7 +443,7 @@ sub authorize_subordinate_action {
 	if ( $operation eq 'update' || $operation eq 'replace' )
 	{
 	    $update_linkval = $action->record_value_alt($linkcol, $altfield);
-
+	    
 	    if ( $update_linkval && any { $_ ne $update_linkval } @linkval )
 	    {
 		push @linkval, $update_linkval;

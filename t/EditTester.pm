@@ -24,17 +24,19 @@ use TestTables;
 
 use namespace::clean;
 
-our (@EXPORT_OK) = qw(connect_to_database ok_eval ok_exception
+our (@EXPORT_OK) = qw(connect_to_database ok_eval ok_exception ok_last_result
 		      select_tester current_tester
 		      set_default_table default_table target_class
 		      invert_mode diag_mode
-		      ok_output ok_no_output diag_output clear_output
-		      last_result last_edt clear_edt
+		      ok_output ok_no_output diag_output diag_lines clear_output
+		      last_result last_result_list last_edt clear_edt
 		      ok_new_edt ok_condition_count ok_has_condition
 		      ok_has_one_condition ok_no_conditions ok_no_errors 
 		      ok_no_warnings ok_has_one_error ok_has_one_warning
-		      ok_diag is_diag
-		      ok_action ok_failed_action ok_commit ok_failed_commit ok_rollback);
+		      ok_has_error ok_has_warning ok_diag is_diag
+		      ok_action ok_failed_action ok_commit ok_failed_commit ok_rollback
+		      clear_table ok_found_record ok_no_record ok_count_records
+		      get_table_name sql_command sql_selectrow count_records fetch_records);
 		      
 
 
@@ -489,57 +491,68 @@ sub ok_new_edt {
 # Subroutines to make testing more straightforward
 # ------------------------------------------------
 
-# ok_eval ( subroutine, label )
+# ok_eval ( subroutine, [ignore_flag], [label] )
 # 
-# The first argument is a subroutine (typically anonymous) that will be called inside an eval. Any
-# errors that occur will be reported. The second argument is the name for this test, which
-# defaults to a generic label. If the result of the eval is true, the test will pass. Otherwise
-# it will fail. This subroutine can be exported and called directly, or it can be called as a method.
+# The first argument is a subroutine (typically anonymous) that will be called
+# inside an eval. Any errors that occur will be reported. The second argument is
+# the name for this test, which defaults to a generic label. If the result of
+# the eval is true, the test will pass. Otherwise it will fail. This subroutine
+# can be exported and called directly, or it can be called as a method. 
+# 
+# If the flag 'IGNORE' is specified, ignore the result and pass the test if no
+# exception occurred.
 
-our ($EVAL_RESULT);
+our (@EVAL_RESULT);
 
 sub ok_eval {
     
     # If the first argument is an EditTester instance, ignore it.
     
-    shift if ref $_[0] eq 'EditTester';
+    shift @_ if ref $_[0] eq 'EditTester';
     
-    my ($sub, $label) = @_;
+    my $sub = shift @_;
     
     croak "First argument must be a subroutine reference" unless ref $sub eq 'CODE';
     
-    $label ||= 'eval succeeded';
+    # If the next argument is 'IGNORE', then return true regardless of the
+    # result. 
+    
+    my $ignore_result;
+    
+    if ( $_[0] eq 'IGNORE' )
+    {
+	$ignore_result = 1;
+	shift @_;
+    }
+    
+    my $label = shift @_ || 'eval succeeded';
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $EVAL_RESULT = undef;
+    @EVAL_RESULT = ();
     
-    my $result = eval { $EVAL_RESULT = $sub->() };
+    eval { @EVAL_RESULT = $sub->() };
     
     if ( $@ )
     {
-	unless ( $INVERT_MODE )
-	{
-	    my ($package, $filename, $line) = caller;
-	    diag "An exception was thrown from ok_eval at $filename line $line:";
-	    diag $@;
-	}
-	ok( $INVERT_MODE, $label );
+	my $msg = trim_exception($@);
+	diag_lines("EXCEPTION : $msg");
+	ok( $INVERT_MODE eq 'eval', $label );
     }
     
-    elsif ( $INVERT_MODE )
+    elsif ( $ignore_result || $EVAL_RESULT[0] )
     {
-	ok( !$result , $label );
+	ok( $INVERT_MODE ne 'eval', $label )
     }
     
     else
     {
-	ok( $result, $label );
+	ok( $INVERT_MODE eq 'eval', $label );
     }
 }
 
 
-# ok_exception ( subroutine, expected, label )
+# ok_exception ( subroutine, expected, [label] )
 # 
 # The first argument is a subroutine (typically anonymous) that will be called inside an eval. The
 # second argument is a regexp to be matched against an exception if one is thrown during the eval.
@@ -552,35 +565,38 @@ sub ok_exception {
     
     # If the first argument is an EditTester instance, ignore it.
     
-    shift if ref $_[0] eq 'EditTester';
+    shift @_ if ref $_[0] eq 'EditTester';
     
     my ($sub, $expected, $label) = @_;
     
     croak "First argument must be a subroutine reference" unless ref $sub eq 'CODE';
-    croak "Second argument must be a regexp reference" 
-	unless ref $expected eq 'Regexp' || $expected eq '1';
+    croak "Second argument must be a regexp reference or '*'" 
+	unless ref $expected eq 'Regexp' || $expected eq '1' || $expected eq '*';
     
     $label ||= 'a matching exception was thrown';
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $EVAL_RESULT = undef;
+    @EVAL_RESULT = ();
     
-    eval { $EVAL_RESULT = $sub->() };
+    eval { @EVAL_RESULT = $sub->() };
     
-    if ( $@ && ( $expected eq '1' || $@ =~ $expected ) )
+    if ( $@ && ( $expected eq '1' || $expected eq '*' || $@ =~ $expected ) )
     {
-	ok( !$INVERT_MODE, $label );
+	ok( $INVERT_MODE ne 'eval', $label );
+    }
+    
+    elsif ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag_lines("", "EXCEPTION : $msg", "EXPECTED  : $expected");
+	ok( $INVERT_MODE eq 'eval', $label);
     }
     
     else
     {
-	if ( $@ )
-	{
-	    diag "Expected exception matching '$expected', got '$@'" unless $INVERT_MODE;
-	}
-	
-	ok( $INVERT_MODE, $label );
+	diag_lines("NO EXCEPTION WAS THROWN");
+	ok( $INVERT_MODE eq 'eval', $label);
     }
 }
 
@@ -591,7 +607,45 @@ sub ok_exception {
 
 sub last_result {
     
-    return $EVAL_RESULT;
+    return $EVAL_RESULT[0];
+}
+
+
+sub last_result_list {
+    
+    shift @_ if ref $_[0] eq 'EditTester';
+    
+    if ( @_ )
+    {
+	return $EVAL_RESULT[$_[0]];
+    }
+    
+    else
+    {
+	return @EVAL_RESULT;
+    }
+}
+
+
+# ok_last_result ( [label] )
+
+sub ok_last_result {
+    
+    # If the first argument is an EditTester instance, ignore it.
+    
+    shift @_ if ref $_[0] eq 'EditTester';
+    
+    my $label = shift @_ || "last result was true";
+    
+    if ( $INVERT_MODE )
+    {
+	ok( !$EVAL_RESULT[0], $label );
+    }
+    
+    else
+    {
+	ok( $EVAL_RESULT[0], $label );
+    }
 }
 
 
@@ -626,7 +680,7 @@ sub invert_mode {
     
     if ( @_ )
     {
-	$INVERT_MODE = ( $_[0] ? 1 : 0 );
+	$INVERT_MODE = $_[0];
     }
     
     return $INVERT_MODE;
@@ -663,8 +717,14 @@ sub diag_lines {
     
     foreach ( @_ )
     {
-	if ( $DIAG_MODE || $INVERT_MODE ) { $DIAG_OUTPUT .= "$_\n"; }
-	else { diag $_ };
+	if ( $DIAG_MODE || $INVERT_MODE )
+	{ 
+	    $DIAG_OUTPUT .= "$_\n"; 
+	}
+	
+	else { 
+	    diag $_;
+	}
     }
 }
 
@@ -687,32 +747,22 @@ sub ok_output {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $not_inverted = ($INVERT_MODE ne 'output');
-    
     if ( $DIAG_OUTPUT =~ $testre )
     {
-	ok( $not_inverted, $label );
-	return $not_inverted;
-    }
-    
-    elsif ( $not_inverted )
-    {
-	fail($label);
-	diag "DIAGNOSTIC OUTPUT:\n";
-	diag $DIAG_OUTPUT;
-	return '';
+	ok( $INVERT_MODE ne 'output', $label );
     }
     
     else
     {
-	pass($label);
-	diag_lines "DIAGNOSTIC OUTPUT:", $DIAG_OUTPUT;
-	return 1;
+	my $temp = $DIAG_OUTPUT;
+	diag_lines("", "DIAGNOSTIC OUTPUT WAS:", $temp,
+		   "EXPECTED : $testre");
+	ok( $INVERT_MODE eq 'output', $label );
     }
 }
 
 
-# ok_no_diag ( [label] )
+# ok_no_output ( [label] )
 # 
 # If $DIAG_OUTPUT is empty, pass a test with the specified label. This method is
 # intended for us only in testing the EditTester class. This subroutine always
@@ -729,17 +779,15 @@ sub ok_no_output {
     
     if ( $DIAG_OUTPUT eq '' )
     {
-	pass( $label );
-	return 1;
+	ok( $INVERT_MODE ne 'output', $label );
     }
     
     else
     {
-	fail( $label );
-	diag "DIAGNOSTIC OUTPUT:\n";
-	diag $DIAG_OUTPUT;
+	my $temp = $DIAG_OUTPUT;
 	$DIAG_OUTPUT = '';
-	return 0;
+	diag_lines("", "DIAGNOSTIC OUTPUT WAS:", $temp);
+	ok( $INVERT_MODE eq 'output', $label );
     }
 }
 
@@ -1042,6 +1090,15 @@ sub _ok_condition_count {
     
     my ($edt, $expected_count, $selector, $type, $filter, $label) = @_;
     
+    # If the selector is a refstring, first make sure it is valid.
+    
+    if ( $selector =~ /^&/ && ! $edt->has_action($selector) )
+    {
+	diag_lines("No action matching '$selector' was found");
+	ok($INVERT_MODE, $label);
+	return $INVERT_MODE;
+    }
+    
     # Get a list of all the conditions matching $selector, $type, and $filter.
     
     my @conditions = grep { $_ =~ $filter } $edt->conditions($selector, $type);
@@ -1206,6 +1263,15 @@ sub _ok_has_one_condition {
     
     my ($edt, $selector, $type, $filter, $label) = @_;
     
+    # If the selector is a refstring, first make sure it is valid.
+    
+    if ( $selector =~ /^&/ && ! $edt->has_action($selector) )
+    {
+	diag_lines("No action matching '$selector' was found");
+	ok($INVERT_MODE, $label);
+	return $INVERT_MODE;
+    }
+    
     # If we find exactly one condition that matches $selector and $type, and it also matches the
     # filter, pass the test and return true. Invert this if $INVERT_MODE is true.
     
@@ -1279,26 +1345,30 @@ sub ok_no_warnings {
 }
 
 
-# sub ok_has_error {
+sub ok_has_error {
 
-#     my ($T, $edt, $selector, $type, $filter, $label) = &condition_args;
+    my ($T, $edt, @rest) = &_edt_args;
     
-#     local $Test::Builder::Level = $Test::Builder::Level + 2;
+    my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
-#     return $T->_ok_has_condition($edt, $selector, 'errors', $filter,
-# 				 $label || "found matching error");
-# }
+    local $Test::Builder::Level = $Test::Builder::Level + 2;
+    
+    _ok_condition_count($edt, '*',  $selector, 'errors', $filter,
+			$label || "found matching error");
+}
 
 
-# sub ok_has_warning {
+sub ok_has_warning {
 
-#     my ($T, $edt, $selector, $type, $filter, $label) = &condition_args;
+    my ($T, $edt, @rest) = &_edt_args;
     
-#     local $Test::Builder::Level = $Test::Builder::Level + 2;
+    my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
-#     return $T->_ok_has_condition($edt, $selector, 'warnings', $filter,
-# 				 $label || "found matching warning");
-# }
+    local $Test::Builder::Level = $Test::Builder::Level + 2;
+    
+    _ok_condition_count($edt, '*', $selector, 'warnings', $filter,
+			$label || "found matching warning");
+}
 
 
 sub ok_has_one_error {
@@ -1741,6 +1811,13 @@ sub ok_rollback {
 # Methods for testing the existence or nonexistence of records in the database
 # -----------------------------------------------------------------------------
 
+
+# clear_table ( table )
+# 
+# Deletes all records from the specified table. If the table has an
+# AUTO_INCREMENT key, the sequence is reset to 1. This record throws an
+# exception if it fails, bringing the test to a halt.
+
 sub clear_table {
     
     my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
@@ -1773,23 +1850,162 @@ sub clear_table {
     
     $T->debug_skip;
     
-    pass($label)
+    pass($label);
     
     return;
 }
 
 
-sub ok_found_record {
+# get_table_name ( table )
+# 
+# Return the real name of the database table specified by the argument, or else
+# throw an exception.
+
+sub get_table_name {
     
-    my ($T, $table, $expr, $label) = @_;
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    croak "You must first create an EditTester instance" unless $T;
+    
+    my $specifier = shift @_ || croak "you must specify a table";
+    
+    my $tableinfo = $T->{edt_class}->table_info_ref($specifier, $T->{dbh}) ||
+	croak "unknown table '$specifier'";
+    
+    return $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
+}
+
+
+# sql_command ( command, [label] )
+# 
+# Attempt to execute the specified sql command. If it executes without throwing
+# an exception, pass a test with the specified label and return the result.
+# Otherwise, fail the test and print out the exception if one occurred. The command
+# result can also be retrieved using the 'last_result' method.
+
+sub sql_command {
+    
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    croak "you must first create an EditTester instance" unless $T;
+    
+    my $sql = shift @_ || croak "you must specify an SQL command";
+    
+    croak "you must specify a valid SQL command" if ref $sql;
+    
+    my $label = shift @_ || "sql command executed successfully";
     
     my $dbh = $T->dbh;
+    
+    # Substitute any table specifiers with with the corresponding table names.
+    
+    $sql =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $T->debug_line($sql);
+    
+    @EVAL_RESULT = ();
+    
+    eval {
+	@EVAL_RESULT = $dbh->do($sql);
+    };
+    
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	$T->{last_exception} = $msg;
+	diag_lines("SQL STMT: $sql");
+	diag_lines("EXCEPTION: $msg");
+	ok( $INVERT_MODE, $label );
+	return undef;
+    }
+    
+    else
+    {
+	ok( !$INVERT_MODE, $label );
+	return $EVAL_RESULT[0];
+    }
+}
+
+
+# sql_selectrow ( command, [label] )
+# 
+# Attempt to execute the specified sql query and fetch the result using
+# 'fetchrow_array'. If it executes without throwing an exception, pass a test
+# with the specified label and return the resulting values. Otherwise, fail the
+# test and print out the exception. The command result can be retrieved using
+# the 'last_result' method.
+
+sub sql_selectrow {
+    
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    croak "You must first create an EditTester instance" unless $T;
+    
+    my $sql = shift @_ || croak "you must specify a valid SELECT statement";
+    
+    croak "you must specify a valid SELECT statement" if ref $sql;
+    
+    my $label = shift @_ || "select statement executed successfully";
+    
+    my $dbh = $T->dbh;
+    
+    # Substitute any table specifiers with with the corresponding table names.
+    
+    $sql =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $T->debug_line($sql);
+    
+    @EVAL_RESULT = ();
+    
+    eval {
+	@EVAL_RESULT = $dbh->selectrow_array($sql);
+    };
+    
+    if ( $@ )
+    {
+	my $msg = trim_exception($@);
+	diag_lines("SQL STMT: $sql");
+	diag_lines("EXCEPTION: $msg");
+	ok( $INVERT_MODE, $label );
+	return ();
+    }
+    
+    else
+    {
+	ok( !$INVERT_MODE, $label );
+	return @EVAL_RESULT;
+    }
+}
+
+
+# ok_found_record ( table, expr, [label] )
+# 
+# If a row is found in the specified table that matches the specified
+# expression, pass a test with the specified label. Otherwise, fail the test. If
+# the sql expression throws an exception, fail the test and print out the
+# exception.
+
+sub ok_found_record {
+    
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    croak "You must first create an EditTester instance" unless $T;
+    
+    my ($table, $expr, $label) = @_;
+    
+    my $dbh = $T->{dbh};
     
     # Check arguments
     
     croak "you must specify a table" unless $table;
-    croak "you must specify a valid SQL expression" unless defined $expr && ! ref $expr && $expr ne '';
+    croak "you must specify a valid SQL expression" if ref $expr;
     $label ||= 'found at least one record';
+    
+    $expr = '1' if !$expr || $expr eq '*';
     
     my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
 	croak "unknown table '$table'";
@@ -1803,6 +2019,13 @@ sub ok_found_record {
 	my $key_name = $tableinfo->{PRIMARY_KEY} || 
 	    croak "could not determine primary key for table '$table'";
 	$expr = "$key_name = '$expr'";
+    }
+    
+    # Otherwise, substitute any table specifiers with the corresponding table names.
+    
+    else
+    {
+	$expr =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
     }
     
     # Execute the SQL expression and test the result.
@@ -1823,10 +2046,11 @@ sub ok_found_record {
     {
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
-	diag_lines("EXCEPTION: msg");
+	diag_lines("SQL STMT: $sql");
+	diag_lines("EXCEPTION: $msg");
     }
     
-    else
+    elsif ( $T->debug_mode )
     {
 	$T->debug_line("Returned $count rows");
 	$T->debug_skip;
@@ -1844,18 +2068,31 @@ sub ok_found_record {
 }
 
 
+# ok_no_record ( table, expr, [label] )
+# 
+# If a row is found in the specified table that matches the specified
+# expression, fail a test with the specified label. Otherwise, pass the test. If
+# the sql expression throws an exception, fail the test and print out the
+# exception.
+
 sub ok_no_record {
     
-    my ($T, $table, $expr, $label) = @_;
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
     
-    my $dbh = $T->dbh;
+    croak "You must first create an EditTester instance" unless $T;
+    
+    my ($table, $expr, $label) = @_;
+    
+    my $dbh = $T->{dbh};
     
     # Check arguments
     
     croak "you must specify a table" unless $table;
-    croak "you must specify a valid SQL expression" unless defined $expr && ! ref $expr && $expr ne '';
+    croak "you must specify a valid SQL expression" if ref $expr;
     $label ||= 'record was absent';
-
+    
+    $expr = '1' if !$expr || $expr eq '*';
+        
     my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
 	croak "unknown table '$table'";
     
@@ -1868,6 +2105,13 @@ sub ok_no_record {
 	my $key_name = $tableinfo->{PRIMARY_KEY} || 
 	    croak "could not determine primary key for table '$table'";
 	$expr = "$key_name = '$expr'";
+    }
+    
+    # Otherwise, substitute any table specifiers with the corresponding table names.
+    
+    else
+    {
+	$expr =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
     }
     
     # Execute the SQL expression and test the result.
@@ -1888,11 +2132,12 @@ sub ok_no_record {
     {
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
-	diag_lines("EXCEPTION: msg");
+	diag_lines("SQL STMT: $sql");
+	diag_lines("EXCEPTION: $msg");
 	$count = 1;		# ensure test fails, unless in INVERT_MODE
     }
     
-    else
+    elsif ( $T->debug_mode )
     {
 	$T->debug_line("Returned $count rows");
 	$T->debug_skip;
@@ -1910,16 +2155,29 @@ sub ok_no_record {
 }
 
 
+# ok_count_records ( expected, table, expr, [label] )
+# 
+# If the count of records in the specified table that match the specified
+# expression is the expected number, pass a test with the specified label.
+# Otherwise, fail the test.  If the sql expression throws an exception, fail the
+# test and print out the exception.
+
 sub ok_count_records {
     
-    my ($T, $count, $table, $expr, $label) = @_;
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
     
-    my $dbh = $T->dbh;
+    croak "You must first create an EditTester instance" unless $T;
+    
+    my ($count, $table, $expr, $label) = @_;
+    
+    my $dbh = $T->{dbh};
     
     croak "invalid count '$count'" unless defined $count && $count =~ /^\d+$/;
-    croak "you must specify a valid SQL expression" unless $expr && ! ref $expr;
+    croak "you must specify a valid SQL expression" if ref $expr;
     
-    $label ||= "found proper number of records";
+    $label ||= "found expected number of records";
+    
+    $expr = '1' if !$expr || $expr eq '*';
     
     my $tablename = $T->get_table_name($table);
     
@@ -1929,6 +2187,11 @@ sub ok_count_records {
     # my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    # Substitute any table specifiers with the corresponding table names and
+    # then generate a SELECT expression.
+    
+    $expr =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
     
     my $sql = "SELECT count(*) FROM $tablename WHERE $expr";
     
@@ -1944,6 +2207,7 @@ sub ok_count_records {
     {
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
+	diag_lines("SQL STMT: $sql");
 	diag_lines("EXCEPTION: $msg");
     }
     
@@ -1966,57 +2230,12 @@ sub ok_count_records {
 }
 
 
-sub get_table_name {
-    
-    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
-    
-    croak "You must first create an EditTester instance" unless $T;
-    
-    my $specifier = shift @_ || croak "you must specify a table";
-    
-    my $tableinfo = $T->{edt_class}->table_info_ref($specifier, $T->dbh) ||
-	croak "unknown table '$table'";
-    
-    return $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
-}
-
-
-sub sql_command {
-    
-    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
-    
-    croak "You must first create an EditTester instance" unless $T;
-    
-    my $sql = shift @_ || croak "you must specify an SQL command";
-    
-    my $label = shift @_ || "sql command executed successfully";
-    
-    my $dbh = $T->dbh;
-    
-    $sql =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    $T->debug_line($sql);
-    
-    eval {
-	$EVAL_RESULT = $dbh->do($sql);
-    };
-    
-    if ( $@ )
-    {
-	my $msg = trim_exception($@);
-	$T->{last_exception} = $msg;
-	diag_lines("EXCEPTION: $msg");
-	ok( !$INVERT_MODE, $label );
-    }
-    
-    else
-    {
-	ok( $INVERT_MODE, $label );
-    }
-}
-
+# count_records ( expr )
+# 
+# Return the number of records matching the specified expression. If the sql
+# query succeeds, pass a test and return the result which may be zero. If an
+# exception occurs, then print out the exception, fail the test, and return
+# undef. 
 
 sub count_records {
 
@@ -2030,14 +2249,25 @@ sub count_records {
     
     my $tablename = $T->get_table_name($table);
     
+    croak "you must specify a valid SQL expression" if ref $expr;
+    
     my $label = "sql record count executed successfully";
     
     # my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
     # 	croak "unknown table '$table'";
     
-    my $where_clause = $expr ? "WHERE $expr" : "";
-    
     local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    # Substitute any table specifiers with the corresponding table names and
+    # then generate a SELECT expression.
+    
+    my $where_clause = "";
+    
+    if ( $expr )
+    {
+	$expr =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
+	$where_clause = "WHERE $expr";
+    }
     
     my $sql = "SELECT count(*) FROM $tablename $where_clause";
     
@@ -2053,9 +2283,10 @@ sub count_records {
     {
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
+	diag_lines("SQL STMT: $sql");
 	diag_lines("EXCEPTION: $msg");
 	ok( $INVERT_MODE, $label );
-	return $INVERT_MODE;
+	return $INVERT_MODE ? 1 : undef;
     }
     
     else
@@ -2066,38 +2297,233 @@ sub count_records {
 }
 
 
-sub find_record_values {
+# fetch_records ( table, selector, return... )
+# 
+# Fetch one or more records or column values from the database. If any return
+# values are generated, pass a test and return them. Otherwise, fail the test
+# and return the empty list. If an exception occurred, print it to the
+# diagnostic output stream.
+# 
+# Accepted values for $selector include:
+# 
+# - A single key value
+# 
+# - A listref containing key values
+# 
+# - A valid SQL expression
+# 
+# - The empty string or '*', which will select all records in the table.
+# 
+# Accepted values for $return include:
+# 
+#  row        If this is followed by a list of column names and a matching row is
+#             found, a list of corresponding column values will be returned. If no
+#             column names are specified, the row will be returned as a hashref.
+#  
+#  column     This must be followed by a single column name. The values of that
+#             column in all matching rows will be returned as a single list, to
+#             a limit of 50.
+#  
+#  keyvalues  Like 'column', but returns the primary key value from each record.
+#             No additional argument is required.
+#  
+#  records    Matching records will be returned as a list of hashrefs, to a
+#             limit of 50. This is the default if no $return specification is given.
 
+sub fetch_records {
+    
     my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
     
     croak "You must first create an EditTester instance" unless $T;
     
-    my ($table, $colname, $expr) = @_;
+    my ($table, $selector, $return, @rest) = @_;
     
     my $dbh = $T->dbh;
     
-    my $tablename = $T->get_table_name($table);
+    croak "you must specify a table" unless $table;
     
-    croak "you must specify a column name" unless $colname;
+    my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
+	croak "unknown table '$table'";
     
-    my $label = "sql query found records";
+    my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
     
-    my $where_clause = $expr ? "WHERE $expr" : "";
+    my $label = "fetch_records had a nonempty result";
     
-    my $sql = "SELECT `$colname` FROM $tablename $where_clause LIMIT 50";
+    my $select_clause = "*";
+    my $where_clause = "";
+    my $limit_clause = "LIMIT 50";
+    my $fetch_method = 'selectall_arrayref';
+    my $return_word = "values";
+    my @extra;
+    
+    # Determine which records to fetch. If the second argument is a listref,
+    # it should be a list of primary key values.
+    
+    if ( ref $selector eq 'ARRAY' )
+    {
+	my $key_name = $tableinfo->{PRIMARY_KEY} || 
+	    croak "could not determine primary key for table '$table'";
+    
+	my @key_list;
+	
+	foreach my $k ( @$selector )
+	{
+	    next unless defined $k;
+	    #croak "keys cannot be refs" if ref $k;
+	    $k =~ s/^\w+[:]//;
+	    push @key_list, $dbh->quote($k);
+	}
+	
+	if ( @key_list )
+	{
+	    my $key_string = join(',', @key_list);
+	    
+	    $where_clause = "WHERE $key_name in ($key_string)";
+	}
+	
+	else
+	{
+	    diag_lines("No valid keys were specified");
+	    ok( $INVERT_MODE, $label );
+	}
+    }
+    
+    # Any other reference is an error.
+    
+    elsif ( ref $selector )
+    {
+	croak "invalid selector '$selector'";
+    }
+    
+    # If it is a string consisting only of word characters and hyphens, assume
+    # it is a single key value.
+    
+    elsif ( defined $selector && $selector =~ /^[a-zA-Z0-9_-]+$/ )
+    {
+	my $key_name = $tableinfo->{PRIMARY_KEY} || 
+	    croak "could not determine primary key for table '$table'";
+	
+	my $quoted = $dbh->quote($selector);
+	
+	$where_clause = "WHERE $key_name=$quoted";
+    }
+    
+    # If it is a non-empty expression, substitute any table specifiers with the
+    # corresponding table names. If it is empty or '*', select the whole table
+    # subject to the 50-row limit.
+    
+    elsif ( defined $selector && $selector ne '' && $selector ne '*' )
+    {
+	$selector =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
+	
+	$where_clause = "WHERE $selector";
+    }
+    
+    # Next, determine what should be returned. If the third argument is 'row',
+    # return a list of values from one row using selectrow_array. The next
+    # argument should be a list of column names. If not specified, the entire
+    # row will be returned.
+    
+    if ( $return eq 'row' )
+    {
+	$limit_clause = 'LIMIT 1';
+	
+	my $column_list;
+	
+	if ( @rest && ref($rest[0]) eq 'ARRAY' )
+	{
+	    $label = $rest[1] || "fetch_records row had a nonempty result";
+	    $column_list = join ',', grep /\w/, $rest[0]->@*;
+	}
+	
+	else
+	{
+	    $column_list = join ',', grep /\w/, @rest;
+	}
+	
+	if ( $column_list )
+	{
+	    $select_clause = $column_list;
+	    $fetch_method = 'selectrow_arrayref';
+	}
+	
+	else
+	{
+	    $fetch_method = 'selectrow_hashref';
+	}
+    }
+    
+    # If the third argument is 'column', return a list of values using
+    # selectcol_arrayref. The next argument should be a single column name.
+    
+    elsif ( $return eq 'column' )
+    {
+	$fetch_method = 'selectcol_arrayref';
+	$return_word = 'rows';
+	
+	if ( $rest[0] )
+	{
+	    $select_clause = $rest[0];
+	    $label = $rest[1] || "fetch_records column had a nonempty result";
+	}
+	
+	else
+	{
+	    croak "you must specify the name of the column to fetch";
+	}
+    }
+    
+    # If the third argument is 'key', return a list of primary key values.
+    
+    elsif ( $return eq 'keyvalues' )
+    {
+	my $key_name = $tableinfo->{PRIMARY_KEY} || 
+	    croak "could not determine primary key for table '$table'";
+	
+	$fetch_method = 'selectcol_arrayref';
+	$select_clause = $key_name;
+	$return_word = 'rows';
+	
+	$label = $rest[0] || "fetch_records keyvalues had a nonempty result";
+    }
+    
+    # Otherwise, the default is to fetch a list of rows using
+    # selectall_arrayref.
+    
+    else
+    {
+	croak "invalid return type '$return'" if $return && $return ne 'records';
+	
+	if ( $return eq 'records' )
+	{
+	    $label = $rest[0] || "fetch_records records had a nonempty result";
+	}
+	
+	$return_word = 'rows';
+    }
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    my $sql = "SELECT $select_clause FROM $tablename $where_clause $limit_clause";
     
     $T->debug_line($sql);
     
-    my $result;
+    if ( $fetch_method eq 'selectall_arrayref' || $fetch_method eq 'selectrow_hashref' )
+    {
+	push @extra, { Slice => { } };
+    }
+    
+    my $results;
     
     eval {
-	$result = $dbh->selectrow_arrayref($sql);
+	$results = $dbh->$fetch_method($sql, @extra);
     };
     
     if ( $@ )
     {
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
+	diag_lines("SQL STMT: $sql");
 	diag_lines("EXCEPTION: $msg");
 	ok( $INVERT_MODE, $label );
 	return $INVERT_MODE ? 1 : ();
@@ -2105,309 +2531,35 @@ sub find_record_values {
     
     elsif ( ref $results eq 'ARRAY' && $results->@* )
     {
-	$T->debug_line("Returned " . scalar(@$results) . " rows");
+	$T->debug_line("Returned " . scalar(@$results) . " $return_word");
 	$T->debug_skip;
 	
 	ok( !$INVERT_MODE, $label );
 	return $INVERT_MODE ? () : @$results;
     }
     
-    else
+    elsif ( ref $results eq 'HASH' )
     {
-	$T->debug_line("Returned no results");
-	$T->debug_skip;
-	ok( $INVERT_MODE, $label);
-	return $INVERT_MODE ? 1 : ();
-    }
-}
-
-
-# Make sure that the schema of the specified table in the test database matches that of the
-# specified table in the main database. Warn if not.
-
-sub check_test_schema {
-
-    my ($T, $table_specifier) = @_;
-    
-    # $$$$ we need to fix this!
-    
-    # my $test_name = exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
-    # my $base_name = exists $TABLE{"==$table_specifier"} && $TABLE{"==$table_specifier"};
-    
-    # unless ( $test_name && $base_name )
-    # {
-    # 	diag "CANNOT CHECK SCHEMA FOR TABLE '$table_specifier'";
-    # 	return;
-    # }
-    
-    # my $test_schema = get_table_schema($T->dbh, $table_specifier);
-    # my $base_schema = get_table_schema($T->dbh, "==$table_specifier");
-    
-    # return is_deeply($test_schema, $base_schema, "schema for '$test_name' matches schema for '$base_name'");
-}
-
-
-sub fetch_records_by_key {
-    
-    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
-    
-    croak "You must first create an EditTester instance" unless $T;
-    
-    my ($table, @keys) = @_;
-    
-    my $dbh = $T->dbh;
-    
-    croak "you must specify a table" unless $table;
-    
-    my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
-	croak "unknown table '$table'";
-    
-    my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
-    
-    my $key_name = $tableinfo->{PRIMARY_KEY} || 
-	croak "could not determine primary key for table '$tablename'";
-    
-    my @key_list;
-    
-    foreach my $k ( @keys )
-    {
-	next unless defined $k;
-	croak "keys cannot be refs" if ref $k;
-	$k =~ s/^\w+[:]//;
-	push @key_list, $dbh->quote($k);
-    }
-    
-    if ( @key_list )
-    {
-	my $key_string = join(',', @key_list);
-	
-	return $T->fetch_records_by_expr($table, "$key_name in ($key_string)");
-    }
-    
-    else
-    {
-	diag_lines("No valid keys were specified");
-	ok( $INVERT_MODE, "sql query found records" );
-    }
-}
-
-
-sub fetch_records_by_expr {
-
-    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
-    
-    croak "You must first create an EditTester instance" unless $T;
-    
-    my ($table, $expr) = @_;
-    
-    my $dbh = $T->dbh;
-    
-    croak "you must specify a table" unless $table;
-    
-    my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
-	croak "unknown table '$table'";
-    
-    my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
-    
-    croak "you must specify a valid SQL expression" unless $expr && ! ref $expr;
-    
-    my $label = "sql query found records";
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    my $sql = "SELECT * FROM $tablename WHERE $key_name in ($key_string)";
-    
-    $T->debug_line($sql);
-    
-    my $results;
-    
-    eval {
-	$results = $dbh->selectall_arrayref($sql, { Slice => { } });
-    };
-
-    if ( $@ )
-    {
-	my $msg = trim_exception($@);
-	diag("EXCEPTION: $msg");
-	$T->{last_exception} = $msg;
-	ok( $INVERT_MODE, $label )
-    }
-    
-    elsif ( ref $results eq 'ARRAY' && $results->@* )
-    {
-	$T->debug_line("Returned " . scalar(@$results) . " rows");
+	$T->debug_line("Returned 1 row");
 	$T->debug_skip;
 	
 	ok( !$INVERT_MODE, $label );
-	return $INVERT_MODE ? () : @$results;
+	return $INVERT_MODE ? undef : $results;
     }
     
     else
     {
 	$T->debug_line("Returned no results");
 	$T->debug_skip;
+	
 	ok( $INVERT_MODE, $label);
 	return $INVERT_MODE ? 1 : ();
      }
 }
 
 
-sub fetch_keys_by_expr {
-
-    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
-    
-    croak "You must first create an EditTester instance" unless $T;
-    
-    my ($table, $expr) = @_;
-    
-    my $dbh = $T->dbh;
-    
-    croak "you must specify a table" unless $table;
-    croak "you must specify a valid SQL expression" unless $expr;
-    
-    my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
-	croak "unknown table '$table'";
-    
-    my $key_name = get_table_property($table, 'PRIMARY_KEY');
-    
-    croak "could not determine primary key for table '$table'" unless $key_name;
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    my $sql = "SELECT $key_name FROM $TABLE{$table} WHERE $expr";
-    
-    $T->debug_line($sql);
-    
-    my $results;
-    
-    eval {
-	$results = $dbh->selectcol_arrayref($sql, { Slice => { } });
-    };
-
-    if ( $@ )
-    {
-	my $msg = trim_exception($@);
-	diag("EXCEPTION: $msg");
-	$T->{last_exception} = $msg;
-    }
-    
-    if ( ref $results eq 'ARRAY' )
-    {
-	$T->debug_line("Returned " . scalar(@$results) . " rows");
-	$T->debug_skip;
-	
-	if ( @$results )
-	{
-	    ok(!$INVERT_MODE, "found keys");
-	}
-
-	else
-	{
-	    ok($INVERT_MODE, "found keys");
-	}
-
-	return @$results;
-    }
-    
-    else
-    {
-	$T->debug_line("Returned no results");
-	$T->debug_skip;
-	ok($INVERT_MODE, "found keys");
-	return;
-    }
-}
-
-
-sub fetch_row_by_expr {
-
-    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
-    
-    croak "You must first create an EditTester instance" unless $T;
-    
-    my ($table, $columns, $expr) = @_;
-    
-    my $dbh = $T->dbh;
-    
-    croak "you must specify a table" unless $table;
-    croak "you must specify at least one column" unless $columns;
-    
-    my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
-	croak "unknown table '$table'";
-    
-    my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
-    
-    croak "you must specify a valid SQL expression" unless $expr && ! ref $expr;
-    
-    my $label = "sql query found a row";
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    my $sql;
-    
-    if ( $expr )
-    {
-	$sql = "SELECT $columns FROM $tablename WHERE $expr";
-    }
-    
-    else
-    {
-	$sql = "SELECT $columns FROM $tablename LIMIT 1";
-    }
-    
-    $T->debug_line($sql);
-    
-    my @values;
-    
-    eval {
-	@values = $dbh->selectrow_array($sql);
-    };
-    
-    if ( $@ )
-    {
-	my $msg = trim_exception($@);
-	diag("EXCEPTION: $msg");
-	$T->{last_exception} = $msg;
-	ok( $INVERT_MODE, $label )
-    }
-    
-    elsif ( ref $results eq 'ARRAY' && $results->@* )
-    {
-	$T->debug_line("Returned " . scalar(@$results) . " rows");
-	$T->debug_skip;
-	
-	ok( !$INVERT_MODE, $label );
-	return $INVERT_MODE ? () : @$results;
-    }
-    
-    else
-    {
-	$T->debug_line("Returned no results");
-	$T->debug_skip;
-	ok( $INVERT_MODE, $label);
-    }
-    
-    
-    if ( $@ )
-    {
-	my $msg = trim_exception($@);
-	diag("EXCEPTION: $msg");
-	$T->{last_exception} = $msg;
-    }
-    
-    if ( @values )
-    {
-	ok(!$INVERT_MODE, $msg);
-	return @values;
-    }
-    
-    else
-    {
-	ok($INVERT_MODE, $msg);
-	return;
-    }
-}
-
+# Methods for keeping track of records that were operated on
+# ----------------------------------------------------------
 
 sub inserted_keys {
     
@@ -2542,6 +2694,34 @@ sub start_test_mode {
 
     return enable_test_mode($table_group);
 }
+
+
+# check_test_schema ( table )
+# 
+# Make sure that the schema of the specified table in the test database matches that of the
+# specified table in the main database. Warn if not.
+
+sub check_test_schema {
+
+    my ($T, $table_specifier) = @_;
+    
+    # $$$$ we need to fix this!
+    
+    # my $test_name = exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
+    # my $base_name = exists $TABLE{"==$table_specifier"} && $TABLE{"==$table_specifier"};
+    
+    # unless ( $test_name && $base_name )
+    # {
+    # 	diag "CANNOT CHECK SCHEMA FOR TABLE '$table_specifier'";
+    # 	return;
+    # }
+    
+    # my $test_schema = get_table_schema($T->dbh, $table_specifier);
+    # my $base_schema = get_table_schema($T->dbh, "==$table_specifier");
+    
+    # return is_deeply($test_schema, $base_schema, "schema for '$test_name' matches schema for '$base_name'");
+}
+
 
 1;
 

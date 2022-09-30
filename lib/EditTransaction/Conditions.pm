@@ -618,7 +618,7 @@ sub conditions {
     {
 	my $action;
 	
-	if ( $selector eq 'latest' )
+	if ( $selector eq '_' )
 	{
 	    $action = $edt->{current_action} || return;
 	}

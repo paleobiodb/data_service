@@ -192,6 +192,7 @@ subtest 'add_condition, has_condition bad arguments' => sub {
 
 subtest 'conditions' => sub {
     
+    diag("TO DO: test 'conditions' method");
     pass('placeholder');
 };
 

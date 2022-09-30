@@ -42,11 +42,12 @@ with 'EditTransaction::Mod::MariaDB';
 {
     set_table_name(EDT_TEST => 'edt_test');
     set_table_name(EDT_TYPES => 'edt_extended');
-    set_table_name(EDT_AUTH => 'edt_auth');
     set_table_name(EDT_SUB => 'edt_sub');
+    set_table_name(EDT_NOPRIM => 'edt_noprimary');
+    set_table_name(EDT_AUTH => 'edt_auth');
     set_table_name(EDT_ANY => 'edt_any');
     
-    set_table_group('edt_test' => 'EDT_TEST', 'EDT_TYPES', 'EDT_AUTH', 'EDT_SUB', 'EDT_ANY');
+    set_table_group('edt_test' => 'EDT_TEST', 'EDT_TYPES', 'EDT_SUB', 'EDT_NOPRIM');
     
     # Set properties for EDT_TEST
     
@@ -625,6 +626,13 @@ sub establish_test_tables {
 		dmdauto timestamp default current_timestamp on update current_timestamp)
 		
 		default charset utf8");
+    
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_NOPRIM}");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDT_NOPRIM} (
+		name varchar(40) not null,
+		value varchar(40) not null,
+		unique key (name, value)) default charset utf8");
     
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_ANY}");
     

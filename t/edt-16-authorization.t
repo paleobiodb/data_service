@@ -1,0 +1,172 @@
+#
+# EditTransaction project
+# -----------------------
+# 
+# This file contains unit tests for the ETBasicTest class, a subclass of EditTransaction whose
+# purpose is to implement these tests.
+# 
+# authorization.t :
+# 
+#         Test the methods used for checking record authorization. The
+#         functionality tested here is limited, because the default
+#         authorization is 'unrestricted'. More sophisticated authorization
+#         requires a plug-in module.
+# 
+
+use strict;
+
+use lib 't', '../lib', 'lib';
+use Test::More tests => 5;
+
+use ETBasicTest;
+use ETTrivialClass;
+use EditTester qw(ok_eval ok_exception ok_new_edt clear_table sql_command
+		  last_result last_result_list ok_has_condition ok_has_error
+		  ok_found_record ok_no_record ok_count_records fetch_records);
+
+
+# Establish an EditTester instance.
+
+$DB::single = 1;
+
+my $T = EditTester->new('ETBasicTest');
+
+
+# Check the scaffolding. These methods are designed primarily for internal use,
+# except for 'check_table_permission' and 'check_record_permission'.
+
+subtest 'internal methods' => sub {
+    
+    can_ok( 'ETBasicTest', 'check_instance_permission', 'validate_instance_permission', 
+	    'check_table_permission', 'check_record_permission', 'authorize_action' )
+	
+	|| BAIL_OUT "missing methods";
+    
+    my $edt = ok_new_edt;
+    
+    my $perm = bless { abc => 1}, 'TestPermission';
+    
+    is( $edt->check_instance_permission($perm), '', 
+	"check_instance_permission returns false" );
+    
+    is( $edt->validate_instance_permission($perm), 'unrestricted',
+        "validate_instance_permission returns 'unrestricted'" );
+    
+    is( $edt->check_table_permission('EDT_TEST', 'post'), 'unrestricted',
+        "validate_instance_permission returns 'unrestricted'" );
+    
+    clear_table('EDT_TEST');
+};
+
+
+subtest 'check_record_permission' => sub {
+    
+    my $edt = ok_new_edt('SILENT_MODE');
+    
+    ok_eval( sub { $edt->check_record_permission('EDT_TEST', 'modify', "test_no=3") },
+	     "check_record_permission executes successfully" )
+    
+	|| BAIL_OUT "check_record_permission failed";
+    
+    is( last_result, 'notfound', "check_record_permission returns 'notfound'" );
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (3, 'abc')");
+    
+    my @result = $edt->check_record_permission('EDT_TEST', 'modify', "test_no=3");
+    
+    is( $result[0], 'unrestricted', "check_record_permission returns 'unrestricted'" );
+    is( $result[1], '1', "check_record_permission returns '1'" );
+    
+    ok_eval( sub { $edt->check_record_permission('EDT_TEST', 'modify', "not an expression xxx") },
+	     "check_record_permission sql error does not throw an exception" );
+    
+    is( ref(last_result), 'ARRAY', "check_record_permission sql error returns listref" ) &&
+	is( last_result->[0], 'E_EXECUTE', "check_record_permission sql error returns E_EXECUTE" );
+};
+
+
+subtest 'authorize_action' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    my $action = $edt->_test_action('insert', 'EDT_TEST', { abc => 1} );
+    
+    ok_eval( sub { $edt->authorize_action($action, 'insert', 'EDT_TEST') },
+	     "authorize_action succeeded" )
+    
+	|| return;
+    
+    is( last_result, 'unrestricted', "authorize_action insert primary unrestricted" );
+    
+    ok_eval( sub { $edt->authorize_action($action, 'insert', 'NOT_A_TABLE_XXX') },
+	     "ok_eval authorize_action with bad table" );
+    
+    ok( $action->has_condition('E_BAD_TABLE'), "bad table generates E_BAD_TABLE" );
+    
+    is( $action->permission, 'none', "action permission set to 'none'" );
+    
+    $action = $edt->_test_action('update', 'EDT_TEST', 
+				 { _primary => 3, string_req => 'def' });
+    
+    my @result = $edt->authorize_action($action, 'update', 'EDT_TEST');
+    
+    is( $result[0], 'unrestricted', "authorize_action update primary unrestricted" );
+    is( $result[1], 1, "authorize_action update count 1" );
+    
+    $action = $edt->_test_action('update', 'EDT_TEST', 
+				 { _primary => [3, 4, 5], string_req => 'ghi' });
+    
+    @result = $edt->authorize_action($action, 'update', 'EDT_TEST');
+    
+    is( $result[0], 'unrestricted', "authorize_action update primary unrestricted" );
+    is( $result[1], 1, "authorize_action update count 1" );
+    
+    $action = $edt->_test_action('update', 'EDT_TEST', 
+				 { _primary => [4, 5, 6], string_req => 'ghi' });
+    
+    @result = $edt->authorize_action($action, 'update', 'EDT_TEST');
+    
+    is( $result[0], 'notfound', "authorize_action update primary notfound" );
+    is( $result[1], undef, "authorize_action update count undef" );
+};
+
+
+subtest 'authorize_action notfound' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    my $action = $edt->_test_action('insupdate', 'EDT_TEST', 
+				    { _primary => 8, string_req => 'hippo' });
+    
+    my @result = $edt->authorize_action($action, 'insupdate', 'EDT_TEST');
+    
+    is( $result[0], 'insert', "authorize_action converts insupdate to insert" );
+    
+    $action = $edt->_test_action('replace', 'EDT_TEST', 
+				 { _primary => 9, string_req => 'elephant' });
+    
+    @result = $edt->authorize_action($action, 'replace', 'EDT_TEST');
+    
+    is( $result[0], 'insert', "authorize_action converts replace to insert" );
+    
+    my $edtnc = ok_new_edt('NO_CREATE');
+    
+    $action = $edtnc->_test_action('insupdate', 'EDT_TEST', 
+				   { _primary => 10, string_req => 'giraffe' });
+    
+    @result = $edtnc->authorize_action($action, 'insupdate', 'EDT_TEST');
+    
+    is( $result[0], 'insert', "authorize_action converts insupdate to insert 2" );
+    
+    ok( $action->has_condition('C_CREATE'), "condition C_CREATE added absent CREATE allowance" );
+    
+    ok( $edtnc->has_condition('C_CREATE'), "same for edt as a whole" );
+};
+    
+
+subtest 'authorize_subordinate_action' => sub {
+    
+    my $edt = ok_new_edt;
+};
+
+

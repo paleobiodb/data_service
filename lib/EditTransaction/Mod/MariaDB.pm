@@ -73,7 +73,7 @@ sub validate_dbh {
 
 sub table_info_ref {
     
-    my ($edt, $table_specifier) = @_;
+    my ($edt, $table_specifier, $dbh_arg) = @_;
     
     # First check if %TABLE_INFO_CACHE has an entry for this class and table. If it does not, then
     # fetch the relevant information from the database and modify it according to the defined
@@ -83,7 +83,7 @@ sub table_info_ref {
     
     unless ( $TABLE_INFO_CACHE{$class}{$table_specifier} )
     {
-	fetch_table_schema($edt, $table_specifier);
+	fetch_table_schema($edt, $table_specifier, $dbh_arg);
     }
 }
 
@@ -219,7 +219,7 @@ sub fetch_table_schema {
     # If called as a class method, we require a database handle as the second argument. Debug mode
     # is always off in this situation.
     
-    elsif ( $dbh_arg && ref $dbh_arg =~ /DB/ )
+    elsif ( $dbh_arg && ref($dbh_arg) =~ /DB/ )
     {
 	$dbh = $dbh_arg;
     }
