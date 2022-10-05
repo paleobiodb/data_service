@@ -16,52 +16,52 @@ use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
 use EditTester qw(ok_eval ok_exception last_result last_result_list
-		  connect_to_database
-		  invert_mode diag_mode diag_lines clear_output diag_output
-		  ok_output ok_no_output);
+		  connect_to_database capture_mode invert_mode diag_lines
+		  captured_output ok_captured_output ok_no_captured_output
+		  clear_captured_output);
 
 
 $DB::single = 1;
 
 
-# Check the 'ok_output' and 'ok_no_output' constructs for checking for the
+# Check the 'ok_captured_output' and 'ok_no_captured_output' constructs for checking for the
 # presence or absence of diagnostic output.
 
-subtest 'ok_output' => sub {
+subtest 'ok_captured_output' => sub {
     
-    clear_output;
+    clear_captured_output;
     
-    ok_no_output( "ok_no_output after clear_output" );
+    ok_no_captured_output( "ok_no_captured_output after clear_captured_output" );
     
-    diag_mode(1);
+    capture_mode(1);
     
     diag_lines("foobar", "biffbaff 23");
     
-    diag_mode(0);
+    capture_mode(0);
     
-    ok_output( qr/foo/, "ok_output 1" );
+    ok_captured_output( qr/foo/, "ok_captured_output 1" );
     
-    ok_output( qr/biff.*23/, "ok_output 2" );
+    ok_captured_output( qr/biff.*23/, "ok_captured_output 2" );
     
     invert_mode('output');
     
-    ok_no_output( "invert: ok_no_output, output is present" );
+    ok_no_captured_output( "invert: ok_no_captured_output, output is present" );
     
-    like( diag_output, qr/^\s*diagnostic output was *:.*23/si, 
-	  "ok_no_output diag & clears output on failure" );
+    like( captured_output, qr/^\s*captured output was *:.*23/si, 
+	  "ok_no_captured_output diag & clears output on failure" );
     
-    clear_output;
+    clear_captured_output;
     
-    diag_mode(1);
+    capture_mode(1);
     
     diag_lines("bananarama");
     
-    diag_mode(0);
+    capture_mode(0);
     
-    ok_output( qr/razzamatazz/, "invert: ok_output, output does not match" );
+    ok_captured_output( qr/razzamatazz/, "invert: ok_captured_output, output does not match" );
     
-    like( diag_output, qr/was *:.*banana.*expected *:.*razz/si, 
-	  "invert: ok_output diag" );
+    like( captured_output, qr/was *:.*banana.*expected *:.*razz/si, 
+	  "invert: ok_captured_output diag" );
     
     invert_mode(0);
 };
@@ -100,13 +100,13 @@ subtest 'ok_eval' => sub {
     
     invert_mode('eval');
     
-    clear_output;
+    clear_captured_output;
     
     ok_eval( sub { die "test exception" }, "invert: ok_eval exception thrown" );
     
     ok( ! defined last_result, "last_result produces undef after exception" );
     
-    ok_output( qr/exception *:.*test exception/si, "invert: ok_eval diag" );
+    ok_captured_output( qr/exception *:.*test exception/si, "invert: ok_eval diag" );
     
     ok_eval( sub { 0 }, "invert: ok_eval false result" );
     
@@ -159,23 +159,23 @@ subtest 'ok_exception' => sub {
     
     invert_mode('eval');
     
-    clear_output;
+    clear_captured_output;
     
     ok_exception( sub { die "test exception xyzzy" }, qr/foobar/, 
 		  "invert: ok_exception with non matching exception" );
     
     ok( ! defined last_result, "last_result undefined after exception" );
     
-    ok_output( qr/exception *:.*xyzzy.*expected *:.*foobar/si,
+    ok_captured_output( qr/exception *:.*xyzzy.*expected *:.*foobar/si,
 	       "invert: ok_exception diag" );
     
-    clear_output;
+    clear_captured_output;
     
     ok_exception( sub { 1 }, qr/foobar/, "invert: ok_exception with no exception" );
     
     is( last_result, 1, "last_result returns subroutine value if no exception" );
     
-    ok_output( qr/no exception/i, "invert: ok_exception diag" );
+    ok_captured_output( qr/no exception/i, "invert: ok_exception diag" );
     
     ok_exception( sub { 0 }, qr/foobar/, "ok_exception with no exception, false result" );
     
@@ -227,7 +227,7 @@ subtest 'connect_to_database' => sub {
 
 # Check the various ways of creating EditTester instances via the 'new' method.
 
-subtest 'constructor' => sub {
+subtest 'new EditTester' => sub {
     
     ok_eval( sub { EditTester->new('ETBasicTest', 'EDT_TEST') },
 	     "new EditTester" ) || BAIL_OUT "new EditTester failed";

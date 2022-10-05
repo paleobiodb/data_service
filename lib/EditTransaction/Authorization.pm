@@ -1,6 +1,8 @@
 # 
-#   EditTransaction::Authorization - a role that provides methods for authorizing transactions and
-#   their associated actions.
+# EditTransaction::Authorization
+# 
+# This role provides methods for authorizing the individual actions that perform
+# the work of each transaction.
 # 
 
 
@@ -197,21 +199,113 @@ sub authorize_action {
     
     my ($edt, $action, $operation, $table_specifier, $flag) = @_;
     
-    # The following statement is used for testing purposes.
+    # If the authorization cannot be resolved yet, return now. In this case, authorization
+    # will be completed just before the action is executed. This typically happens when an
+    # action reference is provided as a key value.
     
-    die "TEST AUTHORIZE" if $EditTransaction::TEST_PROBLEM{authorize_action};
-    
-    # If the authorization cannot be resolved yet, return immediately. In this case, authorization
-    # will be completed just before the action is executed. This typically happens when an action
-    # reference is provided as a key value. But if this call included the argument 'FINAL', it is
-    # time to complete the authorization.
-    
-    unless ( $flag && $flag eq 'FINAL' )
+    if ( $action->permission eq 'PENDING' )
     {
-	return if $action->permission eq 'PENDING';
+	return unless $flag eq 'FINAL';
     }
     
-    # Get a reference to the information record for this table.
+    # If the action has a key value, check the permission.
+    
+    # Each operation has different requirements for key values. Check these now.
+    
+    my $keyexpr = $action->keyexpr;
+    my $abort;
+    
+    # The 'insupdate' operation requires that the table have a primary key. At most one
+    # key value can be specified. If the permission is 'PENDING' that means a key
+    # reference was specified instead of a key value, which is not allowed for
+    # 'insupdate'. If no key value was specified, change the operation to 'insert'.
+    
+    if ( $operation eq 'insupdate' )
+    {
+	if ( ! $action->keycol )
+	{
+	    $edt->add_condition($action, 'E_NO_KEY');
+	    $abort = 1;
+	}
+	
+	elsif ( $action->keymult )
+	{
+	    $edt->add_condition($action, 'E_MULTI_KEY');
+	    $abort = 1;
+	}
+	
+	elsif ( $action->permission eq 'PENDING' )
+	{
+	    $edt->add_condition($action, 'E_BAD_KEY', $action->keyval);
+	    $abort = 1;
+	}
+	
+	elsif ( ! $action->keyval )
+	{
+	    $operation = $action->set_operation('insert');
+	    $edt->add_condition($action, 'C_CREATE') unless $edt->allows('CREATE');
+	}
+    }
+    
+    # The 'replace' operation requires a single primary key value if the table has a
+    # primary key. Key references are not allowed for 'replace' either (see insupdate).
+    
+    elsif ( $operation eq 'replace' )
+    {
+	if ( $action->keymult )
+	{
+	    $edt->add_condition($action, 'E_MULTIPLE_KEYS');
+	    $abort = 1;
+	}
+	
+	elsif ( $action->keycol && ! $action->keyval )
+	{
+	    $edt->add_condition($action, 'E_NO_KEY');
+	    $abort = 1;
+	}
+	
+	elsif ( $action->permission eq 'PENDING' )
+	{
+	    $edt->add_condition('E_BAD_KEY', $action->keyval);
+	    $abort = 1;
+	}
+    }
+    
+    # The 'update' and 'delete' operations require a valid key expression, which
+    # may or may not select specific primary key values.
+    
+    elsif ( $operation =~ /^update|^delete/ )
+    {
+	$edt->add_conditions($action, 'E_NO_KEY') unless $keyexpr;
+	$abort = 1;
+    }
+    
+    # If the operation is 'insert', add E_HAS_KEY if the table has a primary key and a key
+    # value was specified. Otherwise, add C_CREATE unless the CREATE allowance is present.
+    
+    elsif ( $operation eq 'insert' )
+    {
+	if ( $action->keycol && $action->keyval )
+	{
+	    $edt->add_condition('E_HAS_KEY', 'insert');
+	    $abort = 1;
+	}
+	
+	elsif ( ! $edt->allows('CREATE') )
+	{
+	    $edt->add_condition($action, 'C_CREATE');
+	}
+    }
+    
+    # If a condition has been generated that completes the authorization, return now.
+    
+    if ( $abort )
+    {
+	$action->set_permission('none');
+	return;
+    }
+    
+    # Otherwise, get a reference to the information record for this table.
     
     my $tableinfo = $edt->table_info_ref($table_specifier);
     
@@ -226,9 +320,9 @@ sub authorize_action {
     
     my @permcounts;
     
-    if ( my $sup_table = $tableinfo->{SUPERIOR_TABLE} )
+    if ( my $superior = $tableinfo->{SUPERIOR_TABLE} )
     {
-	@permcounts = $edt->authorize_subordinate_action($action, $operation, $table_specifier, $sup_table);
+	@permcounts = $edt->authorize_subordinate($action, $operation, $table_specifier, $superior);
     }
     
     # Otherwise, use the standard authorization for each operation. Some operations are authorized
@@ -236,30 +330,44 @@ sub authorize_action {
     
     else
     {
-	my $keyexpr = $action->keyexpr;
-	
 	sswitch ( $operation )
 	{
 	    case 'insert': {
+		
 		@permcounts = $edt->check_table_permission($table_specifier, 'post');
 	    }
 	    
 	    case 'update':
 	    case 'insupdate':
 	    case 'replace': {
+		
 	        @permcounts = $edt->check_record_permission($table_specifier, 'modify', $keyexpr);
 	    }
 
 	    case 'delete': {
+		
 		@permcounts = $edt->check_record_permission($table_specifier, 'delete', $keyexpr);
 	    }
 	    
 	    case 'delete_cleanup': {
+		
 		croak "the operation '$operation' can only be done on a subordinate table";
 	    }
 	    
 	    case 'other': {
-		@permcounts = $edt->check_record_permission($table_specifier, 'modify', $keyexpr);
+		
+		# $$$ TO DO: need to add a mechanism to specify which permission
+		# (i.e. 'modify', 'view', etc. a specific 'other' action requires)
+		
+		if ( $keyexpr )
+		{
+		    @permcounts = $edt->check_record_permission($table_specifier, 'modify', $keyexpr);
+		}
+		
+		else
+		{
+		    @permcounts = $edt->check_table_permission($table_specifier, 'admin');
+		}
 	    }
 	    
 	  default: {
@@ -297,35 +405,51 @@ sub authorize_action {
 		}
 		
 		$action->set_permission($can_insert);
-		return 'insert';
 	    }
 	    
 	    else
 	    {
-		$edt->add_condition($action, 'E_PERM', 'insert');
-		$action->set_permission('none');
-		return 'none';
+		$edt->add_condition($action, 'E_NOT_FOUND');
+		$action->set_permission('notfound');
+	    }
+	    
+	    # If the operation is 'insupdate', change it to 'insert'.
+	    
+	    if ( $operation eq 'insupdate' )
+	    {
+		$action->set_operation('insert');
 	    }
 	}
 	
-	# In all other situations, add an E_NOT_FOUND condition and return
-	# 'notfound'.
+	# In all other situations, add an E_NOT_FOUND condition.
 	
 	else
 	{
 	    $edt->add_condition($action, 'E_NOT_FOUND');
-	    return $action->set_permission('notfound');
+	    $action->set_permission('notfound');
 	}
+	
+	return ('notfound');
     }
     
-    # If the primary permission is 'none', that means there are at least some records the user has
-    # no authorization to operate on, or else the user lacks the necessary permission on the table
+    # Otherwise, if the operation is 'insupdate' then change it to 'update'.
+    
+    elsif ( $operation eq 'insupdate' )
+    {
+	$action->set_operation('update');
+    }
+    
+    # Now handle the other cases. If the primary permission is 'none', that
+    # means there are at least some records the user has no authorization to
+    # operate on, or else the user lacks the necessary permission on the table
     # itself. This is reported as E_PERM.
     
     elsif ( $result eq 'none' )
     {
 	$edt->add_condition($action, 'E_PERM', $operation, $count);
-	return $action->set_permission('none');
+	$action->set_permission('none');
+	
+	return ('none', $count, @permcounts);
     }
     
     # If the primary permission is 'locked', that means the user is authorized to operate on all
@@ -344,7 +468,9 @@ sub authorize_action {
 	    $edt->add_condition($action, 'E_LOCKED');
 	}
 	
-	return $action->set_permission('locked');
+	$action->set_permission('locked');
+	
+	return ('locked', $count, @permcounts);
     }
     
     # If the primary permission includes '_unlock', that means some of the records were locked by
@@ -364,24 +490,30 @@ sub authorize_action {
 	    $edt->add_condition($action, 'C_LOCKED');
 	    # $action->requires_unlock(1);
 	}
+	
+	return ($result, $count, @permcounts);
     }
     
-    # Store the permission with the action and return it along with the counts.
+    # Otherwise, store the permission with the action and return it along with
+    # the counts.
     
-    $action->set_permission($result);
-    
-    return ($result, $count, @permcounts);
+    else
+    {
+	$action->set_permission($result);
+	
+	return ($result, $count, @permcounts);
+    }
 }
 
 
-# authorize_subordinate_action ( action, operation, table, suptable, keyexpr )
+# authorize_subordinate ( action, operation, table, suptable, keyexpr )
 # 
 # Carry out the authorization operation where the table to be authorized against ($suptable) is
 # different from the one on which the action is being executed ($table_specifier). In this situation, the
 # "subordinate table" is $table_specifier while the "superior table" is $suptable. The former is subordinate
 # because authorization for actions taken on it is referred to the superior table.
 
-sub authorize_subordinate_action {
+sub authorize_subordinate {
 
     my ($edt, $action, $operation, $table_specifier, $suptable, $keyexpr) = @_;
     

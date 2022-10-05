@@ -204,13 +204,13 @@ sub before_key_column {
 }
 
 
-# before_data_column ( cr, operation, permission, value, fieldname )
+# check_data_column ( cr, operation, permission, value, fieldname )
 # 
 # This method is called from Validate.pm whenever a non-special column is assigned a non-null
 # value. It has the ability to modify the value to reflect the semantics of the application. The
 # foreign key check and value validation occur after this method returns.
 
-sub before_data_column {
+sub check_data_column {
 
     my ($edt, $cr, $operation, $permission, $value, $fieldname) = @_;
     

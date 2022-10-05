@@ -27,27 +27,28 @@ use namespace::clean;
 our (@EXPORT_OK) = qw(connect_to_database ok_eval ok_exception ok_last_result
 		      select_tester current_tester
 		      set_default_table default_table target_class
-		      invert_mode diag_mode
-		      ok_output ok_no_output diag_output diag_lines clear_output
+		      invert_mode capture_mode captured_output diag_lines
+		      ok_captured_output ok_no_captured_output clear_captured_output
 		      last_result last_result_list last_edt clear_edt
 		      ok_new_edt ok_condition_count ok_has_condition
 		      ok_has_one_condition ok_no_conditions ok_no_errors 
 		      ok_no_warnings ok_has_one_error ok_has_one_warning
 		      ok_has_error ok_has_warning ok_diag is_diag
 		      ok_action ok_failed_action ok_commit ok_failed_commit ok_rollback
-		      clear_table ok_found_record ok_no_record ok_count_records
-		      get_table_name sql_command sql_selectrow count_records fetch_records);
+		      clear_table ok_found_record ok_no_record ok_record_count
+		      get_table_name sql_command sql_fetchrow count_records fetch_records);
 		      
 
 
 # If $INVERT_MODE is set to true, the outcome of certain tests is reversed. We
 # use this to check that tests will fail under certain circumstances. If either
-# $INVERT_MODE or $DIAG_MODE is set to true, $DIAG_OUTPUT collects diagnostic
+# $INVERT_MODE or $CAPTURE_MODE is set to true, $CAPTURED_OUTPUT collects diagnostic
 # output.
 
 our $INVERT_MODE = 0;
-our $DIAG_MODE = 0;
-our $DIAG_OUTPUT = '';
+our $CAPTURE_MODE = 0;
+our $SUPPRESS_CAPTURE = 0;
+our $CAPTURED_OUTPUT = '';
 
 # Keep track of the last EditTester instance created by this module and the last
 # EditTransaction instance created by this module. This allows all of the
@@ -64,13 +65,14 @@ sub new {
     
     my ($class, $options, $edt_table) = @_;
     
-    my ($dbh, $edt_class, $debug_mode, $errlog_mode);
+    my ($dbh, $edt_class, $edt_request, $debug_mode, $errlog_mode);
     
     if ( ref $options eq 'HASH' )
     {
 	$dbh = $options->{dbh} if $options->{dbh};
 	$edt_class = $options->{class} if $options->{class};
 	$edt_table = $options->{table} if $options->{table};
+	$edt_request = $options->{request} if $options->{request};
 	$debug_mode = $options->{debug_mode} if defined $options->{debug_mode};
 	$errlog_mode = $options->{errlog_mode} if defined $options->{errlog_mode};
     }
@@ -127,6 +129,7 @@ sub new {
     my $instance = { dbh => $dbh,
 		     edt_class => $edt_class,
 		     edt_table => $edt_table,
+		     edt_request => $edt_request,
 		     debug_mode => $debug_mode,
 		     errlog_mode => $errlog_mode,
 		   };
@@ -180,6 +183,17 @@ sub connect_to_database {
 # Return the database handle for the current tester.
 
 sub dbh {
+    
+    return $_[0]->{dbh};
+}
+
+
+# get_connection ( )
+# 
+# This method exists so that we can use this EditTester instance as a 'request'
+# object for EditTransaction instances.
+
+sub get_connection {
     
     return $_[0]->{dbh};
 }
@@ -272,23 +286,9 @@ sub trim_exception {
 
     my ($msg) = @_;
     
+    $msg =~ s{ \s at \s [\w/-]* EditTester.pm \s line .* }{}xs;
+    
     return $msg;
-}
-
-
-sub debug_line {
-    
-    my ($T, $line) = @_;
-
-    print STDERR " ### $line\n" if $T->{debug_mode};
-}
-
-
-sub debug_skip {
-
-    my ($T) = @_;
-    
-    print STDERR "\n" if $T->{debug_mode};
 }
 
 
@@ -304,8 +304,6 @@ sub new_edt {
     
     # croak "You must specify a permission as the first argument" unless $perm;
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
     my (@allowances);
     my $CREATE = 1;
     
@@ -313,7 +311,9 @@ sub new_edt {
     
     my $edt_table = $T->{edt_table};
     my $edt_class = $T->{edt_class} || croak "EditTester instance has an empty class name";
+    my $edt_request = $T->{edt_request};
     my $edt_perm;
+    my $label;
     
     # Now iterate through the arguments given.
     
@@ -338,6 +338,26 @@ sub new_edt {
 		$edt_class->isa('EditTransaction');
 	}
 	
+	elsif ( $entry eq 'request' )
+	{
+	    $edt_request = shift @_;
+	    
+	    # If $INVERT_MODE is true we do not make this check so that we can
+	    # cause _new_edt to generate an exception.
+	    
+	    unless ( $INVERT_MODE )
+	    {
+		croak "invalid request object '$edt_request'" unless 
+		    ref $edt_request && blessed $edt_request &&
+		    $edt_request->can('get_connection');
+	    }
+	}
+	
+	elsif ( $entry eq 'label' )
+	{
+	    $label = shift @_;
+	}
+	
 	elsif ( ref $entry eq 'HASH' )
 	{
 	    foreach my $k ( keys $entry->%* )
@@ -349,6 +369,7 @@ sub new_edt {
 		    $edt_class = $entry->{$k} if $k eq 'class';
 		    $edt_table = $entry->{$k} if $k eq 'table';
 		    $edt_perm = $entry->{$k} if $k eq 'permission';
+		    $edt_request = $entry->{$k} if $k eq 'request';
 		}
 		
 		# Otherwise, if the hash key has a true value then add that allowance.
@@ -397,7 +418,7 @@ sub new_edt {
     
     my $options;
     
-    if ( $edt_table || $edt_perm || @allowances )
+    if ( $edt_table || $edt_perm || $edt_request || @allowances )
     {
 	$options = { };
 	$options->{table} = $edt_table if $edt_table;
@@ -407,50 +428,69 @@ sub new_edt {
     
     # If we are able to create a new edt, pass the test. Otherwise, fail it.
     
-    my $edt = eval { $T->_new_edt($edt_class, $options) };
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    $label ||= "new edt created";
+    
+    # Create this EditTransaction using either the specified request object or
+    # else $T itself. This way, we can capture error and debugging output as
+    # necessary.
+    
+    my $first_argument = $edt_request || $T;
+    
+    $T->{last_edt} = undef;
+    
+    my ($edt) = eval { $edt_class->new($first_argument, $options); };
     
     if ( $edt )
     {
-	pass("created edt");
-	return $edt;
+	$T->{last_edt} = $edt;
+	ok( !$INVERT_MODE, $label );
+	return $INVERT_MODE ? () : $edt;
     }
     
     else
     {
-	diag($@) if $@;
-	fail("created edt");
-	return;
+	ok( $INVERT_MODE, $label );
+	
+	if ( $@ )
+	{
+	    my $msg = trim_exception($@);
+	    diag_lines("EXCEPTION: $msg");
+	}
+    
+	return $INVERT_MODE ? 1 : ();
     }
 }
 
 
 # _new_edt ( perms, options )
 #
-# Do the work of creating a new EditTest object.
+# Do the work of creating a new EditTest object. We pass this EditTester
+# instance as a 'request' object, so that we can capture error and diagnostic
+# output. 
 
-sub _new_edt {
+# sub _new_edt {
     
-    my ($T, $edt_class, @args) = @_;
+    # my ($T, $edt_class, $first_argument, @rest) = @_;
     
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $T->{last_edt} = undef;
-    $T->{last_exception} = undef;
+    # return $edt_class->new($first_argument, @args);
     
-    my $edt = $edt_class->new($T->dbh, @args);
+    # my ($edt) = eval { $edt_class->new($first_argument, @args); };
     
-    if ( $edt )
-    {
-	$T->{last_edt} = $edt;
-	return $edt;
-    }
+    # if ( $@ )
+    # {
+    # 	my $msg = trim_exception($@);
+    # 	diag_lines("EXCEPTION: $msg");
+    # 	return;
+    # }
     
-    else
-    {
-	$T->{last_edt} = undef;
-	return;
-    }
-}
+    # else
+    # {
+    # 	return $edt;
+    # }
+# }
 
 
 sub last_edt {
@@ -531,13 +571,15 @@ sub ok_eval {
     
     @EVAL_RESULT = ();
     
-    eval { @EVAL_RESULT = $sub->() };
+    eval { local $Test::Builder::Level = 1;
+	   @EVAL_RESULT = $sub->() };
     
     if ( $@ )
     {
+	ok( $INVERT_MODE eq 'eval', $label );
 	my $msg = trim_exception($@);
 	diag_lines("EXCEPTION : $msg");
-	ok( $INVERT_MODE eq 'eval', $label );
+	return $INVERT_MODE eq 'eval';
     }
     
     elsif ( $ignore_result || $EVAL_RESULT[0] )
@@ -579,7 +621,8 @@ sub ok_exception {
     
     @EVAL_RESULT = ();
     
-    eval { @EVAL_RESULT = $sub->() };
+    eval { local $Test::Builder::Level = 1;
+	   @EVAL_RESULT = $sub->() };
     
     if ( $@ && ( $expected eq '1' || $expected eq '*' || $@ =~ $expected ) )
     {
@@ -588,15 +631,17 @@ sub ok_exception {
     
     elsif ( $@ )
     {
+	ok( $INVERT_MODE eq 'eval', $label);
 	my $msg = trim_exception($@);
 	diag_lines("", "EXCEPTION : $msg", "EXPECTED  : $expected");
-	ok( $INVERT_MODE eq 'eval', $label);
+	return $INVERT_MODE eq 'eval';
     }
     
     else
     {
-	diag_lines("NO EXCEPTION WAS THROWN");
 	ok( $INVERT_MODE eq 'eval', $label);
+	diag_lines("No exception was thrown");
+	return $INVERT_MODE eq 'eval';
     }
 }
 
@@ -687,89 +732,162 @@ sub invert_mode {
 }
 
 
-# diag_mode ( [value] )
+# capture_mode ( [value] )
 # 
-# If a value is specified, set $DIAG_MODE to true or false accordingly.
+# If a value is specified, set $CAPTURE_MODE to true or false accordingly.
 # Otherwise, just return its current value. This can be used to collect
 # diagnostic output when $INVERT_MODE is not active.
 
-sub diag_mode {
+sub capture_mode {
     
     shift if ref $_[0] eq 'EditTester';
     
     if ( @_ )
     {
-	$DIAG_MODE = ( $_[0] ? 1 : 0 );
+	$CAPTURE_MODE = ( $_[0] ? 1 : 0 );
     }
     
-    return $DIAG_MODE;
+    return $CAPTURE_MODE;
 }
 
 
 # diag_lines ( string... )
 # 
-# If $INVERT_MODE is true, append the given strings to $INVERT_DIAG. Otherwise,
-# print them out as diagnostic messages.
+# If either $CAPTURE_MODE or $INVERT_MODE is true, append the given strings to
+# $CAPTURED_OUTPUT.  Otherwise, print them out as diagnostic messages.
 
 sub diag_lines {
     
     shift if ref $_[0] && $_[0]->isa('EditTester');
     
-    foreach ( @_ )
+    local ($_);
+    
+    if ( ($CAPTURE_MODE || $INVERT_MODE) && ! $SUPPRESS_CAPTURE )
     {
-	if ( $DIAG_MODE || $INVERT_MODE )
-	{ 
-	    $DIAG_OUTPUT .= "$_\n"; 
-	}
-	
-	else { 
-	    diag $_;
-	}
+	$CAPTURED_OUTPUT .= "$_\n" foreach @_;
+    }
+    
+    else
+    {
+	diag $_ foreach @_;
     }
 }
 
 
-# ok_output ( regexp, [label] )
+# error_line ( string )
 # 
-# Match the value of $DIAG_OUTPUT against the specified regexp. If it passes, pass
+# If either $CAPTURE_MODE or $INVERT_MODE is true, append the given string to
+# $CAPTURED_OUTPUT. Otherwise, print it out as a diagnostic message. This method
+# exists so that it can capture EditTransaction error messages.
+
+sub error_line {
+    
+    goto &diag_lines;
+}
+
+
+# debug_line ( string )
+# 
+# If either $CAPTURE_MODE or $INVERT_MODE is true, append the given string to
+# $CAPTURED_OUTPUT. Otherwise, print it out to STDERR. This method
+# exists so that it can capture EditTransaction debugging messages.
+
+sub debug_line {
+    
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    my ($line) = @_;
+    
+    if ( $CAPTURE_MODE || $INVERT_MODE )
+    { 
+	$CAPTURED_OUTPUT .= "$line\n"; 
+    }
+    
+    else {
+	diag " > $line\n";
+    }
+}
+
+
+sub debug_internal {
+    
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    my ($line) = @_;
+    
+    if ( $T->{debug_mode} )
+    {
+	diag " >> $line\n";
+    }
+};
+
+
+sub debug_skip {
+
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    if ( $T->{debug_mode} )
+    {
+	diag "";
+    }
+}
+
+
+# ok_captured_output ( regexp, [label] )
+# 
+# Match the value of $CAPTURED_OUTPUT against the specified regexp. If it passes, pass
 # a test with the specified label. This method is intended for use only in
 # testing the EditTester class.
 
-sub ok_output {
+sub ok_captured_output {
     
     shift if ref $_[0] && $_[0]->isa('EditTester');
     
-    my $testre = shift;
+    my ($expected, $label) = @_;
     
-    croak "You must specify a regular expression" unless ref $testre eq 'Regexp';
-    
-    my $label = shift || "diagnostic output matches regular expression";
+    $label ||= "captured output matches expected value";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    if ( $DIAG_OUTPUT =~ $testre )
+    my $result;
+    
+    if ( ref $expected eq 'Regexp' )
+    {
+	$result = $CAPTURED_OUTPUT =~ $expected;
+    }
+    
+    else
+    {
+	$result = $CAPTURED_OUTPUT eq $expected;
+    }
+    
+    if ( $result )
     {
 	ok( $INVERT_MODE ne 'output', $label );
     }
     
     else
     {
-	my $temp = $DIAG_OUTPUT;
-	diag_lines("", "DIAGNOSTIC OUTPUT WAS:", $temp,
-		   "EXPECTED : $testre");
 	ok( $INVERT_MODE eq 'output', $label );
+	
+	local $SUPPRESS_CAPTURE = ($INVERT_MODE eq 'output' ? 0 : 1);
+	
+	diag_lines("", "CAPTURED OUTPUT WAS:", $CAPTURED_OUTPUT,
+		   "EXPECTED : $expected");
+	
+	return $INVERT_MODE eq 'output';
     }
 }
 
 
-# ok_no_output ( [label] )
+# ok_no_captured_output ( [label] )
 # 
-# If $DIAG_OUTPUT is empty, pass a test with the specified label. This method is
+# If $CAPTURED_OUTPUT is empty, pass a test with the specified label. This method is
 # intended for us only in testing the EditTester class. This subroutine always
-# clears $DIAG_OUTPUT regardless of the result, so that subsequent tests will
+# clears $CAPTURED_OUTPUT regardless of the result, so that subsequent tests will
 # start with an empty baseline.
 
-sub ok_no_output {
+sub ok_no_captured_output {
     
     shift if ref $_[0] && $_[0]->isa('EditTester');
     
@@ -777,41 +895,47 @@ sub ok_no_output {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    if ( $DIAG_OUTPUT eq '' )
+    if ( $CAPTURED_OUTPUT eq '' )
     {
 	ok( $INVERT_MODE ne 'output', $label );
     }
     
     else
     {
-	my $temp = $DIAG_OUTPUT;
-	$DIAG_OUTPUT = '';
-	diag_lines("", "DIAGNOSTIC OUTPUT WAS:", $temp);
 	ok( $INVERT_MODE eq 'output', $label );
+	
+	my $temp = $CAPTURED_OUTPUT;
+	$CAPTURED_OUTPUT = '';
+	
+	local $SUPPRESS_CAPTURE = ($INVERT_MODE eq 'output' ? 0 : 1);
+	
+	diag_lines("", "CAPTURED OUTPUT WAS:", $temp);
+	
+	return $INVERT_MODE eq 'output';
     }
 }
 
 
-# diag_output ( )
+# captured_output ( )
 # 
 # Return the value of $INVERT_DIAG for further testing. This method is intended
 # for use only in testing the EditTester class.
 
-sub diag_output {
+sub captured_output {
 
-    return $DIAG_OUTPUT;
+    return $CAPTURED_OUTPUT;
 }
 
 
-# clear_output ( )
+# clear_captured_output ( )
 #
 # Clear $INVERT_DIAG and return the value it had. This method is intended for use only in testing
 # the EditTester class.
 
-sub clear_output {
+sub clear_captured_output {
 
-    my $retval = $DIAG_OUTPUT;
-    $DIAG_OUTPUT = '';
+    my $retval = $CAPTURED_OUTPUT;
+    $CAPTURED_OUTPUT = '';
     return $retval;
 }
 
@@ -855,7 +979,7 @@ sub _edt_args {
 # arguments, with appropriate defaults. All of the arguments are optional, and
 # this method will properly distinguish whichever ones are specified and will
 # fill in defaults for any left out. The parameter $selector defaults to
-# '_', while $type defaults to 'all'. There is no default for $label.
+# '&_', while $type defaults to 'all'. There is no default for $label.
 # 
 # Accepted values for $selector are:
 # 
@@ -888,10 +1012,10 @@ sub _condition_args {
     
     # Check for selector and/or type arguments. If not given, they default to 'all'.
     
-    my $selector = '_';
+    my $selector = '&_';
     my $type = 'all';
     
-    while ( $_[0] && $_[0] =~ / ^ (?: all | latest | main | &.* | _ |
+    while ( $_[0] && $_[0] =~ / ^ (?: all | latest | main | &.* |
 				      errors | warnings | fatal | nonfatal ) $ /xsi )
     {
 	if ( $_[0] =~ / ^ (?: errors | warnings | fatal | nonfatal ) $ /xsi )
@@ -904,10 +1028,10 @@ sub _condition_args {
 	
 	else
 	{
-	    $selector = '_' if $selector eq 'latest';
+	    $selector = '&_' if $selector eq 'latest';
 	    
 	    croak "conflicting selector arguments: '$selector', '$_[0]'" 
-		unless $selector eq '_' || $selector eq $_[0];
+		unless $selector eq '&_' || $selector eq $_[0];
 	    
 	    $selector = shift @_;
 	}
@@ -985,12 +1109,12 @@ sub _condition_args {
 
 sub _action_args {
     
-    my $refstring;
+    my $refstring = '&_';
     my $status;
     
-    # If the first argument is an action reference string or '_', extract it.
+    # If the first argument is an action reference string or '&_', extract it.
     
-    if ( $_[0] && $_[0] =~ /^&|^_$/ )
+    if ( $_[0] && $_[0] =~ /^&/ )
     {
 	$refstring = shift @_;
     }
@@ -1094,8 +1218,8 @@ sub _ok_condition_count {
     
     if ( $selector =~ /^&/ && ! $edt->has_action($selector) )
     {
-	diag_lines("No action matching '$selector' was found");
 	ok($INVERT_MODE, $label);
+	diag_lines("No action matching '$selector' was found");
 	return $INVERT_MODE;
     }
     
@@ -1104,16 +1228,16 @@ sub _ok_condition_count {
     my @conditions = grep { $_ =~ $filter } $edt->conditions($selector, $type);
     
     # If the number of matching conditions equals the expected count, pass the
-    # test and return true. If the expected count is '*', pass the test if
+    # test and return true. If the expected count is '+', pass the test if
     # there is at least one. Invert this if $INVERT_MODE is true.
     
-    if ( $expected_count eq '*' && @conditions )
+    if ( $expected_count eq '+' && @conditions )
     {
 	ok(!$INVERT_MODE, $label);
 	return !$INVERT_MODE;
     }
     
-    elsif ( $expected_count ne '*' && @conditions == $expected_count )
+    elsif ( $expected_count ne '+' && @conditions == $expected_count )
     {
 	ok(!$INVERT_MODE, $label);
 	return !$INVERT_MODE;
@@ -1198,7 +1322,7 @@ sub ok_has_condition {
         
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_condition_count($edt, '*', $selector, $type, $filter,
+    return _ok_condition_count($edt, '+', $selector, $type, $filter,
 			       $label || "found matching condition");
     
     # return $T->_ok_has_condition($edt, $selector, $type, $filter,
@@ -1282,7 +1406,14 @@ sub _ok_has_one_condition {
 	if ( $conditions[0] =~ $filter )
 	{
 	    ok(!$INVERT_MODE, $label);
-	    return !$INVERT_MODE;
+	}
+	
+	else
+	{
+	    ok($INVERT_MODE, $label);
+	    diag_lines("got      : $conditions[0]",
+		       "expected : $filter");
+	    return $INVERT_MODE;
 	}
     }
     
@@ -1353,7 +1484,7 @@ sub ok_has_error {
     
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    _ok_condition_count($edt, '*',  $selector, 'errors', $filter,
+    _ok_condition_count($edt, '+',  $selector, 'errors', $filter,
 			$label || "found matching error");
 }
 
@@ -1366,7 +1497,7 @@ sub ok_has_warning {
     
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    _ok_condition_count($edt, '*', $selector, 'warnings', $filter,
+    _ok_condition_count($edt, '+', $selector, 'warnings', $filter,
 			$label || "found matching warning");
 }
 
@@ -1583,8 +1714,6 @@ sub ok_action {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $refstring ||= '_';
-    
     unless( $edt->has_action($refstring) )
     {
 	ok($INVERT_MODE, $label);
@@ -1635,8 +1764,6 @@ sub ok_has_action {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $refstring ||= '_';
-    
     if ( $edt->has_action($refstring) )
     {
 	ok(!$INVERT_MODE, $label);
@@ -1672,8 +1799,6 @@ sub ok_failed_action {
     my $wrong_status;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    $refstring ||= '_';
     
     unless ( $edt->has_action($refstring) )
     {
@@ -1834,15 +1959,15 @@ sub clear_table {
     
     my $sql = "DELETE FROM $tablename";
     
-    $T->debug_line($sql);
+    $T->debug_internal($sql);
     
     my $result = $dbh->do($sql);
     
-    $T->debug_line("Deleted $result rows") if $result;
+    $T->debug_internal("Deleted $result rows") if $result;
     
     $sql = "ALTER TABLE $tablename AUTO_INCREMENT = 1";
     
-    $T->debug_line($sql);
+    $T->debug_internal($sql);
     
     eval {
 	$dbh->do($sql);
@@ -1903,7 +2028,7 @@ sub sql_command {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $T->debug_line($sql);
+    $T->debug_internal($sql);
     
     @EVAL_RESULT = ();
     
@@ -1913,11 +2038,11 @@ sub sql_command {
     
     if ( $@ )
     {
+	ok( $INVERT_MODE, $label );
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
 	diag_lines("SQL STMT: $sql");
 	diag_lines("EXCEPTION: $msg");
-	ok( $INVERT_MODE, $label );
 	return undef;
     }
     
@@ -1929,7 +2054,7 @@ sub sql_command {
 }
 
 
-# sql_selectrow ( command, [label] )
+# sql_fetchrow ( command, [label] )
 # 
 # Attempt to execute the specified sql query and fetch the result using
 # 'fetchrow_array'. If it executes without throwing an exception, pass a test
@@ -1937,7 +2062,7 @@ sub sql_command {
 # test and print out the exception. The command result can be retrieved using
 # the 'last_result' method.
 
-sub sql_selectrow {
+sub sql_fetchrow {
     
     my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
     
@@ -1957,7 +2082,7 @@ sub sql_selectrow {
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    $T->debug_line($sql);
+    $T->debug_internal($sql);
     
     @EVAL_RESULT = ();
     
@@ -1967,10 +2092,10 @@ sub sql_selectrow {
     
     if ( $@ )
     {
+	ok( $INVERT_MODE, $label );
 	my $msg = trim_exception($@);
 	diag_lines("SQL STMT: $sql");
 	diag_lines("EXCEPTION: $msg");
-	ok( $INVERT_MODE, $label );
 	return ();
     }
     
@@ -1997,74 +2122,16 @@ sub ok_found_record {
     
     my ($table, $expr, $label) = @_;
     
-    my $dbh = $T->{dbh};
-    
     # Check arguments
     
     croak "you must specify a table" unless $table;
     croak "you must specify a valid SQL expression" if ref $expr;
+    
     $label ||= 'found at least one record';
-    
-    $expr = '1' if !$expr || $expr eq '*';
-    
-    my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
-	croak "unknown table '$table'";
-    
-    my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
-    
-    # If the given expression is a single decimal number, assume it is a key.
-    
-    if ( $expr =~ /^\d+$/ )
-    {
-	my $key_name = $tableinfo->{PRIMARY_KEY} || 
-	    croak "could not determine primary key for table '$table'";
-	$expr = "$key_name = '$expr'";
-    }
-    
-    # Otherwise, substitute any table specifiers with the corresponding table names.
-    
-    else
-    {
-	$expr =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
-    }
-    
-    # Execute the SQL expression and test the result.
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
-    my $sql = "SELECT COUNT(*) FROM $tablename WHERE $expr";
-    
-    $T->debug_line($sql);
-    
-    my $count;
-    
-    eval {
-	($count) = $dbh->selectrow_array($sql);
-    };
-    
-    if ( $@ )
-    {
-	my $msg = trim_exception($@);
-	$T->{last_exception} = $msg;
-	diag_lines("SQL STMT: $sql");
-	diag_lines("EXCEPTION: $msg");
-    }
-    
-    elsif ( $T->debug_mode )
-    {
-	$T->debug_line("Returned $count rows");
-	$T->debug_skip;
-    }
-    
-    if ( $INVERT_MODE )
-    {
-	ok( !$count, $label );
-    }
-    
-    else
-    {
-	ok( $count, $label);
-    }
+    return $T->_ok_record_count('+', $table, $expr, $label);
 }
 
 
@@ -2083,16 +2150,51 @@ sub ok_no_record {
     
     my ($table, $expr, $label) = @_;
     
-    my $dbh = $T->{dbh};
-    
     # Check arguments
     
     croak "you must specify a table" unless $table;
     croak "you must specify a valid SQL expression" if ref $expr;
+    
     $label ||= 'record was absent';
     
-    $expr = '1' if !$expr || $expr eq '*';
-        
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    return $T->_ok_record_count(0, $table, $expr, $label);
+}
+
+
+# ok_record_count ( expected, table, expr, [label] )
+# 
+# If the count of records in the specified table that match the specified
+# expression is the expected number, pass a test with the specified label.
+# Otherwise, fail the test.  If the sql expression throws an exception, fail the
+# test and print out the exception.
+
+sub ok_record_count {
+    
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    croak "You must first create an EditTester instance" unless $T;
+    
+    my ($expected, $table, $expr, $label) = @_;
+    
+    croak "invalid count '$expected'" unless defined $expected && $expected =~ /^\d+$/;
+    croak "you must specify a valid SQL expression" if ref $expr;
+    
+    $label ||= "found expected number of records";
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    return $T->_ok_record_count($expected, $table, $expr, $label);
+}
+
+
+sub _ok_record_count {
+    
+    my ($T, $expected_count, $table, $expr, $label) = @_;
+    
+    my $dbh = $T->{dbh};
+    
     my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
 	croak "unknown table '$table'";
     
@@ -2100,11 +2202,16 @@ sub ok_no_record {
     
     # If the given expression is a single decimal number, assume it is a key.
     
-    if ( $expr =~ /^\d+$/ )
+    if ( defined $expr && $expr =~ /^\d+$/ )
     {
 	my $key_name = $tableinfo->{PRIMARY_KEY} || 
 	    croak "could not determine primary key for table '$table'";
 	$expr = "$key_name = '$expr'";
+    }
+    
+    elsif ( ! $expr || $expr eq '*' )
+    {
+	$expr = '1';
     }
     
     # Otherwise, substitute any table specifiers with the corresponding table names.
@@ -2120,111 +2227,41 @@ sub ok_no_record {
     
     my $sql = "SELECT COUNT(*) FROM $tablename WHERE $expr";
     
-    $T->debug_line($sql);
+    $T->debug_internal($sql);
     
     my $count;
-
+    
     eval {
 	($count) = $dbh->selectrow_array($sql);
     };
     
     if ( $@ )
     {
+	ok( $INVERT_MODE, $label );
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
-	diag_lines("SQL STMT: $sql");
+	diag_lines("SQL STMT: $sql") unless $T->debug_mode;
 	diag_lines("EXCEPTION: $msg");
-	$count = 1;		# ensure test fails, unless in INVERT_MODE
+	return $INVERT_MODE;
     }
     
-    elsif ( $T->debug_mode )
+    elsif ( $expected_count eq '+' && $count ||
+	    $expected_count ne '+' && $count == $expected_count )
     {
-	$T->debug_line("Returned $count rows");
+	$T->debug_internal("Returned $count rows");
 	$T->debug_skip;
-    }
-    
-    if ( $INVERT_MODE )
-    {
-	ok( $count, $label );
+	ok( !$INVERT_MODE, $label );
+	return !$INVERT_MODE;
     }
     
     else
     {
-	ok( !$count, $label);
-    }
-}
-
-
-# ok_count_records ( expected, table, expr, [label] )
-# 
-# If the count of records in the specified table that match the specified
-# expression is the expected number, pass a test with the specified label.
-# Otherwise, fail the test.  If the sql expression throws an exception, fail the
-# test and print out the exception.
-
-sub ok_count_records {
-    
-    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
-    
-    croak "You must first create an EditTester instance" unless $T;
-    
-    my ($count, $table, $expr, $label) = @_;
-    
-    my $dbh = $T->{dbh};
-    
-    croak "invalid count '$count'" unless defined $count && $count =~ /^\d+$/;
-    croak "you must specify a valid SQL expression" if ref $expr;
-    
-    $label ||= "found expected number of records";
-    
-    $expr = '1' if !$expr || $expr eq '*';
-    
-    my $tablename = $T->get_table_name($table);
-    
-    # my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
-    # 	croak "unknown table '$table'";
-    
-    # my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
-    
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    
-    # Substitute any table specifiers with the corresponding table names and
-    # then generate a SELECT expression.
-    
-    $expr =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
-    
-    my $sql = "SELECT count(*) FROM $tablename WHERE $expr";
-    
-    $T->debug_line($sql);
-    
-    my $result;
-    
-    eval {
-	($result) = $dbh->selectrow_array($sql);
-    };
-    
-    if ( $@ )
-    {
-	my $msg = trim_exception($@);
-	$T->{last_exception} = $msg;
-	diag_lines("SQL STMT: $sql");
-	diag_lines("EXCEPTION: $msg");
-    }
-    
-    if ( defined $result && $result == $count )
-    {
-	ok(!$INVERT_MODE, $label);
-    }
-    
-    else
-    {
-	$result //= "undef";
-	
-	ok($INVERT_MODE, $label);
-	
-	diag_lines("     got: $result");
-	diag_lines("expected: $count");
-	
+	$T->debug_internal("Returned $count rows");
+	$T->debug_skip;
+	my $exp = $expected_count eq '+' ? "at least one row" : "$expected_count rows";
+	diag_lines("got      : $count rows");
+	diag_lines("expected : $exp");
+	ok( $INVERT_MODE, $label);
 	return $INVERT_MODE;
     }
 }
@@ -2271,7 +2308,7 @@ sub count_records {
     
     my $sql = "SELECT count(*) FROM $tablename $where_clause";
     
-    $T->debug_line($sql);
+    $T->debug_internal($sql);
     
     my $result;
     
@@ -2281,11 +2318,11 @@ sub count_records {
     
     if ( $@ )
     {
+	ok( $INVERT_MODE, $label );
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
 	diag_lines("SQL STMT: $sql");
 	diag_lines("EXCEPTION: $msg");
-	ok( $INVERT_MODE, $label );
 	return $INVERT_MODE ? 1 : undef;
     }
     
@@ -2506,7 +2543,7 @@ sub fetch_records {
     
     my $sql = "SELECT $select_clause FROM $tablename $where_clause $limit_clause";
     
-    $T->debug_line($sql);
+    $T->debug_internal($sql);
     
     if ( $fetch_method eq 'selectall_arrayref' || $fetch_method eq 'selectrow_hashref' )
     {
@@ -2521,35 +2558,33 @@ sub fetch_records {
     
     if ( $@ )
     {
+	ok( $INVERT_MODE, $label );
 	my $msg = trim_exception($@);
 	$T->{last_exception} = $msg;
 	diag_lines("SQL STMT: $sql");
 	diag_lines("EXCEPTION: $msg");
-	ok( $INVERT_MODE, $label );
 	return $INVERT_MODE ? 1 : ();
     }
     
     elsif ( ref $results eq 'ARRAY' && $results->@* )
     {
-	$T->debug_line("Returned " . scalar(@$results) . " $return_word");
+	$T->debug_internal("Returned " . scalar(@$results) . " $return_word");
 	$T->debug_skip;
-	
 	ok( !$INVERT_MODE, $label );
 	return $INVERT_MODE ? () : @$results;
     }
     
     elsif ( ref $results eq 'HASH' )
     {
-	$T->debug_line("Returned 1 row");
+	$T->debug_internal("Returned 1 row");
 	$T->debug_skip;
-	
 	ok( !$INVERT_MODE, $label );
 	return $INVERT_MODE ? undef : $results;
     }
     
     else
     {
-	$T->debug_line("Returned no results");
+	$T->debug_internal("Returned no results");
 	$T->debug_skip;
 	
 	ok( $INVERT_MODE, $label);
@@ -2563,45 +2598,33 @@ sub fetch_records {
 
 sub inserted_keys {
     
-    my ($T, $edt) = @_;
-
-    $edt //= $T->{last_edt};
+    my ($T, $edt, @rest) = &_edt_args;
     
-    return unless $edt;
-    return $edt->inserted_keys;
+    return $edt->inserted_keys(@rest);
 }
 
 
 sub updated_keys {
     
-    my ($T, $edt) = @_;
-
-    $edt //= $T->{last_edt};
+    my ($T, $edt, @rest) = &_edt_args;
     
-    return unless $edt;
-    return $edt->updated_keys;
+    return $edt->updated_keys(@rest);
 }
 
 
 sub replaced_keys {
     
-    my ($T, $edt) = @_;
-
-    $edt //= $T->{last_edt};
+    my ($T, $edt, @rest) = &_edt_args;
     
-    return unless $edt;
-    return $edt->replaced_keys;
+    return $edt->replaced_keys(@rest);
 }
 
 
 sub deleted_keys {
     
-    my ($T, $edt) = @_;
-
-    $edt //= $T->{last_edt};
+    my ($T, $edt, @rest) = &_edt_args;
     
-    return unless $edt;
-    return $edt->deleted_keys;
+    return $edt->deleted_keys(@rest);
 }
 
 

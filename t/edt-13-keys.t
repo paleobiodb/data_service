@@ -12,11 +12,11 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 7;
+use Test::More tests => 10;
 
 use ETBasicTest;
 use ETTrivialClass;
-use EditTester qw(ok_eval ok_exception 
+use EditTester qw(ok_eval ok_exception ok_new_edt 
 		  ok_no_conditions ok_has_condition ok_has_one_condition);
 
 
@@ -29,24 +29,152 @@ my $T = EditTester->new('ETBasicTest');
 
 # Check that the necessary methods are defined.
 
-subtest 'methods' => sub {
+subtest 'required methods' => sub {
     
-    ok( ETBasicTest->can('action_keyvalues'), "action_keyvalues" ) || 
-	BAIL_OUT "missing method 'action_keyvalues'";
-    
-    ok( ETBasicTest->can('action_keyval'), "action_keyval" ) || 
-	BAIL_OUT "missing method 'action_keyval'";
-    
-    ok( ETBasicTest->can('action_keymult'), "action_keymult" ) || 
-	BAIL_OUT "missing method 'action_keymult'";
+    can_ok( 'ETBasicTest', 'action_keyval', 'action_keyvalues', 'action_keymult' ) ||
+	
+	BAIL_OUT "EditTransaction and related modules are missing some required methods";
+	
 };
 
 
-# Test various ways of specifying key values.
+# Test key values with 'insert'.
+
+subtest 'insert key values' => sub {
+    
+    my $edt = ok_new_edt( table => 'EDT_TEST' );
+    
+    if ( ok_eval( sub { $edt->_test_action('insert', { string_req => 'something' }); },
+		  "_test_action with insert and no key value" ) )
+    {
+	is( $edt->action_keyval, '', "action_keyval empty" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('insert', { string_req => 'else', test_no => '52' }); },
+		  "_test_action with insert and one key value" ) )
+    {
+	is( $edt->action_keyval, '52', "action_keyval not empty" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('insert', { string_req => 'or', _primary => '5' }); },
+		  "_test_action with insert and _primary key value" ) )
+    {
+	is( $edt->action_keyval, '5', "action_keyval not empty with _primary" );
+    }
+};
+
+
+# Test key values with 'delete'. This operation accepts different ways of specifying key values.
+
+subtest 'delete key values'  => sub {
+    
+    my $edt = ok_new_edt( table => 'EDT_TEST' );
+    
+    if ( ok_eval( sub { $edt->_test_action('delete', "18"); },
+		  "_test_action with delete and a single key value" ) )
+    {
+	is( $edt->action_keyval, "18", "action_keyval returns specified key value" );
+	
+	my @kv = $edt->action_keyvalues;
+	
+	is( @kv, 1, "action_keyvalues returns one key value" );
+	is( $kv[0], "18", "action_keyvalues returns specified key value" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('delete', [3, 4, 5]); },
+		  "_test_action with delete and list of key values" ) )
+    {
+	my $kv = $edt->action_keyval;
+	
+	is( ref $kv, 'ARRAY', "action_keyval returns a listref" ) &&
+	    is( @$kv, 3, "action_keyval returns three values" ) &&
+	    is( $kv->[2], 5, "action_keyval entry 2 is '5'" );
+	
+	my @kv = $edt->action_keyvalues;
+	
+	is( @kv, 3, "action_keyvalues returns three values" );
+	is( $kv[2], 5, "last key value is correct" );
+	
+	ok( $edt->action_keymult, "action_keymult returns true for multiple keys" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('delete', "8, 2, 12"); },
+		  "_test_action with delete and comma-separated list" ) )
+    {
+	my $kv = $edt->action_keyval;
+	
+	is( ref $kv, 'ARRAY', "action_keyval returns a listref" ) &&
+	    is( @$kv, 3, "action_keyval returns three values" ) &&
+	    is( $kv->[2], 12, "action_keyval entry 2 is '12'" );
+	
+	my @kv = $edt->action_keyvalues;
+	
+	is( @kv, 3, "action_keyvalues returns three values" );
+	is( $kv[2], 12, "last key value is correct" );
+	
+	ok( $edt->action_keymult, "action_keymult returns true for multiple keys" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('delete', { _primary => "23521" }); },
+		  "_test_action with delete and _primary" ) )
+    {
+	is( $edt->action_keyval, 23521, "action_keyval returns specified key value" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', "18"); },
+		  "_test_action with 'delete_cleanup'" ) )
+    {
+	can_ok( $edt, 'action_keyval' ) &&
+	    is( $edt->action_keyval, "18", "action_keyval returns specified key value" );
+    }
+};
+
+
+# Test key values with 'update', 'replace', and 'other'.
+
+subtest 'update replace other key values' => sub {
+    
+    my $edt = ok_new_edt( table => 'EDT_TEST' );
+    
+    if ( ok_eval( sub { $edt->_test_action('update', { test_no => 74, abc => 1}); }, 
+		  "_test_action executed successfully with 'update'" ) )
+    {
+	is( $edt->action_keyval, "74", "action_keyval returns specified key value" );
+	ok( ! $edt->action_keymult, "action_keymult returns false for a single key" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('update', { _primary => [6, 2, 5], abc => 1}); }, 
+		  "_test_action executed successfully with 'update'" ) )
+    {
+	is( ref $edt->action_keyval, "ARRAY", "action_keyval arrayref" );
+	ok( $edt->action_keymult, "action_keymult true" );
+	
+	my @kv = $edt->action_keyvalues;
+	
+	is( @kv, 3, "action_keyvalues list of 3" );
+	is( $kv[2], 5, "action_keyvalues expected value" );
+    }
+    
+    if ( ok_eval( sub { $edt->_test_action('replace', { test_no => 74, abc => 1}); }, 
+		  "_test_action executed successfully with 'update'" ) )
+    {
+	is( $edt->action_keyval, "74", "action_keyval expected value" );
+	ok( ! $edt->action_keymult, "action_keymult false" );
+    }    
+    
+    if ( ok_eval( sub { $edt->_test_action('other', { abc => 1, _primary => 5 }); }, 
+		  "_test_action executed successfully with 'other'" ) )
+    {
+	is( $edt->action_keyval, 5, "action_keyval expected value" );
+    }
+};
+
+
+# Test other ways of specifying key values.
 
 subtest 'key values' => sub {
     
-    my $edt = $T->new_edt( table => 'EDT_TEST' );
+    my $edt = ok_new_edt( table => 'EDT_TEST' );
     
     $edt->_test_action( 'replace', { _primary => "15", abc => "def" } );
     
@@ -113,7 +241,7 @@ subtest 'key values' => sub {
 
 # Now check oddly formatted values.
 
-subtest 'odd values' => sub {
+subtest 'strange values' => sub {
     
     my $edt = $T->new_edt( table => 'EDT_TEST' );
     
@@ -205,7 +333,7 @@ subtest 'key fields' => sub {
     
     ok_no_conditions;
     
-    is( $edt->action_keyval, undef, "no key value" );
+    is( $edt->action_keyval, '', "no key value" );
     
     $edt->_test_action('delete', "23, 15, 88");
     

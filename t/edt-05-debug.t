@@ -14,7 +14,9 @@ use lib 't', '../lib', 'lib';
 use Test::More tests => 6;
 
 use ETBasicTest;
-use EditTester qw(connect_to_database ok_eval ok_exception);
+use EditTester qw(connect_to_database ok_eval ok_exception ok_new_edt
+		  capture_mode ok_captured_output ok_no_captured_output
+		  clear_captured_output);
 
 
 # Establish an EditTester instance.
@@ -37,25 +39,35 @@ subtest 'debug mode' => sub {
     
     $T = EditTester->new({ class => 'ETBasicTest', debug_mode => 1 });
     
+    clear_captured_output;
+    
+    capture_mode(1);
+    
     ok( $T->debug_mode, "T debug mode set" );
     
     my $edt = $T->new_edt();
     
     ok( $edt->debug_mode, "edt debug mode set" );
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    # is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    
+    ok_captured_output( "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    
+    clear_captured_output;
     
     $T = EditTester->new({ class => 'ETBasicTest' });
+    
+    capture_mode(1);
     
     ok( ! $T->debug_mode, "T debug mode cleared" );
     
@@ -63,17 +75,19 @@ subtest 'debug mode' => sub {
     
     ok( ! $edt->debug_mode, "edt debug mode cleared" );
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "TEST ERROR\n", "only error output captured" );
+    # is( $ERRLOG, "TEST ERROR\n", "only error output captured" );
+    
+    ok_captured_output( "TEST ERROR\n", "only error output captured" );
     
     $T->debug_mode(1);
     is( $T->debug_mode, 1, "T debug mode set" );
@@ -92,42 +106,51 @@ subtest 'errlog mode' => sub {
     ok( ! $T->errlog_mode, "T errlog mode cleared" );
     ok( $T->debug_mode, "T debug mode set" );
     
-    my $edt = $T->new_edt();
+    my $edt = ok_new_edt;
     
     ok( $edt->silent_mode, "edt silent mode set" );
     ok( $edt->debug_mode, "edt debug mode set" );
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
+    
+    capture_mode(1);
+    clear_captured_output;
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    # is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    
+    ok_captured_output( "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
     
     $T = EditTester->new({ class => 'ETBasicTest', errlog_mode => 0 });
     
     ok( ! $T->errlog_mode, "T errlog mode cleared" );
     
-    my $edt = $T->new_edt();
+    my $edt = ok_new_edt;
     
     ok( $edt->silent_mode, "edt silent mode set" );
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    clear_captured_output;
+    
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, '', "neither error nor debug output captured" );
+    # is( $ERRLOG, '', "neither error nor debug output captured" );
+    
+    ok_no_captured_output( "neither error nor debug output captured" );
 };
 
 
@@ -143,74 +166,96 @@ subtest 'setting and clearing' => sub {
     
     $edt->debug_mode(1);
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    clear_captured_output;
+    
+    capture_mode(1);
+    
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    # is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    
+    ok_captured_output( "TEST DEBUG\nTEST ERROR\n", "debug and error output captured" );
+    
+    clear_captured_output;
     
     $edt->debug_mode(0);
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "TEST ERROR\n", "only error output captured" );
+    ok_captured_output( "TEST ERROR\n", "only error output captured" );
+    
+    clear_captured_output;
+    
+    # is( $ERRLOG, "TEST ERROR\n", "only error output captured" );
     
     $edt->silent_mode(1);
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "", "no output captured" );
+    # is( $ERRLOG, "", "no output captured" );
+    
+    ok_no_captured_output( "no output captured" );
     
     $edt->debug_mode(1);
     
-     $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "error and debug output captured" );
+    # is( $ERRLOG, "TEST DEBUG\nTEST ERROR\n", "error and debug output captured" );
+    
+    ok_captured_output( "TEST DEBUG\nTEST ERROR\n", "error and debug output captured" );
+    
+    clear_captured_output;
     
     $edt->debug_mode(0);
     $edt->silent_mode(0);
     
-    $ERRLOG = '';
-    close(STDERR);
-    open(STDERR, '>', \$ERRLOG);
+    # $ERRLOG = '';
+    # close(STDERR);
+    # open(STDERR, '>', \$ERRLOG);
     
     $edt->debug_line('TEST DEBUG');
     $edt->error_line('TEST ERROR');
     
-    close(STDERR);
-    open(STDERR, '>&', $ORIG_ERR);
+    # close(STDERR);
+    # open(STDERR, '>&', $ORIG_ERR);
     
-    is( $ERRLOG, "TEST ERROR\n", "only error output captured" );
+    # is( $ERRLOG, "TEST ERROR\n", "only error output captured" );
+    
+    ok_captured_output( "TEST ERROR\n", "only error output captured" );
+    
+    clear_captured_output;
 };
 
 
@@ -299,11 +344,13 @@ subtest 'modes' => sub {
 
 subtest 'indirect' => sub {
     
+    capture_mode(0);
+    
     my $request = TestIndirect->new($T->dbh);
     
-    $T = EditTester->new({ class => 'ETBasicTest', dbh => $request });
+    $T = EditTester->new({ class => 'ETBasicTest', request => $request });
     
-    ok_eval( sub { $T->new_edt('DEBUG_MODE') }, "new edt with request object" );
+    $T->new_edt('DEBUG_MODE', label =>  "new edt with request object" );
     
     if ( my $edt = $T->last_edt )
     {
@@ -340,6 +387,13 @@ sub debug_line {
     $ERRLOCAL .= "$line\n";
 }
 
+
+sub error_line {
+    
+    my ($self, $line) = @_;
+    
+    $ERRLOCAL .= "$line\n";
+}
 
 sub clear {
     

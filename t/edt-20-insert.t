@@ -13,7 +13,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 4;
+use Test::More tests => 5;
 
 use ETBasicTest;
 use ETTrivialClass;

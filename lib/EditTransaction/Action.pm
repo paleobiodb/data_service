@@ -22,7 +22,7 @@ use Scalar::Util qw(reftype);
 use namespace::clean;
 
 
-our %OPERATION_TYPE = ( skip => 'record', test => 'record',
+our %OPERATION_TYPE = ( skip => 'record', test => 'record', insupdate => 'record',
 			insert => 'record', update => 'record', replace => 'record',
 			update_many => 'selector', insupdate => 'record',
 			delete => 'keys', delete_cleanup => 'keys',

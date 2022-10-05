@@ -11,7 +11,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 6;
+use Test::More tests => 9;
 
 use ETBasicTest;
 use ETTrivialClass;
@@ -23,6 +23,16 @@ use EditTester qw(ok_eval ok_exception ok_new_edt);
 $DB::single = 1;
 
 my $T = EditTester->new('ETBasicTest');
+
+
+# Check that all required methods are present.
+
+subtest 'required methods' => sub {
+    
+    can_ok('ETBasicTest', 'add_condition', 'has_condition', 'conditions') ||
+	
+	BAIL_OUT "EditTransaction and related modules are missing some required methods";
+};
 
 
 # Check the method for registering conditions.
@@ -142,9 +152,9 @@ subtest 'add_condition, has_condition' => sub {
     
     ok( $edt->has_condition('all', 'W_FORMAT'), "has_condition not action warning 'all'" );
     
-    ok( $edt->has_condition('_', 'W_FORMAT'), "has_condition action warning '_'" );
+    ok( $edt->has_condition('&_', 'W_FORMAT'), "has_condition action warning '&_'" );
     
-    ok( ! $edt->has_condition('_', 'W_BAD_FIELD'), "has_condition main warning '_'" );
+    ok( ! $edt->has_condition('&_', 'W_BAD_FIELD'), "has_condition main warning '&_'" );
     
     ok( $edt->has_condition('&#1', 'W_FORMAT'), "has_condition action warning '&#1'" );
     
@@ -185,7 +195,7 @@ subtest 'add_condition, has_condition bad arguments' => sub {
     ok_exception( sub { $edt->has_condition( 'mainn', 'E_BAD_FIELD'); },
 		  qr/condition code/i, "exception add_condition misspelled selector" );
     
-    ok_exception( sub { $edt->has_condition( '_', 'EBAD_FIELD'); },
+    ok_exception( sub { $edt->has_condition( '&_', 'EBAD_FIELD'); },
 		  qr/condition code/i, "exception add_condition misspelled code" );
 };
 
@@ -193,7 +203,8 @@ subtest 'add_condition, has_condition bad arguments' => sub {
 subtest 'conditions' => sub {
     
     diag("TO DO: test 'conditions' method");
-    pass('placeholder');
+    
+    my $edt = ok_new_edt;
 };
 
 
@@ -207,3 +218,19 @@ subtest 'conditions bad arguments' => sub {
     ok_exception( sub { $edt->conditions('main', 'errs'); }, qr/valid selector/i,
 		  "exception conditions misspelled type" );
 };
+
+
+subtest 'import_conditions' => sub {
+    
+    diag("TO DO: test 'import_conditions' method");
+    
+    my $edt = ok_new_edt;
+};
+
+
+subtest 'condition messages' => sub {
+    
+    diag("TO DO: test condition message selection");
+    
+    my $edt = ok_new_edt;
+}

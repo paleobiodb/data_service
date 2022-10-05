@@ -21,8 +21,7 @@ use Test::More tests => 5;
 use ETBasicTest;
 use ETTrivialClass;
 use EditTester qw(ok_eval ok_exception ok_new_edt clear_table sql_command
-		  last_result last_result_list ok_has_condition ok_has_error
-		  ok_found_record ok_no_record ok_count_records fetch_records);
+		  last_result last_result_list ok_has_condition ok_has_error);
 
 
 # Establish an EditTester instance.
@@ -35,22 +34,23 @@ my $T = EditTester->new('ETBasicTest');
 # Check the scaffolding. These methods are designed primarily for internal use,
 # except for 'check_table_permission' and 'check_record_permission'.
 
-subtest 'internal methods' => sub {
+subtest 'required methods' => sub {
     
-    can_ok( 'ETBasicTest', 'check_instance_permission', 'validate_instance_permission', 
-	    'check_table_permission', 'check_record_permission', 'authorize_action' )
+    can_ok( 'ETBasicTest', 'check_table_permission', 'check_record_permission', 'authorize_action' )
 	
-	|| BAIL_OUT "missing methods";
+	|| BAIL_OUT "EditTransaction and related modules are missing some required methods";
     
     my $edt = ok_new_edt;
     
     my $perm = bless { abc => 1}, 'TestPermission';
     
-    is( $edt->check_instance_permission($perm), '', 
-	"check_instance_permission returns false" );
+    can_ok( 'ETBasicTest', 'check_instance_permission' ) &&
+	is( $edt->check_instance_permission($perm), '', 
+	    "default configuration: check_instance_permission always returns false" );
     
-    is( $edt->validate_instance_permission($perm), 'unrestricted',
-        "validate_instance_permission returns 'unrestricted'" );
+    can_ok( 'ETBasicTest', 'validate_instance_permission' ) &&
+	is( $edt->validate_instance_permission($perm), 'unrestricted',
+	    "default configuration: validate_instance_permission always returns 'unrestricted'" );
     
     is( $edt->check_table_permission('EDT_TEST', 'post'), 'unrestricted',
         "validate_instance_permission returns 'unrestricted'" );
@@ -169,4 +169,10 @@ subtest 'authorize_subordinate_action' => sub {
     my $edt = ok_new_edt;
 };
 
+
+diag("TODO: pending authorization and 'insupdate', 'replace'");
+
+# When authorization cannot be finalized, we need to proceed at least as far as
+# checking whether the records exist or not, so that 'insupdate' and 'replace'
+# can be changed to 'insert' if necessary.
 

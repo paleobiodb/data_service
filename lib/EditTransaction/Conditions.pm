@@ -63,7 +63,8 @@ use parent qw(Exporter);
 
 our (@EXPORT_OK) = qw(%CONDITION_BY_CLASS);
 
-our (%CONDITION_BY_CLASS) = ( EditTransaction => {		     
+our (%CONDITION_BY_CLASS) = ( EditTransaction => {
+
 		C_CREATE => "Allow 'CREATE' to create records",
 		C_LOCKED => "Allow 'LOCKED' to update locked records",
 		C_ALTER_TRAIL => "Allow 'ALTER_TRAIL' to explicitly set crmod and authent fields",
@@ -89,6 +90,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 				     default => ["Field '&1': no record with the proper type matches '&2'",
 						 "No record with the proper type matches '&2'",
 						 "No record with the proper type matches '&1'"] },
+		E_BAD_DIRECTIVE => ["Field '&1': &2", "Field '&1': invalid handling directive"],
 		E_NOT_FOUND => ["No record was found with key '&1'", 
 				"No record was found with this key"],
 		E_LOCKED => { multiple => ["Found &2 locked record(s)",
@@ -126,18 +128,21 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_PARAM => "",
   		E_EXECUTE => ["&1", "Unknown"],
 		E_DUPLICATE => "Duplicate entry '&1' for key '&2'",
-		E_BAD_FIELD => "Field '&1' does not correspond to any column in '&2'",
+		E_BAD_FIELD => ["Field '&1' does not correspond to any column in '&2'",
+				"Field '&1' does not correspond to any column in this table"],
 		E_UNRECOGNIZED => "This record not match any record type accepted by this operation",
 		E_IMPORTED => "",
 		W_BAD_ALLOWANCE => "Unknown allowance '&1'",
 		W_EXECUTE => ["&1", "Unknown"],
 		W_UNCHANGED => "",
 		W_NOT_FOUND => "",
+		W_DISCARDED => ["Field '&1': the specified value has been discarded " .
+				"because of a handling directive"],
 		W_PARAM => "",
-		W_TRUNC => ["Field '&1': &2", "Field '&1'"],
+		W_TRUNC => ["Field '&1': &2", 
+			    "Field '&1': value has been truncated to fit the database column"],
 		W_EXTID => ["Field '&1' : &2", 
 			    "Field '&1': column does not accept external identifiers, value looks like one"],
-		W_BAD_FIELD => "Field '&1' does not correspond to any column in '&2'",
 		W_EMPTY_RECORD => "Item is empty",
 		W_IMPORTED => "",
 		UNKNOWN => "Unknown condition code" });
@@ -184,9 +189,25 @@ sub register_conditions {
     }
     
     return $count;
-};
+}
 
 
+sub copy_conditions_from {
+    
+    my ($class, $from_class) = @_;
+    
+    return if $class eq $from_class;
+    
+    if ( ref $CONDITION_BY_CLASS{$from_class} eq 'HASH' )
+    {
+	foreach my $n ( keys %{$CONDITION_BY_CLASS{$from_class}} )
+	{
+	    $CONDITION_BY_CLASS{$class}{$n} = $CONDITION_BY_CLASS{$from_class}{$n};
+	}
+    }
+}
+
+    
 sub is_valid_condition {
     
     my ($class, $name) = @_;
@@ -253,7 +274,7 @@ sub add_condition {
     # If the first parameter starts with '&', look it up as an action reference. Calls of
     # this kind will always come from client code.
     
-    elsif ( $params[0] =~ /^&./ )
+    elsif ( $params[0] =~ /^&./ && $params[0] ne '&_' )
     {
 	unless ( $action = $edt->{action_ref}{$params[0]} )
 	{
@@ -265,13 +286,13 @@ sub add_condition {
     
     # Otherwise, default to the current action. Depending on when this method is called,
     # it may be empty, in which case the condition will be attached to the transaction as
-    # a whole. If the first parameter is '_', remove it.
+    # a whole. If the first parameter is '&_', remove it.
     
     else
     {
 	$action = $edt->{current_action};
 	
-	shift @params if $params[0] eq '_';
+	shift @params if $params[0] eq '&_';
     }
     
     # There must be at least one remaining parameter, and it must match the syntax of a
@@ -411,7 +432,7 @@ sub has_condition {
     
     # If the first argument is a valid selector, remap the arguments.
     
-    if ( $code =~ /^main$|^all$|^_$|^&./ )
+    if ( $code =~ /^main$|^all$|^&./ )
     {
 	($edt, $selector, $code, @v) = @_;
     }
@@ -446,9 +467,9 @@ sub has_condition {
 	return '';
     }
     
-    # If the selector is '_', check the current action.
+    # If the selector is '&_', check the current action.
     
-    elsif ( $selector eq '_' )
+    elsif ( $selector eq '&_' )
     {
 	if ( $edt->{current_action} )
 	{
@@ -477,7 +498,7 @@ sub has_condition {
     }
     
     # If we get here, we were either given a refstring that does not match any
-    # action or else '_' with no current action. In either case, return undef.
+    # action or else '&_' with no current action. In either case, return undef.
     
     return undef;
 }
@@ -537,7 +558,7 @@ my %TYPE_RE = ( errors => qr/^[EFC]/,
 		warnings => qr/^W/,
 		all => qr/^[EFCW]/ );
 
-my $csel_pattern = qr{ ^ (?: main$|_$|all$|& ) }xs;
+my $csel_pattern = qr{ ^ (?: main$|&.|all$|& ) }xs;
 my $ctyp_pattern = qr{ ^ (?: errors|fatal|nonfatal|warnings ) $ }xs;
 
 sub conditions {
@@ -593,10 +614,10 @@ sub conditions {
     my $filter = $TYPE_RE{$type} || $TYPE_RE{all};
     
     # If the selector is 'main', grep through the main conditions list. If the
-    # selector is '_' and there are no actions yet, return the main
+    # selector is '&_' and there are no actions yet, return the main
     # conditions because those are the latest ones to be added.
     
-    if ( $selector eq 'main' || $selector eq '_' && $edt->_action_list == 0 )
+    if ( $selector eq 'main' || $selector eq '&_' && $edt->_action_list == 0 )
     {
     	if ( wantarray )
     	{
@@ -611,14 +632,14 @@ sub conditions {
     	}
     }
     
-    # For '_', we return either or both of the 'errors' and 'warning' lists from
-    # the current action. For an action reference, we use the corresponding action.
+    # For an action reference, return either or both of the 'errors' and 'warning'
+    # lists from the corresponding action.
     
-    elsif ( $selector =~ /^_$|^&/ )
+    elsif ( $selector =~ /^&/ )
     {
 	my $action;
 	
-	if ( $selector eq '_' )
+	if ( $selector eq '&_' )
 	{
 	    $action = $edt->{current_action} || return;
 	}

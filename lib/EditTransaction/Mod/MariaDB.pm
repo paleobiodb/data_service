@@ -21,6 +21,8 @@ use feature 'unicode_strings', 'postderef';
 
 use Role::Tiny;
 
+no warnings 'uninitialized';
+
 our $DECIMAL_NUMBER_RE = qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? | [.] ( \d+ ) ) \s*
 			     (?: [Ee] \s* ( [+-]? ) \s* ( \d+ ) )? \s* $ }xs;
 
@@ -155,10 +157,54 @@ sub table_directives_list {
     
     unless ( defined $TABLE_INFO_CACHE{$class}{$table_specifier} )
     {
-	fetch_table_schema($edt, $table_specifier) || return;
+	fetch_table_schema($edt, $table_specifier);
     }
     
-    return $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier}->%*;
+    return ref $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier} eq 'HASH' ?
+	$COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier}->%* : ();
+}
+
+
+# get_table_handling ( table_specifier, colname )
+# 
+# Both arguments must be specified. If $colname is '*', return the result of
+# table_directives_list. Otherwise, return the table directive (if any) for the
+# specified column. If there is none, return '' if the column exists and undef
+# otherwise. 
+
+sub get_table_handling {
+    
+    my ($edt, $table_specifier, $colname) = @_;
+    
+    croak "you must provide a table specifier and a column name" 
+	unless $table_specifier && $colname;
+    
+    my $class = ref $edt || $edt;
+    
+    if ( $colname eq '*' )
+    {
+	return $edt->table_directives_list($table_specifier);;
+    }
+    
+    elsif ( ! defined $TABLE_INFO_CACHE{$class}{$table_specifier} )
+    {
+	fetch_table_schema($edt, $table_specifier);
+    }
+    
+    if ( $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier}{$colname} )
+    {
+	return $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier}{$colname};
+    }
+    
+    elsif ( $COLUMN_INFO_CACHE{$class}{$table_specifier}{$colname} )
+    {
+	return '';
+    }
+    
+    else
+    {
+	return undef;
+    }
 }
 
 
@@ -230,6 +276,8 @@ sub fetch_table_schema {
     }
     
     my ($table_key, $table_name);
+    
+    $DB::single = 1 if ref $edt && $edt->{breakpoint}{schema}{$table_specifier};
     
     # If the specified name is defined in the table definition module, try the name provided
     # by that module. Otherwise, try the specified name directly.
@@ -325,6 +373,8 @@ sub fetch_table_schema {
 	
 	my $colname = $cr->{Field};
 	
+	$DB::single = 1 if ref $edt && $edt->{breakpoint}{colname}{$colname};
+	
 	# If any properties have been set for this column using the table definition system, add
 	# them now. But if the property IGNORE has a true value, skip this column entirely.
 	
@@ -379,22 +429,6 @@ sub fetch_table_schema {
 	{
 	    unpack_column_type($cr, $cr->{Type});
 	}
-	
-	# The two directives handled by default are 'ts_created' and 'ts_modified'. If this column
-	# has one of them, add an INSERT_FILL or UPDATE_FILL property.
-	
-	if ( $cr->{DIRECTIVE} && $cr->{DIRECTIVE} =~ /^ts_created$|^ts_modified$/ )
-	{
-	    unless ( $cr->{Default} =~ /current_timestamp/i )
-	    {
-		$cr->{INSERT_FILL} = 'NOW()';
-	    }
-	    
-	    unless ( $cr->{Extra} =~ /on update/i )
-	    {
-		$cr->{UPDATE_FILL} = 'NOW()';
-	    }
-	}
     }
     
     # If we found any primary key columns, set the table's PRIMARY_KEY attribute.
@@ -414,7 +448,7 @@ sub fetch_table_schema {
     $table_definition{COLUMN_LIST} = \@column_list;
     
     # If the current class includes a method for post-processing table definitions, call it now.
-
+    
     if ( $edt->can('finish_table_definition') )
     {
 	$edt->finish_table_definition(\%table_definition, \%column_definition, \@column_list);
@@ -444,6 +478,39 @@ sub fetch_table_schema {
     $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier} = \%directives;
     
     return $TABLE_INFO_CACHE{$class}{$table_specifier};
+}
+
+
+# clear_table_cache ( table_specifier )
+# 
+# This method is useful primarily for testing purposes. It allows a unit test to
+# alter table and column properties and then cause the cached table information
+# to be recomputed.
+
+sub clear_table_cache {
+    
+    my ($edt, $table_specifier) = @_;
+    
+    my $class = ref $edt || $edt;
+    
+    if ( $table_specifier eq '*' )
+    {
+	$TABLE_INFO_CACHE{$class} = undef;
+	$COLUMN_INFO_CACHE{$class} = undef;
+	$COLUMN_DIRECTIVE_CACHE{$class} = undef;
+    }
+    
+    elsif ( $table_specifier )
+    {
+	$TABLE_INFO_CACHE{$class}{$table_specifier} = undef;
+	$COLUMN_INFO_CACHE{$class}{$table_specifier} = undef;
+	$COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier} = undef;
+    }
+    
+    else
+    {
+	croak "you must provide a table specifier or '*'";
+    }
 }
 
 
@@ -635,21 +702,28 @@ sub unpack_enum {
 
 # alter_column_property ( table_specifier, column_name, property, value )
 # 
-# This routine is intended primarily for testing purposes. It alters a specific entry in the
-# $COLUMN_INFO_CACHE.
+# This routine is intended primarily for testing purposes. It alters a specific
+# entry in the %COLUMN_INFO_CACHE. If the property is 'DIRECTIVE', the specified
+# value is also stored in %COLUMN_DIRECTIVE_CACHE.
 
 sub alter_column_property {
     
-    my ($edt, $tablename, $colname, $propname, $value) = @_;
+    my ($edt, $table_specifier, $colname, $propname, $value) = @_;
     
     croak "required arguments: table specifier, column name, property name"
-	unless $tablename && $colname && $propname;
+	unless $table_specifier && $colname && $propname;
     
     my $class = ref $edt || $edt;
     
-    if ( defined $COLUMN_INFO_CACHE{$class}{$tablename}{$colname} )
+    if ( ref $COLUMN_INFO_CACHE{$class}{$table_specifier}{$colname} eq 'HASH' )
     {
-	$COLUMN_INFO_CACHE{$class}{$tablename}{$colname}{$propname} = $value;
+	$COLUMN_INFO_CACHE{$class}{$table_specifier}{$colname}{$propname} = $value;
+	
+	if ( $propname eq 'DIRECTIVE' )
+	{
+	    $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier}{$colname} = $value;
+	}
+	
 	return 1;
     }
     
@@ -1284,111 +1358,12 @@ sub validate_geometry_value {
 }
 
 
-# validate_special_column ( directive, cr, action, value, fieldname )
-# 
-# This method is called once for each of the following column types that occurs in the table
-# currently being operated on. The column names will almost certainly be different.
-# 
-# The parameter $directive must be one of the following:
-# 
-# ts_created      Records the date and time at which this record was created.
-# ts_modified     Records the date and time at which this record was last modified.
-# 
-# Values for these columns cannot be specified explicitly except by a user with administrative
-# permission, and then only if this EditTransaction allows the condition 'ALTER_TRAIL'.
-# 
-# If this transaction is in FIXUP_MODE, both field values will be left unchanged if the user has
-# administrative privilege. Otherwise, a permission error will be returned.
-#
-# The parameter $cr must contain the column description record.
+# SQL expressions for use elsewhere in the codebase
+# -------------------------------------------------
 
-# $$$ this needs to go in the database role instead.
-
-my %CACHE_MODIFIED_EXPR;
-
-sub validate_special_column {
-
-    my ($edt, $directive, $cr, $action, $value, $fieldname) = @_;
+sub sql_current_timestamp {
     
-    # If the directive is not one that we know about, return an error condition.
-    
-    unless ( $directive eq 'ts_created' || $directive eq 'ts_modified' )
-    {
-	return ['E_BAD_DIRECTIVE', $cr->{Field}, $directive];
-    }
-    
-    # If the value is non-empty, check that it matches the required format.
-
-    my $operation = $action->operation;
-    my $permission = $action->permission;
-    
-    if ( defined $value && $value ne '' )
-    {
-	# The ts fields take datetime values, which are straightforward to validate.
-	
-	my ($result, $clean_value, $additional, $no_quote) =
-	    $edt->validate_datetime_value($cr->{Type}, $value, $fieldname);
-	
-	# If we have admin permission or general permission, add an ALTER_TRAIL caution unless the
-	# ALTER_TRAIL allowance is present. If we already have an error condition related to the
-	# value format, bump it into second place.
-	
-	if ( $permission =~ /^admin|^unrestricted/ )
-	{
-	    unless ( $edt->{allows}{ALTER_TRAIL} )
-	    {
-		$additional = $result if ref $result eq 'ARRAY';
-		$result = [ 'C_ALTER_TRAIL', $fieldname ];
-	    }
-	}
-	
-	# Otherwise, add a permission error. 
-	
-	else
-	{
-	    $additional = $result if ref $result eq 'ARRAY';
-	    $result = [ 'E_PERM_COL', $fieldname ];
-	}
-	
-	# If we have something to return, then return it now.
-	
-	if ( $result )
-	{
-	    return ($result, $clean_value, $additional, $no_quote);
-	}
-    }
-    
-    # For ts_modified, the column value will remain unchanged if the transaction is executing in
-    # FIXUP_MODE, provided we have the necessary permission.
-    
-    elsif ( $directive eq 'ts_modified' && $edt->{allows}{FIXUP_MODE} )
-    {
-	if ( $permission =~ /^admin|^unrestricted/ )
-	{
-	    return 'UNCHANGED';
-	}
-	
-	else
-	{
-	    return [ 'main', 'E_PERM', 'fixup_mode' ];
-	}
-    }
-    
-    # Otherwise, fill the necessary value if the column doesn't have have a default and/or update clause.
-    
-    elsif ( $operation eq 'insert' && $cr->{INSERT_FILL} )
-    {
-	return (1, $cr->{INSERT_FILL}, undef, 1);
-    }
-    
-    elsif ( $operation =~ /^update|^replace/ && $cr->{UPDATE_FILL} )
-    {
-	return (1, $cr->{UPDATE_FILL}, undef, 1);
-    }
-    
-    # If the value is valid as-is, return the empty list.
-    
-    return;
+    return 'NOW()';
 }
 
 
@@ -1402,13 +1377,13 @@ sub validate_special_column {
 sub count_matching_rows {
     
     my ($edt, $table_specifier, $expression) = @_;
-
+    
     my $sql = "SELECT count(*) FROM $TABLE{$table_specifier} WHERE $expression";
-
+    
     $edt->debug_line("$sql\n") if $edt->debug_mode;
-
+    
     my ($count) = $edt->dbh->selectrow_array($sql);
-
+    
     return $count;
 }
 

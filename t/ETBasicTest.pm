@@ -72,7 +72,6 @@ with 'EditTransaction::Mod::MariaDB';
     # Set properties for EDT_TYPES
     
     set_table_property(EDT_TYPES => CAN_MODIFY => 'ALL');
-    set_column_property(EDT_TYPES => string_req => REQUIRED => 1);
     set_column_property(EDT_TYPES => string_req => COLUMN_COMMENT => 'This is a test comment.');
     set_column_property(EDT_TYPES => string_val => ALTERNATE_NAME => 'alt_val');
     
@@ -190,60 +189,60 @@ before 'authorize_action' => sub {
 };
 
 
-sub validate_action {
+# sub validate_action {
 
-    my ($edt, $action, $operation, $table, $keyexpr) = @_;
+#     my ($edt, $action, $operation, $table, $keyexpr) = @_;
 
-    my $record = $action->record;
+#     my $record = $action->record;
 
-    if ( $record && $record->{string_req} )
-    {
-	if ( $record->{string_req} eq 'validate exception' )
-	{
-	    die "generated exception";
-	}
+#     if ( $record && $record->{string_req} )
+#     {
+# 	if ( $record->{string_req} eq 'validate exception' )
+# 	{
+# 	    die "generated exception";
+# 	}
 	
-	elsif ( $record->{string_req} eq 'validate error' )
-	{
-	    $edt->add_condition('E_TEST', 'xyzzy');
-	}
+# 	elsif ( $record->{string_req} eq 'validate error' )
+# 	{
+# 	    $edt->add_condition('E_TEST', 'xyzzy');
+# 	}
 
-	elsif ( $record->{string_req} eq 'validate warning' )
-	{
-	    $edt->add_condition('W_TEST', 'xyzzy');
-	}
+# 	elsif ( $record->{string_req} eq 'validate warning' )
+# 	{
+# 	    $edt->add_condition('W_TEST', 'xyzzy');
+# 	}
 
-	elsif ( $record->{string_req} eq 'validate save' )
-	{
-	    $edt->{save_validate_action} = $action;
-	    $edt->{save_validate_operation} = $operation;
-	    $edt->{save_validate_table} = $table;
-	    $edt->{save_validate_keyexpr} = $keyexpr;
-	    $edt->{save_validate_errors} = $action->has_errors;
-	}
+# 	elsif ( $record->{string_req} eq 'validate save' )
+# 	{
+# 	    $edt->{save_validate_action} = $action;
+# 	    $edt->{save_validate_operation} = $operation;
+# 	    $edt->{save_validate_table} = $table;
+# 	    $edt->{save_validate_keyexpr} = $keyexpr;
+# 	    $edt->{save_validate_errors} = $action->has_errors;
+# 	}
 	
-	elsif ( $record->{string_req} eq 'validate methods' )
-	{
-	    my $keyexpr = $action->keyexpr;
-	    my @keylist = $action->keylist;
-	    my @values = $edt->test_old_values($action, $table);
+# 	elsif ( $record->{string_req} eq 'validate methods' )
+# 	{
+# 	    my $keyexpr = $action->keyexpr;
+# 	    my @keylist = $action->keylist;
+# 	    my @values = $edt->test_old_values($action, $table);
 	    
-	    $edt->{save_method_keyexpr} = $keyexpr;
-	    $edt->{save_method_keylist} = \@keylist;
-	    $edt->{save_method_values} = \@values;
-	}
-    }
+# 	    $edt->{save_method_keyexpr} = $keyexpr;
+# 	    $edt->{save_method_keylist} = \@keylist;
+# 	    $edt->{save_method_values} = \@values;
+# 	}
+#     }
 
-    if ( $record && $record->{name} )
-    {
-	if ( $record->{name} =~ /validate label (.*)/i )
-	{
-	    $edt->{save_validate_label} = $edt->label_table($1);
-	}
-    }
+#     if ( $record && $record->{name} )
+#     {
+# 	if ( $record->{name} =~ /validate label (.*)/i )
+# 	{
+# 	    $edt->{save_validate_label} = $edt->label_table($1);
+# 	}
+#     }
     
-    return $edt->SUPER::validate_action($action, $operation, $table, $keyexpr);
-}
+#     return $edt->SUPER::validate_action($action, $operation, $table, $keyexpr);
+# }
 
 
 sub test_old_values {
@@ -586,7 +585,7 @@ sub establish_test_tables {
     $dbh->do("CREATE TABLE $TABLE{EDT_TEST} (
 		test_no int unsigned primary key auto_increment,
 		string_val varchar(40) not null default '',
-		string_req varchar(40) not null default '',
+		string_req varchar(40) not null,
 		signed_val mediumint)
 		
 		default charset utf8");
@@ -605,7 +604,6 @@ sub establish_test_tables {
 		name varchar(40) not null primary key,
 		interval_no int unsigned not null default 0,
 		string_val varchar(40) not null default '',
-		string_req varchar(40) not null default '',
 		latin1_val varchar(40) charset latin1 not null default '',
 		greek_val varchar(40) charset greek not null default '',
 		binary_val varbinary(40),
@@ -621,8 +619,9 @@ sub establish_test_tables {
 		boolean_val boolean,
 		enum_val enum('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
-		dcr timestamp default current_timestamp,
-		dmd timestamp default current_timestamp,
+		dcr timestamp,
+		dmd timestamp,
+		dcrauto timestamp default current_timestamp,
 		dmdauto timestamp default current_timestamp on update current_timestamp)
 		
 		default charset utf8");

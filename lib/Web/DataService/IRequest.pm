@@ -624,6 +624,16 @@ sub debug_line {
 }
 
 
+# error_line ( )
+# 
+# Output the specified line(s) of text to report errors.
+
+sub error_line {
+    
+    print STDERR "$_[1]\n";
+}
+
+
 # _process_record ( record, steps )
 # 
 # Process the specified record using the specified steps.

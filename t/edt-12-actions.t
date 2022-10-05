@@ -12,7 +12,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 10;
+use Test::More tests => 12;
 
 use ETBasicTest;
 use ETTrivialClass;
@@ -27,6 +27,17 @@ $DB::single = 1;
 my $T = EditTester->new('ETBasicTest');
 
 
+# Check for required methods.
+
+subtest 'required methods' => sub {
+    
+    can_ok( 'ETBasicTest', '_test_action', 'action_ref', 'has_action', 
+	    'action_operation', 'action_status', 'action_ok' )
+		
+	|| BAIL_OUT "EditTransaction and related modules are missing some required methods";
+};
+
+
 # Check the _test_action method and the basic accessor methods.
 
 subtest '_test_action with insert' => sub {
@@ -38,33 +49,29 @@ subtest '_test_action with insert' => sub {
     if ( ok_eval( sub { $edt->_test_action('insert', $record); },
 		  "_test_action executed successfully with 'insert'" ) )
     {
-	can_ok( $edt, 'action_ok' ) &&
-	    ok( $edt->action_ok, "action_ok" );
+	ok( $edt->action_ok, "action_ok" );
 	
-	can_ok( $edt, 'action_ref' ) &&
-	    is( ref $edt->action_ref, 'EditTransaction::Action', "action_ref" );
+	is( $edt->action_status, 'pending', "action_status" );
+	
+	is( ref $edt->action_ref, 'EditTransaction::Action', "action_ref" );
+	
+	is( $edt->action_operation, 'insert', "action_operation" );
 	
 	can_ok( $edt, 'action_table' ) && 
 	    is( $edt->action_table, 'EDT_TEST', "action_table returns default value" );
 	
-	can_ok( $edt, 'action_operation' ) && 
-	    is( $edt->action_operation, 'insert', "action_operation" );
-	
 	can_ok( $edt, 'action_params' ) &&
 	    is( $edt->action_params, $record, "action_params" );
 	
-	if ( can_ok( $edt, 'action_value' ) )
+	if ( can_ok( $edt, 'action_parameter' ) )
 	{
-	    is( $edt->action_value('string_req'), 'test', "action_value" );
-	    is( $edt->action_value('_', 'string_req'), 'test', "action_value with '_'" );
-	    is( $edt->action_value('&#1', 'string_req'), 'test', "action_value with refstring" );
+	    is( $edt->action_parameter('string_req'), 'test', "action_parameter" );
+	    is( $edt->action_parameter('&_', 'string_req'), 'test', "action_parameter with '&_'" );
+	    is( $edt->action_parameter('&#1', 'string_req'), 'test', "action_parameter with refstring" );
 	}
 	
-	can_ok( $edt, 'action_status' ) &&
-	    is( $edt->action_status, 'pending', "action_status" );
-	
 	can_ok( $edt, 'action_keyval' ) &&
-	    is( $edt->action_keyval, undef, "action_keyval" );
+	    is( $edt->action_keyval, '', "action_keyval" );
     }
     
     else
@@ -81,52 +88,29 @@ subtest '_test_action with delete'  => sub {
     
     my $edt = ok_new_edt( table => 'EDT_TEST' );
     
-    can_ok($edt, 'action_keyval', 'action_keyvalues') || return;
+    ok_eval( sub { $edt->_test_action('delete', "18"); },
+	     "_test_action executed successfully with 'delete' and a single key value" );
     
-    if ( ok_eval( sub { $edt->_test_action('delete', "18"); },
-		  "_test_action executed successfully with 'delete' and a single key value" ) )
-    {
-	is( $edt->action_keyval, "18", "action_keyval returns specified key value" );
-	
-	my @kv = $edt->action_keyvalues;
-	
-	is( @kv, 1, "action_keyvalues returns one key value" );
-	is( $kv[0], "18", "action_keyvalues returns specified key value" );
-    }
+    ok_eval( sub { $edt->_test_action('delete', [3, 4, 5]); },
+	     "_test_action executed successfully with 'delete' and a list of key values" );
     
-    my $keylist = [3, 4, 5];
+    ok_eval( sub { $edt->_test_action('delete', { test_no => "458" }); },
+	     "_test_action executed successfully with 'delete', 'test_no', single" );
     
-    if ( ok_eval( sub { $edt->_test_action('delete', $keylist); },
-		  "_test_action executed successfully with 'delete' and a list of key values" ) )
-    {
-	my $kv = $edt->action_keyval;
-	
-	is( ref $kv, 'ARRAY', "action_keyval returns a listref" ) &&
-	    is( @$kv, 3, "action_keyval returns three values" ) &&
-	    is( $kv->[2], 5, "action_keyval entry 2 is '5'" );
-	
-	my @kv = $edt->action_keyvalues;
-	
-	is( @kv, 3, "action_keyvalues returns three values" );
-	is( $kv[2], 5, "last key values is correct" );
-	
-	can_ok($edt, 'action_keymult') &&
-	    ok( $edt->action_keymult, "action_keymult returns true for multiple keys" );
-    }
+    ok_eval( sub { $edt->_test_action('delete', { test_no => ["12521", "58002", "77000003"] }); },
+	     "_test_action executed successfully with 'delete', 'test_no', 'list" );
     
-    if ( ok_eval( sub { $edt->_test_action('delete', { _primary => "23521" }); },
-		  "_test_action executed successfully with 'delete' and _primary" ) )
-    {
-	can_ok( $edt, 'action_keyval' ) &&
-	    is( $edt->action_keyval, 23521, "action_keyval returns specified key value" );
-    }
+    ok_eval( sub { $edt->_test_action('delete', { _primary => "23521" }); },
+	     "_test_action executed successfully with 'delete', '_primary', single" );
     
-    if ( ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', "18"); },
-		  "_test_action executed successfully with 'delete_cleanup'" ) )
-    {
-	can_ok( $edt, 'action_keyval' ) &&
-	    is( $edt->action_keyval, "18", "action_keyval returns specified key value" );
-    }
+    ok_eval( sub { $edt->_test_action('delete', { _primary => ["12522", "8207"] }); },
+	     "_test_action executed successfully with 'delete', '_primary', list" );
+    
+    ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', "18"); },
+	     "_test_action executed successfully with 'delete_cleanup'" );
+    
+    ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', ["18", 19]); },
+	     "_test_action executed successfully with 'delete_cleanup', list" );
 };
 
 
@@ -136,15 +120,8 @@ subtest 'other actions' => sub {
     
     my $edt = ok_new_edt( table => 'EDT_TEST' );
     
-    if ( ok_eval( sub { $edt->_test_action('update', { test_no => 74, abc => 1}); }, 
-		  "_test_action executed successfully with 'update'" ) )
-    {
-	can_ok( $edt, 'action_keyval' ) &&
-	    is( $edt->action_keyval, "74", "action_keyval returns specified key value" );
-	
-	can_ok( $edt, 'action_keymult' ) &&
-	    ok( ! $edt->action_keymult, "action_keymult returns false for a single key" );
-    }
+    ok_eval( sub { $edt->_test_action('update', { test_no => 74, abc => 1}); }, 
+		  "_test_action executed successfully with 'update'" );
     
     ok_eval( sub { $edt->_test_action('replace', { abc => 1}); }, 
 	     "_test_action executed successfully with 'replace'" );
@@ -178,6 +155,36 @@ subtest 'default table' => sub {
     }
 };
 
+
+# Check the response to bad arguments passed to the action attribute getters.
+
+subtest 'action methods bad arguments' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    ok_exception( sub { $edt->action_ref({ }) }, qr/action reference/,
+		  "exception action_ref not EditTransaction::Action" );
+    
+    ok_exception( sub { $edt->action_parameter }, qr/parameter name/,
+		  "exception action_ref no arguments" );
+    
+    ok_exception( sub { $edt->action_parameter('&_') }, qr/parameter name/,
+		  "exception action_ref one argument" );
+    
+    $edt->_test_action('insert', 'EDT_TEST', { def => 3 });
+    
+    my $action1 = $edt->action_ref;
+    
+    is( ref $action1, "EditTransaction::Action", "got Perl reference to action" );
+    
+    is( $edt->action_operation($action1), 'insert',
+	"action_operation with Perl reference" );
+    
+    my $edt2 = ok_new_edt;
+    
+    is( $edt2->action_operation($action1), undef, 
+	"action_operation undef with action from different transaction" );
+};
 
 # Check the response to bad arguments other than lack of a default table.
 
@@ -346,7 +353,7 @@ subtest 'action references' => sub {
     is( $edt->action_ref('&#1'), $action1, "action_ref with &#1" );
     is( $edt->action_ref($action1), $action1, "action_ref with perl reference" );
     is( $edt->action_ref('&foo'), $action2, "action_ref with label refstring" );
-    is( $edt->action_ref('_'), $action2, "action_ref with '_'");
+    is( $edt->action_ref('&_'), $action2, "action_ref with '&_'");
     is( $edt->action_ref, $action2, "action_ref no arg" );
     
     is( $edt->action_ref('foobar'), undef, "action_ref not found" );

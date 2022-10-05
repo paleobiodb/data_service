@@ -20,7 +20,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 4;
+use Test::More tests => 5;
 
 use List::Util qw(all);
 
@@ -28,9 +28,9 @@ use ETBasicTest;
 use ETTrivialClass;
 
 use EditTester qw(clear_table sql_command count_records fetch_records
-		  ok_found_record ok_no_record ok_count_records
-		  get_table_name sql_command sql_selectrow
-		  invert_mode ok_output ok_no_output clear_output
+		  ok_found_record ok_no_record ok_record_count
+		  get_table_name sql_command sql_fetchrow invert_mode
+		  ok_captured_output clear_captured_output
 		  ok_last_result ok_eval ok_exception last_result);
 
 
@@ -38,6 +38,18 @@ $DB::single = 1;
 
 
 my $T = EditTester->new('ETBasicTest');
+
+
+# Start by checking that 'sql_command' functions properly.
+
+subtest 'sql_command and sql_fetchrow' => sub {
+    
+    diag("TO DO: check 'sql_command' and 'sql_fetchrow'");
+    
+    my @v = sql_fetchrow('SELECT @@character_set_client, @@character_set_server');
+    
+    is( @v, 2, "sql_fetchrow returned 2 values" );
+};
 
 # Check that the basic tests for record checking all provide good results.
 
@@ -66,7 +78,7 @@ subtest 'basic tests' => sub {
     
     ok_last_result("second insert succeeded");
     
-    my $test_no = sql_selectrow("SELECT test_no FROM <<EDT_TEST>> LIMIT 1");
+    my $test_no = sql_fetchrow("SELECT test_no FROM <<EDT_TEST>> LIMIT 1");
     
     if ( ok( $test_no, "got inserted key" ) )
     {
@@ -83,11 +95,11 @@ subtest 'basic tests' => sub {
     
     ok_no_record( 'EDT_TEST', "string_req='def'", "ok_no_record with 'def'" );
     
-    ok_count_records( 2, 'EDT_TEST', "string_req='abc'", "ok_count_records 'abc'" );
+    ok_record_count( 2, 'EDT_TEST', "string_req='abc'", "ok_record_count 'abc'" );
     
-    ok_count_records( 0, 'EDT_TEST', "string_req='def'", "ok_count_records 'def'" );
+    ok_record_count( 0, 'EDT_TEST', "string_req='def'", "ok_record_count 'def'" );
     
-    ok_count_records( 2, 'EDT_TEST', '*', "ok_count_records '*'" );
+    ok_record_count( 2, 'EDT_TEST', '*', "ok_record_count '*'" );
     
     my $a = count_records( 'EDT_TEST', "string_req='abc'" );
     
@@ -100,10 +112,6 @@ subtest 'basic tests' => sub {
     is( $b, 0, "count_records with 'def' returned 0" );
     
     is( $c, 2, "count_records with no expression returned 2" );
-    
-    my @v = sql_selectrow('SELECT @@character_set_client, @@character_set_server');
-    
-    is( @v, 2, "sql_selectrow returned 2 values" );
     
     my $n_records = sql_command( "UPDATE <<EDT_TEST>> SET signed_val=2 WHERE string_req='abc'",
 				 "sql_command update statement succeeded" );
@@ -118,50 +126,50 @@ subtest 'basic tests' => sub {
     
     ok_no_record( 'EDT_TEST', "string_req='abc'" );
     
-    clear_output;
+    clear_captured_output;
     
     ok_found_record( 'EDT_TEST', "string_req xxx" );
     
-    ok_output( qr/EXCEPTION:.*syntax/, "diag exception" );
+    ok_captured_output( qr/EXCEPTION:.*syntax/, "diag exception" );
     
-    clear_output;
+    clear_captured_output;
     
     ok_no_record( 'EDT_TEST', "string_req xxx" );
     
-    ok_output( qr/EXCEPTION:.*syntax/, "diag exception" );
+    ok_captured_output( qr/EXCEPTION:.*syntax/, "diag exception" );
     
-    clear_output;
+    clear_captured_output;
     
-    ok_count_records( 4, 'EDT_TEST', "string_req='abc'" );
+    ok_record_count( 4, 'EDT_TEST', "string_req='abc'" );
     
-    ok_output( qr/got: 2.*expected: 4/s, "diag output" );
+    ok_captured_output( qr/got *: 2.*expected *: 4/s, "diag output" );
     
-    clear_output;
+    clear_captured_output;
     
-    ok_count_records( 4, 'EDT_TEST', "string_req xxx" );
+    ok_record_count( 4, 'EDT_TEST', "string_req xxx" );
     
-    ok_output( qr/EXCEPTION:.*syntax/, "diag exception" );
+    ok_captured_output( qr/EXCEPTION:.*syntax/, "diag exception" );
     
-    clear_output;
+    clear_captured_output;
     
     count_records( 'EDT_TEST', "string_req xxx" );
     
-    ok_output( qr/EXCEPTION:.*syntax/, "diag exception" );
+    ok_captured_output( qr/EXCEPTION:.*syntax/, "diag exception" );
     
-    clear_output;
+    clear_captured_output;
     
     sql_command( "INSERT INTO <<EDT_TEST>> (string_val)",
 		 "sql_command with invalid statement" );
     
     ok_last_result;
     
-    ok_output( qr/EXCEPTION:.*syntax/, "diag exception" );
+    ok_captured_output( qr/EXCEPTION:.*syntax/, "diag exception" );
     
-    clear_output;
+    clear_captured_output;
     
-    sql_selectrow( "SELECT foo WHERE baz", "sql_selectrow with invalid statement" );;
+    sql_fetchrow( "SELECT foo WHERE baz", "sql_fetchrow with invalid statement" );;
     
-    ok_output( qr/EXCEPTION:.*(syntax|foo)/, "diag exception" );
+    ok_captured_output( qr/EXCEPTION:.*(syntax|foo)/, "diag exception" );
     
     invert_mode(0);
 };
@@ -221,12 +229,12 @@ subtest 'fetch_records' => sub {
     
     invert_mode(1);
     
-    clear_output;
+    clear_captured_output;
     
     fetch_records( 'EDT_TEST', "xxx invalid sql expression", 'records', 
 		   "fetch_records with bad expression" );
     
-    ok_output( qr/EXCEPTION:.*syntax/, "diag exception" );
+    ok_captured_output( qr/EXCEPTION:.*syntax/, "diag exception" );
     
     invert_mode(0);
 };
@@ -256,7 +264,7 @@ subtest 'table specifier substitution' => sub {
 				test_no = any(SELECT test_no FROM <<EDT_SUB>>)",
 			       'records', "fetch_records with 2 table specifiers" );
     
-    ok_count_records( $count, 'EDT_TEST', "string_req = any(SELECT name FROM <<EDT_TYPES>>) and
+    ok_record_count( $count, 'EDT_TEST', "string_req = any(SELECT name FROM <<EDT_TYPES>>) and
 				test_no = any(SELECT test_no FROM <<EDT_SUB>>)",
 		      'records', "fetch_records with 2 table specifiers" );
     
@@ -278,8 +286,8 @@ subtest 'bad arguments' => sub {
     ok_exception( sub { sql_command; }, qr/specify/i,
 		  "exception sql_command no arguments" );
     
-    ok_exception( sub { sql_selectrow; }, qr/specify/i,
-		  "exception sql_selectrow no arguments" );
+    ok_exception( sub { sql_fetchrow; }, qr/specify/i,
+		  "exception sql_fetchrow no arguments" );
     
     ok_exception( sub { ok_found_record; }, qr/specify/i,
 		  "exception ok_found_record no arguments" );
@@ -299,17 +307,17 @@ subtest 'bad arguments' => sub {
     ok_exception( sub { ok_no_record('EDT_TEST', [1, 2]); }, qr/valid/i,
 		  "exception ok_no_record with listref" );
     
-    ok_exception( sub { ok_count_records; }, qr/specify|invalid count/i,
-		  "exception ok_count_records no arguments" );
+    ok_exception( sub { ok_record_count; }, qr/specify|invalid count/i,
+		  "exception ok_record_count no arguments" );
     
-    ok_exception( sub { ok_count_records('abc', 'EDT_TEST'); }, qr/invalid count/i,
-		  "exception ok_count_records invalid count" );
+    ok_exception( sub { ok_record_count('abc', 'EDT_TEST'); }, qr/invalid count/i,
+		  "exception ok_record_count invalid count" );
     
-    ok_exception( sub { ok_count_records(3, 'XXX_NOT_A_TABLE'); }, qr/unknown table/i,
-		  "exception ok_count_records nonexistent table" );
+    ok_exception( sub { ok_record_count(3, 'XXX_NOT_A_TABLE'); }, qr/unknown table/i,
+		  "exception ok_record_count nonexistent table" );
     
-    ok_exception( sub { ok_count_records(3, 'EDT_TEST', [1, 2]); }, qr/valid/i,
-		  "exception ok_count_records with listref" );
+    ok_exception( sub { ok_record_count(3, 'EDT_TEST', [1, 2]); }, qr/valid/i,
+		  "exception ok_record_count with listref" );
     
     ok_exception( sub { count_records; }, qr/specify/i,
 		  "exception count_records no arguments" );

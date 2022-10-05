@@ -26,8 +26,8 @@ use Test::More tests => 9;
 use ETBasicTest;
 use ETTrivialClass;
 
-use EditTester qw(ok_new_edt last_edt clear_edt invert_mode diag_mode
-		  ok_output ok_no_output clear_output
+use EditTester qw(ok_new_edt last_edt clear_edt invert_mode capture_mode
+		  ok_captured_output ok_no_captured_output clear_captured_output
 		  ok_condition_count ok_no_conditions ok_has_condition ok_has_one_condition
 		  ok_no_errors ok_no_warnings ok_has_one_error ok_has_one_warning
 		  ok_eval ok_exception ok_diag is_diag
@@ -96,7 +96,7 @@ subtest 'main conditions' => sub {
     ok_has_condition( qr/foobar$/, "ok_has_condition with regexp" );
     ok_has_condition( 'errors', "ok_has_condition with 'errors'" );
     ok_has_condition( 'fatal', "ok_has_condition with 'fatal'" );
-    ok_has_condition( '_', "ok_has_condition with '_'" );
+    ok_has_condition( '&_', "ok_has_condition with '&_'" );
     ok_has_condition( 'main', "ok_has_condition with 'main'" );
     ok_has_condition( 'main', 'errors', "ok_has_condition with 'main' and 'errors'" );
     ok_has_condition( 'errors', 'main', "ok_has_condition with 'errors' and 'main'" );
@@ -184,7 +184,7 @@ subtest 'action conditions' => sub {
     
     $edt->add_condition('E_FORMAT', "string_req", "foobar");
     
-    ok_has_one_condition( '_', qr/foobar/, "found condition attached to action" );
+    ok_has_one_condition( '&_', qr/foobar/, "found condition attached to action" );
     ok_has_one_condition( 'all', "one condition in total" );
     
     ok_no_conditions( 'main', "no main conditions" );
@@ -192,7 +192,7 @@ subtest 'action conditions' => sub {
     $edt->add_condition('C_LOCKED');
     
     ok_condition_count( 2, "two conditions total" );
-    ok_condition_count( 2, '_', "two conditions on latest action" );
+    ok_condition_count( 2, '&_', "two conditions on latest action" );
     
     invert_mode(1);
     
@@ -211,7 +211,7 @@ subtest 'action conditions' => sub {
     $edt->add_condition('main', 'C_CREATE');
     
     ok_has_one_condition( 'main', 'C_CREATE', "C_CREATE is the only condition on main" );
-    ok_has_one_condition( '_', "just one condition on latest action" );
+    ok_has_one_condition( '&_', "just one condition on latest action" );
     ok_has_condition( '&#2', qr/xyzzy/, "found condition by action reference" );
 };
 
@@ -232,16 +232,16 @@ subtest 'condition bad arguments' => sub {
     ok_exception( sub { ok_has_condition('main', '&#1', 'C_LOCKED'); },
 		  qr/conflicting selector/, "selector conflict throws an exception" );
     
-    ok_exception( sub { ok_has_condition('errors', '_', 'nonfatal', 'C_LOCKED'); },
+    ok_exception( sub { ok_has_condition('errors', '&_', 'nonfatal', 'C_LOCKED'); },
 		  qr/conflicting type/, "type conflict throws an exception" );
     
     ok_exception( sub { ok_has_condition('mainn', 'C_LOCKED'); },
 		  qr/unknown selector/, "misspelled selector throws an exception" );
     
-    ok_exception( sub { ok_has_condition('_', 'errs', 'C_LOCKED'); },
+    ok_exception( sub { ok_has_condition('&_', 'errs', 'C_LOCKED'); },
 		  qr/unknown selector/, "misspelled type throws an exception" );
     
-    clear_output;
+    clear_captured_output;
     
     invert_mode(1);
     
@@ -249,7 +249,7 @@ subtest 'condition bad arguments' => sub {
     
     invert_mode(0);
     
-    ok_output( qr/action.*[&][#]/, "ok_has_condition diag no matching action");
+    ok_captured_output( qr/action.*[&][#]/, "ok_has_condition diag no matching action");
     
     ok_exception( sub { ok_has_condition( 'errors', 'CLOCKED'); },
 		  qr/unrecognized filter/, "misspelled filter throws an exception" );
@@ -283,13 +283,13 @@ subtest 'condition bad arguments' => sub {
 # The tests 'ok_diag' and 'is_diag' mirror the corresponding tests from
 # Test::More, but when they fail they also list all conditions from the latest
 # (or specified) EditTransaction that match the specified type, selector, and/or
-# filter. If none are given, the selector defaults to '_'.
+# filter. If none are given, the selector defaults to '&_'.
 
 subtest 'ok_diag and is_diag' => sub {
     
-    diag_mode(1);
+    capture_mode(1);
     
-    clear_output;
+    clear_captured_output;
     
     my $edt = ok_new_edt;
     
@@ -301,7 +301,7 @@ subtest 'ok_diag and is_diag' => sub {
     ok_diag( $test_A, "test value true" );
     is_diag( $test_B, "abc", "test value is expected value" );
     
-    ok_no_output;
+    ok_no_captured_output;
     
     invert_mode(1);
     
@@ -310,15 +310,15 @@ subtest 'ok_diag and is_diag' => sub {
     
     ok_diag( $test_A1, "test value false" );
     
-    ok_output( qr/E_EXECUTE/, "first condition was listed");
+    ok_captured_output( qr/E_EXECUTE/, "first condition was listed");
     
     $edt->add_condition('C_LOCKED');
     
     is_diag( $test_B1, "abc", "test value is not the expected value" );
     
-    ok_output( qr/C_LOCKED/, "second condition was listed" );
+    ok_captured_output( qr/C_LOCKED/, "second condition was listed" );
     
-    clear_output;
+    clear_captured_output;
     
     $edt->_test_action( 'skip', 'EDT_TEST', { abc => 'def' } );
     
@@ -326,7 +326,7 @@ subtest 'ok_diag and is_diag' => sub {
     
     ok_diag( $test_A1, "test value false 2" );
     
-    ok_output( qr/W_PARAM/, "most recent condition was listed" );
+    ok_captured_output( qr/W_PARAM/, "most recent condition was listed" );
     
     invert_mode(0);
 };

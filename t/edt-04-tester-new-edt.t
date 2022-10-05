@@ -16,7 +16,8 @@ use Test::More tests => 3;
 
 use ETBasicTest;
 use ETTrivialClass;
-use EditTester qw(ok_eval ok_exception last_result last_edt ok_new_edt ok_has_condition);
+use EditTester qw(ok_eval ok_exception last_result last_edt ok_new_edt invert_mode
+		  ok_has_condition ok_captured_output clear_captured_output);
 
 
 $DB::single = 1;
@@ -125,5 +126,16 @@ subtest 'new_edt bad arguments' => sub {
     ok_eval( sub { $T->new_edt(table => 'XYZ') }, "bad table name" ) &&
     
 	ok_has_condition( 'E_BAD_TABLE', "bad table name generated E_BAD_TABLE" );
+    
+    invert_mode(1);
+    
+    clear_captured_output;
+    
+    $T->new_edt(request => [ ]);
+    
+    ok_captured_output( qr/EXCEPTION.*database (handle|connection)/,
+			"exception reported EditTransaction::new" );
+    
+    invert_mode(0);
 };
 
