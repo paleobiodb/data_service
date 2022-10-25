@@ -15,25 +15,21 @@ use strict;
 
 package ETBasicTest;
 
+use EditTransaction;
+
 use parent 'EditTransaction';
 
 use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
 
 use Carp qw(carp croak);
 
-use Role::Tiny;
 use Role::Tiny::With;
+
+use Class::Method::Modifiers qw(before around);
 
 with 'EditTransaction::Mod::MariaDB';
 
-
-# use namespace::clean;
-
-# Table names
-
-# our $EDT_TEST = 'edt_test';
-# our $EDT_AUX = 'edt_aux';
-# our $EDT_ANY = 'edt_any';
+use namespace::clean;
 
 
 # At runtime, set column properties for our test table
@@ -93,6 +89,8 @@ with 'EditTransaction::Mod::MariaDB';
     __PACKAGE__->register_allowances('TEST_DEBUG');
     __PACKAGE__->register_conditions(E_TEST => ["TEST ERROR '&1'", "TEST ERROR"],
 				     W_TEST => ["TEST WARNING '&1'", "TEST WARNING"]);
+    
+    # __PACKAGE__->register_database_module();
 }
 
 
@@ -154,64 +152,44 @@ before 'authorize_action' => sub {
     {
 	if ( $record->{string_req} eq 'authorize exception' )
 	{
-	    die "generated exception";
+	    die "exception during authorization";
 	}
 	
-	elsif ( $record->{string_req} eq 'authorize error' )
-	{
-	    $edt->add_condition('E_TEST', 'xyzzy');
-	}
+	# elsif ( $record->{string_req} eq 'authorize save' )
+	# {
+	#     $edt->{save_authorize_action} = $action;
+	#     $edt->{save_authorize_operation} = $operation;
+	#     $edt->{save_authorize_table} = $table;
+	#     $edt->{save_authorize_keyexpr} = $keyexpr;
+	# }
 
-	elsif ( $record->{string_req} eq 'authorize warning' )
-	{
-	    $edt->add_condition('W_TEST', 'xyzzy');
-	}
-
-	elsif ( $record->{string_req} eq 'authorize save' )
-	{
-	    $edt->{save_authorize_action} = $action;
-	    $edt->{save_authorize_operation} = $operation;
-	    $edt->{save_authorize_table} = $table;
-	    $edt->{save_authorize_keyexpr} = $keyexpr;
-	}
-
-	elsif ( $record->{string_req} eq 'authorize methods' )
-	{
-	    my $keyexpr = $action->keyexpr;
-	    my @keylist = $action->keylist;
-	    my @values = $edt->test_old_values($action, $table);
+	# elsif ( $record->{string_req} eq 'authorize methods' )
+	# {
+	#     my $keyexpr = $action->keyexpr;
+	#     my @keylist = $action->keylist;
+	#     my @values = $edt->test_old_values($action, $table);
 	    
-	    $edt->{save_method_keyexpr} = $keyexpr;
-	    $edt->{save_method_keylist} = \@keylist;
-	    $edt->{save_method_values} = \@values;
-	}
+	#     $edt->{save_method_keyexpr} = $keyexpr;
+	#     $edt->{save_method_keylist} = \@keylist;
+	#     $edt->{save_method_values} = \@values;
+	# }
     }
 };
 
 
-# sub validate_action {
+before 'validate_action' => sub {
 
-#     my ($edt, $action, $operation, $table, $keyexpr) = @_;
-
-#     my $record = $action->record;
-
-#     if ( $record && $record->{string_req} )
-#     {
-# 	if ( $record->{string_req} eq 'validate exception' )
-# 	{
-# 	    die "generated exception";
-# 	}
-	
-# 	elsif ( $record->{string_req} eq 'validate error' )
-# 	{
-# 	    $edt->add_condition('E_TEST', 'xyzzy');
-# 	}
-
-# 	elsif ( $record->{string_req} eq 'validate warning' )
-# 	{
-# 	    $edt->add_condition('W_TEST', 'xyzzy');
-# 	}
-
+    my ($edt, $action, $operation, $table, $keyexpr) = @_;
+    
+    my $record = $action->record;
+    
+    if ( $record && $record->{string_req} )
+    {
+	if ( $record->{string_req} eq 'validate exception' )
+	{
+	    die "exception during validation";
+	}
+    
 # 	elsif ( $record->{string_req} eq 'validate save' )
 # 	{
 # 	    $edt->{save_validate_action} = $action;
@@ -231,18 +209,24 @@ before 'authorize_action' => sub {
 # 	    $edt->{save_method_keylist} = \@keylist;
 # 	    $edt->{save_method_values} = \@values;
 # 	}
-#     }
+    }
+};
 
-#     if ( $record && $record->{name} )
+
+# around 'check_table_permission' => sub {
+    
+#     my ($orig, $edt, $table, $requested) = @_;
+    
+#     if ( $edt->{testing}{suppress_insert_key} && $requested eq 'insert' )
 #     {
-# 	if ( $record->{name} =~ /validate label (.*)/i )
-# 	{
-# 	    $edt->{save_validate_label} = $edt->label_table($1);
-# 	}
+# 	return 'none';
 #     }
     
-#     return $edt->SUPER::validate_action($action, $operation, $table, $keyexpr);
-# }
+#     else
+#     {
+# 	return $orig->(@_);
+#     }
+# };
 
 
 sub test_old_values {
@@ -265,13 +249,27 @@ sub test_old_values {
 }
 
 
+sub initialize_instance {
+    
+    my ($edt) = @_;
+    
+    $edt->{save_init_count} = 0;
+    $edt->{save_final_count} = 0;
+    $edt->{save_cleanup_count} = 0;
+    
+    $edt->{save_before_count} = 0;
+    $edt->{save_after_count} = 0;
+    $edt->{save_cleanup_action_count} = 0;    
+}
+
+
 sub initialize_transaction {
 
     my ($edt, $table) = @_;
 
     if ( $edt->get_attr('initialize exception') )
     {
-	die "generated exception";
+	die "initialize exception";
     }
 
     elsif ( $edt->get_attr('initialize error') )
@@ -279,15 +277,21 @@ sub initialize_transaction {
 	$edt->add_condition('E_TEST', 'initialize');
     }
     
+    elsif ( $edt->get_attr('initialize warning') )
+    {
+	$edt->add_condition('W_TEST', 'initialize');
+    }
+    
     elsif ( my $value = $edt->get_attr('initialize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $TABLE{EDT_SUB} (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_TEST} (string_req) values ($quoted)");
     }
     
     $edt->{save_init_count}++;
     $edt->{save_init_table} = $table;
     $edt->{save_init_status} = $edt->status;
+    $edt->{save_init_action} = $edt->current_action;
 }
 
 
@@ -297,7 +301,7 @@ sub finalize_transaction {
     
     if ( $edt->get_attr('finalize exception') )
     {
-	die "generated exception";
+	die "finalize exception";
     }
     
     elsif ( $edt->get_attr('finalize error' ) )
@@ -313,12 +317,19 @@ sub finalize_transaction {
     elsif ( my $value = $edt->get_attr('finalize add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $TABLE{EDT_SUB} (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_TEST} (string_req) values ($quoted)");
+    }
+    
+    elsif ( my $value = $edt->get_attr('finalize remove') )
+    {
+	my $quoted = $edt->dbh->quote($value);
+	$edt->dbh->do("DELETE FROM $TABLE{EDT_TEST} WHERE string_req=$quoted");	
     }
     
     $edt->{save_final_count}++;
     $edt->{save_final_table} = $table;
     $edt->{save_final_status} = $edt->status;
+    $edt->{save_final_action} = $edt->current_action;
 }
 
 
@@ -392,7 +403,7 @@ sub before_action {
     if ( my $value = $edt->get_attr('before add') )
     {
 	my $quoted = $edt->dbh->quote($value);
-	$edt->dbh->do("INSERT INTO $TABLE{EDT_SUB} (name) values ($quoted)");
+	$edt->dbh->do("INSERT INTO $TABLE{EDT_TEST} (string_req) values ($quoted)");
     }
     
     $edt->{save_before_count}++;
@@ -458,16 +469,16 @@ sub after_action {
 	$edt->dbh->do("DELETE FROM $table WHERE string_req=$quoted");
     }
 
-    if ( $operation eq 'delete' && $table eq 'EDT_TEST' )
-    {
-	my $keyexpr = $action->keyexpr;
+    # if ( $operation eq 'delete' && $table eq 'EDT_TEST' )
+    # {
+    # 	my $keyexpr = $action->keyexpr;
 	
-	if ( $keyexpr )
-	{
-	    $edt->dbh->do("DELETE FROM $TABLE{EDT_SUB} WHERE $keyexpr");
-	    $edt->{save_delete_aux} = $keyexpr;
-	}
-    }
+    # 	if ( $keyexpr )
+    # 	{
+    # 	    $edt->dbh->do("DELETE FROM $TABLE{EDT_SUB} WHERE $keyexpr");
+    # 	    $edt->{save_delete_aux} = $keyexpr;
+    # 	}
+    # }
     
     $edt->{save_after_count}++;
     $edt->{save_after_action} = $action;

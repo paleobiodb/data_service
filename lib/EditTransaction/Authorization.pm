@@ -11,9 +11,10 @@ package EditTransaction::Authorization;
 use strict;
 
 use Switch::Plain;
+use Scalar::Util qw(reftype);
 use Carp qw(carp croak);
 
-use Moo::Role;
+use Role::Tiny;
 
 no warnings 'uninitialized';
 
@@ -65,29 +66,32 @@ sub validate_instance_permission {
 # check_table_permission ( table, requested )
 # 
 # This routine is called as an instance method to authorize certain kinds of actions. It is passed
-# a table specifier and a requested authorization from the following list:
+# a table specifier and a requested permission from the following list:
 # 
 # view           view rows in this table
 # 
-# post           add rows to this table; this implies authorization to modify rows you own
+# post           add rows to this table with auto-insert primary key values; this implies
+#                authorization to modify rows you own
 # 
-# modify         modify rows in this table other than ones you own
+# insert         add rows to this table with specified primary key values; this also
+#                implies authorization to modify rows you own
+# 
+# modify         modify rows in this table
 # 
 # admin          execute restricted actions on this table
-# 
-# insert_key     add rows to this table with specified primary key values
 # 
 # The return value should be either a listref representing an error condition, or a string value
 # from the following list. The result should be the first value that applies to the specified
 # database table according to the permission object.
 # 
-# unrestricted   if this class does not do authorization checks, or if this particular table
-#                does not have any authorization information
+# unrestricted   this class does not do authorization checks, or this particular table
+#                does not have any authorization information, or the permission object
+#                includes the 'superuser' attribute.
 # 
-# admin          if the permission object allows the requested authorization and also indicates
-#                administrative permission on this table or superuser privilege
+# admin          the permission object allows the requested authorization and includes
+#                administrative permission on this table
 # 
-# own            if the permission object allows the requested authorization only for objects
+# own            the permission object allows the requested authorization only for objects
 #                owned by the user identified by the permission object.
 # 
 # granted        if the permission object allows the requested authorization
@@ -98,12 +102,36 @@ sub validate_instance_permission {
 # which allows all actions.
 
 sub check_table_permission {
-
+    
+    my ($edt, $table_specifier, $requested) = @_;
+    
+    my $tableinfo = $edt->table_info_ref($table_specifier) || return 'none';
+    
+    if ( $requested eq 'view' )
+    {
+	return 'none' if $tableinfo->{CAN_VIEW} eq 'none';
+    }
+    
+    elsif ( $requested eq 'post' )
+    {
+	return 'none' if $tableinfo->{CAN_POST} eq 'none';
+    }
+    
+    elsif ( $requested eq 'insert' )
+    {
+	return 'none' if $tableinfo->{CAN_INSERT} eq 'none';
+    }
+    
+    elsif ( $requested eq 'modify' )
+    {
+	return 'none' if $tableinfo->{CAN_MODIFY} eq 'none';
+    }
+    
     return 'unrestricted';
 }
 
 
-# check_record_permission ( table, requested, where )
+# check_row_permission ( table, requested, where )
 # 
 # This routine is called as an instance method to authorize certain kinds of actions. It is passed
 # a table specifier, a requested authorization from the following list, and an SQL expression that
@@ -111,59 +139,95 @@ sub check_table_permission {
 # 
 # view           view the rows selected from this table by the specified expression
 # 
-# edit           modify the rows selected from this table by the specified expression
+# modify         modify the rows selected from this table by the specified expression
 # 
 # delete         delete the rows selected from this table by the specified expression
 # 
 # If an error occurs during this routine, the return value should be a listref representing the
 # error condition. If the where expression does not match any rows, the return value should be:
 # 
-# notfound       if no row matches the specified expression
+# notfound       no row matches the specified expression
 # 
-# If the where expression matches one row, the return value should be the first of the following
-# strings that applies to the matching row:
+# If the where expression matches one or more rows, each of the following permissions that
+# applies to at least one row in the set should be returned followed by a count of
+# matching rows. When multiple values are returned, they should occur in the order listed
+# below. Each row should be counted according to the highest of the permissions that apply
+# to it.
 # 
-# unrestricted   if this class does not do authorization checks, or if this specific table
-#                does not contain authorization information
+# unrestricted   this class does not do authorization checks, or this specific table does
+#                not contain authorization information, or the permission object includes
+#                the 'superuser' attribute.
 # 
-# none           if the requested authorization is denied for some other reason than a row lock
+# none           the requested permission is denied for some other reason than a row lock
 # 
-# locked         if the requested authorization would be granted except that the row has an
+# locked         the requested permission would be granted except that the row(s) has an
 #                administrative lock or else has an owner lock and is owned by somebody else
 # 
-# owned          if the selected row is owned by the user identified by the permission object;
-# owned_unlock   the suffix is added if an owner lock is set for this row
+# owned          the selected row is owned by the user identified by the permission object
+# owned_unlock   the suffix is added if an owner lock is set for the row(s)
 # 
-# admin          if the permission object allows the requested authorization for the selected
+# admin          the permission object allows the requested authorization for the selected
 # admin_unlock   row and also indicates administrative permission on this table; the suffix
 #                is added if any lock is set for this row
 # 
-# granted        if the requested authorization is allowed by the permission object but
+# granted        the requested authorization is allowed by the permission object but
 #                the user does not own the selected row
 # 
-# If the SQL expression matches two or more rows, the return value should be a list consisting of
-# strings from the above table alternating with integer values. Each string value should be
-# followed by the number of rows to which it applies. Each row should be counted with the first
-# string value that applies to it. For a single matching row, the string value may optionally be
-# followed by '1'. In no case should the return value be empty.
+# For a single matching row, the permission may optionally be followed by '1'. In no case
+# should the return value be empty.
 # 
 # This default method returns 'notfound' if no rows match the where expression, and 'unrestricted'
 # followed by the row count otherwise.
 
-sub check_record_permission {
+sub check_row_permission {
     
-    my ($edt, $table_specifier, $requested, $selector) = @_;
+    my ($edt, $table_specifier, $requested, $key_expr) = @_;
     
-    my $count;
+    my $tableinfo = $edt->table_info_ref($table_specifier) || return 'none';
     
-    eval {
-        $count = $edt->count_matching_rows($table_specifier, $selector);
-    };
-    
-    if ( $@ )
+    if ( $requested eq 'view' )
     {
-	$edt->error_line($@) unless $edt->silent_mode;
-	return ['E_EXECUTE', "an error occurred while counting the selected record(s)"];
+	return 'none' if $tableinfo->{CAN_VIEW} eq 'none';
+    }
+    
+    elsif ( $requested eq 'modify' )
+    {
+	return 'none' if $tableinfo->{CAN_MODIFY} eq 'none';
+    }
+    
+    if ( $requested eq 'delete' )
+    {
+	return 'none' if $tableinfo->{CAN_DELETE} eq 'none';
+    }
+    
+    my ($count) = $edt->db_count_matching_rows($table_specifier, $key_expr);
+    
+    if ( ref $count eq 'ARRAY' )
+    {
+	return $count;
+    }
+    
+    elsif ( $count )
+    {
+	return ('unrestricted', $count);
+    }
+    
+    else
+    {
+	return 'notfound';
+    }
+}
+
+
+sub check_superior_permission {
+    
+    my ($edt, $superior_table, $requested, $subordinate_table, $key_expr);
+    
+    my $count = $edt->db_count_matching_rows($subordinate_table, $key_expr);
+    
+    if ( ref $count eq 'ARRAY' )
+    {
+	return $count;
     }
     
     elsif ( $count )
@@ -181,11 +245,11 @@ sub check_record_permission {
 # Authorization of actions
 # ------------------------
 
-# authorize_action ( action, table, operation, flag )
+# authorize_action ( action )
 # 
-# Determine whether the current user is authorized to perform the specified action. If so, store
-# the indicated permission in the action record. For any operation but 'insert' a key expression
-# must be provided.
+# Determine whether the permission object associated with this transaction is authorized
+# to perform the specified action.  If so, store the indicated permission in the action
+# record.
 # 
 # This method may be overridden by subclasses, though that is an iffy thing to do because it will
 # circumvent all of the permission checks implemented here. Under most circumstances, an override
@@ -195,268 +259,354 @@ sub check_record_permission {
 # If the flag 'FINAL' is given and the authorization has been marked as pending, complete it
 # now.
 
+our (%AUTH_ERROR) = ( notfound => 'E_NOT_FOUND',
+		      locked => 'E_LOCKED',
+		      none => 'E_PERM' );
+    
+
 sub authorize_action {
     
-    my ($edt, $action, $operation, $table_specifier, $flag) = @_;
+    my ($edt, $action, $operation, $table_specifier) = @_;
     
-    # If the authorization cannot be resolved yet, return now. In this case, authorization
-    # will be completed just before the action is executed. This typically happens when an
-    # action reference is provided as a key value.
+    # If $operation or $table_specifier aren't passed as arguments, fill them in.
     
-    if ( $action->permission eq 'PENDING' )
+    $operation ||= $action->operation;
+    $table_specifier ||= $action->table;
+    
+    # Get a reference to the cached information about the table on which the action will
+    # be operating. If none is available, set the permission to 'none' and return. The
+    # action should already have an 'E_BAD_TABLE' condition if this is the case.
+    
+    my $tableinfo = $edt->table_info_ref($table_specifier) || 
+	return $action->permission('none');
+    
+    # Start by checking whether this action would be performed with administrative
+    # permission or not. This is necessary in order to allow proper validation even if the
+    # action is not authorized or if authorization is still pending. The goal is to return
+    # as much information as possible to the client. If the action parameters are valid or
+    # if they need to be amended, we want to inform the client of that even if the action
+    # cannot proceed. If this table is marked as being subordinate to another table, the
+    # permission check is done against the superior table.
+    
+    my $superior_table = $tableinfo->{SUPERIOR_TABLE};
+    
+    my $perm = $edt->check_table_permission($superior_table || $table_specifier, 'admin');
+    
+    if ( $perm eq 'admin' || $perm eq 'unrestricted' )
     {
-	return unless $flag eq 'FINAL';
+	$action->validate_admin(1);
     }
     
-    # If the action has a key value, check the permission.
+    # If a permission code has already been set for this action, including 'PENDING',
+    # return without doing anything else. Otherwise, proceed with authorization.
     
-    # Each operation has different requirements for key values. Check these now.
-    
-    my $keyexpr = $action->keyexpr;
-    my $abort;
-    
-    # The 'insupdate' operation requires that the table have a primary key. At most one
-    # key value can be specified. If the permission is 'PENDING' that means a key
-    # reference was specified instead of a key value, which is not allowed for
-    # 'insupdate'. If no key value was specified, change the operation to 'insert'.
-    
-    if ( $operation eq 'insupdate' )
+    if ( $action->permission )
     {
-	if ( ! $action->keycol )
-	{
-	    $edt->add_condition($action, 'E_NO_KEY');
-	    $abort = 1;
-	}
-	
-	elsif ( $action->keymult )
-	{
-	    $edt->add_condition($action, 'E_MULTI_KEY');
-	    $abort = 1;
-	}
-	
-	elsif ( $action->permission eq 'PENDING' )
-	{
-	    $edt->add_condition($action, 'E_BAD_KEY', $action->keyval);
-	    $abort = 1;
-	}
-	
-	elsif ( ! $action->keyval )
-	{
-	    $operation = $action->set_operation('insert');
-	    $edt->add_condition($action, 'C_CREATE') unless $edt->allows('CREATE');
-	}
-    }
-    
-    # The 'replace' operation requires a single primary key value if the table has a
-    # primary key. Key references are not allowed for 'replace' either (see insupdate).
-    
-    elsif ( $operation eq 'replace' )
-    {
-	if ( $action->keymult )
-	{
-	    $edt->add_condition($action, 'E_MULTIPLE_KEYS');
-	    $abort = 1;
-	}
-	
-	elsif ( $action->keycol && ! $action->keyval )
-	{
-	    $edt->add_condition($action, 'E_NO_KEY');
-	    $abort = 1;
-	}
-	
-	elsif ( $action->permission eq 'PENDING' )
-	{
-	    $edt->add_condition('E_BAD_KEY', $action->keyval);
-	    $abort = 1;
-	}
-    }
-    
-    # The 'update' and 'delete' operations require a valid key expression, which
-    # may or may not select specific primary key values.
-    
-    elsif ( $operation =~ /^update|^delete/ )
-    {
-	$edt->add_conditions($action, 'E_NO_KEY') unless $keyexpr;
-	$abort = 1;
-    }
-    
-    # If the operation is 'insert', add E_HAS_KEY if the table has a primary key and a key
-    # value was specified. Otherwise, add C_CREATE unless the CREATE allowance is present.
-    
-    elsif ( $operation eq 'insert' )
-    {
-	if ( $action->keycol && $action->keyval )
-	{
-	    $edt->add_condition('E_HAS_KEY', 'insert');
-	    $abort = 1;
-	}
-	
-	elsif ( ! $edt->allows('CREATE') )
-	{
-	    $edt->add_condition($action, 'C_CREATE');
-	}
-    }
-    
-    # If a condition has been generated that completes the authorization, return now.
-    
-    if ( $abort )
-    {
-	$action->set_permission('none');
 	return;
     }
     
-    # Otherwise, get a reference to the information record for this table.
+    # Step 1: check key multiplicity
+    # ------------------------------
     
-    my $tableinfo = $edt->table_info_ref($table_specifier);
+    # The operations 'insert', 'replace', 'insrep' and 'insupd' can affect at
+    # most one record.  If multiple keys or a selection expression is given, add an error
+    # condition and return. 
     
-    unless ( $tableinfo )
+    my $single_op = $operation =~ /^ins|^rep/;
+    
+    if ( $single_op && $action->keymult )
     {
-	$edt->add_condition($action, 'E_BAD_TABLE', $table_specifier);
+	my $code = $action->keymult eq 'where' ? 'E_HAS_WHERE' : 'E_MULTI_KEY';
+	
+	$edt->add_condition($action, $code, $operation);
+	
 	return $action->set_permission('none');
     }
     
-    # Check whether the SUPERIOR_TABLE property is set for the specified table. If so, then the
-    # authorization check needs to be done on this other table instead of the specified one.
+    # Step 2: determine permission
+    # ----------------------------
     
-    my @permcounts;
+    my $key_expr = $action->keyexpr;
     
-    if ( my $superior = $tableinfo->{SUPERIOR_TABLE} )
+    my $auth_table = $table_specifier;
+    
+    my ($primary, $count, @rest);
+    
+    my ($subordinate_count, $link_expr, $link_permission, $insert_key, $create_row);
+    
+    # If the table corresponding to $table_specifier is subordinate to another table,
+    # any action requires 'modify' permission on the linked records in that table.
+    
+    if ( $superior_table )
     {
-	@permcounts = $edt->authorize_subordinate($action, $operation, $table_specifier, $superior);
-    }
-    
-    # Otherwise, use the standard authorization for each operation. Some operations are authorized
-    # against the table permissions, others against individual record permissions.
-    
-    else
-    {
-	sswitch ( $operation )
-	{
-	    case 'insert': {
-		
-		@permcounts = $edt->check_table_permission($table_specifier, 'post');
-	    }
-	    
-	    case 'update':
-	    case 'insupdate':
-	    case 'replace': {
-		
-	        @permcounts = $edt->check_record_permission($table_specifier, 'modify', $keyexpr);
-	    }
-
-	    case 'delete': {
-		
-		@permcounts = $edt->check_record_permission($table_specifier, 'delete', $keyexpr);
-	    }
-	    
-	    case 'delete_cleanup': {
-		
-		croak "the operation '$operation' can only be done on a subordinate table";
-	    }
-	    
-	    case 'other': {
-		
-		# $$$ TO DO: need to add a mechanism to specify which permission
-		# (i.e. 'modify', 'view', etc. a specific 'other' action requires)
-		
-		if ( $keyexpr )
-		{
-		    @permcounts = $edt->check_record_permission($table_specifier, 'modify', $keyexpr);
-		}
-		
-		else
-		{
-		    @permcounts = $edt->check_table_permission($table_specifier, 'admin');
-		}
-	    }
-	    
-	  default: {
-		die "bad operation '$operation' in 'authorize_action'";
-	    }
-	};
-    }
-    
-    # In either case, we will get one or more results from the call. If there are more than
-    # one, each result except possibly the last will be followed by a count.
-    
-    my $result = shift @permcounts;
-    my $count = shift @permcounts;
-    
-    # If the 'notfound' result is first, that means no records at all were found
-    # for the specified key expression. This blocks the action unless the operation is
-    # 'replace' or 'insupdate', which can possibly proceed.
-    
-    if ( $result eq 'notfound' )
-    {
-	# An 'insupdate' operation can turn into an insert if the table
-	# permissions include 'insert_key' and this transaction has the CREATE
-	# allowance. A 'replace' operation is allowed to proceed under the same
-	# circumstances. 
+	$auth_table = $superior_table;
 	
-	if ( $operation eq 'replace' || $operation eq 'insupdate')
+	# If a link expression is present, check for 'modify' permission on the specified
+	# superior record.  If no valid permission was given, add an error condition and
+	# return. 
+	
+	if ( $link_expr = $action->linkexpr )
 	{
-	    my $can_insert = $edt->check_table_permission($table_specifier, 'insert_key');
+	    ($link_permission) = $edt->check_row_permission($superior_table, 'modify', 
+							    $link_expr);
 	    
-	    if ( $can_insert && $can_insert ne 'none' )
+	    if ( ref $link_permission eq 'ARRAY' )
 	    {
-		unless ( $edt->{allows}{CREATE} )
-		{
-		    $edt->add_condition($action, 'C_CREATE');
-		}
-		
-		$action->set_permission($can_insert);
+		my $msg = join(': ', $link_permission->@*);
+		$edt->error_line($msg);
+		$edt->add_condition($action, 'E_BAD_LINK', $action->linkval);
+		return 'none';
 	    }
 	    
 	    else
 	    {
-		$edt->add_condition($action, 'E_NOT_FOUND');
-		$action->set_permission('notfound');
-	    }
-	    
-	    # If the operation is 'insupdate', change it to 'insert'.
-	    
-	    if ( $operation eq 'insupdate' )
-	    {
-		$action->set_operation('insert');
+		$link_permission ||= 'none';
 	    }
 	}
 	
-	# In all other situations, add an E_NOT_FOUND condition.
+	# If a key expression is present, get the permission for the records selected by
+	# that expression.
+	
+	if ( $key_expr )
+	{
+	    ($primary, $count, @rest) = 
+		$edt->check_superior_permission($superior_table, 'modify', 
+						$table_specifier, $key_expr);
+	    
+	    $primary ||= 'none';
+	    
+	    $subordinate_count = $edt->db_count_matching_rows($table_specifier, $key_expr);
+	    
+	    # If an error was returned, add it and return 'none'.
+	    
+	    if ( ref $subordinate_count eq 'ARRAY' )
+	    {
+		$edt->add_condition($action, $subordinate_count->@*);
+		return 'none';
+	    }
+	    
+	    # If the operation is an insert or replace and the key expression does not
+	    # match any row, check to see if we have permission to insert records with
+	    # arbitrary key values into the table. If so, change the operation to
+	    # 'insert'. 
+	    
+	    if ( $single_op && ! $subordinate_count )
+	    {
+		$insert_key = 1;
+	    }
+	}
+	
+	elsif ( $operation =~ /^ins/ )
+	{
+	    if ( $link_permission )
+	    {
+		$primary = $link_permission;
+		$operation = $action->set_operation('insert');
+		$count = 1;
+		$create_row = 1;
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition($action, 'E_NO_KEY', 'link', $action->linkcol);
+		return $action->set_permission('none');
+	    }	    
+	}
 	
 	else
 	{
-	    $edt->add_condition($action, 'E_NOT_FOUND');
-	    $action->set_permission('notfound');
+	    $edt->add_condition($action, 'E_NO_KEY', $operation);
+	    return $action->set_permission('none');
+	}
+    }
+    
+    # For a regular table, if the action parameters include a key expression then check
+    # whether we have permission to operate on the selected records. The requested
+    # permission is 'modify', unless the operation is delete in which case we request
+    # 'delete' permission. The reason for this is that some tables may require
+    # administrative permission to delete records.
+    
+    elsif ( $key_expr )
+    {
+	my $requested = $operation eq 'delete' ? 'delete' : 'modify';
+	
+	($primary, $count, @rest) = 
+	    $edt->check_row_permission($table_specifier, $requested, $key_expr);
+	
+	if ( ref $primary eq 'ARRAY' )
+	{
+	    unless ( $action->keyval )
+	    {
+		$primary->[0] = 'E_WHERE';
+	    }
+	    
+	    $edt->add_condition($action, $primary->@*);
+	    return 'none';
 	}
 	
-	return ('notfound');
+	$primary ||= 'none';
+	
+	if ( $primary eq 'notfound' )
+	{
+	    $insert_key = 1 if $single_op;
+	}
+	
+	elsif ( $operation eq 'insert' )
+	{
+	    $edt->add_condition($action, 'E_DUPLICATE');
+	    return $action->set_permission('none');
+	}
     }
     
-    # Otherwise, if the operation is 'insupdate' then change it to 'update'.
+    # If no key expression is present and the operation is one of the 'insert' variants,
+    # then check for 'post' permission on the table.
     
-    elsif ( $operation eq 'insupdate' )
+    elsif ( $operation =~ /^ins/ )
     {
-	$action->set_operation('update');
+	$primary = $edt->check_table_permission($table_specifier, 'post') || 'none';
+	$operation = $action->set_operation('insert');
+	$count = 1;
+	$create_row = 1;
     }
     
-    # Now handle the other cases. If the primary permission is 'none', that
-    # means there are at least some records the user has no authorization to
-    # operate on, or else the user lacks the necessary permission on the table
-    # itself. This is reported as E_PERM.
+    # If the action parameters do not include a key expression and the operation is
+    # 'other', check for 'admin' permission on the table.
     
-    elsif ( $result eq 'none' )
+    if ( $operation eq 'other' && ! $key_expr )
+    {
+	$primary = $edt->check_table_permission($table_specifier, 'admin') || 'none';
+    }
+    
+    # At this point, if we do not have a primary permission, that means no key expression
+    # is present and the operation requires one. Add E_NO_KEY and return.
+    
+    unless ( $primary )
+    {
+	$edt->add_condition($action, 'E_NO_KEY', $operation);
+	return $action->set_permission('none');
+    }
+    
+    # Step 3: resolve 'insert' and 'replace' operations
+    # -------------------------------------------------
+    
+    # The insert and replace operations may require extra steps to resolve.
+    
+    if ( $single_op )
+    {
+	# If $insert_key was set, the operation is set to 'insert'. We must check whether
+	# permission is granted to insert records with specified keys into the table. If
+	# not, an E_PERM condition will be added below.
+	
+	if ( $insert_key )
+	{
+	    $primary = $edt->check_table_permission($table_specifier, 'insert') || 'none';
+	    
+	    $operation = $action->set_operation('insert');
+	    
+	    if ( $primary ne 'none' )
+	    {
+		$create_row = 1;
+	    }
+	}
+	
+	# Otherwise, if the operation is 'insert' but no key expression was specified, and a
+	# primary key value is required (i.e. because the primary key is not auto_insert),
+	# add E_REQUIRED.  This is needed because the validation subroutine does not check
+	# the primary key column(s). 
+	
+	elsif ( $operation eq 'insert' )
+	{
+	    if ( $tableinfo->{PRIMARY_REQUIRED} )
+	    {
+		$edt->add_condition($action, 'E_REQUIRED', $tableinfo->{PRIMARY_KEY});	
+	    }
+	}
+	
+	# Otherwise, no insertion is taking place. Change 'insrep' and 'insupd' to
+	# 'replace' and 'update' respectively.
+	
+	elsif ( $operation eq 'insrep' )
+	{
+	    $operation = $action->set_operation('replace');
+	}
+	
+	elsif ( $operation eq 'insupd' || $operation eq 'insupdate' )
+	{
+	    $operation = $action->set_operation('update');
+	}	
+    }
+    
+    # If we are creating a row and the 'CREATE' allowance is not present, add C_CREATE.
+    
+    if ( $create_row )
+    {
+	$edt->add_condition($action, 'C_CREATE') unless $edt->allows('CREATE');;
+    }
+    
+    # Step 4: set action row count
+    # ----------------------------
+    
+    # Store the number of rows that matched the key expression as an action attribute.
+    # This can be used later to warn the user that not all specified keys were found, for
+    # example. If this is a subordinate table, the row count has already been calculated
+    # as $subordinate_count. Otherwise, total it up from $count and @rest.
+    
+    # if ( $superior_table )
+    # {
+    # 	$action->row_count($subordinate_count);
+    # }
+    
+    # else
+    # {
+    # 	my $row_count = $count || 0;
+	
+    # 	foreach my $c ( @rest )
+    # 	{
+    # 	    $row_count += $c if $c > 0;
+    # 	}
+	
+    # 	$action->row_count($row_count);
+    # }
+    
+    # Step 5: set action permission
+    # -----------------------------
+    
+    # If the primary permission is a listref, that means an error occured while checking
+    # the permission. Add it to the action and return.
+    
+    if ( ref $primary eq 'ARRAY' )
+    {
+	$edt->add_condition($action, $primary->@*);
+	return $action->set_permission('none');
+    }
+    
+    # If the primary permission is 'notfound', that means no records at all matched the
+    # specified key expression for this action.
+    
+    if ( $primary eq 'notfound' )
+    {
+	$edt->add_condition($action, 'E_NOT_FOUND');
+	$action->set_permission('none');
+	return 'notfound';
+    }
+    
+    # If the primary permission is 'none', that means there are one or more records the
+    # user has no authorization to operate on, or else the user lacks the necessary
+    # permission on the table itself.
+    
+    elsif ( $primary eq 'none' )
     {
 	$edt->add_condition($action, 'E_PERM', $operation, $count);
 	$action->set_permission('none');
 	
-	return ('none', $count, @permcounts);
+	return ($primary, $count, @rest);
     }
     
     # If the primary permission is 'locked', that means the user is authorized to operate on all
     # the records but at least one is either admin_locked or is owner_locked by somebody
-    # else. This is reported as E_LOCKED.
+    # else.
     
-    elsif ( $result eq 'locked' )
+    elsif ( $primary eq 'locked' )
     {
 	if ( $action->keymult )
 	{
@@ -468,9 +618,9 @@ sub authorize_action {
 	    $edt->add_condition($action, 'E_LOCKED');
 	}
 	
-	$action->set_permission('locked');
+	$action->set_permission('none');
 	
-	return ('locked', $count, @permcounts);
+	return ($primary, $count, @rest);
     }
     
     # If the primary permission includes '_unlock', that means some of the records were locked by
@@ -478,11 +628,14 @@ sub authorize_action {
     # anything. If the transaction allows 'LOCKED', we can proceed. Otherwise, add an unlock
     # requirement to this action.
     
-    elsif ( $result =~ /_unlock/ )
+    # $$$ the return from get_row_permissions should state which field is locked, so that
+    # we can check if it is being unlocked by the current action.
+    
+    elsif ( $primary =~ /_unlock/ )
     {
 	if ( $edt->allows('LOCKED') )
 	{
-	    $result =~ s/_unlock//;
+	    $primary =~ s/_unlock//;
 	}
 	
 	else
@@ -490,287 +643,659 @@ sub authorize_action {
 	    $edt->add_condition($action, 'C_LOCKED');
 	    # $action->requires_unlock(1);
 	}
-	
-	return ($result, $count, @permcounts);
     }
     
-    # Otherwise, store the permission with the action and return it along with
-    # the counts.
+    # Store the permission with the action and return.
+    
+    $action->set_permission($primary);
+    
+    if ( $superior_table )
+    {
+	return ($primary, $subordinate_count);
+    }
     
     else
     {
-	$action->set_permission($result);
-	
-	return ($result, $count, @permcounts);
+	return ($primary, $count);
     }
 }
 
 
-# authorize_subordinate ( action, operation, table, suptable, keyexpr )
+# Key values
+# ----------
+#
+# Most actions are associated with one or more unique key values which specify
+# the database record(s) being operated on. The following methods are involved in
+# handling them.
+
+# unpack_key_values ( action, table, operation, params )
 # 
-# Carry out the authorization operation where the table to be authorized against ($suptable) is
-# different from the one on which the action is being executed ($table_specifier). In this situation, the
-# "subordinate table" is $table_specifier while the "superior table" is $suptable. The former is subordinate
-# because authorization for actions taken on it is referred to the superior table.
+# Examine $params, and construct a canonical list of key values. The key value
+# parameter can be either a listref or a scalar. If a scalar, it is assumed to
+# contain either a single key value or a comma-separated list of key values. In
+# the latter case, all commas, spaces and quotation marks are discarded and a
+# list is returned of the remaining values.
+# 
+# If at least one valid key value is found, and none of them are invalid, generate an SQL
+# expression using $column_name that will select the corresponding records. This method
+# does not check if those key values actually exist in the database. Under most
+# circumstances, $column_name will be the primary key column for the table to which the
+# key values will apply.
+# 
+# Store the key value(s) and SQL expression in the action object. If individual key values
+# are found to be invalid (not empty or 0, which are ignored), add error condition(s) to
+# the action.
 
-sub authorize_subordinate {
-
-    my ($edt, $action, $operation, $table_specifier, $suptable, $keyexpr) = @_;
+sub unpack_key_values {
     
-    my ($linkcol, $supcol, $altfield, @linkval, $update_linkval, %PERM, $perm);
+    my ($edt, $action, $table_specifier, $operation, $params) = @_;
     
-    local ($_);
+    # Get a full description of this table from the database, if we don't already have it.
+    # If we can't get one, return without doing anything. This should never happen,
+    # because _new_action checks the table information before calling this subroutine.
     
-    # Start by fetching information about the link between the subordinate table and the superior table.
+    my $tableinfo = $edt->table_info_ref($table_specifier) || return;
     
-    ($linkcol, $supcol, $altfield) = $edt->get_linkinfo($table_specifier, $suptable);
+    # If the parameters include a non-empty value for _where and no primary key
+    # information, set the key expression to the value of _where. But if both 'where' and
+    # a primary key value are given, add an error condition.
     
-    # For an insert operation, the link value is given in the record to be inserted. If it is not
-    # found, the action cannot be authorized.
-    
-    if ( $operation eq 'insert' )
+    if ( $params->{_where} )
     {
-	@linkval = $edt->input_record_value($action, $linkcol, $altfield);
+	my $primary_key = $tableinfo->{PRIMARY_KEY};
+	my $primary_field = $tableinfo->{PRIMARY_FIELD};
 	
-	unless ( @linkval )
+	if ( $params->{_primary} ||
+	     ($primary_key && $params->{$primary_key}) ||
+	     ($primary_field && $params->{$primary_field}) )
 	{
-	    $edt->add_condition($action, 'E_REQUIRED', $linkcol);
-	    $PERM{error} = 1;
-	}
-    }
-    
-    # The operations 'update_many' and 'delete_many' require administrative permission for the
-    # table on which they are being authorized. If we have this permission, the operation is
-    # authorized. If not, it isn't.
-    
-    if ( $operation eq 'update_many' || $operation eq 'delete_many' )
-    {
-	return $edt->check_table_permission($suptable, 'admin');
-    }
-    
-    # For a 'delete_cleanup' operation, authorization is based on the specified key expression.
-    
-    elsif ( $operation eq 'delete_cleanup' )
-    {
-	croak "bad key expression" unless ref $keyexpr eq 'ARRAY' && $keyexpr->@*;
-	@linkval = $keyexpr->@*;
-    }
-    
-    # For update, replace, delete, and other operations, the value of this column in the existing
-    # database record(s) must be retrieved.
-    
-    else
-    {
-	eval
-	{
-	    @linkval = $edt->db_column_values($table_specifier, $keyexpr, $linkcol, { distinct => 1 });
-	};
-	
-	return 'none' unless @linkval;
-	
-	# If a different value is given in the record, we must check this value too. The link
-	# value can only be updated if authorization succeeds for both of them, and if the
-	# transaction allows MOVE_SUBORDINATES.
-	
-	if ( $operation eq 'update' || $operation eq 'replace' )
-	{
-	    $update_linkval = $action->record_value_alt($linkcol, $altfield);
-	    
-	    if ( $update_linkval && any { $_ ne $update_linkval } @linkval )
-	    {
-		push @linkval, $update_linkval;
-		$PERM{c_move} = 1 unless $edt->{allows}{MOVE_SUBORDINATES};
-	    }
-	}
-    }
-    
-    # $$$ split this off into an 'authorize action' method. 
-    
-    # Determine the aggregate permission. If any of the link values cannot yet be evaluated, mark
-    # this action as needing authorization at execution time. If any of them have a permission of
-    # 'none' or 'locked', that will be the aggregate permission. Otherwise, if any of them have a
-    # permission of 'edit', that will be the aggregate permission. If all have 'admin', then that
-    # will be the aggregate. If we cannot find any permissions at all, the aggregate will be
-    # empty.
-    
-    foreach my $lv ( @linkval )
-    {
-	# If any of the link values is an action reference, look it up. If no matching action can
-	# be found, add an error condition. Otherwise, if the action has a key value then use
-	# it. If not, this action will have to be authorized at execution time.
-	
-	if ( $lv =~ /^&./ )
-	{
-	    my $ref_action = $edt->{action_ref}{$lv};
-	    
-	    if ( $ref_action && $ref_action->table eq $suptable )
-	    {
-		my @refkeys = $ref_action->keyvalues;
-		
-		if ( @refkeys == 1 )
-		{
-		    $lv = $refkeys[0];
-		}
-
-		# If there is more than one key value corresponding to this reference, it
-		# cannot be used to authorize a subordinate action.
-
-		elsif ( @refkeys > 1 )
-		{
-		    $edt->add_condition($action, 'E_BAD_REFERENCE', '_multiple_', $linkcol, $lv);
-		    $PERM{error} = 1;
-		    next;
-		}
-		
-		# If the reference is good but the reference has no key value, it is almost
-		# certainly a reference to a new record insertion that hasn't been executed
-		# yet. This means we will have to put off the authorization until execution time.
-		
-		else
-		{
-		    $PERM{later} = 1;
-		    next;
-		}
-	    }
-	    
-	    # If we cannot find the reference at all, add an error condition. This is NOT a
-	    # permission error, and cannot be demoted.
-	    
-	    else
-	    {
-		$edt->add_condition($action, 'E_BAD_REFERENCE', $linkcol, $lv);
-		$PERM{error} = 1;
-		next;
-	    }
-	}
-	
-	# If we get here, then we have an actual key value. If we have a cached permission value,
-	# use it. Otherwise, generate one. If the keyexpr is just a key value, we need to turn it
-	# into an expression.
-	
-	unless ( $perm = $edt->{permission_record_edit_cache}{$suptable}{$lv} )
-	{
-	    my $keyexpr = "$supcol=$lv";
-	    $perm = $edt->check_record_permission($suptable, 'edit', $keyexpr);
-	    $edt->{permission_record_edit_cache}{$suptable}{$lv} = $perm;
-	}
-	
-	# Keep track of which permissions we have found. If the permission has the unlock
-	# attribute, count that as well.
-	
-	if ( $perm =~ /^(.*?),(.*)/ )
-	{
-	    my $main = $1;
-	    my $attrs = $2;
-	    
-	    $PERM{$main} = 1;
-	    $PERM{unlock} = 1 if $attrs =~ /unlock/;
+	    $edt->add_condition('E_BAD_KEY', 'where');
+	    return $action->set_permission('none');
 	}
 	
 	else
 	{
-	    $PERM{$perm} = 1;
+	    $action->set_keyinfo('', '', undef, $params->{_where});
+	    return;
+	}
+    }
+    
+    # Otherwise, look for a primary key. If none is defined for this table, return without
+    # doing anything.
+    
+    my ($key_column, $link_column, $abort);
+    
+    unless ( $key_column = $tableinfo->{PRIMARY_KEY} )
+    {
+	# If the action parameters include _primary, add an error condition.
+	
+	$edt->add_condition($action, 'E_BAD_KEY', "table '$table_specifier' has no primary key")
+	    if $params->{_primary};
+	
+	# Return without setting any key values.
+	
+	return;
+    }
+    
+    my $columninfo = $edt->table_column_ref($table_specifier, $key_column);
+    
+    # Check if this table is marked as being subordinate to another table. If so, make
+    # sure that table and the necessary attributes exist.
+    
+    my $superior_table = $tableinfo->{SUPERIOR_TABLE};
+    my ($superior_tableinfo, $link_columninfo);
+    
+    if ( $superior_table )
+    {
+	unless ( ( $link_column = $tableinfo->{SUPERIOR_KEY} ) &&
+		 ( $link_columninfo = $edt->table_column_ref($table_specifier, $link_column) ) )
+	{
+	    $edt->add_condition('E_BAD_TABLE', 'link column', $table_specifier);
+	    $abort = 1;
 	}
 	
-	$PERM{bad} = 1 if $perm !~ /^none|^locked|^edit|^admin/;
+	unless ( $superior_tableinfo = $edt->table_info_ref($superior_table) )
+	{
+	    $edt->add_condition('E_BAD_TABLE', 'superior', $superior_table);
+	    $abort = 1;
+	}
+    }
+    
+    # If the operation is 'delete_cleanup', key values refer to the superior table rather
+    # than the one we are operating on.
+    
+    if ( $operation eq 'delete_cleanup' )
+    {
+	unless ( $superior_table )
+	{
+	    $edt->add_condition('E_BAD_TABLE', 'no superior', $table_specifier);
+	    $abort = 1;
+	}
 	
-	# Finally, keep track of the superior keys we have authorized against.
-	
-	$edt->{superior_auth_keys}{$lv} = 1;
+	$key_column = $tableinfo->{SUPERIOR_KEY};
+	$table_specifier = $superior_table;
+	$tableinfo = $superior_tableinfo;
     }
     
-    # If we need to add a C_MOVE_SUBORDINATES condition, do so now.
-    
-    $edt->add_condition($action, 'C_MOVE_SUBORDINATES') if $PERM{c_move};
-    
-    # Now use the %PERM hash to generate an aggregate permission for this action. If any of the
-    # linked records had 'none' or 'locked', the action cannot be executed regardless of the other
-    # permissions. If any of the linked records have an unrecognized position, the action cannot
-    # be executed either.
-    
-    if ( $PERM{error} )
+    if ( $abort )
     {
-	return 'error';
+	return $action->set_permission('none');
     }
     
-    elsif ( $PERM{none} || $PERM{bad} )
+    # Now look for key values. Unless we have a hashref of action parameters, return
+    # immediately.
+    
+    return unless ref $params && reftype $params eq 'HASH';
+    
+    # Check for key values under any of the following parameters: _primary, the primary
+    # key, and the field named by PRIMARY_FIELD if any. Add an error condition if more
+    # than one of these has a value.
+    
+    my ($key_field, $raw_values, $ref_type);
+    
+    foreach my $p ( $key_column, '_primary', $tableinfo->{PRIMARY_FIELD} )
     {
-	return 'none';
+	if ( $p && $params->{$p} )
+	{
+	    $raw_values = $params->{$p};
+	    $ref_type = ref $raw_values;
+	    
+	    next unless ! $ref_type || $ref_type eq 'ARRAY' && $raw_values->@*;
+	    
+	    if ( $key_field )
+	    {
+		$edt->add_condition($action, 'E_BAD_KEY_FIELD', $key_field, $p);
+		$raw_values = undef;
+	    }
+	    
+	    else
+	    {
+		$key_field = $p;
+	    }
+	}
     }
     
-    elsif ( $PERM{locked} )
+    # If we found any raw values, filter them to separate acceptable from unacceptable
+    # ones. Add error conditions to the action as appropriate.
+    
+    my $app_call = $edt->can('before_key_column');
+    
+    if ( $key_field && $raw_values )
     {
-	return 'locked';
+	if ( my @key_values = $edt->check_key_values($action, $columninfo,
+						     $key_field, $raw_values, $app_call) )
+	{
+	    if ( $action->permission eq 'PENDING' )
+	    {
+		$action->set_keyinfo($key_column, $key_field, \@key_values);
+	    }
+	    
+	    elsif ( @key_values == 1 )
+	    {
+		my $key_expr = "$key_column='$key_values[0]'";
+		
+		$action->set_keyinfo($key_column, $key_field, $key_values[0], $key_expr); 
+	    }
+	    
+	    elsif ( @key_values > 1 )
+	    {
+		my $key_string = join q{','}, @key_values;
+		my $key_expr = "$key_column in ('$key_string')";
+		
+		$action->set_keyinfo($key_column, $key_field, \@key_values, $key_expr);
+	    }
+	}
     }
-    
-    # Otherwise, if any of the linked records had 'later' then we must put off the authorization
-    # until execution time. Save all of the necessary information with the action.
-    
-    elsif ( $PERM{later} )
-    {
-	$action->set_linkinfo($linkcol, \@linkval);
-	$action->_authorize_later;
-	return 'PENDING';
-    }
-
-    # Otherwise, the action can proceed. If all of the linked records had 'admin' permission, that
-    # is the aggregate permission. Otherwise, it is 'edit'. If any of the linked records had the
-    # 'unlock' attribute, add that to the aggregate permission. Now is the time to add
-    # C_MOVE_SUBORDINATES if that is indicated.
-    
-    elsif ( $PERM{edit} || $PERM{admin} )
-    {
-	my $aggregate = $PERM{edit} ? 'edit' : 'admin';
-	$aggregate .= ',unlock' if $PERM{unlock};
-	
-	
-	return $aggregate;
-    }
-    
-    # As a fallback, just return 'none'.
     
     else
     {
-	return 'none';
+	$action->set_keyinfo($key_column, $key_field, undef, "0");
+	return;
     }
-}
-
-
-# get_linkinfo ( table, suptable )
-#
-# Return information about the link between $table_specifier and $suptable.
-
-sub get_linkinfo {
-
-    my ($edt, $table_specifier, $suptable) = @_;
     
-    # If we have this information already cached, return it now.
+    # If this is a subordinate table, check and store any link values that were provided.
     
-    if ( $edt->{permission_link_cache}{$table_specifier} && ref $edt->{permission_link_cache} eq 'ARRAY' &&
-	 $edt->{permission_link_cache}{$table_specifier}[0] )
+    if ( $superior_table )
     {
-	return $edt->{permission_link_cache}{$table_specifier}->@*;
+	my ($link_field, $link_value);
+	
+	foreach my $p ( $key_column, "_primary", $tableinfo->{PRIMARY_FIELD} )
+	{
+	    if ( $p && $params->{$p} )
+	    {
+		$link_value = $params->{$p};
+		$ref_type = ref $link_value;
+		
+		next unless ! $ref_type || $ref_type eq 'ARRAY' && $raw_values->@*;
+		
+		if ( $link_field )
+		{
+		    $edt->add_condition($action, 'E_BAD_KEY_FIELD', $key_field, $p);
+		    $link_value = undef;
+		}
+		
+		else
+		{
+		    $key_field = $p;
+		}
+	    }
+	}
+	
+	if ( $link_field && $link_value )
+	{
+	    my @link_values = $edt->check_key_values($action, $link_columninfo,
+						     $link_field, $link_value, $app_call);
+	    
+	    if ( @link_values > 1 )
+	    {
+		$edt->add_condition($action, 'E_BAD_FIELD', 'link', $tableinfo->{SUPERIOR_KEY});
+	    }
+	    
+	    else
+	    {
+		$action->set_linkinfo($link_column, $link_field, $link_value);
+	    }
+	}
+	
+	else
+	{
+	    $action->set_linkinfo($link_column, $link_field);
+	}
+    }	
+}
+
+
+    # # Otherwise, look for particular patterns in $raw_values. If if it matches one of
+    # # the expressions "<name> = <value>" or "<name> in (<values...>)", extract the value
+    # # string and make sure that the column matches $key_column.
+    
+    # if ( ! ref $raw_values && $raw_values =~
+    # 	 qr{ ^ \s* (\w+) (?: \s* = \s* | \s+ in \s* [(] ) ( [^)]* ) [)]? \s* $ }xsi )
+    # {
+    # 	my $check_column = $1;
+    # 	$raw_values = $2;
+
+    # 	if ( $check_column ne $key_column )
+    # 	{
+    # 	    $action->add_condition('E_BAD_SELECTOR', $field || 'unknown',
+    # 				   "invalid key column '$check_column'");
+    # 	}
+    # }		
+
+sub check_key_values {
+    
+    my ($edt, $action, $columninfo, $field, $value, $app_call) = @_;
+    
+    my (@key_values, @bad_values);
+    
+    my $action_table = $action->table;
+    
+  VALUE:
+    foreach my $v ( ref $value ? $value->@* : split /\s*,\s*/, $value )
+    {
+	# Skip values that are empty or zero.
+	
+	next VALUE unless $v;
+	
+	# If the value is quoted, remove the quotes and skip if the remainder is empty or zero.
+	
+	if ( $v =~ qr{ ^ (['"]) (.*) \1 $ }xs )
+	{
+	    $v = $2;
+	    next VALUE unless $v;
+	}
+	
+	# A value that is an action label must be looked up. If the action is found but has no
+	# key value, authentication will have to be delayed until execution time.
+	
+	elsif ( $v =~ /^&/ )
+	{
+	    my $ref_action = $edt->{action_ref}{$v};
+		
+	    if ( $ref_action && $ref_action->table eq $action_table )
+	    {
+		if ( $ref_action->keyvalues )
+		{
+		    push @key_values, $ref_action->keyvalues;
+		}
+		    
+		else
+		{
+		    push @key_values, $v;
+		    $action->permission('PENDING');
+		}
+	    }
+		
+	    else
+	    {
+		$action->add_condition('E_BAD_REFERENCE', $field, $v);
+	    }
+		
+	    next VALUE;
+	}
+	    
+	# Otherwise, the key value must be checked. If this EditTransaction subclass
+	# includes an application role that implements 'before_key_column', call it now.
+	# If it returns an error condition, add that condition and go on to the next
+	# value.
+	
+	if ( $app_call )
+	{
+	    my ($result, $clean_value, $additional) =
+		$edt->before_key_column($action, $columninfo, $v, $field);
+	    
+	    if ( ref $result eq 'ARRAY' || ref $additional eq 'ARRAY' )
+	    {
+		$edt->add_validation_error($action, $result, $additional);
+		next VALUE if ref $result;
+	    }
+	    
+	    elsif ( $result )
+	    {
+		$v = $clean_value;
+	    }
+	}
+	
+	# If the key column type is integer, reject key values that are not
+	# integers.
+	
+	if ( $columninfo->{TypeMain} eq 'unsigned' && $v !~ /^\s*\d+\s*$/ )
+	{
+	    push @bad_values, $v;
+	}
+	
+	elsif ( $columninfo->{TypeMain} eq 'integer' && $v !~ /^\s*-?\d+\s*$/ )
+	{
+	    push @bad_values, $v;
+	}
+	
+	else
+	{
+	    push @key_values, $v;
+	}
     }
     
-    # Otherwise, the subordinate table must contain a column that links records in this table to
-    # records in the superior table. If no linking column is specified, assume it is the same as
-    # the primary key of the superior table.
+    # If any bad values were found, add an error condition for all of them.
     
-    my $linkcol = get_table_property($table_specifier, 'SUPERIOR_KEY');
-    my $supcol = get_table_property($suptable, 'PRIMARY_KEY');
+    if ( @bad_values )
+    {
+	my $key_string = join ',', @bad_values;
+	$edt->add_condition($action, 'E_BAD_KEY', $field, $key_string);
+    }
     
-    $linkcol ||= $supcol;
+    # Return the good values, if any.
     
-    my $altfield = get_table_property($table_specifier, $linkcol, 'ALTERNATE_NAME') ||
-	($linkcol =~ /(.*)_no$/ && "${1}_id");
-    
-    croak "SUPERIOR_TABLE was given as '$suptable' but no key column was found"
-	unless $linkcol;
-    
-    $edt->{permission_link_cache}{$table_specifier} = [$linkcol, $supcol, $altfield];
-    
-    return ($linkcol, $supcol, $altfield);
+    return @key_values;
 }
+
+
+1;
+
+# # authorize_superior ( action, operation, table, suptable, keyexpr )
+# # 
+# # Carry out the authorization operation where the table to be authorized against ($suptable) is
+# # different from the one on which the action is being executed ($table_specifier). In this situation, the
+# # "subordinate table" is $table_specifier while the "superior table" is $suptable. The former is subordinate
+# # because authorization for actions taken on it is referred to the superior table.
+
+# sub authorize_superior {
+
+#     my ($edt, $action, $operation, $table_specifier, $suptable, $keyexpr) = @_;
+    
+#     my ($linkcol, $supcol, $altfield, @linkval, $update_linkval, %PERM, $perm);
+    
+#     local ($_);
+    
+#     # Start by fetching information about the link between the subordinate table and the superior table.
+    
+#     ($linkcol, $supcol, $altfield) = $edt->get_linkinfo($table_specifier, $suptable);
+    
+#     # For an insert operation, the link value is given in the record to be inserted. If it is not
+#     # found, the action cannot be authorized.
+    
+#     if ( $operation eq 'insert' )
+#     {
+# 	@linkval = $edt->input_record_value($action, $linkcol, $altfield);
+	
+# 	unless ( @linkval )
+# 	{
+# 	    $edt->add_condition($action, 'E_REQUIRED', $linkcol);
+# 	    $PERM{error} = 1;
+# 	}
+#     }
+    
+#     # The operations 'update_many' and 'delete_many' require administrative permission for the
+#     # table on which they are being authorized. If we have this permission, the operation is
+#     # authorized. If not, it isn't.
+    
+#     if ( $operation eq 'update_many' || $operation eq 'delete_many' )
+#     {
+# 	return $edt->check_table_permission($suptable, 'admin');
+#     }
+    
+#     # For a 'delete_cleanup' operation, authorization is based on the specified key expression.
+    
+#     elsif ( $operation eq 'delete_cleanup' )
+#     {
+# 	croak "bad key expression" unless ref $keyexpr eq 'ARRAY' && $keyexpr->@*;
+# 	@linkval = $keyexpr->@*;
+#     }
+    
+#     # For update, replace, delete, and other operations, the value of this column in the existing
+#     # database record(s) must be retrieved.
+    
+#     else
+#     {
+# 	eval
+# 	{
+# 	    @linkval = $edt->db_column_values($table_specifier, $keyexpr, $linkcol, { distinct => 1 });
+# 	};
+	
+# 	return 'none' unless @linkval;
+	
+# 	# If a different value is given in the record, we must check this value too. The link
+# 	# value can only be updated if authorization succeeds for both of them, and if the
+# 	# transaction allows MOVE_SUBORDINATES.
+	
+# 	if ( $operation eq 'update' || $operation eq 'replace' )
+# 	{
+# 	    $update_linkval = $action->record_value_alt($linkcol, $altfield);
+	    
+# 	    if ( $update_linkval && any { $_ ne $update_linkval } @linkval )
+# 	    {
+# 		push @linkval, $update_linkval;
+# 		$PERM{c_move} = 1 unless $edt->{allows}{MOVE_SUBORDINATES};
+# 	    }
+# 	}
+#     }
+    
+#     # $$$ split this off into an 'authorize action' method. 
+    
+#     # Determine the aggregate permission. If any of the link values cannot yet be evaluated, mark
+#     # this action as needing authorization at execution time. If any of them have a permission of
+#     # 'none' or 'locked', that will be the aggregate permission. Otherwise, if any of them have a
+#     # permission of 'edit', that will be the aggregate permission. If all have 'admin', then that
+#     # will be the aggregate. If we cannot find any permissions at all, the aggregate will be
+#     # empty.
+    
+#     foreach my $lv ( @linkval )
+#     {
+# 	# If any of the link values is an action reference, look it up. If no matching action can
+# 	# be found, add an error condition. Otherwise, if the action has a key value then use
+# 	# it. If not, this action will have to be authorized at execution time.
+	
+# 	if ( $lv =~ /^&./ )
+# 	{
+# 	    my $ref_action = $edt->{action_ref}{$lv};
+	    
+# 	    if ( $ref_action && $ref_action->table eq $suptable )
+# 	    {
+# 		my @refkeys = $ref_action->keyvalues;
+		
+# 		if ( @refkeys == 1 )
+# 		{
+# 		    $lv = $refkeys[0];
+# 		}
+
+# 		# If there is more than one key value corresponding to this reference, it
+# 		# cannot be used to authorize a subordinate action.
+
+# 		elsif ( @refkeys > 1 )
+# 		{
+# 		    $edt->add_condition($action, 'E_BAD_REFERENCE', '_multiple_', $linkcol, $lv);
+# 		    $PERM{error} = 1;
+# 		    next;
+# 		}
+		
+# 		# If the reference is good but the reference has no key value, it is almost
+# 		# certainly a reference to a new record insertion that hasn't been executed
+# 		# yet. This means we will have to put off the authorization until execution time.
+		
+# 		else
+# 		{
+# 		    $PERM{later} = 1;
+# 		    next;
+# 		}
+# 	    }
+	    
+# 	    # If we cannot find the reference at all, add an error condition. This is NOT a
+# 	    # permission error, and cannot be demoted.
+	    
+# 	    else
+# 	    {
+# 		$edt->add_condition($action, 'E_BAD_REFERENCE', $linkcol, $lv);
+# 		$PERM{error} = 1;
+# 		next;
+# 	    }
+# 	}
+	
+# 	# If we get here, then we have an actual key value. If we have a cached permission value,
+# 	# use it. Otherwise, generate one. If the keyexpr is just a key value, we need to turn it
+# 	# into an expression.
+	
+# 	unless ( $perm = $edt->{permission_record_edit_cache}{$suptable}{$lv} )
+# 	{
+# 	    my $keyexpr = "$supcol=$lv";
+# 	    $perm = $edt->check_row_permission($suptable, 'edit', $keyexpr);
+# 	    $edt->{permission_record_edit_cache}{$suptable}{$lv} = $perm;
+# 	}
+	
+# 	# Keep track of which permissions we have found. If the permission has the unlock
+# 	# attribute, count that as well.
+	
+# 	if ( $perm =~ /^(.*?),(.*)/ )
+# 	{
+# 	    my $main = $1;
+# 	    my $attrs = $2;
+	    
+# 	    $PERM{$main} = 1;
+# 	    $PERM{unlock} = 1 if $attrs =~ /unlock/;
+# 	}
+	
+# 	else
+# 	{
+# 	    $PERM{$perm} = 1;
+# 	}
+	
+# 	$PERM{bad} = 1 if $perm !~ /^none|^locked|^edit|^admin/;
+	
+# 	# Finally, keep track of the superior keys we have authorized against.
+	
+# 	$edt->{superior_auth_keys}{$lv} = 1;
+#     }
+    
+#     # If we need to add a C_MOVE_SUBORDINATES condition, do so now.
+    
+#     $edt->add_condition($action, 'C_MOVE_SUBORDINATES') if $PERM{c_move};
+    
+#     # Now use the %PERM hash to generate an aggregate permission for this action. If any of the
+#     # linked records had 'none' or 'locked', the action cannot be executed regardless of the other
+#     # permissions. If any of the linked records have an unrecognized position, the action cannot
+#     # be executed either.
+    
+#     if ( $PERM{error} )
+#     {
+# 	return 'error';
+#     }
+    
+#     elsif ( $PERM{none} || $PERM{bad} )
+#     {
+# 	return 'none';
+#     }
+    
+#     elsif ( $PERM{locked} )
+#     {
+# 	return 'locked';
+#     }
+    
+#     # Otherwise, if any of the linked records had 'later' then we must put off the authorization
+#     # until execution time. Save all of the necessary information with the action.
+    
+#     elsif ( $PERM{later} )
+#     {
+# 	$action->set_linkinfo($linkcol, \@linkval);
+# 	$action->_authorize_later;
+# 	return 'PENDING';
+#     }
+
+#     # Otherwise, the action can proceed. If all of the linked records had 'admin' permission, that
+#     # is the aggregate permission. Otherwise, it is 'edit'. If any of the linked records had the
+#     # 'unlock' attribute, add that to the aggregate permission. Now is the time to add
+#     # C_MOVE_SUBORDINATES if that is indicated.
+    
+#     elsif ( $PERM{edit} || $PERM{admin} )
+#     {
+# 	my $aggregate = $PERM{edit} ? 'edit' : 'admin';
+# 	$aggregate .= ',unlock' if $PERM{unlock};
+	
+	
+# 	return $aggregate;
+#     }
+    
+#     # As a fallback, just return 'none'.
+    
+#     else
+#     {
+# 	return 'none';
+#     }
+# }
+
+
+# # get_linkinfo ( table, suptable )
+# #
+# # Return information about the link between $table_specifier and $suptable.
+
+# sub get_linkinfo {
+
+#     my ($edt, $table_specifier, $suptable) = @_;
+    
+#     # If we have this information already cached, return it now.
+    
+#     if ( $edt->{permission_link_cache}{$table_specifier} && ref $edt->{permission_link_cache} eq 'ARRAY' &&
+# 	 $edt->{permission_link_cache}{$table_specifier}[0] )
+#     {
+# 	return $edt->{permission_link_cache}{$table_specifier}->@*;
+#     }
+    
+#     # Otherwise, the subordinate table must contain a column that links records in this table to
+#     # records in the superior table. If no linking column is specified, assume it is the same as
+#     # the primary key of the superior table.
+    
+#     my $linkcol = get_table_property($table_specifier, 'SUPERIOR_KEY');
+#     my $supcol = get_table_property($suptable, 'PRIMARY_KEY');
+    
+#     $linkcol ||= $supcol;
+    
+#     my $altfield = get_table_property($table_specifier, $linkcol, 'ALTERNATE_NAME') ||
+# 	($linkcol =~ /(.*)_no$/ && "${1}_id");
+    
+#     croak "SUPERIOR_TABLE was given as '$suptable' but no key column was found"
+# 	unless $linkcol;
+    
+#     $edt->{permission_link_cache}{$table_specifier} = [$linkcol, $supcol, $altfield];
+    
+#     return ($linkcol, $supcol, $altfield);
+# }
 
 
 #     # If we were given a key expression for this record, fetch the current value for the
@@ -906,7 +1431,7 @@ sub get_linkinfo {
 # 	# inserting, updating, or deleting subordinate records, that essentially counts as modifying
 # 	# the superior record.
 	
-# 	$alt_permission = $edt->check_record_permission($suptable, 'edit', $alt_keyexpr);
+# 	$alt_permission = $edt->check_row_permission($suptable, 'edit', $alt_keyexpr);
 # 	$edt->{linkval_cache}{$linkval} = $alt_permission;
 #     }
     
@@ -964,4 +1489,93 @@ sub get_linkinfo {
 # }
 
 
-1;
+    # # The 'insupdate' operation requires that the table have a primary key. At most one
+    # # key value can be specified. If the permission is 'PENDING' that means a key
+    # # reference was specified instead of a key value, which is not allowed for
+    # # 'insupdate'. If no key value was specified, change the operation to 'insert'.
+    
+    # if ( $operation eq 'insupdate' )
+    # {
+    # 	if ( ! $action->keycol )
+    # 	{
+    # 	    $edt->add_condition($action, 'E_NO_KEY');
+    # 	    $abort = 1;
+    # 	}
+	
+    # 	elsif ( $action->keymult )
+    # 	{
+    # 	    $edt->add_condition($action, 'E_MULTI_KEY');
+    # 	    $abort = 1;
+    # 	}
+	
+    # 	elsif ( $action->permission eq 'PENDING' )
+    # 	{
+    # 	    $edt->add_condition($action, 'E_BAD_KEY', $action->keyval);
+    # 	    $abort = 1;
+    # 	}
+	
+    # 	elsif ( ! $action->keyval )
+    # 	{
+    # 	    $operation = $action->set_operation('insert');
+    # 	    $edt->add_condition($action, 'C_CREATE') unless $edt->allows('CREATE');
+    # 	}
+    # }
+    
+    # # The 'replace' operation requires a single primary key value if the table has a
+    # # primary key. Key references are not allowed for 'replace' either (see insupdate).
+    
+    # elsif ( $operation eq 'replace' )
+    # {
+    # 	if ( $action->keymult )
+    # 	{
+    # 	    $edt->add_condition($action, 'E_MULTIPLE_KEYS');
+    # 	    $abort = 1;
+    # 	}
+	
+    # 	elsif ( $action->keycol && ! $action->keyval )
+    # 	{
+    # 	    $edt->add_condition($action, 'E_NO_KEY');
+    # 	    $abort = 1;
+    # 	}
+	
+    # 	elsif ( $action->permission eq 'PENDING' )
+    # 	{
+    # 	    $edt->add_condition('E_BAD_KEY', $action->keyval);
+    # 	    $abort = 1;
+    # 	}
+    # }
+    
+    # # The 'update' and 'delete' operations require a valid key expression, which
+    # # may or may not select specific primary key values.
+    
+    # elsif ( $operation =~ /^update|^delete/ )
+    # {
+    # 	$edt->add_conditions($action, 'E_NO_KEY') unless $keyexpr;
+    # 	$abort = 1;
+    # }
+    
+    # # If the operation is 'insert', add E_HAS_KEY if the table has a primary key and a key
+    # # value was specified. Otherwise, add C_CREATE unless the CREATE allowance is present.
+    
+    # elsif ( $operation eq 'insert' )
+    # {
+    # 	if ( $action->keycol && $action->keyval )
+    # 	{
+    # 	    $edt->add_condition('E_HAS_KEY', 'insert');
+    # 	    $abort = 1;
+    # 	}
+	
+    # 	elsif ( ! $edt->allows('CREATE') )
+    # 	{
+    # 	    $edt->add_condition($action, 'C_CREATE');
+    # 	}
+    # }
+    
+    # # If a condition has been generated that completes the authorization, return now.
+    
+    # if ( $abort )
+    # {
+    # 	$action->set_permission('none');
+    # 	return;
+    # }
+    

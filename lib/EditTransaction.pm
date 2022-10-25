@@ -68,7 +68,6 @@ our (%ALLOW_ALIAS) = ( IMMEDIATE_EXECUTION => 'IMMEDIATE_MODE' );
 our (%TEST_PROBLEM);	# This variable can be set in order to trigger specific errors, in order
                         # to test the error-response mechanisms.
 
-
 # We set @CARP_NOT because we specifically do not want subclasses of EditTransaction to be
 # passed over as safe.
 
@@ -325,7 +324,7 @@ sub new {
     
     if ( $edt->{dbh} )
     {
-	my $result = $edt->validate_dbh($edt->{dbh});
+	my $result = $edt->db_validate_dbh($edt->{dbh});
 	
 	if ( $result ne 'ok' )
 	{
@@ -403,13 +402,18 @@ sub new {
     $edt->{dbh}->{RaiseError} = 1;
     $edt->{dbh}->{PrintError} = 0;
     
+    # Call 'initialize_instance', which allows subclasses to adjust the instance in any
+    # way they deem necessary.
+    
+    $edt->initialize_instance;
+    
     # If IMMEDIATE_MODE was specified, then immediately start a new transaction and turn on
     # execution. The same effect can be provided by calling the method 'start_execution' on this
     # new object.
     
     if ( $edt->{allows}{IMMEDIATE_MODE} )
     {
-	$edt->_start_transaction;
+	$edt->start_transaction;
 	$edt->{execution} = 'active';
     }
     
@@ -428,10 +432,12 @@ sub DESTROY {
     delete $edt->{current_action};
     delete $edt->{action_list};
     
-    # Roll back the transaction if it is still active.
+    # Roll back the transaction if it is still active, and if the database
+    # handle hasn't already been destroyed.
     
-    if ( $edt->is_active )
+    if ( $edt->is_active && $edt->{dbh} )
     {
+	$edt->_call_cleanup('destroy');
 	$edt->_rollback_transaction('destroy');
     }
 }
@@ -530,7 +536,7 @@ sub is_executing {
 
 sub has_finished {
 
-    return $_[0]{transaction} && $_[0]{transaction} ne 'active';
+    return $_[0]{has_finished} || '';
 }
 
 
@@ -793,21 +799,59 @@ sub start_transaction {
     
     my ($edt) = @_;
     
-    # If this transaction has already committed, throw an exception.
+    # If this transaction has already finished, return false.
     
     if ( $edt->has_finished )
     {
-	croak "this transaction has already finished";
+	return '';
+    }
+    
+    # If the transaction has already started, return true.
+    
+    elsif ( $edt->has_started )
+    {
+	return 1;
     }
     
     # If we have not started the transaction yet and no errors have occurred, then start it
-    # now. Preserve the current action.
+    # now. Preserve the current action if any.
     
-    elsif ( $edt->can_proceed && ! $edt->has_started )
+    elsif ( $edt->can_proceed )
     {
 	my $save = $edt->{current_action};
 	
-	$edt->_start_transaction;
+	$edt->{current_action} = undef;
+	
+	# If the transaction is successfully started, call the
+	# 'initialize_transaction' method. If an exception occurs, add an error
+	# condition and write the exception to the error stream.
+	
+	if ( $edt->_start_transaction )
+	{
+	    $edt->_call_initialize;
+	}
+	
+	# If any error conditions have accumulated, mark this transaction as 'failed'. If
+	# a database transaction was actually started, roll it back.
+	
+	if ( $edt->has_errors )
+	{
+	    $edt->{transaction} = 'failed';
+	    
+	    if ( $edt->has_started )
+	    {    
+		$edt->_call_cleanup('errors');
+	    }
+	    
+	    my ($in_transaction) = $edt->{dbh}->selectrow_array('SELECT @@in_transaction');
+	    
+	    if ( $in_transaction )
+	    {
+		$edt->_rollback_transaction('errors');
+	    }
+	}
+	
+	# Restore the current action, if any.
 	
 	$edt->{current_action} = $save;
     }
@@ -828,12 +872,19 @@ sub start_execution {
     
     my ($edt) = @_;
     
+    # If this transaction has already finished, return false.
+    
+    if ( $edt->has_finished )
+    {
+	return '';
+    }
+    
     # If the transaction can proceed but has not yet been started, start it now. Then turn on
     # execution and execute all pending actions.
     
     if ( $edt->can_proceed )
     {
-	$edt->_start_transaction unless $edt->has_started;
+	$edt->start_transaction unless $edt->has_started;
 	$edt->{execution} = 'active';
 	$edt->execute_action_list;
     }
@@ -872,7 +923,7 @@ sub execute {
     
     if ( $edt->can_proceed )
     {
-	$edt->_start_transaction unless $edt->has_started;
+	$edt->start_transaction unless $edt->has_started;
 	$edt->execute_action_list;
     }
 
@@ -905,25 +956,34 @@ sub commit {
     {
 	if ( $edt->can_proceed )
 	{
-	    $edt->{transaction} = 'committed';
+	    $edt->{transaction} = 'aborted';
+	    $edt->{has_finished} = 1;
 	    return 1;
 	}
 	
 	else
 	{
-	    $edt->{transaction} = 'aborted';
-	    return 0;
+	    $edt->{transaction} = 'failed';
+	    $edt->{has_finished} = 1;
+	    return '';
 	}
     }
     
     # If this transaction can proceed, start the database transaction if it hasn't already been
-    # started. Then run through the action list and execute any actions that are pending.
+    # started.
     
     elsif ( $edt->can_proceed )
     {
-	$edt->_start_transaction unless $edt->has_started;
-	$edt->execute_action_list;
-    }    
+	$edt->start_transaction unless $edt->has_started;
+    }
+    
+    # Now run through the action list. If the transaction can proceed, any
+    # remaining actions will be executed. Otherwise, they will all be marked as
+    # 'skipped'.
+    
+    $edt->execute_action_list;
+    
+    # Clear the current action.
     
     $edt->{current_action} = undef;
     
@@ -931,37 +991,22 @@ sub commit {
     # call the 'cleanup_transaction' method. These do nothing by default, and are designed to be
     # overridden by subclasses.
     
-    my $culprit;
-    
-    eval {
-	
-	if ( $edt->can_proceed )
-	{
-	    $culprit = 'finalized';
-	    $edt->finalize_transaction($edt->{default_table});
-	}
-	
-	else
-	{
-	    $culprit = 'cleaned up';
-	    $edt->cleanup_transaction($edt->{default_table});
-	}
-    };
-    
-    # If an exception is thrown during either of these method calls, write it to the error stream
-    # and add an error condition.
-    
-    if ( $@ )
+    if ( $edt->can_proceed )
     {
-	$edt->error_line($@);
-	$edt->add_condition('main', 'E_EXECUTE', "an exception occurred while the transaction was $culprit");
+	$edt->_call_finalize;
     }
     
+    else
+    {
+	$edt->_call_cleanup('errors');
+    }
+        
     # If the transaction can proceed at this point, attempt to commit and then return the
     # result.
     
     if ( $edt->can_proceed )
     {
+	$edt->{has_finished} = 1;
 	return $edt->_commit_transaction;
     }
     
@@ -970,8 +1015,9 @@ sub commit {
     else
     {
 	$edt->_rollback_transaction('errors') if $edt->has_started;
+	$edt->{has_finished} = 1;
 	$edt->{transaction} = 'failed';
-	return 0;
+	return '';
     }
 }
 
@@ -999,7 +1045,9 @@ sub rollback {
     
     elsif ( $edt->has_started )
     {
+	$edt->_call_cleanup('call');
 	$edt->_rollback_transaction('call');
+	$edt->{has_finished} = 1;
 	return 1;
     }
     
@@ -1009,6 +1057,7 @@ sub rollback {
     else
     {
 	$edt->{transaction} = 'aborted';
+	$edt->{has_finished} = 1;
 	return 1;
     }
 }
@@ -1034,24 +1083,22 @@ sub _start_transaction {
     if ( ref $TRANSACTION_INTERLOCK{$dbh} && $TRANSACTION_INTERLOCK{$dbh}->isa('EditTransaction') )
     {
 	my ($in_transaction) = $dbh->selectrow_array('SELECT @@in_transaction');
-
+	
 	if ( $in_transaction )
 	{
 	    $TRANSACTION_INTERLOCK{$dbh}->_rollback_transaction('interlock');
 	}
     }
     
-    # Clear the current action. If we are in debug mode, print a line to the debugging stream
+    # If we are in debug mode, print a line to the debugging stream
     # announcing the start of the transaction.
-    
-    $edt->{current_action} = undef;
     
     $edt->debug_line(" >>> START TRANSACTION $edt->{unique_id}\n") if $edt->{debug_mode};
     
-    # Start a new database transaction. If there is an uncommitted transaction on this database
-    # connection that was not initiated by this module, it will be implicitly committed. If there
-    # was an uncommitted transaction that was initiated by this module, it was rolled back
-    # earlier in this subroutine.
+    # Start a new database transaction. If there is an uncommitted transaction on this
+    # database connection that was not initiated by this module, it will be implicitly
+    # committed. If there was an uncommitted transaction that was initiated by this
+    # module, it was rolled back earlier in this subroutine.
     
     eval {
 	$dbh->do("START TRANSACTION");
@@ -1069,20 +1116,18 @@ sub _start_transaction {
 	# to be overridden by subclasses. The default method does nothing.
 	
 	$edt->{transaction} = 'active';
-	
-	$edt->initialize_transaction($edt->{default_table});
     };
     
-    # If an exception was thrown, add an error condition. Write the actual error message to the
-    # error stream.
+    # If an exception was thrown, add an error condition. Write the actual error message
+    # to the error stream.
     
     if ( $@ )
     {
 	$edt->error_line($@);
 	
-	my $word = $edt->{transaction} eq 'active' ? 'initializing' : 'starting';
-	$edt->add_condition('main', 'E_EXECUTE', "an exception occurred while $word the transaction");
-
+	$edt->add_condition('main', 'E_EXECUTE',
+			    "an exception occurred while starting the transaction");
+	
 	# Mark this transaction as 'failed'. If a database transaction was actually started,
 	# roll it back.
 	
@@ -1094,7 +1139,7 @@ sub _start_transaction {
 	{
 	    $edt->_rollback_transaction('errors');
 	}
-
+	
 	return 0;
     }
 
@@ -1154,7 +1199,7 @@ sub _commit_transaction {
 		$edt->{rollback_count}++;
 	    };
 	    
-	    return 0;
+	    return '';
 	}
     }
 
@@ -1214,7 +1259,67 @@ sub _rollback_transaction {
     
     return 1;
 }
+
+
+sub _call_initialize {
     
+    my ($edt) = @_;
+    
+    local($@);
+    
+    eval {
+	$edt->initialize_transaction($edt->{default_table});
+    };
+    
+    if ( $@ )
+    {
+	$edt->error_line($@);
+	
+	$edt->add_condition('main', 'E_EXECUTE', 
+			    "an exception occurred during initialize_transaction");
+    }
+}
+
+
+sub _call_finalize {
+    
+    my ($edt) = @_;
+    
+    local($@);
+    
+    eval {
+	$edt->finalize_transaction($edt->{default_table});
+    };
+    
+    if ( $@ )
+    {
+	$edt->error_line($@);
+	
+	$edt->add_condition('main', 'E_EXECUTE', 
+			    "an exception occurred during finalize_transaction");
+    }
+}
+
+
+sub _call_cleanup {
+    
+    my ($edt, $reason) = @_;
+    
+    local($@);
+    
+    eval {
+	$edt->cleanup_transaction($edt->{default_table}, $reason);
+    };
+    
+    if ( $@ )
+    {
+	$edt->error_line($@);
+	
+	$edt->add_condition('main', 'E_EXECUTE', 
+			    "an exception occurred during cleanup_transaction");
+    }
+}
+
 
 # Methods to be overridden
 # ------------------------
@@ -1222,6 +1327,16 @@ sub _rollback_transaction {
 # The following methods do nothing, and exist solely to be overridden by subclasses. This enables
 # subclasses to execute auxiliary database operations before and/or after actions and
 # transactions.
+
+
+# initialize_instance ( )
+# 
+# This method is called on each new instance.
+
+sub initialize_instance {
+    
+    my ($edt) = @_;
+}
 
 
 # initialize_transaction ( table_specifier )

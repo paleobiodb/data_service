@@ -12,7 +12,7 @@ use EditTransaction;
 use Carp qw(croak);
 use Scalar::Util qw(reftype blessed);
 
-use Moo::Role;
+use Role::Tiny;
 
 no warnings 'uninitialized';
 
@@ -68,16 +68,18 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		C_CREATE => "Allow 'CREATE' to create records",
 		C_LOCKED => "Allow 'LOCKED' to update locked records",
 		C_ALTER_TRAIL => "Allow 'ALTER_TRAIL' to explicitly set crmod and authent fields",
-		C_CHANGE_PARENT => "Allow 'CHANGE_PARENT' to allow subordinate link values to be changed",
+		C_CHANGE_LINK => "Allow 'CHANGE_LINK' to allow subordinate link values to be changed",
 		E_BAD_CONNECTION => ["&1", "Database connection failed"],
 		E_BAD_TABLE => "'&1' does not correspond to any known database table",
-		E_NO_KEY => "The &1 operation requires a primary key value",
-		E_HAS_KEY => "You may not specify a primary key value for the &1 operation",
+		E_NO_KEY => "The &1 operation requires a primary key value or a selection expression",
 		E_MULTI_KEY => "You may only specify a single primary key value for the &1 operation",
 		E_BAD_KEY => ["Field '&1': Invalid key value(s): &2",
 			      "Invalid key value(s): &2",
 			      "Invalid key value(s): &1"],
-		E_BAD_SELECTOR => ["Field '&1': &2", "&2"],
+		E_BAD_KEY_FIELD => "You cannot specify '&1' and '&2' together",
+		E_HAS_WHERE => ["You may not specify a '_where' expression for the &1 operation",
+			        "You may not specify a '_where' expression for this operation"],
+		E_WHERE => "",
 		E_BAD_REFERENCE => { _multiple_ => ["Field '&2': found multiple keys for '&3'",
 						    "Found multiple keys for '&3'",
 						    "Found multiple keys for '&2'"],
@@ -101,13 +103,11 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 				 "You do not have permission to lock/unlock one or more of these records"],
 				 default => "You do not have permission to lock/unlock this record" },
 		E_PERM => { insert => "You do not have permission to insert a record into this table",
-			    update => "You do not have permission to update this record",
-			    update_many => "You do not have permission to update records in this table",
+			    update => "You do not have permission to update this record(s)",
 			    replace_new => "No record was found with key '&2', ".
 				"and you do not have permission to insert one",
-			    replace_existing => "You do not have permission to replace this record",
-			    delete => "You do not have permission to delete this record",
-			    delete_many => "You do not have permission to delete records from this table",
+			    replace => "You do not have permission to replace this record",
+			    delete => "You do not have permission to delete this record(s)",
 			    delete_cleanup => "You do not have permission to delete these records",
 			    fixup_mode => "You do not have permission for fixup mode on this table",
 			    default => "You do not have permission for this operation" },
@@ -143,9 +143,12 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    "Field '&1': value has been truncated to fit the database column"],
 		W_EXTID => ["Field '&1' : &2", 
 			    "Field '&1': column does not accept external identifiers, value looks like one"],
-		W_EMPTY_RECORD => "Item is empty",
+		W_EMPTY_RECORD => "This action was skipped because no field values were specified",
 		W_IMPORTED => "",
-		UNKNOWN => "Unknown condition code" });
+		UNKNOWN_TEMPLATE => ["No template found for '&0' with '&1', '&2'",
+				     "No template found for '&0' with '&1'", 
+				     "No template found for '&0'"],
+	});
 
 
 our ($CONDITION_CODE_STRICT) = qr{ ^ [CEW]_ [A-Z0-9_-]+ $ }x;
@@ -453,21 +456,24 @@ sub has_condition {
     {
 	return 1 if $edt->_has_main_condition($code, @v);
 	
-	# If the selector is 'all', return true if any of the actions has a matching
-	# condition. Return false otherwise.
+	# If the selector is 'all', return true if any of the actions has a
+	# matching condition. Ignore any actions whose status is 'skipped'.
+	# Return false otherwise.
 	
 	if ( $selector eq 'all' && ref $edt->{action_list} eq 'ARRAY' )
 	{
 	    foreach my $action ( $edt->{action_list}->@* )
 	    {
-		return 1 if $action->has_condition($code, @v);
+		return 1 if $action->{status} ne 'skipped' &&
+		    $action->has_condition($code, @v);
 	    }
 	}
 	
 	return '';
     }
     
-    # If the selector is '&_', check the current action.
+    # If the selector is '&_' or an action reference, check the selected action
+    # even if its status is 'skipped'.
     
     elsif ( $selector eq '&_' )
     {
@@ -641,7 +647,8 @@ sub conditions {
 	
 	if ( $selector eq '&_' )
 	{
-	    $action = $edt->{current_action} || return;
+	    $action = $edt->{current_action} || 
+		ref $edt->{action_list} eq 'ARRAY' && $edt->{action_list}[-1] || return;
 	}
 	
 	else
@@ -670,7 +677,7 @@ sub conditions {
 	return map { $edt->condition_string($_->@*) }
 	    grep { ref $_ eq 'ARRAY' && $_->[1] =~ $filter }
 	    $edt->_main_conditions,
-	    map { $_->status ne 'skipped' ? $_->conditions : () } $edt->_action_list;
+	    map { blessed($_) && $_->{status} ne 'skipped' ? $_->conditions : () } $edt->_action_list;
     }
     
     # For 'all' in scalar context, return the count(s) that correspond to $type.
@@ -891,18 +898,18 @@ sub has_condition_code {
 
 sub condition_message {
     
-    my ($edt, $code, @params) = @_;
+    my ($edt, @params) = @_;
     
     # If the code was altered because of the PROCEED allowance, change it back
     # so we can look up the proper template.
     
-    my $lookup = $code;
+    my $lookup = $params[0];
     substr($lookup,0,1) =~ tr/F/E/;
     
     # Look up the template according to the specified code and first parameter.  This may
     # return one or more templates.
     
-    my @templates = $edt->get_condition_template($lookup, $params[0]);
+    my @templates = $edt->get_condition_template($lookup, $params[1]);
     
     # Remove any undefined values from the end of the parameter list, so that the proper template
     # will be selected for the parameters given.
@@ -917,13 +924,16 @@ sub condition_message {
 	if ( defined $tpl && $tpl ne '' )
 	{
 	    my @required = $tpl =~ /[&](\d)/g;
+	    my $used = 0;
 	    
 	    foreach my $n ( @required )
 	    {
-		next TEMPLATE unless defined $params[$n-1] && $params[$n-1] ne '';
+		next TEMPLATE unless defined $params[$n] && $params[$n] ne '';
+		$used = $n unless $used >= $n;
 	    }
 	    
-	    $tpl =~ s/ [&](\d) / &_squash_param($params[$1-1]) /xseg;
+	    $tpl =~ s/ [&](\d) / &_squash_param($params[$1]) /xseg;
+	    
 	    return $tpl;
 	}
     }
@@ -969,14 +979,10 @@ sub get_condition_template {
     my $template = $CONDITION_BY_CLASS{ref $edt}{$code} //
 	           $CONDITION_BY_CLASS{EditTransaction}{$code};
     
-    if ( ref $template eq 'HASH' && $template->{$selector} )
+    if ( ref $template eq 'HASH' )
     {
-	$template = $template->{$selector};
-    }
-    
-    elsif ( ref $template eq 'HASH' && $template->{default} )
-    {
-	$template = $template->{default};
+	$template = $template->{$selector} || $template->{default} ||
+	    $CONDITION_BY_CLASS{EditTransaction}{UNKNOWN_TEMPLATE};
     }
     
     # If we have reached a string value, return it. If it is a non-empty list, return
@@ -992,12 +998,11 @@ sub get_condition_template {
 	return $template;
     }
     
-    # Otherwise, return the UNKNOWN template.
+    # Otherwise, return the UNKNOWN_CODE template.
     
     else
     {
-	return $selector ? $CONDITION_BY_CLASS{EditTransaction}{'UNKNOWN'} . " for '$selector'"
-	    : $CONDITION_BY_CLASS{EditTransaction}{'UNKNOWN'} . " for 'code'";
+	return $CONDITION_BY_CLASS{EditTransaction}{UNKNOWN_TEMPLATE}->@*;
     }
 }
 

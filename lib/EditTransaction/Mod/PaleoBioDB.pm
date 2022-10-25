@@ -19,7 +19,7 @@ our (@CARP_NOT) = qw(EditTransaction);
 
 use feature 'unicode_strings', 'postderef';
 
-use Moo::Role;	# switch to Role::Tiny?
+use Role::Tiny;
 
 
 # Register the extra property names used by this module with the table definition system, and
@@ -33,7 +33,6 @@ BEGIN {
     
     EditTransaction->register_directives('au_authorizer', 'au_creater', 'au_modifier',
 					 'adm_lock', 'own_lock');
-    
 };
 
 
@@ -223,7 +222,7 @@ sub check_data_column {
 	{
 	    return $edt->validate_extid_value($expected, $value, $fieldname);
 	}
-
+	
 	else
 	{
 	    return [ 'E_EXTID', $fieldname, "this field does not accept external identifiers" ];

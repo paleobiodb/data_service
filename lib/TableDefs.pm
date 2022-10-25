@@ -49,20 +49,23 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      is_table_property is_column_property);
 
 
-# List the properties that can be specified for tables.
+# List the properties that can be specified for tables. All of the CAN_ properties default
+# to 'anybody' unless explicitly specified. If CAN_INSERT is not specified, it defaults to
+# the value of CAN_POST.
 
 our (%TABLE_PROP_NAME) = (
-    CAN_POST => 1,	      # specifies who is allowed to add new records
-    CAN_VIEW => 1,	      # specifies who is allowed to view records
-    CAN_MODIFY => 1,	      # specifies who is allowed to modify existing records
-    # BY_AUTHORIZER => 1,	      # if true, check modification permission according to authorizer_no
-    ENABLE_INSERT_KEY => 1,   # if true, an inserted record may specify the primary key value
-    ENABLE_ALTER_TRAIL => 1,  # if true, admins can change record creator/modifier/dates
-    DISABLE_DELETE => 1,      # if true, only admins can delete records
+    CAN_VIEW => 1,	      # specifies who can view records
+    CAN_POST => 1,	      # specifies who can add records with auto_insert keys
+    CAN_INSERT => 1,          # specifies who can add records with specified keys
+    CAN_DELETE => 1,          # specifies who can delete records
+    CAN_MODIFY => 1,	      # specifies who can modify existing records they do not own
+    CAN_ALTER_TRAIL => 1,     # specifies who can change record creator/modifier dates
+    # BY_AUTHORIZER => 1,     # if true, check modification permission according to authorizer_no
     CASCADE_DELETE => 1,      # specifies additional table(s) for cascade deletion from this one
-    SUPERIOR_TABLE => 1,      # specifies a table which controls access to this one
     PRIMARY_KEY => 1,         # specifies the primary key column(s) for this table
-    PRIMARY_FIELD => 1,       # specifies the primary key client field for this table
+    PRIMARY_FIELD => 1,       # specifies the primary key field(s) for this table
+    SUPERIOR_TABLE => 1,      # if non-empty, the specified table controls access to this one
+    SUPERIOR_KEY => 1,	      # if non-empty, the specified column links this table to its superior
     NO_LOG => 1,              # if true, changes to this table will not be logged
     TABLE_COMMENT => 1        # provides a comment or documentation string for this table
 );

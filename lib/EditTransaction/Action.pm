@@ -80,14 +80,24 @@ sub new {
 # ------------------------
 
 sub table {
-
-    return $_[0]{table};
+    
+    if ( defined $_[1] )
+    {
+	$_[0]{table} = $_[1];
+    }
+    
+    return $_[0]{table} // '';
 }
 
 
 sub operation {
     
-    return $_[0]{operation};
+    if ( defined $_[1] )
+    {
+	$_[0]{operation} = $_[1];
+    }
+    
+    return $_[0]{operation} // '';
 }
 
 
@@ -105,6 +115,11 @@ sub refstring {
 
 sub status {
 
+    if ( defined $_[1] )
+    {
+	$_[0]{status} = $_[1];
+    }
+    
     return $_[0]{status} // '';
 }
 
@@ -126,14 +141,6 @@ sub set_status {
     my ($action, $status) = @_;
     
     $action->{status} = $status;
-}
-
-
-sub set_result {
-
-    my ($action, $result) = @_;
-    
-    $action->{result} = $result;
 }
 
 
@@ -243,22 +250,16 @@ sub set_keyinfo {
     $action->{keyfield} = $keyfield;
     $action->{keyval} = $keyval if @_ > 3;
     $action->{keyexpr} = $keyexpr if @_ > 3;
-}
-
-
-sub set_keyexpr {
-
-    my ($action, $keyexpr) = @_;
-
-    $action->{keyexpr} = $keyexpr;
-}
-
-
-sub set_keyval {
-
-    my ($action, $keyval) = @_;
     
-    $action->{keyval} = $keyval;
+    if ( $keyexpr && ! $keycol )
+    {
+	$action->{keymult} = 'where';
+    }
+    
+    elsif ( ref $keyval eq 'ARRAY' && $keyval->@* > 1 )
+    {
+	$action->{keymult} = 'keylist';
+    }
 }
 
 
@@ -283,6 +284,11 @@ sub keyval {
 sub keyexpr {
 
     return $_[0]{keyexpr} // '0';
+}
+
+sub keymult {
+
+    return $_[0]{keymult} // '';
 }
 
 
@@ -311,18 +317,47 @@ sub keyvalues {
 }
 
 
-# keymult ( )
-#
-# Return true if this action has more than one key value, false otherwise.
+# set_keyval ( new_value )
+# 
+# This is called after an insert operation, to store the new key value in the action record.
 
-sub keymult {
-
-    return (ref $_[0]{keyval} eq 'ARRAY' && $_[0]{keyval}->@* > 1 ? 1 : '');
+sub set_keyval {
+    
+    $_[0]{keyval} = $_[1];
 }
 
 
-# Methods for handling error, caution and warning conditions.
-# -----------------------------------------------------------
+# set_linkinfo ( link_column, link_field, link_value )
+# 
+# Store these values with the action.
+
+sub set_linkinfo {
+    
+    my ($action, $link_column, $link_field, $link_value) = @_;
+    
+    $action->{linkcol} = $link_column;
+    $action->{linkfield} = $link_field;
+    $action->{linkval} = $link_value;
+}
+
+
+# row_count ( [count] )
+# 
+# Get or set the count of rows which match this action's key expression.
+
+sub row_count {
+    
+    if ( defined $_[1] )
+    {
+	$_[0]{row_count} = $_[1];
+    }
+    
+    return $_[0]{row_count} // '';    
+}
+
+
+# Methods for handling error, caution and warning conditions
+# ----------------------------------------------------------
 
 # conditions ( )
 # 
@@ -461,8 +496,28 @@ sub clear_conditions_from_parent {
 }
 
 
-# Methods for examining the action record.
-# ----------------------------------------
+# Methods for handling the action result
+# --------------------------------------
+
+sub set_result {
+
+    my ($action, $result) = @_;
+    
+    $action->{result} = $result;
+}
+
+
+sub set_resultinfo {
+    
+    my ($action, $result, $matched) = @_;
+    
+    $action->{result} = $result;
+    $action->{matched} = $matched;
+}
+
+
+# Methods for examining the action parameters
+# -------------------------------------------
 
 # record ( )
 # 
@@ -543,12 +598,17 @@ sub old_record {
 # Methods for handling authorization
 # ----------------------------------
 
-# permission ( )
+# permission ( [permission] )
 # 
-# Return a single permission string that has been determined during the authorization process. If
-# the value is either empty or 'PENDING', then authorization has not been completed.
+# Get or set the permission code associated with this action. If the value is
+# either empty or 'PENDING', then authorization has not been completed.
 
 sub permission {
+    
+    if ( defined $_[1] )
+    {
+	$_[0]{permission} = $_[1];
+    }
     
     return $_[0]{permission} // '';
 }
@@ -567,13 +627,20 @@ sub set_permission {
 }
 
 
-# authorize_later ( )
-#
-# Indicate that authorization could not be completed and should be tried again at execution time.
+# validate_admin ( [boolean] )
+# 
+# Get or set the administrative validation status for this action. If it is set,
+# the action will be validated with administrative permission rather than
+# standard permission.
 
-sub authorize_later {
-
-    $_[0]{permission} = 'PENDING';
+sub validate_admin {
+    
+    if ( defined $_[1] )
+    {
+	$_[0]{validate_admin} = $_[1];
+    }
+    
+    return $_[0]{validate_admin} // '';
 }
 
 
@@ -668,45 +735,45 @@ sub value_list {
 }
 
 
-# # handle_column ( column_name, directive )
-# #
-# # Apply the specified directive to the specified column, for use in the final validation step. The
-# # accepted values are documented with the 'handle_column' method of EditTransaction. If the column
-# # name you supply does not appear in the database table associated with this action, the directive
-# # will have no effect. This method must be called before validation occurs, or it will have no
-# # effect.
+# handle_column ( column_name, directive )
+#
+# Apply the specified directive to the specified column, for use in the final validation
+# step. The accepted values are documented with the 'handle_column' method of
+# EditTransaction. If the column name you supply does not appear in the database table
+# associated with this action, the directive will have no effect. This method must be
+# called before validation occurs, or it will have no effect.
 
-# sub handle_column {
+sub handle_column {
 
-#     my ($action, $column_name, $directive) = @_;
+    my ($action, $column_name, $directive) = @_;
     
-#     croak "you must specify a column name" unless $column_name;
+    croak "you must specify a column name" unless $column_name;
     
-#     # croak "invalid directive" unless $EditTransaction::VALID_DIRECTIVE{$directive};
+    # croak "invalid directive" unless $EditTransaction::VALID_DIRECTIVE{$directive};
     
-#     $action->{directive}{$column_name} = $directive;
-# }
+    $action->{directive}{$column_name} = $directive;
+}
 
 
-# # directive ( column_name )
-# # 
-# # Return the directive, if any, for the specified column.
+# directive ( column_name )
+# 
+# Return the directive, if any, for the specified column.
 
-# sub directive {
+sub directive {
 
-#     return $_[0]{directive} && $_[1] ? $_[0]{directive}{$_[1]} : undef;
-# }
+    return $_[0]{directive} && $_[1] ? $_[0]{directive}{$_[1]} : undef;
+}
 
 
-# # all_directives ( )
-# #
-# # In list context, return a list of column names and directives, suitable for assigning to a
-# # hash. In scalar context, return the number of columns that have directives.
+# all_directives ( )
+#
+# In list context, return a list of column names and directives, suitable for assigning to a
+# hash. In scalar context, return the number of columns that have directives.
 
-# sub all_directives {
+sub all_directives {
 
-#     return $_[0]{directive} ? $_[0]{directive}->%* : ();
-# }
+    return $_[0]{directive} ? $_[0]{directive}->%* : ();
+}
 
 
 # add_precheck ( column_name, check_type, params... )

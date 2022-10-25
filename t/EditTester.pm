@@ -31,9 +31,11 @@ our (@EXPORT_OK) = qw(connect_to_database ok_eval ok_exception ok_last_result
 		      ok_captured_output ok_no_captured_output clear_captured_output
 		      last_result last_result_list last_edt clear_edt
 		      ok_new_edt ok_condition_count ok_has_condition
-		      ok_has_one_condition ok_no_conditions ok_no_errors 
+		      ok_has_one_condition ok_no_conditions ok_no_errors
+		      ok_only_conditions ok_only_warnings ok_only_errors
 		      ok_no_warnings ok_has_one_error ok_has_one_warning
-		      ok_has_error ok_has_warning ok_diag is_diag
+		      ok_has_error ok_has_warning ok_diag is_diag ok_can_proceed ok_cannot_proceed
+		      diag_errors diag_warnings diag_conditions
 		      ok_action ok_failed_action ok_commit ok_failed_commit ok_rollback
 		      clear_table ok_found_record ok_no_record ok_record_count
 		      get_table_name sql_command sql_fetchrow count_records fetch_records);
@@ -742,9 +744,9 @@ sub capture_mode {
     
     shift if ref $_[0] eq 'EditTester';
     
-    if ( @_ )
+    if ( defined $_[0] )
     {
-	$CAPTURE_MODE = ( $_[0] ? 1 : 0 );
+	$CAPTURE_MODE = $_[0];
     }
     
     return $CAPTURE_MODE;
@@ -1049,24 +1051,35 @@ sub _condition_args {
     # code, use it as the filter. The default filter is /./, which selects all
     # conditions. 
     
-    my $filter;
+    my ($filter, @conditions, $condition_label, $condition_string);
     
-    if ( defined $_[0] && $_[0] ne '' )
+    while ( defined $_[0] && $_[0] ne '' )
     {
 	if ( ref $_[0] eq 'Regexp' )
 	{
-	    $filter = shift @_;
+	    if ( $filter )
+	    {
+		my $new = shift @_;
+		$filter = qr{ $filter .* $new }xs;
+	    }
+	    
+	    else
+	    {
+		$filter = shift @_;
+	    }
 	}
 	
 	elsif ( $_[0] && $_[0] =~ qr{ ^ ([CEFW]_[A-Z0-9_]+) $ }xs )
 	{
-	    $filter = qr{ ^ $1 \b }xs;
+	    # $filter = qr{ ^ $1 \b }xs;
+	    push @conditions, $1;
 	    shift @_;
 	}
 	
 	elsif ( $_[0] && $_[0] =~ qr{ ^ EF_ ([A-Z0-9_]+) $ }xs )
 	{
-	    $filter = qr{ ^ [EF]_ $1 \b }xs;
+	    # $filter = qr{ ^ [EF]_ $1 \b }xs;
+	    push @conditions, "[EF]_$1";
 	    shift @_;
 	}
 	
@@ -1074,19 +1087,47 @@ sub _condition_args {
 	{
 	    croak "unrecognized filter '$_[0]': must be a condition code or a regexp";
 	}
+	
+	else
+	{
+	    last;
+	}
     }
     
     # If we already have one filter and the next argument is a regexp,
     # add it to the existing filter.
     
-    if ( ref $filter eq 'Regexp' && ref $_[0] eq 'Regexp' )
+    # if ( ref $filter eq 'Regexp' && ref $_[0] eq 'Regexp' )
+    # {
+    # 	my $second = shift @_;
+    
+    # }
+    
+    # If we have one or more conditions, disjoin them into a regexp.
+    
+    if ( @conditions )
     {
-	my $second = shift @_;
+	$condition_label = join(' | ', @conditions);
+	$condition_string = "(?: $condition_label )";
 	
-	$filter = qr{ $filter .* $second }xs;
+	if ( $filter )
+	{
+	    $condition_label .= ", $filter";
+	    $filter = qr{ ^ $condition_string \b .* $filter }xs;
+	}
+	
+	else
+	{
+	    $filter = qr{ ^ $condition_string \b }xs;
+	}
     }
     
-    $filter ||= qr/./;
+    else
+    {
+	$condition_label = $filter;
+	
+	$filter ||= qr/./;
+    }
     
     # Remove any empty arguments from the end.
     
@@ -1096,7 +1137,7 @@ sub _condition_args {
     }
     
     # The last argument from what remains, if any, will be used as the label
-    # (name) for this test.  If not given, a default will be used (see below).
+    # (name) for this test. If not given, a default will be used.
     
     return ($selector, $type, $filter, $_[-1]);
 }
@@ -1121,7 +1162,7 @@ sub _action_args {
     
     # If the first argument is an action status code, extract it.
     
-    if ( $_[0] && $_[0] =~ qr{ ^ (?: pending|executed|failed|aborted|skipped) $ }xs )
+    if ( $_[0] && $_[0] =~ qr{ ^ (?: pending|executed|unexecuted|failed|skipped) $ }xs )
     {
 	$status = shift @_;
     }
@@ -1145,6 +1186,52 @@ sub _action_args {
     # (name) for this test.  If not given, a default will be used (see below).
     
     return ($refstring, $status, $_[-1])
+}
+
+
+# ok_can_proceed ( [edt], [label] )
+# 
+# If the specified transaction can proceed, in other words if it has not
+# finished and has no error conditions, pass a test with the specified label and
+# return true.  Otherwise, fail the test and return false. As with all of the
+# other routines in this section, the transaction if not specified defaults to
+# the most recent transaction created by the most recent EditTester instance.
+
+sub ok_can_proceed {
+    
+    my ($T, $edt, @rest) = &_edt_args;
+    
+    my $label = $rest[-1] || "transaction can proceed";
+    
+    if ( $edt->can_proceed )
+    {
+	ok( !$INVERT_MODE, $label );
+    }
+    
+    else
+    {
+	ok( $INVERT_MODE, $label );
+	diag_lines( "transaction status : " . $edt->status );
+	diag_errors($edt);
+    }
+}
+
+
+sub ok_cannot_proceed {
+    
+    my ($T, $edt, @rest) = &_edt_args;
+    
+    my $label = $rest[-1] || "transaction cannot proceed";
+    
+    if ( $edt->can_proceed )
+    {
+	ok( $INVERT_MODE, $label );
+    }
+    
+    else
+    {
+	ok( !$INVERT_MODE, $label );
+    }
 }
 
 
@@ -1203,10 +1290,15 @@ sub ok_condition_count {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
+    my $typeword = $type eq 'all' ? 'condition' : $type;
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "$typeword count for $selword is $expected_count";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_condition_count($edt, $expected_count, $selector, $type, $filter,
-			       $label || "condition count is $expected_count");
+    return _ok_condition_count($edt, $expected_count, $selector, $type, $filter, $label );
 }
 
 
@@ -1216,7 +1308,7 @@ sub _ok_condition_count {
     
     # If the selector is a refstring, first make sure it is valid.
     
-    if ( $selector =~ /^&/ && ! $edt->has_action($selector) )
+    if ( $selector =~ /^&/ && $selector ne '&_' && ! $edt->has_action($selector) )
     {
 	ok($INVERT_MODE, $label);
 	diag_lines("No action matching '$selector' was found");
@@ -1274,8 +1366,13 @@ sub ok_no_conditions {
     
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_condition_count($edt, 0, $selector, $type, $filter,
-			       $label || "no matching conditions");
+    my $typeword = $type eq 'all' ? 'conditions' : $type;
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "no matching $typeword on $selword";
+    
+    return _ok_condition_count($edt, 0, $selector, $type, $filter, $label);
     
     # return $T->_ok_no_conditions($edt, $selector, $type, $filter,
     # 				 $label || "no matching conditions");
@@ -1320,10 +1417,15 @@ sub ok_has_condition {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
         
+    my $typeword = $type eq 'all' ? 'condition' : $type;
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "found matching $typeword on $selword";
+        
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_condition_count($edt, '+', $selector, $type, $filter,
-			       $label || "found matching condition");
+    return _ok_condition_count($edt, '+', $selector, $type, $filter, $label);
     
     # return $T->_ok_has_condition($edt, $selector, $type, $filter,
     # 				 $label || "found matching condition");
@@ -1378,8 +1480,13 @@ sub ok_has_one_condition {
         
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_has_one_condition($edt, $selector, $type, $filter,
-				 $label || "found one matching condition");
+    my $typeword = $type eq 'all' ? 'condition' : $type;
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "found one matching $typeword on $selword";
+    
+    return _ok_has_one_condition($edt, $selector, $type, $filter, $label);
 }
 
 
@@ -1389,7 +1496,7 @@ sub _ok_has_one_condition {
     
     # If the selector is a refstring, first make sure it is valid.
     
-    if ( $selector =~ /^&/ && ! $edt->has_action($selector) )
+    if ( $selector =~ /^&/ && $selector ne '&_' && ! $edt->has_action($selector) )
     {
 	diag_lines("No action matching '$selector' was found");
 	ok($INVERT_MODE, $label);
@@ -1441,6 +1548,72 @@ sub _ok_has_one_condition {
 }
 
 
+# ok_only_conditions ( [edt], [selector], [type], [filter], [label] )
+# 
+# If all conditions that match $selector and $type also match $filter, pass a
+# test with the specified label and return true.  Otherwise, fail the test and
+# return false. In the latter case, list all conditions matching $selector and
+# $type to the diagnostic output stream.
+
+sub ok_only_conditions {
+    
+    my ($T, $edt, @rest) = &_edt_args;
+    
+    my ($selector, $type, $filter, $label) = &_condition_args(@rest);
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 2;
+    
+    my $typeword = $type eq 'all' ? 'condition' : $type;
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "all $typeword on $selword match the filter";
+    
+    return _ok_only_conditions($edt, $selector, $type, $filter, $label);
+}
+
+
+sub _ok_only_conditions {
+    
+    my ($edt, $selector, $type, $filter, $label) = @_;
+    
+    # If the selector is a refstring, first make sure it is valid.
+    
+    if ( $selector =~ /^&/ && $selector ne '&_' && ! $edt->has_action($selector) )
+    {
+	diag_lines("No action matching '$selector' was found");
+	ok($INVERT_MODE, $label);
+	return $INVERT_MODE;
+    }
+    
+    # If any condition that matches $selector and $type does not match the
+    # filter, fail the test and return false. Invert this if $INVERT_MODE is true.
+    
+    my @conditions = $edt->conditions($selector, $type);
+    my @failures;
+    
+    foreach my $c ( @conditions )
+    {
+	if ( $c !~ $filter )
+	{
+	    push @failures, "got      : $c";
+	}
+    }
+    
+    if ( @failures )
+    {
+	ok( $INVERT_MODE, $label );
+	diag_lines(@failures, "expected : $filter");
+	return $INVERT_MODE;
+    }
+    
+    else
+    {
+	ok( !$INVERT_MODE );
+    }
+}
+
+
 # The following test subroutines are shortcuts, specialized for particular
 # condition types.
 
@@ -1450,10 +1623,14 @@ sub ok_no_errors {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "no matching errors on $selword";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_condition_count($edt, 0, $selector, 'errors', $filter,
-			       $label || "no matching errors");
+    return _ok_condition_count($edt, 0, $selector, 'errors', $filter, $label);
     
     # return $T->_ok_no_conditions($edt, $selector, 'errors', $filter,
     # 				 $label || "no matching errors");
@@ -1466,10 +1643,14 @@ sub ok_no_warnings {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "no matching warnings on $selword";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_condition_count($edt, 0, $selector, 'warnings', $filter,
-			       $label || "no matching warnings");
+    return _ok_condition_count($edt, 0, $selector, 'warnings', $filter, $label);
     
     # return $T->_ok_no_conditions($edt, $selector, 'warnings', $filter,
     # 				 $label || "no matching warnings");
@@ -1482,10 +1663,14 @@ sub ok_has_error {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "found matching error on $selword";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    _ok_condition_count($edt, '+',  $selector, 'errors', $filter,
-			$label || "found matching error");
+    _ok_condition_count($edt, '+',  $selector, 'errors', $filter, $label);
 }
 
 
@@ -1495,10 +1680,14 @@ sub ok_has_warning {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "found matching warning on $selword";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    _ok_condition_count($edt, '+', $selector, 'warnings', $filter,
-			$label || "found matching warning");
+    _ok_condition_count($edt, '+', $selector, 'warnings', $filter, $label);
 }
 
 
@@ -1508,10 +1697,14 @@ sub ok_has_one_error {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "found one matching error on $selword";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_has_one_condition($edt, $selector, 'errors', $filter,
-				 $label || "found one matching error");
+    return _ok_has_one_condition($edt, $selector, 'errors', $filter, $label);
 }
 
 
@@ -1521,10 +1714,48 @@ sub ok_has_one_warning {
     
     my ($selector, $type, $filter, $label) = &_condition_args(@rest);
     
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "found one matching warning on $selword";
+    
     local $Test::Builder::Level = $Test::Builder::Level + 2;
     
-    return _ok_has_one_condition($edt, $selector, 'warnings', $filter,
-				 $label || "found one matching warning");
+    return _ok_has_one_condition($edt, $selector, 'warnings', $filter, $label);
+}
+
+
+sub ok_only_errors {
+    
+    my ($T, $edt, @rest) = &_edt_args;
+    
+    my ($selector, $type, $filter, $label) = &_condition_args(@rest);
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 2;
+    
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "all errors on $selword match the filter";
+    
+    return _ok_only_conditions($edt, $selector, 'errors', $filter, $label);
+}
+
+
+sub ok_only_warnings {
+    
+    my ($T, $edt, @rest) = &_edt_args;
+    
+    my ($selector, $type, $filter, $label) = &_condition_args(@rest);
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 2;
+    
+    my $selword = $selector eq 'all' ? 'transaction' : 
+	$selector eq '&_' ? 'latest action' : $selector;
+    
+    $label ||= "all warnings on $selword match the filter";
+    
+    return _ok_only_conditions($edt, $selector, 'warnings', $filter, $label);
 }
 
 
@@ -1949,7 +2180,7 @@ sub clear_table {
     
     croak "You must first create an EditTester instance" unless $T;
     
-    my $table = shift @_;
+    my $table = shift @_ || $T->{edt_table} || croak "You must specify a table to clear";
     
     my $dbh = $T->dbh;
     
@@ -2124,10 +2355,15 @@ sub ok_found_record {
     
     # Check arguments
     
+    if ( $table eq 'default' )
+    {
+	$table = $T->default_table;
+    }
+    
     croak "you must specify a table" unless $table;
     croak "you must specify a valid SQL expression" if ref $expr;
     
-    $label ||= 'found at least one record';
+    $label ||= 'found at least one matching record';
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
@@ -2152,10 +2388,15 @@ sub ok_no_record {
     
     # Check arguments
     
+    if ( $table eq 'default' )
+    {
+	$table = $T->default_table;
+    }
+    
     croak "you must specify a table" unless $table;
     croak "you must specify a valid SQL expression" if ref $expr;
     
-    $label ||= 'record was absent';
+    $label ||= 'no matching records were present';
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
@@ -2178,10 +2419,15 @@ sub ok_record_count {
     
     my ($expected, $table, $expr, $label) = @_;
     
+    if ( $table eq 'default' )
+    {
+	$table = $T->default_table;
+    }
+    
     croak "invalid count '$expected'" unless defined $expected && $expected =~ /^\d+$/;
     croak "you must specify a valid SQL expression" if ref $expr;
     
-    $label ||= "found expected number of records";
+    $label ||= "found $expected records in table $table";
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     

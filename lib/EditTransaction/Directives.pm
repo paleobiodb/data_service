@@ -14,7 +14,7 @@ use Switch::Plain;
 use List::Util qw(sum);
 use Carp qw(carp croak);
 
-use Moo::Role;
+use Role::Tiny;
 
 no warnings 'uninitialized';
 

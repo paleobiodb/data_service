@@ -19,7 +19,7 @@ use Carp qw(carp croak);
 
 use EditTransaction::Operations qw(%VALID_OPERATION);
 
-use Moo::Role;
+use Role::Tiny;
 
 no warnings 'uninitialized';
 
@@ -95,46 +95,9 @@ sub _action_args {
 	croak "you must specify a table to operate on";
     }
     
-    # The next argument should be the parameters. It must be a hashref unless
-    # the operation is 'delete'.
+    # The next argument should be the parameters.
     
-    my $parameters = shift @rest;
-    
-    unless ( ref $parameters && reftype $parameters eq 'HASH' )
-    {
-	if ( $operation eq 'skip' )
-	{
-	    if ( $parameters )
-	    {
-		$parameters = { _primary => $parameters };
-	    }
-	    
-	    else
-	    {
-		$parameters = { };
-	    }
-	}
-	
-	elsif ( $operation =~ /^delete/ )
-	{
-	    if ( $parameters )
-	    {
-		$parameters = { _primary => $parameters };
-	    }
-	    
-	    else
-	    {
-		croak "you must specify one or more key values for this action";
-	    }
-	}
-	
-	else
-	{
-	    croak "you must specify a hashref of parameters for this action";
-	}
-    }
-    
-    return ($table_specifier, $parameters);
+    return ($table_specifier, @rest);
 }
 
 
@@ -157,6 +120,26 @@ sub _new_action {
     
     croak "you may not add new actions to a transaction that has completed"
 	if $edt->has_finished;
+    
+    # If the operation is not 'skip', throw an exception if no parameters were
+    # given.
+    
+    if ( $operation ne 'skip' )
+    {
+	croak "you must specify parameters for this action" 
+	    unless defined $parameters || $operation eq 'other';
+	
+	if ( $operation =~ /^delete|^other$/ )
+	{
+	    $parameters = { _primary => $parameters } unless ref $parameters eq 'HASH';
+	}
+	
+	else
+	{
+	    croak "the parameter argument must be a hashref" unless
+		ref $parameters eq 'HASH';
+	}
+    }
     
     # Increment the action sequence number.
     
@@ -202,7 +185,7 @@ sub _new_action {
     {
 	if ( $edt->table_info_ref($table_specifier) )
 	{
-	    $edt->_unpack_key_values($action, $table_specifier, $operation, $parameters);
+	    $edt->unpack_key_values($action, $table_specifier, $operation, $parameters);
 	    
 	    $edt->{action_tables}{$table_specifier} = 1;
 	    $edt->init_directives($table_specifier);
@@ -264,7 +247,7 @@ sub abort_action {
 	# If the action has already been skipped or aborted, return true. This makes
 	# the method idempotent.
 	
-	if ( $action->status =~ /^skipped|^aborted/ )
+	if ( $action->status eq 'skipped' )
 	{
 	    return 1;
 	}
@@ -293,7 +276,7 @@ sub abort_action {
 	    # If the action not 'skipped', set the action status to 'aborted' and
 	    # increment the skip count.
 	    
-	    $action->set_status('aborted');
+	    $action->set_status('skipped');
 	    
 	    $edt->{skip_count}++;
 	    
@@ -413,13 +396,13 @@ sub child_action {
 # completed    Return completed actions
 # pending      Return all actions that have been registered but not completed
 # executed     Return all actions that were executed successfully
-# notex        Return all actions that were skipped, aborted, or failed
+# notex        Return all actions that were skipped, abandoned, or failed
 # failed       Return all actions that failed
-# aborted      Return all actions that were aborted
 # skipped      Return all actions that were skipped
+# blocked      Return all actions that were blocked
 
-our (%STATUS_SELECTOR) = (all => 1, completed => 1, pending => 1,
-			  executed => 1, notex => 1, failed => 1, skipped => 1);
+our (%STATUS_SELECTOR) = (all => 1, completed => 1, pending => 1, executed => 1,
+			  notex => 1, blocked => 1, failed => 1, skipped => 1);
 
 our (%STATUS_LABEL) = (insert => 'inserted', update => 'updated',
 		       replace => 'replaced', delete => 'deleted');
@@ -446,16 +429,9 @@ sub _action_filter {
 
     my ($edt, $action, $selector, $table) = @_;
     
-    my $status = $action->status;
+    my $status = $action->status || '';
     my $operation = $action->operation;
     my $parameters;
-    
-    # If the transaction has errors, report any uncompleted action as 'blocked'.
-    
-    if ( $edt->has_errors )
-    {
-    	$status ||= 'blocked';
-    }
     
     # Return nothing if this action does not match the selector or the table.
     
@@ -553,7 +529,7 @@ sub action_ref {
 	
 	croak "not an action reference" unless ref $selector eq 'EditTransaction::Action';
 	
-	if ( $edt->{action_list} && any { $_ eq $selector } $edt->{action_list}->@* )
+	if ( ref $edt->{action_list} eq 'ARRAY' && any { $_ eq $selector } $edt->{action_list}->@* )
 	{
 	    return $selector;
 	}
@@ -561,7 +537,8 @@ sub action_ref {
     
     elsif ( ! defined $selector || $selector eq '&_' )
     {
-	return $edt->{current_action};
+	return $edt->{current_action} || 
+	    ref $edt->{action_list} eq 'ARRAY' && $edt->{action_list}[-1];
     }
     
     elsif ( $selector =~ /^&/ )
@@ -663,12 +640,12 @@ sub action_status {
     {
 	my $status = $action->status;
 	
-	# If the transaction has fatal errors, the action status will be 'aborted' if the action was
+	# If the transaction has fatal errors, the action status will be 'unexecuted' if the action was
 	# not failed or skipped.
 	
 	if ( $edt->has_errors && $status !~ /^failed|^skipped/ )
 	{
-	    return 'aborted';
+	    return 'unexecuted';
 	}
 	
 	# An empty action status is returned as 'pending'.
@@ -760,7 +737,10 @@ sub action_keymult {
 
 # action_table ( ref )
 # action_operation ( ref )
-# action_param ( ref, parameter_name )
+# action_parent ( ref )
+# action_result ( ref )
+# action_record ( ref )
+# action_parameter ( ref, parameter_name )
 # 
 # Return the specified action attribute if a matching action is found. Return
 # undefined otherwise.
@@ -783,11 +763,38 @@ sub action_operation {
 }
 
 
-sub action_params {
+sub action_parent {
     
     if ( my $action = &action_ref )
     {
-	return $action->record;
+	return $action->parent || '';
+    }
+}
+
+
+sub action_result {
+    
+    if ( my $action = &action_ref )
+    {
+	return defined $action->{result} ? $action->{result} : '';
+    }
+}
+
+
+sub action_matched {
+    
+    if ( my $action = &action_ref )
+    {
+	return defined $action->{matched} ? $action->{matched} : '';
+    }
+}
+
+
+sub action_record {
+    
+    if ( my $action = &action_ref )
+    {
+	return $action->record || '';
     }
 }
 
@@ -827,15 +834,6 @@ sub action_parameter {
 }
 
 
-sub action_parent {
-    
-    if ( my $action = &action_ref )
-    {
-	return $action->parent || '';
-    }
-}
-
-
 # current_action ( )
 #
 # Return the refstring corresponding to the current action, if any. Otherwise,
@@ -846,305 +844,6 @@ sub current_action {
     my ($edt) = @_;
     
     return $edt->{current_action} && $edt->{current_action}->refstring // '';
-}
-
-
-# Keys
-# ----
-#
-# Most actions are associated with one or more primary key values which specify
-# the database records being operated on. The following methods are involved in
-# handling them.
-
-# _unpack_key_values ( action, table, operation, params )
-# 
-# Examine $params, and construct a canonical list of key values. The key value
-# parameter can be either a listref or a scalar. If a scalar, it is assumed to
-# contain either a single key value or a comma-separated list of key values. In
-# the latter case, all commas, spaces and quotation marks are discarded and a
-# list is returned of the remaining values.
-# 
-# If at least one valid key value is found, and none of them are invalid, generate an SQL
-# expression using $column_name that will select the corresponding records. This method
-# does not check if those key values actually exist in the database. Under most
-# circumstances, $column_name should be the primary key column for the table to which the
-# key values will apply.
-# 
-# Store the key value(s) and SQL expression in the action object. If individual key values
-# are found to be invalid (not empty or 0, which are ignored), add error condition(s) to
-# the action.
-
-sub _unpack_key_values {
-    
-    my ($edt, $action, $table_specifier, $operation, $params) = @_;
-    
-    # Get a full description of this table from the database, if we don't already have it. If the
-    # table does not have a primary key, do nothing.
-    
-    my $tableinfo = $edt->table_info_ref($table_specifier);
-    my $key_column;
-    
-    unless ( $key_column = $tableinfo->{PRIMARY_KEY} )
-    {
-	# If the action parameters include _primary, add an error condition.
-	
-	$edt->add_condition($action, 'E_BAD_KEY', "table '$table_specifier' has no primary key")
-	    if $params->{_primary};
-	
-	# Return without setting any key values.
-	
-	return;
-    }
-    
-    my $columninfo = $edt->table_column_ref($table_specifier, $key_column);
-    
-    # If the operation is 'delete_cleanup', we require that the original table's
-    # SUPERIOR_TABLE property be set. The key column name will be original table's
-    # SUPERIOR_KEY if set, or else the PRIMARY_KEY of the superior table. Either way, the
-    # specified column must exist in the subordinate table and must be a foreign key
-    # linked to the superior table.
-    
-    if ( $operation eq 'delete_cleanup' )
-    {
-	my $sup_table_specifier = $tableinfo->{SUPERIOR_TABLE} ||
-	    croak "unable to determine the superior table for '$table_specifier'";
-	
-	my $sup_tableinfo = $edt->table_info_ref($sup_table_specifier);
-	
-	my $sup_key_column = $tableinfo->{SUPERIOR_KEY} || $tableinfo->{PRIMARY_KEY} ||
-	    croak "unable to determine the linking column for '$table_specifier'";
-	
-	# Now that we have all of the necessary information about the superior table, key values
-	# will be looked up in that table instead.
-	
-	$table_specifier = $sup_table_specifier;
-	$tableinfo = $sup_tableinfo;
-	$key_column = $sup_key_column;
-    }
-    
-    # Now look for key values. If $params is a hashref, look for primary key values among
-    # its value set. They may appear under $key_column, or under some other hash key.
-    
-    my ($key_field, $raw_values, @key_values, @bad_values, $auth_later);
-    
-    if ( ref $params )
-    {
-	# Start by checking if the parameter hash includes a value under the
-	# primary key column name.
-	
-	if ( defined $params->{$key_column} && $params->{$key_column} ne '' )
-	{
-	    $key_field = $key_column;
-	    $raw_values = $params->{$key_column};
-	}
-	
-	# Then check if the parameter hash contains a value under '_primary'.
-	
-	if ( defined $params->{_primary} && $params->{_primary} ne '' )
-	{
-	    # Add an error condition if we already found a key value.
-	    
-	    if ( $key_field )
-	    {
-		$edt->add_condition($action, 'E_EXECUTE', 
-			    "you cannot specify '_primary' and '$key_field' together");
-	    }
-	    
-	    # Otherwise, use this value.
-	    
-	    else
-	    {
-		$key_field = '_primary';
-		$raw_values = $params->{_primary};
-	    }
-	}
-	
-	# If the PRIMARY_FIELD attribute is set, check if the parameter hash
-	# contains a value under that name.
-	
-	if ( my $alt_name = $tableinfo->{PRIMARY_FIELD} )
-	{
-	    if ( defined $params->{$alt_name} && $params->{$alt_name} ne '' )
-	    {
-		# Add an error condition if we already found a key value.
-		
-		if ( $key_field )
-		{
-		    $edt->add_condition($action, 'E_EXECUTE',
-			       "you cannot specify '$alt_name' and '$key_field' together" );
-		}
-		
-		# Otherwise, use this value.
-		
-		else
-		{
-		    $key_field = $alt_name;
-		    $raw_values = $params->{$alt_name};
-		}
-	    }
-	}
-    }
-    
-    # If we did not find any raw values, or if what we found was something other than a
-    # nonempty string or a nonempty array, store undef as the key and '0' as the key
-    # expression. This latter expression will select nothing.
-    
-    unless ( ref $raw_values eq 'ARRAY' && $raw_values->@* || $raw_values && ! ref $raw_values )
-    {
-	$action->set_keyinfo($key_column, $key_field, undef, "0");
-	return;
-    }
-    
-    # # Otherwise, look for particular patterns in $raw_values. If if it matches one of
-    # # the expressions "<name> = <value>" or "<name> in (<values...>)", extract the value
-    # # string and make sure that the column matches $key_column.
-    
-    # if ( ! ref $raw_values && $raw_values =~
-    # 	 qr{ ^ \s* (\w+) (?: \s* = \s* | \s+ in \s* [(] ) ( [^)]* ) [)]? \s* $ }xsi )
-    # {
-    # 	my $check_column = $1;
-    # 	$raw_values = $2;
-
-    # 	if ( $check_column ne $key_column )
-    # 	{
-    # 	    $action->add_condition('E_BAD_SELECTOR', $key_field || 'unknown',
-    # 				   "invalid key column '$check_column'");
-    # 	}
-    # }		
-    
-    # Now iterate through the elements of $raw_values, whether it is a listref or a
-    # string. We know it must be one or the other, because of the check above. Collect all
-    # of the valid elements in @key_values and the invalid ones in @bad_values.
-
-    my $app_call = $edt->can('before_key_column');
-
-  VALUE:
-    foreach my $v ( ref $raw_values ? $raw_values->@* : split /\s*,\s*/, $raw_values )
-    {
-	# Remove quotes around values.
-	
-	if ( $v && $v =~ qr{ ^ (['"]) (.*) \1 $ }xs )
-	{
-	    $v = $2;
-	}
-	
-	# Skip any value that is either empty or zero.
-	
-	if ( $v )
-	{
-	    # A value that is an action label must be looked up. If the action is found but has no
-	    # key value, authentication will have to be delayed until execution time.
-	    
-	    if ( $v =~ /^&/ )
-	    {
-		my $ref_action = $edt->{action_ref}{$v};
-		
-		if ( $ref_action && $ref_action->table eq $table_specifier )
-		{
-		    if ( $ref_action->keyvalues )
-		    {
-			push @key_values, $ref_action->keyvalues;
-		    }
-		    
-		    else
-		    {
-			push @key_values, $v;
-			$auth_later = 1;
-		    }
-		}
-		
-		else
-		{
-		    $action->add_condition('E_BAD_REFERENCE', $key_field, $v);
-		}
-		
-		next VALUE;
-	    }
-	    
-	    # Otherwise, the key value must be checked. If this EditTransaction includes an
-	    # application role that implements 'before_key_column', call it now. If it returns an
-	    # error condition, add that condition and go on to the next value.
-	    
-	    if ( $app_call )
-	    {
-		my ($result, $clean_value, $additional) =
-		    $edt->before_key_column($columninfo, $operation, $v, $key_field);
-		
-		if ( ref $result eq 'ARRAY' || ref $additional eq 'ARRAY' )
-		{
-		    $edt->add_validation_error($action, $result, $additional);
-		    next VALUE if ref $result;
-		}
-		
-		elsif ( $result )
-		{
-		    $v = $clean_value;
-		}
-	    }
-	    
-	    # If the key column type is integer, reject key values that are not
-	    # integers.
-	    
-	    if ( $columninfo->{TypeMain} eq 'unsigned' && $v !~ /^\s*\d+\s*$/ )
-	    {
-		push @bad_values, $v;
-	    }
-	    
-	    elsif ( $columninfo->{TypeMain} eq 'signed' && $v !~ /^\s*-?\d+\s*$/ )
-	    {
-		push @bad_values, $v;
-	    }
-	    
-	    else
-	    {
-		push @key_values, $v;
-	    }
-	}
-    }
-    
-    # If any bad values were found, add an error condition for all of them.
-    
-    if ( @bad_values )
-    {
-	my $key_string = join ',', @bad_values;
-	$edt->add_condition($action, 'E_BAD_KEY', $key_field, $key_string);
-    }
-    
-    # If the action can proceed, store the key values and key expression with the action.
-    
-    if ( $action->can_proceed )
-    {    
-	# Start with the case in which there are unresolved key references.
-	
-	if ( $auth_later )
-	{
-	    $action->set_keyinfo($key_column, $key_field, \@key_values);
-	    $action->authorize_later;
-	}
-	
-	# Next, the case in which there is only a single key value.
-	
-	elsif ( @key_values == 1 )
-	{
-	    my $key_expr = "$key_column='$key_values[0]'";
-	    
-	    $action->set_keyinfo($key_column, $key_field, $key_values[0], $key_expr); 
-	}
-	
-	# Next, the case in which there are multiple key values.
-	
-	elsif ( @key_values > 1 )
-	{
-	    my $key_string = join q{','}, @key_values;
-	    my $key_expr = "$key_column in ('$key_string')";
-	    
-	    $action->set_keyinfo($key_column, $key_field, \@key_values, $key_expr);
-	}
-	
-	# If no key values were found, store nothing.
-    }
-    
-    return;
 }
 
 

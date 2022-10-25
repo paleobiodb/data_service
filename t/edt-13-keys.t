@@ -200,7 +200,7 @@ subtest 'key values' => sub {
     is( $keyvalues[0], "18", "first key value" );
     is( $keyvalues[1], "2", "second key value" );
     
-    is( $edt->action_keymult, 1, "comma-separated keymult" );
+    is( $edt->action_keymult, 'keylist', "comma-separated keymult" );
     
     my $keyval = $edt->action_keyval;
     
@@ -224,7 +224,7 @@ subtest 'key values' => sub {
     is( $keyvalues[1], 45, "second key value" );
     is( $keyvalues[2], 8, "third key value" );
     
-    is( $edt->action_keymult, 1, "list keymult" );
+    is( $edt->action_keymult, 'keylist', "list keymult" );
     
     $edt->_test_action('delete', { _primary => [28] } );
     
@@ -232,6 +232,16 @@ subtest 'key values' => sub {
     
     is( $edt->action_keyval, "28", "solitaire list keyval" );
     is( $edt->action_keymult, '', "solitaire list keymult" );
+    
+    my $expr = "string_req = 'abc'";
+    
+    $edt->_test_action('update', { _where => $expr, string_val => 'def' });
+    
+    ok_no_conditions;
+    
+    is( $edt->action_keyval, '', "selection expression keyval is empty" );
+    is( $edt->action_keymult, 'where', "selection expression keymult" );
+    is( $edt->action_ref->keyexpr, $expr, "selection expression keyexpr" );
     
     # is( $action->keyval, "18", "key recognized" );
     # is( ref $action->keyval, 'ARRAY', "key list recognized" ) &&
@@ -357,13 +367,13 @@ subtest 'multiple fields' => sub {
     
     $edt->_test_action('update', { test_no => "3", _primary => "3" });
     
-    ok_has_one_condition( qr/E_EXECUTE.*_primary/, "caught test_no and _primary" );
+    ok_has_one_condition( qr/E_BAD_KEY_FIELD.*test_no/, "caught test_no and _primary" );
     
     $edt->_test_action('update', { test_no => "4", test_id => [5, 6] });
     
-    ok_has_one_condition( qr/E_EXECUTE.*test_id/, "caught test_no and test_id" );
+    ok_has_one_condition( qr/E_BAD_KEY_FIELD.*test_id/, "caught test_no and test_id" );
     
     $edt->_test_action('update', { test_id => "66", _primary => "xxx" });
     
-    ok_has_condition( qr/E_EXECUTE.*test_id/, "caught test_id and _primary" );
+    ok_has_condition( qr/E_BAD_KEY_FIELD.*_primary/, "caught test_id and _primary" );
 };

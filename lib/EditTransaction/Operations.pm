@@ -17,7 +17,7 @@ use Carp qw(carp croak);
 
 use parent 'Exporter';
 
-use Moo::Role;
+use Role::Tiny;
 
 no warnings 'uninitialized';
 
@@ -74,11 +74,7 @@ sub record_operation {
 	# error or caution will be added if the necessary permission cannot be
 	# established.
 	
-	my $result = $edt->authorize_action($action, $operation, $table_specifier);
-	
-	# The operation may have been changed by 'authorize_action'.
-	
-	$operation = $action->operation;
+	my $result = $edt->authorize_action($action);
 	
 	# If the operation is not a deletion, check the parameters. Make sure
 	# that the column values meet all of the criteria for this table.  Any
@@ -86,7 +82,7 @@ sub record_operation {
 	
 	if ( $operation !~ /^delete/ )
 	{
-	    $edt->validate_action($action, $operation, $table_specifier);
+	    $edt->validate_action($action);
 	}
     };
     
@@ -103,7 +99,7 @@ sub record_operation {
     # Regardless of any added conditions, handle the action and return the action
     # reference.
     
-    $edt->_handle_action($action, $operation);
+    $edt->_handle_action($action);
 }
 
 
@@ -484,13 +480,6 @@ sub _handle_action {
     {
 	$edt->{fail_count}++;
 	$action->set_status('failed');
-    }
-    
-    # If fatal errors have accumulated on this transaction, update the action status.
-    
-    elsif ( $edt->{error_count} )
-    {
-	$action->set_status('aborted');
     }
     
     # Otherwise, the action is able to be executed. If execution is active,

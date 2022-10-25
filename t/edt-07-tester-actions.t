@@ -115,11 +115,11 @@ subtest 'failed action' => sub {
     
     ok_failed_action( "ok_failed_action passes from condition code" );
     
-    ok_failed_action( 'aborted', "ok_action with status code" );
+    ok_failed_action( 'unexecuted', "ok_failed_action with status code" );
     
-    ok_failed_action( '&#1', "ok_action with action reference" );
+    ok_failed_action( '&#1', "ok_failed_action with action reference" );
     
-    ok_failed_action( '&#1', 'aborted', "ok_action with reference and status code" );
+    ok_failed_action( '&#1', 'unexecuted', "ok_failed_action with reference and status code" );
     
     ok_no_captured_output( "no diagnostic output from ok_failed_action" );;
     
@@ -129,15 +129,16 @@ subtest 'failed action' => sub {
     
     ok_action;
     
-    ok_captured_output( qr/'aborted'/, "inverted: diag status code 'aborted'");
+    ok_captured_output( qr/'unexecuted'/, "inverted: diag status code 'unexecuted'");
     
-    ok_captured_output( qr/E_FORMAT.*foobar/, "inverted: ok_action diag condition message 'E_FORMAT.*foobar'" );
+    ok_captured_output( qr/E_FORMAT.*foobar/,
+			"inverted: ok_action diag condition message 'E_FORMAT.*foobar'" );
     
     clear_captured_output;
     
     ok_failed_action( 'skipped', "inverted: ok_failed_action with wrong status code" );
     
-    ok_captured_output( qr/'aborted'/, "diag status code 'aborted" );
+    ok_captured_output( qr/'unexecuted'/, "diag status code 'unexecuted" );
     
     clear_captured_output;
     
@@ -149,7 +150,7 @@ subtest 'failed action' => sub {
     
     ok_action( 'executed', "inverted: ok_action with wrong status code" );
     
-    ok_captured_output( qr/'aborted'/, "inverted: diag status code 'aborted'" );
+    ok_captured_output( qr/'unexecuted'/, "inverted: diag status code 'unexecuted'" );
     
     invert_mode(0);
     

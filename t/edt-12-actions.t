@@ -12,12 +12,12 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 12;
+use Test::More tests => 13;
 
 use ETBasicTest;
 use ETTrivialClass;
 use EditTester qw(ok_eval ok_exception ok_new_edt ok_action 
-		  ok_has_condition ok_no_conditions);
+		  ok_has_condition ok_no_conditions ok_condition_count);
 
 
 # Establish an EditTester instance.
@@ -60,8 +60,8 @@ subtest '_test_action with insert' => sub {
 	can_ok( $edt, 'action_table' ) && 
 	    is( $edt->action_table, 'EDT_TEST', "action_table returns default value" );
 	
-	can_ok( $edt, 'action_params' ) &&
-	    is( $edt->action_params, $record, "action_params" );
+	can_ok( $edt, 'action_record' ) &&
+	    is( $edt->action_record, $record, "action_record" );
 	
 	if ( can_ok( $edt, 'action_parameter' ) )
 	{
@@ -199,7 +199,7 @@ subtest 'create action bad arguments' => sub {
 		  qr/parameters|record/, "_test_action exception if no parameters given" );
     
     ok_exception( sub { $edt->_test_action('delete', 'EDT_TEST') },
-		  qr/key.*values/, "_test_action exception with 'delete' and no key values" );
+		  qr/parameters|values/, "_test_action exception with 'delete' and no key values" );
     
     ok_exception( sub { $edt->_test_action('insert', '', { abc => 1 }); },
 		  qr/table/, "_test_action exception with empty table argument" );
@@ -229,7 +229,7 @@ subtest 'create action bad arguments with default table' => sub {
     ok_exception( sub { $edt->_test_action('insert'); }, qr/parameters|record/,
 		  "_test_action exception with default table and no parameters given" );
     
-    ok_exception( sub { $edt->_test_action('delete') }, qr/key.*values/, 
+    ok_exception( sub { $edt->_test_action('delete') }, qr/parameters|values/, 
 		  "_test_action exception with 'delete', default table, no key values" );
     
     ok_eval( sub { $edt->_test_action('insert', '', { abc => 1 }); },
@@ -365,4 +365,33 @@ subtest 'action references' => sub {
 };
 
 
+# Check that 'abort_action' properly removes conditions from the transaction.
 
+subtest 'abort_action' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    $edt->add_condition('E_BAD_TABLE', 'foobar');
+    
+    $edt->_test_action('insert', 'EDT_TEST', { abc => 'first action' });
+    
+    $edt->add_condition('E_FORMAT', 'glipt');
+    $edt->add_condition('E_WIDTH', 'flipt' );
+    
+    $edt->_test_action('insert', 'EDT_TEST', { abc => 'second action' });
+    
+    $edt->add_condition('E_RANGE', 'out of range');
+    $edt->add_condition('W_WIDTH', 'argh' );
+    
+    ok_condition_count( 5, 'all', "total of 5 conditions" );
+    is( $edt->has_errors, 4, "transaction is blocked by 4 errors" );
+    
+    ok( $edt->abort_action('&#1'), "abort_action succeeded" );
+    
+    ok_condition_count( 3, 'all', "only 3 conditions after abort_action" );
+    is( $edt->has_errors, 2, "transaction is now blocked by only 2 errors" );
+    
+    is( $edt->action_count, 2, "total of 2 actions" );
+    is( $edt->skip_count, 1, "skipped (aborted) 1 action" );
+    is( $edt->fail_count, 0, "no actions failed" );
+};

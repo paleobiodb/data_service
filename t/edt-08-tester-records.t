@@ -20,7 +20,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 5;
+use Test::More tests => 7;
 
 use List::Util qw(all);
 
@@ -37,19 +37,40 @@ use EditTester qw(clear_table sql_command count_records fetch_records
 $DB::single = 1;
 
 
+# Check that all of the tested commands exist.
+
+subtest 'required methods' => sub {
+    
+    can_ok('EditTester', 'sql_command', 'sql_fetchrow', 'clear_table', 'ok_found_record',
+	   'ok_no_record', 'ok_record_count', 'count_records')
+	
+	|| BAIL_OUT "EditTester is missing some required methods";
+};
+
+
+# Check that we get 'must create a tester' exceptions if we try to use them as
+# subroutines without any tester object in place.
+
+subtest 'before tester' => sub {
+    
+    pass('placeholder');
+};
+
+
+# Then create an EditTester object to use for the remainder of the test.
+
 my $T = EditTester->new('ETBasicTest');
 
 
-# Start by checking that 'sql_command' functions properly.
+# Check that 'sql_fetchrow' functions properly.
 
 subtest 'sql_command and sql_fetchrow' => sub {
-    
-    diag("TO DO: check 'sql_command' and 'sql_fetchrow'");
     
     my @v = sql_fetchrow('SELECT @@character_set_client, @@character_set_server');
     
     is( @v, 2, "sql_fetchrow returned 2 values" );
 };
+
 
 # Check that the basic tests for record checking all provide good results.
 
@@ -342,5 +363,17 @@ subtest 'bad arguments' => sub {
     
     ok_exception( sub { fetch_records('EDT_TEST', '*', 'colmn'); }, qr/valid/i,
 		  "exception fetch_records with misspelled return type" );
+    
+    ok_exception( sub { sql_fetchrow() }, qr/specify/,
+		  "exception sql_fetchrow without parameters" );
+    
+    ok_exception( sub { sql_fetchrow("SELECT count(*) FROM <<EDT_TESTT>>") }, qr/table/,
+		  "exception sql_fetchrow with invalid table name" );
+    
+    ok_exception( sub { sql_command() }, qr/specify/,
+		  "exception sql_command without parameters" );
+    
+    ok_exception( sub { sql_command("SELECT count(*) FROM <<EDT_TESTT>>") }, qr/table/,
+		  "exception sql_command with invalid table name" );
 };
 

@@ -24,6 +24,7 @@ use TableDefs qw(set_column_property);
 use ETBasicTest;
 use ETTrivialClass;
 use EditTester qw(ok_eval ok_exception ok_new_edt capture_mode last_edt last_result
+		  capture_mode ok_captured_output
 		  clear_table sql_command sql_fetchrow
 		  ok_has_condition ok_no_conditions ok_has_one_condition);
 
@@ -116,15 +117,14 @@ subtest 'validation status' => sub {
     
     ok_no_conditions("validation does not proceed if already complete");
     
-    vtest('insert', 'EDT_TEST', { string_req => 'abc', hippo => 2 },
-	  { _vstatus => 'PENDING' });
+    # vtest('insert', 'EDT_TEST', { string_req => 'abc', hippo => 2 },
+    # 	  { _vstatus => 'PENDING' });
     
-    ok_no_conditions("validation does not proceed if pending");
+    # ok_no_conditions("validation does not proceed if pending");
     
-    vtest('insert', 'EDT_TEST', { string_req => 'abc', hippo => 3 },
-	  { _vstatus => 'PENDING', _vfinal => 1 });
+    vtest('insert', 'EDT_TEST', { string_req => 'abc', hippo => 3 }, {});
     
-    ok_has_one_condition('E_BAD_FIELD', "validation proceeds if pending with 'FINAL' flag");
+    ok_has_one_condition('E_BAD_FIELD', "validation proceeds if not complete");
     
     is( $edt->action_ref->validation_status, 'COMPLETE',
 	"validation status set to COMPLETE when validation completes" );
@@ -250,16 +250,24 @@ subtest 'column handling: special directives' => sub {
     is( cvalue('dmd'), "NOW()", "generated timestamp for field 'dmd' with 'ts_modified'" );
     
     # Now try the same with a column that doesn't have the proper type. Look for
-    # E_BAD_DIRECTIVE. 
+    # E_BAD_DIRECTIVE. We use capture_mode to capture the error output so that
+    # it doesn't appear in the test stream.
     
     $edt->handle_column('EDT_TYPES', 'signed_val', 'ts_modified');
     
+    capture_mode(1);
+    
     $edt->{breakpoint}{colname}{signed_val} = 1;
+    $DB::single=1;
     
     vtest('insert', 'EDT_TYPES', { name => 'flaxx' });
     
-    ok_has_one_condition( qr/E_BAD_DIRECTIVE.*signed_val.*type/i,
+    capture_mode(0);
+    
+    ok_has_one_condition( 'all', qr/E_BAD_DIRECTIVE.*signed_val.*type/i,
 			  "E_BAD_DIRECTIVE from directive mismatch with column type" );
+    
+    ok_captured_output(qr/column type/, "error output from directive mismatch with column type" );
     
     # Finally, register a directive that has no handler and then try to use it.
     # Look for E_BAD_DIRECTIVE with a different message.
@@ -271,7 +279,7 @@ subtest 'column handling: special directives' => sub {
     vtest('insert', 'EDT_TEST', { string_req => 'abhq' },
 	  { signed_val => 'not_a_valid_directive' });
     
-    ok_has_one_condition( qr/E_BAD_DIRECTIVE.*signed_val.*not_a_valid_directive/,
+    ok_has_one_condition( 'all', qr/E_BAD_DIRECTIVE.*signed_val.*not_a_valid_directive/,
 			  "E_BAD_DIRECTIVE from directive with no handler" );
     
 };
