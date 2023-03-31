@@ -14,19 +14,20 @@ use Getopt::Long qw(:config bundling no_auto_abbrev);
 
 use CoreFunction qw(connectDB);
 use ConsoleLog qw(initMessages logMessage logTimestamp);
-use GPlates qw(ensureTables updatePaleocoords readPlateData);
+use PaleoCoords;
 
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
 
 my ($opt_logfile, $opt_test, $opt_error, $opt_quiet, $opt_verbose, $opt_debug,
-    $opt_replace_table, $opt_update_all, $opt_clear_all, $opt_min_age, $opt_max_age,
-    $opt_collection_no, $opt_read_plates, $opt_dbname);
+    $opt_update_all, $opt_clear_all, $opt_min_age, $opt_max_age,
+    $opt_collection_no, $opt_read_plates, $opt_dbname, $opt_initialize, $opt_replace);
 
 GetOptions("log=s" => \$opt_logfile,
 	   "test" => \$opt_test,
 	   "error" => \$opt_error,
-	   "replace-table|R" => \$opt_replace_table,
+	   "initialize=s" => \$opt_initialize,
+	   "replace=s" => \$opt_replace,, 
 	   "update-all|a" => \$opt_update_all,
 	   "clear-all|x" => \$opt_clear_all,
 	   "min-age=s" => \$opt_min_age,
@@ -125,34 +126,54 @@ sub DoTask {
     
     $DB::single = 1;
     
-    # Make sure we have the proper fields in the collections table.
+    # If --initialize was specified, initialize the specified part of
+    # the system. If --replace was specified, replace existing data.
+    # It is an error to specify both options at once.
     
-    if ( $opt_replace_table )
+    if ( $opt_initialize && $opt_replace )
     {
-	logMessage(1, "replacing table 'paleocoords'");
-	ensureTables($dbh, 1);
+	die "ERROR: you cannot specify --initialize and --replace together";
     }
     
-    # If --read-plate-data was specified, then read and parse plate data in
-    # geojson format from standard input. Exit afterward.
-    
-    if ( $opt_read_plates )
+    elsif ( $opt_initialize || $opt_replace )
     {
-	logMessage(1, "Reading plate data from standard input");
-	readPlateData($dbh);
+	my $replace = $opt_replace ? 1 : 0;
+	my $argument = $opt_initialize || $opt_replace;
+	
+	if ( $argument eq 'tables' || $argument =~ /^PALEO/ )
+	{
+	    logMessage(1, "Replacing paleocoordinate tables");
+	    PaleoCoords->initializeTables($dbh, $argument, $replace);
+	}
+	
+	elsif ( $argument eq 'models' )
+	{
+	    PaleoCoords->initializeModels($dbh, $argument, $replace);
+	}
+	
+	elsif ( $argument eq 'plates' )
+	{
+	    PaleoCoords->initializePlates($dbh, $argument, $replace);
+	}
+	
+	else
+	{
+	    die "ERROR: invalid argument '$argument'";
+	}
+	
 	exit;
     }
     
     # Otherwise, update paleocoordinates according to the specified options.
     
-    updatePaleocoords($dbh, { update_all => $opt_update_all,
-			      clear_all => $opt_clear_all,
-			      min_age => $opt_min_age,
-			      max_age => $opt_max_age,
-			      collection_no => $opt_collection_no,
-			      quiet => $opt_quiet,
-			      verbose => $opt_verbose,
-			      debug => $opt_debug });
+    PaleoCoords->updateCoords($dbh, { update_all => $opt_update_all,
+				      clear_all => $opt_clear_all,
+				      min_age => $opt_min_age,
+				      max_age => $opt_max_age,
+				      collection_no => $opt_collection_no,
+				      quiet => $opt_quiet,
+				      verbose => $opt_verbose,
+				      debug => $opt_debug });
     
     logTimestamp() if $opt_verbose;
     logMessage(1, "Done computing paleocoordinates.");

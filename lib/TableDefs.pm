@@ -201,6 +201,16 @@ set_table_property(PERSON_DATA => PRIMARY_KEY => 'person_no');
 set_table_property(SESSION_DATA => PRIMARY_KEY => 'session_id');
 set_table_property(WING_USERS => PRIMARY_KEY => 'id');
 
+# Paleocoordinate tables
+
+set_table_name(PCOORD_DATA => 'paleocoords');
+set_table_name(PCOORD_STATIC => 'paleostatic');
+set_table_name(PCOORD_MODELS => 'paleomodels');
+set_table_name(PCOORD_PLATES => 'geoplates');
+
+set_table_group(paleocoord_data => 'PCOORD_DATA', 'PCOORD_STATIC',
+		'PCOORD_MODELS', 'PCOORD_PLATES');
+
 # new collection tables
 
 our $COLL_MATRIX = "coll_matrix";
@@ -213,8 +223,6 @@ our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
 our $BIN_LOC = "bin_loc";
 our $BIN_CONTAINER = "bin_container";
-our $PALEOCOORDS = 'paleocoords';
-our $GEOPLATES = 'geoplates';
 
 our $COLL_LITH = 'coll_lith';
 our $COLL_ENV = 'coll_env';
