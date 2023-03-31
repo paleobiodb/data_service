@@ -37,7 +37,7 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydqspfAMSL', \%options);
+getopts('tT:oOmR:bcKUuIivrydqspfAMSL', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -86,6 +86,7 @@ my $taxon_steps = $options{T};
 my $old_taxon_tables = $options{y};
 my $strata_tables = $options{s};
 my $lith_tables = $options{L};
+my $populate_orig = $options{o}
 
 my $options = { taxon_steps => $options{T},
 		colls_cluster => $options{k},
@@ -178,6 +179,12 @@ elsif ( $occurrence_int_maps )
     buildOccIntervalMaps($dbh);
 }
 
+# The option -o causes the orig_no field of authorities to be populated.
+
+if ( $populate_orig )
+{
+    populateOrig($dbh);
+}
 
 # The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
 # was specified, its value should be a sequence of steps (a-h) to be carried

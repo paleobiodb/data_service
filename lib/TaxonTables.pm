@@ -25,7 +25,8 @@ use TableDefs qw($OCC_MATRIX $OCC_TAXON);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig computeGenSp rebuildAttrsTable fixOpinionCache);
+our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig populateOpinionCache
+		      rebuildAttrsTable);
 
 
 =head1 NAME
@@ -859,100 +860,115 @@ sub buildTaxonTables {
 
 sub updateTables {
 
-    my ($dbh, $tree_table, $concept_list, $opinion_list, $options) = @_;
+    my ($dbh, $tree_table, $taxon_list, $opinion_list, $options) = @_;
     
     $options ||= {};
     my $search_table = $TAXON_TABLE{$tree_table}{search};
-    
-    my %update_concepts;	# list of concepts to be updated
     
     # First, set the variables that control log output.
     
     #$MSG_TAG = 'Update'; $MSG_LEVEL = $options->{msg_level} || 1;
     
-    # If we have been notified that concept membership has changed, then all
-    # of these changed concepts must be updated in the taxon tree tables.
-    # Before we proceed, we must update the opinions and opinion cache tables
-    # to reflect the new concept membership.
+    # If $taxon_list and/or $opinion_list are arrayrefs, turn them into strings.
     
-    if ( ref $concept_list eq 'ARRAY' and @$concept_list > 0 )
+    if ( ref $taxon_list eq 'ARRAY' )
     {
-	# First clean the list to make sure every entry is unique.
-	
-	foreach my $t (@$concept_list)
-	{
-	    $update_concepts{$t} = 1;
-	}
-	
-	my @concept_list = sort { $a <=> $b } keys %update_concepts;
-	
-	logMessage(1, "notified concepts: " .
-	    join(', ', @concept_list) . "\n");
-	
-	# Update the opinions and opinion cache tables to reflect the new
-	# concept membership.
-	
-	updateOpinionConcepts($dbh, $tree_table, $concept_list);
+	$taxon_list = join(',', @$taxon_list);
     }
     
-    # If we have been notified that opinions have changed, then add to the
-    # update list all concepts that are referenced by either the previous or
-    # the current version of each opinion.  Then update the opinion cache with
-    # the new data.
-    
-    if ( ref $opinion_list eq 'ARRAY' and @$opinion_list > 0 )
+    if ( ref $opinion_list eq 'ARRAY' )
     {
-	# Add to the list all concepts referenced by either the old or the new
-	# version of the changed opinions.  It doesn't matter in which order
-	# we call getOpinionConcepts and updateOpinionConcepts because all of
-	# the original concept values changed by the latter will already be
-	# listed in %update_concepts.
+	$opinion_list = join(',', @$opinion_list);
+    }
+    
+    my $opinion_taxa = '';
+    my $taxon_opinions = '';
+    
+    # If one or more taxa have changed, these taxa must be updated in the taxon
+    # tree tables.   of these changed concepts must be updated in the taxon tree
+    # tables.  Before we proceed, we must update the opinions and opinion cache
+    # tables to reflect the new taxa.
+    
+    if ( $taxon_list )
+    {
+	# logMessage(1, "changed taxa: $taxon_list\n");
 	
-	foreach my $t ( getOpinionConcepts($dbh, $tree_table, $opinion_list) )
-	{
-	    $update_concepts{$t} = 1;
-	}
+	# Update the opinions and opinion cache tables to reflect any new
+	# orig_no values.
 	
-	logMessage(1, "notified opinions: " . 
-	    join(', ', @$opinion_list) . "\n");
+	updateOpinionTaxa($dbh, $tree_table, $taxon_list);
+	
+	$taxon_opinions = getAllOpinions($dbh, $tree_table, $taxon_list);
+    }
+    
+    # If one or more opinions have changed, then create a list of all taxa that
+    # are referenced by either the previous or the current version of each
+    # opinion.  Then update the opinion cache with the new data.
+    
+    if ( $opinion_list )
+    {
+	# Get a list of all taxa referenced by either the old or the new
+	# version of the changed opinions.
+	
+	$opinion_taxa = getOpinionTaxa($dbh, $tree_table, $opinion_list);
 	
 	updateOpinionCache($dbh, $tree_table, $opinion_list);
     }
     
-    # Proceed only if we have one or more concepts to update.
+    # Proceed only if we have one or more taxa to update. Fold any taxa
+    # associated with updated opinions into $taxon_list.
     
-    unless ( %update_concepts )
+    if ( $taxon_list && $opinion_taxa )
+    {
+	$taxon_list = "$taxon_list,$opinion_taxa";
+    }
+    
+    elsif ( $opinion_taxa )
+    {
+	$taxon_list = $opinion_taxa;
+    }
+    
+    elsif ( ! $taxon_list )
     {
 	return;
     }
     
+    # Do the same with the opinion list.
+    
+    if ( $opinion_list && $taxon_opinions )
+    {
+	$opinion_list = "$opinion_list,$taxon_opinions";
+    }
+    
+    elsif ( $taxon_opinions )
+    {
+	$opinion_list = $taxon_opinions;
+    }
+    
     else
     {
-	logMessage(1, "updating the following concepts: " .
-	    join(', ', keys %update_concepts) . "\n");
+	$opinion_list = '0';
     }
     
     $DB::single = 1;
     
-    # The rest of this routine updates the subset of $tree_table comprising
-    # the concept groups listed in %update_concepts along with their junior
-    # synonyms and children.
+    # The rest of this routine updates the subset of $tree_table selected by $taxon_list.
     
     # First create a temporary table to hold the new rows that will eventually
     # go into $tree_table.  To start with, we will need one row for each
-    # concept in %update_concepts.  Create some auxiliary tables as well.
+    # taxon in $taxon_list.
     
-    createWorkingTables($dbh, $tree_table, \%update_concepts);
+    createWorkingTables($dbh, $tree_table, $taxon_list);
     
     # Next, compute the accepted name for every concept in $TREE_WORK and also
     # add corresponding entries to $NAME_WORK.
     
-    computeSpelling($dbh, $tree_table);
+    updateSpelling($dbh, $tree_table, $taxon_list, $opinion_list);
     
     # Then compute the synonymy relation for every concept in $TREE_WORK.  In
     # the process, we need to expand $TREE_WORK to include junior synonyms.
     
-    computeSynonymy($dbh, $tree_table, { expandToJuniors => 1 });
+    updateSynonymy($dbh, $tree_table, $taxon_list, $opinion_list);
     
     # Now that we have computed the synonymy relation, we need to expand
     # $TREE_WORK to include senior synonyms of the concepts represented in it.
@@ -962,7 +978,7 @@ sub updateTables {
     # opinion that is more recent and reliable than the previous best opinion
     # for the senior.
     
-    expandToSeniors($dbh, $tree_table);
+    # expandToSeniors($dbh, $tree_table);
     
     # At this point we remove synonym chains, so that synonym_no always points
     # to the most senior synonym of each taxonomic concept.  This needs to be
@@ -973,7 +989,7 @@ sub updateTables {
     
     # Then compute the hierarchy relation for every concept in $TREE_WORK.
     
-    computeHierarchy($dbh);
+    updateHierarchy($dbh);
     
     # Some parent_no values may not have been set properly, in particular
     # those whose classification points to a parent which is not itself in
@@ -1133,6 +1149,11 @@ sub updateOpinionCache {
     
     my $result;
     
+    my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache}
+    my $refs_table = $TAXON_TABLE{$tree_table}{refs};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    
     # First delete the old opinion data from $OPINION_CACHE and insert the new.
     # We have to explicitly delete because an opinion might have been deleted,
     # which means there would be no new row for that opinion_no.
@@ -1140,17 +1161,15 @@ sub updateOpinionCache {
     # Note that $OPINION_CACHE will not be correctly ordered after this, so we
     # cannot rely on its order during the rest of the update procedure.
     
-    my $opfilter = join ',', @$opinion_list;
+    $result = $dbh->do("LOCK TABLE $opinion_table as o read,
+				   $refs_table as r read,
+				   $auth_table as a1 read,
+				   $auth_table as a2 read,
+				   $opinion_cache write");
     
-    $result = $dbh->do("LOCK TABLE $TAXON_TABLE{$tree_table}{opinions} as o read,
-				   $TAXON_TABLE{$tree_table}{refs} as r read,
-				   $TAXON_TABLE{$tree_table}{authorities} as a1 read,
-				   $TAXON_TABLE{$tree_table}{authorities} as a2 read,
-				   $TAXON_TABLE{$tree_table}{opcache} write");
+    $result = $dbh->do("DELETE FROM $opinion_cache WHERE opinion_no in ($opinion_list)");
     
-    $result = $dbh->do("DELETE FROM $TAXON_TABLE{$tree_table}{opcache} WHERE opinion_no in ($opfilter)");
-    
-    populateOpinionCache($dbh, $TAXON_TABLE{$tree_table}{opcache}, $tree_table, $opfilter);
+    populateOpinionCache($dbh, $opinion_cache, $tree_table, $opinion_list);
     
     $result = $dbh->do("UNLOCK TABLES");
     
@@ -1158,7 +1177,7 @@ sub updateOpinionCache {
 }
 
 
-# populateOpinionCache ( dbh, table_name, auth_table, opinions_table, refs_table, opinion_list )
+# populateOpinionCache ( dbh, table_name, tree_table, opinion_list )
 # 
 # Insert records into the opinion cache table, under the given table name.  If
 # $opinion_list is given, then it should be a string containing a
@@ -1187,7 +1206,9 @@ sub populateOpinionCache {
     my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
-    my $sql = "INSERT INTO $table_name (opinion_no, orig_no, child_rank, child_spelling_no,
+    $table_name ||= $TAXON_TABLE{$tree_table}{opcache};
+    
+    my $sql = "REPLACE INTO $table_name (opinion_no, orig_no, child_rank, child_spelling_no,
 					 parent_no, parent_spelling_no, ri, pubyr,
 					 status, spelling_reason, reference_no, author, suppress)
 		SELECT o.opinion_no, a1.orig_no, a1.taxon_rank,
@@ -1274,62 +1295,92 @@ sub fixOpinionCache {
 }
 
 
-# getOpinionConcepts ( dbh, tree_table, opinion_list )
+# getOpinionTaxa ( dbh, tree_table, opinion_list )
 # 
-# Given a list of changed opinions, return the union of the set of concepts
+# Given a list of changed opinions, return the union of the set of taxa
 # referred to by both the new versions (from the opinions table) and the old
 # versions (from the opinion cache, which has not been modified since the last
 # rebuild of the taxonomy tables).
 
-sub getOpinionConcepts {
+sub getOpinionTaxa {
 
     my ($dbh, $tree_table, $opinion_list) = @_;
     
-    my (%update_concepts);
+    my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     
-    # First fetch the updated opinions, and figure out the "original
-    # combination" mentioned in each one.
+    my %taxa;
     
-    my $opfilter = '(' . join(',', @$opinion_list) . ')';
+    # Start with the new records in the opinion table.
     
     my $new_op_data = $dbh->prepare("
-		SELECT child_no, parent_no
-		FROM $TAXON_TABLE{$tree_table}{opinions} WHERE opinion_no in $opfilter");
+		SELECT child_no, parent_no, child_spelling_no, parent_spelling_no
+		FROM $opinion_table WHERE opinion_no in ($opinion_list)");
     
     $new_op_data->execute();
     
-    while ( my ($child_orig, $parent_orig) = $new_op_data->fetchrow_array() )
+    while ( my ($child_orig, $parent_orig, $child_sp, $parent_sp) = $new_op_data->fetchrow_array() )
     {
-	$update_concepts{$child_orig} = 1 if $child_orig > 0;
-	$update_concepts{$parent_orig} = 1 if $parent_orig > 0;
+	$taxa{$child_orig} = 1 if $child_orig > 0;
+	$taxa{$parent_orig} = 1 if $parent_orig > 0;
+	$taxa{$child_sp} = 1 if $child_sp > 0;
+	$taxa{$parent_sp} = 1 if $parent_sp > 0;
     }
     
-    # Now do the same with the corresponding old opinion records.
+    # Now do the same with the corresponding unmodified records in the opinion cache.
     
     my $old_op_data = $dbh->prepare("
-		SELECT orig_no, parent_no
-		FROM $TAXON_TABLE{$tree_table}{opcache} WHERE opinion_no in $opfilter");
+		SELECT orig_no, parent_no, child_spelling_no, parent_spelling_no
+		FROM $opinion_cache WHERE opinion_no in ($opinion_list)");
     
     $old_op_data->execute();
     
-    while ( my ($child_orig, $parent_orig) = $old_op_data->fetchrow_array() )
+    while ( my ($child_orig, $parent_orig, $child_sp, $parent_sp) = $old_op_data->fetchrow_array() )
     {
-	$update_concepts{$child_orig} = 1 if $child_orig > 0;
-	$update_concepts{$parent_orig} = 1 if $parent_orig > 0;
+	$taxa{$child_orig} = 1 if $child_orig > 0;
+	$taxa{$parent_orig} = 1 if $parent_orig > 0;
+	$taxa{$child_sp} = 1 if $child_sp > 0;
+	$taxa{$parent_sp} = 1 if $parent_sp > 0;
     }
     
-    return keys %update_concepts;
+    return join(',', keys %taxa);
 }
 
 
-# updateOpinionConcepts ( dbh, tree_table, concept_list )
+sub getAllOpinions {
+    
+    my ($dbh, $tree_table, $taxon_list) = @_;
+    
+    my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
+    
+    my $sql = "SELECT distinct opinion_no FROM $opinion_table
+		WHERE child_no in ($taxon_list) or child_spelling_no in ($taxon_list)
+	       UNION SELECT distinct opinion_no FROM $opinion_cache
+		WHERE orig_no in ($taxon_list) or child_spelling_no in ($taxon_list)";
+    
+    my $opinion_list = $dbh->selectcol_arrayref($sql);
+    
+    if ( ref $opinion_list eq 'ARRAY' && @$opinion_list )
+    {
+	return join(',', @$opinion_list);
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+# updateOpinionTaxa ( dbh, tree_table, taxon_list )
 # 
 # This routine updates all of the orig_no, child_no and parent_no values in
 # $OPINIONS_TABLE and $OPINION_CACHE that fall within the given list.
 
-sub updateOpinionConcepts {
+sub updateOpinionTaxa {
 
-    my ($dbh, $tree_table, $concept_list) = @_;
+    my ($dbh, $tree_table, $taxon_list) = @_;
     
     my $concept_filter = join(',', @$concept_list);
     
@@ -1343,27 +1394,27 @@ sub updateOpinionConcepts {
     
     # First, $OPINION_CACHE
     
-    $result = $dbh->do("UPDATE $opinion_table as o
+    $result = $dbh->do("UPDATE $opinion_cache as o
 				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
 			SET o.orig_no = a.orig_no, o.modified = o.modified
-			WHERE o.orig_no in ($concept_filter)");
+			WHERE o.child_spelling_no in ($taxon_list)");
     
-    $result = $dbh->do("UPDATE $opinion_table as o
+    $result = $dbh->do("UPDATE $opinion_cache as o
 				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
 			SET o.parent_no = a.orig_no, o.modified = o.modified
-			WHERE o.parent_no in ($concept_filter)");
+			WHERE o.parent_spelling_no in ($taxon_list)");
     
     # Next, $OPINIONS_TABLE
     
     $result = $dbh->do("UPDATE $opinion_table as o
 				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
 			SET o.child_no = a.orig_no, o.modified = o.modified
-			WHERE a.orig_no in ($concept_filter)");
+			WHERE a.child_spelling_no in ($concept_filter)");
     
     $result = $dbh->do("UPDATE $opinion_table as o
 				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
 			SET o.parent_no = a.orig_no, o.modified = o.modified
-			WHERE a.orig_no in ($concept_filter)");
+			WHERE a.parent_spelling_no in ($concept_filter)");
     
     return;
 }
@@ -1382,7 +1433,7 @@ sub updateOpinionConcepts {
 
 sub createWorkingTables {
 
-    my ($dbh, $tree_table, $concept_hash) = @_;
+    my ($dbh, $tree_table, $taxon_list) = @_;
     
     my ($result);
     
@@ -1394,55 +1445,33 @@ sub createWorkingTables {
     # is being updated.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $TREE_WORK");
-    $result = $dbh->do("CREATE TABLE $TREE_WORK 
-			       (orig_no int unsigned not null,
-				name varchar(80) not null collate latin1_swedish_ci,
-				imp boolean not null,
-				rank tinyint not null,
-				trad_rank tinyint not null,
-				min_rank decimal(3,1) not null,
-				max_rank decimal(3,1) not null,
-				status enum($ALL_STATUS),
-				spelling_no int unsigned not null,
-				trad_no int unsigned not null,
-				synonym_no int unsigned not null,
-				immsyn_no int unsigned not null,
-				accepted_no int unsigned not null,
-				immpar_no int unsigned not null,
-				senpar_no int unsigned not null,
-				opinion_no int unsigned not null,
-				ints_no int unsigned not null,
-				lft int,
-				rgt int,
-				bound int,
-				depth int) ENGINE=MYISAM");
+    $result = $dbh->do("CREATE TABLE $TREE_WORK LIKE $tree_table");
     
     # If we were given a list of concepts, populate it with just those.
     # Otherwise, grab every concept in $AUTH_TABLE
     
-    my $concept_filter = '';
+    my $taxon_filter = '';
     
-    if ( ref $concept_hash eq 'HASH' )
+    if ( $taxon_list )
     {
-	$concept_filter = 'WHERE orig_no in (' . 
-	    join(',', keys %$concept_hash) . ')';
+	$taxon_filter = "WHERE orig_no in ($taxon_list)";
     }
-	
+    
     $result = $dbh->do("INSERT INTO $TREE_WORK (orig_no)
 			SELECT distinct orig_no
-			FROM $auth_table $concept_filter");
+			FROM $auth_table $taxon_filter");
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK ADD PRIMARY KEY (orig_no)");
     
-    # If there isn't a 'taxon_exceptions' table, create one.
+    # # If there isn't a 'taxon_exceptions' table, create one.
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_EXCEPT (
-				orig_no int unsigned not null,
-				name varchar(80),
-				rank tinyint null,
-				ints_rank tinyint null,
-				status enum($ALL_STATUS),
-				primary key (orig_no)) ENGINE=MYISAM");
+    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_EXCEPT (
+    # 				orig_no int unsigned not null,
+    # 				name varchar(80),
+    # 				rank tinyint null,
+    # 				ints_rank tinyint null,
+    # 				status enum($ALL_STATUS),
+    # 				primary key (orig_no)) ENGINE=MYISAM");
     
     my $a = 1;	# we can stop here when debugging
     
@@ -1469,7 +1498,8 @@ sub computeSpelling {
     
     my ($result);
     
-    logMessage(2, "computing currently accepted spelling relation (b)");
+    logMessage(2, "computing currently accepted spelling relation (b)")
+	unless $taxon_list;
     
     my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
@@ -1482,11 +1512,12 @@ sub computeSpelling {
     $result = $dbh->do("DROP TABLE IF EXISTS $MISSPELLING_AUX");
     $result = $dbh->do("CREATE TABLE $MISSPELLING_AUX
 			   (spelling_no int unsigned,
+			    opinion_no int unsigned,
 			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
     
     $result = $dbh->do("
 		INSERT IGNORE INTO $MISSPELLING_AUX
-		SELECT o.child_spelling_no FROM $opinion_cache as o
+		SELECT o.child_spelling_no, o.opinion_no FROM $opinion_cache as o
 		WHERE spelling_reason = 'misspelling'");
     
     # Now, in order to select the currently accepted name for each taxonomic
@@ -1508,11 +1539,10 @@ sub computeSpelling {
 			    is_misspelling boolean,
 			    PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
-    $result = $dbh->do("
-		INSERT IGNORE INTO $SPELLING_AUX
+    $result = $dbh->do("INSERT IGNORE INTO $SPELLING_AUX
 		SELECT o.orig_no, o.child_spelling_no, o.opinion_no,
-		       if(o.spelling_reason = 'misspelling' or m.spelling_no is not null or o.status = 'misspelling of',
-			  true, false)
+		       if(o.spelling_reason = 'misspelling' or m.spelling_no is not null 
+			  or o.status = 'misspelling of', true, false)
 		FROM $opinion_cache as o JOIN $TREE_WORK USING (orig_no)
 			LEFT JOIN $MISSPELLING_AUX as m on o.child_spelling_no = m.spelling_no
 		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
@@ -1525,8 +1555,7 @@ sub computeSpelling {
     # The order is the opposite of what we used above, because we are
     # replacing rather than ignoring.
     
-    $result = $dbh->do("
-		REPLACE INTO $SPELLING_AUX
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
 		SELECT s.orig_no, o.parent_spelling_no, o.opinion_no, false
 		FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (orig_no)
 			LEFT JOIN $MISSPELLING_AUX as m on o.parent_spelling_no = m.spelling_no
@@ -1536,8 +1565,7 @@ sub computeSpelling {
     # We can fix a few more by looking through all of the relevant opinions
     # for alternate names that are nowhere marked as misspellings.
     
-    $result = $dbh->do("
-		REPLACE INTO $SPELLING_AUX
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
 		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
 		FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (orig_no)
 			LEFT JOIN $MISSPELLING_AUX as m on o.child_spelling_no = m.spelling_no
@@ -1562,8 +1590,7 @@ sub computeSpelling {
 			    score int,
 			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
     
-    $result = $dbh->do("
-		INSERT INTO $SPELLING_SCORE
+    $result = $dbh->do("INSERT INTO $SPELLING_SCORE
 		SELECT o.child_spelling_no, o.orig_no, 
 			sum(if(o.spelling_reason = 'misspelling',-1,+1)) as score
 		FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (orig_no)
@@ -1573,8 +1600,7 @@ sub computeSpelling {
     # Now choose the spellings with the best scores and use them to replace
     # the misspellings.
     
-    $result = $dbh->do("
-		REPLACE INTO $SPELLING_AUX
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
 		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
 		FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (orig_no)
 			JOIN $SPELLING_SCORE as x on x.spelling_no = o.child_spelling_no
@@ -1587,16 +1613,14 @@ sub computeSpelling {
     # opinion_no value, but also try just the spelling table alone since often
     # there is no opinion for the original name.
     
-    $result = $dbh->do("
-		REPLACE INTO $SPELLING_AUX
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
 		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
 		FROM $SPELLING_AUX as s JOIN $opinion_cache as o on o.orig_no = s.orig_no
 				and o.child_spelling_no = s.orig_no
 			LEFT JOIN $SPELLING_SCORE as x on x.orig_no = s.orig_no
 		WHERE s.is_misspelling and (x.score is null or x.score >= 0)");
     
-    $result = $dbh->do("
-		REPLACE INTO $SPELLING_AUX
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
 		SELECT s.orig_no, s.orig_no, 0, false
 		FROM $SPELLING_AUX as s LEFT JOIN $SPELLING_SCORE as x on x.spelling_no = s.orig_no
 		WHERE s.is_misspelling and (x.score is null or x.score >= 0)");
@@ -1746,6 +1770,120 @@ sub computeSpelling {
 	SET author = NULL WHERE author = ''");
     
     my $a = 1;		# we can stop on this line when debugging
+}
+
+
+sub updateSpelling {
+    
+    my ($dbh, $tree_table, $taxon_list, $opinion_list) = @_;
+    
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    my $refs_table = $TAXON_TABLE{$tree_table}{refs};
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $MISSPELLING_AUX
+			   (spelling_no int unsigned,
+			    opinion_no int unsigned,
+			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
+    
+    $result = $dbh->do("DELETE FROM $MISSPELLING_AUX WHERE opinion_no in ($opinion_list)");
+    
+    $result = $dbh->do("INSERT IGNORE INTO $MISSPELLING_AUX
+		SELECT o.child_spelling_no, o.opinion_no FROM $opinion_cache as o
+		WHERE spelling_reason = 'misspelling' and opinion_no in ($opinion_list)");
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $SPELLING_AUX
+			   (orig_no int unsigned,
+			    spelling_no int unsigned,
+			    opinion_no int unsigned,
+			    is_misspelling boolean,
+			    PRIMARY KEY (orig_no)) ENGINE=MYISAM");
+    
+    $result = $dbh->do("DELETE FROM $SPELLING_AUX WHERE opinion_no in ($opinion_list)");
+    
+    $result = $dbh->do("INSERT IGNORE INTO $SPELLING_AUX
+		SELECT o.orig_no, o.child_spelling_no, o.opinion_no,
+		       if(o.spelling_reason = 'misspelling' or m.spelling_no is not null 
+			or o.status = 'misspelling of', true, false)
+		FROM $opinion_cache as o join $TREE_WORK as t using (orig_no)
+			LEFT JOIN $MISSPELLING_AUX as m on o.child_spelling_no = m.spelling_no
+		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
+    
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
+		SELECT s.orig_no, o.parent_spelling_no, o.opinion_no, false
+		FROM $SPELLING_AUX as s join $TREE_WORK using (orig_no) 
+			join $opinion_cache as o using (orig_no)
+			left join $MISSPELLING_AUX as m on o.parent_spelling_no = m.spelling_no
+		WHERE s.is_misspelling and o.status = 'misspelling of' and m.spelling_no is null
+		ORDER BY o.pubyr ASC, o.ri ASC, o.opinion_no ASC");
+    
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
+		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
+		FROM $SPELLING_AUX as s 
+			join $TREE_WORK using (orig_no)
+			join $opinion_cache as o using (orig_no)
+			LEFT JOIN $MISSPELLING_AUX as m on o.child_spelling_no = m.spelling_no
+		WHERE s.is_misspelling and o.spelling_reason in ('correction', 'rank change',
+				'recombination', 'reassignment')
+			and m.spelling_no is null
+		ORDER BY o.pubyr ASC, o.ri ASC, o.opinion_no ASC");
+    
+    my ($SPELLING_SCORE) = "spelling_score";
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $SPELLING_SCORE
+			   (spelling_no int unsigned,
+			    orig_no int unsigned,
+			    score int,
+			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
+    
+    $result = $dbh->do("REPLACE $SPELLING_SCORE
+		SELECT o.child_spelling_no, o.orig_no, 
+			sum(if(o.spelling_reason = 'misspelling',-1,+1)) as score
+		FROM $SPELLING_AUX as s join $TREE_WORK using (orig_no)
+			join $opinion_cache as o using (orig_no)
+		WHERE s.is_misspelling
+		GROUP BY o.child_spelling_no");
+    
+        $result = $dbh->do("REPLACE INTO $SPELLING_AUX
+		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
+		FROM $SPELLING_AUX as s join $TREE_WORK using (orig_no)
+			join $opinion_cache as o using (orig_no)
+			join $SPELLING_SCORE as x on x.spelling_no = o.child_spelling_no
+		WHERE s.is_misspelling and o.spelling_reason <> 'misspelling' and
+			x.score > 0
+		ORDER BY x.score ASC, o.pubyr ASC, o.ri ASC, o.opinion_no ASC");
+    
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
+		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
+		FROM $SPELLING_AUX as s join $TREE_WORK using (orig_no)
+			join $opinion_cache as o on o.orig_no = s.orig_no
+				and o.child_spelling_no = s.orig_no
+			left join $SPELLING_SCORE as x on x.orig_no = s.orig_no
+		WHERE s.is_misspelling and (x.score is null or x.score >= 0)");
+    
+    $result = $dbh->do("REPLACE INTO $SPELLING_AUX
+		SELECT s.orig_no, s.orig_no, 0, false
+		FROM $SPELLING_AUX as s join $TREE_WORK using (orig_no)
+			left join $SPELLING_SCORE as x on x.spelling_no = s.orig_no
+		WHERE s.is_misspelling and (x.score is null or x.score >= 0)");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t LEFT JOIN $SPELLING_AUX as s USING (orig_no)
+			SET t.spelling_no = ifnull(s.spelling_no, t.orig_no)");
+    
+    # We punt on trad_no, setting it to the previous trad_no or the spelling_no.
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t join $auth_table as a on a.taxon_no = t.spelling_no
+			SET t.name = a.taxon_name, t.rank = a.taxon_rank");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t left join $tree_table as tt using (orig_no)
+			SET t.trad_no = coalesce(tt.trad_no, t.spelling_no),
+			    t.trad_rank = coalesce(tt.trad_rank, t.rank),
+			    t.min_rank = coalesce(tt.min_rank, t.rank),
+			    t.max_rank = coalesce(tt.max_rank, t.rank)");
+    
+    # Do we need to update $NAME_WORK as well?
+    
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -1950,8 +2088,7 @@ sub computeSynonymy {
 	
 	$result = $dbh->do("DELETE FROM $CLASSIFY_AUX WHERE orig_no in ($check_taxa)");
 	
-	$result = $dbh->do("
-		INSERT IGNORE INTO $CLASSIFY_AUX
+	$result = $dbh->do("INSERT IGNORE INTO $CLASSIFY_AUX
 		SELECT o.orig_no, o.opinion_no, o.parent_no,
 		    o.ri, o.pubyr, o.status
 		FROM $OPINION_CACHE o
@@ -2010,6 +2147,69 @@ sub computeSynonymy {
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (synonym_no)");
     
     my $a = 1;	# we can stop here when debugging
+}
+
+
+sub updateSynonymy {
+    
+    my ($dbh, $tree_table, $taxon_list) = @_;
+    
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
+    
+    # We start by choosing the "classification opinion" for each concept in
+    # $TREE_WORK.  We use the same mechanism as we did previously with the
+    # spelling opinions: use a table with a unique key on orig_no, and INSERT
+    # IGNORE with a properly ordered selection.  We use slightly different
+    # criteria to select these than we did for the "spelling opinions", which
+    # is why we need a separate table.
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIFY_AUX
+			   (orig_no int unsigned not null,
+			    opinion_no int unsigned not null,
+			    parent_no int unsigned not null,
+			    ri int unsigned not null,
+			    pubyr varchar(4),
+			    status enum($ALL_STATUS),
+			    UNIQUE KEY (orig_no)) ENGINE=MYISAM");
+    
+    $result = $dbh->do("DELETE $CLASSIFY_AUX
+			FROM $CLASSIFY_AUX join $TREE_WORK using (orig_no)");
+    
+    $result = $dbh->do("INSERT IGNORE INTO $CLASSIFY_AUX
+		SELECT o.orig_no, o.opinion_no, o.parent_no,
+		    o.ri, o.pubyr, o.status
+		FROM $opinion_cache as o JOIN $TREE_WORK USING (orig_no)
+		WHERE o.orig_no != o.parent_no and o.status not in ($VARIANT_STATUS)
+		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t left join $tree_table as tt using (orig_no)
+			    left join $CLASSIFY_AUX as c using (orig_no)
+		SET t.immsyn_no = if(c.status in ($JUNIOR_STATUS) and parent_no != 0,
+					parent_no, coalesce(tt.synonym_no, t.orig_no)),
+		    t.opinion_no = coalesce(c.opinion_no, tt.opinion_no)");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t
+			   left join $TREE_WORK as t2 on t2.orig_no = t.immsyn_no
+			   left join $tree_table as tt on tt.orig_no = t.immsyn_no
+		SET t.synonym_no = coalesce(t2.synonym_no, tt.synonym_no, t.immsyn_no)");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t
+			    left join $TREE_WORK as t2 on t2.orig_no = t.synonym_no
+			    left join $opinion_cache as o2 on o2.opinion_no = t2.opinion_no
+			    left join $tree_table as tt on tt.orig_no = t.synonym_no
+			    left join $opinion_cache as ot on ot.opinion_no = tt.opinion_no
+		SET t.immpar_no = coalesce(o2.parent_no, ot.parent_no, 0),
+		    t.status = coalesce(o2.status, ot.status)");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t
+			    left join $TREE_WORK as t2 on t2.orig_no = t.immpar_no
+			    left join $tree_table as tt on tt.orig_no = t.immpar_no
+		SET t.senpar_no = coalesce(t2.synonym_no, tt.synonym_no)");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t
+		SET t.accepted_no = if(status in ($VALID_STATUS) or senpar_no = 0,
+					t.synonym_no, t.senpar_no)");
+    
 }
 
 
@@ -5538,67 +5738,69 @@ sub buildTaxaCacheTables {
     
     # Create a new working table for taxa_list_cache
     
-    logMessage(2, "    creating list cache");
+    # logMessage(2, "    creating list cache");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
     
-    $result = $dbh->do("
-	CREATE TABLE $LIST_CACHE_WORK
-	       (parent_no int unsigned not null,
-		child_no int unsigned not null,
-		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
+    # $result = $dbh->do("
+    # 	CREATE TABLE $LIST_CACHE_WORK
+    # 	       (parent_no int unsigned not null,
+    # 		child_no int unsigned not null,
+    # 		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
     
-    # Populate it using the taxon_trees table, 
+    # # Populate it using the taxon_trees table, 
     
-    logMessage(2, "    populating list cache");
+    # logMessage(2, "    populating list cache");
     
-    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
+    # my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
     
-    foreach my $depth (reverse 2..$max_depth)
-    {
-	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+    # foreach my $depth (reverse 2..$max_depth)
+    # {
+    # 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
-	$result = $dbh->do("
-		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT t.immpar_no, l.child_no
-		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
-		WHERE t.depth = $depth");
+    # 	$result = $dbh->do("
+    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
+    # 		SELECT t.immpar_no, l.child_no
+    # 		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
+    # 		WHERE t.depth = $depth");
 	
-	$result = $dbh->do("
-		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT t.immpar_no, t.orig_no
-		FROM $tree_table as t
-		WHERE t.depth = $depth");
-    }
+    # 	$result = $dbh->do("
+    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
+    # 		SELECT t.immpar_no, t.orig_no
+    # 		FROM $tree_table as t
+    # 		WHERE t.depth = $depth");
+    # }
     
-    # Update it to show spelling_no values instead of the corresponding
-    # orig_no values.
+    # # Update it to show spelling_no values instead of the corresponding
+    # # orig_no values.
     
-    logMessage(2, "    setting parent spelling_no values");
+    # logMessage(2, "    setting parent spelling_no values");
     
-    $result = $dbh->do("
-		UPDATE IGNORE $LIST_CACHE_WORK as l
-			JOIN $tree_table as pt on pt.orig_no = l.parent_no
-		SET l.parent_no = pt.spelling_no");
+    # $result = $dbh->do("
+    # 		UPDATE IGNORE $LIST_CACHE_WORK as l
+    # 			JOIN $tree_table as pt on pt.orig_no = l.parent_no
+    # 		SET l.parent_no = pt.spelling_no");
     
-    logMessage(2, "    adding entries for child spellings");
+    # logMessage(2, "    adding entries for child spellings");
     
-    $result = $dbh->do("
-		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-		SELECT l.parent_no, a.taxon_no
-		FROM $auth_table as a JOIN $LIST_CACHE_WORK as l on l.child_no = a.orig_no");
+    # $result = $dbh->do("
+    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
+    # 		SELECT l.parent_no, a.taxon_no
+    # 		FROM $auth_table as a JOIN $LIST_CACHE_WORK as l on l.child_no = a.orig_no");
     
-    logMessage(2, "      $result new entries.");
+    # logMessage(2, "      $result new entries.");
     
-    # Add the necessary indices
+    # # Add the necessary indices
     
-    logMessage(2, "    indexing list cache");
+    # logMessage(2, "    indexing list cache");
     
-    $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
+    # $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
     
     # Now swap in the new tables.
     
-    logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
+    # logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
+    
+    logMessage(2, "  activating table '$CLASSIC_TREE_CACHE'");
     
     # Compute the backup names of all the tables to be activated
     
@@ -5613,15 +5815,15 @@ sub buildTaxaCacheTables {
     # Recreate any of the existing tables that may not exist for some reason
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
+    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
     
     # Now swap in the new tables
     
     $result = $dbh->do("RENAME TABLE
 		$CLASSIC_TREE_CACHE to $tree_bak,
-		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE,
-		$CLASSIC_LIST_CACHE to $list_bak,
-		$LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
+		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE");
+		# $CLASSIC_LIST_CACHE to $list_bak,
+		# $LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
     
     my $a = 1;	# We can stop here when debugging
 }
@@ -5952,7 +6154,7 @@ sub populateOrig {
     
     # Populate all unset orig_no entries.  This algorithm is taken from
     # TaxonInfo::getOriginalCombination() in the old code.
-
+    
     logMessage(1, "Populating 'orig_no' field...");
     
     $count = $dbh->do("

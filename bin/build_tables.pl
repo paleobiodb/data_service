@@ -39,7 +39,9 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 Getopt::Long::Configure("bundling");
 
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
-    $taxon_tables, $collection_tables, $occurrence_tables, $old_taxon_tables, $taxon_steps);
+    $taxon_tables, $collection_tables, $occurrence_tables, 
+    $old_taxon_tables, $taxon_steps, $populate_orig,
+    $strata_tables, $lith_tables, );
 
 GetOptions( "nightly" => \$opt_nightly,
 	    "log=s" => \$opt_logfile,
@@ -49,7 +51,10 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
 	    "listcache|y" => \$old_taxon_tables,
-	    "steps|T=s" => \$taxon_steps );
+	    "orig" => \$populate_orig,
+	    "steps|T=s" => \$taxon_steps,
+	    "stratigraphy|strata|S" => \$strata_tables,
+            "lithology|lith|L" => \$lith_tables );
 
 my $cmd_line_db_name = shift;
 
@@ -159,8 +164,6 @@ sub BuildTables {
     # my $taxon_tables = 1 if $options{t} || $options{T};
     # my $taxon_steps = $options{T};
     # my $old_taxon_tables = $options{y};
-    my $strata_tables = $options{s};
-    my $lith_tables = $options{L};
     
     # my $options = { taxon_steps => $options{T},
     # 		colls_cluster => $options{k},
@@ -265,6 +268,12 @@ sub BuildTables {
 	buildTaxonTables($dbh, 'taxon_trees', $options);
     }
     
+    # If neither -t nor -T was specified, check for --orig which will just call populateOrig.
+    
+    elsif ( $populate_orig )
+    {
+	populateOrig($dbh);
+    }
     
     # The option -y causes the "classic" taxa_tree_cache table to be computed.
     
