@@ -21,7 +21,7 @@ use PaleoCoords;
 
 my ($opt_logfile, $opt_test, $opt_error, $opt_quiet, $opt_verbose, $opt_debug,
     $opt_min_age, $opt_max_age, $opt_model, $opt_collection_no, $opt_dbname,
-    $opt_help);
+    $opt_all, $opt_help);
 
 GetOptions("log=s" => \$opt_logfile,
 	   "test" => \$opt_test,
@@ -30,6 +30,7 @@ GetOptions("log=s" => \$opt_logfile,
 	   "max-age=s" => \$opt_max_age,
 	   "coll=s" => \$opt_collection_no,
 	   "model|M=s", \$opt_model,
+	   "all|a", \$opt_all,
 	   "db=s" => \$opt_dbname,
 	   "quiet|q" => \$opt_quiet,
 	   "verbose|v" => \$opt_verbose,
@@ -97,7 +98,7 @@ elsif ( $ARGV[0] eq 'initialize' || $ARGV[0] eq 'replace' )
     if ( $ARGV[1] eq 'tables' || $ARGV[1] =~ /^PCOORD/ )
     {
 	$CMD = 'init-tables';
-	push @PARAMS = $ARGV[1];
+	push @PARAMS, $ARGV[1];
 	push @PARAMS, 1 if $ARGV[0] eq 'replace';
     }
     
@@ -214,6 +215,7 @@ sub DoTask {
 		    max_age => $opt_max_age,
 		    collection_no => $opt_collection_no,
 		    model => $opt_model,
+		    all => $opt_all,
 		    verbose => $opt_verbose };
     
     # If we are debugging, stop here.
@@ -250,32 +252,6 @@ sub DoTask {
     elsif ( $CMD eq 'init-plates' )
     {
 	$pcoords->initializePlates();
-    }
-    
-    # If opt_clear_all was specified, clear coordinates that fall into the specified age range.
-    # If no age range is given, all coordinates will be cleared.
-    
-    elsif ( $opt_clear_all )
-    {
-	$pcoords->clearCoords();
-    }
-    
-    # Otherwise, update paleocoordinates according to the specified options.
-    
-    else
-    {
-	my $selector = $opt_update_existing ? 'existing' : 'new';
-	
-	$selector = $opt_collection_no if $opt_collection_no;
-	
-	die "You cannot specify --update-existing and --update-new together" if
-	    $opt_update_existing && $opt_update_new;
-	
-	$pcoords->updateCoords($selector, { min_age => $opt_min_age,
-					    max_age => $opt_max_age,
-					    collection_no => $opt_collection_no,
-					    model => $opt_model,
-					    verbose => $opt_verbose });
     }
     
     my $a = 1; # we can stop here when debugging.

@@ -16,7 +16,7 @@ package PB2::CollectionData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX %TABLE);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use Taxonomy;
 
@@ -35,6 +35,7 @@ our (%COUNTRY_NAME, %CONTINENT_NAME);
 our (%ETVALUE, %EZVALUE);
 our (%LITH_VALUE, %LITH_QUOTED, %LITHTYPE_VALUE);
 
+our (%PCOORD_ALIAS, $PCOORD_DEFAULT);
 
 # initialize ( )
 # 
@@ -46,6 +47,8 @@ sub initialize {
     my ($class, $ds) = @_;
     
     use utf8;
+    
+    my $dbh = $ds->get_connection;
     
     # First read the configuration information that describes how the
     # collections are organized into summary clusters (bins).
@@ -166,12 +169,15 @@ sub initialize {
 	{ value => 'coords', maps_to => '1.2:strata:coords' },
 	    "The geographic bounds (latitude and longitude) of the selected",
 	    "occurrences in each stratum",
-	{ value => 'gplates', maps_to => '1.2:strata:gplates' },
-	    "The identifier(s) of the geological plate(s) on which the selected",
-	    "occurrences in each strataum are located, from the GPlates model",
-	{ value => 'splates', maps_to => '1.2:strata:splates' },
-	    "The identifier(s) of the geological plate(s) on which the selected",
-	    "occurrences in each strataum are located, from the Scotese model");
+	# { value => 'gplates', maps_to => '1.2:strata:gplates' },
+	{ value => 'gplates' },
+	    "! This block is now obsolete",
+	    # "The identifier(s) of the geological plate(s) on which the selected",
+	    # "occurrences in each strataum are located, from the paleocoordinate",
+	    # "model selected using the parameter C<pgm>.",
+	# { value => 'splates', maps_to => '1.2:strata:splates' },
+	{ value => 'splates' },
+	    "! This block is now obsolete.");
     
     # Then define the output blocks which these mention.
     
@@ -281,9 +287,10 @@ sub initialize {
 	    "link for a list of the code values.",
 	{ set => 'prc', from => '*', code => \&generateBasisCode, if_vocab => 'com' },
 	{ output => 'prc', pbdb_name => '', com_name => 'prc', if_vocab => 'com' },
-	    "A two-letter code indicating the basis and precision of the geographic coordinates.",
-	    "This field is reported instead of C<latlng_basis> and C<latlng_precision> in",
-	    "responses that use the compact vocabulary.  Follow the above link for a list of the code values.",
+	    "A two-letter code indicating the basis and precision of the geographic",
+	    "coordinates. This field is reported instead of C<latlng_basis> and",
+	    "C<latlng_precision> in responses that use the compact vocabulary.",
+	    "Follow the above link for a list of the code values.",
 	{ output => 'geogscale', com_name => 'gsc' },
 	    "The geographic scale of the collection.",
 	{ output => 'geogcomments', com_name => 'ggc' },
@@ -295,35 +302,82 @@ sub initialize {
 	{ output => 'paleomodel', com_name => 'pm1' },
 	    "The primary model specified by the parameter C<pgm>.  This",
 	    "field will only be included if more than one model is indicated.",
+	{ output => 'geoplate', com_name => 'gpl' },
+	    "The identifier of the geological plate on which the collection lies,",
+	    "evaluated according to the primary model indicated by the parameter C<pgm>.",
+	    "This might be either a number or a string.",
+	{ output => 'paleoage', com_name => 'ps1' },
+	    "Indicates whether these paleocoordinates were computed at the",
+	    "early, mid, or late end of the age range for each collection",
 	{ output => 'paleolng', com_name => 'pln', data_type => 'dec' },
 	    "The paleolongitude of the collection, evaluated according to the",
 	    "primary model indicated by the parameter C<pgm>.",
 	{ output => 'paleolat', com_name => 'pla', data_type => 'dec' },
 	    "The paleolatitude of the collection, evaluated according to the",
 	    "primary model indicated by the parameter C<pgm>.",
-	{ output => 'geoplate', com_name => 'gpl' },
-	    "The identifier of the geological plate on which the collection lies,",
-	    "evaluated according to the primary model indicated by the parameter C<pgm>.",
-	    "This might be either a number or a string.",
-	{ output => 'paleomodel2', com_name => 'pm2' },
-	    "An alternate model specified by the parameter C<pgm>.  This",
+	{ output => 'paleoage_b', com_name => 'ps1_b' },
+	    "Alternate age selector",
+	{ output => 'paleolng_b', com_name => 'pln_b', data_type => 'dec' },
+	    "Paleolongitude corresponding to the alternate age selector",
+	{ output => 'paleolat_b', com_name => 'pla_b', data_type => 'dec' },
+	    "Paleolatitude corresponding to the alternate age selector",
+	{ output => 'paleoage_c', com_name => 'ps1_c' },
+	    "Alternate age selector",
+	{ output => 'paleolng_c', com_name => 'pln_c', data_type => 'dec' },
+	    "Paleolongitude corresponding to the alternate age selector",
+	{ output => 'paleolat_c', com_name => 'pla_c', data_type => 'dec' },
+	    "Paleolatitude corresponding to the alternate age selector",
+	{ output => 'paleomodel2', com_name => 'pm2', if_field => 'paleomodel2' },
+	    "An alternate model specified by the parameter C<pgm>. This",
 	    "field will only be included if more than one model is indicated.",
 	    "There may also be C<paleomodel3>, etc.",
-	{ output => 'paleolng2', com_name => 'pn2', data_type => 'dec' },
-	    "An alternate paleolongitude for the collection, if the C<pgm> parameter",
-	    "indicates more than one model.  There may also be C<paleolng3>, etc.",
-	{ output => 'paleolat2', com_name => 'pa2', data_type => 'dec' },
-	    "An alternate paleolatitude for the collection, if the C<pgm> parameter",
-	    "indicates more than one model.  There may also be C<paleolat3>, etc.",
-	{ output => 'geoplate2', com_name => 'gp2' },
+	{ output => 'geoplate2', com_name => 'gp2', if_field => 'paleomodel2' },
 	    "An alternate geological plate identifier, if the C<pgm> parameter",
 	    "indicates more than one model.  There may also be C<geoplate3>, etc.",
-	{ output => 'paleomodel3', com_name => 'pm3' }, "! these do not need to be documented separately...",
-	{ output => 'paleolng3', com_name => 'pn3' }, "!",
-	{ output => 'paleolat3', com_name => 'pa3' }, "!",
-	{ output => 'paleomodel4', com_name => 'pm4' }, "!",
-	{ output => 'paleolng4', com_name => 'pn4' }, "!",
-	{ output => 'paleolat4', com_name => 'pa4' }, "!");
+	{ output => 'paleoage2', com_name => 'ps2', if_field => 'paleomodel2' },
+	    "Indicates whether the second paleocoordinates were computed at the",
+	    "early, mid, or late end of the age range for each collection",
+	{ output => 'paleolng2', com_name => 'pln2', data_type => 'dec', if_field => 'paleomodel2' },
+	    "An alternate paleolongitude for the collection, if the C<pgm> parameter",
+	    "indicates more than one model.  There may also be C<paleolng3>, etc.",
+	{ output => 'paleolat2', com_name => 'pla2', data_type => 'dec', if_field => 'paleomodel2' },
+	    "An alternate paleolatitude for the collection, if the C<pgm> parameter",
+	    "indicates more than one model.  There may also be C<paleolat3>, etc.",
+	{ output => 'paleoage2_b', com_name => 'ps2_b', if_field => 'paleomodel2' },
+	    "Alternate age selector",
+	{ output => 'paleolng2_b', com_name => 'pln2_b', data_type => 'dec', if_field => 'paleomodel2' },
+	    "Paleolongitude corresponding to the alternate age selector",
+	{ output => 'paleolat2_b', com_name => 'pla2_b', data_type => 'dec', if_field => 'paleomodel2' },
+	    "Paleolatitude corresponding to the alternate age selector",
+	{ output => 'paleoage2_c', com_name => 'ps2_c', if_field => 'paleomodel2' },
+	    "Alternate age selector",
+	{ output => 'paleolng2_c', com_name => 'pln2_c', data_type => 'dec', if_field => 'paleomodel2' },
+	    "Paleolongitude corresponding to the alternate age selector",
+	{ output => 'paleolat2_c', com_name => 'pla2_c', data_type => 'dec', if_field => 'paleomodel2' },
+	    "Paleolatitude corresponding to the alternate age selector",
+	{ output => 'paleomodel3', com_name => 'pm3', if_field => 'paleomodel3' }, 
+	    "! these do not need to be documented separately...",
+	{ output => 'geoplate3', com_name => 'gp3', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleoage3', com_name => 'ps3', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleolng3', com_name => 'pln3', data_type => 'dec', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleolat3', com_name => 'pla3', data_type => 'dec', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleoage3_b', com_name => 'ps3_b', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleolng3_b', com_name => 'pln3_b', data_type => 'dec', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleolat3_b', com_name => 'pla3_b', data_type => 'dec', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleoage3_c', com_name => 'ps3_c', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleolng3_c', com_name => 'pln3_c', data_type => 'dec', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleolat3_c', com_name => 'pla3_c', data_type => 'dec', if_field => 'paleomodel3' }, "!",
+	{ output => 'paleomodel4', com_name => 'pm4', if_field => 'paleomodel4' }, "!",
+	{ output => 'geoplate4', com_name => 'gp4', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleoage4', com_name => 'ps4', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleolng4', com_name => 'pln4', data_type => 'dec', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleolat4', com_name => 'pla4', data_type => 'dec', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleoage4_b', com_name => 'ps4_b', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleolng4_b', com_name => 'pln4_b', data_type => 'dec', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleolat4_b', com_name => 'pla4_b', data_type => 'dec', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleoage4_c', com_name => 'ps4_c', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleolng4_c', com_name => 'pln4_c', data_type => 'dec', if_field => 'paleomodel4' }, "!",
+	{ output => 'paleolat4_c', com_name => 'pla4_c', data_type => 'dec', if_field => 'paleomodel4' }, "!");
     
 #	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
 #	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.");
@@ -633,17 +687,17 @@ sub initialize {
 	{ output => 'max_lat', com_name => 'ly2', pbdb_name => 'lat_max', data_type => 'dec' },
 	    "The maximum latitude for selected occurrences in this stratum");
     
-    $ds->define_block('1.2:strata:gplates' =>
-	{ select => [ 'group_concat(distinct c.g_plate_no) as gplate_no' ] },
-	{ output => 'gplate_no', com_name => 'gpl' },
-	    "The identifier(s) of the geological plate(s) on which the selected",
-	    "occurrences in this stratum lie, from the GPlates model.");
+    # $ds->define_block('1.2:strata:gplates' =>
+    # 	{ select => [ 'group_concat(distinct c.g_plate_no) as gplate_no' ] },
+    # 	{ output => 'gplate_no', com_name => 'gpl' },
+    # 	    "The identifier(s) of the geological plate(s) on which the selected",
+    # 	    "occurrences in this stratum lie, from the GPlates model.");
     
-    $ds->define_block('1.2:strata:splates' =>
-	{ select => [ 'group_concat(distinct c.s_plate_no) as splate_no' ] },
-	{ output => 'splate_no', com_name => 'scp' },
-	    "The identifier(s) of the geological plate(s) on which the selected",
-	    "occurrences in this stratum lie, from the Scotese model.");
+    # $ds->define_block('1.2:strata:splates' =>
+    # 	{ select => [ 'group_concat(distinct c.s_plate_no) as splate_no' ] },
+    # 	{ output => 'splate_no', com_name => 'scp' },
+    # 	    "The identifier(s) of the geological plate(s) on which the selected",
+    # 	    "occurrences in this stratum lie, from the Scotese model.");
     
     $ds->define_block('1.2:strata:auto' =>
 	{ select => [ 'name', 'type', 'n_colls', 'n_occs', 'cc_list' ] },
@@ -798,22 +852,53 @@ sub initialize {
     # 	    "Select only occurrences marked with one of the following:",
     # 	    "C<n. gen.> / C<n. subgen.> / C<n. sp.>");
     
-    $ds->define_set('1.2:colls:pgmodel' =>
-	{ value => 'scotese' },
-	    "Use the paleogeographic model defined by L<C. R. Scotese|http://scotese.com/> (2002), which is the",
-	    "one that this database has been using historically.",
-	{ value => 'gplates' },
-	    "Use the paleogeographic model defined by the GPlates software from the",
-	    "L<EarthByte group|http://www.earthbyte.org/>.  By default, the coordinates",
-	    "for each collection are calculated at the midpoint of its age range.",
-	{ value => 'gp_early' },
-	    "Use the GPlates model, calculating the rotations at the early end of each",
-	    "collection's age range",
-	{ value => 'gp_mid' },
-	    "A synonym for the value C<gplates>.",
-	{ value => 'gp_late' },
-	    "Use the GPlates model, calculating the rotations at the late end of each",
-	    "collection's age range");
+    $ds->define_set('1.2:colls:pgmodel');
+    
+    # Fill in the values for 1.2:colls:pgmodel using $PCOORD_MODELS from ConfigData.
+    
+    if ( ref $PB2::ConfigData::PCOORD_MODELS eq 'ARRAY' )
+    {
+	foreach my $entry ( @$PB2::ConfigData::PCOORD_MODELS )
+	{
+	    my $value = $entry->{code};
+	    my $name = $entry->{name};
+	    my $description = $entry->{description};
+	    
+	    $PCOORD_ALIAS{$value} = $name;
+	    $PCOORD_DEFAULT ||= $value;
+	    
+	    $ds->add_to_set('1.2:colls:pgmodel', { value => $value }, $description);
+	}
+	
+	# $ds->add_to_set('1.2:colls:pgmodel', { value => 'all' }, "Include data from all
+	# models");
+    }
+    
+	# { value => 'scotese' },
+	#     "Use the paleogeographic model defined by L<C. R. Scotese|http://scotese.com/> (2002), which is the",
+	#     "one that this database has been using historically.",
+	# { value => 'gplates' },
+	#     "Use the paleogeographic model defined by the GPlates software from the",
+	#     "L<EarthByte group|http://www.earthbyte.org/>.  By default, the coordinates",
+	#     "for each collection are calculated at the midpoint of its age range.",
+	# { value => 'gp_early' },
+	#     "Use the GPlates model, calculating the rotations at the early end of each",
+	#     "collection's age range",
+	# { value => 'gp_mid' },
+	#     "A synonym for the value C<gplates>.",
+	# { value => 'gp_late' },
+	#     "Use the GPlates model, calculating the rotations at the late end of each",
+	#     "collection's age range");
+    
+    $ds->define_set('1.2:colls:pgselect' => 
+	{ value => 'early' },
+	    "Show the paleocoordinates for the beginning of each collection's age range",
+	{ value => 'mid' },
+	    "Show the paleocoordinates for the midpoint of each collection's age range",
+	{ value => 'late' },
+	    "Show the paleocoordinates for the end of each collection's age range");
+#	{ value => 'all' },
+#	    "Show all of these");
     
     $ds->define_set('1.2:colls:envtype' =>
 	{ value => 'terr' },
@@ -985,7 +1070,7 @@ sub initialize {
 	    "Return only records whose present location (longitude and latitude) falls within",
 	    "the specified shape, which must be given in L<WKT|https://en.wikipedia.org/wiki/Well-known_text> format",
 	    "with the coordinates being longitude and latitude values.",
-	{ param => 'plate', valid => ANY_VALUE },
+	{ param => 'plate', alias => ['plate_no', 'plate_id'], list => ',' },
 	    "Return only records located on the specified geological plate(s).  If the value",
 	    "of this parameter starts with C<!>, then all records on the specified plates",
 	    "are instead excluded.  If the value of this parameter continues with C<G>,",
@@ -995,10 +1080,14 @@ sub initialize {
 	    "be interpreted according to the value of the parameter C<pgm>.",
 	    "The remainder of the value must be a list of plate numbers.",
 	{ optional => 'pgm', valid => $ds->valid_set('1.2:colls:pgmodel'), list => ',' },
-	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
+	    "Specify which paleogeographic model(s) to use when returning paleocoordinates.",
 	    "You may specify one or more from the following list, separated by commas.",
-	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
+	    "If you do not specify a value for this parameter, the default model is C<B<gplates>>.",
 	    $ds->document_set('1.2:colls:pgmodel'),
+	{ optional => 'pgs', valid => $ds->valid_set('1.2:colls:pgselect'), list => ',' },
+	    "Specify whether to return paleocoordinates from the beginning, middle, or end",
+	    "of the age range for each collection. Accepted values are: B<C<early>>,",
+	    "B<C<mid>>, B<C<late>>. You may specify more than one as a comma-separated list.",
 	{ param => 'cc', valid => \&valid_cc, list => ',', alias => 'country', bad_value => '_' },
 	    "Return only records whose location falls within the specified geographic regions.",
 	    "The value of this parameter should be one or more",
@@ -1117,7 +1206,7 @@ sub initialize {
 	{ optional => 'pgm', valid => '1.2:colls:pgmodel', list => "," },
 	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
 	    "You may specify one or more from the following list, separated by commas.",
-	    "If you do not specify a value for this parameter, the default model is C<B<gplates>>.",
+	    "If you do not specify a value for this parameter, the default model is C<B<Scotese>>.",
     	{ allow => '1.2:colls:show' },
     	{ allow => '1.2:special_params' },
         "^You can also use any of the L<special parameters|node:special> with this request");
@@ -1373,7 +1462,7 @@ sub initialize {
 	    $LITHTYPE_VALUE{$lith_type} = 1;
 	}
     }
-
+    
     my $a = 1;	# we can stop here when debugging
 }
 
@@ -1519,7 +1608,8 @@ sub list_colls {
     my $fields = $request->select_string;
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/ ||
+	$request->{my_plate_model};
     
     if ( $tables->{tf} )
     {
@@ -3457,57 +3547,83 @@ sub generateMainFilters {
 	push @filters, "st_contains(geomfromtext($quoted), $mt.loc)";
     }
     
-    # Check for parameter 'plate'
+    # Check for the parameter 'plate'. If it has a value, select only occurrence or
+    # collection records that are located on the specified plate(s). If 'pgm' is also
+    # specified, use the plate identifiers from the first specified model. Otherwise, use
+    # the default model.
     
-    my $plate_param = $request->clean_param('plate');
-    my @pgm = $request->clean_param_list('pgm');
+    my @plate_param = $request->clean_param_list('plate');
+    my @pgm_param = $request->clean_param_list('pgm');
     
-    if ( $plate_param && $plate_param ne '' )
+    if ( @plate_param )
     {
-	my ($model, $exclude);
+	my $exclude;
+	my $model = $PCOORD_DEFAULT;
 	
-	if ( $plate_param =~ qr{ ^ \s* ( [gs] )? \^ (.*) $ }xsi )
+	# If 'pgm' was specified, use the first value.
+	
+	if ( @pgm_param )
+	{
+	    $model = $pgm_param[0];
+	}
+	
+	# If the first value starts with '!' then the specified plate numbers are excluded
+	# rather than included.
+	
+	if ( $plate_param[0] =~ qr{ ^ \s* ! \s* (.*) }xs )
 	{
 	    $exclude = 1;
-	    $plate_param = ($1 // '') . $2;
+	    $plate_param[0] = $1;
 	}
 	
-	if ( $plate_param =~ qr{ ^ ( [gs] ) (.*) }xsi )
+	# If the first value starts with 'S' use the Scotese model if available.
+	
+	if ( $plate_param[0] =~ qr{ ^ \s* S (.*) }xsi )
 	{
-	    $model = uc $1;
-	    $plate_param = $2;
+	    $plate_param[0] = $1;
+	    
+	    if ( $PCOORD_ALIAS{scotese} )
+	    {
+		$model = 'scotese';
+	    }
+	    
+	    else
+	    {
+		die "400 the Scotese model is no longer available";
+	    }
 	}
 	
-	elsif ( $plate_param =~ qr{ ^ [^0-9] }xs )
+	# If it starts with 'G', use the gplates model if available.
+	
+	elsif ( $plate_param[0] =~ qr{ ^ \s* G (.*) }xsi )
 	{
-	    die "400 Bad value '$plate_param' for parameter 'plate' - must start wtih 'G', 'S', or a plate number\n";
+	    $plate_param[0] = $1;
+	    
+	    if ( $PCOORD_ALIAS{gplates} )
+	    {
+		$model = 'gplates';
+	    }
+	    
+	    else
+	    {
+		die "400 the GPlates model is no longer available";
+	    }
 	}
 	
-	elsif ( @pgm && $pgm[0] eq 'scotese' )
-	{
-	    $model = 'S';
-	}
-	
-	else
-	{
-	    $model = 'G';
-	}
-	
-	my @raw_ids = split qr{[\s,]+}, $plate_param;
 	my @plate_ids;
 	
-	foreach my $id ( @raw_ids )
+	foreach my $id ( @plate_param )
 	{
 	    next unless defined $id && $id ne '';
 	    
 	    if ( $id =~ qr{ ^ [0-9]+ $ }xs )
 	    {
-		push @plate_ids, $id;
+		push @plate_ids, "'$id'";
 	    }
 	    
 	    else
 	    {
-		$request->add_warning("Bad value '$id' for 'plate': must be a positive integer");
+		$request->add_warning("bad value '$id' for 'plate': must be a positive integer");
 	    }
 	}
 	
@@ -3521,15 +3637,11 @@ sub generateMainFilters {
 	
 	my $plate_list = join(',', @plate_ids);
 	
-	if ( $model eq 'S' )
-	{
-	    push @filters, "c.s_plate_no ${not}in ($plate_list)";
-	}
+	push @filters, "pc1.plate_no ${not}in ($plate_list)";
 	
-	else
-	{
-	    push @filters, "c.g_plate_no ${not}in ($plate_list)";
-	}
+	$request->{my_plate_model} = $model;
+	
+	$tables_ref->{pc} = [$model, 'mid'];
 	
 	$tables_ref->{non_summary} = 1;
     }
@@ -4364,116 +4476,92 @@ sub selectPaleoModel {
     
     my ($request, $fields_ref, $tables_ref) = @_;
     
-    # Go through each specified paleogeographicmodel and construct a list of the necessary
-    # fields.  If no models were specified, use 'gplates' as the default.
+    # Go through each specified paleocoordinate model and selector and construct a list of
+    # the necessary fields.  If no models were specified, use the first model listed in
+    # the initialization routine as the default.
     
     my @models = $request->clean_param_list('pgm');
     
-    @models = 'gplates' unless @models;
-    
-    my (@fields, %plate_version_shown);
-    my ($lng_field, $lat_field, $plate_field, $model_field);
-    my ($model_no, $model_label);
-    
-    foreach my $model (@models)
+    unless ( @models )
     {
-	$model_no++;
-	$model_label = $model_no > 1 ? $model_no : '';
+	@models = $request->{my_plate_model} || $PCOORD_DEFAULT;
+    }
+    
+    my @selectors = $request->clean_param_list('pgs');
+    
+    @selectors = 'mid' unless @selectors;
+    
+    my (@fields, @joins, $i, $label);
+    
+    foreach my $model ( @models )
+    {
+	$i++;
 	
-	$lng_field = 'paleolng' . $model_label;
-	$lat_field = 'paleolat' . $model_label;
-	$plate_field = 'geoplate' . $model_label;
-	$model_field = 'paleomodel' . $model_label;
+	$label = $i > 1 ? $i : '';
 	
-	if ( $model eq 'scotese' )
+	push @fields,
+	    "'$model' as paleomodel$label",
+	    "pc$i.plate_no as geoplate$label",
+	    "pc$i.selector as paleoage$label",
+	    "pc$i.paleo_lng as paleolng$label",
+	    "pc$i.paleo_lat as paleolat$label";
+	    
+	    push @joins, $i, $model, $selectors[0];
+	
+	if ( $selectors[1])
 	{
-	    push @fields, "cc.paleolng as $lng_field", "cc.paleolat as $lat_field";
-	    push @fields, "cc.plate as $plate_field";
-	    push @fields, "'scotese' as $model_field";
-	    $tables_ref->{cc} = 1;
-	    # $plate_version_shown{'scotese'} = 1;
+	    push @fields, 
+		"pc${i}_b.selector as paleoage${label}_b",
+		"pc${i}_b.paleo_lng as paleolng${label}_b",
+		"pc${i}_b.paleo_lat as paleolat${label}_b";
+	    
+	    push @joins, $i . '_b', $model, $selectors[1];
 	}
 	
-	elsif ( $model eq 'gplates' || $model eq 'gp_mid' )
+	if ( $selectors[2] )
 	{
-	    push @fields, "pc.mid_lng as $lng_field", "pc.mid_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field";
-	    push @fields, "'gp_mid' as $model_field";
-	    $tables_ref->{pc} = 1;
-	    # $plate_version_shown{'gplates'} = 1;
-	}
-	
-	elsif ( $model eq 'gp_early' )
-	{
-	    push @fields, "pc.early_lng as $lng_field", "pc.early_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field";
-	    push @fields, "'gp_early' as $model_field";
-	    $tables_ref->{pc} = 1;
-	    # $plate_version_shown{'gplates'} = 1;
-	}
-	
-	elsif ( $model eq 'gp_late' )
-	{
-	    push @fields, "pc.late_lng as $lng_field", "pc.late_lat as $lat_field";
-	    push @fields, "pc.plate_no as $plate_field";
-	    push @fields, "'gp_late' as $model_field";
-	    $tables_ref->{pc} = 1;
-	    # $plate_version_shown{'gplates'} = 1;
+	    push @fields, 
+		"pc${i}_c.selector as paleoage${label}_c",
+		"pc${i}_c.paleo_lng as paleolng${label}_c",
+		"pc${i}_c.paleo_lat as paleolat${label}_c";
+	    
+	    push @joins, $i . '_c', $model, $selectors[2];
 	}
     }
     
-    # Now substitute this list into the field string.
+    # Substitute this list into the field string.
     
     my $paleofields = join(", ", @fields);
     
     $$fields_ref =~ s/PALEOCOORDS/$paleofields/;
     
+    # Add the join list to $tables_ref.
+    
+    $tables_ref->{pc} = \@joins;
+    
     # Delete unnecessary output fields.
     
-    foreach my $i (2..4)
+    foreach my $d (2..4)
     {
-	next if $i <= $model_no;
+	next if $d <= $i;
 	
-	$request->delete_output_field("paleomodel$i");
-	$request->delete_output_field("paleolng$i");
-	$request->delete_output_field("paleolat$i");
-	$request->delete_output_field("geoplate$i");
+	$request->delete_output_field("paleomodel$d");
+	$request->delete_output_field("geoplate$d");
+	$request->delete_output_field(qr/^paleoage$d/);
+	$request->delete_output_field(qr/^paleolng$d/);
+	$request->delete_output_field(qr/^paleolat$d/);
+    }
+    
+    unless ( $selectors[1] )
+    {
+	$request->delete_output_field(qr/^paleo.*_b$/);
+    }
+    
+    unless ( $selectors[2] )
+    {
+	$request->delete_output_field(qr/^paleo.*_c$/);
     }
 }
-
-
-# adjustPCIntervals ( string... )
-# 
-# Adjust the specified strings (portions of SQL statements) to reflect the
-# proper interval endpoint when selecting or displaying paleocoordinates.
-
-sub adjustPCIntervals {
-    
-    my ($request, @stringrefs) = @_;
-    
-    # Each of the subsequent arguments are references to strings to be
-    # altered.
-    
-    my $selector = $request->clean_param('pcis');
-    
-    if ( $selector eq 'start' )
-    {
-	foreach my $sref (@stringrefs)
-	{
-	    $$sref =~ s/\.mid_(lng|lat|plate_id)/\.early_$1/g;
-	}
-    }
-    
-    elsif ( $selector eq 'end' )
-    {
-	foreach my $sref (@stringrefs)
-	{
-	    $$sref =~ s/\.mid_(lng|lat|plate_id)/\.late_$1/g;
-	}
-    }
-    
-    my $a = 1;	# we can stop here when debugging
-}    
 
 
 # generate_order_clause ( options )
@@ -4758,10 +4846,6 @@ sub generateJoinList {
 	if $tables->{cm};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
-    $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
-	if $tables->{pc};
-    $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
-	if $tables->{gp};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
@@ -4782,6 +4866,37 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
+    
+    # The value of 'pc' must be an array. Each model entry must be followed by a selector
+    # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
+    # value used by the database.
+    
+    if ( ref $tables->{pc} eq 'ARRAY' )
+    {
+	$join_list .= $request->pcoord_joins($tables->{pc}->@*);
+    }
+    
+    return $join_list;
+}
+
+
+
+sub pcoord_joins {
+    
+    my ($request, @join_list) = @_;
+    
+    my $join_list = '';
+    
+    while ( @join_list )
+    {
+	my $label = shift @join_list;
+	my $model = $PCOORD_ALIAS{shift @join_list};
+	my $selector = shift @join_list;
+	    
+	$join_list .= 
+		"LEFT JOIN $TABLE{PCOORD_DATA} as pc$label on pc$label.collection_no = c.collection_no
+		    and pc$label.model = '$model' and pc$label.selector = '$selector'\n";
+    }
     
     return $join_list;
 }
@@ -4873,7 +4988,7 @@ sub process_paleocoords {
 	
 	unless ( $record->{ 'paleolat' . $label } || $record->{ 'paleolng' . $label } )
 	{
-	    $record->{ 'geoplate' . $label } = "coordinates not computable using this model";
+	    $record->{ 'geoplate' . $label } = "not computable using this model";
 	}
     }
 }

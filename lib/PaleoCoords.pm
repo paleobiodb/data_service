@@ -57,14 +57,14 @@ sub clearCoords {
     
     my ($self, $options) = @_;
     
-    my ($filter, $desc, @rest) = $self->generateFilter($options);
+    my ($coord_filter, $unused, $desc, @rest) = $self->generateFilter($options);
     
     logMessage(1, "Clearing paleocoordinates $desc");
     logMessage(1, $_) foreach @rest;
     
     my $sql =  "UPDATE $TABLE{PCOORD_DATA}
 		SET paleo_lng = null, paleo_lat = null, update_flag = false
-		WHERE $filter";
+		WHERE $coord_filter";
     
     my $count = $self->doSQL($sql);
     
@@ -93,13 +93,13 @@ sub updateExisting {
     # remaining returned values provide a text description of which records will
     # be updated.
     
-    my ($filter, $desc, @rest) = $self->generateFilter($options);
+    my ($coord_filter, $unused, $desc, @rest) = $self->generateFilter($options);
     
     logMessage(1, "Updating existing paleocoordinates $desc");
     logMessage(1, $_) foreach @rest;
     
     my $sql =  "UPDATE $TABLE{PCOORD_DATA} SET update_flag = true
-		WHERE $filter";
+		WHERE $coord_filter";
     
     my $count = $self->doSQL($sql);
     
@@ -108,7 +108,7 @@ sub updateExisting {
     # Now update all of the paleocoordinates that have been flagged, including
     # any flags that were already set when this subroutine was called.
     
-    $self->updateFlagged();
+    $self->updateFlagged($coord_filter, $options);
 }
 
 
@@ -134,18 +134,19 @@ sub updateNew {
     # remaining returned values provide a text description of which records will
     # be updated.
     
-    my ($filter, $desc, @rest) = $self->generateFilter($options);
+    my ($coord_filter, $static_filter, $desc, @rest) = $self->generateFilter($options);
     
     logMessage(1, "Generating new paleocoordinates $desc");
     logMessage(1, $_) foreach @rest;
     
-    # Get a list of the available paleocoordinate models.
+    # Get a list of the available paleocoordinate models, restricted by the
+    # filter option 'model' if given.
     
-    my @model_list = $self->getModels( $options->{model} );
+    my @model_list = grep { $self->{model_filter}{$_} } $self->getModels();
     
     if ( @model_list )
     {
-	logMessage(1, "Paleocoordinates will be computed for: " . join(', ', @model_list));
+	logMessage(1, "Paleocoordinates will be computed using " . join(', ', @model_list));
     }
     
     else
@@ -161,14 +162,15 @@ sub updateNew {
     
     $sql = "INSERT IGNORE INTO $TABLE{PCOORD_STATIC}
 		(collection_no, present_lat, present_lng, early_age, late_age, update_flag)
-	    SELECT collection_no, lat, lng, early_age, late_age, 1
+	    SELECT c.collection_no, c.lat, c.lng, c.early_age, c.late_age, 1
 	    FROM $COLL_MATRIX as c
 		left join $TABLE{PCOORD_STATIC} as ps using (collection_no)
-	    WHERE ps.collection_no is null and $filter";
+	    WHERE ps.collection_no is null and $static_filter";
     
     $count = $self->doSQL($sql);
     
-    logMessage(2, "    adding pcoords for $count new collections");
+    logMessage(2, "    adding pcoords for $count new collections")
+	if $count && $count > 0;
     
     # Mark for update any rows in PCOORD_STATIC corresponding to collections
     # whose modern coordinates have been modified.
@@ -176,12 +178,14 @@ sub updateNew {
     $sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
 		join $COLL_MATRIX as c using (collection_no)
 	    SET ps.present_lat = c.lat, ps.present_lng = c.lng, 
-		ps.update_flag = true
-	    WHERE (c.lat <> ps.present_lat or c.lng <> ps.present_lng) and $filter";
+		ps.update_flag = true, ps.invalid = false
+	    WHERE (c.lat <> ps.present_lat or c.lng <> ps.present_lng)
+		and $static_filter";
     
     $count = $self->doSQL($sql);
     
-    logMessage(2, "    updating pcoords for $count collections with modified locations");
+    logMessage(2, "    updating pcoords for $count collections with modified locations")
+	if $count && $count > 0;
     
     # Mark for update any rows in PCOORD_STATIC corresponding to collections
     # whose age range has been modified.
@@ -190,40 +194,48 @@ sub updateNew {
 		join $COLL_MATRIX as c using (collection_no)
 	    SET ps.early_age = c.early_age, ps.late_age = c.late_age, 
 		ps.update_flag = true
-            WHERE (c.early_age <> ps.early_age or c.late_age <> ps.late_age) and $filter";
+            WHERE (c.early_age <> ps.early_age or c.late_age <> ps.late_age)
+		and $static_filter";
     
     $count = $self->doSQL($sql);
     
-    logMessage(2, "    updating pcoords for $count collections with modified ages");
+    logMessage(2, "    updating pcoords for $count collections with modified ages")
+	if $count && $count > 0;
+    
+    # If the option 'all' was specified, check all entries to see if any need to
+    # be updated. Otherwise, check only those for which the update flag has been
+    # set. 
+    
+    my $check = $options->{all} ? '1' : 'ps.update_flag';
     
     # Delete any rows in PCOORD_DATA corresponding to collections
     # whose coordinates have been made invalid.  This should not happen very
     # often, but is a boundary case that we need to take care of.
     
     $sql = "SELECT count(*) FROM $TABLE{PCOORD_STATIC} as ps
-	    WHERE (ps.lat is null or ps.lat not between -90 and 90 or
-		   ps.lng is null or ps.lng not between -180 and 180)
-		and $filter";
+	    WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
+		   ps.present_lng is null or ps.present_lng not between -180 and 180)
+		and $check and not(ps.invalid) and $static_filter";
     
     print STDERR "> $sql\n\n" if $self->{debug};
     
     ($count) = $dbh->selectrow_array($sql);
     
-    if ( defined $count && $count > 0 )
+    if ( $count && $count > 0 )
     {
 	$sql = "DELETE FROM pd USING $TABLE{PCOORD_STATIC} as ps
 		    join $TABLE{PCOORD_DATA} as pd using (collection_no)
-		WHERE (ps.lat is null or ps.lat not between -90 and 90 or
-		       ps.lng is null or ps.lng not between -180 and 180)
-		    and $filter";
+		WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
+		       ps.present_lng is null or ps.present_lng not between -180 and 180)
+		    and $check and $coord_filter";
 	
 	$result = $self->doSQL($sql);
 	
 	$sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
-		SET ps.update_flag = false
-		WHERE (ps.lat is null or ps.lat not between -90 and 90 or
-		       ps.lng is null or ps.lng not between -180 and 180)
-		    and $filter";
+		SET ps.update_flag = false, ps.invalid = true
+		WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
+		       ps.present_lng is null or ps.present_lng not between -180 and 180)
+		    and $check and $static_filter";
 	
 	$result = $self->doSQL($sql);
 	
@@ -236,7 +248,7 @@ sub updateNew {
     $sql = "UPDATE $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps
 		using (collection_no)
 	    SET pd.update_flag = true
-	    WHERE ps.update_flag and $filter";
+	    WHERE ps.update_flag and $coord_filter";
     
     $count = $self->doSQL($sql);
     
@@ -246,54 +258,61 @@ sub updateNew {
     
     foreach my $model ( @model_list )
     {
-	my $min_age = $self->{min_age}{$model};
-	my $max_age = $self->{max_age}{$model};
+	my $model_min = $self->{min_age}{$model};
+	my $model_max = $self->{max_age}{$model};
+	my $quoted_model = $dbh->quote($model);
 	
 	my $count = 0;
 	
 	$sql = "INSERT INTO $TABLE{PCOORD_DATA}
 			(collection_no, model, selector, update_flag, age)
-		SELECT collection_no, model, 'early', 1, round(early_age, 0) as age,
-		FROM $TABLE{PCOORD_STATIC} as ps
-		WHERE ps.update_flag and model = '$model' and
-		      age between $min_age and $max_age and $filter";
+		SELECT ps.collection_no, $quoted_model, 'early', 1, round(early_age, 0) as age
+		FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
+			on pd.collection_no = ps.collection_no 
+			and pd.model = $quoted_model and pd.selector = 'early'
+		WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
+		HAVING age between $model_min and $model_max";
 	
 	$count += $self->doSQL($sql);
 	
 	$sql = "INSERT INTO $TABLE{PCOORD_DATA}
-		    (collection_no, model, selector, age, update_flag)
-		SELECT collection_no, model, 'late', 1, round(late_age, 0) as age,
-		FROM $TABLE{PCOORD_STATIC} as ps
-		WHERE ps.update_flag and model = '$model' and
-		      age between $min_age and $max_age and $filter";
+		    (collection_no, model, selector, update_flag, age)
+		SELECT ps.collection_no, $quoted_model, 'late', 1, round(late_age, 0) as age
+		FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
+			on pd.collection_no = ps.collection_no 
+			and pd.model = $quoted_model and pd.selector = 'late'
+		WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
+		HAVING age between $model_min and $model_max";
 	
 	$count += $self->doSQL($sql);
 	
 	$sql = "INSERT INTO $TABLE{PCOORD_DATA}
-		    (collection_no, model, selector, age, update_flag)
-		SELECT collection_no, model, 'mid', 1,
-		    round((ps.early_age + ps.late_age)/2, 0) as age,
-		FROM $TABLE{PCOORD_STATIC} as ps
-		WHERE ps.update_flag and model = '$model' and
-		      age between $min_age and $max_age and $filter";
+		    (collection_no, model, selector, update_flag, age)
+		SELECT ps.collection_no, $quoted_model, 'mid', 1,
+		    round((ps.early_age + ps.late_age)/2, 0) as age
+		FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
+			on pd.collection_no = ps.collection_no 
+			and pd.model = $quoted_model and pd.selector = 'mid'
+		WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
+		HAVING age between $model_min and $model_max";
 	
 	$count += $self->doSQL($sql);
 	
-	logMessage(2, "    adding $count new paleocoordinates for generation by '$model'");
+	logMessage(2, "    adding $count new paleocoordinates for generation by $model");
     }
-    
-    # At this point, we have created and/or flagged all paleocoordinates that
-    # need updating. It is now safe to clear the update flags on the static
-    # records which are selected by the filter.
-    
-    $sql = "UPDATE $TABLE{PCOORD_STATIC} set update_flag = false WHERE $filter";
-    
-    $result = $self->doSQL($sql);
     
     # Now update all of the paleocoordinates that have been flagged, including
     # any flags that were already set when this subroutine was called.
     
-    $self->updateFlagged();
+    $self->updateFlagged($coord_filter, $options);
+    
+    # After this succeeds, clear all of the update flags on the static records
+    # that were selected by the filter.
+    
+    $sql = "UPDATE $TABLE{PCOORD_STATIC} as ps set update_flag = false
+	    WHERE $static_filter";
+    
+    $result = $self->doSQL($sql);    
 }
 
 
@@ -305,159 +324,178 @@ sub updateNew {
 
 sub updateFlagged {
     
-    my ($self) = @_;
+    my ($self, $coord_filter, $options) = @_;
     
     my $dbh = $self->{dbh};
     
     my $service_uri = $self->{service_uri};
     
-    # Fetch the basic information about all paleocoordinates that need updating. 
-    
-    my $sql = "SELECT ps.collection_no, ps.model_no, ps.present_lng, ps.present_lat,
-		   pd.selector, pd.age
-	      FROM $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps using (collection_no)
-	      WHERE update_flag";
-    
-    print STDERR "> $sql\n\n" if $self->{debug};
-    
-    my $updates = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
-    my %points;
-    
-    if ( ref $updates eq 'ARRAY' && @$updates )
-    {    
-	foreach my $record ( @$updates )
-	{
-	    my $collection_no = $record->{collection_no};
-	    my $lng = $record->{present_lng};
-	    my $lat = $record->{present_lat};
-	    my $selector = $record->{selector};
-	    my $age = $record->{age};
-	    
-	    push $points{$age}->@*, [$collection_no, $selector, $lng, $lat];
-	}
-	
-	my $count = scalar(@$updates);
-	logMessage(2, "    updating $count paleocoordinate entries");
-    }
-    
-    else
-    {
-	logMessage(2, "Nothing to update");
-	return;
-    }
-    
-    # Retrieve the list of models that were selected by the options passed to
-    # the parent subroutine call.
-    
-    my @model_list = $self->getModels();
-    
-    # Sort the list of paleocoordinate ages.
-    
-    my @age_list = sort { $a <=> $b } keys %points;
+    my $opt_verbose = $options->{verbose};
     
     # Prepare the SQL statements that will be used to update entries in the
-    # table.
+    # table, and generate a user agent object with which to make requests.
     
     $self->prepareStatements();
     
-    # Now iterate through all of the available models and all of the ages of
-    # paleocoordinates that need to be generated or updated. For each model/age
-    # combination, send off as many requests as are necessary to generate all of the
-    # paleocoordinates for that model and age.
-        
     my $ua = LWP::UserAgent->new();
     $ua->agent("Paleobiology Database Updater/0.1");
     
+    # Count the number of paleocoordinates to be updated.
+    
+    my $sql = "SELECT count(*) FROM $TABLE{PCOORD_DATA} WHERE update_flag";
+    
+    my ($update_total) = $dbh->selectrow_array($sql);
+    
+    logMessage(2, "    updating $update_total paleocoordinate entries...");
+    
+    # Fetch the basic information about the paleocoordinates that need updating,
+    # in chunks of 10000.
+    
     $DB::single = 1;
     
-  MODEL:
-    foreach my $model ( @model_list )
+  CHUNK:
+    while (1)
     {
-	my $min_age = $self->{min_age}{$model};
-	my $max_age = $self->{max_age}{$model};
+	$sql = "SELECT ps.collection_no, ps.present_lng, ps.present_lat,
+		   pd.model, pd.selector, pd.age
+		FROM $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps using (collection_no)
+		WHERE pd.update_flag and $coord_filter LIMIT 10000";
+    
+	print STDERR "> $sql\n\n" if $self->{debug};
 	
-      AGE:
-	foreach my $age ( @age_list )
-	{
-	    # Ignore any ages that fall outside the bounds of this model. This
-	    # shouldn't happen, but this statement functions as an extra guard.
-	    
-	    next AGE if $age > $max_age || $age < $min_age;
-	    
-	    # Grab the set of points that need to be rotated to this age.
-	    
-	    my @points = $points{$age}->@*;
-	    
-	    # Now create as many requests as are necessary to rotate all of these
-	    # points. 
-	    
-	    while ( @points )
+	my $updates = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+	my %points;
+	
+	if ( ref $updates eq 'ARRAY' && @$updates )
+	{    
+	    foreach my $record ( @$updates )
 	    {
-		# Start building a parameter list.
+		my $collection_no = $record->{collection_no};
+		my $model = $record->{model};
+		my $lng = $record->{present_lng};
+		my $lat = $record->{present_lat};
+		my $selector = $record->{selector};
+		my $age = $record->{age};
 		
-		my $request_params = "model=$model&time=$age&include_failures=1&data=";
-		my $sep = '';
-		
-		# Keep track of the selector and collection_no for each point.
-		
-		my @request_points;
-		
-		# Add each point, up to the limit for a single request.
+		push $points{$model}{$age}->@*, [$collection_no, $selector, $lng, $lat];
+	    }
+	}
+	
+	else
+	{
+	    last CHUNK;
+	}
+	
+	# Retrieve the list of models that were selected by the options passed to
+	# the parent subroutine call.
+	
+	my @model_list = sort keys %points;
+	
+	# Now iterate through all of the available models and all of the ages of
+	# paleocoordinates that need to be generated or updated. For each
+	# model/age combination, send off as many requests as are necessary to
+	# generate all of the paleocoordinates for that model and age.
+        
+      MODEL:
+	foreach my $model ( @model_list )
+	{
+	    my $model_min = $self->{min_age}{$model};
+	    my $model_max = $self->{max_age}{$model};
 	    
-	      POINT:
-		while ( my $point = shift @points )
-		{
-		    my ($coll_no, $selector, $lng, $lat) = @$point;
-		    
-		    # Skip any point with empty coordinates.
-		    
-		    next unless $lng && $lng ne '' && $lat && $lat ne '';
-		    
-		    # Add the rest to the end of the parameter list.
-		    
-		    $request_params .= $sep; $sep = '+';
-		    $request_params .= "$lng,$lat";
-		    
-		    push @request_points, $point;
-		    
-		    last POINT if @request_points >= $self->{max_points};
-		}
+	    # Sort the list of paleocoordinate ages, and then iterate through it.
+	    
+	    my @age_list = sort { $a <=> $b } keys $points{$model}->%*;
+	    
+	  AGE:
+	    foreach my $age ( @age_list )
+	    {
+		# Ignore any ages that fall outside the bounds of this model. This
+		# shouldn't happen, but this statement functions as an extra guard.
 		
-		# Now if we have at least one point to rotate then fire off the request and
-		# process the answer (if any). If processResponse returns false, abort the
-		# task. 
+		next AGE if $age > $model_max || $age < $model_min;
 		
-		if ( @request_points )
+		# Grab the set of points that need to be rotated to this age.
+		
+		my @points = $points{$model}{$age}->@*;
+		
+		# Now create as many requests as are necessary to rotate all of these
+		# points. 
+		
+		while ( @points )
 		{
-		    my $request_uri = "$service_uri?$request_params";
+		    # Start building a parameter list.
+		
+		    my $request_params = "model=$model&time=$age&include_failures=1&data=";
+		    my $sep = '';
 		    
-		    my $data = $self->makePaleocoordRequest($ua, $request_uri);
+		    # Keep track of the selector and collection_no for each point.
 		    
-		    if ( $data )
+		    my @request_points;
+		    
+		    # Add each point, up to the limit for a single request.
+		    
+		  POINT:
+		    while ( my $point = shift @points )
 		    {
-			$self->processResponse($model, $age, $data, \@request_points);
+			my ($coll_no, $selector, $lng, $lat) = @$point;
+			
+			# Skip any point with empty coordinates.
+			
+			next unless $lng && $lng ne '' && $lat && $lat ne '';
+			
+			# Add the rest to the end of the parameter list.
+			
+			$request_params .= $sep; $sep = '+';
+			$request_params .= "$lng,$lat";
+			
+			push @request_points, $point;
+			
+			last POINT if @request_points >= $self->{max_points};
 		    }
 		    
-		    if ( $self->{fail_count} > $self->{fail_limit} )
-		    {
-			logMessage(1, "ABORTING due to service error count: $self->{fail_count}");
-			print STDERR "Aborting due to service error count: $self->{fail_count}\n";
-			last AGE;
-		    }
+		    # Now if we have at least one point to rotate then fire off
+		    # the request and process the answer (if any). If
+		    # processResponse returns false, abort the task. 
 		    
-		    if ( $self->{bad_count} > $self->{bad_limit} )
+		    if ( @request_points )
 		    {
-			logMessage(1, "ABORTING due to database error count: $self->{bad_count}");
-			print STDERR "Aborting due to database error count: $self->{bad_count}\n";
-			last AGE;
+			my $request_uri = "$service_uri?$request_params";
+			
+			if ( $opt_verbose )
+			{
+			    logMessage(2, "    Service request: $request_uri");
+			}
+			
+			my $data = $self->makePaleocoordRequest($ua, $request_uri);
+			
+			if ( $data )
+			{
+			    $self->processResponse($model, $age, $data, \@request_points);
+			}
+			
+			if ( $self->{fail_count} > $self->{fail_limit} )
+			{
+			    logMessage(1, "ABORTING due to service error count: $self->{fail_count}");
+			    print STDERR "Aborting due to service error count: $self->{fail_count}\n";
+			    last AGE;
+			}
+			
+			if ( $self->{bad_count} > $self->{bad_limit} )
+			{
+			    logMessage(1, "ABORTING due to database error count: $self->{bad_count}");
+			    print STDERR "Aborting due to database error count: $self->{bad_count}\n";
+			    last AGE;
+			}
 		    }
 		}
 	    }
 	}
+	
+	my $cumulative = $self->{update_count};
+	
+	logMessage(2, "    updated $cumulative paleocoordinates out of $update_total");
     }
-    
-    logMessage(2, "    updated $self->{update_count} paleocoordinate entries");
     
     my $time = localtime;
     
@@ -467,14 +505,137 @@ sub updateFlagged {
 }
 
 
-# generateFilter ( )
+# generateFilter ( options )
 # 
+# Return two SQL expressions. The first will filter out rows in the
+# PALEOCOORD_DATA table that do not match the specified options. If no filtering
+# options were given, the result will be "1" which does not filter out any rows.
 # 
+# The second expression will filter out rows in the PALEOCOORD_STATIC table that
+# do not match the specified options. If no filtering options were given, this
+# will also be "1".
+# 
+# All of the filter values are stored under $self using keys such as
+# 'model_filter', 'min_age_filter', etc.
+# 
+# This method returns the two filter expressions followed by one or more text
+# strings that describe the generated filter. These can be printed out to
+# confirm to the user that the proper filter is being applied.
 
 sub generateFilter {
     
+    my ($self, $options) = @_;
     
+    my (@coord_clauses, @static_clauses, @description);
     
+    my %is_model = map { $_ => 1 } $self->getModels();
+    
+    if ( my $opt_coll = $options->{collection_no} )
+    {
+	my (@selected_cn, @bad_cn);
+	
+	foreach my $cn ( split /\s*,\s*/, $opt_coll )
+	{
+	    if ( $cn =~ /^\d+$/ )
+	    {
+		push @selected_cn, $cn;
+		$self->{collection_filter}{$cn} = 1;
+	    }
+	    
+	    else
+	    {
+		push @bad_cn, $cn;
+	    }
+	}
+	
+	if ( @bad_cn )
+	{
+	    my $list = join(', ', @bad_cn);
+	    die "Invalid collection_no: $list\n";
+	}
+	
+	else
+	{
+	    my $list = join(', ', @selected_cn);
+	    
+	    push @coord_clauses, "pd.collection_no in ($list)";
+	    push @static_clauses, "ps.collection_no in ($list)";
+	    push @description, "from collection $list";
+	}
+    }
+    
+    if ( my $opt_model = $options->{model} )
+    {
+	my (@selected_models, @bad_models);
+	
+	foreach my $name ( split /\s*,\s*/, $opt_model )
+	{
+	    if ( $name && $is_model{$name} )
+	    {
+		push @selected_models, $name;
+		$self->{model_filter}{$name} = 1;
+	    }
+	    
+	    elsif ( $name )
+	    {
+		push @bad_models, $name;
+	    }
+	}
+	
+	if ( @bad_models )
+	{
+	    my $list = join("', '", @bad_models);
+	    die "Invalid model: '$list'\n";
+	}
+	
+	else
+	{
+	    my $list = join("', '", @selected_models);
+	    
+	    push @coord_clauses, "pd.model in ('$list')" if $list;
+	    push @description, "from model '$list'" if $list;
+	}
+    }
+    
+    else
+    {
+	$self->{model_filter} = \%is_model;
+    }
+    
+    if ( $options->{min_age} && $options->{min_age} > 0 )
+    {
+	my $opt_min_age = $options->{min_age};
+	
+	die "Invalid value for min_age: $opt_min_age\n" unless
+	    $opt_min_age =~ / ^ \d+ (?: [.] \d* )? $ /xs;
+	
+	$self->{min_age_filter} = $opt_min_age;
+	
+	push @coord_clauses, "pd.age >= $opt_min_age";
+	push @static_clauses, "ps.early_age >= $opt_min_age";
+	push @description, "at least $opt_min_age Ma";
+    }
+    
+    if ( my $opt_max_age = $options->{max_age} )
+    {
+	die "Invalid value for max_age: $opt_max_age\n" unless
+	    $opt_max_age =~ / ^ \d+ (?: [.] \d* )? $ /xs;
+	
+	$self->{max_age_filter} = $opt_max_age;
+	
+	push @coord_clauses, "pd.age <= $opt_max_age";
+	push @static_clauses, "ps.early_age <= $opt_max_age";
+	push @description, "at most $opt_max_age Ma";
+    }
+    
+    push @coord_clauses, "1" unless @coord_clauses;
+    push @static_clauses, "1" unless @static_clauses;
+    push @description, "" unless @description;
+    
+    my $coord_expr = join(' and ', @coord_clauses);
+    my $static_expr = join(' and ', @static_clauses);
+    
+    return ($coord_expr, $static_expr, @description);
 }
 
 
@@ -487,7 +648,7 @@ sub generateFilter {
 
 sub getModels {
     
-    my ($self, $opt_model) = @_;
+    my ($self) = @_;
     
     # If we have already generated the list of active models, return it.
     
@@ -500,7 +661,7 @@ sub getModels {
     
     my $dbh = $self->{dbh};
     
-    my $sql = "SELECT * FROM $TABLE{PCOORD_MODELS} WHERE is_active";
+    my $sql = "SELECT * FROM $TABLE{PCOORD_MODELS} WHERE is_active ORDER BY name";
     
     print STDERR "> $sql\n\n" if $self->{debug};
     
@@ -508,39 +669,16 @@ sub getModels {
     
     my @model_list;
     
-    # If one or more models were specified in $opt_model, return only those.
-    # Ant misspellings will be caught below.
-    
-    my %selected;
-    
-    if ( $opt_model )
-    {
-	foreach my $name ( split /\s*,\s*/, $opt_model )
-	{
-	    $selected{$name} = 1 if $name;
-	}
-    }
-    
     # Iterate through the retrieved entries, if any were found.
     
     if ( ref $model_entries eq 'ARRAY' && $model_entries->@* )
     {
 	foreach my $entry ( $model_entries->@* )
 	{
+	    # Add the name of this model to the list, if it is active.  Store
+	    # the minimum and maximum age for later use.
+	    
 	    my $name = $entry->{name};
-	    
-	    # If a specific model or models was selected, list only those.
-	    # Mark each name that we find with '2'.
-	    
-	    if ( %selected )
-	    {
-		my $keep = $selected{$name};
-		$selected{$name} = 2;
-		next unless $keep;
-	    }
-	    
-	    # Add the name of this model to the list, if the is_active property
-	    # is true. Store the minimum and maximum age for later use.
 	    
 	    if ( $name && $entry->{is_active} )
 	    {
@@ -548,16 +686,6 @@ sub getModels {
 		$self->{min_age}{$name} = $entry->{min_age} + 0;
 		$self->{max_age}{$name} = $entry->{max_age} + 0;
 	    }
-	}
-	
-	# If there are any names mentioned in $opt_model that do not correspond
-	# to models in the database, throw an 'invalid argument' exception.
-	
-	if ( my @not_found = grep { $selected{$_} == 1 } keys %selected )
-	{
-	    my $str = join(', ', @not_found);
-	    logMessage(1, "Invalid model name(s): $str");
-	    die "Invalid model name(s): $str";
 	}
     }
     
@@ -609,7 +737,8 @@ sub prepareStatements {
     my $sql;
         
     $sql = "UPDATE $TABLE{PCOORD_DATA}
-	    SET paleo_lng = ?, paleo_lat = ?, plate_no = ?, update_flag = false
+	    SET paleo_lng = ?, paleo_lat = ?, plate_no = ?, 
+		update_flag = false, updated = now()
 	    WHERE collection_no = ? and model = ? and selector = ? LIMIT 1";
     
     print STDERR "> $sql\n\n" if $self->{debug};
@@ -846,7 +975,23 @@ sub doSQL {
     
     print STDERR "> $sql\n\n" if $self->{debug};
     
-    my $result = $dbh->do($sql);
+    my $result;
+    
+    eval {
+	$result = $dbh->do($sql);
+    };
+    
+    if ( $@ )
+    {
+	my ($package, $filename, $line) = caller;
+	
+	my $msg = $@;
+	
+	$msg =~ s/ at \S+ line \d.*//s;
+	$msg .= " at $filename line $line.";
+	
+	die "$msg\n";
+    }
     
     print STDERR "Result: $result\n\n" if $self->{debug};
     
@@ -863,7 +1008,7 @@ sub initializeTables {
     
     my ($self, $argument, $replace) = @_;
     
-    unless ( $argument =~ qr{ ^ tables $ | ^ PCOORD_ (DATA|PRESENT|MODELS|PLATES) $ }xs )
+    unless ( $argument =~ qr{ ^ tables $ | ^ PCOORD_ (DATA|STATIC|MODELS|PLATES) $ }xs )
     {
 	die "Invalid argument '$argument'";
     }
@@ -881,7 +1026,8 @@ sub initializeTables {
 			paleo_lat decimal(5,2) null,
 			update_flag boolean not null,
 			updated timestamp not null,
-			PRIMARY KEY (collection_no, model, selector)
+			PRIMARY KEY (collection_no, model, selector),
+			KEY (update_flag)
 			) Engine=MyISAM CHARSET=utf8");
     }
     
@@ -895,8 +1041,10 @@ sub initializeTables {
 			early_age decimal(9,5) null,
 			late_age decimal(9,5) null,
 			update_flag boolean not null,
+			invalid boolean default '0',
 			updated timestamp not null,
-			PRIMARY KEY (collection_no)
+			PRIMARY KEY (collection_no),
+			KEY (update_flag)
 			) Engine=MyISAM CHARSET=utf8");
     }
     
@@ -908,7 +1056,9 @@ sub initializeTables {
 			model_id int unsigned not null,
 			min_age smallint unsigned not null default '0',
 			max_age smallint unsigned not null default '0',
-			is_active boolean not null,
+			description varchar(255) not null default '',
+			is_active boolean null,
+			is_default boolean null,
 			updated timestamp not null default current_timestamp()
 			) Engine=MyISAM CHARSET=utf8");
     }
@@ -1008,27 +1158,26 @@ sub initializeModels {
     die "Bad response from service: $model_uri" 
 	unless ref $data eq 'ARRAY' && $data->@* && ref $data->[0] eq 'HASH';
     
-    # Retrieve a list of currently inactive models.
+    # Retrieve a list of models currently in the database.
     
-    my (%inactive, $inactive_list);
-    
-    my $sql = "SELECT name FROM $TABLE{PCOORD_MODELS} WHERE not(is_active)";
+    my $sql = "SELECT name FROM $TABLE{PCOORD_MODELS}";
     
     print STDERR "> $sql\n\n" if $self->{debug};
     
-    $inactive_list = $dbh->selectcol_arrayref($sql);
+    my $existing_list = $dbh->selectcol_arrayref($sql);
     
-    if ( ref $inactive_list eq 'ARRAY' )
+    my %exists;
+    
+    if ( ref $existing_list eq 'ARRAY' )
     {
-	$inactive{$_} = 1 foreach $inactive_list->@*;
+	$exists{$_} = 1 foreach $existing_list->@*;
     }
     
-    # Delete all entries in PCOORD_MODELS, then iterate through the list and add
-    # the ones we just retrieved. Previously inactive models stay inactive.
+    # Iterate through the list retrieved from the paleocoordinate service.
+    # Update existing models, and add any new ones.
     
-    $self->doSQL("DELETE FROM $TABLE{PCOORD_MODELS}");
-    
-    my $count = 0;
+    my $update_count = 0;
+    my $insert_count = 0;
     
     foreach my $entry ( $data->@* )
     {
@@ -1038,17 +1187,35 @@ sub initializeModels {
 	    my $quoted_id = $dbh->quote($entry->{id});
 	    my $quoted_min = $dbh->quote($entry->{min_age} || 0);
 	    my $quoted_max = $dbh->quote($entry->{max_age} || 0);
-	    my $is_active = $inactive{$entry->{name}} ? 0 : 1;
 	    
-	    $sql = "INSERT INTO $TABLE{PCOORD_MODELS}
-			(name, model_id, min_age, max_age, is_active)
-		    VALUES ($quoted_name, $quoted_id, $quoted_min, $quoted_max, $is_active)";
+	    if ( $exists{$entry->{name}} )
+	    {
+		$sql = "UPDATE $TABLE{PCOORD_MODELS}
+		SET model_id=$quoted_id, min_age=$quoted_min, max_age=$quoted_max
+		WHERE name=$quoted_name";
+		
+		my $result = $self->doSQL($sql);
+		logMessage(1, "  updated model $quoted_name") if $result && $result > 0;
+		$update_count += $result;
+	    }
 	    
-	    $count += $self->doSQL($sql);
+	    else
+	    {
+		$sql = "INSERT INTO $TABLE{PCOORD_MODELS}
+		(name, model_id, min_age, max_age, is_active)
+		VALUES ($quoted_name, $quoted_id, $quoted_min, $quoted_max, true)";
+	    
+		my $result = $self->doSQL($sql);
+		logMessage(1, "  inserted model $quoted_name") if $result && $result > 0;
+		$insert_count += $result;
+	    }
 	}
     }
     
-    logMessage(1, "  inserted $count models into '$TABLE{PCOORD_MODELS}'");
+    unless ( $update_count || $insert_count )
+    {
+	logMessage(1, "All models are up to date");
+    }
 }
 
 
