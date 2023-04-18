@@ -2,4 +2,7 @@
 
 *~
 .tramp_history
+.#*
 *.ttc
+dataservice.pid
+config.yml

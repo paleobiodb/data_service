@@ -1517,8 +1517,9 @@ sub list_occs {
     my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
-        
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/ ||
+	$request->{my_plate_model};
+    
     $fields .= $access_fields if $access_fields;
     
     # Determine the order in which the results should be returned.
@@ -3377,10 +3378,7 @@ sub generateJoinList {
 	if $tables->{nm};
     $join_list .= "LEFT JOIN taxon_names as ns on ns.taxon_no = t.spelling_no\n"
 	if $tables->{nm} && $tables->{t};
-    $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
-	if $tables->{pc};
-    $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
-	if $tables->{gp};
+    
     $join_list .= "LEFT JOIN refs as r on r.reference_no = o.reference_no\n" 
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
@@ -3406,6 +3404,33 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
+    
+    # The value of 'pc' must be an array. Each model entry must be followed by a selector
+    # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
+    # value used by the database.
+    
+    if ( ref $tables->{pc} eq 'ARRAY' )
+    {
+	$join_list .= $request->pcoord_joins($tables->{pc}->@*);
+    }
+    
+    # if ( ref $tables->{pc} eq 'ARRAY' )
+    # {
+    # 	my @pc_list = $tables->{pc}->@*;
+    # 	my $i;
+	
+    # 	while ( @pc_list )
+    # 	{
+    # 	    $i++;
+    # 	    my $model = $PB2::CollectionData::PCOORD_ALIAS{shift @pc_list};
+    # 	    my $selector = shift @pc_list;
+	    
+    # 	    $join_list .= 
+    # 		"LEFT JOIN $TABLE{PCOORD_DATA} as pc$i on pc$i.collection_no = c.collection_no
+    # 		    and pc$i.model = '$model' and pc$i.selector = '$selector'\n";
+	    
+    # 	}
+    # }
     
     return $join_list;
 }

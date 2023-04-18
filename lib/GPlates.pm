@@ -33,6 +33,7 @@ our ($GEOPLATES_WORK) = 'gpn';
 our ($DEFAULT_RETRY_LIMIT) = 3;
 our ($DEFAULT_RETRY_INTERVAL) = 5;
 our ($DEFAULT_FAIL_LIMIT) = 3;
+our ($DEFAULT_BAD_RESPONSE_LIMIT) = 5;
 
 our ($DEFAULT_MAX_FEATURES) = 35;	# This value can be adjusted if necessary; it ensures
                                         # that the length of each request URL won't exceed the
@@ -52,7 +53,7 @@ sub updatePaleocoords {
     $options ||= {};
     
     # We start by loading the relevant configuration settings from the
-    # paleobiology database configuratio nfile.
+    # paleobiology database configuration file.
     
     loadConfig();
     
@@ -61,6 +62,7 @@ sub updatePaleocoords {
     my $retry_limit = configData('gplates_retry_limit') || $DEFAULT_RETRY_LIMIT;
     my $retry_interval = configData('gplates_retry_interval') || $DEFAULT_RETRY_INTERVAL;
     my $fail_limit = configData('gplates_fail_limit') || $DEFAULT_FAIL_LIMIT;
+    my $bad_limit = configData('gplates_bad_response_limit') || $DEFAULT_BAD_RESPONSE_LIMIT;
     my $max_features = configData('gplates_feature_limit') || $DEFAULT_MAX_FEATURES;
     
     die "You must specify the GPlates URI in the configuration file, as 'gplates_uri'\n"
@@ -84,13 +86,15 @@ sub updatePaleocoords {
 		 update_count => 0,
 		 debug => $options->{debug},
 		 fail_count => 0,
+		 fail_limit => $fail_limit,
+		 bad_count => 0,
+		 bad_limit => $bad_limit,
 		 debug_count => 0,
 		 min_age_bound => $min_age,
 		 max_age_bound => $max_age,
 		 service_uri => $gplates_uri,
 		 retry_limit => $retry_limit,
 		 retry_interval => $retry_interval,
-		 fail_limit => $fail_limit,
 		 max_features => $max_features,
 		 quiet => $options->{quiet},
 		 verbose => $options->{verbose},
@@ -363,16 +367,14 @@ sub updatePaleocoords {
 	
 	while ( @points )
 	{
-	    # my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
-	    # $request_json .= "\"features\": [";
-	    # my $comma = '';
-	    # my @oid_list;
-	    
 	    # Start building a parameter list.
 	    
-	    my $request_params = "points=";
+	    my $request_params = "model=Wright2013&time=$age&include_failures=1&data=";
 	    my $sep = '';
-	    my @oid_list;
+	    
+	    # Keep track of the selector and collection_no for each point.
+	    
+	    my @request_points;
 	    
 	    # Add each point, up to the limit for a single request.
 	    
@@ -380,46 +382,41 @@ sub updatePaleocoords {
 	    while ( my $point = shift @points )
 	    {
 		my ($coll_no, $selector, $lng, $lat) = @$point;
-		my $oid = "$selector.$coll_no";
 		
 		next unless $lng ne '' && $lat ne '';	# skip any point with null coordinates.
 		
-		# $request_json .= $comma; $comma = ",";
-		# $request_json .= $self->generateFeature($lng, $lat, $oid);
+		$request_params .= $sep; $sep = '+';
+		$request_params .= "$lng,$lat";
 		
-		$request_params .= $sep; $sep = ' ';
-		$request_params .= "$lng,$lat,$oid";
+		push @request_points, $point;
 		
-		push @oid_list, $oid;
-		
-		last FEATURE if @oid_list >= $self->{max_features};
+		last FEATURE if @request_points >= $self->{max_features};
 	    }
 	    
-	    # $request_json .= "]}";
+	    # Now if we have at least one point to rotate then fire off the request and
+	    # process the answer (if any). If processResponse returns false, abort the
+	    # task. 
 	    
-	    $request_params .= "&age=$age";
-	    
-	    # Now if we have at least one point to rotate then fire off the
-	    # request and process the answer (if any)
-	    
-	    my $count = scalar(@oid_list);
-	    my $oid_string = join(',', @oid_list);
-	    
-	    next AGE unless $count;
-	    
-	    logMessage(2, "    rotating $count points to $age Ma ($oid_string)");
-	    
-	    # $self->makeGPlatesRequest($ua, \$request_json, $age);
-	    
-	    $self->makeGPlatesRequest($ua, $request_params, $age);
-	    
-	    # If we have gotten too many server failures in a row, then abort this
-	    # run.
-	    
-	    if ( $self->{fail_count} >= $self->{fail_limit} )
+	    if ( @request_points )
 	    {
-		logMessage(2, "    ABORTING RUN DUE TO REPEATED QUERY FAILURE");
-		last;
+		my $uri = $self->{service_uri};
+		
+		my $request = "$uri?$request_params";
+		
+		my $content_ref = $self->makeRotationRequest($ua, $request, $age);
+		
+		if ( $content_ref )
+		{
+		    $self->processResponse($age, $content_ref, \@request_points, $request) 
+			|| return;
+		}
+		
+		if ( $self->{fail_count} > $self->{fail_limit} )
+		{
+		    logMessage(1, "ABORTING DUE TO ERROR COUNT");
+		    print STDERR "Aborting due to error count\n";
+		    last AGE;
+		}
 	    }
 	}
     }
@@ -502,39 +499,21 @@ sub prepareStatements {
 }
 
 
-sub generateFeature {
-    
-    my ($self, $lng, $lat, $oid) = @_;
-    
-    my $output = "{\"type\": \"Feature\",";
-    $output .= "\"geometry\": {\"type\": \"Point\", \"coordinates\": [$lng, $lat]},";
-    $output .= "\"properties\": {\"name\": \"$oid\", \"feature_type\": \"gpml:UnclassifiedFeature\", ";
-    $output .= "\"begin_age\": \"4000.0\", \"end_age\": \"0.0\"}";
-    $output .= "}";
-    
-    return $output;
-}
+# makeRotationRequest ( ua, request )
+# 
+# Make a request to the paleocoordinate rotation service using the specified user agent
+# object.
 
+sub makeRotationRequest {
 
-sub makeGPlatesRequest {
-
-    # my ($self, $ua, $request_ref, $age) = @_;
+    my ($self, $ua, $request) = @_;
     
-    my ($self, $ua, $request_params, $age) = @_;
-    
-    # Generate a GPlates request.  The actual request is wrapped inside a
+    # Generate a rotation request.  The actual request is wrapped inside a
     # while loop so that we can retry it if something goes wrong.
     
-    my $uri = $self->{service_uri};
+    print STDERR "GET $request\n" if $self->{debug};
     
-    # my @headers = ( 'Content-Type' => 'application/x-www-form-urlencoded',
-    # 		    'Content-Length' => length($$request_ref) );
-    
-    # my $req = HTTP::Request->new(POST => $uri, \@headers, $$request_ref);
-    
-    print STDERR "GET $uri?$request_params\n" if $self->{debug};
-    
-    my $req = HTTP::Request->new(GET => "$uri?$request_params");
+    my $req = HTTP::Request->new(GET => $request);
     
     my ($resp, $content_ref);
     my $retry_count = $self->{retry_limit};
@@ -561,14 +540,8 @@ sub makeGPlatesRequest {
 	    
 	    logMessage(3, "    response elapsed time: $elapsed");
 	    
-	    $self->processResponse($age, $content_ref);
 	    $self->{fail_count} = 0;
-
-	    $elapsed = time - $time1;
-	    
-	    logMessage(3, "    process elapsed time: $elapsed");
-	    
-	    return;
+	    return $content_ref;
 	}
 	
 	# Otherwise, check the initial part of the response message body.  If
@@ -580,7 +553,13 @@ sub makeGPlatesRequest {
 	if ( $content_start =~ /server closed connection/i )
 	{
 	    $retry_count--;
-	    logMessage(2, "      SERVER CLOSED CONNECTION, RETRYING...") if $retry_count > 0;
+	    
+	    if ( $retry_count > 0 )
+	    {
+		logMessage(2, "      SERVER CLOSED CONNECTION, RETRYING...");
+		print STDERR "SERVER CLOSED CONNECTION, RETRYING...\n";
+	    }
+	    
 	    sleep($retry_interval);
 	    $retry_interval *= 2;
 	    next RETRY;
@@ -591,7 +570,8 @@ sub makeGPlatesRequest {
 	# content to an error file.
 	
 	my $code = $resp->code;
-	logMessage(2, "      REQUEST FAILED WITH CODE '$code'");
+	logMessage(2, "      REQUEST FAILED WITH CODE '$code': $request");
+	print STDERR "REQUEST FAILED WITH CODE '$code': $request\n";
 	$self->{fail_count}++;
 	
 	if ( $self->{debug} )
@@ -608,7 +588,8 @@ sub makeGPlatesRequest {
     
     # If we get here, then we have exceeded the retry count.
     
-    logMessage(2, "      SERVER CLOSED CONNECTION, ABORTING REQUEST");
+    logMessage(2, "      ABORTING REQUEST");
+    print STDERR "ABORTING REQUEST\n";
     $self->{fail_count}++;
     return;
 }
@@ -617,10 +598,20 @@ sub makeGPlatesRequest {
 my %is_selector = ( 'early' => 1, 'mid' => 1, 'late' => 1 );
 
 
+# processResponse ( age, content_ref, points_ref )
+# 
+# Process a response received from the rotation service. Both $content_ref and $points_ref
+# must be array references.
+# 
+# We need the value of $age because the response does not include this information. The
+# request MUST include the argument 'include_failures=1', so that points which cannot be
+# rotated are returned as null entries.  This enables us to match up the entries in
+# $content_ref with the corresponding entries in $points_ref.
+
 sub processResponse {
     
-    my ($self, $age, $content_ref) = @_;
-
+    my ($self, $age, $content_ref, $points_ref, $request) = @_;
+    
     my $dbh = $self->{dbh};
     my $response;
     my @bad_list;
@@ -632,77 +623,87 @@ sub processResponse {
     }
     
     catch {
-	logMessage(2, "ERROR: bad json from server");
+	logMessage(1, "ERROR: bad json from server: $request");
+	print STDERR "ERROR: bad json from server: $request\n";
         $self->{fail_count}++;
 	return;
     };
     
     # Check for an error
     
-    if ( $response->{error} )
+    if ( ref $response eq 'HASH' && $response->{error} )
     {
-	logMessage(2, "ERROR: $response->{error}");
+	logMessage(1, "ERROR: $response->{error}: $request");
+	print STDERR "ERROR: $response->{error}: $request\n";
 	$self->{fail_count}++;
 	return;
     }
     
-    # For each feature (i.e. result point) in the response, update the
-    # corresponding entry in the database.
-
-    my @result; @result = @{$response->{result}} if ref $response->{result} eq 'ARRAY';
+    # Extract a list of result records from the query response.
+    
+    my @result; 
+    
+    if ( ref $response eq 'ARRAY' )
+    {
+	@result = $response->@*;
+    }
+    
+    elsif ( ref $response eq 'HASH' && ref $response->{result} eq 'ARRAY' )
+    {
+	@result = $response->{result}->@*;
+    }
+    
+    else
+    {
+	logMessage(1, "ERROR: could not extract result array: $request");
+	print STDERR "ERROR: could not extract result array: $request\n";
+	$self->{fail_count}++;
+	return;
+    }
+    
     my $errmsg_displayed;
     
+    # Iterate through the returned entries.
+    
   POINT:
-    foreach my $featcoll ( @result )
+    foreach my $i ( 0..$#result )
     {
-	unless ( ref $featcoll->{features} eq 'ARRAY' &&
-		 ref $featcoll->{features}[0] eq 'HASH' &&
-		 defined $featcoll->{features}[0]{properties}{label} )
+	# Get the corresponding collection identifier and selector (early, mid, late) from
+	# the $points_ref array.
+	
+	my ($coll_no, $selector) = $points_ref->[$i]->@*;
+	
+	# If the response entry is null, it means that the specified rotation model cannot
+	# produce a paleocoordinate for this point/age combination. Set the
+	# paleocoordinates for the corresponding collection identifier, selector, and age
+	# to null.
+	
+	if ( ! defined $result[$i] )
 	{
-	    logMessage(1, "ERROR: found a feature collection with no 'label' property")
-		unless $errmsg_displayed;
-	    $errmsg_displayed = 1;
-	    next;
+	    $self->updateOneEntry($coll_no, $selector, $age, undef, undef);
 	}
 	
-	my $feature = $featcoll->{features}[0];
-	my $key = $feature->{properties}{label};
-	my ($selector, $collection_no) = split(qr{\.}, $key);
+	# If the result entry contains a list of coordinates, set the paleocoordinates for
+	# the corresponding collection identifier, selector, and age to these values. If
+	# there is a third value, it should be the plate identifier.
 	
-	unless ( defined $selector && $is_selector{$selector} && defined $collection_no && $collection_no > 0 )
+	elsif ( ref $result[$i] eq 'HASH' && ref $result[$i]{geometry}{coordinates} eq 'ARRAY' )
 	{
-	    push @bad_list, $key;
-	    next POINT;
-	}
-	
-	unless ( ref $feature->{geometry}{coordinates} eq 'ARRAY' )
-	{
-	    $self->updateOneEntry($collection_no, $selector, $age, undef, undef, undef);
+	    my ($lng, $lat, $plate_id) = $result[$i]{geometry}{coordinates}->@*;
+	    
+	    my ($coll_no, $selector) = $points_ref->[$i]->@*;
+	    
+	    $self->updateOneEntry($coll_no, $selector, $age, $lng, $lat, $plate_id);
 	}
 	
 	else
 	{
-	    my ($lng, $lat) = @{$feature->{geometry}{coordinates}};
-	    
-	    unless ( $lng =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi and
-		     $lat =~ qr{ ^ -? \d+ (?: \. \d* )? (?: E -? \d+ )? $ }xi )
-	    {
-		push @bad_list, "$key ($lng, $lat)";
-		$self->updateOneEntry($collection_no, $selector, $age, undef, undef, undef);
-		next POINT;
-	    }
-	    
-	    my $plate_id = $feature->{properties}{plate_id};
-	    $plate_id =~ s/[.]0$//;
-	    
-	    $plate_id = undef if $plate_id eq 'NULL';
-	    
-	    # my $quoted = defined $plate_id && $plate_id ne '' && $plate_id !~ /null/i ?
-	    # 	$dbh->quote($plate_id) : undef;
-	    
-	    $self->updateOneEntry($collection_no, $selector, $age, $lng, $lat, $plate_id);
+	    push @bad_list, "$coll_no $age ($selector)";
 	}
     }
+    
+    # If there were any entries that we couldn't parse, report them. If we have exceeded
+    # the limit for bad results, return false which will terminate the task.
     
     if ( @bad_list )
     {
@@ -710,8 +711,18 @@ sub processResponse {
 	my $list = join(', ', @bad_list);
 	
 	logMessage(1, "ERROR: the following $count entries were not updated because the GPlates response was invalid:");
-	logMessage(1, "$list");
+	logMessage(1, $list);
+	
+	if ( ++$self->{bad_count} > $self->{bad_limit} )
+	{
+	    logMessage(1, "ABORTING DUE TO BAD RESPONSE COUNT");
+	    return;
+	}
     }
+    
+    # Otherwise, return true.
+    
+    return 1;
 }
 
 
@@ -721,36 +732,42 @@ sub updateOneEntry {
     
     my $dbh = $self->{dbh};
     
-    $self->{add_row_sth}->execute($collection_no);
+    eval {
+	$self->{add_row_sth}->execute($collection_no);
+	
+	if ( $selector eq 'early' )
+	{
+	    $self->{early_sth}->execute($age, $lng, $lat, $collection_no);
+	}
+	
+	elsif ( $selector eq 'mid' )
+	{
+	    $self->{mid_sth}->execute($age, $lng, $lat, $collection_no);
+	}
+	
+	elsif ( $selector eq 'late' )
+	{
+	    $self->{late_sth}->execute($age, $lng, $lat, $collection_no);
+	}
+	
+	if ( $plate_id )
+	{
+	    $self->{set_plate}->execute($plate_id, $plate_id, $plate_id, $collection_no);
+	    $self->{coll_matrix_sth}->execute($collection_no);
+	}
+    };
     
-    if ( $selector eq 'early' )
+    if ( $@ )
     {
-	$self->{early_sth}->execute($age, $lng, $lat, $collection_no);
+	logMessage(1, "ERROR updating the database: $@");
+	print STDERR "ERROR updating the database: $@\n";
+	
+	if ( ++$self->{bad_count} > $self->{bad_limit} )
+	{
+	    logMessage(1, "ABORTING DUE TO ERROR COUNT");
+	    die "Aborting due to error count\n";
+	}
     }
-    
-    elsif ( $selector eq 'mid' )
-    {
-	$self->{mid_sth}->execute($age, $lng, $lat, $collection_no);
-    }
-    
-    elsif ( $selector eq 'late' )
-    {
-	$self->{late_sth}->execute($age, $lng, $lat, $collection_no);
-    }
-    
-    $self->{set_plate}->execute($plate_id, $plate_id, $plate_id, $collection_no);
-    
-    # if ( $age > 200 )
-    # {
-	# $self->{early_plate_sth}->execute($plate_id, $collection_no);
-    # }
-
-    # else
-    # {
-	# $self->{late_plate_sth}->execute($plate_id, $collection_no);
-    # }
-    
-    $self->{coll_matrix_sth}->execute($collection_no);
     
     $self->{update_count}++;
 }

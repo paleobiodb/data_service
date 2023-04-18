@@ -580,18 +580,27 @@ sub delete_output_field {
     
     my ($request, $field_name, $config_name) = @_;
     
+    no warnings 'uninitialized';
+    
     return unless defined $field_name && $field_name ne '';
     
     my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
     my $list = $oc->{field_list};
     
-    foreach my $i ( 0..$#$list )
+    if ( reftype($field_name) eq 'REGEXP' )
     {
-	no warnings 'uninitialized';
-	if ( $oc->{field_list}[$i]{field} eq $field_name )
+	@$list = grep { $_->{field} !~ $field_name } @$list;
+    }
+    
+    else
+    {
+	foreach my $i ( 0..$#$list )
 	{
-	    splice(@$list, $i, 1);
-	    return;
+	    if ( $oc->{field_list}[$i]{field} eq $field_name )
+	    {
+		splice(@$list, $i, 1);
+		return;
+	    }
 	}
     }
 }
