@@ -104,15 +104,22 @@ sub initialize {
     
     $ds->define_block('1.2:config:lithologies' => 
 	{ output => 'config_section', com_name => 'cfg', value => 'lth', if_field => 'lithology' },
+	    "The configuration section: 'lth' for lithologies",
 	{ output => 'lithology', com_name => 'lth' },
-	{ output => 'lith_type', com_name => 'ltp' });
+	    "Lithology name",
+	{ output => 'lith_type', com_name => 'ltp' },
+	    "Lithology type");
     
     $ds->define_block('1.2:config:pgmodels' =>
 	{ set => '*', code => \&process_description },
 	{ output => 'config_section', com_name => 'cfg', value => 'pgm', if_field => 'code' },
+	    "The configuration section: 'pgm' for paleogeographic models",
 	{ output => 'code', com_name => 'cod' },
+	    "Use this string to select this model.",
 	{ output => 'label', com_name => 'lbl' },
-	{ output => 'description', com_name => 'dsc'});
+	    "The name of the model.",
+	{ output => 'description', com_name => 'dsc'},
+	    "Description of the model, including the bibliographic reference for the source.");
     
     $ds->define_block('1.2:config:all' =>
 	{ include => '1.2:config:geosum' },

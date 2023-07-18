@@ -862,7 +862,8 @@ use PB2::MainEntry;
 			title => 'Database contributors',
 			role => 'PB2::PersonData',
 			default_limit => undef,
-			output => '1.2:people:basic' });
+			output => '1.2:people:basic',
+		        optional_output => '1.2:people:basic_map' });
     
     $ds2->define_node({ path => 'people/single', 
 			place => 1,

@@ -87,7 +87,7 @@ sub initialize {
     # Then some rulesets.
     
     $ds->define_ruleset('1.2:people:specifier' => 
-	{ param => 'id', valid => ANY_VALUE, alias => 'person_id' },
+	{ param => 'id', valid => VALID_IDENTIFIER('PRS'), alias => 'person_id' },
 	    "The identifier of a database contributor, either as an external identifier or",
 	    "an integer, or the user identifier string.",
 	{ param => 'loggedin', valid => FLAG_VALUE },
@@ -222,7 +222,7 @@ sub get_person {
 	if ( $request->has_block('1.2:common:crmod') )
 	{
 	    $fields =~ s/\$cd.created/wu.date_created/;
-	    $fields =~ s/\$cd.modiied/wu.date_modified/;
+	    $fields =~ s/\$cd.modiied/wu.date_updated/;
 	}
 	
 	$request->{main_sql} = "
@@ -236,7 +236,7 @@ sub get_person {
 	if ( $request->has_block('1.2:common:crmod') )
 	{
 	    $fields =~ s/\$cd.created/coalesce(wu.date_created, p.created) as created/;
-	    $fields =~ s/\$cd.modified/coalesce(wu.date_modified, p.modified) as modified/;
+	    $fields =~ s/\$cd.modified/coalesce(wu.date_updated, p.modified) as modified/;
 	}
 	
 	$request->{main_sql} = "
@@ -299,7 +299,7 @@ sub list {
     
     $self->{main_sql} = "
 	SELECT $count $fields
-	FROM person as p
+	FROM $TABLE{PERSON_DATA} as p left join $TABLE{WING_USERS} as wu using (person_no)
         WHERE $filter_string
 	ORDER BY p.reversed_name $limit";
     
