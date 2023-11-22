@@ -41,6 +41,8 @@ paleocoord_model_uri: "https://rotate.macrostrat.org/api/model"
 paleocoord_plate_uri: "https://rotate.macrostrat.org/api/plates"
 paleocoord_point_limit: 50
 
+alert_file: "../pbdb-main/alert.txt"
+
 template_toolkit:
     COMPILE_EXT: ".ttc"
 
