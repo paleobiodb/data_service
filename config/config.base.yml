@@ -36,9 +36,10 @@ checks:
     max_synonym_no: 212734
     max_synonym_limit: 65
 
-gplates_uri: "https://macrostrat.org/gplates/reconstruct"
-gplates_max_age: 550
-gplates_feature_limit: 50
+paleocoord_point_uri: "https://rotate.macrostrat.org/api/point"
+paleocoord_model_uri: "https://rotate.macrostrat.org/api/model"
+paleocoord_plate_uri: "https://rotate.macrostrat.org/api/plates"
+paleocoord_point_limit: 50
 
 template_toolkit:
     COMPILE_EXT: ".ttc"
