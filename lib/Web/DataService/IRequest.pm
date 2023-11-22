@@ -623,8 +623,16 @@ sub debug {
 # Output the specified line(s) of text for debugging purposes.
 
 sub debug_line {
-
-    print STDERR "$_[1]\n" if $Web::DataService::DEBUG;
+    
+    if ( ref $_[0] )
+    {
+	print STDERR "$_[1]\n" if $Web::DataService::DEBUG;
+    }
+    
+    else
+    {
+	print STDERR "$_[0]\n" if $Web::DataService::DEBUG;
+    }
 }
 
 
@@ -641,12 +649,30 @@ sub _process_record {
 }
 
 
-# result_limit ( )
+# result_limit ( value )
 #
-# Return the result limit specified for this request, or undefined if
-# it is 'all'.
+# If a value is given, set the result limit to that value. Otherwise, return the result
+# limit specified for this request, or undefined if it is 'all'.
 
 sub result_limit {
+    
+    if ( defined $_[1] )
+    {
+	if ( $_[1] eq 'all' )
+	{
+	    $_[0]->{result_limit} = undef;
+	}
+	
+	elsif ( $_[1] =~ /^\d+$/ )
+	{
+	    $_[0]->{result_limit} = $_[1];
+	}
+	
+	else
+	{
+	    croak "Invalid result limit '$_[1]'";
+	}
+    }
     
     return defined $_[0]->{result_limit} && $_[0]->{result_limit} ne 'all' && $_[0]->{result_limit};
 }
