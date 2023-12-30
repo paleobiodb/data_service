@@ -707,7 +707,7 @@ sub _configure_block {
 	    my $output_record = { field => $r->{output}, name => $r->{output} };
 	    
 	    # Now iterate through the rest of the keys in the record.
-
+	    
 	    my ($override_name, $override_value);
 	    
 	    foreach my $key ( keys %$r )
@@ -745,6 +745,14 @@ sub _configure_block {
 		elsif ( $key ne 'output' )
 		{
 		    carp "unknown key '$key' in output record in block '$block_name'";
+		}
+		
+		# If this block has a sub-record definition, make sure the subsidiary
+		# output block is configured too.
+		
+		if ( $r->{sub_record} )
+		{
+		    $ds->configure_block($request, $r->{sub_record});
 		}
 	    }
 	    
