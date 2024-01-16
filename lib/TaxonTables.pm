@@ -5182,6 +5182,11 @@ sub computeEcotaphTable {
 			DROP COLUMN polymorph,
 			DROP COLUMN depth_habitat");
     
+    # Fix instances where life_habit contains the empty string instead of being null.
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK 
+			SET life_habit = NULL WHERE life_habit = ''");
+    
     # Then fill in null entries for all other senior synonyms
     
     logMessage(2, "    adding entries for the remaining taxa...");
@@ -5940,7 +5945,7 @@ sub populateOrig {
     
     $dbh->do("
 	UPDATE authorities as a LEFT JOIN authorities as a2 on a2.taxon_no = a.orig_no
-	SET a.orig_no = 0 WHERE a2.taxon_no is null");
+	SET a.orig_no = 0, a.modified=a.modified WHERE a2.taxon_no is null");
     
     # Then check to see if we have any unset orig_no entries, and return if we
     # do not.
@@ -5958,31 +5963,31 @@ sub populateOrig {
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_spelling_no
-	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
+	SET a.orig_no = o.child_no, a.modified=a.modified WHERE a.orig_no = 0");
     
     logMessage(2, "   child_spelling_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_no
-	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
+	SET a.orig_no = o.child_no, a.modified=a.modified WHERE a.orig_no = 0");
     
     logMessage(2, "   child_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_spelling_no
-	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
+	SET a.orig_no = o.parent_no, a.modified=a.modified WHERE a.orig_no = 0");
     
     logMessage(2, "   parent_spelling_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_no
-	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
+	SET a.orig_no = o.parent_no, a.modified=a.modified WHERE a.orig_no = 0");
     
     logMessage(2, "   parent_no: $count");
     
     $count = $dbh->do("
 	UPDATE authorities as a
-	SET a.orig_no = a.taxon_no WHERE a.orig_no = 0");
+	SET a.orig_no = a.taxon_no, a.modified=a.modified WHERE a.orig_no = 0");
     
     logMessage(2, "   self: $count");
     
@@ -5999,7 +6004,7 @@ sub populateOrig {
     
     if ( $table_definition =~ /`refauth`/ )
     {
-	$count = $dbh->do("UPDATE authorities set refauth = if(ref_is_authority='YES', 1, 0)");
+	$count = $dbh->do("UPDATE authorities set refauth = if(ref_is_authority='YES', 1, 0), modified=modified");
 	
 	logMessage(2, "Updating 'refauth': $count");
     }
