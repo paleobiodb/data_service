@@ -10,7 +10,7 @@ package PB2::ConfigData;
 
 use strict;
 
-use TableDefs qw($CONTINENT_DATA $COLL_BINS $COLL_LITH $COLLECTIONS $COUNTRY_MAP);
+use TableDefs qw($CONTINENT_DATA $COLL_BINS $COLL_LITH $COLLECTIONS $COUNTRY_MAP %TABLE);
 use TaxonDefs qw(%TAXON_RANK %RANK_STRING);
 
 use Carp qw(carp croak);
@@ -22,7 +22,7 @@ use Moo::Role;
 
 # Variables to store the configuration information.
 
-our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, $LITHOLOGIES);
+our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, $LITHOLOGIES, $PCOORD_MODELS);
 
 
 # Initialization
@@ -52,6 +52,8 @@ sub initialize {
 	    "Return country names and the corresponding ISO-3166-1 country codes.",
 	{ value => 'lithologies', maps_to => '1.2:config:lithologies' },
 	    "Return lithologies and lithology types.",
+	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
+	    "Return available paleogeography models.",
 	{ value => 'all', maps_to => '1.2:config:all' },
 	    "Return all of the above blocks of information.");
     
@@ -102,15 +104,30 @@ sub initialize {
     
     $ds->define_block('1.2:config:lithologies' => 
 	{ output => 'config_section', com_name => 'cfg', value => 'lth', if_field => 'lithology' },
+	    "The configuration section: 'lth' for lithologies",
 	{ output => 'lithology', com_name => 'lth' },
-	{ output => 'lith_type', com_name => 'ltp' });
+	    "Lithology name",
+	{ output => 'lith_type', com_name => 'ltp' },
+	    "Lithology type");
+    
+    $ds->define_block('1.2:config:pgmodels' =>
+	{ set => '*', code => \&process_description },
+	{ output => 'config_section', com_name => 'cfg', value => 'pgm', if_field => 'code' },
+	    "The configuration section: 'pgm' for paleogeographic models",
+	{ output => 'code', com_name => 'cod' },
+	    "Use this string to select this model.",
+	{ output => 'label', com_name => 'lbl' },
+	    "The name of the model.",
+	{ output => 'description', com_name => 'dsc'},
+	    "Description of the model, including the bibliographic reference for the source.");
     
     $ds->define_block('1.2:config:all' =>
 	{ include => '1.2:config:geosum' },
 	{ include => '1.2:config:ranks' },
 	{ include => '1.2:config:continents' },
 	{ include => '1.2:config:countries' },
-	{ include => '1.2:config:lithologies' });
+	{ include => '1.2:config:lithologies' },
+	{ include => '1.2:config:pgmodels' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
@@ -161,6 +178,55 @@ sub initialize {
     
     $LITHOLOGIES = $dbh->selectall_arrayref("
 	SELECT distinct lithology, lith_type FROM $COLL_LITH", { Slice => {} });
+    
+    # Get the list of paleocoordinate models from the database.
+    
+    $PCOORD_MODELS = $dbh->selectall_arrayref("
+	SELECT name, description FROM $TABLE{PCOORD_MODELS} WHERE is_active
+	ORDER BY is_default desc, name asc", { Slice => { } });
+    
+    if ( ref $PCOORD_MODELS eq 'ARRAY' )
+    {
+	foreach my $entry ( @$PCOORD_MODELS )
+	{
+	    if ( $entry->{name} =~ /Wright/ )
+	    {
+		$entry->{code} = 'gplates';
+		$entry->{label} = 'GPlates';
+	    }
+	    
+	    elsif ( $entry->{name} =~ /([^\d]+)/ )
+	    {
+		$entry->{code} = lc $1;
+		$entry->{label} = $1;
+	    }
+	    
+	    else
+	    {
+		$entry->{code} = lc $entry->{label};
+	    }
+	}
+    }
+}
+
+
+# Transform POD L<> tags into HTML anchor tags.
+
+sub process_description {
+    
+    my ($request, $record) = @_;
+    
+    no warnings 'uninitialized';
+    
+    if ( $record->{description} =~ qr{ ^ (.*?) L< (.*?) [|] (.*?) > (.*) }xs )
+    {
+	$record->{description} = "$1<a href=\"$3\" target=\"_blank\">$2</a>$4";
+    }
+    
+    elsif ( $record->{description} =~ qr{ ^ (.*) L< (.*?) > (.*) }xs )
+    {
+	$record->{description} = "$1$2$3";
+    }
 }
 
 
@@ -183,6 +249,7 @@ sub get {
     push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     push @result, @$COUNTRIES if $request->has_block('countries') or $show_all;
     push @result, @$LITHOLOGIES if $request->has_block('lithologies') or $show_all;
+    push @result, @$PCOORD_MODELS if $request->has_block('pgmodels') or $show_all;
     
     if ( my $offset = $request->result_offset(1) )
     {

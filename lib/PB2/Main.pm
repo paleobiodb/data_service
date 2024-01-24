@@ -198,6 +198,16 @@ use PB2::MainEntry;
 	"can be specified using the B<C<type>> parameter, and the number of records to be returned",
 	"using B<C<limit>>.");
     
+    $ds2->define_node({ path => 'combined/associated',
+			place => 1,
+			title => 'List various types of records associated with bibliographic references',
+			method => 'list_associated',
+			output => '1.2:combined:associated',
+			optional_output => '1.2:combined:associated_optional'},
+	"Return a list of records of the specified types that are associated with the",
+	"specified bibliographic reference(s). The desired record types can be specified",
+	"using the B<C<type>> parameter.");
+    
     # Occurrences.  These paths are used to fetch information about fossil
     # occurrences known to the database.
     
@@ -862,7 +872,8 @@ use PB2::MainEntry;
 			title => 'Database contributors',
 			role => 'PB2::PersonData',
 			default_limit => undef,
-			output => '1.2:people:basic' });
+			output => '1.2:people:basic',
+		        optional_output => '1.2:people:basic_map' });
     
     $ds2->define_node({ path => 'people/single', 
 			place => 1,

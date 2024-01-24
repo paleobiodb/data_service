@@ -17,6 +17,8 @@ use ExternalIdent qw(extract_identifier generate_identifier);
 
 use Moo::Role;
 
+our ($MESSAGE_FILE);
+
 
 # initialize ( )
 # 
@@ -38,8 +40,13 @@ sub initialize {
 	    "The number of fossil collections represented in the database",
 	{ output => 'occurrences', com_name => 'occurrences', data_type => 'pos' },
 	    "The number of fossil occurrences represented in the database",
-	{ output => 'scientists', com_name => 'scientists', data_type => 'pos' },
-	    "The number of database users who have entered records in the database");
+	{ output => 'contributors', com_name => 'contributors', data_type => 'pos' },
+	    "The number of database users who have entered records in the database",
+	{ output => 'alert', com_name => 'alert' },
+	    "This field contains the contents of a file whose name is specified",
+	    "under the key 'alert_file' in 'config.yml', if the file exists and",
+	    "is non-empty. This file can be used to alert website users about",
+	    "anticipated downtime or changes to site features.");
 
     $ds->define_block('1.2:larkin:single' =>
 	{ output => 'c', com_name => 'c', data_type => 'int' },
@@ -54,8 +61,7 @@ sub initialize {
 	{ value => 'taxa' },
 	{ value => 'opinions' },
 	{ value => 'members' },
-	{ value => 'scientists' },
-	{ value => 'publications' });
+	{ value => 'contributors' });
     
     $ds->define_set('1.2:larkin:group_by' =>
 	{ value => 'month' },
@@ -86,7 +92,9 @@ sub initialize {
 	{ optional => 'id', valid => ANY_VALUE },
 	    "This parameter is only valid with a GET request. It specifies",
 	    "which application state record to return.");
-   
+    
+    $MESSAGE_FILE = $ds->config_value('alert_file');
+    $MESSAGE_FILE ||= '../pbdb-main/alert.txt';
 }
 
 
@@ -143,12 +151,28 @@ sub larkin_summary {
 	(SELECT COUNT(*) FROM opinions) AS 'opinions',
 	(SELECT COUNT(*) FROM collections) AS 'collections',
 	(SELECT COUNT(*) FROM occurrences) AS 'occurrences',
-	(SELECT COUNT(*) FROM pbdb_wing.users WHERE role = 'authorizer' or role = 'enterer') AS 'scientists'";
+	(SELECT COUNT(*) FROM pbdb_wing.users WHERE role = 'authorizer' or role = 'enterer') AS 'contributors'";
     
     $request->{ds}->debug_line("$sql\n") if $request->debug;
     
     my ($result) = $dbh->selectall_arrayref($sql, { Slice => { } });
-
+    
+    if ( -e $MESSAGE_FILE && ref $result eq 'ARRAY' )
+    {
+	my ($fh, $message);
+	
+	if ( open $fh, '<', $MESSAGE_FILE )
+	{
+	    $result->[0]{alert} = join '', <$fh>;
+	    close $fh;
+	}
+	
+	else
+	{
+	    warn "ERROR: could not open alert file '$MESSAGE_FILE': $!\n";
+	}
+    }
+    
     return $request->list_result($result);
 }
 

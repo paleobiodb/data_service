@@ -580,18 +580,27 @@ sub delete_output_field {
     
     my ($request, $field_name, $config_name) = @_;
     
+    no warnings 'uninitialized';
+    
     return unless defined $field_name && $field_name ne '';
     
     my $oc = $config_name ? $request->{"output_${config_name}"} : $request->{$request->{current_output}};
     my $list = $oc->{field_list};
     
-    foreach my $i ( 0..$#$list )
+    if ( reftype($field_name) eq 'REGEXP' )
     {
-	no warnings 'uninitialized';
-	if ( $oc->{field_list}[$i]{field} eq $field_name )
+	@$list = grep { $_->{field} !~ $field_name } @$list;
+    }
+    
+    else
+    {
+	foreach my $i ( 0..$#$list )
 	{
-	    splice(@$list, $i, 1);
-	    return;
+	    if ( $oc->{field_list}[$i]{field} eq $field_name )
+	    {
+		splice(@$list, $i, 1);
+		return;
+	    }
 	}
     }
 }
@@ -614,8 +623,16 @@ sub debug {
 # Output the specified line(s) of text for debugging purposes.
 
 sub debug_line {
-
-    print STDERR "$_[1]\n" if $Web::DataService::DEBUG;
+    
+    if ( ref $_[0] )
+    {
+	print STDERR "$_[1]\n" if $Web::DataService::DEBUG;
+    }
+    
+    else
+    {
+	print STDERR "$_[0]\n" if $Web::DataService::DEBUG;
+    }
 }
 
 
@@ -632,12 +649,30 @@ sub _process_record {
 }
 
 
-# result_limit ( )
+# result_limit ( value )
 #
-# Return the result limit specified for this request, or undefined if
-# it is 'all'.
+# If a value is given, set the result limit to that value. Otherwise, return the result
+# limit specified for this request, or undefined if it is 'all'.
 
 sub result_limit {
+    
+    if ( defined $_[1] )
+    {
+	if ( $_[1] eq 'all' )
+	{
+	    $_[0]->{result_limit} = undef;
+	}
+	
+	elsif ( $_[1] =~ /^\d+$/ )
+	{
+	    $_[0]->{result_limit} = $_[1];
+	}
+	
+	else
+	{
+	    croak "Invalid result limit '$_[1]'";
+	}
+    }
     
     return defined $_[0]->{result_limit} && $_[0]->{result_limit} ne 'all' && $_[0]->{result_limit};
 }

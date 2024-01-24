@@ -16,8 +16,7 @@ use strict;
 
 package Web::DataService::Plugin::Dancer;
 
-use Carp qw( carp croak );
-
+use URL::Encode qw(url_params_mixed);
 
 sub initialize_plugin {
     
@@ -211,6 +210,19 @@ sub get_request_body {
     elsif ( Dancer::request->body() )
     {
 	return Dancer::request->body();
+    }
+    
+    elsif ( my $content = Dancer::request->env->{CONTENT} )
+    {
+	if ( $content =~ /^[[{]/ )
+	{
+	    return $content;
+	}
+	
+	else
+	{
+	    return url_params_mixed($content);
+	}
     }
     
     else
