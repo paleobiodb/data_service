@@ -25,7 +25,7 @@ use TableDefs qw($OCC_MATRIX $OCC_TAXON);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig populateOpinionCache
+our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables computeOrig populateOpinionCache
 		      rebuildAttrsTable);
 
 
@@ -186,6 +186,7 @@ our $LIST_CACHE_WORK = "tlcn";
 our $ECOTAPH_WORK = "ectn";
 our $ETBASIS_WORK = "etbn";
 our $HOMONYMS_WORK = "homn";
+our $ORIG_WORK = "aon";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -742,11 +743,15 @@ sub buildTaxonTables {
     
     # First, determine which tables will be computed.
     
-    my @steps = split(//, $steps || 'AabcdefghERi');
+    my @steps = split(//, $steps || 'AabcdefghoERi');
     $step_control->{$_} = 1 foreach @steps;
     
     $TREE_WORK = 'taxon_trees' unless $step_control->{a};
     $NAME_WORK = 'taxon_names' unless $step_control->{a};
+    
+    # First, group the taxonomic names into taxonomic concepts based on the opinions table.
+    
+    computeOrig($dbh, $tree_table) if $step_control->{o};
     
     # Now create the necessary tables, including generating the opinion cache
     # from the opinion table.
@@ -1150,7 +1155,7 @@ sub updateOpinionCache {
     my $result;
     
     my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
-    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache}
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     my $refs_table = $TAXON_TABLE{$tree_table}{refs};
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
@@ -1373,51 +1378,51 @@ sub getAllOpinions {
 }
 
 
-# updateOpinionTaxa ( dbh, tree_table, taxon_list )
-# 
-# This routine updates all of the orig_no, child_no and parent_no values in
-# $OPINIONS_TABLE and $OPINION_CACHE that fall within the given list.
+# # updateOpinionTaxa ( dbh, tree_table, taxon_list )
+# # 
+# # This routine updates all of the orig_no, child_no and parent_no values in
+# # $OPINIONS_TABLE and $OPINION_CACHE that fall within the given list.
 
-sub updateOpinionTaxa {
+# sub updateOpinionTaxa {
 
-    my ($dbh, $tree_table, $taxon_list) = @_;
+#     my ($dbh, $tree_table, $taxon_list) = @_;
     
-    my $concept_filter = join(',', @$concept_list);
+#     my $concept_filter = join(',', @$concept_list);
     
-    my $result;
+#     my $result;
     
-    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
-    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
-    my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
+#     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+#     my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
+#     my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
     
-    logMessage(2, "updating opinion cache to reflect concept changes");
+#     logMessage(2, "updating opinion cache to reflect concept changes");
     
-    # First, $OPINION_CACHE
+#     # First, $OPINION_CACHE
     
-    $result = $dbh->do("UPDATE $opinion_cache as o
-				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
-			SET o.orig_no = a.orig_no, o.modified = o.modified
-			WHERE o.child_spelling_no in ($taxon_list)");
+#     $result = $dbh->do("UPDATE $opinion_cache as o
+# 				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
+# 			SET o.orig_no = a.orig_no, o.modified = o.modified
+# 			WHERE o.child_spelling_no in ($taxon_list)");
     
-    $result = $dbh->do("UPDATE $opinion_cache as o
-				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
-			SET o.parent_no = a.orig_no, o.modified = o.modified
-			WHERE o.parent_spelling_no in ($taxon_list)");
+#     $result = $dbh->do("UPDATE $opinion_cache as o
+# 				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
+# 			SET o.parent_no = a.orig_no, o.modified = o.modified
+# 			WHERE o.parent_spelling_no in ($taxon_list)");
     
-    # Next, $OPINIONS_TABLE
+#     # Next, $OPINIONS_TABLE
     
-    $result = $dbh->do("UPDATE $opinion_table as o
-				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
-			SET o.child_no = a.orig_no, o.modified = o.modified
-			WHERE a.child_spelling_no in ($concept_filter)");
+#     $result = $dbh->do("UPDATE $opinion_table as o
+# 				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
+# 			SET o.child_no = a.orig_no, o.modified = o.modified
+# 			WHERE a.child_spelling_no in ($concept_filter)");
     
-    $result = $dbh->do("UPDATE $opinion_table as o
-				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
-			SET o.parent_no = a.orig_no, o.modified = o.modified
-			WHERE a.parent_spelling_no in ($concept_filter)");
+#     $result = $dbh->do("UPDATE $opinion_table as o
+# 				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
+# 			SET o.parent_no = a.orig_no, o.modified = o.modified
+# 			WHERE a.parent_spelling_no in ($concept_filter)");
     
-    return;
-}
+#     return;
+# }
 
 
 # createWorkingTables ( dbh, tree_table, concept_hash )
@@ -1445,7 +1450,28 @@ sub createWorkingTables {
     # is being updated.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $TREE_WORK");
-    $result = $dbh->do("CREATE TABLE $TREE_WORK LIKE $tree_table");
+    $result = $dbh->do("CREATE TABLE $TREE_WORK 
+			       (orig_no int unsigned not null,
+				name varchar(80) not null collate latin1_swedish_ci,
+				imp boolean not null,
+				rank tinyint not null,
+				trad_rank tinyint not null,
+				min_rank decimal(3,1) not null,
+				max_rank decimal(3,1) not null,
+				status enum($ALL_STATUS),
+				spelling_no int unsigned not null,
+				trad_no int unsigned not null,
+				synonym_no int unsigned not null,
+				immsyn_no int unsigned not null,
+				accepted_no int unsigned not null,
+				immpar_no int unsigned not null,
+				senpar_no int unsigned not null,
+				opinion_no int unsigned not null,
+				ints_no int unsigned not null,
+				lft int,
+				rgt int,
+				bound int,
+				depth int) ENGINE=MYISAM");
     
     # If we were given a list of concepts, populate it with just those.
     # Otherwise, grab every concept in $AUTH_TABLE
@@ -1498,8 +1524,7 @@ sub computeSpelling {
     
     my ($result);
     
-    logMessage(2, "computing currently accepted spelling relation (b)")
-	unless $taxon_list;
+    logMessage(2, "computing currently accepted spelling relation (b)");
     
     my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
@@ -1780,6 +1805,8 @@ sub updateSpelling {
     my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     my $refs_table = $TAXON_TABLE{$tree_table}{refs};
+    
+    my $result;
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $MISSPELLING_AUX
 			   (spelling_no int unsigned,
@@ -2155,6 +2182,8 @@ sub updateSynonymy {
     my ($dbh, $tree_table, $taxon_list) = @_;
     
     my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
+    
+    my $result;
     
     # We start by choosing the "classification opinion" for each concept in
     # $TREE_WORK.  We use the same mechanism as we did previously with the
@@ -5699,11 +5728,21 @@ sub buildTaxaCacheTables {
     
     my $result;
     
-    # Create a new working table for taxa_tree_cache
-
     logTimestamp();
     
-    logMessage(2, "computing tree cache and list cache tables");
+    logMessage(2, "computing tree cache and list cache tables (y)");
+    
+    # Acquire a mutex, to prevent taxa_cached from updating while we are doing this task.
+    # Each taxa_cached update should take only a second or less, so proceed anyway if we
+    # cannot acquire the lock within a reasonable amount of time. This is unlikely to
+    # happen, and any negative consequences will be erased at the next table build in any
+    # case.
+    
+    my ($mutex) = $dbh->selectrow_array("SELECT get_lock('taxa_cache_mutex', 5)");
+    
+    logMessage(2, $mutex ? "    acquired taxa_cache_mutex" : "    proceeding without mutex");
+    
+    # Create a new working table for taxa_tree_cache
     
     logMessage(2, "    creating tree cache");
     
@@ -5741,94 +5780,14 @@ sub buildTaxaCacheTables {
     $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (synonym_no)");
     $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (opinion_no)");
     
-    # Create a new working table for taxa_list_cache
+    activateTables($dbh, $TREE_CACHE_WORK => $CLASSIC_TREE_CACHE);
+        
+    $dbh->do("DO release_lock('taxa_cache_mutex')");
     
-    # logMessage(2, "    creating list cache");
-    
-    # $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
-    
-    # $result = $dbh->do("
-    # 	CREATE TABLE $LIST_CACHE_WORK
-    # 	       (parent_no int unsigned not null,
-    # 		child_no int unsigned not null,
-    # 		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
-    
-    # # Populate it using the taxon_trees table, 
-    
-    # logMessage(2, "    populating list cache");
-    
-    # my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
-    
-    # foreach my $depth (reverse 2..$max_depth)
-    # {
-    # 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
-	
-    # 	$result = $dbh->do("
-    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-    # 		SELECT t.immpar_no, l.child_no
-    # 		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
-    # 		WHERE t.depth = $depth");
-	
-    # 	$result = $dbh->do("
-    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-    # 		SELECT t.immpar_no, t.orig_no
-    # 		FROM $tree_table as t
-    # 		WHERE t.depth = $depth");
-    # }
-    
-    # # Update it to show spelling_no values instead of the corresponding
-    # # orig_no values.
-    
-    # logMessage(2, "    setting parent spelling_no values");
-    
-    # $result = $dbh->do("
-    # 		UPDATE IGNORE $LIST_CACHE_WORK as l
-    # 			JOIN $tree_table as pt on pt.orig_no = l.parent_no
-    # 		SET l.parent_no = pt.spelling_no");
-    
-    # logMessage(2, "    adding entries for child spellings");
-    
-    # $result = $dbh->do("
-    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-    # 		SELECT l.parent_no, a.taxon_no
-    # 		FROM $auth_table as a JOIN $LIST_CACHE_WORK as l on l.child_no = a.orig_no");
-    
-    # logMessage(2, "      $result new entries.");
-    
-    # # Add the necessary indices
-    
-    # logMessage(2, "    indexing list cache");
-    
-    # $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
-    
-    # Now swap in the new tables.
-    
-    # logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
-    
-    logMessage(2, "   activating table '$CLASSIC_TREE_CACHE'");
-    
-    # Compute the backup names of all the tables to be activated
-    
-    my $tree_bak = "${CLASSIC_TREE_CACHE}_bak";
-    # my $list_bak = "${CLASSIC_LIST_CACHE}_bak";
-    
-    # Drop those tables if any are still around
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
-    # $result = $dbh->do("DROP TABLE IF EXISTS $list_bak");
-    
-    # Recreate any of the existing tables that may not exist for some reason
-    
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
-    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
-    
-    # Now swap in the new tables
-    
-    $result = $dbh->do("RENAME TABLE
-		$CLASSIC_TREE_CACHE to $tree_bak,
-		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE");
-		# $CLASSIC_LIST_CACHE to $list_bak,
-		# $LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
+    if ( $mutex )
+    {
+	logMessage(2, "    released taxa_cache_mutex");
+    }
     
     my $a = 1;	# We can stop here when debugging
 }
@@ -6128,10 +6087,129 @@ sub ensureOrig {
 }
 
 
+# computeOrig ( dbh )
+# 
+# Rebuild the table 'auth_orig', which groups taxonomic names together into taxonomic concepts.
+
+sub computeOrig {
+    
+    my ($dbh, $tree_table) = @_;
+    
+    my ($auth_table) = $TAXON_TABLE{$tree_table}{authorities} || 'authorities';
+    my ($opinions_table) = $TAXON_TABLE{$tree_table}{opinions} || 'opinions';
+    my ($auth_orig) = $TAXON_TABLE{$tree_table}{orig} || 'auth_orig';
+    
+    my $result;
+    
+    logMessage(2, "computing $auth_orig relation (o)");
+    
+    # Acquire a mutex, to prevent taxa_cached from updating while we are doing this task.
+    # Each taxa_cached update should take only a second or less, so proceed anyway if we
+    # cannot acquire the lock within a reasonable amount of time. This is unlikely to
+    # happen, and any negative consequences will be erased at the next table build in any
+    # case.
+    
+    my ($mutex) = $dbh->selectrow_array("SELECT get_lock('taxa_cache_mutex', 5)");
+    
+    logMessage(2, $mutex ? "    acquired taxa_cache_mutex" : "    proceeding without mutex");
+    
+    # Create a new working table for auth_orig.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $ORIG_WORK");
+    
+    $result = $dbh->do("CREATE TABLE `$ORIG_WORK` (
+	`taxon_no` int unsigned not null,
+	`orig_no` int unsigned not null,
+	UNIQUE KEY `taxon_no` (`taxon_no`)) Engine=MyISAM");
+    
+    # Fill it in based on the relationships between child_no and child_spelling_no in the
+    # opinions table. If there is more than one child_no corresponding to a particular
+    # child_spelling_no, that is okay. The code in Opinion.pm does not allow a cycle to be
+    # created, so the recursive step below will cause the "real" orig_no for each taxon_no
+    # to be reached.
+    
+    logMessage(2, "    inserting child_spelling_no values from $opinions_table...");
+    
+    $result = $dbh->do("INSERT IGNORE INTO `$ORIG_WORK` (taxon_no, orig_no)
+			SELECT child_spelling_no, child_no FROM `$opinions_table`
+			WHERE child_spelling_no <> child_no");
+    
+    logMessage(2, "      inserted $result rows");
+    
+    # Fill in all other taxa from the authorities table. Each one represents a unique
+    # taxonomic concept.
+    
+    logMessage(2, "    inserting taxon_no values from $auth_table...");
+    
+    $result = $dbh->do("INSERT IGNORE INTO `$ORIG_WORK` (taxon_no, orig_no)
+			SELECT taxon_no, taxon_no FROM `$auth_table`");
+    
+    logMessage(2, "      inserted $result rows");
+    
+    # Now propagate this relation recursively, to collapse chains. Ten iterations should
+    # be more than enough. Even though an infinite loop should never happen, we need to
+    # guard against that.
+    
+    logMessage(2, "    collapsing chains...");
+    
+    my $count = 1;
+    my $guard = 10;
+    
+    while ( $count > 0 && --$guard > 0 )
+    {
+	$count = $dbh->do("UPDATE `$ORIG_WORK` as a 
+		JOIN `$ORIG_WORK` as b on b.taxon_no = a.orig_no
+		SET a.orig_no = b.orig_no
+		WHERE b.taxon_no <> b.orig_no");
+	
+	logMessage(2, "      updated $count rows");
+    }
+    
+    unless ( $guard )
+    {
+	logMessage(0, "WARNING: possible INFINITE LOOP in the $auth_orig table!");
+    }
+    
+    # Add an orig_no index to the table, and then activate it.
+    
+    logMessage(2, "    indexing the table...");
+    
+    $result = $dbh->do("ALTER TABLE `$ORIG_WORK` add key (orig_no)");
+    
+    activateTables($dbh, $ORIG_WORK => $auth_orig);
+    
+    # Then update the orig_no field of the authorities record, if that exists.
+    
+    my $sql = "SHOW CREATE TABLE `$auth_table`";
+    
+    my ($table_name, $table_def) = $dbh->selectrow_array($sql);
+    
+    if ( $table_def =~ /\borig_no\b/ )
+    {
+	logMessage(2, "    setting orig_no in authorities...");
+	
+	$result = $dbh->do("UPDATE $auth_table as a
+		join $auth_orig as ao using (taxon_no)
+		SET a.orig_no = ao.orig_no");
+	
+	logMessage(2, "      updated $result rows");
+    }
+    
+    $dbh->do("DO release_lock('taxa_cache_mutex')");
+    
+    if ( $mutex )
+    {
+	logMessage(2, "    released taxa_cache_mutex");
+    }
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
 # populateOrig ( dbh )
 # 
 # If there are any entries where 'orig_no' is not set, fill them in.  Also
-# update the 'refauth' field.
+# update the 'refauth' field. This subroutine is now obsolete.
 
 sub populateOrig {
 

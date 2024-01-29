@@ -40,6 +40,7 @@ $TAXON_TABLE{taxon_trees} = {
     ecotaph => 'taxon_ecotaph',
     etbasis => 'taxon_etbasis',
     images => 'taxon_pics',
+    orig => 'auth_orig',
     
     authorities => 'authorities',
     opinions => 'opinions',

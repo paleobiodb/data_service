@@ -24,9 +24,8 @@ use IntervalTables qw(loadIntervalData
 use CollectionTables qw(buildCollectionTables buildStrataTables buildLithTables);
 use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
 use SpecimenTables qw(buildSpecimenTables);
-use TaxonTables qw(populateOrig
-		   buildTaxonTables rebuildAttrsTable
-		   buildTaxaCacheTables computeGenSp);
+use TaxonTables qw(computeOrig buildTaxonTables rebuildAttrsTable
+		   buildTaxaCacheTables);
 # use TimescaleTables qw(establishTimescaleTables);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
@@ -241,13 +240,11 @@ sub BuildTables {
     
     if ( $occurrence_tables )
     {
-	populateOrig($dbh);
 	buildOccurrenceTables($dbh, $occ_options);
     }
     
     elsif ( $occurrence_reso )
     {
-	populateOrig($dbh);
 	buildTaxonSummaryTable($dbh, $occ_options);
 	rebuildAttrsTable($dbh, 'taxon_trees');
     }
@@ -264,15 +261,14 @@ sub BuildTables {
     
     if ( $taxon_tables )
     {
-	populateOrig($dbh);
 	buildTaxonTables($dbh, 'taxon_trees', $options);
     }
     
-    # If neither -t nor -T was specified, check for --orig which will just call populateOrig.
+    # If neither -t nor -T was specified, check for --orig which will just call computeOrig.
     
     elsif ( $populate_orig )
     {
-	populateOrig($dbh);
+	computeOrig($dbh);
     }
     
     # The option -y causes the "classic" taxa_tree_cache table to be computed.
