@@ -8,16 +8,18 @@
 # configuration file and other local content. You can build this preload image
 # using the command 'pbdb build preload api'.
 
-FROM perl:5.32-threaded AS paleomacro_pbapi_preload
+FROM perl:5.38-threaded AS paleomacro_pbapi_preload
 
 RUN apt-get update && \
     apt-get -y install mariadb-client && \
     cpanm DBI && \
-    cpanm DBD::mysql && \
+    cpanm DBD::MariaDB && \
     cpanm Dancer && \
     cpanm Moo && \
     cpanm namespace::clean && \
     cpanm YAML && \
+    cpanm URL::Encode && \
+    cpanm Text::Levenshtein::Damerau && \
     cpanm Template && \
     cpanm Dancer::Template::Tiny && \
     cpanm Dancer::Plugin::Database && \
