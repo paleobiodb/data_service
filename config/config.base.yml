@@ -48,7 +48,7 @@ template_toolkit:
 
 plugins:
     Database:
-      driver: 'mysql'
+      driver: 'MariaDB'
       database: 'pbdb'
       host: 'mariadb'
       port: 3306
