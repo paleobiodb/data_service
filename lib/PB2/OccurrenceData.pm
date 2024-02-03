@@ -1417,7 +1417,8 @@ sub list_occs {
     push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
+    push @filters, $request->generate_common_filters( 
+		     { occs => 'o', colls => 'cc', bare => 'o', refs => 'r' }, $tables );
     
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.
@@ -2478,7 +2479,7 @@ sub list_occs_associated {
     my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_ref_filters($tables);
+    push @filters, $request->generate_ref_filters($inner_tables);
     push @filters, $request->generate_refno_filter('o');
     push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r' }, $inner_tables );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
@@ -2547,6 +2548,28 @@ sub list_occs_associated {
 	delete $options->{min_ma};
 	delete $options->{max_ma};
 	
+	# For the 'occs/taxabyref' operation, override the default reference
+	# type. If none was explicitly specified, use 'occs'.
+	
+	if ( $record_type eq 'taxa' && ! $options->{ref_type} )
+	{
+	    $options->{ref_type} = [ 'occs' ];
+	}
+	
+	# If we have reference filters, include them in the options.
+	
+	my $ref_tables = { };
+	my @ref_filters = $request->generate_ref_filters($ref_tables);
+	push @ref_filters, $request->generate_common_filters( { refs => 'r', 
+								occs => 'ignore', 
+								taxa => 'ignore' } );
+	
+	if ( @ref_filters )
+	{
+	    $options->{ref_filters} = \@ref_filters;
+	    $options->{ref_tables} = $ref_tables;
+	}
+	
 	# If debug mode is turned on, generate a closure which will be able to output debug
 	# messages. 
 	
@@ -2577,7 +2600,6 @@ sub list_occs_associated {
 	
 	finally {
 	    $dbh->do("DROP TABLE IF EXISTS occ_list");
-	    $request->{ds}->debug_line($taxonomy->last_sql . "\n") if $request->debug;
 	};
 	
 	$request->set_result_count($taxonomy->last_rowcount) if $options->{count};
@@ -2609,14 +2631,6 @@ sub list_occs_associated {
 	
 	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
 	my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($request->tables_hash);
-	
-	# Construct another set of filter expressions to act on the references.
-	
-	my @ref_filters = $request->generate_ref_filters($request->tables_hash);
-	push @ref_filters, $request->generate_common_filters( { refs => 'r', occs => 'ignore' } );
-	push @ref_filters, "1=1" unless @ref_filters;
-	
-	my $ref_filter_string = join(' and ', @ref_filters);
 	
 	# Figure out the order in which we should return the references.  If none
 	# is selected by the options, sort by rank descending.
@@ -2696,7 +2710,6 @@ sub list_occs_associated {
 		FROM ref_collect as base
 			LEFT JOIN refs as r using (reference_no)
 			$outer_join_list
-		WHERE $ref_filter_string
 		GROUP BY base.reference_no ORDER BY $order $limit";
 	
 	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;

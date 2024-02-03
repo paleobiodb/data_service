@@ -171,7 +171,9 @@ my (%REF_OPTION) = ( ref_type => 1,
 		     ref_entered_by => 1,
 		     ref_modified_by => 1,
 		     ref_authent_by => 1,
-		     ref_touched_by => 1 );
+		     ref_touched_by => 1,
+		     ref_filters => 1,
+		     ref_tables => 1 );
 
 my (%COMMON_OPTION) = ( taxa_created_after => 1,
 			taxa_created_before => 1,
@@ -1565,7 +1567,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->exclusion_filters($base_nos);
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables);
-	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');
 	push @inner_filters, "1=1" unless @inner_filters;
 	
 	$taxon_joins = "taxa_list as list JOIN $tree_table as t using (orig_no)\n";
@@ -1863,11 +1865,11 @@ sub list_associated {
 						 count => 0 } );
     }
     
-    # If we get to this point in the code, then we were asked to return either references or taxa.
-    # We may need more than one query, depending upon the value of the 'select' parameter.  So we
-    # build all of the relevant queries and then UNION them together.  For all values of rel other
-    # than 'all_taxa', we construct the inner query based on the value of $taxon_joins computed
-    # above.
+    # If we get to this point in the code, then we were asked to return either
+    # references or taxa.  We may need more than one query, depending upon the
+    # value of the 'select' parameter.  So we collect all of the query results
+    # in a temporary table called 'ref_collect', which is then read to generate
+    # the final result.
     
     my @inner_query;
     
@@ -2177,10 +2179,7 @@ sub list_associated {
 	# push @sql_strings, $sql;
     }
     
-    # Now construct the full query using what we constructed above as a subquery.
-    
-    # my $inner_query = join("\nUNION ", @inner_query);
-    # $inner_query .= " ORDER BY NULL" if $rel eq 'all_taxa';
+    # Now read off the final result from the ref_collect table.
     
     if ( $record_type eq 'taxa' )
     {
@@ -2189,17 +2188,7 @@ sub list_associated {
 	my $fieldspec = $options->{fields} || 'REFTAXA_DATA';	
 	my @fields = $taxonomy->generate_fields($fieldspec, $outer_tables);
 	my $query_fields = join ', ', @fields;
-	
-	# If $rel is 'all_taxa', then the ref_filters have already been applied to the inner
-	# query.  Otherewise, we apply them to the outer query.
-	
-	my @outer_filters;
-	
-	push @outer_filters, $taxonomy->ref_filters($options, $outer_tables)
-	    unless $rel eq 'all_taxa';
-	push @outer_filters, "1=1" unless @outer_filters;
-	my $outer_filters = join q{ and }, @outer_filters;
-	
+		
 	croak "list_associated: the option { return => 'id' } is not compatible with 'list_reftaxa'\n"
 	    if $return_type eq 'id';
 	
@@ -2214,7 +2203,6 @@ sub list_associated {
 			LEFT JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $auth_table as a using (taxon_no)
 			$outer_joins
-		WHERE $outer_filters
 		GROUP BY base.reference_no, a.taxon_no $order_expr $limit_expr";
 	
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
@@ -2235,17 +2223,7 @@ sub list_associated {
 	my $query_fields = join ', ', @fields;
 	
 	$query_fields = 'base.reference_no' if $return_type eq 'id';
-	
-	# If $rel is 'all_taxa', then the ref_filters have already been applied to the inner
-	# query.  Otherewise, we apply them to the outer query.
-	
-	my @outer_filters;
-	
-	push @outer_filters, $taxonomy->ref_filters($options, $outer_tables)
-	    unless $rel eq 'all_taxa';
-	push @outer_filters, "1=1" unless @outer_filters;
-	my $outer_filters = join q{ and }, @outer_filters;
-	
+		
 	my $order_expr = $taxonomy->ref_order($options, $outer_tables);
 	
 	$order_expr ||= 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init, r.reference_no' unless $rel eq 'all_taxa';
@@ -2255,7 +2233,6 @@ sub list_associated {
 	
 	$sql = "SELECT $count_expr $query_fields
 		FROM ref_collect as base JOIN refs as r using (reference_no)
-		WHERE $outer_filters
 		GROUP BY reference_no $order_expr $limit_expr";
 	
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
@@ -4200,6 +4177,25 @@ sub rank_filter {
 sub ref_filters {
     
     my ($taxonomy, $options, $tables_ref) = @_;
+    
+    # If reference filters were already computed and are given as an option, use
+    # those. 
+    
+    if ( $options->{ref_filters} && ref $options->{ref_filters} eq 'ARRAY' )
+    {
+	if ( $options->{ref_tables} && ref $options->{ref_tables} eq 'HASH' )
+	{
+	    foreach my $t ( keys $options->{ref_tables}->%* )
+	    {
+		$tables_ref->{$t} = 1;
+	    }
+	}
+	
+	return $options->{ref_filters}->@*;
+    }
+    
+    # Otherwise, apply a limited set. We either need to expand these, or else
+    # use the above mechanism more widely.
     
     my @filters;
     my $dbh = $taxonomy->{dbh};
