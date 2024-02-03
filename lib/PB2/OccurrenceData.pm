@@ -1195,6 +1195,8 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_ent' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can be used to generate data archives. The easiest way to",
 	"do this is by using the download generator form.",
 	{ allow => '1.2:common:archive_params' },
