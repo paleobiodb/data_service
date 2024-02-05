@@ -41,6 +41,8 @@ sub initialize {
 	{ value => 'both' },
 	    "If this option is specified, show both the formatted reference and",
 	    "the individual fields",
+	{ value => 'authorlist' },
+	    "Show a single list of authors instead of separate fields",
 	{ value => 'comments' },
 	    "Include any additional comments associated with this reference",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
@@ -82,7 +84,7 @@ sub initialize {
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle',
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
-		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
@@ -104,25 +106,29 @@ sub initialize {
       { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', bibjson_name => 'year',
 	not_block => 'formatted', data_type => 'str' },
 	  "The year in which the document was published",
-      { output => 'r_authors', bibjson_name => 'author', if_vocab => 'bibjson' },
+      { output => 'r_author', bibjson_name => 'author', if_vocab => 'bibjson',
+	not_block => 'formatted' },
 	  "This field appears in responses generated with the BibJSON vocabulary,",
 	  "and the other author fields are suppressed.",
+      { output => 'r_author', com_name => 'aut', pbdb_name => 'author', not_vocab => 'bibjson',
+	if_block => 'authorlist', not_block => 'formatted', sub_record => '1.2:refs:author' },
+	  "This field appears in responses if the output block 'authorlist' is included.",
       { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
-	  "First initial of the first author",
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
+	  "First initial of the nth author",
       { output => 'r_al1', com_name => 'al1', pbdb_name => 'author1last', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
-	  "Last name of the second author",
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
+	  "Last name of the first author",
       { output => 'r_ai2', com_name => 'ai2', pbdb_name => 'author2init', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
 	  "First initial of the second author",
       { output => 'r_al2', com_name => 'al2', pbdb_name => 'author2last', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
 	  "Last name of the second author",
       { output => 'r_oa', com_name => 'oau', pbdb_name => 'otherauthors', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
 	  "The names of the remaining authors",
-      { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', bibjson_name => 'editor',
+      { output => 'r_editor', com_name => 'eds', pbdb_name => 'editors', bibjson_name => 'editor',
 	not_block => 'formatted' },
 	  "Names of the editors, if any",
       { output => 'r_refabbr', com_name => 'abr', pbdb_name => 'refabbr', not_block => 'formatted' },
@@ -207,6 +213,12 @@ sub initialize {
 	  tables => 'rs' },
 	{ set => '*', code => \&adjust_ref_counts });
     
+    $ds->define_block('1.2:refs:author' => 
+	{ output => 'firstname', com_name => 'firstname' },
+	{ output => 'lastname', com_name => 'lastname' },
+	{ output => 'affiliation', com_name => 'affiliation' },
+	{ output => 'ORCID', com_name => 'ORCID' });
+    
     # Then blocks for other classes to use when including one or more
     # references into other output.
     
@@ -215,7 +227,7 @@ sub initialize {
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle',
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
-		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
@@ -228,7 +240,7 @@ sub initialize {
       { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
-		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
@@ -635,7 +647,7 @@ sub auto_complete_ref {
 	SELECT r.reference_no, r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2,
 		   r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, 
 		   r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, 
-		   r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, 
+		   r.editors as r_editor, r.pubvol as r_pubvol, r.pubno as r_pubno, 
 		   r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype 
 	FROM refs as r
 	WHERE $filter_string
@@ -673,36 +685,9 @@ sub generate_ref_filters {
     my $dbh = $request->get_connection;
     my @filters;
     
-    if ( my $year = $request->clean_param('ref_pubyr') )
+    if ( my $pubyear = $request->clean_param('ref_pubyr') )
     {
-	if ( $year =~ qr{ ^ (?: max_ | \s* - \s* ) (\d\d\d\d) $ }xs )
-	{
-	    push @filters, "r.pubyr <= $1";
-	}
-	
-	elsif ( $year =~ qr{ ^ min_ (\d\d\d\d) $ }xs )
-	{
-	    push @filters, "r.pubyr >= $1";
-	}
-	
-	elsif ( $year =~ qr{ ^ (\d\d\d\d) \s* - \s* (\d\d\d\d)? $ }xs )
-	{
-	    if ( defined $2 && $2 ne '' ) {
-		push @filters, "r.pubyr between $1 and $2";
-	    } else {
-		push @filters, "r.pubyr >= $1";
-	    }
-	}
-	
-	elsif ( $year =~ qr{ ^ \d+ $ }xs )
-	{
-	    push @filters, "r.pubyr = $year";
-	}
-	
-	else
-	{
-	    die "400 invalid value '$year' for parameter 'ref_pubyr'\n";
-	}
+	push @filters, $request->generate_pubyear_filter($pubyear);
     }
     
     if ( my $authorname = $request->clean_param('ref_author') )
@@ -916,6 +901,42 @@ sub generate_refno_filter {
     }
     
     return;	# otherwise, return no filter at all
+}
+
+
+sub generate_pubyear_filter {
+    
+    my ($request, $year, $mt) = @_;
+    
+    $mt ||= 'r';
+    
+    if ( $year =~ qr{ ^ \s* (\d+) \s* $ }xs )
+    {
+	return ("$mt.pubyr = '$1'");
+    }
+    
+    elsif ( $year =~ qr{ ^ \s* - \s* (\d\d\d\d) $ }xs )
+    {
+	return ("$mt.pubyr <= '$1'");
+    }
+    
+    elsif ( $year =~ qr{ ^ (\d\d\d\d) \s* - \s* (\d\d\d\d)? $ }xs )
+    {
+	if ( defined $2 && $2 ne '' )
+	{
+	    return ("$mt.pubyr between '$1' and '$2'");
+	} 
+	
+	else 
+	{
+	    return "$mt.pubyr >= '$1'";
+	}
+    }
+    
+    else
+    {
+	die "400 invalid value '$year' for parameter 'ref_pubyr'\n";
+    }
 }
 
 
@@ -1243,57 +1264,98 @@ sub format_reference {
     
     my $markup = $request->clean_param('markrefs');
     
-    # First format the author string.  This includes stripping extra periods
-    # from initials and dealing with "et al" where it occurs.
+    my $authorstring = '';
     
-    my $ai1 = $row->{r_ai1} || '';
-    my $al1 = $row->{r_al1} || '';
+    # If we have a 'r_author' field, use that to format the author list.
     
-    #$ai1 =~ s/\.//g;
-    #$ai1 =~ s/([A-Za-z])/$1./g;
-    
-    my $auth1 = $ai1;
-    $auth1 .= ' ' if $ai1 ne '' && $al1 ne '';
-    $auth1 .= $al1;
-    
-    my $ai2 = $row->{r_ai2} || '';
-    my $al2 = $row->{r_al2} || '';
-    
-    $ai2 =~ s/\.//g;
-    $ai2 =~ s/([A-Za-z])/$1./g;
-    
-    my $auth2 = $ai2;
-    $auth2 .= ' ' if $ai2 ne '' && $al2 ne '';
-    $auth2 .= $al2;
-    
-    my $auth3 = $row->{r_oa} || '';
-    
-    $auth3 =~ s/\.//g;
-    $auth3 =~ s/\b(\w)\b/$1./g;
-    
-    # Then construct the author string
-    
-    my $authorstring = $auth1;
-    
-    if ( $auth2 =~ /et al/ )
+    if ( $row->{r_author} && ref $row->{r_author} eq 'ARRAY' &&
+	 $row->{r_author}->@* )
     {
-	$authorstring .= " $auth2";
-    }
-    elsif ( $auth2 ne '' && $auth3 ne '' )
-    {
-	$authorstring .= ", $auth2";
-	if ( $auth3 =~ /et al/ )
+	foreach my $author ( $row->{r_author}->@* )
 	{
-	    $authorstring .= " $auth3";
-	}
-	else
-	{
-	    $authorstring .= ", and $auth3";
+	    $authorstring .= ', ' if $authorstring;
+	    
+	    if ( $author->{firstname} && $author->{lastname} )
+	    {
+		$authorstring .= "$author->{firstname} $author->{lastname}";
+	    }
+	    
+	    elsif ( $author->{firstname} )
+	    {
+		$authorstring .= $author->{firstname};
+	    }
+	    
+	    elsif ( $author->{lastname} )
+	    {
+		$authorstring .= $author->{lastname};
+	    }
+	    
+	    else
+	    {
+		$authorstring =~ s/, $//;
+	    }
 	}
     }
-    elsif ( $auth2 )
+    
+    # Otherwise, format the author string using the pbdb fields.  This includes
+    # stripping extra periods from initials and dealing with "et al" where it
+    # occurs.
+    
+    else
     {
-	$authorstring .= " and $auth2";
+	my $ai1 = $row->{r_ai1} || '';
+	my $al1 = $row->{r_al1} || '';
+	
+	#$ai1 =~ s/\.//g;
+	#$ai1 =~ s/([A-Za-z])/$1./g;
+	
+	my $auth1 = $ai1;
+	$auth1 .= ' ' if $ai1 ne '' && $al1 ne '';
+	$auth1 .= $al1;
+	
+	my $ai2 = $row->{r_ai2} || '';
+	my $al2 = $row->{r_al2} || '';
+	
+	# $ai2 =~ s/\.//g;
+	# $ai2 =~ s/([A-Za-z])/$1./g;
+	
+	my $auth2 = $ai2;
+	$auth2 .= ' ' if $ai2 ne '' && $al2 ne '';
+	$auth2 .= $al2;
+	
+	my $auth3 = $row->{r_oa} || '';
+	
+	$auth3 =~ s/\.//g;
+	$auth3 =~ s/\b(\w)\b/$1./g;
+	
+	# Then construct the author string
+	
+	my $authorstring = $auth1;
+	
+	if ( $auth2 =~ /et al/ )
+	{
+	    $authorstring .= " $auth2";
+	}
+	
+	elsif ( $auth2 ne '' && $auth3 ne '' )
+	{
+	    $authorstring .= ", $auth2";
+	    
+	    if ( $auth3 =~ /et al/ )
+	    {
+		$authorstring .= " $auth3";
+	    }
+	    
+	    else
+	    {
+		$authorstring .= ", and $auth3";
+	    }
+	}
+	
+	elsif ( $auth2 )
+	{
+	    $authorstring .= " and $auth2";
+	}
     }
     
     # Now start building the reference with authorstring, publication year,
@@ -1333,7 +1395,7 @@ sub format_reference {
     }
     
     my $pubtitle = $row->{r_pubtitle} || '';
-    my $editors = $row->{r_editors} || '';
+    my $editors = $row->{r_editor} || '';
     
     if ( $pubtitle ne '' )
     {
@@ -1576,29 +1638,33 @@ sub format_bibjson {
     
     my ($request, $record) = @_;
     
-    # Construct a list of author names.
+    # Construct a list of author names, if one is not already present.
     
     my @author;
-    push @author, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
-    push @author, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
-    push @author, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
     
-    $record->{r_authors} = \@author if @author;
+    if ( $record->{r_al1} && ! $record->{r_author} )
+    {
+	push @author, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
+	push @author, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
+	push @author, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
+	
+	$record->{r_author} = \@author if @author;
+    }
     
     # Construct a list of editor names.
     
-    my @editor = bibjson_name_list($record->{r_editors}) if $record->{r_editors};
-
-    $record->{r_editors} = @editor ? \@editor : undef;
-
+    my @editor = bibjson_name_list($record->{r_editor}) if $record->{r_editor};
+    
+    $record->{r_editor} = @editor ? \@editor : undef;
+    
     # Reformat the DOI, if any.
-
+    
     $record->{r_doi} = bibjson_doi($record->{r_doi}) if $record->{r_doi};
-
+    
     # Reformat the page numbers, if any.
-
+    
     $record->{r_pages} = bibjson_pages($record->{r_fp}, $record->{r_lp});
-
+    
     # Map the publication type to one of the recognized BibJSON types, and alter other fields to
     # match. If no publication type is given, punt.
     
