@@ -18,12 +18,13 @@ use Algorithm::Diff qw(sdiff);
 use Text::Levenshtein::Damerau qw(edistance);
 # use Text::Transliterator::Unaccent;
 # use Encode;
-# use Carp qw(croak);
-# use Scalar::Util qw(reftype);
+use Carp qw(croak);
+use Scalar::Util qw(reftype);
 
 use Exporter 'import';
 
-our (@EXPORT_OK) = qw(ref_similarity get_reftitle get_pubtitle get_publisher
+our (@EXPORT_OK) = qw(ref_similarity ref_match get_reftitle get_subtitle
+		      get_pubtitle get_publisher get_volpages
 		      get_authorname get_authorlist split_authorlist parse_authorname
 		      get_pubyr get_doi title_words @SCORE_VARS);
 
@@ -458,6 +459,251 @@ sub ref_similarity {
 }
 
 
+# ref_match ( r, m, options )
+# 
+# Return a matrix of scores from 0 to 100 (stored as a hashref) that represents
+# the degree of similarity and conflict between the bibliographic reference
+# attributes specified in r and those specified in m. The second argument m
+# should contain the data from a full bibliographic record, while r should contain
+# some set of query attributes. For example, r might be the attributes of a new
+# reference to be added, or attributes fetched from an external source such as
+# crossref. The goal of this function is to determine whether m is a good match.
+# 
+# The arguments $r and $m should both be hashrefs. If a third argument is given, it should be a
+# hashref of option values.
+
+sub ref_match {
+    
+    my ($r, $m, $options) = @_;
+    
+    %DEBUG = ();
+    
+    $options ||= { };
+    
+    # First check for a DOI match. If we get one, then assume this is a correct
+    # match. Is this always a good assumption?
+    
+    if ( my ($rdoi) = get_doi($r) )
+    {
+	my @m_list = get_doi($m);
+	
+	foreach my $mdoi ( @m_list )
+	{
+	    if ( $mdoi && $rdoi eq $mdoi )
+	    {
+		return { complete_s => 500, complete_c => 0,
+			 sum_s => 500, sum_c => 0,
+			 count_s => 1, count_c => 0 };
+	    }
+	}
+    }
+    
+    # The basic idea is to compute a similarity score and a conflict score for each of the most
+    # important field values. Similarity scores are all normalized to the range 0-100, with 100
+    # being an exact similarity and 0 being no significant similarity. Conflict scores are also
+    # normalized to the same range, with 100 meaning that the two values most likely do not
+    # represent the same reference and 0 meaning no conflict. These two scores are not always
+    # inverses of one another; if a given attribute appears only in one record but not the other
+    # then both scores will usually be 0.
+    
+    # First check for a match on the work title.
+    # ------------------------------------------
+    
+    my ($title_similar, $title_conflict) = (0, 0);
+    
+    if ( my $rtitle = get_reftitle($r) )
+    {
+	$rtitle =~ s/^\s+//;
+	$rtitle =~ s/\s+$//;
+	
+	my @words_r = split /\s+/, $rtitle;
+	
+	my $mtitle = get_reftitle($m);
+	
+	my @words_m = split /\s+/, $mtitle;
+	
+	if ( @words_r > 4 && @words_m && scalar(@words_r) / scalar(@words_m) > 0.5 )
+	{
+	    ($title_similar, $title_conflict) = title_similarity($rtitle, $mtitle, 'work');
+	}
+	
+	else
+	{
+	    ($title_similar, $title_conflict) = title_match_words($rtitle, $mtitle);
+	}
+	
+	save_debug('ti', 't1');
+    }
+    
+    # Then check for an author match.
+    # -------------------------------
+    
+    my ($auth1_similar, $auth1_conflict, $auth2_similar, $auth2_conflict) = (0, 0, 0, 0);
+    
+    my @authors_r = get_authorlist($r);
+    my @authors_m = get_authorlist($m);
+    
+    if ( @authors_r && @authors_m )
+    {
+	if ( $r->{primary} )
+	{
+	    ($auth1_similar, $auth1_conflict) = author_similarity(lf($authors_r[0]), 
+								  lf($authors_m[0]));
+	    
+	    save_debug('au', 'a1');
+	    
+	    if ( @authors_r > 1 )
+	    {
+		($auth2_similar, $auth2_conflict) = match_names(lf($authors_r[1]),
+								@authors_m, 2);
+		save_debug('au', 'a2');
+	    }
+	}
+	
+	else
+	{
+	    ($auth1_similar, $auth1_conflict) = match_names(lf($authors_r[0]),
+							    @authors_m, 1);
+	    
+	    save_debug('au', 'a1');
+	    
+	    if ( @authors_r > 1 )
+	    {
+		($auth2_similar, $auth2_conflict) = match_names(lf($authors_r[1]),
+								@authors_m, 1);
+		save_debug('au', 'a2');
+	    }
+	}
+    }
+    
+    # Then compute the similarity and conflict scores for the publication years.
+    # --------------------------------------------------------------------------
+    
+    my ($pubyr_similar, $pubyr_conflict) = (0, 0);
+    
+    my $pubyr_r = get_pubyr($r);
+    my $pubyr_m = get_pubyr($m);
+    
+    if ( $pubyr_r )
+    {
+	($pubyr_similar, $pubyr_conflict) = pubyr_similarity($pubyr_r, $pubyr_m);
+    }
+    
+    # Then compute the similarity and conflict scores for the publication titles.
+    # ---------------------------------------------------------------------------
+    
+    my ($pub_r, @pub_alt_r) = get_pubtitle($r);
+    my ($pub_m, @pub_alt_m) = get_pubtitle($m);
+    
+    my ($pub_similar, $pub_conflict) = (0, 0);
+    
+    if ( $pub_r && $pub_m )
+    {
+	($pub_similar, $pub_conflict) = short_similarity($pub_r, $pub_m);
+	
+	save_debug('sh', 'pt');
+	
+	# If the publication similarity score is less than 80 and we also have
+	# one or more alternate publication titles in either record, try
+	# matching all combinations and take the highest similarity score we
+	# find.
+	
+	if ( $pub_similar < 80 && (@pub_alt_r || @pub_alt_m) )
+	{
+	    my ($multi_similar, $multi_conflict) =
+		title_multimatch( [$pub_r, @pub_alt_r], undef,
+				  [$pub_m, @pub_alt_m], undef, 'pub' );
+	    
+	    save_debug('sh', 'pa');
+	    
+	    if ( $multi_similar > $pub_similar )
+	    {
+		$pub_similar = $multi_similar;
+		$pub_conflict = $multi_conflict;
+		$DEBUG{ptmms} = 1;
+	    }
+	    
+	    else
+	    {
+		$DEBUG{ptmmf} = 1;
+	    }
+	}
+    }
+    
+    # Compute the debug string for this record, and increment the global counts.
+    
+    my @debuglist;
+    
+    foreach my $d ( sort keys %DEBUG )
+    {
+	if ( $DEBUG{$d} == 1 )
+	{
+	    push @debuglist, $d;
+	    $COUNT{$d}++;
+	}
+	
+	elsif ( $DEBUG{$d} )
+	{
+	    push @debuglist, "$d:$DEBUG{$d}";
+	    $COUNT{$d} += $DEBUG{$d} if $DEBUG{$d} > 0;
+	}
+    }
+    
+    my $debugstr = join(' ', @debuglist);
+    
+    # Compute the second-level score variables 'complete', 'count', and 'sum'.
+    # ------------------------------------------------------------------------
+    
+    my $complete_similar = 0;
+    my $count_similar = 0;
+    my $sum_similar = 0;
+    
+    foreach my $value ( $title_similar, $pub_similar, $auth1_similar, $auth2_similar,
+		        $pubyr_similar) # $vol_similar, $pages_similar, $publish_similar )
+    {
+	if ( $value )
+	{
+	    $complete_similar++ if $value == 100;
+	    $count_similar++;
+	    $sum_similar += $value;
+	}
+    }
+    
+    my $complete_conflict = 0;
+    my $count_conflict = 0;
+    my $sum_conflict = 0;
+    
+    foreach my $value ( $title_conflict, $pub_conflict, $auth1_conflict, $auth2_conflict,
+		        $pubyr_conflict) # $vol_conflict, $pages_conflict, $publish_conflict )
+    {
+	if ( $value )
+	{
+	    $complete_conflict++ if $value == 100;
+	    $count_conflict++;
+	    $sum_conflict += $value;
+	}
+    }
+    
+    # Return all of these values as a hashref.
+    # ----------------------------------------
+    
+    my $values = { complete_s => $complete_similar, complete_c => $complete_conflict,
+		   count_s => $count_similar, count_c => $count_conflict,
+		   sum_s => $sum_similar, sum_c => $sum_conflict,
+		   title_s => $title_similar, title_c => $title_conflict,
+		   pub_s => $pub_similar, pub_c => $pub_conflict,
+		   auth1_s => $auth1_similar, auth1_c => $auth1_conflict,
+		   auth2_s => $auth2_similar, auth2_c => $auth2_conflict,
+		   pubyr_s => $pubyr_similar, pubyr_c => $pubyr_conflict,
+		   # volume_s => $vol_similar, volume_c => $vol_conflict,
+		   # pages_s => $pages_similar, pages_c => $pages_conflict,
+		   # pblshr_s => $publish_similar, pblshr_c => $publish_conflict,
+		   debugstr => $debugstr };
+    
+    return $values;
+}
+
+
 sub save_debug {
     
     my ($from, $to) = @_;
@@ -686,10 +932,17 @@ sub get_authorname {
     
     my $selected;
     
+    # If we have a field 'authors', alias it to 'author'.
+    
+    if ( $r->{authors} )
+    {
+	$r->{author} = $r->{authors};
+    }
+    
     # If this is a paleobiodb record, return the first or second author name or else look through
     # otherauthors.
     
-    if ( $r->{reftitle} || $r->{pubtitle} || $r->{author1last} )
+    if ( $r->{author1last} )
     {
 	if ( $index == 1 )
 	{
@@ -770,7 +1023,7 @@ sub get_authorname {
     {
 	my @names = split_authorlist(clean_string($r->{author}));
 	
-	$selected = $names[$index];
+	$selected = $names[$index-1];
     }
 
     # If we have selected a hashref, extract the first and last components and clean them.
@@ -846,7 +1099,7 @@ sub get_authorlist {
 	
 	# Then split up otherauthors. If $index is greater than 3, skip some of the resulting
 	# entries.
-
+	
 	if ( $r->{otherauthors} )
 	{
 	    my $otherlist = clean_string($r->{otherauthors});
@@ -1097,7 +1350,7 @@ sub parse_authorname {
 
     my ($entry) = @_;
     
-    my ($last, $first, $affiliation);
+    my ($last, $first, $affiliation, $orcid);
     
     # If the selected entry is an arrayref, return the contents as-is. This is most likely to
     # happen if an arrayref of already parsed name components is passed to this routine again.
@@ -1116,10 +1369,19 @@ sub parse_authorname {
 	$last = $entry->{last} || $entry->{lastname} || $entry->{family};
 	$first = $entry->{first} || $entry->{firstname} || $entry->{given};
 	$affiliation = $entry->{affiliation} || $entry->{institution};
+	$orcid = $entry->{ORCID} || $entry->{orcid};
 	
 	if ( ref $affiliation eq 'ARRAY' )
 	{
-	    $affiliation = $affiliation->[0];
+	    if ( ref $affiliation->[0] eq 'HASH' )
+	    {
+		$affiliation = $affiliation->[0]{name};
+	    }
+	    
+	    else
+	    {
+		$affiliation = $affiliation->[0];
+	    }
 	}
 	
 	elsif ( ref $affiliation eq 'HASH' )
@@ -1129,7 +1391,7 @@ sub parse_authorname {
 	
 	if ( $last )
 	{
-	    return ($last, $first, $affiliation);
+	    return ($last, $first, $affiliation, $orcid);
 	}
 	
 	elsif ( $entry->{name} )
@@ -1252,6 +1514,31 @@ sub parse_authorname {
 }
 
 
+# lf ( name )
+# 
+# Given a list in the form [last, first, ...] return the lastname followed by
+# the first name.
+
+sub lf {
+    
+    my ($name) = @_;
+    
+    if ( ref $name eq 'ARRAY' )
+    {
+	my $last = $name->[0] || '';
+	my $first = $name->[1] || '';
+	
+	return ($last, $first);
+    }
+    
+    else
+    {
+	my ($last, $first) = parse_authorname($name);
+	return ($last, $first);
+    }
+}
+
+
 # get_volpages ( r )
 # 
 # Return the volume, number, first and last pages from $r.
@@ -1366,7 +1653,9 @@ sub get_publisher {
 
 # get_doi ( r )
 # 
-# Return the doi from $r.
+# Return the doi (or multiple dois) from $r.
+
+my $recognize_doi = qr{ (?:^|[/:]) 10[.] }x;
 
 sub get_doi {
     
@@ -1374,23 +1663,65 @@ sub get_doi {
     
     my $doi = $r->{doi} || $r->{DOI};
     
-    # If the doi is stored in URL form, strip off the protocol and hostname.
+    # If there is a field called 'doi' or 'DOI', and the value either starts
+    # with "10." or contains a slash or colon followed by "10.", then we have a
+    # good value.
     
-    if ( $doi && $doi =~ qr{ ^ \w+ [:] // [^/]+ / (.*) }xs )
+    if ( $doi && $doi =~ $recognize_doi )
     {
-	$doi = $1;
+	return clean_doi($doi);
     }
     
-    # Make sure it contains at least one / between two other characters.
+    # Otherwise, look for a field called 'identifier' that is an array.
     
-    if ( $doi && $doi =~ qr{ [^/] / [^/] }xs )
+    elsif ( ref $r->{identifier} && reftype $r->{identifier} eq 'ARRAY' )
+    {
+	my @doi_list;
+	
+	foreach my $id ( $r->{identifier}->@* )
+	{
+	    if ( $id->{type} && lc $id->{type} eq 'doi' && $id->{id} &&
+		 $id->{id} =~ $recognize_doi )
+	    {
+		push @doi_list, clean_doi($id->{id});
+	    }
+	}
+	
+	return @doi_list;
+    }
+    
+    # Otherwise, no doi was found.
+    
+    else
+    {
+	return;
+    }
+}
+
+
+sub clean_doi {
+    
+    my ($doi) = @_;
+    
+    # If the DOI starts with 10., return it unchanged.
+    
+    if ( $doi =~ /^10[.]/ )
     {
 	return $doi;
     }
-
+    
+    # Otherwise, look for /10. or :10. and strip off everything previous.
+    
+    elsif ( $doi =~ qr{ [/:] (10[.]*) }x )
+    {
+	return $1;
+    }
+    
+    # Otherwise, return it unchanged. $$$
+    
     else
     {
-	return '';
+	return $doi;
     }
 }
 
@@ -2279,6 +2610,64 @@ sub title_multimatch {
 }
 
 
+# title_match_words ( title_r, title_m )
+# 
+# Compute a fuzzy match score between title_r and title_m by matching the words
+# in title_r against title_m. The title_r parameter may contain a small subset
+# of the words in title_m.
+
+sub title_match_words {
+    
+    my ($title_r, $title_m) = @_;
+    
+    # Otherwise, start by removing HTML tags, which occasionally appear in Crossref titles.
+    
+    $title_r =~ s{ &lt; .*? &gt; | < .*? > }{}xsg;
+    $title_m =~ s{ &lt; .*? &gt; | < .*? > }{}xsg;
+
+    # Continue by removing accent marks and then splitting each title into words. Any sequence of
+    # letters and numbers counts as a word, and any sequences of other characters (punctuation and
+    # spacing) counts as a word boundary. Stopwords are also removed, since they occasionally get
+    # left out of a title by mistake.
+    
+    $title_r =~ s/\pM//g;
+    $title_m =~ s/\pM//g;
+    
+    my @words_r = grep { ! $STOPWORD{$_} } map { fc } split /[^\pL\pN]+/, $title_r;
+    my @words_m = grep { ! $STOPWORD{$_} } map { fc } split /[^\pL\pN]+/, $title_m;
+    
+    # Now scan for word matches.
+    
+    my $matches;
+    
+  WORD_R:
+    for (my $i=0; $i<scalar(@words_r); $i++)
+    {
+	for (my $j=0; $j<scalar(@words_m); $j++)
+	{
+	    if ( $words_r[$i] eq $words_m[$j] )
+	    {
+		$matches++;
+		next WORD_R;
+	    }
+	}
+    }
+    
+    # If all the words match, return a strong score.
+    
+    if ( $matches == @words_r )
+    {
+	return (100, 0);
+    }
+    
+    # Otherwise, compute the match fraction.
+    
+    my $frac = int($matches * 100 / @words_r);
+    
+    return ($frac, 100 - $frac);
+}
+
+
 # author_similarity ( last_a, first_a, last_b, first_b )
 # 
 # Compute a fuzzy match score between author names a and b, doing our best to allow for
@@ -2598,6 +2987,24 @@ sub author_similarity {
 }
 
 
+# authname_similarity ( name_a, name_b )
+# 
+# Compute a fuzzy match score between author names a and b, doing our best to
+# allow for mistyping and missing accent marks. This routine returns a list of
+# two numbers. Both names must be lists in the form [last, first] or [last,
+# first, affiliation].
+
+sub authname_similarity {
+    
+    my ($name_a, $name_b) = @_;
+    
+    croak "authname_similarity: invalid value for name_a: $name_a" unless ref $name_a eq 'ARRAY';
+    croak "authname_similarity: invalid value for name_b: $name_b" unless ref $name_b eq 'ARRAY';
+    
+    return author_similarity($name_a->[0], $name_a->[1], $name_b->[0], $name_b->[1]);
+}
+
+
 # match_names ( last, first, name... )
 # 
 # Return the best similarity score and associated conflict score for the specified last and first
@@ -2658,7 +3065,7 @@ sub match_names {
 	
 	my $straight_match = $last_init && $last_init_i &&
 			     $last_init eq $last_init_i &&
-			     $first_init eq $first_init_i;
+			     ($first_init eq $first_init_i || ! $first);
 	
 	# If the first and last initials are both present and are different, also check for a
 	# cross-match between the two names. This is necessary because East Asian names are
@@ -2672,7 +3079,7 @@ sub match_names {
 			  $last_init ne $first_init &&
 			  $last_init eq $first_init_i &&
 			  $first_init eq $last_init_i;
-
+	
 	# If we get either kind of match, run the full similarity algorithm on this pair of
 	# names. If the similarity is better than any we have found so far, select these numbers.
 	
