@@ -19,8 +19,7 @@ use CoreFunction qw(connectDB
 use ConsoleLog qw(initMessages
 		  logMessage
 		  logTimestamp);
-use IntervalTables qw(loadIntervalData
-		      buildIntervalMap);
+use IntervalTables qw(loadIntervalData buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables buildLithTables);
 use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
 use SpecimenTables qw(buildSpecimenTables);
@@ -39,7 +38,8 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 Getopt::Long::Configure("bundling");
 
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
-    $taxon_tables, $collection_tables, $occurrence_tables, $old_taxon_tables, $taxon_steps);
+    $taxon_tables, $collection_tables, $occurrence_tables, $interval_map,
+    $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
 	    "log=s" => \$opt_logfile,
@@ -49,6 +49,7 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
 	    "listcache|y" => \$old_taxon_tables,
+	    "interval-map|u" => \$interval_map,
 	    "steps|T=s" => \$taxon_steps );
 
 my $cmd_line_db_name = shift;
@@ -144,7 +145,7 @@ sub BuildTables {
     
     my $force = $options{f};
     my $interval_data = $options{I};
-    my $interval_map = $options{U};
+    # my $interval_map = $options{U};
     my $rank_map = $options{r};
     my $taxon_pics = $options{p};
     
@@ -187,7 +188,8 @@ sub BuildTables {
     
     if ( $interval_map )
     {
-	buildIntervalMap($dbh);
+	# buildIntervalMap($dbh);
+	buildIntervalBufferMap($dbh);
     }
     
     # The option -r causes the taxon rank map to be (re)generated.

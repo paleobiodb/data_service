@@ -18,8 +18,8 @@ use ConsoleLog qw(logMessage);
 
 use base 'Exporter';
 
-our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap $INTERVAL_DATA $INTERVAL_MAP
-		    );
+our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap
+		     $INTERVAL_DATA $INTERVAL_MAP);
 
 
 # Table and file names
@@ -342,16 +342,6 @@ sub buildIntervalMap {
 	ALTER TABLE $INTERVAL_MAP_WORK ADD UNIQUE KEY (range_key, scale_no)");
     
     activateTables($dbh, $INTERVAL_MAP_WORK => $INTERVAL_MAP);
-    
-    my $a = 1;		# we can stop here when debugging   
-}
-
-
-sub buildIntervalBufferMap {
-    
-    my ($dbh) = @_;
-    
-    my ($result, $sql);
     
     logMessage(2, "    setting interval buffer bounds...");
     

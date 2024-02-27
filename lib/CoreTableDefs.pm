@@ -33,6 +33,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(REFERENCE_DATA => 'refs');
 
     set_table_name(INTERVAL_DATA => 'interval_data');
+    set_table_name(SCALE_MAP => 'scale_map');
     
     set_table_name(SPECIMEN_DATA => 'specimens');
     set_table_name(SPECIMEN_MATRIX => 'spec_matrix');
