@@ -32,7 +32,7 @@ our ($UPDATE_CORRELATIONS) = 0;
 # the database name overriding what was in the configuration file.
 
 my ($opt_quiet, $opt_verbose, $opt_url, $opt_format, $opt_file,
-    $opt_dbname, $opt_debug, $opt_help);
+    $opt_dbname, $opt_force, $opt_debug, $opt_help);
 
 GetOptions("quiet|q" => \$opt_quiet,
 	   "verbose|v" => \$opt_verbose,
@@ -40,6 +40,7 @@ GetOptions("quiet|q" => \$opt_quiet,
 	   "format=s" => \$opt_format,
 	   "file|f=s" => \$opt_file,
 	   "db=s" => \$opt_dbname,
+	   "force" => \$opt_force,
 	   "help|h" => \$opt_help,
 	   "debug|D" => \$opt_debug) or die;
 
@@ -52,22 +53,37 @@ if ( $opt_help )
 }
 
 
-# The remaining arguments specify the command.
+# Do not buffer when printing to STDOUT.
 
 $|=1;
+
+# The input data and its parsed content are stored in the following globals.
+# Yes, I know that's not consistent with best coding practice.
 
 our ($FORMAT, $PARSER, $LINEEND);
 our (@FIELD_LIST, %FIELD_MAP);
 our (%INTERVAL_NAME, %INTERVAL_NUM, @ALL_INTERVALS);
 our (%SCALE_NAME, %SCALE_NUM, %SCALE_INTS, @SCALE_NUMS);
+our (%SCALE_SELECT, $DIFF_CONTAINERS);
 our (%DIFF_NAME, %DIFF_NUM, @DIFF_MISSING, @DIFF_EXTRA, @ERRORS);
+
+# The following regexes validate ages and colors respectively.
 
 our ($AGE_RE) = qr{^\d[.\d]*$};
 our ($COLOR_RE) = qr{^#[0-9A-F]{6}$};
 
+# Allowed interval types.
+
 our (%INTERVAL_TYPE) = (eon => 1, era => 1, period => 1, epoch => 1,
 			subepoch => 1, age => 1, subage => 1, zone => 1);
-			
+
+# The following scales are used in generating values for stage_no, epoch_no, etc.
+
+our ($INTERNATIONAL_SCALE) = '1';
+our ($TERTIARY_SUBEPOCHS) = '2';
+
+# The next remaining argument specifies a subcommand. If none was specified,
+# print out the help message.
 
 my ($CMD, @REST) = @ARGV;
 
@@ -77,10 +93,16 @@ if ( ! $CMD || $CMD eq 'help' )
     exit;
 }
 
+# The subcommand 'fetch' fetches the contents of the specified spreadsheet and
+# prints it to STDOUT.
+
 elsif ( $CMD eq 'fetch' )
 {
     &FetchSheet(@REST);
 }
+
+# The subcommand 'check' reads the specified contents and checks one or more
+# timescales (or all of them) for consistency.
 
 elsif ( $CMD eq 'check' )
 {
@@ -88,6 +110,10 @@ elsif ( $CMD eq 'check' )
     &CheckScales(@REST);
     &ReportErrors;
 }
+
+# The subcommand 'diff' prints out a table of differences between the specified
+# spreadsheet contents and Macrostrat, or between the spreadsheet contents and
+# the PBDB.
 
 elsif ( $CMD eq 'diff' )
 {
@@ -102,7 +128,7 @@ elsif ( $CMD eq 'diff' )
     
     elsif ( $SUBCMD eq 'pbdb' )
     {
-	&DiffPaleoBioDB(@REST);
+	&DiffPBDB('diff', @REST);
 	&ReportErrors;
     }
     
@@ -117,9 +143,21 @@ elsif ( $CMD eq 'diff' )
     }
 }
 
+# The subcommand 'update' updates the PBDB interval tables to match the contents
+# of the spreadsheet.
+
+elsif ( $CMD eq 'update' )
+{
+    shift @REST if $REST[0] eq 'pbdb';
+    
+    &ReadSheet;
+    &DiffPBDB('update', @REST) if @ERRORS == 0 || $opt_force;
+    &ReportErrors;
+}
+
 else
 {
-    die "Invalid command '$CMD'\n";
+    die "Invalid subcommand '$CMD'\n";
 }
 
 
@@ -329,30 +367,10 @@ sub ReadSheet {
 	    }
 	}
 	
-	if ( my $other = $record->{other_names} )
-	{
-	    my @names = split /\s*,\s*/, $other;
-	    
-	    foreach my $n ( @names )
-	    {
-		if ( $INTERVAL_NAME{$n} )
-		{
-		    my $prevline = $INTERVAL_NAME{$n}{line_no};
-		    push @ERRORS, "at line $line_no, '$n' inconsistent with line $prevline";
-		    next;
-		}
-		
-		else
-		{
-		    $INTERVAL_NAME{$n} = $record;
-		}
-	    }
-	}
-	
 	unless ( $SCALE_NUM{$scale_no} )
 	{
 	    $SCALE_NUM{$scale_no} = { scale_no => $scale_no, 
-				      scale_name => $record->{scale_name},
+				      scale_name => $scale_name,
 				      line_no => $line_no };
 	    
 	    push @SCALE_NUMS, $scale_no;
@@ -361,8 +379,8 @@ sub ReadSheet {
 	unless ( $SCALE_NAME{$scale_name} )
 	{
 	    $SCALE_NAME{$scale_name} = { scale_no => $scale_no,
-					 scale_name => $record->{scale_name},
-					 line_no => $line_no };
+					   scale_name => $scale_name,
+					   line_no => $line_no };
 	}
 	
 	if ( $scale_no ne $SCALE_NAME{$scale_name}{scale_no} )
@@ -550,39 +568,62 @@ sub ReportErrors {
 
 sub CheckScales {
     
-    my (@scales) = @_;
+    my (@args) = @_;
     
-    my $checked = 0;
-    
-    foreach my $arg ( @scales )
+    foreach my $t ( @args )
     {
-	if ( $SCALE_INTS{$arg} )
+	if ( $t eq 'all' )
 	{
-	    &CheckOneScale($arg);
-	    $checked++;
+	    $SCALE_SELECT{all} = 1;
 	}
 	
-	elsif ( $SCALE_NAME{$arg} )
+	elsif ( $SCALE_NUM{$t} )
 	{
-	    my $scale_no = $SCALE_NAME{$arg}{scale_no};
-	    &CheckOneScale($scale_no);
-	    $checked++;
+	    $SCALE_SELECT{$t} = 1;
 	}
 	
-	elsif ( $arg eq 'all' )
+	elsif ( $t =~ /[a-z]/ )
 	{
-	    my @scales = sort { $a->{scale_no} <=> $b->{scale_no} } values %SCALE_NUM;
+	    my $re = qr{(?i)$t};
+	    my $found;
 	    
-	    foreach my $s ( @scales )
+	    foreach my $s ( @SCALE_NUMS )
 	    {
-		&CheckOneScale($s->{scale_no});
-		$checked++;
+		if ( $SCALE_NUM{$s}{scale_name} =~ $re )
+		{
+		    $SCALE_SELECT{$s} = 1;
+		    $found++;
+		}
 	    }
+	    
+	    warn "Unrecognized timescale '$t'\n" unless $found;
 	}
 	
 	else
 	{
-	    warn "Unrecognized scale '$arg'\n";
+	    warn "Unrecognized timescale '$t'\n";
+	}
+    }
+    
+    return unless %SCALE_SELECT;
+    
+    foreach my $scale_no ( @SCALE_NUMS )
+    {
+	if ( $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no} )
+	{
+	    my $errors = &CheckOneScale($scale_no);
+	    
+	    my $name = $SCALE_NUM{$scale_no}{scale_name};
+	    
+	    if ( $errors )
+	    {
+		say STDERR "Timescale '$name' had $errors ERRORS";
+	    }
+	    
+	    else
+	    {
+		say STDERR "Timescale '$name' passes all checks";
+	    }
 	}
     }
 }
@@ -599,13 +640,14 @@ sub CheckOneScale {
     {
 	my $line = $i->{line_no};
 	my $name = $i->{interval_name};
+	my $action = $i->{action};
 	
-	if ( $i->{action} eq 'REMOVE' )
+	if ( $action =~ /^REMOVE/ )
 	{
 	    next;
 	}
 	
-	elsif ( $i->{action} =~ /^COALESCE (.*)/ )
+	elsif ( $action =~ /^COALESCE (\w.*)/ )
 	{
 	    my $coalesce = $1;
 	    
@@ -618,7 +660,7 @@ sub CheckOneScale {
 	    elsif ( $INTERVAL_NAME{$coalesce} )
 	    {
 		push @errors, "at line $line, cannot coalesce with an interval to be removed"
-		    if $INTERVAL_NAME{$coalesce}{action} =~ /^REM|^COA/;
+		    if $INTERVAL_NAME{$coalesce}{action} =~ /^REMOVE|^COALESCE/;
 	    }
 	    
 	    else
@@ -627,14 +669,19 @@ sub CheckOneScale {
 	    }
 	}
 	
-	my $top = TopAge($i);
+	elsif ( $action && $action !~ /^RENAME/ )
+	{
+	    push @errors, "at line $line, invalid action '$action'";
+	}
+	
+	my $top = $i->{t_age} = TopAge($i);
 	
 	unless ( $top =~ $AGE_RE )
 	{
 	    push @errors, "at line $line, interval '$name': $top";
 	}
 	
-	my $base = BaseAge($i);
+	my $base = $i->{b_age} = BaseAge($i);
 	
 	unless ( $base =~ $AGE_RE )
 	{
@@ -673,13 +720,12 @@ sub CheckOneScale {
     if ( @errors )
     {
 	push @ERRORS, @errors;
-	my $count = scalar(@errors);
-	say STDERR "Timescale '$name' had $count ERRORS";
+	return scalar(@errors);
     }
     
     else
     {
-	say STDERR "Timescale '$name' passes all checks";
+	return;
     }
 }
 
@@ -874,6 +920,14 @@ sub BaseAgeRef {
 }
 
 
+sub IntervalName {
+    
+    my ($interval_no) = @_;
+    
+    return $INTERVAL_NUM{$interval_no} && $INTERVAL_NUM{$interval_no}{interval_name};
+}
+
+
 sub DiffMacrostrat {
     
     my ($timescale, @rest) = @_;
@@ -910,6 +964,7 @@ sub DiffMacrostrat {
 	    my ($b_interval, $b_which) = BaseAgeRef($interval);
 	    my $type = $interval->{type};
 	    my $color = $interval->{color};
+	    my $abbrev = $interval->{abbrev};
 	    
 	    $matched_interval{$interval_no}++;
 	    $matched_scale{$scale_no}++;
@@ -922,6 +977,11 @@ sub DiffMacrostrat {
 	    if ( $m->{color} && $color ne $m->{color} )
 	    {
 		$DIFF_NAME{$name}{color} = $m->{color};
+	    }
+	    
+	    if ( $m->{abbrev} && $abbrev ne $m->{abbrev} )
+	    {
+		$DIFF_NAME{$name}{abbrev} = $m->{abbrev};
 	    }
 	    
 	    if ( $interval->{action} eq 'REMOVE' )
@@ -1158,7 +1218,7 @@ sub FetchMacrostratIntervals {
 }
 
 
-# DiffPaleoBioDB ( timescale... )
+# DiffPBDB ( timescale... )
 # 
 # Compare the data in the interval spreadsheet with the corresponding interval
 # definitions stored in the Paleobiology Database. Print out a list of all
@@ -1166,14 +1226,13 @@ sub FetchMacrostratIntervals {
 # given. This function is only available if this program is run in the directory
 # which contains the source code for the Paleobiology Database API.
 
-sub DiffPaleoBioDB {
+sub DiffPBDB {
     
-    my (@timescales) = @_;
+    my ($CMD, @args) = @_;
     
-    # First check to make sure we have the necessary PBDB API libraries
-    # available. We do this at runtime rather than at compile time so that the
-    # other functions of this program can be run in environments where they are
-    # not available.
+    # First make sure we have the necessary PBDB API libraries available. We do
+    # this at runtime rather than at compile time so that the other functions of
+    # this program can be run in environments where they are not available.
     
     use lib './lib';
     require "CoreFunction.pm";
@@ -1186,23 +1245,33 @@ sub DiffPaleoBioDB {
     
     # Select intervals contained in any of the specified timescales.
     
-    my (%scale_select, $all_scales);
-    
-    foreach my $t ( @timescales )
+    foreach my $t ( @args )
     {
 	if ( $t eq 'all' )
 	{
-	    $all_scales = 1;
+	    $SCALE_SELECT{all} = 1;
 	}
 	
 	elsif ( $SCALE_INTS{$t} )
 	{
-	    $scale_select{$t} = 1;
+	    $SCALE_SELECT{$t} = 1;
 	}
 	
-	elsif ( $SCALE_NAME{$t} )
+	elsif ( $t =~ /[a-z]/ )
 	{
-	    $scale_select{$SCALE_NAME{$t}{scale_no}} = 1;
+	    my $re = qr{(?i)$t};
+	    my $found;
+	    
+	    foreach my $s ( @SCALE_NUMS )
+	    {
+		if ( $SCALE_NUM{$s}{scale_name} =~ $re )
+		{
+		    $SCALE_SELECT{$s} = 1;
+		    $found++;
+		}
+	    }
+	    
+	    warn "Unrecognized timescale '$t'\n" unless $found;
 	}
 	
 	else
@@ -1211,27 +1280,31 @@ sub DiffPaleoBioDB {
 	}
     }
     
-    return unless $all_scales || %scale_select;
+    return unless %SCALE_SELECT;
     
-    # Check all selected scales, and abort if any errors are found.
+    # Check all selected scales, and compute the top and bottom ages. Do this
+    # for the International scale as well, because it is used in the definitions
+    # of so many other scales.
     
     foreach my $scale_no ( @SCALE_NUMS )
     {
-	if ( $all_scales || $scale_select{$scale_no} )
+	if ( $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no} || $scale_no eq $INTERNATIONAL_SCALE )
 	{
 	    &CheckOneScale($scale_no);
 	}
     }
     
-    return if @ERRORS;
+    # If any errors were found, abort unless the 'force' option was given.
     
-    # If we are checking all scales, fetch a hash of all the intervals known to
+    return if @ERRORS && ! $opt_force;
+    
+    # If we are diffing all scales, fetch a hash of all the intervals known to
     # the PBDB by interval_no. This allows us to make sure that no interval is
     # being left out.
     
     my $remaining = { };
     
-    if ( $all_scales )
+    if ( $SCALE_SELECT{all} )
     {
 	$remaining = FetchPBDBNums($dbh);
     }
@@ -1244,62 +1317,41 @@ sub DiffPaleoBioDB {
     {
 	my $scale_no = $i->{scale_no};
 	
-	next unless $all_scales || $scale_select{$scale_no};
+	next unless $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no};
 	
 	my $interval_no = $i->{interval_no};
 	my $line_no = $i->{line_no};
 	my $name = $i->{interval_name};
+	my $t_age = $i->{t_age};
+	my $b_age = $i->{b_age};
 	my $type = $i->{type};
 	my $color = $i->{color};
 	my $reference_no = $i->{reference_no};
 	
-	my ($t_interval, $t_which) = TopAgeRef($i);
-	my ($b_interval, $b_which) = BaseAgeRef($i);
-	
-	my ($t_age, $b_age);
-	
-	if ( ref $t_interval )
-	{
-	    $t_age = $t_interval->{$t_which};
-	}
-	
-	else
-	{
-	    push @ERRORS, "at line $line_no, $t_interval";
-	}
-	
-	if ( ref $b_interval )
-	{
-	    $b_age = $b_interval->{$b_which};
-	}
-	
-	else
-	{
-	    push @ERRORS, "at line $line_no, $b_interval";
-	}
+	&ComputeContainers($i, $scale_no);
 	
 	if ( my $p = FetchPBDBInterval($dbh, $interval_no, $scale_no) )
 	{
 	    if ( $type ne $p->{type} )
 	    {
-		$DIFF_NUM{$interval_no}{type} = $type;
+		$DIFF_NUM{$scale_no}{$interval_no}{type} = $type;
 	    }
 	    
 	    if ( $color ne $p->{color} )
 	    {
-		$DIFF_NUM{$interval_no}{color} = $color;
+		$DIFF_NUM{$scale_no}{$interval_no}{color} = $color;
 	    }
 	    
 	    if ( $reference_no ne $p->{reference_no} )
 	    {
-		$DIFF_NUM{$interval_no}{reference_no} = $reference_no;
+		$DIFF_NUM{$scale_no}{$interval_no}{reference_no} = $reference_no;
 	    }
 	    
 	    if ( $name ne $p->{interval_name} )
 	    {
 		if ( $i->{action} eq 'RENAME' )
 		{
-		    $DIFF_NUM{$interval_no}{action} = 'RENAME';
+		    $DIFF_NUM{$scale_no}{$interval_no}{action} = 'RENAME';
 		}
 		
 		else
@@ -1309,35 +1361,76 @@ sub DiffPaleoBioDB {
 		}
 	    }
 	    
-	    if ( $i->{action} eq 'REMOVE' )
+	    if ( $i->{action} =~ /^REMOVE|^COALESCE/ )
 	    {
-		$DIFF_NUM{$interval_no}{action} = 'REMOVE';
+		$DIFF_NUM{$scale_no}{$interval_no}{action} = $i->{action};
+		
+		delete $remaining->{$interval_no};
+		next;
 	    }
 	    
-	    if ( $t_age ne $p->{late_age} )
+	    if ( $t_age + 0 != $p->{t_age} + 0 )
 	    {
-		$DIFF_NUM{$interval_no}{t_age} = $t_age;
+		$DIFF_NUM{$scale_no}{$interval_no}{t_type} = $i->{t_type};
+		$DIFF_NUM{$scale_no}{$interval_no}{top} = $t_age;
 	    }
 	    
-	    if ( $b_age ne $p->{early_age} )
+	    if ( $b_age + 0 != $p->{b_age} + 0 )
 	    {
-		$DIFF_NUM{$interval_no}{b_age} = $b_age;
+		$DIFF_NUM{$scale_no}{$interval_no}{b_type} = $i->{b_type};
+		$DIFF_NUM{$scale_no}{$interval_no}{base} = $b_age;
 	    }
 	    
-	    # Remove this interval from the %remaining hash.
+	    if ( $i->{stage} ne IntervalName($p->{stage_no}) )
+	    {
+		$DIFF_NUM{$scale_no}{$interval_no}{stage} = $i->{stage} || 'none';
+		$DIFF_CONTAINERS = 1;
+	    }
+	    
+	    if ( $i->{subepoch} ne IntervalName($p->{subepoch_no}) )
+	    {
+		$DIFF_NUM{$scale_no}{$interval_no}{subepoch} = $i->{subepoch} || 'none';
+		$DIFF_CONTAINERS = 1;
+	    }
+	    
+	    if ( $i->{epoch} ne IntervalName($p->{epoch_no}) )
+	    {
+		$DIFF_NUM{$scale_no}{$interval_no}{epoch} = $i->{epoch} || 'none';
+		$DIFF_CONTAINERS = 1;
+	    }
+	    
+	    if ( $i->{period} ne IntervalName($p->{period_no}) )
+	    {
+		$DIFF_NUM{$scale_no}{$interval_no}{period} = $i->{period} || 'none';
+		$DIFF_CONTAINERS = 1;
+	    }
+	    
+	    if ( $scale_no eq $INTERNATIONAL_SCALE &&
+		 $i->{parent} ne IntervalName($p->{parent_no}) )
+	    {
+		$DIFF_NUM{$scale_no}{$interval_no}{parent} = $i->{parent} || 'none';
+	    }
+	    
+	    # Remove this interval from the $remaining hash.
 	    
 	    delete $remaining->{$interval_no};
 	}
 	
-	elsif ( $i->{action} ne 'REMOVE' )
+	elsif ( $i->{action} =~ /^REMOVE|^COALESCE/ )
 	{
 	    my $diff = { interval_no => $interval_no,
 			 interval_name => $name,
 			 type => $type,
 			 color => $color,
 			 reference_no => $reference_no,
-			 t_age => $t_age,
-			 b_age => $b_age };
+			 top => $t_age,
+			 base => $b_age };
+	    
+	    $diff->{stage} = $i->{stage} if $i->{stage};
+	    $diff->{subepoch} = $i->{subepoch} if $i->{subepoch};
+	    $diff->{epoch} = $i->{epoch} if $i->{epoch};
+	    $diff->{period} = $i->{period} if $i->{period};
+	    $diff->{parent} = $i->{parent} if $i->{parent};
 	    
 	    push @DIFF_EXTRA, $diff;
 	}
@@ -1354,7 +1447,118 @@ sub DiffPaleoBioDB {
 	}
     }
     
-    return if @ERRORS;
+    # Abort if any errors were found. They must be fixed before a valid diff can
+    # be produced.
+    
+    return if @ERRORS && ! $opt_force;
+    
+    # If the command is 'diff', print out a table of differences.
+    
+    if ( $CMD eq 'diff' )
+    {
+	&PrintDifferences;
+    }
+    
+    # If the command is 'update', actually update the PBDB.
+    
+    elsif ( $CMD eq 'update' )
+    {
+	&ApplyDifferences;
+    }
+}
+
+
+# ComputeContainers ( interval, scale_no )
+# 
+# Compute the containing intervals for the given interval, from the
+# International scale and the Tertiary subepochs. For intervals in the
+# international scale, compute the immediate parent.
+
+sub ComputeContainers {
+    
+    my ($i, $scale_no) = @_;
+    
+    # Run through all the intervals from the international scale, looking for
+    # those that contain interval $i.
+    
+    foreach my $c ( $SCALE_INTS{$INTERNATIONAL_SCALE}->@* )
+    {
+	last if $c->{t_age} > $i->{b_age};
+	
+	if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+	{
+	    if ( $c->{type} eq 'eon' )
+	    {
+		if ( $i->{scale_no} eq $INTERNATIONAL_SCALE && $i->{type} eq 'era' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }
+	    
+	    elsif ( $c->{type} eq 'era' )
+	    {
+		if ( $i->{scale_no} eq $INTERNATIONAL_SCALE && $i->{type} eq 'period' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }	    
+	    
+	    elsif ( $c->{type} eq 'period' )
+	    {
+		$i->{period} = $c->{interval_name};
+		
+		if ( $i->{scale_no} eq $INTERNATIONAL_SCALE && $i->{type} eq 'epoch' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }
+	    
+	    elsif ( $c->{type} eq 'epoch' )
+	    {
+		$i->{epoch} = $c->{interval_name};
+		
+		if ( $i->{scale_no} eq $INTERNATIONAL_SCALE && $i->{type} eq 'age' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }
+	    
+	    elsif ( $c->{type} eq 'age' )
+	    {
+		if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+		{
+		    $i->{stage} = $c->{interval_name};
+		}
+	    }
+	}
+    }
+    
+    # Then run through the Tertiary subepochs.
+    
+    foreach my $c ( $SCALE_INTS{$TERTIARY_SUBEPOCHS}->@* )
+    {
+	last if $c->{t_age} > $i->{b_age};
+	
+	if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+	{
+	    if ( $c->{type} eq 'subepoch' )
+	    {
+		$i->{subepoch} = $c->{interval_name};
+	    }
+	}
+    }
+}
+
+
+# PrintDifferences ( )
+# 
+# Print out the differences that were computed by &DiffPBDB between the
+# spreadsheet and the PBDB interval tables. Print a table of differences to
+# STDOUT, in the same format (CSV or TSV) as the input data.
+
+sub PrintDifferences {
+    
+    # If we have generated any differences in containing intervals, 
     
     if ( %DIFF_NUM || @DIFF_MISSING || @DIFF_EXTRA )
     {
@@ -1366,22 +1570,23 @@ sub DiffPaleoBioDB {
 	say STDERR "No differences between this spreadsheet and the PBDB";
     }
     
-    if ( %DIFF_NAME )
+    if ( %DIFF_NUM )
     {
 	say "\nDifferences from PBDB:\n";
 	
 	foreach my $i ( @ALL_INTERVALS )
 	{
+	    my $scale_no = $i->{scale_no};
 	    my $interval_no = $i->{interval_no};
 	    
-	    if ( $DIFF_NUM{$interval_no} )
+	    if ( $DIFF_NUM{$scale_no}{$interval_no} )
 	    {
-		$DIFF_NUM{$interval_no}{interval_no} = $interval_no;
-		$DIFF_NUM{$interval_no}{interval_name} = $i->{interval_name};
-		$DIFF_NUM{$interval_no}{scale_no} = $i->{scale_no};
-		$DIFF_NUM{$interval_no}{scale_name} = $i->{scale_name};
+		$DIFF_NUM{$scale_no}{$interval_no}{interval_no} = $interval_no;
+		$DIFF_NUM{$scale_no}{$interval_no}{interval_name} = $i->{interval_name};
+		$DIFF_NUM{$scale_no}{$interval_no}{scale_no} = $i->{scale_no};
+		$DIFF_NUM{$scale_no}{$interval_no}{scale_name} = $i->{scale_name};
 		
-		print RecordToLine($DIFF_NUM{$interval_no}, \@FIELD_LIST);
+		print RecordToLine($DIFF_NUM{$scale_no}{$interval_no}, \@FIELD_LIST);
 	    }
 	}
     }
@@ -1408,6 +1613,23 @@ sub DiffPaleoBioDB {
 }
 
 
+# ApplyDifferences ( )
+# 
+# Apply the differences that were computed by &DiffPBDB to the PBDB interval
+# tables. The tables 'interval_data', 'scale_map', 'intervals', and
+# 'interval_lookup' will be updated to match the spreadsheet. The scale_map
+# table is the most difficult. For each updated scale, a new set of scale_map
+# records is computed. If the sequence has changed, 
+
+sub ApplyDifferences {
+    
+    
+    
+    
+    
+}
+
+
 # FetchPBDBInterval ( dbh, interval_no, scale_no )
 # 
 # Given an interval_no and scale_no, fetch the corresponding PBDB interval
@@ -1422,9 +1644,12 @@ sub FetchPBDBInterval {
     my $qs = $dbh->quote($scale_no);
     
     my $sql = "SELECT i.interval_no, interval_name, abbrev, type, early_age as b_age,
-		    late_age as t_age, scale_no, parent_no, color
-		FROM $TableDefs::TABLE{INTERVAL_DATA} as i left join $TableDefs::TABLE{SCALE_MAP} as sm 
-		    on sm.interval_no = i.interval_no and sm.scale_no = $qs
+		    late_age as t_age, reference_no, scale_no, parent_no, color,
+		    stage_no, subepoch_no, epoch_no, period_no
+		FROM $TableDefs::TABLE{INTERVAL_DATA} as i
+		    left join interval_lookup using (interval_no)
+		    left join $TableDefs::TABLE{SCALE_MAP} as sm 
+		        on sm.interval_no = i.interval_no and sm.scale_no = $qs
 		WHERE i.interval_no = $qi";
     
     my $result = $dbh->selectrow_hashref($sql, { Slice => { } });
@@ -1453,6 +1678,31 @@ sub FetchPBDBNums {
     }
     
     return \%result;
+}
+
+
+# FetchPBDBSequences ( dbh )
+# 
+# Return a hashref of PBDB scale numbers and interval sequences. Each hash value
+# will be a list of interval numbers, in the order they appear in the database.
+
+sub FetchPBDBSequences {
+    
+    my ($dbh) = @_;
+    
+    my $sql = "SELECT scale_no, interval_no FROM $TableDefs::TABLE{SCALE_MAP}";
+    
+    my @ints = $dbh->selectall_array($sql, { Slice => { } });
+    
+    my %sequence;
+    
+    foreach my $i ( @ints )
+    {
+	$sequence{$i->{scale_no}} ||= [ ];
+	push $sequence{$i->{scale_no}}->@*, $i->{interval_no};
+    }
+    
+    return \%sequence;
 }
 
 
