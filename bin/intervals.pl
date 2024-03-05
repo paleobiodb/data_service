@@ -21,12 +21,16 @@ use feature 'fc';
 our ($MACROSTRAT_INTERVALS) = "https://macrostrat.org/api/defs/intervals";
 our ($MACROSTRAT_TIMESCALES) = "https://macrostrat.org/api/defs/timescales";
 
-our ($UPDATE_INTERVALS) = 0;
-our ($UPDATE_INTERVAL_LOOKUP) = 0;
-our ($UPDATE_INTERVAL_DATA) = 0;
-our ($UPDATE_SCALE_MAP) = 0;
-our ($UPDATE_CORRELATIONS) = 0;
+our ($AUTHORIZER_NO) = 185;	# All created and modified records are credited to
+                                # Michael McClennen, unless this is changed.
 
+our ($DBNAME);
+our ($CREATE_INTERVALS) = 0;
+our ($REMOVE_INTERVALS) = 0;
+our ($UPDATE_INTERVALS) = 0;
+our ($CREATE_SCALES) = 0;
+our ($REMOVE_SCALES) = 0;
+our ($UPDATE_SCALES) = 0;
 
 # The input data and its parsed content are stored in the following globals.
 # Yes, I know that's not consistent with best coding practice.
@@ -34,9 +38,12 @@ our ($UPDATE_CORRELATIONS) = 0;
 our ($FORMAT, $PARSER, $LINEEND);
 our (@FIELD_LIST, %FIELD_MAP);
 our (%INTERVAL_NAME, %INTERVAL_NUM, @ALL_INTERVALS);
-our (%SCALE_NAME, %SCALE_NUM, %SCALE_INTS, @SCALE_NUMS);
-our (%SCALE_SELECT, $DIFF_CONTAINERS);
-our (%DIFF_NAME, %DIFF_NUM, @DIFF_MISSING, @DIFF_EXTRA, @ERRORS);
+our (%SCALE_NAME, %SCALE_NUM, %SCALE_INTS, @SCALE_NUMS, %SCALE_SELECT);
+our (%DIFF_NAME, %DIFF_INT, @DIFF_MISSING, @DIFF_EXTRA);
+our (%DIFF_SCALE, @DIFF_MISSING_SCALES);
+our ($HAS_COLOR, $HAS_LOCALITY, $HAS_REFNO);
+our ($UPDATE_COUNT, $CREATE_COUNT, $REMOVE_COUNT);
+our (@ERRORS);
 
 # The following regexes validate ages and colors respectively.
 
@@ -77,6 +84,8 @@ GetOptions("quiet|q" => \$opt_quiet,
 # The first remaining argument specifies a subcommand.
 
 my ($CMD, @REST) = @ARGV;
+
+my $DBNAME;
 
 # If --help was specified, display the help message.
 
@@ -153,13 +162,21 @@ elsif ( $CMD eq 'diff' )
     
     elsif ( $SUBCMD eq 'pbdb' )
     {
-	&DiffPBDB('diff', @REST);
+	$DBNAME = $opt_dbname || 'pbdb';
+	&DiffPBDB('diff', $DBNAME, @REST);
+	&ReportErrors;
+    }
+    
+    elsif ( $SUBCMD eq 'test' )
+    {
+	$DBNAME = $opt_dbname || 'test';
+	&DiffPBDB('diff', $DBNAME, @REST);
 	&ReportErrors;
     }
     
     elsif ( ! $SUBCMD )
     {
-	die "You must specify either 'macrostrat' or 'pbdb'\n";
+	die "You must specify either 'macrostrat', 'pbdb', or 'test'\n";
     }
     
     else
@@ -168,16 +185,73 @@ elsif ( $CMD eq 'diff' )
     }
 }
 
-# The subcommand 'update' updates the PBDB interval tables to match the contents
-# of the spreadsheet.
+# The subcommand 'update' updates the PBDB interval tables to match the contents of the
+# spreadsheet. The subcommand 'debug' prints out the SQL statements that would be used
+# to perform this update.
 
-elsif ( $CMD eq 'update' )
+elsif ( $CMD eq 'update' || $CMD eq 'debug' )
 {
-    shift @REST if $REST[0] eq 'pbdb';
-    
+    my $SUBCMD = shift @REST;
     &ReadSheet;
-    &DiffPBDB('update', @REST) if @ERRORS == 0 || $opt_force;
-    &ReportErrors;
+    
+    $opt_debug = 1 if $CMD eq 'debug';
+    
+    if ( $SUBCMD eq 'pbdb' )
+    {
+	$DBNAME = $opt_dbname || 'pbdb';
+	&DiffPBDB('update', @REST) if @ERRORS == 0 || $opt_force;
+	&ReportErrors;
+    }
+    
+    elsif ( $SUBCMD eq 'test' )
+    {
+	$DBNAME = $opt_dbname || 'test';
+	&DiffPBDB('update', @REST) if @ERRORS == 0 || $opt_force;
+	&ReportErrors;
+    }
+    
+    elsif ( ! $SUBCMD )
+    {
+	die "You must specify either 'pbdb' or 'test'\n";
+    }
+    
+    else
+    {
+	die "Invalid subcommand '$SUBCMD'\n";
+    }
+}
+
+# The subcommand 'backup' creates backup tables for the PBDB interval tables. The
+# subcommand 'restore' restores the tables to match the contents of the backup tables.
+# The subcommand 'ints' synchronizes the 'intervals' table with the 'interval_data' table.
+
+elsif ( $CMD eq 'backup' || $CMD eq 'restore' || $CMD eq 'ints' )
+{
+    my $SUBCMD = shift @REST;
+    
+    if ( $SUBCMD eq 'pbdb' )
+    {
+	$DBNAME = $opt_dbname || 'pbdb';
+	&PBDBCmd($CMD, $DBNAME, @REST);
+	&ReportErrors;
+    }
+    
+    elsif ( $SUBCMD eq 'test' )
+    {
+	$DBNAME = $opt_dbname || 'test';
+	&PBDBCmd($CMD, $DBNAME, @REST);
+	&ReportErrors;
+    }
+    
+    elsif ( ! $SUBCMD )
+    {
+	die "You must specify either 'pbdb' or 'test'\n";
+    }
+    
+    else
+    {
+	die "Invalid subcommand '$SUBCMD'\n";
+    }
 }
 
 else
@@ -228,7 +302,7 @@ sub FetchSheet {
 # or from STDIN. Put the data into a structure that can be used for checking and
 # updating. Check the data for self consistency, as follows:
 # 
-# 1. Every scale name must be associated with a unique scale number.
+# 1. Every scale name must be associated with a single scale number.
 # 2. Every interval name must be associated with a unique interval number, and vice versa.
 # 3. Every interval must have exactly one definition, and may be used zero or
 #    more times in other scales.
@@ -343,14 +417,18 @@ sub ReadSheet {
 		{
 		    $SCALE_NUM{$scale_no}{type} = $record->{type} 
 			if $record->{type};
+		    $SCALE_NUM{$scale_no}{color} = $record->{color}
+			if $record->{color};
 		    $SCALE_NUM{$scale_no}{reference_no} = $record->{reference_no} 
 			if $record->{reference_no};
+		    $SCALE_NUM{$scale_no}{action} = $record->{action}
+			if $record->{action};
 		}
 	    }
 	    
 	    # If we have encountered this scale name before, it is an error if it now has
 	    # a different scale number. It is okay for the same number to be used with
-	    # different names, but each name must have a unique number.
+	    # different names, but each name must have a single number.
 	    
 	    if ( $SCALE_NAME{$scale_name} )
 	    {
@@ -642,7 +720,7 @@ sub RecordToLine {
     foreach my $i ( 0..$#fields )
     {
 	my $field = $fields[$i] || next;
-	$values[$i] = $record->{$field} || '';
+	$values[$i] = $record->{$field} // '';
 	
 	if ( $values[$i] =~ /"/ )
 	{
@@ -1774,7 +1852,7 @@ sub FetchMacrostratIntervals {
 
 sub DiffPBDB {
     
-    my ($CMD, @args) = @_;
+    my ($cmd, $dbname, @args) = @_;
     
     # First make sure we have the necessary PBDB API libraries available. We do
     # this at runtime rather than at compile time so that the other functions of
@@ -1787,7 +1865,14 @@ sub DiffPBDB {
     TableDefs->import('%TABLE');
     require "CoreTableDefs.pm";
     
-    my $dbh = connectDB("config.yml", $opt_dbname || 'pbdb');
+    my $dbh = connectDB("config.yml", $dbname);
+    
+    # If the command was 'ints', just synchronize the intervals table with interval_data.
+    
+    if ( $CMD eq 'ints' )
+    {
+	return SyncIntervalsTable($dbh);
+    }
     
     # Select intervals contained in any of the specified timescales.
     
@@ -1828,15 +1913,16 @@ sub DiffPBDB {
     
     return unless %SCALE_SELECT;
     
-    # Check all selected scales, and compute the top and bottom ages. Do this
-    # for the International scale as well, because it is used in the definitions
-    # of so many other scales.
+    # Check all selected scales, and compute the top and bottom ages. Do this for the
+    # International scale and the tertiary subepochs as well, because those two are used
+    # to compute containing intervals for other scales.
     
     foreach my $scale_no ( @SCALE_NUMS )
     {
-	if ( $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no} || $scale_no eq $INTL_SCALE )
+	if ( $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no} || 
+	     $scale_no eq $INTL_SCALE || $scale_no eq $TERT_SUBEPOCHS )
 	{
-	    &CheckOneScale($scale_no);
+	    CheckOneScale($scale_no);
 	}
     }
     
@@ -1844,20 +1930,24 @@ sub DiffPBDB {
     
     return if @ERRORS && ! $opt_force;
     
-    # If we are diffing all scales, fetch a hash of all the intervals known to
-    # the PBDB by interval_no. This allows us to make sure that no interval is
-    # being left out.
+    # Check for certain database fields.
     
-    my $remaining = { };
+    CheckScaleTable($dbh);
+    
+    # If we are diffing all scales, fetch a hash of all the intervals known to the PBDB
+    # by interval_no, and all scales known to the PBDB by scale_no. This allows us to
+    # make sure that no interval and no scale is being left out.
+    
+    my $leftover_ints = { };
+    my $leftover_scales = { };
     
     if ( $SCALE_SELECT{all} )
     {
-	$remaining = FetchPBDBNums($dbh);
+	($leftover_ints, $leftover_scales) = FetchPBDBNums($dbh);
     }
     
-    # If no errors were found in the selected scales, go through the entire set
-    # of intervals. Process those which are contained in one of the selected
-    # scales.
+    # If no errors were found in the selected scales, go through the entire set of
+    # intervals. Compare those which are contained in one of the selected scales.
     
     foreach my $i ( @ALL_INTERVALS )
     {
@@ -1868,36 +1958,32 @@ sub DiffPBDB {
 	my $interval_no = $i->{interval_no};
 	my $line_no = $i->{line_no};
 	my $name = $i->{interval_name};
+	my $abbrev = $i->{abbrev};
 	my $t_age = $i->{t_age};
 	my $b_age = $i->{b_age};
 	my $type = $i->{type};
 	my $color = $i->{color};
 	my $reference_no = $i->{reference_no};
 	
-	&ComputeContainers($i, $scale_no);
+	ComputeContainers($i, $scale_no);
+	
+	if ( $scale_no == 1 )
+	{
+	    my $parent_no = $INTERVAL_NAME{$i->{parent}}{interval_no};
+	    
+	    unless ( $parent_no > 0 || $type eq 'eon' )
+	    {
+		push @ERRORS, "at line $line_no, no parent interval was found for '$name'";
+	    }
+	}
 	
 	if ( my $p = FetchPBDBInterval($dbh, $interval_no, $scale_no) )
 	{
-	    if ( $type ne $p->{type} )
-	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{type} = $type;
-	    }
-	    
-	    if ( $color ne $p->{color} )
-	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{color} = $color;
-	    }
-	    
-	    if ( $reference_no ne $p->{reference_no} )
-	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{reference_no} = $reference_no;
-	    }
-	    
 	    if ( $name ne $p->{interval_name} )
 	    {
 		if ( $i->{action} eq 'RENAME' )
 		{
-		    $DIFF_NUM{$scale_no}{$interval_no}{action} = 'RENAME';
+		    $DIFF_INT{$scale_no}{$interval_no}{action} = 'RENAME';
 		}
 		
 		else
@@ -1909,87 +1995,179 @@ sub DiffPBDB {
 	    
 	    if ( $i->{action} =~ /^REMOVE|^COALESCE/ )
 	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{action} = $i->{action};
+		$DIFF_INT{$scale_no}{$interval_no}{action} = $i->{action};
 		
-		delete $remaining->{$interval_no};
+		delete $leftover_ints->{$interval_no};
 		next;
+	    }
+	    
+	    if ( $abbrev ne $p->{abbrev} )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{abbrev} = $abbrev;
+	    }
+	    
+	    if ( $type ne $p->{type} )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{type} = $type;
+	    }
+	    
+	    if ( $color ne $p->{color} )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{color} = $color;
+	    }
+	    
+	    if ( $reference_no ne $p->{reference_no} )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{reference_no} = $reference_no;
 	    }
 	    
 	    if ( $t_age + 0 != $p->{t_age} + 0 )
 	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{t_type} = $i->{t_type};
-		$DIFF_NUM{$scale_no}{$interval_no}{top} = $t_age;
+		$DIFF_INT{$scale_no}{$interval_no}{t_type} = $i->{t_type};
+		$DIFF_INT{$scale_no}{$interval_no}{top} = $t_age;
 	    }
 	    
 	    if ( $b_age + 0 != $p->{b_age} + 0 )
 	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{b_type} = $i->{b_type};
-		$DIFF_NUM{$scale_no}{$interval_no}{base} = $b_age;
+		$DIFF_INT{$scale_no}{$interval_no}{b_type} = $i->{b_type};
+		$DIFF_INT{$scale_no}{$interval_no}{base} = $b_age;
 	    }
 	    
-	    if ( $i->{stage} ne IntervalName($p->{stage_no}) )
+	    if ( $i->{stage} ne IntervalName($p->{stage_no}) ||
+		 $i->{subepoch} ne IntervalName($p->{subepoch_no}) ||
+		 $i->{epoch} ne IntervalName($p->{epoch_no}) ||
+		 $i->{period} ne IntervalName($p->{period_no}) )
 	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{stage} = $i->{stage} || 'none';
-		$DIFF_CONTAINERS = 1;
-	    }
-	    
-	    if ( $i->{subepoch} ne IntervalName($p->{subepoch_no}) )
-	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{subepoch} = $i->{subepoch} || 'none';
-		$DIFF_CONTAINERS = 1;
-	    }
-	    
-	    if ( $i->{epoch} ne IntervalName($p->{epoch_no}) )
-	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{epoch} = $i->{epoch} || 'none';
-		$DIFF_CONTAINERS = 1;
-	    }
-	    
-	    if ( $i->{period} ne IntervalName($p->{period_no}) )
-	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{period} = $i->{period} || 'none';
-		$DIFF_CONTAINERS = 1;
+		$DIFF_INT{$scale_no}{$interval_no}{stage} = $i->{stage} || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{subepoch} = $i->{subepoch} || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{epoch} = $i->{epoch} || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{period} = $i->{period} || 'none';
 	    }
 	    
 	    if ( $scale_no eq $INTL_SCALE &&
 		 $i->{parent} ne IntervalName($p->{parent_no}) )
 	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{parent} = $i->{parent} || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{parent} = $i->{parent} || 'none';
 	    }
 	    
 	    # Remove this interval from the $remaining hash.
 	    
-	    delete $remaining->{$interval_no};
+	    delete $leftover_ints->{$interval_no};
 	}
 	
-	elsif ( $i->{action} =~ /^REMOVE|^COALESCE/ )
+	elsif ( $i->{action} !~ /^REMOVE|^COALESCE/ )
 	{
-	    my $diff = { interval_no => $interval_no,
-			 interval_name => $name,
+	    my $diff = { action => 'CREATE',
 			 type => $type,
 			 color => $color,
 			 reference_no => $reference_no,
 			 top => $t_age,
-			 base => $b_age };
-	    
-	    $diff->{stage} = $i->{stage} if $i->{stage};
-	    $diff->{subepoch} = $i->{subepoch} if $i->{subepoch};
-	    $diff->{epoch} = $i->{epoch} if $i->{epoch};
-	    $diff->{period} = $i->{period} if $i->{period};
-	    $diff->{parent} = $i->{parent} if $i->{parent};
-	    
-	    push @DIFF_EXTRA, $diff;
+			 base => $b_age,
+			 stage => $i->{stage},
+			 subepoch => $i->{subepoch},
+			 epoch => $i->{epoch},
+			 period => $i->{period},
+			 parent => $i->{parent} };
+	    	    
+	    $DIFF_INT{$scale_no}{$interval_no} = $diff;
 	}
     }
     
-    # If we are checking all scales, report anything remaining in $remaining.
+    # If we are checking all scales, report anything remaining in $leftover_ints.
     
-    if ( $remaining->%* )
+    if ( $leftover_ints->%* )
     {
-	foreach my $interval_no ( keys $remaining->%* )
+	foreach my $interval_no ( keys $leftover_ints->%* )
 	{
 	    push @DIFF_MISSING, { interval_no => $interval_no,
-				  interval_name => $remaining->{$interval_no} };
+				  interval_name => $leftover_ints->{$interval_no} };
+	}
+    }
+    
+    # Then go through all of the scales in order of appearance, and compare the selected
+    # ones.
+    
+    foreach my $scale_no ( @SCALE_NUMS )
+    {
+	next unless $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no};
+	
+	ComputeScaleAttrs($scale_no);
+	
+	my $s = $SCALE_NUM{$scale_no};
+	my $line_no = $s->{line_no};
+	my $name = $s->{scale_name};
+	my $locality = $s->{type};
+	my $reference_no = $s->{reference_no};
+	my $color = $s->{color};
+	my $t_age = $s->{t_age};
+	my $b_age = $s->{b_age};
+	
+	if ( my $p = FetchPBDBScale($dbh, $scale_no) )
+	{
+	    if ( $name ne $p->{scale_name} )
+	    {
+		$DIFF_SCALE{$scale_no}{action} = 'RENAME';
+	    }
+	    
+	    if ( $locality ne $p->{locality} )
+	    {
+		$DIFF_SCALE{$scale_no}{type} = $locality || 'none';
+	    }
+	    
+	    if ( $color ne $p->{color} )
+	    {
+		$DIFF_SCALE{$scale_no}{color} = $color || 'none';
+	    }
+	    
+	    if ( defined $t_age && $t_age ne '' && $t_age != $p->{t_age} )
+	    {
+		$DIFF_SCALE{$scale_no}{top} = $t_age;
+	    }
+	    
+	    if ( defined $b_age && $b_age ne '' && $b_age != $p->{b_age} )
+	    {
+		$DIFF_SCALE{$scale_no}{base} = $b_age;
+	    }
+	    
+	    if ( $reference_no ne $p->{reference_no} )
+	    {
+		$DIFF_SCALE{$scale_no}{reference_no} = $reference_no || 'none';
+	    }
+	    
+	    if ( $s->{action} eq 'REMOVE' )
+	    {
+		$DIFF_SCALE{$scale_no}{action} = 'REMOVE';
+	    }
+	    
+	    elsif ( $s->{action} )
+	    {
+		push @ERRORS, "at line $line_no, invalid action '$s->{action}'";
+	    }
+	    
+	    delete $leftover_scales->{$scale_no};
+	}
+	
+	else
+	{
+	    $DIFF_SCALE{$scale_no} = { action => 'CREATE',
+				       scale_name => $name,
+				       top => $t_age,
+				       base => $b_age,
+				       locality => $locality,
+				       color => $color,
+				       reference_no => $reference_no
+				     };
+	}
+    }
+    
+    # If we are checking all scales, report anything remaining in $leftover_scales.
+    
+    if ( $leftover_scales->%* )
+    {
+	foreach my $scale_no ( keys $leftover_scales->%* )
+	{
+	    push @DIFF_MISSING_SCALES, { scale_no => $scale_no,
+					 scale_name => $leftover_scales->{$scale_no} };
 	}
     }
     
@@ -2009,16 +2187,1216 @@ sub DiffPBDB {
     
     elsif ( $CMD eq 'update' )
     {
-	&ApplyDifferences;
+	&ApplyDifferences($dbh);
+    }
+    
+    else
+    {
+	say STDERR "Unknown command '$CMD'";
+    }
+}
+
+
+# PrintDifferences ( )
+# 
+# Print out the differences that were computed by &DiffPBDB between the
+# spreadsheet and the PBDB interval tables. Print a table of differences to
+# STDOUT, in the same format (CSV or TSV) as the input data.
+
+sub PrintDifferences {
+    
+    SetupOutput;
+    
+    # If we have generated any differences in containing intervals, start by generating
+    # the same header line that was read from the input data.
+    
+    if ( %DIFF_INT || %DIFF_SCALE || @DIFF_MISSING || @DIFF_MISSING_SCALES )
+    {
+	print GenerateHeader();
+    }
+    
+    else
+    {
+	say STDERR "No differences between this spreadsheet and the PBDB";
+    }
+    
+    if ( %DIFF_INT )
+    {
+	say "\nInterval differences from PBDB:\n";
+	
+	foreach my $i ( @ALL_INTERVALS )
+	{
+	    my $scale_no = $i->{scale_no};
+	    my $interval_no = $i->{interval_no};
+	    
+	    if ( $DIFF_INT{$scale_no}{$interval_no} )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{interval_no} = $interval_no;
+		$DIFF_INT{$scale_no}{$interval_no}{interval_name} = $i->{interval_name};
+		$DIFF_INT{$scale_no}{$interval_no}{scale_no} = $i->{scale_no};
+		$DIFF_INT{$scale_no}{$interval_no}{scale_name} = $i->{scale_name};
+		
+		print RecordToLine($DIFF_INT{$scale_no}{$interval_no}, \@FIELD_LIST);
+	    }
+	}
+    }
+    
+    if ( @DIFF_MISSING )
+    {
+	say "\Intervals missing from this spreadsheet:\n";
+	
+	foreach my $i ( @DIFF_MISSING )
+	{
+	    print RecordToLine($i, \@FIELD_LIST);
+	}
+    }
+    
+    if ( %DIFF_SCALE )
+    {
+	say "\nScale differences from PBDB:\n";
+	
+	foreach my $scale_no ( @SCALE_NUMS )
+	{
+	    next unless $SCALE_SELECT{$scale_no} || $SCALE_SELECT{all};
+	    
+	    $DIFF_SCALE{$scale_no}{scale_no} = $scale_no;
+	    $DIFF_SCALE{$scale_no}{scale_name} = $SCALE_NUM{$scale_no}{scale_name};
+	    
+	    print RecordToLine($DIFF_SCALE{$scale_no}, \@FIELD_LIST);
+	}
+    }
+    
+    if ( @DIFF_MISSING_SCALES )
+    {
+	say "\nScales missing from this spreadsheet:\n";
+	
+	foreach my $s ( @DIFF_MISSING_SCALES )
+	{
+	    print RecordToLine($s, \@FIELD_LIST);
+	}
+    }
+}
+
+
+# ApplyDifferences ( )
+# 
+# Apply the differences that were computed by &DiffPBDB to the PBDB interval tables. The
+# tables 'interval_data', 'scale_map', 'scale_data', 'intervals', and 'interval_lookup'
+# will be updated to match the spreadsheet. The scale_map table is the most difficult. For
+# each updated scale, a new set of scale_map records is computed. If the sequence has
+# changed, all the map records for that scale will be deleted and new ones added.
+
+sub ApplyDifferences {
+    
+    my ($dbh) = @_;
+    
+    # If there are intervals in the database that are not mentioned in the spreadsheet,
+    # abort unless the 'force' option was specified. Any attempt to update the entire
+    # spreadsheet should cover all of the intervals in the database.
+    
+    if ( @DIFF_MISSING && ! $opt_force )
+    {
+	say STDERR "The update cannot be carried out, because some intervals are missing";
+	exit;
+    }
+    
+    # Make sure that the scale_data table has the proper fields.
+    
+    ConditionScaleTable($dbh);
+    
+    # Fetch the list of PBDB intervals from each PBDB scale from the scale_map table.
+    
+    my %scale_seq = FetchPBDBSequences($dbh);
+    
+    # Run through the list of selected scales, and update each one that has changed.
+    
+    foreach my $scale_no ( @SCALE_NUMS )
+    {
+	next unless $SCALE_SELECT{$scale_no} || $SCALE_SELECT{all};
+	
+	my $scale_name = $SCALE_NUM{$scale_no}{scale_name};
+	
+	# First check the interval sequence of this scale against the PBDB scale map.
+	# Start by comparing the number of intervals in each sequence.
+	
+	my $sheet_count = $SCALE_INTS{$scale_no} ? 
+	    grep { $_->{action} !~ /^REMOVE|^COALESCE/ } $SCALE_INTS{$scale_no}->@* : 0;
+	my $pbdb_count = $scale_seq{$scale_no} ? $scale_seq{$scale_no}->@* : 0;
+	
+	my ($sequence_diff, $create_count, $remove_count, $update_count, $error_count);
+	
+	if ( $sheet_count != $pbdb_count )
+	{
+	    $sequence_diff = 1;
+	}
+	
+	# If the interval counts are equal and there are some intervals in the
+	# spreadsheet, make sure that the same set of interval numbers occurs in both
+	# sequences.
+	
+	elsif ( $sheet_count )
+	{
+	    my (%check) = 1;
+	    
+	    # Add all of the interval_no values from the pbdb sequence to %check.
+	    
+	    foreach my $i ( 0..$sheet_count-1 )
+	    {
+		$check{ $scale_seq{$scale_no}[$i] } = 1;
+	    }
+	    
+	    # Check that each of the interval_no values from the spreadsheet is in
+	    # %check, and remove it. If any are missing, set sequence_diff to true.
+	    
+	    foreach my $i ( 0..$sheet_count-1 )
+	    {
+		my $ino = $SCALE_INTS{$scale_no}[$i]{interval_no};
+		
+		if ( $check{$ino} )
+		{
+		    delete $check{$ino};
+		}
+		
+		else
+		{
+		    $sequence_diff = 1;
+		    last;
+		}
+	    }
+	    
+	    # If anything remains in %check, set sequence_diff to true.
+	    
+	    $sequence_diff = 1 if %check;
+	}
+	
+	# If there is a difference, change the scale_map to match.
+	
+	if ( $sequence_diff )
+	{
+	    UpdatePBDBSequence($dbh, $scale_no, $SCALE_INTS{$scale_no});
+	    $SCALE_NUM{$scale_no}{scale_map_updated} = 1;
+	}
+	
+	# Now compare the intervals one by one and update any that are different.
+	
+	foreach my $i ( $SCALE_INTS{$scale_no}->@* )
+	{
+	    my $interval_no = $i->{interval_no};
+	    
+	    if ( $DIFF_INT{$scale_no}{$interval_no} )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{interval_name} = $i->{interval_name};
+		$DIFF_INT{$scale_no}{$interval_no}{line_no} = $i->{line_no};
+		
+		$DIFF_INT{$scale_no}{$interval_no}{t_age} = $i->{t_age} // TopAge($i);
+		$DIFF_INT{$scale_no}{$interval_no}{b_age} = $i->{b_age} // BaseAge($i); 
+		
+		my $result = UpdatePBDBInterval($dbh, $scale_no, $interval_no,
+						$DIFF_INT{$scale_no}{$interval_no});
+	    }
+	}
+	
+	# If there is a difference in the scale attributes, update the scale.
+	
+	if ( $DIFF_SCALE{$scale_no} )
+	{
+	    &UpdatePBDBScale($dbh, $scale_no, $DIFF_SCALE{$scale_no});
+	}
+    }
+    
+    # Finally, synchronize the classic intervals table with the interval_data table.
+    
+    SyncIntervalsTable($dbh);
+    
+    # Print a summary of actions taken.
+    
+    if ( $UPDATE_INTERVALS || $CREATE_INTERVALS || $REMOVE_INTERVALS ||
+	 $UPDATE_SCALES || $CREATE_SCALES || $REMOVE_SCALES )
+    {
+	if ( $opt_debug )
+	{
+	    say STDERR "Summary of database changes that would have been made:\n";
+	}
+	
+	else
+	{
+	    say STDERR "Summary of database changes made:\n";
+	}
+	
+	say STDERR "  Created $CREATE_INTERVALS intervals" if $CREATE_INTERVALS;
+	say STDERR "  Removed $REMOVE_INTERVALS intervals" if $REMOVE_INTERVALS;
+	say STDERR "  Updated $UPDATE_INTERVALS intervals" if $UPDATE_INTERVALS;
+	say STDERR "  Created $CREATE_SCALES timescales" if $CREATE_SCALES;
+	say STDERR "  Removed $REMOVE_SCALES timescales" if $REMOVE_SCALES;
+	say STDERR "  Updated $UPDATE_SCALES timescales" if $UPDATE_SCALES;
+    }
+    
+    elsif ( $opt_debug )
+    {
+	say STDERR "No changes would have been made to the database\n";
+    }
+    
+    else
+    {
+	say STDERR "No changes were made to the database\n";
+    }
+}
+
+
+# FetchPBDBInterval ( dbh, interval_no, scale_no )
+# 
+# Given an interval_no and scale_no, fetch the corresponding PBDB interval
+# record. Include information from the specified scale, if that interval
+# is included in that scale.
+
+sub FetchPBDBInterval {
+    
+    my ($dbh, $interval_no, $scale_no) = @_;
+    
+    my $qi = $dbh->quote($interval_no);
+    my $qs = $dbh->quote($scale_no);
+    
+    my $sql = "SELECT i.interval_no, interval_name, abbrev, type, early_age as b_age,
+		    late_age as t_age, scale_no, parent_no, color, sm.reference_no,
+		    stage_no, subepoch_no, epoch_no, period_no
+		FROM $TableDefs::TABLE{INTERVAL_DATA} as i
+		    left join interval_lookup using (interval_no)
+		    left join $TableDefs::TABLE{SCALE_MAP} as sm 
+		        on sm.interval_no = i.interval_no and sm.scale_no = $qs
+		WHERE i.interval_no = $qi";
+    
+    unless ( $HAS_REFNO )
+    {
+	$sql =~ s/sm.reference_no,//;
+    }
+    
+    my $result = $dbh->selectrow_hashref($sql, { Slice => { } });
+    
+    return $result;
+}
+
+
+# FetchPBDBScale ( dbh, scale_no )
+# 
+# Given a scale_no, fetch the corresponding PBDB scale record.
+
+sub FetchPBDBScale {
+    
+    my ($dbh, $scale_no) = @_;
+    
+    my $qs = $dbh->quote($scale_no);
+    
+    my $sql = "SELECT scale_no, scale_name, early_age as b_age, late_age as t_age,
+		      color, locality, reference_no
+		FROM $TableDefs::TABLE{SCALE_DATA} as s
+		WHERE s.scale_no = $qs";
+    
+    my $result = $dbh->selectrow_hashref($sql, { Slice => { } });
+    
+    return $result;    
+}
+
+    
+# FetchPBDBNums ( dbh )
+# 
+# Return a hashref of PBDB interval numbers and names, and a hashref of PBDB scale
+# numbers and names.
+
+sub FetchPBDBNums {
+    
+    my ($dbh) = @_;
+    
+    my $sql = "SELECT interval_no, interval_name FROM $TableDefs::TABLE{INTERVAL_DATA}";
+    
+    my @ints = $dbh->selectall_array($sql, { Slice => { } });
+    
+    my %intervals;
+    
+    foreach my $i ( @ints )
+    {
+	$intervals{$i->{interval_no}} = $i->{interval_name};
+    }
+    
+    $sql = "SELECT scale_no, scale_name FROM $TableDefs::TABLE{SCALE_DATA}";
+    
+    my @scales = $dbh->selectall_array($sql, { Slice => { } });
+    
+    my %scales;
+    
+    foreach my $s ( @scales )
+    {
+	$scales{$s->{scale_no}} = $s->{scale_name};
+    }
+    
+    return (\%intervals, \%scales);
+}
+
+
+# FetchPBDBSequences ( dbh )
+# 
+# Return a hashref of PBDB scale numbers and interval sequences. Each hash value
+# will be a list of interval numbers, in the order they appear in the scale_map table.
+
+sub FetchPBDBSequences {
+    
+    my ($dbh) = @_;
+    
+    my $sql = "SELECT scale_no, interval_no FROM $TableDefs::TABLE{SCALE_MAP}";
+    
+    my @ints = $dbh->selectall_array($sql, { Slice => { } });
+    
+    my %sequence;
+    
+    foreach my $i ( @ints )
+    {
+	push $sequence{$i->{scale_no}}->@*, $i->{interval_no};
+    }
+    
+    return %sequence;
+}
+
+
+# UpdatePBDBSequence ( dbh, scale_no, interval_list )
+# 
+# Update the PBDB scale_map table to reflect the specified scale and interval list. If the
+# interval list is empty, remove all entries corresponding to $scale_no from the scale
+# map. Otherwise, remove all entries and add the new list.
+
+sub UpdatePBDBSequence {
+    
+    my ($dbh, $scale_no, $interval_list) = @_;
+    
+    my ($sql, $result);
+    
+    my $SCALE_MAP = $TableDefs::TABLE{SCALE_MAP};
+    
+    my $qs = $dbh->quote($scale_no);
+    my $name = $SCALE_NUM{$scale_no}{scale_name};
+    my $line_no = $SCALE_NUM{$scale_no}{line_no};
+    
+    unless ( $scale_no && $scale_no =~ /^\d+$/ )
+    {
+	push @ERRORS, "at line $line_no, could not update scale: bad scale_no '$scale_no'";
+	return;
+    }
+    
+    # Start by removing all existing entries for this scale from scale_map.
+    
+    $sql = "DELETE FROM $SCALE_MAP WHERE scale_no = $qs";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    return unless ref $interval_list eq 'ARRAY' && $interval_list->@*;
+    
+    my $value_string = '';
+    
+    foreach my $i ( $interval_list->@* )
+    {
+	my $interval_no = $i->{interval_no};
+	my $qtype = $dbh->quote($i->{type});
+	my $qcolor = $dbh->quote($i->{color});
+	my $qrefno = $dbh->quote($i->{reference_no});
+	
+	$value_string .= ', ' if $value_string;
+	
+	if ( $scale_no == 1 )
+	{
+	    my $parent_no = $INTERVAL_NAME{$i->{parent}}{interval_no} || 'NULL';
+	    die "Bad parent '$i->{parent}' for interval $i->{interval_no}"
+		unless $parent_no > 0 || $i->{type} eq 'eon';
+	    
+	    $value_string .= "($scale_no,$interval_no,$parent_no,$qtype,$qcolor,$qrefno)";
+	}
+	
+	else
+	{
+	    $value_string .= "($scale_no,$interval_no,$qtype,$qcolor,$qrefno)";
+	}
+    }
+    
+    if ( $scale_no == 1 )
+    {
+	$sql = "REPLACE INTO $SCALE_MAP (scale_no, interval_no, parent_no, type, color, reference_no)
+		VALUES $value_string";
+    }
+    
+    else
+    {
+	$sql = "REPLACE INTO $SCALE_MAP (scale_no, interval_no, type, color, reference_no)
+		VALUES $value_string";
+    }
+    
+    $result = DoStatement($dbh, $sql);
+    
+    unless ( $opt_debug )
+    {
+	say STDOUT "Updated the sequence for '$name' ($scale_no)";
+    }
+}
+
+
+# UpdatePBDBInterval ( dbh, scale_no, interval_no, diff )
+# 
+# Update the PBDB definition of the specified interval, according to the information in
+# the hashref $diff.
+
+sub UpdatePBDBInterval {
+    
+    my ($dbh, $scale_no, $interval_no, $diff) = @_;
+    
+    my ($sql, $result);
+    
+    my $INTERVAL_DATA = $TableDefs::TABLE{INTERVAL_DATA};
+    my $CLASSIC_LOOKUP = $TableDefs::TABLE{CLASSIC_INTERVAL_LOOKUP};
+    my $SCALE_MAP = $TableDefs::TABLE{SCALE_MAP};
+    
+    my $name = $diff->{interval_name};
+    my $line_no = $diff->{line_no};
+    
+    my $scale_map_updated = $SCALE_NUM{$scale_no}{scale_map_updated};
+    
+    unless ( $scale_no && $scale_no =~ /^\d+$/ )
+    {
+	push @ERRORS, "at line $line_no, could not update interval: bad scale_no '$scale_no'";
+	return;
+    }
+    
+    unless ( $interval_no && $interval_no =~ /^\d+$/ )
+    {
+	push @ERRORS, "at $line_no, could not update interval: bad interval_no '$interval_no'";
+    }
+    
+    # If this is a new interval, create the necessary records.
+    
+    if ( $diff->{action} eq 'CREATE' )
+    {
+	CreatePBDBInterval($dbh, $scale_no, $interval_no, $diff);
+	UpdateIntervalLookup($dbh, $scale_no, $interval_no, $diff);
+	return;
+    }
+    
+    # If this interval is to be removed or coalesced, do the corresponding deletions and
+    # updates.
+    
+    elsif ( $diff->{action} =~ /^REMOVE|^COALESCE/ )
+    {
+	RemovePBDBInterval($dbh, $scale_no, $interval_no, $diff);
+	return;
+    }
+    
+    # Otherwise, update the existing records in the interval_data table, scale_map
+    # table, and interval_lookup table.
+    
+    if ( $diff->{action} eq 'RENAME' )
+    {
+	my $qname = $dbh->quote($name);
+	
+	$sql = "UPDATE $INTERVAL_DATA set interval_name = $qname
+		WHERE interval_no = $interval_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{abbrev} )
+    {
+	my $qabbr = $dbh->quote($diff->{abbrev});
+	
+	$sql = "UPDATE $INTERVAL_DATA SET abbrev = $qabbr
+		WHERE interval_no = $interval_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{top} )
+    {
+	my $qtop = $dbh->quote($diff->{top});
+	    
+	if ( $diff->{top} =~ $AGE_RE )
+	{
+	    $sql = "UPDATE $INTERVAL_DATA set late_age = $qtop
+		    WHERE interval_no = $interval_no";
+	    
+	    $result = DoStatement($dbh, $sql);
+	}
+	
+	else
+	{
+	    push @ERRORS, "at line $line_no, problem updating interval: bad top age $qtop";
+	}
+    }
+    
+    if ( $diff->{base} )
+    {
+	my $qbase = $dbh->quote($diff->{base});
+	
+	if ( $diff->{base} =~ $AGE_RE )
+	{
+	    $sql = "UPDATE $INTERVAL_DATA set early_age = $qbase
+		    WHERE interval_no = $interval_no";
+	    
+	    $result = DoStatement($dbh, $sql);
+	}
+	
+	else
+	{
+	    push @ERRORS, "at line $line_no, problem updating interval: bad base age $qbase";
+	}
+    }
+    
+    if ( $diff->{type} && ! $scale_map_updated )
+    {
+	my $qtype = $dbh->quote($diff->{type});
+	
+	$sql = "UPDATE $SCALE_MAP set type = $qtype
+		WHERE scale_no = $scale_no and interval_no = $interval_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{color} && ! $scale_map_updated )
+    {
+	my $qcolor = $dbh->quote($diff->{color});
+	
+	$sql = "UPDATE $SCALE_MAP set color = $qcolor
+		WHERE scale_no = $scale_no and interval_no = $interval_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+	
+    if ( $diff->{reference_no} && ! $scale_map_updated )
+    {
+	my $qrefno = $dbh->quote($diff->{reference_no});
+	
+	$sql = "UPDATE $SCALE_MAP set reference_no = $qrefno
+		WHERE scale_no = $scale_no and interval_no = $interval_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+	
+    if ( $diff->{parent} && ! $scale_map_updated )
+    {
+	my $parent_no = $INTERVAL_NAME{$diff->{parent}}{interval_no};
+	my $qparent = $dbh->quote($parent_no);
+	
+	$sql = "UPDATE $SCALE_MAP set parent_no = $qparent
+		WHERE scale_no = $scale_no and interval_no = $interval_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{stage} )
+    {
+	UpdateIntervalLookup($dbh, $scale_no, $interval_no, $diff);
+    }
+    
+    # Report what we have done.
+    
+    $UPDATE_INTERVALS++;
+    
+    unless ( $opt_debug )
+    {
+	say STDOUT "Updated interval '$name' ($interval_no)";
+    }
+}
+
+
+sub CreatePBDBInterval {
+    
+    my ($dbh, $scale_no, $interval_no, $diff) = @_;
+    
+    my ($sql, $result);
+    
+    my $INTERVAL_DATA = $TableDefs::TABLE{INTERVAL_DATA};
+    my $CLASSIC_INTS = $TableDefs::TABLE{CLASSIC_INTERVALS};
+    my $CLASSIC_LOOKUP = $TableDefs::TABLE{CLASSIC_INTERVAL_LOOKUP};
+    
+    my $name = $diff->{interval_name};
+    my $line_no = $diff->{line_no};
+    
+    unless ( $name )
+    {
+	push @ERRORS, "at line $line_no, could not create interval: missing interval_name";
+	return;
+    }
+    
+    unless ( $diff->{top} =~ $AGE_RE )
+    {
+	push @ERRORS, "at line $line_no, could not create interval: bad top age '$diff->{top}'";
+	return;
+    }
+    
+    unless ( $diff->{base} =~ $AGE_RE )
+    {
+	push @ERRORS, "at line $line_no,  could not create interval: bad base age '$diff->{base}'";
+	return;
+    }
+    
+    my $qino = $dbh->quote($interval_no);
+    my $qname = $dbh->quote($name);
+    my $qabbr = $dbh->quote($diff->{abbrev});
+    my $qtop = $dbh->quote($diff->{top});
+    my $qbase = $dbh->quote($diff->{base});
+    my $qrefno = $dbh->quote($diff->{reference_no});
+    
+    # Create a record in the interval_data table.
+    
+    $sql = "INSERT INTO $INTERVAL_DATA (interval_no, interval_name, abbrev,
+		late_age, early_age, reference_no)
+	    VALUES ($qino, $qname, $qabbr, $qtop, $qbase, $qrefno)";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    # Create the corresponding record in the intervals table.
+    
+    my ($eml, $classic_name) = EmlName($name);
+    
+    my $qeml = $dbh->quote($eml);
+    my $qclassic = $dbh->quote($classic_name);
+    
+    $sql = "INSERT INTO $CLASSIC_INTS (authorizer_no, enterer_no, interval_no,
+		eml_interval, interval_name, reference_no)
+	    VALUES ($AUTHORIZER_NO, $AUTHORIZER_NO, $qino, $qeml, $qclassic, $qrefno)";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    # Then create the corresponding record in the interval_lookup table.
+    
+    UpdateIntervalLookup($dbh, $scale_no, $interval_no, $diff);
+    
+    # Report what we have done.
+    
+    $CREATE_INTERVALS++;
+    
+    unless ( $opt_debug )
+    {
+	say STDOUT "Created interval '$name' ($interval_no)";
+    }
+}
+
+
+sub UpdateIntervalLookup {
+    
+    my ($dbh, $scale_no, $interval_no, $diff) = @_;
+    
+    my ($sql, $result);
+    
+    my $CLASSIC_LOOKUP = $TableDefs::TABLE{CLASSIC_INTERVAL_LOOKUP};
+    
+    # Create a record in the interval_lookup table. We use 'replace' instead of 'insert'
+    # because there may already be a record there for this interval_no, and the only
+    # fields that are significant are the ones that are explicitly set here.
+    
+    my $stage_no = $INTERVAL_NAME{$diff->{stage}}{interval_no};
+    my $subepoch_no = $INTERVAL_NAME{$diff->{subepoch}}{interval_no};
+    my $epoch_no = $INTERVAL_NAME{$diff->{epoch}}{interval_no};
+    my $period_no = $INTERVAL_NAME{$diff->{period}}{interval_no};
+    
+    my $qstage = $dbh->quote($stage_no);
+    my $qsubep = $dbh->quote($subepoch_no);
+    my $qepoch = $dbh->quote($epoch_no);
+    my $qperiod = $dbh->quote($period_no);
+    
+    my $qtop = $dbh->quote($diff->{t_age});
+    my $qbase = $dbh->quote($diff->{b_age});
+    
+    $sql = "REPLACE INTO $CLASSIC_LOOKUP (interval_no, stage_no, subepoch_no,
+		epoch_no, period_no, top_age, base_age)
+	    VALUES ($interval_no, $qstage, $qsubep, $qepoch, $qperiod, $qtop, $qbase)";
+    
+    $result = DoStatement($dbh, $sql);
+}
+
+
+sub RemovePBDBInterval {
+    
+    my ($dbh, $scale_no, $interval_no, $diff) = @_;
+    
+    my ($sql, $result);
+    
+    my $COLLECTIONS = $TableDefs::TABLE{COLLECTION_DATA};
+    my $INTERVAL_DATA = $TableDefs::TABLE{INTERVAL_DATA};
+    my $CLASSIC_INTS = $TableDefs::TABLE{CLASSIC_INTERVALS};
+    my $CLASSIC_LOOKUP = $TableDefs::TABLE{CLASSIC_INTERVAL_LOOKUP};
+    
+    my $name = $diff->{interval_name};
+    my $line_no = $diff->{line_no};
+    
+    # First check to see how many collections refer to this interval number.
+    
+    $sql = "SELECT count(*) FROM $COLLECTIONS as c
+	    WHERE c.max_interval_no = $interval_no or 
+		  c.min_interval_no = $interval_no or
+		  c.ma_interval_no = $interval_no";
+    
+    my ($count) = $dbh->selectrow_array($sql);
+    
+    if ( $count && $diff->{action} eq 'REMOVE' )
+    {
+	push @ERRORS, "at line $line_no, could not remove interval: $count collections";
+	return;
+    }
+    
+    # If the action is 'COALESCE', then these collections must be updated to point to
+    # the new interval.
+    
+    if ( $count && $diff->{action} =~ /^COALESCE (.*)/ )
+    {
+	my $arg = $1;
+	my $new_no = $INTERVAL_NAME{$arg}{interval_no};
+	my $update_count = 0;
+	
+	unless ( $new_no > 0 )
+	{
+	    push @ERRORS, "at line $line_no, could not coalesce interval: bad argument '$arg'";
+	    return;
+	}
+	
+	$sql = "UPDATE $COLLECTIONS set max_interval_no = $new_no
+		WHERE max_interval_no = $interval_no";
+	
+	$update_count += DoStatement($dbh, $sql);
+	
+	$sql = "UPDATE $COLLECTIONS set min_interval_no = $new_no
+		WHERE min_interval_no = $interval_no";
+	
+	$update_count += DoStatement($dbh, $sql);
+	
+	$sql = "UPDATE $COLLECTIONS set ma_interval_no = $new_no
+		WHERE ma_interval_no = $interval_no";
+	
+	$update_count += DoStatement($dbh, $sql);
+	
+	unless ( $opt_debug )
+	{
+	    say STDERR "Performed $update_count collection interval updates '$name' => '$arg'";
+	}
+    }
+    
+    # If we get here, then we can safely remove the interval.
+    
+    $sql = "DELETE FROM $INTERVAL_DATA WHERE interval_no = $interval_no";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    $sql = "DELETE FROM $CLASSIC_INTS WHERE interval_no = $interval_no";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    $sql = "DELETE FROM $CLASSIC_LOOKUP WHERE interval_no = $interval_no";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    # Report what we have done.
+    
+    $REMOVE_INTERVALS++;
+    
+    unless ( $opt_debug )
+    {
+	say STDOUT "Removed interval '$name' ($interval_no)";
+    }
+}
+
+
+# UpdatePBDBScale ( dbh, scale_no, diff )
+# 
+# Update the PBDB definition of the specified timescale, according to the information in
+# the hashref $diff.
+
+sub UpdatePBDBScale {
+    
+    my ($dbh, $scale_no, $diff) = @_;
+    
+    my ($sql, $result);
+    
+    my $SCALE_DATA = $TableDefs::TABLE{SCALE_DATA};
+    
+    my $name = $SCALE_NUM{$scale_no}{scale_name};
+    my $line_no = $SCALE_NUM{$scale_no}{line_no};
+    
+    unless ( $scale_no && $scale_no =~ /^\d+$/ )
+    {
+	push @ERRORS, "at line $line_no, could not update scale: bad scale_no '$scale_no'";
+	return;
+    }
+    
+    # If this is a new scale, create the necessary record.
+    
+    if ( $diff->{action} eq 'CREATE' )
+    {
+	&CreatePBDBScale($dbh, $scale_no, $diff);
+	return;
+    }
+    
+    # If this scale is to be removed, do that.
+    
+    elsif ( $diff->{action} eq 'REMOVE' )
+    {
+	&RemovePBDBScale($dbh, $scale_no, $diff);
+	return;
+    }
+    
+    # Otherwise, update the existing record in the scale_data table.
+    
+    if ( $diff->{action} eq 'RENAME' )
+    {
+	my $qname = $dbh->quote($name);
+	
+	$sql = "UPDATE $SCALE_DATA set scale_name = $qname
+		WHERE scale_no = $scale_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{color} )
+    {
+	my $color = $diff->{color} eq 'none' ? undef : $diff->{color};
+	my $qcolor = $dbh->quote($color);
+	
+	$sql = "UPDATE $SCALE_DATA set color = $qcolor
+		WHERE scale_no = $scale_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{type} )
+    {
+	my $locality = $diff->{type} eq 'none' ? undef : $diff->{type};
+	my $qloc = $dbh->quote($locality);
+	
+	$sql = "UPDATE $SCALE_DATA set locality = $qloc
+		WHERE scale_no = $scale_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{reference_no} )
+    {
+	my $refno = $diff->{reference_no} eq 'none' ? undef : $diff->{reference_no};
+	my $qrefno = $dbh->quote($refno);
+	
+	$sql = "UPDATE $SCALE_DATA set reference_no = $qrefno
+		WHERE scale_no = $scale_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{top} )
+    {
+	my $qtop = $dbh->quote($diff->{top});
+	
+	$sql = "UPDATE $SCALE_DATA set late_age = $qtop
+		WHERE scale_no = $scale_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    if ( $diff->{base} )
+    {
+	my $qbase = $dbh->quote($diff->{base});
+	
+	$sql = "UPDATE $SCALE_DATA set early_age = $qbase
+		WHERE scale_no = $scale_no";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    # Report what we have done.
+    
+    $UPDATE_SCALES++;
+    
+    unless ( $opt_debug )
+    {
+	say STDOUT "Updated scale '$name' ($scale_no)";
+    }
+}
+
+
+sub CreatePBDBScale {
+    
+    my ($dbh, $scale_no, $diff) = @_;
+    
+    my ($sql, $result);
+    
+    my $SCALE_DATA = $TableDefs::TABLE{SCALE_DATA};
+    
+    my $name = $SCALE_NUM{$scale_no}{scale_name};
+    my $line_no = $SCALE_NUM{$scale_no}{line_no};
+    
+    my $qname = $dbh->quote($name);
+    my $qcolor = $dbh->quote($diff->{color});
+    my $qloc = $dbh->quote($diff->{type});
+    my $qrefno = $dbh->quote($diff->{reference_no});
+    my $qtop = $dbh->quote($diff->{top});
+    my $qbase = $dbh->quote($diff->{base});
+    
+    # Create a record in the scale_data table.
+    
+    $sql = "INSERT INTO $SCALE_DATA (scale_no, scale_name, color, locality,
+		reference_no, late_age, early_age)
+	    VALUES ($scale_no, $qname, $qcolor, $qloc, $qrefno, $qtop, $qbase)";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    unless ( $opt_debug )
+    {
+	say STDOUT "Created scale '$name' ($scale_no)";
+	$CREATE_SCALES++;
+    }
+}
+
+
+sub RemovePBDBScale {
+    
+    my ($dbh, $scale_no, $diff) = @_;
+    
+    my ($sql, $result);
+    
+    my $SCALE_DATA = $TableDefs::TABLE{SCALE_DATA};
+    
+    my $name = $SCALE_NUM{$scale_no}{scale_name};
+    my $line_no = $SCALE_NUM{$scale_no}{line_no};
+    
+    $sql = "DELETE FROM $SCALE_DATA WHERE scale_no = $scale_no";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    # Report what we have done.
+    
+    $REMOVE_SCALES++;
+    
+    unless ( $opt_debug )
+    {
+	say STDOUT "Removed scale '$name' ($scale_no)";
+    }
+}
+
+
+# SyncIntervalsTable ( dbh )
+# 
+# Update the classic intervals table to match the interval_data table. This is made more
+# difficult by the field 'eml_interval' which needs to be computed.
+
+sub SyncIntervalsTable {
+    
+    my ($dbh) = @_;
+    
+    my ($sql, $result);
+    
+    my $INTERVAL_DATA = $TableDefs::TABLE{INTERVAL_DATA};
+    my $CLASSIC_INTS = $TableDefs::TABLE{CLASSIC_INTERVALS};
+    
+    # Start by deleting anything in the intervals table that isn't in the intervals_data
+    # table. 
+    
+    $sql = "DELETE $CLASSIC_INTS
+	    FROM $CLASSIC_INTS left join $INTERVAL_DATA using (interval_no)
+	    WHERE $INTERVAL_DATA.interval_no is null";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    if ( $result > 0 )
+    {
+	say STDERR "  Deleted $result intervals from the classic intervals table";
+    }
+    
+    # Now compare the names between the two tables, and update eml_interval and
+    # interval_name in the intervals table as necessary.
+    
+    $sql = "SELECT id.interval_no, id.interval_name, id.reference_no, 
+		i.interval_no as classic_no, i.eml_interval, i.interval_name as classic_name
+	    FROM $INTERVAL_DATA as id left join $CLASSIC_INTS as i using (interval_no)";
+    
+    my @result = $dbh->selectall_array($sql, { Slice => { } });
+        
+    foreach my $r ( @result )
+    {
+	my $interval_no = $r->{interval_no};
+	my $interval_name = $r->{interval_name};
+	
+	my ($eml, $classic_name) = EmlName($interval_name);
+	
+	# If the interval table record is missing, create it.
+	
+	if ( ! $r->{classic_no} )
+	{
+	    my $qino = $dbh->quote($interval_no);
+	    my $qeml = $dbh->quote($eml);
+	    my $qname = $dbh->quote($classic_name);
+	    my $qref = $dbh->quote($r->{reference_no});
+	    
+	    $sql = "INSERT INTO $CLASSIC_INTS (authorizer_no, enterer_no, interval_no,
+			eml_interval, interval_name, reference_no)
+		    VALUES ($AUTHORIZER_NO, $AUTHORIZER_NO, $qino, $qeml, $qname, $qref)";
+	    
+	    $result = DoStatement($dbh, $sql);
+	    
+	    say STDERR  "  Created $qname ($interval_no) in the classic intervals table"
+		unless $opt_debug;
+	}
+	
+	# If the names don't match, do an update.
+	
+	elsif ( $eml ne $r->{eml_interval} || $classic_name ne $r->{classic_name} )
+	{
+	    my $qino = $dbh->quote($interval_no);
+	    my $qeml = $dbh->quote($eml);
+	    my $qname = $dbh->quote($classic_name);
+	    
+	    $sql = "UPDATE $CLASSIC_INTS
+		    SET eml_interval=$qeml, interval_name=$qname
+		    WHERE interval_no = $qino";
+	    
+	    $result = DoStatement($dbh, $sql);
+	    
+	    say STDERR "  Renamed $qname ($interval_no) in the classic intervals table"
+		unless $opt_debug;
+	}
+    }
+    
+    # Update reference numbers.
+    
+    $sql = "UPDATE $INTERVAL_DATA as id join $CLASSIC_INTS as i using (interval_no)
+	    SET i.reference_no = id.reference_no, i.modifier_no = $AUTHORIZER_NO
+	    WHERE i.reference_no <> id.reference_no";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    if ( $result > 0 )
+    {
+	say STDERR "  Updated $result reference numbers in the classic intervals table";
+    }
+}
+
+
+sub EmlName {
+    
+    my ($name) = @_;
+    
+    if ( $name =~ qr{ ^ (early|middle|late) (\s (?:early|middle|late))? \s (.*) }xi )
+    {
+	my $eml = $1 . $2;
+	my $rest = $3;
+	
+	if ( lc $eml eq 'early' )
+	{
+	    $eml = 'Early/Lower';
+	}
+	
+	elsif ( lc $eml eq 'late' )
+	{
+	    $eml = 'Late/Upper';
+	}
+	
+	elsif ( lc $eml eq 'middle' )
+	{
+	    $eml = 'Middle';
+	}
+	
+	return $eml, $rest;
+    }
+    
+    else
+    {
+	return '', $name;
+    }
+}
+
+
+# DoStatement ( dbh, sql )
+# 
+# If we are running in debug mode, print the specified SQL statement to STDOUT.
+# Otherwise, execute it and return the result.
+
+sub DoStatement {
+    
+    my ($dbh, $sql) = @_;
+    
+    if ( $opt_debug )
+    {
+	print STDOUT "$sql\n\n";
+	return;
+    }
+    
+    else
+    {
+	return $dbh->do($sql);
+    }
+}
+
+
+# CheckScaleTable ( dbh )
+# 
+# Check to see whether the PBDB scale_data table has the fields 'color' and 'locality'.
+
+sub CheckScaleTable {
+    
+    my ($dbh) = @_;
+    
+    my $sql = "SHOW CREATE TABLE $TableDefs::TABLE{SCALE_DATA}";
+    
+    my ($table, $def) = $dbh->selectrow_array($sql);
+    
+    if ( $def =~ /`color`/ )
+    {
+	$HAS_COLOR = 1;
+    }
+    
+    if ( $def =~ /`locality`/ )
+    {
+	$HAS_LOCALITY = 1;
+    }
+    
+    $sql = "SHOW CREATE TABLE $TableDefs::TABLE{SCALE_MAP}";
+    
+    my ($table, $def) = $dbh->selectrow_array($sql);
+    
+    if ( $def =~ /`reference_no`/ )
+    {
+	$HAS_REFNO = 1;
+    }
+}
+
+
+# ConditionScaleTable ( dbh )
+# 
+# Add the fields 'color' and 'locality' to the PBDB scale_data table.
+
+sub ConditionScaleTable {
+    
+    my ($dbh) = @_;
+    
+    my ($sql, $result);
+    
+    my $SCALE_DATA = $TableDefs::TABLE{SCALE_DATA};
+    my $SCALE_MAP = $TableDefs::TABLE{SCALE_MAP};
+    
+    unless ( $HAS_COLOR )
+    {
+	$sql = "ALTER TABLE $SCALE_DATA change default_color color varchar(10) null";
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    unless ( $HAS_LOCALITY )
+    {
+	$sql = "ALTER TABLE $SCALE_DATA add locality varchar(80) null after color";
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    unless ( $HAS_REFNO )
+    {
+	$sql = "ALTER TABLE $SCALE_MAP add reference_no int unsigned null after color";
+	$result = DoStatement($dbh, $sql);
     }
 }
 
 
 # ComputeContainers ( interval, scale_no )
 # 
-# Compute the containing intervals for the given interval, from the
-# International scale and the Tertiary subepochs. For intervals in the
-# international scale, compute the immediate parent.
+# Compute the containing intervals for the given interval, from the International scale
+# and the Cenozoic and Late Cretaceous subepochs. For intervals in the international
+# scale, also compute the immediate parent. This is required so that the API result
+# requested by the Navigator application reports the parent of each interval in the
+# international timescale. Navigator depends on that information.
 
 sub ComputeContainers {
     
@@ -2079,15 +3457,15 @@ sub ComputeContainers {
 	}
     }
     
-    # Then run through the Tertiary subepochs.
+    # Then run through the Cenozoic and Late Cretaceous subepochs.
     
     foreach my $c ( $SCALE_INTS{$TERT_SUBEPOCHS}->@* )
     {
-	last if $c->{t_age} > $i->{b_age};
-	
-	if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+	if ( $c->{type} eq 'subepoch' )
 	{
-	    if ( $c->{type} eq 'subepoch' )
+	    last if $c->{t_age} > $i->{b_age};
+	
+	    if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
 	    {
 		$i->{subepoch} = $c->{interval_name};
 	    }
@@ -2096,162 +3474,57 @@ sub ComputeContainers {
 }
 
 
-# PrintDifferences ( )
+# ComputeScaleAttrs ( scale_no )
 # 
-# Print out the differences that were computed by &DiffPBDB between the
-# spreadsheet and the PBDB interval tables. Print a table of differences to
-# STDOUT, in the same format (CSV or TSV) as the input data.
+# Scan through the intervals and compute the top and base ages for the specified scale.
+# If the scale does not have a reference_no, fill that in from the first non-empty
+# reference_no value among its intervals.
 
-sub PrintDifferences {
+sub ComputeScaleAttrs {
     
-    &SetupOutput;
+    my ($scale_no) = @_;
     
-    # If we have generated any differences in containing intervals, start by generating
-    # the same header line that was read from the input data.
+    my ($t_age, $b_age, $reference_no, $remove);
     
-    if ( %DIFF_NUM || @DIFF_MISSING || @DIFF_EXTRA )
+    foreach my $i ( $SCALE_INTS{$scale_no}->@* )
     {
-	print GenerateHeader();
-    }
-    
-    else
-    {
-	say STDERR "No differences between this spreadsheet and the PBDB";
-    }
-    
-    if ( %DIFF_NUM )
-    {
-	say "\nDifferences from PBDB:\n";
+	# Compute the minimum and maximum age bounds.
 	
-	foreach my $i ( @ALL_INTERVALS )
+	if ( !defined $t_age || $i->{t_age} < $t_age )
 	{
-	    my $scale_no = $i->{scale_no};
-	    my $interval_no = $i->{interval_no};
-	    
-	    if ( $DIFF_NUM{$scale_no}{$interval_no} )
-	    {
-		$DIFF_NUM{$scale_no}{$interval_no}{interval_no} = $interval_no;
-		$DIFF_NUM{$scale_no}{$interval_no}{interval_name} = $i->{interval_name};
-		$DIFF_NUM{$scale_no}{$interval_no}{scale_no} = $i->{scale_no};
-		$DIFF_NUM{$scale_no}{$interval_no}{scale_name} = $i->{scale_name};
-		
-		print RecordToLine($DIFF_NUM{$scale_no}{$interval_no}, \@FIELD_LIST);
-	    }
+	    $t_age = $i->{t_age};
+	}
+	
+	if ( !defined $b_age || $i->{b_age} > $b_age )
+	{
+	    $b_age = $i->{b_age};
+	}
+	
+	# Determine the first non-empty reference_no value.
+	
+	if ( $i->{reference_no} )
+	{
+	    $reference_no ||= $i->{reference_no};
+	}
+	
+	# If all of the intervals are to be removed, flag the scale for removal. If even
+	# one of them is not, clear the flag.
+	
+	if ( $i->{action} =~ /^REMOVE|^COALESCE/ )
+	{
+	    $remove //= 1;
+	}
+	
+	else
+	{
+	    $remove = 0;
 	}
     }
     
-    if ( @DIFF_MISSING )
-    {
-	say "\nMissing from this spreadsheet:\n";
-	
-	foreach my $i ( @DIFF_MISSING )
-	{
-	    print RecordToLine($i, \@FIELD_LIST);
-	}
-    }
-    
-    if ( @DIFF_EXTRA )
-    {
-	say "\nExtra in this spreadsheet:\n";
-	
-	foreach my $i ( @DIFF_EXTRA )
-	{
-	    print RecordToLine($i, \@FIELD_LIST);
-	}
-    }
-}
-
-
-# ApplyDifferences ( )
-# 
-# Apply the differences that were computed by &DiffPBDB to the PBDB interval
-# tables. The tables 'interval_data', 'scale_map', 'intervals', and
-# 'interval_lookup' will be updated to match the spreadsheet. The scale_map
-# table is the most difficult. For each updated scale, a new set of scale_map
-# records is computed. If the sequence has changed, 
-
-sub ApplyDifferences {
-    
-    
-    
-    
-    
-}
-
-
-# FetchPBDBInterval ( dbh, interval_no, scale_no )
-# 
-# Given an interval_no and scale_no, fetch the corresponding PBDB interval
-# record. Include information from the specified scale, if that interval
-# is included in that scale.
-
-sub FetchPBDBInterval {
-    
-    my ($dbh, $interval_no, $scale_no) = @_;
-    
-    my $qi = $dbh->quote($interval_no);
-    my $qs = $dbh->quote($scale_no);
-    
-    my $sql = "SELECT i.interval_no, interval_name, abbrev, type, early_age as b_age,
-		    late_age as t_age, reference_no, scale_no, parent_no, color,
-		    stage_no, subepoch_no, epoch_no, period_no
-		FROM $TableDefs::TABLE{INTERVAL_DATA} as i
-		    left join interval_lookup using (interval_no)
-		    left join $TableDefs::TABLE{SCALE_MAP} as sm 
-		        on sm.interval_no = i.interval_no and sm.scale_no = $qs
-		WHERE i.interval_no = $qi";
-    
-    my $result = $dbh->selectrow_hashref($sql, { Slice => { } });
-    
-    return $result;
-}
-
-
-# FetchPBDBNums ( dbh )
-# 
-# Return a hashref of PBDB interval numbers and names.
-
-sub FetchPBDBNums {
-    
-    my ($dbh) = @_;
-    
-    my $sql = "SELECT interval_no, interval_name FROM $TableDefs::TABLE{INTERVAL_DATA}";
-    
-    my @ints = $dbh->selectall_array($sql, { Slice => { } });
-    
-    my %result;
-    
-    foreach my $i ( @ints )
-    {
-	$result{$i->{interval_no}} = $i->{interval_name};
-    }
-    
-    return \%result;
-}
-
-
-# FetchPBDBSequences ( dbh )
-# 
-# Return a hashref of PBDB scale numbers and interval sequences. Each hash value
-# will be a list of interval numbers, in the order they appear in the database.
-
-sub FetchPBDBSequences {
-    
-    my ($dbh) = @_;
-    
-    my $sql = "SELECT scale_no, interval_no FROM $TableDefs::TABLE{SCALE_MAP}";
-    
-    my @ints = $dbh->selectall_array($sql, { Slice => { } });
-    
-    my %sequence;
-    
-    foreach my $i ( @ints )
-    {
-	$sequence{$i->{scale_no}} ||= [ ];
-	push $sequence{$i->{scale_no}}->@*, $i->{interval_no};
-    }
-    
-    return \%sequence;
+    $SCALE_NUM{$scale_no}{t_age} = $t_age;
+    $SCALE_NUM{$scale_no}{b_age} = $b_age;
+    $SCALE_NUM{$scale_no}{reference_no} ||= $reference_no;
+    $SCALE_NUM{$scale_no}{action} = 'REMOVE' if $remove;
 }
 
 
