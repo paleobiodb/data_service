@@ -7,6 +7,12 @@
 
 use strict;
 
+use lib 'lib';
+
+use CoreFunction qw(connectDB);
+use TableDefs qw(%TABLE);
+use CoreTableDefs;
+
 use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 
 use JSON;
@@ -31,6 +37,7 @@ our ($UPDATE_INTERVALS) = 0;
 our ($CREATE_SCALES) = 0;
 our ($REMOVE_SCALES) = 0;
 our ($UPDATE_SCALES) = 0;
+our ($UPDATE_SEQUENCES) = 0;
 
 # The input data and its parsed content are stored in the following globals.
 # Yes, I know that's not consistent with best coding practice.
@@ -41,7 +48,7 @@ our (%INTERVAL_NAME, %INTERVAL_NUM, @ALL_INTERVALS);
 our (%SCALE_NAME, %SCALE_NUM, %SCALE_INTS, @SCALE_NUMS, %SCALE_SELECT);
 our (%DIFF_NAME, %DIFF_INT, @DIFF_MISSING, @DIFF_EXTRA);
 our (%DIFF_SCALE, @DIFF_MISSING_SCALES);
-our ($HAS_COLOR, $HAS_LOCALITY, $HAS_REFNO);
+our ($HAS_COLOR, $HAS_LOCALITY, $HAS_REFNO, $HAS_SEQUENCE);
 our ($UPDATE_COUNT, $CREATE_COUNT, $REMOVE_COUNT);
 our (@ERRORS);
 
@@ -138,7 +145,7 @@ elsif ( $CMD eq 'check' )
 # more timescales as a sequence of boxes. This enables visual confirmation that the
 # timescale boundaries have been input correctly.
 
-elsif ( $CMD eq 'print' )
+elsif ( $CMD eq 'diagram' )
 {
     &ReadSheet;
     &PrintScales(@REST);
@@ -199,14 +206,14 @@ elsif ( $CMD eq 'update' || $CMD eq 'debug' )
     if ( $SUBCMD eq 'pbdb' )
     {
 	$DBNAME = $opt_dbname || 'pbdb';
-	&DiffPBDB('update', @REST) if @ERRORS == 0 || $opt_force;
+	&DiffPBDB('update', $DBNAME, @REST) if @ERRORS == 0 || $opt_force;
 	&ReportErrors;
     }
     
     elsif ( $SUBCMD eq 'test' )
     {
 	$DBNAME = $opt_dbname || 'test';
-	&DiffPBDB('update', @REST) if @ERRORS == 0 || $opt_force;
+	&DiffPBDB('update', $DBNAME, @REST) if @ERRORS == 0 || $opt_force;
 	&ReportErrors;
     }
     
@@ -225,21 +232,21 @@ elsif ( $CMD eq 'update' || $CMD eq 'debug' )
 # subcommand 'restore' restores the tables to match the contents of the backup tables.
 # The subcommand 'ints' synchronizes the 'intervals' table with the 'interval_data' table.
 
-elsif ( $CMD eq 'backup' || $CMD eq 'restore' || $CMD eq 'ints' )
+elsif ( $CMD eq 'backup' || $CMD eq 'restore' || $CMD eq 'ints' || $CMD eq 'validate' )
 {
     my $SUBCMD = shift @REST;
     
     if ( $SUBCMD eq 'pbdb' )
     {
 	$DBNAME = $opt_dbname || 'pbdb';
-	&PBDBCmd($CMD, $DBNAME, @REST);
+	&PBDBCommand($CMD, $DBNAME, @REST);
 	&ReportErrors;
     }
     
     elsif ( $SUBCMD eq 'test' )
     {
 	$DBNAME = $opt_dbname || 'test';
-	&PBDBCmd($CMD, $DBNAME, @REST);
+	&PBDBCommand($CMD, $DBNAME, @REST);
 	&ReportErrors;
     }
     
@@ -785,6 +792,17 @@ sub CheckScales {
 	    $SCALE_SELECT{$t} = 1;
 	}
 	
+	elsif ( $t =~ /^(\d+)-(\d+)$/ )
+	{
+	    my $min = $1;
+	    my $max = $2;
+	    
+	    foreach my $s ( @SCALE_NUMS )
+	    {
+		$SCALE_SELECT{$s} = 1 if $s >= $min && $s <= $max;
+	    }
+	}
+	
 	elsif ( $t =~ /[a-z]/ )
 	{
 	    my $re = qr{(?i)$t};
@@ -817,20 +835,21 @@ sub CheckScales {
 	    my $errors = &CheckOneScale($scale_no);
 	    
 	    my $name = $SCALE_NUM{$scale_no}{scale_name};
+	    my $count = grep { $_->{action} !~ /^RENAME|^COALESCE/ } $SCALE_INTS{$scale_no}->@*;
 	    
 	    if ( $errors )
 	    {
-		say STDERR "Timescale '$name' had $errors ERRORS";
+		say STDERR "Timescale $scale_no '$name' had $errors ERRORS";
 	    }
 	    
-	    elsif ( $SCALE_INTS{$scale_no} )
+	    elsif ( $count )
 	    {
-		say STDERR "Timescale '$name' passes all checks";
+		say STDERR "Timescale $scale_no '$name' passes all checks";
 	    }
 	    
 	    else
 	    {
-		say STDERR "Timescale '$name' is empty";
+		say STDERR "Timescale $scale_no '$name' is empty";
 	    }
 	}
     }
@@ -1854,25 +1873,14 @@ sub DiffPBDB {
     
     my ($cmd, $dbname, @args) = @_;
     
-    # First make sure we have the necessary PBDB API libraries available. We do
-    # this at runtime rather than at compile time so that the other functions of
-    # this program can be run in environments where they are not available.
-    
-    use lib './lib';
-    require "CoreFunction.pm";
-    CoreFunction->import('connectDB');
-    require "TableDefs.pm";
-    TableDefs->import('%TABLE');
-    require "CoreTableDefs.pm";
+    # use lib './lib';
+    # require "CoreFunction.pm";
+    # CoreFunction->import('connectDB');
+    # require "TableDefs.pm";
+    # TableDefs->import('%TABLE');
+    # require "CoreTableDefs.pm";
     
     my $dbh = connectDB("config.yml", $dbname);
-    
-    # If the command was 'ints', just synchronize the intervals table with interval_data.
-    
-    if ( $CMD eq 'ints' )
-    {
-	return SyncIntervalsTable($dbh);
-    }
     
     # Select intervals contained in any of the specified timescales.
     
@@ -1932,7 +1940,7 @@ sub DiffPBDB {
     
     # Check for certain database fields.
     
-    CheckScaleTable($dbh);
+    CheckScaleTables($dbh);
     
     # If we are diffing all scales, fetch a hash of all the intervals known to the PBDB
     # by interval_no, and all scales known to the PBDB by scale_no. This allows us to
@@ -2178,14 +2186,14 @@ sub DiffPBDB {
     
     # If the command is 'diff', print out a table of differences.
     
-    if ( $CMD eq 'diff' )
+    if ( $cmd eq 'diff' )
     {
 	&PrintDifferences;
     }
     
     # If the command is 'update', actually update the PBDB.
     
-    elsif ( $CMD eq 'update' )
+    elsif ( $cmd eq 'update' )
     {
 	&ApplyDifferences($dbh);
     }
@@ -2302,7 +2310,7 @@ sub ApplyDifferences {
     
     # Make sure that the scale_data table has the proper fields.
     
-    ConditionScaleTable($dbh);
+    ConditionScaleTables($dbh);
     
     # Fetch the list of PBDB intervals from each PBDB scale from the scale_map table.
     
@@ -2336,37 +2344,45 @@ sub ApplyDifferences {
 	
 	elsif ( $sheet_count )
 	{
-	    my (%check) = 1;
-	    
-	    # Add all of the interval_no values from the pbdb sequence to %check.
-	    
 	    foreach my $i ( 0..$sheet_count-1 )
 	    {
-		$check{ $scale_seq{$scale_no}[$i] } = 1;
-	    }
-	    
-	    # Check that each of the interval_no values from the spreadsheet is in
-	    # %check, and remove it. If any are missing, set sequence_diff to true.
-	    
-	    foreach my $i ( 0..$sheet_count-1 )
-	    {
-		my $ino = $SCALE_INTS{$scale_no}[$i]{interval_no};
-		
-		if ( $check{$ino} )
-		{
-		    delete $check{$ino};
-		}
-		
-		else
+		if ( $scale_seq{$scale_no}[$i] ne $SCALE_INTS{$scale_no}[$i]{interval_no} )
 		{
 		    $sequence_diff = 1;
-		    last;
 		}
 	    }
 	    
-	    # If anything remains in %check, set sequence_diff to true.
+	    # my (%check) = 1;
 	    
-	    $sequence_diff = 1 if %check;
+	    # # Add all of the interval_no values from the pbdb sequence to %check.
+	    
+	    # foreach my $i ( 0..$sheet_count-1 )
+	    # {
+	    # 	$check{ $scale_seq{$scale_no}[$i] } = 1;
+	    # }
+	    
+	    # # Check that each of the interval_no values from the spreadsheet is in
+	    # # %check, and remove it. If any are missing, set sequence_diff to true.
+	    
+	    # foreach my $i ( 0..$sheet_count-1 )
+	    # {
+	    # 	my $ino = $SCALE_INTS{$scale_no}[$i]{interval_no};
+		
+	    # 	if ( $check{$ino} )
+	    # 	{
+	    # 	    delete $check{$ino};
+	    # 	}
+		
+	    # 	else
+	    # 	{
+	    # 	    $sequence_diff = 1;
+	    # 	    last;
+	    # 	}
+	    # }
+	    
+	    # # If anything remains in %check, set sequence_diff to true.
+	    
+	    # $sequence_diff = 1 if %check;
 	}
 	
 	# If there is a difference, change the scale_map to match.
@@ -2375,6 +2391,7 @@ sub ApplyDifferences {
 	{
 	    UpdatePBDBSequence($dbh, $scale_no, $SCALE_INTS{$scale_no});
 	    $SCALE_NUM{$scale_no}{scale_map_updated} = 1;
+	    $UPDATE_SEQUENCES++;
 	}
 	
 	# Now compare the intervals one by one and update any that are different.
@@ -2411,7 +2428,7 @@ sub ApplyDifferences {
     # Print a summary of actions taken.
     
     if ( $UPDATE_INTERVALS || $CREATE_INTERVALS || $REMOVE_INTERVALS ||
-	 $UPDATE_SCALES || $CREATE_SCALES || $REMOVE_SCALES )
+	 $UPDATE_SCALES || $CREATE_SCALES || $REMOVE_SCALES || $UPDATE_SEQUENCES )
     {
 	if ( $opt_debug )
 	{
@@ -2429,6 +2446,7 @@ sub ApplyDifferences {
 	say STDERR "  Created $CREATE_SCALES timescales" if $CREATE_SCALES;
 	say STDERR "  Removed $REMOVE_SCALES timescales" if $REMOVE_SCALES;
 	say STDERR "  Updated $UPDATE_SCALES timescales" if $UPDATE_SCALES;
+	say STDERR "  Updated $UPDATE_SEQUENCES timescale sequences" if $UPDATE_SEQUENCES;
     }
     
     elsif ( $opt_debug )
@@ -2541,7 +2559,17 @@ sub FetchPBDBSequences {
     
     my ($dbh) = @_;
     
-    my $sql = "SELECT scale_no, interval_no FROM $TableDefs::TABLE{SCALE_MAP}";
+    my $sql;
+    
+    if ( $HAS_SEQUENCE )
+    {
+	$sql = "SELECT scale_no, interval_no FROM $TABLE{SCALE_MAP} order by sequence";
+    }
+    
+    else
+    {
+	$sql = "SELECT scale_no, interval_no FROM $TABLE{SCALE_MAP}";
+    }
     
     my @ints = $dbh->selectall_array($sql, { Slice => { } });
     
@@ -2589,6 +2617,7 @@ sub UpdatePBDBSequence {
     return unless ref $interval_list eq 'ARRAY' && $interval_list->@*;
     
     my $value_string = '';
+    my $seq = 0;
     
     foreach my $i ( $interval_list->@* )
     {
@@ -2596,6 +2625,7 @@ sub UpdatePBDBSequence {
 	my $qtype = $dbh->quote($i->{type});
 	my $qcolor = $dbh->quote($i->{color});
 	my $qrefno = $dbh->quote($i->{reference_no});
+	$seq++;
 	
 	$value_string .= ', ' if $value_string;
 	
@@ -2605,7 +2635,7 @@ sub UpdatePBDBSequence {
 	    die "Bad parent '$i->{parent}' for interval $i->{interval_no}"
 		unless $parent_no > 0 || $i->{type} eq 'eon';
 	    
-	    $value_string .= "($scale_no,$interval_no,$parent_no,$qtype,$qcolor,$qrefno)";
+	    $value_string .= "($scale_no,$interval_no,$seq,$parent_no,$qtype,$qcolor,$qrefno)";
 	}
 	
 	else
@@ -2616,13 +2646,15 @@ sub UpdatePBDBSequence {
     
     if ( $scale_no == 1 )
     {
-	$sql = "REPLACE INTO $SCALE_MAP (scale_no, interval_no, parent_no, type, color, reference_no)
+	$sql = "REPLACE INTO $SCALE_MAP (scale_no, interval_no, sequence, parent_no,
+		    type, color, reference_no)
 		VALUES $value_string";
     }
     
     else
     {
-	$sql = "REPLACE INTO $SCALE_MAP (scale_no, interval_no, type, color, reference_no)
+	$sql = "REPLACE INTO $SCALE_MAP (scale_no, interval_no, sequence,
+		    type, color, reference_no)
 		VALUES $value_string";
     }
     
@@ -3171,6 +3203,99 @@ sub RemovePBDBScale {
 }
 
 
+# PBDBCommand ( command, dbname, @args )
+
+sub PBDBCommand {
+    
+    my ($cmd, $dbname, @args) = @_;
+    
+    my $dbh = connectDB("config.yml", $dbname);
+    
+    my ($sql, $result);
+    
+    my @table_list = qw(interval_data interval_lookup intervals scale_data scale_map);
+    
+    # If the command is 'ints', just synchronize the intervals table with interval_data.
+    
+    if ( $cmd eq 'ints' )
+    {
+	return SyncIntervalsTable($dbh);
+    }
+    
+    # If the command is 'backup', then backup each of the five tables updated by this
+    # program. First, add the necessary fields if they aren't already in place.
+    
+    elsif ( $cmd eq 'backup' )
+    {
+	CheckScaleTables($dbh);
+	ConditionScaleTables($dbh);
+	
+	foreach my $table ( @table_list )
+	{
+	    my $backup_name = $table . "_backup";
+	    
+	    $sql = "DROP TABLE IF EXISTS $backup_name";
+	    
+	    $result = DoStatement($dbh, $sql);
+	    
+	    $sql = "CREATE TABLE $backup_name like $table";
+	    
+	    $result = DoStatement($dbh, $sql);
+	    
+	    $sql = "INSERT INTO $backup_name SELECT * FROM $table";
+	    
+	    $result = DoStatement($dbh, $sql);
+	    
+	    say "Backed up table $table => $backup_name";
+	}
+	
+	return;
+    }
+    
+    # If the command is 'restore', then restore the tables from the backup tables.
+    
+    elsif ( $cmd eq 'restore' )
+    {
+	foreach my $table ( @table_list )
+	{
+	    my $backup_name = $table . "_backup";
+	    
+	    $sql = "DELETE FROM $table";
+	    
+	    $result = DoStatement($dbh, $sql);
+	    
+	    $sql = "INSERT INTO $table SELECT * FROM $backup_name";
+	    
+	    $result = DoStatement($dbh, $sql);
+	    
+	    say "Restored table $table from $backup_name";
+	}
+	
+	return;
+    }
+    
+    # If the command is 'validate' then check the consistency of the tables.
+    
+    elsif ( $cmd eq 'validate' )
+    {
+	$sql = "SELECT count(*) FROM interval_data";
+	
+	my ($id_count) = $dbh->selectrow_array($sql);
+	
+	$sql = "SELECT count(*) FROM scale_data";
+	
+	my ($sd_count) = $dbh->selectrow_array($sql);
+	
+	say "There are $id_count intervals in $sd_count scales.";
+    }
+    
+    else
+    {
+	die "Unknown command 'cmd'\n";
+    }
+}
+
+
 # SyncIntervalsTable ( dbh )
 # 
 # Update the classic intervals table to match the interval_data table. This is made more
@@ -3324,11 +3449,11 @@ sub DoStatement {
 }
 
 
-# CheckScaleTable ( dbh )
+# CheckScaleTables ( dbh )
 # 
 # Check to see whether the PBDB scale_data table has the fields 'color' and 'locality'.
 
-sub CheckScaleTable {
+sub CheckScaleTables {
     
     my ($dbh) = @_;
     
@@ -3354,14 +3479,20 @@ sub CheckScaleTable {
     {
 	$HAS_REFNO = 1;
     }
+    
+    if ( $def =~ /`sequence`/ )
+    {
+	$HAS_SEQUENCE = 1;
+    }
 }
 
 
-# ConditionScaleTable ( dbh )
+# ConditionScaleTables ( dbh )
 # 
-# Add the fields 'color' and 'locality' to the PBDB scale_data table.
+# Add the fields 'color' and 'locality' to the PBDB scale_data table, and 'reference_no'
+# and 'sequence' to the scale_map table.
 
-sub ConditionScaleTable {
+sub ConditionScaleTables {
     
     my ($dbh) = @_;
     
@@ -3374,18 +3505,28 @@ sub ConditionScaleTable {
     {
 	$sql = "ALTER TABLE $SCALE_DATA change default_color color varchar(10) null";
 	$result = DoStatement($dbh, $sql);
+	$HAS_COLOR = 1;
     }
     
     unless ( $HAS_LOCALITY )
     {
 	$sql = "ALTER TABLE $SCALE_DATA add locality varchar(80) null after color";
 	$result = DoStatement($dbh, $sql);
+	$HAS_LOCALITY = 1;
+    }
+    
+    unless ( $HAS_SEQUENCE )
+    {
+	$sql = "ALTER TABLE $SCALE_MAP add sequence int unsigned not null after interval_no";
+	$result = DoStatement($dbh, $sql);
+	$HAS_SEQUENCE = 1;
     }
     
     unless ( $HAS_REFNO )
     {
 	$sql = "ALTER TABLE $SCALE_MAP add reference_no int unsigned null after color";
 	$result = DoStatement($dbh, $sql);
+	$HAS_REFNO = 1;
     }
 }
 
