@@ -63,7 +63,8 @@ our (%INTERVAL_TYPE) = (eon => 1, era => 1, period => 1, epoch => 1,
 			subepoch => 1, age => 1, subage => 1, zone => 1);
 
 our (%TYPE_LABEL) = (eon => 'Eons', era => 'Eras', period => 'Periods',
-		     epoch => 'Epochs', age => 'Ages', subage => 'Subages', zone => 'Zones');
+		     epoch => 'Epochs', subepoch => 'Subepochs', 
+		     age => 'Ages', subage => 'Subages', zone => 'Zones');
 
 # The following scales are used in generating values for stage_no, epoch_no, etc.
 
@@ -141,14 +142,24 @@ elsif ( $CMD eq 'check' )
     &ReportErrors;
 }
 
-# The subcommand 'print' reads the specified spreadsheet data and prints out one or
+# The subcommand 'print' reads the specified spreadsheet data, interpolates ages, and
+# prints out the result. This enables confirmation that the data is being read properly.
+
+elsif ( $CMD eq 'print' )
+{
+    &ReadSheet;
+    &PrintScales(@REST);
+    &ReportErrors;
+}
+
+# The subcommand 'diagram' reads the specified spreadsheet data and prints out one or
 # more timescales as a sequence of boxes. This enables visual confirmation that the
 # timescale boundaries have been input correctly.
 
 elsif ( $CMD eq 'diagram' )
 {
     &ReadSheet;
-    &PrintScales(@REST);
+    &DiagramScales(@REST);
     &ReportErrors;
 }
 
@@ -380,6 +391,10 @@ sub ReadSheet {
 	
 	my $t_type = $record->{t_type};
 	my $b_type = $record->{b_type};
+	
+	# If the 'scale_no' column contains the value STOP, then stop here.
+	
+	last LINE if $record->{scale_no} eq 'STOP';
 	
 	# If the 'action' column contains the value SKIP, then ignore this line completely.
 	
@@ -778,53 +793,7 @@ sub ReportErrors {
 
 sub CheckScales {
     
-    my (@args) = @_;
-    
-    foreach my $t ( @args )
-    {
-	if ( $t eq 'all' )
-	{
-	    $SCALE_SELECT{all} = 1;
-	}
-	
-	elsif ( $SCALE_NUM{$t} )
-	{
-	    $SCALE_SELECT{$t} = 1;
-	}
-	
-	elsif ( $t =~ /^(\d+)-(\d+)$/ )
-	{
-	    my $min = $1;
-	    my $max = $2;
-	    
-	    foreach my $s ( @SCALE_NUMS )
-	    {
-		$SCALE_SELECT{$s} = 1 if $s >= $min && $s <= $max;
-	    }
-	}
-	
-	elsif ( $t =~ /[a-z]/ )
-	{
-	    my $re = qr{(?i)$t};
-	    my $found;
-	    
-	    foreach my $s ( @SCALE_NUMS )
-	    {
-		if ( $SCALE_NUM{$s}{scale_name} =~ $re )
-		{
-		    $SCALE_SELECT{$s} = 1;
-		    $found++;
-		}
-	    }
-	    
-	    warn "Unrecognized timescale '$t'\n" unless $found;
-	}
-	
-	else
-	{
-	    warn "Unrecognized timescale '$t'\n";
-	}
-    }
+    SelectScales(@_);
     
     return unless %SCALE_SELECT;
     
@@ -853,6 +822,76 @@ sub CheckScales {
 	    }
 	}
     }
+}
+
+
+# SelectScales ( arg... )
+# 
+# Add entries to %SCALE_SELECT based on the arguments. An argument of 'all' selects all
+# scales. A numeric argument or range selects any scales whose scale_no matches. A
+# non-numeric argument selects any scales whose scale_name matches.
+
+sub SelectScales {
+    
+    my @scale_list;
+    
+    foreach my $t ( @_ )
+    {
+	if ( $t eq 'all' )
+	{
+	    $SCALE_SELECT{all} = 1;
+	}
+	
+	elsif ( $SCALE_INTS{$t} )
+	{
+	    push @scale_list, $t unless $SCALE_SELECT{$t};
+	    $SCALE_SELECT{$t} = 1;
+	}
+	
+	elsif ( $t =~ /^(\d+)-(\d+)$/ )
+	{
+	    my $min = $1;
+	    my $max = $2;
+	    my $found;
+	    
+	    foreach my $s ( @SCALE_NUMS )
+	    {
+		if ( $s >= $min && $s <= $max )
+		{
+		    push @scale_list, $s unless $SCALE_SELECT{$s};
+		    $SCALE_SELECT{$s} = 1;
+		    $found++;
+		}
+	    }
+	    
+	    warn "No timescales in range $min-$max\n" unless $found;
+	}
+	
+	elsif ( $t =~ /[a-z]/ )
+	{
+	    my $re = qr{(?i)$t};
+	    my $found;
+	    
+	    foreach my $s ( @SCALE_NUMS )
+	    {
+		if ( $SCALE_NUM{$s}{scale_name} =~ $re )
+		{
+		    push @scale_list, $s unless $SCALE_SELECT{$s};
+		    $SCALE_SELECT{$s} = 1;
+		    $found++;
+		}
+	    }
+	    
+	    warn "Unrecognized timescale '$t'\n" unless $found;
+	}
+	
+	else
+	{
+	    warn "Unrecognized timescale '$t'\n";
+	}
+    }
+    
+    return @scale_list;
 }
 
 
@@ -890,19 +929,11 @@ sub CheckOneScale {
 	{
 	    my $coalesce = $1;
 	    
-	    # If the value is two interval names separated by a dash, generate errors if
-	    # either or both are not found.
+	    # Generate an error if the coalesce value is not the name of a known
+	    # interval, or if it corresponds to an interval that itself will be
+	    # coalesced or removed.
 	    
-	    if ( $coalesce =~ /^(.*?)-(.*)/ )
-	    {
-		push @errors, "at line $line, unrecognized interval '$1'" unless $INTERVAL_NAME{$1};
-		push @errors, "at line $line, unrecognized interval '$2'" unless $INTERVAL_NAME{$2};
-	    }
-	    
-	    # Otherwise, generate an error if the coalesce value is not found, or if it
-	    # corresponds to an interval that itself will be coalesced or removed.
-	    
-	    elsif ( $INTERVAL_NAME{$coalesce} )
+	    if ( $INTERVAL_NAME{$coalesce} )
 	    {
 		push @errors, "at line $line, cannot coalesce with an interval to be removed"
 		    if $INTERVAL_NAME{$coalesce}{action} =~ /^REMOVE|^COALESCE/;
@@ -932,16 +963,40 @@ sub CheckOneScale {
 		push @errors, "at line $line, top must be the same as interval_name";
 	    }
 	    
-	    # Otherwise, the top age must evaluate to a number. If TopAge returns a value that
-	    # is not a number, it is an error message.
+	    # The top age must evaluate to a number. If TopAgeRef returns a value that
+	    # is not an interval reference, it is an error message.
 	    
 	    else
 	    {
-		my $top = $i->{t_age} = TopAge($i);
+		my ($top_interval, $top_which) = TopAgeRef($i);
 		
-		unless ( $top =~ $AGE_RE )
+		if ( ref $top_interval )
 		{
-		    push @errors, "at line $line, interval '$name': $top";
+		    $i->{t_age} = $top_interval->{$top_which};
+		    
+		    unless ( $i->{t_age} =~ $AGE_RE )
+		    {
+			push @errors, "at line $line, bad top age '$i->{t_age}'";
+		    }
+		    
+		    # If the top bound, when evaluated, corresponds to a boundary from
+		    # the international timescale, then it is an anchor. Otherwise, it
+		    # will need to be interpolated.
+		    
+		    elsif ( $top_interval->{scale_no} eq $INTL_SCALE )
+		    {
+			$i->{t_bound} = 'anchor';
+		    }
+		    
+		    else
+		    {
+			$i->{t_bound} = 'eval';
+		    }
+		}
+		
+		else
+		{
+		    push @errors, "at line $line, interval '$name': $top_interval";
 		}
 	    }
 	    
@@ -953,13 +1008,40 @@ sub CheckOneScale {
 		push @errors, "at line $line, base must be the same as interval_name";
 	    }
 	    
+	    # The base age must evaluate to a number. If BaseAgeRef returns a value that
+	    # is not an interval reference, it is an error message.
+	    
 	    else
 	    {
-		my $base = $i->{b_age} = BaseAge($i);
+		my ($base_interval, $base_which) = BaseAgeRef($i);
 		
-		unless ( $base =~ $AGE_RE )
+		if ( ref $base_interval )
 		{
-		    push @errors, "at line $line, interval '$name': $base";
+		    $i->{b_age} = $base_interval->{$base_which};
+		    
+		    unless ( $i->{b_age} =~ $AGE_RE )
+		    {
+			push @errors, "at line $line, interval '$name': bad age '$i->{b_age}'";
+		    }
+		    
+		    # If the base bound, when evaluated, corresponds to a boundary from
+		    # the international timescale, then it is an anchor. Otherwise, it
+		    # will need to be interpolated.
+		    
+		    elsif ( $base_interval->{scale_no} eq $INTL_SCALE )
+		    {
+			$i->{b_bound} = 'anchor';
+		    }
+		    
+		    else
+		    {
+			$i->{b_bound} = 'eval';
+		    }
+		}
+		
+		else
+		{
+		    push @errors, "at line $line, interval '$name': $base_interval";
 		}
 	    }
 	}
@@ -1036,64 +1118,310 @@ sub CheckOneScale {
 }
 
 
+# InterpolateOneScale ( scale_no )
+# 
+# Interpolate the interval bounds in the specified timescale. Boundaries which are
+# defined directly are interpolated according to the surrounding anchor boundaries. This
+# subroutine should not be called on any timescale where CheckOneScale found errors.
+
+sub InterpolateOneScale {
+    
+    my ($scale_no) = @_;
+    
+    # Do not try to interpolate the international scale. It would generate errors
+    # because it does not have any t_ref or b_ref values.
+    
+    return if $scale_no eq $INTL_SCALE;
+    
+    my $name = $SCALE_NUM{$scale_no}{scale_name};
+    
+    # Run through the intervals in the scale, collecting the distinct boundary ages.
+    
+    my (%bound_type, %bound_new, @errors);
+    my ($has_anchor, $has_eval);
+    
+    foreach my $int ( $SCALE_INTS{$scale_no}->@* )
+    {
+	my $line = $int->{line_no};
+	my $t_bound = $int->{t_bound};
+	my $t_ref = $int->{t_ref};
+	
+	if ( $t_bound eq 'anchor' && defined $t_ref && $t_ref ne '' )
+	{
+	    push @errors, "at line $line, top boundary interpolation conflict"
+		if $bound_type{$t_ref} && $bound_type{$t_ref} eq 'eval';
+	    
+	    $bound_type{$t_ref} = 'anchor';
+	    $bound_new{$t_ref} = $int->{t_age};
+	    $has_anchor = 1;
+	}
+	
+	elsif ( $t_bound eq 'eval' )
+	{
+	    $t_ref = $int->{t_ref} = $int->{t_age};
+	    
+	    push @errors, "at line $line, top boundary interpolation conflict"
+		if $bound_type{$t_ref} && $bound_type{$t_ref} eq 'anchor';
+	    
+	    $bound_type{$t_ref} = 'eval';
+	    $has_eval = 1;
+	}
+	
+	my $b_bound = $int->{b_bound};
+	my $b_ref = $int->{b_ref};
+	
+	if ( $b_bound eq 'anchor' && defined $b_ref && $b_ref ne '' )
+	{
+	    push @errors, "at line $line, base boundary interpolation conflict"
+		if $bound_type{$b_ref} && $bound_type{$b_ref} eq 'eval';
+	    
+	    $bound_type{$b_ref} = 'anchor';
+	    $bound_new{$b_ref} = $int->{b_age};
+	    $has_anchor = 1;
+	}
+	
+	elsif ( $b_bound eq 'eval' )
+	{
+	    $b_ref = $int->{b_ref} = $int->{b_age};
+	    
+	    push @errors, "at line $line, base boundary type conflict"
+		if $bound_type{$b_ref} && $bound_type{$b_ref} eq 'anchor';
+	    
+	    $bound_type{$b_ref} = 'eval';
+	    $has_eval = 1;
+	}
+    }
+    
+    # Unless we have both anchors and ages to evaluate, there is nothing to interpolate.
+    
+    unless ( $has_anchor && $has_eval )
+    {
+	return;
+    }
+    
+    # If we have found any errors, we cannot proceed with the interpolation.
+    
+    if ( @errors )
+    {
+	push @errors, "cannot interpolate '$name' ($scale_no)";
+	
+	push @ERRORS, @errors;
+	
+	return scalar(@errors);
+    }
+    
+    # Otherwise, sort the list of anchors and bounds to evaluate.
+    
+    my @bound_list = sort { $a <=> $b } keys %bound_type;
+    
+    # # Any bound to evaluate should be bounded above and below by anchors.
+    
+    # unless ( $bound_type{$bound_list[0]} eq 'anchor' )
+    # {
+    # 	push @ERRORS, "cannot interpolate '$name' ($scale_no): missing top anchor";
+    # 	return 1;
+    # }
+    
+    # unless ( $bound_type{$bound_list[-1]} eq 'anchor' )
+    # {
+    # 	push @ERRORS, "cannot interpolate '$name' ($scale_no): missing bottom anchor";
+    # 	return 1;
+    # }
+    
+    # Now iterate through the bounds and interpolate all those of type 'eval'. Assign to
+    # each of these bounds a value in %bound_new derived from the values in %bound_new
+    # for the closest preceding and following anchors.
+    
+    foreach my $i ( 0..$#bound_list )
+    {
+	my $bound = $bound_list[$i];
+	
+	if ( $bound_type{$bound} eq 'eval' )
+	{
+	    # Search for an anchor boundary both above and below the boundary to be
+	    # evaluated.
+	    
+	    my ($above, $below);
+	    
+	    for ( my $j = $i; $j >= 0 ; $j-- )
+	    {
+		$above = $bound_list[$j], last if $bound_type{$bound_list[$j]} eq 'anchor';
+	    }
+	    
+	    for ( my $j = $i; $j <= $#bound_list; $j++ )
+	    {
+		$below = $bound_list[$j], last if $bound_type{$bound_list[$j]} eq 'anchor';
+	    }
+	    
+	    # If we find an anchor both above and below, generate a corrected value for
+	    # the boundary using linear interpolation.
+	    
+	    if ( defined $above && defined $below &&
+		 defined $bound_new{$above} && defined $bound_new{$below} )
+	    {
+		if ( $bound_new{$above} ne $above || $bound_new{$below} ne $below )
+		{
+		    my $fraction = ($bound - $above) / ($below - $above);
+		    
+		    my $new = $bound_new{$above} + 
+			$fraction * ($bound_new{$below} - $bound_new{$above});
+		    
+		    $bound_new{$bound} = int($new * 10) / 10;
+		}
+	    }
+	    
+	    # If we only have an anchor boundary above, generate a corrected value using the
+	    # difference between the uncorrected and corrected anchor age.
+	    
+	    elsif ( defined $above && defined $bound_new{$above} )
+	    {
+		$bound_new{$bound} = $bound + ($bound_new{$above} - $above);
+	    }
+	    
+	    # Similarly if we only have an anchor boundary below.
+	    
+	    elsif ( defined $below && defined $bound_new{$below} )
+	    {
+		$bound_new{$bound} = $bound + ($bound_new{$below} - $below);
+	    }
+	    
+	    else
+	    {
+		push @ERRORS, "error interpolating '$name': bad bracket for '$bound'";
+	    }
+	}
+    }
+    
+    # Finally, run through the intervals again and assign the interpolated values.
+    
+    foreach my $int ( $SCALE_INTS{$scale_no}->@* )
+    {
+	if ( $int->{t_bound} eq 'eval' )
+	{
+	    $int->{t_intp} = $bound_new{$int->{t_age}};
+	}
+	
+	if ( $int->{b_bound} eq 'eval' )
+	{
+	    $int->{b_intp} = $bound_new{$int->{b_age}};
+	}
+    }
+}
+
+
 # PrintScales ( scale... )
+# 
+# Print the specified timescale(s) as a spreadsheet, with interpolated ages.
+
+sub PrintScales {
+    
+    my @scale_list = SelectScales(@_);
+        
+    return unless @scale_list;
+    
+    # Check each of the scales to be printed, and interpolate the boundary ages if
+    # necessary.
+    
+    foreach my $scale_no ( @scale_list )
+    {
+	if ( my $errors = CheckOneScale($scale_no) )
+	{
+	    my $name = $SCALE_NUM{$scale_no}{scale_name};
+	    say STDERR "Timescale '$name' had $errors ERRORS";
+	}
+	
+	elsif ( $scale_no ne $INTL_SCALE )
+	{
+	    InterpolateOneScale($scale_no);
+	}
+    }
+    
+    my $output = GenerateHeader();
+    
+    $output .= "\n";
+    
+    foreach my $scale_no ( @scale_list )
+    {
+	my $scale_name = $SCALE_NUM{$scale_no}{scale_name};
+	
+	foreach my $int ( $SCALE_INTS{$scale_no}->@* )
+	{
+	    my $interval_no = $int->{interval_no};
+	    my $line_no = $int->{line_no};
+	    my $name = $int->{interval_name};
+	    my $abbrev = $int->{abbrev};
+	    my $t_age = $int->{t_intp} // $int->{t_age};
+	    my $t_type = defined $int->{t_intp} && $int->{t_intp} != $int->{t_age} ? 'intp' : 'def';
+	    my $b_age = $int->{b_intp} // $int->{b_age};
+	    my $b_type = defined $int->{b_intp} && $int->{b_intp} != $int->{b_age} ? 'intp' : 'def';
+	    my $type = $int->{type};
+	    my $color = $int->{color};
+	    my $reference_no = $int->{reference_no};
+	    
+	    ComputeContainers($int, $scale_no);
+	    
+	    my $out = { scale_no => $scale_no,
+			scale_name => $scale_name,
+			interval_no => $int->{interval_no},
+			interval_name => $int->{interval_name},
+			abbrev => $int->{abbrev},
+			renamed => $int->{renamed},
+			action => $int->{action},
+			n_colls => $int->{n_colls},
+			type => $int->{type},
+			color => $int->{color},
+			reference_no => $int->{reference_no},
+			t_type => $t_type,
+			top => $t_age,
+			t_ref => $t_type eq 'intp' ? $int->{t_ref} : undef,
+			b_type => $b_type,
+			base => $b_age,
+			b_ref => $b_type eq 'intp' ? $int->{b_ref} : undef,
+			stage => $int->{stage},
+			subepoch => $int->{subepoch},
+			epoch => $int->{epoch},
+			period => $int->{period},
+			parent => $int->{parent} };
+	    
+	    $output .= RecordToLine($out, \@FIELD_LIST);
+	}
+	
+	$output .= "\n";
+    }
+    
+    &SetupOutput;
+    
+    print $output;    
+}
+
+
+# DiagramScales ( scale... )
 # 
 # Diagram the specified timescale(s) as a sequence of boxes using ASCII characters. The
 # scales will be drawn next to each other in the order specified, with boundaries lined
 # up.  This enables visual confirmation that the timescale bounds have been entered
 # correctly.
 
-sub PrintScales {
+sub DiagramScales {
     
-    my (@args) = @_;
+    my @scale_list = SelectScales(@_);
     
-    my @print_list;
+    return unless @scale_list;
     
-    foreach my $t ( @args )
+    # Check each of the scales to be printed, and interpolate the boundary ages if
+    # necessary.
+    
+    foreach my $scale_no ( @scale_list )
     {
-	if ( $SCALE_NUM{$t} )
+	if ( my $errors = CheckOneScale($scale_no) )
 	{
-	    push @print_list, $t unless $SCALE_SELECT{$t};
-	    $SCALE_SELECT{$t} = 1;
-	}
-	
-	elsif ( $t =~ /[a-z]/ )
-	{
-	    my $re = qr{(?i)$t};
-	    my $found;
-	    
-	    foreach my $s ( @SCALE_NUMS )
-	    {
-		if ( $SCALE_NUM{$s}{scale_name} =~ $re )
-		{
-		    push @print_list, $s unless $SCALE_SELECT{$s};
-		    $SCALE_SELECT{$s} = 1;
-		    $found++;
-		}
-	    }
-	    
-	    warn "Unrecognized timescale '$t'\n" unless $found;
-	}
-	
-	else
-	{
-	    warn "Unrecognized timescale '$t'\n";
-	}
-    }
-    
-    return unless @print_list;
-    
-    # Check each of the scales to be printed.
-    
-    foreach my $scale_no ( @print_list )
-    {
-	my $errors = &CheckOneScale($scale_no);
-	
-	my $name = $SCALE_NUM{$scale_no}{scale_name};
-	
-	if ( $errors )
-	{
+	    my $name = $SCALE_NUM{$scale_no}{scale_name};
 	    say STDERR "Timescale '$name' had $errors ERRORS";
+	}
+	
+	elsif ( $scale_no ne $INTL_SCALE )
+	{
+	    InterpolateOneScale($scale_no);
 	}
     }
     
@@ -1113,7 +1441,7 @@ sub PrintScales {
 	$options->{b_limit} = $base;
     }
     
-    my $plot = DiagramScales($options, \%SCALE_NUM, \%SCALE_INTS, @print_list);
+    my $d = GenerateDiagram($options, \%SCALE_NUM, \%SCALE_INTS, @scale_list);
     
     # Turn that array into character output and print it.
     
@@ -1121,12 +1449,24 @@ sub PrintScales {
     
     if ( $opt_debug )
     {
-	$output = DebugDiagram($options, $plot);
+	$output = DebugDiagram($options, $d);
     }
     
     else
     {
-	$output = DrawDiagram($options, $plot);
+	$output = DrawDiagram($options, $d);
+    }
+    
+    if ( $d->{unplaced} && $d->{unplaced}->@* )
+    {
+	$output .= "\n";
+	
+	foreach my $int ( $d->{unplaced}->@* )
+	{
+	    $output .= "Could not place '$int->{interval_name}' ($int->{interval_no})\n";
+	}
+	
+	$output .= "\n";
     }
     
     &SetupOutput;
@@ -1882,55 +2222,41 @@ sub DiffPBDB {
     
     my $dbh = connectDB("config.yml", $dbname);
     
-    # Select intervals contained in any of the specified timescales.
+    # Select timescales matching the arguments given.
     
-    foreach my $t ( @args )
-    {
-	if ( $t eq 'all' )
-	{
-	    $SCALE_SELECT{all} = 1;
-	}
-	
-	elsif ( $SCALE_INTS{$t} )
-	{
-	    $SCALE_SELECT{$t} = 1;
-	}
-	
-	elsif ( $t =~ /[a-z]/ )
-	{
-	    my $re = qr{(?i)$t};
-	    my $found;
-	    
-	    foreach my $s ( @SCALE_NUMS )
-	    {
-		if ( $SCALE_NUM{$s}{scale_name} =~ $re )
-		{
-		    $SCALE_SELECT{$s} = 1;
-		    $found++;
-		}
-	    }
-	    
-	    warn "Unrecognized timescale '$t'\n" unless $found;
-	}
-	
-	else
-	{
-	    warn "Unrecognized timescale '$t'\n";
-	}
-    }
+    &SelectScales(@args);	
     
     return unless %SCALE_SELECT;
     
-    # Check all selected scales, and compute the top and bottom ages. Do this for the
-    # International scale and the tertiary subepochs as well, because those two are used
-    # to compute containing intervals for other scales.
+    # Check all selected scales, and evaluate the ages of the interval boundaries.
+    # Check the International scale and the tertiary subepochs first, because those
+    # two are used to compute containing intervals for other scales.
+    
+    foreach my $scale_no ( $INTL_SCALE, $TERT_SUBEPOCHS )
+    {
+	if ( my $errors = CheckOneScale($scale_no) )
+	{
+	    my $name = $SCALE_NUM{$scale_no}{scale_name};
+	    say STDERR "Timescale '$name' had $errors ERRORS";
+	}
+    }
     
     foreach my $scale_no ( @SCALE_NUMS )
     {
-	if ( $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no} || 
-	     $scale_no eq $INTL_SCALE || $scale_no eq $TERT_SUBEPOCHS )
+	next if $scale_no eq $INTL_SCALE || $scale_no eq $TERT_SUBEPOCHS;
+	
+	if ( $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no} )
 	{
-	    CheckOneScale($scale_no);
+	    if ( my $errors = CheckOneScale($scale_no) )
+	    {
+		my $name = $SCALE_NUM{$scale_no}{scale_name};
+		say STDERR "Timescale '$name' had $errors ERRORS";
+	    }
+	    
+	    else
+	    {
+		InterpolateOneScale($scale_no);
+	    }
 	}
     }
     
@@ -1938,7 +2264,8 @@ sub DiffPBDB {
     
     return if @ERRORS && ! $opt_force;
     
-    # Check for certain database fields.
+    # Check to see if certain columns have been added to the interval tables in the
+    # database.
     
     CheckScaleTables($dbh);
     
@@ -1967,13 +2294,21 @@ sub DiffPBDB {
 	my $line_no = $i->{line_no};
 	my $name = $i->{interval_name};
 	my $abbrev = $i->{abbrev};
-	my $t_age = $i->{t_age};
-	my $b_age = $i->{b_age};
+	my $t_age = $i->{t_intp} // $i->{t_age};
+	my $t_type = defined $i->{t_intp} && $i->{t_intp} != $i->{t_age} ? 'intp' : 'def';
+	my $b_age = $i->{b_intp} // $i->{b_age};
+	my $b_type = defined $i->{b_intp} && $i->{b_intp} != $i->{b_age} ? 'intp' : 'def';
 	my $type = $i->{type};
 	my $color = $i->{color};
 	my $reference_no = $i->{reference_no};
 	
+	# Compute containing intervals (age, subepoch, epoch, period) from the
+	# international timescale and the tertiary/cretaceous subepochs.
+	
 	ComputeContainers($i, $scale_no);
+	
+	# For the international scale, verify that each interval other than eons has a
+	# containing 'parent' interval. This is required by the Navigator app.
 	
 	if ( $scale_no == 1 )
 	{
@@ -2031,14 +2366,16 @@ sub DiffPBDB {
 	    
 	    if ( $t_age + 0 != $p->{t_age} + 0 )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{t_type} = $i->{t_type};
+		$DIFF_INT{$scale_no}{$interval_no}{t_type} = $t_type;
 		$DIFF_INT{$scale_no}{$interval_no}{top} = $t_age;
+		$DIFF_INT{$scale_no}{$interval_no}{t_ref} = $i->{t_ref} if $t_type eq 'intp';
 	    }
 	    
 	    if ( $b_age + 0 != $p->{b_age} + 0 )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{b_type} = $i->{b_type};
+		$DIFF_INT{$scale_no}{$interval_no}{b_type} = $b_type;
 		$DIFF_INT{$scale_no}{$interval_no}{base} = $b_age;
+		$DIFF_INT{$scale_no}{$interval_no}{b_ref} = $i->{b_ref} if $b_type eq 'intp';
 	    }
 	    
 	    if ( $i->{stage} ne IntervalName($p->{stage_no}) ||
@@ -2069,8 +2406,12 @@ sub DiffPBDB {
 			 type => $type,
 			 color => $color,
 			 reference_no => $reference_no,
+			 t_type => $t_type,
 			 top => $t_age,
+			 t_ref => $t_type eq 'intp' ? $i->{t_ref} : undef,
+			 b_type => $b_type,
 			 base => $b_age,
+			 b_ref => $b_type eq 'intp' ? $i->{b_ref} : undef,
 			 stage => $i->{stage},
 			 subepoch => $i->{subepoch},
 			 epoch => $i->{epoch},
@@ -2202,6 +2543,144 @@ sub DiffPBDB {
     {
 	say STDERR "Unknown command '$CMD'";
     }
+}
+
+
+# ComputeContainers ( interval, scale_no )
+# 
+# Compute the containing intervals for the given interval, from the International scale
+# and the Cenozoic and Late Cretaceous subepochs. For intervals in the international
+# scale, also compute the immediate parent. This is required so that the API result
+# requested by the Navigator application reports the parent of each interval in the
+# international timescale. Navigator depends on that information.
+
+sub ComputeContainers {
+    
+    my ($i, $scale_no) = @_;
+    
+    # Run through all the intervals from the international scale, looking for
+    # those that contain interval $i.
+    
+    foreach my $c ( $SCALE_INTS{$INTL_SCALE}->@* )
+    {
+	last if $c->{t_age} > $i->{b_age};
+	
+	if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+	{
+	    if ( $c->{type} eq 'eon' )
+	    {
+		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'era' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }
+	    
+	    elsif ( $c->{type} eq 'era' )
+	    {
+		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'period' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }	    
+	    
+	    elsif ( $c->{type} eq 'period' )
+	    {
+		$i->{period} = $c->{interval_name};
+		
+		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'epoch' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }
+	    
+	    elsif ( $c->{type} eq 'epoch' )
+	    {
+		$i->{epoch} = $c->{interval_name};
+		
+		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'age' )
+		{
+		    $i->{parent} = $c->{interval_name};
+		}
+	    }
+	    
+	    elsif ( $c->{type} eq 'age' )
+	    {
+		if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+		{
+		    $i->{stage} = $c->{interval_name};
+		}
+	    }
+	}
+    }
+    
+    # Then run through the Cenozoic and Late Cretaceous subepochs.
+    
+    foreach my $c ( $SCALE_INTS{$TERT_SUBEPOCHS}->@* )
+    {
+	if ( $c->{type} eq 'subepoch' )
+	{
+	    last if $c->{t_age} > $i->{b_age};
+	
+	    if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+	    {
+		$i->{subepoch} = $c->{interval_name};
+	    }
+	}
+    }
+}
+
+
+# ComputeScaleAttrs ( scale_no )
+# 
+# Scan through the intervals and compute the top and base ages for the specified scale.
+# If the scale does not have a reference_no, fill that in from the first non-empty
+# reference_no value among its intervals.
+
+sub ComputeScaleAttrs {
+    
+    my ($scale_no) = @_;
+    
+    my ($t_age, $b_age, $reference_no, $remove);
+    
+    foreach my $i ( $SCALE_INTS{$scale_no}->@* )
+    {
+	# Compute the minimum and maximum age bounds.
+	
+	if ( !defined $t_age || $i->{t_age} < $t_age )
+	{
+	    $t_age = $i->{t_age};
+	}
+	
+	if ( !defined $b_age || $i->{b_age} > $b_age )
+	{
+	    $b_age = $i->{b_age};
+	}
+	
+	# Determine the first non-empty reference_no value.
+	
+	if ( $i->{reference_no} )
+	{
+	    $reference_no ||= $i->{reference_no};
+	}
+	
+	# If all of the intervals are to be removed, flag the scale for removal. If even
+	# one of them is not, clear the flag.
+	
+	if ( $i->{action} =~ /^REMOVE|^COALESCE/ )
+	{
+	    $remove //= 1;
+	}
+	
+	else
+	{
+	    $remove = 0;
+	}
+    }
+    
+    $SCALE_NUM{$scale_no}{t_age} = $t_age;
+    $SCALE_NUM{$scale_no}{b_age} = $b_age;
+    $SCALE_NUM{$scale_no}{reference_no} ||= $reference_no;
+    $SCALE_NUM{$scale_no}{action} = 'REMOVE' if $remove;
 }
 
 
@@ -3531,145 +4010,7 @@ sub ConditionScaleTables {
 }
 
 
-# ComputeContainers ( interval, scale_no )
-# 
-# Compute the containing intervals for the given interval, from the International scale
-# and the Cenozoic and Late Cretaceous subepochs. For intervals in the international
-# scale, also compute the immediate parent. This is required so that the API result
-# requested by the Navigator application reports the parent of each interval in the
-# international timescale. Navigator depends on that information.
-
-sub ComputeContainers {
-    
-    my ($i, $scale_no) = @_;
-    
-    # Run through all the intervals from the international scale, looking for
-    # those that contain interval $i.
-    
-    foreach my $c ( $SCALE_INTS{$INTL_SCALE}->@* )
-    {
-	last if $c->{t_age} > $i->{b_age};
-	
-	if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
-	{
-	    if ( $c->{type} eq 'eon' )
-	    {
-		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'era' )
-		{
-		    $i->{parent} = $c->{interval_name};
-		}
-	    }
-	    
-	    elsif ( $c->{type} eq 'era' )
-	    {
-		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'period' )
-		{
-		    $i->{parent} = $c->{interval_name};
-		}
-	    }	    
-	    
-	    elsif ( $c->{type} eq 'period' )
-	    {
-		$i->{period} = $c->{interval_name};
-		
-		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'epoch' )
-		{
-		    $i->{parent} = $c->{interval_name};
-		}
-	    }
-	    
-	    elsif ( $c->{type} eq 'epoch' )
-	    {
-		$i->{epoch} = $c->{interval_name};
-		
-		if ( $i->{scale_no} eq $INTL_SCALE && $i->{type} eq 'age' )
-		{
-		    $i->{parent} = $c->{interval_name};
-		}
-	    }
-	    
-	    elsif ( $c->{type} eq 'age' )
-	    {
-		if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
-		{
-		    $i->{stage} = $c->{interval_name};
-		}
-	    }
-	}
-    }
-    
-    # Then run through the Cenozoic and Late Cretaceous subepochs.
-    
-    foreach my $c ( $SCALE_INTS{$TERT_SUBEPOCHS}->@* )
-    {
-	if ( $c->{type} eq 'subepoch' )
-	{
-	    last if $c->{t_age} > $i->{b_age};
-	
-	    if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
-	    {
-		$i->{subepoch} = $c->{interval_name};
-	    }
-	}
-    }
-}
-
-
-# ComputeScaleAttrs ( scale_no )
-# 
-# Scan through the intervals and compute the top and base ages for the specified scale.
-# If the scale does not have a reference_no, fill that in from the first non-empty
-# reference_no value among its intervals.
-
-sub ComputeScaleAttrs {
-    
-    my ($scale_no) = @_;
-    
-    my ($t_age, $b_age, $reference_no, $remove);
-    
-    foreach my $i ( $SCALE_INTS{$scale_no}->@* )
-    {
-	# Compute the minimum and maximum age bounds.
-	
-	if ( !defined $t_age || $i->{t_age} < $t_age )
-	{
-	    $t_age = $i->{t_age};
-	}
-	
-	if ( !defined $b_age || $i->{b_age} > $b_age )
-	{
-	    $b_age = $i->{b_age};
-	}
-	
-	# Determine the first non-empty reference_no value.
-	
-	if ( $i->{reference_no} )
-	{
-	    $reference_no ||= $i->{reference_no};
-	}
-	
-	# If all of the intervals are to be removed, flag the scale for removal. If even
-	# one of them is not, clear the flag.
-	
-	if ( $i->{action} =~ /^REMOVE|^COALESCE/ )
-	{
-	    $remove //= 1;
-	}
-	
-	else
-	{
-	    $remove = 0;
-	}
-    }
-    
-    $SCALE_NUM{$scale_no}{t_age} = $t_age;
-    $SCALE_NUM{$scale_no}{b_age} = $b_age;
-    $SCALE_NUM{$scale_no}{reference_no} ||= $reference_no;
-    $SCALE_NUM{$scale_no}{action} = 'REMOVE' if $remove;
-}
-
-
-# DiagramScales ( options, scale_hash, ints_hash, timescale... )
+# GenerateDiagram ( options, scale_hash, ints_hash, timescale... )
 # 
 # Generate a 2-d array encoding columns of boxes, in order to display the specified
 # timescale(s) visually. Each row in the @bounds2d array represents a distinct age
@@ -3679,7 +4020,7 @@ sub ComputeScaleAttrs {
 # The first argument must be a hashref, and subsequent arguments must all be scale_no
 # values.
 
-sub DiagramScales {
+sub GenerateDiagram {
     
     my ($options, $scale_hash, $ints_hash, @scale_list) = @_;
     
@@ -3688,10 +4029,10 @@ sub DiagramScales {
     my $t_limit = $options->{t_limit} || 0;
     my $b_limit = $options->{b_limit} || 5000;
     
-    # Unless we are displaying to the end of the Proterozoic, there is no point in showing
-    # eons and eras.
+    # Unless we are displaying the Precambrian, there is no point in showing eons and
+    # eras.
     
-    my $remove_eras = $b_limit < 2500;
+    my $remove_eras = $b_limit < 550;
     
     # Phase I: determine interval boundaries
     
@@ -3699,55 +4040,98 @@ sub DiagramScales {
     # maximum. If top and base limits were given, restrict the set of age boundaries to
     # that range.
     
-    my (%bound, $t_range, $b_range, %ibound, $t_intl, $b_intl);
+    my (%ints_list);	# List of intervals to be displayed for each timescale
+    
+    my (%bound);	# Boundary ages from scales other than the international timescale
+    
+    my ($t_range, $b_range);	# The range of ages from those scales
+    
+    my (%ibound);	# Boundary ages from the international timescale
+    
+    my ($t_intl, $b_intl);	# The range of ages from the international timescale
+    
+    my %eval_bound;	# True for each age value that was interpolated
+    
+    my %open_top;	# True for each interval that continues past the top limit
+    
+    my %open_base;	# True for each interval that continues past the bottom limit
+    
+    my @unplaced;	# If any intervals cannot be placed, they are listed here.
     
     # For each displayed scale in turn, run through its list of intervals.
     
-    foreach my $s ( @scale_list )
+    foreach my $snum ( @scale_list )
     {
-	foreach my $i ( $ints_hash->{$s}->@* )
+	foreach my $int ( $ints_hash->{$snum}->@* )
 	{
 	    # Ignore any interval that is flagged for removal, and ignore eras and eons if
 	    # $remove_eras is true.
 	    
-	    next if $i->{action} =~ /^REMOVE|^COALESCE/;
-	    next if $remove_eras && $i->{type} =~ /^era|^eon/;
+	    next if $int->{action} =~ /^REMOVE|^COALESCE/;
+	    next if $remove_eras && $int->{type} =~ /^era|^eon/;
 	    
-	    # Throw an exception if we find a bad age. This shouldn't happen, except in
-	    # rare cases when the 'force' option is used.
+	    # We cannot display any interval that doesn't have a good top and bottom
+	    # age. This shouldn't happen except in rare cases where the 'force' option
+	    # is given.
 	    
-	    my $top = $i->{t_age} = TopAge($i);
-	    my $base = $i->{b_age} = BaseAge($i);
+	    my $top = $int->{t_intp} // $int->{t_age};
+	    my $base = $int->{b_intp} // $int->{b_age};
 	    
-	    unless ( $top =~ $AGE_RE and $base =~ $AGE_RE )
+	    unless ( defined $top && $top =~ $AGE_RE )
 	    {
-		die "Bad age boundary for '$i->{interval_name}'\n";
+		my $line = $int->{line_no};
+		push @ERRORS, "at line $line, bad top age '$top'";
+		push @unplaced, $int;
+		next;
 	    }
+	    
+	    unless ( defined $base && $base =~ $AGE_RE )
+	    {
+		my $line = $int->{line_no};
+		push @ERRORS, "at line $line, bad base age '$top'";
+		push @unplaced, $int;
+		next;
+	    }
+	    
+	    # If either bound has been evaluated (interpolated) then mark it as such.
+	    
+	    $eval_bound{$top} = 1 if defined $int->{t_intp};
+	    $eval_bound{$base} = 1 if defined $int->{b_intp};
 	    
 	    # Skip this interval if it falls outside of the age limits.
 	    
 	    next if $base <= $t_limit;
 	    next if $top >= $b_limit;
 	    
+	    # The interval key is generated from the scale_no and interval_no values.
+	    
+	    my $inum = $int->{interval_no};
+	    my $iref = "$snum-$inum";
+	    
 	    # If this interval overlaps the age limits, only display the part that lies
-	    # within them. The Phase II code will leave out the boundary to show that the
-	    # interval overlaps at top or bottom.
+	    # within them.
 	    
 	    if ( $top < $t_limit )
 	    {
 		$top = $t_limit;
+		$open_top{$iref} = 1;
 	    }
 	    
 	    if ( $base > $b_limit )
 	    {
 		$base = $b_limit;
+		$open_base{$iref} = 1;
 	    }
+	    
+	    # Add this interval to the list for display
+	    
+	    push $ints_list{$snum}->@*, $int;
 	    
 	    # Keep track of the age boundaries separately for the international scale and
 	    # all other scales. Keep track of the minimum and maximum boundary ages
 	    # separately as well.
 	    
-	    if ( $s eq $INTL_SCALE )
+	    if ( $snum eq $INTL_SCALE )
 	    {
 		$ibound{$top} = 1;
 		
@@ -3767,7 +4151,7 @@ sub DiagramScales {
 		}
 	    }
 		
-	    if ( $s eq $INTL_SCALE )
+	    if ( $snum eq $INTL_SCALE )
 	    {
 		$ibound{$base} = 1;
 		
@@ -3793,7 +4177,7 @@ sub DiagramScales {
     # the international boundaries which lie in their range. Do not display the whole
     # international scale unless it is the only one being shown.
     
-    if ( $b_range )
+    if ( defined $b_range )
     {
 	foreach my $b ( keys %ibound )
 	{
@@ -3801,7 +4185,8 @@ sub DiagramScales {
 	}
     }
     
-    # If we are displaying only the international scale, use all of its boundaries.
+    # If we are displaying only the international scale, use all of its boundaries
+    # between $t_limit and $b_limit.
     
     else
     {
@@ -3815,14 +4200,14 @@ sub DiagramScales {
     }
     
     # Don't show eras and eons unless the bottom of the displayed range reaches
-    # the end of the Proterozoic.
+    # into the Precambrian.
     
-    $remove_eras = 1 if $b_range < 2500;
+    $remove_eras = 1 if $b_range < 550;
     
     # Phase II: Generate the diagram
     
-    # The following arrays and hashes store the information necessary to draw the
-    # diagram.
+    # The following arrays and hashes store rest of the information necessary to draw
+    # the diagram.
     
     my @bound2d;	# Each element (cell) represents one interval boundary plus the
 			# content below it. The first column holds the age.
@@ -3835,9 +4220,9 @@ sub DiagramScales {
     
     my %label;		# Stores the label for each cell.
     
-    my %t_age;		# Stores the top age for each cell.
+    my %height;		# Stores the height of each cell in rows.
     
-    my %b_age;		# Stores the bottom age for each cell.
+    my %label_split;	# Indicates labels which are split across lines.
     
     # Store age boundaries in the first column of the bounds2d array, in order from newest
     # to oldest.
@@ -3862,52 +4247,58 @@ sub DiagramScales {
     my $min_col = 0;
     my $max_col = 0;
     
-    foreach my $s ( @scale_list )
+    foreach my $snum ( @scale_list )
     {
 	$min_col = $max_col + 1;
 	$max_col = $min_col;
 	
-	my ($last_top, $last_base, $last_ref);
+	my ($last_top, $last_base, $last_type, $last_ref);
 	
-	# Run through the intervals in the order they appear in the timescale. This
-	# order can affect how they are displayed if some of them overlap others.
+	# Run through the intervals a second time in the order they appear in the
+	# timescale.  This order can affect how they are displayed if some of them
+	# overlap others.
 	
-	foreach my $i ( $ints_hash->{$s}->@* )
+	foreach my $int ( $ints_list{$snum}->@* )
 	{
 	    # Ignore any interval that is flagged for removal, and ignore eras and eons if
 	    # $remove_eras is true.
 	    
-	    next if $i->{action} =~ /^REMOVE|^COALESCE/;
-	    next if $remove_eras && $i->{type} =~ /^era|^eon/;
+	    # next if $int->{action} =~ /^REMOVE|^COALESCE/;
+	    next if $remove_eras && $int->{type} =~ /^era|^eon/;
 	    
-	    # The displayed intervals are identified by their interval_no value. It is
-	    # possible that the same interval may appear in more than one timescale
-	    # displayed at the same time, in which case it must have the same name and
-	    # top/bottom ages in each case. It is okay to use the same identifier for
-	    # both, since name and top/bottom ages are the only attributes stored.
+	    # # The displayed intervals are identified by their interval_no value. It is
+	    # # possible that the same interval may appear in more than one timescale
+	    # # displayed at the same time, in which case it must have the same name and
+	    # # top/bottom ages in each case. It is okay to use the same identifier for
+	    # # both, since name and top/bottom ages are the only attributes stored.
 	    
-	    my $iref = $i->{interval_no};
-	    my $iname = $i->{interval_name};
-	    my $top = $i->{t_age};
-	    my $base = $i->{b_age};
+	    my $inum = $int->{interval_no};
+	    my $iname = $int->{interval_name};
+	    my $itype = $int->{type};
+	    my $iref = "$snum-$inum";
 	    
-	    # Ignore any interval that falls outside of the age bounds.
+	    my $top = $int->{t_intp} // $int->{t_age};
+	    my $base = $int->{b_intp} // $int->{b_age};
 	    
-	    next if $base <= $t_limit;
-	    next if $top >= $b_limit;
+	    # Ignore any interval that falls outside of the age range to be displayed.
+	    
+	    next if $base <= $t_range;
+	    next if $top >= $b_range;
 	    
 	    # If this interval overlaps the top or bottom age boundary, display only the
 	    # part that falls within these boundaries. The horizontal boundary line will
 	    # be suppressed in these cases (see below) so that the overlap is clear.
 	    
-	    if ( $top < $t_limit )
+	    if ( $top < $t_range )
 	    {
-		$top = $t_limit;
+		$top = $t_range;
+		$open_top{$iref} = 1;
 	    }
 	    
-	    if ( $base > $b_limit )
+	    if ( $base > $b_range )
 	    {
-		$base = $b_limit;
+		$base = $b_range;
+		$open_base{$iref} = 1;
 	    }
 	    
 	    # If the top and bottom ages for this interval are identical to the previous
@@ -3915,7 +4306,7 @@ sub DiagramScales {
 	    # rather than generating a separate box in a separate column.  This situation
 	    # happens quite a bit in some of our timescales.
 	    
-	    if ( $top eq $last_top && $base eq $last_base )
+	    if ( $top eq $last_top && $base eq $last_base && $itype eq $last_type )
 	    {
 		$label{$last_ref} .= '/' . $iname;
 		next;
@@ -3926,19 +4317,30 @@ sub DiagramScales {
 	    
 	    else
 	    {
-		$label{$iref} = $iname;
-		$t_age{$iref} = $top;
-		$b_age{$iref} = $base;
-		
+		$label{$iref} = $iname;		
 		$last_top = $top;
 		$last_base = $base;
+		$last_type = $itype;
 		$last_ref = $iref;
 	    }
 	    
-	    # The header of the first column for each displayed scale contains the scale
-	    # number and as much of the scale name as will fit.
+	    # # The header of the first column for each displayed scale contains the scale
+	    # # number and as much of the scale name as will fit. For the international
+	    # # scale, use the label corresponding to the interval type.
 	    
-	    $header[$min_col] ||= "$s $scale_hash->{$s}{scale_name}";
+	    # unless ( $header[$min_col] )
+	    # {
+	    # 	if ( $snum eq $INTL_SCALE )
+	    # 	{
+	    # 	    my $label = $TYPE_LABEL{$int->{type}};
+	    # 	    $header[$min_col] = "$snum $label";
+	    # 	}
+		
+	    # 	else
+	    # 	{
+	    # 	    $header[$min_col] = "$snum $scale_hash->{$snum}{scale_name}";
+	    # 	}
+	    # }
 	    
 	    # Determine which column this interval should be place into. The value of $c
 	    # will be that column number.
@@ -3956,6 +4358,15 @@ sub DiagramScales {
 		$rbase = $r, last if $bound2d[$r][0] eq $base;
 	    }
 	    
+	    # If either the top or the bottom age cannot be matched to a row, this
+	    # interval cannot be placed.
+	    
+	    unless ( defined $rtop && defined $rbase )
+	    {
+		push @unplaced, $int;
+		next;
+	    }
+	    
 	    # Place this interval either in the minimum column for this scale, or up to 5
 	    # columns further to the right if necessary to avoid overlapping any interval
 	    # that has already been placed.
@@ -3966,17 +4377,17 @@ sub DiagramScales {
 		# If this interval has a type that is different from the interval type for
 		# the current column, move one column to the right and try again.
 		
-		if ( $col_type[$c] && $i->{type} )
+		if ( $col_type[$c] && $int->{type} )
 		{
-		    $c++, next COLUMN unless $col_type[$c] eq $i->{type};
+		    $c++, next COLUMN unless $col_type[$c] eq $int->{type};
 		}
 		
 		# Otherwise, set the interval type for this column to the type for this
 		# interval if it is not already set.
 		
-		elsif ( $i->{type} )
+		elsif ( $int->{type} )
 		{
-		    $col_type[$c] ||= $i->{type};
+		    $col_type[$c] ||= $int->{type};
 		}
 		
 		# If any of the cells where this interval would be placed are occupied by
@@ -3999,15 +4410,20 @@ sub DiagramScales {
 		
 		unless ( $header[$c] )
 		{
-		    if ( $i->{type} )
+		    if ( $c == $min_col && $snum ne $INTL_SCALE )
 		    {
-			my $label = $TYPE_LABEL{$i->{type}};
-			$header[$c] = "$s $label";
+			$header[$c] = "$snum $scale_hash->{$snum}{scale_name}";
+		    }
+		    
+		    elsif ( $int->{type} )
+		    {
+			my $label = $TYPE_LABEL{$int->{type}};
+			$header[$c] = "$snum $label";
 		    }
 		    
 		    else
 		    {
-			$header[$c] = $s;
+			$header[$c] = $snum;
 		    }
 		}
 		
@@ -4029,11 +4445,10 @@ sub DiagramScales {
 		$bound2d[$r][$c] = $iref;
 	    }
 	    
-	    # If the bottom age of the interval is not the same as the age of the bottom
-	    # boundary row, that means the interval continues past the display area. So
-	    # store the interval number to indicate that situation.
+	    # If the interval continues past the display area, store the interval number
+	    # to indicate that situation.
 	    
-	    if ( $base ne $i->{b_age} )
+	    if ( $open_base{$iref} )
 	    {
 		$bound2d[$rbase][$c] = $iref;
 	    }
@@ -4044,6 +4459,10 @@ sub DiagramScales {
 	    {
 		$bound2d[$rbase][$c] = 'b';
 	    }
+	    
+	    # Store the height of this cell.
+	    
+	    $height{$iref} = $rbase - $rtop;
 	}
     }
     
@@ -4061,6 +4480,29 @@ sub DiagramScales {
 	    {
 		my $iref = $bound2d[$r][$c];
 		my $w = length($label{$iref}) + 2;
+		
+		# If the label contains a '/' character and is at least 20 characters
+		# wide, and the cell is more than 1 row in height, split the label.
+		
+		if ( $label{$iref} =~ qr{/} && length($label{$iref}) >= 20 && 
+		     $height{$iref} > 1 )
+		{
+		    if ( $label{$iref} =~ qr{(.*?/.*?/)(.*)} )
+		    {
+			$label_split{$iref} = length($1);
+		    }
+		    
+		    else
+		    {
+			$label{$iref} =~ qr{(.*?/)(.*)};
+			$label_split{$iref} = length($2);
+		    }
+		}
+		
+		if ( my $w1 = $label_split{$iref} )
+		{
+		    $w = max($w1, $w - $w1);
+		}
 		
 		if ( $w > $c_width )
 		{
@@ -4080,8 +4522,10 @@ sub DiagramScales {
 		   col_width => \@col_width,
 		   header => \@header,
 		   label => \%label,
-		   t_age => \%t_age,
-		   b_age => \%b_age,
+		   label_split => \%label_split,
+		   eval_bound => \%eval_bound,
+		   open_top => \%open_top,
+		   unplaced => \@unplaced,
 		   max_row => $max_row,
 		   max_col => $max_col };
     
@@ -4091,13 +4535,13 @@ sub DiagramScales {
 
 sub DebugDiagram {
     
-    my ($options, $plot) = @_;
+    my ($options, $diagram) = @_;
     
-    my @bound2d = $plot->{bound2d}->@*;
-    my @col_width = $plot->{col_width}->@*;
+    my @bound2d = $diagram->{bound2d}->@*;
+    my @col_width = $diagram->{col_width}->@*;
     my @col_intnum;
-    my $max_row = $plot->{max_row};
-    my $max_col = $plot->{max_col};
+    my $max_row = $diagram->{max_row};
+    my $max_col = $diagram->{max_col};
     
     my $output = "";
     
@@ -4119,14 +4563,14 @@ sub DebugDiagram {
 }
 
 
-# DrawDiagram ( options, plot )
+# DrawDiagram ( options, diagram )
 # 
 # Draw a set of boxes using ASCII characters, according to the rows and columns laid out
-# in $plot, modified by the options in $options.
+# in $diagram, modified by the options in $options.
 
 sub DrawDiagram {
     
-    my ($options, $plot) = @_;
+    my ($options, $diagram) = @_;
     
     # Create the output string in $output. Create the top and left margins.
     
@@ -4145,15 +4589,19 @@ sub DrawDiagram {
     
     # Unpack the data structure.
     
-    my @bound2d = $plot->{bound2d}->@*;
-    my @col_width = $plot->{col_width}->@*;
-    my $max_row = $plot->{max_row};
-    my $max_col = $plot->{max_col};
+    my @bound2d = $diagram->{bound2d}->@*;
+    my @col_width = $diagram->{col_width}->@*;
+    my $max_row = $diagram->{max_row};
+    my $max_col = $diagram->{max_col};
     
     # The following array keeps track of which interval identifier was last seen in each
     # column as we scan down the rows, so we will know when it changes.
     
     my @col_intnum;
+    
+    # The following hash allows us to split labels between lines
+    
+    my %line2;
     
     # Generate the column header row. The foreach loops here and in the footer are only
     # there so that the $c loop is equally indented in all three sections.
@@ -4164,7 +4612,7 @@ sub DrawDiagram {
 	
 	foreach my $c ( 1..$max_col )
 	{
-	    $line1 .= ColumnHeader($plot, $c);
+	    $line1 .= ColumnHeader($diagram, $c);
 	}
 	
 	$output .= "$line1\n";
@@ -4195,13 +4643,19 @@ sub DrawDiagram {
 	    {
 		$col_intnum[$c] = $iref;
 		
-		my $t_age = $plot->{t_age}{$iref};
-		my $label = $plot->{label}{$iref};
+		# my $t_age = $diagram->{top_bound}{$iref};
+		my $label = $diagram->{label}{$iref};
+		
+		if ( my $split = $diagram->{label_split}{$iref} )
+		{
+		    $line2{$iref} = substr($label, $split);
+		    $label = substr($label, 0, $split);
+		}
 		
 		# If the interval doesn't extent up past this boundary, add a horizontal
 		# border for the first line and the interval name to the second.
 		
-		if ( $t_age eq $age )
+		unless ( $diagram->{open_top}{$iref} )
 		{
 		    # Uncomment the following line to generate a + at these junctions.
 		    
@@ -4210,8 +4664,8 @@ sub DrawDiagram {
 		    $line1 .= '+' if $c == 1;
 		    $line2 .= '|' if $c == 1;
 		    
-		    $line1 .= CellBorder($plot, $c);
-		    $line2 .= CellInterior($plot, $c, $label);
+		    $line1 .= CellBorder($diagram, $c);
+		    $line2 .= CellInterior($diagram, $c, $label);
 		}
 		
 		# If the interval does extend up past this boundary, no horizontal border
@@ -4222,21 +4676,32 @@ sub DrawDiagram {
 		    $line1 .= '|' if $c == 1;
 		    $line2 .= '|' if $c == 1;
 		    
-		    $line1 .= CellInterior($plot, $c);
-		    $line2 .= CellInterior($plot, $c, $label);
+		    $line1 .= CellInterior($diagram, $c);
+		    $line2 .= CellInterior($diagram, $c, $label);
 		}
 	    }
 	    
 	    # If we have an interval identifier that is the same as the one in the row
 	    # above, add empty cell interiors to both rows.
 	    
+	    elsif ( $iref > 0 && $line2{$iref} )
+	    {
+		$line1 .= '|' if $c == 1;
+		$line2 .= '|' if $c == 1;
+		
+		$line1 .= CellInterior($diagram, $c, $line2{$iref});
+		$line2 .= CellInterior($diagram, $c);
+		
+		delete $line2{$iref};
+	    }
+	    
 	    elsif ( $iref > 0 )
 	    {
 		$line1 .= '|' if $c == 1;
 		$line2 .= '|' if $c == 1;
 		
-		$line1 .= CellInterior($plot, $c);
-		$line2 .= CellInterior($plot, $c);
+		$line1 .= CellInterior($diagram, $c);
+		$line2 .= CellInterior($diagram, $c);
 	    }
 	    
 	    # If we have a 'b', that indicates a bottom boundary where no interval has
@@ -4249,27 +4714,34 @@ sub DrawDiagram {
 		$line1 .= '+' if $c == 1;
 		$line2 .= '|' if $c == 1;
 		
-		$line1 .= CellBorder($plot, $c);
-		$line2 .= CellInterior($plot, $c, "(empty)");
+		$line1 .= CellBorder($diagram, $c);
+		$line2 .= CellInterior($diagram, $c, "(empty)");
 	    }
 	    
-	    # If we have nothing at all, that indicates a continuing gap in the timescale.
-	    # Add empty cell interiors to both rows.
+	    # If we have nothing at all, that indicates a continuing gap in the
+	    # timescale.  Add empty cell interiors to both rows. If the row number is
+	    # zero, put in an empty cell label.
 	    
 	    else
 	    {
 		$line1 .= '|' if $c == 1;
 		$line2 .= '|' if $c == 1;
 		
-		$line1 .= CellInterior($plot, $c);
-		$line2 .= CellInterior($plot, $c);
+		$line1 .= CellInterior($diagram, $c);
+		$line2 .= CellInterior($diagram, $c, $r == 0 ? '(empty)' : undef);
 	    }
 	}
 	
-	# Add the age at the end of each horizontal boundary.
+	# Add the age at the end of each horizontal boundary. If the age was evaluated
+	# (interpolated) then add an asterisk.
 	
 	$line1 .= ' ' . sprintf("%-9s", $bound2d[$r][0]);
 	$line2 .= ' ' x 10;
+	
+	if ( $diagram->{eval_bound}{$age} )
+	{
+	    $line1 .= ' *';
+	}
 	
 	# Add both of the lines to the output.
 	
@@ -4304,7 +4776,7 @@ sub DrawDiagram {
 	    if ( $iref eq 'b' )
 	    {
 		$line1 .= '+' if $c == 1;		
-		$line1 .= CellBorder($plot, $c);
+		$line1 .= CellBorder($diagram, $c);
 	    }
 	    
 	    # Otherwise, add an empty cell interior to the line. This will indicate that
@@ -4313,13 +4785,21 @@ sub DrawDiagram {
 	    else
 	    {
 		$line1 .= '|' if $c == 1;
-		$line1 .= CellInterior($plot, $c);
+		$line1 .= CellInterior($diagram, $c);
 	    }
 	}
 	
-	# Add the age at the end of the last horizontal boundary.
+	# Add the age at the end of the last horizontal boundary. If the age was
+	# interpolated, add an asterisk.
 	
-	$line1 .= ' ' . sprintf("%-9s", $bound2d[$r][0]);
+	my $age = $bound2d[$r][0];
+	
+	$line1 .= ' ' . sprintf("%-9s", $age);
+	
+	if ( $diagram->{eval_bound}{$age} )
+	{
+	    $line1 .= ' *';
+	}
 	
 	# Add the last line to the output.
 	
@@ -4343,9 +4823,9 @@ sub DrawDiagram {
 
 sub CellBorder {
     
-    my ($plot, $c) = @_;
+    my ($diagram, $c) = @_;
     
-    my $width = $plot->{col_width}[$c] || 10;
+    my $width = $diagram->{col_width}[$c] || 10;
     
     my $border = '-' x $width;
     
@@ -4359,9 +4839,9 @@ sub CellBorder {
 
 sub CellInterior {
     
-    my ($plot, $c, $label) = @_;
+    my ($diagram, $c, $label) = @_;
     
-    my $width = $plot->{col_width}[$c] || 10;
+    my $width = $diagram->{col_width}[$c] || 10;
     my $content;
     
     if ( $label )
@@ -4384,11 +4864,11 @@ sub CellInterior {
 
 sub ColumnHeader {
     
-    my ($plot, $c) = @_;
+    my ($diagram, $c) = @_;
     
-    my $width = $plot->{col_width}[$c] || 10;
+    my $width = $diagram->{col_width}[$c] || 10;
     
-    my $label = $plot->{header}[$c];
+    my $label = $diagram->{header}[$c];
     
     if ( length($label) > $width - 2)
     {
