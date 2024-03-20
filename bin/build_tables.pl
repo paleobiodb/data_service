@@ -39,6 +39,7 @@ Getopt::Long::Configure("bundling");
 
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
     $taxon_tables, $collection_tables, $occurrence_tables, $interval_map,
+    $occurrence_int_maps, $taxon_summary_table,
     $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
@@ -48,6 +49,8 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "taxonomy|t" => \$taxon_tables,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
+	    "M" => \$occurrence_int_maps,
+	    "S" => \$taxon_summary_table,
 	    "listcache|y" => \$old_taxon_tables,
 	    "interval-map|u" => \$interval_map,
 	    "steps|T=s" => \$taxon_steps );
@@ -151,7 +154,7 @@ sub BuildTables {
     
     # my $collection_tables = $options{c};
     # my $occurrence_tables = $options{m};
-    my $occurrence_int_maps = $options{M};
+    # my $occurrence_int_maps = $options{M};
     my $occurrence_reso = $options{R};
     my $diversity_tables = $options{d};
     my $prevalence_tables = $options{q};
@@ -256,6 +259,10 @@ sub BuildTables {
 	buildOccIntervalMaps($dbh);
     }
     
+    elsif ( $taxon_summary_table )
+    {
+	buildTaxonSummaryTable($dbh);
+    }
     
     # The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
     # was specified, its value should be a sequence of steps (a-h) to be carried
