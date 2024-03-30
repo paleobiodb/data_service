@@ -73,7 +73,8 @@ our (%TYPE_LABEL) = (eon => 'Eons', era => 'Eras', period => 'Periods',
 # The following scales are used in generating values for stage_no, epoch_no, etc.
 
 our ($INTL_SCALE) = '1';
-our ($TERT_SUBEPOCHS) = '2';
+our ($CENO_SCALE) = '2';
+our ($BIN_SCALE) = 10;
 
 # The following value is used for specifying extra boundaries.
 
@@ -1359,6 +1360,9 @@ sub CheckOneScale {
 	
 	foreach my $int ( $SCALE_INTS{$scale_no}->@* )
 	{
+	    next if $int->{interval_no} eq $EMPTY_INTERVAL;
+	    next if $int->{action} =~ /^REMOVE|^COALESCE/;
+	    
 	    if ( $int->{t_bound} eq 'defined' && defined $intp_value{$int->{t_age}} )
 	    {
 		$int->{t_intp} = $intp_value{$int->{t_age}};
@@ -1369,6 +1373,21 @@ sub CheckOneScale {
 	    {
 		$int->{b_intp} = $intp_value{$int->{b_age}};
 		$int->{b_bound} = 'interpolated' if $int->{b_intp} != $int->{b_age};
+	    }
+	    
+	    my $t_age = $int->{t_intp} // $int->{t_age};
+	    my $b_age = $int->{b_intp} // $int->{b_age};
+	    my $line = $int->{line_no};
+	    my $name = $int->{interval_name};
+	    
+	    if ( $t_age eq $b_age )
+	    {
+		push @errors, "at line $line, interval '$name': top age and base age are the same";
+	    }
+	    
+	    elsif ( $t_age > $b_age )
+	    {
+		push @errors, "at line $line, interval '$name': top age is greater than base age";
 	    }
 	}
     }	
@@ -2307,14 +2326,14 @@ sub FetchMacrostratIntervals {
     
     if ( $timescale =~ /^\d+$/ )
     {
-	$url = "$MACROSTRAT_INTERVALS?timescale_id=$timescale";
+	$url = "$MACROSTRAT_INTERVALS?timescale_id=$timescale&true_colors=true";
     }
     
     # Otherwise, use the 'timescale' parameter.
     
     else
     {
-	$url="$MACROSTRAT_INTERVALS?timescale=$timescale";
+	$url="$MACROSTRAT_INTERVALS?timescale=$timescale&true_colors=true";
     }
     
     # Make the request.
@@ -2387,20 +2406,6 @@ sub DiffPBDB {
 	    say STDERR "Timescale '$name' had *** $errors errors ***";
 	}
     }
-    
-    # foreach my $scale_no ( @SCALE_NUMS )
-    # {
-    # 	next if $scale_no eq $INTL_SCALE || $scale_no eq $TERT_SUBEPOCHS;
-	
-    # 	if ( $SCALE_SELECT{all} || $SCALE_SELECT{$scale_no} )
-    # 	{
-    # 	    if ( my $errors = CheckOneScale($scale_no) )
-    # 	    {
-    # 		my $name = $SCALE_NUM{$scale_no}{scale_name};
-    # 		say STDERR "Timescale '$name' had *** $errors errors ***";
-    # 	    }
-    # 	}
-    # }
     
     # If any errors were found, abort unless the 'force' option was given.
     
@@ -2559,12 +2564,14 @@ sub DiffPBDB {
 	    if ( $i->{stage} ne IntervalName($p->{stage_no}) ||
 		 $i->{subepoch} ne IntervalName($p->{subepoch_no}) ||
 		 $i->{epoch} ne IntervalName($p->{epoch_no}) ||
-		 $i->{period} ne IntervalName($p->{period_no}) )
+		 $i->{period} ne IntervalName($p->{period_no}) ||
+		 $i->{ten_my_bin} ne $p->{ten_my_bin} )
 	    {
 		$DIFF_INT{$scale_no}{$interval_no}{stage} = $i->{stage} || 'none';
 		$DIFF_INT{$scale_no}{$interval_no}{subepoch} = $i->{subepoch} || 'none';
 		$DIFF_INT{$scale_no}{$interval_no}{epoch} = $i->{epoch} || 'none';
 		$DIFF_INT{$scale_no}{$interval_no}{period} = $i->{period} || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{ten_my_bin} = $i->{ten_my_bin} || 'none';
 	    }
 	    
 	    if ( $scale_no eq $INTL_SCALE &&
@@ -2653,12 +2660,12 @@ sub DiffPBDB {
 		$DIFF_SCALE{$scale_no}{color} = $color || 'none';
 	    }
 	    
-	    if ( defined $t_age && $t_age ne '' && $t_age != $p->{t_age} )
+	    if ( $t_age + 0 ne $p->{t_age} + 0 )
 	    {
 		$DIFF_SCALE{$scale_no}{top} = $t_age;
 	    }
 	    
-	    if ( defined $b_age && $b_age ne '' && $b_age != $p->{b_age} )
+	    if ( $b_age + 0 ne $p->{b_age} + 0 )
 	    {
 		$DIFF_SCALE{$scale_no}{base} = $b_age;
 	    }
@@ -2842,18 +2849,52 @@ sub ComputeContainers {
 	}
     }
     
-    # Then run through the Cenozoic and Late Cretaceous subepochs.
+    # Then run through the Cenozoic subepochs.
     
-    foreach my $c ( $SCALE_INTS{$TERT_SUBEPOCHS}->@* )
+    foreach my $c ( $SCALE_INTS{$CENO_SCALE}->@* )
     {
-	if ( $c->{type} eq 'subepoch' )
-	{
-	    last if $c->{t_age} > $i->{b_age};
+	last if $c->{t_age} > $i->{b_age};
 	
-	    if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
-	    {
-		$i->{subepoch} = $c->{interval_name};
-	    }
+	if ( $c->{t_age} <= $i->{t_age} && $c->{b_age} >= $i->{b_age} )
+	{
+	    $i->{subepoch} = $c->{interval_name};
+	}
+    }
+    
+    # Finally, run through the 10 million year bins.
+    
+    my @intersection;
+    
+    foreach my $c ( $SCALE_INTS{$BIN_SCALE}->@* )
+    {
+	last if $c->{t_age} > $i->{b_age};
+	
+	if ( $c->{t_age} < $i->{b_age} && $c->{b_age} > $i->{t_age} )
+	{
+	    push @intersection, $c->{interval_name};
+	}
+    }
+    
+    # If this interval falls across bin boundaries, indicate the range.
+    
+    if ( @intersection == 1 )
+    {
+	$i->{ten_my_bin} = $intersection[0];
+    }
+    
+    elsif ( @intersection )
+    {
+	my ($period1, $bin1) = split /\s+/, $intersection[0];
+	my ($period2, $bin2) = split /\s+/, $intersection[-1];
+	
+	if ( $period1 eq $period2 )
+	{
+	    $i->{ten_my_bin} = "$period1 $bin2-$bin1";
+	}
+	
+	else
+	{
+	    $i->{ten_my_bin} = "$period2-$period1";
 	}
     }
 }
@@ -2875,12 +2916,12 @@ sub ComputeScaleAttrs {
     {
 	# Compute the minimum and maximum age bounds.
 	
-	if ( !defined $t_age || $i->{t_age} < $t_age )
+	if ( !defined $t_age || defined($i->{t_age}) && $i->{t_age} < $t_age )
 	{
 	    $t_age = $i->{t_age};
 	}
 	
-	if ( !defined $b_age || $i->{b_age} > $b_age )
+	if ( !defined $b_age || defined($i->{b_age}) && $i->{b_age} > $b_age )
 	{
 	    $b_age = $i->{b_age};
 	}
@@ -3190,7 +3231,7 @@ sub FetchPBDBInterval {
     
     my $sql = "SELECT i.interval_no, interval_name, abbrev, type, color, parent_no,
 		    $ages $extra
-		    stage_no, subepoch_no, epoch_no, period_no
+		    stage_no, subepoch_no, epoch_no, period_no, ten_my_bin
 		FROM $TableDefs::TABLE{INTERVAL_DATA} as i
 		    left join interval_lookup using (interval_no)
 		    left join $TableDefs::TABLE{SCALE_MAP} as sm
@@ -3713,18 +3754,20 @@ sub UpdateIntervalLookup {
     my $subepoch_no = $INTERVAL_NAME{$diff->{subepoch}}{interval_no};
     my $epoch_no = $INTERVAL_NAME{$diff->{epoch}}{interval_no};
     my $period_no = $INTERVAL_NAME{$diff->{period}}{interval_no};
+    my $ten_my_bin = $diff->{ten_my_bin} eq 'none' ? undef : $diff->{ten_my_bin};
     
     my $qstage = $dbh->quote($stage_no);
     my $qsubep = $dbh->quote($subepoch_no);
     my $qepoch = $dbh->quote($epoch_no);
     my $qperiod = $dbh->quote($period_no);
+    my $qbin = $dbh->quote($ten_my_bin);
     
     my $qtop = $dbh->quote($diff->{t_age});
     my $qbase = $dbh->quote($diff->{b_age});
     
-    $sql = "REPLACE INTO $CLASSIC_LOOKUP (interval_no, stage_no, subepoch_no,
+    $sql = "REPLACE INTO $CLASSIC_LOOKUP (interval_no, ten_my_bin, stage_no, subepoch_no,
 		epoch_no, period_no, top_age, base_age)
-	    VALUES ($interval_no, $qstage, $qsubep, $qepoch, $qperiod, $qtop, $qbase)";
+	    VALUES ($interval_no, $qbin, $qstage, $qsubep, $qepoch, $qperiod, $qtop, $qbase)";
     
     $result = DoStatement($dbh, $sql);
 }
@@ -4478,7 +4521,7 @@ sub GenerateDiagram {
     
     my $remove_eras = $b_limit < 550;
     
-    # Phase I: determine interval boundaries
+    # Phase I: collect interval boundaries
     
     # Start by computing the age of each boundary in the scale, and the minimum and
     # maximum. If top and base limits were given, restrict the set of age boundaries to
