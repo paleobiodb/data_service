@@ -1075,6 +1075,11 @@ sub CheckOneScale {
 			$i->{t_bound} = 'anchor';
 		    }
 		    
+		    elsif ( $top_scale_no ne $scale_no )
+		    {
+			$i->{t_bound} = 'reference';
+		    }
+		    
 		    else
 		    {
 			$i->{t_bound} = 'defined';
@@ -1126,6 +1131,11 @@ sub CheckOneScale {
 		    elsif ( $base_scale_no eq $INTL_SCALE )
 		    {
 			$i->{b_bound} = 'anchor';
+		    }
+		    
+		    elsif ( $base_scale_no ne $scale_no )
+		    {
+			$i->{b_bound} = 'reference';
 		    }
 		    
 		    else
@@ -1220,13 +1230,13 @@ sub CheckOneScale {
 	    my $t_bound = $int->{t_bound};
 	    my $t_ref = $int->{t_ref};
 	    
-	    if ( $t_bound eq 'anchor' && defined $t_ref && $t_ref ne '' )
+	    if ( ($t_bound eq 'anchor' || $t_bound eq 'reference') && defined $t_ref && $t_ref ne '' )
 	    {
 		push @errors, "at line $line, top boundary interpolation conflict"
-		    if $bound_type{$t_ref} && $bound_type{$t_ref} eq 'defined' or
+		    if $bound_type{$t_ref} && $bound_type{$t_ref} ne $t_bound or
 		       defined $anchor_value{$t_ref} && $anchor_value{$t_ref} != $int->{t_age};
 		
-		$bound_type{$t_ref} = 'anchor';
+		$bound_type{$t_ref} = $t_bound;
 		$anchor_value{$t_ref} = $int->{t_age};
 		$has_anchor = 1;
 	    }
@@ -1236,22 +1246,22 @@ sub CheckOneScale {
 		$t_ref = $int->{t_ref} = $int->{t_age};
 		
 		push @errors, "at line $line, top boundary interpolation conflict"
-		    if $bound_type{$t_ref} && $bound_type{$t_ref} eq 'anchor';
+		    if $bound_type{$t_ref} && $bound_type{$t_ref} ne $t_bound;
 		
-		$bound_type{$t_ref} = 'defined';
+		$bound_type{$t_ref} = $t_bound;
 		$has_eval = 1;
 	    }
 	    
 	    my $b_bound = $int->{b_bound};
 	    my $b_ref = $int->{b_ref};
 	    
-	    if ( $b_bound eq 'anchor' && defined $b_ref && $b_ref ne '' )
+	    if ( ($b_bound eq 'anchor' || $b_bound eq 'reference') && defined $b_ref && $b_ref ne '' )
 	    {
 		push @errors, "at line $line, base boundary interpolation conflict"
-		    if $bound_type{$b_ref} && $bound_type{$b_ref} eq 'defined' or
+		    if $bound_type{$b_ref} && $bound_type{$b_ref} ne $b_bound or
 		       defined $anchor_value{$b_ref} && $anchor_value{$b_ref} != $int->{b_age};
 		
-		$bound_type{$b_ref} = 'anchor';
+		$bound_type{$b_ref} = $b_bound;
 		$anchor_value{$b_ref} = $int->{b_age};
 		$has_anchor = 1;
 	    }
@@ -1261,9 +1271,9 @@ sub CheckOneScale {
 		$b_ref = $int->{b_ref} = $int->{b_age};
 		
 		push @errors, "at line $line, base boundary interpolation conflict"
-		    if $bound_type{$b_ref} && $bound_type{$b_ref} eq 'anchor';
+		    if $bound_type{$b_ref} && $bound_type{$b_ref} ne $b_bound;
 		
-		$bound_type{$b_ref} = 'defined';
+		$bound_type{$b_ref} = $b_bound;
 		$has_eval = 1;
 	    }
 	}
@@ -4472,9 +4482,9 @@ sub ConditionScaleTables {
 	$sql = "ALTER TABLE $INTERVAL_DATA
 		add scale_no int unsigned not null default '0' after interval_no,
 		add t_ref decimal(9,5) after $T_AGE,
-		add t_type enum('anchor', 'defined', 'interpolated') after t_ref,
+		add t_type enum('anchor', 'reference', 'defined', 'interpolated') after t_ref,
 		add b_ref decimal(9,5) after $B_AGE,
-		add b_type enum('anchor', 'defined', 'interpolated') after b_ref,
+		add b_type enum('anchor', 'reference', 'defined', 'interpolated') after b_ref,
 		add authorizer_no int unsigned not null default '0',
 		add enterer_no int unsigned not null default '0',
 		add modifier_no int unsigned not null default '0',
