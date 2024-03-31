@@ -12,21 +12,20 @@ package PB2::IntervalData;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
-use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA);
+use TableDefs qw(%TABLE);
+use CoreTableDefs;
+
+use IntervalBase qw(ts_defined ts_record ts_intervals ts_list
+		    int_defined int_record int_bounds ints_by_prefix ts_list);
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
 
+use List::Util qw(min max);
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
 use Moo::Role;
 
 no warnings 'numeric';
-
-
-# Store the basic data about each interval and scale.
-
-our (%IDATA, %INAME, %IPREFIX, %SDATA, %SLDATA, %SMDATA);
-our (%BOUNDARY_LIST, %BOUNDARY_MAP);
 
 
 # initialize ( )
@@ -41,8 +40,10 @@ sub initialize {
     # Define output blocks for displaying time interval information
     
     $ds->define_block('1.2:intervals:basic' =>
-	{ select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.scale_level
+	{ select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no 
 			 sm.parent_no sm.color i.early_age i.late_age i.reference_no) ] },
+	# { select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.scale_level
+	# 		 sm.parent_no sm.color i.early_age i.late_age i.reference_no) ] },
 	{ output => 'interval_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this interval",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{INT} },
@@ -50,66 +51,99 @@ sub initialize {
 	{ output => 'scale_no', com_name => 'tsc' },
 	    "The time scale in which this interval lies.  An interval may be reported more than",
 	    "once, as a member of different time scales",
-	{ output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
-	    "The level within the time scale to which this interval belongs.  For example,",
-	    "the default time scale is organized into the following levels:",
-	    "=over", "=item Level 1", "Eons",
-		       "=item Level 2", "Eras",
-		       "=item Level 3", "Periods",
-		       "=item Level 4", "Epochs",
-		       "=item Level 5", "Stages",
-	    "=back",
+	# { output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
+	#     "The level within the time scale to which this interval belongs.  For example,",
+	#     "the default time scale is organized into the following levels:",
+	#     "=over", "=item Level 1", "Eons",
+	# 	       "=item Level 2", "Eras",
+	# 	       "=item Level 3", "Periods",
+	# 	       "=item Level 4", "Epochs",
+	# 	       "=item Level 5", "Stages",
+	#     "=back",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of this interval",
 	{ output => 'abbrev', com_name => 'abr' },
 	    "The standard abbreviation for the interval name, if any",
+	{ output => 'type', com_name => 'itp' },
+	    "The interval type: eon, era, period, epoch, subepoch, age, subage, zone",
 	{ output => 'parent_no', com_name => 'pid' },
 	    "The identifier of the parent interval",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color for displaying this interval",
-	{ output => 'early_age', pbdb_name => 'max_ma', com_name => 'eag', data_type => 'dec' },
-	    "The early age boundary of this interval (in Ma)",
-	{ output => 'late_age', pbdb_name => 'min_ma', com_name => 'lag', data_type => 'dec' },
-	    "The late age boundary of this interval (in Ma)",
+	{ output => 't_age', pbdb_name => 't_age', com_name => 'lag', data_type => 'dec' },
+	    "The top age of this interval, in Ma",
+	{ output => 'b_age', pbdb_name => 'b_age', com_name => 'eag', data_type => 'dec' },
+	    "The base age of this interval, in Ma",
 	# { set => 'reference_no', append => 1 },
-	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
-	    "The identifier(s) of the references from which this data was entered",
+	{ output => 'reference_no', com_name => 'rid' },
+	    "The identifier of the bibliographic reference from which this data was entered",
 	{ set => '*', code => \&process_int_ids });
     
     $ds->define_block('1.2:scales:basic' =>
 	{ select => [ 'sc.scale_no', 'sc.scale_name', 'sc.levels as num_levels',
-		      'sc.early_age', 'sc.late_age', 'sc.reference_no',
-		      'sl.scale_level', 'sl.level_name' ] },
+		      'sc.early_age', 'sc.late_age', 'sc.reference_no', ] },
+		      # 'sl.scale_level', 'sl.level_name' ] },
 	{ output => 'scale_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this time scale",
-	{ output => 'record_type', com_name => 'typ', com_value => 'tsc', value => 'timescale' },
-	    "The type of this object: 'tsc' for a time scale",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{TSC} },
+	    "The type of this object: C<$IDP{TSC}> for a time scale",
 	{ output => 'scale_name', com_name => 'nam' },
 	    "The name of this time scale",
-	{ output => 'num_levels', com_name => 'nlv', data_type => 'pos' },
-	    "The number of levels into which this time scale is organized",
-	{ output => 'level_list', com_name => 'lvs', sub_record => '1.2:scales:level',
-	  if_format => 'json' },
-	    "A list of levels associated with this time scale, if more than one.",
-	    "This field will only be present in C<json> responses.",
-	{ output => 'scale_level', com_name => 'lvl', not_format => 'json', data_type => 'pos' },
-	    "Level number.",
-	{ output => 'level_name', com_name => 'nam', not_format => 'json' },
-	    "Level name",
-	{ output => 'early_age', pbdb_name => 'max_ma', com_name => 'eag', data_type => 'dec' },
-	    "The early bound of this time scale, in Ma",
-	{ output => 'late_age', pbdb_name => 'min_ma', com_name => 'lag', data_type => 'dec' },
-	    "The late bound of this time scale, in Ma",
+	# { output => 'num_levels', com_name => 'nlv', data_type => 'pos' },
+	#     "The number of levels into which this time scale is organized",
+	# { output => 'level_list', com_name => 'lvs', sub_record => '1.2:scales:level',
+	#   if_format => 'json' },
+	#     "A list of levels associated with this time scale, if more than one.",
+	#     "This field will only be present in C<json> responses.",
+	# { output => 'scale_level', com_name => 'lvl', not_format => 'json', data_type => 'pos' },
+	#     "Level number.",
+	# { output => 'level_name', com_name => 'nam', not_format => 'json' },
+	#     "Level name",
+	{ output => 't_age', pbdb_name => 't_age', com_name => 'lag', data_type => 'dec' },
+	    "The top age of this time scale, in Ma",
+	{ output => 'b_age', pbdb_name => 'b_age', com_name => 'eag', data_type => 'dec' },
+	    "The base age of this time scale, in Ma",
 	# { set => 'reference_no', append => 1 },
 	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered",
 	{ set => '*', code => \&process_int_ids });
     
-    $ds->define_block('1.2:scales:level' =>
-	{ output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
-	    "Level number",
-	{ output => 'level_name', com_name => 'nam' },
-	    "Level name");
+    $ds->define_block('1.2:intervals:colls' => 
+	{ output => 'colls_defined', com_name => 'nco' },
+	    "The number of collections whose definition refers to this interval",
+	{ output => 'colls_major', com_name => 'nmc' },
+	    "The total number of collections within this interval's time range according",
+	    "to the 'major' timerule",
+	{ output => 'occs_major', com_name => 'nmo' },
+	    "The total number of occurrences within this interval's time range according",
+	    "to the 'major' timerule");
+    
+    $ds->define_output_map('1.2:intervals:output_map' =>
+	{ value => 'colls', maps_to => '1.2:intervals:colls' },
+	    "Show the number of collections whose definition refers to each",
+	    "returned interval or timescale. This can be an expensive operation",
+	    "if the number of intervals is large.");
+    
+    $ds->define_ruleset('1.2:intervals:show' =>
+	{ optional => 'show', list => q{,},
+	  valid => '1.2:intervals:output_map' },
+	    "This parameter is used to select additional blocks of information to be returned",
+	    "along with the basic record for each collection.  Its value should be",
+	    "one or more of the following, separated by commas:");
+    
+    
+    # $ds->define_block('1.2:scales:level' =>
+    # 	{ output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
+    # 	    "Level number",
+    # 	{ output => 'level_name', com_name => 'nam' },
+    # 	    "Level name");
+    
+    $ds->define_block('1.2:scales:diagram' =>
+	{ output => 'diagram', com_name => 'dgr' },
+	    "An HTML table expression showing the intervals from the specified",
+	    "scale(s) with correlated boundaries.",
+	{ output => 'bounds', com_name => 'bnd' },
+	    "A list of the ages of interval bounds displayed in the diagram");
     
     # Define the set of time resolution rules that we implement.
     
@@ -159,51 +193,74 @@ sub initialize {
 	    "Return intervals from the specified time scale(s).",
 	    "The value of this parameter should be a list of scale identifiers separated",
 	    "by commas, or 'all'",
-	{ param => 'scale_level', valid => POS_VALUE, list => ',', alias => 'level' },
-	    "Return intervals from the specified scale level(s).  The value of this",
-	    "parameter can be one or more level numbers separated by commas.",
+	# { param => 'scale_level', valid => POS_VALUE, list => ',', alias => 'level' },
+	#     "Return intervals from the specified scale level(s).  The value of this",
+	#     "parameter can be one or more level numbers separated by commas.",
 	{ param => 'id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'interval_id',
 	  bad_value => '_' },
 	    "Return intervals that have the specified identifiers",
 	{ param => 'name', list => ',' },
 	    "Return intervals that have the specified names",
-	{ at_most_one => ['id', 'name'],
-	  errmsg => "You may not specify both 'name' and 'id' in the same query." },
+	# { at_most_one => ['id', 'name'],
+	#   errmsg => "You may not specify both 'name' and 'id' in the same query." },
 	{ param => 'min_ma', valid => DECI_VALUE(0) },
 	    "Return only intervals that are at least this old",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
 	    "Return only intervals that are at most this old",
-	{ optional => 'order', valid => ENUM_VALUE('age', 'age.asc', 'age.desc', 'name', 'name.asc', 'name.desc'), default => 'age' },
+	{ optional => 'order', valid => ENUM_VALUE('age', 'age.asc', 'age.desc', 
+						   'name', 'name.asc', 'name.desc') },
 	    "Return the intervals in order starting as specified.  Possible values include ",
-	    "C<age>, C<name>.  Defaults to C<age>.");
+	    "C<age>, C<name>.");
     
     $ds->define_ruleset('1.2:intervals:list' => 
 	{ require => '1.2:intervals:selector' },
+	{ allow => '1.2:intervals:show' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 
     $ds->define_ruleset('1.2:intervals:single' => 
 	{ require => '1.2:intervals:specifier' },
+	{ allow => '1.2:intervals:show' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
     $ds->define_ruleset('1.2:scales:specifier' =>
-	{ param => 'id', valid => VALID_IDENTIFIER('TSC') },
+	{ param => 'id', alias => ['scale_id', 'scale'], valid => VALID_IDENTIFIER('TSC') },
 	    "Return the time scale corresponding to the specified identifier. (REQUIRED)");
     
     $ds->define_ruleset('1.2:scales:selector' =>
-	"To return all time scales, use this URL path with no parameters.",
-	{ param => 'id', valid => VALID_IDENTIFIER('TSC'), list => ',' },
+	"To return all time scales, use the parameter 'all_records'.",
+	{ param => 'all_records', valid => FLAG_VALUE },
+	    "List all intervals known to the database.",
+	{ param => 'id', alias => ['scale_id', 'scale'], valid => VALID_IDENTIFIER('TSC'), list => ',' },
 	    "Return intervals that have the specified identifier(s).",
 	    "You may specify more than one, as a comma-separated list.");
     
     $ds->define_ruleset('1.2:scales:single' =>
 	{ require => '1.2:scales:specifier' },
+	{ allow => '1.2:intervals:show' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
     $ds->define_ruleset('1.2:scales:list' =>
-	{ allow => '1.2:scales:selector' },
+	{ require => '1.2:scales:selector' },
+	{ allow => '1.2:intervals:show' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:scales:diagram' =>
+	{ require => '1.2:scales:selector' },
+	{ optional => 'display', valid => ANY_VALUE },
+	    "Display only the portion of the timescale corresponding to the",
+	    "named interval or interval range. To specify a range, separate",
+	    "two interval names with a dash.",
+	{ optional => 'interval', valid => ANY_VALUE, list => ',' },
+	    "Highlight the named interval(s) in the diagram. You can specify",
+	    "more than one as a comma-separated list, and you can use identifiers",
+	    "as well as names.",
+	{ optional => 'range', valid => ANY_VALUE },
+	    "Highlight all intervals in the specified range. Specify two",
+	    "interval names or identifiers separated by a dash.",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -253,7 +310,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    $class->read_interval_data($dbh);
+    IntervalBase->cache_interval_data($dbh);
 }
 
 
@@ -266,245 +323,205 @@ sub get {
 
     my ($request) = @_;
     
-    # Get a database handle by which we can make queries.
+    $request->strict_check;
+    $request->extid_check;
     
-    my $dbh = $request->get_connection;
+    my $int;
     
-    # Make sure we have a valid id number or a name.
-    
-    my $id = $request->clean_param('id');
-    my $name = $request->clean_param('name');
-    my $filter;
-    
-    die "Bad identifier '$id'" unless (defined $id and $id =~ /^\d+$/ || defined $name && $name ne '');
-    
-    if ( $name )
+    if ( my $id = $request->clean_param('id') )
     {
-	my $quoted = $dbh->quote($name);
-	$filter = "interval_name = $quoted";
+	$int = int_record($id);
+    }
+    
+    elsif ( my $name = $request->clean_param('name') )
+    {
+	$int = int_record($name);
+    }
+    
+    if ( $int )
+    {
+	if ( $request->has_block('colls') )
+	{
+	    my $interval_no = $int->{interval_no};
+	    my $coll_hash = $request->query_colls('int', $interval_no);
+	    $int->{colls_defined} = $coll_hash->{$interval_no}{colls_defined} // '0';
+	    $int->{colls_contained} = $coll_hash->{$interval_no}{colls_contained} // '0';
+	    $int->{occs_contained} = $coll_hash->{$interval_no}{occs_contained} // '0';
+	    $int->{colls_major} = $coll_hash->{$interval_no}{colls_major} // '0';
+	    $int->{occs_major} = $coll_hash->{$interval_no}{occs_major} // '0';
+	}
+	
+	$request->single_result($int);
     }
     
     else
     {
-	$filter = "interval_no = $id";
+	die $request->exception(404, "Not found");
     }
-    
-    $request->strict_check;
-    $request->extid_check;
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    $request->substitute_select( mt => 'i' );
-    
-    my $fields = $request->select_string;
-    
-    # Determine the necessary joins.
-    
-    my ($join_list) = $request->generateJoinList('i', $request->{select_tables});
-    
-    # Generate the main query.
-    
-    $request->{main_sql} = "
-	SELECT $fields
-	FROM $INTERVAL_DATA as i LEFT JOIN $SCALE_MAP as sm using (interval_no)
-		$join_list
-        WHERE $filter
-	GROUP BY i.interval_no";
-    
-    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
-    
-    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
-    
-    # Unless we found a record, return 404.
-    
-    die "404 No such interval was found\n" unless ref $request->{main_record};
-    
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
-    
-    return 1;
 }
 
 
 # list ( )
 # 
-# Query the database for basic info about all specified intervals.
-# 
-# Returns true if the fetch succeeded, false if an error occurred.
+# Return a list of interval records matching the specified parameters.
 
 sub list {
-
+    
     my ($request) = @_;
-    
-    # Get a database handle by which we can make queries.
-    
-    my $dbh = $request->get_connection;
-    
-    # If we were asked for a hierarchy, indicate that we will need to process
-    # the result set before sending it.
-    
-    $request->{process_resultset} = \&generateHierarchy if 
-	defined $request->{op} && $request->{op} eq 'hierarchy';
-    
-    # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
-    
-    my @filters;
-    
-    my $scale = $request->clean_param('scale');
-    my @scale_ids = $request->clean_param_list('scale_id');
-    my @scale_levels = $request->clean_param_list('scale_level');
-    my @ids = $request->clean_param_list('id');
-    
-    my $level_string = join(',', @scale_levels);
-    
-    if ( defined $scale && $scale eq 'all' )
-    {
-	unless ( $level_string )
-	{
-	    push @filters, "sm.scale_level is not null";
-	}
-    }
-    
-    elsif ( $request->param_given('scale_id') || $request->param_given('scale') )
-    {
-	push @scale_ids, 0 unless @scale_ids;
-	my $filter_string = join(',', @scale_ids);
-	
-	if ( $filter_string !~ /all/ )
-	{
-	    push @filters, "sm.scale_no in ($filter_string)";
-	}
-    }
-    
-    if ( $request->param_given('id') )
-    {
-	push @ids, -1 unless @ids;
-	my $id_string = join(',', @ids);
-	push @filters, "i.interval_no in ($id_string)";
-    }
-    
-    elsif ( my @names = $request->clean_param_list('name') )
-    {
-	my @ids;
-	
-	foreach my $name (@names)
-	{
-	    if ( $INAME{lc $name} )
-	    {
-		push @ids, $INAME{lc $name}{interval_no};
-	    }
-	    
-	    else
-	    {
-		$request->add_warning("The interval '$name' is not known to the database");
-	    }
-	}
-	
-	push @ids, -1 unless @ids;
-	my $id_string = join(',', @ids);
-	push @filters, "i.interval_no in ($id_string)";
-    }
-    
-    if ( my $min_ma = $request->clean_param('min_ma') )
-    {
-	$min_ma += 0;
-	push @filters, "i.late_age >= $min_ma" if $min_ma > 0;
-    }
-    
-    if ( my $max_ma = $request->clean_param('max_ma') )
-    {
-	$max_ma += 0;
-	push @filters, "i.early_age <= $max_ma" if $max_ma > 0;
-    }
-    
-    if ( $level_string )
-    {
-	push @filters, "sm.scale_level in ($level_string)";
-    }
-    
-    push @filters, "1=1" unless @filters;
-    
-    # Get the results in the specified order
-    
-    my $order = $request->clean_param('order');
-    
-    my $order_expr = 'ORDER BY i.early_age desc, sm.scale_no, sm.scale_level';
-    
-    if ( defined $order )
-    {
-	if ( $order eq 'age' || $order eq 'age.asc' )
-	{
-	    $order_expr = "ORDER BY i.early_age asc, sm.scale_no, sm.scale_level";
-	}
-	
-	elsif ( $order eq 'age.desc' )
-	{
-	    # leave it unchanged
-	}
-	
-	elsif ( $order eq 'name' || $order eq 'name.asc' )
-	{
-	    $order_expr = "ORDER BY i.interval_name asc";
-	}
-	
-	elsif ( $order eq 'name.desc' )
-	{
-	    $order_expr = "ORDER BY i.interval_name desc";
-	}
-	
-	else
-	{
-	    die $request->exception(400, "unknown value '$order' for parameter 'order'");
-	}
-    }
     
     $request->strict_check;
     $request->extid_check;
     
-    # Determine which fields and tables are needed to display the requested
-    # information.
+    my (@result, %int_uniq, $use_list, @scale_list, %scale_uniq);
     
-    $request->substitute_select( mt => 'i' );
+    my $max_ma = $request->clean_param('max_ma');
+    my $min_ma = $request->clean_param('min_ma');
     
-    my $fields = $request->select_string;
+    my $has_max = defined $max_ma && $max_ma ne '';
+    my $has_min = defined $min_ma && $min_ma ne '';
     
-    # Determine the necessary joins.
+    if ( my @int_select = $request->clean_param_list('id') )
+    {
+	$use_list = 1;
+	
+	foreach my $i ( @int_select )
+	{
+	    if ( int_defined($i) )
+	    {
+		unless ( $int_uniq{$i} )
+		{
+		    push @result, int_record($i);
+		    $int_uniq{$i} = 1;
+		}
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("interval '$i' was not found");
+	    }
+	}
+    }
     
-    my ($join_list) = $request->generateJoinList('i', $request->{select_tables});
+    if ( my @name_select = $request->clean_param_list('name' ) )
+    {
+	$use_list = 1;
+	
+	foreach my $n ( @name_select )
+	{
+	    if ( my $i = int_defined($n) )
+	    {
+		unless ( $int_uniq{$i} )
+		{
+		    push @result, int_record($n);
+		    $int_uniq{$i} = 1;
+		}
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("interval '$n' was not found");
+	    }
+	}
+    }
     
-    # If a query limit has been specified, modify the query accordingly.
-    # If we were asked to count rows, modify the query accordingly
+    unless ( $use_list )
+    {
+	if ( my @scale_select = $request->clean_param_list('scale_id') )
+	{
+	    foreach my $s ( @scale_select )
+	    {
+		if ( ts_defined($s) )
+		{
+		    unless ( $scale_uniq{$s} )
+		    {
+			push @scale_list, $s;
+			$scale_uniq{$s} = 1;
+		    }
+		}
+		
+		else
+		{
+		    $request->add_warning("timescale '$s' was not found");
+		}
+	    }
+	}
+	
+	else
+	{
+	    @scale_list = ts_list();
+	}
+	
+	foreach my $s ( @scale_list )
+	{
+	    foreach my $int ( ts_intervals($s) )
+	    {
+		next if $has_max && $int->{b_age} > $max_ma;
+		next if $has_min && $int->{t_age} < $min_ma;
+		
+		push @result, $int;
+	    }
+	}
+    }
     
-    my $limit = $request->sql_limit_clause(1);    
-    my $calc = $request->sql_count_clause;
+    if ( $request->has_block('colls') )
+    {
+	my $coll_hash;
+	
+	if ( $use_list || $has_max || $has_min )
+	{
+	    my @int_nos = map { $_->{interval_no} } @result;
+	    $coll_hash = $request->query_colls('int', @int_nos);
+	}
+	
+	elsif ( @scale_list )
+	{
+	    $coll_hash = $request->query_colls('int_by_ts', @scale_list);
+	}
+	
+	if ( $coll_hash )
+	{
+	    foreach my $int ( @result )
+	    {
+		my $interval_no = $int->{interval_no};
+		$int->{colls_defined} = $coll_hash->{$interval_no}{colls_defined} // '0';
+		$int->{colls_contained} = $coll_hash->{$interval_no}{colls_contained} // '0';
+		$int->{occs_contained} = $coll_hash->{$interval_no}{occs_contained} // '0';
+		$int->{colls_major} = $coll_hash->{$interval_no}{colls_major} // '0';
+		$int->{occs_major} = $coll_hash->{$interval_no}{occs_major} // '0';
+	    }
+	}
+    }
     
-    # Generate the main query.
+    my $order = $request->clean_param('order');
     
-    my $filter_string = join(' and ', @filters);
+    if ( $order eq 'age' || $order eq 'age.asc' )
+    {
+	@result = sort { $a->{t_age} <=> $b->{t_age} ||
+			     $b->{b_age} <=> $a->{b_age} ||
+			     $a->{scale_no} <=> $b->{scale_no} } @result;
+    }
     
-    $request->{main_sql} = "
-	SELECT $calc $fields
-	FROM $INTERVAL_DATA as i LEFT JOIN $SCALE_MAP as sm using (interval_no)
-		$join_list
-	WHERE $filter_string
-	$order_expr
-	$limit";
+    elsif ( $order eq 'age.desc' )
+    {
+	@result = sort { $b->{b_age} <=> $a->{b_age} ||
+			     $a->{t_age} <=> $b->{t_age} ||
+			     $a->{scale_no} <=> $b->{scale_no} } @result;
+    }
     
-    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+    elsif ( $order eq 'name' || $order eq 'name.asc' )
+    {
+	@result = sort { $a->{interval_name} cmp $b->{interval_name} ||
+			     $a->{scale_no} <=> $b->{scale_no} } @result;
+    }
     
-    # Then prepare and execute the main query.
+    elsif ( $order eq 'name.desc' )
+    {
+	@result = sort { $b->{interval_name} cmp $a->{interval_name} ||
+			     $a->{scale_no} <=> $b->{scale_no} } @result;
+    }
     
-    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
-    
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
-        
-    return 1;
+    $request->list_result(@result);
+    $request->set_result_count(scalar(@result));
 }
 
 
@@ -514,114 +531,218 @@ sub list {
 
 sub list_scales {
     
-    my ($request) = @_;
-    
-    # Get a database handle by which we can make queries.
-    
-    my $dbh = $request->get_connection;
-    my @filters;
-    
-    # Get the list of database fields.
-    
-    $request->substitute_select( mt => 'sc' );
-    
-    my $fields = $request->select_string;
-    
-    # Construct the list of filter expressions.
-    
-    if ( my @id_list = $request->clean_param_list('id') )
-    {
-	my $id_list = join(',', @id_list);
-	push @filters, "scale_no in ($id_list)";
-    }
-    
-    push @filters, "1=1" unless @filters;
+    my ($request, $arg) = @_;
     
     $request->strict_check;
     $request->extid_check;
     
-    # If a query limit has been specified, modify the query accordingly.
-    # If we were asked to count rows, modify the query accordingly
+    my (@scale_list, @result);
     
-    my $limit = $request->sql_limit_clause(1);    
-    my $calc = $request->sql_count_clause;
-    my $order_expr = '';
-    
-    # Generate the main query.
-    
-    my $filter_string = join(' and ', @filters);
-    
-    $request->{main_sql} = "
-	SELECT $calc $fields
-	FROM $SCALE_DATA as sc LEFT JOIN $SCALE_LEVEL_DATA as sl using (scale_no)
-	WHERE $filter_string ORDER BY scale_no, scale_level
-	$limit";
-    
-    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
-    
-    # Then prepare and execute the main query.
-    
-    my $sth = $dbh->prepare($request->{main_sql});
-    $sth->execute();
-    
-    # If the result is to be returned in JSON format, we need to reorganize it:
-    
-    my (@scales, %scale);
-    
-    if ( $request->output_format eq 'json' )
+    unless ( @scale_list = $request->clean_param_list('id') )
     {
-	while ( my $row = $sth->fetchrow_hashref() )
-	{
-	    my $scale_no = $row->{scale_no};
-	    
-	    unless ( $scale{$scale_no} )
-	    {
-		$row->{level_list} = [];
-		$scale{$scale_no} = $row;
-		push @scales, $row;
-	    }
-	    
-	    push @{$scale{$scale_no}{level_list}}, { scale_level => $row->{scale_level},
-						     level_name => $row->{level_name} };
-	}
+	@scale_list = ts_list();
+    }
+    
+    foreach my $s ( @scale_list )
+    {
+	push @result, ts_record($s);
+    }
+    
+    if ( $request->has_block('colls') )
+    {
+	my $coll_hash = $request->query_colls('ts', @scale_list);
 	
-	$request->{main_result} = \@scales;
+	foreach my $scale ( @result )
+	{
+	    my $scale_no = $scale->{scale_no};
+	    $scale->{colls_defined} = $coll_hash->{$scale_no}{colls_defined} // '0';
+	}
     }
     
-    # Otherwise we can just return the statement handle and let the data
-    # service code do the rest.
+    $request->list_result(@result);
+    $request->set_result_count(scalar(@result));
     
-    else
+    if ( $arg eq 'single' && ! @result )
     {
-	$request->{main_sth} = $sth;
-    }
-    
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
+	die $request->exception(404, "Not found");
+    }    
 }
 
 
-# generateJoinList ( tables )
+sub query_colls {
+    
+    my ($request, $type, @args) = @_;
+    
+    my $dbh = $request->get_connection();
+    
+    my $id_string = join(',', @args);
+    my $sql;
+    
+    if ( $type eq 'int' )
+    {
+	$sql = "SELECT * FROM $TABLE{OCC_INT_SUMMARY}
+		WHERE interval_no in ($id_string)";
+	
+	# $sql = "SELECT i.interval_no, count(*) as n_colls
+	# 	FROM $TABLE{INTERVAL_DATA} as i 
+	# 	    join $TABLE{COLLECTION_DATA} as c on
+	# 		i.interval_no = c.max_interval_no or
+	# 		i.interval_no = c.min_interval_no or
+	# 		i.interval_no = c.ma_interval_no
+	# 	WHERE i.interval_no in ($id_string)
+	# 	GROUP BY i.interval_no";
+    }
+    
+    elsif ( $type eq 'int_by_ts' )
+    {
+	$sql = "SELECT * FROM $TABLE{OCC_INT_SUMMARY} as s
+		WHERE scale_no in ($id_string)";
+	
+	# $sql = "SELECT i.interval_no, count(*) as n_colls
+	# 	FROM $TABLE{INTERVAL_DATA} as i
+	# 	    join $TABLE{SCALE_MAP} as sm using (interval_no)
+	# 	    join $TABLE{COLLECTION_DATA} as c on
+	# 		i.interval_no = c.max_interval_no or
+	# 		i.interval_no = c.min_interval_no or
+	# 		i.interval_no = c.ma_interval_no
+	# 	WHERE sm.scale_no in ($id_string)
+	# 	GROUP BY i.interval_no";
+    }
+    
+    elsif ( $type eq 'ts' )
+    {
+	$sql = "SELECT * FROM $TABLE{OCC_TS_SUMMARY} as s
+		WHERE scale_no in ($id_string)";
+	
+	# $sql = "SELECT sm.scale_no, count(*) as n_colls
+	# 	FROM $TABLE{COLLECTION_DATA} as c join $TABLE{SCALE_MAP} as sm
+	# 		on sm.interval_no = c.max_interval_no or
+	# 		   sm.interval_no = c.min_interval_no or
+	# 		   sm.interval_no = c.ma_interval_no
+	# 	     join $TABLE{INTERVAL_DATA} as i using (interval_no)
+	# 	WHERE i.scale_no = sm.scale_no and sm.scale_no in ($id_string)
+	# 	GROUP BY sm.scale_no";
+    }
+    
+    my $colls_hash = { };
+    
+    $request->debug_line("$sql\n") if $request->debug;
+    
+    foreach my $r ( $dbh->selectall_array($sql, { Slice => { } }) )
+    {
+	my $id = $r->{interval_no} || $r->{scale_no};
+	$colls_hash->{$id} = $r;
+    }
+    
+    return $colls_hash;
+}
+
+
+# diagram_scales ( )
 # 
-# Generate the actual join string indicated by the table hash.
+# Generate a diagram of the specified timescale(s).
 
-sub generateJoinList {
-
-    my ($request, $mt, $tables) = @_;
+sub diagram_scales {
     
-    my $join_list = '';
+    my ($request) = @_;
     
-    # Return an empty string unless we actually have some joins to make
+    # Get a list of the scales to display.
     
-    return $join_list unless ref $tables eq 'HASH' and %$tables;
+    my @scale_list = $request->clean_param_list('id');
     
-    # Create the necessary join expressions.
+    $request->strict_check;
     
-    $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
-	if $tables->{r};
+    my (%sdata, %ssequence);
     
-    return $join_list;
+    # Check to make sure that all of the specified scales are defined.
+    
+    foreach my $s ( @scale_list )
+    {
+	unless ( ts_defined($s) )
+	{
+	    die $request->exception('400', "Scale $s is not defined");
+	}
+	
+	$sdata{$s} = ts_record($s);
+	$ssequence{$s} = [ ts_intervals($s) ];
+    }
+    
+    # Check for other parameters.
+    
+    my $options = { };
+    
+    if ( my $display = $request->clean_param('display') )
+    {
+	$display = lc $display;
+	
+	if ( $display =~ /(.*?)-(.*)/ )
+	{
+	    die $request->exception(400, "unknown interval '$1'")
+		unless int_defined($1);
+	    
+	    die $request->exception(400, "unknown interval '$2'")
+		unless int_defined($2);
+	    
+	    my ($b1, $t1) = int_bounds($1);
+	    my ($b2, $t2) = int_bounds($2);
+	    
+	    $options->{t_limit} = min($t1, $t2);
+	    $options->{b_limit} = max($b1, $b2);
+	}
+	
+	else
+	{
+	    die $request->exception(400, "unknown interval '$display'")
+		unless int_defined($display);
+	    
+	    ($options->{b_limit}, $options->{t_limit}) = int_bounds($display);
+	}
+    }
+    
+    if ( my @intervals = $request->clean_param_list('interval') )
+    {
+	foreach ( @intervals )
+	{
+	    if ( my $interval_no = int_defined($_) )
+	    {
+		$options->{highlight}{$interval_no} = 1;
+	    }
+	}
+    }
+    
+    if ( my @ids = $request->clean_param_list('interval_id') )
+    {
+	foreach ( @ids )
+	{
+	    if ( my $interval_no = int_defined($_) )
+	    {
+		$options->{highlight}{$interval_no} = 1;
+	    }
+	}
+    }
+    
+    # Generate the diagram.
+    
+    my $d = IntervalBase->generate_ts_diagram($options, \%sdata, \%ssequence, @scale_list);
+    
+    # Generate the HTML expression and list of bounds.
+    
+    my $html_output = IntervalBase->generate_ts_html($d, \%sdata);
+    
+    my @bounds_list = map { $_->[0] } $d->{bound2d}->@*;
+    
+    if ( ref $d->{errors} eq 'ARRAY' && $d->{errors}->@* )
+    {
+	foreach my $m ( $d->{errors}->@* )
+	{
+	    $request->add_warning($m);
+	}
+    }
+    
+    # Return this information to the client process.
+    
+    $request->single_result({ diagram => $html_output,
+			      bounds => \@bounds_list });
 }
 
 
@@ -665,9 +786,9 @@ sub process_interval_params {
     {
 	foreach my $id ( $request->clean_param_list('interval_id') )
 	{
-	    if ( defined $id && $IDATA{$id} )
+	    if ( int_defined($id) )
 	    {
-		push @ids, $id;
+		push @ids, int_defined($id);
 	    }
 	    
 	    elsif ( $id )
@@ -688,9 +809,9 @@ sub process_interval_params {
 	{
 	    next unless defined $name && $name =~ qr{\S};
 	    
-	    if ( my $i = $INAME{lc $name} )
+	    if ( int_defined($name) )
 	    {
-		push @ids, $i->{interval_no};
+		push @ids, int_defined($name);
 	    }
 	    
 	    else
@@ -759,10 +880,7 @@ sub process_interval_params {
     
     foreach my $interval_no ( @ids )
     {
-	my $i = $IDATA{$interval_no};
-	
-	my $new_max = $i->{early_age};
-	my $new_min = $i->{late_age};
+	my ($new_max, $new_min) = int_bounds($interval_no);
 	
 	if ( !defined $max_ma || $new_max >= $max_ma )
 	{
@@ -805,22 +923,22 @@ sub interval_age_range {
 
     my ($request, $name) = @_;
     
-    if ( my $i = $INAME{lc $name} )
+    if ( int_defined($name) )
     {
-	return ($i->{early_age}, $i->{late_age});
+	return int_bounds($name);
     }
     
     elsif ( $name =~ qr{ ^ (\w+) \s* - \s* (\w+) $ }xs )
     {
-	my $i1 = $INAME{lc $1};
-	my $i2 = $INAME{lc $2};
-	
-	if ( $i1 && $i2 )
+	if ( int_defined($1) && int_defined($2) )
 	{
-	    my $early_age = $i1->{early_age} > $i2->{early_age} ? $i1->{early_age} : $i2->{early_age};
-	    my $late_age = $i1->{late_age} < $i2->{late_age} ? $i1->{late_age} : $i2->{late_age};
+	    my ($b1, $t1) = int_bounds($1);
+	    my ($b2, $t2) = int_bounds($2);
 	    
-	    return ($early_age, $late_age);
+	    my $b = max($b1, $b2);
+	    my $t = min($t1, $t2);
+	    
+	    return ($b, $t);
 	}
     }
     
@@ -982,7 +1100,7 @@ sub auto_complete_int {
     my $count;
     my $use_extids = $request->has_block('extids');
     
-    foreach my $i ( @{$PB2::IntervalData::IPREFIX{$prefix}} )
+    foreach my $i ( ints_by_prefix($prefix) )
     {
 	if ( lc substr($i->{interval_name}, 0, $name_len) eq lc $name )
 	{
@@ -996,205 +1114,6 @@ sub auto_complete_int {
     }
     
     return @results;
-}
-
-
-# generateHierarchy ( rows )
-# 
-# Arrange the rows into a hierarchy.  This is only called on requests
-# which use the 'hierarchy' route.
-
-sub generateHierarchy {
-
-    my ($request, $rowref) = @_;
-    
-    return $rowref unless $request->output_format eq 'json';
-    
-    my @toplevel = ();
-    my %row = ();
-    
-    foreach my $r ( @$rowref )
-    {
-	$r->{hier_child} ||= [];
-	$row{$r->{interval_no}} = $r;
-	
-	if ( $r->{scale_level} == 1 )
-	{
-	    push @toplevel, $r;
-	}
-	
-	else
-	{
-	    my $parent_no = $r->{parent_no};
-	    $row{$parent_no}{hier_child} ||= [];
-	    push @{$row{$parent_no}{hier_child}}, $r;
-	}
-    }
-    
-    return \@toplevel;
-}
-
-
-# read_interval_data ( dbh )
-# 
-# Read the basic interval and scale data from the relevant data tables and
-# install them into package-local variables.
-
-sub read_interval_data {
-    
-    my ($class, $dbh) = @_;
-    
-    # Abort if we have already done this task.
-    
-    return if %IDATA;
-    
-    # First read in a list of all the intervals and put them in the IDATA
-    # hash, indexed by interval_no.
-    
-    my $sql = "SELECT * FROM $INTERVAL_DATA";
-    
-    my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
-    if ( ref $result eq 'ARRAY' )
-    {
-	my $interval_no;
-	
-	foreach my $i ( @$result )
-	{
-	    next unless $interval_no = $i->{interval_no};
-	    my $interval_name = lc $i->{interval_name};
-	    
-	    my $interval_prefix = $interval_name;
-	    $interval_prefix =~ s/ ^early\s | ^middle\s | ^late\s //xs;
-	    $interval_prefix = substr($interval_prefix, 0, 3);
-	    
-	    $IDATA{$interval_no} = $i;
-	    $INAME{$interval_name} = $i;
-	    push @{$IPREFIX{$interval_prefix}}, $i;
-	}
-    }
-    
-    # Then read in a list of all the scales and put them in the SDATA hash,
-    # indexed by scale_no.
-    
-    $sql = "SELECT * FROM $SCALE_DATA";
-    
-    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
-    if ( ref $result eq 'ARRAY' )
-    {
-	my $scale_no;
-	
-	foreach my $s ( @$result )
-	{
-	    next unless $scale_no = $s->{scale_no};
-	    $SDATA{$scale_no} = $s;
-	}
-    }
-    
-    # Then read in a list of the scale levels and fill them in to the
-    # %SLDATA hash.
-    
-    $sql = "SELECT * FROM $SCALE_LEVEL_DATA";
-    
-    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
-    if ( ref $result eq 'ARRAY' )
-    {
-	my ($scale_no, $scale_level, %sample_level);
-	
-	foreach my $s ( @$result )
-	{
-	    next unless $scale_no = $s->{scale_no};
-	    next unless $scale_level = ($s->{scale_level} // $s->{level});
-	    $SLDATA{$scale_no}{$scale_level} = $s->{level_name};
-	    $sample_level{$scale_no}{$scale_level} = 1 if $s->{sample};
-	}
-	
-	# The 'sample_list' field will be a list of the levels at which
-	# diversity statistics should be counted.  So, for example, for the
-	# standard timescale (scale_no = 1), the "Eon" and "Era" levels are
-	# just too coarse for diversity computations to make any sense.  It
-	# only makes sense to do them at "Period" and below.  We sort the list
-	# from largest to smallest, which means from finest-resolution to coarsest.
-	
-	foreach $scale_no ( keys %SLDATA )
-	{
-	    $SLDATA{$scale_no}{sample} = $sample_level{$scale_no};
-	}
-    }
-    
-    # Now read in the mapping from interval numbers to scale levels and parent
-    # intervals. 
-    
-    $sql = "SELECT * FROM $SCALE_MAP";
-    
-    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
-    if ( ref $result eq 'ARRAY' )
-    {
-	my ($interval_no, $scale_no, $scale_level, $parent_no, $color);
-	
-	foreach my $m ( @$result )
-	{
-	    next unless $scale_no = $m->{scale_no};
-	    next unless $scale_level = ($m->{scale_level} // $m->{level});
-	    next unless $interval_no = $m->{interval_no};
-	    next unless $parent_no = $m->{parent_no};
-	    $color = $m->{color};
-	    
-	    $SMDATA{$scale_no}{$interval_no} = { %{$IDATA{$interval_no}}, 
-						 parent_no => $parent_no,
-						 color => $color,
-						 scale_level => $scale_level + 0,
-						 "L$scale_level" => $interval_no };
-	}
-	
-	# Now compute boundary lists and parent level mappings. $$$
-	
-	foreach $scale_no ( keys %SMDATA )
-	{
-	    my (%boundary_map);
-	    
-	    foreach $interval_no ( keys %{$SMDATA{$scale_no}} )
-	    {
-		my $i = $SMDATA{$scale_no}{$interval_no};
-		my $parent_no = $i->{parent_no};
-		my $scale_level = $i->{scale_level};
-		my $boundary_age = $i->{early_age};
-		
-		# Note the early age for this interval as one of the
-		# boundaries for this scale level.
-		
-		$boundary_map{$scale_level}{$boundary_age} = $i;
-		
-		# Iteratively compute the level mapping for this interval and
-		# all its parents.  So, for example, if we know that interval
-		# 50 is at level 5 and its parent is 27 which is at level 4,
-		# then the "L5" value for interval 50 is 50 and the "L4" value
-		# is 27.  If the parent of 27 is 18, then the "L3" value for
-		# 50 is 18.  And so on.
-		
-		while ( my $p = $SMDATA{$scale_no}{$parent_no} )
-		{
-		    $i->{"L$p->{scale_level}"} = $parent_no;
-		    $parent_no = $p->{parent_no};
-		}
-	    }
-	    
-	    # Now sort each of the boundary lists (oldest to youngest) and
-	    # store them in the appropriate package variable. Add the end age of the scale.
-	    
-	    foreach my $scale_level ( keys %boundary_map )
-	    {
-		$BOUNDARY_LIST{$scale_no}{$scale_level} = [ sort { $b <=> $a } keys %{$boundary_map{$scale_level}} ];
-		push @{$BOUNDARY_LIST{$scale_no}{$scale_level}}, $SDATA{$scale_no}{late_age};
-		$BOUNDARY_MAP{$scale_no}{$scale_level} = $boundary_map{$scale_level};
-	    }
-	}
-    }
-    
-    my $a = 1;	# we can stop here when debugging.
 }
 
 
@@ -1240,8 +1159,18 @@ sub process_int_ids {
 	# $record->{$f} = "scl$record->{$f}" if defined $record->{$f};
     }
     
-    $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) 
-	if defined $record->{reference_no};
+    if ( ref $record->{reference_no} eq 'ARRAY' )
+    {
+	foreach my $r ( $record->{reference_no}->@* )
+	{
+	    $r = generate_identifier('REF', $r);
+	}
+    }
+    
+    elsif ( $record->{reference_no} )
+    {
+	$record->{reference_no} = generate_identifier('REF', $record->{reference_no});
+    }
 }
 
 1;
