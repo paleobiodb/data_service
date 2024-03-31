@@ -1237,7 +1237,7 @@ sub CheckOneScale {
 		       defined $anchor_value{$t_ref} && $anchor_value{$t_ref} != $int->{t_age};
 		
 		$bound_type{$t_ref} = $t_bound;
-		$anchor_value{$t_ref} = $int->{t_age};
+		$anchor_value{$t_ref} = $int->{t_intp} // $int->{t_age};
 		$has_anchor = 1;
 	    }
 	    
@@ -1262,7 +1262,7 @@ sub CheckOneScale {
 		       defined $anchor_value{$b_ref} && $anchor_value{$b_ref} != $int->{b_age};
 		
 		$bound_type{$b_ref} = $b_bound;
-		$anchor_value{$b_ref} = $int->{b_age};
+		$anchor_value{$b_ref} = $int->{b_intp} // $int->{b_age};
 		$has_anchor = 1;
 	    }
 	    
@@ -1309,12 +1309,12 @@ sub CheckOneScale {
 		
 		for ( my $j = $i; $j >= 0 ; $j-- )
 		{
-		    $above = $bound_list[$j], last if $bound_type{$bound_list[$j]} eq 'anchor';
+		    $above = $bound_list[$j], last if $bound_type{$bound_list[$j]} ne 'defined';
 		}
 		
 		for ( my $j = $i; $j <= $#bound_list; $j++ )
 		{
-		    $below = $bound_list[$j], last if $bound_type{$bound_list[$j]} eq 'anchor';
+		    $below = $bound_list[$j], last if $bound_type{$bound_list[$j]} ne 'defined';
 		}
 		
 		# If we find an anchor both above and below, generate a corrected value for
