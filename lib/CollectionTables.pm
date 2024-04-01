@@ -217,8 +217,8 @@ sub buildCollectionTables {
     
     # Setting paleocoordinates using GPlates, if available
     
-    my ($paleo_available) = eval {
-	$dbh->selectrow_array("SELECT count(*) from $PALEOCOORDS");
+    my ($paleo_available) = eval { 0
+	# $dbh->selectrow_array("SELECT count(*) from $PALEOCOORDS");
     };
     
     if ( $paleo_available )
