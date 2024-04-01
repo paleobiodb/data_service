@@ -960,8 +960,8 @@ sub updateOneEntry {
     
     if ( $@ )
     {
-	logMessage(1, "ERROR updating table '$TABLE{PALEOCOORD_DATA}': $@");
-	print STDERR "ERROR updating table '$TABLE{PALEOCORD_DATA}': $@\n";
+	logMessage(1, "ERROR updating table '$TABLE{PCOORD_DATA}': $@");
+	print STDERR "ERROR updating table '$TABLE{PCOORD_DATA}': $@\n";
 	$self->{bad_count}++;
     }
 }
