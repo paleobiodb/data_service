@@ -3663,6 +3663,8 @@ sub get_image {
 	
 	$request->{ds}->debug_line($request->{main_sql}) if $request->debug;
 	
+	die "NC ERROR: $request->{main_sql}\n" if $filter =~ /\bNC\b/i;
+	
 	($request->{main_data}) = $dbh->selectrow_array($request->{main_sql});
 	
 	die $request->exception(404, "Image not found") unless $request->{main_data};
