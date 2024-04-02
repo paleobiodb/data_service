@@ -665,7 +665,7 @@ sub buildOccIntervalMaps {
     
     $sql = "INSERT INTO $INT_SUMMARY_AUX
 	    SELECT early_age, late_age, count(*), sum(n_occs)
-	    FROM $TABLE{COLLECTION_MATRIX} WHERE n_occs > 0
+	    FROM $TABLE{COLLECTION_MATRIX}
 	    GROUP BY early_age, late_age";
     
     $result = $dbh->do($sql);

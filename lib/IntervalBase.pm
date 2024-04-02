@@ -537,7 +537,15 @@ sub ints_by_prefix {
     
     my ($prefix) = @_;
     
-    return $IPREFIX{$prefix}->@*;
+    if ( $IPREFIX{$prefix} )
+    {
+	return $IPREFIX{$prefix}->@*;
+    }
+    
+    else
+    {
+	return;
+    }
 }
 
 
