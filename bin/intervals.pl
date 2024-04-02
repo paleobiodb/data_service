@@ -4464,6 +4464,7 @@ sub ConditionScaleTables {
     {
 	$sql = "ALTER TABLE $SCALE_MAP
 		add sequence int unsigned not null after scale_level,
+		add type varchar(20) null after parent_no,
 		add obsolete tinyint unsigned not null default '0',
 		add reference_no int unsigned null";
 	
