@@ -191,8 +191,8 @@ sub BuildTables {
     
     if ( $interval_map )
     {
-	# buildIntervalMap($dbh);
-	buildIntervalBufferMap($dbh);
+	buildIntervalMap($dbh);
+	# buildIntervalBufferMap($dbh);
     }
     
     # The option -r causes the taxon rank map to be (re)generated.
