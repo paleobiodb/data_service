@@ -13,8 +13,9 @@ use lib '..';
 
 package PB2::DiversityData;
 
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING %UNS_NAME);
-use TableDefs qw($INTERVAL_MAP);
+use TaxonDefs qw(%UNS_NAME);
+use IntervalBase qw(ts_boundary_list ts_boundary_no ts_boundary_name ts_boundary_next
+		    INTL_SCALE BIN_SCALE);
 use Taxonomy;
 use ExternalIdent qw(extract_num);
 
@@ -22,7 +23,6 @@ use Try::Tiny;
 use Carp qw(croak confess);
 
 use Moo::Role;
-
 
 
 sub generate_diversity_table {
@@ -39,8 +39,8 @@ sub generate_diversity_table {
     # other scale options than 1.  If no resolution is specified, use the
     # maximum resolution of the selected scale.
     
-    my $scale_no = $options->{scale_no} || 1;
-    my $scale_level = $options->{timereso} || $PB2::IntervalData::SCALE_DATA{$scale_no}{levels};
+    my $timereso = $options->{timereso} || 'default';
+    my $scale_no = $options->{scale_no} || ($timereso eq 'bin' ? BIN_SCALE : INTL_SCALE);
     
     # Figure out the parameters to use in the binning process.
     
@@ -50,12 +50,12 @@ sub generate_diversity_table {
     
     my ($early_limit, $late_limit) = $request->process_interval_params();
     
-    my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
-    my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
+    # my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
+    # my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
     
     my @trimmed_bounds;
     
-    foreach my $bin ( @$boundary_list )
+    foreach my $bin ( ts_boundary_list($scale_no, $timereso) )
     {
 	push @trimmed_bounds, $bin if (! defined $early_limit || $bin <= $early_limit) &&
 				      (! defined $late_limit || $bin >= $late_limit);
@@ -349,8 +349,9 @@ sub generate_diversity_table {
 	    
 	    foreach my $t ( @taxon_list )
 	    {
-		my $r = { interval_no => $boundary_map->{$bin}{interval_no},
-			  interval_name => $boundary_map->{$bin}{interval_name},
+		my $r = { interval_no => ts_boundary_no($scale_no, $timereso, $bin),
+			  interval_name => ts_boundary_name($scale_no, $timereso, $bin),
+			  # $boundary_map->{$bin}{interval_name},
 			  orig_no => $t,
 			  count_name => $counted_name{$t},
 			  diagnosis => 'counted' };
@@ -371,8 +372,10 @@ sub generate_diversity_table {
 	    
 	    foreach my $t ( @implied_list )
 	    {
-		my $r = { interval_no => $boundary_map->{$bin}{interval_no},
-			  interval_name => $boundary_map->{$bin}{interval_name},
+		my $r = { interval_no => ts_boundary_no($scale_no, $timereso, $bin), 
+			  interval_name => ts_boundary_name($scale_no, $timereso, $bin),
+			  # interval_no => $boundary_map->{$bin}{interval_no},
+			  # interval_name => $boundary_map->{$bin}{interval_name},
 			  orig_no => $t,
 			  count_name => $counted_name{$t},
 			  diagnosis => 'implied' };
@@ -406,16 +409,20 @@ sub generate_diversity_table {
 		my @list = reverse @{$r->{diag_bins}};
 		my $top_bin = shift @list;
 		
-		$r->{interval_no} = $boundary_map->{$top_bin}{interval_no};
-		$r->{interval_name} = $boundary_map->{$top_bin}{interval_name};
+		$r->{interval_no} = ts_boundary_no($scale_no, $timereso, $top_bin);
+		$r->{interval_name} = ts_boundary_name($scale_no, $timereso, $top_bin);
+		# $r->{interval_no} = $boundary_map->{$top_bin}{interval_no};
+		# $r->{interval_name} = $boundary_map->{$top_bin}{interval_name};
 		
 		$request->add_result($r);
 		
 		foreach my $bin ( @list )
 		{
 		    my $s = { %$r };
-		    $s->{interval_no} = $boundary_map->{$bin}{interval_no};
-		    $s->{interval_name} = $boundary_map->{$bin}{interval_name};
+		    $s->{interval_no} = ts_boundary_no($scale_no, $timereso, $bin);
+		    $s->{interval_name} = ts_boundary_name($scale_no, $timereso, $bin);
+		    # $s->{interval_no} = $boundary_map->{$bin}{interval_no};
+		    # $s->{interval_name} = $boundary_map->{$bin}{interval_name};
 		    $request->add_result($s);
 		}
 	    }
@@ -513,10 +520,13 @@ sub generate_diversity_table {
     
     foreach my $b (@bins)
     {
-	my $r = { interval_no => $boundary_map->{$b}{interval_no},
-		  interval_name => $boundary_map->{$b}{interval_name},
+	my $r = { interval_no => ts_boundary_no($scale_no, $timereso, $b),
+		  interval_name => ts_boundary_name($scale_no, $timereso, $b),
+		  # interval_no => $boundary_map->{$b}{interval_no},
+		  # interval_name => $boundary_map->{$b}{interval_name},
 		  early_age => $b,
-		  late_age => $boundary_map->{$b}{late_age},
+		  late_age => ts_boundary_next($scale_no, $timereso, $b),
+		  # late_age => $boundary_map->{$b}{late_age},
 		  originations => $X_Ft{$b},
 		  extinctions => $X_bL{$b},
 		  singletons => $X_FL{$b},
@@ -1282,56 +1292,6 @@ sub make_taxon_request {
     }
 }
 
-
-# get_interval_info ( nodes )
-# 
-# Fetch interval names from the interval_map table to go with the occurrence
-# time ranges.
-
-sub get_interval_info {
-    
-    my ($request, $nodes) = @_;
-    
-    my $dbh = $request->get_connection;
-    
-    my %range_keys;
-    
-    foreach my $node ( values %$nodes )
-    {
-	next unless defined $node->{firstocc_ea} && defined $node->{lastocc_la};
-	my $first = $node->{firstocc_ea} + 0;
-	my $last = $node->{lastocc_la} + 0;
-	$range_keys{"'$first-$last'"} = 1;
-	$node->{range_key} = "$first-$last";
-    }
-    
-    my $key_list = join(',', keys %range_keys);
-    
-    return unless $key_list;
-    
-    my $sql = "SELECT range_key, early_interval, late_interval
-	       FROM $INTERVAL_MAP WHERE range_key in ($key_list)";
-    
-    my $result = $dbh->selectall_arrayref($sql);
-    
-    my (%early, %late);
-    
-    foreach my $r ( @$result )
-    {
-	my ($range_key, $early_interval, $late_interval) = @$r;
-	
-	$early{$range_key} = $early_interval;
-	$late{$range_key} = $late_interval;
-    }
-    
-    foreach my $node ( values %$nodes )
-    {
-	next unless defined $node->{range_key};
-	$node->{occ_early_interval} = $early{$node->{range_key}};
-	$node->{occ_late_interval} = $late{$node->{range_key}};
-    }
-}
- 
 
 # count_taxa ( node )
 # 

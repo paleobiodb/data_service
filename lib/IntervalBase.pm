@@ -17,6 +17,7 @@ use Carp qw(croak);
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw(ts_defined ts_name ts_bounds ts_record ts_intervals ts_by_age ts_list
+		      ts_boundary_list ts_boundary_no ts_boundary_name ts_boundary_next
 		      int_defined int_bounds int_scale int_name int_type int_correlation
 		      int_container int_record ints_by_age ints_by_prefix
 		      INTL_SCALE BIN_SCALE AGE_RE);
@@ -35,6 +36,7 @@ our (@CENO_COLOR) = ('#FB8069', '#FB8D76', '#FB9A85', '#FCB4A2', '#FCC0B2',
 our (@PALEO_COLOR) = ('#FFFF33', '#FFFF4D', '#FFFF59', '#FFFF66', '#FFFF73',
 		       '#FFFF73', '#FFFF73', '#FFFF73', '#FFFF73', '#FFFF73');
 
+our (%IS_DEFAULT_TYPE) = (age => 1, bin => 1, zone => 1, chron => 1);
 
 
 # cache_interval_data ( dbh )
@@ -57,7 +59,8 @@ sub cache_interval_data {
     # First, read in a list of all the scales and put them in the SDATA hash,
     # indexed by scale_no.
     
-    $sql = "SELECT * FROM $TABLE{SCALE_DATA} ORDER BY scale_no";
+    $sql = "SELECT scale_no, scale_name, early_age, late_age, locality, reference_no
+	    FROM $TABLE{SCALE_DATA} ORDER BY scale_no";
     
     foreach my $s ( $dbh->selectall_array($sql, { Slice => {} }) )
     {
@@ -101,8 +104,8 @@ sub cache_interval_data {
 	$sm->{b_age} =~ s/[.]?0+$//;
 	$sm->{t_ref} =~ s/[.]?0+$//;
 	$sm->{b_ref} =~ s/[.]?0+$//;
-	$sm->{early_age} = $sm->{t_age};
-	$sm->{late_age} = $sm->{b_age};
+	$sm->{early_age} = $sm->{b_age};
+	$sm->{late_age} = $sm->{t_age};
 	
 	push $SSEQUENCE{$scale_no}->@*, $sm;
 	
@@ -136,6 +139,13 @@ sub cache_interval_data {
 	{
 	    push $SDATA{$scale_no}{reflist}->@*, $reference_no;
 	    $ref_uniq{$scale_no}{$reference_no} = 1;
+	}
+	
+	# Set the default type for this scale, if it has not already been set.
+	
+	unless ( $SDATA{$scale_no}{default_type} )
+	{
+	    $SDATA{$scale_no}{default_type} = $sm->{type} if $IS_DEFAULT_TYPE{$sm->{type}};
 	}
     }
     
@@ -187,9 +197,22 @@ sub cache_interval_data {
 	foreach my $i ( $SSEQUENCE{$scale_no}->@* )
 	{
 	    my $b_age = $i->{early_age};
-	    my $type = $i->{interval_type};
+	    my $type = $i->{type};
 	    
-	    $boundary_map{$type}{$b_age} = $i;
+	    if ( $type ne 'era' && $type ne 'eon' &&
+	         $b_age > 0.01 )
+	    {
+		$boundary_map{$type}{$b_age} = $i;
+	    }
+	}
+	
+	# Add Holocene to the 'age' map for the international scale. Otherwise,
+	# it will end with the Late Pleistocene.
+	
+	if ( $scale_no eq INTL_SCALE )
+	{
+	    my $hbound = $INAME{holocene}{early_age};
+	    $boundary_map{age}{$hbound} = $INAME{holocene};
 	}
 	
 	# Now sort each of the boundary lists (oldest to youngest) and
@@ -203,6 +226,9 @@ sub cache_interval_data {
 	    push @{$BOUNDARY_LIST{$scale_no}{$type}}, $SDATA{$scale_no}{late_age};
 	    $BOUNDARY_MAP{$scale_no}{$type} = $boundary_map{$type};
 	}
+	
+	my $default_type = $SDATA{$scale_no}{default_type};
+	$BOUNDARY_LIST{$scale_no}{default} = $BOUNDARY_LIST{$scale_no}{$default_type};
     }
     
     my $a = 1;	# we can stop here when debugging.
@@ -337,6 +363,38 @@ sub ts_intervals {
     }
     
     return @result;
+}
+
+
+sub ts_boundary_list {
+    
+    my ($scale_no, $type) = @_;
+    
+    return $BOUNDARY_LIST{$scale_no}{$type} ? $BOUNDARY_LIST{$scale_no}{$type}->@* : ();
+}
+
+
+sub ts_boundary_no {
+    
+    my ($scale_no, $type, $bound) = @_;
+    
+    return $BOUNDARY_MAP{$scale_no}{$type}{$bound}{interval_no};
+}
+
+
+sub ts_boundary_name {
+    
+    my ($scale_no, $type, $bound) = @_;
+    
+    return $BOUNDARY_MAP{$scale_no}{$type}{$bound}{interval_name};
+}
+
+
+sub ts_boundary_next {
+    
+    my ($scale_no, $type, $bound) = @_;
+    
+    return $BOUNDARY_MAP{$scale_no}{$type}{$bound}{t_age};
 }
 
 
