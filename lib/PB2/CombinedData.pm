@@ -14,7 +14,7 @@ package PB2::CombinedData;
 
 use HTTP::Validate qw(:validators);
 
-use PB2::IntervalData qw(%IDATA %INAME);
+use IntervalBase qw(int_record);
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
 use ExternalIdent qw(generate_identifier %IDRE VALID_IDENTIFIER);
@@ -294,12 +294,12 @@ sub auto_complete {
 	
 	if ( $interval =~ $IDRE{INT} )
 	{
-	    $interval_record = $PB2::IntervalData::IDATA{$2};
+	    $interval_record = int_record($2);
 	}
 	
 	else
 	{
-	    $interval_record = $PB2::IntervalData::INAME{lc $interval};
+	    $interval_record = int_record($interval);
 	}
 	
 	unless ( ref $interval_record )

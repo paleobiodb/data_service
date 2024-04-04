@@ -1811,7 +1811,7 @@ sub summary {
 		WHERE $filter_string
 		GROUP BY s.bin_id
 		ORDER BY s.bin_id $limit) as innerq
-	join $INTERVAL_MAP as im on im.early_age = innerq.early_age and im.late_age = innerq.late_age";
+	left join $INTERVAL_MAP as im on im.early_age = innerq.early_age and im.late_age = innerq.late_age";
     }
     
     # Otherwise we just need a single query.
