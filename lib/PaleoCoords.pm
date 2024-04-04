@@ -306,10 +306,13 @@ sub updateNew {
     
     $self->updateFlagged($coord_filter, $options);
     
-    # After this succeeds, clear all of the update flags on the static records
+    # After this succeeds, clear all of the update flags on the records
     # that were selected by the filter.
     
-    $sql = "UPDATE $TABLE{PCOORD_STATIC} as ps set update_flag = false
+    $sql = "UPDATE $TABLE{PCOORD_DATA} SET update_flag = false
+	    WHERE $coord_filter";
+    
+    $sql = "UPDATE $TABLE{PCOORD_STATIC} SET update_flag = false
 	    WHERE $static_filter";
     
     $result = $self->doSQL($sql);    
