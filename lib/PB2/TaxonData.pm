@@ -3598,6 +3598,8 @@ sub get_image {
 
     elsif ( my $taxon_no = $request->clean_param('taxon_id') )
     {
+	die $request->exception(400, "You must provide a valid taxon identifier") if $taxon_no eq 'NC';
+	
 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
 	$joins = "
