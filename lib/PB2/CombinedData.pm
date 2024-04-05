@@ -262,7 +262,7 @@ sub auto_complete {
     if ( @requested_types == 1 )
     {
 	@requested_types = ('int', 'str', 'prs', 'txn', 'col', 'ref') if $requested_types[0] eq 'nav';
-	@requested_types = ('str', 'txn', 'col', 'ref') if $requested_types[0] eq 'cls';
+	@requested_types = ('int', 'str', 'txn', 'col', 'ref') if $requested_types[0] eq 'cls';
     }
     
     elsif ( @requested_types == 0 )
