@@ -1026,7 +1026,7 @@ sub initialize {
 	{ param => 'count', valid => '1.2:occs:quickdiv_count', default => 'genera' },
 	    "This parameter specifies the taxonomic level at which to count.  If not",
 	    "specified, it defaults to C<genera>.  The accepted values are:",
-	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso', default => 'stage' },
+	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso', default => 'age' },
 	    "This parameter specifies the temporal resolution at which to count.  If not",
 	    "specified, it defaults to C<stage>.  You can also use the parameter name",
 	    "F<reso>.  Accepted values are:");
