@@ -211,7 +211,17 @@ sub initialize {
     $ds->define_block('1.2:refs:counts' =>
 	{ select => ['rs.n_taxa', 'rs.n_class', 'rs.n_opinions', 'rs.n_occs', 'rs.n_colls'], 
 	  tables => 'rs' },
-	{ set => '*', code => \&adjust_ref_counts });
+	{ set => '*', code => \&adjust_ref_counts },
+	{ output => 'n_taxa', com_name => 'rct', data_type => 'pos' },
+	    "The number of taxonomic names for which this reference is the source",
+	{ output => 'n_opinions', com_name => 'rcp', data_type => 'pos' },
+	    "The number of taxonomic opinions for which this reference is the source",
+	{ output => 'n_class', com_name => 'rcl', data_type => 'pos' },
+	    "The number of these opinions that are currently chosen for classification",
+	{ output => 'n_occs', com_name => 'rco', data_type => 'pos' },
+	    "The number of occurrences for which this reference is the source",
+	{ output => 'n_colls', com_name => 'rcc', data_type => 'pos' },
+	    "The number of collections for which this reference is the primary source");
     
     $ds->define_block('1.2:refs:author' => 
 	{ output => 'firstname', com_name => 'firstname' },
@@ -509,11 +519,14 @@ sub get {
     
     my $fields = $request->select_string;
     
+    my $tables = $request->tables_hash;
+    my $join_list = $request->generate_join_list($tables);
+    
     # Generate the main query.
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM refs as r
+	FROM refs as r $join_list
         WHERE r.reference_no = $id
 	GROUP BY r.reference_no";
     
@@ -532,7 +545,7 @@ sub list {
     my ($request) = @_;
     
     # Get a database handle by which we can make queries.
-
+    
     my $dbh = $request->get_connection;
     
     # Construct a list of filter expressions that must be added to the query

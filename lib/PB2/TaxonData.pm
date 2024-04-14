@@ -1310,6 +1310,9 @@ sub initialize {
 	    "plus all synonyms and subtaxa.  You can specify more than one identifier, separated",
 	    "by commas.  This is a shortcut, equivalent to specifying B<C<taxon_id>> and",
 	    "B<C<rel=all_children>>.",
+	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',', bad_value => '-1' },
+	    "Selects the taxonomic names for which the specified reference(s) are the",
+	    "primary source.",
 	{ param => 'all_taxa', valid => FLAG_VALUE },
 	    "Selects the current variant of every taxonomic name from the database.",
 	    "Be careful when using this, since",
@@ -1321,9 +1324,8 @@ sub initialize {
 	    "Be careful when using this, since",
 	    "the full result set if you don't specify any other parameters can exceed",
 	    "80 megabytes.  This parameter does not need any value.",
-	{ param => 'extra_ref_id', alias => 'ref_id', undocumented => 1 },
 	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id', 
-			  'match_name', 'all_taxa', 'all_records'] });
+			  'match_name', 'ref_id', 'all_taxa', 'all_records'] });
 	
     $ds->define_ruleset('1.2:taxa:selector_2' =>
 	">>The following parameters modify the selection of taxonomic names:",
@@ -2208,14 +2210,14 @@ sub list_taxa {
 
     $request->delete_output_field('container_no');
     
-    # If the 'ref_id' parameter was included, signal an error.  I had to include it in the
-    # ruleset which is used by both taxa/list and taxa/byref, but it is only relevant for the
-    # second operation.
+    # # If the 'ref_id' parameter was included, signal an error.  I had to include it in the
+    # # ruleset which is used by both taxa/list and taxa/byref, but it is only relevant for the
+    # # second operation.
     
-    if ( $request->clean_param('extra_ref_id') )
-    {
-	die $request->exception(400, "If you wish to use the parameter 'ref_id', use the operation 'taxa/byref' instead.");
-    }
+    # if ( $request->clean_param('extra_ref_id') )
+    # {
+    # 	die $request->exception(400, "If you wish to use the parameter 'ref_id', use the operation 'taxa/byref' instead.");
+    # }
     
     # First, figure out the basic set of taxa we are being asked for.
     
@@ -3596,6 +3598,8 @@ sub get_image {
 
     elsif ( my $taxon_no = $request->clean_param('taxon_id') )
     {
+	die $request->exception(400, "You must provide a valid taxon identifier") if $taxon_no eq 'NC';
+	
 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
 	$joins = "
@@ -3660,6 +3664,8 @@ sub get_image {
 		WHERE $filter";
 	
 	$request->{ds}->debug_line($request->{main_sql}) if $request->debug;
+	
+	die "NC ERROR: $request->{main_sql}\n" if $filter =~ /\bNC\b/i;
 	
 	($request->{main_data}) = $dbh->selectrow_array($request->{main_sql});
 	

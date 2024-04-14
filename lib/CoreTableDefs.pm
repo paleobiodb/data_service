@@ -29,11 +29,18 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('OPINION_DATA', CAN_DELETE => 'admin');
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
-    set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
-
     set_table_property('OCCURRENCE_DATA', CAN_DELETE => 'admin');
     
-    set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX');
+    set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
+    
+    set_table_name(OCC_TAXON_SUMMARY => 'occ_taxon');
+    set_table_name(OCC_REF_SUMMARY => 'ref_summary');
+    set_table_name(OCC_INT_SUMMARY => 'int_summary');
+    set_table_name(OCC_TS_SUMMARY => 'ts_summary');
+    
+    set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX',
+		    'OCC_TAXON_SUMMARY', 'OCC_REF_SUMMARY', 
+		    'OCC_INT_SUMMARY', 'OCC_TS_SUMMARY');
     
     set_table_name(COLLECTION_DATA => 'collections');
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
@@ -52,6 +59,10 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('REFERENCE_DATA', CAN_DELETE => 'admin');
     
     set_table_name(INTERVAL_DATA => 'interval_data');
+    set_table_name(CLASSIC_INTERVALS => 'intervals');
+    set_table_name(CLASSIC_INTERVAL_LOOKUP => 'interval_lookup');
+    set_table_name(SCALE_DATA => 'scale_data');
+    set_table_name(SCALE_MAP => 'scale_map');
     
     set_table_name(SPECIMEN_DATA => 'specimens');
     set_table_name(SPECIMEN_MATRIX => 'spec_matrix');

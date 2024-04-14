@@ -19,8 +19,7 @@ use CoreFunction qw(connectDB
 use ConsoleLog qw(initMessages
 		  logMessage
 		  logTimestamp);
-use IntervalTables qw(loadIntervalData
-		      buildIntervalMap);
+use IntervalTables qw(loadIntervalData buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables buildLithTables);
 use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
 use SpecimenTables qw(buildSpecimenTables);
@@ -39,7 +38,9 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 Getopt::Long::Configure("bundling");
 
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
-    $taxon_tables, $collection_tables, $occurrence_tables, $old_taxon_tables, $taxon_steps);
+    $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables, $interval_map,
+    $occurrence_int_maps, $taxon_summary_table,
+    $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
 	    "log=s" => \$opt_logfile,
@@ -48,7 +49,11 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "taxonomy|t" => \$taxon_tables,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
+	    "M" => \$occurrence_int_maps,
+	    "S" => \$taxon_summary_table,
 	    "listcache|y" => \$old_taxon_tables,
+	    "diversity|d" => \$diversity_tables,
+	    "interval-map|u" => \$interval_map,
 	    "steps|T=s" => \$taxon_steps );
 
 my $cmd_line_db_name = shift;
@@ -144,15 +149,15 @@ sub BuildTables {
     
     my $force = $options{f};
     my $interval_data = $options{I};
-    my $interval_map = $options{U};
+    # my $interval_map = $options{U};
     my $rank_map = $options{r};
     my $taxon_pics = $options{p};
     
     # my $collection_tables = $options{c};
     # my $occurrence_tables = $options{m};
-    my $occurrence_int_maps = $options{M};
+    # my $occurrence_int_maps = $options{M};
     my $occurrence_reso = $options{R};
-    my $diversity_tables = $options{d};
+    # my $diversity_tables = $options{d};
     my $prevalence_tables = $options{q};
     my $timescale_tables = $options{S};
     
@@ -188,6 +193,7 @@ sub BuildTables {
     if ( $interval_map )
     {
 	buildIntervalMap($dbh);
+	# buildIntervalBufferMap($dbh);
     }
     
     # The option -r causes the taxon rank map to be (re)generated.
@@ -254,6 +260,10 @@ sub BuildTables {
 	buildOccIntervalMaps($dbh);
     }
     
+    elsif ( $taxon_summary_table )
+    {
+	buildTaxonSummaryTable($dbh);
+    }
     
     # The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
     # was specified, its value should be a sequence of steps (a-h) to be carried

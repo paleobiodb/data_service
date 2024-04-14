@@ -19,6 +19,7 @@ use HTTP::Validate qw(:validators);
 use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
+use IntervalBase qw(INTL_SCALE BIN_SCALE int_defined);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use TaxonDefs qw(%RANK_STRING %TAXON_RANK %UNS_RANK %UNS_NAME);
@@ -616,14 +617,16 @@ sub initialize {
 	{ value => 'order', undocumented => 1 });
     
     $ds->define_set('1.2:occs:div_reso' =>
+	{ value => 'age' },
+	    "Count by age",
 	{ value => 'stage' },
-	    "Count by stage",
+	    "Alias for 'age'",	    
 	{ value => 'epoch' },
 	    "Count by epoch",
 	{ value => 'period' },
 	    "Count by period",
-	{ value => 'era' },
-	    "Count by era");
+	{ value => 'bin' },
+	    "Count by ten million year bin");
     
     $ds->define_set('1.2:occs:order' =>
 	{ value => 'id' },
@@ -945,9 +948,9 @@ sub initialize {
 	    "If this parameter is specified, then taxa that are known to be extant",
 	    "are considered to range through to the present, regardless of the age",
 	    "of their last known fossil occurrence.",
-	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso', default => 'stage' },
+	{ param => 'time_reso', valid => '1.2:occs:div_reso', alias => 'reso', default => 'age' },
 	    "This parameter specifies the temporal resolution at which to count.  If not",
-	    "specified, it defaults to C<stage>.  You can also use the parameter name",
+	    "specified, it defaults to C<age>.  You can also use the parameter name",
 	    "F<reso>.  Accepted values are:");
     
     $ds->define_ruleset('1.2:occs:diversity' =>
@@ -1195,6 +1198,8 @@ sub initialize {
 	{ allow => '1.2:common:select_taxa_ent' },
 	{ allow => '1.2:common:select_ops_crmod' },
 	{ allow => '1.2:common:select_ops_ent' },
+	{ allow => '1.2:common:select_refs_crmod' },
+	{ allow => '1.2:common:select_refs_ent' },
 	">>The following parameters can be used to generate data archives. The easiest way to",
 	"do this is by using the download generator form.",
 	{ allow => '1.2:common:archive_params' },
@@ -1417,7 +1422,8 @@ sub list_occs {
     push @filters, $request->generateOccFilters($tables, 'o');
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
+    push @filters, $request->generate_common_filters( 
+		     { occs => 'o', colls => 'cc', bare => 'o', refs => 'r' }, $tables );
     
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.
@@ -1517,8 +1523,9 @@ sub list_occs {
     my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
-        
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/ ||
+	$request->{my_plate_model};
+    
     $fields .= $access_fields if $access_fields;
     
     # Determine the order in which the results should be returned.
@@ -1588,11 +1595,13 @@ sub diversity {
     
     # if ( my @occs = $request->clean_param_list('check') )
     
-    my $reso_param = $request->clean_param('time_reso');
+    my $reso_param = $request->clean_param('time_reso') || 'default';
     
-    my %level_map = ( stage => 5, epoch => 4, period => 3 );
+    $reso_param = 'age' if $reso_param eq 'stage';
     
-    $options->{timereso} = $level_map{$reso_param} || 5;
+    # my %level_map = ( stage => 5, epoch => 4, period => 3 );
+    
+    $options->{timereso} = $reso_param;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.  We must add 'o' to the table
@@ -1771,35 +1780,44 @@ sub quickdiv {
     my $count_what = $request->clean_param('count') || 'genera';
     my $filter_expr = join(' and ', @filters);
     
-    my $scale_id = $request->clean_param('scale_id') || 1;
-    my $reso = $request->clean_param('time_reso');
+    my $scale_no = $request->clean_param('scale_id') || 1;
+    my $reso = $request->clean_param('time_reso') || 'age';
     
-    # If no value was given for 'reso', use the maximum level of the selected scale.
+    $reso = 'age' if $reso eq 'stage';
+    $scale_no = BIN_SCALE if $reso eq 'bin';
     
-    if ( $scale_id == 1 )
-    {
-	if ( $reso eq 'era' )
-	{
-	    $reso = 2;
-	}
-	elsif ( $reso eq 'period' )
-	{
-	    $reso = 3;
-	}
-	elsif ( $reso eq 'epoch' )
-	{
-	    $reso = 4;
-	}
-	else
-	{
-	    $reso = 5;
-	}
-    }
+    my $qscale = $dbh->quote($scale_no);
+    my $qtype = $dbh->quote($reso);
     
-    else
-    {
-	$reso = $PB2::IntervalData::SCALE_DATA{$scale_id}{levels};
-    }
+    my $holocene = int_defined('holocene');
+    my $grnl = int_defined('greenlandian');
+    
+    # # If no value was given for 'reso', use the maximum level of the selected scale.
+    
+    # if ( $scale_id == 1 )
+    # {
+    # 	if ( $reso eq 'era' )
+    # 	{
+    # 	    $reso = 2;
+    # 	}
+    # 	elsif ( $reso eq 'period' )
+    # 	{
+    # 	    $reso = 3;
+    # 	}
+    # 	elsif ( $reso eq 'epoch' )
+    # 	{
+    # 	    $reso = 4;
+    # 	}
+    # 	else
+    # 	{
+    # 	    $reso = 5;
+    # 	}
+    # }
+    
+    # else
+    # {
+    # 	$reso = $PB2::IntervalData::SCALE_DATA{$scale_id}{levels};
+    # }
     
     # Now check for parameters 'interval', 'interval_id', 'min_ma', 'max_ma'.
     
@@ -1866,7 +1884,12 @@ sub quickdiv {
     # Now generate the appropriate SQL expression based on what we are trying
     # to count.
     
-    my $age_clause = ''; my $age_join = '';
+    my $type_clause = "sm.type = $qtype";
+    
+    if ( $reso eq 'age' )
+    {
+	$type_clause = "(sm.type = $qtype and sm.interval_no <> '$grnl' or sm.interval_no = '$holocene')";
+    }
     
     my $main_table = $tables->{use_global} ? $DIV_GLOBAL : $DIV_MATRIX;
     my $other_joins = $request->generateQuickDivJoins('d', $tables, $taxonomy);
@@ -1875,31 +1898,31 @@ sub quickdiv {
 	 $count_what eq 'genus_plus' )
     {
 	$sql = "SELECT d.interval_no, count(distinct d.genus_no) as sampled_in_bin, sum(d.n_occs) as n_occs
-		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
+		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no)
 			$other_joins
-		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso
+		WHERE $filter_expr and sm.scale_no = $qscale and $type_clause
 		GROUP BY interval_no";
-
-		$request->add_warning("The option 'genera_plus' is not supported with '/occs/quickdiv'.  If you want to promote subgenera to genera, use the operation '/occs/diversity' instead.") if $count_what eq 'genera_plus';
+	
+	$request->add_warning("The option 'genera_plus' is not supported with '/occs/quickdiv'.  If you want to promote subgenera to genera, use the operation '/occs/diversity' instead.") if $count_what eq 'genera_plus';
     }
     
     elsif ( $count_what eq 'families' || $count_what eq 'family' )
     {
 	$sql = "SELECT d.interval_no, count(distinct ph.family_no) as sampled_in_bin, sum(d.n_occs) as n_occs
-		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
+		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no)
 			JOIN $INTS_TABLE as ph using (ints_no)
 			$other_joins
-		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso $age_clause
+		WHERE $filter_expr and sm.scale_no = $qscale and $type_clause
 		GROUP BY interval_no";
     }
     
     elsif ( $count_what eq 'orders' || $count_what eq 'order' )
     {
 	$sql = "SELECT d.interval_no, count(distinct ph.order_no) as sampled_in_bin, sum(d.n_occs) as n_occs
-		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
+		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no)
 			JOIN $INTS_TABLE as ph using (ints_no)
 			$other_joins
-		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso $age_clause
+		WHERE $filter_expr and sm.scale_no = $qscale and $type_clause
 		GROUP BY interval_no";
     }
     
@@ -1917,7 +1940,7 @@ sub quickdiv {
 		SELECT interval_no, interval_name, early_age, late_age, d.sampled_in_bin, d.n_occs
 		FROM $INTERVAL_DATA JOIN $SCALE_MAP as sm using (interval_no)
 		    LEFT JOIN ($sql) as d using (interval_no)
-		WHERE sm.scale_no = $scale_id and sm.scale_level = $reso $age_limit
+		WHERE sm.scale_no = $qscale and $type_clause $age_limit
 		ORDER BY early_age";
     
     $request->{ds}->debug_line("$outer_sql\n") if $request->debug;
@@ -2477,7 +2500,7 @@ sub list_occs_associated {
     my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generate_ref_filters($tables);
+    push @filters, $request->generate_ref_filters($inner_tables);
     push @filters, $request->generate_refno_filter('o');
     push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r' }, $inner_tables );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
@@ -2546,6 +2569,28 @@ sub list_occs_associated {
 	delete $options->{min_ma};
 	delete $options->{max_ma};
 	
+	# For the 'occs/taxabyref' operation, override the default reference
+	# type. If none was explicitly specified, use 'occs'.
+	
+	if ( $record_type eq 'taxa' && ! $options->{ref_type} )
+	{
+	    $options->{ref_type} = [ 'occs' ];
+	}
+	
+	# If we have reference filters, include them in the options.
+	
+	my $ref_tables = { };
+	my @ref_filters = $request->generate_ref_filters($ref_tables);
+	push @ref_filters, $request->generate_common_filters( { refs => 'r', 
+								occs => 'ignore', 
+								taxa => 'ignore' } );
+	
+	if ( @ref_filters )
+	{
+	    $options->{ref_filters} = \@ref_filters;
+	    $options->{ref_tables} = $ref_tables;
+	}
+	
 	# If debug mode is turned on, generate a closure which will be able to output debug
 	# messages. 
 	
@@ -2576,7 +2621,6 @@ sub list_occs_associated {
 	
 	finally {
 	    $dbh->do("DROP TABLE IF EXISTS occ_list");
-	    $request->{ds}->debug_line($taxonomy->last_sql . "\n") if $request->debug;
 	};
 	
 	$request->set_result_count($taxonomy->last_rowcount) if $options->{count};
@@ -2608,14 +2652,6 @@ sub list_occs_associated {
 	
 	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
 	my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($request->tables_hash);
-	
-	# Construct another set of filter expressions to act on the references.
-	
-	my @ref_filters = $request->generate_ref_filters($request->tables_hash);
-	push @ref_filters, $request->generate_common_filters( { refs => 'r', occs => 'ignore' } );
-	push @ref_filters, "1=1" unless @ref_filters;
-	
-	my $ref_filter_string = join(' and ', @ref_filters);
 	
 	# Figure out the order in which we should return the references.  If none
 	# is selected by the options, sort by rank descending.
@@ -2695,7 +2731,6 @@ sub list_occs_associated {
 		FROM ref_collect as base
 			LEFT JOIN refs as r using (reference_no)
 			$outer_join_list
-		WHERE $ref_filter_string
 		GROUP BY base.reference_no ORDER BY $order $limit";
 	
 	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
@@ -3377,10 +3412,7 @@ sub generateJoinList {
 	if $tables->{nm};
     $join_list .= "LEFT JOIN taxon_names as ns on ns.taxon_no = t.spelling_no\n"
 	if $tables->{nm} && $tables->{t};
-    $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
-	if $tables->{pc};
-    $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
-	if $tables->{gp};
+    
     $join_list .= "LEFT JOIN refs as r on r.reference_no = o.reference_no\n" 
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
@@ -3406,6 +3438,33 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
+    
+    # The value of 'pc' must be an array. Each model entry must be followed by a selector
+    # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
+    # value used by the database.
+    
+    if ( ref $tables->{pc} eq 'ARRAY' )
+    {
+	$join_list .= $request->pcoord_joins($tables->{pc}->@*);
+    }
+    
+    # if ( ref $tables->{pc} eq 'ARRAY' )
+    # {
+    # 	my @pc_list = $tables->{pc}->@*;
+    # 	my $i;
+	
+    # 	while ( @pc_list )
+    # 	{
+    # 	    $i++;
+    # 	    my $model = $PB2::CollectionData::PCOORD_ALIAS{shift @pc_list};
+    # 	    my $selector = shift @pc_list;
+	    
+    # 	    $join_list .= 
+    # 		"LEFT JOIN $TABLE{PCOORD_DATA} as pc$i on pc$i.collection_no = c.collection_no
+    # 		    and pc$i.model = '$model' and pc$i.selector = '$selector'\n";
+	    
+    # 	}
+    # }
     
     return $join_list;
 }

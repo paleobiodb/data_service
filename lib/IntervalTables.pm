@@ -11,21 +11,24 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
+use TableDefs qw(%TABLE $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BUFFER
 		 $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP);
+use CoreTableDefs;
 use CoreFunction qw(activateTables loadSQLFile);
 use ConsoleLog qw(logMessage);
 
 use base 'Exporter';
 
-our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap $INTERVAL_DATA $INTERVAL_MAP
-		    );
+our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap
+		     $INTERVAL_DATA $INTERVAL_MAP);
 
+
+our ($holocene_no) = 32;
+our ($holocene_stages) = '(1200, 1201, 1202)';
 
 # Table and file names
 
 our $INTERVAL_MAP_WORK = "imn";
-our $INTERVAL_BRACKET_WORK = "ibn";
 our $INTERVAL_BUFFER_WORK = "iun";
 
 # Template files
@@ -149,168 +152,146 @@ sub buildIntervalMap {
 		scale_no smallint unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
-		range_key varchar(20) not null,
-		cx_int_no int unsigned not null,
-		cx_interval varchar(80) not null,
+		range_key varchar(20),
+		cx_int_no int unsigned,
+		cx_interval varchar(80),
 		early_int_no int unsigned not null,
 		early_interval varchar(80) not null,
 		late_int_no int unsigned not null,
 		late_interval varchar(80) not null,
 		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
     
-    logMessage(2, "    computing containing intervals...");
+    # Generate a table with all possible start/end ages. We use late ages only
+    # because we don't care about the Hadean eon.
     
-    $sql = "	INSERT IGNORE $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-		SELECT i.scale_no, i.early_age, i.late_age, 
-		       (SELECT cxi.interval_no 
-			FROM $INTERVAL_DATA as cxi JOIN $SCALE_MAP as sm using (interval_no)
-			WHERE cxi.early_age >= i.early_age and cxi.late_age <= i.late_age 
-				and sm.scale_no = i.scale_no
-			ORDER BY scale_level desc limit 1) as cx_int_no
-		FROM (SELECT distinct s.scale_no, ei.early_age, li.late_age
-		      FROM scale_data as s JOIN interval_data as ei JOIN interval_data as li
-		      WHERE ei.early_age > li.late_age and
-			ei.early_age <= s.early_age and li.late_age >= s.late_age) as i";
+    logMessage(2, "    computing endpoints...");
+    
+    $sql = "    INSERT IGNORE into $INTERVAL_MAP_WORK (scale_no, early_age, late_age)
+		SELECT 1, i.late_age, j.late_age
+		FROM $TABLE{INTERVAL_DATA} as i cross join $TABLE{INTERVAL_DATA} as j
+		WHERE i.late_age >= j.late_age";
     
     $result = $dbh->do($sql);
     
     logMessage(2, "      found $result age start/end pairs");
     
-    $sql = "	INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-		SELECT i.scale_no, i.early_age, i.early_age,
-		       (SELECT cxi.interval_no 
-			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
-			WHERE cxi.early_age > i.early_age and cxi.late_age < i.early_age
-				and sm.scale_no = i.scale_no
-			ORDER BY scale_level desc limit 1) as cx_int_no
-		FROM (SELECT distinct s.scale_no, i.early_age
-		      FROM scale_data as s JOIN interval_data as i
-		      WHERE i.early_age <= s.early_age and i.early_age >= s.late_age) as i";
+    # Set containing intervals whenever possible.
+    
+    logMessage(2, "    computing containing intervals...");
+    
+    $sql = "	UPDATE $INTERVAL_MAP_WORK as im
+		SET cx_int_no = (SELECT interval_no FROM $TABLE{INTERVAL_DATA} as i
+		      WHERE i.early_age >= im.early_age and i.late_age <= im.late_age and scale_no = 1
+		      ORDER by i.early_age - i.late_age LIMIT 1)";
     
     $result = $dbh->do($sql);
     
-    $sql = "	INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-		SELECT i.scale_no, i.late_age, i.late_age,
-		       (SELECT cxi.interval_no 
-			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
-			WHERE cxi.early_age >= i.late_age and cxi.late_age < i.late_age
-				and sm.scale_no = i.scale_no
-			ORDER BY scale_level desc limit 1) as cx_int_no
-		FROM (SELECT distinct s.scale_no, i.late_age
-		      FROM scale_data as s JOIN interval_data as i
-		      WHERE i.late_age <= s.early_age and i.late_age >= s.late_age) as i";
+    logMessage(2, "      found $result containing intervals");
     
-    $result += $dbh->do($sql);
+    # Set the rest to 0.
     
-    logMessage(2, "      found $result age boundary points");
+    $sql = "UPDATE $INTERVAL_MAP_WORK SET cx_int_no = 0 WHERE cx_int_no is null";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      found $result ranges with no containing interval");
     
     # Now, we fill in the most specific early interval for each age range.
     
     logMessage(2, "    computing early intervals...");
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK as i
-	    SET i.early_int_no =
-	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-		WHERE d.early_age >= i.early_age and d.late_age < i.early_age and d.late_age >= i.late_age
-			and sm.scale_no = i.scale_no
-		ORDER BY early_age asc, scale_level asc limit 1)";
+    $sql = "UPDATE $INTERVAL_MAP_WORK as im
+	    SET im.early_int_no =
+	       (SELECT i.interval_no FROM $TABLE{INTERVAL_DATA} as i
+		WHERE i.early_age >= im.early_age and i.late_age < im.early_age and scale_no = 1
+		ORDER BY i.early_age - i.late_age limit 1)";
     
     $result = $dbh->do($sql);
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on i.late_age = d.late_age
-		JOIN $SCALE_MAP as sm using (interval_no)
-	    SET i.early_int_no =
-	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-		WHERE d.late_age = i.late_age
-		ORDER BY scale_level asc limit 1)
-	    WHERE i.early_age = i.late_age";
-    
-    $result = $dbh->do($sql);
+    logMessage(2, "      found $result early intervals");
     
     $sql = "UPDATE $INTERVAL_MAP_WORK
-	    SET early_int_no = cx_int_no
-	    WHERE early_int_no = 0 and
-		(early_age = late_age or late_int_no = 0 or late_int_no = cx_int_no)";
-    
-    $result = $dbh->do($sql);
-    
-    my ($hadean_no, $early) = $dbh->selectrow_array("
-	SELECT interval_no, early_age FROM $INTERVAL_DATA
-	WHERE interval_name = 'Hadean'");
-    
-    $hadean_no ||= 0;
-    $early ||= 4600.0;
-    
-    $sql = "UPDATE $INTERVAL_MAP_WORK
-	    SET cx_int_no = $hadean_no, early_int_no = $hadean_no, late_int_no = $hadean_no
-	    WHERE early_age = $early and late_age = $early";
+	    SET cx_int_no = 32 WHERE early_age = 0 and late_age = 0";
     
     $result = $dbh->do($sql);
     
     logMessage(2, "    computing late intervals...");
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK as i
-	    SET i.late_int_no =
-	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-		WHERE d.early_age <= i.early_age and d.early_age > i.late_age and d.late_age <= i.late_age
-			and sm.scale_no = i.scale_no
-		ORDER BY late_age desc, scale_level asc limit 1)";
+    $sql = "UPDATE $INTERVAL_MAP_WORK as im
+	    SET im.late_int_no =
+	       (SELECT i.interval_no FROM $TABLE{INTERVAL_DATA} as i
+		WHERE i.early_age > im.late_age and i.late_age <= im.late_age and scale_no = 1
+		ORDER BY i.early_age - i.late_age limit 1)";
     
     $result = $dbh->do($sql);
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on i.early_age = d.early_age
-		JOIN $SCALE_MAP as sm using (interval_no)
-	    SET i.late_int_no =
-	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
-		WHERE d.early_age = i.early_age
-		ORDER BY scale_level asc limit 1)
-	    WHERE i.early_age = i.late_age";
+    logMessage(2, "      found $result late intervals");
+    
+    $sql = "UPDATE $INTERVAL_MAP_WORK as im
+	    SET early_int_no = $holocene_no WHERE early_int_no in $holocene_stages";
     
     $result = $dbh->do($sql);
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK
-	    SET late_int_no = cx_int_no
-	    WHERE late_int_no = 0 and
-		(early_age = late_age or early_int_no = 0 or early_int_no = cx_int_no)";
+    $sql = "UPDATE $INTERVAL_MAP_WORK as im
+	    SET late_int_no = $holocene_no WHERE late_int_no in $holocene_stages";
     
-    $result = $dbh->do($sql);
+    $result += $dbh->do($sql);
     
-    my ($holocene_no) = $dbh->selectrow_array("
-	SELECT interval_no FROM $INTERVAL_DATA
-	WHERE interval_name = 'Holocene'");
+    logMessage(2, "      corrected $result entries from Holocene stages to Holocene");
     
-    $holocene_no ||= 0;
+    # $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on i.early_age = d.early_age
+    # 		JOIN $SCALE_MAP as sm using (interval_no)
+    # 	    SET i.late_int_no =
+    # 	       (SELECT d.interval_no FROM $INTERVAL_DATA as d JOIN $SCALE_MAP as sm using (interval_no)
+    # 		WHERE d.early_age = i.early_age
+    # 		ORDER BY scale_level asc limit 1)
+    # 	    WHERE i.early_age = i.late_age";
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK
-	    SET cx_int_no = $holocene_no, early_int_no = $holocene_no, late_int_no = $holocene_no
-	    WHERE early_age = 0 and late_age = 0";
+    # $result = $dbh->do($sql);
     
-    $result = $dbh->do($sql);
+    # $sql = "UPDATE $INTERVAL_MAP_WORK
+    # 	    SET late_int_no = cx_int_no
+    # 	    WHERE late_int_no = 0 and
+    # 		(early_age = late_age or early_int_no = 0 or early_int_no = cx_int_no)";
     
-    my ($quaternary_no) = $dbh->selectrow_array("
-	SELECT interval_no FROM $INTERVAL_DATA
-	WHERE interval_name = 'Quaternary'");
+    # $result = $dbh->do($sql);
     
-    my ($pleistocene_no) = $dbh->selectrow_array("
-	SELECT interval_no FROM $INTERVAL_DATA
-	WHERE interval_name = 'Pleistocene'");
+    # my ($holocene_no) = $dbh->selectrow_array("
+    # 	SELECT interval_no FROM $INTERVAL_DATA
+    # 	WHERE interval_name = 'Holocene'");
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK
-	    SET late_int_no = $holocene_no
-	    WHERE late_age = 0 and late_int_no = $quaternary_no";
+    # $holocene_no ||= 0;
     
-    $result = $dbh->do($sql);
+    # $sql = "UPDATE $INTERVAL_MAP_WORK
+    # 	    SET cx_int_no = $holocene_no, early_int_no = $holocene_no, late_int_no = $holocene_no
+    # 	    WHERE early_age = 0 and late_age = 0";
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK
-	    SET early_int_no = $pleistocene_no
-	    WHERE early_int_no = $quaternary_no";
+    # $result = $dbh->do($sql);
     
-    $result = $dbh->do($sql);
+    # my ($quaternary_no) = $dbh->selectrow_array("
+    # 	SELECT interval_no FROM $INTERVAL_DATA
+    # 	WHERE interval_name = 'Quaternary'");
+    
+    # my ($pleistocene_no) = $dbh->selectrow_array("
+    # 	SELECT interval_no FROM $INTERVAL_DATA
+    # 	WHERE interval_name = 'Pleistocene'");
+    
+    # $sql = "UPDATE $INTERVAL_MAP_WORK
+    # 	    SET late_int_no = $holocene_no
+    # 	    WHERE late_age = 0 and late_int_no = $quaternary_no";
+    
+    # $result = $dbh->do($sql);
+    
+    # $sql = "UPDATE $INTERVAL_MAP_WORK
+    # 	    SET early_int_no = $pleistocene_no
+    # 	    WHERE early_int_no = $quaternary_no";
+    
+    # $result = $dbh->do($sql);
     
     logMessage(2, "    setting interval names...");
     
-    $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN $INTERVAL_DATA as d on d.interval_no = i.cx_int_no
-	    SET i.cx_interval = d.interval_name";
+    $sql = "UPDATE $INTERVAL_MAP_WORK as im JOIN $INTERVAL_DATA as i on i.interval_no = im.cx_int_no
+	    SET im.cx_interval = i.interval_name";
     
     $result = $dbh->do($sql);
     
@@ -343,16 +324,6 @@ sub buildIntervalMap {
     
     activateTables($dbh, $INTERVAL_MAP_WORK => $INTERVAL_MAP);
     
-    my $a = 1;		# we can stop here when debugging   
-}
-
-
-sub buildIntervalBufferMap {
-    
-    my ($dbh) = @_;
-    
-    my ($result, $sql);
-    
     logMessage(2, "    setting interval buffer bounds...");
     
     $dbh->do("DROP TABLE IF EXISTS $INTERVAL_BUFFER_WORK");
@@ -364,7 +335,7 @@ sub buildIntervalBufferMap {
     
     $sql = "INSERT IGNORE INTO $INTERVAL_BUFFER_WORK (interval_no, early_bound, late_bound)
 		SELECT interval_no, early_age + 50, if(late_age - 50 > 0, late_age - 50, 0)
-		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
+		FROM $INTERVAL_DATA
 		WHERE scale_no = 1";
     
     $result = $dbh->do($sql);

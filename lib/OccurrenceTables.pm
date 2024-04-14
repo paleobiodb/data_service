@@ -16,18 +16,23 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_TAXON $REF_SUMMARY
-		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
-		 $INTERVAL_DATA $SCALE_MAP);
+use TableDefs qw(%TABLE $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP);
+use IntervalBase qw(INTL_SCALE BIN_SCALE);
+
+use CoreTableDefs;
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage logTimestamp);
 
-our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildDiversityTables updateOccurrenceMatrix
-		      buildOccIntervalMaps);
+our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildDiversityTables 
+		      updateOccurrenceMatrix buildOccIntervalMaps);
 		      
 our $OCC_MATRIX_WORK = "omn";
 our $OCC_TAXON_WORK = "otn";
+our $PRECISE_AGE_AUX = "pan";
 our $REF_SUMMARY_WORK = "orn";
+our $INT_SUMMARY_WORK = "oin";
+our $INT_SUMMARY_AUX = "oia";
+our $TS_SUMMARY_WORK = "otsn";
 
 
 # buildOccurrenceTables ( dbh )
@@ -95,8 +100,8 @@ sub buildOccurrenceTables {
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no, o.modifier_no, o.created, o.modified
 		FROM occurrences as o JOIN coll_matrix as c using (collection_no)
-			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
@@ -117,8 +122,8 @@ sub buildOccurrenceTables {
 			ei.early_age, li.late_age, re.reference_no,
 			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
 		FROM reidentifications as re JOIN coll_matrix as c using (collection_no)
-			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
@@ -182,7 +187,7 @@ sub buildOccurrenceTables {
     
     # Then activate the new tables.
     
-    activateTables($dbh, $OCC_MATRIX_WORK => $OCC_MATRIX);
+    activateTables($dbh, $OCC_MATRIX_WORK => $TABLE{OCCURRENCE_MATRIX});
     
     # Create tables summarizing the occurrences by taxon and reference.
     
@@ -211,7 +216,7 @@ sub updateOccurrenceMatrix {
     
     logMessage(2, "    updating occurrence...");
     
-    $sql = "	REPLACE INTO $OCC_MATRIX
+    $sql = "	REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso, 
 			species_name, species_reso, plant_organ, plant_organ2,
@@ -224,8 +229,8 @@ sub updateOccurrenceMatrix {
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no, o.modifier_no, o.created, o.modified
 		FROM occurrences as o JOIN coll_matrix as c using (collection_no)
-			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 			LEFT JOIN authorities as a using (taxon_no)
 		WHERE occurrence_no = $occurrence_no";
     
@@ -233,7 +238,7 @@ sub updateOccurrenceMatrix {
     
     # Then replace any reidentifications
     
-    $sql = "	REPLACE INTO $OCC_MATRIX
+    $sql = "	REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso,
 			species_name, species_reso, plant_organ,
@@ -245,8 +250,8 @@ sub updateOccurrenceMatrix {
 			ei.early_age, li.late_age, re.reference_no,
 			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
 		FROM reidentifications as re JOIN coll_matrix as c using (collection_no)
-			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 			LEFT JOIN authorities as a using (taxon_no)
 		WHERE occurrence_no = $occurrence_no and reid_no > 0";
     
@@ -254,7 +259,7 @@ sub updateOccurrenceMatrix {
     
     # Now make sure that superceded identifications are marked
 
-    $sql = "	UPDATE $OCC_MATRIX as m
+    $sql = "	UPDATE $TABLE{OCCURRENCE_MATRIX} as m
 			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no 
 				and re.most_recent = 'YES'
 		SET m.latest_ident = false WHERE m.occurrence_no = $occurrence_no and m.reid_no = 0";
@@ -277,19 +282,9 @@ sub buildTaxonSummaryTable {
     
     $options ||= {};
     
-    # First make sure that the scale_map table has field 'scale_level' instead
-    # of just 'level'.
-    
-    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE $SCALE_MAP"); 
-    
-    unless ( $table_definition =~ /`scale_level`/ )
-    {
-	$dbh->do("ALTER TABLE $SCALE_MAP change column `level` `scale_level` smallint unsigned not null");
-    }
-    
-    # Then create working tables which will become the new taxon summary
+    # Create working tables which will become the new taxon summary
     # table and reference summary table.
-        
+    
     logMessage(2, "    summarizing by taxonomic concept...");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $OCC_TAXON_WORK");
@@ -315,9 +310,10 @@ sub buildTaxonSummaryTable {
 		SELECT orig_no, count(*), 0,
 			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
 			false
-		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
-			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+		FROM $TABLE{OCCURRENCE_MATRIX} as m 
+			JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 		WHERE latest_ident and access_level = 0 and orig_no > 0
 		GROUP BY orig_no";
     
@@ -331,7 +327,7 @@ sub buildTaxonSummaryTable {
     # Any taxon having occurrences that are dated more precisely than this
     # will be substituted with more precise bounds based just on those
     # occurrences.
-    
+        
     # The age thresholds can be adjusted by means of the $options hash.
     
     logMessage(2, "    computing precise age bounds where possible...");
@@ -357,25 +353,42 @@ sub buildTaxonSummaryTable {
     # revisit this procedure, and figure out a better way to determine
     # first/last appearance ranges (as probability curves, perhaps?)
     
+    $result = $dbh->do("DROP TABLE IF EXISTS $PRECISE_AGE_AUX");
+    $result = $dbh->do("CREATE TABLE $PRECISE_AGE_AUX (
+				early_int_no int unsigned not null,
+				late_int_no int unsigned not null,
+				early_age decimal(9,5),
+				late_age decimal(9,5),
+				precise boolean,
+				KEY (early_int_no, late_int_no)) ENGINE=MyISAM");
+    
+    $sql = "	INSERT INTO $PRECISE_AGE_AUX (early_int_no, late_int_no, early_age, late_age, precise)
+		SELECT distinct early_int_no, late_int_no, ei.early_age, li.late_age,
+		    ((ei.early_age <= 20 and ei.early_age - li.late_age <= 5) or 
+		     (ei.early_age <= 66 and ei.early_age - li.late_age <= 20) or 
+		     (ei.early_age <= 252 and ei.early_age - li.late_age <= 25) or
+		     (ei.early_age <= 540 and ei.early_age - li.late_age <= 30) or 
+		     (ei.early_age > 540))
+		FROM $TABLE{OCCURRENCE_MATRIX} as m 
+			join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+			join $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			join $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "       computed precise age table");
+    
     $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age,
 			precise_age)
 		SELECT m.orig_no, count(*), 0,
-			max(ei.early_age) as fea, max(li.late_age) as lea,
-			min(ei.early_age) as fla, min(li.late_age) as lla,
+			max(pa.early_age) as fea, max(pa.late_age) as lea,
+			min(pa.early_age) as fla, min(pa.late_age) as lla,
 			true
-		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
-			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-			LEFT JOIN $SCALE_MAP as es on es.interval_no = ei.interval_no
-			LEFT JOIN $SCALE_MAP as ls on ls.interval_no = li.interval_no
-		WHERE m.latest_ident and m.orig_no > 0 and
-		      ((ei.early_age - li.late_age <= $interval_bound and li.late_age >= 20) or
-		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
-		      (es.scale_no = 1 and es.scale_level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
-		      (ls.scale_no = 1 and ls.scale_level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
-		      (es.scale_no = 1 and es.scale_level = 3 and ei.early_age < 3) or
-		      (ls.scale_no = 1 and ls.scale_level = 3 and li.late_age >= 540))
+		FROM $TABLE{OCCURRENCE_MATRIX} as m 
+			join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+			join $PRECISE_AGE_AUX as pa using (early_int_no, late_int_no)
+		WHERE m.latest_ident and m.orig_no > 0 and pa.precise
 		GROUP BY m.orig_no
 		ON DUPLICATE KEY UPDATE
 			first_early_age = values(first_early_age),
@@ -403,9 +416,9 @@ sub buildTaxonSummaryTable {
     # 		SELECT m.orig_no, count(*), 0,
     # 			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
     # 			false
-    # 		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
-    # 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-    # 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+    # 		FROM $TABLE{OCCURRENCE_MATRIX} as m JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+    # 			JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+    # 			JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
     # 		WHERE m.latest_ident and m.orig_no > 0
     # 		GROUP BY m.orig_no
     # 		ON DUPLICATE KEY UPDATE n_occs = n_occs + 1";
@@ -421,12 +434,12 @@ sub buildTaxonSummaryTable {
     
     logMessage(2, "    finding first and last occurrences...");
     
-    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX as o using (orig_no)
+    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $TABLE{OCCURRENCE_MATRIX} as o using (orig_no)
 		SET s.early_occ = o.occurrence_no WHERE o.late_age >= s.first_late_age and latest_ident";
     
     $count = $dbh->do($sql);
     
-    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX as o using (orig_no)
+    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $TABLE{OCCURRENCE_MATRIX} as o using (orig_no)
 		SET s.late_occ = o.occurrence_no WHERE o.early_age <= s.last_early_age and latest_ident";
     
     $count = $dbh->do($sql);
@@ -444,7 +457,7 @@ sub buildTaxonSummaryTable {
     
     # Now swap in the new table.
     
-    activateTables($dbh, $OCC_TAXON_WORK => $OCC_TAXON);
+    activateTables($dbh, $OCC_TAXON_WORK => $TABLE{OCC_TAXON_SUMMARY});
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -484,9 +497,10 @@ sub buildReferenceSummaryTable {
 			early_age, late_age)
 		SELECT m.reference_no, count(*), count(distinct collection_no),
 			max(ei.early_age), min(li.late_age)
-		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
-			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+		FROM $TABLE{OCCURRENCE_MATRIX} as m 
+			join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+			join $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			join $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 		WHERE latest_ident
 		GROUP BY m.reference_no";
     
@@ -506,7 +520,7 @@ sub buildReferenceSummaryTable {
     logMessage(2, "    counting primary references...");
     
     $sql = "	UPDATE $REF_SUMMARY_WORK as rs join
-		       (SELECT reference_no, count(*) as count from $COLL_MATRIX
+		       (SELECT reference_no, count(*) as count from $TABLE{COLLECTION_MATRIX}
 			GROUP BY reference_no) as m using (reference_no)
 		SET rs.n_prim = m.count";
     
@@ -521,7 +535,7 @@ sub buildReferenceSummaryTable {
     
     # Now swap in the new table.
     
-    activateTables($dbh, $REF_SUMMARY_WORK => $REF_SUMMARY);
+    activateTables($dbh, $REF_SUMMARY_WORK => $TABLE{OCC_REF_SUMMARY});
     
     my $a = 1;		# we can stop here when debugging.
 }
@@ -539,30 +553,33 @@ sub buildOccIntervalMaps {
     
     my ($sql, $result, $count);
     
-    logMessage(2, "    creating occurrence interval maps...");
+    # logMessage(2, "    creating occurrence interval maps...");
     
-    $dbh->do("DROP TABLE IF EXISTS $OCC_CONTAINED_MAP");
+    # $dbh->do("DROP TABLE IF EXISTS $OCC_CONTAINED_MAP");
     
-    $dbh->do("
-	CREATE TABLE $OCC_CONTAINED_MAP (
-		scale_no smallint unsigned not null,
-		scale_level smallint unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		interval_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    # $dbh->do("
+    # 	CREATE TABLE $OCC_CONTAINED_MAP (
+    # 		scale_no smallint unsigned not null,
+    # 		scale_level smallint unsigned not null,
+    # 		early_age decimal(9,5),
+    # 		late_age decimal(9,5),
+    # 		interval_no int unsigned not null,
+    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
     
-    $sql = "
-	INSERT INTO $OCC_CONTAINED_MAP (scale_no, scale_level, early_age, late_age, interval_no)
-	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
-	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
-		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
-		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
-	WHERE m.late_age >= i.late_age and m.early_age <= i.early_age";
+    # $sql = "
+    # 	INSERT INTO $OCC_CONTAINED_MAP (scale_no, scale_level, early_age, late_age, interval_no)
+    # 	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
+    # 	FROM (SELECT distinct early_age, late_age FROM $TABLE{OCCURRENCE_MATRIX}) as i
+    # 		JOIN (SELECT sm.scale_no, scale_level, early_age, late_age, interval_no
+    # 		      FROM $TABLE{SCALE_MAP} as sm JOIN $TABLE{INTERVAL_DATA} using (interval_no)) as m
+    # 	WHERE m.late_age >= i.late_age and m.early_age <= i.early_age";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows with container rule");
+    # logMessage(2, "      generated $result rows with container rule");
+    
+    my $INTL = INTL_SCALE;
+    my $BIN = BIN_SCALE;
     
     $dbh->do("DROP TABLE IF EXISTS $OCC_MAJOR_MAP");
     
@@ -578,9 +595,10 @@ sub buildOccIntervalMaps {
     $sql = "
 	INSERT INTO $OCC_MAJOR_MAP (scale_no, scale_level, early_age, late_age, interval_no)
 	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
-	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
-		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
-		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
+	FROM (SELECT distinct early_age, late_age FROM $TABLE{OCCURRENCE_MATRIX}) as i
+		JOIN (SELECT sm.scale_no, scale_level, early_age, late_age, interval_no
+		      FROM $TABLE{SCALE_MAP} as sm JOIN $TABLE{INTERVAL_DATA} using (interval_no)
+		      WHERE sm.scale_no in ('$INTL', '$BIN')) as m
 	WHERE i.early_age > i.late_age and
 		if(i.late_age >= m.late_age,
 			if(i.early_age <= m.early_age, i.early_age - i.late_age, m.early_age - i.late_age),
@@ -590,53 +608,172 @@ sub buildOccIntervalMaps {
     
     logMessage(2, "      generated $result rows with majority rule");
     
-    $dbh->do("DROP TABLE IF EXISTS $OCC_BUFFER_MAP");
+    # $dbh->do("DROP TABLE IF EXISTS $OCC_BUFFER_MAP");
     
-    $dbh->do("
-	CREATE TABLE $OCC_BUFFER_MAP (
-		scale_no smallint unsigned not null,
-		scale_level smallint unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		interval_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    # $dbh->do("
+    # 	CREATE TABLE $OCC_BUFFER_MAP (
+    # 		scale_no smallint unsigned not null,
+    # 		scale_level smallint unsigned not null,
+    # 		early_age decimal(9,5),
+    # 		late_age decimal(9,5),
+    # 		interval_no int unsigned not null,
+    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
     
-    $sql = "
-	INSERT INTO $OCC_BUFFER_MAP (scale_no, scale_level, early_age, late_age, interval_no)
-	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
-	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
-		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
-		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
-	WHERE m.late_age < i.early_age and m.early_age > i.late_age and
-		i.early_age <= m.early_age + if(i.early_age > 66, 12, 5) and
-		i.late_age >= m.late_age - if(i.late_age >= 66, 12, 5)";
+    # $sql = "
+    # 	INSERT INTO $OCC_BUFFER_MAP (scale_no, scale_level, early_age, late_age, interval_no)
+    # 	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
+    # 	FROM (SELECT distinct early_age, late_age FROM $TABLE{OCCURRENCE_MATRIX}) as i
+    # 		JOIN (SELECT sm.scale_no, scale_level, early_age, late_age, interval_no
+    # 		      FROM $TABLE{SCALE_MAP} as sm JOIN $TABLE{INTERVAL_DATA} using (interval_no)
+    # 		      WHERE sm.scale_no = 1) as m
+    # 	WHERE m.late_age < i.early_age and m.early_age > i.late_age and
+    # 		i.early_age <= m.early_age + if(i.early_age > 66, 12, 5) and
+    # 		i.late_age >= m.late_age - if(i.late_age >= 66, 12, 5)";
+    
+    # $result = $dbh->do($sql);
+    
+    # logMessage(2, "      generated $result rows with buffer rule");
+    
+    # $dbh->do("DROP TABLE IF EXISTS $OCC_OVERLAP_MAP");
+    
+    # $dbh->do("
+    # 	CREATE TABLE $OCC_OVERLAP_MAP (
+    # 		scale_no smallint unsigned not null,
+    # 		scale_level smallint unsigned not null,
+    # 		early_age decimal(9,5),
+    # 		late_age decimal(9,5),
+    # 		interval_no int unsigned not null,
+    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    
+    # $sql = "
+    # 	INSERT INTO $OCC_OVERLAP_MAP (scale_no, scale_level, early_age, late_age, interval_no)
+    # 	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
+    # 	FROM (SELECT distinct early_age, late_age FROM $TABLE{OCCURRENCE_MATRIX}) as i
+    # 		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
+    # 		      FROM $TABLE{SCALE_MAP} JOIN $TABLE{INTERVAL_DATA} using (interval_no)) as m
+    # 	WHERE m.late_age < i.early_age and m.early_age > i.late_age";
+    
+    # $result = $dbh->do($sql);
+    
+    # logMessage(2, "      generated $result rows with overlap rule");
+    
+    $dbh->do("DROP TABLE IF EXISTS $INT_SUMMARY_AUX");
+    
+    $dbh->do("CREATE TABLE $INT_SUMMARY_AUX (
+		early_age decimal(9,5) not null,
+		late_age decimal(9,5) not null,
+		n_colls int unsigned not null default '0',
+		n_occs int unsigned not null default '0') Engine=Aria");
+    
+    logMessage(2, "    creating int summary...");
+    
+    $sql = "INSERT INTO $INT_SUMMARY_AUX
+	    SELECT early_age, late_age, count(*), sum(n_occs)
+	    FROM $TABLE{COLLECTION_MATRIX}
+	    GROUP BY early_age, late_age";
+    
+    $result = $dbh->do($sql);
+
+    $dbh->do("DROP TABLE IF EXISTS $INT_SUMMARY_WORK");
+    
+    $dbh->do("CREATE TABLE $INT_SUMMARY_WORK (
+		interval_no int unsigned PRIMARY KEY,
+		scale_no int unsigned not null,
+		colls_defined int unsigned not null default '0',
+		occs_defined int unsigned not null default '0',
+		colls_contained int unsigned not null default '0',
+		occs_contained int unsigned not null default '0',
+		colls_major int unsigned not null default '0',
+		occs_major int unsigned not null default '0',
+		KEY (scale_no)) Engine=Aria");
+    
+    $sql = "INSERT INTO $INT_SUMMARY_WORK
+	    SELECT interval_no, scale_no, 0, 0, 0, 0, 0, 0
+	    FROM $TABLE{INTERVAL_DATA}";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows with buffer rule");
-    
-    $dbh->do("DROP TABLE IF EXISTS $OCC_OVERLAP_MAP");
-    
-    $dbh->do("
-	CREATE TABLE $OCC_OVERLAP_MAP (
-		scale_no smallint unsigned not null,
-		scale_level smallint unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		interval_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
-    
-    $sql = "
-	INSERT INTO $OCC_OVERLAP_MAP (scale_no, scale_level, early_age, late_age, interval_no)
-	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
-	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
-		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
-		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
-	WHERE m.late_age < i.early_age and m.early_age > i.late_age";
+    $sql = "UPDATE $INT_SUMMARY_WORK as s
+	      join (SELECT interval_no, sum(n_colls) as n_colls, sum(n_occs) as n_occs
+		    FROM $INT_SUMMARY_AUX as m join $TABLE{INTERVAL_DATA} as i 
+		    WHERE m.early_age <= i.early_age and m.late_age >= i.late_age
+		    GROUP BY interval_no) as u
+	      using (interval_no)
+	    SET s.colls_contained = u.n_colls,
+		s.occs_contained = u.n_occs";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows with overlap rule");
+    logMessage(2, "      found $result intervals with timerule=contained collections");
+    
+    $sql = "UPDATE $INT_SUMMARY_WORK as s
+	      join (SELECT interval_no, sum(n_colls) as n_colls, sum(n_occs) as n_occs
+		    FROM $INT_SUMMARY_AUX as m join $TABLE{INTERVAL_DATA} as i
+		    WHERE m.early_age > m.late_age and if(m.late_age >= i.late_age, 
+		      if(m.early_age <= i.early_age, m.early_age - m.late_age, i.early_age - m.late_age), 
+		      if(m.early_age > i.early_age, i.early_age - i.late_age, m.early_age - i.late_age)) / 
+			(m.early_age - m.late_age) >= 0.5
+		    GROUP BY interval_no) as u
+	      using (interval_no)
+	    SET s.colls_major = u.n_colls,
+		s.occs_major = u.n_occs";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      found $result intervals with timerule=major collections");
+    
+    $sql = "UPDATE $INT_SUMMARY_WORK as s
+	      join (SELECT interval_no, count(distinct collection_no) as n_colls
+		    FROM $TABLE{COLLECTION_DATA} as cc 
+			join $TABLE{INTERVAL_DATA} as i on
+			    cc.max_interval_no = i.interval_no or
+			    cc.min_interval_no = i.interval_no or
+			    cc.ma_interval_no = i.interval_no
+		    GROUP BY interval_no) as u
+	      using (interval_no)
+	    SET s.colls_defined = u.n_colls";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      found $result intervals with defined collections");
+    
+    $sql = "UPDATE $INT_SUMMARY_WORK as s
+	      join (SELECT interval_no, count(distinct collection_no) as n_colls
+		    FROM $TABLE{COLLECTION_DATA} as cc 
+			join $TABLE{INTERVAL_DATA} as i on
+			    cc.max_interval_no = i.interval_no or
+			    cc.min_interval_no = i.interval_no or
+			    cc.ma_interval_no = i.interval_no
+		    GROUP BY interval_no) as u
+	      using (interval_no)
+	    SET s.colls_defined = u.n_colls";
+    
+    $result = $dbh->do($sql);
+    
+    $dbh->do("DROP TABLE IF EXISTS $TS_SUMMARY_WORK");
+    
+    $dbh->do("CREATE TABLE $TS_SUMMARY_WORK (
+		scale_no int unsigned PRIMARY KEY,
+		colls_defined int unsigned not null default '0',
+		occs_defined int unsigned not null default '0') Engine=Aria");
+    
+    $sql = "INSERT INTO $TS_SUMMARY_WORK (scale_no, colls_defined)
+	    SELECT scale_no, count(distinct collection_no) as colls_defined
+	    FROM $TABLE{COLLECTION_DATA} as cc 
+		join $TABLE{INTERVAL_DATA} as i on
+		    cc.max_interval_no = i.interval_no or
+		    cc.min_interval_no = i.interval_no or
+		    cc.ma_interval_no = i.interval_no
+	    GROUP BY scale_no";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      found $result timescales with defined collections");    
+    
+    # Now swap in the new tables.
+    
+    activateTables($dbh, $INT_SUMMARY_WORK => $TABLE{OCC_INT_SUMMARY},
+		  $TS_SUMMARY_WORK => $TABLE{OCC_TS_SUMMARY});
 }
 
 1;

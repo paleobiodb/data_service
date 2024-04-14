@@ -59,6 +59,21 @@ sub define_valueset {
     
     $ds->{set}{$name} = $vs;
     
+    # Then add the specified value records and documentation strings to this set.
+    
+    $self->add_to_set($name, @_);
+}
+
+
+sub add_to_set {
+    
+    my $self = shift;
+    my $name = shift;
+    
+    # Make sure the name is defined.
+    
+    my $vs = $self->{set}{$name} || croak "add_to_set: unknown set '$name'";
+    
     # Then process the records and documentation strings one by one.  Throw an
     # exception if we find an invalid record.
     

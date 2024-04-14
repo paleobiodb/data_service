@@ -171,7 +171,9 @@ my (%REF_OPTION) = ( ref_type => 1,
 		     ref_entered_by => 1,
 		     ref_modified_by => 1,
 		     ref_authent_by => 1,
-		     ref_touched_by => 1 );
+		     ref_touched_by => 1,
+		     ref_filters => 1,
+		     ref_tables => 1 );
 
 my (%COMMON_OPTION) = ( taxa_created_after => 1,
 			taxa_created_before => 1,
@@ -1565,7 +1567,7 @@ sub list_associated {
 	push @inner_filters, $taxonomy->exclusion_filters($base_nos);
 	push @inner_filters, $taxonomy->ref_filters($options, $inner_tables);
 	push @inner_filters, $taxonomy->opinion_filters($options, $inner_tables);
-	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');	
+	push @inner_filters, $taxonomy->common_filters($options, $inner_tables, 'a', 'r', 'oo');
 	push @inner_filters, "1=1" unless @inner_filters;
 	
 	$taxon_joins = "taxa_list as list JOIN $tree_table as t using (orig_no)\n";
@@ -1863,11 +1865,11 @@ sub list_associated {
 						 count => 0 } );
     }
     
-    # If we get to this point in the code, then we were asked to return either references or taxa.
-    # We may need more than one query, depending upon the value of the 'select' parameter.  So we
-    # build all of the relevant queries and then UNION them together.  For all values of rel other
-    # than 'all_taxa', we construct the inner query based on the value of $taxon_joins computed
-    # above.
+    # If we get to this point in the code, then we were asked to return either
+    # references or taxa.  We may need more than one query, depending upon the
+    # value of the 'select' parameter.  So we collect all of the query results
+    # in a temporary table called 'ref_collect', which is then read to generate
+    # the final result.
     
     my @inner_query;
     
@@ -2177,10 +2179,7 @@ sub list_associated {
 	# push @sql_strings, $sql;
     }
     
-    # Now construct the full query using what we constructed above as a subquery.
-    
-    # my $inner_query = join("\nUNION ", @inner_query);
-    # $inner_query .= " ORDER BY NULL" if $rel eq 'all_taxa';
+    # Now read off the final result from the ref_collect table.
     
     if ( $record_type eq 'taxa' )
     {
@@ -2189,17 +2188,7 @@ sub list_associated {
 	my $fieldspec = $options->{fields} || 'REFTAXA_DATA';	
 	my @fields = $taxonomy->generate_fields($fieldspec, $outer_tables);
 	my $query_fields = join ', ', @fields;
-	
-	# If $rel is 'all_taxa', then the ref_filters have already been applied to the inner
-	# query.  Otherewise, we apply them to the outer query.
-	
-	my @outer_filters;
-	
-	push @outer_filters, $taxonomy->ref_filters($options, $outer_tables)
-	    unless $rel eq 'all_taxa';
-	push @outer_filters, "1=1" unless @outer_filters;
-	my $outer_filters = join q{ and }, @outer_filters;
-	
+		
 	croak "list_associated: the option { return => 'id' } is not compatible with 'list_reftaxa'\n"
 	    if $return_type eq 'id';
 	
@@ -2214,7 +2203,6 @@ sub list_associated {
 			LEFT JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $auth_table as a using (taxon_no)
 			$outer_joins
-		WHERE $outer_filters
 		GROUP BY base.reference_no, a.taxon_no $order_expr $limit_expr";
 	
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
@@ -2235,17 +2223,7 @@ sub list_associated {
 	my $query_fields = join ', ', @fields;
 	
 	$query_fields = 'base.reference_no' if $return_type eq 'id';
-	
-	# If $rel is 'all_taxa', then the ref_filters have already been applied to the inner
-	# query.  Otherewise, we apply them to the outer query.
-	
-	my @outer_filters;
-	
-	push @outer_filters, $taxonomy->ref_filters($options, $outer_tables)
-	    unless $rel eq 'all_taxa';
-	push @outer_filters, "1=1" unless @outer_filters;
-	my $outer_filters = join q{ and }, @outer_filters;
-	
+		
 	my $order_expr = $taxonomy->ref_order($options, $outer_tables);
 	
 	$order_expr ||= 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init, r.reference_no' unless $rel eq 'all_taxa';
@@ -2255,7 +2233,6 @@ sub list_associated {
 	
 	$sql = "SELECT $count_expr $query_fields
 		FROM ref_collect as base JOIN refs as r using (reference_no)
-		WHERE $outer_filters
 		GROUP BY reference_no $order_expr $limit_expr";
 	
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
@@ -4201,6 +4178,25 @@ sub ref_filters {
     
     my ($taxonomy, $options, $tables_ref) = @_;
     
+    # If reference filters were already computed and are given as an option, use
+    # those. 
+    
+    if ( $options->{ref_filters} && ref $options->{ref_filters} eq 'ARRAY' )
+    {
+	if ( $options->{ref_tables} && ref $options->{ref_tables} eq 'HASH' )
+	{
+	    foreach my $t ( keys $options->{ref_tables}->%* )
+	    {
+		$tables_ref->{$t} = 1;
+	    }
+	}
+	
+	return $options->{ref_filters}->@*;
+    }
+    
+    # Otherwise, apply a limited set. We either need to expand these, or else
+    # use the above mechanism more widely.
+    
     my @filters;
     my $dbh = $taxonomy->{dbh};
     
@@ -5633,11 +5629,17 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 			       'v.n_occs', 'v.is_extant', 'v.is_trace', 'v.is_form'],
 		      AUTH_DATA => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 't.spelling_no',
 				    '(a.taxon_rank + 0) as taxon_rank',
-				    't.lft', 't.rgt', 't.status', 't.accepted_no', 't.immpar_no', 't.senpar_no',
-				    'a.common_name', 'a.reference_no', 'vt.name as accepted_name', 
-				    'nn.spelling_reason', 'n.spelling_reason as accepted_reason',
-				    'vt.rank as accepted_rank', 'v.n_occs', 'v.is_extant', 'v.is_trace', 'v.is_form'],
-		      REFTAXA_DATA => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
+				    't.lft', 't.rgt', 't.status', 't.accepted_no', 't.immpar_no',
+				    't.senpar_no', 'a.common_name', 'a.reference_no',
+				    'vt.name as accepted_name', 'nn.spelling_reason',
+				    'n.spelling_reason as accepted_reason',
+				    'vt.rank as accepted_rank', 'v.n_occs', 'v.is_extant',
+				    'v.is_trace', 'v.is_form'],
+		      AUTH_ASSOC => ['a.reference_no', 'a.taxon_no', 't.orig_no', 
+				     'a.taxon_name', 'a.taxon_rank',
+				     't.name as current_name', 't.spelling_no as current_no'],
+		      REFTAXA_DATA => ['base.reference_no', 
+				       'group_concat(distinct base.ref_type) as ref_type', 
 				       'a.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
 				       'max(base.class_no) as class_no',
 				       'max(base.unclass_no) as unclass_no',
@@ -5648,18 +5650,23 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				       'nn.spelling_reason', 'n.spelling_reason as accepted_reason',
 				       'vt.rank as accepted_rank',
 				       'v.n_occs', 'v.is_extant', 'v.is_trace', 'v.is_form'],
-		      REFTAXA_SIMPLE => ['base.reference_no', 'group_concat(distinct base.ref_type) as ref_type', 
-					 'base.taxon_no', 'base.orig_no', 'a.taxon_name', 'a.taxon_rank',
+		      REFTAXA_SIMPLE => ['base.reference_no',
+					 'group_concat(distinct base.ref_type) as ref_type', 
+					 'base.taxon_no', 'base.orig_no', 'a.taxon_name',
+					 'a.taxon_rank',
 					 'max(base.class_no) as class_no',
 					 'max(base.unclass_no) as unclass_no',
 					 'max(base.occurrence_no) as occurrence_no',
 					 'max(base.collection_no) as collection_no'],
-		      REF_DATA => ['r.reference_no', 'r.author1init as r_ai1', 'r.author1last as r_al1', 
-				   'r.author2init as r_ai2', 'r.author2last as r_al2', 'r.otherauthors as r_oa', 
-				   'r.pubyr as r_pubyr', 'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
-				   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
-				   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
-				   'r.language as r_language', 'r.doi as r_doi', 'r.comments as r_comments'],
+		      REF_DATA => ['r.reference_no', 'r.author1init as r_ai1', 
+				   'r.author1last as r_al1', 'r.author2init as r_ai2',
+				   'r.author2last as r_al2', 'r.otherauthors as r_oa', 
+				   'r.pubyr as r_pubyr', 'r.reftitle as r_reftitle',
+				   'r.pubtitle as r_pubtitle', 'r.editors as r_editors',
+				   'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+				   'r.firstpage as r_fp', 'r.lastpage as r_lp',
+				   'r.publication_type as r_pubtype', 'r.language as r_language',
+				   'r.doi as r_doi', 'r.comments as r_comments'],
 		      REF_COUNTS => ['count(distinct taxon_no) as n_reftaxa',
 				     'count(distinct auth_no) as n_refauth',
 				     'count(distinct var_no) as n_refvar',
@@ -5668,11 +5675,19 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				     'count(distinct occurrence_no) as n_refoccs',
 				     'count(distinct specimen_no) as n_refspecs',
 				     'count(distinct collection_no) as n_refcolls'],
-		      OP_DATA => ['o.opinion_no', 'base.opinion_type', 't.orig_no', 't.name as taxon_name', 
-				  'o.child_spelling_no', 'o.parent_no', 'o.parent_spelling_no', 'oo.basis',
-				  'o.ri', 'o.pubyr', 'o.author', 'o.status', 'o.spelling_reason', 'o.reference_no',
-				  'o.suppress', 'a.taxon_name as child_name', 'cast(a.taxon_rank as integer) as taxon_rank',
-				  'ap.taxon_name as parent_name', 'pt.spelling_no as parent_current_no'],
+		      OP_DATA => ['o.opinion_no', 'base.opinion_type', 't.orig_no',
+				  't.name as taxon_name', 'o.child_spelling_no',
+				  'o.parent_no', 'o.parent_spelling_no', 'oo.basis',
+				  'o.ri', 'o.pubyr', 'o.author', 'o.status', 'o.spelling_reason',
+				  'o.reference_no', 'o.suppress', 'a.taxon_name as child_name',
+				  'cast(a.taxon_rank as integer) as taxon_rank',
+				  'ap.taxon_name as parent_name',
+				  'pt.spelling_no as parent_current_no'],
+		      OP_ASSOC => ['o.reference_no', 'o.opinion_no', 'base.opinion_type as ref_type',
+				   'o.status', 'o.spelling_reason', 'o.pubyr', 'o.author',
+				   't.name as current_name', 't.spelling_no as current_no',
+				   'a.taxon_name as child_name', 'ap.taxon_name as parent_name',
+				   'o.child_spelling_no', 'o.parent_spelling_no', 't.orig_no'],
 		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
 				 't.lft', 't.rgt', 't.senpar_no'],
 		      AUTH_SEARCH => ['s.taxon_no', 's.orig_no', 'a.taxon_name', 'a.taxon_rank',
