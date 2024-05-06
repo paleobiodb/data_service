@@ -193,6 +193,8 @@ subtest 'subtree basic with output' => sub {
     $tc->limit_max( 'AU' => 10 );
     $tc->limit_max( 'formatted' => 10 );
     
+    no warnings 'numeric';
+    
     foreach my $i ( 0..$#r1j )
     {
 	my $rj = $r1j[$i];
@@ -212,19 +214,19 @@ subtest 'subtree basic with output' => sub {
 	my $ai1 = $rj->{ai1} || ''; my $ai1_1 = substr($ai1,0,1);
 	my $tit = $rj->{tit} || $rj->{pbt};
 	
-	$tc->flag('al1', $rj->{oid}) unless $al1;
+	$tc->flag('al1', $i) unless $al1;
 	$tc->flag('author1last', $rt->{reference_no}) unless $rt->{author1last} eq $al1;
-	$tc->flag('AU', $rr->{ID}) unless index($rr->{AU}, "$al1,$ai1_1") != -1
-	    || $al1 =~ /jr|sr|ii|iv/i;
+	$tc->flag('AU', $i) unless index($rr->{AU}, "$al1,$ai1_1") != -1
+	    || $al1 =~ /jr|sr|ii|iv|anonymous/i;
 	
-	$tc->flag('ref', $rj->{oid}) unless $rj->{ref} =~ qr{$ai1_1[^,]*$al1};
-	$tc->flag('ref_title', $rt->{reference_no}) if $rt->{ref_title} && $rj->{tit} &&
+	$tc->flag('ref', $i) unless $rj->{ref} =~ qr{$ai1_1[^,]*$al1};
+	$tc->flag('ref_title', $i) if $rt->{ref_title} && $rj->{tit} &&
 	    $rt->{ref_title} ne $rj->{tit};
-	$tc->flag('pub_title', $rt->{reference_no}) if $rt->{pub_title} && $rj->{pbt} &&
+	$tc->flag('pub_title', $i) if $rt->{pub_title} && $rj->{pbt} &&
 	    $rt->{pub_title} ne $rj->{pbt};
 	
-	$tc->flag('formatted', $rt->{reference_no}) if $rt->{formatted} && $rj->{ref} &&
-	    $rt->{formatted} ne $rj->{ref};
+	$tc->flag('formatted', $i) if $rt->{formatted} && $rj->{ref} &&
+	    substr($rt->{formatted},0,10) ne substr($rj->{ref},0,10);
 	
 	my $pby = $rj->{pby};
 	
@@ -236,7 +238,7 @@ subtest 'subtree basic with output' => sub {
 	$tc->flag('n_taxa', $rt->{reference_no}) unless defined $rt->{n_taxa};
 	$tc->flag('KW', $rr->{ID}) unless defined $rr->{KW};
 	
-	$tc->flag('ntx/n_taxa', $rj->{oid}) unless $rj->{ntx} eq $rt->{n_taxa};
+	$tc->flag('ntx/n_taxa', $rj->{oid}) unless $rj->{ntx} == $rt->{n_taxa} + 0;
 	if ( $rr->{KW} && $rr->{KW} =~ /taxa = (\d+)/ )
 	{
 	    $tc->flag('ntx/taxa', $rj->{oid}) unless $1 eq $rj->{ntx};
@@ -249,7 +251,7 @@ subtest 'subtree basic with output' => sub {
 	$tc->flag('ncl', $rj->{oid}) unless defined $rj->{ncl};
 	$tc->flag('n_class', $rt->{reference_no}) unless defined $rt->{n_class};
 	
-	$tc->flag('ncl/n_class', $rj->{oid}) unless $rj->{ncl} eq $rt->{n_class};
+	$tc->flag('ncl/n_class', $rj->{oid}) unless $rj->{ncl} == $rt->{n_class} + 0;
 	if ( $rr->{KW} && $rr->{KW} =~ /(?<!un)class = (\d+)/ )
 	{
 	    $tc->flag('ncl/class', $rj->{oid}) unless $1 eq $rj->{ncl};

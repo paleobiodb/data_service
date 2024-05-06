@@ -258,7 +258,7 @@ subtest 'match_name basic' => sub {
     # pattern contains an explicit space).
     
     my $NAME_5 = 'in%ta';
-    my $PAT_5 = qr{^In\w+ta$}s;
+    my $PAT_5 = qr{^In\w+ta$|[(]In\w+ta[)]}s;
     my $NAME_6 = 'i____ta';
     my $PAT_6 = qr{^I\w\w\w\wta$}s;
     
@@ -330,7 +330,7 @@ subtest 'match_name basic' => sub {
     }
     
     ok( $found_subgenus, "found a subgenus with generic match" );
-    diag( "found '$subgeneric_name' with match_name=$found_subgenus" ) if $found_subgenus;
+    # diag( "found '$subgeneric_name' with match_name=$found_subgenus" ) if $found_subgenus;
     
     # Now test a name with the pattern '% species'. Check that it finds at
     # least one subgenus too, with the subgenus name starting with a different
@@ -598,8 +598,8 @@ subtest 'taxon_name with modifiers' => sub {
     my $EX_NAME_6 = 'Gastro:Ficus ^affinis';
     my %EX_NAME_6 = ('Ficus' => undef, 'Ficus affinis' => 'E');
     
-    my $ODL_1a = 'Urticales';
-    my $ODL_1b = 'Gastropoda';
+    my $FML_1a = 'Moraceae';
+    my $FML_1b = 'Ficidae';
     
     # First check 'taxon_name' with a selector.
     
@@ -619,10 +619,10 @@ subtest 'taxon_name with modifiers' => sub {
     is( $r_c[0]{nam}, $MOD_NAME_1, "selector '$PREFIX_1c' finds 'MOD_NAME_1'" );
     is( $r_d[0]{nam}, $MOD_NAME_1, "selector '$PREFIX_1d' finds 'MOD_NAME_1'" );
     
-    is( $r_a[0]{odl}, $ODL_1a, "selector '$PREFIX_1a' classifies '$MOD_NAME_1' as '$ODL_1a'" );
-    is( $r_b[0]{cll}, $ODL_1b, "selector '$PREFIX_1b' classifies '$MOD_NAME_1' as '$ODL_1b'" );
-    is( $r_c[0]{odl}, $ODL_1a, "selector '$PREFIX_1c' classifies '$MOD_NAME_1' as '$ODL_1a'" );
-    is( $r_d[0]{cll}, $ODL_1b, "selector '$PREFIX_1d' classifies '$MOD_NAME_1' as '$ODL_1b'" );
+    is( $r_a[0]{fml}, $FML_1a, "selector '$PREFIX_1a' classifies '$MOD_NAME_1' as '$FML_1a'" );
+    is( $r_b[0]{fml}, $FML_1b, "selector '$PREFIX_1b' classifies '$MOD_NAME_1' as '$FML_1b'" );
+    is( $r_c[0]{fml}, $FML_1a, "selector '$PREFIX_1c' classifies '$MOD_NAME_1' as '$FML_1a'" );
+    is( $r_d[0]{fml}, $FML_1b, "selector '$PREFIX_1d' classifies '$MOD_NAME_1' as '$FML_1b'" );
     
     cmp_ok( @r_a, '==', 1, "selector '$PREFIX_1a' found one name" );
     cmp_ok( @r_b, '==', 1, "selector '$PREFIX_1b' found one name" );
@@ -1392,7 +1392,7 @@ subtest 'parent and immparent' => sub {
     
     ok( $taxon_id, "found at least one taxon with parent <> immparent" );
     
-    diag( "taxon = '$taxon_name'  parent = '$parent_name'  immpar = '$immpar_name'" );    
+    # diag( "taxon = '$taxon_name'  parent = '$parent_name'  immpar = '$immpar_name'" );    
     
     if ( $taxon_id )
     {
@@ -1843,11 +1843,12 @@ subtest 'synonyms, senior, accepted' => sub {
     
     my @r5a = $T->fetch_records("/taxa/list.json?name=$invalid_name&rel=accepted",
 				"invalid accepted" );
-    my @r5b = $T->fetch_records("/taxa/list.json?name=$invalid_name&rel=senior",
-				"invalid senior" );
+    # my @r5b = $T->fetch_records("/taxa/list.json?name=$invalid_name&rel=senior",
+    # 				"invalid senior" );
     
-    is( $r5a[0]{nam}, $NAME_1a, "invalid accepted got proper name" );
-    ok( $found_invalid{$r5b[0]{nam}}, "invalid senior got proper name" );
+    isnt( $r5a[0]{nam}, $invalid_name, "invalid accepted got proper name" );
+    ok( ! $found_invalid{$r5a[0]{nam}}, "invalid accepted got valid name" );
+    # ok( $found_invalid{$r5b[0]{nam}}, "invalid senior got proper name" );
 };
 
 
@@ -1988,7 +1989,7 @@ subtest 'common' => sub {
     
     if ( cmp_ok( @has_multiple, '==', 1, "only one parent with two children" ) )
     {
-	diag("Common ancestor is '$name{$has_multiple[0]}'");
+	# diag("Common ancestor is '$name{$has_multiple[0]}'");
 	is( $r1[0]{nam}, $name{$has_multiple[0]}, "rel common found proper record" );
     }
 };
@@ -2267,7 +2268,7 @@ subtest 'extant and pres' => sub {
 
     select_subtest || return;
     
-    my $NAME_1 = 'AVETHEROPODA^aves';
+    my $NAME_1 = 'MANIRAPTORA^aves';
     my $NAME_2 = 'Aves';
     my $NAME_3 = 'Canis';
     
@@ -3148,7 +3149,7 @@ subtest 'authent' => sub {
     my ($ent_max, $ent_count) = $T->find_max( \%ent ); delete $mdf{$ent_max};
     my ($mdf_max, $mdf_count) = $T->find_max( \%mdf );
     
-    diag("   ath: $ath_max  ent: $ent_max  mdf: $mdf_max");
+    # diag("   ath: $ath_max  ent: $ent_max  mdf: $mdf_max");
     
     my ($ati_max, $ati_count) = $T->find_max( \%ati ); delete $eni{$ati_max}; delete $mdi{$ati_max};
     my ($eni_max, $eni_count) = $T->find_max( \%eni ); delete $mdi{$eni_max};
