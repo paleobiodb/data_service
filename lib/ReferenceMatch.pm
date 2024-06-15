@@ -26,7 +26,7 @@ use Exporter 'import';
 our (@EXPORT_OK) = qw(ref_similarity ref_match get_reftitle get_subtitle
 		      get_pubtitle get_publisher get_volpages
 		      get_authorname get_authorlist split_authorlist parse_authorname
-		      get_pubyr get_doi title_words @SCORE_VARS);
+		      get_pubyr get_doi get_publication_type title_words @SCORE_VARS);
 
 our $IgnoreCaseAccents = Unicode::Collate->new(
      level         => 1,
@@ -1583,19 +1583,19 @@ sub get_volpages {
     # and last. The volume is always in 'volume', but the issue number may be in either 'number'
     # or 'issue'.
     
-    else
+    elsif ( $r->{volume} )
     {
 	$volume = $r->{volume};
-	$issue = $r->{issue} || $r->{number};
+	$issue = $r->{issue} || $r->{member} || $r->{number};
 	
 	my $pages = $r->{pages} || $r->{page};
 	
-	if ( $pages =~ qr{ ^ (\d+) }xs )
+	if ( $pages =~ qr{ ^ (\d+) }x )
 	{
 	    $first = $1;
 	}
-
-	if ( $pages =~ qr{ (\d+) $ }xs )
+	
+	if ( $pages =~ qr{ - (\d+) $ }x )
 	{
 	    $last = $1;
 	}
@@ -1785,6 +1785,52 @@ sub clean_string {
     }
     
     return wantarray ? @values : $values[0];
+}
+
+
+# get_publication_type ( r )
+# 
+# Return the publication type from $r, if that can be determined, using the
+# Paleobiology Database enumerated publication type list.
+
+sub get_publication_type {
+    
+    my ($r) = @_;
+    
+    if ( $r->{type} eq 'book' )
+    {
+	return 'book';
+    }
+    
+    elsif ( $r->{type} eq 'book-chapter' )
+    {
+	return 'book chapter';
+    }
+    
+    elsif ( $r->{type} eq 'report' )
+    {
+	return 'serial monograph';
+    }
+    
+    elsif ( $r->{type} eq 'dissertation' )
+    {
+	return 'Ph.D. thesis';
+    }
+    
+    elsif ( $r->{type} eq 'journal-article' || $r->{type} eq 'article' )
+    {
+	return 'journal article';
+    }
+    
+    elsif ( $r->{journal} )
+    {
+	return 'journal article';
+    }
+    
+    else
+    {
+	return;
+    }
 }
 
 
