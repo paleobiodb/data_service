@@ -292,7 +292,7 @@ sub new {
 	
 	my $dbh_class = ref $edt->{dbh};
 	
-	unless ( $dbh_class =~ /DBI::/ )
+	unless ( $dbh_class =~ /DBI::|Plugin::Database::/ )
 	{
 	    croak "'get_connection' failed to return a database handle";
 	    $edt->{dbh} = undef;

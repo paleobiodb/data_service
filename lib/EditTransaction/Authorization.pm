@@ -800,7 +800,7 @@ sub unpack_key_values {
 	    $raw_values = $params->{$p};
 	    $ref_type = ref $raw_values;
 	    
-	    next unless ! $ref_type || $ref_type eq 'ARRAY' && $raw_values->@*;
+	    next unless ! $ref_type || $ref_type =~ /::/ || $ref_type eq 'ARRAY' && $raw_values->@*;
 	    
 	    if ( $key_field )
 	    {
@@ -931,7 +931,7 @@ sub check_key_values {
     my $action_table = $action->table;
     
   VALUE:
-    foreach my $v ( ref $value ? $value->@* : split /\s*,\s*/, $value )
+    foreach my $v ( ref $value eq 'ARRAY' ? $value->@* : split /\s*,\s*/, $value )
     {
 	# Skip values that are empty or zero.
 	

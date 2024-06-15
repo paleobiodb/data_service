@@ -408,7 +408,7 @@ sub validate_action {
 	    # override an 'IGNORE_FIELD' on the transaction.
 	    
 	    if ( $action->{directives}{"FIELD:$key"} eq 'ignore' || 
-		 $edt->{directives}{"FIELD:$key"} eq 'ignore' )
+		 $edt->{directives}{$table_specifier}{"FIELD:$key"} eq 'ignore' )
 	    {
 		next;
 	    }
@@ -533,9 +533,7 @@ sub validate_data_column {
 	
 	else
 	{
-	    $edt->add_condition($action, 'E_REQUIRED', "this column requires a non-empty value")
-		if $cr->{REQUIRED};
-	    
+	    $edt->add_condition($action, 'E_REQUIRED', $fieldname) if $cr->{REQUIRED};
 	    return 'ignore';
 	}
     }
@@ -567,7 +565,7 @@ sub validate_data_column {
 	    
     if ( $cr->{REQUIRED} && defined $value && $value eq '' )
     {
-	$edt->add_condition($action, 'E_REQUIRED', "this column requires a non-empty value");
+	$edt->add_condition($action, 'E_REQUIRED', $fieldname);
 	return 'ignore';
     }
     
@@ -794,7 +792,7 @@ our $DECIMAL_NUMBER_RE = qr{ ^ \s* ( [+-]? ) \s* (?: ( \d+ ) (?: [.] ( \d* ) )? 
 #    is not an SQL literal and should not be quoted.
 # 
 # D. If the column value should remain unchanged despite any 'on update' clause, the
-#    single value 'UNCHANGED' is returned.
+#    single value 'unchanged' is returned.
 
 
 # validate_column ( cr, value, fieldname )

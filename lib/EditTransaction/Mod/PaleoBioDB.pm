@@ -9,17 +9,20 @@ package EditTransaction::Mod::PaleoBioDB;
 
 use strict;
 
-use TableDefs qw(set_table_property_name set_column_property_name);
+use TableDefs qw(%TABLE set_table_property_name set_column_property_name);
 use PBDBFields qw(%COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 use Permissions;
+use ExternalIdent qw(%IDP %IDRE);
 
 use Carp qw(croak);
-
-our (@CARP_NOT) = qw(EditTransaction);
 
 use feature 'unicode_strings', 'postderef';
 
 use Role::Tiny;
+
+our (@CARP_NOT) = qw(EditTransaction);
+
+our (%EXTID_CHECK);
 
 
 # Register the extra property names used by this module with the table definition system, and
@@ -64,7 +67,7 @@ sub finish_table_definition {
     
     foreach my $colname ( @$column_list )
     {
-	my $cr = $column_defn{$colname};
+	my $cr = $column_defn->{$colname};
 	
 	# Adjust the FOREIGN_KEY property if necessary by checking %FOREIGN_KEY_TABLE.
 	
@@ -94,7 +97,7 @@ sub finish_table_definition {
 	# _id substituted unless there is already a field with that name. If it is the primary
 	# key, store this info under PRIMARY_FIELD in the table description. Otherwise, store it
 	# under ALTERNATE_NAME in the column description.
-
+	
 	if ( $colname =~ qr{ ^ (.*) _no }xs )
 	{
 	    my $alt = $1 . '_id';
@@ -109,7 +112,16 @@ sub finish_table_definition {
 		$cr->{ALTERNATE_NAME} = $alt;
 	    }
 	}
-
+	
+	# If the column name corresponds to one of the PaleoBioDB special
+	# columns, add the corresponding directive unless the column already has
+	# one. 
+	
+	if ( $COMMON_FIELD_SPECIAL{$colname} && ! $cr->{DIRECTIVE} )
+	{
+	    $cr->{DIRECTIVE} = $COMMON_FIELD_SPECIAL{$colname};
+	}
+	
 	# Record a list of the authorization columns that we find.
 	
 	if ( $cr->{DIRECTIVE} && $AUTH_DIRECTIVE{$cr->{DIRECTIVE}} )
@@ -169,7 +181,7 @@ sub finish_table_definition {
 # quoted.
 #
 # D. If the column value should remain unchanged despite any 'on update' clause, the single value
-# 'UNCHANGED' is returned.
+#    'unchanged' is returned.
 
 
 # before_key_column ( cr, operation, value, fieldname )
@@ -336,7 +348,7 @@ sub validate_extid_value {
 
 sub validate_special_column {
 
-    my ($edt, $cr, $action, $value, $fieldname) = @_;
+    my ($edt, $action, $colname, $cr, $directive, $value, $fieldname) = @_;
     
     my $operation = $action->operation;
     my $permission = $action->permission;
@@ -354,7 +366,7 @@ sub validate_special_column {
 	{
 	    if ( $permission =~ /^admin|^unrestricted/ )
 	    {
-		return 'UNCHANGED';	# We need to return 'UNCHANGED' even with 'update', because an
+		return 'unchanged';	# we need to return 'unchanged' even with 'update', because an
 	    }				# 'on update' clause might otherwise change the value anyway.
 	    
 	    else
@@ -369,27 +381,27 @@ sub validate_special_column {
 	
 	elsif ( $directive eq 'auth_authorizer' )
 	{
-	    $value = $operation eq 'replace' ? 'UNCHANGED'
+	    $value = $operation eq 'replace' ? 'unchanged'
 		   : $operation eq 'update'  ? undef
-					     : $edt->{perms}->authorizer_no;
-	    return (1, $value);
+					     : $edt->{permission}->authorizer_no;
+	    return ('clean', $value);
 	}
 	
 	elsif ( $directive eq 'auth_creator' )
 	{
-	    $value = $operation eq 'replace' ? 'UNCHANGED'
+	    $value = $operation eq 'replace' ? 'unchanged'
 		   : $operation eq 'update'  ? undef
-		   : $cr->{Field} =~ /_no$/  ? $edt->{perms}->enterer_no
-					     : $edt->{perms}->user_id;
-	    return (1, $value);
+		   : $cr->{Field} =~ /_no$/  ? $edt->{permission}->enterer_no
+					     : $edt->{permission}->user_id;
+	    return ('clean', $value);
 	}
 	
 	elsif ( $directive eq 'auth_modifier' )
 	{
 	    $value = $operation eq 'insert' ? 0
-		   : $cr->{Field} =~ /_no$/ ? $edt->{perms}->enterer_no
-					    : $edt->{perms}->user_id;
-	    return (1, $value);
+		   : $cr->{Field} =~ /_no$/ ? $edt->{permission}->enterer_no
+					    : $edt->{permission}->user_id;
+	    return ('clean', $value);
 	}
 	
 	# For the 'ts_created' and 'ts_modified' directives, if the column does not have a default
@@ -400,12 +412,12 @@ sub validate_special_column {
 	{
 	    if ( $operation eq 'insert' && $cr->{INSERT_FILL} )
 	    {
-		return (1, $cr->{INSERT_FILL}, undef, 1);
+		return ('unquoted', $cr->{INSERT_FILL}, undef, 1);
 	    }
 	    
 	    elsif ( $operation =~ /^update|^replace/ && $cr->{UPDATE_FILL} )
 	    {
-		return (1, $cr->{UPDATE_FILL}, undef, 1);
+		return ('unquoted', $cr->{UPDATE_FILL}, undef, 1);
 	    }
 	    
 	    else
@@ -419,7 +431,7 @@ sub validate_special_column {
 	
 	elsif ( $directive eq 'adm_lock' || $directive eq 'own_lock' )
 	{
-	    return $operation eq 'replace' ? 'UNCHANGED' : ();
+	    return $operation eq 'replace' ? 'unchanged' : ();
 	}
 	
 	# If the directive is anything else, return an error condition.
@@ -481,7 +493,7 @@ sub validate_special_column {
 	
 	else
 	{
-	    @result = (1, $check_value);
+	    @result = ('clean', $check_value);
 	}
     }
     
@@ -490,7 +502,7 @@ sub validate_special_column {
     
     elsif ( $directive eq 'adm_lock' || $directive eq 'own_lock' )
     {
-	@result = $edt->validate_boolean_value($type, $value, $fieldname);
+	@result = $edt->validate_boolean_value('boolean', $value, $fieldname);
 	$action->requires_unlock(0);
     }
     
@@ -676,7 +688,7 @@ sub check_table_permission {
     
     unless ( $edt->{permission_table_cache}{$table_specifier}{$requested} )
     {
-	$edt->{permission_table_cache}{$table_specifier}{$permission} = 
+	$edt->{permission_table_cache}{$table_specifier}{$requested} = 
 	    _compute_table_permission($edt, $table_specifier, $requested);
     }
 }
@@ -751,7 +763,7 @@ sub _compute_table_permission {
     
     if ( $tp->{none} )
     {
-	$edt->debug_line( "$dprefix DENIED by $dauth\n") if $debug_mode
+	$edt->debug_line( "$dprefix DENIED by $dauth\n") if $debug_mode;
 	return 'none';
     }
     
@@ -939,13 +951,13 @@ sub check_record_permission {
     
     foreach my $a ( $authinfo->@* )
     {
-	my ($eno, $ano, $uid, $c, $lock);
+	my ($eno, $ano, $uid, $c, $locked);
 	
 	if ( $debug_mode )
 	{
 	    $eno = $a->{enterer_no} // '0';
 	    $ano = $a->{authorizer_no} // '0';
-	    $eid = $a->{enterer_id} ? 'enterer_id: ' . substr($a->{enterer_id}, 0, 10) . '...' : '';
+	    $uid = $a->{enterer_id} ? 'enterer_id: ' . substr($a->{enterer_id}, 0, 10) . '...' : '';
 	    $locked = '';
 	    $locked .= 'ADMIN_LOCK' if $a->{admin_lock};
 	    $locked .= ',OWNER_LOCK' if $a->{owner_lock};
@@ -1125,7 +1137,7 @@ sub _check_admin_permission {
 
     my ($edt, $perms, $debug_mode, $tableinfo, $tp, $table_specifier, $requested, $where) = @_;
     
-    my $dprefix = $debug_mode && "    Permission for $table_specifier ($key_expr) : '$requested' ";
+    my $dprefix = $debug_mode && "    Permission for $table_specifier ($where) : '$requested' ";
     my $dauth = $debug_mode && $perms->{auth_diag}{$table_specifier};
     
     my $which = $perms->is_superuser ? 'SUPERUSER' : 'ADMIN';
@@ -1163,7 +1175,7 @@ sub _check_admin_permission {
 	
 	my $lock_fields = join(',', @fields);
 	
-	my @authinfo = $edt->select_authinfo($table_specifier, $key_expr, $lock_fields);
+	my @authinfo = $edt->select_authinfo($table_specifier, $where, $lock_fields);
 	
 	my $lock_count = 0;
 	my $nolock_count = 0;

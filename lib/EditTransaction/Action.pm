@@ -751,7 +751,7 @@ sub handle_column {
     
     # croak "invalid directive" unless $EditTransaction::VALID_DIRECTIVE{$directive};
     
-    $action->{directive}{$column_name} = $directive;
+    $action->{directives}{$column_name} = $directive;
 }
 
 
@@ -761,7 +761,7 @@ sub handle_column {
 
 sub directive {
 
-    return $_[0]{directive} && $_[1] ? $_[0]{directive}{$_[1]} : undef;
+    return $_[0]{directives} && $_[1] ? $_[0]{directives}{$_[1]} : undef;
 }
 
 
@@ -772,7 +772,7 @@ sub directive {
 
 sub all_directives {
 
-    return $_[0]{directive} ? $_[0]{directive}->%* : ();
+    return $_[0]{directives} ? $_[0]{directives}->%* : ();
 }
 
 

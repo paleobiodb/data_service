@@ -412,6 +412,22 @@ sub get_handling {
     }
 }
 
+
+# ignore_field ( field_name )
+# 
+# Add a handling directive for the specified field (not column) that will cause
+# this field to be ignored. This can be used to indicate fields that are handled
+# specially by a subclass of EditTransaction and do not correspond to any
+# database column.
+
+sub ignore_field {
+    
+    my ($edt, $table_or_action, $field_name) = @_;
+    
+    return $edt->handle_column($table_or_action, "FIELD:$field_name", 'ignore');
+}
+
+
     # # Otherwise, return directives from this transaction associated with the
     # # specified table.
     

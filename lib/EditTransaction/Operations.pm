@@ -74,7 +74,8 @@ sub record_operation {
 	# error or caution will be added if the necessary permission cannot be
 	# established.
 	
-	my $result = $edt->authorize_action($action);
+	my $result = $edt->authorize_action($action, $operation, $table_specifier, 
+					    $parameters);
 	
 	# If the operation is not a deletion, check the parameters. Make sure
 	# that the column values meet all of the criteria for this table.  Any
@@ -82,7 +83,7 @@ sub record_operation {
 	
 	if ( $operation !~ /^delete/ )
 	{
-	    $edt->validate_action($action);
+	    $edt->validate_action($action, $operation, $table_specifier, $parameters);
 	}
     };
     

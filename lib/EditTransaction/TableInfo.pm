@@ -63,7 +63,7 @@ sub register_database_module {
 
 sub table_info_ref {
     
-    my ($edt, $table_specifier, $dbh_arg) = @_;
+    my ($edt, $table_specifier, $dbh_arg, $flag) = @_;
     
     # First check if %TABLE_INFO_CACHE has an entry for this class and table. If it does not, then
     # fetch the relevant information from the database and modify it according to the defined
@@ -73,7 +73,7 @@ sub table_info_ref {
     
     unless ( $TABLE_INFO_CACHE{$class}{$table_specifier} )
     {
-	fetch_table_schema($edt, $table_specifier, $dbh_arg);
+	fetch_table_schema($edt, $table_specifier, $dbh_arg, $flag);
     }
 }
 
@@ -236,7 +236,7 @@ sub table_info_present {
 
 sub fetch_table_schema {
     
-    my ($edt, $table_specifier, $dbh_arg) = @_;
+    my ($edt, $table_specifier, $dbh_arg, $debug_flag) = @_;
     
     # If this is called as an instance method, retrieve the necessary information from the
     # EditTransaction instance.
@@ -252,9 +252,10 @@ sub fetch_table_schema {
     # If called as a class method, we require a database handle as the second argument. Debug mode
     # is always off in this situation.
     
-    elsif ( $dbh_arg && ref($dbh_arg) =~ /DB/ )
+    elsif ( $dbh_arg && ref($dbh_arg) =~ /DB||Database/ )
     {
 	$dbh = $dbh_arg;
+	$debug_mode = $debug_flag;
     }
     
     else
@@ -415,11 +416,16 @@ sub fetch_table_schema {
     
     if ( $table_definition{REQUIRED_COLS} )
     {
-	foreach my $colname ( split /\*,\*/, $table_definition{REQUIRED_COLS} )
+	foreach my $colname ( split /\s*,\s*/, $table_definition{REQUIRED_COLS} )
 	{
 	    if ( $colname && $column_definition{$colname} )
 	    {
 		$column_definition{$colname}{REQUIRED} = 1;
+	    }
+	    
+	    else
+	    {
+		print STDERR "ERROR: unknown column '$colname' in REQUIRED_COLS\n";
 	    }
 	}
     }
@@ -428,16 +434,21 @@ sub fetch_table_schema {
     # one to the column name. Directives other than the column name must be set
     # separately.
     
-    if ( $table_definition{SPECIAL_COLS} )
-    {
-	foreach my $colname ( split /\*,\*/, $table_definition{REQUIRED_COLS} )
-	{
-	    if ( $colname && $column_definition{$colname} )
-	    {
-		$column_definition{$colname}{DIRECTIVE} = $colname;
-	    }
-	}
-    }
+    # if ( $table_definition{SPECIAL_COLS} )
+    # {
+    # 	foreach my $colname ( split /\s*,\s*/, $table_definition{REQUIRED_COLS} )
+    # 	{
+    # 	    if ( $colname && $column_definition{$colname} )
+    # 	    {
+    # 		$column_definition{$colname}{DIRECTIVE} = $colname;
+    # 	    }
+	    	    
+    # 	    else
+    # 	    {
+    # 		print STDERR "ERROR: unknown column '$colname' in REQUIRED_COLS\n";
+    # 	    }
+    # 	}
+    # }
     
     # Store the list of column names in the table definition.
     
@@ -644,7 +655,7 @@ sub table_has_column {
     
     croak "you must specify a table name and a column name" unless $tablename && $colname;
     
-    if ( $edt->column_info_ref($tablename, $colname) )
+    if ( $edt->table_column_ref($tablename, $colname) )
     {
 	return $colname;
     }
@@ -669,7 +680,7 @@ sub get_column_property {
 	unless $tablename && $colname && $propname;
     croak "invalid property name '$propname'" unless is_column_property($propname);
     
-    if ( my $columninfo = $edt->column_info_ref($tablename, $colname) )
+    if ( my $columninfo = $edt->table_column_ref($tablename, $colname) )
     {
 	return copy_property_value($columninfo->{$propname});
     }
@@ -692,7 +703,7 @@ sub get_column_type {
     
     croak "you must specify a table name and a column name" unless $tablename && $colname;
     
-    if ( my $columninfo = $edt->column_info_ref($tablename, $colname) )
+    if ( my $columninfo = $edt->table_column_ref($tablename, $colname) )
     {
 	return $columninfo->{TypeMain};
     }
