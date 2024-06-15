@@ -6,3 +6,6 @@
 *.ttc
 dataservice.pid
 config.yml
+starman.pid
+lib/HTTP
+Dancer
