@@ -60,14 +60,17 @@ our (%TABLE_PROP_NAME) = (
     CAN_DELETE => 1,          # specifies who can delete records
     CAN_MODIFY => 1,	      # specifies who can modify existing records they do not own
     CAN_ALTER_TRAIL => 1,     # specifies who can change record creator/modifier dates
-    # BY_AUTHORIZER => 1,     # if true, check modification permission according to authorizer_no
+    BY_AUTHORIZER => 1,       # if true, check modification permission according to authorizer_no
     CASCADE_DELETE => 1,      # specifies additional table(s) for cascade deletion from this one
     PRIMARY_KEY => 1,         # specifies the primary key column(s) for this table
     PRIMARY_FIELD => 1,       # specifies the primary key field(s) for this table
+    AUTH_TABLE => 1,          # authorization should be performed on the specified table
     SUPERIOR_TABLE => 1,      # if non-empty, the specified table controls access to this one
     SUPERIOR_KEY => 1,	      # if non-empty, the specified column links this table to its superior
     NO_LOG => 1,              # if true, changes to this table will not be logged
-    TABLE_COMMENT => 1        # provides a comment or documentation string for this table
+    SPECIAL_COLS => 1,        # specifies a list of columns to be handled by special directives
+    REQUIRED_COLS => 1,	      # specifies a list of columns whose values must be non-empty
+    TABLE_COMMENT => 1,       # provides a comment or documentation string for this table
 );
 
 # List the properties that can be specified for columns.
@@ -81,10 +84,10 @@ our (%COLUMN_PROP_NAME) = (
     ALTERNATE_NAME => 1,    # client provided records may provide column value under this name
     ALTERNATE_ONLY => 1,    # client provided records must use alternate name (bool)
     FOREIGN_KEY => 1,       # table for which this column is a foreign key
-    # EXTID_TYPE => 1,        # external identifier type(s) accepted by this column
+    EXTID_TYPE => 1,       # external identifier type(s) accepted by this column
     DIRECTIVE => 1,         # special handling for this column by the EditTransaction system
     IGNORE => 1,            # this column will be ignored as if it didn't exist (bool)
-    COLUMN_COMMENT => 1     # provides a comment or documentation string for this column
+    COLUMN_COMMENT => 1,    # provides a comment or documentation string for this column
 );
 
 
