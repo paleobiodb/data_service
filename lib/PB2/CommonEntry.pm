@@ -83,18 +83,28 @@ sub initialize {
 	    "If some of the submitted records generate cautions or,",
 	    "errors, this allowance will enable any database operations that do",
 	    "B<not> generate cautions or errors to complete. Without it, the",
-	    "entire operation will be rolled back if any cautions or errors are generated.");
+	    "entire operation will be rolled back if any cautions or errors are generated.",
+	{ value => 'NOT_PERMITTED' },
+	    "This is a more limited allowance than 'PROCEED'. If the user has permission",
+	    "to modify some records but not others, this allowance will enable the records",
+	    "which can be modified to be modified, while generating warnings about the",
+	    "rest. Without it, the entire operation will be rolled back.",
+	{ value => 'NOT_FOUND' },
+	    "This is a more limited allowance than 'PROCEED'. If some of the records to",
+	    "be modified are not found, this allowance will enable the records which do",
+	    "exist to be modified, while generating warnings about the rest. Without it,",
+	    "the entire operation will be rolled back.");
 }
 
 
-# parse_main_params ( allowances_ref, url_ruleset )
+# parse_main_params ( url_ruleset, [extra_flag...] )
 # 
-# Go through the main parameters to this request, looking for the following. If the parameter
-# 'allow' is found, then enter all of the specified conditions as hash keys into
-# $conditions_ref. These will already have been checked by the initial ruleset validation of the
-# request. Otherwise, any parameters we find that are specified in the ruleset whose name is given
-# in $entry_ruleset should be copied into a hash which is then returned as the result. These
-# parameters will be used as defaults for all records speified in the request body.
+# Go through the main parameters to this request, and return a list of two
+# hashrefs. The first will contain as keys any "allowances", which are values of
+# the parameter 'allow'. The second will contain all other parameters as  keys
+# with their associated values. These will already have been checked by the
+# initial ruleset validation of the request. These parameters
+# will be used as defaults for all records speified in the request body.
 
 sub parse_main_params {
     
@@ -147,6 +157,26 @@ sub parse_main_params {
 }
 
 
+# get_main_params ( allowances_ref, url_ruleset )
+# 
+# This is a wrapper around 'parse_main_params' that can be used by older code
+# which has not yet been updated.
+
+sub get_main_params {
+    
+    my ($request, $allowances_ref, $url_ruleset) = @_;
+    
+    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset);
+    
+    foreach my $k ( keys %$allowances )
+    {
+	$allowances_ref->{$k} = $allowances->{$k};
+    }
+    
+    return $main_params;
+}
+
+
 sub parse_body_records {
     
     my ($request, $main_params, @ruleset_patterns) = @_;
@@ -182,7 +212,7 @@ sub parse_body_records {
     else
     {
 	my ($body, $error) = $request->decode_body;
-
+	
 	# If an error occurred while decoding the request body, or if the request body was empty,
 	# return a 400 response immediately.
 	
@@ -339,7 +369,7 @@ sub parse_body_records {
 		    push @{$result->{clean_list}}, $k;
 		}
 	    }
-
+	    
 	    # Generate a record with the cleaned parameter values. If any errors or warnings were
 	    # generated, add them to the record.
 	    
