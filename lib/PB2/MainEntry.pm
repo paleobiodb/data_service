@@ -11,8 +11,10 @@ use feature 'unicode_strings';
 package PBEntry;
 
 use PB2::CommonEntry;
+use PB2::ReferenceEntry;
+use PB2::ReferenceAux;
 use PB2::SpecimenEntry;
-use PB2::TimescaleEntry;
+# use PB2::TimescaleEntry;
 use PB2::ResourceEntry;
 use PB2::PublicationEntry;
 use PB2::ArchiveEntry;
@@ -24,109 +26,155 @@ sub initialize {
     $ds2->define_node({ path => 'entry',
 			title => 'Data Entry' });
 
+    # Bibliographic references
+    
+    $ds2->define_node({ path => 'entry/refs',
+			title => 'Bibliographic references' });
+    
+    $ds2->list_node({ path => 'entry/refs',
+		      list => 'entry',
+		      place => 1 },
+		    "Data entry operations for bibliographic references");
+    
+    $ds2->define_node({ path => 'refs/matchlocal',
+			title => 'Check for a matching bibliographic reference locally',
+		        place => 2,
+			allow_method => 'GET',
+		        role => 'PB2::ReferenceAux',
+			method => 'match_local' },
+	"This operation takes a partial set of bibliographic reference attributes",
+	"and returns any matching entries from the local database. A DOI alone is",
+	"often enough, but good results can be gotten from one or two authors, a",
+	"publication year, and some words from the title.");
+    
+    $ds2->define_node({ path => 'refs/matchext',
+			title => 'Fetch reference data from known external sources',
+			place => 2,
+			allow_method => 'GET',
+			role => 'PB2::ReferenceAux',
+			method => 'match_external',
+			optional_output => '1.2:refs:matchext_map' },
+	"This operation takes a partial set of bibliographic reference attributes",
+	"and returns matching entries from external sources such as Crossref and XDD.",
+	"A DOI alone is often enough, but good results can be gotten from one or two",
+	"authors, a publication year, and some words from the title.");
+    
+    $ds2->define_node({ path => 'refs/addupdate',
+			title => 'Add bibliographic references or update existing references',
+			place => 10,
+			allow_method => 'PUT,POST',
+			doc_template => 'entry_operation.tt',
+			body_ruleset => '1.2:refs:addupdate_body',
+			role => 'PB2::ReferenceEntry',
+			method => 'addupdate_refs',
+			output => '1.2:refs:basic',
+			optional_output => '1.2:refs:output_map' },
+	"This operation allows you to add new bibliographic references to the database",
+	"and/or update the attributes of existing references.");
+    
     # Timescales and Interval bounds
     
-    $ds2->define_node({ path => 'entry/timescales',
-    			title => 'Timescales and interval boundaries' });
+    # $ds2->define_node({ path => 'entry/timescales',
+    # 			title => 'Timescales and interval boundaries' });
     
-    $ds2->list_node({ path => 'entry/timescales',
-    		      list => 'entry',
-    		      place => 1 },
-    	"Data entry operations for timescales and timescale bounds.");
+    # $ds2->list_node({ path => 'entry/timescales',
+    # 		      list => 'entry',
+    # 		      place => 1 },
+    # 	"Data entry operations for timescales and timescale bounds.");
     
-    $ds2->define_node({ path => 'timescales/addupdate',
-    			title => 'Add timescales or update existing timescales',
-    			place => 0,
-    			allow_method => 'PUT,POST',
-			doc_template => 'entry_operation.tt',
-			body_ruleset => '1.2:timescales:entry,1.2:bounds:entry',
-    			role => 'PB2::TimescaleEntry',
-    			method => 'update_records',
-    			output => '1.2:timescales:basic',
-    			optional_output => '1.2:timescales:optional_basic' },
-    	"This operation allows you to add new timescales to the database and/or",
-    	"update the attributes of existing timescales.");
+    # $ds2->define_node({ path => 'timescales/addupdate',
+    # 			title => 'Add timescales or update existing timescales',
+    # 			place => 0,
+    # 			allow_method => 'PUT,POST',
+    # 			doc_template => 'entry_operation.tt',
+    # 			body_ruleset => '1.2:timescales:entry,1.2:bounds:entry',
+    # 			role => 'PB2::TimescaleEntry',
+    # 			method => 'update_records',
+    # 			output => '1.2:timescales:basic',
+    # 			optional_output => '1.2:timescales:optional_basic' },
+    # 	"This operation allows you to add new timescales to the database and/or",
+    # 	"update the attributes of existing timescales.");
     
-    $ds2->list_node({ path => 'timescales/addupdate',
-    		      list => 'entry/timescales',
-    		      place => 1 });
+    # $ds2->list_node({ path => 'timescales/addupdate',
+    # 		      list => 'entry/timescales',
+    # 		      place => 1 });
     
-    $ds2->extended_doc({ path => 'timescales/addupdate' },
-    	"This operation can be used to add new timescale or bound records to the database,",
-	"or to delete or update the attributes of existing records. The new or updated values",
-	"must be supplied in the",
-	"request body in JSON format, using the HTTP C<B<PUT>> method. Any supplied record which",
-	"contains the field 'bound_id' will be interpreted to refer to an existing bound record.",
-	"Any record that contains 'bound_type' but not 'bound_id' will be interpreted as a new",
-	"boundary record. Any record that contains neither of these but does contain 'timescale_id'",
-	"will be interpreted to refer to an existing timescale record. Any record that contains none",
-	"of these but does contain 'timescale_name' will be interpreted as a new timescale record.",
-	"All other records will generate an error.",
-	">To delete an existing table row, include a record that specifies a timescale or bound",
-	"identifier and also the field C<B<_operation>> with the value C<B<delete>>.",
-     	"If there are bounds in other timescales that depend on the",
-    	"timescales(s) or bound(s) to be deleted, then the operation will be blocked unless you also",
-	"include the parameter C<B<allow=BREAK_DEPENDENCIES>>.",
-   	">By default, this operation returns a list of new or updated record(s).");
+    # $ds2->extended_doc({ path => 'timescales/addupdate' },
+    # 	"This operation can be used to add new timescale or bound records to the database,",
+    # 	"or to delete or update the attributes of existing records. The new or updated values",
+    # 	"must be supplied in the",
+    # 	"request body in JSON format, using the HTTP C<B<PUT>> method. Any supplied record which",
+    # 	"contains the field 'bound_id' will be interpreted to refer to an existing bound record.",
+    # 	"Any record that contains 'bound_type' but not 'bound_id' will be interpreted as a new",
+    # 	"boundary record. Any record that contains neither of these but does contain 'timescale_id'",
+    # 	"will be interpreted to refer to an existing timescale record. Any record that contains none",
+    # 	"of these but does contain 'timescale_name' will be interpreted as a new timescale record.",
+    # 	"All other records will generate an error.",
+    # 	">To delete an existing table row, include a record that specifies a timescale or bound",
+    # 	"identifier and also the field C<B<_operation>> with the value C<B<delete>>.",
+    #  	"If there are bounds in other timescales that depend on the",
+    # 	"timescales(s) or bound(s) to be deleted, then the operation will be blocked unless you also",
+    # 	"include the parameter C<B<allow=BREAK_DEPENDENCIES>>.",
+    # 	">By default, this operation returns a list of new or updated record(s).");
 
-    $ds2->define_node({ path => 'timescales/define',
-			title => 'Define intervals from timescale bounds',
-			place => 0,
-			allow_method => 'GET',
-			role => 'PB2::TimescaleEntry',
-			method => 'define_intervals',
-			output => '1.2:timescales:interval' },
-	"This operation defines intervals based on the bounds in the specified timescale.");
+    # $ds2->define_node({ path => 'timescales/define',
+    # 			title => 'Define intervals from timescale bounds',
+    # 			place => 0,
+    # 			allow_method => 'GET',
+    # 			role => 'PB2::TimescaleEntry',
+    # 			method => 'define_intervals',
+    # 			output => '1.2:timescales:interval' },
+    # 	"This operation defines intervals based on the bounds in the specified timescale.");
     
-    $ds2->list_node({ path => 'timescales/define',
-    		      list => 'entry/timescales',
-    		      place => 1 });
+    # $ds2->list_node({ path => 'timescales/define',
+    # 		      list => 'entry/timescales',
+    # 		      place => 1 });
     
-    $ds2->extended_doc({ path => 'timescales/define' },
-	"This needs to be written...");
+    # $ds2->extended_doc({ path => 'timescales/define' },
+    # 	"This needs to be written...");
 
-    $ds2->define_node({ path => 'timescales/undefine',
-			title => 'Remove interval definitions',
-			place => 0,
-			allow_method => 'GET',
-			role => 'PB2::TimescaleEntry',
-			method => 'define_intervals',
-			arg => 'undefine',
-			output => '1.2:timescales:interval' },
-	"This operation removes interval definitions corresponding to the specified timescale.");
+    # $ds2->define_node({ path => 'timescales/undefine',
+    # 			title => 'Remove interval definitions',
+    # 			place => 0,
+    # 			allow_method => 'GET',
+    # 			role => 'PB2::TimescaleEntry',
+    # 			method => 'define_intervals',
+    # 			arg => 'undefine',
+    # 			output => '1.2:timescales:interval' },
+    # 	"This operation removes interval definitions corresponding to the specified timescale.");
     
-    $ds2->list_node({ path => 'timescales/undefine',
-		      list => 'entry/timescales',
-		      place => 1 });
+    # $ds2->list_node({ path => 'timescales/undefine',
+    # 		      list => 'entry/timescales',
+    # 		      place => 1 });
 
-    $ds2->extended_doc({ path => 'timescales/undefine' },
-	"This needs to be written...");
+    # $ds2->extended_doc({ path => 'timescales/undefine' },
+    # 	"This needs to be written...");
     
-    $ds2->define_node({ path => 'timescales/delete',
-    			title => 'Delete timescales',
-    			place => 0,
-    			allow_method => 'GET,PUT,DELETE',
-    			role => 'PB2::TimescaleEntry',
-    			method => 'delete_records',
-			arg => 'timescales',
-    		        output => '1.2:timescales:basic' },
-    	"This operation allows you to delete one or more existing timescales.");
+    # $ds2->define_node({ path => 'timescales/delete',
+    # 			title => 'Delete timescales',
+    # 			place => 0,
+    # 			allow_method => 'GET,PUT,DELETE',
+    # 			role => 'PB2::TimescaleEntry',
+    # 			method => 'delete_records',
+    # 			arg => 'timescales',
+    # 		        output => '1.2:timescales:basic' },
+    # 	"This operation allows you to delete one or more existing timescales.");
     
-    $ds2->list_node({ path => 'timescales/delete',
-    		      list => 'entry/timescales',
-    		      place => 1 });
+    # $ds2->list_node({ path => 'timescales/delete',
+    # 		      list => 'entry/timescales',
+    # 		      place => 1 });
     
-    $ds2->extended_doc({ path => 'timescales/delete' },
-    	"You may specify the timescale(s) to be deleted either using the request parameter",
-	"B<C<timescale_id>> or else by including a request body in JSON format. The HTTP",
-	"methods should be C<B<GET>> or C<B<DELETE>> in the former case, C<B<PUT>> in the latter.",
-	"The request body should either be a list of timescale identifiers separated by commas",
-	"or else a list of records that each specifies a timescale identifier.",
-    	">If there are interval boundaries in other timescales that depend on the",
-    	"timescale(s) to be deleted, then the operation will be blocked unless you also",
-	"include the parameter C<B<allow=BREAK_DEPENDENCIES>>.",
-    	">Nothing will be returned except a result code indicating success or failure,",
-    	"plus any errors or warnings that were generated.");
+    # $ds2->extended_doc({ path => 'timescales/delete' },
+    # 	"You may specify the timescale(s) to be deleted either using the request parameter",
+    # 	"B<C<timescale_id>> or else by including a request body in JSON format. The HTTP",
+    # 	"methods should be C<B<GET>> or C<B<DELETE>> in the former case, C<B<PUT>> in the latter.",
+    # 	"The request body should either be a list of timescale identifiers separated by commas",
+    # 	"or else a list of records that each specifies a timescale identifier.",
+    # 	">If there are interval boundaries in other timescales that depend on the",
+    # 	"timescale(s) to be deleted, then the operation will be blocked unless you also",
+    # 	"include the parameter C<B<allow=BREAK_DEPENDENCIES>>.",
+    # 	">Nothing will be returned except a result code indicating success or failure,",
+    # 	"plus any errors or warnings that were generated.");
     
     # $ds2->define_node({ path => 'bounds/addupdate',
     # 		        title => 'Add interval boundaries or update existing boundaries',
@@ -166,30 +214,30 @@ sub initialize {
     # 	">By default, this operation returns the full list of bounds for every updated timescale",
     # 	"after the operation is carried out.");
     
-    $ds2->define_node({ path => 'bounds/delete',
-    			title => 'Delete interval bounds',
-    			place => 0,
-    			allow_method => 'GET,PUT,DELETE',
-    			role => 'PB2::TimescaleEntry',
-    			method => 'delete_records',
-			arg => 'bounds' },
-    	"This operation allows you to delete one or more existing interval bounds.");
+    # $ds2->define_node({ path => 'bounds/delete',
+    # 			title => 'Delete interval bounds',
+    # 			place => 0,
+    # 			allow_method => 'GET,PUT,DELETE',
+    # 			role => 'PB2::TimescaleEntry',
+    # 			method => 'delete_records',
+    # 			arg => 'bounds' },
+    # 	"This operation allows you to delete one or more existing interval bounds.");
     
-    $ds2->list_node({ path => 'bounds/delete',
-    		      list => 'entry/timescales',
-    		      place => 2 });
+    # $ds2->list_node({ path => 'bounds/delete',
+    # 		      list => 'entry/timescales',
+    # 		      place => 2 });
     
-    $ds2->extended_doc({ path => 'bounds/delete' },
-    	"You may specify the bounds(s) to be deleted either using the request parameter",
-	"B<C<bound_id>> or else by including a request body in JSON format. The HTTP",
-	"methods should be C<B<GET>> in the former case, C<B<PUT>> in the latter. The",
-	"request body should either be a list of bound identifiers separated by commas",
-	"or else a list of records that each specifies a bound identifier.",
-    	">If there are interval boundaries in the same or other timescales that depend on the",
-    	"bounds(s) to be deleted, then the operation will be blocked unless you also",
-	"include the parameter C<B<allow=BREAK_DEPENDENCIES>>.",
-    	">Nothing will be returned except a result code indicating success or failure,",
-    	"plus any errors or warnings that were generated.");
+    # $ds2->extended_doc({ path => 'bounds/delete' },
+    # 	"You may specify the bounds(s) to be deleted either using the request parameter",
+    # 	"B<C<bound_id>> or else by including a request body in JSON format. The HTTP",
+    # 	"methods should be C<B<GET>> in the former case, C<B<PUT>> in the latter. The",
+    # 	"request body should either be a list of bound identifiers separated by commas",
+    # 	"or else a list of records that each specifies a bound identifier.",
+    # 	">If there are interval boundaries in the same or other timescales that depend on the",
+    # 	"bounds(s) to be deleted, then the operation will be blocked unless you also",
+    # 	"include the parameter C<B<allow=BREAK_DEPENDENCIES>>.",
+    # 	">Nothing will be returned except a result code indicating success or failure,",
+    # 	"plus any errors or warnings that were generated.");
 
     # $ds2->define_node({ path => 'tsi/delete',
     # 			title => 'Delete intervals',
