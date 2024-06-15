@@ -25,7 +25,8 @@ use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use ReferenceMatch qw(get_reftitle get_subtitle get_pubtitle get_publisher
 		      get_authorname get_authorlist get_pubyr get_doi get_volpages
-		      title_words ref_similarity ref_match @SCORE_VARS);
+		      get_publication_type title_words ref_similarity ref_match 
+		      @SCORE_VARS);
 
 our ($USER_AGENT);
 
@@ -439,7 +440,11 @@ sub external_query {
 		
 		my ($pages) = $item->{pages} || $item->{page};
 		
+		$pages =~ s/\b--\b/-/g;
+		
 		$r->{r_fp} = $pages if defined $pages && $pages ne '';
+		
+		$r->{r_pubtype} = get_publication_type($item);
 		
 		$r->{source} = $source;
 		$r->{source_url} = $request_url;
@@ -818,29 +823,44 @@ sub extract_crossref_records {
 }
 
 
+# clean_crossref_item ( data )
+# 
+# Clean the specified data, which should be a record fetched from crossref, for
+# storage in the Paleobiology Database as the source for a reference record.
+
 sub clean_crossref_item {
     
     my ($rm, $data) = @_;
-
+    
+    # Delete the citation list, which is large and is unnecessary for our
+    # purpose, and some other unnecessary elements. We store this data only to
+    # document the source from which the reference attributes were derived.
+    
     delete $data->{reference};
     delete $data->{license};
     delete $data->{'content-domain'};
     
-    foreach my $key ( 'created', 'deposited', 'indexed', 'published' )
-    {
-	if ( $data->{$key}{'date-time'} )
-	{
-	    $data->{$key} = $data->{$key}{'date-time'};
-	}
-
-	elsif ( ref $data->{$key}{'date-parts'} eq 'ARRAY' &&
-		ref $data->{$key}{'date-parts'}[0] eq 'ARRAY' &&
-		$data->{$key}{'date-parts'}[0][0] =~ /^\d+$/ )
-	{
-	    $data->{$key} = join '-', $data->{$key}{'date-parts'}[0]->@*;
-	}
-    }
-
+    # Put the specified date items into a canonical form. The value of each key
+    # will be the actual date.
+    
+    # foreach my $key ( 'created', 'deposited', 'indexed', 'published', 'issued', 
+    # 		      'published-print', 'published-electronic' )
+    # {
+    # 	if ( $data->{$key}{'date-time'} )
+    # 	{
+    # 	    $data->{$key} = $data->{$key}{'date-time'};
+    # 	}
+	
+    # 	elsif ( ref $data->{$key}{'date-parts'} eq 'ARRAY' &&
+    # 		ref $data->{$key}{'date-parts'}[0] eq 'ARRAY' &&
+    # 		$data->{$key}{'date-parts'}[0][0] =~ /^\d+$/ )
+    # 	{
+    # 	    $data->{$key} = join '-', $data->{$key}{'date-parts'}[0]->@*;
+    # 	}
+    # }
+    
+    # Return the cleaned data.
+    
     return $data;
 }
 
@@ -1096,9 +1116,18 @@ sub extract_xdd_records {
 }
 
 
+# clean_xdd_item ( data )
+# 
+# Clean the specified data, which should be a record fetched from xDD, for
+# storage as the source for a Paleobiology Database reference record.
+
 sub clean_xdd_item {
     
     my ($rm, $data) = @_;
+    
+    # Delete the citation list, which is large and is unnecessary for our
+    # purpose. We store this data only to document the source from which the
+    # reference attributes were derived.
     
     delete $data->{citation_list};
     
