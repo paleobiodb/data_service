@@ -41,6 +41,8 @@ sub initialize {
 	{ value => 'both' },
 	    "If this option is specified, show both the formatted reference and",
 	    "the individual fields",
+	{ value => 'relevance', maps_to => '1.2:refs:relevance' },
+	    "For queries with the 'ref_match' or 'pub_match' parameter, show the relevance score",
 	{ value => 'authorlist' },
 	    "Show a single list of authors instead of separate fields",
 	{ value => 'comments' },
@@ -76,7 +78,7 @@ sub initialize {
     
     # Then some output blocks:
     
-    # One block for the reference routes themselves.
+    # One block for the reference operations themselves.
     
     $ds->define_block( '1.2:refs:basic' =>
       { select => ['r.reference_no', 'r.comments as r_comments',
@@ -97,7 +99,7 @@ sub initialize {
       { output => 'record_type', com_name => 'typ', value => $IDP{REF}, not_block => 'extids' },
 	  "The type of this object: C<$IDP{REF}> for a document reference.",
       { output => 'r_pubtype', com_name => 'pty', pbdb_name => 'publication_type', 
-	bibjson_name => 'type',	not_block => 'formatted' },
+	bibjson_name => 'type' },
 	  "The type of publication this entry represents. Examples include: article, book,",
 	  "unpublished, etc.",
       { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', bibjson_name => 'title',
@@ -229,6 +231,13 @@ sub initialize {
 	{ output => 'affiliation', com_name => 'affiliation' },
 	{ output => 'ORCID', com_name => 'ORCID' });
     
+    $ds->define_block('1.2:refs:relevance' => 
+        { set => '*', code => \&process_relevance },
+	{ output => 'r_relevance', com_name => 'rsc', pbdb_name => 'relevance', 
+	  bibjson_name => '_relevance' },
+	"For queries with either the 'ref_match' or 'pub_match' parameter,",
+	"this field displays the fulltext relevance score of each matching record");
+    
     # Then blocks for other classes to use when including one or more
     # references into other output.
     
@@ -272,9 +281,16 @@ sub initialize {
     
     $ds->define_set('1.2:refs:order' =>
 	{ value => 'author' },
-	    "Results are ordered alphabetically by the name of the primary and authors (last, first)",
+	    "Results are ordered alphabetically by the name of the primary author.",
+	    "This is the default for any query that does not contain either 'ref_match'",
+	    "or 'pub_match'.",
 	{ value => 'author.asc', undocumented => 1 },
 	{ value => 'author.desc', undocumented => 1 },
+	{ value => 'relevance' },
+	    "Results are ordered by relevance score. This is the default for queries",
+	    "that include either 'ref_match' or 'pub_match'.",
+	{ value => 'relevance.asc', undocumented => 1 },
+	{ value => 'relevance.desc', undocumented => 1 },
 	{ value => 'pubyr' },
 	    "Results are ordered by the year of publication",
 	{ value => 'pubyr.asc', undocumented => 1 },
@@ -374,9 +390,19 @@ sub initialize {
 	{ param => 'ref_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references whose title matches the specified word or words.  You can",
 	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'ref_match', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select references whose title matches the specified word or words.  You can",
+	    "use the operators '+', '-', '>', and '<', and you can use parentheses and",
+	    "double quote marks.",
+	{ at_most_one => ['ref_title', 'ref_match'] },
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references from publications whose title matches the specified",
 	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'pub_match', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select references from publications whose title matches the specified word",
+	    "or words.  You can use the operators '+', '-', '>', and '<', and you can",
+	    "use parentheses and double quote marks.",
+	{ at_most_one => ['pub_title', 'pub_match'] },
 	{ param => 'ref_abbr', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references whose abbreviation matches the specified word or words.  You can",
 	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
@@ -556,7 +582,7 @@ sub list {
     my @filters = $request->generate_ref_filters();
     push @filters, $request->generate_refno_filter('r');
     push @filters, $request->generate_common_filters( { refs => 'r', bare => 'r' } );
-    push @filters, '1=1' if $all_records;
+    push @filters, '1=1' unless @filters;
     
     my $filter_string = join(' and ', @filters);
     
@@ -570,11 +596,6 @@ sub list {
     # publication year second.
     
     my $order = $request->generate_order_clause();
-    
-    unless ( $order )
-    {
-	$order = $all_records ? 'NULL' : 'r.author1last, r.author1init';
-    }
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -594,7 +615,74 @@ sub list {
     
     my $join_list = $request->generate_join_list($tables);
     
-    $request->{main_sql} = "
+    # If either of the parameters 'ref_match' or 'pub_match' were specified, use
+    # the fulltext indices. The default order is by relevance.
+    
+    my $refmatch = $request->clean_param("ref_match");
+    my $pubmatch = $request->clean_param("pub_match");
+    
+    if ( $refmatch || $pubmatch )
+    {
+	my ($fulltext, $having, $order_byscore);
+	
+	# The match threshold may be adjusted if necessary.
+	
+	my $threshold = 5;
+	
+	if ( $refmatch && $pubmatch )
+	{
+	    my $refquoted = $dbh->quote($refmatch);
+	    my $pubquoted = $dbh->quote($pubmatch);
+	    
+	    $fulltext = "match(r.reftitle) against($refquoted in boolean mode) as r_relevance_1,
+		  match(r.pubtitle) against ($pubquoted in boolean mode) as r_relevance_2";
+	    $having = "r_relevance_1 > $threshold and r_relevance_2 > $threshold";
+	    $order_byscore = "(r_relevance_1 + r_relevance_2) desc";
+	}
+	
+	elsif ( $pubmatch )
+	{
+	    my $quoted = $dbh->quote($pubmatch);
+	    
+	    $fulltext = "match(r.pubtitle) against($quoted in boolean mode) as r_relevance";
+	    $having = "r_relevance > $threshold";
+	}
+	
+	else
+	{
+	    my $quoted = $dbh->quote($refmatch);
+	    
+	    $fulltext = "match(r.reftitle) against($quoted in boolean mode) as r_relevance";
+	    $having = "r_relevance > $threshold";
+	    $order_byscore = "r_relevance desc";
+	}
+	
+	unless ( $order )
+	{
+	    $order = $order_byscore || 'r.author1last, r.author1init, r.author2last, r.author2init, r.pubyr desc';
+	}
+	
+	$request->{main_sql} = "
+	SELECT $calc $fields, $fulltext
+	FROM refs as r
+		$join_list
+        WHERE $filter_string
+	GROUP BY r.reference_no
+	HAVING $having
+	ORDER BY $order
+	$limit";
+    }
+    
+    # Otherwise, do a simple query. The default order is by author name.
+    
+    else
+    {
+	unless ( $order )
+	{
+	    $order = $all_records ? 'NULL' : 'r.author1last, r.author1init, r.author2last, r.author2init, r.pubyr desc';
+	}
+	
+	$request->{main_sql} = "
 	SELECT $calc $fields
 	FROM refs as r
 		$join_list
@@ -602,6 +690,7 @@ sub list {
 	GROUP BY r.reference_no
 	ORDER BY $order
 	$limit";
+    }
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
@@ -723,13 +812,17 @@ sub generate_ref_filters {
 	    $op = 'not rlike';
 	}
 	
+	$reftitle =~ s/\./\\./g;
+	$reftitle =~ s/\?/\\?/g;
 	$reftitle =~ s/%/.*/g;
 	$reftitle =~ s/_/./g;
 	$reftitle =~ s/\s+/\\s+/g;
 	$reftitle =~ s/\(/\\(/g;
 	$reftitle =~ s/\)/\\)/g;
+	$reftitle =~ s/\[/\\[/g;
+	$reftitle =~ s/\]/\\]/g;
 	
-	my $quoted = $dbh->quote("^$reftitle");
+	my $quoted = $dbh->quote("$reftitle");
 	
 	push @filters, "coalesce(r.reftitle, r.pubtitle) $op $quoted";
     }
@@ -744,13 +837,17 @@ sub generate_ref_filters {
 	    $op = 'not rlike';
 	}
 	
+	$pubtitle =~ s/\./\\./g;
+	$pubtitle =~ s/\?/\\?/g;
 	$pubtitle =~ s/%/.*/g;
 	$pubtitle =~ s/_/./g;
 	$pubtitle =~ s/\s+/\\s+/g;
 	$pubtitle =~ s/\(/\\(/g;
 	$pubtitle =~ s/\)/\\)/g;
+	$pubtitle =~ s/\[/\\[/g;
+	$pubtitle =~ s/\]/\\]/g;
 	
-	my $quoted = $dbh->quote("^$pubtitle");
+	my $quoted = $dbh->quote("$pubtitle");
 	
 	push @filters, "r.pubtitle $op $quoted";
     }
@@ -1343,7 +1440,7 @@ sub format_reference {
 	
 	# Then construct the author string
 	
-	my $authorstring = $auth1;
+	$authorstring = $auth1;
 	
 	if ( $auth2 =~ /et al/ )
 	{
@@ -1610,6 +1707,22 @@ sub process_acronyms {
 		$record->{r_pubtitle} = $1;
 		$record->{r_pubabbr} = $2;
 	}
+    }
+}
+
+
+sub process_relevance {
+    
+    my ($request, $record) = @_;
+    
+    if ( defined $record->{r_relevance_1} )
+    {
+	$record->{r_relevance} = int($record->{r_relevance_1} + $record->{r_relevance_2} + 0.5);
+    }
+    
+    elsif ( defined $record->{r_relevance} )
+    {
+	$record->{r_relevance} = int($record->{r_relevance} + 0.5);
     }
 }
 
