@@ -22,7 +22,8 @@ use Moo::Role;
 
 # Variables to store the configuration information.
 
-our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, $LITHOLOGIES, $PCOORD_MODELS);
+our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, $LITHOLOGIES, $LITH_ADJECTIVES,
+     $PRES_MODES, $PCOORD_MODELS);
 
 
 # Initialization
@@ -52,6 +53,10 @@ sub initialize {
 	    "Return country names and the corresponding ISO-3166-1 country codes.",
 	{ value => 'lithologies', maps_to => '1.2:config:lithologies' },
 	    "Return lithologies and lithology types.",
+	{ value => 'lithadj', maps_to => '1.2:config:lithadj' },
+	    "Return lithology adjectives.",
+	{ value => 'presmodes', maps_to => '1.2:config:pres_modes' },
+	    "Return preservation modes.",
 	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
 	    "Return available paleogeography models.",
 	{ value => 'all', maps_to => '1.2:config:all' },
@@ -109,6 +114,18 @@ sub initialize {
 	    "Lithology name",
 	{ output => 'lith_type', com_name => 'ltp' },
 	    "Lithology type");
+    
+    $ds->define_block('1.2:config:lithadj' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'lta', if_field => 'lithadj' },
+	    "The configuration section: 'lta' for litholgy adjectives",
+	{ output => 'lithadj', com_name => 'lta' },
+	    "Lithology adjective");
+    
+    $ds->define_block('1.2:config:pres_modes' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'prm', if_field => 'pres_mode' },
+	    "The configuration section: 'prm' for preservation modes",
+	{ output => 'pres_mode', com_name => 'prm' },
+	    "Preservation mode");
     
     $ds->define_block('1.2:config:pgmodels' =>
 	{ set => '*', code => \&process_description },
@@ -176,8 +193,45 @@ sub initialize {
     
     # Get the list of lithologies from the database.
     
-    $LITHOLOGIES = $dbh->selectall_arrayref("
-	SELECT distinct lithology, lith_type FROM $COLL_LITH", { Slice => {} });
+    my ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'lithology2'");
+    
+    my @lithology_list = $field_type =~ /'(.*?)'/g;
+    
+    my $lith_types = $dbh->selectall_arrayref("
+	SELECT distinct lithology, lith_type FROM $COLL_LITH", { Slice => { } });
+    
+    my %lith_type;
+    
+    foreach my $row ( @$lith_types )
+    {
+	$lith_type{$row->{lithology}} = $row->{lith_type};
+    }
+    
+    $LITHOLOGIES = [ ];
+    
+    push @$LITHOLOGIES, { lithology => $_, lith_type => $lith_type{$_} || 'mixed' } 
+	foreach @lithology_list;
+    
+    # Get the list of lithology adjectives from the database.
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'lithadj'");
+    
+    my @lithadj_list = $field_type =~ /'(.*?)'/g;
+    
+    $LITH_ADJECTIVES = [ ];
+    
+    push @$LITH_ADJECTIVES, { lithadj => $_ } foreach @lithadj_list;
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'pres_mode'");
+    
+    my @presmode_list = $field_type =~ /'(.*?)'/g;
+    
+    $PRES_MODES = [ ];
+    
+    push @$PRES_MODES, { pres_mode => $_ } foreach @presmode_list;
     
     # Get the list of paleocoordinate models from the database.
     
@@ -249,6 +303,8 @@ sub get {
     push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     push @result, @$COUNTRIES if $request->has_block('countries') or $show_all;
     push @result, @$LITHOLOGIES if $request->has_block('lithologies') or $show_all;
+    push @result, @$LITH_ADJECTIVES if $request->has_block('lithadj') or $show_all;
+    push @result, @$PRES_MODES if $request->has_block('presmodes') or $show_all;
     push @result, @$PCOORD_MODELS if $request->has_block('pgmodels') or $show_all;
     
     if ( my $offset = $request->result_offset(1) )
