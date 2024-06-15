@@ -12,8 +12,8 @@ use strict;
 
 use Carp qw(croak);
 
-use TableDefs qw(%TABLE $TEST_DB %FOREIGN_KEY_COL set_table_group set_table_property set_column_property
-		 set_table_name change_table_db restore_table_name);
+use TableDefs qw(%TABLE $TEST_DB set_table_group set_table_property set_column_property
+		 set_table_name);
 
 
 # At runtime, register table names and table properties.
