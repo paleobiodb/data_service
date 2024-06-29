@@ -755,6 +755,22 @@ sub handle_column {
 }
 
 
+# ignore_field ( field_name )
+# 
+# Add a handling directive to the specified field (not column) that will cause
+# this field to be ignored. This can be used to add extra information to the
+# action record without generating an error.
+
+sub ignore_field {
+    
+    my ($action, $field_name) = @_;
+    
+    croak "you must specify a field name" unless $field_name;
+    
+    $action->{directives}{"FIELD:$field_name"} = 'ignore';
+}
+
+
 # directive ( column_name )
 # 
 # Return the directive, if any, for the specified column.

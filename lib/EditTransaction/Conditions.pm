@@ -115,6 +115,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_BAD_RECORD => "",
 		E_BAD_CONDITION => "&1 '&2'",
 		E_PERM_COL => "You do not have permission to set the value of '&1'",
+		E_EMPTY_RECORD => "This record is empty",
 		E_REQUIRED => ["Field '&1': &2", "Field '&1': must have a non-empty value"],
 		E_RANGE => ["Field '&1': &2", "&2", "Field '&1'"],
 		E_WIDTH => ["Field '&1': &2", "&2", "Field '&1'"],
