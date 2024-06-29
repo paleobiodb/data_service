@@ -12,7 +12,8 @@ package PB2::ReferenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($REF_SUMMARY);
+use TableDefs qw(%TABLE $REF_SUMMARY);
+use CoreTableDefs;
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
 use PB2::CommonData qw(generateAttribution);
 
@@ -94,6 +95,8 @@ sub initialize {
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
       { set => '*', code => \&format_bibjson, if_vocab => 'bibjson' },
       { set => '*', code => \&process_acronyms, not_block => 'formatted' },
+      { set => '*', code => \&generate_authorlist, if_block => 'authorlist', 
+	not_block => 'formatted' },
       { output => 'reference_no', com_name => 'oid', bibjson_name => 'id' }, 
 	  "Numeric identifier for this document reference in the database",
       { output => 'record_type', com_name => 'typ', value => $IDP{REF}, not_block => 'extids' },
@@ -552,7 +555,7 @@ sub get {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM refs as r $join_list
+	FROM $TABLE{REFERENCE_DATA} as r $join_list
         WHERE r.reference_no = $id
 	GROUP BY r.reference_no";
     
@@ -664,7 +667,7 @@ sub list {
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields, $fulltext
-	FROM refs as r
+	FROM $TABLE{REFERENCE_DATA} as r
 		$join_list
         WHERE $filter_string
 	GROUP BY r.reference_no
@@ -684,7 +687,7 @@ sub list {
 	
 	$request->{main_sql} = "
 	SELECT $calc $fields
-	FROM refs as r
+	FROM $TABLE{REFERENCE_DATA} as r
 		$join_list
         WHERE $filter_string
 	GROUP BY r.reference_no
@@ -751,7 +754,7 @@ sub auto_complete_ref {
 		   r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, 
 		   r.editors as r_editor, r.pubvol as r_pubvol, r.pubno as r_pubno, 
 		   r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype 
-	FROM refs as r
+	FROM $TABLE{REFERENCE_DATA} as r
 	WHERE $filter_string
 	ORDER BY author1last, author1init, author2last, author2init LIMIT $limit";
     
@@ -1733,7 +1736,8 @@ sub process_ref_ids {
     
     return unless $request->{block_hash}{extids};
     
-    $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) if defined $record->{reference_no};
+    $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) 
+	if defined $record->{reference_no};
     # "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};
 }
 
@@ -1756,7 +1760,48 @@ sub adjust_ref_counts {
 }
 
 
-# format_bibjson ( )
+# generate_authorlist ( record )
+# 
+# If there are entries in the table ref_authors corresponding to this record,
+# generate an author list from them. Otherwise, generate an author list from the
+# fields author1init, author1last, etc.
+
+sub generate_authorlist {
+    
+    my ($request, $record) = @_;
+    
+    my $dbh = $request->get_connection();
+    
+    my @authors;
+    
+    my $reference_no = $record->{reference_no};
+    
+    my $sql = "SELECT * FROM $TABLE{REFERENCE_AUTHORS}
+		WHERE reference_no = $reference_no
+		ORDER BY place";
+    
+    my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( $results && @$results )
+    {
+	foreach my $a ( @$results )
+	{
+	    push @authors, bibjson_name_record($a->{lastname}, $a->{firstname});
+	}
+    }
+    
+    else
+    {
+	push @authors, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
+	push @authors, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
+	push @authors, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
+    }
+    
+    $record->{r_author} = \@authors if @authors;
+}
+
+
+# format_bibjson ( record )
 #
 # Format the specified record for output in the BibJSON format.
 
