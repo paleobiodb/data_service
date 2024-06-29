@@ -42,7 +42,9 @@ sub initialize {
     # Value sets for specifying data entry options
     
     $ds->define_set('1.2:refs:allowances' =>
-	{ insert => '1.2:common:std_allowances' });
+	{ insert => '1.2:common:std_allowances' },
+	{ value => 'CAPITAL' },
+	    "Allow bad capitalization of names and titles");
     
     $ds->define_set('1.2:refs:publication_type');
     
@@ -87,9 +89,9 @@ sub initialize {
 	{ optional => 'pages' },
 	    "Page range for the work",
 	{ optional => 'language' },
-	    "The language of the work, if not English",
+	    "The language of the work",
 	{ optional => 'doi' },
-	    "One or more DOIs associated with the work, separated by semicolons.",
+	    "One or more DOIs associated with the work, separated by whitespace.",
 	{ optional => 'pubtitle', alias => 'pub_title' },
 	    "Title of the publication in which the work appears (journal, book, series, etc.)",
 	{ optional => 'publisher' },
@@ -104,9 +106,11 @@ sub initialize {
 	    "as a list of strings or a list of objects with fields 'firstname' and 'lastname'.",
 	{ optional => 'issn' },
 	    "One or more ISSNs associated with the seris in which the work appears,",
-	    "separated by semicolons.",
+	    "separated by whitespace.",
 	{ optional => 'isbn' },
-	    "One or more ISBNs associated with the work.");
+	    "One or more ISBNs associated with the work, separated by whitespace.",
+	{ optional => 'comments' },
+	    "Commands and/or remarks about this bibliographic reference");
     
     $ds->define_ruleset('1.2:refs:delete' =>
 	{ param => 'reference_id', valid => VALID_IDENTIFIER('REF'), list => ',',
@@ -169,7 +173,7 @@ sub addupdate_refs {
     # handle this operation.
     
     my $edt = ReferenceEdit->new($request, { permission => $perms, 
-					     table => 'REF_DATA', 
+					     table => 'REFERENCE_DATA', 
 					     allows => $allowances } );
     
     # Now go through the records and handle each one in turn. This will check every record and
@@ -177,7 +181,7 @@ sub addupdate_refs {
     
     foreach my $r (@records)
     {
-	$edt->process_record('REF_DATA', $r);
+	$edt->process_record('REFERENCE_DATA', $r);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -225,12 +229,16 @@ sub list_updated_refs {
     
     # Fetch the main reference records.
     
-    my $calc = $request->sql_count_clause;
+    $request->strict_check;
+    $request->extid_check;
     
+    $request->substitute_select( cd => 'r' );
     my $fields = $request->select_string;
     my $tables = $request->tables_hash;
     
     my $join_list = $request->generate_join_list($tables);
+    
+    my $calc = $request->sql_count_clause;
     
     my $sql = "SELECT $calc $fields
 		FROM refs as r

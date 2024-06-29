@@ -20,7 +20,7 @@ use ReferenceMatch qw(parse_authorname);
 
 use Carp qw(carp croak);
 
-use TableDefs qw(set_table_name set_table_group set_table_property set_column_property);
+use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
 use CoreTableDefs;
 
 use Class::Method::Modifiers qw(before around);
@@ -35,37 +35,38 @@ use namespace::clean;
 our (@CARP_NOT) = qw(EditTransaction);
 
 {
-    ReferenceEdit->ignore_field('REF_DATA', 'authors');
-    ReferenceEdit->ignore_field('REF_DATA', 'editors');
+    ReferenceEdit->ignore_field('REFERENCE_DATA', 'authors');
+    ReferenceEdit->ignore_field('REFERENCE_DATA', 'pages');
     
     ReferenceEdit->register_conditions(
        C_DUPLICATE => "Allow 'DUPLICATE' to add records that are potential duplicates.",
        W_DUPLICATE => "Possible duplicate for reference '&1' in the database",
-       E_AUTHOR_EMPTY => "Author &1 has an empty value",
-       E_LASTNAME_WIDTH => "Author lastname &1 exceeds column width of 80",
-       E_FIRSTNAME_WIDTH => "Author firstname &1 exceeds column width of 80");
+       E_NAME_EMPTY => "&1 &2 must have a last name containing at least one letter",
+       E_NAME_WIDTH => "&1 &2 exceeds column width of 100",
+       C_CAPITAL => ["&1 &2 has bad capitalization", "Field '&1': bad capitalization"],
+       E_CANNOT_DELETE => "This reference is used by other records in the database");
     
-    ReferenceEdit->register_allowances('DUPLICATE');
+    ReferenceEdit->register_allowances('DUPLICATE', 'CAPITAL');
     
-    set_table_name(REF_DATA => 'refs');
-    set_table_name(REF_AUTHORS => 'ref_authors');
-    set_table_name(REF_SOURCES => 'ref_sources');
-    set_table_name(REF_EXTDATA => 'ref_external');
+    set_table_name(REFERENCE_DATA => 'refs');
+    set_table_name(REFERENCE_AUTHORS => 'ref_authors');
+    set_table_name(REFERENCE_SOURCES => 'ref_sources');
+    set_table_name(REFERENCE_EXTDATA => 'ref_external');
     
-    set_table_group('references' => qw(REF_DATA REF_AUTHORS REF_SOURCES REF_EXTDATA));
+    set_table_group('references' => qw(REFERENCE_DATA REFERENCE_AUTHORS 
+				       REFERENCE_SOURCES REFERENCE_EXTDATA));
     
-    set_table_property('REF_DATA', CAN_MODIFY => 'authorized');
-    set_table_property('REF_DATA', CAN_DELETE => 'admin');
-    set_table_property('REF_DATA', REQUIRED_COLS => 'publication_type, pubyr, authors');
-    set_table_property('REF_DATA', SPECIAL_COLS => 
+    set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
+    set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
+    set_table_property('REFERENCE_DATA', CAN_DELETE => 'ADMIN');
+    set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle, publication_type, pubyr');
+    set_table_property('REFERENCE_DATA', SPECIAL_COLS => 
 		       'ts_created, ts_modified, authorizer_no, enterer_no, modifier_no');
-    set_column_property('REF_DATA', 'publication_type', REQUIRED => 1);
-    set_column_property('REF_DATA', 'pubyr', REQUIRED => 1);
     
-    set_table_property(REF_EXTERNAL => CAN_MODIFY => 'authorized');
-    
-    set_table_property(REF_TEMPDATA => CAN_MODIFY => 'authorized');
-    set_table_property(REF_TEMPDATA => REQUIRED_COLS => 'source');
+    set_table_property(REFERENCE_EXTDATA => CAN_POST => 'AUTHORIZED');
+    set_table_property(REFERENCE_EXTDATA => CAN_MODIFY => 'AUTHORIZED');
+    set_table_property(REFERENCE_TEMPDATA => CAN_MODIFY => 'AUTHORIZED');
+    set_table_property(REFERENCE_TEMPDATA => REQUIRED_COLS => 'source');
 }
 
 
@@ -81,11 +82,35 @@ before 'validate_action' => sub {
     
     my ($edt, $action, $operation, $table) = @_;
     
+    # If the operation is 'delete', we check to see if any other records use
+    # this reference. If so, it cannot be deleted. If there is no bar to
+    # deletion, then no other checks need to be done.
+    
+    if ( $operation eq 'delete' )
+    {
+	unless ( $edt->can_delete($action) )
+	{
+	    $edt->add_condition('E_CANNOT_DELETE');
+	}
+	
+	return;
+    }
+    
+    # Otherwise, do some checks on the incoming data.
+    
     my $record = $action->record;
-
-    # If this transaction allows duplicates, we skip the check.
-
-    if ( ! $edt->allows('DUPLICATE') )
+    my $keyexpr = $action->keyexpr;
+    
+    if ( $action->keymult )
+    {
+	$edt->add_condition($action, 'E_MULTI_KEY', $operation);
+	return;
+    }
+    
+    # If the operation is 'insert' and this transaction does not allow
+    # duplicates, check to see if the new record duplicates an existing one.
+    
+    if ( $operation eq 'insert' && ! $edt->allows('DUPLICATE') )
     {
 	my $threshold = 80;
 	
@@ -96,26 +121,10 @@ before 'validate_action' => sub {
 	
 	my ($duplicate_no, $estimate);
 	
-	if ( $operation eq 'insert' || $operation eq 'replace' )
-	{
-	    ($duplicate_no, $estimate) = check_for_duplication($record);
-	}
-	
-	# # For 'update' operations, we fetch the current record and apply the updates, then check
-	# # for the possibility that the update record duplicates a different one that is already in
-	# # the databse.
-	
-	# elsif ( $operation eq 'update' )
-	# {
-	#     my $current = $edt->fetch_old_record($action, $table, $keyexpr);
-	    
-	#     my %check = (%$current, %$record);
-
-	#     ($duplicate_no, $estimate) = check_for_duplication(\%check);
-	# }
+	($duplicate_no, $estimate) = $edt->check_for_duplication($record);
 	
 	# If we have an estimate that passes the threshold, then throw a caution.
-
+	
 	if ( $estimate >= $threshold )
 	{
 	    $edt->add_condition($action, 'C_DUPLICATE', $duplicate_no);
@@ -123,13 +132,45 @@ before 'validate_action' => sub {
 	}
     }
     
-    # Now handle the author and editor lists.
+    # If the operation is 'update' or 'replace' and the record does not contain
+    # a 'publication_type' field, fetch it from the existing record.
     
-    # $action->handle_column("FIELD:authors", 'ignore');
-    # $action->handle_column("FIELD:editors", 'ignore');
+    my $pubtype = $record->{publication_type};
+    
+    if ( ($operation eq 'update' || $operation eq 'replace') && ! $pubtype )
+    {
+	my $dbh = $edt->dbh;
+	my $sql = "SELECT publication_type FROM refs WHERE reference_no = $keyexpr";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	($pubtype) = $dbh->selectrow_array($sql);
+    }
+    
+    unless ( $pubtype )
+    {
+	$edt->add_condition($action, 'E_REQUIRED', 'publication_type');
+    }
+    
+    # Check capitalizatiion of the reference title and publication title.
+    
+    unless ( $edt->allows('CAPITAL') )
+    {
+	if ( $record->{reftitle} && $record->{reftitle} !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	{
+	    $edt->add_condition('C_CAPITAL', 'reftitle');
+	}
+	
+	if ( $record->{pubtitle} && $record->{pubtitle} !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	{
+	    $edt->add_condition('C_CAPITAL', 'pubtitle');
+	}
+    }
+    
+    # Handle the author names, if any.
     
     my $author_list = $record->{authors};
-    my (@authorname, @firstname, @lastname);
+    my (@authorname, @authorfirst, @authorlast);
     
     if ( ref $author_list eq 'ARRAY' )
     {
@@ -155,71 +196,221 @@ before 'validate_action' => sub {
     
     foreach my $i ( 0..$#authorname )
     {
-	unless ( $authorname[$i] =~ / \pL /xs )
+	# Check that each name is within the column width limit.
+	
+	if ( length($authorname[$i]) >= 100 )
 	{
-	    $edt->add_condition('E_AUTHOR_EMPTY', $i+1);
+	    $edt->add_condition('E_NAME_WIDTH', 'Author', $i+1);
 	    next;
 	}
 	
-	my ($lastname, $firstname, $affiliation, $orcid) = parse_authorname($authorname[$i]);
+	# Parse each name into first and last.
 	
-	$firstname[$i] = $firstname;
-	$lastname[$i] = $lastname;
+	my ($authorlast, $authorfirst) = parse_authorname($authorname[$i]);
 	
+	$authorfirst[$i] = $authorfirst;
+	$authorlast[$i] = $authorlast;
+	
+	# Make sure that each author has at least two letters in the last name,
+	# and that the name is properly capitalized unless CAPITAL is allowed.
+	
+	if ( $authorlast[$i] !~ / \pL .* \pL /xs )
+	{
+	    $edt->add_condition('E_NAME_EMPTY', 'Author', $i+1);
+	    next;
+	}
+	
+	elsif ( ! $edt->allows('CAPITAL') )
+	{
+	    if ( $authorlast !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	    {
+		$edt->add_condition('C_CAPITAL', 'Author', $i+1);
+	    }
+	    
+	    if ( defined $authorfirst && $authorfirst ne '' && 
+		 $authorfirst !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	    {
+		$edt->add_condition('C_CAPITAL', 'Author', $i+1);
+	    }
+	}
+		
 	my $suffix;
 	
-	my $initial = substr($firstname, 0, 1) . '.'; # $$$ allow for multiple initials
+	my $initials = '';
+	
+	# If a first name is given, generate initials.
+	
+	if ( $authorfirst )
+	{
+	    foreach my $word ( split(/\s+/, $authorfirst ) )
+	    {
+		if ( $word =~ /(\p{L})/ )
+		{
+		    $initials .= "$1. ";
+		}
+	    }
+	    
+	    $initials =~ s/ $//;
+	}
 	
 	if ( $i == 0 )
 	{
-	    $record->{author1last} = $lastname;
-	    $record->{author1init} = $initial;
+	    $record->{author1last} = $authorlast;
+	    $record->{author1init} = $initials;
 	}
 	
 	elsif ( $i == 1 )
 	{
-	    $record->{author2last} = $lastname;
-	    $record->{author2init} = $initial;
+	    $record->{author2last} = $authorlast;
+	    $record->{author2init} = $initials;
 	}
 	
 	else
 	{
-	    push @otherauthors, "$initial $lastname";
+	    push @otherauthors, ($initials ? "$initials $authorlast" : $authorlast);
 	}
 	
-	if ( $authorname[$i] =~ / (.*) (,\s*jr.\s*|,\s*iii\s*) (.*) /xsi )
-	{
-	    $authorname[$i] = "$1$3";
-	    $suffix = $2;
-	}
+	# if ( $authorname[$i] =~ / (.*) (,\s*jr.\s*|,\s*iii\s*) (.*) /xsi )
+	# {
+	#     $authorname[$i] = "$1$3";
+	#     $suffix = $2;
+	# }
 	
-	if ( $authorname[$i] =~ / (.*?) , \s* (.*) /xs )
-	{
-	    $lastname[$i] = $1;
-	    $lastname[$i] .= $suffix if $suffix;
-	    $firstname[$i] = $2;
-	}
+	# if ( $authorname[$i] =~ / (.*?) , \s* (.*) /xs )
+	# {
+	#     $authorlast[$i] = $1;
+	#     $authorlast[$i] .= $suffix if $suffix;
+	#     $authorfirst[$i] = $2;
+	# }
 	
-	elsif ( $authorname[$i] =~ / (.*) \s (.*) /xs )
-	{
-	    $firstname[$i] = $1;
-	    $lastname[$i] = $2;
-	    $lastname[$i] .= $suffix if $suffix;
-	}
-	
-	if ( @otherauthors )
-	{
-	    $record->{otherauthors} = join(', ', @otherauthors);
-	}
+	# elsif ( $authorname[$i] =~ / (.*) \s (.*) /xs )
+	# {
+	#     $authorfirst[$i] = $1;
+	#     $authorlast[$i] = $2;
+	#     $authorlast[$i] .= $suffix if $suffix;
+	# }
     }
     
-    $record->{firstname} = \@firstname;
-    $record->{lastname} = \@lastname;
+    if ( @otherauthors )
+    {
+	$record->{otherauthors} = join(', ', @otherauthors);
+    }
+    
+    $record->{authorfirst} = \@authorfirst;
+    $record->{authorlast} = \@authorlast;
     $record->{n_authors} = scalar(@authorname);
     
-    $action->handle_column("FIELD:firstname", 'ignore');
-    $action->handle_column("FIELD:lastname", 'ignore');
-    $action->handle_column("FIELD:n_authors", 'ignore');
+    # At least one author name is required.
+    
+    unless ( @authorlast && $authorlast[0] )
+    {
+	$edt->add_condition('E_REQUIRED', 'authors');
+    }
+    
+    # $action->handle_column("FIELD:authorfirst", 'ignore');
+    # $action->handle_column("FIELD:authorlast", 'ignore');
+    # $action->handle_column("FIELD:n_authors", 'ignore');
+    
+    $action->ignore_field('authorfirst');
+    $action->ignore_field('authorlast');
+    $action->ignore_field('n_authors');
+    
+    # Handle the editor names, if any.
+    
+    my $editor_list = $record->{editors};
+    my (@editorname, @editorfirst, @editorlast);
+    
+    if ( ref $editor_list eq 'ARRAY' )
+    {
+	@editorname = $editor_list->@*;
+    }
+    
+    elsif ( ref $editor_list )
+    {
+	croak "The value of 'editors' must be a listref or a scalar";
+    }
+    
+    else
+    {
+	@editorname = split /;\s+/, $editor_list;
+    }
+    
+    my @ref_editors;
+    
+    foreach my $i ( 0..$#editorname )
+    {
+	# Check that each name is within the column width limit.
+	
+	if ( length($editorname[$i]) >= 100 )
+	{
+	    $edt->add_condition('E_NAME_WIDTH', 'Editor', $i+1);
+	    next;
+	}
+	
+	# Parse each name into first and last.
+	
+	my ($editorlast, $editorfirst) = parse_authorname($editorname[$i]);
+	
+	$editorfirst[$i] = $editorfirst;
+	$editorlast[$i] = $editorlast;
+	
+	# Make sure that each editor has at least two letters in the last name,
+	# and that the name is properly capitalized unless CAPITAL is allowed.
+	
+	if ( $editorlast[$i] !~ / \pL .* \pL /xs )
+	{
+	    $edt->add_condition('E_NAME_EMPTY', 'Editor', $i+1);
+	    next;
+	}
+	
+	elsif ( ! $edt->allows('CAPITAL') )
+	{
+	    if ( $editorlast !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	    {
+		$edt->add_condition('C_CAPITAL', 'Editor', $i+1);
+	    }
+	    
+	    if ( defined $editorfirst && $editorfirst ne '' && 
+		 $editorfirst !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	    {
+		$edt->add_condition('C_CAPITAL', 'Editor', $i+1);
+	    }
+	}
+	
+	my $suffix;
+	
+	my $initials = '';
+	
+	# If a first name is given, generate initials.
+	
+	if ( $editorfirst )
+	{
+	    foreach my $word ( split(/\s+/, $editorfirst ) )
+	    {
+		if ( $word =~ /(\p{L})/ )
+		{
+		    $initials .= "$1. ";
+		}
+	    }
+	    
+	    $initials =~ s/ $//;
+	}
+	
+	push @ref_editors, ($initials ? "$initials $editorlast" : $editorlast);
+    }
+    
+    $record->{editors} = join(', ', @ref_editors) if $editor_list;
+    $record->{editorfirst} = \@editorfirst;
+    $record->{editorlast} = \@editorlast;
+    $record->{n_editors} = scalar(@editorname);
+    
+    # $action->handle_column("FIELD:editorfirst", 'ignore');
+    # $action->handle_column("FIELD:editorlast", 'ignore');
+    # $action->handle_column("FIELD:n_editors", 'ignore');
+    
+    $action->ignore_field('editorfirst');
+    $action->ignore_field('editorlast');
+    $action->ignore_field('n_editors');
     
     # Handle the page number(s).
     
@@ -233,8 +424,6 @@ before 'validate_action' => sub {
     {
 	$record->{firstpage} = $record->{pages};
     }
-    
-    $action->handle_column("FIELD:pages", 'ignore');
 };
 
 
@@ -243,15 +432,60 @@ sub after_action {
     my ($edt, $action, $operation, $table_specifier) = @_;
     
     my $keyval = $action->keyval;
+    my $record = $action->record;
     my $dbh = $edt->dbh;
     my $qkeyval = $dbh->quote($keyval);
+    my $result;
     
-    
-    if ( $operation eq 'update' || $operation eq 'replace' )
+    if ( exists $record->{n_authors} || exists $record->{n_editors} || $operation eq 'delete' )
     {
+	if ( $operation eq 'update' || $operation eq 'replace' || $operation eq 'delete' )
+	{
+	    my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE
+		reference_no = $qkeyval";
+	    
+	    $edt->debug_line("$sql\n\n");
+	    
+	    $result = $dbh->do($sql);
+	}
 	
+	if ( $operation eq 'insert' || $operation eq 'update' || 
+	     $operation eq 'replace' )
+	{
+	    my @author_records;
+	    
+	    foreach my $i ( 0 .. $record->{n_authors} - 1 )
+	    {
+		my $place = $i + 1;
+		my $qfirst = $dbh->quote($record->{authorfirst}[$i]);
+		my $qlast = $dbh->quote($record->{authorlast}[$i]);
+		
+		push @author_records, "($qkeyval,'author',$place,$qfirst,$qlast)";
+	    }
+	    
+	    foreach my $i ( 0 .. $record->{n_editors} - 1 )
+	    {
+		my $place = $i + 1;
+		my $qfirst = $dbh->quote($record->{editorfirst}[$i]);
+		my $qlast = $dbh->quote($record->{editorlast}[$i]);
+		
+		push @author_records, "($qkeyval,'editor',$place,$qfirst,$qlast)";
+	    }
+	    
+	    if ( @author_records )
+	    {
+		my $authorstring = join(',', @author_records);
+		
+		my $sql = "INSERT INTO $TABLE{REFERENCE_AUTHORS}
+		    (reference_no, role, place, firstname, lastname)
+		    VALUES $authorstring";
+		
+		$edt->debug_line("$sql\n\n");
+		
+		$result = $dbh->do($sql);
+	    }
+	}
     }
-    
 }
 
 
