@@ -19,7 +19,7 @@ use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block complete_ruleset);
+our (@EXPORT_OK) = qw(complete_output_block complete_ruleset complete_valueset);
 
 our (@CARP_NOT) = qw(EditTransaction Try::Tiny);
 
@@ -50,7 +50,8 @@ sub complete_output_block {
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
+    my $tableinfo = TableSchema->table_info_ref($table_specifier, $dbh, $ds->debug);
+    my $columninfo = TableSchema->table_column_ref($table_specifier);
     
     # Then get the existing contents of the block and create a hash of the field names that are
     # already defined. If no block by this name is yet defined, create an empty one.
@@ -81,7 +82,7 @@ sub complete_output_block {
     # name in that hash and apply any specified attributes. If the _ignore key is present with a
     # true value, skip that field entirely.
     
-    my $field_list = $schema->{_column_list};
+    my $field_list = $tableinfo->{COLUMN_LIST};
     
     foreach my $field_name ( @$field_list )
     {
@@ -102,12 +103,12 @@ sub complete_output_block {
 	# If this field has the 'IGNORE' attribute set, skip it as well. Check for an override
 	# entry as well.
 
-	next if $schema->{$field_name}{IGNORE} || $override->{$field_name}{IGNORE};
+	next if $columninfo->{$field_name}{IGNORE} || $override->{$field_name}{IGNORE};
 	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
 	
-	my $field_record = $schema->{$field_name};
+	my $field_record = $columninfo->{$field_name};
 	my $type = $field_record->{Type};
 	
 	my $r = { output => $field_name };
@@ -206,7 +207,8 @@ sub complete_ruleset {
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
+    my $tableinfo = TableSchema->table_info_ref($table_specifier, $dbh, $ds->debug);
+    my $columninfo = TableSchema->table_column_ref($table_specifier);
     
     # Then get the existing ruleset documentation and create a hash of the field names that are
     # already defined. If no ruleset by this name is yet defined, croak.
@@ -227,14 +229,14 @@ sub complete_ruleset {
     # Then go through the field list from the schema and add any fields that aren't already in the
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
-    my $field_list = $schema->{_column_list};
-    my %column_properties = get_column_properties($table_specifier);
+    my $field_list = $tableinfo->{COLUMN_LIST};
+    # my %column_properties = get_column_properties($table_specifier);
     
     foreach my $column_name ( @$field_list )
     {
 	next if $COMMON_FIELD_SPECIAL{$column_name};
 	
-	my $field_record = $schema->{$column_name};
+	my $field_record = $columninfo->{$column_name};
 	
 	my $field_name = $column_name;
 	
@@ -336,7 +338,7 @@ sub complete_ruleset {
 	    $doc .= " The value is not checked before being sent to the database, and will throw an exception if the database does not accept it.";
 	}
 	
-	if ( my $type = $column_properties{$column_name}{EXTID_TYPE} )
+	if ( my $type = $columninfo->{$column_name}{EXTID_TYPE} )
 	{
 	    $rr->{valid} = VALID_IDENTIFIER($type);
 	}
@@ -346,6 +348,56 @@ sub complete_ruleset {
 	$ds->validator->add_rules($rs, $rr, $doc);
     }
 }
+
+
+# complete_valueset ( ds, dbh, set_name, table_specifier )
+# 
+# The argument $table_specifier should specify a table whose first two columns are a
+# number and a string value. These are both added to the specified set, with the string
+# values added to the value list and the numeric values collected under 'numeric_list'.
+# 
+# The specified set can then be used to map either numeric values into strings or vice
+# versa. 
+
+sub complete_valueset {
+    
+    my ($ds, $dbh, $set_name, $table_specifier) = @_;
+    
+    my $vs = $ds->{set}{$set_name} || croak "unknown set '$set_name'";
+    
+    $vs->{value_list} ||= [ ];
+    $vs->{numeric_list} ||= [ ];
+    
+    croak "unknown table '$table_specifier'" unless exists $TABLE{$table_specifier};
+    
+    my $sql = "SELECT * FROM $TABLE{$table_specifier} LIMIT 50";
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => [0, 1] });
+    
+    if ( $result && ref $result eq 'ARRAY' )
+    {
+	foreach my $row ( $result->@* )
+	{
+	    my ($numeric, $string) = $row->@*;
+	    
+	    $vs->{value}{$string} = $numeric;
+	    $vs->{value}{$numeric} = $string;
+	    
+	    push $vs->{value_list}->@*, $string;
+	    push $vs->{numeric_list}->@*, $numeric;
+	}
+    }
+}
+
+
+# Create a package for use in fetching table information
+
+package TableSchema;
+
+use Role::Tiny::With;
+
+with 'EditTransaction::TableInfo';
+with 'EditTransaction::Mod::MariaDB';
 
 
 1;
