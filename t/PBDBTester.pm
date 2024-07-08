@@ -101,15 +101,11 @@ sub establish_session_data {
   `authorizer` varchar(64) NOT NULL DEFAULT '',
   `enterer` varchar(64) NOT NULL DEFAULT '',
   `role` varchar(20) DEFAULT NULL,
-  `roles` varchar(128) DEFAULT NULL,
   `reference_no` int(11) DEFAULT NULL,
   `queue` varchar(255) DEFAULT NULL,
   `record_date` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `marine_invertebrate` tinyint(1) DEFAULT 0,
-  `micropaleontology` tinyint(1) DEFAULT 0,
-  `paleobotany` tinyint(1) DEFAULT 0,
-  `taphonomy` tinyint(1) DEFAULT 0,
-  `vertebrate` tinyint(1) DEFAULT 0,
+  `created_date` timestamp NOT NULL DEFAULT current_timestamp(),
+  `expire_days` int NOT NULL default 1,
   `superuser` tinyint(1) DEFAULT 0,
   `authorizer_no` int(10) NOT NULL DEFAULT 0,
   `enterer_no` int(10) NOT NULL DEFAULT 0,
@@ -117,15 +113,15 @@ sub establish_session_data {
 	
 	$dbh->do("DELETE FROM $TABLE{SESSION_DATA}");
 
-	$dbh->do("INSERT INTO $TABLE{SESSION_DATA} (session_id, user_id, authorizer_no, enterer_no, role, superuser)
-		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','39998','39998','authorizer',0),
-			('SESSION-ENTERER','USERID-ENTERER','39998','39997','enterer',0),
-			('SESSION-GUEST','USERID-GUEST','0','0','guest',0),
-			('SESSION-STUDENT','USERID-STUDENT','39999','39996','student',0),
-			('SESSION-OTHER', 'USERID-OTHER', '39999', '39995', 'enterer', 0),
-			('SESSION-UNAUTH', 'USERID-UNAUTH', '0', '39994', 'enterer', 0),
-			('SESSION-SUPERUSER','USERID-SUPERUSER','39999','39999','authorizer', 1),
-			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','39999','39991','enterer', 0)");
+	$dbh->do("INSERT INTO $TABLE{SESSION_DATA} (session_id, user_id, authorizer_no, enterer_no, role, expire_days, superuser)
+		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','39998','39998','authorizer',30000,0),
+			('SESSION-ENTERER','USERID-ENTERER','39998','39997','enterer',30000,0),
+			('SESSION-GUEST','USERID-GUEST','0','0','guest',30000,0),
+			('SESSION-STUDENT','USERID-STUDENT','39999','39996','student',30000,0),
+			('SESSION-OTHER','USERID-OTHER','39999','39995','enterer',30000,0),
+			('SESSION-UNAUTH','USERID-UNAUTH','0','39994','enterer',30000,0),
+			('SESSION-SUPERUSER','USERID-SUPERUSER','39999','39999','authorizer',30000,1),
+			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','39999','39991','enterer',30000,0)");
 
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PERSON_DATA} (
   `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -219,6 +215,8 @@ sub establish_session_data {
   `permission` set('none','view','post','modify','delete','insert_key','admin') NOT NULL,
   UNIQUE KEY `person_no` (`person_no`,`table_name`))");
 	
+	# $dbh->do("INSERT INTO $TABLE{TABLE_PERMS} (person_no, table_name, permission)
+	# 	VALUES ('39991', 'RESOURCE_QUEUE', 'admin')");
     };
     
     if ( $@ )

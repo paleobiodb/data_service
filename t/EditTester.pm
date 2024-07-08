@@ -102,7 +102,7 @@ sub new {
     
     # Make sure this class actually is a subclass of EditTransaction.
     
-    unless ( $edt_class && $edt_class->isa('EditTransaction') )
+    if ( $edt_class && ! $edt_class->isa('EditTransaction') )
     {
 	croak "You must specify the name of a class that is a subclass of EditTransaction.";
     }
