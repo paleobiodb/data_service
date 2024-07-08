@@ -16,10 +16,11 @@ package ReferenceEdit;
 
 use parent 'EditTransaction';
 
-use ReferenceMatch qw(parse_authorname);
+use ReferenceMatch qw(ref_similarity parse_authorname);
 
 use Carp qw(carp croak);
 
+use ExternalIdent qw(generate_identifier);
 use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
 use CoreTableDefs;
 
@@ -39,11 +40,10 @@ our (@CARP_NOT) = qw(EditTransaction);
     ReferenceEdit->ignore_field('REFERENCE_DATA', 'pages');
     
     ReferenceEdit->register_conditions(
-       C_DUPLICATE => "Allow 'DUPLICATE' to add records that are potential duplicates.",
-       W_DUPLICATE => "Possible duplicate for reference '&1' in the database",
+       C_DUPLICATE => "Possible duplicate of: &1",
+       C_CAPITAL => ["&1 &2 has bad capitalization", "Field '&1': bad capitalization"],
        E_NAME_EMPTY => "&1 &2 must have a last name containing at least one letter",
        E_NAME_WIDTH => "&1 &2 exceeds column width of 100",
-       C_CAPITAL => ["&1 &2 has bad capitalization", "Field '&1': bad capitalization"],
        E_CANNOT_DELETE => "This reference is used by other records in the database");
     
     ReferenceEdit->register_allowances('DUPLICATE', 'CAPITAL');
@@ -88,7 +88,7 @@ before 'validate_action' => sub {
     
     if ( $operation eq 'delete' )
     {
-	unless ( $edt->can_delete($action) )
+	unless ( $edt->able_to_delete($action) )
 	{
 	    $edt->add_condition('E_CANNOT_DELETE');
 	}
@@ -107,37 +107,12 @@ before 'validate_action' => sub {
 	return;
     }
     
-    # If the operation is 'insert' and this transaction does not allow
-    # duplicates, check to see if the new record duplicates an existing one.
-    
-    if ( $operation eq 'insert' && ! $edt->allows('DUPLICATE') )
-    {
-	my $threshold = 80;
-	
-	# For 'insert' and 'replace' operations, we check for the possibility that the submitted
-	# record duplicates one that is already in the database. The variable $estimate will hold
-	# a rough estimate of the probability that a duplicate has been found, with values in the
-	# range 0-100.
-	
-	my ($duplicate_no, $estimate);
-	
-	($duplicate_no, $estimate) = $edt->check_for_duplication($record);
-	
-	# If we have an estimate that passes the threshold, then throw a caution.
-	
-	if ( $estimate >= $threshold )
-	{
-	    $edt->add_condition($action, 'C_DUPLICATE', $duplicate_no);
-	    return;
-	}
-    }
-    
-    # If the operation is 'update' or 'replace' and the record does not contain
+    # If the operation is 'update' and the record does not contain
     # a 'publication_type' field, fetch it from the existing record.
     
     my $pubtype = $record->{publication_type};
     
-    if ( ($operation eq 'update' || $operation eq 'replace') && ! $pubtype )
+    if ( $operation eq 'update' && ! $pubtype )
     {
 	my $dbh = $edt->dbh;
 	my $sql = "SELECT publication_type FROM refs WHERE reference_no = $keyexpr";
@@ -228,7 +203,7 @@ before 'validate_action' => sub {
 	    }
 	    
 	    if ( defined $authorfirst && $authorfirst ne '' && 
-		 $authorfirst !~ / ^ \p{Lu} .* \p{Ll} /xs )
+		 $authorfirst !~ / ^ \p{Lu} /xs )
 	    {
 		$edt->add_condition('C_CAPITAL', 'Author', $i+1);
 	    }
@@ -424,6 +399,26 @@ before 'validate_action' => sub {
     {
 	$record->{firstpage} = $record->{pages};
     }
+    
+    # If the operation is 'insert' and this transaction does not allow
+    # duplicates, check to see if the new record duplicates an existing one. If
+    # so, throw a caution.
+    
+    if ( $operation eq 'insert' && $action->can_proceed && ! $edt->allows('DUPLICATE') )
+    {
+	my $test = { %$record };
+	
+	my (@duplicate_nos) = $edt->my_duplicate_check($test);
+	
+	if ( @duplicate_nos )
+	{
+	    my $dup_string = join(',', map { generate_identifier('REF', $_) } @duplicate_nos);
+	    
+	    $edt->add_condition($action, 'C_DUPLICATE', $dup_string);
+	    return;
+	}
+    }
+    
 };
 
 
@@ -437,71 +432,230 @@ sub after_action {
     my $qkeyval = $dbh->quote($keyval);
     my $result;
     
-    if ( exists $record->{n_authors} || exists $record->{n_editors} || $operation eq 'delete' )
+    if ( $operation eq 'replace' || $operation eq 'delete' ||
+	 ($operation eq 'update' && $record->{n_authors}) )
     {
-	if ( $operation eq 'update' || $operation eq 'replace' || $operation eq 'delete' )
+	my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE reference_no = $qkeyval";
+	
+	$edt->debug_line("$sql\n\n");
+	
+	$result = $dbh->do($sql);
+    }
+    
+    if ( $operation ne 'delete' )
+    {
+	my @author_records;
+	
+	foreach my $i ( 0 .. $record->{n_authors} - 1 )
 	{
-	    my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE
-		reference_no = $qkeyval";
+	    my $place = $i + 1;
+	    my $qfirst = $dbh->quote($record->{authorfirst}[$i]);
+	    my $qlast = $dbh->quote($record->{authorlast}[$i]);
+	    
+	    push @author_records, "($qkeyval,$place,$qfirst,$qlast)";
+	}
+	
+	# foreach my $i ( 0 .. $record->{n_editors} - 1 )
+	# {
+	# 	my $place = $i + 1;
+	# 	my $qfirst = $dbh->quote($record->{editorfirst}[$i]);
+	# 	my $qlast = $dbh->quote($record->{editorlast}[$i]);
+	
+	# 	push @author_records, "($qkeyval,'editor',$place,$qfirst,$qlast)";
+	# }
+	
+	if ( @author_records )
+	{
+	    my $authorstring = join(',', @author_records);
+	    
+	    my $sql = "INSERT INTO $TABLE{REFERENCE_AUTHORS}
+		    (reference_no, place, firstname, lastname)
+		    VALUES $authorstring";
 	    
 	    $edt->debug_line("$sql\n\n");
 	    
 	    $result = $dbh->do($sql);
 	}
-	
-	if ( $operation eq 'insert' || $operation eq 'update' || 
-	     $operation eq 'replace' )
-	{
-	    my @author_records;
-	    
-	    foreach my $i ( 0 .. $record->{n_authors} - 1 )
-	    {
-		my $place = $i + 1;
-		my $qfirst = $dbh->quote($record->{authorfirst}[$i]);
-		my $qlast = $dbh->quote($record->{authorlast}[$i]);
-		
-		push @author_records, "($qkeyval,'author',$place,$qfirst,$qlast)";
-	    }
-	    
-	    foreach my $i ( 0 .. $record->{n_editors} - 1 )
-	    {
-		my $place = $i + 1;
-		my $qfirst = $dbh->quote($record->{editorfirst}[$i]);
-		my $qlast = $dbh->quote($record->{editorlast}[$i]);
-		
-		push @author_records, "($qkeyval,'editor',$place,$qfirst,$qlast)";
-	    }
-	    
-	    if ( @author_records )
-	    {
-		my $authorstring = join(',', @author_records);
-		
-		my $sql = "INSERT INTO $TABLE{REFERENCE_AUTHORS}
-		    (reference_no, role, place, firstname, lastname)
-		    VALUES $authorstring";
-		
-		$edt->debug_line("$sql\n\n");
-		
-		$result = $dbh->do($sql);
-	    }
-	}
     }
 }
 
 
+# able_to_delete ( )
+# 
+# Return true if the specified record(s) is not referenced by any record in any of
+# the core database tables, false otherwise.
+
+sub able_to_delete {
+    
+    my ($edt, $action) = @_;
+    
+    my $dbh = $edt->dbh;
+    
+    my @quoted = map { $dbh->quote($_) } $action->keyvalues;
+    
+    my $idstring = join(',', @quoted);
+    
+    return () if $edt->my_reference_check($dbh, $TABLE{COLLECTION_DATA}, $idstring);
+    return () if $edt->my_reference_check($dbh, $TABLE{OCCURRENCE_DATA}, $idstring);
+    return () if $edt->my_reference_check($dbh, $TABLE{SPECIMEN_DATA}, $idstring);
+    return () if $edt->my_reference_check($dbh, $TABLE{AUTHORITY_DATA}, $idstring);
+    return () if $edt->my_reference_check($dbh, $TABLE{OPINION_DATA}, $idstring);
+    return () if $edt->my_reference_check($dbh, $TABLE{INTERVAL_DATA}, $idstring);
+    return () if $edt->my_reference_check($dbh, $TABLE{SCALE_DATA}, $idstring);
+    
+    return 1;
+}
 
 
-# check_for_duplication ( attrs )
+sub my_reference_check {
+    
+    my ($edt, $dbh, $table_name, $idstring) = @_;
+    
+    my $sql = "SELECT count(*) FROM $table_name WHERE reference_no in ($idstring)";
+    
+    $edt->debug_line($sql) if $edt->debug_mode;
+    
+    my ($count) = $dbh->selectrow_array($sql);
+    
+    return !$count;
+}
+    
+
+# my_duplicate_check ( attrs )
 #
 # Given a hashref of reference attributes in $attrs, check and see if this set of attributes
 # matches any records currently in the REFERENCES table. If so, return the reference_no of the
 # most likely match, along with an estimated probability of a duplication.
 
-sub check_for_duplication {
+sub my_duplicate_check {
 
-    my ($attrs) = @_;
-
+    my ($edt, $attrs) = @_;
     
+    my $dbh = $edt->dbh;
+    
+    my @matches;
+    
+    # Start by matching against the reftitle and pubtitle fields with a pubyr
+    # filter.  If a DOI is provided, use that for the initial search as well.
+    # But if the search returns no results, try it again without the DOI.
+    
+    @matches = $edt->my_reftitle_query($attrs, { doi => 1 });
+    
+    if ( !@matches && $attrs->{doi} )
+    {
+	@matches = $edt->my_reftitle_query($attrs, { });
+    }
+    
+    # If we can't find any matches at all, try again with just the DOI and see
+    # if we get any hits.
+    
+    if ( !@matches && $attrs->{doi} )
+    {
+	my $quoted = $dbh->quote($attrs->{doi});
+	
+	my $sql = "SELECT * FROM refs WHERE doi=$quoted";
+	
+	@matches = $edt->my_sql_query($dbh, $sql);
+    }
+    
+    # If we haven't found any matches at this point, we can stop.
+    
+    return @matches;
 }
+
+
+sub my_reftitle_query {
+    
+    my ($edt, $attrs, $options) = @_;
+    
+    my $dbh = $edt->dbh;
+    
+    my ($fulltext, $having);
+    
+    my $ref_title = $attrs->{reftitle};
+    my $pub_title = $attrs->{pubtitle};
+    
+    if ( $ref_title && $pub_title )
+    {
+	my $refquoted = $dbh->quote($ref_title);
+	my $pubquoted = $dbh->quote($pub_title);
+	
+	$fulltext = "match(r.reftitle) against($refquoted) as score1,
+		  match(r.pubtitle) against ($pubquoted) as score2";
+	$having = "score1 > 5 and score2 > 5";
+    }
+    
+    elsif ( $ref_title )
+    {
+	my $quoted = $dbh->quote($ref_title);
+	
+	$fulltext = "match(r.reftitle) against($quoted) as score";
+	$having = "score > 5";
+    }
+    
+    elsif ( $pub_title )
+    {
+	my $quoted = $dbh->quote($pub_title);
+	
+	$fulltext = "match(r.pubtitle) against($quoted) as score";
+	$having = "score > 0";
+    }
+    
+    my $pubyr_quoted = $dbh->quote($attrs->{pubyr});
+    
+    my $sql = "SELECT r.*, $fulltext
+		FROM $TABLE{REFERENCE_DATA} as r
+		WHERE r.pubyr = $pubyr_quoted
+		HAVING $having";
+    
+    # my $sql = "SELECT r.*, $fulltext
+    # 		FROM $TABLE{REFERENCE_DATA} as r
+    # 		     join $TABLE{REFERENCE_SEARCH} as rs using (reference_no)
+    # 		WHERE r.pubyr = $pubyr_quoted
+    # 		HAVING $having";
+    
+    my @raw = $edt->my_sql_query($dbh, $sql);
+    
+    my @matches;
+    
+    foreach my $r ( @raw )
+    {
+	my $similarity = ref_similarity($r, $attrs, { });
+	
+	# if ( $similarity->{sum_s} > 500 )
+	# {
+	#     return $r->{reference_no};
+	# }
+	
+	if ( $similarity->{sum_s} > 400 & $similarity->{sum_c} < 200 )
+	{
+	    push @matches, $r->{reference_no};
+	}
+    }
+    
+    return @matches;
+}
+
+
+sub my_sql_query {
+    
+    my ($edt, $dbh, $sql) = @_;
+    
+    $edt->debug_line($sql) if $edt->debug_mode;
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $result eq 'ARRAY' )
+    {
+	return @$result;
+    }
+    
+    else
+    {
+	return ();
+    }
+}
+
+
 
 1;

@@ -43,6 +43,8 @@ sub initialize {
     
     $ds->define_set('1.2:refs:allowances' =>
 	{ insert => '1.2:common:std_allowances' },
+	{ value => 'DUPLICATE' },
+	    "Allow this entry even if it may possibly duplicate another entry",
 	{ value => 'CAPITAL' },
 	    "Allow bad capitalization of names and titles");
     
@@ -252,7 +254,7 @@ sub list_updated_refs {
     
     $sql = "SELECT * FROM ref_authors
 	       WHERE $filter_string
-	       ORDER BY reference_no, role, place";
+	       ORDER BY reference_no, place";
     
     my $attrib = $dbh->selectall_arrayref($sql, { Slice => { } });
     
@@ -262,17 +264,8 @@ sub list_updated_refs {
     {
 	my $refno = $a->{reference_no};
 	
-	if ( $a->{role} eq 'author' )
-	{
-	    $authors{$refno} ||= [ ];
-	    push $authors{$refno}->@*, $a;
-	}
-	
-	else
-	{
-	    $editors{$refno} ||= [ ];
-	    push $editors{$refno}->@*, $a;
-	}
+	$authors{$refno} ||= [ ];
+	push $authors{$refno}->@*, $a;
     }
     
     # Link them up
@@ -284,11 +277,6 @@ sub list_updated_refs {
 	if ( $authors{$refno} )
 	{
 	    $r->{authors} = $authors{$refno};
-	}
-	
-	if ( $editors{$refno} )
-	{
-	    $r->{editors} = $editors{$refno};
 	}
     }
     
