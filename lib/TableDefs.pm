@@ -64,6 +64,7 @@ our (%TABLE_PROP_NAME) = (
     CASCADE_DELETE => 1,      # specifies additional table(s) for cascade deletion from this one
     PRIMARY_KEY => 1,         # specifies the primary key column(s) for this table
     PRIMARY_FIELD => 1,       # specifies the primary key field(s) for this table
+    AUTH_FIELDS => 1,	      # specifies the fields that determine record ownership
     AUTH_TABLE => 1,          # authorization should be performed on the specified table
     SUPERIOR_TABLE => 1,      # if non-empty, the specified table controls access to this one
     SUPERIOR_KEY => 1,	      # if non-empty, the specified column links this table to its superior
