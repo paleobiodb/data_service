@@ -16,7 +16,6 @@ use Role::Tiny;
 
 no warnings 'uninitialized';
 
-use parent qw(Exporter);
 
 
 # Default condition codes and templates
@@ -102,13 +101,13 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 				["You do not have permission to lock/unlock &2 of these records",
 				 "You do not have permission to lock/unlock one or more of these records"],
 				 default => "You do not have permission to lock/unlock this record" },
-		E_PERM => { insert => "You do not have permission to insert a record into this table",
-			    update => "You do not have permission to update this record(s)",
+		E_PERM => { insert => "You do not have permission to insert into this table",
+			    update => "You do not have permission to update",
 			    replace_new => "No record was found with key '&2', ".
 				"and you do not have permission to insert one",
-			    replace => "You do not have permission to replace this record",
-			    delete => "You do not have permission to delete this record(s)",
-			    delete_cleanup => "You do not have permission to delete these records",
+			    replace => "You do not have permission to replace",
+			    delete => "You do not have permission to delete",
+			    delete_cleanup => "You do not have permission to delete",
 			    fixup_mode => "You do not have permission for fixup mode on this table",
 			    default => "You do not have permission for this operation" },
 		E_BAD_OPERATION => ["Invalid operation '&1'", "Invalid operation"],
@@ -982,8 +981,20 @@ sub get_condition_template {
     
     if ( ref $template eq 'HASH' )
     {
-	$template = $template->{$selector} || $template->{default} ||
-	    $CONDITION_BY_CLASS{EditTransaction}{UNKNOWN_TEMPLATE};
+	$template = $template->{$selector} || $template->{default};
+	
+	unless ( $template )
+	{
+	    if ( $CONDITION_BY_CLASS{EditTransaction}{$code} &&
+		 ref $CONDITION_BY_CLASS{EditTransaction}{$code} eq 'HASH' &&
+		 $CONDITION_BY_CLASS{EditTransaction}{$code}{$selector} )
+	    {
+		$template = $CONDITION_BY_CLASS{EditTransaction}{$code}{$selector} ||
+		    $CONDITION_BY_CLASS{EditTransaction}{$code}{default};
+	    }
+	    
+	    $template ||= $CONDITION_BY_CLASS{EditTransaction}{UNKNOWN_TEMPLATE};
+	}
     }
     
     # If we have reached a string value, return it. If it is a non-empty list, return

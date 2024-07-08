@@ -177,6 +177,12 @@ sub _new_action {
 	weaken $edt->{action_ref}{$k};
     }
     
+    # Make this the current action. It will be the default action during
+    # execution of the methods 'authorize_action' and 'validate_action' in
+    # subclasses.
+    
+    $edt->{current_action} = $action;
+    
     # If the action is not 'skip' and the table specifier is not empty, check it
     # and unpack key values from the action parameters. Then load the directives
     # for this table as specified for this class.
@@ -193,14 +199,13 @@ sub _new_action {
 	
 	else
 	{
-	    $edt->add_condition($action, 'E_BAD_TABLE', $table_specifier);
+	    $edt->add_condition('E_BAD_TABLE', $table_specifier);
 	}
     }
     
-    # Finally, make this action the current action. This will cause the object reference
-    # to be implicitly returned from this subroutine.
+    # Return a reference to the new action.
     
-    $edt->{current_action} = $action;
+    return $action;
 }
 
 

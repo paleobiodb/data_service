@@ -185,7 +185,7 @@ sub pre_execution_check {
     
     if ( $action->validation_status eq 'PENDING' )
     {
-	$edt->validate_action($action, $operation, $table_specifier, 'FINAL');
+	$edt->validate_action($action, $operation, $table_specifier);
     }
     
     # If the operation is 'insert', 'update', or 'replace', we need to call
@@ -841,6 +841,14 @@ sub execute_insert {
 	    unless ( $new_keyval )
 	    {
 		$edt->add_condition($action, 'E_EXECUTE', 'insert statement failed');
+	    }
+	    
+	    # If the action has a label, store the label under the new key
+	    # value. 
+	    
+	    if ( my $label = $action->record_value('_label') )
+	    {
+		$edt->store_label($table, $new_keyval, $label);
 	    }
 	    
 	    # Finally, call the 'after_action' method.

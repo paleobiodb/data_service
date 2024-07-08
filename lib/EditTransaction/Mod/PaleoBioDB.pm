@@ -791,7 +791,7 @@ sub _compute_table_permission {
 }
 
 
-# check_record_permission ( table_specifier, requested, where )
+# check_row_permission ( table_specifier, requested, where )
 # 
 # This routine is called as an instance method to authorize certain kinds of actions. It is passed
 # a table specifier, a requested authorization from the following list, and an SQL expression that
@@ -833,7 +833,7 @@ sub _compute_table_permission {
 # strings from the above table alternating with integer values. Each string value will be
 # followed by the number of rows to which it applies.
 
-sub check_record_permission {
+sub check_row_permission {
     
     my ($edt, $table_specifier, $requested, $where) = @_;
     
@@ -856,7 +856,7 @@ sub check_record_permission {
     
     if ( $tableinfo->{UNRESTRICTED} )
     {
-	if ( my $count = $edt->count_matching_rows($table_specifier, $where) )
+	if ( my $count = $edt->db_count_matching_rows($table_specifier, $where) )
 	{
 	    $edt->debug_line( "$dprefix unrestricted from NO AUTH PROPERTIES\n" ) if $debug_mode;
 	    return ('unrestricted', $count);
@@ -879,7 +879,7 @@ sub check_record_permission {
 				       $table_specifier, $requested, $where);
     }
     
-    if ( $requested eq 'admin' )
+    elsif ( $requested eq 'admin' )
     {
 	$edt->debug_line( "$dprefix 'admin' DENIED for $dauth\n" ) if $debug_mode;
 	return 'none';
@@ -892,7 +892,7 @@ sub check_record_permission {
     {
 	if ( $tp->{view} || $tp->{modify} )
 	{
-	    if ( my $count = $edt->count_matching_rows($table_specifier, $where) )
+	    if ( my $count = $edt->db_count_matching_rows($table_specifier, $where) )
 	    {
 		$edt->debug_line( "$dprefix granted from $dauth\n" ) if $debug_mode;
 		return ('granted', $count);
@@ -1149,7 +1149,7 @@ sub _check_admin_permission {
     
     if ( $requested eq 'view' || $auth_fields !~ /_lock/ )
     {
-	if ( my $count = $perms->count_matching_rows($table_specifier, $where) )
+	if ( my $count = $edt->db_count_matching_rows($table_specifier, $where) )
 	{
 	    $edt->debug_line("$dprefix admin $count from $which\n") if $debug_mode;
 	    return ('admin', $count);
@@ -1238,7 +1238,7 @@ sub _check_admin_permission {
 
 sub select_authinfo {
     
-    my ($edt, $table_specifier, $key_expr, $auth_fields) = @_;
+    my ($edt, $table_specifier, $auth_fields, $key_expr) = @_;
     
     my $sql = "SELECT $auth_fields, count(*) as `count`
 		FROM $TABLE{$table_specifier} WHERE $key_expr

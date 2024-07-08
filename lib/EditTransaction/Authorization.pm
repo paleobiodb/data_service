@@ -268,6 +268,14 @@ sub authorize_action {
     
     my ($edt, $action, $operation, $table_specifier) = @_;
     
+    # If the action permission is already set, return without doing anything.
+    # This should only be the case if the permission is 'PENDING'.
+    
+    if ( $action->permission )
+    {
+	return;
+    }
+    
     # If $operation or $table_specifier aren't passed as arguments, fill them in.
     
     $operation ||= $action->operation;
@@ -280,6 +288,9 @@ sub authorize_action {
     my $tableinfo = $edt->table_info_ref($table_specifier) || 
 	return $action->permission('none');
     
+    # Step 1: Check for administrative or unrestricted permission
+    # -----------------------------------------------------------
+    
     # Start by checking whether this action would be performed with administrative
     # permission or not. This is necessary in order to allow proper validation even if the
     # action is not authorized or if authorization is still pending. The goal is to return
@@ -290,38 +301,12 @@ sub authorize_action {
     
     my $superior_table = $tableinfo->{SUPERIOR_TABLE};
     
-    my $perm = $edt->check_table_permission($superior_table || $table_specifier, 'admin');
+    # my $perm = $edt->check_table_permission($superior_table || $table_specifier, 'admin');
     
-    if ( $perm eq 'admin' || $perm eq 'unrestricted' )
-    {
-	$action->validate_admin(1);
-    }
-    
-    # If a permission code has already been set for this action, including 'PENDING',
-    # return without doing anything else. Otherwise, proceed with authorization.
-    
-    if ( $action->permission )
-    {
-	return;
-    }
-    
-    # Step 1: check key multiplicity
-    # ------------------------------
-    
-    # The operations 'insert', 'replace', 'insrep' and 'insupd' can affect at
-    # most one record.  If multiple keys or a selection expression is given, add an error
-    # condition and return. 
-    
-    my $single_op = $operation =~ /^ins|^rep/;
-    
-    if ( $single_op && $action->keymult )
-    {
-	my $code = $action->keymult eq 'where' ? 'E_HAS_WHERE' : 'E_MULTI_KEY';
-	
-	$edt->add_condition($action, $code, $operation);
-	
-	return $action->set_permission('none');
-    }
+    # unless ( $perm eq 'admin' || $perm eq 'unrestricted' )
+    # {
+    # 	$perm = undef;
+    # }
     
     # Step 2: determine permission
     # ----------------------------
@@ -390,7 +375,7 @@ sub authorize_action {
 	    # arbitrary key values into the table. If so, change the operation to
 	    # 'insert'. 
 	    
-	    if ( $single_op && ! $subordinate_count )
+	    if ( $operation =~ /^ins|^rep/ && ! $subordinate_count )
 	    {
 		$insert_key = 1;
 	    }
@@ -448,7 +433,7 @@ sub authorize_action {
 	
 	if ( $primary eq 'notfound' )
 	{
-	    $insert_key = 1 if $single_op;
+	    $insert_key = 1 if $operation =~ /^ins|^rep/;
 	}
 	
 	elsif ( $operation eq 'insert' )
@@ -491,7 +476,7 @@ sub authorize_action {
     
     # The insert and replace operations may require extra steps to resolve.
     
-    if ( $single_op )
+    if ( $operation =~ /^ins|^rep/ )
     {
 	# If $insert_key was set, the operation is set to 'insert'. We must check whether
 	# permission is granted to insert records with specified keys into the table. If
@@ -533,7 +518,7 @@ sub authorize_action {
 	elsif ( $operation eq 'insupd' || $operation eq 'insupdate' )
 	{
 	    $operation = $action->set_operation('update');
-	}	
+	}
     }
     
     # If we are creating a row and the 'CREATE' allowance is not present, add C_CREATE.
@@ -718,6 +703,14 @@ sub unpack_key_values {
 	    $action->set_keyinfo('', '', undef, $params->{_where});
 	    return;
 	}
+	
+	# Also add an error condition if this is an 'insert' or 'replace'
+	# operation, as neither of those can take a 'where' clause.
+	
+	if ( $operation =~ /^ins|^rep/ )
+	{
+	    $edt->add_condition('E_HAS_WHERE', $operation);
+	}
     }
     
     # Otherwise, look for a primary key. If none is defined for this table, return without
@@ -729,7 +722,7 @@ sub unpack_key_values {
     {
 	# If the action parameters include _primary, add an error condition.
 	
-	$edt->add_condition($action, 'E_BAD_KEY', "table '$table_specifier' has no primary key")
+	$edt->add_condition('E_BAD_KEY', "table '$table_specifier' has no primary key")
 	    if $params->{_primary};
 	
 	# Return without setting any key values.
@@ -804,7 +797,7 @@ sub unpack_key_values {
 	    
 	    if ( $key_field )
 	    {
-		$edt->add_condition($action, 'E_BAD_KEY_FIELD', $key_field, $p);
+		$edt->add_condition('E_BAD_KEY_FIELD', $key_field, $p);
 		$raw_values = undef;
 	    }
 	    
@@ -825,24 +818,25 @@ sub unpack_key_values {
 	if ( my @key_values = $edt->check_key_values($action, $columninfo,
 						     $key_field, $raw_values, $app_call) )
 	{
-	    if ( $action->permission eq 'PENDING' )
-	    {
-		$action->set_keyinfo($key_column, $key_field, \@key_values);
-	    }
+	    my $dbh = $edt->dbh;
+	    my $quoted = join ',', map { $dbh->quote($_) } @key_values;
 	    
-	    elsif ( @key_values == 1 )
+	    if ( @key_values == 1 )
 	    {
-		my $key_expr = "$key_column='$key_values[0]'";
-		
-		$action->set_keyinfo($key_column, $key_field, $key_values[0], $key_expr); 
+		$action->set_keyinfo($key_column, $key_field, $key_values[0], $quoted); 
 	    }
 	    
 	    elsif ( @key_values > 1 )
 	    {
-		my $key_string = join q{','}, @key_values;
-		my $key_expr = "$key_column in ('$key_string')";
+		# The 'insert' and 'replace' operations require a single key per
+		# record.
 		
-		$action->set_keyinfo($key_column, $key_field, \@key_values, $key_expr);
+		if ( $operation =~ /^ins|^rep/ )
+		{
+		    $edt->add_condition('E_MULTI_KEY', $operation);
+		}
+		
+		$action->set_keyinfo($key_column, $key_field, \@key_values, $quoted);
 	    }
 	}
     }

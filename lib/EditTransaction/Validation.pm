@@ -25,7 +25,17 @@ no warnings 'uninitialized';
 # column using 'set_column_property' such as 'REQUIRED' and 'ADMIN_SET'.
 
 
-# validate_action ( action, operation, table, flag )
+# validate_action ( action, operation, table )
+# 
+# This method is designed to be overridden by subclasses. By default, it does
+# nothing. 
+
+sub validate_action {
+    
+}
+
+
+# validate_against_schema ( action )
 # 
 # Check the field values to be stored in the database against the corresponding table definition,
 # and call 'add_condition' to record any error or warning conditions that are detected. The
@@ -35,12 +45,12 @@ no warnings 'uninitialized';
 # If the $flag argument is present, it should have the value 'FINAL' to indicate that we should
 # now complete a pending validation.
 
-sub validate_action {
+sub validate_against_schema {
 
-    my ($edt, $action) = @_;
+    my ($edt, $action, $operation, $table_specifier) = @_;
     
-    my $operation = $action->operation;
-    my $table_specifier = $action->table;
+    # my $operation = $action->operation;
+    # my $table_specifier = $action->table;
     
     $DB::single = 1 if $edt->{breakpoint}{validation};
     

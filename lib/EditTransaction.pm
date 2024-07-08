@@ -196,7 +196,7 @@ our ($TRANSACTION_COUNT) = 1;
 
 sub new {
     
-    my ($class, $dbh_arg, $options) = @_;
+    my ($class, $dbh_arg, $options, @rest) = @_;
     
     local ($_);
     
@@ -213,7 +213,16 @@ sub new {
     
     my ($table_specifier, $permission, @allowances);
     
-    if ( ref $options eq 'HASH' )
+    # If we are called using the old syntax, parse that.
+    
+    if ( ref $options eq 'Permissions' && @rest == 2 )
+    {
+	$permission = $options;
+	$table_specifier = $rest[0];
+	@allowances = parse_allowances($rest[1]);
+    }
+    
+    elsif ( ref $options eq 'HASH' )
     {
 	foreach my $k ( keys $options->%* )
 	{
@@ -321,6 +330,11 @@ sub new {
     
     # Use the database interface module to evaluate the specified database handle. This call will
     # add an error condition if the database handle does not match the expected DBMS.
+    
+    unless ( $edt->can('db_validate_dbh') )
+    {
+	croak "Class '$class' must include a database role, like 'EditTransaction::Mod::xxx'";
+    }
     
     if ( $edt->{dbh} )
     {

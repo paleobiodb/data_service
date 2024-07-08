@@ -77,13 +77,46 @@ sub record_operation {
 	my $result = $edt->authorize_action($action, $operation, $table_specifier, 
 					    $parameters);
 	
-	# If the operation is not a deletion, check the parameters. Make sure
-	# that the column values meet all of the criteria for this table.  Any
-	# discrepancies will cause error and/or warning conditions to be added.
+	# If the action has a key value, and if the action parameters contain
+	# the field '_label', store the key/label association.
 	
-	if ( $operation !~ /^delete/ )
+	if ( my $keyval = $action->keyval )
 	{
-	    $edt->validate_action($action, $operation, $table_specifier, $parameters);
+	    if ( my $label = $action->record_value('_label') )
+	    {
+		$edt->store_label($table_specifier, $keyval, $label);
+	    }
+	}
+	
+	# If the action can proceed (in other words, if authorization does not
+	# add any errors or cautions) then it must be validated.
+	
+	if ( $action->can_proceed )
+	{
+	    # If the operation is 'insupdate', change it to either 'insert' or
+	    # 'update' depending on whether a key value is present.
+	    
+	    if ( $operation eq 'insupdate' )
+	    {
+		$operation = $action->keyval ? 'update' : 'insert';
+		$action->operation($operation);
+	    }
+	    
+	    # Call validate_action. This method is designed to be overridden by
+	    # subclasses, and has an opportunity to carry out additional
+	    # database queries, add conditions, etc.
+	    
+	    $edt->validate_action($action, $operation, $table_specifier);
+	    
+	    # If the operation is not a deletion, check the parameters against
+	    # the table schema.  Make sure that the column values meet all of
+	    # the criteria for this table.  Any discrepancies will cause error
+	    # and/or warning conditions to be added.
+	    
+	    if ( $operation !~ /^delete/ )
+	    {
+		$edt->validate_against_schema($action, $operation, $table_specifier);
+	    }
 	}
     };
     
@@ -101,6 +134,29 @@ sub record_operation {
     # reference.
     
     $edt->_handle_action($action);
+}
+
+
+# store_label ( label, keyval )
+# 
+# Store the association between the specified label and the specified key value(s).
+
+sub store_label {
+    
+    my ($edt, $table_specifier, $keyval, $label) = @_;
+    
+    if ( ref $keyval eq 'ARRAY' )
+    {
+	foreach my $k ( @$keyval )
+	{
+	    $edt->{key_labels}{$table_specifier}{$k} = $label;
+	}
+    }
+    
+    elsif ( $keyval )
+    {
+	$edt->{key_labels}{$table_specifier}{$keyval} = $label;
+    }
 }
 
 

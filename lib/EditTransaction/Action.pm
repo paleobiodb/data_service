@@ -234,13 +234,13 @@ sub add_child {
 
 # set_keyinfo ( keycol, keyfield, keyval, keyexpr )
 # 
-# Set the fields that determine which records are operated on. The $keycol argument must be the
-# name of the primary key column for the table on which this action will operate. The $keyfield
-# argument specifies the key in the input record from which the key values or the selector were
-# taken. The $keyvalue argument can be either a single keyval or a listref. The final argument
-# gives an SQL expression for selecting the corresponding records. This method and the two
-# following are intended to be called from EditTransaction.pm and its related modules, and should
-# be used with extreme caution anywhere else.
+# Set the fields that determine which records are operated on. The $keycol argument must
+# be the name of the primary key column for the table on which this action will operate.
+# The $keyfield argument specifies the key in the input record from which the key values
+# or the selector were taken. The $keyvalue argument can be either a single keyval or a
+# listref. The final argument should be an SQL-quoted list of the key values, or else an
+# SQL expression that can be used with a WHERE clause. In the latter case, $keycol should
+# be empty.
 
 sub set_keyinfo {
 
@@ -282,8 +282,34 @@ sub keyval {
 }
 
 sub keyexpr {
+    
+    if ( $_[0]{keyexpr} && $_[0]{keycol} )
+    {
+	return "$_[0]{keycol} in ($_[0]{keyexpr})";
+    }
+    
+    elsif ( $_[0]{keyexpr} )
+    {
+	return $_[0]{keyexpr};
+    }
+    
+    else
+    {
+	return '0';
+    }
+}
 
-    return $_[0]{keyexpr} // '0';
+sub keylist {
+    
+    if ( $_[0]{keyexpr} && $_[0]{keycol} )
+    {
+	return $_[0]{keyexpr};
+    }
+    
+    else
+    {
+	return '';
+    }
 }
 
 sub keymult {
