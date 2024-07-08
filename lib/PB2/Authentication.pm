@@ -73,8 +73,14 @@ sub require_authentication {
 	$request->{my_perms} = Permissions->new($dbh, $session_id, $table_name, $options);
     }
 
-    unless ( $request->{my_perms} && $request->{my_perms}{authorizer_no} && $request->{my_perms}{enterer_no} )
+    unless ( $request->{my_perms} && $request->{my_perms}{role} && 
+	     $request->{my_perms}{role} ne 'none' )
     {
+	if ( $request->{my_perms}{expired} )
+	{
+	    $errmsg = "Your login session has expired. Please log in again.";
+	}
+	
 	die $request->exception(401, $errmsg || "You must be logged in to perform this operation");
     }
     
