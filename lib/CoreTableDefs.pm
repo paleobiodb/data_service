@@ -23,9 +23,13 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(TAXON_TREES => 'taxon_trees');
     
     set_table_name(AUTHORITY_DATA => 'authorities');
-    set_table_name(OPINION_DATA => 'opinions');
-
+    set_table_property('AUTHORITY_DATA', CAN_POST => 'NOT_STUDENT');
+    set_table_property('AUTHORITY_DATA', CAN_MODIFY => 'NOT_STUDENT');
     set_table_property('AUTHORITY_DATA', CAN_DELETE => 'admin');
+    
+    set_table_name(OPINION_DATA => 'opinions');
+    set_table_property('OPINION_DATA', CAN_POST => 'NOT_STUDENT');
+    set_table_property('OPINION_DATA', CAN_MODIFY => 'NOT_STUDENT');
     set_table_property('OPINION_DATA', CAN_DELETE => 'admin');
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
@@ -41,6 +45,9 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX',
 		    'OCC_TAXON_SUMMARY', 'OCC_REF_SUMMARY', 
 		    'OCC_INT_SUMMARY', 'OCC_TS_SUMMARY');
+    
+    set_table_name(REID_DATA => 'reidentifications');
+    set_table_property('REID_DATA', CAN_DELETE => 'admin');
     
     set_table_name(COLLECTION_DATA => 'collections');
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
