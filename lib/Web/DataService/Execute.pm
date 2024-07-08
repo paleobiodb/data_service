@@ -1219,6 +1219,13 @@ sub error_result {
 	@errors = "A server error occurred.  Please contact the server administrator.";
     }
     
+    # If we are in debug mode, print out any error code other than 200.
+    
+    if ( $ds->debug_mode && $code ne '200' )
+    {
+	$ds->debug_line("Error result: $code");
+    }
+    
     # Cancel any content encoding that had been set.
 
     $Web::DataService::FOUNDATION->set_header($outer, 'Content-Encoding' => '');

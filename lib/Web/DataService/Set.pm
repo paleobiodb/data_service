@@ -34,7 +34,7 @@ our ($METHODNAME) = 'define_valueset';
 # 
 # The names of sets must be unique within a single data service.
 
-sub define_valueset {
+sub define_set {
 
     my ($ds, $name, @items) = @_;
     
@@ -43,8 +43,8 @@ sub define_valueset {
     croak "$METHODNAME: the first argument must be a valid name"
 	unless $ds->valid_name($name);
     
-    croak "$METHODNAME: '$name' was already defined at $ds->{valueset}{$name}{defined_at}"
-	if ref $ds->{valueset}{$name};
+    croak "$METHODNAME: '$name' was already defined at $ds->{set}{$name}{defined_at}"
+	if ref $ds->{set}{$name};
     
     # Create a new set object.
     
@@ -61,18 +61,17 @@ sub define_valueset {
     
     # Then add the specified value records and documentation strings to this set.
     
-    $self->add_to_set($name, @_);
+    $ds->add_to_set($name, @items);
 }
 
 
 sub add_to_set {
     
-    my $self = shift;
-    my $name = shift;
+    my ($ds, $name, @items) = @_;
     
     # Make sure the name is defined.
     
-    my $vs = $self->{set}{$name} || croak "add_to_set: unknown set '$name'";
+    my $vs = $ds->{set}{$name} || croak "add_to_set: unknown set '$name'";
     
     # Then process the records and documentation strings one by one.  Throw an
     # exception if we find an invalid record.
@@ -174,10 +173,10 @@ sub add_to_set {
 #
 # This is an alias for define_valueset.
 
-sub define_set {
+sub define_valueset {
 
-    local($METHODNAME) = 'define_set';
-    goto &define_valueset;
+    local($METHODNAME) = 'define_valueset';
+    &define_set;
 }
 
 
@@ -188,7 +187,7 @@ sub define_set {
 sub define_map {
 
     local($METHODNAME) = 'define_map';
-    goto &define_valueset;
+    &define_set;
 }
 
 
