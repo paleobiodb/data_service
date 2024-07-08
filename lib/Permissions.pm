@@ -77,6 +77,7 @@ sub new {
 	    
 	    my $sql = "
 		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, 
+		       timestampdiff(day,s.record_date,now()) as days_old, expire_days,
 		       s.role, p.permission
 		FROM $TABLE{SESSION_DATA} as s left join $TABLE{TABLE_PERMS} as p
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
@@ -91,7 +92,8 @@ sub new {
 	else
 	{
 	    my $sql = "
-		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, role
+		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, role,
+		       timestampdiff(day,record_date,now()) as days_old, expire_days
 		FROM $TABLE{SESSION_DATA} WHERE session_id = $quoted_id";
 	    
 	    print STDERR "$sql\n\n" if $options->{debug};
@@ -111,6 +113,17 @@ sub new {
 	else
 	{
 	    return Permissions->no_login($dbh, $table_specifier, $options);
+	}
+	
+	# If the login session has expired, return the same no permissions
+	# object but with the 'expired' flag set.
+	
+	if ( $perms->{days_old} && $perms->{expire_days} && 
+	     $perms->{days_old} >= $perms->{expire_days} )
+	{
+	    my $perms = Permissions->no_login($dbh, $table_specifier, $options);
+	    $perms->{expired} = 1;
+	    return $perms;
 	}
 	
 	# If a table name was specified and we retrieved a specific table permission, add it into
@@ -827,7 +840,9 @@ sub get_record_authinfo {
     
     # First get a list of the authorization fields for this table.
     
-    my $auth_fields = get_authinfo_fields($perms->{dbh}, $table_specifier, $perms->{debug});
+    # my $auth_fields = get_authinfo_fields($perms->{dbh}, $table_specifier, $perms->{debug});
+    
+    my $auth_fields = get_table_property($table_specifier, 'AUTH_FIELDS');
     
     # If it is empty, then just fetch the key value. This will allow us to check that the record
     # actually exists. If the table has no primary key, then just return an empty record.
