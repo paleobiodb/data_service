@@ -1770,34 +1770,35 @@ sub generate_authorlist {
     
     my ($request, $record) = @_;
     
-    my $dbh = $request->get_connection();
-    
-    my @authors;
-    
-    my $reference_no = $record->{reference_no};
-    
-    my $sql = "SELECT * FROM $TABLE{REFERENCE_AUTHORS}
+    if ( my $reference_no = $record->{reference_no} )
+    {
+	my $dbh = $request->get_connection();
+	
+	my @authors;
+	
+	my $sql = "SELECT * FROM $TABLE{REFERENCE_AUTHORS}
 		WHERE reference_no = $reference_no
 		ORDER BY place";
     
-    my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
-    
-    if ( $results && @$results )
-    {
-	foreach my $a ( @$results )
+	my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+	
+	if ( $results && @$results )
 	{
-	    push @authors, bibjson_name_record($a->{lastname}, $a->{firstname});
+	    foreach my $a ( @$results )
+	    {
+		push @authors, bibjson_name_record($a->{firstname}, $a->{lastname});
+	    }
 	}
+	
+	else
+	{
+	    push @authors, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
+	    push @authors, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
+	    push @authors, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
+	}
+	
+	$record->{r_author} = \@authors if @authors;
     }
-    
-    else
-    {
-	push @authors, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
-	push @authors, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
-	push @authors, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
-    }
-    
-    $record->{r_author} = \@authors if @authors;
 }
 
 
