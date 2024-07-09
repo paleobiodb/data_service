@@ -1822,6 +1822,11 @@ sub get_publication_type {
 	return 'journal article';
     }
     
+    elsif ( $r->{type} eq 'monograph' )
+    {
+	return 'book';
+    }
+    
     elsif ( $r->{journal} )
     {
 	return 'journal article';
