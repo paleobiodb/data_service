@@ -193,7 +193,7 @@ sub update_resources {
     # occured, return an HTTP 400 result. For now, we will look for the global parameters under
     # the key 'all'.
     
-    my @records = $request->unpack_input_records($main_params, '1.2:eduresources:bodyparams');
+    my @records = $request->parse_body_records($main_params, '1.2:eduresources:bodyparams');
     
     if ( $request->errors )
     {
@@ -204,7 +204,8 @@ sub update_resources {
     # record because this request must have been submitted as a GET operation. This case is
     # handled by a separate subroutine.
     
-    if ( $records[0]{status} eq 'activate' || $records[0]{status} eq 'inactivate' )
+    if ( $records[0]{status} && 
+	 ($records[0]{status} eq 'activate' || $records[0]{status} eq 'inactivate') )
     {
 	return $request->change_active_status($perms, $records[0], $dbh);
     }
@@ -397,7 +398,7 @@ sub delete_resources {
     
     # Check for any allowances.
     
-    my $allowances = { MULTI_DELETE => 1 };
+    my $allowances = { };
     
     if ( my @allowance = $request->clean_param_list('allow') )
     {
@@ -421,7 +422,7 @@ sub delete_resources {
     # transaction. If any errors occur during that process, the transaction will be automatically
     # rolled back. Otherwise, it will be automatically committed.
     
-    $edt->execute;
+    $edt->commit;
     
     # Now handle any errors or warnings that may have been generated.
     

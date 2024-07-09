@@ -229,7 +229,9 @@ sub get_resource {
 	$IMAGE_TABLE = $TABLE{RESOURCE_IMAGES_ACTIVE};
     }
     
-    # Otherwise, the user must be logged in and must have permission to view the record.
+    # If the user is not logged in, or does not have permission to view the
+    # record, use the active tables. This will allow users who are not logged in
+    # permission to see only active resources.
     
     else
     {
@@ -238,7 +240,8 @@ sub get_resource {
 	unless ( $perms->check_record_permission('RESOURCE_QUEUE', 'view',
 						 'eduresource_no', $id) eq 'view' )
 	{
-	    die $request->exception('401', 'Permission denied');
+	    $RESOURCE_TABLE = $TABLE{RESOURCE_ACTIVE};
+	    $IMAGE_TABLE = $TABLE{RESOURCE_IMAGES_ACTIVE};
 	}
     }
     
@@ -342,7 +345,7 @@ sub list_resources {
     else
     {
 	$perms = $request->require_authentication('RESOURCE_QUEUE');
-
+	
 	$show_queue = $request->clean_param('queue');
     }
     
@@ -369,7 +372,7 @@ sub list_resources {
 	my $status_string = join("','", @status_list);
 	push @filters, "edr.status in ('$status_string')";
     }
-
+    
     elsif ( $active_table && $arg eq 'inactive' )
     {
 	push @filters, "edr.status = 'inactive'";
@@ -379,7 +382,7 @@ sub list_resources {
     {
 	push @filters, "edr.status = 'active'";
     }
-
+    
     elsif ( $show_queue )
     {
 	push @filters, "edr.status in ('pending','changed')";
@@ -481,6 +484,7 @@ sub list_resources {
 	    
 	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
 	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
+	    push @clauses, "edr.status in ('active', 'inactive')";
 	    
 	    my $filter_str = join(' or ', @clauses) || "edr.enterer_no = -1";
 	    push @filters, "($filter_str)";
@@ -496,6 +500,7 @@ sub list_resources {
 	    push @clauses, "edr.enterer_no = $enterer_no" if $enterer_no;
 	    push @clauses, "edr.authorizer_no = $enterer_no" if $enterer_no;
 	    push @clauses, "edr.enterer_id = $user_id" if $user_id;
+	    push @clauses, "edr.status in ('active', 'inactive')";
 	    
 	    my $filter_str = join(' or ', @clauses) || "edr.enterer_no = -1";
 	    push @filters, "($filter_str)";
@@ -557,6 +562,15 @@ sub list_resources {
     my $filter_string = join(' and ', @filters) || '1=1';
     
     my $extra_fields = $request->select_string;
+    my $extra_joins = '';
+    
+    if ( $extra_fields =~ /\$cd/ )
+    {
+	$request->substitute_select( cd => 'edq' );
+	$extra_fields = $request->select_string;
+	$extra_joins = "left join $TABLE{RESOURCE_QUEUE} as edq using (eduresource_no)";
+    }
+    
     $extra_fields = ", $extra_fields" if $extra_fields;
     
     # Generate the main query.
@@ -564,6 +578,7 @@ sub list_resources {
     $request->{main_sql} = "
 	SELECT $calc edr.*, edi.eduresource_no as has_image $extra_fields
 	FROM $RESOURCE_TABLE as edr left join $IMAGE_TABLE as edi using (eduresource_no)
+	     $extra_joins
         WHERE $filter_string $limit";
     
     $request->debug_line("$request->{main_sql}\n") if $request->debug;
