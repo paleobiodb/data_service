@@ -15,8 +15,10 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TableDefs qw($REF_SUMMARY);
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS $RANK_MAP
-	         $ALL_STATUS $VALID_STATUS $VARIANT_STATUS $JUNIOR_STATUS $SENIOR_STATUS $INVALID_STATUS);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $OPCACHE_WORK $ORIG_WORK
+		 @ECOTAPH_FIELD_DEFS $RANK_MAP
+	         $ALL_STATUS $VALID_STATUS $VARIANT_STATUS $JUNIOR_STATUS $SENIOR_STATUS 
+		 $INVALID_STATUS);
 use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
@@ -25,7 +27,8 @@ use TableDefs qw($OCC_MATRIX $OCC_TAXON);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig computeGenSp rebuildAttrsTable fixOpinionCache);
+our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables buildOpinionCache computeAuthOrig
+		      rebuildAttrsTable);
 
 
 =head1 NAME
@@ -179,9 +182,7 @@ our $SEARCH_WORK = "sn";
 our $INTS_WORK = "phyn";
 our $LOWER_WORK = "lown";
 our $COUNTS_WORK = "cntn";
-our $OPINION_WORK = "opn";
 our $TREE_CACHE_WORK = "ttcn";
-our $LIST_CACHE_WORK = "tlcn";
 our $ECOTAPH_WORK = "ectn";
 our $ETBASIS_WORK = "etbn";
 our $HOMONYMS_WORK = "homn";
@@ -208,513 +209,9 @@ our $QUEUE_TABLE = "taxon_queue";
 # Other variables and constants
 
 our (@TREE_ERRORS);
-my ($REPORT_THRESHOLD) = 20;
-
-
-# This is used for proper signal handling
-
-my ($ABORT) = 0;
-
-# Constants used with $QUEUE_TABLE
-
-use constant TYPE_CONCEPT => 1;
-use constant TYPE_OPINION => 2;
-use constant TYPE_REBUILD => 3;
-use constant TYPE_CHECK => 4;
-use constant TYPE_ERROR => 9;
-
-# This holds the last SQL command issued
-
 our ($SQL_STRING);
 
-=head1 INTERFACE
-
-The interface to this module is as follows (note: I<this is a draft
-specification>).  In the following documentation, the parameter C<dbh> is
-always a database handle.
-
-=head2 Action routines
-
-The following routines are used to request that certain actions be taken by
-the maintenance thread.  This mechanism is used in order to simplify the code
-for updating, rebuilding and checking the taxon tables.  By ensuring that only
-one thread will be writing to these tables at any given time, we avoid having
-to mess around with table write locks.
-
-Each routine returns a "request identifier" that can then be passed to
-C<requestStatus> to determine whether or not the request has been carried
-out. If necessary, C<requestStatus> can be called repeatedly until it returns
-an affirmative result.
-
-=head3 build ( dbh )
-
-Requests a rebuild of the taxon trees.  This will be carried out by the
-maintenance thread at the next opportunity.  Returns a request id that can be
-passed to requestStatus() in order to determine whether the request has been
-carried out.
-
-=cut
-
-sub build {
-
-    my ($dbh) = @_;
-    
-    my $rebuild_op = TYPE_REBUILD;
-    
-    $dbh->do("INSERT INTO $QUEUE_TABLE (type, param, time)
-	      VALUES ($rebuild_op, 0, now())");
-    
-    return $dbh->last_insert_id();
-}
-
-
-=head3 check ( dbh )
-
-Requests a consistency check of the taxon trees.  This will be carried out by
-the maintenance thread at the next opportunity.  Returns a request id that can
-be passed to requestStatus() in order to determine whether the request has
-been carried out.
-
-=cut
-
-sub check {
-
-    my ($dbh) = @_;
-
-    my $check_op = TYPE_CHECK;
-    
-    $dbh->do("INSERT INTO $QUEUE_TABLE (type, param, time)
-	      VALUES ($check_op, 0, now())");
-    
-    return $dbh->last_insert_id();
-}
-
-
-=head3 updateConcepts ( dbh, orig_no ... )
-
-Requests that the maintenance thread adjust the taxon tree tables to take
-into account changes to the given concepts.  Some of the listed concepts may
-disappear from the taxon tables, as may happen if two concepts are merged,
-while others may need to be created.  This routine should be called whenever
-C<orig_no> values in the C<authorities> table are adjusted, and both the old
-and the new C<orig_no> values should be included in the argument list.
-
-=cut
-
-sub updateConcepts {
-    
-    my ($dbh, @concepts) = @_;
-    
-    # Insert into $QUEUE_TABLE one row for each modified taxonomic concept.
-    # Ignore any concepts that are not integers greater than zero.
-    
-    my $concept_op = TYPE_CONCEPT;
-    my $insert_sql = "INSERT INTO $QUEUE_TABLE (type, param, time) VALUES ";
-    my $comma = '';
-    
-    foreach my $orig_no (@concepts)
-    {
-	next unless $orig_no > 0;
-	$insert_sql .= "$comma($concept_op, " . $orig_no + 0 . ', now())';
-	$comma = ', ';
-    }
-    
-    # If we didn't get any valid concepts, return false.
-    
-    return unless $comma;
-    
-    # Now do the insert.
-    
-    $dbh->do($insert_sql);
-    
-    # Return the id of the last inserted row.  This can then be passed to
-    # status() to determine whether the requested update has been completed.
-    # We only care about the last inserted row, since they will be processed in
-    # order and under most circumstances are processed together as a group.  Once
-    # the last one has been completed, we know that all of the others have.
-    
-    return $dbh->last_insert_id();
-}
-
-
-=head3 updateOpinions ( dbh, opinion_no ... )
-
-Adjusts the taxon tree tables to take into account changes to the given
-opinions.  Some of the listed opinions may disappear from the taxon tables, as
-may happen if an opinion is deleted, while others may need to be created.
-This routine should be called whenever the C<opinions> table is modified.
-
-This routine actually adds an entry to C<$QUEUE_TABLE> and waits for the
-maintenance thread to do the update.  It returns the id number of the newly
-added queue entry, which can be passed to the status() routine to determine
-when that particular update has been completed.
-
-=cut
-
-sub updateOpinions {
-    
-    my ($dbh, @opinions) = @_;
-    
-    # Insert into $QUEUE_TABLE one row for each modified opinion.  Ignore any
-    # values that are not integers greater than zero.
-    
-    my $concept_op = TYPE_OPINION;
-    my $insert_sql = "INSERT INTO $QUEUE_TABLE (type, param, time) VALUES ";
-    my $comma = '';
-    
-    foreach my $opinion_no (@opinions)
-    {
-	next unless $opinion_no > 0;
-	$insert_sql .= "$comma($concept_op, " . $opinion_no + 0 . ', now())';
-	$comma = ', ';
-    }
-    
-    # If we didn't get any valid concepts, return false.
-    
-    return unless $comma;
-    
-    # Now do the insert.
-    
-    $dbh->do($insert_sql);
-    
-    # Return the id of the last inserted row.  This can then be passed to
-    # status() to determine whether the requested update has been completed.
-    # We only care about the last inserted row, since they will be processed in
-    # order and under most circumstances are processed together as a group.  Once
-    # the last one has been completed, we know that all of the others have.
-    
-    return $dbh->last_insert_id();
-}
-
-
-=item requestStatus ( dbh, insert_id )
-
-This routine can be called subsequently to update_concepts() or
-update_opinions() to determine whether the requested updates have been
-completed.  It returns a status value as follows:
-
-=over 4
-
-=item REQUEST_PENDING
-
-The request has not yet been completed
-
-=item REQUEST_COMPLETE
-
-The request has been completed
-
-=item REQUEST_ERROR
-
-An error occurred while processing the update, so it was not completed.  In
-this case, the error message is returned as the second item in the return
-list. 
-
-=item REQUEST_INVALID
-
-The given id is not an integer greater than zero.
-
-=back
-
-Note that this routine will return REQUEST_COMPLETE if called with a parameter
-that is not a return value from a previous call to one of the action routines.
-
-=cut
-
-sub requestStatus {
-
-    my ($dbh, $insert_id) = @_;
-    
-    # First make sure that the parameter value is valid.    
-    
-    unless ( $insert_id > 0 )
-    {
-	return 'REQUEST_INVALID';
-    }
-    
-    # Then query the queue table.
-    
-    my ($type, $time, $comment) = $dbh->selectrow_array("
-		SELECT type, time, comment FROM $QUEUE_TABLE
-		WHERE id = ?", undef, $insert_id + 0);
-    
-    # Return the appropriate code.  If we didn't find anything, we can assume
-    # that the update has completed.
-    
-    if ( $type == TYPE_ERROR )
-    {
-	return ('REQUEST_ERROR', $comment);
-    }
-    
-    elsif ( $type > 0 )
-    {
-	return ('REQUEST_PENDING');
-    }
-    
-    else
-    {
-	return ('REQUEST_COMPLETE');
-    }
-}
-
-
-=head3 maintenance ( dbh, options )
-
-This routine should be called periodically (every few seconds) by the
-taxon_trees maintenance daemon.  It checks the taxon_queue table for entries
-and carries out the pending requests.  The taxon_trees tables should not be
-written to except by this routine.
-
-Options should be passed as a hash ref.  Valid keys are:
-
-=over 4
-
-=item msg_level
-
-Override the default message level 
-
-=item keep_temps
-
-If true, do not delete temporary tables when done with a build.
-
-=back
-
-=cut
-
-sub maintenance {
-    
-    my ($dbh, $options) = @_;
-    
-    $options ||= {};
-    
-    # The following variables keep track of what we are being asked to do.
-    
-    my (@id_list, @concept_list, @opinion_list, $rebuild_tables, 
-	$check_tables);
-    
-    # Check $QUEUE_TABLE to see if any requests are pending.
-    
-    my $items = $dbh->prepare("SELECT id, type, param FROM $QUEUE_TABLE");
-    
-    $items->execute();
-	
-    while ( my($id, $type, $param, $time) = $items->fetchrow_array() )
-    {	    
-	if ( $type == TYPE_CONCEPT )
-	{
-	    push @id_list, $id;
-	    push @concept_list, $param;
-	}
-	elsif ( $type == TYPE_OPINION )
-	{
-	    push @id_list, $id;
-	    push @opinion_list, $param;
-	}
-	elsif ( $type == TYPE_REBUILD )
-	{
-	    $rebuild_tables = 1;
-	}
-	elsif ( $type == TYPE_CHECK )
-	{
-	    $check_tables = 1;
-	}
-	elsif ( $type == TYPE_ERROR )
-	{
-	    # ignore these
-	}
-	else
-	{
-	    logMessage(0, "ERROR: invalid queue entry type '$type'");
-	}
-    }
-    
-    my $id_filter = '(' . join(',', @id_list) . ')';
-    
-    # Also check to see if it is time for an automatic rebuild and if so then
-    # trigger it.  We do an automatic rebuild every day at 9am Sydney time
-    # (11pm GMT?), as long as it has been at least 18 hours since the last
-    # rebuild for any reason.
-    
-    my ($sec, $min, $hour) = gmtime;
-    
-    my ($rebuild_interval) = $dbh->selectrow_array("
-		SELECT timestampdiff(hour, time, now())
-		FROM $QUEUE_TABLE WHERE type = " . TYPE_REBUILD);
-    
-    if ( $hour == 23 and ($rebuild_interval > 18 or $rebuild_interval == 0) )
-    {
-	$rebuild_tables = 1;
-    }
-    
-    # If a rebuild is pending, that takes precedence over everything else.
-    
-    if ( $rebuild_tables )
-    {
-	logMessage(1, "Rebuilding tree tables at " . gmtime() . " GMT");
-	
-	# Put a record into the queue table, so that any threads that are
-	# tracking the status of update requests can inform their users
-	# that a rebuild is going on.  A param value of 1 means "in
-	# progress".
-	
-	my $rebuild_op = TYPE_REBUILD;
-	
-	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $rebuild_op");
-	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param)
-			  VALUES ($rebuild_op, now(), 1)");
-	
-	# Now, rebuild each table in turn.
-
-	foreach my $table (@TREE_TABLE_LIST)
-	{
-	    logMessage(1, "Rebuilding table '$table'");
-	    
-	    eval {
-		buildTaxonTables($dbh, $table, $options);
-	    };
-	    
-	    # If an error occurred, we need to note this.
-	    
-	    if ( $@ )
-	    {
-		logMessage(0, "Error: $@");
-	    }
-	    
-	    logMessage(1, "Finished rebuild of '$table'");
-	}
-	
-	logMessage(1,"Done with total rebuild at " . gmtime() . " GMT");
-	
-	# Record when this rebuild occurred, so that the next automatic
-	# one won't come too soon.  A param value of 2 means "complete".
-	# We also include the error message, if any.
-	
-	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $rebuild_op");
-	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param, comment)
-			  VALUES ($rebuild_op, now(), 2, $@)");
-	
-	# Then, we remove all update requests that were pending at the
-	# start of the rebuild operation, as they are made moot by the
-	# rebuild.  Any updates that may have been added since then should
-	# still be carried out.
-	
-	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE id in $id_filter");
-	
-	# Also delete any error entries, since if the table is rebuilt
-	# properly then those entries are now irrelevant.  If an error has
-	# occurred in the rebuild, that is more serious anyway.
-	
-	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = " . TYPE_ERROR);
-	
-	# Finally, we need to do a check to make sure that the rebuilt
-	# tables are okay.
-	
-	$check_tables = 1;
-    }
-    
-    # If we are not rebuilding, but have one or more concepts or opinions to
-    # update, do those operations.
-    
-    elsif ( @concept_list or @opinion_list )
-    {
-	logMessage(1, "Updating tree tables at " . gmtime() . " GMT");
-	
-	# Now, update each table in turn.
-	
-	foreach my $table (@TREE_TABLE_LIST)
-	{
-	    logMessage(1, "Updating table '$table'");
-	    
-	    eval {
-		updateTables($dbh, $table, \@concept_list, \@opinion_list, $options);
-	    };
-	    
-	    # If an error occurred during the update, leave those entries in
-	    # the queue marked as errors.  This could be helpful in cleanup
-	    # and debugging.
-	    
-	    if ( $@ )
-	    {
-		logMessage(0, "Error: $@");
-		
-		my $error_op = TYPE_ERROR;
-		my $error_string = $dbh->quote($@);
-		
-		$dbh->do("UPDATE $QUEUE_TABLE
-			  SET type = $error_op, comment = $error_string
-			  WHERE id in $id_filter");
-	    }
-	    
-	    # Otherwise, remove the entries representing the updates we have
-	    # just carried out.  This will inform any threads watching the queue
-	    # (i.e. those that requested the updates) that they have been
-	    # accomplished.
-	    
-	    else
-	    {
-		$dbh->do("DELETE FROM $QUEUE_TABLE WHERE id in $id_filter");
-	    }
-	    
-	    logMessage(1, "Finished update of '$table'");
-	}
-	
-	logMessage(1,"Done with update at " . gmtime() . " GMT");
-    }
-    
-    # Now, if we were requested to check the tables (or if an update
-    # occurred, which triggers an automatic check) then do the check.  We
-    # want to do the check at the end, so that if a check request and some
-    # update requests come in simultaneously, the updates get done first.
-    
-    if ( $check_tables )
-    {
-	logMessage(1, "Checking tables at " . gmtime() . " GMT");
-	
-	# Put a record into the queue table, so that any threads that are
-	# tracking the status of update requests can inform their users
-	# that a check is going on.  A param value of 1 means "in
-	# progress".
-	
-	my $check_op = TYPE_CHECK;
-	
-	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $check_op");
-	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param)
-			  VALUES ($check_op, now(), 1)");
-	
-	foreach my $table (@TREE_TABLE_LIST)
-	{
-	    logMessage(1, "Checking table '$table'");
-	    
-	    eval {
-		checkTables($dbh, $table, $options);
-	    };
-	    
-	    # If an error occurred, we need to note this.
-	    
-	    if ( $@ )
-	    {
-		logMessage(0, "Error: $@");
-	    }
-	    
-	    logMessage(1, "Finished check of '$table'");
-	}
-	
-	logMessage(1,"Done with total check at " . gmtime() . " GMT");
-	
-	# Now, record when this check occurred, so that the next automatic
-	# one won't come too soon.  A param value of 2 means "complete".
-	# We also include the error message, if any.
-	
-	my $check_op = TYPE_CHECK;
-	
-	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $check_op");
-	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param, comment)
-			  VALUES ($check_op, now(), 2, $@)");
-    }
-    
-    # Now we're done, until we're called again.
-    
-    return;
-}
+my ($REPORT_THRESHOLD) = 20;
 
 
 # buildTaxonTables ( dbh, tree_table, options, msg_level )
@@ -750,7 +247,12 @@ sub buildTaxonTables {
     # Now create the necessary tables, including generating the opinion cache
     # from the opinion table.
     
-    buildOpinionCache($dbh, $tree_table) if $step_control->{A} && ! $options->{no_rebuild_cache};
+    if ( $step_control->{A} && ! $options->{opcache_built} )
+    {
+	buildOpinionCache($dbh, $tree_table);
+	# computeAuthOrig($dbh, $tree_table);
+    }
+    
     createWorkingTables($dbh, $tree_table) if $step_control->{a};
     
     # Next, determine the currently accepted spelling for each concept from
@@ -838,195 +340,6 @@ sub buildTaxonTables {
 }
 
 
-# updateTables ( dbh, table_name, concept_list, opinion_list, options )
-# 
-# This routine is called by maintenance() whenever opinions are created,
-# edited, or deleted, or when concept membership in the authorities table is
-# changed.  It should NEVER BE CALLED FROM OUTSIDE THIS MODULE when the
-# database is live, because it has no concurrency control and so inconsistent
-# updates and race conditions may occur.
-# 
-# The taxon tree tables will be updated to match the new state of authorities
-# and opinions.  This involves first computing the list of taxonomic concepts
-# that could possibly be affected by the change, and then recomputing the
-# three organizing relations of "group leader", "synonymy" and "hierarchy" for
-# those concepts.  Finally, the taxonomic tree is renumbered and the ancestor
-# relationship adjusted to match.
-# 
-# The option 'msg_level', if given, specifies how verbose this routine will
-# be in writing messages to the log.  It defaults to 1, which means a minimal
-# message set.
-
-sub updateTables {
-
-    my ($dbh, $tree_table, $concept_list, $opinion_list, $options) = @_;
-    
-    $options ||= {};
-    my $search_table = $TAXON_TABLE{$tree_table}{search};
-    
-    my %update_concepts;	# list of concepts to be updated
-    
-    # First, set the variables that control log output.
-    
-    #$MSG_TAG = 'Update'; $MSG_LEVEL = $options->{msg_level} || 1;
-    
-    # If we have been notified that concept membership has changed, then all
-    # of these changed concepts must be updated in the taxon tree tables.
-    # Before we proceed, we must update the opinions and opinion cache tables
-    # to reflect the new concept membership.
-    
-    if ( ref $concept_list eq 'ARRAY' and @$concept_list > 0 )
-    {
-	# First clean the list to make sure every entry is unique.
-	
-	foreach my $t (@$concept_list)
-	{
-	    $update_concepts{$t} = 1;
-	}
-	
-	my @concept_list = sort { $a <=> $b } keys %update_concepts;
-	
-	logMessage(1, "notified concepts: " .
-	    join(', ', @concept_list) . "\n");
-	
-	# Update the opinions and opinion cache tables to reflect the new
-	# concept membership.
-	
-	updateOpinionConcepts($dbh, $tree_table, $concept_list);
-    }
-    
-    # If we have been notified that opinions have changed, then add to the
-    # update list all concepts that are referenced by either the previous or
-    # the current version of each opinion.  Then update the opinion cache with
-    # the new data.
-    
-    if ( ref $opinion_list eq 'ARRAY' and @$opinion_list > 0 )
-    {
-	# Add to the list all concepts referenced by either the old or the new
-	# version of the changed opinions.  It doesn't matter in which order
-	# we call getOpinionConcepts and updateOpinionConcepts because all of
-	# the original concept values changed by the latter will already be
-	# listed in %update_concepts.
-	
-	foreach my $t ( getOpinionConcepts($dbh, $tree_table, $opinion_list) )
-	{
-	    $update_concepts{$t} = 1;
-	}
-	
-	logMessage(1, "notified opinions: " . 
-	    join(', ', @$opinion_list) . "\n");
-	
-	updateOpinionCache($dbh, $tree_table, $opinion_list);
-    }
-    
-    # Proceed only if we have one or more concepts to update.
-    
-    unless ( %update_concepts )
-    {
-	return;
-    }
-    
-    else
-    {
-	logMessage(1, "updating the following concepts: " .
-	    join(', ', keys %update_concepts) . "\n");
-    }
-    
-    $DB::single = 1;
-    
-    # The rest of this routine updates the subset of $tree_table comprising
-    # the concept groups listed in %update_concepts along with their junior
-    # synonyms and children.
-    
-    # First create a temporary table to hold the new rows that will eventually
-    # go into $tree_table.  To start with, we will need one row for each
-    # concept in %update_concepts.  Create some auxiliary tables as well.
-    
-    createWorkingTables($dbh, $tree_table, \%update_concepts);
-    
-    # Next, compute the accepted name for every concept in $TREE_WORK and also
-    # add corresponding entries to $NAME_WORK.
-    
-    computeSpelling($dbh, $tree_table);
-    
-    # Then compute the synonymy relation for every concept in $TREE_WORK.  In
-    # the process, we need to expand $TREE_WORK to include junior synonyms.
-    
-    computeSynonymy($dbh, $tree_table, { expandToJuniors => 1 });
-    
-    # Now that we have computed the synonymy relation, we need to expand
-    # $TREE_WORK to include senior synonyms of the concepts represented in it.
-    # We need to do this before we update the hierarchy relation because the
-    # classification of those senior synonyms might change; if one of the rows
-    # in $TREE_WORK is a new junior synonym, it might have a 'belongs to'
-    # opinion that is more recent and reliable than the previous best opinion
-    # for the senior.
-    
-    expandToSeniors($dbh, $tree_table);
-    
-    # At this point we remove synonym chains, so that synonym_no always points
-    # to the most senior synonym of each taxonomic concept.  This needs to be
-    # done before we update the hierarchy relation, because that computation
-    # depends on this property of synonym_no.
-    
-    # linkSynonyms($dbh);
-    
-    # Then compute the hierarchy relation for every concept in $TREE_WORK.
-    
-    computeHierarchy($dbh);
-    
-    # Some parent_no values may not have been set properly, in particular
-    # those whose classification points to a parent which is not itself in
-    # $TREE_WORK.  These must now be updated to their proper values.
-    
-    # linkParents($dbh, $tree_table);     # This is no longer needed MM 2012-12-08
-    
-    # We can now update the search table.
-    
-    updateSearchTable($dbh, $search_table);
-    
-    # If the adjustments to the hierarchy are small, then we can now update
-    # $tree_table using the rows from $TREE_WORK and then adjust the tree
-    # sequence in-place.  This will finish the procedure.  We set the
-    # threshold at 3 because altering the tree in-place is several times more
-    # efficient than rebuilding it even if we have to scan over the entire
-    # table multiple times (3 is actually just a guess...)
-    
-    if ( treePerturbation($dbh, $tree_table) < 3 )
-    {
-	updateTreeTable($dbh, $tree_table);
-	updateSecondaryTables($dbh, $tree_table, $options->{keep_temps});
-	logMessage(1, "done updating tree tables for '$tree_table'");
-    }
-    
-    # Otherwise, we need to completely rebuild the tree sequence and then
-    # activate the temporary table using atomic rename.
-    
-    else
-    {
-	# Copy all rows from $tree_table into $TREE_WORK that aren't already
-	# represented there.
-	
-	my $result = $dbh->do("
-		INSERT IGNORE INTO $TREE_WORK
-		SELECT * FROM $tree_table");
-	
-	# Now that $TREE_WORK has the entire tree, resequence it.
-	
-	computeTreeSequence($dbh);
-	
-	# Then activate the new tree table by renaming it over the previous
-	# one.  The secondary tables get updated as usual.
-	
-	activateTreeTable($dbh, $tree_table);
-	updateSecondaryTables($dbh, $tree_table, $options->{keep_temps});
-	logMessage(1, "done updating tree tables for '$tree_table'");
-    }
-    
-    my $a = 1;		# we can stop here when debugging
-}
-
-
 # buildOpinionCache ( dbh )
 # 
 # Build the opinion cache completely from the opinions table.
@@ -1037,19 +350,20 @@ sub buildOpinionCache {
     
     my ($result);
     
-    logMessage(2, "building opinion cache (a)");
+    my ($orig_table) = $TAXON_TABLE{$tree_table}{auth_orig};
+    my ($refs_table) = $TAXON_TABLE{$tree_table}{refs};
+    my ($ops_table) = $TAXON_TABLE{$tree_table}{opinions};
+    my ($ops_cache) = $TAXON_TABLE{$tree_table}{opcache};
     
-    my $OPINION_CACHE = $TAXON_TABLE{$tree_table}{opcache};
+    logMessage(2, "building opinion cache (A)");
     
-    # In order to minimize interference with any other threads which might
-    # need to access the opinion cache, we create a new table and then rename
-    # it into the old one.
+    # Create a working table.
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $OPINION_WORK");
-    $result = $dbh->do("CREATE TABLE $OPINION_WORK
+    $result = $dbh->do("DROP TABLE IF EXISTS $OPCACHE_WORK");
+    $result = $dbh->do("CREATE TABLE $OPCACHE_WORK
 			  (opinion_no int unsigned not null,
 			   orig_no int unsigned not null,
-			   child_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
+			   child_no int unsigned not null,
 			   child_spelling_no int unsigned not null,
 			   parent_no int unsigned not null,
 			   parent_spelling_no int unsigned not null,
@@ -1068,132 +382,11 @@ sub buildOpinionCache {
     # opinions, since this will speed up subsequent steps of the taxon trees
     # rebuild/update process.
     
-    populateOpinionCache($dbh, $OPINION_WORK, $tree_table);
-    
-    # Then index the newly populated opinion cache.
-    
-    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (orig_no)");
-    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (child_spelling_no)");
-    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (parent_no)");
-    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (parent_spelling_no)");
-    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (pubyr)");
-    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (author)");
-    
-    # Now, we remove any backup table that might have been left in place, and
-    # swap in the new table using an atomic rename operation
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS ${OPINION_CACHE}_bak");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OPINION_CACHE LIKE $OPINION_WORK");
-    
-    $result = $dbh->do("RENAME TABLE
-				$OPINION_CACHE to ${OPINION_CACHE}_bak,
-				$OPINION_WORK to $OPINION_CACHE");
-    
-    # ...and remove the backup
-    
-    $result = $dbh->do("DROP TABLE ${OPINION_CACHE}_bak");
-    
-    # # Add columns 'child_orig_no' and 'parent_orig_no' to opinions table unless they are already
-    # # there.
-    
-    # my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
-    # my ($table, $def) = $dbh->selectrow_array("SHOW CREATE TABLE $ops_table");
-    
-    # unless ( $def =~ qr{`child_orig_no`} )
-    # {
-    # 	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `child_orig_no` int unsigned not null AFTER `pubyr`");
-    # 	$dbh->do("ALTER TABLE $ops_table ADD COLUMN `parent_orig_no` int unsigned not null AFTER `child_orig_no`");
-    # }
-    
-    # Also add a key 'created' to the opinions table, unless it already exists.
-    
-    my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
-    
-    my ($result) = $dbh->selectrow_array("SHOW KEYS FROM $ops_table WHERE key_name like 'created'");
-    
-    unless ( $result )
-    {
-	logMessage(2, "      adding index 'created' to opinions table...");
-	
-	$dbh->do("ALTER TABLE $ops_table ADD KEY (created)");
-    }
-    
-    my $a = 1;		# we can stop here when debugging
-}
-
-
-# updateOpinionCache ( dbh, opinion_list )
-# 
-# Copy the indicated opinion data from the opinions table to the opinion
-# cache.
-
-sub updateOpinionCache {
-    
-    my ($dbh, $tree_table, $opinion_list) = @_;
-    
-    my $result;
-    
-    # First delete the old opinion data from $OPINION_CACHE and insert the new.
-    # We have to explicitly delete because an opinion might have been deleted,
-    # which means there would be no new row for that opinion_no.
-    
-    # Note that $OPINION_CACHE will not be correctly ordered after this, so we
-    # cannot rely on its order during the rest of the update procedure.
-    
-    my $opfilter = join ',', @$opinion_list;
-    
-    $result = $dbh->do("LOCK TABLE $TAXON_TABLE{$tree_table}{opinions} as o read,
-				   $TAXON_TABLE{$tree_table}{refs} as r read,
-				   $TAXON_TABLE{$tree_table}{authorities} as a1 read,
-				   $TAXON_TABLE{$tree_table}{authorities} as a2 read,
-				   $TAXON_TABLE{$tree_table}{opcache} write");
-    
-    $result = $dbh->do("DELETE FROM $TAXON_TABLE{$tree_table}{opcache} WHERE opinion_no in ($opfilter)");
-    
-    populateOpinionCache($dbh, $TAXON_TABLE{$tree_table}{opcache}, $tree_table, $opfilter);
-    
-    $result = $dbh->do("UNLOCK TABLES");
-    
-    my $a = 1;		# we can stop here when debugging
-}
-
-
-# populateOpinionCache ( dbh, table_name, auth_table, opinions_table, refs_table, opinion_list )
-# 
-# Insert records into the opinion cache table, under the given table name.  If
-# $opinion_list is given, then it should be a string containing a
-# comma-separated list of opinion numbers to insert.  The results are sorted
-# in the order necessary for selecting the most reliable and recent opinions.
-
-sub populateOpinionCache {
-
-    my ($dbh, $table_name, $tree_table, $opinion_list) = @_;
-    
-    my ($result);
-    
-    # If we were given a filter expression, create the necessary clause.
-    
-    my $filter_clause = $opinion_list ?
-	"WHERE opinion_no in ($opinion_list) and (parent_no > 0 or child_no = 1)" :
-	    "WHERE parent_no > 0 or child_no = 1";
-    
-    # This query is adapated from the old getMostRecentClassification()
-    # routine, from TaxonInfo.pm line 2003.  We have to join with authorities
-    # twice to look up the original combination (taxonomic concept id) of both
-    # child and parent.  The authorities table is the canonical source of that
-    # information, not the opinions table.
-    
-    my $refs_table = $TAXON_TABLE{$tree_table}{refs};
-    my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
-    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
-    
-    my $sql = "INSERT INTO $table_name (opinion_no, orig_no, child_rank, child_spelling_no,
-					 parent_no, parent_spelling_no, ri, pubyr,
-					 status, spelling_reason, reference_no, author, suppress)
-		SELECT o.opinion_no, a1.orig_no, a1.taxon_rank,
-			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
-			a2.orig_no,
-			if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no),
+    $result = $dbh->do("INSERT INTO $OPCACHE_WORK (opinion_no, orig_no, child_no, child_spelling_no,
+				parent_no, parent_spelling_no, ri, pubyr,
+				status, spelling_reason, reference_no, author)
+		SELECT o.opinion_no, a1.orig_no, o.child_no, o.child_spelling_no, 
+			a2.orig_no, o.parent_spelling_no,
 			IF ((o.basis != '' AND o.basis IS NOT NULL), CASE o.basis
  			WHEN 'second hand' THEN 1
 			WHEN 'stated without evidence' THEN 2
@@ -1208,164 +401,132 @@ sub populateOpinionCache {
 			o.status, o.spelling_reason, o.reference_no,
 			if(o.ref_has_opinion = 'YES',
 			   compute_attr(r.author1last, r.author2last, r.otherauthors),
-			   compute_attr(o.author1last, o.author2last, o.otherauthors)),
-			null
+			   compute_attr(o.author1last, o.author2last, o.otherauthors))
 		FROM $ops_table as o
-			LEFT JOIN $refs_table as r using (reference_no)
-			JOIN $auth_table as a1
-				on a1.taxon_no = if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no)
-			LEFT JOIN $auth_table as a2
-				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
-		$filter_clause
-		ORDER BY ri DESC, pubyr DESC, opinion_no DESC";
+			left join $refs_table as r using (reference_no)
+			left join $orig_table as a1 on a1.taxon_no = o.child_spelling_no
+			left join $orig_table as a2 on a2.taxon_no = o.parent_spelling_no
+		WHERE o.parent_no > 0 and (o.status_old is null or o.status_old <> 'ignore')
+		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
     
-    $result = $dbh->do($sql);
+    logMessage(2, "  indexing opinion cache...");
     
-    return;
+    # Then index the newly populated opinion cache.
+    
+    $result = $dbh->do("ALTER TABLE $OPCACHE_WORK ADD KEY (orig_no)");
+    $result = $dbh->do("ALTER TABLE $OPCACHE_WORK ADD KEY (child_spelling_no)");
+    $result = $dbh->do("ALTER TABLE $OPCACHE_WORK ADD KEY (parent_no)");
+    $result = $dbh->do("ALTER TABLE $OPCACHE_WORK ADD KEY (parent_spelling_no)");
+    $result = $dbh->do("ALTER TABLE $OPCACHE_WORK ADD KEY (pubyr)");
+    $result = $dbh->do("ALTER TABLE $OPCACHE_WORK ADD KEY (author)");
+    
+    # Then activate the new table.
+    
+    activateTables($dbh, $OPCACHE_WORK => $ops_cache);
+    
+    my $a = 1;		# we can stop here when debugging
 }
 
 
-# fixOpinionCache ( dbh, table_name, tree_table, opinion_no )
+# computeAuthOrig ( dbh )
 # 
-# Update a single entry in the opinion cache.
+# Rebuild the contents of the auth_orig table from the opinions. Then set the orig_no field of
+# the authorities table from auth_orig.
 
-sub fixOpinionCache {
-    
-    my ($dbh, $table_name, $tree_table, $opinion_no) = @_;
-    
-    my ($result);
-    
-    croak "bad opinion_no: $opinion_no\n" unless $opinion_no =~ qr{ ^ [0-9]+ $ }xsi;
-    
-    # This query is adapated from the old getMostRecentClassification()
-    # routine, from TaxonInfo.pm line 2003.  We have to join with authorities
-    # twice to look up the original combination (taxonomic concept id) of both
-    # child and parent.  The authorities table is the canonical source of that
-    # information, not the opinions table.
-    
-    $result = $dbh->do("REPLACE INTO $table_name (opinion_no, orig_no, child_spelling_no,
-						  parent_no, parent_spelling_no, ri, pubyr,
-						  status, spelling_reason, reference_no, suppress)
-		SELECT o.opinion_no, a1.orig_no,
-			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
-			a2.orig_no,
-			if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no),
-			IF ((o.basis != '' AND o.basis IS NOT NULL), CASE o.basis
- 			WHEN 'second hand' THEN 1
-			WHEN 'stated without evidence' THEN 2
-			WHEN 'implied' THEN 2
-			WHEN 'stated with evidence' THEN 3 END,
-			IF(r.reference_no = 6930, 0, CASE r.basis
-				WHEN 'second hand' THEN 1
-				WHEN 'stated without evidence' THEN 2
-				WHEN 'stated with evidence' THEN 3
-				ELSE 2 END)) AS ri,
-			if(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr,
-			o.status, o.spelling_reason, o.reference_no, null
-		FROM $TAXON_TABLE{$tree_table}{opinions} as o
-			LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r using (reference_no)
-			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1
-				on a1.taxon_no = if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no)
-			LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as a2
-				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
-		WHERE opinion_no = $opinion_no");
-    
-    return;
-}
+sub computeAuthOrig {
 
-
-# getOpinionConcepts ( dbh, tree_table, opinion_list )
-# 
-# Given a list of changed opinions, return the union of the set of concepts
-# referred to by both the new versions (from the opinions table) and the old
-# versions (from the opinion cache, which has not been modified since the last
-# rebuild of the taxonomy tables).
-
-sub getOpinionConcepts {
-
-    my ($dbh, $tree_table, $opinion_list) = @_;
-    
-    my (%update_concepts);
-    
-    # First fetch the updated opinions, and figure out the "original
-    # combination" mentioned in each one.
-    
-    my $opfilter = '(' . join(',', @$opinion_list) . ')';
-    
-    my $new_op_data = $dbh->prepare("
-		SELECT child_no, parent_no
-		FROM $TAXON_TABLE{$tree_table}{opinions} WHERE opinion_no in $opfilter");
-    
-    $new_op_data->execute();
-    
-    while ( my ($child_orig, $parent_orig) = $new_op_data->fetchrow_array() )
-    {
-	$update_concepts{$child_orig} = 1 if $child_orig > 0;
-	$update_concepts{$parent_orig} = 1 if $parent_orig > 0;
-    }
-    
-    # Now do the same with the corresponding old opinion records.
-    
-    my $old_op_data = $dbh->prepare("
-		SELECT orig_no, parent_no
-		FROM $TAXON_TABLE{$tree_table}{opcache} WHERE opinion_no in $opfilter");
-    
-    $old_op_data->execute();
-    
-    while ( my ($child_orig, $parent_orig) = $old_op_data->fetchrow_array() )
-    {
-	$update_concepts{$child_orig} = 1 if $child_orig > 0;
-	$update_concepts{$parent_orig} = 1 if $parent_orig > 0;
-    }
-    
-    return keys %update_concepts;
-}
-
-
-# updateOpinionConcepts ( dbh, tree_table, concept_list )
-# 
-# This routine updates all of the orig_no, child_no and parent_no values in
-# $OPINIONS_TABLE and $OPINION_CACHE that fall within the given list.
-
-sub updateOpinionConcepts {
-
-    my ($dbh, $tree_table, $concept_list) = @_;
-    
-    my $concept_filter = join(',', @$concept_list);
+    my ($dbh, $tree_table) = @_;
     
     my $result;
     
-    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
-    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
-    my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
+    my ($auth_table) = $TAXON_TABLE{$tree_table}{authorities};
+    my ($ops_cache) = $TAXON_TABLE{$tree_table}{opcache};
+    my ($auth_orig) = $TAXON_TABLE{$tree_table}{auth_orig};
     
-    logMessage(2, "updating opinion cache to reflect concept changes");
+    logMessage(2, "computing taxonomic concept (auth_orig) relation (A)");
     
-    # First, $OPINION_CACHE
+    # Create a working table.
     
-    $result = $dbh->do("UPDATE $opinion_table as o
-				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
-			SET o.orig_no = a.orig_no, o.modified = o.modified
-			WHERE o.orig_no in ($concept_filter)");
+    $result = $dbh->do("DROP TABLE IF EXISTS $ORIG_WORK");
     
-    $result = $dbh->do("UPDATE $opinion_table as o
-				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
-			SET o.parent_no = a.orig_no, o.modified = o.modified
-			WHERE o.parent_no in ($concept_filter)");
+    $result = $dbh->do("CREATE TABLE $ORIG_WORK (
+		taxon_no int unsigned not null,
+		orig_no int unsigned not null,
+		UNIQUE KEY (`taxon_no`)) Engine=MyISAM");
     
-    # Next, $OPINIONS_TABLE
+    # Fill it with the child_spelling_no/child_no relation from opinions.
     
-    $result = $dbh->do("UPDATE $opinion_table as o
-				JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
-			SET o.child_no = a.orig_no, o.modified = o.modified
-			WHERE a.orig_no in ($concept_filter)");
+    $result = $dbh->do("INSERT IGNORE INTO $ORIG_WORK (taxon_no, orig_no)
+			SELECT distinct child_spelling_no, child_no
+			FROM $ops_cache
+			WHERE ignore is null and child_spelling_no <> child_no
+			ORDER BY ri desc, pubyr desc, opinion_no desc");
     
-    $result = $dbh->do("UPDATE $opinion_table as o
-				JOIN $auth_table as a on a.taxon_no = o.parent_spelling_no
-			SET o.parent_no = a.orig_no, o.modified = o.modified
-			WHERE a.orig_no in ($concept_filter)");
+    logMessage(2, "  added $result rows from opinions");
     
-    return;
+    # Fill in the remaining entries with orig_no = taxon_no.
+    
+    $result = $dbh->do("INSERT IGNORE INTO $ORIG_WORK (taxon_no, orig_no)
+			SELECT taxon_no, taxon_no
+			FROM $auth_table");
+    
+    logMessage(2, "  filled in $result rows from authorities");
+    
+    # Compute the transitive closure of this relation. Limit the iterations, in
+    # case there is a cycle. The code in Opinions.pm (Classic) is supposed to
+    # prevent this, but we should be aware of that possibility.
+    
+    for ( my $i = 0; $i < 10; $i++ )
+    {
+	$result = $dbh->do("
+		UPDATE $ORIG_WORK as a1 join $ORIG_WORK as a2 on a1.orig_no = a2.taxon_no
+		SET a1.orig_no = a2.orig_no");
+	
+	if ( $result )
+	{
+	    logMessage(2, "    set $result rows transitively");
+	    next;
+	}
+	
+	else
+	{
+	    logMessage(2, "    no more transitive rows");
+	    last;
+	}
+    }
+    
+    if ( $result )
+    {
+	logMessage("WARNING *** There may be a cycle in the auth_orig relation ***");
+    }
+    
+    # Index the 'orig_no' field.
+    
+    logMessage(2, "  indexing the table...");
+    
+    $result = $dbh->do("ALTER TABLE $ORIG_WORK ADD KEY (`orig_no`)");
+    
+    activateTables($dbh, $ORIG_WORK => $auth_orig);
+    
+    # Update the 'orig_no' column in the authorities table to match.
+    
+    logMessage(2, "  setting orig_no field of authorities");
+    
+    $result = $dbh->do("
+	UPDATE $auth_table as a join $auth_orig as ao using (taxon_no)
+	SET a.orig_no = ao.orig_no, a.modified = a.modified");
+    
+    logMessage(2, "    updated $result rows");
+    
+    logMessage(2, "  updating refauth field of authorities");
+    
+    $result = $dbh->do("
+	UPDATE $auth_table
+	SET refauth = if(ref_is_authority='YES', 1, 0), modified = modified");
+    
+    logMessage(2, "    updated $result rows");
+    
+    my $a = 1;	# we can stop here when debugging.
 }
 
 
@@ -1579,7 +740,7 @@ sub computeSpelling {
 		FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (orig_no)
 			JOIN $SPELLING_SCORE as x on x.spelling_no = o.child_spelling_no
 		WHERE s.is_misspelling and o.spelling_reason <> 'misspelling' and
-			x.score > 0
+			x.score > 0 and
 		ORDER BY x.score ASC, o.pubyr ASC, o.ri ASC, o.opinion_no ASC");
     
     # If this fails, we try the original spelling as long as its score is not
@@ -5444,47 +4605,6 @@ sub activateNewTaxonomyTables {
 }
 
 
-# activateTreeTables ( dbh, new_tree_table )
-# 
-# In one atomic operation, move the new tree table to active status and swap
-# out the old one.  This routine does not do anything with the secondary tables.
-
-sub activateTreeTables {
-
-    my ($dbh, $tree_table) = @_;
-    
-    my $result;
-    
-    logMessage(2, "activating new version of table '$tree_table' (g)");
-    
-    # Compute the backup names of all the tables to be activated
-    
-    my $tree_bak = "${tree_table}_bak";
-    
-    # Delete any backup tables that might still be around
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
-    
-    # Create dummy versions of any of the tree table if it is missing
-    # (otherwise the rename will fail; the dummy will be deleted below anyway,
-    # after it is renamed to the backup name).
-    
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_WORK");
-    
-    # Now do the Atomic Table Swap (tm)
-    
-    $result = $dbh->do("RENAME TABLE
-			    $tree_table to $tree_bak,
-			    $TREE_WORK to $tree_table");
-    
-    # Then we can get rid of the backup table
-    
-    $result = $dbh->do("DROP TABLE $tree_bak");
-    
-    my $a = 1;		# we can stop here when debugging
-}
-
-
 # buildTaxaCacheTables ( dbh, tree_table )
 # 
 # Rebuild the tables 'taxa_tree_cache' and 'taxa_list_cache' using the
@@ -5531,7 +4651,7 @@ sub buildTaxaCacheTables {
 	FROM $auth_table as a JOIN $tree_table as t using (orig_no)
 		JOIN $tree_table as t2 on t2.orig_no = t.synonym_no");
     
-    # Add the necessar indices
+    # Add the necessary indices
     
     logMessage(2, "    indexing tree cache");
     
@@ -5541,93 +4661,27 @@ sub buildTaxaCacheTables {
     $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (synonym_no)");
     $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (opinion_no)");
     
-    # Create a new working table for taxa_list_cache
-    
-    # logMessage(2, "    creating list cache");
-    
-    # $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
-    
-    # $result = $dbh->do("
-    # 	CREATE TABLE $LIST_CACHE_WORK
-    # 	       (parent_no int unsigned not null,
-    # 		child_no int unsigned not null,
-    # 		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
-    
-    # Populate it using the taxon_trees table, 
-    
-    # logMessage(2, "    populating list cache");
-    
-    # my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
-    
-    # foreach my $depth (reverse 2..$max_depth)
-    # {
-    # 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
-	
-    # 	$result = $dbh->do("
-    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-    # 		SELECT t.immpar_no, l.child_no
-    # 		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
-    # 		WHERE t.depth = $depth");
-	
-    # 	$result = $dbh->do("
-    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-    # 		SELECT t.immpar_no, t.orig_no
-    # 		FROM $tree_table as t
-    # 		WHERE t.depth = $depth");
-    # }
-    
-    # # Update it to show spelling_no values instead of the corresponding
-    # # orig_no values.
-    
-    # logMessage(2, "    setting parent spelling_no values");
-    
-    # $result = $dbh->do("
-    # 		UPDATE IGNORE $LIST_CACHE_WORK as l
-    # 			JOIN $tree_table as pt on pt.orig_no = l.parent_no
-    # 		SET l.parent_no = pt.spelling_no");
-    
-    # logMessage(2, "    adding entries for child spellings");
-    
-    # $result = $dbh->do("
-    # 		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
-    # 		SELECT l.parent_no, a.taxon_no
-    # 		FROM $auth_table as a JOIN $LIST_CACHE_WORK as l on l.child_no = a.orig_no");
-    
-    # logMessage(2, "      $result new entries.");
-    
-    # Add the necessary indices
-    
-    # logMessage(2, "    indexing list cache");
-    
-    # $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
-    
-    # Now swap in the new tables.
-    
-    # logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
     logMessage(2, "   activating table '$CLASSIC_TREE_CACHE'");
     
-    # Compute the backup names of all the tables to be activated
+    activateTables($dbh, $TREE_CACHE_WORK => $CLASSIC_TREE_CACHE);
     
-    my $tree_bak = "${CLASSIC_TREE_CACHE}_bak";
-    # my $list_bak = "${CLASSIC_LIST_CACHE}_bak";
+    # # Compute the backup names of all the tables to be activated
     
-    # Drop those tables if any are still around
+    # my $tree_bak = "${CLASSIC_TREE_CACHE}_bak";
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
-    # $result = $dbh->do("DROP TABLE IF EXISTS $list_bak");
+    # # Drop those tables if any are still around
     
-    # Recreate any of the existing tables that may not exist for some reason
+    # $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
-    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
+    # # Recreate any of the existing tables that may not exist for some reason
     
-    # Now swap in the new tables
+    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
     
-    $result = $dbh->do("RENAME TABLE
-		$CLASSIC_TREE_CACHE to $tree_bak,
-		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE");
-		# $CLASSIC_LIST_CACHE to $list_bak,
-		# $LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
+    # # Now swap in the new tables
+    
+    # $result = $dbh->do("RENAME TABLE
+    # 		$CLASSIC_TREE_CACHE to $tree_bak,
+    # 		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE");
     
     my $a = 1;	# We can stop here when debugging
 }
@@ -5925,93 +4979,6 @@ sub ensureOrig {
     
     return;
 }
-
-
-# populateOrig ( dbh )
-# 
-# If there are any entries where 'orig_no' is not set, fill them in.  Also
-# update the 'refauth' field.
-
-sub populateOrig {
-
-    my ($dbh) = @_;
-    
-    # First make sure that we have a field to populate.
-    
-    ensureOrig($dbh);
-    
-    # Start by zeroing any orig_no entries that no longer correspond to
-    # taxon_no values.
-    
-    $dbh->do("
-	UPDATE authorities as a LEFT JOIN authorities as a2 on a2.taxon_no = a.orig_no
-	SET a.orig_no = 0, a.modified=a.modified WHERE a2.taxon_no is null");
-    
-    # Then check to see if we have any unset orig_no entries, and return if we
-    # do not.
-    
-    my ($count) = $dbh->selectrow_array("
-	SELECT count(*) from authorities
-	WHERE orig_no = 0");
-    
-    return unless $count > 0;
-    
-    # Populate all unset orig_no entries.  This algorithm is taken from
-    # TaxonInfo::getOriginalCombination() in the old code.
-
-    logMessage(1, "Populating 'orig_no' field...");
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_spelling_no
-	SET a.orig_no = o.child_no, a.modified=a.modified WHERE a.orig_no = 0");
-    
-    logMessage(2, "   child_spelling_no: $count");
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_no
-	SET a.orig_no = o.child_no, a.modified=a.modified WHERE a.orig_no = 0");
-    
-    logMessage(2, "   child_no: $count");
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_spelling_no
-	SET a.orig_no = o.parent_no, a.modified=a.modified WHERE a.orig_no = 0");
-    
-    logMessage(2, "   parent_spelling_no: $count");
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_no
-	SET a.orig_no = o.parent_no, a.modified=a.modified WHERE a.orig_no = 0");
-    
-    logMessage(2, "   parent_no: $count");
-    
-    $count = $dbh->do("
-	UPDATE authorities as a
-	SET a.orig_no = a.taxon_no, a.modified=a.modified WHERE a.orig_no = 0");
-    
-    logMessage(2, "   self: $count");
-    
-    # Index the field, unless there is already an index.
-    
-    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE authorities"); 
-    
-    unless ( $table_definition =~ qr{KEY `orig_no`} )
-    {
-	$dbh->do("ALTER TABLE authorities ADD KEY (orig_no)");
-    }
-    
-    # If the field 'refauth' exists, update it.
-    
-    if ( $table_definition =~ /`refauth`/ )
-    {
-	$count = $dbh->do("UPDATE authorities set refauth = if(ref_is_authority='YES', 1, 0), modified=modified");
-	
-	logMessage(2, "Updating 'refauth': $count");
-    }
-    
-    # print STDERR "  done.\n";
-}
-
 
 
 # UTILITY ROUTINES

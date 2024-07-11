@@ -23,9 +23,8 @@ use IntervalTables qw(loadIntervalData buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables buildLithTables);
 use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
 use SpecimenTables qw(buildSpecimenTables);
-use TaxonTables qw(populateOrig
-		   buildTaxonTables rebuildAttrsTable
-		   buildTaxaCacheTables computeGenSp);
+use TaxonTables qw(buildOpinionCache computeAuthOrig buildTaxonTables rebuildAttrsTable
+		   buildTaxaCacheTables);
 # use TimescaleTables qw(establishTimescaleTables);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
@@ -156,7 +155,7 @@ sub BuildTables {
     # my $collection_tables = $options{c};
     # my $occurrence_tables = $options{m};
     # my $occurrence_int_maps = $options{M};
-    my $occurrence_reso = $options{R};
+    # my $occurrence_reso = $options{R};
     # my $diversity_tables = $options{d};
     my $prevalence_tables = $options{q};
     my $timescale_tables = $options{S};
@@ -172,7 +171,9 @@ sub BuildTables {
     # 		no_rebuild_cache => $options{O},
     # 		no_rebuild_div => $options{A} };
     
-    my $options = { taxon_steps => $taxon_steps };
+    my $options = { };
+    
+    my $taxon_options = { taxon_steps => $taxon_steps };
     
     # The option -i causes a forced reload of the interval data from the source
     # data files.  Otherwise, do a (non-forced) call to LoadIntervalData if any
@@ -217,42 +218,23 @@ sub BuildTables {
 	buildLithTables($dbh);
     }
     
-    # The option -m causes the occurrence tables to be (re)computed.  -R also
-    # triggers this.
+    # The option -m causes the occurrence tables to be (re)computed. If we are
+    # also recomputing the taxon tables, then build the opinion cache and
+    # auth_orig relation first. Use these working tables to build the new
+    # occurrence tables. Otherwise, use the existing tables.
     
-    my ($occ_options);
+    my $occ_options = { };
     
-    if ( $occurrence_reso )
+    if ( $taxon_tables && $occurrence_tables )
     {
-	$occurrence_reso //= '';
-	
-	if ( $occurrence_reso =~ qr{p}x )
-	{
-	    $occ_options->{accept_periods} = 1;
-	}
-	
-	if ( $occurrence_reso =~ qr{^[^/\d]*(\d+)}x )
-	{
-	    $occ_options->{epoch_bound} = $1;
-	}
-	
-	if ( $occurrence_reso =~ qr{/(\d+)}x )
-	{
-	    $occ_options->{interval_bound} = $1;
-	}
+	buildOpinionCache($dbh);
+	computeAuthOrig($dbh);
+	$taxon_options->{opcache_built} = 1;
     }
     
     if ( $occurrence_tables )
     {
-	populateOrig($dbh);
-	buildOccurrenceTables($dbh, $occ_options);
-    }
-    
-    elsif ( $occurrence_reso )
-    {
-	populateOrig($dbh);
-	buildTaxonSummaryTable($dbh, $occ_options);
-	rebuildAttrsTable($dbh, 'taxon_trees');
+	buildOccurrenceTables($dbh, 'taxon_trees', $occ_options);
     }
     
     elsif ( $occurrence_int_maps )
@@ -267,14 +249,13 @@ sub BuildTables {
     
     # The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
     # was specified, its value should be a sequence of steps (a-h) to be carried
-    # out. 
+    # out. If the opinion cache and auth_orig tables were already rebuilt, don't
+    # repeat that step.
     
     if ( $taxon_tables )
     {
-	populateOrig($dbh);
-	buildTaxonTables($dbh, 'taxon_trees', $options);
+	buildTaxonTables($dbh, 'taxon_trees', $taxon_options);
     }
-    
     
     # The option -y causes the "classic" taxa_tree_cache table to be computed.
     
