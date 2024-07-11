@@ -93,6 +93,7 @@ sub initialize {
 	tables => ['r'] },
       { set => 'formatted', from => '*', code => \&format_reference, if_block => 'formatted,both' },
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
+      { set => '*', code => \&process_doi },
       { set => '*', code => \&format_bibjson, if_vocab => 'bibjson' },
       { set => '*', code => \&process_acronyms, not_block => 'formatted' },
       { set => '*', code => \&generate_authorlist, if_block => 'authorlist', 
@@ -431,9 +432,9 @@ sub initialize {
 	{ param => 'is_private', valid => FLAG_VALUE },
 	    "Select only museum collection references that are marked as being private collections,",
 	    "or exclude these if the value 'no' is specified.",
-	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
+	{ param => 'ref_doi', valid => ANY_VALUE, list => qr{\s+} },
 	    "Select only records entered from references with any of the specified DOIs.",
-	    "You may specify one or more, separated by commas.");
+	    "You may specify one or more, separated by whitespace.");
     
     $ds->define_ruleset('1.2:refs:aux_selector' =>
 	{ param => 'ref_id', valid =>  VALID_IDENTIFIER('REF'), list => ',',
@@ -482,9 +483,9 @@ sub initialize {
 	{ param => 'is_private', valid => FLAG_VALUE },
 	    "Select only museum collection references that are marked as being private collections,",
 	    "or exclude these if the value 'no' is specified.",
-	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
+	{ param => 'ref_doi', valid => ANY_VALUE, list => qr{\s+} },
 	    "Select only records entered from references with any of the specified DOIs.",
-	    "You may specify one or more, separated by commas.");
+	    "You may specify one or more, separated by whitespace.");
     
     $ds->define_ruleset('1.2:refs:single' => 
     	{ require => '1.2:refs:specifier' },
@@ -933,9 +934,9 @@ sub generate_ref_filters {
     
     if ( my @doi_list = $request->clean_param_list('ref_doi') )
     {
-	my @fixed_list;
-	my @like_list;
-	my @filter_list;
+	# my @fixed_list;
+	# my @like_list;
+	# my @filter_list;
 	
 	if ( @doi_list == 1 && $doi_list[0] eq '!' )
 	{
@@ -944,29 +945,43 @@ sub generate_ref_filters {
 	
 	else
 	{
+	    my @filter_list;
+	    
 	    foreach my $d ( @doi_list )
 	    {
-		if ( $d =~ /[_%]/ ) {
-		    push @like_list, $d;
-		} elsif ( defined $d && $d ne '' ) {
-		    push @fixed_list, $d;
+		if ( $d && $d ne '' )
+		{
+		    my $quoted = $dbh->quote("%$d");
+		    push @filter_list, "r.doi like $quoted";
 		}
 	    }
 	    
-	    foreach my $d ( @like_list )
-	    {
-		my $quoted = $dbh->quote($d);
-		push @filter_list, "r.doi like $quoted"; 
-	    }
+	    my $disjunction = join(' or ', @filter_list);
+	    push @filters, "($disjunction)";
 	    
-	    if ( @fixed_list )
-	    {
-		my $quoted = join( ',', map { $dbh->quote($_) } @fixed_list );
-		push @filter_list, "r.doi in ($quoted)";
-	    }
+	    # foreach my $d ( @doi_list )
+	    # {
+	    # 	if ( $d =~ /[_%]/ ) {
+	    # 	    push @like_list, $d;
+	    # 	} elsif ( defined $d && $d ne '' ) {
+	    # 	    push @fixed_list, $d;
+	    # 	}
+	    # }
 	    
-	    push @filter_list, "r.doi = 'NOTHING'" unless @filter_list;
-	    push @filters, @filter_list;
+	    # foreach my $d ( @like_list )
+	    # {
+	    # 	my $quoted = $dbh->quote($d);
+	    # 	push @filter_list, "r.doi like $quoted"; 
+	    # }
+	    
+	    # if ( @fixed_list )
+	    # {
+	    # 	my $quoted = join( ',', map { $dbh->quote($_) } @fixed_list );
+	    # 	push @filter_list, "r.doi in ($quoted)";
+	    # }
+	    
+	    # push @filter_list, "r.doi = 'NOTHING'" unless @filter_list;
+	    # push @filters, @filter_list;
 	}
     }
     
@@ -1368,8 +1383,7 @@ sub generate_join_list {
 # 
 # Generate a string for the given reference.  This relies on the
 # fields "r_al1", "r_ai1", "r_al2", "r_ai2", "r_oa", "r_pubyr", "r_reftitle",
-# "r_pubtitle", "r_pubvol", "r_pubno".
-# 
+# "r_pubtitle", "r_pubvol", "r_pubno", "r_pubtype".
 
 sub format_reference {
 
@@ -1489,13 +1503,14 @@ sub format_reference {
 	$longref .= "$pubyr. ";
     }
     
+    my $pubtype = $row->{r_pubtype};
     my $reftitle = $row->{r_reftitle} || '';
     
     if ( $reftitle ne '' )
     {
 	$longref .= $reftitle;
 
-	if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'instcoll' )
+	if ( $pubtype eq 'instcoll' )
 	{
 	    $longref .= ', ';
 	}
@@ -1510,7 +1525,7 @@ sub format_reference {
     my $pubtitle = $row->{r_pubtitle} || '';
     my $editors = $row->{r_editor} || '';
     
-    if ( $pubtitle ne '' )
+    if ( $pubtitle && $pubtitle ne '' )
     {
 	my $pubstring = $markup ? "<i>$pubtitle</i>" : $pubtitle;
 
@@ -1532,19 +1547,16 @@ sub format_reference {
     my $publisher = $row->{r_publisher};
     my $pubcity = $row->{r_pubcity};
 
-    if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'instcoll' )
+    if ( $pubtype eq 'instcoll' && $pubcity )
     {
-	if ( $pubcity )
-	{
-	    $pubcity =~ s/^(, )+//;
-	    $pubcity =~ s/, , /, /;
-	    $longref =~ s/\s+$//;
-	    $longref .= ". " unless $longref =~ /[.]$/;
-	    $longref .= "$pubcity. ";
-	}
+	$pubcity =~ s/^(, )+//;
+	$pubcity =~ s/, , /, /;
+	$longref =~ s/\s+$//;
+	$longref .= ". " unless $longref =~ /[.]$/;
+	$longref .= "$pubcity. ";
     }
     
-    elsif ( $publisher )
+    elsif ( $pubtype =~ /^book|^guide|^comp|^M|^Ph/ && $publisher )
     {
 	$longref =~ s/\s+$//;
 	$longref .= ". ";
@@ -1759,6 +1771,25 @@ sub adjust_ref_counts {
     }
 }
 
+
+# process_doi ( record )
+# 
+# Remove prefixes from DOIs.
+
+sub process_doi {
+    
+    my ($request, $record) = @_;
+    
+    if ( $record->{r_doi} )
+    {
+	$record->{r_doi} =~ s/^\s+//;
+	
+	if ( $record->{r_doi} =~ qr{ ^http .*? (10[.].*) }x )
+	{
+	    $record->{r_doi} = $1;
+	}
+    }
+}
 
 # generate_authorlist ( record )
 # 
