@@ -103,7 +103,7 @@ before 'validate_action' => sub {
     
     if ( $action->keymult )
     {
-	$edt->add_condition($action, 'E_MULTI_KEY', $operation);
+	$edt->add_condition('E_MULTI_KEY', $operation);
 	return;
     }
     
@@ -112,19 +112,21 @@ before 'validate_action' => sub {
     
     my $pubtype = $record->{publication_type};
     
-    if ( $operation eq 'update' && ! $pubtype )
+    if ( exists $record->{publication_type} && ! $record->{publication_type} )
     {
-	my $dbh = $edt->dbh;
-	my $sql = "SELECT publication_type FROM refs WHERE reference_no = $keyexpr";
+	# my $dbh = $edt->dbh;
+	# my $sql = "SELECT publication_type FROM refs WHERE $keyexpr";
 	
-	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	# $edt->debug_line("$sql\n") if $edt->debug_mode;
 	
-	($pubtype) = $dbh->selectrow_array($sql);
+	# ($pubtype) = $dbh->selectrow_array($sql);
+	
+	$edt->add_condition('E_REQUIRED', 'publication_type');
     }
     
-    unless ( $pubtype )
+    if ( $operation !~ /^update/ && ! $record->{publication_type} )
     {
-	$edt->add_condition($action, 'E_REQUIRED', 'publication_type');
+	$edt->add_condition('E_REQUIRED', 'publication_type');
     }
     
     # Check capitalizatiion of the reference title and publication title.
@@ -144,151 +146,158 @@ before 'validate_action' => sub {
     
     # Handle the author names, if any.
     
-    my $author_list = $record->{authors};
-    my (@authorname, @authorfirst, @authorlast);
-    
-    if ( ref $author_list eq 'ARRAY' )
+    if ( exists $record->{authors} )
     {
-	@authorname = $author_list->@*;
-    }
-    
-    elsif ( ref $author_list )
-    {
-	croak "The value of 'authors' must be a listref or a scalar";
-    }
-    
-    else
-    {
-	@authorname = split /;\s+/, $author_list;
-    }
-    
-    $record->{author1last} = '';
-    $record->{author1init} = '';
-    $record->{author2last} = '';
-    $record->{author2init} = '';
-    $record->{otherauthors} = '';
-    my @otherauthors;
-    
-    foreach my $i ( 0..$#authorname )
-    {
-	# Check that each name is within the column width limit.
+	my $author_list = $record->{authors};
+	my $bad_format;
 	
-	if ( length($authorname[$i]) >= 100 )
+	my (@authorname, @authorfirst, @authorlast);
+	
+	if ( ref $author_list eq 'ARRAY' )
 	{
-	    $edt->add_condition('E_NAME_WIDTH', 'Author', $i+1);
-	    next;
+	    @authorname = $author_list->@*;
 	}
 	
-	# Parse each name into first and last.
-	
-	my ($authorlast, $authorfirst) = parse_authorname($authorname[$i]);
-	
-	$authorfirst[$i] = $authorfirst;
-	$authorlast[$i] = $authorlast;
-	
-	# Make sure that each author has at least two letters in the last name,
-	# and that the name is properly capitalized unless CAPITAL is allowed.
-	
-	if ( $authorlast[$i] !~ / \pL .* \pL /xs )
+	elsif ( ref $author_list )
 	{
-	    $edt->add_condition('E_NAME_EMPTY', 'Author', $i+1);
-	    next;
+	    $edt->add_condition('E_FORMAT', 'authors', 'must be a string or an array of strings');
+	    $bad_format = 1;
 	}
 	
-	elsif ( ! $edt->allows('CAPITAL') )
+	elsif ( $author_list )
 	{
-	    if ( $authorlast !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	    @authorname = split /;\s+/, $author_list;
+	}
+	
+	$record->{author1last} = '';
+	$record->{author1init} = '';
+	$record->{author2last} = '';
+	$record->{author2init} = '';
+	$record->{otherauthors} = '';
+	my @otherauthors;
+	
+	foreach my $i ( 0..$#authorname )
+	{
+	    # Check that each name is within the column width limit.
+	    
+	    if ( length($authorname[$i]) >= 100 )
 	    {
-		$edt->add_condition('C_CAPITAL', 'Author', $i+1);
+		$edt->add_condition('E_NAME_WIDTH', 'Author', $i+1);
+		next;
 	    }
 	    
-	    if ( defined $authorfirst && $authorfirst ne '' && 
-		 $authorfirst !~ / ^ \p{Lu} /xs )
+	    # Parse each name into first and last.
+	    
+	    my ($authorlast, $authorfirst) = parse_authorname($authorname[$i]);
+	    
+	    $authorfirst[$i] = $authorfirst;
+	    $authorlast[$i] = $authorlast;
+	    
+	    # Make sure that each author has at least two letters in the last name,
+	    # and that the name is properly capitalized unless CAPITAL is allowed.
+	    
+	    if ( $authorlast[$i] !~ / \pL .* \pL /xs )
 	    {
-		$edt->add_condition('C_CAPITAL', 'Author', $i+1);
+		$edt->add_condition('E_NAME_EMPTY', 'Author', $i+1);
+		next;
 	    }
-	}
-		
-	my $suffix;
-	
-	my $initials = '';
-	
-	# If a first name is given, generate initials.
-	
-	if ( $authorfirst )
-	{
-	    foreach my $word ( split(/\s+/, $authorfirst ) )
+	    
+	    elsif ( ! $edt->allows('CAPITAL') )
 	    {
-		if ( $word =~ /(\p{L})/ )
+		if ( $authorlast !~ / ^ \p{Lu} .* \p{Ll} /xs )
 		{
-		    $initials .= "$1. ";
+		    $edt->add_condition('C_CAPITAL', 'Author', $i+1);
+		}
+		
+		if ( defined $authorfirst && $authorfirst ne '' && 
+		     $authorfirst !~ / ^ \p{Lu} /xs )
+		{
+		    $edt->add_condition('C_CAPITAL', 'Author', $i+1);
 		}
 	    }
 	    
-	    $initials =~ s/ $//;
+	    my $suffix;
+	    
+	    my $initials = '';
+	    
+	    # If a first name is given, generate initials.
+	    
+	    if ( $authorfirst )
+	    {
+		foreach my $word ( split(/\s+/, $authorfirst ) )
+		{
+		    if ( $word =~ /(\p{L})/ )
+		    {
+			$initials .= "$1. ";
+		    }
+		}
+		
+		$initials =~ s/ $//;
+	    }
+	    
+	    if ( $i == 0 )
+	    {
+		$record->{author1last} = $authorlast;
+		$record->{author1init} = $initials;
+	    }
+	    
+	    elsif ( $i == 1 )
+	    {
+		$record->{author2last} = $authorlast;
+		$record->{author2init} = $initials;
+	    }
+	    
+	    else
+	    {
+		push @otherauthors, ($initials ? "$initials $authorlast" : $authorlast);
+	    }
+	
+	    # if ( $authorname[$i] =~ / (.*) (,\s*jr.\s*|,\s*iii\s*) (.*) /xsi )
+	    # {
+	    #     $authorname[$i] = "$1$3";
+	    #     $suffix = $2;
+	    # }
+	    
+	    # if ( $authorname[$i] =~ / (.*?) , \s* (.*) /xs )
+	    # {
+	    #     $authorlast[$i] = $1;
+	    #     $authorlast[$i] .= $suffix if $suffix;
+	    #     $authorfirst[$i] = $2;
+	    # }
+	    
+	    # elsif ( $authorname[$i] =~ / (.*) \s (.*) /xs )
+	    # {
+	    #     $authorfirst[$i] = $1;
+	    #     $authorlast[$i] = $2;
+	    #     $authorlast[$i] .= $suffix if $suffix;
+	    # }
 	}
 	
-	if ( $i == 0 )
+	if ( @otherauthors )
 	{
-	    $record->{author1last} = $authorlast;
-	    $record->{author1init} = $initials;
+	    $record->{otherauthors} = join(', ', @otherauthors);
 	}
 	
-	elsif ( $i == 1 )
+	$record->{authorfirst} = \@authorfirst;
+	$record->{authorlast} = \@authorlast;
+	$record->{n_authors} = scalar(@authorname);
+	
+	# At least one author name is required.
+	
+	unless ( @authorlast && $authorlast[0] )
 	{
-	    $record->{author2last} = $authorlast;
-	    $record->{author2init} = $initials;
+	    $edt->add_condition('E_REQUIRED', 'authors') unless $bad_format;
 	}
 	
-	else
-	{
-	    push @otherauthors, ($initials ? "$initials $authorlast" : $authorlast);
-	}
-	
-	# if ( $authorname[$i] =~ / (.*) (,\s*jr.\s*|,\s*iii\s*) (.*) /xsi )
-	# {
-	#     $authorname[$i] = "$1$3";
-	#     $suffix = $2;
-	# }
-	
-	# if ( $authorname[$i] =~ / (.*?) , \s* (.*) /xs )
-	# {
-	#     $authorlast[$i] = $1;
-	#     $authorlast[$i] .= $suffix if $suffix;
-	#     $authorfirst[$i] = $2;
-	# }
-	
-	# elsif ( $authorname[$i] =~ / (.*) \s (.*) /xs )
-	# {
-	#     $authorfirst[$i] = $1;
-	#     $authorlast[$i] = $2;
-	#     $authorlast[$i] .= $suffix if $suffix;
-	# }
+	$action->ignore_field('authorfirst');
+	$action->ignore_field('authorlast');
+	$action->ignore_field('n_authors');
     }
     
-    if ( @otherauthors )
-    {
-	$record->{otherauthors} = join(', ', @otherauthors);
-    }
-    
-    $record->{authorfirst} = \@authorfirst;
-    $record->{authorlast} = \@authorlast;
-    $record->{n_authors} = scalar(@authorname);
-    
-    # At least one author name is required.
-    
-    unless ( @authorlast && $authorlast[0] )
+    elsif ( $operation !~ /^update/ )
     {
 	$edt->add_condition('E_REQUIRED', 'authors');
     }
-    
-    # $action->handle_column("FIELD:authorfirst", 'ignore');
-    # $action->handle_column("FIELD:authorlast", 'ignore');
-    # $action->handle_column("FIELD:n_authors", 'ignore');
-    
-    $action->ignore_field('authorfirst');
-    $action->ignore_field('authorlast');
-    $action->ignore_field('n_authors');
     
     # Handle the editor names, if any.
     
@@ -375,17 +384,17 @@ before 'validate_action' => sub {
     }
     
     $record->{editors} = join(', ', @ref_editors) if $editor_list;
-    $record->{editorfirst} = \@editorfirst;
-    $record->{editorlast} = \@editorlast;
-    $record->{n_editors} = scalar(@editorname);
+    # $record->{editorfirst} = \@editorfirst;
+    # $record->{editorlast} = \@editorlast;
+    # $record->{n_editors} = scalar(@editorname);
     
     # $action->handle_column("FIELD:editorfirst", 'ignore');
     # $action->handle_column("FIELD:editorlast", 'ignore');
     # $action->handle_column("FIELD:n_editors", 'ignore');
     
-    $action->ignore_field('editorfirst');
-    $action->ignore_field('editorlast');
-    $action->ignore_field('n_editors');
+    # $action->ignore_field('editorfirst');
+    # $action->ignore_field('editorlast');
+    # $action->ignore_field('n_editors');
     
     # Handle the page number(s).
     
@@ -395,9 +404,33 @@ before 'validate_action' => sub {
 	$record->{lastpage} = $2;
     }
     
-    else
+    elsif ( $record->{pages} )
     {
 	$record->{firstpage} = $record->{pages};
+	$record->{lastpage} = undef;
+    }
+    
+    elsif ( exists $record->{pages} )
+    {
+	$record->{firstpage} = undef;
+	$record->{lastpage} = undef;
+    }
+    
+    # Check that the other fields are string valued, and change empty string
+    # values to null.
+    
+    foreach my $field ( qw(publication_type reftitle pubtitle pubvol pubno language
+			   doi publisher pubcity isbn project_name comments) )
+    {
+	if ( ref $record->{$field} )
+	{
+	    $edt->add_condition('E_FORMAT', $field, "must be a string value");
+	}
+	
+	elsif ( exists $record->{$field} && $record->{$field} eq '' )
+	{
+	    $record->{$field} = undef;
+	}
     }
     
     # If the operation is 'insert' and this transaction does not allow

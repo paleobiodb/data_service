@@ -106,11 +106,10 @@ sub initialize {
 	    "specified as 'first last' or as 'last, first'.",
 	    "If the body of the request is in JSON format, the editors can be provided",
 	    "as a list of strings or a list of objects with fields 'firstname' and 'lastname'.",
-	{ optional => 'issn' },
-	    "One or more ISSNs associated with the seris in which the work appears,",
-	    "separated by whitespace.",
 	{ optional => 'isbn' },
 	    "One or more ISBNs associated with the work, separated by whitespace.",
+	{ optional => 'project_name' },
+	    "The name of the project for which this reference was entered",
 	{ optional => 'comments' },
 	    "Commands and/or remarks about this bibliographic reference");
     

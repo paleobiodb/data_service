@@ -65,6 +65,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('REFERENCE_DATA', CAN_DELETE => 'admin');
+    set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle');
     
     set_table_name(INTERVAL_DATA => 'interval_data');
     set_table_name(CLASSIC_INTERVALS => 'intervals');

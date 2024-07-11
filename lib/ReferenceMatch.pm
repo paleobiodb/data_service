@@ -1765,23 +1765,33 @@ sub extract_json_year {
 
 # clean_string ( string... )
 #
-# For each nonempty argument, replace any HTML character entity sequences with the corresponding
-# characters and then normalize to NFD. We choose the decomposed normalization so that we can easily
-# compare letters without regard to accent marks.
+# For each nonempty argument, replace any HTML character entity sequences with
+# the corresponding characters and then normalize to NFD. We choose the
+# decomposed normalization so that we can easily compare letters without regard
+# to accent marks. Also replace any HTML tags with spaces, then change any
+# sequence of spaces to a single space. This will properly take care of cases
+# where an HTML tag should have a space before or after but doesn't.
 
 sub clean_string {
     
     my (@values) = @_;
     
-    foreach ( @values )
+    foreach my $v ( @values )
     {
 	if ( defined $_ && $_ ne '' )
 	{
-	    $_ =~ s{ &\#(\d+); }{ chr($1) }xsge;
-	    $_ = NFD($_);
+	    $v =~ s{ &\#(\d+); }{ chr($1) }xge;
+	    $v = NFD($v);
+	    
+	    if ( $v =~ /<[a-zA-Z]+>/ )
+	    {
+		$v =~ s{ </?[a-zA-Z]+> }{ }xg;
+	    }
+	    
+	    $v =~ s/  +/ /g;
 	}
 	
-	$_ //= '';
+	$v //= '';
     }
     
     return wantarray ? @values : $values[0];
