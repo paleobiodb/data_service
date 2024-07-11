@@ -319,46 +319,46 @@ sub validate_against_schema {
 	    next COLUMN;
 	}
 	
-	# Handle null values
-	# ------------------
+	# Check for required values
+	# -------------------------
 	
-	unless ( defined $value )
+	# For an 'update' operation, the requirement is only checked if the
+	# column is given a new value.
+	
+	if ( $cr->{REQUIRED} && ($operation !~ /^update/ || $fieldname) )
 	{
-	    # If the column is NOT_NULL or REQUIRED, add an error condition.
-	    
-	    if ( $cr->{NOT_NULL} || $cr->{REQUIRED} )
+	    if ( ! defined $value || $value eq '' )
+	    {
+		$edt->add_condition('E_REQUIRED', $fieldname || $colname);
+	    }
+	}
+	
+	elsif ( $cr->{NOT_NULL} && ! defined $value )
+	{
+	    if ( $operation !~ /^update/ || $fieldname )
 	    {
 		# For a special column, this will only happen if a bug occurs in the
 		# 'validate_special_column' routine. So add an E_EXECUTE in this case.
 		
 		if ( $special )
 		{
-		    $edt->add_condition($action, 'E_EXECUTE',
-					"Column '$colname': value cannot be null");
+		    $edt->add_condition($action, 'E_EXECUTE', $fieldname || $colname,
+					"special value cannot be null");
 		}
-		
-		# Otherwise, add an E_REQUIRED. If the column also has the REQUIRED
-		# property, tell the client that the value must be non-empty instead of
-		# just non-null. If this column doesn't have an assigned value, use the
-		# column name because we don't have a field name.
 		
 		else
 		{
-		    my $message = $cr->{REQUIRED} ? "this column requires a non-empty value"
-			: "this column requires a non-null value";
-		    
-		    my $field = $fieldname || $colname;
-		    
-		    $edt->add_condition($action, 'E_REQUIRED', $field, $message);
+		    $edt->add_condition($action, 'E_REQUIRED', $fieldname || $colname);
 		}
 	    }
-	    
-	    # Otherwise, skip the column entirely unless the null value is specifically assigned.
-	    
-	    elsif ( ! $fieldname )
-	    {
-		next COLUMN;
-	    }
+	}
+	
+	# Any column that was not mentioned in the operation record and does not
+	# have a value and is not marked as required or not null is skipped.
+	
+	elsif ( ! $fieldname && ! defined $value )
+	{
+	    next COLUMN;
 	}
 	
 	# Handle error conditions
