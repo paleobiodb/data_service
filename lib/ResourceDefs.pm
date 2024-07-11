@@ -6,7 +6,7 @@
 # Definitions and properties necessary for working with the Educational Resource tables.
 # 
 
-package ResourceDefs;
+package ResourceTables;
 
 use strict;
 
@@ -39,26 +39,24 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
 {
     set_table_name(RESOURCE_QUEUE => 'eduresource_queue');
     set_table_name(RESOURCE_IMAGES => 'eduresource_images');
-    set_table_name(RESOURCE_ACTIVE => 'eduresource_active' );
-    set_table_name(RESOURCE_IMAGES_ACTIVE => 'eduresource_images_active');
+    set_table_name(RESOURCE_ACTIVE => 'eduresources' );
     set_table_name(RESOURCE_TAG_NAMES => 'edutags' );
     set_table_name(RESOURCE_TAGS => 'eduresource_tags' );
-    
+
     set_table_group('eduresources' => 'RESOURCE_QUEUE', 'RESOURCE_IMAGES', 'RESOURCE_ACTIVE',
-				      'RESOURCE_IMAGES_ACTIVE', 'RESOURCE_TAG_NAMES', 'RESOURCE_TAGS');
+				      'RESOURCE_TAG_NAMES', 'RESOURCE_TAGS');
     
     set_table_property(RESOURCE_QUEUE => CAN_POST => 'LOGGED_IN');
-    # set_table_property(RESOURCE_QUEUE => CAN_VIEW => 'LOGGED_IN');
+    set_table_property(RESOURCE_QUEUE => CAN_VIEW => 'LOGGED_IN');
+    set_table_property(RESOURCE_QUEUE => ALLOW_DELETE => 1);
     set_table_property(RESOURCE_QUEUE => PRIMARY_KEY => "eduresource_no");
     set_table_property(RESOURCE_QUEUE => PRIMARY_FIELD => "eduresource_id");
-    set_table_property(RESOURCE_QUEUE => AUTH_FIELDS => "authorizer_no, enterer_no");
     
     set_column_property(RESOURCE_QUEUE => 'eduresource_no', EXTID_TYPE => 'EDR');
     set_column_property(RESOURCE_QUEUE => 'title', REQUIRED => 1);
     # set_column_property(RESOURCE_QUEUE => 'status', ADMIN_SET => 1);
     
-    set_table_property(RESOURCE_ACTIVE => PRIMARY_KEY => 'eduresource_no');
-    set_table_property(RESOURCE_ACTIVE => PRIMARY_FIELD => 'eduresource_id');
+    set_table_property(RESOURCE_ACTIVE => PRIMARY_KEY => 'id');
 }
 
 

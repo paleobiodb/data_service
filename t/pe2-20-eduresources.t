@@ -314,8 +314,8 @@ subtest 'update admin' => sub {
     $T->set_cookie("session_id", "SESSION-WITH-ADMIN");
     
     my $update2 = { eduresource_id => $test_record_oid,
-		    description => 'Updated 2' };
-		    # status => 'pending' };
+		    description => 'Updated 2',
+		    status => 'pending' };
     
     my (@r3) = $T->send_records("/eduresources/update.json", "admin update 1", json => $update2);
     
@@ -326,7 +326,7 @@ subtest 'update admin' => sub {
     }
     
     cmp_ok($r3[0]{description}, 'eq', $update2->{description}, "admin update 1 was carried out");
-    cmp_ok($r3[0]{sta}, 'eq', 'changed', "admin update 1 changed status");
+    cmp_ok($r3[0]{sta}, 'eq', $update2->{status}, "admin update 1 changed status");
 
     # Then try to activate the resource.
 
@@ -405,7 +405,7 @@ subtest 'update nonadmin' => sub {
 				    "update non-owned status");
 	
 	$T->ok_response_code("400", "update non-owned status returned proper response code");
-	$T->ok_error_like(qr{E_PERM.*update}i, "update non-owned status returned proper error message");
+	$T->ok_error_like(qr{E_PERM.*status}i, "update non-owned status returned proper error message");
     }
     
     # Now we switch to the admin user and activate the owned record, and then switch back and
@@ -429,7 +429,7 @@ subtest 'update nonadmin' => sub {
     
     if ( @r4b )
     {
-	cmp_ok($r4b[0]{sta}, 'eq', 'changed', "update for change set proper status");
+	cmp_ok($r4b[0]{sta}, 'eq', 'changes', "update for change set proper status");
     }
 };
 
@@ -522,9 +522,9 @@ subtest 'image data' => sub {
     ok( $oid4c, "updated record 2" ) &&
 	cmp_ok( $r4b->{sta}, 'eq', 'active', "activated record 2" );
     
-    # diag( "file 1a: " . $img1a );
-    # diag( "file 1b: " . $img1b );
-    # diag( "file 2: " . $img2 );
+    diag( "file 1a: " . $img1a );
+    diag( "file 1b: " . $img1b );
+    diag( "file 2: " . $img2 );
     
     # 7. check that the image data files appear. Try to fetch them from the
     # main web server, but if we can't do that then try to read them from the
@@ -538,59 +538,65 @@ subtest 'image data' => sub {
     my $image_dir = `grep eduresources_img_dir config.yml`;
     chomp $image_dir;
     $image_dir =~ s/^.*:\s+//;
+    $image_dir ||= '/var/paleobiodb/pbdb-main/build/img';
     
-    # $TT = Tester->new({ server => $image_host });
+    my $image_host = `grep eduresources_img_host config.yml`;
+    chomp $image_host;
+    $image_host =~ s/^.*:\s+//;
+    $image_host ||= 'nginx';
     
-    # my ($m4a) = $TT->fetch_url($img1a, "fetch image 1a", { no_check => 1 });
-    # my ($m4b) = $TT->fetch_url($img1b, "fetch image 1b", { no_check => 1 });
-    # my ($m4c) = $TT->fetch_url($img2, "fetch image 2", { no_check => 1 });
+    $TT = Tester->new({ server => $image_host });
     
-    # if ( $m4a && $TT->get_response_code($m4a) ne '' )
-    # {
-    # 	diag("fetching images from WEB SERVER");
-	
-    # 	if ( ok( $TT->get_response_code($m4a) eq '200', "fetch image 1a returned 200" ) )
-    # 	{
-    # 	    like( $m4a->content_type, qr{image/jpe?g}, "fetched image 1a has proper content type" );
-    # 	    cmp_ok( length($m4a->content), '>', 0, "fetched image 1a has non-empty content" );
-    # 	}
-	
-    # 	if ( ok( $m4b && $TT->get_response_code($m4b) eq '200', "fetch image 1b returned 200" ) )
-    # 	{
-    # 	    like( $m4b->content_type, qr{image/jpe?g}, "Fetched image 1b has proper content type" );
-    # 	    cmp_ok( length($m4b->content), '>', 0, "fetched image 1b has non-empty content" );
-    # 	}
-	
-    # 	if ( ok( $m4c && $TT->get_response_code($m4c) eq '200', "fetch image 2 returned 200" ) )
-    # 	{
-    # 	    like( $m4c->content_type, qr{image/gif}, "Fetched image 2 has proper content type" );
-    # 	    cmp_ok( length($m4c->content), '>', 0, "fetched image 2 has non-empty content" );
-    # 	}
-    # }
+    my ($m4a) = $TT->fetch_url($img1a, "fetch image 1a", { no_check => 1 });
+    my ($m4b) = $TT->fetch_url($img1b, "fetch image 1b", { no_check => 1 });
+    my ($m4c) = $TT->fetch_url($img2, "fetch image 2", { no_check => 1 });
     
-    # if ( $image_dir )
-    # {
-    # 	diag("fetching images from: $image_dir");
+    if ( $m4a && $TT->get_response_code($m4a) ne '' )
+    {
+	diag("fetching images from WEB SERVER");
 	
-    # 	my $image_file1 = "$image_dir$img1a";
-    # 	my $image_file2 = "$image_dir$img1b";
-    # 	my $image_file3 = "$image_dir$img2";
+	if ( ok( $TT->get_response_code($m4a) eq '200', "fetch image 1a returned 200" ) )
+	{
+	    like( $m4a->content_type, qr{image/jpe?g}, "fetched image 1a has proper content type" );
+	    cmp_ok( length($m4a->content), '>', 0, "fetched image 1a has non-empty content" );
+	}
 	
-    # 	ok( -e $image_file1, "found image file 1" );
-    # 	ok( -e $image_file2, "found image file 2" );
-    # 	ok( ! -e $image_file3, "did not find image file 3" );
-    # }
+	if ( ok( $m4b && $TT->get_response_code($m4b) eq '200', "fetch image 1b returned 200" ) )
+	{
+	    like( $m4b->content_type, qr{image/jpe?g}, "Fetched image 1b has proper content type" );
+	    cmp_ok( length($m4b->content), '>', 0, "fetched image 1b has non-empty content" );
+	}
+	
+	if ( ok( $m4c && $TT->get_response_code($m4c) eq '200', "fetch image 2 returned 200" ) )
+	{
+	    like( $m4c->content_type, qr{image/gif}, "Fetched image 2 has proper content type" );
+	    cmp_ok( length($m4c->content), '>', 0, "fetched image 2 has non-empty content" );
+	}
+    }
     
-    # else
-    # {
-    # 	fail("check for images");
-    # }
+    elsif ( $image_dir )
+    {
+	diag("fetching images from DIRECTORY");
+	
+	my $image_file1 = "$image_dir$img1a";
+	my $image_file2 = "$image_dir$img1b";
+	my $image_file3 = "$image_dir$img2";
+	
+	ok( -e $image_file1, "found image file 1" );
+	ok( -e $image_file2, "found image file 2" );
+	ok( ! -e $image_file3, "did not find image file 3" );
+    }
+    
+    else
+    {
+	fail("check for images");
+    }
     
     # 6. deactivate one record and delete the other
     
-    my ($r5a) = $T->fetch_records("/eduresources/update.json?id=$oid1&status=inactive");
+    my ($r5a) = $T->fetch_records("/eduresources/update.json?id=$oid1&status=pending");
     
-    cmp_ok( $r5a->{sta}, 'eq', 'inactive', "status of record $oid1 returned 'inactive'" );
+    cmp_ok( $r5a->{sta}, 'eq', 'pending', "status of record $oid1 returned 'pending'" );
     
     my ($r5b) = $T->fetch_records("/eduresources/delete.json?id=$oid2");
     
@@ -598,32 +604,32 @@ subtest 'image data' => sub {
     
     # 7. check that the image data file vanishes
     
-    # my ($m5a) = $TT->fetch_url($img1a, "fetch image 1a", { no_check => 1 });
-    # my ($m5b) = $TT->fetch_url($img1b, "fetch image 1b", { no_check => 1 });
+    my ($m5a) = $TT->fetch_url($img1a, "fetch image 1a", { no_check => 1 });
+    my ($m5b) = $TT->fetch_url($img1b, "fetch image 1b", { no_check => 1 });
     
-    # if ( $m5a && $TT->get_response_code($m5a) ne '' )
-    # {
-    # 	diag("checking deleted images using WEB SERVER");
+    if ( $m5a && $TT->get_response_code($m5a) ne '' )
+    {
+	diag("checking deleted images using WEB SERVER");
 	
-    # 	ok( $TT->get_response_code($m5a) eq '404', "image 1a has been deleted" );
-    # 	ok( $TT->get_response_code($m5b) eq '404', "image 1b has been deleted" );
-    # }
+	ok( $TT->get_response_code($m5a) eq '404', "image 1a has been deleted" );
+	ok( $TT->get_response_code($m5b) eq '404', "image 1b has been deleted" );
+    }
     
-    # elsif ( $image_dir )
-    # {
-    # 	diag("checking deleted images using DIRECTORY");
+    elsif ( $image_dir )
+    {
+	diag("checking deleted images using DIRECTORY");
 	
-    # 	my $image_file1 = "$image_dir$img1a";
-    # 	my $image_file2 = "$image_dir$img1b";
+	my $image_file1 = "$image_dir$img1a";
+	my $image_file2 = "$image_dir$img1b";
 	
-    # 	ok( ! -e $image_file1, "image file 1 has been deleted" );
-    # 	ok( ! -e $image_file2, "image file 2 has been deleted" );
-    # }
+	ok( ! -e $image_file1, "image file 1 has been deleted" );
+	ok( ! -e $image_file2, "image file 2 has been deleted" );
+    }
     
-    # else
-    # {
-    # 	fail("check for image deletion");
-    # }
+    else
+    {
+	fail("check for image deletion");
+    }
 };
 
 

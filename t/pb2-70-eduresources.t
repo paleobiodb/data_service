@@ -85,7 +85,7 @@ subtest 'parameters' => sub {
     my (@r1) = $T->fetch_records("/eduresources/active.json", "active with no parameters");
     my ($m2) = $T->fetch_nocheck("/eduresources/list.json", "list with no parameters");
     
-    $T->ok_response_code($m2, '401', "list with no parameters");
+    $T->ok_response_code($m2, '400', "list with no parameters");
     
     unless ( @r1 )
     {
