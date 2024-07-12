@@ -123,7 +123,7 @@ sub update_publications {
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->unpack_input_records($main_params, '1.2:pubs:addupdate_body');
+    my (@records) = $request->parse_body_records($main_params, '1.2:pubs:addupdate_body');
     
     if ( $request->errors )
     {

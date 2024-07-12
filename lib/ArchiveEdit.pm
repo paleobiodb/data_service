@@ -8,13 +8,16 @@ package ArchiveEdit;
 
 use strict;
 
-use Carp qw(carp croak);
+use parent 'EditTransaction';
 
 use TableDefs qw(%TABLE);
 
-use base 'EditTransaction';
+use Role::Tiny::With;
 
-our (@CARP_NOT) = qw(EditTransaction);
+with 'EditTransaction::Mod::MariaDB';
+with 'EditTransaction::Mod::PaleoBioDB';
+
+use namespace::clean;
 
 
 {
