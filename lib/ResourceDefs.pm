@@ -48,7 +48,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_property(RESOURCE_QUEUE => CAN_POST => 'LOGGED_IN');
     set_table_property(RESOURCE_QUEUE => CAN_VIEW => 'LOGGED_IN');
-    set_table_property(RESOURCE_QUEUE => ALLOW_DELETE => 1);
+    # set_table_property(RESOURCE_QUEUE => ALLOW_DELETE => 1);
     set_table_property(RESOURCE_QUEUE => PRIMARY_KEY => "eduresource_no");
     set_table_property(RESOURCE_QUEUE => PRIMARY_FIELD => "eduresource_id");
     
