@@ -46,7 +46,7 @@ sub initialize {
 	    "For queries with the 'ref_match' or 'pub_match' parameter, show the relevance score",
 	{ value => 'authorlist' },
 	    "Show a single list of authors instead of separate fields",
-	{ value => 'comments' },
+	{ value => 'comments', maps_to => '1.2:refs:comments' },
 	    "Include any additional comments associated with this reference",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
@@ -177,9 +177,6 @@ sub initialize {
 	  "The language in which the document is written.",
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi', bibjson_name => 'identifier' },
 	  "The DOI for this document, if known",
-      { output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', bibjson_name => '_comments',
-	if_block => 'comments' },
-	  "Additional comments about this reference, if any",
       { output => 'ref_type', com_name => 'rtp', bibjson_name => '_reftype' },
 	  "The role(s) played by this reference in the database.  This field will only appear",
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
@@ -228,6 +225,15 @@ sub initialize {
 	    "The number of occurrences for which this reference is the source",
 	{ output => 'n_colls', com_name => 'rcc', data_type => 'pos' },
 	    "The number of collections for which this reference is the primary source");
+    
+    $ds->define_block('1.2:refs:comments' =>
+	{ select => ['r.project_name as r_project_name'] },
+	{ output => 'r_project_name', com_name => 'prj', pbdb_name => 'project_name',
+		bibjson_name => '_project_name' },
+	    "The name of the project for which this reference was entered",
+	{ output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', 
+		bibjson_name => '_comments' },
+	    "Additional comments about this reference, if any");
     
     $ds->define_block('1.2:refs:author' => 
 	{ output => 'firstname', com_name => 'firstname' },
