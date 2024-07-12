@@ -385,9 +385,11 @@ sub child_action {
     
     $parent->add_child($child);
     
-    # Handle the new action.
+    # Return the new action.
     
-    return $edt->_handle_action($child, $child->operation);
+    return $child;
+    
+    # return $edt->_handle_action($child, $child->operation);
 }
 
 

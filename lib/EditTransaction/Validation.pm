@@ -49,8 +49,8 @@ sub validate_against_schema {
 
     my ($edt, $action, $operation, $table_specifier) = @_;
     
-    # my $operation = $action->operation;
-    # my $table_specifier = $action->table;
+    $operation ||= $action->operation;
+    $table_specifier ||= $action->table;
     
     $DB::single = 1 if $edt->{breakpoint}{validation};
     
@@ -406,34 +406,37 @@ sub validate_against_schema {
     # If there are any unrecognized keys in this record, add an error or a warning depending on
     # whether BAD_FIELDS is allowed for this transaction.
     
-    foreach my $key ( keys %$record )
+    unless ( $action->{ignore_bad_fields} )
     {
-	# Ignore any key whose name starts with an underscore, and also those
-	# which have been marked using handle_column.
-	
-	unless ( $used{$key} || $key =~ /^_/ )
+	foreach my $key ( keys %$record )
 	{
-	    # If we have been told to ignore this field, skip it. The //
-	    # operator is used because a 'USE_FIELD' on the action should
-	    # override an 'IGNORE_FIELD' on the transaction.
+	    # Ignore any key whose name starts with an underscore, and also those
+	    # which have been marked using handle_column.
 	    
-	    if ( $action->{directives}{"FIELD:$key"} eq 'ignore' || 
-		 $edt->{directives}{$table_specifier}{"FIELD:$key"} eq 'ignore' )
+	    unless ( $used{$key} || $key =~ /^_/ )
 	    {
-		next;
-	    }
-	    
-	    # Otherwise, add an error or warning condition according to whether
-	    # or not the 'BAD_FIELDS' allowance was specified.
-	    
-	    elsif ( $edt->allows('BAD_FIELDS') )
-	    {
-		$edt->add_condition($action, 'W_BAD_FIELD', $key, $table_specifier);
-	    }
-	    
-	    else
-	    {
-		$edt->add_condition($action, 'E_BAD_FIELD', $key, $table_specifier);
+		# If we have been told to ignore this field, skip it. The //
+		# operator is used because a 'USE_FIELD' on the action should
+		# override an 'IGNORE_FIELD' on the transaction.
+		
+		if ( $action->{directives}{"FIELD:$key"} eq 'ignore' || 
+		     $edt->{directives}{$table_specifier}{"FIELD:$key"} eq 'ignore' )
+		{
+		    next;
+		}
+		
+		# Otherwise, add an error or warning condition according to whether
+		# or not the 'BAD_FIELDS' allowance was specified.
+		
+		elsif ( $edt->allows('BAD_FIELDS') )
+		{
+		    $edt->add_condition($action, 'W_BAD_FIELD', $key, $table_specifier);
+		}
+		
+		else
+		{
+		    $edt->add_condition($action, 'E_BAD_FIELD', $key, $table_specifier);
+		}
 	    }
 	}
     }
