@@ -24,7 +24,6 @@ use ExternalIdent qw(generate_identifier);
 use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
 use CoreTableDefs;
 
-use Class::Method::Modifiers qw(before around);
 use Role::Tiny::With;
 
 with 'EditTransaction::Mod::MariaDB';
@@ -78,7 +77,7 @@ our (@CARP_NOT) = qw(EditTransaction);
 # This method is called from EditTransaction.pm to validate each action. We override it to do
 # additional checks.
 
-before 'validate_action' => sub {
+sub validate_action {
     
     my ($edt, $action, $operation, $table) = @_;
     
