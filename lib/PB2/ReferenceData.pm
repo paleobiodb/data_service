@@ -1510,7 +1510,7 @@ sub format_reference {
 	$longref .= "$pubyr. ";
     }
     
-    my $pubtype = $row->{r_pubtype};
+    my $pubtype = $row->{r_pubtype} || '';
     my $reftitle = $row->{r_reftitle} || '';
     
     if ( $reftitle ne '' )
