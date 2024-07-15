@@ -645,8 +645,8 @@ sub list {
 	    my $refquoted = $dbh->quote($refmatch);
 	    my $pubquoted = $dbh->quote($pubmatch);
 	    
-	    $fulltext = "match(r.reftitle) against($refquoted in boolean mode) as r_relevance_1,
-		  match(r.pubtitle) against ($pubquoted in boolean mode) as r_relevance_2";
+	    $fulltext = "match(r.reftitle) against($refquoted) as r_relevance_1,
+		  match(r.pubtitle) against ($pubquoted) as r_relevance_2";
 	    $having = "r_relevance_1 > $threshold and r_relevance_2 > $threshold";
 	    $order_byscore = "(r_relevance_1 + r_relevance_2) desc";
 	}
@@ -655,7 +655,7 @@ sub list {
 	{
 	    my $quoted = $dbh->quote($pubmatch);
 	    
-	    $fulltext = "match(r.pubtitle) against($quoted in boolean mode) as r_relevance";
+	    $fulltext = "match(r.pubtitle) against($quoted) as r_relevance";
 	    $having = "r_relevance > $threshold";
 	}
 	
@@ -663,7 +663,7 @@ sub list {
 	{
 	    my $quoted = $dbh->quote($refmatch);
 	    
-	    $fulltext = "match(r.reftitle) against($quoted in boolean mode) as r_relevance";
+	    $fulltext = "match(r.reftitle) against($quoted) as r_relevance";
 	    $having = "r_relevance > $threshold";
 	    $order_byscore = "r_relevance desc";
 	}
