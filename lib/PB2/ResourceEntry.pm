@@ -174,6 +174,7 @@ sub update_resources {
     
     foreach my $r (@records)
     {
+	$r->{is_video} = 0 if $r->{is_video} eq '';
 	$edt->insert_update_record('RESOURCE_QUEUE', $r);
     }
     
