@@ -328,8 +328,9 @@ sub external_query {
 				   0.5 * $fuzzy_match->{sum_c} };
 		
 		$r->{r_reftitle} = get_reftitle($item);
+		my $subtitle = get_subtitle($item);
 		
-		if ( my ($subtitle) = get_subtitle($item) )
+		if ( $subtitle && $subtitle ne '' )
 		{
 		    $r->{r_reftitle} .= ": $subtitle";
 		}
@@ -399,9 +400,15 @@ sub external_query {
 			$bibj->{lastname} = $last;
 		    }
 		    
+		    elsif ( $last || $first )
+		    {
+			$bibj->{firstname} = '';
+			$bibj->{lastname} = $last || $first;
+		    }
+		    
 		    else
 		    {
-			$bibj->{name} = $last || $first || '';
+			next;
 		    }
 		    
 		    $bibj->{affiliation} = $affiliation if $affiliation;
