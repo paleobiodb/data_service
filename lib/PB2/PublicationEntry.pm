@@ -7,14 +7,12 @@
 # 
 # Author: Michael McClennen
 
-use strict;
-
-use lib '..';
-
 package PB2::PublicationEntry;
 
-use TableDefs qw(%TABLE);
+use strict;
 
+use PbdbEdit;
+use TableDefs qw(%TABLE);
 use ExternalIdent qw(generate_identifier VALID_IDENTIFIER);
 use TableData qw(complete_ruleset);
 
@@ -68,7 +66,7 @@ sub initialize {
 	    "determination. The main use of this field is with the value 'delete',",
 	    "which causes this record to be deleted from the database.",
 	{ ignore => 'password' },
-	{ param => 'pub_id', valid => VALID_IDENTIFIER('PUB'), alias => ['pub_no' ,'oid' ] },
+	{ param => 'pub_no', valid => VALID_IDENTIFIER('PUB'), alias => ['pub_id' ,'oid' ] },
 	    "The identifier of the official publication record to be updated. If it is",
 	    "empty, a new record will be created. You can also use the alias B<C<pub_id>>.");
     
@@ -130,10 +128,10 @@ sub update_publications {
 	die $request->exception(400, "Bad data");
     }
     
-    # If we get here without any errors being detected so far, create a new EditTransaction object to
+    # If we get here without any errors being detected so far, create a new PbdbEdit object to
     # handle this operation.
     
-    my $edt = EditTransaction->new($request, $perms, 'PUBLICATIONS', $allowances);
+    my $edt = PbdbEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
@@ -241,18 +239,18 @@ sub delete_publications {
     
     # Check for any allowances.
     
-    my $allowances = { MULTI_DELETE => 1 };
+    my $allowances = { };
     
     if ( my @allowance = $request->clean_param_list('allow') )
     {
 	$allowances->{$_} = 1 foreach @allowance;
     }
     
-    # Determine our authentication info, and then create an EditTransaction object.
+    # Determine our authentication info, and then create an PbdbEdit object.
     
     my $perms = $request->require_authentication('PUBLICATIONS');
     
-    my $edt = EditTransaction->new($request, $perms, 'PUBLICATIONS', $allowances);
+    my $edt = PbdbEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
 
     # Then go through the records and handle each one in turn.
     

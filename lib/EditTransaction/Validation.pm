@@ -410,17 +410,25 @@ sub validate_against_schema {
     {
 	foreach my $key ( keys %$record )
 	{
-	    # Ignore any key whose name starts with an underscore, and also those
-	    # which have been marked using handle_column.
+	    # Ignore any key which was already validated (%used), any key whose
+	    # name starts with an underscore, and also ignore the primary key
+	    # for this table if it has an empty value.  The latter may occur
+	    # with an insert operation.
 	    
 	    unless ( $used{$key} || $key =~ /^_/ )
 	    {
-		# If we have been told to ignore this field, skip it. The //
-		# operator is used because a 'USE_FIELD' on the action should
-		# override an 'IGNORE_FIELD' on the transaction.
+		if ( (!defined $record->{$key} || $record->{$key} eq '') &&
+		     ($key eq $tableinfo->{PRIMARY_KEY} || 
+		      $key eq $tableinfo->{PRIMARY_FIELD}) )
+		{
+		    next;
+		}
 		
-		if ( $action->{directives}{"FIELD:$key"} eq 'ignore' || 
-		     $edt->{directives}{$table_specifier}{"FIELD:$key"} eq 'ignore' )
+		# If we have been directed to ignore this field with
+		# 'ignore_field', skip it.
+		
+		elsif ( $action->{directives}{"FIELD:$key"} eq 'ignore' || 
+			$edt->{directives}{$table_specifier}{"FIELD:$key"} eq 'ignore' )
 		{
 		    next;
 		}
@@ -428,7 +436,7 @@ sub validate_against_schema {
 		# Otherwise, add an error or warning condition according to whether
 		# or not the 'BAD_FIELDS' allowance was specified.
 		
-		elsif ( $edt->allows('BAD_FIELDS') )
+		if ( $edt->allows('BAD_FIELDS') )
 		{
 		    $edt->add_condition($action, 'W_BAD_FIELD', $key, $table_specifier);
 		}
