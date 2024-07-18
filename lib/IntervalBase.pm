@@ -19,7 +19,8 @@ use base 'Exporter';
 our (@EXPORT_OK) = qw(ts_defined ts_name ts_bounds ts_record ts_intervals ts_by_age ts_list
 		      ts_boundary_list ts_boundary_no ts_boundary_name ts_boundary_next
 		      int_defined int_bounds int_scale int_name int_type int_correlation
-		      int_container int_record ints_by_age ints_by_prefix
+		      int_container int_record ints_by_age ts_intervals_by_age
+		      interval_nos_by_age ints_by_prefix
 		      INTL_SCALE BIN_SCALE AGE_RE);
 
 our (%IDATA, %INAME, %IPREFIX, %ICORR, %SDATA, %SSEQUENCE, @SCALE_NUMS);
@@ -560,7 +561,25 @@ sub ints_by_age {
     
     my @result;
     
-    if ( $selector eq 'overlap' )
+    if ( $b_age < $t_age )
+    {
+	my $temp = $b_age;
+	$b_age = $t_age;
+	$t_age = $temp;
+    }
+    
+    if ( !defined $selector || $selector eq 'contained' )
+    {
+	foreach my $int ( values %IDATA )
+	{
+	    if ( $int->{b_age} <= $b_age && $int->{t_age} >= $t_age )
+	    {
+		push @result, { $int->%* };
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'overlap' )
     {
 	foreach my $int ( values %IDATA )
 	{
@@ -571,13 +590,230 @@ sub ints_by_age {
 	}
     }
     
-    elsif ( $selector eq 'contained' )
+    elsif ( $selector eq 'major' )
+    {
+	foreach my $int ( values %IDATA )
+	{
+	    if ( $int->{b_age} > $t_age && $int->{t_age} < $b_age )
+	    {
+		my $overlap;
+		
+		if ( $int->{b_age} >= $b_age )
+		{
+		    if ( $int->{t_age} > $t_age )
+		    {
+			$overlap = $b_age - $int->{t_age};
+		    }
+		    
+		    else
+		    {
+			$overlap = $b_age - $t_age;
+		    }
+		}
+		
+		else
+		{
+		    $overlap = $int->{b_age} - $t_age;
+		}
+		
+		if ( $overlap / ($int->{b_age} - $int->{t_age}) >= 0.5 )
+		{
+		    push @result, { $int->%* };
+		}
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'contains' )
+    {
+	foreach my $int ( values %IDATA )
+	{
+	    if ( $int->{b_age} > $b_age && $int->{t_age} <= $t_age ||
+		 $int->{b_age} >= $b_age && $int->{t_age} < $t_age )
+	    {
+		push @result, { $int->%* };
+	    }
+	}
+    }
+    
+    else
+    {
+	croak "invalid selector '$selector'";
+    }
+    
+    return @result;
+}
+
+
+sub ts_intervals_by_age {
+    
+    my ($scale_no, $b_age, $t_age, $selector) = @_;
+    
+    return unless $scale_no && $SSEQUENCE{$scale_no};
+    
+    my @result;
+    
+    if ( $b_age < $t_age )
+    {
+	my $temp = $b_age;
+	$b_age = $t_age;
+	$t_age = $temp;
+    }
+    
+    if ( !defined $selector || $selector eq 'contained' )
+    {
+	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	{
+	    if ( $int->{b_age} <= $b_age && $int->{t_age} >= $t_age )
+	    {
+		push @result, { $int->%* };
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'overlap' )
+    {
+	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	{
+	    if ( $int->{b_age} > $t_age && $int->{t_age} < $b_age )
+	    {
+		push @result, { $int->%* };
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'major' )
+    {
+	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	{
+	    if ( $int->{b_age} > $t_age && $int->{t_age} < $b_age )
+	    {
+		my $overlap;
+		
+		if ( $int->{b_age} >= $b_age )
+		{
+		    if ( $int->{t_age} > $t_age )
+		    {
+			$overlap = $b_age - $int->{t_age};
+		    }
+		    
+		    else
+		    {
+			$overlap = $b_age - $t_age;
+		    }
+		}
+		
+		else
+		{
+		    $overlap = $int->{b_age} - $t_age;
+		}
+		
+		if ( $overlap / ($int->{b_age} - $int->{t_age}) >= 0.5 )
+		{
+		    push @result, { $int->%* };
+		}
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'contains' )
+    {
+	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	{
+	    if ( $int->{b_age} > $b_age && $int->{t_age} <= $t_age ||
+		 $int->{b_age} >= $b_age && $int->{t_age} < $t_age )
+	    {
+		push @result, { $int->%* };
+	    }
+	}
+    }
+    
+    else
+    {
+	croak "invalid selector '$selector'";
+    }
+    
+    return @result;
+}
+
+
+sub interval_nos_by_age {
+    
+    my ($b_age, $t_age, $selector) = @_;
+    
+    my @result;
+    
+    if ( $b_age < $t_age )
+    {
+	my $temp = $b_age;
+	$b_age = $t_age;
+	$t_age = $temp;
+    }
+    
+    if ( !defined $selector || $selector eq 'contained' )
     {
 	foreach my $int ( values %IDATA )
 	{
 	    if ( $int->{b_age} <= $b_age && $int->{t_age} >= $t_age )
 	    {
-		push @result, { $int->%* };
+		push @result, $int->{interval_no};
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'overlap' )
+    {
+	foreach my $int ( values %IDATA )
+	{
+	    if ( $int->{b_age} > $t_age && $int->{t_age} < $b_age )
+	    {
+		push @result, $int->{interval_no};
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'major' )
+    {
+	foreach my $int ( values %IDATA )
+	{
+	    if ( $int->{b_age} > $t_age && $int->{t_age} < $b_age )
+	    {
+		my $overlap;
+		
+		if ( $int->{b_age} >= $b_age )
+		{
+		    if ( $int->{t_age} > $t_age )
+		    {
+			$overlap = $b_age - $int->{t_age};
+		    }
+		    
+		    else
+		    {
+			$overlap = $b_age - $t_age;
+		    }
+		}
+		
+		else
+		{
+		    $overlap = $int->{b_age} - $t_age;
+		}
+		
+		if ( $overlap / ($int->{b_age} - $int->{t_age}) >= 0.5 )
+		{
+		    push @result, $int->{interval_no};
+		}
+	    }
+	}
+    }
+    
+    elsif ( $selector eq 'contains' )
+    {
+	foreach my $int ( values %IDATA )
+	{
+	    if ( $int->{b_age} > $b_age && $int->{t_age} <= $t_age ||
+		 $int->{b_age} >= $b_age && $int->{t_age} < $t_age )
+	    {
+		push @result, $int->{interval_no};
 	    }
 	}
     }
