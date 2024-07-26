@@ -126,6 +126,8 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_name(APP_STATE => 'navigator_states');
     set_table_property('APP_STATE', PRIMARY_KEY => 'id');
+    
+    set_table_name(SESSION_DATA => 'session_data');
 }
 
 
