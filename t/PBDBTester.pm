@@ -9,7 +9,10 @@ package PBDBTester;
 
 use parent 'EditTester';
 
-use TableDefs qw(enable_test_mode);
+use TableDefs qw(%TABLE enable_test_mode);
+use CoreFunction qw(configData);
+use Test::More;
+use Carp qw(croak);
 
 use namespace::clean;
 
@@ -22,7 +25,9 @@ use namespace::clean;
 
 sub new {
     
-    my $instance = &SUPER::new;
+    my ($class, @args) = @_;
+    
+    my $instance = EditTester->new(@args);
     
     # Double check to make sure that the session_data table has actually been switched over to the
     # test database.
@@ -39,6 +44,8 @@ sub new {
     
     my $id_bound;
     
+    my $dbh = $instance->dbh;
+    
     eval {
 	($id_bound) = $dbh->selectrow_array("
 		SELECT min(enterer_no) FROM $TABLE{SESSION_DATA} WHERE enterer_no > 0");
@@ -53,7 +60,7 @@ sub new {
     
     $instance->{id_bound} = $id_bound;
     
-    return $instance;
+    return bless $instance;
 }
 
 
@@ -90,67 +97,69 @@ sub establish_session_data {
     
     if ( ($person_count && $person_count > 100) || ($user_count && $user_count > 100) )
     {
-	BAIL_OUT "There are more than 100 rows in the table '$TABLE{PERSON_DATA}'. You must establish a test database.";
+	BAIL_OUT "There are more than 100 rows in the table '$TABLE{PERSON_DATA}'. " .
+	    "You must establish a test database.";
     }
     
     eval {
 	
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{SESSION_DATA} (
-  `session_id` varchar(80) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `authorizer` varchar(64) NOT NULL DEFAULT '',
-  `enterer` varchar(64) NOT NULL DEFAULT '',
-  `role` varchar(20) DEFAULT NULL,
-  `reference_no` int(11) DEFAULT NULL,
-  `queue` varchar(255) DEFAULT NULL,
-  `record_date` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `created_date` timestamp NOT NULL DEFAULT current_timestamp(),
-  `expire_days` int NOT NULL default 1,
-  `superuser` tinyint(1) DEFAULT 0,
-  `authorizer_no` int(10) NOT NULL DEFAULT 0,
-  `enterer_no` int(10) NOT NULL DEFAULT 0,
-  PRIMARY KEY (`session_id`))");
+	  `session_id` varchar(80) NOT NULL,
+	  `user_id` char(36) NOT NULL,
+	  `authorizer` varchar(64) NOT NULL DEFAULT '',
+	  `enterer` varchar(64) NOT NULL DEFAULT '',
+	  `role` varchar(20) DEFAULT NULL,
+	  `reference_no` int(11) DEFAULT NULL,
+	  `queue` varchar(255) DEFAULT NULL,
+	  `record_date` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+	  `created_date` timestamp NOT NULL DEFAULT current_timestamp(),
+	  `expire_days` int NOT NULL default 1,
+	  `superuser` tinyint(1) DEFAULT 0,
+	  `authorizer_no` int(10) NOT NULL DEFAULT 0,
+	  `enterer_no` int(10) NOT NULL DEFAULT 0,
+	  PRIMARY KEY (`session_id`))");
 	
 	$dbh->do("DELETE FROM $TABLE{SESSION_DATA}");
 
-	$dbh->do("INSERT INTO $TABLE{SESSION_DATA} (session_id, user_id, authorizer_no, enterer_no, role, expire_days, superuser)
-		VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','39998','39998','authorizer',30000,0),
-			('SESSION-ENTERER','USERID-ENTERER','39998','39997','enterer',30000,0),
-			('SESSION-GUEST','USERID-GUEST','0','0','guest',30000,0),
-			('SESSION-STUDENT','USERID-STUDENT','39999','39996','student',30000,0),
-			('SESSION-OTHER','USERID-OTHER','39999','39995','enterer',30000,0),
-			('SESSION-UNAUTH','USERID-UNAUTH','0','39994','enterer',30000,0),
-			('SESSION-SUPERUSER','USERID-SUPERUSER','39999','39999','authorizer',30000,1),
-			('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','39999','39991','enterer',30000,0)");
-
+	$dbh->do("INSERT INTO $TABLE{SESSION_DATA} (session_id, user_id, authorizer_no, 
+						enterer_no, role, expire_days, superuser)
+	VALUES  ('SESSION-AUTHORIZER','USERID-AUTHORIZER','39998','39998','authorizer',30000,0),
+		('SESSION-ENTERER','USERID-ENTERER','39998','39997','enterer',30000,0),
+		('SESSION-GUEST','USERID-GUEST','0','0','guest',30000,0),
+		('SESSION-STUDENT','USERID-STUDENT','39999','39996','student',30000,0),
+		('SESSION-OTHER','USERID-OTHER','39999','39995','enterer',30000,0),
+		('SESSION-UNAUTH','USERID-UNAUTH','0','39994','enterer',30000,0),
+		('SESSION-SUPERUSER','USERID-SUPERUSER','39999','39999','authorizer',30000,1),
+		('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','39999','39991','enterer',30000,0)");
+	
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PERSON_DATA} (
-  `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(64) NOT NULL DEFAULT '',
-  `reversed_name` varchar(64) NOT NULL DEFAULT '',
-  `first_name` varchar(30) NOT NULL DEFAULT '',
-  `middle` varchar(10) DEFAULT NULL,
-  `last_name` varchar(30) NOT NULL DEFAULT '',
-  `country` varchar(80) DEFAULT NULL,
-  `institution` varchar(80) DEFAULT NULL,
-  `email` varchar(255) DEFAULT NULL,
-  `homepage` varchar(255) DEFAULT NULL,
-  `photo` varchar(255) DEFAULT NULL,
-  `is_authorizer` tinyint(1) NOT NULL DEFAULT 0,
-  `role` set('authorizer','enterer','officer','student','technician') DEFAULT NULL,
-  `active` tinyint(1) NOT NULL DEFAULT 1,
-  `heir_no` int(10) unsigned NOT NULL DEFAULT 0,
-  `research_group` varchar(64) DEFAULT NULL,
-  `preferences` varchar(64) DEFAULT NULL,
-  `last_download` varchar(64) DEFAULT NULL,
-  `created` datetime DEFAULT NULL,
-  `modified` datetime DEFAULT NULL,
-  `last_action` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `last_entry` datetime DEFAULT NULL,
-  `hours` int(4) unsigned DEFAULT NULL,
-  `hours_ever` int(6) unsigned DEFAULT NULL,
-  `hours_authorized` int(6) unsigned DEFAULT NULL,
-  `superuser` tinyint(1) DEFAULT 0,
-  PRIMARY KEY (`person_no`))");
+	  `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
+	  `name` varchar(64) NOT NULL DEFAULT '',
+	  `reversed_name` varchar(64) NOT NULL DEFAULT '',
+	  `first_name` varchar(30) NOT NULL DEFAULT '',
+	  `middle` varchar(10) DEFAULT NULL,
+	  `last_name` varchar(30) NOT NULL DEFAULT '',
+	  `country` varchar(80) DEFAULT NULL,
+	  `institution` varchar(80) DEFAULT NULL,
+	  `email` varchar(255) DEFAULT NULL,
+	  `homepage` varchar(255) DEFAULT NULL,
+	  `photo` varchar(255) DEFAULT NULL,
+	  `is_authorizer` tinyint(1) NOT NULL DEFAULT 0,
+	  `role` set('authorizer','enterer','officer','student','technician') DEFAULT NULL,
+	  `active` tinyint(1) NOT NULL DEFAULT 1,
+	  `heir_no` int(10) unsigned NOT NULL DEFAULT 0,
+	  `research_group` varchar(64) DEFAULT NULL,
+	  `preferences` varchar(64) DEFAULT NULL,
+	  `last_download` varchar(64) DEFAULT NULL,
+	  `created` datetime DEFAULT NULL,
+	  `modified` datetime DEFAULT NULL,
+	  `last_action` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+	  `last_entry` datetime DEFAULT NULL,
+	  `hours` int(4) unsigned DEFAULT NULL,
+	  `hours_ever` int(6) unsigned DEFAULT NULL,
+	  `hours_authorized` int(6) unsigned DEFAULT NULL,
+	  `superuser` tinyint(1) DEFAULT 0,
+	  PRIMARY KEY (`person_no`))");
 
 	$dbh->do("DELETE FROM $TABLE{PERSON_DATA} WHERE institution = 'Test'");
 
@@ -164,56 +173,57 @@ sub establish_session_data {
 			(39991,'A. Admin','Admin, A.','Test')");
 
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{WING_USERS} (
-  `id` char(36) COLLATE utf8_unicode_ci NOT NULL,
-  `date_created` datetime NOT NULL DEFAULT current_timestamp,
-  `date_updated` datetime NOT NULL DEFAULT current_timestamp,
-  `admin` tinyint(4) NOT NULL DEFAULT 0,
-  `real_name` varchar(255) COLLATE utf8_unicode_ci DEFAULT '',
-  `password_type` varchar(10) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'bcrypt',
-  `password_salt` char(16) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'abcdefghijklmnop',
-  `username` varchar(30) COLLATE utf8_unicode_ci NOT NULL,
-  `email` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `password` char(50) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `use_as_display_name` varchar(10) COLLATE utf8_unicode_ci DEFAULT 'username',
-  `developer` tinyint(4) NOT NULL DEFAULT 0,
-  `last_login` datetime DEFAULT NULL,
-  `country` char(2) COLLATE utf8_unicode_ci NOT NULL default '',
-  `person_no` int(11) DEFAULT NULL,
-  `middle_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
-  `role` enum('guest','authorizer','enterer','student') COLLATE utf8_unicode_ci NOT NULL,
-  `institution` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
-  `last_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
-  `first_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
-  `authorizer_no` int(11) DEFAULT NULL,
-  `orcid` varchar(19) COLLATE utf8_unicode_ci NOT NULL default '',
-  `contributor_status` enum('active','disabled','deceased') COLLATE utf8_unicode_ci NOT NULL default 'active',
-  `last_pwchange` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `users_username` (`username`),
-  KEY `idx_search` (`real_name`,`username`,`email`),
-  KEY `idx_country` (`country`),
-  KEY `idx_last_name` (`last_name`),
-  KEY `users_email` (`email`),
-  KEY `idx_person_no` (`person_no`))");
+	  `id` char(36) COLLATE utf8_unicode_ci NOT NULL,
+	  `date_created` datetime NOT NULL DEFAULT current_timestamp,
+	  `date_updated` datetime NOT NULL DEFAULT current_timestamp,
+	  `admin` tinyint(4) NOT NULL DEFAULT 0,
+	  `real_name` varchar(255) COLLATE utf8_unicode_ci DEFAULT '',
+	  `password_type` varchar(10) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'bcrypt',
+	  `password_salt` char(16) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'abcdefghijklmnop',
+	  `username` varchar(30) COLLATE utf8_unicode_ci NOT NULL,
+	  `email` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
+	  `password` char(50) COLLATE utf8_unicode_ci DEFAULT NULL,
+	  `use_as_display_name` varchar(10) COLLATE utf8_unicode_ci DEFAULT 'username',
+	  `developer` tinyint(4) NOT NULL DEFAULT 0,
+	  `last_login` datetime DEFAULT NULL,
+	  `country` char(2) COLLATE utf8_unicode_ci NOT NULL default '',
+	  `person_no` int(11) DEFAULT NULL,
+	  `middle_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
+	  `role` enum('guest','authorizer','enterer','student') COLLATE utf8_unicode_ci NOT NULL,
+	  `institution` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
+	  `last_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
+	  `first_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
+	  `authorizer_no` int(11) DEFAULT NULL,
+	  `orcid` varchar(19) COLLATE utf8_unicode_ci NOT NULL default '',
+	  `contributor_status` enum('active','disabled','deceased') 
+		COLLATE utf8_unicode_ci NOT NULL default 'active',
+	  `last_pwchange` datetime DEFAULT NULL,
+	  PRIMARY KEY (`id`),
+	  UNIQUE KEY `users_username` (`username`),
+	  KEY `idx_search` (`real_name`,`username`,`email`),
+	  KEY `idx_country` (`country`),
+	  KEY `idx_last_name` (`last_name`),
+	  KEY `users_email` (`email`),
+	  KEY `idx_person_no` (`person_no`))");
 	
 	$dbh->do("DELETE FROM $TABLE{WING_USERS}");
 	
 	$dbh->do("INSERT INTO $TABLE{WING_USERS} (id, person_no, username, role,
 						  real_name, first_name, last_name, institution)
-		VALUES	('USERID-SUPERUSER','39999','sua','authorizer','A. Superuser','A.','Superuser','Test'),
-			('USERID-AUTHORIZER','39998','aua','authorizer','A. Authorizer','A.','Authorizer','Test'),
-			('USERID-ENTERER','39997','ena','enterer','A. Enterer','A.','Enterer','Test'),
-			('USERID-STUDENT','39996','sta','student','A. Student','A.','Student','Test'),
-			('USERID-OTHER','39995','enb','enterer','B. Enterer','B.','Enterer','Test'),
-			('USERID-UNAUTH','39994','enc','enterer','C. Enterer','C.','Enterer','Test'),
-			('USERID-WITH-ADMIN','39991','adm','enterer','A. Admin','A.','Admin','Test'),
-			('USERID-GUEST','0','gua','guest','A. Guest','A.','Guest','Test')");
+    VALUES  ('USERID-SUPERUSER','39999','sua','authorizer','A. Superuser','A.','Superuser','Test'),
+	    ('USERID-AUTHORIZER','39998','aua','authorizer','A. Authorizer','A.','Authorizer','Test'),
+	    ('USERID-ENTERER','39997','ena','enterer','A. Enterer','A.','Enterer','Test'),
+	    ('USERID-STUDENT','39996','sta','student','A. Student','A.','Student','Test'),
+	    ('USERID-OTHER','39995','enb','enterer','B. Enterer','B.','Enterer','Test'),
+	    ('USERID-UNAUTH','39994','enc','enterer','C. Enterer','C.','Enterer','Test'),
+	    ('USERID-WITH-ADMIN','39991','adm','enterer','A. Admin','A.','Admin','Test'),
+	    ('USERID-GUEST','0','gua','guest','A. Guest','A.','Guest','Test')");
 	
 	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{TABLE_PERMS} (
-  `person_no` int(10) unsigned NOT NULL,
-  `table_name` varchar(80) NOT NULL,
-  `permission` set('none','view','post','modify','delete','insert_key','admin') NOT NULL,
-  UNIQUE KEY `person_no` (`person_no`,`table_name`))");
+	  `person_no` int(10) unsigned NOT NULL,
+	  `table_name` varchar(80) NOT NULL,
+	  `permission` set('none','view','post','modify','delete','insert_key','admin') NOT NULL,
+	  UNIQUE KEY `person_no` (`person_no`,`table_name`))");
 	
 	# $dbh->do("INSERT INTO $TABLE{TABLE_PERMS} (person_no, table_name, permission)
 	# 	VALUES ('39991', 'RESOURCE_QUEUE', 'admin')");
@@ -306,7 +316,8 @@ sub get_session_authinfo {
 
     croak "you must specify a session id" unless $session_id;
     
-    return $T->dbh->selectrow_array("SELECT authorizer_no, enterer_no, user_id FROM $TABLE{SESSION_DATA}
+    return $T->dbh->selectrow_array("SELECT authorizer_no, enterer_no, user_id
+		FROM $TABLE{SESSION_DATA}
 		WHERE session_id = " . $T->dbh->quote($session_id));
 }
 

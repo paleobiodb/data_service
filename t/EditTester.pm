@@ -67,7 +67,9 @@ sub new {
     
     my ($class, $options, $edt_table) = @_;
     
-    my ($dbh, $edt_class, $edt_request, $debug_mode, $errlog_mode);
+    my ($dbh, $edt_request, $debug_mode, $errlog_mode);
+    
+    my $edt_class = 'EditTransaction';
     
     if ( ref $options eq 'HASH' )
     {
@@ -92,7 +94,7 @@ sub new {
     
     # If a class was specified, load corresponding module if it was not already loaded.
     
-    if ( $edt_class && ! $edt_class->isa('EditTransaction') )
+    if ( $edt_class != 'EditTransaction' && ! $edt_class->isa('EditTransaction') )
     {
 	my $class = $edt_class;
 	$class =~ s{::}{/}g;
@@ -102,7 +104,7 @@ sub new {
     
     # Make sure this class actually is a subclass of EditTransaction.
     
-    if ( $edt_class && ! $edt_class->isa('EditTransaction') )
+    if ( $edt_class ne 'EditTransaction' && ! $edt_class->isa('EditTransaction') )
     {
 	croak "You must specify the name of a class that is a subclass of EditTransaction.";
     }

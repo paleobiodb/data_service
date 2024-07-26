@@ -15,10 +15,6 @@ use Switch::Plain;
 
 use feature 'unicode_strings', 'postderef';
 
-use parent 'Exporter';
-
-our (@EXPORT_OK) = qw(%ALLOW_BY_CLASS %ALLOW_ALIAS);
-
 use EditTransaction::Action;
 
 use Role::Tiny::With;
