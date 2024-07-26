@@ -72,6 +72,19 @@ sub initialize {
 	"This operation allows you to add new bibliographic references to the database",
 	"and/or update the attributes of existing references.");
     
+    $ds2->define_node({ path => 'refs/classic_select',
+			title => 'Select a bibliographic reference for data entry',
+			place => 11,
+			allow_method => 'GET',
+			doc_template => 'entry_operation.tt',
+			role => 'PB2::ReferenceAux',
+			method => 'classic_select',
+			output => '1.2:refs:basic',
+			optional_output => '1.2:refs:output_map' },
+	"This operation allows you to select the specified reference for your current",
+	"session in the Classic environment. After it is executed, the next time the",
+	"current user visits the Classic environment, this reference will be the selected one.");
+    
     # Timescales and Interval bounds
     
     # $ds2->define_node({ path => 'entry/timescales',

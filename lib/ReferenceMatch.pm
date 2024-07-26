@@ -23,7 +23,7 @@ use Scalar::Util qw(reftype);
 
 use Exporter 'import';
 
-our (@EXPORT_OK) = qw(ref_similarity ref_match get_reftitle get_subtitle
+our (@EXPORT_OK) = qw(ref_similarity ref_match author_similarity get_reftitle get_subtitle
 		      get_pubtitle get_publisher get_volpages
 		      get_authorname get_authorlist split_authorlist parse_authorname
 		      get_pubyr get_doi get_publication_type title_words @SCORE_VARS);
@@ -1058,7 +1058,9 @@ sub get_authorname {
 
 our($CONTAINS_INITIALS) = qr{ \b \pL\pM*[.] | ^ \pL\pM* \s | \s \pL\pM* $ }xs;
 
-our($NAME_SUFFIX) = qr{ ^ (?:jr|ii|iii|iv|2nd|3rd|4th) [.] $ }xsi;
+our($NAME_SUFFIX) = qr{ ^ (?:jr[.]?|ii|iii|iv|2nd|3rd|4th) $ }xsi;
+
+our($EXTRACT_SUFFIX) = qr{ (.*) \s+ (jr[.]|ii|iii|iv|2nd|3rd|4th) $ }xsi;
 
 sub get_authorlist {
     
@@ -1288,7 +1290,7 @@ sub split_authorlist {
 	{
 	    if ( @names )
 	    {
-		$names[-1] .= ", $item";
+		$names[-1] .= " $item";
 	    }
 	}
 	
@@ -1370,6 +1372,11 @@ sub parse_authorname {
 	$first = $entry->{first} || $entry->{firstname} || $entry->{given};
 	$affiliation = $entry->{affiliation} || $entry->{institution};
 	$orcid = $entry->{ORCID} || $entry->{orcid};
+	
+	if ( my $suffix = $entry->{suffix} )
+	{
+	    $last .= " $suffix";
+	}
 	
 	if ( ref $affiliation eq 'ARRAY' )
 	{

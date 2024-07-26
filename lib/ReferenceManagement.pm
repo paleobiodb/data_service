@@ -18,6 +18,8 @@ use Carp qw(croak);
 use LWP::UserAgent;
 use URI::Escape;
 use JSON;
+use Encode qw(encode);
+use Unicode::Normalize;
 
 use Scalar::Util qw(reftype blessed);
 
@@ -291,7 +293,9 @@ sub external_query {
 	
 	# Send the request and wait for the response. Record how long it takes.
 	
-	print STDERR "Request Text: $progress->{query_text}\n" if $rm->{debug_mode};
+	my $encoded_text = encode('UTF-8', $progress->{query_text});
+	
+	print STDERR "Request Text: $encoded_text\n" if $rm->{debug_mode};
 	print STDERR "Request URL: $request_url\n" if $rm->{debug_mode};
 	
 	my $inittime = time;
@@ -730,12 +734,12 @@ sub generate_crossref_request {
 	    
 	    if ( $lastname && $lastname =~ /\pL{2}/ )
 	    {
-		push @author_words, grep { /\pL{2}/ } title_words($lastname);
+		push @author_words, map { NFC($_) } grep { /\pL{2}/ } $lastname;
 	    }
 	    
 	    if ( $firstname && $firstname =~ /\pL{2}/ )
 	    {
-		push @author_words, grep { /\pL{2}/ } title_words($firstname);
+		push @author_words, map { NFC($_) } grep { /\pL{2}/ } $firstname;
 	    }
 	}
 	
@@ -786,9 +790,12 @@ sub generate_crossref_request {
 	    my $query_string = join '&', @url_params;
 	    return "$CROSSREF_BASE?$query_string";
 	}
-
-	print STDERR "Crossref: not enough bibliographic information.\n"
-	    if $rm->{debug_mode};
+	
+	else
+	{
+	    print STDERR "Crossref: not enough bibliographic information.\n"
+		if $rm->{debug_mode};
+	}
     }
     
     # If we have tried both of these, return nothing.

@@ -245,8 +245,10 @@ sub initialize {
         { set => '*', code => \&process_relevance },
 	{ output => 'r_relevance', com_name => 'rsc', pbdb_name => 'relevance', 
 	  bibjson_name => '_relevance' },
-	"For queries with either the 'ref_match' or 'pub_match' parameter,",
-	"this field displays the fulltext relevance score of each matching record");
+	    "For queries with either the 'ref_match' or 'pub_match' parameter,",
+	    "this field displays the fulltext relevance score of each matching record",
+	{ output => 'r_relevance_a', com_name => 'rsa', pbdb_name => 'relevance_a' },
+	    "An auxiliary relevance score, used for debugging purposes.");
     
     # Then blocks for other classes to use when including one or more
     # references into other output.
@@ -365,7 +367,7 @@ sub initialize {
     
     $ds->define_ruleset('1.2:refs:specifier' => 
 	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id' },
-	    "The identifier of the reference to be returned");
+	    "The identifier of the reference to be returned or selected");
     
     $ds->define_ruleset('1.2:refs:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
@@ -1156,7 +1158,7 @@ sub generate_one_auth_filter {
     }
     
     my ($firstname, $lastname, $initpat, $lastpat, $fullpat, @authfilters);
-	
+    
     if ( $name =~ /(.*)[.] +(.*)/ )
     {
 	$firstname = $1;

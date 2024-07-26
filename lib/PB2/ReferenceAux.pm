@@ -17,6 +17,7 @@ use CoreTableDefs;
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use ReferenceManagement;
+use ReferenceMatch qw(parse_authorname author_similarity);
 
 use Carp qw(carp croak);
 use JSON qw(to_json);
@@ -118,14 +119,22 @@ sub initialize {
 	    "The request URL that was used to fetch this record",
 	{ output => 'source_data', com_name => 'exd' },
 	    "The externally fetched data that is the source for this record");
-
+    
+    $ds->define_ruleset('1.2:refs:classic_select' =>
+    	{ require => '1.2:refs:specifier' },
+    	{ allow => '1.2:refs:display' },
+    	{ allow => '1.2:special_params' },
+    	"^You can also use any of the L<special parameters|node:special>");
+        
 }
 
 
 # match_local ( )
 # 
 # Return a list of local bibliographic references that match the specified
-# attributes, roughly in decreasing order of similarity, date entered.
+# attributes, roughly in decreasing order of similarity, date entered. This is a
+# "fuzzy match" with respect to author and publication year, unlike the refs/list
+# operation.
 
 sub match_local {
     
@@ -159,134 +168,291 @@ sub match_local {
 	
 	# Assign match scores and add to the match list.
 	
-	foreach my $m ( @$result )
+	if ( ref $result eq 'ARRAY' && @$result )
 	{
-	    my $score = 90;
-	    $score++ if $m->{reftitle};
-	    $score++ if $m->{pubtitle};
-	    $score++ if $m->{author1last};
-	    $score++ if $m->{pubvol};
-	    $score++ if $m->{pubno};
-	    $score++ if $m->{publisher};
-	    $score++ if $m->{firstpage};
+	    foreach my $m ( @$result )
+	    {
+		my $score = 90;
+		$score++ if $m->{reftitle};
+		$score++ if $m->{pubtitle};
+		$score++ if $m->{author1last};
+		$score++ if $m->{pubvol};
+		$score++ if $m->{pubno};
+		$score++ if $m->{publisher};
+		$score++ if $m->{firstpage};
+		
+		$m->{r_relevance} = $score;
+	    }
 	    
-	    $m->{score} = $score;
-	    push @matches, $m;
+	    push @matches, sort { $b->{r_relevance} <=> $a->{r_relevance} } @$result;
 	}
     }
     
-    # If no doi was given or if no references with that doi were found, look for references that
-    # match some combination of reftitle, pubtitle, pubyr, authors.
+    # Then, look for references that match some combination of reftitle,
+    # pubtitle, pubyr, authors.
     
-    unless ( @matches )
+    my (@filters, $having, $order);
+    
+    my $ref_title = $request->clean_param("ref_title");
+    my $pub_title = $request->clean_param("pub_title");
+    
+    # If we have a reftitle or a pubtitle, use the refsearch table for full-text matching.
+    
+    if ( $ref_title && $pub_title )
     {
-	my (@filters, $having);
+	my $refquoted = $dbh->quote($ref_title);
+	my $pubquoted = $dbh->quote($pub_title);
 	
-	my $ref_title = $request->clean_param("ref_title");
-	my $pub_title = $request->clean_param("pub_title");
+	$fulltext = "match(r.reftitle) against($refquoted) as score1,
+		  match(r.pubtitle) against ($pubquoted) as score2";
+	$having = "score1 > 5";
+	$order = "ORDER BY score1 + 0.5 * score2 desc";
+    }
+    
+    elsif ( $ref_title )
+    {
+	my $quoted = $dbh->quote($ref_title);
 	
-	# If we have a reftitle or a pubtitle, use the refsearch table for full-text matching.
-	
-	if ( $ref_title && $pub_title )
+	$fulltext = "match(r.reftitle) against($quoted) as score";
+	$having = "score > 5";
+	$order = "ORDER BY score1 desc";
+    }
+    
+    else
+    {
+	$request->add_error("E_REQUIRED: you must provide a non-empty value for 'ref_title' with this operation");
+	die $request->exception(400, "Bad request");
+    }
+    
+    # If a publication year was specified, add a filter.
+    
+    my $exact_pubyr;
+    
+    if ( my $ref_pubyr = $request->clean_param("ref_pubyr") )
+    {
+	if ( $ref_pubyr =~ /^\d\d\d\d$/ )
 	{
-	    my $refquoted = $dbh->quote($ref_title);
-	    my $pubquoted = $dbh->quote($pub_title);
-
-	    $fulltext = "match(rs.reftitle) against($refquoted) as score1,
-		  match(rs.pubtitle) against ($pubquoted) as score2";
-	    $having = "score1 > 5 and score2 > 5";
+	    my $list = join("','", $ref_pubyr-1, $ref_pubyr, $ref_pubyr+1);
+	    push @filters, "r.pubyr in ('$list')";
+	    $exact_pubyr = $ref_pubyr;
 	}
 	
-	elsif ( $ref_title )
+	elsif ( $ref_pubyr =~ /^(\d\d\d\d)\s*-\s*(\d\d\d\d)$/ )
 	{
-	    my $quoted = $dbh->quote($ref_title);
-
-	    $fulltext = "match(rs.reftitle) against($quoted) as score";
-	    $having = "score > 5";
+	    push @filters, "r.pubyr >= '$1'";
+	    push @filters, "r.pubyr <= '$2'";
 	}
 	
-	elsif ( $pub_title )
+	elsif ( $ref_pubyr =~ /^(\d\d\d\d)\s*-\s*$/ )
 	{
-	    my $quoted = $dbh->quote($pub_title);
-	    
-	    $fulltext = "match(rs.pubtitle) against($quoted) as score";
-	    $having = "score > 0";
+	    push @filters, "r.pubyr >= '$1'";
 	}
 	
-	# Then add clauses to restrict the selection based on pubyr and author names.
-	
-	if ( my $ref_pubyr = $request->clean_param("ref_pubyr") )
+	elsif ( $ref_pubyr =~ /^\s*-\s*(\d\d\d\d)$/ )
 	{
-	    push @filters, $request->generate_pubyear_filter($ref_pubyr);
-	}
-	
-	if ( my $authorname = $request->clean_param('ref_author') )
-	{
-	    push @filters, $request->generate_auth_filter($authorname, 'author');
-	}
-	
-	if ( my $authorname = $request->clean_param('ref_primary') )
-	{
-	    push @filters, $request->generate_auth_filter($authorname, 'primary');
-	}
-	
-	# Now put the pieces together into a single SQL statement and execute
-	# it. But return an error if we don't have at least two different
-	# attributes to match on.
-	
-	die $request->exception(400, "You must specify at one attribute to match")
-	    unless @filters or $having;
-	
-	my $clause = join(' and ', @filters);
-	
-	$clause ||= '1';
-	
-	my $limit = $request->sql_limit_clause;
-	
-	my $calc = $request->sql_count_clause;
-	
-	if ( $fulltext )
-	{
-	    $sql = "SELECT $calc $fields, $fulltext
-		FROM $TABLE{REFERENCE_DATA} as r
-		     join $TABLE{REFERENCE_SEARCH} as rs using (reference_no)
-		WHERE $clause
-		HAVING $having $limit";
+	    push @filters, "r.pubyr <= '$1'";
 	}
 	
 	else
 	{
-	    $sql = "SELECT $calc $fields
-		FROM $TABLE{REFERENCE_DATA} as r
-		WHERE $clause $limit";
-	}
-	
-	$request->debug_line("$sql\n") if $request->debug;
-	
-	my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
-	
-	foreach my $m ( @$result )
-	{
-	    if ( $m->{score1} || $m->{score2} )
-	    {
-		$m->{score} = $m->{score1} + $m->{score2};
-	    }
-	    
-	    $m->{score} ||= 1;
-	    
-	    push @matches, $m;
+	    my $quoted = $dbh->quote($ref_pubyr);
+	    $request->add_error("E_FORMAT: ref_pubyr: bad value $quoted");
+	    die $request->exception(400, "Bad request");
 	}
     }
     
-    # Now sort the matches in descending order by score.
+    my ($authorname, $author_is_primary, $a1last, $a1first, $a2last, $a2first);
     
-    my @sorted = sort { $b->{score} <=> $a->{score} } @matches;
+    if ( $authorname = $request->clean_param('ref_primary') )
+    {
+	$author_is_primary = 1;
+    }
     
-    $request->list_result(@sorted);
+    else
+    {
+	$authorname = $request->clean_param('ref_author');
+    }
+    
+    if ( $authorname =~ /(.*?) and (.*)/ )
+    {
+	my $name1 = $1;
+	my $name2 = $2;
+	
+	($a1last, $a1first) = parse_authorname($name1);
+	($a2last, $a2first) = parse_authorname($name2);
+    }
+    
+    else
+    {
+	($a1last, $a1first) = parse_authorname($authorname);
+    }
+    
+    my $clause = join(' and ', @filters);
+    
+    $clause ||= '1';
+    
+    my $calc = $request->sql_count_clause;
+    
+    my $authorlist = "group_concat(concat_ws(';',lastname,firstname) separator '|') as authorlist";
+    
+    $sql = "SELECT $calc $fields, $authorlist, $fulltext
+	    FROM $TABLE{REFERENCE_DATA} as r
+		left join $TABLE{REFERENCE_AUTHORS} as ra using (reference_no)
+	    WHERE $clause
+	    GROUP BY reference_no
+	    HAVING $having LIMIT 500";
+    
+    $request->debug_line("$sql\n") if $request->debug;
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    if ( ref $result eq 'ARRAY' && @$result )
+    {
+	my $total_sim;
+	my $max_relevance = $result->[0]{score} || $result->[0]{score1} + 0.5 * $result->[0]{score2};
+	
+	foreach my $m ( @$result )
+	{
+	    # Title/publication similarity
+	    
+	    my $relevance = $m->{score} || $m->{score1} + 0.5 * $m->{score2};
+	    
+	    my $text_sim = int( 100 * $relevance / $max_relevance + 0.5 );
+	    
+	    # Author similarity
+	    
+	    my $author_sim;
+	    
+	    my @authors = $request->extract_authorlist($m);
+	    
+	    my $r1last = $authors[0]{lastname};
+	    my $r1first = $authors[0]{firstname};
+	    
+	    my ($sim1, $con1) = author_similarity($a1last, $a1first, $r1last, $r1first);
+	    
+	    if ( $author_is_primary )
+	    {
+		if ( $sim1 >= 50 && $a2last )
+		{
+		    my $sim2 = 0;
+		    
+		    foreach my $i ( 1..$#authors )
+		    {
+			my ($sim, $con) = author_similarity($a2last, $a2first,
+							    $authors[$i]{lastname},
+							    $authors[$i]{firstname});
+			
+			$sim2 = $sim if $sim > $sim2;
+		    }
+		    
+		    $author_sim = 0.5 * $sim1 + 0.5 * $sim2;
+		}
+		
+		elsif ( $a2last )
+		{
+		    $author_sim = 0.5 * $sim1;
+		}
+		
+		else
+		{
+		    $author_sim = $sim1;
+		}
+	    }
+	    
+	    else
+	    {
+		if ( $sim1 < 90 )
+		{
+		    foreach my $i ( 1..$#authors )
+		    {
+			my ($sim, $con) = author_similarity($a1last, $a1first,
+							    $authors[$i]{lastname},
+							    $authors[$i]{firstname});
+			
+			$sim1 = $sim if $sim > $sim1;
+		    }
+		}
+		
+		if ( $a2last )
+		{
+		    my $sim2 = 0;
+		    
+		    foreach my $i ( 0..$#authors )
+		    {
+			my ($sim, $con) = author_similarity($a2last, $a2first,
+							    $authors[$i]{lastname},
+							    $authors[$i]{firstname});
+			
+			$sim2 = $sim if $sim > $sim2;
+		    }
+		    
+		    $author_sim = 0.5 * $sim1 + 0.5 * $sim2;
+		}
+		
+		else
+		{
+		    $author_sim = $sim1;
+		}
+		
+		$m->{author_sim} = $author_sim;
+	    }
+	    
+	    # Pubyr similarity
+	    
+	    my $pubyr_sim;
+	    
+	    if ( $m->{r_pubyr} && $exact_pubyr )
+	    {
+		$pubyr_sim = $m->{r_pubyr} eq $exact_pubyr ? 100 : 50;
+	    }
+	    
+	    else
+	    {
+		$pubyr_sim = 100;
+	    }
+	    
+	    $m->{r_relevance} = $text_sim + $author_sim + $pubyr_sim;
+	    $m->{r_relevance_a} = "T$text_sim A$author_sim P$pubyr_sim";
+	}
+	
+	push @matches, sort { $b->{r_relevance} <=> $a->{r_relevance} } 
+	    grep { $_->{r_relevance} >= 200 && $_->{author_sim} > 0 } @$result;
+    }
+    
+    $request->list_result(@matches);
     
     $request->sql_count_rows;
     
     return 1;
+}
+
+
+sub extract_authorlist {
+    
+    my ($request, $record) = @_;
+    
+    my @authors;
+    
+    if ( $record->{authorlist} )
+    {
+	my @extracted = split /[|]/, $record->{authorlist};
+	
+	foreach my $i ( 0..$#extracted )
+	{
+	    my ($last, $first) = split /;/, $extracted[$i];
+	    
+	    push @authors, PB2::ReferenceData::bibjson_name_record($first, $last);
+	}
+    }
+    
+    else
+    {
+	push @authors, PB2::ReferenceData::bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
+	push @authors, PB2::ReferenceData::bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
+	push @authors, PB2::ReferenceData::bibjson_name_list($record->{r_oa}) if $record->{r_oa};
+    }
+    
+    return @authors;
 }
 
 
@@ -349,5 +515,82 @@ sub match_external {
     $request->list_result(@sorted);
 }
 
+
+# classic_select ( )
+# 
+# Select the specified reference for the current session in the Classic
+# environment. 
+
+sub classic_select {
+    
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    
+    # Make sure we have a valid id number.
+    
+    my $id = $request->clean_param('ref_id');
+    
+    die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
+    
+    $request->strict_check;
+    $request->extid_check;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    $request->substitute_select( cd => 'r' );
+    
+    my $fields = $request->select_string;
+    
+    my $tables = $request->tables_hash;
+    my $join_list = $request->generate_join_list($tables);
+    
+    # Generate the main query.
+    
+    $request->{main_sql} = "
+	SELECT $fields
+	FROM $TABLE{REFERENCE_DATA} as r $join_list
+        WHERE r.reference_no = $id
+	GROUP BY r.reference_no";
+    
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+    
+    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+    
+    return unless $request->{main_record};
+    
+    my $session_id = Dancer::cookie('session_id');
+    
+    my $quoted_id = $dbh->quote($session_id);
+    
+    my ($sql, $s);
+    
+    if ( $session_id )
+    {
+	$sql = "SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, role,
+		       timestampdiff(day,record_date,now()) as days_old, expire_days
+		FROM $TABLE{SESSION_DATA} WHERE session_id = $quoted_id";
+	    
+	print STDERR "$sql\n\n" if $request->{debug};
+    
+	$s = $dbh->selectrow_hashref($sql);
+    }
+    
+    die $request->exception(401, "You must log in first") unless $s;
+    
+    die $request->exception(401, "Unauthorized") unless $s->{role} =~ /^auth|^ent|^stu/;
+    
+    my $reference_no = $request->{main_record}{reference_no};
+    
+    $sql = "UPDATE $TABLE{SESSION_DATA} SET reference_no = '$reference_no'
+		WHERE session_id = $quoted_id";
+    
+    my $result = $dbh->do($sql);
+    
+    my $a = 1;	# we can stop here when debugging
+}
 
 1;
