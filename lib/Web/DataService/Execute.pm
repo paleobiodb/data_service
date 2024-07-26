@@ -12,7 +12,7 @@ package Web::DataService::Execute;
 
 use Carp 'croak';
 use Scalar::Util qw(reftype weaken);
-
+use Encode qw(encode);
 use Moo::Role;
 
 
@@ -424,9 +424,19 @@ sub configure_request {
 	    foreach my $p ( $result->keys )
 	    {
 		my $value = $result->value($p);
-		$value = join(', ', @$value) if ref $value eq 'ARRAY';
-		$value ||= '[ NO GOOD VALUES FOUND ]';
-		print STDERR "$p = $value\n";
+		
+		if ( defined $value )
+		{
+		    $value = join(', ', @$value) if ref $value eq 'ARRAY';
+		    my $encoded = encode('UTF-8', $value);
+		    $encoded =~ s/'/\\'/g;
+		    print STDERR "$p = '$encoded'\n";
+		}
+		
+		else
+		{
+		    print STDERR "$p = (undefined)\n";
+		}
 	    }
 	}
     }
