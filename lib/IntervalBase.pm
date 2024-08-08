@@ -16,15 +16,15 @@ use Carp qw(croak);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(ts_defined ts_name ts_bounds ts_record ts_intervals ts_by_age ts_list
-		      ts_boundary_list ts_boundary_no ts_boundary_name ts_boundary_next
+our (@EXPORT_OK) = qw(ts_defined ts_name ts_bounds ts_record ts_intervals ts_has_type ts_by_age
+		      ts_list ts_boundary_list ts_boundary_no ts_boundary_name ts_boundary_next
 		      int_defined int_bounds int_scale int_name int_type int_correlation
 		      int_container int_record ints_by_age ts_intervals_by_age
 		      interval_nos_by_age ints_by_prefix
 		      INTL_SCALE BIN_SCALE AGE_RE);
 
-our (%IDATA, %INAME, %IPREFIX, %ICORR, %SDATA, %SSEQUENCE, @SCALE_NUMS);
-our (%BOUNDARY_LIST, %BOUNDARY_MAP);
+our (%IDATA, %INAME, %IPREFIX, %ICORR, %SDATA, %SNAME, %SSEQUENCE, @SCALE_NUMS);
+our (%BOUNDARY_LIST, %BOUNDARY_MAP, %BOUNDARY_NAME);
 
 use constant INTL_SCALE => 1;	# The identifier of the ICS international time scale.
 use constant BIN_SCALE => 10;	# The identifier of the 10-million-year bin scale.
@@ -47,7 +47,8 @@ our (%IS_DEFAULT_TYPE) = (age => 1, bin => 1, zone => 1, chron => 1);
 
 sub cache_interval_data {
     
-    my ($class, $dbh) = @_;
+    shift @_ unless ref $_[0];
+    my $dbh = shift @_;
     
     # If we have already done this, then there is nothing else to do.
     
@@ -66,6 +67,7 @@ sub cache_interval_data {
     foreach my $s ( $dbh->selectall_array($sql, { Slice => {} }) )
     {
 	my $scale_no = $s->{scale_no};
+	my $scale_name = $s->{scale_name};
 	my $reference_no = $s->{reference_no};
 	
 	$s->{early_age} =~ s/[.]?0+$// if defined $s->{early_age};
@@ -76,10 +78,12 @@ sub cache_interval_data {
 	
 	$SDATA{$scale_no} = $s;
 	push @SCALE_NUMS, $scale_no;
+	$SNAME{lc $scale_name} = $s;
 	
 	if ( $reference_no )
 	{
-	    push $SDATA{$scale_no}{reflist}->@*, $reference_no;
+	    push $SDATA{$scale_no}{reflist}->@*, $reference_no 
+		unless $ref_uniq{$scale_no}{$reference_no};
 	    $ref_uniq{$scale_no}{$reference_no} = 1;
 	}
     }
@@ -187,49 +191,38 @@ sub cache_interval_data {
 	    }
 	}
     }
-	
+    
+    # Fill in the default type for every timescale that doesn't yet have one set.
+    
+    foreach my $scale_no ( @SCALE_NUMS )
+    {
+	unless ( $SDATA{$scale_no}{default_type} )
+	{
+	    my %has_type;
+	    
+	    foreach my $i ( $SSEQUENCE{$scale_no}->@* )
+	    {
+		$has_type{$i->{type}} = 1;
+	    }
+	    
+	    foreach my $type ( qw(subage subepoch epoch period era) )
+	    {
+		if ( $has_type{$type} )
+		{
+		    $SDATA{$scale_no}{default_type} = $type;
+		    last;
+		}
+	    }
+	}
+    }
+    
     # Now compute a boundary list and boundary map for each interval type in the
-    # international scale and the ten million year bin scale.
+    # international scale and the ten million year bin scale. The others will be
+    # computed on the fly as needed.
     
     foreach my $scale_no ( INTL_SCALE, BIN_SCALE )
     {
-	my %boundary_map;
-	
-	foreach my $i ( $SSEQUENCE{$scale_no}->@* )
-	{
-	    my $b_age = $i->{early_age};
-	    my $type = $i->{type};
-	    
-	    if ( $type ne 'era' && $type ne 'eon' &&
-	         $b_age > 0.01 )
-	    {
-		$boundary_map{$type}{$b_age} = $i;
-	    }
-	}
-	
-	# Add Holocene to the 'age' map for the international scale. Otherwise,
-	# it will end with the Late Pleistocene.
-	
-	if ( $scale_no eq INTL_SCALE )
-	{
-	    my $hbound = $INAME{holocene}{early_age};
-	    $boundary_map{age}{$hbound} = $INAME{holocene};
-	}
-	
-	# Now sort each of the boundary lists (oldest to youngest) and
-	# store them in the appropriate package variable. Add the end age of the scale.
-	
-	foreach my $type ( keys %boundary_map )
-	{
-	    $BOUNDARY_LIST{$scale_no}{$type} = 
-		[ sort { $b <=> $a } keys %{$boundary_map{$type}} ];
-	    
-	    push @{$BOUNDARY_LIST{$scale_no}{$type}}, $SDATA{$scale_no}{late_age};
-	    $BOUNDARY_MAP{$scale_no}{$type} = $boundary_map{$type};
-	}
-	
-	my $default_type = $SDATA{$scale_no}{default_type};
-	$BOUNDARY_LIST{$scale_no}{default} = $BOUNDARY_LIST{$scale_no}{$default_type};
+	compute_boundary_map($scale_no);
     }
     
     my $a = 1;	# we can stop here when debugging.
@@ -242,13 +235,97 @@ sub cache_filled {
 }
 
 
-sub ts_defined {
+sub compute_boundary_map {
     
     my ($scale_no) = @_;
     
-    if ( $scale_no && $SDATA{$scale_no} && $SDATA{$scale_no}{scale_no} )
+    my %boundary_map;
+    my %boundary_name;
+    
+    foreach my $i ( $SSEQUENCE{$scale_no}->@* )
     {
-	return $SDATA{$scale_no}{scale_no};
+	my $b_age = $i->{early_age};
+	my $type = $i->{type};
+	my $name = $i->{interval_name};
+	
+	if ( $type ne 'eon' )
+	{
+	    $boundary_map{$type}{$b_age} = $i;
+	    
+	    if ( $boundary_name{$type}{$b_age} )
+	    {
+		$boundary_name{$type}{$b_age} .= "/$name";
+	    }
+	    
+	    else
+	    {
+		$boundary_name{$type}{$b_age} = $name;
+	    }
+	    
+	    # The default map for the international scale includes all ages
+	    # except Meghalayan, Northgrippian, and Greenlandian, and
+	    # precambrian periods.
+	    
+	    if ( $scale_no eq INTL_SCALE )
+	    {
+		if ( $b_age > 500 && $type eq 'period' ||
+		     $b_age > 0.01 && $type eq 'age' )
+		{
+		    $boundary_map{default}{$b_age} = $i;
+		    $boundary_name{default}{$b_age} = $name;
+		}
+	    }
+	}
+    }
+    
+    # Add Holocene to the default map for the international scale. Otherwise, it
+    # will end with the Late Pleistocene because of the exclusions above.
+    
+    if ( $scale_no eq INTL_SCALE )
+    {
+        my $hbound = $INAME{holocene}{early_age};
+        $boundary_map{default}{$hbound} = $INAME{Holocene};
+	$boundary_name{default}{$hbound} = 'Holocene';
+    }
+    
+    # Now sort each of the boundary lists (oldest to youngest) and
+    # store them in the appropriate package variable. Add the end age of the scale.
+    
+    foreach my $type ( keys %boundary_map )
+    {
+	$BOUNDARY_LIST{$scale_no}{$type} = 
+	    [ sort { $b <=> $a } keys %{$boundary_map{$type}} ];
+	
+	push @{$BOUNDARY_LIST{$scale_no}{$type}}, $SDATA{$scale_no}{late_age};
+	$BOUNDARY_MAP{$scale_no}{$type} = $boundary_map{$type};
+	$BOUNDARY_NAME{$scale_no}{$type} = $boundary_name{$type};
+    }
+    
+    # For any timescale that does not have a default map, make the default map
+    # the same as the map for the default type.
+    
+    unless ( $BOUNDARY_MAP{$scale_no}{default} )
+    {
+	my $default_type = $SDATA{$scale_no}{default_type};
+	$BOUNDARY_LIST{$scale_no}{default} = $BOUNDARY_LIST{$scale_no}{$default_type};
+	$BOUNDARY_MAP{$scale_no}{default} = $BOUNDARY_MAP{$scale_no}{$default_type};
+	$BOUNDARY_NAME{$scale_no}{default} = $BOUNDARY_NAME{$scale_no}{$default_type};
+    }
+}
+
+
+sub ts_defined {
+    
+    my ($name_or_num) = @_;
+    
+    if ( $name_or_num && $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} )
+    {
+	return $SDATA{$name_or_num}{scale_no};
+    }
+    
+    elsif ( $name_or_num && $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no} )
+    {
+	return $SNAME{lc $name_or_num}{scale_no};
     }
     
     else
@@ -260,11 +337,16 @@ sub ts_defined {
 
 sub ts_name {
     
-    my ($scale_no) = @_;
+    my ($name_or_num) = @_;
     
-    if ( $scale_no && $SDATA{$scale_no} && $SDATA{$scale_no}{scale_no} )
+    if ( $name_or_num && $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} )
     {
-	return $SDATA{$scale_no}{scale_name};
+	return $SDATA{$name_or_num}{scale_name};
+    }
+    
+    elsif ( $name_or_num && $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no} )
+    {
+	return $SNAME{lc $name_or_num}{scale_name};
     }
     
     else
@@ -276,11 +358,16 @@ sub ts_name {
 
 sub ts_record {
     
-    my ($scale_no) = @_;
+    my ($name_or_num) = @_;
     
-    if ( $scale_no && $SDATA{$scale_no} && $SDATA{$scale_no}{scale_no} )
+    if ( $name_or_num && $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} )
     {
-	return { $SDATA{$scale_no}->%* };
+	return { $SDATA{$name_or_num}->%* };
+    }
+    
+    elsif ( $name_or_num && $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no} )
+    {
+	return { $SNAME{lc $name_or_num}->%* };
     }
     
     else
@@ -292,11 +379,16 @@ sub ts_record {
 
 sub ts_bounds {
     
-    my ($scale_no) = @_;
+    my ($name_or_num) = @_;
     
-    if ( $scale_no && $SDATA{$scale_no} && $SDATA{$scale_no}{scale_no} )
+    if ( $name_or_num && $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} )
     {
-	return ($SDATA{$scale_no}{early_age}, $SDATA{$scale_no}{late_age});
+	return ($SDATA{$name_or_num}{early_age}, $SDATA{$name_or_num}{late_age});
+    }
+    
+    elsif ( $name_or_num && $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no} )
+    {
+	return ($SNAME{lc $name_or_num}{early_age}, $SNAME{lc $name_or_num}{late_age});
     }
     
     else
@@ -351,13 +443,18 @@ sub ts_by_age {
 
 sub ts_intervals {
     
-    my ($scale_no) = @_;
+    my ($name_or_num) = @_;
+    
+    unless ( $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} ) 
+    {
+	$name_or_num = $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no};
+    }
     
     my @result;
     
-    if ( $scale_no && $SSEQUENCE{$scale_no} )
+    if ( $name_or_num && $SSEQUENCE{$name_or_num} )
     {
-	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	foreach my $int ( $SSEQUENCE{$name_or_num}->@* )
 	{
 	    push @result, { $int->%* };
 	}
@@ -367,35 +464,98 @@ sub ts_intervals {
 }
 
 
+sub ts_has_type {
+    
+    my ($name_or_num, @types) = @_;
+    
+    my %has_type = map { $_ => 1 } @types;
+    
+    unless ( $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} ) 
+    {
+	$name_or_num = $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no};
+    }
+    
+    if ( $name_or_num && $SSEQUENCE{$name_or_num} )
+    {
+	foreach my $int ( $SSEQUENCE{$name_or_num}->@* )
+	{
+	    return 1 if $has_type{$int->{type}};
+	}
+    }
+    
+    return '';
+}
+
+
 sub ts_boundary_list {
     
-    my ($scale_no, $type) = @_;
+    my ($name_or_num, $type) = @_;
     
-    return $BOUNDARY_LIST{$scale_no}{$type} ? $BOUNDARY_LIST{$scale_no}{$type}->@* : ();
+    unless ( $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} ) 
+    {
+	$name_or_num = $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no};
+    }
+    
+    unless ( $BOUNDARY_LIST{$name_or_num} && $BOUNDARY_LIST{$name_or_num}->%* )
+    {
+	compute_boundary_map($name_or_num);
+    }
+    
+    return $BOUNDARY_LIST{$name_or_num}{$type} ? $BOUNDARY_LIST{$name_or_num}{$type}->@* : ();
 }
 
 
 sub ts_boundary_no {
     
-    my ($scale_no, $type, $bound) = @_;
+    my ($name_or_num, $type, $bound) = @_;
     
-    return $BOUNDARY_MAP{$scale_no}{$type}{$bound}{interval_no};
+    unless ( $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} ) 
+    {
+	$name_or_num = $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no};
+    }
+    
+    unless ( $BOUNDARY_LIST{$name_or_num} && $BOUNDARY_LIST{$name_or_num}->%* )
+    {
+	compute_boundary_map($name_or_num);
+    }
+    
+    return $BOUNDARY_MAP{$name_or_num}{$type}{$bound}{interval_no};
 }
 
 
 sub ts_boundary_name {
     
-    my ($scale_no, $type, $bound) = @_;
+    my ($name_or_num, $type, $bound) = @_;
     
-    return $BOUNDARY_MAP{$scale_no}{$type}{$bound}{interval_name};
+    unless ( $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} ) 
+    {
+	$name_or_num = $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no};
+    }
+    
+    unless ( $BOUNDARY_LIST{$name_or_num} && $BOUNDARY_LIST{$name_or_num}->%* )
+    {
+	compute_boundary_map($name_or_num);
+    }
+    
+    return $BOUNDARY_NAME{$name_or_num}{$type}{$bound};
 }
 
 
 sub ts_boundary_next {
     
-    my ($scale_no, $type, $bound) = @_;
+    my ($name_or_num, $type, $bound) = @_;
     
-    return $BOUNDARY_MAP{$scale_no}{$type}{$bound}{t_age};
+    unless ( $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} ) 
+    {
+	$name_or_num = $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no};
+    }
+    
+    unless ( $BOUNDARY_LIST{$name_or_num} && $BOUNDARY_LIST{$name_or_num}->%* )
+    {
+	compute_boundary_map($name_or_num);
+    }
+    
+    return $BOUNDARY_MAP{$name_or_num}{$type}{$bound}{t_age};
 }
 
 
@@ -431,7 +591,7 @@ sub int_name {
     
     elsif ( $name_or_num && $INAME{lc $name_or_num} && $INAME{lc $name_or_num}{interval_no} )
     {
-	return $IDATA{lc $name_or_num}{interval_name};
+	return $INAME{lc $name_or_num}{interval_name};
     }
     
     else
@@ -647,9 +807,14 @@ sub ints_by_age {
 
 sub ts_intervals_by_age {
     
-    my ($scale_no, $b_age, $t_age, $selector) = @_;
+    my ($name_or_num, $b_age, $t_age, $selector) = @_;
     
-    return unless $scale_no && $SSEQUENCE{$scale_no};
+    unless ( $SDATA{$name_or_num} && $SDATA{$name_or_num}{scale_no} ) 
+    {
+	$name_or_num = $SNAME{lc $name_or_num} && $SNAME{lc $name_or_num}{scale_no};
+    }
+    
+    return unless $name_or_num && $SSEQUENCE{$name_or_num};
     
     my @result;
     
@@ -662,7 +827,7 @@ sub ts_intervals_by_age {
     
     if ( !defined $selector || $selector eq 'contained' )
     {
-	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	foreach my $int ( $SSEQUENCE{$name_or_num}->@* )
 	{
 	    if ( $int->{b_age} <= $b_age && $int->{t_age} >= $t_age )
 	    {
@@ -673,7 +838,7 @@ sub ts_intervals_by_age {
     
     elsif ( $selector eq 'overlap' )
     {
-	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	foreach my $int ( $SSEQUENCE{$name_or_num}->@* )
 	{
 	    if ( $int->{b_age} > $t_age && $int->{t_age} < $b_age )
 	    {
@@ -684,7 +849,7 @@ sub ts_intervals_by_age {
     
     elsif ( $selector eq 'major' )
     {
-	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	foreach my $int ( $SSEQUENCE{$name_or_num}->@* )
 	{
 	    if ( $int->{b_age} > $t_age && $int->{t_age} < $b_age )
 	    {
@@ -718,7 +883,7 @@ sub ts_intervals_by_age {
     
     elsif ( $selector eq 'contains' )
     {
-	foreach my $int ( $SSEQUENCE{$scale_no}->@* )
+	foreach my $int ( $SSEQUENCE{$name_or_num}->@* )
 	{
 	    if ( $int->{b_age} > $b_age && $int->{t_age} <= $t_age ||
 		 $int->{b_age} >= $b_age && $int->{t_age} < $t_age )
