@@ -215,7 +215,7 @@ sub match_local {
 	
 	$fulltext = "match(r.reftitle) against($quoted) as score";
 	$having = "score > 5";
-	$order = "ORDER BY score1 desc";
+	$order = "ORDER BY score desc";
     }
     
     else
