@@ -572,6 +572,8 @@ sub get {
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+    
+    die $request->exception(404, "Not found") unless $request->{main_record};
 }
 
 
@@ -1361,6 +1363,12 @@ sub generate_order_clause {
 	{
 	    $dir ||= 'desc';
 	    push @exprs, "r.modified $dir";
+	}
+	
+	elsif ( $term eq 'relevance' )
+	{
+	    # Do nothing; if fulltext searching is being used, the default order
+	    # will be by relevance. Otherwise, relevance is irrelevant.
 	}
 	
 	else
