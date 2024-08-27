@@ -32,10 +32,11 @@ RUN cpanm HTTP::Validate && \
     cpanm --force Text::CSV_XS && \
     cpanm --force Test::Conditions && \
     cpanm --force Term::ReadKey && \
-    cpanm --force LWP::Protocol::https
-
-RUN cpanm Server::Starter && \
-    cpanm Net::Server::SS::PreFork
+    cpanm --force LWP::Protocol::https && \
+    cpanm Server::Starter && \
+    cpanm Net::Server::SS::PreFork && \
+    cpanm URL::Encode && \
+    cpanm Text::Levenshtein::Damerau
 
 RUN apt-get -y install vim && \
     apt-get -y install curl && \

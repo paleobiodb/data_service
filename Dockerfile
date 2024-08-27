@@ -16,9 +16,6 @@ EXPOSE 3000 3003 3999
 
 WORKDIR /var/paleomacro/pbapi/
 
-RUN cpanm URL::Encode && \
-    cpanm Text::Levenshtein::Damerau
-
 # To build this container with the proper timezone setting, use --build-arg TZ=xxx
 # where xxx specifies the timezone in which the server is located, for example
 # "America/Chicago". The 'pbdb build' command will do this automatically. Without
