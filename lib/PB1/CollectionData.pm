@@ -1764,8 +1764,8 @@ sub generateMainFilters {
 	if ( $interval_no )
 	{
 	    my $sql = "
-		SELECT early_age, late_age, scale_no, scale_level, early_bound, late_bound
-		FROM $INTERVAL_DATA LEFT JOIN $SCALE_MAP using (interval_no)
+		SELECT early_age, late_age, sm.scale_no, scale_level, early_bound, late_bound
+		FROM $INTERVAL_DATA as i LEFT JOIN $SCALE_MAP as sm using (interval_no)
 			LEFT JOIN $INTERVAL_BUFFER using (interval_no)
 		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
 	    
@@ -1780,8 +1780,8 @@ sub generateMainFilters {
 	{
 	    my $quoted_name = $dbh->quote($interval_name);
 	    
-	    my $sql = "SELECT early_age, late_age, interval_no, scale_no, early_bound, late_bound
-		   FROM $INTERVAL_DATA LEFT JOIN $SCALE_MAP using (interval_no)
+	    my $sql = "SELECT early_age, late_age, interval_no, sm.scale_no, early_bound, late_bound
+		   FROM $INTERVAL_DATA as i LEFT JOIN $SCALE_MAP as sm using (interval_no)
 			LEFT JOIN $INTERVAL_BUFFER using (interval_no)
 		   WHERE interval_name like $quoted_name ORDER BY scale_no";
 	

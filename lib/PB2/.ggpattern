@@ -1,1 +1,3 @@
 pm: *.pm ../*.pm
+wds: ../Web/DataService.pm ../Web/DataService/*.pm
+

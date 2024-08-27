@@ -2312,7 +2312,7 @@ sub list_associated {
     # Delete unused reference count fields.
     
     my @types = ref $options->{ref_type} eq 'ARRAY' ? @{$options->{ref_type}}
-	: ('auth', 'class');
+	: ('all');
     
     my %type = map { $_ => 1 } @types;
     

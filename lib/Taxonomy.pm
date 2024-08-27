@@ -1347,7 +1347,7 @@ sub list_associated {
     {
 	my @select = ref $options->{ref_type} eq 'ARRAY' ? @{$options->{ref_type}}
 	           : $options->{ref_type}		 ? split(qr{\s*,\s*}, $options->{ref_type})
-							 : 'taxonomy';
+							 : 'all';
 	
 	foreach my $s (@select)
 	{

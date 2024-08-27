@@ -12,7 +12,8 @@ package PB2::ReferenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($REF_SUMMARY);
+use TableDefs qw(%TABLE $REF_SUMMARY);
+use CoreTableDefs;
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
 use PB2::CommonData qw(generateAttribution);
 
@@ -41,7 +42,11 @@ sub initialize {
 	{ value => 'both' },
 	    "If this option is specified, show both the formatted reference and",
 	    "the individual fields",
-	{ value => 'comments' },
+	{ value => 'relevance', maps_to => '1.2:refs:relevance' },
+	    "For queries with the 'ref_match' or 'pub_match' parameter, show the relevance score",
+	{ value => 'authorlist' },
+	    "Show a single list of authors instead of separate fields",
+	{ value => 'comments', maps_to => '1.2:refs:comments' },
 	    "Include any additional comments associated with this reference",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
@@ -74,7 +79,7 @@ sub initialize {
     
     # Then some output blocks:
     
-    # One block for the reference routes themselves.
+    # One block for the reference operations themselves.
     
     $ds->define_block( '1.2:refs:basic' =>
       { select => ['r.reference_no', 'r.comments as r_comments',
@@ -82,20 +87,23 @@ sub initialize {
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle',
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
-		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
       { set => 'formatted', from => '*', code => \&format_reference, if_block => 'formatted,both' },
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
+      { set => '*', code => \&process_doi },
       { set => '*', code => \&format_bibjson, if_vocab => 'bibjson' },
       { set => '*', code => \&process_acronyms, not_block => 'formatted' },
+      { set => '*', code => \&generate_authorlist, if_block => 'authorlist', 
+	not_block => 'formatted' },
       { output => 'reference_no', com_name => 'oid', bibjson_name => 'id' }, 
 	  "Numeric identifier for this document reference in the database",
       { output => 'record_type', com_name => 'typ', value => $IDP{REF}, not_block => 'extids' },
 	  "The type of this object: C<$IDP{REF}> for a document reference.",
       { output => 'r_pubtype', com_name => 'pty', pbdb_name => 'publication_type', 
-	bibjson_name => 'type',	not_block => 'formatted' },
+	bibjson_name => 'type' },
 	  "The type of publication this entry represents. Examples include: article, book,",
 	  "unpublished, etc.",
       { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', bibjson_name => 'title',
@@ -104,25 +112,29 @@ sub initialize {
       { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', bibjson_name => 'year',
 	not_block => 'formatted', data_type => 'str' },
 	  "The year in which the document was published",
-      { output => 'r_authors', bibjson_name => 'author', if_vocab => 'bibjson' },
+      { output => 'r_author', bibjson_name => 'author', if_vocab => 'bibjson',
+	not_block => 'formatted' },
 	  "This field appears in responses generated with the BibJSON vocabulary,",
 	  "and the other author fields are suppressed.",
+      { output => 'r_author', com_name => 'aut', pbdb_name => 'author', not_vocab => 'bibjson',
+	if_block => 'authorlist', not_block => 'formatted', sub_record => '1.2:refs:author' },
+	  "This field appears in responses if the output block 'authorlist' is included.",
       { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
-	  "First initial of the first author",
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
+	  "First initial of the nth author",
       { output => 'r_al1', com_name => 'al1', pbdb_name => 'author1last', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
-	  "Last name of the second author",
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
+	  "Last name of the first author",
       { output => 'r_ai2', com_name => 'ai2', pbdb_name => 'author2init', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
 	  "First initial of the second author",
       { output => 'r_al2', com_name => 'al2', pbdb_name => 'author2last', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
 	  "Last name of the second author",
       { output => 'r_oa', com_name => 'oau', pbdb_name => 'otherauthors', 
-	not_block => 'formatted', not_vocab => 'bibjson' },
+	not_block => 'formatted', not_vocab => 'bibjson', not_block => 'authorlist' },
 	  "The names of the remaining authors",
-      { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', bibjson_name => 'editor',
+      { output => 'r_editor', com_name => 'eds', pbdb_name => 'editors', bibjson_name => 'editor',
 	not_block => 'formatted' },
 	  "Names of the editors, if any",
       { output => 'r_refabbr', com_name => 'abr', pbdb_name => 'refabbr', not_block => 'formatted' },
@@ -165,9 +177,6 @@ sub initialize {
 	  "The language in which the document is written.",
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi', bibjson_name => 'identifier' },
 	  "The DOI for this document, if known",
-      { output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', bibjson_name => '_comments',
-	if_block => 'comments' },
-	  "Additional comments about this reference, if any",
       { output => 'ref_type', com_name => 'rtp', bibjson_name => '_reftype' },
 	  "The role(s) played by this reference in the database.  This field will only appear",
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
@@ -217,6 +226,30 @@ sub initialize {
 	{ output => 'n_colls', com_name => 'rcc', data_type => 'pos' },
 	    "The number of collections for which this reference is the primary source");
     
+    $ds->define_block('1.2:refs:comments' =>
+	{ select => ['r.project_name as r_project_name'] },
+	{ output => 'r_project_name', com_name => 'prj', pbdb_name => 'project_name',
+		bibjson_name => '_project_name' },
+	    "The name of the project for which this reference was entered",
+	{ output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', 
+		bibjson_name => '_comments' },
+	    "Additional comments about this reference, if any");
+    
+    $ds->define_block('1.2:refs:author' => 
+	{ output => 'firstname', com_name => 'firstname' },
+	{ output => 'lastname', com_name => 'lastname' },
+	{ output => 'affiliation', com_name => 'affiliation' },
+	{ output => 'ORCID', com_name => 'ORCID' });
+    
+    $ds->define_block('1.2:refs:relevance' => 
+        { set => '*', code => \&process_relevance },
+	{ output => 'r_relevance', com_name => 'rsc', pbdb_name => 'relevance', 
+	  bibjson_name => '_relevance' },
+	    "For queries with either the 'ref_match' or 'pub_match' parameter,",
+	    "this field displays the fulltext relevance score of each matching record",
+	{ output => 'r_relevance_a', com_name => 'rsa', pbdb_name => 'relevance_a' },
+	    "An auxiliary relevance score, used for debugging purposes.");
+    
     # Then blocks for other classes to use when including one or more
     # references into other output.
     
@@ -225,7 +258,7 @@ sub initialize {
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle',
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
-		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
@@ -238,7 +271,7 @@ sub initialize {
       { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
-		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
@@ -260,9 +293,16 @@ sub initialize {
     
     $ds->define_set('1.2:refs:order' =>
 	{ value => 'author' },
-	    "Results are ordered alphabetically by the name of the primary and authors (last, first)",
+	    "Results are ordered alphabetically by the name of the primary author.",
+	    "This is the default for any query that does not contain either 'ref_match'",
+	    "or 'pub_match'.",
 	{ value => 'author.asc', undocumented => 1 },
 	{ value => 'author.desc', undocumented => 1 },
+	{ value => 'relevance' },
+	    "Results are ordered by relevance score. This is the default for queries",
+	    "that include either 'ref_match' or 'pub_match'.",
+	{ value => 'relevance.asc', undocumented => 1 },
+	{ value => 'relevance.desc', undocumented => 1 },
 	{ value => 'pubyr' },
 	    "Results are ordered by the year of publication",
 	{ value => 'pubyr.asc', undocumented => 1 },
@@ -327,7 +367,7 @@ sub initialize {
     
     $ds->define_ruleset('1.2:refs:specifier' => 
 	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id' },
-	    "The identifier of the reference to be returned");
+	    "The identifier of the reference to be returned or selected");
     
     $ds->define_ruleset('1.2:refs:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
@@ -362,9 +402,19 @@ sub initialize {
 	{ param => 'ref_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references whose title matches the specified word or words.  You can",
 	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'ref_match', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select references whose title matches the specified word or words.  You can",
+	    "use the operators '+', '-', '>', and '<', and you can use parentheses and",
+	    "double quote marks.",
+	{ at_most_one => ['ref_title', 'ref_match'] },
     	{ param => 'pub_title', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references from publications whose title matches the specified",
 	    "word or words.  You can use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
+	{ param => 'pub_match', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
+	    "Select references from publications whose title matches the specified word",
+	    "or words.  You can use the operators '+', '-', '>', and '<', and you can",
+	    "use parentheses and double quote marks.",
+	{ at_most_one => ['pub_title', 'pub_match'] },
 	{ param => 'ref_abbr', valid => MATCH_VALUE('.*\p{L}.*'), errmsg => $no_letter },
 	    "Select only references whose abbreviation matches the specified word or words.  You can",
 	    "use C<%> and C<_> as wildcards, but the value must contain at least one letter.",
@@ -390,9 +440,9 @@ sub initialize {
 	{ param => 'is_private', valid => FLAG_VALUE },
 	    "Select only museum collection references that are marked as being private collections,",
 	    "or exclude these if the value 'no' is specified.",
-	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
+	{ param => 'ref_doi', valid => ANY_VALUE, list => qr{\s+} },
 	    "Select only records entered from references with any of the specified DOIs.",
-	    "You may specify one or more, separated by commas.");
+	    "You may specify one or more, separated by whitespace.");
     
     $ds->define_ruleset('1.2:refs:aux_selector' =>
 	{ param => 'ref_id', valid =>  VALID_IDENTIFIER('REF'), list => ',',
@@ -441,9 +491,9 @@ sub initialize {
 	{ param => 'is_private', valid => FLAG_VALUE },
 	    "Select only museum collection references that are marked as being private collections,",
 	    "or exclude these if the value 'no' is specified.",
-	{ param => 'ref_doi', valid => ANY_VALUE, list => ',' },
+	{ param => 'ref_doi', valid => ANY_VALUE, list => qr{\s+} },
 	    "Select only records entered from references with any of the specified DOIs.",
-	    "You may specify one or more, separated by commas.");
+	    "You may specify one or more, separated by whitespace.");
     
     $ds->define_ruleset('1.2:refs:single' => 
     	{ require => '1.2:refs:specifier' },
@@ -457,7 +507,8 @@ sub initialize {
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:common:select_refs_crmod' },
 	{ allow => '1.2:common:select_refs_ent' },
-	{ require_any => ['1.2:refs:selector', '1.2:refs:filter'] },
+	{ require_any => ['1.2:refs:selector', '1.2:refs:filter', 
+			  '1.2:common:select_refs_crmod', '1.2:common:select_refs_ent'] },
 	">>The following parameters can be used to generate data archives. The easiest way to",
 	"do this is by using the download generator form.",
 	{ allow => '1.2:common:archive_params' },
@@ -514,13 +565,15 @@ sub get {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM refs as r $join_list
+	FROM $TABLE{REFERENCE_DATA} as r $join_list
         WHERE r.reference_no = $id
 	GROUP BY r.reference_no";
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
     $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+    
+    die $request->exception(404, "Not found") unless $request->{main_record};
 }
 
 
@@ -544,7 +597,7 @@ sub list {
     my @filters = $request->generate_ref_filters();
     push @filters, $request->generate_refno_filter('r');
     push @filters, $request->generate_common_filters( { refs => 'r', bare => 'r' } );
-    push @filters, '1=1' if $all_records;
+    push @filters, '1=1' unless @filters;
     
     my $filter_string = join(' and ', @filters);
     
@@ -558,11 +611,6 @@ sub list {
     # publication year second.
     
     my $order = $request->generate_order_clause();
-    
-    unless ( $order )
-    {
-	$order = $all_records ? 'NULL' : 'r.author1last, r.author1init';
-    }
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -582,14 +630,82 @@ sub list {
     
     my $join_list = $request->generate_join_list($tables);
     
-    $request->{main_sql} = "
+    # If either of the parameters 'ref_match' or 'pub_match' were specified, use
+    # the fulltext indices. The default order is by relevance.
+    
+    my $refmatch = $request->clean_param("ref_match");
+    my $pubmatch = $request->clean_param("pub_match");
+    
+    if ( $refmatch || $pubmatch )
+    {
+	my ($fulltext, $having, $order_byscore);
+	
+	# The match threshold may be adjusted if necessary.
+	
+	my $threshold = 5;
+	
+	if ( $refmatch && $pubmatch )
+	{
+	    my $refquoted = $dbh->quote($refmatch);
+	    my $pubquoted = $dbh->quote($pubmatch);
+	    
+	    $fulltext = "match(r.reftitle) against($refquoted) as r_relevance_1,
+		  match(r.pubtitle) against ($pubquoted) as r_relevance_2";
+	    $having = "r_relevance_1 > $threshold and r_relevance_2 > $threshold";
+	    $order_byscore = "(r_relevance_1 + r_relevance_2) desc";
+	}
+	
+	elsif ( $pubmatch )
+	{
+	    my $quoted = $dbh->quote($pubmatch);
+	    
+	    $fulltext = "match(r.pubtitle) against($quoted) as r_relevance";
+	    $having = "r_relevance > $threshold";
+	}
+	
+	else
+	{
+	    my $quoted = $dbh->quote($refmatch);
+	    
+	    $fulltext = "match(r.reftitle) against($quoted) as r_relevance";
+	    $having = "r_relevance > $threshold";
+	    $order_byscore = "r_relevance desc";
+	}
+	
+	unless ( $order )
+	{
+	    $order = $order_byscore || 'r.author1last, r.author1init, r.author2last, r.author2init, r.pubyr desc';
+	}
+	
+	$request->{main_sql} = "
+	SELECT $calc $fields, $fulltext
+	FROM $TABLE{REFERENCE_DATA} as r
+		$join_list
+        WHERE $filter_string
+	GROUP BY r.reference_no
+	HAVING $having
+	ORDER BY $order
+	$limit";
+    }
+    
+    # Otherwise, do a simple query. The default order is by author name.
+    
+    else
+    {
+	unless ( $order )
+	{
+	    $order = $all_records ? 'NULL' : 'r.author1last, r.author1init, r.author2last, r.author2init, r.pubyr desc';
+	}
+	
+	$request->{main_sql} = "
 	SELECT $calc $fields
-	FROM refs as r
+	FROM $TABLE{REFERENCE_DATA} as r
 		$join_list
         WHERE $filter_string
 	GROUP BY r.reference_no
 	ORDER BY $order
 	$limit";
+    }
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
@@ -648,9 +764,9 @@ sub auto_complete_ref {
 	SELECT r.reference_no, r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2,
 		   r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, 
 		   r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, 
-		   r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, 
+		   r.editors as r_editor, r.pubvol as r_pubvol, r.pubno as r_pubno, 
 		   r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype 
-	FROM refs as r
+	FROM $TABLE{REFERENCE_DATA} as r
 	WHERE $filter_string
 	ORDER BY author1last, author1init, author2last, author2init LIMIT $limit";
     
@@ -686,36 +802,9 @@ sub generate_ref_filters {
     my $dbh = $request->get_connection;
     my @filters;
     
-    if ( my $year = $request->clean_param('ref_pubyr') )
+    if ( my $pubyear = $request->clean_param('ref_pubyr') )
     {
-	if ( $year =~ qr{ ^ (?: max_ | \s* - \s* ) (\d\d\d\d) $ }xs )
-	{
-	    push @filters, "r.pubyr <= $1";
-	}
-	
-	elsif ( $year =~ qr{ ^ min_ (\d\d\d\d) $ }xs )
-	{
-	    push @filters, "r.pubyr >= $1";
-	}
-	
-	elsif ( $year =~ qr{ ^ (\d\d\d\d) \s* - \s* (\d\d\d\d)? $ }xs )
-	{
-	    if ( defined $2 && $2 ne '' ) {
-		push @filters, "r.pubyr between $1 and $2";
-	    } else {
-		push @filters, "r.pubyr >= $1";
-	    }
-	}
-	
-	elsif ( $year =~ qr{ ^ \d+ $ }xs )
-	{
-	    push @filters, "r.pubyr = $year";
-	}
-	
-	else
-	{
-	    die "400 invalid value '$year' for parameter 'ref_pubyr'\n";
-	}
+	push @filters, $request->generate_pubyear_filter($pubyear);
     }
     
     if ( my $authorname = $request->clean_param('ref_author') )
@@ -738,13 +827,17 @@ sub generate_ref_filters {
 	    $op = 'not rlike';
 	}
 	
+	$reftitle =~ s/\./\\./g;
+	$reftitle =~ s/\?/\\?/g;
 	$reftitle =~ s/%/.*/g;
 	$reftitle =~ s/_/./g;
 	$reftitle =~ s/\s+/\\s+/g;
 	$reftitle =~ s/\(/\\(/g;
 	$reftitle =~ s/\)/\\)/g;
+	$reftitle =~ s/\[/\\[/g;
+	$reftitle =~ s/\]/\\]/g;
 	
-	my $quoted = $dbh->quote("^$reftitle");
+	my $quoted = $dbh->quote("$reftitle");
 	
 	push @filters, "coalesce(r.reftitle, r.pubtitle) $op $quoted";
     }
@@ -759,13 +852,17 @@ sub generate_ref_filters {
 	    $op = 'not rlike';
 	}
 	
+	$pubtitle =~ s/\./\\./g;
+	$pubtitle =~ s/\?/\\?/g;
 	$pubtitle =~ s/%/.*/g;
 	$pubtitle =~ s/_/./g;
 	$pubtitle =~ s/\s+/\\s+/g;
 	$pubtitle =~ s/\(/\\(/g;
 	$pubtitle =~ s/\)/\\)/g;
+	$pubtitle =~ s/\[/\\[/g;
+	$pubtitle =~ s/\]/\\]/g;
 	
-	my $quoted = $dbh->quote("^$pubtitle");
+	my $quoted = $dbh->quote("$pubtitle");
 	
 	push @filters, "r.pubtitle $op $quoted";
     }
@@ -848,9 +945,9 @@ sub generate_ref_filters {
     
     if ( my @doi_list = $request->clean_param_list('ref_doi') )
     {
-	my @fixed_list;
-	my @like_list;
-	my @filter_list;
+	# my @fixed_list;
+	# my @like_list;
+	# my @filter_list;
 	
 	if ( @doi_list == 1 && $doi_list[0] eq '!' )
 	{
@@ -859,29 +956,43 @@ sub generate_ref_filters {
 	
 	else
 	{
+	    my @filter_list;
+	    
 	    foreach my $d ( @doi_list )
 	    {
-		if ( $d =~ /[_%]/ ) {
-		    push @like_list, $d;
-		} elsif ( defined $d && $d ne '' ) {
-		    push @fixed_list, $d;
+		if ( $d && $d ne '' )
+		{
+		    my $quoted = $dbh->quote("%$d");
+		    push @filter_list, "r.doi like $quoted";
 		}
 	    }
 	    
-	    foreach my $d ( @like_list )
-	    {
-		my $quoted = $dbh->quote($d);
-		push @filter_list, "r.doi like $quoted"; 
-	    }
+	    my $disjunction = join(' or ', @filter_list);
+	    push @filters, "($disjunction)";
 	    
-	    if ( @fixed_list )
-	    {
-		my $quoted = join( ',', map { $dbh->quote($_) } @fixed_list );
-		push @filter_list, "r.doi in ($quoted)";
-	    }
+	    # foreach my $d ( @doi_list )
+	    # {
+	    # 	if ( $d =~ /[_%]/ ) {
+	    # 	    push @like_list, $d;
+	    # 	} elsif ( defined $d && $d ne '' ) {
+	    # 	    push @fixed_list, $d;
+	    # 	}
+	    # }
 	    
-	    push @filter_list, "r.doi = 'NOTHING'" unless @filter_list;
-	    push @filters, @filter_list;
+	    # foreach my $d ( @like_list )
+	    # {
+	    # 	my $quoted = $dbh->quote($d);
+	    # 	push @filter_list, "r.doi like $quoted"; 
+	    # }
+	    
+	    # if ( @fixed_list )
+	    # {
+	    # 	my $quoted = join( ',', map { $dbh->quote($_) } @fixed_list );
+	    # 	push @filter_list, "r.doi in ($quoted)";
+	    # }
+	    
+	    # push @filter_list, "r.doi = 'NOTHING'" unless @filter_list;
+	    # push @filters, @filter_list;
 	}
     }
     
@@ -929,6 +1040,42 @@ sub generate_refno_filter {
     }
     
     return;	# otherwise, return no filter at all
+}
+
+
+sub generate_pubyear_filter {
+    
+    my ($request, $year, $mt) = @_;
+    
+    $mt ||= 'r';
+    
+    if ( $year =~ qr{ ^ \s* (\d+) \s* $ }xs )
+    {
+	return ("$mt.pubyr = '$1'");
+    }
+    
+    elsif ( $year =~ qr{ ^ \s* - \s* (\d\d\d\d) $ }xs )
+    {
+	return ("$mt.pubyr <= '$1'");
+    }
+    
+    elsif ( $year =~ qr{ ^ (\d\d\d\d) \s* - \s* (\d\d\d\d)? $ }xs )
+    {
+	if ( defined $2 && $2 ne '' )
+	{
+	    return ("$mt.pubyr between '$1' and '$2'");
+	} 
+	
+	else 
+	{
+	    return "$mt.pubyr >= '$1'";
+	}
+    }
+    
+    else
+    {
+	die "400 invalid value '$year' for parameter 'ref_pubyr'\n";
+    }
 }
 
 
@@ -1013,7 +1160,7 @@ sub generate_one_auth_filter {
     }
     
     my ($firstname, $lastname, $initpat, $lastpat, $fullpat, @authfilters);
-	
+    
     if ( $name =~ /(.*)[.] +(.*)/ )
     {
 	$firstname = $1;
@@ -1218,6 +1365,12 @@ sub generate_order_clause {
 	    push @exprs, "r.modified $dir";
 	}
 	
+	elsif ( $term eq 'relevance' )
+	{
+	    # Do nothing; if fulltext searching is being used, the default order
+	    # will be by relevance. Otherwise, relevance is irrelevant.
+	}
+	
 	else
 	{
 	    die "400 bad value for parameter 'order': must be a valid order expression with optional suffix '.asc' or '.desc' (was '$term')\n";
@@ -1247,8 +1400,7 @@ sub generate_join_list {
 # 
 # Generate a string for the given reference.  This relies on the
 # fields "r_al1", "r_ai1", "r_al2", "r_ai2", "r_oa", "r_pubyr", "r_reftitle",
-# "r_pubtitle", "r_pubvol", "r_pubno".
-# 
+# "r_pubtitle", "r_pubvol", "r_pubno", "r_pubtype".
 
 sub format_reference {
 
@@ -1256,57 +1408,98 @@ sub format_reference {
     
     my $markup = $request->clean_param('markrefs');
     
-    # First format the author string.  This includes stripping extra periods
-    # from initials and dealing with "et al" where it occurs.
+    my $authorstring = '';
     
-    my $ai1 = $row->{r_ai1} || '';
-    my $al1 = $row->{r_al1} || '';
+    # If we have a 'r_author' field, use that to format the author list.
     
-    #$ai1 =~ s/\.//g;
-    #$ai1 =~ s/([A-Za-z])/$1./g;
-    
-    my $auth1 = $ai1;
-    $auth1 .= ' ' if $ai1 ne '' && $al1 ne '';
-    $auth1 .= $al1;
-    
-    my $ai2 = $row->{r_ai2} || '';
-    my $al2 = $row->{r_al2} || '';
-    
-    $ai2 =~ s/\.//g;
-    $ai2 =~ s/([A-Za-z])/$1./g;
-    
-    my $auth2 = $ai2;
-    $auth2 .= ' ' if $ai2 ne '' && $al2 ne '';
-    $auth2 .= $al2;
-    
-    my $auth3 = $row->{r_oa} || '';
-    
-    $auth3 =~ s/\.//g;
-    $auth3 =~ s/\b(\w)\b/$1./g;
-    
-    # Then construct the author string
-    
-    my $authorstring = $auth1;
-    
-    if ( $auth2 =~ /et al/ )
+    if ( $row->{r_author} && ref $row->{r_author} eq 'ARRAY' &&
+	 $row->{r_author}->@* )
     {
-	$authorstring .= " $auth2";
-    }
-    elsif ( $auth2 ne '' && $auth3 ne '' )
-    {
-	$authorstring .= ", $auth2";
-	if ( $auth3 =~ /et al/ )
+	foreach my $author ( $row->{r_author}->@* )
 	{
-	    $authorstring .= " $auth3";
-	}
-	else
-	{
-	    $authorstring .= ", and $auth3";
+	    $authorstring .= ', ' if $authorstring;
+	    
+	    if ( $author->{firstname} && $author->{lastname} )
+	    {
+		$authorstring .= "$author->{firstname} $author->{lastname}";
+	    }
+	    
+	    elsif ( $author->{firstname} )
+	    {
+		$authorstring .= $author->{firstname};
+	    }
+	    
+	    elsif ( $author->{lastname} )
+	    {
+		$authorstring .= $author->{lastname};
+	    }
+	    
+	    else
+	    {
+		$authorstring =~ s/, $//;
+	    }
 	}
     }
-    elsif ( $auth2 )
+    
+    # Otherwise, format the author string using the pbdb fields.  This includes
+    # stripping extra periods from initials and dealing with "et al" where it
+    # occurs.
+    
+    else
     {
-	$authorstring .= " and $auth2";
+	my $ai1 = $row->{r_ai1} || '';
+	my $al1 = $row->{r_al1} || '';
+	
+	#$ai1 =~ s/\.//g;
+	#$ai1 =~ s/([A-Za-z])/$1./g;
+	
+	my $auth1 = $ai1;
+	$auth1 .= ' ' if $ai1 ne '' && $al1 ne '';
+	$auth1 .= $al1;
+	
+	my $ai2 = $row->{r_ai2} || '';
+	my $al2 = $row->{r_al2} || '';
+	
+	# $ai2 =~ s/\.//g;
+	# $ai2 =~ s/([A-Za-z])/$1./g;
+	
+	my $auth2 = $ai2;
+	$auth2 .= ' ' if $ai2 ne '' && $al2 ne '';
+	$auth2 .= $al2;
+	
+	my $auth3 = $row->{r_oa} || '';
+	
+	$auth3 =~ s/\.//g;
+	$auth3 =~ s/\b(\w)\b/$1./g;
+	
+	# Then construct the author string
+	
+	$authorstring = $auth1;
+	
+	if ( $auth2 =~ /et al/ )
+	{
+	    $authorstring .= " $auth2";
+	}
+	
+	elsif ( $auth2 ne '' && $auth3 ne '' )
+	{
+	    $authorstring .= ", $auth2";
+	    
+	    if ( $auth3 =~ /et al/ )
+	    {
+		$authorstring .= " $auth3";
+	    }
+	    
+	    else
+	    {
+		$authorstring .= ", and $auth3";
+	    }
+	}
+	
+	elsif ( $auth2 )
+	{
+	    $authorstring .= " and $auth2";
+	}
     }
     
     # Now start building the reference with authorstring, publication year,
@@ -1327,13 +1520,14 @@ sub format_reference {
 	$longref .= "$pubyr. ";
     }
     
+    my $pubtype = $row->{r_pubtype} || '';
     my $reftitle = $row->{r_reftitle} || '';
     
     if ( $reftitle ne '' )
     {
 	$longref .= $reftitle;
 
-	if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'instcoll' )
+	if ( $pubtype eq 'instcoll' )
 	{
 	    $longref .= ', ';
 	}
@@ -1346,9 +1540,9 @@ sub format_reference {
     }
     
     my $pubtitle = $row->{r_pubtitle} || '';
-    my $editors = $row->{r_editors} || '';
+    my $editors = $row->{r_editor} || '';
     
-    if ( $pubtitle ne '' )
+    if ( $pubtitle && $pubtitle ne '' )
     {
 	my $pubstring = $markup ? "<i>$pubtitle</i>" : $pubtitle;
 
@@ -1370,19 +1564,16 @@ sub format_reference {
     my $publisher = $row->{r_publisher};
     my $pubcity = $row->{r_pubcity};
 
-    if ( $row->{r_pubtype} && $row->{r_pubtype} eq 'instcoll' )
+    if ( $pubtype eq 'instcoll' && $pubcity )
     {
-	if ( $pubcity )
-	{
-	    $pubcity =~ s/^(, )+//;
-	    $pubcity =~ s/, , /, /;
-	    $longref =~ s/\s+$//;
-	    $longref .= ". " unless $longref =~ /[.]$/;
-	    $longref .= "$pubcity. ";
-	}
+	$pubcity =~ s/^(, )+//;
+	$pubcity =~ s/, , /, /;
+	$longref =~ s/\s+$//;
+	$longref .= ". " unless $longref =~ /[.]$/;
+	$longref .= "$pubcity. ";
     }
     
-    elsif ( $publisher )
+    elsif ( $pubtype =~ /^book|^guide|^comp|^M|^Ph/ && $publisher )
     {
 	$longref =~ s/\s+$//;
 	$longref .= ". ";
@@ -1552,13 +1743,30 @@ sub process_acronyms {
 }
 
 
+sub process_relevance {
+    
+    my ($request, $record) = @_;
+    
+    if ( defined $record->{r_relevance_1} )
+    {
+	$record->{r_relevance} = int($record->{r_relevance_1} + $record->{r_relevance_2} + 0.5);
+    }
+    
+    elsif ( defined $record->{r_relevance} )
+    {
+	$record->{r_relevance} = int($record->{r_relevance} + 0.5);
+    }
+}
+
+
 sub process_ref_ids {
     
     my ($request, $record) = @_;
     
     return unless $request->{block_hash}{extids};
     
-    $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) if defined $record->{reference_no};
+    $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) 
+	if defined $record->{reference_no};
     # "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};
 }
 
@@ -1581,7 +1789,68 @@ sub adjust_ref_counts {
 }
 
 
-# format_bibjson ( )
+# process_doi ( record )
+# 
+# Remove prefixes from DOIs.
+
+sub process_doi {
+    
+    my ($request, $record) = @_;
+    
+    if ( $record->{r_doi} )
+    {
+	$record->{r_doi} =~ s/^\s+//;
+	
+	if ( $record->{r_doi} =~ qr{ ^http .*? (10[.].*) }x )
+	{
+	    $record->{r_doi} = $1;
+	}
+    }
+}
+
+# generate_authorlist ( record )
+# 
+# If there are entries in the table ref_authors corresponding to this record,
+# generate an author list from them. Otherwise, generate an author list from the
+# fields author1init, author1last, etc.
+
+sub generate_authorlist {
+    
+    my ($request, $record) = @_;
+    
+    if ( my $reference_no = $record->{reference_no} )
+    {
+	my $dbh = $request->get_connection();
+	
+	my @authors;
+	
+	my $sql = "SELECT * FROM $TABLE{REFERENCE_AUTHORS}
+		WHERE reference_no = $reference_no
+		ORDER BY place";
+    
+	my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
+	
+	if ( $results && @$results )
+	{
+	    foreach my $a ( @$results )
+	    {
+		push @authors, bibjson_name_record($a->{firstname}, $a->{lastname});
+	    }
+	}
+	
+	else
+	{
+	    push @authors, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
+	    push @authors, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
+	    push @authors, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
+	}
+	
+	$record->{r_author} = \@authors if @authors;
+    }
+}
+
+
+# format_bibjson ( record )
 #
 # Format the specified record for output in the BibJSON format.
 
@@ -1589,29 +1858,33 @@ sub format_bibjson {
     
     my ($request, $record) = @_;
     
-    # Construct a list of author names.
+    # Construct a list of author names, if one is not already present.
     
     my @author;
-    push @author, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
-    push @author, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
-    push @author, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
     
-    $record->{r_authors} = \@author if @author;
+    if ( $record->{r_al1} && ! $record->{r_author} )
+    {
+	push @author, bibjson_name_record($record->{r_ai1}, $record->{r_al1}) if $record->{r_al1};
+	push @author, bibjson_name_record($record->{r_ai2}, $record->{r_al2}) if $record->{r_al2};
+	push @author, bibjson_name_list($record->{r_oa}) if $record->{r_oa};
+	
+	$record->{r_author} = \@author if @author;
+    }
     
     # Construct a list of editor names.
     
-    my @editor = bibjson_name_list($record->{r_editors}) if $record->{r_editors};
-
-    $record->{r_editors} = @editor ? \@editor : undef;
-
+    my @editor = bibjson_name_list($record->{r_editor}) if $record->{r_editor};
+    
+    $record->{r_editor} = @editor ? \@editor : undef;
+    
     # Reformat the DOI, if any.
-
+    
     $record->{r_doi} = bibjson_doi($record->{r_doi}) if $record->{r_doi};
-
+    
     # Reformat the page numbers, if any.
-
+    
     $record->{r_pages} = bibjson_pages($record->{r_fp}, $record->{r_lp});
-
+    
     # Map the publication type to one of the recognized BibJSON types, and alter other fields to
     # match. If no publication type is given, punt.
     

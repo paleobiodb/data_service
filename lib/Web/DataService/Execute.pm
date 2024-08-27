@@ -12,7 +12,7 @@ package Web::DataService::Execute;
 
 use Carp 'croak';
 use Scalar::Util qw(reftype weaken);
-
+use Encode qw(encode);
 use Moo::Role;
 
 
@@ -424,9 +424,19 @@ sub configure_request {
 	    foreach my $p ( $result->keys )
 	    {
 		my $value = $result->value($p);
-		$value = join(', ', @$value) if ref $value eq 'ARRAY';
-		$value ||= '[ NO GOOD VALUES FOUND ]';
-		print STDERR "$p = $value\n";
+		
+		if ( defined $value )
+		{
+		    $value = join(', ', @$value) if ref $value eq 'ARRAY';
+		    my $encoded = encode('UTF-8', $value);
+		    $encoded =~ s/'/\\'/g;
+		    print STDERR "$p = '$encoded'\n";
+		}
+		
+		else
+		{
+		    print STDERR "$p = (undefined)\n";
+		}
 	    }
 	}
     }
@@ -1217,6 +1227,13 @@ sub error_result {
 	$code = 500;
 	warn $error;
 	@errors = "A server error occurred.  Please contact the server administrator.";
+    }
+    
+    # If we are in debug mode, print out any error code other than 200.
+    
+    if ( $ds->debug_mode && $code ne '200' )
+    {
+	$ds->debug_line("Error result: $code");
     }
     
     # Cancel any content encoding that had been set.

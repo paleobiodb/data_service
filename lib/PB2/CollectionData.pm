@@ -18,6 +18,7 @@ use HTTP::Validate qw(:validators);
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX %TABLE);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
+use IntervalBase qw(ts_defined ts_record ts_boundary_list ts_boundary_name);
 use Taxonomy;
 use IntervalBase qw(ts_boundary_list ts_boundary_name);
 
@@ -5238,6 +5239,8 @@ sub generate_timebins {
     
     unless ( $request->{my_binrule} )
     {
+	my $dbh = $request->get_connection;
+	IntervalBase->cache_interval_data($dbh);
 	$request->setup_time_variables;
     }
     
@@ -5289,28 +5292,37 @@ sub setup_time_variables {
     $request->{my_early} = $early;
     $request->{my_late} = $late;
     
-    my $scale_no = $request->clean_param('scale_id') || 1;
-    my $time_reso = $request->clean_param('time_reso') || 'age';
+    my $scale = $request->clean_param('scale_id') || $request->clean_param('scale') || 1;
     
-    $time_reso = 'age' if $time_reso eq 'stage';
+    my $scale_no = ts_defined($scale) || 
+	die $request->exception(400, "Unknown scale '$scale'");
     
-    # if ( ! defined $scale_level ) { $scale_level = 1 }
-    # 	elsif ( $scale_level eq 'epoch' ) { $scale_level = 4 }
-    # elsif ( $scale_level eq 'period' ) { $scale_level = 3 }
-    # elsif ( $scale_level eq 'era' ) { $scale_level = 2 }
+    my $scale_level = $request->clean_param('reso');
+    my $interval_type = $request->clean_param('interval_type');
+    
+    my @types = ('eon', 'era', 'period', 'epoch', 'age');
+    
+    if ( $scale_level )
+    {
+	$interval_type ||= $types[$scale_level-1];
+    }
+    
+    else
+    {
+	$interval_type ||= 'default';
+    }
     
     $request->{my_scale_no} = $scale_no;
-    $request->{my_reso} = $time_reso;
-    
+    $request->{my_interval_type} = $interval_type;
+
     my @bins;
     
-    foreach my $b ( ts_boundary_list($scale_no, $time_reso) )
+    foreach my $b ( ts_boundary_list($scale_no, $interval_type) )
     {
 	push @bins, $b unless defined $early && $b > $early || defined $late && $b < $late; 
     }
     
     $request->{my_boundary_list} = \@bins;
-    # $request->{my_boundary_map} = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
 }
 
 
@@ -5323,13 +5335,12 @@ sub generate_bin_names {
 	return '-';
     }
     
-    elsif ( my $scale_no = $request->{my_scale_no} )
+    my $scale_no = $request->{my_scale_no};
+    my $interval_type = $request->{my_interval_type} || '';
+    
+    if ( $scale_no && $interval_type )
     {
-	my $time_reso = $request->{my_reso};
-	
-	my @names = map { ts_boundary_name($scale_no, $time_reso, $_) } @_;
-	
-	return join ', ', @names;
+	return join ', ', map { ts_boundary_name($scale_no, $interval_type, $_) || 'x' } @_;
     }
     
     # elsif ( my $bm = $request->{my_boundary_map} )

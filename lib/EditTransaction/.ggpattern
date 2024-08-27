@@ -1,0 +1,14 @@
+# GG patterns for lib/EditTransaction/
+
+basedir =  ../
+edtdir =
+moddir = Mod/
+testdir = ../../t/
+
+pm: [edtdir]*.pm [moddir]*.pm [basedir]*.pm [basedir]PB2/*.pm
+edt: [edtdir]*.pm [moddir]*.pm [basedir]EditTransaction.pm [basedir]Permissions.pm [basedir]TableDefs.pm
+t: [testdir]*.t [testdir]*.pm
+pmt: [pm] [t]
+edtt: [edt] [t]
+wds: [basedir]Web/DataService/*.pm [basedir]Web/DataService/*/*.pm
+wdspod: [basedir]Web/DataService/*.pod [basedir]Web/DataService/*/*.pod

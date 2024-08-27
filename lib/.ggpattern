@@ -1,4 +1,16 @@
-pm: <$> *.pm PB2/*.pm
-edt: *.pm EditTransaction/*.pm
-wds: <$> Web/DataService/*.pm Web/DataService/*/*.pm
-wdspod: <$>  Web/DataService/*.pod Web/DataService/*/*.pod
+# GG patterns for lib/
+
+basedir = 
+edtdir = EditTransaction/
+moddir = EditTransaction/Mod/
+bindir = ../bin/
+testdir = ../t/
+
+pm: [edtdir]*.pm [moddir]*.pm [basedir]*.pm [basedir]PB2/*.pm
+edt: [edtdir]*.pm [moddir]*.pm [basedir]EditTransaction.pm [basedir]Permissions.pm [basedir]TableDefs.pm
+t: [testdir]*.t [testdir]*.pm
+pmt: [pm] [t]
+edtt: [edt] [t]
+ref: [basedir]Reference*.pm [bindir]ref*.pl
+wds: [basedir]Web/DataService/*.pm [basedir]Web/DataService/*/*.pm
+wdspod: [basedir]Web/DataService/*.pod [basedir]Web/DataService/*/*.pod

@@ -405,7 +405,7 @@ subtest 'update nonadmin' => sub {
 				    "update non-owned status");
 	
 	$T->ok_response_code("400", "update non-owned status returned proper response code");
-	$T->ok_error_like(qr{E_PERM.*status}i, "update non-owned status returned proper error message");
+	$T->ok_error_like(qr{E_PERM.*update}i, "update non-owned status returned proper error message");
     }
     
     # Now we switch to the admin user and activate the owned record, and then switch back and
@@ -547,9 +547,9 @@ subtest 'image data' => sub {
     
     $TT = Tester->new({ server => $image_host });
     
-    my ($m4a) = $TT->fetch_url($img1a, "fetch image 1a", { no_check => 1 });
-    my ($m4b) = $TT->fetch_url($img1b, "fetch image 1b", { no_check => 1 });
-    my ($m4c) = $TT->fetch_url($img2, "fetch image 2", { no_check => 1 });
+    my ($m4a) = $TT->fetch_url("build/img/$img1a", "fetch image 1a", { no_check => 1 });
+    my ($m4b) = $TT->fetch_url("build/img/$img1b", "fetch image 1b", { no_check => 1 });
+    my ($m4c) = $TT->fetch_url("build/img/$img2", "fetch image 2", { no_check => 1 });
     
     if ( $m4a && $TT->get_response_code($m4a) ne '' )
     {

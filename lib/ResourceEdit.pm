@@ -6,10 +6,11 @@
 #   This class is a subclass of EditTransaction, and encapsulates the logic for adding, updating,
 #   and deleting educational resource records.
 #   
-#   Each instance of this class is responsible for initiating a database transaction, checking a
-#   set of records for insertion, update, or deletion, and either committing or rolling back the
-#   transaction depending on the results of the checks. If the object is destroyed, the transaction will
-#   be rolled back. This is all handled by code in EditTransaction.pm.
+#   Each instance of this class is responsible for initiating a database
+#   transaction, checking a set of records for insertion, update, or deletion,
+#   and either committing or rolling back the transaction depending on the
+#   results of the checks. If the object is destroyed, the transaction will be
+#   rolled back. This is all handled by code in EditTransaction.pm.
 #   
 #   To use it, first call $edt = EditResource->new() with appropriate arguments (see
 #   EditTransaction.pm). Then you can call EditResource->add_resource, etc.
@@ -19,13 +20,17 @@ package ResourceEdit;
 
 use strict;
 
+use parent 'EditTransaction';
+
 use Carp qw(carp croak);
-use Try::Tiny;
 
 use TableDefs qw(%TABLE is_test_mode);
 use ResourceDefs;
 
-use base 'EditTransaction';
+use Role::Tiny::With;
+
+with 'EditTransaction::Mod::MariaDB';
+with 'EditTransaction::Mod::PaleoBioDB';
 
 use namespace::clean;
 
@@ -38,7 +43,7 @@ our (%TAG_ID);
 {
     ResourceEdit->register_conditions(
 	E_PERM => { status => "You do not have permission to change the status of this record" },
-	W_TAG_NOT_FOUND => "Unrecognized resource tag '%1'",
+	W_TAG_NOT_FOUND => "Unrecognized resource tag '&1'",
 	W_PERM => { status => "The status of this record has been set to 'pending'" });
 }
 
@@ -207,7 +212,7 @@ sub after_action {
     elsif ( $operation eq 'delete' )
     {
 	my $dbh = $edt->dbh;
-	my $keylist = $action->keylist($action);
+	my $keylist = $action->keylist();
 	
 	# First get the names of the image files, if any
 	
@@ -223,7 +228,7 @@ sub after_action {
 		DELETE FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD in ($keylist)";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	my $res = $dbh->do($sql);
 	
@@ -233,7 +238,7 @@ sub after_action {
 		DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id in ($keylist)";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	$res = $dbh->do($sql);
 	
@@ -243,7 +248,7 @@ sub after_action {
 		DELETE FROM $TABLE{RESOURCE_IMAGES}
 		WHERE eduresource_no in ($keylist)";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	$res = $dbh->do($sql);
 
@@ -269,21 +274,21 @@ sub convert_image {
     
     # return unless $eduresource_no && $r->{image_data};
     
-    print STDERR "Converting image:\n" if $edt->debug;
+    print STDERR "Converting image:\n" if $edt->debug_mode;
     
     my $fh = File::Temp->new( UNLINK => 1 );
     
     unless ( $fh )
     {
 	print STDERR "ERROR: could not create temporary file for image\n"
-	    if $edt->debug;
+	    if $edt->debug_mode;
 	$edt->add_condition('E_EXECUTE', 'convert image');
 	return;
     }
     
     my $filename = $fh->filename;
     
-    print STDERR "Writing image to $filename\n" if $edt->debug;
+    print STDERR "Writing image to $filename\n" if $edt->debug_mode;
     
     binmode($fh);
     
@@ -300,7 +305,8 @@ sub convert_image {
     
     my $output = `$IMAGE_IDENTIFY_COMMAND $filename`;
     
-    print STDERR "Executing: $IMAGE_IDENTIFY_COMMAND $filename\nOutput: $output\n" if $edt->debug;
+    print STDERR "Executing: $IMAGE_IDENTIFY_COMMAND $filename\nOutput: $output\n" 
+	if $edt->debug_mode;
     
     if ( $output =~ qr{ \s (\w+) \s (\d+) x (\d+) }xs )
     {
@@ -324,7 +330,7 @@ sub convert_image {
 	    my $newsize = $width >= $height ? $IMAGE_MAX : "x$IMAGE_MAX";
 	    my $resize_cmd = "convert $filename -resize $newsize -";
 	    
-	    print STDERR "Executing: $resize_cmd\n" if $edt->debug;
+	    print STDERR "Executing: $resize_cmd\n" if $edt->debug_mode;
 	    
 	    my $converted_data = `$resize_cmd`;
 	    
@@ -336,7 +342,8 @@ sub convert_image {
 	    
 	    $store_data = "data:image/$format;base64," . MIME::Base64::encode_base64($converted_data);
 	    
-	    print STDERR 'Output: [' . length($store_data) . " chars converted to base64]\n" if $edt->debug;
+	    print STDERR 'Output: [' . length($store_data) . " chars converted to base64]\n" 
+		if $edt->debug_mode;
 	    
 	    return $store_data;
 	}
@@ -361,7 +368,7 @@ sub store_image {
     my $sql = "REPLACE INTO $TABLE{RESOURCE_IMAGES} (eduresource_no, image_data) 
 		values ($eduresource_no, ?)";
     
-    print STDERR "$sql\n\n" if $edt->debug;
+    print STDERR "$sql\n\n" if $edt->debug_mode;
     
     my $result = $dbh->do($sql, { }, $store_data);
     
@@ -392,7 +399,7 @@ sub activate_resource {
 		SELECT image FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD = $quoted_id";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	my ($filename) = $dbh->selectrow_array($sql);
 	
@@ -407,14 +414,14 @@ sub activate_resource {
 		DELETE FROM $TABLE{RESOURCE_ACTIVE}
 		WHERE $RESOURCE_IDFIELD = $quoted_id";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	my $result = $dbh->do($sql);
 	
 	$sql = "	DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id = $quoted_id";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	$result = $dbh->do($sql);
 	
@@ -433,7 +440,7 @@ sub activate_resource {
 		FROM $TABLE{RESOURCE_QUEUE} as e left join $TABLE{RESOURCE_IMAGES} as i using (eduresource_no)
 		WHERE eduresource_no = $quoted_id";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	my ($r) = $dbh->selectrow_hashref($sql);
 	
@@ -453,23 +460,43 @@ sub activate_resource {
 	# in the proper directory, then stuff the file name into the 'image' field of the mirrored
 	# record.
 	
+	my $quoted_imagename = "''";
+	
 	if ( $r->{image_data} )
 	{
-	    $r->{image} = $edt->write_image_file($r->{id}, $r->{image_data});
+	    my $image_filename = $edt->write_image_file($r->{id}, $r->{image_data});
+	    $quoted_imagename = $dbh->quote($image_filename);
 	}
 	
 	# Now create a new action for this activation, and check the field values. We already know
 	# that the user has admin permission on $RESOURCE_QUEUE, so we record them as having admin
 	# permission for this action as well.
 	
-	my $activation_action = $edt->aux_action('RESOURCE_ACTIVE', 'replace', $r);
+	# my $activation_action = $edt->child_action('replace', 'RESOURCE_ACTIVE', $r);
 	
-	$activation_action->_set_permission('admin');
-	$edt->validate_against_schema($activation_action);
+	# $activation_action->ignore_bad_fields;
+	
+	# $edt->validate_against_schema($activation_action);
+	
+	# $edt->_handle_action($activation_action);
 	
 	# Then copy the record over to the active table.
 	
-	$edt->execute_action($activation_action);
+	# $edt->execute_replace($activation_action);
+	
+	my $authorizer_no = $edt->permission->{enterer_no};
+	
+	my $quoted_auth = $dbh->quote($authorizer_no);
+	
+	$sql = "REPLACE INTO $TABLE{RESOURCE_ACTIVE} (id, title, description, url,
+		    is_video, author, submitter, authorizer_no, created_on, modified, image)
+		SELECT eduresource_no, title, description, url, is_video, author,
+		    submitter, $quoted_auth, now(), now(), $quoted_imagename
+		FROM $TABLE{RESOURCE_QUEUE} WHERE eduresource_no = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $edt->debug_mode;
+	
+	my $result = $dbh->do($sql);
 	
 	# Then handle the tags. We first delete any which are there, then create new records for
 	# the ones we know are supposed to be there.
@@ -477,7 +504,7 @@ sub activate_resource {
 	$sql =  "	DELETE FROM $TABLE{RESOURCE_TAGS}
 		WHERE resource_id = $quoted_id";
 	
-	print STDERR "$sql\n\n" if $edt->debug;
+	print STDERR "$sql\n\n" if $edt->debug_mode;
 	
 	my $result = $dbh->do($sql);
 	
@@ -499,7 +526,7 @@ sub activate_resource {
 		
 		$sql = "	INSERT INTO $TABLE{RESOURCE_TAGS} (resource_id, tag_id) VALUES $insert_str";
 		
-		print STDERR "$sql\n\n" if $edt->debug;
+		print STDERR "$sql\n\n" if $edt->debug_mode;
 		
 		my $result = $dbh->do($sql);
 		
@@ -583,7 +610,7 @@ sub write_image_file {
     
     close $fout || warn "ERROR: could not write '$filename': $!";
 
-    print STDERR "\nWrote image file '$filepath'\n\n" if $edt->debug;
+    print STDERR "\nWrote image file '$filepath'\n\n" if $edt->debug_mode;
     
     return $filename;
 }
@@ -603,7 +630,7 @@ sub delete_image_file {
     {
 	if ( unlink($filepath) )
 	{
-	    print STDERR "\nDeleted image file '$filepath'\n\n" if $edt->debug;
+	    print STDERR "\nDeleted image file '$filepath'\n\n" if $edt->debug_mode;
 	}
 	
 	else
@@ -613,7 +640,7 @@ sub delete_image_file {
 	}
     }
 
-    elsif ( $edt->debug )
+    elsif ( $edt->debug_mode )
     {
 	print STDERR "\nCould not find image file '$filepath'\n\n";
     }

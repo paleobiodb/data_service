@@ -156,7 +156,7 @@ sub update_resources {
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->unpack_input_records($main_params, '1.2:eduresources:bodyparams');
+    my (@records) = $request->parse_body_records($main_params, '1.2:eduresources:bodyparams');
     
     if ( $request->errors )
     {
@@ -174,6 +174,7 @@ sub update_resources {
     
     foreach my $r (@records)
     {
+	$r->{is_video} = 0 if $r->{is_video} eq '';
 	$edt->insert_update_record('RESOURCE_QUEUE', $r);
     }
     
@@ -271,7 +272,7 @@ sub delete_resources {
     
     # Check for any allowances.
     
-    my $allowances = { MULTI_DELETE => 1 };
+    my $allowances = { };
     
     if ( my @allowance = $request->clean_param_list('allow') )
     {
@@ -295,7 +296,7 @@ sub delete_resources {
     # transaction. If any errors occur during that process, the transaction will be automatically
     # rolled back. Otherwise, it will be automatically committed.
     
-    $edt->execute;
+    $edt->commit;
     
     # Now handle any errors or warnings that may have been generated.
     

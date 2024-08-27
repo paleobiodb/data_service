@@ -614,6 +614,14 @@ sub ruleset_defined {
 }
 
 
+sub has_ruleset {
+
+    my ($ds, $rs_name) = @_;
+
+    return $ds->{validator}->ruleset_defined($rs_name);
+}
+
+
 sub list_ruleset_params {
     
     my ($ds, $rs_name) = @_;

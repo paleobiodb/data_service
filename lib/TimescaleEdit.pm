@@ -27,7 +27,7 @@ our ($TIMESCALE_KEY) = 'timescale_no';
 {
     TimescaleEdit->register_conditions(
 	C_BREAK_DEPENDENCIES => "There are intervals in other timescales dependent on this one. Allow BREAK_DEPENDENCIES to break these dependencies.",
-	E_TIMESCALE_HAS_ERRORS => "The timescale '%1' has inconsistencies in its bounds.");
+	E_TIMESCALE_HAS_ERRORS => "The timescale '&1' has inconsistencies in its bounds.");
 
     TimescaleEdit->register_allowances('BREAK_DEPENDENCIES');
 }
@@ -930,14 +930,14 @@ sub check_timescale_id {
 	return $timescale_id + 0;
     }
     
-    elsif ( $timescale_id && $timescale_id =~ $IDRE{TSC} )
+    elsif ( $timescale_id && $IDRE{TSC} && $timescale_id =~ $IDRE{TSC} )
     {
 	return $1;
     }
     
-    elsif ( $timescale_id && $timescale_id =~ $IDRE{LOOSE} )
+    elsif ( $timescale_id && $IDRE{LOOSE} && $timescale_id =~ $IDRE{LOOSE} )
     {
-	$edt->add_condition('E_EXTTYPE', 'timescale_id', "external identifier must be of type '$IDP{TSC}', was '$1'");
+	$edt->add_condition('E_EXTTYPE', 'timescale_id', $IDP{TSC}, $1);
 	return;
     }
     

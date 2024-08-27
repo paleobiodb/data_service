@@ -17,12 +17,16 @@ use Moo::Role;
 
 
 our (%SET_DEF) = (value => 'single',
+		  insert => 'single',
 		  maps_to => 'single',
 		  disabled => 'single',
 		  undocumented => 'single',
 		  doc_string => 'single');
 
-# define_map ( name, specification... )
+our ($METHODNAME) = 'define_valueset';
+
+
+# define_valueset ( name, specification... )
 # 
 # Define a set of values, with optional value map and documentation.  Such
 # sets can be used to define and document acceptable parameter values,
@@ -32,16 +36,15 @@ our (%SET_DEF) = (value => 'single',
 
 sub define_set {
 
-    my $self = shift;
-    my $name = shift;
+    my ($ds, $name, @items) = @_;
     
     # Make sure the name is unique.
     
-    croak "define_set: the first argument must be a valid name"
-	unless $self->valid_name($name);
+    croak "$METHODNAME: the first argument must be a valid name"
+	unless $ds->valid_name($name);
     
-    croak "define_set: '$name' was already defined at $self->{valueset}{$name}{defined_at}"
-	if ref $self->{valueset}{$name};
+    croak "$METHODNAME: '$name' was already defined at $ds->{set}{$name}{defined_at}"
+	if ref $ds->{set}{$name};
     
     # Create a new set object.
     
@@ -54,22 +57,21 @@ sub define_set {
     
     bless $vs, 'Web::DataService::Set';
     
-    $self->{set}{$name} = $vs;
+    $ds->{set}{$name} = $vs;
     
     # Then add the specified value records and documentation strings to this set.
     
-    $self->add_to_set($name, @_);
+    $ds->add_to_set($name, @items);
 }
 
 
 sub add_to_set {
     
-    my $self = shift;
-    my $name = shift;
+    my ($ds, $name, @items) = @_;
     
     # Make sure the name is defined.
     
-    my $vs = $self->{set}{$name} || croak "add_to_set: unknown set '$name'";
+    my $vs = $ds->{set}{$name} || croak "add_to_set: unknown set '$name'";
     
     # Then process the records and documentation strings one by one.  Throw an
     # exception if we find an invalid record.
@@ -77,13 +79,13 @@ sub add_to_set {
     my $doc_node;
     my @doc_lines;
     
-    foreach my $item (@_)
+    foreach my $item (@items)
     {
 	# A scalar is interpreted as a documentation string.
 	
 	unless ( ref $item )
 	{
-	    $self->add_doc($vs, $item) if defined $item;
+	    $ds->add_doc($vs, $item) if defined $item;
 	    next;
 	}
 	
@@ -91,44 +93,101 @@ sub add_to_set {
 	
 	unless ( ref $item && reftype $item eq 'HASH' )
 	{
-	    croak "define_set: arguments must be records (hash refs) and documentation strings";
+	    croak "$METHODNAME: arguments must be records (hash refs) and documentation strings";
 	}
+
+	# If this item includes the key 'insert', and a valueset exists whose name matches the key
+	# value, copy all of its records into the current valueset. If this item also contains
+	# 'disabled' and/or 'undocumented', the values of these keys override these attributes in
+	# the copied records.
 	
-	# Add the record to the documentation list.
-	
-	$self->add_doc($vs, $item);
-	
-	# Check for invalid attributes.
-	
-	foreach my $k ( keys %$item )
+	if ( $item->{insert} )
 	{
-	    croak "define_set: unknown attribute '$k'"
-		unless defined $SET_DEF{$k};
+	    croak "$METHODNAME: 'value' is not allowed with 'insert'" if defined $item->{value};
+	    croak "$METHODNAME: 'maps_to' is not allowed with 'insert'" if defined $item->{maps_to};
+	    
+	    my $insert_set = $ds->{set}{$item->{insert}};
+	    
+	    croak "$METHODNAME: valueset '$item->{insert}' is not defined"
+		unless ref $insert_set eq 'Web::DataService::Set';
+	    
+	    foreach my $value ( $insert_set->{value_list}->@* )
+	    {
+		croak "$METHODNAME: value '$value' cannot be defined twice in the same valueset"
+		    if exists $vs->{value}{$value};
+		
+		my %newitem = $insert_set->{value}{$value}->%*;
+
+		$newitem{disabled} = $item->{disabled} if defined $item->{disabled};
+		$newitem{undocumented} = $item->{undocumented} if defined $item->{undocumented};
+		
+		$ds->add_doc($vs, \%newitem);
+		
+		push @{$vs->{value_list}}, $value unless $newitem{disabled};
+		$vs->{value}{$value} = \%newitem;
+	    }
 	}
 	
-	# Check that each reord contains an actual value, and that these
-	# values do not repeat.
+	# Otherwise, this item represents a single value.
+
+	else
+	{
+	    # Check for invalid attributes.
+	    
+	    foreach my $k ( keys %$item )
+	    {
+		croak "$METHODNAME: unknown attribute '$k'"
+		    unless defined $SET_DEF{$k};
+	    }
 	
-	my $value = $item->{value};
-	
-	croak "add_to_set: you must specify a nonempty 'value' key in each record"
-	    unless defined $value && $value ne '';
-	
-	croak "add_to_set: value '$value' cannot be defined twice"
-	    if exists $vs->{value}{$value};
-	
-	# Add the value to the various lists it belongs to, and to the hash
-	# containing all defined values.
-	
-	push @{$vs->{value_list}}, $value unless $item->{disabled};
-	$vs->{value}{$value} = $item;
+	    # Check that each reord contains an actual value, and that these
+	    # values do not repeat.
+	    
+	    my $value = $item->{value};
+	    
+	    croak "$METHODNAME: you must specify a nonempty 'value' key in each record"
+		unless defined $value && $value ne '';
+	    
+	    croak "$METHODNAME: value '$value' cannot be defined twice in the same valueset"
+		if exists $vs->{value}{$value};
+	    
+	    # Add the value to the various lists it belongs to, and to the hash
+	    # containing all defined values.
+
+	    $ds->add_doc($vs, $item);
+	    
+	    push @{$vs->{value_list}}, $value unless $item->{disabled};
+	    $vs->{value}{$value} = $item;
+	}
     }
     
     # Finish the documentation for this object.
     
-    $self->process_doc($vs);
+    $ds->process_doc($vs);
     
     my $a = 1;	# we can stop here when debugging
+}
+
+
+# define_set ( ... )
+#
+# This is an alias for define_valueset.
+
+sub define_valueset {
+
+    local($METHODNAME) = 'define_valueset';
+    &define_set;
+}
+
+
+# define_map ( ... )
+#
+# This is an alias for define_valueset.
+
+sub define_map {
+
+    local($METHODNAME) = 'define_map';
+    &define_set;
 }
 
 
@@ -139,9 +198,9 @@ sub add_to_set {
 
 sub set_defined {
     
-    my ($self, $name) = @_;
+    my ($ds, $name) = @_;
     
-    return ref $self->{set}{$name} eq 'Web::DataService::Set';
+    return ref $ds->{set}{$name} eq 'Web::DataService::Set';
 }
 
 
@@ -154,9 +213,9 @@ sub set_defined {
 
 sub valid_set {
 
-    my ($self, $set_name) = @_;
+    my ($ds, $set_name) = @_;
     
-    my $vs = $self->{set}{$set_name};
+    my $vs = $ds->{set}{$set_name};
     
     unless ( ref $vs eq 'Web::DataService::Set' )
     {
@@ -195,12 +254,12 @@ sub bad_set_validator {
 
 sub document_set {
 
-    my ($self, $set_name) = @_;
+    my ($ds, $set_name) = @_;
     
     # Look up a set object using the given name.  If none could be found,
     # return an explanatory message.
     
-    my $vs = $self->{set}{$set_name};
+    my $vs = $ds->{set}{$set_name};
     
     return "=over\n\n=item I<Could not find the specified set>\n\n=back"
 	unless ref $vs eq 'Web::DataService::Set';

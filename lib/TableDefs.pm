@@ -13,6 +13,8 @@ package TableDefs;
 
 use strict;
 
+no warnings 'uninitialized';
+
 use Carp qw(carp croak);
 use Hash::Util qw(lock_value unlock_value lock_keys unlock_keys);
 
@@ -38,100 +40,56 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
 		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $TEST_DB %TABLE
-		      %COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL 
 		      init_table_names enable_test_mode disable_test_mode is_test_mode
-		      get_table_name set_table_name set_table_group get_table_group
-		      change_table_db change_table_name restore_table_name original_table
-		      set_table_property get_table_property
-		      set_column_property get_column_properties list_column_properties
-		      substitute_table alternate_table);
+		      change_table_name change_table_db restore_table_name original_table_name
+		      set_table_name get_table_name set_table_group get_table_group
+		      set_table_property get_table_property set_column_property get_column_property
+		      set_table_property_name list_table_property_names get_table_properties
+		      set_column_property_name list_column_property_names get_column_properties
+		      is_table_property is_column_property);
 
 
-# Define the properties that are allowed to be specified for tables and table columns.
+# List the properties that can be specified for tables. All of the CAN_ properties default
+# to 'anybody' unless explicitly specified. If CAN_INSERT is not specified, it defaults to
+# the value of CAN_POST.
 
 our (%TABLE_PROP_NAME) = (
-	CAN_POST => 1,		# specifies who is allowed to add new records
-	CAN_VIEW => 1,		# specifies who is allowed to view records
-	CAN_MODIFY => 1,	# specifies who is allowed to modify existing records
-	ALLOW_DELETE => 1,	# if true, then deletion is allowed without admin
-	ALLOW_INSERT_KEY => 1,	# if true, then insertion allowed with specified primary key
-	CASCADE_DELETE => 1,	# specifies additional tables whose entries should be deleted
-                                #     when a record in this table is deleted.
-	BY_AUTHORIZER => 1,	# if true, then editing permission by authorizer_no
-	SUPERIOR_TABLE => 1,	# specifies table which controls permissions for this one
-	SUPERIOR_KEY => 1,	# specifies a field to be matched to the p.t. primary key
-	PRIMARY_KEY => 1,	# specifies the primary key column(s) for this table
-	PRIMARY_FIELD => 1,	# specifies the primary key record field for this table
-	NO_LOG => 1,		# specifies that changes to this table should not be logged
-	TABLE_COMMENT => 1	# specifies a comment relating to the table
-    );
+    CAN_VIEW => 1,	      # specifies who can view records
+    CAN_POST => 1,	      # specifies who can add records with auto_insert keys
+    CAN_INSERT => 1,          # specifies who can add records with specified keys
+    CAN_DELETE => 1,          # specifies who can delete records
+    CAN_MODIFY => 1,	      # specifies who can modify existing records they do not own
+    CAN_ALTER_TRAIL => 1,     # specifies who can change record creator/modifier dates
+    BY_AUTHORIZER => 1,       # if true, check modification permission according to authorizer_no
+    CASCADE_DELETE => 1,      # specifies additional table(s) for cascade deletion from this one
+    PRIMARY_KEY => 1,         # specifies the primary key column(s) for this table
+    PRIMARY_FIELD => 1,       # specifies the primary key field(s) for this table
+    AUTH_FIELDS => 1,	      # specifies the fields that determine record ownership
+    AUTH_TABLE => 1,          # authorization should be performed on the specified table
+    SUPERIOR_TABLE => 1,      # if non-empty, the specified table controls access to this one
+    SUPERIOR_KEY => 1,	      # if non-empty, the specified column links this table to its superior
+    NO_LOG => 1,              # if true, changes to this table will not be logged
+    SPECIAL_COLS => 1,        # specifies a list of columns to be handled by special directives
+    REQUIRED_COLS => 1,	      # specifies a list of columns whose values must be non-empty
+    TABLE_COMMENT => 1,       # provides a comment or documentation string for this table
+);
 
-our (%COLUMN_PROP_NAME) = ( ALTERNATE_NAME => 1,
-			    ALTERNATE_ONLY => 1,
-			    FOREIGN_KEY => 1,
-			    FOREIGN_TABLE => 1,
-			    EXTID_TYPE => 1,
-			    ALLOW_TRUNCATE => 1,
-			    VALUE_SEPARATOR => 1,
-			    VALIDATOR => 1,
-			    REQUIRED => 1,
-			    NOT_NULL => 1,
-			    ADMIN_SET => 1,
-			    IGNORE => 1,
-			    COLUMN_COMMENT => 1 );
+# List the properties that can be specified for columns.
 
-
-# Define the properties of certain fields that are common to many tables in the PBDB.
-
-our (%FOREIGN_KEY_TABLE) = ( taxon_no => 'AUTHORITY_DATA',
-			     resource_no => 'REFERENCE_DATA',
-			     collection_no => 'COLLECTION_DATA',
-			     occurrence_no => 'OCCURRENCE_DATA',
-			     specimen_no => 'SPECIMEN_DATA',
-			     measurement_no => 'MEASUREMENT_DATA',
-			     specelt_no => 'SPECELT_DATA',
-			     reid_no => 'REID_DATA',
-			     opinion_no => 'OPINION_DATA',
-			     interval_no => 'INTERVAL_DATA',
-			     timescale_no => 'TIMESCALE_DATA',
-			     bound_no => 'TIMESCALE_BOUNDS',
-			     eduresource_no => 'RESOURCE_QUEUE',
-			     person_no => 'WING_USERS',
-			     authorizer_no => 'WING_USERS',
-			     enterer_no => 'WING_USERS',
-			     modifier_no => 'WING_USERS');
-
-our (%FOREIGN_KEY_COL) = ( authorizer_no => 'person_no',
-			   enterer_no => 'person_no',
-			   modifier_no => 'person_no' );
-
-our (%COMMON_FIELD_IDTYPE) = ( taxon_no => 'TID',
-			       orig_no => 'TXN',
-			       reference_no => 'REF',
-			       collection_no => 'COL',
-			       occurrence_no => 'OCC',
-			       specimen_no => 'SPM',
-			       measurement_no => 'MEA',
-			       specelt_no => 'ELS',
-			       reid_no => 'REI',
-			       opinion_no => 'OPN',
-			       interval_no => 'INT',
-			       timescale_no => 'TSC',
-			       bound_no => 'BND',
-			       eduresource_no => 'EDR',
-			       person_no => 'PRS',
-			       authorizer_no => 'PRS',
-			       enterer_no => 'PRS',
-			       modifier_no => 'PRS' );
-
-our (%COMMON_FIELD_SPECIAL) = ( authorizer_no => 'authent',
-				enterer_no => 'authent',
-				modifier_no => 'authent',
-				enterer_id => 'authent',
-				created => 'crmod',
-				modified => 'crmod',
-				admin_lock => 'admin',
-			        owner_lock => 'owner' );
+our (%COLUMN_PROP_NAME) = (
+    REQUIRED => 1,          # non-empty value is required; more strict than NOT_NULL (bool)
+    NOT_NULL => 1,          # non-null value is required; overrides database (bool)
+    ADMIN_SET => 1,         # only admins can set or modify the value of this column (bool)
+    ALLOW_TRUNCATE => 1,    # large client provided values will be truncated to fit column (bool)
+    VALUE_SEPARATOR => 1,   # override regexp for splitting column value into list of values
+    ALTERNATE_NAME => 1,    # client provided records may provide column value under this name
+    ALTERNATE_ONLY => 1,    # client provided records must use alternate name (bool)
+    FOREIGN_KEY => 1,       # table for which this column is a foreign key
+    EXTID_TYPE => 1,       # external identifier type(s) accepted by this column
+    DIRECTIVE => 1,         # special handling for this column by the EditTransaction system
+    IGNORE => 1,            # this column will be ignored as if it didn't exist (bool)
+    COLUMN_COMMENT => 1,    # provides a comment or documentation string for this column
+);
 
 
 # Define the mechanism for substituting test tables instead of real ones.
@@ -346,6 +304,8 @@ our (%TABLE_PROPERTIES, %COLUMN_PROPERTIES);
 
 our (%TABLE, %TABLE_GROUP, %TABLE_NAME_MAP);
 
+# Table names
+# -----------
 
 sub set_table_name {
 
@@ -363,17 +323,17 @@ sub set_table_name {
 
 sub get_table_name {
 
-    return $TABLE{$_[0]} || croak "unknown table '$_[0]'";
+    return exists $TABLE{$_[0]} ? $TABLE{$_[0]} : undef;
 }
 
 
 sub change_table_name {
 
     my ($table_specifier, $new_name) = @_;
-
+    
     if ( exists $TABLE{$table_specifier} )
     {
-	my $orig_name = original_table($TABLE{$table_specifier});
+	my $orig_name = original_table_name($TABLE{$table_specifier});
 	
 	$TABLE_NAME_MAP{$new_name} = $orig_name;
 	
@@ -400,7 +360,7 @@ sub change_table_db {
     if ( exists $TABLE{$table_specifier} )
     {
 	my $table_name = $TABLE{$table_specifier};
-	my $orig_name = original_table($table_name);
+	my $orig_name = original_table_name($table_name);
 	
 	$table_name =~ s/^.+[.]//;
 	
@@ -432,7 +392,7 @@ sub restore_table_name {
     if ( exists $TABLE{$table_specifier} )
     {
 	unlock_value(%TABLE, $table_specifier);
-	$TABLE{$table_specifier} = original_table($TABLE{$table_specifier});
+	$TABLE{$table_specifier} = original_table_name($TABLE{$table_specifier});
 	lock_value(%TABLE, $table_specifier);
 	
 	return $TABLE{$table_specifier};
@@ -445,7 +405,7 @@ sub restore_table_name {
 }
 
 
-sub original_table {
+sub original_table_name {
     
     return $TABLE_NAME_MAP{$_[0]} || $_[0];
 }
@@ -504,6 +464,37 @@ sub disable_test_mode {
 }
 
 
+# Table properties
+# ----------------
+
+sub list_table_property_names {
+
+    return keys %TABLE_PROP_NAME;
+}
+
+
+sub is_table_property {
+
+    return $_[0] && $TABLE_PROP_NAME{$_[0]} ? 1 : '';
+}
+
+
+sub set_table_property_name {
+    
+    my ($property_name, $status) = @_;
+
+    if ( $status )
+    {
+	$TABLE_PROP_NAME{$property_name} = 1;
+    }
+
+    else
+    {
+	$TABLE_PROP_NAME{$property_name} = '';
+    }
+}
+
+
 sub set_table_property {
     
     my ($table_specifier, $property, $value) = @_;
@@ -511,11 +502,11 @@ sub set_table_property {
     croak "Invalid table property '$property'" unless $TABLE_PROP_NAME{$property};
     
     $TABLE_PROPERTIES{$table_specifier}{$property} = $value;
-
-    if ( $property eq 'PRIMARY_KEY' && $value =~ / (.*) _no $ /xs )
-    {
-	$TABLE_PROPERTIES{$table_specifier}{PRIMARY_FIELD} = "${1}_id";
-    }
+    
+    # if ( $property eq 'PRIMARY_KEY' && $value =~ / (.*) _no $ /xs )
+    # {
+    # 	$TABLE_PROPERTIES{$table_specifier}{PRIMARY_FIELD} = "${1}_id";
+    # }
 }
 
 
@@ -530,14 +521,61 @@ sub get_table_property {
 	return $TABLE_PROPERTIES{$table_specifier}{$property}
     }
     
-    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
+    # elsif ( ! defined $TABLE_PROPERTIES{$table_specifier} )
+    # {
+    # 	carp "No properties set for table '$table_specifier'";
+    # }
+    
+    else
     {
-	return;
+	return undef;
+    }
+}
+
+
+sub get_table_properties {
+    
+    my ($table_specifier) = @_;
+    
+    if ( defined $TABLE_PROPERTIES{$table_specifier} )
+    {
+	return $TABLE_PROPERTIES{$table_specifier}->%*;
     }
     
     else
     {
-	carp "No properties set for table '$table_specifier'";
+	return ();
+    }
+}
+
+
+# Column properties
+# -----------------
+
+sub list_column_property_names {
+
+    return keys %COLUMN_PROP_NAME;
+}
+
+
+sub is_column_property {
+
+    return $_[0] && $COLUMN_PROP_NAME{$_[0]} ? 1 : '';
+}
+
+
+sub set_column_property_name {
+    
+    my ($property_name, $status) = @_;
+
+    if ( $status )
+    {
+	$COLUMN_PROP_NAME{$property_name} = 1;
+    }
+
+    else
+    {
+	$COLUMN_PROP_NAME{$property_name} = '';
     }
 }
 
@@ -547,8 +585,6 @@ sub set_column_property {
     my ($table_specifier, $column_name, $property, $value) = @_;
     
     croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
-    
-    # my $base_name = $TABLE_NAME_MAP{$table_name} || $table_name;
     
     if ( ref $value )
     {
@@ -571,20 +607,25 @@ sub get_column_property {
     
     my ($table_specifier, $column_name, $property) = @_;
     
+    return unless $table_specifier && $column_name && $property;
+    
     if ( exists $COLUMN_PROPERTIES{$table_specifier}{$column_name}{$property} )
     {
 	return $COLUMN_PROPERTIES{$table_specifier}{$column_name}{$property};
     }
-    
-    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
-    {
-	return;
-    }
-    
+
     else
     {
-	carp "No properties set for table '$table_specifier'";	
+	return undef;
     }
+}
+
+
+sub has_column_properties {
+
+    my ($table_specifier) = @_;
+
+    return $COLUMN_PROPERTIES{$table_specifier} ? 1 : '';
 }
 
 
@@ -592,64 +633,55 @@ sub get_column_properties {
 
     my ($table_specifier, $column_name) = @_;
     
-    if ( defined $COLUMN_PROPERTIES{$table_specifier}{$column_name} )
+    if ( defined $column_name )
     {
-	return %{$COLUMN_PROPERTIES{$table_specifier}{$column_name}};
-    }
-
-    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
-    {
-	return;
+	if ( my $column_ref = $COLUMN_PROPERTIES{$table_specifier}{$column_name} )
+	{
+	    return map { $_ => copy_property_value($column_ref->{$_}) } keys $column_ref->%*;
+	}
     }
     
-    else
+    elsif ( my $cols_ref = $COLUMN_PROPERTIES{$table_specifier} )
     {
-	carp "No properties set for table '$table_specifier'";	
-    }
-}
-
-
-sub list_column_properties {
-    
-    my ($table_specifier) = @_;
-    
-    if ( defined $COLUMN_PROPERTIES{$table_specifier} )
-    {
-	return map { $_ => 1 } keys %{$COLUMN_PROPERTIES{$table_specifier}};
-    }
-    
-    elsif ( defined $TABLE_PROPERTIES{$table_specifier} )
-    {
-	return;
+	my @result;
+	
+	foreach my $colname ( keys $cols_ref->%* )
+	{
+	    if ( ref $cols_ref->{$colname} eq 'HASH' )
+	    {
+		push @result, $colname;
+		my %propvals = map { $_ => copy_property_value($cols_ref->{$colname}{$_}) }
+		    keys $cols_ref->{$colname}->%*;
+		push @result, \%propvals;
+	    }
+	}
+	
+	return @result;
     }
     
     else
     {
-	carp "No properties set for table '$table_specifier'";	
+	return ();
     }
 }
 
 
-sub substitute_table {
+sub copy_property_value {
 
-    my ($new_name, $old_name) = @_;
+    if ( ref $_[0] eq 'HASH' )
+    {
+	return { $_[0]->%* };
+    }
     
-    $TABLE_NAME_MAP{$new_name} = $old_name;
-    return $new_name;
-}
-
-
-sub alternate_table {
+    elsif ( ref $_[0] eq 'ARRAY' )
+    {
+	return [ $_[0]->@* ];
+    }
     
-    my ($new_db, $table_name) = @_;
-    
-    croak "you must specify an alternate database name" unless $new_db;
-    
-    my $orig_name = original_table($table_name);
-    my $new_name = "$new_db.$orig_name";
-    
-    $TABLE_NAME_MAP{$new_name} = $orig_name;
-    return $new_name;
+    else
+    {
+	return $_[0];
+    }
 }
 
 

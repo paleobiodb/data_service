@@ -15,7 +15,7 @@ use Carp qw(carp croak);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
 
-use IntervalBase qw(ts_defined ts_record ts_intervals ts_list
+use IntervalBase qw(ts_defined ts_record ts_intervals ts_bounds ts_has_type ts_list
 		    int_defined int_record int_bounds ints_by_prefix ts_list);
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
 
@@ -36,6 +36,18 @@ no warnings 'numeric';
 sub initialize {
 
     my ($class, $ds) = @_;
+    
+    $ds->define_set('1.2:intervals:types' => 
+	{ value => 'eon' },
+	{ value => 'era' },
+	{ value => 'period' },
+	{ value => 'epoch' },
+	{ value => 'subepoch' },
+	{ value => 'age' },
+	{ value => 'subage' },
+	{ value => 'zone' },
+	{ value => 'chron' },
+        { value => 'bin' });
     
     # Define output blocks for displaying time interval information
     
@@ -149,28 +161,32 @@ sub initialize {
     
     $ds->define_set('1.2:timerules' =>
 	{ value => 'contain' },
-	    "Select only records whose temporal locality is strictly contained in the specified time range.",
-	    "This is the most restrictive rule.  For diversity output, this rule guarantees that each occurrence",
-	    "will fall into at most one temporal bin, but many occurrences will be ignored because their temporal",
+	    "Select only records whose temporal locality is strictly contained in the",
+	    "specified time range. This is the most restrictive rule.  For diversity",
+	    "output, this rule guarantees that each occurrence will fall into at most",
+	    "one temporal bin, but many occurrences will be ignored because their temporal",
 	    "locality is too wide to fall into any of the bins.",
 	{ value => 'major' },
-	    "Select only records for which at least 50% of the temporal locality range falls within the specified",
-	    "time range.",
-	    "For diversity output, this rule also guarantees that each occurrence will fall into at most one",
-	    "temporal bin.  Many occurrences will be ignored because their temporal locality is more than twice",
-	    "as wide as any of the overlapping bins, but fewer will be ignored than with the C<contain> rule.",
-	    "This is the B<default> timerule unless you specifically select one.",
+	    "Select only records for which at least 50% of the temporal locality range",
+	    "falls within the specified time range. For diversity output, this rule also",
+	    "guarantees that each occurrence will fall into at most one temporal bin.",
+	    "Many occurrences will be ignored because their temporal locality is more",
+	    "than twice as wide as any of the overlapping bins, but fewer will be ignored",
+            "than with the C<contain> rule. This is the B<default> timerule unless you",
+	    "specifically select one.",
 	{ value => 'buffer' },
-	    "Select only records whose temporal locality overlaps the specified time range and also falls",
-	    "completely within a 'buffer zone' around this range.  This buffer defaults",
-	    "to 12 million years for the Paleozoic and Mesozoic and 5 million years for the Cenozoic.",
-	    "You can override the buffer width using the parameters B<C<timebuffer>> and",
-	    "B<C<late_buffer>>.  For diversity output, some occurrences will be counted as falling into more",
-	    "than one bin.  Some occurrences will still be ignored, but fewer than with the above rules.",
+	    "Select only records whose temporal locality overlaps the specified time range",
+	    "and also falls completely within a 'buffer zone' around this range.  This",
+	    "buffer defaults to 12 million years for the Paleozoic and Mesozoic and 5",
+	    "million years for the Cenozoic. You can override the buffer width using the",
+	    "parameters B<C<timebuffer>> and B<C<late_buffer>>.  For diversity output,",
+	    "some occurrences will be counted as falling into more than one bin.  Some",
+	    "occurrences will still be ignored, but fewer than with the above rules.",
 	{ value => 'overlap' },
-	    "Select only records whose temporal locality overlaps the specified time range by any amount.",
-	    "This is the most permissive rule.  For diversity output, every occurrence will be counted.",
-	    "Many will be counted as falling into more than one bin.");
+	    "Select only records whose temporal locality overlaps the specified time",
+	    "range by any amount. This is the most permissive rule.  For diversity output,",
+	    "every occurrence will be counted. Many will be counted as falling into more",
+	    "than one bin.");
 
     # Then define some rulesets to describe the parameters accepted by the
     # operations defined here.
@@ -187,22 +203,24 @@ sub initialize {
     $ds->define_ruleset('1.2:intervals:selector' => 
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "List all intervals known to the database.",
-	{ param => 'scale_id', valid => [VALID_IDENTIFIER('TSC'), ENUM_VALUE('all')], 
-	  list => ',', alias => 'scale',
-	  errmsg => "the value of {param} should be a list of scale identifiers or 'all'" },
+	{ param => 'scale_id', valid => VALID_IDENTIFIER('TSC'), list => ',' },
 	    "Return intervals from the specified time scale(s).",
-	    "The value of this parameter should be a list of scale identifiers separated",
-	    "by commas, or 'all'",
+	    "The value of this parameter should be one or more scale identifiers separated",
+	    "by commas.",
+	{ param => 'scale', valid => ANY_VALUE, list => ',' },
+	    "Return intervals from the specified time scale(s). The value",
+	    "of this parameter should be one or more scale names or numbers, separated by",
+	    "commas.",
 	# { param => 'scale_level', valid => POS_VALUE, list => ',', alias => 'level' },
 	#     "Return intervals from the specified scale level(s).  The value of this",
 	#     "parameter can be one or more level numbers separated by commas.",
 	{ param => 'id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'interval_id',
 	  bad_value => '_' },
-	    "Return intervals that have the specified identifiers",
+	    "Return intervals that have the specified identifier(s).",
 	{ param => 'name', list => ',' },
-	    "Return intervals that have the specified names",
-	# { at_most_one => ['id', 'name'],
-	#   errmsg => "You may not specify both 'name' and 'id' in the same query." },
+	    "Return intervals that have the specified name(s).",
+	{ param => 'type', valid => '1.2:intervals:types', list => ',' },
+	    "Return only intervals of the specified type(s):",
 	{ param => 'min_ma', valid => DECI_VALUE(0) },
 	    "Return only intervals that are at least this old",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
@@ -225,16 +243,29 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
     $ds->define_ruleset('1.2:scales:specifier' =>
-	{ param => 'id', alias => ['scale_id', 'scale'], valid => VALID_IDENTIFIER('TSC') },
-	    "Return the time scale corresponding to the specified identifier. (REQUIRED)");
+	{ param => 'id', alias => ['scale_id'], valid => VALID_IDENTIFIER('TSC') },
+	    "Return the time scale corresponding to the specified identifier.",
+	{ param => 'name', alias => ['scale_name', 'scale'], valid => ANY_VALUE },
+	    "Return the time scale corresponding to the specified name.",
+	{ at_most_one => ['id', 'name'] });
     
     $ds->define_ruleset('1.2:scales:selector' =>
 	"To return all time scales, use the parameter 'all_records'.",
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "List all intervals known to the database.",
-	{ param => 'id', alias => ['scale_id', 'scale'], valid => VALID_IDENTIFIER('TSC'), list => ',' },
-	    "Return intervals that have the specified identifier(s).",
-	    "You may specify more than one, as a comma-separated list.");
+	{ param => 'id', alias => ['scale_id'], valid => VALID_IDENTIFIER('TSC'), list => ',' },
+	    "Return time scales that have the specified identifier(s).",
+	    "You may specify more than one, as a comma-separated list.",
+	{ param => 'name', alias => ['scale_name', 'scale'], valid => ANY_VALUE, list => ',' },
+	    "Return time scales that have the specified name(s). You may specify",
+	    "more than one, as a comma-separated list.",
+	{ param => 'type', valid => '1.2:intervals:types', list => ',' },
+	    "Return only time scales that contain the specified interval type(s).",
+	    "You may specify more than one, as a comma-separated list:",
+	{ param => 'min_ma', valid => DECI_VALUE(0) },
+	    "Return only time scales whose early boundary is at least this old.",
+	{ param => 'max_ma', valid => DECI_VALUE(0) },
+	    "Return only time scales whose late boundary is at most this old.");
     
     $ds->define_ruleset('1.2:scales:single' =>
 	{ require => '1.2:scales:specifier' },
@@ -288,6 +319,17 @@ sub initialize {
 	{ at_most_one => ['interval_id', 'interval', 'max_ma'] });
     
     $ds->define_ruleset('1.2:timerule_selector' =>
+	{ optional => 'scale_id', valid => VALID_IDENTIFIER('TSC') },
+	    "The identifier of the timescale to be used when binning occurrences. Use",
+	    "1 for the International Chronostratigraphic Timescale, and 10 for the PBDB",
+	    "Ten Million Year bins. If not specified, the default is 1.",
+	{ optional => 'scale' },
+	    "The name of the timescale to be used when binning occurrences. The default",
+	    "is 'International Chronostratigraphic Timescale'.",
+	{ at_most_one => ['scale_id', 'scale'] },
+	{ optional => 'interval_type', valid => '1.2:intervals:types' },
+	    "The interval type to be used when binning occurrences. If not specified,",
+	    "the default interval type for the selected timescale is used.",
 	{ optional => 'timerule', valid => '1.2:timerules', alias => 'time_rule', default => 'major' },
 	    "Resolve temporal locality according to the specified rule, as listed below.  This",
 	    "rule is applied to determine which occurrences, collections, and/or taxa will be selected if",
@@ -380,18 +422,49 @@ sub list {
     my $has_max = defined $max_ma && $max_ma ne '';
     my $has_min = defined $min_ma && $min_ma ne '';
     
-    if ( my @int_select = $request->clean_param_list('id') )
+    my %has_type = map { $_ => 1 } $request->clean_param_list('type');
+    
+    my @int_select = $request->clean_param_list('id');
+    push @int_select, $request->clean_param_list('name');
+    
+    my @scale_select = $request->clean_param_list('scale_id');
+    push @scale_select, $request->clean_param_list('scale');
+    
+    if ( @int_select )
     {
-	$use_list = 1;
+	my %scale_selected;
+	
+	foreach my $s ( @scale_select )
+	{
+	    if ( my $scale_no = ts_defined($s) )
+	    {
+		$scale_selected{$scale_no} = 1;
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("timescale '$s' was not found");
+	    }
+	}	
 	
 	foreach my $i ( @int_select )
 	{
-	    if ( int_defined($i) )
+	    my $interval_no = int_defined($i);
+	    
+	    if ( $interval_no )
 	    {
 		unless ( $int_uniq{$i} )
 		{
-		    push @result, int_record($i);
 		    $int_uniq{$i} = 1;
+		    
+		    my $int = int_record($i);
+		    
+		    next if $has_max && $int->{b_age} > $max_ma;
+		    next if $has_min && $int->{t_age} < $min_ma;
+		    next if %has_type && ! $has_type{$int->{type}};
+		    next if @scale_select && ! $scale_selected{$int->{scale_no}};
+		    
+		    push @result, int_record($i);
 		}
 	    }
 	    
@@ -402,40 +475,18 @@ sub list {
 	}
     }
     
-    if ( my @name_select = $request->clean_param_list('name' ) )
+    else
     {
-	$use_list = 1;
-	
-	foreach my $n ( @name_select )
-	{
-	    if ( my $i = int_defined($n) )
-	    {
-		unless ( $int_uniq{$i} )
-		{
-		    push @result, int_record($n);
-		    $int_uniq{$i} = 1;
-		}
-	    }
-	    
-	    else
-	    {
-		$request->add_warning("interval '$n' was not found");
-	    }
-	}
-    }
-    
-    unless ( $use_list )
-    {
-	if ( my @scale_select = $request->clean_param_list('scale_id') )
+	if ( @scale_select )
 	{
 	    foreach my $s ( @scale_select )
 	    {
-		if ( ts_defined($s) )
+		if ( my $scale_no = ts_defined($s) )
 		{
-		    unless ( $scale_uniq{$s} )
+		    unless ( $scale_uniq{$scale_no} )
 		    {
-			push @scale_list, $s;
-			$scale_uniq{$s} = 1;
+			$scale_uniq{$scale_no} = 1;
+			push @scale_list, $scale_no;
 		    }
 		}
 		
@@ -457,6 +508,7 @@ sub list {
 	    {
 		next if $has_max && $int->{b_age} > $max_ma;
 		next if $has_min && $int->{t_age} < $min_ma;
+		next if %has_type && ! $has_type{$int->{type}};
 		
 		push @result, $int;
 	    }
@@ -467,15 +519,10 @@ sub list {
     {
 	my $coll_hash;
 	
-	if ( $use_list || $has_max || $has_min )
+	if ( @result )
 	{
 	    my @int_nos = map { $_->{interval_no} } @result;
 	    $coll_hash = $request->query_colls('int', @int_nos);
-	}
-	
-	elsif ( @scale_list )
-	{
-	    $coll_hash = $request->query_colls('int_by_ts', @scale_list);
 	}
 	
 	if ( $coll_hash )
@@ -536,21 +583,46 @@ sub list_scales {
     $request->strict_check;
     $request->extid_check;
     
-    my (@scale_list, @result);
+    my (@scale_list, @to_filter, @result);
     
-    unless ( @scale_list = $request->clean_param_list('id') )
+    @scale_list = $request->clean_param_list('id');
+    push @scale_list, $request->clean_param_list('name');
+    
+    if ( @scale_list )
     {
-	@scale_list = ts_list();
+	foreach my $s ( @scale_list )
+	{
+	    push @to_filter, ts_record($s);
+	}
     }
     
-    foreach my $s ( @scale_list )
+    else
     {
-	push @result, ts_record($s);
+	@to_filter = map { ts_record($_) } ts_list();
+    }
+    
+    my $max_ma = $request->clean_param('max_ma');
+    my $min_ma = $request->clean_param('min_ma');
+    
+    my $has_max = defined $max_ma && $max_ma ne '';
+    my $has_min = defined $min_ma && $min_ma ne '';
+    
+    my @types = $request->clean_param_list('type');
+    
+    foreach my $scale ( @to_filter )
+    {
+	next if $has_max && $scale->{late_age} >= $max_ma;
+	next if $has_min && $scale->{early_age} <= $min_ma;
+	next if @types && ! ts_has_type($scale->{scale_no}, @types);
+	
+	push @result, $scale;
     }
     
     if ( $request->has_block('colls') )
     {
-	my $coll_hash = $request->query_colls('ts', @scale_list);
+	my @scale_nos = map { $_->{scale_no} } @result;
+	
+	my $coll_hash = $request->query_colls('ts', @scale_nos);
 	
 	foreach my $scale ( @result )
 	{
@@ -562,7 +634,7 @@ sub list_scales {
     $request->list_result(@result);
     $request->set_result_count(scalar(@result));
     
-    if ( $arg eq 'single' && ! @result )
+    if ( $arg && $arg eq 'single' && ! @result )
     {
 	die $request->exception(404, "Not found");
     }    
@@ -649,6 +721,7 @@ sub diagram_scales {
     # Get a list of the scales to display.
     
     my @scale_list = $request->clean_param_list('id');
+    push @scale_list, $request->clean_param_list('name');
     
     $request->strict_check;
     

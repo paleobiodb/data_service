@@ -86,7 +86,9 @@ sub initialize {
 	    "label value, if any, that was submitted with each record.",
 	{ output => 'status', com_name => 'sta' },
 	    "The status will be one of the following codes:",
-	    $ds->document_set('1.2:eduresources:status'));
+	    $ds->document_set('1.2:eduresources:status'),
+	{ output => 'submitted_by', com_name => 'sub' },
+	    "The name of the person who submitted this resouce.");
     
     $ds->define_block('1.2:eduresources:larkin' =>
 	{ output => 'id', data_type => 'pos' },
@@ -491,10 +493,12 @@ sub list_resources {
     else
     {
 	$request->{main_sql} = "
-	SELECT $calc edr.*, act.image as active_image, edi.eduresource_no as has_image $extra_fields
+	SELECT $calc edr.*, act.image as active_image, edi.eduresource_no as has_image,
+		wu.real_name as submitted_by $extra_fields
 	FROM $TABLE{RESOURCE_QUEUE} as edr
 		left join $TABLE{RESOURCE_IMAGES} as edi using (eduresource_no)
 		left join $TABLE{RESOURCE_ACTIVE} as act on edr.eduresource_no = act.$RESOURCE_IDFIELD
+		left join pbdb_wing.users as wu on wu.id = edr.enterer_id
 		$join_list
         WHERE $filter_string
 	GROUP BY edr.eduresource_no";

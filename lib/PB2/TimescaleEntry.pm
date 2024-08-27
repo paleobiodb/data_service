@@ -308,7 +308,7 @@ sub update_records {
     # First get the parameters from the URL, and/or from the body if it is from a web form. In the
     # latter case, it will necessarily specify a single timescale only.
     
-    my %allowances = ( CREATE => 1, IMMEDIATE_MODE => 1 );
+    my %allowances = ( CREATE => 1, IMMEDIATE_EXECUTION => 1 );
     
     my $main_params = $request->get_main_params(\%allowances);
     my $perms = $request->require_authentication('TIMESCALE_DATA');

@@ -10,8 +10,8 @@ package TableData;
 
 use strict;
 
-use TableDefs qw(%TABLE get_table_property get_column_properties list_column_properties
-		 %COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL);
+use TableDefs qw(%TABLE get_column_properties);
+use PBDBFields qw(%COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 
 use Carp qw(croak);
 use HTTP::Validate qw(:validators);
@@ -19,8 +19,7 @@ use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block complete_ruleset
-		      get_table_schema reset_cached_column_properties get_authinfo_fields);
+our (@EXPORT_OK) = qw(complete_output_block complete_ruleset complete_valueset);
 
 our (@CARP_NOT) = qw(EditTransaction Try::Tiny);
 
@@ -37,369 +36,11 @@ our (%COMMON_FIELD_COM) = ( taxon_no => 'tid',
 
 our (%COMMON_FIELD_IDSUB);
 
-our (%SCHEMA_CACHE);
-
-our (@SCHEMA_COLUMN_PROPS) = qw(REQUIRED NOT_NULL ALTERNATE_NAME ALTERNATE_ONLY ALLOW_TRUNCATE VALUE_SEPARATOR
-				ADMIN_SET FOREIGN_TABLE FOREIGN_KEY EXTID_TYPE VALIDATOR IGNORE);
-
-our (%PREFIX_SIZE) = ( tiny => 255,
-		       regular => 65535,
-		       medium => 16777215,
-		       large => 4294967295 );
-
 our (%INT_SIZE) = ( tiny => 'one byte integer',
 		    small => 'two byte integer',
 		    medium => 'three byte integer',
 		    regular => 'four byte integer',
 		    big => 'eight byte integer');
-
-
-# get_table_scheme ( table_name, debug_flag )
-# 
-# Fetch the schema for the specified table, and return it as a hash ref. This information is
-# cached, so that subsequent queries can be satisfied without hitting the database again. The key
-# '_column_list' contains a list of the column names, in the order they appear in the table.
-
-sub get_table_schema {
-    
-    my ($dbh, $table_specifier, $debug) = @_;
-    
-    # If we already have the schema cached, just return it.
-    
-    return $SCHEMA_CACHE{$table_specifier} if ref $SCHEMA_CACHE{$table_specifier} eq 'HASH';
-    
-    # Otherwise construct an SQL statement to get the schema from the appropriate database.
-
-    my $table_name;
-
-    if ( $table_specifier =~ /^==(.*)/ )
-    {
-	croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
-	
-	$table_name = $TABLE{$table_specifier};
-	$table_specifier = $1;
-	# $table_name =~ s/^\w+[.]//;
-    }
-    
-    else
-    {
-	croak "Unknown table '$table_specifier'" unless exists $TABLE{$table_specifier} && $TABLE{$table_specifier};
-	
-	$table_name = $TABLE{$table_specifier};
-    }
-    
-    my ($sql, $check_table, %schema, $quoted_table);
-    
-    if ( $table_name =~ /(\w+)[.](.+)/ )
-    {
-	$sql = "SHOW TABLES FROM `$1` LIKE " . $dbh->quote($2);
-	$quoted_table = "`$1`.". $dbh->quote_identifier($2);
-    }
-    
-    else
-    {
-	$sql = "SHOW TABLES LIKE " . $dbh->quote($table_name);
-	$quoted_table = $dbh->quote_identifier($table_name);
-    }
-    
-    print STDERR "$sql\n" if $debug;
-    
-    eval {
-	($check_table) = $dbh->selectrow_array($sql);
-    };
-    
-    croak "unknown table '$table_specifier'" unless $check_table;
-    
-    print STDERR "SHOW FULL COLUMNS FROM $quoted_table\n" if $debug;
-    
-    my $columns_ref = $dbh->selectall_arrayref("
-	SHOW FULL COLUMNS FROM $quoted_table", { Slice => { } });
-    
-    # Figure out which columns from this table have had properties set for them.
-    
-    my %has_properties = list_column_properties($table_specifier);
-    
-    # Now go through the columns one by one. Find the primary key if there is one, and also parse
-    # the column datatypes. Collect up the list of field names for easy access later.
-    
-    my @field_list;
-    
-    foreach my $c ( @$columns_ref )
-    {
-	# Each field definition comes to us as a hash. The name is in 'Field'.
-	
-	my $field = $c->{Field};
-	
-	$schema{$field} = $c;
-	push @field_list, $field;
-	
-	# if ( $c->{Key} =~ 'PRI' && ! $schema{_primary} )
-	# {
-	#     $schema{_primary} = $field;
-	# }
-    }
-    
-    # Then go through the list again and add the proper attributes to each column.
-
-    foreach my $c ( @$columns_ref )
-    {
-	my $field = $c->{Field};
-	
-	# If the column has properties, then record those we are interested in.
-	
-	if ( $has_properties{$field} )
-	{
-	    my %properties = get_column_properties($table_specifier, $field);
-	    
-	    foreach my $p ( @SCHEMA_COLUMN_PROPS )
-	    {
-		$c->{$p} = $properties{$p} if defined $properties{$p};
-	    }
-
-	    if ( ref $c->{VALIDATOR} && ref $c->{VALIDATOR} ne 'code' )
-	    {
-		croak "the value of VALIDATOR must be a code ref";
-	    }
-	}
-	
-	# If the column is Not Null and has neither a default value nor auto_increment, then mark
-	# it as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column. [But not if the column type is BLOB or
-	# TEXT, because of an issue with MariaDB 10.0-10.1. - taken out 2020-03-06 mjm]
-	
-	if ( $c->{Null} && $c->{Null} eq 'NO' && not ( defined $c->{Default} ) &&
-	     not ( $c->{Extra} && $c->{Extra} =~ /auto_increment/i ) )
-	{
-	    $c->{NOT_NULL} = 1; # unless $c->{Type} =~ /text|blob/i;
-	}
-	
-	# We discard the Privileges and Comment fields, because we don't use them. The only reason
-	# for retrieving the full column output is to get the Collation information.
-
-	delete $c->{Privileges};
-	delete $c->{Comments};
-	
-	# If the name of the field ends in _no, then record its alternate as the same name with
-	# _id substituted unless there is already a field with that name.
-	
-	if ( ! $c->{ALTERNATE_NAME} && $field =~ qr{ ^ (.*) _no }xs )
-	{
-	    my $alt = $1 . '_id';
-	    
-	    unless ( $schema{$alt} )
-	    {
-		$c->{ALTERNATE_NAME} = $alt;
-	    }
-	}
-	
-	# The type definition is in 'Type'. We parse each type, for easy access by validation
-	# routines later, and store the parsed values in TypeParams.
-	
-	my $type = $c->{Type};
-	
-	if ( $type =~ qr{ ^ ( var )? ( char | binary ) [(] ( \d+ ) }xs )
-	{
-	    my $type = $2 eq 'char' ? 'text' : 'data';
-	    my $mode = $1 ? 'variable' : 'fixed';
-	    my $size = $3;
-	    my ($charset) = $c->{Collation} =~ qr{ ^ ([^_]+) }xs;
-	    $c->{TypeParams} = [ $type, $size, $mode, $charset ];
-	}
-	
-	elsif ( $type =~ qr{ ^ ( tiny | medium | long )? ( text | blob ) (?: [(] ( \d+ ) )? }xs )
-	{
-	    my $type = $2 eq 'text' ? 'text' : 'data';
-	    my $size = $3 || $PREFIX_SIZE{$1 || 'regular'};
-	    my ($charset) = $c->{Collation} =~ qr{ ^ ([^_]+) }xs;
-	    $c->{TypeParams} = [ $type, $size, 'variable', $charset ];
-	}
-	
-	elsif ( $type =~ qr{ ^ tinyint [(] 1 [)] }xs )
-	{
-	    $c->{TypeParams} = [ 'boolean' ];
-	}
-	
-	elsif ( $type =~ qr{ ^ (tiny|small|medium|big)? int [(] (\d+) [)] \s* (unsigned)? }xs )
-	{
-	    my $bound = $1 || 'regular';
-	    my $unsigned = $3 ? 'unsigned' : '';
-	    $c->{TypeParams} = [ 'integer', $unsigned, $bound, $2 ];
-	}
-	
-	elsif ( $type =~ qr{ ^ decimal [(] (\d+) , (\d+) [)] \s* (unsigned)? }xs )
-	{
-	    my $unsigned = $3 ? 'unsigned' : '';
-	    my $before = $1 - $2;
-	    my $after = $2;
-	    $after = 10 if $after > 10;	# This is necessary for value checking in EditTransaction.pm.
-					# If people want fields with more than 10 decimals, they should
-					# use floating point.
-	    $c->{TypeParams} = [ 'fixed', $unsigned, $before, $after ];
-	}
-	
-	elsif ( $type =~ qr{ ^ ( float | double ) (?: [(] ( \d+ ) , ( \d+ ) [)] )? \s* (unsigned)? }xs )
-	{
-	    my $unsigned = $3 ? 'unsigned' : '';
-	    my $precision = $1;
-	    my $before = defined $2 ? $2 - $3 : undef;
-	    my $after = $3;
-	    $c->{TypeParams} = [ 'floating', $unsigned, $precision, $before, $after ];
-	}
-	
-	elsif ( $type =~ qr{ ^ bit [(] ( \d+ ) }xs )
-	{
-	    $c->{TypeParams} = [ 'bits', $1 ];
-	}
-	
-	elsif ( $type =~ qr{ ^ ( enum | set ) [(] (.+) [)] $ }xs )
-	{
-	    my $type = $1;
-	    my $list = $2;
-	    my $value_hash = unpack_enum($2);
-	    $c->{TypeParams} = [ $type, $value_hash, $list ];
-	}
-	
-	elsif ( $type =~ qr{ ^ ( date | time | datetime | timestamp ) \b }xs )
-	{
-	    $c->{TypeParams} = [ 'date', $1 ];
-	}
-	
-	elsif ( $type =~ qr{ ^ ( (?: multi )? (?: point | linestring | polygon ) ) \b }xs )
-	{
-	    $c->{TypeParams} = [ 'geometry', $1 ];
-	}
-	
-	elsif ( $type =~ qr{ ^ ( geometry (?: collection )? ) \b }xs )
-	{
-	    $c->{TypeParams} = [ 'geometry', $1 ];
-	}
-
-	else
-	{
-	    $c->{TypeParams} = [ 'unknown' ];
-	}
-    }
-    
-    $schema{_column_list} = \@field_list;
-    
-    $SCHEMA_CACHE{$table_specifier} = \%schema;
-    
-    return \%schema;
-}
-
-
-# unpack_enum ( value_string )
-# 
-# Given a string of values, unpack them and construct a hash ref with each value as a key.
-
-sub unpack_enum {
-
-    use feature 'fc';
-    
-    my ($string) = @_;
-    
-    my $value_hash = { };
-    
-    while ( $string =~ qr{ ^ ['] ( (?: [^'] | '' )* ) ['] ,? (.*) }xs )
-    {
-	my $value = $1;
-	$string = $2;
-	
-	$value =~ s/''/'/g;
-	$value_hash->{fc $value} = 1;
-    }
-    
-    if ( $string )
-    {
-	print STDERR "ERROR: could not parse ENUM($_[0])";
-    }
-    
-    return $value_hash;
-}
-
-
-# reset_cached_column_properties ( table_name, column_name )
-#
-# This routine is intended primarily for for testing purposes.
-
-sub reset_cached_column_properties {
-    
-    my ($table_specifier, $column_name) = @_;
-    
-    if ( my $col = $SCHEMA_CACHE{$table_specifier}{$column_name} )
-    {
-	my %properties = get_column_properties($table_specifier, $column_name);
-	
-	foreach my $p ( @SCHEMA_COLUMN_PROPS )
-	{
-	    delete $col->{$p};
-	    $col->{$p} = $properties{$p} if defined $properties{$p};
-	}
-	
-	# If the column is Not Null and has neither a default value nor auto_increment, then mark it
-	# as NOT_NULL. Otherwise, a database error will be generated when we try to insert or
-	# update a record with a null value for this column.
-	
-	if ( $col->{Null} && $col->{Null} eq 'NO' && not ( defined $col->{Default} ) &&
-	     not ( $col->{Extra} && $col->{Extra} =~ /auto_increment/i ) )
-	{
-	    $col->{NOT_NULL} = 1;
-	}
-	
-	# If the name of the field ends in _no, then record its alternate as the same name with
-	# _id substituted unless there is already a field with that name.
-	
-	if ( ! $col->{ALTERNATE_NAME} && $column_name =~ qr{ ^ (.*) _no }xs )
-	{
-	    my $alt = $1 . '_id';
-	    $col->{ALTERNATE_NAME} = $alt;
-	}
-    }
-}
-
-
-# get_authinfo_fields ( dbh, table_name, debug )
-# 
-# Return a list of the fields from the specified table that record who created each record. If
-# there are none, return false.
-
-our (%IS_AUTH) = (authorizer_no => 1, enterer_no => 1, enterer_id => 1, admin_lock => 1, owner_lock => 1);
-our (%AUTH_FIELD_CACHE);
-
-sub get_authinfo_fields {
-
-    my ($dbh, $table_specifier, $debug) = @_;
-    
-    # If we already have this info cached, just return it.
-    
-    return $AUTH_FIELD_CACHE{$table_specifier} if exists $AUTH_FIELD_CACHE{$table_specifier};
-    
-    # Otherwise, get a hash of table column definitions
-    
-    my $schema = get_table_schema($dbh, $table_specifier, $debug);
-    
-    # If we don't have one, then barf.
-    
-    unless ( $schema && $schema->{_column_list} )
-    {
-	croak "Cannot retrieve schema for table '$table_specifier'";
-    }
-    
-    # Then scan through the columns and collect up the names that are significant.
-    
-    my @authinfo_fields;
-    
-    foreach my $col ( @{$schema->{_column_list}} )
-    {
-	push @authinfo_fields, $col if $IS_AUTH{$col};
-    }
-    
-    my $fields = join(', ', @authinfo_fields);
-    $AUTH_FIELD_CACHE{$table_specifier} = $fields;
-    
-    return $fields;
-}
-
 
 sub complete_output_block {
     
@@ -409,7 +50,8 @@ sub complete_output_block {
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
+    my $tableinfo = TableSchema->table_info_ref($table_specifier, $dbh, $ds->debug);
+    my $columninfo = TableSchema->table_column_ref($table_specifier);
     
     # Then get the existing contents of the block and create a hash of the field names that are
     # already defined. If no block by this name is yet defined, create an empty one.
@@ -440,7 +82,7 @@ sub complete_output_block {
     # name in that hash and apply any specified attributes. If the _ignore key is present with a
     # true value, skip that field entirely.
     
-    my $field_list = $schema->{_column_list};
+    my $field_list = $tableinfo->{COLUMN_LIST};
     
     foreach my $field_name ( @$field_list )
     {
@@ -461,12 +103,12 @@ sub complete_output_block {
 	# If this field has the 'IGNORE' attribute set, skip it as well. Check for an override
 	# entry as well.
 
-	next if $schema->{$field_name}{IGNORE} || $override->{$field_name}{IGNORE};
+	next if $columninfo->{$field_name}{IGNORE} || $override->{$field_name}{IGNORE};
 	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
 	
-	my $field_record = $schema->{$field_name};
+	my $field_record = $columninfo->{$field_name};
 	my $type = $field_record->{Type};
 	
 	my $r = { output => $field_name };
@@ -565,7 +207,8 @@ sub complete_ruleset {
     
     # First get a hash of table column definitions
     
-    my $schema = get_table_schema($dbh, $table_specifier, $ds->debug);
+    my $tableinfo = TableSchema->table_info_ref($table_specifier, $dbh, $ds->debug);
+    my $columninfo = TableSchema->table_column_ref($table_specifier);
     
     # Then get the existing ruleset documentation and create a hash of the field names that are
     # already defined. If no ruleset by this name is yet defined, croak.
@@ -586,14 +229,14 @@ sub complete_ruleset {
     # Then go through the field list from the schema and add any fields that aren't already in the
     # ruleset. We need to translate names that end in '_no' to '_id'.
     
-    my $field_list = $schema->{_column_list};
-    my %has_properties = list_column_properties($table_specifier);
+    my $field_list = $tableinfo->{COLUMN_LIST};
+    # my %column_properties = get_column_properties($table_specifier);
     
     foreach my $column_name ( @$field_list )
     {
 	next if $COMMON_FIELD_SPECIAL{$column_name};
 	
-	my $field_record = $schema->{$column_name};
+	my $field_record = $columninfo->{$column_name};
 	
 	my $field_name = $column_name;
 	
@@ -695,14 +338,9 @@ sub complete_ruleset {
 	    $doc .= " The value is not checked before being sent to the database, and will throw an exception if the database does not accept it.";
 	}
 	
-	if ( $has_properties{$column_name} )
+	if ( my $type = $columninfo->{$column_name}{EXTID_TYPE} )
 	{
-	    my %properties = get_column_properties($table_specifier, $column_name);
-	    
-	    if ( my $type = $properties{EXTID_TYPE} )
-	    {
-		$rr->{valid} = VALID_IDENTIFIER($type);
-	    }
+	    $rr->{valid} = VALID_IDENTIFIER($type);
 	}
 	
 	push @{$ds->{my_param_records}}, $rr;
@@ -710,6 +348,56 @@ sub complete_ruleset {
 	$ds->validator->add_rules($rs, $rr, $doc);
     }
 }
+
+
+# complete_valueset ( ds, dbh, set_name, table_specifier )
+# 
+# The argument $table_specifier should specify a table whose first two columns are a
+# number and a string value. These are both added to the specified set, with the string
+# values added to the value list and the numeric values collected under 'numeric_list'.
+# 
+# The specified set can then be used to map either numeric values into strings or vice
+# versa. 
+
+sub complete_valueset {
+    
+    my ($ds, $dbh, $set_name, $table_specifier) = @_;
+    
+    my $vs = $ds->{set}{$set_name} || croak "unknown set '$set_name'";
+    
+    $vs->{value_list} ||= [ ];
+    $vs->{numeric_list} ||= [ ];
+    
+    croak "unknown table '$table_specifier'" unless exists $TABLE{$table_specifier};
+    
+    my $sql = "SELECT * FROM $TABLE{$table_specifier} LIMIT 50";
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => [0, 1] });
+    
+    if ( $result && ref $result eq 'ARRAY' )
+    {
+	foreach my $row ( $result->@* )
+	{
+	    my ($numeric, $string) = $row->@*;
+	    
+	    $vs->{value}{$string} = $numeric;
+	    $vs->{value}{$numeric} = $string;
+	    
+	    push $vs->{value_list}->@*, $string;
+	    push $vs->{numeric_list}->@*, $numeric;
+	}
+    }
+}
+
+
+# Create a package for use in fetching table information
+
+package TableSchema;
+
+use Role::Tiny::With;
+
+with 'EditTransaction::TableInfo';
+with 'EditTransaction::Mod::MariaDB';
 
 
 1;

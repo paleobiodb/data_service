@@ -538,6 +538,11 @@ sub exception {
 	{
 	    $message = 'Parameter error';
 	}
+
+	elsif ( $code eq '401' )
+	{
+	    $message = 'Permission denied';
+	}
 	
 	elsif ( $code eq '404' )
 	{
@@ -633,6 +638,16 @@ sub debug_line {
     {
 	print STDERR "$_[0]\n" if $Web::DataService::DEBUG;
     }
+}
+
+
+# error_line ( )
+# 
+# Output the specified line(s) of text to report errors.
+
+sub error_line {
+    
+    print STDERR "$_[1]\n";
 }
 
 
