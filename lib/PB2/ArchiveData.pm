@@ -236,12 +236,31 @@ sub retrieve_archive {
     # If the actual archive file is missing or not readable, we return a 500 error rather than a
     # 404. The presence of the archive metadata record means that a missing file is an internal
     # error rather than a resource not found.
-
-    my $filename = "/var/paleomacro/archives/$id.gz";
     
-    unless ( -r $filename )
+    my $filename;
+    my $encoding;
+    
+    if ( -r "/var/paleomacro/archives/$id.gz" )
     {
-	print STDERR "ERROR: missing or unreadable archive file $filename: $!\n";
+	$filename = "/var/paleomacro/archives/$id.gz";
+	$encoding = "gzip";
+    }
+    
+    elsif ( -r "/var/paleomacro/archives/$id.bz2" )
+    {
+	$filename = "/var/paleomacro/archives/$id.bz2";
+	$encoding = "application/x-bzip2";
+    }
+    
+    elsif ( -r "/var/paleomacro/archives/$id" )
+    {
+	$filename = "/var/paleomacro/archives/$id";
+	$encoding = undef;
+    }
+    
+    else
+    {
+	print STDERR "ERROR: missing or unreadable archive file /var/paleomacro/archives/$id.gz|bz2\n";
 	die $request->exception('500', "Missing or unreadable archive data file");
     }
     
@@ -265,7 +284,7 @@ sub retrieve_archive {
     
     $request->file_result($filename, system_path => 1, 
 			  content_type => $content_type,
-			  content_encoding => 'gzip',
+			  content_encoding => $encoding,
 			  content_disposition => "attachment; filename=pbdb_archive_$id.$suffix");
 }
 
