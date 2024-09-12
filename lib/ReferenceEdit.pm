@@ -175,6 +175,8 @@ sub validate_action {
 	$record->{otherauthors} = '';
 	my @otherauthors;
 	
+	# Process the author names one at a time.
+	
 	foreach my $i ( 0..$#authorname )
 	{
 	    # Check that each name is within the column width limit.
@@ -185,9 +187,24 @@ sub validate_action {
 		next;
 	    }
 	    
-	    # Parse each name into first and last.
+	    # If a name includes an asterisk '*', treat it as a last name
+	    # only. Remove the asterisk, of course.
 	    
-	    my ($authorlast, $authorfirst) = parse_authorname($authorname[$i]);
+	    my ($authorfirst, $authorlast);
+	    
+	    if ( $authorname[$i] =~ /[*]/ )
+	    {
+		$authorfirst = '';
+		$authorlast = $authorname[$i];
+		$authorlast =~ s/[*]//g;
+	    }
+	    
+	    # Otherwise, parse the name into first and last.
+	    
+	    else
+	    {
+		($authorlast, $authorfirst) = parse_authorname($authorname[$i]);
+	    }
 	    
 	    $authorfirst[$i] = $authorfirst;
 	    $authorlast[$i] = $authorlast;
