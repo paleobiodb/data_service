@@ -196,7 +196,7 @@ sub validate_action {
 	    {
 		$authorfirst = '';
 		$authorlast = $authorname[$i];
-		$authorlast =~ s/[*]//g;
+		$authorlast =~ s/\s*[*]\s*//g;
 	    }
 	    
 	    # Otherwise, parse the name into first and last.

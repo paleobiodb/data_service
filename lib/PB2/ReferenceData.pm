@@ -209,6 +209,10 @@ sub initialize {
       { output => 'formatted', com_name => 'ref', bibjson_name => '_formatted',
 	if_block => 'formatted,both' },
 	  "Formatted reference",
+      { output => 'r_relevance', com_name => 'rsc', pbdb_name => 'relevance', 
+	bibjson_name => '_relevance' },
+	  "For queries that compute a relevance score for each matching record,",
+	  "this field displays that score.",
       { set => '*', code => \&process_ref_ids });
     
     $ds->define_block('1.2:refs:counts' =>
@@ -243,10 +247,6 @@ sub initialize {
     
     $ds->define_block('1.2:refs:relevance' => 
         { set => '*', code => \&process_relevance },
-	{ output => 'r_relevance', com_name => 'rsc', pbdb_name => 'relevance', 
-	  bibjson_name => '_relevance' },
-	    "For queries with either the 'ref_match' or 'pub_match' parameter,",
-	    "this field displays the fulltext relevance score of each matching record",
 	{ output => 'r_relevance_a', com_name => 'rsa', pbdb_name => 'relevance_a' },
 	    "An auxiliary relevance score, used for debugging purposes.");
     

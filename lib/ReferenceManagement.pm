@@ -26,7 +26,7 @@ use Scalar::Util qw(reftype blessed);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use ReferenceMatch qw(get_reftitle get_subtitle get_pubtitle get_publisher
-		      get_authorname get_authorlist get_pubyr get_doi get_volpages
+		      get_authorname get_authorlist get_pubyr get_doi get_url get_volpages
 		      get_publication_type title_words ref_similarity ref_match 
 		      @SCORE_VARS);
 
@@ -319,17 +319,42 @@ sub external_query {
 	    my $decoded_content = $rm->decode_response_json($response);
 	    my @items = $rm->extract_source_records($source, $decoded_content, $attrs);
 	    
-	    # Loop through the items and score them one by one. Ignore any item with a
-	    # conflict sum of 300 or more. If we find an item with a similarity sum of 500
-	    # or better, choose it immediately. Otherwise, set aside any items that have a
-	    # similarity sum of 300 or better.
+	    # Loop through the items and score them one by one. The base score
+	    # is the total similarity minus half the total conflict. Ignore any
+	    # item with a conflict sum of 200 or more, and ignore any item with
+	    # a similarity score less than 70 on any of the specified
+	    # attributes.  Keep any items that have a similarity sum of 100 or
+	    # better.
 	    
 	    foreach my $item ( @items )
 	    {
 		my $fuzzy_match = ref_match($attrs, $item);
 		
-		my $r = { score => $fuzzy_match->{sum_s} - 
-				   0.5 * $fuzzy_match->{sum_c} };
+		# Unless the parameter 'loose' was specified, reject items that
+		# don't meet the fuzzy match threshold.
+		
+		unless ( $attrs->{loose_match} )
+		{
+		    next if $fuzzy_match->{sum_s} < 100 || $fuzzy_match->{sum_c} > 200;
+		    
+		    next if $attrs->{reftitle} && $fuzzy_match->{title_s} < 70;
+		    
+		    next if $attrs->{pubyr} && $fuzzy_match->{pubyr_s} < 70;
+		    
+		    if ( $attrs->{author} )
+		    {
+			next if $fuzzy_match->{auth1_s} < 70;
+			next if $fuzzy_match->{auth2_c} > 30;
+		    }
+		}
+		
+		# Create a record to represent this item, starting with the
+		# fuzzy match score.
+				
+		my $r = { r_relevance => $fuzzy_match->{sum_s} - 0.5 * $fuzzy_match->{sum_c} };
+		
+		# Process the title of the work. If there is also a subtitle, add it
+		# following a colon.
 		
 		$r->{r_reftitle} = get_reftitle($item);
 		my $subtitle = get_subtitle($item);
@@ -424,6 +449,9 @@ sub external_query {
 		$r->{r_author} = \@bibj_authors;
 		$r->{r_oa} = $otherauthors if $otherauthors;
 		
+		# Now process the other fields that are relevant to the PBDB
+		# reference schema.
+		
 		if ( my ($pubyr) = get_pubyr($item) )
 		{
 		    $r->{r_pubyr} = $pubyr;
@@ -444,6 +472,11 @@ sub external_query {
 		    $r->{r_doi} = $doi;
 		}
 		
+		if ( my ($url) = get_url($item) )
+		{
+		    $r->{r_url} = $url;
+		}
+		
 		my ($volume, $issue) = get_volpages($item);
 		
 		$r->{r_pubvol} = $volume if defined $volume && $volume ne '';
@@ -457,17 +490,25 @@ sub external_query {
 		
 		$r->{r_pubtype} = get_publication_type($item);
 		
+		$item->{r_match} = $fuzzy_match;
+		
 		$r->{source} = $source;
 		$r->{source_url} = $request_url;
 		$r->{source_data} = JSON->new->encode($item);
 		
 		push @matches, $r;
 	    }
+	    
+	    # If there are any items which exceed the fuzzy match threshold, we
+	    # are done. Otherwise, try another request if we haven't tried all
+	    # possibilities yet.
+	    
+	    last REQUEST if @matches;
 	}
 	
 	# If the response indicates a client error, abort the fetch.
 	
-	elsif ( $response_code =~ /^4../ )
+	elsif ( $response_code =~ /^4../ && $response_code !~ /^404/ )
 	{
 	    $abort = $response->status_line;
 	    last REQUEST;
@@ -504,7 +545,7 @@ sub external_query {
     
     if ( $abort )
     {
-	return { status => $abort, error => 1, source => $source, score => 0 }
+	return { status => $abort, error => 1, source => $source, r_relevance => 0 }
     }
     
     # Otherwise, return the matches.
@@ -743,25 +784,26 @@ sub generate_crossref_request {
 	    }
 	}
 	
-	# If we have enough attributes for a reasonable request, assemble and return it.
+	# If we have enough attributes for a reasonable request, assemble and
+	# return it. Don't use $pubyr if it was expressed as a range of years.
 	
-	if ( @title_words > 1 || @title_words && $pubyr ||
+	if ( @title_words && $pubyr && $pubyr !~ /-/ ||
 	     @title_words && @author_words ||
 	     @title_words && @container_words ||
 	     @author_words && @container_words ||
-	     @author_words && $pubyr )
+	     @author_words && $pubyr && $pubyr !~ /-/ )
 	{
 	    my (@url_params, @text_params);
 	    
 	    if ( @title_words )
 	    {
-		my $value = join ' ', @title_words, $pubyr;
+		my $value = join ' ', @title_words;
 		
 		push @url_params, "query.title=" . uri_escape_utf8($value);
 		push @text_params, "title: $value";
 	    }
 	    
-	    if ( $pubyr )
+	    if ( $pubyr && $pubyr !~ /-/ )
 	    {
 		push @url_params, "query.bibliographic=" . uri_escape_utf8($pubyr);
 		push @text_params, "pubyr: $pubyr";
@@ -785,7 +827,7 @@ sub generate_crossref_request {
 	    
 	    $progress->{query_text} = join '; ', @text_params;
 	    
-	    push @url_params, "rows=5";
+	    push @url_params, "rows=10";
 	    
 	    my $query_string = join '&', @url_params;
 	    return "$CROSSREF_BASE?$query_string";
@@ -798,7 +840,48 @@ sub generate_crossref_request {
 	}
     }
     
-    # If we have tried both of these, return nothing.
+    # If the bibliographic query does not return any results, try the title
+    # alone if it has at least two words.
+    
+    if ( ! $progress->{try_title} )
+    {
+	$progress->{try_title} = 1;
+	
+	my @title_words;
+	
+	# If the attributes include a reference title containing at least 3 letters in a
+	# row, chop it up into words. Ignore punctuation, whitespace, and stopwords, and
+	# put each word into foldcase.
+	
+	my $reftitle = get_reftitle($attrs);
+	
+	if ( $reftitle =~ /\pL{3}/ )
+	{
+	    @title_words = title_words($reftitle);
+	}
+	
+	# If we have at least two words, make a query.
+	
+	if ( @title_words >= 3 )
+	{
+	    my (@url_params, @text_params);
+	    
+	    if ( @title_words )
+	    {
+		my $value = join ' ', @title_words;
+		
+		push @url_params, "query.title=" . uri_escape_utf8($value);
+		push @text_params, "title: $value";
+	    }
+	    
+	    push @url_params, "rows=10";
+	    
+	    my $query_string = join '&', @url_params;
+	    return "$CROSSREF_BASE?$query_string";
+	}
+    }
+    
+    # If we have tried all of these, return nothing.
     
     return;
 }

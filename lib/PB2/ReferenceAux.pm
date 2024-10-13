@@ -39,7 +39,7 @@ sub initialize {
     my $no_letter = "the value of {param} must contain at least two letters (was {value})";
     
     $ds->define_ruleset('1.2:refs:match' =>
-    	{ param => 'ref_author', valid => MATCH_VALUE('.*\p{L}\p{L}.*'),
+    	{ param => 'ref_author', valid => MATCH_VALUE('\p{L}\p{L}'),
 	  bad_value => '_', errmsg => $no_auth },
     	    "Return references for which any of the authors matches the specified",
 	    "name or names. You can use any of the following patterns:",
@@ -48,12 +48,13 @@ sub initialize {
 	    "in any order.",
 	    "You can use C<%> and C<_> as wildcards, but each name must contain at least one letter.",
 	    "You can include more than one name, separated by commas.",
-    	{ param => 'ref_primary', valid => MATCH_VALUE('.*\p{L}\p{L}.*'),
+    	{ param => 'ref_primary', valid => MATCH_VALUE('\p{L}\p{L}'),
 	  bad_value => '_', errmsg => $no_auth },
     	    "Return references for which the primary author matches the specified name",
 	    "or names (see C<ref_author> above).  If you give a name like 'Smith and Jones',",
 	    "then references are returnd for which Smith is the primary author and Jones is",
 	    "also an author.",
+	{ at_most_one => ['ref_author', 'ref_primary'] },
 	{ param => 'ref_pubyr', valid => \&PB2::ReferenceData::valid_pubyr, alias => 'pubyr' },
 	    "Return references published during the indicated year or range of years.",
 	    "The parameter value must match one of the following patterns:",
@@ -76,7 +77,9 @@ sub initialize {
 	#     "This is especially useful when searching for museum collections by institution acronym.",
 	{ param => 'ref_doi', valid => ANY_VALUE },
 	    "Select only records entered from references with any of the specified DOIs.",
-	    "You may specify one or more, separated by commas.");
+	    "You may specify one or more, separated by commas.",
+	{ optional => 'loose', valid => FLAG_VALUE },
+	    "If specified, return all records regardless of the fuzzy match threshold.");
     
     $ds->define_output_map('1.2:refs:matchext_map' =>
 	{ value => 'formatted' },
@@ -115,7 +118,7 @@ sub initialize {
     $ds->define_block('1.2:refs:extrequest' =>
 	{ output => 'source', com_name => 'src' },
 	    "The external source from which this record was fetched",
-	{ output => 'source_url', com_name => 'url' },
+	{ output => 'source_url', com_name => 'req' },
 	    "The request URL that was used to fetch this record",
 	{ output => 'source_data', com_name => 'exd' },
 	    "The externally fetched data that is the source for this record");
@@ -478,14 +481,29 @@ sub match_external {
 	$attrs->{pubyr} = $ref_pubyr;
     }
     
-    if ( my $authorname = $request->clean_param('ref_author') )
+    my $authorname = '';
+    
+    if ( $authorname = $request->clean_param('ref_primary') )
     {
-	$attrs->{author} = $authorname;
+	$attrs->{author_is_primary} = 1;
     }
     
-    if ( my $authorname = $request->clean_param('ref_primary') )
+    else
     {
-	$attrs->{author} = $authorname;
+	$authorname = $request->clean_param('ref_author');
+    }
+    
+    if ( $authorname =~ /(.+?) \s+ and \s+ (.*)/x )
+    {
+	my $auth1 = $1;
+	my $auth2 = $2;
+	
+	$attrs->{author} = [ clean_author($auth1), clean_author($auth2) ];
+    }
+    
+    else
+    {
+	$attrs->{author} = clean_author($authorname);
     }
     
     if ( my $reftitle = $request->clean_param('ref_title') )
@@ -499,20 +517,54 @@ sub match_external {
     }
     
     die $request->exception(400, "You must specify at least two attributes to match")
-	unless keys %$attrs > 1 || $attrs->{doi};
+	unless keys %$attrs > 1 || $attrs->{doi} || $attrs->{ref_title};
+    
+    if ( $request->clean_param('loose') )
+    {
+	$attrs->{loose_match} = 1;
+    }
     
     my (@matches);
     
     push @matches, $rm->external_query('crossref', $attrs);
-    push @matches, $rm->external_query('xdd', $attrs);
+    # push @matches, $rm->external_query('xdd', $attrs);
     
-    my @sorted = sort { $b->{score} <=> $a->{score} } grep { $_->{score} } @matches;
+    if ( my $abort = $matches[0]{status} )
+    {
+	if ( $abort =~ /^(4..)/ && $abort !~ /^404/ )
+	{
+	    die $request->exception(500, "Got $1 response from external resource");
+	}
+	
+	elsif ( $abort =~ /^(5..)/ )
+	{
+	    die $request->exception(502, "Got $1 response from external resource");
+	}
+    }
     
-    # print STDERR "==========\n";
-    # print STDERR to_json(\@matches) . "\n";
-    # print STDERR "==========\n";
+    my @sorted = sort { $b->{r_relevance} <=> $a->{r_relevance} } grep { $_->{r_relevance} } @matches;
     
     $request->list_result(@sorted);
+}
+
+
+sub clean_author {
+    
+    my ($authorname) = @_;
+    
+    if ( $authorname =~ /[*]/ )
+    {
+	$authorname =~ s/\s*[*]\s*//g;
+	return { name => $authorname };
+    }
+    
+    else
+    {
+	$authorname =~ s/\s*$//;
+	$authorname =~ s/^\s*//;
+	
+	return $authorname;
+    }
 }
 
 

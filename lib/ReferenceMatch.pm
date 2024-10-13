@@ -26,7 +26,7 @@ use Exporter 'import';
 our (@EXPORT_OK) = qw(ref_similarity ref_match author_similarity get_reftitle get_subtitle
 		      get_pubtitle get_publisher get_volpages
 		      get_authorname get_authorlist split_authorlist parse_authorname
-		      get_pubyr get_doi get_publication_type title_words @SCORE_VARS);
+		      get_pubyr get_doi get_url get_publication_type title_words @SCORE_VARS);
 
 our $IgnoreCaseAccents = Unicode::Collate->new(
      level         => 1,
@@ -545,7 +545,7 @@ sub ref_match {
     
     if ( @authors_r && @authors_m )
     {
-	if ( $r->{primary} )
+	if ( $r->{author_is_primary} )
 	{
 	    ($auth1_similar, $auth1_conflict) = author_similarity(lf($authors_r[0]), 
 								  lf($authors_m[0]));
@@ -555,22 +555,20 @@ sub ref_match {
 	    if ( @authors_r > 1 )
 	    {
 		($auth2_similar, $auth2_conflict) = match_names(lf($authors_r[1]),
-								@authors_m, 2);
+								@authors_m[1..$#authors_m]);
 		save_debug('au', 'a2');
 	    }
 	}
 	
 	else
 	{
-	    ($auth1_similar, $auth1_conflict) = match_names(lf($authors_r[0]),
-							    @authors_m, 1);
+	    ($auth1_similar, $auth1_conflict) = match_names(lf($authors_r[0]), @authors_m);
 	    
 	    save_debug('au', 'a1');
 	    
 	    if ( @authors_r > 1 )
 	    {
-		($auth2_similar, $auth2_conflict) = match_names(lf($authors_r[1]),
-								@authors_m, 1);
+		($auth2_similar, $auth2_conflict) = match_names(lf($authors_r[1]), @authors_m);
 		save_debug('au', 'a2');
 	    }
 	}
@@ -1140,50 +1138,16 @@ sub get_authorlist {
     
     elsif ( $r->{author} && ref $r->{author} eq 'ARRAY' )
     {
-	# If 'author' is an array of hashes, we need to work around the interleaving bug discussed
-	# in get_authorname above.
-	
-	my $family_field;
-
-	if ( ref $r->{author}[0] eq 'HASH' )
-	{
-	    $family_field = $r->{author}[0]{family} ? 'family' :
-		$r->{author}[0]{last} ? 'last' :
-		$r->{author}[0]{lastname} ? 'lastname' : '';
-	}
-	
-	# Go through the entries, skipping until we reach $index. If a family/last name field has
-	# been identified, skip entries that do not have a value for that field. But if such
-	# entries have a 'name' or 'affiliation' attribute, add that information to the previous name.
+	# Go through the entries, skipping until we reach $index.
 	
 	my $count = 0;
 	
 	foreach my $entry ( $r->{author}->@* )
 	{
-	    # Skip any entry the lacks a family name field, but if we have already found one or
-	    # more proper entries and this entry has a value for 'name', assume the value is
-	    # intended to give the affiliation for the most recent name entry. Add the value as an
-	    # additional component to that entry.
-	    
-	    if ( $family_field && ! $entry->{$family_field} )
-	    {
-		if ( @result && $entry->{name} )
-		{
-		    my $affiliation = $entry->{name};
-		    
-		    if ( ref $affiliation eq 'ARRAY' )
-		    {
-			$affiliation = $affiliation->[0];
-		    }
-		    
-		    push $result[-1]->@*, $affiliation;
-		}
-	    }
-	    
 	    # Skip name entries up to the position indicated by $index, then parse each subsequent
 	    # name and add a listref of the name components to the result list.
 	    
-	    elsif ( ++$count >= $index )
+	    if ( ++$count >= $index )
 	    {
 		# If the entry is a hashref or an array, parse it and then clean the individual
 		# components. If we get a list with a non-empty first component (last name) then
@@ -1368,10 +1332,10 @@ sub parse_authorname {
     
     elsif ( ref $entry eq 'HASH' )
     {
-	$last = $entry->{last} || $entry->{lastname} || $entry->{family};
+	$last = $entry->{last} || $entry->{lastname} || $entry->{family} || $entry->{name};
 	$first = $entry->{first} || $entry->{firstname} || $entry->{given};
 	$affiliation = $entry->{affiliation} || $entry->{institution};
-	$orcid = $entry->{ORCID} || $entry->{orcid};
+	$orcid = $entry->{ORCID} || $entry->{Orcid} || $entry->{orcid};
 	
 	if ( my $suffix = $entry->{suffix} )
 	{
@@ -1396,7 +1360,7 @@ sub parse_authorname {
 	    $affiliation = $affiliation->{name};
 	}
 	
-	if ( $last )
+	if ( $last && ! ref $last )
 	{
 	    return ($last, $first, $affiliation, $orcid);
 	}
@@ -1679,6 +1643,14 @@ sub get_doi {
 	return clean_doi($doi);
     }
     
+    # If there is a field called 'URL' which contains a dx.doi.org URL, use
+    # that. 
+    
+    elsif ( $r->{URL} && $r->{URL} =~ /dx.doi.org\/(10.*)/ )
+    {
+	return clean_doi($1);
+    }
+    
     # Otherwise, look for a field called 'identifier' that is an array.
     
     elsif ( ref $r->{identifier} && reftype $r->{identifier} eq 'ARRAY' )
@@ -1730,6 +1702,25 @@ sub clean_doi {
     {
 	return $doi;
     }
+}
+
+
+# get_url ( r )
+# 
+# Return the url (if any) from $r.
+
+sub get_url {
+    
+    my ($r) = @_;
+    
+    my $url = $r->{url} || $r->{resource}{primary}{URL} || $r->{URL};
+    
+    if ( $url && $url !~ /dx.doi.org\/10/ )
+    {
+	return $url;
+    }
+    
+    return;
 }
 
 
@@ -3135,7 +3126,7 @@ sub match_names {
 	my ($first_init_i) = $first_i =~ $FIRST_INITIAL;
 	
 	my $straight_match = $last_init && $last_init_i &&
-			     $last_init eq $last_init_i &&
+			     fc($last_init) eq fc($last_init_i) &&
 			     ($first_init eq $first_init_i || ! $first);
 	
 	# If the first and last initials are both present and are different, also check for a
@@ -3147,9 +3138,9 @@ sub match_names {
 	
 	my $cross_match = $last_init && $last_init_i &&
 			  $first_init && $first_init_i &&
-			  $last_init ne $first_init &&
-			  $last_init eq $first_init_i &&
-			  $first_init eq $last_init_i;
+			  fc($last_init) ne fc($first_init) &&
+			  fc($last_init) eq fc($first_init_i) &&
+			  fc($first_init) eq fc($last_init_i);
 	
 	# If we get either kind of match, run the full similarity algorithm on this pair of
 	# names. If the similarity is better than any we have found so far, select these numbers.
@@ -3218,9 +3209,8 @@ sub vol_similarity {
 
 # pubyr_similarity ( pubyr_a, pubyr_b )
 # 
-# Compute a fuzzy match score between pubyr_a and pubyr_b. Publication years are rarely mistyped
-# (at least this is my hypothesis) since they are so important. For now, we return either 100 or
-# 0, nothing in between.
+# Compute a fuzzy match score between pubyr_a and pubyr_b. If pubyr_a is a
+# range, return 100 if pubyr_b is in that range and 0 otherwise.
 
 sub pubyr_similarity {
 
@@ -3230,13 +3220,32 @@ sub pubyr_similarity {
     # information to tell us that the records are similar, nor that they are dissimilar.
 
     return (0, 0) unless $pubyr_a && $pubyr_b;
-
+    
+    # If $pubyr_a is a range, return (100, 0) if $pubyr_b is in that range and
+    # (0, 100) otherwise.
+    
+    if ( $pubyr_a =~ /^\d\d\d\d\s*-\s*\d\d\d\d$|^\s*-\s*\d\d\d\d$|^\d\d\d\d\s*-\s*$/ && 
+	 $pubyr_b =~ /^\d\d\d\d$/ )
+    {
+	if ( $pubyr_a =~ /(\d\d\d\d)\s*-/ )
+	{
+	    return (0, 100) if $pubyr_b < $1;
+	}
+	
+	if ( $pubyr_a =~ /-\s*(\d\d\d\d)/ )
+	{
+	    return (0, 100) if $pubyr_b > $1;
+	}
+	
+	return (100, 0);
+    }
+    
     # If both arguments are 4-digit years that differ by 1, return (70, 30). Apparently,
     # off-by-one errors are not uncommon. This may have to do with confusion between
     # pre-publication and actual publication dates, but I am not certain. In any case, it does
     # occur in a non-trivial number of cases that are otherwise obvious matches.
     
-    if ( $pubyr_a =~ /^\d\d\d\d$/ && $pubyr_b =~ /^\d\d\d\d$/ )
+    elsif ( $pubyr_a =~ /^\d\d\d\d$/ && $pubyr_b =~ /^\d\d\d\d$/ )
     {
 	return (70, 30) if $pubyr_a - $pubyr_b == 1 || $pubyr_b - $pubyr_a == 1;
     }
