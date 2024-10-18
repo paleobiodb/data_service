@@ -20,7 +20,8 @@ our (@EXPORT_OK) = qw(ts_defined ts_name ts_bounds ts_record ts_intervals ts_has
 		      ts_list ts_boundary_list ts_boundary_no ts_boundary_name ts_boundary_next
 		      int_defined int_bounds int_scale int_name int_type int_correlation
 		      int_container int_record ints_by_age ts_intervals_by_age
-		      interval_nos_by_age ints_by_prefix
+		      interval_nos_by_age ints_by_prefix 
+		      classic_scale_order classic_scale_map
 		      INTL_SCALE BIN_SCALE AGE_RE);
 
 our (%IDATA, %INAME, %IPREFIX, %ICORR, %SDATA, %SNAME, %SSEQUENCE, @SCALE_NUMS);
@@ -311,6 +312,77 @@ sub compute_boundary_map {
 	$BOUNDARY_MAP{$scale_no}{default} = $BOUNDARY_MAP{$scale_no}{$default_type};
 	$BOUNDARY_NAME{$scale_no}{default} = $BOUNDARY_NAME{$scale_no}{$default_type};
     }
+}
+
+
+sub classic_scale_map {
+    
+    my ($scale, $type) = @_;
+    
+    my %map;
+    
+    if ( $scale eq 'periods' || $scale eq '69' )
+    {
+	foreach my $interval_no ( keys %ICORR )
+	{
+	    if ( $ICORR{$interval_no}{period_no} && $type eq 'names' )
+	    {
+		$map{$interval_no} = int_name($ICORR{$interval_no}{period_no});
+	    }
+	    
+	    elsif ( $ICORR{$interval_no}{period_no} )
+	    {
+		$map{$interval_no} = $ICORR{$interval_no}{period_no};
+	    }
+	}
+    }
+    
+    elsif ( $scale eq 'bins' || $scale eq 'ten_my_bins' )
+    {
+	foreach my $interval_no ( keys %ICORR )
+	{
+	    if ( $ICORR{$interval_no}{ten_my_bin} )
+	    {
+		$map{$interval_no} = $ICORR{$interval_no}{ten_my_bin};
+	    }
+	}
+    }
+    
+    return \%map;
+}
+
+
+sub classic_scale_order {
+    
+    my ($scale, $type) = @_;
+    
+    my @order;
+    
+    if ( $scale eq 'periods' || $scale eq '69' )
+    {
+	foreach my $interval ( $SSEQUENCE{INTL_SCALE}->@* )
+	{
+	    if ( $interval->{type} eq 'period' && $type eq 'names' )
+	    {
+		push @order, $interval->{interval_name};
+	    }
+	    
+	    elsif ( $interval->{type} eq 'period' )
+	    {
+		push @order, $interval->{interval_no};
+	    }
+	}
+    }
+    
+    elsif ( $scale eq 'bins' || $scale eq 'ten_my_bins' )
+    {
+	foreach my $interval ( $SSEQUENCE{BIN_SCALE}->@* )
+	{
+	    push @order, $interval->{interval_name};
+	}
+    }
+    
+    return @order;
 }
 
 
