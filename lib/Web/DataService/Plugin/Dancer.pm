@@ -212,7 +212,7 @@ sub get_request_body {
 	return Dancer::request->body();
     }
     
-    elsif ( my $content = Dancer::request->env->{CONTENT} )
+    elsif ( my $content = Dancer::request->env->{CONTENT} || $main::CONTENT )
     {
 	if ( $content =~ /^[[{]/ )
 	{

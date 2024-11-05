@@ -181,9 +181,9 @@ our ($TRANSACTION_COUNT) = 1;
 #                     started and the operations carried out only when 'commit' or 'execute' is
 #                     called.
 # 
-#   FIXUP_MODE        If this mode is specified, and if the user has either unrestricted or
-#                     administrative position on a particular table, then operations done on that
-#                     table will not change special column values such as a modification timestamp.
+#   FIXUP_MODE       If this mode is specified, and if the user has either unrestricted or
+#                     administrative position on a particular table, then operations done on
+#                     that table will not change the value of the field 'modified' if it exists.
 # 
 #   VALIDATION_ONLY   If this mode is specified, then no transaction will be started and the
 #                     database will not be modified in any way. Each operation will be checked for

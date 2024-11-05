@@ -41,8 +41,8 @@ BEGIN {
 
 # These are the special column directives accepted by this application.
 
-our %APP_DIRECTIVE = ( ts_created => 1, ts_modified => 1,
-		       auth_authorizer => 1, auth_creator => 1, auth_modifier => 1,
+our %APP_DIRECTIVE = ( ts_created => 1, ts_modified => 1, ts_updated => 1,
+		       auth_authorizer => 1, auth_creator => 1, auth_modifier => 1, auth_updater => 1,
 		       adm_lock => 1, own_lock => 1 );
 
 our %AUTH_DIRECTIVE = ( auth_authorizer => 'authorizer_id', auth_creator => 'enterer_id',
@@ -331,19 +331,22 @@ sub validate_extid_value {
 # 
 # ts_created      Records the date and time at which this record was created.
 # ts_modified     Records the date and time at which this record was last modified.
-# au_creater      Records the person_no or user_id of the person who created this record.
-# au_authorizer   Records the person_no or user_id of the person who authorized its creation.
-# au_modifier     Records the person_no or user_id of the person who last modified this record.
-# adm_lock        If true, indicates that this record is administratively locked.
-# own_lock        If true, indicates that this record is locked by its owner.
+# ts_updated      Records the date and time at which this record was last updated.
+# auth_creater    Records the person_no or user_id of the person who created this record.
+# auth_authorizer Records the person_no or user_id of the person who authorized its creation.
+# auth_modifier   Records the person_no or user_id of the person who last modified this record.
+# auth_updater    Records the person_no of the person who last updated this record in FIXUP_MODE.
+# adm_lock        A true value in this column indicates that this record is locked administratively.
+# own_lock        A true value in this column indicates that this record is locked by its owner.
 # 
 # Values for these columns (except for own_lock) cannot be specified explicitly
 # except by a user with administrative permission, and then only if this
 # EditTransaction allows the condition 'ALTER_TRAIL'.
 # 
-# If this transaction is in FIXUP_MODE, both field values will be left unchanged if the user has
-# administrative privilege. Otherwise, a permission error will be returned.
-#
+# If this transaction is in FIXUP_MODE, the value of a 'ts_modified' or 'ts_modifier'
+# column will be left unchanged if the user has administrative privilege. Otherwise, a permission
+# error will be returned.
+# 
 # The parameter $cr must contain the column description record.
 
 sub validate_special_column {
@@ -361,17 +364,32 @@ sub validate_special_column {
 	# If the transaction is being executed in FIXUP_MODE, the modifier and modified date
 	# should remain unchanged. This is only allowed with 'admin' or 'unrestricted' permission.
 	
-	if ( $edt->{allows}{FIXUP_MODE} && ( $directive eq 'ts_modified' ||
-					     $directive eq 'auth_modifier' ) )
+	if ( $edt->{allows}{FIXUP_MODE} )
 	{
-	    if ( $permission =~ /^admin|^unrestricted/ )
+	    if ( $directive eq 'ts_modified' || $directive eq 'auth_modifier' )
 	    {
-		return 'unchanged';	# we need to return 'unchanged' even with 'update', because an
-	    }				# 'on update' clause might otherwise change the value anyway.
+		if ( $permission =~ /^admin|^unrestricted/ )
+		{
+		    return 'unchanged';	    # we need to return 'unchanged' even with
+                                            # 'update', because an 'on update' clause
+                                            # might otherwise change the value anyway.
+		}
+		
+		else
+		{
+		    $edt->add_condition('main', 'E_PERM', 'fixup_mode', $action->table);
+		    return 'unchanged';
+		}
+	    }
 	    
-	    else
+	    elsif ( $directive eq 'ts_updated' )
 	    {
-		return [ 'main', 'E_PERM', 'fixup_mode' ];
+		return ('unquoted', 'NOW()');
+	    }
+	    
+	    elsif ( $directive eq 'auth_updater' )
+	    {
+		return ('clean', $edt->{permission}->enterer_no);
 	    }
 	}
 	
@@ -379,7 +397,7 @@ sub validate_special_column {
 	# columns whose names end in '_no' are keys with integer values. Those whose names end in
 	# '_id' have string values.
 	
-	elsif ( $directive eq 'auth_authorizer' )
+	if ( $directive eq 'auth_authorizer' )
 	{
 	    $value = $operation eq 'replace' ? 'unchanged'
 		   : $operation eq 'update'  ? undef
@@ -404,6 +422,11 @@ sub validate_special_column {
 	    return ('clean', $value);
 	}
 	
+	elsif ( $directive eq 'auth_updater' )
+	{
+	    return 'ignore';
+	}
+	
 	# For the 'ts_created' and 'ts_modified' directives, if the column does not have a default
 	# value then emulate the desired behavior by putting in the current timestamp on insert
 	# and/or update.
@@ -423,6 +446,23 @@ sub validate_special_column {
 	    else
 	    {
 		return;
+	    }
+	}
+	
+	# A column with the 'ts_updated' directive is ignored if we are not in FIXUP_MODE
+	# except for a 'replace' operation, where its value must be copied from the old
+	# record.
+	
+	elsif ( $directive eq 'ts_updated' )
+	{
+	    if ( $operation eq 'replace' )
+	    {
+		return 'unchanged';
+	    }
+	    
+	    else
+	    {
+		return 'ignore';
 	    }
 	}
 	

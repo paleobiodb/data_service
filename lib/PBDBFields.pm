@@ -20,8 +20,10 @@ our %COMMON_FIELD_SPECIAL = ( authorizer_no => 'auth_authorizer',
 			      enterer_id => 'auth_creator',
 			      modifier_no => 'auth_modifier',
 			      modifier_id => 'auth_modifier',
+			      updater_no => 'auth_updater',
 			      created => 'ts_created',
 			      modified => 'ts_modified',
+			      updated => 'ts_updated',
 			      admin_lock => 'adm_lock',
 			      owner_lock => 'own_lock' );
 

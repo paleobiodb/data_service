@@ -53,7 +53,10 @@ sub initialize {
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
 	{ value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "Include the creation and modification times for this record");
+	    "Include the creation and modification times for this record",
+	{ value => 'none' },
+	    "Do not return any records. If you have asked for summary counts, these",
+	    "will still be returned.");
     
     # Output sets:
     
@@ -717,6 +720,13 @@ sub list {
     # If we were asked to get the count, then do so
     
     $request->sql_count_rows;
+    
+    # If show=none was specified, close the statement handle without reading it.
+    
+    if ( $request->has_block('none') )
+    {
+	$request->{main_sth} = undef;
+    }
     
     return 1;
 }

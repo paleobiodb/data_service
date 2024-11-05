@@ -93,7 +93,11 @@ sub initialize {
 	    "This is a more limited allowance than 'PROCEED'. If some of the records to",
 	    "be modified are not found, this allowance will enable the records which do",
 	    "exist to be modified, while generating warnings about the rest. Without it,",
-	    "the entire operation will be rolled back.");
+	    "the entire operation will be rolled back.",
+	{ value => 'FIXUP_MODE' },
+	    "This allowance can only be used by a user with administrative privilege.",
+	    "It causes any update or replacement of records to be recorded as an 'update'",
+	    "rather than a 'modification'.");
 }
 
 

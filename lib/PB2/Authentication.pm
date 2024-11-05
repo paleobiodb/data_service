@@ -31,7 +31,7 @@ sub authenticate {
 	$request->{my_perms}->get_table_permissions($table_name) if $table_name;
     }
     
-    elsif ( my $session_id = Dancer::cookie('session_id') )
+    elsif ( my $session_id = Dancer::cookie('session_id') // Dancer::request->env->{session_id} )
     {
 	my $dbh = $request->get_connection;
 	my $options = { debug => $request->debug };
@@ -65,7 +65,7 @@ sub require_authentication {
 	$request->{my_perms}->get_table_permissions($table_name) if $table_name;
     }
     
-    elsif ( my $session_id = Dancer::cookie('session_id') )
+    elsif ( my $session_id = Dancer::cookie('session_id') // Dancer::request->env->{session_id} )
     {
 	my $dbh = $request->get_connection;
 	my $options = { debug => $request->debug };

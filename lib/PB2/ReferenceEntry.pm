@@ -210,7 +210,10 @@ sub addupdate_refs {
     
     my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
     
-    $request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;   
+    unless ( $request->has_block('none') )
+    {
+	$request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+    }
 }
 
 

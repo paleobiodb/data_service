@@ -50,6 +50,16 @@ BEGIN {
 	    
 	    Web::DataService->set_mode('debug', 'one_request');
 	    $Web::DataService::ONE_PROCESS = 1;
+	    
+	    if ( $cmd eq 'put' || $cmd eq 'post' )
+	    {
+		$main::CONTENT = '';
+		
+		while (<STDIN>)
+		{
+		    $main::CONTENT .= $_;
+		}
+	    }
 	}
 	
 	# If the command-line argument is 'diag' then set a flag to indicate that Web::DataService
