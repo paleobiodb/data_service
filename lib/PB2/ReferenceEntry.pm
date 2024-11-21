@@ -58,7 +58,7 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $ds->define_ruleset('1.2:refs:author_entry');
+    # $ds->define_ruleset('1.2:refs:author_entry');
     
     $ds->define_ruleset('1.2:refs:addupdate_body' =>
 	">>The body of this request must be either a single JSON object, or an array of",
@@ -123,7 +123,7 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    my $dbh = $ds->get_connection;
+    # my $dbh = $ds->get_connection;
     
     # complete_ruleset($ds, $dbh, '1.2:refs:addupate_body', 'REFERENCES');
     
@@ -149,7 +149,7 @@ my $addupdate_config = { class => 'ReferenceEdit',
 
 sub addupdate_refs {
     
-    my ($request, $arg) = @_;
+    my ($request, $operation) = @_;
     
     my $dbh = $request->get_connection;
     
@@ -178,16 +178,45 @@ sub addupdate_refs {
 					     allows => $allowances } );
     
     # Now go through the records and handle each one in turn. This will check every record and
-    # queue them up for insertion and/or updating.
+    # queue them up for the specified operation.
     
     foreach my $r (@records)
     {
-	$edt->process_record('REFERENCE_DATA', $r);
+	if ( $r->{_operation} )
+	{
+	    $edt->process_record('REFERENCE_DATA', $r);
+	}
+	
+	elsif ( $operation eq 'insert' )
+	{
+	    $edt->insert_record('REFERENCE_DATA', $r);
+	}
+	
+	elsif ( $operation eq 'update' )
+	{
+	    $edt->update_record('REFERENCE_DATA', $r);
+	}
+	
+	elsif ( $operation eq 'replace' )
+	{
+	    $edt->replace_record('REFERENCE_DATA', $r);
+	}
+	
+	elsif ( $operation eq 'delete' )
+	{
+	    $edt->delete_record('REFERENCE_DATA', $r);
+	}
+	
+	else
+	{
+	    $edt->insert_update_record('REFERENCE_DATA', $r);
+	}
     }
     
-    # If no errors have been detected so far, execute the queued actions inside a database
-    # transaction. If any errors occur during that process, the transaction will be automatically
-    # rolled back unless the PROCEED allowance was given. Otherwise, it will be automatically
+    # If no errors have been detected so far, execute the queued actions inside
+    # a database transaction. If any errors occur during that process, the
+    # transaction will be automatically rolled back unless the NOT_FOUND or
+    # PROCEED allowance was given. Otherwise, it will be automatically
     # committed.
     
     $edt->commit;
@@ -195,10 +224,10 @@ sub addupdate_refs {
     # Now handle any errors or warnings that may have been generated.
     
     $request->collect_edt_warnings($edt);
+    $request->collect_edt_errors($edt);
     
-    if ( $edt->errors )
+    if ( $edt->fatals )
     {
-    	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");
     }
     

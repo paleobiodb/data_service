@@ -703,7 +703,7 @@ sub addupdate_common {
     $request->collect_edt_errors($edt);
     $request->collect_edt_warnings($edt);
     
-    if ( $edt->errors )
+    if ( $edt->fatals )
     {
     	die $request->exception(400, "Bad request");
     }
@@ -826,7 +826,7 @@ sub collect_edt_warnings {
     
     my ($request, $edt) = @_;
     
-    my @strings = $edt->warning_strings;
+    my @strings = $edt->nonfatals;
 
     foreach my $m ( @strings )
     {
@@ -839,7 +839,7 @@ sub collect_edt_errors {
     
     my ($request, $edt) = @_;
     
-    my @strings = $edt->error_strings;
+    my @strings = $edt->fatals;
 
     foreach my $m ( @strings )
     {

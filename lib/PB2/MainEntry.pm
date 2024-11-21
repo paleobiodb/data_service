@@ -59,6 +59,36 @@ sub initialize {
 	"A DOI alone is often enough, but good results can be gotten from one or two",
 	"authors, a publication year, and some words from the title.");
     
+    $ds2->define_node({ path => 'refs/add',
+			title => 'Add new bibliographic references',
+			place => 10,
+			allow_method => 'PUT,POST',
+			doc_template => 'entry_operation.tt',
+			ruleset => '1.2:refs:addupdate',
+			body_ruleset => '1.2:refs:addupdate_body',
+			role => 'PB2::ReferenceEntry',
+			method => 'addupdate_refs',
+			arg => 'insert',
+			output => '1.2:refs:basic',
+			optional_output => '1.2:refs:output_map' },
+	"This operation allows you to add new bibliographic references to",
+	"the database.");
+    
+    $ds2->define_node({ path => 'refs/update',
+			title => 'Update existing bibliographic references',
+			place => 10,
+			allow_method => 'PUT,POST',
+			doc_template => 'entry_operation.tt',
+			ruleset => '1.2:refs:addupdate',
+			body_ruleset => '1.2:refs:addupdate_body',
+			role => 'PB2::ReferenceEntry',
+			method => 'addupdate_refs',
+			arg => 'update',
+			output => '1.2:refs:basic',
+			optional_output => '1.2:refs:output_map' },
+	"This operation allows you to update existing bibliographic references in",
+	"the database.");
+    
     $ds2->define_node({ path => 'refs/addupdate',
 			title => 'Add bibliographic references or update existing references',
 			place => 10,
@@ -70,7 +100,34 @@ sub initialize {
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
 	"This operation allows you to add new bibliographic references to the database",
-	"and/or update the attributes of existing references.");
+	"and/or update existing references.");
+    
+    $ds2->define_node({ path => 'refs/replace',
+			title => 'Replace existing bibliographic references',
+			place => 10,
+			allow_method => 'PUT,POST',
+			doc_template => 'entry_operation.tt',
+			ruleset => '1.2:refs:addupdate',
+			body_ruleset => '1.2:refs:addupdate_body',
+			role => 'PB2::ReferenceEntry',
+			method => 'addupdate_refs',
+			arg => 'replace',
+			output => '1.2:refs:basic',
+			optional_output => '1.2:refs:output_map' },
+	"This operation allows you to replace existing bibliographic reference records",
+	"in the database.");
+    
+    # $ds2->define_node({ path => 'refs/delete',
+    # 			title => 'Delete existing bibliographic references',
+    # 			place => 10,
+    # 			allow_method => 'GET,DELETE',
+    # 			doc_template => 'entry_operation.tt',
+    # 			role => 'PB2::ReferenceEntry',
+    # 			method => 'delete_refs',
+    # 			output => '1.2:refs:basic' },
+    # 	"This operation allows you to delete existing bibliographic reference records,",
+    # 	"provided they are not referenced by any other database records. It works only",
+    # 	"on records created by yourself, unless you have administrative privilege.");
     
     $ds2->define_node({ path => 'refs/classic_select',
 			title => 'Select a bibliographic reference for data entry',
