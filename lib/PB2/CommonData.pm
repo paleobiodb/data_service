@@ -150,7 +150,9 @@ sub initialize {
 	{ output => 'created', com_name => 'dcr' },
 	  "The date and time at which this record was created.",
 	{ output => 'modified', com_name => 'dmd' },
-	  "The date and time at which this record was last modified.");
+	  "The date and time at which this record was last modified.",
+	{ output => 'updated', com_name => 'dud' },
+	  "The date and time at which this record was last updated, if it has been updated");
     
     $ds->define_ruleset('1.2:common:select_ent' =>
 	{ param => 'authorized_by', valid => ANY_VALUE, list => ',' },
@@ -273,18 +275,30 @@ sub initialize {
         
     $ds->define_block('1.2:common:ent' =>
 	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
-	{ set => 'authorizer_extid', from => 'authorizer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'authorizer_extid', from => 'authorizer_no', code => \&generate_person_id,
+	  not_vocab => 'pbdb' },
 	{ set => 'authorizer_extid', from => 'authorizer_no', if_vocab => 'pbdb' },
-	{ set => 'enterer_extid', from => 'enterer_no', code => \&generate_person_id, not_vocab => 'pbdb' },
+	{ set => 'enterer_extid', from => 'enterer_no', code => \&generate_person_id,
+	  not_vocab => 'pbdb' },
 	{ set => 'enterer_extid', from => 'enterer_no', if_vocab => 'pbdb' },
-	{ set => 'modifier_extid', from => 'modifier_no', code => \&generate_person_id, not_vocab => 'pbdb' },
-	{ set => 'modifier_extid', from => 'modifier_no', if_vocab => 'pbdb' },	
-	{ output => 'authorizer_extid', com_name => 'ati', pbdb_name => 'authorizer_no', if_block => 'ent,entname' },
+	{ set => 'modifier_extid', from => 'modifier_no', code => \&generate_person_id, 
+	  not_vocab => 'pbdb' },
+	{ set => 'modifier_extid', from => 'modifier_no', if_vocab => 'pbdb' },
+	{ set => 'updater_extid', from => 'updater_no', code => \&generate_person_id,
+	  not_vocab => 'pbdb' },
+	{ set => 'updater_extid', from => 'updater_no', if_vocab => 'pbdb' },
+	{ output => 'authorizer_extid', com_name => 'ati', pbdb_name => 'authorizer_no', 
+	  if_block => 'ent,entname' },
 	    "The identifier of the person who authorized the entry of this record",
-	{ output => 'enterer_extid', com_name => 'eni', pbdb_name => 'enterer_no', if_block => 'ent,entname' },
+	{ output => 'enterer_extid', com_name => 'eni', pbdb_name => 'enterer_no', 
+	  if_block => 'ent,entname' },
 	    "The identifier of the person who actually entered this record.",
-	{ output => 'modifier_extid', com_name => 'mdi', pbdb_name => 'modifier_no', if_block => 'ent,entname' },
-	    "The identifier of the person who last modified this record, if it has been modified.");
+	{ output => 'modifier_extid', com_name => 'mdi', pbdb_name => 'modifier_no', 
+	  if_block => 'ent,entname' },
+	    "The identifier of the person who last modified this record, if it has been modified.",
+	{ output => 'updater_extid', com_name => 'udi', pbdb_name => 'updater_no',
+	  if_block => 'ent,entname' },
+	    "The identifier of the person or process who last updated this record, if it has been updated.");
     
     $ds->define_block('1.2:common:entname' =>
 	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
@@ -297,7 +311,9 @@ sub initialize {
 	{ output => 'enterer', com_name => 'ent' },
 	    "The name of the person who actually entered this record",
 	{ output => 'modifier', com_name => 'mdf' },
-	    "The name of the person who last modified this record, if it has been modified.");
+	    "The name of the person who last modified this record, if it has been modified.",
+	{ output => 'updater', com_name => 'udf' },
+	    "The name of the person or process who last updated this record, if it has been updated.");
     
     $ds->define_block('1.2:common:ent_guest' =>
     	{ select => ['$cd.enterer_id'] },
@@ -813,7 +829,12 @@ sub process_entnames {
     {
 	$record->{modifier} = $PERSON_NAME{$record->{modifier_no}} || 'unknown';
     }
-
+    
+    if ( $record->{updater_no} )
+    {
+	$record->{updater} = $PERSON_NAME{$record->{updater_no}} || 'unknown';
+    }
+    
     if ( $record->{enterer_no} && $record->{enterer_no} =~ /^\d+$/ )
     {
 	$record->{enterer} = $PERSON_NAME{$record->{enterer_no}} || 'unknown';

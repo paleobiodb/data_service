@@ -92,7 +92,7 @@ sub initialize {
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
-		   'r.language as r_language', 'r.doi as r_doi'],
+		   'r.language as r_language', 'r.doi as r_doi', 'r.updated', 'r.updater_no'],
 	tables => ['r'] },
       { set => 'formatted', from => '*', code => \&format_reference, if_block => 'formatted,both' },
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
