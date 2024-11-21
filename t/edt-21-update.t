@@ -214,7 +214,7 @@ subtest 'update_record bad arguments' => sub {
     
     $edt->update_record('EDT_TEST', { _where => "string_va='bar'", string_val => 'baz' });
     
-    ok_has_one_condition('E_WHERE');
+    ok_has_one_condition('E_EXECUTE');
     
     ok_failed_commit( "commit failed due to error condition" );
     

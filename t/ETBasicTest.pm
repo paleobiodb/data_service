@@ -591,6 +591,8 @@ sub establish_test_tables {
     
     # Create, or re-create, the table 'edt_test'.
     
+    $dbh->do("SET SESSION foreign_key_checks = 0");
+    
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_TEST}");
     
     $dbh->do("CREATE TABLE $TABLE{EDT_TEST} (
@@ -683,6 +685,8 @@ sub establish_test_tables {
 		owner_lock boolean not null default 0,
 		created timestamp default current_timestamp,
 		modified timestamp default current_timestamp) default charset utf8");
+    
+    $dbh->do("SET SESSION foreign_key_checks = 1");
     
     return 1;
 }

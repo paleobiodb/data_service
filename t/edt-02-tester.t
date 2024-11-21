@@ -15,11 +15,12 @@ use strict;
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
+use ETBasicTest;
+
 use EditTester qw(ok_eval ok_exception last_result last_result_list
 		  connect_to_database capture_mode invert_mode diag_lines
 		  captured_output ok_captured_output ok_no_captured_output
 		  clear_captured_output);
-
 
 $DB::single = 1;
 
@@ -265,10 +266,10 @@ subtest 'new EditTester' => sub {
 
 subtest 'constructor bad arguments' => sub {
     
-    ok_exception( sub { EditTester->new('NOT_A_CLASS_XXX') }, qr/NOT_A_CLASS_XXX.*[@]INC/,
+    ok_exception( sub { EditTester->new('NOT_A_CLASS_XXX') }, qr/subclass of EditTransaction/i,
 		  "unknown class exception" );
     
-    ok_exception( sub { EditTester->new('Test::More') }, qr/EditTransaction/,
+    ok_exception( sub { EditTester->new('Test::More') }, qr/subclass of EditTransaction/,
 		  "not subclass exception" );
 };
 

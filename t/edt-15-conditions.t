@@ -166,9 +166,9 @@ subtest 'add_condition, has_condition' => sub {
     
     $edt->_test_action('insert', 'EDT_TEST', { string_req => 'ghi' });
     
-    $edt->add_condition('F_BAD_KEY');
+    $edt->add_condition('D_BAD_KEY');
     
-    ok( $edt->has_condition('E_BAD_KEY'), "add_condition F_ => E_" );
+    ok( $edt->has_condition('E_BAD_KEY'), "add_condition D_ => E_" );
     
 };
 

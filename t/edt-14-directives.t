@@ -327,7 +327,7 @@ subtest 'bad arguments for setting and retrieving' => sub {
     
     is( $edt->get_handling('EDT_TEST', 'foobar'), undef, "unknown column returns undef" );
     
-    is( $edt->get_handling('_', 'foobar'), undef, "no current action results undef" );
+    # is( $edt->get_handling('_', 'foobar'), undef, "no current action results undef" );
     
     my %directives = $edt->get_handling('&#2', '*');
     

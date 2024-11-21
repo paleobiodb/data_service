@@ -359,7 +359,7 @@ sub vtest {
 	}
     }
     
-    $edt->validate_action($action, $operation, $table, $validation_flag);
+    $edt->validate_against_schema($action, $operation, $table);
 }
 
 

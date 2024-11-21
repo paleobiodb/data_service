@@ -219,7 +219,7 @@ subtest 'unsuccessful commit' => sub {
     
     ok_no_captured_output;
     
-    is( $edt->status, 'aborted', "transaction status is 'aborted'" );
+    is( $edt->status, 'failed', "transaction status is 'failed'" );
     
     $edt = ok_new_edt;
     
@@ -229,7 +229,7 @@ subtest 'unsuccessful commit' => sub {
     
     ok_commit "invert: ok_commit";
     
-    ok_captured_output( qr/'aborted'/, "invert: diag transaction status 'aborted'" );
+    ok_captured_output( qr/'failed'/, "invert: diag transaction status 'failed'" );
     
     invert_mode(0);
 };

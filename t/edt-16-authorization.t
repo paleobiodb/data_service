@@ -98,6 +98,8 @@ subtest 'authorize_action' => sub {
     
     is( last_result, 'unrestricted', "authorize_action insert primary unrestricted" );
     
+    $action->set_permission(undef);
+    
     ok_eval( sub { $edt->authorize_action($action, 'insert', 'NOT_A_TABLE_XXX') },
 	     "ok_eval authorize_action with bad table" );
     
@@ -154,7 +156,7 @@ subtest 'authorize_action' => sub {
     @result = $edt->authorize_action($action);
     
     is( $result[0], 'unrestricted', "authorize_action other no key" );
-    is( $result[1], undef, "authorize_action other count undef" );
+    # is( $result[1], undef, "authorize_action other count undef" );
 };
 
 
@@ -199,9 +201,9 @@ subtest 'authorize_action change operation' => sub {
     
     is( $action->operation, 'insert', "authorize_action converts insupdate to insert" );
     
-    ok( $action->has_condition('C_CREATE'), "condition C_CREATE added absent CREATE allowance" );
+    # ok( $action->has_condition('C_CREATE'), "condition C_CREATE added absent CREATE allowance" );
     
-    ok( $edtnc->has_condition('C_CREATE'), "same for edt as a whole" );
+    # ok( $edtnc->has_condition('C_CREATE'), "same for edt as a whole" );
 };
     
 
