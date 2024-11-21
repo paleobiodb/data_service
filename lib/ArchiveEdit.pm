@@ -62,7 +62,7 @@ sub validate_action {
 	    
 	    elsif ( $permission ne 'admin' )
 	    {
-		$edt->add_condition('E_PERM_COL', 'doi');	# A non-administrator gets an error
+		$edt->add_condition('E_PERMISSION_COLUMN', 'doi'); # A non-administrator gets an error
 	    }
 	    
 	    elsif ( ! $edt->allows('ARCHIVE_HAS_DOI') )

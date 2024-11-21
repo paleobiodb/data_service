@@ -57,10 +57,11 @@ our (@CARP_NOT) = qw(EditTransaction);
     
     set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
-    set_table_property('REFERENCE_DATA', CAN_DELETE => 'ADMIN');
+    set_table_property('REFERENCE_DATA', CAN_DELETE => 'OWNER');
     set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle, publication_type, pubyr');
     set_table_property('REFERENCE_DATA', SPECIAL_COLS => 
 		       'ts_created, ts_modified, authorizer_no, enterer_no, modifier_no');
+    set_column_property('REFERENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
     
     set_table_property(REFERENCE_EXTDATA => CAN_POST => 'AUTHORIZED');
     set_table_property(REFERENCE_EXTDATA => CAN_MODIFY => 'AUTHORIZED');

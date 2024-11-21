@@ -42,7 +42,7 @@ our (%TAG_ID);
 
 {
     ResourceEdit->register_conditions(
-	E_PERM => { status => "You do not have permission to change the status of this record" },
+	E_PERMISSION => { status => "You do not have permission to change the status of this record" },
 	W_TAG_NOT_FOUND => "Unrecognized resource tag '&1'",
 	W_PERM => { status => "The status of this record has been set to 'pending'" });
 }
@@ -111,7 +111,7 @@ sub validate_action {
 	{
 	    if ( $record->{status} && $record->{status} ne 'changes' )
 	    {
-		$edt->add_condition('E_PERM', 'status');
+		$edt->add_condition('E_PERMISSION', 'status');
 	    }
 	    
 	    $record->{status} = 'changes';

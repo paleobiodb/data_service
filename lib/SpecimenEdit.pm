@@ -365,7 +365,7 @@ sub validate_collection {
 	
 	unless ( $authorizer_no && $enterer_no )
 	{
-	    $edt->add_condition($action, 'E_PERM', 'insert');
+	    $edt->add_condition($action, 'E_PERMISSION', 'insert');
 	}
 	
 	my $reference_no = ($record->{reference_id} + 0) || '0';
