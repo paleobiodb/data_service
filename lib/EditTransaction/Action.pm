@@ -152,6 +152,14 @@ sub set_operation {
 }
 
 
+sub set_label {
+    
+    my ($action, $label) = @_;
+    
+    $action->{label} = $label;
+}
+
+
 # Methods for keeping track of the action status.
 # -----------------------------------------------
 
@@ -455,7 +463,7 @@ sub has_condition {
     {
 	# Return true if we find an entry that has the proper code and also matches any extra
 	# values that were given.
-	    
+	
 	foreach my $i ( 0 .. $action->{conditions}->$#* )
 	{
 	    my $c = $action->{conditions}[$i];

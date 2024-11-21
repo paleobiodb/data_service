@@ -14,6 +14,7 @@ use strict;
 
 use Switch::Plain;
 use Carp qw(carp croak);
+use Scalar::Util qw(weaken blessed);
 
 use parent 'Exporter';
 
@@ -61,6 +62,13 @@ sub record_operation {
 	$edt->import_conditions($action, $ew);
     }
     
+    # Check for an inappropriate _where clause.
+    
+    if ( $parameters->{_where} && $operation =~ /^ins|^rep/ )
+    {
+	$edt->add_condition($action, 'E_HAS_WHERE');
+    }
+    
     # Execute the following code inside an eval block. If an exception is thrown
     # during authorization or validation, either from Authorization.pm or
     # Validation.pm or from a subclass, capture the error and add an E_EXECUTE
@@ -70,15 +78,9 @@ sub record_operation {
     
     eval {
 	
-	# Check to make sure we have permission to carry out this operation.  An
-	# error or caution will be added if the necessary permission cannot be
-	# established.
-	
-	my $result = $edt->authorize_action($action, $operation, $table_specifier, 
-					    $parameters);
-	
 	# If the action has a key value, and if the action parameters contain
-	# the field '_label', store the key/label association.
+	# the field '_label', store the key/label association. Otherwise, if the
+	# action has a scalar key value, use that.
 	
 	if ( my $keyval = $action->keyval )
 	{
@@ -86,7 +88,40 @@ sub record_operation {
 	    {
 		$edt->store_label($table_specifier, $keyval, $label);
 	    }
+	    
+	    elsif ( ref $keyval ne 'ARRAY' )
+	    {
+		my $ref;
+		
+		if ( blessed $keyval && $keyval->can('regenerate') )
+		{
+		    $ref = $keyval->regenerate;
+		}
+		
+		else
+		{
+		    $ref = "$keyval";
+		}
+		
+		if ( $edt->{action_ref}{"&$ref"} )
+		{
+		    my $index = 2;
+		    $index++ while $edt->{action_ref}{"&$ref-$index"};
+		    $ref = "$ref-$index";
+		}
+		
+		$edt->{action_ref}{"&$ref"} = $action;
+		weaken $edt->{action_ref}{"&$ref"};
+		$action->set_label($ref);
+	    }
 	}
+	
+	# Check to make sure we have permission to carry out this operation.  An
+	# error or caution will be added if the necessary permission cannot be
+	# established.
+	
+	my $result = $edt->authorize_action($action, $operation, $table_specifier, 
+					    $parameters);
 	
 	# If the action can proceed (in other words, if authorization does not
 	# add any errors or cautions) then it must be validated.
@@ -98,7 +133,7 @@ sub record_operation {
 	    
 	    if ( $operation eq 'insupdate' )
 	    {
-		$operation = $action->keyval ? 'update' : 'insert';
+		$operation = defined $action->keyval ? 'update' : 'insert';
 		$action->operation($operation);
 	    }
 	    
@@ -153,7 +188,7 @@ sub store_label {
 	}
     }
     
-    elsif ( $keyval )
+    elsif ( defined $keyval )
     {
 	$edt->{key_labels}{$table_specifier}{$keyval} = $label;
     }
@@ -171,9 +206,9 @@ sub insert_record {
 
     my ($edt, @rest) = @_;
     
-    my ($table_specifier, $parameters) = $edt->_action_args('insert', @rest);
+    # my ($table_specifier, $parameters) = $edt->_action_args('insert', @rest);
     
-    $edt->record_operation('insert', $table_specifier, $parameters);
+    $edt->record_operation('insert', @rest);
 }
 
 
@@ -187,9 +222,9 @@ sub update_record {
     
     my ($edt, @rest) = @_;
     
-    my ($table_specifier, $parameters) = $edt->_action_args('update', @rest);
+    # my ($table_specifier, $parameters) = $edt->_action_args('update', @rest);
     
-    $edt->record_operation('update', $table_specifier, $parameters);    
+    $edt->record_operation('update', @rest);
 }
 
 
@@ -209,7 +244,7 @@ sub replace_record {
     
     my ($table_specifier, $parameters) = $edt->_action_args('replace', @rest);
     
-    $edt->record_operation('replace', $table_specifier, $parameters);
+    $edt->record_operation('replace', @rest);
 }
 
 
@@ -224,9 +259,9 @@ sub delete_record {
 
     my ($edt, @rest) = @_;
     
-    my ($table_specifier, $parameters) = $edt->_action_args('delete', @rest);
+    # my ($table_specifier, $parameters) = $edt->_action_args('delete', @rest);
     
-    $edt->record_operation('delete', $table_specifier, $parameters);
+    $edt->record_operation('delete', @rest);
 }
 
 
@@ -240,9 +275,9 @@ sub insert_update_record {
     
     my ($edt, @rest) = @_;
     
-    my ($table_specifier, $parameters) = $edt->_action_args('insupdate', @rest);
+    # my ($table_specifier, $parameters) = $edt->_action_args('insupdate', @rest);
     
-    $edt->record_operation('insupdate', $table_specifier, $parameters);
+    $edt->record_operation('insupdate', @rest);
 }
 
 
@@ -262,9 +297,9 @@ sub delete_cleanup {
     
     my ($edt, @rest) = @_;
     
-    my ($table_specifier, $parameters) = $edt->_action_args('delete_cleanup', @rest);
+    # my ($table_specifier, $parameters) = $edt->_action_args('delete_cleanup', @rest);
     
-    $edt->record_operation('delete_cleanup', $table_specifier, $parameters);    
+    $edt->record_operation('delete_cleanup', @rest);
 }
 
 
@@ -329,7 +364,7 @@ sub other_action {
     
     else
     {
-	$edt->add_condition($action, 'E_NO_KEY', 'other');
+	$edt->add_condition($action, 'E_NO_KEY', 'operation');
     }
     
     # Handle the action and return the action reference.

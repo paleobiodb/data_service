@@ -508,7 +508,7 @@ sub validate_data_column {
     {
 	if ( $action->permission !~ /^admin|^unrestricted/ )
 	{
-	    $edt->add_condition($action, 'E_PERM_COL', $fieldname);
+	    $edt->add_condition($action, 'E_PERMISSION_COLUMN', $fieldname);
 	    return 'ignore';
 	}
     }
@@ -665,7 +665,7 @@ sub validate_special_column {
 	    {
 		unless ( $edt->{allows}{ALTER_TRAIL} )
 		{
-		    $edt->add_condition($action, 'C_ALTER_TRAIL', $fieldname);
+		    $edt->add_condition('main', 'C_ALTER_TRAIL', $fieldname);
 		}
 		
 		return ($result, $new_value);
@@ -675,7 +675,7 @@ sub validate_special_column {
 	    
 	    else
 	    {
-		$edt->add_condition($action, 'E_PERM_COL', $fieldname);
+		$edt->add_condition($action, 'E_PERMISSION_COLUMN', $fieldname);
 		return 'ignore';
 	    }
 	}
@@ -762,9 +762,16 @@ sub validate_special_column {
 	    return ($result, $new_value);
 	}
 	
+	elsif ( $value )
+	{
+	    $edt->add_condition($action, 'E_PERMISSION', 'lock');
+	    return 'ignore';
+	}
+	
 	else
 	{
-	    $edt->add_condition($action, 'E_PERM_COL', $fieldname);
+	    $edt->add_condition($action, 'E_PERMISSION', 'unlock') unless
+		$action->operation eq 'insert';
 	    return 'ignore';
 	}
     }

@@ -154,7 +154,7 @@ sub _new_action {
     if ( ref $parameters && defined $parameters->{_label} && $parameters->{_label} ne '' )
     {
 	$label = $parameters->{_label};
- 	push @refs, '&' . $label;
+	push @refs, '&' . $label;
 	push @refs, '&#' . $edt->{action_count};
     }
     
@@ -278,8 +278,7 @@ sub abort_action {
 	    
 	    $edt->{fail_count}-- if $action->status eq 'failed';
 	    
-	    # If the action not 'skipped', set the action status to 'aborted' and
-	    # increment the skip count.
+	    # Set the action status to 'skipped' and increment the skip count.
 	    
 	    $action->set_status('skipped');
 	    
@@ -291,30 +290,8 @@ sub abort_action {
 	    # left in place in the action record, so they will be included
 	    # whenever all actions are listed.
 	    
-	    foreach my $c ( $action->conditions )
-	    {
-		if ( $c->[1] =~ /^[EC]/ )
-		{
-		    $edt->{error_count}--;
-		}
-		
-		elsif ( $c->[1] =~ /^F/ )
-		{
-		    $edt->{demoted_count}--;
-		}
-		
-		elsif ( $c->[1] =~ /^W/ )
-		{
-		    $edt->{warning_count}--;
-		}
-	    }
+	    $edt->_remove_conditions($action);
 	    
-	    # Just in case a bug has occurred, don't let the parent counts go negative.
-	    
-	    $edt->{error_count} = 0 if $edt->{error_count} < 0;
-	    $edt->{demoted_count} = 0 if $edt->{demoted_count} < 0;
-	    $edt->{warning_count} = 0 if $edt->{warning_count} < 0;
-	
 	    # If this is a child action, do the same thing for the child counts
 	    # associated with its parent action.
 	    

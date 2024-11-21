@@ -284,7 +284,7 @@ sub validate_extid_value {
 	
 	if ( $value_type =~ $EXTID_CHECK{$type} )
 	{
-	    return (1, "$value");
+	    return (1, $value);
 	}
 	
 	# Otherwise, return an error condition.
@@ -370,15 +370,23 @@ sub validate_special_column {
 	    {
 		if ( $permission =~ /^admin|^unrestricted/ )
 		{
-		    return 'unchanged';	    # we need to return 'unchanged' even with
+		    if ( $directive eq 'auth_modifier' && $operation ne 'replace' )
+		    {
+			return 'ignore';
+		    }
+		    
+		    else
+		    {
+			return 'unchanged'; # we need to return 'unchanged' even with
                                             # 'update', because an 'on update' clause
                                             # might otherwise change the value anyway.
+		    }
 		}
 		
 		else
 		{
-		    $edt->add_condition('main', 'E_PERM', 'fixup_mode', $action->table);
-		    return 'unchanged';
+		    $edt->add_condition('main', 'E_FIXUP_MODE', $action->table);
+		    return 'ignore';
 		}
 	    }
 	    
@@ -478,7 +486,7 @@ sub validate_special_column {
 	
 	else
 	{
-	    return [ 'E_BAD_DIRECTIVE', $cr->{Field}, $directive ];
+	    $edt->add_condition('main', 'E_BAD_DIRECTIVE', $cr->{Field}, $directive);
 	}
     }
     
@@ -523,12 +531,13 @@ sub validate_special_column {
 	
 	elsif ( ! is_foreign_key($cr) )
 	{
-	    @result = [ 'E_EXECUTE', "no foreign key information is available for '$fieldname'" ];
+	    $edt->add_condition('main', 'E_EXECUTE', 
+				"no foreign key information is available for '$fieldname'");
 	}
 	
 	elsif ( ! $edt->check_foreign_key($cr, $check_value) )
 	{
-	    @result = [ 'E_KEY_NOT_FOUND', $fieldname, $check_value ];
+	    $edt->add_condition('main', 'E_KEY_NOT_FOUND', $fieldname, $check_value);
 	}
 	
 	else
@@ -550,7 +559,7 @@ sub validate_special_column {
     
     else
     {
-	return [ 'E_BAD_DIRECTIVE', $cr->{Field}, $directive ];
+	$edt->add_condition('main', 'E_BAD_DIRECTIVE', $cr->{Field}, $directive);
     }
     
     # Permission check
@@ -566,17 +575,17 @@ sub validate_special_column {
     {
 	unless ( $permission =~ /^admin|^unrestricted/ )
 	{
-	    $result[2] = $result[0] if ref $result[0] eq 'ARRAY';
-	    $result[0] = [ 'E_PERM_COL', $fieldname ];
+	    $edt->add_condition('main', 'E_PERMISSION_COLUMN', $fieldname);
+	    return 'ignore';
 	}
     }
     
     elsif ( $directive eq 'own_lock' )
     {
-	unless ( $permission =~ /^owned|^admin|^unrestricted/ )
+	unless ( $permission =~ /^owned|^admin|^unrestricted/ || $operation eq 'insert' )
 	{
-	    $result[2] = $result[0] if ref $result[0] eq 'ARRAY';
-	    $result[0] = [ 'E_PERM_COL', $fieldname ];
+	    $edt->add_condition('main', 'E_PERMISSION', $value ? 'lock' : 'unlock');
+	    return 'ignore';
 	}
     }
     
@@ -585,17 +594,15 @@ sub validate_special_column {
     
     elsif ( $permission !~ /^admin|^unrestricted/ )
     {
-	$result[2] = $result[0] if ref $result[0] eq 'ARRAY';
-	$result[0] = [ 'E_PERM_COL', $fieldname ];
+	$edt->add_condition('main', 'E_PERMISSION_COLUMN', $fieldname);
+	return 'ignore';
     }
     
     elsif ( ! $edt->{allows}{ALTER_TRAIL} )
     {
-	$result[2] = $result[0] if ref $result[0] eq 'ARRAY';
-	$result[0] = [ 'C_ALTER_TRAIL', $fieldname ];
+	$edt->add_condition('main', 'C_ALTER_TRAIL', $fieldname);
+	return 'ignore';
     }
-    
-    # $$$ check for ENABLE_ALTER_TRAIL or require superuser.
     
     return @result;
 }
@@ -955,9 +962,10 @@ sub check_row_permission {
     # If delete operations are not allowed on this table, reject a 'delete' request by a
     # non-administrator.
     
-    if ( $requested eq 'delete' && $tableinfo->{DISABLE_DELETE} )
+    if ( $requested eq 'delete' && $tableinfo->{CAN_DELETE} ne 'AUTHORIZED' &&
+				   $tableinfo->{CAN_DELETE} ne 'OWNER' )
     {
-	$edt->debug_line( "$dprefix DENIED by DISABLE_DELETE\n" );
+	$edt->debug_line( "$dprefix DENIED by CAN_DELETE '$tableinfo->{CAN_DELETE}\n" );
 	return 'none';
     }
     
@@ -1051,9 +1059,25 @@ sub check_row_permission {
 	    }
 	}
 	
-	# If the user has 'modify' permission on the table as a whole, they can view, edit or
-	# delete any record that is not locked by somebody else. Any records for which they have
-	# direct permission have already counted above, so an owner lock denies authorization.
+	elsif ( $requested eq 'DELETE' && $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' )
+	{
+	    $edt->debug_line("TABLE DELETE: $c end_no: $eno auth_no: $ano $uid $locked");
+	    
+	    if ( $a->{admin_lock} || $a->{owner_lock} )
+	    {
+		$lock_count += $a->{count};
+	    }
+	    
+	    else
+	    {
+		$unowned_count += $a->{count};
+	    }
+	}
+	
+	# If the user has 'modify' permission on the table as a whole, they can view or
+	# edit any record that is not locked by somebody else. Any records for
+	# which they have direct permission have already counted above, so an owner lock
+	# denies authorization.
 	
 	elsif ( $tp->{modify} )
 	{
@@ -1183,7 +1207,15 @@ sub _check_admin_permission {
     my $which = $perms->is_superuser ? 'SUPERUSER' : 'ADMIN';
     
     my $auth_fields = $tableinfo->{AUTH_COLUMN_STRING};
-        
+    
+    # If deletion is not allowed for anybody, return 'none'.
+    
+    if ( $requested eq 'delete' && $tableinfo->{CAN_DELETE} eq 'NONE' && ! $perms->is_superuser )
+    {
+	$edt->debug_line("$dprefix TABLE DELETE DENIED to ADMIN\n");
+	return ('none');
+    }
+    
     # If the table has no lock fields or the requested permission is 'view', all we need to
     # do is to check how many records match the key expression.
     
@@ -1270,6 +1302,26 @@ sub _check_admin_permission {
     }
 }
     
+
+# authorize_insert_key ( )
+# 
+# Return 'granted' if the transaction allows INSERT_KEY, 'none' otherwise.
+
+sub authorize_insert_key {
+    
+    my ($edt) = @_;
+    
+    if ( $edt->allows('INSERT_KEY') )
+    {
+	return 'granted';
+    }
+    
+    else
+    {
+	return 'none';
+    }
+}
+
 
 # select_authinfo ( table_specifier, auth_fields, where )
 # 

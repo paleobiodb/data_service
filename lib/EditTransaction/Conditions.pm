@@ -64,13 +64,14 @@ our (@EXPORT_OK) = qw(%CONDITION_BY_CLASS);
 
 our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 
-		C_CREATE => "Allow 'CREATE' to create records",
 		C_LOCKED => "Allow 'LOCKED' to update locked records",
 		C_ALTER_TRAIL => "Allow 'ALTER_TRAIL' to explicitly set crmod and authent fields",
 		C_CHANGE_LINK => "Allow 'CHANGE_LINK' to allow subordinate link values to be changed",
 		E_BAD_CONNECTION => ["&1", "Database connection failed"],
 		E_BAD_TABLE => "'&1' does not correspond to any known database table",
-		E_NO_KEY => "The &1 operation requires a primary key value or a selection expression",
+		E_NO_KEY => { link => "This operation requires a linking key",
+			      operation => ["The &1 operation requires a primary key value or a selection expression", "This operation requires a primary key value"],
+			      default => "This operation requires a primary key value" },
 		E_MULTI_KEY => "You may only specify a single primary key value for the &1 operation",
 		E_BAD_KEY => ["Field '&1': Invalid key value(s): &2",
 			      "Invalid key value(s): &2",
@@ -92,28 +93,30 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 						 "No record with the proper type matches '&2'",
 						 "No record with the proper type matches '&1'"] },
 		E_BAD_DIRECTIVE => ["Field '&1': &2", "Field '&1': invalid handling directive"],
-		E_NOT_FOUND => ["No record was found with key '&1'", 
-				"No record was found with this key"],
+		E_NOT_FOUND => { link => ["Linked record '&1' was not found",
+					  "Linked record was not found"],
+				 default => ["No record was found with key '&1'", 
+					     "No record was found with this key"] },
 		E_LOCKED => { multiple => ["Found &2 locked record(s)",
 					   "One or more of these records is locked"],
+			      link => "The linked record is locked",
 			      default => "This record is locked" },
-		E_PERM_LOCK => { _multiple_ => 
-				["You do not have permission to lock/unlock &2 of these records",
-				 "You do not have permission to lock/unlock one or more of these records"],
-				 default => "You do not have permission to lock/unlock this record" },
-		E_PERM => { insert => "You do not have permission to insert into this table",
-			    update => "You do not have permission to update",
-			    replace_new => "No record was found with key '&2', ".
-				"and you do not have permission to insert one",
-			    replace => "You do not have permission to replace",
-			    delete => "You do not have permission to delete",
-			    delete_cleanup => "You do not have permission to delete",
-			    fixup_mode => "You do not have permission for fixup mode on this table",
-			    default => "You do not have permission for this operation" },
+		E_FIXUP_MODE => "You must be an administrator to use fixup mode",
+		E_PERMISSION => { insert => "You do not have permission to insert into this table",
+				  update => "You do not have permission to update this record",
+				  replace_new => "No record was found with key '&2', ".
+				  "and you do not have permission to insert one",
+				  replace => "You do not have permission to replace this record",
+				  delete => "You do not have permission to delete this record",
+				  delete_cleanup => "You do not have permission to delete this record",
+				  lock => "You do not have permission to lock this record",
+				  unlock => "You do not have permission to unlock this record",
+				  link => "You do not have permission to modify the linked record",
+				  default => "You do not have permission for this operation" },
+		E_PERMISSION_COLUMN => "You do not have permission to set the value of '&1'",
 		E_BAD_OPERATION => ["Invalid operation '&1'", "Invalid operation"],
 		E_BAD_RECORD => "",
 		E_BAD_CONDITION => "&1 '&2'",
-		E_PERM_COL => "You do not have permission to set the value of '&1'",
 		E_EMPTY_RECORD => "This record is empty",
 		E_REQUIRED => ["Field '&1': &2", "Field '&1': must have a non-empty value"],
 		E_RANGE => ["Field '&1': &2", "&2", "Field '&1'"],
@@ -152,9 +155,9 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 
 
 our ($CONDITION_CODE_STRICT) = qr{ ^ [CEW]_ [A-Z0-9_-]+ $ }x;
-our ($CONDITION_CODE_LOOSE) =  qr{ ^ [CEFW]_ [A-Z0-9_-]+ $ }x;
-our ($CONDITION_CODE_START) =  qr{ ^ [CEFW]_ }x;
-our ($CONDITION_LINE_IMPORT) = qr{ ^ ([CEFW]_[A-Z0-9_-]+) (?: \s* [(] .*? [)] )? (?: \s* : \s* )? (.*) }x;
+our ($CONDITION_CODE_LOOSE) =  qr{ ^ [CDEW]_ [A-Z0-9_-]+ $ }x;
+our ($CONDITION_CODE_START) =  qr{ ^ [CDEW]_ }x;
+our ($CONDITION_LINE_IMPORT) = qr{ ^ ([CDEW]_[A-Z0-9_-]+) (?: \s* [(] .*? [)] )? (?: \s* : \s* )? (.*) }x;
 
 # register_conditions ( condition ... )
 #
@@ -234,8 +237,8 @@ sub is_valid_condition {
 # Add a condition (error, caution, or warning) that pertains to the either the entire
 # transaction or to a single action. The condition is specified by a code, optionally
 # followed by one or more parameters which will be used later to generate an error or
-# warning message. Conditions that pertain to an action may be demoted to warnings if
-# any of the allowances PROCEED, NOT_FOUND, or NOT_PERMITTED was specified.
+# warning message. Conditions that pertain to an action may be demoted to warnings if any
+# of the allowances PROCEED, NOT_FOUND, or NOT_PERMITTED was specified.
 # 
 # If the first parameter is a reference to an action, then the condition will be attached
 # to that action. If it is the undefined value or the string 'main', then the condition
@@ -299,7 +302,7 @@ sub add_condition {
     }
     
     # There must be at least one remaining parameter, and it must match the syntax of a
-    # condition code. If it starts with F, change it back to E. If it does not have the
+    # condition code. If it starts with D, change it back to E. If it does not have the
     # form of a condition code, throw an exception. Any subsequent parameters will be kept
     # and used to generate the condition message.
     
@@ -307,7 +310,7 @@ sub add_condition {
     {
 	$code = shift @params;
 
-	if ( $code =~ /^F/ )
+	if ( $code =~ /^D/ )
 	{
 	    substr($code, 0, 1) = 'E';
 	}
@@ -323,23 +326,25 @@ sub add_condition {
 	croak "you must specify a condition code";
     }
     
-    # If this condition belongs to an action, add it to that action. Adjust the condition counts
-    # for the transaction, but only if the action is not marked as skipped. If the action already
-    # has this exact condition, return without doing anything.
+    # If this condition belongs to an action, add it to that action. Adjust the condition
+    # counts for the transaction, but only if the action is not marked as skipped. If the
+    # action already has this exact condition, return without doing anything.
     
     if ( $action )
     {
 	# When an error condition is attached to an action and this transaction allows
-	# PROCEED, the error is demoted to a warning. If this transaction allows NOT_FOUND,
-	# then an E_NOT_FOUND error is demoted to a warning but others are not.
+	# PROCEED, the error is demoted to a warning. If this transaction allows
+	# NOT_FOUND, then an E_NOT_FOUND error is demoted to a warning but others are not.
+	# If this transaction allows NOT_PERMITTED, then an E_PERMISSION error is demoted to a
+	# warning but others are not.
 	
 	if ( $action && $code =~ /^E/ && ref $edt->{allows} eq 'HASH' )
 	{
 	    if ( $edt->{allows}{PROCEED} ||
 		 $edt->{allows}{NOT_FOUND} && $code eq 'E_NOT_FOUND' ||
-		 $edt->{allows}{NOT_PERMITTED} && $code eq 'E_PERM' )
+		 $edt->{allows}{NOT_PERMITTED} && $code eq 'E_PERMISSION' )
 	    {
-		substr($code, 0, 1) = 'F';
+		substr($code, 0, 1) = 'D';
 	    }
 	}
 
@@ -351,22 +356,20 @@ sub add_condition {
 	{
 	    $edt->{condition_code}{$code}++;
 	    
-	    # If the code starts with E or C then it represents an error or caution.
-	    
 	    if ( $code =~ /^[EC]/ )
 	    {
 		$edt->{error_count}++;
 	    }
 	    
-	    # If the code starts with F, then it represents a demoted error. It counts as a
-	    # warning for the transaction as a whole, but as an error for the action.
+	    # If the code starts with D, then it represents a demoted error. It counts as
+	    # a warning for the transaction as a whole, but as an error for the action.
 	    
-	    elsif ( $code =~ /^F/ )
+	    elsif ( $code =~ /^D/ )
 	    {
 		$edt->{demoted_count}++;
 	    }
 	    
-	    # Otherwise, it represents a warning.
+	    # otherwise, it represents a warning.
 	    
 	    else
 	    {
@@ -391,7 +394,7 @@ sub add_condition {
 	
 	$edt->{condition_code}{$code}++;
 	
-	# If the code starts with [EC], it represents an error or caution.
+	# If the code starts with E or C, it represents a fatal condition.
 	
 	if ( $code =~ /^[EC]/ )
 	{
@@ -414,6 +417,41 @@ sub add_condition {
     # was skipped or aborted and thus is not counted.
     
     return;
+}
+
+
+# _remove_conditions($action)
+# 
+# This method is calld when an action is aborted. All conditions associated with this
+# action are removed from the transaction.
+
+sub _remove_conditions {
+    
+    my ($edt, $action) = @_;
+    
+    foreach my $c ( $action->conditions )
+    {
+	if ( $c->[1] =~ /^[EC]/ )
+	{
+	    $edt->{error_count}--;
+	}
+	
+	elsif ( $c->[1] =~ /^D/ )
+	{
+	    $edt->{demoted_count}--;
+	}
+	
+	elsif ( $c->[1] =~ /^W/ )
+	{
+	    $edt->{warning_count}--;
+	}
+    }
+    
+    # Just in case a bug has occurred, don't let the parent counts go negative.
+    
+    $edt->{error_count} = 0 if $edt->{error_count} < 0;
+    $edt->{demoted_count} = 0 if $edt->{demoted_count} < 0;
+    $edt->{warning_count} = 0 if $edt->{warning_count} < 0;
 }
 
 
@@ -440,13 +478,20 @@ sub has_condition {
 	($edt, $selector, $code, @v) = @_;
     }
     
-    # Make sure that we were given either a regex or a string starting with [CDEFW] as the
+    # Make sure that we were given either a regex or a string starting with [CDEW] as the
     # code to look for.
     
     unless ( $code && (ref $code && reftype $code eq 'REGEXP' || $code =~ $CONDITION_CODE_LOOSE ) )
     {
 	croak $code ? "'$code' is not a valid selector or condition code" :
 	    "you must specify a condition code";
+    }
+    
+    # Return false if the code is not present in this transaction at all.
+    
+    unless ( $edt->{condition_code}{$code} || reftype $code eq 'REGEXP' )
+    {
+	return '';
     }
     
     # If the selector is either 'main' or 'all', check the main condition list.  Return true if we
@@ -549,8 +594,8 @@ sub _has_main_condition {
 # 
 # The type can be any of the following, also defaulting to 'all':
 # 
-#     errors		Return only error conditions.
-#     fatal		With selector 'all', return error conditions that were not demoted to warnings.
+#     errors		Return only error and caution conditions.
+#     fatal		With selector 'all', return cautions and errors not demoted to warnings.
 #     nonfatal		With selector 'all', return warning conditions and demoted errors.
 #     warnings		Return only warning conditions.
 #     all		Return all conditions.
@@ -558,11 +603,11 @@ sub _has_main_condition {
 # The types 'fatal' and 'nonfatal' are the same as 'errors' and 'warnings' respectively when used
 # with 'main'.
 
-my %TYPE_RE = ( errors => qr/^[EFC]/,
-		fatal => qr/^[EC]/,
-		nonfatal => qr/^[FW]/,
+my %TYPE_RE = ( errors => qr/^[CDE]/,
+		fatal => qr/^[CE]/,
+		nonfatal => qr/^[DW]/,
 		warnings => qr/^W/,
-		all => qr/^[EFCW]/ );
+		all => qr/^[CDEW]/ );
 
 my $csel_pattern = qr{ ^ (?: main$|&.|all$|& ) }xs;
 my $ctyp_pattern = qr{ ^ (?: errors|fatal|nonfatal|warnings ) $ }xs;
@@ -674,10 +719,57 @@ sub conditions {
     
     elsif ( wantarray )
     {
-	return map { $edt->condition_string($_->@*) }
-	    grep { ref $_ eq 'ARRAY' && $_->[1] =~ $filter }
-	    $edt->_main_conditions,
-	    map { blessed($_) && $_->{status} ne 'skipped' ? $_->conditions : () } $edt->_action_list;
+	my @conditions = grep { ref $_ eq 'ARRAY' && $_->[1] =~ $filter }
+	    $edt->_main_conditions;
+	
+	my @aconds = grep { ref $_ eq 'ARRAY' && $_->[1] =~ $filter }
+	    map { blessed($_) && $_->{status} ne 'skipped' ? $_->conditions : () } 
+	    $edt->_action_list;
+	
+	my (@sig_list, %sig_hash, %cond_hash);
+	
+	foreach my $c ( @aconds )
+	{
+	    my ($label, $code, @rest) = @$c;
+	    
+	    my $signature = join ':', $code, @rest;
+	    
+	    if ( $sig_hash{$signature} )
+	    {
+		push $sig_hash{$signature}->@*, $label;
+	    }
+	    
+	    else
+	    {
+		$sig_hash{$signature} = [$label];
+		$cond_hash{$signature} = [$code, @rest];
+		push @sig_list, $signature;
+	    }
+	}
+	
+	foreach my $s ( @sig_list )
+	{
+	    my $label_list;
+	    my $label_count = scalar($sig_hash{$s}->@*);
+	    
+	    if ( $label_count <= 20 )
+	    {
+		$label_list = join ', ', $sig_hash{$s}->@*;
+	    }
+	    
+	    else
+	    {
+		$label_list = "$label_count records, including " . 
+		    join(', ', $sig_hash{$s}->@[0,1,2], '...', $sig_hash{$s}[-1]);
+	    }
+	    
+	    my $regrouped = $cond_hash{$s};
+	    unshift @$regrouped, $label_list;
+	    
+	    push @conditions, $regrouped;
+	}
+	
+	return map { $edt->condition_string($_->@*) } @conditions;
     }
     
     # For 'all' in scalar context, return the count(s) that correspond to $type.
@@ -726,6 +818,10 @@ sub condition_string {
     # If no code was given, return undefined.
     
     return unless $code;
+    
+    # Restore demoted error codes to normal for reporting.
+    
+    $code =~ s/^D/E/;
     
     # If this condition is associated with an action, include the action's label in
     # parentheses.

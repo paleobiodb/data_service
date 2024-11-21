@@ -125,14 +125,6 @@ our ($TRANSACTION_COUNT) = 1;
 # returned. If the user gives approval, the transaction should then be repeated with the necessary
 # allowance.
 # 
-#   CREATE            If this allowance is specified, then 'insert' operations are allowed
-#                     as part of this transaction. Otherwise, a 'C_CREATE' caution will be
-#                     returned if insertion is attempted. The reason behind this is to prevent new
-#                     records being added inadvertently due to improper client interface design or
-#                     improper user input. In other words, insertion must be explicitly enabled
-#                     or else some mechanism must be provided for the end user to confirm that
-#                     they are intending to create new records rather than just update existing ones.
-# 
 #   LOCKED            If this allowance is specified, then locked records which the user has
 #                     authorization to unlock may be operated upon without explicitly unlocking
 #                     them. Otherwise, a 'C_LOCKED' caution will be returned for any attempt to
@@ -272,8 +264,8 @@ sub new {
 		skip_count => 0,
 		conditions => [ ],
 		error_count => 0,
-		warning_count => 0,
 		demoted_count => 0,
+		warning_count => 0,
 		condition_code => { },
 		commit_count => 0,
 		rollback_count => 0,
