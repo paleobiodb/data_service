@@ -509,12 +509,12 @@ sub list_associated {
 	    
 	    my %ref_count;
 	    
-	    foreach my $r ( $taxonomy->list_taxa('all_taxa', undef, $options) )
+	    foreach my $r ( $taxonomy->list_taxa('all_records', undef, $options) )
 	    {
 		my $refno = $r->{reference_no};
 		
-		$r->{record_id} = $r->{orig_no};
-		$r->{record_type} = $r->{taxon_no} eq $r->{orig_no} ? 'txn' : 'var';
+		$r->{record_id} = $r->{orig_no} || $r->{taxon_no};
+		$r->{record_type} = $r->{orig_no} && $r->{taxon_no} eq $r->{orig_no} ? 'txn' : 'var';
 		$r->{ref_type} = 'A';
 		$request->generate_extids($r) if $generate_extids;
 		

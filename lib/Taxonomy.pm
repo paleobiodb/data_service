@@ -446,7 +446,7 @@ sub list_taxa_simple {
     
     $sql = "
 	SELECT $fields
-	FROM $auth_table as base JOIN $tree_table as t using (orig_no)
+	FROM $auth_table as base LEFT JOIN $tree_table as t using (orig_no)
 		JOIN $auth_table as a on $auth_expr
 		$other_joins
 	WHERE $filters
@@ -999,7 +999,7 @@ sub list_taxa {
 		GROUP BY t.orig_no $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'all_taxa' || $rel eq 'all_records' )
+    elsif ( $rel eq 'all_taxa' )
     {
 	my $fields = join ', ', @fields;
 	
@@ -1026,6 +1026,25 @@ sub list_taxa {
 	
 	$sql = "SELECT $count_expr $fields
 		FROM $tree_table as t JOIN $auth_table as a$force on $auth_expr
+			$other_joins
+		WHERE $filters $order_expr $limit_expr\n";
+    }
+    
+    elsif ( $rel eq 'all_records' )
+    {
+	my $fields = join ', ', @fields;
+	
+	my @filters = $taxonomy->taxon_filters($options, $tables);
+	push @filters, $taxonomy->common_filters($options, $tables, 'a');
+	push @filters, $taxonomy->refno_filter($options, 'a');
+	push @filters, '1=1' unless @filters;
+	my $filters = join( q{ and }, @filters);
+	
+	my $other_joins = $taxonomy->taxon_joins('t', $tables);
+	$other_joins .= $taxonomy->ref_joins('a', $tables);
+	
+	$sql = "SELECT $count_expr $fields
+		FROM $auth_table as a LEFT JOIN $tree_table as t using (orig_no)
 			$other_joins
 		WHERE $filters $order_expr $limit_expr\n";
     }
@@ -1647,8 +1666,8 @@ sub list_associated {
 	    my $query_core = "$op_cache as o
 			JOIN $op_table as oo$force using (opinion_no)
 			JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
-			JOIN $tree_table as t on t.orig_no = o.orig_no
-			JOIN $refs_table as r on r.reference_no = o.reference_no
+			LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
+			LEFT JOIN $refs_table as r on r.reference_no = o.reference_no
 			$other_joins";
 	    
 	    # If the order and limit expressions can be applied here, as opposed to the outer
@@ -1851,7 +1870,7 @@ sub list_associated {
 	
 	$sql = "SELECT $count_expr $query_fields
 		FROM op_collect as base JOIN $op_cache as o using (opinion_no)
-			JOIN $tree_table as t on t.orig_no = base.orig_no
+			LEFT JOIN $tree_table as t on t.orig_no = base.orig_no
 			LEFT JOIN $auth_table as a on a.taxon_no = o.child_spelling_no
 			LEFT JOIN $auth_table as ap on ap.taxon_no = o.parent_spelling_no
 			LEFT JOIN refs as r on r.reference_no = o.reference_no
@@ -5622,8 +5641,8 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      AUTH_SIMPLE => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 
 				      '(a.taxon_rank + 0) as taxon_rank', 't.lft', 't.spelling_no',
 				      't.status', 't.immpar_no', 't.senpar_no', 't.accepted_no'],
-		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
-			       't.rank as taxon_rank', 't.lft', 't.rgt', 't.status', 't.accepted_no',
+		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 'a.taxon_name',
+			       'a.taxon_rank', 't.lft', 't.rgt', 't.status', 't.accepted_no',
 			       't.immpar_no', 't.senpar_no', 'a.common_name', 'a.reference_no',
 			       'vt.name as accepted_name', 'vt.rank as accepted_rank',
 			       'v.n_occs', 'v.is_extant', 'v.is_trace', 'v.is_form'],
