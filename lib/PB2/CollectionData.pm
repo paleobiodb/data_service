@@ -4863,7 +4863,7 @@ sub generateJoinList {
 	if $tables->{ei};
     $join_list .= "LEFT JOIN $INTERVAL_DATA as li on li.interval_no = $mt.late_int_no\n"
 	if $tables->{li};
-    $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
+    $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc\n"
 	if $tables->{ccmap};
     
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
