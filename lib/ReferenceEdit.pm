@@ -268,7 +268,7 @@ sub validate_action {
 	    {
 		push @otherauthors, ($initials ? "$initials $authorlast" : $authorlast);
 	    }
-	
+	    
 	    # if ( $authorname[$i] =~ / (.*) (,\s*jr.\s*|,\s*iii\s*) (.*) /xsi )
 	    # {
 	    #     $authorname[$i] = "$1$3";
@@ -318,100 +318,109 @@ sub validate_action {
     
     # Handle the editor names, if any.
     
-    my $editor_list = $record->{editors};
-    my (@editorname, @editorfirst, @editorlast);
-    
-    if ( ref $editor_list eq 'ARRAY' )
+    if ( exists $record->{editors} )
     {
-	@editorname = $editor_list->@*;
-    }
-    
-    elsif ( ref $editor_list )
-    {
-	croak "The value of 'editors' must be a listref or a scalar";
-    }
-    
-    else
-    {
-	@editorname = split /;\s+/, $editor_list;
-    }
-    
-    my @ref_editors;
-    
-    foreach my $i ( 0..$#editorname )
-    {
-	# Check that each name is within the column width limit.
+	my $editor_list = $record->{editors};
+	my (@editorname, @editorfirst, @editorlast);
 	
-	if ( length($editorname[$i]) >= 100 )
+	if ( ref $editor_list eq 'ARRAY' )
 	{
-	    $edt->add_condition('E_NAME_WIDTH', 'Editor', $i+1);
-	    next;
+	    @editorname = $editor_list->@*;
 	}
 	
-	# Parse each name into first and last.
-	
-	my ($editorlast, $editorfirst) = parse_authorname($editorname[$i]);
-	
-	$editorfirst[$i] = $editorfirst;
-	$editorlast[$i] = $editorlast;
-	
-	# Make sure that each editor has at least two letters in the last name,
-	# and that the name is properly capitalized unless CAPITAL is allowed.
-	
-	if ( $editorlast[$i] !~ / \pL .* \pL /xs )
+	elsif ( ref $editor_list )
 	{
-	    $edt->add_condition('E_NAME_EMPTY', 'Editor', $i+1);
-	    next;
+	    croak "The value of 'editors' must be a listref or a scalar";
 	}
 	
-	elsif ( ! $edt->allows('CAPITAL') )
+	else
 	{
-	    if ( $editorlast !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	    @editorname = split /;\s+/, $editor_list;
+	}
+	
+	my @ref_editors;
+	
+	foreach my $i ( 0..$#editorname )
+	{
+	    # Check that each name is within the column width limit.
+	    
+	    if ( length($editorname[$i]) >= 100 )
 	    {
-		$edt->add_condition('C_CAPITAL', 'Editor', $i+1);
+		$edt->add_condition('E_NAME_WIDTH', 'Editor', $i+1);
+		next;
 	    }
 	    
-	    if ( defined $editorfirst && $editorfirst ne '' && 
-		 $editorfirst !~ / ^ \p{Lu} .* \p{Ll} /xs )
+	    # If a name includes an asterisk '*', treat it as a last name
+	    # only. Remove the asterisk, of course.
+	    
+	    my ($editorfirst, $editorlast);
+	    
+	    if ( $editorname[$i] =~ /[*]/ )
 	    {
-		$edt->add_condition('C_CAPITAL', 'Editor', $i+1);
+		$editorfirst = '';
+		$editorlast = $editorname[$i];
+		$editorlast =~ s/\s*[*]\s*//g;
 	    }
-	}
-	
-	my $suffix;
-	
-	my $initials = '';
-	
-	# If a first name is given, generate initials.
-	
-	if ( $editorfirst )
-	{
-	    foreach my $word ( split(/\s+/, $editorfirst ) )
+	    
+	    # Otherwise, parse the name into first and last.
+	    
+	    else
 	    {
-		if ( $word =~ /(\p{L})/ )
+		($editorlast, $editorfirst) = parse_authorname($editorname[$i]);
+	    }
+	    
+	    $editorfirst[$i] = $editorfirst;
+	    $editorlast[$i] = $editorlast;
+	    
+	    # Make sure that each editor has at least two letters in the last name,
+	    # and that the name is properly capitalized unless CAPITAL is allowed.
+	    
+	    if ( $editorlast !~ / \pL .* \pL /xs )
+	    {
+		$edt->add_condition('E_NAME_EMPTY', 'Editor', $i+1);
+		next;
+	    }
+	    
+	    elsif ( ! $edt->allows('CAPITAL') )
+	    {
+		if ( $editorlast !~ / ^ \p{Lu} .* \p{Ll} /xs )
 		{
-		    $initials .= "$1. ";
+		    $edt->add_condition('C_CAPITAL', 'Editor', $i+1);
 		}
 	    }
 	    
-	    $initials =~ s/ $//;
+	    my $suffix;
+	    
+	    my $initials = '';
+	    
+	    # If a first name is given, generate initials.
+	    
+	    if ( $editorfirst )
+	    {
+		foreach my $word ( split(/\s+/, $editorfirst ) )
+		{
+		    if ( $word =~ /(\p{L})/ )
+		    {
+			$initials .= "$1. ";
+		    }
+		}
+		
+		$initials =~ s/ $//;
+	    }
+	    
+	    push @ref_editors, ($initials ? "$initials $editorlast" : $editorlast);
 	}
 	
-	push @ref_editors, ($initials ? "$initials $editorlast" : $editorlast);
+	$record->{editors} = join(', ', @ref_editors);
+	
+	$record->{editorfirst} = \@editorfirst;
+	$record->{editorlast} = \@editorlast;
+	$record->{n_editors} = scalar(@editorname);
+	
+	$action->ignore_field('editorfirst');
+	$action->ignore_field('editorlast');
+	$action->ignore_field('n_editors');
     }
-    
-    $record->{editors} = join(', ', @ref_editors) if $editor_list;
-    # $record->{editorfirst} = \@editorfirst;
-    # $record->{editorlast} = \@editorlast;
-    # $record->{n_editors} = scalar(@editorname);
-    
-    # $action->handle_column("FIELD:editorfirst", 'ignore');
-    # $action->handle_column("FIELD:editorlast", 'ignore');
-    # $action->handle_column("FIELD:n_editors", 'ignore');
-    
-    # $action->ignore_field('editorfirst');
-    # $action->ignore_field('editorlast');
-    # $action->ignore_field('n_editors');
     
     # Handle the page number(s).
     
@@ -483,7 +492,7 @@ sub after_action {
     my $result;
     
     if ( $operation eq 'replace' || $operation eq 'delete' ||
-	 ($operation eq 'update' && $record->{n_authors}) )
+	 ($operation eq 'update' && exists $record->{n_authors}) )
     {
 	my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE reference_no = $qkeyval";
 	
@@ -492,35 +501,58 @@ sub after_action {
 	$result = $dbh->do($sql);
     }
     
+    if ( $operation eq 'replace' || $operation eq 'delete' ||
+	 ($operation eq 'update' && exists $record->{n_editors}) )
+    {
+	my $sql = "DELETE FROM $TABLE{REFERENCE_EDITORS} WHERE reference_no = $qkeyval";
+	
+	$edt->debug_line("$sql\n\n");
+	
+	$result = $dbh->do($sql);
+    }
+    
     if ( $operation ne 'delete' )
     {
-	my @author_records;
+	my (@author_records, @editor_records);
 	
-	foreach my $i ( 0 .. $record->{n_authors} - 1 )
+	if ( $record->{n_authors} )
 	{
-	    my $place = $i + 1;
-	    my $qfirst = $dbh->quote($record->{authorfirst}[$i]);
-	    my $qlast = $dbh->quote($record->{authorlast}[$i]);
+	    foreach my $i ( 0 .. $record->{n_authors} - 1 )
+	    {
+		my $place = $i + 1;
+		my $qfirst = $dbh->quote($record->{authorfirst}[$i]);
+		my $qlast = $dbh->quote($record->{authorlast}[$i]);
+		
+		push @author_records, "($qkeyval,$place,$qfirst,$qlast)";
+	    }
 	    
-	    push @author_records, "($qkeyval,$place,$qfirst,$qlast)";
-	}
-	
-	# foreach my $i ( 0 .. $record->{n_editors} - 1 )
-	# {
-	# 	my $place = $i + 1;
-	# 	my $qfirst = $dbh->quote($record->{editorfirst}[$i]);
-	# 	my $qlast = $dbh->quote($record->{editorlast}[$i]);
-	
-	# 	push @author_records, "($qkeyval,'editor',$place,$qfirst,$qlast)";
-	# }
-	
-	if ( @author_records )
-	{
 	    my $authorstring = join(',', @author_records);
 	    
 	    my $sql = "INSERT INTO $TABLE{REFERENCE_AUTHORS}
 		    (reference_no, place, firstname, lastname)
 		    VALUES $authorstring";
+	    
+	    $edt->debug_line("$sql\n\n");
+	    
+	    $result = $dbh->do($sql);
+	}
+	
+	if ( $record->{n_editors} )
+	{
+	    foreach my $i ( 0 .. $record->{n_editors} - 1 )
+	    {
+		my $place = $i + 1;
+		my $qfirst = $dbh->quote($record->{editorfirst}[$i]);
+		my $qlast = $dbh->quote($record->{editorlast}[$i]);
+		
+		push @editor_records, "($qkeyval,$place,$qfirst,$qlast)";
+	    }
+	    
+	    my $editorstring = join(',', @editor_records);
+	    
+	    my $sql = "INSERT INTO $TABLE{REFERENCE_EDITORS}
+		    (reference_no, place, firstname, lastname)
+		    VALUES $editorstring";
 	    
 	    $edt->debug_line("$sql\n\n");
 	    
@@ -561,13 +593,13 @@ sub my_reference_check {
     
     my ($edt, $dbh, $table_name, $idstring) = @_;
     
-    my $sql = "SELECT count(*) FROM $table_name WHERE reference_no in ($idstring)";
+    my $sql = "SELECT 1 FROM $table_name WHERE reference_no in ($idstring) limit 1";
     
     $edt->debug_line($sql) if $edt->debug_mode;
     
-    my ($count) = $dbh->selectrow_array($sql);
+    my ($found) = $dbh->selectrow_array($sql);
     
-    return !$count;
+    return !$found;
 }
     
 

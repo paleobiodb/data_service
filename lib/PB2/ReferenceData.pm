@@ -16,6 +16,7 @@ use TableDefs qw(%TABLE $REF_SUMMARY);
 use CoreTableDefs;
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
 use PB2::CommonData qw(generateAttribution);
+use ReferenceMatch qw(split_authorlist parse_authorname);
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
@@ -92,7 +93,8 @@ sub initialize {
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
-		   'r.language as r_language', 'r.doi as r_doi', 'r.updated', 'r.updater_no'],
+		   'r.language as r_language', 'r.doi as r_doi', 'r.isbn as r_isbn',
+		   'r.updated', 'r.updater_no'],
 	tables => ['r'] },
       { set => 'formatted', from => '*', code => \&format_reference, if_block => 'formatted,both' },
       { set => 'ref_type', from => '*', code => \&set_reference_type, if_vocab => 'pbdb' },
@@ -180,6 +182,8 @@ sub initialize {
 	  "The language in which the document is written.",
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi', bibjson_name => 'identifier' },
 	  "The DOI for this document, if known",
+      { output => 'r_isbn', com_name => 'isb', pbdb_name => 'isbn', bibjson_name => 'isbn' },
+	  "ISBN, if one was entered",
       { output => 'ref_type', com_name => 'rtp', bibjson_name => '_reftype' },
 	  "The role(s) played by this reference in the database.  This field will only appear",
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
@@ -1837,7 +1841,7 @@ sub generate_authorlist {
 	my $sql = "SELECT * FROM $TABLE{REFERENCE_AUTHORS}
 		WHERE reference_no = $reference_no
 		ORDER BY place";
-    
+	
 	my $results = $dbh->selectall_arrayref($sql, { Slice => { } });
 	
 	if ( $results && @$results )
@@ -1856,6 +1860,35 @@ sub generate_authorlist {
 	}
 	
 	$record->{r_author} = \@authors if @authors;
+	
+	my @editors;
+	
+	$sql = "SELECT * FROM $TABLE{REFERENCE_EDITORS}
+		WHERE reference_no = $reference_no
+		ORDER BY place";
+	
+	$results = $dbh->selectall_arrayref($sql, { Slice => { } });
+	
+	if ( $results && @$results )
+	{
+	    foreach my $a ( @$results )
+	    {
+		push @editors, bibjson_name_record($a->{firstname}, $a->{lastname});
+	    }
+	}
+	
+	elsif ( $record->{r_editor} )
+	{
+	    my @names = split_authorlist($record->{r_editor});
+	    
+	    foreach my $n ( @names )
+	    {
+		my ($lastname, $firstname) = parse_authorname($n);
+		push @editors, bibjson_name_record($firstname, $lastname);
+	    }
+	}
+	
+	$record->{r_editor} = \@editors if @editors;
     }
 }
 

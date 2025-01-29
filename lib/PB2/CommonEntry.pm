@@ -372,6 +372,13 @@ sub parse_body_records {
 		    $result->{clean}{$k} = '';
 		    push @{$result->{clean_list}}, $k;
 		}
+		
+		elsif ( ref $raw->{$k} eq 'ARRAY' && scalar($raw->{$k}->@*) == 0 &&
+			! defined $result->{clean}{$k} )
+		{
+		    $result->{clean}{$k} = [];
+		    push @{$result->{clean_list}}, $k;
+		}
 	    }
 	    
 	    # Generate a record with the cleaned parameter values. If any errors or warnings were

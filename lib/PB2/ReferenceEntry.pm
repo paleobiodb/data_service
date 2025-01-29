@@ -151,6 +151,8 @@ sub addupdate_refs {
     
     my ($request, $operation) = @_;
     
+    $operation ||= '';
+    
     my $dbh = $request->get_connection;
     
     # First get the parameters from the URL, and/or from the body if it is from a web form. In the
