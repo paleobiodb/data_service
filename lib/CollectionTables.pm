@@ -78,8 +78,8 @@ sub buildCollectionTables {
 	    
 	    $level++;
 	    push @bin_reso, $bin->{resolution};
-	    $bin_lines .= "bin_id_$level int unsigned not null,\n";
-	    $next_line = "bin_id_$level int unsigned not null,\n";
+	    $bin_lines .= "bin_id_$level int unsigned not null default 0,\n";
+	    $next_line = "bin_id_$level int unsigned not null default 0,\n";
 	    $parent_lines .= $next_line;
 	}
     }
@@ -106,11 +106,11 @@ sub buildCollectionTables {
     $dbh->do("CREATE TABLE $COLL_MATRIX_WORK (
 		collection_no int unsigned primary key,
 		$bin_lines
-		clust_id int unsigned not null,
+		clust_id int unsigned not null default 0,
 		lng decimal(9,6),
 		lat decimal(9,6),
-		g_plate_no smallint unsigned not null,
-		s_plate_no smallint unsigned not null,
+		g_plate_no smallint unsigned null,
+		s_plate_no smallint unsigned null,
 		loc geometry not null,
 		cc char(2),
 		protected varchar(255),
@@ -119,9 +119,9 @@ sub buildCollectionTables {
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
 		environment $env_enum default null,
-		n_occs int unsigned not null,
+		n_occs int unsigned not null default 0,
 		reference_no int unsigned not null,
-		access_level tinyint unsigned not null) Engine=MYISAM");
+		access_level tinyint unsigned not null) Engine=MyISAM");
     
     logMessage(2, "    inserting collections...");
     
@@ -955,7 +955,7 @@ sub buildLithTables {
 	lith_type varchar(30) not null,
 	UNIQUE KEY (collection_no, lithology),
 	KEY (lithology),
-	KEY (macros_lith)) ENGINE=MYISAM");
+	KEY (macros_lith)) ENGINE=MyISAM");
     
     my ($sql, $count);
     
@@ -1071,7 +1071,7 @@ sub applyClustering {
     
     $dbh->do("CREATE TABLE $CLUST_AUX (
 		bin_id int unsigned primary key,
-		clust_id int unsigned not null) ENGINE=MYISAM");
+		clust_id int unsigned not null) ENGINE=MyISAM");
     
     # Go through the bin levels, skipping any that don't specify clustering.
     # We will need to cluster the finer bins first, then go to coarser.  Thus
