@@ -13,7 +13,7 @@ use lib '..';
 
 package PB2::DiversityData;
 
-use TaxonDefs qw(%UNS_NAME);
+use TaxonDefs qw(%UNS_NAME %TAXON_RANK);
 use IntervalBase qw(ts_boundary_list ts_boundary_no ts_boundary_name ts_boundary_next
 		    INTL_SCALE BIN_SCALE);
 use Taxonomy;
@@ -1352,6 +1352,13 @@ sub sum_subtaxa {
     my ($request, $node, $child) = @_;
     
     no warnings 'uninitialized';
+
+    # Make sure that we have a numeric taxon rank rather than a string value.
+    
+    unless ( $node->{taxon_rank} > 0 )
+    {
+	$node->{taxon_rank} = $TAXON_RANK{$node->{taxon_rank}};
+    }
     
     # Now add the number of species, genera, etc. counted for the child to the
     # parent node.
