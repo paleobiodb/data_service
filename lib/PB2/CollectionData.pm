@@ -965,7 +965,10 @@ sub initialize {
     $ds->define_ruleset('1.2:main_selector' =>
 	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
-	    "You may specify one or more cluster ids, separated by commas.",
+			"You may specify one or more cluster ids, separated by commas.",
+	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',', bad_value => '0' },
+	    "Return only records associated with the specified bibliographic",
+	    "reference(s).",
 	{ param => 'coll_match', valid => ANY_VALUE },
 	    "A string which will be matched against the C<collection_name> and",
 	    "C<collection_aka> fields.  Records will be returned only if they belong to a",
@@ -1562,7 +1565,7 @@ sub list_colls {
     my $tables = $request->tables_hash;
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateCollFilters($tables);
+    # push @filters, $request->generateCollFilters($tables);
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('c');
@@ -1675,7 +1678,8 @@ sub summary {
     # in order to select the proper result set.
     
     my @filters = $request->generateMainFilters('summary', 's', $tables);
-    push @filters, $request->generateCollFilters($tables);
+    # push @filters, $request->generateCollFilters($tables);
+    push @filters, $request->generate_refno_filter('c');
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
     push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc' }, $tables );
     
@@ -1862,7 +1866,7 @@ sub refs {
     my $inner_tables = {};
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    push @filters, $request->generateCollFilters($inner_tables);
+    # push @filters, $request->generateCollFilters($inner_tables);
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($inner_tables, 'o');
     push @filters, $request->generate_common_filters( { colls => 'cc' }, $inner_tables );
     # push @filters, $request->generate_crmod_filters('cc', $inner_tables);
@@ -1972,7 +1976,8 @@ sub list_coll_strata {
     my $strata_fields = "cs.grp, cs.formation, cs.member";
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
-    push @filters, $request->generateCollFilters($tables);
+    push @filters, $request->generate_refno_filter('c');
+    # push @filters, $request->generateCollFilters($tables);
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
     # push @filters, $request->generateStrataFilters($tables, $arg);
     

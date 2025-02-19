@@ -478,9 +478,9 @@ sub list_associated {
     # Determine the result limit, and then remove the automatic limit check on the overall
     # result.
     
-    my $limit = $request->clean_param('limit') || 100;
+    my $limit = $request->clean_param('limit') || '100000';
     
-    $limit = '9999' if $limit eq 'all';
+    $limit = '10000' if $limit eq 'all';
     
     $request->result_limit('all');
     
