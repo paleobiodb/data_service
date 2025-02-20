@@ -4,8 +4,8 @@
 
 data_provider: "The Paleobiology Database"
 data_source: "The Paleobiology Database"
-data_license:  "Creative Commons CC-BY"
-license_url:   "http://creativecommons.org/licenses/by/4.0/"
+data_license:  "Creative Commons CC0"
+license_url:   "https://creativecommons.org/publicdomain/zero/1.0/"
 contact_email:   "admin@paleobiodb.org"
 contact_name:    "the database administrator"
 
