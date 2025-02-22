@@ -38,8 +38,8 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 Getopt::Long::Configure("bundling");
 
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
-    $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables, $interval_map,
-    $occurrence_int_maps, $taxon_summary_table,
+    $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables,
+    $occurrence_int_maps, $taxon_summary_table, $prevalence_tables, $country_map,
     $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
@@ -49,11 +49,12 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "taxonomy|t" => \$taxon_tables,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
+	    "prevalence|P" => \$prevalence_tables,
 	    "M" => \$occurrence_int_maps,
 	    "S" => \$taxon_summary_table,
+	    "countries|C" => \$country_map,
 	    "listcache|y" => \$old_taxon_tables,
 	    "diversity|d" => \$diversity_tables,
-	    "interval-map|u" => \$interval_map,
 	    "steps|T=s" => \$taxon_steps );
 
 my $cmd_line_db_name = shift;
@@ -158,7 +159,7 @@ sub BuildTables {
     # my $occurrence_int_maps = $options{M};
     my $occurrence_reso = $options{R};
     # my $diversity_tables = $options{d};
-    my $prevalence_tables = $options{q};
+    # my $prevalence_tables = $options{q};
     my $timescale_tables = $options{S};
     
     # my $taxon_tables = 1 if $options{t} || $options{T};
@@ -174,35 +175,17 @@ sub BuildTables {
     
     my $options = { taxon_steps => $taxon_steps };
     
-    # The option -i causes a forced reload of the interval data from the source
-    # data files.  Otherwise, do a (non-forced) call to LoadIntervalData if any
-    # function has been selected that requires it.
-    
-    if ( $interval_data )
-    {
-	loadIntervalData($dbh, 1);
-    }
-    
-    elsif ( $interval_map || $collection_tables || $occurrence_tables )
-    {
-	loadIntervalData($dbh);
-    }
-    
-    # The option -u causes the interval map tables to be (re)computed.
-    
-    if ( $interval_map )
-    {
-	buildIntervalMap($dbh);
-	# buildIntervalBufferMap($dbh);
-    }
-    
     # The option -r causes the taxon rank map to be (re)generated.
     
     if ( $rank_map )
     {
 	TaxonTables::createRankMap($dbh);
-	CollectionTables::createCountryMap($dbh, 1);
     }
+    
+    if ( $country_map )
+    {
+	CollectionTables::createCountryMap($dbh, 1);
+    }	
     
     # The option -c causes the collection tables to be (re)computed.
     

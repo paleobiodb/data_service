@@ -1220,9 +1220,10 @@ sub createCountryMap {
     }
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $COUNTRY_MAP (
-		cc char(2) primary key,
-		continent char(3),
+		cc char(2) not null default '',
+		continent char(3) not null,
 		name varchar(80) not null,
+		PRIMARY KEY (cc),
 		INDEX (name),
 		INDEX (continent)) Engine=MyISAM");
     
@@ -1427,10 +1428,17 @@ sub createCountryMap {
 	('MV', 'IOC', 'Maldives'),
 	('MU', 'IOC', 'Mauritius'),
 	('YT', 'IOC', 'Mayotte'),
-	('SC', 'IOC', 'Seychelles')");
+	('SC', 'IOC', 'Seychelles'),
+	('O1', '', 'Arctic Ocean'),
+	('O2', '', 'North Atlantic'),
+	('O3', '', 'South Atlantic'),
+	('O4', '', 'North Pacific'),
+	('O5', '', 'South Pacific'),
+	('O6', '', 'Indian Ocean'),
+	('O7', '', 'Southern Ocean')");
     
     # Now the continents.
-
+    
     $dbh->do("DROP TABLE IF EXISTS $CONTINENT_DATA");
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $CONTINENT_DATA (
@@ -1444,7 +1452,7 @@ sub createCountryMap {
 	('ASI', 'Asia'),
 	('AUS', 'Australia'),
 	('EUR', 'Europe'),
-	('IOC', 'Indian Ocean'),
+	('IOC', 'Indian Ocean Territories'),
 	('NOA', 'North America'),
 	('OCE', 'Oceania'),
 	('SOA', 'South America')");
