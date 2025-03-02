@@ -57,21 +57,12 @@ sub initialize {
 	# { select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.scale_level
 	# 		 sm.parent_no sm.color i.early_age i.late_age i.reference_no) ] },
 	{ output => 'interval_no', com_name => 'oid' },
-	    "A positive integer that uniquely identifies this interval",
+	    "The unique identifier of this interval",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{INT} },
 	    "The type of this object: C<$IDP{INT}> for an interval",
 	{ output => 'scale_no', com_name => 'tsc' },
-	    "The time scale in which this interval lies.  An interval may be reported more than",
+	    "The time scale in which this interval is defined.  An interval may be reported more than",
 	    "once, as a member of different time scales",
-	# { output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
-	#     "The level within the time scale to which this interval belongs.  For example,",
-	#     "the default time scale is organized into the following levels:",
-	#     "=over", "=item Level 1", "Eons",
-	# 	       "=item Level 2", "Eras",
-	# 	       "=item Level 3", "Periods",
-	# 	       "=item Level 4", "Epochs",
-	# 	       "=item Level 5", "Stages",
-	#     "=back",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of this interval",
 	{ output => 'abbrev', com_name => 'abr' },
@@ -79,44 +70,31 @@ sub initialize {
 	{ output => 'type', com_name => 'itp' },
 	    "The interval type: eon, era, period, epoch, subepoch, age, subage, zone",
 	{ output => 'parent_no', com_name => 'pid' },
-	    "The identifier of the parent interval",
+	    "The identifier of the parent interval, if any",
 	{ output => 'color', com_name => 'col' },
 	    "The standard color for displaying this interval",
 	{ output => 't_age', pbdb_name => 't_age', com_name => 'lag', data_type => 'dec' },
 	    "The top age of this interval, in Ma",
 	{ output => 'b_age', pbdb_name => 'b_age', com_name => 'eag', data_type => 'dec' },
 	    "The base age of this interval, in Ma",
-	# { set => 'reference_no', append => 1 },
 	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier of the bibliographic reference from which this data was entered",
 	{ set => '*', code => \&process_int_ids });
     
-    $ds->define_block('1.2:scales:basic' =>
-	{ select => [ 'sc.scale_no', 'sc.scale_name', 'sc.levels as num_levels',
-		      'sc.early_age', 'sc.late_age', 'sc.reference_no', ] },
-		      # 'sl.scale_level', 'sl.level_name' ] },
+    $ds->define_block('1.2:timescales:basic' =>
 	{ output => 'scale_no', com_name => 'oid' },
-	    "A positive integer that uniquely identifies this time scale",
+	    "The unique identifier of this time scale",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{TSC} },
 	    "The type of this object: C<$IDP{TSC}> for a time scale",
 	{ output => 'scale_name', com_name => 'nam' },
 	    "The name of this time scale",
-	# { output => 'num_levels', com_name => 'nlv', data_type => 'pos' },
-	#     "The number of levels into which this time scale is organized",
-	# { output => 'level_list', com_name => 'lvs', sub_record => '1.2:scales:level',
-	#   if_format => 'json' },
-	#     "A list of levels associated with this time scale, if more than one.",
-	#     "This field will only be present in C<json> responses.",
-	# { output => 'scale_level', com_name => 'lvl', not_format => 'json', data_type => 'pos' },
-	#     "Level number.",
-	# { output => 'level_name', com_name => 'nam', not_format => 'json' },
-	#     "Level name",
 	{ output => 't_age', pbdb_name => 't_age', com_name => 'lag', data_type => 'dec' },
 	    "The top age of this time scale, in Ma",
 	{ output => 'b_age', pbdb_name => 'b_age', com_name => 'eag', data_type => 'dec' },
 	    "The base age of this time scale, in Ma",
-	# { set => 'reference_no', append => 1 },
-	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
+	{ output => 'locality', com_name => 'loc' },
+	    "The region of the world where this timescale is valid",
+	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier(s) of the references from which this data was entered",
 	{ set => '*', code => \&process_int_ids });
     
@@ -143,14 +121,7 @@ sub initialize {
 	    "along with the basic record for each collection.  Its value should be",
 	    "one or more of the following, separated by commas:");
     
-    
-    # $ds->define_block('1.2:scales:level' =>
-    # 	{ output => 'scale_level', com_name => 'lvl', data_type => 'pos' },
-    # 	    "Level number",
-    # 	{ output => 'level_name', com_name => 'nam' },
-    # 	    "Level name");
-    
-    $ds->define_block('1.2:scales:diagram' =>
+    $ds->define_block('1.2:timescales:diagram' =>
 	{ output => 'diagram', com_name => 'dgr' },
 	    "An HTML table expression showing the intervals from the specified",
 	    "scale(s) with correlated boundaries.",
@@ -167,21 +138,21 @@ sub initialize {
 	    "one temporal bin, but many occurrences will be ignored because their temporal",
 	    "locality is too wide to fall into any of the bins.",
 	{ value => 'major' },
-	    "Select only records for which at least 50% of the temporal locality range",
+	    "Select only records for which more than 50% of the temporal locality range",
 	    "falls within the specified time range. For diversity output, this rule also",
 	    "guarantees that each occurrence will fall into at most one temporal bin.",
 	    "Many occurrences will be ignored because their temporal locality is more",
 	    "than twice as wide as any of the overlapping bins, but fewer will be ignored",
             "than with the C<contain> rule. This is the B<default> timerule unless you",
 	    "specifically select one.",
-	{ value => 'buffer' },
-	    "Select only records whose temporal locality overlaps the specified time range",
-	    "and also falls completely within a 'buffer zone' around this range.  This",
-	    "buffer defaults to 12 million years for the Paleozoic and Mesozoic and 5",
-	    "million years for the Cenozoic. You can override the buffer width using the",
-	    "parameters B<C<timebuffer>> and B<C<late_buffer>>.  For diversity output,",
-	    "some occurrences will be counted as falling into more than one bin.  Some",
-	    "occurrences will still be ignored, but fewer than with the above rules.",
+	{ value => 'buffer', undocumented => 1 },
+	    # "Select only records whose temporal locality overlaps the specified time range",
+	    # "and also falls completely within a 'buffer zone' around this range.  This",
+	    # "buffer defaults to 12 million years for the Paleozoic and Mesozoic and 5",
+	    # "million years for the Cenozoic. You can override the buffer width using the",
+	    # "parameters B<C<timebuffer>> and B<C<late_buffer>>.  For diversity output,",
+	    # "some occurrences will be counted as falling into more than one bin.  Some",
+	    # "occurrences will still be ignored, but fewer than with the above rules.",
 	{ value => 'overlap' },
 	    "Select only records whose temporal locality overlaps the specified time",
 	    "range by any amount. This is the most permissive rule.  For diversity output,",
@@ -211,12 +182,10 @@ sub initialize {
 	    "Return intervals from the specified time scale(s). The value",
 	    "of this parameter should be one or more scale names or numbers, separated by",
 	    "commas.",
-	# { param => 'scale_level', valid => POS_VALUE, list => ',', alias => 'level' },
-	#     "Return intervals from the specified scale level(s).  The value of this",
-	#     "parameter can be one or more level numbers separated by commas.",
 	{ param => 'id', valid => VALID_IDENTIFIER('INT'), list => ',', alias => 'interval_id',
 	  bad_value => '_' },
-	    "Return intervals that have the specified identifier(s).",
+	    "Return intervals that have the specified identifier(s). You may enter one or more,",
+	    "separated by commas.",
 	{ param => 'name', list => ',' },
 	    "Return intervals that have the specified name(s).",
 	{ param => 'type', valid => '1.2:intervals:types', list => ',' },
@@ -225,10 +194,19 @@ sub initialize {
 	    "Return only intervals that are at least this old",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
 	    "Return only intervals that are at most this old",
+	{ optional => 'timerule', valid => '1.2:timerules' },
+	    "You can use this parameter with C<max_ma> and C<min_ma> to determine which",
+	    "intervals fall into the specified time range under the specified rule.",
+	    "Accepted values are: ", "=over", 
+	    "=item contain", "Report intervals that are contained in the specified range",
+	    "=item major", "Report intervals for which more than 50% of their range overlaps",
+	    "the specified range",
+	    "=item overlap", "Report intervals whose range overlaps the specified range",
+	    "=back",
 	{ optional => 'order', valid => ENUM_VALUE('age', 'age.asc', 'age.desc', 
 						   'name', 'name.asc', 'name.desc') },
-	    "Return the intervals in order starting as specified.  Possible values include ",
-	    "C<age>, C<name>.");
+	    "Return the intervals in the specified order.  Accepted values are ",
+	    "C<age>, C<name>. You may append C<.asc> or C<.desc> to either.");
     
     $ds->define_ruleset('1.2:intervals:list' => 
 	{ require => '1.2:intervals:selector' },
@@ -242,17 +220,16 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $ds->define_ruleset('1.2:scales:specifier' =>
+    $ds->define_ruleset('1.2:timescales:specifier' =>
 	{ param => 'id', alias => ['scale_id'], valid => VALID_IDENTIFIER('TSC') },
 	    "Return the time scale corresponding to the specified identifier.",
 	{ param => 'name', alias => ['scale_name', 'scale'], valid => ANY_VALUE },
 	    "Return the time scale corresponding to the specified name.",
 	{ at_most_one => ['id', 'name'] });
     
-    $ds->define_ruleset('1.2:scales:selector' =>
-	"To return all time scales, use the parameter 'all_records'.",
+    $ds->define_ruleset('1.2:timescales:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
-	    "List all intervals known to the database.",
+	    "List all time scales known to the database.",
 	{ param => 'id', alias => ['scale_id'], valid => VALID_IDENTIFIER('TSC'), list => ',' },
 	    "Return time scales that have the specified identifier(s).",
 	    "You may specify more than one, as a comma-separated list.",
@@ -263,24 +240,24 @@ sub initialize {
 	    "Return only time scales that contain the specified interval type(s).",
 	    "You may specify more than one, as a comma-separated list:",
 	{ param => 'min_ma', valid => DECI_VALUE(0) },
-	    "Return only time scales whose early boundary is at least this old.",
+	    "Return only time scales whose late boundary is at least this old.",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
-	    "Return only time scales whose late boundary is at most this old.");
+	    "Return only time scales whose early boundary is at most this old.");
     
-    $ds->define_ruleset('1.2:scales:single' =>
-	{ require => '1.2:scales:specifier' },
+    $ds->define_ruleset('1.2:timescales:single' =>
+	{ require => '1.2:timescales:specifier' },
 	{ allow => '1.2:intervals:show' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
-    $ds->define_ruleset('1.2:scales:list' =>
-	{ require => '1.2:scales:selector' },
+    $ds->define_ruleset('1.2:timescales:list' =>
+	{ require => '1.2:timescales:selector' },
 	{ allow => '1.2:intervals:show' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    $ds->define_ruleset('1.2:scales:diagram' =>
-	{ require => '1.2:scales:selector' },
+    $ds->define_ruleset('1.2:timescales:diagram' =>
+	{ require => '1.2:timescales:selector' },
 	{ optional => 'display', valid => ANY_VALUE },
 	    "Display only the portion of the timescale corresponding to the",
 	    "named interval or interval range. To specify a range, separate",
@@ -422,6 +399,8 @@ sub list {
     my $has_max = defined $max_ma && $max_ma ne '';
     my $has_min = defined $min_ma && $min_ma ne '';
     
+    my $timerule = $request->clean_param('timerule') || 'contain';
+    
     my %has_type = map { $_ => 1 } $request->clean_param_list('type');
     
     my @int_select = $request->clean_param_list('id');
@@ -459,8 +438,11 @@ sub list {
 		    
 		    my $int = int_record($i);
 		    
-		    next if $has_max && $int->{b_age} > $max_ma;
-		    next if $has_min && $int->{t_age} < $min_ma;
+		    if ( $has_max || $has_min )
+		    {
+			next if exclude_by_time($int, $timerule, $max_ma, $min_ma);
+		    }
+		    
 		    next if %has_type && ! $has_type{$int->{type}};
 		    next if @scale_select && ! $scale_selected{$int->{scale_no}};
 		    
@@ -506,8 +488,13 @@ sub list {
 	{
 	    foreach my $int ( ts_intervals($s) )
 	    {
-		next if $has_max && $int->{b_age} > $max_ma;
-		next if $has_min && $int->{t_age} < $min_ma;
+		if ( $has_max || $has_min )
+		{
+		    next if exclude_by_time($int, $timerule, $max_ma, $min_ma);
+		}
+		
+		# next if $has_max && $int->{b_age} > $max_ma;
+		# next if $has_min && $int->{t_age} < $min_ma;
 		next if %has_type && ! $has_type{$int->{type}};
 		
 		push @result, $int;
@@ -572,11 +559,84 @@ sub list {
 }
 
 
-# list_scales ( )
+# exclude_by_time ( interval, timerule, max_ma, min_ma )
+# 
+# Return true if the specified interval falls outside of the specified range
+# according to the specified timerule. Return false otherwise.
+
+sub exclude_by_time {
+    
+    my ($int, $timerule, $max_ma, $min_ma) = @_;
+    
+    if ( $timerule eq 'contain' )
+    {
+	return 1 if defined $max_ma && $max_ma ne '' && $int->{b_age} > $max_ma;
+	return 1 if defined $min_ma && $min_ma ne '' && $int->{t_age} < $min_ma;
+    }
+    
+    elsif ( $timerule eq 'overlap' )
+    {
+	return 1 if defined $max_ma && $max_ma ne '' && $int->{t_age} >= $max_ma;
+	return 1 if defined $min_ma && $min_ma ne '' && $int->{b_age} <= $min_ma;
+    }
+    
+    else # timerule = 'major'
+    {
+	if ( defined $max_ma && $max_ma ne '' )
+	{
+	    return 1 if $int->{t_age} >= $max_ma;
+	    
+	    if ( defined $min_ma && $min_ma ne '' )
+	    {
+		return 1 if $int->{b_age} <= $min_ma;
+		
+		if ( $int->{b_age} >= $max_ma )
+		{
+		    if ( $int->{t_age} >= $min_ma )
+		    {
+			return 1 if ($max_ma - $int->{t_age}) / ($int->{b_age} - $int->{t_age}) < 0.5;
+		    }
+		    
+		    else
+		    {
+			return 1 if ($max_ma - $min_ma) / ($int->{b_age} - $int->{t_age}) < 0.5;
+		    }
+		}
+		
+		else
+		{
+		    return 1 if ($int->{b_age} - $min_ma) / ($int->{b_age} - $int->{t_age}) < 0.5;
+		}
+	    }
+	    
+	    elsif ( $int->{b_age} > $max_ma )
+	    {
+		return 1 if ($max_ma - $int->{t_age}) / ($int->{b_age} - $int->{t_age}) < 0.5;
+	    }
+	}
+	
+	elsif ( defined $min_ma && $min_ma ne '' )
+	{
+	    return 1 if $int->{b_age} <= $min_ma;
+	    
+	    if ( $int->{t_age} < $min_ma )
+	    {
+		return 1 if ($int->{b_age} - $min_ma) / ($int->{b_age} - $int->{t_age}) < 0.5;
+	    }
+	}
+    }
+    
+    # If this interval is not excluded, return false.
+    
+    return '';
+}
+
+
+# list_timescales ( )
 # 
 # Query the database for time scales.
 
-sub list_scales {
+sub list_timescales {
     
     my ($request, $arg) = @_;
     
@@ -710,11 +770,11 @@ sub query_colls {
 }
 
 
-# diagram_scales ( )
+# diagram_timescales ( )
 # 
 # Generate a diagram of the specified timescale(s).
 
-sub diagram_scales {
+sub diagram_timescales {
     
     my ($request) = @_;
     
@@ -872,7 +932,7 @@ sub process_interval_params {
 	
 	unless ( @ids )
 	{
-	    push @errors, "No valid interval identifiers were given.";
+	    push @warnings, "No valid interval identifiers were given.";
 	}
     }
     
@@ -1032,6 +1092,8 @@ sub interval_age_range {
 sub bin_by_interval {
     
     my ($request, $record, $bounds_list, $timerule, $timebuffer, $latebuffer) = @_;
+    
+    return unless defined $record->{early_age} && defined $record->{late_age};
     
     my $occ_early = $record->{early_age} + 0;
     my $occ_late = $record->{late_age} + 0;
