@@ -49,17 +49,18 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "taxonomy|t" => \$taxon_tables,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
-	    "prevalence|P" => \$prevalence_tables,
 	    "M" => \$occurrence_int_maps,
 	    "S" => \$taxon_summary_table,
 	    "countries|C" => \$country_map,
 	    "listcache|y" => \$old_taxon_tables,
+	    "prevalence|p" => \$prevalence_tables,
 	    "diversity|d" => \$diversity_tables,
 	    "steps|T=s" => \$taxon_steps );
 
 my $cmd_line_db_name = shift;
 
-# The argument 'nightly' is the same as -cmty. 
+# The argument 'nightly' is the same as -cmty. If this is being run on
+# Sunday, rebuild the diversity tables as well.
 
 if ( $opt_nightly )
 {
@@ -67,6 +68,12 @@ if ( $opt_nightly )
     $collection_tables = 1;
     $occurrence_tables = 1;
     $old_taxon_tables = 1;
+    
+    my (@time) = localtime(time);
+    if ( $time[6] == 0 ) { 
+	$diversity_tables = 1;
+	$prevalence_tables = 1;
+    }
 }
 
 # The argument 'log' specifies that output should be written to the specified file.
@@ -314,7 +321,7 @@ sub BuildTables {
     }
     
     
-    # The option -d causes the diversity tables to be (re)computed.
+    # The option -d causes the diversity and prevalence tables to be (re)computed.
     
     if ( $diversity_tables )
     {
