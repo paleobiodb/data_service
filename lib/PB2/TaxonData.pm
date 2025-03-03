@@ -2093,46 +2093,58 @@ sub get_taxon {
 	
 	my $data = ['SIMPLE','SIZE','APP'];
 	
-	unless ( $r->{phylum_no} or (defined $r->{taxon_rank} && $r->{taxon_rank} <= 20) )
+	my $numeric_rank;
+	
+	if ( $r->{taxon_rank} =~ /[a-zA-Z]/ )
+	{
+	    $numeric_rank = $TAXON_RANK{$r->{taxon_rank}} || 0;
+	}
+	
+	else
+	{
+	    $numeric_rank = $r->{taxon_rank} || 0;
+	}
+	
+	unless ( $r->{phylum_no} or $numeric_rank <= 20 )
 	{
 	    $r->{phylum_list} = [ $taxonomy->list_taxa($taxon_no, 'all_children',
 						     { limit => 10, order => 'size.desc', rank => 20, fields => $data } ) ];
 	}
 	
-	unless ( $r->{class_no} or $r->{taxon_rank} <= 17 )
+	unless ( $r->{class_no} or $numeric_rank <= 17 )
 	{
 	    $r->{class_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => 'size.desc', rank => 17, fields => $data } ) ];
 	}
 	
-	unless ( $r->{order_no} or $r->{taxon_rank} <= 13 )
+	unless ( $r->{order_no} or $numeric_rank <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
 	    $r->{order_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => $order, rank => 13, fields => $data } ) ];
 	}
 	
-	unless ( $r->{family_no} or $r->{taxon_rank} <= 9 )
+	unless ( $r->{family_no} or $numeric_rank <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
 	    $r->{family_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						     { limit => 10, order => $order, rank => 9, fields => $data } ) ];
 	}
 	
-	if ( $r->{taxon_rank} > 5 )
+	if ( $numeric_rank > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
 	    $r->{genus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						    { limit => 10, order => $order, rank => 5, fields => $data } ) ];
 	}
 	
-	if ( $r->{taxon_rank} == 5 )
+	if ( $numeric_rank == 5 )
 	{
 	    $r->{subgenus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 4, fields => $data } ) ];
 	}
 	
-	if ( $r->{taxon_rank} == 5 or $r->{taxon_rank} == 4 )
+	if ( $numeric_rank == 5 or $numeric_rank == 4 )
 	{
 	    $r->{species_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 3, fields => $data } ) ];
