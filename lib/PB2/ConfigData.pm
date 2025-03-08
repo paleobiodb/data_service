@@ -23,7 +23,7 @@ use Moo::Role;
 # Variables to store the configuration information.
 
 our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, $LITHOLOGIES, $LITH_ADJECTIVES,
-     $PRES_MODES, $PCOORD_MODELS);
+     $PRES_MODES, $PCOORD_MODELS, $RESEARCH_GROUPS);
 
 
 # Initialization
@@ -59,6 +59,8 @@ sub initialize {
 	    "Return preservation modes.",
 	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
 	    "Return available paleogeography models.",
+	{ value => 'resgroups', maps_to => '1.2:config:resgroups' },
+	    "Return research group names.",
 	{ value => 'all', maps_to => '1.2:config:all' },
 	    "Return all of the above blocks of information.");
     
@@ -91,9 +93,9 @@ sub initialize {
     $ds->define_block('1.2:config:continents' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'con', if_field => 'continent_name' },
 	    "The configuration section: 'con' for continents",
-	{ output => 'continent_name', com_name => 'nam' },
+	{ output => 'name', pbdb_name => 'continent_name', com_name => 'nam' },
 	    "Continent name",
-	{ output => 'continent_code', com_name => 'cod' },
+	{ output => 'cc', pbdb_name => 'continent_code', com_name => 'cod' },
 	    "The code used to indicate this continent when selecting fossil occurrences by continent");
     
     $ds->define_block('1.2:config:countries' =>
@@ -103,7 +105,8 @@ sub initialize {
 	    "Country name",
 	{ output => 'cc', pbdb_name => 'country_code', com_name => 'cod' },
 	    "The code used to indicate this continent when selecting fossil occurrences by country.",
-	    "These are the standard ISO-3166-1 country codes.",
+	    "These are the standard ISO-3166-1 country codes, except for the ocean basins which",
+	    "are coded as O1 through O7.",
 	{ output => 'continent', com_name => 'con' },
 	    "The code for the continent on which this country is located");
     
@@ -138,13 +141,21 @@ sub initialize {
 	{ output => 'description', com_name => 'dsc'},
 	    "Description of the model, including the bibliographic reference for the source.");
     
+    $ds->define_block('1.2:config:resgroups' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'rsg', if_field => 'group_name' },
+	{ output => 'group_name', com_name => 'rsg' },
+	    "Research group name");
+    
     $ds->define_block('1.2:config:all' =>
 	{ include => '1.2:config:geosum' },
 	{ include => '1.2:config:ranks' },
 	{ include => '1.2:config:continents' },
 	{ include => '1.2:config:countries' },
 	{ include => '1.2:config:lithologies' },
-	{ include => '1.2:config:pgmodels' });
+	{ include => '1.2:config:lithadj' },
+	{ include => '1.2:config:pres_modes' },
+	{ include => '1.2:config:pgmodels' },
+	{ include => '1.2:config:resgroups' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
@@ -184,7 +195,7 @@ sub initialize {
     # Get the list of continents from the database.
     
     $CONTINENTS = $dbh->selectall_arrayref("
-	SELECT continent as continent_code, name as continent_name FROM $CONTINENT_DATA", { Slice => {} });
+	SELECT continent as cc, name FROM $CONTINENT_DATA", { Slice => {} });
     
     # Get the list of countries from the database.
     
@@ -261,6 +272,15 @@ sub initialize {
 	    }
 	}
     }
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'research_group'");
+    
+    my @resgroup_list = $field_type =~ /'(.*?)'/g;
+    
+    $RESEARCH_GROUPS = [ ];
+    
+    push @$RESEARCH_GROUPS, { group_name => $_ } foreach @resgroup_list;
 }
 
 
@@ -306,6 +326,7 @@ sub get {
     push @result, @$LITH_ADJECTIVES if $request->has_block('lithadj') or $show_all;
     push @result, @$PRES_MODES if $request->has_block('presmodes') or $show_all;
     push @result, @$PCOORD_MODELS if $request->has_block('pgmodels') or $show_all;
+    push @result, @$RESEARCH_GROUPS if $request->has_block('resgroups') or $show_all;
     
     if ( my $offset = $request->result_offset(1) )
     {

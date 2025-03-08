@@ -16,7 +16,7 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL
+use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOBAL $PVL_COLLS
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use IntervalBase qw(INTL_SCALE BIN_SCALE int_defined);
@@ -26,6 +26,7 @@ use TaxonDefs qw(%RANK_STRING %TAXON_RANK %UNS_RANK %UNS_NAME);
 
 use Carp qw(carp croak);
 use Try::Tiny;
+use List::Util qw(any);
 
 use Moo::Role;
 
@@ -625,6 +626,8 @@ sub initialize {
 	    "Count by epoch",
 	{ value => 'period' },
 	    "Count by period",
+	{ value => 'era' },
+	    "Count by era",
 	{ value => 'bin' },
 	    "Count by ten million year bin");
     
@@ -1634,12 +1637,9 @@ sub diversity {
     $tables->{pl} = 1;
     $tables->{tv} = 1;
     $tables->{c} = 1;
-    $tables->{im} = 1;
-    $tables->{ei} = 1;
-    $tables->{li} = 1;
     
-    my @fields = ('o.occurrence_no', 'tv.orig_no', 'tv.rank', 'im.cx_int_no as interval_no, o.early_age, o.late_age',
-		  'ei.interval_name as early_name', 'li.interval_name as late_name', 'tv.name as accepted_name');
+    my @fields = ('o.occurrence_no', 'tv.orig_no', 'tv.rank', 'tv.name as accepted_name',
+		  'c.early_age, c.late_age');
     
     if ( $request->clean_param('recent') )
     {
@@ -1756,14 +1756,22 @@ sub quickdiv {
     # result. This is possible if the only filters are geographic, temporal,
     # and/or taxonomic.
     
-    my @filters = $request->generateQuickDivFilters('d', $tables);
+    my @filters = $request->generateMainFilters('quickdiv', 'c', $tables);
+    push @filters, $request->generateOccFilters($tables, 'o', 1);
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
+    # If we need to use any tables other than the summary bins, use the full
+    # diversity output instead.
     
-    # If an empty list of filters was returned, redirect to the 'diversity'
-    # route to use the less efficient but more flexible procedure.
-    
-    unless ( @filters )
+    if ( $tables->{c} || $tables->{cc} || $tables->{o} || $tables->{non_summary} )
     {
 	return $request->diversity();
+    }
+    
+    # Otherwise, generate just the filters applicable to quickdiv.
+    
+    else
+    {
+	@filters = $request->generateQuickDivFilters('d', $tables);
     }
     
     # If the 'private' parameter was specified, add a warning.
@@ -1778,7 +1786,6 @@ sub quickdiv {
     # the appropriate SQL statement to generate this count.
     
     my $count_what = $request->clean_param('count') || 'genera';
-    my $filter_expr = join(' and ', @filters);
     
     my $scale_no = $request->clean_param('scale_id') || 1;
     my $reso = $request->clean_param('time_reso') || 'age';
@@ -1789,39 +1796,24 @@ sub quickdiv {
     my $qscale = $dbh->quote($scale_no);
     my $qtype = $dbh->quote($reso);
     
-    my $holocene = int_defined('holocene');
-    my $grnl = int_defined('greenlandian');
-    
-    # # If no value was given for 'reso', use the maximum level of the selected scale.
-    
-    # if ( $scale_id == 1 )
-    # {
-    # 	if ( $reso eq 'era' )
-    # 	{
-    # 	    $reso = 2;
-    # 	}
-    # 	elsif ( $reso eq 'period' )
-    # 	{
-    # 	    $reso = 3;
-    # 	}
-    # 	elsif ( $reso eq 'epoch' )
-    # 	{
-    # 	    $reso = 4;
-    # 	}
-    # 	else
-    # 	{
-    # 	    $reso = 5;
-    # 	}
-    # }
-    
-    # else
-    # {
-    # 	$reso = $PB2::IntervalData::SCALE_DATA{$scale_id}{levels};
-    # }
-    
     # Now check for parameters 'interval', 'interval_id', 'min_ma', 'max_ma'.
     
     my ($max_ma, $min_ma, $early_interval_no, $late_interval_no) = $request->process_interval_params;
+    
+    if ( defined $max_ma && $max_ma > 0 )
+    {
+	push @filters, "early_age <= $max_ma";
+	$tables->{i} = 1;
+    }
+    
+    if ( defined $min_ma && $min_ma > 0 )
+    {
+	push @filters, "late_age >= $min_ma";
+	$tables->{i} = 1;
+    }
+    
+    # $age_limit .= " and early_age <= $max_ma" if defined $max_ma && $max_ma > 0;
+    # $age_limit .= " and late_age >= $min_ma" if defined $min_ma && $min_ma > 0;
     
     # my @interval_nos = $request->safe_param_list('interval_id');
     # my $interval_name = $request->clean_param('interval');
@@ -1884,46 +1876,53 @@ sub quickdiv {
     # Now generate the appropriate SQL expression based on what we are trying
     # to count.
     
-    my $type_clause = "sm.type = $qtype";
+    $tables->{i} = 1;
     
-    if ( $reso eq 'age' )
-    {
-	$type_clause = "(sm.type = $qtype and sm.interval_no <> '$grnl' or sm.interval_no = '$holocene')";
-    }
+    push @filters, "sm.scale_no = $qscale", "sm.type = $qtype";
+    
+    my $filter_expr = join(' and ', @filters);
     
     my $main_table = $tables->{use_global} ? $DIV_GLOBAL : $DIV_MATRIX;
     my $other_joins = $request->generateQuickDivJoins('d', $tables, $taxonomy);
     
+    unless ( $tables->{use_global} )
+    {
+	$other_joins = "JOIN $COLL_BINS as s using (bin_id, interval_no)\n$other_joins";
+    }
+    
     if ( $count_what eq 'genera' || $count_what eq 'genera_plus' || $count_what eq 'genus' ||
 	 $count_what eq 'genus_plus' )
     {
-	$sql = "SELECT d.interval_no, count(distinct d.genus_no) as sampled_in_bin, sum(d.n_occs) as n_occs
+	$sql = "SELECT d.interval_no, count(distinct d.genus_no) as sampled_in_bin,
+		    sum(d.n_occs) as n_occs, i.interval_name, i.early_age, i.late_age
 		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no)
 			$other_joins
-		WHERE $filter_expr and sm.scale_no = $qscale and $type_clause
-		GROUP BY interval_no";
+		WHERE $filter_expr and d.genus_no <> 0
+		GROUP BY interval_no ORDER BY sm.sequence";
 	
 	$request->add_warning("The option 'genera_plus' is not supported with '/occs/quickdiv'.  If you want to promote subgenera to genera, use the operation '/occs/diversity' instead.") if $count_what eq 'genera_plus';
     }
     
     elsif ( $count_what eq 'families' || $count_what eq 'family' )
     {
-	$sql = "SELECT d.interval_no, count(distinct ph.family_no) as sampled_in_bin, sum(d.n_occs) as n_occs
+	$sql = "SELECT d.interval_no, count(distinct ph.family_no) as sampled_in_bin, 
+		    sum(d.n_occs) as n_occs, i.interval_name, i.early_age, i.late_age
 		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no)
 			JOIN $INTS_TABLE as ph using (ints_no)
 			$other_joins
-		WHERE $filter_expr and sm.scale_no = $qscale and $type_clause
-		GROUP BY interval_no";
+		WHERE $filter_expr and ph.family_no <> 0
+		GROUP BY interval_no ORDER BY sm.sequence";
     }
     
     elsif ( $count_what eq 'orders' || $count_what eq 'order' )
     {
-	$sql = "SELECT d.interval_no, count(distinct ph.order_no) as sampled_in_bin, sum(d.n_occs) as n_occs
+	$sql = "SELECT d.interval_no, count(distinct ph.order_no) as sampled_in_bin, 
+		    sum(d.n_occs) as n_occs, i.interval_name, i.early_age, i.late_age
 		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no)
 			JOIN $INTS_TABLE as ph using (ints_no)
 			$other_joins
-		WHERE $filter_expr and sm.scale_no = $qscale and $type_clause
-		GROUP BY interval_no";
+		WHERE $filter_expr and ph.order_no <> 0
+		GROUP BY interval_no ORDER BY sm.sequence";
     }
     
     else
@@ -1932,20 +1931,16 @@ sub quickdiv {
 	return $request->list_result();
     }
     
-    my $age_limit = '';
-    $age_limit .= " and early_age <= $max_ma" if defined $max_ma && $max_ma > 0;
-    $age_limit .= " and late_age >= $min_ma" if defined $min_ma && $min_ma > 0;
+    # my $outer_sql = "
+    # 		SELECT interval_no, interval_name, early_age, late_age, d.sampled_in_bin, d.n_occs
+    # 		FROM $INTERVAL_DATA JOIN $SCALE_MAP as sm using (interval_no)
+    # 		    LEFT JOIN ($sql) as d using (interval_no)
+    # 		WHERE sm.scale_no = $qscale and $type_clause $age_limit
+    # 		ORDER BY early_age";
     
-    my $outer_sql = "
-		SELECT interval_no, interval_name, early_age, late_age, d.sampled_in_bin, d.n_occs
-		FROM $INTERVAL_DATA JOIN $SCALE_MAP as sm using (interval_no)
-		    LEFT JOIN ($sql) as d using (interval_no)
-		WHERE sm.scale_no = $qscale and $type_clause $age_limit
-		ORDER BY early_age";
+    $request->{ds}->debug_line("$sql\n") if $request->debug;
     
-    $request->{ds}->debug_line("$outer_sql\n") if $request->debug;
-    
-    $result = $dbh->selectall_arrayref($outer_sql, { Slice => {} });
+    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
     
     # Now trim empty bins from the start and end of the list.
     
@@ -2245,125 +2240,30 @@ sub prevalence {
 	$request->add_warning("The parameter 'private' does not work with this operation.");
     }
     
-    # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.  First see if we can generate
-    # a simple (and quick) expression based on the request parameters.
-    
-    my $tables = { };
-    
-    my @filters = $request->generateQuickDivFilters('p', $tables);
-    
-    if ( @filters )
-    {
-	# Add an interval filter if one was specified.
-	
-	my $interval_name = $request->clean_param('interval');
-	my $interval_string;
-	
-	if ( $interval_name )
-	{
-	    my $quoted = $dbh->quote($interval_name);
-	    
-	    my $sql = "
-		SELECT interval_no FROM $INTERVAL_DATA
-		WHERE interval_name like $quoted";
-	    
-	    ($interval_string) = $dbh->selectrow_array($sql);
-	    
-	    unless ( $interval_string )
-	    {
-		$interval_string = -1;
-		$request->add_warning("unknown interval '$interval_name'");
-	    }
-	}
-	
-	else
-	{
-	    my @interval_nos = $request->safe_param_list('interval_id');
-	    $interval_string = join(',', @interval_nos);
-	}
-	
-	$interval_string ||= '751';
-	push @filters, "p.interval_no in ($interval_string)";
-	
-	# If the 'strict' parameter was given, make sure we haven't generated any
-	# warnings. 
-	
-	$request->strict_check;
-	$request->extid_check;
-	
-	# Then generate the required SQL statement.
-	
-	my $filter_string = join(' and ', @filters);
-	
-	no warnings 'uninitialized';
-	
-	if ( $tables->{use_global} )
-	{
-	    $request->{main_sql} = "
-		SELECT $fields
-		FROM $PVL_GLOBAL as p
-		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
-		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
-		WHERE $filter_string
-		GROUP BY orig_no
-		ORDER BY n_occs desc LIMIT $raw_limit";
-	}
-	
-	else
-	{
-	    $request->{main_sql} = "
-		SELECT $fields
-		FROM $PVL_MATRIX as p
-		    JOIN $BIN_LOC as bl using (bin_id)
-		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
-		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
-		WHERE $filter_string
-		GROUP BY orig_no
-		ORDER BY n_occs desc LIMIT $raw_limit";
-	}
-	
-	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
-	
-	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
-	
-	$request->generate_prevalence($result, $limit, $detail);
-	return;
-    }
-    
-    # If the simple filters don't work, we must generate an expression linking
-    # to the summary table.
-    
-    $tables = { };
-    
-    @filters = $request->generateMainFilters('summary', 's', $tables);
-    push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
-    # push @filters, $request->generate_crmod_filters('o', $tables);
-    # push @filters, $request->generate_ent_filters('o', $tables);
-    
-    #$request->add_table('oc');
-    
     # If we were asked to count rows, modify the query accordingly
     
     my $calc = $request->sql_count_clause;
     
-    # Determine which fields and tables are needed to display the requested
-    # information.  If the given parameters can be fulfilled by just querying
-    # for summary bins, we do so.  Otherwise, we have to go through the entire
-    # set of occurrences again.  In this case, we must include 'o' in the table
-    # hash, so that the proper identification filter (idtype) is added to the
-    # query.
+    # Construct a list of filter expressions that must be added to the query in
+    # order to select the proper result set.
     
-    if ( $tables->{o} || $tables->{cc} || $tables->{c} || $tables->{non_summary} )
+    my $tables = { };
+    
+    my @filters = $request->generateMainFilters('prevalence', 's', $tables);
+    push @filters, $request->generateOccFilters($tables, 'o', 1);
+    push @filters, $request->generate_common_filters( { occs => 'oc', colls => 'cc', bare => 'oc' }, $tables );
+    
+    # If we need the occurrences table in order to fulfill this query, then
+    # re-do the filters to use the collection matrix. Generate an SQL statement
+    # that includes both the collection matrix and the occurrence matrix. 
+    
+    if ( $tables->{o} || $tables->{oc} )
     {
-	$tables = { o => 1 };
+	$tables->{c} = 1;
 	
-	@filters = $request->generateMainFilters('list', 'c', $tables);
+	@filters = $request->generateMainFilters('prevalence', 'c', $tables);
 	push @filters, $request->generateOccFilters($tables, 'o', 1);
-	push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
-	# push @filters, $request->generate_crmod_filters('o', $tables);
-	# push @filters, $request->generate_ent_filters('o', $tables);
+	push @filters, $request->generate_common_filters( { occs => 'oc', colls => 'cc', bare => 'oc' }, $tables );
 	
 	my $fields = "ph.phylum_no, ph.class_no, ph.order_no, count(*) as n_occs";
 	
@@ -2371,7 +2271,6 @@ sub prevalence {
 	$tables->{ph} = 1;
 	
 	push @filters, "c.access_level = 0";
-	# @filters = grep { $_ !~ qr{^s.interval_no} } @filters;
 	
 	my $filter_string = join(' and ', @filters);
 	
@@ -2381,11 +2280,8 @@ sub prevalence {
 	$request->strict_check;
 	$request->extid_check;
 	
-	# Determine which extra tables, if any, must be joined to the query.  Then
-	# construct the query.
-	
 	my $join_list = $request->generateJoinList('c', $tables);
-	
+    
 	$request->{main_sql} = "
 	SELECT $fields
 	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
@@ -2402,36 +2298,138 @@ sub prevalence {
 	
 	$request->generate_prevalence($result, $limit, $detail);
 	return;
-	
-	# my $sth = $dbh->prepare($request->{main_sql});
-	# $sth->execute();
-	
-	# return $request->generate_prevalence($sth, 'taxon_trees');
     }
     
-    # Summary
+    # If we need either the collection table or some other non-summary table,
+    # then re-do the filters using the collection matrix instead of the summary
+    # matrix.
     
-    else
+    elsif ( $tables->{cc} || $tables->{c} || $tables->{non_summary} )
     {
+	$tables->{c} = 1;
+	
+	@filters = $request->generateMainFilters('prevalence', 'c', $tables);
+	push @filters, $request->generate_common_filters( { colls => 'cc' }, $tables );
+	
+	my $fields = "p.phylum_no, p.class_no, p.order_no, count(*) as n_occs";
+	
+	# $tables->{t} = 1;
+	# $tables->{ph} = 1;
+	
+	push @filters, "c.access_level = 0";
+	# @filters = grep { $_ !~ qr{^s.interval_no} } @filters;
+	
+	my $filter_string = join(' and ', @filters);
+	
 	# If the 'strict' parameter was given, make sure we haven't generated any
 	# warnings. 
 	
 	$request->strict_check;
 	$request->extid_check;
 	
-	# Construct and execute the necessary SQL statement.
+	# Determine which extra tables, if any, must be joined to the query.  Then
+	# construct the query.
 	
-	push @filters, "s.access_level = 0";
-	my $filter_string = join(' and ', @filters);
+	my $join_list = $request->PB2::CollectionData::generateJoinList('c', $tables);
+	
+	$join_list = "JOIN collections as cc using (collection_no)\n$join_list"
+	    if $tables->{cc};
 	
 	$request->{main_sql} = "
+	SELECT $fields
+	FROM $PVL_COLLS as p JOIN $COLL_MATRIX as c using (collection_no)
+		$join_list
+        WHERE $filter_string
+	GROUP BY coalesce(p.order_no, p.class_no, p.phylum_no)
+	ORDER BY n_occs desc LIMIT $raw_limit";
+	
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
+	
+	# Then prepare and execute the main query.
+	
+	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
+	
+	$request->generate_prevalence($result, $limit, $detail);
+	return;
+    }
+    
+    # Otherwise, we can just use either the global prevalence matrix or the
+    # per-bin prevalence matrix.
+    
+    else
+    {
+	# # Add an interval filter if one was specified.
+	
+	# my $interval_name = $request->clean_param('interval');
+	# my $interval_string;
+	
+	# if ( $interval_name )
+	# {
+	#     my $quoted = $dbh->quote($interval_name);
+	    
+	#     my $sql = "
+	# 	SELECT interval_no FROM $INTERVAL_DATA
+	# 	WHERE interval_name like $quoted";
+	    
+	#     ($interval_string) = $dbh->selectrow_array($sql);
+	    
+	#     unless ( $interval_string )
+	#     {
+	# 	$interval_string = -1;
+	# 	$request->add_warning("unknown interval '$interval_name'");
+	#     }
+	# }
+	
+	# else
+	# {
+	#     my @interval_nos = $request->safe_param_list('interval_id');
+	#     $interval_string = join(',', @interval_nos);
+	# }
+	
+	# $interval_string ||= '751';
+	# push @filters, "p.interval_no in ($interval_string)";
+	
+	# If the 'strict' parameter was given, make sure we haven't generated any
+	# warnings.
+	
+	$request->strict_check;
+	$request->extid_check;
+	
+	# Then generate the required SQL statement.
+	
+	unless ( any { /^\w+[.]interval/ } @filters )
+	{
+	    push @filters, "p.interval_no = 0";
+	}
+	
+	my $filter_string = join(' and ', @filters);
+	
+	my $join_list = $request->generateQuickDivJoins('p', $tables);
+	
+	no warnings 'uninitialized';
+	
+	if ( $tables->{use_local} )
+	{
+	    $request->{main_sql} = "
 		SELECT $fields
 		FROM $PVL_MATRIX as p JOIN $COLL_BINS as s using (bin_id, interval_no)
-		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
-		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
+			$join_list
 		WHERE $filter_string
-		GROUP BY orig_no
+		GROUP BY coalesce(order_no, class_no, phylum_no)
 		ORDER BY n_occs desc LIMIT $raw_limit";
+	}
+	
+	else
+	{
+	    $filter_string =~ s/s[.]interval_no/p.interval_no/;
+	    
+	    $request->{main_sql} = "
+		SELECT $fields
+		FROM $PVL_GLOBAL as p
+		WHERE $filter_string
+		GROUP BY coalesce(order_no, class_no, phylum_no)
+		ORDER BY n_occs desc LIMIT $raw_limit";
+	}
 	
 	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
 	
@@ -2440,6 +2438,50 @@ sub prevalence {
 	$request->generate_prevalence($result, $limit, $detail);
 	return;
     }
+    
+    # # If the simple filters don't work, we must generate an expression linking
+    # # to the summary table.
+    
+    # $tables = { };
+    
+    # @filters = $request->generateMainFilters('summary', 's', $tables);
+    # push @filters, $request->generateOccFilters($tables, 'o', 1);
+    # push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
+    # # push @filters, $request->generate_crmod_filters('o', $tables);
+    # # push @filters, $request->generate_ent_filters('o', $tables);
+    
+    # #$request->add_table('oc');
+    
+    
+    # # Summary
+    
+    # else
+    # {
+    # 	# If the 'strict' parameter was given, make sure we haven't generated any
+    # 	# warnings. 
+	
+    # 	$request->strict_check;
+    # 	$request->extid_check;
+	
+    # 	# Construct and execute the necessary SQL statement.
+	
+    # 	push @filters, "s.access_level = 0";
+    # 	my $filter_string = join(' and ', @filters);
+	
+    # 	$request->{main_sql} = "
+    # 		SELECT $fields
+    # 		FROM $PVL_MATRIX as p JOIN $COLL_BINS as s using (bin_id, interval_no)
+    # 		WHERE $filter_string
+    # 		GROUP BY orig_no
+    # 		ORDER BY n_occs desc LIMIT $raw_limit";
+	
+    # 	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
+	
+    # 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
+	
+    # 	$request->generate_prevalence($result, $limit, $detail);
+    # 	return;
+    # }
 }
 
 
@@ -3164,6 +3206,10 @@ sub generateQuickDivFilters {
     
     return () if $request->param_given('ref_id');
     
+    # Same with strat and research_group
+    
+    return () if $request->param_given('strat') || $request->param_given('research_group');
+    
     # Then check for geographic parameters, including 'clust_id', 'continent',
     # 'country', 'latmin', 'latmax, 'lngmin', 'lngmax', 'loc'
     
@@ -3180,8 +3226,8 @@ sub generateQuickDivFilters {
     if ( my @ccs = $request->clean_param_list('cc') ) # $$$
     {
 	my $cc_list = "'" . join("','", @ccs) . "'";
-	push @filters, "bl.cc in ($cc_list)";
-	$tables_ref->{bl} = 1;
+	push @filters, "c.cc in ($cc_list)";
+	$tables_ref->{c} = 1;
     }
     
     if ( my @continents = $request->clean_param_list('continent') )
@@ -3230,8 +3276,7 @@ sub generateQuickDivFilters {
 	if ( $x1 < $x2 )
 	{
 	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-	    push @filters, "contains(geomfromtext($polygon), bl.loc)";
-	    $tables_ref->{bl} = 1;
+	    push @filters, "contains(geomfromtext($polygon), s.loc)";
 	}
 	
 	# Otherwise, our bounding box crosses the antimeridian and so must be
@@ -3242,8 +3287,7 @@ sub generateQuickDivFilters {
 	{
 	    my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))," .
 					"((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
-	    push @filters, "contains(geomfromtext($polygon), bl.loc)";
-	    $tables_ref->{bl} = 1;
+	    push @filters, "contains(geomfromtext($polygon), s.loc)";
 	}
     }
     
@@ -3253,14 +3297,12 @@ sub generateQuickDivFilters {
 	$y2 //= 90;
 	
 	my $polygon = "'POLYGON((-180.0 $y1,180.0 $y1,180.0 $y2,-180.0 $y2,-180.0 $y1))'";
-	push @filters, "contains(geomfromtext($polygon), bl.loc)";
-	$tables_ref->{bl} = 1;
+	push @filters, "contains(geomfromtext($polygon), s.loc)";
     }
     
     if ( my $loc = $request->clean_param('loc') )
     {
-	push @filters, "contains(geomfromtext($loc), bl.loc)";
-	$tables_ref->{bl} = 1;
+	push @filters, "contains(geomfromtext($loc), s.loc)";
     }
     
     # At this point, if no geographic parameters have been specified then we
@@ -3481,6 +3523,9 @@ sub generateQuickDivJoins {
     return $join_list unless ref $tables eq 'HASH' and %$tables;
     
     # Create the necessary join expressions.
+    
+    $join_list .= "JOIN interval_data as i using (interval_no)\n"
+	if $tables->{i};
     
     $join_list .= "JOIN bin_loc as bl using (bin_id)\n"
 	if $tables->{bl};
