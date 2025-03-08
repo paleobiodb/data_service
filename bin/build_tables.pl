@@ -68,12 +68,6 @@ if ( $opt_nightly )
     $collection_tables = 1;
     $occurrence_tables = 1;
     $old_taxon_tables = 1;
-    
-    my (@time) = localtime(time);
-    if ( $time[6] == 0 ) { 
-	$diversity_tables = 1;
-	$prevalence_tables = 1;
-    }
 }
 
 # The argument 'log' specifies that output should be written to the specified file.
