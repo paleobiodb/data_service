@@ -23,7 +23,8 @@ use Try::Tiny;
 use JSON;
 use LWP::UserAgent;
 
-use TableDefs qw(%TABLE $COLL_MATRIX);
+use TableDefs qw(%TABLE);
+use CoreTableDefs;
 use ConsoleLog qw(logMessage);
 use CoreFunction qw(loadConfig configData);
 
@@ -62,9 +63,25 @@ sub clearCoords {
     logMessage(1, "Clearing paleocoordinates $desc");
     logMessage(1, $_) foreach @rest;
     
-    my $sql =  "UPDATE $TABLE{PCOORD_DATA}
-		SET paleo_lng = null, paleo_lat = null, update_flag = false
+    my $sql;
+    
+    if ( $options->{bins} )
+    {
+	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd JOIN $TABLE{PCOORD_BINS_STATIC} as ps
+		    using (bin_id, interval_no)
+		SET pd.paleo_lng = null, pd.paleo_lat = null, pd.plate_no = null, 
+		    pd.update_flag = false
 		WHERE $coord_filter";
+    }
+    
+    else
+    {
+	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd JOIN $TABLE{PCOORD_STATIC} as ps
+		    using (collection_no)
+		SET pd.paleo_lng = null, pd.paleo_lat = null, pd.plate_no = null,
+		    pd.update_flag = false
+		WHERE $coord_filter";
+    }
     
     my $count = $self->doSQL($sql);
     
@@ -98,8 +115,23 @@ sub updateExisting {
     logMessage(1, "Updating existing paleocoordinates $desc");
     logMessage(1, $_) foreach @rest;
     
-    my $sql =  "UPDATE $TABLE{PCOORD_DATA} SET update_flag = true
+    my $sql;
+    
+    if ( $options->{bins} )
+    {
+	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd JOIN $TABLE{PCOORD_BINS_STATIC} as ps
+		    using (bin_id, interval_no)
+		SET update_flag = true
 		WHERE $coord_filter";
+    }
+    
+    else
+    {
+	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd JOIN $TABLE{PCOORD_STATIC} as ps
+		    using (collection_no)
+		SET update_flag = true
+		WHERE $coord_filter";
+    }
     
     my $count = $self->doSQL($sql);
     
@@ -123,6 +155,8 @@ sub updateNew {
     my ($self, $options) = @_;
     
     my $dbh = $self->{dbh};
+    
+    my $word = $options->{bins} ? 'bins' : 'collections';
     
     # Start by loading the relevant configuration settings from the
     # paleobiology database configuration file.
@@ -156,31 +190,64 @@ sub updateNew {
 	return;
     }
     
-    # Add a new entry to PCOORD_STATIC for every new collection.
+    # Add a new entry to PCOORD_STATIC for every new collection, or to PCOORD_BINS_STATIC
+    # for every new bin.
     
     my ($sql, $count, $result);
     
-    $sql = "INSERT IGNORE INTO $TABLE{PCOORD_STATIC}
+    if ( $options->{bins} )
+    {
+	$static_filter =~ s/ps[.]early_age/i.early_age/g;
+	$static_filter =~ s/ps[.]late_age/i.late_age/g;
+	
+	$sql = "INSERT IGNORE INTO $TABLE{PCOORD_BINS_STATIC}
+		(bin_id, interval_no, present_lat, present_lng, early_age, late_age, update_flag)
+	    SELECT s.bin_id, s.interval_no, s.lat, s.lng, i.early_age, i.late_age, 1
+	    FROM $TABLE{SUMMARY_BINS} as s join $TABLE{INTERVAL_DATA} as i using (interval_no)
+		left join $TABLE{PCOORD_BINS_STATIC} as ps using (bin_id, interval_no)
+	    WHERE ps.bin_id is null and i.scale_no = 1 and $static_filter";
+    }
+    
+    else
+    {
+	$static_filter =~ s/ps[.]early_age/c.early_age/g;
+	$static_filter =~ s/ps[.]late_age/c.late_age/g;
+	
+	$sql = "INSERT IGNORE INTO $TABLE{PCOORD_STATIC}
 		(collection_no, present_lat, present_lng, early_age, late_age, update_flag)
 	    SELECT c.collection_no, c.lat, c.lng, c.early_age, c.late_age, 1
-	    FROM $COLL_MATRIX as c
+	    FROM $TABLE{COLLECTION_MATRIX} as c
 		left join $TABLE{PCOORD_STATIC} as ps using (collection_no)
 	    WHERE ps.collection_no is null and $static_filter";
+    }
     
     $count = $self->doSQL($sql);
     
-    logMessage(2, "    adding pcoords for $count new collections")
+    logMessage(2, "    adding pcoords for $count new $word")
 	if $count && $count > 0;
     
-    # Mark for update any rows in PCOORD_STATIC corresponding to collections
+    # Mark for update any rows in PCOORD_STATIC corresponding to collections or bins
     # whose modern coordinates have been modified.
     
-    $sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
-		join $COLL_MATRIX as c using (collection_no)
+    if ( $options->{bins} )
+    {
+	$sql = "UPDATE $TABLE{PCOORD_BINS_STATIC} as ps
+		join $TABLE{SUMMARY_BINS} as s using (bin_id, interval_no)
+	    SET ps.present_lat = s.lat, ps.present_lng = s.lng, 
+		ps.update_flag = true, ps.invalid = false
+	    WHERE (s.lat <> ps.present_lat or s.lng <> ps.present_lng)
+		and $static_filter";
+    }
+    
+    else
+    {
+	$sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
+		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	    SET ps.present_lat = c.lat, ps.present_lng = c.lng, 
 		ps.update_flag = true, ps.invalid = false
 	    WHERE (c.lat <> ps.present_lat or c.lng <> ps.present_lng)
 		and $static_filter";
+    }
     
     $count = $self->doSQL($sql);
     
@@ -190,12 +257,26 @@ sub updateNew {
     # Mark for update any rows in PCOORD_STATIC corresponding to collections
     # whose age range has been modified.
     
-    $sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
-		join $COLL_MATRIX as c using (collection_no)
+    if ( $options->{bins} )
+    {
+	$sql = "UPDATE $TABLE{PCOORD_BINS_STATIC} as ps
+		join $TABLE{SUMMARY_BINS} as s using (bin_id, interval_no)
+		join $TABLE{INTERVAL_DATA} as i using (interval_no)
+	    SET ps.early_age = i.early_age, ps.late_age = i.late_age, 
+		ps.update_flag = true
+            WHERE (i.early_age <> ps.early_age or i.late_age <> ps.late_age)
+		and $static_filter";
+    }
+    
+    else
+    {
+	$sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
+		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	    SET ps.early_age = c.early_age, ps.late_age = c.late_age, 
 		ps.update_flag = true
             WHERE (c.early_age <> ps.early_age or c.late_age <> ps.late_age)
 		and $static_filter";
+    }
     
     $count = $self->doSQL($sql);
     
@@ -212,10 +293,21 @@ sub updateNew {
     # whose coordinates have been made invalid.  This should not happen very
     # often, but is a boundary case that we need to take care of.
     
-    $sql = "SELECT count(*) FROM $TABLE{PCOORD_STATIC} as ps
+    if ( $options->{bins} )
+    {
+	$sql = "SELECT count(*) FROM $TABLE{PCOORD_BINS_STATIC} as ps
 	    WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
 		   ps.present_lng is null or ps.present_lng not between -180 and 180)
 		and $check and not(ps.invalid) and $static_filter";
+    }
+    
+    else
+    {
+	$sql = "SELECT count(*) FROM $TABLE{PCOORD_STATIC} as ps
+	    WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
+		   ps.present_lng is null or ps.present_lng not between -180 and 180)
+		and $check and not(ps.invalid) and $static_filter";
+    }
     
     print STDERR "> $sql\n\n" if $self->{debug};
     
@@ -223,19 +315,43 @@ sub updateNew {
     
     if ( $count && $count > 0 )
     {
-	$sql = "DELETE FROM pd USING $TABLE{PCOORD_STATIC} as ps
+	if ( $options->{bins} )
+	{
+	    $sql = "DELETE FROM pd USING $TABLE{PCOORD_BINS_STATIC} as ps
+		    join $TABLE{PCOORD_BINS_DATA} as pd using (bin_id, interval_no)
+		WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
+		       ps.present_lng is null or ps.present_lng not between -180 and 180)
+		    and $check and $coord_filter";
+	}
+	
+	else
+	{
+	    $sql = "DELETE FROM pd USING $TABLE{PCOORD_STATIC} as ps
 		    join $TABLE{PCOORD_DATA} as pd using (collection_no)
 		WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
 		       ps.present_lng is null or ps.present_lng not between -180 and 180)
 		    and $check and $coord_filter";
+	}
 	
 	$result = $self->doSQL($sql);
 	
-	$sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
+	if ( $options->{bins} )
+	{
+	    $sql = "UPDATE $TABLE{PCOORD_BINS_STATIC} as ps
 		SET ps.update_flag = false, ps.invalid = true
 		WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
 		       ps.present_lng is null or ps.present_lng not between -180 and 180)
 		    and $check and $static_filter";
+	}
+	
+	else
+	{
+	    $sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
+		SET ps.update_flag = false, ps.invalid = true
+		WHERE (ps.present_lat is null or ps.present_lat not between -90 and 90 or
+		       ps.present_lng is null or ps.present_lng not between -180 and 180)
+		    and $check and $static_filter";
+	}
 	
 	$result = $self->doSQL($sql);
 	
@@ -245,10 +361,21 @@ sub updateNew {
     # For every entry in PCOORD_STATIC marked for update, mark all of the
     # corresponding rows in PCOORD_DATA for update. 
     
-    $sql = "UPDATE $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps
+    if ( $options->{bins} )
+    {
+	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd join $TABLE{PCOORD_BINS_STATIC} as ps
+		using (bin_id, interval_no)
+	    SET pd.update_flag = true
+	    WHERE ps.update_flag and $coord_filter";
+    }
+    
+    else
+    {
+	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps
 		using (collection_no)
 	    SET pd.update_flag = true
 	    WHERE ps.update_flag and $coord_filter";
+    }
     
     $count = $self->doSQL($sql);
     
@@ -264,7 +391,46 @@ sub updateNew {
 	
 	my $count = 0;
 	
-	$sql = "INSERT INTO $TABLE{PCOORD_DATA}
+	if ( $options->{bins} )
+	{
+	    $sql = "INSERT INTO $TABLE{PCOORD_BINS_DATA}
+			(bin_id, interval_no, model, selector, update_flag, age)
+		SELECT ps.bin_id, ps.interval_no, $quoted_model, 'early', 1, round(early_age, 0) as age
+		FROM $TABLE{PCOORD_BINS_STATIC} as ps left join $TABLE{PCOORD_BINS_DATA} as pd
+			on pd.bin_id = ps.bin_id and pd.interval_no = ps.interval_no
+			and pd.model = $quoted_model and pd.selector = 'early'
+		WHERE $check and pd.bin_id is null and not(ps.invalid) and $static_filter
+		HAVING age between $model_min and $model_max";
+	
+	    $count += $self->doSQL($sql);
+	    
+	    $sql = "INSERT INTO $TABLE{PCOORD_BINS_DATA}
+			(bin_id, interval_no, model, selector, update_flag, age)
+		    SELECT ps.bin_id, ps.interval_no, $quoted_model, 'late', 1, round(late_age, 0) as age
+		    FROM $TABLE{PCOORD_BINS_STATIC} as ps left join $TABLE{PCOORD_BINS_DATA} as pd
+			    on pd.bin_id = ps.bin_id and pd.interval_no = ps.interval_no
+			    and pd.model = $quoted_model and pd.selector = 'late'
+		    WHERE $check and pd.bin_id is null and not(ps.invalid) and $static_filter
+		    HAVING age between $model_min and $model_max";
+
+	    $count += $self->doSQL($sql);
+
+	    $sql = "INSERT INTO $TABLE{PCOORD_BINS_DATA}
+			(bin_id, interval_no, model, selector, update_flag, age)
+		    SELECT ps.bin_id, ps.interval_no, $quoted_model, 'mid', 1,
+			round((ps.early_age + ps.late_age)/2, 0) as age
+		    FROM $TABLE{PCOORD_BINS_STATIC} as ps left join $TABLE{PCOORD_BINS_DATA} as pd
+			    on pd.bin_id = ps.bin_id and pd.interval_no = ps.interval_no
+			    and pd.model = $quoted_model and pd.selector = 'mid'
+		    WHERE $check and pd.bin_id is null and not(ps.invalid) and $static_filter
+		    HAVING age between $model_min and $model_max";
+
+	    $count += $self->doSQL($sql);
+	}
+	
+	else
+	{
+	    $sql = "INSERT INTO $TABLE{PCOORD_DATA}
 			(collection_no, model, selector, update_flag, age)
 		SELECT ps.collection_no, $quoted_model, 'early', 1, round(early_age, 0) as age
 		FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
@@ -273,30 +439,31 @@ sub updateNew {
 		WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
 		HAVING age between $model_min and $model_max";
 	
-	$count += $self->doSQL($sql);
-	
-	$sql = "INSERT INTO $TABLE{PCOORD_DATA}
-		    (collection_no, model, selector, update_flag, age)
-		SELECT ps.collection_no, $quoted_model, 'late', 1, round(late_age, 0) as age
-		FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
-			on pd.collection_no = ps.collection_no 
-			and pd.model = $quoted_model and pd.selector = 'late'
-		WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
-		HAVING age between $model_min and $model_max";
-	
-	$count += $self->doSQL($sql);
-	
-	$sql = "INSERT INTO $TABLE{PCOORD_DATA}
-		    (collection_no, model, selector, update_flag, age)
-		SELECT ps.collection_no, $quoted_model, 'mid', 1,
-		    round((ps.early_age + ps.late_age)/2, 0) as age
-		FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
-			on pd.collection_no = ps.collection_no 
-			and pd.model = $quoted_model and pd.selector = 'mid'
-		WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
-		HAVING age between $model_min and $model_max";
-	
-	$count += $self->doSQL($sql);
+	    $count += $self->doSQL($sql);
+	    
+	    $sql = "INSERT INTO $TABLE{PCOORD_DATA}
+			(collection_no, model, selector, update_flag, age)
+		    SELECT ps.collection_no, $quoted_model, 'late', 1, round(late_age, 0) as age
+		    FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
+			    on pd.collection_no = ps.collection_no 
+			    and pd.model = $quoted_model and pd.selector = 'late'
+		    WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
+		    HAVING age between $model_min and $model_max";
+
+	    $count += $self->doSQL($sql);
+
+	    $sql = "INSERT INTO $TABLE{PCOORD_DATA}
+			(collection_no, model, selector, update_flag, age)
+		    SELECT ps.collection_no, $quoted_model, 'mid', 1,
+			round((ps.early_age + ps.late_age)/2, 0) as age
+		    FROM $TABLE{PCOORD_STATIC} as ps left join $TABLE{PCOORD_DATA} as pd
+			    on pd.collection_no = ps.collection_no 
+			    and pd.model = $quoted_model and pd.selector = 'mid'
+		    WHERE $check and pd.collection_no is null and not(ps.invalid) and $static_filter
+		    HAVING age between $model_min and $model_max";
+
+	    $count += $self->doSQL($sql);
+	}
 	
 	logMessage(2, "    adding $count new paleocoordinates for generation by $model");
     }
@@ -309,13 +476,13 @@ sub updateNew {
     # After this succeeds, clear all of the update flags on the records
     # that were selected by the filter.
     
-    $sql = "UPDATE $TABLE{PCOORD_DATA} SET update_flag = false
-	    WHERE $coord_filter";
+    # $sql = "UPDATE $TABLE{PCOORD_DATA} SET update_flag = false
+    # 	    WHERE $coord_filter and updated";
     
-    $sql = "UPDATE $TABLE{PCOORD_STATIC} SET update_flag = false
-	    WHERE $static_filter";
+    # $sql = "UPDATE $TABLE{PCOORD_STATIC} SET update_flag = false
+    # 	    WHERE $static_filter and updated";
     
-    $result = $self->doSQL($sql);    
+    # $result = $self->doSQL($sql);    
 }
 
 
@@ -335,17 +502,27 @@ sub updateFlagged {
     
     my $opt_verbose = $options->{verbose};
     
+    my $sql;
+    
     # Prepare the SQL statements that will be used to update entries in the
     # table, and generate a user agent object with which to make requests.
     
-    $self->prepareStatements();
+    $self->prepareStatements($options);
     
     my $ua = LWP::UserAgent->new();
     $ua->agent("Paleobiology Database Updater/0.1");
     
     # Count the number of paleocoordinates to be updated.
     
-    my $sql = "SELECT count(*) FROM $TABLE{PCOORD_DATA} WHERE update_flag";
+    if ( $options->{bins} )
+    {
+	$sql = "SELECT count(*) FROM $TABLE{PCOORD_BINS_DATA} WHERE update_flag";
+    }
+    
+    else
+    {
+	$sql = "SELECT count(*) FROM $TABLE{PCOORD_DATA} WHERE update_flag";
+    }
     
     my ($update_total) = $dbh->selectrow_array($sql);
     
@@ -359,11 +536,23 @@ sub updateFlagged {
   CHUNK:
     while (1)
     {
-	$sql = "SELECT ps.collection_no, ps.present_lng, ps.present_lat,
+	if ( $options->{bins} )
+	{
+	    $sql = "SELECT ps.bin_id, ps.interval_no, ps.present_lng, ps.present_lat,
+		   pd.model, pd.selector, pd.age
+		FROM $TABLE{PCOORD_BINS_DATA} as pd join $TABLE{PCOORD_BINS_STATIC} as ps
+		    using (bin_id, interval_no)
+		WHERE pd.update_flag and $coord_filter LIMIT 10000";
+	}
+	
+	else
+	{
+	    $sql = "SELECT ps.collection_no, ps.present_lng, ps.present_lat,
 		   pd.model, pd.selector, pd.age
 		FROM $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps using (collection_no)
 		WHERE pd.update_flag and $coord_filter LIMIT 10000";
-    
+	}
+	
 	print STDERR "> $sql\n\n" if $self->{debug};
 	
 	my $updates = $dbh->selectall_arrayref($sql, { Slice => {} });
@@ -374,14 +563,25 @@ sub updateFlagged {
 	{    
 	    foreach my $record ( @$updates )
 	    {
-		my $collection_no = $record->{collection_no};
+		my $key;
+		
+		if ( $options->{bins} )
+		{
+		    $key = "$record->{bin_id}-$record->{interval_no}";
+		}
+		
+		else
+		{
+		    $key = $record->{collection_no};
+		}
+		
 		my $model = $record->{model};
 		my $lng = $record->{present_lng};
 		my $lat = $record->{present_lat};
 		my $selector = $record->{selector};
 		my $age = $record->{age};
 		
-		push $points{$model}{$age}->@*, [$collection_no, $selector, $lng, $lat];
+		push $points{$model}{$age}->@*, [$key, $selector, $lng, $lat];
 	    }
 	}
 	
@@ -413,16 +613,26 @@ sub updateFlagged {
 	  AGE:
 	    foreach my $age ( @age_list )
 	    {
-		# Ignore any ages that fall outside the bounds of this model. This
-		# shouldn't happen, but this statement functions as an extra guard.
-		
-		next AGE if $age > $model_max || $age < $model_min;
-		
 		# Grab the set of points that need to be rotated to this age.
 		
 		my @points = $points{$model}{$age}->@*;
 		
-		# Now create as many requests as are necessary to rotate all of these
+		# If the age falls outside of the age bounds for this model, set
+		# all of the paleocoordinates to null.
+		
+		if ( $age > $model_max || $age < $model_min )
+		{
+		    foreach my $p ( @points )
+		    {
+			my ($key, $selector) = $p->@*;
+			
+			$self->updateOneEntry($key, $model, $selector, $age, undef, undef, undef);
+		    }
+		    
+		    next AGE;
+		}
+		
+		# Otherwise, create as many requests as are necessary to rotate all of these
 		# points. 
 		
 		while ( @points )
@@ -564,6 +774,40 @@ sub generateFilter {
 	    push @coord_clauses, "pd.collection_no in ($list)";
 	    push @static_clauses, "ps.collection_no in ($list)";
 	    push @description, "from collection $list";
+	}
+    }
+    
+    if ( my $opt_bins = $options->{bin_id} )
+    {
+	my (@selected_cn, @bad_cn);
+	
+	foreach my $cn ( split /\s*,\s*/, $opt_bins )
+	{
+	    if ( $cn =~ /^\d+$/ )
+	    {
+		push @selected_cn, $cn;
+		$self->{bin_filter}{$cn} = 1;
+	    }
+	    
+	    else
+	    {
+		push @bad_cn, $cn;
+	    }
+	}
+	
+	if ( @bad_cn )
+	{
+	    my $list = join(', ', @bad_cn);
+	    die "Invalid bin_id: $list\n";
+	}
+	
+	else
+	{
+	    my $list = join(', ', @selected_cn);
+	    
+	    push @coord_clauses, "pd.bin_id in ($list)";
+	    push @static_clauses, "ps.bin_id in ($list)";
+	    push @description, "from bin_id $list";
 	}
     }
     
@@ -727,22 +971,33 @@ sub getConfig {
 }
 	
 
-# prepareStatements ( )
+# prepareStatements ( options )
 # 
 # Prepare the SQL statements that will be used to store paleocoordinate data
 # into the database.
 
 sub prepareStatements {
     
-    my ($self) = @_;
+    my ($self, $options) = @_;
     
     my $dbh = $self->{dbh};
     my $sql;
-        
-    $sql = "UPDATE $TABLE{PCOORD_DATA}
+    
+    if ( $options->{bins} )
+    {
+	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA}
+	    SET paleo_lng = ?, paleo_lat = ?, plate_no = ?, 
+		update_flag = false, updated = now()
+	    WHERE bin_id = ? and interval_no = ? and model = ? and selector = ? LIMIT 1";
+    }
+    
+    else
+    {
+	$sql = "UPDATE $TABLE{PCOORD_DATA}
 	    SET paleo_lng = ?, paleo_lat = ?, plate_no = ?, 
 		update_flag = false, updated = now()
 	    WHERE collection_no = ? and model = ? and selector = ? LIMIT 1";
+    }
     
     print STDERR "> $sql\n\n" if $self->{debug};
     
@@ -894,7 +1149,7 @@ sub processResponse {
 	# Get the corresponding collection identifier and selector (early, mid, late) from
 	# the $source_points array.
 	
-	my ($coll_no, $selector) = $source_points->[$i]->@*;
+	my ($key, $selector) = $source_points->[$i]->@*;
 	
 	# If the entry is null, it means that the specified rotation model cannot produce
 	# a paleocoordinate for this point/age combination. Set the paleocoordinates for
@@ -902,7 +1157,7 @@ sub processResponse {
 	
 	if ( ! $entry )
 	{
-	    $self->updateOneEntry($coll_no, $model, $selector, $age, undef, undef, undef);
+	    $self->updateOneEntry($key, $model, $selector, $age, undef, undef, undef);
 	}
 	
 	# If the entry contains coordinates, set the paleocoordinates for the
@@ -915,14 +1170,14 @@ sub processResponse {
 	    
 	    my $plate_id = $entry->{properties}{plate_id};
 	    
-	    $self->updateOneEntry($coll_no, $model, $selector, $age, $lng, $lat, $plate_id);
+	    $self->updateOneEntry($key, $model, $selector, $age, $lng, $lat, $plate_id);
 	}
 	
 	# Otherwise, keep a list of any bad entries.
 	
 	else
 	{
-	    push @bad_list, "$coll_no $age ($selector)";
+	    push @bad_list, "$key $age ($selector)";
 	}
     }
     
@@ -952,13 +1207,23 @@ sub processResponse {
 
 sub updateOneEntry {
     
-    my ($self, $collection_no, $model, $selector, $age, $lng, $lat, $plate_id) = @_;
+    my ($self, $key, $model, $selector, $age, $lng, $lat, $plate_id) = @_;
     
     my $dbh = $self->{dbh};
     
     eval {
-	$self->{update_sth}->execute($lng, $lat, $plate_id, $collection_no, $model, $selector);
-	$self->{update_count}++;
+	
+	if ( $key =~ /(\d+)-(\d+)/ )
+	{
+	    $self->{update_sth}->execute($lng, $lat, $plate_id, $1, $2, $model, $selector);
+	    $self->{update_count}++;
+	}
+	
+	else
+	{
+	    $self->{update_sth}->execute($lng, $lat, $plate_id, $key, $model, $selector);
+	    $self->{update_count}++;
+	}
     };
     
     if ( $@ )
@@ -1011,12 +1276,13 @@ sub initializeTables {
     
     my ($self, $argument, $replace) = @_;
     
-    unless ( $argument =~ qr{ ^ tables $ | ^ PCOORD_ (DATA|STATIC|MODELS|PLATES) $ }xs )
+    unless ( $argument =~ qr{ ^ tables $ | ^ PCOORD_ (BINS_)? (DATA|STATIC|MODELS|PLATES) $ }xs )
     {
 	die "Invalid argument '$argument'";
     }
     
-    if ( $argument eq 'PCOORD_DATA' || $argument eq 'tables' )
+    if ( $argument eq 'PCOORD_DATA' || $argument eq 'tables' || 
+	 $argument eq $TABLE{PCOORD_DATA} )
     {
 	$self->initOneTable('PCOORD_DATA', $replace,
 		     "CREATE TABLE IF NOT EXISTS $TABLE{PCOORD_DATA} (
@@ -1031,10 +1297,31 @@ sub initializeTables {
 			updated timestamp not null,
 			PRIMARY KEY (collection_no, model, selector),
 			KEY (update_flag)
-			) Engine=MyISAM CHARSET=utf8");
+			) Engine=MyISAM CHARSET=utf8mb3");
     }
     
-    if ( $argument eq 'PCOORD_STATIC' || $argument eq 'tables' )
+    if ( $argument eq 'PCOORD_BINS_DATA' || $argument eq 'tables' || 
+	 $argument eq $TABLE{PCOORD_BINS_DATA} )
+    {
+	$self->initOneTable('PCOORD_BINS_DATA', $replace,
+		     "CREATE TABLE IF NOT EXISTS $TABLE{PCOORD_BINS_DATA} (
+			`bin_id` int(10) unsigned NOT NULL,
+			`interval_no` int(10) unsigned NOT NULL,
+			`model` varchar(255) NOT NULL,
+			`selector` enum('early','mid','late') NOT NULL,
+			`age` smallint(5) unsigned NOT NULL,
+			`plate_no` smallint(5) unsigned DEFAULT NULL,
+			`paleo_lng` decimal(5,2) DEFAULT NULL,
+			`paleo_lat` decimal(5,2) DEFAULT NULL,
+			`update_flag` tinyint(1) NOT NULL,
+			`updated` timestamp NOT NULL,
+			PRIMARY KEY (`bin_id`,`interval_no`,`model`,`selector`),
+			KEY `update_flag` (`update_flag`)
+			) Engine=MyISAM CHARSET=utf8mb3");
+    }
+    
+    if ( $argument eq 'PCOORD_STATIC' || $argument eq 'tables' || 
+	 $argument eq $TABLE{PCOORD_STATIC} )
     {
 	$self->initOneTable('PCOORD_STATIC', $replace,
 		     "CREATE TABLE IF NOT EXISTS $TABLE{PCOORD_STATIC} (
@@ -1048,7 +1335,26 @@ sub initializeTables {
 			updated timestamp not null,
 			PRIMARY KEY (collection_no),
 			KEY (update_flag)
-			) Engine=MyISAM CHARSET=utf8");
+			) Engine=MyISAM CHARSET=utf8mb3");
+    }
+    
+    if ( $argument eq 'PCOORD_BINS_STATIC' || $argument eq 'tables' || 
+	 $argument eq $TABLE{PCOORD_BINS_STATIC} )
+    {
+	$self->initOneTable('PCOORD_STATIC', $replace,
+		    "CREATE TABLE IF NOT EXISTS $TABLE{PCOORD_BINS_STATIC} (
+			`bin_id` int(10) unsigned NOT NULL,
+			`interval_no` int(10) unsigned NOT NULL,
+			`present_lng` decimal(9,6) DEFAULT NULL,
+			`present_lat` decimal(9,6) DEFAULT NULL,
+			`early_age` decimal(9,5) DEFAULT NULL,
+			`late_age` decimal(9,5) DEFAULT NULL,
+			`update_flag` tinyint(1) NOT NULL,
+			`invalid` tinyint(1) DEFAULT 0,
+			`updated` timestamp NOT NULL,
+			PRIMARY KEY (`bin_id`,`interval_no`),
+			KEY `update_flag` (`update_flag`)
+			) ENGINE=MyISAM CHARSET=utf8mb3");
     }
     
     if ( $argument eq 'PCOORD_MODELS' || $argument eq 'tables' )
@@ -1094,22 +1400,31 @@ sub initOneTable {
     
     my ($self, $table_specifier, $replace, $create_stmt) = @_;
     
+    my $dbh = $self->{dbh};
+    
     my $table_name = $TABLE{$table_specifier};
+    
+    my ($check) = $dbh->selectrow_array("SHOW TABLES LIKE '$table_name'");
     
     if ( $replace )
     {
 	logMessage(1, "Replacing table $table_specifier as '$table_name'");
-	$self->doSQL("DROP TABLE IF EXISTS $table_name");
+	$self->doSQL("DROP TABLE IF EXISTS ${table_name}_bak");
+	$self->doSQL("RENAME TABLE IF EXISTS $table_name to ${table_name}_bak");
+	return $self->doSQL($create_stmt);
+    }
+    
+    elsif ( $check eq $table_name )
+    {
+	logMessage(1, "Table $table_specifier exists");
     }
     
     else
     {
 	logMessage(1, "Creating new table $table_specifier as '$table_name'");
-	$self->doSQL("DROP TABLE IF EXISTS ${table_name}_bak");
-	$self->doSQL("RENAME TABLE IF EXISTS $table_name to ${table_name}_bak");
+	return $self->doSQL($create_stmt);
     }
     
-    return $self->doSQL($create_stmt);
 }
 
 
