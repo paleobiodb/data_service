@@ -16,8 +16,9 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use TableDefs qw(%TABLE $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP);
+use TableDefs qw(%TABLE);
 use IntervalBase qw(INTL_SCALE BIN_SCALE);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK);
 
 use CoreTableDefs;
 use TaxonDefs qw(@TREE_TABLE_LIST);
@@ -33,6 +34,7 @@ our $REF_SUMMARY_WORK = "orn";
 our $INT_SUMMARY_WORK = "oin";
 our $INT_SUMMARY_AUX = "oia";
 our $TS_SUMMARY_WORK = "otsn";
+our $PVL_COLLS_WORK = "pvc";
 
 
 # buildOccurrenceTables ( dbh )
@@ -459,6 +461,34 @@ sub buildTaxonSummaryTable {
     
     activateTables($dbh, $OCC_TAXON_WORK => $TABLE{OCC_TAXON_SUMMARY});
     
+    # # Now create a prevalence table for collections.
+    
+    # my $TREE_TABLE = 'taxon_trees';
+    # my $INTS_TABLE = $TAXON_TABLE{$TREE_TABLE}{ints};
+    
+    # logMessage(2, "   generating collection prevalence matrix...");
+    
+    # $dbh->do("CREATE TABLE $PVL_COLLS_WORK (
+    #            collection_no int unsigned not null default '0',
+    #            order_no int unsigned,
+    #            class_no int unsigned,
+    #            phylum_no int unsigned,
+    #            n_occs int unsigned not null default '0') Engine=MyISAM");
+    
+    # $sql = "
+    #     INSERT INTO $PVL_COLLS_WORK (collection_no, order_no, class_no, phylum_no, n_occs)
+    #     SELECT collection_no, order_no, class_no, phylum_no, count(*)
+    #     FROM $OCC_MATRIX as o JOIN $TREE_TABLE as t using (orig_no)
+    #             JOIN $INTS_TABLE as ph using (ints_no)
+    #     WHERE o.latest_ident = 1 and (order_no <> 0 or class_no <> 0 or phylum_no <> 0)
+    #     GROUP BY collection_no, order_no, class_no, phylum_no";
+    
+    # $result = $dbh->do($sql);
+    
+    # logMessage(2, "      generated $result rows.");
+    
+    # activateTables($dbh, $PVL_COLLS_WORK => $PVL_COLLS);
+    
     my $a = 1;	# we can stop here when debugging
 }
 
@@ -577,36 +607,6 @@ sub buildOccIntervalMaps {
     # $result = $dbh->do($sql);
     
     # logMessage(2, "      generated $result rows with container rule");
-    
-    my $INTL = INTL_SCALE;
-    my $BIN = BIN_SCALE;
-    
-    $dbh->do("DROP TABLE IF EXISTS $OCC_MAJOR_MAP");
-    
-    $dbh->do("
-	CREATE TABLE $OCC_MAJOR_MAP (
-		scale_no smallint unsigned not null,
-		scale_level smallint unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		interval_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
-    
-    $sql = "
-	INSERT INTO $OCC_MAJOR_MAP (scale_no, scale_level, early_age, late_age, interval_no)
-	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
-	FROM (SELECT distinct early_age, late_age FROM $TABLE{OCCURRENCE_MATRIX}) as i
-		JOIN (SELECT sm.scale_no, scale_level, early_age, late_age, interval_no
-		      FROM $TABLE{SCALE_MAP} as sm JOIN $TABLE{INTERVAL_DATA} using (interval_no)
-		      WHERE sm.scale_no in ('$INTL', '$BIN')) as m
-	WHERE i.early_age > i.late_age and
-		if(i.late_age >= m.late_age,
-			if(i.early_age <= m.early_age, i.early_age - i.late_age, m.early_age - i.late_age),
-			if(i.early_age > m.early_age, m.early_age - m.late_age, i.early_age - m.late_age)) / (i.early_age - i.late_age) >= 0.5";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "      generated $result rows with majority rule");
     
     # $dbh->do("DROP TABLE IF EXISTS $OCC_BUFFER_MAP");
     
