@@ -71,14 +71,7 @@ sub initialize {
 			"Accepted values are:");
     
     $ds->define_valueset('1.2:common:std_allowances',
-	{ value => 'CREATE' },
-	    "This allowance enables new records to be inserted. Without it, a",
-	    "caution will be thrown for any record that does not include an",
-	    "identifier. This feature is present as a failsafe to make sure",
-	    "that new records are not added accidentally due to bad client code",
-	    "that omits a record identifier where one should appear. The argument",
-	    "C<B<allow=CREATE>> should be included with every request that is",
-	    "expected to insert new records.",
+	{ value => 'CREATE', undocumented => 1 },
 	{ value => 'PROCEED' },
 	    "If some of the submitted records generate cautions or,",
 	    "errors, this allowance will enable any database operations that do",

@@ -44,9 +44,9 @@ sub initialize {
     $ds->define_set('1.2:refs:allowances' =>
 	{ insert => '1.2:common:std_allowances' },
 	{ value => 'DUPLICATE' },
-	    "Allow this entry even if it may possibly duplicate another entry",
+	    "Allow allow this operation even if it may lead to a duplicate record in the database.",
 	{ value => 'CAPITAL' },
-	    "Allow bad capitalization of names and titles");
+	    "Allow bad capitalization of names and titles.");
     
     $ds->define_set('1.2:refs:publication_type');
     
