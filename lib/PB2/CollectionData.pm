@@ -78,12 +78,12 @@ sub initialize {
     
     foreach my $r ( @$PB2::ConfigData::COUNTRIES )
     {
-	$COUNTRY_NAME{$r->{cc}} = $r->{name};
+	$COUNTRY_NAME{$r->{cc2}} = $r->{country_name};
     }
     
     foreach my $r ( @$PB2::ConfigData::CONTINENTS )
     {
-	$CONTINENT_NAME{$r->{cc}} = $r->{name};
+	$CONTINENT_NAME{$r->{cc3}} = $r->{continent_name};
     }
     
     # Define an output map listing the blocks of information that can be

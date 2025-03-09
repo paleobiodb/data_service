@@ -67,22 +67,27 @@ sub initialize {
     # Next, define these output blocks.
     
     $ds->define_block('1.2:config:geosum' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'clu', if_field => 'cluster_level' },
+	{ output => 'config_section', com_name => 'cfg', value => 'clu', 
+	  if_field => 'cluster_level' },
 	    "The configuration section: 'clu' for clusters",
 	{ output => 'cluster_level', com_name => 'lvl' },
 	    "Cluster level, starting at 1",
 	{ output => 'degrees', com_name => 'deg' },
-	    "The width and height of the area represented by each cluster, in degrees.  Each level of clustering is aligned so that",
-	    "0 lat and 0 lng fall on cluster boundaries, and the cluster width/height must evenly divide 90.",
+	    "The width and height of the area represented by each cluster, in degrees.",
+	    "Each level of clustering is aligned so that 0 lat and 0 lng fall on cluster",
+	    "boundaries, and the cluster width/height must evenly divide 90.",
 	{ output => 'count', com_name => 'cnt' },
 	    "The approximate number of summary clusters at this level.",
 	{ output => 'max_colls', com_name => 'mco' },
-	    "The maximum nmber of collections in any cluster at this level (can be used for scaling cluster indicators)",
+	    "The maximum nmber of collections in any cluster at this level",
+	    "(can be used for scaling cluster indicators)",
 	{ output => 'max_occs', com_name => 'moc' },
-	    "The maximum number of occurrences in any cluster at this level (can be used for scaling cluster indicators)");
+	    "The maximum number of occurrences in any cluster at this level",
+	    "(can be used for scaling cluster indicators)");
     
     $ds->define_block('1.2:config:ranks' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'trn', if_field => 'taxonomic_rank' },
+	{ output => 'config_section', com_name => 'cfg', value => 'trn', 
+	  if_field => 'taxonomic_rank' },
 	    "The configuration section: 'trn' for taxonomic ranks",
 	{ output => 'taxonomic_rank', com_name => 'rnk' },
 	    "Taxonomic rank",
@@ -91,20 +96,24 @@ sub initialize {
 	    "which is the default for C<json> format");
     
     $ds->define_block('1.2:config:continents' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'con', if_field => 'continent_name' },
+	{ output => 'config_section', com_name => 'cfg', value => 'con', 
+	  if_field => 'continent_name' },
 	    "The configuration section: 'con' for continents",
-	{ output => 'name', pbdb_name => 'continent_name', com_name => 'nam' },
+	{ output => 'continent_name', com_name => 'nam' },
 	    "Continent name",
-	{ output => 'cc', pbdb_name => 'continent_code', com_name => 'cod' },
-	    "The code used to indicate this continent when selecting fossil occurrences by continent");
+	{ output => 'cc3', pbdb_name => 'continent_code', com_name => 'cod' },
+	    "The code used to indicate this continent when selecting fossil occurrences",
+	    "by continent");
     
     $ds->define_block('1.2:config:countries' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'cou', if_field => 'name' },
-	    "The configuration section: 'cnt' for countries",
-	{ output => 'name', pbdb_name => 'country_name', com_name => 'nam' },
+	{ output => 'config_section', com_name => 'cfg', value => 'cou', 
+	  if_field => 'country_name' },
+	    "The configuration section: 'cou' for countries",
+	{ output => 'country_name', com_name => 'nam' },
 	    "Country name",
-	{ output => 'cc', pbdb_name => 'country_code', com_name => 'cod' },
-	    "The code used to indicate this continent when selecting fossil occurrences by country.",
+	{ output => 'cc2', pbdb_name => 'country_code', com_name => 'cod' },
+	    "The code used to indicate this country when selecting fossil occurrences",
+	    "by country.",
 	    "These are the standard ISO-3166-1 country codes, except for the ocean basins which",
 	    "are coded as O1 through O7.",
 	{ output => 'continent', com_name => 'con' },
@@ -149,8 +158,8 @@ sub initialize {
     $ds->define_block('1.2:config:all' =>
 	{ include => '1.2:config:geosum' },
 	{ include => '1.2:config:ranks' },
-	{ include => '1.2:config:continents' },
 	{ include => '1.2:config:countries' },
+	{ include => '1.2:config:continents' },
 	{ include => '1.2:config:lithologies' },
 	{ include => '1.2:config:lithadj' },
 	{ include => '1.2:config:pres_modes' },
@@ -195,12 +204,12 @@ sub initialize {
     # Get the list of continents from the database.
     
     $CONTINENTS = $dbh->selectall_arrayref("
-	SELECT continent as cc, name FROM $CONTINENT_DATA", { Slice => {} });
+	SELECT continent as cc3, name as continent_name FROM $CONTINENT_DATA", { Slice => {} });
     
     # Get the list of countries from the database.
     
     $COUNTRIES = $dbh->selectall_arrayref("
-	SELECT cc, continent, name FROM $COUNTRY_MAP", { Slice => {} });
+	SELECT cc as cc2, continent, name as country_name FROM $COUNTRY_MAP", { Slice => {} });
     
     # Get the list of lithologies from the database.
     
@@ -320,8 +329,8 @@ sub get {
     
     push @result, @$BINS if $request->has_block('clusters') or $show_all;
     push @result, @$RANKS if $request->has_block('ranks') or $show_all;
-    push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     push @result, @$COUNTRIES if $request->has_block('countries') or $show_all;
+    push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     push @result, @$LITHOLOGIES if $request->has_block('lithologies') or $show_all;
     push @result, @$LITH_ADJECTIVES if $request->has_block('lithadj') or $show_all;
     push @result, @$PRES_MODES if $request->has_block('presmodes') or $show_all;

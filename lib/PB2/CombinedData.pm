@@ -456,10 +456,10 @@ sub auto_complete_cou {
 	{
 	    foreach my $r ( @$PB2::ConfigData::COUNTRIES )
 	    {
-		my $canonical = lc $r->{name};
+		my $canonical = lc $r->{country_name};
 		
-		$CC_NAME{$canonical} = $r->{name};
-		$CC_CODE{$canonical} = $r->{cc};
+		$CC_NAME{$canonical} = $r->{country_name};
+		$CC_CODE{$canonical} = $r->{cc2};
 		push @CC_LIST, $canonical;
 	    }
 	}
@@ -468,12 +468,12 @@ sub auto_complete_cou {
 	{
 	    foreach my $r ( @$PB2::ConfigData::CONTINENTS )
 	    {
-		my $canonical = lc $r->{name};
+		my $canonical = lc $r->{continent_name};
 		
 		unless ( $CC_NAME{$canonical} )
 		{
-		    $CC_NAME{$canonical} = $r->{name};
-		    $CC_CODE{$canonical} = $r->{cc};
+		    $CC_NAME{$canonical} = $r->{continent_name};
+		    $CC_CODE{$canonical} = $r->{cc3};
 		    push @CC_LIST, $canonical;
 		}
 	    }
