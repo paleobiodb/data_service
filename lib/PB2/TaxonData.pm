@@ -1473,7 +1473,10 @@ sub initialize {
 	    "Select only taxa no more than the specified number of levels below or",
 	     "above the base taxon or taxa in the taxonomic hierarchy.  You can use this",
 	     "parameter if you want to print out a portion of the taxonomic hierarchy centered",
-	     "upon a higher taxon wihtout printing out its entire subtree.");
+	     "upon a higher taxon wihtout printing out its entire subtree.",
+	{ optional => 'published', valid => FLAG_VALUE },
+	    "Selects only taxa named in published sources. If the value C<NO> is given,",
+	    "selects only taxa whose names derive from unpublished sources.");
     
     $ds->define_ruleset('1.2:taxa:occ_list_filter' =>
 	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
@@ -1538,7 +1541,10 @@ sub initialize {
 	{ param => 'op_pubyr', valid => ANY_VALUE },
 	    "Selects only opinions published during the indicated year or range of years.",
 	    "Note that the opinion publication year may be different from the publication",
-	    "year of the reference from which the opinion was entered.");
+	    "year of the reference from which the opinion was entered.",
+	{ optional => 'published', valid => FLAG_VALUE },
+	    "Selects only opinions from published sources. If the value C<NO> is given,",
+	    "selects only opinions from unpublished sources.");
     
     $ds->define_ruleset('1.2:opinions:display' => 
 	{ optional => 'SPECIAL(show)', valid => '1.2:opinions:output_map', list => ','},
@@ -2093,46 +2099,58 @@ sub get_taxon {
 	
 	my $data = ['SIMPLE','SIZE','APP'];
 	
-	unless ( $r->{phylum_no} or (defined $r->{taxon_rank} && $r->{taxon_rank} <= 20) )
+	my $numeric_rank;
+	
+	if ( $r->{taxon_rank} =~ /[a-zA-Z]/ )
+	{
+	    $numeric_rank = $TAXON_RANK{$r->{taxon_rank}} || 0;
+	}
+	
+	else
+	{
+	    $numeric_rank = $r->{taxon_rank} || 0;
+	}
+	
+	unless ( $r->{phylum_no} or $numeric_rank <= 20 )
 	{
 	    $r->{phylum_list} = [ $taxonomy->list_taxa($taxon_no, 'all_children',
 						     { limit => 10, order => 'size.desc', rank => 20, fields => $data } ) ];
 	}
 	
-	unless ( $r->{class_no} or $r->{taxon_rank} <= 17 )
+	unless ( $r->{class_no} or $numeric_rank <= 17 )
 	{
 	    $r->{class_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => 'size.desc', rank => 17, fields => $data } ) ];
 	}
 	
-	unless ( $r->{order_no} or $r->{taxon_rank} <= 13 )
+	unless ( $r->{order_no} or $numeric_rank <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
 	    $r->{order_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => $order, rank => 13, fields => $data } ) ];
 	}
 	
-	unless ( $r->{family_no} or $r->{taxon_rank} <= 9 )
+	unless ( $r->{family_no} or $numeric_rank <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
 	    $r->{family_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						     { limit => 10, order => $order, rank => 9, fields => $data } ) ];
 	}
 	
-	if ( $r->{taxon_rank} > 5 )
+	if ( $numeric_rank > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
 	    $r->{genus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						    { limit => 10, order => $order, rank => 5, fields => $data } ) ];
 	}
 	
-	if ( $r->{taxon_rank} == 5 )
+	if ( $numeric_rank == 5 )
 	{
 	    $r->{subgenus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 4, fields => $data } ) ];
 	}
 	
-	if ( $r->{taxon_rank} == 5 or $r->{taxon_rank} == 4 )
+	if ( $numeric_rank == 5 or $numeric_rank == 4 )
 	{
 	    $r->{species_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 3, fields => $data } ) ];
@@ -2809,6 +2827,19 @@ sub generate_query_options {
     if ( my $idqual = $request->clean_param('idqual') )
     {
 	$options->{ident_qual} = $idqual;
+    }
+    
+    if ( $request->param_given('published') )
+    {
+	if ( $request->clean_param('published') )
+	{
+	    $options->{published} = 'yes';
+	}
+	
+	else
+	{
+	    $options->{published} = 'no';
+	}
     }
     
     # if ( my $occ_name = $request->clean_param('usetaxon') )

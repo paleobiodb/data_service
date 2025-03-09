@@ -17,7 +17,7 @@ use CoreTableDefs;
 
 use IntervalBase qw(ts_defined ts_record ts_intervals ts_bounds ts_has_type ts_list
 		    int_defined int_record int_bounds ints_by_prefix ts_list);
-use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
+use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP %IDRE);
 
 use List::Util qw(min max);
 
@@ -881,6 +881,11 @@ sub process_interval_params {
 	foreach my $name ( split qr{\s*[,-]+\s*}, $interval_name_value )
 	{
 	    next unless defined $name && $name =~ qr{\S};
+	    
+	    if ( $name =~ $IDRE{INT} )
+	    {
+		$name = $1;
+	    }
 	    
 	    if ( int_defined($name) )
 	    {
