@@ -223,7 +223,10 @@ sub initialize {
 	{ output => 'collection_aka', com_name => 'aka' },
 	    "An alternate name for the collection, or additional remarks about it.",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
-	    "The number of occurrences in the collection",
+	    "The number of occurrences in the collection. If the search parameters specify a",
+	    "specific taxon, this field will report the number of occurrences of that taxon",
+	    "in each returned collection. Otherwise, it will report the total number of occurrences",
+	    "in each returned collection.",
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with the collection (not necessarily a",
 	    "standard interval), or the interval that begins the range if C<late_interval> is also given",
@@ -776,45 +779,67 @@ sub initialize {
     # defined by this class.
     
     $ds->define_set('1.2:colls:order' =>
-	{ value => 'earlyage' },
-	    "Results are ordered chronologically by early age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'id.asc', undocumented => 1 },
+	{ value => 'id.desc', undocumented => 1 },
+	{ value => 'id' },
+	    "Results are ordered by collection identifier, lowest to highest unless you add C<.desc>",
+	{ value => 'name.asc', undocumented => 1 },
+	{ value => 'name.desc', undocumented => 1 },
+	{ value => 'name' },
+	    "Results are ordered by collection name, sorted alphabetically",
+	{ value => 'ref.asc', undocumented => 1 },
+	{ value => 'ref.desc', undocumented => 1 },
+	{ value => 'ref' },
+	    "Results are ordered by reference identifier, lowest to highest unless you add C<.desc>",
 	{ value => 'earlyage.asc', undocumented => 1 },
 	{ value => 'earlyage.desc', undocumented => 1 },
-	{ value => 'lateage' },
-	    "Results are ordered chronologically by late age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'earlyage' },
+	    "Results are ordered chronologically by early age bound, oldest to youngest unless",
+	    " you add C<.asc>",
 	{ value => 'lateage.asc', undocumented => 1 },
 	{ value => 'lateage.desc', undocumented => 1 },
-	{ value => 'agespread' },
-	    "Results are ordered based on the difference between the early and late age bounds, starting",
-	    "with occurrences with the largest spread (least precise temporal resolution) unless you add C<.asc>",
+	{ value => 'lateage' },
+	    "Results are ordered chronologically by late age bound, oldest to youngest unless",
+	    "you add C<.asc>",
 	{ value => 'agespread.asc', undocumented => 1 },
 	{ value => 'agespread.desc', undocumented => 1 },
-	{ value => 'formation' },
-	    "Results are ordered by the stratigraphic formation in which they were found, sorted alphabetically.",
+	{ value => 'agespread' },
+	    "Results are ordered based on the difference between the early and late age bounds",
+	    "starting the largest spread (least precise temporal resolution) unless you add C<.asc>",
 	{ value => 'formation.asc', undocumented => 1 },
 	{ value => 'formation.desc', undocumented => 1 },
-	{ value => 'stratgroup' },
-	    "Results are ordered by the stratigraphic group in which they were found, sorted alphabetically.",
+	{ value => 'formation' },
+	    "Results are ordered by the stratigraphic formation in which they were found,",
+	    "sorted alphabetically.",
 	{ value => 'stratgroup.asc', undocumented => 1 },
 	{ value => 'stratgroup.desc', undocumented => 1 },
-	{ value => 'member' },
-	    "Results are ordered by the stratigraphic member in which they were found, sorted alphabetically.",
+	{ value => 'stratgroup' },
+	    "Results are ordered by the stratigraphic group in which they were found,",
+	    " sorted alphabetically.",
 	{ value => 'member.asc', undocumented => 1 },
 	{ value => 'member.desc', undocumented => 1 },
-	{ value => 'plate' },
-	    "Results are ordered by the geological plate on which they are located, sorted numerically by identifier.",
-	{ value => 'plate.asc', undocumented => 1 },
-	{ value => 'plate.desc', undocumented => 1 },
+	{ value => 'member' },
+	    "Results are ordered by the stratigraphic member in which they were found,",
+	    "sorted alphabetically.",
+	{ value => 'occs.asc', undocumented => 1 },
+	{ value => 'occs.desc', undocumented => 1 },
+	{ value => 'occs' },
+	    "Results are ordered by the number of occurrences, highest to lowest unless you add",
+	    "C<.asc>",
+	# { value => 'plate.asc', undocumented => 1 },
+	# { value => 'plate.desc', undocumented => 1 },
+	# { value => 'plate' },
+	#     "Results are ordered by the geological plate on which they are located, sorted numerically by identifier.",
+	{ value => 'created.asc', undocumented => 1 },
+	{ value => 'created.desc', undocumented => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
-	{ value => 'created.asc', undocumented => 1 },
-	{ value => 'created.desc', undocumented => 1 },
+	{ value => 'modified.asc', undocumented => 1 },
+	{ value => 'modified.desc', undocumented => 1 },
 	{ value => 'modified' },
 	    "Results are ordered by the date the record was last modified",
-	    "most recent first unless you add C<.asc>",
-	{ value => 'modified.asc', undocumented => 1 },
-	{ value => 'modified.desc', undocumented => 1 });
+	    "most recent first unless you add C<.asc>");
     
     $ds->define_set('1.2:occs:abund_type' =>
 	{ value => 'count' },
@@ -1136,6 +1161,9 @@ sub initialize {
 	    "The value of this parameter should be a comma-separated list of ",
 	    "L<continent codes|op:config.txt?show=continents>.  This parameter is deprecated;",
 	    "use F<cc> instead.",
+	{ param => 'published', valid => FLAG_VALUE },
+	    "Return only records based on published sources, if the value C<YES> is given for this",
+	    "parameter. If the value C<NO> is given, return only records based on unpublished data.",
 	{ param => 'strat', valid => ANY_VALUE, list => ',' },
 	    "Return only records that fall within the named geological stratum or strata.  You",
 	    "may specify more than one, separated by commas.  Names may include the standard",
@@ -1247,8 +1275,6 @@ sub initialize {
    	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
-	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
-			  '1.2:interval_selector', '1.2:ma_selector' ] },
 	">>The following parameters can be used to filter the selection.",
 	"If you wish to use one of them and have not specified any of the selection parameters",
 	"listed above, use B<C<all_records>>.",
@@ -1256,6 +1282,10 @@ sub initialize {
 	{ allow => '1.2:common:select_colls_ent' },
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+			  '1.2:interval_selector', '1.2:ma_selector', 
+			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
 	">>The following parameters can be used to further filter the selection, based on the",
 	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
 	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
@@ -1643,7 +1673,7 @@ sub list_colls {
     
     # Determine the order in which the results should be returned.
     
-    my $order_clause = $request->generate_order_clause($tables, { at => 'c', bt => 'c' }) || 'NULL';
+    my $order_clause = $request->generate_order_clause($tables, { at => 'c', bt => 'cc' }) || 'NULL';
     
     # Determine if any extra tables need to be joined in.
     
@@ -2859,7 +2889,7 @@ sub generateMainFilters {
     
     if ( my $coll_match = $request->clean_param('coll_match') )
     {
-	my $quoted = $dbh->quote($coll_match);
+	my $quoted = $dbh->quote("%${coll_match}%");
 	
 	$tables->{cc} = 1;
 	push @filters, "(cc.collection_name like $quoted or cc.collection_aka like $quoted)";
@@ -4313,6 +4343,23 @@ sub generateMainFilters {
 	}
     }
     
+    # Check for parameter 'published'.
+    
+    if ( $request->param_given('published') )
+    {
+	my $published = $request->clean_param('published');
+	
+	if ( $published )
+	{
+	    push @filters, "(r.publication_type <> 'unpublished' or r.publication_type is null)";
+	}
+	
+	else
+	{
+	    push @filters, "r.publication_type = 'unpublished'";
+	}
+    }
+    
     # Return the list
     
     return @filters;
@@ -4702,6 +4749,12 @@ sub generate_order_clause {
 
 	    $tables->{$bt} = 1;
 	}
+	
+	elsif ( $term eq 'name' )
+	{
+	    push @exprs, "cc.collection_name $dir";
+	    $tables->{cc} = 1;
+	}
 
 	elsif ( $term eq 'ref' )
 	{
@@ -4734,14 +4787,14 @@ sub generate_order_clause {
 	    $tables->{$bt} = 1;
 	}
 	
-	elsif ( $term eq 'max_ma' )
+	elsif ( $term eq 'earlyage' )
 	{
 	    $dir ||= 'desc';
 	    push @exprs, "$at.early_age $dir";
 	    $tables->{$at} = 1;
 	}
 	
-	elsif ( $term eq 'min_ma' )
+	elsif ( $term eq 'lateage' )
 	{
 	    $dir ||= 'desc';
 	    push @exprs, "$at.late_age $dir";
@@ -4785,22 +4838,28 @@ sub generate_order_clause {
 	    $tables->{cc} = 1;
 	}
 	
-	elsif ( $term eq 'plate' )
+	# elsif ( $term eq 'plate' )
+	# {
+	#     my ($pgm) = $request->clean_param_list('pgm');
+	#     $pgm //= 'gplates';
+	    
+	#     if ( $pgm eq 'scotese' )
+	#     {
+	# 	push @exprs, "c.s_plate_no $dir";
+	# 	# $tables->{cc} = 1;
+	#     }
+	    
+	#     else
+	#     {
+	# 	push @exprs, "c.g_plate_no $dir";
+	# 	# $tables->{pc} = 1;
+	#     }
+	# }
+	
+	elsif ( $term eq 'occs' )
 	{
-	    my ($pgm) = $request->clean_param_list('pgm');
-	    $pgm //= 'gplates';
-	    
-	    if ( $pgm eq 'scotese' )
-	    {
-		push @exprs, "c.s_plate_no $dir";
-		# $tables->{cc} = 1;
-	    }
-	    
-	    else
-	    {
-		push @exprs, "c.g_plate_no $dir";
-		# $tables->{pc} = 1;
-	    }
+	    $dir ||= 'desc';
+	    push @exprs, "n_occs $dir";
 	}
 	
 	elsif ( $term eq 'created' )

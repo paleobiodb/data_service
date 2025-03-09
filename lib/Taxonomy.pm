@@ -122,6 +122,7 @@ my (%TAXON_OPTION) = ( rank => 1,
 		       min_modyr => 1, 
 		       max_modyr => 1,
 		       reference_no => 1,
+		       published => 1,
 		       taxa_authorized_by => 1,
 		       taxa_entered_by => 1,
 		       taxa_modified_by => 1,
@@ -4105,6 +4106,21 @@ sub taxon_filters {
 	elsif ( defined $options->{max_pubyr} && $options->{max_pubyr} ne '' )
 	{
 	    croak "bad value '$options->{max_pubyr}' for option 'max_pubyr'\n";
+	}
+    }
+    
+    if ( $options->{published} )
+    {
+	if ( $options->{published} eq 'yes' )
+	{
+	    push @filters, "(r.publication_type <> 'unpublished' or r.publication_type is null)";
+	    $tables_ref->{r} = 1;
+	}
+	
+	elsif ( $options->{published} eq 'no' )
+	{
+	    push @filters, "r.publication_type = 'unpublished'";
+	    $tables_ref->{r} = 1;
 	}
     }
     

@@ -1473,7 +1473,10 @@ sub initialize {
 	    "Select only taxa no more than the specified number of levels below or",
 	     "above the base taxon or taxa in the taxonomic hierarchy.  You can use this",
 	     "parameter if you want to print out a portion of the taxonomic hierarchy centered",
-	     "upon a higher taxon wihtout printing out its entire subtree.");
+	     "upon a higher taxon wihtout printing out its entire subtree.",
+	{ optional => 'published', valid => FLAG_VALUE },
+	    "Selects only taxa named in published sources. If the value C<NO> is given,",
+	    "selects only taxa whose names derive from unpublished sources.");
     
     $ds->define_ruleset('1.2:taxa:occ_list_filter' =>
 	{ param => 'taxon_status', valid => '1.2:taxa:status', default => 'all' },
@@ -1538,7 +1541,10 @@ sub initialize {
 	{ param => 'op_pubyr', valid => ANY_VALUE },
 	    "Selects only opinions published during the indicated year or range of years.",
 	    "Note that the opinion publication year may be different from the publication",
-	    "year of the reference from which the opinion was entered.");
+	    "year of the reference from which the opinion was entered.",
+	{ optional => 'published', valid => FLAG_VALUE },
+	    "Selects only opinions from published sources. If the value C<NO> is given,",
+	    "selects only opinions from unpublished sources.");
     
     $ds->define_ruleset('1.2:opinions:display' => 
 	{ optional => 'SPECIAL(show)', valid => '1.2:opinions:output_map', list => ','},
@@ -2821,6 +2827,19 @@ sub generate_query_options {
     if ( my $idqual = $request->clean_param('idqual') )
     {
 	$options->{ident_qual} = $idqual;
+    }
+    
+    if ( $request->param_given('published') )
+    {
+	if ( $request->clean_param('published') )
+	{
+	    $options->{published} = 'yes';
+	}
+	
+	else
+	{
+	    $options->{published} = 'no';
+	}
     }
     
     # if ( my $occ_name = $request->clean_param('usetaxon') )
