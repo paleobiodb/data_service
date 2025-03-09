@@ -1026,6 +1026,19 @@ sub generate_ref_filters {
 	}
     }
     
+    if ( $request->param_given('published') )
+    {
+	if ( $request->clean_param('published') )
+	{
+	    push @filters, "(r.publication_type is null or r.publication_type <> 'unpublished')";
+	}
+	
+	else
+	{
+	    push @filters, "r.publication_type = 'unpublished'";
+	}
+    }
+    
     if ( @filters )
     {
 	$tables_hash->{r} = 1;
