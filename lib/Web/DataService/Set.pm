@@ -120,8 +120,9 @@ sub add_to_set {
 
 		$newitem{disabled} = $item->{disabled} if defined $item->{disabled};
 		$newitem{undocumented} = $item->{undocumented} if defined $item->{undocumented};
-		
+
 		$ds->add_doc($vs, \%newitem);
+		$ds->add_doc($vs, $newitem{doc_string}) if $newitem{doc_string};
 		
 		push @{$vs->{value_list}}, $value unless $newitem{disabled};
 		$vs->{value}{$value} = \%newitem;
