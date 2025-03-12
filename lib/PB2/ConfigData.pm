@@ -51,10 +51,10 @@ sub initialize {
 	    "Return continent names and their corresponding codes.",
 	{ value => 'countries', maps_to => '1.2:config:countries' },
 	    "Return country names and the corresponding ISO-3166-1 country codes.",
-	{ value => 'lithologies', maps_to => '1.2:config:lithologies' },
-	    "Return lithologies and lithology types.",
-	{ value => 'lithadj', maps_to => '1.2:config:lithadj' },
-	    "Return lithology adjectives.",
+	{ value => 'lithologies', maps_to => '1.2:config:lithblock' },
+	    "Return lithologies, lithology types, minor lithologies, and lithology adjectives.",
+	{ value => 'environments', maps_to => '1.2:config:environments' },
+	    "Return environments and tectonic settings.",
 	{ value => 'presmodes', maps_to => '1.2:config:pres_modes' },
 	    "Return preservation modes.",
 	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
@@ -69,7 +69,7 @@ sub initialize {
     $ds->define_block('1.2:config:geosum' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'clu', 
 	  if_field => 'cluster_level' },
-	    "The configuration section: 'clu' for clusters",
+	    "Value 'clu' for geographic summary levels",
 	{ output => 'cluster_level', com_name => 'lvl' },
 	    "Cluster level, starting at 1",
 	{ output => 'degrees', com_name => 'deg' },
@@ -88,7 +88,7 @@ sub initialize {
     $ds->define_block('1.2:config:ranks' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'trn', 
 	  if_field => 'taxonomic_rank' },
-	    "The configuration section: 'trn' for taxonomic ranks",
+	    "Value 'trn' for taxonomic ranks",
 	{ output => 'taxonomic_rank', com_name => 'rnk' },
 	    "Taxonomic rank",
 	{ output => 'rank_code', com_name => 'cod', data_type => 'pos' },
@@ -98,7 +98,7 @@ sub initialize {
     $ds->define_block('1.2:config:continents' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'con', 
 	  if_field => 'continent_name' },
-	    "The configuration section: 'con' for continents",
+	    "Value 'con' for continents",
 	{ output => 'continent_name', com_name => 'nam' },
 	    "Continent name",
 	{ output => 'cc3', pbdb_name => 'continent_code', com_name => 'cod' },
@@ -108,7 +108,7 @@ sub initialize {
     $ds->define_block('1.2:config:countries' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'cou', 
 	  if_field => 'country_name' },
-	    "The configuration section: 'cou' for countries",
+	    "Value 'cou' for countries",
 	{ output => 'country_name', com_name => 'nam' },
 	    "Country name",
 	{ output => 'cc2', pbdb_name => 'country_code', com_name => 'cod' },
@@ -121,17 +121,35 @@ sub initialize {
     
     $ds->define_block('1.2:config:lithologies' => 
 	{ output => 'config_section', com_name => 'cfg', value => 'lth', if_field => 'lithology' },
-	    "The configuration section: 'lth' for lithologies",
+	    "Value 'lth' for lithologies",
 	{ output => 'lithology', com_name => 'lth' },
-	    "Lithology name",
+	    "Lithology value",
 	{ output => 'lith_type', com_name => 'ltp' },
 	    "Lithology type");
     
+    $ds->define_block('1.2:config:minorliths' => 
+	{ output => 'config_section', com_name => 'cfg', value => 'mlt', if_field => 'minorlith' },
+	    "Value 'mlt' for minor lithologies",
+	{ output => 'minorlith', com_name => 'mlt' },
+	    "Minor lithology value");
+    
+    $ds->define_block('1.2:config:lithification' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'ltf', if_field => 'lithification' },
+	    "Value 'ltf' for lithification descriptions",
+	{ output => 'lithification', com_name => 'ltf' },
+	    "Lithification description");
+    
     $ds->define_block('1.2:config:lithadj' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'lta', if_field => 'lithadj' },
-	    "The configuration section: 'lta' for litholgy adjectives",
+	    "Value 'lta' for litholgy adjectives",
 	{ output => 'lithadj', com_name => 'lta' },
 	    "Lithology adjective");
+    
+    $ds->define_block('1.2:config:lithblock' =>
+	{ include => '1.2:config:lithologies' },
+	{ include => '1.2:config:minorliths' },
+	{ include => '1.2:config:lithification' },
+	{ include => '1.2:config:lithadj' });
     
     $ds->define_block('1.2:config:pres_modes' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'prm', if_field => 'pres_mode' },

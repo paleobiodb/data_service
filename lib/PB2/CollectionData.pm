@@ -116,6 +116,9 @@ sub initialize {
 	{ value => 'timecompare', maps_to => '1.2:colls:timecompare' },
 	    "Like B<C<timebins>>, but shows this information for all available",
 	    "timerules.",
+	{ value => 'ages', maps_to => '1.2:colls:ages' },
+	    "If a precise age, or a maximum age, or a minimum age, has been determined",
+	    "for this collection, this block provides that information.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -140,7 +143,7 @@ sub initialize {
 	    "Information about the collection methods used",
         { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
 	    "Any additional remarks that were entered about the collection.",
-	{ value => 'resgroup', maps_to => '1.2:colls:group' },
+	{ value => 'resgroup', maps_to => '1.2:colls:resgroup' },
 	    "The research group(s), if any, associated with this collection.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
 	    "The primary reference for the collection, as formatted text.",
@@ -438,6 +441,36 @@ sub initialize {
 	    "List of time intervals into which this occurrence or collection would be placed",
 	    "according to the C<B<overlap>> timerule.");
     
+    $ds->define_block('1.2:colls:ages' => 
+	{ select => ['cc.direct_ma', 'cc.direct_ma_error', 'cc.direct_ma_unit',
+	  'cc.direct_ma_method', 'cc.max_ma', 'cc.max_ma_error', 'cc.max_ma_unit',
+	  'cc.max_ma_method', 'cc.min_ma', 'cc.min_ma_error', 'cc.min_ma_unit',
+	  'cc.min_ma_method' ], tables => 'cc' },
+	{ output => 'direct_ma', com_name => 'agd', data_type => 'dec' },
+	    "The direct age (if any) determined for this collection.",
+	{ output => 'direct_ma_error', com_name => 'agdc', data_type => 'dec' },
+	    "The uncertainty in the direct age measurement",
+	{ output => 'direct_ma_unit', com_name => 'agdu' },
+	    "The unit for the direct age and uncertainty. Values are: B<Ma>, B<Ka>, B<YBP>.",
+	{ output => 'direct_ma_method', com_name => 'agdm' },
+	    "The method by which the direct age was obtained.",
+	{ output => 'max_ma', com_name => 'agb', data_type => 'dec' },
+	    "The maximum age (if any) determined for this collection.",
+	{ output => 'max_ma_error', com_name => 'agbc', data_type => 'dec' },
+	    "The uncertainty in the maximum age measurement",
+	{ output => 'max_ma_unit', com_name => 'agbu' },
+	    "The unit for the maximum age and uncertainty. Values are the same as for B<adu>.",
+	{ output => 'max_ma_method', com_name => 'agbm' },
+	    "The method by which the maximum age was obtained.",
+	{ output => 'min_ma', com_name => 'agt', data_type => 'dec' },
+	    "The minimum age (if any) determined for this collection.",
+	{ output => 'min_ma_error', com_name => 'agtc', data_type => 'dec' },
+	    "The uncertainty in the minimum age measurement",
+	{ output => 'min_ma_unit', com_name => 'agtu' },
+	    "The unit for the minimum age and uncertainty. Values are the same as for B<adu>.",
+	{ output => 'min_ma_method', com_name => 'agtm' },
+	    "The method by which the minimum age was obtained.");
+    
     $ds->define_block('1.2:colls:strat' =>
 	{ select => ['cc.formation', 'cc.geological_group', 'cc.member'], tables => 'cc' },
 	{ output => 'formation', com_name => 'sfm' },
@@ -606,7 +639,7 @@ sub initialize {
 	{ output => 'taxonomy_comments', com_name => 'tcm' },
 	    "Comments about the taxonomy of what was found.");
     
-    $ds->define_block('1.2:colls:group' =>
+    $ds->define_block('1.2:colls:resgroup' =>
 	{ select => [ 'cc.research_group' ],
 	  tables => 'cc' },
 	{ output => 'research_group', com_name => 'rgp' },
@@ -619,13 +652,14 @@ sub initialize {
 	{ include => '1.2:colls:loc' },
 	{ include => '1.2:colls:paleoloc' },
 	{ include => '1.2:colls:prot' },
+	{ include => '1.2:colls:ages' },
 	{ include => '1.2:colls:stratext' },
 	{ include => '1.2:colls:lithext' },
 	{ include => '1.2:colls:geo' },
 	{ include => '1.2:colls:components' },
 	{ include => '1.2:colls:taphonomy' },
 	{ include => '1.2:colls:methods' },
-	{ include => '1.2:colls:group' },
+	{ include => '1.2:colls:resgroup' },
 	{ include => '1.2:refs:attr' });
     
     # Then define an output block for displaying stratigraphic results
@@ -877,6 +911,16 @@ sub initialize {
 	    "Select the original identification of the specified occurrence.",
 	{ value => 'latest' },
 	    "Select the latest identification of the specified occurrence.");
+    
+    $ds->define_set('1.2:colls:agetypes' => 
+	{ value => 'direct' },
+	    "Select collections that specify a direct age.",
+	{ value => 'max' },
+	    "Select collections that specify a maximum age.",
+	{ value => 'min' },
+	    "Select collections that specify a minimum age.",
+	{ value => 'any' },
+	    "Select all of these.");
     
     # $ds->define_set('1.2:occs:ident_qualification' =>
     # 	{ value => 'any' },
@@ -1198,6 +1242,10 @@ sub initialize {
 	    "C<!slope,^carbonate>.  You may specify one or more of the following values,",
 	    "as a comma-separated list:", 
 	    $ds->document_set('1.2:colls:envtype'),
+	{ param => 'has_age', valid => '1.2:colls:agetypes', list => ',' },
+	    "Return only records associated with a collection that has been dated. In other",
+	    "words, one that has either a direct age, a maximum age, or a minimum age more",
+	    "precise than the range of its assigned time interval. Accepted values include:",
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
 	{ allow => '1.2:timerule_selector' });
@@ -3959,6 +4007,31 @@ sub generateMainFilters {
 	elsif ( $e ne '_' )
 	{
 	    $request->add_warning("bad value '$e' for parameter 'envtype'");
+	}
+    }
+    
+    # Check for parameter 'has_age'
+    
+    my %has_age = map { $_ => 1 } $request->clean_param_list('has_age');
+    
+    if ( %has_age )
+    {
+	my @age_filters;
+	
+	push @age_filters, 'cc.direct_ma is not null' if $has_age{direct} || $has_age{any};
+	push @age_filters, 'cc.max_ma is not null' if $has_age{max} || $has_age{any};
+	push @age_filters, 'cc.min_ma is not null' if $has_age{min} || $has_age{any};
+	
+	if ( @age_filters == 1 )
+	{
+	    push @filters, @age_filters;
+	    $tables->{cc} = 1;
+	}
+	
+	elsif ( @age_filters )
+	{
+	    push @filters, '(' . join(' or ', @age_filters) . ')';
+	    $tables->{cc} = 1;
 	}
     }
     
