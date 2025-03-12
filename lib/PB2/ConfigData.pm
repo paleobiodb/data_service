@@ -230,11 +230,6 @@ sub initialize {
 	{ output => 'description', com_name => 'dsc'},
 	    "Description of the model, including the bibliographic reference for the source.");
     
-    $ds->define_block('1.2:config:resgroups' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'rsg', if_field => 'group_name' },
-	{ output => 'group_name', com_name => 'rsg' },
-	    "Research group name");
-    
     $ds->define_block('1.2:config:all' =>
 	{ include => '1.2:config:geosum' },
 	{ include => '1.2:config:ranks' },
@@ -300,7 +295,7 @@ sub initialize {
     # Get the list of lithologies from the database.
     
     my ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'lithology2'");
+	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'lithology1'");
     
     my @lithology_list = $field_type =~ /'(.*?)'/g;
     
@@ -434,9 +429,9 @@ sub initialize {
     
     my @resgroup_list = $field_type =~ /'(.*?)'/g;
     
-    $RES_GROUPS = [ ];
+    $RESEARCH_GROUPS = [ ];
     
-    push @$RES_GROUPS, { group_name => $_ } foreach @resgroup_list;
+    push @$RESEARCH_GROUPS, { group_name => $_ } foreach @resgroup_list;
     
     # Get the list of paleocoordinate models from the database.
     
@@ -466,15 +461,6 @@ sub initialize {
 	    }
 	}
     }
-    
-    ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $COLLECTIONS like 'research_group'");
-    
-    my @resgroup_list = $field_type =~ /'(.*?)'/g;
-    
-    $RESEARCH_GROUPS = [ ];
-    
-    push @$RESEARCH_GROUPS, { group_name => $_ } foreach @resgroup_list;
 }
 
 
