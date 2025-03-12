@@ -27,12 +27,14 @@ use Moo::Role;
 no warnings 'numeric';
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData PB2::IntervalData PB2::CollectionData PB2::TaxonData PB2::PersonData);
+our (@REQUIRES_ROLE) = qw(PB2::ConfigData PB2::CommonData PB2::ReferenceData PB2::IntervalData 
+			  PB2::CollectionData PB2::TaxonData PB2::PersonData);
 
 our ($MAX_BIN_LEVEL) = 0;
-our (%COUNTRY_NAME, %CONTINENT_NAME);
+our (%CC_NAME, %CC_CODE, @CC_LIST);
 our (%ETVALUE, %EZVALUE);
 our (%LITH_VALUE, %LITHTYPE_VALUE);
+our (%RESEARCH_GROUP_NAME);
 
 
 # initialize ( )
@@ -52,7 +54,7 @@ sub initialize {
 	    "The identifier (if any) of the database record corresponding to this name.",
 	{ output => 'record_type', com_name => 'typ' },
 	    "The type of this record: varies by record. Will be one of: C<B<txn>>, C<B<str>>,",
-	    "C<B<prs>>, C<B<int>>, C<B<col>>, C<B<ref>>.",
+	    "C<B<prs>>, C<B<int>>, C<B<col>>, C<B<ref>>, C<B<rgp>>, C<B<cou>>.",
 	{ output => 'name', com_name => 'nam' },
 	    "A name that matches the characters given by the B<C<name>> parameter.",
 	# taxa
@@ -115,8 +117,12 @@ sub initialize {
 	    "taxonomic names",
 	{ value => 'col' },
 	    "fossil collections",
+	{ value => 'cou' },
+	    "countries and ocean basins",
 	{ value => 'ref' },
 	    "bibliographic references",
+	{ value => 'rgp' },
+	    "contributor research groups",
 	{ value => 'nav' },
 	    "select the set of types appropriate for auto-complete in the Navigator web application",
 	{ value => 'cls' },
@@ -243,7 +249,6 @@ sub initialize {
 	{ output => 'pubyr', com_name => 'opy' },
 	    "The year in which the opinion was published, if different from the",
 	    "bibliographic reference.");
-    
 }
 
 
@@ -261,7 +266,8 @@ sub auto_complete {
     
     if ( @requested_types == 1 )
     {
-	@requested_types = ('int', 'str', 'prs', 'txn', 'col', 'ref') if $requested_types[0] eq 'nav';
+	@requested_types = ('int', 'str', 'prs', 'txn', 'cou', 'rgp') 
+	    if $requested_types[0] eq 'nav';
 	@requested_types = ('int', 'str', 'txn', 'col', 'ref') if $requested_types[0] eq 'cls';
     }
     
@@ -316,8 +322,7 @@ sub auto_complete {
     
     # Now collect up all of the results.
     
-    my (@txn_results, @int_results, @str_results, @prs_results, @col_results, @ref_results);
-    my (%type_processed, @found_types);
+    my (%type_processed, %results);
     
     foreach my $type ( @requested_types )
     {
@@ -326,107 +331,67 @@ sub auto_complete {
 	
 	if ( $type eq 'int' )
 	{
-	    @int_results = $request->auto_complete_int($name, $total_limit);
-	    push @found_types, 'int' if @int_results;
+	    my @results = $request->auto_complete_int($name, $total_limit);
+	    $results{'int'} = \@results if @results;
 	}
 	
 	elsif ( $type eq 'txn' )
 	{
-	    @txn_results = $request->auto_complete_txn($name, $total_limit);
-	    push @found_types, 'txn' if @txn_results;
+	    my @results = $request->auto_complete_txn($name, $total_limit);
+	    $results{'txn'} = \@results if @results;
 	}
 	
 	elsif ( $type eq 'str' )
 	{
-	    @str_results = $request->auto_complete_str($name, $total_limit, $options);
-	    push @found_types, 'str' if @str_results;
+	    my @results = $request->auto_complete_str($name, $total_limit, $options);
+	    $results{'str'} = \@results if @results;
 	}
 	
 	elsif ( $type eq 'prs' )
 	{
-	    @prs_results = $request->auto_complete_prs($name, $total_limit);
-	    push @found_types, 'prs' if @prs_results;
+	    my @results = $request->auto_complete_prs($name, $total_limit);
+	    $results{'prs'} = \@results if @results;
 	}
 	
 	elsif ( $type eq 'col' )
 	{
-	    @col_results = $request->auto_complete_col($name, $total_limit, $options);
-	    push @found_types, 'col' if @col_results;
+	    my @results = $request->auto_complete_col($name, $total_limit, $options);
+	    $results{'col'} = \@results if @results;
 	}
 	
 	elsif ( $type eq 'ref' )
 	{
-	    @ref_results = $request->auto_complete_ref($name, $total_limit);
-	    push @found_types, 'ref' if @ref_results;
+	    my @results = $request->auto_complete_ref($name, $total_limit);
+	    $results{'ref'} = \@results if @results;
+	}
+	
+	elsif ( $type eq 'cou' )
+	{
+	    my @results = $request->auto_complete_cou($name, $total_limit);
+	    $results{'cou'} = \@results if @results;
+	}
+	
+	elsif ( $type eq 'rgp' )
+	{
+	    my @results = $request->auto_complete_rgp($name, $total_limit);
+	    $results{'rgp'} = \@results if @results;
 	}
     }
     
-    return unless @found_types;
+    return unless keys %results;
     
-    my $per_type_limit = int($total_limit / scalar(@found_types));
     my @results;
     
-    foreach my $type ( @found_types )
+    foreach my $type ( qw(int txn str prs col ref cou rgp) )
     {
-	my $count = 0;
-	
-	if ( $type eq 'int' )
+	if ( $results{$type} )
 	{
-	    foreach my $r (@int_results)
+	    my $count = 0;
+	    
+	    foreach my $r ( $results{$type}->@* )
 	    {
 		push @results, $r;
-		last if ++$count >= $per_type_limit;
-		last if @results > $total_limit;
-	    }
-	}
-	
-	elsif ( $type eq 'txn' )
-	{
-	    foreach my $r (@txn_results)
-	    {
-		push @results, $r;
-		last if ++$count >= $per_type_limit;
-		last if @results > $total_limit;
-	    }
-	}
-	
-	elsif ( $type eq 'str' )
-	{
-	    foreach my $r (@str_results)
-	    {
-		push @results, $r;
-		last if ++$count >= $per_type_limit;
-		last if @results > $total_limit;
-	    }
-	}
-	
-	elsif ( $type eq 'prs' )
-	{
-	    foreach my $r (@prs_results)
-	    {
-		push @results, $r;
-		last if ++$count >= $per_type_limit;
-		last if @results > $total_limit;
-	    }
-	}
-	
-	elsif ( $type eq 'col' )
-	{
-	    foreach my $r (@col_results)
-	    {
-		push @results, $r;
-		last if ++$count >= $per_type_limit;
-		last if @results > $total_limit;
-	    }
-	}
-	
-	elsif ( $type eq 'ref' )
-	{
-	    foreach my $r (@ref_results)
-	    {
-		push @results, $r;
-		last if ++$count >= $per_type_limit;
-		last if @results > $total_limit;
+		last if ++$count >= $total_limit;
 	    }
 	}
     }
@@ -434,6 +399,116 @@ sub auto_complete {
     $request->list_result(\@results);
 }
 
+
+
+# auto_complete_rgp ( name )
+# 
+# If $name matches any research group, return that group.
+
+sub auto_complete_rgp {
+    
+    my ($request, $name) = @_;
+    
+    my $len = length($name);
+    
+    my $search = lc $name;
+    
+    unless ( %RESEARCH_GROUP_NAME )
+    {
+	if ( $PB2::ConfigData::RESEARCH_GROUPS && @$PB2::ConfigData::RESEARCH_GROUPS )
+	{
+	    foreach my $r ( @$PB2::ConfigData::RESEARCH_GROUPS )
+	    {
+		my $name = $r->{group_name};
+		my $canonical = lc $name;
+		
+		$RESEARCH_GROUP_NAME{$canonical} = $name;
+	    }
+	}
+    }
+    
+    my @results;
+    
+    foreach my $k ( keys %RESEARCH_GROUP_NAME )
+    {
+	if ( substr($k, 0, $len) eq $search )
+	{
+	    push @results, { record_id => 'rgp', record_type => 'rgp', 
+			     name => $RESEARCH_GROUP_NAME{$k} };
+	}
+    }
+    
+    return @results;
+}
+
+
+sub auto_complete_cou {
+    
+    my ($request, $name, $limit) = @_;
+    
+    my $len = length($name);
+    
+    my $search = lc $name;
+    
+    unless ( %CC_NAME )
+    {
+	if ( $PB2::ConfigData::COUNTRIES && @$PB2::ConfigData::COUNTRIES )
+	{
+	    foreach my $r ( @$PB2::ConfigData::COUNTRIES )
+	    {
+		my $canonical = lc $r->{country_name};
+		
+		$CC_NAME{$canonical} = $r->{country_name};
+		$CC_CODE{$canonical} = $r->{cc2};
+		push @CC_LIST, $canonical;
+	    }
+	}
+	
+	if ( $PB2::ConfigData::CONTINENTS && @$PB2::ConfigData::CONTINENTS )
+	{
+	    foreach my $r ( @$PB2::ConfigData::CONTINENTS )
+	    {
+		my $canonical = lc $r->{continent_name};
+		
+		unless ( $CC_NAME{$canonical} )
+		{
+		    $CC_NAME{$canonical} = $r->{continent_name};
+		    $CC_CODE{$canonical} = $r->{cc3};
+		    push @CC_LIST, $canonical;
+		}
+	    }
+	}
+    }
+    
+    my @results;
+    
+    foreach my $k ( @CC_LIST )
+    {
+	if ( substr($k, 0, $len) eq $search )
+	{
+	    push @results, { record_id => 'cou', name => $CC_NAME{$k}, cc_list => $CC_CODE{$k} };
+	}
+    }
+    
+    return @results;    
+    
+    # my $dbh = $request->get_connection;
+    
+    # my $sql = "SELECT 'cou' as record_id, name, cc as cc_list FROM $COUNTRY_MAP
+    # 		WHERE name like '%${name}%'";
+    
+    # my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    # if ( ref $result eq 'ARRAY' )
+    # {
+    # 	return @$result;
+    # }
+    
+    # else
+    # {
+    # 	return;
+    # }
+}
 
 # list_associated ( )
 # 

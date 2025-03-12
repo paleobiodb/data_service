@@ -54,6 +54,48 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_property('COLLECTION_DATA', CAN_DELETE => 'admin');
     
+    set_table_name(COLLECTION_LOC => 'coll_loc');
+    set_table_name(COLLECTION_INTS => 'coll_ints');
+    set_table_name(COLLECTION_LITHS => 'coll_lith');
+    set_table_name(COLLECTION_STRATA => 'coll_strata');
+    set_table_name(STRATA_NAMES => 'strata_names');
+    
+    set_table_group('collection_data' => 'COLLECTION_DATA', 'COLLECTION_MATRIX',
+		    'COLLECTION_LOC', 'COLLECTION_INTS', 'COLLECTION_STRATA',
+		    'STRATA_NAMES');
+    
+    set_table_name(PALEOCOORDS => 'paleocoords');
+    set_table_name(PALEOSTATIC => 'paleostatic');
+    set_table_name(PALEOCOORDS_BINS => 'paleocoords_bins');
+    set_table_name(PALEOSTATIC_BINS => 'paleostatic_bins');
+    set_table_name(PALEOMODELS => 'paleomodels');
+    
+    set_table_group('paleocoordinates' => 'PALEOCOORDS', 'PALEOSTATIC',
+		    'PALEOCOORDS_BINS', 'PALEOSTATIC_BINS', 'PALEOMODELS');
+    
+    set_table_name(MACROSTRAT_LITHS => 'macrostrat.liths');
+    
+    set_table_name(COUNTRY_MAP => 'country_map');
+    set_table_name(CONTINENT_DATA => 'continent_data');
+    
+    set_table_group('country_data' => 'COUNTRY_MAP', 'CONTINENT_DATA');
+    
+    set_table_name(SUMMARY_BINS => 'coll_bins');
+    set_table_name(SUMMARY_LOC => 'bin_loc');
+    
+    set_table_group('collection_summary' => 'SUMMARY_BINS', 'SUMMARY_LOC');
+    
+    set_table_name(DIVERSITY_GLOBAL => 'div_global');
+    set_table_name(DIVERSITY_MATRIX => 'div_matrix');
+    
+    set_table_group(diversity_data => 'DIV_GLOBAL', 'DIV_MATRIX');
+    
+    set_table_name(PREVALENCE_GLOBAL => 'pvl_global');
+    set_table_name(PREVALENCE_MATRIX => 'pvl_matrix');
+    set_table_name(PREVALENCE_COLLS => 'pvl_collections');
+    
+    set_table_group(prevalence_data => 'PVL_GLOBAL', 'PVL_MATRIX', 'PVL_COLLS');
+    
     set_table_name(REFERENCE_DATA => 'refs');
     set_table_name(REFERENCE_AUTHORS => 'ref_authors');
     set_table_name(REFERENCE_EDITORS => 'ref_editors');
@@ -115,6 +157,30 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('SPECIMEN_MATRIX', PRIMARY_KEY => "specimen_no");
     set_table_property(SPEC_MATRIX => TABLE_COMMENT =>
 		       "This table should not be modified directly, but only through automatic processes");
+    
+    set_table_name(INTERVAL_DATA => 'interval_data');
+    set_table_name(INTERVAL_LOOKUP => 'interval_lookup');
+    set_table_name(TIMESCALE_DATA => 'scale_data');
+    set_table_name(TIMESCALE_MAP => 'scale_map');
+    set_table_group('intervals' => 'INTERVAL_DATA', 'INTERVAL_LOOKUP', 
+		    'TIMESCALE_DATA', 'TIMESCALE_MAP');
+    
+    set_table_name(INTERVAL_MAJOR_MAP => 'int_major_map');
+    
+    # Paleocoordinate tables
+    
+    set_table_name(PCOORD_DATA => 'paleocoords');
+    set_table_name(PCOORD_STATIC => 'paleostatic');
+    set_table_name(PCOORD_MODELS => 'paleomodels');
+    set_table_name(PCOORD_PLATES => 'geoplates');
+    set_table_name(PCOORD_BINS_DATA => 'paleocoords_bins');
+    set_table_name(PCOORD_BINS_STATIC => 'paleostatic_bins');
+    
+    set_table_group(paleocoord_data => 'PCOORD_DATA', 'PCOORD_STATIC',
+		    'PCOORD_MODELS', 'PCOORD_PLATES',
+		    'PCOORD_BINS_DATA', 'PCOORD_BINS_STATIC');
+    
+    # Publications and archives
     
     set_table_name(PUBLICATIONS => 'pubs');
     set_table_property('PUBLICATIONS', PRIMARY_KEY => 'pub_no');

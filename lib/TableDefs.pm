@@ -26,7 +26,7 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $COLL_LITH $COLL_ENV $STRATA_NAMES
 		      $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS
-		      $DIV_MATRIX $DIV_GLOBAL $PVL_MATRIX $PVL_GLOBAL
+		      $DIV_MATRIX $DIV_GLOBAL $PVL_MATRIX $PVL_GLOBAL $PVL_COLLS
 		      $OCC_MATRIX $OCC_TAXON $REF_SUMMARY $SPEC_MATRIX
 		      $SPEC_ELEMENTS $SPEC_ELT_MAP $LOCALITIES $WOF_PLACES $COLL_EVENTS
 		      $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
@@ -159,16 +159,6 @@ set_table_property(PERSON_DATA => PRIMARY_KEY => 'person_no');
 set_table_property(SESSION_DATA => PRIMARY_KEY => 'session_id');
 set_table_property(WING_USERS => PRIMARY_KEY => 'id');
 
-# Paleocoordinate tables
-
-set_table_name(PCOORD_DATA => 'paleocoords');
-set_table_name(PCOORD_STATIC => 'paleostatic');
-set_table_name(PCOORD_MODELS => 'paleomodels');
-set_table_name(PCOORD_PLATES => 'geoplates');
-
-set_table_group(paleocoord_data => 'PCOORD_DATA', 'PCOORD_STATIC',
-		'PCOORD_MODELS', 'PCOORD_PLATES');
-
 # new collection tables
 
 our $COLL_MATRIX = "coll_matrix";
@@ -235,6 +225,7 @@ our $DIV_MATRIX = 'div_matrix';
 our $DIV_GLOBAL = 'div_global';
 our $PVL_MATRIX = 'pvl_matrix';
 our $PVL_GLOBAL = 'pvl_global';
+our $PVL_COLLS = 'pvl_collections';
 
 # iDigBio external info table
 

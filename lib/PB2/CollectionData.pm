@@ -16,13 +16,14 @@ package PB2::CollectionData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX %TABLE);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX $BIN_LOC %TABLE);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use IntervalBase qw(ts_defined ts_record ts_boundary_list ts_boundary_name);
 use Taxonomy;
 use IntervalBase qw(ts_boundary_list ts_boundary_name);
 
 use Try::Tiny;
+use List::Util qw(any);
 use Carp qw(carp croak);
 
 use Moo::Role;
@@ -30,7 +31,8 @@ use Moo::Role;
 no warnings 'numeric';
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2::IntervalData PB2::TaxonData);
+our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ConfigData PB2::ReferenceData PB2::IntervalData 
+			  PB2::TaxonData);
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);
@@ -76,12 +78,12 @@ sub initialize {
     
     foreach my $r ( @$PB2::ConfigData::COUNTRIES )
     {
-	$COUNTRY_NAME{$r->{cc}} = $r->{name};
+	$COUNTRY_NAME{$r->{cc2}} = $r->{country_name};
     }
     
     foreach my $r ( @$PB2::ConfigData::CONTINENTS )
     {
-	$CONTINENT_NAME{$r->{continent_code}} = $r->{continent_name};
+	$CONTINENT_NAME{$r->{cc3}} = $r->{continent_name};
     }
     
     # Define an output map listing the blocks of information that can be
@@ -158,6 +160,8 @@ sub initialize {
     $ds->define_output_map('1.2:colls:summary_map' =>
 	{ value => 'bin' },
 	    "The list of larger-scale clusters to which this cluster belongs.",
+	{ value => 'paleoloc', maps_to => '1.2:summary:paleoloc' },
+	    "The paleo-coordinates of each cluster",
         { value => 'ext', maps_to => '1.2:colls:ext' },
 	    "Additional information about the geographic extent of each cluster.",
         { value => 'time', maps_to => '1.2:colls:time' },
@@ -383,6 +387,15 @@ sub initialize {
 	{ output => 'paleoage4_c', com_name => 'ps4_c', if_field => 'paleomodel4' }, "!",
 	{ output => 'paleolng4_c', com_name => 'pln4_c', data_type => 'dec', if_field => 'paleomodel4' }, "!",
 	{ output => 'paleolat4_c', com_name => 'pla4_c', data_type => 'dec', if_field => 'paleomodel4' }, "!");
+    
+    $ds->define_block('1.2:summary:paleoloc' =>
+	{ select => ['sp.plate_no', 'sp.paleo_lat', 'sp.paleo_lng'] },
+	{ output => 'plate_no', com_name => 'gpl' },
+	    "The geologic plate on which this summary cluster is located",
+	{ output => 'paleo_lng', com_name => 'pln' },
+	    "The paleolongitude of this summary cluster, averaged over its collections",
+	{ output => 'paleo_lat', com_name => 'pla' },
+	    "The paleolatitude of this summary cluster, averaged over its collections");
     
 #	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
 #	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.");
@@ -612,6 +625,7 @@ sub initialize {
 	{ include => '1.2:colls:components' },
 	{ include => '1.2:colls:taphonomy' },
 	{ include => '1.2:colls:methods' },
+	{ include => '1.2:colls:group' },
 	{ include => '1.2:refs:attr' });
     
     # Then define an output block for displaying stratigraphic results
@@ -1006,6 +1020,8 @@ sub initialize {
 	    "the vertical bar character C<|>, and you can use all of the other standard",
 	    "regular expression syntax including the backslash C<\\>.",
 	{ at_most_one => [ 'coll_match', 'coll_re' ] },
+	{ param => 'research_group', valid => ANY_VALUE },
+	    "Return only records associated with the specified research group.",
 	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s),",
 	    "I<including all subtaxa and synonyms>.  You may specify multiple names, separated",
@@ -1700,7 +1716,7 @@ sub summary {
     my $dbh = $request->get_connection;
     my $tables = $request->tables_hash;
     
-    # Figure out which bin level we are being asked for.  The default is 1.    a
+    # Figure out which bin level we are being asked for.  The default is 1.
     
     my $bin_level = $request->clean_param('level') || 1;
     
@@ -1800,6 +1816,16 @@ sub summary {
     
     $summary_joins .= $request->generateJoinList('s', $tables);
     
+    if ( $request->has_block('1.2:summary:paleoloc') )
+    {
+	$summary_joins .= "LEFT JOIN paleocoords_bins as sp using (bin_id, interval_no)\n";
+	
+	my $pgm = $request->{my_plate_model} || $PCOORD_DEFAULT;
+	
+	push @filters, "sp.model = 'Wright2013'";
+	push @filters, "sp.selector = 'mid'";
+    }
+    
     if ( $tables->{cc} )
     {
 	push @filters, $access_filter;
@@ -1831,7 +1857,7 @@ sub summary {
     
     my $filter_string = join(' and ', @filters);
     
-    unless ( $filter_string =~ qr{ \bs.interval_no \s* = }xs )
+    unless ( $filter_string =~ qr{ \bs.interval_no \s* = }xs or $tables->{c} )
     {
 	$filter_string .= ' and s.interval_no = 0';
     }
@@ -2765,7 +2791,7 @@ sub generateAccessFilter {
 
 sub generateMainFilters {
 
-    my ($request, $op, $mt, $tables_ref) = @_;
+    my ($request, $op, $mt, $tables) = @_;
     
     my $dbh = $request->get_connection;
     my $taxonomy = $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
@@ -2823,7 +2849,7 @@ sub generateMainFilters {
 		push @filters, @clust_filters;
 	    }
 	    
-	    $tables_ref->{non_summary} = 1;
+	    $tables->{non_summary} = 1;
 	}
     }
     
@@ -2836,7 +2862,7 @@ sub generateMainFilters {
 					     "Unknown collection '%'");
 	
 	# If the result is -1, that means that only invalid identifiers were
-	# specified.
+	# specified. In that case, include a filter that will return no results.
 	
 	if ( $id_list eq '-1' )
 	{
@@ -2844,20 +2870,18 @@ sub generateMainFilters {
 	    push @filters, "c.collection_no = -1";
 	}
 	
-	# If there aren't any bins, or no valid cluster ids were specified,
-	# include a filter that will return no results.
-	
-	elsif ( $op eq 'summary' )
-	{
-	    $tables_ref->{non_summary} = 1;
-	    $tables_ref->{cm} = 1;
-	    push @filters, "cm.collection_no in ($id_list)";
-	}
+	# elsif ( $op eq 'summary' )
+	# {
+	#     $tables->{non_summary} = 1;
+	#     $tables->{cm} = 1;
+	#     push @filters, "cm.collection_no in ($id_list)";
+	# }
 	
 	else
 	{
 	    push @filters, "c.collection_no in ($id_list)";
-	    $tables_ref->{non_summary} = 1;
+	    $tables->{c} = 1;
+	    $tables->{non_summary} = 1;
 	}
     }
     
@@ -2867,7 +2891,7 @@ sub generateMainFilters {
     {
 	my $quoted = $dbh->quote("%${coll_match}%");
 	
-	$tables_ref->{cc} = 1;
+	$tables->{cc} = 1;
 	push @filters, "(cc.collection_name like $quoted or cc.collection_aka like $quoted)";
     }
     
@@ -2875,8 +2899,26 @@ sub generateMainFilters {
     {
 	my $quoted = $dbh->quote($coll_re);
 	
-	$tables_ref->{cc} = 1;
+	$tables->{cc} = 1;
 	push @filters, "(cc.collection_name rlike $quoted or cc.collection_aka rlike $quoted)";
+    }
+    
+    # Check for parameter 'research_group'.
+    
+    if ( my $resgroup = $request->clean_param('research_group') )
+    {
+	my $negate = '';
+	
+	if ( $resgroup =~ /^!(.*)/ )
+	{
+	    $negate = 'not ';
+	    $resgroup = $1;
+	}
+	
+	my $quoted = $dbh->quote($resgroup);
+	
+	$tables->{cc} = 1;
+	push @filters, "${negate}find_in_set(cc.research_group,$quoted)";
     }
     
     # Check for parameters 'base_name', 'taxon_name', 'match_name',
@@ -2891,6 +2933,7 @@ sub generateMainFilters {
 	$taxon_name = $value;
 	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
+	$tables->{o} = 1;
     }
     
     elsif ( $value = $request->clean_param('match_name') )
@@ -2898,12 +2941,14 @@ sub generateMainFilters {
 	$taxon_name = $value;
 	$do_match = 1;
 	$no_synonyms = 1;
+	$tables->{o} = 1;
     }
     
     elsif ( $value = $request->clean_param('taxon_name') )
     {
 	$taxon_name = $value;
 	$no_synonyms = $request->clean_param('immediate');
+	$tables->{o} = 1;
     }
     
     elsif ( @values = $request->safe_param_list('base_id') )
@@ -2911,12 +2956,14 @@ sub generateMainFilters {
 	@taxon_nos = @values;
 	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
+	$tables->{o} = 1;
     }
     
     elsif ( @values = $request->safe_param_list('taxon_id') )
     {
 	@taxon_nos = @values;
 	$no_synonyms = $request->clean_param('immediate');
+	$tables->{o} = 1;
     }
     
     # If a name was specified, we start by resolving it.  The resolution is
@@ -3034,9 +3081,9 @@ sub generateMainFilters {
     {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
-	$tables_ref->{o} = 1;
-	$tables_ref->{tf} = 1;
-	$tables_ref->{non_geo_filter} = 1;
+	$tables->{o} = 1;
+	$tables->{tf} = 1;
+	$tables->{non_geo_filter} = 1;
 	$request->{my_base_taxa} = [ @include_taxa, @exclude_taxa ];
     }
     
@@ -3044,10 +3091,10 @@ sub generateMainFilters {
     {
 	my $taxon_list = join ',', map { $_->{orig_no} } @include_taxa;
 	push @filters, "(t.accepted_no in ($taxon_list) or t.orig_no in ($taxon_list))";
-	$tables_ref->{o} = 1;
-	$tables_ref->{tf} = 1;
-	$tables_ref->{non_geo_filter} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{o} = 1;
+	$tables->{tf} = 1;
+	$tables->{non_geo_filter} = 1;
+	$tables->{non_summary} = 1;
 	$request->{my_taxa} = [ @include_taxa, @exclude_taxa ];
     }
     
@@ -3161,8 +3208,8 @@ sub generateMainFilters {
 	    push @filters, "o.orig_no = -1";
 	}
 	
-	$tables_ref->{o} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{o} = 1;
+	$tables->{non_summary} = 1;
     }
     
     # If a number was given but it does not exist in the hierarchy, add a
@@ -3172,7 +3219,7 @@ sub generateMainFilters {
 	    $request->param_given('taxon_name') || $request->param_given('taxon_id') )
     {
 	push @filters, "o.orig_no = -1";
-	$tables_ref->{non_summary} = 1;
+	$tables->{non_summary} = 1;
     }
     
     # Now add filters for excluded taxa.  But only if there is at least one
@@ -3182,7 +3229,7 @@ sub generateMainFilters {
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
 	$request->{my_excluded_taxa} = \@exclude_taxa;
-	$tables_ref->{tf} = 1;
+	$tables->{tf} = 1;
     }
     
     # If any warnings occurreed, pass them on.
@@ -3199,23 +3246,23 @@ sub generateMainFilters {
 	if ( $taxonres eq 'species' )
 	{
 	    push @filters, "tv.rank <= 3";
-	    $tables_ref->{tv} = 1;
-	    $tables_ref->{o} = 1;
+	    $tables->{tv} = 1;
+	    $tables->{o} = 1;
 	}
 	
 	elsif ( $taxonres eq 'genus' || $taxonres eq 'lump_genus' || $taxonres eq 'lump_gensub' )
 	{
 	    push @filters, "tv.rank <= 5";
-	    $tables_ref->{tv} = 1;
-	    $tables_ref->{o} = 1;
+	    $tables->{tv} = 1;
+	    $tables->{o} = 1;
 	}
 	
 	elsif ( $taxonres eq 'family' || $taxonres eq 'lump_family' )
 	{
 	    push @filters, "(tv.rank <= 9 or ph.family_no is not null)";
-	    $tables_ref->{tv} = 1;
-	    $tables_ref->{ph} = 1;
-	    $tables_ref->{o} = 1;
+	    $tables->{tv} = 1;
+	    $tables->{ph} = 1;
+	    $tables->{o} = 1;
 	}
     }
     
@@ -3223,14 +3270,14 @@ sub generateMainFilters {
     
     my $taxon_status = $request->clean_param('taxon_status');
     
-    if ( $tables_ref->{tf} && $taxon_status )
+    if ( $tables->{tf} && $taxon_status )
     {
 	my $filter = $Taxonomy::STATUS_FILTER{$taxon_status};
 	
 	die "bad taxon status '$taxon_status'\n" unless $filter;
 	
 	push @filters, $filter;
-	$tables_ref->{o} = 1;
+	$tables->{o} = 1;
     }
     
     # Check for parameter 'pres'
@@ -3248,8 +3295,8 @@ sub generateMainFilters {
 	
 	if ( %pres && ! $pres{all} )
 	{
-	    $tables_ref->{v} = 1;
-	    $tables_ref->{o} = 1;
+	    $tables->{v} = 1;
+	    $tables->{o} = 1;
 	    
 	    my @keys = keys %pres;
 	    
@@ -3258,19 +3305,19 @@ sub generateMainFilters {
 		if ( $keys[0] eq 'regular' )
 		{
 		    push @filters, "not(v.is_trace or v.is_form)";
-		    $tables_ref->{v} = 1;
+		    $tables->{v} = 1;
 		}
 		
 		elsif ( $keys[0] eq 'form' )
 		{
 		    push @filters, "v.is_form";
-		    $tables_ref->{v} = 1;
+		    $tables->{v} = 1;
 		}
 		
 		elsif ( $keys[0] eq 'ichno' )
 		{
 		    push @filters, "v.is_trace";
-		    $tables_ref->{v} = 1;
+		    $tables->{v} = 1;
 		}
 		
 		else
@@ -3317,21 +3364,36 @@ sub generateMainFilters {
 	
     if ( defined $extant && $extant ne '' )
     {
-	$tables_ref->{v} = 1;
-	$tables_ref->{o} = 1;
+	$tables->{v} = 1;
+	$tables->{o} = 1;
 	push @filters, ($extant ? "v.is_extant = 1" : "v.is_extant = 0");
     }
     
-    # Check for parameter 'cc'
+    # Check for parameter 'cc', which selects countries, ocean basins, and/or continents
     
     my @ccs = $request->clean_param_list('cc');
     push @ccs, $request->clean_param_list('continent');
     
     if ( @ccs )
     {
+	my $countrytable;
+	
+	if ( $mt eq 's' )
+	{
+	    $tables->{bl} = 1;
+	    $tables->{use_local} = 1;
+	    $countrytable = 'bl';
+	}
+	
+	else
+	{
+	    $countrytable = 'c';
+	    $tables->{c} = 1;
+	}
+	
 	if ( $ccs[0] eq '_' )
 	{
-	    push @filters, "c.collection_no = -1";
+	    push @filters, "$countrytable.cc = 'xx'";
 	}
 	
 	else
@@ -3373,15 +3435,23 @@ sub generateMainFilters {
 	    
 	    if ( @cc2 )
 	    {
-	    	push @disjoint_filters, "c.cc in ('" . join("','", @cc2) . "')";
-		$tables_ref->{c} = 1;
+	    	push @disjoint_filters, "$countrytable.cc in ('" . join("','", @cc2) . "')";
+		$tables->{c} = 1;
 	    }
 	    
 	    if ( @cc3 )
 	    {
-	    	push @disjoint_filters, "ccmap.continent in ('" . join("','", @cc3) . "')";
-		$tables_ref->{c} = 1;
-	    	$tables_ref->{ccmap} = 1;
+	    	push @disjoint_filters, "$countrytable.continent in ('" . join("','", @cc3) . "')";
+		
+		if ( any { $_ eq 'EUR' } @cc3 and ! any { $_ eq 'ASI' } @cc3 )
+		{
+		    push @cc_filters, "if($countrytable.cc = 'RU', $mt.lng < 50, 1)";
+		}
+		
+		if ( any { $_ eq 'ASI' } @cc3 and ! any { $_ eq 'EUR' } @cc3 )
+		{
+		    push @disjoint_filters, "$countrytable.cc = 'RU' and $mt.lng >= 50";
+		}
 	    }
 	    
 	    if ( @disjoint_filters > 1 )
@@ -3396,7 +3466,7 @@ sub generateMainFilters {
 	    
 	    if ( @cc2x )
 	    {
-	     	push @cc_filters, "c.cc not in ('" . join("','", @cc2x) . "')";
+	     	push @cc_filters, "$countrytable.cc not in ('" . join("','", @cc2x) . "')";
 	    }
 	    
 	    if ( $invert )
@@ -3409,8 +3479,6 @@ sub generateMainFilters {
 		push @filters, @cc_filters;
 	    }
 	}
-	
-	$tables_ref->{non_summary} = 1;
     }
     
     # Check for parameter 'state'
@@ -3445,8 +3513,8 @@ sub generateMainFilters {
 	    push @filters, "cc.state in ($state_list)";
 	}
 	
-	$tables_ref->{cc} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{cc} = 1;
+	$tables->{non_summary} = 1;
     }
     
     # Check for parameter 'county'
@@ -3480,8 +3548,8 @@ sub generateMainFilters {
 	    push @filters, "cc.county in ($county_list)";
 	}
 	
-	$tables_ref->{cc} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{cc} = 1;
+	$tables->{non_summary} = 1;
     }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
@@ -3546,6 +3614,8 @@ sub generateMainFilters {
 					"((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
 	    push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
 	}
+	
+	$tables->{use_local} = 1;
     }
     
     # If only latitude bounds were specified then create a bounding box
@@ -3560,6 +3630,8 @@ sub generateMainFilters {
 	
 	my $polygon = "'POLYGON((-180.0 $y1,180.0 $y1,180.0 $y2,-180.0 $y2,-180.0 $y1))'";
 	push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
+	
+	$tables->{use_local} = 1;
     }
     
     # If the latitude bounds are such as to select no records, then add a warning.
@@ -3678,9 +3750,9 @@ sub generateMainFilters {
 	
 	$request->{my_plate_model} = $model;
 	
-	$tables_ref->{pc} = [$model, 'mid'];
+	$tables->{pc} = [$model, 'mid'];
 	
-	$tables_ref->{non_summary} = 1;
+	$tables->{non_summary} = 1;
     }
     
     # Check for parameter 'lithology'
@@ -3763,7 +3835,7 @@ sub generateMainFilters {
     
     if ( $type_string || $lith_string || $exlith_string || $lith_unknown )
     {
-	$tables_ref->{cl} = 1;
+	$tables->{cl} = 1;
 	
 	my (@include, @lith_filters);
 	
@@ -3964,28 +4036,28 @@ sub generateMainFilters {
 	if ( $et_invert && $et_unknown )
 	{
 	    push @filters, "cc.environment not in ($env_list)";
-	    $tables_ref->{cc} = 1;
+	    $tables->{cc} = 1;
 	}
 	
 	elsif ( $et_invert )
 	{
 	    push @filters, "(cc.environment not in ($env_list) or cc.environment is null)";
-	    $tables_ref->{cc} = 1;
+	    $tables->{cc} = 1;
 	}
 	
 	elsif ( $et_unknown )
 	{
 	    push @filters, "(cc.environment in ($env_list) or cc.environment is null)";
-	    $tables_ref->{cc} = 1;
+	    $tables->{cc} = 1;
 	}
 	
 	else
 	{
 	    push @filters, "cc.environment in ($env_list)";
-	    $tables_ref->{cc} = 1;
+	    $tables->{cc} = 1;
 	}
 	
-	# $tables_ref->{cc} = 1;
+	# $tables->{cc} = 1;
     }
     
     # Otherwise, if a parameter value was specified but the list is empty,
@@ -4078,8 +4150,8 @@ sub generateMainFilters {
 	my $pattern = '^(' . join('|', @formations) . ')$';
 	my $quoted = $dbh->quote($pattern);
 	push @filters, "cc.formation rlike $quoted";
-	$tables_ref->{cc} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{cc} = 1;
+	$tables->{non_summary} = 1;
     }
     
     if ( my @stratgroups = $request->clean_param_list('stratgroup') )
@@ -4092,8 +4164,8 @@ sub generateMainFilters {
 	my $pattern = '^(' . join('|', @stratgroups) . ')$';
 	my $quoted = $dbh->quote($pattern);
 	push @filters, "cc.geological_group rlike $quoted";
-	$tables_ref->{cc} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{cc} = 1;
+	$tables->{non_summary} = 1;
     }
     
     if ( my @members = $request->clean_param_list('member') )
@@ -4106,8 +4178,8 @@ sub generateMainFilters {
 	my $pattern = '^(' . join('|', @members) . ')$';
 	my $quoted = $dbh->quote($pattern);
 	push @filters, "cc.member rlike $quoted";
-	$tables_ref->{cc} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{cc} = 1;
+	$tables->{non_summary} = 1;
     }
     
     # Check for parameter 'strat'.
@@ -4115,64 +4187,71 @@ sub generateMainFilters {
     if ( my @strata = $request->clean_param_list('strat') )
     {
 	push @filters, $request->generate_stratname_filter('cs', \@strata);
-	$tables_ref->{cs} = 1;
-	$tables_ref->{c} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{cs} = 1;
+	$tables->{c} = 1;
+	$tables->{non_summary} = 1;
     }
     
     # Now we need to figure out if the 'c' table is needed.
 
-    if ( $tables_ref->{o} || $tables_ref->{t} || $tables_ref->{tf} || $tables_ref->{v} )
+    if ( $tables->{o} || $tables->{t} || $tables->{tf} || $tables->{v} )
     {
-	$tables_ref->{o} = 1;
-	$tables_ref->{c} = 1;
+	$tables->{o} = 1;
+	$tables->{c} = 1;
     }
 
-    elsif ( $tables_ref->{cc} )
+    elsif ( $tables->{cc} )
     {
-	$tables_ref->{c} = 1;
+	$tables->{c} = 1;
     }
     
     # Check for interval parameters. If no time rule is specified, it defaults to 'major'.
     
     my $time_rule = $request->clean_param('timerule') || 'major';
     
-    my ($early_age, $late_age, $early_interval_no, $late_interval_no) = $request->process_interval_params;
+    my ($early_age, $late_age, $early_interval_no, $late_interval_no) = 
+	$request->process_interval_params;
     
-    # If this is a summary or prevalence operation and no interval bounds were given at all, then
-    # we can just query on interval_no = 0 in the summary bin table.
-
-    if ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
-	 ( $time_rule eq 'major' ) &&
-	 ( ! $tables_ref->{c} ) && 
-	 ( ! $early_interval_no && ! $early_age && ! $late_age ) )
+    # If this is a summary or prevalence operation, add a clause to select the interval_no
+    # in the bin table. If no age bounds were given, select interval_no = 0.
+    
+    if ( $mt eq 's' )
     {
-	push @filters, "s.interval_no = 0";
+	my $selected = $early_interval_no || '0';
+	
+	push @filters, "s.interval_no = $selected";
     }
     
-    # If this is a summary or prevalence operation using the 'major' time rule and covering a
-    # single interval, then we can just query on the appropriate interval_no.
+    # if ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
+    # 	 ( $time_rule eq 'major' ) && $mt ne 'c' && 
+    # 	 ( ! $tables->{c} ) && 
+    # 	 ( ! $early_interval_no && ! $early_age && ! $late_age ) )
+    # {
+    # 	push @filters, "s.interval_no = 0";
+    # }
     
-    elsif ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
-	    ( $time_rule eq 'major' ) &&
-	    ( ! $tables_ref->{c} ) && 
-	    ( $early_interval_no && ( ! $late_interval_no || $early_interval_no == $late_interval_no ) ) )
+    # # If this is a summary or prevalence operation using the 'major' time rule and covering a
+    # # single interval, then we can just query on the appropriate interval_no.
+    
+    # elsif ( ( $op eq 'summary' || $op eq 'prevalence' ) &&
+    # 	    ( $time_rule eq 'major' ) &&
+    # 	    ( ! $tables->{c} ) && 
+    # 	    ( $early_interval_no && ( ! $late_interval_no || $early_interval_no == $late_interval_no ) ) )
+    # {
+    # 	push @filters, "s.interval_no = $early_interval_no";
+    # }
+    
+    # Otherwise, if age bounds were given we need to join to the collection
+    # table and filter on actual collection ages. But skip this if the operation
+    # is 'quickdiv', because the quickdiv code will add its own interval filter.
+    
+    if ( ($early_age || $late_age) && ($mt ne 's' || $tables->{c}) && $op ne 'quickdiv' )
     {
-	push @filters, "s.interval_no = $early_interval_no";
-    }
-    
-    # Otherwise, if age bounds were given we need to join to the collection table and filter on
-    # actual collection ages.
-    
-    elsif ( $early_age || $late_age )
-    {
-	$tables_ref->{c} = 1;
-	$tables_ref->{non_summary} = 1;
+	$tables->{c} = 1;
+	$tables->{non_summary} = 1;
 	
 	$request->{early_age} = $early_age;
 	$request->{late_age} = $late_age;
-
-	push @filters, "s.interval_no = 0" if $op eq 'summary' || $op eq 'prevalence';
 	
 	if ( $time_rule eq 'contain' )
 	{
@@ -4908,8 +4987,6 @@ sub generateJoinList {
 	if $tables->{pl};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = $t.ints_no\n"
 	if $tables->{ph};
-    $join_list .= "JOIN coll_map as cm using (bin_id)\n"
-	if $tables->{cm};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
@@ -4929,6 +5006,8 @@ sub generateJoinList {
 	if $tables->{li};
     $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc\n"
 	if $tables->{ccmap};
+    
+    $join_list .= "JOIN $BIN_LOC as bl using (bin_id)\n" if $tables->{bl};
     
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
@@ -5102,7 +5181,7 @@ sub valid_cc {
     # Start with a simple syntactic check.
     
     return { error => $country_error }
-	unless $value =~ qr{ ^ ( [!^]? ) ( [a-z]{2,3} ) $ }xsi;
+	unless $value =~ qr{ ^ ( [!^]? ) ( [a-z]{2,3} | [a-z][0-9] ) $ }xsi;
     
     my $exclude = $1 // '';
     my $code = $2;

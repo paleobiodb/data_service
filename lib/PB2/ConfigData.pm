@@ -25,8 +25,7 @@ use Moo::Role;
 our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, 
      $LITHOLOGIES, $MINOR_LITHS, $LITHIFICATION, $LITH_ADJECTIVES,
      $ENVIRONMENTS, $TEC_SETTINGS, $COLL_METHODS, $DATE_METHODS,
-     $PRES_MODES, $PCOORD_MODELS, $RES_GROUPS);
-
+     $PRES_MODES, $PCOORD_MODELS, $RESEARCH_GROUPS);
 
 # Initialization
 # --------------
@@ -88,22 +87,27 @@ sub initialize {
     # Next, define these output blocks.
     
     $ds->define_block('1.2:config:geosum' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'clu', if_field => 'cluster_level' },
+	{ output => 'config_section', com_name => 'cfg', value => 'clu', 
+	  if_field => 'cluster_level' },
 	    "Value 'clu' for clusters",
 	{ output => 'cluster_level', com_name => 'lvl' },
 	    "Cluster level, starting at 1",
 	{ output => 'degrees', com_name => 'deg' },
-	    "The width and height of the area represented by each cluster, in degrees.  Each level of clustering is aligned so that",
-	    "0 lat and 0 lng fall on cluster boundaries, and the cluster width/height must evenly divide 90.",
+	    "The width and height of the area represented by each cluster, in degrees.",
+	    "Each level of clustering is aligned so that 0 lat and 0 lng fall on cluster",
+	    "boundaries, and the cluster width/height must evenly divide 90.",
 	{ output => 'count', com_name => 'cnt' },
 	    "The approximate number of summary clusters at this level.",
 	{ output => 'max_colls', com_name => 'mco' },
-	    "The maximum nmber of collections in any cluster at this level (can be used for scaling cluster indicators)",
+	    "The maximum nmber of collections in any cluster at this level",
+	    "(can be used for scaling cluster indicators)",
 	{ output => 'max_occs', com_name => 'moc' },
-	    "The maximum number of occurrences in any cluster at this level (can be used for scaling cluster indicators)");
+	    "The maximum number of occurrences in any cluster at this level",
+	    "(can be used for scaling cluster indicators)");
     
     $ds->define_block('1.2:config:ranks' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'trn', if_field => 'taxonomic_rank' },
+	{ output => 'config_section', com_name => 'cfg', value => 'trn',
+	  if_field => 'taxonomic_rank' },
 	    "Value 'trn' for taxonomic ranks",
 	{ output => 'taxonomic_rank', com_name => 'rnk' },
 	    "Taxonomic rank",
@@ -112,21 +116,26 @@ sub initialize {
 	    "which is the default for C<json> format");
     
     $ds->define_block('1.2:config:continents' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'con', if_field => 'continent_name' },
+	{ output => 'config_section', com_name => 'cfg', value => 'con',
+	  if_field => 'continent_name' },
 	    "Value 'con' for continents",
 	{ output => 'continent_name', com_name => 'nam' },
 	    "Continent name",
-	{ output => 'continent_code', com_name => 'cod' },
-	    "The code used to indicate this continent when selecting fossil occurrences by continent");
+	{ output => 'cc3', pbdb_name => 'continent_code', com_name => 'cod' },
+	    "The code used to indicate this continent when selecting fossil occurrences",
+	    "by continent");
     
     $ds->define_block('1.2:config:countries' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'cou', if_field => 'name' },
+	{ output => 'config_section', com_name => 'cfg', value => 'cou',
+	  if_field => 'name' },
 	    "Value 'cou' for countries",
-	{ output => 'name', pbdb_name => 'country_name', com_name => 'nam' },
+	{ output => 'country_name', com_name => 'nam' },
 	    "Country name",
-	{ output => 'cc', pbdb_name => 'country_code', com_name => 'cod' },
-	    "The code used to indicate this continent when selecting fossil occurrences by country.",
-	    "These are the standard ISO-3166-1 country codes.",
+	{ output => 'cc2', pbdb_name => 'country_code', com_name => 'cod' },
+	    "The code used to indicate this country when selecting fossil occurrences",
+	    "by country.",
+	    "These are the standard ISO-3166-1 country codes, except for the ocean basins which",
+	    "are coded as O1 through O7.",
 	{ output => 'continent', com_name => 'con' },
 	    "The code for the continent on which this country is located");
     
@@ -204,9 +213,9 @@ sub initialize {
 	{ include => '1.2:config:lithification' },
 	{ include => '1.2:config:lithadjs' },
 	{ include => '1.2:config:environments' },
+	{ include => '1.2:config:tecsettings' },
 	{ include => '1.2:config:collmets' },
 	{ include => '1.2:config:datemets' },
-	{ include => '1.2:config:tecsettings' },
 	{ include => '1.2:config:pres_modes' },
 	{ include => '1.2:config:resgroups' });
     
@@ -221,11 +230,16 @@ sub initialize {
 	{ output => 'description', com_name => 'dsc'},
 	    "Description of the model, including the bibliographic reference for the source.");
     
+    $ds->define_block('1.2:config:resgroups' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'rsg', if_field => 'group_name' },
+	{ output => 'group_name', com_name => 'rsg' },
+	    "Research group name");
+    
     $ds->define_block('1.2:config:all' =>
 	{ include => '1.2:config:geosum' },
 	{ include => '1.2:config:ranks' },
-	{ include => '1.2:config:continents' },
 	{ include => '1.2:config:countries' },
+	{ include => '1.2:config:continents' },
 	{ include => '1.2:config:lithologies' },
 	{ include => '1.2:config:minorliths' },
 	{ include => '1.2:config:lithification' },
@@ -235,8 +249,8 @@ sub initialize {
 	{ include => '1.2:config:collmets' },
 	{ include => '1.2:config:datemets' },
 	{ include => '1.2:config:pres_modes' },	
-	{ include => '1.2:config:pgmodels' },
-	{ include => '1.2:config:resgroups' });
+	{ include => '1.2:config:resgroups' },
+	{ include => '1.2:config:pgmodels' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
@@ -276,12 +290,12 @@ sub initialize {
     # Get the list of continents from the database.
     
     $CONTINENTS = $dbh->selectall_arrayref("
-	SELECT continent as continent_code, name as continent_name FROM $CONTINENT_DATA", { Slice => {} });
+	SELECT continent as cc3, name as continent_name FROM $CONTINENT_DATA", { Slice => {} });
     
     # Get the list of countries from the database.
     
     $COUNTRIES = $dbh->selectall_arrayref("
-	SELECT cc, continent, name FROM $COUNTRY_MAP", { Slice => {} });
+	SELECT cc as cc2, continent, name as country_name FROM $COUNTRY_MAP", { Slice => {} });
     
     # Get the list of lithologies from the database.
     
@@ -452,6 +466,15 @@ sub initialize {
 	    }
 	}
     }
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'research_group'");
+    
+    my @resgroup_list = $field_type =~ /'(.*?)'/g;
+    
+    $RESEARCH_GROUPS = [ ];
+    
+    push @$RESEARCH_GROUPS, { group_name => $_ } foreach @resgroup_list;
 }
 
 
@@ -555,8 +578,8 @@ sub get {
     
     push @result, @$BINS if $request->has_block('clusters') or $show_all;
     push @result, @$RANKS if $request->has_block('ranks') or $show_all;
-    push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     push @result, @$COUNTRIES if $request->has_block('countries') or $show_all;
+    push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     push @result, @$LITHOLOGIES if $request->has_block('lithologies') or $show_all or $show_lith;
     push @result, @$MINOR_LITHS if $request->has_block('minorliths') or $show_all or $show_lith;
     push @result, @$LITHIFICATION if $request->has_block('lithification') or $show_all or $show_lith;
@@ -566,7 +589,7 @@ sub get {
     push @result, @$COLL_METHODS if $request->has_block('collmet') or $show_all or $show_coll;
     push @result, @$DATE_METHODS if $request->has_block('datemet') or $show_all or $show_coll;
     push @result, @$PRES_MODES if $request->has_block('presmodes') or $show_all or $show_coll;
-    push @result, @$RES_GROUPS if $request->has_block('resgroups') or $show_all or $show_coll;
+    push @result, @$RESEARCH_GROUPS if $request->has_block('resgroups') or $show_all or $show_coll;
     push @result, @$PCOORD_MODELS if $request->has_block('pgmodels') or $show_all;
     
     if ( my $offset = $request->result_offset(1) )

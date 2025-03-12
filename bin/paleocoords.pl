@@ -19,13 +19,14 @@ use PaleoCoords;
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
 
-my ($opt_logfile, $opt_test, $opt_error, $opt_quiet, $opt_verbose, $opt_debug,
+my ($opt_logfile, $opt_test, $opt_error, $opt_quiet, $opt_verbose, $opt_debug, $opt_bins,
     $opt_min_age, $opt_max_age, $opt_model, $opt_collection_no, $opt_dbname,
     $opt_all, $opt_help);
 
 GetOptions("log=s" => \$opt_logfile,
 	   "test" => \$opt_test,
 	   "error" => \$opt_error,
+	   "bins" => \$opt_bins, 
 	   "min-age=s" => \$opt_min_age,
 	   "max-age=s" => \$opt_max_age,
 	   "coll=s" => \$opt_collection_no,
@@ -215,6 +216,7 @@ sub DoTask {
 		    max_age => $opt_max_age,
 		    collection_no => $opt_collection_no,
 		    model => $opt_model,
+		    bins => $opt_bins,
 		    all => $opt_all,
 		    verbose => $opt_verbose };
     
