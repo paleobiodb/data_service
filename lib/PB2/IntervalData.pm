@@ -917,22 +917,27 @@ sub process_interval_params {
     
     if ( $request->param_given('interval_id') )
     {
-	foreach my $id ( $request->clean_param_list('interval_id') )
+	my @raw = $request->clean_param_list('interval_id');
+	
+	unless ( @raw == 1 && $raw[0] eq '0' )
 	{
-	    if ( int_defined($id) )
+	    foreach my $id ( @raw )
 	    {
-		push @ids, int_defined($id);
+		if ( int_defined($id) )
+		{
+		    push @ids, int_defined($id);
+		}
+		
+		elsif ( $id )
+		{
+		    push @warnings, "The interval identifier '$id' was not found in the database.";
+		}
 	    }
 	    
-	    elsif ( $id )
+	    unless ( @ids )
 	    {
-		push @warnings, "The interval identifier '$id' was not found in the database.";
+		push @warnings, "No valid interval identifiers were given.";
 	    }
-	}
-	
-	unless ( @ids )
-	{
-	    push @warnings, "No valid interval identifiers were given.";
 	}
     }
     

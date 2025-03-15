@@ -2264,7 +2264,7 @@ sub prevalence {
     
     if ( $tables->{o} || $tables->{oc} )
     {
-	$tables->{c} = 1;
+	$tables = { };
 	
 	@filters = $request->generateMainFilters('prevalence', 'c', $tables);
 	push @filters, $request->generateOccFilters($tables, 'o', 1);
@@ -2311,7 +2311,7 @@ sub prevalence {
     
     elsif ( $tables->{cc} || $tables->{c} || $tables->{non_summary} )
     {
-	$tables->{c} = 1;
+	$tables = { };
 	
 	@filters = $request->generateMainFilters('prevalence', 'c', $tables);
 	push @filters, $request->generate_common_filters( { colls => 'cc' }, $tables );
