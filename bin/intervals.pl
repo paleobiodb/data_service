@@ -8,6 +8,7 @@
 use strict;
 
 use lib 'lib';
+use utf8;
 
 use CoreFunction qw(connectDB);
 use TableDefs qw(%TABLE);
@@ -27,8 +28,7 @@ use feature 'fc';
 our ($MACROSTRAT_INTERVALS) = "https://macrostrat.org/api/defs/intervals";
 our ($MACROSTRAT_TIMESCALES) = "https://macrostrat.org/api/defs/timescales";
 
-our ($AUTHORIZER_NO) = 185;	# All created and modified records are credited to
-                                # Michael McClennen, unless this is changed.
+our ($AUTHORIZER_NO);
 
 our ($DBNAME);
 our ($CREATE_INTERVALS) = 0;
@@ -51,14 +51,16 @@ our (%INTERVAL_NAME, %INTERVAL_NUM, @ALL_INTERVALS);
 our (%SCALE_NAME, %SCALE_NUM, %SCALE_INTS, @SCALE_NUMS, %SCALE_CHECKED, %SCALE_SELECT);
 our (%DIFF_NAME, %DIFF_INT, @DIFF_MISSING, @DIFF_EXTRA);
 our (%DIFF_SCALE, @DIFF_MISSING_SCALES);
-our ($HAS_COLOR, $HAS_LOCALITY, $HAS_SEQUENCE, $HAS_AUTH);
-our ($HAS_INTP, $T_AGE, $B_AGE);
+our ($HAS_UNC, $T_AGE, $B_AGE, $T_UNC, $B_UNC);
 our (@ERRORS);
 
 # The following regexes validate ages and colors respectively.
 
-our ($AGE_RE) = qr{^\d[.\d]*$};
-our ($COLOR_RE) = qr{^#[0-9A-F]{6}$};
+our ($AGE_RE) = qr{ ^ \d+ (?: [.]\d* )? $ }x;
+our ($UNC_RE) = qr{ ^ ~ $ | ^ \d+ (?: [.]\d* )? $ }x;
+our ($AGE_UNC_RE) = qr{ ^ (?: (~) \s*)? (\d [.\d]*) (?: \s* ± \s* (\d [.\d]*))? $}x;
+our ($RANGE_RE) = qr{ ^ (\d [.\d]*) \s* - \s* (\d [.\d]*) $ }x; 
+our ($COLOR_RE) = qr{ ^ \# [0-9A-F]{6} $ }x;
 
 # Allowed interval types.
 
@@ -245,7 +247,7 @@ elsif ( $CMD eq 'update' || $CMD eq 'debug' )
     
     elsif ( $SUBCMD eq 'test' )
     {
-	$DBNAME = $opt_dbname || 'test';
+	$DBNAME = $opt_dbname || 'PBDBtest';
 	&DiffPBDB('update', $DBNAME, @REST) if @ERRORS == 0 || $opt_force;
 	&ReportErrors;
     }
@@ -338,9 +340,9 @@ sub FetchSheet {
 
 # ReadSheet ( )
 # 
-# Read an interval spreadsheet in CSV format from the specified URL or filename,
-# or from STDIN. Put the data into a structure that can be used for checking and
-# updating. Check the data for self consistency, as follows:
+# Read an interval spreadsheet in TSV or CSV format from the specified URL or
+# filename, or from STDIN. Put the data into a structure that can be used for
+# checking and updating. Check the data for self consistency, as follows:
 # 
 # 1. Every scale name must be associated with a single scale number.
 # 2. Every interval name must be associated with a unique interval number, and vice versa.
@@ -358,19 +360,19 @@ sub ReadSheet {
     {
 	my $content = FetchData($opt_url, 1);
 	
-	($header, @data) = split /[\n\r]+/, $content;
+	($header, @data) = map { decode_utf8($_) } split /[\n\r]+/, $content;
     }
     
     elsif ( $opt_file && $opt_file eq '-' )
     {
-	($header, @data) = <STDIN>;
-    }	
+	($header, @data) = map { decode_utf8($_) } <STDIN>;
+    }
     
     elsif ( $opt_file )
     {
 	open(my $fh, '<', $opt_file) || die "Could not read $opt_file: $!";
 	
-	($header, @data) = <$fh>;
+	($header, @data) = map { decode_utf8($_) } <$fh>;
 	
 	close $fh;
     }
@@ -465,8 +467,13 @@ sub ReadSheet {
 			if $record->{color};
 		    $SCALE_NUM{$scale_no}{reference_no} = $record->{reference_no} 
 			if $record->{reference_no};
+		    $SCALE_NUM{$scale_no}{authorizer_no} = $record->{authorizer_no}
+		        if $record->{authorizer_no};
 		    $SCALE_NUM{$scale_no}{action} = $record->{action}
-			if $record->{action};
+		    if $record->{action};
+		    
+		    push @ERRORS, "at line $line_no, scale_no $scale_no has no authorizer_no"
+			unless $record->{authorizer_no};
 		}
 	    }
 	    
@@ -861,6 +868,11 @@ sub SelectScales {
     
     my $bad_argument;
     
+    unless ( @_ )
+    {
+	$SCALE_SELECT{all} = 1;
+    }
+    
     foreach my $t ( @_ )
     {
 	if ( $t eq 'all' )
@@ -1048,15 +1060,33 @@ sub CheckOneScale {
 	    
 	    else
 	    {
-		my ($top_interval, $top_which) = TopAgeRef($i);
+		my ($top_interval, $age_field) = TopAgeRef($i);
 		
-		if ( ref $top_interval )
+		# If $age_field is 'top' or 'base', that means the age value hasn't been
+		# unpacked yet. Do so now.
+		
+		if ( ref $top_interval && ($age_field eq 'top' || $age_field eq 'base') )
 		{
 		    my $top_scale_no = $top_interval->{scale_no};
 		    
-		    $i->{t_age} = $top_interval->{$top_which};
+		    $i->{t_age} = $top_interval->{$age_field};
 		    
-		    if ( $i->{t_age} !~ $AGE_RE )
+		    if ( $i->{t_age} =~ $AGE_UNC_RE )
+		    {
+			$i->{t_age} = $2;
+			
+			if ( $1 ) { $i->{t_unc} = 0; }
+			elsif ( $3 ) { $i->{t_unc} = $3; }
+			else { $i->{t_unc} = undef; }
+		    }
+		    
+		    elsif ( $i->{t_age} =~ $RANGE_RE )
+		    {
+			$i->{t_age} = ($1 + $2) / 2;
+			$i->{t_unc} = &ComputeUncertainty($2, $1);
+		    }
+		    
+		    elsif ( $i->{t_age} !~ $AGE_RE )
 		    {
 			push @errors, "at line $line, bad top age '$i->{t_age}'";
 		    }
@@ -1070,7 +1100,7 @@ sub CheckOneScale {
 		    # the international timescale, then it is an anchor. Otherwise, it
 		    # will need to be interpolated.
 		    
-		    elsif ( $top_scale_no eq $INTL_SCALE )
+		    if ( $top_scale_no eq $INTL_SCALE )
 		    {
 			$i->{t_bound} = 'anchor';
 		    }
@@ -1085,6 +1115,23 @@ sub CheckOneScale {
 			$i->{t_bound} = 'defined';
 		    }
 		}
+		
+		# Otherwise, the age field will be either 't_age' or 'b_age'. If
+		# $top_interval is a reference to a different interval, copy the age and
+		# uncertainty.
+		
+		elsif ( ref $top_interval )
+		{
+		    if ( $top_interval ne $i )
+		    {
+			$i->{t_age} = $top_interval->{$age_field};
+			my $unc_field = $age_field eq 't_age' ? 't_unc' : 'b_unc';
+			$i->{t_unc} = $top_interval->{$unc_field};
+		    }
+		}
+		
+		# If a scalar value is returned for $top_interval, it represents an error
+		# message.
 		
 		else
 		{
@@ -1106,15 +1153,33 @@ sub CheckOneScale {
 	    
 	    elsif ( $i->{interval_no} ne $EMPTY_INTERVAL )
 	    {
-		my ($base_interval, $base_which) = BaseAgeRef($i);
+		my ($base_interval, $age_field) = BaseAgeRef($i);
 		
-		if ( ref $base_interval )
+		# If $age_field is 'base' or 'top', that means the age hasn't been
+		# unpacked yet.
+		
+		if ( ref $base_interval && ($age_field eq 'base' || $age_field eq 'top') )
 		{
 		    my $base_scale_no = $base_interval->{scale_no};
 		    
-		    $i->{b_age} = $base_interval->{$base_which};
+		    $i->{b_age} = $base_interval->{$age_field};
 		    
-		    if ( $i->{b_age} !~ $AGE_RE )
+		    if ( $i->{b_age} =~ $AGE_UNC_RE )
+		    {
+			$i->{b_age} = $2;
+			
+			if ( $1 ) { $i->{b_unc} = 0; }
+			elsif ( $3 ) { $i->{b_unc} = $3; }
+			else { $i->{b_unc} = undef; }
+		    }
+		    
+		    elsif ( $i->{b_age} =~ $RANGE_RE )
+		    {
+			$i->{b_age} = ($1 + $2) / 2;
+			$i->{b_unc} = &ComputeUncertainty($2, $1);
+		    }
+		    
+		    elsif ( $i->{b_age} !~ $AGE_RE )
 		    {
 			push @errors, "at line $line, interval '$name': bad age '$i->{b_age}'";
 		    }
@@ -1128,7 +1193,7 @@ sub CheckOneScale {
 		    # the international timescale, then it is an anchor. Otherwise, it
 		    # will need to be interpolated.
 		    
-		    elsif ( $base_scale_no eq $INTL_SCALE )
+		    if ( $base_scale_no eq $INTL_SCALE )
 		    {
 			$i->{b_bound} = 'anchor';
 		    }
@@ -1143,6 +1208,23 @@ sub CheckOneScale {
 			$i->{b_bound} = 'defined';
 		    }
 		}
+		
+		# Otherwise, the age field will be either 't_age' or 'b_age'. If
+		# $base_interval is a reference to a different interval, copy the age and
+		# uncertainty.
+		
+		elsif ( ref $base_interval )
+		{
+		    if ( $base_interval ne $i )
+		    {
+			$i->{t_age} = $base_interval->{$age_field};
+			my $unc_field = $age_field eq 't_age' ? 't_unc' : 'b_unc';
+			$i->{t_unc} = $base_interval->{$unc_field};
+		    }
+		}
+		
+		# If a scalar value is returned for $top_interval, it represents an error
+		# message.
 		
 		else
 		{
@@ -1230,6 +1312,8 @@ sub CheckOneScale {
 	    my $t_bound = $int->{t_bound};
 	    my $t_ref = $int->{t_ref};
 	    
+	    next if $t_ref eq '*';
+	    
 	    if ( ($t_bound eq 'anchor' || $t_bound eq 'reference') && defined $t_ref && $t_ref ne '' )
 	    {
 		push @errors, "at line $line, top boundary interpolation conflict"
@@ -1254,6 +1338,8 @@ sub CheckOneScale {
 	    
 	    my $b_bound = $int->{b_bound};
 	    my $b_ref = $int->{b_ref};
+	    
+	    next if $b_ref eq '*';
 	    
 	    if ( ($b_bound eq 'anchor' || $b_bound eq 'reference') && defined $b_ref && $b_ref ne '' )
 	    {
@@ -1300,6 +1386,13 @@ sub CheckOneScale {
 	{
 	    my $bound = $bound_list[$i];
 	    
+	    my $places = 1;
+	    
+	    if ( $bound =~ /[.](\d+)/ )
+	    {
+		$places = length($1) + 1;
+	    }
+	    
 	    if ( $bound_type{$bound} eq 'defined' )
 	    {
 		# Search for an anchor boundary both above and below the boundary to be
@@ -1330,7 +1423,7 @@ sub CheckOneScale {
 			my $new = $anchor_value{$above} + 
 			    $fraction * ($anchor_value{$below} - $anchor_value{$above});
 			
-			$intp_value{$bound} = int($new * 10) / 10;
+			$intp_value{$bound} = int($new * (10**$places)) / (10**$places);
 		    }
 		}
 		
@@ -1341,7 +1434,9 @@ sub CheckOneScale {
 		{
 		    if ( $anchor_value{above} != $above )
 		    {
-			$intp_value{$bound} = $bound + ($anchor_value{$above} - $above);
+			my $new = $bound + ($anchor_value{$above} - $above);
+
+			$intp_value{$bound} = int($new * (10**$places)) / (10**$places);
 		    }
 		}
 		
@@ -1351,7 +1446,9 @@ sub CheckOneScale {
 		{
 		    if ( $anchor_value{$below} != $below )
 		    {
-			$intp_value{$bound} = $bound + ($anchor_value{$below} - $below);
+			my $new = $bound + ($anchor_value{$below} - $below);
+			
+			$intp_value{$bound} = int($new * (10**$places)) / (10**$places);
 		    }
 		}
 		
@@ -1420,6 +1517,38 @@ sub CheckOneScale {
 }
 
 
+# ComputeUncertainty ( b, a )
+# 
+# Compute the quantity (b-a)/2, correcting for floating point errors.
+
+sub ComputeUncertainty {
+    
+    my ($b, $a) = @_;
+    
+    # Compute the maximum number of decimal places in b and a.
+    
+    my $places = 0;
+    
+    if ( $b =~ /[.](\d+)$/ )
+    {
+	$places = length($1);
+    }
+    
+    if ( $a =~ /[.](\d+)$/ )
+    {
+	$places = length($1) if length($1) > $places;
+    }
+    
+    # Compute the raw result, which may look like "0.530000000001" or "0.539999999998".
+    
+    my $raw = ($b - $a) / 2;
+    
+    # Round the result to precision computed above.
+    
+    return int($raw * (10**$places) + 0.5) / (10**$places);
+}
+
+
 # PrintScales ( scale... )
 # 
 # Print the specified timescale(s) as a spreadsheet, with interpolated ages.
@@ -1458,9 +1587,11 @@ sub PrintScales {
 	    my $abbrev = $int->{abbrev};
 	    my $t_type = $int->{t_bound};
 	    my $t_age = $int->{t_intp} // $int->{t_age};
+	    my $t_unc = $int->{t_unc};
 	    my $t_ref = $int->{t_ref} // $int->{t_age};
 	    my $b_type = $int->{b_bound};
 	    my $b_age = $int->{b_intp} // $int->{b_age};
+	    my $b_unc = $int->{b_unc};
 	    my $b_ref = $int->{b_ref} // $int->{b_age};
 	    my $type = $int->{type};
 	    my $color = $int->{color};
@@ -1480,10 +1611,10 @@ sub PrintScales {
 			color => $int->{color},
 			reference_no => $int->{reference_no},
 			t_type => $t_type,
-			top => $t_age,
+			top => &AgeUnc($t_age, $t_unc),
 			t_ref => $t_ref,
 			b_type => $b_type,
-			base => $b_age,
+			base => &AgeUnc($b_age, $b_unc),
 			b_ref => $b_ref,
 			stage => $int->{stage},
 			subepoch => $int->{subepoch},
@@ -1667,6 +1798,11 @@ sub TopAge {
 	my $age = $lookup->{$which};
 	my $line = $lookup->{line_no};
 	
+	unless ( $SCALE_CHECKED{$lookup->{scale_no}} )
+	{
+	    die "ERROR: scale $lookup->{scale_no} has not been checked\n";
+	}
+	
 	# If the age matches the regexp defined above, return it. Otherwise, return an
 	# error message.
 	
@@ -1678,6 +1814,49 @@ sub TopAge {
 	else
 	{
 	    return "bad top age '$age' at line $line";
+	}
+    }
+    
+    # If the result is not a reference, it is an error message.
+    
+    else
+    {
+	return $lookup;
+    }
+}
+
+
+# TopUnc ( interval )
+# 
+# Evaluate the top age uncertainty for the specified interval, and return it. If an error
+# occurs, such as a reference to a nonexistent interval, return an error message instead.
+
+sub TopUnc {
+    
+    my ($interval) = @_;
+    
+    # Determine the interval whose bound is being used, and which bound it is. This could
+    # be the same interval, or a different one. The empty hashref is used to detect
+    # dependency loops.
+    
+    my ($lookup, $which) = TopAgeRef($interval, { });
+    
+    if ( ref $lookup )
+    {
+	my $unc = $which eq 'top' ? $lookup->{t_unc} : $lookup->{b_unc};
+	my $line = $lookup->{line_no};
+	
+	# If the age is empty or else matches the regexp defined above, return it.
+	# Otherwise, return an error message.
+	
+	if ( ! defined $unc || $unc =~ $UNC_RE )
+	{
+	    return $unc;
+	}
+	
+	else
+	{
+	    return "bad top uncertainty '$unc' at line $line";
 	}
     }
     
@@ -1708,7 +1887,8 @@ sub TopAgeRef {
     
     if ( $type eq 'def' )
     {
-	return $interval, 'top';
+	my $which = defined $interval->{t_age} ? 't_age' : 'top';
+	return $interval, $which;
     }
     
     # Otherwise, the value of top will be the name of some other interval. Look this name
@@ -1801,6 +1981,11 @@ sub BaseAge {
 	my $age = $lookup->{$which};
 	my $line = $lookup->{line_no};
 	
+	unless ( $SCALE_CHECKED{$lookup->{scale_no}} )
+	{
+	    die "ERROR: scale $lookup->{scale_no} has not been checked\n";
+	}
+	
 	# If the age matches the regexp defined above, return it. Otherwise, return an
 	# error message.
 	
@@ -1812,6 +1997,49 @@ sub BaseAge {
 	else
 	{
 	    return "bad base age '$age' at line $line";
+	}
+    }
+    
+    # If the result is not a reference, it is an error message.
+    
+    else
+    {
+	return $lookup;
+    }
+}
+
+
+# BaseUnc ( interval )
+# 
+# Evaluate the base age uncertainty for the specified interval, and return it. If an error
+# occurs, such as a reference to a nonexistent interval, return an error message instead.
+
+sub BaseUnc {
+    
+    my ($interval) = @_;
+    
+    # Determine the interval whose bound is being used, and which bound it is. This could
+    # be the same interval, or a different one. The empty hashref is used to detect
+    # dependency loops.
+    
+    my ($lookup, $which) = BaseAgeRef($interval, { });
+    
+    if ( ref $lookup )
+    {
+	my $unc = $which eq 'top' ? $lookup->{t_unc} : $lookup->{b_unc};
+	my $line = $lookup->{line_no};
+	
+	# If the uncertainty is empty or matches the regexp defined above, return it.
+	# Otherwise, return an error message.
+	
+	if ( ! defined $unc || $unc =~ $UNC_RE )
+	{
+	    return $unc;
+	}
+	
+	else
+	{
+	    return "bad base uncertainty '$unc' at line $line";
 	}
     }
     
@@ -1842,7 +2070,8 @@ sub BaseAgeRef {
     
     if ( $type eq 'def' )
     {
-	return $interval, 'base';
+	my $which = $interval->{b_age} ? 'b_age' : 'base';
+	return $interval, $which;
     }
     
     # Otherwise, the value of base will be the name of some other interval. Look this name
@@ -1970,6 +2199,85 @@ sub IntervalBounds {
 }
 
 
+# DiffElt ( new, old )
+# 
+# Generate a diff element for the specified new and old values.
+
+sub DiffElt {
+    
+    my ($for_update, $new, $old) = @_;
+    
+    if ( $for_update )
+    {
+	return $new // 'none';
+    }
+    
+    else
+    {
+	my $delt = defined $new && $new ne '' ? $new : '';
+	
+	if ( defined $old && $old ne '' )
+	{
+	    $old =~ s/([.]\d*?)0+$/$1/;
+	    $old =~ s/[.]$//;
+	    $delt .= ' ' if defined $new && $new ne '';
+	    $delt .= "($old)";
+	}
+	
+	return $delt;
+    }
+}
+
+
+# CompareUnc ( new, old )
+# 
+# Return true if the two uncertainty values are different, or one is defined and
+# the other not. Return false otherwise.
+
+sub CompareUnc {
+    
+    my ($new, $old) = @_;
+    
+    if ( !defined $new && !defined $old )
+    {
+	return 0;
+    }
+    
+    if ( defined $new && defined $old )
+    {
+	return 0 if $new + 0 eq $old + 0;
+    }
+    
+    return 1;
+}
+
+
+# AgeUnc ( age, unc )
+# 
+# Generate a string displaying the specified age and uncertainty.
+
+sub AgeUnc {
+    
+    my ($age, $unc) = @_;
+    
+    if ( defined $unc && $unc == 0 )
+    {
+	return "~ $age";
+    }
+    
+    elsif ( defined $unc )
+    {
+	$unc += 0;
+	return "$age ±$unc";
+    }
+    
+    else
+    {
+	return $age;
+    }
+}
+
+
 # DiffMacrostrat ( timescale )
 # 
 # Compute a table of differences between the specified macrostrat timescale and the
@@ -2054,17 +2362,17 @@ sub DiffMacrostrat {
 	    
 	    if ( $m->{type} && $type ne $m->{type} )
 	    {
-		$DIFF_NAME{$name}{type} = $m->{type};
+		$DIFF_NAME{$name}{type} = DiffElt('', $m->{type}, $type);
 	    }
 	    
 	    if ( $m->{color} && $color ne $m->{color} )
 	    {
-		$DIFF_NAME{$name}{color} = $m->{color};
+		$DIFF_NAME{$name}{color} = DiffElt('', $m->{color}, $color);
 	    }
 	    
 	    if ( $m->{abbrev} && $abbrev ne $m->{abbrev} )
 	    {
-		$DIFF_NAME{$name}{abbrev} = $m->{abbrev};
+		$DIFF_NAME{$name}{abbrev} = DiffElt('', $m->{abbrev}, $abbrev);
 	    }
 	    
 	    # Any interval which is to be removed or coalesced represents a difference.
@@ -2084,7 +2392,7 @@ sub DiffMacrostrat {
 		if ( $m->{t_age} ne $t_age )
 		{
 		    # $$$ need to guard against inconsistent updates
-		    $DIFF_NAME{$name}{top} = $m->{t_age};
+		    $DIFF_NAME{$name}{top} = DiffElt('', $m->{t_age}, $t_age);
 		}
 	    }
 	    
@@ -2101,7 +2409,7 @@ sub DiffMacrostrat {
 		if ( $m->{b_age} ne $b_age )
 		{
 		    # $$$ need to guard against inconsistent updates
-		    $DIFF_NAME{$name}{base} = $m->{b_age};
+		    $DIFF_NAME{$name}{base} = DiffElt('', $m->{b_age}, $b_age);
 		}
 	    }
 	    
@@ -2400,7 +2708,7 @@ sub DiffPBDB {
     
     # Select timescales matching the arguments given.
     
-    &SelectScales(@args);	
+    &SelectScales(@args);
     
     return unless %SCALE_SELECT;
     
@@ -2425,6 +2733,13 @@ sub DiffPBDB {
     # database.
     
     CheckScaleTables($dbh);
+    
+    $AUTHORIZER_NO = AuthenticateSession($dbh);
+    
+    # If we are updating, generate an "update" diff rather than a "display"
+    # diff. 
+    
+    my $u = $cmd eq 'update' ? 1 : '';
     
     # If we are diffing all scales, fetch a hash of all the intervals known to the PBDB
     # by interval_no, and all scales known to the PBDB by scale_no. This allows us to
@@ -2455,14 +2770,20 @@ sub DiffPBDB {
 	my $abbrev = $i->{abbrev};
 	my $t_type = $i->{t_bound};
 	my $t_age = $i->{t_intp} // $i->{t_age};
+	my $t_unc = $i->{t_unc};
 	my $t_ref = $i->{t_ref} // $i->{t_age};
 	my $b_type = $i->{b_bound};
 	my $b_age = $i->{b_intp} // $i->{b_age};
+	my $b_unc = $i->{b_unc};
 	my $b_ref = $i->{b_ref} // $i->{b_age};
 	my $type = $i->{type};
 	my $color = $i->{color};
 	my $obsolete = $i->{obsolete} ? 1 : 0;
 	my $reference_no = $i->{reference_no};
+	my $authorizer_no = $i->{authorizer_no} || $AUTHORIZER_NO;
+	
+	$t_ref = $t_age if $t_ref eq '*';
+        $b_ref = $b_age if $b_ref eq '*';
 	
 	# Skip empty intervals.
 	
@@ -2511,7 +2832,7 @@ sub DiffPBDB {
 			    "'$p->{interval_name}'";
 		    }
 		}
-	    
+		
 		if ( $i->{action} =~ /^REMOVE|^COALESCE/ )
 		{
 		    $DIFF_INT{$scale_no}{$interval_no}{action} = $i->{action};
@@ -2522,29 +2843,97 @@ sub DiffPBDB {
 		
 		if ( $abbrev ne $p->{abbrev} )
 		{
-		    $DIFF_INT{$scale_no}{$interval_no}{abbrev} = $abbrev // 'none';
+		    $DIFF_INT{$scale_no}{$interval_no}{abbrev} = 
+			DiffElt($u, $abbrev, $p->{abbrev});
 		}
 		
-		if ( $i->{t_type} ne 'use' && $p->{main_scale_no} && 
-		     $p->{main_scale_no} ne $scale_no )
+		if ( $p->{main_scale_no} && $p->{main_scale_no} ne $scale_no )
 		{
-		    $DIFF_INT{$scale_no}{$interval_no}{main_scale_no} = $scale_no;
+		    $DIFF_INT{$scale_no}{$interval_no}{main_scale_no} = 
+			DiffElt($u, $scale_no, $p->{main_scale_no});
 		}
 		
-		if ( $t_age + 0 ne $p->{t_age} + 0 || $t_ref + 0 ne $p->{t_ref} + 0 || 
-		     $t_type ne $p->{t_type} )
+		if ( $t_age + 0 ne $p->{t_age} + 0 || CompareUnc($t_unc, $p->{t_unc}) )
 		{
-		    $DIFF_INT{$scale_no}{$interval_no}{t_type} = $t_type;
-		    $DIFF_INT{$scale_no}{$interval_no}{top} = $t_age;
-		    $DIFF_INT{$scale_no}{$interval_no}{t_ref} = $t_ref;
+		    if ( $u )
+		    {
+			$DIFF_INT{$scale_no}{$interval_no}{top} = $t_age + 0;
+			$DIFF_INT{$scale_no}{$interval_no}{t_unc} = $t_unc // 'none';
+		    }
+		    
+		    else
+		    {
+			$DIFF_INT{$scale_no}{$interval_no}{top} = 
+			    DiffElt('', AgeUnc($t_age, $t_unc), AgeUnc($p->{t_age}, $p->{t_unc}));
+		    }
 		}
 		
-		if ( $b_age + 0 ne $p->{b_age} + 0 || $b_ref + 0 ne $p->{b_ref} + 0 ||
-		     $b_type ne $p->{b_type} )
+		if ( $t_ref + 0 ne $p->{t_ref} + 0 )
 		{
-		    $DIFF_INT{$scale_no}{$interval_no}{b_type} = $b_type;
-		    $DIFF_INT{$scale_no}{$interval_no}{base} = $b_age;
-		    $DIFF_INT{$scale_no}{$interval_no}{b_ref} = $b_ref;
+		    $DIFF_INT{$scale_no}{$interval_no}{t_ref} = 
+			DiffElt($u, $t_ref + 0, $p->{t_ref} + 0);
+		}
+		
+		if ( $t_type && $t_type ne $p->{t_type} )
+		{
+		    $DIFF_INT{$scale_no}{$interval_no}{t_type} = 
+			DiffElt($u, $t_type, $p->{t_type});
+		}
+		
+		elsif ( ! $t_type )
+		{
+		    push @ERRORS, "at line $line_no, interval_no $interval_no has no t_type";
+		}
+		
+		if ( $b_age + 0 ne $p->{b_age} + 0 || CompareUnc($b_unc, $p->{b_unc}) )
+		{
+		    if ( $u )
+		    {
+			$DIFF_INT{$scale_no}{$interval_no}{base} = $b_age + 0;
+			$DIFF_INT{$scale_no}{$interval_no}{b_unc} = $b_unc // 'none';
+		    }
+		    
+		    else
+		    {
+			$DIFF_INT{$scale_no}{$interval_no}{top} = 
+			    DiffElt('', AgeUnc($b_age, $b_unc), AgeUnc($p->{b_age}, $p->{b_unc}));
+		    }
+		}
+		
+		if ( $b_ref + 0 ne $p->{b_ref} + 0 )
+		{
+		    $DIFF_INT{$scale_no}{$interval_no}{b_ref} = 
+			DiffElt($u, $b_ref + 0, $p->{b_ref} + 0);
+		}
+		
+		if ( $b_type && $b_type ne $p->{b_type} )
+		{
+		    $DIFF_INT{$scale_no}{$interval_no}{b_type} = 
+			DiffElt($u, $b_type, $p->{b_type});
+		}
+		
+		elsif ( ! $b_type )
+		{
+		    push @ERRORS, "at line $line_no, interval_no $interval_no has no b_type";
+		}
+		
+		if ( ! $p->{authorizer_no} || $authorizer_no && $authorizer_no =~ /[*]$/ )
+		{
+		    $authorizer_no =~ s/[*]$// if $authorizer_no;
+		    
+		    if ( $authorizer_no )
+		    {
+			if ( ! $p->{authorizer_no} || $authorizer_no ne $p->{authorizer_no} )
+			{
+			    $DIFF_INT{$scale_no}{$interval_no}{authorizer_no} = 
+				DiffElt($u, $authorizer_no, $p->{authorizer_no});
+			}
+		    }
+		    
+		    else
+		    {
+			push @ERRORS, "at line $line_no, interval_no $interval_no has no authorizer_no";
+		    }
 		}
 	    }
 	    
@@ -2553,41 +2942,60 @@ sub DiffPBDB {
 	    
 	    if ( $obsolete ne ($p->{obsolete} // '0') )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{obsolete} = $i->{obsolete} || '0';
+		$DIFF_INT{$scale_no}{$interval_no}{obsolete} = DiffElt($u, $i->{obsolete} || '0',
+								       $p->{obsolete} // '0');
 	    }
 	    
 	    if ( $type ne $p->{type} )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{type} = $type;
+		$DIFF_INT{$scale_no}{$interval_no}{type} = DiffElt($u, $type, $p->{type});
 	    }
 	    
 	    if ( $color ne $p->{color} )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{color} = $color || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{color} = DiffElt($u, $color, $p->{color});
 	    }
 	    
 	    if ( $reference_no ne $p->{reference_no} )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{reference_no} = $reference_no;
+		$DIFF_INT{$scale_no}{$interval_no}{reference_no} = 
+		    DiffElt($u, $reference_no, $p->{reference_no});
 	    }
 	    
-	    if ( $i->{stage} ne IntervalName($p->{stage_no}) ||
-		 $i->{subepoch} ne IntervalName($p->{subepoch_no}) ||
-		 $i->{epoch} ne IntervalName($p->{epoch_no}) ||
-		 $i->{period} ne IntervalName($p->{period_no}) ||
-		 $i->{ten_my_bin} ne $p->{ten_my_bin} )
+	    if ( $i->{stage} ne IntervalName($p->{stage_no}) )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{stage} = $i->{stage} || 'none';
-		$DIFF_INT{$scale_no}{$interval_no}{subepoch} = $i->{subepoch} || 'none';
-		$DIFF_INT{$scale_no}{$interval_no}{epoch} = $i->{epoch} || 'none';
-		$DIFF_INT{$scale_no}{$interval_no}{period} = $i->{period} || 'none';
-		$DIFF_INT{$scale_no}{$interval_no}{ten_my_bin} = $i->{ten_my_bin} || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{stage} =
+		    DiffElt($u, $i->{stage}, IntervalName($p->{stage_no}));
 	    }
 	    
-	    if ( $scale_no eq $INTL_SCALE &&
-		 $i->{parent} ne IntervalName($p->{parent_no}) )
+	    if ( $i->{subepoch} ne IntervalName($p->{subepoch_no}) )
 	    {
-		$DIFF_INT{$scale_no}{$interval_no}{parent} = $i->{parent} || 'none';
+		$DIFF_INT{$scale_no}{$interval_no}{subepoch} =
+		    DiffElt($u, $i->{subepoch}, IntervalName($p->{subepoch_no}));
+	    }
+	    
+	    if ( $i->{epoch} ne IntervalName($p->{epoch_no}) )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{epoch} =
+		    DiffElt($u, $i->{epoch}, IntervalName($p->{epoch_no}));
+	    }
+	    
+	    if ( $i->{period} ne IntervalName($p->{period_no}) )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{period} =
+		    DiffElt($u, $i->{period}, IntervalName($p->{period_no}));
+	    }
+	    
+	    if ( $i->{ten_my_bin} ne $p->{ten_my_bin} )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{ten_my_bin} = 
+		    DiffElt($u, $i->{ten_my_bin}, $p->{ten_my_bin});
+	    }
+	    
+	    if ( $scale_no eq $INTL_SCALE && $i->{parent} ne IntervalName($p->{parent_no}) )
+	    {
+		$DIFF_INT{$scale_no}{$interval_no}{parent} =
+		    DiffElt($u, $i->{parent}, IntervalName($p->{parent_no}));
 	    }
 	    
 	    # Remove this interval from the $leftover_ints hash, because it is accounted for.
@@ -2652,6 +3060,7 @@ sub DiffPBDB {
 	my $color = $s->{color};
 	my $t_age = $s->{t_age};
 	my $b_age = $s->{b_age};
+	my $authorizer_no = $s->{authorizer_no} || $AUTHORIZER_NO;
 	
 	if ( my $p = FetchPBDBScale($dbh, $scale_no) )
 	{
@@ -2662,27 +3071,47 @@ sub DiffPBDB {
 	    
 	    if ( $locality ne $p->{locality} )
 	    {
-		$DIFF_SCALE{$scale_no}{type} = $locality || 'none';
+		$DIFF_SCALE{$scale_no}{type} = DiffElt($u, $locality, $p->{locality});
 	    }
 	    
 	    if ( $color ne $p->{color} )
 	    {
-		$DIFF_SCALE{$scale_no}{color} = $color || 'none';
+		$DIFF_SCALE{$scale_no}{color} = DiffElt($u, $color, $p->{color});
 	    }
 	    
 	    if ( $t_age + 0 ne $p->{t_age} + 0 )
 	    {
-		$DIFF_SCALE{$scale_no}{top} = $t_age;
+		$DIFF_SCALE{$scale_no}{top} = DiffElt($u, $t_age + 0, $p->{t_age} + 0);
 	    }
 	    
 	    if ( $b_age + 0 ne $p->{b_age} + 0 )
 	    {
-		$DIFF_SCALE{$scale_no}{base} = $b_age;
+		$DIFF_SCALE{$scale_no}{base} = DiffElt($u, $b_age + 0, $p->{b_age} + 0);
 	    }
 	    
 	    if ( ($reference_no + 0) ne ($p->{reference_no} + 0) )
 	    {
-		$DIFF_SCALE{$scale_no}{reference_no} = $reference_no || 'none';
+		$DIFF_SCALE{$scale_no}{reference_no} =
+		    DiffElt($u, $reference_no + 0, $p->{reference_no} + 0);
+	    }
+	    
+	    if ( ! $p->{authorizer_no} || $authorizer_no && $authorizer_no =~ /[*]$/ )
+	    {
+		$authorizer_no =~ s/[*]$// if $authorizer_no;
+		
+		if ( $authorizer_no )
+		{
+		    if ( ! $p->{authorizer_no} || $authorizer_no ne $p->{authorizer_no} )
+		    {
+			$DIFF_SCALE{$scale_no}{authorizer_no} = 
+			    DiffElt($u, $authorizer_no, $p->{authorizer_no});
+		    }
+		}
+		
+		else
+		{
+		    push @ERRORS, "at line $line_no, scale_no $scale_no has no authorizer_no";
+		}
 	    }
 	    
 	    if ( $s->{action} eq 'REMOVE' )
@@ -3159,8 +3588,11 @@ sub ApplyDifferences {
 		$DIFF_INT{$scale_no}{$interval_no}{interval_name} = $i->{interval_name};
 		$DIFF_INT{$scale_no}{$interval_no}{line_no} = $i->{line_no};
 		
-		$DIFF_INT{$scale_no}{$interval_no}{t_age} = $i->{t_age} // TopAge($i);
-		$DIFF_INT{$scale_no}{$interval_no}{b_age} = $i->{b_age} // BaseAge($i); 
+		$DIFF_INT{$scale_no}{$interval_no}{t_age} = TopAge($i);
+		$DIFF_INT{$scale_no}{$interval_no}{b_age} = BaseAge($i); 
+		
+		$DIFF_INT{$scale_no}{$interval_no}{t_unc} = TopUnc($i);
+		$DIFF_INT{$scale_no}{$interval_no}{b_unc} = BaseUnc($i);
 		
 		my $result = UpdatePBDBInterval($dbh, $scale_no, $interval_no,
 						$DIFF_INT{$scale_no}{$interval_no});
@@ -3232,16 +3664,14 @@ sub FetchPBDBInterval {
     my $qi = $dbh->quote($interval_no);
     my $qs = $dbh->quote($scale_no);
     
-    my $extra = '';
-    $extra .= 'sm.obsolete, sm.reference_no, ' if $HAS_SEQUENCE;
-    
-    my $ages = "$T_AGE as t_age, $B_AGE as b_age, ";
-    $ages = "$T_AGE as t_age, t_type, t_ref, $B_AGE as b_age, b_type, b_ref, " if $HAS_INTP;
-    $ages .= "i.scale_no as main_scale_no, " if $HAS_INTP;
+    my $unc = '';
+    $unc .= "$T_UNC as t_unc, $B_UNC as b_unc, " if $HAS_UNC;
     
     my $sql = "SELECT i.interval_no, interval_name, abbrev, type, color, parent_no,
-		    $ages $extra
-		    stage_no, subepoch_no, epoch_no, period_no, ten_my_bin
+		    $T_AGE as t_age, t_type, t_ref, $B_AGE as b_age, b_type, b_ref, 
+		    ${unc}i.scale_no as main_scale_no, sm.obsolete, sm.reference_no,
+		    stage_no, subepoch_no, epoch_no, period_no, ten_my_bin, 
+		    authorizer_no, enterer_no, modifier_no
 		FROM $TableDefs::TABLE{INTERVAL_DATA} as i
 		    left join interval_lookup using (interval_no)
 		    left join $TableDefs::TABLE{SCALE_MAP} as sm
@@ -3264,12 +3694,8 @@ sub FetchPBDBScale {
     
     my $qs = $dbh->quote($scale_no);
     
-    my $extra = '';
-    $extra .= ', color' if $HAS_COLOR;
-    $extra .= ', locality, reference_no' if $HAS_LOCALITY;
-    $extra .= ', authorizer_no, modifier_no' if $HAS_AUTH;
-    
-    my $sql = "SELECT scale_no, scale_name, $B_AGE as b_age, $T_AGE as t_age $extra
+    my $sql = "SELECT scale_no, scale_name, $B_AGE as b_age, $T_AGE as t_age, color,
+		   locality, reference_no, authorizer_no, enterer_no, modifier_no
 		FROM $TableDefs::TABLE{SCALE_DATA} as s
 		WHERE s.scale_no = $qs";
     
@@ -3292,15 +3718,12 @@ sub FetchPBDBScaleIntervals {
     my $SCALE_MAP = $TableDefs::TABLE{SCALE_MAP};
     my $INTERVAL_DATA = $TableDefs::TABLE{INTERVAL_DATA};
     
-    my $extra = '';
-    $extra .= 'sm.obsolete, sm.reference_no, ' if $HAS_SEQUENCE;
-    
-    my $ages = "$T_AGE as t_age, $B_AGE as b_age, ";
-    $ages = "$T_AGE as t_age, t_type, t_ref, $B_AGE as b_age, b_type, b_ref, " if $HAS_INTP;
-    $ages .= "i.scale_no as main_scale_no, " if $HAS_INTP;
+    my $unc = '';
+    $unc .= '$T_UNC as t_unc, $B_UNC as b_unc, ' if $HAS_UNC;
     
     my $sql = "SELECT i.interval_no, interval_name, abbrev, type, color, parent_no,
-		    $ages $extra
+		    $T_AGE as t_age, t_type, t_ref, $B_AGE as b_age, b_type, b_ref, 
+		    ${unc}i.scale_no as main_scale_no, sm.obsolete, sm.reference_no,
 		    stage_no, subepoch_no, epoch_no, period_no
 		FROM $SCALE_MAP as sm
 		    left join $INTERVAL_DATA as i using (interval_no)
@@ -3360,15 +3783,7 @@ sub FetchPBDBSequences {
     
     my $sql;
     
-    if ( $HAS_SEQUENCE )
-    {
-	$sql = "SELECT scale_no, interval_no FROM $TABLE{SCALE_MAP} order by sequence";
-    }
-    
-    else
-    {
-	$sql = "SELECT scale_no, interval_no FROM $TABLE{SCALE_MAP}";
-    }
+    $sql = "SELECT scale_no, interval_no FROM $TABLE{SCALE_MAP} order by sequence";
     
     my @ints = $dbh->selectall_array($sql, { Slice => { } });
     
@@ -3544,12 +3959,10 @@ sub UpdatePBDBInterval {
     if ( defined $diff->{top} && $diff->{top} ne '' )
     {
 	my $qtop = $dbh->quote($diff->{top});
-	my $qtype = $dbh->quote($diff->{t_type});
-	my $qref = $dbh->quote($diff->{t_ref});
 	
-	if ( $diff->{top} =~ $AGE_RE && $diff->{t_type} )
+	if ( $diff->{top} =~ $AGE_RE )
 	{
-	    push @id_updates, "$T_AGE = $qtop", "t_ref = $qref", "t_type = $qtype";
+	    push @id_updates, "$T_AGE = $qtop";
 	}
 	
 	else
@@ -3558,15 +3971,50 @@ sub UpdatePBDBInterval {
 	}
     }
     
+    if ( defined $diff->{t_type} && $diff->{t_type} ne '' )
+    {
+    	my $qtype = $dbh->quote($diff->{t_type});
+	
+	push @id_updates, "t_type = $qtype";
+    }
+    
+    if ( defined $diff->{t_ref} && $diff->{t_ref} ne '' )
+    {
+	my $qref = $diff->{t_ref} eq 'none' ? 'NULL' : $dbh->quote($diff->{t_ref});
+	
+	if ( $diff->{t_ref} =~ $AGE_RE || $diff->{t_ref} eq 'none' )
+	{
+	    push @id_updates, "t_ref = $qref";
+	}
+	
+	else
+	{
+	    push @ERRORS, "at line $line, problem updating '$name': bad top ref $qref";
+	}
+    }
+    
+    if ( defined $diff->{t_unc} && $diff->{t_unc} ne '' )
+    {
+	my $qunc = $diff->{t_unc} eq 'none' ? 'NULL' : $dbh->quote($diff->{t_unc});
+	
+	if ( $diff->{t_unc} =~ $AGE_RE || $diff->{t_unc} eq 'none' )
+	{
+	    push @id_updates, "$T_UNC = $qunc" if $HAS_UNC;
+	}
+	
+	else
+	{
+	    push @ERRORS, "at line $line, problem updating '$name': bad top unc $qunc";
+	}
+    }
+    
     if ( defined $diff->{base} && $diff->{base} ne '' )
     {
 	my $qbase = $dbh->quote($diff->{base});
-	my $qtype = $dbh->quote($diff->{b_type});
-	my $qref = $dbh->quote($diff->{b_ref});
 	
-	if ( $diff->{base} =~ $AGE_RE && $diff->{b_type} )
+	if ( $diff->{base} =~ $AGE_RE )
 	{
-	    push @id_updates, "$B_AGE = $qbase", "b_ref = $qref", "b_type = $qtype";
+	    push @id_updates, "$B_AGE = $qbase";
 	}
 	
 	else
@@ -3575,14 +4023,63 @@ sub UpdatePBDBInterval {
 	}
     }
     
-    my $qauth = $dbh->quote($INTERVAL_NUM{$interval_no}{authorizer_no} || $AUTHORIZER_NO);
-    my $qmain = $dbh->quote($INTERVAL_NUM{$interval_no}{scale_no});
+    if ( defined $diff->{b_type} && $diff->{b_type} ne '' )
+    {
+    	my $qtype = $dbh->quote($diff->{b_type});
+	
+	push @id_updates, "b_type = $qtype";
+    }
     
-    push @id_updates, "modifier_no = $qauth";
-    push @id_updates, "scale_no = $qmain";
+    if ( defined $diff->{b_ref} && $diff->{b_ref} ne '' )
+    {
+	my $qref = $diff->{b_ref} eq 'none' ? 'NULL' : $dbh->quote($diff->{b_ref});
+	
+	if ( $diff->{b_ref} =~ $AGE_RE || $diff->{b_ref} eq 'none' )
+	{
+	    push @id_updates, "b_ref = $qref";
+	}
+	
+	else
+	{
+	    push @ERRORS, "at line $line, problem updating '$name': bad base ref $qref";
+	}
+    }
+    
+    if ( defined $diff->{b_unc} && $diff->{b_unc} ne '' )
+    {
+	my $qunc = $diff->{b_unc} eq 'none' ? 'NULL' : $dbh->quote($diff->{b_unc});
+	
+	if ( $diff->{b_unc} =~ $AGE_RE || $diff->{b_unc} eq 'none' )
+	{
+	    push @id_updates, "$B_UNC = $qunc" if $HAS_UNC;
+	}
+	
+	else
+	{
+	    push @ERRORS, "at line $line, problem updating '$name': bad base unc $qunc";
+	}
+    }
+    
+    if ( defined $diff->{main_scale_no} )
+    {
+	my $qmain = $dbh->quote($diff->{main_scale_no});
+	
+	push @id_updates, "scale_no = $qmain";
+    }
+    
+    if ( defined $diff->{authorizer_no} )
+    {
+	my $qauth = $dbh->quote($diff->{authorizer_no});
+	
+	push @id_updates, "authorizer_no = $qauth", "enterer_no = $qauth";
+    }
     
     if ( @id_updates )
     {
+	my $qmod = $dbh->quote($AUTHORIZER_NO);
+	
+	push @id_updates, "modifier_no = $qmod";
+	
 	my $update_string = join(', ', @id_updates);
 	
 	$sql = "UPDATE $INTERVAL_DATA
@@ -3701,22 +4198,37 @@ sub CreatePBDBInterval {
     my $qname = $dbh->quote($name);
     my $qabbr = $dbh->quote($diff->{abbrev});
     my $qtop = $dbh->quote($diff->{top});
+    my $qtunc = $dbh->quote($diff->{t_unc});
     my $qttype = $dbh->quote($diff->{t_type});
     my $qtref = $dbh->quote($diff->{t_ref});
     my $qbase = $dbh->quote($diff->{base});
+    my $qbunc = $dbh->quote($diff->{b_unc});
     my $qbtype = $dbh->quote($diff->{b_type});
     my $qbref = $dbh->quote($diff->{b_ref});
     my $qauth = $dbh->quote($INTERVAL_NUM{$interval_no}{authorizer_no} || $AUTHORIZER_NO);
     my $qobs = $diff->{obsolete} ? '1' : '0';
-    my $qrefno = $dbh->quote($INTERVAL_NUM{$interval_no}{reference_no} // '0');
+    my $qrefno = $dbh->quote($INTERVAL_NUM{$interval_no}{reference_no} || '0');
     my $qmain = $dbh->quote($INTERVAL_NUM{$interval_no}{scale_no});
     
     # Create a record in the interval_data table.
     
-    $sql = "INSERT INTO $INTERVAL_DATA (interval_no, scale_no, interval_name, abbrev,
-		$T_AGE, t_ref, t_type, $B_AGE, b_ref, b_type, authorizer_no, enterer_no)
+    if ( $HAS_UNC )
+    {
+	$sql = "INSERT INTO $INTERVAL_DATA (interval_no, scale_no, interval_name, abbrev,
+		$T_AGE, $T_UNC, t_ref, t_type, $B_AGE, $B_UNC, b_ref, b_type, 
+		authorizer_no, enterer_no, reference_no)
+	    VALUES ($qino, $qmain, $qname, $qabbr, $qtop, $qtunc, $qtref, $qttype,
+		$qbase, $qbunc, $qbref, $qbtype, $qauth, $qauth, $qrefno)";
+    }
+    
+    else
+    {
+	$sql = "INSERT INTO $INTERVAL_DATA (interval_no, scale_no, interval_name, abbrev,
+		$T_AGE, t_ref, t_type, $B_AGE, b_ref, b_type, 
+		authorizer_no, enterer_no, reference_no)
 	    VALUES ($qino, $qmain, $qname, $qabbr, $qtop, $qtref, $qttype,
-		$qbase, $qbref, $qbtype, $qauth, $qauth)";
+		$qbase, $qbref, $qbtype, $qauth, $qauth, $qrefno)";
+    }
     
     $result = DoStatement($dbh, $sql);
     
@@ -4002,30 +4514,39 @@ sub UpdatePBDBScale {
 	push @sd_updates, "$B_AGE = $qbase";
     }
     
-    my $authorizer_no = $SCALE_NUM{$scale_no}{authorizer_no} || $AUTHORIZER_NO;
-    my $qauth = $dbh->quote($authorizer_no);
-    
-    push @sd_updates, "modifier_no = $qauth";
-    
-    my $update_string = join(', ', @sd_updates);
-    
-    $sql = "UPDATE $SCALE_DATA SET $update_string
-		WHERE scale_no = $scale_no";
-    
-    $result = DoStatement($dbh, $sql);
-    
-    unless ( $result || $ opt_debug )
+    if ( defined $diff->{authorizer_no} )
     {
-	push @ERRORS, "at line $line_no, failed to update scale $scale_no"; 
+	my $qauth = $dbh->quote($diff->{authorizer_no});
+	
+	push @sd_updates, "authorizer_no = $qauth", "enterer_no = $qauth";
     }
     
-    # Report what we have done.
-    
-    $UPDATE_SCALES++;
-    
-    unless ( $opt_debug )
+    if ( @sd_updates )
     {
-	say STDOUT "Updated scale '$name' ($scale_no)";
+	my $qmod = $dbh->quote($AUTHORIZER_NO);
+	
+	push @sd_updates, "modifier_no = $qmod";
+	
+	my $update_string = join(', ', @sd_updates);
+	
+	$sql = "UPDATE $SCALE_DATA SET $update_string
+		       WHERE scale_no = $scale_no";
+	
+	$result = DoStatement($dbh, $sql);
+	
+	unless ( $result || $ opt_debug )
+	{
+	    push @ERRORS, "at line $line_no, failed to update scale $scale_no"; 
+	}
+	
+	# Report what we have done.
+	
+	$UPDATE_SCALES++;
+	
+	unless ( $opt_debug )
+	{
+	    say STDOUT "Updated scale '$name' ($scale_no)";
+	}
     }
 }
 
@@ -4047,7 +4568,7 @@ sub CreatePBDBScale {
     my $qrefno = $dbh->quote($diff->{reference_no});
     my $qtop = $dbh->quote($diff->{top});
     my $qbase = $dbh->quote($diff->{base});
-    my $qauth = $dbh->quote($diff->{authorizer_no} || $AUTHORIZER_NO);
+    my $qauth = $dbh->quote($SCALE_NUM{$scale_no}{authorizer_no} || $AUTHORIZER_NO);
     
     # Create a record in the scale_data table.
     
@@ -4100,10 +4621,12 @@ sub PBDBCommand {
     
     my $dbh = connectDB("config.yml", $dbname);
     
-    my ($sql, $result);
+    my ($sql, $result, $count);
     
-    my @table_list = qw(interval_data interval_lookup intervals scale_data scale_map);
-    
+    my @table_list = ($TABLE{INTERVAL_DATA}, $TABLE{CLASSIC_INTERVALS},
+		      $TABLE{CLASSIC_INTERVAL_LOOKUP}, $TABLE{SCALE_DATA},
+		      $TABLE{SCALE_MAP});
+	
     # If the command is 'ints', just synchronize the intervals table with interval_data.
     
     if ( $cmd eq 'ints' )
@@ -4167,6 +4690,231 @@ sub PBDBCommand {
     
     elsif ( $cmd eq 'validate' )
     {
+	my $errors = 0;
+	my $warnings = 0;
+	
+	# Check table INTERVAL_DATA.
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE interval_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` have interval_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE scale_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` have scale_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE interval_name = ''";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` have interval_name = ''";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE early_age is null";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` have early_age = NULL";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE late_age is null";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` have late_age = NULL";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE authorizer_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` have authorizer_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE enterer_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` have enterer_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} WHERE reference_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "WARNING: $count rows in `$TABLE{INTERVAL_DATA}` have reference_no = 0";
+	    $warnings++;
+	}
+	
+	# Check table SCALE_DATA.
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_DATA} WHERE scale_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_DATA}` have scale_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_DATA} WHERE scale_name = ''";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_DATA}` have scale_name = ''";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_DATA} WHERE early_age is null";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_DATA}` have early_age = NULL";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_DATA} WHERE late_age is null";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_DATA}` have late_age = NULL";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_DATA} WHERE authorizer_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_DATA}` have authorizer_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_DATA} WHERE enterer_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_DATA}` have enterer_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_DATA} WHERE reference_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "WARNING: $count rows in `$TABLE{SCALE_DATA}` have reference_no = 0";
+	    $warnings++;
+	}
+	
+	# Check table SCALE_MAP.
+	
+	$sql = "SELECT count(*) FROM `$TABLE{SCALE_MAP}` WHERE interval_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_MAP}` have interval_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM `$TABLE{SCALE_MAP}` WHERE scale_no = 0";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_MAP}` have scale_no = 0";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM `$TABLE{SCALE_MAP}` WHERE type is null or type = ''";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_MAP}` have type = NULL or ''";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{INTERVAL_DATA} as i 
+		  LEFT JOIN $TABLE{SCALE_MAP} as sm using (interval_no)
+		WHERE sm.interval_no is null";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{INTERVAL_DATA}` are missing from `$TABLE{SCALE_MAP}`";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_MAP} as sm
+		  LEFT JOIN $TABLE{INTERVAL_DATA} as i using (interval_no)
+		WHERE i.interval_no is null";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_MAP}` are missing from `$TABLE{INTERVAL_DATA}`";
+	    $errors++;
+	}
+	
+	$sql = "SELECT count(*) FROM $TABLE{SCALE_MAP} as sm
+		  LEFT JOIN $TABLE{SCALE_DATA} as s using (scale_no)
+		WHERE s.scale_no is null";
+	
+	($count) = $dbh->selectrow_array($sql);
+	
+	if ( $count )
+	{
+	    say "ERROR: $count rows in `$TABLE{SCALE_MAP}` are missing from `$TABLE{SCALE_DATA}`";
+	    $errors++;
+	}
+	
 	$sql = "SELECT count(*) FROM interval_data";
 	
 	my ($id_count) = $dbh->selectrow_array($sql);
@@ -4176,6 +4924,11 @@ sub PBDBCommand {
 	my ($sd_count) = $dbh->selectrow_array($sql);
 	
 	say "There are $id_count intervals in $sd_count scales.";
+	
+	unless ( $errors )
+	{
+	    say "All checks passed.";
+	}
     }
     
     else
@@ -4196,8 +4949,8 @@ sub SyncIntervalsTable {
     
     my ($sql, $result);
     
-    my $INTERVAL_DATA = $TableDefs::TABLE{INTERVAL_DATA};
-    my $CLASSIC_INTS = $TableDefs::TABLE{CLASSIC_INTERVALS};
+    my $INTERVAL_DATA = $TABLE{INTERVAL_DATA};
+    my $CLASSIC_INTS = $TABLE{CLASSIC_INTERVALS};
     
     # Start by deleting anything in the intervals table that isn't in the intervals_data
     # table. 
@@ -4328,7 +5081,7 @@ sub EmlName {
 
 sub DoStatement {
     
-    my ($dbh, $sql) = @_;
+    my ($dbh, $sql, $print_stmt) = @_;
     
     if ( $opt_debug )
     {
@@ -4338,6 +5091,8 @@ sub DoStatement {
     
     else
     {
+	print STDOUT "$sql\n\n" if $print_stmt;
+	
 	my $result = eval { $dbh->do($sql) };
 	
 	if ( $@ )
@@ -4364,52 +5119,27 @@ sub CheckScaleTables {
     
     my ($dbh) = @_;
     
-    my $sql = "SHOW CREATE TABLE $TableDefs::TABLE{SCALE_DATA}";
+    my $sql = "SHOW CREATE TABLE $TABLE{INTERVAL_DATA}";
     
     my ($table, $def) = $dbh->selectrow_array($sql);
     
-    if ( $def =~ /`color`/ )
+    if ( $def =~ /`early_unc`|`t_unc`/ )
     {
-	$HAS_COLOR = 1;
-    }
-    
-    if ( $def =~ /`locality`/ )
-    {
-	$HAS_LOCALITY = 1;
-    }
-    
-    if ( $def =~ /`authorizer_no`/ )
-    {
-	$HAS_AUTH = 1;
-    }
-    
-    $sql = "SHOW CREATE TABLE $TableDefs::TABLE{SCALE_MAP}";
-    
-    ($table, $def) = $dbh->selectrow_array($sql);
-    
-    if ( $def =~ /`sequence`/ )
-    {
-	$HAS_SEQUENCE = 1;
-    }
-    
-    $sql = "SHOW CREATE TABLE $TableDefs::TABLE{INTERVAL_DATA}";
-    
-    ($table, $def) = $dbh->selectrow_array($sql);
-    
-    if ( $def =~ /`t_type`/ )
-    {
-	$HAS_INTP = 1;
+	$HAS_UNC = 1;
     }
     
     $T_AGE = ( $def =~ /`t_age`/ ) ? 't_age' : 'late_age';
     $B_AGE = ( $def =~ /`b_age`/ ) ? 'b_age' : 'early_age';
+    
+    $T_UNC = ( $def =~ /`t_unc`/ ) ? 't_unc' : 'late_unc';
+    $B_UNC = ( $def =~ /`b_unc`/ ) ? 'b_unc' : 'early_unc';
 }
 
 
 # ConditionScaleTables ( dbh )
 # 
-# Add the fields 'color' and 'locality' to the PBDB scale_data table, and 'reference_no',
-# 'obsolete', and 'sequence' to the scale_map table.
+# Add any necessary fields to the interval and scale tables if they don't already exist.
+# If $opt_debug is true, print out the statements but don't execute them.
 
 sub ConditionScaleTables {
     
@@ -4422,88 +5152,28 @@ sub ConditionScaleTables {
     my $INTERVAL_DATA = $TableDefs::TABLE{INTERVAL_DATA};
     my $CLASSIC_INTS = $TableDefs::TABLE{CLASSIC_INTERVALS};
     
-    # Add the necessary fields to the scale_data table, if they are not already there.
+    my ($table, $def) = $dbh->selectrow_array("SHOW CREATE TABLE `$INTERVAL_DATA`");
     
-    my $sql = "SHOW CREATE TABLE $SCALE_DATA";
-    
-    my ($table, $def) = $dbh->selectrow_array($sql);
-    
-    unless ( $def =~ /`color`/ )
+    unless ( $def =~ /`early_unc`|`b_unc`/ )
     {
-	$sql = "ALTER TABLE $SCALE_DATA change default_color color varchar(10) null";
-	$result = DoStatement($dbh, $sql);
-	$HAS_COLOR = 1;
+	DoStatement($dbh, "ALTER TABLE `$INTERVAL_DATA` ADD COLUMN IF NOT EXISTS
+				`$B_UNC` decimal(9,5) null after `$B_AGE`", 1);
+	
+	DoStatement($dbh, "ALTER TABLE `$INTERVAL_DATA` ADD COLUMN IF NOT EXISTS
+				`$T_UNC` decimal(9,5) null after `$T_AGE`", 1);
+	
+	$HAS_UNC = 1;
     }
     
-    unless ( $def =~ /`locality`/ )
+    my ($row, $def) = $dbh->selectrow_array("SHOW COLUMNS FROM `$INTERVAL_DATA` like 'b_type'");
+    
+    unless ( $def =~ /NOT NULL/i )
     {
-	$sql = "ALTER TABLE $SCALE_DATA add locality varchar(80) null after color";
-	$result = DoStatement($dbh, $sql);
-	$HAS_LOCALITY = 1;
-    }
-    
-    unless ( $def =~ /`authorizer_no`/ )
-    {
-	$sql = "ALTER TABLE $SCALE_DATA
-		add authorizer_no int unsigned not null default '0',
-		add enterer_no int unsigned not null default '0',
-		add modifier_no int unsigned not null default '0',
-		add created timestamp not null default current_timestamp(),
-		add modified timestamp not null default current_timestamp on update current_timestamp()";
+	DoStatement($dbh, "ALTER TABLE `$INTERVAL_DATA` MODIFY `b_type`
+				enum('anchor','reference','defined','interpolated') NOT NULL");
 	
-	$result = DoStatement($dbh, $sql);
-    }
-    
-    # Add the necessary fields to the scale_map table, if they are not already there.
-    
-    $sql = "SHOW CREATE TABLE $SCALE_MAP";
-    
-    ($table, $def) = $dbh->selectrow_array($sql);
-    
-    unless ( $def =~ /`sequence`/ )
-    {
-	$sql = "ALTER TABLE $SCALE_MAP
-		add sequence int unsigned not null after scale_level,
-		add type varchar(20) null after parent_no,
-		add obsolete tinyint unsigned not null default '0',
-		add reference_no int unsigned null";
-	
-	$result = DoStatement($dbh, $sql);
-	$HAS_SEQUENCE = 1;
-    }
-    
-    # Add the necessary fields to the interval_data table, if they are not already there.
-    
-    $sql = "SHOW CREATE TABLE $INTERVAL_DATA";
-    
-    ($table, $def) = $dbh->selectrow_array($sql);
-    
-    unless ( $def =~ /`t_type`/ )
-    {
-	$sql = "ALTER TABLE $INTERVAL_DATA
-		add scale_no int unsigned not null default '0' after interval_no,
-		add t_ref decimal(9,5) after $T_AGE,
-		add t_type enum('anchor', 'reference', 'defined', 'interpolated') after t_ref,
-		add b_ref decimal(9,5) after $B_AGE,
-		add b_type enum('anchor', 'reference', 'defined', 'interpolated') after b_ref,
-		add authorizer_no int unsigned not null default '0',
-		add enterer_no int unsigned not null default '0',
-		add modifier_no int unsigned not null default '0',
-		add created timestamp not null default current_timestamp(),
-		add modified timestamp not null default current_timestamp on update current_timestamp()";
-	
-	$result = DoStatement($dbh, $sql);
-	
-	$HAS_INTP = 1;
-	
-	$sql = "UPDATE $INTERVAL_DATA as id join $CLASSIC_INTS as i using (interval_no)
-		SET id.authorizer_no = i.authorizer_no,
-		    id.enterer_no = i.enterer_no,
-		    id.modifier_no = i.modifier_no,
-		    id.created = i.created,
-		    id.modified = i.modified";
-	
-	$result = DoStatement($dbh, $sql);
+	DoStatement($dbh, "ALTER TABLE `$INTERVAL_DATA` MODIFY `t_type`
+				enum('anchor','reference','defined','interpolated') NOT NULL");
     }
 }
 
@@ -5399,7 +6069,58 @@ sub ColumnHeader {
     
     return $content . '*';
 }
+    
+    
+# AuthenticateSession ( )
+# 
+# 
 
+sub AuthenticateSession {
+    
+    my ($dbh) = @_;
+    
+    if ( $ENV{AUTHORIZER_NO} )
+    {
+	return $ENV{AUTHORIZER_NO};
+    }
+    
+    else
+    {
+	print "Who is authorizing these changes? ";
+	my $auth = <STDIN>;
+	chomp $auth;
+	
+	if ( $auth =~ /^\d+$/ )
+	{
+	    return $auth;
+	}
+	
+	elsif ( $auth )
+	{
+	    my $qauth = $dbh->quote($auth);
+	    
+	    my ($auth_no, $name) = $dbh->selectrow_array("
+		SELECT person_no, real_name FROM pbdb_wing.users
+		WHERE username=$qauth or email=$qauth");
+	    
+	    if ( $auth_no =~ /^\d+$/ )
+	    {
+		say "Using $auth_no ($name)";
+		return $auth_no;
+	    }
+	    
+	    else
+	    {
+		die "Unknown authorizer '$auth'\n";
+	    }
+	}
+	
+	else
+	{
+	    die "You must specify an authorizer\n";
+	}
+    }
+}
 
 # ShowHelp ( )
 # 
