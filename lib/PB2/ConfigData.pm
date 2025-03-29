@@ -25,7 +25,15 @@ use Moo::Role;
 our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, 
      $LITHOLOGIES, $MINOR_LITHS, $LITHIFICATION, $LITH_ADJECTIVES,
      $ENVIRONMENTS, $TEC_SETTINGS, $COLL_METHODS, $DATE_METHODS,
-     $PRES_MODES, $PCOORD_MODELS, $RESEARCH_GROUPS);
+     $COLL_COVERAGES, $COLL_TYPES,
+     $PRES_MODES, $PCOORD_MODELS, $RESEARCH_GROUPS, $MUSEUMS);
+
+our (%COV_LABEL) = ( 'some genera' => 'some genera within listed groups',
+		     'some microfossils' => 'major groups of microfossils',
+		     'some macrofossils' => 'major groups of macrofossils <em>(e.g. trilobites, gastropods, herps)</em>',
+		     'species names' => 'most species names',
+		     'difficult macrofossils' => 'difficult macrofossils <em>(e.g. bryozoans, crinoids, spongs)</em>' );
+		     
 
 # Initialization
 # --------------
@@ -56,7 +64,8 @@ sub initialize {
 	    "Return all of the information necessary for editing collections:",
 	    "lithologies, lithifications, minor lithologies, lithology adjectives,",
 	    "environments, tectonic settings, collection methods, dating methods,",
-	    "collection/preservation modes, and research groups",
+	    "collection/preservation modes, collection coverage, collection type,",
+	    "and research groups",
 	{ value => 'lithblock', maps_to => '1.2:config:lithblock' },
 	    "Return lithologies, lithology types, minor lithologies, and lithology adjectives.",
 	{ value => 'lithologies', maps_to => '1.2:config:lithologies' },
@@ -75,12 +84,18 @@ sub initialize {
 	    "Return collection methods.",
 	{ value => 'datemet', maps_to => '1.2:config:datemet' },
 	    "Return dating methods.",
-	{ value => 'presmodes', maps_to => '1.2:config:pres_modes' },
+	{ value => 'colltype', maps_to => '1.2:config:colltypes' },
+	    "Return collection types.",
+	{ value => 'collcov', maps_to => '1.2:config:collcovs' },
+	    "Return collection coverage values.",
+	{ value => 'presmodes', maps_to => '1.2:config:presmodes' },
 	    "Return preservation modes.",
-	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
-	    "Return available paleogeography models.",
 	{ value => 'resgroups', maps_to => '1.2:config:resgroups' },
 	    "Return research group names.",
+	{ value => 'museums', maps_to => '1.2:config:museums' },
+	    "Return museum names.",
+	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
+	    "Return available paleogeography models.",
 	{ value => 'all', maps_to => '1.2:config:all' },
 	    "Return all of the above blocks of information.");
     
@@ -127,7 +142,7 @@ sub initialize {
     
     $ds->define_block('1.2:config:countries' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'cou',
-	  if_field => 'name' },
+	  if_field => 'country_name' },
 	    "Value 'cou' for countries",
 	{ output => 'country_name', com_name => 'nam' },
 	    "Country name",
@@ -191,11 +206,25 @@ sub initialize {
     
     $ds->define_block('1.2:config:datemets' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'dmt', if_field => 'date_method' },
-	   "Value 'dmt' for dating methods",
+	    "Value 'dmt' for dating methods",
 	{ output => 'date_method', com_name => 'nam' },
 	    "Dating methods");
     
-    $ds->define_block('1.2:config:pres_modes' =>
+    $ds->define_block('1.2:config:collcovs' => 
+	{ output => 'config_section', com_name => 'cfg', value => 'cov', if_field => 'cov_value' },
+	    "Value 'cov' for coverage values",
+	{ output => 'cov_value', com_name => 'nam' },
+	    "Coverage value",
+	{ output => 'cov_label', com_name => 'lbl' },
+	    "The corresponding label to display for this value");
+    
+    $ds->define_block('1.2:config:colltypes' => 
+	{ output => 'config_section', com_name => 'cfg', value => 'ctp', if_field => 'coll_type' },
+	    "Value 'ctp' for collection types",
+	{ output => 'coll_type', com_name => 'nam' },
+	    "Collection type");
+    
+    $ds->define_block('1.2:config:presmodes' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'prm', if_field => 'pres_mode' },
 	    "The configuration section: 'prm' for preservation modes",
 	{ output => 'pres_mode', com_name => 'nam' },
@@ -207,6 +236,12 @@ sub initialize {
 	{ output => 'group_name', com_name => 'nam' },
 	    "Research group name");
     
+    $ds->define_block('1.2:config:museums' => 
+	{ output => 'config_section', com_name => 'cfg', value => 'mus', if_field => 'museum_abbr' },
+	    "Value 'mus' for museums",
+	{ output => 'museum_abbr', com_name => 'nam' },
+	    "Museum abbreviation");
+    
     $ds->define_block('1.2:config:collblock' =>
 	{ include => '1.2:config:lithologies' },
 	{ include => '1.2:config:minorliths' },
@@ -216,8 +251,11 @@ sub initialize {
 	{ include => '1.2:config:tecsettings' },
 	{ include => '1.2:config:collmets' },
 	{ include => '1.2:config:datemets' },
-	{ include => '1.2:config:pres_modes' },
-	{ include => '1.2:config:resgroups' });
+	{ include => '1.2:config:collcovs' },
+	{ include => '1.2:config:colltypes' },
+	{ include => '1.2:config:presmodes' },
+	{ include => '1.2:config:resgroups' },
+	{ include => '1.2:config:museums' });
     
     $ds->define_block('1.2:config:pgmodels' =>
 	{ set => '*', code => \&process_description },
@@ -243,8 +281,9 @@ sub initialize {
 	{ include => '1.2:config:tecsettings' },
 	{ include => '1.2:config:collmets' },
 	{ include => '1.2:config:datemets' },
-	{ include => '1.2:config:pres_modes' },	
+	{ include => '1.2:config:presmodes' },	
 	{ include => '1.2:config:resgroups' },
+	{ include => '1.2:config:museums' },
 	{ include => '1.2:config:pgmodels' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
@@ -315,7 +354,7 @@ sub initialize {
     
     $LITHOLOGIES = [ ];
     
-    push @$LITHOLOGIES, { lithology => $_, lith_type => $lith_type{$_} || 'mixed' } 
+    push @$LITHOLOGIES, { lithology => $_, lith_type => $lith_type{$_} || ($_ ne 'not reported' && $_ !~ /^-/ ? 'mixed' : '') } 
 	foreach @lithology_list;
     
     # Get the list of minor lithologies from the database.
@@ -392,7 +431,7 @@ sub initialize {
     my @collmet_list = $field_type =~ /'(.*?)'/g;
     
     add_divisions(\@collmet_list, ['bulk', '-- Collection methods --'],
-		  ['chemical', '-- Preservation methods --'],
+		  ['chemical', '-- Preparation methods --'],
 		  ['field collection', '-- Fossil source --'],
 		  ['repository not specified', '-- Other --']);
     
@@ -418,6 +457,48 @@ sub initialize {
     
     my @presmode_list = $field_type =~ /'(.*?)'/g;
     
+    my $state = 'top';
+    
+    for ( my $i = 0; $i < @presmode_list; $i++ )
+    {
+	if ( $state eq 'top' && $presmode_list[$i] =~ /^original/ )
+	{
+	    splice(@presmode_list, $i, 0, '-- Original --');
+	    $state = 'original';
+	}
+	
+	if ( $state eq 'original' && $presmode_list[$i] =~ /^replaced/ )
+	{
+	    splice(@presmode_list, $i, 0, '-- Replaced By --');
+	    $state = 'replaced';
+	}
+	
+	if ( $state eq 'replaced' && $presmode_list[$i] !~ /^replaced|^--/ )
+	{
+	    splice(@presmode_list, $i, 0, '-- Special Modes --');
+	    $state = 'special';
+	}
+    }
+    
+    $COLL_COVERAGES = [ ];
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'collection_coverage'");
+    
+    my @collcov_list = $field_type =~ /'(.*?)'/g;
+        
+    push @$COLL_COVERAGES, { cov_value => $_, cov_label => ($COV_LABEL{$_} || $_) } 
+	foreach @collcov_list;
+    
+    $COLL_TYPES = [ ];
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'collection_type'");
+    
+    my @colltype_list = $field_type =~ /'(.*?)'/g;
+        
+    push @$COLL_TYPES, { coll_type => $_ } foreach @colltype_list;
+    
     $PRES_MODES = [ ];
     
     push @$PRES_MODES, { pres_mode => $_ } foreach @presmode_list;
@@ -432,6 +513,17 @@ sub initialize {
     $RESEARCH_GROUPS = [ ];
     
     push @$RESEARCH_GROUPS, { group_name => $_ } foreach @resgroup_list;
+    
+    # Get the list of museum abbreviations from the database.
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $COLLECTIONS like 'museum'");
+    
+    my @museum_list = $field_type =~ /'(.*?)'/g;
+    
+    $MUSEUMS = [ ];
+    
+    push @$MUSEUMS, { museum_abbr => $_ } foreach @museum_list;
     
     # Get the list of paleocoordinate models from the database.
     
@@ -556,27 +648,31 @@ sub get {
 
     my ($request) = @_;
     
-    my $show_all; $show_all = 1 if $request->has_block('all');
-    my $show_lith; $show_lith = 1 if $request->has_block('lithblock');
-    my $show_coll; $show_coll = 1 if $request->has_block('collblock');
-    $show_lith = 1 if $show_coll;
+    # my $show_all; $show_all = 1 if $request->has_block('all');
+    # my $show_lith; $show_lith = 1 if $request->has_block('lithblock');
+    # my $show_coll; $show_coll = 1 if $request->has_block('collblock');
+    # $show_lith = 1 if $show_coll;
+    
     my @result;
     
-    push @result, @$BINS if $request->has_block('clusters') or $show_all;
-    push @result, @$RANKS if $request->has_block('ranks') or $show_all;
-    push @result, @$COUNTRIES if $request->has_block('countries') or $show_all;
-    push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
-    push @result, @$LITHOLOGIES if $request->has_block('lithologies') or $show_all or $show_lith;
-    push @result, @$MINOR_LITHS if $request->has_block('minorliths') or $show_all or $show_lith;
-    push @result, @$LITHIFICATION if $request->has_block('lithification') or $show_all or $show_lith;
-    push @result, @$LITH_ADJECTIVES if $request->has_block('lithadj') or $show_all or $show_lith;
-    push @result, @$ENVIRONMENTS if $request->has_block('envs') or $show_all or $show_coll;
-    push @result, @$TEC_SETTINGS if $request->has_block('tecs') or $show_all or $show_coll;
-    push @result, @$COLL_METHODS if $request->has_block('collmet') or $show_all or $show_coll;
-    push @result, @$DATE_METHODS if $request->has_block('datemet') or $show_all or $show_coll;
-    push @result, @$PRES_MODES if $request->has_block('presmodes') or $show_all or $show_coll;
-    push @result, @$RESEARCH_GROUPS if $request->has_block('resgroups') or $show_all or $show_coll;
-    push @result, @$PCOORD_MODELS if $request->has_block('pgmodels') or $show_all;
+    push @result, @$BINS if $request->has_block('1.2:config:geosum');
+    push @result, @$RANKS if $request->has_block('1.2:config:ranks');
+    push @result, @$COUNTRIES if $request->has_block('1.2:config:countries');
+    push @result, @$CONTINENTS if $request->has_block('1.2:config:continents');
+    push @result, @$LITHOLOGIES if $request->has_block('1.2:config:lithologies');
+    push @result, @$MINOR_LITHS if $request->has_block('1.2:config:minorliths');
+    push @result, @$LITHIFICATION if $request->has_block('1.2:config:lithification');
+    push @result, @$LITH_ADJECTIVES if $request->has_block('1.2:config:lithadjs');
+    push @result, @$ENVIRONMENTS if $request->has_block('1.2:config:environments');
+    push @result, @$TEC_SETTINGS if $request->has_block('1.2:config:tecsettings');
+    push @result, @$COLL_METHODS if $request->has_block('1.2:config:collmets');
+    push @result, @$DATE_METHODS if $request->has_block('1.2:config:datemets');
+    push @result, @$COLL_TYPES if $request->has_block('1.2:config:colltypes');
+    push @result, @$COLL_COVERAGES if $request->has_block('1.2:config:collcovs');
+    push @result, @$PRES_MODES if $request->has_block('1.2:config:presmodes');
+    push @result, @$RESEARCH_GROUPS if $request->has_block('1.2:config:resgroups');
+    push @result, @$MUSEUMS if $request->has_block('1.2:config:museums');
+    push @result, @$PCOORD_MODELS if $request->has_block('1.2:config:pgmodels');
     
     if ( my $offset = $request->result_offset(1) )
     {
