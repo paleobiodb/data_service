@@ -185,6 +185,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(PUBLICATIONS => 'pubs');
     set_table_property('PUBLICATIONS', PRIMARY_KEY => 'pub_no');
     set_table_property('PUBLICATIONS', PRIMARY_FIELD => 'pub_no');
+    set_column_property('PUBLICATIONS', 'pub_no', EXTID_TYPE => 'PUB');
     
     set_table_name(ARCHIVES => 'data_archives');
     set_table_property('ARCHIVES', PRIMARY_KEY => 'archive_no');

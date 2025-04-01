@@ -107,7 +107,7 @@ sub valid_identifier {
     
     if ( $value =~ $IDRE{$type} )
     {
-	my $idtype = $1;
+	my $idtype = $1 || $type;
 	my $idnum = ($2 eq 'ERROR') ? -1 : $2;
 	
 	return { value => PBDB::ExtIdent->new($idtype, $idnum) };
