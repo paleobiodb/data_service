@@ -2844,7 +2844,7 @@ sub DiffPBDB {
 		    push @ERRORS, "at line $line_no, interval_no $interval_no has no b_type";
 		}
 		
-		if ( $reference_no ne $p->{int_ref_no} )
+		if ( $reference_no + 0 != $p->{int_ref_no} + 0)
 		{
 		    $DIFF_INT{$scale_no}{$interval_no}{int_ref_no} =
 			DiffElt($u, $reference_no, $p->{int_ref_no});
@@ -2876,7 +2876,7 @@ sub DiffPBDB {
 		$DIFF_INT{$scale_no}{$interval_no}{color} = DiffElt($u, $color, $p->{color});
 	    }
 	    
-	    if ( $reference_no ne $p->{reference_no} )
+	    if ( $reference_no + 0 != $p->{reference_no} + 0 )
 	    {
 		$DIFF_INT{$scale_no}{$interval_no}{reference_no} = 
 		    DiffElt($u, $reference_no, $p->{reference_no});
@@ -3327,12 +3327,17 @@ sub PrintDifferences {
     
     SetupOutput;
     
+    if ( $opt_debug )
+    {
+	require "Data/Dumper.pm";
+    }
+    
     # If we have generated any differences in containing intervals, start by generating
     # the same header line that was read from the input data.
     
     if ( %DIFF_INT || %DIFF_SCALE || @DIFF_MISSING || @DIFF_MISSING_SCALES )
     {
-	print GenerateHeader();
+	print GenerateHeader() unless $opt_debug;
     }
     
     if ( %DIFF_INT )
@@ -3351,7 +3356,15 @@ sub PrintDifferences {
 		$DIFF_INT{$scale_no}{$interval_no}{scale_no} = $i->{scale_no};
 		$DIFF_INT{$scale_no}{$interval_no}{scale_name} = $i->{scale_name};
 		
-		print RecordToLine($DIFF_INT{$scale_no}{$interval_no}, \@FIELD_LIST);
+		if ( $opt_debug )
+		{
+		    print Data::Dumper::Dumper($DIFF_INT{$scale_no}{$interval_no});
+		}
+		
+		else
+		{
+		    print RecordToLine($DIFF_INT{$scale_no}{$interval_no}, \@FIELD_LIST);
+		}
 	    }
 	}
     }
@@ -3760,7 +3773,7 @@ sub UpdatePBDBSequence {
 	    my $qtype = $dbh->quote($i->{type});
 	    my $qcolor = $dbh->quote($i->{color});
 	    my $qobs = $i->{obsolete} ? '1' : '0';
-	    my $qrefno = $dbh->quote($i->{reference_no});
+	    my $qrefno = $dbh->quote($i->{reference_no} || '0');
 	    
 	    $seq++;
 	    
@@ -3882,7 +3895,7 @@ sub UpdatePBDBInterval {
 	push @id_updates, "t_type = $qtype";
     }
     
-    if ( defined $diff->{t_age} )
+    if ( defined $diff->{t_age} && $diff->{t_age} ne '' )
     {
 	my $qtop = $dbh->quote($diff->{t_age});
 	
@@ -3986,9 +3999,9 @@ sub UpdatePBDBInterval {
 	push @id_updates, "scale_no = $qmain";
     }
     
-    if ( defined $diff->{int_ref_no} && $diff->{int_ref_no} ne '' )
+    if ( exists $diff->{int_ref_no} )
     {
-	my $qref = $dbh->quote($diff->{int_ref_no});
+	my $qref = $dbh->quote($diff->{int_ref_no} || 0);
 	
 	push @id_updates, "reference_no = $qref";
     }
@@ -4024,16 +4037,16 @@ sub UpdatePBDBInterval {
     
     my @sm_updates;
     
-    if ( $diff->{type} && ! $scale_map_updated )
+    if ( defined $diff->{type} && $diff->{type} ne '' && ! $scale_map_updated )
     {
-	my $qtype = $diff->{type} eq 'none' ? 'NULL' : $dbh->quote($diff->{type});
+	my $qtype = $dbh->quote($diff->{type});
 	
 	push @sm_updates, "type = $qtype";
     }
     
-    if ( $diff->{color} && ! $scale_map_updated )
+    if ( exists $diff->{color} && ! $scale_map_updated )
     {
-	my $qcolor = $diff->{color} eq 'none' ? 'NULL' : $dbh->quote($diff->{color});
+	my $qcolor = $dbh->quote($diff->{color});
 	
 	push @sm_updates, "color = $qcolor";
     }
@@ -4045,14 +4058,14 @@ sub UpdatePBDBInterval {
 	push @sm_updates, "obsolete = $qobs";
     }
     
-    if ( $diff->{reference_no} && ! $scale_map_updated )
+    if ( defined $diff->{reference_no} && $diff->{reference_no} ne '' && ! $scale_map_updated )
     {
-	my $qrefno = $diff->{reference_no} eq 'none' ? '0' : $dbh->quote($diff->{reference_no} // '0');
+	my $qrefno = $dbh->quote($diff->{reference_no} || '0');
 	
 	push @sm_updates, "reference_no = $qrefno";
     }
     
-    if ( $diff->{parent} && ! $scale_map_updated )
+    if ( exists $diff->{parent} && ! $scale_map_updated )
     {
 	my $parent_no = $INTERVAL_NAME{$diff->{parent}}{interval_no};
 	my $qparent = $dbh->quote($parent_no);
@@ -4073,10 +4086,59 @@ sub UpdatePBDBInterval {
     
     # Finally, update the interval_lookup table.
     
-    if ( $diff->{period} || $diff->{epoch} || $diff->{subepoch} || $diff->{stage} )
+    my @lk_updates;
+    
+    if ( exists $diff->{period} )
     {
-	UpdateIntervalLookup($dbh, $scale_no, $interval_no, $diff);
+	my $qperiod = $dbh->quote($INTERVAL_NAME{$diff->{period}}{interval_no});
+	
+	push @lk_updates, "period_no = $qperiod";
     }
+    
+    if ( exists $diff->{epoch} )
+    {
+	my $qepoch = $dbh->quote($INTERVAL_NAME{$diff->{epoch}}{interval_no});
+	
+	push @lk_updates, "epoch_no = $qepoch";
+    }
+    
+    if ( exists $diff->{subepoch} )
+    {
+	my $qsubepoch = $dbh->quote($INTERVAL_NAME{$diff->{subepoch}}{interval_no});
+	
+	push @lk_updates, "subepoch_no = $qsubepoch";
+    }
+    
+    if ( exists $diff->{stage} )
+    {
+	my $qstage = $dbh->quote($INTERVAL_NAME{$diff->{stage}}{interval_no});
+	
+	push @lk_updates, "stage_no = $qstage";
+    }
+    
+    if ( exists $diff->{ten_my_bin} )
+    {
+	my $qbin = $dbh->quote($diff->{ten_my_bin});
+	
+	push @lk_updates, "ten_my_bin = $qbin";
+    }
+    
+    if ( @lk_updates )
+    {
+	my $update_string = join(', ', @lk_updates);
+	
+	$sql = "UPDATE $TABLE{CLASSIC_INTERVAL_LOOKUP}
+		SET $update_string
+		WHERE interval_no = $qino";
+	
+	$result = DoStatement($dbh, $sql);
+    }
+    
+    # if ( $diff->{period} || $diff->{epoch} || $diff->{subepoch} || $diff->{stage} || 
+    # 	 $diff->{ten_my_bin} )
+    # {
+    # 	UpdateIntervalLookup($dbh, $scale_no, $interval_no, $diff);
+    # }
     
     # Report what we have done.
     
@@ -4228,7 +4290,7 @@ sub UpdateIntervalLookup {
     
     my ($sql, $result);
     
-    my $CLASSIC_LOOKUP = $TableDefs::TABLE{CLASSIC_INTERVAL_LOOKUP};
+    my $CLASSIC_LOOKUP = $TABLE{CLASSIC_INTERVAL_LOOKUP};
     
     # Create a record in the interval_lookup table. We use 'replace' instead of 'insert'
     # because there may already be a record there for this interval_no, and the only
@@ -4238,7 +4300,7 @@ sub UpdateIntervalLookup {
     my $subepoch_no = $INTERVAL_NAME{$diff->{subepoch}}{interval_no};
     my $epoch_no = $INTERVAL_NAME{$diff->{epoch}}{interval_no};
     my $period_no = $INTERVAL_NAME{$diff->{period}}{interval_no};
-    my $ten_my_bin = $diff->{ten_my_bin} eq 'none' ? undef : $diff->{ten_my_bin};
+    my $ten_my_bin = $diff->{ten_my_bin};
     
     my $qstage = $dbh->quote($stage_no);
     my $qsubep = $dbh->quote($subepoch_no);
@@ -4440,24 +4502,21 @@ sub UpdatePBDBScale {
     
     if ( $diff->{color} )
     {
-	my $color = $diff->{color} eq 'none' ? undef : $diff->{color};
-	my $qcolor = $dbh->quote($color);
+	my $qcolor = $dbh->quote($diff->{color});
 	
 	push @sd_updates, "color = $qcolor";
     }
     
     if ( $diff->{type} )
     {
-	my $locality = $diff->{type} eq 'none' ? undef : $diff->{type};
-	my $qloc = $dbh->quote($locality);
+	my $qloc = $dbh->quote($diff->{type});
 	
 	push @sd_updates, "locality = $qloc";
     }
     
     if ( $diff->{reference_no} )
     {
-	my $refno = $diff->{reference_no} eq 'none' ? undef : $diff->{reference_no};
-	my $qrefno = $dbh->quote($refno);
+	my $qrefno = $dbh->quote($diff->{reference_no} || '0');
 	
 	push @sd_updates, "reference_no = $qrefno";
     }
@@ -4527,7 +4586,7 @@ sub CreatePBDBScale {
     my $qname = $dbh->quote($name);
     my $qcolor = $dbh->quote($diff->{color});
     my $qloc = $dbh->quote($diff->{type});
-    my $qrefno = $dbh->quote($diff->{reference_no});
+    my $qrefno = $dbh->quote($diff->{reference_no} || '0');
     my $qtop = $dbh->quote($diff->{top});
     my $qbase = $dbh->quote($diff->{base});
     my $qauth = $dbh->quote($SCALE_NUM{$scale_no}{authorizer_no} || $AUTHORIZER_NO);
@@ -4998,6 +5057,18 @@ sub SyncIntervalsTable {
     if ( $result > 0 )
     {
 	say STDERR "  Updated $result rows in the classic intervals table";
+    }
+    
+    $sql = "UPDATE $TABLE{INTERVAL_DATA} as i join $TABLE{CLASSIC_INTERVAL_LOOKUP} as l
+		using (interval_no)
+	    SET l.top_age = i.late_age, l.base_age = i.early_age
+	    WHERE l.top_age <> i.late_age or l.base_age <> i.early_age";
+    
+    $result = DoStatement($dbh, $sql);
+    
+    if ( $result > 0 )
+    {
+	say "Updated $result ages in the interval lookup table";
     }
 }
 
