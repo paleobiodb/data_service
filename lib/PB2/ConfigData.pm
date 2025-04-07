@@ -329,7 +329,8 @@ sub initialize {
     # Get the list of countries from the database.
     
     $COUNTRIES = $dbh->selectall_arrayref("
-	SELECT cc as cc2, continent, name as country_name FROM $COUNTRY_MAP", { Slice => {} });
+	SELECT cc as cc2, continent, name as country_name FROM $COUNTRY_MAP
+	ORDER BY country_name", { Slice => {} });
     
     # Get the list of lithologies from the database.
     
