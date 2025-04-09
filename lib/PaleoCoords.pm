@@ -46,6 +46,14 @@ sub new {
     my $self = { dbh => $dbh,
 		 debug => $opt_debug };
     
+    my ($lock) = $dbh->selectrow_array("SELECT GET_LOCK('paleocoords', 5)");
+    
+    unless ( $lock )
+    {
+	logMessage(1, "Another process is already updating the paleocoordinates");
+	exit;
+    }
+    
     return bless($self, $class);
 }
 
@@ -70,7 +78,7 @@ sub clearCoords {
 	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd JOIN $TABLE{PCOORD_BINS_STATIC} as ps
 		    using (bin_id, interval_no)
 		SET pd.paleo_lng = null, pd.paleo_lat = null, pd.plate_no = null, 
-		    pd.update_flag = false
+		    pd.update_flag = false, ps.update_flag = false
 		WHERE $coord_filter";
     }
     
@@ -79,7 +87,7 @@ sub clearCoords {
 	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd JOIN $TABLE{PCOORD_STATIC} as ps
 		    using (collection_no)
 		SET pd.paleo_lng = null, pd.paleo_lat = null, pd.plate_no = null,
-		    pd.update_flag = false
+		    pd.update_flag = false, ps.update_flag = false
 		WHERE $coord_filter";
     }
     
@@ -121,7 +129,7 @@ sub updateExisting {
     {
 	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd JOIN $TABLE{PCOORD_BINS_STATIC} as ps
 		    using (bin_id, interval_no)
-		SET update_flag = true
+		SET pd.update_flag = true
 		WHERE $coord_filter";
     }
     
@@ -129,7 +137,7 @@ sub updateExisting {
     {
 	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd JOIN $TABLE{PCOORD_STATIC} as ps
 		    using (collection_no)
-		SET update_flag = true
+		SET pd.update_flag = true
 		WHERE $coord_filter";
     }
     
@@ -201,8 +209,8 @@ sub updateNew {
 	$static_filter =~ s/ps[.]late_age/i.late_age/g;
 	
 	$sql = "INSERT IGNORE INTO $TABLE{PCOORD_BINS_STATIC}
-		(bin_id, interval_no, present_lat, present_lng, early_age, late_age, update_flag)
-	    SELECT s.bin_id, s.interval_no, s.lat, s.lng, i.early_age, i.late_age, 1
+		(bin_id, interval_no, present_lat, present_lng, early_age, late_age)
+	    SELECT s.bin_id, s.interval_no, s.lat, s.lng, i.early_age, i.late_age
 	    FROM $TABLE{SUMMARY_BINS} as s join $TABLE{INTERVAL_DATA} as i using (interval_no)
 		left join $TABLE{PCOORD_BINS_STATIC} as ps using (bin_id, interval_no)
 	    WHERE ps.bin_id is null and i.scale_no = 1 and $static_filter";
@@ -214,8 +222,8 @@ sub updateNew {
 	$static_filter =~ s/ps[.]late_age/c.late_age/g;
 	
 	$sql = "INSERT IGNORE INTO $TABLE{PCOORD_STATIC}
-		(collection_no, present_lat, present_lng, early_age, late_age, update_flag)
-	    SELECT c.collection_no, c.lat, c.lng, c.early_age, c.late_age, 1
+		(collection_no, present_lat, present_lng, early_age, late_age)
+	    SELECT c.collection_no, c.lat, c.lng, c.early_age, c.late_age
 	    FROM $TABLE{COLLECTION_MATRIX} as c
 		left join $TABLE{PCOORD_STATIC} as ps using (collection_no)
 	    WHERE ps.collection_no is null and $static_filter";
@@ -226,25 +234,27 @@ sub updateNew {
     logMessage(2, "    adding pcoords for $count new $word")
 	if $count && $count > 0;
     
-    # Mark for update any rows in PCOORD_STATIC corresponding to collections or bins
+    # Mark for update any rows in PCOORD_DATA corresponding to collections or bins
     # whose modern coordinates have been modified.
     
     if ( $options->{bins} )
     {
-	$sql = "UPDATE $TABLE{PCOORD_BINS_STATIC} as ps
+	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd 
+		join $TABLE{PCOORD_BINS_STATIC} as ps using (bin_id, interval_no)
 		join $TABLE{SUMMARY_BINS} as s using (bin_id, interval_no)
-	    SET ps.present_lat = s.lat, ps.present_lng = s.lng, 
-		ps.update_flag = true, ps.invalid = false
+	    SET ps.present_lat = s.lat, ps.present_lng = s.lng, ps.invalid = false,
+		pd.update_flag = true
 	    WHERE (s.lat <> ps.present_lat or s.lng <> ps.present_lng)
 		and $static_filter";
     }
     
     else
     {
-	$sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
+	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd 
+		join $TABLE{PCOORD_STATIC} as ps using (collection_no)
 		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
-	    SET ps.present_lat = c.lat, ps.present_lng = c.lng, 
-		ps.update_flag = true, ps.invalid = false
+	    SET ps.present_lat = c.lat, ps.present_lng = c.lng, ps.invalid = false,
+		pd.update_flag = true
 	    WHERE (c.lat <> ps.present_lat or c.lng <> ps.present_lng)
 		and $static_filter";
     }
@@ -259,21 +269,23 @@ sub updateNew {
     
     if ( $options->{bins} )
     {
-	$sql = "UPDATE $TABLE{PCOORD_BINS_STATIC} as ps
+	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd
+		join $TABLE{PCOORD_BINS_STATIC} as ps using (bin_id, interval_no)
 		join $TABLE{SUMMARY_BINS} as s using (bin_id, interval_no)
 		join $TABLE{INTERVAL_DATA} as i using (interval_no)
 	    SET ps.early_age = i.early_age, ps.late_age = i.late_age, 
-		ps.update_flag = true
+		pd.update_flag = true
             WHERE (i.early_age <> ps.early_age or i.late_age <> ps.late_age)
 		and $static_filter";
     }
     
     else
     {
-	$sql = "UPDATE $TABLE{PCOORD_STATIC} as ps
+	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd
+		join $TABLE{PCOORD_STATIC} as ps using (collection_no)
 		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	    SET ps.early_age = c.early_age, ps.late_age = c.late_age, 
-		ps.update_flag = true
+		pd.update_flag = true
             WHERE (c.early_age <> ps.early_age or c.late_age <> ps.late_age)
 		and $static_filter";
     }
@@ -361,23 +373,23 @@ sub updateNew {
     # For every entry in PCOORD_STATIC marked for update, mark all of the
     # corresponding rows in PCOORD_DATA for update. 
     
-    if ( $options->{bins} )
-    {
-	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd join $TABLE{PCOORD_BINS_STATIC} as ps
-		using (bin_id, interval_no)
-	    SET pd.update_flag = true
-	    WHERE ps.update_flag and $coord_filter";
-    }
+    # if ( $options->{bins} )
+    # {
+    # 	$sql = "UPDATE $TABLE{PCOORD_BINS_DATA} as pd join $TABLE{PCOORD_BINS_STATIC} as ps
+    # 		using (bin_id, interval_no)
+    # 	    SET pd.update_flag = true
+    # 	    WHERE ps.update_flag and $coord_filter";
+    # }
     
-    else
-    {
-	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps
-		using (collection_no)
-	    SET pd.update_flag = true
-	    WHERE ps.update_flag and $coord_filter";
-    }
+    # else
+    # {
+    # 	$sql = "UPDATE $TABLE{PCOORD_DATA} as pd join $TABLE{PCOORD_STATIC} as ps
+    # 		using (collection_no)
+    # 	    SET pd.update_flag = true
+    # 	    WHERE ps.update_flag and $coord_filter";
+    # }
     
-    $count = $self->doSQL($sql);
+    # $count = $self->doSQL($sql);
     
     # Now iterate through all available models. For each model, add rows for
     # every collection that doesn't yet have paleocoords for this model and

@@ -20,7 +20,7 @@ use PaleoCoords;
 # the database name overriding what was in the configuration file.
 
 my ($opt_logfile, $opt_test, $opt_error, $opt_quiet, $opt_verbose, $opt_debug,
-    $opt_min_age, $opt_max_age, $opt_model, $opt_collection_no, $opt_dbname,
+    $opt_min_age, $opt_max_age, $opt_model, $opt_collection_no, $opt_dbname, $opt_bins,
     $opt_all, $opt_help);
 
 GetOptions("log=s" => \$opt_logfile,
