@@ -577,19 +577,19 @@ sub able_to_delete {
     
     my $idstring = join(',', @quoted);
     
-    return () if $edt->my_reference_check($dbh, $TABLE{COLLECTION_DATA}, $idstring);
-    return () if $edt->my_reference_check($dbh, $TABLE{OCCURRENCE_DATA}, $idstring);
-    return () if $edt->my_reference_check($dbh, $TABLE{SPECIMEN_DATA}, $idstring);
-    return () if $edt->my_reference_check($dbh, $TABLE{AUTHORITY_DATA}, $idstring);
-    return () if $edt->my_reference_check($dbh, $TABLE{OPINION_DATA}, $idstring);
-    return () if $edt->my_reference_check($dbh, $TABLE{INTERVAL_DATA}, $idstring);
-    return () if $edt->my_reference_check($dbh, $TABLE{SCALE_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{COLLECTION_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{OCCURRENCE_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{SPECIMEN_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{AUTHORITY_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{OPINION_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{INTERVAL_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{SCALE_DATA}, $idstring);
     
     return 1;
 }
 
 
-sub my_reference_check {
+sub ref_has_dependency {
     
     my ($edt, $dbh, $table_name, $idstring) = @_;
     
@@ -599,7 +599,7 @@ sub my_reference_check {
     
     my ($found) = $dbh->selectrow_array($sql);
     
-    return !$found;
+    return $found;
 }
     
 
