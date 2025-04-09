@@ -26,14 +26,17 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('AUTHORITY_DATA', CAN_POST => 'NOT_STUDENT');
     set_table_property('AUTHORITY_DATA', CAN_MODIFY => 'NOT_STUDENT');
     set_table_property('AUTHORITY_DATA', CAN_DELETE => 'admin');
+    set_table_property('AUTHORITY_DATA', LOG_CHANGES => 1);
     
     set_table_name(OPINION_DATA => 'opinions');
     set_table_property('OPINION_DATA', CAN_POST => 'NOT_STUDENT');
     set_table_property('OPINION_DATA', CAN_MODIFY => 'NOT_STUDENT');
     set_table_property('OPINION_DATA', CAN_DELETE => 'admin');
+    set_table_property('OPINION_DATA', LOG_CHANGES => 1);
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
     set_table_property('OCCURRENCE_DATA', CAN_DELETE => 'admin');
+    set_table_property('OCCURRENCE_DATA', LOG_CHANGES => 1);
     
     set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
     
@@ -48,11 +51,13 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_name(REID_DATA => 'reidentifications');
     set_table_property('REID_DATA', CAN_DELETE => 'admin');
+    set_table_property('REID_DATA', LOG_CHANGES => 1);
     
     set_table_name(COLLECTION_DATA => 'collections');
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
     
     set_table_property('COLLECTION_DATA', CAN_DELETE => 'admin');
+    set_table_property('COLLECTION_DATA', LOG_CHANGES => 1);
     
     set_table_name(COLLECTION_LOC => 'coll_loc');
     set_table_name(COLLECTION_INTS => 'coll_ints');
@@ -107,8 +112,9 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('REFERENCE_DATA', PRIMARY_FIELD => 'reference_id');
     set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
-    set_table_property('REFERENCE_DATA', CAN_DELETE => 'admin');
+    set_table_property('REFERENCE_DATA', CAN_DELETE => 'OWNER');
     set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle');
+    set_table_property('REFERENCE_DATA', LOG_CHANGES => 1);
     
     set_table_name(INTERVAL_DATA => 'interval_data');
     set_table_name(CLASSIC_INTERVALS => 'intervals');
@@ -130,6 +136,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('SPECIMEN_DATA', PRIMARY_KEY => "specimen_no");
     set_table_property('SPECIMEN_DATA', PRIMARY_FIELD => "specimen_id");
     set_table_property('SPECIMEN_DATA', CASCADE_DELETE => [ 'MEASUREMENT_DATA' ]);
+    set_table_property('SPECIMEN_DATA', LOG_CHANGES => 1);
     
     set_column_property('SPECIMEN_DATA', 'specimen_id', REQUIRED => 1);
     set_column_property('SPECIMEN_DATA', 'specimen_id', ALTERNATE_NAME => 'specimen_code');
@@ -144,6 +151,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('MEASUREMENT_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('MEASUREMENT_DATA', PRIMARY_KEY => 'measurement_no');
     set_table_property('MEASUREMENT_DATA', PRIMARY_FIELD => 'measurement_id');
+    set_table_property('MEASUREMENT_DATA', LOG_CHANGES => 1);
     
     set_column_property('MEASUREMENT_DATA', 'specimen_no', REQUIRED => 1);
     set_column_property('MEASUREMENT_DATA', 'specimen_no', ALTERNATE_NAME => 'specimen_id');
@@ -185,11 +193,13 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(PUBLICATIONS => 'pubs');
     set_table_property('PUBLICATIONS', PRIMARY_KEY => 'pub_no');
     set_table_property('PUBLICATIONS', PRIMARY_FIELD => 'pub_no');
+    set_table_property('PUBLICATIONS', LOG_CHANGES => 1);
     set_column_property('PUBLICATIONS', 'pub_no', EXTID_TYPE => 'PUB');
     
     set_table_name(ARCHIVES => 'data_archives');
     set_table_property('ARCHIVES', PRIMARY_KEY => 'archive_no');
     set_table_property('ARCHIVES', PRIMARY_FIELD => 'archive_id');
+    set_table_property('ARCHIVES', LOG_CHANGES => 1);
     # set_table_property('ARCHIVES', BY_AUTHORIZER => 1);
     
     set_table_name(APP_STATE => 'navigator_states');

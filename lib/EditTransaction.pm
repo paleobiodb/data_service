@@ -44,7 +44,7 @@ our ($MULTI_DELETE_LIMIT) = 100;
 our ($MULTI_INSERT_LIMIT) = 100;
 
 our (%ALLOW_BY_CLASS) = ( EditTransaction => { 
-		CREATE => 1,
+		CREATE => 1, # deprecated
 		LOCKED => 1,
 		MOVE_SUBORDINATES => 1,
 		NOT_FOUND => 1,
@@ -55,6 +55,7 @@ our (%ALLOW_BY_CLASS) = ( EditTransaction => {
 		DEBUG_MODE => 1,
 		SILENT_MODE => 1,
 		FIXUP_MODE => 1,
+		NO_LOG_MODE => 1,
 		ALTER_TRAIL => 1,
 		IMMEDIATE_MODE => 1,
 		VALIDATION_ONLY => 1 } );
@@ -63,6 +64,14 @@ our (%ALLOW_ALIAS) = ( IMMEDIATE_EXECUTION => 'IMMEDIATE_MODE' );
 
 our (%TEST_PROBLEM);	# This variable can be set in order to trigger specific errors, in order
                         # to test the error-response mechanisms.
+
+our ($LOG_FILENAME);	# This variable can be set to the name of a file to
+                        # which database changes will be logged.
+
+our ($LOG_ALL_TABLES);  # This variable can be set to true in order to log 
+			# changes to all tables. Otherwise, only tables with
+			# the 'LOG_CHANGES' property will be logged.
+
 
 # We set @CARP_NOT because we specifically do not want subclasses of EditTransaction to be
 # passed over as safe.
@@ -271,6 +280,8 @@ sub new {
 		rollback_count => 0,
 		transaction => '',
 		execution => '',
+		log_lines => '',
+		log_date => undef,
 		debug_mode => 0,
 	        errlog_mode => 1 } ;
     
@@ -658,7 +669,7 @@ sub debug_mode {
 }
 
 
-# silent_mode ( value )
+# silent_mode ( [value] )
 #
 # Turn error logging mode on or off, or return the current value if no argument is
 # given. The given value is inverted: a true value will turn off error logging mode, while
@@ -672,6 +683,37 @@ sub silent_mode {
     }
 
     return $_[0]{errlog_mode} ? 0 : 1;
+}
+
+
+# Logging
+# -------
+
+# log_filename ( [value] )
+# 
+# Set the filename to which changes to the database tables will be logged, or
+# return the current filename if no argument is given. This should be called as
+# a class method. If
+
+sub log_filename {
+    
+    if ( @_ > 1 )
+    {
+	$LOG_FILENAME = $_[1];
+    }
+    
+    return $LOG_FILENAME;
+}
+
+
+sub log_all_tables {
+    
+    if ( @_ > 1 )
+    {
+	$LOG_ALL_TABLES = $_[1];
+    }
+    
+    return $LOG_ALL_TABLES;
 }
 
 
@@ -1003,13 +1045,20 @@ sub commit {
 	$edt->_call_cleanup('errors');
     }
         
-    # If the transaction can proceed at this point, attempt to commit and then return the
-    # result.
+    # If the transaction can proceed at this point, attempt to commit. If it
+    # succeeds, and if there is log data to write, do so. Return the commit result.
     
     if ( $edt->can_proceed )
     {
 	$edt->{has_finished} = 1;
-	return $edt->_commit_transaction;
+	my $result = $edt->_commit_transaction;
+	
+	if ( $edt->{log_lines} && $LOG_FILENAME )
+	{
+	    $edt->write_log;
+	}
+	
+	return $result;
     }
     
     # Otherwise, roll back the transaction and return false. Set the status to 'failed'.
@@ -1164,7 +1213,7 @@ sub _commit_transaction {
 
     my $dbh = $edt->dbh;
     
-    # If debug mode is on, print a line to the debugging straem announcing the commit.
+    # If debug mode is on, print a line to the debugging stream announcing the commit.
     
     $edt->debug_line( " <<< COMMIT TRANSACTION $edt->{unique_id}\n" ) if $edt->{debug_mode};
     

@@ -13,6 +13,8 @@ use strict;
 use TableDefs qw(%TABLE);
 use Switch::Plain;
 use Carp qw(carp croak);
+use Fcntl qw(:flock SEEK_END);
+use Encode;
 
 use Role::Tiny;
 
@@ -750,19 +752,19 @@ sub _do_all_prechecks {
 
 sub fetch_old_record {
     
-    my ($edt, $action, $table_key, $keyexpr) = @_;
+    my ($edt, $action, $table_specifier, $keyexpr) = @_;
     
     if ( my $old = $action->old_record )
     {
 	return $old;
     }
     
-    $table_key ||= $action->table;
+    $table_specifier ||= $action->table;
     $keyexpr ||= $action->keyexpr;
 
-    if ( $table_key && $keyexpr )
+    if ( $table_specifier && $keyexpr )
     {
-	return $edt->fetch_record($table_key, $keyexpr);
+	return $action->set_old_record($edt->fetch_record($table_specifier, $keyexpr));
     }
 
     else
@@ -786,7 +788,9 @@ sub execute_insert {
     # Check to make sure that we have non-empty column/value lists, and that the number of columns
     # and values is equal and non-zero.
     
-    my $table = $action->table;    
+    my $table_specifier = $action->table;
+    my $table_info = $edt->table_info_ref($table_specifier);
+
     my $cols = $action->column_list;
     my $vals = $action->value_list;
     
@@ -805,10 +809,18 @@ sub execute_insert {
     my $column_string = join(',', @$cols);
     my $value_string = join(',', @$vals);
     
-    my $sql = "	INSERT INTO $TABLE{$table} ($column_string)
+    my $sql = "	INSERT INTO $TABLE{$table_specifier} ($column_string)
 		VALUES ($value_string)";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    my $do_logging = $table_info->{LOG_CHANGES} || 
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+    
+    if ( $do_logging )
+{
+	$edt->before_log_event($action, 'insert', $table_specifier);
+    }
     
     my ($new_keyval);
     
@@ -816,7 +828,7 @@ sub execute_insert {
     
     eval {
 	
-	$edt->before_action($action, 'insert', $table);
+	$edt->before_action($action, 'insert', $table_specifier);
 	
 	# Execute the insert statement itself, provided there were no errors and the action
 	# was not aborted during the execution of before_action.
@@ -824,8 +836,6 @@ sub execute_insert {
 	if ( $action->can_proceed )
 	{
 	    my $result = $dbh->do($sql);
-	    
-	    $action->set_status('executed');
 	    
 	    # If the insert succeeded, get and store the new primary key value. Otherwise, add an
 	    # error condition. Unlike update, replace, and delete, if an insert statement fails
@@ -838,22 +848,39 @@ sub execute_insert {
 		$action->set_resultinfo($new_keyval);
 	    }
 	    
-	    unless ( $new_keyval )
+	    # If we got a non-empty key value, then the insertion succeeded.
+	    
+	    if ( $new_keyval )
+	    {
+		# If changes to this table are to be logged, add the appropriate
+		# lines to the transaction log variable. They will be written to
+		# the log file when (if) the transaction commits.
+		
+		if ( $do_logging )
+		{
+		    $edt->log_event($action, 'insert', $table_specifier, $sql, $new_keyval);
+		}
+		
+		# If the action has a label, store the label under the new key
+		# value.
+		
+		if ( my $label = $action->record_value('_label') )
+		{
+		    $edt->store_label($table_specifier, $new_keyval, $label);
+		}
+		
+		# Call the 'after_action' method. If it doesn't throw an exception,
+		# set the action status to 'executed'.
+		
+		$edt->after_action($action, 'insert', $table_specifier, $new_keyval);
+		
+		$action->set_status('executed');		
+	    }
+	    
+	    else
 	    {
 		$edt->add_condition($action, 'E_EXECUTE', 'insert statement failed');
 	    }
-	    
-	    # If the action has a label, store the label under the new key
-	    # value. 
-	    
-	    if ( my $label = $action->record_value('_label') )
-	    {
-		$edt->store_label($table, $new_keyval, $label);
-	    }
-	    
-	    # Finally, call the 'after_action' method.
-	    
-	    $edt->after_action($action, 'insert', $table, $new_keyval);
 	}
     };
     
@@ -910,7 +937,8 @@ sub execute_replace {
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
     
-    my $table = $action->table;
+    my $table_specifier = $action->table;
+    my $table_info = $edt->table_info_ref($table_specifier);
     my $cols = $action->column_list;
     my $vals = $action->value_list;
     
@@ -929,10 +957,18 @@ sub execute_replace {
     my $column_list = join(',', @$cols);
     my $value_list = join(',', @$vals);
     
-    my $sql = "	REPLACE INTO $TABLE{$table} ($column_list)
+    my $sql = "	REPLACE INTO $TABLE{$table_specifier} ($column_list)
 		VALUES ($value_list)";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    my $do_logging = $table_info->{LOG_CHANGES} || 
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+    
+    if ( $do_logging )
+    {
+	$edt->before_log_event($action, 'replace', $table_specifier);
+    }
     
     # Execute the statement inside a try block, to catch any exceptions that might be thrown.
     
@@ -940,14 +976,14 @@ sub execute_replace {
 	
 	# If we are logging this action, then fetch the existing record if any.
 	
-	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table, 'NO_LOG') )
+	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table_specifier, 'NO_LOG') )
 	# {
-	#     $edt->fetch_old_record($action, $table);
+	#     $edt->fetch_old_record($action, $table_specifier);
 	# }
 	
 	# Start by calling the 'before_action' method.
 	
-	$edt->before_action($action, 'replace', $table);
+	$edt->before_action($action, 'replace', $table_specifier);
 	
 	# Then execute the replace statement itself, provided there are no errors and the action
 	# was not aborted. If the replace statement returns a zero result and does not throw an
@@ -958,10 +994,23 @@ sub execute_replace {
 	{
 	    my $result = $dbh->do($sql);
 	    
-	    $action->set_status('executed');
 	    $action->set_result($result);
 	    
-	    $edt->after_action($action, 'replace', $table, $result);
+	    # If changes to this table are to be logged, add the appropriate
+	    # lines to the transaction log variable. They will be written to the
+	    # log file when (if) the transaction commits.
+		
+	    if ( $do_logging )
+	    {
+		$edt->log_event($action, 'replace', $table_specifier, $sql);
+	    }
+	    
+	    # Call the 'after_action' method. If it doesn't throw an exception,
+	    # set the action status to 'executed'.
+	    
+	    $edt->after_action($action, 'replace', $table_specifier, $result);
+	    
+	    $action->set_status('executed');
 	}
     };
     
@@ -1018,7 +1067,8 @@ sub execute_update {
     # Check to make sure that we actually have column/value lists, and that the number of columns
     # and values is equal and non-zero.
     
-    my $table = $action->table;
+    my $table_specifier = $action->table;
+    my $table_info = $edt->table_info_ref($table_specifier);    
     my $cols = $action->column_list;
     my $vals = $action->value_list;
     
@@ -1043,10 +1093,18 @@ sub execute_update {
     
     my $keyexpr = $action->keyexpr;
     
-    my $sql = "	UPDATE $TABLE{$table} SET $set_list
+    my $sql = "	UPDATE $TABLE{$table_specifier} SET $set_list
 		WHERE $keyexpr";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    my $do_logging = $table_info->{LOG_CHANGES} || 
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+    
+    if ( $do_logging )
+    {
+	$edt->before_log_event($action, 'update', $table_specifier);
+    }
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
@@ -1055,14 +1113,14 @@ sub execute_update {
 	
 	# If we are logging this action, then fetch the existing record.
 	
-	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table, 'NO_LOG') )
+	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table_specifier, 'NO_LOG') )
 	# {
-	#     $edt->fetch_old_record($action, $table, $keyexpr);
+	#     $edt->fetch_old_record($action, $table_specifier, $keyexpr);
 	# }
 	
 	# Start by calling the 'before_action' method.
 	
-	$edt->before_action($action, 'update', $table);
+	$edt->before_action($action, 'update', $table_specifier);
 	
 	# Then execute the update statement itself, provided there are no errors and the action
 	# has not been aborted. If the update statement returns a result less than the number of
@@ -1075,12 +1133,11 @@ sub execute_update {
 	    
 	    if ( $action->keymult )
 	    {
-		($matched) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{$table} WHERE $keyexpr");
+		($matched) = $dbh->selectrow_array("
+			SELECT count(*) FROM $TABLE{$table_specifier} WHERE $keyexpr");
 	    }
 	    
 	    my $result = $dbh->do($sql);
-	    
-	    $action->set_status('executed');
 	    
 	    $result = 0 if $result eq '0E0';
 	    
@@ -1115,7 +1172,21 @@ sub execute_update {
 		}
 	    }
 	    
-	    $edt->after_action($action, 'update', $table, $result);
+	    # If changes to this table are to be logged, add the appropriate
+	    # lines to the transaction log variable. They will be written to the
+	    # log file when (if) the transaction commits.
+	    
+	    if ( $do_logging )
+	    {
+		$edt->log_event($action, 'update', $table_specifier, $sql);
+	    }
+	    
+	    # Call the 'after_action' method. If it doesn't throw an exception,
+	    # set the action status to 'executed'.
+		
+	    $edt->after_action($action, 'update', $table_specifier, $result);
+	    
+	    $action->set_status('executed');
 	}
     };
     
@@ -1156,9 +1227,9 @@ sub execute_update {
 }
 
 
-# execute_update ( action )
+# execute_delete ( action )
 #
-# Execute an 'update' action on the database.
+# Execute a 'delete' action on the database.
 
 sub execute_delete {
 
@@ -1167,13 +1238,22 @@ sub execute_delete {
     # Construct the DELETE statement.
     
     my $dbh = $edt->dbh;
-    my $table = $action->table;
+    my $table_specifier = $action->table;
+    my $table_info = $edt->table_info_ref($table_specifier);
     my $keyexpr = $action->keyexpr;
     my $found;
     
-    my $sql = "	DELETE FROM $TABLE{$table} WHERE $keyexpr";
+    my $sql = "	DELETE FROM $TABLE{$table_specifier} WHERE $keyexpr";
     
     $edt->debug_line( "$sql\n" ) if $edt->debug_mode;
+    
+    my $do_logging = $table_info->{LOG_CHANGES} || 
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+    
+    if ( $do_logging )
+    {
+	$edt->before_log_event($action, 'replace', $table_specifier);
+    }
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
@@ -1182,16 +1262,16 @@ sub execute_delete {
 	
 	# If we are logging this action, then fetch the existing record.
 	
-	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table, 'NO_LOG') )
+	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table_specifier, 'NO_LOG') )
 	# {
-	#     $edt->fetch_old_record($action, $table, $keyexpr);
+	#     $edt->fetch_old_record($action, $table_specifier, $keyexpr);
 	# }
 	
 	# Start by calling the 'before_action' method. This is designed to be overridden by
 	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
 	# default method does nothing.    
 	
-	$edt->before_action($action, 'delete', $table);
+	$edt->before_action($action, 'delete', $table_specifier);
 	
 	# Then execute the delete statement itself, provided the action has not
 	# been aborted. If we are operationg on multiple records, figure out how
@@ -1201,8 +1281,9 @@ sub execute_delete {
 	{
 	    my $result = $dbh->do($sql);
 	    
-	    $action->set_status('executed');
 	    $action->set_resultinfo($result, $result);
+	    
+	    $result = "0" if $result eq "0E0";
 	    
 	    if ( $action->keymult )
 	    {
@@ -1219,7 +1300,21 @@ sub execute_delete {
 		$edt->add_condition($action, 'W_NOT_FOUND', "the specified key value was not found");
 	    }
 	    
-	    $edt->after_action($action, 'delete', $table, $result);
+	    # If changes to this table are to be logged, add the appropriate
+	    # lines to the transaction log variable. They will be written to the
+	    # log file when (if) the transaction commits.
+	    
+	    if ( $do_logging )
+	    {
+		$edt->log_event($action, 'delete', $table_specifier, $sql);
+	    }
+	    
+	    # Call the 'after_action' method. If it doesn't throw an exception,
+	    # set the action status to 'executed'.
+	    
+	    $edt->after_action($action, 'delete', $table_specifier, $result);
+	    
+	    $action->set_status('executed');
 	}
     };
     
@@ -1373,13 +1468,8 @@ sub execute_other {
 
     my ($edt, $action) = @_;
     
-    my $table_key = $action->table;
-    
-    # If authorization and/or validation for this action are still pending, do those now. Also
-    # complete action reference substitution. If the pre-execution check returns false, then
-    # the action has failed and cannot proceed.
-    
-    $edt->_pre_execution_check($action, 'insert', $table_key) || return;
+    my $table_specifier = $action->table;
+    my $table_info = $edt->table_info_ref($table_specifier);
     
     # Determine the method to be called.
     
@@ -1390,16 +1480,20 @@ sub execute_other {
     
     eval {
 	
-	$edt->before_action($action, 'other', $table_key);
+	$edt->before_action($action, $method, $table_specifier);
 
 	if ( $action->can_proceed )
 	{
-	    my $result = $edt->$method($action, $table_key, $action->record);
+	    my $result = $edt->$method($action, $table_specifier, $action->record);
+	    
+	    $action->set_result($result);
+	    
+	    # Call the 'after_action' method. If it doesn't throw an exception,
+	    # set the action status to 'executed'.
+		
+	    $edt->after_action($action, $method, $table_specifier, $result);
 	    
 	    $action->set_status('executed');
-	    $action->set_result($result);
-
-	    $edt->after_action($action, 'other', $table_key, $result);
 	}
     };
     
@@ -1467,5 +1561,134 @@ sub _execute_sql_action {
     return $result;
 }
 
+
+# log_event ( action, operation, table, key_value, sql )
+# 
+# This routine logs changes to the database tables. It can be overridden by
+# included modules.
+
+sub log_event {
+    
+    my ($edt, $action, $op, $table_specifier, $sql, $key_value) = @_;
+    
+    return unless $EditTransaction::LOG_FILENAME;
+    return if $edt->allows('NO_LOG_MODE');
+    
+    my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
+    my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
+    my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
+    
+    my $keyval //= $action->keyval // '?';
+    
+    $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
+    $sql =~ s/^\s+//;
+    
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_specifier, $keyval) . "\n";
+    my $line2 = "$sql;\n";
+    
+    $edt->{log_lines} .= $line1 . $line2;
+    $edt->{log_date} = $datestr;
+}
+
+
+# before_log_event ( action, operation, table )
+# 
+# This default routine does nothing. It can be overridden by included modules.
+
+sub before_log_event {
+    
+}
+
+
+# write_log ( )
+# 
+# Write the log data for this transaction to the specified file.
+
+sub write_log {
+    
+    my ($edt) = @_;
+    
+    my $logfile;
+    my $logname = $EditTransaction::LOG_FILENAME =~ s/DATE/$edt->{log_date}/r;
+    
+    unless ( open($logfile, ">>", $logname) )
+    {
+	my_error("cannot open $logname: $!", $edt->{log_lines});
+	return;
+    }
+    
+    unless ( my_lock($logfile) )
+    {
+	my_error("cannot lock or seek $logname: $!", $edt->{log_lines});
+	return;
+    }
+    
+    print $logfile encode_utf8($edt->{log_lines});
+    
+    unless ( my_unlock($logfile) )
+    {
+	my_error("cannot unlock $logname: $!");
+    }
+    
+    close($logfile) or my_error("closing $logname: $!");
+}
+
+
+sub my_lock {
+    
+    my ($fh) = @_;
+    
+    # Try to obtain the lock.  If unsuccessful, try up to three times sleeping
+    # for one second between tries.
+    
+    foreach my $tries (1..3)
+    {
+	# If we are able to get the lock, return the result of the seek
+	# operation (true if successful, false otherwise).
+	
+	if ( flock($fh, LOCK_EX | LOCK_NB) )
+	{
+	    return seek($fh, 0, SEEK_END);
+	}
+	
+	sleep(1) unless $tries == 3;
+    }
+    
+    # Return false, we were unable to obtain the lock.
+    
+    return;
+}
+
+
+# my_unlock ( fh )
+# 
+# Release the advisory lock on the given file.
+
+sub my_unlock {
+    
+    my ($fh) = @_;
+    
+    return flock($fh, LOCK_UN);
+}
+
+
+# my_error ( errmsg, log_record )
+# 
+# This routine is called if an error occurred while writing to the datalog.
+# Print the specified message to STDERR, which will generally result in it
+# ending up in the web server's error log file.  Also print the log record to
+# STDERR, so we have some chance of finding it and putting it back in the
+# proper place in the data log.
+# 
+# We hope this routine will not get called very often, maybe not at all.
+
+sub my_error {
+    
+    my ($errmsg, $log_record) = @_;
+    
+    print STDERR "DATALOG ERROR: $errmsg\n";
+    print STDERR encode_utf8($log_record);
+    print STDERR "# =\n";
+}
 
 1;
