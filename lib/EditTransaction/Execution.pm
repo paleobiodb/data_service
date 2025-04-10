@@ -1562,7 +1562,7 @@ sub _execute_sql_action {
 }
 
 
-# log_event ( action, operation, table, key_value, sql )
+# log_event ( action, operation, table, sql, key_value )
 # 
 # This routine logs changes to the database tables. It can be overridden by
 # included modules.
@@ -1578,12 +1578,12 @@ sub log_event {
     my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
-    my $keyval //= $action->keyval // '?';
+    $key_value //= $action->keyval // '?';
     
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
     
-    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_specifier, $keyval) . "\n";
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_specifier, $key_value) . "\n";
     my $line2 = "$sql;\n";
     
     $edt->{log_lines} .= $line1 . $line2;
@@ -1597,6 +1597,35 @@ sub log_event {
 
 sub before_log_event {
     
+}
+
+
+# log_aux_event ( operation, table, sql, key_value )
+# 
+# This routine logs changes to auxiliary database tables that hold lists of
+# records relating to primary tables.
+
+sub log_aux_event {
+    
+    my ($edt, $op, $table_specifier, $sql, $key_col, $key_value) = @_;
+    
+    return unless $EditTransaction::LOG_FILENAME;
+    return if $edt->allows('NO_LOG_MODE');
+    
+    my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
+    my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
+    my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
+    
+    $key_value //= '?';
+    
+    $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
+    $sql =~ s/^\s+//;
+    
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_specifier, $key_value) . "\n";
+    my $line2 = "$sql;\n";
+    
+    $edt->{log_lines} .= $line1 . $line2;
+    $edt->{log_date} = $datestr;
 }
 
 

@@ -489,6 +489,7 @@ sub after_action {
     my $record = $action->record;
     my $dbh = $edt->dbh;
     my $qkeyval = $dbh->quote($keyval);
+    my $tableinfo = $edt->table_info_ref('REFERENCE_DATA');
     my $result;
     
     if ( $operation eq 'replace' || $operation eq 'delete' ||
@@ -498,6 +499,18 @@ sub after_action {
 	
 	$edt->debug_line("$sql\n\n");
 	
+	if ( $tableinfo->{LOG_CHANGES} )
+	{
+	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_AUTHORS}
+			WHERE reference_no = $qkeyval", { Slice => { } });
+	
+	    if ( ref $result eq 'ARRAY' && @$result )
+	    {
+		$edt->log_aux_event('delete', 'REFERENCE_AUTHORS', $sql, 'reference_no', $keyval, 
+				    $result);
+	    }
+	}
+			    
 	$result = $dbh->do($sql);
     }
     
@@ -508,6 +521,18 @@ sub after_action {
 	
 	$edt->debug_line("$sql\n\n");
 	
+	if ( $tableinfo->{LOG_CHANGES} )
+	{
+	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_EDITORS}
+			WHERE reference_no = $qkeyval", { Slice => { } });
+	
+	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
+	    {
+		$edt->log_aux_event('delete', 'REFERENCE_EDITORS', $sql, 'reference_no', $keyval, 
+				    $result);
+	    }
+	}
+			    
 	$result = $dbh->do($sql);
     }
     
@@ -534,6 +559,11 @@ sub after_action {
 	    
 	    $edt->debug_line("$sql\n\n");
 	    
+	    if ( $tableinfo->{LOG_CHANGES} )
+	    {
+		$edt->log_aux_event('insert', 'REFERENCE_AUTHORS', $sql, 'reference_no', $keyval);
+	    }
+	    
 	    $result = $dbh->do($sql);
 	}
 	
@@ -555,6 +585,11 @@ sub after_action {
 		    VALUES $editorstring";
 	    
 	    $edt->debug_line("$sql\n\n");
+	    
+	    if ( $tableinfo->{LOG_CHANGES} )
+	    {
+		$edt->log_aux_event('insert', 'REFERENCE_EDITORS', $sql, 'reference_no', $keyval);
+	    }
 	    
 	    $result = $dbh->do($sql);
 	}

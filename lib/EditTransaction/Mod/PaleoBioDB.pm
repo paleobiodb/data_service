@@ -102,7 +102,7 @@ sub finish_table_definition {
 	{
 	    my $alt = $1 . '_id';
 	    
-	    if ( $colname eq $table_defn->{PRIMARY_KEY} )
+	    if ( $colname && $colname eq $table_defn->{PRIMARY_KEY} )
 	    {
 		$table_defn->{PRIMARY_FIELD} = $alt;
 	    }
@@ -1529,7 +1529,7 @@ sub record_filter {
 
 sub log_event {
     
-    my ($edt, $action, $op, $table_specifier, $sql, $key_value) = @_;
+    my ($edt, $action, $op, $table_specifier, $sql, $keyval) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
     return if $edt->allows('NO_LOG_MODE');
@@ -1539,7 +1539,7 @@ sub log_event {
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
     my $keycol = $action->keycol;
-    my $keyval //= $action->keyval // '';
+    $keyval //= $action->keyval // '';
     
     my $dbh = $edt->dbh;
     
@@ -1553,7 +1553,8 @@ sub log_event {
     
     if ( $op eq 'insert' )
     {
-	$rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol = '$keyval' LIMIT 1";
+	my $qkeyval = $dbh->quote($keyval);
+	$rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol = $qkeyval LIMIT 1";
     }
     
     elsif ( ! $action->keymult )
@@ -1587,6 +1588,12 @@ sub log_event {
 }
 
 
+# before_log_event ( action, operation, table )
+# 
+# This is called before an operation to be logged is executed. We take this
+# opportunity to fetch the existing record, so that we can write the info
+# necessary to reverse the operation as a comment.
+
 sub before_log_event {
     
     my ($edt, $action, $op, $table_specifier) = @_;
@@ -1595,6 +1602,70 @@ sub before_log_event {
     {
 	$edt->fetch_old_record($action, $table_specifier);
     }
+}
+
+
+# log_aux_event ( operation, table, sql, key_value, rev_info )
+# 
+# This routine logs changes to auxiliary database tables such as
+# 'REFERENCE_AUTHORS' and 'REFERENCE_EDITORS'.
+
+sub log_aux_event {
+    
+    my ($edt, $op, $table_specifier, $sql, $keycol, $keyval, $rev) = @_;
+    
+    return unless $EditTransaction::LOG_FILENAME;
+    return if $edt->allows('NO_LOG_MODE');
+    
+    my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
+    my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
+    my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
+    
+    $keyval //= '';
+    
+    my $dbh = $edt->dbh;
+    my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no : 0;
+    my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no : 0;
+        
+    if ( $op eq 'insert' && ! defined $rev )
+    {
+	my $qkeyval = $dbh->quote($keyval);
+	$rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol = $qkeyval";
+    }
+    
+    elsif ( ref $rev eq 'ARRAY' )
+    {
+	my @fields = $edt->table_column_list($table_specifier);
+	my $fieldlist = join(',', @fields);
+	
+	my @values;
+	my @records;
+	
+	foreach my $old ( @$rev )
+	{
+	    foreach my $field ( @fields )
+	    {
+		if ( defined $old->{$field} )
+		{
+		    push @values, $dbh->quote($old->{$field});
+		}
+	    }
+	    
+	    push @records, '(' . join(',', @values) . ')';
+	}
+	
+	my $recordlist = join(', ', @records);
+	
+	$rev = "REPLACE INTO $TABLE{$table_specifier} ($fieldlist) VALUES $recordlist";
+    }
+    
+    $edt->{log_lines} .= "# ";
+    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $table_specifier, 
+			      $keyval, $auth_no, $ent_no);
+    $edt->{log_lines} .= "\n";
+    $edt->{log_lines} .= "# $rev\n" if $rev && ! ref $rev;
+    $edt->{log_lines} .= "$sql;\n";
+    $edt->{log_date} = $datestr;
 }
 
 1;
