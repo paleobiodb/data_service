@@ -33,7 +33,7 @@ our %OPERATION_TYPE = ( skip => 'record', test => 'record', insupdate => 'record
 
 sub new {
     
-    my ($class, $edt, $tablename, $operation, $label, $record) = @_;
+    my ($class, $edt, $table_specifier, $operation, $label, $record) = @_;
     
     # Start by checking that we have the required attributes.
     
@@ -43,11 +43,11 @@ sub new {
     # A valid table name is not required for a skipped action, but is required for every other
     # kind of action.
     
-    die "missing tablename" unless $tablename || $operation eq 'skip';
+    die "missing tablename" unless $table_specifier || $operation eq 'skip';
     
     # Create a basic object to represent this action.
     
-    my $action = { table => $tablename,
+    my $action = { table => $table_specifier,
 		   operation => $operation,
 		   record => $record,
 		   label => $label,

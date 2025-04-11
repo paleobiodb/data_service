@@ -117,17 +117,17 @@ sub initialize {
 	"This operation allows you to replace existing bibliographic reference records",
 	"in the database.");
     
-    # $ds2->define_node({ path => 'refs/delete',
-    # 			title => 'Delete existing bibliographic references',
-    # 			place => 10,
-    # 			allow_method => 'GET,DELETE',
-    # 			doc_template => 'entry_operation.tt',
-    # 			role => 'PB2::ReferenceEntry',
-    # 			method => 'delete_refs',
-    # 			output => '1.2:refs:basic' },
-    # 	"This operation allows you to delete existing bibliographic reference records,",
-    # 	"provided they are not referenced by any other database records. It works only",
-    # 	"on records created by yourself, unless you have administrative privilege.");
+    $ds2->define_node({ path => 'refs/delete',
+			title => 'Delete existing bibliographic references',
+			place => 10,
+			allow_method => 'GET,DELETE',
+			doc_template => 'entry_operation.tt',
+			role => 'PB2::ReferenceEntry',
+			method => 'delete_refs',
+			output => '1.2:refs:basic' },
+	"This operation allows you to delete existing bibliographic reference records,",
+	"provided they are not referenced by any other database records. It works only",
+	"on records created by yourself, unless you have administrative privilege.");
     
     $ds2->define_node({ path => 'refs/classic_select',
 			title => 'Select a bibliographic reference for data entry',

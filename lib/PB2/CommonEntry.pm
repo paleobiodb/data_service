@@ -23,6 +23,9 @@ use namespace::clean;
 
 our (@REQUIRES_ROLE) = qw(PB2::TableData PB2::Authentication);
 
+use EditTransaction;
+
+EditTransaction->log_filename('./datalogs/datalog-DATE.sql');
 
 # The following hash will cache the list of ruleset parameters corresponding to various
 # rulesets. The hash keys are ruleset names.

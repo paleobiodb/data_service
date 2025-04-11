@@ -114,8 +114,8 @@ sub initialize {
 	    "Commands and/or remarks about this bibliographic reference");
     
     $ds->define_ruleset('1.2:refs:delete' =>
-	{ param => 'reference_id', valid => VALID_IDENTIFIER('REF'), list => ',',
-	  alias => ['reference_no', 'id', 'ref_id', 'oid'] },
+	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',',
+	  alias => ['reference_no', 'id', 'reference_id', 'oid'] },
 	    "The identifier(s) of the record(s) to be deleted. You may specify",
 	    "multiple identifiers as a comma-separated list.",
 	{ optional => 'allow', valid => '1.2:refs:allowances', list => ',' },
@@ -316,6 +316,67 @@ sub list_updated_refs {
     # Return the result list
     
     $request->list_result($result);
+}
+
+
+sub delete_refs {
+    
+    my ($request) = @_;
+    
+    my $dbh = $request->get_connection;
+    
+    # First get the parameters from the URL.
+    
+    my (@id_list) = $request->clean_param_list('ref_id');
+    
+    # Check for any allowances.
+    
+    my $allowances = { };
+    
+    if ( my @allowance = $request->clean_param_list('allow') )
+    {
+	$allowances->{$_} = 1 foreach @allowance;
+    }
+    
+    # Authenticate to the database
+    
+    my $perms = $request->require_authentication('REFERENCE_DATA');
+    
+    # Create a transaction object for this operation.
+    
+    my $edt = ReferenceEdit->new($request, $perms, 'REFERENCE_DATA', $allowances);
+    
+    # Then go through the records and handle each one in turn.
+    
+    foreach my $id (@id_list)
+    {
+	$edt->delete_record('REFERENCE_DATA', $id);
+    }
+    
+    $edt->commit;
+    
+    # Now handle any errors of warnings that may have been generated.
+    
+    $request->collect_edt_warnings($edt);
+    $request->collect_edt_errors($edt);
+    
+    if ( $edt->fatals )
+    {
+	die $request->exception(400, "Bad request");
+    }
+    
+    # Then return one result record for each deleted database record.
+    
+    my @results;
+    
+    foreach my $record_id ( $edt->deleted_keys )
+    {
+	push @results, { reference_no => generate_identifier('REF', $record_id),
+			 _status => 'deleted' };
+    }
+    
+    $request->{main_result} = \@results;
+    $request->{result_count} = scalar(@results);
 }
 
 1;

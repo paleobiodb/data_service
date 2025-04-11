@@ -102,7 +102,7 @@ sub finish_table_definition {
 	{
 	    my $alt = $1 . '_id';
 	    
-	    if ( $colname eq $table_defn->{PRIMARY_KEY} )
+	    if ( $colname && $colname eq $table_defn->{PRIMARY_KEY} )
 	    {
 		$table_defn->{PRIMARY_FIELD} = $alt;
 	    }
@@ -1031,7 +1031,14 @@ sub check_row_permission {
 	    {
 		$lock_count += $a->{count};
 	    }
-
+	    
+	    elsif ( $requested eq 'delete' && ( $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' ||
+						$tableinfo->{CAN_DELETE} eq 'OWNER' ) )
+	    {
+		$owned_count += $a->{count};
+		$unlock_count += $a->{count} if $a->{owner_lock};
+	    }
+	    
 	    else
 	    {
 		$owned_count += $a->{count};
@@ -1052,6 +1059,13 @@ sub check_row_permission {
 		$lock_count += $a->{count};
 	    }
 
+	    elsif ( $requested eq 'delete' && ( $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' ||
+						$tableinfo->{CAN_DELETE} eq 'OWNER' ) )
+	    {
+		$owned_count += $a->{count};
+		$unlock_count += $a->{count} if $a->{owner_lock};
+	    }
+	    
 	    else
 	    {
 		$owned_count += $a->{count};
@@ -1059,18 +1073,32 @@ sub check_row_permission {
 	    }
 	}
 	
-	elsif ( $requested eq 'DELETE' && $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' )
+	# If we get here and the requested operation is 'delete', it will
+	# succeed only if the CAN_DELETE property is 'AUTHORIZED'.
+	
+	elsif ( $requested eq 'delete' )
 	{
-	    $edt->debug_line("TABLE DELETE: $c end_no: $eno auth_no: $ano $uid $locked");
-	    
-	    if ( $a->{admin_lock} || $a->{owner_lock} )
+	    if ( $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' )
 	    {
-		$lock_count += $a->{count};
+		$edt->debug_line("TABLE DELETE: $c end_no: $eno auth_no: $ano $uid $locked");
+		
+		if ( $a->{admin_lock} || $a->{owner_lock} )
+		{
+		    $lock_count += $a->{count};
+		}
+		
+		else
+		{
+		    $unowned_count += $a->{count};
+		}
 	    }
 	    
 	    else
 	    {
-		$unowned_count += $a->{count};
+		$edt->debug_line("NO PERMISSION: $c ent_no: $eno auth_no: $ano user_id: $uid")
+		    if $debug_mode;
+	    
+		$unauth_count += $a->{count};
 	    }
 	}
 	
@@ -1489,5 +1517,155 @@ sub record_filter {
     # This still needs to be implemented... $$$
 }
 
+
+# Logging
+# -------
+
+# log_event ( action, sql, key_value )
+# 
+# This method overrides the default log_event method. Like the logging code in
+# Classic, it stores the authorizer_no and enterer_no for each event, and it
+# also stores an SQL statement which will reverse the change.
+
+sub log_event {
+    
+    my ($edt, $action, $op, $table_specifier, $sql, $keyval) = @_;
+    
+    return unless $EditTransaction::LOG_FILENAME;
+    return if $edt->allows('NO_LOG_MODE');
+    
+    my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
+    my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
+    my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
+    
+    my $keycol = $action->keycol;
+    $keyval //= $action->keyval // '';
+    
+    my $dbh = $edt->dbh;
+    
+    $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
+    $sql =~ s/^\s+//;
+    
+    my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no : 0;
+    my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no : 0;
+    
+    my $rev = '';
+    
+    if ( $op eq 'insert' )
+    {
+	my $qkeyval = $dbh->quote($keyval);
+	$rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol = $qkeyval LIMIT 1";
+    }
+    
+    elsif ( ! $action->keymult )
+    {
+	my $old = $edt->fetch_old_record($action, $table_specifier);
+	my @fields;
+	my @values;
+	
+	foreach my $field ( $edt->table_column_list($table_specifier) )
+	{
+	    if ( defined $old->{$field} )
+	    {
+		push @fields, $field;
+		push @values, $dbh->quote($old->{$field});
+	    }
+	}
+	
+	my $fieldlist = join(',', @fields);
+	my $valuelist = join(',', @values);
+	
+	$rev = "REPLACE INTO $TABLE{$table_specifier} ($fieldlist) VALUES ($valuelist)";
+    }
+    
+    $edt->{log_lines} .= "# ";
+    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $TABLE{$table_specifier}, 
+			      $keyval, $auth_no, $ent_no);
+    $edt->{log_lines} .= "\n";
+    $edt->{log_lines} .= "# $rev\n" if $rev;
+    $edt->{log_lines} .= "$sql;\n";
+    $edt->{log_date} = $datestr;
+}
+
+
+# before_log_event ( action, operation, table )
+# 
+# This is called before an operation to be logged is executed. We take this
+# opportunity to fetch the existing record, so that we can write the info
+# necessary to reverse the operation as a comment.
+
+sub before_log_event {
+    
+    my ($edt, $action, $op, $table_specifier) = @_;
+    
+    if ( $op ne 'insert' )
+    {
+	$edt->fetch_old_record($action, $table_specifier);
+    }
+}
+
+
+# log_aux_event ( operation, table, sql, key_value, rev_info )
+# 
+# This routine logs changes to auxiliary database tables such as
+# 'REFERENCE_AUTHORS' and 'REFERENCE_EDITORS'.
+
+sub log_aux_event {
+    
+    my ($edt, $op, $table_specifier, $sql, $keycol, $keyval, $rev) = @_;
+    
+    return unless $EditTransaction::LOG_FILENAME;
+    return if $edt->allows('NO_LOG_MODE');
+    
+    my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
+    my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
+    my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
+    
+    $keyval //= '';
+    
+    my $dbh = $edt->dbh;
+    my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no : 0;
+    my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no : 0;
+        
+    if ( $op eq 'insert' && ! defined $rev )
+    {
+	my $qkeyval = $dbh->quote($keyval);
+	$rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol = $qkeyval";
+    }
+    
+    elsif ( ref $rev eq 'ARRAY' )
+    {
+	my @fields = $edt->table_column_list($table_specifier);
+	my $fieldlist = join(',', @fields);
+	
+	my @values;
+	my @records;
+	
+	foreach my $old ( @$rev )
+	{
+	    foreach my $field ( @fields )
+	    {
+		if ( defined $old->{$field} )
+		{
+		    push @values, $dbh->quote($old->{$field});
+		}
+	    }
+	    
+	    push @records, '(' . join(',', @values) . ')';
+	}
+	
+	my $recordlist = join(', ', @records);
+	
+	$rev = "REPLACE INTO $TABLE{$table_specifier} ($fieldlist) VALUES $recordlist";
+    }
+    
+    $edt->{log_lines} .= "# ";
+    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, 
+			      $keyval, $auth_no, $ent_no);
+    $edt->{log_lines} .= "\n";
+    $edt->{log_lines} .= "# $rev\n" if $rev && ! ref $rev;
+    $edt->{log_lines} .= "$sql;\n";
+    $edt->{log_date} = $datestr;
+}
 
 1;

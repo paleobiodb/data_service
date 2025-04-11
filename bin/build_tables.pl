@@ -38,7 +38,7 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 Getopt::Long::Configure("bundling");
 
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
-    $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables,
+    $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables, $interval_map,
     $occurrence_int_maps, $taxon_summary_table, $prevalence_tables, $country_map,
     $old_taxon_tables, $taxon_steps);
 
@@ -49,6 +49,8 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "taxonomy|t" => \$taxon_tables,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
+	    "prevalence|P" => \$prevalence_tables,
+	    "I" => \$interval_map,
 	    "M" => \$occurrence_int_maps,
 	    "S" => \$taxon_summary_table,
 	    "countries|C" => \$country_map,
@@ -199,6 +201,11 @@ sub BuildTables {
     if ( $lith_tables && ! $collection_tables )
     {
 	buildLithTables($dbh);
+    }
+    
+    if ( $interval_map )
+    {
+	buildIntervalMap($dbh);
     }
     
     # The option -m causes the occurrence tables to be (re)computed.  -R also

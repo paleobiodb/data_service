@@ -69,6 +69,7 @@ our (%TABLE_PROP_NAME) = (
     SUPERIOR_TABLE => 1,      # if non-empty, the specified table controls access to this one
     SUPERIOR_KEY => 1,	      # if non-empty, the specified column links this table to its superior
     NO_LOG => 1,              # if true, changes to this table will not be logged
+    LOG_CHANGES => 1,	      # if true, changes to this table will be logged
     SPECIAL_COLS => 1,        # specifies a list of columns to be handled by special directives
     REQUIRED_COLS => 1,	      # specifies a list of columns whose values must be non-empty
     TABLE_COMMENT => 1,       # provides a comment or documentation string for this table
