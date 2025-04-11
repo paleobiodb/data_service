@@ -1583,7 +1583,8 @@ sub log_event {
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
     
-    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_specifier, $key_value) . "\n";
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, $key_value) 
+	. "\n";
     my $line2 = "$sql;\n";
     
     $edt->{log_lines} .= $line1 . $line2;
@@ -1621,7 +1622,8 @@ sub log_aux_event {
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
     
-    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_specifier, $key_value) . "\n";
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, $key_value) 
+	. "\n";
     my $line2 = "$sql;\n";
     
     $edt->{log_lines} .= $line1 . $line2;

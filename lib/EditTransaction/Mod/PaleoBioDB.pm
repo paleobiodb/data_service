@@ -1579,7 +1579,7 @@ sub log_event {
     }
     
     $edt->{log_lines} .= "# ";
-    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $table_specifier, 
+    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $TABLE{$table_specifier}, 
 			      $keyval, $auth_no, $ent_no);
     $edt->{log_lines} .= "\n";
     $edt->{log_lines} .= "# $rev\n" if $rev;
@@ -1660,7 +1660,7 @@ sub log_aux_event {
     }
     
     $edt->{log_lines} .= "# ";
-    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $table_specifier, 
+    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, 
 			      $keyval, $auth_no, $ent_no);
     $edt->{log_lines} .= "\n";
     $edt->{log_lines} .= "# $rev\n" if $rev && ! ref $rev;
