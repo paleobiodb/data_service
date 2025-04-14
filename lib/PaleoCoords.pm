@@ -299,7 +299,7 @@ sub updateNew {
     # be updated. Otherwise, check only those for which the update flag has been
     # set. 
     
-    my $check = $options->{all} ? '1' : 'ps.update_flag';
+    my $check = 1;
     
     # Delete any rows in PCOORD_DATA corresponding to collections
     # whose coordinates have been made invalid.  This should not happen very

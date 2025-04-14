@@ -141,11 +141,7 @@ sub initialize {
 	    "by continent");
     
     $ds->define_block('1.2:config:countries' =>
-<<<<<<< HEAD
-	{ output => 'config_section', com_name => 'cfg', value => 'cou', 
-=======
 	{ output => 'config_section', com_name => 'cfg', value => 'cou',
->>>>>>> origin
 	  if_field => 'country_name' },
 	    "Value 'cou' for countries",
 	{ output => 'country_name', com_name => 'nam' },
