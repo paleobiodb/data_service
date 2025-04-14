@@ -1168,6 +1168,13 @@ sub get_upper_taxa {
 	
 	$taxon_node{$taxon_no} = $r;
 	
+	# Translate the taxon rank to a numeric value.
+	
+	if ( $r->{taxon_rank} =~ /^[a-zA-Z]/ )
+	{
+	    $r->{taxon_rank} = $r->{rank} || $TAXON_RANK{$r->{taxon_rank}} || 0;
+	}
+	
 	# Hook this node up to its parent, which will already be in the
 	# %taxon_node hash because &list_subtree retrieves nodes in
 	# tree-sequence order.
@@ -1270,7 +1277,17 @@ sub make_taxon_request {
 	foreach my $f ( keys %$r )
 	{
 	    next if $f eq 'n_occs';
-	    $taxon_node->{$f} = $r->{$f} unless defined $taxon_node->{$f};
+	    next if defined $taxon_node->{$f};
+	    
+	    if ( $f eq 'taxon_rank' )
+	    {
+		$taxon_node->{taxon_rank} = $r->{rank} || $TAXON_RANK{$r->{taxon_rank}} || 0;
+	    }
+	    
+	    else
+	    {
+		$taxon_node->{$f} = $r->{$f};
+	    }
 	}
 	
 	# # If the node doesn't give a taxonomic rank, copy over the name, rank
@@ -1355,9 +1372,9 @@ sub sum_subtaxa {
 
     # Make sure that we have a numeric taxon rank rather than a string value.
     
-    unless ( $node->{taxon_rank} > 0 )
+    if ( $node->{taxon_rank} =~ /^[a-zA-Z]/ )
     {
-	$node->{taxon_rank} = $TAXON_RANK{$node->{taxon_rank}};
+	$node->{taxon_rank} = $node->{rank} || $TAXON_RANK{$node->{taxon_rank}} || 0;
     }
     
     # Now add the number of species, genera, etc. counted for the child to the
@@ -1656,7 +1673,7 @@ sub check_record {
     
     my ($request, $node, $options) = @_;
     
-    print STDERR "Node: $node->{taxon_name}\n";
+    # print STDERR "Node: $node->{taxon_name}\n";
     
     if ( my $status = $options->{status} )
     {
@@ -1731,7 +1748,7 @@ sub check_record {
 	}
     }
     
-    print STDERR "Selected\n";
+    # print STDERR "Selected\n";
     
     return 1;
 }

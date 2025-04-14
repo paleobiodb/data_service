@@ -4128,17 +4128,29 @@ sub process_com {
     # 	($request->{my_rel} eq 'variants' || $request->{my_rel} eq 'exact' ||
     # 	 $request->{my_rel} eq 'current');
     
+    my $numeric_rank;
+    
+    if ( $record->{taxon_rank} =~ /^[a-zA-Z]/ )
+    {
+	$numeric_rank = $TAXON_RANK{$record->{taxon_rank}} || 0;
+    }
+    
+    else
+    {
+	$numeric_rank = $record->{taxon_rank} || 0;
+    }
+    
     $record->{n_orders} = undef if defined $record->{n_orders} && 
-	$record->{n_orders} == 0 && $record->{taxon_rank} <= 13;
+	$record->{n_orders} == 0 && $numeric_rank <= 13;
     
     $record->{n_families} = undef if defined $record->{n_families} &&
-	$record->{n_families} == 0 && $record->{taxon_rank} <= 9;
+	$record->{n_families} == 0 && $numeric_rank <= 9;
     
     $record->{n_genera} = undef if defined $record->{n_genera} &&
-	$record->{n_genera} == 0 && $record->{taxon_rank} <= 5;
+	$record->{n_genera} == 0 && $numeric_rank <= 5;
     
     $record->{n_species} = undef if defined $record->{n_species} &&
-	$record->{n_species} == 0 && $record->{taxon_rank} <= 3;
+	$record->{n_species} == 0 && $numeric_rank <= 3;
     
     # if ( $record->{is_trace} )
     # {
