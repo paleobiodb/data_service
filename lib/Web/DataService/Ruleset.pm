@@ -630,6 +630,14 @@ sub list_ruleset_params {
 }
 
 
+sub list_rules {
+
+    my ($ds, $rs_name) = @_;
+
+    return $ds->{validator}->list_rules($rs_name);
+}
+
+
 sub document_ruleset {
     
     my ($ds, $rs_name) = @_;
