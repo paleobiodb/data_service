@@ -933,9 +933,9 @@ sub check_row_permission {
     }
     
     # If the requested permission is 'view' for a non-administrative user, that is easy to resolve
-    # as well.
+    # for records that are not associated with collections.
     
-    if ( $requested eq 'view' )
+    if ( $requested eq 'view' && $table_specifier !~ /^COLLECTION_DATA|^OCCURRENCE_DATA|^REID_DATA/ )
     {
 	if ( $tp->{view} || $tp->{modify} )
 	{
@@ -1102,10 +1102,27 @@ sub check_row_permission {
 	    }
 	}
 	
-	# If the user has 'modify' permission on the table as a whole, they can view or
-	# edit any record that is not locked by somebody else. Any records for
-	# which they have direct permission have already counted above, so an owner lock
-	# denies authorization.
+	# If the table is 'COLLECTION_DATA', 'OCCURRENCE_DATA', 'REID_DATA' or
+	# 'SPECIMEN_DATA', then a user can view or edit any record that has been
+	# released to the public or for which they meet the access criteria.
+	
+	elsif ( $table_specifier =~ /^COLLECTION_DATA|^OCCURRENCE_DATA|^REID_DATA/ )
+	{
+	    if ( $edt->_check_coll_access($a, $perms) )
+	    {
+		$unowned_count += $a->{count};
+	    }
+	    
+	    else
+	    {
+		$unauth_count += $a->{count};
+	    }
+	}
+	
+	# For all other tables, if the user has 'modify' permission on the table
+	# as a whole, they can edit any record that is not locked by somebody
+	# else.  Any records for which they have direct permission have already
+	# counted above, so an owner lock denies authorization.
 	
 	elsif ( $tp->{modify} )
 	{
@@ -1329,7 +1346,69 @@ sub _check_admin_permission {
 	return @permcounts;
     }
 }
+
+
+sub _check_coll_access {
     
+    my ($edt, $authinfo, $perms) = @_;
+    
+    # Access is granted trivially to collections available to 'the public'.
+    
+    if ( $authinfo->{access_level} eq 'the public' )
+    {
+	return 1;
+    }
+    
+    # Access is granted to collections available to 'database members' if the
+    # user has a non-zero enterer_no.
+    
+    elsif ( $authinfo->{access_level} eq 'database members' )
+    {
+	return $perms->{enterer_no} > 0;
+    }
+    
+    # Access is granted to collections available to 'group members' if any of
+    # the research groups to which the user belongs matches a group associated
+    # with the collection.
+    
+    elsif ( $authinfo->{access_level} eq 'group members' )
+    {
+	# If we haven't fetched the list of research groups to which the user
+	# belongs, do so now.
+	
+	unless ( exists $perms->{research_group} )
+	{
+	    my $dbh = $edt->dbh;
+	    my ($rg) = $edt->selectrow_array("
+		SELECT research_group FROM person WHERE person_no = $authinfo->{enterer_no}");
+	    
+	    $perms->{research_group} = [ ];
+	    
+	    foreach my $group ( split /,/, $rg )
+	    {
+		push $perms->{research_group}->@*, $group if $group;
+	    }
+	}
+	
+	# If any of the user's groups match a research group of the
+	# collection, access is granted.
+	
+	foreach my $group ( $perms->{research_group}->@* )
+	{
+	    return 1 if index($authinfo->{research_group}, $group) >= 0;
+	}
+	
+	return 0; # otherwise, access is denied.
+    }
+    
+    # Rows marked 'authorizer only' will have already been authorized in
+    # 'check_row_permission'. If we get here, access is not ggranted.
+    
+    else
+    {
+	return 0;
+    }
+}
 
 # authorize_insert_key ( )
 # 
@@ -1356,13 +1435,43 @@ sub authorize_insert_key {
 # Fetch the specified authorization information for all records that are selected by the specified
 # expression.
 
+my ($coll_auth) = "cc.authorizer_no, cc.enterer_no, cc.access_level, cc.research_group";
+
 sub select_authinfo {
     
     my ($edt, $table_specifier, $auth_fields, $key_expr) = @_;
     
-    my $sql = "SELECT $auth_fields, count(*) as `count`
+    my $sql;
+    
+    if ( $table_specifier eq 'COLLECTION_DATA' )
+    {
+	$sql = "SELECT $coll_auth, count(*) as `count`
+		FROM $TABLE{COLLECTION_DATA} as cc 
+		WHERE $key_expr GROUP BY $coll_auth";
+    }
+    
+    elsif ( $table_specifier eq 'OCCURRENCE_DATA' )
+    {
+	$sql = "SELECT $coll_auth, count(*) as `count`
+		FROM $TABLE{COLLECTION_DATA} as cc 
+		JOIN $TABLE{OCCURRENCE_DATA} as oc using (collection_no)
+		WHERE $key_expr GROUP BY $coll_auth";
+    }
+    
+    elsif ( $table_specifier eq 'REID_DATA' )
+    {
+	$sql = "SELECT $coll_auth, count(*) as `count`
+		FROM $TABLE{COLLECTION_DATA} as cc
+		JOIN $TABLE{REID_DATA} as rc using (collection_no)
+		WHERE $key_expr GROUP BY $coll_auth";
+    }
+    
+    else
+    {
+	$sql = "SELECT $auth_fields, count(*) as `count`
 		FROM $TABLE{$table_specifier} WHERE $key_expr
 		GROUP BY $auth_fields";
+    }
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
     

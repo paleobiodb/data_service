@@ -128,13 +128,15 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    # "External identifier must be of type '&2', was '&3'",
 			    # "External identifier must be of type '&2'",
 			    # "No external identifier type is defined for field '&1'"],
-		E_PARAM => "",
+		E_BAD_VALUE => ["Field '&1': &2", "&2", "Field '&1'"],
+		E_NOT_BOTH => "You may not specify '&1' and '&2' together",
+		E_PARAM => ["Field '&1': &2", "Field '&1'"],
   		E_EXECUTE => ["&1", "Unknown"],
 		E_DUPLICATE => "Duplicate entry '&1' for key '&2'",
 		E_BAD_FIELD => ["Field '&1' does not correspond to any column in '&2'",
 				"Field '&1' does not correspond to any column in this table"],
 		E_UNRECOGNIZED => "This record not match any record type accepted by this operation",
-		E_IMPORTED => "",
+		E_IMPORTED => ["&1: Field '&2': &3", "&1: Field '&2'", "&1"],
 		W_BAD_ALLOWANCE => "Unknown allowance '&1'",
 		W_EXECUTE => ["&1", "Unknown"],
 		W_UNCHANGED => "",
@@ -147,7 +149,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		W_EXTID => ["Field '&1' : &2", 
 			    "Field '&1': column does not accept external identifiers, value looks like one"],
 		W_EMPTY_RECORD => "This action was skipped because no field values were specified",
-		W_IMPORTED => "",
+		W_IMPORTED => ["&1: Field '&2': &3", "&1: Field '&2'", "&1"],
 		UNKNOWN_TEMPLATE => ["No template found for '&0' with '&1', '&2'",
 				     "No template found for '&0' with '&1'", 
 				     "No template found for '&0'"],
@@ -1210,7 +1212,7 @@ sub import_conditions {
 
 sub _import_condition {
 
-    my ($edt, $action, $code, $message) = @_;
+    my ($edt, $action, $code, @args) = @_;
     
     # Return the code to its canonical version.
     
@@ -1220,7 +1222,7 @@ sub _import_condition {
     
     if ( $edt->get_condition_template($code) )
     {
-	$edt->add_condition($action, $code, $message);
+	$edt->add_condition($action, $code, @args);
     }
     
     # Otherwise, change any warning condition to 'W_IMPORTED' and all other conditions to
@@ -1230,7 +1232,8 @@ sub _import_condition {
     else
     {
 	my $newcode = $code =~ /^W/ ? 'W_IMPORTED' : 'E_IMPORTED';
-	$edt->add_condition($action, $newcode, "$code: $message");
+
+	$edt->add_condition($action, $newcode, $code, @args);
     }
 }
 

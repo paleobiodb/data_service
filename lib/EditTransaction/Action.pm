@@ -180,7 +180,7 @@ sub has_warnings {
 
 sub can_proceed {
 
-    return $_[0]{status} || $_[0]{error_count} || $_[0]{child_errors} ? 0 : 1;
+    return ($_[0]{status} || $_[0]{error_count} || $_[0]{child_errors}) ? 0 : 1;
 }
 
 
@@ -570,11 +570,40 @@ sub record {
 
 sub record_value {
 
-    my ($action, $fieldname) = @_;
+    if ( ref $_[0]{record} && reftype $_[0]{record} eq 'HASH' && defined $_[1] )
+    {
+	return $_[0]{record}{$_[1]};
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+# field_specified ( fieldname )
+# 
+# Return true if the given field is a key in the action record, false otherwise.
+
+sub field_specified {
+    
+    return ref $_[0]{record} && reftype $_[0]{record} eq 'HASH' && defined $_[1] 
+	&& exists $_[0]{record}{$_[1]};
+}
+
+
+# set_record_value ( fieldname, new_value )
+# 
+# Set the value of the specified field in the action record.
+
+sub set_record_value {
+    
+    my ($action, $fieldname, $new_value) = @_;
     
     if ( ref $action->{record} && reftype $action->{record} eq 'HASH' && defined $fieldname )
     {
-	return $action->{record}{$fieldname};
+	$action->{record}{$fieldname} = $new_value;
     }
     
     else
@@ -628,6 +657,22 @@ sub old_record {
     return $_[0]{old_record};
 }
 
+
+# old_record_value ()
+# 
+
+sub old_record_value {
+    
+    if ( $_[0]{old_record} && defined $_[1] )
+    {
+	return $_[0]{old_record}{$_[1]};
+    }
+    
+    else
+    {
+	return;
+    }
+}
 
 # Methods for handling authorization
 # ----------------------------------

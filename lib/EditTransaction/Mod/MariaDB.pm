@@ -152,7 +152,7 @@ sub db_unpack_column_type {
     {
 	my $bound = $1 || 'regular';
 	my $type = $3 ? 'unsigned' : 'signed';
-	$cr->{TypeMain} = $3 ? 'unsigned' : 'integer';
+	$cr->{TypeMain} = 'integer';
 	$cr->{TypeParams} = [ $type, $bound, $2 ];
     }
     
@@ -162,16 +162,13 @@ sub db_unpack_column_type {
 	my $before = $1 - $2;
 	my $after = $2;
 	
-	$after = 10 if $after > 10;	# If people want fields with more than 10 decimals, they should
-					# use floating point.
-
 	$cr->{TypeMain} = 'fixed';
 	$cr->{TypeParams} = [ $unsigned, $before, $after ];
     }
     
     elsif ( $typeinfo =~ qr{ ^ ( float | double ) (?: [(] ( \d+ ) , ( \d+ ) [)] )? \s* (unsigned)? }xs )
     {
-	my $unsigned = $3 ? 'unsigned' : '';
+	my $unsigned = $4 ? 'unsigned' : '';
 	my $precision = $1;
 	my $before = defined $2 ? $2 - $3 : undef;
 	my $after = $3;

@@ -416,7 +416,19 @@ sub fetch_table_schema {
     
     if ( $table_definition{REQUIRED_COLS} )
     {
-	foreach my $colname ( split /\s*,\s*/, $table_definition{REQUIRED_COLS} )
+	my @col_list;
+
+	if ( ref $table_definition{REQUIRED_COLS} eq 'ARRAY' )
+	{
+	    @col_list = $table_definition{REQUIRED_COLS}->@*;
+	}
+
+	else
+	{
+	    @col_list = split /\s*,\s*/, $table_definition{REQUIRED_COLS};
+	}
+	
+	foreach my $colname ( @col_list )
 	{
 	    if ( $colname && $column_definition{$colname} )
 	    {

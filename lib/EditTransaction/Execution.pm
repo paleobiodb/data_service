@@ -754,6 +754,8 @@ sub fetch_old_record {
     
     my ($edt, $action, $table_specifier, $keyexpr) = @_;
     
+    $action ||= $edt->{current_action};
+    
     if ( my $old = $action->old_record )
     {
 	return $old;

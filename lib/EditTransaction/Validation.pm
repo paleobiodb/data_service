@@ -353,6 +353,20 @@ sub validate_against_schema {
 	    }
 	}
 	
+	elsif ( $cr->{NOT_NULL_NEW} && $operation eq 'insert' && ! defined $value )
+	{
+	    if ( $special )
+	    {
+		$edt->add_condition($action, 'E_EXECUTE', $fieldname || $colname,
+				    "special value cannot be null");
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition($action, 'E_REQUIRED', $fieldname || $colname);
+	    }
+	}
+	
 	# Any column that was not mentioned in the operation record and does not
 	# have a value and is not marked as required or not null is skipped.
 	
@@ -844,7 +858,7 @@ sub validate_data_value {
 	return $edt->validate_boolean_value($cr->{TypeParams}, $value, $fieldname);
     }
     
-    elsif ( $maintype eq 'integer' || $maintype eq 'unsigned' )
+    elsif ( $maintype eq 'integer' )
     {
 	return $edt->validate_integer_value($cr->{TypeParams}, $value, $fieldname);
     }
@@ -989,8 +1003,8 @@ sub validate_boolean_value {
 	return (1, undef);
     }
     
-    elsif ( $value =~ qr{ ^ \s* (?: ( 1 | true | yes | on ) | 
-				    ( 0 | false | no | off ) ) \s* $ }xsi )
+    elsif ( $value =~ qr{ ^ \s* (?: ( 1 | true | yes | y | on ) | 
+				    ( 0 | false | no | n | off ) ) \s* $ }xsi )
     {
 	my $clean_value = $1 ? '1' : '0';
 	return ('clean', $clean_value);
@@ -1284,7 +1298,7 @@ sub validate_enum_value {
 
     my ($edt, $type, $value, $fieldname) = @_;
     
-    my ($subtype, $good_values) = ref $type eq 'ARRAY' ? $type->@* : $type;
+    my ($coltype, $good_values) = ref $type eq 'ARRAY' ? $type->@* : $type;
     
     # If the data type is either 'set' or 'enum', then we check to make sure that the value is one
     # of the allowable ones. We always match without regard to case, using the Unicode 'fold case'
@@ -1297,11 +1311,10 @@ sub validate_enum_value {
     
     my @raw = $value;
     
-    # if ( $type eq 'set' )
-    # {
-    # 	my $sep = $column_defn->{VALUE_SEPARATOR} || qr{ \s* , \s* }xs;
-    # 	@raw = split $sep, $value;
-    # }
+    if ( $coltype eq 'set' )
+    {
+	@raw = split /\s*,\s*/, $value;
+    }
     
     my (@good, @bad);
     
@@ -1331,7 +1344,7 @@ sub validate_enum_value {
 	my $word = @bad > 1 ? 'values' : 'value';
 	my $word2 = @bad > 1 ? 'are' : 'is';
 	
-	return [ 'E_RANGE', $fieldname, "$word '$value_string' $word2 not allowed for this table column" ];
+	return [ 'E_BAD_VALUE', $fieldname, "$word '$value_string' $word2 not allowed for this table column" ];
     }
     
     elsif ( @good )
