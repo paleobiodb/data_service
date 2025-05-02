@@ -630,7 +630,7 @@ BEGIN {
 
     @EXPORT_OK = qw(
 	define_ruleset check_params validation_settings ruleset_defined document_params
-	list_params 
+	list_params list_rules
 	INT_VALUE POS_VALUE POS_ZERO_VALUE
 	DECI_VALUE
 	ENUM_VALUE
@@ -643,8 +643,8 @@ BEGIN {
 		     ENUM_VALUE MATCH_VALUE BOOLEAN_VALUE FLAG_VALUE ANY_VALUE);
 
     %EXPORT_TAGS = (
-	keywords => [qw(define_ruleset check_params validation_settings ruleset_defined document_params
-		        list_params)],
+	keywords => [qw(define_ruleset check_params validation_settings ruleset_defined 
+			document_params list_params list_rules)],
 	validators => \@VALIDATORS,
     );
 };
@@ -1025,6 +1025,35 @@ sub list_params {
 }
 
 
+=head3 list_rules
+
+This function returns a list of the rules belonging to the specified ruleset and
+any included rulesets.
+
+=cut
+
+sub list_rules {
+
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined instance.
+    
+    my $self = ref $_[0] eq 'HTTP::Validate' ? shift : $DEFAULT_INSTANCE;
+    
+    my ($ruleset_name) = @_;
+    
+    # Make sure we have a valid ruleset, or else return false.
+    
+    return unless defined $ruleset_name;
+    
+    my $rs = $self->{RULESETS}{$ruleset_name};
+    return unless $rs;
+    
+    # Now generate the requested list.
+    
+    return $self->generate_rule_list($ruleset_name);
+}
+
+
 # Here are the implementing functions:
 # ====================================
 
@@ -1072,7 +1101,7 @@ my %DIRECTIVE = ( 'param' => 2, 'optional' => 2, 'mandatory' => 2,
 		  'together' => 2, 'at_most_one' => 2, 'ignore' => 2,
 		  'require' => 2, 'allow' => 2, 'require_one' => 2,
 		  'require_any' => 2, 'allow_one' => 2, 'content_type' => 2,
-		  'valid' => 1, 'clean' => 1, 
+		  'valid' => 1, 'clean' => 1, 'allow_empty' => 1,
 		  'multiple' => 1, 'split' => 1, 'list' => 1, 'bad_value' => 1, 
 		  'error' => 1, 'errmsg' => 1, 'warn' => 1, 'undocumented' => 1,
 		  'alias' => 1, 'key' => 1, 'default' => 1);
@@ -1198,10 +1227,10 @@ sub add_rules {
 	# If we get here, assume the item represents a rule and create a new record to
 	# represent it.
 	
-	my $rr = { rs => $rs, rn => scalar(@{$rs->{rules}}) + 1 };
+	my $rr = { rn => scalar(@{$rs->{rules}}) + 1 };
 	push @{$rs->{rules}}, $rr;
 	
-	weaken($rr->{rs});
+	# weaken($rr->{rs});
 	
 	# Check all of the keys in the rule definition, making sure that all
 	# are valid, and determine the rule type.
@@ -1580,7 +1609,12 @@ sub add_doc {
     {
 	push @{$rs->{doc_items}}, $rr;
 	weaken $rs->{doc_items}[-1];
-	push @{$rs->{doc_items}}, process_doc($body, 1) if defined $body;
+	if ( defined $body )
+	{
+	    push @{$rs->{doc_items}}, process_doc($body, 1);
+	    $rr->{doc_ref} = \$rs->{doc_items}[-1];
+	    weaken $rs->{doc_ref};
+	}
     }
     
     # If this is an include rule, then we add a special line to include the
@@ -1767,6 +1801,39 @@ sub generate_param_list {
     }
     
     return @params;
+}
+
+
+# generate_rule_list ( ruleset )
+#
+# Generate a list of the rules contained in this ruleset and its included
+# rulesets if any. Each rule is followed by its documentation string.
+
+sub generate_rule_list {
+
+    my ($self, $rs_name, $uniq) = @_;
+
+    $uniq ||= {};
+
+    return if $uniq->{$rs_name}; $uniq->{$rs_name} = 1;
+    
+    my @rules;
+    
+    foreach my $item ( $self->{RULESETS}{$rs_name}{rules}->@* )
+    {
+	if ( ref $item && $item->{type} eq 'include' )
+	{
+	    my $included_name = $item->{allow} || $item->{require};
+	    push @rules, $self->generate_rule_list($included_name, $uniq);
+	}
+
+	else
+	{
+	    push @rules, $item;
+	}
+    }
+    
+    return @rules;
 }
 
 
@@ -2015,7 +2082,7 @@ sub validate_ruleset {
 	
 	if ( $type eq 'param' )
 	{
-	    my (%names_found, @names_found, @raw_values);
+	    my (%names_found, @names_found, @raw_values, $empty_string);
 	    
 	    # Skip this rule if a previous 'ignore' was encountered.
 	    
@@ -2027,11 +2094,27 @@ sub validate_ruleset {
 	    foreach my $name ( $rr->{param}, @{$rr->{alias}} )
 	    {
 		next unless exists $vr->{raw}{$name};
+		
 		$names_found{$name} = 1;
+		
 		my $v = $vr->{raw}{$name};
-		push @raw_values, grep { defined $_ && $_ ne '' } ref $v eq 'ARRAY' ? @$v : $v;
+
+		foreach my $subv ( ref $v eq 'ARRAY' ? @$v : $v )
+		{
+		    if ( defined $subv && $subv ne '' )
+		    {
+			push @raw_values, $subv;
+		    }
+
+		    elsif ( defined $subv && $subv eq '' )
+		    {
+			$empty_string = 1;
+		    }
+		}
+		
 		# Make sure this parameter exists in {ps}, but don't
 		# change its status if any.
+		
 		$vr->{ps}{$name} = undef unless exists $vr->{ps}{$name};
 	    }
 	    
@@ -2087,10 +2170,13 @@ sub validate_ruleset {
 	    
 	    if ( $rr->{split} )
 	    {
-		# Split all of the raw values, and discard empty strings.
+		# Split all of the raw values, and discard empty strings. If
+		# there are raw values but not any split values, we take the
+		# value to be the empty string.
 		
 		my @new_values = grep { defined $_ && $_ ne '' } 
 				    map { split $rr->{split}, $_ } @raw_values;
+		$empty_string = 1 if @raw_values && ! @new_values;
 		@raw_values = @new_values;
 	    }
 	    
@@ -2103,7 +2189,9 @@ sub validate_ruleset {
 	    }
 	    
 	    # At this point, if there are no values then generate an error if
-	    # the parameter is mandatory.  Otherwise just skip this rule.
+	    # the parameter is mandatory. Otherwise just skip this rule unless
+	    # this rule has the 'allow_empty' attribute and at least one of the
+	    # parameter names was specified.
 	    
 	    unless ( @raw_values )
 	    {
@@ -2114,7 +2202,7 @@ sub validate_ruleset {
 		    $vr->{rs}{$ruleset_name} = 2 unless $rr->{optional};
 		}
 		
-		next RULE;
+		next RULE unless $rr->{allow_empty} && keys %names_found;
 	    }
 	    
 	    # Now indicate that at least one value was found for this
@@ -2218,6 +2306,15 @@ sub validate_ruleset {
 		$value = $rr->{cleaner}($value) if ref $rr->{cleaner} eq 'CODE';
 		
 		push @clean_values, $value;
+	    }
+	    
+	    # If no raw values were found, and this rule has the 'allow_empty'
+	    # attribute, add the empty string or the undefined value depending
+	    # on $empty_string.
+	    
+	    if ( $rr->{allow_empty} && ! @raw_values )
+	    {
+		push @clean_values, $empty_string ? '' : undef;
 	    }
 	    
 	    # If clean values were found, store them.  If multiple values are
@@ -2481,7 +2578,7 @@ sub add_error {
     my $err_key = $rr->{key}				      ? $rr->{key}
 		: $rr->{type} eq 'param'		      ? $rr->{param}
 		: $rr->{type} eq 'content_type'		      ? '_content_type'     
-		:						"_$rr->{rs}{name}_$rr->{rn}";
+		:						"_$rr";
     
     # Record the error message under the key, and add the key to the error
     # list.  Other rules might later remove or alter the error
@@ -2520,7 +2617,7 @@ sub add_warning {
     my $warn_key = $rr->{key}				      ? $rr->{key}
 		 : $rr->{type} eq 'param'		      ? $rr->{param}
 		 : $rr->{type} eq 'content_type'	      ? '_content_type'     
-		 :						"_$rr->{rs}{name}_$rr->{rn}";
+		 :						"_$rr";
     
     # Record the warning message under the key.  Other rules might later
     # alter the warning message if they use the same key.
