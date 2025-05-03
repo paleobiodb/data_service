@@ -50,14 +50,34 @@ sub initialize {
     
     $ds->define_set('1.2:refs:publication_type');
     
-    $ds->define_ruleset('1.2:refs:addupdate' =>
-	{ allow => '1.2:refs:specifier' },
+    $ds->define_ruleset('1.2:refs:add' =>
 	{ optional => 'SPECIAL(show)', valid => '1.2:refs:output_map' },
 	{ optional => 'allow', valid => '1.2:refs:allowances', list => ',' },
 	    "Allows the operation to proceed with certain conditions or properties:",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
+    $ds->define_ruleset('1.2:refs:update' =>
+	{ optional => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id' },
+	    "The identifier of a reference to update. If this parameter is specified,",
+	    "then the body record should not contain a collection identifier.",
+	{ optional => 'SPECIAL(show)', valid => '1.2:refs:output_map' },
+	{ optional => 'allow', valid => '1.2:refs:allowances', list => ',' },
+	    "Allows the operation to proceed with certain conditions or properties:",
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special>  with this request");
+
+    $ds->define_ruleset('1.2:refs:addupdate' =>
+	{ optional => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id' },
+	    "The identifier of a reference to update. If this parameter is specified,",
+	    "then the body record should not contain a collection identifier.",
+	    "For an add operation, do not specify this parameter.",
+	{ optional => 'SPECIAL(show)', valid => '1.2:refs:output_map' },
+	{ optional => 'allow', valid => '1.2:refs:allowances', list => ',' },
+	    "Allows the operation to proceed with certain conditions or properties:",
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special>  with this request");
+
     # $ds->define_ruleset('1.2:refs:author_entry');
     
     $ds->define_ruleset('1.2:refs:addupdate_body' =>
@@ -69,20 +89,20 @@ sub initialize {
 	"record.",
 	{ optional => 'reference_id', valid => VALID_IDENTIFIER('REF'),
 	  alias => ['reference_no', 'id', 'ref_id', 'oid'] },
-	    "If this field is empty, this record will be inserted into the database",
+	    "If this field is empty, a record will be inserted into the database",
 	    "and a new identifier will be returned. If it is non-empty, it must match",
-	    "the identifier of an existing record.",
+	    "the identifier of an existing record. That record will be updated.",
 	{ allow => '1.2:common:entry_fields' },
 	{ optional => 'publication_type', alias => ['ref_type'] },
 	    "Type of reference to be added: journal article, book chapter, thesis, etc.",
 	{ optional => 'pubyr' },
 	    "Year of publication",
-	{ optional => 'authors', multiple => 1 },
+	{ optional => 'authors', multiple => 1, note => 'textarea' },
 	    "The author(s) of the work, in the proper order, separated by semicolons.",
 	    "Each author name can be specified as 'first last' or as 'last, first'.",
 	    "If the body of the request is in JSON format, the authors can be provided",
 	    "as a list of strings or a list of objects with fields 'firstname' and 'lastname'.",
-	{ optional => 'reftitle', alias => 'ref_title' },
+	{ optional => 'reftitle', alias => 'ref_title', note => 'textarea' },
 	    "Title of the work",
 	{ optional => 'pubvol', alias => 'pub_vol' },
 	    "Volume in which the work appears",
@@ -94,13 +114,13 @@ sub initialize {
 	    "The language of the work",
 	{ optional => 'doi' },
 	    "One or more DOIs associated with the work, separated by whitespace.",
-	{ optional => 'pubtitle', alias => 'pub_title' },
+	{ optional => 'pubtitle', alias => 'pub_title', note => 'textarea' },
 	    "Title of the publication in which the work appears (journal, book, series, etc.)",
 	{ optional => 'publisher' },
 	    "The publisher of the work or of the publication in which it appears",
 	{ optional => 'pubcity', alias => 'pub_city' },
 	    "The city where published",
-	{ optional => 'editors', multiple => 1 },
+	{ optional => 'editors', multiple => 1, note => 'textarea' },
 	    "The editor(s) of the book, compendium, or other publication. These must",
 	    "be given in proper order, separated by semicolons. Each editor name can be",
 	    "specified as 'first last' or as 'last, first'.",
@@ -110,7 +130,7 @@ sub initialize {
 	    "One or more ISBNs associated with the work, separated by whitespace.",
 	{ optional => 'project_name' },
 	    "The name of the project for which this reference was entered",
-	{ optional => 'comments' },
+	{ optional => 'comments', note => 'textarea' },
 	    "Commands and/or remarks about this bibliographic reference");
     
     $ds->define_ruleset('1.2:refs:delete' =>
@@ -377,6 +397,27 @@ sub delete_refs {
     
     $request->{main_result} = \@results;
     $request->{result_count} = scalar(@results);
+}
+
+
+sub addupdate_sandbox {
+    
+    my ($request, $operation) = @_;
+
+    if ( $operation eq 'insert' )
+    {
+	$request->generate_sandbox('refs/add', '1.2:refs:addupdate_body', 'show=both,edit');
+    }
+
+    elsif ( $operation eq 'update' )
+    {
+	$request->generate_sandbox('refs/update', '1.2:refs:addupdate_body', 'show=both,edit');
+    }
+    
+    else
+    {
+	$request->generate_sandbox('unknown');
+    }
 }
 
 1;

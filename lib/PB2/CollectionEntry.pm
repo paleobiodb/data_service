@@ -43,11 +43,7 @@ sub initialize {
 	{ value => 'DUPLICATE' },
 	    "Allow this operation even if it may lead to a duplicate record in the database.");
     
-    $ds->define_ruleset('1.2:colls:addupdate' =>
-	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
-	  alias => ['coll_id', 'id', 'oid'] },
-	    "The identifier of a collection to update. If this parameter is specified,",
-	    "then the body record should not contain a collection identifier.",
+    $ds->define_ruleset('1.2:colls:add' =>
 	{ optional => 'SPECIAL(show)', valid => '1.2:colls:basic_map' },
 	{ optional => 'allow', valid => '1.2:colls:allowances', list => ',' },
 	    "Allows the operation to proceed with certain conditions or properties:",
@@ -330,3 +326,5 @@ sub addupdate_sandbox {
 	$request->generate_sandbox('unknown');
     }
 }
+
+1;

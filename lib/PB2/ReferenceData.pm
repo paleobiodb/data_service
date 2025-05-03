@@ -55,9 +55,14 @@ sub initialize {
 	    "The names of the people who authorized, entered and modified this record",
 	{ value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "Include the creation and modification times for this record",
+	{ value => 'edit', maps_to => '1.2:refs:edit' },
+	    "All of the information necessary to edit a bibliographic reference.",
+	    "This includes the blocks C<B<authorlist>>, C<B<comments>>, C<B<entname>>,",
+	    "C<B<crmod>>.",
 	{ value => 'none' },
 	    "Do not return any records. If you have asked for summary counts, these",
-	    "will still be returned.");
+	    "will still be returned. This can be used with the data entry operations",
+	    "to suppress the output.");
     
     # Output sets:
     
@@ -194,31 +199,7 @@ sub initialize {
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
-      { output => 'n_reftaxa', pbdb_name => 'n_taxa', com_name => 'ntx', bibjson_name => '_n_taxa',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of distinct taxa associated with this reference",
-      { output => 'n_refauth', pbdb_name => 'n_auth', com_name => 'nau', bibjson_name => '_n_auth',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of taxa for which this reference gives the authority for the current name variant",
-      { output => 'n_refvar', pbdb_name => 'n_var', com_name => 'nva', bibjson_name => '_n_var',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of non-current name variants for which this reference gives the authority",
-      { output => 'n_refclass', pbdb_name => 'n_class', com_name => 'ncl', bibjson_name => '_n_class',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of classification opinions entered from this reference",
-      { output => 'n_refunclass', pbdb_name => 'n_unclass', com_name => 'nuc', bibjson_name => '_n_unclass',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of opinions not selected for classification entered from this reference",
-      { output => 'n_refoccs', pbdb_name => 'n_occs', com_name => 'noc', bibjson_name => '_n_occs',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of occurrences entered from this reference",
-      { output => 'n_refspecs', pbdb_name => 'n_specs', com_name => 'nsp', bibjson_name => '_n_specs',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of specimens entered from this reference",
-      { output => 'n_refcolls', pbdb_name => 'n_colls', com_name => 'nco', bibjson_name => '_n_colls',
-	if_block => 'counts', data_type => 'pos' },
-	  "The number of collections for which this is the primary reference",
-      { output => 'formatted', com_name => 'ref', bibjson_name => '_formatted',
+     { output => 'formatted', com_name => 'ref', bibjson_name => '_formatted',
 	if_block => 'formatted,both' },
 	  "Formatted reference",
       { output => 'r_relevance', com_name => 'rsc', pbdb_name => 'relevance', 
@@ -231,16 +212,16 @@ sub initialize {
 	{ select => ['rs.n_taxa', 'rs.n_class', 'rs.n_opinions', 'rs.n_occs', 'rs.n_colls'], 
 	  tables => 'rs' },
 	{ set => '*', code => \&adjust_ref_counts },
-	{ output => 'n_taxa', com_name => 'rct', data_type => 'pos' },
+	{ output => 'n_taxa', com_name => 'rct', bibjson_name => '_n_taxa', data_type => 'pos' },
 	    "The number of taxonomic names for which this reference is the source",
-	{ output => 'n_opinions', com_name => 'rcp', data_type => 'pos' },
+	{ output => 'n_opinions', com_name => 'rcp', bibjson_name => '_n_opinions', data_type => 'pos' },
 	    "The number of taxonomic opinions for which this reference is the source",
-	{ output => 'n_class', com_name => 'rcl', data_type => 'pos' },
+	{ output => 'n_class', com_name => 'rcl', bibjson_name => '_n_class', data_type => 'pos' },
 	    "The number of these opinions that are currently chosen for classification",
-	{ output => 'n_occs', com_name => 'rco', data_type => 'pos' },
+	{ output => 'n_occs', com_name => 'rco', bibjson_name => '_n_colls', data_type => 'pos' },
 	    "The number of occurrences for which this reference is the source",
-	{ output => 'n_colls', com_name => 'rcc', data_type => 'pos' },
-	    "The number of collections for which this reference is the primary source");
+	{ output => 'n_colls', com_name => 'rcc', bibjson_name => '_n_colls', data_type => 'pos' },
+	    "The number of collections for which this reference is a primary source or secondary source");
     
     $ds->define_block('1.2:refs:comments' =>
 	{ select => ['r.project_name as r_project_name'] },
@@ -261,6 +242,12 @@ sub initialize {
         { set => '*', code => \&process_relevance },
 	{ output => 'r_relevance_a', com_name => 'rsa', pbdb_name => 'relevance_a' },
 	    "An auxiliary relevance score, used for debugging purposes.");
+
+    $ds->define_block('1.2:refs:edit' =>
+	{ set_output_key => 'authorlist' },
+	{ include => '1.2:refs:comments' },
+	{ include => '1.2:common:entname' },
+	{ include => '1.2:common:crmod' });
     
     # Then blocks for other classes to use when including one or more
     # references into other output.

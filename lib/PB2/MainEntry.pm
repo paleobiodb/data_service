@@ -64,7 +64,6 @@ sub initialize {
 			place => 10,
 			allow_method => 'PUT,POST',
 			doc_template => 'entry_operation.tt',
-			ruleset => '1.2:refs:addupdate',
 			body_ruleset => '1.2:refs:addupdate_body',
 			role => 'PB2::ReferenceEntry',
 			method => 'addupdate_refs',
@@ -74,12 +73,23 @@ sub initialize {
 	"This operation allows you to add new bibliographic references to",
 	"the database.");
     
+    $ds2->define_node({ path => 'refs/add_sandbox',
+			title => 'Sandbox for the refs/add operation',
+			place => 10,
+			allow_format => 'html',
+			allow_method => 'GET',
+			doc_template => 'sandbox_operation.tt',
+			role => 'PB2::ReferenceEntry',
+			method => 'addupdate_sandbox',
+			arg => 'insert' },
+	"This operation displays an HTML form which you can use to generate",
+	"calls to the refs/add operation.");
+    
     $ds2->define_node({ path => 'refs/update',
 			title => 'Update existing bibliographic references',
 			place => 10,
 			allow_method => 'PUT,POST',
 			doc_template => 'entry_operation.tt',
-			ruleset => '1.2:refs:addupdate',
 			body_ruleset => '1.2:refs:addupdate_body',
 			role => 'PB2::ReferenceEntry',
 			method => 'addupdate_refs',
@@ -89,6 +99,18 @@ sub initialize {
 	"This operation allows you to update existing bibliographic references in",
 	"the database.");
     
+    $ds2->define_node({ path => 'refs/update_sandbox',
+			title => 'Sandbox for the refs/update operation',
+			place => 10,
+			allow_format => 'html',
+			allow_method => 'GET',
+			doc_template => 'sandbox_operation.tt',
+			role => 'PB2::ReferenceEntry',
+			method => 'addupdate_sandbox',
+			arg => 'update' },
+	"This operation displays an HTML form which you can use to generate",
+	"calls to the refs/update operation.");
+    
     $ds2->define_node({ path => 'refs/addupdate',
 			title => 'Add bibliographic references or update existing references',
 			place => 10,
@@ -97,6 +119,7 @@ sub initialize {
 			body_ruleset => '1.2:refs:addupdate_body',
 			role => 'PB2::ReferenceEntry',
 			method => 'addupdate_refs',
+			arg => 'addupdate',
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
 	"This operation allows you to add new bibliographic references to the database",

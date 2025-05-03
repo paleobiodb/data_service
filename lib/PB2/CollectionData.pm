@@ -167,8 +167,8 @@ sub initialize {
 	    "C<B<locext>>, C<B<ages>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<ctaph>>,",
 			   "C<B<comps>>, C<B<methods>>, C<B<resgroup>>, C<B<entname>>, C<B<crmod>>",
 	{ value => 'none' },
-	    "Do not return any records. If you have asked for summary counts, these",
-	    "will still be returned.");
+	    "Do not return any records. This can be used with data entry operations to",
+	    "suppress the output.");
     
     # Then a second map for geographic summary clusters.
     
