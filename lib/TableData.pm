@@ -15,11 +15,12 @@ use PBDBFields qw(%COMMON_FIELD_IDTYPE %COMMON_FIELD_SPECIAL %FOREIGN_KEY_TABLE 
 
 use Carp qw(croak);
 use HTTP::Validate qw(:validators);
-use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER);
+use ExternalIdent qw(extract_identifier generate_identifier VALID_IDENTIFIER %IDP);
+use Scalar::Util qw(reftype);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(complete_output_block complete_ruleset complete_valueset);
+our (@EXPORT_OK) = qw(complete_output_block complete_ruleset add_to_ruleset complete_valueset);
 
 our (@CARP_NOT) = qw(EditTransaction Try::Tiny);
 
@@ -41,6 +42,12 @@ our (%INT_SIZE) = ( tiny => 'one byte integer',
 		    medium => 'three byte integer',
 		    regular => 'four byte integer',
 		    big => 'eight byte integer');
+
+our (%INT_SIZE2) = ( tiny => 'one byte',
+		     small => 'two bytes',
+		     medium => 'three bytes',
+		     regular => 'four bytes',
+		     big => 'eight bytes' );
 
 sub complete_output_block {
     
@@ -103,7 +110,9 @@ sub complete_output_block {
 	# If this field has the 'IGNORE' attribute set, skip it as well. Check for an override
 	# entry as well.
 
-	next if $columninfo->{$field_name}{IGNORE} || $override->{$field_name}{IGNORE};
+	next if $columninfo->{$field_name}{IGNORE} ||
+	    ref $override->{$field_name} && $override->{$field_name}{IGNORE};
+	    $override->{$field_name} && $override->{$field_name} eq 'IGNORE';
 	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
@@ -148,10 +157,17 @@ sub complete_output_block {
 
 	# If there are any attribute overrides specified for this field, apply them now.
 
-	if ( my $ov = $override->{$field_name} )
+	if ( ref $override->{$field_name} )
 	{
+	    my $ov = $override->{$field_name};
+	    
 	    foreach my $attr ( keys %$ov )
 	    {
+		if ( $attr eq 'doc' && $ov->{$attr} )
+		{
+		    $doc = $ov->{$attr};
+		}
+		
 		if ( defined $ov->{$attr} )
 		{
 		    $r->{$attr} = $ov->{$attr};
@@ -256,54 +272,225 @@ sub complete_ruleset {
 	# If there is an entry for this field in the $override hash with the IGNORE attribute,
 	# ignore it. Also ignore any field for which the column property IGNORE was set.
 	
-	next if $field_record->{IGNORE} || $override->{$field_name}{IGNORE};
+	next if $field_record->{IGNORE} ||
+	    ref $override->{$field_name} && $override->{$field_name}{IGNORE} ||
+	    $override->{$field_name} && $override->{$field_name} eq 'IGNORE';
 	
 	# Now create a record to represent this field, along with a documentation string and
 	# whatever other attributes we can glean from the table definition.
 	
-	my $rr = { optional => $field_name };
-	my $doc = "This parameter sets the value of C<$field_name> in the C<$TABLE{$table_specifier}> table.";
+	my $rr = { optional => $field_name, allow_empty => 1 };
 	
-	my ($type, @type_param) = $field_record->{TypeParams}[0];
+	my $attr = '';
+	$attr = 'B<required> ' if $field_record->{REQUIRED};
+	
+	my $doc = "This ${attr}parameter sets the value of C<$field_name> in the C<$TABLE{$table_specifier}> table.";
+	
+	my $type = $field_record->{TypeMain} // '?';
+	my @type_params = $field_record->{TypeParams} ? $field_record->{TypeParams}->@* : ();
 	
 	if ( $field_name ne $column_name && ! $field_record->{ALTERNATE_ONLY} )
 	{
 	    $rr->{alias} = $column_name;
 	}
 	
-	# Add documentation depending on the data type of this field.
+	# Add documentation depending on the data type of this field, unless
+	# documentation was specified in the override hash.
 	
-	if ( $type eq 'text' )
+	if ( ref $override->{$field_name} &&
+	     ($override->{$field_name}{doc} || $override->{$field_name}{doc_full}) )
 	{
-	    $doc .= " It accepts a string of length at most $type_param[0]";
+	    my $newdoc = $override->{$field_name}{doc_full} // $override->{$field_name}{doc};
 	    
-	    if ( $type_param[2] && $type_param[2] =~ /latin1/ )
+	    if ( $newdoc =~ /%{type}/ )
 	    {
-		$doc .= " in the latin1 character set";
+		my $typestring;
+
+		if ( $type eq 'char' )
+		{
+		    $typestring = $type_params[0] eq 'data' ? 'binary data' : 'a string';
+		}
+		
+		elsif ( $type eq 'integer' )
+		{
+		    $typestring = $type_params[0] eq 'unsigned' ?
+			'an unsigned integer' : 'an integer' ;
+		}
+		
+		elsif ( $type eq 'fixed' || $type eq 'floating' )
+		{
+		    $typestring = $type_params[0] eq 'unsigned' ?
+			'an unsigned decimal number' : 'a decimal number';
+		}
+
+		elsif ( $type eq 'enum' )
+		{
+		    $typestring = ($type_params[0] && $type_params[0] eq 'set') ?
+			'one or more values' : 'a value';
+		}
+
+		elsif ( $type eq 'boolean' )
+		{
+		    $typestring = 'a boolean value';
+		}
+
+		elsif ( $type eq 'datetime' )
+		{
+		    $typestring = "a $type_params[0]";
+		}
+		
+		else
+		{
+		    $typestring = '?';
+		}
+
+		$newdoc =~ s/%{type}/$typestring/eg;
+	    }
+	    
+	    if ( $newdoc =~ /%{size}/ )
+	    {
+		my $size;
+		
+		if ( $type eq 'char' )
+		{
+		    $size = $type_params[1];
+		}
+		
+		elsif ( $type eq 'integer' )
+		{
+		    $size = $INT_SIZE2{$type_params[1]} || '?';
+		}
+
+		elsif ( $type eq 'floating' )
+		{
+		    if ( $type_params[1] && $type_params[1] eq 'float' )
+		    {
+			$size = 'single precision floating point';
+		    }
+
+		    elsif ( $type_params[1] && $type_params[1] eq 'double' )
+		    {
+			$size = 'double precision floating point';
+		    }
+
+		    else
+		    {
+			$size = '?';
+		    }
+		}
+
+		elsif ( $type eq 'fixed' )
+		{
+		    my $a = ($type_params[1] + $type_params[2]) // '?';
+		    my $b = $type_params[2] // '?';
+		    $size = "decimal($a,$b)";
+		}
+
+		else
+		{
+		    $size = '?';
+		}
+
+		$newdoc =~ s/%{size}/$size/eg;
+	    }
+	    
+	    if ( $newdoc =~ /%{charset}/ )
+	    {
+		my $charset = '?';
+		
+		if ( $type_params[0] && $type_params[0] eq 'text' )
+		{
+		    if ( $type_params[3] =~ /latin1/ )
+		    {
+			$charset = 'latin1';
+		    }
+		    
+		    elsif ( $type_params[3] =~ /utf(\d+)/ )
+		    {
+			$charset = "utf-$1";
+		    }
+		    
+		    else
+		    {
+			$charset = $type_params[3] || '?';
+		    }
+		}
+		
+		$newdoc =~ s/%{size}/$charset/eg;
 	    }
 
-	    elsif ( $type_param[2] && $type_param[2] =~ /utf\d/ )
+	    if ( $newdoc =~ /%{values}/ )
 	    {
-		$doc .= " in utf-8";
+		my $values = '?';
+		
+		if ( $type_params[0] && ($type_params[0] eq 'enum' || $type_params[0] eq 'set') )
+		{
+		    $values = $type_params[2] // '?';
+		}
+		
+		elsif ( $type eq 'boolean' )
+		{
+		    $values = "'1','0','true','false','yes','no','y','n','on','off'";
+		}
+
+		$newdoc =~ s/%{values}/$values/eg;
+	    }
+
+	    if ( $newdoc =~ /%{extid}/ )
+	    {
+		my $extid = $columninfo->{$column_name}{EXTID_TYPE} // '?';
+
+		$newdoc =~ s/%{extid}/$extid/eg;
+	    }
+
+	    if ( $override->{$field_name}{doc_full} )
+	    {
+		$doc = $newdoc;
+	    }
+
+	    else
+	    {
+		$doc .= " $newdoc";
+	    }
+	}
+	
+	elsif ( my $extid_type = $columninfo->{$column_name}{EXTID_TYPE} )
+	{
+	    $doc .= " It accepts an external identifier of type '$IDP{$extid_type}', or an integer value.";
+	}
+	
+	elsif ( $type eq 'char' )
+	{
+	    my $which = ($type_params[0] && $type_params[0] eq 'data') ? 'binary data' : 'a string';
+	    my $size = $type_params[1] // '?';
+	    
+	    $doc .= " It accepts $which of maximum length $size";
+
+	    if ( $type_params[0] && $type_params[0] eq 'text' )
+	    {
+		if ( $type_params[2] && $type_params[2] =~ /latin1/ )
+		{
+		    $doc .= ", stored as latin1";
+		}
+		
+		elsif ( $type_params[2] && $type_params[2] =~ /utf(\d+)/ )
+		{
+		    $doc .= ", stored as utf-$1";
+		}
 	    }
 	    
 	    $doc .= ".";
 	}
 	
-	elsif ( $type eq 'data' )
-	{
-	    $doc .= " It accepts binary data of length at most $type_param[0].";
-	}
-	
 	elsif ( $type eq 'boolean' )
 	{
-	    $doc .= " It accepts a boolean value.";
+	    $doc .= " It accepts any of the following values: C<'1','0','true','false','yes','no','y','n','on','off'>.";
 	}
 	
 	elsif ( $type eq 'integer' )
 	{
-	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
-	    my $size = $INT_SIZE{$type_param[1]} || 'integer';
+	    my $prefix = $type_params[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    my $size = $INT_SIZE{$type_params[1]} || 'integer';
 	    $prefix = 'an' if $size eq 'integer';
 	    
 	    $doc .= " It accepts $prefix $size value.";
@@ -311,41 +498,68 @@ sub complete_ruleset {
 	
 	elsif ( $type eq 'fixed' )
 	{
-	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
-	    $doc .= " It accepts $prefix decimal value with at most $type_param[1] digits before the decimal and at most $type_param[2] digits after.";
+	    my $prefix = $type_params[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    $doc .= " It accepts $prefix decimal value with at most $type_params[1] digits before the decimal and at most $type_params[2] digits after.";
 	}
 	
 	elsif ( $type eq 'floating' )
 	{
-	    my $prefix = $type_param[0] eq 'unsigned' ? 'an unsigned' : 'a';
-	    my $size = $type_param[2] eq 'double' ? 'double precision' : 'single precision';
+	    my $prefix = $type_params[0] eq 'unsigned' ? 'an unsigned' : 'a';
+	    my $size = $type_params[2] eq 'double' ? 'double precision' : 'single precision';
 	    $doc .= " It accepts $prefix decimal value that can be stored in $size floating point.";
 	}
-
-	elsif ( $type eq 'enum' || $type eq 'set' )
+	
+	elsif ( $type eq 'enum' )
 	{
-	    my $prefix = $type eq 'enum' ? 'a value' : 'one or more values';
-	    $doc .= " It accepts $prefix from the following list: C<$type_param[1]>.";
+	    my $prefix = $type_params[0] eq 'enum' ? 'a value' : 'one or more values';
+	    $doc .= " It accepts $prefix from the following list: C<$type_params[2]>.";
 	}
 	
-	elsif ( $type eq 'date' )
+	elsif ( $type eq 'datetime' )
 	{
-	    $doc .= " It accepts a $type_param[0] in any format acceptable to MariaDB.\n";
+	    $doc .= " It accepts a $type_params[0] in any format acceptable to MariaDB.\n";
 	}
 	
 	else
 	{
-	    $doc .= " The value is not checked before being sent to the database, and will throw an exception if the database does not accept it.";
+	    $doc .= " The data type is not reported.";
 	}
 	
-	if ( my $type = $columninfo->{$column_name}{EXTID_TYPE} )
+	if ( my $extid_type = $columninfo->{$column_name}{EXTID_TYPE} )
 	{
-	    $rr->{valid} = VALID_IDENTIFIER($type);
+	    $rr->{valid} = VALID_IDENTIFIER($extid_type);
 	}
 	
 	push @{$ds->{my_param_records}}, $rr;
 	
 	$ds->validator->add_rules($rs, $rr, $doc);
+    }
+}
+
+
+# add_to_ruleset ( ds, ruleset_name, @rules_and_doc )
+
+sub add_to_ruleset {
+    
+    my ($ds, $ruleset_name, @rules_and_doc) = @_;
+    
+    my $rs = $ds->validator->{RULESETS}{$ruleset_name};
+    
+    while ( @rules_and_doc )
+    {
+	my $rr = shift @rules_and_doc;
+	my @doc;
+	
+	while ( @rules_and_doc && ! ref $rules_and_doc[0] )
+	{
+	    push @doc, shift @rules_and_doc;
+	}
+	
+	croak "bad rule" unless $rr && reftype($rr) eq 'HASH';
+	
+	push @{$ds->{my_param_records}}, $rr;
+	
+	$ds->validator->add_rules($rs, $rr, @doc);
     }
 }
 
