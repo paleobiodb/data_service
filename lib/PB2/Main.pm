@@ -120,10 +120,9 @@ use PB2::MainEntry;
 	    "loaded into spreadsheets or other analysis tools.  The field names are",
 	    "taken from the PBDB Classic interface, for compatibility with existing",
 	    "tools and analytical procedures.",
-	# { name => 'html', content_type => 'text/html', doc_node => 'formats/html', title => 'HTML',
-	#   module => 'Template', disabled => 1 },
-	#     "The HTML format returns formatted web pages describing the selected",
-	#     "object or objects from the database.",
+	{ name => 'html', content_type => 'text/html', doc_node => 'formats/html', 
+	  module => '', title => 'HTML' },
+	    "The HTML format is used for active pages such as API sandboxes.",
 	{ name => 'larkin', content_type => 'application/json; charset=utf-8',
 	  doc_node => 'formats/larkin', title => 'Larkin', default_vocab => '',
 	  module => 'Larkin' },
@@ -1280,6 +1279,9 @@ use PB2::MainEntry;
     
     $ds2->define_node({ path => 'images',
 			file_dir => 'images' });
+    
+    $ds2->define_node({ path => 'js',
+			file_dir => 'js' });
 
     # Now initialize the data entry nodes.
     
