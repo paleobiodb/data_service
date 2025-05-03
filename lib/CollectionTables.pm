@@ -433,8 +433,8 @@ sub buildCollectionTables {
 	
 	my $coded_reso = 360 / $reso;
 	
-	$sql = "REPLACE INTO $COLL_BINS_WORK (bin_id, interval_no, bin_level, n_colls)
-		VALUES ($level, '999999', $level, $coded_reso)";
+	$sql = "REPLACE INTO $COLL_BINS_WORK (bin_id, interval_no, bin_level, n_colls, loc, access_level)
+		VALUES ($level, '999999', $level, $coded_reso, '', 0)";
 	
 	$result = $dbh->do($sql);
 	
@@ -725,10 +725,10 @@ sub buildStrataTables {
     $dbh->do("DROP TABLE IF EXISTS $COLL_STRATA_WORK");
     
     $dbh->do("CREATE TABLE $COLL_STRATA_WORK (
-		grp varchar(255) not null,
-		formation varchar(255) not null,
-		member varchar(255) not null,
-		maybe boolean not null,
+		grp varchar(255) not null default '',
+		formation varchar(255) not null default '',
+		member varchar(255) not null default '',
+		maybe boolean not null default '0',
 		lithology varchar(255),
 		collection_no int unsigned not null,
 		access_level tinyint unsigned not null,
@@ -736,9 +736,9 @@ sub buildStrataTables {
 		cc char(2),
 		lat decimal(9,6),
 		lng decimal(9,6),
-		g_plate_no smallint unsigned not null,
-		s_plate_no smallint unsigned not null,
-		loc geometry not null) Engine=MyISAM");
+		g_plate_no smallint unsigned not null default '0',
+		s_plate_no smallint unsigned not null default '0',
+		loc geometry not null default '') Engine=MyISAM");
     
     $DB::single = 1;
     
