@@ -1,3 +1,4 @@
+
 # CollectionData
 # 
 # A class that returns information from the PaleoDB database about a single
@@ -91,15 +92,18 @@ sub initialize {
     
     $ds->define_output_map('1.2:colls:basic_map' =>
 	{ value => 'full', maps_to => '1.2:colls:full_info' },
-	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: C<B<attr>>, C<B<loc>>,",
-	    "C<B<paleoloc>>, C<B<prot>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<ctaph>>,",
-	    "C<B<comps>>, C<B<methods>>, C<B<rem>>, C<B<refattr>>.",
+	    "This is a shortcut for including all of the information that defines this record.",
+	    "Currently, this includes the following blocks: C<B<loc>>, C<B<paleoloc>>,",
+	    "C<B<prot>>, C<B<ages>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<comps>>,",
+	    "C<B<ctaph>>, C<B<methods>>, C<B<resgroup>>, C<B<refattr>>.",
 	    "If we later add new data fields to the collection records, these will be included",
 	    "by this block.  Therefore, if you are publishing a URL, it might be a good idea",
 	    "to include B<C<show=full>>.",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the collection",
+	{ value => 'locext', maps_to => '1.2:colls:locext' },
+	    "Detailed information about the latitude and longitude of the collection, in",
+	    "addition to all the fields from C<B<loc>>.",
 	{ value => 'bin', maps_to => '1.2:colls:bin' },
 	    "The list of geographic clusters to which the collection belongs.",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
@@ -122,13 +126,13 @@ sub initialize {
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
-	    "Detailed information about the stratigraphic context of collection.",
-	    "This includes all of the information from C<strat> plus extra fields.",
+	    "Detailed information about the stratigraphic context of collection,",
+	    "in addition to all the fields from C<B<strat>>.",
 	{ value => 'lith', maps_to => '1.2:colls:lith' },
 	    "Basic information about the lithological context of the collection.",
 	{ value => 'lithext', maps_to => '1.2:colls:lithext' },
-	    "Detailed information about the lithological context of the collection.",
-	    "This includes all of the information from C<lith> plus extra fields.",
+	    "Detailed information about the lithological context of the collection,",
+	    "In addition to all the fields from C<B<lith>>.",
 	{ value => 'env', maps_to => '1.2:colls:env' },
 	    "The paleoenvironment associated with this collection.",
 	{ value => 'geo', maps_to => '1.2:colls:geo' },
@@ -142,7 +146,8 @@ sub initialize {
 	{ value => 'methods', maps_to => '1.2:colls:methods' },
 	    "Information about the collection methods used",
         { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
-	    "Any additional remarks that were entered about the collection.",
+	    "Any additional remarks that were entered about the collection. This block is",
+	    "deprecated, and the remarks fields are all reported under other output blocks.",
 	{ value => 'resgroup', maps_to => '1.2:colls:resgroup' },
 	    "The research group(s), if any, associated with this collection.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
@@ -156,7 +161,14 @@ sub initialize {
 	{ value => 'entname', maps_to => '1.2:common:entname' },
 	    "The names of the people who authorized, entered and modified this record",
         { value => 'crmod', maps_to => '1.2:common:crmod' },
-	    "The C<created> and C<modified> timestamps for the collection record");
+	    "The C<created> and C<modified> timestamps from the collection record",
+	{ value => 'edit', maps_to => '1.2:colls:edit_info' },
+	    "All of the information necessary to edit a collection. This includes the blocks",
+	    "C<B<locext>>, C<B<ages>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<ctaph>>,",
+			   "C<B<comps>>, C<B<methods>>, C<B<resgroup>>, C<B<entname>>, C<B<crmod>>",
+	{ value => 'none' },
+	    "Do not return any records. If you have asked for summary counts, these",
+	    "will still be returned.");
     
     # Then a second map for geographic summary clusters.
     
@@ -194,7 +206,7 @@ sub initialize {
 	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.collection_aka',
 		     'cc.formation', 'c.lat', 'c.lng', 'c.n_occs', 'c.early_age', 'c.late_age',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
-		     'c.reference_no'], 
+		     'c.reference_no', 'c.access_level'], 
 	  tables => ['cc', 'ei', 'li', 'sr', 'r'] },
 	{ output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	    "A unique identifier for the collection.  This will be a string if the result",
@@ -281,8 +293,7 @@ sub initialize {
     
     $ds->define_block('1.2:colls:loc' =>
 	{ select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale', 'cc.geogcomments',
-		     'cc.latlng_basis', 'cc.latlng_precision', 'cc.altitude_value', 'cc.altitude_unit'],
-	  tables => ['cc'] },
+		     'cc.latlng_basis', 'cc.latlng_precision', 'cc.altitude_value', 'cc.altitude_unit'] },
 	{ output => 'cc', com_name => 'cc2' },
 	    "The country in which the collection is located, encoded as",
 	    "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
@@ -308,7 +319,34 @@ sub initialize {
 	{ output => 'geogcomments', com_name => 'ggc' },
 	    "Additional comments about the geographic location of the collection");
 
-     $ds->define_block('1.2:colls:paleoloc' =>
+    $ds->define_block('1.2:colls:locext' =>
+	{ include => '1.2:colls:loc' },
+	{ select => ['cc.latdeg', 'cc.latmin', 'cc.latsec', 'cc.latdec', 'cc.latdir',
+		     'cc.lngdeg', 'cc.lngmin', 'cc.lngsec', 'cc.lngdec', 'cc.lngdir'] },
+	{ output => 'latdeg', com_name => 'latd' },
+	    "The degrees of latitude of the collection location",
+	{ output => 'latmin', com_name => 'latm' },
+	    "The minutes of latitude of the collection location",
+	{ output => 'latsec', com_name => 'lats' },
+	    "The seconds of latitude of the collection location",
+	{ output => 'latdec', com_name => 'latf' },
+	    "The fraction of a degree of latitude of the collection location. This will",
+	    "be empty if either minutes or seconds of latitude are specified, and vice versa.",
+	{ output => 'latdir', com_name => 'latn' },
+	    "The latitude direction of the collection location. Will be either 'North' or 'South'.",
+	{ output => 'lngdeg', com_name => 'lngd' },
+	    "The degrees of longitude of the collection location",
+	{ output => 'lngmin', com_name => 'lngm' },
+	    "The minutes of longitude of the collection location",
+	{ output => 'lngsec', com_name => 'lngs' },
+	    "The seconds of longitude of the collection location",
+	{ output => 'lngdec', com_name => 'lngf' },
+	    "The fraction of a degree of longitude of the collection location. This will",
+	    "be empty if either minutes or seconds of longitude are specified, and vice versa.",
+	{ output => 'lngdir', com_name => 'lnge' },
+	    "The longitude direction of the collection location. Will be either 'East' or 'West'.");
+    
+    $ds->define_block('1.2:colls:paleoloc' =>
 	{ select => 'PALEOCOORDS' },
 	{ set => '*', code => \&process_paleocoords },
 	{ output => 'paleomodel', com_name => 'pm1' },
@@ -648,7 +686,7 @@ sub initialize {
     $ds->define_block('1.2:colls:secref' =>
 	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) as reference_nos'] });
     
-    $ds->define_block( '1.2:colls:full_info' =>
+    $ds->define_block('1.2:colls:full_info' =>
 	{ include => '1.2:colls:loc' },
 	{ include => '1.2:colls:paleoloc' },
 	{ include => '1.2:colls:prot' },
@@ -661,6 +699,19 @@ sub initialize {
 	{ include => '1.2:colls:methods' },
 	{ include => '1.2:colls:resgroup' },
 	{ include => '1.2:refs:attr' });
+    
+    $ds->define_block('1.2:colls:edit_info' =>
+	{ include => '1.2:colls:locext' },
+	{ include => '1.2:colls:ages' },
+	{ include => '1.2:colls:stratext' },
+	{ include => '1.2:colls:lithext' },
+	{ include => '1.2:colls:geo' },
+	{ include => '1.2:colls:taphonomy' },
+	{ include => '1.2:colls:components' },
+	{ include => '1.2:colls:methods' },
+	{ include => '1.2:colls:resgroup' },
+	{ include => '1.2:common:entname' },
+	{ include => '1.2:common:crmod' });
     
     # Then define an output block for displaying stratigraphic results
     
@@ -1747,6 +1798,15 @@ sub list_colls {
     # If we were asked to get the count, then do so
     
     $request->sql_count_rows;
+    
+    # If show=none was specified, close the statement handle without reading it.
+    
+    if ( $request->has_block('none') )
+    {
+	$request->{main_sth} = undef;
+    }
+    
+    return 1;
 }
 
 
