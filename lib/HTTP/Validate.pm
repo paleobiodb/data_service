@@ -1030,6 +1030,8 @@ sub list_params {
 This function returns a list of the rules belonging to the specified ruleset and
 any included rulesets.
 
+    my @rules = list_rules($ruleset_name);
+
 =cut
 
 sub list_rules {
@@ -1104,7 +1106,7 @@ my %DIRECTIVE = ( 'param' => 2, 'optional' => 2, 'mandatory' => 2,
 		  'valid' => 1, 'clean' => 1, 'allow_empty' => 1,
 		  'multiple' => 1, 'split' => 1, 'list' => 1, 'bad_value' => 1, 
 		  'error' => 1, 'errmsg' => 1, 'warn' => 1, 'undocumented' => 1,
-		  'alias' => 1, 'key' => 1, 'default' => 1);
+		  'alias' => 1, 'key' => 1, 'default' => 1, 'note' => 1 );
 
 # Categorize the rule types
 
@@ -1827,9 +1829,9 @@ sub generate_rule_list {
 	    push @rules, $self->generate_rule_list($included_name, $uniq);
 	}
 
-	else
+	elsif ( ref $item eq 'HASH' )
 	{
-	    push @rules, $item;
+	    push @rules, { %$item };
 	}
     }
     
