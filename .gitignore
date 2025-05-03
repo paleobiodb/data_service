@@ -8,3 +8,4 @@ dataservice.pid
 config.yml
 starman.pid
 Dancer
+.vscode

@@ -932,14 +932,14 @@ sub generate_sandbox {
     $output .= "operation at <a href=\"/data1.2/${ds_operation}_doc.html\" target=\"_blank\">\n";
     $output .= "/data1.2/${ds_operation}_doc.html</a>.</p>\n";
     
-    $output .= "<button id=\"b_clear\" name=\"Clear\">Clear</button>\n";
-    $output .= "<button id=\"b_submit\" onclick=\"sandbox_request()\">Submit</button>\n\n";
+    $output .= "<button id=\"b_clear\" onclick=\"sandbox_clear()\">Clear</button>\n";
+    $output .= "<button id=\"b_submit\" class=\"submit\" onclick=\"sandbox_request()\">Submit</button>\n\n";
     
     $output .= "<p>allows <input type=\"text\" id=\"allows\" size=\"50\"></p>\n";
     
     $output .= "<hr>\n";
 
-    $output .= "<p>Parameters which are <b>required</b> must be given a non-empty value for new records, and must not be given an empty value in an update. If you wish to update a field to have a null value, enter <i>NULL</i> below. To update a field to the empty string, enter <i>EMPTY</i> below.</p>";
+    $output .= "<p>Parameters which are <b>required</b> must be given a non-empty value for new records, and must not be given an empty value in an update. If you wish to update a field to have a null value, enter <i>NULL</i> below. To update a field to the empty string, enter <i>EMPTY</i> below. To enter JSON content into a field, start it with either J[ or J{.</p>";
     
     $output .= "<table width=\"800px\" style=\"max-width: 800px\">\n";
     
@@ -971,8 +971,16 @@ sub generate_sandbox {
 	
 	if ( $field_name )
 	{
-	    $output .= "<tr><td>$field_name<br><input type=\"text\" name=\"f_$field_name\" " .
-		"size=\"40\"></td>\n";
+	    if ( $rule->{note} && $rule->{note} =~ /textarea/ )
+	    {
+		$output .= "<tr><td>$field_name<br><textarea name=\"f_$field_name\" " .
+		    "rows=\"2\" cols=\"35\"></textarea></td>\n";
+	    }
+	    else
+	    {
+		$output .= "<tr><td>$field_name<br><input type=\"text\" name=\"f_$field_name\" " .
+		    "size=\"40\"></td>\n";
+	    }
 	    $output .= "<td>$field_doc</td></tr>\n";
 	    
 	    push @field_list, $field_name;

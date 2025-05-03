@@ -25,6 +25,20 @@ function sandbox_request () {
 		data[fn] = '';
 	    }
 
+	    else if ( /^J\[|^J\{/.test(value) )
+	    {
+		value = value.substring(1);
+
+		try {
+		    data[fn] = JSON.parse(value);
+		}
+
+		catch (err) {
+		    window.alert("Error in field '" + fn + "': " + err.message);
+		    return false;
+		}
+	    }
+
 	    else
 	    {
 		data[fn] = value;
@@ -74,4 +88,15 @@ function sandbox_request () {
     // Make sure that the form does not submit.
     
     return false;
+}
+
+
+function sandbox_clear ( ) {
+
+    var form = document.getElementById("sandbox_form");
+    
+    for (var fn of sandbox_fields)
+    {
+	form["f_"+fn].value = '';
+    }
 }

@@ -103,7 +103,7 @@ sub define_block {
 	
 	# Add the record to the appropriate list(s).
 	
-	if ( $type eq 'include' )
+	if ( $type eq 'include' || $type eq 'set_output_key' )
 	{
 	    push @{$ds->{block}{$name}{include_list}}, $item;
 	}
@@ -120,6 +120,7 @@ our %OUTPUT_DEF = (output => 'type',
 		   select => 'type',
 		   filter => 'type',
 		   include => 'type',
+		   set_output_key => 'type',
 		   if_block => 'set',
 		   not_block => 'set',
 		   if_vocab => 'set',
@@ -531,16 +532,24 @@ sub add_output_blocks {
 	    next INCLUDE_RECORD if $r->{not_vocab}
 		and check_value($r->{not_vocab}, $vocab);
 
-	    # Add the included block to the block_hash, so that if_block and not_block attributes
-	    # in other output records can be properly evaluated.
+	    # Add each included block to the block_hash, so that if_block and not_block
+	    # attributes in other output records can be properly evaluated. Add the block
+	    # to the end of the scan list, so that it will be scanned for additional inclusions.
 	    
-	    my $include_block = $r->{include};
-	    
-	    # Now add the specified key and block to the output hash, if they are defined. Add the
-	    # block to the end of the scan list, so that it will be scanned for additional inclusions.
-	    
-	    $oc->{block_hash}{$include_block} = 1;
-	    push @include_scan, $include_block;
+	    if ( my $include_block = $r->{include} )
+	    {
+		$oc->{block_hash}{$include_block} = 1;
+		push @include_scan, $include_block;
+	    }
+
+	    # Set each indicated output key, so that if_block and not_block attributes in
+	    # other output records can be properly evaluated. This kind of record should
+	    # only be used to set output keys that do not map to blocks.
+
+	    elsif ( my $key = $r->{set_output_key} )
+	    {
+		$oc->{block_hash}{$key} = 1;
+	    }
 	}
     }
     
@@ -913,6 +922,14 @@ sub _configure_block {
 	    # record list.
 	    
 	    unshift @output_list, @$add_list;
+	}
+
+	# If the record type is 'set_output_key', we do not need to do anything because it
+	# has already been added to the block hash in 'add_output_blocks' above.
+	
+	elsif ( $r->{set_output_key} )
+	{
+	    # do nothing
 	}
 	
 	# All other record types throw an error.
