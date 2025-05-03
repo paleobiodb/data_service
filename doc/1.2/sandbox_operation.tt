@@ -1,0 +1,13 @@
+
+<% DESCRIPTION_SECTION(opt_force=1) %>
+
+<% USAGE_SECTION %>
+
+<% PARAMETER_SECTION(opt_force=1) %>
+
+<% METHOD_SECTION(opt_force=1) %>
+
+<% RESPONSE_SECTION(opt_force=1,content="The response to this operation is a web page in HTML format.") %>
+
+<% FORMAT_SECTION %>
+

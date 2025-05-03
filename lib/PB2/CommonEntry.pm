@@ -64,14 +64,15 @@ sub initialize {
     $ds->define_ruleset('1.2:common:entry_fields',
 	{ optional => '_label', valid => ANY_VALUE },
 	    "If you provide a non-empty value for this parameter, that value",
-	    "will be included in any response associated with this record.",
-	    "Otherwise, a label will be generated according to the following",
+	    "can be used in association with auxiliary references, i.e. occurrences",
+	    "to collections. Otherwise, a label will be generated according to the following",
 	    "pattern: '#1' for the first submitted record, '#2' for the second,",
-	    "etc.",
-	{ optional => '_operation', valid => '1.2:common:entry_ops' },
-	    "You may include this parameter in any submitted record. It specifies",
-	    "the database operation to be performed, overriding the default operation.",
-			"Accepted values are:");
+	    "etc.");
+    
+    # { optional => '_operation', valid => '1.2:common:entry_ops' },
+    #     "You may include this parameter in any submitted record. It specifies",
+    #     "the database operation to be performed, overriding the default operation.",
+    # 		"Accepted values are:");
     
     $ds->define_valueset('1.2:common:std_allowances',
 	{ value => 'CREATE', undocumented => 1 },
@@ -97,18 +98,18 @@ sub initialize {
 }
 
 
-# parse_main_params ( url_ruleset, [extra_flag...] )
+# parse_main_params ( url_ruleset, default_params )
 # 
 # Go through the main parameters to this request, and return a list of two
 # hashrefs. The first will contain as keys any "allowances", which are values of
-# the parameter 'allow'. The second will contain all other parameters as  keys
-# with their associated values. These will already have been checked by the
-# initial ruleset validation of the request. These parameters
-# will be used as defaults for all records speified in the request body.
+# the parameter 'allow'. If one or more default parameter names are provided,
+# and if any of those are specified in this request, include them in the second
+# hash. These parameter values will be used as defaults for all records
+# specified in the request body.
 
 sub parse_main_params {
     
-    my ($request, $url_ruleset, @extra_flags) = @_;
+    my ($request, $url_ruleset, $default_params) = @_;
     
     # First grab a list of the parameters that were specified in the request URL. Also allocate
     # two hashes which will end up being the return value of this routine.
@@ -126,6 +127,21 @@ sub parse_main_params {
 	    $RULESET_HAS_PARAM{$url_ruleset}{$p} = 1 if $p;
 	}
     }
+
+    # Determine which parameters (if any) should be used as defaults for the
+    # body records.
+
+    my %is_default;
+    
+    if ( ref $default_params eq 'ARRAY' )
+    {
+	$is_default{$_} = 1 foreach @$default_params;
+    }
+
+    elsif ( $default_params )
+    {
+	$is_default{$default_params} = 1;
+    }
     
     # Now process the request parameters one by one.
     
@@ -137,15 +153,15 @@ sub parse_main_params {
 	    $allowances->{$_} = 1 foreach @list;
 	}
 	
-	elsif ( $url_ruleset && $RULESET_HAS_PARAM{$url_ruleset}{$k} )
+	elsif ( $url_ruleset && $RULESET_HAS_PARAM{$url_ruleset}{$k} && $is_default{$k} )
 	{
 	    $main_params->{$k} = $request->clean_param($k);
 	}
     }
-
+    
     # Then add any extra flags that were specified.
-
-    $allowances->{$_} = 1 foreach @extra_flags;
+    
+    # $allowances->{$_} = 1 foreach @extra_flags;
     
     # Print out the main parameters and allowances if we are in debug mode, then return the two
     # hashes.
@@ -388,7 +404,7 @@ sub parse_body_records {
 	    
 	    foreach my $e ( $result->errors )
 	    {
-		if ( $e =~ /^Field (.*?): (.*)/ )
+		if ( $e =~ /^Field '?(.*?)'?: (.*)/ )
 		{
 		    my $field = $1;
 		    my $msg = $2;
@@ -873,6 +889,118 @@ sub debug_out {
     $request->{ds}->debug_line("");
 }
 
+
+sub generate_sandbox {
+
+    my ($request, $ds_operation, $ruleset_name, $extra_params, $doc_for_operation) = @_;
+
+    my $ds_params = 'rowcount&vocab=pbdb';
+
+    if ( $extra_params )
+    {
+	$ds_params .= "&$extra_params";
+    }
+
+    if ( $ds_operation eq 'unknown' )
+    {
+	my $output = "<html><head><title>No sandbox is available</title>\n";
+	$output .= "    <link rel=\"stylesheet\" href=\"/data1.2/css/sandbox.css\">\n";
+	$output .= "</head>\n";
+	$output .= "<body>\n";
+	
+	$output .= "<div id=\"main_body\" style=\"max-width: 800px\">\n";
+	$output .= "<h1>No sandbox is available</h1>\n";
+	$output .= "</div>\n";
+	$output .= "</body></html>\n";
+
+	$request->data_result($output);
+	return;
+    }
+    
+    my $output = "<html><head><title>Sandbox for $ds_operation</title>\n";
+    $output .= "    <link rel=\"stylesheet\" href=\"/data1.2/css/sandbox.css\">\n";
+    $output .= "</head>\n";
+    $output .= "<body>\n";
+
+    $output .= "<div id=\"main_body\" style=\"max-width: 800px\">\n";
+    $output .= "<h1>Sandbox for '$ds_operation'</h1>\n";
+    $output .= "<form id=\"sandbox_form\" onsubmit=\"return false\">\n";
+
+    $output .= "<p>You can use this form to make calls to the data service operation '$ds_operation'.\n";
+    $output .= "For 'add' operations, leave the top field blank. For 'update' operations, fill in the\n";
+    $output .= "identifier of the record you wish to update. You can find the documentation for this\n";
+    $output .= "operation at <a href=\"/data1.2/${ds_operation}_doc.html\" target=\"_blank\">\n";
+    $output .= "/data1.2/${ds_operation}_doc.html</a>.</p>\n";
+    
+    $output .= "<button id=\"b_clear\" name=\"Clear\">Clear</button>\n";
+    $output .= "<button id=\"b_submit\" onclick=\"sandbox_request()\">Submit</button>\n\n";
+    
+    $output .= "<p>allows <input type=\"text\" id=\"allows\" size=\"50\"></p>\n";
+    
+    $output .= "<hr>\n";
+
+    $output .= "<p>Parameters which are <b>required</b> must be given a non-empty value for new records, and must not be given an empty value in an update. If you wish to update a field to have a null value, enter <i>NULL</i> below. To update a field to the empty string, enter <i>EMPTY</i> below.</p>";
+    
+    $output .= "<table width=\"800px\" style=\"max-width: 800px\">\n";
+    
+    my @doc_list = $request->ds->list_rules($ruleset_name);
+    
+    my @field_list;
+    
+    # while ( @doc_list && ! ref $doc_list[0] )
+    # {
+    # 	shift @doc_list;
+    # }
+    
+    while ( @doc_list )
+    {
+	my $rule = shift @doc_list;
+	
+	my $field_name = $rule->{param} || $rule->{optional} || $rule->{required} || '';
+	my $field_doc = ref $rule->{doc_ref} ? $rule->{doc_ref}->$* : '';
+	
+	# $field_doc = shift @doc_list if @doc_list && !ref $doc_list[0];
+	
+	# shift @doc_list while @doc_list && !ref $doc_list[0];
+	
+	if ( $field_doc )
+	{
+	    $field_doc =~ s/C<(.*?)>/<span class="dbfield">$1<\/span>/g;
+	    $field_doc =~ s/B<(.*?)>/<b>$1<\/b>/g;
+	}
+	
+	if ( $field_name )
+	{
+	    $output .= "<tr><td>$field_name<br><input type=\"text\" name=\"f_$field_name\" " .
+		"size=\"40\"></td>\n";
+	    $output .= "<td>$field_doc</td></tr>\n";
+	    
+	    push @field_list, $field_name;
+	}
+    }
+    
+    $output .= "</table>\n";
+    $output .= "</form>\n";
+    
+    $output .= "<hr>\n";
+    
+    $output .= "<p><button id=\"b_submit\" onclick=\"sandbox_request()\">Submit</button></p>\n\n";
+    $output .= "</div>\n";
+    
+    my $field_string = join("','", @field_list);
+    
+    $output .= "<script type=\"text/javascript\">\n";
+    $output .= "    sandbox_fields = ['$field_string'];\n";
+    $output .= "    sandbox_operation = '$ds_operation';\n";
+    $output .= "    sandbox_extra = '$ds_params';\n";
+    $output .= "</script>\n\n";
+    $output .= '<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>';
+    $output .= "<script src=\"/data1.2/js/sandbox.js\" type=\"text/javascript\"></script>\n";
+    
+    $output .= "</body></html>\n";
+    
+    $request->data_result($output);
+}
 
 
 1;

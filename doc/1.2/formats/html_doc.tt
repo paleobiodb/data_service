@@ -1,0 +1,12 @@
+
+=head2 DESCRIPTION
+
+This page describes how the data service formats HTML responses.
+
+=head2 SYNOPSIS
+
+The HTML format is selected by ending a URL path with the suffix C<.html>. The response
+will have the content type 'text/html; charset=utf-8', which indicates to the web browser
+that this content should be displayed as a web page.
+
+

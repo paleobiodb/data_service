@@ -229,8 +229,8 @@
 	SET fixed = request.output_label;
 	SET optional = request.optional_output;
 	IF response_doc;
-  	    IF response_doc.match('^MSG_'); sub_message(response_doc);
-	    ELSIF content; GET content FILTER trim; "\n\n$response_doc";
+	    IF content; GET content FILTER trim; "\n\n";
+  	    ELSIF response_doc.match('^MSG_'); sub_message(response_doc);
 	    ELSE;
 	        sub_message("MSG_RESPONSE_HEADER");
 	    	IF fixed && optional;
@@ -241,6 +241,8 @@
 	    	END;
 		"\n\n$response_doc";
 	    END;
+	ELSIF content;
+	    GET content FILTER trim; "\n\n";
 	ELSE;
 	    sub_message("MSG_RESPONSE_NONE_DEFINED");
 	END;
@@ -259,7 +261,7 @@
 	ELSIF response_doc; response_doc;
 	ELSE; sub_message("MSG_RESPONSE_NONE_DEFINED");
 	END;
-   END;
+    END;
     
     MACRO RESPONSE INCLUDE RESPONSE;
     
