@@ -25,17 +25,17 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(AUTHORITY_DATA => 'authorities');
     set_table_property('AUTHORITY_DATA', CAN_POST => 'NOT_STUDENT');
     set_table_property('AUTHORITY_DATA', CAN_MODIFY => 'NOT_STUDENT');
-    set_table_property('AUTHORITY_DATA', CAN_DELETE => 'admin');
+    set_table_property('AUTHORITY_DATA', CAN_DELETE => 'OWNER');
     set_table_property('AUTHORITY_DATA', LOG_CHANGES => 1);
     
     set_table_name(OPINION_DATA => 'opinions');
     set_table_property('OPINION_DATA', CAN_POST => 'NOT_STUDENT');
     set_table_property('OPINION_DATA', CAN_MODIFY => 'NOT_STUDENT');
-    set_table_property('OPINION_DATA', CAN_DELETE => 'admin');
+    set_table_property('OPINION_DATA', CAN_DELETE => 'OWNER');
     set_table_property('OPINION_DATA', LOG_CHANGES => 1);
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
-    set_table_property('OCCURRENCE_DATA', CAN_DELETE => 'admin');
+    set_table_property('OCCURRENCE_DATA', CAN_DELETE => 'OWNER');
     set_table_property('OCCURRENCE_DATA', LOG_CHANGES => 1);
     
     set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
@@ -50,14 +50,17 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
 		    'OCC_INT_SUMMARY', 'OCC_TS_SUMMARY');
     
     set_table_name(REID_DATA => 'reidentifications');
-    set_table_property('REID_DATA', CAN_DELETE => 'admin');
+    set_table_property('REID_DATA', CAN_DELETE => 'OWNER');
     set_table_property('REID_DATA', LOG_CHANGES => 1);
     
     set_table_name(COLLECTION_DATA => 'collections');
+    set_table_property('COLLECTION_DATA', CAN_POST => 'AUTHORIZED');
+    set_table_property('COLLECTION_DATA', CAN_DELETE => 'OWNER');
+    set_table_property('COLLECTION_DATA', LOG_CHANGES => 1);
+    
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
     
-    set_table_property('COLLECTION_DATA', CAN_DELETE => 'admin');
-    set_table_property('COLLECTION_DATA', LOG_CHANGES => 1);
+    set_table_name(COLLECTION_REFS => 'secondary_refs');
     
     set_table_name(COLLECTION_LOC => 'coll_loc');
     set_table_name(COLLECTION_INTS => 'coll_ints');

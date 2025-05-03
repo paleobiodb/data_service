@@ -82,7 +82,7 @@ sub initialize {
 	    "The unique identifier of this record in the database.",
 	{ set => '*', code => \&process_record},
 	{ output => '_label', com_name => 'rlb' },
-	    "For all data entry operations, this field will report the record",
+	    "For data entry operations, this field will report the record",
 	    "label value, if any, that was submitted with each record.",
 	{ output => 'status', com_name => 'sta' },
 	    "The status will be one of the following codes:",
