@@ -97,7 +97,7 @@ sub initialize {
 	    "Type of reference to be added: journal article, book chapter, thesis, etc.",
 	{ optional => 'pubyr' },
 	    "Year of publication",
-	{ optional => 'authors', multiple => 1, note => 'textarea' },
+	{ optional => 'authors', multiple => 1, note => 'textarea,json' },
 	    "The author(s) of the work, in the proper order, separated by semicolons.",
 	    "Each author name can be specified as 'first last' or as 'last, first'.",
 	    "If the body of the request is in JSON format, the authors can be provided",
@@ -120,7 +120,7 @@ sub initialize {
 	    "The publisher of the work or of the publication in which it appears",
 	{ optional => 'pubcity', alias => 'pub_city' },
 	    "The city where published",
-	{ optional => 'editors', multiple => 1, note => 'textarea' },
+	{ optional => 'editors', multiple => 1, note => 'textarea,json' },
 	    "The editor(s) of the book, compendium, or other publication. These must",
 	    "be given in proper order, separated by semicolons. Each editor name can be",
 	    "specified as 'first last' or as 'last, first'.",
@@ -406,12 +406,18 @@ sub addupdate_sandbox {
 
     if ( $operation eq 'insert' )
     {
-	$request->generate_sandbox('refs/add', '1.2:refs:addupdate_body', 'show=both,edit');
+	$request->generate_sandbox({ operation => 'refs/add',
+				     ruleset => '1.2:refs:addupdate_body',
+				     allowances => '1.2:refs:allowances',
+				     extra_params => 'show=both,edit' });
     }
-
+    
     elsif ( $operation eq 'update' )
     {
-	$request->generate_sandbox('refs/update', '1.2:refs:addupdate_body', 'show=both,edit');
+	$request->generate_sandbox({ operation => 'refs/update',
+				     ruleset => '1.2:refs:addupdate_body',
+				     allowances => '1.2:refs:allowances',
+				     extra_params => 'show=both,edit' });
     }
     
     else

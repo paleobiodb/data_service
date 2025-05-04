@@ -25,10 +25,8 @@ function sandbox_request () {
 		data[fn] = '';
 	    }
 
-	    else if ( /^J\[|^J\{/.test(value) )
+	    else if ( sandbox_json[fn] && /^\[|^\{/.test(value) )
 	    {
-		value = value.substring(1);
-
 		try {
 		    data[fn] = JSON.parse(value);
 		}
@@ -49,8 +47,10 @@ function sandbox_request () {
     var content = JSON.stringify(data);
     
     var post_url = "/data1.2/" + sandbox_operation + ".json";
+
+    var params = form["ds_params"].value.trim();
     
-    if ( sandbox_extra ) post_url = post_url + '?' + sandbox_extra;
+    if ( params ) post_url = post_url + '?' + params;
     
     $.ajax({ url: post_url,
 	     type: "POST",

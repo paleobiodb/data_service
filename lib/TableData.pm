@@ -133,6 +133,7 @@ sub complete_output_block {
 	    if ( $block_needs_oid )
 	    {
 		$r->{com_name} = 'oid';
+		$block_needs_oid = 0;
 	    }
 	    
 	    else
@@ -153,8 +154,6 @@ sub complete_output_block {
 	    $doc .= " The value will be an integer.";
 	}
 	
-	$block_needs_oid = 0;
-
 	# If there are any attribute overrides specified for this field, apply them now.
 
 	if ( ref $override->{$field_name} )
@@ -512,7 +511,9 @@ sub complete_ruleset {
 	elsif ( $type eq 'enum' )
 	{
 	    my $prefix = $type_params[0] eq 'enum' ? 'a value' : 'one or more values';
-	    $doc .= " It accepts $prefix from the following list: C<$type_params[2]>.";
+	    my $list = $type_params[2];
+	    $list =~ s/','/', '/g;
+	    $doc .= " It accepts $prefix from the following list: C<$list>.";
 	}
 	
 	elsif ( $type eq 'datetime' )
@@ -524,11 +525,31 @@ sub complete_ruleset {
 	{
 	    $doc .= " The data type is not reported.";
 	}
+
+	# If this column accepts an external identifier, set the validator function
+	# of the ruleset to a function that accepts the specified identifier type.
 	
 	if ( my $extid_type = $columninfo->{$column_name}{EXTID_TYPE} )
 	{
 	    $rr->{valid} = VALID_IDENTIFIER($extid_type);
 	}
+
+	# If the override hash includes any attributes other than 'doc', add
+	# them to the rule record.
+
+	if ( ref $override->{$field_name} eq 'HASH' )
+	{
+	    foreach my $k ( keys $override->{$field_name}->%* )
+	    {
+		if ( $k ne 'doc' )
+		{
+		    $rr->{$k} = $override->{$field_name}{$k};
+		}
+	    }
+	}
+	
+	# Add this rule record and its corresponding documentation to the
+	# specified ruleset.
 	
 	push @{$ds->{my_param_records}}, $rr;
 	

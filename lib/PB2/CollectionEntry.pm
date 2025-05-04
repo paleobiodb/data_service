@@ -104,7 +104,8 @@ sub initialize {
 		       emlintage_min => 'IGNORE', intage_min => 'IGNORE',
 		       emllocage_max => 'IGNORE', locage_max => 'IGNORE',
 		       emllocage_min => 'IGNORE', locage_min => 'IGNORE',
-		       collection_name => { doc => "The name must contain at least one letter, with maximum length %{size}." },
+		       collection_name => { doc => "The name must contain at least one letter, with maximum length %{size}.", note => 'textarea', before => 'research_group' },
+		       collection_aka => { note => 'textarea', before => 'research_group' },
 		       country => { doc => "The value must be a country name appearing in the C<country_map> table." },
 		       latdeg => { doc => "It accepts an integer between 0-89." },
 		       lngdeg => { doc => "It accepts an integer between 0-180." },
@@ -120,15 +121,28 @@ sub initialize {
 		       max_ma_error => { doc => "It accepts an unsigned decimal number of at most 8 digits." },
 		       min_ma => { doc => "It accepts an unsigned decimal number of at most 8 digits." },
 		       min_ma_error => { doc => "It accepts an unsigned decimal number of at most 8 digits." },
+		       geogcomments => { note => 'textarea' },
+		       stratcomments => { note => 'textarea' },
+		       lithdescript => { note => 'lithdescript' },
 		       fossilsfrom1 => { valid => FLAG_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no','y','n'." },
 		       fossilsfrom2 => { valid => FLAG_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no','y','n'." },
-		       release_date => { doc => "It accepts either 'immediate', or else a string of the form 'n months' or 'n years' where n is a digit. The maximum is 5 years." },
+		       geology_comments => { note => 'textarea' },
+		       pres_mode => { note => 'textarea' },
+		       common_body_parts => { note => 'textarea' },
+		       rare_body_parts => { note => 'textarea' },
+		       component_comments => { note => 'textarea' },
+		       collection_comments => { note => 'textarea' },
+		       taxonomy_comments => { note => 'textarea' },
+		       access_level => { before => 'research_group' },
+		       release_date => { doc => "It accepts either 'immediate', or else a string of the form 'n months' or 'n years' where n is a digit. The maximum is 5 years.", before => 'research_group' },
 		     });
     
     add_to_ruleset($ds, '1.2:colls:addupdate_body',
-	{ optional => 'max_interval', valid => [VALID_IDENTIFIER('INT'), ANY_VALUE] },
+	{ optional => 'max_interval', valid => [VALID_IDENTIFIER('INT'), ANY_VALUE], 
+	  before => 'zone_type' },
 	    "This parameter sets the value of C<max_interval_no> in the C<collections> table. It accepts an interval name or number, or an external identifier of type 'int'.",
-	{ optional => 'min_interval', valid => [VALID_IDENTIFIER('INT'), ANY_VALUE] },
+	{ optional => 'min_interval', valid => [VALID_IDENTIFIER('INT'), ANY_VALUE],
+	  before => 'zone_type' },
 	    "This parameter sets the value of C<min_interval_no> in the C<collections> table. It accepts an interval name or number, or an external identifier of type 'int'. If this collection is associated with a single interval, leave this field null.");
 }
 
@@ -313,17 +327,23 @@ sub addupdate_sandbox {
 
     if ( $operation eq 'insert' )
     {
-	$request->generate_sandbox('colls/add', '1.2:colls:addupdate_body', 'show=edit');
+	$request->generate_sandbox({ operation => 'colls/add',
+				     ruleset => '1.2:colls:addupdate_body',
+				     allowances => '1.2:colls:allowances',
+				     extra_params => 'show=edit' });
     }
 
     elsif ( $operation eq 'update' )
     {
-	$request->generate_sandbox('colls/update', '1.2:colls:addupdate_body', 'show=edit');
+	$request->generate_sandbox({ operation => 'colls/update',
+				     ruleset => '1.2:colls:addupdate_body',
+				     allowances => '1.2:colls:allowances',
+				     extra_params => 'show=edit' });
     }
     
     else
     {
-	$request->generate_sandbox('unknown');
+	$request->generate_sandbox({ operation => 'unknown' });
     }
 }
 

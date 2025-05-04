@@ -892,10 +892,33 @@ sub debug_out {
 
 sub generate_sandbox {
 
-    my ($request, $ds_operation, $ruleset_name, $extra_params, $doc_for_operation) = @_;
+    my ($request, $config) = @_;
+    
+    my ($ds_operation, $ruleset_name, $extra_params, $allowances, @allow_list);
+    
+    if ( ref $config eq 'HASH' )
+    {
+	$ds_operation = $config->{operation} || '???';
+	$ruleset_name = $config->{ruleset} || '';
+	$extra_params = $config->{extra_params} || '';
+	$allowances = $config->{allowances};
+    }
+    
+    else
+    {
+	croak "You must provide a hashref to configure the sandbox.";
+    }
+    
+    @allow_list = $request->ds->list_set_values($allowances) if $allowances;
+    
+    my $allow_string = join ', ', @allow_list;
 
+    my $allow_stmt = '';
+
+    $allow_stmt = "If you wish to specify allowances, those available are: $allow_string.";
+    
     my $ds_params = 'rowcount&vocab=pbdb';
-
+    
     if ( $extra_params )
     {
 	$ds_params .= "&$extra_params";
@@ -908,7 +931,7 @@ sub generate_sandbox {
 	$output .= "</head>\n";
 	$output .= "<body>\n";
 	
-	$output .= "<div id=\"main_body\" style=\"max-width: 800px\">\n";
+	$output .= "<div id=\"main_body\" class=\"sbmain\">\n";
 	$output .= "<h1>No sandbox is available</h1>\n";
 	$output .= "</div>\n";
 	$output .= "</body></html>\n";
@@ -921,31 +944,35 @@ sub generate_sandbox {
     $output .= "    <link rel=\"stylesheet\" href=\"/data1.2/css/sandbox.css\">\n";
     $output .= "</head>\n";
     $output .= "<body>\n";
-
-    $output .= "<div id=\"main_body\" style=\"max-width: 800px\">\n";
+    
+    $output .= "<div id=\"main_body\" class=\"sbmain\">\n";
     $output .= "<h1>Sandbox for '$ds_operation'</h1>\n";
     $output .= "<form id=\"sandbox_form\" onsubmit=\"return false\">\n";
-
+    
     $output .= "<p>You can use this form to make calls to the data service operation '$ds_operation'.\n";
-    $output .= "For 'add' operations, leave the top field blank. For 'update' operations, fill in the\n";
-    $output .= "identifier of the record you wish to update. You can find the documentation for this\n";
+    $output .= "You can find the documentation for this\n";
     $output .= "operation at <a href=\"/data1.2/${ds_operation}_doc.html\" target=\"_blank\">\n";
     $output .= "/data1.2/${ds_operation}_doc.html</a>.</p>\n";
     
     $output .= "<button id=\"b_clear\" onclick=\"sandbox_clear()\">Clear</button>\n";
     $output .= "<button id=\"b_submit\" class=\"submit\" onclick=\"sandbox_request()\">Submit</button>\n\n";
     
-    $output .= "<p>allows <input type=\"text\" id=\"allows\" size=\"50\"></p>\n";
+    $output .= "<table class=\"sbtable\">\n";
+    $output .= "<tr><td>call parameters<br><input type=\"text\" id=\"ds_params\" size=\"50\" " .
+	"value=\"$ds_params\"></td>\n";
+    $output .= "<td class=\"sbdoc\">The parameters in this box will be added to the data service\n";
+    $output .= "request. $allow_stmt</td></tr>\n";
+    $output .= "</table>\n";
     
     $output .= "<hr>\n";
 
-    $output .= "<p>Parameters which are <b>required</b> must be given a non-empty value for new records, and must not be given an empty value in an update. If you wish to update a field to have a null value, enter <i>NULL</i> below. To update a field to the empty string, enter <i>EMPTY</i> below. To enter JSON content into a field, start it with either J[ or J{.</p>";
+    $output .= "<p>Parameters which are <b>required</b> must be given a non-empty value for new records, and must not be given an empty value in an update. If you wish to update a field to have a null value, enter <i>NULL</i> below. To update a field to the empty string, enter <i>EMPTY</i> below. If you wish to enter JSON content into a field that accepts it, start the value with either '[' or '{'.</p>\n";
     
-    $output .= "<table width=\"800px\" style=\"max-width: 800px\">\n";
+    $output .= "<table class=\"sbtable\">\n";
     
     my @doc_list = $request->ds->list_rules($ruleset_name);
     
-    my @field_list;
+    my (@field_list, @json_list);
     
     # while ( @doc_list && ! ref $doc_list[0] )
     # {
@@ -973,17 +1000,23 @@ sub generate_sandbox {
 	{
 	    if ( $rule->{note} && $rule->{note} =~ /textarea/ )
 	    {
-		$output .= "<tr><td>$field_name<br><textarea name=\"f_$field_name\" " .
-		    "rows=\"2\" cols=\"35\"></textarea></td>\n";
+		$output .= "<tr><td class=\"sbfield\">$field_name<br>\n";
+		$output .= "<textarea class=\"sbtext\" name=\"f_$field_name\" " .
+		    "rows=\"2\" cols=\"40\"></textarea></td>\n";
 	    }
 	    else
 	    {
 		$output .= "<tr><td>$field_name<br><input type=\"text\" name=\"f_$field_name\" " .
 		    "size=\"40\"></td>\n";
 	    }
-	    $output .= "<td>$field_doc</td></tr>\n";
+	    $output .= "<td class=\"sbdoc\">$field_doc</td></tr>\n";
 	    
 	    push @field_list, $field_name;
+
+	    if ( $rule->{note} && $rule->{note} =~ /json/ )
+	    {
+		push @json_list, $field_name;
+	    }
 	}
     }
     
@@ -995,14 +1028,16 @@ sub generate_sandbox {
     $output .= "<p><button id=\"b_submit\" onclick=\"sandbox_request()\">Submit</button></p>\n\n";
     $output .= "</div>\n";
     
-    my $field_string = join("','", @field_list);
+    my $field_string = join "','", @field_list;
+    my $json_string = join ', ', map { "\"$_\": 1" } @json_list;
     
     $output .= "<script type=\"text/javascript\">\n";
     $output .= "    sandbox_fields = ['$field_string'];\n";
+    $output .= "    sandbox_json = { $json_string };\n";
     $output .= "    sandbox_operation = '$ds_operation';\n";
     $output .= "    sandbox_extra = '$ds_params';\n";
     $output .= "</script>\n\n";
-    $output .= '<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>';
+    $output .= "<script src=\"//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js\"></script>\n";
     $output .= "<script src=\"/data1.2/js/sandbox.js\" type=\"text/javascript\"></script>\n";
     
     $output .= "</body></html>\n";
