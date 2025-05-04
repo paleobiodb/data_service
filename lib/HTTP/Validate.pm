@@ -24,7 +24,7 @@ Version 0.982
 
 =head1 DESCRIPTION
 
-This module provides validation of HTTP request parameters against a set of
+This module provides validation of a set of parameter values against a set of
 clearly defined rules.  It is designed to work with L<Dancer>, L<Mojolicious>,
 L<Catalyst>, and similar web application frameworks, both for interactive apps
 and for data services.  It can also be used with L<CGI>, although the use of
@@ -32,6 +32,10 @@ L<CGI::Fast> or another similar solution is recommended to avoid paying the
 penalty of loading this module and initializing all of the rulesets over again
 for each request.  Both an object-oriented interface and a procedural
 interface are provided.
+
+There are several use cases for this module. It was originally designed for
+validating HTTP request parameters, but it can also be used to validate other
+sets of parameters and values, such as the body of an HTTP POST request.
 
 The rule definition mechanism is very flexible.  A ruleset can be defined once
 and used with multiple URL paths, and rulesets can be combined using the rule
@@ -542,6 +546,27 @@ reported if the parameter is not present in the request or if it is present
 with an empty value.  If the rule also includes a validator and/or a cleaner,
 the specified default value will be passed to it when the ruleset is defined.
 An exception will be thrown if the default value does not pass the validator.
+
+=head3 allow_empty
+
+If this attribute is given a true value, then if the corresponding parameter has
+the value I<undef>, that value will be reported for the parameter. Otherwise,
+parameters with an undefined value will be ignored. This attribute is useful for
+rulesets used to validate records for insertion into a database, because it
+allows nulls to be expressed as I<undef>.
+
+=head3 before
+
+This attribute can be used to change the order in which the rules are listed.
+Its value should be the name of a parameter rule or an inclusion rule in the
+same ruleset. The rule will be placed in the list immediately before the named
+rule, if it can be found. Otherwise, it will be placed at the end of the list as
+usual.
+
+=head3 note
+
+This attribute attaches an arbitrary string to the rule. It can be used to
+provide hints to other code modules as to how the rule should be displayed.
 
 =head3 undocumented
 
@@ -1103,10 +1128,10 @@ my %DIRECTIVE = ( 'param' => 2, 'optional' => 2, 'mandatory' => 2,
 		  'together' => 2, 'at_most_one' => 2, 'ignore' => 2,
 		  'require' => 2, 'allow' => 2, 'require_one' => 2,
 		  'require_any' => 2, 'allow_one' => 2, 'content_type' => 2,
-		  'valid' => 1, 'clean' => 1, 'allow_empty' => 1,
+		  'valid' => 1, 'clean' => 1, 'allow_empty' => 1, 'note' => 1,
 		  'multiple' => 1, 'split' => 1, 'list' => 1, 'bad_value' => 1, 
 		  'error' => 1, 'errmsg' => 1, 'warn' => 1, 'undocumented' => 1,
-		  'alias' => 1, 'key' => 1, 'default' => 1, 'note' => 1 );
+		  'alias' => 1, 'key' => 1, 'default' => 1, 'before' => 1 );
 
 # Categorize the rule types
 
@@ -1230,9 +1255,38 @@ sub add_rules {
 	# represent it.
 	
 	my $rr = { rn => scalar(@{$rs->{rules}}) + 1 };
-	push @{$rs->{rules}}, $rr;
+
+	# If the item has the 'before' attribute set, add the new rule before
+	# the rule whose parameter name is equal to the value of 'before', if one
+	# such is found.
 	
-	# weaken($rr->{rs});
+	my $inserted;
+	
+	if ( my $search_for = $rule->{before} )
+	{
+	    foreach my $i ( 0 .. $rs->{rules}->$#* )
+	    {
+		my $rule_i = $rs->{rules}[$i];
+		
+		if ( $rule_i->{type} eq 'param' &&
+		     $search_for eq ($rule_i->{param} || $rule_i->{optional} ||
+				     $rule_i->{mandatory}) ||
+		     $rule_i->{type} eq 'include' && 
+		     $search_for eq ($rule_i->{allow} || $rule_i->{require}) )
+		{
+		    splice $rs->{rules}->@*, $i, 0, $rr;
+		    $inserted = 1;
+		    last;
+		}
+	    }
+	}
+	
+	# Otherwise, add it to the end of the rule list.
+	
+	unless ( $inserted )
+	{
+	    push @{$rs->{rules}}, $rr;
+	}
 	
 	# Check all of the keys in the rule definition, making sure that all
 	# are valid, and determine the rule type.
@@ -1383,6 +1437,7 @@ sub add_rules {
 		{
 		    $rr->{flag} = 1 if $v eq 'FLAG_VALUE';
 		    push @{$rr->{validators}}, \&boolean_value if $v eq 'FLAG_VALUE';
+		    push @{$rr->{validators}}, \&any_value if $v eq 'ANY_VALUE' && @validators > 1;
 		}
 		
 		elsif ( defined $v )
@@ -3248,9 +3303,16 @@ is equivalent to not specifying any validator at all.
 
 =cut
 
+sub any_value {
+
+    my ($value, $context) = @_;
+    
+    return { value => $value };
+}
+
 sub ANY_VALUE {
     
-    return 'ANY_VALUE';
+    return \&any_value;
 };
 
 
