@@ -348,22 +348,8 @@ sub validate_against_schema {
 		
 		else
 		{
-		    $edt->add_condition($action, 'E_REQUIRED', $fieldname || $colname);
+		    $edt->add_condition($action, 'E_NOT_NULL', $fieldname || $colname);
 		}
-	    }
-	}
-	
-	elsif ( $cr->{NOT_NULL_NEW} && $operation eq 'insert' && ! defined $value )
-	{
-	    if ( $special )
-	    {
-		$edt->add_condition($action, 'E_EXECUTE', $fieldname || $colname,
-				    "special value cannot be null");
-	    }
-	    
-	    else
-	    {
-		$edt->add_condition($action, 'E_REQUIRED', $fieldname || $colname);
 	    }
 	}
 	

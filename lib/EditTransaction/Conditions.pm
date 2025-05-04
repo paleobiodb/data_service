@@ -119,6 +119,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_BAD_CONDITION => "&1 '&2'",
 		E_EMPTY_RECORD => "This record is empty",
 		E_REQUIRED => ["Field '&1': &2", "Field '&1': must have a non-empty value"],
+		E_NOT_NULL => ["Field '&1': &2", "Field '&1': must have a non-null value"],
 		E_RANGE => ["Field '&1': &2", "&2", "Field '&1'"],
 		E_WIDTH => ["Field '&1': &2", "&2", "Field '&1'"],
 		E_FORMAT => ["Field '&1': &2", "&2", "Field '&1'"],
