@@ -295,6 +295,8 @@ sub _setup_output {
 	{
 	    @output_list = $output_list;
 	}
+
+	$request->{block_hash}{$_} = 1 foreach @output_list;
     }
     
     # The attribute 'optional_output' specifies a map which is used to select additional output
