@@ -338,10 +338,10 @@ sub parse_body_records {
 		
 		foreach my $k ( $key_name, @check_keys )
 		{
-		    if ( $r->{$k} )
+		    if ( exists $r->{$k} )
 		    {
 			$rs_name = $ruleset_name;
-			$r->{_table} = $table_name; # $$$ need to check for main_table
+			# $r->{_table} = $table_name; # $$$ need to check for main_table
 			last RULESET;
 		    }
 		}
@@ -917,7 +917,7 @@ sub generate_sandbox {
 
     $allow_stmt = "If you wish to specify allowances, those available are: $allow_string.";
     
-    my $ds_params = 'rowcount&vocab=pbdb';
+    my $ds_params = 'rowcount';
     
     if ( $extra_params )
     {
@@ -957,9 +957,11 @@ sub generate_sandbox {
     $output .= "<button id=\"b_clear\" onclick=\"sandbox_clear()\">Clear</button>\n";
     $output .= "<button id=\"b_submit\" class=\"submit\" onclick=\"sandbox_request()\">Submit</button>\n\n";
     
+    $output .= "<span id=\"testcontrol\" style=\"margin-left: 20px\"></span>\n";
+    
     $output .= "<table class=\"sbtable\">\n";
     $output .= "<tr><td>call parameters<br><input type=\"text\" id=\"ds_params\" size=\"50\" " .
-	"value=\"$ds_params\"></td>\n";
+	"value=\"$ds_params\"/></td>\n";
     $output .= "<td class=\"sbdoc\">The parameters in this box will be added to the data service\n";
     $output .= "request. $allow_stmt</td></tr>\n";
     $output .= "</table>\n";
@@ -1031,14 +1033,19 @@ sub generate_sandbox {
     my $field_string = join "','", @field_list;
     my $json_string = join ', ', map { "\"$_\": 1" } @json_list;
     
+    $output .= "<script src=\"//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js\"></script>\n";
+    $output .= "<script src=\"/data1.2/js/sandbox.js\" type=\"text/javascript\"></script>\n";
     $output .= "<script type=\"text/javascript\">\n";
     $output .= "    sandbox_fields = ['$field_string'];\n";
     $output .= "    sandbox_json = { $json_string };\n";
     $output .= "    sandbox_operation = '$ds_operation';\n";
     $output .= "    sandbox_extra = '$ds_params';\n";
+    $output .= "    var testreq = new XMLHttpRequest();\n";
+    $output .= "    testreq.open('GET', '/dtest1.2/formats/png', true);\n";
+    $output .= "    testreq.onload = function () {\n";
+    $output .= "        if ( testreq.status == \"200\" ) sandbox_addtest(); }\n";
+    $output .= "    testreq.send();\n";
     $output .= "</script>\n\n";
-    $output .= "<script src=\"//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js\"></script>\n";
-    $output .= "<script src=\"/data1.2/js/sandbox.js\" type=\"text/javascript\"></script>\n";
     
     $output .= "</body></html>\n";
     

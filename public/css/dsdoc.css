@@ -45,7 +45,7 @@ LI.pod_def2 { margin-bottom: 10px; }
 
 .pod_B { font-weight: bold; }
 
-.pod_C { font-family: monospace; }
+.pod_C { font-family: monospace; font-size: 90% }
 
 #logo {
     height: 7em;

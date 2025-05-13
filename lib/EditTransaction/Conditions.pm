@@ -68,7 +68,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		C_ALTER_TRAIL => "Allow 'ALTER_TRAIL' to explicitly set crmod and authent fields",
 		C_CHANGE_LINK => "Allow 'CHANGE_LINK' to allow subordinate link values to be changed",
 		E_BAD_CONNECTION => ["&1", "Database connection failed"],
-		E_BAD_TABLE => "'&1' does not correspond to any known database table",
+		E_BAD_TABLE => ["'&1' &2", "'&1' does not correspond to any known database table"],
 		E_NO_KEY => { link => "This operation requires a linking key",
 			      operation => ["The &1 operation requires a primary key value or a selection expression", "This operation requires a primary key value"],
 			      default => "This operation requires a primary key value" },

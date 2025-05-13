@@ -45,8 +45,10 @@ function sandbox_request () {
     }
     
     var content = JSON.stringify(data);
+
+    var base_url = form["use_test"] && form["use_test"].checked ? "/dtest1.2/" : "/data1.2/";
     
-    var post_url = "/data1.2/" + sandbox_operation + ".json";
+    var post_url = base_url + sandbox_operation + ".json";
 
     var params = form["ds_params"].value.trim();
     
@@ -100,3 +102,18 @@ function sandbox_clear ( ) {
 	form["f_"+fn].value = '';
     }
 }
+
+
+function sandbox_addtest ( ) {
+
+    var testcontrol_elt = document.getElementById("testcontrol");
+
+    if ( testcontrol_elt )
+    {
+	testcontrol_elt.innerHTML =
+	    "<input type=\"checkbox\" id=\"use_test\" name=\"use_test\" value=\"yes\">\n" +
+	    "<label for=\"use_test\"> Use test server<\label>";
+    }
+}
+
+

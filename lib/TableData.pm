@@ -232,9 +232,24 @@ sub complete_ruleset {
     
     croak "unknown ruleset '$ruleset_name'" unless defined $rs;
     
+    # Record all of the parameters in the current ruleset. For each parameter
+    # ending in '_id', also add the corresponding name ending in '_no'. For
+    # example, the ruleset parameter 'collection_id' will correspond to the
+    # database column 'collection_no'.
+    
     my @param_list = $ds->validator->list_params($ruleset_name);
     
-    my %ruleset_has_field = map { $_ => 1 } @param_list;
+    my %ruleset_has_field;
+
+    foreach my $param ( @param_list )
+    {
+	$ruleset_has_field{$param} = 1;
+
+	if ( $param =~ /^(\w+)_id$/ )
+	{
+	    $ruleset_has_field{$1 . "_no"} = 1;
+	}
+    }
     
     # We need to keep a list of the parameter records generated below, because the references to
     # them inside the validator record are weakened.
@@ -242,14 +257,20 @@ sub complete_ruleset {
     $ds->{my_param_records} ||= [ ];
     
     # Then go through the field list from the schema and add any fields that aren't already in the
-    # ruleset. We need to translate names that end in '_no' to '_id'.
+    # ruleset.
     
     my $field_list = $tableinfo->{COLUMN_LIST};
-    # my %column_properties = get_column_properties($table_specifier);
     
     foreach my $column_name ( @$field_list )
     {
-	next if $COMMON_FIELD_SPECIAL{$column_name};
+	# Skip all of the special columns, plus 'authorizer', 'enterer', and
+	# 'modifier', unless we are told to include them.
+	
+	unless ( $override->{$column_name} && $override->{$column_name} ne 'IGNORE' )
+	{
+	    next if $COMMON_FIELD_SPECIAL{$column_name};
+	    next if $column_name =~ /^authorizer$|^enterer$|^modifier$/;
+	}
 	
 	my $field_record = $columninfo->{$column_name};
 	
@@ -275,8 +296,10 @@ sub complete_ruleset {
 	    ref $override->{$field_name} && $override->{$field_name}{IGNORE} ||
 	    $override->{$field_name} && $override->{$field_name} eq 'IGNORE';
 	
-	# Now create a record to represent this field, along with a documentation string and
-	# whatever other attributes we can glean from the table definition.
+	# Now create a record to represent this field, along with a documentation string
+	# and whatever other attributes we can glean from the table definition. We include
+	# the attribute 'allow_empty' by default, so that clients can set the value of
+	# this column to the empty string or null.
 	
 	my $rr = { optional => $field_name, allow_empty => 1 };
 	
@@ -535,8 +558,9 @@ sub complete_ruleset {
 	}
 
 	# If the override hash includes any attributes other than 'doc', add
-	# them to the rule record.
-
+	# them to the rule record, overriding any existing attributes with those
+	# keys. 
+	
 	if ( ref $override->{$field_name} eq 'HASH' )
 	{
 	    foreach my $k ( keys $override->{$field_name}->%* )
