@@ -1,7 +1,9 @@
 #  
-# ReferenceAux
+# PB2::ReferenceAux
 # 
-# This role provides operations for matching references based on sparse attributes
+# This role provides operations for matching references (both locally and externally)
+# based on sparse attributes, and also for setting and querying the reference selected 
+# in the Classic environment.
 # 
 # Author: Michael McClennen
 
@@ -14,13 +16,9 @@ use HTTP::Validate qw(:validators);
 use TableDefs qw(%TABLE);
 
 use CoreTableDefs;
-use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use ReferenceManagement;
 use ReferenceMatch qw(parse_authorname author_similarity);
-
-use Carp qw(carp croak);
-use JSON qw(to_json);
 
 use Moo::Role;
 
@@ -123,12 +121,16 @@ sub initialize {
 	{ output => 'source_data', com_name => 'exd' },
 	    "The externally fetched data that is the source for this record");
     
+    $ds->define_ruleset('1.2:refs:selected' =>
+	{ allow => '1.2:refs:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special>");
+    
     $ds->define_ruleset('1.2:refs:classic_select' =>
     	{ require => '1.2:refs:specifier' },
     	{ allow => '1.2:refs:display' },
     	{ allow => '1.2:special_params' },
     	"^You can also use any of the L<special parameters|node:special>");
-        
 }
 
 
@@ -565,6 +567,74 @@ sub clean_author {
 	
 	return $authorname;
     }
+}
+
+
+# selected ( )
+#
+# Return the currently selected reference (if any) for the current session in
+# the Classic environment.
+
+sub selected {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+
+    my $session_id = Dancer::cookie('session_id');
+    
+    my $quoted_id = $dbh->quote($session_id);
+    
+    my ($sql, $selected_refno, $ent_no);
+
+    # Fetch the selected reference number from the SESSION_DATA table. Also
+    # fetch the enterer number, so we will know whether or not we have a valid
+    # session. If the enterer number is empty, no session was found.
+    
+    if ( $session_id )
+    {
+	$sql = "SELECT reference_no, enterer_no
+		FROM $TABLE{SESSION_DATA} WHERE session_id = $quoted_id";
+	    
+	print STDERR "$sql\n\n" if $request->{debug};
+    
+	($selected_refno, $ent_no) = $dbh->selectrow_array($sql);
+    }
+    
+    die $request->exception(401, "You must log in first") unless $ent_no;
+    
+    # If there is no selected reference, return an empty result.
+
+    return unless $selected_refno;
+
+    # Otherwise, query for the reference information.
+    
+    $request->strict_check;
+    $request->extid_check;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    $request->substitute_select( cd => 'r' );
+    
+    my $fields = $request->select_string;
+    
+    my $tables = $request->tables_hash;
+    my $join_list = $request->generate_join_list($tables);
+    
+    # Generate the main query.
+    
+    $request->{main_sql} = "
+	SELECT $fields
+	FROM $TABLE{REFERENCE_DATA} as r $join_list
+        WHERE r.reference_no = $selected_refno
+	GROUP BY r.reference_no";
+    
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+    
+    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
 }
 
 

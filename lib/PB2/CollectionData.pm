@@ -42,6 +42,8 @@ our (%LITH_VALUE, %LITH_QUOTED, %LITHTYPE_VALUE);
 
 our (%PCOORD_ALIAS, $PCOORD_DEFAULT);
 
+our (@COLLECTION_METADATA, %IS_COLL_METADATA, %IS_METADATA_OP);
+
 # initialize ( )
 # 
 # This routine is called once by Web::DataService in order to initialize this
@@ -86,6 +88,33 @@ sub initialize {
     {
 	$CONTINENT_NAME{$r->{cc3}} = $r->{continent_name};
     }
+
+    # Define some value sets.
+
+    $ds->define_valueset('1.2:colls:timerules' => 
+	{ value => 'contain' },
+	    "Select only collections whose temporal locality is strictly contained",
+	    "in the specified time range.",
+	{ value => 'major' },
+	    "Select only collections whose temporal locality overlaps the specified",
+	    "time range by at least 50%.",
+	{ value => 'overlap' },
+	    "Select only collections whose temporal locality overlaps the specified",
+	    "time range by any amount.",
+	{ value => 'defined' },
+	    "Select only collections whose temporal locality is exactly defined as the",
+	    "specified time range. If only one interval is specified, it may match",
+	    "either the maximum or minimum interval associated with the collection.");
+    
+    @COLLECTION_METADATA = qw(collection_comments collection_dates collection_coverage
+			      coll_meth collection_type collectors geogcomments
+			      geology_comments taxonomy_comments preservation_comments
+			      component_comments museum seq_strat assembl_comps pres_mode
+			      taphonomy_comments local_section regional_section zone);
+    
+    %IS_COLL_METADATA = map { $_ => 1 } @COLLECTION_METADATA;
+
+    %IS_METADATA_OP = ( ':' => 'like', '~' => 'rlike' );
     
     # Define an output map listing the blocks of information that can be
     # returned about collections.
@@ -170,7 +199,65 @@ sub initialize {
 	    "Do not return any records. This can be used with data entry operations to",
 	    "suppress the output.");
     
-    # Then a second map for geographic summary clusters.
+    # Then a map for the 'matchlocal' operation.
+    
+    $ds->define_output_map('1.2:colls:match_map' =>
+        { value => 'loc', maps_to => '1.2:colls:loc' },
+	    "Additional information about the geographic locality of the collection",
+	{ value => 'locext', maps_to => '1.2:colls:locext' },
+	    "Detailed information about the latitude and longitude of the collection, in",
+	    "addition to all the fields from C<B<loc>>.",
+	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
+	    "Information about the paleogeographic locality of the collection,",
+	    "evaluated according to the model(s) specified by the parameter C<pgm>.",
+	{ value => 'prot', maps_to => '1.2:colls:prot' },
+	    "Indicate whether the collection is on protected land",
+	{ value => 'timebins', maps_to => '1.2:colls:timebins' },
+	    "Shows a list of temporal bins into which each collection falls according",
+	    "to the timerule selected for this request. You may select one using the",
+	    "B<C<timerule>> parameter, or it will default to C<B<major>>.",
+	{ value => 'ages', maps_to => '1.2:colls:ages' },
+	    "If a precise age, or a maximum age, or a minimum age, has been determined",
+	    "for this collection, this block provides that information.",
+	{ value => 'strat', maps_to => '1.2:colls:strat' },
+	    "Basic information about the stratigraphic context of the collection.",
+	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
+	    "Detailed information about the stratigraphic context of collection,",
+	    "in addition to all the fields from C<B<strat>>.",
+	{ value => 'lith', maps_to => '1.2:colls:lith' },
+	    "Basic information about the lithological context of the collection.",
+	{ value => 'lithext', maps_to => '1.2:colls:lithext' },
+	    "Detailed information about the lithological context of the collection,",
+	    "In addition to all the fields from C<B<lith>>.",
+	{ value => 'env', maps_to => '1.2:colls:env' },
+	    "The paleoenvironment associated with this collection.",
+	{ value => 'geo', maps_to => '1.2:colls:geo' },
+	    "Information about the geological context of the collection (includes C<env>).",
+	{ value => 'ctaph', maps_to =>'1.2:colls:taphonomy' },
+	    "Information about the taphonomy of the collection and the mode of",
+	    "preservation of the constituent fossils.",
+	{ value => 'comps', maps_to => '1.2:colls:components' },
+	    "Information about the various kinds of body parts and other things",
+	    "found as part of this collection.",
+	{ value => 'methods', maps_to => '1.2:colls:methods' },
+	    "Information about the collection methods used",
+        { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
+	    "Any additional remarks that were entered about the collection. This block is",
+	    "deprecated, and the remarks fields are all reported under other output blocks.",
+	{ value => 'resgroup', maps_to => '1.2:colls:resgroup' },
+	    "The research group(s), if any, associated with this collection.",
+        { value => 'ref', maps_to => '1.2:refs:primary' },
+	    "The primary reference for the collection, as formatted text.",
+	{ value => 'secref', maps_to => '1.2:colls:secref' },
+	    "Include the identifiers of the secondary references for the collection.",
+	{ value => 'ent', maps_to => '1.2:common:ent' },
+	    "The identifiers of the people who authorized, entered and modified this record",
+	{ value => 'entname', maps_to => '1.2:common:entname' },
+	    "The names of the people who authorized, entered and modified this record",
+        { value => 'crmod', maps_to => '1.2:common:crmod' },
+	    "The C<created> and C<modified> timestamps from the collection record");
+    
+    # Then a map for geographic summary clusters.
     
     $ds->define_output_map('1.2:colls:summary_map' =>
 	{ value => 'bin' },
@@ -203,10 +290,12 @@ sub initialize {
     # Then define the output blocks which these mention.
     
     $ds->define_block('1.2:colls:basic' =>
-	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.collection_aka',
-		     'cc.formation', 'c.lat', 'c.lng', 'c.n_occs', 'c.early_age', 'c.late_age',
+	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 
+		     'cc.collection_aka', 'cc.formation', 'c.lat', 'c.lng', 'c.n_occs',
+		     'c.early_age', 'c.late_age',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
-		     'c.reference_no', 'c.access_level'], 
+		     'c.reference_no', 'c.access_level', 'cc.access_level as real_access',
+		     'cc.release_date', 'now() as today'], 
 	  tables => ['cc', 'ei', 'li', 'sr', 'r'] },
 	{ output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	    "A unique identifier for the collection.  This will be a string if the result",
@@ -214,16 +303,19 @@ sub initialize {
 	    "results will continue to be integers.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{COL} },
 	    "The type of this object: C<$IDP{COL}> for a collection",
-	{ output => 'permissions', com_name => 'prm' },
+	{ output => 'real_access', pbdb_name => 'access_level', com_name => 'prm' },
 	    "The accessibility of this record.  If empty, then the record is",
 	    "public.  Otherwise, the value of this record will be one",
 	    "of the following:", "=over",
-	    "=item members", "The record is accessible to database members only.",
-	    "=item authorizer", "The record is accessible to its authorizer group,",
+	    "=item database members", "The record is accessible to database members only.",
+	    "=item authorizer only", "The record is accessible to its authorizer group,",
 	    "and to any other authorizer groups given permission.",
-	    "=item group(...)", "The record is accessible to",
-	    "members of the specified research group(s) only.",
+	    "=item group members", "The record is accessible to",
+	    "members of its associated research group(s) only.",
 	    "=back",
+	{ output => 'release_date', com_name => 'rld' },
+	    "If this record is not publicly accessible, this field contains the date",
+	    "on which it will become so.",
 	{ set => 'permissions', from => '*', code => \&process_permissions },
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
@@ -263,6 +355,76 @@ sub initialize {
 	    "A list of identifiers of all of the references associated with this collection.",
 	    "In general, these include the primary reference plus any other references from which",
 	    "occurrences were entered.",
+	{ set => '*', code => \&process_coll_ids });
+    
+    $ds->define_block('1.2:colls:match' =>
+	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 
+		     'cc.collection_aka', 'cc.formation', 'c.n_occs',
+		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
+		     'cc.country', 'cc.state', 'c.reference_no',
+		     'cc.access_level as real_access', 'cc.release_date', 'now() as today',
+		     'r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
+	  	     'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr',
+		     'cc.authorizer_no'], 
+	  tables => ['cc', 'ei', 'li', 'r'] },
+	{ output => 'collection_no', com_name => 'oid' },
+	    "The unique identifier of the collection.  This will be a string if the result",
+	    "format is JSON.  For backward compatibility, all identifiers in text format",
+	    "results will continue to be integers.",
+	{ output => 'record_type', com_name => 'typ', value => $IDP{COL} },
+	    "The type of this object: C<$IDP{COL}> for a collection",
+	{ output => 'real_access', pbdb_name => 'access_level', com_name => 'prm' },
+	    "The accessibility of this record.  If empty, then the record is",
+	    "public.  Otherwise, the value of this record will be one",
+	    "of the following:", "=over",
+	    "=item database members", "The record is accessible to database members only.",
+	    "=item authorizer only", "The record is accessible to its authorizer group,",
+	    "and to any other authorizer groups given permission.",
+	    "=item group members", "The record is accessible to",
+	    "members of its associated research group(s) only.",
+	    "=back",
+	{ output => 'release_date', com_name => 'rld' },
+	    "If this record is not publicly accessible, this field contains the date",
+	    "on which it will become so.",
+	{ set => 'permissions', from => '*', code => \&process_permissions },
+	{ output => 'collection_name', com_name => 'nam' },
+	    "The name which identifies the collection, not necessarily unique",
+	{ output => 'collection_subset', com_name => 'nm2' },
+	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'collection_aka', com_name => 'aka' },
+	    "An alternate name for the collection, or additional remarks about it.",
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
+	    "The number of occurrences in the collection. If the search parameters specify a",
+	    "specific taxon, this field will report the number of occurrences of that taxon",
+	    "in each returned collection. Otherwise, it will report the total number of occurrences",
+	    "in each returned collection.",
+	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
+	    "The specific geologic time range associated with the collection (not necessarily a",
+	    "standard interval), or the interval that begins the range if C<late_interval>",
+	    "is also given",
+	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', 
+	  dedup => 'early_interval' },
+	    "The interval that ends the specific geologic time range associated with the collection",
+	{ set => '*', code => \&fixTimeOutput },
+	{ output => 'country', com_name => 'cou', pbdb_name => 'country' },
+	    "The country in which the collection is located.",
+	{ output => 'state', com_name => 'stp', pbdb_name => 'state' },
+	    "The state or province in which the collection is located, if specified.",
+	{ output => 'distance', com_name => 'dst' },
+	    "The distance from this collection to the center of the search bounding box.",
+	    "This field is only returned if the parameters C<B<latmin>>, C<B<latmax>>,",
+	    "C<B<lngmin>>, and C<B<lngmax>> are all specified.",
+	{ output => 'reference_no', com_name => 'rid' },
+	    "The identifier of the primary reference from which this data was entered.",
+        { set => 'ref_author', from => '*', code => \&PB2::ReferenceData::format_authors },
+	{ output => 'ref_author', com_name => 'aut' },
+	    "The author of the primary bibliographic reference for this collection",
+	{ output => 'r_pubyr', com_name => 'pby' },
+	    "The year in which the primary bibliographic reference for this collection",
+	    "was published",
+	{ set => '*', code => \&PB2::CommonData::process_entnames },
+	{ output => 'authorizer', com_name => 'ath' },
+	    "The name of the person who authorized the entry of this record",
 	{ set => '*', code => \&process_coll_ids });
     
     my (@bin_levels, @bin_fields);
@@ -906,6 +1068,16 @@ sub initialize {
 	{ value => 'member' },
 	    "Results are ordered by the stratigraphic member in which they were found,",
 	    "sorted alphabetically.",
+	{ value => 'country.asc', undocumented => 1 },
+	{ value => 'country.desc', undocumented => 1 },
+	{ value => 'country' },
+	    "Results are ordered by country, state, and county, sorted alphabetically.",
+	{ value => 'distance.asc', undocumented => 1 },
+	{ value => 'distance.desc', undocumented => 1 },
+	{ value => 'distance' },
+	    "This value is only valid if B<C<latmin>>, B<C<latmax>>, B<C<lngmin>>, and",
+	    "B<C<lngmax>> are also specified. Collections are sorted in order of distance",
+	    "from the central point of this area.",
 	{ value => 'occs.asc', undocumented => 1 },
 	{ value => 'occs.desc', undocumented => 1 },
 	{ value => 'occs' },
@@ -1100,15 +1272,15 @@ sub initialize {
 	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
 			"You may specify one or more cluster ids, separated by commas.",
-	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',', bad_value => '0' },
+	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',', bad_value => '0',
+	  alias => ['reference_id', 'reference_no'] },
 	    "Return only records associated with the specified bibliographic",
 	    "reference(s).",
-	{ param => 'coll_match', valid => ANY_VALUE },
+	{ param => 'coll_match', valid => ANY_VALUE, 
+	  alias => ['collection_name','collection_match'] },
 	    "A string which will be matched against the C<collection_name> and",
 	    "C<collection_aka> fields.  Records will be returned only if they belong to a",
 	    "matching collection.  This string may contain the wildcards C<%> and C<_>.",
-	    "In fact, it will probably not match anything unless you include a C<%> at the",
-	    "beginning and/or the end.",
 	{ param => 'coll_re', valid => ANY_VALUE },
 	    "This is like B<C<coll_match>>, except that it takes a regular expression.",
 	    "You can specify two or more alternatives separated by",
@@ -1229,7 +1401,7 @@ sub initialize {
 	    "Specify whether to return paleocoordinates from the beginning, middle, or end",
 	    "of the age range for each collection. Accepted values are: B<C<early>>,",
 	    "B<C<mid>>, B<C<late>>. You may specify more than one as a comma-separated list.",
-	{ param => 'cc', valid => \&valid_cc, list => ',', alias => 'country', bad_value => '_' },
+	{ param => 'cc', valid => \&valid_cc, alias => 'country', list => ',', bad_value => '_' },
 	    "Return only records whose location falls within the specified geographic regions.",
 	    "The value of this parameter should be one or more",
 	    "L<two-character country codes|http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2> and/or ",
@@ -1240,6 +1412,10 @@ sub initialize {
 	    "=item ATA,AU", "Select occurrences from Antarctica and Australia",
 	    "=item NOA,SOA,^AR,^BO", "Select occurrences from North and South America, but not Argentina or Bolivia",
 	    "=item !EUR,^IS", "Exclude occurrences from Europe, except those from Iceland", "=back",
+	{ param => 'country_name', valid => ANY_VALUE, list => ',', bad_value => '_' },
+	    "Return only records from collections that are indicated as falling within the specified",
+	    "country. This parameter takes full country names, which may include the",
+	    "wildcards C<%> and C<_>.",
 	{ param => 'state', valid => ANY_VALUE, list => ',', bad_value => '_' },
 	    "Return only records from collections that are indicated as falling within the specified",
 	    "state or province. This information is not recorded for all collections, and has not",
@@ -1302,22 +1478,36 @@ sub initialize {
 	{ allow => '1.2:timerule_selector' });
     
     $ds->define_ruleset('1.2:colls:specifier' =>
-	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), alias => 'id' },
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'),
+	  alias => ['id', 'collection_id', 'collection_no'] },
 	    "The identifier of the collection you wish to retrieve (REQUIRED).  You",
 	    "may instead use the parameter name B<C<id>>.");
     
     $ds->define_ruleset('1.2:colls:selector' =>
-	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), alias => 'id', list => ',' },
+	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',',
+	  alias => ['collection_id', 'collection_no'] },
 	    "A comma-separated list of collection identifiers.  The specified collections",
 	    "are selected, provided they satisfy the other parameters",
 	    "given with this request.  You may also use the parameter name B<C<id>>.",
 	    "You can also use this parameter along with any of the other parameters",
 	    "to filter a known list of collections according to other criteria.",
-	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',' },
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',',
+	  alias => ['occurrence_id', 'occurrence_no'] },
 	    "A comma-separated list of occurrence identifiers.  The collections associated with the",
 	    "specified occurrences are selected, provided they satisfy the other parameters given",
 	    "with this request.");
-    
+
+    $ds->define_ruleset('1.2:colls:metadata' => 
+	{ param => 'metadata', valid => \&coll_metadata_value, multiple => 1 },
+	    "You may specify this parameter more than once. Each value must take one of the",
+	    "following forms: C<field_name:pattern>, C<field_name!:pattern>,",
+	    "C<field_name~pattern>, or C<field_name!~pattern>,",
+	    "where C<field_name> is the name of a collection metadata field.", 
+	    "If the separator is ':', the pattern may contain the wildcards C<%> and C<_>.",
+	    "If it is '~', then the C<rlike> operator is used and the pattern is interpreted",
+	    "as a regular expression (PCRE). If C<!> is present then the comparison is",
+	    "negated. Only collections which match all of the specified critera are returned."),
+
     $ds->define_ruleset('1.2:colls:all_records' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "Select all collections entered in the database, subject to any other parameters you may specify.",
@@ -1372,8 +1562,7 @@ sub initialize {
 	"select those collections that contain at least one matching occurrence.",
 	{ allow => '1.2:colls:selector' },
    	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
+	{ allow => '1.2:colls:metadata' },
 	">>The following parameters can be used to filter the selection.",
 	"If you wish to use one of them and have not specified any of the selection parameters",
 	"listed above, use B<C<all_records>>.",
@@ -1382,6 +1571,7 @@ sub initialize {
 	{ allow => '1.2:common:select_occs_crmod' },
 	{ allow => '1.2:common:select_occs_ent' },
 	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+			  '1.2:colls:metadata',
 			  '1.2:interval_selector', '1.2:ma_selector', 
 			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent',
 			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
@@ -1405,6 +1595,45 @@ sub initialize {
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
+    $ds->define_ruleset('1.2:colls:matchlocal' => 
+        ">>The following parameters can be used to query for collections by a variety of criteria.",
+	"You must specify at least one selection parameter from the following list.",
+	"The parameters referring to taxonomy",
+	"select those collections that contain at least one matching occurrence.",
+	{ allow => '1.2:colls:selector' },
+   	{ allow => '1.2:main_selector' },
+	{ allow => '1.2:colls:metadata' },
+	">>The following parameters can be used to filter the selection.",
+	"If you wish to use one of them and have not specified any of the selection parameters",
+	"listed above, use B<C<all_records>>.",
+	{ allow => '1.2:common:select_colls_crmod' },
+	{ allow => '1.2:common:select_colls_ent' },
+	{ allow => '1.2:common:select_occs_crmod' },
+	{ allow => '1.2:common:select_occs_ent' },
+	{ require_any => ['1.2:colls:selector', '1.2:main_selector', 
+			  '1.2:colls:metadata',
+			  '1.2:interval_selector', '1.2:ma_selector', 
+			  '1.2:common:select_colls_crmod', '1.2:common:select_colls_ent',
+			  '1.2:common:select_occs_crmod', '1.2:common:select_occs_ent'] },
+	">>The following parameters can be used to further filter the selection, based on the",
+	"taxonomy of the selected occurrences.  These are only relevant if you have also specified",
+	"one of the taxonomic parameters above.  In this case, collections are only selected if they",
+	"contain at least one occurrence matching the specified parameters.",
+	{ allow => '1.2:taxa:occ_list_filter' },
+	">>You can use the following parameters to select extra information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
+	{ optional => 'show', list => q{,}, valid => '1.2:colls:match_map' },
+	    "This parameter is used to select additional blocks of information to be returned",
+	    "along with the basic record for each collection.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	{ optional => 'order', valid => '1.2:colls:order', split => ',' },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  If this",
+	    "parameter is not given, the returned collections are displayed in the order in which they",
+	    "were entered into the database.  Accepted values are:",
+    	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
     $ds->define_ruleset('1.2:colls:byref' => 
 	"You can use the following parameter if you wish to retrieve the entire set of",
 	"collection records stored in this database.  Please use this with care, since the",
@@ -1418,9 +1647,9 @@ sub initialize {
 	"select those collections that contain at least one matching occurrence.",
 	{ allow => '1.2:colls:selector' },
    	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
-	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+	{ allow => '1.2:colls:metadata' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector',
+			  '1.2:colls:metadata',
 			  '1.2:interval_selector', '1.2:ma_selector' ] },
 	{ ignore => [ 'level', 'ref_type', 'select' ] },
 	">>You can use the following parameters to filter the result set based on attributes",
@@ -1465,9 +1694,9 @@ sub initialize {
 	"The taxonomic parameters select all collections that contain at least one matching occurrence.",
 	{ allow => '1.2:colls:selector' },
 	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
-	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+	{ allow => '1.2:colls:metadata' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector',
+			  '1.2:colls:metadata',
 			  '1.2:interval_selector', '1.2:ma_selector'] },
 	">>You can use the following parameters to filter the result set based on attributes",
 	"of the bibliographic references.  If you wish to use one of them and have not specified",
@@ -1507,9 +1736,9 @@ sub initialize {
 	"resolution.",
     	{ allow => '1.2:colls:selector' },
     	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:interval_selector' },
-	{ allow => '1.2:ma_selector' },
-	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector', 
+	{ allow => '1.2:colls:metadata' },
+	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector',
+			  '1.2:colls:metadata',
 			  '1.2:interval_selector', '1.2:ma_selector'] },
 	">>The following parameters filter the result set.  If you wish to use one of them and",
 	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
@@ -1773,6 +2002,15 @@ sub list_colls {
     # Determine the order in which the results should be returned.
     
     my $order_clause = $request->generate_order_clause($tables, { at => 'c', bt => 'cc' }) || 'NULL';
+    
+    # If the operation is 'colls/matchlocal', generate the distance.
+
+    if ( $request->has_block('1.2:colls:match') &&  
+	 defined $request->{my_center_x} && defined $request->{my_center_y} )
+    {
+	my $center = "'point($request->{my_center_x} $request->{my_center_y})'";
+	$fields .= ", (st_distance_sphere(geomfromtext($center),c.loc)/1000) as distance";
+    }
     
     # Determine if any extra tables need to be joined in.
     
@@ -3589,36 +3827,41 @@ sub generateMainFilters {
 	}
     }
     
+    # Check for parameter 'country'
+
+    my @countries = $request->clean_param_list('country_name');
+    
+    if ( @countries )
+    {
+	# Construct a quoted list using the parameter values, and add warnings for each value that
+	# does not appear in the database. Separate out values with wildcards.
+	
+	my $country_clause = $request->verify_coll_param($dbh, 'country_name',
+							 \@countries, 'country');
+
+	if ( $country_clause )
+	{
+	    push @filters, $country_clause;
+	}
+	
+	$tables->{cc} = 1;
+	$tables->{non_summary} = 1;
+    }
+    
     # Check for parameter 'state'
     
     my @states = $request->clean_param_list('state');
     
     if ( @states )
     {
-	my $invert;
-	
-	# Look for an ! flag at the beginning, signalling that the user wants to invert this
-	# filter.
-	
-	if ( $states[0] =~ qr{ ^ ! (.*) }xs )
-	{
-	    $states[0] = $1;
-	    $invert = 1;
-	}
-
 	# Construct a quoted list using the parameter values, and add warnings for each value that
 	# does not appear in the database.
+	
+	my $state_clause = $request->verify_coll_param($dbh, 'state', \@states, 'state');
 
-	my $state_list = $request->verify_coll_param($dbh, 'state', \@states, 'state');
-	
-	if ( $invert )
+	if ( $state_clause )
 	{
-	    push @filters, "cc.state not in ($state_list)";
-	}
-	
-	else
-	{
-	    push @filters, "cc.state in ($state_list)";
+	    push @filters, $state_clause;
 	}
 	
 	$tables->{cc} = 1;
@@ -3631,29 +3874,13 @@ sub generateMainFilters {
     
     if ( @counties )
     {
-	my $invert;
-	
-	# Look for an ! flag at the beginning, signalling that the user wants to invert this
-	# filter.
-	
-	if ( $counties[0] =~ qr{ ^ ! (.*) }xs )
-	{
-	    $counties[0] = $1;
-	    $invert = 1;
-	}
-
 	# Construct a quoted list using the parameter values.
 	
-	my $county_list = $request->verify_coll_param($dbh, 'county', \@counties, 'county');
-	
-	if ( $invert )
+	my $county_clause = $request->verify_coll_param($dbh, 'county', \@counties, 'county');
+
+	if ( $county_clause )
 	{
-	    push @filters, "cc.county not in ($county_list)";
-	}
-	
-	else
-	{
-	    push @filters, "cc.county in ($county_list)";
+	    push @filters, $county_clause;
 	}
 	
 	$tables->{cc} = 1;
@@ -3675,6 +3902,10 @@ sub generateMainFilters {
 	
 	$y1 = -90.0 unless defined $y1 && $y1 ne '';
 	$y2 = 90.0 unless defined $y2 && $y2 ne '';
+
+	# Set center_y, for use in calculating collection distances.
+	
+	$request->{my_center_y} = ($y1 + $y2) / 2;
 	
 	# If the longitude coordinates do not fall between -180 and 180,
 	# adjust them so that they do.
@@ -3710,6 +3941,10 @@ sub generateMainFilters {
 	    
 	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
 	    push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
+
+	    # Set center_x as well.
+
+	    $request->{my_center_x} = ($x1 + $x2) / 2;
 	}
 	
 	# Otherwise, our bounding box crosses the antimeridian and so must be
@@ -3721,6 +3956,16 @@ sub generateMainFilters {
 	    my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))," .
 					"((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
 	    push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
+
+	    if ( $x1 + $x2 > 0 )
+	    {
+		$request->{my_center_x} = ($x1 + $x2) / 2 - 180;
+	    }
+	    
+	    else
+	    {
+		$request->{my_center_x} = ($x1 + $x2) / 2 + 180;
+	    }
 	}
 	
 	$tables->{use_local} = 1;
@@ -3740,6 +3985,21 @@ sub generateMainFilters {
 	push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
 	
 	$tables->{use_local} = 1;
+	
+	# Set center_x and center_y, if the specified range is centered on one
+	# of the poles. Otherwise ignore it.
+	
+	if ( $y2 == 90.0 )
+	{
+	    $request->{my_center_x} = 0.0;
+	    $request->{my_center_y} = 90.0;
+	}
+
+	elsif ( $y1 == -90.0 )
+	{
+	    $request->{my_center_x} = 0.0;
+	    $request->{my_center_y} = -90.0;
+	}
     }
     
     # If the latitude bounds are such as to select no records, then add a warning.
@@ -4493,6 +4753,43 @@ sub generateMainFilters {
 	}
     }
     
+    # Check for parameter 'metadata'.
+
+    if ( my @metadata_filters = $request->clean_param_list('metadata') )
+    {
+	# Make sure that the 'collections' table is included in the query.
+	
+	$tables->{cc} = 1;
+	
+	# Add the specified filters.
+	
+	foreach my $f ( @metadata_filters )
+	{
+	    if ( $f =~ /^(\w+)\s*(!?)(:|~)\s*(\S.*)$/ )
+	    {
+		my $field = $1;
+		my $not = ($2 ? 'not ' : '');
+		
+		if ( $3 eq ':' )
+		{
+		    my $qpattern = $dbh->quote("%$4%");
+		    push @filters, "cc.$field ${not}like $qpattern";
+		}
+
+		else
+		{
+		    my $qpattern = $dbh->quote($4);
+		    push @filters, "cc.$field ${not}rlike $qpattern";
+		}
+	    }
+	    
+	    else
+	    {
+		die "400 Bad metadata filter";
+	    }
+	}
+    }
+    
     # Return the list
     
     return @filters;
@@ -4505,58 +4802,101 @@ sub verify_coll_param {
     
     $db_field ||= $api_field;
     
-    # Construct a list of quoted values.
+    # Look for an ! flag at the beginning, signalling that the user wants to invert this
+    # filter.
+
+    my $invert = '';
     
-    my $value_list = '';
-    my $sep = '';
+    if ( $values_ref->[0] =~ qr{ ^ ! (.*) }xs )
+    {
+	$values_ref->[0] = $1;
+	$invert = 'not ';
+    }
+    
+    # Construct a list of quoted values without wildcards, and another list of
+    # quoted values with wildcards.
+    
+    my (@direct_list, @direct_unquoted, @wildcard_list, @clauses);
     
     foreach my $v ( @$values_ref )
     {
-	$value_list .= $sep;
-	$value_list .= $dbh->quote($v);
-	$sep = ',';
-    }
-    
-    # Now verify that these values actually appear in the database, and add warnings for
-    # those which do not.
-    
-    my $sql = "
-	SELECT distinct $db_field FROM collections
-	WHERE $db_field in ($value_list)";
-    
-    print STDERR "$sql\n\n" if $request->debug;
-    
-    my $result = $dbh->selectcol_arrayref($sql);
-    
-    my %verified;
-    my @bad;
-    
-    if ( ref $result eq 'ARRAY' )
-    {
-	%verified = map { lc $_ => 1 } @$result;
-    }
-    
-    foreach my $v ( @$values_ref )
-    {
-	push @bad, $v unless $verified{lc $v};
-    }
-
-    if ( @bad )
-    {
-	my $bad_list = join("', '", @bad);
-
-	if ( @bad == 1 )
+	if ( $v =~ /[%_]/ )
 	{
-	    $request->add_warning("Field '$api_field': the value '$bad_list' was not found in the database");
+	    push @wildcard_list, $dbh->quote($v);
 	}
 
 	else
 	{
-	    $request->add_warning("Field '$api_field': the values '$bad_list' were not found in the database");
+	    push @direct_unquoted, $v;
+	    push @direct_list, $dbh->quote($v);
 	}
     }
     
-    return $value_list;
+    # Now verify that these non-wildcard values actually appear in the database, and
+    # add warnings for those which do not.
+    
+    if ( @direct_list )
+    {
+	my $direct_values = join(',', @direct_list);
+	
+	my $sql = "
+	SELECT distinct $db_field FROM collections
+	WHERE $db_field in ($direct_values)";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	my $result = $dbh->selectcol_arrayref($sql);
+	
+	my %verified;
+	my @bad;
+	
+	if ( ref $result eq 'ARRAY' )
+	{
+	    %verified = map { lc $_ => 1 } @$result;
+	}
+	
+	foreach my $v ( @direct_unquoted )
+	{
+	    push @bad, $v unless $verified{lc $v};
+	}
+	
+	if ( @bad )
+	{
+	    my $bad_list = join(", ", @bad);
+	    
+	    if ( @bad == 1 )
+	    {
+		$request->add_warning("Field '$api_field': the value '$bad_list' was not found in the database");
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("Field '$api_field': the values '$bad_list' were not found in the database");
+	    }
+	}
+	
+	push @clauses, "cc.$db_field ${invert}in ($direct_values)";
+    }
+    
+    if ( @wildcard_list )
+    {
+	foreach my $v ( @wildcard_list )
+	{
+	    push @clauses, "cc.$db_field ${invert}like $v";
+	}
+    }
+    
+    if ( @clauses > 1 )
+    {
+	my $op = ($invert ? ' and ' : ' or ');
+	
+	return '(' . join($op, @clauses) . ')';
+    }
+    
+    else
+    {
+	return $clauses[0];
+    }
 }
 	
 
@@ -4832,8 +5172,7 @@ sub selectPaleoModel {
 
 # generate_order_clause ( options )
 # 
-# Return the order clause for the list of references, or the empty string if
-# none was selected.
+# Return the order clause a list of collections, or the empty string if none was selected.
 
 sub generate_order_clause {
     
@@ -4988,6 +5327,85 @@ sub generate_order_clause {
 	# 	# $tables->{pc} = 1;
 	#     }
 	# }
+
+	elsif ( $term eq 'country' )
+	{
+	    $dir ||= 'asc';
+	    push @exprs, "$bt.country $dir, $bt.state $dir, $bt.county $dir";
+	}
+
+	elsif ( $term eq 'distance' )
+	{
+	    $dir ||= 'asc';
+	    
+	    # my $x1 = $request->clean_param('lngmin');
+	    # my $x2 = $request->clean_param('lngmax');
+	    # my $y1 = $request->clean_param('latmin');
+	    # my $y2 = $request->clean_param('latmax');
+	    
+	    # unless ( defined $x1 && $x1 ne '' && defined $x2 && $x2 ne '' &&
+	    # 	     defined $y1 && $y1 ne '' && defined $y2 && $y2 ne '' )
+	    # {
+	    # 	$request->add_error("Error with 'order=distance': you must also specify a bounding box with 'latmin', 'lastmax', 'lngmin', 'lngmax'");
+	    # 	die $request->exception(400);
+	    # }
+	    
+	    # # Find the center latitude and longitude value.
+	    
+	    # my $center_y = ($y1 + $y2) / 2;
+	    # my $center_x;
+	    # my $distance_expr;
+	    
+	    # # If the longitude coordinates do not fall between -180 and 180,
+	    # # adjust them so that they do.
+	    
+	    # if ( $x1 < -180.0 )
+	    # {
+	    # 	$x1 = $x1 + ( POSIX::floor( (180.0 - $x1) / 360.0) * 360.0);
+	    # }
+	    
+	    # if ( $x2 < -180.0 )
+	    # {
+	    # 	$x2 = $x2 + ( POSIX::floor( (180.0 - $x2) / 360.0) * 360.0);
+	    # }
+	    
+	    # if ( $x1 > 180.0 )
+	    # {
+	    # 	$x1 = $x1 - ( POSIX::floor( ($x1 + 180.0) / 360.0 ) * 360.0);
+	    # }
+	    
+	    # if ( $x2 > 180.0 )
+	    # {
+	    # 	$x2 = $x2 - ( POSIX::floor( ($x2 + 180.0) / 360.0 ) * 360.0);
+	    # }
+	    
+	    # # If $x1 < $x2, then the center computation is simple.
+	    
+	    # if ( $x1 <= $x2 )
+	    # {
+	    # 	$center_x = ($x1 + $x2) / 2;
+	    # }
+	    
+	    # # Otherwise, our range crosses the antimeridian
+	    
+	    # elsif ( $x1 + $x2 > 0 )
+	    # {
+	    # 	$center_x = ($x1 + $x2) / 2 - 180;
+	    # }
+
+	    # else
+	    # {
+	    # 	$center_x = ($x1 + $x2) / 2 + 180;
+	    # }
+	    
+	    # my $center = "'point($center_x,$center_y)'";
+
+	    if ( defined $request->{my_center_x} && defined $request->{my_center_y} )
+	    {
+		my $center = "'point($request->{my_center_x} $request->{my_center_y})'";
+		push @exprs, "st_distance_sphere(geomfromtext($center),c.loc) $dir";
+	    }
+	}
 	
 	elsif ( $term eq 'occs' )
 	{
@@ -5488,21 +5906,11 @@ sub process_permissions {
     
     my ($request, $record) = @_;
     
-    return unless $record->{access_level};
-    
-    if ( $record->{access_level} == 1 )
+    if ( $record->{real_access} eq 'the public' ||
+	 ($record->{release_date} && $record->{release_date} < $record->{today}) )
     {
-	return 'members';
-    }
-    
-    elsif ( $record->{access_resgroup} )
-    {
-	return "group($record->{access_resgroup})";
-    }
-    
-    else
-    {
-	return "authorizer";
+	delete $record->{real_access};
+	delete $record->{release_date};
     }
 }
 
@@ -5683,6 +6091,31 @@ sub coord_value {
 	    : "an unsigned decimal number followed by 'E' or 'W'";
 	
 	return { error => "bad value '$value' for {param}: must be a decimal number with optional sign or $suffix" };
+    }
+}
+
+
+sub coll_metadata_value {
+    
+    my ($value) = @_;
+
+    if ( $value =~ /^(\w+)\s*!?(:|~)\s*(\S.*)$/ )
+    {
+	if ( $IS_COLL_METADATA{$1} )
+	{
+	    return { value => $value };
+	}
+	
+	else
+	{
+	    return { error => "bad value for {param}: '$1' is not a collection metadata field" };
+	}
+    }
+    
+    else
+    {
+	return { error => "bad value for {param}: must start with a valid field name followed " .
+		 "by optional '!' then ':' or '~' and match pattern" };
     }
 }
 

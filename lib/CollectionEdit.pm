@@ -50,9 +50,9 @@ our (@CARP_NOT) = qw(EditTransaction);
 			'lithology1', 'environment', 'assembl_comps']);
     set_column_property('COLLECTION_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('COLLECTION_DATA', 'reference_no', EXTID_TYPE => 'REF');
-    # set_column_property('COLLECTION_DATA', 'max_interval_no', EXTID_TYPE => 'INT');
-    # set_column_property('COLLECTION_DATA', 'min_interval_no', EXTID_TYPE => 'INT');
     
+    set_table_property('OCCURRENCE_DATA', REQUIRED_COLS => ['collection_no', 'reference_no']);
+	
     set_column_property('OCCURRENCE_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
     set_column_property('OCCURRENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
     
@@ -64,7 +64,7 @@ our (@CARP_NOT) = qw(EditTransaction);
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
 
-# validate_action ( table, operation, action, keyexpr )
+# validate_action ( action, operation, table_specifier )
 # 
 # This method is called from EditTransaction.pm to validate each action. We override it to do
 # additional checks.
@@ -75,7 +75,35 @@ my ($NUMBER_RE) = qr/^\d+[.]\d*$|^[.]\d+$|^\d+$/;
 
 sub validate_action {
     
-    my ($edt, $action, $operation, $table) = @_;
+    my ($edt, $action, $operation, $table_specifier) = @_;
+
+    if ( $table_specifier eq 'COLLECTION_DATA' )
+    {
+	return $edt->validate_coll_action($action, $operation);
+    }
+
+    elsif ( $table_specifier eq 'OCCURRENCE_DATA' ||
+	    $table_specifier eq 'REID_DATA' )
+    {
+	return $edt->validate_occ_action($action, $operation, $table_specifier);
+    }
+    
+    else
+    {
+	$edt->add_condition('E_BAD_TABLE', $table_specifier,
+			    'is not an allowed table for this operation');
+    }
+}
+
+
+# validate_coll_action ( action, operation )
+#
+# Validate an action (insert, replace, update, delete) on the COLLECTION_DATA
+# table.
+
+sub validate_coll_action {
+
+    my ($edt, $action, $operation) = @_;
     
     # Validation for delete operations is entirely different from validation for
     # insert, replace, or update operations.
@@ -119,8 +147,29 @@ sub validate_action {
 	$edt->add_condition($action, 'E_REQUIRED', 'collection_name');
     }
     
-    # Check the primary and secondary refs
-    # ------------------------------------
+    # Check the primary reference
+    # ---------------------------
+    
+    my $reference_no = $action->record_value('reference_id');
+    
+    if ( $operation eq 'insert' || $operation eq 'replace' ||
+	 $action->field_specified('reference_id') )
+    {
+	if ( defined $reference_no && $reference_no ne '' )
+	{
+	    my $qref = $dbh->quote($reference_no);
+	    
+	    my ($check_re) = $dbh->selectrow_array("
+		SELECT created FROM $TABLE{REFERENCE_DATA}
+		WHERE reference_no = $qref");
+
+	    unless ( $check_re )
+	    {
+		$edt->add_condition('E_BAD_VALUE', 'reference_id',
+				    "unknown reference $qref");
+	    }
+	}
+    }
     
     # Check the access level and release date
     # ---------------------------------------
@@ -183,6 +232,8 @@ sub validate_action {
 	{
 	    $edt->add_condition('E_BAD_VALUE', 'release_date', 
 				"value must be of the form 'n months' or 'n years' where <n> is a digit");
+	    $action->handle_column('release_date', 'unquoted');
+	    $action->set_record_value('release_date', 'created');
 	}
 	
 	elsif ( $operation eq 'insert' || $operation eq 'replace' )
@@ -205,98 +256,8 @@ sub validate_action {
 	}
     }
     
-    # Check the max and min intervals
-    # -------------------------------
-    
-    my $max_interval = $action->record_value('max_interval');
-    my $min_interval = $action->record_value('min_interval');
-    
-    my ($max_interval_no, $min_interval_no);
-	
-    if ( $operation eq 'insert' || $operation eq 'replace' ||
-	 $action->field_specified('max_interval') )
-    {
-	$action->ignore_field('max_interval');
-	
-	# If the value of 'max_interval' corresponds to a known interval, set the
-	# field 'max_interval_no' to the corresponding interval_no value.
-	
-	if ( defined $max_interval && int_defined($max_interval) )
-	{
-	    $max_interval_no = int_defined($max_interval);
-	    $action->set_record_value('max_interval_no', $max_interval_no);
-	}
-	
-	# If the value is otherwise non-empty, add a 'bad value' condition.
-	
-	elsif ( defined $max_interval && $max_interval ne '' )
-	{
-	    $edt->add_condition('E_BAD_VALUE', 'max_interval',
-				"unknown interval '$max_interval'");
-	}
-	
-	# If it is empty, add a 'required' condition.
-	
-	else
-	{
-	    $edt->add_condition($action, 'E_REQUIRED', 'max_interval');
-	}
-    }
-    
-    if ( $action->field_specified('min_interval') )
-    {
-	$action->ignore_field('min_interval');
-	
-	# If the value of 'min_interval' corresponds to a known interval, set the
-	# field 'min_interval_no' to the corresponding interval_no value.
-	
-	if ( defined $min_interval && int_defined($min_interval) )
-	{
-	    $min_interval_no = int_defined($min_interval);
-	    $action->set_record_value('min_interval_no', $min_interval_no);
-	    
-	    # If 'max_interval' is also valid, check to make sure they were
-	    # specified in the proper order. If not, switch them. The interval
-	    # specified by 'max_interval_no' must be older than the one specified by
-	    # 'min_interval_no'. If the bounds of both intervals are the same, set
-	    # 'min_interval_no' to null.
-	    
-	    if ( defined $max_interval && int_defined($max_interval) )
-	    {
-		my ($b_max, $t_max) = int_bounds($max_interval);
-		my ($b_min, $t_min) = int_bounds($min_interval);
-		
-		if ( $b_max < $b_min || ($b_max == $b_min && $t_max < $t_min ) )
-		{
-		    $action->set_record_value('max_interval_no', $min_interval_no);
-		    $action->set_record_value('min_interval_no', $max_interval_no);
-		}
-		
-		elsif ( $b_max == $b_min && $t_max == $t_min )
-		{
-		    $action->set_record_value('min_interval_no', undef);
-		}
-	    }
-	}
-	
-	# If the value is otherwise non-empty, add a 'bad value' condition.
-	
-	elsif ( defined $min_interval && $min_interval ne '' )
-	{
-	    $edt->add_condition('E_BAD_VALUE', 'min_interval',
-				"unknown interval '$min_interval'");
-	}
-	
-	# If the value is the empty string, set it to null.
-	
-	elsif ( defined $min_interval && $min_interval eq '' )
-	{
-	    $action->set_record_value('min_interval_no', undef);
-	}
-    }
-    
-    # Check the latitude and longitude
-    # --------------------------------
+    # Check the Geography fields
+    # --------------------------
     
     my $latdeg = $action->record_value('latdeg');
     my $lngdeg = $action->record_value('lngdeg');
@@ -604,8 +565,99 @@ sub validate_action {
 	}
     }
     
-    # Check the direct, max, and min dates
-    # ------------------------------------
+    # Check the Stratigraphy fields
+    # -----------------------------
+    
+    # Check the max and min intervals.
+    
+    my $max_interval = $action->record_value('max_interval');
+    my $min_interval = $action->record_value('min_interval');
+    
+    my ($max_interval_no, $min_interval_no);
+	
+    if ( $operation eq 'insert' || $operation eq 'replace' ||
+	 $action->field_specified('max_interval') )
+    {
+	$action->ignore_field('max_interval');
+	
+	# If the value of 'max_interval' corresponds to a known interval, set the
+	# field 'max_interval_no' to the corresponding interval_no value.
+	
+	if ( defined $max_interval && int_defined($max_interval) )
+	{
+	    $max_interval_no = int_defined($max_interval);
+	    $action->set_record_value('max_interval_no', $max_interval_no);
+	}
+	
+	# If the value is otherwise non-empty, add a 'bad value' condition.
+	
+	elsif ( defined $max_interval && $max_interval ne '' )
+	{
+	    $edt->add_condition('E_BAD_VALUE', 'max_interval',
+				"unknown interval '$max_interval'");
+	}
+	
+	# If it is empty, add a 'required' condition.
+	
+	else
+	{
+	    $edt->add_condition($action, 'E_REQUIRED', 'max_interval');
+	}
+    }
+    
+    if ( $action->field_specified('min_interval') )
+    {
+	$action->ignore_field('min_interval');
+	
+	# If the value of 'min_interval' corresponds to a known interval, set the
+	# field 'min_interval_no' to the corresponding interval_no value.
+	
+	if ( defined $min_interval && int_defined($min_interval) )
+	{
+	    $min_interval_no = int_defined($min_interval);
+	    $action->set_record_value('min_interval_no', $min_interval_no);
+	    
+	    # If 'max_interval' is also valid, check to make sure they were
+	    # specified in the proper order. If not, switch them. The interval
+	    # specified by 'max_interval_no' must be older than the one specified by
+	    # 'min_interval_no'. If the bounds of both intervals are the same, set
+	    # 'min_interval_no' to null.
+	    
+	    if ( defined $max_interval && int_defined($max_interval) )
+	    {
+		my ($b_max, $t_max) = int_bounds($max_interval);
+		my ($b_min, $t_min) = int_bounds($min_interval);
+		
+		if ( $b_max < $b_min || ($b_max == $b_min && $t_max < $t_min ) )
+		{
+		    $action->set_record_value('max_interval_no', $min_interval_no);
+		    $action->set_record_value('min_interval_no', $max_interval_no);
+		}
+		
+		elsif ( $b_max == $b_min && $t_max == $t_min )
+		{
+		    $action->set_record_value('min_interval_no', undef);
+		}
+	    }
+	}
+	
+	# If the value is otherwise non-empty, add a 'bad value' condition.
+	
+	elsif ( defined $min_interval && $min_interval ne '' )
+	{
+	    $edt->add_condition('E_BAD_VALUE', 'min_interval',
+				"unknown interval '$min_interval'");
+	}
+	
+	# If the value is the empty string, set it to null.
+	
+	elsif ( defined $min_interval && $min_interval eq '' )
+	{
+	    $action->set_record_value('min_interval_no', undef);
+	}
+    }
+
+    # Check the direct, max, and min dates if specified.
     
     # We only need to do these checks if at least one of the relevant fields was
     # specified, since none of them are required.
@@ -632,6 +684,10 @@ sub validate_action {
 	my $min_ma_unit = $action->record_value('min_ma_unit');
 	my $min_ma_method = $action->record_value('min_ma_method');
 	
+	# For each of 'direct', 'max', and 'min': ignore the 'error', 'unit',
+	# and 'method' fields unless the 'ma' field is specified, or unless this
+	# is an existing record with a corresponding 'ma' value.
+	
 	if ( $operation eq 'update' )
 	{
 	    ($old_direct_ma, $old_max_ma, $old_min_ma) = 
@@ -639,42 +695,39 @@ sub validate_action {
 		SELECT direct_ma, max_ma, min_ma
 		FROM $TABLE{COLLECTION_DATA} WHERE $keyexpr");
 	    
-	    unless ( defined $old_direct_ma && $old_direct_ma ne '' ||
-		     $direct_ma && $direct_ma ne '' )
-	    {
-		$action->delete_record_value('direct_ma_error');
-		$action->delete_record_value('direct_ma_unit');
-		$action->delete_record_value('direct_ma_method');
-		$direct_ma_error = undef;
-		$direct_ma_unit = undef;
-		$direct_ma_method = undef;
-	    }
-	    
-	    unless ( defined $old_max_ma && $old_max_ma ne '' ||
-		     $max_ma && $max_ma ne '' )
-	    {
-		$action->delete_record_value('max_ma_error');
-		$action->delete_record_value('max_ma_unit');
-		$action->delete_record_value('max_ma_method');
-		$max_ma_error = undef;
-		$max_ma_unit = undef;
-		$max_ma_method = undef;
-	    }
-	    
-	    unless ( defined $old_min_ma && $old_min_ma ne '' ||
-		     $min_ma && $min_ma ne '' )
-	    {
-		$action->delete_record_value('min_ma_error');
-		$action->delete_record_value('min_ma_unit');
-		$action->delete_record_value('min_ma_method');
-		$min_ma_error = undef;
-		$min_ma_unit = undef;
-		$min_ma_method = undef;
-	    }
-	    
 	    $direct_ma = $old_direct_ma unless $action->field_specified($direct_ma);
 	    $max_ma = $old_max_ma unless $action->field_specified($max_ma);
 	    $min_ma = $old_min_ma unless $action->field_specified($min_ma);
+	}
+	
+	unless ( $direct_ma && $direct_ma ne '' )
+	{
+	    $action->ignore_field('direct_ma_error');
+	    $action->ignore_field('direct_ma_unit');
+	    $action->ignore_field('direct_ma_method');
+	    $direct_ma_error = undef;
+	    $direct_ma_unit = undef;
+	    $direct_ma_method = undef;
+	}
+	
+	unless ( $max_ma && $max_ma ne '' )
+	{
+	    $action->ignore_field('max_ma_error');
+	    $action->ignore_field('max_ma_unit');
+	    $action->ignore_field('max_ma_method');
+	    $max_ma_error = undef;
+	    $max_ma_unit = undef;
+	    $max_ma_method = undef;
+	}
+	
+	unless ( $min_ma && $min_ma ne '' )
+	{
+	    $action->ignore_field('min_ma_error');
+	    $action->ignore_field('min_ma_unit');
+	    $action->ignore_field('min_ma_method');
+	    $min_ma_error = undef;
+	    $min_ma_unit = undef;
+	    $min_ma_method = undef;
 	}
 	
 	if ( defined $direct_ma && $direct_ma ne '' )
@@ -732,6 +785,32 @@ sub validate_action {
 	}
     }
     
+    # Check the 'altitude_value' field if specified.
+    
+    my $altitude_value = $action->record_value('altitude_value');
+
+    if ( defined $altitude_value && $altitude_value ne '' )
+    {
+	$edt->add_condition('E_FORMAT', 'altitude_value', "must be a non-negative integer")
+	    unless $altitude_value =~ $DIGITS_RE;
+    }
+    
+    # Checks on the geology fields
+    # ----------------------------
+
+    my $fossilsfrom1 = $action->record_value('fossilsfrom1');
+    my $fossilsfrom2 = $action->record_value('fossilsfrom2');
+
+    if ( defined $fossilsfrom1 )
+    {
+	$action->set_record_value('fossilsfrom1', $fossilsfrom1 ? 'Y' : '');
+    }
+
+    if ( defined $fossilsfrom2 )
+    {
+	$action->set_record_value('fossilsfrom2', $fossilsfrom2 ? 'Y' : '');
+    }
+    
     # Check for size classes
     # ----------------------
     
@@ -745,6 +824,16 @@ sub validate_action {
 	    $edt->add_condition('E_REQUIRED', 'assembl_comps');
 	}
     }
+}
+
+
+# validate_occ_action ( action, operation, table_specifier )
+
+sub validate_occ_action {
+
+    my ($edt, $action, $operation, $table_specifier) = @_;
+    
+    
 }
 
 

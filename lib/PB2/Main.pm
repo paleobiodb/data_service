@@ -455,13 +455,25 @@ use PB2::MainEntry;
 			method => 'list_colls',
 			output => '1.2:colls:basic',
 			optional_output => '1.2:colls:basic_map' },
-	"This operation returns information about multiple collections, selected according to the parameters you provide.",
-	"You can select collections by taxonomy, geography, age, environment, and many other criteria.",
-	"If you select the C<csv> or C<tsv> output format, the output you get will be very similar to the Classic",
+	"This operation returns information about multiple collections, selected according",
+	"to the parameters you provide. You can select collections by taxonomy, geography,",
+	"age, environment, and many other criteria. If you select the C<csv> or C<tsv>",
+	"output format, the output you get will be very similar to the Classic",
 	"collection download.");
     
-    $ds2->define_node({ path => 'colls/summary',
+    $ds2->define_node({ path => 'colls/matchlocal',
 			place => 3,
+			title => 'Search results for fossil collections',
+			method => 'list_colls',
+			arg => 'match',
+			output => '1.2:colls:match',
+			optional_output => '1.2:colls:match_map' },
+	"This operation returns information about multiple collections, selected according",
+	"to the parameters you provide. The output is tailored toward generating a list of",
+	"search results.");
+    
+    $ds2->define_node({ path => 'colls/summary',
+			place => 4,
 			title => 'Geographic summary of fossil collections',
 			usage => [ "colls/summary.json?lngmin=0.0&lngmax=15.0&latmin=0.0&latmax=15.0&level=2",
 				   "config.json?show=clusters" ],
@@ -476,7 +488,7 @@ use PB2::MainEntry;
 	"are available.");
     
     $ds2->define_node({ path => 'colls/refs',
-			place => 4,
+			place => 5,
 			title => 'Bibliographic references for fossil collections',
 			usage => [ "colls/refs.ris?base_name=Cetacea&interval=Miocene&show=comments&textresult" ],
 			method => 'refs',
@@ -493,7 +505,7 @@ use PB2::MainEntry;
 	"use that operation instead.");
     
     $ds2->define_node({ path => 'colls/byref',
-			place => 4,
+			place => 5,
 			title => 'Collections grouped by bibliographic reference',
 			usage => [ "colls/refs.ris?base_name=Cetacea&interval=Miocene&show=comments&textresult" ],
 			method => 'list_colls',

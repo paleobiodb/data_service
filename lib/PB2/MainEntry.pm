@@ -152,6 +152,20 @@ sub initialize {
 	"provided they are not referenced by any other database records. It works only",
 	"on records created by yourself, unless you have administrative privilege.");
     
+    $ds2->define_node({ path => 'refs/selected',
+			title => 'Fetch the bibliographic reference selected for data entry',
+			place => 11,
+			allow_method => 'GET',
+			doc_template => 'operation.tt',
+			role => 'PB2::ReferenceAux',
+			method => 'selected',
+			output => '1.2:refs:basic',
+			optional_output => '1.2:refs:output_map' },
+	"This operation returns the bibliographic reference (if any) that is currently",
+	"selected for your current session in the Classic environment. If no reference",
+	"is selected, the result will contain no records. If you are not logged in,",
+	"a 401 error will be returned.");
+    
     $ds2->define_node({ path => 'refs/classic_select',
 			title => 'Select a bibliographic reference for data entry',
 			place => 11,
@@ -163,9 +177,7 @@ sub initialize {
 			optional_output => '1.2:refs:output_map' },
 	"This operation allows you to select the specified reference for your current",
 	"session in the Classic environment. After it is executed, the next time the",
-	"current user visits the Classic environment, this reference will be the selected one.",
-	"If no reference identifier is specified, this operation will return the currently",
-	"selected one.");
+	"current user visits the Classic environment, this reference will be the selected one.");
     
     # Fossil Collections
 
@@ -220,6 +232,30 @@ sub initialize {
 			body_ruleset => '1.2:colls:addupdate_body' },
 	"This operation displays an HTML form which you can use to generate",
 	"calls to the colls/update operation.");
+    
+    # $ds2->define_node({ path => 'colls/update_occs',
+    # 			title => 'Sandbox for the colls/update_occs operation.',
+    # 			place => 10,
+    # 			allow_method => 'PUT,POST',
+    # 			doc_template => 'entry_operation.tt',
+    # 			body_ruleset => '1.2:occs:addupdate_body',
+    # 			method => 'update_occs',
+    # 			output => '1.2:occs:edit',
+    # 			optional_output => '1.2:occs:edit_map' },
+    # 	"This operation allows you to add, update, and/or delete occurrences and",
+    # 	"reidentifications associated with a specified collection.");
+    
+    $ds2->define_node({ path => 'colls/update_occs_sandbox',
+			title => 'Sandbox for the colls/update_occs operation',
+			place => 10,
+			allow_format => 'html',
+			allow_method => 'GET',
+			doc_template => 'sandbox_operation.tt',
+			role => 'PB2::CollectionEntry',
+			method => 'update_occs_sandbox',
+			body_ruleset => '1.2:occs:addupdate_body' },
+	"This operation displays an HTML form which you can use to generate",
+	"calls to the colls/update_occs operation.");
     
     # Educational Resources
     

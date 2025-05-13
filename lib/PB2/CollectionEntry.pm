@@ -89,9 +89,7 @@ sub initialize {
     
     complete_ruleset($ds, $dbh, '1.2:colls:addupdate_body', 'COLLECTION_DATA',
 		     { max_interval_no => 'IGNORE', min_interval_no => 'IGNORE',
-		       authorizer_no => 'IGNORE', enterer_no => 'IGNORE',
-		       modifier_no => 'IGNORE', authorizer => 'IGNORE',
-		       enterer => 'IGNORE', modifier => 'IGNORE',
+		       reference_no => { optional => 'reference_id', alias => ['reference_no'] },
 		       collection_no => 'IGNORE', source_database => 'IGNORE', license => 'IGNORE',
 		       coordinate => 'IGNORE', lat => 'IGNORE', lng => 'IGNORE',
 		       latlng_precision => 'IGNORE', ma_interval_no => 'IGNORE',
@@ -124,8 +122,8 @@ sub initialize {
 		       geogcomments => { note => 'textarea' },
 		       stratcomments => { note => 'textarea' },
 		       lithdescript => { note => 'lithdescript' },
-		       fossilsfrom1 => { valid => FLAG_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no','y','n'." },
-		       fossilsfrom2 => { valid => FLAG_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no','y','n'." },
+		       fossilsfrom1 => { valid => BOOLEAN_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no'." },
+		       fossilsfrom2 => { valid => BOOLEAN_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no'." },
 		       geology_comments => { note => 'textarea' },
 		       pres_mode => { note => 'textarea' },
 		       common_body_parts => { note => 'textarea' },
@@ -144,6 +142,43 @@ sub initialize {
 	{ optional => 'min_interval', valid => [VALID_IDENTIFIER('INT'), ANY_VALUE],
 	  before => 'zone_type' },
 	    "This parameter sets the value of C<min_interval_no> in the C<collections> table. It accepts an interval name or number, or an external identifier of type 'int'. If this collection is associated with a single interval, leave this field null.");
+    
+    $ds->define_ruleset('1.2:occs:addupdate_body' =>
+	">>The body of this request must be either a single JSON object, or an array of",
+	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
+	"The following fields are allowed in each record.",
+	"Any columns that are B<required> must be given a nonempty value in every new",
+	"record, and may not be set to empty or null in an update.",
+	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
+	  alias => ['collection_no'] },
+	    "This B<required> field specifies the collection with which this occurrence",
+	    "is or will be associated.",
+	{ optional => 'occurrence_id', valid => VALID_IDENTIFIER('OCC'),
+	  alias => ['occurrence_no', 'id', 'occ_id', 'oid'] },
+	    "If this field is empty, an occurrence record will be inserted into the database",
+	    "and a new identifier will be returned. If it is non-empty, it must match",
+	    "the identifier of an existing record. That record will be updated.",
+	{ optional => 'reid_id', valid => VALID_IDENTIFIER('REI'),
+	  alias => ['reid_no'] },
+	    "If this field occurs with an empty value, and if 'occurrence_id' is not",
+	    "empty, a reidentification record will be inserted into the database and a",
+	    "new identifier will be returned. If it is non-empty, it must match the",
+	    "identifier of an existing record. That record will be updated.",
+	{ allow => '1.2:common:entry_fields' });
+
+    complete_ruleset($ds, $dbh, '1.2:occs:addupdate_body', 'OCCURRENCE_DATA',
+		     { taxon_no => 'IGNORE', collection_no => 'IGNORE',
+		       occurrence_no => 'IGNORE', reid_no => 'IGNORE',
+		       genus_reso => 'IGNORE', genus_name => 'IGNORE',
+		       subgenus_reso => 'IGNORE', subgenus_name => 'IGNORE',
+		       species_reso => 'IGNORE', species_name => 'IGNORE',
+		       subspecies_reso => 'IGNORE', subspecies_name => 'IGNORE' });
+    
+    add_to_ruleset($ds, '1.2:occs:addupdate_body', 
+	{ optional => 'taxon_name', before => 'abund_value' },
+	    "This parameter is parsed in order to set the value for C<genus_reso>,",
+	    "C<genus_name>, etc. in the C<$TABLE{OCCURRENCE_DATA}> or",
+	    "C<$TABLE{REID_DATA}> table as appropriate.");
 }
 
 
@@ -180,7 +215,11 @@ sub addupdate_colls {
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->parse_body_records($main_params, '1.2:colls:addupdate_body');
+    my (@records) = $request->parse_body_records($main_params,
+		['REID_DATA', '1.2:reids:addupdate_body', 'reid_id'],
+		['OCCURRENCE_DATA', '1.2:occs:addupdate_body', 'occurrence_id'],
+		['COLLECTION_DATA', '1.2:colls:addupdate_body', 'collection_id', 'collection_name'],
+		'NO_MATCH');
     
     if ( $request->errors )
     {
@@ -199,14 +238,14 @@ sub addupdate_colls {
     
     foreach my $r (@records)
     {
-	if ( $r->{occurrence_id} )
+	if ( exists $r->{reid_id} )
 	{
-	    $edt->process_record('OCCURRENCE_DATA', $r);
+	    $edt->insert_update_record('REID_DATA', $r);
 	}
-
-	elsif ( $r->{genus_name} || $r->{species_name} )
+	
+	elsif ( exists $r->{occurrence_id} )
 	{
-	    $edt->insert_record('OCCURRENCE_DATA', $r);
+	    $edt->insert_update_record('OCCURRENCE_DATA', $r);
 	}
 	
 	elsif ( $operation eq 'insert' )
@@ -330,7 +369,7 @@ sub addupdate_sandbox {
 	$request->generate_sandbox({ operation => 'colls/add',
 				     ruleset => '1.2:colls:addupdate_body',
 				     allowances => '1.2:colls:allowances',
-				     extra_params => 'show=edit' });
+				     extra_params => 'vocab=pbdb&private&show=edit' });
     }
 
     elsif ( $operation eq 'update' )
@@ -338,7 +377,7 @@ sub addupdate_sandbox {
 	$request->generate_sandbox({ operation => 'colls/update',
 				     ruleset => '1.2:colls:addupdate_body',
 				     allowances => '1.2:colls:allowances',
-				     extra_params => 'show=edit' });
+				     extra_params => 'vocab=pbdb&private&show=edit' });
     }
     
     else
@@ -346,5 +385,17 @@ sub addupdate_sandbox {
 	$request->generate_sandbox({ operation => 'unknown' });
     }
 }
+
+
+sub update_occs_sandbox {
+
+    my ($request, $operation) = @_;
+
+    $request->generate_sandbox({ operation => 'occs/update',
+				 ruleset => '1.2:occs:addupdate_body',
+				 multiplicity => 5,
+				 allowances => '1.2:colls:allowances' });
+}
+
 
 1;

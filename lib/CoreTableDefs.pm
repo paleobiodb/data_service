@@ -35,7 +35,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('OPINION_DATA', LOG_CHANGES => 1);
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
-    set_table_property('OCCURRENCE_DATA', CAN_DELETE => 'OWNER');
+    set_table_property('OCCURRENCE_DATA', SUPERIOR_TABLE => 'COLLECTION_DATA');
     set_table_property('OCCURRENCE_DATA', LOG_CHANGES => 1);
     
     set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
