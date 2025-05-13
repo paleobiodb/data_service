@@ -1518,6 +1518,19 @@ sub add_rules {
 	    croak "ruleset '$typevalue' not found" unless defined $self->{RULESETS}{$typevalue};
 	    
 	    $rs->{includes}{$typevalue} = 1;
+	    
+	    # Every ruleset that was included in the named ruleset is also
+	    # recursively included in this one.
+	    
+	    my $included_rs = $self->{RULESETS}{$typevalue};
+	    
+	    if ( ref $included_rs->{includes} eq 'HASH' )
+	    {
+		foreach my $key ( keys %{$included_rs->{includes}} )
+		{
+		    $rs->{includes}{$key} = 1;
+		}
+	    }
 	}
 	
 	elsif ( $CATEGORY{$type} eq 'constraint' )
@@ -1533,7 +1546,9 @@ sub add_rules {
 	    {
 		next unless defined $arg && $arg ne '';
 		
-		croak "ruleset '$arg' was not included by any rule" unless defined $rs->{includes}{$arg};
+		croak "ruleset '$arg' was not included by any rule"
+		    unless defined $rs->{includes}{$arg};
+		
 		push @{$rr->{ruleset}}, $arg;
 	    }
 	    
