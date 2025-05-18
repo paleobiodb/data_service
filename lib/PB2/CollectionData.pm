@@ -1,4 +1,4 @@
-
+# 
 # CollectionData
 # 
 # A class that returns information from the PaleoDB database about a single
@@ -90,21 +90,6 @@ sub initialize {
     }
 
     # Define some value sets.
-
-    $ds->define_valueset('1.2:colls:timerules' => 
-	{ value => 'contain' },
-	    "Select only collections whose temporal locality is strictly contained",
-	    "in the specified time range.",
-	{ value => 'major' },
-	    "Select only collections whose temporal locality overlaps the specified",
-	    "time range by at least 50%.",
-	{ value => 'overlap' },
-	    "Select only collections whose temporal locality overlaps the specified",
-	    "time range by any amount.",
-	{ value => 'defined' },
-	    "Select only collections whose temporal locality is exactly defined as the",
-	    "specified time range. If only one interval is specified, it may match",
-	    "either the maximum or minimum interval associated with the collection.");
     
     @COLLECTION_METADATA = qw(collection_comments collection_dates collection_coverage
 			      coll_meth collection_type collectors geogcomments
@@ -303,19 +288,16 @@ sub initialize {
 	    "results will continue to be integers.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{COL} },
 	    "The type of this object: C<$IDP{COL}> for a collection",
-	{ output => 'real_access', pbdb_name => 'access_level', com_name => 'prm' },
+	{ output => 'permissions', com_name => 'prm' },
 	    "The accessibility of this record.  If empty, then the record is",
 	    "public.  Otherwise, the value of this record will be one",
 	    "of the following:", "=over",
-	    "=item database members", "The record is accessible to database members only.",
-	    "=item authorizer only", "The record is accessible to its authorizer group,",
+	    "=item members", "The record is accessible to database members only.",
+	    "=item authorizer", "The record is accessible to its authorizer group,",
 	    "and to any other authorizer groups given permission.",
-	    "=item group members", "The record is accessible to",
-	    "members of its associated research group(s) only.",
+	    "=item group(...)", "The record is accessible to",
+	    "members of the specified research group(s) only.",
 	    "=back",
-	{ output => 'release_date', com_name => 'rld' },
-	    "If this record is not publicly accessible, this field contains the date",
-	    "on which it will become so.",
 	{ set => 'permissions', from => '*', code => \&process_permissions },
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
@@ -406,10 +388,13 @@ sub initialize {
 	  dedup => 'early_interval' },
 	    "The interval that ends the specific geologic time range associated with the collection",
 	{ set => '*', code => \&fixTimeOutput },
-	{ output => 'country', com_name => 'cou', pbdb_name => 'country' },
+	{ output => 'country', com_name => 'cou' },
 	    "The country in which the collection is located.",
-	{ output => 'state', com_name => 'stp', pbdb_name => 'state' },
+	{ output => 'state', com_name => 'stp' },
 	    "The state or province in which the collection is located, if specified.",
+	{ output => 'county', com_name => 'cny' },
+	    "The county or region in which the collection is located, if specified.",
+	{ set => 'distance', from => 'distance', code => \&process_distance },
 	{ output => 'distance', com_name => 'dst' },
 	    "The distance from this collection to the center of the search bounding box.",
 	    "This field is only returned if the parameters C<B<latmin>>, C<B<latmax>>,",
@@ -1209,24 +1194,22 @@ sub initialize {
 #	    "Show all of these");
     
     $ds->define_set('1.2:colls:envtype' =>
-	{ value => 'terr' },
+	{ value => 'terrestrial' },
 	    "Any terrestrial environment",
 	{ value => 'marine' },
 	    "Any marine environment",
 	{ value => 'carbonate' },
-	    "Carbonate environment",
-	{ value => 'silicic' },
-	    "Siliciclastic environment",
+	    "Any carbonate environment",
+	{ value => 'siliciclastic' },
+	    "Any siliciclastic environment",
 	{ value => 'unknown' },
 	    "Unknown or indeterminate environment",
-	{ value => 'lacust' },
+	{ value => 'lacustrine' },
 	    "Lacustrine zone",
 	{ value => 'fluvial' },
 	    "Fluvial zone",
 	{ value => 'karst' },
 	    "Karst zone",
-	{ value => 'terrother' },
-	    "Other terrestrial zone",
 	{ value => 'marginal' },
 	    "Marginal marine zone",
 	{ value => 'reef' },
@@ -1238,9 +1221,7 @@ sub initialize {
 	{ value => 'offshore' },
 	    "Offshore zone",
 	{ value => 'slope' },
-	    "Slope/basin zone",
-	{ value => 'marindet' },
-	    "Marine indeterminate zone");
+	    "Slope/basin zone");
      
     $ds->define_set('1.2:colls:envzone' => 
 	{ value => 'lacust' },
@@ -3039,7 +3020,16 @@ sub generateAccessFilter {
     
     unless ( $request->clean_param('private') )
     {
-	return ("c.access_level = 0", '');
+	if ( $tables_ref->{c} )
+	{
+	    return ("c.access_level = 0", '');
+	}
+
+	else
+	{
+	    $tables_ref->{cc} = 1;
+	    return ("cc.access_level = 'the public'", '');
+	}
     }
     
     # Next see if we have a login cookie from Classic.  If so, extract the
@@ -3061,51 +3051,71 @@ sub generateAccessFilter {
 	($authorizer_no, $is_super) = $dbh->selectrow_array($sql);
     }
     
-    else
-    {
-	print STDERR "cookie: NONE\n";
-    }
+    # else
+    # {
+    # 	print STDERR "cookie: NONE\n";
+    # }
     
     # If we don't have a recognizable cookie that corresponds to a session
     # still in the table, then abort!
     
     unless ( $authorizer_no && $authorizer_no =~ /^\d+$/ )
     {
-	die $request->exception(401, "You must be logged in to use a URL that contains the parameter 'private'");
+	die $request->exception(401, "You must be logged in to use a URL that contains " .
+				"the parameter 'private'");
     }
     
-    # If we get here, then the requestor has some ability to see private data.  We need to select
-    # additional fields so that the records can be checked before being sent to the requestor.
+    # If we get here, then the requestor has some ability to see private data.
+    # We need to select additional fields so that the record permission can be
+    # properly reported, and also add additional filters to ensure that only
+    # records which the requestor has permission to see are returned.
     
     $request->{my_authorizer_no} = $is_super ? -1 : $authorizer_no;
-    $tables_ref->{$mt} = 1;
-    
-    my $fields = ", c.access_level, $mt.authorizer_no as access_no, " .
-	"if($mt.access_level = 'group members', $mt.research_group, '') as access_resgroup";
+    $tables_ref->{cc} = 1;
     
     # If the requestor has superuser privilege, they can access anything.  But we still need the
     # access-control fields so that we can report the permissions on each individual record.
     
+    my $fields = ", c.access_level, " .
+	"if(cc.access_level = 'group members', cc.research_group, '') as access_resgroup";
+    
     if ( $is_super )
     {
-	return ("c.access_level = c.access_level", $fields);
+	if ( $tables_ref->{c} )
+	{
+	    return ("c.access_level = c.access_level", $fields);
+	}
+	
+	else
+	{
+	    return ("cc.access_level = cc.access_level", $fields);
+	}
     }
     
     # Otherwise, we need to filter by authorizer_no and/or research group.
     
     else
     {
-	my @clauses = "c.access_level <= 1";
+	my @clauses;
+	
+	if ( $tables_ref->{c} )
+	{
+	    push @clauses, "c.access_level <= 1";
+	}
+	
+	else
+	{
+	    push @clauses, "cc.access_level in ('the public', 'database members')";
+	}
 	
 	my $sql = "SELECT authorizer_no FROM permissions WHERE modifier_no=$authorizer_no";
 	
 	my ($permlist) = $dbh->selectcol_arrayref($sql);
+
+	push @$permlist, $authorizer_no unless any { $_ == $authorizer_no } @$permlist;
 	
-	if ( ref $permlist eq 'ARRAY' && @$permlist )
-	{
-	    my $perm_string = join(',', @$permlist);
-	    push @clauses, "$mt.authorizer_no in ($perm_string)";
-	}
+	my $perm_string = join(',', @$permlist);
+	push @clauses, "cc.authorizer_no in ($perm_string)";
 	
 	$sql = "SELECT research_group FROM person WHERE person_no=$authorizer_no";
 	
@@ -3114,12 +3124,12 @@ sub generateAccessFilter {
 	if ( $grouplist && $grouplist =~ /^[\w,-]+$/ )
 	{
 	    $grouplist =~ s/,/|/g;
-	    push @clauses, "$mt.access_level = 'group members' and $mt.research_group rlike '$grouplist'";
+	    push @clauses, "cc.access_level = 'group members' and cc.research_group rlike '$grouplist'";
 	}
 	
 	my $filter = "(" . join(' or ', @clauses) . ")";
 	
-	return ( $filter, $fields );
+	return ($filter, $fields);
     }
 }
 
@@ -4634,11 +4644,28 @@ sub generateMainFilters {
     # 	push @filters, "s.interval_no = $early_interval_no";
     # }
     
+    # If the time_rule is 'defined', select collections which are defined using
+    # the specified intervals.
+
+    if ( $time_rule eq 'defined' && $early_interval_no )
+    {
+	if ( $late_interval_no )
+	{
+	    push @filters, "c.early_int_no = '$early_interval_no'";
+	    push @filters, "c.late_int_no = '$late_interval_no'";
+	}
+
+	else
+	{
+	    push @filters, "(c.early_int_no = '$early_interval_no' or c.late_int_no = '$late_interval_no')";
+	}
+    }
+    
     # Otherwise, if age bounds were given we need to join to the collection
     # table and filter on actual collection ages. But skip this if the operation
     # is 'quickdiv', because the quickdiv code will add its own interval filter.
     
-    if ( ($early_age || $late_age) && ($mt ne 's' || $tables->{c}) && $op ne 'quickdiv' )
+    elsif ( ($early_age || $late_age) && ($mt ne 's' || $tables->{c}) && $op ne 'quickdiv' )
     {
 	$tables->{c} = 1;
 	$tables->{non_summary} = 1;
@@ -5906,11 +5933,37 @@ sub process_permissions {
     
     my ($request, $record) = @_;
     
-    if ( $record->{real_access} eq 'the public' ||
-	 ($record->{release_date} && $record->{release_date} < $record->{today}) )
+    return unless $record->{access_level};
+    
+    if ( $record->{access_level} == 1 )
     {
-	delete $record->{real_access};
-	delete $record->{release_date};
+	return 'members';
+    }
+    
+    elsif ( $record->{access_resgroup} )
+    {
+	return "group($record->{access_resgroup})";
+    }
+    
+    else
+    {
+	return "authorizer";
+    }
+}
+
+
+sub process_distance {
+
+    my ($request, $distance) = @_;
+
+    if ( defined $distance && $distance ne '' )
+    {
+	return POSIX::round($distance*100) / 100;
+    }
+    
+    else
+    {
+	return $distance;
     }
 }
 

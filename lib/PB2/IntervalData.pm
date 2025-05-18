@@ -157,8 +157,13 @@ sub initialize {
 	    "Select only records whose temporal locality overlaps the specified time",
 	    "range by any amount. This is the most permissive rule.  For diversity output,",
 	    "every occurrence will be counted. Many will be counted as falling into more",
-	    "than one bin.");
-
+	    "than one bin.",
+	{ value => 'defined' },
+	    "Select only records associated with collections whose temporal locality",
+	    "is exactly defined as the specified interval range. If only one interval",
+	    "is specified, it may match",
+	    "either the maximum or minimum interval associated with the collection.");
+    
     # Then define some rulesets to describe the parameters accepted by the
     # operations defined here.
     

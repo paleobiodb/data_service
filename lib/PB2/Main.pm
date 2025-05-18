@@ -422,8 +422,21 @@ use PB2::MainEntry;
 			default_limit => $ref_limit,
 			output => '1.2:opinions:basic',
 			optional_output => '1.2:opinions:output_map' },
-	"This operation returns information about taxonomic opinions associated with fossil occurrences.",
-	"You can use this to retrieve just the opinions relevant to any selected set of occurrences.");
+	"This operation returns information about taxonomic opinions associated with",
+	"fossil occurrences. You can use this to retrieve just the opinions relevant",
+	"to any selected set of occurrences.");
+    
+    $ds2->define_node({ path => 'occs/display',
+			place => 12,
+			usage => [ "/occs/display.json?coll_id=1234" ],
+			title => "Fossil occurrences for display and editing",
+			method => 'list_occs_display',
+			output => '1.2:occs:display',
+			optional_output => '1.2:occs:display_map',
+		        ruleset => '1.2:occs:for_display' },
+	"This operation returns information about fossil occurrences in the format",
+	"necessary for display or editing on a per-collection basis. It is intended",
+	"to enable a frontend application to perform these activities.");
     
     # Collections.  These paths are used to fetch information about fossil
     # collections known to the database.

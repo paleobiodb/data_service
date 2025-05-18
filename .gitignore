@@ -7,5 +7,6 @@
 dataservice.pid
 config.yml
 starman.pid
+master_intervals.tsv
 Dancer
 .vscode
