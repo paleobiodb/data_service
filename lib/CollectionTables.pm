@@ -138,7 +138,7 @@ sub buildCollectionTables {
 			c.reference_no,
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
-				when 'research group' then if(c.release_date < now(), 0, 2)
+				when 'group members' then if(c.release_date < now(), 0, 2)
 				when 'authorizer only' then if(c.release_date < now(), 0, 2)
 				else 0
 			end
