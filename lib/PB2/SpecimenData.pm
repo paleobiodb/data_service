@@ -220,6 +220,8 @@ sub initialize {
 	{ value => 'coll', maps_to => '1.2:colls:name' },
 	    "The name of the collection in which the associated occurrence was found, plus any",
 	    "additional remarks entered about it.",
+	{ value => 'mslink', maps_to => '1.2:colls:mslink' },
+	    "The Macrostrat column and unit ids (if any) of the associated occurrence",
 	{ value => 'coords', maps_to => '1.2:occs:coords' },
 	     "The latitude and longitude of the associated occurrence, if any.",
         { value => 'loc', maps_to => '1.2:colls:loc' },
@@ -1807,6 +1809,9 @@ sub generateJoinList {
 	if $tables->{e};
     $join_list .= "\t\tLEFT JOIN taxon_etbasis as etb on etb.orig_no = tv.orig_no\n"
 	if $tables->{etb};
+    
+    $join_list .= "LEFT JOIN $TABLE{MACROSTRAT_COLLS} as ms on ms.collection_no = c.collection_no\n"
+	if $tables->{ms};
     
     return $join_list;
 }

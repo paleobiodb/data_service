@@ -21,6 +21,7 @@ our (@EXPORT_OK) = qw(VALID_IDENTIFIER extract_identifier generate_identifier ex
 # List the identifier prefixes:
 
 our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',	# standard prefixes
+	     UMS => '(?:(?:urn:lsid:)?macrostrat.org:|macrostrat:)',
 	     TID => 'txn|var',		# taxonomic names
 	     TXN => 'txn',		# primary taxonomic names
 	     VAR => 'var',		# spelling variants
@@ -39,6 +40,8 @@ our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',	# standard prefix
 	     GNM => 'gnm',		# geographic names
 	     CLU => 'clu',		# geographic clusters of fossil occurrence locations
 	     PLC => 'col|loc|gnm',	# locations in general
+	     CLM => 'clm',		# macrostrat columns
+	     UNT => 'unit',		# macrostrat units
 	     INT => 'int',		# geologic time intervals
 	     BND => 'bnd',		# geologic time interval boundaries
 	     TSC => 'tsc',		# geologic time scales
@@ -79,11 +82,23 @@ my $key_expr = '';
 
 foreach my $key ( keys %IDP )
 {
-    next if $key eq 'URN';
-    $IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? ( $IDP{$key} ) [:] )? ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
+    next if $key eq 'URN' || $key eq 'UMS';
+    
+    if ( $key eq 'CLM' || $key eq 'UNT' )
+    {
+	$IDRE{$key} = qr{ ^ (?: (?: $IDP{UMS} )? ( $IDP{$key} ) [:] )? 
+			  ( [0]+ | [1-9][0-9]* | ERROR ) $}xsi;
+    }
+    
+    else
+    {
+	$IDRE{$key} = qr{ ^ (?: (?: $IDP{URN} )? ( $IDP{$key} ) [:] )? 
+			  ( [0]+ | [1-9][0-9]* | ERROR ) $ }xsi;
+	$key_expr .= '|' if $key_expr;
+	$key_expr .= $IDP{$key};
+    }
+    
     $IDVALID{$key} = sub { return valid_identifier(shift, shift, $key) };
-    $key_expr .= '|' if $key_expr;
-    $key_expr .= $IDP{$key};
 }
 
 $IDRE{UNKTXN} = qr{ ^ (?: (?: $IDP{URN} )? txn [:] )? ( [UN] [A-Z] \d* ) $ }xsi;
