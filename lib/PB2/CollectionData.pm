@@ -91,10 +91,10 @@ sub initialize {
     
     $ds->define_output_map('1.2:colls:basic_map' =>
 	{ value => 'full', maps_to => '1.2:colls:full_info' },
-	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: C<B<attr>>, C<B<loc>>,",
-	    "C<B<paleoloc>>, C<B<prot>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<ctaph>>,",
-	    "C<B<comps>>, C<B<methods>>, C<B<rem>>, C<B<refattr>>.",
+	    "This is a shortcut for including all of the information that defines this record.",
+	    "Currently, this includes the following blocks: C<B<loc>>, C<B<paleoloc>>,",
+	    "C<B<prot>>, C<B<ages>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<comps>>,",
+	    "C<B<ctaph>>, C<B<methods>>, C<B<resgroup>>, C<B<refattr>>.",
 	    "If we later add new data fields to the collection records, these will be included",
 	    "by this block.  Therefore, if you are publishing a URL, it might be a good idea",
 	    "to include B<C<show=full>>.",
@@ -102,6 +102,8 @@ sub initialize {
 	    "Additional information about the geographic locality of the collection",
 	{ value => 'bin', maps_to => '1.2:colls:bin' },
 	    "The list of geographic clusters to which the collection belongs.",
+	{ value => 'mslink', maps_to => '1.2:colls:mslink' },
+	    "The Macrostrat column and unit ids (if any) associated with the collection",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
 	    "Information about the paleogeographic locality of the collection,",
 	    "evaluated according to the model(s) specified by the parameter C<pgm>.",
@@ -142,7 +144,8 @@ sub initialize {
 	{ value => 'methods', maps_to => '1.2:colls:methods' },
 	    "Information about the collection methods used",
         { value => 'rem', maps_to => '1.2:colls:rem', undocumented => 1 },
-	    "Any additional remarks that were entered about the collection.",
+	    "Any additional remarks that were entered about the collection. This block is",
+	    "deprecated, and the remarks fields are all reported under other output blocks.",
 	{ value => 'resgroup', maps_to => '1.2:colls:resgroup' },
 	    "The research group(s), if any, associated with this collection.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
@@ -266,6 +269,15 @@ sub initialize {
 	{ select =>  \@bin_fields, tables => [ 'c' ] },
 	@bin_levels);
     
+    $ds->define_block('1.2:colls:mslink' =>
+	{ select => ['group_concat(distinct ms.column_id order by ms.column_id) as column_id',
+		     'group_concat(distinct ms.unit_id order by ms.unit_id) as unit_id' ], 
+	  tables => ['ms'] },
+	{ output => 'column_id', com_name => 'msc' },
+	    "The macrostrat column identifier(s), if any, associated with this collection.",
+	{ output => 'unit_id', com_name => 'msu' },
+	    "The macrostrat unit identifier(s), if any, associated with this collection.");
+    
     $ds->define_block('1.2:colls:rem');	# this block is deprecated, but we don't want to return an error
                                         # if specified
     
@@ -307,7 +319,7 @@ sub initialize {
 	    "The geographic scale of the collection.",
 	{ output => 'geogcomments', com_name => 'ggc' },
 	    "Additional comments about the geographic location of the collection");
-
+    
      $ds->define_block('1.2:colls:paleoloc' =>
 	{ select => 'PALEOCOORDS' },
 	{ set => '*', code => \&process_paleocoords },
@@ -1205,6 +1217,10 @@ sub initialize {
 	    "The value of this parameter should be a comma-separated list of ",
 	    "L<continent codes|op:config.txt?show=continents>.  This parameter is deprecated;",
 	    "use F<cc> instead.",
+	{ param => 'ms_column', valid => VALID_IDENTIFIER('CLM'), list => ',' },
+	    "Return only records associated with the specified Macrostrat column.",
+	{ param => 'ms_unit', valid => VALID_IDENTIFIER('UNT'), list => ',' },
+	    "Return only records associated with the specified Macrostrat unit.",
 	{ param => 'published', valid => FLAG_VALUE },
 	    "Return only records based on published sources, if the value C<YES> is given for this",
 	    "parameter. If the value C<NO> is given, return only records based on unpublished data.",
@@ -3600,6 +3616,42 @@ sub generateMainFilters {
 	$tables->{non_summary} = 1;
     }
     
+    # Check for parameters 'ms_column' and 'ms_unit'
+    
+    if ( my @ms_columns = $request->clean_param_list('ms_column') )
+    {
+	my $invert = '';
+	
+	if ( $ms_columns[0] =~ /^!(.*)/ )
+	{
+	    $invert = ' not';
+	    $ms_columns[0] = $1;
+	}
+	
+	$tables->{ms} = 1;
+	
+	my $column_list = join("','", @ms_columns);
+	
+	push @filters, "ms.column_id$invert in ('$column_list')";
+    }
+    
+    if ( my @ms_units = $request->clean_param_list('ms_unit') )
+    {
+	my $invert = '';
+	
+	if ( $ms_units[0] =~ /^!(.*)/ )
+	{
+	    $invert = ' not';
+	    $ms_units[0] = $1;
+	}
+	
+	$tables->{ms} = 1;
+	
+	my $unit_list = join("','", @ms_units);
+	
+	push @filters, "ms.unit_id$invert in ('$unit_list')";
+    }
+    
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
     
     my $x1 = $request->clean_param('lngmin');
@@ -5085,6 +5137,9 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
     
+    $join_list .= "LEFT JOIN $TABLE{MACROSTRAT_COLLS} as ms on ms.collection_no = c.collection_no\n"
+	if $tables->{ms};
+    
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
     # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
     # value used by the database.
@@ -5420,6 +5475,16 @@ sub process_coll_ids {
 	{
 	    $record->{$f} = generate_identifier('CLU', $record->{$f}) if defined $record->{$f}
 	}
+    }
+    
+    if ( defined $record->{column_id} )
+    {
+	$record->{column_id} =~ s/(\d+)/generate_identifier('CLM', $1)/ge;
+    }
+    
+    if ( defined $record->{unit_id} )
+    {
+	$record->{unit_id} =~ s/(\d+)/generate_identifier('UNT', $1)/ge;
     }
 }
 
