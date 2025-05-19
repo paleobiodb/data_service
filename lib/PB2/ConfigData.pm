@@ -404,9 +404,9 @@ sub initialize {
     
     add_divisions(\@env_list, ['carbonate indet.', '-- Carbonate marine --'],
 		  'peritidal', 'reef, buildup or bioherm', 'deep subtidal ramp',
-		  'slope', ['marginal marine indet', '-- Siliciclastic marine --'],
+		  'slope', ['marginal marine indet.', '-- Siliciclastic marine --'],
 		  'estuary/bay', 'delta plain', 'foreshore', 'submarine fan',
-		  ['fluvial indet.', '-- Terrestrial --'],
+		  ['fluvial-lacustrine indet.', '-- Terrestrial --'],
 		  'lacustrine - large', 'dune', 'cave', 'tar');
     
     $ENVIRONMENTS = [ ];
