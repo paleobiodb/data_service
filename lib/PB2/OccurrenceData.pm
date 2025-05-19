@@ -113,6 +113,8 @@ sub initialize {
 	    "Additional information about the geographic locality of the occurrence",
 	{ value => 'bin', maps_to => '1.2:colls:bin' },
 	    "The list of geographic clusters to which the collection belongs.",
+	{ value => 'mslink', maps_to => '1.2:colls:mslink' },
+	    "The Macrostrat column and unit ids (if any) associated with the occurrence",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
 	    "Information about the paleogeographic locality of the occurrence,",
 	    "evaluated according to the model specified by the parameter F<pgm>.",
@@ -3680,6 +3682,9 @@ sub generateJoinList {
 
     $join_list .= "LEFT JOIN (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA} group by occurrence_no) as sc on sc.occurrence_no = o.occurrence_no\n"; 
     
+    $join_list .= "LEFT JOIN $TABLE{MACROSTRAT_COLLS} as ms on ms.collection_no = c.collection_no\n"
+	if $tables->{ms};
+    
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
     # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
     # value used by the database.
@@ -4140,6 +4145,16 @@ sub process_occ_ids {
     {
 	$record->{identified_no} = generate_identifier('TXN', $record->{identified_no});
     }
+    
+    if ( defined $record->{column_id} )
+    {
+	$record->{column_id} =~ s/(\d+)/generate_identifier('CLM', $1)/ge;
+    }
+    
+    if ( defined $record->{unit_id} )
+    {
+	$record->{unit_id} =~ s/(\d+)/generate_identifier('UNT', $1)/ge;
+    }    
 }
 
 
