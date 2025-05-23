@@ -24,7 +24,7 @@ use Moo::Role;
 
 our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES, 
      $LITHOLOGIES, $MINOR_LITHS, $LITHIFICATION, $LITH_ADJECTIVES,
-     $ENVIRONMENTS, $TEC_SETTINGS, $COLL_METHODS, $DATE_METHODS,
+     $ENVIRONMENTS, $ENVTYPES, $TEC_SETTINGS, $COLL_METHODS, $DATE_METHODS,
      $COLL_COVERAGES, $COLL_TYPES,
      $PRES_MODES, $PCOORD_MODELS, $RESEARCH_GROUPS, $MUSEUMS);
 
@@ -33,7 +33,8 @@ our (%COV_LABEL) = ( 'some genera' => 'some genera within listed groups',
 		     'some macrofossils' => 'major groups of macrofossils <em>(e.g. trilobites, gastropods, herps)</em>',
 		     'species names' => 'most species names',
 		     'difficult macrofossils' => 'difficult macrofossils <em>(e.g. bryozoans, crinoids, spongs)</em>' );
-		     
+
+our (%ENV_VALUE);
 
 # Initialization
 # --------------
@@ -78,6 +79,8 @@ sub initialize {
 	    "Return lithology adjectives.",
 	{ value => 'envs', maps_to => '1.2:config:environments' },
 	    "Return environments.",
+	{ value => 'envtypes', maps_to => '1.2:config:envtypes' },
+	    "Return environment types.",
 	{ value => 'tecs', maps_to => '1.2:config:tecsettings' },
 	    "Return tectonic settings.",
 	{ value => 'collmet', maps_to => '1.2:config:collmet' },
@@ -191,6 +194,14 @@ sub initialize {
 	    "Value 'env' for environments",
 	{ output => 'environment', com_name => 'nam' },
 	    "Environment name");
+    
+    $ds->define_block('1.2:config:envtypes' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'evt', if_field => 'envtype' },
+	    "Value 'evt' for environment types",
+	{ output => 'envtype', com_name => 'nam' },
+	    "Environment type",
+	{ output => 'label', com_name => 'lbl' },
+	    "Label for this environment type");
     
     $ds->define_block('1.2:config:tecsettings' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'tec', if_field => 'tec_setting' },
@@ -399,6 +410,8 @@ sub initialize {
 	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'environment'");
     
     my @env_list = $field_type =~ /'(.*?)'/g;
+
+    $ENV_VALUE{$_} = 1 foreach @env_list;
     
     unshift @env_list, '-- General --';
     
@@ -412,6 +425,38 @@ sub initialize {
     $ENVIRONMENTS = [ ];
     
     push @$ENVIRONMENTS, { environment => $_ } foreach @env_list;
+
+    # The list of environment types is (for now) hard coded.
+
+    $ENVTYPES = [ ];
+
+    my @envtypes = ('terrestrial', 'any terrestrial',
+		    'lacustrine', 'lacustrine',
+		    'fluvial', 'fluvial',
+		    'karst', 'karst',
+		    'glacial', 'glacial',
+		    'terrother', 'other terrestrial',
+		    'terrindet', 'terrestrial indet.',
+		    'marine', 'any marine',
+		    'carbonate', 'carbonate marine',
+		    'silicic', 'siliciclastic marine',
+		    'marginal', 'marginal marine',
+		    'reef', 'reef',
+		    'stshallow', 'shallow subtidal',
+		    'stdeep', 'deep subtidal',
+		    'offshore', 'offshore',
+		    'slope', 'slope',
+		    'basin', 'basin',
+		    'marindet', 'marine indet.',
+		    'unknown', 'not recorded');
+
+    for (my $i = 0; $i < @envtypes; $i += 2)
+    {
+	my $key = $envtypes[$i];
+	my $label = $envtypes[$i+1];
+
+	push @$ENVTYPES, { envtype => $key, label => $label };
+    }
     
     # Get the list of tectonic settings from the database.
     
@@ -665,6 +710,7 @@ sub get {
     push @result, @$LITHIFICATION if $request->has_block('1.2:config:lithification');
     push @result, @$LITH_ADJECTIVES if $request->has_block('1.2:config:lithadjs');
     push @result, @$ENVIRONMENTS if $request->has_block('1.2:config:environments');
+    push @result, @$ENVTYPES if $request->has_block('1.2:config:envtypes');
     push @result, @$TEC_SETTINGS if $request->has_block('1.2:config:tecsettings');
     push @result, @$COLL_METHODS if $request->has_block('1.2:config:collmets');
     push @result, @$DATE_METHODS if $request->has_block('1.2:config:datemets');

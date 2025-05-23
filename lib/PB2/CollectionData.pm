@@ -1207,59 +1207,43 @@ sub initialize {
     $ds->define_set('1.2:colls:envtype' =>
 	{ value => 'terrestrial' },
 	    "Any terrestrial environment",
+	{ value => 'lacustrine' },
+	    "Lacustrine",
+	{ value => 'fluvial' },
+	    "Fluvial",
+	{ value => 'karst' },
+	    "Karst",
+	{ value => 'glacial' },
+	    "Glacial",
+	{ value => 'terrother' },
+	    "Other terrestrial",
+	{ value => 'terrindet' },
+	    "Terrestrial indet.",
 	{ value => 'marine' },
 	    "Any marine environment",
 	{ value => 'carbonate' },
-	    "Any carbonate environment",
-	{ value => 'siliciclastic' },
-	    "Any siliciclastic environment",
-	{ value => 'unknown' },
-	    "Unknown or indeterminate environment",
-	{ value => 'lacustrine' },
-	    "Lacustrine zone",
-	{ value => 'fluvial' },
-	    "Fluvial zone",
-	{ value => 'karst' },
-	    "Karst zone",
+	    "Carbonate marine",
+	{ value => 'silicic' },
+	    "Siliciclastic marine",
 	{ value => 'marginal' },
-	    "Marginal marine zone",
+	    "Marginal marine",
 	{ value => 'reef' },
-	    "Reef zone",
+	    "Any reef",
 	{ value => 'stshallow' },
-	    "Shallow subtidal zone",
+	    "Shallow subtidal",
 	{ value => 'stdeep' },
-	    "Deep subtidal zone",
+	    "Deep subtidal",
 	{ value => 'offshore' },
-	    "Offshore zone",
+	    "Offshore",
 	{ value => 'slope' },
-	    "Slope/basin zone");
-     
-    $ds->define_set('1.2:colls:envzone' => 
-	{ value => 'lacust' },
-	    "Lacustrine zone",
-	{ value => 'fluvial' },
-	    "Fluvial zone",
-	{ value => 'karst' },
-	    "Karst zone",
-	{ value => 'terrother' },
-	    "Other terrestrial zone",
-	{ value => 'marginal' },
-	    "Marginal marine zone",
-	{ value => 'reef' },
-	    "Reef zone",
-	{ value => 'stshallow' },
-	    "Shallow subtidal zone",
-	{ value => 'stdeep' },
-	    "Deep subtidal zone",
-	{ value => 'offshore' },
-	    "Offshore zone",
-	{ value => 'slope' },
-	    "Slope/basin zone",
+	    "Slope",
+	{ value => 'basin' },
+	    "Basin",
 	{ value => 'marindet' },
-	    "Marine indeterminate zone",
+	    "Marine indet.",
 	{ value => 'unknown' },
-	    "Unknown or indeterminate environment");
-    
+	    "Environment not recorded");
+     
     $ds->define_ruleset('1.2:main_selector' =>
 	{ param => 'clust_id', valid => VALID_IDENTIFIER('CLU'), list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
@@ -1462,8 +1446,8 @@ sub initialize {
 	    "matching records will be B<excluded> instead.",
 	    "If the symbol C<^> occurs at the beginning of any environment code, then all subsequent",
 	    "values will be subtracted from the filter.  Examples: C<terr,^fluvial,lacustrine> or",
-	    "C<!slope,^carbonate>.  You may specify one or more of the following values,",
-	    "as a comma-separated list:", 
+	    "C<!slope,^carbonate>.  You may specify one or more values as a comma-separated list.",
+	    "These must be either specific environment values or any of the following:",
 	    $ds->document_set('1.2:colls:envtype'),
 	{ param => 'has_age', valid => '1.2:colls:agetypes', list => ',' },
 	    "Return only records associated with a collection that has been dated. In other",
@@ -4184,6 +4168,31 @@ sub generateMainFilters {
 	$tables->{non_summary} = 1;
     }
     
+    # Check for parameter 'has_age'
+    
+    my %has_age = map { $_ => 1 } $request->clean_param_list('has_age');
+    
+    if ( %has_age )
+    {
+	my @age_filters;
+	
+	push @age_filters, 'cc.direct_ma is not null' if $has_age{direct} || $has_age{any};
+	push @age_filters, 'cc.max_ma is not null' if $has_age{max} || $has_age{any};
+	push @age_filters, 'cc.min_ma is not null' if $has_age{min} || $has_age{any};
+	
+	if ( @age_filters == 1 )
+	{
+	    push @filters, @age_filters;
+	    $tables->{cc} = 1;
+	}
+	
+	elsif ( @age_filters )
+	{
+	    push @filters, '(' . join(' or ', @age_filters) . ')';
+	    $tables->{cc} = 1;
+	}
+    }
+    
     # Check for parameter 'lithology'
     
     my @lithology = $request->clean_param_list('lithology');
@@ -4329,7 +4338,7 @@ sub generateMainFilters {
     
     my @envtype = $request->clean_param_list('envtype');
     
-    my (%env_values, %exc_values, $et_invert, $et_unknown);
+    my (%env_values, %exc_values, $et_invert, $et_unknown, $et_good);
     
     if ( @envtype && $envtype[0] =~ qr{ ^ ! (.*) }xs )
     {
@@ -4362,16 +4371,13 @@ sub generateMainFilters {
 		}
 	    }
 	}
-	
-	elsif ( $EZVALUE{$e} )
+
+	elsif ( $PB2::ConfigData::ENV_VALUE{$e} )
 	{
-	    foreach my $k ( keys %{$EZVALUE{$e}} )
-	    {
-		if ( $et_exclude ) {
-		    delete $env_values{$k};
-		} else {
-		    $env_values{$k} = 1;
-		}
+	    if ( $et_exclude ) {
+		delete $env_values{$e};
+	    } else {
+		$env_values{$e} = 1;
 	    }
 	}
 	
@@ -4390,95 +4396,6 @@ sub generateMainFilters {
 	    $request->add_warning("bad value '$e' for parameter 'envtype'");
 	}
     }
-    
-    # Check for parameter 'has_age'
-    
-    my %has_age = map { $_ => 1 } $request->clean_param_list('has_age');
-    
-    if ( %has_age )
-    {
-	my @age_filters;
-	
-	push @age_filters, 'cc.direct_ma is not null' if $has_age{direct} || $has_age{any};
-	push @age_filters, 'cc.max_ma is not null' if $has_age{max} || $has_age{any};
-	push @age_filters, 'cc.min_ma is not null' if $has_age{min} || $has_age{any};
-	
-	if ( @age_filters == 1 )
-	{
-	    push @filters, @age_filters;
-	    $tables->{cc} = 1;
-	}
-	
-	elsif ( @age_filters )
-	{
-	    push @filters, '(' . join(' or ', @age_filters) . ')';
-	    $tables->{cc} = 1;
-	}
-    }
-    
-    # if ( @envzone && $envzone[0] =~ qr{ ^ \^ (.*) }xs )
-    # {
-    # 	$envzone[0] = $1;
-    # 	$ez_invert = 1;
-    # }    
-    
-    # elsif ( @envzone & $envzone[0] =~ qr{ ^ \+ (.*) }xs )
-    # {
-    # 	$envzone[0] = $1;
-    # 	$ez_add = 1;
-    # 	$request->add_warning("the '+' modifier on parameter 'envzone' is typically used along with at least one value for 'envtype'") unless @envtype;
-    # }
-    
-    # foreach my $e ( @envzone )
-    # {
-    # 	$e = lc $e;
-	
-    # 	if ( $EZVALUE{$e} )
-    # 	{
-    # 	    foreach my $k ( keys %{$ETVALUE{$e}} )
-    # 	    {
-    # 		$mod_values{$k} = 1;
-    # 	    }
-    # 	}
-	
-    # 	elsif ( $e eq 'unknown' )
-    # 	{
-    # 	    $env_values{''} = 1;
-    # 	    $et_unknown = 1;
-    # 	}
-	
-    # 	else
-    # 	{
-    # 	    $request->add_warning("bad value '$e' for parameter 'envtype'");
-    # 	}
-    # }
-    
-    # If @envzone was specified, then add, remove or restrict the values according to
-    # $ez_add and $ez_invert.
-    
-    # if ( $ez_add && @envzone )
-    # {
-    # 	foreach my $k ( keys %mod_values )
-    # 	{
-    # 	    $env_values{$k} = 1;
-    # 	}
-    # }
-    
-    # elsif ( $ez_invert && @envzone )
-    # {
-    # 	foreach my $k ( keys %env_values )
-    # 	{
-    # 	    delete $env_values{$k} if $mod_values{$k};
-    # 	}
-    # }
-    
-    # elsif ( @envzone )
-    # {
-    # 	foreach my $k ( keys %env_values )
-    # 	{
-    # 	    delete $env_values{$k} unless $mod_values{$k};
-    # 	}
-    # }
     
     # If we ended up with at last one environment value, then construct a
     # filter expression.
@@ -5858,37 +5775,41 @@ sub continent_error {
 # Set up the hashes that are used to evaluate the parameters 'environment' and
 # 'envzone'. 
 
-$ETVALUE{terr} = {'terrestrial indet.' => 1, 'fluvial indet.' => 1, 'alluvial fan' => 1, 'channel lag' => 1, 'coarse channel fill' => 1, 'fine channel fill' => 1, '"channel"' => 1, 'wet floodplain' => 1, 'dry floodplain' => 1, '"floodplain"' => 1, 'crevasse splay' => 1, 'levee' => 1, 'mire/swamp' => 1, 'fluvial-lacustrine indet.' => 1, 'delta plain' => 1, 'fluvial-deltaic indet.' => 1, 'lacustrine - large' => 1, 'lacustrine - small' => 1, 'pond' => 1, 'crater lake' => 1, 'lacustrine delta plain' => 1, 'lacustrine interdistributary bay' => 1, 'lacustrine delta front' => 1, 'lacustrine prodelta' => 1, 'lacustrine deltaic indet.' => 1, 'lacustrine indet.' => 1, 'dune' => 1, 'interdune' => 1, 'loess' => 1, 'eolian indet.' => 1, 'cave' => 1, 'fissure fill' => 1, 'sinkhole' => 1, 'karst indet.' => 1, 'tar' => 1, 'mire/swamp' => 1, 'spring' => 1, 'glacial' => 1};
+$ETVALUE{terrestrial} = {'terrestrial indet.' => 1, 'fluvial indet.' => 1, 'alluvial fan' => 1, 'channel lag' => 1, 'coarse channel fill' => 1, 'fine channel fill' => 1, '"channel"' => 1, 'wet floodplain' => 1, 'dry floodplain' => 1, '"floodplain"' => 1, 'crevasse splay' => 1, 'levee' => 1, 'mire/swamp' => 1, 'fluvial-lacustrine indet.' => 1, 'delta plain' => 1, 'fluvial-deltaic indet.' => 1, 'lacustrine - large' => 1, 'lacustrine - small' => 1, 'pond' => 1, 'crater lake' => 1, 'lacustrine delta plain' => 1, 'lacustrine interdistributary bay' => 1, 'lacustrine delta front' => 1, 'lacustrine prodelta' => 1, 'lacustrine deltaic indet.' => 1, 'lacustrine indet.' => 1, 'dune' => 1, 'interdune' => 1, 'loess' => 1, 'eolian indet.' => 1, 'cave' => 1, 'fissure fill' => 1, 'sinkhole' => 1, 'karst indet.' => 1, 'tar' => 1, 'mire/swamp' => 1, 'spring' => 1, 'glacial' => 1 };
 
-$ETVALUE{carbonate} = {'carbonate indet.' => 1, 'peritidal' => 1, 'shallow subtidal indet.' => 1, 'open shallow subtidal' => 1, 'lagoonal/restricted shallow subtidal' => 1, 'sand shoal' => 1, 'reef, buildup or bioherm' => 1, 'perireef or subreef' => 1, 'intrashelf/intraplatform reef' => 1, 'platform/shelf-margin reef' => 1, 'slope/ramp reef' => 1, 'basin reef' => 1, 'deep subtidal ramp' => 1, 'deep subtidal shelf' => 1, 'deep subtidal indet.' => 1, 'offshore ramp' => 1, 'offshore shelf' => 1, 'offshore indet.' => 1, 'slope' => 1, 'basinal (carbonate)' => 1, 'basinal (siliceous)' => 1 };
+$ETVALUE{carbonate} = {'carbonate indet.' => 1, 'peritidal' => 1, 'shallow subtidal indet.' => 1, 'open shallow subtidal' => 1, 'lagoonal/restricted shallow subtidal' => 1, 'reef, buildup or bioherm' => 1, 'perireef or subreef' => 1, 'intrashelf/intraplatform reef' => 1, 'platform/shelf-margin reef' => 1, 'slope/ramp reef' => 1, 'basin reef' => 1, 'deep subtidal ramp' => 1, 'deep subtidal shelf' => 1, 'deep subtidal indet.' => 1, 'offshore ramp' => 1, 'offshore shelf' => 1, 'offshore indet.' => 1, 'slope' => 1, 'basinal (carbonate)' => 1, 'basinal (siliceous)' => 1 };
 
-$ETVALUE{silicic} = {'marginal marine indet.' => 1, 'coastal indet.' => 1, 'estuary/bay' => 1, 'lagoonal' => 1, 'paralic indet.' => 1, 'delta plain' => 1, 'interdistributary bay' => 1, 'delta front' => 1, 'prodelta' => 1, 'deltaic indet.' => 1, 'foreshore' => 1, 'shoreface' => 1, 'transition zone/lower shoreface' => 1, 'offshore' => 1, 'coastal indet.' => 1, 'submarine fan' => 1, 'basinal (siliciclastic)' => 1, 'basinal (siliceous)' => 1, 'basinal (carbonate)' => 1, 'deep-water indet.' => 1 };
+$ETVALUE{silicic} = {'marginal marine indet.' => 1, 'coastal indet.' => 1, 'estuary/bay' => 1, 'lagoonal' => 1, 'paralic indet.' => 1, 'delta plain' => 1, 'interdistributary bay' => 1, 'delta front' => 1, 'prodelta' => 1, 'deltaic indet.' => 1, 'foreshore' => 1, 'shoreface' => 1, 'transition zone/lower shoreface' => 1, 'offshore' => 1, 'coastal indet.' => 1, 'sand shoal' => 1, 'submarine fan' => 1, 'basinal (siliciclastic)' => 1 };
 
 $ETVALUE{marine} = { 'marine indet.' => 1, 'carbonate indet.' => 1, 'peritidal' => 1, 'shallow subtidal indet.' => 1, 'open shallow subtidal' => 1, 'lagoonal/restricted shallow subtidal' => 1, 'sand shoal' => 1, 'reef, buildup or bioherm' => 1, 'perireef or subreef' => 1, 'intrashelf/intraplatform reef' => 1, 'platform/shelf-margin reef' => 1, 'slope/ramp reef' => 1, 'basin reef' => 1, 'deep subtidal ramp' => 1, 'deep subtidal shelf' => 1, 'deep subtidal indet.' => 1, 'offshore ramp' => 1, 'offshore shelf' => 1, 'offshore indet.' => 1, 'slope' => 1, 'basinal (carbonate)' => 1, 'basinal (siliceous)' => 1, 'marginal marine indet.' => 1, 'coastal indet.' => 1, 'estuary/bay' => 1, 'lagoonal' => 1, 'paralic indet.' => 1, 'delta plain' => 1, 'interdistributary bay' => 1, 'delta front' => 1, 'prodelta' => 1, 'deltaic indet.' => 1, 'foreshore' => 1, 'shoreface' => 1, 'transition zone/lower shoreface' => 1, 'offshore' => 1, 'coastal indet.' => 1, 'submarine fan' => 1, 'basinal (siliciclastic)' => 1, 'basinal (siliceous)' => 1, 'basinal (carbonate)' => 1, 'deep-water indet.' => 1 };
 
-$EZVALUE{lacust} = {'lacustrine - large' => 1, 'lacustrine - small' => 1, 'pond' => 1, 'crater lake' => 1, 'lacustrine delta plain' => 1, 'lacustrine interdistributary bay' => 1, 'lacustrine delta front' => 1, 'lacustrine prodelta' => 1, 'lacustrine deltaic indet.' => 1, 'lacustrine indet.' => 1 };
+$ETVALUE{lacustrine} = {'lacustrine - large' => 1, 'lacustrine - small' => 1, 'pond' => 1, 'crater lake' => 1, 'lacustrine delta plain' => 1, 'lacustrine interdistributary bay' => 1, 'lacustrine delta front' => 1, 'lacustrine prodelta' => 1, 'lacustrine deltaic indet.' => 1, 'lacustrine indet.' => 1, 'fluvial-lacustrine indet.' => 1 };
 
-$EZVALUE{fluvial} = {'fluvial indet.' => 1, 'alluvial fan' => 1, 'channel lag' => 1, 'coarse channel fill' => 1, 'fine channel fill' => 1, '"channel"' => 1, 'wet floodplain' => 1, 'dry floodplain' => 1, '"floodplain"' => 1, 'crevasse splay' => 1, 'levee' => 1, 'mire/swamp' => 1, 'fluvial-lacustrine indet.' => 1, 'delta plain' => 1, 'fluvial-deltaic indet.' => 1 };
+$ETVALUE{fluvial} = {'fluvial indet.' => 1, 'alluvial fan' => 1, 'channel lag' => 1, 'coarse channel fill' => 1, 'fine channel fill' => 1, '"channel"' => 1, 'fluvial-lacustrine indet.' => 1, 'delta plain' => 1, 'fluvial-deltaic indet.' => 1 };
 
-$EZVALUE{karst} = {'cave' => 1, 'fissure fill' => 1, 'sinkhole' => 1, 'karst indet.' => 1 };
+$ETVALUE{karst} = {'cave' => 1, 'fissure fill' => 1, 'sinkhole' => 1, 'karst indet.' => 1 };
 
-$EZVALUE{terrother} = {'dune' => 1, 'interdune' => 1, 'loess' => 1, 'eolian indet.' => 1, 'tar' => 1, 'spring' => 1, 'glacial' => 1 };
+$ETVALUE{glacial} = {'glacial' => 1 };
 
-$EZVALUE{terrindet} = { 'terrestrial indet.' => 1 };
+$ETVALUE{terrother} = {'dune' => 1, 'interdune' => 1, 'loess' => 1, 'eolian indet.' => 1, 'tar' => 1, 'spring' => 1, 'wet floodplain' => 1, 'dry floodplain' => 1, '"floodplain"' => 1, 'crevasse splay' => 1, 'levee' => 1, 'mire/swamp' => 1,  };
 
-$EZVALUE{marginal} = {'marginal marine indet.' => 1, 'peritidal' => 1, 'lagoonal/restricted shallow subtidal' => 1, 'estuary/bay' => 1, 'lagoonal' => 1, 'paralic indet.' => 1, 'delta plain' => 1, 'interdistributary bay' => 1 };
+$ETVALUE{terrindet} = { 'terrestrial indet.' => 1 };
 
-$EZVALUE{reef} = {'reef, buildup or bioherm' => 1, 'perireef or subreef' => 1, 'intrashelf/intraplatform reef' => 1, 'platform/shelf-margin reef' => 1, 'slope/ramp reef' => 1, 'basin reef' => 1 };
+$ETVALUE{marginal} = {'marginal marine indet.' => 1, 'peritidal' => 1, 'lagoonal/restricted shallow subtidal' => 1, 'estuary/bay' => 1, 'lagoonal' => 1, 'paralic indet.' => 1, 'delta plain' => 1, 'interdistributary bay' => 1 };
 
-$EZVALUE{stshallow} = {'shallow subtidal indet.' => 1, 'open shallow subtidal' => 1, 'delta front' => 1, 'foreshore' => 1, 'shoreface' => 1, 'sand shoal' => 1 };
+$ETVALUE{reef} = {'reef, buildup or bioherm' => 1, 'perireef or subreef' => 1, 'intrashelf/intraplatform reef' => 1, 'platform/shelf-margin reef' => 1, 'slope/ramp reef' => 1, 'basin reef' => 1 };
 
-$EZVALUE{stdeep} = {'transition zone/lower shoreface' => 1, 'deep subtidal ramp' => 1, 'deep subtidal shelf' => 1, 'deep subtidal indet.' => 1 };
+$ETVALUE{stshallow} = {'shallow subtidal indet.' => 1, 'open shallow subtidal' => 1, 'delta front' => 1, 'foreshore' => 1, 'shoreface' => 1, 'sand shoal' => 1 };
 
-$EZVALUE{offshore} = {'offshore ramp' => 1, 'offshore shelf' => 1, 'offshore indet.' => 1, 'prodelta' => 1, 'offshore' => 1 };
+$ETVALUE{stdeep} = {'transition zone/lower shoreface' => 1, 'deep subtidal ramp' => 1, 'deep subtidal shelf' => 1, 'deep subtidal indet.' => 1 };
 
-$EZVALUE{slope} = {'slope' => 1, 'basinal (carbonate)' => 1, 'basinal (siliceous)' => 1, 'submarine fan' => 1, 'basinal (siliciclastic)' => 1, 'basinal (siliceous)' => 1, 'basinal (carbonate)' => 1, 'deep-water indet.' => 1 };
+$ETVALUE{slope} = {'slope' => 1, 'slope/ramp reef' => 1 };
 
-$EZVALUE{marindet} = {'marine indet.' => 1, 'carbonate indet.' => 1, 'coastal indet.' => 1, 'deltaic indet.' => 1 };
+$ETVALUE{basin} = { 'basinal (carbonate)' => 1, 'basinal (siliceous)' => 1, 'submarine fan' => 1, 'basinal (siliciclastic)' => 1, 'basin reef' => 1, 'deep-water indet.' => 1 };
+
+$ETVALUE{offshore} = {'offshore ramp' => 1, 'offshore shelf' => 1, 'offshore indet.' => 1, 'prodelta' => 1, 'offshore' => 1 };
+
+$ETVALUE{marindet} = {'marine indet.' => 1, 'carbonate indet.' => 1, 'coastal indet.' => 1, 'deltaic indet.' => 1 };
 
 
 # prune_field_list ( )
