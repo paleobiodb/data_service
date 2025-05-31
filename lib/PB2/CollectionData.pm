@@ -181,7 +181,7 @@ sub initialize {
 	{ value => 'edit', maps_to => '1.2:colls:edit_info' },
 	    "All of the information necessary to edit a collection. This includes the blocks",
 	    "C<B<locext>>, C<B<ages>>, C<B<stratext>>, C<B<lithext>>, C<B<geo>>, C<B<ctaph>>,",
-			   "C<B<comps>>, C<B<methods>>, C<B<resgroup>>, C<B<entname>>, C<B<crmod>>",
+	    "C<B<comps>>, C<B<methods>>, C<B<resgroup>>, C<B<entname>>, C<B<crmod>>",
 	{ value => 'none' },
 	    "Do not return any records. This can be used with data entry operations to",
 	    "suppress the output.");
@@ -300,7 +300,12 @@ sub initialize {
 	    "=item group(...)", "The record is accessible to",
 	    "members of the specified research group(s) only.",
 	    "=back",
-	{ set => 'permissions', from => '*', code => \&process_permissions },
+	{ set => '*', code => \&process_permissions },
+	{ output => 'real_access', com_name => 'accl', pbdb_name => 'access_level', if_block => 'edit' },
+	    "The access level stored for this collection, regardless of whether",
+	    "it is still restricted.",
+	{ output => 'release_date', com_name => 'reld', if_block => 'edit' },
+	    "The release date stored for this collection, interpreted for editing",
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
 	{ output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng', data_type => 'dec' },
@@ -472,6 +477,10 @@ sub initialize {
 	    "coordinates. This field is reported instead of C<latlng_basis> and",
 	    "C<latlng_precision> in responses that use the compact vocabulary.",
 	    "Follow the above link for a list of the code values.",
+	{ output => 'altitude_value', com_name => 'altv' },
+	    "The reported altitude of the collection.",
+	{ output => 'altitude_unit', com_name => 'altu' },
+	    "The unit in which the altitude is expressed, either 'meters' or 'feet'.",
 	{ output => 'geogscale', com_name => 'gsc' },
 	    "The geographic scale of the collection.",
 	{ output => 'geogcomments', com_name => 'ggc' },
@@ -480,7 +489,8 @@ sub initialize {
     $ds->define_block('1.2:colls:locext' =>
 	{ include => '1.2:colls:loc' },
 	{ select => ['cc.latdeg', 'cc.latmin', 'cc.latsec', 'cc.latdec', 'cc.latdir',
-		     'cc.lngdeg', 'cc.lngmin', 'cc.lngsec', 'cc.lngdec', 'cc.lngdir'] },
+		     'cc.lngdeg', 'cc.lngmin', 'cc.lngsec', 'cc.lngdec', 'cc.lngdir',
+		     'cc.gps_datum'] },
 	{ output => 'latdeg', com_name => 'latd' },
 	    "The degrees of latitude of the collection location",
 	{ output => 'latmin', com_name => 'latm' },
@@ -491,7 +501,7 @@ sub initialize {
 	    "The fraction of a degree of latitude of the collection location. This will",
 	    "be empty if either minutes or seconds of latitude are specified, and vice versa.",
 	{ output => 'latdir', com_name => 'latn' },
-	    "The latitude direction of the collection location. Will be either 'North' or 'South'.",
+	    "The latitude direction of the collection location, either 'North' or 'South'.",
 	{ output => 'lngdeg', com_name => 'lngd' },
 	    "The degrees of longitude of the collection location",
 	{ output => 'lngmin', com_name => 'lngm' },
@@ -502,7 +512,9 @@ sub initialize {
 	    "The fraction of a degree of longitude of the collection location. This will",
 	    "be empty if either minutes or seconds of longitude are specified, and vice versa.",
 	{ output => 'lngdir', com_name => 'lnge' },
-	    "The longitude direction of the collection location. Will be either 'East' or 'West'.");
+	    "The longitude direction of the collection location, either 'East' or 'West'.",
+	{ output => 'gps_datum', com_name => 'gpsd' },
+	    "The GPS datum used in computing the latitude and longitude.");
     
     $ds->define_block('1.2:colls:paleoloc' =>
 	{ select => 'PALEOCOORDS' },
@@ -678,13 +690,15 @@ sub initialize {
     
     $ds->define_block('1.2:colls:stratext' =>
 	{ include => '1.2:colls:strat' },
-	{ select => [ qw(cc.zone cc.localsection cc.localbed cc.localbedunit cc.localorder
+	{ select => [ qw(cc.zone_type cc.zone cc.localsection cc.localbed cc.localbedunit cc.localorder
 		         cc.regionalsection cc.regionalbed cc.regionalbedunit cc.regionalorder
 		         cc.stratscale cc.stratcomments) ], tables => 'cc' },
 	{ output => 'stratscale', com_name => 'ssc' },
 	    "The stratigraphic range covered by this collection",
 	{ output => 'zone', com_name => 'szn' },
 	    "The stratigraphic zone in which the collection is located, if known",
+	{ output => 'zone_type', com_name => 'szt' },
+	    "The type of zone specified in the previous field: ammonite, conodont, etc.",
 	{ output => 'localsection', com_name => 'sls' },
 	    "The local section in which the collection is located, if known",
 	{ output => 'localbed', com_name => 'slb' },
@@ -778,7 +792,7 @@ sub initialize {
 	{ select => [ qw(cc.assembl_comps cc.articulated_parts cc.associated_parts
 			 cc.common_body_parts cc.rare_body_parts cc.feed_pred_traces
 			 cc.artifacts cc.component_comments) ], tables => 'cc' },
-	{ output => 'assembl_comps', com_name => 'cps' },
+	{ output => 'assembl_comps', com_name => 'cps', pbdb_name => 'size_classes' },
 	    "The size classes found in this collection.  The value of this field",
 	    "will be one or more of: C<B<macrofossils>, C<B<mesofossils>>, C<B<microfossils>>.",
 	{ output => 'articulated_parts', com_name => 'cpa' },
@@ -859,6 +873,19 @@ sub initialize {
 	{ include => '1.2:refs:attr' });
     
     $ds->define_block('1.2:colls:edit_info' =>
+        { select => ['r.reference_no', 'r.comments as r_comments',
+		   'r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
+		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
+		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle',
+		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
+		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
+		   'r.language as r_language', 'r.doi as r_doi', 'r.isbn as r_isbn',
+		   'r.updated', 'r.updater_no'],
+	  tables => ['r'] },
+        { set => 'formatted', from => '*', code => \&PB2::ReferenceData::format_reference },
+	{ output => 'formatted', com_name => 'ref' },
+	    "The primary reference for the collection, formatted for display",
 	{ include => '1.2:colls:locext' },
 	{ include => '1.2:colls:ages' },
 	{ include => '1.2:colls:stratext' },
@@ -868,6 +895,8 @@ sub initialize {
 	{ include => '1.2:colls:components' },
 	{ include => '1.2:colls:methods' },
 	{ include => '1.2:colls:resgroup' },
+	{ include => '1.2:refs:attr' },
+	{ include => '1.2:colls:secref' },
 	{ include => '1.2:common:entname' },
 	{ include => '1.2:common:crmod' });
     
@@ -1869,7 +1898,8 @@ sub get_coll {
     
     # Figure out what information we need to determine access permissions.
     
-    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', { });
+    my ($access_filter, $access_fields) =
+	$request->generateAccessFilter('c', { c => 1, cc => 1 });
     
     $fields .= $access_fields if $access_fields;
     
@@ -3015,7 +3045,7 @@ sub generateAccessFilter {
     
     # First check to see if the 'private' parameter was included in this
     # request.  If not, then return a filter that will select only public
-    # data. 
+    # data.
     
     unless ( $request->clean_param('private') )
     {
@@ -3060,8 +3090,12 @@ sub generateAccessFilter {
     
     unless ( $authorizer_no && $authorizer_no =~ /^\d+$/ )
     {
-	die $request->exception(401, "You must be logged in to use a URL that contains " .
-				"the parameter 'private'");
+	if ( $tables_ref->{c} ) {
+	    return ("c.access_level = 0", '');
+	} else {
+	    $tables_ref->{cc} = 1;
+	    return ("cc.access_level = 'the public'", '');
+	}
     }
     
     # If we get here, then the requestor has some ability to see private data.
@@ -5918,21 +5952,85 @@ sub process_permissions {
     
     my ($request, $record) = @_;
     
-    return unless $record->{access_level};
+    # If the output block 'edit' was selected (1.2:colls:edit_info) then turn
+    # the release date into one of the options for editing.
     
-    if ( $record->{access_level} == 1 )
+    if ( $request->has_block('edit') )
     {
-	return 'members';
+	my $dbh = $request->get_connection();
+	my $collection_no = $record->{collection_no};
+
+	my ($release_days, $days_past) = $dbh->selectrow_array("
+		SELECT datediff(release_date, created), datediff(release_date, now())
+		FROM $TABLE{COLLECTION_DATA} WHERE collection_no = '$collection_no'");
+
+	if ( $release_days == 0 )
+	{
+	    $record->{release_date} = 'immediate';
+	}
+	
+	elsif ( $days_past < 0 )
+	{
+	    $record->{release_date} = 'passed';
+	}
+
+	elsif ( $release_days > 4 * 366 )
+	{
+	    $record->{release_date} = '5 years';
+	}
+
+	elsif ( $release_days > 3 * 366 )
+	{
+	    $record->{release_date} = '4 years';
+	}
+
+	elsif ( $release_days > 2 * 366 )
+	{
+	    $record->{release_date} = '3 years';
+	}
+
+	elsif ( $release_days > 366 )
+	{
+	    $record->{release_date} = '2 years';
+	}
+
+	elsif ( $release_days > 6 * 31 )
+	{
+	    $record->{release_date} = '1 years';
+	}
+
+	elsif ( $release_days > 3 * 31 )
+	{
+	    $record->{release_date} = '6 months';
+	}
+
+	elsif ( $release_days > 1 )
+	{
+	    $record->{release_date} = '3 months';
+	}
+
+	else
+	{
+	    $record->{release_date} = 'immediate';
+	}
     }
     
-    elsif ( $record->{access_resgroup} )
+    elsif ( $record->{access_level} )
     {
-	return "group($record->{access_resgroup})";
-    }
-    
-    else
-    {
-	return "authorizer";
+	if ( $record->{access_level} == 1 )
+	{
+	    $record->{access_level} = 'members';
+	}
+	
+	elsif ( $record->{access_resgroup} )
+	{
+	    return "group($record->{access_resgroup})";
+	}
+	
+	else
+	{
+	    return "authorizer";
+	}
     }
 }
 

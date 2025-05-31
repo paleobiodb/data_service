@@ -121,10 +121,14 @@ sub initialize {
 		       min_ma_error => { doc => "It accepts an unsigned decimal number of at most 8 digits." },
 		       geogcomments => { note => 'textarea' },
 		       stratcomments => { note => 'textarea' },
-		       lithdescript => { note => 'lithdescript' },
+		       lithdescript => { note => 'textarea' },
+		       lithadj => { alias => 'lithadj1' },
+		       lithification => { alias => 'lithification1' },
+		       minor_lithology => { alias => 'minor_lithology1' },
 		       fossilsfrom1 => { valid => BOOLEAN_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no'." },
 		       fossilsfrom2 => { valid => BOOLEAN_VALUE, doc => "It accepts a value from the following list: 'true','false','1','0','yes','no'." },
 		       geology_comments => { note => 'textarea' },
+		       assembl_comps => { alias => 'size_classes' },
 		       pres_mode => { note => 'textarea' },
 		       common_body_parts => { note => 'textarea' },
 		       rare_body_parts => { note => 'textarea' },
@@ -136,11 +140,11 @@ sub initialize {
 		     });
     
     add_to_ruleset($ds, '1.2:colls:addupdate_body',
-	{ optional => 'max_interval', valid => [VALID_IDENTIFIER('INT'), ANY_VALUE], 
-	  before => 'zone_type' },
+	{ optional => 'max_interval', alias => 'early_interval',
+	  valid => [VALID_IDENTIFIER('INT'), ANY_VALUE], before => 'zone_type' },
 	    "This parameter sets the value of C<max_interval_no> in the C<collections> table. It accepts an interval name or number, or an external identifier of type 'int'.",
-	{ optional => 'min_interval', valid => [VALID_IDENTIFIER('INT'), ANY_VALUE],
-	  before => 'zone_type' },
+	{ optional => 'min_interval', alias => 'late_interval',
+	  valid => [VALID_IDENTIFIER('INT'), ANY_VALUE], before => 'zone_type' },
 	    "This parameter sets the value of C<min_interval_no> in the C<collections> table. It accepts an interval name or number, or an external identifier of type 'int'. If this collection is associated with a single interval, leave this field null.");
     
     $ds->define_ruleset('1.2:occs:addupdate_body' =>

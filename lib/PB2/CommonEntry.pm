@@ -985,7 +985,18 @@ sub generate_sandbox {
     {
 	my $rule = shift @doc_list;
 	
-	my $field_name = $rule->{param} || $rule->{optional} || $rule->{required} || '';
+	my $field_name = $rule->{param} || $rule->{optional} || $rule->{required} || '???';
+	
+	if ( $rule->{alias} )
+	{
+	    my @aliases;
+
+	    if ( ref $rule->{alias} eq 'ARRAY' ) { @aliases = $rule->{alias}->@*; }
+	    else { @aliases = $rule->{alias}; }
+	    
+	    $field_name = join(' / ', $field_name, @aliases);
+	}
+	
 	my $field_doc = ref $rule->{doc_ref} ? $rule->{doc_ref}->$* : '';
 	
 	# $field_doc = shift @doc_list if @doc_list && !ref $doc_list[0];
