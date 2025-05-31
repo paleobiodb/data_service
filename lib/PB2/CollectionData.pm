@@ -2787,12 +2787,14 @@ sub generate_stratname_filter {
     my ($request, $mt, $names_ref, $rank) = @_;
     
     my $dbh = $request->get_connection;
-    my (@unqualified, @clauses);
-    my $negate;
+    
+    my (@groups, @formations, @members, @clauses, $negate);
+
+    $negate = '';
     
     if ( $names_ref->[0] =~ qr{ ^ ! (.*) }xs )
     {
-	$negate = 1; $names_ref->[0] = $1;
+	$negate = 'not '; $names_ref->[0] = $1;
     }
     
     foreach my $name ( @$names_ref )
@@ -2803,110 +2805,87 @@ sub generate_stratname_filter {
 	
 	next unless defined $name && $name ne '';
 	
+	$name =~ s/%/.*/g;
+	$name =~ s/_/./g;
+	
+	unless ( $name =~ /[a-zA-Z]/ )
+	{
+	    $request->add_warning("bad value '$name' for parameter 'strat', " .
+				  "must contain at least one letter");
+	    next;
+	}
+	
 	if ( $name =~ qr{ ^ (.*?) \s+ (fm|mbr|gp) $ }xsi )
 	{
 	    $name = $1;
 	    my $rank = $2;
 	    
-	    unless ( $name =~ qr{[a-z%]}xi )
-	    {
-		$request->add_warning("bad value '$name' for parameter 'strat', must contain at least one letter");
-		next;
-	    }
-	    
-	    my $quoted = $dbh->quote($name);
-	    
 	    if ( lc $rank eq 'fm' )
 	    {
-		push @clauses, "cs.formation like $quoted";
+		push @formations, $name;
 	    }
 	    
 	    elsif ( lc $rank eq 'mbr' )
 	    {
-		push @clauses, "cs.member like $quoted";
+		push @members, $name;
 	    }
 	    
 	    else # ( lc $rank eq 'gp' )
 	    {
-		push @clauses, "cs.grp like $quoted";
+		push @groups, $name;
 	    }
 	}
-	
-	elsif ( $name =~ qr{[%_]}xs )
+
+	elsif ( defined $rank && $rank eq 'group' )
 	{
-	    unless ( $name =~ qr{[a-z]}xi )
-	    {
-		$request->add_warning("bad value '$name' for parameter 'strat', must contain at least one letter");
-		next;
-	    }
-	    
-	    my $quoted = $dbh->quote($name);
-	    
-	    if ( defined $rank && $rank eq 'group' )
-	    {
-		push @clauses, "cs.grp like $quoted";
-	    }
-	    
-	    elsif ( defined $rank && $rank eq 'formation' )
-	    {
-		push @clauses, "cs.formation like $quoted";
-	    }
-	    
-	    elsif ( defined $rank && $rank eq 'member' )
-	    {
-		push @clauses, "cs.member like $quoted";
-	    }
-	    
-	    else
-	    {
-		push @clauses, "cs.grp like $quoted";
-		push @clauses, "cs.formation like $quoted";
-		push @clauses, "cs.member like $quoted";
-	    }
+	    push @groups, $name;
 	}
-	
-	else
-	{
-	    push @unqualified, $dbh->quote($name);
-	}
-    }
-    
-    if ( @unqualified )
-    {
-	my $quoted = join(',', @unqualified);
-	
-	if ( defined $rank && $rank eq 'group' )
-	{
-	    push @clauses, "cs.grp in ($quoted)";
-	}
-	
+
 	elsif ( defined $rank && $rank eq 'formation' )
 	{
-	    push @clauses, "cs.formation in ($quoted)";
+	    push @formations, $name;
 	}
-	
+
 	elsif ( defined $rank && $rank eq 'member' )
 	{
-	    push @clauses, "cs.member in ($quoted)";
+	    push @members, $name;
 	}
-	
+
 	else
 	{
-	    push @clauses, "cs.grp in ($quoted)";
-	    push @clauses, "cs.formation in ($quoted)";
-	    push @clauses, "cs.member in ($quoted)";
+	    push @groups, $name;
+	    push @formations, $name;
+	    push @members, $name;
 	}
     }
-    
-    # If no valid values were found, then add a clause that will select nothing.
-    
+
+    if ( @groups )
+    {
+	my $regex = $dbh->quote(join('|', @groups));
+	
+	push @clauses, "cs.grp rlike $regex";
+    }
+
+    if ( @formations )
+    {
+	my $regex = $dbh->quote(join('|', @groups));
+	
+	push @clauses, "cs.formation rlike $regex";
+    }
+
+    if ( @members )
+    {
+	my $regex = $dbh->quote(join('|', @groups));
+	
+	push @clauses, "cs.member rlike $regex";
+    }
+
     unless ( @clauses )
     {
-	push @clauses, "cs.formation = '!NOTHING!'";
-    }
+	push @clauses, "cs.grp = '_NOTHING_'";
+    }    
     
-    my $clause = '(' . join( ' or ', @clauses ) . ')';
-    $clause = "not " . $clause if $negate;
+    my $clause = "${negate}(" . join( ' or ', @clauses ) . ')';
     
     return $clause;
 }
