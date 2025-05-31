@@ -62,6 +62,19 @@ elsif ( $ARGV[0] eq 'adjust' )
     exit;
 }
 
+elsif ( $ARGV[0] eq 'checkunits' )
+{
+    MatchUnits();
+    exit;
+}
+
+elsif ( $ARGV[0] eq 'units' )
+{
+    $EXECUTE_MODE = 1;
+    MatchUnits();
+    exit;
+}
+
 elsif ( $ARGV[0] eq 'compare' )
 {
     $EXECUTE_MODE = 1;
@@ -123,6 +136,8 @@ exit;
 sub AdjustTable {
     
     say "Checking structure of table `offshore_collections`...";
+
+    my $has_country = 1;
     
     # Step I: check/update the structure of `offshore_collections`.
     
@@ -135,6 +150,7 @@ sub AdjustTable {
     {
 	DBCommand($mstr, "ALTER TABLE offshore_collections ADD COLUMN IF NOT EXISTS `country` \
 	varchar(255) not null default ''");
+	$has_country = 0;
     }
     
     # Step II: check/update the contents of `offshore_collections`.
@@ -158,7 +174,7 @@ sub AdjustTable {
     # If any records have an empty value for country, set that now based on the latitude
     # and longitude of each collection.
     
-    my ($ccount) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_collections WHERE country=''");
+    my ($ccount) = $has_country && DBRowQuery($mstr, "SELECT count(*) FROM offshore_collections WHERE country=''");
     
     if ( $ccount > 0 )
     {
@@ -199,35 +215,6 @@ sub AdjustTable {
 	{
 	    say "  There are still $ccount collections with no country name.";
 	}
-    }
-    
-    # Look for collections where the top_depth and bottom_depth are identical and which
-    # have no matching unit but are located exactly at the top of an existing unit in the
-    # same column. These should be matched.
-    
-    my ($mcount) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_collections as c 
-			JOIN units as u on u.col_id = c.col_id 
-			     and u.position_top = c.top_depth and u.position_top = c.bottom_depth
-			WHERE c.unit_id = 0");
-    
-    if ( $mcount > 0 )
-    {
-	DBCommand($mstr, "UPDATE offshore_collections as c 
-			      JOIN units as u on u.col_id = c.col_id 
-			      and u.position_top = c.top_depth and u.position_top = c.bottom_depth
-			SET c.unit_id = u.id
-			WHERE c.unit_id = 0");
-    }
-    
-    # Look for collections where ma = ''. Those need to be corrected for the fact that
-    # they have no matching unit in macrostrat.
-    
-    my ($macount) = DBRowQuery($mstr, "SELECT count(*) from offshore_collections as c
-				WHERE ma = ''");
-    
-    if ( $macount )
-    {
-	AddUnits();
     }
     
     # Step III: check/update the structure of `offshore_occs`.
@@ -317,17 +304,118 @@ sub AdjustTable {
 	WHERE species_modifier = 's.s.'");
     }
     
-    # Step V: check for the table `coll_units` and create it if it doesn't already exist.
+    # Step V: check for the table `macrostrat_colls` and create it if it doesn't already exist.
     
-    my ($ucheck) = DBRowQuery($pbdb, "SHOW TABLES LIKE 'coll_units'");
+    my ($ucheck) = DBRowQuery($pbdb, "SHOW TABLES LIKE 'macrostrat_colls'");
     
-    unless ( $ucheck =~ /coll_units/ )
+    unless ( $ucheck =~ /macrostrat_colls/ )
     {
-	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `coll_units` (
-		`id` int unsigned not null PRIMARY KEY,
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `macrostrat_colls` (
 		`collection_no` int unsigned not null,
-		`col_id` int unsigned not null default '0',
-		`unit_id` int unsigned not null default '0') Engine=InnoDB");
+		`column_id` int unsigned not null default '0',
+		`unit_id` int unsigned not null default '0'
+		PRIMARY KEY (`collection_no`, `column_id`, `unit_id`)) Engine=InnoDB");
+    }
+}
+
+
+sub MatchUnits {
+
+    # First, look for collections where the top_depth and bottom_depth are identical and which
+    # have no matching unit but are located exactly at the top of an existing unit in the
+    # same column. These should be matched to the existing unit.
+    
+    my ($mcount) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_collections as c 
+			JOIN units as u on u.col_id = c.col_id 
+			     and u.position_top = c.top_depth and u.position_top = c.bottom_depth
+			WHERE c.unit_id = 0");
+    
+    if ( $mcount > 0 )
+    {
+	say "Matching collections with top_depth = bottom_depth to their units...";
+	
+	DBCommand($mstr, "UPDATE offshore_collections as c 
+			      JOIN units as u on u.col_id = c.col_id 
+			      and u.position_top = c.top_depth and u.position_top = c.bottom_depth
+			SET c.unit_id = u.id
+			WHERE c.unit_id = 0");
+    }
+    
+    # Then look for other collections with unit_id = 0.
+    
+    my ($ucount) = DBRowQuery($mstr, "SELECT count(*) from offshore_collections as c
+				WHERE unit_id = 0");
+    
+    if ( $ucount )
+    {
+	say "Matching other collections with missing units...";
+
+	my @columns = DBColumnQuery($mstr, "SELECT distinct col_id from offshore_collections
+		      WHERE unit_id = 0");
+
+	my $colstring = join("','", @columns);
+
+	my $colsects = DBArrayQuery($mstr, "SELECT * FROM offshore_colsects
+		       WHERE col_id in ('$colstring')");
+	
+	my $current_col = 0;
+	my $updated = 0;
+	my $skipped = 0;
+	my (%core_unit, %core_lith);
+	
+	foreach my $r ( @$colsects )
+	{
+	    if ( $r->{col_id} != $current_col )
+	    {
+		$current_col = $r->{col_id};
+		%core_unit = ();
+		%core_lith = ();
+	    }
+
+	    my $collection_id = $r->{collection_id};
+	    my $core_no = $r->{core};
+	    my $unit_id = $r->{unit_id};
+	    my $lith = $r->{pbdb_lith};
+
+	    if ( $unit_id == 0 )
+	    {
+		my @prev_liths = $core_lith{$core_no} ? keys $core_lith{$core_no}->%* : ();
+		my $prev_unit = $core_unit{$core_no};
+		
+		if ( $prev_unit && @prev_liths == 1 )
+		{
+		    my $result = DBCommand($mstr, "UPDATE offshore_collections SET unit_id = '$prev_unit'
+		    WHERE id = '$collection_id'");
+		    
+		    $updated += $result;
+		}
+		
+		elsif ( $prev_unit )
+		{
+		    say "Could not update collection $collection_id in column $current_col: multiple lithologies";
+		    $skipped++;
+		}
+		
+		else
+		{
+		    say "Could not update collection $collection_id in column $current_col: no previous unit";
+		    $skipped++;
+		}
+	    }
+	    
+	    else
+	    {
+		$core_unit{$core_no} = $unit_id;
+		$core_lith{$core_no}{$lith} = 1;
+	    }
+	}
+	
+	say "\nUpdated $updated collections.\nSkipped $skipped collections.\n";
+    }
+
+    else
+    {
+	say "\nNothing to update.\n";
     }
 }
 
@@ -585,6 +673,24 @@ sub DBTextQuery {
 }
 
 
+sub DBArrayQuery {
+    
+    my ($dbh, $query) = @_;
+
+    my $dbresult = $dbh->selectall_arrayref($query, { Slice => { } });
+
+    if ( ref $dbresult eq 'ARRAY' )
+    {
+	return $dbresult;
+    }
+
+    else
+    {
+	return [ ];
+    }
+}
+
+
 sub DBRowQuery {
     
     my ($dbh, $query) = @_;
@@ -607,7 +713,7 @@ sub DBColumnQuery {
     
     my ($dbh, $query) = @_;
     
-    my @dbresult = eval { $dbh->selectcol_array($query) };
+    my $dbresult = eval { $dbh->selectcol_arrayref($query) };
     
     if ( $@ )
     {
@@ -617,7 +723,7 @@ sub DBColumnQuery {
 	die $@;
     }
     
-    return @dbresult;
+    return @$dbresult;
 }
 
 
