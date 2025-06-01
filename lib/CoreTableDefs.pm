@@ -18,7 +18,8 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
 # At runtime, set table and column properties.
 
 {
-    set_table_name(PERSON => 'person');
+    set_table_name(PERSON_DATA => 'person');
+    set_table_name(SESSION_DATA => 'session_data');
     
     set_table_name(TAXON_TREES => 'taxon_trees');
     

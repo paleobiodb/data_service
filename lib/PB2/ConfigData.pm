@@ -66,7 +66,7 @@ sub initialize {
 	    "lithologies, lithifications, minor lithologies, lithology adjectives,",
 	    "environments, tectonic settings, collection methods, dating methods,",
 	    "collection/preservation modes, collection coverage, collection type,",
-	    "and research groups",
+	    "research groups, and current preferences",
 	{ value => 'lithblock', maps_to => '1.2:config:lithblock' },
 	    "Return lithologies, lithology types, minor lithologies, and lithology adjectives.",
 	{ value => 'lithologies', maps_to => '1.2:config:lithologies' },
@@ -99,6 +99,8 @@ sub initialize {
 	    "Return museum names.",
 	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
 	    "Return available paleogeography models.",
+	{ value => 'prefs', maps_to => '1.2:config:preferences' },
+	    "If the user is logged in, return their data entry preferences.",
 	{ value => 'all', maps_to => '1.2:config:all' },
 	    "Return all of the above blocks of information.");
     
@@ -252,6 +254,14 @@ sub initialize {
 	    "Value 'mus' for museums",
 	{ output => 'museum_abbr', com_name => 'nam' },
 	    "Museum abbreviation");
+
+    $ds->define_block('1.2:config:preferences' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'prf', if_field => 'preference' },
+	    "Value 'prf' for preferences",
+	{ output => 'preference', com_name => 'nam' },
+	    "Preference field",
+	{ output => 'value', com_name => 'val' },
+	    "Preference value");
     
     $ds->define_block('1.2:config:collblock' =>
 	{ include => '1.2:config:lithologies' },
@@ -266,7 +276,8 @@ sub initialize {
 	{ include => '1.2:config:colltypes' },
 	{ include => '1.2:config:presmodes' },
 	{ include => '1.2:config:resgroups' },
-	{ include => '1.2:config:museums' });
+	{ include => '1.2:config:museums' },
+	{ include => '1.2:config:preferences' });
     
     $ds->define_block('1.2:config:pgmodels' =>
 	{ set => '*', code => \&process_description },
@@ -295,7 +306,8 @@ sub initialize {
 	{ include => '1.2:config:presmodes' },	
 	{ include => '1.2:config:resgroups' },
 	{ include => '1.2:config:museums' },
-	{ include => '1.2:config:pgmodels' });
+	{ include => '1.2:config:pgmodels' },
+	{ include => '1.2:config:preferences' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
@@ -720,6 +732,7 @@ sub get {
     push @result, @$RESEARCH_GROUPS if $request->has_block('1.2:config:resgroups');
     push @result, @$MUSEUMS if $request->has_block('1.2:config:museums');
     push @result, @$PCOORD_MODELS if $request->has_block('1.2:config:pgmodels');
+    push @result, $request->get_preferences if $request->has_block('1.2:config:preferences');
     
     if ( my $offset = $request->result_offset(1) )
     {
@@ -731,5 +744,54 @@ sub get {
     $request->list_result(@result);
 }
 
+
+# get_preferences ( )
+#
+# If the user making this request is logged in to Classic, return their data
+# entry preferences.
+
+sub get_preferences {
+
+    my ($request) = @_;
+
+    my @records;
+
+    if ( my $cookie_id = Dancer::cookie('session_id') )
+    {
+	my $dbh = $request->get_connection();
+	my $session_id = $dbh->quote($cookie_id);
+	
+	my $sql = "SELECT person_no, preferences
+		FROM $TABLE{PERSON_DATA} as p join $TABLE{SESSION_DATA} as s
+		     on p.person_no = s.enterer_no
+		WHERE s.session_id = $session_id";
+	
+	my ($person_no, $preferences) = $dbh->selectrow_array($sql);
+	
+	return unless $preferences;
+	
+	my @prefs = split / -:- /, $preferences;
+
+	my ($field, $value);
+
+	my %override = ( max_interval => 'early_interval', assembl_comps => 'size_classes',
+		         pres_mode => 'pres_modes', coll_meth => 'fossil_source' );
+	
+	foreach my $p ( @prefs )
+	{
+	    if ( $p =~ /(.*?)=(.*)/ )
+	    {
+		push @records, { preference => $override{$1} || $1, value => $2 };
+	    }
+
+	    else
+	    {
+		push @records, { preference => $p, value => "true" };
+	    }
+	}    
+    }
+
+    return @records;
+}
 
 1;
