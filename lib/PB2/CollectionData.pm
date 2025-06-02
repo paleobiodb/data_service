@@ -650,11 +650,11 @@ sub initialize {
 	    "according to the C<B<overlap>> timerule.");
     
     $ds->define_block('1.2:colls:ages' => 
-	{ select => ['cc.direct_ma', 'cc.direct_ma_error', 'cc.direct_ma_unit',
-	  'cc.direct_ma_method', 'cc.max_ma', 'cc.max_ma_error', 'cc.max_ma_unit',
-	  'cc.max_ma_method', 'cc.min_ma', 'cc.min_ma_error', 'cc.min_ma_unit',
+	{ select => ['cc.direct_ma as direct_ma_value', 'cc.direct_ma_error', 'cc.direct_ma_unit',
+	  'cc.direct_ma_method', 'cc.max_ma as max_ma_value', 'cc.max_ma_error', 'cc.max_ma_unit',
+	  'cc.max_ma_method', 'cc.min_ma as min_ma_value', 'cc.min_ma_error', 'cc.min_ma_unit',
 	  'cc.min_ma_method' ], tables => 'cc' },
-	{ output => 'direct_ma', com_name => 'agd', data_type => 'dec' },
+	{ output => 'direct_ma_value', com_name => 'agd', data_type => 'dec' },
 	    "The direct age (if any) determined for this collection.",
 	{ output => 'direct_ma_error', com_name => 'agdc', data_type => 'dec' },
 	    "The uncertainty in the direct age measurement",
@@ -662,7 +662,7 @@ sub initialize {
 	    "The unit for the direct age and uncertainty. Values are: B<Ma>, B<Ka>, B<YBP>.",
 	{ output => 'direct_ma_method', com_name => 'agdm' },
 	    "The method by which the direct age was obtained.",
-	{ output => 'max_ma', com_name => 'agb', data_type => 'dec' },
+	{ output => 'max_ma_value', com_name => 'agb', data_type => 'dec' },
 	    "The maximum age (if any) determined for this collection.",
 	{ output => 'max_ma_error', com_name => 'agbc', data_type => 'dec' },
 	    "The uncertainty in the maximum age measurement",
@@ -670,7 +670,7 @@ sub initialize {
 	    "The unit for the maximum age and uncertainty. Values are the same as for B<adu>.",
 	{ output => 'max_ma_method', com_name => 'agbm' },
 	    "The method by which the maximum age was obtained.",
-	{ output => 'min_ma', com_name => 'agt', data_type => 'dec' },
+	{ output => 'min_ma_value', com_name => 'agt', data_type => 'dec' },
 	    "The minimum age (if any) determined for this collection.",
 	{ output => 'min_ma_error', com_name => 'agtc', data_type => 'dec' },
 	    "The uncertainty in the minimum age measurement",
