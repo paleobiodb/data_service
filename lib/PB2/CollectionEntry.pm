@@ -133,6 +133,7 @@ sub initialize {
 		       geology_comments => { note => 'textarea' },
 		       assembl_comps => { alias => 'size_classes' },
 		       pres_mode => { note => 'textarea' },
+		       coll_meth => { note => 'textarea', alias => 'collection_methods' },
 		       common_body_parts => { note => 'textarea' },
 		       rare_body_parts => { note => 'textarea' },
 		       component_comments => { note => 'textarea' },

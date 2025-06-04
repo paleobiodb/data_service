@@ -365,7 +365,7 @@ sub initialize {
 	    "case they are returned by default in the order they occur in the database.");
     
     $ds->define_ruleset('1.2:refs:specifier' => 
-	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => 'id' },
+	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), alias => ['id', 'reference_id'] },
 	    "The identifier of the reference to be returned or selected");
     
     $ds->define_ruleset('1.2:refs:selector' =>
