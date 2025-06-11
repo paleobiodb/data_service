@@ -34,9 +34,6 @@ sub initialize {
     # Start by defining an output map.
     
     $ds->define_output_map('1.2:refs:output_map' =>
-	{ value => 'counts', maps_to => '1.2:refs:counts' },
-	    "Report the number of taxonomic names, opinions, occurrences, specimens, and collections",
-	    "derived from this reference that have been entered into the database.",
 	{ value => 'formatted' },
 	    "If this option is specified, show the formatted reference instead of",
 	    "the individual fields.",
@@ -59,6 +56,15 @@ sub initialize {
 	    "All of the information necessary to edit a bibliographic reference.",
 	    "This includes the blocks C<B<authorlist>>, C<B<comments>>, C<B<entname>>,",
 	    "C<B<crmod>>.",
+	{ value => 'counts', maps_to => '1.2:refs:counts' },
+	    "Report the number of taxonomic names, opinions, occurrences, specimens, and collections",
+	    "derived from this reference that have been entered into the database.",
+	{ value => 'collcounts', maps_to => '1.2:refs:collcounts' },
+	    "If you include this output block, you must also specify the parameter",
+	    "C<B<count_id>>. This block reports the number of occurrences (including reidentifications)",
+	    "and specimens entered from this reference that are associated with the",
+	    "collection specified by C<B<count_id>>. This is intended to be used",
+	    "by the collection editing app.",
 	{ value => 'none' },
 	    "Do not return any records. If you have asked for summary counts, these",
 	    "will still be returned. This can be used with the data entry operations",
@@ -223,6 +229,16 @@ sub initialize {
 	{ output => 'n_colls', com_name => 'rcc', bibjson_name => '_n_colls', data_type => 'pos' },
 	    "The number of collections for which this reference is a primary source or secondary source");
     
+    $ds->define_block('1.2:refs:collcounts' => 
+	{ select => ['rcco.n_occs', 'rccs.n_specs'],
+	  tables => ['rcco', 'rccs'] },
+	{ output => 'n_occs', com_name => 'rcco', data_type => 'pos' },
+	    "The number of occurrences in the collection identified by C<B<count_id>> whose",
+	    "identification and/or reidentification was entered from this reference.",
+	{ output => 'n_specs', com_name => 'rccs', data_type => 'pos' },
+	    "The number of specimens in the collection identified by C<B<count_id>> that",
+	    "were entered from this reference.");
+    
     $ds->define_block('1.2:refs:comments' =>
 	{ select => ['r.project_name as r_project_name'] },
 	{ output => 'r_project_name', com_name => 'prj', pbdb_name => 'project_name',
@@ -353,7 +369,10 @@ sub initialize {
 	{ optional => 'show', valid => '1.2:refs:output_map', list => ',' },
 	    "Indicates additional information to be shown along",
 	    "with the basic record.  The value should be a comma-separated list containing",
-	    "one or more of the following values:");
+	    "one or more of the following values:",
+	{ optional => 'count_id', valid => VALID_IDENTIFIER('COL') },
+	    "The value of this parameter must be a valid collection identifier. If specified,",
+	    "you should also specify \"show=collcounts\".");
     
     $ds->define_ruleset('1.2:refs:order' =>
 	{ optional => 'order', valid => '1.2:refs:order', split => ',', no_set_doc => 1 },
@@ -545,6 +564,19 @@ sub get {
     
     my $id = $request->clean_param('ref_id');
     
+    # If the parameter 'count_id' was specified, store its value for use by
+    # 'generate_join_list'. 
+    
+    if ( my $count_id = $request->clean_param('count_id') )
+    {
+	$request->{my_count_id} = $dbh->quote($count_id);
+    }
+
+    elsif ( $request->has_block('1.2:refs:collcounts') )
+    {
+	die $request->exception(400, "You must specify the parameter 'count_id' with 'show=collcounts'");
+    }
+    
     die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
     
     $request->strict_check;
@@ -599,6 +631,19 @@ sub list {
     push @filters, '1=1' unless @filters;
     
     my $filter_string = join(' and ', @filters);
+
+    # If the parameter 'count_id' was specified, store its value for use by
+    # 'generate_join_list'. 
+    
+    if ( my $count_id = $request->clean_param('count_id') )
+    {
+	$request->{my_count_id} = $dbh->quote($count_id);
+    }
+
+    elsif ( $request->has_block('1.2:refs:collcounts') )
+    {
+	die $request->exception(400, "You must specify the parameter 'count_id' with 'show=collcounts'");
+    }
     
     # Check for strictness and external identifiers
     
@@ -1407,11 +1452,19 @@ sub generate_order_clause {
 sub generate_join_list {
 
     my ($request, $tables_hash) = @_;
+
+    my $join_list = '';
     
-    return "	JOIN $REF_SUMMARY as rs on rs.reference_no = r.reference_no\n"
+    $join_list .= "    LEFT JOIN $REF_SUMMARY as rs on rs.reference_no = r.reference_no\n"
 	if $tables_hash->{rs};
+
+    $join_list .= "    LEFT JOIN (SELECT rcca.reference_no, count(*) as n_occs FROM (SELECT reference_no, occurrence_no from occurrences WHERE collection_no = $request->{my_count_id} UNION DISTINCT SELECT reference_no, occurrence_no from reidentifications WHERE collection_no = $request->{my_count_id}) as rcca group by reference_no) as rcco on rcco.reference_no = r.reference_no\n"
+	if $tables_hash->{rcco} && $request->{my_count_id};
+
+    $join_list .= "    LEFT JOIN (SELECT rxs.reference_no, count(*) as n_specs FROM occurrences as rxo JOIN specimens as rxs using (occurrence_no) WHERE collection_no = $request->{my_count_id} GROUP BY reference_no) as rccs on rccs.reference_no = r.reference_no\n"
+	if $tables_hash->{rccs} && $request->{my_count_id};
     
-    return '';
+    return $join_list;
 }
 
 
