@@ -41,6 +41,11 @@ our (@CARP_NOT) = qw(EditTransaction);
     
     CollectionEdit->register_allowances('DUPLICATE');
     
+    CollectionEdit->ignore_field('reference_add');
+    CollectionEdit->ignore_field('reference_delete');
+    CollectionEdit->ignore_field('max_interval');
+    CollectionEdit->ignore_field('min_interval');
+    
     set_table_property('COLLECTION_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('COLLECTION_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('COLLECTION_DATA', CAN_DELETE => 'OWNER');
@@ -122,6 +127,7 @@ sub validate_coll_action {
     
     my $dbh = $edt->dbh;
     my $keyexpr = $action->keyexpr;
+    my $coll_id = $action->keyval;
     
     # my $old_record;
     
@@ -147,8 +153,8 @@ sub validate_coll_action {
 	$edt->add_condition($action, 'E_REQUIRED', 'collection_name');
     }
     
-    # Check the primary reference
-    # ---------------------------
+    # Check the reference parameters
+    # ------------------------------
     
     my $reference_no = $action->record_value('reference_id');
     
@@ -170,6 +176,9 @@ sub validate_coll_action {
 	    }
 	}
     }
+    
+    $action->ignore_field('reference_add');
+    $action->ignore_field('reference_delete');
     
     # Check the access level and release date
     # ---------------------------------------
@@ -224,8 +233,8 @@ sub validate_coll_action {
 	    $action->set_record_value('release_date', "created + INTERVAL $1 $2");
 	    $action->handle_column('release_date', 'unquoted');
 	    
-	    $edt->add_condition('E_BAD_VALUE', 'release_date', "a maximum of 5 years is allowed")
-		if $2 eq 'year' && $1 > 5;
+	    $edt->add_condition('E_BAD_VALUE', 'release_date', "a maximum of 3 years is allowed")
+		if $2 eq 'year' && $1 > 3;
 	}
 	
 	elsif ( defined $release_date && $release_date ne '' )
@@ -843,47 +852,88 @@ sub validate_occ_action {
 # collection is added or updated, this method updates the collection matrix.
 
 sub after_action {
+    
+    my ($edt, $action, $operation, $table_specifier, $new_keyval) = @_;
 
+    if ( $table_specifier eq 'COLLECTION_DATA' )
+    {
+	return after_coll_action(@_);
+    }
+    
+    elsif ( $table_specifier eq 'OCCURRENCE_DATA' ||
+	    $table_specifier eq 'REID_DATA' )
+    {
+	return after_occ_action(@_);
+    }
+}
+
+
+sub after_coll_action {
+    
     my ($edt, $action, $operation, $table_specifier, $new_keyval) = @_;
     
     my $dbh = $edt->dbh;
     
-    my $keyexpr;
+    my ($keyexpr, $keyval, $sql, $result);
+    my $tableinfo = $edt->table_info_ref('COLLECTION_DATA');
 
     # For an 'insert' operation, the new key value is provided as an argument to
     # this method.
     
-    if ( $table_specifier eq 'COLLECTION_DATA' && $operation eq 'insert' )
+    if ( $operation eq 'insert' )
     {
 	$keyexpr = "collection_no = '$new_keyval'";
+	$keyval = $new_keyval;
     }
     
     # Otherwise, we can get it from the action.
     
-    elsif ( $table_specifier eq 'COLLECTION_DATA' &&
-	    ( $operation eq 'update' || $operation eq 'replace' || $operation eq 'delete' ) )
+    elsif ( $operation eq 'update' || $operation eq 'replace' || $operation eq 'delete' )
     {
 	$keyexpr = $action->keyexpr;
+	$keyval = $action->keyval;
     }
 
     # For a 'delete' operation on the COLLECTION_DATA table, remove the
-    # corresponding row from the COLLECTION_MATRIX table.
+    # corresponding row from the COLLECTION_MATRIX table and any corresponding
+    # rows from the COLLECTION_REFS table.
     
-    if ( $table_specifier eq 'COLLECTION_DATA' && $operation eq 'delete' && $keyexpr )
+    if ( $operation eq 'delete' && $keyexpr )
     {
-	my $sql = "DELETE FROM $TABLE{COLLECTION_MATRIX} WHERE $keyexpr";
-
+	$sql = "DELETE FROM $TABLE{COLLECTION_MATRIX} WHERE $keyexpr";
+	
 	$edt->debug_line("$sql\n") if $edt->debug_mode;
-
+	
+	$dbh->do($sql);
+	
+	$sql = "DELETE FROM $TABLE{COLLECTION_REFS} WHERE $keyexpr";
+	
+	if ( $tableinfo->{LOG_CHANGES} )
+	{
+	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{COLLECTION_REFS}
+			WHERE $keyexpr", { Slice => { } });
+	    
+	    if ( ref $result eq 'ARRAY' && @$result )
+	    {
+		$edt->log_aux_event('delete', 'COLLECTION_REFS', $sql, 'collection_no', $keyval,
+				    $result);
+	    }
+	}
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
 	$dbh->do($sql);
     }
     
     # For any other operation on the COLLECTION_DATA table, generate a fresh row
-    # in the COLLECTION_MATRIX table.
+    # in the COLLECTION_MATRIX table and adjust the COLLECTION_REFS table as
+    # specified by the reference fields.
     
-    elsif ( $table_specifier eq 'COLLECTION_DATA' && $keyexpr )
+    elsif ( $keyexpr )
     {
-	my $sql = "REPLACE INTO $TABLE{COLLECTION_MATRIX}
+	# First, adjust the collection matrix.
+	
+	$sql = "REPLACE INTO $TABLE{COLLECTION_MATRIX}
 		       (collection_no, lng, lat, loc, cc,
 			protected, early_age, late_age,
 			early_int_no, late_int_no, 
@@ -909,21 +959,181 @@ sub after_action {
 			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = 
 				if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
 		WHERE $keyexpr";
-	    
+	
 	$edt->debug_line("$sql\n") if $edt->debug_mode;
 	
 	$dbh->do($sql);
-	    
+	
 	$sql = "UPDATE $TABLE{COLLECTION_MATRIX} as m JOIN
 			(SELECT collection_no, count(*) as n_occs FROM $TABLE{OCCURRENCE_DATA}
 			 GROUP BY collection_no) as sum using (collection_no)
 		    SET m.n_occs = sum.n_occs WHERE $keyexpr";
-
+	
 	$edt->debug_line("$sql\n") if $edt->debug_mode;
 	
 	$dbh->do($sql);
+	
+	# Then add and remove any necessary entries to the secondary reference table.
+	# Because this is happening after the main operation, we don't generate any
+	# error conditions. Instead, we just silently ignore any reference identifier
+	# that is invalid to add or remove. If the keyvalue is multiple, iterate over
+	# all of the corresponding collection identifiers.
+	
+	my (@add_refs, @delete_refs, @coll_ids);
+
+	@coll_ids = $action->keyvals;
+	
+	# foreach my $c ( @coll_ids )
+	# {
+	#     print STDERR "c = $c\n";
+	# }
+	
+	# If a list of references to add was specified, put them on the add list. If a
+	# new primary reference identifier was specified, make sure it is on the list
+	# too.
+	
+	my $new_primary = $action->record_value('reference_id');
+	
+	if ( my $add_refs = $action->record_value('reference_add') )
+	{
+	    if ( ref $add_refs eq 'ARRAY' )
+	    {
+		@add_refs = @$add_refs;
+	    }
+
+	    else
+	    {
+		@add_refs = $add_refs;
+	    }
+	    
+	    if ( $new_primary && List::Util::none { $_ eq $new_primary } @add_refs )
+	    {
+		push @add_refs, $new_primary;
+	    }
+	}
+	
+	elsif ( $new_primary )
+	{
+	    push @add_refs, $new_primary;
+	}
+	
+	# If a list of references to delete was specified, put them on the delete list.
+	# However, don't delete the primary reference.
+	
+	if ( my $delete_refs = $action->record_value('reference_delete') )
+	{
+	    if ( ref $delete_refs eq 'ARRAY' )
+	    {
+		@delete_refs = @$delete_refs;
+	    }
+
+	    else
+	    {
+		@delete_refs = $delete_refs;
+	    }
+	    
+	    # If a new primary reference was set, make sure we don't delete it.
+	    
+	    if ( $new_primary )
+	    {
+		@delete_refs = grep { $_ ne $new_primary } @delete_refs;
+	    }
+	}
+	
+	# Now iterate over all of the collections to update. In almost all cases, there
+	# will be only one.
+	
+	foreach my $coll_id ( @coll_ids )
+	{
+	    my $qcoll = $dbh->quote($coll_id);
+	    
+	    # For logging purposes, fetch the current list of secondary references.
+	    
+	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{COLLECTION_REFS}
+			WHERE collection_no = $qcoll", { Slice => { } });
+	    
+	    # If there are any refs to add, add them now. Make sure to add only those
+	    # identifiers that exist in the REFERENCE_DATA table. We use INSERT IGNORE
+	    # in case any of these entries already exists in the table.
+	    
+	    if ( @add_refs )
+	    {
+		my $add_list = join(',', map { $dbh->quote($_) } @add_refs);
+		
+		$sql = "INSERT IGNORE INTO $TABLE{COLLECTION_REFS} (collection_no, reference_no)
+			SELECT $qcoll as collection_no, reference_no FROM $TABLE{REFERENCE_DATA}
+			WHERE reference_no in ($add_list)";
+
+		if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
+		{
+		    $edt->log_aux_event('insert', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
+					$result);
+		}
+
+		$edt->debug_line("$sql\n") if $edt->debug_mode;
+		
+		$dbh->do($sql);
+	    }
+	    
+	    # If there are any refs to delete, delete them now. If a new primary
+	    # reference was not set, retrieve the current primary reference for this
+	    # collection and make sure that we don't delete it.
+
+	    if ( @delete_refs )
+	    {
+		my $delete_list;
+		
+		if ( $new_primary )
+		{
+		    $delete_list = join(',', map { $dbh->quote($_) } @delete_refs);
+		}
+		
+		else
+		{
+		    $sql = "SELECT reference_no FROM $TABLE{COLLECTION_DATA}
+			    WHERE collection_no = $qcoll";
+		    
+		    $edt->debug_line("$sql\n") if $edt->debug_mode;
+		    
+		    my ($current_primary) = $dbh->selectrow_array($sql);
+		    
+		    $current_primary //= '';
+		    
+		    $delete_list = join(',', map { $dbh->quote($_) }
+					     grep { $_ ne $current_primary } @delete_refs);
+		}
+
+		if ( $delete_list )
+		{
+		    $sql = "DELETE sr FROM $TABLE{COLLECTION_REFS} as sr
+			    left join $TABLE{OCCURRENCE_DATA} as o1 using (collection_no, reference_no)
+			    left join $TABLE{OCCURRENCE_DATA} as o2 using (collection_no)
+			    left join $TABLE{SPECIMEN_DATA} as sp on
+			        sp.occurrence_no = o2.occurrence_no and sp.reference_no = sr.reference_no
+		        WHERE collection_no = $qcoll and sr.reference_no in ($delete_list)
+			      and o1.occurrence_no is null and sp.specimen_no is null";
+		    
+		    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
+		    {
+			$edt->log_aux_event('delete', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
+					    $result);
+		    }
+		    
+		    $edt->debug_line("$sql\n") if $edt->debug_mode;
+		    
+		    $dbh->do($sql);
+		}
+	    }
+	}
     }
+}
+
+
+sub after_occ_action {
     
+    my ($edt, $action, $operation, $table_specifier, $new_keyval) = @_;
+
+
 }
 
 

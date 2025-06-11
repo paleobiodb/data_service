@@ -5632,7 +5632,7 @@ sub set_collection_refs {
 	}
     }
     
-    return \@refs;
+    return join(',', @refs);
 }
 
 
@@ -5943,7 +5943,7 @@ sub process_permissions {
 		SELECT datediff(release_date, created), datediff(release_date, now())
 		FROM $TABLE{COLLECTION_DATA} WHERE collection_no = '$collection_no'");
 
-	if ( $release_days == 0 )
+	if ( !defined $release_days || $release_days == 0 )
 	{
 	    $record->{release_date} = 'immediate';
 	}
