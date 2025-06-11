@@ -257,7 +257,7 @@ sub set_keyinfo {
     $action->{keycol} = $keycol;
     $action->{keyfield} = $keyfield;
     $action->{keyval} = $keyval if @_ > 3;
-    $action->{keyexpr} = $keyexpr if @_ > 3;
+    $action->{keyexpr} = $keyexpr if @_ > 4;
     
     if ( $keyexpr && ! $keycol )
     {
@@ -287,6 +287,24 @@ sub keyfield {
 sub keyval {
 
     return $_[0]{keyval};
+}
+
+sub keyvals {
+
+    if ( ref $_[0]{keyval} eq 'ARRAY' )
+    {
+	return $_[0]{keyval}->@*;
+    }
+    
+    elsif ( wantarray )
+    {
+	return $_[0]{keyval};
+    }	
+    
+    else
+    {
+	return 1;
+    }
 }
 
 sub keyexpr {

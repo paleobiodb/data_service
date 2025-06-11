@@ -15,6 +15,7 @@ use Permissions;
 use ExternalIdent qw(%IDP %IDRE);
 
 use Carp qw(croak);
+use List::Util qw(none);
 
 use feature 'unicode_strings', 'postderef';
 
@@ -102,7 +103,7 @@ sub finish_table_definition {
 	{
 	    my $alt = $1 . '_id';
 	    
-	    if ( $colname && $colname eq $table_defn->{PRIMARY_KEY} )
+	    if ( $colname && $table_defn->{PRIMARY_KEY} && $colname eq $table_defn->{PRIMARY_KEY} )
 	    {
 		$table_defn->{PRIMARY_FIELD} = $alt;
 	    }
@@ -1752,6 +1753,8 @@ sub log_aux_event {
 	
 	foreach my $old ( @$rev )
 	{
+	    @values = ();
+	    
 	    foreach my $field ( @fields )
 	    {
 		if ( defined $old->{$field} )

@@ -766,6 +766,7 @@ sub fetch_old_record {
 
     if ( $table_specifier && $keyexpr )
     {
+
 	return $action->set_old_record($edt->fetch_record($table_specifier, $keyexpr));
     }
 
@@ -803,6 +804,16 @@ sub execute_insert {
 	$action->set_status('skipped');
 	return;
     }
+
+    # If we are logging this event, do any necessary prep work.
+    
+    my $do_logging = $table_info->{LOG_CHANGES} || 
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+    
+    if ( $do_logging )
+    {
+	$edt->before_log_event($action, 'insert', $table_specifier);
+    }
     
     # Construct the INSERT statement.
     
@@ -815,14 +826,6 @@ sub execute_insert {
 		VALUES ($value_string)";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
-    
-    my $do_logging = $table_info->{LOG_CHANGES} || 
-	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
-    
-    if ( $do_logging )
-{
-	$edt->before_log_event($action, 'insert', $table_specifier);
-    }
     
     my ($new_keyval);
     
@@ -952,6 +955,16 @@ sub execute_replace {
 	return;
     }
     
+    # If we are logging this event, do any necessary prep work.
+    
+    my $do_logging = $table_info->{LOG_CHANGES} || 
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+    
+    if ( $do_logging )
+    {
+	$edt->before_log_event($action, 'replace', $table_specifier);
+    }
+        
     # Construct the REPLACE statement.
     
     my $dbh = $edt->dbh;
@@ -963,14 +976,6 @@ sub execute_replace {
 		VALUES ($value_list)";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
-    
-    my $do_logging = $table_info->{LOG_CHANGES} || 
-	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
-    
-    if ( $do_logging )
-    {
-	$edt->before_log_event($action, 'replace', $table_specifier);
-    }
     
     # Execute the statement inside a try block, to catch any exceptions that might be thrown.
     
@@ -1082,6 +1087,16 @@ sub execute_update {
 	return;
     }
     
+    # If we are logging this event, do any necessary prep work.
+    
+    my $do_logging = $table_info->{LOG_CHANGES} || 
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+    
+    if ( $do_logging )
+    {
+	$edt->before_log_event($action, 'update', $table_specifier);
+    }
+    
     # Construct the UPDATE statement.
     
     my $dbh = $edt->dbh;
@@ -1099,14 +1114,6 @@ sub execute_update {
 		WHERE $keyexpr";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
-    
-    my $do_logging = $table_info->{LOG_CHANGES} || 
-	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
-    
-    if ( $do_logging )
-    {
-	$edt->before_log_event($action, 'update', $table_specifier);
-    }
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
@@ -1245,9 +1252,7 @@ sub execute_delete {
     my $keyexpr = $action->keyexpr;
     my $found;
     
-    my $sql = "	DELETE FROM $TABLE{$table_specifier} WHERE $keyexpr";
-    
-    $edt->debug_line( "$sql\n" ) if $edt->debug_mode;
+    # If we are logging this event, do any necessary prep work.
     
     my $do_logging = $table_info->{LOG_CHANGES} || 
 	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
@@ -1256,6 +1261,12 @@ sub execute_delete {
     {
 	$edt->before_log_event($action, 'replace', $table_specifier);
     }
+    
+    # Construct the DELETE statement.
+    
+    my $sql = "	DELETE FROM $TABLE{$table_specifier} WHERE $keyexpr";
+    
+    $edt->debug_line( "$sql\n" ) if $edt->debug_mode;
     
     # Execute the statement inside a try block. If it fails, add either an error or a warning
     # depending on whether this EditTransaction allows PROCEED.
