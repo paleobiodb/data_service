@@ -954,8 +954,8 @@ sub generate_sandbox {
     $output .= "operation at <a href=\"/data1.2/${ds_operation}_doc.html\" target=\"_blank\">\n";
     $output .= "/data1.2/${ds_operation}_doc.html</a>.</p>\n";
     
-    $output .= "<button id=\"b_clear\" onclick=\"sandbox_clear()\">Clear</button>\n";
-    $output .= "<button id=\"b_submit\" class=\"submit\" onclick=\"sandbox_request()\">Submit</button>\n\n";
+    $output .= "<input type=\"submit\" value=\"Submit\" onclick=\"sandbox_request()\">\n";
+    $output .= "<input type=\"reset\" value=\"reset\" onclick=\"sandbox_clear()\">\n";
     
     $output .= "<span id=\"testcontrol\" style=\"margin-left: 20px\"></span>\n";
     
@@ -986,6 +986,7 @@ sub generate_sandbox {
 	my $rule = shift @doc_list;
 	
 	my $field_name = $rule->{param} || $rule->{optional} || $rule->{required} || '???';
+	my $field_label = $field_name;
 	
 	if ( $rule->{alias} )
 	{
@@ -994,7 +995,7 @@ sub generate_sandbox {
 	    if ( ref $rule->{alias} eq 'ARRAY' ) { @aliases = $rule->{alias}->@*; }
 	    else { @aliases = $rule->{alias}; }
 	    
-	    $field_name = join(' / ', $field_name, @aliases);
+	    $field_label = join(' / ', $field_name, @aliases);
 	}
 	
 	my $field_doc = ref $rule->{doc_ref} ? $rule->{doc_ref}->$* : '';
@@ -1013,13 +1014,13 @@ sub generate_sandbox {
 	{
 	    if ( $rule->{note} && $rule->{note} =~ /textarea/ )
 	    {
-		$output .= "<tr><td class=\"sbfield\">$field_name<br>\n";
+		$output .= "<tr><td class=\"sbfield\">$field_label<br>\n";
 		$output .= "<textarea class=\"sbtext\" name=\"f_$field_name\" " .
 		    "rows=\"2\" cols=\"40\"></textarea></td>\n";
 	    }
 	    else
 	    {
-		$output .= "<tr><td>$field_name<br><input type=\"text\" name=\"f_$field_name\" " .
+		$output .= "<tr><td>$field_label<br><input type=\"text\" name=\"f_$field_name\" " .
 		    "size=\"40\"></td>\n";
 	    }
 	    $output .= "<td class=\"sbdoc\">$field_doc</td></tr>\n";
@@ -1038,7 +1039,7 @@ sub generate_sandbox {
     
     $output .= "<hr>\n";
     
-    $output .= "<p><button id=\"b_submit\" onclick=\"sandbox_request()\">Submit</button></p>\n\n";
+    $output .= "<p><input type=\"submit\" value=\"Submit\" onclick=\"sandbox_request()\"></p>\n\n";
     $output .= "</div>\n";
     
     my $field_string = join "','", @field_list;
