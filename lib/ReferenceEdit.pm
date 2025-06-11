@@ -486,6 +486,7 @@ sub after_action {
     my ($edt, $action, $operation, $table_specifier) = @_;
     
     my $keyval = $action->keyval;
+    my $keyexpr = $action->keyexpr;
     my $record = $action->record;
     my $dbh = $edt->dbh;
     my $qkeyval = $dbh->quote($keyval);
@@ -495,14 +496,16 @@ sub after_action {
     if ( $operation eq 'replace' || $operation eq 'delete' ||
 	 ($operation eq 'update' && exists $record->{n_authors}) )
     {
-	my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE reference_no = $qkeyval";
+	my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE $keyexpr";
 	
 	$edt->debug_line("$sql\n\n");
+				    
+	$result = $dbh->do($sql);
 	
 	if ( $tableinfo->{LOG_CHANGES} )
 	{
 	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_AUTHORS}
-			WHERE reference_no = $qkeyval", { Slice => { } });
+			WHERE $keyexpr", { Slice => { } });
 	
 	    if ( ref $result eq 'ARRAY' && @$result )
 	    {
@@ -510,21 +513,21 @@ sub after_action {
 				    $result);
 	    }
 	}
-			    
-	$result = $dbh->do($sql);
     }
     
     if ( $operation eq 'replace' || $operation eq 'delete' ||
 	 ($operation eq 'update' && exists $record->{n_editors}) )
     {
-	my $sql = "DELETE FROM $TABLE{REFERENCE_EDITORS} WHERE reference_no = $qkeyval";
+	my $sql = "DELETE FROM $TABLE{REFERENCE_EDITORS} WHERE $keyexpr";
 	
 	$edt->debug_line("$sql\n\n");
+	
+	$result = $dbh->do($sql);
 	
 	if ( $tableinfo->{LOG_CHANGES} )
 	{
 	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_EDITORS}
-			WHERE reference_no = $qkeyval", { Slice => { } });
+			WHERE $keyexpr", { Slice => { } });
 	
 	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
 	    {
@@ -532,8 +535,6 @@ sub after_action {
 				    $result);
 	    }
 	}
-			    
-	$result = $dbh->do($sql);
     }
     
     if ( $operation ne 'delete' )
@@ -559,12 +560,12 @@ sub after_action {
 	    
 	    $edt->debug_line("$sql\n\n");
 	    
+	    $result = $dbh->do($sql);
+	    
 	    if ( $tableinfo->{LOG_CHANGES} )
 	    {
 		$edt->log_aux_event('insert', 'REFERENCE_AUTHORS', $sql, 'reference_no', $keyval);
 	    }
-	    
-	    $result = $dbh->do($sql);
 	}
 	
 	if ( $record->{n_editors} )
@@ -586,12 +587,12 @@ sub after_action {
 	    
 	    $edt->debug_line("$sql\n\n");
 	    
+	    $result = $dbh->do($sql);
+	    
 	    if ( $tableinfo->{LOG_CHANGES} )
 	    {
 		$edt->log_aux_event('insert', 'REFERENCE_EDITORS', $sql, 'reference_no', $keyval);
 	    }
-	    
-	    $result = $dbh->do($sql);
 	}
     }
 }
