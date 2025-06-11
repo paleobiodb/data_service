@@ -18,6 +18,7 @@ use PB2::SpecimenEntry;
 use PB2::ResourceEntry;
 use PB2::PublicationEntry;
 use PB2::ArchiveEntry;
+use PB2::PreferencesEntry;
 
 sub initialize {
 
@@ -25,7 +26,31 @@ sub initialize {
     
     $ds2->define_node({ path => 'entry',
 			title => 'Data Entry' });
-
+    
+    # Preferences
+    
+    $ds2->define_node({ path => 'prefs',
+			title => 'Preferences' });
+    
+    $ds2->define_node({ path => 'prefs/set',
+			title => 'Set preferences',
+			allow_method => 'GET,PUT,POST',
+			role => 'PB2::PreferencesEntry',
+			method => 'set_preference',
+			output => '1.2:prefs:basic',
+			optional_output => '1.2:prefs:map' },
+	"This operation sets one or more preferences or default values for fields.");
+    
+    $ds2->define_node({ path => 'prefs/set_sandbox',
+		       title => 'Sandbox for the prefs/set operation',
+		       place => 2,
+		       allow_format => 'html',
+		       allow_method => 'GET',
+		       role => 'PB2::PreferencesEntry',
+		       method => 'set_sandbox' },
+	"This operation displays a form with which you can generate calls to the",
+	"prefs/set operation.");
+    
     # Bibliographic references
     
     $ds2->define_node({ path => 'entry/refs',
