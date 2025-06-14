@@ -255,14 +255,15 @@ sub addupdate_refs {
     
     # Return all new, updated, or deleted records.
     
-    my @deleted_keys = $edt->deleted_keys;
-    
-    $request->list_deleted_refs(\@deleted_keys, $edt->key_labels) if @deleted_keys;
-    
-    my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
-    
     unless ( $request->has_block('none') )
     {
+	my @deleted_keys = $edt->deleted_keys;
+	
+	$request->list_deleted_items('reference_no', \@deleted_keys, $edt->key_labels)
+	    if @deleted_keys;
+	
+	my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
+	
 	$request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
     }
 }
@@ -305,13 +306,13 @@ sub list_updated_refs {
     
     # Fetch the author/editor names
     
-    $sql = "SELECT * FROM ref_authors
+    my (%authors, %editors);
+    
+    $sql = "SELECT * FROM $TABLE{REFERENCE_AUTHORS}
 	       WHERE $filter_string
 	       ORDER BY reference_no, place";
     
     my $attrib = $dbh->selectall_arrayref($sql, { Slice => { } });
-    
-    my (%authors, %editors) = @_;
     
     foreach my $a ( $attrib->@* )
     {
@@ -319,6 +320,20 @@ sub list_updated_refs {
 	
 	$authors{$refno} ||= [ ];
 	push $authors{$refno}->@*, $a;
+    }
+    
+    $sql = "SELECT * FROM $TABLE{REFERENCE_EDITORS}
+		WHERE $filter_string
+		ORDER BY reference_no, place";
+    
+    my $eds = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    foreach my $a ( $eds->@* )
+    {
+	my $refno = $a->{reference_no};
+	
+	$editors{$refno} ||= [ ];
+	push $editors{$refno}->@*, $a;
     }
     
     # Link them up
@@ -331,11 +346,21 @@ sub list_updated_refs {
 	{
 	    $r->{authors} = $authors{$refno};
 	}
+	
+	if ( $editors{$refno} )
+	{
+	    $r->{editors} = $editors{$refno};
+	}
+	
+	if ( $ref_labels->{$refno} )
+	{
+	    $r->{_label} = $ref_labels->{$refno};
+	}
     }
     
     # Return the result list
     
-    $request->list_result($result);
+    $request->add_result($result);
 }
 
 
@@ -387,16 +412,14 @@ sub delete_refs {
     
     # Then return one result record for each deleted database record.
     
-    my @results;
+    $request->extid_check;
     
-    foreach my $record_id ( $edt->deleted_keys )
-    {
-	push @results, { reference_no => generate_identifier('REF', $record_id),
-			 _status => 'deleted' };
-    }
+    my @deleted_keys = $edt->deleted_keys;
     
-    $request->{main_result} = \@results;
-    $request->{result_count} = scalar(@results);
+    $request->list_deleted_items('reference_no', \@deleted_keys, $edt->key_labels)
+	if @deleted_keys;
+
+    my $a = 1;
 }
 
 

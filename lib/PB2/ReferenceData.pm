@@ -1835,10 +1835,10 @@ sub process_ref_ids {
     
     my ($request, $record) = @_;
     
-    return unless $request->{block_hash}{extids};
+    return unless $request->has_block('extids');
     
     $record->{reference_no} = generate_identifier('REF', $record->{reference_no}) 
-	if defined $record->{reference_no};
+	if defined $record->{reference_no} && $record->{reference_no} ne '';
     # "$IDP{REF}:$record->{reference_no}" if defined $record->{reference_no};
 }
 

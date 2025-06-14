@@ -1270,7 +1270,6 @@ sub add_result {
     my ($request, @records) = @_;
     
     $request->clear_result unless ref $request->{main_result} eq 'ARRAY';
-    return unless @_;
     
     foreach my $r ( @records )
     {
