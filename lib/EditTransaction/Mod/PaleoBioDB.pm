@@ -673,7 +673,7 @@ sub has_app_directive {
 # The Paleobiology Database uses a permission system based on the following special columns:
 # 
 # enterer_no (auth_creator)
-# enterer_id ( auth_creator)
+# enterer_id (auth_creator)
 # authorizer_no (auth_authorizer)
 # admin_lock (adm_lock)
 # owner_lock (own_lock)

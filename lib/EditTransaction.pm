@@ -1808,6 +1808,7 @@ sub set_attr_key {
     croak "you must specify an attribute name" unless $attr;
     croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
 	! ref $edt->{attrs}{$attr} eq 'HASH';
+    
     $edt->{attrs}{$attr}{$key} = $value;
 }
 
@@ -1817,9 +1818,30 @@ sub delete_attr_key {
     my ($edt, $attr, $key) = @_;
     
     croak "you must specify an attribute name" unless $attr;
-    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
-	! ref $edt->{attrs}{$attr} eq 'HASH';
-    delete $edt->{attrs}{$attr}{$key};
+    
+    if ( exists $edt->{attrs}{$attr} )
+    {
+	croak "attribute '$attr' is not a hash" unless ref $edt->{attrs}{$attr} eq 'HASH';
+	delete $edt->{attrs}{$attr}{$key};
+    }
+}
+
+
+sub get_attr_key_value {
+
+    my ($edt, $attr, $key) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    
+    if ( exists $edt->{attrs}{$attr} )
+    {
+	croak "attribute '$attr' is not a hash" unless ref $edt->{attrs}{$attr} eq 'HASH';
+	return $edt->{attrs}{$attr}{$key};
+    }
+    else
+    {
+	return undef;
+    }
 }
 
 
@@ -1828,20 +1850,34 @@ sub get_attr_keys {
     my ($edt, $attr) = @_;
     
     croak "you must specify an attribute name" unless $attr;
-    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
-	! ref $edt->{attrs}{$attr} eq 'HASH';
-    return keys %{$edt->{attrs}{$attr}};
-}
     
+    if ( exists $edt->{attrs}{$attr} )
+    {
+	croak "attribute '$attr' is not a hash" unless ref $edt->{attrs}{$attr} eq 'HASH';
+	return keys %{$edt->{attrs}{$attr}};
+    }
+    else
+    {
+	return ();
+    }
+}
+
 
 sub get_attr_hash {
     
     my ($edt, $attr) = @_;
     
     croak "you must specify an attribute name" unless $attr;
-    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
-	! ref $edt->{attrs}{$attr} eq 'HASH';
-    return %{$edt->{attrs}{$attr}};
+
+    if ( exists $edt->{attrs}{$attr} )
+    {
+	croak "attribute '$attr' is not a hash" unless ref $edt->{attrs}{$attr} eq 'HASH';
+	return %{$edt->{attrs}{$attr}};
+    }
+    else
+    {
+	return ();
+    }
 }
 
 1;
