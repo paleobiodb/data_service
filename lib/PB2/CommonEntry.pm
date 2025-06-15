@@ -867,6 +867,28 @@ sub collect_edt_errors {
 }
 
 
+sub list_deleted_items {
+
+    my ($request, $keycol, $deleted_keys, $key_labels) = @_;
+    
+    my (@records);
+    
+    foreach my $k ( $deleted_keys->@* )
+    {
+	my $r = { $keycol => "$k", _status => 'deleted' };
+	
+	if ( $key_labels->{$k} )
+	{
+	    $r->{_label} = $key_labels->{$k};
+	}
+
+	push @records, $r;
+    }
+    
+    $request->add_result(\@records);
+}
+
+
 sub debug_out {
 
     my ($request, $record, $prefix) = @_;
