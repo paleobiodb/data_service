@@ -22,6 +22,10 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(SESSION_DATA => 'session_data');
     
     set_table_name(TAXON_TREES => 'taxon_trees');
+    set_table_name(TAXON_INTS => 'taxon_ints');
+    set_table_name(TAXON_LOWER => 'taxon_lower');
+    set_table_name(TAXON_ATTRS => 'taxon_attrs');
+    set_table_name(TAXON_NAMES => 'taxon_names');
     
     set_table_name(AUTHORITY_DATA => 'authorities');
     set_table_property('AUTHORITY_DATA', CAN_POST => 'NOT_STUDENT');
