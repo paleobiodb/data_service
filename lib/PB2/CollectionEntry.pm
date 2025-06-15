@@ -19,12 +19,12 @@ use HTTP::Validate qw(FLAG_VALUE);
 use TableData qw(complete_ruleset add_to_ruleset complete_valueset);
 
 use CollectionEdit;
-
-use Carp qw(carp croak);
+use MatrixBase qw(initializeBins);
 
 use Moo::Role;
 
-our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::CollectionData);
+our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry
+			  PB2::CollectionData PB2::OccurrenceData PB2::ReferenceData);
 
 
 # initialize ( )
@@ -43,6 +43,9 @@ sub initialize {
 	{ value => 'DUPLICATE' },
 	    "Allow this operation even if it may lead to a duplicate record in the database.");
     
+    $ds->define_set('1.2:occs:allowances' =>
+	{ insert => '1.2:common:std_allowances' });
+    
     $ds->define_ruleset('1.2:colls:add' =>
 	{ optional => 'SPECIAL(show)', valid => '1.2:colls:basic_map' },
 	{ optional => 'allow', valid => '1.2:colls:allowances', list => ',' },
@@ -54,7 +57,8 @@ sub initialize {
 	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
 	  alias => ['coll_id', 'id', 'oid'] },
 	    "The identifier of a collection to update. If this parameter is specified,",
-	    "then the body record should not contain a collection identifier.",
+	    "then there should be only a single body record which does not contain a",
+	    "collection identifier.",
 	{ optional => 'SPECIAL(show)', valid => '1.2:colls:basic_map' },
 	{ optional => 'allow', valid => '1.2:colls:allowances', list => ',' },
 	    "Allows the operation to proceed with certain conditions or properties:",
@@ -106,7 +110,8 @@ sub initialize {
 			       "with maximum length %{size}.", note => 'textarea',
 			       before => 'research_group' },
 	  collection_aka => { note => 'textarea', before => 'research_group' },
-	  country => { doc => "The value must be a country name appearing in the C<country_map> table." },
+	  country => { doc => "The value must be a country name appearing in the C<country_map> " .
+		       "table." },
 	  latdeg => { doc => "It accepts an integer between 0-89." },
 	  lngdeg => { doc => "It accepts an integer between 0-180." },
 	  latmin => { doc => "It accepts an integer between 0-59." },
@@ -172,6 +177,18 @@ sub initialize {
 	    "It accepts an interval name or number, or an external identifier of type 'int'.",
 	    "If this collection is associated with a single interval, leave this field null.");
     
+    $ds->define_ruleset('1.2:occs:update' =>
+	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
+	  alias => ['coll_id', 'id', 'oid'] },
+	    "The identifier of a collection whose occurrences are being updated. If this",
+	    "parameter is specified, then the body record(s) should not contain a collection",
+	    "identifier.",
+	{ optional => 'SPECIAL(show)', valid => '1.2:occs:display_map' },
+	{ optional => 'allow', valid => '1.2:colls:allowances', list => ',' },
+	    "Allows the operation to proceed with certain conditions or properties:",
+	{ allow => '1.2:special_params' },
+	    "^You can also use any of the L<special parameters|node:special> with this request");
+    
     $ds->define_ruleset('1.2:occs:addupdate_body' =>
 	">>The body of this request must be either a single JSON object, or an array of",
 	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
@@ -180,8 +197,9 @@ sub initialize {
 	"record, and may not be set to empty or null in an update.",
 	{ param => 'collection_id', valid => VALID_IDENTIFIER('COL'),
 	  alias => ['collection_no', 'cid'] },
-	    "This B<required> field specifies the collection with which this occurrence",
-	    "is or will be associated.",
+	    "This field is required for a new occurrence, specifying the collection",
+	    "with which that occurrence will be associated. If specified for an existing",
+	    "occurrence, it must match that occurrence's collection.",
 	{ param => 'occurrence_id', valid => VALID_IDENTIFIER('OCC'),
 	  alias => ['occurrence_no', 'occ_id', 'oid'] },
 	    "This field B<must> be included when submitting occurrences. If its value is empty,",
@@ -194,7 +212,14 @@ sub initialize {
 	    "empty, a reidentification record will be inserted into the database and a",
 	    "new identifier will be returned. If it is non-empty, it must match the",
 	    "identifier of an existing record. That record will be updated.",
-	{ allow => '1.2:common:entry_fields' });
+	{ allow => '1.2:common:entry_fields' },
+	{ optional => '_delete', valid => ANY_VALUE },
+	    "If this field is specified with a non-empty value, this occurrence or",
+	    "reidentification will be",
+	    "deleted. The deletion will only happen if the user is the enterer or",
+	    "authorizer of the occurrence or its associated collection.",
+	{ optional => 'identified_name', valid => ANY_VALUE, alias => 'taxon_name' },
+	    "The taxonomic name identifying this occurrence, optionally with modifiers.");
 
     complete_ruleset($ds, $dbh, '1.2:occs:addupdate_body', 'OCCURRENCE_DATA',
 		     { taxon_no => 'IGNORE', collection_no => 'IGNORE',
@@ -202,13 +227,16 @@ sub initialize {
 		       genus_reso => 'IGNORE', genus_name => 'IGNORE',
 		       subgenus_reso => 'IGNORE', subgenus_name => 'IGNORE',
 		       species_reso => 'IGNORE', species_name => 'IGNORE',
-		       subspecies_reso => 'IGNORE', subspecies_name => 'IGNORE' });
+		       subspecies_reso => 'IGNORE', subspecies_name => 'IGNORE',
+		       plant_organ2 => 'IGNORE' });
     
     add_to_ruleset($ds, '1.2:occs:addupdate_body', 
 		   { optional => 'taxon_name', before => 'abund_value' },
 		   "This parameter is parsed in order to set the value for C<genus_reso>,",
 		   "C<genus_name>, etc. in the C<$TABLE{OCCURRENCE_DATA}> or",
 		   "C<$TABLE{REID_DATA}> table as appropriate.");
+    
+    initializeBins($ds);
 }
 
 
@@ -240,16 +268,17 @@ sub addupdate_colls {
     
     my $perms = $request->require_authentication('COLLECTION_DATA');
     
-    my ($allowances, $main_params) = $request->parse_main_params('1.2:colls:addupdate', 'collection_id');
+    my ($allowances, $main_params) = $request->parse_main_params('1.2:colls:addupdate',
+								 'collection_id');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->parse_body_records($main_params,
-		['REID_DATA', '1.2:reids:addupdate_body', 'reid_id'],
-		['OCCURRENCE_DATA', '1.2:occs:addupdate_body', 'occurrence_id'],
-		['COLLECTION_DATA', '1.2:colls:addupdate_body', 'collection_id', 'collection_name'],
-		'NO_MATCH');
+    my (@records) = $request->parse_body_records($main_params, '1.2:colls:addupdate_body');
+		# ['REID_DATA', '1.2:reids:addupdate_body', 'reid_id'],
+		# ['OCCURRENCE_DATA', '1.2:occs:addupdate_body', 'occurrence_id'],
+		# ['COLLECTION_DATA', '1.2:colls:addupdate_body', 'collection_id', 'collection_name'],
+		# 'NO_MATCH');
     
     if ( $request->errors )
     {
@@ -268,35 +297,74 @@ sub addupdate_colls {
     
     foreach my $r (@records)
     {
-	if ( exists $r->{reid_id} )
+	# If the field '_delete' was specified with a true value, delete the record.
+	
+	if ( $r->{_delete} )
 	{
-	    $edt->insert_update_record('REID_DATA', $r);
+	    # if ( exists $r->{reid_id} )
+	    # {
+	    # 	$edt->delete_record('REID_DATA', $r);
+	    # }
+
+	    # elsif ( exists $r->{occurrence_id} )
+	    # {
+	    # 	$edt->delete_record('OCCURRENCE_DATA', $r);
+	    # }
+	    
+	    # else
+	    # {
+		$edt->delete_record('COLLECTION_DATA', $r);
+	    # }
 	}
 	
-	elsif ( exists $r->{occurrence_id} )
-	{
-	    $edt->insert_update_record('OCCURRENCE_DATA', $r);
-	}
+	# # Otherwise, if 'reid_id' was specified then insert or update this
+	# # record in the REID_DATA table.
+	
+	# elsif ( exists $r->{reid_id} )
+	# {
+	#     $edt->insert_update_record('REID_DATA', $r);
+	# }
+	
+	# # Otherwise, if 'occurrence_id' was specified then insert or update this
+	# # record in the OCCURRENCE_DATA table.
+	
+	# elsif ( exists $r->{occurrence_id} )
+	# {
+	#     $edt->insert_update_record('OCCURRENCE_DATA', $r);
+	# }
+	
+	# Otherwise, if this operation was called as 'colls/add' then insert
+	# this record in the COLLECTION_DATA table.
 	
 	elsif ( $operation eq 'insert' )
 	{
 	    $edt->insert_record('COLLECTION_DATA', $r);
 	}
-
+	
+	# If this operation was called as 'colls/update' then update this record
+	# in the COLLECTION_DATA table.
+	
 	elsif ( $operation eq 'update' )
 	{
 	    $edt->update_record('COLLECTION_DATA', $r);
 	}
-
-	elsif ( $operation eq 'replace' )
-	{
-	    $edt->replace_record('COLLECTION_DATA', $r);
-	}
-
+	
+	# elsif ( $operation eq 'replace' )
+	# {
+	#     $edt->replace_record('COLLECTION_DATA', $r);
+	# }
+	
+	# If this operation was called as 'colls/delete' then delete this record
+	# from the COLLECTION_DATA table.
+	
 	elsif ( $operation eq 'delete' )
 	{
 	    $edt->delete_record('COLLECTION_DATA', $r);
 	}
+	
+	# If we have no operation information available, insert or update this
+	# record in the COLLECTION_DATA table based on the presence or absence
+	# of a value for 'collection_id'.
 	
 	else
 	{
@@ -322,18 +390,25 @@ sub addupdate_colls {
     	die $request->exception(400, "Bad request");
     }
     
-    my @existing_keys = ($edt->updated_keys, $edt->inserted_keys);
-    
     unless ( $request->has_block('none') )
     {
-	$request->list_updated_colls($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+	my @deleted_keys = $edt->deleted_keys();
+	
+	$request->list_deleted_colls($dbh, \@deleted_keys, $edt->key_labels)
+	    if @deleted_keys;
+	
+	my @existing_keys = ($edt->inserted_keys('COLLECTION_DATA'),
+			       $edt->updated_keys('COLLECTION_DATA'));
+			       
+	$request->list_updated_colls($dbh, \@existing_keys, $edt->key_labels)
+	    if @existing_keys;
     }
 }
 
 
 sub list_updated_colls {
     
-    my ($request, $dbh, $coll_ids, $ref_labels) = @_;
+    my ($request, $dbh, $coll_ids, $key_labels) = @_;
     
     # Get a list of the collection_no values to return.
     
@@ -377,17 +452,143 @@ sub list_updated_colls {
         WHERE $filter_string
 	GROUP BY c.collection_no";
     
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
+    $request->debug_line("$request->{main_sql}\n\n") if $request->debug;
     
-    # Then prepare and execute the main query and the secondary query.
+    # Then return the result.
+
+    my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => { } });
     
-    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
+    foreach my $r ( @$result )
+    {
+	if ( $r->{collection_no} && $key_labels->{$r->{collection_no}} )
+	{
+	    $r->{_label} = $key_labels->{$r->{collection_no}};
+	}
+    }
     
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
+    $request->add_result($result);
 }
+
+
+sub update_occs {
+    
+    my ($request, $operation) = @_;
+    
+    $operation ||= '';
+    
+    my $dbh = $request->get_connection;
+    
+    # First get the parameters from the URL, and/or from the body if it is from a web form. In the
+    # latter case, it will necessarily specify a single record only.
+    
+    my $perms = $request->require_authentication('COLLECTION_DATA');
+    
+    my ($allowances, $main_params) = $request->parse_main_params('1.2:occs:addupdate',
+								 'collection_id');
+    
+    # Then decode the body, and extract input records from it. If an error occured, return an
+    # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
+    
+    my (@records) = $request->parse_body_records($main_params, '1.2:occs:addupdate_body');
+    
+    if ( $request->errors )
+    {
+	die $request->exception(400, "Bad data");
+    }
+    
+    # If we get here without any errors being detected so far, create a new EditTransaction object to
+    # handle this operation.
+    
+    my $edt = CollectionEdit->new($request, { permission => $perms, 
+					      table => 'COLLECTION_DATA', 
+					      allows => $allowances } );
+    
+    # Now go through the records and handle each one in turn. This will check every record and
+    # queue them up for the specified operation.
+    
+    foreach my $r (@records)
+    {
+	# If the field '_delete' was specified with a true value, delete the record.
+	
+	if ( $r->{_delete} )
+	{
+	    if ( exists $r->{reid_id} )
+	    {
+		$edt->delete_record('REID_DATA', $r);
+	    }
+
+	    elsif ( exists $r->{occurrence_id} )
+	    {
+		$edt->delete_record('OCCURRENCE_DATA', $r);
+	    }
+	}
+	
+	# Otherwise, if 'reid_id' was specified then insert or update this
+	# record in the REID_DATA table.
+	
+	elsif ( exists $r->{reid_id} )
+	{
+	    $edt->insert_update_record('REID_DATA', $r);
+	}
+	
+	# Otherwise, if 'occurrence_id' was specified then insert or update this
+	# record in the OCCURRENCE_DATA table.
+	
+	elsif ( exists $r->{occurrence_id} )
+	{
+	    $edt->insert_update_record('OCCURRENCE_DATA', $r);
+	}
+	
+	else
+	{
+	    $request->add_error("E_BAD_DATA: a body record did not contain either 'reid_id' or 'occurrence_id'");
+	    die $request->exception("Bad data");
+	}
+    }
+    
+    # If no errors have been detected so far, execute the queued actions inside
+    # a database transaction. If any errors occur during that process, the
+    # transaction will be automatically rolled back unless the NOT_FOUND or
+    # PROCEED allowance was given. Otherwise, it will be automatically
+    # committed.
+    
+    $edt->commit;
+    
+    # Now handle any errors or warnings that may have been generated.
+    
+    $request->collect_edt_warnings($edt);
+    $request->collect_edt_errors($edt);
+    
+    if ( $edt->fatals )
+    {
+    	die $request->exception(400, "Bad request");
+    }
+    
+    if ( $request->has_block('all') )
+    {
+	my @deleted_keys = $edt->deleted_keys();
+	
+	$request->list_deleted_items('occurrence_no', \@deleted_keys, $edt->key_labels)
+	    if @deleted_keys;
+    }
+    
+    unless ( $request->has_block('none') )
+    {
+	my @deleted_keys = $edt->deleted_keys();
+	
+	$request->list_deleted_occs($dbh, \@deleted_keys, $edt->key_labels)
+	    if @deleted_keys;
+	
+	my @existing_keys = ($edt->inserted_keys('COLLECTION_DATA'),
+			       $edt->updated_keys('COLLECTION_DATA'));
+			       
+	$request->list_updated_occs($dbh, \@existing_keys, $edt->key_labels)
+	    if @existing_keys;
+    }
+}
+
+
+
 
 
 sub addupdate_sandbox {
@@ -399,7 +600,7 @@ sub addupdate_sandbox {
 	$request->generate_sandbox({ operation => 'colls/add',
 				     ruleset => '1.2:colls:addupdate_body',
 				     allowances => '1.2:colls:allowances',
-				     extra_params => 'vocab=pbdb&private&show=edit' });
+				     extra_params => 'vocab=pbdb&private&extids&show=edit' });
     }
 
     elsif ( $operation eq 'update' )
@@ -407,7 +608,7 @@ sub addupdate_sandbox {
 	$request->generate_sandbox({ operation => 'colls/update',
 				     ruleset => '1.2:colls:addupdate_body',
 				     allowances => '1.2:colls:allowances',
-				     extra_params => 'vocab=pbdb&private&show=edit' });
+				     extra_params => 'vocab=pbdb&private&extids&show=edit' });
     }
     
     else
@@ -423,8 +624,9 @@ sub update_occs_sandbox {
 
     $request->generate_sandbox({ operation => 'occs/update',
 				 ruleset => '1.2:occs:addupdate_body',
-				 multiplicity => 5,
-				 allowances => '1.2:colls:allowances' });
+				 multiplicity => 3,
+				 allowances => '1.2:occs:allowances',
+			         extra_params => 'vocab=pbdb&private&extids&show=edit' });
 }
 
 

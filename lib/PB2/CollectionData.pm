@@ -290,6 +290,11 @@ sub initialize {
 	    "results will continue to be integers.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{COL} },
 	    "The type of this object: C<$IDP{COL}> for a collection",
+        { output => '_label', com_name => 'rlb' },
+	    "For data entry operations, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
+        { output => '_status', com_name => 'sta' },
+	    "Records that were deleted will have the value 'deleted' in this field.",
 	{ output => 'permissions', com_name => 'prm' },
 	    "The accessibility of this record.  If empty, then the record is",
 	    "public.  Otherwise, the value of this record will be one",
@@ -1953,7 +1958,7 @@ sub list_colls {
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
     push @filters, $request->generate_ref_filters($tables);
     push @filters, $request->generate_refno_filter('c');
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'cc' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'oc', colls => 'cc', bare => 'cc' }, $tables );
     push @filters, '1=1' if $request->clean_param('all_records');
     # push @filters, $request->generate_crmod_filters('cc', $tables);
     # push @filters, $request->generate_ent_filters('cc', $tables);
@@ -2083,7 +2088,7 @@ sub summary {
     # push @filters, $request->generateCollFilters($tables);
     push @filters, $request->generate_refno_filter('c');
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($tables, 'o');
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'oc', colls => 'cc' }, $tables );
     
     # Figure out the filter we need for determining access permissions.  We can ignore the extra
     # fields, since we are not returning records of type 'collection' or 'occurrence'.
@@ -3044,7 +3049,7 @@ sub generateAccessFilter {
     # authorizer_no and is_super values from the corresponding record in the
     # 'session_data' table.
     
-    my ($authorizer_no, $is_super);
+    my ($user_id, $authorizer_no, $enterer_no, $is_super);
     
     my $dbh = $request->get_connection;
     
@@ -3053,10 +3058,10 @@ sub generateAccessFilter {
 	my $session_id = $dbh->quote($cookie_id);
 	
 	my $sql = "
-		SELECT authorizer_no, superuser FROM session_data
+		SELECT user_id, authorizer_no, enterer_no, superuser FROM session_data
 		WHERE session_id = $session_id";
 	
-	($authorizer_no, $is_super) = $dbh->selectrow_array($sql);
+	($user_id, $authorizer_no, $enterer_no, $is_super) = $dbh->selectrow_array($sql);
     }
     
     # else
@@ -3069,6 +3074,12 @@ sub generateAccessFilter {
     
     unless ( $authorizer_no && $authorizer_no =~ /^\d+$/ )
     {
+	if ( $user_id ) {
+	    $request->add_warning("W_NOT_CONTRIBUTOR: you are not a database contributor, so you have no access to private data.");
+	} else {
+	    $request->add_warning("W_NOT_AUTHENTICATED: you are not logged in, so you have no access to private data");
+	}
+	
 	if ( $tables_ref->{c} ) {
 	    return ("c.access_level = 0", '');
 	} else {
@@ -3120,16 +3131,19 @@ sub generateAccessFilter {
 	    push @clauses, "cc.access_level in ('the public', 'database members')";
 	}
 	
-	my $sql = "SELECT authorizer_no FROM permissions WHERE modifier_no=$authorizer_no";
+	# my $sql = "SELECT authorizer_no FROM permissions WHERE modifier_no=$authorizer_no";
 	
-	my ($permlist) = $dbh->selectcol_arrayref($sql);
+	# my ($permlist) = $dbh->selectcol_arrayref($sql);
 
-	push @$permlist, $authorizer_no unless any { $_ == $authorizer_no } @$permlist;
+	# push @$permlist, $authorizer_no unless any { $_ == $authorizer_no } @$permlist;
 	
-	my $perm_string = join(',', @$permlist);
-	push @clauses, "cc.authorizer_no in ($perm_string)";
+	# my $perm_string = join(',', @$permlist);
+	# push @clauses, "cc.authorizer_no in ($perm_string)";
+
+	push @clauses, "cc.authorizer_no = '$authorizer_no'";
+	push @clauses, "cc.enterer_no = '$enterer_no'";
 	
-	$sql = "SELECT research_group FROM person WHERE person_no=$authorizer_no";
+	my $sql = "SELECT research_group FROM person WHERE person_no=$authorizer_no";
 	
 	my ($grouplist) = $dbh->selectrow_array($sql);
 	

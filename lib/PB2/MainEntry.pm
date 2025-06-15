@@ -221,7 +221,7 @@ sub initialize {
     
     $ds2->define_node({ path => 'colls/add_sandbox',
 			title => 'Sandbox for the colls/add operation',
-			place => 10,
+			place => 20,
 			allow_format => 'html',
 			allow_method => 'GET',
 			doc_template => 'sandbox_operation.tt',
@@ -234,7 +234,7 @@ sub initialize {
     
     $ds2->define_node({ path => 'colls/update',
 			title => 'Update existing collections',
-			place => 10,
+			place => 20,
 			allow_method => 'PUT,POST',
 			doc_template => 'entry_operation.tt',
 			body_ruleset => '1.2:colls:addupdate_body',
@@ -247,7 +247,7 @@ sub initialize {
         
     $ds2->define_node({ path => 'colls/update_sandbox',
 			title => 'Sandbox for the colls/update operation',
-			place => 10,
+			place => 20,
 			allow_format => 'html',
 			allow_method => 'GET',
 			doc_template => 'sandbox_operation.tt',
@@ -258,21 +258,39 @@ sub initialize {
 	"This operation displays an HTML form which you can use to generate",
 	"calls to the colls/update operation.");
     
-    # $ds2->define_node({ path => 'colls/update_occs',
-    # 			title => 'Sandbox for the colls/update_occs operation.',
-    # 			place => 10,
-    # 			allow_method => 'PUT,POST',
-    # 			doc_template => 'entry_operation.tt',
-    # 			body_ruleset => '1.2:occs:addupdate_body',
-    # 			method => 'update_occs',
-    # 			output => '1.2:occs:edit',
-    # 			optional_output => '1.2:occs:edit_map' },
-    # 	"This operation allows you to add, update, and/or delete occurrences and",
-    # 	"reidentifications associated with a specified collection.");
+    $ds2->define_node({ path => 'occs/edit',
+			place => 12,
+			usage => [ "/occs/edit.json?coll_id=1234" ],
+			title => "Fossil occurrences for editing",
+			method => 'list_occs_display',
+			arg => 'edit',
+			output => '1.2:occs:display',
+			optional_output => '1.2:occs:display_map',
+		        ruleset => '1.2:occs:for_display' },
+	"This operation returns information about fossil occurrences in the format",
+	"necessary for editing on a per-collection basis. It is intended",
+	"to enable a frontend application to perform this activity.");
     
-    $ds2->define_node({ path => 'colls/update_occs_sandbox',
-			title => 'Sandbox for the colls/update_occs operation',
-			place => 10,
+    $ds2->define_node({ path => 'occs/update',
+			title => 'Update occurrences',
+			place => 20,
+			allow_method => 'PUT,POST',
+			doc_template => 'entry_operation.tt',
+			body_ruleset => '1.2:occs:addupdate_body',
+			role => 'PB2::CollectionEntry',
+			method => 'update_occs',
+			output => '1.2:occs:display',
+			optional_output => '1.2:occs:display_map' },
+	"This operation allows you to add, update, and delete fossil occurrences",
+	"in the database.");
+    
+    $ds2->list_node({ path => 'occs/update',
+		      list => 'colls',
+		      place => 20 });
+    
+    $ds2->define_node({ path => 'occs/update_sandbox',
+			title => 'Sandbox for the occs/update operation',
+			place => 20,
 			allow_format => 'html',
 			allow_method => 'GET',
 			doc_template => 'sandbox_operation.tt',
@@ -280,7 +298,7 @@ sub initialize {
 			method => 'update_occs_sandbox',
 			body_ruleset => '1.2:occs:addupdate_body' },
 	"This operation displays an HTML form which you can use to generate",
-	"calls to the colls/update_occs operation.");
+	"calls to the occs/update operation.");
     
     # Educational Resources
     

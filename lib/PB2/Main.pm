@@ -429,14 +429,15 @@ use PB2::MainEntry;
     $ds2->define_node({ path => 'occs/display',
 			place => 12,
 			usage => [ "/occs/display.json?coll_id=1234" ],
-			title => "Fossil occurrences for display and editing",
+			title => "Fossil occurrences for display by collection",
 			method => 'list_occs_display',
+			arg => 'display',
 			output => '1.2:occs:display',
 			optional_output => '1.2:occs:display_map',
 		        ruleset => '1.2:occs:for_display' },
 	"This operation returns information about fossil occurrences in the format",
-	"necessary for display or editing on a per-collection basis. It is intended",
-	"to enable a frontend application to perform these activities.");
+	"necessary for display on a per-collection basis. It is intended",
+	"to enable a frontend application to perform this activity.");
     
     # Collections.  These paths are used to fetch information about fossil
     # collections known to the database.

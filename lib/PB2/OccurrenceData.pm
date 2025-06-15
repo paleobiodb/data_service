@@ -171,7 +171,21 @@ sub initialize {
         { value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the occurrence record");
 
-    $ds->define_set('1.2:occs:display_map');
+    $ds->define_set('1.2:occs:display_map' =>
+	{ value => 'edit' },
+	    "If this block is included, the occurrences and reidentifications will be listed",
+	    "in the order of when they were entered instead of being grouped by class,",
+	    "order, and family.",
+	{ value => 'all' },
+	    "This block is intended for use with the C<B<occs/update>> operation. If specified,",
+	    "all of the occurrences associated with the collection(s) being updated will be",
+	    "returned instead of just those occurrences which were directly updated.",
+	{ value => 'ent', maps_to => '1.2:common:ent' },
+	    "The identifiers of the people who authorized, entered and modified this record",
+	{ value => 'entname', maps_to => '1.2:common:entname' },
+	    "The names of the people who authorized, entered and modified this record",
+        { value => 'crmod', maps_to => '1.2:common:crmod' },
+	    "The C<created> and C<modified> timestamps for the occurrence record");
     
     # Then define those blocks which are not already defined in
     # CollectionData.pm 
@@ -274,27 +288,32 @@ sub initialize {
 	    "The identifier of the reference from which this data was entered");
     
     $ds->define_block('1.2:occs:display' =>
-	{ select => ['o.occurrence_no', 'o.reid_no', 'o.latest_ident', 'o.collection_no',
-		     'o.taxon_no as identified_no', 't.rank as identified_rank',
+	{ select => ['oc.occurrence_no', 'oc.reid_no', 'oc.collection_no',
+		     'oc.taxon_no as identified_no', 't.rank as identified_rank',
 		     't.status as taxon_status', 't.orig_no', 't.accepted_no',
 		     'tv.name as accepted_name', 'tv.rank as accepted_rank',
-		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
-		     'o.species_name', 'o.species_reso', 'o.subspecies_name', 'o.subspecies_reso',
+		     'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
+		     'oc.genus_name', 'oc.genus_reso', 'oc.subgenus_name', 'oc.subgenus_reso',
+		     'oc.species_name', 'oc.species_reso', 'oc.subspecies_name', 'oc.subspecies_reso',
 		     'ph.phylum_no', 'ph.class_no', 'ph.order_no', 'ph.family_no',
 		     'oc.abund_unit', 'oc.abund_value', 'oc.plant_organ', 'oc.plant_organ2',
-		     'sc.n_specs',
-		     'o.reference_no', 'r.pubyr as ref_pubyr', 'r.author1last as r_al1',
+		     'oc.comments', 'sc.n_specs',
+		     'oc.reference_no', 'r.pubyr as ref_pubyr', 'r.author1last as r_al1',
 		     'r.author2last as r_al2', 'r.otherauthors as r_oa',
 		     'v.is_trace', 'v.is_form'],
-	  tables => ['o', 'oc', 'c', 'cc', 'tv', 'r', 'v', 'ph', 'sc'] },
+	  tables => ['oc', 'cc', 'tv', 'r', 'v', 'ph', 'ns', 'sc'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
-	# { set => '*', code => \&process_class_order_family },
 	{ set => '*', code => \&process_occ_com, if_format => 'json' },
 	{ set => '*', code => \&process_occ_ids },
 	{ output => 'occurrence_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{OCC} },
 	    "The type of this object: C<$IDP{OCC}> for an occurrence.",
+        { output => '_label', com_name => 'rlb' },
+	    "For data entry operations, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
+        { output => '_status', com_name => 'sta' },
+	    "Records that were deleted will have the value 'deleted' in this field.",
 	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
 	    "If this occurrence was reidentified, a unique identifier for the reidentification.",
 	{ output => 'collection_no', com_name => 'cid' },
@@ -314,10 +333,10 @@ sub initialize {
 	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
-	    "we have no further information about the classification of this occurrence.  In some cases,",
-	    "the genus has been entered into the taxonomic hierarchy but not the species.  This field will",
-	    "be omitted for responses in the compact voabulary if it is identical",
-	    "to the value of F<accepted_no>.",
+	    "we have no further information about the classification of this occurrence.",
+	    "In some cases, the genus has been entered into the taxonomic hierarchy but not",
+	    "the species.  This field will be omitted for responses in JSON format",
+	    "if it is identical to the value of F<accepted_no>.",
 	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If the identified name is different from the accepted name, this field gives",
 	    "the reason why.  This field will be present if, for example, the identified name",
@@ -327,12 +346,13 @@ sub initialize {
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
 	    "The attribution (author and year) of the accepted name",
-	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no', data_type => 'mix' },
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no', 
+	  data_type => 'mix' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
 	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
 	    "of this database.",
-	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', data_type => 'mix' },
+	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
 	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ output => 'flags', com_name => 'flg' },
@@ -347,13 +367,13 @@ sub initialize {
 	{ output => 'abund_unit', com_name => 'abu', if_field => 'abund_value' },
 	    "The unit in which the abundance is expressed",
 	{ output => 'plant_organ', com_name => 'pl1' },
-	    "The plant organ, if any, associated with this occurrence.  This field",
+	    "The plant organ(s), if any, associated with this occurrence.  This field",
 	    "will be empty unless the occurrence is a plant fossil.",
-	{ output => 'plant_organ2', com_name => 'pl2' },
-	    "An additional plant organ, if any, associated with this occurrence.",
-        { set => 'ref_author', from => '*', code => \&PB2::ReferenceData::format_authors },
-	{ output => 'n_specs', com_name => 'nsp' },
+	{ output => 'comments', pbdb_name => 'occurrence_comments', com_name => 'ocm' },
+	    "Comments about this occurrence, if any.",
+	{ output => 'n_specs', com_name => 'nsp', data_type => 'pos' },
 	    "The number of specimens (if any) associated with this occurrence",
+        { set => 'ref_author', from => '*', code => \&PB2::ReferenceData::format_authors },
 	{ output => 'ref_author', com_name => 'aut' },
 	    "The author(s) of the reference from which this data was entered.",
 	{ output => 'ref_pubyr', com_name => 'pby' },
@@ -436,10 +456,8 @@ sub initialize {
     $ds->define_block('1.2:occs:plant' =>
 	{ select => ['o.plant_organ', 'o.plant_organ2'] },
 	{ output => 'plant_organ', com_name => 'pl1' },
-	    "The plant organ, if any, associated with this occurrence.  This field",
-	    "will be empty unless the occurrence is a plant fossil.",
-	{ output => 'plant_organ2', com_name => 'pl2' },
-	    "An additional plant organ, if any, associated with this occurrence.");
+	    "The plant organ(s), if any, associated with this occurrence.  This field",
+	    "will be empty unless the occurrence is a plant fossil.");
     
     $ds->define_block('1.2:occs:coords' =>
 	{ select => ['c.lat', 'c.lng'], tables => 'c' },
@@ -904,6 +922,10 @@ sub initialize {
 	  alias => ['collection_id', 'collection_no'] },
 	    "A comma-separated list of collection identifiers. All of the occurrences",
 	    "associated with each collection will be returned, in order by collection id.",
+	{ optional => 'show', list => q{,}, valid => '1.2:occs:display_map' },
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each occurrence.  Its value should be",
+	    "one or more of the following, separated by commas:",
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -1687,17 +1709,25 @@ sub list_occs {
 
 sub list_occs_display {
 
-    my ($request) = @_;
+    my ($request, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
     my $dbh = $request->get_connection;
     
+    # Figure out if we are returning occurrences for display or for editing. If
+    # we either called this method from the operation 'occs/edit' or
+    # 'occs/display' with 'show=edit', then do this operation in for_edit mode.
+
+    my $for_edit;
+
+    $for_edit = 1 if $arg eq 'edit' || $request->has_block('edit');
+    
     # Get a hash of the tables needed by this query.
     
     my $tables = $request->tables_hash;
     
-    $request->substitute_select( mt => 'o', cd => 'o' );
+    $request->substitute_select( cd => 'oc' );
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -1708,7 +1738,7 @@ sub list_occs_display {
     {
 	my $coll_list = join("','", @colls);
 	
-	push @filters, "c.collection_no in ('$coll_list')";
+	push @filters, "cc.collection_no in ('$coll_list')";
     }
 
     else
@@ -1724,7 +1754,15 @@ sub list_occs_display {
     
     # Get a list of fields needed for this query.
 
-    my $fields = $request->select_string;
+    my $occ_fields = $request->select_string;
+    my $reid_fields = $occ_fields;
+    
+    $occ_fields =~ s/oc.reid_no/0 as reid_no/;
+
+    $reid_fields =~ s/oc[.]/re./g;
+    $reid_fields =~ s/re[.](abund\w+)/'' as $1/g;
+    $reid_fields =~ s/re[.]plant_organ2/'' as plant_organ2/;
+    $reid_fields =~ s/sc[.]n_specs/0 as n_specs/;
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -1735,20 +1773,41 @@ sub list_occs_display {
     my $calc = $request->sql_count_clause;
     
     # If the 'strict' parameter was given, make sure we haven't generated any
-    # warnings.
+    # warnings. Also check whether to generate external identifiers.
     
     $request->strict_check;
     $request->extid_check;
     
-    my $join_list = $request->generateJoinList('c', $tables);
+    # Create a join list of all the tables we will need.
+    
+    my $other_joins = <<END_JOINS;
+left join $TABLE{AUTHORITY_DATA} as a using (taxon_no)
+	    left join $TABLE{TAXON_NAMES} as nm using (taxon_no)
+	    left join $TABLE{TAXON_TREES} as t on t.orig_no = a.orig_no
+	    left join $TABLE{TAXON_TREES} as tv on tv.orig_no = t.accepted_no
+	    left join $TABLE{TAXON_NAMES} as ns on ns.taxon_no = tv.spelling_no
+	    left join $TABLE{TAXON_ATTRS} as v on v.orig_no = t.orig_no
+	    left join $TABLE{TAXON_INTS} as ph on ph.ints_no = t.ints_no
+END_JOINS
+    
+    # Select all occurrences and reidentifications for the given collection(s),
+    # marking which identification is the most recent for each occurrence.
     
     $request->{main_sql} = "
-	SELECT $calc $fields
-	FROM $TABLE{OCCURRENCE_MATRIX} as o join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
-	    $join_list
+	SELECT $calc $occ_fields, if(oc.reid_no > 0, '', 1) as latest_ident
+	FROM $TABLE{OCCURRENCE_DATA} as oc join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+	    left join $TABLE{REFERENCE_DATA} as r on r.reference_no = oc.reference_no
+	    left join (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA}
+		       GROUP BY occurrence_no) as sc on sc.occurrence_no = oc.occurrence_no
+	    $other_joins
         WHERE $filter_string
-	GROUP BY o.occurrence_no, o.reid_no
-	ORDER BY o.collection_no, o.occurrence_no, o.reid_no
+        UNION ALL
+	SELECT $reid_fields, if(re.most_recent = 'YES', 1, '') as latest_ident
+	FROM $TABLE{REID_DATA} as re join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+	    left join $TABLE{REFERENCE_DATA} as r on r.reference_no = re.reference_no
+	    $other_joins
+	WHERE $filter_string
+	ORDER BY collection_no, occurrence_no, reid_no
 	$limit";
     
     $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
@@ -1763,10 +1822,36 @@ sub list_occs_display {
     # If we were asked to get the count, then do so
     
     $request->sql_count_rows;
-
-    # Process and sort the result;
-
-    $request->list_result($request->process_occs_for_display($result));
+    
+    # # Go through the list backward, marking latest identifications.
+    
+    # my %found_occ;
+    
+    # foreach my $record ( reverse @$result )
+    # {
+    # 	delete $record->{n_specs} if defined $record->{n_specs} && $record->{n_specs} == 0;
+	
+    # 	unless ( $found_occ{$record->{occurrence_no}} )
+    # 	{
+    # 	    $record->{latest_ident} = 1;
+    # 	    $found_occ{$record->{occurrence_no}} = 1;
+    # 	}
+    # }
+    
+    # If we are in 'for_edit' mode, return the results in the order retrieved,
+    # which is sorted by collection_no, then occurrence_no, then reid_no.
+    
+    if ( $for_edit )
+    {
+	$request->list_result($result);
+    }
+    
+    # Otherwise, group them by class, order, and family.
+    
+    else
+    {
+	$request->list_result($request->process_occs_for_display($result));
+    }
 }
 
 
@@ -2450,7 +2535,7 @@ sub prevalence {
     
     my @filters = $request->generateMainFilters('prevalence', 's', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'oc', colls => 'cc', bare => 'oc' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'oc' }, $tables );
     
     # If we need the occurrences table in order to fulfill this query, then
     # re-do the filters to use the collection matrix. Generate an SQL statement
@@ -2462,7 +2547,7 @@ sub prevalence {
 	
 	@filters = $request->generateMainFilters('prevalence', 'c', $tables);
 	push @filters, $request->generateOccFilters($tables, 'o', 1);
-	push @filters, $request->generate_common_filters( { occs => 'oc', colls => 'cc', bare => 'oc' }, $tables );
+	push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'oc' }, $tables );
 	
 	my $fields = "ph.phylum_no, ph.class_no, ph.order_no, count(*) as n_occs";
 	
@@ -3680,7 +3765,7 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
 
-    $join_list .= "LEFT JOIN (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA} group by occurrence_no) as sc on sc.occurrence_no = o.occurrence_no\n"; 
+    $join_list .= "LEFT JOIN (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA} group by occurrence_no) as sc on sc.occurrence_no = o.occurrence_no\n" if $tables->{sc};
     
     $join_list .= "LEFT JOIN $TABLE{MACROSTRAT_COLLS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
@@ -3763,6 +3848,18 @@ sub process_basic_record {
 	$record->{flags} ||= '';
 	$record->{flags} .= 'I' if $record->{is_trace};
 	$record->{flags} .= 'F' if $record->{is_form};
+    }
+
+    # Generate a single plant_organ field.
+
+    if ( $record->{plant_organ} && $record->{plant_organ2} )
+    {
+	$record->{plant_organ} = join(',', $record->{plant_organ}, $record->{plant_organ2});
+    }
+    
+    elsif ( $record->{plant_organ2} )
+    {
+	$record->{plant_organ} = $record->{plant_organ2};
     }
     
     # Generate the identified name from the occurrence fields.
@@ -3979,7 +4076,7 @@ sub process_difference {
 	    
 	    else
 	    {
-		push @reasons, 'obsolete variant of';
+		push @reasons, ($record->{taxon_status} || 'obsolete variant of');
 	    }
 	}
 	
@@ -4191,29 +4288,42 @@ sub process_classification {
 }
 
 
+# process_occs_for_display ( record_list )
+#
+# Take the raw result from 'list_occs_display' and process it into the proper
+# form for a taxonomic list to be displayed on the collection details page.
+
 sub process_occs_for_display {
     
     my ($request, $record_list) = @_;
     
-    my (%taxon_nos, %taxon_name, %taxon_sort, @classified, @unclassified);
+    my (%taxon_nos, %taxon_name, %taxon_sort, @classified, @unclassified);    
+    
+    # Go through all of the records on the list and create a hash table with all
+    # of the taxon_no values for phylum, class, order, and family. Any record
+    # which has at least one of these is put on the 'classified' list, while the
+    # rest are put on the 'unclassified' list.
     
     foreach my $r ( @$record_list )
     {
+	$taxon_nos{$r->{phylum_no}} = 1 if $r->{phylum_no};
 	$taxon_nos{$r->{class_no}} = 1 if $r->{class_no};
 	$taxon_nos{$r->{order_no}} = 1 if $r->{order_no};
 	$taxon_nos{$r->{family_no}} = 1 if $r->{family_no};
-	$taxon_nos{$r->{phylum_no}} = 1 if $r->{phylum_no};
 	
 	if ( $r->{family_no} || $r->{order_no} || $r->{class_no} || $r->{phylum_no} )
 	{
 	    push @classified, $r;
 	}
-
+	
 	else
 	{
 	    push @unclassified, $r;
 	}
     }
+    
+    # Fetch all of the taxon names ('name') and tree-traversal indices ('lft')
+    # for phyla, classes, orders, and families.
     
     my $taxon_string = join("','", keys %taxon_nos);
     
@@ -4233,11 +4343,20 @@ sub process_occs_for_display {
     
     no warnings 'uninitialized';
     
+    # Sort the records in our result set according to the 'lft' value of the
+    # phylum, class, order, and family in turn. This will order similar life
+    # forms together.
+    
     my @sorted = sort { $taxon_sort{$a->{phylum_no}} <=> $taxon_sort{$b->{phylum_no}} ||
 			    $taxon_sort{$a->{class_no}} <=> $taxon_sort{$b->{class_no}} ||
 			    $taxon_sort{$a->{order_no}} <=> $taxon_sort{$b->{order_no}} ||
 			    $taxon_sort{$a->{family_no}} <=> $taxon_sort{$b->{family_no}} }
 	@classified;
+    
+    # Then generate a class-order-family string for each record. If there is a
+    # phylum but no class, order, or family, use the phylum. If there are no
+    # terms, use 'Unclassified'. This last category appears at the end of the
+    # final result.
     
     foreach my $r ( @sorted, @unclassified )
     {
