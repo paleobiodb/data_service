@@ -46,6 +46,9 @@ my $MAX_ROUNDS = 15;
 # $cluster_flag is true, then execute k-means clustering on any bin level
 # for which that attribute is specified.
 
+# IMPORTANT NOTE: If the structure of the collection matrix is updated, you must
+# also update MatrixBase.pm.
+
 sub buildCollectionTables {
 
     my ($dbh, $bin_list, $options) = @_;
@@ -92,14 +95,6 @@ sub buildCollectionTables {
     logTimestamp();
     
     logMessage(1, "Building collection tables");
-    
-    # logMessage(2, "    copying enumerations from collections table...");
-    
-    # my (@create) = $dbh->selectrow_array("SHOW CREATE TABLE `collections`");
-    
-    # my ($env_enum) = $create[1] =~ qr{ `environment` \s+ ( enum [(] .*? [)] ) \s+ DEFAULT \s+ NULL }xmi;
-    
-    # $env_enum ||= 'varchar(30)';
     
     logMessage(2, "    creating collection matrix...");
     
