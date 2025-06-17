@@ -39,8 +39,15 @@ our (@CARP_NOT) = qw(EditTransaction);
 {
     CollectionEdit->register_conditions(
        C_DUPLICATE => "Possible duplicate of: &1",
+       C_DUPLICATE_OCC => "Occurrence is a duplicate of &1",
+       W_DUPLICATE_OCC => "Occurrence was skipped because it is a duplicate of &1",
        E_BAD_NAME => "Field '&1' must contain at least one letter",
-       E_CANNOT_DELETE => "Deletion of collections has not been implemented");
+       E_CANNOT_DELETE => { collection => "Deletion of collections has not been implemented",
+			    occurrence => "Cannot delete an occurrence with speciments" },
+       E_CANNOT_MOVE => { occurrence => "The value of 'collection_id' must match what is " .
+			  "already stored in the record",
+			  reid => "The value of 'occurrence_id' must match what is " .
+			  "already stored in the record" });
     
     CollectionEdit->register_allowances('DUPLICATE');
     
@@ -60,11 +67,14 @@ our (@CARP_NOT) = qw(EditTransaction);
     set_column_property('COLLECTION_DATA', 'reference_no', EXTID_TYPE => 'REF');
     
     set_table_property('OCCURRENCE_DATA', REQUIRED_COLS => ['collection_no', 'reference_no']);
-	
+    
     set_column_property('OCCURRENCE_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
+    set_column_property('OCCURRENCE_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('OCCURRENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
     
     set_column_property('REID_DATA', 'reid_no', EXTID_TYPE => 'REI');
+    set_column_property('REID_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
+    set_column_property('REID_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('REID_DATA', 'reference_no', EXTID_TYPE => 'REF');
 }
 
@@ -124,7 +134,7 @@ sub validate_coll_action {
 	
 	# Until we can set all of this up, just return 'cannot delete'.
 	
-	$edt->add_condition('E_CANNOT_DELETE');
+	$edt->add_condition('E_CANNOT_DELETE', 'collection');
 	return;
     }
     
@@ -161,26 +171,27 @@ sub validate_coll_action {
     # Check the reference parameters
     # ------------------------------
     
+    # If a reference id is specified, it must match an existing reference. This field is
+    # required, but does not have to be specified in an update operation.
+    
     my $reference_no = $action->record_value('reference_id');
     
-    if ( $operation eq 'insert' || $operation eq 'replace' ||
-	 $action->field_specified('reference_id') )
+    if ( defined $reference_no && $reference_no ne '' )
     {
-	if ( defined $reference_no && $reference_no ne '' )
-	{
-	    my $qref = $dbh->quote($reference_no);
-	    
-	    my ($check_re) = $dbh->selectrow_array("
+	my $qref = $dbh->quote($reference_no);
+	
+	my ($check_re) = $dbh->selectrow_array("
 		SELECT created FROM $TABLE{REFERENCE_DATA}
 		WHERE reference_no = $qref");
-
-	    unless ( $check_re )
-	    {
-		$edt->add_condition('E_BAD_VALUE', 'reference_id',
-				    "unknown reference $qref");
-	    }
+	
+	unless ( $check_re )
+	{
+	    $edt->add_condition('E_BAD_VALUE', 'reference_id',
+				"unknown reference $qref");
 	}
     }
+    
+    # The following two fields will be handled by the 'after_action' method.
     
     $action->ignore_field('reference_add');
     $action->ignore_field('reference_delete');
@@ -841,6 +852,77 @@ sub validate_coll_action {
 }
 
 
+# initialize_occs ( occurrence_nos )
+#
+# This method should be called for any transaction involving occurrences. The parameter
+# $occurrence_nos must be a hashref whose keys are the existing occurrence numbers
+# involved in the transaction. The purpose of this method is to fetch all of the
+# existing occurrences for the collection(s) in which the submitted occurrences are
+# located. This will allow checking for duplicates, checking for collection_no changes,
+# etc.
+
+sub initialize_occs {
+
+    my ($edt, $occurrence_nos, $reid_nos) = @_;
+    
+    my $dbh = $edt->dbh;
+    
+    # Select all occurrences from the collection(s) corresponding to the submitted
+    # occurrence numbers.
+    
+    my (%occs_by_id, %reids_by_id, %names_by_collection);
+    my ($sql, $result);
+    
+    my $occ_string = join(',', map { $dbh->quote($_) } keys $occurrence_nos->%*);
+    
+    if ( $occ_string )
+    {
+	$sql = "SELECT * FROM $TABLE{OCCURRENCE_DATA} WHERE collection_no = any
+	       (SELECT collection_no FROM $TABLE{OCCURRENCE_DATA}
+		WHERE occurrence_no in ($occ_string)";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	$result = $dbh->selectall_arrayref($sql, { Slice => { } });
+	
+	foreach my $occ ( @$result )
+	{
+	    my $occurrence_no = $occ->{occurrence_no};
+	    my $collection_no = $occ->{collection_no};
+	    my $check_name = join('|', $occ->{genus_reso}, $occ->{genus_name},
+				  $occ->{subgenus_reso}, $occ->{subgenus_name},
+				  $occ->{species_reso}, $occ->{species_name},
+				  $occ->{subspecies_reso}, $occ->{subspecies_name});
+	    
+	    $occs_by_id{$occurrence_no} = $occ;
+	    $names_by_collection{$collection_no}{$check_name} = 1;
+	}
+    }
+    
+    my $reid_string = join(',', map { $dbh->quote($_) } keys $reid_nos->%*);
+
+    if ( $reid_string )
+    {
+	$sql = "SELECT reid_no, occurrence_no, collection_no, reference_no FROM $TABLE{REID_DATA}
+		WHERE reid_no in ($reid_string)";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	$result = $dbh->selectall_arrayref($sql, { Slice => { } });
+	
+	foreach my $reid ( @$result )
+	{
+	    my $reid_no = $reid->{reid_no};
+	    $reids_by_id{$reid_no} = $reid;
+	}
+    }
+    
+    $edt->set_attr('occs', \%occs_by_id);
+    $edt->set_attr('occ_names', \%names_by_collection);
+    $edt->set_attr('reids', \%reids_by_id);
+}
+
+
 # validate_occ_action ( action, operation, table_specifier )
 # 
 # Validate an action (insert, replace, update, delete) on the OCCURRENCE_DATA
@@ -849,6 +931,316 @@ sub validate_coll_action {
 sub validate_occ_action {
 
     my ($edt, $action, $operation, $table_specifier) = @_;
+    
+    my ($sql, $result);
+    
+    my $dbh = $edt->dbh;
+    
+    # Validate collection_id
+    # ----------------------
+    
+    # This field is required, and its value cannot be changed after a record is created.
+    # On an insert operation, the value must match an existing collection. If specified
+    # in a non-insert operation, it must match the value already stored in the record.
+    
+    my $collection_no = $action->record_value('collection_id');
+    
+    if ( defined $collection_no && $collection_no ne '' )
+    {
+	$collection_no = "$collection_no"; # stringify
+	my $qref = $dbh->quote($collection_no);
+	
+	if ( $operation eq 'insert' )
+	{
+	    unless ( $edt->get_attr_key_value('good_collection', $collection_no ) )
+	    {
+		$sql = "SELECT collection_no FROM $TABLE{COLLECTION_DATA}
+			WHERE collection_no = $qref";
+		
+		$edt->debug_line("$sql\n") if $edt->debug_mode;
+		
+		my ($check) = $dbh->selectrow_array($sql);
+		
+		if ( $check )
+		{
+		    $edt->set_attr_key('good_collection', $collection_no, 1);
+		}
+		
+		else
+		{
+		    $edt->add_condition('E_BAD_VALUE', 'collection_id',
+					"unknown collection $qref");
+		}
+	    }
+	}
+
+	else
+	{
+	    $action->handle_column('collection_id', 'ignore');
+	    
+	    # foreach my $id ( $action->keyvals )
+	    # {
+	    # 	if ( $table_specifier eq 'OCCURRENCE_DATA' )
+	    # 	{
+
+	    
+	    # my $keyexpr = $action->keyexpr;
+	    
+	    # $sql = "SELECT distinct collection_no FROM $TABLE{$table_specifier}
+	    # 	WHERE $keyexpr";
+	    
+	    # $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    # $result = $dbh->selectcol_arrayref($sql);
+	    
+	    # if ( $result->@* != 1 || $result->[0] ne "$collection_no" )
+	    # {
+	    # 	$edt->add_condition('E_CANNOT_MOVE', 'collection');
+	    # }
+	}
+    }
+    
+    # Validate occurrence_id
+    # ----------------------
+    
+    # Like collection_id, this field is required and cannot be changed after a record is
+    # created. On an insert operation, it must match an existing occurrence, or the
+    # label of an occurrence being created in the same transaction.
+
+    my $occurrence_no = $action->record_value('occurrence_id');
+
+    if ( defined $occurrence_no && $occurrence_no ne '' )
+    {
+	$occurrence_no = "$occurrence_no"; # stringify
+	my $qref = $dbh->quote($occurrence_no);
+	
+	if ( $operation eq 'insert' )
+	{
+	    # If the stringified value is a decimal number greater than zero, check that
+	    # it corresponds to an existing occurrence.
+	    
+	    if ( $occurrence_no > 0 )
+	    {
+		unless ( $edt->get_attr_key_value('good_occurrence', $occurrence_no ) )
+		{
+		    $sql = "SELECT occurrence_no FROM $TABLE{OCCURRENCE_DATA}
+			WHERE occurrence_no = $qref";
+		
+		    $edt->debug_line("$sql\n") if $edt->debug_mode;
+		    
+		    my ($check) = $dbh->selectrow_array($sql);
+		    
+		    if ( $check )
+		    {
+			$edt->set_attr_key('good_occurrence', $occurrence_no, 1);
+		    }
+		    
+		    else
+		    {
+			$edt->add_condition('E_BAD_VALUE', 'occurrence_id',
+					    "unknown occurrence $qref");
+		    }
+		}
+	    }
+	    
+	    # If the value is an action label, do nothing. This case will be checked
+	    # later by the EditTransaction code.
+	}
+
+	else
+	{
+	    $action->handle_column('collection_id', 'ignore');
+	    # # If this is an update, replace, or delete operation, make sure that the
+	    # # occurrence_no matches what is already stored in the database row.
+	    
+	    # my $keyexpr = $action->keyexpr;
+	    
+	    # $sql = "SELECT distinct occurrence_no FROM $TABLE{OCCURRENCE_DATA}
+	    # 	WHERE $keyexpr";
+	    
+	    # $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    # $result = $dbh->selectcol_arrayref($sql);
+	    
+	    # if ( $result->@* != 1 || $result->[0] ne "$occurrence_no" )
+	    # {
+	    # 	$edt->add_condition('E_CANNOT_MOVE', 'reid');
+	    # }
+	}
+    }
+    
+    # Check for deletion
+    # ------------------
+    
+    # If this record is being deleted, we do not need to do any other checks on it. We
+    # do not delete an occurrence that has specimens associated with it.
+    
+    if ( $operation eq 'delete' )
+    {
+	if ( $table_specifier eq 'REID_DATA' )
+	{
+	    $edt->validate_delete_reids($action);
+	}
+	
+	else
+	{
+	    $edt->validate_delete_occs($action);
+	}
+	
+	return;
+    }
+    
+    # Validate reference_id
+    # ---------------------
+    
+    # Like occurrence_id, this field is required and must match an existing reference.
+    # It can, however, be changed.
+    
+    my $reference_no = $action->record_value('reference_id');
+    
+    if ( defined $reference_no && $reference_no ne '' )
+    {
+	$reference_no = "$reference_no"; # stringify
+	
+	unless ( $edt->get_attr_key_value('good_reference', $occurrence_no ) )
+	{
+	    my $qref = $dbh->quote($reference_no);
+	    
+	    $sql = "SELECT reference_no FROM $TABLE{REFERENCE_DATA}
+		    WHERE reference_no = $qref";
+	    
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    my ($check) = $dbh->selectrow_array($sql);
+	    
+	    if ( $check )
+	    {
+		$edt->set_attr_key('good_reference', $reference_no, 1);
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition('E_BAD_VALUE', 'reference_id',
+				    "unknown reference $qref");
+	    }
+	}
+    }
+    
+    # Validate the taxonomic name
+    # ---------------------------
+    
+    # This field will be deconstructed and used to set the fields 'genus_name',
+    # 'genus_reso', etc. If the field is specified with an empty value, that will be
+    # caught by 'validate_against_schema'.
+    
+    my $taxon_name = $action->record_value('taxon_name');
+    
+    if ( defined $taxon_name && $taxon_name ne '' )
+    {
+	$edt->validate_taxon_name($action, $table_specifier, $taxon_name);
+    }
+
+    elsif ( $operation eq 'insert' )
+    {
+	$edt->add_condition('E_REQUIRED', 'taxon_name');
+    }
+    
+    # Validate the plant organ
+    # ------------------------
+
+    # If more than one is specified, they must be (for now) stored in separate fields.
+    # Two is (for now) the limit.
+    
+    my $plant_organs = $action->record_value('plant_organ');
+    
+    if ( defined $plant_organs && $plant_organs ne '' )
+    {
+	my @organs = split /\s*,\s*/, $plant_organs;
+	
+	if ( @organs > 2 )
+	{
+	    $edt->add_condition('E_BAD_VALUE', 'plant_organ', "Only two plant organs may be selected");
+	}
+	
+	elsif ( @organs == 2 )
+	{
+	    $action->set_record_value('plant_organ', $organs[0]);
+	    $action->set_record_value('plant_organ2', $organs[1]);
+	}
+	
+	else # @organs == 1
+	{
+	    $action->set_record_value('plant_organ', $organs[0]);
+	    $action->set_record_value('plant_organ2', undef);
+	}
+    }
+
+    elsif ( $action->field_specified('plant_organ') )
+    {
+	$action->set_record_value('plant_organ', undef);
+	$action->set_record_value('plant_organ2', undef);
+    }
+}
+
+
+sub validate_delete_occs {
+
+    my ($edt, $action) = @_;
+    
+    # When deleting occurrences, we cannot proceed if there are any specimens
+    # corresponding to the occurrence(s).
+    
+    my $dbh = $edt->dbh;
+    my $keyexpr = $action->keyexpr;
+    my $sql = "SELECT count(specimen_no) FROM $TABLE{SPECIMEN_DATA} WHERE $keyexpr";
+    
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    my ( $check ) = $dbh->selectrow_array($sql);
+    
+    if ( $check )
+    {
+	$edt->add_condition('E_CANNOT_DELETE', 'occurrence');
+    }
+    
+    else
+    {
+	foreach my $k ( $action->keyvals )
+	{
+	    $edt->set_attr_key('delete_occs', $k, 1);
+	}
+    }
+}
+
+
+sub validate_delete_reids {
+
+    my ($edt, $action) = @_;
+    
+    # When deleting reidentifications, we must mark all of the corresponding occurrences
+    # for update.
+    
+    my $dbh = $edt->dbh;
+    my $keyexpr = $action->keyexpr;
+    my $sql = "SELECT occurrence_no FROM $TABLE{REID_DATA}
+		WHERE $keyexpr";
+    
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
+
+    my $result = $dbh->selectcol_arrayref($sql);
+    
+    foreach my $occurrence_no ( @$result )
+    {
+	$edt->set_attr_key('update_occs', $occurrence_no, 1);
+    }
+}
+
+
+sub validate_taxon_name {
+
+    my ($edt, $action, $table_specifier, $taxon_name) = @_;
+    
+    
     
     
 }
@@ -1165,18 +1557,18 @@ sub finalize_transaction {
 	updateCollectionMatrix($dbh, \@update_colls, $debug_out);
     }
     
-    my @delete_reids = $edt->get_attr_keys('delete_reids');
-    
-    if ( @delete_reids )
-    {
-	deleteReidsFromCollectionMatrix($dbh, \@delete_reids, $debug_out);
-    }
-    
     my @delete_occs = $edt->get_attr_keys('delete_occs');
     
     if ( @delete_occs )
     {
 	deleteFromOccurenceMatrix($dbh, \@delete_occs, $debug_out);
+    }
+    
+    my @delete_reids = $edt->get_attr_keys('delete_reids');
+    
+    if ( @delete_reids )
+    {
+	deleteReidsFromCollectionMatrix($dbh, \@delete_reids, $debug_out);
     }
     
     my @update_occs = $edt->get_attr_keys('update_occs');

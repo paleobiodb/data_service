@@ -258,18 +258,18 @@ sub initialize {
 	"This operation displays an HTML form which you can use to generate",
 	"calls to the colls/update operation.");
     
-    $ds2->define_node({ path => 'occs/edit',
-			place => 12,
-			usage => [ "/occs/edit.json?coll_id=1234" ],
-			title => "Fossil occurrences for editing",
-			method => 'list_occs_display',
-			arg => 'edit',
-			output => '1.2:occs:display',
-			optional_output => '1.2:occs:display_map',
-		        ruleset => '1.2:occs:for_display' },
-	"This operation returns information about fossil occurrences in the format",
-	"necessary for editing on a per-collection basis. It is intended",
-	"to enable a frontend application to perform this activity.");
+    # $ds2->define_node({ path => 'occs/edit',
+    # 			place => 12,
+    # 			usage => [ "/occs/edit.json?coll_id=1234" ],
+    # 			title => "Fossil occurrences for editing",
+    # 			method => 'list_occs_display',
+    # 			arg => 'edit',
+    # 			output => '1.2:occs:display',
+    # 			optional_output => '1.2:occs:display_map',
+    # 		        ruleset => '1.2:occs:for_display' },
+    # 	"This operation returns information about fossil occurrences in the format",
+    # 	"necessary for editing on a per-collection basis. It is intended",
+    # 	"to enable a frontend application to perform this activity.");
     
     $ds2->define_node({ path => 'occs/update',
 			title => 'Update occurrences',
