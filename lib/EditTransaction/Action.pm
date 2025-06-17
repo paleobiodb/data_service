@@ -631,6 +631,21 @@ sub set_record_value {
 }
 
 
+# delete_record_value( fieldname )
+#
+# Remove the specified field from the action record.
+
+sub delete_record_value {
+
+    my ($action, $fieldname) = @_;
+
+    if ( ref $action->{record} && reftype $action->{record} eq 'HASH' && defined $fieldname )
+    {
+	delete $action->{record}{$fieldname};
+    }
+}
+
+
 # record_value_alt ( fieldname... )
 #
 # Look up each of the specified fieldnames in action record in turn, and return the first defined
