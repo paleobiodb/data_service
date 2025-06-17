@@ -172,7 +172,7 @@ sub initialize {
 	    "The C<created> and C<modified> timestamps for the occurrence record");
 
     $ds->define_set('1.2:occs:display_map' =>
-	{ value => 'edit' },
+	{ value => 'edit', maps_to => '1.2:occs:edit' },
 	    "If this block is included, the occurrences and reidentifications will be listed",
 	    "in the order of when they were entered instead of being grouped by class,",
 	    "order, and family.",
@@ -380,6 +380,10 @@ sub initialize {
 	    "The year of publication of the reference from which this data was entered",
 	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier of the reference from which this data was entered");
+    
+    $ds->define_block('1.2:occs:edit' =>
+	{ include => '1.2:common:entname' },
+	{ include => '1.2:common:crmod' });
     
     $ds->define_block('1.2:occs:attr' =>
 	{ select => ['v.attribution', 'v.pubyr'], tables => 'v' });
