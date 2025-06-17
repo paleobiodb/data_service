@@ -10,7 +10,8 @@ package PB2::ConfigData;
 
 use strict;
 
-use TableDefs qw($CONTINENT_DATA $COLL_BINS $COLL_LITH $COLLECTIONS $COUNTRY_MAP %TABLE);
+use TableDefs qw(%TABLE $COLL_BINS $COLL_LITH);
+use CoreTableDefs;
 use TaxonDefs qw(%TAXON_RANK %RANK_STRING);
 
 use Carp qw(carp croak);
@@ -26,7 +27,7 @@ our ($BINS, $RANKS, $CONTINENTS, $COUNTRIES,
      $LITHOLOGIES, $MINOR_LITHS, $LITHIFICATION, $LITH_ADJECTIVES,
      $ENVIRONMENTS, $ENVTYPES, $TEC_SETTINGS, $COLL_METHODS, $DATE_METHODS,
      $COLL_COVERAGES, $COLL_TYPES,
-     $PRES_MODES, $PCOORD_MODELS, $RESEARCH_GROUPS, $MUSEUMS);
+     $PRES_MODES, $PCOORD_MODELS, $RESEARCH_GROUPS, $MUSEUMS, $ABUND_UNITS, $PLANT_ORGANS);
 
 our (%COV_LABEL) = ( 'some genera' => 'some genera within listed groups',
 		     'some microfossils' => 'major groups of microfossils',
@@ -97,6 +98,10 @@ sub initialize {
 	    "Return research group names.",
 	{ value => 'museums', maps_to => '1.2:config:museums' },
 	    "Return museum names.",
+	{ value => 'abundance', maps_to => '1.2:config:abund_units' },
+	    "Return abundance units.",
+	{ value => 'plant', maps_to => '1.2:config:plant_organs' },
+	    "Return plant organs.",
 	{ value => 'pgmodels', maps_to => '1.2:config:pgmodels' },
 	    "Return available paleogeography models.",
 	{ value => 'prefs', maps_to => '1.2:config:preferences' },
@@ -254,7 +259,19 @@ sub initialize {
 	    "Value 'mus' for museums",
 	{ output => 'museum_abbr', com_name => 'nam' },
 	    "Museum abbreviation");
-
+    
+    $ds->define_block('1.2:config:abund_units' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'abu', if_field => 'abund_unit' },
+	    "Value 'abu' for abundance units",
+	{ output => 'abund_unit', com_name => 'nam' },
+	    "Abundance unit");
+    
+    $ds->define_block('1.2:config:plant_organs' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'plo', if_field => 'plant_organ' },
+	    "Value 'plo' for plant organs",
+	{ output => 'plant_organ', com_name => 'nam' },
+	    "Plant organ");
+    
     $ds->define_block('1.2:config:preferences' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'prf', if_field => 'preference' },
 	    "Value 'prf' for preferences",
@@ -277,6 +294,8 @@ sub initialize {
 	{ include => '1.2:config:presmodes' },
 	{ include => '1.2:config:resgroups' },
 	{ include => '1.2:config:museums' },
+	{ include => '1.2:config:abund_units' },
+	{ include => '1.2:config:plant_organs' },
 	{ include => '1.2:config:preferences' });
     
     $ds->define_block('1.2:config:pgmodels' =>
@@ -307,6 +326,8 @@ sub initialize {
 	{ include => '1.2:config:resgroups' },
 	{ include => '1.2:config:museums' },
 	{ include => '1.2:config:pgmodels' },
+	{ include => '1.2:config:abund_units' },
+	{ include => '1.2:config:plant_organs' },
 	{ include => '1.2:config:preferences' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
@@ -347,12 +368,12 @@ sub initialize {
     # Get the list of continents from the database.
     
     $CONTINENTS = $dbh->selectall_arrayref("
-	SELECT continent as cc3, name as continent_name FROM $CONTINENT_DATA", { Slice => {} });
+	SELECT continent as cc3, name as continent_name FROM $TABLE{CONTINENT_DATA}", { Slice => {} });
     
     # Get the list of countries from the database.
     
     $COUNTRIES = $dbh->selectall_arrayref("
-	SELECT cc as cc2, continent, name as country_name FROM $COUNTRY_MAP
+	SELECT cc as cc2, continent, name as country_name FROM $TABLE{COUNTRY_MAP}
 	ORDER BY country_name", { Slice => {} });
     
     # Get the list of lithologies from the database.
@@ -406,7 +427,7 @@ sub initialize {
     # Get the list of lithology adjectives from the database.
     
     ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $COLLECTIONS like 'lithadj'");
+	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'lithadj'");
     
     my @lithadj_list = $field_type =~ /'(.*?)'/g;
     
@@ -511,7 +532,7 @@ sub initialize {
     # Get the list of preservation modes from the database.
     
     ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $COLLECTIONS like 'pres_mode'");
+	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'pres_mode'");
     
     my @presmode_list = $field_type =~ /'(.*?)'/g;
     
@@ -541,7 +562,7 @@ sub initialize {
     $COLL_COVERAGES = [ ];
     
     ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $COLLECTIONS like 'collection_coverage'");
+	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'collection_coverage'");
     
     my @collcov_list = $field_type =~ /'(.*?)'/g;
         
@@ -551,7 +572,7 @@ sub initialize {
     $COLL_TYPES = [ ];
     
     ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $COLLECTIONS like 'collection_type'");
+	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'collection_type'");
     
     my @colltype_list = $field_type =~ /'(.*?)'/g;
         
@@ -564,7 +585,7 @@ sub initialize {
     # Get the list of research groups from the database.
     
     ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $COLLECTIONS like 'research_group'");
+	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'research_group'");
     
     my @resgroup_list = $field_type =~ /'(.*?)'/g;
     
@@ -575,13 +596,34 @@ sub initialize {
     # Get the list of museum abbreviations from the database.
     
     ($field, $field_type) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $COLLECTIONS like 'museum'");
+	SHOW COLUMNS FROM $TABLE{COLLECTION_DATA} like 'museum'");
     
     my @museum_list = $field_type =~ /'(.*?)'/g;
     
     $MUSEUMS = [ ];
     
     push @$MUSEUMS, { museum_abbr => $_ } foreach @museum_list;
+    
+    # Get the list of abundance units, which is not stored in the database.
+    
+    my @abund_list = qw(specimens individuals elements fragments category rank
+			grid-count quadrats %-specimens %-individuals %-elements
+			%-fragments %-quadrats %-volume %-area);
+    
+    $ABUND_UNITS = [ ];
+    
+    push @$ABUND_UNITS, { abund_unit => $_ } foreach @abund_list;
+    
+    # Get the list of plant organs from the database.
+    
+    ($field, $field_type) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $TABLE{OCCURRENCE_DATA} like 'plant_organ'");
+    
+    my @organ_list = grep { $_ } $field_type =~ /'(.*?)'/g;
+    
+    $PLANT_ORGANS = [ ];
+    
+    push @$PLANT_ORGANS, { plant_organ => $_ } foreach @organ_list;
     
     # Get the list of paleocoordinate models from the database.
     
@@ -731,6 +773,8 @@ sub get {
     push @result, @$PRES_MODES if $request->has_block('1.2:config:presmodes');
     push @result, @$RESEARCH_GROUPS if $request->has_block('1.2:config:resgroups');
     push @result, @$MUSEUMS if $request->has_block('1.2:config:museums');
+    push @result, @$ABUND_UNITS if $request->has_block('1.2:config:abund_units');
+    push @result, @$PLANT_ORGANS if $request->has_block('1.2:config:plant_organs');
     push @result, @$PCOORD_MODELS if $request->has_block('1.2:config:pgmodels');
     push @result, $request->get_preferences if $request->has_block('1.2:config:preferences');
     
