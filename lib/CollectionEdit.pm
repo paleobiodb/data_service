@@ -149,8 +149,6 @@ sub validate_coll_action {
     # 	$old_record = $edt->fetch_old_record();
     # }
     
-    $edt->set_attr_key('update_colls', $coll_id, 1);
-    
     # Check the collection name
     # -------------------------
     
@@ -1274,7 +1272,7 @@ sub after_coll_action {
     
     my $dbh = $edt->dbh;
     
-    my ($keyexpr, $keyval, $sql, $result);
+    my ($keyexpr, @keyvals, $sql, $result);
     my $tableinfo = $edt->table_info_ref('COLLECTION_DATA');
 
     # For an 'insert' operation, the new key value is provided as an argument to
@@ -1283,7 +1281,8 @@ sub after_coll_action {
     if ( $operation eq 'insert' )
     {
 	$keyexpr = "collection_no = '$new_keyval'";
-	$keyval = $new_keyval;
+	@keyvals = $new_keyval;
+	$edt->set_attr_key('update_colls', $new_keyval, 1);
     }
     
     # Otherwise, we can get it from the action.
@@ -1291,7 +1290,8 @@ sub after_coll_action {
     elsif ( $operation eq 'update' || $operation eq 'replace' || $operation eq 'delete' )
     {
 	$keyexpr = $action->keyexpr;
-	$keyval = $action->keyval;
+	@keyvals = $action->keyvals;
+	$edt->set_attr_key('update_colls', $_, 1) foreach @keyvals;
     }
 
     # # For a 'delete' operation on the COLLECTION_DATA table, remove the
@@ -1379,9 +1379,7 @@ sub after_coll_action {
     # that is invalid to add or remove. If the keyvalue is multiple, iterate over
     # all of the corresponding collection identifiers.
     
-    my (@add_refs, @delete_refs, @coll_ids);
-    
-    @coll_ids = $action->keyvals;
+    my (@add_refs, @delete_refs);
     
     # foreach my $c ( @coll_ids )
     # {
@@ -1443,7 +1441,7 @@ sub after_coll_action {
     # Now iterate over all of the collections to update. In almost all cases, there
     # will be only one.
     
-    foreach my $coll_id ( @coll_ids )
+    foreach my $coll_id ( @keyvals )
     {
 	my $qcoll = $dbh->quote($coll_id);
 	
