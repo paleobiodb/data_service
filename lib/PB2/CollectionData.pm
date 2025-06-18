@@ -337,7 +337,8 @@ sub initialize {
 	    "The early bound of the geologic time range associated with this collection (in Ma)",
 	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with this collection (in Ma)",
-	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', 
+	  if_block => '1.2:refs:attr' },
 	    "The attribution (author and year) of the collection",
 	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
 	    "The year in which the collection was published",
@@ -461,7 +462,8 @@ sub initialize {
     
     $ds->define_block('1.2:colls:loc' =>
 	{ select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale', 'cc.geogcomments',
-		     'cc.latlng_basis', 'cc.latlng_precision', 'cc.altitude_value', 'cc.altitude_unit'] },
+		     'cc.latlng_basis', 'cc.latlng_precision', 'cc.altitude_value', 'cc.altitude_unit'],
+	  tables=> ['cc'] },
 	{ output => 'cc', com_name => 'cc2' },
 	    "The country in which the collection is located, encoded as",
 	    "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
