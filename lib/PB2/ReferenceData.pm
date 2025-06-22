@@ -1695,7 +1695,7 @@ sub format_reference {
 # 
 # Generate an attribution string for the primary reference associated with
 # the given record.  This relies on the fields "r_al1", "r_al2", "r_oa".  This
-# string does not include the publication year.
+# string includes the publication year.
 
 sub format_authors {
 
@@ -1722,6 +1722,8 @@ sub format_authors {
     {
 	$attr_string .= " and $auth2";
     }
+
+    $attr_string .= " $record->{r_pubyr}" if $record->{r_pubyr};
     
     return $attr_string;
 }

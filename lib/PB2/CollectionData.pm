@@ -3027,13 +3027,13 @@ sub generate_strata_auto_filters {
 
 sub generateAccessFilter {
     
-    my ($request, $mt, $tables_ref) = @_;
+    my ($request, $mt, $tables_ref, $force_private) = @_;
     
     # First check to see if the 'private' parameter was included in this
     # request.  If not, then return a filter that will select only public
     # data.
     
-    unless ( $request->clean_param('private') )
+    unless ( $request->clean_param('private') || $force_private )
     {
 	if ( $tables_ref->{c} )
 	{

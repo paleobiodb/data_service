@@ -303,7 +303,6 @@ sub initialize {
 		     'v.is_trace', 'v.is_form'],
 	  tables => ['oc', 'cc', 'tv', 'r', 'v', 'ph', 'ns', 'sc'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
-	{ set => '*', code => \&process_occ_com, if_format => 'json' },
 	{ set => '*', code => \&process_occ_ids },
 	{ output => 'occurrence_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
@@ -1814,33 +1813,13 @@ END_JOINS
 	ORDER BY collection_no, occurrence_no, reid_no
 	$limit";
     
-    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
-    
-    # Then prepare and execute the main query.
-    
-    # $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    # $request->{main_sth}->execute();
+    $request->debug_line("$request->{main_sql}\n") if $request->debug;
     
     my $result = $dbh->selectall_arrayref($request->{main_sql}, {Slice => { }});
     
     # If we were asked to get the count, then do so
     
     $request->sql_count_rows;
-    
-    # # Go through the list backward, marking latest identifications.
-    
-    # my %found_occ;
-    
-    # foreach my $record ( reverse @$result )
-    # {
-    # 	delete $record->{n_specs} if defined $record->{n_specs} && $record->{n_specs} == 0;
-	
-    # 	unless ( $found_occ{$record->{occurrence_no}} )
-    # 	{
-    # 	    $record->{latest_ident} = 1;
-    # 	    $found_occ{$record->{occurrence_no}} = 1;
-    # 	}
-    # }
     
     # If we are in 'for_edit' mode, return the results in the order retrieved,
     # which is sorted by collection_no, then occurrence_no, then reid_no.
@@ -3840,6 +3819,8 @@ sub generateQuickDivJoins {
 sub process_basic_record {
     
     my ($request, $record) = @_;
+
+    return if $record->{_status} && $record->{_status} eq 'deleted';
     
     no warnings 'uninitialized';
     
@@ -3894,6 +3875,8 @@ sub process_identification {
     
     my ($request, $record) = @_;
     
+    no warnings 'uninitialized';
+    
     # Construct the 'identified_name' field using the '_name' and '_reso'
     # fields from the occurrence record.  Also build 'taxon_name' using just
     # the '_name' fields.
@@ -3902,34 +3885,40 @@ sub process_identification {
     
     my $ident_name = combine_modifier($record->{genus_name},
 				      $record->{genus_reso}, $n_mods) || '';
-    my $taxon_name = $record->{genus_name} || '';
+    my $taxon_name = '';
+    my $stop_name;
+
+    $stop_name = 1 if $record->{genus_reso} eq 'informal';
     
-    # $ident_name .= " $record->{genus_reso}" if $record->{genus_reso};
+    $taxon_name .= $record->{genus_name} if $record->{genus_name} && ! $stop_name;
     
     if ( $record->{subgenus_name} )
     {
 	$ident_name .= " (" . combine_modifier($record->{subgenus_name},
 					       $record->{subgenus_reso}, $n_mods) . ")";
-	# $ident_name .= " $record->{subgenus_reso}" if $record->{subgenus_reso};
-	# $ident_name .= ")";
-	
-	$taxon_name .= " ($record->{subgenus_name})";
+
+	$stop_name = 1 if $record->{subgenus_reso} eq 'informal';
+	$taxon_name .= " ($record->{subgenus_name})" if ! $stop_name;
     }
     
     if ( $record->{species_name} )
     {
 	$ident_name .= " " . combine_modifier($record->{species_name},
 					      $record->{species_reso}, $n_mods);
-	# $ident_name .= " $record->{species_reso}" if $record->{species_reso};
 
-	$taxon_name .= " $record->{species_name}" if $record->{species_name} !~ /\.$|^[?]$/;
-	$taxon_name =~ s/[ ]?[?]$//;
+	$stop_name = 1 if $record->{species_reso} eq 'informal';
+	$taxon_name .= " $record->{species_name}" if $record->{species_name} !~ /\.$|^[?]$/
+	    && ! $stop_name;
     }
     
     if ( $record->{subspecies_name} )
     {
 	$ident_name .= " " . combine_modifier($record->{subspecies_name},
 					      $record->{subspecies_reso}, $n_mods);
+
+	$stop_name = 1 if $record->{subspecies_reso} eq 'informal';
+	$taxon_name .= " $record->{subspecies_name}" if $record->{subspecies_name} !~ /\.$/
+	    && ! $stop_name;
     }
 
     if ( @$n_mods )
@@ -3941,6 +3930,11 @@ sub process_identification {
     $record->{taxon_name} ||= $taxon_name || $record->{identified_name} || 'UNKNOWN';
     
     # If the 'identified_rank' field is not set properly, try to determine it.
+
+    if ( defined $record->{subspecies_name} && $record->{subspecies_name} =~ qr{[a-z0-9]$} )
+    {
+	$record->{identified_rank} = 2;
+    }
     
     if ( defined $record->{species_name} && $record->{species_name} =~ qr{[a-z0-9]$} )
     {
@@ -3973,12 +3967,12 @@ sub combine_modifier {
     
     return $name unless defined $modifier && $modifier ne '';
     
-    if ( $modifier eq '?' || $modifier eq 'sensu lato' )
-    {
-	return "$name $modifier";
-    }
+    # if ( $modifier =~ /^sensu/ )
+    # {
+    # 	return "$name $modifier";
+    # }
 
-    elsif ( $modifier eq 'informal' )
+    if ( $modifier eq 'informal' )
     {
 	return "<$name>";
     }
@@ -4037,27 +4031,11 @@ sub process_difference {
 	#     $record->{taxonomic_reason} = 'taxon not fully entered';
 	# }
 	
-	# If the species was not entered then report that as the primary difference.
+	# If the orig_no and accepted_no are the same, then the two names are
+	# variants. So try to figure out why they differ. If we can't find
+	# anything else, just report 'variant'.
 	
-	if ( defined $record->{identified_rank} && $record->{identified_rank} < 4 &&
-	     defined $record->{accepted_rank} && $record->{accepted_rank} >= 4 &&
-	     defined $record->{taxon_status} &&
-	     ( $record->{taxon_status} eq 'belongs to' || 
-	       $record->{taxon_status} eq 'subjective synonym of' ||
-	       $record->{taxon_status} eq 'objective synonym of' ||
-	       $record->{taxon_status} eq 'replaced by' ||
-	       $record->{taxon_status} eq '' ) )
-	{
-	    push @reasons, $record->{taxon_status} if defined $record->{taxon_status} &&
-		$record->{taxon_status} ne 'belongs to' && $record->{taxon_status} ne '';
-	    push @reasons, 'species not entered';
-	}
-	
-	# Otherwise, if the orig_no and accepted_no are the same, then the two
-	# names are variants.  So try to figure out why they differ.  If we
-	# can't find anything else, just report 'variant'.
-	
-	elsif ( $record->{orig_no} && $record->{accepted_no} && 
+	if ( $record->{orig_no} && $record->{accepted_no} && 
 	     $record->{orig_no} eq $record->{accepted_no} )
 	{
 	    if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
@@ -4078,9 +4056,30 @@ sub process_difference {
 		push @reasons, 'corrected to';
 	    }
 	    
-	    else
+	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'rank change' ||
+		    $record->{spelling_reason} && $record->{spelling_reason} eq 'rank change' )
 	    {
-		push @reasons, ($record->{taxon_status} || 'obsolete variant of');
+		if ( $record->{identified_rank} && $record->{identified_rank} == 5 &&
+		     $record->{accepted_rank} && $record->{accepted_rank} == 4 )
+		{
+		    push @reasons, 'demoted to subgenus';
+		}
+
+		elsif ( $record->{identified_rank} && $record->{identified_rank} == 4 &&
+			$record->{accepted_rank} && $record->{accepted_rank} == 5 )
+		{
+		    push @reasons, 'promoted to genus';
+		}
+
+		else
+		{
+		    push @reasons, 'rank change';
+		}
+	    }
+	    
+	    elsif ( $record->{taxon_status} && $record->{taxon_status} ne 'belongs to' )
+	    {
+		push @reasons, $record->{taxon_status};
 	    }
 	}
 	
@@ -4114,8 +4113,28 @@ sub process_difference {
 	
 	if ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
 	{
-	    unshift @reasons, 'misspelling of';
+	    unshift @reasons, 'misspelling of' unless $reasons[0] eq 'corrected to';
 	}
+
+	# If the species or subspecies was not entered then report that at the end.
+	
+	if ( defined $record->{identified_rank} && $record->{identified_rank} == 2 &&
+	     defined $record->{accepted_rank} && $record->{accpted_rank} == 3 &&
+	     defined $record->{taxon_status} )
+	{
+	    push @reasons, 'subspecies not entered';
+	}
+	
+	elsif ( defined $record->{identified_rank} && $record->{identified_rank} < 4 &&
+		defined $record->{accepted_rank} && $record->{accepted_rank} >= 4 &&
+		defined $record->{taxon_status} )
+	{
+	    push @reasons, 'species not entered';
+	}	
+	
+	# If we don't have any reason so far, use 'variant of'.
+
+	push @reasons, 'variant of' unless @reasons;
 	
 	# Now join all of the reasons together.
 	
