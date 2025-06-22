@@ -72,11 +72,11 @@ sub finish_table_definition {
 	
 	# Adjust the FOREIGN_KEY property if necessary by checking %FOREIGN_KEY_TABLE.
 	
-	if ( not $cr->{FOREIGN_KEY} and $FOREIGN_KEY_TABLE{$colname} )
-	{
-	    $cr->{FOREIGN_KEY} = $FOREIGN_KEY_TABLE{$colname};
-	    $cr->{FOREIGN_COL} = $FOREIGN_KEY_COL{$colname} if $FOREIGN_KEY_COL{$colname};
-	}
+	# if ( not $cr->{FOREIGN_KEY} and $FOREIGN_KEY_TABLE{$colname} )
+	# {
+	#     $cr->{FOREIGN_KEY} = $FOREIGN_KEY_TABLE{$colname};
+	#     $cr->{FOREIGN_COL} = $FOREIGN_KEY_COL{$colname} if $FOREIGN_KEY_COL{$colname};
+	# }
 	
 	# If the column does not have a DIRECTIVE property, check for a special handler based on
 	# the column name.

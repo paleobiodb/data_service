@@ -1052,9 +1052,9 @@ sub condition_message {
 
 sub _squash_param {
 
-    if ( defined $_[0] && length($_[0]) > 80 )
+    if ( defined $_[0] && length($_[0]) > 100 )
     {
-	return substr($_[0],0,80) . '...';
+	return substr($_[0],0,100) . '...';
     }
     
     else

@@ -494,18 +494,18 @@ sub fetch_table_schema {
     
     $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier} = \%directives;
     
-    # If this column is marked as being subordinate to another table, fetch that
-    # table's schema as well. This is done after the $TABLE_INFO_CACHE entry for
-    # this table is set, to make sure the recursion will always stop even if a
-    # superior-table loop is incorrectly present. 
+    # If this table is specified as using another table for authorization, fetch
+    # that table's schema as well. This is done after the $TABLE_INFO_CACHE
+    # entry for this table is set, to make sure the recursion will always stop
+    # even if a superior-table loop is incorrectly present.
     
-    if ( my $sup_specifier = $table_definition{SUPERIOR_TABLE} )
+    if ( my $auth_table_specifier = $table_definition{AUTH_TABLE} )
     {
-	my $sup_tableinfo = $edt->fetch_table_schema($sup_specifier, $dbh_arg);
+	my $auth_table_info = $edt->fetch_table_schema($auth_table_specifier, $dbh_arg);
 	
-	if ( $sup_tableinfo )
+	if ( $auth_table_info )
 	{
-	    $table_definition{SUPERIOR_KEY} ||= $sup_tableinfo->{PRIMARY_KEY};
+	    $table_definition{AUTH_KEY} ||= $auth_table_info->{PRIMARY_KEY};
 	}
     }
     

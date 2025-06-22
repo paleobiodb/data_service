@@ -13,6 +13,7 @@ use strict;
 use Switch::Plain;
 use Scalar::Util qw(reftype);
 use Carp qw(carp croak);
+use TableDefs qw(%TABLE);
 
 use Role::Tiny;
 
@@ -252,21 +253,13 @@ sub authorize_insert_key {
 # Authorization of actions
 # ------------------------
 
-# authorize_action ( action )
+# authorize_against_table ( action, operation, table_specifier )
 # 
 # Determine whether the permission object associated with this transaction is authorized
 # to perform the specified action.  If so, store the indicated permission in the action
-# record.
-# 
-# This method may be overridden by subclasses, though that is an iffy thing to do because it will
-# circumvent all of the permission checks implemented here. Under most circumstances, an override
-# method should make additional checks and then call this one. Override methods should indicate
-# error and warning conditions by calling the method 'add_condition'.
-# 
-# If the flag 'FINAL' is given and the authorization has been marked as pending, complete it
-# now.
+# record and return it.
 
-sub authorize_action {
+sub authorize_against_table {
     
     my ($edt, $action, $operation, $table_specifier) = @_;
     
@@ -289,14 +282,12 @@ sub authorize_action {
     my $tableinfo = $edt->table_info_ref($table_specifier) || 
 	return $action->permission('none');
     
-    my $superior_table = $tableinfo->{SUPERIOR_TABLE};
+    my $auth_table = $tableinfo->{AUTH_TABLE};
     
     # Step 1: determine permission
     # ----------------------------
     
     my $key_expr = $action->keyexpr;
-    
-    my $auth_table = $table_specifier;
     
     my ($primary, $count, @rest);
     
@@ -305,16 +296,42 @@ sub authorize_action {
     # If the table corresponding to $table_specifier is subordinate to another table,
     # any action requires 'modify' permission on the linked records in that table.
     
-    if ( $superior_table )
+    if ( $auth_table )
     {
-	$auth_table = $superior_table;
+	my $link_col = $tableinfo->{AUTH_KEY};
+
+	unless ( $link_col )
+	{
+	    $edt->add_condition('E_EXECUTE', 'no linking column was found');
+	}
+	
+	# If no linking keys were found, attempt to fetch a linking key from the
+	# existing database record.
+	
+	if ( $key_expr && ! $action->linkvalues )
+	{
+	    my $dbh = $edt->dbh;
+	    
+	    my $sql = "SELECT distinct $link_col FROM $TABLE{$table_specifier} WHERE $key_expr";
+	    
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    my $result = $dbh->selectcol_arrayref($sql);
+	    
+	    my $link_list = join(',', map { $dbh->quote($_) } @$result);
+
+	    if ( $link_list )
+	    {
+		$action->set_linkinfo($link_col, $link_col, $result, $link_list);
+	    }
+	}
 	
 	# If a link expression is present, check for 'modify' permission on the specified
 	# superior record.
 	
 	if ( $link_expr = $action->linkexpr )
 	{
-	    ($link_permission) = $edt->check_row_permission($superior_table, 'modify', 
+	    ($link_permission) = $edt->check_row_permission($auth_table, 'modify', 
 							    $link_expr);
 	    
 	    $link_permission ||= 'none';
@@ -723,21 +740,21 @@ sub unpack_key_values {
     # Check if this table is marked as being subordinate to another table. If so, make
     # sure that table and the necessary attributes exist.
     
-    my $superior_table = $tableinfo->{SUPERIOR_TABLE};
-    my ($superior_tableinfo, $link_columninfo);
+    my $auth_table = $tableinfo->{AUTH_TABLE};
+    my ($auth_tableinfo, $link_columninfo);
     
-    if ( $superior_table )
+    if ( $auth_table )
     {
-	unless ( ( $link_column = $tableinfo->{SUPERIOR_KEY} ) &&
-		 ( $link_columninfo = $edt->table_column_ref($table_specifier, $link_column) ) )
+	unless ( $auth_tableinfo = $edt->table_info_ref($auth_table) )
 	{
-	    $edt->add_condition('E_BAD_TABLE', 'link column', $table_specifier);
+	    $edt->add_condition('E_BAD_TABLE', 'superior', $auth_table);
 	    $abort = 1;
 	}
 	
-	unless ( $superior_tableinfo = $edt->table_info_ref($superior_table) )
+	unless ( ( $link_column = $tableinfo->{AUTH_KEY} ) &&
+		 ( $link_columninfo = $edt->table_column_ref($table_specifier, $link_column) ) )
 	{
-	    $edt->add_condition('E_BAD_TABLE', 'superior', $superior_table);
+	    $edt->add_condition('E_BAD_TABLE', 'link column', $table_specifier);
 	    $abort = 1;
 	}
     }
@@ -747,15 +764,15 @@ sub unpack_key_values {
     
     if ( $operation eq 'delete_cleanup' )
     {
-	unless ( $superior_table )
+	unless ( $auth_table )
 	{
 	    $edt->add_condition('E_BAD_TABLE', 'no superior', $table_specifier);
 	    $abort = 1;
 	}
 	
-	$key_column = $tableinfo->{SUPERIOR_KEY};
-	$table_specifier = $superior_table;
-	$tableinfo = $superior_tableinfo;
+	$key_column = $tableinfo->{AUTH_KEY};
+	$table_specifier = $auth_table;
+	$tableinfo = $auth_tableinfo;
     }
     
     if ( $abort )
@@ -800,13 +817,13 @@ sub unpack_key_values {
     # ones. Add error conditions to the action as appropriate.
     
     my $app_call = $edt->can('before_key_column');
+    my $dbh = $edt->dbh;
     
     if ( $key_field && $raw_values )
     {
 	if ( my @key_values = $edt->check_key_values($action, $columninfo,
 						     $key_field, $raw_values, $app_call) )
 	{
-	    my $dbh = $edt->dbh;
 	    my $quoted = join ',', map { $dbh->quote($_) } @key_values;
 	    
 	    if ( @key_values == 1 )
@@ -832,23 +849,22 @@ sub unpack_key_values {
     else
     {
 	$action->set_keyinfo($key_column, $key_field, undef, "0");
-	return;
     }
     
     # If this is a subordinate table, check and store any link values that were provided.
     
-    if ( $superior_table )
+    if ( $auth_table )
     {
 	my ($link_field, $link_value);
 	
-	foreach my $p ( $key_column, "_primary", $tableinfo->{PRIMARY_FIELD} )
+	foreach my $p ( $link_column, $auth_tableinfo->{PRIMARY_FIELD} )
 	{
 	    if ( $p && $params->{$p} )
 	    {
 		$link_value = $params->{$p};
 		$ref_type = ref $link_value;
 		
-		next unless ! $ref_type || $ref_type eq 'ARRAY' && $raw_values->@*;
+		next unless ! $ref_type || $ref_type =~ /::/ || $ref_type eq 'ARRAY' && $raw_values->@*;
 		
 		if ( $link_field )
 		{
@@ -858,7 +874,7 @@ sub unpack_key_values {
 		
 		else
 		{
-		    $key_field = $p;
+		    $link_field = $p;
 		}
 	    }
 	}
@@ -870,12 +886,13 @@ sub unpack_key_values {
 	    
 	    if ( @link_values > 1 )
 	    {
-		$edt->add_condition($action, 'E_BAD_FIELD', 'link', $tableinfo->{SUPERIOR_KEY});
+		$edt->add_condition($action, 'E_BAD_FIELD', 'link', $tableinfo->{AUTH_KEY});
 	    }
 	    
 	    else
 	    {
-		$action->set_linkinfo($link_column, $link_field, $link_value);
+		my $quoted = $dbh->quote($link_value);
+		$action->set_linkinfo($link_column, $link_field, $link_value, $quoted);
 	    }
 	}
 	
@@ -1264,7 +1281,7 @@ sub check_key_values {
 #     # records in the superior table. If no linking column is specified, assume it is the same as
 #     # the primary key of the superior table.
     
-#     my $linkcol = get_table_property($table_specifier, 'SUPERIOR_KEY');
+#     my $linkcol = get_table_property($table_specifier, 'AUTH_KEY');
 #     my $supcol = get_table_property($suptable, 'PRIMARY_KEY');
     
 #     $linkcol ||= $supcol;
@@ -1272,7 +1289,7 @@ sub check_key_values {
 #     my $altfield = get_table_property($table_specifier, $linkcol, 'ALTERNATE_NAME') ||
 # 	($linkcol =~ /(.*)_no$/ && "${1}_id");
     
-#     croak "SUPERIOR_TABLE was given as '$suptable' but no key column was found"
+#     croak "AUTH_TABLE was given as '$suptable' but no key column was found"
 # 	unless $linkcol;
     
 #     $edt->{permission_link_cache}{$table_specifier} = [$linkcol, $supcol, $altfield];

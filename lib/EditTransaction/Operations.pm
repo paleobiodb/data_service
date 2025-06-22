@@ -120,8 +120,8 @@ sub record_operation {
 	# error or caution will be added if the necessary permission cannot be
 	# established.
 	
-	my $result = $edt->authorize_action($action, $operation, $table_specifier, 
-					    $parameters);
+	my $result = $edt->authorize_against_table($action, $operation, $table_specifier, 
+						   $parameters);
 	
 	# If the action can proceed (in other words, if authorization does not
 	# add any errors or cautions) then it must be validated.
@@ -342,7 +342,7 @@ sub other_action {
 	    # First check to make sure we have permission to update this record. An error
 	    # condition will be added if the proper permission cannot be established.
 	    
-	    $edt->authorize_action($action, 'other', $table_specifier);
+	    $edt->authorize_against_table($action, 'other', $table_specifier);
 	    
 	    # Then call the 'validate_action' method, which can be overriden by subclasses to do
 	    # class-specific checks and substitutions.
@@ -625,7 +625,7 @@ sub _handle_action {
 # 	# An error or caution will be added if the necessary permission cannot be
 # 	# established.
 	
-# 	$edt->authorize_action($action, 'update', $table_specifier);
+# 	$edt->authorize_against_table($action, 'update', $table_specifier);
 	
 # 	# Then check the record to be inserted, making sure that the column values meet all of
 # 	# the criteria for this table. Any discrepancies will cause error and/or warning
@@ -684,7 +684,7 @@ sub _handle_action {
 # 	    # First check to make sure we have permission to replace this record. An
 # 	    # error condition will be added if the proper permission cannot be established.
 	    
-# 	    $edt->authorize_action($action, 'replace', $table_specifier);
+# 	    $edt->authorize_against_table($action, 'replace', $table_specifier);
 	    
 # 	    # If more than one key value was specified, add an error condition.
 
@@ -765,7 +765,7 @@ sub _handle_action {
 # 	    # First check to make sure we have permission to delete this record. An
 # 	    # error condition will be added if the proper permission cannot be established.
 	    
-# 	    $edt->authorize_action($action, 'delete', $table_specifier);
+# 	    $edt->authorize_against_table($action, 'delete', $table_specifier);
 	    
 # 	    # Then call the 'validate_action' method, which can be overriden by subclasses to do
 # 	    # class-specific checks and substitutions.
@@ -826,7 +826,7 @@ sub _handle_action {
 # 	# error or caution will be added if the necessary permission cannot be
 # 	# established.
 	
-# 	my $result = $edt->authorize_action($action, 'insupdate', $table_specifier);
+# 	my $result = $edt->authorize_against_table($action, 'insupdate', $table_specifier);
 	
 # 	if ( $result eq 'insert' )
 # 	{
@@ -876,7 +876,7 @@ sub _handle_action {
 # 	    # First check to make sure we have permission to delete records in this table. An
 # 	    # error condition will be added if the proper permission cannot be established.
 	    
-# 	    $edt->authorize_action($action, 'delete_cleanup', $table_specifier);
+# 	    $edt->authorize_against_table($action, 'delete_cleanup', $table_specifier);
 # 	};
 	
 # 	# If a exception occurred, write the exception to the error stream and add an error
@@ -950,9 +950,9 @@ sub _handle_action {
 # 	# error or caution will be added if the necessary permission cannot be
 # 	# established.
 	
-# 	$edt->authorize_action($action, 'delete_cleanup', $table_specifier);
+# 	$edt->authorize_against_table($action, 'delete_cleanup', $table_specifier);
 	
-# 	# If authorize_action returned 'insert', change the operation.
+# 	# If authorize_against_table returned 'insert', change the operation.
 	
 # 	if ( $result eq 'insert' )
 # 	{
@@ -1001,7 +1001,7 @@ sub _handle_action {
 # 	    # First check to make sure we have permission to delete records in this table. An
 # 	    # error condition will be added if the proper permission cannot be established.
 	    
-# 	    $edt->authorize_action($action, 'delete_cleanup', $table_specifier);
+# 	    $edt->authorize_against_table($action, 'delete_cleanup', $table_specifier);
 # 	};
 	
 # 	# If a exception occurred, write the exception to the error stream and add an error

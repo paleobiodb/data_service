@@ -1806,10 +1806,24 @@ sub set_attr_key {
     my ($edt, $attr, $key, $value) = @_;
     
     croak "you must specify an attribute name" unless $attr;
+    croak "you must specify a key" unless $key;
     croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
 	! ref $edt->{attrs}{$attr} eq 'HASH';
     
     $edt->{attrs}{$attr}{$key} = $value;
+}
+
+
+sub set_attr_2key {
+    
+    my ($edt, $attr, $key, $key2, $value) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    croak "you must specify two keys" unless $key && $key2;
+    croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
+	! ref $edt->{attrs}{$attr} eq 'HASH';
+    
+    $edt->{attrs}{$attr}{$key}{$key2} = $value;
 }
 
 
@@ -1827,7 +1841,7 @@ sub delete_attr_key {
 }
 
 
-sub get_attr_key_value {
+sub get_attr_key {
 
     my ($edt, $attr, $key) = @_;
     
@@ -1838,6 +1852,26 @@ sub get_attr_key_value {
 	croak "attribute '$attr' is not a hash" unless ref $edt->{attrs}{$attr} eq 'HASH';
 	return $edt->{attrs}{$attr}{$key};
     }
+    
+    else
+    {
+	return undef;
+    }
+}
+
+
+sub get_attr_2key {
+
+    my ($edt, $attr, $key, $key2) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    
+    if ( exists $edt->{attrs}{$attr} )
+    {
+	croak "attribute '$attr' is not a hash" unless ref $edt->{attrs}{$attr} eq 'HASH';
+	return $edt->{attrs}{$attr}{$key}{$key2};
+    }
+    
     else
     {
 	return undef;

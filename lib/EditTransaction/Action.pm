@@ -271,6 +271,21 @@ sub set_keyinfo {
 }
 
 
+# set_linkinfo ( link_column, link_field, link_value )
+# 
+# Store these values with the action.
+
+sub set_linkinfo {
+    
+    my ($action, $link_column, $link_field, $link_value, $link_expr) = @_;
+    
+    $action->{linkcol} = $link_column;
+    $action->{linkfield} = $link_field;
+    $action->{linkval} = $link_value;
+    $action->{linkexpr} = $link_expr;
+}
+
+
 # A get method is provided for each of these variables. Note that the key expression defaults to
 # '0', which will select nothing if included in an SQL where clause.
 
@@ -312,11 +327,6 @@ sub keyexpr {
     if ( $_[0]{keyexpr} && $_[0]{keycol} )
     {
 	return "$_[0]{keycol} in ($_[0]{keyexpr})";
-    }
-    
-    elsif ( $_[0]{keyexpr} )
-    {
-	return $_[0]{keyexpr};
     }
     
     else
@@ -369,6 +379,39 @@ sub keyvalues {
 }
 
 
+sub linkvalues {
+
+    if ( ref $_[0]{linkval} eq 'ARRAY' )
+    {
+	return $_[0]{linkval}->@*;
+    }
+
+    elsif ( wantarray )
+    {
+	return defined $_[0]{linkval} ? ($_[0]{linkval}) : ();
+    }
+
+    else
+    {
+	return defined $_[0]{linkval} ? 1 : 0;
+    }
+}
+
+
+sub linkexpr {
+    
+    if ( $_[0]{linkexpr} && $_[0]{linkcol} )
+    {
+	return "$_[0]{linkcol} in ($_[0]{linkexpr})";
+    }
+    
+    else
+    {
+	return '0';
+    }
+}
+
+
 # set_keyval ( new_value )
 # 
 # This is called after an insert operation, to store the new key value in the action record.
@@ -376,20 +419,6 @@ sub keyvalues {
 sub set_keyval {
     
     $_[0]{keyval} = $_[1];
-}
-
-
-# set_linkinfo ( link_column, link_field, link_value )
-# 
-# Store these values with the action.
-
-sub set_linkinfo {
-    
-    my ($action, $link_column, $link_field, $link_value) = @_;
-    
-    $action->{linkcol} = $link_column;
-    $action->{linkfield} = $link_field;
-    $action->{linkval} = $link_value;
 }
 
 
