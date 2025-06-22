@@ -916,7 +916,7 @@ sub generate_sandbox {
 
     my ($request, $config) = @_;
     
-    my ($ds_operation, $ruleset_name, $extra_params, $allowances, @allow_list);
+    my ($ds_operation, $ruleset_name, $extra_params, $allowances, $multiplicity, @allow_list);
     
     if ( ref $config eq 'HASH' )
     {
@@ -924,12 +924,15 @@ sub generate_sandbox {
 	$ruleset_name = $config->{ruleset} || '';
 	$extra_params = $config->{extra_params} || '';
 	$allowances = $config->{allowances};
+	$multiplicity = $config->{multiplicity};
     }
     
     else
     {
 	croak "You must provide a hashref to configure the sandbox.";
     }
+    
+    $multiplicity ||= 1;
     
     @allow_list = $request->ds->list_set_values($allowances) if $allowances;
     
@@ -978,6 +981,7 @@ sub generate_sandbox {
     
     $output .= "<input type=\"submit\" value=\"Submit\" onclick=\"sandbox_request()\">\n";
     $output .= "<input type=\"reset\" value=\"reset\" onclick=\"sandbox_clear()\">\n";
+    $output .= "<input type=\"submit\" value=\"Request body\" onclick=\"sandbox_request(true)\" style=\"margin-left: 40px\">\n";
     
     $output .= "<span id=\"testcontrol\" style=\"margin-left: 20px\"></span>\n";
     
@@ -988,12 +992,10 @@ sub generate_sandbox {
     $output .= "request. $allow_stmt</td></tr>\n";
     $output .= "</table>\n";
     
-    $output .= "<hr>\n";
-
     $output .= "<p>Parameters which are <b>required</b> must be given a non-empty value for new records, and must not be given an empty value in an update. If you wish to update a field to have a null value, enter <i>NULL</i> below. To update a field to the empty string, enter <i>EMPTY</i> below. If you wish to enter JSON content into a field that accepts it, start the value with either '[' or '{'.</p>\n";
     
-    $output .= "<table class=\"sbtable\">\n";
-    
+    $output .= "<hr>\n";
+
     my @doc_list = $request->ds->list_rules($ruleset_name);
     
     my (@field_list, @json_list);
@@ -1002,6 +1004,8 @@ sub generate_sandbox {
     # {
     # 	shift @doc_list;
     # }
+
+    my $section_output = "<table class=\"sbtable\">\n";
     
     while ( @doc_list )
     {
@@ -1036,16 +1040,16 @@ sub generate_sandbox {
 	{
 	    if ( $rule->{note} && $rule->{note} =~ /textarea/ )
 	    {
-		$output .= "<tr><td class=\"sbfield\">$field_label<br>\n";
-		$output .= "<textarea class=\"sbtext\" name=\"f_$field_name\" " .
+		$section_output .= "<tr><td class=\"sbfield\">$field_label<br>\n";
+		$section_output .= "<textarea class=\"sbtext\" name=\"f_$field_name\" " .
 		    "rows=\"2\" cols=\"40\"></textarea></td>\n";
 	    }
 	    else
 	    {
-		$output .= "<tr><td>$field_label<br><input type=\"text\" name=\"f_$field_name\" " .
-		    "size=\"40\"></td>\n";
+		$section_output .= "<tr><td>$field_label<br><input type=\"text\" " .
+		    "name=\"f_$field_name\" size=\"40\"></td>\n";
 	    }
-	    $output .= "<td class=\"sbdoc\">$field_doc</td></tr>\n";
+	    $section_output .= "<td class=\"sbdoc\">$field_doc</td></tr>\n";
 	    
 	    push @field_list, $field_name;
 
@@ -1055,11 +1059,18 @@ sub generate_sandbox {
 	    }
 	}
     }
+
+    $section_output .= "</table>\n";
+
+    for ( my $i = 0; $i < $multiplicity; $i++ )
+    {
+	$output .= ( $section_output =~ s/name=\"f_/name=\"f${i}_/gr );
+	$output .= "<hr>\n";
+    }
     
-    $output .= "</table>\n";
     $output .= "</form>\n";
     
-    $output .= "<hr>\n";
+    $output .= "<hr/>\n";
     
     $output .= "<p><input type=\"submit\" value=\"Submit\" onclick=\"sandbox_request()\"></p>\n\n";
     $output .= "</div>\n";
@@ -1074,6 +1085,7 @@ sub generate_sandbox {
     $output .= "    sandbox_json = { $json_string };\n";
     $output .= "    sandbox_operation = '$ds_operation';\n";
     $output .= "    sandbox_extra = '$ds_params';\n";
+    $output .= "    sandbox_sections = '$multiplicity';\n";
     $output .= "    var testreq = new XMLHttpRequest();\n";
     $output .= "    testreq.open('GET', '/dtest1.2/formats/png', true);\n";
     $output .= "    testreq.onload = function () {\n";
