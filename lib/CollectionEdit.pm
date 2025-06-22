@@ -33,8 +33,8 @@ with 'EditTransaction::Mod::PaleoBioDB';
 
 use namespace::clean;
 
-
 our (@CARP_NOT) = qw(EditTransaction);
+our (%OCC_RESO, %OCC_RESO_RE);
 
 {
     CollectionEdit->register_conditions(
@@ -66,11 +66,13 @@ our (@CARP_NOT) = qw(EditTransaction);
     set_column_property('COLLECTION_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('COLLECTION_DATA', 'reference_no', EXTID_TYPE => 'REF');
     
-    set_table_property('OCCURRENCE_DATA', REQUIRED_COLS => ['collection_no', 'reference_no']);
+    set_table_property('OCCURRENCE_DATA', REQUIRED_COLS => ['reference_no']);
     
     set_column_property('OCCURRENCE_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
     set_column_property('OCCURRENCE_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('OCCURRENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
+    
+    set_table_property('REID_DATA', REQUIRED_COLS => ['reference_no']);
     
     set_column_property('REID_DATA', 'reid_no', EXTID_TYPE => 'REI');
     set_column_property('REID_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
@@ -79,13 +81,20 @@ our (@CARP_NOT) = qw(EditTransaction);
 }
 
 
+# Methods
+# -------
+
 # The following methods override methods from EditTransaction.pm:
-# ---------------------------------------------------------------
+#
+# validate_action
+# after_action
+# finalize_transaction
+
 
 # validate_action ( action, operation, table_specifier )
 # 
-# This method is called from EditTransaction.pm to validate each action. We override it to do
-# additional checks.
+# This method is called from EditTransaction.pm to validate each action. The default
+# method does nothing.
 
 my ($DIGITS_RE) = qr/^\d+$/;
 my ($NUMBER_RE) = qr/^\d+[.]\d*$|^[.]\d+$|^\d+$/;
@@ -850,14 +859,16 @@ sub validate_coll_action {
 }
 
 
-# initialize_occs ( occurrence_nos )
+# initialize_occs ( occurrence_nos, reid_nos )
 #
-# This method should be called for any transaction involving occurrences. The parameter
-# $occurrence_nos must be a hashref whose keys are the existing occurrence numbers
-# involved in the transaction. The purpose of this method is to fetch all of the
-# existing occurrences for the collection(s) in which the submitted occurrences are
-# located. This will allow checking for duplicates, checking for collection_no changes,
-# etc.
+# This method should be called for any EditTransaction involving occurrences. The
+# parameter $occurrence_nos must be a hashref whose keys are the existing occurrence
+# numbers involved in the transaction. The parameter $reid_nos must be a hashref whose
+# keys are the existing reid numbers involved in the transaction.
+#
+# The purpose of this method is to fetch all of the existing occurrences for the
+# collection(s) in which the submitted occurrences are located. This will allow checking
+# for duplicates, checking for collection_no changes, etc.
 
 sub initialize_occs {
 
@@ -877,7 +888,7 @@ sub initialize_occs {
     {
 	$sql = "SELECT * FROM $TABLE{OCCURRENCE_DATA} WHERE collection_no = any
 	       (SELECT collection_no FROM $TABLE{OCCURRENCE_DATA}
-		WHERE occurrence_no in ($occ_string)";
+		WHERE occurrence_no in ($occ_string))";
 	
 	$edt->debug_line("$sql\n") if $edt->debug_mode;
 	
@@ -885,15 +896,18 @@ sub initialize_occs {
 	
 	foreach my $occ ( @$result )
 	{
+	    no warnings 'uninitialized';
+	    
 	    my $occurrence_no = $occ->{occurrence_no};
 	    my $collection_no = $occ->{collection_no};
-	    my $check_name = join('|', $occ->{genus_reso}, $occ->{genus_name},
-				  $occ->{subgenus_reso}, $occ->{subgenus_name},
-				  $occ->{species_reso}, $occ->{species_name},
-				  $occ->{subspecies_reso}, $occ->{subspecies_name});
-	    
-	    $occs_by_id{$occurrence_no} = $occ;
-	    $names_by_collection{$collection_no}{$check_name} = 1;
+	    my $check_name = join('|', $occ->{genus_name}, $occ->{genus_reso},
+				  $occ->{subgenus_name}, $occ->{subgenus_reso},
+				  $occ->{species_name}, $occ->{species_reso},
+				  $occ->{subspecies_name}, $occ->{subspecies_reso}, '#');
+
+	    $edt->set_attr_key('occs', $occurrence_no, $occ) if $occurrence_no;
+	    $edt->set_attr_2key('occ_names', $collection_no, $check_name, 1) if $collection_no;
+	    $edt->set_attr_key('show_collection', $collection_no, 1) if $collection_no;
 	}
     }
     
@@ -911,13 +925,54 @@ sub initialize_occs {
 	foreach my $reid ( @$result )
 	{
 	    my $reid_no = $reid->{reid_no};
-	    $reids_by_id{$reid_no} = $reid;
+	    $edt->set_attr_key('reids', $reid_no, $reid) if $reid_no;
+	    my $collection_no = $reid->{collection_no};
+	    $edt->set_attr_key('show_collection', $collection_no, 1) if $collection_no;
 	}
     }
+}
+
+
+sub fetch_existing_names {
+
+    my ($edt, $collection_no) = @_;
     
-    $edt->set_attr('occs', \%occs_by_id);
-    $edt->set_attr('occ_names', \%names_by_collection);
-    $edt->set_attr('reids', \%reids_by_id);
+    # Make sure that we have a valid collection_no. We must stringify it, in case it is
+    # an object representing an external identifier.
+    
+    return unless "$collection_no" > 0;
+    
+    # If we already have the occurrence taxonomic names for the specified collection,
+    # return.
+    
+    return if $edt->get_attr_key('occ_names', "$collection_no" );
+    
+    # Otherwise, fetch them.
+    
+    my $dbh = $edt->dbh;
+    
+    my (%names_by_collection);
+    my ($sql, $result);
+    
+    $sql = "SELECT genus_reso, genus_name, subgenus_reso, subgenus_name,
+		       species_reso, species_name, subspecies_reso, subspecies_name
+		FROM $TABLE{OCCURRENCE_DATA} WHERE collection_no = '$collection_no'";
+    
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    $result = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    foreach my $occ ( @$result )
+    {
+	no warnings 'uninitialized';
+	
+	my $check_name = join('|', $occ->{genus_name}, $occ->{genus_reso},
+			      $occ->{subgenus_name}, $occ->{subgenus_reso},
+			      $occ->{species_name}, $occ->{species_reso},
+			      $occ->{subspecies_name}, $occ->{subspecies_reso}, '#');
+	
+	$edt->set_attr_2key('occ_names', $collection_no, $check_name, 1);
+    }
 }
 
 
@@ -934,173 +989,270 @@ sub validate_occ_action {
     
     my $dbh = $edt->dbh;
     
-    # Validate collection_id
-    # ----------------------
+    my $occs = $edt->get_attr('occs');
+    my $reids = $edt->get_attr('reids');
     
-    # This field is required, and its value cannot be changed after a record is created.
-    # On an insert operation, the value must match an existing collection. If specified
-    # in a non-insert operation, it must match the value already stored in the record.
+    # Validate ids
+    # ------------
     
     my $collection_no = $action->record_value('collection_id');
-    
-    if ( defined $collection_no && $collection_no ne '' )
-    {
-	$collection_no = "$collection_no"; # stringify
-	my $qref = $dbh->quote($collection_no);
-	
-	if ( $operation eq 'insert' )
-	{
-	    unless ( $edt->get_attr_key_value('good_collection', $collection_no ) )
-	    {
-		$sql = "SELECT collection_no FROM $TABLE{COLLECTION_DATA}
-			WHERE collection_no = $qref";
-		
-		$edt->debug_line("$sql\n") if $edt->debug_mode;
-		
-		my ($check) = $dbh->selectrow_array($sql);
-		
-		if ( $check )
-		{
-		    $edt->set_attr_key('good_collection', $collection_no, 1);
-		}
-		
-		else
-		{
-		    $edt->add_condition('E_BAD_VALUE', 'collection_id',
-					"unknown collection $qref");
-		}
-	    }
-	}
-
-	else
-	{
-	    $action->handle_column('collection_id', 'ignore');
-	    
-	    # foreach my $id ( $action->keyvals )
-	    # {
-	    # 	if ( $table_specifier eq 'OCCURRENCE_DATA' )
-	    # 	{
-
-	    
-	    # my $keyexpr = $action->keyexpr;
-	    
-	    # $sql = "SELECT distinct collection_no FROM $TABLE{$table_specifier}
-	    # 	WHERE $keyexpr";
-	    
-	    # $edt->debug_line("$sql\n") if $edt->debug_mode;
-	    
-	    # $result = $dbh->selectcol_arrayref($sql);
-	    
-	    # if ( $result->@* != 1 || $result->[0] ne "$collection_no" )
-	    # {
-	    # 	$edt->add_condition('E_CANNOT_MOVE', 'collection');
-	    # }
-	}
-    }
-    
-    # Validate occurrence_id
-    # ----------------------
-    
-    # Like collection_id, this field is required and cannot be changed after a record is
-    # created. On an insert operation, it must match an existing occurrence, or the
-    # label of an occurrence being created in the same transaction.
-
     my $occurrence_no = $action->record_value('occurrence_id');
-
-    if ( defined $occurrence_no && $occurrence_no ne '' )
+    my $reid_no = $action->record_value('reid_id');
+    
+    # Select the case that applies to this action.
+    
+    if ( $table_specifier eq 'OCCURRENCE_DATA' )
     {
-	$occurrence_no = "$occurrence_no"; # stringify
-	my $qref = $dbh->quote($occurrence_no);
+	# If this is an insert operation on the OCCURRENCE_DATA table, then
+	# collection_id is required.
 	
 	if ( $operation eq 'insert' )
 	{
-	    # If the stringified value is a decimal number greater than zero, check that
-	    # it corresponds to an existing occurrence.
-	    
-	    if ( $occurrence_no > 0 )
+	    if ( defined $collection_no && $collection_no ne '' )
 	    {
-		unless ( $edt->get_attr_key_value('good_occurrence', $occurrence_no ) )
-		{
-		    $sql = "SELECT occurrence_no FROM $TABLE{OCCURRENCE_DATA}
-			WHERE occurrence_no = $qref";
+		# We must stringify the collection_no value, because it may be an object
+		# representing an external identifier.
 		
+		$collection_no = "$collection_no";
+		
+		# Unless we know this is a valid collection number, check it against the
+		# COLLECTION_DATA table.
+		
+		unless ( $edt->get_attr_key('valid_collection', $collection_no ) )
+		{
+		    my $qref = $dbh->quote($collection_no);
+		    
+		    $sql = "SELECT collection_no FROM $TABLE{COLLECTION_DATA}
+			WHERE collection_no = $qref";
+		    
 		    $edt->debug_line("$sql\n") if $edt->debug_mode;
 		    
 		    my ($check) = $dbh->selectrow_array($sql);
 		    
 		    if ( $check )
 		    {
-			$edt->set_attr_key('good_occurrence', $occurrence_no, 1);
+			$edt->set_attr_key('valid_collection', $collection_no, 1);
+			$edt->set_attr_key('show_collection', $collection_no, 1);
+			$edt->fetch_existing_names($collection_no);
 		    }
 		    
 		    else
 		    {
-			$edt->add_condition('E_BAD_VALUE', 'occurrence_id',
-					    "unknown occurrence $qref");
+			$edt->add_condition('E_BAD_VALUE', 'collection_id',
+					    "unknown collection $qref");
+			return;
 		    }
 		}
 	    }
 	    
-	    # If the value is an action label, do nothing. This case will be checked
-	    # later by the EditTransaction code.
-	}
-
-	else
-	{
-	    $action->handle_column('collection_id', 'ignore');
-	    # # If this is an update, replace, or delete operation, make sure that the
-	    # # occurrence_no matches what is already stored in the database row.
-	    
-	    # my $keyexpr = $action->keyexpr;
-	    
-	    # $sql = "SELECT distinct occurrence_no FROM $TABLE{OCCURRENCE_DATA}
-	    # 	WHERE $keyexpr";
-	    
-	    # $edt->debug_line("$sql\n") if $edt->debug_mode;
-	    
-	    # $result = $dbh->selectcol_arrayref($sql);
-	    
-	    # if ( $result->@* != 1 || $result->[0] ne "$occurrence_no" )
-	    # {
-	    # 	$edt->add_condition('E_CANNOT_MOVE', 'reid');
-	    # }
-	}
-    }
-    
-    # Check for deletion
-    # ------------------
-    
-    # If this record is being deleted, we do not need to do any other checks on it. We
-    # do not delete an occurrence that has specimens associated with it.
-    
-    if ( $operation eq 'delete' )
-    {
-	if ( $table_specifier eq 'REID_DATA' )
-	{
-	    $edt->validate_delete_reids($action);
+	    else
+	    {
+		$edt->add_condition('E_REQUIRED', 'collection_no');
+		return;
+	    }
 	}
 	
-	else
+	# If this is a 'delete' operation on the OCCURRENCE_DATA table, validate it and
+	# return. We don't need to do any of the checks below.
+	
+	elsif ( $operation eq 'delete' )
 	{
 	    $edt->validate_delete_occs($action);
-	}
+	    return;
+	}	
 	
-	return;
+	# For any other operation on the OCCURRENCE_DATA table, collection_no is ignored
+	# if specified. Use the collection_no value from the existing occurrence record.
+	
+	else
+	{
+	    $action->handle_column(collection_no => 'ignore');
+	    
+	    if ( $occurrence_no = $action->keyval )
+	    {
+		$collection_no = $occs->{$occurrence_no}{collection_no};
+	    }
+	    
+	    # If more than one key was specified, add an error condition.
+
+	    if ( ref $occurrence_no eq 'ARRAY' )
+	    {
+		$edt->add_condition('E_MULTI_KEY', $operation);
+		return;
+	    }
+	    
+	    # If we could not find both an occurrence_no and a collection_no, add an
+	    # error condition. This should not occur unless something has gone
+	    # seriously wrong.
+	    
+	    elsif ( $action->can_proceed && ! ($occurrence_no && $collection_no) )
+	    {
+		$edt->add_condition('E_EXECUTE', "could not locate collection_no");
+		return;
+	    }
+
+	    # If reid_id was specified, the wrong table was used when creating this
+	    # action.
+
+	    elsif ( $action->field_specified('reid_id') )
+	    {
+		$edt->add_condition('E_BAD_TABLE', 'OCCURRENCE_DATA',
+				    "cannot be specified with 'reid_id'");
+		return;
+	    }
+	}
     }
     
+    # Otherwise, the 'validate_action' method has already ensured that the table must be
+    # REID_DATA.
+    
+    else
+    {
+	# If this is an insert operation on the REID_DATA table, then
+	# occurrence_id is required.
+	
+	if ( $operation eq 'insert' )
+	{
+	    if ( defined $occurrence_no && $occurrence_no ne '' )
+	    {
+		# We must stringify the occurrence_no value, because it may be an object
+		# representing an external identifier.
+		
+		$occurrence_no = "$occurrence_no";
+		
+		# If the stringified value is a decimal number greater than zero, check
+		# that it corresponds to an existing occurrence.
+		
+		if ( $occurrence_no > 0 )
+		{
+		    # Unless we know that this is a valid occurrence, check it against
+		    # the OCCURRENCE_DATA table.
+		    
+		    unless ( $edt->get_attr_key('valid_occurrence', $occurrence_no ) )
+		    {
+			my $qref = $dbh->quote($occurrence_no);
+			
+			$sql = "SELECT occurrence_no, collection_no FROM $TABLE{OCCURRENCE_DATA}
+				WHERE occurrence_no = $qref";
+			
+			$edt->debug_line("$sql\n") if $edt->debug_mode;
+			
+			my ($check, $collection_no) = $dbh->selectrow_array($sql);
+			
+			if ( $check )
+			{
+			    $edt->set_attr_key('valid_occurrence', $occurrence_no, 1);
+			    $edt->set_attr_key('show_collection', $collection_no, 1);
+			}
+			
+			else
+			{
+			    $edt->add_condition('E_BAD_VALUE', 'occurrence_id',
+						"unknown occurrence $qref");
+			    return;
+			}
+		    }
+		}
+
+		# If the value is an action label, look up the collection_no from that
+		# action. If we can't find one, add an E_BAD_REFERENCE condition.
+
+		elsif ( $occurrence_no =~ /^&/ )
+		{
+		    my $referenced_action = $edt->action_ref($occurrence_no);
+
+		    if ( $referenced_action )
+		    {
+			$collection_no = $referenced_action->record_value('collection_id') || '';
+			$collection_no = "$collection_no";
+		    }
+		    
+		    unless ( $collection_no )
+		    {
+			$edt->add_condition('E_BAD_REFERENCE', 'occurrence_id', $occurrence_no);
+			return;
+		    }
+		}
+		
+		else
+		{
+		    $edt->add_condition('E_FORMAT', 'occurrence_id',
+					"must be an occurrence id or a record label");
+		}
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition('E_REQUIRED', 'occurrence_id');
+	    }
+	}
+	
+	# If this is a 'delete' operation on the REID_DATA table, validate it and
+	# return. We don't need to do any of the checks below.
+	
+	elsif ( $operation eq 'delete' )
+	{
+	    $edt->validate_delete_reids($action);
+	    return;
+	}
+	
+	# For any other operation on the REID_DATA table, both collection_no and
+	# occurrence_no are ignored if specified. Use the occurrence_no value from
+	# the existing occurrence record.
+	
+	else
+	{
+	    $action->handle_column('occurrence_id', 'ignore');
+	    $action->handle_column('collection_id', 'ignore');
+	    
+	    if ( $reid_no = $action->keyval )
+	    {
+		$collection_no = $reids->{$reid_no}{collection_no};
+		$occurrence_no = $reids->{$reid_no}{occurrence_no};
+	    }
+	    
+	    # If more than one key was specified, add an error condition.
+
+	    if ( ref $reid_no eq 'ARRAY' )
+	    {
+		$edt->add_condition('E_MULTI_KEY', $operation);
+	    }
+	    
+	    # If we could not find all three ids, add an error condition. This should
+	    # not occur unless something has gone seriously wrong.
+	    
+	    elsif ( $action->can_proceed && ! ($reid_no && $occurrence_no && $collection_no) )
+	    {
+		$edt->add_condition('E_EXECUTE', "could not locate occurrence_no or collection_no");
+	    }
+
+	    # If reid_id was not specified, the wrong table was used when creating this
+	    # action.
+
+	    elsif ( ! $action->field_specified('reid_id') )
+	    {
+		$edt->add_condition('E_BAD_TABLE', 'OCCURRENCE_DATA',
+				    "must be specified with 'reid_id'");
+		return;
+	    }
+	}
+    }
+        
     # Validate reference_id
     # ---------------------
     
-    # Like occurrence_id, this field is required and must match an existing reference.
-    # It can, however, be changed.
+    # This field is required and must match an existing reference.
     
     my $reference_no = $action->record_value('reference_id');
     
     if ( defined $reference_no && $reference_no ne '' )
     {
-	$reference_no = "$reference_no"; # stringify
+	# Stringify this value, because it may be an object representing an external
+	# identifier.
 	
-	unless ( $edt->get_attr_key_value('good_reference', $occurrence_no ) )
+	$reference_no = "$reference_no";
+	
+	unless ( $edt->get_attr_key('valid_reference', $reference_no ) )
 	{
 	    my $qref = $dbh->quote($reference_no);
 	    
@@ -1113,7 +1265,7 @@ sub validate_occ_action {
 	    
 	    if ( $check )
 	    {
-		$edt->set_attr_key('good_reference', $reference_no, 1);
+		$edt->set_attr_key('valid_reference', $reference_no, 1);
 	    }
 	    
 	    else
@@ -1128,19 +1280,20 @@ sub validate_occ_action {
     # ---------------------------
     
     # This field will be deconstructed and used to set the fields 'genus_name',
-    # 'genus_reso', etc. If the field is specified with an empty value, that will be
-    # caught by 'validate_against_schema'.
+    # 'genus_reso', etc. It must not be specified with an empty value.
     
-    my $taxon_name = $action->record_value('taxon_name');
+    my $identified_name = $action->record_value('identified_name');
     
-    if ( defined $taxon_name && $taxon_name ne '' )
+    $action->ignore_field('identified_name');
+    
+    if ( defined $identified_name && $identified_name ne '' )
     {
-	$edt->validate_taxon_name($action, $table_specifier, $taxon_name);
+	$edt->validate_identified_name($action, $table_specifier, $identified_name);
     }
 
-    elsif ( $operation eq 'insert' )
+    elsif ( $operation eq 'insert' || $action->field_specified('identified_name') )
     {
-	$edt->add_condition('E_REQUIRED', 'taxon_name');
+	$edt->add_condition('E_REQUIRED', 'identified_name');
     }
     
     # Validate the plant organ
@@ -1153,7 +1306,7 @@ sub validate_occ_action {
     
     if ( defined $plant_organs && $plant_organs ne '' )
     {
-	my @organs = split /\s*,\s*/, $plant_organs;
+	my @organs = grep { $_ ne '' } split /\s*,\s*/, $plant_organs;
 	
 	if ( @organs > 2 )
 	{
@@ -1224,23 +1377,430 @@ sub validate_delete_reids {
 		WHERE $keyexpr";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
-
+    
     my $result = $dbh->selectcol_arrayref($sql);
     
     foreach my $occurrence_no ( @$result )
     {
 	$edt->set_attr_key('update_occs', $occurrence_no, 1);
+	$edt->set_attr_key('recompute_occs', $occurrence_no, 1);
     }
 }
 
 
-sub validate_taxon_name {
+sub validate_identified_name {
 
-    my ($edt, $action, $table_specifier, $taxon_name) = @_;
+    my ($edt, $action, $table_specifier, $identified_name) = @_;
     
+    # The following variables will be filled in by the name parsing routine below.
+
+    my ($genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+	$species_name, $species_reso, $subspecies_name, $subspecies_reso);
     
+    # Check for n. gen., n. sp., etc.  These have an unambiguous meaning
+    # wherever they occur. Removing them may leave extra spaces in the
+    # name.
+
+    $identified_name =~ s/^\s+//;
+    $identified_name =~ s/\s+$//;
     
+    my $name = $identified_name;
     
+    if ( $name =~ /(.*)n[.]\s*gen[.](.*)/ )
+    {
+	$genus_reso = "n. gen.";
+	$name = "$1 $2";
+    }
+    
+    if ( $name =~ /(.*)n[.]\s*subgen[.](.*)/ )
+    {
+	$subgenus_reso = "n. subgen.";
+	$name = "$1 $2";
+    }
+    
+    if ( $name =~ /(.*)n[.]\s*sp[.](.*)/ )
+    {
+	$species_reso = "n. sp.";
+	$name = "$1 $2";
+    }
+    
+    if ( $name =~ /(.*)n[.]\s*(subsp|ssp)[.](.*)/ )
+    {
+	$subspecies_reso = "n. ssp.";
+	$name = "$1 $3";
+    }
+    
+    # Now deconstruct the name component by component, using the same rules as the
+    # Javascript form checker.
+    
+    # Start with the genus and any qualifier that may precede it.
+    
+    if ( $name =~ $OCC_RESO_RE{genus} )
+    {
+	if ( $genus_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting genus modifier on '$identified_name'");
+	    return;
+	}
+	
+	$genus_reso = $1;
+	$name = $2;
+    }
+    
+    if ( $name =~ /^\s*<(.*?\S.*?)>\s*(.*)/ )
+    {
+	if ( $genus_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting genus modifier on '$identified_name'");
+	    return;
+	}
+	
+	$genus_reso = 'informal';
+	$genus_name = $1;
+	$name = $2;
+    }
+    
+    elsif ( $name =~ /^\s*("?)([A-Za-z]+)("?)\s*(.*)/ )
+    {
+	if ( $genus_reso && $1 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting genus modifier on '$identified_name'");
+	    return;
+	}
+	
+	elsif ( $1 )
+	{
+	    $genus_reso = $1;
+	}
+	
+	$genus_name = $2;
+	$name = $4;
+	
+	unless ( $1 eq $3 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Mismatched &quot; on '$identified_name'");
+	    return;
+	}
+    }
+    
+    else
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': could not resolve genus");
+	return;
+    }
+    
+    if ( $genus_name && $genus_reso ne 'informal' && $genus_name !~ /^[A-Z][a-z]+$/ )
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': bad capitalization on genus");
+	return;
+    }
+    
+    # Continue with a possible subgenus and preceding qualifier.
+    
+    if ( $name =~ $OCC_RESO_RE{subgenus} )
+    {
+	if ( $subgenus_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting subgenus modifier on '$identified_name'");
+	    return;
+	}
+	
+	$subgenus_reso = $1;
+	$name = $2;
+    }
+    
+    if ( $name =~ /^[(]<(.*?\S.*?)>[)]\s*(.*)/ )
+    {
+	if ( $subgenus_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting subgenus modifier on '$identified_name'");
+	    return;
+	}
+	
+	$subgenus_reso = 'informal';
+	$subgenus_name = $1;
+	$name = $2;
+    }
+    
+    elsif ( $name =~ /^[(]("?)([A-Za-z]+)("?)[)]\s*(.*)/ )
+    {
+	if ( $subgenus_reso && $1 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting subgenus modifier on '$identified_name'");
+	    return;
+	}
+	
+	elsif ( $1 )
+	{
+	    $subgenus_reso = $1;
+	}
+	
+	$subgenus_name = $2;
+	$name = $4;
+	
+	unless ( $1 eq $3 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Invalid name '$identified_name': mismatched &quot; on subgenus");
+	    return;
+	}
+    }
+    
+    elsif ( $name =~ /[(]/ )
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': could not resolve subgenus");
+	return;
+    }
+    
+    else
+    {
+	$subgenus_name ||= '';
+    }
+    
+    if ( $subgenus_name && $subgenus_reso ne 'informal' &&
+	 $subgenus_name !~ /^[A-Z][a-z]+$/ )
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': bad capitalization on subgenus");
+    }
+    
+    # Continue with a species name and any qualifier that may precede it.
+    
+    if ( $name =~ $OCC_RESO_RE{species} )
+    {
+	if ( $species_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting species modifier on '$identified_name'");
+	    return;
+	}
+	
+	$species_reso = $1;
+	$name = $2;
+    }
+    
+    if ( ($species_reso eq 'cf.' || $species_reso eq 'aff.') &&
+	 $name =~ /([A-Z])[.]\s*(.*)/ )
+    {
+	if ( $1 ne substr($genus_name, 0, 1) )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Genus initial after $species_reso did not match genus");
+	    return;
+	}
+
+	$name = $2;
+    }
+    
+    if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
+    {
+	if ( $species_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting species modifier on '$identified_name'");
+	    return;
+	}
+	
+	$species_reso = 'informal';
+	$species_name = $1;
+	$name = $2;
+    }
+    
+    elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
+    {
+	if ( $species_reso && $1 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting species modifier on '$identified_name'");
+	    return;
+	}
+	
+	elsif ( $1 )
+	{
+	    $species_reso = $1;
+	}
+	
+	$species_name = $2;
+	$name = $4;
+	
+	unless ( $1 eq $3 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Invalid name '$identified_name': mismatched &quot; on species");
+	}
+    }
+    
+    elsif ( $species_reso && ! $species_name  )
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': could not resolve species");
+	return;
+    }
+    
+    else
+    {
+	$species_name ||= '';
+    }
+    
+    if ( $species_name && $species_reso ne 'informal' )
+    {
+	if ( $species_name =~ /[.]$/ )
+	{
+	    if ( $species_name !~ /^(?:sp|spp|indet)[.]$/ )
+	    {
+		$edt->add_condition('E_FORMAT', 'identified_name',
+				    "Invalid name '$identified_name': '$species_name' is not valid");
+		return;
+	    }
+	}
+	
+	elsif ( $species_name !~ /^[a-z]+$/ )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Invalid name '$identified_name': bad capitalization on species");
+	    return;
+	}
+    }
+    
+    # Finish with a possible subspecies name and any qualifier that may precede it.
+    
+    if ( $name =~ $OCC_RESO_RE{subspecies} )
+    {
+	if ( $subspecies_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting subspecies modifier on '$identified_name'");
+	    return;
+	}
+	
+	$subspecies_reso = $1;
+	$name = $2;
+    }
+    
+    if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
+    {
+	if ( $subspecies_reso )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting subspecies modifier on '$identified_name'");
+	    return;
+	}
+	
+	$subspecies_reso = 'informal';
+	$subspecies_name = $1;
+	$name = $2;
+    }
+    
+    elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
+    {
+	if ( $subspecies_reso && $1 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Conflicting subspecies modifier on '$identified_name'");
+	    return;
+	}
+	
+	elsif ( $1 )
+	{
+	    $subspecies_reso = $1;
+	}
+	
+	$subspecies_name = $2;
+	$name = $4;
+	
+	unless ( $1 eq $3 )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Invalid name '$identified_name': mismatched &quot; on subspecies");
+	}
+    }
+    
+    elsif ( $name && ! $species_name )
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': could not resolve species");
+	return;
+    }
+    
+    elsif ( $subspecies_reso )
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': could not resolve subspecies");
+	return;
+    }
+    
+    elsif ( $name && $name !~ /^\s+$/ )
+    {
+	$edt->add_condition('E_FORMAT', 'identified_name',
+			    "Invalid name '$identified_name': could not parse '$name'");
+	return;
+    }
+    
+    else
+    {
+	$subspecies_name ||= '';
+    }
+    
+    if ( $subspecies_name && $subspecies_reso ne 'informal' )
+    {
+	if ( $subspecies_name =~ /[.]$/ )
+	{
+	    if ( $subspecies_name !~ /^(?:subsp|subspp|indet)[.]$/ )
+	    {
+		$edt->add_condition('E_FORMAT', 'identified_name',
+				    "Invalid name '$identified_name': '$subspecies_name' is not valid");
+		return;
+	    }
+	}
+	
+	elsif ( $subspecies_name !~ /^[a-z]+$/ )
+	{
+	    $edt->add_condition('E_FORMAT', 'identified_name',
+				"Invalid name '$identified_name': bad capitalization on subspecies");
+	    return;
+	}
+    }
+    
+    # If we get here, then the name has been correctly parsed.
+    
+    # $edt->add_condition('E_BAD_VALUE', 'identified_name', 'parsed correctly');
+    no warnings 'uninitialized';
+    
+    my $name_check = join('|', $genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+			  $species_name, $species_reso, $subspecies_name, $subspecies_reso, '#');
+    
+    my ($collection_no) = $action->linkvalues;
+    
+    my $existing_names = $edt->get_attr('occ_names');
+    
+    if ( $edt->get_attr_2key('occ_names', $collection_no, $name_check) )
+    {
+	$edt->add_condition('E_BAD_VALUE', 'identified_name', "is a duplicate");
+    }
+
+    else
+    {
+	$edt->set_attr_2key('occ_names', $collection_no, $name_check, 1);
+    }
+    
+    $action->set_record_value('genus_name', $genus_name);
+    $action->set_record_value('genus_reso', $genus_reso);
+    $action->set_record_value('subgenus_name', $subgenus_name);
+    $action->set_record_value('subgenus_reso', $subgenus_reso);
+    $action->set_record_value('species_name', $species_name);
+    $action->set_record_value('species_reso', $species_reso);
+    $action->set_record_value('subspecies_name', $subspecies_name);
+    $action->set_record_value('subspecies_reso', $subspecies_reso);
 }
 
 
@@ -1287,7 +1847,15 @@ sub after_coll_action {
     
     # Otherwise, we can get it from the action.
     
-    elsif ( $operation eq 'update' || $operation eq 'replace' || $operation eq 'delete' )
+    elsif ( $operation eq 'delete' )
+    {
+	$keyexpr = $action->keyexpr;
+	@keyvals = $action->keyvals;
+	$edt->set_attr_key('delete_colls', $_, 1) foreach @keyvals;
+
+    }
+    
+    else
     {
 	$keyexpr = $action->keyexpr;
 	@keyvals = $action->keyvals;
@@ -1449,6 +2017,25 @@ sub after_coll_action {
 	
 	$result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{COLLECTION_REFS}
 			WHERE collection_no = $qcoll", { Slice => { } });
+
+	# For a delete operation, we just delete all of the secondary references.
+
+	if ( $operation eq 'delete' )
+	{
+	    $sql = "DELETE FROM $TABLE{COLLECTION_REFS} WHERE collection_no = $qcoll";
+	    
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    $dbh->do($sql);
+	    
+	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' )
+	    {
+		$edt->log_aux_event('delete', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
+				    $result);
+	    }
+
+	    next;
+	}
 	
 	# If there are any refs to add, add them now. Make sure to add only those
 	# identifiers that exist in the REFERENCE_DATA table. We use INSERT IGNORE
@@ -1462,15 +2049,15 @@ sub after_coll_action {
 			SELECT $qcoll as collection_no, reference_no FROM $TABLE{REFERENCE_DATA}
 			WHERE reference_no in ($add_list)";
 	    
-	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    $dbh->do($sql);
+	    
+	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' )
 	    {
 		$edt->log_aux_event('insert', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
 				    $result);
 	    }
-	    
-	    $edt->debug_line("$sql\n") if $edt->debug_mode;
-	    
-	    $dbh->do($sql);
 	}
 	
 	# If there are any refs to delete, delete them now. If a new primary
@@ -1511,15 +2098,15 @@ sub after_coll_action {
 		        WHERE collection_no = $qcoll and sr.reference_no in ($delete_list)
 			      and o1.occurrence_no is null and sp.specimen_no is null";
 		
+		$edt->debug_line("$sql\n") if $edt->debug_mode;
+		
+		$dbh->do($sql);
+		
 		if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
 		{
 		    $edt->log_aux_event('delete', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
 					$result);
 		}
-		
-		$edt->debug_line("$sql\n") if $edt->debug_mode;
-		
-		$dbh->do($sql);
 	    }
 	}
     }
@@ -1530,7 +2117,39 @@ sub after_occ_action {
     
     my ($edt, $action, $operation, $table_specifier, $new_keyval) = @_;
 
+    my @keyvals;
+    
+    # For an 'insert' operation, the new key value is provided as an argument to
+    # this method.
+    
+    if ( $operation eq 'insert' )
+    {
+	@keyvals = $new_keyval;
+	$edt->set_attr_key('update_occs', $new_keyval, 1);
+    }
+    
+    # Otherwise, we can get it from the action.
 
+    elsif ( $operation eq 'delete' )
+    {
+	@keyvals = $action->keyvals;
+
+	if ( $table_specifier eq 'REID_DATA' )
+	{
+	    $edt->set_attr_key('delete_reids', $_, 1) foreach @keyvals;
+	}
+
+	else
+	{
+	    $edt->set_attr_key('delete_occs', $_, 1) foreach @keyvals;
+	}
+    }
+    
+    else
+    {
+	@keyvals = $action->keyvals;
+	$edt->set_attr_key('update_occs', $_, 1) foreach @keyvals;
+    }
 }
 
 
@@ -1559,14 +2178,21 @@ sub finalize_transaction {
     
     if ( @delete_occs )
     {
-	deleteFromOccurenceMatrix($dbh, \@delete_occs, $debug_out);
+	deleteFromOccurrenceMatrix($dbh, \@delete_occs, $debug_out);
     }
     
     my @delete_reids = $edt->get_attr_keys('delete_reids');
     
     if ( @delete_reids )
     {
-	deleteReidsFromCollectionMatrix($dbh, \@delete_reids, $debug_out);
+	deleteReidsFromOccurrenceMatrix($dbh, \@delete_reids, $debug_out);
+    }
+    
+    my @recompute_occs = $edt->get_attr_keys('recompute_occs');
+    
+    if ( @recompute_occs )
+    {
+	$edt->recompute_occs($dbh, \@recompute_occs);
     }
     
     my @update_occs = $edt->get_attr_keys('update_occs');
@@ -1581,6 +2207,53 @@ sub finalize_transaction {
     if ( @update_occ_counts )
     {
 	updateOccurrencecounts($dbh, \@update_occ_counts, $debug_out);
+    }
+}
+
+
+# The following methods are unique to this subclass:
+# --------------------------------------------------
+
+# initialize_occ_resos ( dbh )
+#
+# This method must be called before any EditTransactions involving occurrences are
+# created. It reads the database definition of the fields 'genus_reso', 'subgenus_reso',
+# 'species_reso', and 'subspecies_reso', and stores all of the valid modifiers.
+#
+# IMPORTANT NOTE: this method assumes that the REID_DATA table accepts the same
+# modifiers as the OCCURRENCE_DATA table. If you change one, you must also change the
+# other.
+
+sub initialize_occ_resos {
+
+    my ($class, $dbh) = @_;
+    
+    foreach my $field ( qw(genus subgenus species subspecies) )
+    {
+	# Fetch the column definition from the database.
+	
+	my ($name, $definition) = $dbh->selectrow_array("
+	SHOW COLUMNS FROM $TABLE{OCCURRENCE_DATA} like '${field}_reso'");
+	
+	# Extract the list of allowed modifiers. Skip the empty string, and also '"',
+	# and 'informal'.
+	
+	my @modifier_list = grep { $_ && $_ ne 'informal' && $_ ne '"' } $definition =~ /'(.*?)'/g;
+	
+	$OCC_RESO{$field}{$_} = 1 foreach @modifier_list;
+	
+	my $regex_source = join('|', @modifier_list);
+	$regex_source =~ s/([.?])/[$1]/g;
+
+	if ( $field eq 'subgenus' )
+	{
+	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+([(].*)};
+	}
+
+	else
+	{
+	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+(.*)};
+	}
     }
 }
 

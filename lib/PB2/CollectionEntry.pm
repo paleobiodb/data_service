@@ -219,7 +219,8 @@ sub initialize {
 	    "deleted. The deletion will only happen if the user is the enterer or",
 	    "authorizer of the occurrence or its associated collection.",
 	{ optional => 'identified_name', valid => ANY_VALUE, alias => 'taxon_name' },
-	    "The taxonomic name identifying this occurrence, optionally with modifiers.");
+	    "The taxonomic name identifying this occurrence, optionally with modifiers.",
+	    "This field is required.");
 
     complete_ruleset($ds, $dbh, '1.2:occs:addupdate_body', 'OCCURRENCE_DATA',
 		     { taxon_no => 'IGNORE', collection_no => 'IGNORE',
@@ -230,13 +231,16 @@ sub initialize {
 		       subspecies_reso => 'IGNORE', subspecies_name => 'IGNORE',
 		       plant_organ2 => 'IGNORE' });
     
-    add_to_ruleset($ds, '1.2:occs:addupdate_body', 
-		   { optional => 'taxon_name', before => 'abund_value' },
-		   "This parameter is parsed in order to set the value for C<genus_reso>,",
-		   "C<genus_name>, etc. in the C<$TABLE{OCCURRENCE_DATA}> or",
-		   "C<$TABLE{REID_DATA}> table as appropriate.");
+    # add_to_ruleset($ds, '1.2:occs:addupdate_body', 
+    # 		   { optional => 'identified_name', before => 'abund_value' },
+    # 		   "This parameter is parsed in order to set the value for C<genus_reso>,",
+    # 		   "C<genus_name>, etc. in the C<$TABLE{OCCURRENCE_DATA}> or",
+    # 		   "C<$TABLE{REID_DATA}> table as appropriate.");
     
-    initializeBins($ds);
+    MatrixBase::initializeBins($ds);
+    CollectionEdit->initialize_occ_resos($dbh);
+
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -394,13 +398,13 @@ sub addupdate_colls {
     {
 	my @deleted_keys = $edt->deleted_keys();
 	
-	$request->list_deleted_colls($dbh, \@deleted_keys, $edt->key_labels)
+	$request->list_deleted_colls($dbh, \@deleted_keys, $edt->key_labels('COLLECTION_DATA'))
 	    if @deleted_keys;
 	
 	my @existing_keys = ($edt->inserted_keys('COLLECTION_DATA'),
 			       $edt->updated_keys('COLLECTION_DATA'));
 			       
-	$request->list_updated_colls($dbh, \@existing_keys, $edt->key_labels)
+	$request->list_updated_colls($dbh, \@existing_keys, $edt->key_labels('COLLECTION_DATA'))
 	    if @existing_keys;
     }
 }
@@ -565,7 +569,7 @@ sub update_occs {
 	else
 	{
 	    $request->add_error("E_BAD_DATA: a body record did not contain either 'reid_id' or 'occurrence_id'");
-	    die $request->exception("Bad data");
+	    die $request->exception(400, "Bad data");
 	}
     }
     
@@ -587,31 +591,191 @@ sub update_occs {
     	die $request->exception(400, "Bad request");
     }
     
-    if ( $request->has_block('all') )
-    {
-	my @deleted_keys = $edt->deleted_keys();
-	
-	$request->list_deleted_items('occurrence_no', \@deleted_keys, $edt->key_labels)
-	    if @deleted_keys;
-    }
-    
     unless ( $request->has_block('none') )
     {
-	my @deleted_keys = $edt->deleted_keys();
+	my @deleted_occs = $edt->deleted_keys('OCCURRENCE_DATA');
 	
-	$request->list_deleted_occs($dbh, \@deleted_keys, $edt->key_labels)
-	    if @deleted_keys;
+	$request->list_deleted_items('occurrence_no', \@deleted_occs,
+				     $edt->key_labels('OCCURRENCE_DATA'))
+	    if @deleted_occs;
 	
-	my @existing_keys = ($edt->inserted_keys('COLLECTION_DATA'),
-			       $edt->updated_keys('COLLECTION_DATA'));
-			       
-	$request->list_updated_occs($dbh, \@existing_keys, $edt->key_labels)
-	    if @existing_keys;
+	my @deleted_reids = $edt->deleted_keys('REID_DATA');
+	
+	$request->list_deleted_items('reid_no', \@deleted_reids,
+				     $edt->key_labels('REID_DATA'))
+	    if @deleted_reids;
+	
+	if ( $request->has_block('all') )
+	{
+	    my @coll_nos = $edt->get_attr_keys('show_collection');
+
+	    $request->list_updated_occs($dbh, \@coll_nos);
+	}
+
+	else
+	{
+	    my @occ_nos = ($edt->inserted_keys('OCCURRENCE_DATA'),
+			   $edt->updated_keys('OCCURRENCE_DATA'));
+	    
+	    my @reid_nos = ($edt->inserted_keys('REID_DATA'),
+			    $edt->updated_keys('REID_DATA'));
+	    
+	    my $occ_labels = $edt->key_labels('OCCURRENCE_DATA');
+	    my $reid_labels = $edt->key_labels('REID_DATA');
+	    
+	    $request->list_updated_occs($dbh, undef, \@occ_nos, \@reid_nos, $occ_labels, $reid_labels)
+		if @occ_nos || @reid_nos;
+	}
     }
 }
 
 
+sub list_updated_occs {
 
+    my ($request, $dbh, $coll_nos, $occ_nos, $reid_nos, $occ_labels, $reid_labels) = @_;
+    
+    $request->extid_check;
+    
+    my $tables = $request->tables_hash;
+    
+    $request->substitute_select( cd => 'oc' );
+    
+    my ($access_filter) = $request->generateAccessFilter('cc', $tables, 1);
+    
+    my $occ_fields = $request->select_string;
+    my $reid_fields = $occ_fields;
+    
+    $occ_fields =~ s/oc.reid_no/0 as reid_no/;
+    
+    $reid_fields =~ s/oc[.]/re./g;
+    $reid_fields =~ s/re[.](abund\w+)/'' as $1/g;
+    $reid_fields =~ s/re[.]plant_organ2/'' as plant_organ2/;
+    $reid_fields =~ s/sc[.]n_specs/0 as n_specs/;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+    
+    # Create a join list of all the tables we will need.
+    
+    my $other_joins = <<END_JOINS;
+left join $TABLE{AUTHORITY_DATA} as a using (taxon_no)
+	    left join $TABLE{TAXON_NAMES} as nm using (taxon_no)
+	    left join $TABLE{TAXON_TREES} as t on t.orig_no = a.orig_no
+	    left join $TABLE{TAXON_TREES} as tv on tv.orig_no = t.accepted_no
+	    left join $TABLE{TAXON_NAMES} as ns on ns.taxon_no = tv.spelling_no
+	    left join $TABLE{TAXON_ATTRS} as v on v.orig_no = t.orig_no
+	    left join $TABLE{TAXON_INTS} as ph on ph.ints_no = t.ints_no
+END_JOINS
+    
+    my $result;    
+    
+    # If we were given a list of collection_no values, select all occurrences
+    # and reidentifications in those collections (typically there will be only one).
+    
+    if ( $coll_nos  )
+    {
+	push @$coll_nos, 0 unless @$coll_nos;
+	
+    	my $coll_list = join("','", @$coll_nos);
+	
+	my $filter_string = "cc.collection_no in ('$coll_list') and $access_filter";
+	
+	$request->{main_sql} = "
+	SELECT $calc $occ_fields, if(oc.reid_no > 0, '', 1) as latest_ident
+	FROM $TABLE{OCCURRENCE_DATA} as oc join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+	    left join $TABLE{REFERENCE_DATA} as r on r.reference_no = oc.reference_no
+	    left join (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA}
+		       GROUP BY occurrence_no) as sc on sc.occurrence_no = oc.occurrence_no
+	    $other_joins
+        WHERE $filter_string
+        UNION ALL
+	SELECT $reid_fields, if(re.most_recent = 'YES', 1, '') as latest_ident
+	FROM $TABLE{REID_DATA} as re join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+	    left join $TABLE{REFERENCE_DATA} as r on r.reference_no = re.reference_no
+	    $other_joins
+	WHERE $filter_string
+	ORDER BY collection_no, occurrence_no, reid_no
+	$limit";
+    
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
+	
+	$result = $dbh->selectall_arrayref($request->{main_sql}, {Slice => { }});
+    }
+
+    # Otherwise, select all occurrences and reidentifications specified in the
+    # given lists.
+
+    else
+    {
+	push @$occ_nos, 0 unless @$occ_nos;
+
+	my $occ_list = join("','", @$occ_nos);
+
+	my $occ_filter = "oc.occurrence_no in ('$occ_list') and $access_filter";
+	
+	push @$reid_nos, 0 unless @$reid_nos;
+
+	my $reid_list = join("','", @$reid_nos);
+	
+	my $reid_filter = "re.reid_no in ('$reid_list') and $access_filter";
+
+	$request->{main_sql} = "
+	SELECT $calc $occ_fields, if(oc.reid_no > 0, '', 1) as latest_ident
+	FROM $TABLE{OCCURRENCE_DATA} as oc join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+	    left join $TABLE{REFERENCE_DATA} as r on r.reference_no = oc.reference_no
+	    left join (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA}
+		       GROUP BY occurrence_no) as sc on sc.occurrence_no = oc.occurrence_no
+	    $other_joins
+        WHERE $occ_filter
+        UNION ALL
+	SELECT $reid_fields, if(re.most_recent = 'YES', 1, '') as latest_ident
+	FROM $TABLE{REID_DATA} as re join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+	    left join $TABLE{REFERENCE_DATA} as r on r.reference_no = re.reference_no
+	    $other_joins
+	WHERE $reid_filter
+	ORDER BY collection_no, occurrence_no, reid_no
+	$limit";
+    
+	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
+	
+	$result = $dbh->selectall_arrayref($request->{main_sql}, {Slice => { }});
+    }	
+
+    # If we were given key labels, apply them.
+
+    foreach my $r ( @$result )
+    {
+	if ( $reid_labels && $r->{reid_no} )
+	{
+	    $r->{_label} = $reid_labels->{$r->{reid_no}};
+	}
+
+	if ( $occ_labels && ! $r->{reid_no} )
+	{
+	    $r->{_label} = $occ_labels->{$r->{occurrence_no}};
+	}
+    }
+    
+    # If show=edit was specified, return the results in the order retrieved,
+    # which is sorted by collection_no, then occurrence_no, then reid_no.
+    
+    if ( $request->has_block('edit') )
+    {
+	$request->list_result($result);
+    }
+    
+    # Otherwise, group them by class, order, and family.
+    
+    else
+    {
+	$request->list_result($request->process_occs_for_display($result));
+    }
+}
 
 
 sub addupdate_sandbox {
