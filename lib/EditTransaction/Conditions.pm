@@ -131,7 +131,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    # "No external identifier type is defined for field '&1'"],
 		E_BAD_VALUE => ["Field '&1': &2", "&2", "Field '&1'"],
 		E_NOT_BOTH => "You may not specify '&1' and '&2' together",
-		E_PARAM => ["Field '&1': &2", "Field '&1'"],
+		E_PARAM => ["Field '&1': &2", "&1"],
   		E_EXECUTE => ["&1", "Unknown"],
 		E_DUPLICATE => "Duplicate entry '&1' for key '&2'",
 		E_BAD_FIELD => ["Field '&1' does not correspond to any column in '&2'",

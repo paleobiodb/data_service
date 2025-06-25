@@ -462,37 +462,11 @@ sub fetch_table_schema {
     # 	}
     # }
     
-    # Store the list of column names in the table definition.
-    
-    $table_definition{COLUMN_LIST} = \@column_list;
-    
-    # If the current class includes a method for post-processing table definitions, call it now.
-    
-    if ( $edt->can('finish_table_definition') )
-    {
-	$edt->finish_table_definition(\%table_definition, \%column_definition, \@column_list);
-    }
-    
-    # Then collect up all of the column directives into a single hash. Ignore any 'validate'
-    # directives, since that is the default.
-    
-    my %directives;
-    
-    foreach my $colname ( @column_list )
-    {
-	if ( my $directive = $column_definition{$colname}{DIRECTIVE} )
-	{
-	    $directives{$colname} = $directive unless $directive eq 'validate';
-	}
-    }
-    
     # Cache all the information we have collected, overwriting any previous cache entries.
     
     $TABLE_INFO_CACHE{$class}{$table_specifier} = \%table_definition;
     
     $COLUMN_INFO_CACHE{$class}{$table_specifier} = \%column_definition;
-    
-    $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier} = \%directives;
     
     # If this table is specified as using another table for authorization, fetch
     # that table's schema as well. This is done after the $TABLE_INFO_CACHE
@@ -508,6 +482,34 @@ sub fetch_table_schema {
 	    $table_definition{AUTH_KEY} ||= $auth_table_info->{PRIMARY_KEY};
 	}
     }
+    
+    # If the current class includes a method for post-processing table
+    # definitions, call it now. Because we are passing the addresses of the
+    # cache entries, any updates will be stored in the cache.
+    
+    if ( $edt->can('finish_table_definition') )
+    {
+	$edt->finish_table_definition(\%table_definition, \%column_definition, \@column_list);
+    }
+    
+    # Store the list of column names in the table definition.
+    
+    $table_definition{COLUMN_LIST} = \@column_list;
+    
+    # Then collect up all of the column directives into a single hash. Ignore any 'validate'
+    # directives, since that is the default.
+    
+    my %directives;
+    
+    foreach my $colname ( @column_list )
+    {
+	if ( my $directive = $column_definition{$colname}{DIRECTIVE} )
+	{
+	    $directives{$colname} = $directive unless $directive eq 'validate';
+	}
+    }
+    
+    $COLUMN_DIRECTIVE_CACHE{$class}{$table_specifier} = \%directives;
     
     # Now return a reference to the newly cached table information record.
     

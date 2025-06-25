@@ -271,21 +271,6 @@ sub set_keyinfo {
 }
 
 
-# set_linkinfo ( link_column, link_field, link_value )
-# 
-# Store these values with the action.
-
-sub set_linkinfo {
-    
-    my ($action, $link_column, $link_field, $link_value, $link_expr) = @_;
-    
-    $action->{linkcol} = $link_column;
-    $action->{linkfield} = $link_field;
-    $action->{linkval} = $link_value;
-    $action->{linkexpr} = $link_expr;
-}
-
-
 # A get method is provided for each of these variables. Note that the key expression defaults to
 # '0', which will select nothing if included in an SQL where clause.
 
@@ -376,6 +361,22 @@ sub keyvalues {
     {
 	return defined $_[0]{keyval} ? 1 : 0;
     }
+}
+
+
+# set_linkinfo ( link_column, link_field, link_value )
+# 
+# Store these values with the action.
+
+sub set_linkinfo {
+    
+    my ($action, $auth_column, $link_column, $link_field, $link_value, $link_expr) = @_;
+    
+    $action->{authcol} = $auth_column;
+    $action->{linkcol} = $link_column;
+    $action->{linkfield} = $link_field;
+    $action->{linkval} = $link_value;
+    $action->{linkexpr} = $link_expr;
 }
 
 

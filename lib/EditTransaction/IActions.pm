@@ -312,7 +312,7 @@ sub abort_action {
 }
 
 
-# child_action ( [action], table, operation, record )
+# add_child_action ( [action], table, operation, record )
 # 
 # This method is called from client code or subclass methods that wish to create auxiliary actions
 # to supplement the current one. For example, adding a record to one table may involve also adding
@@ -320,7 +320,7 @@ sub abort_action {
 # string or a Perl reference), the new action is attached to that. Otherwise, it is attached to
 # the current action.
 
-sub child_action {
+sub add_child_action {
     
     my ($edt, @params) = @_;
     
@@ -362,11 +362,36 @@ sub child_action {
     
     $parent->add_child($child);
     
-    # Return the new action.
+    # Because this action is a child of an authorized action, it is assumed to
+    # be authorized.
+
+    $child->set_permission('modify');
     
-    return $child;
+    # Validate the new action, unless this is a delete.
     
-    # return $edt->_handle_action($child, $child->operation);
+    if ( $op =~ /^ins|^upd|^rep/ )
+    {
+	eval {
+	    $edt->validate_action($child, $op, $table_specifier);
+	    
+	    if ( $child->can_proceed )
+	    {
+		$edt->validate_against_schema($child, $op, $table_specifier);
+	    }
+	};
+	
+	if ( $@ )
+	{
+	    $edt->error_line($@);
+	    $edt->add_condition($child, 'E_EXECUTE', 
+				'an exception occurred during validation of a child action');
+	}
+    }
+    
+    # Regardless of any added conditions, handle the action and return the action
+    # reference.
+    
+    $edt->_handle_action($child);
 }
 
 

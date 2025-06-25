@@ -283,6 +283,7 @@ sub authorize_against_table {
 	return $action->permission('none');
     
     my $auth_table = $tableinfo->{AUTH_TABLE};
+    my $auth_tableinfo;
     
     # Step 1: determine permission
     # ----------------------------
@@ -298,8 +299,17 @@ sub authorize_against_table {
     
     if ( $auth_table )
     {
+	my $auth_tableinfo = $edt->table_info_ref($auth_table);
+	
+	unless ( $auth_tableinfo )
+	{
+	    $edt->add_condition('E_BAD_TABLE', $auth_table);
+	    return;
+	}
+	
 	my $link_col = $tableinfo->{AUTH_KEY};
-
+	my $auth_col = $auth_tableinfo->{PRIMARY_KEY} || $link_col;
+	
 	unless ( $link_col )
 	{
 	    $edt->add_condition('E_EXECUTE', 'no linking column was found');
@@ -319,10 +329,10 @@ sub authorize_against_table {
 	    my $result = $dbh->selectcol_arrayref($sql);
 	    
 	    my $link_list = join(',', map { $dbh->quote($_) } @$result);
-
+	    
 	    if ( $link_list )
 	    {
-		$action->set_linkinfo($link_col, $link_col, $result, $link_list);
+		$action->set_linkinfo($auth_col, $link_col, $link_col, $result, $link_list);
 	    }
 	}
 	
@@ -754,7 +764,7 @@ sub unpack_key_values {
 	unless ( ( $link_column = $tableinfo->{AUTH_KEY} ) &&
 		 ( $link_columninfo = $edt->table_column_ref($table_specifier, $link_column) ) )
 	{
-	    $edt->add_condition('E_BAD_TABLE', 'link column', $table_specifier);
+	    $edt->add_condition('E_BAD_TABLE', $table_specifier);
 	    $abort = 1;
 	}
     }
@@ -798,9 +808,10 @@ sub unpack_key_values {
 	    $raw_values = $params->{$p};
 	    $ref_type = ref $raw_values;
 	    
-	    next unless ! $ref_type || $ref_type =~ /::/ || $ref_type eq 'ARRAY' && $raw_values->@*;
+	    next unless ! $ref_type || $ref_type =~ /::/ ||
+		$ref_type eq 'ARRAY' && $raw_values->@*;
 	    
-	    if ( $key_field )
+	    if ( $key_field && $key_field ne $p )
 	    {
 		$edt->add_condition('E_BAD_KEY_FIELD', $key_field, $p);
 		$raw_values = undef;
@@ -855,20 +866,23 @@ sub unpack_key_values {
     
     if ( $auth_table )
     {
+	my $auth_column = $auth_tableinfo->{PRIMARY_KEY} || $link_column;
+	
 	my ($link_field, $link_value);
 	
-	foreach my $p ( $link_column, $auth_tableinfo->{PRIMARY_FIELD} )
+	foreach my $p ( $link_column, $tableinfo->{AUTH_FIELD} )
 	{
 	    if ( $p && $params->{$p} )
 	    {
 		$link_value = $params->{$p};
 		$ref_type = ref $link_value;
 		
-		next unless ! $ref_type || $ref_type =~ /::/ || $ref_type eq 'ARRAY' && $raw_values->@*;
+		next unless ! $ref_type || $ref_type =~ /::/ ||
+		    $ref_type eq 'ARRAY' && $raw_values->@*;
 		
-		if ( $link_field )
+		if ( $link_field && $link_field ne $p )
 		{
-		    $edt->add_condition($action, 'E_BAD_KEY_FIELD', $key_field, $p);
+		    $edt->add_condition($action, 'E_BAD_KEY_FIELD', $link_field, $p);
 		    $link_value = undef;
 		}
 		
@@ -892,13 +906,13 @@ sub unpack_key_values {
 	    else
 	    {
 		my $quoted = $dbh->quote($link_value);
-		$action->set_linkinfo($link_column, $link_field, $link_value, $quoted);
+		$action->set_linkinfo($auth_column, $link_column, $link_field, $link_value, $quoted);
 	    }
 	}
 	
 	else
 	{
-	    $action->set_linkinfo($link_column, $link_field);
+	    $action->set_linkinfo($auth_column, $link_column, $link_field);
 	}
     }	
 }

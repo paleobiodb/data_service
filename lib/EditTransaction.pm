@@ -1426,17 +1426,37 @@ sub cleanup_transaction {
 }
 
 
+# initialize_action ( action, operation, table_specifier )
+#
+# This method is called when a new action is created. It is designed to be
+# overridden by subclasses, to provide a point of control before authorization
+# and validation.
+#
+# This action will already have been made the current action, so 'add_condition'
+# will work properly. The key values will not yet have been unpacked, so you can
+# inspect, add, and delete them.
+
+sub initialize_action {
+
+    my ($edt, $action, $operation, $table_specifier) = @_;
+}
+
+
 # before_action ( action, operation, table_specifier )
 # 
-# This method is called before each action. It is designed to be overridden by subclasses, so that
-# any necessary auxiliary work can be carried out. The default method defined here does nothing.
+# This method is called after authorization and validation, and before action
+# execution. It is designed to be overridden by subclasses, so that any
+# necessary auxiliary work can be carried out. The default method defined here
+# does nothing.
 # 
 # If any changes to the database are made by this method, you should be careful
 # to provide a 'cleanup_action' method that undoes them. The reason is that if
 # the action fails to execute and the PROCEED allowance is present, the
 # transaction as a whole may complete and preserve whatever was done by this
-# method even though the action it was designed to initialize was not carried
-# out.
+# method even though the action it was designed to effect was not carried out.
+# Whenever possible, it is better to make auxiliary changes to the database in
+# the 'after_action' method, because at that point you know that the action
+# itself has succeeded.
 
 sub before_action {
 
@@ -1471,6 +1491,7 @@ sub cleanup_action {
     
     my ($edt, $action, $operation, $table_specifier);
 }
+
 
 # Progress and results of actions
 # -------------------------------

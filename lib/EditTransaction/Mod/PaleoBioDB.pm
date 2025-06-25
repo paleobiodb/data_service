@@ -159,6 +159,13 @@ sub finish_table_definition {
     {
 	$table_defn->{UNRESTRICTED} = 1;
     }
+
+    # If this table has an AUTH_KEY property set, set AUTH_FIELD as well.
+    
+    if ( $table_defn->{AUTH_KEY} && $table_defn->{AUTH_KEY} =~ / ^ (.*) _no$ /xs )
+    {
+	$table_defn->{AUTH_FIELD} = $1 . "_id";
+    }
 }
 
 
@@ -1637,6 +1644,13 @@ sub record_filter {
 # Classic, it stores the authorizer_no and enterer_no for each event, and it
 # also stores an SQL statement which will reverse the change.
 
+# $$$ need to fix:
+# - fetch_old_record must store separately by table specifier, because a single
+#   action may include auxiliary events on other tables.
+# - fetch_old_record must deal with multiple records due to multiple keys (e.g.
+#   on delete actions).
+# - log_event must handle multiple keys properly.
+
 sub log_event {
     
     my ($edt, $action, $op, $table_specifier, $sql, $keyval) = @_;
@@ -1707,6 +1721,9 @@ sub log_event {
 sub before_log_event {
     
     my ($edt, $action, $op, $table_specifier) = @_;
+    
+    return unless $EditTransaction::LOG_FILENAME;
+    return if $edt->allows('NO_LOG_MODE');
     
     if ( $op ne 'insert' )
     {

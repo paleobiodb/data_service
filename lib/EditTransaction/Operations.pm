@@ -69,6 +69,15 @@ sub record_operation {
 	$edt->add_condition($action, 'E_HAS_WHERE');
     }
     
+    # If the operation is 'insupdate', change it to either 'insert' or
+    # 'update' depending on whether a key value is present.
+    
+    if ( $operation eq 'insupdate' )
+    {
+	$operation = defined $action->keyval ? 'update' : 'insert';
+	$action->operation($operation);
+    }
+    
     # Execute the following code inside an eval block. If an exception is thrown
     # during authorization or validation, either from Authorization.pm or
     # Validation.pm or from a subclass, capture the error and add an E_EXECUTE
@@ -76,7 +85,14 @@ sub record_operation {
     # allowance is present, and will enable client interface code to handle it
     # as a failed transaction rather than a thrown exception.
     
+    my $stage = 'initialize';
+    
     eval {
+	
+	# Call the 'initialize_action' method. The default does nothing, and is
+	# designed to be overridden by subclasses.
+	
+	$edt->initialize_action($action, $operation, $table_specifier);
 	
 	# If the action has a key value, and if the action parameters contain
 	# the field '_label', store the key/label association. Otherwise, if the
@@ -116,27 +132,25 @@ sub record_operation {
 	    }
 	}
 	
+	$stage = 'authorize';
+	
 	# Check to make sure we have permission to carry out this operation.  An
 	# error or caution will be added if the necessary permission cannot be
 	# established.
 	
-	my $result = $edt->authorize_against_table($action, $operation, $table_specifier, 
-						   $parameters);
+	if ( $action->can_proceed )
+	{
+	    $edt->authorize_against_table($action, $operation, $table_specifier, 
+					  $parameters);
+	}
 	
 	# If the action can proceed (in other words, if authorization does not
 	# add any errors or cautions) then it must be validated.
+
+	$stage = 'validate';
 	
 	if ( $action->can_proceed )
 	{
-	    # If the operation is 'insupdate', change it to either 'insert' or
-	    # 'update' depending on whether a key value is present.
-	    
-	    if ( $operation eq 'insupdate' )
-	    {
-		$operation = defined $action->keyval ? 'update' : 'insert';
-		$action->operation($operation);
-	    }
-	    
 	    # Call validate_action. This method is designed to be overridden by
 	    # subclasses, and has an opportunity to carry out additional
 	    # database queries, add conditions, etc.
@@ -161,8 +175,24 @@ sub record_operation {
     if ( $@ )
     {
 	$edt->error_line($@);
-	$edt->add_condition($action, 'E_EXECUTE', 
-			    'an exception occurred during authorization or validation');
+	
+	if ( $stage eq 'initialize' )
+	{
+	    $edt->add_condition($action, 'E_EXECUTE',
+				"an exception occurred during initalization");
+	}
+	
+	elsif ( $stage eq 'authorize' )
+	{
+	    $edt->add_condition($action, 'E_EXECUTE',
+				"an exception occurred during authorization");
+	}
+	
+	else
+	{
+	    $edt->add_condition($action, 'E_EXECUTE',
+				"an exception occurred during validation");
+	}
     }
     
     # Regardless of any added conditions, handle the action and return the action

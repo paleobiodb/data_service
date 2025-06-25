@@ -170,7 +170,8 @@ sub pre_execution_check {
     
     if ( ! $permission || $permission eq 'PENDING' )
     {
-	$permission = $edt->authorize_action($action, $operation, $table_specifier, 'FINAL');
+	$permission = $edt->authorize_against_table($action, $operation, $table_specifier,
+						    'FINAL');
     }
     
     # If we don't have a valid permission by this point (including 'none'), something went wrong.
@@ -1591,7 +1592,7 @@ sub log_event {
     my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
-    $key_value //= $action->keyval // '?';
+    $key_value //= join(',', $action->keyvals) // '?';
     
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
