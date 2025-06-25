@@ -57,7 +57,9 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
 		    'OCC_INT_SUMMARY', 'OCC_TS_SUMMARY');
     
     set_table_name(REID_DATA => 'reidentifications');
-    set_table_property('REID_DATA', CAN_DELETE => 'OWNER');
+    set_table_property('REID_DATA', AUTH_TABLE => 'COLLECTION_DATA');
+    set_table_property('REID_DATA', CAN_DELETE => 'AUTHORIZED');
+    set_table_property('REID_DATA', CAN_MOVE => 'NONE');
     set_table_property('REID_DATA', LOG_CHANGES => 1);
     
     set_table_name(COLLECTION_DATA => 'collections');

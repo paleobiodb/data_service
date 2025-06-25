@@ -297,7 +297,7 @@ sub initialize {
 		     'oc.species_name', 'oc.species_reso', 'oc.subspecies_name', 'oc.subspecies_reso',
 		     'ph.phylum_no', 'ph.class_no', 'ph.order_no', 'ph.family_no',
 		     'oc.abund_unit', 'oc.abund_value', 'oc.plant_organ', 'oc.plant_organ2',
-		     'oc.comments', 'sc.n_specs',
+		     'oc.comments', 'sc.n_specs', 'a.type_locality',
 		     'oc.reference_no', 'r.pubyr as ref_pubyr', 'r.author1last as r_al1',
 		     'r.author2last as r_al2', 'r.otherauthors as r_oa',
 		     'v.is_trace', 'v.is_form'],
@@ -341,6 +341,9 @@ sub initialize {
 	    "the reason why.  This field will be present if, for example, the identified name",
 	    "is a junior synonym or nomen dubium, or if the species has been recombined, or",
 	    "if the identification is misspelled.",
+	{ output => 'is_type_locality', pbdb_name => 'type_locality', com_name => 'tlc' },
+	    "The value of this field will be non-empty if the collection to which this",
+	    "occurrence belongs is the type locality for the identified name.",
 	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
@@ -3835,6 +3838,14 @@ sub process_basic_record {
 	$record->{flags} .= 'F' if $record->{is_form};
     }
 
+    # Check the type locality.
+    
+    if ( $record->{collection_no} && $record->{type_locality} &&
+	 $record->{collection_no} eq $record->{type_locality} )
+    {
+	$record->{is_type_locality} = 1;
+    }
+    
     # Generate a single plant_organ field.
 
     if ( $record->{plant_organ} && $record->{plant_organ2} )
@@ -3854,7 +3865,7 @@ sub process_basic_record {
     # Now generate the 'difference' field if the accepted name and identified
     # name are different.
     
-    $request->process_difference($record);
+    $request->PB2::TaxonData::process_difference($record);
     
     my $a = 1;	# we can stop here when debugging
 }

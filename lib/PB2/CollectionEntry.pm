@@ -206,7 +206,7 @@ sub initialize {
 	    "an occurrence record will be inserted into the database",
 	    "and a new identifier will be returned. If it is non-empty, it must match",
 	    "the identifier of an existing record. That record will be updated.",
-	{ optional => 'reid_id', valid => VALID_IDENTIFIER('REI'),
+	{ param => 'reid_id', valid => VALID_IDENTIFIER('REI'),
 	  alias => ['reid_no', 'reid'] },
 	    "If this field occurs with an empty value, and if 'occurrence_id' is not",
 	    "empty, a reidentification record will be inserted into the database and a",
@@ -220,11 +220,13 @@ sub initialize {
 	    "authorizer of the occurrence or its associated collection.",
 	{ optional => 'identified_name', valid => ANY_VALUE, alias => 'taxon_name' },
 	    "The taxonomic name identifying this occurrence, optionally with modifiers.",
-	    "This field is required.");
-
+	    "This field is required.",
+	{ optional => 'taxon_no', valid => VALID_IDENTIFIER('TID'),
+	  alias => ['taxon_id'] },
+	    "This field should only be specified when choosing between homonyms.");
+    
     complete_ruleset($ds, $dbh, '1.2:occs:addupdate_body', 'OCCURRENCE_DATA',
-		     { taxon_no => 'IGNORE', collection_no => 'IGNORE',
-		       occurrence_no => 'IGNORE', reid_no => 'IGNORE',
+		     { reference_no => { alias => ['reference_id'] },
 		       genus_reso => 'IGNORE', genus_name => 'IGNORE',
 		       subgenus_reso => 'IGNORE', subgenus_name => 'IGNORE',
 		       species_reso => 'IGNORE', species_name => 'IGNORE',
