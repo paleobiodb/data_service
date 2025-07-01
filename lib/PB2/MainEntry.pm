@@ -300,6 +300,32 @@ sub initialize {
 	"This operation displays an HTML form which you can use to generate",
 	"calls to the occs/update operation.");
     
+    $ds2->define_node({ path => 'occs/checknames',
+			title => 'Check occurrence names before submission',
+			place => 21,
+			allow_method => 'GET,POST',
+			doc_template => 'entry_operation.tt',
+			role => 'PB2::CollectionEntry',
+			method => 'check_taxonomic_names',
+			ruleset => '1.2:occs:checknames',
+			body_ruleset => '1.2:occs:checknames_body',
+			output => '1.2:occs:checknames' },
+	"This operation checks one or more taxonomic names. It is recommended",
+	"to call this operation before submitting occurrences for insertion or",
+	"update.");
+    
+    $ds2->define_node({ path => 'occs/checknames_sandbox',
+			title => 'Sandbox for the occs/checknames operation',
+			place => 21,
+			allow_format => 'html',
+			allow_method => 'GET',
+			doc_template => 'sandbox_operation.tt',
+			role => 'PB2::CollectionEntry',
+			method => 'check_names_sandbox',
+			body_ruleset => '1.2:occs:checknames_body' },
+	"This operation displays an HTML form which you can use to generate",
+	"calls to the occs/checknames operation.");
+    
     # Educational Resources
     
     $ds2->define_node({ path => 'entry/eduresources',

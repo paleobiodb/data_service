@@ -2,7 +2,9 @@
 # 
 #   MatrixBase.pm
 #
-# Update the occurrence matrix and collection matrix when the base tables have changed.
+# The routines in this module update the occurrence matrix and collection matrix
+# when the base tables have changed. It is designed to be used both by the API
+# and by Classic.
 
 package MatrixBase;
 
@@ -10,7 +12,8 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(initializeBins updateCollectionMatrix updateOccurrenceMatrix
+our (@EXPORT_OK) = qw(initializeBins updateCollectionMatrix
+		      updateOccurrenceMatrix updateOccurrenceMatrixReids
 		      deleteFromCollectionMatrix deleteFromOccurrenceMatrix
 		      deleteReidsFromOccurrenceMatrix updateOccurrenceCounts);
 
@@ -249,8 +252,10 @@ sub updateOccurrenceMatrix {
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT o.occurrence_no, 0, if(o.reid_no > 0, false, true),
 			o.collection_no, o.taxon_no, a.orig_no, 
-			o.genus_name, o.genus_reso, o.subgenus_name, o.subgenus_reso,
-			o.species_name, o.species_reso, o.subspecies_name, o.subspecies_reso,
+			o.genus_name, coalesce(o.genus_reso,''),
+			coalesce(o.subgenus_name,''), coalesce(o.subgenus_reso,''),
+			o.species_name, coalesce(o.species_reso,''),
+			coalesce(o.subspecies_name,''), coalesce(o.subspecies_reso,''),
 			o.plant_organ, o.plant_organ2,
 			ei.early_age, li.late_age,
 			if(o.reference_no > 0, o.reference_no, 0),
@@ -275,8 +280,10 @@ sub updateOccurrenceMatrix {
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT re.occurrence_no, re.reid_no, if(re.most_recent = 'YES', true, false),
 			re.collection_no, re.taxon_no, a.orig_no, 
-			re.genus_name, re.genus_reso, re.subgenus_name, re.subgenus_reso,
-			re.species_name, re.species_reso, re.subspecies_name, re.subspecies_reso,
+			re.genus_name, coalesce(re.genus_reso,''),
+			coalesce(re.subgenus_name,''), coalesce(re.subgenus_reso,''),
+			re.species_name, coalesce(re.species_reso,''),
+			coalesce(re.subspecies_name,''), coalesce(re.subspecies_reso,''),
 			re.plant_organ,
 			ei.early_age, li.late_age, if(re.reference_no > 0, re.reference_no, 0),
 			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
@@ -285,6 +292,61 @@ sub updateOccurrenceMatrix {
 			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 			LEFT JOIN $TABLE{AUTHORITY_DATA} as a using (taxon_no)
 		WHERE occurrence_no in ($occurrence_list)";
+	
+	debug_line($debug_out, "$sql\n") if $debug_out;
+	
+	$dbh->do($sql);
+    }
+}
+
+
+sub updateOccurrenceMatrixReids {
+
+    my ($dbh, $reid_nos, $debug_out) = @_;
+
+    my @reid_nos;
+
+    if ( ref $reid_nos eq 'ARRAY' )
+    {
+	@reid_nos = @$reid_nos;
+    }
+
+    else
+    {
+	@reid_nos = $reid_nos;
+    }
+    
+    # Update the occurrence matrix, at most 1000 records at a time.
+
+    my $sql;
+    
+    while ( @reid_nos )
+    {
+	my @work_list = splice(@reid_nos, 0, 1000);
+	
+	my $reid_list = join(',', map { $dbh->quote($_) } @work_list);
+	
+	$sql = "REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
+		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
+			genus_name, genus_reso, subgenus_name, subgenus_reso,
+			species_name, species_reso, subspecies_name, subspecies_reso,
+			plant_organ,
+			early_age, late_age, reference_no,
+			authorizer_no, enterer_no, modifier_no, created, modified)
+		SELECT re.occurrence_no, re.reid_no, if(re.most_recent = 'YES', true, false),
+			re.collection_no, re.taxon_no, a.orig_no, 
+			re.genus_name, coalesce(re.genus_reso,''),
+			coalesce(re.subgenus_name,''), coalesce(re.subgenus_reso,''),
+			re.species_name, coalesce(re.species_reso,''),
+			coalesce(re.subspecies_name,''), coalesce(re.subspecies_reso,''),
+			re.plant_organ,
+			ei.early_age, li.late_age, if(re.reference_no > 0, re.reference_no, 0),
+			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
+		FROM $TABLE{REID_DATA} as re JOIN coll_matrix as c using (collection_no)
+			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
+			LEFT JOIN $TABLE{AUTHORITY_DATA} as a using (taxon_no)
+		WHERE reid_no in ($reid_list)";
 	
 	debug_line($debug_out, "$sql\n") if $debug_out;
 	

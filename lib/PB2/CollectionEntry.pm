@@ -17,9 +17,13 @@ use CoreTableDefs;
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use HTTP::Validate qw(FLAG_VALUE);
 use TableData qw(complete_ruleset add_to_ruleset complete_valueset);
+use TaxonDefs qw(%RANK_STRING %TAXON_RANK);
 
 use CollectionEdit;
+
 use MatrixBase qw(initializeBins);
+use OccurrenceBase qw(initializeModifiers parseIdentifiedName constructIdentifiedName
+		      matchIdentifiedName);
 
 use Moo::Role;
 
@@ -238,10 +242,106 @@ sub initialize {
     # 		   "This parameter is parsed in order to set the value for C<genus_reso>,",
     # 		   "C<genus_name>, etc. in the C<$TABLE{OCCURRENCE_DATA}> or",
     # 		   "C<$TABLE{REID_DATA}> table as appropriate.");
+
+    # Output block for the 'checknames' operation:
+
+    $ds->define_block('1.2:occs:checknames' =>
+	{ select => ['a.taxon_no as matched_no', 'a.taxon_name as matched_name',
+		     'a.taxon_rank as matched_rank', 't.status as taxon_status',
+		     't.orig_no', 't.spelling_no', 't.accepted_no',
+		     'tv.name as accepted_name', 'tv.rank as accepted_rank',
+		     'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
+		     'ph.phylum', 'ph.class', 'ph.order', 'ph.family',
+		     'if(a.ref_is_authority <> \'\', r.author1last, a.author1last) as r_al1',
+		     'if(a.ref_is_authority <> \'\', r.author2last, a.author2last) as r_al2',
+		     'if(a.ref_is_authority <> \'\', r.otherauthors, a.otherauthors) as r_oa',
+		     'if(a.ref_is_authority <> \'\', r.pubyr, a.pubyr) as r_pubyr',
+		     'v.is_trace', 'v.is_form'] },
+	{ set => '*', from => '*', code => \&process_checknames_record },
+	{ output => 'record_type', com_name => 'typ', value => $IDP{TXN} },
+	    "The type of this object: C<$IDP{TXN}> for a taxonomic name.",
+        { output => '_label', com_name => 'rlb' },
+	    "For data entry operations, this field will report the record",
+	    "label value, if any, that was submitted with each record.",
+	{ output => 'error', com_name => 'err' },
+	    "If the submitted name is not valid, this field will contain an error message",
+	    "describing the reason.",
+	{ output => 'classification', com_name => 'cof' },
+	    "The class, order, and family in which this name is located. The value of this",
+	    "field contains such of those terms as have non-empty values, separated by dashes.",
+	{ output => 'identified_name', com_name => 'idn' },
+	    "The taxonomic name that was submitted, possibly with syntax errors corrected.",
+	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ output => 'identified_rank', com_name => 'idr' },
+	    "The rank of the taxonomic name that was submitted.",
+	{ output => 'matched_no', com_name => 'mid' },
+	    "The unique identifier of a taxonomic name matching the submitted name.",
+	{ output => 'matched_name', com_name => 'mtn' },
+	    "The matching name.",
+	{ output => 'matched_rank', com_name => 'mtr', data_type => 'mix' },
+	    "The taxonomic rank of the matching name.",
+	{ set => 'matched_rank', lookup => \%TAXON_RANK, if_vocab => 'com' },
+        { set => 'matched_attr', from => '*', code => \&PB2::ReferenceData::format_authors },
+	{ output => 'matched_attr', com_name => 'atr' },
+	    "The attribution of the matching name: author(s) and year.",
+	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
+	    "If the matched name is different from the accepted name, this field gives",
+	    "the reason why.  This field will be present if, for example, the matched name",
+	    "is a junior synonym or nomen dubium, or if the species has been recombined, or",
+	    "if the identification is misspelled.",
+	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
+	    "The unique identifier of the accepted name corresponding to the matched name.",
+	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
+	    "The accepted taxonomic name corresponding to the matched name.",
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no', 
+	  data_type => 'mix' },
+	    "The taxonomic rank of the accepted name.  This may be different from the",
+	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
+	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
+	    "of this database.",
+	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ output => 'is_type_locality', pbdb_name => 'type_locality', com_name => 'tlc' },
+	    "The value of this field will be C<B<yes>> if the collection to which this",
+	    "occurrence belongs is the type locality for the matched name. It will be",
+	    "C<B<possible>> if the matched name does not currently have a type locality.",
+	{ output => 'flags', com_name => 'flg' },
+	    "This field will be empty for most records.  Otherwise, it will contain one or more",
+	    "of the following letters:", "=over",
+	    "=item I", "This identification is an ichnotaxon",
+	    "=item F", "This identification is a form taxon");
+    
+    # Rulesets for the 'checknames' operation:
+    
+    $ds->define_ruleset('1.2:occs:checknames' => 
+	{ optional => 'name', valid => ANY_VALUE },
+	    "The taxonomic name (optionally with modifiers) to be checked.",
+	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'), 
+	  alias => ['collection_no', 'coll_id'] },
+	    "If you are checking the name of an occurrence or reidentification, you may",
+	    "optionally specify the corresponding collection identifier.",
+	{ optional => 'loose', valid => FLAG_VALUE },
+	    "If this parameter is specified, bad capitalization will be accepted.",
+	{ allow => '1.2:special_params' },
+	    "^You can use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:checknames_body' =>
+	{ param => 'name', valid => ANY_VALUE },
+	    "The name to be checked.",
+	{ optional => '_label', valid => ANY_VALUE },
+	    "An optional label which will be associated with any return records matching",
+	    "this input record.",
+	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
+	  alias => 'collection_no' },
+	    "If you are checking the name of an occurrence or reidentification, you may",
+	    "optionally specify the corresponding collection identifier. This allows",
+	    "the response record to properly report whether this is the type location of",
+	    "the matched taxonomic name.");
+    
+    # Initialize the libraries we depend on.
     
     MatrixBase::initializeBins($ds);
-    CollectionEdit->initialize_occ_resos($dbh);
-
+    OccurrenceBase::initializeModifiers($dbh);
+    
     my $a = 1;	# we can stop here when debugging
 }
 
@@ -780,6 +880,276 @@ END_JOINS
 }
 
 
+sub check_taxonomic_names {
+
+    my ($request) = @_;
+    
+    my $dbh = $request->get_connection;
+    
+    my $tables = $request->tables_hash;
+    
+    $request->substitute_select( cd => 'oc' );
+    
+    my $fields = $request->select_string;
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If the 'strict' parameter was given, make sure we haven't generated any
+    # warnings. Also check whether to generate external identifiers.
+    
+    $request->strict_check;
+    $request->extid_check;
+
+    # Parse the main parameters.
+
+    my $main_params = { name => $request->clean_param('name'),
+			collection_id => $request->clean_param('collection_id'),
+			loose => $request->clean_param('loose') };
+    
+    if ( Dancer::request->method eq 'GET' && ! $main_params->{name} )
+    {
+	$request->add_error("E_PARAM: you must specify a value for 'name'");
+	die $request->exception(400, "Bad request");
+    }
+
+    elsif ( Dancer::request->method =~ /^POST/ && $main_params->{name} )
+    {
+	$request->add_error("E_PARAM: you must not specify a value for 'name' in a 'POST' request");
+	die $request->exception(400, "Bad request");
+    }
+    
+    # Decode the body and extract input records from it. If an error occured, return an
+    # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
+    
+    my (@records) = $request->parse_body_records($main_params, '1.2:occs:checknames_body');
+    
+    if ( $request->errors )
+    {
+	die $request->exception(400, "Bad data");
+    }
+    
+    # Iterate through the submitted records and check each specified name. For
+    # each input record, we will add one or more response records to @final. All
+    # of the response records for a given input record will have the same label.
+
+    my ($identified_name, @matches, $sql, $result, @final);
+    my $debug_out; $debug_out = $request if $request->debug;
+    my $record_count = 0;
+    
+    foreach my $r (@records)
+    {
+	# If no label was given, use the index of the record in the request
+	# body starting with 1.
+	
+	my $label = $r->{_label} || ("#" . ++$record_count);
+	
+	my $loose = $r->{loose} ? 1 : undef;
+	
+	my $submitted_name = $r->{name};
+	
+	# Parse the submitted name.
+	
+	my ($genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+	    $species_name, $species_reso, $subspecies_name, $subspecies_reso) =
+		parseIdentifiedName($submitted_name, { debug_out => ( $request->debug ? $request :
+								      undef ),
+						       loose => $loose });
+	
+	# If the submitted name threw a syntax error, generate a result record
+	# reflecting that and go on to the next input record.
+	
+	if ( ref $genus_name )
+	{
+	    push @final, { _label => $label,
+			   identified_name => $submitted_name,
+			   matched_no => 0,
+			   error => $genus_name->{error} };
+	    next;
+	}
+	
+	# If the submitted name has an informal genus, there won't be any
+	# matches. So add a result record reflecting that.
+	
+	if ( $genus_reso && $genus_reso eq 'informal' )
+	{
+	    push @final, { _label => $label,
+			   identified_name => $submitted_name,
+			   matched_no => 0 };
+	    next;
+	}
+	
+	# Otherwise, put the name together again from the individual components.
+	# This will make sure that it is syntactically correct, since the parse
+	# routine corrects some errors.
+	
+	my $cleaned_name = constructIdentifiedName($genus_name, $genus_reso,
+						   $subgenus_name, $subgenus_reso,
+						   $species_name, $species_reso,
+						   $subspecies_name, $subspecies_reso);
+	
+	my $cleaned_rank = 'genus';
+	
+	# If the submitted name has an informal subgenus, leave it out when
+	# querying for matches.
+	
+	if ( $subgenus_reso && $subgenus_reso eq 'informal' )
+	{
+	    $subgenus_name = '';
+	}
+	
+	elsif ( $subgenus_name )
+	{
+	    $cleaned_rank = 'subgenus';
+	}
+	
+	# If the submitted name has an informal species, or more commonly 'sp.'
+	# or 'indet.', leave it out when querying for matches and also leave out
+	# any subspecies that may have been specified. This will often
+	# result in a match at the genus level.
+	
+	if ( $species_reso && $species_reso eq 'informal' ||
+	     $species_name && $species_name =~ /[.]$/ )
+	{
+	    $species_name = '';
+	    $subspecies_name = '';
+	}
+	
+	elsif ( $species_name )
+	{
+	    $cleaned_rank = 'species';
+	}
+	
+	# Otherwise, if the submitted name has an informal subspecies, or more
+	# commonly 'ssp.', leave it out when querying for matches. This will
+	# often result in a match at the species level.
+	
+	elsif ( $subspecies_reso && $subspecies_reso eq 'informal' ||
+		$subspecies_name && $subspecies_name =~ /[.]$/ )
+	{
+	    $subspecies_name = '';
+	}
+
+	elsif ( $subspecies_name )
+	{
+	    $cleaned_rank = 'subspecies';
+	}
+	
+	# Do a complex query for matches in the authorities table.
+	
+	@matches = matchIdentifiedName($dbh, $debug_out, $genus_name, $subgenus_name,
+				       $species_name, $subspecies_name);
+	
+	# If we find any, select the information necessary to put together full
+	# response records.
+	
+	if ( @matches )
+	{
+	    my $taxon_list = join("','", @matches);
+	    
+	    $sql = "SELECT $fields
+		FROM $TABLE{AUTHORITY_DATA} as a left join $TABLE{TAXON_NAMES} as nm using (taxon_no)
+		    left join $TABLE{REFERENCE_DATA} as r using (reference_no)
+		    left join $TABLE{TAXON_TREES} as t on t.orig_no = a.orig_no
+		    left join $TABLE{TAXON_TREES} as tv on tv.orig_no = t.accepted_no
+		    left join $TABLE{TAXON_NAMES} as ns on ns.taxon_no = tv.spelling_no
+		    left join $TABLE{TAXON_ATTRS} as v on v.orig_no = t.orig_no
+		    left join $TABLE{TAXON_INTS} as ph on ph.ints_no = t.ints_no
+		WHERE a.taxon_no in ('$taxon_list')";
+		
+	    $request->debug_line("$sql\n") if $request->debug;
+	    
+	    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	}
+	
+	# If there are no matches, generate a single response record with
+	# matched_no = 0.
+	
+	else
+	{
+	    $result = [{ matched_no => 0 }];
+	}
+	
+	# Fill in the identified name, identified rank, and label on each of the
+	# response records, and add them to the final list.
+	
+	foreach my $m ( @$result )
+	{
+	    $m->{identified_name} = $cleaned_name;
+	    $m->{identified_rank} = $cleaned_rank;
+	    $m->{_label} = $label;
+	    
+	    push @final, $m;
+	}
+    }
+    
+    $request->list_result(\@final);
+}
+
+
+sub process_checknames_record {
+
+    my ($request, $record) = @_;
+    
+    # If this is an error record, do nothing.
+    
+    return if $record->{error};
+    
+    # Set the flags as appropriate.
+    
+    if ( $record->{is_trace} || $record->{is_form} )
+    {
+	$record->{flags} ||= '';
+	$record->{flags} .= 'I' if $record->{is_trace};
+	$record->{flags} .= 'F' if $record->{is_form};
+    }
+    
+    # Check the type locality.
+    
+    if ( $record->{collection_no} && $record->{type_locality} &&
+	 $record->{collection_no} eq $record->{type_locality} )
+    {
+	$record->{is_type_locality} = 'yes';
+    }
+    
+    elsif ( $record->{identified_name} =~ /n[.] (gen|subgen|sp|ssp)[.]/ )
+    {
+	$record->{is_type_locality} = 'possible';
+    }
+    
+    # Now generate the 'difference' field if the accepted name and identified
+    # name are different.
+    
+    $request->PB2::TaxonData::process_difference($record);
+    
+    # Generate the class-order-family string.
+    
+    my @cof;
+    push @cof, $record->{class} if $record->{class};
+    push @cof, $record->{order} if $record->{order};
+    push @cof, $record->{family} if $record->{family};
+    push @cof, $record->{phylum} if $record->{phylum} && ! @cof;
+    push @cof, "Unclassified" unless @cof;
+    
+    $record->{classification} = join(' - ', @cof);
+    
+    # Generate external ids if requested.
+
+    if ( $request->has_block('extids') )
+    {
+	foreach my $f ( qw(matched_no accepted_no) )
+	{
+	    $record->{$f} = generate_identifier('TXN', $record->{$f})
+		if defined $record->{$f};
+	}
+    }
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+
 sub addupdate_sandbox {
     
     my ($request, $operation) = @_;
@@ -818,5 +1188,15 @@ sub update_occs_sandbox {
 			         extra_params => 'vocab=pbdb&private&extids&show=edit' });
 }
 
+
+sub check_names_sandbox {
+
+    my ($request, $operation) = @_;
+
+    $request->generate_sandbox({ operation => 'occs/checknames',
+				 ruleset => '1.2:occs:checknames_body',
+				 multiplicity => 5,
+				 extra_params => 'vocab=pbdb&extids' });
+}
 
 1;

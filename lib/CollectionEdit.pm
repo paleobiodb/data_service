@@ -1791,386 +1791,394 @@ sub validate_identified_name {
 
     my ($edt, $action, $table_specifier, $collection_no, $identified_name) = @_;
     
-    # The following variables will be filled in by the name parsing routine below.
-
+    # Parse the name and return either the name components or a hashref indicating an
+    # error message.
+    
     my ($genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
-	$species_name, $species_reso, $subspecies_name, $subspecies_reso);
-    
-    # Prepare to parse the identified name by trimming whitespace.
-    
-    $identified_name =~ s/^\s+//;
-    $identified_name =~ s/\s+$//;
-    
-    my $name = $identified_name;
-    
-    # Check for n. gen., n. sp., etc.  These have an unambiguous meaning
-    # wherever they occur. Removing them may leave extra spaces in the
-    # name.
+	$species_name, $species_reso, $subspecies_name, $subspecies_reso) =
+	    $edt->request->parse_identified_name($identified_name);
 
-    if ( $name =~ /(.*)n[.]\s*gen[.](.*)/ )
+    if ( ref $genus_name )
     {
-	$genus_reso = "n. gen.";
-	$name = "$1 $2";
-    }
-    
-    if ( $name =~ /(.*)n[.]\s*subgen[.](.*)/ )
-    {
-	$subgenus_reso = "n. subgen.";
-	$name = "$1 $2";
-    }
-    
-    if ( $name =~ /(.*)n[.]\s*sp[.](.*)/ )
-    {
-	$species_reso = "n. sp.";
-	$name = "$1 $2";
-    }
-    
-    if ( $name =~ /(.*)n[.]\s*(subsp|ssp)[.](.*)/ )
-    {
-	$subspecies_reso = "n. ssp.";
-	$name = "$1 $3";
-    }
-    
-    # Now deconstruct the name component by component, using the same rules as the
-    # Javascript form checker.
-    
-    # Start with the genus and any qualifier that may precede it.
-    
-    if ( $name =~ $OCC_RESO_RE{genus} )
-    {
-	if ( $genus_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting genus modifier on '$identified_name'");
-	    return;
-	}
-	
-	$genus_reso = $1;
-	$name = $2;
-    }
-    
-    if ( $name =~ /^\s*<(.*?\S.*?)>\s*(.*)/ )
-    {
-	if ( $genus_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting genus modifier on '$identified_name'");
-	    return;
-	}
-	
-	$genus_reso = 'informal';
-	$genus_name = $1;
-	$name = $2;
-    }
-    
-    elsif ( $name =~ /^\s*("?)([A-Za-z]+)("?)\s*(.*)/ )
-    {
-	if ( $genus_reso && $1 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting genus modifier on '$identified_name'");
-	    return;
-	}
-	
-	elsif ( $1 )
-	{
-	    $genus_reso = $1;
-	}
-	
-	$genus_name = $2;
-	$name = $4;
-	
-	unless ( $1 eq $3 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Mismatched &quot; on '$identified_name'");
-	    return;
-	}
-    }
-    
-    else
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': could not resolve genus");
+	$edt->add_condition('E_FORMAT', 'identified_name', $genus_name->{error} || 'invalid name');
 	return;
     }
     
-    if ( $genus_name && $genus_reso ne 'informal' && $genus_name !~ /^[A-Z][a-z]+$/ )
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': bad capitalization on genus");
-	return;
-    }
+    # # Prepare to parse the identified name by trimming whitespace.
     
-    # Continue with a possible subgenus and preceding qualifier.
+    # $identified_name =~ s/^\s+//;
+    # $identified_name =~ s/\s+$//;
     
-    if ( $name =~ $OCC_RESO_RE{subgenus} )
-    {
-	if ( $subgenus_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting subgenus modifier on '$identified_name'");
-	    return;
-	}
-	
-	$subgenus_reso = $1;
-	$name = $2;
-    }
+    # my $name = $identified_name;
     
-    if ( $name =~ /^[(]<(.*?\S.*?)>[)]\s*(.*)/ )
-    {
-	if ( $subgenus_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting subgenus modifier on '$identified_name'");
-	    return;
-	}
-	
-	$subgenus_reso = 'informal';
-	$subgenus_name = $1;
-	$name = $2;
-    }
-    
-    elsif ( $name =~ /^[(]("?)([A-Za-z]+)("?)[)]\s*(.*)/ )
-    {
-	if ( $subgenus_reso && $1 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting subgenus modifier on '$identified_name'");
-	    return;
-	}
-	
-	elsif ( $1 )
-	{
-	    $subgenus_reso = $1;
-	}
-	
-	$subgenus_name = $2;
-	$name = $4;
-	
-	unless ( $1 eq $3 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Invalid name '$identified_name': mismatched &quot; on subgenus");
-	    return;
-	}
-    }
-    
-    elsif ( $name =~ /[(]/ )
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': could not resolve subgenus");
-	return;
-    }
-    
-    else
-    {
-	$subgenus_name ||= '';
-    }
-    
-    if ( $subgenus_name && $subgenus_reso ne 'informal' &&
-	 $subgenus_name !~ /^[A-Z][a-z]+$/ )
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': bad capitalization on subgenus");
-    }
-    
-    # Continue with a species name and any qualifier that may precede it.
-    
-    if ( $name =~ $OCC_RESO_RE{species} )
-    {
-	if ( $species_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting species modifier on '$identified_name'");
-	    return;
-	}
-	
-	$species_reso = $1;
-	$name = $2;
-    }
-    
-    if ( ($species_reso eq 'cf.' || $species_reso eq 'aff.') &&
-	 $name =~ /([A-Z])[.]\s*(.*)/ )
-    {
-	if ( $1 ne substr($genus_name, 0, 1) )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Genus initial after $species_reso did not match genus");
-	    return;
-	}
+    # # Check for n. gen., n. sp., etc.  These have an unambiguous meaning
+    # # wherever they occur. Removing them may leave extra spaces in the
+    # # name.
 
-	$name = $2;
-    }
+    # if ( $name =~ /(.*)n[.]\s*gen[.](.*)/ )
+    # {
+    # 	$genus_reso = "n. gen.";
+    # 	$name = "$1 $2";
+    # }
     
-    if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
-    {
-	if ( $species_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting species modifier on '$identified_name'");
-	    return;
-	}
+    # if ( $name =~ /(.*)n[.]\s*subgen[.](.*)/ )
+    # {
+    # 	$subgenus_reso = "n. subgen.";
+    # 	$name = "$1 $2";
+    # }
+    
+    # if ( $name =~ /(.*)n[.]\s*sp[.](.*)/ )
+    # {
+    # 	$species_reso = "n. sp.";
+    # 	$name = "$1 $2";
+    # }
+    
+    # if ( $name =~ /(.*)n[.]\s*(subsp|ssp)[.](.*)/ )
+    # {
+    # 	$subspecies_reso = "n. ssp.";
+    # 	$name = "$1 $3";
+    # }
+    
+    # # Now deconstruct the name component by component, using the same rules as the
+    # # Javascript form checker.
+    
+    # # Start with the genus and any qualifier that may precede it.
+    
+    # if ( $name =~ $OCC_RESO_RE{genus} )
+    # {
+    # 	if ( $genus_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting genus modifier on '$identified_name'");
+    # 	    return;
+    # 	}
 	
-	$species_reso = 'informal';
-	$species_name = $1;
-	$name = $2;
-    }
+    # 	$genus_reso = $1;
+    # 	$name = $2;
+    # }
     
-    elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
-    {
-	if ( $species_reso && $1 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting species modifier on '$identified_name'");
-	    return;
-	}
+    # if ( $name =~ /^\s*<(.*?\S.*?)>\s*(.*)/ )
+    # {
+    # 	if ( $genus_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting genus modifier on '$identified_name'");
+    # 	    return;
+    # 	}
 	
-	elsif ( $1 )
-	{
-	    $species_reso = $1;
-	}
+    # 	$genus_reso = 'informal';
+    # 	$genus_name = $1;
+    # 	$name = $2;
+    # }
+    
+    # elsif ( $name =~ /^\s*("?)([A-Za-z]+)("?)\s*(.*)/ )
+    # {
+    # 	if ( $genus_reso && $1 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting genus modifier on '$identified_name'");
+    # 	    return;
+    # 	}
 	
-	$species_name = $2;
-	$name = $4;
+    # 	elsif ( $1 )
+    # 	{
+    # 	    $genus_reso = $1;
+    # 	}
 	
-	unless ( $1 eq $3 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Invalid name '$identified_name': mismatched &quot; on species");
-	}
-    }
-    
-    elsif ( $species_reso && ! $species_name  )
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': could not resolve species");
-	return;
-    }
-    
-    else
-    {
-	$species_name ||= '';
-    }
-    
-    if ( $species_name && $species_reso ne 'informal' )
-    {
-	if ( $species_name =~ /[.]$/ )
-	{
-	    if ( $species_name !~ /^(?:sp|spp|indet)[.]$/ )
-	    {
-		$edt->add_condition('E_FORMAT', 'identified_name',
-				    "Invalid name '$identified_name': '$species_name' is not valid");
-		return;
-	    }
-	}
+    # 	$genus_name = $2;
+    # 	$name = $4;
 	
-	elsif ( $species_name !~ /^[a-z]+$/ )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Invalid name '$identified_name': bad capitalization on species");
-	    return;
-	}
-    }
+    # 	unless ( $1 eq $3 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Mismatched &quot; on '$identified_name'");
+    # 	    return;
+    # 	}
+    # }
     
-    # Finish with a possible subspecies name and any qualifier that may precede it.
+    # else
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': could not resolve genus");
+    # 	return;
+    # }
     
-    if ( $name =~ $OCC_RESO_RE{subspecies} )
-    {
-	if ( $subspecies_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting subspecies modifier on '$identified_name'");
-	    return;
-	}
+    # if ( $genus_name && $genus_reso ne 'informal' && $genus_name !~ /^[A-Z][a-z]+$/ )
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': bad capitalization on genus");
+    # 	return;
+    # }
+    
+    # # Continue with a possible subgenus and preceding qualifier.
+    
+    # if ( $name =~ $OCC_RESO_RE{subgenus} )
+    # {
+    # 	if ( $subgenus_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting subgenus modifier on '$identified_name'");
+    # 	    return;
+    # 	}
 	
-	$subspecies_reso = $1;
-	$name = $2;
-    }
+    # 	$subgenus_reso = $1;
+    # 	$name = $2;
+    # }
     
-    if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
-    {
-	if ( $subspecies_reso )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting subspecies modifier on '$identified_name'");
-	    return;
-	}
+    # if ( $name =~ /^[(]<(.*?\S.*?)>[)]\s*(.*)/ )
+    # {
+    # 	if ( $subgenus_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting subgenus modifier on '$identified_name'");
+    # 	    return;
+    # 	}
 	
-	$subspecies_reso = 'informal';
-	$subspecies_name = $1;
-	$name = $2;
-    }
+    # 	$subgenus_reso = 'informal';
+    # 	$subgenus_name = $1;
+    # 	$name = $2;
+    # }
     
-    elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
-    {
-	if ( $subspecies_reso && $1 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Conflicting subspecies modifier on '$identified_name'");
-	    return;
-	}
+    # elsif ( $name =~ /^[(]("?)([A-Za-z]+)("?)[)]\s*(.*)/ )
+    # {
+    # 	if ( $subgenus_reso && $1 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting subgenus modifier on '$identified_name'");
+    # 	    return;
+    # 	}
 	
-	elsif ( $1 )
-	{
-	    $subspecies_reso = $1;
-	}
+    # 	elsif ( $1 )
+    # 	{
+    # 	    $subgenus_reso = $1;
+    # 	}
 	
-	$subspecies_name = $2;
-	$name = $4;
+    # 	$subgenus_name = $2;
+    # 	$name = $4;
 	
-	unless ( $1 eq $3 )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Invalid name '$identified_name': mismatched &quot; on subspecies");
-	}
-    }
+    # 	unless ( $1 eq $3 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Invalid name '$identified_name': mismatched &quot; on subgenus");
+    # 	    return;
+    # 	}
+    # }
     
-    elsif ( $name && ! $species_name )
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': could not resolve species");
-	return;
-    }
+    # elsif ( $name =~ /[(]/ )
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': could not resolve subgenus");
+    # 	return;
+    # }
     
-    elsif ( $subspecies_reso )
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': could not resolve subspecies");
-	return;
-    }
+    # else
+    # {
+    # 	$subgenus_name ||= '';
+    # }
     
-    elsif ( $name && $name !~ /^\s+$/ )
-    {
-	$edt->add_condition('E_FORMAT', 'identified_name',
-			    "Invalid name '$identified_name': could not parse '$name'");
-	return;
-    }
+    # if ( $subgenus_name && $subgenus_reso ne 'informal' &&
+    # 	 $subgenus_name !~ /^[A-Z][a-z]+$/ )
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': bad capitalization on subgenus");
+    # }
     
-    else
-    {
-	$subspecies_name ||= '';
-    }
+    # # Continue with a species name and any qualifier that may precede it.
     
-    if ( $subspecies_name && $subspecies_reso ne 'informal' )
-    {
-	if ( $subspecies_name =~ /[.]$/ )
-	{
-	    if ( $subspecies_name !~ /^(?:subsp|subspp|indet)[.]$/ )
-	    {
-		$edt->add_condition('E_FORMAT', 'identified_name',
-				    "Invalid name '$identified_name': '$subspecies_name' is not valid");
-		return;
-	    }
-	}
+    # if ( $name =~ $OCC_RESO_RE{species} )
+    # {
+    # 	if ( $species_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting species modifier on '$identified_name'");
+    # 	    return;
+    # 	}
 	
-	elsif ( $subspecies_name !~ /^[a-z]+$/ )
-	{
-	    $edt->add_condition('E_FORMAT', 'identified_name',
-				"Invalid name '$identified_name': bad capitalization on subspecies");
-	    return;
-	}
-    }
+    # 	$species_reso = $1;
+    # 	$name = $2;
+    # }
+    
+    # if ( ($species_reso eq 'cf.' || $species_reso eq 'aff.') &&
+    # 	 $name =~ /([A-Z])[.]\s*(.*)/ )
+    # {
+    # 	if ( $1 ne substr($genus_name, 0, 1) )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Genus initial after $species_reso did not match genus");
+    # 	    return;
+    # 	}
+
+    # 	$name = $2;
+    # }
+    
+    # if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
+    # {
+    # 	if ( $species_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting species modifier on '$identified_name'");
+    # 	    return;
+    # 	}
+	
+    # 	$species_reso = 'informal';
+    # 	$species_name = $1;
+    # 	$name = $2;
+    # }
+    
+    # elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
+    # {
+    # 	if ( $species_reso && $1 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting species modifier on '$identified_name'");
+    # 	    return;
+    # 	}
+	
+    # 	elsif ( $1 )
+    # 	{
+    # 	    $species_reso = $1;
+    # 	}
+	
+    # 	$species_name = $2;
+    # 	$name = $4;
+	
+    # 	unless ( $1 eq $3 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Invalid name '$identified_name': mismatched &quot; on species");
+    # 	}
+    # }
+    
+    # elsif ( $species_reso && ! $species_name  )
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': could not resolve species");
+    # 	return;
+    # }
+    
+    # else
+    # {
+    # 	$species_name ||= '';
+    # }
+    
+    # if ( $species_name && $species_reso ne 'informal' )
+    # {
+    # 	if ( $species_name =~ /[.]$/ )
+    # 	{
+    # 	    if ( $species_name !~ /^(?:sp|spp|indet)[.]$/ )
+    # 	    {
+    # 		$edt->add_condition('E_FORMAT', 'identified_name',
+    # 				    "Invalid name '$identified_name': '$species_name' is not valid");
+    # 		return;
+    # 	    }
+    # 	}
+	
+    # 	elsif ( $species_name !~ /^[a-z]+$/ )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Invalid name '$identified_name': bad capitalization on species");
+    # 	    return;
+    # 	}
+    # }
+    
+    # # Finish with a possible subspecies name and any qualifier that may precede it.
+    
+    # if ( $name =~ $OCC_RESO_RE{subspecies} )
+    # {
+    # 	if ( $subspecies_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting subspecies modifier on '$identified_name'");
+    # 	    return;
+    # 	}
+	
+    # 	$subspecies_reso = $1;
+    # 	$name = $2;
+    # }
+    
+    # if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
+    # {
+    # 	if ( $subspecies_reso )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting subspecies modifier on '$identified_name'");
+    # 	    return;
+    # 	}
+	
+    # 	$subspecies_reso = 'informal';
+    # 	$subspecies_name = $1;
+    # 	$name = $2;
+    # }
+    
+    # elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
+    # {
+    # 	if ( $subspecies_reso && $1 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Conflicting subspecies modifier on '$identified_name'");
+    # 	    return;
+    # 	}
+	
+    # 	elsif ( $1 )
+    # 	{
+    # 	    $subspecies_reso = $1;
+    # 	}
+	
+    # 	$subspecies_name = $2;
+    # 	$name = $4;
+	
+    # 	unless ( $1 eq $3 )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Invalid name '$identified_name': mismatched &quot; on subspecies");
+    # 	}
+    # }
+    
+    # elsif ( $name && ! $species_name )
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': could not resolve species");
+    # 	return;
+    # }
+    
+    # elsif ( $subspecies_reso )
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': could not resolve subspecies");
+    # 	return;
+    # }
+    
+    # elsif ( $name && $name !~ /^\s+$/ )
+    # {
+    # 	$edt->add_condition('E_FORMAT', 'identified_name',
+    # 			    "Invalid name '$identified_name': could not parse '$name'");
+    # 	return;
+    # }
+    
+    # else
+    # {
+    # 	$subspecies_name ||= '';
+    # }
+    
+    # if ( $subspecies_name && $subspecies_reso ne 'informal' )
+    # {
+    # 	if ( $subspecies_name =~ /[.]$/ )
+    # 	{
+    # 	    if ( $subspecies_name !~ /^(?:subsp|subspp|indet)[.]$/ )
+    # 	    {
+    # 		$edt->add_condition('E_FORMAT', 'identified_name',
+    # 				    "Invalid name '$identified_name': '$subspecies_name' is not valid");
+    # 		return;
+    # 	    }
+    # 	}
+	
+    # 	elsif ( $subspecies_name !~ /^[a-z]+$/ )
+    # 	{
+    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
+    # 				"Invalid name '$identified_name': bad capitalization on subspecies");
+    # 	    return;
+    # 	}
+    # }
     
     # If we get here, then the name has been correctly parsed.
     
@@ -2185,7 +2193,7 @@ sub validate_identified_name {
 			    "duplicates another occurrence in this collection");
     }
 
-    else
+    elsif ( $table_specifier eq 'OCCURRENCE_DATA' )
     {
 	$edt->set_attr_2key('occ_names', $collection_no, $name_check, 1);
     }
@@ -2200,8 +2208,7 @@ sub validate_identified_name {
     $action->set_record_value('subspecies_reso', $subspecies_reso);
     
     # Now put the name back together without modifiers, and link it up to its
-    # corresponding authority record if the name has already been entered. This may also
-    # involve updating the type locality.
+    # corresponding authority record if the name has already been entered.
     
     $edt->validate_taxon_no($action, $genus_name, $genus_reso,
 			    $subgenus_name, $subgenus_reso,

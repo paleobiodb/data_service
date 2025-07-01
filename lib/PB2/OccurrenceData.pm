@@ -289,7 +289,7 @@ sub initialize {
     
     $ds->define_block('1.2:occs:display' =>
 	{ select => ['oc.occurrence_no', 'oc.reid_no', 'oc.collection_no',
-		     'oc.taxon_no as identified_no', 't.rank as identified_rank',
+		     'oc.taxon_no as identified_no',
 		     't.status as taxon_status', 't.orig_no', 't.accepted_no',
 		     'tv.name as accepted_name', 'tv.rank as accepted_rank',
 		     'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
@@ -317,7 +317,7 @@ sub initialize {
 	    "If this occurrence was reidentified, a unique identifier for the reidentification.",
 	{ output => 'collection_no', com_name => 'cid' },
 	    "The identifier of the collection with which this occurrence is associated.",
-	{ output => 'class_order_family', com_name => 'cof' },
+	{ output => 'classification', com_name => 'cof' },
 	    "The class, order, and family in which this name is located. The value of this",
 	    "field contains such of those terms as have non-empty values, separated by dashes.",
 	{ output => 'identified_name', com_name => 'idn' },
@@ -1827,17 +1827,17 @@ END_JOINS
     # If we are in 'for_edit' mode, return the results in the order retrieved,
     # which is sorted by collection_no, then occurrence_no, then reid_no.
     
-    if ( $for_edit )
-    {
-	$request->list_result($result);
-    }
+    # if ( $for_edit )
+    # {
+    # 	$request->list_result($result);
+    # }
     
-    # Otherwise, group them by class, order, and family.
+    # # Otherwise, group them by class, order, and family.
     
-    else
-    {
-	$request->list_result($request->process_occs_for_display($result));
-    }
+    # else
+    # {
+	$request->list_result($request->process_occs_for_display($result, $for_edit));
+    # }
 }
 
 
@@ -3892,81 +3892,70 @@ sub process_identification {
     # fields from the occurrence record.  Also build 'taxon_name' using just
     # the '_name' fields.
     
-    my $n_mods = [ ];
+    my $end_mods = [ ];
     
     my $ident_name = combine_modifier($record->{genus_name},
-				      $record->{genus_reso}, $n_mods) || '';
+				      $record->{genus_reso}, $end_mods) || '';
     my $taxon_name = '';
+    my $taxon_rank = '';
     my $stop_name;
 
     $stop_name = 1 if $record->{genus_reso} eq 'informal';
     
-    $taxon_name .= $record->{genus_name} if $record->{genus_name} && ! $stop_name;
+    if ( $record->{genus_name} && ! $stop_name ) {
+	$taxon_name = $record->{genus_name};
+	$taxon_rank = 5;
+    }
     
     if ( $record->{subgenus_name} )
     {
 	$ident_name .= " (" . combine_modifier($record->{subgenus_name},
-					       $record->{subgenus_reso}, $n_mods) . ")";
-
+					       $record->{subgenus_reso}, $end_mods) . ")";
+	
 	$stop_name = 1 if $record->{subgenus_reso} eq 'informal';
-	$taxon_name .= " ($record->{subgenus_name})" if ! $stop_name;
+	
+	unless ( $stop_name ) {
+	    $taxon_name .= " ($record->{subgenus_name}";
+	    $taxon_rank = 4;
+	}
     }
     
     if ( $record->{species_name} )
     {
 	$ident_name .= " " . combine_modifier($record->{species_name},
-					      $record->{species_reso}, $n_mods);
-
-	$stop_name = 1 if $record->{species_reso} eq 'informal';
-	$taxon_name .= " $record->{species_name}" if $record->{species_name} !~ /\.$|^[?]$/
-	    && ! $stop_name;
+					      $record->{species_reso}, $end_mods);
+	
+	$stop_name = 1 if $record->{species_reso} eq 'informal' ||
+	    $record->{species_name} =~ /\.$|^[?]$/;
+	
+	unless ( $stop_name ) {
+	    $taxon_name .= " $record->{species_name}";
+	    $taxon_rank = 3;
+	}
     }
     
     if ( $record->{subspecies_name} )
     {
 	$ident_name .= " " . combine_modifier($record->{subspecies_name},
-					      $record->{subspecies_reso}, $n_mods);
-
-	$stop_name = 1 if $record->{subspecies_reso} eq 'informal';
-	$taxon_name .= " $record->{subspecies_name}" if $record->{subspecies_name} !~ /\.$/
-	    && ! $stop_name;
+					      $record->{subspecies_reso}, $end_mods);
+	
+	$stop_name = 1 if $record->{subspecies_reso} eq 'informal' ||
+	    $record->{subspecies_name} =~ /\.$/;
+	
+	unless ( $stop_name ) {
+	    $taxon_name .= " $record->{subspecies_name}";
+	    $taxon_rank = 2;
+	}
     }
 
-    if ( @$n_mods )
+    if ( @$end_mods )
     {
-	$ident_name .= " " . join(' ', @$n_mods);
+	$ident_name .= " " . join(' ', @$end_mods);
     }
     
     $record->{identified_name} ||= $ident_name || $taxon_name || 'UNKNOWN';
     $record->{taxon_name} ||= $taxon_name || $record->{identified_name} || 'UNKNOWN';
-    
-    # If the 'identified_rank' field is not set properly, try to determine it.
-
-    if ( defined $record->{subspecies_name} && $record->{subspecies_name} =~ qr{[a-z0-9]$} )
-    {
-	$record->{identified_rank} = 2;
-    }
-    
-    if ( defined $record->{species_name} && $record->{species_name} =~ qr{[a-z0-9]$} )
-    {
-	$record->{identified_rank} = 3;
-    }
-    
-    elsif ( defined $record->{subgenus_name} && $record->{subgenus_name} =~ qr{[a-z0-9]$} )
-    {
-	$record->{identified_rank} = 4;
-    }
-    
-    elsif ( defined $record->{species_name} && $record->{species_name} eq 'sp.' )
-    {
-	$record->{identified_rank} = 5;
-    }
-    
-    elsif ( defined $record->{genus_name} && defined $record->{accepted_name} && 
-	    $record->{genus_name} eq $record->{accepted_name} )
-    {
-	$record->{identified_rank} = $record->{accepted_rank};
-    }
+    $record->{taxon_rank} = $taxon_rank;
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -3974,7 +3963,7 @@ sub process_identification {
 
 sub combine_modifier {
     
-    my ($name, $modifier, $n_mod_list) = @_;
+    my ($name, $modifier, $end_mod_list) = @_;
     
     return $name unless defined $modifier && $modifier ne '';
     
@@ -3993,9 +3982,9 @@ sub combine_modifier {
 	return qq{"$name"};
     }
     
-    elsif ( $modifier =~ /^n[.]/ )
+    elsif ( $modifier =~ /^n[.]|^sensu/ )
     {
-	push @$n_mod_list, $modifier;
+	push @$end_mod_list, $modifier;
 	return $name;
     }
     
@@ -4004,6 +3993,7 @@ sub combine_modifier {
 	return "$modifier $name";
     }
 }
+
 
 sub process_difference {
     
@@ -4329,7 +4319,7 @@ sub process_classification {
 
 sub process_occs_for_display {
     
-    my ($request, $record_list) = @_;
+    my ($request, $record_list, $for_edit) = @_;
     
     my (%taxon_nos, %taxon_name, %taxon_sort, @classified, @unclassified);    
     
@@ -4376,6 +4366,30 @@ sub process_occs_for_display {
     }
     
     no warnings 'uninitialized';
+
+    if ( $for_edit )
+    {
+	foreach my $r ( @$record_list )
+	{
+	    my @terms;
+	    push @terms, $taxon_name{$r->{class_no}} if $r->{class_no};
+	    push @terms, $taxon_name{$r->{order_no}} if $r->{order_no};
+	    push @terms, $taxon_name{$r->{family_no}} if $r->{family_no};
+	    push @terms, $taxon_name{$r->{phylum_no}} if $r->{phylum_no} && !@terms;
+	    
+	    if ( @terms )
+	    {
+		$r->{classification} = join(' - ', @terms);
+	    }
+	    
+	    else
+	    {
+		$r->{classification} = 'Unclassified';
+	    }
+	}
+	
+	return @$record_list;
+    }
     
     # Sort the records in our result set according to the 'lft' value of the
     # phylum, class, order, and family in turn. This will order similar life
@@ -4402,17 +4416,16 @@ sub process_occs_for_display {
 	
 	if ( @terms )
 	{
-	    $r->{class_order_family} = join(' - ', @terms);
+	    $r->{classification} = join(' - ', @terms);
 	}
 	
 	else
 	{
-	    $r->{class_order_family} = 'Unclassified';
+	    $r->{classification} = 'Unclassified';
 	}
     }
 
     return (@sorted, @unclassified);
 }
-
 
 1;

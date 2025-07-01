@@ -16,6 +16,8 @@ package PB2::TaxonData;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
+use TableDefs qw(%TABLE);
+use CoreTableDefs;
 use Try::Tiny;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
@@ -2464,284 +2466,6 @@ sub list_opinions {
 }
 
 
-# get_taxa_by_name ( names, options )
-# 
-# Given a taxon name (or list of names), return either a list of ids or a
-# range expression that can be used to select the corresponding taxa.
-
-our ($NAME_SQL) = '';
-
-# sub get_taxa_by_name {
-
-#     my ($request, $names, $options) = @_;
-    
-#     $options ||= {};
-#     my $dbh = $request->get_connection;
-    
-#     # We start with some common query clauses, depending on the options.
-    
-#     my (@clauses);
-#     my $order_string = 'ORDER BY v.taxon_size';
-#     my $limit_string = '';
-#     my $fields = 't.orig_no';
-    
-#     # Do we accept common names?
-    
-#     if ( $DB_FIELD{common} && defined $options->{common} && $options->{common} eq 'only' )
-#     {
-# 	push @clauses, "common = 'EN'";
-#     }
-    
-#     elsif ( $DB_FIELD{common} && $options->{common} )
-#     {
-# 	push @clauses, "common = ''";
-#     }
-    
-#     # Invalid names?
-    
-#     my $status = $options->{status} // 'any';
-    
-#     if ( $status eq 'valid' )
-#     {
-# 	push @clauses, "status in ('belongs to', 'objective synonym of', 'subjective synonym of')";
-#     }
-    
-#     elsif ( $status eq 'senior' )
-#     {
-# 	push @clauses, "status in ('belongs to')";
-#     }
-    
-#     elsif ( $status eq 'invalid' )
-#     {
-# 	push @clauses, "status not in ('belongs to', 'objective synonym of', 'subjective synonym of')";
-#     }
-    
-#     elsif ( $status ne 'any' && $status ne 'all' )
-#     {
-# 	push @clauses, "status = 'bad_value'";
-#     }
-    
-#     # Number of results
-    
-#     unless ( $options->{all_names} )
-#     {
-# 	$limit_string = "LIMIT 1";
-#     }
-    
-#     # Result fields
-    
-#     if ( $options->{return} eq 'range' )
-#     {
-# 	$fields = "t.orig_no, t.name, t.lft, t.rgt";
-#     }
-    
-#     elsif ( $options->{return} eq 'id' )
-#     {
-# 	$fields = $options->{exact} ? 's.taxon_no' : 't.orig_no';
-#     }
-    
-#     else
-#     {
-# 	$fields = "s.taxon_name as match_name, t.orig_no, t.name as taxon_name, t.rank as taxon_rank, t.status, v.taxon_size, t.orig_no, t.trad_no as taxon_no";
-#     }
-    
-#     # The names might be given as a list, a hash, or a single string (in which
-#     # case it will be split into comma-separated items).
-    
-#     my @name_list;
-    
-#     if ( ref $names eq 'ARRAY' )
-#     {
-# 	@name_list = @$names;
-#     }
-    
-#     elsif ( ref $names eq 'HASH' )
-#     {
-# 	@name_list = keys %$names;
-#     }
-    
-#     elsif ( ref $names )
-#     {
-# 	croak "get_taxa_by_name: parameter 'names' may not be a blessed reference";
-#     }
-    
-#     else
-#     {
-# 	@name_list = split( qr{\s*,\s*}, $names );
-#     }
-    
-#     # Now that we have a list, we evaluate the names one by one.
-    
-#     my (@result);
-    
-#  NAME:
-#     foreach my $tn ( @name_list )
-#     {
-# 	my @filters;
-	
-# 	# We start by removing any bad characters and trimming leading and
-# 	# trailing spaces.  Also translate all whitespace to a single space
-# 	# and '.' to the wildcard '%'.  For example, "T.  rex" goes to
-# 	# "T% rex";
-	
-# 	$tn =~ s/^\s+//;
-# 	$tn =~ s/\s+$//;
-# 	$tn =~ s/\s+/ /g;
-# 	$tn =~ s/\./% /g;
-# 	$tn =~ tr{a-zA-Z%_: }{}cd;
-	
-# 	# If we have a selection prefix, evaluate it and add the proper range
-# 	# filter.
-	
-# 	if ( $tn =~ qr { [:] }xs )
-# 	{
-# 	    my $range = '';
-	    
-# 	    while ( $tn =~ qr{ ^ ([^:]+) : \s* (.*) }xs )
-# 	    {
-# 		my $prefix = $1;
-# 		$tn = $2;
-		
-# 		# A prefix is only valid if it's a single word.  Otherwise, we
-# 		# skip this name entirely because with an invalid prefix it cannot
-# 		# evaluate to any actual name entry.
-		
-# 		if ( $prefix =~ qr{ ^ \s* ([a-zA-Z][a-zA-Z%]+) \s* $ }xs )
-# 		{
-# 		    $range = $request->get_taxon_range($1, $range);  
-# 		}
-		
-# 		else
-# 		{
-# 		    next NAME;
-# 		}
-# 	    }
-	    
-# 	    # If we get here, we have evaluated all prefixes.  So add the
-# 	    # resulting range to the list of filters.
-	    
-# 	    push @filters, $range if $range;
-# 	}
-	
-# 	# Now, we determine the query necessary to find each name.
-	
-# 	# If we have a species name, we need to filter on both genus and
-# 	# species name.  The name is not valid unless we have at least one
-# 	# alphabetic character in the genus and one in the species.
-	
-# 	if ( $tn =~ qr{ ^ ([^\s]+) \s+ (.*) }xs )
-# 	{
-# 	    my $genus = $1;
-# 	    my $species = $2;
-	    
-# 	    next unless $genus =~ /[a-zA-Z]/ && $species =~ /[a-zA-Z]/;
-	    
-# 	    # We don't have to quote these, because we have already eliminated
-# 	    # all characters except alphabetic and wildcards.
-	    
-# 	    push @filters, "genus like '$genus'";
-# 	    push @filters, "taxon_name like '$species'";
-# 	}
-	
-# 	# If we have a higher taxon name, we just need to filter on that.  The
-# 	# name is not valid unless it contains at least two alphabetic
-# 	# characters. 
-	
-# 	elsif ( $tn =~ qr{ ^ ([^\s]+) $ }xs )
-# 	{
-# 	    my $higher = $1;
-	    
-# 	    next unless $higher =~ qr< [a-zA-Z]{2} >xs;
-	    
-# 	    push @filters, "taxon_name like '$higher' and taxon_rank >= 5";
-# 	}
-	
-# 	# Otherwise, we have an invalid name so just skip it.
-	
-# 	else
-# 	{
-# 	    next NAME;
-# 	}
-	
-# 	# Now, construct the query.
-	
-# 	my $filter_string = join(' and ', @clauses, @filters);
-# 	$filter_string = '1=1' unless $filter_string;
-	
-# 	my $s_field = $DB_FIELD{orig_no} ? 'orig_no' : 'result_no';
-# 	my $current_clause = $DB_FIELD{is_current} ? 's.is_current desc,' : '';
-	
-# 	$NAME_SQL = "
-# 		SELECT $fields
-# 		FROM taxon_search as s join taxon_trees as t on t.orig_no = s.$s_field
-# 			join taxon_attrs as v on v.orig_no = t.orig_no
-# 		WHERE $filter_string
-# 		ORDER BY $current_clause v.taxon_size desc
-# 		$limit_string";
-	
-# 	print STDERR $NAME_SQL . "\n\n" if $request->debug;
-	
-# 	my $records;
-	
-# 	if ( $options->{return} eq 'id' )
-# 	{
-# 	    $records = $dbh->selectcol_arrayref($NAME_SQL);
-# 	}
-	
-# 	else
-# 	{
-# 	    $records = $dbh->selectall_arrayref($NAME_SQL, { Slice => {} });
-# 	}
-	
-# 	push @result, @$records if ref $records eq 'ARRAY';
-#     }
-    
-#     return @result;
-# }
-
-
-# sub get_taxon_range {
-    
-#     my ($request, $name, $range) = @_;
-    
-#     my $dbh = $request->get_connection;
-#     my $range_filter = $range ? "and $range" : "";
-    
-#     my $sql = "
-# 		SELECT t.lft, t.rgt
-# 		FROM taxon_search as s JOIN taxon_trees as t on t.orig_no = s.synonym_no
-# 			JOIN taxon_attrs as v on v.orig_no = t.orig_no
-# 		WHERE s.taxon_name like '$name' $range_filter
-# 		ORDER BY v.taxon_size LIMIT 1";
-    
-#     my ($lft, $rgt) = $dbh->selectrow_array($sql);
-    
-#     return $lft ? "t.lft between $lft and $rgt" : "t.lft = 0";
-# }
-
-
-# generate_query_fields ( )
-# 
-# Add a 'fields' option to the specified query options hash, according to the
-# request parameters.  Then return the options hashref.
-
-# sub generate_query_fields {
-
-#     my ($request, $operation, $options) = @_;
-    
-#     my @fields = $request->select_list_for_taxonomy($operation);
-    
-#     if ( $operation eq 'refs' )
-#     {
-# 	push @fields, 'REF_COUNTS' if $request->has_block('counts') ;
-#     }
-    
-#     $options->{fields} = \@fields;
-    
-#     return $options;
-# }
-
-
 # generate_query_options ( )
 # 
 # Return an options hash, based on the parameters, which can be passed to
@@ -4310,54 +4034,163 @@ sub process_taxon_ids {
 }
 
 
+# process_difference ( record )
+#
+# This method is designed to be used both by taxa requests and occurrence
+# requests. If it gives the wrong result for taxa requests, I may have to add a
+# check for e.g. occurrence_no to distinguish them.
+
 sub process_difference {
     
     my ($request, $record) = @_;
     
-    # If the orig_no and accepted_no are different, then the name is either
-    # invalid or a junior synonym.  So we use the status as the reason.
+    # If the 'taxon_name' and 'accepted_name' fields are different, then
+    # create a 'difference' field.  This may contain one or more relevant reasons.
+    # If there is no accepted name, then the taxon was not entered at all.
     
-    if ( defined $record->{orig_no} && defined $record->{accepted_no} &&
-	 $record->{orig_no} ne $record->{accepted_no} )
+    if ( ! $record->{accepted_name} )
     {
-	$record->{difference} = $record->{status};
-    }
-    
-    # If  the accepted name is a different variant of the same
-    # orig_no, it takes a bit more work to figure out the reason.
-    
-    elsif ( defined $record->{spelling_no} && $record->{taxon_no} ne $record->{spelling_no} )
-    {
-	if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
-	     $record->{spelling_reason} && $record->{spelling_reason} eq 'recombination' )
+	if ( ! $record->{accepted_no} )
 	{
-	    $record->{difference} = 'recombined as';
-	}
-	
-	elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'reassignment' ||
-		$record->{spelling_reason} && $record->{spelling_reason} eq 'reassignment' )
-	{
-	    $record->{difference} = 'reassigned as';
-	}
-	
-	elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
-		! ($record->{spelling_reason} && $record->{spelling_reason} eq 'correction' ) )
-	{
-	    $record->{difference} = 'corrected to';
-	}
-	
-	elsif ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
-	{
-	    $record->{difference} = 'misspelling of';
+	    $record->{difference} = 'taxon not entered';
 	}
 	
 	else
 	{
-	    $record->{difference} = 'obsolete variant of';
+	    $record->{difference} = 'error';
 	}
     }
     
-    my $a = 1; # we can stop here when debugging
+    # If the accepted name exists and is different from the identified name,
+    # there will be one or more reasons why.
+    
+    elsif ( $record->{taxon_name} && $record->{accepted_name} &&
+	    $record->{taxon_name} ne $record->{accepted_name} )
+    {
+	my @reasons;
+	
+	# my $len = length($record->{accepted_name});
+	
+	# if ( $record->{accepted_name} eq substr($record->{taxon_name}, 0, $len) &&
+	#      $record->{taxon_rank} < 5 )
+	# {
+	#     $record->{taxonomic_reason} = 'taxon not fully entered';
+	# }
+	
+	# If the orig_no and accepted_no are the same, then the two names are
+	# variants. So try to figure out why they differ. If we can't find
+	# anything else, just report 'variant'.
+	
+	if ( $record->{orig_no} && $record->{accepted_no} && 
+	     $record->{orig_no} eq $record->{accepted_no} )
+	{
+	    if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' ||
+	         $record->{spelling_reason} && $record->{spelling_reason} eq 'recombination' )
+	    {
+		push @reasons, 'recombined as';
+	    }
+	    
+	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'reassignment' ||
+		    $record->{spelling_reason} && $record->{spelling_reason} eq 'reassignment' )
+	    {
+		push @reasons, 'reassigned as';
+	    }
+	    
+	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
+		    $record->{spelling_reason} ne 'correction' )
+	    {
+		push @reasons, 'corrected to';
+	    }
+	    
+	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'rank change' ||
+		    $record->{spelling_reason} && $record->{spelling_reason} eq 'rank change' )
+	    {
+		if ( $record->{taxon_rank} && $record->{taxon_rank} == 5 &&
+		     $record->{accepted_rank} && $record->{accepted_rank} == 4 )
+		{
+		    push @reasons, 'demoted to subgenus';
+		}
+
+		elsif ( $record->{taxon_rank} && $record->{taxon_rank} == 4 &&
+			$record->{accepted_rank} && $record->{accepted_rank} == 5 )
+		{
+		    push @reasons, 'promoted to genus';
+		}
+
+		else
+		{
+		    push @reasons, 'rank change';
+		}
+	    }
+	    
+	    elsif ( $record->{taxon_status} && $record->{taxon_status} ne 'belongs to' )
+	    {
+		push @reasons, $record->{taxon_status};
+	    }
+	}
+	
+	# Otherwise, we report the taxonomic status of the identified name as
+	# the difference.  If this record is a specimen record, then we may
+	# have to override this.
+	
+	else
+	{
+	    if ( $record->{taxon_status} && $record->{taxon_status} eq 'belongs to' )
+	    {
+		if ( $record->{specimen_no} )
+		{
+		    push @reasons, 'specimen and occurrence identified differently'
+		}
+		
+		else
+		{
+		    push @reasons, 'error';
+		}
+	    }
+	    
+	    else
+	    {	    
+		push @reasons, $record->{taxon_status};
+	    }
+	}
+	
+	# If the identified name is a misspelling, report that right away in 
+	# front of any other differences there might be.
+	
+	if ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
+	{
+	    unshift @reasons, 'misspelling of' unless $reasons[0] eq 'corrected to';
+	}
+
+	# If the species or subspecies was not entered then report that at the end.
+	
+	if ( defined $record->{taxon_rank} && $record->{taxon_rank} == 2 &&
+	     defined $record->{accepted_rank} && $record->{accepted_rank} == 3 &&
+	     defined $record->{taxon_status} )
+	{
+	    push @reasons, 'subspecies not entered';
+	}
+	
+	elsif ( defined $record->{taxon_rank} && $record->{taxon_rank} < 4 &&
+		defined $record->{accepted_rank} && $record->{accepted_rank} >= 4 &&
+		defined $record->{taxon_status} )
+	{
+	    push @reasons, 'species not entered';
+	}	
+	
+	# If we don't have any reason so far, use 'variant of'.
+
+	push @reasons, 'variant of' unless @reasons;
+	
+	# Now join all of the reasons together.
+	
+	$record->{difference} = join(q{, }, grep { defined $_ && $_ ne '' } @reasons);
+    }
+    
+    # Otherwise, the accepted name and identified name are the same so there
+    # is no difference.
+    
+    my $a = 1;	# we can stop here when debugging
 }
 
 
