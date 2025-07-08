@@ -20,6 +20,7 @@ use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $PVL_MATRIX $PVL_GLOB
 		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 use IntervalBase qw(INTL_SCALE BIN_SCALE int_defined);
+use OccurrenceBase qw(parseIdentifiedName);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
 use TaxonDefs qw(%RANK_STRING %TAXON_RANK %UNS_RANK %UNS_NAME);
@@ -300,7 +301,7 @@ sub initialize {
 		     'oc.comments', 'sc.n_specs', 'a.type_locality',
 		     'oc.reference_no', 'r.pubyr as ref_pubyr', 'r.author1last as r_al1',
 		     'r.author2last as r_al2', 'r.otherauthors as r_oa',
-		     'v.is_trace', 'v.is_form'],
+		     'a.preservation_less_old as preservation'],
 	  tables => ['oc', 'cc', 'tv', 'r', 'v', 'ph', 'ns', 'sc'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ set => '*', code => \&process_occ_ids },
@@ -336,14 +337,15 @@ sub initialize {
 	    "In some cases, the genus has been entered into the taxonomic hierarchy but not",
 	    "the species.  This field will be omitted for responses in JSON format",
 	    "if it is identical to the value of F<accepted_no>.",
+	{ output => 'name_attribution', com_name => 'natr', if_block => 'attr' },
+	    "The author(s) and publication year of the matched name.",
 	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If the identified name is different from the accepted name, this field gives",
 	    "the reason why.  This field will be present if, for example, the identified name",
 	    "is a junior synonym or nomen dubium, or if the species has been recombined, or",
 	    "if the identification is misspelled.",
-	{ output => 'is_type_locality', pbdb_name => 'type_locality', com_name => 'tlc' },
-	    "The value of this field will be non-empty if the collection to which this",
-	    "occurrence belongs is the type locality for the identified name.",
+	{ output => 'type_locality', pbdb_name => 'type_locality', com_name => 'tlc' },
+	    "The type locality of the matching taxon, if any.",
 	{ output => 'accepted_name', com_name => 'tna', if_field => 'accepted_no' },
 	    "The value of this field will be the accepted taxonomic name corresponding",
 	    "to the identified name.",
@@ -388,7 +390,7 @@ sub initialize {
 	{ include => '1.2:common:crmod' });
     
     $ds->define_block('1.2:occs:attr' =>
-	{ select => ['v.attribution', 'v.pubyr'], tables => 'v' });
+	{ select => ['v.attribution as name_attribution'], tables => 'v' });
     
     $ds->define_block('1.2:occs:ident' =>
 	{ select => ['o.genus_name', 'o.genus_reso',
@@ -3831,19 +3833,14 @@ sub process_basic_record {
     
     $record->{flags} = "R" unless $record->{latest_ident};
     
-    if ( $record->{is_trace} || $record->{is_form} )
+    if ( $record->{is_trace} || $record->{is_form} ||
+	 $record->{preservation} && $record->{preservation} ne 'regular taxon' )
     {
 	$record->{flags} ||= '';
-	$record->{flags} .= 'I' if $record->{is_trace};
-	$record->{flags} .= 'F' if $record->{is_form};
-    }
-
-    # Check the type locality.
-    
-    if ( $record->{collection_no} && $record->{type_locality} &&
-	 $record->{collection_no} eq $record->{type_locality} )
-    {
-	$record->{is_type_locality} = 1;
+	$record->{flags} .= 'I' if $record->{is_trace} ||
+	    $record->{preservation} && $record->{preservation} eq 'ichnofossil';
+	$record->{flags} .= 'F' if $record->{is_form} ||
+	    $record->{preservation} && $record->{preservation} eq 'form taxon';
     }
     
     # Generate a single plant_organ field.
@@ -3915,7 +3912,7 @@ sub process_identification {
 	$stop_name = 1 if $record->{subgenus_reso} eq 'informal';
 	
 	unless ( $stop_name ) {
-	    $taxon_name .= " ($record->{subgenus_name}";
+	    $taxon_name .= " ($record->{subgenus_name})";
 	    $taxon_rank = 4;
 	}
     }
@@ -4166,6 +4163,7 @@ my %ID_TYPE = ( orig_no => 'TXN',
 		occurrence_no => 'OCC',
 		specimen_no => 'SPM',
 		collection_no => 'COL',
+		type_locality => 'COL',
 		reid_no => 'REI',
 		reference_no => 'REF',
 		bin_id_1 => 'CLU',
@@ -4238,7 +4236,7 @@ sub process_occ_ids {
     
     my ($request, $record) = @_;
     
-    return unless $request->{block_hash}{extids};
+    return unless $request->has_block('extids');;
     
     # my $make_ids = $request->clean_param('extids');
     # $make_ids = 1 if ! $request->param_given('extids') && $request->output_vocab eq 'com';
@@ -4249,7 +4247,7 @@ sub process_occ_ids {
     
     foreach my $f ( qw(orig_no taxon_no accepted_no phylum_no
 		       class_no order_no family_no genus_no subgenus_no
-		       interval_no specimen_no occurrence_no collection_no
+		       interval_no specimen_no occurrence_no collection_no type_locality
 		       reid_no reference_no bin_id_1 bin_id_2 bin_id_3 bin_id_4) )
     {
 	$record->{$f} = generate_identifier($ID_TYPE{$f}, $record->{$f})

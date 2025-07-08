@@ -20,6 +20,7 @@ use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $P
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX $BIN_LOC %TABLE);
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use IntervalBase qw(ts_defined ts_record ts_boundary_list ts_boundary_name);
+use OccurrenceBase qw(parseIdentifiedName);
 use Taxonomy;
 use IntervalBase qw(ts_boundary_list ts_boundary_name);
 
@@ -3308,13 +3309,14 @@ sub generateMainFilters {
     # Check for parameters 'base_name', 'taxon_name', 'match_name',
     # 'base_id', 'taxon_id'
     
-    my ($taxon_name, @taxon_nos, $value, @values);
+    my ($taxon_name, $taxon_field, @taxon_nos, $value, @values);
     my (@include_taxa, @exclude_taxa, $no_synonyms, $all_children, $do_match, $ident_used);
     my (@taxon_warnings);
     
     if ( $value = $request->clean_param('base_name') )
     {
 	$taxon_name = $value;
+	$taxon_field = 'base_name';
 	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
 	$tables->{o} = 1;
@@ -3323,6 +3325,7 @@ sub generateMainFilters {
     elsif ( $value = $request->clean_param('match_name') )
     {
 	$taxon_name = $value;
+	$taxon_field = 'match_name';
 	$do_match = 1;
 	$no_synonyms = 1;
 	$tables->{o} = 1;
@@ -3331,6 +3334,7 @@ sub generateMainFilters {
     elsif ( $value = $request->clean_param('taxon_name') )
     {
 	$taxon_name = $value;
+	$taxon_field = 'taxon_name';
 	$no_synonyms = $request->clean_param('immediate');
 	$tables->{o} = 1;
     }
@@ -3355,9 +3359,18 @@ sub generateMainFilters {
     
     if ( $taxon_name )
     {
+	# If the specified name contains modifiers, we will need to do a query
+	# on the occurrence name component fields.
+	
+	if ( $taxon_name =~ / \bn[.] | \bsensu\b | " | < | \bcf[.] | \baff[.] | \bs[.] |
+			      \bvar\b | \bforma\b | \bmorph\b | \bmut\b /x )
+	{
+	    @include_taxa = ();
+	}
+	
 	# If we are doing a syntactic match, get all matching names and ignore exclusions.
 	
-	if ( $do_match )
+	elsif ( $do_match )
 	{
 	    my @taxa;
 	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
@@ -3498,6 +3511,7 @@ sub generateMainFilters {
 	$ident_used = 1;
 	
 	my @exact_genera;
+	my @wildcard_genera;
 	my @name_clauses;
 	
 	my @raw_names = ref $taxon_name eq 'ARRAY' ? @$taxon_name : split qr{\s*,\s*}, $taxon_name;
@@ -3514,37 +3528,77 @@ sub generateMainFilters {
 	    
 	    # Then test for syntax and add the corresponding filters.
 	    
-	    if ( $name =~ qr{ ^\s*([A-Za-z_.%]+)(?:\s+\(([A-Za-z_.%]+)\))?(?:\s+([A-Za-z_.%]+))?(?:\s+([A-Za-z_.%]+))? }xs )
+	    my ($genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+		$species_name, $species_reso, $subspecies_name, $subspecies_reso) =
+		    parseIdentifiedName($taxon_name, { debug_out => ($request->debug ? $request :
+								     undef),
+						       loose => 1,
+						       wildcards => 1 });
+	    
+	    if ( ref $genus_name )
+	    {
+		$request->add_error("E_FORMAT: Field '$taxon_field': $genus_name->{error}");
+		die $request->exception(400, "Bad request");
+	    }
+	    
+	    else
 	    {
 		my @name_filters;
 		
-		my $main = $1;
-		my $subgenus = $2 if defined $2;
-		my $species = (defined $4 ? "$3 $4" : $3) if defined $3;
+		# my $main = $1;
+		# my $subgenus = $2 if defined $2;
+		# my $species = (defined $4 ? "$3 $4" : $3) if defined $3;
 		
-		$main =~ s/\./%/g;
-		$subgenus =~ s/\./%/g if defined $subgenus;
-		$species =~ s/\./%/g if defined $species;
+		# $main =~ s/\./%/g;
+		# $subgenus =~ s/\./%/g if defined $subgenus;
+		# $species =~ s/\./%/g if defined $species;
 		
-		unless ( $subgenus || $species || $main =~ /[%_]/ )
+		if ( $genus_name !~ /^[%_]+$/ )
 		{
-		    push @exact_genera, $dbh->quote($main);
-		    next;
+		    my $quoted_genus = $dbh->quote($genus_name);
+		    push @name_filters, "oc.genus_name like $quoted_genus"
 		}
 		
-		my $quoted_genus = $dbh->quote($main);
-		push @name_filters, "o.genus_name like $quoted_genus";
-		
-		if ( $subgenus )
+		if ( $genus_reso )
 		{
-		    my $quoted_subgenus = $dbh->quote($subgenus);
-		    push @name_filters, "o.subgenus_name like $quoted_subgenus";
+		    my $quoted_reso = $dbh->quote($genus_reso);
+		    push @name_filters, "oc.genus_reso = $quoted_reso";
 		}
 		
-		if ( $species )
+		if ( $subgenus_name && $subgenus_name !~ /^[%_]+$/ )
 		{
-		    my $quoted_species = $dbh->quote($species);
-		    push @name_filters, "o.species_name like $quoted_species";
+		    my $quoted_subgenus = $dbh->quote($subgenus_name);
+		    push @name_filters, "oc.subgenus_name like $quoted_subgenus";
+		}
+		
+		if ( $subgenus_reso )
+		{
+		    my $quoted_reso = $dbh->quote($subgenus_reso);
+		    push @name_filters, "oc.subgenus_reso = $quoted_reso";
+		}
+		
+		if ( $species_name && $species_name !~ /^[%_]+$/ )
+		{
+		    my $quoted_species = $dbh->quote($species_name);
+		    push @name_filters, "oc.species_name like $quoted_species";
+		}
+		
+		if ( $species_reso )
+		{
+		    my $quoted_reso = $dbh->quote($species_reso);
+		    push @name_filters, "oc.species_reso = $quoted_reso";
+		}
+		
+		if ( $subspecies_name && $subspecies_name !~ /^[%_]$/ )
+		{
+		    my $quoted_subspecies = $dbh->quote($subspecies_name);
+		    push @name_filters, "oc.subspecies_name like $quoted_subspecies";
+		}
+		
+		if ( $subspecies_reso )
+		{
+		    my $quoted_reso = $dbh->quote($subspecies_reso);
+		    push @name_filters, "oc.subspecies_reso = $quoted_reso";
 		}
 		
 		if ( @name_filters > 1 )
@@ -3559,13 +3613,13 @@ sub generateMainFilters {
 	    }
 	}
 	
-	# All of the exact genus names can be combined into a single 'in' clause.
+	# # All of the exact genus names can be combined into a single 'in' clause.
 	
-	if ( @exact_genera )
-	{
-	    my $list = join(',', @exact_genera);
-	    push @name_clauses, "o.genus_name in ($list)";
-	}
+	# if ( @exact_genera )
+	# {
+	#     my $list = join(',', @exact_genera);
+	#     push @name_clauses, "o.genus_name in ($list)";
+	# }
 	
 	# If we have more than one clause, add their disjunction to the filter
 	# list.  We need to add table 'oc' to the join set, and we also set
@@ -3575,6 +3629,7 @@ sub generateMainFilters {
 	if ( @name_clauses > 1 )
 	{
 	    push @filters, '(' . join(' or ', @name_clauses) . ')';
+	    $tables->{oc} = 1;
 	}
 	
 	# If we have a single clause, just add it to the filter list.
@@ -3582,6 +3637,7 @@ sub generateMainFilters {
 	elsif ( @name_clauses )
 	{
 	    push @filters, $name_clauses[0];
+	    $tables->{oc} = 1;
 	}
 	
 	# If we did not find any valid names, then add a filter clause that
@@ -3590,9 +3646,9 @@ sub generateMainFilters {
 	else
 	{
 	    push @filters, "o.orig_no = -1";
+	    $tables->{o} = 1;
 	}
 	
-	$tables->{o} = 1;
 	$tables->{non_summary} = 1;
     }
     

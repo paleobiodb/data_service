@@ -20,9 +20,11 @@ use Carp qw(carp croak);
 use List::Util qw(any);
 
 use ExternalIdent qw(generate_identifier);
-use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
+use TableDefs qw(%TABLE set_table_property set_column_property);
 use CoreTableDefs;
 use IntervalBase qw(int_defined int_bounds);
+use OccurrenceBase qw(parseIdentifiedName matchExactName matchIdentifiedName findParentTaxon
+		      computeTaxonMatch hashIdentification);
 use MatrixBase qw(updateCollectionMatrix updateOccurrenceMatrix
 		  deleteFromCollectionMatrix deleteFromOccurrenceMatrix
 		  deleteReidsFromOccurrenceMatrix updateOccurrenceCounts);
@@ -47,6 +49,7 @@ my (%OCC_RESO, %OCC_RESO_RE);
        W_DUPLICATE_OCC => "Occurrence was skipped because it is a duplicate of &1",
        E_BAD_NAME => "Field '&1' must contain at least one letter",
        E_MULTI_COLLECTIONS => "this action spans more than one collection",
+       E_AMBIGUOUS => "Field 'identified_name' matches more than one taxon in the database",
        E_CANNOT_DELETE => { collection => "Deletion of collections has not been implemented",
 			    occurrence => "Cannot delete an occurrence with speciments" },
        E_CANNOT_MOVE => { occurrence => "The value of 'collection_id' must match what is " .
@@ -56,10 +59,14 @@ my (%OCC_RESO, %OCC_RESO_RE);
     
     CollectionEdit->register_allowances('DUPLICATE');
     
-    CollectionEdit->ignore_field('reference_add');
-    CollectionEdit->ignore_field('reference_delete');
-    CollectionEdit->ignore_field('max_interval');
-    CollectionEdit->ignore_field('min_interval');
+    CollectionEdit->ignore_field('COLLECTION_DATA', 'reference_add');
+    CollectionEdit->ignore_field('COLLECTION_DATA', 'reference_delete');
+    CollectionEdit->ignore_field('COLLECTION_DATA', 'max_interval');
+    CollectionEdit->ignore_field('COLLECTION_DATA', 'min_interval');
+    CollectionEdit->ignore_field('OCCURRENCE_DATA', 'identified_name');
+    CollectionEdit->ignore_field('REID_DATA', 'identified_name');
+    CollectionEdit->ignore_field('OCCURRENCE_DATA', 'validation');
+    CollectionEdit->ignore_field('REID_DATA', 'validation');
     
     set_table_property('COLLECTION_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('COLLECTION_DATA', CAN_MODIFY => 'AUTHORIZED');
@@ -76,6 +83,7 @@ my (%OCC_RESO, %OCC_RESO_RE);
     set_column_property('OCCURRENCE_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
     set_column_property('OCCURRENCE_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('OCCURRENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
+    set_column_property('OCCURRENCE_DATA', 'taxon_no', EXTID_TYPE => 'TID');
     
     set_table_property('REID_DATA', REQUIRED_COLS => ['reference_no']);
     
@@ -83,6 +91,7 @@ my (%OCC_RESO, %OCC_RESO_RE);
     set_column_property('REID_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
     set_column_property('REID_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('REID_DATA', 'reference_no', EXTID_TYPE => 'REF');
+    set_column_property('REID_DATA', 'taxon_no', EXTID_TYPE => 'TID');
 }
 
 
@@ -226,6 +235,14 @@ sub finalize_transaction {
     {
 	updateOccurrencecounts($dbh, \@update_occ_counts, $debug_out);
     }
+    
+    my $set_type_locality = $edt->get_attr('set_type_locality');
+    my $remove_type_locality = $edt->get_attr('remove_type_locality');
+
+    if ( $set_type_locality || $remove_type_locality )
+    {
+	$edt->resolveTypeLocality();
+    }
 }
 
 
@@ -306,12 +323,7 @@ sub validate_coll_action {
 				"unknown reference $qref");
 	}
     }
-    
-    # The following two fields will be handled by the 'after_action' method.
-    
-    $action->ignore_field('reference_add');
-    $action->ignore_field('reference_delete');
-    
+        
     # Check the access level and release date
     # ---------------------------------------
     
@@ -719,8 +731,6 @@ sub validate_coll_action {
     if ( $operation eq 'insert' || $operation eq 'replace' ||
 	 $action->field_specified('max_interval') )
     {
-	$action->ignore_field('max_interval');
-	
 	# If the value of 'max_interval' corresponds to a known interval, set the
 	# field 'max_interval_no' to the corresponding interval_no value.
 	
@@ -748,8 +758,6 @@ sub validate_coll_action {
     
     if ( $action->field_specified('min_interval') )
     {
-	$action->ignore_field('min_interval');
-	
 	# If the value of 'min_interval' corresponds to a known interval, set the
 	# field 'min_interval_no' to the corresponding interval_no value.
 	
@@ -1177,7 +1185,7 @@ sub after_coll_action {
 # initialize_occ_action ( action, operation, table_specifier )
 #
 # Make sure that every action on the 'OCCURRENCE_DATA' and 'REID_DATA' tables has a
-# valid 'collection_id' field. This is necessary for authorization, because those tables
+# valid 'collection_no' field. This is necessary for authorization, because those tables
 # use the 'COLLECTION_DATA' table for authorization. Inserts into the REID_DATA table
 # also require a valid 'occurrence_id' field.
 
@@ -1190,11 +1198,10 @@ sub initialize_occ_action {
     my $collection_no = $action->record_value('collection_id');
     my $occurrence_no = $action->record_value('occurrence_id');
     my $reid_no = $action->record_value('reid_id');
-    my $check;
+    my ($check, $sql);
     
     my $occs = $edt->get_attr('occs');
     my $reids = $edt->get_attr('reids');
-    my $sql;
     
     # Select the case that applies to this action.
     
@@ -1218,12 +1225,17 @@ sub initialize_occ_action {
 	    $edt->add_condition('E_MULTI_COLLECTIONS');
 	}
 	
+	elsif ( $table_specifier eq 'OCCURRENCE_DATA' )
+	{
+	    $action->set_attr('occurrence_no', "$occurrence_no");
+	    $action->set_attr('collection_no', $occs->{"$occurrence_no"}{collection_no});
+	}
+	
 	else
 	{
-	    my $collection_no = $result->[0] || '0';
-	    
-	    $action->set_linkinfo('collection_no', 'collection_no', 'collection_id',
-				  $collection_no, "collection_no = '$collection_no'");
+	    $action->set_attr('reid_no', "$reid_no");
+	    $action->set_attr('occurrence_no', $reids->{"$reid_no"}{occurrence_no});
+	    $action->set_attr('collection_no', $reids->{"$reid_no"}{collection_no});
 	}
     }
     
@@ -1307,8 +1319,9 @@ sub initialize_occ_action {
 	    
 	    if ( $occurrence_no = $action->keyval )
 	    {
-		$collection_no = $occs->{$occurrence_no}{collection_no};
+		$collection_no = $occs->{"$occurrence_no"}{collection_no};
 		$action->set_attr('collection_no', $collection_no);
+		$action->set_attr('occurrence_no', "$occurrence_no");
 	    }
 	    
 	    # If more than one key was specified, add an error condition.
@@ -1424,7 +1437,7 @@ sub initialize_occ_action {
 		$edt->add_condition('E_REQUIRED', 'occurrence_id');
 	    }
 	}
-
+	
 	elsif ( $operation eq 'delete' )
 	{
 	    my @keyvals = $action->keyvals;
@@ -1480,7 +1493,8 @@ sub initialize_occ_action {
 	    
 	    elsif ( $action->can_proceed && ! ($reid_no && $occurrence_no && $collection_no) )
 	    {
-		$edt->add_condition('E_EXECUTE', "could not locate occurrence_no or collection_no");
+		$edt->add_condition('E_EXECUTE',
+				    "could not locate reid_no, occurrence_no, or collection_no");
 	    }
 	}
     }
@@ -1503,24 +1517,82 @@ sub validate_occ_action {
     my $occs = $edt->get_attr('occs');
     my $reids = $edt->get_attr('reids');
     
+    my $collection_no = $action->get_attr('collection_no');
     my $occurrence_no = $action->get_attr('occurrence_no');
     my $reid_no = $action->get_attr('reid_no');
     
-    # If the operation is 'delete', call the appropriate routine and return. We don't
-    # need any of the checks below.
+    # If the operation is 'update', 'replace', or 'delete', get a reference to the
+    # existing data for this record.
+    
+    my $is_update = $operation eq 'update' || $operation eq 'replace';
+    my $existing_data;
+    
+    if ( $is_update || $operation eq 'delete' )
+    {
+	if ( $table_specifier eq 'OCCURRENCE_DATA' )
+	{
+	    if ( $occurrence_no && $occs->{$occurrence_no} )
+	    {
+		$existing_data = $occs->{$occurrence_no};
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition('E_EXECUTE',
+				    "could not retrieve occurrence data for '$occurrence_no' during validation");
+		return;
+	    }
+	}
 
+	else
+	{
+	    if ( $reid_no && $reids->{$reid_no} )
+	    {
+		$existing_data = $reids->{$reid_no};
+	    }
+	    
+	    else
+	    {
+		$edt->add_condition('E_EXECUTE',
+				    "could not retrieve reidentification data for '$reid_no' during validation");
+		return;
+	    }
+	}
+    }
+    
+    # If the operation is 'delete', call the appropriate routine and return. We don't
+    # need any of the checks below in this case.
+    
     if ( $operation eq 'delete' )
     {
 	if ( $table_specifier eq 'OCCURRENCE_DATA' )
 	{
 	    $edt->validate_delete_occs($action);
 	}
-
+	
 	else
 	{
 	    $edt->validate_delete_reids($action);
 	}
+	
+	# If the row to be deleted contains an 'n. gen.', 'n. sp.', etc. modifier,
+	# then we may need to remove one or more type locality links.
+	
+	no warnings 'uninitialized';
+	
+	if ( $existing_data->{genus_reso} eq 'n. gen.' ||
+	     $existing_data->{subgenus_reso} eq 'n. subgen.' ||
+	     $existing_data->{species_reso} eq 'n. sp.' ||
+	     $existing_data->{subspecies_reso} eq 'n. ssp.' )
+	{
+	    $edt->check_remove_type_locality($action, $existing_data->{taxon_no}, $collection_no,
+		      $existing_data->{genus_name}, $existing_data->{genus_reso},
+		      $existing_data->{subgenus_name}, $existing_data->{subgenus_reso},
+		      $existing_data->{species_name}, $existing_data->{species_reso},
+		      $existing_data->{subspecies_name}, $existing_data->{subspecies_reso});
+	}
     }
+    
     
     # Validate reference_id
     # ---------------------
@@ -1532,11 +1604,6 @@ sub validate_occ_action {
     
     if ( defined $reference_no && $reference_no ne '' )
     {
-	# Stringify this value, because it may be an object representing an external
-	# identifier.
-	
-	$reference_no = "$reference_no";
-	
 	my $qref = $dbh->quote($reference_no);
 	
 	unless ( $edt->get_attr_key('valid_reference', $reference_no ) )
@@ -1556,14 +1623,14 @@ sub validate_occ_action {
 	    else
 	    {
 		$edt->add_condition('E_BAD_VALUE', 'reference_id',
-				    "unknown reference $qref");
+				    "Unknown reference $qref");
 	    }
 	}
 	
 	# If this is an occurrence update or replacement, check if any of the
 	# reidentifications already use this reference.
 	
-	if ( $table_specifier eq 'OCCURRENCE_DATA' && $operation =~ /^rep|^upd/ )
+	if ( $table_specifier eq 'OCCURRENCE_DATA' && $is_update )
 	{
 	    my $qocc = $dbh->quote($occurrence_no);
 
@@ -1579,7 +1646,8 @@ sub validate_occ_action {
 		if ( $rr eq $reference_no )
 		{
 		    $edt->add_condition('E_BAD_VALUE', 'reference_no',
-					"a reidentification of this occurrence uses this reference");
+					"A reidentification of this occurrence already uses " .
+					"this reference");
 		}
 	    }
 	}
@@ -1587,14 +1655,16 @@ sub validate_occ_action {
 	# If this is a reidentification action, check if the occurrence or any of the
 	# other reidentifications already use this reference.
 	
-	elsif ( $operation =~ /^rep|^upd/ )
+	elsif ( $table_specifier eq 'REID_DATA' )
 	{
 	    my $qocc = $dbh->quote($occurrence_no);
+	    my $qreid = $dbh->quote($reid_no);
 	    
 	    $sql = "SELECT reference_no FROM $TABLE{OCCURRENCE_DATA}
 		WHERE reference_no = $qref and occurrence_no = $qocc
 		UNION SELECT reference_no FROM $TABLE{REID_DATA}
-		WHERE reference_no = $qref and occurrence_no = $qocc";
+		WHERE reference_no = $qref and occurrence_no = $qocc and
+			reid_no <> $qreid";
 	    
 	    $edt->debug_line("$sql\n") if $edt->debug_mode;
 	    
@@ -1603,81 +1673,156 @@ sub validate_occ_action {
 	    if ( $check )
 	    {
 		$edt->add_condition('E_BAD_VALUE', 'reference_id',
-				    "there is already an identification of this occurrence using this reference");
+				    "This occurrence or a reidentification already uses " .
+				    "this reference");
 	    }
 	}
     }
     
-    # Validate the taxonomic name
-    # ---------------------------
+    # Validate the taxonomic name and taxon number
+    # --------------------------------------------
     
-    # This field will be deconstructed and used to set the fields 'genus_name',
-    # 'genus_reso', etc. It must not be specified with an empty value.
+    # The 'identified_name' field will be deconstructed and used to set the fields
+    # 'genus_name', 'genus_reso', etc. It must not be specified with an empty value.
     
     my $identified_name = $action->record_value('identified_name');
-    my $taxon_no = $action->record_value('taxon_no');
+    my $taxon_no = $action->record_value('taxon_id');
     my $collection_no = $action->get_attr('collection_no');
-    
-    $action->ignore_field('identified_name');
     
     if ( defined $identified_name && $identified_name ne '' )
     {
-	$edt->validate_identified_name($action, $table_specifier, $collection_no, $identified_name);
+	# Validate the specified name and associated taxon number if any. We need the
+	# collection_no so we can verify that no other occurrence associated with this
+	# collection has the same name.
+	
+	$edt->validate_identification($action, $table_specifier, $collection_no,
+				      $identified_name, $taxon_no);
     }
-
+    
     elsif ( $operation eq 'insert' || $action->field_specified('identified_name') )
     {
 	$edt->add_condition('E_REQUIRED', 'identified_name');
     }
     
-    # If the name isn't being updated but the taxon_no is, validate it according to the
-    # name components stored in the database. This may also involve updating the type
-    # locality.
+    # If the name isn't being updated but the taxon_no is, validate it according to
+    # the name components stored in the database row.
     
-    elsif ( $taxon_no && ($operation eq 'update' || $operation eq 'replace') )
+    elsif ( defined $taxon_no && $taxon_no ne '' && $is_update )
     {
-	my ($genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
-	    $species_name, $species_reso, $subspecies_name, $subspecies_reso);
+	my $genus_name = $existing_data->{genus_name};
+	my $genus_reso = $existing_data->{genus_reso};
+	my $subgenus_name = $existing_data->{subgenus_name};
+	my $subgenus_reso = $existing_data->{subgenus_reso};
+	my $species_name = $existing_data->{species_name};
+	my $species_reso = $existing_data->{species_reso};
+	my $subspecies_name = $existing_data->{subspecies_name};
+	my $subspecies_reso = $existing_data->{subspecies_reso};
 	
-	my $identification_data;
+	$edt->validate_taxon_no($action, "$taxon_no", $collection_no,
+				$genus_name || '', $genus_reso,
+				$subgenus_name || '', $subgenus_reso,
+				$species_name || '', $species_reso,
+				$subspecies_name || '', $subspecies_reso);
+    }
+
+    # If neither the name nor the taxon_no is being updated but _set_locality is
+    # specified, do that.
+    
+    elsif ( $action->record_value('_set_locality') )
+    {
+	my $genus_name = $existing_data->{genus_name};
+	my $genus_reso = $existing_data->{genus_reso};
+	my $subgenus_name = $existing_data->{subgenus_name};
+	my $subgenus_reso = $existing_data->{subgenus_reso};
+	my $species_name = $existing_data->{species_name};
+	my $species_reso = $existing_data->{species_reso};
+	my $subspecies_name = $existing_data->{subspecies_name};
+	my $subspecies_reso = $existing_data->{subspecies_reso};
+	my $taxon_no = $existing_data->{taxon_no};
 	
+	$edt->check_type_locality($action, $taxon_no, $collection_no, 1,
+				  $genus_name || '', $genus_reso,
+				  $subgenus_name || '', $subgenus_reso,
+				  $species_name || '', $species_reso,
+				  $subspecies_name || '', $subspecies_reso);
+    }
+    
+    # If new name components are being set and there is an existing name which is
+    # different, then we need to check whether to unlink the old name's type
+    # localit(ies).
+
+    my $new_name = $action->record_value('identified_name');
+    my $new_taxon = $action->record_value('taxon_id');
+    
+    if ( $is_update && $existing_data->{taxon_no} &&
+	 ($new_name || $new_taxon && "$new_taxon" ne $existing_data->{taxon_no}) )
+    {
+	$edt->check_remove_type_locality($action, $existing_data->{taxon_no}, $collection_no,
+		      $existing_data->{genus_name}, $existing_data->{genus_reso},
+		      $existing_data->{subgenus_name}, $existing_data->{subgenus_reso},
+		      $existing_data->{species_name}, $existing_data->{species_reso},
+		      $existing_data->{subspecies_name}, $existing_data->{subspecies_reso});
+	
+	# my $old_gen = $existing_data->{genus_reso};
+	# my $old_subgen = $existing_data->{subgenus_reso};
+	# my $old_sp = $existing_data->{species_reso};
+	# my $old_subsp = $existing_data->{subspecies_reso};
+	
+	# my $new_gen = $action->record_value('genus_reso');
+	# my $new_subgen = $action->record_value('subgenus_reso');
+	# my $new_sp = $action->record_value('species_reso');
+	# my $new_subsp = $action->record_value('subspecies_reso');
+    }
+    
+    # Validate the abundance
+    # ----------------------
+    
+    # If an abundance value is specified, an abundance unit must also be specified.
+    # Otherwise, the abundance unit is ignored.
+    
+    my $abund_value = $action->record_value('abund_value');
+    my $abund_unit = $action->record_value('abund_unit');
+    my ($existing_value, $existing_unit);
+    
+    if ( $operation =~ /^upd|^rep/ )
+    {
 	if ( $table_specifier eq 'OCCURRENCE_DATA' )
 	{
-	    unless ( $occurrence_no && $occs->{$occurrence_no} )
-	    {
-		$edt->add_condition('E_EXECUTE',
-				    "could not retrieve occurrence data during validation");
-		return;
-	    }
-	    
-	    $identification_data = $occs->{$occurrence_no};
+	    $existing_value = $occs->{$occurrence_no}{abund_value};
+	    $existing_unit = $occs->{$occurrence_no}{abund_unit};
 	}
-
+	
 	else
 	{
-	    unless ( $reid_no && $reids->{$reid_no} )
-	    {
-		$edt->add_condition('E_EXECUTE',
-				    "could not retrieve reidentification data during validation");
-		return;
-	    }
-	    
-	    $identification_data = $reids->{$reid_no};
+	    $existing_value = $reids->{$occurrence_no}{abund_value};
+	    $existing_unit = $reids->{$occurrence_no}{abund_unit};
+	}
+    }
+    
+    if ( $abund_value )
+    {
+	unless ( $abund_unit || $existing_unit )
+	{
+	    $edt->add_condition('E_REQUIRED', 'abund_unit');
 	}
 	
-	$genus_name = $identification_data->{genus_name};
-	$genus_reso = $identification_data->{genus_reso};
-	$subgenus_name = $identification_data->{subgenus_name};
-	$subgenus_reso = $identification_data->{subgenus_reso};
-	$species_name = $identification_data->{species_name};
-	$species_reso = $identification_data->{species_reso};
-	$subspecies_name = $identification_data->{subspecies_name};
-	$subspecies_reso = $identification_data->{subspecies_reso};
-	
-	$edt->validate_taxon_no($action, $genus_name, $genus_reso,
-				$subgenus_name, $subgenus_reso,
-				$species_name, $species_reso,
-				$subspecies_name, $subspecies_reso);
+	elsif ( !$abund_unit && $action->field_specified('abund_unit') )
+	{
+	    $edt->add_condition('E_REQUIRED', 'abund_unit');
+	}
+    }
+    
+    elsif ( $action->field_specified('abund_value') )
+    {
+	$action->set_record_value('abund_unit', undef);
+    }
+    
+    elsif ( $abund_unit )
+    {
+	unless ( $abund_value || $existing_value )
+	{
+	    $action->ignore_field('abund_unit');
+	}
     }
     
     # Validate the plant organ
@@ -1707,14 +1852,14 @@ sub validate_occ_action {
 	else # @organs == 1
 	{
 	    $action->set_record_value('plant_organ', $organs[0]);
-	    $action->set_record_value('plant_organ2', undef);
+	    $action->set_record_value('plant_organ2', undef) if $table_specifier ne 'REID_DATA';
 	}
     }
 
     elsif ( $action->field_specified('plant_organ') )
     {
 	$action->set_record_value('plant_organ', undef);
-	$action->set_record_value('plant_organ2', undef);
+	$action->set_record_value('plant_organ2', undef) if $table_specifier ne 'REID_DATA';
     }
 }
 
@@ -1787,416 +1932,48 @@ sub validate_delete_reids {
 }
 
 
-sub validate_identified_name {
+sub validate_identification {
 
-    my ($edt, $action, $table_specifier, $collection_no, $identified_name) = @_;
+    my ($edt, $action, $table_specifier, $collection_no, $identified_name, $taxon_no) = @_;
     
-    # Parse the name and return either the name components or a hashref indicating an
-    # error message.
+    # Parse the name and get either the name components or a hashref indicating an error
+    # message.
     
     my ($genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
 	$species_name, $species_reso, $subspecies_name, $subspecies_reso) =
-	    $edt->request->parse_identified_name($identified_name);
+	    parseIdentifiedName($identified_name);
 
     if ( ref $genus_name )
     {
-	$edt->add_condition('E_FORMAT', 'identified_name', $genus_name->{error} || 'invalid name');
+	$edt->add_condition('E_FORMAT', 'identified_name', $genus_name->{error} || 'Invalid name');
 	return;
     }
     
-    # # Prepare to parse the identified name by trimming whitespace.
+    # If we are inserting or updating an occurrence, the identified name must not
+    # duplicate the identified name of any other occurrence in this collection.
+    # Reidentifications are allowed to be duplicates, however.
     
-    # $identified_name =~ s/^\s+//;
-    # $identified_name =~ s/\s+$//;
-    
-    # my $name = $identified_name;
-    
-    # # Check for n. gen., n. sp., etc.  These have an unambiguous meaning
-    # # wherever they occur. Removing them may leave extra spaces in the
-    # # name.
-
-    # if ( $name =~ /(.*)n[.]\s*gen[.](.*)/ )
-    # {
-    # 	$genus_reso = "n. gen.";
-    # 	$name = "$1 $2";
-    # }
-    
-    # if ( $name =~ /(.*)n[.]\s*subgen[.](.*)/ )
-    # {
-    # 	$subgenus_reso = "n. subgen.";
-    # 	$name = "$1 $2";
-    # }
-    
-    # if ( $name =~ /(.*)n[.]\s*sp[.](.*)/ )
-    # {
-    # 	$species_reso = "n. sp.";
-    # 	$name = "$1 $2";
-    # }
-    
-    # if ( $name =~ /(.*)n[.]\s*(subsp|ssp)[.](.*)/ )
-    # {
-    # 	$subspecies_reso = "n. ssp.";
-    # 	$name = "$1 $3";
-    # }
-    
-    # # Now deconstruct the name component by component, using the same rules as the
-    # # Javascript form checker.
-    
-    # # Start with the genus and any qualifier that may precede it.
-    
-    # if ( $name =~ $OCC_RESO_RE{genus} )
-    # {
-    # 	if ( $genus_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting genus modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$genus_reso = $1;
-    # 	$name = $2;
-    # }
-    
-    # if ( $name =~ /^\s*<(.*?\S.*?)>\s*(.*)/ )
-    # {
-    # 	if ( $genus_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting genus modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$genus_reso = 'informal';
-    # 	$genus_name = $1;
-    # 	$name = $2;
-    # }
-    
-    # elsif ( $name =~ /^\s*("?)([A-Za-z]+)("?)\s*(.*)/ )
-    # {
-    # 	if ( $genus_reso && $1 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting genus modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	elsif ( $1 )
-    # 	{
-    # 	    $genus_reso = $1;
-    # 	}
-	
-    # 	$genus_name = $2;
-    # 	$name = $4;
-	
-    # 	unless ( $1 eq $3 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Mismatched &quot; on '$identified_name'");
-    # 	    return;
-    # 	}
-    # }
-    
-    # else
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': could not resolve genus");
-    # 	return;
-    # }
-    
-    # if ( $genus_name && $genus_reso ne 'informal' && $genus_name !~ /^[A-Z][a-z]+$/ )
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': bad capitalization on genus");
-    # 	return;
-    # }
-    
-    # # Continue with a possible subgenus and preceding qualifier.
-    
-    # if ( $name =~ $OCC_RESO_RE{subgenus} )
-    # {
-    # 	if ( $subgenus_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting subgenus modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$subgenus_reso = $1;
-    # 	$name = $2;
-    # }
-    
-    # if ( $name =~ /^[(]<(.*?\S.*?)>[)]\s*(.*)/ )
-    # {
-    # 	if ( $subgenus_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting subgenus modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$subgenus_reso = 'informal';
-    # 	$subgenus_name = $1;
-    # 	$name = $2;
-    # }
-    
-    # elsif ( $name =~ /^[(]("?)([A-Za-z]+)("?)[)]\s*(.*)/ )
-    # {
-    # 	if ( $subgenus_reso && $1 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting subgenus modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	elsif ( $1 )
-    # 	{
-    # 	    $subgenus_reso = $1;
-    # 	}
-	
-    # 	$subgenus_name = $2;
-    # 	$name = $4;
-	
-    # 	unless ( $1 eq $3 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Invalid name '$identified_name': mismatched &quot; on subgenus");
-    # 	    return;
-    # 	}
-    # }
-    
-    # elsif ( $name =~ /[(]/ )
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': could not resolve subgenus");
-    # 	return;
-    # }
-    
-    # else
-    # {
-    # 	$subgenus_name ||= '';
-    # }
-    
-    # if ( $subgenus_name && $subgenus_reso ne 'informal' &&
-    # 	 $subgenus_name !~ /^[A-Z][a-z]+$/ )
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': bad capitalization on subgenus");
-    # }
-    
-    # # Continue with a species name and any qualifier that may precede it.
-    
-    # if ( $name =~ $OCC_RESO_RE{species} )
-    # {
-    # 	if ( $species_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting species modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$species_reso = $1;
-    # 	$name = $2;
-    # }
-    
-    # if ( ($species_reso eq 'cf.' || $species_reso eq 'aff.') &&
-    # 	 $name =~ /([A-Z])[.]\s*(.*)/ )
-    # {
-    # 	if ( $1 ne substr($genus_name, 0, 1) )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Genus initial after $species_reso did not match genus");
-    # 	    return;
-    # 	}
-
-    # 	$name = $2;
-    # }
-    
-    # if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
-    # {
-    # 	if ( $species_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting species modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$species_reso = 'informal';
-    # 	$species_name = $1;
-    # 	$name = $2;
-    # }
-    
-    # elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
-    # {
-    # 	if ( $species_reso && $1 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting species modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	elsif ( $1 )
-    # 	{
-    # 	    $species_reso = $1;
-    # 	}
-	
-    # 	$species_name = $2;
-    # 	$name = $4;
-	
-    # 	unless ( $1 eq $3 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Invalid name '$identified_name': mismatched &quot; on species");
-    # 	}
-    # }
-    
-    # elsif ( $species_reso && ! $species_name  )
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': could not resolve species");
-    # 	return;
-    # }
-    
-    # else
-    # {
-    # 	$species_name ||= '';
-    # }
-    
-    # if ( $species_name && $species_reso ne 'informal' )
-    # {
-    # 	if ( $species_name =~ /[.]$/ )
-    # 	{
-    # 	    if ( $species_name !~ /^(?:sp|spp|indet)[.]$/ )
-    # 	    {
-    # 		$edt->add_condition('E_FORMAT', 'identified_name',
-    # 				    "Invalid name '$identified_name': '$species_name' is not valid");
-    # 		return;
-    # 	    }
-    # 	}
-	
-    # 	elsif ( $species_name !~ /^[a-z]+$/ )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Invalid name '$identified_name': bad capitalization on species");
-    # 	    return;
-    # 	}
-    # }
-    
-    # # Finish with a possible subspecies name and any qualifier that may precede it.
-    
-    # if ( $name =~ $OCC_RESO_RE{subspecies} )
-    # {
-    # 	if ( $subspecies_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting subspecies modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$subspecies_reso = $1;
-    # 	$name = $2;
-    # }
-    
-    # if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
-    # {
-    # 	if ( $subspecies_reso )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting subspecies modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	$subspecies_reso = 'informal';
-    # 	$subspecies_name = $1;
-    # 	$name = $2;
-    # }
-    
-    # elsif ( $name =~ /^("?)([A-Za-z]+[.]?)("?)\s*(.*)/ )
-    # {
-    # 	if ( $subspecies_reso && $1 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Conflicting subspecies modifier on '$identified_name'");
-    # 	    return;
-    # 	}
-	
-    # 	elsif ( $1 )
-    # 	{
-    # 	    $subspecies_reso = $1;
-    # 	}
-	
-    # 	$subspecies_name = $2;
-    # 	$name = $4;
-	
-    # 	unless ( $1 eq $3 )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Invalid name '$identified_name': mismatched &quot; on subspecies");
-    # 	}
-    # }
-    
-    # elsif ( $name && ! $species_name )
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': could not resolve species");
-    # 	return;
-    # }
-    
-    # elsif ( $subspecies_reso )
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': could not resolve subspecies");
-    # 	return;
-    # }
-    
-    # elsif ( $name && $name !~ /^\s+$/ )
-    # {
-    # 	$edt->add_condition('E_FORMAT', 'identified_name',
-    # 			    "Invalid name '$identified_name': could not parse '$name'");
-    # 	return;
-    # }
-    
-    # else
-    # {
-    # 	$subspecies_name ||= '';
-    # }
-    
-    # if ( $subspecies_name && $subspecies_reso ne 'informal' )
-    # {
-    # 	if ( $subspecies_name =~ /[.]$/ )
-    # 	{
-    # 	    if ( $subspecies_name !~ /^(?:subsp|subspp|indet)[.]$/ )
-    # 	    {
-    # 		$edt->add_condition('E_FORMAT', 'identified_name',
-    # 				    "Invalid name '$identified_name': '$subspecies_name' is not valid");
-    # 		return;
-    # 	    }
-    # 	}
-	
-    # 	elsif ( $subspecies_name !~ /^[a-z]+$/ )
-    # 	{
-    # 	    $edt->add_condition('E_FORMAT', 'identified_name',
-    # 				"Invalid name '$identified_name': bad capitalization on subspecies");
-    # 	    return;
-    # 	}
-    # }
-    
-    # If we get here, then the name has been correctly parsed.
-    
-    no warnings 'uninitialized';
-    
-    my $name_check = join('|', $genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
-			  $species_name, $species_reso, $subspecies_name, $subspecies_reso, '#');
-    
-    if ( $edt->get_attr_2key('occ_names', $collection_no, $name_check) )
+    if ( $table_specifier eq 'OCCURRENCE_DATA' )
     {
-	$edt->add_condition('E_BAD_VALUE', 'identified_name',
-			    "duplicates another occurrence in this collection");
+	no warnings 'uninitialized';
+	
+	my $name_check = join('|', $genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+			      $species_name, $species_reso, $subspecies_name, $subspecies_reso, '#');
+	
+	if ( $edt->get_attr_2key('occ_names', $collection_no, $name_check) )
+	{
+	    $edt->add_condition('E_BAD_VALUE', 'identified_name',
+				"duplicates another occurrence in this collection");
+	    return;
+	}
+	
+	else
+	{
+	    $edt->set_attr_2key('occ_names', $collection_no, $name_check, 1);
+	}
     }
-
-    elsif ( $table_specifier eq 'OCCURRENCE_DATA' )
-    {
-	$edt->set_attr_2key('occ_names', $collection_no, $name_check, 1);
-    }
+    
+    # Store the individual name components in the occurrence or reidentification record.
     
     $action->set_record_value('genus_name', $genus_name);
     $action->set_record_value('genus_reso', $genus_reso);
@@ -2207,13 +1984,16 @@ sub validate_identified_name {
     $action->set_record_value('subspecies_name', $subspecies_name);
     $action->set_record_value('subspecies_reso', $subspecies_reso);
     
-    # Now put the name back together without modifiers, and link it up to its
-    # corresponding authority record if the name has already been entered.
+    # Now validate the taxon_no (if one was submitted) against the name components, or
+    # else do a database query to figure out what the taxon_no must be.
     
-    $edt->validate_taxon_no($action, $genus_name, $genus_reso,
-			    $subgenus_name, $subgenus_reso,
-			    $species_name, $species_reso,
-			    $subspecies_name, $subspecies_reso);
+    my $new_taxon_no = $taxon_no ? "$taxon_no" : '';
+    
+    $edt->validate_taxon_no($action, $new_taxon_no, $collection_no,
+			    $genus_name || '', $genus_reso,
+			    $subgenus_name || '', $subgenus_reso,
+			    $species_name || '', $species_reso,
+			    $subspecies_name || '', $subspecies_reso);
 }
 
 
@@ -2225,49 +2005,376 @@ sub validate_identified_name {
 
 sub validate_taxon_no {
 
-    my ($edt, $action, $genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+    my ($edt, $action, $new_taxon_no, $collection_no,
+	$genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
 	$species_name, $species_reso, $subspecies_name, $subspecies_reso) = @_;
+    
+    # An informal genus name means the new taxon_no must be 0.
     
     if ( $genus_reso eq 'informal' )
     {
-	$action->set_record_value('taxon_no', 0);
+	$action->set_record_value('taxon_id', 0);
 	return;
     }
     
-    my $taxon_name = $genus_name;
+    # Otherwise, if we were provided with both a taxon_no value and a validation hash
+    # value, see if they match up. If so, accept the submitted taxon_no value.
+
+    my $validation = $action->record_value('validation');
     
-    $taxon_name .= " ($subgenus_name)"
-	if $subgenus_name && $subgenus_reso ne 'informal';
+    if ( defined $new_taxon_no && $new_taxon_no ne '' &&
+	 defined $validation && $validation ne '' )
+    {
+	my $validation_name = join('|', $genus_name, $subgenus_name,
+				   $species_name, $subspecies_name);
+	
+	my $check = hashIdentification($validation_name, $new_taxon_no);
+
+	if ( $check eq $validation )
+	{
+	    $edt->debug_line("VALIDATION ACCEPTED\n") if $edt->debug_mode;
+	    
+	    # If the submitted taxon_no value is not 0, check to see if we need to link
+	    # up the type locality.
+	    
+	    if ( $new_taxon_no ne "0" )
+	    {
+		my $override = $action->record_value("_set_locality");
+		
+		$edt->check_type_locality($action, $new_taxon_no, $collection_no, $override,
+					  $genus_name, $genus_reso,
+					  $subgenus_name, $subgenus_reso,
+					  $species_name, $species_reso,
+					  $subspecies_name, $subspecies_reso);
+	    }
+	    
+	    return;
+	}
+    }
     
-    $taxon_name .= " $species_name"
-	if $species_name && $species_name !~ /[.?]$/ && $species_reso ne 'informal';
+    # Otherwise, check to see which taxa (if any) from the authorities table match the
+    # submitted name.
+
+    if ( $subgenus_reso && $subgenus_reso eq 'informal' )
+    {
+	$subgenus_name = '';
+    }
     
-    $taxon_name .= " $subspecies_name"
-	if $subspecies_name && $subspecies_name !~ /[.?]$/ && $subspecies_reso ne 'informal';
+    if ( $species_reso && $species_reso eq 'informal' ||
+	 $species_name && $species_name =~ /[.?]$/ )
+    {
+	$species_name = '';
+	$subspecies_name = '';
+    }
+    
+    elsif ( $subspecies_reso && $subspecies_reso eq 'informal' ||
+	    $subspecies_name && $subspecies_name =~ /[.]$/ )
+    {
+	$subspecies_name = '';
+    }
     
     my $dbh = $edt->dbh;
-    my $qname = $dbh->quote($taxon_name);
+    my $debug_out = $edt->debug_mode ? $edt : undef;
+    my @matches;
     
-    my $sql = "SELECT taxon_no FROM $TABLE{AUTHORITY_DATA} WHERE taxon_name = $qname";
+    # If this is a new name, look for the best possible exact match in the authorities
+    # table.
+    
+    if ( $genus_reso eq 'n. gen.' || $subgenus_reso eq 'n. subgen.' ||
+	 $species_reso eq 'n. sp.' || $subspecies_reso eq 'n. ssp.' )
+    {
+	@matches = matchExactName($dbh, $debug_out, $genus_name, $subgenus_name,
+				  $species_name, $subspecies_name);
+    }
+    
+    # Otherwise, do a complex query on the authorities table with somewhat
+    # looser criteria. This query will, for example, match the species name
+    # in a different subgenus, or with the subgenus as genus, etc.
+    
+    else
+    {	
+	@matches = matchIdentifiedName($dbh, $debug_out, $genus_name, $subgenus_name,
+				       $species_name, $subspecies_name);
+    }
+    
+    # If the submitted taxon_no value is equal to one of the matches, accept it. Otherwise, add
+    # an error condition.
+    
+    if ( defined $new_taxon_no && $new_taxon_no ne '' )
+    {
+	unless ( any { $_ eq $new_taxon_no } @matches )
+	{
+	    $edt->add_condition('E_BAD_VALUE', 'taxon_id', "does not match the identified name");
+	    return;
+	}
+    }
+    
+    # If no taxon_id was submitted and there is more than one match, add an error
+    # condition.
+    
+    elsif ( @matches > 1 )
+    {
+	$edt->add_condition('E_AMBIGUOUS', 'identified_name');
+	return;
+    }
+    
+    # Otherwise, accept the single match as the taxon_id value.
+    
+    else
+    {
+	$new_taxon_no = $matches[0];
+	$action->set_record_value('taxon_id', $new_taxon_no);
+    }
+
+    # If the new taxon_no value is not 0, check to see if we need to link up the type
+    # locality.
+    
+    if ( defined $new_taxon_no && $new_taxon_no ne "0" )
+    {
+	my $override = $action->record_value("_set_locality");
+		
+	$edt->check_type_locality($action, $new_taxon_no, $collection_no, $override,
+				  $genus_name, $genus_reso,
+				  $subgenus_name, $subgenus_reso,
+				  $species_name, $species_reso,
+				  $subspecies_name, $subspecies_reso);
+    }
+}
+
+
+# check_type_locality ( action, new_taxon_no, collection_no, override, genus_name .... )
+#
+# If the specified name components include the modifiers 'n. gen.', 'n. sp.', etc.,
+# check to see if we are able to link the matching taxonomic names to this collection as
+# the type locality.
+
+sub check_type_locality {
+
+    my ($edt, $action, $new_taxon_no, $collection_no, $override,
+	$genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+	$species_name, $species_reso, $subspecies_name, $subspecies_reso) = @_;
+    
+    # If the species or subspecies is marked as new, check that $new_taxon_no refers to a
+    # taxon of equal rank. If so, add it to the 'set_type_locality' hash. 
+    
+    my $expected_genus = $genus_name;
+    $expected_genus .= " ($subgenus_name)" if $subgenus_name && $subgenus_reso ne 'informal';
+    
+    my $expected_species = $expected_genus;
+    $expected_species .= " $species_name" if $species_name;
+    $expected_species .= " $subspecies_name" if $subspecies_name;
+    
+    if ( $subspecies_reso eq 'n. ssp.' )
+    {
+	if ( $edt->check_taxon_match($new_taxon_no, 'subspecies', $expected_species) )
+	{
+	    $action->set_attr_key('set_type_locality', $new_taxon_no, $collection_no);
+	    $action->set_attr_key('override_type_locality', $new_taxon_no, 1) if $override;
+	    $edt->debug_line("SET TYPE LOCALITY subsp = $new_taxon_no\n") if $edt->debug_mode;
+	}
+    }
+    
+    elsif ( $species_reso eq 'n. sp.' )
+    {
+	if ( $edt->check_taxon_match($new_taxon_no, 'species', $expected_species) )
+	{
+	    $action->set_attr_key('set_type_locality', $new_taxon_no, $collection_no);
+	    $action->set_attr_key('override_type_locality', $new_taxon_no, 1) if $override;
+	    $edt->debug_line("SET TYPE LOCALITY sp = $new_taxon_no\n") if $edt->debug_mode;
+	}
+    }
+    
+    if ( $subgenus_reso eq 'n. subgen.' )
+    {
+	my $dbh = $edt->dbh;
+	my $debug_out = $edt->debug_mode ? $edt : undef;
+	
+	if ( $edt->check_taxon_match($new_taxon_no, 'subgenus', "$genus_name ($subgenus_name)") )
+	{
+	    $action->set_attr_key('set_type_locality', $new_taxon_no, $collection_no);
+	    $action->set_attr_key('override_type_locality', $new_taxon_no, 1) if $override;
+	    $edt->debug_line("SET TYPE LOCALITY subgen = $new_taxon_no\n") if $edt->debug_mode;
+	}
+	
+	elsif ( my $parent_no = findParentTaxon($dbh, $debug_out, $new_taxon_no,
+						"$genus_name ($subgenus_name)") )
+	{
+	    $action->set_attr_key('set_type_locality', $parent_no, $collection_no);
+	    $action->set_attr_key('override_type_locality', $parent_no, 1) if $override;
+	    $edt->debug_line("SET TYPE LOCALITY subgen = $parent_no\n") if $edt->debug_mode;
+	}
+    }
+    
+    if ( $genus_reso eq 'n. gen.' )
+    {
+	my $dbh = $edt->dbh;
+	my $debug_out = $edt->debug_mode ? $edt : undef;
+	
+	if ( $edt->check_taxon_match($new_taxon_no, 'genus', $genus_name) )
+	{
+	    $action->set_attr_key('set_type_locality', $new_taxon_no, $collection_no);
+	    $action->set_attr_key('override_type_locality', $new_taxon_no, 1) if $override;
+	    $edt->debug_line("SET TYPE LOCALITY genus = $new_taxon_no\n") if $edt->debug_mode;
+	}
+	
+	elsif ( my $parent_no = findParentTaxon($dbh, $debug_out, $new_taxon_no, $genus_name) )
+	{
+	    $action->set_attr_key('set_type_locality', $parent_no, $collection_no);
+	    $action->set_attr_key('override_type_locality', $parent_no, 1) if $override;
+	    $edt->debug_line("SET TYPE LOCALITY genus = $parent_no\n") if $edt->debug_mode;
+	}
+	
+	# else
+	# {
+	#     my $dbh = $edt->dbh;
+	#     my $debug_out = $edt->debug_mode ? $edt : undef;
+	    
+	#     my (@matches) = matchOrigName($dbh, $debug_out, $genus_name);
+	    
+	#     if ( @matches == 1 )
+	#     {
+	# 	$action->set_attr_key('set_type_locality', $matches[0], $collection_no);
+	# 	$action->set_attr_key('override_type_locality', $matches[0], 1) if $override;
+	# 	$edt->debug_line("SET TYPE LOCALITY gen = $matches[0]\n") if $edt->debug_mode;
+	#     }
+	# }
+    }
+}
+
+
+# check_remove_type_locality ( edt, existing_taxon_no, collection_no, genus_name .... )
+#
+# If the specified name components include the modifiers 'n. gen.', 'n. sp.', etc.,
+# check to see if we are able to unlink the matching taxonomic names from this collection as
+# the type locality.
+
+sub check_remove_type_locality {
+
+    my ($edt, $action, $existing_taxon_no, $collection_no,
+	$genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
+	$species_name, $species_reso, $subspecies_name, $subspecies_reso) = @_;
+    
+    # If the species or subspecies is marked as new, check that $existing_taxon_no refers to a
+    # taxon of equal rank. If so, add it to the 'remove_type_locality' hash. 
+        
+    if ( $subspecies_reso eq 'n. ssp.' )
+    {
+	if ( $edt->check_locality_link($existing_taxon_no, 'subspecies', $collection_no) )
+	{
+	    $action->set_attr_key('remove_type_locality', $existing_taxon_no, $collection_no);
+	    $edt->debug_line("REMOVE TYPE LOCALITY subsp = $existing_taxon_no\n") if $edt->debug_mode;
+	}
+    }
+    
+    elsif ( $species_reso eq 'n. sp.' )
+    {
+	if ( $edt->check_locality_link($existing_taxon_no, 'species', $collection_no) )
+	{
+	    $action->set_attr_key('remove_type_locality', $existing_taxon_no, $collection_no);
+	    $edt->debug_line("REMOVE TYPE LOCALITY sp = $existing_taxon_no\n") if $edt->debug_mode;
+	}
+    }
+    
+    if ( $subgenus_reso eq 'n. subgen.' )
+    {
+	my $dbh = $edt->dbh;
+	my $debug_out = $edt->debug_mode ? $edt : undef;
+	
+	if ( $edt->check_locality_link($existing_taxon_no, 'subgenus', $collection_no) )
+	{
+	    $action->set_attr_key('remove_type_locality', $existing_taxon_no, $collection_no);
+	    $edt->debug_line("REMOVE TYPE LOCALITY subgen = $existing_taxon_no\n") if $edt->debug_mode;
+	}
+	
+	elsif ( my $parent_no = findParentTaxon($dbh, $debug_out, $existing_taxon_no,
+						"$genus_name ($subgenus_name)") )
+	{
+	    if ( $edt->check_locality_link($parent_no, 'subgenus', $collection_no) )
+	    {
+		$action->set_attr_key('remove_type_locality', $parent_no, $collection_no);
+		$edt->debug_line("REMOVE TYPE LOCALITY subgen = $parent_no\n")
+		    if $edt->debug_mode;
+	    }
+	}
+    }
+    
+    if ( $genus_reso eq 'n. gen.' )
+    {
+	my $dbh = $edt->dbh;
+	my $debug_out = $edt->debug_mode ? $edt : undef;
+	
+	if ( $edt->check_locality_link($existing_taxon_no, 'genus', $collection_no) )
+	{
+	    $action->set_attr_key('remove_type_locality', $existing_taxon_no, $collection_no);
+	    $edt->debug_line("REMOVE TYPE LOCALITY gen = $existing_taxon_no\n") if $edt->debug_mode;
+	}
+	
+	elsif ( my $parent_no = findParentTaxon($dbh, $debug_out, $existing_taxon_no, $genus_name) )
+	{
+	    if ( $edt->check_locality_link($parent_no, 'genus', $collection_no) )
+	    {
+		$action->set_attr_key('remove_type_locality', $parent_no, $collection_no);
+		$edt->debug_line("REMOVE TYPE LOCALITY genus = $parent_no\n")
+		    if $edt->debug_mode;
+	    }
+	}
+    }
+    
+    # 	{
+    # 	    my $dbh = $edt->dbh;
+    # 	    my $debug_out = $edt->debug_mode ? $edt : undef;
+	    
+    # 	    my (@matches) = matchOrigName($dbh, $debug_out, $genus_name);
+	    
+    # 	    foreach my $orig_no ( @matches )
+    # 	    {
+    # 		if ( $edt->check_locality_link($orig_no, 'genus', $collection_no) )
+    # 		{
+    # 		    $action->set_attr_key('remove_type_locality', $matches[0], $collection_no);
+    # 		    $edt->debug_line("REMOVE TYPE LOCALITY gen = $matches[0]\n") if $edt->debug_mode;
+    # 		}
+    # 	    }
+    # 	}
+    # }
+}
+
+
+sub check_taxon_match {
+    
+    my ($edt, $taxon_no, $expected_rank, $expected_name) = @_;
+    
+    my $dbh = $edt->dbh;
+    my $sql = "SELECT taxon_rank, taxon_name FROM $TABLE{AUTHORITY_DATA}
+		WHERE taxon_no = '$taxon_no'";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
     
-    my $result = $dbh->selectcol_arrayref($sql);
+    my ($taxon_rank, $taxon_name) = $dbh->selectrow_array($sql);
+
+    return ($taxon_rank eq $expected_rank && $taxon_name eq $expected_name);
+}
+
+
+sub check_locality_link {
+
+    my ($edt, $taxon_no, $rank, $collection_no) = @_;
     
-    if ( my $submitted_no = $action->record_value('taxon_no') )
+    my $dbh = $edt->dbh;
+    my $sql = "SELECT type_locality, taxon_rank FROM $TABLE{AUTHORITY_DATA}
+		WHERE taxon_no = '$taxon_no' and type_locality = '$collection_no'";
+    
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    my ($check_locality, $check_rank) = $dbh->selectrow_array($sql);
+
+    if ( $check_rank eq $rank && $check_locality eq $collection_no)
     {
-	unless ( any { $_ eq $submitted_no } @$result )
-	{
-	    $edt->add_condition('E_BAD_VALUE', 'taxon_no',
-				"does not match the identified name");
-	}
+	return 1;
     }
 
     else
     {
-	my $taxon_no = $result->[0] || 0;
-
-	$action->set_record_value('taxon_no', $taxon_no);
+	return '';
     }
 }
 
@@ -2283,19 +2390,16 @@ sub after_occ_action {
     
     if ( $operation eq 'insert' )
     {
-	@keyvals = $new_keyval;
-	
 	if ( $table_specifier eq 'OCCURRENCE_DATA' )
 	{
 	    $edt->set_attr_key('update_occs', $new_keyval, 1);
 	}
 	
-	elsif ( my $occurrence_no = $action->get_attr('occurrence_id') )
+	elsif ( my $occurrence_no = $action->get_attr('occurrence_no') )
 	{
 	    $edt->set_attr_key('update_occs', $occurrence_no, 1);
+	    $edt->set_attr_key('recompute_occs', $occurrence_no, 1);
 	}
-	
-	# $$$ need to handle type locality here
     }
     
     # Otherwise, we can get it from the action.
@@ -2313,8 +2417,6 @@ sub after_occ_action {
 	{
 	    $edt->set_attr_key('delete_reids', $_, 1) foreach @keyvals;
 	}
-	
-	# $$$ need to handle type locality here
     }
     
     else
@@ -2326,12 +2428,38 @@ sub after_occ_action {
 	    $edt->set_attr_key('update_occs', $_, 1) foreach @keyvals;
 	}
 	
-	elsif ( my $occurrence_no = $action->get_attr('occurrence_id') )
+	elsif ( my $occurrence_no = $action->get_attr('occurrence_no') )
 	{
 	    $edt->set_attr_key('update_occs', $occurrence_no, 1);
 	}
-	
-	# $$$ need to handle type locality here
+    }
+    
+    # If the action would affect type locality links, add this info as a transaction
+    # attribute. We do this here because we know the action went through.
+    
+    $edt->save_action_attr($action, 'set_type_locality');
+    $edt->save_action_attr($action, 'override_type_locality');
+    $edt->save_action_attr($action, 'remove_type_locality');
+}
+
+
+sub save_action_attr {
+
+    my ($edt, $action, $attr) = @_;
+    
+    my $attr_value = $action->get_attr($attr);
+    
+    if ( $attr_value && ref $attr_value eq 'HASH' )
+    {
+	foreach my $k ( keys $attr_value->%* )
+	{
+	    $edt->set_attr_key($attr, $k, $attr_value->{$k});
+	}
+    }
+
+    else
+    {
+	$edt->set_attr($attr, $attr_value);
     }
 }
 
@@ -2346,7 +2474,7 @@ sub recompute_occs {
 	my $sql = "UPDATE $TABLE{OCCURRENCE_DATA} as o
 			left join $TABLE{REID_DATA} as re using (occurrence_no)
 			left join $TABLE{REFERENCE_DATA} as r on r.reference_no = re.reference_no
-		SET o.reid_no = if(re.reid_no is null, 0, re.reid_no)
+		SET o.reid_no = if(re.reid_no is null, 0, re.reid_no), o.modified = o.modified
 		WHERE occurrence_no = $quoted
 		ORDER BY pubyr desc, re.reid_no desc LIMIT 1";
 	
@@ -2356,12 +2484,91 @@ sub recompute_occs {
 	
 	$sql = "UPDATE $TABLE{OCCURRENCE_DATA} as o
 		    join $TABLE{REID_DATA} as re using (occurrence_no)
-		SET re.most_recent = if(o.reid_no = re.reid_no, 'YES', 'NO')
+		SET re.most_recent = if(o.reid_no = re.reid_no, 'YES', 'NO'), re.modified = re.modified
 		WHERE occurrence_no = $quoted";
 
 	$edt->debug_line("$sql\n") if $edt->debug_mode;
 
 	$dbh->do($sql);
+    }
+}
+
+
+# resolveTypeLocality ( )
+#
+# Add and remove type localities based on the transaction attributes
+# 'set_type_locality', 'remove_type_locality', and 'override_type_locality'.
+
+sub resolveTypeLocality {
+    
+    my ($edt) = @_;
+
+    my $dbh = $edt->dbh;
+    my $sql;
+    
+    # Get these three attribute values. 
+    
+    my $set_type_locality = $edt->get_attr('set_type_locality') || { };
+    my $override_type_locality = $edt->get_attr('override_type_locality') || { };
+    my $remove_type_locality = $edt->get_attr('remove_type_locality') || { };
+    
+    # Remove the type locality from all of the specified taxon_nos, unless it would be
+    # set again.
+    
+    foreach my $taxon_no ( keys $remove_type_locality->%* )
+    {
+	unless ( $set_type_locality->{$taxon_no} &&
+		 $set_type_locality->{$taxon_no} eq $remove_type_locality->{$taxon_no} )
+	{
+	    my $collection_no = $remove_type_locality->{$taxon_no};
+	    
+	    $sql = "UPDATE $TABLE{AUTHORITY_DATA} as a
+			join $TABLE{AUTHORITY_DATA} as base using (orig_no)
+		SET a.type_locality = null, a.modified = a.modified
+		WHERE base.taxon_no = '$taxon_no' and a.type_locality = '$collection_no'";
+	    
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    my $result = $dbh->do($sql);
+	    
+	    $edt->debug_line("UPDATED $result ROW\n") if $result && $edt->debug_mode;
+	}
+    }
+    
+    # Add the type locality from all of the specified taxon_nos. Override those which
+    # are also keys in the 'override_type_locality' hash.
+
+    foreach my $taxon_no ( keys $set_type_locality->%* )
+    {
+	my $collection_no = $set_type_locality->{$taxon_no};
+	my $override = $override_type_locality->{$taxon_no};
+
+	unless ( $override )
+	{
+	    $sql = "SELECT a.type_locality FROM $TABLE{AUTHORITY_DATA} as a
+			join $TABLE{AUTHORITY_DATA} as base using (orig_no)
+		WHERE base.taxon_no = '$taxon_no'";
+	    
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    my ($existing_locality) = $dbh->selectrow_array($sql);
+	    
+	    if ( $existing_locality && $existing_locality ne $collection_no )
+	    {
+		next;
+	    }
+	}
+	
+	$sql = "UPDATE $TABLE{AUTHORITY_DATA} as a
+			join $TABLE{AUTHORITY_DATA} as base using (orig_no)
+		SET a.type_locality = '$collection_no', a.modified = a.modified
+		WHERE base.taxon_no = '$taxon_no'";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	my $result = $dbh->do($sql);
+	
+	$edt->debug_line("UPDATED $result ROW\n") if $result && $edt->debug_mode;
     }
 }
 
@@ -2425,7 +2632,7 @@ sub initialize_occs {
     
     if ( $reid_string )
     {
-	$sql = "SELECT reid_no, occurrence_no, collection_no, reference_no FROM $TABLE{REID_DATA}
+	$sql = "SELECT * FROM $TABLE{REID_DATA}
 		WHERE reid_no in ($reid_string)";
 	
 	$edt->debug_line("$sql\n") if $edt->debug_mode;

@@ -4044,6 +4044,13 @@ sub process_difference {
     
     my ($request, $record) = @_;
     
+    my $taxon_rank = $record->{taxon_rank};
+    
+    if ( defined $taxon_rank && $taxon_rank =~ /[a-z]/ )
+    {
+	$taxon_rank = $TAXON_RANK{$taxon_rank};
+    }
+    
     # If the 'taxon_name' and 'accepted_name' fields are different, then
     # create a 'difference' field.  This may contain one or more relevant reasons.
     # If there is no accepted name, then the taxon was not entered at all.
@@ -4068,14 +4075,6 @@ sub process_difference {
 	    $record->{taxon_name} ne $record->{accepted_name} )
     {
 	my @reasons;
-	
-	# my $len = length($record->{accepted_name});
-	
-	# if ( $record->{accepted_name} eq substr($record->{taxon_name}, 0, $len) &&
-	#      $record->{taxon_rank} < 5 )
-	# {
-	#     $record->{taxonomic_reason} = 'taxon not fully entered';
-	# }
 	
 	# If the orig_no and accepted_no are the same, then the two names are
 	# variants. So try to figure out why they differ. If we can't find
@@ -4105,13 +4104,13 @@ sub process_difference {
 	    elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'rank change' ||
 		    $record->{spelling_reason} && $record->{spelling_reason} eq 'rank change' )
 	    {
-		if ( $record->{taxon_rank} && $record->{taxon_rank} == 5 &&
+		if ( $taxon_rank && $taxon_rank == 5 &&
 		     $record->{accepted_rank} && $record->{accepted_rank} == 4 )
 		{
 		    push @reasons, 'demoted to subgenus';
 		}
 
-		elsif ( $record->{taxon_rank} && $record->{taxon_rank} == 4 &&
+		elsif ( $taxon_rank && $taxon_rank == 4 &&
 			$record->{accepted_rank} && $record->{accepted_rank} == 5 )
 		{
 		    push @reasons, 'promoted to genus';
@@ -4159,19 +4158,19 @@ sub process_difference {
 	
 	if ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
 	{
-	    unshift @reasons, 'misspelling of' unless $reasons[0] eq 'corrected to';
+	    unshift @reasons, 'misspelling of' unless $reasons[0] && $reasons[0] eq 'corrected to';
 	}
-
+	
 	# If the species or subspecies was not entered then report that at the end.
 	
-	if ( defined $record->{taxon_rank} && $record->{taxon_rank} == 2 &&
+	if ( defined $taxon_rank && $taxon_rank == 2 &&
 	     defined $record->{accepted_rank} && $record->{accepted_rank} == 3 &&
 	     defined $record->{taxon_status} )
 	{
 	    push @reasons, 'subspecies not entered';
 	}
 	
-	elsif ( defined $record->{taxon_rank} && $record->{taxon_rank} < 4 &&
+	elsif ( defined $taxon_rank && $taxon_rank < 4 &&
 		defined $record->{accepted_rank} && $record->{accepted_rank} >= 4 &&
 		defined $record->{taxon_status} )
 	{
@@ -4179,7 +4178,7 @@ sub process_difference {
 	}	
 	
 	# If we don't have any reason so far, use 'variant of'.
-
+	
 	push @reasons, 'variant of' unless @reasons;
 	
 	# Now join all of the reasons together.

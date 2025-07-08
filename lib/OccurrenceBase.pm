@@ -12,15 +12,23 @@ use strict;
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw(initializeModifiers parseIdentifiedName constructIdentifiedName
-		      matchIdentifiedName splitTaxonName computeTaxonMatch);
+		      matchIdentifiedName matchExactName findParentTaxon
+		      splitTaxonName computeTaxonMatch hashIdentification);
 
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
+use TaxonDefs qw(%TAXON_RANK);
 use List::Util qw(any);
 
 use namespace::clean;
 
-our (%OCC_RESO_RE);
+our (%OCC_RESO_RE, $HASH_MODULUS);
+
+BEGIN {
+    # The environment variable is supposed to hold a random value established when the
+    # container starts. If not, default to this hard-coded value.
+    $HASH_MODULUS = $ENV{HASH_MODULUS} || 347215;
+}
 
 
 # initializeModifiers ( dbh )
@@ -32,8 +40,10 @@ our (%OCC_RESO_RE);
 sub initializeModifiers {
 
     my ($dbh) = @_;
+
+    # Skip this step if we have already done the initialization.
     
-    my %modifiers;
+    return if $OCC_RESO_RE{genus};
     
     # For each of the four name components, generate a regular expression to recognize
     # its modifiers.
@@ -48,9 +58,8 @@ sub initializeModifiers {
 	# Extract the list of allowed modifiers. Skip the empty string, and also '"',
 	# and 'informal'.
 	
-	my @modifier_list = grep { $_ && $_ ne 'informal' && $_ ne '"' } $definition =~ /'(.*?)'/g;
-	
-	$modifiers{$_} = 1 foreach @modifier_list;
+	my @modifier_list = grep { $_ && $_ ne 'informal' && $_ ne '"' &&
+		$_ ne 'sensu stricto' && $_ ne 'sensu lato' } $definition =~ /'(.*?)'/g;
 	
 	my $regex_source = join('|', @modifier_list);
 	$regex_source =~ s/([.?])/[$1]/g;
@@ -63,7 +72,7 @@ sub initializeModifiers {
 	}
 	
 	# The regex for 'subspecies' should match an optional period after 'var',
-	# 'forma', 'morph', and 'mut'.
+	# 'forma', 'morph', and 'mut', and should match prefixes of these as well.
 	
 	elsif ( $field eq 'subspecies' )
 	{
@@ -81,19 +90,6 @@ sub initializeModifiers {
 	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s*(.*)};
 	}
     }
-    
-    # # Now generate an expression for quickly recognizing a name with modifiers.
-
-    # $modifiers{sensu} = 1;
-    
-    # my $regex_source = join('|', keys %modifiers);
-    # $regex_source =~ s/([.?])/[$1]/g;
-    # $regex_source =~ s/var/va?r?[.]?/;
-    # $regex_source =~ s/forma/fo?r?m?a?[.]?/;
-    # $regex_source =~ s/morph/mor?p?h?[.]?/;
-    # $regex_source =~ s/mut/mu?t?[.]?/;
-    
-    # $OCC_RESO_RE{modifiers} = qr{\b(?:$regex_source)\b};
 }
 
 
@@ -125,13 +121,22 @@ sub parseIdentifiedName {
 	return ('', '', '', '', '', '', '', '');
     }
 
-    unless ( $identified_name =~ /[a-zA-Z]/ )
+    # Immediately reject any name that does not have at least two letters in a row.
+    
+    unless ( $identified_name =~ /[a-zA-Z]{2}/ )
     {
-	return { error => "Could not resolve genus name" };
+	return { error => "Names must contain at least two letters in a row" };
+    }
+    
+    # Reject names that contain wildcards unless that is explicitly allowed.
+    
+    unless ( $options->{wildcards} || $identified_name !~ /[%_]|^\s*[A-Z][.] / )
+    {
+	return { error => "Wildcards are not allowed" };
     }
     
     # If the name is syntactically correct without modifiers, split it and return it.
-
+    
     if ( my @components = quickParseIdentifiedName($identified_name) )
     {
 	$options->{debug_out}->debug_line("Quick Parse\n") if $options->{debug_out};
@@ -165,7 +170,7 @@ sub parseIdentifiedName {
     # a single regexp that will recognize any of them using a permissive match. We try
     # to recognize obvious misspellings too.
     
-    my ($sensu, $nperiod);
+    my ($sensu, $nperiod, $allquotes);
     
     if ( $name =~ / n[.] \s* [sg][a-z]+[.] | s[.] \s* [sl][.] |
 		    \bsens?u? \s* strict?o? | \bsens?u? \s* lato? /xs )
@@ -223,9 +228,17 @@ sub parseIdentifiedName {
 	}
     }
     
-    # Now deconstruct the name component by component.
+    # If the entire name is enclosed in quotation marks, all of the individual modifiers
+    # will be '"'.
     
-    # Start with the genus and any qualifier that may precede it.
+    if ( $name =~ /^"(.*)"$/ )
+    {
+	$name = $1;
+	$allquotes = 1;
+    }
+    
+    # Now deconstruct the name component by component. Start with the genus and any
+    # qualifier that may precede it.
     
     if ( $name =~ $OCC_RESO_RE{genus} )
     {
@@ -236,6 +249,11 @@ sub parseIdentifiedName {
 	
 	$genus_reso = $1;
 	$name = $2;
+    }
+    
+    if ( $options->{wildcards} && $name =~ /^\s*[A-Z][.]\s/ )
+    {
+	$name =~ s/^\s*([A-Z])[.]/$1%/;
     }
     
     if ( $name =~ /^\s*<(.*?\S.*?)>\s*(.*)/ )
@@ -250,30 +268,38 @@ sub parseIdentifiedName {
 	$name = $2;
     }
     
-    elsif ( $name =~ /^\s*("?)([A-Za-z]+)("?)\s*(.*)/ )
+    elsif ( $name =~ /^\s*("?)([A-Za-z%_]+)("?)\s*(.*)/ )
     {
-	if ( $genus_reso && ($1 || $3) )
+	if ( $1 || $3 || $allquotes )
 	{
-	    return { error => "Conflicting genus modifiers '$genus_reso' and '\"\"'" };
-	}
-	
-	elsif ( $1 || $3 )
-	{
-	    $genus_reso = $1;
+	    if ( $genus_reso )
+	    {
+		return { error => "Conflicting genus modifiers '$genus_reso' and '\"\"'" };
+	    }
+	    
+	    else
+	    {
+		$genus_reso = '"';
+	    }
 	}
 	
 	$genus_name = $2;
 	$name = $4;
     }
     
+    elsif ( $name =~ /^(\S+)/ )
+    {
+	return { error => "Invalid genus name '$1'" };
+    }
+    
     else
     {
-	return { error => "Invalid genus modifier" };
+	return { error => "Could not resolve genus name" };
     }
     
     if ( $genus_name && $genus_reso ne 'informal' )
     {
-	unless ( $options->{loose} || $genus_name =~ /^[A-Z][a-z]+$/ )
+	unless ( $options->{loose} || $genus_name =~ /^[A-Z%_][a-z%_]+$/ )
 	{
 	    return { error => "Bad capitalization on genus name" };
 	}
@@ -309,23 +335,31 @@ sub parseIdentifiedName {
 	$name = $2;
     }
     
-    elsif ( $name =~ /^[(]("?)([A-Za-z]+)("?)[)]\s*(.*)/ )
+    elsif ( $name =~ /^[(]("?)([A-Za-z%_]+)("?)[)]\s*(.*)/ )
     {
-	if ( $subgenus_reso && ($1 || $3) )
+	if ( $1 || $3 || $allquotes )
 	{
-	    return { error => "Conflicting subgenus modifiers '$subgenus_reso' and '\"\"'" };
-	}
-	
-	elsif ( $1 || $3 )
-	{
-	    $subgenus_reso = $1;
+	    if ( $subgenus_reso )
+	    {
+		return { error => "Conflicting subgenus modifiers '$subgenus_reso' and '\"\"'" };
+	    }
+	    
+	    else
+	    {
+		$subgenus_reso = '"';
+	    }
 	}
 	
 	$subgenus_name = $2;
 	$name = $4;
     }
     
-    elsif ( $name =~ /^(.*)[(]/ )
+    elsif ( $name =~ /^[(](\S+)/ )
+    {
+	return { error => "Invalid subgenus name '$1'" };
+    }
+    
+    elsif ( $name =~ /[(]/ )
     {
 	return { error => "Could not resolve subgenus" };
     }
@@ -337,7 +371,7 @@ sub parseIdentifiedName {
     
     if ( $subgenus_name && $subgenus_reso ne 'informal' )
     {
-	unless ( $options->{loose} || $subgenus_name =~ /^[A-Z][a-z]+$/ )
+	unless ( $options->{loose} || $subgenus_name =~ /^[A-Z%_][a-z%_]+$/ )
 	{
 	    return { error => "Bad capitalization on subgenus" };
 	}
@@ -366,7 +400,7 @@ sub parseIdentifiedName {
     {
 	if ( $1 ne substr($genus_name, 0, 1) )
 	{
-	    return { error => "Genus initial after $species_reso did not match genus" };
+	    return { error => "Genus initial after '$species_reso' did not match genus" };
 	}
 
 	$name = $2;
@@ -384,25 +418,33 @@ sub parseIdentifiedName {
 	$name = $2;
     }
     
-    elsif ( $name =~ /^("?)([A-Za-z.]+)("?)\s*(.*)/ )
+    elsif ( $name =~ /^("?)([A-Za-z%_.]+)("?)\s*(.*)/ )
     {
-	if ( $species_reso && ($1 || $3) )
+	if ( $1 || $3 || $allquotes )
 	{
-	    return { error => "Conflicting species modifiers '$species_reso' and '\"\"'" };
-	}
-	
-	elsif ( $1 || $3 )
-	{
-	    $species_reso = $1;
+	    if ( $species_reso )
+	    {
+		return { error => "Conflicting species modifiers '$species_reso' and '\"\"'" };
+	    }
+	    
+	    else
+	    {
+		$species_reso = '"';
+	    }
 	}
 	
 	$species_name = $2;
 	$name = $4;
     }
     
+    elsif ( $name =~ /^(\S+)/ )
+    {
+	return { error => "Invalid species name '$1'" };
+    }
+    
     else
     {
-	return { error => "Could not resolve species" };
+	return { error => "Missing species name" };
     }
     
     if ( $species_name && $species_reso ne 'informal' )
@@ -432,11 +474,11 @@ sub parseIdentifiedName {
 	    
 	    else
 	    {
-		return { error => "Invalid species '$species_name'" };
+		return { error => "Invalid species name '$species_name'" };
 	    }
 	}
 	
-	elsif ( !( $options->{loose} || $species_name =~ /^[a-z]+$/) )
+	elsif ( !( $options->{loose} || $species_name =~ /^[a-z%_]+$/) )
 	{
 	    return { error => "Bad capitalization on species name" };
 	}
@@ -480,16 +522,19 @@ sub parseIdentifiedName {
 	$name = $2;
     }
     
-    elsif ( $name =~ /^("?)([A-Za-z.]+)("?)\s*(.*)/ )
+    elsif ( $name =~ /^("?)([A-Za-z%_]+)("?)\s*(.*)/ )
     {
-	if ( $subspecies_reso && ($1 || $3) )
+	if ( $1 || $3 || $allquotes )
 	{
-	    return { error => "Conflicting subspecies modifiers '$subspecies_reso' and '\"\"'" };
-	}
-	
-	elsif ( $1 || $3 )
-	{
-	    $subspecies_reso = $1;
+	    if ( $subspecies_reso )
+	    {
+		return { error => "Conflicting subspecies modifiers '$subspecies_reso' and '\"\"'" };
+	    }
+	    
+	    else
+	    {
+		$subspecies_reso = $1;
+	    }
 	}
 	
 	$subspecies_name = $2;
@@ -501,43 +546,24 @@ sub parseIdentifiedName {
 	return { error => "Could not resolve species" };
     }
     
+    elsif ( $name && $name !~ /^\s+$/ )
+    {
+	return { error => "Invalid subspecies '$name'" };
+    }
+    
     elsif ( $subspecies_reso )
     {
 	return { error => "Could not resolve subspecies" };
     }
     
-    elsif ( $name && $name !~ /^\s+$/ )
-    {
-	return { error => "Could not parse '$name'" };
-    }
-    
     if ( $subspecies_name && $subspecies_reso ne 'informal' )
     {
-	if ( $subspecies_name =~ / ^ ( ss?pp?[.]? | ind(?:et)?[.]? | sens?u?[.]? | .*[.] |
-				  [a-z][a-z]? | var | form?a? | morp?h? | mut ) $ /x )
+	if ( $subspecies_name =~ / ^ ( [A-Za-z][A-Za-z]? | var | form?a? | morp?h? | mut ) $ /x )
 	{
-	    if ( $subspecies_name =~ /^ind(?:et)?[.]?$/i )
-	    {
-		$subspecies_name = 'indet.';
-	    }
-	    
-	    elsif ( $subspecies_name =~ /^ss?p?[.]?$/i )
-	    {
-		$subspecies_name = 'ssp.';
-	    }
-	    
-	    elsif ( $subspecies_name =~ /^ss?pp[.]?$/i )
-	    {
-		$subspecies_name = 'sspp.';
-	    }
-	    
-	    else
-	    {
-		return { error => "invalid subspecies '$subspecies_name'" };
-	    }
+	    return { error => "Invalid subspecies name '$subspecies_name'" };
 	}
 	
-	elsif ( !( $options->{loose} || $subspecies_name =~ /^[a-z]+$/ ) )
+	elsif ( !( $options->{loose} || $subspecies_name =~ /^[a-z%_]+$/ ) )
 	{
 	    return { error => "Bad capitalization on subspecies" };
 	}
@@ -548,11 +574,21 @@ sub parseIdentifiedName {
 	}
     }
     
+    else
+    {
+	$subspecies_name ||= '';
+    }
+    
     no warnings 'uninitialized';
 
-    if ( $subspecies_name && $subspecies_reso eq 'n. ssp.' && $subspecies_name =~ /[.]/ )
+    if ( $subspecies_reso eq 'n. ssp.' && ! $subspecies_name )
     {
 	return { error => "Invalid modifier 'n. ssp.'" };
+    }
+    
+    if ( $subspecies_reso eq 'n. ssp.' && $species_reso )
+    {
+	return { error => "Conflicting modifiers '$species_reso' and 'n. ssp.'" };
     }
     
     if ( $subspecies_name && $species_reso eq 'n. sp.' )
@@ -570,9 +606,14 @@ sub parseIdentifiedName {
 	return { error => "Invalid modifier 'n. gen.'" };
     }
     
-    if ( $species_name && $species_reso eq 'n. sp.' && $species_name =~ /[.]/ )
+    if ( $species_reso eq 'n. sp.' && (!$species_name || $species_name =~ /[.]/) )
     {
 	return { error => "Invalid modifier 'n. sp.'" };
+    }
+    
+    if ( $species_reso eq 'n. sp.' && $genus_reso eq 'informal' )
+    {
+	return { error => "Conflicting modifiers '<>' and 'n. sp.'" };
     }
     
     if ( $species_name && $genus_reso eq 'n. gen.' && $species_reso ne 'n. sp.' )
@@ -585,9 +626,19 @@ sub parseIdentifiedName {
 	return { error => "You forgot to include 'n. sp.'" };
     }
     
-    if ( $subgenus_name && $genus_reso eq 'n. gen.' )
+    if ( $subgenus_reso eq 'n. subgen.' && !$subgenus_name )
     {
-	return { error => "Invalid modifier 'n. gen.'" };
+	return { error => "Invalid modifier 'n. subgen.'" };
+    }
+    
+    if ( $subgenus_reso eq 'n. subgen.' && $genus_reso eq 'informal' )
+    {
+	return { error => "Conflicting modifiers '<>' and 'n. subgen.'" };
+    }
+    
+    if ( $subgenus_name && $genus_reso eq 'n. gen.' && $subgenus_reso ne 'n. subgen.' )
+    {
+	return { error => "You forgot to include 'n. subgen.'" };
     }
     
     # If the name contained one of 'sensu stricto', 's.s.', 'sensu lato', 's.l.', then
@@ -656,8 +707,8 @@ sub quickParseIdentifiedName {
     
     # Check the name against the overall pattern.
     
-    if ( $name =~  / ^ \s* ([A-Z][a-z]+) (?: \s+ [(]([A-Z][a-z]+)[)] )?
-		     \s+ ([a-z]+|indet[.]|spp?[.]) (?: \s+ ([a-z]+|ssp[.]) )? \s* $ /xs )
+    if ( $name =~  / ^ \s* ([A-Z%_][a-z%_]+) (?: \s+ [(]([A-Z%_][a-z%_]+)[)] )?
+		     \s+ ([a-z%_]+|indet[.]|spp?[.]) (?: \s+ ([a-z%_]+) )? \s* $ /xs )
     {
 	my $genus = $1;
 	my $subgenus = $2;
@@ -694,6 +745,9 @@ sub constructIdentifiedName {
 	$species_name, $species_reso, $subspecies_name, $subspecies_reso) = @_;
     
     no warnings 'uninitialized';
+
+    # Put the name components together along with their modifiers, moving modifiers
+    # that start with either 'n.' or 'sensu' to the end of the name.
     
     my @end_mods;
     
@@ -712,6 +766,14 @@ sub constructIdentifiedName {
     if ( $subspecies_name )
     {
 	$clean_name .= " " . combine_modifier($subspecies_name, $subspecies_reso, \@end_mods);
+    }
+    
+    # If the name starts and ends with quotation marks, take out any intermediate
+    # quotation marks so that the entire name is quoted."
+    
+    if ( $clean_name =~ /^".*"$/ )
+    {
+	$clean_name =~ s/" "//g;
     }
     
     if ( @end_mods )
@@ -752,10 +814,10 @@ sub combine_modifier {
 }
 
 
-# matchIdentifiedName ( dbh, genus_name, subgenus_name, species_name, subspecies_name )
+# matchIdentifiedName ( dbh, debug_out, genus_name, subgenus_name, ... )
 #
 # Return a list of taxon numbers matching the specified name components from an
-# occurrence or reidentification.
+# occurrence or reidentification as closely as possible.
 #
 # If an exact match is found, it alone will be returned.
 # 
@@ -1079,11 +1141,164 @@ sub matchIdentifiedName {
 }
 
 
+# matchExactName ( dbh, debug_out, genus_name, subgenus_name, ... )
+#
+# Return a list of taxon numbers matching the specified name components from an
+# occurrence or reidentification. Make the most complete exact match we can. In other
+# words, if a subspecies is specified and we can find the exact name, return it.
+# Otherwise, try to match at the species level. If that doesn't work, try to match at
+# the subgenus or genus level.
+#
+# This subroutine is intended for matching new names, i.e. names with a modifier of 'n.
+# gen.', 'n. sp.', etc.
+
+sub matchExactName { 
+    
+    my ($dbh, $debug_out, $genus_name, $subgenus_name, $species_name, $subspecies_name) = @_;
+    
+    my ($sql, $result, @names, $cumulative);
+    
+    return () unless $genus_name;
+    
+    # Put together the most complete name that we can, and keep a list of the
+    # intermediate names.
+    
+    $cumulative = $genus_name;
+    push @names, $genus_name;
+    
+    if ( $subgenus_name )
+    {
+	$cumulative .= " ($subgenus_name)";
+	push @names, $cumulative;
+    }
+    
+    if ( $species_name )
+    {
+	$cumulative .= " $species_name";
+	push @names, $cumulative;
+    }
+    
+    if ( $subspecies_name )
+    {
+	$cumulative .= " $subspecies_name";
+	push @names, $cumulative;
+    }
+    
+    # Query for any of the names we have constructed.
+    
+    my $name_string = join(',', map { $dbh->quote($_) } @names);
+    
+    $sql = "SELECT taxon_no, orig_no, taxon_name, taxon_rank FROM $TABLE{AUTHORITY_DATA}
+		WHERE taxon_name in ($name_string)";
+    
+    $debug_out->debug_line("$sql\n") if $debug_out;
+    
+    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    # Sort the names in order by rank. Lower ranking names come first, as they are more
+    # specific. Then return all of the taxon_nos that have the lowest rank. There will
+    # typically be just one, unless there are homonyms entered into the database.
+    
+    my @matches;
+    
+    if ( @$result )
+    {
+	@$result = sort { $TAXON_RANK{$a->{taxon_rank}} <=> $TAXON_RANK{$b->{taxon_rank}} } @$result;
+	
+	my $best_rank = $result->[0]{taxon_rank};
+	
+	foreach my $r ( @$result )
+	{
+	    push @matches, $r->{taxon_no} if $r->{taxon_rank} eq $best_rank;
+	}
+    }
+    
+    return @matches;
+}
+
+
+# findParentTaxon ( dbh, debug_out, base_no, parent_name )
+# 
+# Given the number of a base taxon, return the taxon number of the
+# specified parent name, if it is within three levels of the base taxon.
+
+sub findParentTaxon {
+
+    my ($dbh, $debug_out, $base_no, $parent_name) = @_;
+    
+    my $sql = "SELECT t2.name as name2, t2.spelling_no as tno2,
+		      t3.name as name3, t3.spelling_no as tno3,
+		      t4.name as name4, t4.spelling_no as tno4
+		FROM $TABLE{AUTHORITY_DATA} as base join $TABLE{TAXON_TREES} as t1 using (orig_no)
+		left join $TABLE{TAXON_TREES} as t2 on t2.orig_no = t1.immpar_no
+		left join $TABLE{TAXON_TREES} as t3 on t3.orig_no = t2.immpar_no
+		left join $TABLE{TAXON_TREES} as t4 on t4.orig_no = t3.immpar_no
+		WHERE base.taxon_no = '$base_no'";
+    
+    $debug_out->debug_line("$sql\n") if $debug_out;
+    
+    my ($name2, $tno2, $name3, $tno3, $name4, $tno4) = $dbh->selectrow_array($sql);
+    
+    if ( $name2 eq $parent_name )
+    {
+	return $tno2;
+    }
+    
+    elsif ( $name3 eq $parent_name )
+    {
+	return $tno3;
+    }
+    
+    elsif ( $name4 eq $parent_name )
+    {
+	return $tno4;
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+# matchOrigName ( dbh, genus_name, subgenus_name, species_name, subspecies_name )
+# 
+# Return a list of distinct orig_nos exactly matching the specified name components from an
+# occurrence or reidentification.
+
+sub matchOrigName {
+
+    my ($dbh, $debug_out, $genus_name, $subgenus_name, $species_name, $subspecies_name) = @_;
+    
+    my ($sql, $result);
+    
+    return () unless $genus_name;
+    
+    # Query for a match. Look for duplicate names with the same orig_no, because we only
+    # want to return one of them.
+    
+    my $latin_name = $genus_name;
+    $latin_name .= " ($subgenus_name)" if $subgenus_name;
+    $latin_name .= " $species_name" if $species_name;
+    $latin_name .= " $subspecies_name" if $subspecies_name;
+    
+    my $qname = $dbh->quote($latin_name);
+	
+    $sql = "SELECT distinct orig_no FROM $TABLE{AUTHORITY_DATA} WHERE taxon_name = $qname";
+    
+    $debug_out->debug_line("$sql\n") if $debug_out;
+    
+    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+
+    return @$result;
+}
+
+
 # splitTaxonName ( taxon_name )
 #
 # Split the specified name into genus, subgenus, species, and subspecies components.
 # Return this list of four strings. All of them will be defined, and at least the first
-# will be nonempty.
+# will be nonempty unless the entire name is empty.
 
 sub splitTaxonName {
 
@@ -1231,6 +1446,22 @@ sub computeTaxonMatch {
     }
     
     return 0; # no match
+}
+
+
+# hashIdentification ( identified_name, identified_no )
+#
+# Compute a hash value from the specified name and taxon number. This is intended to be
+# returned to the client by the operation that checks occurrence identifications, and
+# then included by the client when occurrences are submitted for entry. This allows the
+# occurrence entry code to easily verify that the name has already been checked for
+# validity and that the submitted taxon number is a proper match for it.
+
+sub hashIdentification {
+
+    my ($identified_name, $identified_no) = @_;
+
+    return (unpack("%32L*", $identified_name) + $identified_no) % $HASH_MODULUS;
 }
 
 1;

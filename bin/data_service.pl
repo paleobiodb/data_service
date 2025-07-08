@@ -44,6 +44,10 @@ unless ( $precheck && $precheck =~ qr{<html><head>}m )
 
 print STDOUT "Passed.\n";
 
+# Choose a random hash modulus that will be common to all the child processes.
+
+$ENV{HASH_MODULUS} = int(rand(900000)) + 100000;
+
 # Establish signal handlers to kill the child processes if we receive a QUIT, INT, or TERM signal.
 
 $SIG{INT} = sub { &kill_dataservice('INT') };

@@ -23,7 +23,7 @@ use CollectionEdit;
 
 use MatrixBase qw(initializeBins);
 use OccurrenceBase qw(initializeModifiers parseIdentifiedName constructIdentifiedName
-		      matchIdentifiedName);
+		      matchExactName matchIdentifiedName hashIdentification);
 
 use Moo::Role;
 
@@ -219,15 +219,24 @@ sub initialize {
 	{ allow => '1.2:common:entry_fields' },
 	{ optional => '_delete', valid => ANY_VALUE },
 	    "If this field is specified with a non-empty value, this occurrence or",
-	    "reidentification will be",
-	    "deleted. The deletion will only happen if the user is the enterer or",
-	    "authorizer of the occurrence or its associated collection.",
+	    "reidentification will be deleted.",
+	{ optional => '_set_locality', valid => ANY_VALUE },
+	    "If this field is specified with a non-empty value, and if the identified",
+	    "name of this occurrence contains 'n. sp.', etc. then the type locality",
+	    "of the matching taxon will be set to this collection even if it is",
+	    "currently set to a different one.",
 	{ optional => 'identified_name', valid => ANY_VALUE, alias => 'taxon_name' },
 	    "The taxonomic name identifying this occurrence, optionally with modifiers.",
 	    "This field is required.",
-	{ optional => 'taxon_no', valid => VALID_IDENTIFIER('TID'),
-	  alias => ['taxon_id'] },
-	    "This field should only be specified when choosing between homonyms.");
+	{ optional => 'taxon_id', valid => VALID_IDENTIFIER('TID'),
+	  alias => ['taxon_no', 'identified_id', 'identified_no'] },
+	    "This field is optional, but if this identification has been checked using",
+	    "the C<B<occs/checknames>> operation then one of the returned",
+	    "C<B<matched_no>> values should be included.",
+	{ optional => 'validation', valid => ANY_VALUE },
+	    "If this identification has been checked using the C<B<occs/checknames>>",
+	    "operation, the validation code returned by that operation should be",
+	    "included here.");
     
     complete_ruleset($ds, $dbh, '1.2:occs:addupdate_body', 'OCCURRENCE_DATA',
 		     { reference_no => { alias => ['reference_id'] },
@@ -247,7 +256,8 @@ sub initialize {
 
     $ds->define_block('1.2:occs:checknames' =>
 	{ select => ['a.taxon_no as matched_no', 'a.taxon_name as matched_name',
-		     'a.taxon_rank as matched_rank', 't.status as taxon_status',
+		     'a.taxon_rank as matched_rank', 'a.type_locality',
+		     't.status as taxon_status',
 		     't.orig_no', 't.spelling_no', 't.accepted_no',
 		     'tv.name as accepted_name', 'tv.rank as accepted_rank',
 		     'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
@@ -266,9 +276,6 @@ sub initialize {
 	{ output => 'error', com_name => 'err' },
 	    "If the submitted name is not valid, this field will contain an error message",
 	    "describing the reason.",
-	{ output => 'classification', com_name => 'cof' },
-	    "The class, order, and family in which this name is located. The value of this",
-	    "field contains such of those terms as have non-empty values, separated by dashes.",
 	{ output => 'identified_name', com_name => 'idn' },
 	    "The taxonomic name that was submitted, possibly with syntax errors corrected.",
 	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
@@ -300,15 +307,21 @@ sub initialize {
 	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
 	    "of this database.",
 	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
-	{ output => 'is_type_locality', pbdb_name => 'type_locality', com_name => 'tlc' },
-	    "The value of this field will be C<B<yes>> if the collection to which this",
-	    "occurrence belongs is the type locality for the matched name. It will be",
-	    "C<B<possible>> if the matched name does not currently have a type locality.",
+	{ output => 'classification', com_name => 'cof' },
+	    "The class, order, and family in which the accepted name is located. The value of this",
+	    "field contains such of those terms as have non-empty values, separated by dashes.",
+	{ output => 'type_locality', pbdb_name => 'type_locality', com_name => 'tlc' },
+	    "The type locality of the matching taxon, if any.",
 	{ output => 'flags', com_name => 'flg' },
 	    "This field will be empty for most records.  Otherwise, it will contain one or more",
 	    "of the following letters:", "=over",
 	    "=item I", "This identification is an ichnotaxon",
-	    "=item F", "This identification is a form taxon");
+	    "=item F", "This identification is a form taxon",
+	{ output => 'validation', com_name => 'vld' },
+	    "A hash value computed from the identified name and taxon number. If this",
+	    "occurrence is later submitted for entry or update and this value is included,",
+	    "the data entry operation will assume that the taxon number valid and won't",
+	    "do extra work to match the name again.");
     
     # Rulesets for the 'checknames' operation:
     
@@ -707,11 +720,14 @@ sub update_occs {
 				     $edt->key_labels('REID_DATA'))
 	    if @deleted_reids;
 	
+	my $occ_labels = $edt->key_labels('OCCURRENCE_DATA');
+	my $reid_labels = $edt->key_labels('REID_DATA');
+	
 	if ( $request->has_block('all') )
 	{
 	    my @coll_nos = $edt->get_attr_keys('show_collection');
 
-	    $request->list_updated_occs($dbh, \@coll_nos);
+	    $request->list_updated_occs($dbh, \@coll_nos, undef, undef, $occ_labels, $reid_labels);
 	}
 
 	else
@@ -721,9 +737,6 @@ sub update_occs {
 	    
 	    my @reid_nos = ($edt->inserted_keys('REID_DATA'),
 			    $edt->updated_keys('REID_DATA'));
-	    
-	    my $occ_labels = $edt->key_labels('OCCURRENCE_DATA');
-	    my $reid_labels = $edt->key_labels('REID_DATA');
 	    
 	    $request->list_updated_occs($dbh, undef, \@occ_nos, \@reid_nos, $occ_labels, $reid_labels)
 		if @occ_nos || @reid_nos;
@@ -866,17 +879,17 @@ END_JOINS
     # If show=edit was specified, return the results in the order retrieved,
     # which is sorted by collection_no, then occurrence_no, then reid_no.
     
-    if ( $request->has_block('edit') )
-    {
-	$request->list_result($result);
-    }
+    # if ( $request->has_block('edit') )
+    # {
+    # 	$request->list_result($result);
+    # }
     
-    # Otherwise, group them by class, order, and family.
+    # # Otherwise, group them by class, order, and family.
     
-    else
-    {
+    # else
+    # {
 	$request->list_result($request->process_occs_for_display($result));
-    }
+    # }
 }
 
 
@@ -969,6 +982,15 @@ sub check_taxonomic_names {
 	    next;
 	}
 	
+	# Generate a validation string based on the name components. We use
+	# these instead of the submitted name to make it easier for
+	# CollectionEdit.pm to match this process.
+	
+	no warnings 'uninitialized';
+	
+	my $validation_name = join('|', $genus_name, $subgenus_name,
+				   $species_name, $subspecies_name);
+	
 	# If the submitted name has an informal genus, there won't be any
 	# matches. So add a result record reflecting that.
 	
@@ -976,7 +998,8 @@ sub check_taxonomic_names {
 	{
 	    push @final, { _label => $label,
 			   identified_name => $submitted_name,
-			   matched_no => 0 };
+			   matched_no => 0,
+			   validation => hashIdentification($validation_name, 0) };
 	    next;
 	}
 	
@@ -989,8 +1012,9 @@ sub check_taxonomic_names {
 						   $species_name, $species_reso,
 						   $subspecies_name, $subspecies_reso);
 	
-	my $cleaned_rank = 'genus';
-	
+	my $taxon_name = $genus_name;
+	my $taxon_rank = 'genus';
+		
 	# If the submitted name has an informal subgenus, leave it out when
 	# querying for matches.
 	
@@ -1001,7 +1025,8 @@ sub check_taxonomic_names {
 	
 	elsif ( $subgenus_name )
 	{
-	    $cleaned_rank = 'subgenus';
+	    $taxon_name .= " ($subgenus_name)";
+	    $taxon_rank = 'subgenus';
 	}
 	
 	# If the submitted name has an informal species, or more commonly 'sp.'
@@ -1018,7 +1043,8 @@ sub check_taxonomic_names {
 	
 	elsif ( $species_name )
 	{
-	    $cleaned_rank = 'species';
+	    $taxon_name .= " $species_name";
+	    $taxon_rank = 'species';
 	}
 	
 	# Otherwise, if the submitted name has an informal subspecies, or more
@@ -1030,16 +1056,32 @@ sub check_taxonomic_names {
 	{
 	    $subspecies_name = '';
 	}
-
+	
 	elsif ( $subspecies_name )
 	{
-	    $cleaned_rank = 'subspecies';
+	    $taxon_name .= " $subspecies_name";
+	    $taxon_rank = 'subspecies';
 	}
 	
-	# Do a complex query for matches in the authorities table.
+	# If this is a new name, look for an exact match in the authorities
+	# table.
 	
-	@matches = matchIdentifiedName($dbh, $debug_out, $genus_name, $subgenus_name,
-				       $species_name, $subspecies_name);
+	if ( $genus_reso eq 'n. gen.' || $subgenus_reso eq 'n. subgen.' ||
+	     $species_reso eq 'n. sp.' || $subspecies_reso eq 'n. ssp.' )
+	{
+	    @matches = matchExactName($dbh, $debug_out, $genus_name, $subgenus_name,
+				      $species_name, $subspecies_name);
+	}
+	
+	# Otherwise, do a complex query on the authorities table with somewhat
+	# looser criteria. This query will, for example, match the species name
+	# in a different subgenus, or with the subgenus as genus, etc.
+	
+	else
+	{	
+	    @matches = matchIdentifiedName($dbh, $debug_out, $genus_name, $subgenus_name,
+					   $species_name, $subspecies_name);
+	}
 	
 	# If we find any, select the information necessary to put together full
 	# response records.
@@ -1071,13 +1113,16 @@ sub check_taxonomic_names {
 	    $result = [{ matched_no => 0 }];
 	}
 	
-	# Fill in the identified name, identified rank, and label on each of the
-	# response records, and add them to the final list.
+	# Fill in the identified name, taxon name, taxon rank, validation hash
+	# value, and label on each of the response records, and add them to the
+	# final list.
 	
 	foreach my $m ( @$result )
 	{
 	    $m->{identified_name} = $cleaned_name;
-	    $m->{identified_rank} = $cleaned_rank;
+	    $m->{taxon_name} = $taxon_name;
+	    $m->{taxon_rank} = $taxon_rank;
+	    $m->{validation} = hashIdentification($validation_name, $m->{matched_no});
 	    $m->{_label} = $label;
 	    
 	    push @final, $m;
@@ -1105,19 +1150,6 @@ sub process_checknames_record {
 	$record->{flags} .= 'F' if $record->{is_form};
     }
     
-    # Check the type locality.
-    
-    if ( $record->{collection_no} && $record->{type_locality} &&
-	 $record->{collection_no} eq $record->{type_locality} )
-    {
-	$record->{is_type_locality} = 'yes';
-    }
-    
-    elsif ( $record->{identified_name} =~ /n[.] (gen|subgen|sp|ssp)[.]/ )
-    {
-	$record->{is_type_locality} = 'possible';
-    }
-    
     # Now generate the 'difference' field if the accepted name and identified
     # name are different.
     
@@ -1138,11 +1170,12 @@ sub process_checknames_record {
 
     if ( $request->has_block('extids') )
     {
-	foreach my $f ( qw(matched_no accepted_no) )
-	{
-	    $record->{$f} = generate_identifier('TXN', $record->{$f})
-		if defined $record->{$f};
-	}
+	$record->{accepted_no} = generate_identifier('TXN', $record->{accepted_no})
+	    if $record->{accepted_no};
+	$record->{matched_no} = generate_identifier('TXN', $record->{matched_no})
+	    if $record->{matched_no};
+	$record->{type_locality} = generate_identifier('COL', $record->{type_locality})
+	    if $record->{type_locality};
     }
     
     my $a = 1;	# we can stop here when debugging
