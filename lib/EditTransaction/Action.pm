@@ -1017,4 +1017,36 @@ sub get_attr {
     return $action->{attrs}{$attr};
 }
 
+
+sub set_attr_key {
+    
+    my ($action, $attr, $key, $value) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    croak "you must specify a key" unless $key;
+    croak "attribute '$attr' is not a hash" if exists $action->{attrs}{$attr} &&
+	! ref $action->{attrs}{$attr} eq 'HASH';
+    
+    $action->{attrs}{$attr}{$key} = $value;
+}
+
+
+sub get_attr_key {
+
+    my ($action, $attr, $key) = @_;
+    
+    croak "you must specify an attribute name" unless $attr;
+    
+    if ( exists $action->{attrs}{$attr} )
+    {
+	croak "attribute '$attr' is not a hash" unless ref $action->{attrs}{$attr} eq 'HASH';
+	return $action->{attrs}{$attr}{$key};
+    }
+    
+    else
+    {
+	return undef;
+    }
+}
+
 1;
