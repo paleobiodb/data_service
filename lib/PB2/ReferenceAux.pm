@@ -670,19 +670,32 @@ sub classic_select {
     my $tables = $request->tables_hash;
     my $join_list = $request->generate_join_list($tables);
     
-    # Generate the main query.
+    # Generate the main query, unless the specified reference_id = 0.
+
+    my $reference_no = 0;
     
-    $request->{main_sql} = "
+    unless ( $id eq '0' )
+    {
+	$request->{main_sql} = "
 	SELECT $fields
 	FROM $TABLE{REFERENCE_DATA} as r $join_list
         WHERE r.reference_no = $id
 	GROUP BY r.reference_no";
-    
-    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
-    
-    $request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
-    
-    return unless $request->{main_record};
+	
+	print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+	
+	$request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+
+	if ( $request->{main_record} )
+	{
+	    $reference_no = $request->{main_record}{reference_no};
+	}
+
+	else
+	{
+	    die $request->exception(404, "Not found");
+	}
+    }
     
     my $session_id = Dancer::cookie('session_id');
     
@@ -704,8 +717,6 @@ sub classic_select {
     die $request->exception(401, "You must log in first") unless $s;
     
     die $request->exception(401, "Unauthorized") unless $s->{role} =~ /^auth|^ent|^stu/;
-    
-    my $reference_no = $request->{main_record}{reference_no};
     
     $sql = "UPDATE $TABLE{SESSION_DATA} SET reference_no = '$reference_no'
 		WHERE session_id = $quoted_id";

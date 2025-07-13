@@ -295,8 +295,7 @@ sub initialize {
 	{ include => '1.2:config:resgroups' },
 	{ include => '1.2:config:museums' },
 	{ include => '1.2:config:abund_units' },
-	{ include => '1.2:config:plant_organs' },
-	{ include => '1.2:config:preferences' });
+	{ include => '1.2:config:plant_organs' });
     
     $ds->define_block('1.2:config:pgmodels' =>
 	{ set => '*', code => \&process_description },

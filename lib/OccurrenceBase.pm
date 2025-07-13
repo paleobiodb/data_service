@@ -773,7 +773,7 @@ sub constructIdentifiedName {
     
     if ( $clean_name =~ /^".*"$/ )
     {
-	$clean_name =~ s/" "//g;
+	$clean_name =~ s/" "/ /g;
     }
     
     if ( @end_mods )

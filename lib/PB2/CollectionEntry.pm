@@ -59,7 +59,7 @@ sub initialize {
     
     $ds->define_ruleset('1.2:colls:update' =>
 	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
-	  alias => ['coll_id', 'id', 'oid'] },
+	  alias => ['coll_id', 'id', 'oid', 'collection_no', 'coll_no'] },
 	    "The identifier of a collection to update. If this parameter is specified,",
 	    "then there should be only a single body record which does not contain a",
 	    "collection identifier.",
@@ -387,8 +387,19 @@ sub addupdate_colls {
     
     my $perms = $request->require_authentication('COLLECTION_DATA');
     
-    my ($allowances, $main_params) = $request->parse_main_params('1.2:colls:addupdate',
-								 'collection_id');
+    my ($allowances, $main_params);
+    
+    if ( $operation eq 'delete' )
+    {
+	($allowances, $main_params) = $request->parse_main_params('1.2:colls:delete',
+								  'collection_id');
+    }
+
+    else
+    {
+	($allowances, $main_params) = $request->parse_main_params('1.2:colls:update',
+								  'collection_id');
+    }
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
@@ -513,7 +524,8 @@ sub addupdate_colls {
     {
 	my @deleted_keys = $edt->deleted_keys();
 	
-	$request->list_deleted_colls($dbh, \@deleted_keys, $edt->key_labels('COLLECTION_DATA'))
+	$request->list_deleted_items('collection_no', \@deleted_keys,
+				     $edt->key_labels('COLLECTION_DATA'))
 	    if @deleted_keys;
 	
 	my @existing_keys = ($edt->inserted_keys('COLLECTION_DATA'),
@@ -559,12 +571,19 @@ sub list_updated_colls {
     
     my $base_joins = $request->generateJoinList('c', $tables);
     
+    my ($authorizer_no) = $request->{my_perms}{authorizer_no};
+    my ($enterer_no) = $request->{my_perms}{enterer_no};
+    $request->{my_admin} = ($request->{my_perms}{superuser} ||
+			    $request->{my_perms}{permission} &&
+			    $request->{my_perms}{permission} eq 'admin') ? 'admin' : '';
+    
     # If we were asked to count rows, modify the query accordingly
     
     my $calc = $request->sql_count_clause;
     
     $request->{main_sql} = "
-	SELECT $calc $fields
+	SELECT $calc $fields,
+	    if(cc.authorizer_no = '$enterer_no' or cc.enterer_no = '$enterer_no', 1, '') as is_owner
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
@@ -786,6 +805,13 @@ left join $TABLE{AUTHORITY_DATA} as a using (taxon_no)
 	    left join $TABLE{TAXON_ATTRS} as v on v.orig_no = t.orig_no
 	    left join $TABLE{TAXON_INTS} as ph on ph.ints_no = t.ints_no
 END_JOINS
+    
+    if ( $tables->{nr} )
+    {
+	$other_joins .= <<END_JOINS
+	    left join $TABLE{REFERENCE_DATA} as nr on nr.reference_no = a.reference_no
+END_JOINS
+    }
     
     my $result;    
     

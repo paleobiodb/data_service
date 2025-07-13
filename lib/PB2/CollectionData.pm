@@ -306,6 +306,10 @@ sub initialize {
 	    "=item group(...)", "The record is accessible to",
 	    "members of the specified research group(s) only.",
 	    "=back",
+	{ output => 'authorization', com_name => 'atz' },
+	    "The value of this record will be 'owner' if the requesting user is the",
+	    "authorizer or enterer of this collection, or 'admin' if the requesting",
+	    "user has administrative permission over the collections table.",
 	{ set => '*', code => \&process_permissions },
 	{ output => 'real_access', com_name => 'accl', pbdb_name => 'access_level', if_block => 'edit' },
 	    "The access level stored for this collection, regardless of whether",
@@ -1300,6 +1304,10 @@ sub initialize {
 	    "the vertical bar character C<|>, and you can use all of the other standard",
 	    "regular expression syntax including the backslash C<\\>.",
 	{ at_most_one => [ 'coll_match', 'coll_re' ] },
+	{ param => 'coll_range', valid => ANY_VALUE },
+	    "You can use this parameter to specify one or more collection numbers or",
+	    "ranges of collection numbers. All collections within those ranges which",
+	    "match the other parameters will be returned.",
 	{ param => 'research_group', valid => ANY_VALUE },
 	    "Return only records associated with the specified research group.",
 	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
@@ -3052,7 +3060,7 @@ sub generateAccessFilter {
     # authorizer_no and is_super values from the corresponding record in the
     # 'session_data' table.
     
-    my ($user_id, $authorizer_no, $enterer_no, $is_super);
+    my ($user_id, $authorizer_no, $enterer_no, $is_super, $coll_perm);
     
     my $dbh = $request->get_connection;
     
@@ -3060,11 +3068,16 @@ sub generateAccessFilter {
     {
 	my $session_id = $dbh->quote($cookie_id);
 	
-	my $sql = "
-		SELECT user_id, authorizer_no, enterer_no, superuser FROM session_data
+	my $sql = "SELECT user_id, authorizer_no, enterer_no, superuser, p.permission
+		FROM $TABLE{SESSION_DATA} as s left join $TABLE{TABLE_PERMS} as p
+			on p.person_no = s.enterer_no and p.table_name = 'COLLECTION_DATA'
+			and p.permission <> ''
 		WHERE session_id = $session_id";
 	
-	($user_id, $authorizer_no, $enterer_no, $is_super) = $dbh->selectrow_array($sql);
+		# SELECT user_id, authorizer_no, enterer_no, superuser FROM session_data
+		# WHERE session_id = $session_id";
+
+	($user_id, $authorizer_no, $enterer_no, $is_super, $coll_perm) = $dbh->selectrow_array($sql);
     }
     
     # else
@@ -3096,13 +3109,14 @@ sub generateAccessFilter {
     # properly reported, and also add additional filters to ensure that only
     # records which the requestor has permission to see are returned.
     
-    $request->{my_authorizer_no} = $is_super ? -1 : $authorizer_no;
+    $request->{my_admin} = ($is_super || $coll_perm && $coll_perm eq 'admin') ? 'admin' : '';
     $tables_ref->{cc} = 1;
     
     # If the requestor has superuser privilege, they can access anything.  But we still need the
     # access-control fields so that we can report the permissions on each individual record.
     
     my $fields = ", c.access_level, " .
+	"if(cc.authorizer_no = '$enterer_no' or cc.enterer_no = '$enterer_no', 1, '') as is_owner, " .
 	"if(cc.access_level = 'group members', cc.research_group, '') as access_resgroup";
     
     if ( $is_super )
@@ -3286,6 +3300,37 @@ sub generateMainFilters {
 	
 	$tables->{cc} = 1;
 	push @filters, "(cc.collection_name rlike $quoted or cc.collection_aka rlike $quoted)";
+    }
+    
+    # Check for parameter 'coll_range'.
+    
+    if ( my $coll_range = $request->clean_param('coll_range') )
+    {
+	my @ranges = grep { /\d/ } split(/\s*,\s*/, $coll_range);
+	my @range_filters;
+
+	foreach my $r ( @ranges )
+	{
+	    if ( $r =~ / ^ \s* (\d+) \s* - \s* (\d+) \s* $ /xs )
+	    {
+		push @range_filters, "c.collection_no between '$1' and '$2'";
+	    }
+	    
+	    elsif ( $r =~ / ^ \s* (\d+) \s* $ /xs )
+	    {
+		push @range_filters, "c.collection_no = '$1'";
+	    }
+
+	    else
+	    {
+		$request->add_error("E_PARAM: '$r' is not a valid collection range");
+	    }
+	}
+
+	if ( @range_filters )
+	{
+	    push @filters, '(' . join(' or ', @range_filters) . ')';
+	}
     }
     
     # Check for parameter 'research_group'.
@@ -6082,6 +6127,16 @@ sub process_permissions {
 	{
 	    return "authorizer";
 	}
+    }
+    
+    if ( $record->{is_owner} )
+    {
+	$record->{authorization} = 'owner';
+    }
+    
+    elsif ( $request->{my_admin} )
+    {
+	$record->{authorization} = 'admin';
     }
 }
 

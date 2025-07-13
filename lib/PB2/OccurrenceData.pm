@@ -177,6 +177,8 @@ sub initialize {
 	    "If this block is included, the occurrences and reidentifications will be listed",
 	    "in the order of when they were entered instead of being grouped by class,",
 	    "order, and family.",
+	{ value => 'attr', maps_to => '1.2:occs:nameattr' },
+	    "The attribution - author(s) and year - of the identified name.",
 	{ value => 'all' },
 	    "This block is intended for use with the C<B<occs/update>> operation. If specified,",
 	    "all of the occurrences associated with the collection(s) being updated will be",
@@ -339,6 +341,11 @@ sub initialize {
 	    "if it is identical to the value of F<accepted_no>.",
 	{ output => 'name_attribution', com_name => 'natr', if_block => 'attr' },
 	    "The author(s) and publication year of the matched name.",
+	{ output => 'name_reference_no', com_name => 'nrid', if_block => 'attr' },
+	    "The reference identifier associated with the matched name.",
+	{ output => 'ref_is_authority', com_name => 'ria' },
+	    "This field will have a non-empty value if the name was published in the",
+	    "reference identified by C<B<name_reference_no>>.",
 	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If the identified name is different from the accepted name, this field gives",
 	    "the reason why.  This field will be present if, for example, the identified name",
@@ -359,6 +366,8 @@ sub initialize {
 	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
 	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
+	{ output => 'taxon_name', com_name => 'tnm', not_field => 'accepted_no' },
+	    "If no accepted name is found, the taxon name without modifiers will be returned.",
 	{ output => 'flags', com_name => 'flg' },
 	    "This field will be empty for most records.  Otherwise, it will contain one or more",
 	    "of the following letters:", "=over",
@@ -388,6 +397,14 @@ sub initialize {
     $ds->define_block('1.2:occs:edit' =>
 	{ include => '1.2:common:entname' },
 	{ include => '1.2:common:crmod' });
+    
+    $ds->define_block('1.2:occs:nameattr' =>
+	{ select => ['if(a.refauth, nr.author1last, a.author1last) as n_al1',
+		     'if(a.refauth, nr.author2last, a.author2last) as n_al2',
+		     'if(a.refauth, nr.otherauthors, a.otherauthors) as n_oa',
+		     'if(a.refauth, nr.pubyr, a.pubyr) as n_pubyr', 'a.refauth',
+		     'nr.reference_no as name_reference_no'],
+	  tables => ['nr'] });
     
     $ds->define_block('1.2:occs:attr' =>
 	{ select => ['v.attribution as name_attribution'], tables => 'v' });
@@ -1797,6 +1814,13 @@ left join $TABLE{AUTHORITY_DATA} as a using (taxon_no)
 	    left join $TABLE{TAXON_ATTRS} as v on v.orig_no = t.orig_no
 	    left join $TABLE{TAXON_INTS} as ph on ph.ints_no = t.ints_no
 END_JOINS
+    
+    if ( $tables->{nr} )
+    {
+	$other_joins .= <<END_JOINS
+	    left join $TABLE{REFERENCE_DATA} as nr on nr.reference_no = a.reference_no
+END_JOINS
+    }
     
     # Select all occurrences and reidentifications for the given collection(s),
     # marking which identification is the most recent for each occurrence.
@@ -3864,6 +3888,40 @@ sub process_basic_record {
     
     $request->PB2::TaxonData::process_difference($record);
     
+    # If we have name attribution information, process it now.
+    
+    if ( $record->{n_al1} )
+    {
+	my $auth1 = $record->{n_al1} || '';
+	my $auth2 = $record->{n_al2} || '';
+	my $auth3 = $record->{n_oa} || '';
+    
+	$auth1 =~ s/( Jr)|( III)|( II)//i;
+	$auth1 =~ s/[,.]+$//;
+	$auth2 =~ s/( Jr)|( III)|( II)//i;
+	$auth2 =~ s/[,.]+$//;
+	
+	my $attr_string = $auth1;
+	
+	if ( $auth3 ne '' or $auth2 =~ /et al/ )
+	{
+	    $attr_string .= " et al.";
+	}
+	elsif ( $auth2 ne '' )
+	{
+	    $attr_string .= " and $auth2";
+	}
+	
+	$attr_string .= " $record->{n_pubyr}" if $record->{n_pubyr};
+	
+	$record->{name_attribution} = $attr_string;
+	
+	if ( $record->{refauth} )
+	{
+	    $record->{ref_is_authority} = 1;
+	}
+    }
+    
     my $a = 1;	# we can stop here when debugging
 }
 
@@ -3944,7 +4002,12 @@ sub process_identification {
 	    $taxon_rank = 2;
 	}
     }
-
+    
+    if ( $ident_name =~ /^".*"$/ )
+    {
+	$ident_name =~ s/" "/ /g;
+    }
+    
     if ( @$end_mods )
     {
 	$ident_name .= " " . join(' ', @$end_mods);
@@ -4319,7 +4382,7 @@ sub process_occs_for_display {
     
     my ($request, $record_list, $for_edit) = @_;
     
-    my (%taxon_nos, %taxon_name, %taxon_sort, @classified, @unclassified);    
+    my (%taxon_nos, %taxon_name, %taxon_sort, @classified, @unclassified, %ocdata);    
     
     # Go through all of the records on the list and create a hash table with all
     # of the taxon_no values for phylum, class, order, and family. Any record
@@ -4341,6 +4404,36 @@ sub process_occs_for_display {
 	else
 	{
 	    push @unclassified, $r;
+	}
+	
+	# At the same time, determine the classification of the most recent
+	# identification for each occurrence. This will then be copied to all
+	# identifications of that occurrence.
+	
+	if ( ! $ocdata{$r->{occurrence_no}} || $r->{latest_ident} )
+	{
+	    $ocdata{$r->{occurrence_no}} = [$r->{phylum_no}, $r->{class_no}, $r->{order_no},
+					    $r->{family_no}];
+	}
+    }
+    
+    # Now go through the records again and set the classification fields to the
+    # most recent values for that occurrence. This ensures that each occurrence
+    # and all its reidentifications (if any) will be classified according to the
+    # most recent identification.
+
+    foreach my $r ( @$record_list )
+    {
+	if ( $ocdata{$r->{occurrence_no}} )
+	{
+	    my ($phylum_no, $class_no, $order_no, $family_no) = $ocdata{$r->{occurrence_no}}->@*;
+	    
+	    no warnings 'uninitialized';
+	    
+	    $r->{phylum_no} = $phylum_no unless $r->{phylum_no} eq $phylum_no;
+	    $r->{class_no} = $class_no unless $r->{class_no} eq $class_no;
+	    $r->{order_no} = $order_no unless $r->{order_no} eq $order_no;
+	    $r->{family_no} = $family_no unless $r->{family_no} eq $family_no;
 	}
     }
     
@@ -4364,47 +4457,11 @@ sub process_occs_for_display {
     }
     
     no warnings 'uninitialized';
-
-    if ( $for_edit )
-    {
-	foreach my $r ( @$record_list )
-	{
-	    my @terms;
-	    push @terms, $taxon_name{$r->{class_no}} if $r->{class_no};
-	    push @terms, $taxon_name{$r->{order_no}} if $r->{order_no};
-	    push @terms, $taxon_name{$r->{family_no}} if $r->{family_no};
-	    push @terms, $taxon_name{$r->{phylum_no}} if $r->{phylum_no} && !@terms;
-	    
-	    if ( @terms )
-	    {
-		$r->{classification} = join(' - ', @terms);
-	    }
-	    
-	    else
-	    {
-		$r->{classification} = 'Unclassified';
-	    }
-	}
-	
-	return @$record_list;
-    }
     
-    # Sort the records in our result set according to the 'lft' value of the
-    # phylum, class, order, and family in turn. This will order similar life
-    # forms together.
+    # Set the output field 'classification' based on the class, order, family,
+    # and if none of those were specified on the phylum.
     
-    my @sorted = sort { $taxon_sort{$a->{phylum_no}} <=> $taxon_sort{$b->{phylum_no}} ||
-			    $taxon_sort{$a->{class_no}} <=> $taxon_sort{$b->{class_no}} ||
-			    $taxon_sort{$a->{order_no}} <=> $taxon_sort{$b->{order_no}} ||
-			    $taxon_sort{$a->{family_no}} <=> $taxon_sort{$b->{family_no}} }
-	@classified;
-    
-    # Then generate a class-order-family string for each record. If there is a
-    # phylum but no class, order, or family, use the phylum. If there are no
-    # terms, use 'Unclassified'. This last category appears at the end of the
-    # final result.
-    
-    foreach my $r ( @sorted, @unclassified )
+    foreach my $r ( @$record_list )
     {
 	my @terms;
 	push @terms, $taxon_name{$r->{class_no}} if $r->{class_no};
@@ -4423,6 +4480,28 @@ sub process_occs_for_display {
 	}
     }
 
+    # If the output block 'edit' was specified, return now with the records in
+    # the order they were retrieved.
+
+    if ( $for_edit )
+    {
+	return @$record_list;
+    }
+    
+    # Otherwise, sort the records in our result set according to the 'lft' value
+    # of the phylum, class, order, and family in turn. This will group similar
+    # life forms together, as they will appear in the taxonomic list display.
+    # The unclassified occurrences are returned at the end of the result, in the
+    # order they were retrieved.
+    
+    my @sorted = sort { $taxon_sort{$a->{phylum_no}} <=> $taxon_sort{$b->{phylum_no}} ||
+			    $taxon_sort{$a->{class_no}} <=> $taxon_sort{$b->{class_no}} ||
+			    $taxon_sort{$a->{order_no}} <=> $taxon_sort{$b->{order_no}} ||
+			    $taxon_sort{$a->{family_no}} <=> $taxon_sort{$b->{family_no}} ||
+			    $a->{occurrence_no} <=> $b->{occurrence_no} ||
+			    $a->{reid_no} <=> $b->{reid_no} }
+	@classified;
+    
     return (@sorted, @unclassified);
 }
 

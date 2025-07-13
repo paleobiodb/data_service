@@ -15,7 +15,8 @@ use base 'Exporter';
 our (@EXPORT_OK) = qw(initializeBins updateCollectionMatrix
 		      updateOccurrenceMatrix updateOccurrenceMatrixReids
 		      deleteFromCollectionMatrix deleteFromOccurrenceMatrix
-		      deleteReidsFromOccurrenceMatrix updateOccurrenceCounts);
+		      deleteReidsFromOccurrenceMatrix deleteCollsFromOccurrenceMatrix
+		      updateOccurrenceCounts);
 
 use Carp qw(carp croak);
 use Scalar::Util qw(blessed);
@@ -417,6 +418,41 @@ sub deleteReidsFromOccurrenceMatrix {
 	my $reid_list = join(',', map { $dbh->quote($_) } @work_list);
 	
 	$sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX} WHERE reid_no in ($reid_list)";
+	
+	debug_line($debug_out, "$sql\n") if $debug_out;
+	
+	$dbh->do($sql);
+    }
+}
+
+
+sub deleteCollsFromOccurrenceMatrix {
+    
+    my ($dbh, $collection_nos, $debug_out) = @_;
+    
+    my @collection_nos;
+    
+    if ( ref $collection_nos eq 'ARRAY' )
+    {
+	@collection_nos = @$collection_nos;
+    }
+    
+    else
+    {
+	@collection_nos = $collection_nos;
+    }
+    
+    # Update the collection matrix, at most 1000 records at a time.
+    
+    my $sql;
+    
+    while ( @collection_nos )
+    {
+	my @work_list = splice(@collection_nos, 0, 1000);
+	
+	my $collection_list = join(',', map { $dbh->quote($_) } @work_list);
+	
+	$sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX} WHERE collection_no in ($collection_list)";
 	
 	debug_line($debug_out, "$sql\n") if $debug_out;
 	

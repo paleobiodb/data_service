@@ -27,7 +27,8 @@ use OccurrenceBase qw(parseIdentifiedName matchExactName matchIdentifiedName fin
 		      computeTaxonMatch hashIdentification);
 use MatrixBase qw(updateCollectionMatrix updateOccurrenceMatrix
 		  deleteFromCollectionMatrix deleteFromOccurrenceMatrix
-		  deleteReidsFromOccurrenceMatrix updateOccurrenceCounts);
+		  deleteReidsFromOccurrenceMatrix deleteCollsFromOccurrenceMatrix
+		  updateOccurrenceCounts);
 
 use Role::Tiny::With;
 
@@ -50,8 +51,8 @@ my (%OCC_RESO, %OCC_RESO_RE);
        E_BAD_NAME => "Field '&1' must contain at least one letter",
        E_MULTI_COLLECTIONS => "this action spans more than one collection",
        E_AMBIGUOUS => "Field 'identified_name' matches more than one taxon in the database",
-       E_CANNOT_DELETE => { collection => "Deletion of collections has not been implemented",
-			    occurrence => "Cannot delete an occurrence with speciments" },
+       E_CANNOT_DELETE => { collection => "Cannot delete a collection that has associated specimens",
+			    occurrence => "Cannot delete an occurrence that has associated speciments" },
        E_CANNOT_MOVE => { occurrence => "The value of 'collection_id' must match what is " .
 			  "already stored in the record",
 			  reid => "The value of 'occurrence_id' must match what is " .
@@ -192,6 +193,18 @@ sub finalize_transaction {
     if ( @delete_colls )
     {
 	deleteFromCollectionMatrix($dbh, \@delete_colls, $debug_out);
+	deleteCollsFromOccurrenceMatrix($dbh, \@delete_colls, $debug_out);
+	
+	my $collection_list = join(',', map { $dbh->quote($_) } @delete_colls);
+	
+	my $sql = "UPDATE $TABLE{AUTHORITY_DATA} SET type_locality = null
+		WHERE type_locality in ($collection_list)";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	my $result = $dbh->do($sql);
+	
+	$edt->debug_line("Updated $result authority records.\n") if $edt->debug_mode;
     }
     
     my @update_colls = $edt->get_attr_keys('update_colls');
@@ -258,25 +271,34 @@ sub validate_coll_action {
 
     my ($edt, $action, $operation) = @_;
     
+    my $dbh = $edt->dbh;
+    my $keyexpr = $action->keyexpr;
+    my $coll_id = $action->keyval;
+    
     # Validation for delete operations is entirely different from validation for
     # insert, replace, or update operations.
     
     if ( $operation eq 'delete' )
     {
 	# If this is the type locality for any taxon, clear that. Delete any
-	# occurrences, reidentifications, and specimens associated with this
-	# collection.
+	# occurrences and reidentifications associated with this collection.
 	
-	# Until we can set all of this up, just return 'cannot delete'.
+	my $sql = "SELECT specimen_no FROM $TABLE{SPECIMEN_DATA} as sp
+		join $TABLE{OCCURRENCE_DATA} as oc using (occurrence_no)
+		WHERE $keyexpr";
 	
-	$edt->add_condition('E_CANNOT_DELETE', 'collection');
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	my ($check) = $dbh->selectrow_array($sql);
+	
+	if ( $check )
+	{	
+	    $edt->add_condition('E_CANNOT_DELETE', 'collection');
+	}
+	
 	return;
     }
-    
-    my $dbh = $edt->dbh;
-    my $keyexpr = $action->keyexpr;
-    my $coll_id = $action->keyval;
-    
+        
     # my $old_record;
     
     # if ( $operation eq 'update' )
@@ -1002,7 +1024,32 @@ sub after_coll_action {
 	$keyexpr = $action->keyexpr;
 	@keyvals = $action->keyvals;
 	$edt->set_attr_key('delete_colls', $_, 1) foreach @keyvals;
-
+	
+	$sql = "DELETE FROM $TABLE{OCCURRENCE_DATA} WHERE $keyexpr";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	$result = $dbh->do($sql);
+	
+	$edt->debug_line("Deleted $result rows.\n") if $edt->debug_mode;
+	
+	$sql = "DELETE FROM $TABLE{REID_DATA} WHERE $keyexpr";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	$result = $dbh->do($sql);
+	
+	$edt->debug_line("Deleted $result rows.\n") if $edt->debug_mode;
+	
+	$sql = "DELETE FROM $TABLE{COLLECTION_REFS} WHERE $keyexpr";
+	
+	$edt->debug_line("$sql\n") if $edt->debug_mode;
+	
+	$result = $dbh->do($sql);
+	
+	$edt->debug_line("Deleted $result rows.\n") if $edt->debug_mode;
+	
+	return;
     }
     
     else
@@ -1707,7 +1754,7 @@ sub validate_occ_action {
     # If the name isn't being updated but the taxon_no is, validate it according to
     # the name components stored in the database row.
     
-    elsif ( defined $taxon_no && $taxon_no ne '' && $is_update )
+    elsif ( $taxon_no && $is_update )
     {
 	my $genus_name = $existing_data->{genus_name};
 	my $genus_reso = $existing_data->{genus_reso};
@@ -1885,12 +1932,12 @@ sub validate_delete_occs {
 	return;
     }
     
-    # Mark each occurrence for deletion.
+    # # Mark each occurrence for deletion.
     
-    foreach my $k ( $action->keyvals )
-    {
-	$edt->set_attr_key('delete_occs', $k, 1);
-    }
+    # foreach my $k ( $action->keyvals )
+    # {
+    # 	$edt->set_attr_key('delete_occs', $k, 1);
+    # }
 
     # Fetch all of the reidentifications that are attached to the occurrence(s) and add
     # an action to delete them too.
@@ -1926,8 +1973,11 @@ sub validate_delete_reids {
     
     foreach my $occurrence_no ( @$result )
     {
-	$edt->set_attr_key('recompute_occs', $occurrence_no, 1);
-	$edt->set_attr_key('update_occs', $occurrence_no, 1);
+	if ( ! $edt->get_attr_key('delete_occs', $occurrence_no) )
+	{
+	    $edt->set_attr_key('recompute_occs', $occurrence_no, 1);
+	    $edt->set_attr_key('update_occs', $occurrence_no, 1);
+	}
     }
 }
 

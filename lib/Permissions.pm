@@ -234,6 +234,12 @@ sub is_superuser {
 }
 
 
+sub table_permission {
+
+    return $_[0]->{permission};
+}
+
+
 sub debug_line {
     
     my ($perms, $line) = @_;
