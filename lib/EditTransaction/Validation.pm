@@ -311,12 +311,23 @@ sub validate_against_schema {
 	    # Otherwise, the result should be 'pass'. Keep the assigned value.
 	}
 	
-	# Case 4: If there is no assigned value and the operation is 'update', skip this column
-	# entirely.
+	# Case 4: If there is no assigned value and the operation is 'update',
+	# skip this column entirely.
 	
 	elsif ( $operation eq 'update' && not $fieldname )
 	{
 	    next COLUMN;
+	}
+	
+	# Case 5: If the assigned value is not defined and the column has a
+	# default value, substitute the default. This fixes what is (in my
+	# opinion) bad behavior on the part of MariaDB, which will throw an
+	# error when you try to assign null to a column with a default.
+	
+	elsif ( !defined $value && $cr->{Null} && $cr->{Null} eq 'NO' &&
+		defined $cr->{Default} )
+	{
+	    $value = $cr->{Default};
 	}
 	
 	# Check for required values
