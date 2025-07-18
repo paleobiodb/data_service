@@ -573,9 +573,9 @@ sub list_updated_colls {
     
     my ($authorizer_no) = $request->{my_perms}{authorizer_no};
     my ($enterer_no) = $request->{my_perms}{enterer_no};
-    $request->{my_admin} = ($request->{my_perms}{superuser} ||
-			    $request->{my_perms}{permission} &&
-			    $request->{my_perms}{permission} eq 'admin') ? 'admin' : '';
+    my $perms = $request->{my_perms};
+    $request->{my_admin} = ($perms->is_superuser() ||
+			    $perms->table_permission('COLLECTION_DATA', 'admin')) ? 'admin' : '';
     
     # If we were asked to count rows, modify the query accordingly
     

@@ -3074,10 +3074,17 @@ sub generateAccessFilter {
 			and p.permission <> ''
 		WHERE session_id = $session_id";
 	
-		# SELECT user_id, authorizer_no, enterer_no, superuser FROM session_data
-		# WHERE session_id = $session_id";
-
-	($user_id, $authorizer_no, $enterer_no, $is_super, $coll_perm) = $dbh->selectrow_array($sql);
+	$request->debug_line("$sql\n") if $request->debug;
+	
+	($user_id, $authorizer_no, $enterer_no, $is_super, $coll_perm) =
+	    $dbh->selectrow_array($sql);
+	
+	$sql = "UPDATE $TABLE{SESSION_DATA} SET record_date = now()
+		WHERE session_id = $session_id";
+	
+	$request->debug_line("$sql\n") if $request->debug;
+	
+	$dbh->do($sql);
     }
     
     # else

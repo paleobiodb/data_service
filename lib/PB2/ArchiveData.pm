@@ -474,8 +474,7 @@ sub process_record {
     if ( $request->{my_perms} && $request->{my_perms}{enterer_no} )
     {
 	$record->{permissions} =
-	    $request->{my_perms}->check_record_permission('ARCHIVES',
-							  'edit',
+	    $request->{my_perms}->check_record_permission('ARCHIVES', 'edit',
 							  "archive_no=$record->{archive_no}",
 							  $record);
     }

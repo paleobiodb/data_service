@@ -78,11 +78,11 @@ sub new {
 	    my $sql = "
 		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, 
 		       timestampdiff(day,s.record_date,now()) as days_old, expire_days,
-		       s.role, p.permission
+		       s.role, group_concat(p.permission)
 		FROM $TABLE{SESSION_DATA} as s left join $TABLE{TABLE_PERMS} as p
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
 			and p.permission <> ''
-		WHERE session_id = $quoted_id";
+		WHERE session_id = $quoted_id GROUP BY session_id";
 	    
 	    print STDERR "$sql\n\n" if $options->{debug};
 	    
@@ -100,10 +100,21 @@ sub new {
 	    
 	    $perms = $dbh->selectrow_hashref($sql);
 	}
+
+	# Update the record_date field in the session record to reflect the time
+	# of the current interaction.
 	
-	# If we retrieved a record that includes a value for 'user_id', then we have the basis for
-	# a valid Permissions object. Otherwise, return a dummy Permissions object that has no
-	# permissions other than those available to everybody.
+	my $sql = "UPDATE $TABLE{SESSION_DATA} SET record_date = now()
+		WHERE session_id = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$dbh->do($sql);
+	
+	# If we retrieved a record that includes a value for
+	# 'user_id', then we have the basis for a valid Permissions object.
+	# Otherwise, return a dummy Permissions object that has no permissions
+	# other than those available to everybody.
 	
 	if ( $perms && $perms->{user_id} )
 	{
@@ -157,8 +168,8 @@ sub new {
 	    delete $perms->{is_superuser};
 	}
 	
-	# Cache the dbh in case we need it later, plus the debug flag. If 'role' is not set for some
-	# reason, default it to 'guest'.
+	# Cache the dbh in case we need it later, plus the debug flag. If 'role'
+	# is not set for some reason, default it to 'guest'.
 	
 	$perms->{dbh} = $dbh;
 	weaken $perms->{dbh};
@@ -236,7 +247,29 @@ sub is_superuser {
 
 sub table_permission {
 
-    return $_[0]->{permission};
+    my ($perms, $table_specifier, $permission) = @_;
+
+    if ( $perms->{$table_specifier} && $permission ) {
+	return $perms->{$table_specifier}{$permission} || '';
+    }
+
+    else {
+	return '';
+    }
+}
+
+
+sub table_permissions {
+
+    my ($perms, $table_specifier) = @_;
+
+    if ( $perms->{$table_specifier} ) {
+	return keys $perms->{$table_specifier}->%*;
+    }
+
+    else {
+	return ();
+    }
 }
 
 
@@ -261,8 +294,9 @@ sub get_table_permissions {
     
     unless ( ref $perms->{table_permission}{$table_specifier} eq 'HASH' )
     {
-	# If the current user is a database member, check for explicitly granted permissions. If
-	# the table name has a database prefix, strip it off (see 'new' above).
+	# If the current user is a database member, check for explicitly granted
+	# permissions. If the table name has a database prefix, strip it off
+	# (see 'new' above).
 	
 	if ( $perms->{enterer_no} )
 	{
@@ -275,8 +309,9 @@ sub get_table_permissions {
 	    my $quoted_table = $dbh->quote($lookup_name);
 	    
 	    my $sql = "
-		SELECT permission FROM $TABLE{TABLE_PERMS}
-		WHERE person_no = $quoted_person and table_name = $quoted_table and permission <> ''";
+		SELECT group_concat(permission) FROM $TABLE{TABLE_PERMS}
+		WHERE person_no = $quoted_person and table_name = $quoted_table
+			and permission <> ''";
 	    
 	    my $permission;
 	    
@@ -292,7 +327,8 @@ sub get_table_permissions {
 		$perms->{table_permission}{$table_specifier} = { map { $_ => 1 } @list };
 	    }
 	    
-	    # Otherwise, compute the permissions from the authorization info and table properties.
+	    # Otherwise, compute the permissions from the authorization info and
+	    # table properties.
 	    
 	    else
 	    {
@@ -308,14 +344,16 @@ sub get_table_permissions {
 	    $this_table->{post} = 1 if $this_table->{modify};
 	    $this_table->{view} = 1 if $this_table->{modify};
 	    
-	    # If the user has either 'post' or 'modify', then add 'delete' and/or 'insert_key' if the
-	    # table properties allow that.
+	    # # If the user has either 'post' or 'modify', then add 'delete'
+	    # # and/or 'insert_key' if the table properties allow that.
 	    
-	    if ( $this_table->{post} || $this_table->{modify} )
-	    {
-		$this_table->{no_delete} = 1 if get_table_property($table_specifier, 'DISABLE_DELETE');
-		$this_table->{insert_key} = 1 if get_table_property($table_specifier, 'ENABLE_INSERT_KEY');
-	    }
+	    # if ( $this_table->{post} || $this_table->{modify} )
+	    # {
+	    # 	$this_table->{no_delete} = 1 if get_table_property($table_specifier,
+	    # 							   'DISABLE_DELETE');
+	    # 	$this_table->{insert_key} = 1 if get_table_property($table_specifier,
+	    # 							    'ENABLE_INSERT_KEY');
+	    # }
 	    
 	    # If the table has the BY_AUTHORIZER property, add the 'by_authorizer' permission.
 	    
@@ -415,8 +453,8 @@ sub default_table_permissions {
 	}
     }
     
-    # If this table allows viewing for certain classes of people, check to see if the current user
-    # falls into one of them.
+    # If this table allows viewing for certain classes of people, check to see
+    # if the current user falls into one of them.
     
     if ( my $allow_view = get_table_property($table_specifier, 'CAN_VIEW') || '' )
     {
@@ -434,7 +472,8 @@ sub default_table_permissions {
 	    $tp->{view} = 1;
 	}
 	
-	elsif ( $allow_view eq 'AUTHORIZED' && $perms->{enterer_no} && $perms->{authorizer_no} )
+	elsif ( $allow_view eq 'AUTHORIZED' &&
+		$perms->{enterer_no} && $perms->{authorizer_no} )
 	{
 	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
 	    $tp->{view} = 1;
@@ -447,8 +486,9 @@ sub default_table_permissions {
 	}
     }
     
-    # If this table allows modification of records owned by others for certain classes of people, check
-    # to see if the current user falls into one of them.
+    # If this table allows modification of records owned by others for certain
+    # classes of people, check to see if the current user falls into one of
+    # them.
     
     if ( my $allow_modify = get_table_property($table_specifier, 'CAN_MODIFY') )
     {
@@ -466,7 +506,8 @@ sub default_table_permissions {
 	    $tp->{modify} = 1;
 	}
 	
-	elsif ( $allow_modify eq 'AUTHORIZED' && $perms->{enterer_no} && $perms->{authorizer_no} )
+	elsif ( $allow_modify eq 'AUTHORIZED' &&
+		$perms->{enterer_no} && $perms->{authorizer_no} )
 	{
 	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
 	    $tp->{modify} = 1;
@@ -805,7 +846,8 @@ sub check_record_permission {
     # property.
     
     if ( $record->{authorizer_no} && $perms->{authorizer_no} &&
-	 $record->{authorizer_no} eq $perms->{authorizer_no} && $tp->{by_authorizer} )
+	 $record->{authorizer_no} eq $perms->{authorizer_no} &&
+	 get_table_property($table_specifier, 'BY_AUTHORIZER') )
     {
 	if ( $perms->{debug} )
 	{
@@ -816,8 +858,8 @@ sub check_record_permission {
 	return $p;
     }
     
-    # If the user would have been able to modify this record except that it was locked by somebody
-    # else, return 'locked'.
+    # If the user would have been able to modify this record except that it was
+    # locked by somebody else, return 'locked'.
     
     if ( $tp->{modify} && ( $requested eq 'edit' || $requested eq 'delete' ) )
     {
