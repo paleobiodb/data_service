@@ -3854,7 +3854,7 @@ sub process_com {
     
     my $numeric_rank;
     
-    if ( $record->{taxon_rank} =~ /^[a-zA-Z]/ )
+    if ( $record->{taxon_rank} && $record->{taxon_rank} =~ /^[a-zA-Z]/ )
     {
 	$numeric_rank = $TAXON_RANK{$record->{taxon_rank}} || 0;
     }
@@ -4046,9 +4046,16 @@ sub process_difference {
     
     my $taxon_rank = $record->{taxon_rank};
     
-    if ( defined $taxon_rank && $taxon_rank =~ /[a-z]/ )
+    if ( defined $taxon_rank && $taxon_rank =~ /^[a-z]/ )
     {
 	$taxon_rank = $TAXON_RANK{$taxon_rank};
+    }
+    
+    my $accepted_rank = $record->{accepted_rank};
+    
+    if ( defined $accepted_rank && $accepted_rank =~ /^[a-z]/ )
+    {
+	$accepted_rank = $TAXON_RANK{$accepted_rank};
     }
     
     # If the 'taxon_name' and 'accepted_name' fields are different, then
@@ -4105,13 +4112,13 @@ sub process_difference {
 		    $record->{spelling_reason} && $record->{spelling_reason} eq 'rank change' )
 	    {
 		if ( $taxon_rank && $taxon_rank == 5 &&
-		     $record->{accepted_rank} && $record->{accepted_rank} == 4 )
+		     $accepted_rank && $accepted_rank == 4 )
 		{
 		    push @reasons, 'demoted to subgenus';
 		}
 
 		elsif ( $taxon_rank && $taxon_rank == 4 &&
-			$record->{accepted_rank} && $record->{accepted_rank} == 5 )
+			$accepted_rank && $accepted_rank == 5 )
 		{
 		    push @reasons, 'promoted to genus';
 		}
@@ -4122,9 +4129,9 @@ sub process_difference {
 		}
 	    }
 	    
-	    elsif ( $record->{taxon_status} && $record->{taxon_status} ne 'belongs to' )
+	    if ( $record->{status} && $record->{status} ne 'belongs to' )
 	    {
-		push @reasons, $record->{taxon_status};
+		push @reasons, $record->{status};
 	    }
 	}
 	
@@ -4134,7 +4141,7 @@ sub process_difference {
 	
 	else
 	{
-	    if ( $record->{taxon_status} && $record->{taxon_status} eq 'belongs to' )
+	    if ( $record->{status} && $record->{status} eq 'belongs to' )
 	    {
 		if ( $record->{specimen_no} )
 		{
@@ -4149,7 +4156,7 @@ sub process_difference {
 	    
 	    else
 	    {	    
-		push @reasons, $record->{taxon_status};
+		push @reasons, $record->{status};
 	    }
 	}
 	
@@ -4164,18 +4171,18 @@ sub process_difference {
 	# If the species or subspecies was not entered then report that at the end.
 	
 	if ( defined $taxon_rank && $taxon_rank == 2 &&
-	     defined $record->{accepted_rank} && $record->{accepted_rank} == 3 &&
-	     defined $record->{taxon_status} )
+	     defined $accepted_rank && $accepted_rank == 3 &&
+	     defined $record->{status} )
 	{
 	    push @reasons, 'subspecies not entered';
 	}
 	
 	elsif ( defined $taxon_rank && $taxon_rank < 4 &&
-		defined $record->{accepted_rank} && $record->{accepted_rank} >= 4 &&
-		defined $record->{taxon_status} )
+		defined $accepted_rank && $accepted_rank >= 4 &&
+		defined $record->{status} )
 	{
 	    push @reasons, 'species not entered';
-	}	
+	}
 	
 	# If we don't have any reason so far, use 'variant of'.
 	

@@ -1321,7 +1321,7 @@ sub initialize_occ_action {
 		
 		# Unless we know this is a valid collection number, check it against the
 		# COLLECTION_DATA table.
-		
+
 		unless ( $edt->get_attr_key('valid_collection', $collection_no ) )
 		{
 		    my $dbh = $edt->dbh;
@@ -1334,21 +1334,22 @@ sub initialize_occ_action {
 		    
 		    my ($check) = $dbh->selectrow_array($sql);
 		    
-		    if ( $check )
-		    {
-			$action->set_attr('collection_no', $collection_no);
-			$edt->set_attr_key('valid_collection', $collection_no, 1);
-			$edt->set_attr_key('show_collection', $collection_no, 1);
-			$edt->fetch_existing_names($collection_no);
-		    }
-		    
-		    else
+		    unless ( $check )
 		    {
 			$edt->add_condition('E_BAD_VALUE', 'collection_id',
 					    "unknown collection $qref");
 			return;
 		    }
 		}
+		
+		# Set the proper action attributes for later routines, and fetch
+		# the existing names from the collection if they haven't already
+		# been fetched.
+		
+		$action->set_attr('collection_no', $collection_no);
+		$edt->set_attr_key('valid_collection', $collection_no, 1);
+		$edt->set_attr_key('show_collection', $collection_no, 1);
+		$edt->fetch_existing_names($collection_no);
 	    }
 	    
 	    else
