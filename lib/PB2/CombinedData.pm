@@ -640,7 +640,7 @@ sub list_associated {
 		left join $COUNTRY_MAP as cm using (cc)
 		left join $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 		left join $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-	WHERE sr.reference_no in ('$ref_list')
+	WHERE sr.reference_no in ('$ref_list') and cc.reference_no not in ('$ref_list')
 	ORDER BY reference_no, record_id";
 	    
 	    print STDERR "$sql\n\n" if $request->debug;
