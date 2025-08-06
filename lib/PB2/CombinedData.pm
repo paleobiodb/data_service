@@ -216,7 +216,9 @@ sub initialize {
 	    "The taxonomic rank of that name",
 	# collections
 	{ output => 'collection_name', com_name => 'nam' },
-	    "The name of a collection",
+	    "The name of the collection",
+	{ output => 'collection_aka', com_name => 'aka' },
+	    "An alternate name for the collection",
 	{ output => 'early_interval', com_name => 'oei' },
 	    "The interval from which the collection dates, or the early end of the range.",
 	{ output => 'late_interval', com_name => 'oli', dedup => 'early_interval' },
@@ -623,7 +625,7 @@ sub list_associated {
 	    my $ref_list = join("','", @reference_nos);
 	    
 	    my $sql = "
-	SELECT collection_no as record_id, 'P' as ref_type, cc.collection_name,
+	SELECT collection_no as record_id, 'P' as ref_type, cc.collection_name, cc.collection_aka,
 		cc.reference_no, $cc_field as cc_list, n_occs, c.early_age, c.late_age,
 		ei.interval_name as early_interval, li.interval_name as late_interval
 	FROM collections as cc join $COLL_MATRIX as c using (collection_no)
@@ -632,7 +634,7 @@ sub list_associated {
 		left join $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 	WHERE cc.reference_no in ('$ref_list')
 	UNION
-	SELECT collection_no as record_id, 'S' as ref_type, cc.collection_name,
+	SELECT collection_no as record_id, 'S' as ref_type, cc.collection_name, cc.collection_aka,
 		sr.reference_no, $cc_field as cc_list, n_occs, c.early_age, c.late_age,
 		ei.interval_name as early_interval, li.interval_name as late_interval
 	FROM collections as cc join $COLL_MATRIX as c using (collection_no)
