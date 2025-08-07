@@ -2169,11 +2169,12 @@ sub validate_taxon_no {
 	return;
     }
     
-    # Otherwise, accept the single match as the taxon_id value.
+    # Otherwise, accept the single match as the taxon_id value. If no matches
+    # were returned, the taxon number will be 0.
     
     else
     {
-	$new_taxon_no = $matches[0];
+	$new_taxon_no = $matches[0] // 0;
 	$action->set_record_value('taxon_id', $new_taxon_no);
     }
 
@@ -2451,6 +2452,12 @@ sub after_occ_action {
 	    $edt->set_attr_key('update_occs', $occurrence_no, 1);
 	    $edt->set_attr_key('recompute_occs', $occurrence_no, 1);
 	}
+	
+	if ( my $reference_no = $action->record_value('reference_no') )
+	{
+	    my $collection_no = $action->get_attr('collection_no');
+	    $edt->add_occurrence_ref($collection_no, $reference_no);
+	}
     }
     
     # Otherwise, we can get it from the action.
@@ -2483,6 +2490,12 @@ sub after_occ_action {
 	{
 	    $edt->set_attr_key('update_occs', $occurrence_no, 1);
 	}
+	
+	if ( my $reference_no = $action->record_value('reference_no') )
+	{
+	    my $collection_no = $action->get_attr('collection_no');
+	    $edt->add_occurrence_ref($collection_no, "$reference_no");
+	}
     }
     
     # If the action would affect type locality links, add this info as a transaction
@@ -2491,6 +2504,25 @@ sub after_occ_action {
     $edt->save_action_attr($action, 'set_type_locality');
     $edt->save_action_attr($action, 'override_type_locality');
     $edt->save_action_attr($action, 'remove_type_locality');
+}
+
+
+sub add_occurrence_ref {
+
+    my ($edt, $collection_no, $reference_no) = @_;
+
+    my $dbh = $edt->dbh;
+    my $qcoll = $dbh->quote($collection_no);
+    my $qref = $dbh->quote($reference_no);
+    
+    my $sql = "REPLACE INTO $TABLE{COLLECTION_REFS} (collection_no, reference_no)
+		VALUES ($qcoll, $qref)";
+    
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    my $result = $dbh->do($sql);
+    
+    my $a = 1;	# we can stop here when debugging
 }
 
 

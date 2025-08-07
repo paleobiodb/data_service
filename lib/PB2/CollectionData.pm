@@ -695,7 +695,7 @@ sub initialize {
 	{ select => ['cc.formation', 'cc.geological_group', 'cc.member'], tables => 'cc' },
 	{ output => 'formation', com_name => 'sfm' },
 	    "The stratigraphic formation in which the collection is located, if known",
-	{ output => 'geological_group', pbdb_name => 'stratgroup', com_name => 'sgr' },
+	{ output => 'geological_group', pbdb_name => 'geological_group', com_name => 'sgr' },
 	    "The stratigraphic group in which the collection is located, if known",
 	{ output => 'member', com_name => 'smb' },
 	    "The stratigraphic member in which the collection is located, if known");

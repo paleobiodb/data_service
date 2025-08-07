@@ -62,13 +62,33 @@ sub initializeModifiers {
 		$_ ne 'sensu stricto' && $_ ne 'sensu lato' } $definition =~ /'(.*?)'/g;
 	
 	my $regex_source = join('|', @modifier_list);
+	
+	# The characters ? and . should be put inside [] in order to effectively quote
+	# them.
+	
 	$regex_source =~ s/([.?])/[$1]/g;
+	
+	# The regex for genus should match an optional period after 'ex' in 'ex gr.'.
+	
+	if ( $field eq 'genus' )
+	{
+	    $regex_source =~ s/ex gr/ex[.]? gr/;
+	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s*(.*)};
+	}
 	
 	# The regex for subgenus must match the '(' after the modifier.
 	
-	if ( $field eq 'subgenus' )
+	elsif ( $field eq 'subgenus' )
 	{
 	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s*([(].*)};
+	}
+	
+	# The regex for species should match an optional period after 'ex' in 'ex gr.'.
+	
+	elsif ( $field eq 'species' )
+	{
+	    $regex_source =~ s/ex gr[.]/ex[.]? gr[.]/;
+	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s*(.*)};
 	}
 	
 	# The regex for 'subspecies' should match an optional period after 'var',
@@ -80,13 +100,6 @@ sub initializeModifiers {
 	    $regex_source =~ s/forma/fo?r?m?a?[.]?/;
 	    $regex_source =~ s/morph/mor?p?h?[.]?/;
 	    $regex_source =~ s/mut/mu?t?[.]?/;
-	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s*(.*)};
-	}
-	
-	# The others are formatted as follows.
-	
-	else
-	{
 	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s*(.*)};
 	}
     }
@@ -249,6 +262,8 @@ sub parseIdentifiedName {
 	
 	$genus_reso = $1;
 	$name = $2;
+	
+	$genus_reso = 'ex gr.' if $genus_reso eq 'ex. gr.';
     }
     
     if ( $options->{wildcards} && $name =~ /^\s*[A-Z][.]\s/ )

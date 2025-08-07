@@ -252,7 +252,7 @@ sub updateOccurrenceMatrix {
 			early_age, late_age, reference_no,
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT o.occurrence_no, 0, if(o.reid_no > 0, false, true),
-			o.collection_no, o.taxon_no, a.orig_no, 
+			o.collection_no, o.taxon_no, coalesce(a.orig_no, o.taxon_no), 
 			o.genus_name, coalesce(o.genus_reso,''),
 			coalesce(o.subgenus_name,''), coalesce(o.subgenus_reso,''),
 			o.species_name, coalesce(o.species_reso,''),
@@ -280,7 +280,7 @@ sub updateOccurrenceMatrix {
 			early_age, late_age, reference_no,
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT re.occurrence_no, re.reid_no, if(re.most_recent = 'YES', true, false),
-			re.collection_no, re.taxon_no, a.orig_no, 
+			re.collection_no, re.taxon_no, coalesce(a.orig_no, re.taxon_no), 
 			re.genus_name, coalesce(re.genus_reso,''),
 			coalesce(re.subgenus_name,''), coalesce(re.subgenus_reso,''),
 			re.species_name, coalesce(re.species_reso,''),
@@ -335,7 +335,7 @@ sub updateOccurrenceMatrixReids {
 			early_age, late_age, reference_no,
 			authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT re.occurrence_no, re.reid_no, if(re.most_recent = 'YES', true, false),
-			re.collection_no, re.taxon_no, a.orig_no, 
+			re.collection_no, re.taxon_no, coalesce(a.orig_no, re.taxon_no), 
 			re.genus_name, coalesce(re.genus_reso,''),
 			coalesce(re.subgenus_name,''), coalesce(re.subgenus_reso,''),
 			re.species_name, coalesce(re.species_reso,''),
