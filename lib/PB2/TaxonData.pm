@@ -4170,16 +4170,16 @@ sub process_difference {
 	
 	# If the species or subspecies was not entered then report that at the end.
 	
-	if ( defined $taxon_rank && $taxon_rank == 2 &&
-	     defined $accepted_rank && $accepted_rank == 3 &&
-	     defined $record->{status} )
+	if ( $taxon_rank && $taxon_rank == 2 &&
+	     $accepted_rank && $accepted_rank == 3 &&
+	     $record->{status} )
 	{
 	    push @reasons, 'subspecies not entered';
 	}
 	
-	elsif ( defined $taxon_rank && $taxon_rank < 4 &&
-		defined $accepted_rank && $accepted_rank >= 4 &&
-		defined $record->{status} )
+	elsif ( $taxon_rank && $taxon_rank < 4 &&
+		$accepted_rank && $accepted_rank >= 4 &&
+		$record->{status} )
 	{
 	    push @reasons, 'species not entered';
 	}
