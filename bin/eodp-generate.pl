@@ -36,6 +36,7 @@ our ($mstr, $pbdb, $EXECUTE_MODE);
 our ($MATCH_DIST_LIMIT) = 0.25;
 our ($INTP_AGE_LIMIT) = 2.0;
 our ($COLLECTIONS_TABLE) = 'offshore_collections';
+our ($OCCURRENCES_TABLE) = 'offshore_occs';
 
 $MATCH_DIST_LIMIT = $opt_match if defined $opt_match;
 $INTP_AGE_LIMIT = $opt_age if defined $opt_age;
@@ -122,34 +123,44 @@ elsif ( $ARGV[0] eq 'show' && $ARGV[1] eq 'missing' )
     ShowMissing(@ARGV);
 }
 
-elsif ( $ARGV[0] eq 'check' && $ARGV[1] eq 'ages' )
+elsif ( $ARGV[0] =~ /^check$|^update$/ && $ARGV[1] eq 'ages' )
 {
     my $subcommand = shift @ARGV;
     shift @ARGV;
+    $EXECUTE_MODE = 1 if $subcommand eq 'update';
     UpdateAges($subcommand, @ARGV);
 }
 
-elsif ( $ARGV[0] eq 'update' && $ARGV[1] eq 'ages' )
+elsif ( $ARGV[0] eq 'set' && $ARGV[1] eq 'pbdb' && $ARGV[2] eq 'liths' )
+{
+    $EXECUTE_MODE = 1;
+    SetPBDBLiths();
+}
+
+elsif ( $ARGV[0] =~ /^show$|^generate$|^set$/ && $ARGV[1] eq 'pbdb' && $ARGV[2] eq 'attrs' )
 {
     my $subcommand = shift @ARGV;
     shift @ARGV;
-    $EXECUTE_MODE = 1;
-    UpdateAges($subcommand, @ARGV);
+    shift @ARGV;
+    $EXECUTE_MODE = 1 if $subcommand eq 'set' || $subcommand eq 'generate';
+    SetPBDBAttrs($subcommand, @ARGV);
 }
 
-elsif ( $ARGV[0] eq 'check' && $ARGV[1] eq 'attrs' )
+elsif ( $ARGV[0] =~ /^set$/ && $ARGV[1] eq 'pbdb' && $ARGV[2] eq 'intervals' )
 {
+    my $subcommand = shift @ARGV;
     shift @ARGV;
     shift @ARGV;
-    UpdateAttrs(@ARGV);
+    $EXECUTE_MODE = 1 if $subcommand eq 'set';
+    SetPBDBIntervals($subcommand, @ARGV);
 }
 
-elsif ( $ARGV[0] eq 'update' && $ARGV[1] eq 'attrs' )
+elsif ( $ARGV[0] =~ /^check$|^update$/ && $ARGV[1] eq 'genera' )
 {
+    my $subcommand = shift @ARGV;
     shift @ARGV;
-    shift @ARGV;
-    $EXECUTE_MODE = 1;
-    UpdateAttrs(@ARGV);
+    $EXECUTE_MODE = 1 if $subcommand eq 'update';
+    UpdateGeneraReport(@ARGV);
 }
 
 # elsif ( $ARGV[0] eq 'constraints' )
@@ -174,13 +185,21 @@ elsif ( $ARGV[0] eq 'update' && $ARGV[1] eq 'attrs' )
 #     }
 # }
 
-elsif ( $ARGV[0] eq 'insert' )
+elsif ( $ARGV[0] eq 'insert' && $ARGV[1] eq 'data' )
 {
     $EXECUTE_MODE = 1;
     InsertData();
 }
 
-elsif ( $ARGV[0] eq 'remove' )
+elsif ( $ARGV[0] eq 'update' && $ARGV[1] eq 'data' && $ARGV[2] )
+{
+    shift @ARGV;
+    shift @ARGV;
+    $EXECUTE_MODE = 1;
+    UpdateData(@ARGV);
+}
+
+elsif ( $ARGV[0] eq 'remove' && $ARGV[1] eq 'data' )
 {
     $EXECUTE_MODE = 1;
     RemoveData();
@@ -234,7 +253,7 @@ sub AdjustTable {
     unless ( $tcount > 0 )
     {
 	DBCommand($mstr, "UPDATE $COLLECTIONS_TABLE as oc JOIN \
-	(SELECT sample_id, count(*) as count FROM offshore_occs GROUP BY sample_id) as oo \
+	(SELECT sample_id, count(*) as count FROM $OCCURRENCES_TABLE GROUP BY sample_id) as oo \
 		ON oc.id = oo.sample_id \
 	SET oc.taxa_count = oo.count");
     }
@@ -291,11 +310,11 @@ sub AdjustTable {
     
     # If there is a column named `subgenera_name`, rename it to `subgenus_name`.
     
-    $check = DBTextQuery($mstr, "SHOW COLUMNS FROM offshore_occs LIKE 'subgenera_name'");
+    $check = DBTextQuery($mstr, "SHOW COLUMNS FROM $OCCURRENCES_TABLE LIKE 'subgenera_name'");
     
-    if ( $check !~ /subenera_name/ )
+    if ( $check !~ /subgenera_name/ )
     {
-	DBCommand($mstr, "ALTER TABLE offshore_occs CHANGE `subgenera_name` `subgenus_name` \
+	DBCommand($mstr, "ALTER TABLE $OCCURRENCES_TABLE CHANGE `subgenera_name` `subgenus_name` \
 	varchar(100) NOT NULL default ''");
     }
     
@@ -305,7 +324,7 @@ sub AdjustTable {
     
     # Fix occurrences where the genus is empty.
     
-    my ($count) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_occs WHERE genus_name = ''");
+    my ($count) = DBRowQuery($mstr, "SELECT count(*) FROM $OCCURRENCES_TABLE WHERE genus_name = ''");
     
     if ( $count )
     {
@@ -313,32 +332,38 @@ sub AdjustTable {
 	
 	# If the taxonomic name is 'xxx indet.', set the genus to 'xxx'.
 	
-	DBCommand($mstr, "UPDATE offshore_occs SET genus_name=regexp_substr(name, '^\\w+'), \
-	species_name='indet.' WHERE name rlike '^\\w+ indet.' and genus_name = ''");
+	DBCommand($mstr, "UPDATE $OCCURRENCES_TABLE
+	SET genus_name=regexp_substr(name, '^\\w+'),
+	    species_name='indet.'
+	WHERE name rlike '^\\w+ indet.' and genus_name = ''");
 	
 	# If the taxonomic name starts with '"xxx"', set the genus name to 'xxx' and the
 	# genus modifier to 'informal'. I (MM) have determined that the modifier
 	# 'informal' more closely matches how quotes are used in this dataset than the
 	# modifier '"'.
 	
-	DBCommand($mstr, "UPDATE offshore_occs SET genus_name=regexp_substr(name, '(?<=\").*?(?=\")'), \
-	genus_modifier='informal' WHERE name rlike '^\"' and genus_name = ''");
+	DBCommand($mstr, "UPDATE $OCCURRENCES_TABLE
+	SET genus_name=regexp_substr(name, '(?<=\").*?(?=\")'),
+	    genus_modifier='informal'
+	WHERE name rlike '^\"' and genus_name = ''");
 	
 	# Do the same for some occurrences where the taxonomic name is '"Forma T"'.
 	
-	DBCommand($mstr, "UPDATE offshore_occs SET genus_name = 'Forma T', genus_modifier = 'informal' \
+	DBCommand($mstr, "UPDATE $OCCURRENCES_TABLE
+	SET genus_name = 'Forma T', genus_modifier = 'informal'
 	WHERE name = '\"Forma T\"'");
 	
 	# Verify that there are now 0 rows with an empty genus name.
 	
-	my ($newcount) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_occs WHERE genus_name = ''");
+	my ($newcount) = DBRowQuery($mstr, "SELECT count(*) FROM $OCCURRENCES_TABLE
+					WHERE genus_name = ''");
 	
 	say "There are now $newcount rows with genus_name = ''";
     }
     
     # Fix abbreviated species and subspecies modifiers.
     
-    my ($varcount) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_occs \
+    my ($varcount) = DBRowQuery($mstr, "SELECT count(*) FROM $OCCURRENCES_TABLE
 	WHERE subspecies_modifier in ('f.')");
     
     if ( $varcount )
@@ -358,31 +383,34 @@ sub AdjustTable {
 	WHERE subspecies_modifier = 'f.'");
     }
     
-    my ($scount) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_occs \
+    my ($scount) = DBRowQuery($mstr, "SELECT count(*) FROM $OCCURRENCES_TABLE
 	WHERE species_modifier in ('s.s.', 's.l.')");
     
     if ( $scount )
     {
 	say "There are $scount rows with species modifiers 's.s.', 's.l.'";
 	
-	DBCommand($mstr, "UPDATE offshore_occs SET species_modifier = 'sensu lato' \
+	DBCommand($mstr, "UPDATE $OCCURRENCES_TABLE SET species_modifier = 'sensu lato'
 	WHERE species_modifier = 's.l.'");
 	
-	DBCommand($mstr, "UPDATE offshore_occs SET species_modifier = 'sensu stricto' \
+	DBCommand($mstr, "UPDATE $OCCURRENCES_TABLE SET species_modifier = 'sensu stricto' \
 	WHERE species_modifier = 's.s.'");
     }
     
-    # Step V: check for the table `macrostrat_colls` and create it if it doesn't already exist.
+    # Step V: check for the table `coll_units` and create it if it doesn't already exist.
     
-    my ($ucheck) = DBRowQuery($pbdb, "SHOW TABLES LIKE 'macrostrat_colls'");
+    my ($ucheck) = DBRowQuery($pbdb, "SHOW TABLES LIKE '$TABLE{COLLECTION_UNITS}'");
     
-    unless ( $ucheck =~ /macrostrat_colls/ )
+    unless ( $ucheck =~ /coll_units/ )
     {
-	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `macrostrat_colls` (
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `$TABLE{COLLECTION_UNITS}` (
+		`id` int unsigned  not null PRIMARY KEY,
 		`collection_no` int unsigned not null,
 		`column_id` int unsigned not null default '0',
-		`unit_id` int unsigned not null default '0'
-		PRIMARY KEY (`collection_no`, `column_id`, `unit_id`)) Engine=InnoDB");
+		`unit_id` int unsigned not null default '0',
+		UNIQUE KEY (`collection_no`, `column_id`, `unit_id`),
+		KEY (`col_id`, `unit_id`),
+		KEY (`unit_id`)) Engine=InnoDB");
     }
 }
 
@@ -548,12 +576,13 @@ sub MatchUnits {
 
     foreach my $col ( @columns )
     {
-	my $sql = "SELECT id as collection_id, col_id, unit_id, top_depth, bottom_depth,
-			ms_lith
+	my $sql = "SELECT id as collection_id, col_id, unit_id, max_interval_id, min_interval_id,
+			ma, top_depth, bottom_depth, ms_lith
 	FROM $COLLECTIONS_TABLE
 	WHERE col_id  = '$col'
-	UNION SELECT 0 as collection_id, u.col_id, u.id as unit_id, position_top as top_depth,
-		position_bottom as bottom_depth, l.lith as ms_lith
+	UNION SELECT 0 as collection_id, u.col_id, u.id as unit_id,
+		0 as max_interval_id, 0 as min_interval_id, 0 as ma,
+		position_top as top_depth, position_bottom as bottom_depth, l.lith as ms_lith
 	FROM units as u
 	     left join unit_liths as ul on ul.unit_id = u.id join liths as l on l.id = ul.lith_id
 	     left join $COLLECTIONS_TABLE as c on c.col_id = u.col_id and c.unit_id = u.id
@@ -566,8 +595,8 @@ sub MatchUnits {
 	{
 	    my $result = DBArrayQuery($mstr, $sql);
 	    
-	    my $output = FormatTable(['collection_id', 'col_id', 'unit_id',
-				      'top_depth', 'bottom_depth', 'ms_lith'], @$result);
+	    my $output = FormatTable(['collection_id', 'col_id', 'unit_id', 'max_int', 'min_int',
+				      'ma', 'top_depth', 'bottom_depth', 'ms_lith'], @$result);
 	    
 	    $output .= "Found " . scalar(@$result) . " rows\n";
 	    
@@ -999,8 +1028,12 @@ sub InterpolateCollections {
 	    my $result = DBCommand($mstr, $sql);
 	    $updated += $result;
 	}
-
-	say "Updated $updated rows.\n";
+	
+	my $sql = "UPDATE $COLLECTIONS_TABLE
+		SET ma_direct = ma + 0
+		WHERE has_age";
+	
+	my $result = DBCommand($mstr, $sql);
     }
 }
 
@@ -1201,26 +1234,26 @@ sub UpdateAges {
     
     if ( $subcommand eq 'update' )
     {
-	$sql = "UPDATE offshore_collections
+	$sql = "UPDATE $COLLECTIONS_TABLE
 		SET has_age = 0, ma = null, ma_direct = '',
 		    max_interval_no = null, min_interval_no = null";
 	
 	$result = DBCommand($mstr, $sql);
 	
-	$sql = "UPDATE offshore_collections
+	$sql = "UPDATE $COLLECTIONS_TABLE
 		SET ma = 0.0, has_age = 1
 		WHERE mid_depth = 0 and unit_id > 0";
 	
 	$result = DBCommand($mstr, $sql);
 
-	$sql = "UPDATE offshore_collections as c
+	$sql = "UPDATE $COLLECTIONS_TABLE as c
 		    join unit_boundaries as bmin on bmin.unit_id = c.unit_id and bmin.unit_id_2 = 0
 		SET max_interval_no = bmin.t1
 		WHERE mid_depth = 0 and c.unit_id > 0";
 	
 	$result = DBCommand($mstr, $sql);
 	
-	$sql = "UPDATE offshore_collections as c join units as u on u.id = c.unit_id
+	$sql = "UPDATE $COLLECTIONS_TABLE as c join units as u on u.id = c.unit_id
 		    join unit_boundaries as bmin using (unit_id)
 		    join unit_boundaries as bmax on bmax.unit_id_2 = c.unit_id
 		SET ma = bmax.t1_age - (bmax.t1_age - bmin.t1_age) *
@@ -1230,7 +1263,7 @@ sub UpdateAges {
 	
 	$result = DBCommand($mstr, $sql);
 	
-	$sql = "UPDATE offshore_collections
+	$sql = "UPDATE $COLLECTIONS_TABLE
 		SET ma_direct = ma + 0
 		WHERE has_age";
 	
@@ -1239,32 +1272,227 @@ sub UpdateAges {
 
     elsif ( $subcommand eq 'check' )
     {
-	$sql = "SELECT distinct col_id, unit_id from offshore_collections as c
+	$sql = "SELECT distinct c.col_id, c.id as collection_id, c.ma,
+		    if(c.ma > imax.age_bottom, 'B', 'T') as dir
+		FROM $COLLECTIONS_TABLE as c
 		    join intervals as imax on imax.id = c.max_interval_id
-		WHERE c.ma > imax.age_bottom
+		    left join intervals as imin on imin.id = c.min_interval_id
+		WHERE c.ma > imax.age_bottom or c.ma < coalesce(imin.age_top, imax.age_top)
 		ORDER BY col_id, top_depth, bottom_depth";
 	
 	$result = DBArrayQuery($mstr, $sql);
 	
-	my $output = FormatTable(['col_id', 'unit_id'], @$result);
+	my $output = FormatTable(['col_id', 'collection_id', 'ma', 'dir'], @$result);
 	my $rows = scalar(@$result);
 	
-	$output .= "Found $rows units where the age was outside the max interval\n\n";
+	$output .= "Found $rows units where the age was outside the max/min interval\n\n";
 	
-	$sql = "SELECT distinct col_id, unit_id FROM offshore_collections as c
-		    join intervals as imin on imin.id = c.min_interval_id
-		WHERE c.ma < imin.age_top
-		ORDER BY col_id, top_depth, bottom_depth";
+	# $sql = "SELECT distinct col_id, unit_id FROM $COLLECTIONS_TABLE as c
+	# 	    join intervals as imin on imin.id = c.min_interval_id
+	# 	WHERE c.ma < imin.age_top
+	# 	ORDER BY col_id, top_depth, bottom_depth";
 	
-	$result = DBArrayQuery($mstr, $sql);
+	# $result = DBArrayQuery($mstr, $sql);
 	
-	$output .= FormatTable(['col_id', 'unit_id'], @$result);
-	$rows = scalar(@$result);
+	# $output .= FormatTable(['col_id', 'unit_id'], @$result);
+	# $rows = scalar(@$result);
 	
-	$output .= "Found $rows units where the age was outside the min interval\n\n";
+	# $output .= "Found $rows units where the age was outside the min interval\n\n";
 	
 	print $output;
     }
+}
+
+
+sub UpdateGeneraReport {
+
+    my ($subcommand) = @_;
+    
+    my $REPORT = "pbdb.age_check_genera";
+    
+    my $sql = "UPDATE $REPORT SET eodp_min = null, eodp_max = null, f0 = null, f1 = null";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $REPORT as r join
+		(SELECT o.genus_name, min(c.ma) as min_ma, max(c.ma) as max_ma
+		 FROM $OCCURRENCES_TABLE as o join $COLLECTIONS_TABLE as c on c.id = o.sample_id
+		 GROUP BY o.genus_name) as o on r.taxon_name = o.genus_name
+	    SET r.eodp_min = o.min_ma, r.eodp_max = o.max_ma";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $REPORT SET f0 = '*' WHERE source_min > 0 and eodp_min < source_min - 1.0";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $REPORT SET f0 = '**' WHERE source_min > 0 and eodp_min < source_min - 10.0";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $REPORT SET f1 = '*' WHERE source_max > 0 and eodp_max > source_max + 1.0";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $REPORT SET f1 = '**' WHERE source_max > 0 and eodp_max > source_max + 10.0";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $REPORT SET f1 = '*' WHERE source_min > 0 and eodp_max < source_min";
+    
+    DBCommand($mstr, $sql);
+
+    $sql = "UPDATE $REPORT SET f1 = '**' WHERE source_min > 0 and eodp_max < source_min - 10.0";
+    
+    DBCommand($mstr, $sql);
+}
+
+
+sub SetPBDBLiths {
+    
+    my $sql = "UPDATE $COLLECTIONS_TABLE as c join pbdb_lith_map as m using (ms_lith)
+	    SET c.pbdb_lith = m.pbdb_lith, c.pbdb_lithification = m.pbdb_lithification";
+
+    DBCommand($mstr, $sql);
+
+    $sql = "UPDATE $COLLECTIONS_TABLE as c join pbdb_lith_map as m on m.ms_lith = c.ms_lith_2
+	    SET c.pbdb_lith_2 = m.pbdb_lith, c.pbdb_lithification_2 = m.pbdb_lithification";
+    
+    DBCommand($mstr, $sql);
+}
+
+
+sub SetPBDBAttrs {
+
+    my ($subcommand) = @_;
+    
+    my $sql;
+    
+    $sql = "SHOW COLUMNS FROM collections LIKE 'minor_lithology'";
+    
+    my ($field, $type) = $pbdb->selectrow_array($sql);
+    
+    my %minor_lith = map { $_ => $_ } $type =~ /'(.*?)'/g;
+    
+    $minor_lith{cherty} = 'cherty/siliceous';
+    $minor_lith{siliceous} = 'cherty/siliceous';
+    
+    $sql = "SHOW COLUMNS FROM collections LIKE 'lithadj'";
+    
+    ($field, $type) = $pbdb->selectrow_array($sql);
+    
+    my %lith_adj = map { $_ => $_ } $type =~ /'(.*?)'/g;
+    
+    $sql = "SELECT distinct ms_lith_att FROM $COLLECTIONS_TABLE WHERE ms_lith_att <> ''
+	    UNION
+	    SELECT distinct ms_lith_att_2 FROM $COLLECTIONS_TABLE WHERE ms_lith_att_2 <> ''";
+    
+    my @lith_att_values = DBColumnQuery($mstr, $sql);
+    
+    my %attrs;
+    
+    foreach my $v ( @lith_att_values )
+    {
+	foreach my $a ( split /,/, $v )
+	{
+	    $attrs{$a} = 1;
+	}
+    }
+    
+    foreach my $k ( sort keys %attrs )
+    {
+	$lith_adj{$k} = 'bioturbation' if $k =~ /bioturbated/;
+	$lith_adj{$k} = 'brown' if $k =~ /brown/;
+	$lith_adj{$k} = 'gray' if $k =~ /gray/;
+	$lith_adj{$k} = 'shelly/skeletal' if $k =~ /shelly|skeletal/;
+	$lith_adj{$k} = 'diatomaceous' if $k eq 'diatom';
+    }
+
+    if ( $subcommand eq 'show' )
+    {
+	foreach my $k ( sort keys %attrs )
+	{
+	    my $minorlith = $minor_lith{$k} // '';
+	    my $lithadj = $lith_adj{$k} // '';
+	    say sprintf("%-20s%-20s%-20s", $k, $minorlith, $lithadj);
+	}
+    }
+    
+    elsif ( $subcommand eq 'generate' )
+    {
+	DBCommand($mstr, "DELETE FROM pbdb_attr_map");
+	
+	$sql = "SELECT distinct ms_lith_att FROM $COLLECTIONS_TABLE WHERE ms_lith_att <> ''
+		UNION
+		SELECT distinct ms_lith_att_2 FROM $COLLECTIONS_TABLE WHERE ms_lith_att_2 <> ''";
+	
+	my @lith_att_values = DBColumnQuery($mstr, $sql);
+	
+	foreach my $v ( @lith_att_values )
+	{
+	    my $qv = $mstr->quote($v);
+	    
+	    my %minors = map { $minor_lith{$_} => 1 } grep { $minor_lith{$_} } split /,/, $v;
+	    my $qminorlith = "null";
+	    $qminorlith = $mstr->quote(join(',', keys %minors)) if %minors;
+	    
+	    my %adjs = map { $lith_adj{$_} => 1 } grep { $lith_adj{$_} } split /,/, $v;
+	    my $qlithadj = "null";
+	    $qlithadj = $mstr->quote(join(',', keys %adjs)) if %adjs;
+	    
+	    $sql = "INSERT INTO pbdb_attr_map (ms_lith_att, pbdb_minor_lith, pbdb_lith_adj)
+		VALUES ($qv, $qminorlith, $qlithadj)";
+	    
+	    DBCommand($mstr, $sql);
+	}
+    }
+    
+    elsif ( $subcommand eq 'set' )
+    {
+	$sql = "UPDATE $COLLECTIONS_TABLE as c join pbdb_attr_map as m using (ms_lith_att)
+		SET c.pbdb_minor_lith = m.pbdb_minor_lith,
+		    c.pbdb_lith_adj = m.pbdb_lith_adj";
+	
+	DBCommand($mstr, $sql);
+
+	$sql = "UPDATE $COLLECTIONS_TABLE as c join pbdb_attr_map as m on
+			m.ms_lith_att = c.ms_lith_att_2
+		SET c.pbdb_minor_lith_2 = m.pbdb_minor_lith,
+		    c.pbdb_lith_adj_2 = m.pbdb_lith_adj";
+	
+	DBCommand($mstr, $sql);
+
+	$sql = "UPDATE $COLLECTIONS_TABLE
+		SET pbdb_lith_2 = null, pbdb_minor_lith_2 = null,
+		    pbdb_lith_adj_2 = null, pbdb_lithification_2 = null
+		WHERE pbdb_lith_2 = ''";
+	
+	DBCommand($mstr, $sql);
+    }
+}
+
+
+sub SetPBDBIntervals {
+    
+    my ($subcommand) = @_;
+    
+    my $sql = "UPDATE $COLLECTIONS_TABLE as c join intervals as i on i.id = c.max_interval_id
+		left join pbdb.interval_data as pi using (interval_name)
+	    SET c.pbdb_max_interval_no = pi.interval_no";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $COLLECTIONS_TABLE as c join intervals as i on i.id = c.min_interval_id
+		left join pbdb.interval_data as pi using (interval_name)
+	    SET c.pbdb_min_interval_no = pi.interval_no";
+    
+    DBCommand($mstr, $sql);
+    
+    $sql = "UPDATE $COLLECTIONS_TABLE
+	    SET pbdb_min_interval_no = null
+	    WHERE pbdb_max_interval_no = pbdb_min_interval_no";
+    
+    DBCommand($mstr, $sql);
 }
 
 
@@ -1320,7 +1548,7 @@ sub InsertData {
 	die "There is already eODP data in this database.\n";
     }
     
-    ($count) = DBRowQuery($mstr, "SELECT count(*) FROM offshore_occs WHERE genus_name = ''");
+    ($count) = DBRowQuery($mstr, "SELECT count(*) FROM $OCCURRENCES_TABLE WHERE genus_name = ''");
     
     if ( $count > 0 )
     {
@@ -1334,36 +1562,38 @@ sub InsertData {
     # Insert the collections
     
     DBCommand($pbdb, <<END_STMT);
-INSERT INTO collections (authorizer, enterer, authorizer_no, enterer_no, upload, upload_id,
-	research_group, license, reference_no, collection_name, country,
+INSERT INTO $TABLE{COLLECTION_DATA} (authorizer, enterer, authorizer_no, enterer_no,
+	upload, upload_id, research_group, license, reference_no, collection_name, country,
 	lat, lng, latlng_basis, gps_datum, geogscale, 
 	localsection, localbed, localbedunit, localorder, stratscale, environment, tectonic_setting,
 	pres_mode, assembl_comps, collection_type, collection_coverage, coll_meth, access_level,
-	max_interval_no, direct_ma, direct_ma_unit, direct_ma_method,
+	max_interval_no, min_interval_no, direct_ma, direct_ma_unit, direct_ma_method,
 	lithology1, fossilsfrom1, lithification, 
-	lithadj, minor_lithology, lithology2, fossilsfrom2,
+	lithadj, minor_lithology, lithology2, fossilsfrom2, lithification2, lithadj2,
+	minor_lithology2,
 	collectors, preservation_quality, fragmentation, abund_in_sediment, taxonomy_comments)
 SELECT 'A. Fraass', 'S. Peters', '919', '136', 'eODP', oc.id,
 	'eODP', 'CC BY', '82981', coll_name, country, 
 	cols.lat, cols.lng, 'stated in text', 'WGS84', 'hand sample',
 	site_hole, mid_depth, 'mbsf', 'top to bottom', 'bed', 'basinal (carbonate)', 'deep ocean basin',
 	'body', 'microfossils', 'biostratigraphic', 'some microfossils', 'core', 'the public',
-	pbdb_interval_no, round(ma, 2), 'Ma', 'age-depth',
+	pbdb_max_interval_no, pbdb_min_interval_no, round(ma, 2), 'Ma', 'age-depth',
 	if(pbdb_lith<>'',pbdb_lith,'not reported'), 'Y', pbdb_lithification,
         pbdb_lith_adj, pbdb_minor_lith,	pbdb_lith_2, if(pbdb_lith_2<>'', 'Y', NULL),
+	pbdb_lithification_2, pbdb_lith_adj_2, pbdb_minor_lith_2,
 	'IODP', pbdb_pres, pbdb_frag, pbdb_abund, data_source_notes
 FROM macrostrat.$COLLECTIONS_TABLE as oc
 	JOIN macrostrat.cols as cols on col_id=cols.id
-WHERE taxa_count > 0
+WHERE taxa_count > 0 and ms_lith <> ''
 END_STMT
     
     # Insert the newly added collections into the `coll_units` table
     
     DBCommand($pbdb, <<END_STMT);
-INSERT INTO coll_units (collection_no, col_id, unit_id)
+INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, col_id, unit_id)
 SELECT c.collection_no, oc.col_id, oc.unit_id
-FROM collections as c JOIN macrostrat.$COLLECTIONS_TABLE as oc
-	on oc.id = c.upload_id and c.upload = 'eODP'
+FROM collections as c JOIN macrostrat.$COLLECTIONS_TABLE as mc
+	on mc.id = c.upload_id and c.upload = 'eODP'
 END_STMT
     
     # Set the latitude and longitude fields from the raw lat/lng numbers.
@@ -1390,7 +1620,8 @@ END_STMT
     # Insert occurrences
     
     DBCommand($pbdb, <<END_STMT);
-INSERT INTO occurrences (authorizer, enterer, authorizer_no, enterer_no, upload, upload_id,
+INSERT INTO $TABLE{OCCURRENCE_DATA} (authorizer, enterer, authorizer_no, enterer_no,
+	upload, upload_id,
 	reference_no, collection_no, taxon_no, genus_reso, genus_name, subgenus_name, 
 	species_reso, species_name, subspecies_reso, subspecies_name, 
 	abund_value, abund_unit, comments)
@@ -1398,7 +1629,7 @@ SELECT 'A. Fraass', 'S. Peters', '919', '136', 'eODP', oo.id, '82981',
 	collection_no, pbdb_taxon_id, genus_modifier, genus_name, subgenus_name,
 	species_modifier, species_name, subspecies_modifier, subspecies_name,
 	cleaned_code, code_unit, comments
-FROM macrostrat.offshore_occs as oo
+FROM macrostrat.$OCCURRENCES_TABLE as oo
 	JOIN collections as c on oo.sample_id = c.upload_id and c.upload='eODP'
 END_STMT
     
@@ -1406,21 +1637,215 @@ END_STMT
 }
 
 
+sub UpdateData {
+
+    my (@sections) = @_;
+    
+    my %selector = map { $_ => 1 } grep { $_ } @sections;
+    
+    my $updates = 0;
+    
+    say "Starting transaction...";
+    
+    $pbdb->begin_work or die $pbdb->errstr;
+    
+    # Update the collections
+    
+    if ( $selector{countries} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA} as c
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id and c.upload = 'eODP'
+SET c.country = mc.country
+END_STMT
+    }
+    
+    if ( $selector{latlng} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA} as c
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id and c.upload = 'eODP'
+	join macrostrat.cols as cols on mc.col_id = cols.id
+SET c.lat = cols.lat,
+    c.lng = cols.lng
+END_STMT
+	
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA}
+SET lngdeg=floor(abs(lng)), lngdir=if(lng<0, 'West', 'East'), 
+    latdeg=floor(abs(lat)), latdir=if(lat<0, 'South', 'North')
+WHERE upload='eODP'
+END_STMT
+	
+	DBCommand($pbdb, <<END_STMT);
+UPDATE collections
+SET lngmin=floor((abs(lng)-lngdeg)*60), latmin=floor((abs(lat)-latdeg)*60)
+WHERE upload='eODP'
+END_STMT
+	
+	DBCommand($pbdb, <<END_STMT);
+UPDATE collections
+SET lngsec=floor(((abs(lng)-lngdeg)*60-lngmin)*60), latsec=floor(((abs(lat)-latdeg)*60-latmin)*60)
+WHERE upload='eODP'
+END_STMT
+    }
+    
+    if ( $selector{depths} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA} as c
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id and c.upload = 'eODP'
+	join macrostrat.cols as cols on mc.col_id = cols.id
+SET c.localbed = mc.mid_depth
+END_STMT
+    }
+    
+    if ( $selector{intervals} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA} as c
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id and c.upload = 'eODP'
+SET c.max_interval_no = mc.pbdb_max_interval_no,
+    c.min_interal_no = mc.pbdb_min_interval_no,
+    c.direct_ma = round(mc.ma, 2)
+END_STMT
+    }
+    
+    if ( $selector{lithologies} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA} as c
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id and c.upload = 'eODP'
+SET c.lithology1 = if(mc.pbdb_lith<>'', mc.pbdb_lith, 'not reported'),
+    c.lithification = mc.pbdb_lithification,
+    c.lithadj = mc.pbdb_lith_adj,
+    c.lithification = mc.pbdb_minor_lith,
+    c.lithology2 = mc.pbdb_lith_2,
+    c.fossilsfrom2 = if(pbdb_lith_2<>'', 'Y', NULL),
+    c.lithification2 = mc.pbdblithification_2,
+    c.lithadj2 = mc.pbdb_lith_adj_2,
+    c.minor_lithology2 = mc.pbdb_minor_lith_2
+END_STMT
+    }
+    
+    if ( $selector{preservation} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA} as c
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id and c.upload = 'eODP'
+SET c.preservation_quality = mc.pbdb_pres,
+    c.fragmentation = mc.pbdb_frag,
+    c.abund_in_sediment = mc.pbdb_abund
+END_STMT
+    }
+    
+    if ( $selector{comments} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_DATA} as c
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id and c.upload = 'eODP'
+SET c.taxonomy_comments = mc.data_source_notes
+END_STMT
+    }
+    
+    if ( $selector{units} || $selector{colls} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{COLLECTION_UNITS} as cu join $TABLE{COLLECTION_DATA} as c
+	    on cu.collection_no = c.collection_no and c.upload = 'eODP'
+	join macrostrat.$COLLECTIONS_TABLE as mc on c.upload_id = mc.id
+SET cu.unit_id = mc.unit_id,
+    cu.col_id = mc.col_id
+END_STMT
+    }
+    
+    # Update occurrences
+    
+    if ( $selector{taxon_names} || $selector{'taxon-names'} || $selector{occs} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{OCCURRENCE_DATA} as o
+	join macrostrat.$OCCURRENCES_TABLE as oo on o.upload_id = oo.id and o.upload = 'eODP'
+SET o.genus_reso = oo.genus_modifier,
+    o.genus_name = oo.genus_name,
+    o.subgenus_reso = oo.subgenus_modifier,
+    o.subgenus_name = oo.subgenus_name,
+    o.species_reso = oo.species_modifier,
+    o.species_name = oo.species_name,
+    o.subspecies_reso = oo.subspecies_modifier,
+    o.subspecies_name = oo.subspecies_name
+END_STMT
+    }
+    
+    if ( $selector{taxon_nos} || $selector{'taxon-nos'} || $selector{occs} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{OCCURRENCE_DATA} as o
+	join macrostrat.$OCCURRENCES_TABLE as oo on o.upload_id = oo.id and o.upload = 'eODP'
+SET o.taxon_no = oo.pbdb_taxon_id
+END_STMT
+    }
+    
+    if ( $selector{abundances} || $selector{occs} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{OCCURRENCE_DATA} as o
+	join macrostrat.$OCCURRENCES_TABLE as oo on o.upload_id = oo.id and o.upload = 'eODP'
+SET o.abund_value = oo.cleaned_code,
+    o.abund_unit = oo.code_unit
+END_STMT
+    }
+    
+    if ( $selector{occ_comments} || $selector{'occ-comments'} || $selector{occs} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{OCCURRENCE_DATA} as o
+	join macrostrat.$OCCURRENCES_TABLE as oo on o.upload_id = oo.id and o.upload = 'eODP'
+SET o.comments = oo.comments
+END_STMT
+    }
+    
+    if ( $updates )
+    {
+	$pbdb->commit;
+    }
+
+    else
+    {
+	say "You did not specify a valid section to update";
+    }
+}
+
+
 sub RemoveData {
     
     say "Removing eODP data from the PBDB...";
     
-    DBCommand($pbdb, "DELETE FROM occurrences WHERE upload='eODP'");
+    DBCommand($pbdb, "DELETE FROM $TABLE{OCCURRENCE_DATA} WHERE upload='eODP'");
     
-    my ($next) = DBRowQuery($pbdb, "SELECT max(occurrence_no)+1 FROM occurrences");
+    my ($next) = DBRowQuery($pbdb, "SELECT max(occurrence_no)+1 FROM $TABLE{OCCURRENCE_DATA}");
     
-    DBCommand($pbdb, "ALTER TABLE occurrences AUTO_INCREMENT = $next");
+    DBCommand($pbdb, "ALTER TABLE $TABLE{OCCURRENCE_DATA} AUTO_INCREMENT = $next");
     
-    DBCommand($pbdb, "DELETE FROM collections WHERE upload='eODP'");
+    DBCommand($pbdb, "DELETE FROM $TABLE{COLLECTION_UNITS} as cu
+			  join $TABLE{COLLECTION_DATA} as c
+			  on cu.collection_no = c.collection_no and c.upload = 'eODP'");
     
-    ($next) = DBRowQuery($pbdb, "SELECT max(collection_no)+1 FROM collections");
+    ($next) = DBRowQuery($pbdb, "SELECT max(collection_no)+1 FROM $TABLE{COLLECTION_DATA}");
     
-    DBCommand($pbdb, "ALTER TABLE collections AUTO_INCREMENT = $next");
+    DBCommand($pbdb, "ALTER TABLE $TABLE{COLLECTION_DATA} AUTO_INCREMENT = $next");
 }
 
 
