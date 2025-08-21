@@ -1421,9 +1421,9 @@ sub generate_ts_diagram {
 		
 		if ( my $pkey = $bound2d[$rtop][$c] )
 		{
-		    if ( $cell_top{$pkey} && $itop eq $cell_top{$pkey} &&
-			 $cell_base{$pkey} && $ibase eq $cell_base{$pkey} &&
-			 $cell_type{$pkey} && $itype eq $cell_type{$pkey} )
+		    if ( defined $cell_top{$pkey} && $itop eq $cell_top{$pkey} &&
+			 defined $cell_base{$pkey} && $ibase eq $cell_base{$pkey} &&
+			 defined $cell_type{$pkey} && $itype eq $cell_type{$pkey} )
 		    {
 			delete $cell_label{$ikey};
 			$cell_label{$pkey} .= '/' . $iname;

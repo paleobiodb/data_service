@@ -10,7 +10,7 @@ use strict;
 use lib 'lib';
 use utf8;
 
-use CoreFunction qw(connectDB);
+use CoreFunction qw(loadConfig configData connectDB);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
 
@@ -19,6 +19,7 @@ use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use JSON;
 use Encode;
 use LWP::UserAgent;
+use Term::ReadLine;
 use Carp qw(croak);
 use List::Util qw(any max min);
 
@@ -66,7 +67,7 @@ our ($COLOR_RE) = qr{ ^ \# [0-9A-F]{6} $ }x;
 
 our (%INTERVAL_TYPE) = (eon => 1, era => 1, period => 1, epoch => 1,
 			subepoch => 1, age => 1, subage => 1,
-			zone => 1, chron => 1, bin => 1);
+			zone => 1, subzone => 1, chron => 1, subchron => 1, bin => 1);
 
 our (%TYPE_LABEL) = (eon => 'Eons', era => 'Eras', period => 'Periods',
 		     epoch => 'Epochs', subepoch => 'Subepochs', 
@@ -100,19 +101,31 @@ $| = 1;
 # Start by parsing command-line options.
 
 my ($opt_quiet, $opt_verbose, $opt_url, $opt_format, $opt_file, $opt_output, $opt_interval,
-    $opt_dbname, $opt_force, $opt_debug, $opt_help);
+    $opt_dbname, $opt_config, $opt_force, $opt_debug, $opt_help);
 
 GetOptions("quiet|q" => \$opt_quiet,
 	   "verbose|v" => \$opt_verbose,
 	   "url|u=s" => \$opt_url,
 	   "format=s" => \$opt_format,
 	   "file|f=s" => \$opt_file,
+	   "config|F" => \$opt_config,
 	   "out|o=s" => \$opt_output,
 	   "interval|i=s" => \$opt_interval,
 	   "db=s" => \$opt_dbname,
 	   "force" => \$opt_force,
 	   "help|h" => \$opt_help,
 	   "debug|D" => \$opt_debug) or die;
+
+# Read the pbapi container configuration file so that we know how to connect to the database.
+
+loadConfig($opt_config);
+
+my $dbconf = configData('Database');
+
+if ( $ENV{PWD} ne '/var/paleomacro/pbapi' )
+{
+    $dbconf->{host} = '127.0.0.1';
+}
 
 # The first remaining argument specifies a subcommand.
 
@@ -691,15 +704,15 @@ sub ReadSheet {
 	
 	if ( $t_type eq 'use' )
 	{
-	    if ( $record->{top} ne $record->{interval_name} )
-	    {
-		push @ERRORS, "at line $line_no, interval $interval_no bad top '$record->{top}'";
-	    }
+	    # if ( $record->{top} ne $record->{interval_name} )
+	    # {
+	    # 	push @ERRORS, "at line $line_no, interval $interval_no bad top '$record->{top}'";
+	    # }
 	    
-	    if ( $record->{base} && $record->{base} ne $record->{interval_name} )
-	    {
-		push @ERRORS, "at line $line_no, interval $interval_no bad base '$record->{base}'";
-	    }		
+	    # if ( $record->{base} && $record->{base} ne $record->{interval_name} )
+	    # {
+	    # 	push @ERRORS, "at line $line_no, interval $interval_no bad base '$record->{base}'";
+	    # }		
 	}
 	
 	# If t_type is anything other than 'use', then top and base cannot be the same as
@@ -1796,7 +1809,7 @@ sub DiagramPBDBScales {
     
     my ($dbname, @args) = @_;
     
-    my $dbh = connectDB("config.yml", $dbname);
+    my $dbh = connectDB($opt_config, $dbname);
     
     CheckScaleTables($dbh);
     
@@ -1921,7 +1934,7 @@ sub TopAgeRef {
     
     elsif ( $type eq 'use' )
     {
-	my $name = $interval->{interval_name};
+	my $name = $interval->{top};
 	my $lookup = $INTERVAL_NAME{$name};
 	
 	if ( $lookup && $lookup ne $interval )
@@ -2012,7 +2025,7 @@ sub BaseAgeRef {
     
     elsif ( $interval->{t_type} eq 'use' )
     {
-	my $name = $interval->{interval_name};
+	my $name = $interval->{top};
 	my $lookup = $INTERVAL_NAME{$name};
 	
 	if ( $lookup && $lookup ne $interval )
@@ -2022,7 +2035,7 @@ sub BaseAgeRef {
 	
 	else
 	{
-	    return "could not fine '$name' at line $line";
+	    return "could not find '$name' at line $line";
 	}
     }
     
@@ -2609,7 +2622,7 @@ sub DiffPBDB {
     
     my ($cmd, $dbname, @args) = @_;
     
-    my $dbh = connectDB("config.yml", $dbname);
+    my $dbh = connectDB($opt_config, $dbname);
     
     # Select timescales matching the arguments given.
     
@@ -4640,7 +4653,7 @@ sub PBDBCommand {
     
     my ($cmd, $dbname, @args) = @_;
     
-    my $dbh = connectDB("config.yml", $dbname);
+    my $dbh = connectDB($opt_config, $dbname);
     
     my ($sql, $result, $count);
     
