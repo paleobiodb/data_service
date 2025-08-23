@@ -2884,14 +2884,14 @@ sub generate_stratname_filter {
 
     if ( @formations )
     {
-	my $regex = $dbh->quote(join('|', @groups));
+	my $regex = $dbh->quote(join('|', @formations));
 	
 	push @clauses, "cs.formation rlike $regex";
     }
 
     if ( @members )
     {
-	my $regex = $dbh->quote(join('|', @groups));
+	my $regex = $dbh->quote(join('|', @members));
 	
 	push @clauses, "cs.member rlike $regex";
     }

@@ -4650,7 +4650,7 @@ sub CreatePBDBScale {
 
     if ( $PLACE )
     {
-	$sql = "INSERT INTO $SCALE_DATA (scale_no, scale_name, color, locality, place
+	$sql = "INSERT INTO $SCALE_DATA (scale_no, scale_name, color, locality, place,
 		    reference_no, $T_AGE, $B_AGE, authorizer_no, enterer_no)
 	        VALUES ($scale_no, $qname, $qcolor, $qloc, $qplace, $qrefno, $qtop, $qbase,
 			$qauth, $qauth)";
