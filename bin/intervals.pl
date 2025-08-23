@@ -52,7 +52,7 @@ our (%INTERVAL_NAME, %INTERVAL_NUM, @ALL_INTERVALS);
 our (%SCALE_NAME, %SCALE_NUM, %SCALE_INTS, @SCALE_NUMS, %SCALE_CHECKED, %SCALE_SELECT);
 our (%DIFF_NAME, %DIFF_INT, @DIFF_MISSING, @DIFF_EXTRA);
 our (%DIFF_SCALE, @DIFF_MISSING_SCALES);
-our ($HAS_UNC, $T_AGE, $B_AGE, $T_UNC, $B_UNC);
+our ($HAS_UNC, $T_AGE, $B_AGE, $T_UNC, $B_UNC, $PLACE);
 our (@ERRORS);
 
 # The following regexes validate ages and colors respectively.
@@ -291,7 +291,8 @@ elsif ( $CMD eq 'update' || $CMD eq 'debug' )
 # subcommand 'restore' restores the tables to match the contents of the backup tables.
 # The subcommand 'ints' synchronizes the 'intervals' table with the 'interval_data' table.
 
-elsif ( $CMD eq 'backup' || $CMD eq 'restore' || $CMD eq 'ints' || $CMD eq 'validate' )
+elsif ( $CMD eq 'backup' || $CMD eq 'restore' || $CMD eq 'ints' || $CMD eq 'validate' ||
+	$CMD eq 'delete' )
 {
     my $SUBCMD = shift @REST;
     
@@ -485,8 +486,24 @@ sub ReadSheet {
 		
 		unless ( $interval_name )
 		{
-		    $SCALE_NUM{$scale_no}{type} = $record->{type} 
-			if $record->{type};
+		    my $type = $record->{type};
+		    my $place;
+		    
+		    if ( $type =~ /(.*?)-(\d+)/ )
+		    {
+			$type = $1;
+			$place = $2;
+		    }
+
+		    elsif ( $type =~ /-/ )
+		    {
+			push @ERRORS, "at line $line_no, bad type '$type'";
+		    }
+		    
+		    $SCALE_NUM{$scale_no}{type} = $type
+			if $type;
+		    $SCALE_NUM{$scale_no}{place} = $place
+			if $place;
 		    $SCALE_NUM{$scale_no}{color} = $record->{color}
 			if $record->{color};
 		    $SCALE_NUM{$scale_no}{reference_no} = $record->{reference_no} 
@@ -704,15 +721,15 @@ sub ReadSheet {
 	
 	if ( $t_type eq 'use' )
 	{
-	    # if ( $record->{top} ne $record->{interval_name} )
-	    # {
-	    # 	push @ERRORS, "at line $line_no, interval $interval_no bad top '$record->{top}'";
-	    # }
+	    if ( $record->{top} ne $record->{interval_name} )
+	    {
+		push @ERRORS, "at line $line_no, interval $interval_no bad top '$record->{top}'";
+	    }
 	    
-	    # if ( $record->{base} && $record->{base} ne $record->{interval_name} )
-	    # {
-	    # 	push @ERRORS, "at line $line_no, interval $interval_no bad base '$record->{base}'";
-	    # }		
+	    if ( $record->{base} && $record->{base} ne $record->{interval_name} )
+	    {
+		push @ERRORS, "at line $line_no, interval $interval_no bad base '$record->{base}'";
+	    }		
 	}
 	
 	# If t_type is anything other than 'use', then top and base cannot be the same as
@@ -2652,7 +2669,7 @@ sub DiffPBDB {
     
     CheckScaleTables($dbh);
     
-    $AUTHORIZER_NO = AuthenticateSession($dbh);
+    $AUTHORIZER_NO = AuthenticateSession($dbh) if $cmd eq 'update';
     
     # If we are updating, generate an "update" diff rather than a "display"
     # diff. 
@@ -2993,6 +3010,7 @@ sub DiffPBDB {
 	my $line_no = $s->{line_no};
 	my $name = $s->{scale_name};
 	my $locality = $s->{type};
+	my $place = $s->{place};
 	my $reference_no = $s->{reference_no};
 	my $color = $s->{color};
 	my $t_age = $s->{t_age};
@@ -3009,6 +3027,11 @@ sub DiffPBDB {
 	    if ( $locality ne $p->{locality} )
 	    {
 		$DIFF_SCALE{$scale_no}{type} = DiffElt($u, $locality, $p->{locality});
+	    }
+	    
+	    if ( $place ne $p->{place} )
+	    {
+		$DIFF_SCALE{$scale_no}{place} = DiffElt($u, $place, $p->{place});
 	    }
 	    
 	    if ( $color ne $p->{color} )
@@ -3411,6 +3434,17 @@ sub PrintDifferences {
 		$DIFF_SCALE{$scale_no}{scale_name} = $SCALE_NUM{$scale_no}{scale_name};
 		$DIFF_SCALE{$scale_no}{interval_no} = 'sequence' 
 		    if $DIFF_SCALE{$scale_no}{sequence};
+
+		if ( $DIFF_SCALE{$scale_no}{type} && $DIFF_SCALE{$scale_no}{place} )
+		{
+		    $DIFF_SCALE{$scale_no}{type} =
+			"$DIFF_SCALE{$scale_no}{type} :: $DIFF_SCALE{$scale_no}{place}";
+		}
+
+		elsif ( $DIFF_SCALE{$scale_no}{place} )
+		{
+		    $DIFF_SCALE{$scale_no}{type} = $DIFF_SCALE{$scale_no}{place};
+		}
 		
 		print RecordToLine($DIFF_SCALE{$scale_no}, \@FIELD_LIST);
 	    }
@@ -3640,7 +3674,7 @@ sub FetchPBDBScale {
     my $qs = $dbh->quote($scale_no);
     
     my $sql = "SELECT scale_no, scale_name, $B_AGE as b_age, $T_AGE as t_age, color,
-		   locality, reference_no, authorizer_no, enterer_no, modifier_no
+		   locality, reference_no, authorizer_no, enterer_no, modifier_no $PLACE
 		FROM $TableDefs::TABLE{SCALE_DATA} as s
 		WHERE s.scale_no = $qs";
     
@@ -4527,6 +4561,13 @@ sub UpdatePBDBScale {
 	push @sd_updates, "locality = $qloc";
     }
     
+    if ( $diff->{place} )
+    {
+	my $qplace = $dbh->quote($diff->{place});
+
+	push @sd_updates, "place = $qplace";
+    }
+    
     if ( $diff->{reference_no} )
     {
 	my $qrefno = $dbh->quote($diff->{reference_no} || '0');
@@ -4599,16 +4640,28 @@ sub CreatePBDBScale {
     my $qname = $dbh->quote($name);
     my $qcolor = $dbh->quote($diff->{color});
     my $qloc = $dbh->quote($diff->{type});
+    my $qplace = $dbh->quote($diff->{place});
     my $qrefno = $dbh->quote($diff->{reference_no} || '0');
     my $qtop = $dbh->quote($diff->{top});
     my $qbase = $dbh->quote($diff->{base});
     my $qauth = $dbh->quote($SCALE_NUM{$scale_no}{authorizer_no} || $AUTHORIZER_NO);
     
     # Create a record in the scale_data table.
+
+    if ( $PLACE )
+    {
+	$sql = "INSERT INTO $SCALE_DATA (scale_no, scale_name, color, locality, place
+		    reference_no, $T_AGE, $B_AGE, authorizer_no, enterer_no)
+	        VALUES ($scale_no, $qname, $qcolor, $qloc, $qplace, $qrefno, $qtop, $qbase,
+			$qauth, $qauth)";
+    }
     
-    $sql = "INSERT INTO $SCALE_DATA (scale_no, scale_name, color, locality,
-		reference_no, $T_AGE, $B_AGE, authorizer_no, enterer_no)
-	    VALUES ($scale_no, $qname, $qcolor, $qloc, $qrefno, $qtop, $qbase, $qauth, $qauth)";
+    else
+    {
+	$sql = "INSERT INTO $SCALE_DATA (scale_no, scale_name, color, locality,
+		    reference_no, $T_AGE, $B_AGE, authorizer_no, enterer_no)
+	        VALUES ($scale_no, $qname, $qcolor, $qloc, $qrefno, $qtop, $qbase, $qauth, $qauth)";
+    }
     
     $result = DoStatement($dbh, $sql);
     
@@ -4965,6 +5018,38 @@ sub PBDBCommand {
 	}
     }
     
+    # If the command is 'delete', then delete the specified timescale.
+    
+    elsif ( $cmd eq 'delete' )
+    {
+	unless ( @args == 1 && $args[0] && $args[0] =~ /^\d+$/ )
+	{
+	    die "You must specify a timescale (by number) to delete\n";
+	}
+	
+	my $delete_timescale = "'$args[0]'";
+	
+	$sql = "DELETE FROM $TABLE{INTERVAL_DATA} WHERE scale_no = $delete_timescale";
+	
+	my ($int_count) = DoStatement($dbh, $sql);
+	
+	say "Deleted $int_count intervals.";
+	
+	$sql = "DELETE FROM $TABLE{SCALE_MAP} WHERE scale_no = $delete_timescale";
+	
+	my ($map_count) = DoStatement($dbh, $sql);
+	
+	say "Deleted $map_count sequence entries.";
+	
+	$sql = "DELETE FROM $TABLE{SCALE_DATA} WHERE scale_no = $delete_timescale";
+	
+	my ($scale_count) = DoStatement($dbh, $sql);
+	
+	say "Deleted $scale_count timescales.";
+	
+	SyncIntervalsTable($dbh);
+    }
+    
     else
     {
 	die "Unknown command 'cmd'\n";
@@ -4985,9 +5070,10 @@ sub SyncIntervalsTable {
     
     my $INTERVAL_DATA = $TABLE{INTERVAL_DATA};
     my $CLASSIC_INTS = $TABLE{CLASSIC_INTERVALS};
+    my $CLASSIC_LOOKUP = $TABLE{CLASSIC_INTERVAL_LOOKUP};
     
-    # Start by deleting anything in the intervals table that isn't in the intervals_data
-    # table. 
+    # Start by deleting anything in the classic intervals table and lookup table
+    # that isn't in the intervals_data table.
     
     $sql = "DELETE $CLASSIC_INTS
 	    FROM $CLASSIC_INTS left join $INTERVAL_DATA using (interval_no)
@@ -4997,7 +5083,18 @@ sub SyncIntervalsTable {
     
     if ( $result > 0 )
     {
-	say STDERR "  Deleted $result intervals from the classic intervals table";
+	say "  Deleted $result intervals from the classic intervals table";
+    }
+    
+    $sql = "DELETE $CLASSIC_LOOKUP
+	    FROM $CLASSIC_LOOKUP left join $INTERVAL_DATA using (interval_no)
+	    WHERE $INTERVAL_DATA.interval_no is null";
+    
+    $result = DoStatement($dbh, $sql);
+
+    if ( $result > 0 )
+    {
+	say "  Deleted $result intervals from the classic interval lookup table";
     }
     
     # Now compare the names between the two tables, and update eml_interval and
@@ -5038,7 +5135,7 @@ sub SyncIntervalsTable {
 	    
 	    $result = DoStatement($dbh, $sql);
 	    
-	    say STDERR  "  Created $qname ($interval_no) in the classic intervals table"
+	    say  "  Created $qname ($interval_no) in the classic intervals table"
 		unless $opt_debug;
 	}
 	
@@ -5051,7 +5148,7 @@ sub SyncIntervalsTable {
 	    
 	    $result = DoStatement($dbh, $sql);
 	    
-	    say STDERR "  Renamed $qname ($interval_no) in the classic intervals table"
+	    say "  Renamed $qname ($interval_no) in the classic intervals table"
 		unless $opt_debug;
 	}
     }
@@ -5069,7 +5166,7 @@ sub SyncIntervalsTable {
     
     if ( $result > 0 )
     {
-	say STDERR "  Updated $result rows in the classic intervals table";
+	say "  Updated $result rows in the classic intervals table";
     }
     
     $sql = "UPDATE $TABLE{INTERVAL_DATA} as i join $TABLE{CLASSIC_INTERVAL_LOOKUP} as l
@@ -5081,7 +5178,7 @@ sub SyncIntervalsTable {
     
     if ( $result > 0 )
     {
-	say "Updated $result ages in the interval lookup table";
+	say "  Updated $result ages in the interval lookup table";
     }
 }
 
@@ -5179,6 +5276,20 @@ sub CheckScaleTables {
     
     $T_UNC = ( $def =~ /`t_unc`/ ) ? 't_unc' : 'late_unc';
     $B_UNC = ( $def =~ /`b_unc`/ ) ? 'b_unc' : 'early_unc';
+    
+    $sql = "SHOW CREATE TABLE $TABLE{SCALE_DATA}";
+    
+    ($table, $def) = $dbh->selectrow_array($sql);
+    
+    if ( $def =~ /`place`/ )
+    {
+	$PLACE = ', place';
+    }
+    
+    else
+    {
+	$PLACE = '';
+    }
 }
 
 
@@ -5220,6 +5331,13 @@ sub ConditionScaleTables {
 	
 	DoStatement($dbh, "ALTER TABLE `$INTERVAL_DATA` MODIFY `t_type`
 				enum('anchor','gssp','reference','defined','interpolated') NOT NULL");
+    }
+    
+    my ($field, $type) = $dbh->selectrow_array("SHOW COLUMNS FROM `$SCALE_DATA` like 'place'");
+    
+    unless ( $field && $field =~ /place/ )
+    {
+	DoStatement($dbh, "ALTER TABLE `$SCALE_DATA` ADD `place` tinyint after `locality`");
     }
 }
 
