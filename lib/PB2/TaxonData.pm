@@ -3177,6 +3177,11 @@ sub auto {
 			JOIN $names_table as n on n.taxon_no = $match_field
 	        WHERE taxon_name like $name ORDER BY n_occs desc $limit";
     }
+
+    else
+    {
+	return;
+    }
     
     $request->{main_sql} = $sql;
     
