@@ -291,11 +291,11 @@ sub initialize {
 	    "results will continue to be integers.",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{COL} },
 	    "The type of this object: C<$IDP{COL}> for a collection",
-        { output => '_label', com_name => 'rlb' },
+        { output => '_label', com_name => 'rlb', if_tag => 'entry' },
 	    "For data entry operations, this field will report the record",
 	    "label value, if any, that was submitted with each record.",
-        { output => '_status', com_name => 'sta' },
-	    "Records that were deleted will have the value 'deleted' in this field.",
+        { output => '_status', com_name => 'sta', if_tag => 'entry' },
+	    "records that were deleted will have the value 'deleted' in this field.",
 	{ output => 'permissions', com_name => 'prm' },
 	    "The accessibility of this record.  If empty, then the record is",
 	    "public.  Otherwise, the value of this record will be one",
@@ -444,7 +444,7 @@ sub initialize {
 	@bin_levels);
     
     $ds->define_block('1.2:colls:mslink' =>
-	{ select => ['group_concat(distinct ms.column_id order by ms.column_id) as column_id',
+	{ select => ['group_concat(distinct ms.col_id order by ms.col_id) as column_id',
 		     'group_concat(distinct ms.unit_id order by ms.unit_id) as unit_id' ], 
 	  tables => ['ms'] },
 	{ output => 'column_id', com_name => 'msc' },
@@ -3428,36 +3428,43 @@ sub generateMainFilters {
 	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
 	    
 	    try {
-		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE', all_names => 1, 
-								current => 1, debug_out => $debug_out });
+		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR,t.name',
+								all_names => 1, 
+								debug_out => $debug_out });
 	    };
 	    
 	    # catch {
 	    # 	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
 	    # 	die $_;
 	    # };
+
+	    # print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
 	    
 	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
 	    @include_taxa = grep { ! $_->{exclude} } @taxa;
 	}
 	
-	# Otherwise, we get the best match for each given name (generally the
-	# one with the most occurrences in the database).  We will need to
+	# Otherwise, get all matches for each given name. We will need to
 	# collect included and excluded names separately.
 	
 	else
 	{
 	    my @taxa;
+	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
+	    my $current = $no_synonyms ? '' : 1;
 	    
 	    try {
-		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
-	    }
-	    
-	    catch {
-		print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-		die $_;
+		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR,t.name',
+								all_names => 1,
+								current => $current,
+								debug_out => $debug_out });
 	    };
+	    
+	    # catch {
+	    # 	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+	    # 	die $_;
+	    # };
 	    
 	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
@@ -3473,7 +3480,8 @@ sub generateMainFilters {
 	    {
 		if ( $all_children )
 		{
-		    push @exclude_taxa, $taxonomy->list_taxa('juniors', \@include_taxa, { fields => 'RANGE' });
+		    push @exclude_taxa, $taxonomy->list_taxa('juniors', \@include_taxa,
+							     { fields => 'RANGE,ATTR,t.name' });
 		}
 	    }
 	    
@@ -3482,15 +3490,19 @@ sub generateMainFilters {
 	    
 	    elsif ( $all_children )
 	    {
-		@include_taxa = $taxonomy->list_taxa('senior', \@include_taxa, { fields => 'RANGE' });
-		@exclude_taxa = $taxonomy->list_taxa('senior', \@exclude_taxa, { fields => 'RANGE' }) if @exclude_taxa;
+		@include_taxa = $taxonomy->list_taxa('senior', \@include_taxa,
+						     { fields => 'RANGE,ATTR,t.name' });
+		@exclude_taxa = $taxonomy->list_taxa('senior', \@exclude_taxa,
+						     { fields => 'RANGE,ATTR,t.name' })
+		    if @exclude_taxa;
 	    }
 	    
 	    # Otherwise, we want all synonyms of the included taxa.  We can ignore exclusions.
 	    
 	    else
 	    {
-		@include_taxa = $taxonomy->list_taxa('synonyms', \@include_taxa, { fields => 'RANGE' });
+		@include_taxa = $taxonomy->list_taxa('synonyms', \@include_taxa,
+						     { fields => 'RANGE,ATTR,t.name' });
 	    }
 	}
     }
@@ -3499,17 +3511,20 @@ sub generateMainFilters {
     {
 	if ( $no_synonyms )
 	{
-	    @include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos, { fields => 'RANGE' });
+	    @include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos,
+						 { fields => 'RANGE,ATTR,t.name' });
 	}
 	
 	elsif ( $all_children )
 	{
-	    @include_taxa = $taxonomy->list_taxa('senior', \@taxon_nos, { fields => 'RANGE' });
+	    @include_taxa = $taxonomy->list_taxa('senior', \@taxon_nos,
+						 { fields => 'RANGE,ATTR,t.name' });
 	}
 	
 	else
 	{
-	    @include_taxa = $taxonomy->list_taxa('synonyms', \@taxon_nos, { fields => 'RANGE' });
+	    @include_taxa = $taxonomy->list_taxa('synonyms', \@taxon_nos,
+						 { fields => 'RANGE,ATTR,t.name' });
 	}
     }
     
@@ -3520,7 +3535,8 @@ sub generateMainFilters {
     {
 	if ( my @exclude_nos = $request->clean_param_list('exclude_id') )
 	{
-	    push @exclude_taxa, $taxonomy->list_taxa('exact', \@exclude_nos, { fields => 'RANGE' });
+	    push @exclude_taxa, $taxonomy->list_taxa('exact', \@exclude_nos,
+						     { fields => 'RANGE,ATTR,t.name' });
 	}
     }
     
@@ -3570,9 +3586,9 @@ sub generateMainFilters {
 	
 	foreach my $name ( @raw_names )
 	{
-	    # Ignore any name with a selector
+	    # Ignore selectors in this branch.
 	    
-	    next if $name =~ qr{:};
+	    $name =~ s/^.*://;
 	    
 	    # Remove exclusions
 	    
@@ -4049,7 +4065,7 @@ sub generateMainFilters {
 	
 	my $column_list = join("','", @ms_columns);
 	
-	push @filters, "ms.column_id$invert in ('$column_list')";
+	push @filters, "ms.col_id$invert in ('$column_list')";
     }
     
     if ( my @ms_units = $request->clean_param_list('ms_unit') )
@@ -5695,7 +5711,7 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
     
-    $join_list .= "LEFT JOIN $TABLE{MACROSTRAT_COLLS} as ms on ms.collection_no = c.collection_no\n"
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
     
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
