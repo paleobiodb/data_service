@@ -1810,7 +1810,7 @@ sub generateJoinList {
     $join_list .= "\t\tLEFT JOIN taxon_etbasis as etb on etb.orig_no = tv.orig_no\n"
 	if $tables->{etb};
     
-    $join_list .= "LEFT JOIN $TABLE{MACROSTRAT_COLLS} as ms on ms.collection_no = c.collection_no\n"
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
     
     return $join_list;

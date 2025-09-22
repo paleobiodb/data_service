@@ -311,10 +311,10 @@ sub initialize {
 	    "A positive integer that uniquely identifies the occurrence",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{OCC} },
 	    "The type of this object: C<$IDP{OCC}> for an occurrence.",
-        { output => '_label', com_name => 'rlb' },
+        { output => '_label', com_name => 'rlb', if_tag => 'entry' },
 	    "For data entry operations, this field will report the record",
 	    "label value, if any, that was submitted with each record.",
-        { output => '_status', com_name => 'sta' },
+        { output => '_status', com_name => 'sta', if_tag => 'entry' },
 	    "Records that were deleted will have the value 'deleted' in this field.",
 	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
 	    "If this occurrence was reidentified, a unique identifier for the reidentification.",
@@ -3779,7 +3779,7 @@ sub generateJoinList {
 
     $join_list .= "LEFT JOIN (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA} group by occurrence_no) as sc on sc.occurrence_no = o.occurrence_no\n" if $tables->{sc};
     
-    $join_list .= "LEFT JOIN $TABLE{MACROSTRAT_COLLS} as ms on ms.collection_no = c.collection_no\n"
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
     
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
