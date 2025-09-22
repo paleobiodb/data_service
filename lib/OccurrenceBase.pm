@@ -457,7 +457,7 @@ sub parseIdentifiedName {
 	return { error => "Invalid species name '$1'" };
     }
     
-    else
+    elsif ( ! $options->{loose} )
     {
 	return { error => "Missing species name" };
     }
