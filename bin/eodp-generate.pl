@@ -1584,7 +1584,7 @@ SELECT 'A. Fraass', 'S. Peters', '919', '136', 'eODP', oc.id,
 	'IODP', pbdb_pres, pbdb_frag, pbdb_abund, data_source_notes
 FROM macrostrat.$COLLECTIONS_TABLE as oc
 	JOIN macrostrat.cols as cols on col_id=cols.id
-WHERE taxa_count > 0 and ms_lith <> ''
+WHERE taxa_count > 0 and unit_id > 0
 END_STMT
     
     # Insert the newly added collections into the `coll_units` table
