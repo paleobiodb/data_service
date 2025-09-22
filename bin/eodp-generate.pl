@@ -1591,7 +1591,7 @@ END_STMT
     
     DBCommand($pbdb, <<END_STMT);
 INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, col_id, unit_id)
-SELECT c.collection_no, oc.col_id, oc.unit_id
+SELECT c.collection_no, mc.col_id, mc.unit_id
 FROM collections as c JOIN macrostrat.$COLLECTIONS_TABLE as mc
 	on mc.id = c.upload_id and c.upload = 'eODP'
 END_STMT
@@ -1839,7 +1839,7 @@ sub RemoveData {
     
     DBCommand($pbdb, "ALTER TABLE $TABLE{OCCURRENCE_DATA} AUTO_INCREMENT = $next");
     
-    DBCommand($pbdb, "DELETE FROM $TABLE{COLLECTION_UNITS} as cu
+    DBCommand($pbdb, "DELETE cu, c FROM $TABLE{COLLECTION_UNITS} as cu
 			  join $TABLE{COLLECTION_DATA} as c
 			  on cu.collection_no = c.collection_no and c.upload = 'eODP'");
     
