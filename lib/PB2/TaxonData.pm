@@ -4044,6 +4044,10 @@ sub process_difference {
     
     my ($request, $record) = @_;
     
+    # Make sure we have a proper numeric identfied rank. If an occurrence has a
+    # subspecies name, its rank must be 2. Otherwise, if it has a species name,
+    # its rank must be 3.
+    
     my $taxon_rank = $record->{taxon_rank};
     
     if ( defined $taxon_rank && $taxon_rank =~ /^[a-z]/ )
@@ -4051,12 +4055,28 @@ sub process_difference {
 	$taxon_rank = $TAXON_RANK{$taxon_rank};
     }
     
+    if ( $record->{subspecies_name} )
+    {
+	$taxon_rank = 2;
+    }
+    
+    elsif ( $record->{species_name} )
+    {
+	$taxon_rank = 3;
+    }
+    
+    # Make sure we have a proper numeric accepted rank.
+    
     my $accepted_rank = $record->{accepted_rank};
     
     if ( defined $accepted_rank && $accepted_rank =~ /^[a-z]/ )
     {
 	$accepted_rank = $TAXON_RANK{$accepted_rank};
     }
+    
+    # Make sure we have a proper status.
+    
+    my $status = $record->{status} || $record->{taxon_status};
     
     # If the 'taxon_name' and 'accepted_name' fields are different, then
     # create a 'difference' field.  This may contain one or more relevant reasons.
@@ -4129,9 +4149,9 @@ sub process_difference {
 		}
 	    }
 	    
-	    if ( $record->{status} && $record->{status} ne 'belongs to' )
+	    if ( $status && $status ne 'belongs to' )
 	    {
-		push @reasons, $record->{status};
+		push @reasons, $status;
 	    }
 	}
 	
@@ -4141,7 +4161,7 @@ sub process_difference {
 	
 	else
 	{
-	    if ( $record->{status} && $record->{status} eq 'belongs to' )
+	    if ( $status && $status eq 'belongs to' )
 	    {
 		if ( $record->{specimen_no} )
 		{
@@ -4172,14 +4192,14 @@ sub process_difference {
 	
 	if ( $taxon_rank && $taxon_rank == 2 &&
 	     $accepted_rank && $accepted_rank == 3 &&
-	     $record->{status} )
+	     $status )
 	{
 	    push @reasons, 'subspecies not entered';
 	}
 	
 	elsif ( $taxon_rank && $taxon_rank < 4 &&
 		$accepted_rank && $accepted_rank >= 4 &&
-		$record->{status} )
+		$status )
 	{
 	    push @reasons, 'species not entered';
 	}
