@@ -330,7 +330,7 @@ sub diag_field_widths {
     $widths->[1] = length($block) if !defined $widths->[1] || length($block) > $widths->[1];
     
     foreach my $c ( qw(if_block not_block if_vocab not_vocab if_field not_field
-		       if_format not_format if_code not_code) )
+		       if_format not_format if_tag not_tag if_code not_code) )
     {
 	my $value = $record->{$c};
 	next unless $value;
@@ -369,7 +369,7 @@ sub diag_field_output {
     $output .= " \"$record->{vvalue}\"" if defined $record->{vvalue} && $record->{vvalue} ne '';
     
     foreach my $c ( qw(if_block not_block if_vocab not_vocab if_field not_field
-		       if_format not_format if_code not_code) )
+		       if_format not_format if_tag not_tag if_code not_code) )
     {
 	my $value = $record->{$c};
 	next unless $value;

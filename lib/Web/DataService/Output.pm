@@ -127,6 +127,8 @@ our %OUTPUT_DEF = (output => 'type',
 		   not_vocab => 'set',
 		   if_format => 'set',
 		   not_format => 'set',
+		   if_tag => 'set',
+		   not_tag => 'set',
 		   if_field => 'single',
 		   not_field => 'single',
 		   if_code => 'code',
@@ -156,11 +158,12 @@ our %SELECT_KEY = (select => 1, tables => 1, if_block => 1);
 
 our %FIELD_KEY = (dedup => 1, name => 1, value => 1, always => 1, sub_record => 1, if_field => 1, 
 		  not_field => 1, if_block => 1, not_block => 1, if_format => 1, not_format => 1,
-		  if_vocab => 1, not_vocab => 1, data_type => 1,
-		  text_join => 1, xml_join => 1, doc_string => 1, show_as_list => 1, disabled => 1, undocumented => 1);
+		  if_tag => 1, not_tag => 1, if_vocab => 1, not_vocab => 1, data_type => 1,
+		  text_join => 1, xml_join => 1, doc_string => 1, show_as_list => 1,
+		  disabled => 1, undocumented => 1);
 
 our %PROC_KEY = (set => 1, check => 1, append => 1, from => 1, from_each => 1, data_type => 1,
-		 if_vocab => 1, not_vocab => 1, if_block => 1, not_block => 1,
+		 if_vocab => 1, not_vocab => 1, if_block => 1, not_block => 1, if_tag => 1, not_tag => 1,
 	         if_format => 1, not_format => 1, if_field => 1, not_field => 1,
 		 code => 1, lookup => 1, split => 1, join => 1, default => 1, disabled => 1);
 
@@ -533,7 +536,15 @@ sub add_output_blocks {
 	    
 	    next INCLUDE_RECORD if $r->{not_vocab}
 		and check_value($r->{not_vocab}, $vocab);
-
+	    
+	    # Evaluate dependency on the node tag
+	    
+	    next INCLUDE_RECORD if $r->{if_tag}
+		and not check_set($r->{if_tag}, node_tag($ds, $request));
+	    
+	    next INCLUDE_RECORD if $r->{not_tag}
+		and check_set($r->{not_tag}, node_tag($ds, $request));
+	    
 	    # Add each included block to the block_hash, so that if_block and not_block
 	    # attributes in other output records can be properly evaluated. Add the block
 	    # to the end of the scan list, so that it will be scanned for additional inclusions.
@@ -697,6 +708,11 @@ sub _configure_block {
 	
 	next RECORD if $r->{if_vocab} and not check_value($r->{if_vocab}, $vocab);
 	next RECORD if $r->{not_vocab} and check_value($r->{not_vocab}, $vocab);
+	
+	# Evaluate dependency on the node tag
+	
+	next RECORD if $r->{if_tag} and not check_set($r->{if_tag}, node_tag($ds, $request));
+	next RECORD if $r->{not_tag} and check_set($r->{not_tag}, node_tag($ds, $request));
 	
 	# Now process the record according to its type, which is indicated by one of the keys
 	# 'output', 'select', 'filter', 'set', 'check', 'include'. The define_block method
@@ -950,6 +966,18 @@ sub _configure_block {
 	$request->{block_field_list}{$block_name} = \@field_list;
 	$request->{block_proc_list}{$block_name} = \@proc_list;
     }
+}
+
+
+# node_tag ( request )
+#
+# Return the node tag(s) (if any) associated with this request.
+
+sub node_tag {
+
+    my ($ds, $request) = @_;
+    
+    return $ds->node_attr($request->node_path, 'tag');
 }
 
 
