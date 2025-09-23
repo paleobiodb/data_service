@@ -4174,13 +4174,13 @@ sub process_difference {
 	
 	if ( $record->{spelling_reason} && $record->{spelling_reason} eq 'misspelling' )
 	{
-	    unshift @reasons, 'misspelling of' unless $reasons[0] eq 'corrected to';
+	    unshift @reasons, 'misspelling of' unless @reasons && $reasons[0] eq 'corrected to';
 	}
 
 	# If the species or subspecies was not entered then report that at the end.
 	
 	if ( defined $record->{identified_rank} && $record->{identified_rank} == 2 &&
-	     defined $record->{accepted_rank} && $record->{accpted_rank} == 3 &&
+	     defined $record->{accepted_rank} && $record->{accepted_rank} == 3 &&
 	     defined $record->{taxon_status} )
 	{
 	    push @reasons, 'subspecies not entered';
