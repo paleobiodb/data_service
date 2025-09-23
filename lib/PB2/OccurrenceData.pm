@@ -2013,7 +2013,8 @@ sub diversity {
         WHERE $filter_string
 	GROUP BY $group_expr";
     
-    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
+    $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug ||
+	$request->{main_sql} =~ /and \) and cc\.environment/;
     
     # Then prepare and execute the main query.
     
