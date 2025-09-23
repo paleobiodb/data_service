@@ -3428,7 +3428,7 @@ sub generateMainFilters {
 	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
 	    
 	    try {
-		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR,t.name',
+		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
 								all_names => 1, 
 								debug_out => $debug_out });
 	    };
@@ -3455,7 +3455,7 @@ sub generateMainFilters {
 	    my $current = $no_synonyms ? '' : 1;
 	    
 	    try {
-		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR,t.name',
+		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
 								all_names => 1,
 								current => $current,
 								debug_out => $debug_out });
@@ -3481,7 +3481,7 @@ sub generateMainFilters {
 		if ( $all_children )
 		{
 		    push @exclude_taxa, $taxonomy->list_taxa('juniors', \@include_taxa,
-							     { fields => 'RANGE,ATTR,t.name' });
+							     { fields => 'RANGE,ATTR' });
 		}
 	    }
 	    
@@ -3491,9 +3491,9 @@ sub generateMainFilters {
 	    elsif ( $all_children )
 	    {
 		@include_taxa = $taxonomy->list_taxa('senior', \@include_taxa,
-						     { fields => 'RANGE,ATTR,t.name' });
+						     { fields => 'RANGE,ATTR' });
 		@exclude_taxa = $taxonomy->list_taxa('senior', \@exclude_taxa,
-						     { fields => 'RANGE,ATTR,t.name' })
+						     { fields => 'RANGE,ATTR' })
 		    if @exclude_taxa;
 	    }
 	    
@@ -3502,7 +3502,7 @@ sub generateMainFilters {
 	    else
 	    {
 		@include_taxa = $taxonomy->list_taxa('synonyms', \@include_taxa,
-						     { fields => 'RANGE,ATTR,t.name' });
+						     { fields => 'RANGE,ATTR' });
 	    }
 	}
     }
@@ -3512,19 +3512,19 @@ sub generateMainFilters {
 	if ( $no_synonyms )
 	{
 	    @include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos,
-						 { fields => 'RANGE,ATTR,t.name' });
+						 { fields => 'RANGE,ATTR' });
 	}
 	
 	elsif ( $all_children )
 	{
 	    @include_taxa = $taxonomy->list_taxa('senior', \@taxon_nos,
-						 { fields => 'RANGE,ATTR,t.name' });
+						 { fields => 'RANGE,ATTR' });
 	}
 	
 	else
 	{
 	    @include_taxa = $taxonomy->list_taxa('synonyms', \@taxon_nos,
-						 { fields => 'RANGE,ATTR,t.name' });
+						 { fields => 'RANGE,ATTR' });
 	}
     }
     
@@ -3536,7 +3536,7 @@ sub generateMainFilters {
 	if ( my @exclude_nos = $request->clean_param_list('exclude_id') )
 	{
 	    push @exclude_taxa, $taxonomy->list_taxa('exact', \@exclude_nos,
-						     { fields => 'RANGE,ATTR,t.name' });
+						     { fields => 'RANGE,ATTR' });
 	}
     }
     
