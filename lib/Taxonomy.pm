@@ -2491,6 +2491,7 @@ sub execute_query {
     
     catch
     {
+	print STDERR "$sql\n";
 	$_ =~ s{ \s at \s / (.*) line \s+ \d* }{ at $filename line $line}xs;
 	die $_;
     }

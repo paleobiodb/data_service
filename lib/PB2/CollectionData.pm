@@ -3544,8 +3544,16 @@ sub generateMainFilters {
     
     if ( @include_taxa && $all_children )
     {
+	my @missing = grep { !$_->{lft} || !$_->{rgt} } @include_taxa;
+
+	foreach my $m ( @missing )
+	{
+	    print STDERR "Bad range: '$m->{name}' '$m->{lft}' '$m->{rgt}'\n";
+	}
+	
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
+	
 	$tables->{o} = 1;
 	$tables->{tf} = 1;
 	$tables->{non_geo_filter} = 1;
