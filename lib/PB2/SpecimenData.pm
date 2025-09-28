@@ -65,7 +65,7 @@ sub initialize {
 	    "The unique identifier of this specimen in the database",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{SPM} },
 	    "The type of this object: C<$IDP{SPM}> for a specimen.",
-	{ output => '_label', com_name => 'rlb' },
+	{ output => '_label', com_name => 'rlb', if_tag => 'entry' },
 	    "For newly added or updated records, this field will report the record",
 	    "label value, if any, that was submitted with each record.",
 	{ output => 'flags', com_name => 'flg' },
@@ -301,7 +301,7 @@ sub initialize {
 	{ set => '*', code => \&process_measurement_ids },
 	{ output => 'measurement_no', com_name => 'oid' },
 	    "The unique identifier of this measurement in the database",
-	{ output => '_label', com_name => 'rlb' },
+	{ output => '_label', com_name => 'rlb', if_tag => 'entry' },
 	    "For newly added or updated records, this field will report the record",
 	    "label value, if any, that was submitted with each record.",
 	{ output => 'specimen_no', com_name => 'sid' },
@@ -1102,7 +1102,8 @@ sub list_specimens {
     my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/ ||
+	$request->{my_plate_model};
     
     $fields .= $access_fields if $access_fields;
     
@@ -1783,10 +1784,7 @@ sub generateJoinList {
 	if $tables->{nm};
     $join_list .= "LEFT JOIN taxon_names as ns on ns.taxon_no = t.spelling_no\n"
 	if $tables->{nm} && $tables->{t};
-    $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
-	if $tables->{pc};
-    $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
-	if $tables->{gp};
+
     $join_list .= "LEFT JOIN refs as r on r.reference_no = ss.reference_no\n" 
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
@@ -1812,6 +1810,15 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
+    
+    # The value of 'pc' must be an array. Each model entry must be followed by a selector
+    # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
+    # value used by the database.
+    
+    if ( ref $tables->{pc} eq 'ARRAY' )
+    {
+	$join_list .= $request->pcoord_joins($tables->{pc}->@*);
+    }
     
     return $join_list;
 }
