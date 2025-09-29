@@ -4324,7 +4324,7 @@ sub generateMainFilters {
 	
 	$request->{my_plate_model} = $model;
 	
-	$tables->{pc} = [$model, 'mid'];
+	$tables->{pc} = [1, $model, 'mid'];
 	
 	$tables->{non_summary} = 1;
     }
