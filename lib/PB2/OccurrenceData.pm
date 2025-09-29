@@ -1512,7 +1512,8 @@ sub get_occ {
     my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $tables) if $fields =~ /PALEOCOORDS/;
+    $request->selectPaleoModel(\$fields, $tables) if $fields =~ /PALEOCOORDS/ ||
+	$request->{my_plate_model};
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 

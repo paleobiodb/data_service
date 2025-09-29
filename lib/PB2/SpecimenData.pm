@@ -935,7 +935,8 @@ sub get_specimen {
     my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/ ||
+	$request->{my_plate_model};
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -1570,7 +1571,8 @@ sub list_measurements {
     my $fields = join(', ', @fields);
     
     $request->adjustCoordinates(\$fields);
-    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/;
+    $request->selectPaleoModel(\$fields, $request->tables_hash) if $fields =~ /PALEOCOORDS/ ||
+	$request->{my_plate_model};
     
     # Determine the order in which the results should be returned.
     
