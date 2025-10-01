@@ -113,7 +113,9 @@ sub initializeModifiers {
 #
 # Accepted options:
 #
-# loose       If true, bad capitalization is accepted and corrected.
+# loose       If true, bad capitalization is accepted and corrected, and 'sp.'
+#               is accepted as well.
+# wildcards   If true, wildcards are accepted in names.
 # debug_out   If nonempty, it must be a blessed reference that has a 'debug_line' method.
 
 sub parseIdentifiedName {
@@ -185,7 +187,7 @@ sub parseIdentifiedName {
     
     my ($sensu, $nperiod, $allquotes);
     
-    if ( $name =~ / n[.] \s* [sg][a-z]+[.] | s[.] \s* [sl][.] |
+    if ( $name =~ / \bn[.] \s* [sg][a-z]+[.] | \bs[.] \s* [sl][.] | \bsp[.]? \s* nov[.]? |
 		    \bsens?u? \s* strict?o? | \bsens?u? \s* lato? /xs )
     {
 	if ( $name =~ /(.*)n[.]\s*gen[.](.*)/ )
@@ -206,6 +208,13 @@ sub parseIdentifiedName {
 	{
 	    $species_reso = "n. sp.";
 	    $nperiod = "n. sp.";
+	    $name = "$1 $2";
+	}
+	
+	elsif ( $name =~ /(.*)\bsp[.]?\s*nov[.]?(.*)/ )
+	{
+	    $species_reso = "n. sp.";
+	    $nperiod = "sp. nov.";
 	    $name = "$1 $2";
 	}
 	
@@ -397,6 +406,13 @@ sub parseIdentifiedName {
 	}
     }
     
+    # Handle the case of "Somegenus sp. cf. S. somespecies"
+
+    if ( $name =~ /^\s*sp[.]\s*(cf[.]|aff[.])(.*)/ )
+    {
+	$name = "$1$2";
+    }
+    
     # Continue with a species name and any qualifier that may precede it.
     
     if ( $name =~ $OCC_RESO_RE{species} )
@@ -467,6 +483,11 @@ sub parseIdentifiedName {
 	if ( $species_name =~ / ^ ( ss?pp?[.]? | ind(?:et)?[.]? | sens?u?[.]? | .*[.] |
 				    [a-z][a-z]? | var | forma | morph | mut ) $ /x )
 	{
+	    if ( $species_reso )
+	    {
+		return { error => "Invalid combination of '$species_reso' and '$species_name'" };
+	    }
+	    
 	    if ( $species_name =~ /^ind(?:et)?[.]?$/i )
 	    {
 		$species_name = 'indet.';
@@ -730,7 +751,12 @@ sub quickParseIdentifiedName {
 	my $species = $3;
 	my $subspecies = $4;
 
-	if ( $species =~ / ^ (var|forma|morph|mut) $ /x )
+	if ( $species =~ / ^ (var|forma|morph|mut|nov) $ /x )
+	{
+	    return ();
+	}
+	
+	elsif ( $subspecies =~ / ^ (var|forma|morph|mut|nov) $ /x )
 	{
 	    return ();
 	}
