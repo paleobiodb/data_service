@@ -675,6 +675,7 @@ sub initialize {
     $ds->define_block('1.2:occs:prevalence' =>
 	{ output => 'orig_no', com_name => 'oid', pbdb_name => 'taxon_no' },
 	    "The identifier of the taxon.",
+	{ set => '*', code => \&process_occ_ids },
 	{ output => 'name', com_name => 'nam', pbdb_name => 'taxon_name' },
 	    "The scientific name of the taxon.",
 	{ set => 'rank', if_vocab => 'pbdb,dwc', lookup => \%PB2::TaxonData::RANK_STRING },
