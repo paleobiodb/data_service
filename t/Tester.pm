@@ -1467,6 +1467,13 @@ sub extract_records {
 	return $tester->extract_records_ris($response, $message, $options);
     }
     
+    # If the body starts with 89 50 4E 47, this is a PNG response.
+    
+    elsif ( substr($body,0,4) eq "\x89\x50\x4E\x47" )
+    {
+	return ($body);
+    }
+    
     # Otherwise, assume it is a tsv or csv (including .txt) response.
     
     else
