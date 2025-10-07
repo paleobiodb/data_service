@@ -2104,7 +2104,7 @@ sub summary {
     # Figure out the filter we need for determining access permissions.  We can ignore the extra
     # fields, since we are not returning records of type 'collection' or 'occurrence'.
     
-    my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
+    my ($access_filter, $access_fields) = $request->generateAccessFilter('s', $tables);
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -3049,10 +3049,15 @@ sub generateAccessFilter {
 	    return ("c.access_level = 0", '');
 	}
 
-	else
+	elsif ( $tables_ref->{cc} || $mt eq 'cc' )
 	{
 	    $tables_ref->{cc} = 1;
 	    return ("cc.access_level = 'the public'", '');
+	}
+	
+	else
+	{
+	    return;
 	}
     }
     
@@ -3544,15 +3549,30 @@ sub generateMainFilters {
     
     if ( @include_taxa && $all_children )
     {
-	my @missing = grep { !$_->{lft} || !$_->{rgt} } @include_taxa;
-
-	foreach my $m ( @missing )
+	my @include_filters;
+	
+	foreach my $t ( @include_taxa )
 	{
-	    print STDERR "Bad range: '$m->{name}' '$m->{lft}' '$m->{rgt}'\n";
+	    if ( $t->{lft} && $t->{rgt} )
+	    {
+		push @include_filters, "t.lft between '$t->{lft}' and '$t->{rgt}'";
+	    }
+	    
+	    elsif ( $t->{orig_no} )
+	    {
+		push @include_filters, "t.orig_no = '$t->{orig_no}'", "t.accepted_no = '$t->{orig_no}'";
+	    }
 	}
 	
-	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
-	push @filters, "($taxon_filters)";
+	if ( @include_filters == 1 )
+	{
+	    push @filters, @include_filters;
+	}
+
+	elsif ( @include_filters > 1 )
+	{
+	    push @filters, '(' . join(' or ', @include_filters) . ')';
+	}
 	
 	$tables->{o} = 1;
 	$tables->{tf} = 1;
@@ -3743,12 +3763,27 @@ sub generateMainFilters {
     
     if ( @exclude_taxa && @include_taxa )
     {
-	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
+	my @exclude_filters;
+	
+	foreach my $t ( @exclude_taxa )
+	{
+	    if ( $t->{lft} && $t->{rgt} )
+	    {
+		push @exclude_filters, "t.lft not between '$t->{lft}' and '$t->{rgt}'";
+	    }
+	    
+	    elsif ( $t->{orig_no} )
+	    {
+		push @exclude_filters, "t.orig_no <> '$t->{orig_no}'", "t.accepted_no <> '$t->{orig_no}'";
+	    }
+	}
+	
+	push @filters, @exclude_filters;
 	$request->{my_excluded_taxa} = \@exclude_taxa;
 	$tables->{tf} = 1;
     }
     
-    # If any warnings occurreed, pass them on.
+    # If any warnings occurred, pass them on.
     
     $request->add_warning(@taxon_warnings) if @taxon_warnings;
     
