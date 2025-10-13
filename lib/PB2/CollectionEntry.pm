@@ -157,7 +157,7 @@ sub initialize {
 	  access_level => { before => 'research_group' },
 	  release_date => { doc => "It accepts either 'immediate', or else a string of the form " .
 			    "'n months' or 'n years' where n is a digit. The maximum is 3 years.",
-			    before => 'research_group' },
+			    before => 'research_group', alias => 'release_spec' },
 	});
     
     add_to_ruleset($ds, '1.2:colls:addupdate_body',

@@ -6141,6 +6141,8 @@ sub process_permissions {
     
     if ( $request->has_block('edit') )
     {
+	$record->{release_on} = $record->{release_date};
+	
 	my $dbh = $request->get_connection();
 	my $collection_no = $record->{collection_no};
 
@@ -6150,52 +6152,52 @@ sub process_permissions {
 
 	if ( !defined $release_days || $release_days == 0 )
 	{
-	    $record->{release_spec} = 'immediate';
+	    $record->{release_date} = 'immediate';
 	}
 	
 	elsif ( $days_past < 0 )
 	{
-	    $record->{release_spec} = 'passed';
+	    $record->{release_date} = 'passed';
 	}
 
 	elsif ( $release_days > 4 * 366 )
 	{
-	    $record->{release_spec} = '5 years';
+	    $record->{release_date} = '5 years';
 	}
 
 	elsif ( $release_days > 3 * 366 )
 	{
-	    $record->{release_spec} = '4 years';
+	    $record->{release_date} = '4 years';
 	}
 
 	elsif ( $release_days > 2 * 366 )
 	{
-	    $record->{release_spec} = '3 years';
+	    $record->{release_date} = '3 years';
 	}
 
 	elsif ( $release_days > 366 )
 	{
-	    $record->{release_spec} = '2 years';
+	    $record->{release_date} = '2 years';
 	}
 
 	elsif ( $release_days > 6 * 31 )
 	{
-	    $record->{release_spec} = '1 years';
+	    $record->{release_date} = '1 years';
 	}
 
 	elsif ( $release_days > 3 * 31 )
 	{
-	    $record->{release_spec} = '6 months';
+	    $record->{release_date} = '6 months';
 	}
 
 	elsif ( $release_days > 1 )
 	{
-	    $record->{release_spec} = '3 months';
+	    $record->{release_date} = '3 months';
 	}
 
 	else
 	{
-	    $record->{release_spec} = 'immediate';
+	    $record->{release_date} = 'immediate';
 	}
     }
     
@@ -6219,7 +6221,7 @@ sub process_permissions {
     
     if ( $record->{release_date} )
     {
-	if ( $record->{today} && $record->{release_date} < $record->{today} )
+	if ( $record->{today} && $record->{release_date} lt $record->{today} )
 	{
 	    $record->{release_date} = '';
 	    $record->{access_level} = '';
