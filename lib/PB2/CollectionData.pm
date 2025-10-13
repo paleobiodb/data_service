@@ -172,7 +172,9 @@ sub initialize {
         { value => 'refattr', maps_to => '1.2:refs:attr' },
 	    "The author(s) and year of publication of the primary reference for the collection.",
 	{ value => 'secref', maps_to => '1.2:colls:secref' },
-	    "Include the identifiers of the secondary references for the collection.",
+	    "The identifiers of the primary and secondary references for the collection.",
+	{ value => 'container', maps_to => '1.2:colls:container' },
+	    "The name of the containing collection, if any.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
@@ -278,7 +280,7 @@ sub initialize {
     # Then define the output blocks which these mention.
     
     $ds->define_block('1.2:colls:basic' =>
-	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 
+	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset as container_no', 
 		     'cc.collection_aka', 'cc.formation', 'c.lat', 'c.lng', 'c.n_occs',
 		     'c.early_age', 'c.late_age',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
@@ -314,7 +316,12 @@ sub initialize {
 	{ output => 'real_access', com_name => 'accl', pbdb_name => 'access_level', if_block => 'edit' },
 	    "The access level stored for this collection, regardless of whether",
 	    "it is still restricted.",
-	{ output => 'release_date', com_name => 'reld', if_block => 'edit' },
+	{ output => 'access_resgroup', com_name => 'accr', if_block => 'edit' },
+	    "The research group that has access to this collection, if any.",
+	{ output => 'release_on', com_name => 'rld' },
+	    "If this record is not publicly accessible, this field contains the date",
+	    "on which it will become so.",
+	{ output => 'release_date', com_name => 'rlds', if_block => 'edit' },
 	    "The release date stored for this collection, interpreted for editing",
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
@@ -324,8 +331,9 @@ sub initialize {
 	    "The latitude at which the collection is located (in degrees)",
 	{ output => 'collection_name', dwc_name => 'collectionCode', com_name => 'nam' },
 	    "The name which identifies the collection, not necessarily unique",
-	{ output => 'collection_subset', com_name => 'nm2' },
-	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'container_no', com_name => 'ctno' },
+	    "If the collection is a subset of another one, this field provides the identifier",
+	    "of the containing collection.",
 	{ output => 'collection_aka', com_name => 'aka' },
 	    "An alternate name for the collection, or additional remarks about it.",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
@@ -358,7 +366,7 @@ sub initialize {
 	{ set => '*', code => \&process_coll_ids });
     
     $ds->define_block('1.2:colls:match' =>
-	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 
+	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset as container_no', 
 		     'cc.collection_aka', 'cc.formation', 'c.n_occs',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'cc.country', 'cc.state', 'c.reference_no',
@@ -389,8 +397,9 @@ sub initialize {
 	{ set => 'permissions', from => '*', code => \&process_permissions },
 	{ output => 'collection_name', com_name => 'nam' },
 	    "The name which identifies the collection, not necessarily unique",
-	{ output => 'collection_subset', com_name => 'nm2' },
-	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'container_no', com_name => 'ctno' },
+	    "If the collection is a subset of another one, this field provides the identifier",
+	    "of the containing collection.",
 	{ output => 'collection_aka', com_name => 'aka' },
 	    "An alternate name for the collection, or additional remarks about it.",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
@@ -456,12 +465,13 @@ sub initialize {
                                         # if specified
     
     $ds->define_block('1.2:colls:name' =>
-	{ select => ['cc.collection_name', 'cc.collection_subset', 'cc.collection_aka' ],
+	{ select => ['cc.collection_name', 'cc.collection_subset as container_no', 'cc.collection_aka' ],
 	  tables => ['cc'] },
 	{ output => 'collection_name', dwc_name => 'collectionCode', com_name => 'cnm' },
 	    "An arbitrary name which identifies the collection, not necessarily unique",
-	{ output => 'collection_subset', com_name => 'cns' },
-	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'container_no', com_name => 'ctno' },
+	    "If the collection is a subset of another one, this field provides the identifier",
+	    "of the containing collection.",
 	{ output => 'collection_aka', com_name => 'aka' },
 	    "An alternate name for the collection, or additional remarks about it.");
     
@@ -869,6 +879,13 @@ sub initialize {
     
     $ds->define_block('1.2:colls:secref' =>
 	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) as reference_nos'] });
+
+    $ds->define_block('1.2:colls:container' =>
+	{ select => ['ccs.collection_name as container_name'],
+	  tables => 'ccs' },
+	{ output => 'container_name', com_name => 'ctnm' },
+	    "If this collection is a subset of another one, this field provides the name of",
+	    "the containing collection.");
     
     $ds->define_block('1.2:colls:full_info' =>
 	{ include => '1.2:colls:loc' },
@@ -898,6 +915,7 @@ sub initialize {
         { set => 'formatted', from => '*', code => \&PB2::ReferenceData::format_reference },
 	{ output => 'formatted', com_name => 'ref' },
 	    "The primary reference for the collection, formatted for display",
+	{ include => '1.2:colls:container' },
 	{ include => '1.2:colls:locext' },
 	{ include => '1.2:colls:ages' },
 	{ include => '1.2:colls:stratext' },
@@ -5710,6 +5728,7 @@ sub generateJoinList {
     $tables->{o} = 1 if ($tables->{t} || $tables->{tf} || $tables->{oc}) && ! $tables->{ds};
     $tables->{c} = 1 if $tables->{o} || $tables->{pc} || $tables->{cs};
     $tables->{t} = 1 if $tables->{ph} || $tables->{pl} || $tables->{tv};
+    $tables->{cc} = 1 if $tables->{ccs};
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
@@ -5756,6 +5775,9 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
+
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
+	if $tables->{ccs};
     
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
     # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
@@ -6063,7 +6085,7 @@ sub process_coll_ids {
     
     # $request->delete_output_field('record_type');
     
-    foreach my $f ( qw(collection_no) )
+    foreach my $f ( qw(collection_no container_no) )
     {
 	$record->{$f} = generate_identifier('COL', $record->{$f}) if defined $record->{$f};
 	# $record->{$f} = $record->{$f} ? "$IDP{COL}:$record->{$f}" : '';
@@ -6128,52 +6150,52 @@ sub process_permissions {
 
 	if ( !defined $release_days || $release_days == 0 )
 	{
-	    $record->{release_date} = 'immediate';
+	    $record->{release_spec} = 'immediate';
 	}
 	
 	elsif ( $days_past < 0 )
 	{
-	    $record->{release_date} = 'passed';
+	    $record->{release_spec} = 'passed';
 	}
 
 	elsif ( $release_days > 4 * 366 )
 	{
-	    $record->{release_date} = '5 years';
+	    $record->{release_spec} = '5 years';
 	}
 
 	elsif ( $release_days > 3 * 366 )
 	{
-	    $record->{release_date} = '4 years';
+	    $record->{release_spec} = '4 years';
 	}
 
 	elsif ( $release_days > 2 * 366 )
 	{
-	    $record->{release_date} = '3 years';
+	    $record->{release_spec} = '3 years';
 	}
 
 	elsif ( $release_days > 366 )
 	{
-	    $record->{release_date} = '2 years';
+	    $record->{release_spec} = '2 years';
 	}
 
 	elsif ( $release_days > 6 * 31 )
 	{
-	    $record->{release_date} = '1 years';
+	    $record->{release_spec} = '1 years';
 	}
 
 	elsif ( $release_days > 3 * 31 )
 	{
-	    $record->{release_date} = '6 months';
+	    $record->{release_spec} = '6 months';
 	}
 
 	elsif ( $release_days > 1 )
 	{
-	    $record->{release_date} = '3 months';
+	    $record->{release_spec} = '3 months';
 	}
 
 	else
 	{
-	    $record->{release_date} = 'immediate';
+	    $record->{release_spec} = 'immediate';
 	}
     }
     
@@ -6192,6 +6214,16 @@ sub process_permissions {
 	else
 	{
 	    return "authorizer";
+	}
+    }
+    
+    if ( $record->{release_date} )
+    {
+	if ( $record->{today} && $record->{release_date} < $record->{today} )
+	{
+	    $record->{release_date} = '';
+	    $record->{access_level} = '';
+	    $record->{real_access} = 'the public';
 	}
     }
     
