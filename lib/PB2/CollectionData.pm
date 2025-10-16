@@ -883,9 +883,19 @@ sub initialize {
     $ds->define_block('1.2:colls:container' =>
 	{ select => ['ccs.collection_name as container_name'],
 	  tables => 'ccs' },
+	{ set => '*', code => \&fetch_subset_collections },
 	{ output => 'container_name', com_name => 'ctnm' },
 	    "If this collection is a subset of another one, this field provides the name of",
-	    "the containing collection.");
+	    "the containing collection.",
+	{ output => 'contains_collections', com_name => 'ctcc', sub_record => '1.2:colls:subset' },
+	    "If this collection contains others, this field provides a list of their names",
+	    "and identifiers.");
+
+    $ds->define_block('1.2:colls:subset' => 
+	{ output => 'collection_no', com_name => 'cid' },
+	    "The identifier of a subset collection",
+	{ output => 'collection_name', com_name => 'nam' },
+	    "The name of a subset collection");
     
     $ds->define_block('1.2:colls:full_info' =>
 	{ include => '1.2:colls:loc' },
@@ -6458,6 +6468,41 @@ sub coll_metadata_value {
     {
 	return { error => "bad value for {param}: must start with a valid field name followed " .
 		 "by optional '!' then ':' or '~' and match pattern" };
+    }
+}
+
+
+sub fetch_subset_collections {
+
+    my ($request, $record) = @_;
+    
+    my $dbh = $request->get_connection();
+    
+    my $collection_no = $record->{collection_no};
+    $collection_no =~ s/^.*://;
+    
+    my $sql = "SELECT collection_no, collection_name FROM collections
+		WHERE collection_subset = " . $dbh->quote($collection_no);
+
+    if ( $request->debug && ! $record->{subset_debug_print} )
+    {
+	$request->debug_line("$sql\n\n");
+	$record->{subset_debug_print} = 1;
+    }
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => { }});
+    
+    if ( $result && @$result )
+    {
+	$record->{contains_collections} = $result;
+
+	if ( $request->has_block('extids') )
+	{
+	    foreach my $r ( @$result )
+	    {
+		$r->{collection_no} = generate_identifier('COL', $r->{collection_no});
+	    }
+	}
     }
 }
 

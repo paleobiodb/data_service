@@ -549,7 +549,7 @@ sub list_updated_colls {
     
     my $id_list = join(',', @ids);
     
-    my $filter_string = "collection_no in ($id_list)";
+    my $filter_string = "c.collection_no in ($id_list)";
     
     # Fetch the collection records.
     
