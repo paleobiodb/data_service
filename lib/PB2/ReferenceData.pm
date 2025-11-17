@@ -1383,12 +1383,12 @@ sub generate_order_clause {
 	
 	if ( $term eq 'author' )
 	{
-	    push @exprs, "r.author1last $dir, r.author1init $dir, ifnull(r.author2last, '') $dir, ifnull(r.author2last, '') $dir";
+	    push @exprs, "r.author1last $dir, r.author1init $dir, ifnull(r.author2last, '') $dir, ifnull(r.author2init, '') $dir, pubyr $dir";
 	}
 	
 	elsif ( $term eq 'pubyr' )
 	{
-	    push @exprs, "r.pubyr $dir";
+	    push @exprs, "r.pubyr $dir, r.author1last $dir, r.author1init $dir, ifnull(r.author2last, '') $dir, ifnull(r.author2init, '') $dir";
 	}
 	
 	elsif ( $term eq 'reftitle' )
