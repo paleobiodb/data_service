@@ -88,7 +88,8 @@ our (%is_rock_type) = ( and => 1, ash => 1, ashe => 1,
 			yellow => 1, zone => 1 );
 
 our (%excluded_name) = ( lower => 1, middle => 1, upper => 1, first => 1, second => 1, third => 1,
-			 fourth => 1 );
+			 fourth => 1, base => 1, top => 1, 'upper part' => 1, 'lower part' => 1,
+			 'middle part' => 1, alpha => 1, beta => 1, informal => 1 );
 		      
 
 # Check the command arguments, and execute the specified function.
@@ -262,16 +263,22 @@ sub GenerateConcepts {
 	    # concepts even if they have different ranks and/or are spelled slightly
 	    # differently. 
 	    
-	    $exact_name{$c} ||= [];
-	    push $exact_name{$c}->@*, $key;
+	    # $exact_name{$c} ||= [];
+	    # push $exact_name{$c}->@*, $key;
 	    
 	    my $ft = substr($c, 0, 2);
-	    my $fl = substr($c, 0, 1) . substr($c, -1, 1);
 	    
 	    $first_two{$ft} ||= [];
 	    push $first_two{$ft}->@*, $key;
-	    $first_last{$fl} ||= [];
-	    push $first_last{$fl}->@*, $key;
+	    
+	    my @fl = ($c =~ /^([[:alpha:]]).*?[[:alpha:]]{2}([[:alpha:]])(?: |$)/);
+	    
+	    if ( @fl )
+	    {
+		my $fl = $fl[0] . $fl[1];
+		$first_last{$fl} ||= [];
+		push $first_last{$fl}->@*, $key;
+	    }
 	    
 	    # If an alias was specified, store it in the same way. Also store it
 	    # under %alias_key with the original key as a value. This will
@@ -287,16 +294,25 @@ sub GenerateConcepts {
 		
 		$alias_of{$alias_key} = $key;
 		
-		$exact_name{$alias} ||= [];
-		push $exact_name{$alias}->@*, $alias_key;
+		my @afl = ($c =~ /^([[:alpha:]]).*?[[:alpha:]]{2}([[:alpha:]])(?: |$)/);
 		
-		my $aft = substr($alias, 0, 2);
-		my $afl = substr($alias, 0, 1) . substr($alias, -1, 1);
+		if ( @afl )
+		{
+		    my $afl = $afl[0] . $afl[1];
+		    $first_last{$afl} ||= [];
+		    push $first_last{$afl}->@*, $key;
+		}
 		
-		$first_two{$aft} ||= [];
-		push $first_two{$aft}->@*, $alias_key;
-		$first_last{$afl} ||= [];
-		push $first_last{$afl}->@*, $alias_key;
+		# $exact_name{$alias} ||= [];
+		# push $exact_name{$alias}->@*, $alias_key;
+		
+		# my $aft = substr($alias, 0, 2);
+		
+		# $first_two{$aft} ||= [];
+		# push $first_two{$aft}->@*, $alias_key;
+		# my $afl = substr($alias, 0, 1) . substr($alias, -1, 1);
+		# $first_last{$afl} ||= [];
+		# push $first_last{$afl}->@*, $alias_key;
 	    }
 	}
     }
@@ -305,8 +321,8 @@ sub GenerateConcepts {
     
     say "Assigning concepts...";
     
-    my (%name_concept, %concept_no);
-    my $concept_no = 0;
+    my (%name_concept, %preliminary_concept);
+    my $preliminary_concept_no = 0;
     
     foreach my $key ( sort keys %orig_name )
     {
@@ -355,45 +371,52 @@ sub GenerateConcepts {
       RECORD:
 	foreach my $rn ( $orig_name{$key}->@* )
 	{
-	    my $rc;
+	    my ($rc, @matching_concepts);
 	    
 	    # First check to see if there are any existing name concepts
 	    # associated with this key. If there are, check to see if any of
-	    # them are compatible (place and time) with the name. If so, 
+	    # them are compatible (place and time) with the name.
 	    
 	    foreach $rc ( $name_concept{$key}->@* )
 	    {
 		if ( ConceptIsCompatible($rc, $rn) )
 		{
-		    AddToConcept($rc, $rn, $key);
-		    next RECORD;
+		    push @matching_concepts, $rc;
+		    say "Found EXISTING concept for $key\n";
 		}
 	    }
 	    
 	    # If we get here, there were no matching concepts, so check for
 	    # concepts with the same name but different rank.
 	    
-	    foreach my $alt_key ( $exact_name{$name}->@* )
-	    {
-		foreach $rc ( $name_concept{$alt_key}->@* )
-		{
-		    if ( ConceptIsCompatible($rc, $rn) )
-		    {
-			AddToConcept($rc, $rn, $key);
-			$name_concept{$key} ||= [];
-			push $name_concept{$key}->@*, $rc;
-			next RECORD;
-		    }
-		}
-	    }
+	    # foreach my $alt_key ( $exact_name{$name}->@* )
+	    # {
+	    # 	foreach $rc ( $name_concept{$alt_key}->@* )
+	    # 	{
+	    # 	    if ( ConceptIsCompatible($rc, $rn) )
+	    # 	    {
+	    # 		push @matching_concepts, $rc;
+	    # 	    }
+	    # 	}
+	    # }
 	    
-	    # If we get here, there were no matching concepts, so check for
-	    # names that could be spelling variants.
+	    # Next, check for the same name with a different rank, plus any names
+	    # that could be spelling variants.
+	    
+	    my @candidates;
 	    
 	    my $ft = substr($name, 0, 2);
-	    my $fl = substr($name, 0, 1) . substr($name, -1, 1);
+	    push @candidates, $first_two{$ft}->@* if $first_two{$ft};
 	    
-	    foreach my $alt_key ( $first_two{$ft}->@*, $first_last{$fl}->@* )
+	    my @fl = ($name =~ /^([[:alpha:]]).*?[[:alpha:]]{2}([[:alpha:]])(?: |$)/);
+	    
+	    if ( @fl )
+	    {
+		my $fl = $fl[0] . $fl[1];
+		push @candidates, $first_last{$fl}->@* if $first_last{$fl};
+	    }
+	    
+	    foreach my $alt_key ( @candidates )
 	    {
 		my ($alt_name, $alt_rank) = split /\|/, $alt_key;
 		
@@ -406,7 +429,7 @@ sub GenerateConcepts {
 		# distance, having a rock type added to one name but not
 		# the other, etc.
 		
-		next if $alt_name eq $name;
+		# next if $alt_name eq $name;
 
 		my $match_level = NamesAreCompatible($name, $alt_name, \$second_word);
 		
@@ -425,25 +448,61 @@ sub GenerateConcepts {
 		{
 		    if ( ConceptIsCompatible($rc, $rn, $match_level) )
 		    {
-			AddToConcept($rc, $rn, $key);
-			$name_concept{$key} ||= [];
-			push $name_concept{$key}->@*, $rc;
-			next RECORD;
+			push @matching_concepts, $rc;
 		    }
 		}
 	    }
 	    
-	    # If we get here, we weren't able to find any matches. So create a
-	    # new stratigraphic name concept. Store it in the %name_concept hash
-	    # under the name key for which it was created, and also in
-	    # the %concept_no hash under its concept_no value.
+	    # If there is exactly one matching concept, add the name to it.
 	    
-	    $rc = CreateConcept($rn, $key, ++$concept_no);
+	    if ( @matching_concepts == 1 )
+	    {
+		AddToConcept($matching_concepts[0], $rn, $key);
+		$name_concept{$key} ||= [];
+		unless ( grep { $_ eq $rc } $name_concept{$key}->@* )
+		{
+		    push $name_concept{$key}->@*, $rc;
+		}
+	    }
 	    
-	    $name_concept{$key} ||= [];
-	    push $name_concept{$key}->@*, $rc;
+	    # If there is more than one, then this name bridges multiple
+	    # concepts and we must consolidate them. The one with the lowest
+	    # concept number will be selected, and the rest will be consolidated
+	    # with it.
 	    
-	    $concept_no{$rc->{concept_no}} = $rc;
+	    elsif ( @matching_concepts > 1 )
+	    {
+		my ($first, @rest) =
+		    sort { $a->{preliminary_concept_no} <=> $b->{preliminary_concept_no} }
+		    @matching_concepts;
+		
+		foreach my $rc ( @rest )
+		{
+		    if ( $first ne $rc )
+		    {
+			$rc->{consolidated_with} = $first->{preliminary_concept_no};
+		    }
+		}
+
+		AddToConcept($first, $rn, $key);
+		$name_concept{$key} ||= [];
+		unless ( grep { $_ eq $rc } $name_concept{$key}->@* )
+		{
+		    push $name_concept{$key}->@*, $rc;
+		}
+	    }
+	    
+	    # If there aren't any, we must create a new stratigraphic name concept.
+	    
+	    else
+	    {
+		$rc = CreateConcept($rn, $key, ++$preliminary_concept_no);
+		
+		$name_concept{$key} ||= [];
+		push $name_concept{$key}->@*, $rc;
+		
+		$preliminary_concept{"${preliminary_concept_no}A"} = $rc;
+	    }
 	}
 
 	# my $cc_list = join ',', sort keys %cc;
@@ -452,6 +511,42 @@ sub GenerateConcepts {
 	# 	cc_list, n_colls, n_occs, lat_min, lat_max, lng_min, lng_max)
 	# 	VALUES ($qname, '$rank', '$cc_list', $n_colls, $n_occs,
 	# 		$latmin, $latmax, $lngmin, $lngmax)");
+    }
+    
+    # Now consolidate the preliminary concepts into real ones.
+    
+    say "Consolidating concepts...";
+    
+    my $real_concept_no = 0;
+    my (%real_concept, %prelim_to_real);
+    
+    foreach my $preliminary_concept_no ( sort keys %preliminary_concept )
+    {
+	my $rc = $preliminary_concept{$preliminary_concept_no};
+	
+	unless ( $rc->{consolidated_with} )
+	{
+	    $rc->{concept_no} = ++$real_concept_no;
+	    $real_concept{$real_concept_no} = $rc;
+	    $prelim_to_real{$preliminary_concept_no} = $real_concept_no;
+	}
+    }
+
+    foreach my $preliminary_concept_no ( sort keys %preliminary_concept )
+    {
+	my $rc = $preliminary_concept{$preliminary_concept_no};
+	my $canonical = $rc;
+	
+	while ( $canonical->{consolidated_with} )
+	{
+	    $canonical = $preliminary_concept{$canonical->{consolidated_with}};
+	}
+
+	if ( $canonical ne $rc )
+	{
+	    ConsolidateConcepts($canonical, $rc);
+	    $prelim_to_real{$preliminary_concept_no} = $canonical->{concept_no};
+	}
     }
     
     # Empty the STRAT_NAMES and STRAT_CONCEPTS tables, so we can refill them
@@ -474,9 +569,9 @@ sub GenerateConcepts {
     my $new_names = 0;
     my $new_concepts = 0;
 
-    foreach my $key ( sort keys %concept_no )
+    foreach my $key ( sort keys %real_concept )
     {
-	my $rc = $concept_no{$key};
+	my $rc = $real_concept{$key};
 	
 	my $qstratc = $pbdb->quote($rc->{concept_no});
 	my $qname = $pbdb->quote($rc->{name});
@@ -504,17 +599,19 @@ sub GenerateConcepts {
 	
 	foreach my $rn ( $orig_name{$key}->@* )
 	{
-	    unless ( $rn->{concept}{$key}{concept_no} )
+	    unless ( $rn->{concept}{$key}{preliminary_concept_no} )
 	    {
 		$missing++;
 		next;
 	    }
 	    
+	    my $concept_no = $prelim_to_real{$rn->{concept}{$key}{preliminary_concept_no}};
+	    
 	    $new_names++;
 	    
 	    my $qname = $pbdb->quote($name);
 	    my $qrank = $pbdb->quote($rank);
-	    my $qstratc = $pbdb->quote($rn->{concept}{$key}{concept_no});
+	    my $qstratc = $pbdb->quote($concept_no);
 	    my $qcc = $pbdb->quote($rn->{cc});
 	    my $qcou = $pbdb->quote($rn->{country});
 	    my $qncolls = $pbdb->quote($rn->{n_colls} || 0);
@@ -607,11 +704,18 @@ sub NamesAreCompatible {
 
     my ($name, $alt_name, $second_word_ref) = @_;
     
+    # If the two names are the same, return true.
+
+    if ( $name eq $alt_name )
+    {
+	return 1;
+    }
+    
     # If the two names are of the form "X" and "X Y" where Y is a rock type,
     # then the two names are compatible, provided they are of the same rank.
     
     my ($smaller, $larger);
-
+    
     if ( substr($name, 0, 3) eq substr($alt_name, 0, 3) )
     {
 	if ( length($name) < length($alt_name) )
@@ -620,7 +724,7 @@ sub NamesAreCompatible {
 	    $larger = $alt_name;
 	}
 	
-	else 
+	else
 	{
 	    $smaller = $alt_name;
 	    $larger = $name;
@@ -650,7 +754,7 @@ sub NamesAreCompatible {
     # sequence of digits. This criterion filters out names of the form "ABC I" and
     # "ABC II", or "ABC 1" and "ABC 2", which should be considered different.
     
-    if ( edistance($name, $alt_name, 2 ) > 0 )
+    if ( edistance($name, $alt_name, 2 ) >= 0 )
     {
 	my @words = $name =~ /([[:alpha:]]+)/g;
 	my @alt_words = $alt_name =~ /([[:alpha:]]+)/g;
@@ -710,11 +814,11 @@ sub IsRockType {
 
 sub CreateConcept {
 
-    my ($rn, $key, $new_concept_no) = @_;
+    my ($rn, $key, $preliminary_concept_no) = @_;
     
     my ($name) = split /\|/, $key;
     
-    my $rc = { name => $name, concept_no => $new_concept_no,
+    my $rc = { name => $name, preliminary_concept_no => "${preliminary_concept_no}A",
 	       lat_min => $rn->{lat_min}, lat_max => $rn->{lat_max},
 	       lng_min => $rn->{lng_min}, lng_max => $rn->{lng_max},
 	       early_age => $rn->{early_age}, late_age => $rn->{late_age},
@@ -785,17 +889,42 @@ sub AddToConcept {
 }
 
 
+sub ConsolidateConcepts {
+
+    my ($concept, $alt) = @_;
+    
+    $concept->{alt}{$alt->{concept_no}} = 1;
+    
+    $concept->{cc}{$_} = 1 foreach keys $alt->{cc}->%*;
+    $concept->{country}{$_} = 1 foreach keys $alt->{country}->%*;
+    
+    $concept->{lat_min} = $alt->{lat_min} if $alt->{lat_min} < $concept->{lat_min};
+    $concept->{lat_max} = $alt->{lat_max} if $alt->{lat_max} > $concept->{lat_max};
+    $concept->{lng_min} = $alt->{lng_min} if $alt->{lng_min} < $concept->{lng_min};
+    $concept->{lng_max} = $alt->{lng_max} if $alt->{lng_max} > $concept->{lng_max};
+
+    $concept->{early_age} = $alt->{early_age} if $alt->{early_age} > $concept->{early_age};
+    $concept->{late_age} = $alt->{late_age} if $alt->{late_age} < $concept->{late_age};
+
+    $concept->{n_colls} += $alt->{n_colls};
+    $concept->{n_occs} += $alt->{n_occs};
+}
+
+
 sub ContextIsCompatible {
 
     my ($context1, $context2) = @_;
+
+    unless ( $context1->{cc} eq $context2->{cc} )
+    {
+	if ( $context2->{lat_min} > $context1->{lat_max} + 10 ) { return undef; }
+	if ( $context2->{lat_max} < $context1->{lat_min} - 10 ) { return undef; }
+	if ( $context2->{lng_min} > $context1->{lng_max} + 10 ) { return undef; }
+	if ( $context2->{lng_max} < $context1->{lng_min} - 10 ) { return undef; }
+    }
     
-    if ( $context2->{lat_min} > $context1->{lat_max} + 10 ) { return undef; }
-    if ( $context2->{lat_max} < $context1->{lat_min} - 10 ) { return undef; }
-    if ( $context2->{lng_min} > $context1->{lng_max} + 10 ) { return undef; }
-    if ( $context2->{lng_max} < $context1->{lng_min} - 10 ) { return undef; }
-    
-    if ( $context2->{early_age} < $context1->{late_age} - 30 ) { return undef; }
-    if ( $context2->{late_age} > $context1->{early_age} + 30 ) { return undef; }
+    if ( $context2->{early_age} < $context1->{late_age} - 10 ) { return undef; }
+    if ( $context2->{late_age} > $context1->{early_age} + 10 ) { return undef; }
     
     return 1;
 }

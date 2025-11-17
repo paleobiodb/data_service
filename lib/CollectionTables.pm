@@ -723,7 +723,6 @@ sub buildStrataTables {
 		grp varchar(255) not null default '',
 		formation varchar(255) not null default '',
 		member varchar(255) not null default '',
-		maybe boolean not null default '0',
 		lithology varchar(255),
 		collection_no int unsigned not null,
 		access_level tinyint unsigned not null,
@@ -731,6 +730,8 @@ sub buildStrataTables {
 		cc char(2),
 		lat decimal(9,6),
 		lng decimal(9,6),
+		early_age decimal(9,6),
+		late_age decimal(9,6),
 		g_plate_no smallint unsigned not null default '0',
 		s_plate_no smallint unsigned not null default '0',
 		loc geometry not null default '') Engine=MyISAM");
@@ -745,13 +746,13 @@ sub buildStrataTables {
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (grp, formation, member, lithology,
 			collection_no, access_level, n_occs, cc, lat, lng, 
-			g_plate_no, s_plate_no, loc)
+			early_age, late_age, g_plate_no, s_plate_no, loc)
 		SELECT cc.geological_group, cc.formation, cc.member, 
 			if(lithology1 <> '' and lithology2 <> '' and lithology1 <> lithology2,
 			  concat(lithology1,'/',lithology2),
 			    if(lithology1 <> '' and lithology1 <> 'not reported', lithology1, null)),
 			collection_no, c.access_level, c.n_occs, c.cc, c.lat, c.lng,
-			c.g_plate_no, c.s_plate_no, c.loc
+			c.early_age, c.late_age, c.g_plate_no, c.s_plate_no, c.loc
 		FROM $coll_matrix as c JOIN $TABLE{COLLECTION_DATA} as cc using (collection_no)";
     
     $result = $dbh->do($sql);
@@ -770,12 +771,12 @@ sub buildStrataTables {
     # Remove redundant suffixes
     
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET member = left(member, length(member)-3)
-		WHERE member like '\%Mb.'";
+		SET grp = left(grp, length(grp)-3)
+		WHERE grp like '\%Gp.'";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      removed $result final 'Mb.'");
+    logMessage(2, "      removed $result final 'Gp.'") if $result && $result > 0;
     
     $sql = "    UPDATE $COLL_STRATA_WORK
 		SET formation = left(formation, length(formation)-3)
@@ -783,84 +784,116 @@ sub buildStrataTables {
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      removed $result final 'Fm.'");
+    logMessage(2, "      removed $result final 'Fm.'") if $result && $result > 0;
     
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET formation = left(formation, length(formation)-9)
-		WHERE formation like '\%Formation'";
+		SET formation = left(formation, length(formation)-3)
+		WHERE formation like '\% Fm'";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      removed $result final 'Formation'");
+    logMessage(2, "      removed $result final 'Fm'") if $result && $result > 0;
     
     $sql = "    UPDATE $COLL_STRATA_WORK
-		SET grp = left(grp, length(grp)-5)
-		WHERE grp like '\%Group'";
+		SET member = left(member, length(member)-3)
+		WHERE member like '\%Mb.'";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      removed $result final 'Group'");
+    logMessage(2, "      removed $result final 'Mb.'") if $result && $result > 0;
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET grp = left(grp, length(grp)-6)
+		WHERE grp like '\% Group'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final 'Group'") if $result && $result > 0;
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET formation = left(formation, length(formation)-10)
+		WHERE formation like '\% Formation'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final 'Formation'") if $result && $result > 0;
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET member = left(member, length(member)-7)
+		WHERE formation like '\% Member'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final 'Member'") if $result && $result > 0;
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET member = replace(member, '\\t', '')
+		WHERE member like '\\t%'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result initial tabs") if $result && $result > 0;
     
     # Then remove question marks and set the 'maybe' field to true for those
     # records.
     
-    $sql = "    UPDATE $COLL_STRATA_WORK
-		SET member = substring(member, 2), maybe = true
-		WHERE member like '?%'";
+    # $sql = "    UPDATE $COLL_STRATA_WORK
+    # 		SET member = substring(member, 2), maybe = true
+    # 		WHERE member like '?%'";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    $sql = "    UPDATE $COLL_STRATA_WORK
-		SET formation = substring(formation, 2), maybe = true
-		WHERE formation like '?%'";
+    # $sql = "    UPDATE $COLL_STRATA_WORK
+    # 		SET formation = substring(formation, 2), maybe = true
+    # 		WHERE formation like '?%'";
     
-    $result += $dbh->do($sql);
+    # $result += $dbh->do($sql);
     
-    $sql = "    UPDATE $COLL_STRATA_WORK
-		SET grp = substring(grp, 2), maybe = true
-		WHERE grp like '?%'";
+    # $sql = "    UPDATE $COLL_STRATA_WORK
+    # 		SET grp = substring(grp, 2), maybe = true
+    # 		WHERE grp like '?%'";
     
-    $result += $dbh->do($sql);
+    # $result += $dbh->do($sql);
     
-    logMessage(2, "      removed $result initial question-marks");
+    # logMessage(2, "      removed $result initial question-marks");
     
-    $sql = "	UPDATE $COLL_STRATA_WORK
-		SET member = left(member, length(member)-1), maybe = true
-		WHERE member like '%?'";
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET member = left(member, length(member)-1), maybe = true
+    # 		WHERE member like '%?'";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    $sql = "	UPDATE $COLL_STRATA_WORK
-		SET formation = left(formation, length(formation)-1), maybe = true
-		WHERE formation like '%?'";
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET formation = left(formation, length(formation)-1), maybe = true
+    # 		WHERE formation like '%?'";
     
-    $result += $dbh->do($sql);
+    # $result += $dbh->do($sql);
     
-    $sql = "	UPDATE $COLL_STRATA_WORK
-		SET grp = left(grp, length(grp)-1), maybe = true
-		WHERE grp like '%?'";
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET grp = left(grp, length(grp)-1), maybe = true
+    # 		WHERE grp like '%?'";
     
-    $result += $dbh->do($sql);
+    # $result += $dbh->do($sql);
     
-    $sql = "	UPDATE $COLL_STRATA_WORK
-		SET member = left(member, length(member)-3), maybe = true
-		WHERE member like '%(?)'";
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET member = left(member, length(member)-3), maybe = true
+    # 		WHERE member like '%(?)'";
     
-    $result += $dbh->do($sql);
+    # $result += $dbh->do($sql);
     
-    $sql = "	UPDATE $COLL_STRATA_WORK
-		SET formation = left(formation, length(formation)-3), maybe = true
-		WHERE formation like '%(?)'";
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET formation = left(formation, length(formation)-3), maybe = true
+    # 		WHERE formation like '%(?)'";
     
-    $result += $dbh->do($sql);
+    # $result += $dbh->do($sql);
     
-    $sql = "	UPDATE $COLL_STRATA_WORK
-		SET grp = left(grp, length(grp)-3), maybe = true
-		WHERE grp like '%(?)'";
+    # $sql = "	UPDATE $COLL_STRATA_WORK
+    # 		SET grp = left(grp, length(grp)-3), maybe = true
+    # 		WHERE grp like '%(?)'";
     
-    $result += $dbh->do($sql);
+    # $result += $dbh->do($sql);
     
-    logMessage(2, "      removed $result final question-marks");
+    # logMessage(2, "      removed $result final question-marks");
     
     # $sql = "	UPDATE $COLL_STRATA_WORK
     # 		SET name = replace(name, '(?)', ''), maybe = true
@@ -910,38 +943,56 @@ sub buildStrataTables {
     
     $dbh->do("CREATE TABLE $STRATA_NAMES_WORK (
 		name varchar(255) not null,
-		type enum('group', 'formation', 'member'),
-		cc_list varchar(255) not null,
-		country_list varchar(255) not null,
+		rank enum('Gp', 'Fm', 'Mbr'),
+		cc varchar(255) not null,
+		country varchar(255) not null,
 		n_colls int unsigned not null,
 		n_occs int unsigned not null,
+		early_age decimal(9,6),
+		late_age decimal(9,6),
 		lng_min decimal(9,6),
 		lng_max decimal(9,6),
 		lat_min decimal(9,6),
 		lat_max decimal(9,6),
-		UNIQUE KEY (name, type)) Engine=MyISAM");
+		UNIQUE KEY (name, rank, cc)) Engine=MyISAM");
     
     logMessage(2, "    inserting groups...");
     
-    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
-			country_list, lng_min, lng_max, lat_min, lat_max)
-		SELECT grp, 'group', count(*), sum(n_occs), group_concat(distinct cc),
-		       group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
+    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, rank, n_colls, n_occs, cc,
+			country, early_age, late_age, lng_min, lng_max, lat_min, lat_max)
+		SELECT grp, 'Gp', count(*), sum(n_occs), group_concat(distinct cc),
+		       group_concat(distinct cm.name), max(early_age), min(late_age),
+		       min(lng), max(lng), min(lat), max(lat)
 		FROM $COLL_STRATA_WORK join $TABLE{COUNTRY_MAP} as cm using (cc)
-		WHERE grp <> ''	and grp not like 'unnamed' GROUP BY grp");
+		WHERE grp rlike '[[:alpha:]]{3}' and grp not like '%unnamed%'
+		GROUP BY grp, cc");
     
     logMessage(2, "      $result groups");
     
     logMessage(2, "    inserting formations...");
     
-    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, type, n_colls, n_occs, cc_list,
-			country_list, lng_min, lng_max, lat_min, lat_max)
-		SELECT formation, 'formation', count(*), sum(n_occs), group_concat(distinct cc),
-			group_concat(distinct cm.name), min(lng), max(lng), min(lat), max(lat)
+    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, rank, n_colls, n_occs, cc,
+			country, early_age, late_age, lng_min, lng_max, lat_min, lat_max)
+		SELECT formation, 'Fm', count(*), sum(n_occs), group_concat(distinct cc),
+			group_concat(distinct cm.name), max(early_age), min(late_age),
+			min(lng), max(lng), min(lat), max(lat)
 		FROM $COLL_STRATA_WORK join $TABLE{COUNTRY_MAP} as cm using (cc)
-		WHERE formation <> '' and formation not like 'unnamed' GROUP BY formation");
+		WHERE formation rlike '[[:alpha:]]{3}' and formation not like 'unnamed'
+		GROUP BY formation, cc");
     
     logMessage(2, "      $result formations");
+    
+    $result = $dbh->do("INSERT INTO $STRATA_NAMES_WORK (name, rank, n_colls, n_occs, cc,
+			country, early_age, late_age, lng_min, lng_max, lat_min, lat_max)
+		SELECT member, 'Mbr', count(*), sum(n_occs), group_concat(distinct cc),
+			group_concat(distinct cm.name), max(early_age), min(late_age),
+			min(lng), max(lng), min(lat), max(lat)
+		FROM $COLL_STRATA_WORK join $TABLE{COUNTRY_MAP} as cm using (cc)
+		WHERE member rlike '[[:alpha:]]{3}' and
+			member not in ('unnamed', 'upper', 'middle', 'lower')
+		GROUP BY member, cc");
+    
+    logMessage(2, "      $result members");
     
     activateTables($dbh, $COLL_STRATA_WORK => $TABLE{COLLECTION_STRATA},
 			 $STRATA_NAMES_WORK => $TABLE{STRATA_NAMES});

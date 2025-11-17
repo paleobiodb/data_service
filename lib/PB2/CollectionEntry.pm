@@ -585,7 +585,6 @@ sub list_updated_colls {
 	SELECT $calc $fields,
 	    if(cc.authorizer_no = '$enterer_no' or cc.enterer_no = '$enterer_no', 1, '') as is_owner
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
-		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no";

@@ -16,8 +16,10 @@ package PB2::CollectionData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX $BIN_LOC %TABLE);
+use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP
+		 $PALEOCOORDS $GEOPLATES $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP
+		 $INTERVAL_BUFFER $PVL_MATRIX $BIN_LOC);
+use CoreTableDefs;
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use IntervalBase qw(ts_defined ts_record ts_boundary_list ts_boundary_name);
 use OccurrenceBase qw(parseIdentifiedName);
@@ -286,7 +288,7 @@ sub initialize {
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'c.reference_no', 'c.access_level', 'cc.access_level as real_access',
 		     'cc.release_date', 'now() as today'], 
-	  tables => ['cc', 'ei', 'li', 'sr', 'r'] },
+	  tables => ['cc', 'ei', 'li', 'r'] },
 	{ output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	    "A unique identifier for the collection.  This will be a string if the result",
 	    "format is JSON.  For backward compatibility, all identifiers in text format",
@@ -878,7 +880,9 @@ sub initialize {
 	    "The research group(s), if any, associated with this collection.");
     
     $ds->define_block('1.2:colls:secref' =>
-	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) as reference_nos'] });
+	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) ' .
+		     'as reference_nos'],
+	  tables => 'sr' });
 
     $ds->define_block('1.2:colls:container' =>
 	{ select => ['ccs.collection_name as container_name'],
@@ -919,8 +923,7 @@ sub initialize {
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
-		   'r.language as r_language', 'r.doi as r_doi', 'r.isbn as r_isbn',
-		   'r.updated', 'r.updater_no'],
+		   'r.language as r_language', 'r.doi as r_doi', 'r.isbn as r_isbn'],
 	  tables => ['r'] },
         { set => 'formatted', from => '*', code => \&PB2::ReferenceData::format_reference },
 	{ output => 'formatted', com_name => 'ref' },
@@ -1031,13 +1034,14 @@ sub initialize {
     # 	    "occurrences in this stratum lie, from the Scotese model.");
     
     $ds->define_block('1.2:strata:auto' =>
-	{ select => [ 'name', 'type', 'n_colls', 'n_occs', 'cc_list' ] },
+	{ select => [ 'name', 'rank', 'n_colls', 'n_occs', 
+		      'group_concat(distinct cc) as cc_list' ] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
 	{ output => 'name', com_name => 'nam' },
 	    "The name of a matching stratum",
-	{ output => 'type', com_name => 'rnk' },
-	    "The type of stratum: group, formation, or member.",
+	{ output => 'rank', com_name => 'rnk', pbdb_name => 'type' },
+	    "The rank of the stratum: Grp, Fm, or Mbr.",
 	{ output => 'cc_list', com_name => 'cc2' },
 	    "The country or countries in which this stratum lies, as ISO-3166 country codes.",
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
@@ -1398,16 +1402,20 @@ sub initialize {
 	    "If the first one is preceded by C<!> then they are excluded.",
 	    "otherwise, only occurrences marked with at least one are included:", 
 	    "=over",
-	    "=item ns", "n. sp.", "=item ng", "n. gen. or n. subgen.",
-	    "=item af", "aff.", "=item cf", "cf.", "=item sl", "sensu lato", "=item if", "informal",
+	    "=item ns", "n. gen. / n. subgen. / n. sp. / n. ssp.",
+	    "=item af", "aff.", "=item cf", "cf.", "=item if", "informal",
+	    "=item ss", "sensu stricto", "=item sl", "sensu lato", 
 	    "=item eg", "ex gr.", "=item qm", "question mark (?)", "=item qu", "quotes (\"\")",
+	    "=item nm", "no modifiers",
 	    "=back",
 	{ optional => 'idgenmod', valid => ANY_VALUE },
 	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
 	    "modifiers on the genus and/or subgenus name.  See C<B<idmod>> above.",
+	{ at_most_one => ['idmod', 'idgenmod'] },
 	{ optional => 'idspcmod', valid => ANY_VALUE },
 	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
 	    "modifiers on the species name.  See C<B<idmod>> above.",
+	{ at_most_one => ['idmod', 'idspcmod'] },
 	{ param => 'abundance', valid => ANY_VALUE },
 	    "This parameter selects only occurrences that have particular kinds of abundance",
 	    "values.  Accepted values are:", $ds->document_set('1.2:occs:abund_type'),
@@ -1956,7 +1964,6 @@ sub get_coll {
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
 	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
-		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id
 	GROUP BY c.collection_no";
@@ -2073,7 +2080,6 @@ sub list_colls {
     $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
-		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no
@@ -2387,7 +2393,6 @@ sub refs {
 	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
 	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
 	    FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
-		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
 		$inner_join_list
             WHERE $filter_string
 	    GROUP BY sr.reference_no) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
@@ -2565,8 +2570,9 @@ sub strata_auto {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM strata_names as sn
+	FROM $TABLE{STRAT_RAW} as sn
         WHERE $filter_string
+	GROUP BY name, rank
 	ORDER BY n_occs desc
 	$limit";
     
@@ -2609,11 +2615,12 @@ sub auto_complete_str {
     
     my $filter_string = join(' and ', @filters);
     
-    my $country_field = $options->{countries} ? 'country_list' : 'cc_list';
+    my $country_field = $options->{countries} ? 'country' : 'cc';
     
     my $sql = "
-	SELECT name, type, $country_field as cc_list, n_colls, n_occs, 'str' as record_type, 'str' as record_id
-	FROM strata_names as sn
+	SELECT name, rank as type, group_concat(distinct $country_field) as cc_list,
+		n_colls, n_occs, 'str' as record_type, 'str' as record_id
+	FROM $TABLE{STRAT_RAW} as sn
 	WHERE $filter_string
 	ORDER BY n_occs desc LIMIT $limit";
     
@@ -5762,6 +5769,8 @@ sub generateJoinList {
 	if $tables->{cs};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
 	if $tables->{r};
+    $join_list .= "LEFT JOIN secondary_refs as sr on sr.collection_no = c.collection_no\n"
+	if $tables->{sr};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
 	if $tables->{ppa};
     $join_list .= "LEFT JOIN person as ppe on ppe.person_no = c.enterer_no\n"
