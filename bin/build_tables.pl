@@ -39,7 +39,7 @@ Getopt::Long::Configure("bundling");
 
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
     $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables, $interval_map,
-    $occurrence_int_maps, $taxon_summary_table, $prevalence_tables, $country_map,
+    $occurrence_int_maps, $stratigraphy_tables, $prevalence_tables, $country_map,
     $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
@@ -52,7 +52,7 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "prevalence|P" => \$prevalence_tables,
 	    "I" => \$interval_map,
 	    "M" => \$occurrence_int_maps,
-	    "S" => \$taxon_summary_table,
+	    "stratigraphy|S" => \$stratigraphy_tables,
 	    "countries|C" => \$country_map,
 	    "listcache|y" => \$old_taxon_tables,
 	    "prevalence|p" => \$prevalence_tables,
@@ -151,25 +151,25 @@ sub BuildTables {
     
     my %options;
     
-    my $force = $options{f};
-    my $interval_data = $options{I};
+    # my $force = $options{f};
+    # my $interval_data = $options{I};
     # my $interval_map = $options{U};
-    my $rank_map = $options{r};
-    my $taxon_pics = $options{p};
+    # my $rank_map = $options{r};
+    # my $taxon_pics = $options{p};
     
     # my $collection_tables = $options{c};
     # my $occurrence_tables = $options{m};
     # my $occurrence_int_maps = $options{M};
-    my $occurrence_reso = $options{R};
+    # my $occurrence_reso = $options{R};
     # my $diversity_tables = $options{d};
     # my $prevalence_tables = $options{q};
-    my $timescale_tables = $options{S};
+    # my $timescale_tables = $options{S};
     
     # my $taxon_tables = 1 if $options{t} || $options{T};
     # my $taxon_steps = $options{T};
     # my $old_taxon_tables = $options{y};
-    my $strata_tables = $options{s};
-    my $lith_tables = $options{L};
+    # my $strata_tables = $options{S};
+    # my $lith_tables = $options{L};
     
     # my $options = { taxon_steps => $options{T},
     # 		colls_cluster => $options{k},
@@ -180,10 +180,10 @@ sub BuildTables {
     
     # The option -r causes the taxon rank map to be (re)generated.
     
-    if ( $rank_map )
-    {
-	TaxonTables::createRankMap($dbh);
-    }
+    # if ( $rank_map )
+    # {
+    # 	TaxonTables::createRankMap($dbh);
+    # }
     
     if ( $country_map )
     {
@@ -198,10 +198,10 @@ sub BuildTables {
 	buildCollectionTables($dbh, $bins, $options);
     }
     
-    if ( $lith_tables && ! $collection_tables )
-    {
-	buildLithTables($dbh);
-    }
+    # if ( $lith_tables && ! $collection_tables )
+    # {
+    # 	buildLithTables($dbh);
+    # }
     
     if ( $interval_map )
     {
@@ -213,25 +213,25 @@ sub BuildTables {
     
     my ($occ_options);
     
-    if ( $occurrence_reso )
-    {
-	$occurrence_reso //= '';
+    # if ( $occurrence_reso )
+    # {
+    # 	$occurrence_reso //= '';
 	
-	if ( $occurrence_reso =~ qr{p}x )
-	{
-	    $occ_options->{accept_periods} = 1;
-	}
+    # 	if ( $occurrence_reso =~ qr{p}x )
+    # 	{
+    # 	    $occ_options->{accept_periods} = 1;
+    # 	}
 	
-	if ( $occurrence_reso =~ qr{^[^/\d]*(\d+)}x )
-	{
-	    $occ_options->{epoch_bound} = $1;
-	}
+    # 	if ( $occurrence_reso =~ qr{^[^/\d]*(\d+)}x )
+    # 	{
+    # 	    $occ_options->{epoch_bound} = $1;
+    # 	}
 	
-	if ( $occurrence_reso =~ qr{/(\d+)}x )
-	{
-	    $occ_options->{interval_bound} = $1;
-	}
-    }
+    # 	if ( $occurrence_reso =~ qr{/(\d+)}x )
+    # 	{
+    # 	    $occ_options->{interval_bound} = $1;
+    # 	}
+    # }
     
     if ( $occurrence_tables )
     {
@@ -239,22 +239,22 @@ sub BuildTables {
 	buildOccurrenceTables($dbh, $occ_options);
     }
     
-    elsif ( $occurrence_reso )
-    {
-	populateOrig($dbh);
-	buildTaxonSummaryTable($dbh, $occ_options);
-	rebuildAttrsTable($dbh, 'taxon_trees');
-    }
+    # elsif ( $occurrence_reso )
+    # {
+    # 	populateOrig($dbh);
+    # 	buildTaxonSummaryTable($dbh, $occ_options);
+    # 	rebuildAttrsTable($dbh, 'taxon_trees');
+    # }
     
     elsif ( $occurrence_int_maps )
     {
 	buildOccIntervalMaps($dbh);
     }
     
-    elsif ( $taxon_summary_table )
-    {
-	buildTaxonSummaryTable($dbh);
-    }
+    # elsif ( $taxon_summary_table )
+    # {
+    # 	buildTaxonSummaryTable($dbh);
+    # }
     
     # The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
     # was specified, its value should be a sequence of steps (a-h) to be carried
@@ -336,15 +336,15 @@ sub BuildTables {
     
     # The option -p causes taxon pictures to be fetched from phylopic.org
     
-    if ( $taxon_pics )
-    {
-	getPics($dbh, 'taxon_trees', $force);
-	selectPics($dbh, 'taxon_trees');
-    }
+    # if ( $taxon_pics )
+    # {
+    # 	getPics($dbh, 'taxon_trees', $force);
+    # 	selectPics($dbh, 'taxon_trees');
+    # }
     
     # temp
     
-    if ( $strata_tables )
+    if ( $stratigraphy_tables )
     {
 	buildStrataTables($dbh);
     }
@@ -352,11 +352,6 @@ sub BuildTables {
     if ( $occurrence_tables )
     {
 	buildSpecimenTables($dbh);
-    }
-    
-    if ( $timescale_tables )
-    {
-	establishTimescaleTables($dbh);
     }
     
     logTimestamp();

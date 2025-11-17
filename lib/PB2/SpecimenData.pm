@@ -1769,6 +1769,7 @@ sub generateJoinList {
     # Create the necessary join expressions.
     
     $tables->{t} = 1 if $tables->{pl} || $tables->{ph} || $tables->{v} || $tables->{tv} || $tables->{tf};
+    $tables->{cc} = 1 if $tables->{ccs};
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
@@ -1820,6 +1821,9 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
+    
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
+	if $tables->{ccs};
     
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
     # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the

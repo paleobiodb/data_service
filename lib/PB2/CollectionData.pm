@@ -16,8 +16,10 @@ package PB2::CollectionData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX $BIN_LOC %TABLE);
+use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP
+		 $PALEOCOORDS $GEOPLATES $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP
+		 $INTERVAL_BUFFER $PVL_MATRIX $BIN_LOC);
+use CoreTableDefs;
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use IntervalBase qw(ts_defined ts_record ts_boundary_list ts_boundary_name);
 use OccurrenceBase qw(parseIdentifiedName);
@@ -172,7 +174,9 @@ sub initialize {
         { value => 'refattr', maps_to => '1.2:refs:attr' },
 	    "The author(s) and year of publication of the primary reference for the collection.",
 	{ value => 'secref', maps_to => '1.2:colls:secref' },
-	    "Include the identifiers of the secondary references for the collection.",
+	    "The identifiers of the primary and secondary references for the collection.",
+	{ value => 'container', maps_to => '1.2:colls:container' },
+	    "The name of the containing collection, if any.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
@@ -278,13 +282,13 @@ sub initialize {
     # Then define the output blocks which these mention.
     
     $ds->define_block('1.2:colls:basic' =>
-	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 
+	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset as container_no', 
 		     'cc.collection_aka', 'cc.formation', 'c.lat', 'c.lng', 'c.n_occs',
 		     'c.early_age', 'c.late_age',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'c.reference_no', 'c.access_level', 'cc.access_level as real_access',
 		     'cc.release_date', 'now() as today'], 
-	  tables => ['cc', 'ei', 'li', 'sr', 'r'] },
+	  tables => ['cc', 'ei', 'li', 'r'] },
 	{ output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	    "A unique identifier for the collection.  This will be a string if the result",
 	    "format is JSON.  For backward compatibility, all identifiers in text format",
@@ -314,7 +318,12 @@ sub initialize {
 	{ output => 'real_access', com_name => 'accl', pbdb_name => 'access_level', if_block => 'edit' },
 	    "The access level stored for this collection, regardless of whether",
 	    "it is still restricted.",
-	{ output => 'release_date', com_name => 'reld', if_block => 'edit' },
+	{ output => 'access_resgroup', com_name => 'accr', if_block => 'edit' },
+	    "The research group that has access to this collection, if any.",
+	{ output => 'release_on', com_name => 'rld' },
+	    "If this record is not publicly accessible, this field contains the date",
+	    "on which it will become so.",
+	{ output => 'release_date', com_name => 'rlds', if_block => 'edit' },
 	    "The release date stored for this collection, interpreted for editing",
 	{ output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	    "The formation in which the collection was found",
@@ -324,8 +333,9 @@ sub initialize {
 	    "The latitude at which the collection is located (in degrees)",
 	{ output => 'collection_name', dwc_name => 'collectionCode', com_name => 'nam' },
 	    "The name which identifies the collection, not necessarily unique",
-	{ output => 'collection_subset', com_name => 'nm2' },
-	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'container_no', com_name => 'ctno' },
+	    "If the collection is a subset of another one, this field provides the identifier",
+	    "of the containing collection.",
 	{ output => 'collection_aka', com_name => 'aka' },
 	    "An alternate name for the collection, or additional remarks about it.",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
@@ -358,7 +368,7 @@ sub initialize {
 	{ set => '*', code => \&process_coll_ids });
     
     $ds->define_block('1.2:colls:match' =>
-	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 
+	{ select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset as container_no', 
 		     'cc.collection_aka', 'cc.formation', 'c.n_occs',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'cc.country', 'cc.state', 'c.reference_no',
@@ -389,8 +399,9 @@ sub initialize {
 	{ set => 'permissions', from => '*', code => \&process_permissions },
 	{ output => 'collection_name', com_name => 'nam' },
 	    "The name which identifies the collection, not necessarily unique",
-	{ output => 'collection_subset', com_name => 'nm2' },
-	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'container_no', com_name => 'ctno' },
+	    "If the collection is a subset of another one, this field provides the identifier",
+	    "of the containing collection.",
 	{ output => 'collection_aka', com_name => 'aka' },
 	    "An alternate name for the collection, or additional remarks about it.",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
@@ -456,12 +467,13 @@ sub initialize {
                                         # if specified
     
     $ds->define_block('1.2:colls:name' =>
-	{ select => ['cc.collection_name', 'cc.collection_subset', 'cc.collection_aka' ],
+	{ select => ['cc.collection_name', 'cc.collection_subset as container_no', 'cc.collection_aka' ],
 	  tables => ['cc'] },
 	{ output => 'collection_name', dwc_name => 'collectionCode', com_name => 'cnm' },
 	    "An arbitrary name which identifies the collection, not necessarily unique",
-	{ output => 'collection_subset', com_name => 'cns' },
-	    "If the collection is a part of another one, this field specifies which part",
+	{ output => 'container_no', com_name => 'ctno' },
+	    "If the collection is a subset of another one, this field provides the identifier",
+	    "of the containing collection.",
 	{ output => 'collection_aka', com_name => 'aka' },
 	    "An alternate name for the collection, or additional remarks about it.");
     
@@ -868,7 +880,26 @@ sub initialize {
 	    "The research group(s), if any, associated with this collection.");
     
     $ds->define_block('1.2:colls:secref' =>
-	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) as reference_nos'] });
+	{ select => ['group_concat(distinct sr.reference_no order by sr.reference_no) ' .
+		     'as reference_nos'],
+	  tables => 'sr' });
+
+    $ds->define_block('1.2:colls:container' =>
+	{ select => ['ccs.collection_name as container_name'],
+	  tables => 'ccs' },
+	{ set => '*', code => \&fetch_subset_collections },
+	{ output => 'container_name', com_name => 'ctnm' },
+	    "If this collection is a subset of another one, this field provides the name of",
+	    "the containing collection.",
+	{ output => 'contains_collections', com_name => 'ctcc', sub_record => '1.2:colls:subset' },
+	    "If this collection contains others, this field provides a list of their names",
+	    "and identifiers.");
+
+    $ds->define_block('1.2:colls:subset' => 
+	{ output => 'collection_no', com_name => 'cid' },
+	    "The identifier of a subset collection",
+	{ output => 'collection_name', com_name => 'nam' },
+	    "The name of a subset collection");
     
     $ds->define_block('1.2:colls:full_info' =>
 	{ include => '1.2:colls:loc' },
@@ -892,12 +923,12 @@ sub initialize {
 		   'r.publisher as r_publisher', 'r.pubcity as r_pubcity',
 		   'r.editors as r_editor', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
-		   'r.language as r_language', 'r.doi as r_doi', 'r.isbn as r_isbn',
-		   'r.updated', 'r.updater_no'],
+		   'r.language as r_language', 'r.doi as r_doi', 'r.isbn as r_isbn'],
 	  tables => ['r'] },
         { set => 'formatted', from => '*', code => \&PB2::ReferenceData::format_reference },
 	{ output => 'formatted', com_name => 'ref' },
 	    "The primary reference for the collection, formatted for display",
+	{ include => '1.2:colls:container' },
 	{ include => '1.2:colls:locext' },
 	{ include => '1.2:colls:ages' },
 	{ include => '1.2:colls:stratext' },
@@ -1003,13 +1034,14 @@ sub initialize {
     # 	    "occurrences in this stratum lie, from the Scotese model.");
     
     $ds->define_block('1.2:strata:auto' =>
-	{ select => [ 'name', 'type', 'n_colls', 'n_occs', 'cc_list' ] },
+	{ select => [ 'name', 'rank', 'n_colls', 'n_occs', 
+		      'group_concat(distinct cc) as cc_list' ] },
 	{ output => 'record_type', com_name => 'typ', value => 'str' },
 	    "The type of this record: 'str' for a stratum",
 	{ output => 'name', com_name => 'nam' },
 	    "The name of a matching stratum",
-	{ output => 'type', com_name => 'rnk' },
-	    "The type of stratum: group, formation, or member.",
+	{ output => 'rank', com_name => 'rnk', pbdb_name => 'type' },
+	    "The rank of the stratum: Grp, Fm, or Mbr.",
 	{ output => 'cc_list', com_name => 'cc2' },
 	    "The country or countries in which this stratum lies, as ISO-3166 country codes.",
 	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
@@ -1370,16 +1402,20 @@ sub initialize {
 	    "If the first one is preceded by C<!> then they are excluded.",
 	    "otherwise, only occurrences marked with at least one are included:", 
 	    "=over",
-	    "=item ns", "n. sp.", "=item ng", "n. gen. or n. subgen.",
-	    "=item af", "aff.", "=item cf", "cf.", "=item sl", "sensu lato", "=item if", "informal",
+	    "=item ns", "n. gen. / n. subgen. / n. sp. / n. ssp.",
+	    "=item af", "aff.", "=item cf", "cf.", "=item if", "informal",
+	    "=item ss", "sensu stricto", "=item sl", "sensu lato", 
 	    "=item eg", "ex gr.", "=item qm", "question mark (?)", "=item qu", "quotes (\"\")",
+	    "=item nm", "no modifiers",
 	    "=back",
 	{ optional => 'idgenmod', valid => ANY_VALUE },
 	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
 	    "modifiers on the genus and/or subgenus name.  See C<B<idmod>> above.",
+	{ at_most_one => ['idmod', 'idgenmod'] },
 	{ optional => 'idspcmod', valid => ANY_VALUE },
 	    "This parameter selects or excludes occurrences based on any combination of taxonomic",
 	    "modifiers on the species name.  See C<B<idmod>> above.",
+	{ at_most_one => ['idmod', 'idspcmod'] },
 	{ param => 'abundance', valid => ANY_VALUE },
 	    "This parameter selects only occurrences that have particular kinds of abundance",
 	    "values.  Accepted values are:", $ds->document_set('1.2:occs:abund_type'),
@@ -1928,7 +1964,6 @@ sub get_coll {
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
 	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
-		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id
 	GROUP BY c.collection_no";
@@ -2045,7 +2080,6 @@ sub list_colls {
     $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
-		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no
@@ -2359,7 +2393,6 @@ sub refs {
 	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
 	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
 	    FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
-		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
 		$inner_join_list
             WHERE $filter_string
 	    GROUP BY sr.reference_no) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
@@ -2537,8 +2570,9 @@ sub strata_auto {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM strata_names as sn
+	FROM $TABLE{STRAT_RAW} as sn
         WHERE $filter_string
+	GROUP BY name, rank
 	ORDER BY n_occs desc
 	$limit";
     
@@ -2581,11 +2615,12 @@ sub auto_complete_str {
     
     my $filter_string = join(' and ', @filters);
     
-    my $country_field = $options->{countries} ? 'country_list' : 'cc_list';
+    my $country_field = $options->{countries} ? 'country' : 'cc';
     
     my $sql = "
-	SELECT name, type, $country_field as cc_list, n_colls, n_occs, 'str' as record_type, 'str' as record_id
-	FROM strata_names as sn
+	SELECT name, rank as type, group_concat(distinct $country_field) as cc_list,
+		n_colls, n_occs, 'str' as record_type, 'str' as record_id
+	FROM $TABLE{STRAT_RAW} as sn
 	WHERE $filter_string
 	ORDER BY n_occs desc LIMIT $limit";
     
@@ -5710,6 +5745,7 @@ sub generateJoinList {
     $tables->{o} = 1 if ($tables->{t} || $tables->{tf} || $tables->{oc}) && ! $tables->{ds};
     $tables->{c} = 1 if $tables->{o} || $tables->{pc} || $tables->{cs};
     $tables->{t} = 1 if $tables->{ph} || $tables->{pl} || $tables->{tv};
+    $tables->{cc} = 1 if $tables->{ccs};
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
@@ -5733,6 +5769,8 @@ sub generateJoinList {
 	if $tables->{cs};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
 	if $tables->{r};
+    $join_list .= "LEFT JOIN secondary_refs as sr on sr.collection_no = c.collection_no\n"
+	if $tables->{sr};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
 	if $tables->{ppa};
     $join_list .= "LEFT JOIN person as ppe on ppe.person_no = c.enterer_no\n"
@@ -5756,6 +5794,9 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
+
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
+	if $tables->{ccs};
     
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
     # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the
@@ -6063,7 +6104,7 @@ sub process_coll_ids {
     
     # $request->delete_output_field('record_type');
     
-    foreach my $f ( qw(collection_no) )
+    foreach my $f ( qw(collection_no container_no) )
     {
 	$record->{$f} = generate_identifier('COL', $record->{$f}) if defined $record->{$f};
 	# $record->{$f} = $record->{$f} ? "$IDP{COL}:$record->{$f}" : '';
@@ -6119,6 +6160,8 @@ sub process_permissions {
     
     if ( $request->has_block('edit') )
     {
+	$record->{release_on} = $record->{release_date};
+	
 	my $dbh = $request->get_connection();
 	my $collection_no = $record->{collection_no};
 
@@ -6192,6 +6235,16 @@ sub process_permissions {
 	else
 	{
 	    return "authorizer";
+	}
+    }
+    
+    if ( $record->{release_date} )
+    {
+	if ( $record->{today} && $record->{release_date} lt $record->{today} )
+	{
+	    $record->{release_date} = '';
+	    $record->{access_level} = '';
+	    $record->{real_access} = 'the public';
 	}
     }
     
@@ -6424,6 +6477,41 @@ sub coll_metadata_value {
     {
 	return { error => "bad value for {param}: must start with a valid field name followed " .
 		 "by optional '!' then ':' or '~' and match pattern" };
+    }
+}
+
+
+sub fetch_subset_collections {
+
+    my ($request, $record) = @_;
+    
+    my $dbh = $request->get_connection();
+    
+    my $collection_no = $record->{collection_no};
+    $collection_no =~ s/^.*://;
+    
+    my $sql = "SELECT collection_no, collection_name FROM collections
+		WHERE collection_subset = " . $dbh->quote($collection_no);
+
+    if ( $request->debug && ! $record->{subset_debug_print} )
+    {
+	$request->debug_line("$sql\n\n");
+	$record->{subset_debug_print} = 1;
+    }
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => { }});
+    
+    if ( $result && @$result )
+    {
+	$record->{contains_collections} = $result;
+
+	if ( $request->has_block('extids') )
+	{
+	    foreach my $r ( @$result )
+	    {
+		$r->{collection_no} = generate_identifier('COL', $r->{collection_no});
+	    }
+	}
     }
 }
 

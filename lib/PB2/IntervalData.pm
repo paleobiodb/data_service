@@ -99,12 +99,12 @@ sub initialize {
 	{ set => '*', code => \&process_int_ids });
     
     $ds->define_block('1.2:intervals:colls' => 
-	{ output => 'colls_defined', com_name => 'nco' },
+	{ output => 'colls_defined', com_name => 'nco', data_type => 'dec' },
 	    "The number of collections whose definition refers to this interval",
-	{ output => 'colls_major', com_name => 'nmc' },
+	{ output => 'colls_major', com_name => 'nmc', data_type => 'dec' },
 	    "The total number of collections within this interval's time range according",
 	    "to the 'major' timerule",
-	{ output => 'occs_major', com_name => 'nmo' },
+	{ output => 'occs_major', com_name => 'nmo', data_type => 'dec' },
 	    "The total number of occurrences within this interval's time range according",
 	    "to the 'major' timerule");
     

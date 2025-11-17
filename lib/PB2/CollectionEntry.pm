@@ -157,7 +157,7 @@ sub initialize {
 	  access_level => { before => 'research_group' },
 	  release_date => { doc => "It accepts either 'immediate', or else a string of the form " .
 			    "'n months' or 'n years' where n is a digit. The maximum is 3 years.",
-			    before => 'research_group' },
+			    before => 'research_group', alias => 'release_spec' },
 	});
     
     add_to_ruleset($ds, '1.2:colls:addupdate_body',
@@ -549,7 +549,7 @@ sub list_updated_colls {
     
     my $id_list = join(',', @ids);
     
-    my $filter_string = "collection_no in ($id_list)";
+    my $filter_string = "c.collection_no in ($id_list)";
     
     # Fetch the collection records.
     
@@ -585,7 +585,6 @@ sub list_updated_colls {
 	SELECT $calc $fields,
 	    if(cc.authorizer_no = '$enterer_no' or cc.enterer_no = '$enterer_no', 1, '') as is_owner
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
-		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no";

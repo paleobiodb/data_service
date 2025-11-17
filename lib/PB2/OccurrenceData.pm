@@ -202,7 +202,7 @@ sub initialize {
 		     'tv.rank as accepted_rank',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
-		     'o.species_name', 'o.species_reso',
+		     'o.species_name', 'o.species_reso', 'o.subspecies_name', 'o.subspecies_reso',
 		     'o.early_age', 'o.late_age', 'o.reference_no', 'r.pubyr',
 		     'v.is_trace', 'v.is_form'],
 	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li', 'r', 'v'] },
@@ -1702,8 +1702,11 @@ sub list_occs {
 		'o.occurrence_no';
     }
     
-    # Determine which extra tables, if any, must be joined to the query.  Then
-    # construct the query.
+    # Determine which extra tables, if any, must be joined to the query. Then
+    # construct the query. We don't need a union query for occurrences and reids
+    # because the only fields in the occurrences table we actually use are
+    # 'abund_value' and 'abund_unit'. We really should display reidentification
+    # comments, but those are currently available only from the 'occs/display' route.
     
     my $join_list = $request->generateJoinList('c', $tables);
     
@@ -3370,96 +3373,327 @@ sub generateIdentFilters {
 	    push @filters, "$tn.genus_reso not in ($IDENT_UNCERTAIN)";
 	    push @filters, "$tn.subgenus_reso not in ($IDENT_UNCERTAIN)";
 	    push @filters, "$tn.species_reso not in ($IDENT_UNCERTAIN)" if $idqual eq 'certain';
+	    push @filters, "$tn.subspecies_reso not in ($IDENT_UNCERTAIN)" if $idqual eq 'certain';
 	}
 	
 	elsif ( $idqual eq 'uncertain' )
 	{
 	    push @filters, "($tn.genus_reso in ($IDENT_UNCERTAIN) or " .
-		"$tn.subgenus_reso in ($IDENT_UNCERTAIN) or $tn.species_reso in ($IDENT_UNCERTAIN))";
+		"$tn.subgenus_reso in ($IDENT_UNCERTAIN) or " .
+		"$tn.species_reso in ($IDENT_UNCERTAIN) or " .
+		"$tn.subspecies_reso in ($IDENT_UNCERTAIN))";
 	}
 	
 	elsif ( $idqual eq 'new' )
 	{
-	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or $tn.species_reso = 'n. sp.')";
+	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or " .
+		"$tn.species_reso = 'n. sp.' or $tn.subspecies_reso = 'n. ssp.')";
 	}
 	
 	# otherwise $idqual is 'any', so do nothing
     }
     
-    if ( $idmod )
+    if ( $idmod || $idgen || $idspc )
     {
-	my ($op, $value_str) = $request->id_mod_filter('idmod', $idmod);
+	push @filters, $request->id_mod_filter($tn, $idmod, $idgen, $idspc);
 	
-	if ( $op eq 'in' )
+	# if ( $op eq 'in' )
+	# {
+	#     push @filters, "($tn.genus_reso in ('$value_str') or " .
+	# 	"$tn.subgenus_reso in ('$value_str') or " .
+	# 	"$tn.species_reso in ('$value_str') or " .
+	# 	"$tn.subspecies_reso in ('$value_str'))";
+	# }
+	
+	# else
+	# {
+	#     push @filters, "$tn.genus_reso not in ('$value_str')";
+	#     push @filters, "$tn.subgenus_reso not in ('$value_str')";
+	#     push @filters, "$tn.species_reso not in ('$value_str')";
+	#     push @filters, "$tn.subspecies_reso not in ('$value_str')";
+	# }
+    }
+    
+    # if ( $idspc )
+    # {
+    # 	my ($op, $value_str, $no_modifiers) = $request->id_mod_filter('idspc', $idspc);
+	
+    # 	if ( $no_modifiers && $op eq 'in' )
+    # 	{
+    # 	    push @filters, "($tn.species_reso in ('$value_str') or " .
+    # 		"$tn.subspecies_reso in ('$value_str') or " .
+    # 		"(($tn.species_reso = '' or $tn.species_reso is null) and " .
+    # 		"($tn.subspecies_reso = '' or $tn.subspecies_reso is null)))";
+    # 	}
+	
+    # 	elsif ( $op eq 'in' )
+    # 	{
+    # 	    push @filters, "($tn.species_reso in ('$value_str') or " .
+    # 		"$tn.subspecies_reso in ('$value_str'))";
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    push @filters, "$tn.species_reso not in ('$value_str')";
+    # 	    push @filters, "$tn.species_reso <> ''" if $no_modifiers;
+    # 	    push @filters, "$tn.subspecies_reso not in ('$value_str')";
+    # 	    push @filters, "$tn.subspecies_reso <> ''" if $no_modifiers;
+    # 	}
+    # }
+    
+    # if ( $idgen )
+    # {
+    # 	my ($op, $value_str, $no_modifiers) = $request->id_mod_filter('idgen', $idgen);
+	
+    # 	if ( $op eq 'in' )
+    # 	{
+    # 	    push @filters, "($tn.genus_reso in ('$value_str') or " .
+    # 		"$tn.subgenus_reso in ('$value_str'))";
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    push @filters, "$tn.genus_reso not in ('$value_str')";
+    # 	    push @filters, "$tn.subgenus_reso not in ('$value_str')";
+    # 	}
+    # }
+    
+    return @filters;
+}
+
+
+our (%IDENT_MODIFIER) = ( af => 'aff.', cf => 'cf.', eg => 'ex gr.',
+			  ss => 'sensu stricto', sl => 'sensu lato', if => 'informal',
+			  qm => '?', qu => '"' );
+
+our ($IDENT_MOD_LIST) = "'ns', 'ng', 'af', 'cf', 'eg', 'ss', 'sl', 'if', 'qm', 'qu', 'nm'";
+
+sub id_mod_filter {
+
+    my ($request, $table, $all_filter, $gen_filter, $spc_filter) = @_;
+    
+    my (@gen_values, @spc_values, $gen_nomods, $spc_nomods, $gen_neg, $spc_neg);
+    my (@pos_nomods, @neg_nomods, @pos_clauses);
+    my (@filters);
+    
+    if ( $all_filter )
+    {
+	if ( $all_filter =~ / ^ [!] (.*) /xs )
 	{
-	    push @filters, "($tn.genus_reso in ('$value_str') or " .
-		"$tn.subgenus_reso in ('$value_str') or " .
-		"$tn.species_reso in ('$value_str'))";
+	    $gen_neg = 1;
+	    $spc_neg = 1;
+	    $all_filter = $1;
 	}
 	
-	else
+	foreach my $code ( split( /\s*,\s*/, $all_filter ) )
 	{
-	    push @filters, "$tn.genus_reso not in ('$value_str')";
-	    push @filters, "$tn.subgenus_reso not in ('$value_str')";
-	    push @filters, "$tn.species_reso not in ('$value_str')";
+	    if ( $IDENT_MODIFIER{$code} )
+	    {
+		push @gen_values, $IDENT_MODIFIER{$code};
+		push @spc_values, $IDENT_MODIFIER{$code};
+	    }
+	    
+	    elsif ( $code eq 'ns' || $code eq 'ng' )
+	    {
+		push @gen_values, 'n. gen.', 'n. subgen.';
+		push @spc_values, 'n. sp.', 'n. ssp.';
+	    }
+	    
+	    elsif ( $code eq 'nm' )
+	    {
+		$gen_nomods = 1;
+		$spc_nomods = 1;
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("bad value '$code' for parameter 'idmod': " .
+				      "must be one of $IDENT_MOD_LIST");
+	    }
 	}
     }
     
-    if ( $idspc )
+    if ( $gen_filter && ! $all_filter )
     {
-	my ($op, $value_str) = $request->id_mod_filter('idspc', $idspc);
-	push @filters, "$tn.species_reso $op ('$value_str')";
+	if ( $gen_filter =~ / ^ [!] (.*) /xs )
+	{
+	    $gen_neg = 1;
+	    $gen_filter = $1;
+	}
+	
+	foreach my $code ( split( /\s*,\s*/, $gen_filter ) )
+	{
+	    if ( $IDENT_MODIFIER{$code} )
+	    {
+		push @gen_values, $IDENT_MODIFIER{$code};
+	    }
+	    
+	    elsif ( $code eq 'ns' || $code eq 'ng' )
+	    {
+		push @gen_values, 'n. gen.', 'n. subgen.';
+	    }
+	    
+	    elsif ( $code eq 'nm' )
+	    {
+		$gen_nomods = 1;
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("bad value '$code' for parameter 'idgenmod': " .
+				      "must be one of $IDENT_MOD_LIST");
+	    }
+	}
     }
     
-    if ( $idgen )
+    if ( $spc_filter && ! $all_filter )
     {
-	my ($op, $value_str) = $request->id_mod_filter('idgen', $idgen);
-	push @filters, "$tn.genus_reso $op ('$value_str')";
+	if ( $spc_filter =~ / ^ [!] (.*) /xs )
+	{
+	    $spc_neg = 1;
+	    $spc_filter = $1;
+	}
+	
+	foreach my $code ( split( /\s*,\s*/, $spc_filter ) )
+	{
+	    if ( $IDENT_MODIFIER{$code} )
+	    {
+		push @spc_values, $IDENT_MODIFIER{$code};
+	    }
+	    
+	    elsif ( $code eq 'ns' )
+	    {
+		push @spc_values, 'n. sp.', 'n. ssp.';
+	    }
+	    
+	    elsif ( $code eq 'nm' )
+	    {
+		$spc_nomods = 1;
+	    }
+	    
+	    else
+	    {
+		$request->add_warning("bad value '$code' for parameter 'idspcmod': " .
+				      "must be one of $IDENT_MOD_LIST");
+	    }
+	}
+    }
+    
+    my $gen_string = '';
+    my $spc_string = '';
+    
+    $gen_string = "'" . join("','", @gen_values) . "'" if @gen_values;
+    $spc_string = "'" . join("','", @spc_values) . "'" if @spc_values;
+    
+    if ( $gen_neg )
+    {
+	push @filters, "$table.genus_reso not in ($gen_string)" if $gen_string;
+	push @filters, "$table.subgenus_reso not in ($gen_string)" if $gen_string;
+	
+	if ( $gen_nomods )
+	{
+	    push @neg_nomods, "$table.genus_reso <> ''" if $gen_nomods;
+	    push @neg_nomods, "$table.subgenus_reso <> ''" if $gen_nomods;
+	}
+    }
+    
+    else
+    {
+	push @pos_clauses, "$table.genus_reso in ($gen_string)" if $gen_string;
+	push @pos_clauses, "$table.subgenus_reso in ($gen_string)" if $gen_string;
+	
+	push @pos_nomods, "($table.genus_reso = '' or $table.genus_reso is null)"
+	    if $gen_nomods;
+	push @pos_nomods, "($table.subgenus_reso = '' or $table.subgenus_reso is null)"
+	    if $gen_nomods;
+    }
+    
+    if ( $spc_neg )
+    {
+	push @filters, "$table.species_reso not in ($spc_string)" if $spc_string;
+	push @filters, "$table.subspecies_reso not in ($spc_string)" if $spc_string;
+	
+	if ( $spc_nomods )
+	{
+	    push @neg_nomods, "$table.species_reso <> ''" if $spc_nomods;
+	    push @neg_nomods, "$table.subspecies_reso <> ''" if $spc_nomods;
+	}
+    }
+    
+    else
+    {
+	push @pos_clauses, "$table.species_reso in ($spc_string)" if $spc_string;
+	push @pos_clauses, "$table.subspecies_reso in ($spc_string)" if $spc_string;
+	
+	push @pos_nomods, "($table.species_reso = '' or $table.species_reso is null)"
+	    if $spc_nomods;
+	push @pos_nomods, "($table.subspecies_reso = '' or $table.subspecies_reso is null)"
+	    if $spc_nomods;
+    }
+
+    if ( @neg_nomods )
+    {
+	push @filters, '(' . join(' or ', @neg_nomods) . ')';
+    }
+
+    if ( @pos_nomods )
+    {
+	push @pos_clauses, '(' . join(' and ', @pos_nomods) . ')';
+    }
+    
+    if ( @pos_clauses )
+    {
+	push @filters, '(' . join(' or ', @pos_clauses) . ')';
+    }
+    
+    unless ( @filters || $gen_neg || $spc_neg )
+    {
+	push @filters, "$table.genus_reso = 'SELECT NOTHING'";
     }
     
     return @filters;
 }
 
 
-our (%IDENT_MODIFIER) = ( ns => 'n. sp.', ng => "n. gen.','n. subgen.", af => 'aff.', cf => 'cf.',
-			  eg => 'ex gr.', sl => 'sensu lato', if => 'informal',
-			  qm => '?', qu => '"' );
+# sub id_mod_filter {
+    
+#     my ($request, $param_name, $modifier_list) = @_;
+    
+#     my $op = 'in';
+#     my @values;
+#     my $no_modifier = '';
+    
+#     if ( $modifier_list =~ / ^ [!] (.*) /xs )
+#     {
+# 	$op = 'not in';
+# 	$modifier_list = $1;
+#     }
+    
+#     foreach my $code ( split( /\s*,\s*/, $modifier_list ) )
+#     {
+# 	if ( $IDENT_MODIFIER{$code} )
+# 	{
+# 	    push @values, $IDENT_MODIFIER{$code};
+# 	}
 
-our ($IDENT_MOD_LIST) = "'ns', 'ng', 'af', 'cf', 'eg', 'sl', 'if', 'qm', 'qu'";
-
-sub id_mod_filter {
-    
-    my ($request, $param_name, $modifier_list) = @_;
-    
-    my $op = 'in';
-    my @values;
-    
-    if ( $modifier_list =~ / ^ [!] (.*) /xs )
-    {
-	$op = 'not in';
-	$modifier_list = $1;
-    }
-    
-    foreach my $code ( split( /\s*,\s*/, $modifier_list ) )
-    {
-	if ( $IDENT_MODIFIER{$code} )
-	{
-	    push @values, $IDENT_MODIFIER{$code};
-	}
+# 	elsif ( $code eq 'nm' )
+# 	{
+# 	    $no_modifier = 1;
+# 	}
 	
-	else
-	{
-	    $request->add_warning("bad value '$code' for parameter '$param_name', must be one of $IDENT_MOD_LIST");
-	}
-    }
+# 	else
+# 	{
+# 	    $request->add_warning("bad value '$code' for parameter '$param_name', must be one of $IDENT_MOD_LIST");
+# 	}
+#     }
     
-    unless ( @values )
-    {
-	push @values, "SELECT_NOTHING";
-    }
+#     unless ( @values )
+#     {
+# 	push @values, "SELECT_NOTHING";
+#     }
     
-    return $op, join("','", @values);
-}
+#     return $op, join("','", @values), $no_modifier;
+# }
 
 
 # generateQuickDivFilters ( main_table, tables_ref )
@@ -3713,6 +3947,7 @@ sub generateJoinList {
     # Create the necessary join expressions.
     
     $tables->{t} = 1 if $tables->{pl} || $tables->{ph} || $tables->{v} || $tables->{tv} || $tables->{tf};
+    $tables->{cc} = 1 if $tables->{ccs};
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
@@ -3784,6 +4019,9 @@ sub generateJoinList {
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
 	if $tables->{ms};
+    
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
+	if $tables->{ccs};
     
     # The value of 'pc' must be an array. Each model entry must be followed by a selector
     # entry. The model values provided to the API are looked up in %PCOORD_ALIAS to find the

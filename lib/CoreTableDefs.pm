@@ -75,12 +75,16 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(COLLECTION_INTS => 'coll_ints');
     set_table_name(COLLECTION_LITHS => 'coll_lith');
     set_table_name(COLLECTION_STRATA => 'coll_strata');
-    set_table_name(STRATA_NAMES => 'strata_names');
+    set_table_name(STRATA_NAMES => 'strat_raw');
+    set_table_name(STRAT_RAW => 'strat_raw');
+    set_table_name(STRAT_NAMES => 'strat_names');
+    set_table_name(STRAT_CONCEPTS => 'strat_concepts');
     set_table_name(COLLECTION_UNITS => 'coll_units');
     
     set_table_group('collection_data' => 'COLLECTION_DATA', 'COLLECTION_MATRIX',
 		    'COLLECTION_LOC', 'COLLECTION_INTS', 'COLLECTION_STRATA',
-		    'STRATA_NAMES', 'COLLECTION_UNITS');
+		    'STRATA_NAMES', 'STRAT_RAW', 'STRAT_NAMES', 'STRAT_CONCEPTS',
+		    'COLLECTION_UNITS');
     
     set_table_name(PALEOCOORDS => 'paleocoords');
     set_table_name(PALEOSTATIC => 'paleostatic');

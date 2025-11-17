@@ -1037,7 +1037,7 @@ sub initialize {
 	    "C<aff.> / C<cf.> / C<?> / C<\"\"> / C<informal> / C<sensu lato>.",
 	{ value => 'new' },
 	    "Select only occurrences marked with one of the following:",
-	    "C<n. gen.> / C<n. subgen.> / C<n. sp.>");
+	    "C<n. gen.> / C<n. subgen.> / C<n. sp.> / C<n. ssp.>");
     
     # { value => 'latest' },
     #     "Select only references associated with most recently published identification of",
