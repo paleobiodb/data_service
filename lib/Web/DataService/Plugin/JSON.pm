@@ -534,7 +534,7 @@ sub json_clean {
     
     # WARNING: this decoding needs to be checked. $$$
     
-    $string =~ s/&\#(\d)+;/chr($1)/eg;
+    # $string =~ s/&\#(\d)+;/chr($1)/eg;
     
     # Next, escape all backslashes, double-quotes and whitespace control characters
     
