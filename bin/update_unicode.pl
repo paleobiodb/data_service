@@ -280,7 +280,7 @@ sub UpdateRefs {
 
     say "\nUpdating escaped unicode characters in 'pbdb.refs'...";
     
-    my $edt = ReferenceEdit->new($pbdb, { permission => $perms, 
+    my $edt = PBDBEdit->new($pbdb, { permission => $perms, 
 					  table => 'REFERENCE_DATA',
 					  allows => ['FIXUP_MODE'] } );
     
