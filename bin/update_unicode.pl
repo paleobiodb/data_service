@@ -22,8 +22,6 @@ use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use Encode qw(encode_utf8);
 use Term::ReadLine;
 
-use PBDBEdit;
-
 
 # Read the configuration file, and open a database connection.
 
