@@ -8,7 +8,7 @@
 use strict;
 
 use lib 'lib';
-use feature 'say';
+use feature qw(say fc);
 
 use CoreFunction qw(loadConfig configData connectDB);
 use TableDefs qw(%TABLE);
@@ -72,7 +72,7 @@ our (%is_rock_type) = ( and => 1, ash => 1, ashe => 1,
 			gravel => 1, greensand => 1, 'grès' => 1, grey => 1, grigi => 1,
 			grit => 1, gypsum => 1, hoj => 1, 'høj' => 1, horizon => 1, 
 			iron => 1, ironstone => 1,
-			limesetone => 1, limestone => 1, limestone => 1, limstone => 1, lutite => 1,
+			limesetone => 1, limestone => 1, limstone => 1, ls => 1, lutite => 1,
 			marble => 1, 'marine sand' => 1, marl => 1, marlstone => 1, marly => 1,
 			measure => 1, mudstone => 1,
 			oolite => 1, ore => 1,
@@ -90,7 +90,8 @@ our (%is_rock_type) = ( and => 1, ash => 1, ashe => 1,
 our (%excluded_name) = ( lower => 1, middle => 1, upper => 1, first => 1, second => 1, third => 1,
 			 fourth => 1, base => 1, top => 1, 'upper part' => 1, 'lower part' => 1,
 			 'middle part' => 1, alpha => 1, beta => 1, informal => 1 );
-		      
+
+our (%allowed_suffix) = ( fjord => 1, land => 1, mountain => 1 );
 
 # Check the command arguments, and execute the specified function.
 
@@ -124,6 +125,46 @@ exit;
 
 sub GenerateConcepts {
 
+    # Step I: iterate through the rows of COLLECTION_STRATA. Record the relationships
+    # between raw stratigraphic names.
+    
+    say "Reading from table '$TABLE{COLLECTION_STRATA}'...";
+    
+    my (%contained_in, %rel_lookup);
+    
+    my $hierarchy = DBHashQuery($pbdb, "
+	SELECT cs.grp, cs.formation, cs.member, c.cc,
+		group_concat(distinct c.reference_no) as reference_nos
+	FROM $TABLE{COLLECTION_STRATA} as cs join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+	GROUP BY grp, formation, member, cc");
+    
+    foreach my $a ( $hierarchy->@* )
+    {
+	if ( $a->{grp} && $a->{formation} )
+	{
+	    my $larger_key = "$a->{grp}|Gp|$a->{cc}";
+	    my $smaller_key = "$a->{formation}|Fm|$a->{cc}";
+	    
+	    $contained_in{$smaller_key} = [$larger_key, $a->{reference_nos}];
+	}
+	
+	elsif ( $a->{grp} && $a->{member} )
+	{
+	    my $larger_key = "$a->{grp}|Gp|$a->{cc}";
+	    my $smaller_key = "$a->{member}|Mbr|$a->{cc}";
+	    
+	    $contained_in{$smaller_key} = [$larger_key, $a->{reference_nos}];
+	}
+	
+	if ( $a->{formation} && $a->{member} )
+	{
+	    my $larger_key = "$a->{formation}|Fm|$a->{cc}";
+	    my $smaller_key = "$a->{member}|Mbr|$a->{cc}";
+	    
+	    $contained_in{$smaller_key} = [$larger_key, $a->{reference_nos}];
+	}
+    }
+    
     say "Reading from table '$TABLE{STRAT_RAW}'...";
     
     my $raw_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_RAW} order by name");
@@ -131,7 +172,7 @@ sub GenerateConcepts {
     my (%orig_name, %alias_name, %alias_of);
     my (%exact_name, %first_two, %first_last);
     
-    # Step I: Iterate through the rows of STRAT_RAW. Each row generates a name context
+    # Step II: Iterate through the rows of STRAT_RAW. Each row generates a name context
     # record, along with one or more name keys. Situations which generate
     # multiple keys include names which contain 'and', 'or', 'x (= y)', etc.
     
@@ -154,12 +195,14 @@ sub GenerateConcepts {
 	    $raw_name = "$1$2";
 	}
 	
+	# Remove whitespace on either side of a hyphen.
+	
 	if ( $raw_name =~ /-/ )
 	{
 	    $raw_name =~ s/\s*-\s*/-/g;
 	}
 	
-	# Split up names that include '-', 'and/or', 'and', 'or', or commas. The
+	# Split up names that include '-', '&', 'and/or', 'and', 'or', or commas. The
 	# 'and' case is the hardest by far, because 'and' can sometimes be
 	# part of a stratigraphic name.
 	
@@ -168,7 +211,7 @@ sub GenerateConcepts {
 	    @components = ($1, $2);
 	}
 	
-	elsif ( $raw_name =~ /(.*?)\s+(or|and\s*\/\s*or)\s+(.*)/ )
+	elsif ( $raw_name =~ /(.*?)\s+(or|and\s*\/\s*or|&)\s+(.*)/ )
 	{
 	    @components = ($1, $2);
 	}
@@ -188,7 +231,7 @@ sub GenerateConcepts {
 	    }
 	}
 	
-	elsif ( $raw_name =~ /(.*?)\s+(and|&)\s+(.*)/ )
+	elsif ( $raw_name =~ /(.*?)\s+and\s+(.*)/ )
 	{
 	    @components = ParseConjunction($1, $3);
 	}
@@ -197,6 +240,8 @@ sub GenerateConcepts {
 	{
 	    @components = $raw_name;
 	}
+	
+	$n->{n_names} = scalar(@components);
 	
 	# Iterate through the individual components, assuming that each
 	# represents a separate stratum name. For each one that appears to be an
@@ -261,7 +306,7 @@ sub GenerateConcepts {
 	    # second is the first two letters, and for the last the first/last
 	    # letters. These will allow us to associate names together into
 	    # concepts even if they have different ranks and/or are spelled slightly
-	    # differently. 
+	    # differently.
 	    
 	    # $exact_name{$c} ||= [];
 	    # push $exact_name{$c}->@*, $key;
@@ -315,9 +360,39 @@ sub GenerateConcepts {
 		# push $first_last{$afl}->@*, $alias_key;
 	    }
 	}
+
+	# Map "relationship keys" to name context records. This will be used in the next step.
+	
+	$rel_lookup{"$n->{name}|$n->{rank}|$n->{cc}"} = $n;
     }
 
-    # Step II: Iterate through the name keys, assigning each one to a concept.
+    # Step IIa: assign hierarchical relationships. A parent/child relationship is only
+    # possible if the parent name context is associated with a single name, because otherwise we
+    # don't know which name to associate each child with.
+    
+    say "Assigning hierarchical relationships...";
+    
+    foreach my $key ( sort keys %orig_name )
+    {
+	foreach my $rn ( $orig_name{$key}->@* )
+	{
+	    my $rkey = "$rn->{name}|$rn->{rank}|$rn->{cc}";
+	    
+	    if ( $contained_in{$rkey}[0] && $rel_lookup{$contained_in{$rkey}[0]} )
+	    {
+		my $parent = $rel_lookup{$contained_in{$rkey}[0]};
+		
+		if ( $parent->{n_names} == 1 )
+		{
+		    say encode_utf8("Multiple parents for $key");
+		    $rn->{parent}{$key} = $parent;
+		    # $$$
+		}
+	    }
+	}
+    }
+    
+    # Step III: Iterate through the name keys, assigning each one to a concept.
     
     say "Assigning concepts...";
     
@@ -360,7 +435,7 @@ sub GenerateConcepts {
 	    if ( @consolidated_names < $orig_name{$key}->@* )
 	    {
 		$orig_name{$key} = \@consolidated_names;
-		say "Consolidated names for $key";
+		say "Consolidated names for " . encode_utf8($key);
 	    }
 	}
 	
@@ -373,18 +448,18 @@ sub GenerateConcepts {
 	{
 	    my ($rc, @matching_concepts);
 	    
-	    # First check to see if there are any existing name concepts
-	    # associated with this key. If there are, check to see if any of
-	    # them are compatible (place and time) with the name.
+	    # # First check to see if there are any existing name concepts
+	    # # associated with this key. If there are, check to see if any of
+	    # # them are compatible (place and time) with the name.
 	    
-	    foreach $rc ( $name_concept{$key}->@* )
-	    {
-		if ( ConceptIsCompatible($rc, $rn) )
-		{
-		    push @matching_concepts, $rc;
-		    say "Found EXISTING concept for $key\n";
-		}
-	    }
+	    # foreach $rc ( $name_concept{$key}->@* )
+	    # {
+	    # 	if ( ConceptIsCompatible($rc, $rn) )
+	    # 	{
+	    # 	    push @matching_concepts, $rc;
+	    # 	    say "Found EXISTING concept for $key\n";
+	    # 	}
+	    # }
 	    
 	    # If we get here, there were no matching concepts, so check for
 	    # concepts with the same name but different rank.
@@ -422,16 +497,13 @@ sub GenerateConcepts {
 		
 		my $second_word;
 		
-		# We can skip the name itself, because we already checked the
-		# exact_name hash above. Skip any potential name which is not
-		# compatible with the name being checked. Compatibility is
-		# indicated by various measures such as having a small edit
-		# distance, having a rock type added to one name but not
+		# Skip any potential name which is not compatible with the name being
+		# checked. Compatibility is indicated by various measures such as having
+		# a small edit distance, having a rock type added to one name but not
 		# the other, etc.
 		
-		# next if $alt_name eq $name;
-
-		my $match_level = NamesAreCompatible($name, $alt_name, \$second_word);
+		my $match_level = NamesAreCompatible($name, $key, $rn,
+						     $alt_name, $alt_key, $orig_name{$alt_key}[0]);
 		
 		unless ( $match_level )
 		{
@@ -448,7 +520,10 @@ sub GenerateConcepts {
 		{
 		    if ( ConceptIsCompatible($rc, $rn, $match_level) )
 		    {
-			push @matching_concepts, $rc;
+			unless ( grep { $_ eq $rc } @matching_concepts )
+			{
+			    push @matching_concepts, $rc;
+			}
 		    }
 		}
 	    }
@@ -459,9 +534,9 @@ sub GenerateConcepts {
 	    {
 		AddToConcept($matching_concepts[0], $rn, $key);
 		$name_concept{$key} ||= [];
-		unless ( grep { $_ eq $rc } $name_concept{$key}->@* )
+		unless ( grep { $_ eq $matching_concepts[0] } $name_concept{$key}->@* )
 		{
-		    push $name_concept{$key}->@*, $rc;
+		    push $name_concept{$key}->@*, $matching_concepts[0];
 		}
 	    }
 	    
@@ -504,23 +579,16 @@ sub GenerateConcepts {
 		$preliminary_concept{"${preliminary_concept_no}A"} = $rc;
 	    }
 	}
-
-	# my $cc_list = join ',', sort keys %cc;
-
-	# my $name_no = DBInsert($pbdb, "INSERT INTO $TABLE{STRAT_NAMES} (name, rank, stratc_no,
-	# 	cc_list, n_colls, n_occs, lat_min, lat_max, lng_min, lng_max)
-	# 	VALUES ($qname, '$rank', '$cc_list', $n_colls, $n_occs,
-	# 		$latmin, $latmax, $lngmin, $lngmax)");
     }
     
-    # Now consolidate the preliminary concepts into real ones.
+    # Step IV: consolidate the preliminary concepts into real ones.
     
     say "Consolidating concepts...";
     
     my $real_concept_no = 0;
     my (%real_concept, %prelim_to_real);
     
-    foreach my $preliminary_concept_no ( sort keys %preliminary_concept )
+    foreach my $preliminary_concept_no ( sort { $a <=> $b } keys %preliminary_concept )
     {
 	my $rc = $preliminary_concept{$preliminary_concept_no};
 	
@@ -549,26 +617,38 @@ sub GenerateConcepts {
 	}
     }
     
-    # Empty the STRAT_NAMES and STRAT_CONCEPTS tables, so we can refill them
-    # from our computed data.
+    # # Step V: link up concepts into hierarchical relationships.
+    
+    # foreach my $key ( sort keys %orig_names )
+    # {
+    # 	foreach my $rn ( $orig_name{$key}->@* )
+    # 	{
+    # 	    my $child_cr = $rn->{concept}{$key};
+    # 	    my $parent = $rn->{parent}{$key};
+    # 	    my $parent_cr = $parent->{concept} $$$
+    # 	}
+    # }
+    
+    # Step VI: regenerate the STRAT_NAMES, STRAT_CONCEPTS, and STRAT_OPINIONS tables.
+    
+    # First, empty these tables so we can refill them from our computed data.
     
     $DB::single = 1;
     
-    say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRAT_CONCEPTS}'...";
+    say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRAT_CONCEPTS}', '$TABLE{STRAT_OPINIONS}'...";
     
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_NAMES}");
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_CONCEPTS}");
+    DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_OPINIONS}");
     
-    # Now go through the list again, and create the database rows.
+    # Then go through the list of concepts, and add one row to the STRAT_CONCEPTS table
+    # per concept.
     
-    say "Writing database rows...";
+    say "Generating the STRAT_CONCEPTS ($TABLE{STRAT_CONCEPTS}) table...";
     
-    my $name_values = '';
     my $concept_values = '';
-
-    my $new_names = 0;
     my $new_concepts = 0;
-
+    
     foreach my $key ( sort keys %real_concept )
     {
 	my $rc = $real_concept{$key};
@@ -590,8 +670,15 @@ sub GenerateConcepts {
     }
     
     InsertConcepts($pbdb, $concept_values) if $concept_values;
-
-    my ($missing, $found);
+    
+    # Then go through the list of names, and add one row to the STRAT_NAMES table for
+    # each name.
+    
+    say "Generating the STRAT_NAMES ($TABLE{STRAT_NAMES}) table...";
+    
+    my $name_values = '';
+    my $new_names = 0;
+    my $missing_names = 0;
     
     foreach my $key ( sort keys %orig_name )
     {
@@ -601,16 +688,18 @@ sub GenerateConcepts {
 	{
 	    unless ( $rn->{concept}{$key}{preliminary_concept_no} )
 	    {
-		$missing++;
+		$missing_names++;
 		next;
 	    }
 	    
 	    my $concept_no = $prelim_to_real{$rn->{concept}{$key}{preliminary_concept_no}};
+	    my $name_no = ++$new_names;
 	    
-	    $new_names++;
+	    $rn->{name_no}{$key} = $name_no;
 	    
 	    my $qname = $pbdb->quote($name);
 	    my $qrank = $pbdb->quote($rank);
+	    my $qstratn = $pbdb->quote($name_no);
 	    my $qstratc = $pbdb->quote($concept_no);
 	    my $qcc = $pbdb->quote($rn->{cc});
 	    my $qcou = $pbdb->quote($rn->{country});
@@ -620,7 +709,7 @@ sub GenerateConcepts {
 	    my $qlate = $pbdb->quote($rn->{late_age} || '');
 	    
 	    $name_values .= ', ' if $name_values;
-	    $name_values .= "($qname, $qrank, $qstratc, $qcc, $qcou, $qncolls, $qnoccs, " .
+	    $name_values .= "($qstratn, $qstratc, $qname, $qrank, $qcc, $qcou, $qncolls, $qnoccs, " .
 		"$qearly, $qlate, $rn->{lat_min}, $rn->{lat_max}, $rn->{lng_min}, $rn->{lng_max})";
 	    
 	    if ( length($name_values) > 50000 )
@@ -633,21 +722,62 @@ sub GenerateConcepts {
     
     InsertNames($pbdb, $name_values) if $name_values;
     
-    say "Missing: $missing" if $missing && $missing > 0;
+    # Then go through the names again, and add whatever opinions are found.
+    
+    say "Generating the STRAT_OPINIONS ($TABLE{STRAT_OPINIONS}) table...";
+    
+    my $opinion_values = '';
+    my $new_opinions = 0;
+
+    foreach my $key ( sort keys %orig_name )
+    {
+	my ($name, $rank, $cc) = split /\|/, $key;
+	
+	foreach my $rn ( $orig_name{$key}->@* )
+	{
+	    if ( my $parent = $rn->{parent}{$key} )
+	    {
+		my $qopno = $pbdb->quote(++$new_opinions);
+		my $qchildno = $pbdb->quote($rn->{name_no}{$key});
+		my $qchildrank = $pbdb->quote($rank);
+		
+		my ($parent_key) = keys $parent->{concept}->%*;
+		my ($parent_name, $parent_rank, $parent_cc) = split /\|/, $parent_key;
+		my $qparno = $pbdb->quote($parent->{name_no}{$parent_key});
+		my $qparrank = $pbdb->quote($parent_rank);
+		my $qrefno = $pbdb->quote(0);
+		
+		$opinion_values .= ', ' if $opinion_values;
+		$opinion_values .= "($qopno, $qchildno, $qchildrank, 'belongs to', " .
+		    "$qparno, $qparrank, $qrefno)";
+	    }
+	    
+	    if ( length($opinion_values) > 50000 )
+	    {
+		InsertOpinions($pbdb, $opinion_values);
+		$opinion_values = '';
+	    }
+	}
+    }
+    
+    InsertOpinions($pbdb, $opinion_values);
+    
+    say "Missing: $missing_names" if $missing_names && $missing_names > 0;
     say "Created $new_names names";
     say "Created $new_concepts concepts";
+    say "Created $new_opinions opinions";
     
-    my $words_fh;
+    # my $words_fh;
     
-    if ( open($words_fh, '>', 'second_words.txt') )
-    {
-	say $words_fh encode_utf8($_) foreach sort keys %second_words;
-    }
+    # if ( open($words_fh, '>', 'second_words.txt') )
+    # {
+    # 	say $words_fh encode_utf8($_) foreach sort keys %second_words;
+    # }
     
-    else
-    {
-	say "Could not open second_words.txt: $!";
-    }
+    # else
+    # {
+    # 	say "Could not open second_words.txt: $!";
+    # }
 }
 
 
@@ -696,13 +826,18 @@ sub ParseConjunction {
 }
 
 
-# NamesAreCompatible ( name, alt_name )
+# NamesAreCompatible ( name, key, name_context, alt_name, alt_key, alt_name_context )
 #
 # Return true if name and alt_name are likely to be variants of each other.
 
 sub NamesAreCompatible {
 
-    my ($name, $alt_name, $second_word_ref) = @_;
+    my ($name, $key, $rn, $alt_name, $alt_key, $alt_rn) = @_;
+
+    # Convert both names to fold-case, to make this comparison case-insensitive.
+
+    $name = fc $name;
+    $alt_name = fc $alt_name;
     
     # If the two names are the same, return true.
 
@@ -711,78 +846,233 @@ sub NamesAreCompatible {
 	return 1;
     }
     
-    # If the two names are of the form "X" and "X Y" where Y is a rock type,
-    # then the two names are compatible, provided they are of the same rank.
+    my ($smaller, $larger, $same_prefix, $same_parents, $same_rank,
+	$ages_overlap, $ages_identical, $ages_close, $locations_close, $locations_overlap);
     
-    my ($smaller, $larger);
+    # If the age ranges overlap, the two names are potentially compatible.
+    
+    if ( $rn->{early_age} >= $alt_rn->{late_age} &&
+	 $rn->{late_age} <= $alt_rn->{early_age} )
+    {
+	$ages_overlap = 1;
+    }
+    
+    # If the age ranges are exactly the same or very close, the two names are even more
+    # likely to be compatible.
+    
+    if ( $rn->{early_age} == $alt_rn->{early_age} &&
+	 abs($rn->{late_age} - $alt_rn->{late_age}) < 5 ||
+	 $rn->{late_age} == $alt_rn->{late_age} &&
+	 abs($rn->{early_age} - $alt_rn->{early_age}) < 5 )
+    {
+	$ages_identical = 1;
+    }
+    
+    # If the geographic ranges overlap or are very close to each other, the two names are
+    # potentially compatible.
+
+    if ( $rn->{cc} eq $alt_rn->{cc} )
+    {
+	$locations_close = 1;
+    }
+    
+    elsif ( $rn->{lat_min} <= $alt_rn->{lat_max} + 5 &&
+	    $rn->{lat_max} >= $alt_rn->{lat_min} - 5 &&
+	    $rn->{lng_min} <= $alt_rn->{lng_max} + 5 &&
+	    $rn->{lng_max} >= $alt_rn->{lng_min} - 5 )
+    {
+	$locations_close = 1;
+    }
+
+    if ( $rn->{lat_min} <= $alt_rn->{lat_max} + 1 &&
+	 $rn->{lat_max} >= $alt_rn->{lat_min} - 1 &&
+	 $rn->{lng_min} <= $alt_rn->{lng_max} + 1 &&
+	 $rn->{lng_max} >= $alt_rn->{lng_min} - 1 )
+    {
+	$locations_overlap = 1;
+    }
+    
+    # If the two names start with the same three letters, they are potentially compatible.
     
     if ( substr($name, 0, 3) eq substr($alt_name, 0, 3) )
     {
-	if ( length($name) < length($alt_name) )
-	{
-	    $smaller = $name;
-	    $larger = $alt_name;
-	}
+	$same_prefix = 1;
+    }
+    
+    # Otherwise, if the initial words have an edit distance of 2 or less, the names are
+    # potentially compatible.
+    
+    else
+    {
+	my ($first) = $name =~ /(\S+)/;
+	my ($alt_first) = $alt_name =~ /(\S+)/;
 	
-	else
+	if ( edistance($first, $alt_first, 2) >= 0 )
 	{
-	    $smaller = $alt_name;
-	    $larger = $name;
+	    $same_prefix = 1;
 	}
-	
-	if ( edistance(substr($larger, 0, length($smaller) + 1), "$smaller ", 2) >= 0 &&
-	     substr($larger, length($smaller), 2) =~ / / && ! IsRockType($smaller) )
+    }
+    
+    # If the two names have identical parents, they are potentially compatible.
+    
+    if ( $rn->{parent}{$key} && $alt_rn->{parent}{$alt_key} &&
+	 $rn->{parent}{$key} eq $alt_rn->{parent}{$alt_key} )
+    {
+	$same_parents = 1;
+    }
+
+    # If they have the same rank, they are potentially compatible.
+    
+    if ( $rn->{rank} eq $alt_rn->{rank} )
+    {
+	$same_rank = 1;
+    }
+    
+    # If the names differ in a sequence that includes numbers (including roman numerals)
+    # possibly followed by letters, they are not compatible. That means they are
+    # individually lettered or numbered members.
+    
+    my @sequence = $name =~ /(\d+[[:alpha:]]*|\b[ivx]+\b)/g;
+    my @alt_sequence = $alt_name =~ /(\d+[[:alpha:]]*|\b[ivx]+\b)/g;
+    
+    if ( @sequence != @alt_sequence )
+    {
+	return '';
+    }
+
+    elsif ( @sequence )
+    {
+	foreach my $i ( 0..$#sequence )
 	{
-	    my $suffix = substr($larger, length($smaller) + 1);
-	    $suffix =~ s/^\s+//;
-	    
-	    if ( IsRockType($suffix) )
+	    if ( $sequence[$i] ne $alt_sequence[$i] )
 	    {
-		return 2;
-	    }
-	    
-	    elsif ( $suffix =~ /[[:alpha:]]{2}/ )
-	    {
-		$$second_word_ref = lc "$suffix ($smaller)";
+		return '';
 	    }
 	}
     }
     
-    # If the names have a Levenshtein-Damerau edit distance of 1 or 2, then the
-    # two names are compatible. But only if they do not differ in any word that
-    # contains fewer than three letters in a row, and they do not differ in any
-    # sequence of digits. This criterion filters out names of the form "ABC I" and
-    # "ABC II", or "ABC 1" and "ABC 2", which should be considered different.
-    
-    if ( edistance($name, $alt_name, 2 ) >= 0 )
+    # If the two names are of the form "X" and "X Y" where Y is a rock type, then the
+    # two names are compatible. If the two names are of the form "X Y" and "X Z" where Y
+    # and Z are rock types, then the two names are compatible. But this test is only
+    # done if the two names have either identical parents or else overlapping ages.
+
+    if ( $same_prefix && ($same_parents || $ages_overlap) )
     {
-	my @words = $name =~ /([[:alpha:]]+)/g;
-	my @alt_words = $alt_name =~ /([[:alpha:]]+)/g;
+	my @smaller = $name =~ /(\S+)/g;
+	my @larger = $alt_name =~ /(\S+)/g;
+	my @prefix;
 	
-	my @not_words = grep { $_ !~ /[[:alpha:]]{3}/ } @words;
-	my @alt_not_words = grep { $_ !~ /[[:alpha:]]{3}/ } @alt_words;
-	
-	my @digits = $name =~ /(\d+)/g;
-	my @alt_digits = $alt_name =~ /(\d+)/g;
-	
-	if ( @digits == 0 && @alt_digits == 0 )
+	if ( @smaller > @larger )
 	{
-	    if ( @not_words == 0 && @alt_not_words == 0 )
-	    {
-		return 1;
-	    }
-	    
-	    if ( @not_words == 1 && @alt_not_words == 1 && $not_words[0] eq $alt_not_words[0] )
-	    {
-		return 1;
-	    }
+	    my @temp = @smaller;
+	    @smaller = @larger;
+	    @larger = @temp;
 	}
 	
-	elsif ( @digits == 1 && @alt_digits == 1 && $digits[0] eq $alt_digits[0] )
+	while ( $smaller[0] eq $larger[0] || edistance($smaller[0], $larger[0], 2) >= 0 )
+	{
+	    push @prefix, shift @smaller;
+	    shift @larger;
+	    last unless @smaller;
+	}
+	
+	if ( @smaller == 0 && $same_parents && $ages_overlap && $same_rank )
 	{
 	    return 1;
 	}
+
+	elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
+	{
+	    return 1;
+	}
+	
+	elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} && $same_rank )
+	{
+	    return 1;
+	}
+	
+	elsif ( @smaller && @larger &&
+		(@smaller == grep { IsRockType($_) } @smaller) &&
+		(@larger == grep { IsRockType($_) } @larger) )
+	{
+	    return 1;
+	}
+	
+	# if ( length($name) < length($alt_name) )
+	# {
+	#     $smaller = $name;
+	#     $larger = $alt_name;
+	# }
+	
+	# else
+	# {
+	#     $smaller = $alt_name;
+	#     $larger = $name;
+	# }
+	
+	# if ( edistance(substr($larger, 0, length($smaller) + 1), "$smaller ", 2) >= 0 &&
+	#      substr($larger, length($smaller), 2) =~ / / && ! IsRockType($smaller) )
+	# {
+	#     my $suffix = substr($larger, length($smaller) + 1);
+	#     $suffix =~ s/^\s+//;
+	    
+	#     if ( IsRockType($suffix) )
+	#     {
+	# 	return 1;
+	#     }
+	    
+	#     # elsif ( $suffix =~ /[[:alpha:]]{2}/ )
+	#     # {
+	#     # 	$$second_word_ref = lc "$suffix ($smaller)";
+	#     # }
+	# }
+	
+	# else
+	# {
+	#     say "Candidate pair: $name | $alt_name";
+	# }
     }
+    
+    # If the names have a Levenshtein-Damerau edit distance of 1 or 2, then the two
+    # names are compatible. But only if they either have the same parents or else their
+    # ages and locations both overlap.
+    
+    my $ldd = edistance($name, $alt_name, 2);
+    
+    if ( $ldd >= 0 && $ldd <= 2 &&
+	 ($same_parents || $ages_identical ||
+	  ($ages_overlap && $locations_overlap) ||
+	  ($ages_overlap && $locations_close && $same_rank)) )
+    {
+	return 1;
+    }
+    
+	# if ( $ldd == 1 )
+	# {
+	#     return 1;
+	# }
+	
+	# my @words = $name =~ /([[:alpha:]]+)/g;
+	# my @alt_words = $alt_name =~ /([[:alpha:]]+)/g;
+	
+	# my @not_words = grep { $_ !~ /[[:alpha:]]{3}/ } @words;
+	# my @alt_not_words = grep { $_ !~ /[[:alpha:]]{3}/ } @alt_words;
+	
+	# while ( @not_words && lc $not_words[0] eq lc $alt_not_words[0] )
+	# {
+	#     shift @not_words;
+	#     shift @alt_not_words;
+	# }
+	
+	# if ( @not_words == 0 && @alt_not_words == 0 )
+	# {
+	#     return 1;
+	# }
+	
+	# else
+	# {
+	#     say encode_utf8("Edistance pair: $name | $alt_name");
+	# }
     
     # If none of the criteria are satisfied, return false.
     
@@ -953,7 +1243,7 @@ sub InsertNames {
 
     my ($dbh, $name_values) = @_;
 
-    DBCommand($dbh, "INSERT INTO $TABLE{STRAT_NAMES} (name, rank, stratc_no, cc, country, " .
+    DBCommand($dbh, "INSERT INTO $TABLE{STRAT_NAMES} (stratn_no, stratc_no, name, rank, cc, country, " .
 	      "n_colls, n_occs, early_age, late_age, lat_min, lat_max, lng_min, lng_max) VALUES " .
 	      $name_values);
 }
@@ -967,4 +1257,13 @@ sub InsertConcepts {
 	      $concept_values);
 }
 	
+
+sub InsertOpinions {
+
+    my ($dbh, $opinion_values) = @_;
+
+    DBCommand($dbh, "INSERT INTO $TABLE{STRAT_OPINIONS} (strato_no, child_no, child_rank, " .
+	      "relationship, parent_no, parent_rank, reference_no) VALUES " .
+	      $opinion_values);
+}
 
