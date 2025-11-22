@@ -58,7 +58,7 @@ die "Could not connect to database: $DBI::errstr\n" unless $mstr && $pbdb;
 
 our (%second_words);
 
-our (%is_rock_type) = ( and => 1, ash => 1, ashe => 1,
+our (%is_rock_type) = ( and => 1, argile => 1, ash => 1, ashe => 1,
 			bed => 1, band => 1, 'bänderschiefer' => 1, black => 1, breccia => 1,
 			calcaire => 1, calcarenite => 1, calcareous => 1, calcareou => 1,
 			calcari => 1,
@@ -71,8 +71,9 @@ our (%is_rock_type) = ( and => 1, ash => 1, ashe => 1,
 			formtation => 1,
 			gravel => 1, greensand => 1, 'grès' => 1, grey => 1, grigi => 1,
 			grit => 1, gypsum => 1, hoj => 1, 'høj' => 1, horizon => 1, 
-			iron => 1, ironstone => 1,
-			limesetone => 1, limestone => 1, limstone => 1, ls => 1, lutite => 1,
+			iron => 1, ironstone => 1, lignite => 1,
+			limesetone => 1, limestone => 1, limstone => 1, ls => 1, 'ls.' => 1,
+			lutite => 1,
 			marble => 1, 'marine sand' => 1, marl => 1, marlstone => 1, marly => 1,
 			measure => 1, mudstone => 1,
 			oolite => 1, ore => 1,
@@ -80,7 +81,7 @@ our (%is_rock_type) = ( and => 1, ash => 1, ashe => 1,
 			platy => 1, porcelain => 1, pyrite => 1,
 			quarry => 1, quartzite => 1, 'q-sand' => 1,
 			radiolaridic => 1, rag => 1, red => 1, reef => 1, sand => 1,
-			sandstone => 1, schichten => 1, series => 1, serie => 1,
+			sandstone => 1, ss => 1, 'ss.' => 1, schichten => 1, series => 1, serie => 1,
 			sh => 1, ss => 1, shale => 1, shellbed => 1, silt => 1, silty => 1,
 			siltsone => 1, siltstone => 1, slate => 1, stage => 1, suite => 1,
 			stone => 1, subsuite => 1, suite => 1, svita => 1,
@@ -130,13 +131,18 @@ sub GenerateConcepts {
     
     say "Reading from table '$TABLE{COLLECTION_STRATA}'...";
     
-    my (%contained_in, %rel_lookup);
+    my (%contained_in, %rkey_lookup);
     
     my $hierarchy = DBHashQuery($pbdb, "
 	SELECT cs.grp, cs.formation, cs.member, c.cc,
 		group_concat(distinct c.reference_no) as reference_nos
 	FROM $TABLE{COLLECTION_STRATA} as cs join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	GROUP BY grp, formation, member, cc");
+    
+    # Record each Mbr -> Fm, Mbr -> Gp, and Fm -> Gp relationship using "relationship
+    # keys", which consist of the raw stratigraphic name plus the rank and country code.
+    # These are different from the "name keys" generated below, which use individual
+    # name components extracted from the raw stratigraphic names.
     
     foreach my $a ( $hierarchy->@* )
     {
@@ -145,7 +151,7 @@ sub GenerateConcepts {
 	    my $larger_key = "$a->{grp}|Gp|$a->{cc}";
 	    my $smaller_key = "$a->{formation}|Fm|$a->{cc}";
 	    
-	    $contained_in{$smaller_key} = [$larger_key, $a->{reference_nos}];
+	    $contained_in{$smaller_key}{$larger_key} = 1; # $$$ reference_nos
 	}
 	
 	elsif ( $a->{grp} && $a->{member} )
@@ -153,7 +159,7 @@ sub GenerateConcepts {
 	    my $larger_key = "$a->{grp}|Gp|$a->{cc}";
 	    my $smaller_key = "$a->{member}|Mbr|$a->{cc}";
 	    
-	    $contained_in{$smaller_key} = [$larger_key, $a->{reference_nos}];
+	    $contained_in{$smaller_key}{$larger_key} = 1;
 	}
 	
 	if ( $a->{formation} && $a->{member} )
@@ -161,7 +167,7 @@ sub GenerateConcepts {
 	    my $larger_key = "$a->{formation}|Fm|$a->{cc}";
 	    my $smaller_key = "$a->{member}|Mbr|$a->{cc}";
 	    
-	    $contained_in{$smaller_key} = [$larger_key, $a->{reference_nos}];
+	    $contained_in{$smaller_key}{$larger_key} = 1;
 	}
     }
     
@@ -169,16 +175,15 @@ sub GenerateConcepts {
     
     my $raw_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_RAW} order by name");
     
-    my (%orig_name, %alias_name, %alias_of);
-    my (%exact_name, %first_two, %first_last);
+    my (%orig_name, %first_two, %first_last, %alias_of);
     
     # Step II: Iterate through the rows of STRAT_RAW. Each row generates a name context
     # record, along with one or more name keys. Situations which generate
     # multiple keys include names which contain 'and', 'or', 'x (= y)', etc.
     
-    foreach my $n ( @$raw_names )
+    foreach my $rn ( @$raw_names )
     {
-	my $raw_name = $n->{name};
+	my $raw_name = $rn->{name};
 	my @components;
 	
 	# Remove quotation marks and question marks.
@@ -187,12 +192,43 @@ sub GenerateConcepts {
 	
 	if ( $raw_name =~ /(.*?)\s*[(][?][)]\s*(.*)/ )
 	{
-	    $raw_name = "$1$2";
+	    if ( $1 && $2 )
+	    {
+		$raw_name = "$1$2";
+	    }
+
+	    elsif ( $1 )
+	    {
+		$raw_name = $1;
+	    }
+
+	    else
+	    {
+		$raw_name = $2;
+	    }
+	}
+
+	elsif ( $raw_name =~ /(.*?)\s*[?]\s*(.*?)\s*[?]$/ )
+	{
+	    $raw_name = "$1 or $2";
 	}
 	
 	elsif ( $raw_name =~ /(.*?)\s*[?]\s*(.*)/ )
 	{
-	    $raw_name = "$1$2";
+	    if ( $1 && $2 )
+	    {
+		$raw_name = "$1 $2";
+	    }
+
+	    elsif ( $1 )
+	    {
+		$raw_name = $1;
+	    }
+
+	    else
+	    {
+		$raw_name = $2;
+	    }
 	}
 	
 	# Remove whitespace on either side of a hyphen.
@@ -202,8 +238,8 @@ sub GenerateConcepts {
 	    $raw_name =~ s/\s*-\s*/-/g;
 	}
 	
-	# Split up names that include '-', '&', 'and/or', 'and', 'or', or commas. The
-	# 'and' case is the hardest by far, because 'and' can sometimes be
+	# Split up names that include '&', 'and/or', 'and', 'or', or commas. The
+	# 'and/&' case is the hardest by far, because 'and' can sometimes be
 	# part of a stratigraphic name.
 	
 	if ( $raw_name =~ /(.*?)\s*\/\s*(.*)/ )
@@ -211,12 +247,12 @@ sub GenerateConcepts {
 	    @components = ($1, $2);
 	}
 	
-	elsif ( $raw_name =~ /(.*?)\s+(or|and\s*\/\s*or|&)\s+(.*)/ )
+	elsif ( $raw_name =~ /(.*?)\s+(or|and\s*\/\s*or)\s+(.*)/ )
 	{
 	    @components = ($1, $2);
 	}
 	
-	elsif ( $raw_name =~ /Playa del Zorro/ )
+	elsif ( $raw_name =~ /^Aloformation Playa del Zorro|^Grès, argiles et lignites/ )
 	{
 	    @components = $raw_name;
 	}
@@ -225,13 +261,13 @@ sub GenerateConcepts {
 	{
 	    @components = split /\s*,\s*/, $raw_name;
 	    
-	    if ( $components[-1] =~ /^(?:&|and)\s*(.*)/ )
+	    if ( $components[-1] =~ /^(?:&|and|et)\s*(.*)/ )
 	    {
 		$components[-1] = $1;
 	    }
 	}
 	
-	elsif ( $raw_name =~ /(.*?)\s+and\s+(.*)/ )
+	elsif ( $raw_name =~ /(.*?)\s+(?:and|&)\s+(.*)/ )
 	{
 	    @components = ParseConjunction($1, $3);
 	}
@@ -240,8 +276,6 @@ sub GenerateConcepts {
 	{
 	    @components = $raw_name;
 	}
-	
-	$n->{n_names} = scalar(@components);
 	
 	# Iterate through the individual components, assuming that each
 	# represents a separate stratum name. For each one that appears to be an
@@ -277,7 +311,7 @@ sub GenerateConcepts {
 	    # 	$c =~ s/\s*\bupper\b\s*//;
 	    # 	$c =~ s/\s*\bmiddle\b\s*//;
 	    # 	$c =~ s/\s*\blower\b\s*//;
-	    # 	if ( $n->{rank} eq 'Mbr' ) {
+	    # 	if ( $rn->{rank} eq 'Mbr' ) {
 	    # 	    $c =~ s/\s*\bbetween\b\s*//;
 	    # 	    $c =~ s/\s*\bcontact\b\s*//;
 	    # 	}
@@ -292,14 +326,18 @@ sub GenerateConcepts {
 	    
 	    next if $excluded_name{lc $c};
 	    
-	    # Generate a key consisting of the stratum name, rank, and country
+	    # Increment the component count
+	    
+	    $rn->{n_names}++;
+	    
+	    # Generate a "name key" consisting of the stratum name, rank, and country
 	    # code. Store this key in %orig_name, with the value being a list of
 	    # all the name context records associated with the name.
 	    
-	    my $key = "$c|$n->{rank}|$n->{cc}";
+	    my $key = "$c|$rn->{rank}|$rn->{cc}";
 	    
 	    $orig_name{$key} ||= [];
-	    push $orig_name{$key}->@*, $n;
+	    push $orig_name{$key}->@*, $rn;
 	    
 	    # Store the name key in the hashes %exact_name, %first_two, and
 	    # %first_last. The hash key for the first is the exact name, for the
@@ -332,12 +370,20 @@ sub GenerateConcepts {
 	    
 	    if ( $alias && ! $excluded_name{$alias} )
 	    {
-		my $alias_key = "$alias|$n->{rank}|$n->{cc}";
+		my $alias_key = "$alias|$rn->{rank}|$rn->{cc}";
 		
 		$orig_name{$alias_key} ||= [];
-		push $orig_name{$alias_key}->@*, $n;
-		
-		$alias_of{$alias_key} = $key;
+		push $orig_name{$alias_key}->@*, $rn;
+
+		if ( $key lt $alias_key )
+		{
+		    $alias_of{$alias_key} = $key;
+		}
+
+		else
+		{
+		    $alias_of{$key} = $alias_key;
+		}
 		
 		my @afl = ($c =~ /^([[:alpha:]]).*?[[:alpha:]]{2}([[:alpha:]])(?: |$)/);
 		
@@ -361,32 +407,30 @@ sub GenerateConcepts {
 	    }
 	}
 
-	# Map "relationship keys" to name context records. This will be used in the next step.
+	# Map "relationship keys" to name context records. This mapping will be used in
+	# the next step.
 	
-	$rel_lookup{"$n->{name}|$n->{rank}|$n->{cc}"} = $n;
+	$rn->{rkey} = "$rn->{name}|$rn->{rank}|$rn->{cc}";
+	$rkey_lookup{$rn->{rkey}} = $rn;
     }
 
-    # Step IIa: assign hierarchical relationships. A parent/child relationship is only
-    # possible if the parent name context is associated with a single name, because otherwise we
-    # don't know which name to associate each child with.
+    # # Step IIa: assign hierarchical relationships among names. A parent/child relationship is
+    # # only possible if the parent name context is associated with a single name, because
+    # # otherwise we don't know which name to associate each child with.
     
-    say "Assigning hierarchical relationships...";
+    say "Assigning name relationships...";
     
     foreach my $key ( sort keys %orig_name )
     {
 	foreach my $rn ( $orig_name{$key}->@* )
 	{
-	    my $rkey = "$rn->{name}|$rn->{rank}|$rn->{cc}";
-	    
-	    if ( $contained_in{$rkey}[0] && $rel_lookup{$contained_in{$rkey}[0]} )
+	    foreach my $parent_rkey ( keys $contained_in{$rn->{rkey}}->%* )
 	    {
-		my $parent = $rel_lookup{$contained_in{$rkey}[0]};
+		my $parent = $rkey_lookup{$parent_rkey};
 		
 		if ( $parent->{n_names} == 1 )
 		{
-		    say encode_utf8("Multiple parents for $key");
-		    $rn->{parent}{$key} = $parent;
-		    # $$$
+		    $rn->{parent_rn}{$key}{$parent_rkey} = 1;
 		}
 	    }
 	}
@@ -396,47 +440,65 @@ sub GenerateConcepts {
     
     say "Assigning concepts...";
     
-    my (%name_concept, %preliminary_concept);
+    my (%name_concept, %preliminary_concept, $progress_letter);
     my $preliminary_concept_no = 0;
     
     foreach my $key ( sort keys %orig_name )
     {
 	my ($name, $rank, $cc) = split /\|/, $key;
 	
+	my $first_letter = uc substr($name, 0, 1);
+	
+	if ( $first_letter gt $progress_letter && $first_letter =~ /[A-Z]/ )
+	{
+	    $progress_letter = $first_letter;
+	    print STDERR "$first_letter..";
+	}
+	
 	# If there are multiple name context records for a given key, start by
 	# consolidating them if possible.
 	
 	if ( $orig_name{$key}->@* > 1 )
 	{
-	    # Start with the first name context record.
+	    # Look for a name context record with only a single associated name. Keep
+	    # track of all the others as well.
 	    
-	    my @consolidated_names = shift $orig_name{$key}->@*;
-	    
-	    # Compare each subsequent name context record to each element of
-	    # this new list. If it matches one of them, consolidate them.
-	    # Otherwise, add it to the list.
+	    my ($single, @rest, @separate);
 	    
 	    foreach my $rn ( $orig_name{$key}->@* )
 	    {
-		foreach my $cons ( @consolidated_names )
+		if ( $rn->{n_names} == 1 && ! $single )
 		{
-		    if ( ContextIsCompatible($cons, $rn) )
-		    {
-			AddToContext($cons, $rn);
-		    }
-		    
-		    else
-		    {
-			push @consolidated_names, $rn;
-		    }
+		    $single = $rn;
+		}
+
+		else
+		{
+		    push @rest, $rn;
 		}
 	    }
 
-	    if ( @consolidated_names < $orig_name{$key}->@* )
+	    unless ( $single )
 	    {
-		$orig_name{$key} = \@consolidated_names;
-		say "Consolidated names for " . encode_utf8($key);
+		$single = { name => $name, rank => $rank, n_names => 1,
+			    cc => $cc, country => $orig_name{$key}[0]{country} };
 	    }
+	    
+	    foreach my $other ( @rest )
+	    {
+		if ( ContextsAreCompatible($single, $other) )
+		{
+		    AddToContext($single, $other, $key);
+		}
+
+		else
+		{
+		    push @separate, $other;
+		}
+	    }
+	    
+	    $orig_name{$key} = [$single, @separate];
+	    # say "Consolidated names for " . encode_utf8($key);
 	}
 	
 	# For each key, iterate through the consolidated name context records
@@ -448,35 +510,23 @@ sub GenerateConcepts {
 	{
 	    my ($rc, @matching_concepts);
 	    
-	    # # First check to see if there are any existing name concepts
-	    # # associated with this key. If there are, check to see if any of
-	    # # them are compatible (place and time) with the name.
+	    # If this key is an alias for another key that has already been assigned to
+	    # a concept, then assign all associated name contexts to that same concept.
 	    
-	    # foreach $rc ( $name_concept{$key}->@* )
-	    # {
-	    # 	if ( ConceptIsCompatible($rc, $rn) )
-	    # 	{
-	    # 	    push @matching_concepts, $rc;
-	    # 	    say "Found EXISTING concept for $key\n";
-	    # 	}
-	    # }
+	    if ( my $orig_key = $alias_of{$key} )
+	    {
+		foreach my $orig_rn ( $orig_name{$orig_key}->@* )
+		{
+		    if ( my $orig_concept = $orig_rn->{context}{$orig_key} )
+		    {
+			push @matching_concepts, $orig_concept;
+			last;
+		    }
+		}
+	    }
 	    
-	    # If we get here, there were no matching concepts, so check for
-	    # concepts with the same name but different rank.
-	    
-	    # foreach my $alt_key ( $exact_name{$name}->@* )
-	    # {
-	    # 	foreach $rc ( $name_concept{$alt_key}->@* )
-	    # 	{
-	    # 	    if ( ConceptIsCompatible($rc, $rn) )
-	    # 	    {
-	    # 		push @matching_concepts, $rc;
-	    # 	    }
-	    # 	}
-	    # }
-	    
-	    # Next, check for the same name with a different rank, plus any names
-	    # that could be spelling variants.
+	    # Check for other records with the same name and (possibly) a different
+	    # rank, plus any names that could be spelling variants.
 	    
 	    my @candidates;
 	    
@@ -553,7 +603,7 @@ sub GenerateConcepts {
 		
 		foreach my $rc ( @rest )
 		{
-		    if ( $first ne $rc )
+		    if ( $rc ne $first )
 		    {
 			$rc->{consolidated_with} = $first->{preliminary_concept_no};
 		    }
@@ -581,7 +631,7 @@ sub GenerateConcepts {
 	}
     }
     
-    # Step IV: consolidate the preliminary concepts into real ones.
+    # Step IV: consolidate the preliminary stratigraphic concepts into real ones.
     
     say "Consolidating concepts...";
     
@@ -617,17 +667,66 @@ sub GenerateConcepts {
 	}
     }
     
-    # # Step V: link up concepts into hierarchical relationships.
+    # Step V: link up stratigraphic concepts into hierarchical relationships, using the
+    # "relationship keys" and the name context relationships that were stored in the
+    # %contained_in relation in Step I above.
     
-    # foreach my $key ( sort keys %orig_names )
-    # {
-    # 	foreach my $rn ( $orig_name{$key}->@* )
-    # 	{
-    # 	    my $child_cr = $rn->{concept}{$key};
-    # 	    my $parent = $rn->{parent}{$key};
-    # 	    my $parent_cr = $parent->{concept} $$$
-    # 	}
-    # }
+    say "Computing concept relationships...";
+    
+    foreach my $key ( sort keys %orig_name )
+    {
+	foreach my $rn ( $orig_name{$key}->@* )
+	{
+	    my %parent_concept;
+	    
+	    if ( $rn->{parent_rn} && $rn->{parent_rn}{$key} )
+	    {
+		my $child_rc = $rn->{concept}{$key};
+		
+		while ( $child_rc->{consolidated_with} )
+		{
+		    $child_rc = $preliminary_concept{$child_rc->{consolidated_with}};
+		}
+		
+		foreach my $rkey ( keys $rn->{parent_rn}{$key}->%* )
+		{
+		    my $parent_rkey = $rkey;
+		    my $parent_rn = $rkey_lookup{$parent_rkey};
+		    
+		    while ( $parent_rn->{consolidated_with} )
+		    {
+			$parent_rkey = $parent_rn->{consolidated_with};
+			$parent_rn = $rkey_lookup{$parent_rkey};
+		    }
+		    
+		    if ( $parent_rn->{concept} && $parent_rn->{concept}->%* )
+		    {
+			if ( values $parent_rn->{concept}->%* > 1 )
+			{
+			    say encode_utf8("Concept ambiguity for $parent_rkey");
+			    next;
+			}
+			
+			my ($parent_rc) = values $parent_rn->{concept}->%*;
+			
+			unless ( $parent_rc )
+			{
+			    say encode_utf8("No concept for $parent_rkey");
+			    next;
+			}
+			
+			while ( $parent_rc->{consolidated_with} )
+			{
+			    $parent_rc = $preliminary_concept{$parent_rc->{consolidated_with}};
+			}
+			
+			$child_rc->{parent_rc}{"$rn->{rank}|$rn->{cc}|$parent_rkey"} =
+			    $parent_rc->{concept_no};
+		    }
+		}
+	    }
+	}
+    }
     
     # Step VI: regenerate the STRAT_NAMES, STRAT_CONCEPTS, and STRAT_OPINIONS tables.
     
@@ -635,11 +734,13 @@ sub GenerateConcepts {
     
     $DB::single = 1;
     
-    say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRAT_CONCEPTS}', '$TABLE{STRAT_OPINIONS}'...";
+    say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRAT_CONCEPTS}', " .
+	"'$TABLE{STRAT_OPINIONS}', strat2_opinions...";
     
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_NAMES}");
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_CONCEPTS}");
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_OPINIONS}");
+    DBCommand($pbdb, "TRUNCATE strat2_opinions");
     
     # Then go through the list of concepts, and add one row to the STRAT_CONCEPTS table
     # per concept.
@@ -649,16 +750,27 @@ sub GenerateConcepts {
     my $concept_values = '';
     my $new_concepts = 0;
     
-    foreach my $key ( sort keys %real_concept )
+    my @concept_list = sort { $a <=> $b } keys %real_concept;
+    
+    foreach my $key ( @concept_list )
     {
 	my $rc = $real_concept{$key};
 	
 	my $qstratc = $pbdb->quote($rc->{concept_no});
-	my $qname = $pbdb->quote($rc->{name});
+	my $qname = $pbdb->quote(ChooseConceptName($rc));
 	my $qcc = $pbdb->quote(join ',', keys $rc->{cc}->%*);
+	my $qncolls = $pbdb->quote($rc->{n_colls} || 0);
+	my $qnoccs = $pbdb->quote($rc->{n_occs} || 0);
+	my $qearly = $pbdb->quote($rc->{early_age} || '');
+	my $qlate = $pbdb->quote($rc->{late_age} || '');
+	my $qlatmin = $pbdb->quote($rc->{lat_min});
+	my $qlatmax = $pbdb->quote($rc->{lat_max});
+	my $qlngmin = $pbdb->quote($rc->{lng_min});
+	my $qlngmax = $pbdb->quote($rc->{lng_max});
 	
 	$concept_values .= ', ' if $concept_values;
-	$concept_values .= "($qstratc, $qname, $qcc)";
+	$concept_values .= "($qstratc, $qname, $qcc, '', $qncolls, $qnoccs, $qearly, $qlate, " .
+	    "$qlatmin, $qlatmax, $qlngmin, $qlngmax)";
 	
 	$new_concepts++;
 	
@@ -722,7 +834,8 @@ sub GenerateConcepts {
     
     InsertNames($pbdb, $name_values) if $name_values;
     
-    # Then go through the names again, and add whatever opinions are found.
+    # Then go through the names again, and add an opinion for each child-parent
+    # relationship.
     
     say "Generating the STRAT_OPINIONS ($TABLE{STRAT_OPINIONS}) table...";
     
@@ -735,15 +848,26 @@ sub GenerateConcepts {
 	
 	foreach my $rn ( $orig_name{$key}->@* )
 	{
-	    if ( my $parent = $rn->{parent}{$key} )
+	    next unless $rn->{parent_rn};
+	    
+	    foreach my $parent_rkey ( keys $rn->{parent_rn}{$key}->%* )
 	    {
 		my $qopno = $pbdb->quote(++$new_opinions);
 		my $qchildno = $pbdb->quote($rn->{name_no}{$key});
 		my $qchildrank = $pbdb->quote($rank);
 		
-		my ($parent_key) = keys $parent->{concept}->%*;
+		my $parent_rn = $rkey_lookup{$parent_rkey};
+		
+		my ($parent_key) = keys $parent_rn->{concept}->%*;
+		
+		unless ( $parent_key && $parent_rn->{name_no}{$parent_key} )
+		{
+		    # say encode_utf8("No name key for parent $parent_rkey");
+		    next;
+		}
+		
 		my ($parent_name, $parent_rank, $parent_cc) = split /\|/, $parent_key;
-		my $qparno = $pbdb->quote($parent->{name_no}{$parent_key});
+		my $qparno = $pbdb->quote($parent_rn->{name_no}{$parent_key});
 		my $qparrank = $pbdb->quote($parent_rank);
 		my $qrefno = $pbdb->quote(0);
 		
@@ -762,10 +886,60 @@ sub GenerateConcepts {
     
     InsertOpinions($pbdb, $opinion_values);
     
-    say "Missing: $missing_names" if $missing_names && $missing_names > 0;
+    # Finally, go through the concepts and add an opinion for each child-parent
+    # relationship.
+    
+    say "Generating the strat2_opinions table...";
+    
+    my $opinion2_values = '';
+    my $new_opinions2 = 0;
+    my $bad_ccs = 0;
+
+    @concept_list = sort { $a <=> $b } @concept_list;
+    
+    foreach my $child_no ( @concept_list )
+    {
+	my $child_rc = $real_concept{$child_no};
+
+	foreach my $key ( keys $child_rc->{parent_rc}->%* )
+	{
+	    my ($child_rank, $child_cc, $unused, $parent_rank, $parent_cc) = split /[|]/, $key;
+	    
+	    if ( $child_cc ne $parent_cc )
+	    {
+		$bad_ccs++;
+	    }
+	    
+	    # my $parent_rank = $child_rc->{parent_rc}{$child_rank}{$parent_no};
+	    
+	    my $qopno = $pbdb->quote(++$new_opinions2);
+	    my $qchildno = $pbdb->quote($child_no);
+	    my $qchildrank = $pbdb->quote($child_rank);
+	    my $qchildcc = $pbdb->quote($child_cc);
+	    my $qparno = $pbdb->quote($child_rc->{parent_rc}{$key});
+	    my $qparrank = $pbdb->quote($parent_rank);
+	    my $qrefno = $pbdb->quote(0);
+	    
+	    $opinion2_values .= ', ' if $opinion2_values;
+	    $opinion2_values .= "($qopno, $qchildno, $qchildrank, $qchildcc, 'belongs to', " .
+		"$qparno, $qparrank, $qrefno)";
+	}
+	
+	if ( length($opinion2_values) > 50000 )
+	{
+	    InsertOpinions2($pbdb, $opinion2_values);
+	    $opinion2_values = '';
+	}
+    }
+    
+    InsertOpinions2($pbdb, $opinion2_values);
+    
+    say "Missing: $missing_names" if $missing_names > 0;
+    say "Bad ccs: $bad_ccs" if $bad_ccs > 0;
     say "Created $new_names names";
     say "Created $new_concepts concepts";
-    say "Created $new_opinions opinions";
+    say "Created $new_opinions name opinions";
+    say "Created $new_opinions2 concept opinions";
     
     # my $words_fh;
     
@@ -915,12 +1089,23 @@ sub NamesAreCompatible {
     
     # If the two names have identical parents, they are potentially compatible.
     
-    if ( $rn->{parent}{$key} && $alt_rn->{parent}{$alt_key} &&
-	 $rn->{parent}{$key} eq $alt_rn->{parent}{$alt_key} )
+    if ( $rn->{parent_rn} && $rn->{parent_rn}{$key} &&
+	 $alt_rn->{parent_rn} && $alt_rn->{parent_rn}{$alt_key} )
     {
-	$same_parents = 1;
+      KEY:
+	foreach my $a ( keys $rn->{parent_rn}{$key}->%* )
+	{
+	    foreach my $b ( keys $alt_rn->{parent_rn}{$alt_key}->%* )
+	    {
+		if ( $a eq $b )
+		{
+		    $same_parents = 1;
+		    last KEY;
+		}
+	    }
+	}
     }
-
+    
     # If they have the same rank, they are potentially compatible.
     
     if ( $rn->{rank} eq $alt_rn->{rank} )
@@ -976,22 +1161,22 @@ sub NamesAreCompatible {
 	    last unless @smaller;
 	}
 	
-	if ( @smaller == 0 && $same_parents && $ages_overlap && $same_rank )
+	if ( @smaller == 0 && $same_parents && $ages_overlap )
 	{
 	    return 1;
 	}
-
+	
 	elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
 	{
 	    return 1;
 	}
 	
-	elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} && $same_rank )
+	elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} )
 	{
 	    return 1;
 	}
 	
-	elsif ( @smaller && @larger &&
+	elsif ( @smaller && @larger && $same_rank &&
 		(@smaller == grep { IsRockType($_) } @smaller) &&
 		(@larger == grep { IsRockType($_) } @larger) )
 	{
@@ -1084,8 +1269,8 @@ sub IsRockType {
 
     my ($string) = @_;
     
-    $string =~ s/s$//;
-    $string = lc $string;
+    $string =~ s/s$// if length($string) > 3;
+    $string = fc $string;
     
     my @words = ($string =~ /(\S+)/g);
     my @rock_type_words = grep { $is_rock_type{$_} } @words;
@@ -1106,9 +1291,10 @@ sub CreateConcept {
 
     my ($rn, $key, $preliminary_concept_no) = @_;
     
-    my ($name) = split /\|/, $key;
+    my ($strat_name) = split /\|/, $key;
     
-    my $rc = { name => $name, preliminary_concept_no => "${preliminary_concept_no}A",
+    my $rc = { name => $strat_name, strat_name => { $strat_name => 1 },
+	       preliminary_concept_no => "${preliminary_concept_no}A",
 	       lat_min => $rn->{lat_min}, lat_max => $rn->{lat_max},
 	       lng_min => $rn->{lng_min}, lng_max => $rn->{lng_max},
 	       early_age => $rn->{early_age}, late_age => $rn->{late_age},
@@ -1157,11 +1343,15 @@ sub AddToConcept {
     
     if ( $name->{concept}{$key} )
     {
-	print "Overwrote concept for key '$key'\n";
+	say "Overwrote concept for key '$key'";
 	$DB::single = 1;
     }
     
     $name->{concept}{$key} = $concept;
+    
+    my ($strat_name) = split /[|]/, $key;
+    
+    $concept->{strat_name}{$strat_name} = 1;
     
     $concept->{cc}{$name->{cc}} = 1 if $name->{cc};
     $concept->{country}{$name->{country}} = 1 if $name->{country};
@@ -1201,20 +1391,19 @@ sub ConsolidateConcepts {
 }
 
 
-sub ContextIsCompatible {
+sub ContextsAreCompatible {
 
     my ($context1, $context2) = @_;
-
-    unless ( $context1->{cc} eq $context2->{cc} )
-    {
-	if ( $context2->{lat_min} > $context1->{lat_max} + 10 ) { return undef; }
-	if ( $context2->{lat_max} < $context1->{lat_min} - 10 ) { return undef; }
-	if ( $context2->{lng_min} > $context1->{lng_max} + 10 ) { return undef; }
-	if ( $context2->{lng_max} < $context1->{lng_min} - 10 ) { return undef; }
-    }
     
-    if ( $context2->{early_age} < $context1->{late_age} - 10 ) { return undef; }
-    if ( $context2->{late_age} > $context1->{early_age} + 10 ) { return undef; }
+    if ( ! defined $context1->{early_age} ) { return 1; }
+    
+    if ( $context2->{lat_min} > $context1->{lat_max} + 10 ) { return undef; }
+    if ( $context2->{lat_max} < $context1->{lat_min} - 10 ) { return undef; }
+    if ( $context2->{lng_min} > $context1->{lng_max} + 10 ) { return undef; }
+    if ( $context2->{lng_max} < $context1->{lng_min} - 10 ) { return undef; }
+    
+    if ( $context2->{early_age} < $context1->{late_age} - 5 ) { return undef; }
+    if ( $context2->{late_age} > $context1->{early_age} + 5 ) { return undef; }
     
     return 1;
 }
@@ -1222,20 +1411,64 @@ sub ContextIsCompatible {
 
 sub AddToContext {
 
-    my ($context1, $context2) = @_;
+    my ($context1, $context2, $key) = @_;
     
-    $context1->{lat_min} = $context2->{lat_min} if $context2->{lat_min} < $context1->{lat_min};
-    $context1->{lat_max} = $context2->{lat_max} if $context2->{lat_max} > $context1->{lat_max};
-    $context1->{lng_min} = $context2->{lng_min} if $context2->{lng_min} < $context1->{lng_min};
-    $context1->{lng_max} = $context2->{lng_max} if $context2->{lng_max} > $context1->{lng_max};
+    $context1->{lat_min} = $context2->{lat_min}
+	if ! defined $context1->{lat_min} || $context2->{lat_min} < $context1->{lat_min};
+    $context1->{lat_max} = $context2->{lat_max}
+	if ! defined $context1->{lat_max} || $context2->{lat_max} > $context1->{lat_max};
+    $context1->{lng_min} = $context2->{lng_min}
+	if ! defined $context1->{lng_min} || $context2->{lng_min} < $context1->{lng_min};
+    $context1->{lng_max} = $context2->{lng_max}
+	if ! defined $context1->{lng_max} || $context2->{lng_max} > $context1->{lng_max};
 
     $context1->{early_age} = $context2->{early_age}
-	if $context2->{early_age} > $context1->{early_age};
+	if ! defined $context1->{early_age} || $context2->{early_age} > $context1->{early_age};
     $context1->{late_age} = $context2->{late_age}
-	if $context2->{late_age} < $context1->{late_age};
-
+	if ! defined $context1->{late_age} || $context2->{late_age} < $context1->{late_age};
+    
     $context1->{n_colls} += $context2->{n_colls};
     $context1->{n_occs} += $context2->{n_occs};
+
+    if ( $context2->{parent_rn} && $context2->{parent_rn}{$key} )
+    {
+	foreach my $a ( keys $context2->{parent_rn}{$key}->%* )
+	{
+	    $context1->{parent_rn}{$key}{$a} = $context2->{parent_rn}{$key}{$a};
+	}
+    }
+    
+    $context2->{consolidated_with} = $context1->{rkey};
+}
+
+
+sub ChooseConceptName {
+
+    my ($context) = @_;
+    
+    my @candidates = keys $context->{strat_name}->%*;
+    
+    # Start by looking for names which have a character other than letters, numbers, and
+    # punctuation. Since data enterers often leave out accent marks, the names with
+    # accent marks are more likely to be correct. Out of all those, pick the first one
+    # in alphabetical order.
+
+    if ( my @with_accents = grep { /[!a-zA-Z0-9 .,:-]/ } @candidates )
+    {
+	return (sort @with_accents)[0];
+    }
+
+    # Otherwise, choose the first name in alphabetical order.
+
+    elsif ( @candidates )
+    {
+	return (sort @candidates)[0];
+    }
+
+    else
+    {
+	return $context->{name};
+    }
 }
 
 
@@ -1253,7 +1486,8 @@ sub InsertConcepts {
 
     my ($dbh, $concept_values) = @_;
 
-    DBCommand($dbh, "INSERT INTO $TABLE{STRAT_CONCEPTS} (stratc_no, name, cc_list) VALUES " .
+    DBCommand($dbh, "INSERT INTO $TABLE{STRAT_CONCEPTS} (stratc_no, name, cc_list, country_list, " .
+	     "n_colls, n_occs, early_age, late_age, lat_min, lat_max, lng_min, lng_max) VALUES " .
 	      $concept_values);
 }
 	
@@ -1266,4 +1500,15 @@ sub InsertOpinions {
 	      "relationship, parent_no, parent_rank, reference_no) VALUES " .
 	      $opinion_values);
 }
+
+
+sub InsertOpinions2 {
+
+    my ($dbh, $opinion_values) = @_;
+
+    DBCommand($dbh, "INSERT IGNORE INTO strat2_opinions (strato_no, child_no, child_rank, child_cc, " .
+	      "relationship, parent_no, parent_rank, reference_no) VALUES " .
+	      $opinion_values);
+}
+
 
