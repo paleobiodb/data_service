@@ -78,8 +78,11 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(STRATA_NAMES => 'strat_raw');
     set_table_name(STRAT_RAW => 'strat_raw');
     set_table_name(STRAT_NAMES => 'strat_names');
+    set_table_name(STRAT_NREFS => 'strat_nrefs');
+    set_table_name(STRAT_OREFS => 'strat_orefs');
     set_table_name(STRAT_CONCEPTS => 'strat_concepts');
     set_table_name(STRAT_OPINIONS => 'strat_opinions');
+    set_table_name(STRAT_MS_NAMES => 'strat_ms_names');
     set_table_name(COLLECTION_UNITS => 'coll_units');
     
     set_table_group('collection_data' => 'COLLECTION_DATA', 'COLLECTION_MATRIX',
