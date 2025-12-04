@@ -22,6 +22,7 @@ use YAML;
 use Encode qw(encode_utf8);
 use Term::ReadLine;
 
+use utf8;
 
 # use List::Util qw(any max min);
 
@@ -29,13 +30,14 @@ use Term::ReadLine;
 # Read the configuration file, and open database connections.
 
 my ($opt_quiet, $opt_verbose,  $opt_force, $opt_debug, $opt_help);
-my ($opt_config);
+my ($opt_config, $opt_test);
 
 GetOptions("quiet|q" => \$opt_quiet,
 	   "verbose|v" => \$opt_verbose,
 	   "config|f" => \$opt_config,
 	   "force" => \$opt_force,
 	   "help|h" => \$opt_help,
+	   "test|t" => \$opt_test,
 	   "debug|D" => \$opt_debug) or die;
 
 loadConfig($opt_config);
@@ -56,42 +58,76 @@ die "Could not connect to database: $DBI::errstr\n" unless $mstr && $pbdb;
 
 our (%second_words);
 
-our (%is_rock_type) = ( and => 1, argile => 1, ash => 1, ashe => 1,
-			bed => 1, band => 1, 'bänderschiefer' => 1, black => 1, breccia => 1,
-			calcaire => 1, calcarenite => 1, calcareous => 1, calcareou => 1,
-			calcari => 1,
-			calciferous => 1, calcilutite => 1, calcirudite => 1, carbonate => 1,
-			chalk => 1, chalke => 1, chert => 1, clay => 1, coal => 1, complex => 1,
-			conglomerate => 1, conglomeratic => 1,
-			coquina => 1, crag => 1, cyclothem => 1,
-			diatomite => 1, dolomite => 1, dolostone => 1,
-			equivalent => 1, facie => 1, flag => 1, flagstone => 1,
-			formtation => 1,
-			gravel => 1, greensand => 1, 'grès' => 1, grey => 1, grigi => 1,
-			grit => 1, gypsum => 1, hoj => 1, 'høj' => 1, horizon => 1, 
-			iron => 1, ironstone => 1, lignite => 1,
+our (%is_rock_type) = ( argile => 1, argiles => 1, arkose => 1, ash => 1, ashes => 1,
+			bed => 1, beds => 1, band => 1, bands => 1, 'bänderschiefer' => 1,
+			black => 1, breccia => 1, breccias => 1,
+			calcaire => 1, calcaires => 1, calcarenite => 1, calcarenites => 1,
+			calcareous => 1, calcari => 1, calciferous => 1,
+			calcilutite => 1, calcilutites => 1, calcirudite => 1, calcirudites => 1,
+			carbonate => 1, carbonates => 1, chalk => 1, chalke => 1, chalks => 1,
+			chert => 1, cherts => 1, chine => 1, clay => 1, clays => 1,
+			coal => 1, coals => 1, 'coal-bearing' => 1, complex => 1, complexes => 1,
+			conglomerate => 1, conglomerates => 1, conglomeratic => 1,
+			coquina => 1, coquinas => 1, crag => 1, crags => 1, cyclothem => 1,
+			diatomite => 1, diatomites => 1, dolomite => 1, dolomites => 1,
+			dolostone => 1, dolostones => 1, 
+			equivalent => 1, equivalents => 1, facie => 1, facies => 1,
+			flag => 1, flags => 1, flagstone => 1, flagstones => 1, formtation => 1,
+			gravel => 1, gravels => 1, greensand => 1, greensands => 1,
+			greywacke => 1, greywackes => 1, 
+			gres => 1, 'grès' => 1, grey => 1, grigi => 1, gris => 1,
+			grit => 1, grits => 1, gypsum => 1, gypsums => 1,
+			hoj => 1, 'høj' => 1, horizon => 1, horizons => 1, 
+			iron => 1, ironstone => 1, ironstones => 1, lignite => 1, lignites => 1, 
 			limesetone => 1, limestone => 1, limstone => 1, ls => 1, 'ls.' => 1,
-			lutite => 1,
-			marble => 1, 'marine sand' => 1, marl => 1, marlstone => 1, marly => 1,
-			measure => 1, mudstone => 1,
-			oolite => 1, ore => 1,
-			pebble => 1, pebbly => 1, phonolite => 1, phosphatic => 1,
-			platy => 1, porcelain => 1, pyrite => 1,
-			quarry => 1, quartzite => 1, 'q-sand' => 1,
-			radiolaridic => 1, rag => 1, red => 1, reef => 1, sand => 1,
-			sandstone => 1, ss => 1, 'ss.' => 1, schichten => 1, series => 1, serie => 1,
-			sh => 1, ss => 1, shale => 1, shellbed => 1, silt => 1, silty => 1,
-			siltsone => 1, siltstone => 1, slate => 1, stage => 1, suite => 1,
-			stone => 1, subsuite => 1, suite => 1, svita => 1,
-			tuff => 1, tuffaceous => 1, unit => 1, volcanic => 1, waterstones => 1,
-			yellow => 1, zone => 1 );
+			limestones => 1, lutite => 1, lutites => 1, 
+			marble => 1, marbles => 1, marine => 1, marl => 1, marls => 1,
+			marlstone => 1, marly => 1,
+			measure => 1, measures => 1, mudstone => 1, mudstones => 1,
+			oolite => 1, oolites => 1, ore => 1, ores => 1,
+			pebble => 1, pebbles => 1, pebbly => 1, phonolite => 1, phonolites => 1,
+			phosphatic => 1, platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
+			quarry => 1, quarries => 1, quartzite => 1, quartzites => 1, 'q-sand' => 1,
+			radiolaridic => 1, radiolarite => 1, radiolarites => 1, rag => 1, rags => 1,
+			red => 1, reef => 1, reefs => 1, sand => 1, sands => 1,
+			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1,
+			schichten => 1, sequence => 1, sequences => 1, series => 1,
+			succession => 1, successions => 1,
+			shale => 1, shales => 1, sh => 1, 'sh.' => 1, shellbed => 1, shellbeds => 1,
+			silt => 1, silts => 1, silty => 1, siltsone => 1, siltstone => 1, siltstones => 1,
+			slate => 1, slates => 1, stage => 1, stages => 1, stone => 1, stones => 1,
+			suite => 1, suites => 1, subsuite => 1, subsuites => 1, svita => 1, sub => 1,
+			tuff => 1, tuffs => 1, tuffaceous => 1, unit => 1, units => 1, volcanic => 1,
+			volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
+			waterstone => 1, waterstones => 1, yellow => 1, zone => 1 );
 
-our (%excluded_name) = ( lower => 1, middle => 1, upper => 1, first => 1, second => 1, third => 1,
-			 fourth => 1, base => 1, top => 1, 'upper part' => 1, 'lower part' => 1,
-			 'middle part' => 1, alpha => 1, beta => 1, informal => 1 );
+our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, top => 1, bottom => 1,
+		   first => 1, second => 1, third => 1, fourth => 1, alpha => 1, beta => 1,
+		   part => 1, sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
+		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
+		   schicht => 1, unit => 1, units => 1, zone => 1, zones => 1,
+		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
+		   'inférieurs' => 1, 'supérieurs' => 1, inferieurs => 1, superieurs => 1,
+		   'moitié' => 1, moitie => 1 );
 
-our (%allowed_suffix) = ( fjord => 1, land => 1, mountain => 1 );
+our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
+			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
 
+our (%rank_comparison) = ( SGp => 'Gp', Gp => 'Gp', SubGp => 'Gp', Fm => 'Fm', Mbr => 'Mbr',
+			   Bed => 'Bed' );
+
+our (%infer_from_ref) = ( 1 => 'US', 2 => 'CA', 5 => 'NZ', 10 => 'CA', 11 => 'CA', 12 => 'CA',
+			  19 => 'US', 21 => 'CA', 22 => 'AU', 29 => 'BR', 31 => 'BR', 32 => 'CL',
+			  34 => 'BR', 38 => 'BR', 39 => 'CL', 40 => 'BO', 41 => 'BR',
+			  48 => 'NZ', 73 => 'CA', 74 => 'CA', 75 => 'CA', 77 => 'CA', 78 => 'CA',
+			  100 => 'MX', 105 => 'US', 109 => 'US', 115 => 'CA', 116 => 'CA',
+			  118 => 'CA', 121 => 'CA', 122 => 'CA', 125 => 'CA', 131 => 'CA',
+			  134 => 'GL', 135 => 'SJ', 156 => 'MX', 159 => 'GL',
+			  163 => 'MY', 164 => 'MY', 165 => 'VN', 166 => 'VN', 167 => 'VN',
+			  168 => 'ID', 169 => 'ID', 170 => 'ID', 171 => 'ID', 172 => 'MY',
+			  173 => 'TH', 174 => 'LA', 175 => 'ID', 176 => 'ID', 177 => 'ID',
+			  178 => 'ID', 188 => 'NZ', 218 => 'SJ', 225 => 'CA' );
+			  
 # Check the command arguments, and execute the specified function.
 
 if ( $ARGV[0] eq 'generate' )
@@ -106,23 +142,32 @@ if ( $ARGV[0] eq 'generate' )
     
     else
     {
-	die "Unknown subcommand '$ARGV[0]'\n";
+	die "Unknown argument '$ARGV[0]'\n";
     }
 }
 
-elsif ( $ARGV[0] eq 'import' )
+elsif ( $ARGV[0] eq 'import' || $ARGV[0] eq 'match' )
 {
-    shift @ARGV;
+    my $cmd = shift @ARGV;
     
     if ( $ARGV[0] eq 'macrostrat' || $ARGV[0] eq 'ms' )
     {
 	shift @ARGV;
-	&ImportMacrostrat()
+
+	if ( $cmd eq 'import' )
+	{
+	    &ImportMacrostrat();
+	}
+
+	else
+	{
+	    &MatchMacrostrat();
+	}
     }
     
     else
     {
-	die "Unknown subcommand '$ARGV[0]'\n";
+	die "Unknown argument '$ARGV[0]'\n";
     }
 }
 
@@ -130,7 +175,7 @@ elsif ( $ARGV[0] eq 'check' || $ARGV[0] eq 'update' )
 {
     my $cmd = shift @ARGV;
     
-    if ( $ARGV[1] eq 'tables' )
+    if ( $ARGV[0] eq 'tables' )
     {
 	shift @ARGV;
 	&UpdateTables($cmd, @ARGV);
@@ -138,7 +183,7 @@ elsif ( $ARGV[0] eq 'check' || $ARGV[0] eq 'update' )
     
     else
     {
-	die "Unknown subcommand '$ARGV[0]'\n";
+	die "Unknown argument '$ARGV[0]'\n";
     }
 }
 
@@ -158,7 +203,8 @@ exit;
 # suffixes like 'Fm.' or 'Gp.'. This subroutine completely rebuilds the
 # STRAT_NAMES and STRAT_CONCEPTS tables.
 
-our (%strat_raw, %strat_name, %strat_prelim, %strat_concept, %contained_in, %prelim_to_real);
+our (%strat_raw, %strat_name, %strat_name_fc);
+our (%strat_prelim, %strat_concept, %contained_in, %prelim_to_real);
 our (%country_map);
 
 our $raw_colls = 0;
@@ -281,106 +327,165 @@ sub GenerateConcepts {
     
     my (%gp_keys, %fm_keys, %sfm_keys, %mbr_keys);
     my (%first_two, %first_last, %alias_of);
+    my @deferred;
     
+    # Make a first pass through the raw name records, processing as many as possible. A
+    # few, specifically those which contain either 'and', '&' or '-' are deferred until
+    # the rest are processed. This will enable us to determine whether the components
+    # before and after the conjunction are stratigraphic names in their own right, or
+    # whether the conjunction is a part of the name.
+    
+  RKEY:
     foreach my $rkey ( sort { fc($a) cmp fc($b) } keys %strat_raw )
     {
+	&processRawName($rkey, 1);
+    }
+    
+    # Now process the deferred names.
+    
+    foreach my $rkey ( @deferred )
+    {
+	&processRawName($rkey, 2);
+    }
+
+    # The following function does the actual name processing. We declare it here so that
+    # it sees the variables declared above such as %gp_keys, %first_two, etc.
+    
+    sub processRawName {
+	
+	my ($rkey, $pass) = @_;
+	
+	die "Error calling &processRawName: invalid pass number" unless $pass && $pass > 0;
+	
 	my $nr = $strat_raw{$rkey};
 	my $raw_name = $nr->{name};
 	my $rank = $nr->{rank};
 	my @components;
 	
-	# Start by processing the raw name to remove double quotation marks and question
-	# marks surrounded by parentheses.
+	# Start by stripping out any accidental control characters.
+	
+	if ( $raw_name =~ /[[:cntrl:]\0177]/ )
+	{
+	    $raw_name =~ s/[[:cntrl:]\0177]//g;
+	}
+	
+	# Remove all double quotation marks.
 	
 	$raw_name =~ s/"//g;
-	
-	if ( $raw_name =~ /(.*?)\s*[(][?][)]\s*(.*)/ )
-	{
-	    if ( $1 ne '' && $2 ne '' )
-	    {
-		$raw_name = "$1 $2";
-	    }
-	    
-	    else
-	    {
-		$raw_name = ($1 ne '' ? $1 : $2);
-	    }
-	}
 	
 	# A few names have the form "x? y?". Replace these with "x or y", which will be
 	# split up below.
 	
-	elsif ( $raw_name =~ /(.*?)\s*[?]\s*(.*?)\s*[?]$/ )
+	if ( $raw_name =~ /(.*?)\s*[?]\s*(.*?)\s*[?]$/ )
 	{
 	    $raw_name = "$1 or $2";
 	}
 	
-	# Other than this special case, process single question marks the same way as
-	# those surrounded by parentheses.
+	# Remove any other question marks, including those surrounded by parentheses.
 	
-	elsif ( $raw_name =~ /(.*?)\s*[?]\s*(.*)/ )
+	while ( $raw_name =~ qr{ (.*?) \s* (?: [?] | [(][?][)] ) \s* (.*) }xs )
 	{
 	    if ( $1 ne '' && $2 ne '' )
 	    {
 		$raw_name = "$1 $2";
 	    }
-
+	    
 	    else
 	    {
 		$raw_name = ($1 ne '' ? $1 : $2);
 	    }
 	}
 	
-	# Remove whitespace on either side of a hyphen.
+	# Remove a parenthesized expression with a question mark.
 	
-	if ( $raw_name =~ /-/ )
+	if ( $raw_name =~ qr{ (.*?) \s* [(] [^)]* [?] [^)]* [)] $ }xs )
 	{
-	    $raw_name =~ s/\s*-\s*/-/g;
+	    $raw_name = $1;
 	}
 	
-	# Split up names that include '&', 'and/or', 'and', 'or', or commas. The
-	# 'and/&' case is the hardest by far, because 'and' can sometimes be
-	# part of a stratigraphic name.
+	# Now split the name into individual components. In some cases, processing will
+	# be deferred until after the first pass.
 	
-	if ( $raw_name =~ /(.*?)\s*\/\s*(.*)/ )
+	# Names that include 'and/or', or 'or' represent straightforward alternatives,
+	# and can be simply split up, and do not need to be deferred.
+	
+	if ( $raw_name =~ qr{ \S \s+ (?: or | and \s* [/] \s* or) \s+ \S }xs )
 	{
-	    @components = ($1, $2);
+	    @components = ParseDisjunction($raw_name, $nr);
+	    say "ParseDisjunction: $raw_name -> " . join(' | ', @components) if $opt_debug;
 	}
 	
-	elsif ( $raw_name =~ /(.*?)\s+(or|and\s*\/\s*or)\s+(.*)/ )
-	{
-	    @components = ($1, $2);
-	}
+	# Defer processing of names with certain punctuation or conjunctions. Sometimes
+	# the punctuation or conjunction is an integral part of the name, other times it
+	# separates two or more stratigraphic names. Deferral of processing helps to
+	# determine which is the case, because we will be able to check whether each
+	# part has been found separately in the dataset as a stratigraphic name.
 	
-	# There are a few special cases which we handle here.
-	
-	elsif ( $raw_name =~ /^Aloformation Playa del Zorro|^Grès, argiles et lignites/ )
+	elsif ( $raw_name =~ qr{ [-,&(/] | \s (and|et|y) \s }xs )
 	{
-	    @components = $raw_name;
-	}
-	
-	elsif ( $raw_name =~ /,/ )
-	{
-	    @components = split /\s*,\s*/, $raw_name;
+	    my $extra;
 	    
-	    if ( $components[-1] =~ /^(?:&|and|et)\s*(.*)/ )
+	    if ( $pass == 1 )
 	    {
-		$components[-1] = $1;
+		push @deferred, $rkey;
+		next RKEY;
 	    }
-	}
-	
-	# Use the ParseConjunction function to handle "x & y" or "x and y". We handle
-	# the first one separately because there are a few names of the form "a b and c
-	# & d e and f" where "a b and c" and "d e and f" are both valid name components.
-	
-	elsif ( $raw_name =~ /(.*?)\s+&\s+(.*)/ )
-	{
-	    @components = ParseConjunction($1, $2);
-	}
-	
-	elsif ( $raw_name =~ /(.*?)\s+and\s+(.*)/ )
-	{
-	    @components = ParseConjunction($1, $2);
+	    
+	    if ( $raw_name =~ /[(]/ )
+	    {
+		my $parsed = ParseParentheses($raw_name, $nr);
+		say "ParseParentheses: $raw_name -> $parsed" if $opt_debug;
+		
+		$raw_name = $parsed;
+	    }
+	    
+	    if ( $raw_name =~ /,/ )
+	    {
+		@components = ParseCommas($raw_name, $nr);
+		say "ParseCommas: $raw_name -> " . join(' | ', @components) if $opt_debug;
+	    }
+
+	    elsif ( $raw_name =~ qr{/} )
+	    {
+		@components = ParseAmpersand($raw_name, $nr);
+		say "ParseAmpersand: $raw_name -> " . join(' | ', @components) if $opt_debug;
+	    }
+	    
+	    elsif ( $raw_name =~ /-/ )
+	    {
+		@components = ParseHyphenated($raw_name, $nr);
+		say "ParseHyphenated: $raw_name -> " . join(' | ', @components) if $opt_debug;
+	    }
+
+	    elsif ( $2 eq 'and' || $raw_name =~ /&/ )
+	    {
+		@components = ParseConjunction($raw_name, $nr);
+		say "ParseConjunction: $raw_name -> " . join(' | ', @components) if $opt_debug;
+	    }
+	    
+	    elsif ( $2 eq 'et' )
+	    {
+		@components = ParseConjunctionFR($raw_name, $nr);
+		say "ParseConjunctionFR: $raw_name -> " . join(' | ', @components) if $opt_debug;
+	    }
+	    
+	    elsif ( $2 eq 'y' )
+	    {
+		# The particle 'y' in Welsh does not indicate a conjunction.
+		
+		if ( $nr->{cc} eq 'UK' )
+		{
+		    @components = $raw_name;
+		}
+		
+		# Anywhere else, the name is most likely Spanish.
+		
+		else
+		{
+		    @components = ParseConjunctionES($raw_name, $nr);
+		    say "ParseConjunctionES: $raw_name -> " . join(' | ', @components) if $opt_debug;
+		}
+	    }
 	}
 	
 	# Otherwise, treat the name as a single component.
@@ -395,9 +500,8 @@ sub GenerateConcepts {
 	# name, add it to the %strat_name hash with the name component key as the key
 	# and the raw name record as its value.
 	
-	while ( @components )
+	foreach my $c ( @components )
 	{
-	    my $c = shift @components;
 	    my $alias;
 	    my $is_subfm;
 	    
@@ -428,19 +532,26 @@ sub GenerateConcepts {
 	    }
 	    
 	    # Ignore any name component that doesn't contain at least three
-	    # letters in a row, and ignore roman numerals.
+	    # letters in a row.
 	    
 	    next unless $c =~ /[[:alpha:]]{3}/;
-	    next if $c =~ /^[ivx]+$/i;
+	    
+	    # Remove any mention of cyclothem.
+	    
+	    if ( $c =~ qr{ (.*?) \s+ (?: [vix]+[a-z]? \s+ )? cyclothem }xs )
+	    {
+		$c = $1;
+	    }
 	    
 	    # Put the component into fold-case so that we can do case-insensitive
 	    # comparisons.
 	    
 	    my $fc = fc $c;
 	    
-	    # Ignore any of the excluded name components, i.e. "upper" and "lower".
+	    # Ignore any name that consists solely of words like "upper", "lower",
+	    # "unit", "bed", "i", "ii", etc. with no descriptive words.
 	    
-	    next if $excluded_name{$fc};
+	    next if IsNullName($fc);
 	    
 	    # Increment the component count for the name record.
 	    
@@ -456,12 +567,16 @@ sub GenerateConcepts {
 	    $strat_name{$nkey} ||= [];
 	    push $strat_name{$nkey}->@*, $nr;
 	    
+	    # Also store the key with the name in foldcase, for comparison.
+	    
+	    $strat_name_fc{"$fc|$rank|$nr->{cc}"} = 1;
+	    
 	    # Also store the name key in the hashes %first_two, and %first_last. The
 	    # hash key for the former is the first two letters in fold-case, and the
-	    # hash key for the latter is the first and last letters of the first word,
-	    # provided it contains at least three letters. This will allow us to
-	    # associate names together into concepts even if they have different ranks
-	    # and/or are spelled slightly differently.
+	    # hash key for the latter is the first and last letters of the first word
+	    # that contains at least three letters. This will allow us to associate
+	    # names together into concepts even if they have different ranks and/or are
+	    # spelled slightly differently.
 	    
 	    my $ft = substr($fc, 0, 2);
 	    
@@ -484,7 +599,7 @@ sub GenerateConcepts {
 
 	    my $alias_key;
 	    
-	    if ( $alias && ! $excluded_name{fc $alias} )
+	    if ( $alias && ! IsNullName(fc $alias) )
 	    {
 		$alias_key = "$alias|$rank|$nr->{cc}";
 		my $afc = fc $alias;
@@ -536,15 +651,16 @@ sub GenerateConcepts {
 		$gp_keys{$alias_key} = 1 if $alias_key;
 	    }
 	    
-	    elsif ( $is_subfm )
-	    {
-		$sfm_keys{$nkey} = 1;
-	    }
-	    
 	    elsif ( $nr->{rank} eq 'Fm' )
 	    {
 		$fm_keys{$nkey} = 1;
 		$fm_keys{$alias_key} = 1 if $alias_key;
+	    }
+	    
+	    elsif ( $is_subfm )
+	    {
+		$sfm_keys{$nkey} = 1;
+		$sfm_keys{$alias_key} = 1 if $alias_key;
 	    }
 	    
 	    else
@@ -555,17 +671,21 @@ sub GenerateConcepts {
 	}
     }
     
-    
     # Step III: Iterate through the %strat_name relation, which is a subset of the cross
-    # product between name component keys and stratigraphic name records. Each
-    # unconsolidated member of this relation will be assigned to a preliminary name
-    # concept record using the 'concept' field of the stratigraphic name record,
-    # subdivided by name component key.
+    # product between name component keys and stratigraphic name records. Multiple
+    # instances of the same name will be consolidated together. After conslidation, each
+    # remaining member of this relation will be assigned to a preliminary stratigraphic
+    # concept record. Each concept will end up associated with one or more names, all of
+    # which represent the same real-world rock unit. Some of these names may have
+    # different ranks, for example "Xyz Fm" and "Xyz Gp" may be two different ways to
+    # refer to the same rock unit, depending on where in its geographic range you are
+    # considering.
     
-    # The iteration starts with keys that represent groups, then formations, then
-    # sub-formations, then members. This guarantees that parents will be resolved before
-    # children, so that the 'same parents' relation is always correct.
-        
+    # The set of names in the %strat_names relation has been partitioned above into
+    # %gp_keys, %fm_keys, %sfm_keys, and %mbr_keys, each of which is processed in turn.
+    # This guarantees that parent concepts will be resolved before children, so that the
+    # 'same parents' relation can be used in the assignment process.
+    
     say "Assigning preliminary concepts...";
     
     my $progress_rank = '';
@@ -645,10 +765,10 @@ sub GenerateConcepts {
 	    $strat_name{$nkey} = [$single, @separate];
 	}
 	
-	# For each key, iterate through the consolidated stratigraphic name records
-	# associated with that key. Assign each name record to a stratigraphic concept.
-	# In the code below, $nr points to a stratigraphic name record, while $cr points
-	# to a stratigraphic concept record.
+	# Now the main loop. For each key, iterate through the consolidated
+	# stratigraphic name records associated with that key. Assign each name record
+	# to a stratigraphic concept. In the code below, $nr points to a stratigraphic
+	# name record, while $cr points to a stratigraphic concept record.
 	
       RECORD:
 	foreach my $nr ( $strat_name{$nkey}->@* )
@@ -928,12 +1048,13 @@ sub GenerateConcepts {
     
     $DB::single = 1;
     
-    say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRATN_REFS}', '$TABLE{STRAT_CONCEPTS}', " .
-	"'$TABLE{STRAT_OPINIONS}', '$TABLE{STRATO_REFS}'...";
+    say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRAT_NREFS}', '$TABLE{STRAT_CONCEPTS}', " .
+	"`strat_concept_ccs`, '$TABLE{STRAT_OPINIONS}', '$TABLE{STRAT_OREFS}'...";
     
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_NAMES}");
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_NREFS}");
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_CONCEPTS}");
+    DBCommand($pbdb, "TRUNCATE `strat_concept_ccs`");
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_OPINIONS}");
     DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_OREFS}");
     
@@ -942,9 +1063,10 @@ sub GenerateConcepts {
     # characters instead of one at a time. The last call to InsertConcepts adds any
     # remaining rows after the last block.
     
-    say "Generating the STRAT_CONCEPTS ($TABLE{STRAT_CONCEPTS}) table...";
+    say "Generating the STRAT_CONCEPTS ($TABLE{STRAT_CONCEPTS}) and strat_concept_ccs tables...";
     
     my $concept_values = '';
+    my $cc_values = '';
     my $new_concepts = 0;
     my $concept_colls = 0;
     my $concept_occs = 0;
@@ -960,8 +1082,7 @@ sub GenerateConcepts {
 	
 	my $qstratc = $pbdb->quote($cr->{concept_no});
 	my $qname = $pbdb->quote(ChooseConceptName($cr));
-	my $qcc = $pbdb->quote(join ',', keys $cr->{cc}->%*);
-	my $qcou = $pbdb->quote('');
+	# my $qcc = $pbdb->quote(join ',', keys $cr->{cc}->%*);
 	my $qlith1 = $pbdb->quote(join ',', keys $cr->{lithology1}->%*);
 	my $qlith2 = $pbdb->quote(join ',', keys $cr->{lithology2}->%*);
 	my $qncolls = $pbdb->quote($cr->{n_colls} || 0);
@@ -974,7 +1095,7 @@ sub GenerateConcepts {
 	my $qlngmax = $pbdb->quote($cr->{lng_max});
 	
 	$concept_values .= ', ' if $concept_values;
-	$concept_values .= "($qstratc, $qname, $qcc, $qcou, $qlith1, $qlith2, $qncolls, $qnoccs, " .
+	$concept_values .= "($qstratc, $qname, $qlith1, $qlith2, $qncolls, $qnoccs, " .
 	    "$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax)";
 
 	if ( length($concept_values) > $chunk_size )
@@ -982,9 +1103,25 @@ sub GenerateConcepts {
 	    InsertConcepts($pbdb, $concept_values);
 	    $concept_values = '';
 	}
+	
+	foreach my $cc ( keys $cr->{cc}->%* )
+	{
+	    my $qcc = $pbdb->quote($cc);
+	    my $qname = $pbdb->quote($country_map{$cc});
+	    
+	    $cc_values .= ', ' if $cc_values;
+	    $cc_values .= "($qstratc, $qcc, $qname)";
+	}
+	
+	if ( length($cc_values) > $chunk_size )
+	{
+	    InsertConceptCCs($pbdb, $cc_values);
+	    $cc_values = '';
+	}
     }
     
     InsertConcepts($pbdb, $concept_values) if $concept_values;
+    InsertConceptCCs($pbdb, $cc_values) if $cc_values;
     
     # Then go through the list of names, and add one row to the STRAT_NAMES table for
     # each name. As before, these rows are added in large blocks. The association
@@ -1026,7 +1163,6 @@ sub GenerateConcepts {
 	    my $qcc = $pbdb->quote($nr->{cc});
 	    my $qlith1 = $pbdb->quote(join ',', keys $nr->{lithology1}->%*);
 	    my $qlith2 = $pbdb->quote(join ',', keys $nr->{lithology2}->%*);
-	    my $qcou = $pbdb->quote($nr->{country} || '');
 	    my $qncolls = $pbdb->quote($nr->{n_colls} || 0);
 	    my $qnoccs = $pbdb->quote($nr->{n_occs} || 0);
 	    my $qearly = $pbdb->quote($nr->{early_age} || '');
@@ -1037,7 +1173,7 @@ sub GenerateConcepts {
 	    my $qlngmax = $pbdb->quote($nr->{lng_max});
 	    
 	    $name_values .= ', ' if $name_values;
-	    $name_values .= "($qstratn, $qstratc, $qname, $qrank, $qcc, $qcou, $qlith1, $qlith2, " .
+	    $name_values .= "($qstratn, $qstratc, $qname, $qrank, $qcc, $qlith1, $qlith2, " .
 		"$qncolls, $qnoccs, $qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax)";
 	    
 	    if ( length($name_values) > $chunk_size )
@@ -1337,49 +1473,308 @@ sub ConsolidateNames {
 }
 
 
+# ParseDisjunction ( raw_name, nr )
+#
+# Given a raw name that contains a disjunction, parse it into two or more name
+# components and return them. Disjunctions are assumed to represent simple lists of
+# alternatives.
+
+sub ParseDisjunction {
+    
+    my ($raw_name, $nr) = @_;
+    
+    if ( $raw_name =~ qr{ (.*?\S) \s+ (?: or | and \s* [/] \s* or) \s+ (\S.*) }xs )
+    {
+	my $first = $1;
+	my $last = $2;
+	
+	if ( $first =~ /,/ )
+	{
+	    my @comps = split /\s*,\s*/, $first;
+	    
+	    return grep { $_ =~ /\S/ } (@comps, $last);
+	}
+	
+	else
+	{
+	    return ($first, $last);
+	}
+    }
+    
+    else
+    {
+	return $raw_name;
+    }
+}
+
+
+# ParseCommas ( raw_name, nr )
+#
+# Given a raw name that contains at least one comma, parse it into two or more name
+# components and return them.
+
+sub ParseCommas {
+
+    my ($raw_name, $nr) = @_;
+
+   if ( $raw_name =~ qr{ ^ ([^,]+?) \s+ (?: \d+(?:-\d+) , \s* | [vix]+ , \s* | [a-z] , \s* )*
+			  (?: \d+(?:-\d+) | [vix]+ | [a-z] ) $ }xsi )
+    {
+	return $1;
+    }
+    
+    my @comps = split /\s*,\s*/, $raw_name;
+    
+    $comps[-1] =~ s/^and\s+|^&\s*//;
+    
+    if ( @comps == 2 && IsNullName(fc $comps[1]) )
+    {
+	return ParseAmpersand($comps[0], $nr);
+    }
+    
+    elsif ( grep { $is_rock_type{fc $_} } @comps )
+    {
+	return $raw_name;
+    }
+    
+    else
+    {
+	return map { ParseAmpersand($_, $nr) } @comps;
+    }
+}
+
+
+sub ParseAmpersand {
+    
+    my ($raw_name, $nr) = @_;
+    
+    if ( $raw_name =~ /(\S.*?)\s*&\s*(.*)/ )
+    {
+	my $left = $1;
+	my $right = $2;
+
+	if ( $right =~ /(.+?)\s+(\S+)$/ && $is_rock_type{$2} )
+	{
+	    return ("$left $2", "$1 $2");
+	}
+
+	else
+	{
+	    return ($left, $right);
+	}
+    }
+    
+    elsif ( $raw_name =~ qr{(.*?)\s*/\s*(.*)} )
+    {
+	return ($1, $2);
+    }
+    
+    else
+    {
+	return $raw_name;
+    }
+}
+
+
+sub ParseHyphenated {
+
+    my ($raw_name, $nr) = @_;
+    
+    if ( $raw_name =~ qr{ ^ (.*?) \s* - \s* (.*) $ }xs )
+    {
+	my $left = $1;
+	my $right = $2;
+	
+	if ( $right =~ qr{ ^ (.*?) \s+ [(] ([^)]+) [)] $ }xs )
+	{
+	    my $temp = $1;
+	    
+	    if ( IsNullName(fc $2) )
+	    {
+		$right = $temp;
+	    }
+	}
+	
+	if ( $left =~ /^(\S.*?) and (\S.*)/ )
+	{
+	    return ($1, "$2-$right");
+	}
+	
+	if ( $right =~ /(.*?)\s+(\S+)s$/ )
+	{
+	    my $name = $1;
+	    my $lastword = $2;
+	    
+	    if ( $is_rock_type{fc $lastword} &&
+		 ( IsKnownStratum($left, $nr) || IsKnownStratum($name, $nr) ) )
+	    {
+		return ("$left $lastword", "$name $lastword");
+	    }
+	}
+	
+	if ( IsKnownStratum($left, $nr) || IsKnownStratum($right, $nr) )
+	{
+	    return ($left, $right);
+	}
+
+	if ( IsNullName(fc $left) || IsNullName(fc $right) )
+	{
+	    return "$left $right";
+	}
+	
+	$raw_name =~ s/\s*-\s*/-/g;
+	return $raw_name;
+    }
+    
+    return $raw_name;
+}
+
+
 # ParseConjunction ( a, b )
 # 
 # Parse the two parts of a conjunction, i.e. "A B and X". These could be two
-# separate stratigraphic names, or alternatively two names in the form "X Silts and
+# separate stratigraphic names, or alternatively one name in the form "X Silts and
 # Shales".
 
 sub ParseConjunction {
 
-    my ($a, $b) = @_;
+    my ($raw_name, $nr) = @_;
     
-    if ( $a =~ /^Walpen\b|^Wall\b|^Daleje\b/ )
+    if ( $raw_name =~ /^Daleje\b/ )
     {
-	return ("$a and $b");
+	return $raw_name;
     }
     
-    if ( IsRockType($b) )
+    if ( $raw_name =~ qr{ ^ (\S.*?) \s* & \s* (.*) $ }xs )
     {
-	return ("$a and $b");
-    }
-    
-    if ( $b =~ /(.*?)\s+suites?$/i )
-    {
-	$b = $1;
-	substr($b, 0, 1) = uc substr($b, 0, 1);
+	my $a = $1;
+	my $b = $2;
+
+	if ( IsRockType(fc $b) )
+	{
+	    return ("$a and $b");
+	}
 	
-	return ("$a Suite", "$b Suite");
-    }
-    
-    if ( $b =~ /(.*?)\s+horizons?$/i )
-    {
-	$b = $1;
-	substr($b, 0, 1) = uc substr($b, 0, 1);
+	if ( IsKnownStratum($a, $nr) || IsKnownStratum($b, $nr) )
+	{
+	    return (ParseConjunction($a), ParseConjunction($b));
+	}
 	
-	return ("$a Horizon", "$b Horizon");
+	if ( $a =~ / and / )
+	{
+	    return $raw_name;
+	}
+	
+	return (ParseConjunction($a), ParseConjunction($b));
     }
     
-    if ( $b =~ /(.*?) & (.*)/ )
+    elsif ( $raw_name =~ qr{ ^ (\S.*?) (?: \s+ and \s+ | \s* & \s*) (.*) $ }xs )
     {
-	return ("$a $1", $2);
+	my $a = $1;
+	my $b = $2;
+	
+	if ( IsRockType(fc $b) )
+	{
+	    return ("$a and $b");
+	}
+	
+	if ( $b =~ /(.*?)\s+suites?$/i )
+	{
+	    $b = $1;
+	    substr($b, 0, 1) = uc substr($b, 0, 1);
+	    
+	    return ("$a Suite", "$b Suite");
+	}
+	
+	if ( $b =~ /(.*?)\s+horizons?$/i )
+	{
+	    $b = $1;
+	    substr($b, 0, 1) = uc substr($b, 0, 1);
+	    
+	    return ("$a Horizon", "$b Horizon");
+	}
+	
+	if ( IsKnownStratum($a, $nr) || IsKnownStratum($b, $nr) )
+	{
+	    return ($a, $b);
+	}
     }
     
-    return ($a, $b);
+    return $raw_name;
 }
+
+
+sub ParseConjunctionFR {
+
+    my ($raw_name, $nr) = @_;
+
+    return $raw_name;
+}
+
+
+sub ParseConjunctionES {
+
+    my ($raw_name, $nr) = @_;
+
+    return $raw_name;
+}
+
+
+sub ParseParentheses {
+
+    my ($raw_name, $nr) = @_;
+    
+    if ( $raw_name =~ qr{ [(] \s* = \s* [^)] }xs )
+    {
+	return $raw_name;
+    }
+
+    if ( $raw_name =~ qr{ (\S.*?) \s+ [(] \s* (?: also | also \s called ) \s* (.*) [)] $ }xs )
+    {
+	return "$1 (= $2)";
+    }
+    
+    if ( $raw_name =~ qr{ ^ (\S.*) \s+ [(] ([^)]+) [)] $ }xs )
+    {
+	my $a = $1;
+	my $b = $2;
+
+	if ( $b =~ /[?]| only$/ )
+	{
+	    return ($a);
+	}
+	
+	elsif ( IsNullName(fc $b) )
+	{
+	    return ($a);
+	}
+
+	elsif ( IsNullName(fc $a) )
+	{
+	    return ($b);
+	}
+	
+	else
+	{
+	    return "$a (= $b)";
+	}
+    }
+
+    elsif ( $raw_name =~ qr{ ^ (\S.*?) \s* [(] ([^)]+) [)] \s* (\S.*) $ }xs )
+    {
+	return "$1 $3";
+    }
+
+    elsif ( $raw_name =~ qr{ ^ [(] (.*) [)] $ }xs )
+    {
+	return $1;
+    }
+    
+    else
+    {
+	return $raw_name;
+    }
+}	
 
 
 # NamesAreCompatible ( name, key, name_context, alt_name, alt_key, alt_name_context )
@@ -1390,135 +1785,137 @@ sub NamesAreCompatible {
 
     my ($name, $nr, $alt_name, $alt_nr) = @_;
 
-    # Convert both names to fold-case, to make this comparison case-insensitive.
+    # Convert both names to foldcase, to make this comparison case-insensitive.
 
     $name = fc $name;
     $alt_name = fc $alt_name;
     
-    # If the two names are the same, return true.
-
-    if ( $name eq $alt_name )
-    {
-	return 1;
-    }
-    
     my $similarities = 0;
+    my $differences = 0;
     
     my ($same_prefix, $same_parents, $same_rank,
 	$ages_overlap, $ages_identical, $locations_close, $locations_overlap);
     
     # If the age ranges overlap, the two names are potentially compatible.
-    
-    if ( $nr->{early_age} >= $alt_nr->{late_age} &&
-	 $nr->{late_age} <= $alt_nr->{early_age} )
+
+    if ( defined $nr->{early_age} && $nr->{early_age} ne '' &&
+	 defined $alt_nr->{early_age} && $alt_nr->{early_age} ne '' )
     {
-	$ages_overlap = 1;
-	$similarities++;
-    }
-    
-    # If the age ranges are exactly the same or very close, the two names are even more
-    # likely to be compatible.
-    
-    if ( $nr->{early_age} == $alt_nr->{early_age} &&
-	 abs($nr->{late_age} - $alt_nr->{late_age}) < 5 ||
-	 $nr->{late_age} == $alt_nr->{late_age} &&
-	 abs($nr->{early_age} - $alt_nr->{early_age}) < 5 )
-    {
-	$ages_identical = 1;
-	$similarities++;
+	if ( $nr->{early_age} >= $alt_nr->{late_age} &&
+	     $nr->{late_age} <= $alt_nr->{early_age} )
+	{
+	    $ages_overlap = 1;
+	    $similarities++;
+	}
+	
+	# If the age ranges are separated by at least 20 million years, the two names are
+	# not compatible.
+	
+	elsif ( $nr->{early_age} < $alt_nr->{late_age} - 20 &&
+		$nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
+		$nr->{late_age} > $alt_nr->{early_age} + 20 &&
+		$alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
+	{
+	    $differences++;
+	}
+	
+	# If the age ranges are exactly the same or very close, the two names are even more
+	# likely to be compatible.
+	
+	if ( $nr->{early_age} == $alt_nr->{early_age} &&
+	     abs($nr->{late_age} - $alt_nr->{late_age}) < 5 ||
+	     $nr->{late_age} == $alt_nr->{late_age} &&
+	     abs($nr->{early_age} - $alt_nr->{early_age}) < 5 )
+	{
+	    $ages_identical = 1;
+	    $similarities++;
+	}
     }
     
     # If the geographic ranges overlap or are very close to each other, the two names are
-    # potentially compatible.
-
-    if ( $nr->{cc} eq $alt_nr->{cc} )
+    # potentially compatible. Start by checking the country codes.
+    
+    if ( $nr->{cc} && $nr->{cc} eq $alt_nr->{cc} )
     {
+	$similarities++;
 	$locations_close = 1;
-	$similarities++;
     }
     
-    elsif ( $nr->{lat_min} <= $alt_nr->{lat_max} + 5 &&
-	    $nr->{lat_max} >= $alt_nr->{lat_min} - 5 &&
-	    $nr->{lng_min} <= $alt_nr->{lng_max} + 5 &&
-	    $nr->{lng_max} >= $alt_nr->{lng_min} - 5 )
+    # Then check the lat/lng range if that is defined for both name records.
+    
+    if ( defined $nr->{lat_min} && $nr->{lat_min} ne '' &&
+	 defined $alt_nr->{lat_min} && $nr->{lat_min} ne '' )
     {
-	$locations_close = 1;
-	$similarities++;
+	if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 5 &&
+	     $nr->{lat_max} >= $alt_nr->{lat_min} - 5 &&
+	     $nr->{lng_min} <= $alt_nr->{lng_max} + 5 &&
+	     $nr->{lng_max} >= $alt_nr->{lng_min} - 5 )
+	{
+	    $similarities++ unless $locations_close;
+	    $locations_close = 1;
+	}
+	
+	# If the geographic ranges are separated by at least 20º, the two names are not
+	# compatible.
+	
+	elsif ( $nr->{lat_min} > $alt_nr->{lat_max} + 20 ||
+		$nr->{lat_max} < $alt_nr->{lat_min} - 20 ||
+		$nr->{lng_min} > $alt_nr->{lng_max} + 20 ||
+		$nr->{lng_max} < $alt_nr->{lng_min} - 20 )
+	{
+	    $differences++;
+	}
+	
+	# If the geographic ranges are very close to each other, the two names are even
+	# more likely to be compatible.
+	
+	if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 1 &&
+	     $nr->{lat_max} >= $alt_nr->{lat_min} - 1 &&
+	     $nr->{lng_min} <= $alt_nr->{lng_max} + 1 &&
+	     $nr->{lng_max} >= $alt_nr->{lng_min} - 1 )
+	{
+	    $locations_overlap = 1;
+	    $similarities++;
+	}
     }
     
-    # If the geographic ranges are very close to each other, the two names are even more
-    # likely to be compatible.
-    
-    if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 1 &&
-	 $nr->{lat_max} >= $alt_nr->{lat_min} - 1 &&
-	 $nr->{lng_min} <= $alt_nr->{lng_max} + 1 &&
-	 $nr->{lng_max} >= $alt_nr->{lng_min} - 1 )
-    {
-	$locations_overlap = 1;
-	$similarities++;
-    }
-
     # At this point, reject the match unless we have at least one geographic or
-    # temporal similarity.
+    # temporal similarity and no differences.
     
-    return '' unless $similarities > 0;
+    return 0 unless $similarities > 0 && $differences == 0;
     
-    # If the two names have the same rank, they are potentially compatible.
+    # If the two names have the same rank, they are potentially compatible. For this
+    # purpose, we rank supergroups, groups, and subgroups together because the
+    # PBDB does not differentiate between them.
     
-    if ( $nr->{rank} eq $alt_nr->{rank} )
+    if ( $rank_comparison{$nr->{rank}} eq $rank_comparison{$alt_nr->{rank}} )
     {
 	$same_rank = 1;
 	$similarities++;
+    }
+
+    # If one of the two is a Gp and the other a Mbr, they are not compatible.
+
+    elsif ( $rank_comparison{$nr->{rank}} eq 'Gp' && $rank_comparison{$alt_nr->{rank}} eq 'Mbr' ||
+	    $rank_comparison{$alt_nr->{rank}} eq 'Gp' && $rank_comparison{$nr->{rank}} eq 'Mbr' )
+    {
+	$differences++;
     }
     
     # If the two names have identical stratigraphic parents, they are potentially
     # compatible.
     
-    # if ( $nr->{parent_name} && $alt_nr->{parent_name} )
-    # {
-    # 	my (@parents, @alt_parents, $rkey);
-	
-    # 	foreach $rkey ( keys $nr->{parent_name}->%* )
-    # 	{
-    # 	    my $anr = $strat_raw{$rkey};
-	    
-    # 	    if ( $anr->{consolidated_with} )
-    # 	    {
-    # 		push @parents, $anr->{consolidated_with}->@*;
-    # 	    }
-	    
-    # 	    else
-    # 	    {
-    # 		push @parents, $rkey;
-    # 	    }
-    # 	}
-	
-    # 	foreach $rkey ( keys $alt_nr->{parent_name}->%* )
-    # 	{
-    # 	    my $bnr = $strat_raw{$rkey};
-
-    # 	    if ( $bnr->{consolidated_with} )
-    # 	    {
-    # 		push @alt_parents, $bnr->{consolidated_with}->@*;
-    # 	    }
-	    
-    # 	    else
-    # 	    {
-    # 		push @alt_parents, $rkey;
-    # 	    }
-    # 	}
-
     if ( $contained_in{$nr->{rkey}} && $contained_in{$alt_nr->{rkey}} )
     {
-	my (@parents, @alt_parents, $rkey);
+	my (@parents, @alt_parents);
 	
-	foreach $rkey ( keys $contained_in{$nr->{rkey}}->%* )
+	foreach my $rkey ( keys $contained_in{$nr->{rkey}}->%* )
 	{
-	    my $anr = $strat_raw{$rkey};
+	    my $pnr = $strat_raw{$rkey};
 	    
-	    if ( $anr->{consolidated_with} )
+	    if ( $pnr->{consolidated_with} )
 	    {
-		push @parents, $anr->{consolidated_with}->@*;
+		push @parents, $pnr->{consolidated_with}->@*;
 	    }
 	    
 	    else
@@ -1527,29 +1924,30 @@ sub NamesAreCompatible {
 	    }
 	}
 	
-	foreach $rkey ( keys $contained_in{$nr->{rkey}}->%* )
+	foreach my $alt_rkey ( keys $contained_in{$alt_nr->{rkey}}->%* )
 	{
-	    my $bnr = $strat_raw{$rkey};
-
-	    if ( $bnr->{consolidated_with} )
+	    my $pnr = $strat_raw{$alt_rkey};
+	    
+	    if ( $pnr->{consolidated_with} )
 	    {
-		push @alt_parents, $bnr->{consolidated_with}->@*;
+		push @alt_parents, $pnr->{consolidated_with}->@*;
 	    }
 	    
 	    else
 	    {
-		push @alt_parents, $rkey;
+		push @alt_parents, $alt_rkey;
 	    }
 	}
 	
       KEY:
 	foreach my $a ( @parents )
 	{
-	    foreach my $b ( @parents )
+	    foreach my $b ( @alt_parents )
 	    {
 		if ( $a eq $b )
 		{
 		    $same_parents = 1;
+		    $similarities++;
 		    $parent_matches++;
 		    last KEY;
 		}
@@ -1558,20 +1956,28 @@ sub NamesAreCompatible {
     }
     
     # At this point, reject the match unless we have at least two geographic,
-    # stratigraphic, or temporal similarities.
-
-    return '' unless $similarities > 1;
+    # stratigraphic, or temporal similarities and no differences.
+    
+    return 0 unless $similarities > 1 && $differences == 0;
+    
+    # If the two names are the same, return the number of similarities plus 2 for
+    # lexical equality.
+    
+    if ( $name eq $alt_name )
+    {
+	return $similarities + 2;
+    }
     
     # If the names differ in a sequence that includes numbers (including roman numerals)
     # possibly followed by letters, they are not compatible. That means they are
     # individually lettered or numbered members.
     
-    my @sequence = $name =~ /(\d+[[:alpha:]]*|\b[ivx]+\b)/g;
-    my @alt_sequence = $alt_name =~ /(\d+[[:alpha:]]*|\b[ivx]+\b)/g;
+    my @sequence = $name =~ /(\d+[[:alpha:]]*|\b[ivx]+\b|\s[[:alpha:]](?:\s|$))/g;
+    my @alt_sequence = $alt_name =~ /(\d+[[:alpha:]]*|\b[ivx]+\b|\s[[:alpha:]](?:\s|$))/g;
     
     if ( @sequence != @alt_sequence )
     {
-	return '';
+	return 0;
     }
 
     elsif ( @sequence )
@@ -1580,32 +1986,40 @@ sub NamesAreCompatible {
 	{
 	    if ( $sequence[$i] ne $alt_sequence[$i] )
 	    {
-		return '';
+		return 0;
 	    }
 	}
     }
     
-    # If the two names start with the same three letters, they are potentially compatible.
+    # If the initial words have an edit distance of 2 or less, the names are
+    # potentially compatible. If either word is 4 characters or less, or if the name
+    # records are both in New Zealand, the maximum allowed edit distance is 1.
     
-    if ( substr($name, 0, 3) eq substr($alt_name, 0, 3) )
+    my ($first) = $name =~ /(\S+)/;
+    my ($alt_first) = $alt_name =~ /(\S+)/;
+    
+    if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
     {
-	$same_prefix = 1;
-	$similarities++;
-    }
-    
-    # Otherwise, if the initial words have an edit distance of 2 or less, the names are
-    # potentially compatible.
-    
-    else
-    {
-	my ($first) = $name =~ /(\S+)/;
-	my ($alt_first) = $alt_name =~ /(\S+)/;
-	
-	if ( edistance($first, $alt_first, 2) >= 0 )
+	if ( edistance($first, $alt_first, 1) >= 0 )
 	{
 	    $same_prefix = 1;
 	    $similarities++;
 	}
+    }
+    
+    elsif ( length($first) <= 4 || length($alt_first) <= 4 )
+    {
+	if ( edistance($first, $alt_first, 1) >= 0 )
+	{
+	    $same_prefix = 1;
+	    $similarities++;
+	}
+    }
+    
+    elsif ( edistance($first, $alt_first, 2) >= 0 )
+    {
+	$same_prefix = 1;
+	$similarities++;
     }
     
     # If the two names are of the form "X" and "X Y" where Y is a rock type, then the
@@ -1625,34 +2039,37 @@ sub NamesAreCompatible {
 	    @smaller = @larger;
 	    @larger = @temp;
 	}
-	
-	while ( $smaller[0] eq $larger[0] || edistance($smaller[0], $larger[0], 2) >= 0 )
+
+	if ( ! IsRockType(@smaller) )
 	{
-	    push @prefix, shift @smaller;
-	    shift @larger;
-	    last unless @smaller;
-	}
-	
-	if ( @smaller == 0 && $same_parents && $ages_overlap )
-	{
-	    return 1;
-	}
-	
-	elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
-	{
-	    return 1;
-	}
-	
-	elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} )
-	{
-	    return 1;
-	}
-	
-	elsif ( @smaller && @larger && $same_rank &&
-		(@smaller == grep { IsRockType($_) } @smaller) &&
-		(@larger == grep { IsRockType($_) } @larger) )
-	{
-	    return 1;
+	    while ( $smaller[0] eq $larger[0] || edistance($smaller[0], $larger[0], 2) >= 0 )
+	    {
+		push @prefix, shift @smaller;
+		shift @larger;
+		last unless @smaller;
+	    }
+	    
+	    if ( @smaller == 0 && $same_parents && $ages_overlap )
+	    {
+		return $similarities;
+	    }
+	    
+	    elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
+	    {
+		return $similarities;
+	    }
+	    
+	    elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} )
+	    {
+		return $similarities;
+	    }
+	    
+	    elsif ( @smaller && @larger && $same_rank &&
+		    (@smaller == grep { IsRockType($_) } @smaller) &&
+		    (@larger == grep { IsRockType($_) } @larger) )
+	    {
+		return $similarities;
+	    }
 	}
     }
     
@@ -1660,19 +2077,74 @@ sub NamesAreCompatible {
     # names are compatible. But only if they either have the same parents or else their
     # ages and locations both overlap.
     
-    my $ldd = edistance($name, $alt_name, 2);
-    
-    if ( $ldd >= 0 && $ldd <= 2 &&
-	 ($same_parents || $ages_identical ||
-	  ($ages_overlap && $locations_overlap) ||
-	  ($ages_overlap && $locations_close && $same_rank)) )
+    if ( $same_parents || $ages_identical ||
+	 ($ages_overlap && $locations_overlap) ||
+	 ($ages_overlap && $locations_close && $same_rank) )
     {
-	return 1;
+	if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
+	{
+	    if ( edistance($name, $alt_name, 1) >= 0 )
+	    {
+		return $similarities + 1;
+	    }
+	}
+	
+	elsif ( length($name) <= 4 || length($alt_name) <= 4 )
+	{
+	    if ( edistance($name, $alt_name, 1) >= 0 )
+	    {
+		return $similarities + 1;
+	    }
+	}
+	
+	elsif ( edistance($name, $alt_name, 2) >= 0 )
+	{
+	    return $similarities + 1;
+	}
+	
+	if ( $same_rank )
+	{
+	    if ( $name eq "${alt_name}ian" || $alt_name eq "${name}ian" )
+	    {
+		return $similarities + 1;
+	    }
+
+	    if ( $name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
+	    {
+		if ( $alt_name eq $1 )
+		{
+		    return $similarities + 1;
+		}
+	    }
+	    
+	    elsif ( $alt_name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
+	    {
+		if ( $name eq $1 )
+		{
+		    return $similarities + 1;
+		}
+	    }
+	}
     }
     
     # If none of the criteria are satisfied, return false.
     
-    return '';
+    else
+    {
+	return 0;
+    }
+}
+
+
+sub IsNullName {
+
+    my ($string) = @_;
+    
+    my @words = $string =~ /([[:alpha:]]+)/g;
+    my @null_words =
+	grep { $is_null{$_} || $_ =~ /^[xvi]+[a-z]?$|^[a-z]$|^[a-z]-[a-z]$/ } @words;
+    
+    return ( @words && @words == @null_words ) ? 1 : '';
 }
 
 
@@ -1680,21 +2152,31 @@ sub IsRockType {
 
     my ($string) = @_;
     
-    $string =~ s/s$// if length($string) > 3;
-    $string = fc $string;
-    
-    my @words = ($string =~ /(\S+)/g);
+    my @words = $string =~ /(\S+)/g;
     my @rock_type_words = grep { $is_rock_type{$_} } @words;
     
-    if ( @words && @words == @rock_type_words )
-    {
-	return 1;
-    }
+    return ( @words && @words == @rock_type_words ) ? 1 : '';
+}
 
-    else
-    {
-	return '';
-    }
+
+sub IsRockDescription {
+
+    my ($string) = @_;
+    
+    my @words = $string =~ /([[:alpha:]]+)/g;
+    my @rock_desc_words =
+	grep { $is_rock_type{$_} || $is_null{$_} || $_ =~ /^[xvi]+[a-z]?$|^[a-z]$/ } @words;
+    
+    return ( @words && @words == @rock_desc_words ) ? 1 : '';
+}
+
+
+sub IsKnownStratum {
+
+    my ($string, $nr) = @_;
+
+    my $test_key = join('|', fc($string), $nr->{rank}, $nr->{cc});
+    return $strat_name_fc{$test_key} ? 1 : '';
 }
 
 
@@ -1863,33 +2345,22 @@ sub ChooseConceptName {
 # This command imports stratigraphic names from `macrostrat`.`strat_names` and
 # associated tables, and puts the processed names into `pbdb`.`strat_ms_names`.
 
-our (%place);
-
-our (%infer_from_ref) = ( 1 => 'US', 2 => 'CA', 5 => 'NZ', 10 => 'CA', 11 => 'CA', 12 => 'CA',
-			  19 => 'US', 21 => 'CA', 22 => 'AU', 29 => 'BR', 31 => 'BR', 32 => 'CL',
-			  34 => 'BR', 38 => 'BR', 39 => 'CL', 40 => 'BO', 41 => 'BR',
-			  48 => 'NZ', 73 => 'CA', 74 => 'CA', 75 => 'CA', 77 => 'CA', 78 => 'CA',
-			  100 => 'MX', 105 => 'US', 109 => 'US', 115 => 'CA', 116 => 'CA',
-			  118 => 'CA', 121 => 'CA', 122 => 'CA', 125 => 'CA', 131 => 'CA',
-			  134 => 'GL', 135 => 'SJ', 156 => 'MX', 159 => 'GL',
-			  163 => 'MY', 164 => 'MY', 165 => 'VN', 166 => 'VN', 167 => 'VN',
-			  168 => 'ID', 169 => 'ID', 170 => 'ID', 171 => 'ID', 172 => 'MY',
-			  173 => 'TH', 174 => 'LA', 175 => 'ID', 176 => 'ID', 177 => 'ID',
-			  178 => 'ID', 188 => 'NZ', 218 => 'SJ', 225 => 'CA' );
-			  
+our (%place, %uniq);
 
 sub ImportMacrostrat {
 
     # Step I: Truncate the STRAT_MS_NAMES table.
     
-    say "Truncating tables: STRAT_MS_NAMES (strat_ms_names)";
+    say "Truncating tables: STRAT_MS_NAMES (strat_ms_names)...";
     
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_NAMES}`");
     
     # Step II: Extract all of the relevant information from Macrostrat.
 
     # Start with the `places` table.
-
+    
+    say "Reading from the `macrostrat`.`places` table...";
+    
     my $places = DBHashQuery($mstr, "
 	SELECT p.name, p.postal, p.country_abbrev, 
 	    round(y(st_pointn(st_exteriorring(envelope(p.geom)), 1)), 2) as lat_min,
@@ -1926,9 +2397,16 @@ sub ImportMacrostrat {
 	}
     }
     
-    # Now fetch the `strat_names` table and associated information.
+    # Add New Zealand, which is inexplicably missing.
+    
+    $place{'New Zealand'} = $place{NZ} = { name => 'New Zealand', postal => 'NZ', cc => 'NZ' };
+    
+    # Now fetch the `macrostrat`.`strat_names` table and associated information.
+    
+    say "Reading from `macrostrat`.`strat_names` and associated tables...";
     
     my $imported_names = 0;
+    my $good_names = 0;
     
     my $strat_names = DBHashQuery($mstr, "
 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places,
@@ -1983,8 +2461,8 @@ sub ImportMacrostrat {
 	    $row->{late_age} = $row->{late_concept_age};
 	}
 	
-	# Determine the country code for this name, and get a list of state/province
-	# codes as well.
+	# Determine the country code for this name. Codes that are enclosed in braces
+	# are from the US, Canada, and countries other than Australia.
 	
 	if ( $row->{places} =~ qr{ ^ [{] (.*) [}] \s* $ }xs )
 	{
@@ -1992,23 +2470,72 @@ sub ImportMacrostrat {
 	    
 	    $row->{cc} = $place{$codes[0]}{cc};
 	}
+	
+	# Places whose codes are not enclosed in braces are either provinces in
+	# Australia, or else Antarctica.
 
+	elsif ( $row->{places} eq 'ATA' )
+	{
+	    $row->{cc} = 'AQ';
+	}
+	
 	elsif ( $row->{places} )
 	{
 	    my @codes = split /,/, $row->{places};
 	    
-	    $row->{cc} = $place{substr($codes[0],0,2)}{cc};
+	    $row->{cc} = $place{"AU-" . substr($codes[0],0,2)}{cc};
 	}
 	
-	else
+	# If no places were given, or if the given place doesn't correspond to any entry
+	# in %places, try to infer the country code from the reference.
+	
+	unless ( $row->{cc} )
 	{
 	    $row->{cc} = $infer_from_ref{$row->{ref_id}};
 	}
 	
+	# Exclude names that are ineligible for matching. Start by excluding duplicates.
+	# The name with the lower id tends to be the valid one, so we exclude the later
+	# one. The exclusion code is 'D' for dupicate.
+	
+	my $import_key = "$row->{strat_name}|$row->{rank}|$row->{cc}|" .
+	    "$row->{early_age}|$row->{late_age}";
+	
+	if ( $uniq{$import_key} )
+	{
+	    $row->{exclude} = 'D';
+	}
+	
+	else
+	{
+	    $uniq{$import_key} = 1;
+	}
+	
+	# Exclude names whose rank is 'bed', because the PBDB doesn't consistently store
+	# bed names. The exclusion code is 'R' for rank.
+	
+	if ( $row->{rank} eq 'Bed' && ! $row->{exclude} )
+	{
+	    $row->{exclude} = 'R';
+	}
+	
+	# Exclude names with no location information. If we don't know where in the
+	# world the name applies to, we cannot match it. The exclusion code is 'L' for
+	# location.
+
+	if ( ! $row->{exclude} && ! defined $row->{cc} && ! defined $row->{lat_min} )
+	{
+	    $row->{exclude} = 'L';
+	}
+	
+	# Now generate a row in the STRAT_MS_NAMES table for this name.
+	
 	$imported_names++;
+	$good_names++ unless $row->{exclude};
 	
 	my $qstratn = $pbdb->quote($row->{id});
 	my $qstratc = $pbdb->quote($row->{concept_id});
+	my $qexclude = $pbdb->quote($row->{exclude});
 	my $qname = $pbdb->quote($row->{strat_name});
 	my $qrank = $pbdb->quote($row->{rank});
 	my $qcc = $pbdb->quote($row->{cc});
@@ -2020,7 +2547,7 @@ sub ImportMacrostrat {
 	my $qlngmax = $pbdb->quote($row->{lng_max});
 	
 	$strat_ms_values .= ', ' if $strat_ms_values;
-	$strat_ms_values .= "($qstratn, $qstratc, $qname, $qrank, $qcc, $qearly, $qlate, " .
+	$strat_ms_values .= "($qstratn, $qstratc, $qexclude, $qname, $qrank, $qcc, $qearly, $qlate, " .
 	    "$qlatmin, $qlatmax, $qlngmin, $qlngmax)";
 
 	if ( length($strat_ms_values) > $chunk_size )
@@ -2033,22 +2560,304 @@ sub ImportMacrostrat {
     InsertMSNames($pbdb, $strat_ms_values) if $strat_ms_values;
     
     say "Imported $imported_names names.";
+    say "Of these, $good_names were eligible for matching.";
 }
 
 
-sub MaxValue {
+# MatchMacrostrat ( )
+#
+# Execute the subcommand 'match macrostrat'.
+#
+# This command matches names in the STRAT_NAMES table to names in the STRAT_MS_NAMES
+# table. The matches are stored in the `stratn_id` and `stratc_id` columns in STRAT_NAMES.
 
-    my ($a, $b) = @_;
+sub MatchMacrostrat {
 
-    return ($a > $b ? $a : $b);
-}
+    my $ms_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_MS_NAMES}");
+    
+    my (%strat_ms_names, %first_two, %first_last);
 
+    my $msnames = 0;
+    my $pbnames = 0;
+    
+    say "Reading from table `$TABLE{STRAT_MS_NAMES}`...";
+    
+    foreach my $nr ( $ms_names->@* )
+    {
+	next if $nr->{exclude};
+	
+	my $fcname = fc $nr->{name};
+	
+	if ( $fcname =~ qr{ ^ (?:lower|lowermost|middle|upper|uppermost) \s+ (.*) }xs )
+	{
+	    $fcname = $1;
+	}
+	
+	if ( my @ft = ($fcname =~ /([[:alpha:]]{2})\S*[[:alpha:]]/) )
+	{
+	    my $ftchars = $ft[0];
+	    $first_two{$ftchars} ||= [ ];
+	    push $first_two{$ftchars}->@*, $nr;
+	}
+	
+	if ( my @fl = ($fcname =~ /([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/) )
+	{
+	    my $flchars = $fl[0] . $fl[1];
+	    $first_last{$flchars} ||= [ ];
+	    push $first_last{$flchars}->@*, $nr;
+	}
 
-sub MinValue {
+	$msnames++;
+    }
 
-    my ($a, $b) = @_;
+    say "  Read $msnames names.";
 
-    return ($a < $b ? $a : $b);
+    unless ( $opt_test )
+    {
+	say "Clearing any previous matches...";
+	
+	DBCommand($pbdb, "TRUNCATE `strat_name_matches`");
+    }
+    
+    say "Reading from table `$TABLE{STRAT_NAMES}`...";
+    
+    my $pbdb_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_NAMES}");
+
+    my $good_matches = 0;
+    my $matched_names = 0;
+    my $match_values = '';
+    my %msnames;
+    
+    foreach my $pbnr ( $pbdb_names->@* )
+    {
+	my $pbname = fc $pbnr->{name};
+	my $stratn_no = $pbnr->{stratn_no};
+	my (@candidates);
+	
+	if ( $pbname =~ qr{ ^ (?:lower|lowermost|middle|upper|uppermost) \s+ (.*) }xs )
+	{
+	    $pbname = $1;
+	}
+	
+	if ( my @ft = ($pbname =~ /([[:alpha:]]{2})\S*[[:alpha:]]/) )
+	{
+	    my $ftchars = $ft[0];
+	    push @candidates, $first_two{$ftchars}->@* if $first_two{$ftchars};
+	}
+	
+	if ( my @fl = ($pbname =~ /([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/) )
+	{
+	    my $flchars = $fl[0] . $fl[1];
+	    push @candidates, $first_last{$flchars}->@* if $first_last{$flchars};
+	}
+	
+	my (%matches, $best_match, $mismatches);
+	
+	foreach my $msnr ( @candidates )
+	{
+	    my $score = NamesAreCompatible($pbnr->{name}, $pbnr, $msnr->{name}, $msnr);
+	    
+	    if ( $score )
+	    {
+		$matches{$msnr->{stratn_id}} = $msnr;
+		$msnr->{score} = $score;
+	    }
+	    
+	    else
+	    {
+		$mismatches++;
+	    }
+	}
+
+	if ( keys %matches == 1 )
+	{
+	    $best_match = (values %matches)[0];
+	}
+
+	elsif ( keys %matches > 1 )
+	{
+	    foreach my $stratn_id ( sort { $a <=> $b } keys %matches )
+	    {
+		my $msnr = $matches{$stratn_id};
+		
+		if ( ! $best_match )
+		{
+		    $best_match = $msnr;
+		}
+		
+		elsif ( $msnr->{score} > $best_match->{score} )
+		{
+		    $best_match = $msnr;
+		}
+		
+		elsif ( $msnr->{score} < $best_match->{score} )
+		{
+		    next;
+		}
+		
+		elsif ( fc $best_match->{name} eq fc $pbnr->{name} &&
+			$best_match->{rank} eq $pbnr->{rank} &&
+			$best_match->{cc} eq $pbnr->{cc} )
+		{
+		    next;
+		}
+		
+		elsif ( $msnr->{stratc_id} eq $best_match->{stratc_id} )
+		{
+		    next;
+		}
+		
+		elsif ( $msnr->{cc} eq $pbnr->{cc} &&
+			$best_match->{cc} ne $pbnr->{cc} )
+		{
+		    $best_match = $msnr;
+		}
+
+		elsif ( $msnr->{cc} ne $pbnr->{cc} )
+		{
+		    next;
+		}
+		
+		elsif ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} &&
+			$rank_comparison{$best_match->{rank}} ne $pbnr->{rank} )
+		{
+		    $best_match = $msnr;
+		}
+		
+		elsif ( $msnr->{rank} eq $pbnr->{rank} &&
+			$best_match->{rank} ne $pbnr->{rank} )
+		{
+		    $best_match = $msnr;
+		}
+		
+		elsif ( fc $msnr->{name} eq fc $pbnr->{name} &&
+			fc $best_match->{name} ne fc $pbnr->{name} )
+		{
+		    $best_match = $msnr;
+		}
+		
+		else
+		{
+		    my ($best_first) = $best_match->{name} =~ /(\S+)/;
+		    my ($msnr_first) = $msnr->{name} =~ /(\S+)/;
+		    my ($pbnr_first) = $pbnr->{name} =~ /(\S+)/;
+
+		    if ( fc $msnr_first eq fc $pbnr_first &&
+			 fc $best_first ne fc $pbnr_first )
+		    {
+			$best_match = $msnr;
+		    }
+
+		    elsif ( fc $best_first eq fc $pbnr_first &&
+			    fc $msnr_first ne fc $pbnr_first )
+		    {
+			next;
+		    }
+		    
+		    elsif ( fc $best_first eq fc $pbnr_first &&
+			    fc $msnr_first eq fc $pbnr_first &&
+			    $msnr->{stratc_id} && ! $pbnr->{stratc_id} )
+		    {
+			$best_match = $msnr;
+		    }
+		    
+		    # else
+		    # {
+		    # 	$ambiguous_matches++;
+			
+		    # 	say "Ambiguous match for " .
+		    # 	    "$pbnr->{stratn_no}\t$pbnr->{name}\t$pbnr->{rank}\t$pbnr->{cc}";
+		    # 	say "  $best_match->{stratn_id}\t$best_match->{name}\t$best_match->{rank}\t" .
+		    # 	    "$best_match->{cc}";
+		    # 	say "  $msnr->{stratn_id}\t$msnr->{name}\t$msnr->{rank}\t$msnr->{cc}";
+		    # 	say "";
+		    # }
+		}
+	    }
+	}
+
+	if ( $best_match )
+	{
+	    my @good_matches = $best_match->{stratn_id};
+	    $good_matches++;
+	    $matched_names++;
+	    
+	    foreach my $stratn_id ( keys %matches )
+	    {
+		my $msnr = $matches{$stratn_id};
+		
+		if ( $msnr ne $best_match )
+		{
+		    if ( $msnr->{score} == $best_match->{score} ||
+			 $msnr->{stratc_id} == $best_match->{stratc_id} )
+		    {
+			push @good_matches, $stratn_id;
+			$good_matches++;
+		    }
+		}
+	    }
+	    
+	    foreach my $stratn_id ( @good_matches )
+	    {
+		my $qno = $pbdb->quote($stratn_no);
+		my $qid = $pbdb->quote($stratn_id);
+		
+		$match_values .= ', ' if $match_values;
+		$match_values .= "($qno, $qid)";
+	    }
+	    
+	    if ( length($match_values > $chunk_size) )
+	    {
+		InsertNameMatches($pbdb, $match_values);
+		$match_values = '';
+	    }
+	}
+	
+	# if ( $best_match )
+	# {
+	#     $pbnr->{stratn_id} = $best_match->{stratn_id};
+	#     $pbnr->{stratc_id} = $best_match->{stratc_id};
+	    
+	#     unless ( $opt_test )
+	#     {
+	# 	my $qstratn = $pbdb->quote($best_match->{stratn_id});
+	# 	my $qstratc = $pbdb->quote($best_match->{stratc_id});
+	# 	my $qkey = $pbdb->quote($pbnr->{stratn_no});
+		
+	# 	DBCommand($pbdb, "UPDATE $TABLE{STRAT_NAMES}
+	# 				SET stratn_id = $qstratn, stratc_id = $qstratc
+	# 				WHERE stratn_no = $qkey");
+	#     }
+	    
+	#     $good_matches++;
+	# }
+	
+	$pbnames++;
+    }
+    
+    InsertNameMatches($pbdb, $match_values) if $match_values;
+
+    say "  Read $pbnames names.";
+    say "  Matched $matched_names names.";
+    say "  There were $good_matches total matches.";
+    
+    say "";
+    
+    # foreach my $pbnr ( $pbdb_names->@* )
+    # {
+    # 	if ( $pbnr->{matches} && $pbnr->{matches}->@* > 1 )
+    # 	{
+    # 	    say "$pbnr->{stratn_no}\t$pbnr->{name}\t$pbnr->{rank}\t$pbnr->{cc}";
+
+    # 	    foreach my $msnr ( $pbnr->{matches}->@* )
+    # 	    {
+    # 		say "    $msnr->{stratn_id}\t$msnr->{name}\t$msnr->{rank}\t$msnr->{cc}";
+    # 	    }
+	    
+    # 	    say "";
+    # 	    last if ++$output_count == 10;
+    # 	}
+    # }
 }
 
 
@@ -2069,7 +2878,7 @@ sub UpdateTables {
     my $check = DBTextQuery($pbdb, "SHOW TABLES LIKE 'strat%'");
     my $activity;
     
-    unless ( $check =~ /\bstrat_names\b/ )
+    if ( $check !~ /\bstrat_names\b/ )
     {
 	$activity = 1;
 	
@@ -2079,7 +2888,6 @@ sub UpdateTables {
 	  `rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
 	  `name` varchar(255) NOT NULL,
 	  `cc` varchar(255) NOT NULL DEFAULT '',
-	  `country` varchar(255) NOT NULL DEFAULT '',
 	  `lithology1` varchar(255) NOT NULL DEFAULT '',
 	  `lithology2` varchar(255) NOT NULL DEFAULT '',
 	  `n_colls` smallint(6) NOT NULL DEFAULT 0,
@@ -2096,7 +2904,7 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    unless ( $check =~ /\bstrat_nrefs\b/ )
+    if ( $check !~ /\bstrat_nrefs\b/ )
     {
 	$activity = 1;
 	
@@ -2108,15 +2916,13 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    unless ( $check =~ /\bstrat_concepts\b/ )
+    if ( $check !~ /\bstrat_concepts\b/ )
     {
 	$activity = 1;
 	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_concepts` (
 	  `stratc_no` int(11) unsigned NOT NULL AUTO_INCREMENT,
 	  `name` varchar(255) NOT NULL,
-	  `cc_list` varchar(255) NOT NULL DEFAULT '',
-	  `country_list` varchar(255) NOT NULL DEFAULT '',
 	  `lithology1` varchar(255) NOT NULL DEFAULT '',
 	  `lithology2` varchar(255) NOT NULL DEFAULT '',
 	  `n_colls` smallint(6) NOT NULL DEFAULT 0,
@@ -2132,7 +2938,32 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    unless ( $check =~ /\bstrat_opinions\b/ )
+    if ( $check !~ /\bstrat_concept_ccs\b/ )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_concept_ccs` (
+	  `stratc_no` int(11) unsigned NOT NULL,
+	  `cc` varchar(10) NOT NULL,
+	  `country` varchar(100) NOT NULL,
+	  PRIMARY KEY (`stratc_no`, `cc`),
+	  KEY (`cc`)
+	) ENGINE=InnoDB", 1);
+    }
+    
+    if ( $check !~ /\bstrat_cons\b/ )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_cons` AS
+	  SELECT stratc_no, sc.name, group_concat(cm.country) as countries,
+		sc.lithology1, sc.lithology2, sc.n_colls, sc.n_occs, sc.early_age, sc.late_age,
+		sc.lat_min, sc.lat_max, sc.lng_min, sc.lng_max
+	  FROM strat_concepts as sc join strat_concept_ccs as cm using (stratc_no)
+	  GROUP BY stratc_no", 1);
+    }
+    
+    if ( $check !~ /\bstrat_opinions\b/ )
     {
 	$activity = 1;
 	
@@ -2150,7 +2981,19 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    unless ( $check =~ /\bstrat_orefs\b/ )
+    if ( $check !~ /\bstrat_ops\b/ )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_ops` AS
+	  SELECT o.strato_no, o.child_no, cc.name as child_name, o.child_rank, o.cc,
+		 o.relationship, o.parent_no, pc.name as parent_name, o.parent_rank as parent_rank
+	  FROM strat_opinions as o
+	    left join strat_concepts as cc on cc.stratc_no = o.child_no
+	    left join strat_concepts as pc on pc.stratc_no = o.parent_no", 1);
+    }
+    
+    if ( $check !~ /\bstrat_orefs\b/ )
     {
 	$activity = 1;
 	
@@ -2162,13 +3005,14 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    unless ( $check =~ /\bstrat_ms_names\b/ )
+    if ( $check !~ /\bstrat_ms_names\b/ )
     {
 	$activity = 1;
 	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_ms_names` (
 	  `stratn_id` int(10) unsigned NOT NULL PRIMARY KEY,
 	  `stratc_id` int(10) unsigned NOT NULL default '0',
+	  `exclude` varchar(10) NULL,
 	  `name` varchar(255) NOT NULL,
 	  `rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
 	  `cc` varchar(2) NULL,
@@ -2182,10 +3026,70 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
 
+    if ( $check !~ /\bstrat_name_matches\b/ )
+    {
+	$activity = 1;
+
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_name_matches` (
+	  `stratn_no` int(10) unsigned NOT NULL,
+	  `stratn_id` int(10) unsigned NOT NULL,
+	  PRIMARY KEY (`stratn_no`, `stratn_id`),
+	  KEY (`stratn_id`)
+	) ENGINE=InnoDB", 1);
+    }
+    
+    if ( $check !~ /\bstrat_nm\b/ )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_nm` AS
+	  SELECT stratn_no, pb.name as pb_name, pb.rank as pb_rank, pb.cc as pb_cc,
+		stratn_id, ms.name as ms_name, ms.rank as ms_rank, ms.cc as ms_cc,
+		pb.early_age as pb_early, pb.late_age as pb_late,
+		ms.early_age as ms_early, ms.late_age as ms_late
+	  FROM strat_name_matches as nm
+	    left join strat_names as pb using (stratn_no)
+	    left join strat_ms_names as ms using (stratn_id)", 1);
+    }
+    
+    if ( $check !~ /\bstrat_cm\b/ )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_cm` AS
+	  SELECT stratc_no, pb.name as pb_name, group_concat(distinct pbn.rank) as pb_rank,
+		group_concat(distinct pbn.cc) as pb_cc,	if(msn.stratc_id > 0, 'C', 'N') as type,
+		if(msn.stratc_id > 0, msn.stratc_id, msn.stratn_id) as stratx_id,
+		if(msn.stratc_id > 0, ms.name, msn.name) as ms_name,
+		group_concat(distinct msn.rank) as ms_rank, group_concat(distinct msn.cc) as ms_cc
+	  FROM strat_name_matches as nm
+	    left join strat_names as pbn using (stratn_no)
+	    left join strat_concepts as pb using (stratc_no)
+	    left join strat_ms_names as msn using (stratn_id)
+	    left join macrostrat.strat_names_meta as ms on ms.concept_id = msn.stratc_id
+	  GROUP BY stratc_no, stratx_id", 1);
+    }
+    
     unless ( $activity )
     {
 	say "No updates.";
     }
+}
+
+
+sub MaxValue {
+
+    my ($a, $b) = @_;
+
+    return ($a > $b ? $a : $b);
+}
+
+
+sub MinValue {
+
+    my ($a, $b) = @_;
+
+    return ($a < $b ? $a : $b);
 }
 
 
@@ -2194,7 +3098,7 @@ sub InsertNames {
     my ($dbh, $name_values) = @_;
 
     DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, stratc_no, name, rank, cc, " .
-	      "country, lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
+	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
 	      "lat_min, lat_max, lng_min, lng_max) VALUES " .
 	      $name_values);
 }
@@ -2204,8 +3108,8 @@ sub InsertMSNames {
 
     my ($dbh, $name_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_NAMES}` (stratn_id, stratc_id, name, rank, cc, " .
-	      "early_age, late_age, lat_min, lat_max, lng_min, lng_max) VALUES " .
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_NAMES}` (stratn_id, stratc_id, exclude, name, " .
+	      "rank, cc, early_age, late_age, lat_min, lat_max, lng_min, lng_max) VALUES " .
 	      $name_values);
 }
 
@@ -2222,10 +3126,18 @@ sub InsertConcepts {
 
     my ($dbh, $concept_values) = @_;
 
-    DBCommand($dbh, "INSERT INTO $TABLE{STRAT_CONCEPTS} (stratc_no, name, cc_list, country_list, " .
+    DBCommand($dbh, "INSERT INTO $TABLE{STRAT_CONCEPTS} (stratc_no, name, " .
 	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
 	      "lat_min, lat_max, lng_min, lng_max) VALUES " .
 	      $concept_values);
+}
+
+
+sub InsertConceptCCs {
+
+    my ($dbh, $cc_values) = @_;
+    
+    DBCommand($dbh, "INSERT INTO `strat_concept_ccs` (stratc_no, cc, country) VALUES " . $cc_values);
 }
 	
 
@@ -2251,4 +3163,10 @@ sub InsertOpinionRefs {
 }
 
 
+sub InsertNameMatches {
+
+    my ($dbh, $match_values) = @_;
+    
+    DBCommand($dbh, "INSERT INTO `strat_name_matches` (stratn_no, stratn_id) VALUES $match_values");
+}
 
