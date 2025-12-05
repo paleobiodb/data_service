@@ -16,6 +16,7 @@ use CoreTableDefs;
 use DBQuery qw(DBHashQuery DBRowQuery DBSingleHashQuery DBTextQuery DBCommand DBInsert CheckMode);
 
 use Text::Levenshtein::Damerau qw(edistance);
+use List::Util qw(max min);
 
 use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use YAML;
@@ -23,8 +24,6 @@ use Encode qw(encode_utf8);
 use Term::ReadLine;
 
 use utf8;
-
-# use List::Util qw(any max min);
 
 
 # Read the configuration file, and open database connections.
@@ -58,10 +57,10 @@ die "Could not connect to database: $DBI::errstr\n" unless $mstr && $pbdb;
 
 our (%second_words);
 
-our (%is_rock_type) = ( argile => 1, argiles => 1, arkose => 1, ash => 1, ashes => 1,
+our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			bed => 1, beds => 1, band => 1, bands => 1, 'bänderschiefer' => 1,
 			black => 1, breccia => 1, breccias => 1,
-			calcaire => 1, calcaires => 1, calcarenite => 1, calcarenites => 1,
+			calcarenite => 1, calcarenites => 1,
 			calcareous => 1, calcari => 1, calciferous => 1,
 			calcilutite => 1, calcilutites => 1, calcirudite => 1, calcirudites => 1,
 			carbonate => 1, carbonates => 1, chalk => 1, chalke => 1, chalks => 1,
@@ -75,8 +74,7 @@ our (%is_rock_type) = ( argile => 1, argiles => 1, arkose => 1, ash => 1, ashes 
 			flag => 1, flags => 1, flagstone => 1, flagstones => 1, formtation => 1,
 			gravel => 1, gravels => 1, greensand => 1, greensands => 1,
 			greywacke => 1, greywackes => 1, 
-			gres => 1, 'grès' => 1, grey => 1, grigi => 1, gris => 1,
-			grit => 1, grits => 1, gypsum => 1, gypsums => 1,
+			grey => 1, grit => 1, grits => 1, gypsum => 1, gypsums => 1,
 			hoj => 1, 'høj' => 1, horizon => 1, horizons => 1, 
 			iron => 1, ironstone => 1, ironstones => 1, lignite => 1, lignites => 1, 
 			limesetone => 1, limestone => 1, limstone => 1, ls => 1, 'ls.' => 1,
@@ -99,7 +97,13 @@ our (%is_rock_type) = ( argile => 1, argiles => 1, arkose => 1, ash => 1, ashes 
 			suite => 1, suites => 1, subsuite => 1, subsuites => 1, svita => 1, sub => 1,
 			tuff => 1, tuffs => 1, tuffaceous => 1, unit => 1, units => 1, volcanic => 1,
 			volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
-			waterstone => 1, waterstones => 1, yellow => 1, zone => 1 );
+			waterstone => 1, waterstones => 1, yellow => 1, zone => 1,
+			arenal => 1, argile => 1, argiles => 1, bleu => 1, bleues => 1,
+			calcaire => 1, calcaires => 1, 
+		        gres => 1, 'grès' => 1, grigi => 1, gris => 1, jaune => 1, jaunes => 1,
+			marne => 1, marnes => 1, niveau => 1, niveaux => 1,
+			rouge => 1, rouges => 1, sableuse => 1, sableuses => 1,
+			schiste => 1, schistes => 1, vert => 1, verts => 1, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, top => 1, bottom => 1,
 		   first => 1, second => 1, third => 1, fourth => 1, alpha => 1, beta => 1,
@@ -108,7 +112,7 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, top => 1, bot
 		   schicht => 1, unit => 1, units => 1, zone => 1, zones => 1,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
 		   'inférieurs' => 1, 'supérieurs' => 1, inferieurs => 1, superieurs => 1,
-		   'moitié' => 1, moitie => 1 );
+		   'moitié' => 1, moitie => 1, les => 1 );
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
 			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
@@ -223,7 +227,7 @@ sub GenerateConcepts {
     say "Reading from table '$TABLE{COLLECTION_STRATA}'...";
     
     my $stratigraphy_data = DBHashQuery($pbdb, "
-	SELECT cs.grp, cs.formation, cs.member, c.cc,
+	SELECT cs.grp, cs.formation, cs.member, c.cc, group_concat(distinct collection_no) as coll_nos,
 		count(*) as n_colls, sum(c.n_occs) as n_occs,
 		max(c.early_age) as early_age, min(c.late_age) as late_age,
 		min(c.lat) as lat_min, max(c.lat) as lat_max,
@@ -1133,6 +1137,7 @@ sub GenerateConcepts {
     
     my $name_values = '';
     my $name_ref_values = '';
+    my $name_coll_values = '';
     my $new_names = 0;
     my $name_colls = 0;
     my $name_occs = 0;
@@ -1194,12 +1199,26 @@ sub GenerateConcepts {
 		InsertNameRefs($pbdb, $name_ref_values);
 		$name_ref_values = '';
 	    }
+	    
+	    foreach my $collection_no ( sort { $a <=> $b } keys $nr->{collection_no}->%* )
+	    {
+		my $qcollno = $pbdb->quote($collection_no);
+		$name_coll_values .= ', ' if $name_coll_values;
+		$name_coll_values .= "($qcollno, $qstratn)";
+	    }
+	    
+	    if ( length($name_coll_values) > $chunk_size )
+	    {
+		InsertCollNames($pbdb, $name_coll_values);
+		$name_coll_values = '';
+	    }
 	}
     }
     
     InsertNames($pbdb, $name_values) if $name_values;
     InsertNameRefs($pbdb, $name_ref_values) if $name_ref_values;
-
+    InsertCollNames($pbdb, $name_coll_values) if $name_coll_values;
+    
     # Now run through the concepts again and add an opinion for every child-parent
     # relationship.
     
@@ -1329,7 +1348,7 @@ sub GenerateConcepts {
 sub UpdateStratRaw {
 
     my ($key, $source, $field) = @_;
-
+    
     my ($record);
     
     if ( $record = $strat_raw{$key} )
@@ -1352,11 +1371,15 @@ sub UpdateStratRaw {
 	    if ! defined $record->{lng_min} || $source->{lng_min} < $record->{lng_min};
 	$record->{lng_max} = $source->{lng_max}
 	    if ! defined $record->{lng_max} || $source->{lng_max} > $record->{lng_max};
-
+	
 	# The 'n_colls' and 'n_occs' fields are the sum of the aggregate values.
 	
 	$record->{n_colls} += $source->{n_colls};
 	$record->{n_occs} += $source->{n_occs};
+	
+	# The 'coll_nos' field is an aggregate set of collection numbers, as a hash.
+	
+	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
     }
     
     else
@@ -1456,6 +1479,11 @@ sub ConsolidateNames {
     if ( $other->{reference_no} )
     {
 	$remaining->{reference_no}{$_} = 1 foreach keys $other->{reference_no}->%*;
+    }
+    
+    if ( $other->{collection_no} )
+    {
+	$remaining->{collection_no}{$_} = 1 foreach keys $other->{collection_no}->%*;
     }
     
     if ( $other->{lithology1} )
@@ -2410,10 +2438,12 @@ sub ImportMacrostrat {
     
     my $strat_names = DBHashQuery($mstr, "
 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places,
-		max(iub.age_bottom) as early_unit_age,
+	    max(iub.age_bottom) as early_unit_age,
 	    min(iut.age_top) as late_unit_age,
 	    max(icb.age_bottom) as early_concept_age,
 	    min(ict.age_top) as late_concept_age,
+	    max(lsn.early_age) as early_lookup_age,
+	    min(lsn.late_age) as late_lookup_age,	
 	    min(round(y(st_pointn(st_exteriorring(envelope(ca.col_area)), 1)), 2)) as lat_min,
 	    max(round(y(st_pointn(st_exteriorring(envelope(ca.col_area)), 3)), 2)) as lat_max,
 	    min(round(x(st_pointn(st_exteriorring(envelope(ca.col_area)), 1)), 2)) as lng_min,
@@ -2421,6 +2451,7 @@ sub ImportMacrostrat {
 	    sn.ref_id
 	FROM strat_names as sn
 	  left join strat_names_meta as sc using (concept_id)
+	  left join lookup_strat_names as lsn on lsn.strat_name_id = sn.id
 	  left join unit_strat_names as usn on usn.strat_name_id = sn.id
 	  left join units as u on u.id = usn.unit_id
 	  left join cols as c on c.id = u.col_id
@@ -2429,9 +2460,10 @@ sub ImportMacrostrat {
 	  left join intervals as iut on iut.id = u.LO
 	  left join intervals as icb on icb.id = sc.b_int
 	  left join intervals as ict on ict.id = sc.t_int
-	WHERE (concept_id > 0 or c.status_code = 'active')
+	WHERE (c.status_code = 'active' or c.status_code is null)
 	GROUP BY sn.id
-	HAVING (early_unit_age is not null or early_concept_age is not null)");
+	HAVING (early_unit_age is not null or early_concept_age is not null or
+		early_lookup_age is not null)");
     
     # Iterate through the rows of the result, processing them to generate all of the
     # necessary fields for the STRAT_MS_NAMES table.
@@ -2440,26 +2472,15 @@ sub ImportMacrostrat {
     
     foreach my $row ( @$strat_names )
     {
-	# Compute 'early_age' and 'late_age', using the broader of the two age definitions if
-	# both are given.
+	# Compute 'early_age' and 'late_age', using the broadest of the age definitions
+	# if more than one is found.
 	
-	if ( defined $row->{early_unit_age} && defined $row->{early_concept_age} )
-	{
-	    $row->{early_age} = MaxValue($row->{early_unit_age}, $row->{early_concept_age});
-	    $row->{late_age} = MinValue($row->{late_unit_age}, $row->{late_concept_age});
-	}
-	
-	elsif ( defined $row->{early_unit_age} )
-	{
-	    $row->{early_age} = $row->{early_unit_age};
-	    $row->{late_age} = $row->{late_unit_age};
-	}
-	
-	elsif ( defined $row->{early_concept_age} )
-	{
-	    $row->{early_age} = $row->{early_concept_age};
-	    $row->{late_age} = $row->{late_concept_age};
-	}
+	$row->{early_age} = max grep { defined $_ } ($row->{early_unit_age},
+						     $row->{early_concept_age},
+						     $row->{early_lookup_age});
+	$row->{late_age} = min grep { defined $_ } ($row->{late_unit_age},
+						    $row->{late_concept_age},
+						    $row->{late_lookup_age});
 	
 	# Determine the country code for this name. Codes that are enclosed in braces
 	# are from the US, Canada, and countries other than Australia.
@@ -2492,31 +2513,6 @@ sub ImportMacrostrat {
 	unless ( $row->{cc} )
 	{
 	    $row->{cc} = $infer_from_ref{$row->{ref_id}};
-	}
-	
-	# Exclude names that are ineligible for matching. Start by excluding duplicates.
-	# The name with the lower id tends to be the valid one, so we exclude the later
-	# one. The exclusion code is 'D' for dupicate.
-	
-	my $import_key = "$row->{strat_name}|$row->{rank}|$row->{cc}|" .
-	    "$row->{early_age}|$row->{late_age}";
-	
-	if ( $uniq{$import_key} )
-	{
-	    $row->{exclude} = 'D';
-	}
-	
-	else
-	{
-	    $uniq{$import_key} = 1;
-	}
-	
-	# Exclude names whose rank is 'bed', because the PBDB doesn't consistently store
-	# bed names. The exclusion code is 'R' for rank.
-	
-	if ( $row->{rank} eq 'Bed' && ! $row->{exclude} )
-	{
-	    $row->{exclude} = 'R';
 	}
 	
 	# Exclude names with no location information. If we don't know where in the
@@ -2760,18 +2756,6 @@ sub MatchMacrostrat {
 		    {
 			$best_match = $msnr;
 		    }
-		    
-		    # else
-		    # {
-		    # 	$ambiguous_matches++;
-			
-		    # 	say "Ambiguous match for " .
-		    # 	    "$pbnr->{stratn_no}\t$pbnr->{name}\t$pbnr->{rank}\t$pbnr->{cc}";
-		    # 	say "  $best_match->{stratn_id}\t$best_match->{name}\t$best_match->{rank}\t" .
-		    # 	    "$best_match->{cc}";
-		    # 	say "  $msnr->{stratn_id}\t$msnr->{name}\t$msnr->{rank}\t$msnr->{cc}";
-		    # 	say "";
-		    # }
 		}
 	    }
 	}
@@ -2812,25 +2796,6 @@ sub MatchMacrostrat {
 		$match_values = '';
 	    }
 	}
-	
-	# if ( $best_match )
-	# {
-	#     $pbnr->{stratn_id} = $best_match->{stratn_id};
-	#     $pbnr->{stratc_id} = $best_match->{stratc_id};
-	    
-	#     unless ( $opt_test )
-	#     {
-	# 	my $qstratn = $pbdb->quote($best_match->{stratn_id});
-	# 	my $qstratc = $pbdb->quote($best_match->{stratc_id});
-	# 	my $qkey = $pbdb->quote($pbnr->{stratn_no});
-		
-	# 	DBCommand($pbdb, "UPDATE $TABLE{STRAT_NAMES}
-	# 				SET stratn_id = $qstratn, stratc_id = $qstratc
-	# 				WHERE stratn_no = $qkey");
-	#     }
-	    
-	#     $good_matches++;
-	# }
 	
 	$pbnames++;
     }
@@ -3070,26 +3035,24 @@ sub UpdateTables {
 	  GROUP BY stratc_no, stratx_id", 1);
     }
     
+    $check = DBTextQuery($pbdb, "SHOW TABLES LIKE 'coll_strat_names'");
+    
+    if ( $check !~ /\bcoll_strat_names\b/ )
+    {
+	$activity = 1;
+
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `coll_strat_names` (
+	  `collection_no` int unsigned not null,
+	  `stratn_no` int unsigned not null,
+	  PRIMARY KEY (`collection_no`, `stratn_no`),
+	  KEY (`stratn_no`)
+	) ENGINE=InnoDB", 1);
+    }
+    
     unless ( $activity )
     {
 	say "No updates.";
     }
-}
-
-
-sub MaxValue {
-
-    my ($a, $b) = @_;
-
-    return ($a > $b ? $a : $b);
-}
-
-
-sub MinValue {
-
-    my ($a, $b) = @_;
-
-    return ($a < $b ? $a : $b);
 }
 
 
@@ -3168,5 +3131,13 @@ sub InsertNameMatches {
     my ($dbh, $match_values) = @_;
     
     DBCommand($dbh, "INSERT INTO `strat_name_matches` (stratn_no, stratn_id) VALUES $match_values");
+}
+
+
+sub InsertCollNames {
+
+    my ($dbh, $name_values) = @_;
+    
+    DBCommand($dbh, "INSERT INTO `coll_strat_names` (collection_no, stratn_no) VALUES $name_values");
 }
 
