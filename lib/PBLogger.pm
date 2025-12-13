@@ -15,6 +15,7 @@ use Dancer qw(info);
 use Dancer::Config qw(setting);
 use Dancer::Logger::File;
 use Dancer::FileUtils qw(open_file);
+use Encode qw(encode_utf8);
 use File::Spec;
 use Carp qw(carp);
 use Fcntl qw(:flock SEEK_END);
@@ -85,23 +86,8 @@ sub log_request {
     
     return unless(ref $fh && $fh->opened);
     
-    flock($fh, LOCK_EX)
-        or carp "locking logfile $logger->{logfile} failed";
-    seek($fh, 0, SEEK_END)
-        or carp "seeking to logfile $logger->{logfile} end failed";
-    $fh->print($logger->format_logline($request))
-        or carp "writing to logfile $logger->{logfile} failed";
-    flock($fh, LOCK_UN)
-        or carp "unlocking logfile $logger->{logfile} failed";
-
-}
-
-
-sub format_logline {
-    
-    my ($logger, $request) = @_;
-    
-    my $remote_addr = $request->remote_address || 'REMOTE_ADDR_UNKNOWN';
+    my $remote_addr = $request->headers ? $request->header('X-Real-IP') || $request->end->{REMOTE_ADDR}
+	: $request->env->{REMOTE_ADDR};
     my $time_formatted = localtime;
     my $method = $request->method;
     my $uri = $request->uri;
@@ -109,19 +95,46 @@ sub format_logline {
     my $agent = $request->user_agent || '';
     my $post_params = '';
 
-    if ( $method eq 'POST' )
+    if ( $method eq 'POST' || $method eq 'PUT' )
     {
-	my %params = $request->params('body');
-
-	while ( my ($key, $value) = each %params )
+	if ( $request->content_type =~ qr{ application/x-www-form-urlencoded }xsi &&
+	     $request->params('body') )
 	{
-	    $post_params .= "  $key=$value\n";
+	    my %params = $request->params('body');
+	    
+	    while ( my ($key, $value) = each %params )
+	    {
+		$post_params .= "  $key=$value\n";
+	    }
 	}
-
-	$post_params .= "==\n";
+	
+	elsif ( $request->body() )
+	{
+	    $post_params = $request->body();
+	    $post_params .= "\n" unless $post_params =~ /\n$/;
+	}
     }
     
-    return sprintf(qq{%s <%s> [%s] "%s %s" "%s" "%s"\n%s}, $remote_addr, $$, $time_formatted, $method, $uri, $referer, $agent, $post_params);
+    my $line = sprintf(qq{%6d : %s [%s] "%s %s"\n%s}, $$, $remote_addr, $time_formatted,
+		       $method, $uri, $post_params);
+    
+    $fh->print(encode_utf8($line));
+}
+
+
+sub log_event {
+    
+    my ($logger, $request, $event, $starttime) = @_;
+    
+    my $fh = $logger->{fh};
+    
+    return unless(ref $fh && $fh->opened);
+    
+    my $elapsed = time - $starttime;
+
+    my $line = sprintf(qq{%-6d : %s (%s secs)\n}, $$, $event, $elapsed);
+    
+    $fh->print(encode_utf8($line));
 }
 
 1;

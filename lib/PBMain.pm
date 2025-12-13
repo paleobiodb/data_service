@@ -13,6 +13,7 @@ use PBLogger;
 use TableDefs qw(init_table_names enable_test_mode disable_test_mode is_test_mode);
 
 my $logger = PBLogger->new;
+my $starttime;
 
 
 # We need a couple of routes to handle interaction with the server when it is in test mode.
@@ -180,7 +181,13 @@ any qr{.*} => sub {
     # Now pass the request off to Web::DataService to handle according to the configuration
     # it has been given.
     
-    return Web::DataService->handle_request($r);
+    $starttime = time if $logger;
+    
+    my $result = Web::DataService->handle_request($r);
+
+    $logger->log_event($r, 'DONE', $starttime) if $logger && !$PBData::TEST_MODE;
+
+    return $result;
 };
 
 
@@ -189,12 +196,16 @@ any qr{.*} => sub {
 # following two hooks:
 
 hook on_handler_exception => sub {
-    
+
+    $logger->log_event(Dancer::request, 'HANDLER EXCEPTION', $starttime)
+	if $logger && !$PBData::TEST_MODE;
     var(error => $_[0]);
 };
 
 hook on_route_exception => sub {
 
+    $logger->log_event(Dancer::request, 'ROUTE EXCEPTION', $starttime)
+	if $logger && !$PBData::TEST_MODE;
     var(error => $_[0]);
 };
 
