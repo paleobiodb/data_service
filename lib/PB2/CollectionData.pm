@@ -2022,7 +2022,7 @@ sub list_colls {
     
     my ($access_filter, $access_fields) = $request->generateAccessFilter('cc', $tables);
     
-    push @filters, $access_filter;
+    push @filters, $access_filter if $access_filter;
     
     my $filter_string = join(' and ', @filters);
     
@@ -2234,7 +2234,7 @@ sub summary {
     
     if ( $tables->{cc} )
     {
-	push @filters, $access_filter;
+	push @filters, $access_filter if $access_filter;
     }
     
     elsif ( $tables->{c} )
@@ -2339,7 +2339,7 @@ sub refs {
     
     my ($access_filter, $access_fields) = $request->generateAccessFilter('c', $inner_tables);
     
-    push @filters, $access_filter;
+    push @filters, $access_filter if $access_filter;
     
     # Then construct the inner filter string, for selecting collection records.
     
@@ -2447,7 +2447,7 @@ sub list_coll_strata {
     
     my ($access_filter, $access_fields) = $request->generateAccessFilter('c', $tables);
     
-    push @filters, $access_filter;
+    push @filters, $access_filter if $access_filter;
     
     # If the 'name' parameter was given, then add a filter for the stratigraphic name.
     
