@@ -77,7 +77,7 @@ sub initialize {
 	    "For taxonomic names: a higher taxon (class if known or else phylum) in",
 	    "which this taxon is contained.",
 	# strata and collections
-	{ output => 'type', com_name => 'rnk' },
+	{ output => 'rank', com_name => 'rnk', pbdb_name => 'type' },
 	    "For strata, this field specifies: group, formation, or member.",
 	{ output => 'cc_list', com_name => 'cc2' },
 	    "For strata and collections: the country or countries in which it lies, as ISO-3166 country codes.",

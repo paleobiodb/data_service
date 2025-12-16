@@ -2618,7 +2618,7 @@ sub auto_complete_str {
     my $country_field = $options->{countries} ? 'country' : 'cc';
     
     my $sql = "
-	SELECT name, rank as type, group_concat(distinct $country_field) as cc_list,
+	SELECT name, rank, group_concat(distinct $country_field) as cc_list,
 		n_colls, n_occs, 'str' as record_type, 'str' as record_id
 	FROM $TABLE{STRAT_RAW} as sn
 	WHERE $filter_string
