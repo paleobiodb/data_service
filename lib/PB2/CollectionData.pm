@@ -2628,7 +2628,15 @@ sub auto_complete_str {
     
     my $result_list = $dbh->selectall_arrayref($sql, { Slice => { } });
     
-    return ref $result_list eq 'ARRAY' ? @$result_list : ( );
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	return grep { defined $_->{name} && $_->{name} ne '' } @$result_list;
+    }
+
+    else
+    {
+	return ( );
+    }
 }
 
 
