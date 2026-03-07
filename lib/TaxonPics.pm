@@ -262,7 +262,7 @@ sub selectPics {
     
     $dbh->do("CREATE TABLE $TAXON_PICS_WORK (
 		orig_no int unsigned primary key,
-		image_no int unsigned not null) Engine=MyISAM");
+		image_no int unsigned not null) Engine=InnoDB");
     
     # Select images by priority number, or by earlier modification date
     # otherwise.
@@ -305,7 +305,7 @@ sub ensureTables {
 		license varchar(255),
 		thumb blob,
 		icon blob,
-		key (image_no)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		key (image_no)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     $dbh->do("INSERT INTO $PHYLOPICS (uid, modified)
 	      VALUES ('LAST_FETCH', '2001-01-01')") if $force;
@@ -316,14 +316,14 @@ sub ensureTables {
 		taxon_attr varchar(100) not null,
 		unique key (uid, taxon_name, taxon_attr),
 		key (uid),
-		key (taxon_name)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		key (taxon_name)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $PHYLOPIC_CHOICE (
 		orig_no int unsigned not null,
 		uid varchar(80) not null,
 		priority tinyint not null,
 		unique key (orig_no, uid),
-		key (uid)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		key (uid)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     my $a = 1;	# we can stop here when debugging
 }

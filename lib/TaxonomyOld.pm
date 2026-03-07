@@ -7223,7 +7223,7 @@ sub computeAncestry {
     $result = $dbh->do("DROP TABLE IF EXISTS ancestry_temp");
     $result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp (
 				orig_no int unsigned primary key,
-				is_base tinyint unsigned) Engine=MyISAM");
+				is_base tinyint unsigned) Engine=InnoDB");
     
     # Lock the tables that will be used by the stored procedure
     # "compute_ancestry".

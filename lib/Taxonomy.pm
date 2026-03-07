@@ -1617,7 +1617,7 @@ sub list_associated {
 	$dbh->do("DROP TABLE IF EXISTS op_collect");
 	
 	my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
-	my $engine = $rel eq 'all_taxa' ? 'engine=myisam' : 'engine=memory';
+	my $engine = $rel eq 'all_taxa' ? 'engine=InnoDB' : 'engine=memory';
 	
 	$dbh->do("CREATE $temp TABLE op_collect (
 		opinion_no int unsigned not null,
@@ -5530,7 +5530,7 @@ sub compute_ancestry {
     $result = $dbh->do("DROP TABLE IF EXISTS ancestry_temp");
     $result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp (
 				orig_no int unsigned primary key,
-				is_base tinyint unsigned) Engine=MyISAM");
+				is_base tinyint unsigned) Engine=InnoDB");
     
     # Generate the SQL string to fill the scratch table, and output it as a debug line if necessary.
     

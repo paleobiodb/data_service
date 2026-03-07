@@ -159,7 +159,7 @@ sub buildIntervalMap {
 		early_interval varchar(80) not null,
 		late_int_no int unsigned not null,
 		late_interval varchar(80) not null,
-		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
+		PRIMARY KEY (early_age, late_age, scale_no)) Engine=InnoDB");
     
     # Generate a table with all possible start/end ages. We use late ages only
     # because we don't care about the Hadean eon.

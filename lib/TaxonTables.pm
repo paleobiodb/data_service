@@ -1061,7 +1061,7 @@ sub buildOpinionCache {
 			   author varchar(80),
 			   suppress boolean,
 			   UNIQUE KEY (opinion_no),
-			   KEY (suppress)) ENGINE=MYISAM");
+			   KEY (suppress)) ENGINE=INNODB");
     
     # Populate this table with data from $OPINIONS_TABLE.  We will sort this
     # data properly for determining the best (most recent and reliable)
@@ -1415,7 +1415,7 @@ sub createWorkingTables {
 				lft int,
 				rgt int,
 				bound int,
-				depth int) ENGINE=MYISAM");
+				depth int) ENGINE=INNODB");
     
     # If we were given a list of concepts, populate it with just those.
     # Otherwise, grab every concept in $AUTH_TABLE
@@ -1442,7 +1442,7 @@ sub createWorkingTables {
 				rank tinyint null,
 				ints_rank tinyint null,
 				status enum($ALL_STATUS),
-				primary key (orig_no)) ENGINE=MYISAM");
+				primary key (orig_no)) ENGINE=INNODB");
     
     my $a = 1;	# we can stop here when debugging
     
@@ -1482,7 +1482,7 @@ sub computeSpelling {
     $result = $dbh->do("DROP TABLE IF EXISTS $MISSPELLING_AUX");
     $result = $dbh->do("CREATE TABLE $MISSPELLING_AUX
 			   (spelling_no int unsigned,
-			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
+			    PRIMARY KEY (spelling_no)) ENGINE=INNODB");
     
     $result = $dbh->do("
 		INSERT IGNORE INTO $MISSPELLING_AUX
@@ -1506,7 +1506,7 @@ sub computeSpelling {
 			    spelling_no int unsigned,
 			    opinion_no int unsigned,
 			    is_misspelling boolean,
-			    PRIMARY KEY (orig_no)) ENGINE=MYISAM");
+			    PRIMARY KEY (orig_no)) ENGINE=INNODB");
     
     $result = $dbh->do("
 		INSERT IGNORE INTO $SPELLING_AUX
@@ -1560,7 +1560,7 @@ sub computeSpelling {
 			   (spelling_no int unsigned,
 			    orig_no int unsigned,
 			    score int,
-			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
+			    PRIMARY KEY (spelling_no)) ENGINE=INNODB");
     
     $result = $dbh->do("
 		INSERT INTO $SPELLING_SCORE
@@ -1688,7 +1688,7 @@ sub computeSpelling {
 				opinion_no int unsigned not null,
 				pubyr varchar(4),
 				author varchar(80),
-				PRIMARY KEY (taxon_no)) ENGINE=MYISAM");
+				PRIMARY KEY (taxon_no)) ENGINE=INNODB");
     
     $result = $dbh->do("
 	INSERT IGNORE INTO $NAME_WORK (taxon_no, orig_no, spelling_reason, opinion_no)
@@ -1861,7 +1861,7 @@ sub computeSynonymy {
 			    ri int unsigned not null,
 			    pubyr varchar(4),
 			    status enum($ALL_STATUS),
-			    UNIQUE KEY (orig_no)) ENGINE=MYISAM");
+			    UNIQUE KEY (orig_no)) ENGINE=INNODB");
     
     # We ignore any opinions where orig_no and parent_no are identical, because those are
     # irrelevant to the synonymy relation (they might simply indicate variant spellings, for
@@ -2240,7 +2240,7 @@ sub computeHierarchy {
 				(junior_no int unsigned,
 				 senior_no int unsigned,
 				 primary key (junior_no),
-				 key (senior_no)) ENGINE=MYISAM");
+				 key (senior_no)) ENGINE=INNODB");
     
     # We consider all junior synonyms of genera and above, subjective
     # and objective synonyms and replaced taxa.  We leave out nomina dubia,
@@ -2637,7 +2637,7 @@ sub adjustHierarchicalNames {
     $result = $dbh->do("DROP TABLE IF EXISTS $ADJUST_AUX");
     $result = $dbh->do("CREATE TABLE $ADJUST_AUX
 			       (orig_no int unsigned not null,
-				new_name varchar(80) not null) ENGINE=MYISAM");
+				new_name varchar(80) not null) ENGINE=INNODB");
     
     # The first thing we need to do is to fix subgenus names.  All of these
     # which are themselves senior synonyms must match the senior synonym of
@@ -2802,7 +2802,7 @@ sub computeTreeSequence {
      			lft int unsigned,
      			rgt int unsigned,
 			bound int unsigned,
-     			depth int unsigned) ENGINE=MYISAM");
+     			depth int unsigned) ENGINE=INNODB");
     
     my $insert_stmt = "INSERT INTO tree_insert VALUES ";
     my $comma = '';
@@ -3364,7 +3364,7 @@ sub computeClassification {
 				order_no int unsigned,
 				`order` varchar(80),
 				family_no int unsigned,
-				family varchar(80)) ENGINE=MYISAM");
+				family varchar(80)) ENGINE=INNODB");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $INTS_AUX");
     $result = $dbh->do("CREATE TABLE $INTS_AUX
@@ -3384,7 +3384,7 @@ sub computeClassification {
 				was_order smallint,
 				not_order smallint,
 				order_yr smallint,
-				primary key (orig_no)) ENGINE=MYISAM");
+				primary key (orig_no)) ENGINE=INNODB");
     
     # $result = $dbh->do($SQL_STRING);
     
@@ -3732,7 +3732,7 @@ sub computeClassification {
 				genus_count int unsigned not null,
 				is_species tinyint unsigned not null,
 				species_count int unsigned not null,
-				primary key (orig_no)) ENGINE=MYISAM");
+				primary key (orig_no)) ENGINE=INNODB");
     
     $SQL_STRING = "INSERT INTO $COUNTS_WORK (orig_no, is_kingdom, is_phylum, is_class,
 					     is_order, is_family, is_genus, is_species)
@@ -3859,7 +3859,7 @@ sub computeClassification {
 				subgenus_no int unsigned,
 				subgenus varchar(80),
 				species_no int unsigned,
-				species varchar(80)) ENGINE=MYISAM");
+				species varchar(80)) ENGINE=INNODB");
     
     logMessage(2, "    adding entries to the lower phylogeny table...");
     
@@ -4023,7 +4023,7 @@ sub computeSearchTable {
 				common char(2) not null,
 				KEY (taxon_name, genus),
 				KEY (full_name),
-				UNIQUE KEY (taxon_no, genus, common)) ENGINE=MYISAM");
+				UNIQUE KEY (taxon_no, genus, common)) ENGINE=INNODB");
     
     # We start by copying all higher taxa into the search table.  That's the
     # easy part.
@@ -4119,7 +4119,7 @@ sub computeSearchTable {
     # 				taxon_name varchar(80) not null,
     # 				taxon_no int unsigned not null,
     # 				orig_no int unsigned not null,
-    # 				unique key (taxon_name, genus)) ENGINE=MYISAM");
+    # 				unique key (taxon_name, genus)) ENGINE=INNODB");
     
     # # Now for each species and subspecies, create an entry corresponding to each
     # # genus that is synonymous to its current genus.  The result_no will be the
@@ -4323,7 +4323,7 @@ sub computeAttrsTable {
 				last_early_age decimal(9,5),
 				last_late_age decimal(9,5),
 				early_occ int unsigned,
-				late_occ int unsigned) ENGINE=MyISAM");
+				late_occ int unsigned) ENGINE=InnoDB");
     
     # Same for the image selection table.
     
@@ -4366,7 +4366,7 @@ sub computeAttrsTable {
 				modyr varchar(4),
 				is_changed boolean,
 				attribution varchar(80),
-				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
+				PRIMARY KEY (orig_no)) ENGINE=INNODB");
     
     # Prime the new table with values from the authorities table and
     # tree table.
@@ -4983,7 +4983,7 @@ sub computeAgesTable {
 				last_late_age decimal(9,5),
 				early_occ int unsigned,
 				late_occ int unsigned,
-				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
+				PRIMARY KEY (orig_no)) ENGINE=INNODB");
     
     # For now, we will fill in these values from the (already computed) attributes table. Once the
     # data service code has been changed to look in the new table, we will move the code to
@@ -5070,7 +5070,7 @@ sub computeEcotaphTable {
 				ontogeny_basis_no int unsigned not null,
 				ontogeny_basis varchar(80),
 				diet_basis_no int unsigned not null,
-				diet_basis varchar(80)) Engine=MyISAM");
+				diet_basis varchar(80)) Engine=InnoDB");
     
     # Combine some of the columns together into new ones, and then drop the superfluous columns.
     
@@ -5317,7 +5317,7 @@ sub updateRefSummary {
 			reference_no int unsigned primary key,
 			n_taxa int unsigned not null,
 			n_class int unsigned not null,
-			n_opinions int unsigned not null) Engine=MyISAM");
+			n_opinions int unsigned not null) Engine=InnoDB");
     
     # Then fill in the counts.
     
@@ -5371,7 +5371,7 @@ sub createRankMap {
 	CREATE TABLE IF NOT EXISTS $RANK_MAP (
 		rank_no tinyint unsigned primary key,
 		rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
-		key (rank)) Engine=MyISAM");
+		key (rank)) Engine=InnoDB");
     
     # Then populate it if necessary.  Abort if there are any rows already in
     # the table.
@@ -5519,7 +5519,7 @@ sub buildTaxaCacheTables {
 		opinion_no int unsigned not null,
 		max_interval_no int unsigned not null,
 		min_interval_no int unsigned not null,
-		mass float) ENGINE=MYISAM");
+		mass float) ENGINE=INNODB");
     
     # Populate it using the authorities table and taxon_trees table
     
@@ -5551,7 +5551,7 @@ sub buildTaxaCacheTables {
     # 	CREATE TABLE $LIST_CACHE_WORK
     # 	       (parent_no int unsigned not null,
     # 		child_no int unsigned not null,
-    # 		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
+    # 		PRIMARY KEY (child_no, parent_no)) ENGINE=INNODB");
     
     # Populate it using the taxon_trees table, 
     

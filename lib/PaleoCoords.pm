@@ -1309,7 +1309,7 @@ sub initializeTables {
 			updated timestamp not null,
 			PRIMARY KEY (collection_no, model, selector),
 			KEY (update_flag)
-			) Engine=MyISAM CHARSET=utf8mb3");
+			) Engine=InnoDB CHARSET=utf8mb3");
     }
     
     if ( $argument eq 'PCOORD_BINS_DATA' || $argument eq 'tables' || 
@@ -1329,7 +1329,7 @@ sub initializeTables {
 			`updated` timestamp NOT NULL,
 			PRIMARY KEY (`bin_id`,`interval_no`,`model`,`selector`),
 			KEY `update_flag` (`update_flag`)
-			) Engine=MyISAM CHARSET=utf8mb3");
+			) Engine=InnoDB CHARSET=utf8mb3");
     }
     
     if ( $argument eq 'PCOORD_STATIC' || $argument eq 'tables' || 
@@ -1347,7 +1347,7 @@ sub initializeTables {
 			updated timestamp not null,
 			PRIMARY KEY (collection_no),
 			KEY (update_flag)
-			) Engine=MyISAM CHARSET=utf8mb3");
+			) Engine=InnoDB CHARSET=utf8mb3");
     }
     
     if ( $argument eq 'PCOORD_BINS_STATIC' || $argument eq 'tables' || 
@@ -1366,7 +1366,7 @@ sub initializeTables {
 			`updated` timestamp NOT NULL,
 			PRIMARY KEY (`bin_id`,`interval_no`),
 			KEY `update_flag` (`update_flag`)
-			) ENGINE=MyISAM CHARSET=utf8mb3");
+			) ENGINE=InnoDB CHARSET=utf8mb3");
     }
     
     if ( $argument eq 'PCOORD_MODELS' || $argument eq 'tables' )
@@ -1381,7 +1381,7 @@ sub initializeTables {
 			is_active boolean null,
 			is_default boolean null,
 			updated timestamp not null default current_timestamp()
-			) Engine=MyISAM CHARSET=utf8");
+			) Engine=InnoDB CHARSET=utf8");
     }
     
     if ( $argument eq 'PCOORD_PLATES' || $argument eq 'tables' )
@@ -1395,7 +1395,7 @@ sub initializeTables {
 			max_age int unsigned null,
 			updated timestamp not null default current_timestamp(),
 			primary key (model, plate_no)
-			) Engine=MyISAM CHARSET=utf8");
+			) Engine=InnoDB CHARSET=utf8");
     }
     
     my $a = 1;	# we can stop here when debugging

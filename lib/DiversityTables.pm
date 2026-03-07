@@ -65,7 +65,7 @@ sub buildDiversityTables {
 		genus_no int unsigned not null,
 		n_occs int unsigned not null,
 		not_trace tinyint unsigned not null,
-		PRIMARY KEY (bin_id, interval_no, ints_no, genus_no)) Engine=MyISAM");
+		PRIMARY KEY (bin_id, interval_no, ints_no, genus_no)) Engine=InnoDB");
 
     $sql = "INSERT INTO $DIV_MATRIX_WORK (bin_id, interval_no, ints_no, genus_no, n_occs, not_trace)
 		SELECT SQL_NO_CACHE c.bin_id_${MBL}, mm.interval_no, ta.ints_no, pl.genus_no, 1, not(is_trace)
@@ -92,7 +92,7 @@ sub buildDiversityTables {
 		genus_no int unsigned not null,
 		n_occs int unsigned not null,
 		not_trace tinyint unsigned not null,
-		PRIMARY KEY (interval_no, ints_no, genus_no)) Engine=MyISAM");
+		PRIMARY KEY (interval_no, ints_no, genus_no)) Engine=InnoDB");
 
     $sql = "INSERT INTO $DIV_GLOBAL_WORK (interval_no, ints_no, genus_no, n_occs, not_trace)
 		SELECT SQL_NO_CACHE mm.interval_no, ta.ints_no, pl.genus_no, 1, not(is_trace)
@@ -154,7 +154,7 @@ sub buildPrevalenceTables {
 		order_no int unsigned,
 		class_no int unsigned,
 		phylum_no int unsigned,
-		n_occs int unsigned not null) Engine=MyISAM");
+		n_occs int unsigned not null) Engine=InnoDB");
 
     $sql = "INSERT INTO $PVL_MATRIX_WORK (bin_id, interval_no, order_no, class_no, phylum_no, n_occs)
 		SELECT bin_id_${MBL}, interval_no, order_no, class_no, phylum_no, count(*)
@@ -211,7 +211,7 @@ sub buildPrevalenceTables {
 		order_no int unsigned,
 		class_no int unsigned,
 		phylum_no int unsigned,
-		n_occs int unsigned not null default '0') Engine=MyISAM");
+		n_occs int unsigned not null default '0') Engine=InnoDB");
 
     $sql = "INSERT INTO $PVL_GLOBAL_WORK (interval_no, order_no, class_no, phylum_no, n_occs)
 		SELECT interval_no, order_no, class_no, phylum_no, count(*)
@@ -255,7 +255,7 @@ sub buildPrevalenceTables {
 		order_no int unsigned,
 		class_no int unsigned,
 		phylum_no int unsigned,
-		n_occs int unsigned not null default '0') Engine=MyISAM");
+		n_occs int unsigned not null default '0') Engine=InnoDB");
 
     $sql = "
 	INSERT INTO $PVL_COLLS_WORK (collection_no, order_no, class_no, phylum_no, n_occs)

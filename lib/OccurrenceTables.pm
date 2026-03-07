@@ -85,7 +85,7 @@ sub buildOccurrenceTables {
 				created timestamp null,
 				modified timestamp null,
 				primary key (occurrence_no, reid_no),
-				key (reid_no)) ENGINE=MyISAM");
+				key (reid_no)) ENGINE=InnoDB");
     
     # Add one row for every occurrence in the database.
     
@@ -304,7 +304,7 @@ sub buildTaxonSummaryTable {
 				last_late_age decimal(9,5),
 				precise_age boolean default false,
 				early_occ int unsigned,
-				late_occ int unsigned) ENGINE=MyISAM");
+				late_occ int unsigned) ENGINE=InnoDB");
     
     # Fill in this table with numbers of occurrences, and age bounds for first
     # and last appearance crudely calculated as the minimum and maximum of the
@@ -366,7 +366,7 @@ sub buildTaxonSummaryTable {
 				early_age decimal(9,5),
 				late_age decimal(9,5),
 				precise boolean,
-				KEY (early_int_no, late_int_no)) ENGINE=MyISAM");
+				KEY (early_int_no, late_int_no)) ENGINE=InnoDB");
     
     $sql = "	INSERT INTO $PRECISE_AGE_AUX (early_int_no, late_int_no, early_age, late_age, precise)
 		SELECT distinct early_int_no, late_int_no, ei.early_age, li.late_age,
@@ -477,7 +477,7 @@ sub buildTaxonSummaryTable {
     #            order_no int unsigned,
     #            class_no int unsigned,
     #            phylum_no int unsigned,
-    #            n_occs int unsigned not null default '0') Engine=MyISAM");
+    #            n_occs int unsigned not null default '0') Engine=InnoDB");
     
     # $sql = "
     #     INSERT INTO $PVL_COLLS_WORK (collection_no, order_no, class_no, phylum_no, n_occs)
@@ -525,7 +525,7 @@ sub buildReferenceSummaryTable {
 				n_colls int unsigned not null,
 				n_prim int unsigned not null,
 				early_age decimal(9,5),
-				late_age decimal(9,5)) ENGINE=MyISAM");
+				late_age decimal(9,5)) ENGINE=InnoDB");
     
     $sql = "	INSERT INTO $REF_SUMMARY_WORK (reference_no, n_occs, n_colls,
 			early_age, late_age)
@@ -598,7 +598,7 @@ sub buildOccIntervalMaps {
     # 		early_age decimal(9,5),
     # 		late_age decimal(9,5),
     # 		interval_no int unsigned not null,
-    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=InnoDB");
     
     # $sql = "
     # 	INSERT INTO $OCC_CONTAINED_MAP (scale_no, scale_level, early_age, late_age, interval_no)
@@ -621,7 +621,7 @@ sub buildOccIntervalMaps {
     # 		early_age decimal(9,5),
     # 		late_age decimal(9,5),
     # 		interval_no int unsigned not null,
-    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=InnoDB");
     
     # $sql = "
     # 	INSERT INTO $OCC_BUFFER_MAP (scale_no, scale_level, early_age, late_age, interval_no)
@@ -647,7 +647,7 @@ sub buildOccIntervalMaps {
     # 		early_age decimal(9,5),
     # 		late_age decimal(9,5),
     # 		interval_no int unsigned not null,
-    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    # 		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=InnoDB");
     
     # $sql = "
     # 	INSERT INTO $OCC_OVERLAP_MAP (scale_no, scale_level, early_age, late_age, interval_no)

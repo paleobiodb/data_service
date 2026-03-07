@@ -70,7 +70,7 @@ sub buildSpecimenTables {
 				modifier_no int unsigned not null,
 				created timestamp null,
 				modified timestamp null,
-				primary key (specimen_no, reid_no)) ENGINE=MyISAM");
+				primary key (specimen_no, reid_no)) ENGINE=InnoDB");
     
     # Add one row for every specimen in the database.  For specimens tied to
     # occurrences that have multiple identifications, we create a separate row
@@ -225,7 +225,7 @@ sub establish_extra_specimen_tables {
 		wkt longtext,
 		INDEX (name),
 		INDEX (name_eng),
-		SPATIAL INDEX (geom)) engine=MyISAM");
+		SPATIAL INDEX (geom)) engine=InnoDB");
     
     $dbh->do("DROP TABLE IF EXISTS $LOCALITY_WORK");
     

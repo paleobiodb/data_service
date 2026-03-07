@@ -118,7 +118,7 @@ sub buildCollectionTables {
 		late_int_no int unsigned not null,
 		n_occs int unsigned not null default 0,
 		reference_no int unsigned not null,
-		access_level tinyint unsigned not null) Engine=MyISAM");
+		access_level tinyint unsigned not null) Engine=InnoDB");
     
     logMessage(2, "    inserting collections...");
     
@@ -311,7 +311,7 @@ sub buildCollectionTables {
 		late_age decimal(9,5),
 		interval_no int unsigned not null,
 		scale_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, interval_no)) Engine=MyISAM");
+		PRIMARY KEY (early_age, late_age, interval_no)) Engine=InnoDB");
     
     $sql = "
 	INSERT INTO $INT_MAJOR_WORK (early_age, late_age, interval_no, scale_no)
@@ -356,7 +356,7 @@ sub buildCollectionTables {
 		lat_max decimal(9,6),
 		std_dev float,
 		access_level tinyint unsigned not null,
-		primary key (bin_id, interval_no)) Engine=MyISAM");
+		primary key (bin_id, interval_no)) Engine=InnoDB");
     
     my $set_lines = '';
     my @index_stmts;
@@ -486,7 +486,7 @@ sub buildCollectionTables {
 		continent char(3),
 		PRIMARY KEY (bin_id, cc),
 		KEY (cc),
-		KEY (continent)) Engine=MyISAM");
+		KEY (continent)) Engine=InnoDB");
     
     foreach my $i (0..$#bin_reso)
     {
@@ -522,7 +522,7 @@ sub buildCollectionTables {
     
     # $dbh->do("CREATE TABLE $BIN_CONTAINER (
     # 		bin_id int unsigned not null PRIMARY KEY,
-    # 		$bin_lines) Engine=MyISAM");
+    # 		$bin_lines) Engine=InnoDB");
     
     # logMessage(2, "    mapping bin containership");
     
@@ -553,7 +553,7 @@ sub buildCollectionTables {
     
     # $dbh->do("CREATE TABLE $COLL_INTS_WORK (
     # 		collection_no int unsigned not null,
-    # 		interval_no int unsigned not null) Engine=MyISAM");
+    # 		interval_no int unsigned not null) Engine=InnoDB");
     
     # $sql = "
     # 		INSERT IGNORE INTO $COLL_INTS_WORK (collection_no, interval_no)
@@ -612,7 +612,7 @@ sub updateLocationTable {
 		lng decimal(9,6),
 		lat decimal(9,6),
 		cc char(2),
-		protected varchar(255)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		protected varchar(255)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     # If there is anything in the table, delete from it any row corresponding
     # to a collection whose coordinates have been nulled out.  This will occur
@@ -734,7 +734,7 @@ sub buildStrataTables {
 		late_age decimal(9,6),
 		g_plate_no smallint unsigned not null default '0',
 		s_plate_no smallint unsigned not null default '0',
-		loc geometry not null default '') Engine=MyISAM");
+		loc geometry not null default '') Engine=InnoDB");
     
     $DB::single = 1;
     
@@ -954,7 +954,7 @@ sub buildStrataTables {
 		lng_max decimal(9,6),
 		lat_min decimal(9,6),
 		lat_max decimal(9,6),
-		UNIQUE KEY (name, rank, cc)) Engine=MyISAM");
+		UNIQUE KEY (name, rank, cc)) Engine=InnoDB");
     
     logMessage(2, "    inserting groups...");
     
@@ -1020,7 +1020,7 @@ sub buildLithTables {
 	lith_type varchar(30) not null,
 	UNIQUE KEY (collection_no, lithology),
 	KEY (lithology),
-	KEY (macros_lith)) ENGINE=MyISAM");
+	KEY (macros_lith)) ENGINE=InnoDB");
     
     my ($sql, $count);
     
@@ -1137,7 +1137,7 @@ sub applyClustering {
     
     $dbh->do("CREATE TABLE $CLUST_AUX (
 		bin_id int unsigned primary key,
-		clust_id int unsigned not null) ENGINE=MyISAM");
+		clust_id int unsigned not null) ENGINE=InnoDB");
     
     # Go through the bin levels, skipping any that don't specify clustering.
     # We will need to cluster the finer bins first, then go to coarser.  Thus
@@ -1293,7 +1293,7 @@ sub createCountryMap {
 		name varchar(80) not null,
 		PRIMARY KEY (cc),
 		INDEX (name),
-		INDEX (continent)) Engine=MyISAM");
+		INDEX (continent)) Engine=InnoDB");
     
     # Then populate it if necessary.
     
@@ -1623,7 +1623,7 @@ sub createCountryMap {
     $dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{CONTINENT_DATA} (
 		continent char(3) primary key,
 		name varchar(80) not null,
-		INDEX (name)) Engine=MyISAM");
+		INDEX (name)) Engine=InnoDB");
     
     $dbh->do("INSERT INTO $TABLE{CONTINENT_DATA} (continent, name) VALUES
 	('ATA', 'Antarctica'),
@@ -1713,7 +1713,7 @@ sub startProtLandInsert {
     $dbh->do("CREATE TABLE $PROTECTED_WORK (
 		shape GEOMETRY not null,
 		cc char(2) not null,
-		category varchar(10) not null) Engine=MyISAM");
+		category varchar(10) not null) Engine=InnoDB");
     
     # Empty the hash that keeps track of what countries we are loading data
     # for. 

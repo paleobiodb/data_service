@@ -818,14 +818,14 @@ sub ensureTables {
 		update_early boolean not null,
 		update_mid boolean not null,
 		update_late boolean not null,
-		key (plate_no)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		key (plate_no)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $GEOPLATES (
 		plate_no int unsigned primary key,
 		abbrev varchar(10) not null,
 		name varchar(255) not null,
 		key (abbrev),
-		key (name)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		key (name)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     my $a = 1;	# we can stop here when debugging
 }
