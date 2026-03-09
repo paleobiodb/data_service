@@ -1538,7 +1538,7 @@ sub get_occ {
     
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
-	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $specifier
 	GROUP BY o.occurrence_no";
@@ -1712,7 +1712,7 @@ sub list_occs {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr
@@ -2013,7 +2013,7 @@ sub diversity {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
+	FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c using (collection_no)
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr";
@@ -2475,7 +2475,7 @@ sub list_occs_taxa {
     
     $request->{main_sql} = "
 	SELECT $fields
-	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY $group_expr";
@@ -2586,7 +2586,7 @@ sub prevalence {
     
 	$request->{main_sql} = "
 	SELECT $fields
-	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY ph.phylum_no, ph.class_no, ph.order_no
@@ -2882,7 +2882,7 @@ sub list_occs_associated {
 	    $sql = "
 		INSERT IGNORE INTO occ_list
 		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $TABLE{OCCURRENCE_MATRIX} as o
-			JOIN $COLL_MATRIX as c using (collection_no)
+			STRAIGHT_JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	
@@ -3029,7 +3029,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT o.reference_no, 'O' as ref_type, o.taxon_no, o.occurrence_no, 
 			null as specimen_no, null as collection_no
-		FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -3043,7 +3043,7 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT c.reference_no, 'P' as ref_type, null as taxon_no, 
 			null as occurrence_no, null as specimen_no, c.collection_no
-		FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -3057,8 +3057,8 @@ sub list_occs_associated {
 	    $sql = "INSERT IGNORE INTO ref_collect
 		SELECT ss.reference_no, 'S' as ref_type, ss.taxon_no, null as occurrence_no,
 			ss.specimen_no, null as collection_no
-		FROM $TABLE{SPECIMEN_MATRIX} as ss JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
-			JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $TABLE{SPECIMEN_MATRIX} as ss STRAIGHT_JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+			STRAIGHT_JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	    
@@ -3178,7 +3178,7 @@ sub list_occs_strata {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $TABLE{OCCURRENCE_MATRIX} as o JOIN $COLL_MATRIX as c using (collection_no)
+	FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c using (collection_no)
 		JOIN $COLL_STRATA as cs using (collection_no)
 		$join_list
         WHERE $filter_string
@@ -3951,9 +3951,9 @@ sub generateJoinList {
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
-    $join_list .= "JOIN collections as cc on c.collection_no = cc.collection_no\n"
+    $join_list .= "STRAIGHT_JOIN collections as cc on c.collection_no = cc.collection_no\n"
 	if $tables->{cc};
-    $join_list .= "JOIN $TABLE{OCCURRENCE_DATA} as oc on o.occurrence_no = oc.occurrence_no\n"
+    $join_list .= "STRAIGHT_JOIN $TABLE{OCCURRENCE_DATA} as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
