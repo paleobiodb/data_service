@@ -3896,6 +3896,7 @@ sub generateQuickDivFilters {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
+	$tables_ref->{t_lft} = 1;
 	$request->{my_base_taxa} = [ @include_taxa, @exclude_taxa ];
     }
     
@@ -3920,6 +3921,7 @@ sub generateQuickDivFilters {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
 	$request->{my_excluded_taxa} = \@exclude_taxa;
 	$tables_ref->{t} = 1;
+	$tables_ref->{t_lft} = 1;
     }
     
     # Return the list, and make sure it includes at least one clause.
@@ -3968,6 +3970,12 @@ sub generateJoinList {
 	} else {
 	    $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = pl.genus_no\n";
 	}
+    }
+
+    elsif ( $tables->{t_lft} )
+    {
+	$join_list .= "LEFT JOIN taxon_trees as t use index (lft) on t.orig_no = o.orig_no\n"
+	    if $tables->{t};
     }
     
     else

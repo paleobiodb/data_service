@@ -5291,6 +5291,8 @@ sub generatePrevalenceFilters {
 	{
 	    push @includes, "t.lft between $t->{lft} and $t->{rgt}";
 	}
+
+	$tables_ref->{t_lft} = 1;
     }
     
     if ( @includes )
