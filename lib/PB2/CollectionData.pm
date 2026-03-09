@@ -1963,7 +1963,7 @@ sub get_coll {
     
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
-	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
+	FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc using (collection_no)
 		$join_list
         WHERE c.collection_no = $id
 	GROUP BY c.collection_no";
@@ -2079,7 +2079,7 @@ sub list_colls {
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM coll_matrix as c JOIN collections as cc using (collection_no)
+	FROM coll_matrix as c STRAIGHT_JOIN collections as cc using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no
@@ -2392,7 +2392,7 @@ sub refs {
     $request->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
 	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
-	    FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
+	    FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc on cc.collection_no = c.collection_no
 		$inner_join_list
             WHERE $filter_string
 	    GROUP BY sr.reference_no) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
@@ -3599,6 +3599,7 @@ sub generateMainFilters {
 	    if ( $t->{lft} && $t->{rgt} )
 	    {
 		push @include_filters, "t.lft between '$t->{lft}' and '$t->{rgt}'";
+		$tables->{t_lft} = 1;
 	    }
 	    
 	    elsif ( $t->{orig_no} )
@@ -3813,6 +3814,7 @@ sub generateMainFilters {
 	    if ( $t->{lft} && $t->{rgt} )
 	    {
 		push @exclude_filters, "t.lft not between '$t->{lft}' and '$t->{rgt}'";
+		$tables->{t_lft} = 1;
 	    }
 	    
 	    elsif ( $t->{orig_no} )
@@ -5763,8 +5765,12 @@ sub generateJoinList {
 	if $tables->{o};
     $join_list .= "JOIN occurrences as oc using (occurrence_no)\n"
 	if $tables->{oc};
-    $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
-	if $tables->{t} || $tables->{tf} || $tables->{v};
+    if ( $tables->{t} || $tables->{tf} || $tables->{v} )
+    {
+	$join_list .= ($tables->{t_lft} ?
+		       "JOIN taxon_trees as t use index (lft) using (orig_no)\n" :
+		       "JOIN taxon_trees as t using (orig_no)\n");
+    }
     $join_list .= "JOIN taxon_trees as tv on tv.orig_no = t.accepted_no\n"
 	if $tables->{tv};
     $join_list .= "JOIN taxon_attrs as v on v.orig_no = $t.orig_no\n"
