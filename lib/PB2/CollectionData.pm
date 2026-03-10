@@ -3419,7 +3419,7 @@ sub generateMainFilters {
 	$taxon_field = 'base_name';
 	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
-	$tables->{o} = 1;
+	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
     elsif ( $value = $request->clean_param('match_name') )
@@ -3428,7 +3428,7 @@ sub generateMainFilters {
 	$taxon_field = 'match_name';
 	$do_match = 1;
 	$no_synonyms = 1;
-	$tables->{o} = 1;
+	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
     elsif ( $value = $request->clean_param('taxon_name') )
@@ -3436,7 +3436,7 @@ sub generateMainFilters {
 	$taxon_name = $value;
 	$taxon_field = 'taxon_name';
 	$no_synonyms = $request->clean_param('immediate');
-	$tables->{o} = 1;
+	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
     elsif ( @values = $request->safe_param_list('base_id') )
@@ -3444,14 +3444,14 @@ sub generateMainFilters {
 	@taxon_nos = @values;
 	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
-	$tables->{o} = 1;
+	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
     elsif ( @values = $request->safe_param_list('taxon_id') )
     {
 	@taxon_nos = @values;
 	$no_synonyms = $request->clean_param('immediate');
-	$tables->{o} = 1;
+	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
     # If a name was specified, we start by resolving it.  The resolution is
@@ -3618,7 +3618,7 @@ sub generateMainFilters {
 	    push @filters, '(' . join(' or ', @include_filters) . ')';
 	}
 	
-	$tables->{o} = 1;
+	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
 	$tables->{tf} = 1;
 	$tables->{non_geo_filter} = 1;
 	$request->{my_base_taxa} = [ @include_taxa, @exclude_taxa ];
@@ -4808,8 +4808,8 @@ sub generateMainFilters {
 
     if ( $tables->{o} || $tables->{t} || $tables->{tf} || $tables->{v} )
     {
-	$tables->{o} = 1;
-	$tables->{c} = 1;
+	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
+	$tables->{c} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
 
     elsif ( $tables->{cc} )

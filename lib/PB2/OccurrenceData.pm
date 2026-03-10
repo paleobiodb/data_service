@@ -2104,13 +2104,13 @@ sub quickdiv {
     
     if ( defined $max_ma && $max_ma > 0 )
     {
-	push @filters, "early_age <= $max_ma";
+	push @filters, "i.early_age <= $max_ma";
 	$tables->{i} = 1;
     }
     
     if ( defined $min_ma && $min_ma > 0 )
     {
-	push @filters, "late_age >= $min_ma";
+	push @filters, "i.late_age >= $min_ma";
 	$tables->{i} = 1;
     }
     
@@ -2728,6 +2728,7 @@ sub prevalence {
 	    $request->{main_sql} = "
 		SELECT $fields
 		FROM $PVL_GLOBAL as p
+			$join_list
 		WHERE $filter_string
 		GROUP BY coalesce(order_no, class_no, phylum_no)
 		ORDER BY n_occs desc LIMIT $raw_limit";
@@ -4066,6 +4067,8 @@ sub generateQuickDivJoins {
 
     my ($request, $mt, $tables) = @_;
     
+    $tables->{t} = 1 if $tables->{tf};
+    
     my $join_list = '';
     
     # Return an empty string unless we actually have some joins to make
@@ -4081,7 +4084,10 @@ sub generateQuickDivJoins {
 	if $tables->{bl};
     
     $join_list .= "JOIN taxon_trees as t on t.orig_no = $mt.ints_no\n"
-	if $tables->{t};
+	if $tables->{t} && $mt ne 'p';
+    
+    $join_list .= "JOIN taxon_trees as t on t.orig_no = coalesce(p.order_no, p.class_no, p.phylum_no)\n"
+	if $tables->{t} && $mt eq 'p';
     
     return $join_list;
 }
