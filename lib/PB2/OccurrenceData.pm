@@ -1708,12 +1708,15 @@ sub list_occs {
     # 'abund_value' and 'abund_unit'. We really should display reidentification
     # comments, but those are currently available only from the 'occs/display' route.
     
+    my $join_op = $tables->{c} ? 'join' : 'straight_join';
+    
     my $join_list = $request->generateJoinList('c', $tables);
     
     $request->{main_sql} = "
 	SELECT $calc $fields
-	FROM $TABLE{OCCURRENCE_MATRIX} as o STRAIGHT_JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
-		$join_list
+	FROM $TABLE{OCCURRENCE_MATRIX} as o
+	    $join_op $COLL_MATRIX as c on o.collection_no = c.collection_no
+	    $join_list
         WHERE $filter_string
 	GROUP BY $group_expr
 	ORDER BY $order_clause

@@ -3344,7 +3344,8 @@ sub generateMainFilters {
     if ( my $coll_match = $request->clean_param('coll_match') )
     {
 	my $quoted = $dbh->quote("%${coll_match}%");
-	
+
+	$tables->{c} = 1;
 	$tables->{cc} = 1;
 	push @filters, "(cc.collection_name like $quoted or cc.collection_aka like $quoted)";
     }
@@ -3352,7 +3353,8 @@ sub generateMainFilters {
     if ( my $coll_re = $request->clean_param('coll_re') )
     {
 	my $quoted = $dbh->quote($coll_re);
-	
+
+	$tables->{c} = 1;
 	$tables->{cc} = 1;
 	push @filters, "(cc.collection_name rlike $quoted or cc.collection_aka rlike $quoted)";
     }
@@ -3401,7 +3403,8 @@ sub generateMainFilters {
 	}
 	
 	my $quoted = $dbh->quote($resgroup);
-	
+
+	$tables->{c} = 1;
 	$tables->{cc} = 1;
 	push @filters, "${negate}find_in_set(cc.research_group,$quoted)";
     }
@@ -4093,7 +4096,8 @@ sub generateMainFilters {
 	{
 	    push @filters, $country_clause;
 	}
-	
+
+	$tables->{c} = 1;
 	$tables->{cc} = 1;
 	$tables->{non_summary} = 1;
     }
@@ -4113,7 +4117,8 @@ sub generateMainFilters {
 	{
 	    push @filters, $state_clause;
 	}
-	
+
+	$tables->{c} = 1;
 	$tables->{cc} = 1;
 	$tables->{non_summary} = 1;
     }
@@ -4133,6 +4138,7 @@ sub generateMainFilters {
 	    push @filters, $county_clause;
 	}
 	
+	$tables->{c} = 1;
 	$tables->{cc} = 1;
 	$tables->{non_summary} = 1;
     }
@@ -4271,6 +4277,7 @@ sub generateMainFilters {
 	push @filters, "st_contains(geomfromtext($polygon), $mt.loc)";
 	
 	$tables->{use_local} = 1;
+	$tables->{c} = 1;
 	
 	# Set center_x and center_y, if the specified range is centered on one
 	# of the poles. Otherwise ignore it.
@@ -4424,12 +4431,14 @@ sub generateMainFilters {
 	if ( @age_filters == 1 )
 	{
 	    push @filters, @age_filters;
+	    $tables->{c} = 1;
 	    $tables->{cc} = 1;
 	}
 	
 	elsif ( @age_filters )
 	{
 	    push @filters, '(' . join(' or ', @age_filters) . ')';
+	    $tables->{c} = 1;
 	    $tables->{cc} = 1;
 	}
     }
@@ -4806,13 +4815,12 @@ sub generateMainFilters {
     
     # Now we need to figure out if the 'c' table is needed.
 
-    if ( $tables->{o} || $tables->{t} || $tables->{tf} || $tables->{v} )
+    if ( $tables->{t} || $tables->{tf} || $tables->{v} )
     {
 	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
-	$tables->{c} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
 
-    elsif ( $tables->{cc} )
+    if ( $tables->{cc} )
     {
 	$tables->{c} = 1;
     }
@@ -4996,6 +5004,7 @@ sub generateMainFilters {
 	# Make sure that the 'collections' table is included in the query.
 	
 	$tables->{cc} = 1;
+	$tables->{c} = 1;
 	
 	# Add the specified filters.
 	
