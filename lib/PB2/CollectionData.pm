@@ -4882,24 +4882,26 @@ sub generateMainFilters {
     # table and filter on actual collection ages. But skip this if the operation
     # is 'quickdiv', because the quickdiv code will add its own interval filter.
     
-    elsif ( ($early_age || $late_age) && ($mt ne 's' || $tables->{c}) && $op ne 'quickdiv' )
+    elsif ( ($early_age || $late_age) && ($mt ne 's' || $tables->{c} || $tables->{o})
+	    && $op ne 'quickdiv' )
     {
-	$tables->{c} = 1;
 	$tables->{non_summary} = 1;
 	
 	$request->{early_age} = $early_age;
 	$request->{late_age} = $late_age;
 	
+	my $table = ($mt eq 'c' || $tables->{c}) ? 'c' : 'o';
+	
 	if ( $time_rule eq 'contain' )
 	{
 	    if ( defined $late_age and $late_age > 0 )
 	    {
-		push @filters, "c.late_age >= $late_age";
+		push @filters, "$table.late_age >= $late_age";
 	    }
 
 	    if ( defined $early_age and $early_age > 0 )
 	    {
-		push @filters, "c.early_age <= $early_age";
+		push @filters, "$table.early_age <= $early_age";
 	    }
 	}
 
@@ -4907,12 +4909,12 @@ sub generateMainFilters {
 	{
 	    if ( defined $late_age and $late_age > 0 )
 	    {
-		push @filters, "c.early_age > $late_age";
+		push @filters, "$table.early_age > $late_age";
 	    }
 
 	    if ( defined $early_age and $early_age > 0 )
 	    {
-		push @filters, "c.late_age < $early_age";
+		push @filters, "$table.late_age < $early_age";
 	    }
 	}
 
@@ -4921,9 +4923,9 @@ sub generateMainFilters {
 	    my $ea = $early_age ? $early_age + 0 : 5000;
 	    my $la = $late_age ? $late_age + 0 : 0;
 
-	    push @filters, "if(c.late_age >= $la,
-		    if(c.early_age <= $ea, c.early_age - c.late_age, $ea - c.late_age),
-		    if(c.early_age > $ea, $ea - $la, c.early_age - $la)) / (c.early_age - c.late_age) >= 0.5"
+	    push @filters, "if($table.late_age >= $la,
+		    if($table.early_age <= $ea, $table.early_age - $table.late_age, $ea - $table.late_age),
+		    if($table.early_age > $ea, $ea - $la, $table.early_age - $la)) / ($table.early_age - $table.late_age) >= 0.5"
 	}
 
 	else # $time_rule eq 'buffer'
@@ -4959,22 +4961,22 @@ sub generateMainFilters {
 	    if ( defined $late_age and defined $early_age and 
 		 defined $late_bound and defined $early_bound )
 	    {
-		push @filters, "c.early_age <= $early_bound and c.late_age >= $late_bound";
-		push @filters, "(c.early_age < $early_bound or c.late_age > $late_bound)";
-		push @filters, "c.early_age > $late_age";
-		push @filters, "c.late_age < $early_age";
+		push @filters, "$table.early_age <= $early_bound and $table.late_age >= $late_bound";
+		push @filters, "($table.early_age < $early_bound or $table.late_age > $late_bound)";
+		push @filters, "$table.early_age > $late_age";
+		push @filters, "$table.late_age < $early_age";
 	    }
 
 	    else
 	    {
 		if ( defined $late_age and defined $late_bound )
 		{
-		    push @filters, "c.late_age >= $late_bound and c.early_age > $late_age";
+		    push @filters, "$table.late_age >= $late_bound and $table.early_age > $late_age";
 		}
 
 		if ( defined $early_age and defined $early_bound )
 		{
-		    push @filters, "c.early_age <= $early_bound and c.late_age < $early_age";
+		    push @filters, "$table.early_age <= $early_bound and $table.late_age < $early_age";
 		}
 	    }
 	}
