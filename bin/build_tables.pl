@@ -146,6 +146,13 @@ sub BuildTables {
     
     my $t = Taxonomy->new($dbh, 'taxon_trees');
     
+    # Set the transaction isolation level to READ COMMITTED. Ordinary database traffic
+    # is continuing while we are rebuilding the tables, and the possibility of
+    # inconsistent reads is not likely to make any practical difference. This code
+    # was originally written for non-transaction tables in the first place.
+    
+    $dbh->do("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    
     # Call the routines that build the various caches, depending upon the options
     # that were specified.
     
