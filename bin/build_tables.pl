@@ -27,7 +27,7 @@ use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
 # use TimescaleTables qw(establishTimescaleTables);
-use TaxonPics qw(getPics selectPics);
+use TaxonPics qw(getPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
@@ -37,26 +37,29 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 Getopt::Long::Configure("bundling");
 
-my ($opt_nightly, $opt_logfile, $opt_test, $opt_error,
+my ($opt_nightly, $opt_logfile, $opt_test, $opt_error, $opt_debug, $opt_all,
     $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables, $interval_map,
     $occurrence_int_maps, $stratigraphy_tables, $prevalence_tables, $country_map,
+    $phylopic_fetch,
     $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
 	    "log=s" => \$opt_logfile,
 	    "test" => \$opt_test,
 	    "error" => \$opt_error,
+	    "debug|D" => \$opt_debug,
+	    "all|A" => \$opt_all,
 	    "taxonomy|t" => \$taxon_tables,
 	    "collections|c" => \$collection_tables,
 	    "occurrences|m" => \$occurrence_tables,
-	    "prevalence|P" => \$prevalence_tables,
 	    "I" => \$interval_map,
 	    "M" => \$occurrence_int_maps,
 	    "stratigraphy|S" => \$stratigraphy_tables,
 	    "countries|C" => \$country_map,
-	    "listcache|y" => \$old_taxon_tables,
+	    "taxacache|y" => \$old_taxon_tables,
 	    "prevalence|p" => \$prevalence_tables,
 	    "diversity|d" => \$diversity_tables,
+	    "phylopics|P" => \$phylopic_fetch,
 	    "steps|T=s" => \$taxon_steps );
 
 my $cmd_line_db_name = shift;
@@ -110,12 +113,16 @@ else
 
 
 sub BuildTables {
+
+    # Set the message level depending upon whether or not --debug was specified.
+    
+    my $level = $opt_debug ? 4 : 2;
     
     # If either option --test or --error was given, just write a test message and stop.
     
     if ( $opt_test || $opt_error )
     {
-	initMessages(2, 'Build test');
+	initMessages($level, 'Build test');
 	logMessage(1, '------------------------------------------------------------');
 	logTimestamp();
 	logMessage(1, 'Test log message');
@@ -125,7 +132,7 @@ sub BuildTables {
     
     # Initialize the output-message subsystem
     
-    initMessages(2, 'Build');
+    initMessages($level, 'Build');
     logMessage(1, '------------------------------------------------------------');
     logTimestamp();
     
@@ -352,6 +359,11 @@ sub BuildTables {
     if ( $occurrence_tables )
     {
 	buildSpecimenTables($dbh);
+    }
+
+    if ( $phylopic_fetch )
+    {
+	getPics($dbh, $opt_all);
     }
     
     logTimestamp();

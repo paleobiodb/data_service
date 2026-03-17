@@ -40,7 +40,7 @@ sub initMessages {
 
 # logMessage ( level, message )
 # 
-# If $level is greater than or equal to the package variable $MSG_LEVEL, then
+# If $level is less than or equal to the package variable $MSG_LEVEL, then
 # print $message to the log.
 
 sub logMessage {
