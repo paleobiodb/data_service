@@ -1904,7 +1904,7 @@ sub generate_prevalence {
 		$count++ if $list[$i]{class}{$n}{n_occs} > $threshold;
 	    }
 	    
-	    if ( $count > 1 )
+	    if ( $count )
 	    {
 		push @subelements, @subs;
 		splice(@list, $i, 1);

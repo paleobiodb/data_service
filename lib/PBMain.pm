@@ -158,6 +158,22 @@ any qr{.*} => sub {
 	}
     }
     
+    # We have added the parameter 'goodrequest', which avoids the nginx blocking
+    # rules. We need to delete this so that it doesn't mess up the parameter
+    # validation.
+    
+    if ( exists params->{goodrequest} )
+    {
+	delete params->{goodrequest};
+	delete params('query')->{goodrequest};
+	
+	if ( $r->env->{REQUEST_URI} )
+	{
+	    $r->env->{REQUEST_URI} =~ s/&goodrequest//;
+	    $r->env->{REQUEST_URI} =~ s/goodrequest&//;
+	}
+    }
+    
     # If the path ends in a string of digits with a format suffix, we treat this as if it were a
     # request for the object whose identifier corresponds to the digit string. To do this, we
     # rewrite the request as if it had been .../single.<format>?id=<digits>
