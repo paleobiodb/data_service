@@ -26,6 +26,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(TAXON_LOWER => 'taxon_lower');
     set_table_name(TAXON_ATTRS => 'taxon_attrs');
     set_table_name(TAXON_NAMES => 'taxon_names');
+    set_table_name(TAXON_PICS => 'taxon_pics');
     
     set_table_name(AUTHORITY_DATA => 'authorities');
     set_table_property('AUTHORITY_DATA', CAN_POST => 'NOT_STUDENT');
@@ -38,6 +39,10 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('OPINION_DATA', CAN_MODIFY => 'NOT_STUDENT');
     set_table_property('OPINION_DATA', CAN_DELETE => 'OWNER');
     set_table_property('OPINION_DATA', LOG_CHANGES => 1);
+    
+    set_table_name(PHYLOPIC_DATA => 'phylopics');
+    set_table_name(PHYLOPIC_NAMES => 'phylopic_names');
+    set_table_name(PHYLOPIC_CHOICE => 'phylopic_choice');
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
     set_table_property('OCCURRENCE_DATA', AUTH_TABLE => 'COLLECTION_DATA');
