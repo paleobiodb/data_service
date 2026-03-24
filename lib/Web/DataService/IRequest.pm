@@ -1092,6 +1092,7 @@ sub get_connection {
     return $request->{dbh} if ref $request->{dbh};
     
     $request->{dbh} = $request->{ds}{backend_plugin}->get_connection($request->{ds});
+    $request->{dbh}->do("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
     return $request->{dbh};
 }
 
