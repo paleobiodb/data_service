@@ -716,7 +716,7 @@ sub generate_result {
     {
 	$ds->_check_output_config($request);
 	
-	my $threshold = $ds->node_attr($path, 'streaming_threshold')
+	my $threshold = $ds->node_attr($path, 'stream_threshold')
 	    unless $request->{do_not_stream};
 	
 	# If the result set requires processing before output, then call
@@ -1080,32 +1080,40 @@ sub error_result {
     {
 	unless ( defined $error )
 	{
-	    Dancer::debug("CAUGHT UNKNOWN ERROR");
+	    $ds->debug_line("CAUGHT UNKNOWN ERROR");
 	}
 	
 	elsif ( ! ref $error )
 	{
-	    Dancer::debug("CAUGHT ERROR: " . $error);
+	    $ds->debug_line("CAUGHT ERROR: " . $error);
 	}
 	
 	elsif ( $error->isa('HTTP::Validate::Result') )
 	{
-	    Dancer::debug("CAUGHT HTTP::VALIDATE RESULT");
+	    require 'Data/Dumper.pm';
+	    $Data::Dumper::Useqq = 1;
+	    $Data::Dumper::Terse = 1;
+	    
+	    $ds->debug_line("CAUGHT HTTP::VALIDATE: " . Dumper($error->{er}));
 	}
 	
 	elsif ( $error->isa('Dancer::Exception::Base') )
 	{
-	    Dancer::debug("CAUGHT ERROR: " . $error->message);
+	    $ds->debug_line("CAUGHT ERROR: " . $error->message);
 	}
 	
 	elsif ( $error->isa('Web::DataService::Exception') )
 	{
-	    Dancer::debug("CAUGHT EXCEPTION: " . $error->{message});
+	    $ds->debug_line("CAUGHT EXCEPTION: " . $error->{message});
 	}
 	
 	else
 	{
-	    Dancer::debug("CAUGHT OTHER ERROR");
+	    require 'Data/Dumper.pm';
+	    $Data::Dumper::Useqq = 1;
+	    $Data::Dumper::Terse = 1;
+	    
+	    $ds->debug_line("CAUGHT UNKNOWN ERROR: " . Dumper($error));
 	}
     }
     

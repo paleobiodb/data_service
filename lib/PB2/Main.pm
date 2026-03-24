@@ -150,6 +150,7 @@ use PB2::MainEntry;
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
 			default_save_filename => 'pbdb_data',
+			stream_threshold => (1024 * 1024),
 			before_operation_hook => \&PB2::ArchiveEntry::check_archive,
 			title => 'Documentation' });
     

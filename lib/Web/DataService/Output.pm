@@ -17,6 +17,9 @@ use Carp qw(carp croak);
 use Moo::Role;
 
 
+my ($streamed_request, $stream_status, @stream_headers) = @_;
+
+
 sub define_output_map {
     
     goto \&Web::DataService::Set::define_set;
@@ -2224,11 +2227,10 @@ sub _generate_compound_result {
 	    last if $request->{actual_count} >= $request->{result_limit};
 	}
 	
-	# If streaming is a possibility, check whether we have passed the
-	# threshold for result size.  If so, then we need to immediately
-	# stash the output generated so far and call stream_data.  Doing that
-	# will cause the current function to be aborted, followed by an
-	# automatic call to &stream_result (defined below).
+	# If streaming is a possibility, check whether we have passed the threshold for
+	# result size. If so, then we need to immediately stash the output generated so
+	# far and abort this subroutine in such a way that PSGI will call the proper
+	# subroutine to initiate streaming.
 	
 	if ( defined $streaming_threshold && length($output) > $streaming_threshold )
 	{
@@ -2237,18 +2239,35 @@ sub _generate_compound_result {
 	    
 	    # Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
 	    
-	    if ( $request->{out_fh} && $request->{response_hook} )
-	    {
-		$request->_stream_compound_result();
+	    # if ( $request->{out_fh} && $request->{response_hook} )
+	    # {
+	    # 	$request->_stream_compound_result();
 
-		my $response_hook = $request->{response_hook};
-		return $request->$response_hook();
-	    }
+	    # 	my $response_hook = $request->{response_hook};
+	    # 	return $request->$response_hook();
+	    # }
 	    
-	    else
-	    {
-		Dancer::Plugin::StreamData::stream_data($request, &_stream_compound_result);
-	    }
+	    # Save the value of $request, and clear $stream_status and @stream_headers.
+	    # These variables are needed in order to pass values between this
+	    # subroutine, &_prepare_stream, and &_stream_compound_result. The latter two
+	    # routines are called by the PSGI code, and there is no other way to convey
+	    # these values.
+	    
+	    $streamed_request = $request;
+	    $stream_status = undef;
+	    @stream_headers = ();
+	    
+	    # Indicate that this response will be streamed, and that the streaming will
+	    # be managed by &_prepare_stream.
+	    
+	    my $resp = Dancer::SharedData::response;
+	    $resp->streamed(\&_prepare_stream);
+	    
+	    # This following idiosyncratic statements are the only way to get Dancer to
+	    # return the proper result to PSGI in order for the streaming to kick in.
+	    
+	    my $c = Dancer::Continuation::Route::FileSent->new(return_value => $resp);
+	    $c->throw;
 	}
     }
     
@@ -2281,10 +2300,10 @@ sub _generate_compound_result {
     
     $output .= $footer;
     
-    # If we are directing output to a file, write it now and then close the file. The proper encoding
-    # should already have been set up. If a response_hook has been established, call it and return
-    # as output whatever it returns. Otherwise, continue and return the output to the client as
-    # normal.
+    # If we are directing output to a file, write it now and then close the file. The
+    # proper encoding should already have been set up. If a response_hook has been
+    # established, call it and return as output whatever it returns. Otherwise, continue
+    # and return the output to the client as normal.
     
     if ( my $fh = $request->{out_fh} )
     {
@@ -2469,30 +2488,47 @@ sub _generate_processed_result {
 	    last if $request->{actual_count} >= $request->{result_limit};
 	}
 	
-	# If streaming is a possibility, check whether we have passed the
-	# threshold for result size.  If so, then we need to immediately
-	# stash the output generated so far and call stream_data.  Doing that
-	# will cause the current function to be aborted, followed by an
-	# automatic call to &stream_result (defined below).
+	# If streaming is a possibility, check whether we have passed the threshold for
+	# result size. If so, then we need to immediately stash the output generated so
+	# far and abort this subroutine in such a way that PSGI will call the proper
+	# subroutine to initiate streaming.
 	
 	if ( defined $streaming_threshold && length($output) > $streaming_threshold )
 	{
 	    $request->{stashed_output} = $output;
-	    $request->{stashed_results} = \@results;
-	    $request->{processing_complete} = 1;
+	    $request->{header_lists} = \@header_lists;
 	    
-	    if ( $request->{out_fh} && $request->{response_hook} )
-	    {
-		$request->_stream_compound_result();
-		
-		my $response_hook = $request->{response_hook};
-		return $request->$response_hook();
-	    }
+	    # Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
 	    
-	    else
-	    {
-		Dancer::Plugin::StreamData::stream_data($request, &_stream_compound_result);
-	    }
+	    # if ( $request->{out_fh} && $request->{response_hook} )
+	    # {
+	    # 	$request->_stream_compound_result();
+
+	    # 	my $response_hook = $request->{response_hook};
+	    # 	return $request->$response_hook();
+	    # }
+	    
+	    # Save the value of $request, and clear $stream_status and @stream_headers.
+	    # These variables are needed in order to pass values between this
+	    # subroutine, &_prepare_stream, and &_stream_compound_result. The latter two
+	    # routines are called by the PSGI code, and there is no other way to convey
+	    # these values.
+	    
+	    $streamed_request = $request;
+	    $stream_status = undef;
+	    @stream_headers = ();
+	    
+	    # Indicate that this response will be streamed, and that the streaming will
+	    # be managed by &_prepare_stream.
+	    
+	    my $resp = Dancer::SharedData::response;
+	    $resp->streamed(\&_prepare_stream);
+	    
+	    # This following idiosyncratic statements are the only way to get Dancer to
+	    # return the proper result to PSGI in order for the streaming to kick in.
+	    
+	    my $c = Dancer::Continuation::Route::FileSent->new(return_value => $resp);
+	    $c->throw;
 	}
     }
     
@@ -2525,10 +2561,10 @@ sub _generate_processed_result {
     
     $output .= $footer;
     
-    # If we are directing output to a file, write it now and then close the file. The proper encoding
-    # should already have been set up. If a response_hook has been established, call it and return
-    # as output whatever it returns. Otherwise, continue and return the output to the client as
-    # normal.
+    # If we are directing output to a file, write it now and then close the file. The
+    # proper encoding should already have been set up. If a response_hook has been
+    # established, call it and return as output whatever it returns. Otherwise, continue
+    # and return the output to the client as normal.
     
     if ( my $out_fh = $request->{out_fh} )
     {
@@ -2560,6 +2596,34 @@ sub _generate_processed_result {
 }
 
 
+# _prepare_stream ( status, headers )
+#
+# This subroutine is called from the PSGI code if the response is to be streamed to the
+# client. It filters out the 'content-length' header, because we don't know what the
+# full content length is going to be. Then it returns a CODE reference to the subroutine
+# that will stream the result.
+
+sub _prepare_stream {
+
+    my ($status, $headers) = @_;
+    
+    if ( !defined $stream_status )
+    {
+	$stream_status = $status;
+	
+	for ( my $i = 0; $i < @$headers; $i = $i + 2 )
+	{
+	    if ( $headers->[$i] !~ /^content-length/i )
+	    {
+		push @stream_headers, $headers->[$i], $headers->[$i+1];
+	    }
+	}
+    }
+    
+    return \&_stream_compound_result;
+}
+
+
 # _stream_compound_result ( )
 # 
 # Continue to generate a compound query result from where generate_compound_result() left off, and
@@ -2573,7 +2637,11 @@ sub _generate_processed_result {
 
 sub _stream_compound_result {
     
-    my ($request, $writer) = @_;
+    my ($psgi_callback) = @_;
+    
+    my $writer = $psgi_callback->( [ $stream_status, \@stream_headers ] );
+    
+    my $request = $streamed_request;
     
     my $ds = $request->{ds};
     
@@ -2708,7 +2776,7 @@ sub _stream_compound_result {
 	# Keep count of the output records, and stop if we have exceeded the
 	# limit. 
 	
-	last if $request->{result_limit} ne 'all' && 
+	last if defined $request->{result_limit} && $request->{result_limit} ne 'all' && 
 	    ++$request->{actual_count} >= $request->{result_limit};
     }
     
