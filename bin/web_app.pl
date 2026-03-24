@@ -16,6 +16,8 @@ use Template;
 use TableDefs qw(init_table_names);
 use Web::DataService;
 
+our ($TEST_MODE);
+
 # If we were called from the command line with one or more arguments, then
 # assume that we have been called for debugging purposes.  This does not count
 # the standard options accepted by Dancer, such as "--confdir" and "--port",
@@ -25,8 +27,6 @@ BEGIN {
 
     Web::DataService->VERSION(0.3);
 
-    my $test_mode;
-    
     # If we were given a command-line argument, figure out what to do with it.
     
     if ( defined $ARGV[0] )
@@ -109,7 +109,7 @@ BEGIN {
 	    my $test_port = setting('test_port');
 	    set port => $test_port if $test_port;
 
-	    $test_mode = 1;
+	    $TEST_MODE = 1;
 	    
 	    # Also check for the 'debug' command following this one.
 
@@ -124,7 +124,7 @@ BEGIN {
 	}
     }
     
-    init_table_names(Dancer::config, $test_mode);
+    init_table_names(Dancer::config, $TEST_MODE);
 }
 
 use PB0::Main;

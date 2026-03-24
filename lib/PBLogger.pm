@@ -86,7 +86,7 @@ sub log_request {
     
     return unless(ref $fh && $fh->opened);
     
-    my $remote_addr = $request->headers ? $request->header('X-Real-IP') || $request->end->{REMOTE_ADDR}
+    my $remote_addr = $request->headers ? $request->header('X-Real-IP') || $request->env->{REMOTE_ADDR}
 	: $request->env->{REMOTE_ADDR};
     my $time_formatted = localtime;
     my $method = $request->method;

@@ -15,7 +15,6 @@ use TableDefs qw(init_table_names enable_test_mode disable_test_mode is_test_mod
 my $logger = PBLogger->new;
 my $starttime;
 
-
 # We need a couple of routes to handle interaction with the server when it is in test mode.
 
 get '/:prefix/testmode/:tablename/:op' => sub {
@@ -129,7 +128,7 @@ any qr{.*} => sub {
     # anything else. This will make sure that we have a record of it even in case this process
     # hangs while responding. But suppress this if we are running in test mode.
     
-    $logger->log_request($r) if $logger && !$PBData::TEST_MODE;
+    $logger->log_request($r) if $logger && !$main::TEST_MOMDE;
     
     # Handle some special parameters.
     
@@ -201,7 +200,7 @@ any qr{.*} => sub {
     
     my $result = Web::DataService->handle_request($r);
 
-    $logger->log_event($r, 'DONE', $starttime) if $logger && !$PBData::TEST_MODE;
+    $logger->log_event($r, 'DONE', $starttime) if $logger && !$main::TEST_MODE;
 
     return $result;
 };
@@ -214,19 +213,19 @@ any qr{.*} => sub {
 hook on_handler_exception => sub {
 
     $logger->log_event(Dancer::request, 'HANDLER EXCEPTION', $starttime)
-	if $logger && !$PBData::TEST_MODE;
+	if $logger && !$main::TEST_MODE;
     var(error => $_[0]);
 };
 
 hook on_route_exception => sub {
 
     $logger->log_event(Dancer::request, 'ROUTE EXCEPTION', $starttime)
-	if $logger && !$PBData::TEST_MODE;
+	if $logger && !$main::TEST_MODE;
     var(error => $_[0]);
 };
 
 hook after_error_render => sub {
-    
+
     Web::DataService->error_result(var('error'), var('wds_request'));
 };
 
