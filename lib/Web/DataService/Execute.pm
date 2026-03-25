@@ -1074,47 +1074,53 @@ sub error_result {
 
     my ($ds, $error, $request) = @_;
     
-    # If we are in 'debug' mode, then print out the error message.
+    # Dancer does a lousy job of logging error messages, so log some message
+    # details unless the error is a string. Dancer does fine with those.
     
-    if ( Web::DataService->is_mode('debug') )
+    my $error_output;
+    
+    unless ( defined $error )
     {
-	unless ( defined $error )
+	$error_output = "CAUGHT UNDEFINED ERROR";
+    }
+    
+    elsif ( ! ref $error )
+    {
+	$error_output = "CAUGHT ERROR: " . $error if $Web::DataService::DEBUG;
+    }
+    
+    elsif ( $error->isa('HTTP::Validate::Result') )
+    {
+	my @messages;
+	
+	foreach my $e ( $error->errors )
 	{
-	    $ds->debug_line("CAUGHT UNKNOWN ERROR");
+	    push @messages, $e;
 	}
 	
-	elsif ( ! ref $error )
-	{
-	    $ds->debug_line("CAUGHT ERROR: " . $error);
-	}
-	
-	elsif ( $error->isa('HTTP::Validate::Result') )
-	{
-	    require 'Data/Dumper.pm';
-	    $Data::Dumper::Useqq = 1;
-	    $Data::Dumper::Terse = 1;
-	    
-	    $ds->debug_line("CAUGHT HTTP::VALIDATE: " . Dumper($error->{er}));
-	}
-	
-	elsif ( $error->isa('Dancer::Exception::Base') )
-	{
-	    $ds->debug_line("CAUGHT ERROR: " . $error->message);
-	}
-	
-	elsif ( $error->isa('Web::DataService::Exception') )
-	{
-	    $ds->debug_line("CAUGHT EXCEPTION: " . $error->{message});
-	}
-	
-	else
-	{
-	    require 'Data/Dumper.pm';
-	    $Data::Dumper::Useqq = 1;
-	    $Data::Dumper::Terse = 1;
-	    
-	    $ds->debug_line("CAUGHT UNKNOWN ERROR: " . Dumper($error));
-	}
+	$error_output = "CAUGHT HTTP::VALIDATE: " . join('; ', @messages);
+    }
+    
+    elsif ( $error->isa('Web::DataService::Exception') )
+    {
+	$error_output = "CAUGHT EXCEPTION: " . $error->{code} . " " . $error->{message};
+    }
+    
+    elsif ( $error->isa('Dancer::Exception::Base') )
+    {
+	$error_output = "CAUGHT ERROR: " . $error->message if $Web::DataService::DEBUG;
+    }
+    
+    # If we are running in debug mode, print this error. Otherwise log it.
+    
+    if ( $Web::DataService::DEBUG )
+    {
+	$ds->debug_line($error_output);
+    }
+
+    else
+    {
+	Dancer::error($error_output);
     }
     
     # Then figure out which kind of request object we have.
