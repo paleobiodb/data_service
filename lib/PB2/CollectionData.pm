@@ -2325,7 +2325,7 @@ sub refs {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my $inner_tables = {};
+    my $inner_tables = { sr => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     # push @filters, $request->generateCollFilters($inner_tables);
