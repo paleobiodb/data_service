@@ -2747,6 +2747,8 @@ sub prevalence {
 	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
+	$dbh->do("ROLLBACK");
+	
 	$request->generate_prevalence($result, $limit, $detail);
 	return;
     }
