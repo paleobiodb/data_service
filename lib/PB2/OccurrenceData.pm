@@ -1725,10 +1725,16 @@ sub list_occs {
     
     $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
-    # Then prepare and execute the main query.
+    # Then prepare and execute the query. We need to wrap it in a transaction in order
+    # to avoid triggering the "Update locks cannot be acquired during a READ UNCOMMITTED
+    # transaction" bug.
+    
+    $dbh->do("BEGIN");
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
+    
+    $dbh->do("ROLLBACK");
     
     # If we were asked to get the count, then do so
     
@@ -2025,10 +2031,16 @@ sub diversity {
     $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug ||
 	$request->{main_sql} =~ /and \) and cc\.environment/;
     
-    # Then prepare and execute the main query.
+    # Then prepare and execute the query. We need to wrap it in a transaction in order
+    # to avoid triggering the "Update locks cannot be acquired during a READ UNCOMMITTED
+    # transaction" bug.
+    
+    $dbh->do("BEGIN");
     
     my $sth = $dbh->prepare($request->{main_sql});
     $sth->execute();
+    
+    $dbh->do("ROLLBACK");
     
     # Now fetch all of the rows, and process them into a diversity matrix.
     
@@ -2237,16 +2249,17 @@ sub quickdiv {
 	return $request->list_result();
     }
     
-    # my $outer_sql = "
-    # 		SELECT interval_no, interval_name, early_age, late_age, d.sampled_in_bin, d.n_occs
-    # 		FROM $INTERVAL_DATA JOIN $SCALE_MAP as sm using (interval_no)
-    # 		    LEFT JOIN ($sql) as d using (interval_no)
-    # 		WHERE sm.scale_no = $qscale and $type_clause $age_limit
-    # 		ORDER BY early_age";
-    
     $request->{ds}->debug_line("$sql\n") if $request->debug;
     
+    # Then prepare and execute the query. We need to wrap it in a transaction in order
+    # to avoid triggering the "Update locks cannot be acquired during a READ UNCOMMITTED
+    # transaction" bug.
+    
+    $dbh->do("BEGIN");
+    
     $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    $dbh->do("ROLLBACK");
     
     # Now trim empty bins from the start and end of the list.
     
@@ -2486,10 +2499,16 @@ sub list_occs_taxa {
     
     $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
-    # Then prepare and execute the main query.
+    # Then prepare and execute the query. We need to wrap it in a transaction in order
+    # to avoid triggering the "Update locks cannot be acquired during a READ UNCOMMITTED
+    # transaction" bug.
+    
+    $dbh->do("BEGIN");
     
     my $sth = $dbh->prepare($request->{main_sql});
     $sth->execute();
+    
+    $dbh->do("ROLLBACK");
     
     # Remove unnecessary output fields.
     

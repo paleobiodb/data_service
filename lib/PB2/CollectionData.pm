@@ -2088,10 +2088,16 @@ sub list_colls {
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
-    # Then prepare and execute the main query and the secondary query.
+    # Then prepare and execute the main query. We need to wrap it in a transaction in
+    # order to avoid triggering the "Update locks cannot be acquired during a READ
+    # UNCOMMITTED transaction" bug.
+    
+    $dbh->do("BEGIN");
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
+    
+    $dbh->do("ROLLBACK");
     
     # If we were asked to get the count, then do so
     
@@ -2294,12 +2300,18 @@ sub summary {
 	ORDER BY s.bin_id $limit";
     }
     
-    # Then prepare and execute the query..
+    # Then prepare and execute the query. We need to wrap it in a transaction in order
+    # to avoid triggering the "Update locks cannot be acquired during a READ UNCOMMITTED
+    # transaction" bug.
+    
+    $dbh->do("BEGIN");
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
+    
+    $dbh->do("ROLLBACK");
     
     # Get the result count, if we were asked to do so.
     
@@ -2403,10 +2415,16 @@ sub refs {
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
-    # Then prepare and execute the main query.
+    # Then prepare and execute the query. We need to wrap it in a transaction in order
+    # to avoid triggering the "Update locks cannot be acquired during a READ UNCOMMITTED
+    # transaction" bug.
+    
+    $dbh->do("BEGIN");
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
+    
+    $dbh->do("ROLLBACK");
     
     # If we were asked to get the count, then do so
     
@@ -2512,10 +2530,16 @@ sub list_coll_strata {
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
-    # Then prepare and execute the main query and the secondary query.
+    # Then prepare and execute the query. We need to wrap it in a transaction in order
+    # to avoid triggering the "Update locks cannot be acquired during a READ UNCOMMITTED
+    # transaction" bug.
+    
+    $dbh->do("BEGIN");
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
     $request->{main_sth}->execute();
+    
+    $dbh->do("ROLLBACK");
     
     # If we were asked to get the count, then do so
     
