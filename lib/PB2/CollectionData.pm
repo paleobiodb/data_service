@@ -1546,7 +1546,7 @@ sub initialize {
     
     $ds->define_ruleset('1.2:colls:selector' =>
 	{ param => 'coll_id', valid => VALID_IDENTIFIER('COL'), list => ',',
-	  alias => ['collection_id', 'collection_no'] },
+	  alias => ['id', 'collection_id', 'collection_no'] },
 	    "A comma-separated list of collection identifiers.  The specified collections",
 	    "are selected, provided they satisfy the other parameters",
 	    "given with this request.  You may also use the parameter name B<C<id>>.",

@@ -3333,7 +3333,7 @@ sub generate_id_string {
     
     elsif ( ref $base eq 'PBDB::ExtIdent' )
     {
-	if ( $base->{type} eq 'txn' && $exact )
+	if ( $base->{type} eq 'txn' && $base->{num} > 0 && $exact )
 	{
 	    my $dbh = $taxonomy->{dbh};
 	    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
@@ -3347,9 +3347,14 @@ sub generate_id_string {
 	    push @ids, $taxon_no if $taxon_no;
 	}
 	
-	elsif ( $base->{num} )
+	elsif ( $base->{num} > 0 )
 	{
 	    push @ids, $base->{num};
+	}
+
+	else
+	{
+	    die "400 Invalid taxon number '$base->{num}'\n";
 	}
     }
     
@@ -3379,7 +3384,7 @@ sub generate_id_string {
 	    
 	    elsif ( ref $t eq 'PBDB::ExtIdent' )
 	    {
-		if ( $t->{type} eq 'txn' && $exact )
+		if ( $t->{type} eq 'txn' && $t->{num} > 0 && $exact )
 		{
 		    $dbh //= $taxonomy->{dbh};
 		    $TREE_TABLE //= $taxonomy->{TREE_TABLE};
@@ -3393,12 +3398,17 @@ sub generate_id_string {
 		    push @ids, $taxon_no if $taxon_no;
 		}
 		
-		elsif ( $t->{num} )
+		elsif ( $t->{num} > 0 )
 		{
 		    push @ids, $t->{num};
 		}
+		
+		else
+		{
+		    die "400 Invalid taxon number '$t->{num}'\n";
+		}
 	    }
-    
+	    
 	    elsif ( ! ref $t )
 	    {
 		push @ids, grep { $_ } map { $1 if $_ =~ $VALID_TAXON_ID } split(qr{\s*,\s*}, $t);
