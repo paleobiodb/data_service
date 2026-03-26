@@ -858,7 +858,8 @@ sub initialize {
 	    "any specification of a particular re-identification.");
     
     $ds->define_ruleset('1.2:occs:selector' =>
-	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', alias => 'id' },
+	{ param => 'occ_id', valid => VALID_IDENTIFIER('OCC'), list => ',', 
+	  alias => ['id', 'occurrence_no', 'occurrence_id'] },
 	    "A comma-separated list of occurrence identifiers.  The specified occurrences",
 	    "are selected, provided they satisfy the other parameters",
 	    "given with this request.  You may also use the parameter name B<C<id>>.",
