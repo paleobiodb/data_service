@@ -2739,6 +2739,11 @@ sub prevalence {
 	
 	$request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
 	
+	$dbh->do("BEGIN");	# We need to start a transaction in order to
+                                # avoid triggering the "Update locks cannot be
+                                # acquired during a READ UNCOMMITTED
+                                # transaction" bug.
+	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
 	$request->generate_prevalence($result, $limit, $detail);
