@@ -2645,6 +2645,8 @@ sub _stream_compound_result {
     
     my $ds = $request->{ds};
     
+    $ds->debug_line("Switching output to streaming mode\n") if $ds->debug;
+    
     # Determine the output format and figure out which class implements it.
     
     my $format = $request->output_format;
