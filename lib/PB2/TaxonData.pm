@@ -3358,7 +3358,9 @@ sub get_image {
 
     elsif ( my $taxon_no = $request->clean_param('taxon_id') )
     {
-	die $request->exception(400, "You must provide a valid taxon identifier") if $taxon_no eq 'NC';
+	die $request->exception(400, "Field 'taxon_id': value must be either a valid taxon " .
+				"identifier or a nonnegative integer")
+	    unless $taxon_no =~ /^\d+$/;
 	
 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
@@ -3379,8 +3381,9 @@ sub get_image {
 	die $request->exception(400, "The value of 'taxon_name' must be a single taxon name")
 	    if $taxon_name =~ qr{,};
 	
-	# Look up the identifier corresponding to the name (if more than one name matches, the one
-	# with the highest number of occurrences in the database is chosen).
+	# Look up the identifier corresponding to the name (if more than one name
+	# matches, the one with the highest number of occurrences in the database is
+	# chosen).
 	
 	my $options = { fields => 'SIMPLE' };
 	
