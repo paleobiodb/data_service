@@ -2050,8 +2050,8 @@ sub bibjson_name_record {
 
     # Decode any numeric character references.
     
-    $last =~ s/&\#(\d+);/chr($1)/eg if defined $first;
-    $first =~ s/&\#(\d+);/chr($1)/eg if defined $last;
+    $last =~ s/&\#(\d+);/chr($1)/eg if defined $last;
+    $first =~ s/&\#(\d+);/chr($1)/eg if defined $first;
     
     # Construct a name record.
     

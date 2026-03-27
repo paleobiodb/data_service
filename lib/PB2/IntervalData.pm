@@ -962,9 +962,9 @@ sub process_interval_params {
 		push @ids, int_defined($name);
 	    }
 	    
-	    else
+	    elsif ( defined $name )
 	    {
-		push @warnings, "Unknown interval '$name.'";
+		push @warnings, "Unknown interval '$name'";
 	    }
 	}
 	
