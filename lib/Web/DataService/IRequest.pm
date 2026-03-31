@@ -1092,6 +1092,10 @@ sub get_connection {
     return $request->{dbh} if ref $request->{dbh};
     
     $request->{dbh} = $request->{ds}{backend_plugin}->get_connection($request->{ds});
+    
+    $request->{ds}->_call_hooks($request, 'get_connection_hook', $request->{dbh})
+	if $request->{hook_enabled}{get_connection_hook};
+    
     return $request->{dbh};
 }
 

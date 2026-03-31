@@ -232,6 +232,30 @@ sub get_request_body {
 }
 
 
+# requires_encoding ( plugin, ds, request )
+# 
+# If the foundation framework won't recognize the output as text and thus won't
+# encode it into the output character set, return the output character set.
+# Otherwise, return false.
+
+sub encoding_required {
+    
+    my ($plugin, $ds, $request) = @_;
+
+    if ( $ds->{_config}{charset} &&
+	 $ds->{format}{$request->output_format}{encode_as_text} &&
+	 ! $request->{content_type_is_text} )
+    {
+	return $ds->{_config}{charset};
+    }
+
+    else
+    {
+	return;
+    }
+}
+
+
 # set_cors_header ( request, arg )
 # 
 # Set the CORS access control header according to the argument.

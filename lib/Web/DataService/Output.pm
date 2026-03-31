@@ -14,10 +14,12 @@ use Encode;
 use Scalar::Util qw(reftype);
 use Carp qw(carp croak);
 
+use feature 'try';
+
 use Moo::Role;
 
 
-my ($streamed_request, $stream_status, @stream_headers) = @_;
+my ($stream_status, @stream_headers) = @_;
 
 
 sub define_output_map {
@@ -2086,7 +2088,21 @@ sub _generate_single_result {
 	$ds->_call_hooks($request, 'after_serialize_hook', 'footer', \$footer);
     }
     
-    return $header . $record . $footer;
+    # If we need to encode this response into the output character set, do so. This is
+    # only necessary in situations where the backend framework doesn't recognize the
+    # output format as text.
+    
+    if ( my $encoding_required = $ds->{backend_plugin}->encoding_required($ds, $request) )
+    {
+	return encode($encoding_required, $header . $record . $footer);
+    }
+    
+    # Otherwise, return the response as-is.
+    
+    else
+    {
+	return $header . $record . $footer;
+    }
 }
 
 
@@ -2103,8 +2119,6 @@ sub _generate_compound_result {
 
     my ($ds, $request, $streaming_threshold) = @_;
     
-    # Dancer::error "Generating compound result\n";
-    
     # Determine the output format and figure out which class implements it.
     
     my $format = $request->output_format;
@@ -2114,14 +2128,78 @@ sub _generate_compound_result {
 	unless $format_class;
     
     my $path = $request->node_path;
-    my $serial_hook = $ds->{hook_enabled}{after_serialize_hook} && $ds->node_attr($path, 'after_serialize_hook');
     
-    # Get the output configuration to use
+    # Figure out if we are writing output to a file. The necessary encoding will already
+    # have been established as an output layer.
+    
+    my $out_fh = $request->{out_fh};
+    
+    # Figure out if we have to explicitly encode the output into the output character
+    # set. If so, then $encoding_required will have the value of the character set to
+    # encode into.
+    
+    my $encoding_required = $ds->{backend_plugin}->encoding_required($ds, $request);   
     
     # If we have an explicit result list, then we know the count.
     
     $request->{result_count} = scalar(@{$request->{main_result}})
 	if ref $request->{main_result};
+    
+    # If we are supposed to preprocess the result set, do so now.
+    
+    my (@results, $processing_complete);
+
+    if ( $request->{preprocess} )
+    {
+      PRE_RECORD:
+	while ( my $record = $ds->_next_record($request) )
+	{
+	    # Determine the output configuration for this record.
+	    
+	    my $oc = $record->{_output_config} ? $request->{$record->{_output_config}}
+		: $request->{$request->{current_output}};
+	    
+	    my $proc_list = $oc->{proc_list};
+	    
+	    # If there is a before_record_hook defined for this path, call it now. If
+	    # the record should be skipped, then skip it.
+	    
+	    if ( $request->{hook_enabled}{before_record_hook} )
+	    {
+		$ds->_call_hooks($request, 'before_record_hook', $record);
+	    }
+	    
+	    next PRE_RECORD if $record->{_skip_record};
+	    
+	    # If a specific output block was selected for this record, use that block's
+	    # process list.
+	    
+	    if ( $record->{_output_block} )
+	    {
+		$proc_list = $request->{block_proc_list}{$record->{_output_block}};
+	    }
+	    
+	    # Execute any processing steps there may be.
+	    
+	    $ds->process_record($request, $record, $proc_list);
+	
+	    # If 'skip_output_record' was called on this record, skip it. Otherwise, add
+	    # it to the list.
+	    
+	    push @results, $record unless $record->{_skip_record};
+	}
+	
+	# We now know the result count, which may have changed because of skipped
+	# records.
+	
+	$request->{result_count} = scalar(@results);
+	
+	# Record that processing is complete, and stash the results where _next_record
+	# can find them.
+	
+	$processing_complete = 1;
+	$request->{stashed_results} = \@results;
+    }
     
     # Get the list of fields for the header. There may be more than one, if add_header has been
     # called.
@@ -2136,6 +2214,14 @@ sub _generate_compound_result {
     {
 	$ds->_call_hooks($request, 'after_serialize_hook', 'header', \$output);	
     }
+    
+    # If we are writing output to a file, write the header now.
+    
+    print $out_fh $output if $out_fh;
+    
+    # If we need to encode the header, do so now.
+    
+    $output = encode($encoding_required, $output) if $encoding_required;
     
     # A record separator is emitted before every record except the first.  If
     # this format class does not define a record separator, use the empty
@@ -2189,8 +2275,8 @@ sub _generate_compound_result {
 	}
 	
 	# If 'skip_output_record' was called on this record, then skip it now. If
-	# 'select_output_block' was called, then substitute the field list and proc list associated
-	# with that block.
+	# 'select_output_block' was called, then substitute the field list and proc list
+	# associated with that block.
 
 	next RECORD if $record->{_skip_record};
 	
@@ -2200,22 +2286,39 @@ sub _generate_compound_result {
 	    $field_list = $request->{block_field_list}{$alt};
 	}
 	
-	# If there are any processing steps to do, then process this record.
-	
-	$ds->process_record($request, $record, $proc_list);
+	# Unless processing has been done, execute any processing steps that may be
+	# defined for this record. If the processing indicates that the record should be
+	# skipped, then skip it.
+
+	unless ( $processing_complete )
+	{
+	    $ds->process_record($request, $record, $proc_list);
+
+	    next RECORD if $record->{_skip_record};
+	}
 	
 	# Generate the output for this record, preceded by a record separator if
 	# it is not the first record.
 	
 	my $outrs = $emit_rs ? $request->{rs} : ''; $emit_rs = 1;
-	my $outrec = $format_class->emit_record($request, $record, $field_list);
+	my $outrec = $outrs . $format_class->emit_record($request, $record, $field_list);
 	
 	if ( $request->{hook_enabled}{after_serialize_hook} )
 	{
-	    $ds->_call_hooks($request, 'after_serialize_hook', 'record', \$outrs, \$outrec);
+	    $ds->_call_hooks($request, 'after_serialize_hook', 'record', \$outrec);
 	}
 	
-	$output .= $outrs . $outrec;
+	# If we are sending output to a file, write the record now.
+	
+	print $out_fh $outrec if $out_fh;
+	
+	# If we need to encode the record, do so now.
+	
+	$outrec = encode($encoding_required, $outrec) if $encoding_required;
+	
+	# Append the record to the output, unless we are sending to a file only.
+	
+	$output .= $outrec unless $request->{file_only};
 	
 	# Keep count of the output records, and stop if we have exceeded the
 	# limit.
@@ -2229,31 +2332,19 @@ sub _generate_compound_result {
 	
 	# If streaming is a possibility, check whether we have passed the threshold for
 	# result size. If so, then we need to immediately stash the output generated so
-	# far and abort this subroutine in such a way that PSGI will call the proper
-	# subroutine to initiate streaming.
+	# far and abort this subroutine in such a way that the PSGI framework will call
+	# the proper subroutine to initiate streaming.
 	
 	if ( defined $streaming_threshold && length($output) > $streaming_threshold )
 	{
 	    $request->{stashed_output} = $output;
-	    $request->{header_lists} = \@header_lists;
+	    $request->{processing_complete} = $processing_complete;
 	    
-	    # Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
+	    # Clear $stream_status and @stream_headers. These variables are needed in
+	    # order to pass values between this subroutine, &_prepare_stream, and
+	    # &_stream_compound_result. The latter two routines are called by the PSGI
+	    # code, and there is no other way to convey these values.
 	    
-	    # if ( $request->{out_fh} && $request->{response_hook} )
-	    # {
-	    # 	$request->_stream_compound_result();
-
-	    # 	my $response_hook = $request->{response_hook};
-	    # 	return $request->$response_hook();
-	    # }
-	    
-	    # Save the value of $request, and clear $stream_status and @stream_headers.
-	    # These variables are needed in order to pass values between this
-	    # subroutine, &_prepare_stream, and &_stream_compound_result. The latter two
-	    # routines are called by the PSGI code, and there is no other way to convey
-	    # these values.
-	    
-	    $streamed_request = $request;
 	    $stream_status = undef;
 	    @stream_headers = ();
 	    
@@ -2271,269 +2362,8 @@ sub _generate_compound_result {
 	}
     }
     
-    # If we get here, then we did not initiate streaming.  So add the
-    # footer and return the output data.
-    
-    # If we didn't output any records, give the formatter a chance to indicate
-    # this. 
-    
-    unless ( $request->{actual_count} )
-    {
-	my $empty = $format_class->emit_empty($request);
-	
-	if ( $request->{hook_enabled}{after_serialize_hook} )
-	{
-	    $ds->_call_hooks($request, 'after_serialize_hook', 'empty', \$empty);
-	}
-
-	$output .= $empty;
-    }
-    
-    # Generate the final part of the output, after the last record.
-    
-    my $footer = $format_class->emit_footer($request, @header_lists);
-    
-    if ( $request->{hook_enabled}{after_serialize_hook} )
-    {
-	$ds->_call_hooks($request, 'after_serialize_hook', 'footer', \$footer);
-    }
-    
-    $output .= $footer;
-    
-    # If we are directing output to a file, write it now and then close the file. The
-    # proper encoding should already have been set up. If a response_hook has been
-    # established, call it and return as output whatever it returns. Otherwise, continue
-    # and return the output to the client as normal.
-    
-    if ( my $fh = $request->{out_fh} )
-    {
-	print $fh $output;
-	close $fh;
-	
-	if ( my $response_hook = $request->{response_hook} )
-	{
-	    return $request->$response_hook();
-	}
-    }
-    
-    # Determine if we need to encode the output into the proper character set.  Usually Dancer
-    # does this for us, but only if it recognizes the content type as text.  For these formats,
-    # the definition should set the attribute 'encode_as_text' to true.
-    
-    my $output_charset = $ds->{_config}{charset};
-    my $must_encode;
-    
-    if ( $output_charset 
-	 && $ds->{format}{$format}{encode_as_text}
-	 && ! $request->{content_type_is_text} )
-    {
-	$must_encode = 1;
-    }
-    
-    return $must_encode ? encode($output_charset, $output) : $output;
-}
-
-
-# _generate_processed_result ( request )
-# 
-# This function is called if the result set needs to be processed in its
-# entirety before being output.  It processes the entire result set and
-# collects a list of processed records, and then serializes each result record
-# according to the specified output format.  If $streaming_threshold is
-# specified, and if the size of the output exceeds this threshold, this
-# routine then sets up to stream the rest of the output.
-
-sub _generate_processed_result {
-
-    my ($ds, $request, $streaming_threshold) = @_;
-    
-    # Determine the output format and figure out which class implements it.
-    
-    my $format = $request->output_format;
-    my $format_class = $ds->{format}{$format}{package};
-    
-    die "could not generate a result in format '$format': no implementing module was found"
-	unless $format_class;
-    
-    $ds->debug_line("Processing result set before output.");
-    
-    my $path = $request->node_path;
-    my $serial_hook = $ds->{hook_enabled}{after_serialize_hook} && $ds->node_attr($path, 'after_serialize_hook');
-    
-    # Now fetch and process each output record in turn.  Collect up all of the
-    # records that pass the processing phase in a list.
-    
-    my @results;
-    
- RECORD:
-    while ( my $record = $ds->_next_record($request) )
-    {
-	my $oc = $record->{_output_config} ? $request->{$record->{_output_config}}
-	    : $request->{$request->{current_output}};
-	
-	my $proc_list = $oc->{proc_list};
-	
-	# If there is a before_record_hook defined for this path, call it now.
-	
-	if ( $request->{hook_enabled}{before_record_hook} )
-	{
-	    $ds->_call_hooks($request, 'before_record_hook', $record);
-	}
-
-	# If 'skip_output_record' was called on this record, skip it now. If 'select_output_block'
-	# was called, then substitute the proc list associated with the selected output block.
-	
-	next RECORD if $record->{_skip_record};
-	
-	if ( $record->{_output_block} )
-	{
-	    $proc_list = $request->{block_proc_list}{$record->{_output_block}};
-	}
-	
-	# If there are any processing steps to do, then process this record.
-	
-	$ds->process_record($request, $record, $proc_list);
-	
-	# Add the record to the list.
-	
-	push @results, $record;
-    }
-    
-    # We now know the result count.
-    
-    $request->{result_count} = scalar(@results);
-    
-    # At this point, we can generate the output.  We start with the header.
-    
-    my @header_lists = $ds->header_lists($request);
-    
-    my $output = $format_class->emit_header($request, @header_lists);
-    
-    if ( $request->{hook_enabled}{after_serialize_hook} )
-    {
-	$ds->_call_hooks($request, 'after_serialize_hook', 'header', \$output);	
-    }
-    
-    # A record separator is emitted before every record except the first.  If
-    # this format class does not define a record separator, use the empty
-    # string.
-    
-    $request->{rs} = $format_class->can('emit_separator') ?
-	$format_class->emit_separator($request) : '';
-    
-    my $emit_rs = 0;
-    
-    $request->{actual_count} = 0;
-    
-    # If an offset was specified and the result method didn't handle this
-    # itself, then skip the specified number of records.
-    
-    if ( defined $request->{result_offset} && $request->{result_offset} > 0
-	 && ! $request->{offset_handled} )
-    {
-	splice(@results, 0, $request->{result_offset});
-    }
-    
-    # If the result limit is zero, we can ignore all records.
-    
-    if ( defined $request->{result_limit} && $request->{result_limit} eq '0' )
-    {
-	@results = ();	
-    }
-    
-    # Otherwise iterate over all of the remaining records.
-    
- OUTPUT:
-    while ( @results )
-    {
-	my $record = shift @results;
-
-	# If an alternate block or output configuration was specified for this record, use it.
-	
-	my $field_list;
-
-	if ( $record->{_output_block} )
-	{
-	    $field_list = $record->{block_field_list}{$record->{_output_block}};
-	}
-
-	else
-	{
-	    my $oc = $record->{_output_config} ? $request->{$record->{_output_config}}
-		: $request->{$request->{current_output}};
-	    
-	    $field_list = $oc->{field_list};
-	}
-	
-	# Generate the output for this record, preceded by a record separator if
-	# it is not the first record.
-	
-	my $outrs = $emit_rs ? $request->{rs} : ''; $emit_rs = 1;
-	my $outrec = $format_class->emit_record($request, $record, $field_list);
-	
-	if ( $request->{hook_enabled}{after_serialize_hook} )
-	{
-	    $ds->_call_hooks($request, 'after_serialize_hook', 'record', \$outrs, \$outrec);
-	}
-	
-	$output .= $outrs . $outrec;
-	
-	# Keep count of the output records, and stop if we have exceeded the
-	# limit.
-	
-	$request->{actual_count}++;
-	
-	if ( defined $request->{result_limit} && $request->{result_limit} ne 'all' )
-	{
-	    last if $request->{actual_count} >= $request->{result_limit};
-	}
-	
-	# If streaming is a possibility, check whether we have passed the threshold for
-	# result size. If so, then we need to immediately stash the output generated so
-	# far and abort this subroutine in such a way that PSGI will call the proper
-	# subroutine to initiate streaming.
-	
-	if ( defined $streaming_threshold && length($output) > $streaming_threshold )
-	{
-	    $request->{stashed_output} = $output;
-	    $request->{header_lists} = \@header_lists;
-	    
-	    # Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
-	    
-	    # if ( $request->{out_fh} && $request->{response_hook} )
-	    # {
-	    # 	$request->_stream_compound_result();
-
-	    # 	my $response_hook = $request->{response_hook};
-	    # 	return $request->$response_hook();
-	    # }
-	    
-	    # Save the value of $request, and clear $stream_status and @stream_headers.
-	    # These variables are needed in order to pass values between this
-	    # subroutine, &_prepare_stream, and &_stream_compound_result. The latter two
-	    # routines are called by the PSGI code, and there is no other way to convey
-	    # these values.
-	    
-	    $streamed_request = $request;
-	    $stream_status = undef;
-	    @stream_headers = ();
-	    
-	    # Indicate that this response will be streamed, and that the streaming will
-	    # be managed by &_prepare_stream.
-	    
-	    my $resp = Dancer::SharedData::response;
-	    $resp->streamed(\&_prepare_stream);
-	    
-	    # This following idiosyncratic statements are the only way to get Dancer to
-	    # return the proper result to PSGI in order for the streaming to kick in.
-	    
-	    my $c = Dancer::Continuation::Route::FileSent->new(return_value => $resp);
-	    $c->throw;
-	}
-    }
-    
-    # If we get here, then we did not initiate streaming.  So add the
-    # footer and return the output data.
+    # If we get here, then we did not initiate streaming. So add the footer and return
+    # the output data.
     
     # If we didn't output any records, give the formatter a chance to indicate
     # this. 
@@ -2547,6 +2377,10 @@ sub _generate_processed_result {
 	    $ds->_call_hooks($request, 'after_serialize_hook', 'empty', \$empty);
 	}
 	
+	print $out_fh $empty if $out_fh;
+	
+	$empty = encode($encoding_required, $empty) if $encoding_required;
+	
 	$output .= $empty;
     }
     
@@ -2559,49 +2393,330 @@ sub _generate_processed_result {
 	$ds->_call_hooks($request, 'after_serialize_hook', 'footer', \$footer);
     }
     
-    $output .= $footer;
-    
-    # If we are directing output to a file, write it now and then close the file. The
-    # proper encoding should already have been set up. If a response_hook has been
-    # established, call it and return as output whatever it returns. Otherwise, continue
-    # and return the output to the client as normal.
-    
-    if ( my $out_fh = $request->{out_fh} )
+    # If we are sending output to a file, send the footer and close the file.
+
+    if ( $out_fh )
     {
-	print $out_fh $output;
+	print $out_fh $footer;
 	close $out_fh;
-	
-	if ( my $response_hook = $request->{response_hook} )
-	{
-	    return $request->$response_hook();
-	}
     }
     
-    # Determine if we need to encode the output into the proper character set.
-    # Usually Dancer does this for us, but only if it recognizes the content
-    # type as text.  For these formats, the definition should set the
-    # attribute 'encode_as_text' to true.
+    # If we need to encode the output into the output character set, do so now.
+
+    $footer = encode($encoding_required, $footer) if $encoding_required;
     
-    my $output_charset = $ds->{_config}{charset};
-    my $must_encode;
+    # Add the footer to the output.
     
-    if ( $output_charset 
-	 && $ds->{format}{$format}{encode_as_text}
-	 && ! $request->{content_type_is_text} )
+    $output .= $footer;
+    
+    # If we are sending to the file only, use the response hook to generate output and
+    # return that.
+
+    if ( $request->{file_only} )
     {
-	$must_encode = 1;
+	my $response_hook = $request->{response_hook};
+	return $request->$response_hook();
     }
     
-    return $must_encode ? encode($output_charset, $output) : $output;
+    # Otherwise return the output we have generated.
+    
+    return $output;
 }
+
+
+# # _generate_processed_result ( request )
+# # 
+# # This function is called if the result set needs to be processed in its
+# # entirety before being output.  It processes the entire result set and
+# # collects a list of processed records, and then serializes each result record
+# # according to the specified output format.  If $streaming_threshold is
+# # specified, and if the size of the output exceeds this threshold, this
+# # routine then sets up to stream the rest of the output.
+
+# sub _generate_processed_result {
+
+#     my ($ds, $request, $streaming_threshold) = @_;
+    
+#     # Determine the output format and figure out which class implements it.
+    
+#     my $format = $request->output_format;
+#     my $format_class = $ds->{format}{$format}{package};
+    
+#     die "could not generate a result in format '$format': no implementing module was found"
+# 	unless $format_class;
+    
+#     $ds->debug_line("Processing result set before output.");
+    
+#     my $path = $request->node_path;
+    
+#     # Figure out if we are writing output to a file. The necessary encoding will already
+#     # have been established as an output layer.
+    
+#     my $out_fh = $request->{out_fh};
+    
+#     # Figure out if we have to explicitly encode the output into the output character
+#     # set. If so, then $encoding_required will have the value of the character set to
+#     # encode into.
+    
+#     my $encoding_required = $ds->{backend_plugin}->encoding_required($ds, $request);   
+    
+#     # Now fetch and process each output record in turn.  Collect up all of the
+#     # records that pass the processing phase in a list.
+    
+#     my @results;
+    
+#  RECORD:
+#     while ( my $record = $ds->_next_record($request) )
+#     {
+# 	my $oc = $record->{_output_config} ? $request->{$record->{_output_config}}
+# 	    : $request->{$request->{current_output}};
+	
+# 	my $proc_list = $oc->{proc_list};
+	
+# 	# If there is a before_record_hook defined for this path, call it now.
+	
+# 	if ( $request->{hook_enabled}{before_record_hook} )
+# 	{
+# 	    $ds->_call_hooks($request, 'before_record_hook', $record);
+# 	}
+
+# 	# If 'skip_output_record' was called on this record, skip it now. If 'select_output_block'
+# 	# was called, then substitute the proc list associated with the selected output block.
+	
+# 	next RECORD if $record->{_skip_record};
+	
+# 	if ( $record->{_output_block} )
+# 	{
+# 	    $proc_list = $request->{block_proc_list}{$record->{_output_block}};
+# 	}
+	
+# 	# If there are any processing steps to do, then process this record.
+	
+# 	$ds->process_record($request, $record, $proc_list);
+	
+# 	# Add the record to the list.
+	
+# 	push @results, $record;
+#     }
+    
+#     # We now know the result count.
+    
+#     $request->{result_count} = scalar(@results);
+    
+#     # Record that processing is complete.
+    
+#     $request->{processing_complete} = 1;
+    
+#     # At this point, we can generate the output.  We start with the header.
+    
+#     my @header_lists = $ds->header_lists($request);
+    
+#     my $output = $format_class->emit_header($request, @header_lists);
+    
+#     if ( $request->{hook_enabled}{after_serialize_hook} )
+#     {
+# 	$ds->_call_hooks($request, 'after_serialize_hook', 'header', \$output);	
+#     }
+    
+#     # If we are writing output to a file, write the header now.
+    
+#     print $out_fh $output if $out_fh;
+    
+#     # If we need to encode the header, do so now.
+    
+#     $output = encode($encoding_required, $output) if $encoding_required;
+    
+#     # A record separator is emitted before every record except the first.  If
+#     # this format class does not define a record separator, use the empty
+#     # string.
+    
+#     $request->{rs} = $format_class->can('emit_separator') ?
+# 	$format_class->emit_separator($request) : '';
+    
+#     my $emit_rs = 0;
+    
+#     $request->{actual_count} = 0;
+    
+#     # If an offset was specified and the result method didn't handle this
+#     # itself, then skip the specified number of records.
+    
+#     if ( defined $request->{result_offset} && $request->{result_offset} > 0
+# 	 && ! $request->{offset_handled} )
+#     {
+# 	splice(@results, 0, $request->{result_offset});
+#     }
+    
+#     # If the result limit is zero, we can ignore all records.
+    
+#     if ( defined $request->{result_limit} && $request->{result_limit} eq '0' )
+#     {
+# 	@results = ();	
+#     }
+    
+#     # Otherwise iterate over all of the remaining records.
+    
+#  OUTPUT:
+#     while ( @results )
+#     {
+# 	my $record = shift @results;
+
+# 	# If an alternate block or output configuration was specified for this record, use it.
+	
+# 	my $field_list;
+
+# 	if ( $record->{_output_block} )
+# 	{
+# 	    $field_list = $record->{block_field_list}{$record->{_output_block}};
+# 	}
+
+# 	else
+# 	{
+# 	    my $oc = $record->{_output_config} ? $request->{$record->{_output_config}}
+# 		: $request->{$request->{current_output}};
+	    
+# 	    $field_list = $oc->{field_list};
+# 	}
+	
+# 	# Generate the output for this record, preceded by a record separator if
+# 	# it is not the first record.
+	
+# 	my $outrs = $emit_rs ? $request->{rs} : ''; $emit_rs = 1;
+# 	my $outrec = $format_class->emit_record($request, $record, $field_list);
+	
+# 	if ( $request->{hook_enabled}{after_serialize_hook} )
+# 	{
+# 	    $ds->_call_hooks($request, 'after_serialize_hook', 'record', \$outrs, \$outrec);
+# 	}
+	
+# 	# If we are sending output to a file, do so now.
+	
+# 	print $out_fh, $outrec if $out_fh;
+	
+# 	# If we need to encode the record, do so now.
+	
+# 	$outrec = encode($encoding_required, $outrec) if $encoding_required;
+	
+# 	# Append the record to the output, unless we are writing only to a file.
+	
+# 	$output .= $outrs . $outrec unless $request->{file_only};
+	
+# 	# Keep count of the output records, and stop if we have exceeded the
+# 	# limit.
+	
+# 	$request->{actual_count}++;
+	
+# 	if ( defined $request->{result_limit} && $request->{result_limit} ne 'all' )
+# 	{
+# 	    last if $request->{actual_count} >= $request->{result_limit};
+# 	}
+	
+# 	# If streaming is a possibility, check whether we have passed the threshold for
+# 	# result size. If so, then we need to immediately stash the output generated so
+# 	# far and abort this subroutine in such a way that PSGI will call the proper
+# 	# subroutine to initiate streaming.
+	
+# 	# if ( defined $streaming_threshold && length($output) > $streaming_threshold )
+# 	# {
+# 	#     $request->{stashed_output} = $output;
+# 	#     $request->{header_lists} = \@header_lists;
+	    
+# 	#     # Dancer::error "Initiating streaming at threshold $streaming_threshold\n";
+	    
+# 	#     # Save the value of $request, and clear $stream_status and @stream_headers.
+# 	#     # These variables are needed in order to pass values between this
+# 	#     # subroutine, &_prepare_stream, and &_stream_compound_result. The latter two
+# 	#     # routines are called by the PSGI code, and there is no other way to convey
+# 	#     # these values.
+	    
+# 	#     $streamed_request = $request;
+# 	#     $stream_status = undef;
+# 	#     @stream_headers = ();
+	    
+# 	#     # Indicate that this response will be streamed, and that the streaming will
+# 	#     # be managed by &_prepare_stream.
+	    
+# 	#     my $resp = Dancer::SharedData::response;
+# 	#     $resp->streamed(\&_prepare_stream);
+	    
+# 	#     # This following idiosyncratic statements are the only way to get Dancer to
+# 	#     # return the proper result to PSGI in order for the streaming to kick in.
+	    
+# 	#     my $c = Dancer::Continuation::Route::FileSent->new(return_value => $resp);
+# 	#     $c->throw;
+# 	# }
+#     }
+    
+#     # If we get here, then we did not initiate streaming.  So add the
+#     # footer and return the output data.
+    
+#     # If we didn't output any records, give the formatter a chance to indicate
+#     # this. 
+    
+#     unless ( $request->{actual_count} )
+#     {
+# 	my $empty = $format_class->emit_empty($request);
+	
+# 	if ( $request->{hook_enabled}{after_serialize_hook} )
+# 	{
+# 	    $ds->_call_hooks($request, 'after_serialize_hook', 'empty', \$empty);
+# 	}
+	
+# 	print $out_fh $empty if $out_fh;
+	
+# 	$output .= $empty;
+#     }
+    
+#     # Generate the final part of the output, after the last record.
+    
+#     my $footer = $format_class->emit_footer($request, @header_lists);
+    
+#     if ( $request->{hook_enabled}{after_serialize_hook} )
+#     {
+# 	$ds->_call_hooks($request, 'after_serialize_hook', 'footer', \$footer);
+#     }
+    
+#     # If we are sending output to a file, do so now.
+    
+#     print $out_fh $footer if $out_fh;
+    
+#     # If we need to encode the output into the output character set, do so now.
+    
+#     $footer = encode($encoding_required, $footer) if $encoding_required;
+    
+#     # Add the footer to the output.
+    
+#     $output .= $footer;
+    
+#     # If we have been directing output to a file, close it.
+    
+#     close $out_fh if $out_fh;
+    
+#     # If an 'after_output_hook' is defined, call it now.
+    
+#     $ds->_call_hooks($request, 'after_output_hook')
+# 	if $request->{hook_enabled}{after_output_hook};
+    
+#     # If we are sending to the file only, use the response hook to generate output and
+#     # return that.
+
+#     if ( $request->{file_only} )
+#     {
+# 	my $response_hook = $request->{response_hook};
+# 	return $request->$response_hook();
+#     }
+    
+#     # Otherwise return the output we have generated, to be sent to the client.
+    
+#     return $output;
+# }
 
 
 # _prepare_stream ( status, headers )
 #
-# This subroutine is called from the PSGI code if the response is to be streamed to the
-# client. It filters out the 'content-length' header, because we don't know what the
-# full content length is going to be. Then it returns a CODE reference to the subroutine
-# that will stream the result.
+# This subroutine is called from the PSGI framework code if the response is to be
+# streamed to the client. We filter out the 'content-length' header, because we don't
+# know what the full content length is going to be. Then we return a CODE reference to
+# the subroutine that will stream the result.
 
 sub _prepare_stream {
 
@@ -2619,33 +2734,71 @@ sub _prepare_stream {
 	    }
 	}
     }
-    
-    return \&_stream_compound_result;
+
+    return \&_protect_stream;
 }
 
 
-# _stream_compound_result ( )
+# _protect_stream ( psgi_callback )
+#
+# The main reason for this function is to wrap the call to _stream_compound_result in a
+# try block. That way, we can catch any exception that might be thrown. If we didn't do
+# this, an exception would actually terminate this entire process.
 # 
-# Continue to generate a compound query result from where generate_compound_result() left off, and
-# stream it to the client or write it to an output file record-by-record.
-# 
-# If the second argument is defined, it must be a Plack 'writer' object. This object's 'write'
-# method will be called to send in turn the previously stashed output, each subsequent record, and
-# then the footer.  Each of these chunks of data will be immediately sent off to the client,
-# instead of being marshalled together in memory.  This allows the server to send results up to
-# hundreds of megabytes in length without bogging down.
+# The single argument is a callback which we immediately call in order to acquire a
+# writer object.
 
-sub _stream_compound_result {
-    
+sub _protect_stream {
+
     my ($psgi_callback) = @_;
     
     my $writer = $psgi_callback->( [ $stream_status, \@stream_headers ] );
     
-    my $request = $streamed_request;
+    no warnings 'experimental';
+    
+    try {
+	&_stream_compound_result($writer);
+    }
+    
+    catch ($e) {
+	$writer->write("\nAn exception occurred while processing the output");
+	$writer->close;
+	
+	Dancer::error("An exception occurred while streaming output: $e");
+	
+	my $request = $Web::DataService::FOUNDATION->retrieve_inner;
+	$request->debug_line($e) if $request->debug;
+    }
+}
+
+
+# _stream_compound_result ( writer )
+# 
+# Continue to generate a compound query result from where generate_compound_result() left off, and
+# stream it to the client or write it to an output file record-by-record.
+#
+# The single argument is an object wiht a 'write' method. We can call this method to
+# send in turn the previously stashed output, each subsequent record, and then the
+# footer. Each of these chunks of data will be immediately sent off to the client,
+# instead of being marshalled together in memory. This allows the server to send results
+# up to gigabytes in length without bogging down.
+
+sub _stream_compound_result {
+    
+    my ($writer) = @_;
+    
+    die "Error: no writer was provided" unless $writer;
+    
+    # Grab the request handle and associated information.
+    
+    my $request = $Web::DataService::FOUNDATION->retrieve_inner;
     
     my $ds = $request->{ds};
     
-    $ds->debug_line("Switching output to streaming mode\n") if $ds->debug;
+    my $processing_complete = $request->{processing_complete};
+    
+    $ds->debug_line("Switching output to streaming mode at length " .
+		    length($request->{stashed_output}) . "\n") if $ds->debug;
     
     # Determine the output format and figure out which class implements it.
     
@@ -2657,40 +2810,36 @@ sub _stream_compound_result {
 	unless $format_class;
     
     my $path = $request->node_path;
-    my $serial_hook = $ds->{hook_enabled}{after_serialize_hook} && $ds->node_attr($path, 'after_serialize_hook');
+    my $serial_hook = $ds->{hook_enabled}{after_serialize_hook} &&
+	$ds->node_attr($path, 'after_serialize_hook');
     
-    # Determine the output character set, because we will need to encode text
-    # responses in it.
+    # Figure out if we are writing output to a file. The necessary encoding will already
+    # have been established as an output layer.
     
-    my $output_charset = $ds->{_config}{charset};
+    my $out_fh = $request->{out_fh};
     
-    #return $must_encode ? encode($output_charset, $output) : $output;
+    # Figure out if we already explicitly encoded the stashed output. The following
+    # statement will set $already_encoded to a true value (the name of the encoding) if
+    # that is the case.
+    
+    my $already_encoded = $ds->{backend_plugin}->encoding_required($ds, $request);   
+    
+    # Unless we have already encoded the output, it will need to be encoded into the
+    # output character set before being streamed.
+    
+    my $encoding = $ds->config_value('charset') || 'utf-8';
     
     # If we have a writer object, send out the partial output previously stashed by
     # generate_compound_result().
 
-    if ( $writer )
+    if ( $already_encoded )
     {
-	if ( $output_charset && $format_is_text )
-	{
-	    # Dancer::error "Writing stashed output encoded as $output_charset\n";
-	    $writer->write( encode($output_charset, $request->{stashed_output}) );
-	}
-	
-	else
-	{
-	    # Dancer::error "Writing stashed output\n";
-	    $writer->write( $request->{stashed_output} );
-	}
+	$writer->write( $request->{stashed_output} );
     }
-    
-    # If we have an output filehandle, write the stashed output to it. The proper encoding layer
-    # should have been established already.
-    
-    if ( $request->{out_fh} )
+
+    else
     {
-	# Dancer::error "Writing stashed output to filehandle\n";
-	print $request->{stashed_output};
+	$writer->write( encode($encoding, $request->{stashed_output}) );
     }
     
     # Then process the remaining rows.
@@ -2704,10 +2853,10 @@ sub _stream_compound_result {
 	my $proc_list = $oc->{proc_list};
 	my $field_list = $oc->{field_list};
 	
-	# If there are any processing steps to do, then process this record. But skip this if this
-	# subroutine was called from '_generate_processed_result'.
+	# If there are any processing steps to do, then process this record. But skip
+	# this if the result set was preprocessed.
 
-	if ( $request->{processing_complete} )
+	if ( $processing_complete )
 	{
 	    $field_list = $record->{block_field_list}{$record->{_output_block}}
 		if $record->{_output_block};
@@ -2723,8 +2872,8 @@ sub _stream_compound_result {
 	    }
 
 	    # If 'skip_output_record' was called on this record, skip it now. If
-	    # 'select_output_block' was called, then substitute the proc list and field list for
-	    # the selected block.
+	    # 'select_output_block' was called, then substitute the proc list and field
+	    # list for the selected block.
 	    
 	    next RECORD if $record->{_skip_record};
 	    
@@ -2737,45 +2886,31 @@ sub _stream_compound_result {
 	    # Do any processing steps that were defined for this record.
 	    
 	    $ds->process_record($request, $record, $proc_list);
+
+	    next RECORD if $record->{_skip_record};
 	}
 	
 	# Generate the output for this record, preceded by a record separator if
 	# it is not the first record.
 	
 	my $outrs = $request->{rs};
-	my $outrec = $format_class->emit_record($request, $record, $field_list);
+	my $outrec = $outrs . $format_class->emit_record($request, $record, $field_list);
 	
 	if ( $request->{hook_enabled}{after_serialize_hook} )
 	{
-	    $ds->_call_hooks($request, 'after_serialize_hook', 'record', \$outrs, \$outrec);
+	    $ds->_call_hooks($request, 'after_serialize_hook', 'record', \$outrec);
 	}
 	
-	my $output .= $outrs . $outrec;
+	# If we are sending output to a file, do so now.
 	
-	if ( ! defined $output or $output eq '' )
-	{
-	    # do nothing
-	}
-
-	if ( $writer )
-	{
-	    if ( $output_charset && $format_is_text )
-	    {
-		$writer->write( encode($output_charset, $output) );
-	    }
-	    
-	    else
-	    {
-		$writer->write( $output );
-	    }
-	}
-
-	if ( my $out_fh = $request->{out_fh} )
-	{
-	    print $out_fh $output;
-	}
+	print $out_fh $outrec if $out_fh;
 	
-	# Keep count of the output records, and stop if we have exceeded the
+	# Send the record to the output stream. We need to encode it before sending,
+	# because the $writer object does not do so.
+	
+	$writer->write( encode($encoding, $outrec) );
+	
+	# Keep count of the output records, and stop if we have reached the
 	# limit. 
 	
 	last if defined $request->{result_limit} && $request->{result_limit} ne 'all' && 
@@ -2784,45 +2919,24 @@ sub _stream_compound_result {
     
     # Finally, send out the footer and then close the writer object and/or filehandle.
     
-    my @header_lists; @header_lists = @{$request->{header_lists}}
-	if ref $request->{header_lists} eq 'ARRAY';
-    
-    my $footer = $format_class->emit_footer($request, @header_lists);
+    my $footer = $format_class->emit_footer($request, @stream_headers);
     
     if ( $request->{hook_enabled}{after_serialize_hook} )
     {
 	$ds->_call_hooks($request, 'after_serialize_hook', 'footer', \$footer);
     }
     
-    if ( $writer )
-    {
-	if ( ! defined $footer or $footer eq '' )
-	{
-	    # do nothing
-	}
-	
-	elsif ( $output_charset && $format_is_text )
-	{
-	    $writer->write( encode($output_charset, $footer) );
-	}
-	
-	else
-	{
-	    $writer->write( $footer );
-	}
-	
-	$writer->close();
-    }
-
-    if ( my $out_fh = $request->{out_fh} )
-    {
-	if ( defined $footer && $footer ne '' )
-	{
-	    print $out_fh $footer;
-	}
-
-	close $out_fh;
-    }
+    # If we are sending output to a file, do so now.
+    
+    print $out_fh $footer if $out_fh;
+    
+    # Send the footer using the writer object and then close it. We need to encode the
+    # footer first, because the writer object doesn't do that.
+    
+    $writer->write( encode($encoding, $footer) );
+    $writer->close();
+    
+    return;
 }
 
 
@@ -2889,6 +3003,17 @@ sub _generate_empty_result {
     croak "could not generate a result in format '$format': no implementing class"
 	unless $format_class;
     
+    # Figure out if we are writing output to a file. The necessary encoding will already
+    # have been established as an output layer.
+    
+    my $out_fh = $request->{out_fh};
+    
+    # Figure out if we have to explicitly encode the output into the output character
+    # set. If so, then $encoding_required will have the value of the character set to
+    # encode into.
+    
+    my $encoding_required = $Web::DataService::FOUNDATION->encoding_required($ds, $request);   
+    
     # Call the appropriate methods from this class to generate the header,
     # and footer.
     
@@ -2896,6 +3021,26 @@ sub _generate_empty_result {
     
     $output .= $format_class->emit_empty($request);
     $output .= $format_class->emit_footer($request);
+    
+    if ( $request->{hook_enabled}{after_serialize_hook} )
+    {
+	$ds->_call_hooks($request, 'after_serialize_hook', 'empty', \$output);
+    }
+    
+    # If we are sending output to a file, send it and close the file.
+
+    if ( $out_fh )
+    {
+	print $out_fh $output;
+	close $out_fh;
+    }
+    
+    # If we need to encode the output, do so now.
+    
+    $output = encode($encoding_required, $output) if $encoding_required;
+    
+    $ds->_call_hooks($request, 'after_output_hook')
+	if $request->{hook_enabled}{after_output_hook};
     
     return $output;
 }

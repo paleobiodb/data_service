@@ -16,7 +16,6 @@ use Encode qw(encode);
 use Moo::Role;
 
 
-
 # new_request ( outer, attrs )
 # 
 # Generate a new request object, using the given attributes.  $outer should be
@@ -224,15 +223,11 @@ sub execute_request {
 	die "404\n" if $request->{is_invalid_request};
     }
     
-    # If a 'before_execute_hook' was defined for this request, call it now.
-    
-    $ds->_call_hooks($request, 'before_execute_hook')
-	if $request->{hook_enabled}{before_execute_hook};
-    
     # If the request has been tagged as a "documentation path", then show the
     # documentation. The only allowed methods for documentation are GET and HEAD.
     
-    if ( $request->{is_node_path} && $request->{is_doc_request} && $ds->has_feature('documentation') )
+    if ( $request->{is_node_path} && $request->{is_doc_request} &&
+	 $ds->has_feature('documentation') )
     {
 	unless ( $http_method eq 'GET' || $http_method eq 'HEAD' )
 	{
@@ -256,9 +251,11 @@ sub execute_request {
 	return $ds->send_file($request);
     }
     
-    # If the selected node has an operation, execute it and return the result. But we first have
-    # to check if the request method is allowed. 
-    
+    # If the selected node has an operation, execute it and return the result. But we
+    # first have to check if the request method is allowed. Almost all requests will go
+    # through this branch of the code. This leads to the actual execution of data
+    # service operations.
+	    
     elsif ( $request->{is_node_path} && $ds->node_has_operation($path) )
     {
 	# Always allow HEAD if GET is allowed. But otherwise reject any request that doesn't have
@@ -271,11 +268,27 @@ sub execute_request {
 	    die "405 Method Not Allowed\n";
 	}
 	
-	# Almost all requests will go through this branch of the code. This leads to the actual
-	# execution of data service operations.
+	# If a 'before_execute_hook' was defined for this request, call it now.
+	
+	$ds->_call_hooks($request, 'before_execute_hook')
+	    if $request->{hook_enabled}{before_execute_hook};
+	
+	# Configure the request, which includes validating the parameters.
 	
 	$ds->configure_request($request);
-	return $ds->generate_result($request);
+	
+	# If the method is 'HEAD', return empty content. Otherwise, generate and return
+	# the result of this operation.
+	
+	if ( $http_method eq 'HEAD' )
+	{
+	    return;
+	}
+	
+	else
+	{
+	    return $ds->generate_result($request);
+	}
     }
     
     # If the request cannot be satisfied in any of these ways, then return a 404 error.
@@ -719,27 +732,17 @@ sub generate_result {
 	my $threshold = $ds->node_attr($path, 'stream_threshold')
 	    unless $request->{do_not_stream};
 	
-	# If the result set requires processing before output, then call
-	# _generate_processed_result.  Otherwise, call
-	# _generate_compound_result.  One of the conditions that can cause
-	# this to happen is if record counts are requested and generating them
-	# requires processing (i.e. because a 'check' rule was encountered).
+	$request->{preprocess} = 1 if $request->display_counts &&
+	    $request->{process_before_count};
 	
-	$request->{preprocess} = 1 if $request->display_counts && $request->{process_before_count};
-	
-	if ( $request->{preprocess} )
-	{
-	    return $ds->_generate_processed_result($request, $threshold);
-	}
-	
-	else
-	{
-	    return $ds->_generate_compound_result($request, $threshold);
-	}
+	return $ds->_generate_compound_result($request, $threshold);
     }
     
     elsif ( defined $request->{main_data} )
     {
+	$ds->_call_hooks($request, 'after_output_hook')
+	    if $request->{hook_enabled}{after_output_hook};
+	
 	return $request->{main_data};
     }
     
@@ -748,6 +751,7 @@ sub generate_result {
     else
     {
 	$ds->_check_output_config($request);
+	
 	return $ds->_generate_empty_result($request);
     }
 }
