@@ -56,7 +56,7 @@ $SIG{TERM} = sub { &kill_dataservice('TERM') };
 
 # If we get here, there is a good chance that everything is fine. So start the data service.
 
-system("start_server --port $PORT --pid-file=dataservice.pid -- starman --workers $WORKERS --access-log=logs/$ACCESS_LOG --preload-app bin/web_app.pl &");
+system("start_server --port $PORT --pid-file=dataservice.pid --signal-on-hup=QUIT --signal-on-term=QUIT -- starman --workers $WORKERS --max-requests=100 --access-log=logs/$ACCESS_LOG --preload-app bin/web_app.pl &");
 
 print STDOUT "Started data service.\n";
 
@@ -93,7 +93,7 @@ sub kill_dataservice {
     print STDERR "Shutting down on receipt of signal $signame...\n";
     
     print STDERR "Killing process $pid\n";
-    kill('TERM', $pid) if $pid;
+    kill($signame, $pid) if $pid;
     
     exit;
 }
