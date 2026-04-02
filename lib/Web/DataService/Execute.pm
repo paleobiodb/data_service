@@ -10,6 +10,8 @@ use strict;
 
 package Web::DataService::Execute;
 
+use feature 'defer';
+
 use Carp 'croak';
 use Scalar::Util qw(reftype weaken);
 use Encode qw(encode);
@@ -696,6 +698,45 @@ sub generate_result {
     $ds->_call_hooks($request, 'before_output_hook')
 	if $request->{hook_enabled}{before_output_hook};
     
+    # If an after_operation_hook is defined for this path, put it in a defer block. That
+    # way, it will be called whether the output generation completes normally or throws
+    # an exception. But do not call the hook if 'stashed_output' is defined, because in
+    # that case we are initiating streaming output and the hook will be handled by
+    # &_protect_stream.
+
+    no warnings 'experimental';
+
+    defer {
+	unless ( $request->{stashed_output} )
+	{
+	    # If we have a statement handle, make sure it is finished. If there are
+	    # unprocessed records, note that. This is wrapped in an eval to make sure
+	    # that the hook will be called even if an exception occurs.
+	    
+	    eval {
+		if ( ref $request->{main_sth} && $ds->_next_record($request) )
+		{
+		    my $message = "The main statement handle has unprocessed records";
+		    
+		    if ( $Web::DataService::DEBUG )
+		    {
+			$ds->debug_line($message);
+		    }
+		    
+		    else
+		    {
+			$Web::DataService::FOUNDATION->error_line($message);
+		    }
+		    
+		    $request->{main_sth}->finish;
+		}
+	    };
+	    
+	    $ds->_call_hooks($request, 'after_operation_hook')
+		if $request->{hook_enabled}{after_operation_hook};
+	}
+    }
+    
     # Then we use the output configuration and the result of the query
     # operation to generate the actual output.  How we do this depends
     # upon how the operation method chooses to return its data.  It must
@@ -740,9 +781,6 @@ sub generate_result {
     
     elsif ( defined $request->{main_data} )
     {
-	$ds->_call_hooks($request, 'after_output_hook')
-	    if $request->{hook_enabled}{after_output_hook};
-	
 	return $request->{main_data};
     }
     

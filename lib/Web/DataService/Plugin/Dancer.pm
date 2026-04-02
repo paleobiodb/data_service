@@ -388,4 +388,14 @@ sub send_file {
 }
 
 
+# error_line ( message )
+#
+# Log an error message.
+
+sub error_line {
+
+    my ($message) = @_;
+    Dancer::error $message;
+}
+
 1;

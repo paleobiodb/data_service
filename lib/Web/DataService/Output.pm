@@ -2691,10 +2691,10 @@ sub _generate_compound_result {
     
 #     close $out_fh if $out_fh;
     
-#     # If an 'after_output_hook' is defined, call it now.
+#     # If an 'after_operation_hook' is defined, call it now.
     
-#     $ds->_call_hooks($request, 'after_output_hook')
-# 	if $request->{hook_enabled}{after_output_hook};
+#     $ds->_call_hooks($request, 'after_operation_hook')
+# 	if $request->{hook_enabled}{after_operation_hook};
     
 #     # If we are sending to the file only, use the response hook to generate output and
 #     # return that.
@@ -2752,22 +2752,67 @@ sub _protect_stream {
 
     my ($psgi_callback) = @_;
     
+    # Get a writer object from PSGI.
+    
     my $writer = $psgi_callback->( [ $stream_status, \@stream_headers ] );
+    
+    # Grab the request handle and associated information.
+    
+    my $request = $Web::DataService::FOUNDATION->retrieve_inner;
+    
+    my $ds = $request->{ds};
+    
+    # Call _stream_compound_result inside a 'try' block.
     
     no warnings 'experimental';
     
     try {
-	&_stream_compound_result($writer);
+	&_stream_compound_result($request, $writer);
     }
+    
+    # If an exception is caught, write an explanatory message to the end of the streamed
+    # content and close it.
     
     catch ($e) {
 	$writer->write("\nAn exception occurred while processing the output");
 	$writer->close;
 	
-	Dancer::error("An exception occurred while streaming output: $e");
+	my $message = "An exception occurred while streaming output: $e";
 	
-	my $request = $Web::DataService::FOUNDATION->retrieve_inner;
-	$request->debug_line($e) if $request->debug;
+	$Web::DataService::DEBUG ? Web::DataService::debug_line({}, $message) :
+	    $Web::DataService::FOUNDATION->error_line($message);
+    }
+    
+    # If we have a statement handle, make sure it is finished so that the
+    # after_operation_hook can execute SQL statements even if 'mysql_use_result' or some
+    # equivalent is true. If there are unprocessed records, note that. This is wrapped
+    # in an eval to make sure that the hook will be called even if an exception occurs.
+    # If an exception is thrown, it is ignored.
+    
+    eval {
+	if ( ref $request->{main_sth} && $ds->_next_record($request) )
+	{
+	    my $message = "The main statement handle has unprocessed records";
+	    
+	    $Web::DataService::DEBUG ? Web::DataService::debug_line({}, $message) :
+		$Web::DataService::FOUNDATION->error_line($message);
+	    
+	    $request->{main_sth}->finish;
+	}
+    };
+    
+    # If an after_operation_hook was defined for this request, call it.
+    
+    try {
+	$ds->_call_hooks($request, 'after_operation_hook')
+	    if $request->{hook_enabled}{after_operation_hook};
+    }
+    
+    catch ($e) {
+	my $message = "An exception occurred while executing an after_operation_hook: $e";
+	
+	$Web::DataService::DEBUG ? Web::DataService::debug_line({}, $message) :
+	    $Web::DataService::FOUNDATION->error_line($message);
     }
 }
 
@@ -2785,13 +2830,9 @@ sub _protect_stream {
 
 sub _stream_compound_result {
     
-    my ($writer) = @_;
+    my ($request, $writer) = @_;
     
     die "Error: no writer was provided" unless $writer;
-    
-    # Grab the request handle and associated information.
-    
-    my $request = $Web::DataService::FOUNDATION->retrieve_inner;
     
     my $ds = $request->{ds};
     
@@ -3039,8 +3080,8 @@ sub _generate_empty_result {
     
     $output = encode($encoding_required, $output) if $encoding_required;
     
-    $ds->_call_hooks($request, 'after_output_hook')
-	if $request->{hook_enabled}{after_output_hook};
+    $ds->_call_hooks($request, 'after_operation_hook')
+	if $request->{hook_enabled}{after_operation_hook};
     
     return $output;
 }
