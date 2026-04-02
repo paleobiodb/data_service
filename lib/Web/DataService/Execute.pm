@@ -1162,7 +1162,7 @@ sub error_result {
 
     else
     {
-	Dancer::error($error_output);
+	$Web::DataService::FOUNDATION->error_line($error_output);
     }
     
     # Then figure out which kind of request object we have.

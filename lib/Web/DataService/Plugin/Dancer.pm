@@ -394,7 +394,7 @@ sub send_file {
 
 sub error_line {
 
-    my ($message) = @_;
+    my ($plugin, $message) = @_;
     Dancer::error $message;
 }
 
