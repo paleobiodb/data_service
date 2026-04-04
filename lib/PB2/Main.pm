@@ -30,6 +30,8 @@ use PB2::Statistics;
 use PB2::Authentication;
 use PB2::MainEntry;
 
+our ($DROP_TABLE);
+
 {
     # We start by defining a data service instance for version 1.2. We provide the ability to
     # override the path prefix and version string using the configuration file, so that test
@@ -123,7 +125,7 @@ use PB2::MainEntry;
 	{ name => 'html', content_type => 'text/html', doc_node => 'formats/html', 
 	  module => '', title => 'HTML' },
 	    "The HTML format is used for active pages such as API sandboxes.",
-	{ name => 'larkin', content_type => 'application/json; charset=utf-8',
+	{ name => 'larkin', content_type => 'application/json',
 	  doc_node => 'formats/larkin', title => 'Larkin', default_vocab => '',
 	  module => 'Larkin' },
 	    "This format is used for operations that replace the old Larkin data service,",
@@ -151,8 +153,35 @@ use PB2::MainEntry;
 			allow_vocab => 'pbdb,com',
 			default_save_filename => 'pbdb_data',
 			stream_threshold => (1024 * 1024),
+			get_connection_hook => \&do_rollback,
 			before_operation_hook => \&PB2::ArchiveEntry::check_archive,
+			after_operation_hook => \&finish_request,
 			title => 'Documentation' });
+    
+    # Make sure that we do a rollback before every operation, just in case the
+    # previous operation executed by this process left an unclosed transaction.
+    
+    sub do_rollback {
+
+	my ($request, $dbh) = @_;
+	$dbh->do("ROLLBACK") if $dbh;
+    }
+    
+    # If a temporary table has been created during the operation, drop it now to
+    # immediately free up the memory.
+
+    sub finish_request {
+	
+	my ($request) = @_;
+	
+	if ( $DROP_TABLE )
+	{
+	    $request->debug_line("DROP TABLE IF EXISTS $DROP_TABLE") if $request->debug;
+	    my $dbh = $request->get_connection();
+	    $dbh->do("DROP TABLE IF EXISTS $DROP_TABLE");
+	    $DROP_TABLE = undef;
+	}
+    }
     
     # If a default_limit value was defined in the configuration file, get that
     # now so that we can use it to derive limits for certain nodes.

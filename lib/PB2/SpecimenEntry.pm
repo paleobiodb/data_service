@@ -25,7 +25,6 @@ use SpecimenEdit;
 # use TaxonDefs qw(%RANK_STRING);
 
 use Carp qw(carp croak);
-use Try::Tiny;
 
 use Moo::Role;
 

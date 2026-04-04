@@ -23,7 +23,6 @@ use TableData qw(complete_ruleset);
 use HTTP::Validate qw(:validators);
 use File::Temp qw(tempfile);
 use Carp qw(carp croak);
-use Try::Tiny;
 use MIME::Base64;
 
 use Moo::Role;

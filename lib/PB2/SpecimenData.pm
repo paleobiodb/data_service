@@ -19,13 +19,9 @@ use TableDefs qw(%TABLE $COLL_BINS
 		 $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use Taxonomy;
-
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
-
 use TaxonDefs qw(%RANK_STRING);
-
 use Carp qw(carp croak);
-use Try::Tiny;
 
 use Moo::Role;
 
@@ -1254,11 +1250,11 @@ sub list_specimens_associated {
 			taxon_no int unsigned not null,
 			orig_no int unsigned not null ) engine=memory");
 	
+	$PBData::DROP_TABLE = 'spec_list';
+	
 	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
 	
-	try {
-	    $sql = "
-		INSERT IGNORE INTO spec_list
+	$sql = "INSERT IGNORE INTO spec_list
 		SELECT ss.specimen_no, ss.occurrence_no, ss.taxon_no, ss.orig_no FROM $TABLE{SPECIMEN_MATRIX} as ss
 			JOIN $TABLE{SPECIMEN_DATA} as sp using (specimen_no)
 			JOIN $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
@@ -1267,17 +1263,9 @@ sub list_specimens_associated {
 			$inner_join_list
 		WHERE $filter_string";
 	
-	    $dbh->do($sql);
-	}
+	$request->debug_line("$sql\n") if $request->debug;
 	
-	catch {
-	    $dbh->do("DROP TEMPORARY TABLE IF EXISTS spec_list");
-	    die $_;
-	}
-	
-	finally {
-	    $request->{ds}->debug_line("$sql\n") if $request->debug;
-	};
+	$dbh->do($sql);
 	
 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
@@ -1310,22 +1298,11 @@ sub list_specimens_associated {
 	$options->{return} = 'stmt';
 	$options->{table} = 'spec_list';
 	
-	try {
-	    my ($result) = $taxonomy->list_associated('specs', $request->{my_base_taxa}, $options);
-	    my @warnings = $taxonomy->list_warnings;
-	    
-	    $request->sth_result($result) if $result;
-	    $request->add_warning(@warnings) if @warnings;
-	}
+	my ($result) = $taxonomy->list_associated('specs', $request->{my_base_taxa}, $options);
+	my @warnings = $taxonomy->list_warnings;
 	
-	catch {
-	    die $_;
-	}
-	
-	finally {
-	    $dbh->do("DROP TABLE IF EXISTS spec_list");
-	    $request->{ds}->debug_line($taxonomy->last_sql . "\n") if $request->debug;
-	};
+	$request->sth_result($result) if $result;
+	$request->add_warning(@warnings) if @warnings;
 	
 	$request->set_result_count($taxonomy->last_rowcount) if $options->{count};
 	return;
@@ -1392,6 +1369,8 @@ sub list_specimens_associated {
 		collection_no int unsigned null,
 		UNIQUE KEY (reference_no, ref_type, occurrence_no, specimen_no, collection_no)) engine=memory");
 	
+	$PBdata::DROP_TABLE = 'ref_collect';
+	
 	if ( $select{specs} )
 	{
 	    $sql = "INSERT IGNORE INTO ref_collect
@@ -1455,21 +1434,8 @@ sub list_specimens_associated {
 	
 	# Then prepare and execute the main query.
 	
-	try 
-	{
-	    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-	    $request->{main_sth}->execute();
-	}
-	
-	catch
-	{
-	    die $_;
-	}
-	
-	finally
-	{
-	    $dbh->do("DROP TABLE IF EXISTS ref_collect");
-	};
+	$request->{main_sth} = $dbh->prepare($request->{main_sql});
+	$request->{main_sth}->execute();
 	
 	# If we were asked to get the count, then do so
 	

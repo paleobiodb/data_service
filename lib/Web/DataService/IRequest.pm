@@ -816,9 +816,10 @@ sub sql_count_rows {
 
 sub set_result_count {
     
-    my ($request, $count) = @_;
+    my ($request, $count, $returned) = @_;
     
     $request->{result_count} = $count;
+    $request->{results_returned} = $returned if defined $returned;
 }
 
 
@@ -1004,12 +1005,17 @@ sub result_counts {
     # if no information is available.
     
     my $r = { found => $request->{result_count} // '',
-	      returned => $request->{result_count} // '',
+	      returned => $request->{results_returned} // $request->{result_count} // '',
 	      offset => $request->{result_offset} // '' };
     
     # If no result count was given, just return the default hashref.
     
     return $r unless defined $request->{result_count};
+
+    # If we know the results returned, return the default hashref.
+    
+    return $r if ( defined $request->{results_returned} && ! $request->{result_offset} &&
+		   ! defined $request->{result_limit} );
     
     # Otherwise, figure out the start and end of the output window.
     

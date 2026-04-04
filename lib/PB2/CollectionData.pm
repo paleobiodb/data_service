@@ -10,6 +10,7 @@ use strict;
 
 use lib '..';
 
+use feature 'unicode_strings';
 use POSIX ();
 
 package PB2::CollectionData;
@@ -26,7 +27,6 @@ use OccurrenceBase qw(parseIdentifiedName);
 use Taxonomy;
 use IntervalBase qw(ts_boundary_list ts_boundary_name);
 
-use Try::Tiny;
 use List::Util qw(any);
 use Carp qw(carp croak);
 
@@ -2077,7 +2077,46 @@ sub list_colls {
     
     my $base_joins = $request->generateJoinList('c', $request->tables_hash);
     
-    $request->{main_sql} = "
+    # Debug
+    
+    my ($in_transaction) = $dbh->selectrow_array("SELECT \@\@in_transaction");
+    
+    $request->debug_line("In transaction: $in_transaction") if $request->debug;
+    
+    # If 'show=none' was specified, just count the results.
+    
+    if ( $request->has_block('none') )
+    {
+	$request->{main_sql} = "
+	SELECT count(distinct c.collection_no)
+	FROM coll_matrix as c STRAIGHT_JOIN collections as cc using (collection_no)
+		$base_joins
+        WHERE $filter_string";
+	
+	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	
+	$dbh->do("BEGIN");
+	
+	my ($count) = $dbh->selectrow_array($request->{main_sql});
+	
+	$dbh->do("ROLLBACK");
+	
+	$request->set_result_count($count, 0);
+	return $request->list_result();
+    }
+    
+    # Otherwise, prepare and execute the main query. We need to wrap it in a transaction
+    # in order to avoid triggering the "Update locks cannot be acquired during a READ
+    # UNCOMMITTED transaction" bug. However, we also want to use 'mariadb_use_result' if
+    # possible. This flag will allow us to transmit large result sets without growing
+    # the memory allocation of this process to a ridiculous size. But this means that we
+    # cannot execute any other statement (including "ROLLBACK") until all rows have been
+    # read. So a get_connection_hook is defined in Main.pm that automatically issues a
+    # rollback at the beginning of each new operation
+    
+    else
+    {
+	$request->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c STRAIGHT_JOIN collections as cc using (collection_no)
 		$base_joins
@@ -2085,32 +2124,17 @@ sub list_colls {
 	GROUP BY c.collection_no
 	ORDER BY $order_clause
 	$limit";
-    
-    print STDERR "$request->{main_sql}\n\n" if $request->debug;
-    
-    # Then prepare and execute the main query. We need to wrap it in a transaction in
-    # order to avoid triggering the "Update locks cannot be acquired during a READ
-    # UNCOMMITTED transaction" bug.
-    
-    $dbh->do("BEGIN");
-    
-    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-    $request->{main_sth}->execute();
-    
-    $dbh->do("ROLLBACK");
-    
-    # If we were asked to get the count, then do so
-    
-    $request->sql_count_rows;
-    
-    # If show=none was specified, close the statement handle without reading it.
-    
-    if ( $request->has_block('none') )
-    {
-	$request->{main_sth} = undef;
+	
+	$dbh->do("BEGIN");
+	
+	$request->{main_sth} = $dbh->prepare($request->{main_sql});
+	$request->{main_sth}{mariadb_use_result} = 1 unless $request->display_counts;
+	$request->{main_sth}->execute();
+	
+	# If we were asked to get the count, then do so
+	
+	return $request->sql_count_rows;
     }
-    
-    return 1;
 }
 
 
@@ -3502,19 +3526,9 @@ sub generateMainFilters {
 	    my @taxa;
 	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
 	    
-	    try {
-		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
-								all_names => 1, 
-								debug_out => $debug_out });
-	    };
-	    
-	    # catch {
-	    # 	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-	    # 	die $_;
-	    # };
-
-	    # print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-	    
+	    @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
+							    all_names => 1, 
+							    debug_out => $debug_out });
 	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
 	    @include_taxa = grep { ! $_->{exclude} } @taxa;
@@ -3529,17 +3543,10 @@ sub generateMainFilters {
 	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
 	    my $current = $no_synonyms ? '' : 1;
 	    
-	    try {
-		@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
-								all_names => 1,
-								current => $current,
-								debug_out => $debug_out });
-	    };
-	    
-	    # catch {
-	    # 	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-	    # 	die $_;
-	    # };
+	    @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
+							    all_names => 1,
+							    current => $current,
+							    debug_out => $debug_out });
 	    
 	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
@@ -6565,81 +6572,6 @@ sub fetch_subset_collections {
 	}
     }
 }
-
-
-# check_access ( record )
-# 
-# Check to make sure that this record can properly be accessed by the
-# requestor.  Return 1 if so, false otherwise.
-
-# sub check_access {
-    
-#     my ($request, $record) = @_;
-    
-#     # If the record does not include an access level field, or if the value is
-#     # zero, then the record is accessible.
-    
-#     return 1 unless $record->{access_level};
-    
-#     # If the requestor is authenticated as a database member, the record is
-#     # accessible if its level is 1 or less.  The 'access_level' field will
-#     # only be part of the record if the requestor is authenticated.
-    
-#     return 1 if $record->{access_level} <= 1;
-    
-#     # Otherwise, we will need to check individual access rights.  If the
-#     # record's access_no (i.e. authorizer_no) field is the same as the
-#     # requestor's, then the record is accessible.
-    
-#     return 1 if $record->{access_no} && $request->{my_authorizer_no} &&
-# 	$record->{access_no} eq $request->{my_authorizer_no};
-    
-#     # Otherwise, we have to check whether permission was granted by the
-#     # record's authorizer.  If we haven't yet done so, grab a list of all
-#     # authorizers who have permitted the requestor to edit their collections
-#     # and also a list of the requestor's research groups.
-    
-#     unless ( $request->{my_permissions} )
-#     {
-# 	my (%permissions, %groups);
-	
-# 	my $dbh = $request->get_connection;
-# 	my $auth_no = $request->{my_authorizer_no};
-# 	my $sql = "SELECT authorizer_no FROM permissions WHERE modifier_no=$auth_no";
-	
-# 	my ($permlist) = $dbh->selectcol_arrayref($sql);
-	
-# 	%permissions = map { $_ => 1 } @$permlist if ref $permlist eq 'ARRAY';
-	
-# 	$sql = "SELECT research_group FROM person WHERE person_no=$auth_no";
-	
-# 	my ($grouplist) = $dbh->selectrow_array($sql);
-	
-# 	%groups = map { $_ => 1 } split( /\s*,\s*/, $grouplist ) if $grouplist;
-	
-# 	$request->{my_permissions} = \%permissions;
-# 	$request->{my_groups} = \%groups;
-#     }
-    
-#     return 1 if $request->{my_permissions}{$record->{access_no}};
-    
-#     # Otherwise, we have to check whether permission was granted for the
-#     # requestor's research group(s).
-    
-#     if ( $record->{access_resgroup} )
-#     {
-# 	my @groups = split( /\s*,\s*/, $record->{access_resgroup} );
-	
-# 	foreach my $g ( @groups )
-# 	{
-# 	    return 1 if $request->{my_groups}{$g};
-# 	}
-#     }
-    
-#     # If none of these rules grant access, then access is denied.
-    
-#     return 0;
-# }
 
 
 # cache_still_good ( key, created )

@@ -26,7 +26,6 @@ use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 use TaxonDefs qw(%RANK_STRING %TAXON_RANK %UNS_RANK %UNS_NAME);
 
 use Carp qw(carp croak);
-use Try::Tiny;
 use List::Util qw(any);
 
 use Moo::Role;
@@ -407,7 +406,7 @@ sub initialize {
 	  tables => ['nr'] });
     
     $ds->define_block('1.2:occs:attr' =>
-	{ select => ['v.attribution as name_attribution'], tables => 'v' });
+	{ select => ['v.attribution as accepted_attr'], tables => 'v' });
     
     $ds->define_block('1.2:occs:ident' =>
 	{ select => ['o.genus_name', 'o.genus_reso',
@@ -1703,6 +1702,12 @@ sub list_occs {
 		'o.occurrence_no';
     }
     
+    # Debug
+    
+    my ($in_transaction) = $dbh->selectrow_array("SELECT \@\@in_transaction");
+    
+    $request->debug_line("In transaction: $in_transaction") if $request->debug;
+    
     # Determine which extra tables, if any, must be joined to the query. Then
     # construct the query. We don't need a union query for occurrences and reids
     # because the only fields in the occurrences table we actually use are
@@ -1732,9 +1737,8 @@ sub list_occs {
     $dbh->do("BEGIN");
     
     $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}{mariadb_use_result} = 1 unless $request->display_counts;
     $request->{main_sth}->execute();
-    
-    $dbh->do("ROLLBACK");
     
     # If we were asked to get the count, then do so
     
@@ -2907,27 +2911,19 @@ sub list_occs_associated {
 			taxon_no int unsigned not null,
 			orig_no int unsigned not null ) engine=memory");
 	
+	$PBData::DROP_TABLE = 'occ_list';
+	
 	my $inner_join_list = $request->generateJoinList('c', $inner_tables);
 	
-	try {
-	    $sql = "
-		INSERT IGNORE INTO occ_list
+	$sql = "INSERT IGNORE INTO occ_list
 		SELECT o.occurrence_no, o.taxon_no, o.orig_no FROM $TABLE{OCCURRENCE_MATRIX} as o
 			STRAIGHT_JOIN $COLL_MATRIX as c using (collection_no)
 			$inner_join_list
 		WHERE $filter_string";
 	
-	    $dbh->do($sql);
-	}
+	$request->debug_line("$sql\n") if $request->debug;
 	
-	catch {
-	    $dbh->do("DROP TEMPORARY TABLE IF EXISTS occ_list");
-	    die $_;
-	}
-	
-	finally {
-	    $request->{ds}->debug_line("$sql\n") if $request->debug;
-	};
+	$dbh->do($sql);
 	
 	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
 	
@@ -2982,21 +2978,13 @@ sub list_occs_associated {
 	$options->{return} = 'stmt';
 	$options->{table} = 'occ_list';
 	
-	try {
-	    my ($result) = $taxonomy->list_associated('occs', $request->{my_base_taxa}, $options);
-	    my @warnings = $taxonomy->list_warnings;
-	    
-	    $request->sth_result($result) if $result;
-	    $request->add_warning(@warnings) if @warnings;
-	}
+	$Taxonomy::DROP_TABLE = 'occ_list';
 	
-	catch {
-	    die $_;
-	}
+	my ($result) = $taxonomy->list_associated('occs', $request->{my_base_taxa}, $options);
+	my @warnings = $taxonomy->list_warnings;
 	
-	finally {
-	    $dbh->do("DROP TABLE IF EXISTS occ_list");
-	};
+	$request->sth_result($result) if $result;
+	$request->add_warning(@warnings) if @warnings;
 	
 	$request->set_result_count($taxonomy->last_rowcount) if $options->{count};
 	return;
@@ -3044,7 +3032,8 @@ sub list_occs_associated {
 	
 	$dbh->do("DROP TABLE IF EXISTS ref_collect");
 	
-	my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+	my $temp = ''; $temp = 'TEMPORARY' unless $ENV{KEEP_TEMPS};
+	$PBData::DROP_TABLE = 'ref_collect';
 	
 	$dbh->do("CREATE $temp TABLE ref_collect (
 		reference_no int unsigned not null,
@@ -3112,21 +3101,8 @@ sub list_occs_associated {
 	
 	# Then prepare and execute the main query.
 	
-	try 
-	{
-	    $request->{main_sth} = $dbh->prepare($request->{main_sql});
-	    $request->{main_sth}->execute();
-	}
-	
-	catch
-	{
-	    die $_;
-	}
-	
-	finally
-	{
-	    $dbh->do("DROP TABLE IF EXISTS ref_collect");
-	};
+	$request->{main_sth} = $dbh->prepare($request->{main_sql});
+	$request->{main_sth}->execute();
 	
 	# If we were asked to get the count, then do so
 	
@@ -4133,7 +4109,7 @@ sub generateQuickDivJoins {
 sub process_basic_record {
     
     my ($request, $record) = @_;
-
+    
     return if $record->{_status} && $record->{_status} eq 'deleted';
     
     no warnings 'uninitialized';

@@ -20,7 +20,6 @@ use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
 use TableData qw(complete_output_block);
 
 use Carp qw(carp croak);
-use Try::Tiny;
 
 use Moo::Role;
 

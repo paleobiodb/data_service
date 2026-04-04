@@ -14,14 +14,12 @@ use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use TableDefs qw($INTERVAL_MAP $OCC_MATRIX $SPEC_MATRIX $COLL_MATRIX);
 use ExternalIdent qw(%IDP);
 use Carp qw(carp croak);
-use Try::Tiny;
 
 use strict;
-use feature 'unicode_strings';
+use feature qw(unicode_strings try defer);
 
 
 our (%FIELD_LIST, %FIELD_TABLES);
-
 
 =head1 NAME
 
@@ -462,13 +460,7 @@ sub list_taxa_simple {
 	&{$options->{debug_out}}($sql);
     }
     
-    try {
-	$result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
-    }
-    
-    catch {
-	die $_ if $_;
-    };
+    $result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
     
     # If we got some results, then process the list and return it.
     
@@ -585,13 +577,7 @@ sub list_subtree {
     
     my $result_list;
     
-    try {
-	$result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
-    }
-    
-    catch {
-	die $_ if $_;
-    };
+    $result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
     
     # If we got some results, then bless each object into class 'PBDB::Taxon',
     # set the result count, and return the list or listref.
@@ -767,7 +753,7 @@ sub list_taxa {
     
     my $copy_exclusions;
     
-    my ($sql, @sql_strings, $drop_table);
+    my ($sql, @sql_strings);
     
     if ( $rel eq 'exact' || $rel eq 'current' || $rel eq 'variants' )
     {
@@ -1086,7 +1072,7 @@ sub list_taxa {
 		WHERE $filters
 		GROUP BY $group_expr $order_expr $limit_expr\n";
 	
-	$drop_table = 'taxa_list';
+	$PBData::DROP_TABLE = 'taxa_list';
     }
     
     else
@@ -1101,7 +1087,6 @@ sub list_taxa {
 					    count => $options->{count},
 					    debug_out => $options->{debug_out},
 					    sql_strings => \@sql_strings,
-					    drop_table => $drop_table,
 					    base_nos => $base_nos,
 					    copy_exclusions => $copy_exclusions } );
 }
@@ -1616,15 +1601,16 @@ sub list_associated {
     {
 	$dbh->do("DROP TABLE IF EXISTS op_collect");
 	
-	my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
-	my $engine = $rel eq 'all_taxa' ? 'engine=InnoDB' : 'engine=memory';
+	my $temp = $ENV{KEEP_TEMPS} ? '' : 'TEMPORARY';
+	# my $engine = $rel eq 'all_taxa' ? 'engine=InnoDB' : 'engine=memory';
+	$PBData::DROP_TABLE = 'op_collect';
 	
 	$dbh->do("CREATE $temp TABLE op_collect (
 		opinion_no int unsigned not null,
 		opinion_type char(1) not null,
 		taxon_no int unsigned not null,
 		orig_no int unsigned not null,
-		UNIQUE KEY (opinion_no)) $engine");
+		UNIQUE KEY (opinion_no)) Engine=Memory");
 	
 	push @inner_filters, 'o.opinion_no = t.opinion_no' if $rel eq 'all_taxa' && ! $select{ops_all};
 	push @inner_filters, $taxonomy->refno_filter($options, 'o');
@@ -1895,7 +1881,8 @@ sub list_associated {
     
     $dbh->do("DROP TABLE IF EXISTS ref_collect");
     
-    my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+    my $temp = $ENV{KEEP_TEMPS} ? '' : 'TEMPORARY';
+    $PBData::DROP_TABLE = 'ref_collect';
     
     $dbh->do("CREATE $temp TABLE ref_collect (
 		reference_no int unsigned not null,
@@ -2229,7 +2216,6 @@ sub list_associated {
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
 						 debug_out => $options->{debug_out},
-						 drop_table => 'ref_collect',
 						 count => $options->{count} } );
     }
     
@@ -2259,7 +2245,6 @@ sub list_associated {
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
 						 debug_out => $options->{debug_out},
-						 drop_table => 'ref_collect',
 						 count => $options->{count} } );
     }
 }
@@ -2296,7 +2281,7 @@ sub generate_taxa_list {
     
     $dbh->do("DROP TABLE IF EXISTS taxa_list");
     
-    my $temp = ''; $temp = 'TEMPORARY' unless $Web::DataService::ONE_PROCESS;
+    my $temp = $ENV{KEEP_TEMPS} ? '' : 'TEMPORARY';
     
     $dbh->do("CREATE $temp TABLE taxa_list (
 		taxon_no int unsigned not null,
@@ -2462,8 +2447,9 @@ sub execute_query {
 	&{$params->{debug_out}}($taxonomy->{sql_string});
     }
     
-    try
-    {
+    no warnings 'experimental';
+    
+    try {
 	if ( $return_type eq 'list' || $return_type eq 'listref' )
 	{
 	    $result_list = $dbh->selectall_arrayref($sql, { Slice => {} });
@@ -2477,6 +2463,7 @@ sub execute_query {
 	elsif ( $return_type eq 'stmt' )
 	{
 	    $sth = $dbh->prepare($sql);
+	    $sth->{mariadb_use_result} = 1 unless $params->{count};
 	    $sth->execute();
 	}
 	
@@ -2489,17 +2476,11 @@ sub execute_query {
 	    if $params->{count};
     }
     
-    catch
+    catch ($e)
     {
-	print STDERR "$sql\n";
-	$_ =~ s{ \s at \s / (.*) line \s+ \d* }{ at $filename line $line}xs;
-	die $_;
+	$e =~ s{ \s at \s / (.*) line \s+ \d* }{ at $filename line $line}xs;
+	die $e;
     }
-    
-    finally
-    {
-	$dbh->do("DROP TABLE IF EXISTS $params->{drop_table}") if $params->{drop_table};
-    };
     
     if ( $return_type eq 'list' || $return_type eq 'listref' )
     {
@@ -5540,7 +5521,7 @@ sub compute_ancestry {
     $result = $dbh->do("DROP TABLE IF EXISTS ancestry_temp");
     $result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp (
 				orig_no int unsigned primary key,
-				is_base tinyint unsigned) Engine=InnoDB");
+				is_base tinyint unsigned) Engine=Memory");
     
     # Generate the SQL string to fill the scratch table, and output it as a debug line if necessary.
     
@@ -5564,23 +5545,18 @@ sub compute_ancestry {
     # We need a try block to make sure that the table locks are released
     # no matter what else happens.
     
-    try
-    {	
-	$result = $dbh->do($sql);
-	
-	# Now copy the information out of the scratch table to a temporary
-	# table so that we can release the locks.
-	
-	$result = $dbh->do("INSERT INTO ancestry_temp SELECT * FROM $SCRATCH_TABLE"); 
-    }
+    no warnings 'experimental';
     
-    catch {
-        die $_ if $_;
-    }
+    $result = $dbh->do($sql);
     
-    finally {
+    # Now copy the information out of the scratch table to a temporary
+    # table so that we can release the locks.
+    
+    $result = $dbh->do("INSERT INTO ancestry_temp SELECT * FROM $SCRATCH_TABLE"); 
+    
+    defer {
 	$dbh->do("UNLOCK TABLES");
-    };
+    }
     
     # There is no need to return anything, since the results of this function
     # are in the rows of the 'ancestry_temp' table.  But we can stop here on
@@ -5626,28 +5602,20 @@ sub add_ancestry {
 				    $TREE_TABLE read,
 				    $table_name write");
     
-    # We need a try block to make sure that the table locks are released
-    # no matter what else happens.
+    # Fill the scratch table with the requested ancestry list.
     
-    try
-    {
-	# Fill the scratch table with the requested ancestry list.
-	
-	$result = $dbh->do($sql);
-	
-	# Now copy the ancestral orig_no values back to the specified table.
-	
-	$result = $dbh->do("INSERT IGNORE INTO $table_name (orig_no)
+    $result = $dbh->do($sql);
+    
+    # Now copy the ancestral orig_no values back to the specified table.
+    
+    no warnings 'experimental';
+    
+    $result = $dbh->do("INSERT IGNORE INTO $table_name (orig_no)
 			    SELECT orig_no FROM $SCRATCH_TABLE WHERE is_base = 0");
-    }
     
-    catch {
-        die $_ if $_;
-    }
-    
-    finally {
+    defer {
 	$dbh->do("UNLOCK TABLES");
-    };
+    }
     
     # There is no need to return anything, since the results of this function
     # are in the rows of the 'ancestry_temp' table.  But we can stop here on
@@ -5789,6 +5757,7 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
 			AUTH_DATA => ['v', 'vt', 'n', 'nn'],
 			REFTAXA_DATA => ['v', 'vt', 'n', 'nn'],
 			REF_DATA => ['r'],
+			REF_ATTR => ['r'],
 			OP_DATA => ['o', 'oo', 'pt'],
 			REF_COUNTS => ['refcounts'],
 			APP => ['v','app'], 

@@ -19,7 +19,6 @@ use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $P
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
 use ExternalIdent qw(generate_identifier %IDRE VALID_IDENTIFIER);
 
-use Try::Tiny;
 use Carp qw(carp croak);
 
 use Moo::Role;

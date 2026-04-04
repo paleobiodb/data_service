@@ -8,7 +8,7 @@
 # Author: Michael McClennen
 
 use strict;
-use feature qw(unicode_strings fc say);
+use feature qw(unicode_strings fc say defer);
 
 use lib '..';
 
@@ -18,7 +18,6 @@ use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
-use Try::Tiny;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
 		 %UNS_NAME %UNS_RANK);
@@ -180,20 +179,23 @@ sub initialize {
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
 	    "The scientific name of this taxon",
-	{ output => 'taxon_attr', if_block => 'attr', 
+	{ output => 'taxon_attr', if_block => '1.2:taxa:attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common,full' },
+	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2',
+	  if_block => 'common,full' },
 	    "The common (vernacular) name of this taxon, if any",
 	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If this name is either a junior synonym or is invalid for some reason,",
 	    "this field gives the reason.  The fields C<accepted_no>",
 	    "and C<accepted_name> then specify the name that should be used instead.",
-	{ set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, if_vocab => 'dwc' },
+	{ set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, 
+	  if_vocab => 'dwc' },
 	{ output => 'tax_status', dwc_name => 'taxonomicStatus', if_vocab => 'dwc' },
 	    "The taxonomic status of this name, in the Darwin Core vocabulary.",
 	    "This field only appears if that vocabulary is selected.",
-	{ set => 'nom_status', from => 'status', lookup => \%NOMENCLATURAL_STATUS, if_vocab => 'dwc' },
+	{ set => 'nom_status', from => 'status', lookup => \%NOMENCLATURAL_STATUS, 
+	  if_vocab => 'dwc' },
 	{ output => 'nom_status', dwc_name => 'nomenclaturalStatus', if_vocab => 'dwc' },
 	    "The nomenclatural status of this name, in the Darwin Core vocabulary.",
 	    "This field only appears if that vocabulary is selected.",
@@ -203,22 +205,26 @@ sub initialize {
 	    "the identifier of the accepted name to be used in its place.  Otherwise, its value",
 	    "will be the same as C<orig_no>.  In the compact vocabulary, this field",
 	    "will be omitted in that case.",
-	{ output => 'accepted_rank', com_name => 'acr', not_block => 'acconly', data_type => 'mix' },
+	{ output => 'accepted_rank', com_name => 'acr', not_block => 'acconly', 
+	  data_type => 'mix' },
 	    "If C<accepted_no> is different from C<orig_no>, this field",
 	    "gives the rank of the accepted name.  Otherwise, its value will",
 	    "be the same as C<taxon_rank>.  In the compact voabulary, this field",
 	    "will be omitted in that case.",
-	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
+	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', 
+	  pbdb_name => 'accepted_name',
 	  com_name => 'acn', not_block => 'acconly' },
 	    "If C<accepted_no> is different from C<orig_no>, this field gives the",
 	    "accepted name.  Otherwise, its value will be",
 	    "the same as C<taxon_name>.  In the compact vocabulary, this field",
 	    "will be omitted in that case.",
-	{ output => 'senpar_no', pbdb_name => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
+	{ output => 'senpar_no', pbdb_name => 'parent_no', dwc_name => 'parentNameUsageID', 
+	  com_name => 'par' }, 
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
 	    "This field and those following are only available if the classification of",
 	    "this taxon is known to the database.",
-	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'parent_name', if_block => 'parent,immparent' },
+	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'parent_name', 
+	  if_block => 'parent,immparent,full' },
 	    "The name of the parent taxon, or of its senior synonym if there is one.",
 	{ output => 'immpar_no', dwc_name => 'parentNameUsageID', com_name => 'ipn',
 	  pbdb_name => 'immpar_no', if_block => 'immparent', dedup => 'senpar_no' },
@@ -226,22 +232,26 @@ sub initialize {
 	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
 	  if_block => 'immparent', dedup => 'senpar_name' },
 	    "The name of the immediate parent taxon, even if it is a junior synonym.",
-	{ output => 'container_no', com_name => 'ctn', pbdb_name => 'container_no', dedup => 'senpar_no' },
+	{ output => 'container_no', com_name => 'ctn', pbdb_name => 'container_no', 
+	  dedup => 'senpar_no' },
 	    "The identifier of a taxon from the result set containing this one, which",
 	    "may or may not be the parent.  This field will only appear in the result",
 	    "of the L<occs/taxa|node:occs/taxa> operation, where no base taxon is",
 	    "specified.  The taxa reported in this case are the \"classical\" ranks,",
 	    "rather than the full taxonomic hierarcy.",
-	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => 'refattr,1.2:refs:attr' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', 
+	  if_block => '1.2:refs:attr' },
 	    "The author(s) of the reference from which this name was entered.  Note that",
-	    "the author of the name itself may be different if the reference is a secondary source.",
+	    "the author of the name itself may be different if the reference is a",
+	    "secondary source.",
 	{ output => 'ref_pubyr', com_name => 'pby', if_block => 'refattr,1.2:refs:attr' },
-	    "The year of publication of the reference from which this name was entered.  Note that",
-	    "the publication year of the name itself may be different if the reference is a secondary source.",
+	    "The year of publication of the reference from which this name was entered.",
+	    "Note that the publication year of the name itself may be different if the",
+	    "reference is a secondary source.",
 	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier of the reference from which this name was entered.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
-	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
+	    "True if this taxon is extant on earth today, false if not",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of fossil occurrences in this database that are identified",
 	    "as belonging to this taxon or any of its subtaxa.");
@@ -280,13 +290,15 @@ sub initialize {
 	{ set => 'taxon_rank', if_vocab => 'com', lookup => \%TAXON_RANK },
 	{ set => 'accepted_rank', if_vocab => 'pbdb', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk', data_type => 'mix' },
-	    "The rank of this taxon as mentioned in the reference, ranging from subspecies up to kingdom",
+	    "The rank of this taxon as mentioned in the reference, ranging from subspecies up",
+	    "to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
 	    "The taxonomic name actually mentioned in the reference.",
-	{ output => 'taxon_attr', if_block => 'attr', 
+	{ output => 'taxon_attr', if_block => '1.2:taxa:attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common,full' },
+	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', 
+	  if_block => 'common,full' },
 	    "The common (vernacular) name of this taxon, if any",
 	{ output => 'difference', com_name => 'tdf' },
 	    "If this name is either a junior synonym or is invalid for some reason,",
@@ -322,15 +334,17 @@ sub initialize {
 	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
 	    "This field and those following are only available if the classification of",
 	    "this taxon is known to the database.",
-	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'parent_name', if_block => 'parent,immparent' },
+	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'parent_name', 
+	  if_block => 'parent,immparent,full' },
 	    "The name of the parent taxon, or of its senior synonym if there is one.",
 	{ output => 'immpar_no', pbdb_name => 'immpar_no', dwc_name => 'parentNameUsageID', 
-	  com_name => 'ipn', if_block => 'full,immparent', dedup => 'senpar_no' },
+	  com_name => 'ipn', if_block => 'immparent', dedup => 'senpar_no' },
 	    "The identifier of the immediate parent taxon, even if it is a junior synonym.",
 	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
 	  if_block => 'immparent', dedup => 'senpar_name' },
 	    "The name of the immediate parent taxon, even if it is a junior synonym.",
-	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => 'refattr,1.2:refs:attr' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', 
+	  if_block => 'refattr,1.2:refs:attr' },
 	    "The author(s) of the reference from which this name was entered.  Note that",
 	    "the author of the name itself may be different if the reference is a secondary source.",
 	{ output => 'ref_pubyr', com_name => 'pby', if_block => 'refattr,1.2:refs:attr' },
@@ -362,16 +376,16 @@ sub initialize {
 	{ select => 'APP' },
 	{ set => '*', code => \&process_ages },
 	{ output => 'firstapp_ea', name => 'firstapp_max_ma', com_name => 'fea', 
-	  dwc_name => 'firstAppearanceEarlyAge', if_block => 'app', data_type => 'dec' },
+	  data_type => 'dec' },
 	    "The early age bound for the first appearance of this taxon in the database",
 	{ output => 'firstapp_la', name => 'firstapp_min_ma', com_name => 'fla', 
-	  dwc_name => 'firstAppearanceLateAge', if_block => 'app', data_type => 'dec' }, 
+	  data_type => 'dec' }, 
 	    "The late age bound for the first appearance of this taxon in the database",
 	{ output => 'lastapp_ea', name => 'lastapp_max_ma', com_name => 'lea', 
-	  dwc_name => 'lastAppearanceEarlyAge', if_block => 'app', data_type => 'dec' },
+	  data_type => 'dec' },
 	    "The early age bound for the last appearance of this taxon in the database",
 	{ output => 'lastapp_la', name => 'lastapp_min_ma', com_name => 'lla', 
-	  dwc_name => 'lastAppearanceLateAge', if_block => 'app', data_type => 'dec' }, 
+	  data_type => 'dec' }, 
 	    "The late age bound for the last appearance of this taxon in the database",
 	{ output => 'early_interval', com_name => 'tei' },
 	    "The name of the interval in which this taxon first appears, or the start of its range.",
@@ -592,77 +606,49 @@ sub initialize {
 	{ output => 'taxon_environment', com_name => 'jev' },
 	    "The general environment or environments in which this life form is found.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'environment_basis', com_name => 'jec' },
-	    "Specifies the taxon from which the environment information is",
-	    "inherited.",
-	#     "Here is a L<list of values|node:taxa/ecotaph_values>.",
+	{ output => 'environment_basis', com_name => 'jevb', if_block => '1.2:taxa:etbasis',
+	  if_field => 'taxon_environment' },
+	    "Specifies the taxon from which the environment information is inherited.",
+	    "This field (and the other basis fields) are only included if the C<etbasis>",
+	    "block is included as well.",
 	{ output => 'motility', com_name => 'jmo' },
 	    "Whether the organism is motile, attached and/or epibiont, and its",
 	    "mode of locomotion if any.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'motility_basis', com_name => 'jmc',
-	  if_block => 'etbasis' }, # , if_format => ['txt', 'csv', 'tsv']
-	    "Specifies the taxon for which the motility information was set.",
-	    "The taphonomy and ecospace information are inherited from parent",
-	    "taxa unless specific values are set.",
-	    # "For L<JSON|node:formats/json> responses, the fields 'jmb' and 'jmn'",
-	    # "give the taxon identifier and taxon name respectively, while for",
-	    # "L<text|node:formats/text> responses, the field 'motility_basis'",
-	    # "provides both.  These fields are only included if the C<ecospace> output",
-	    # "block is also included.  Similar annotation fields are included",
-	    # "for the following, if the C<etbasis> output block is included.",
-	# { output => 'motility_basis_no', com_name => 'jmb',
-	#   if_block => 'etbasisext', if_format => 'json' },
-	# { output => 'motility_basis', com_name => 'jmn',
-	#   if_block => 'etbasis', if_format => 'json' },
+	{ output => 'motility_basis', com_name => 'jmob', if_block => '1.2:taxa:etbasis',
+	  if_field => 'motility' },
+	    "Specifies the taxon from which the motility information is inherited.",
 	{ output => 'life_habit', com_name => 'jlh' },
 	    "The general life mode and locality of this organism.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'life_habit_basis', com_name => 'jhc',
-	  if_block => 'etbasis' }, # , if_format => ['txt', 'csv', 'tsv']
-	    "Specifies the taxon for which the life habit information was set.",
-	    "See B<motility_basis> above.  These fields are only included if the",
-	    "C<ecospace> block is also included.",
-	# { output => 'life_habit_basis_no', com_name => 'jhb',
-	#   if_block => 'etbasisext', if_format => 'json' },
-	# { output => 'life_habit_basis', com_name => 'jhn',
-	#   if_block => 'etbasis', if_format => 'json' },
+	{ output => 'life_habit_basis', com_name => 'jlhb', if_block => '1.2:taxa:etbasis',
+	  if_field => 'life_habit' },
+	    "Specifies the taxon from which the life_habit information is inherited.",
 	{ output => 'vision', com_name => 'jvs' },
 	    "The degree of vision possessed by this organism.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'vision_basis', com_name => 'jvc', if_block => 'etbasis' },
-	    "Specifies the taxon for which the vision information was set.",
-	    "See B<motility_basis> above.  These fields are only included if the",
-	    "C<ecospace> block is also included.",
+	{ output => 'vision_basis', com_name => 'jvsb', if_block => 'etbasis' },
+	    "Specifies the taxon from which the vision information is inherited.",
 	{ output => 'diet', com_name => 'jdt' },
 	    "The general diet or feeding mode of this organism.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'diet_basis', com_name => 'jdc',
-	  if_block => 'etbasis' }, # , if_format => ['txt', 'csv', 'tsv']
-	    "Specifies the taxon for which the diet information was set.",
-	    "See B<motility_basis> above.  These fields are only included if the",
-	    "C<ecospace> block is also included.",
+	{ output => 'diet_basis', com_name => 'jdtb', if_block => '1.2:taxa:etbasis',
+	  if_field => 'diet' },
+	    "Specifies the taxon from which the diet information is inherited.",
 	{ output => 'reproduction', com_name => 'jre' },
 	    "The mode of reproduction of this organism.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'reproduction_basis', com_name => 'jrc', if_block => 'etbasis' },
-	    "Specifies the taxon for which the reproduction information was set.",
-	    "See B<motility_basis> above.  These fields are only included if the",
-	    "C<ecospace> block is also included.",
+	{ output => 'reproduction_basis', com_name => 'jreb', if_block => '1.2:taxa:etbasis',
+	  if_field => 'reproduction' },
+	    "Specifies the taxon from which the reproduction information is inherited.",
 	{ output => 'ontogeny', com_name => 'jon' },
 	    "Briefly describes the ontogeny of this organism.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'ontogeny_basis', com_name => 'joc', if_block => 'etbasis' },
-	    "Specifies the taxon for which the ontogeny information was set.",
-	    "See B<motility_basis> above.  These fields are only included if the",
-	    "C<ecospace> block is also included.",
+	{ output => 'ontogeny_basis', com_name => 'jonb', if_block => '1.2:taxa:etbasis',
+	  if_field => 'ontogeny' },
+	    "Specifies the taxon from which the ontogeny information is inherited.",
 	{ output => 'ecospace_comments', com_name => 'jcm' },
-	    "Additional remarks about the ecospace, if any.",
-	# { output => 'diet_basis_no', com_name => 'jdb',
-	#   if_block => 'etbasisext', if_format => 'json' },
-	# { output => 'diet_basis', com_name => 'jdn',
-	#   if_block => 'etbasis', if_format => 'json' }
-	);
+	    "Additional remarks about the ecospace, if any.");
     
     $ds->define_block('1.2:taxa:taphonomy' =>
 	{ select => 'TAPHONOMY' },
@@ -678,16 +664,8 @@ sub initialize {
 	{ output => 'reinforcement', com_name => 'jsr' },
 	    "An indication of the skeletal reinforcement, if any.",
 	    "See L<taphonomy vocabulary|node:general/ecotaph#Taphonomy>.",
-	{ output => 'taphonomy_basis', com_name => 'jtc',
-	  if_block => 'etbasis' }, # , if_format => ['txt', 'csv', 'tsv']
-	    "Specifies the taxon for which the taphonomy information was set.",
-	    "See B<motility_basis> above.  These fields are only included if the",
-	    "C<otaph> block is also included.",
-	# { output => 'taphonomy_basis_no', com_name => 'jtb', if_field => 'taphonomy_basis_no', 
-	#   if_block => 'etbasisext', if_format => 'json' },
-	# { output => 'taphonomy_basis', com_name => 'jtn',
-	#   if_block => 'etbasis', if_format => 'json' }
-	);
+	{ output => 'taphonomy_basis', com_name => 'jtpb', if_block => '1.2:taxa:etbasis' },
+	    "Specifies the taxon from which the taphonomy information is inherited.");
     
     $ds->define_block('1.2:taxa:etbasis' =>
 	{ select => 'TAPHBASIS', if_block => '1.2:taxa:taphonomy' },
@@ -727,7 +705,8 @@ sub initialize {
 	{ include => '1.2:taxa:class' },
 	{ include => '1.2:taxa:ecospace' },
 	{ include => '1.2:taxa:taphonomy' },
-	{ include => '1.2:taxa:etbasis' });
+	{ include => '1.2:taxa:etbasis' },
+	{ include => '1.2:refs:attr' });
 	# { include => '1.2:taxa:pres' });
     
     # Now define output blocks for opinions
@@ -2031,13 +2010,7 @@ sub get_taxon {
     
     my ($r);
     
-    try {
-	($r) = $taxonomy->list_taxa_simple($taxon_no, $options);
-    }
-    
-    catch { die $_ }
-    
-    finally { print STDERR $taxonomy->last_sql . "\n\n" if $request->debug };
+    ($r) = $taxonomy->list_taxa_simple($taxon_no, $options);
     
     # Return a 404 error if we did not find anything.
     
@@ -2195,17 +2168,7 @@ sub get_opinion {
     
     my ($r);
     
-    try {
-	($r) = $taxonomy->list_opinions($opinion_no, $options);
-    }
-    
-    catch {
-	die $_;
-    }
-	
-    finally {
-	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-    };
+    ($r) = $taxonomy->list_opinions($opinion_no, $options);
     
     die $request->exception(404, "Unknown opinion id '$opinion_no'")
 	unless ref $r;
@@ -2278,31 +2241,21 @@ sub list_taxa {
     
     # Now execute the query.
     
-    try {
-	my @result = $taxonomy->list_taxa($rel, $base, $options);
-	my @warnings = $taxonomy->list_warnings;
-	
-	$request->add_warning(@warnings) if @warnings;
-	
-	if ( $options->{return} eq 'stmt' )
-	{
-	    $request->sth_result($result[0]) if $result[0];
-	}
-	
-	else
-	{
-	    $request->add_result(@result);
-	}
+    my @result = $taxonomy->list_taxa($rel, $base, $options);
+    my @warnings = $taxonomy->list_warnings;
+    
+    $request->add_warning(@warnings) if @warnings;
+    
+    if ( $options->{return} eq 'stmt' )
+    {
+	$request->sth_result($result[0]) if $result[0];
     }
     
-    catch {
-	die $_;
+    else
+    {
+	$request->add_result(@result);
     }
 	
-    finally {
-	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-    };
-    
     $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
     $request->{main_sql} = $taxonomy->last_sql;
 }
@@ -2385,30 +2338,20 @@ sub list_associated {
     
     # Now execute the query.
     
-    try {
-	my @result = $taxonomy->list_associated($rel, $base, $options);
-	my @warnings = $taxonomy->list_warnings;
-	
-	$request->add_warning(@warnings) if @warnings;
-	
-	if ( $options->{return} eq 'stmt' )
-	{
-	    $request->sth_result($result[0]) if $result[0];
-	}
-	
-	else
-	{
-	    $request->list_result(\@result);
-	}
+    my @result = $taxonomy->list_associated($rel, $base, $options);
+    my @warnings = $taxonomy->list_warnings;
+    
+    $request->add_warning(@warnings) if @warnings;
+    
+    if ( $options->{return} eq 'stmt' )
+    {
+	$request->sth_result($result[0]) if $result[0];
     }
     
-    catch {
-	die $_;
-    };
-	
-    # finally {
-    # 	print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
-    # };
+    else
+    {
+	$request->list_result(\@result);
+    }
     
     $request->set_result_count($taxonomy->last_rowcount) if $options->{count};
     $request->{main_sql} = $taxonomy->last_sql;
@@ -2450,19 +2393,13 @@ sub list_opinions {
     
     my $sth;
     
-    try {
-	$sth = $taxonomy->list_opinions($base, $options);
-	
-	my @warnings = $taxonomy->list_warnings;
-	$request->add_warning(@warnings) if @warnings;
-	
-	$request->sth_result($sth);
-	$request->set_result_count($taxonomy->last_rowcount);
-    }
+    $sth = $taxonomy->list_opinions($base, $options);
     
-    catch { die $_ }
+    my @warnings = $taxonomy->list_warnings;
+    $request->add_warning(@warnings) if @warnings;
     
-    finally { print STDERR $taxonomy->last_sql . "\n\n" if $request->debug };
+    $request->sth_result($sth);
+    $request->set_result_count($taxonomy->last_rowcount);
 }
 
 

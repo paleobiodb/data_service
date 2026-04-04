@@ -1134,18 +1134,10 @@ sub get_upper_taxa {
     
     my $taxa_list;
     
-    try {
-	$taxa_list = $taxonomy->list_subtree($base_no, { min_rank => 6, 
-							 fields => \@fields, 
-							 debug_out => $debug_out,
-							 return => 'listref' });
-    }
-    
-    catch {
-	die $_ if $_;
-    };
-    
-    # print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+    $taxa_list = $taxonomy->list_subtree($base_no, { min_rank => 6, 
+						     fields => \@fields, 
+						     debug_out => $debug_out,
+						     return => 'listref' });
     
     # If no taxa were returned, then the base taxon is probably a genus or
     # below.  So just fetch that single record, so that we at least have
@@ -1251,17 +1243,9 @@ sub make_taxon_request {
     
     my $taxa_list = [];
     
-    try {
-	$taxa_list = $taxonomy->list_taxa('current', $taxon_list, { fields => $field_list,
-								    debug_out => $debug_out,
-								    return => 'listref' });
-    }
-    
-    catch {
-	die $_ if $_;
-    };
-    
-    # print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
+    $taxa_list = $taxonomy->list_taxa('current', $taxon_list, { fields => $field_list,
+								debug_out => $debug_out,
+								return => 'listref' });
     
     # Now go through the list, and copy the relevant info.
     
