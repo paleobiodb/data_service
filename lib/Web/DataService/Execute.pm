@@ -1140,12 +1140,12 @@ sub error_result {
 	    push @messages, $e;
 	}
 	
-	$error_output = "CAUGHT HTTP::VALIDATE: " . join('; ', @messages);
+	$error_output = join('; ', @messages);
     }
     
     elsif ( $error->isa('Web::DataService::Exception') )
     {
-	$error_output = "CAUGHT EXCEPTION: " . $error->{code} . " " . $error->{message};
+	$error_output = $error->{code} . " " . $error->{message};
     }
     
     elsif ( $error->isa('Dancer::Exception::Base') )
@@ -1153,14 +1153,15 @@ sub error_result {
 	$error_output = "CAUGHT ERROR: " . $error->message if $Web::DataService::DEBUG;
     }
     
-    # If we are running in debug mode, print this error. Otherwise log it.
+    # If we are running in debug mode, print the detail output if it is not empty.
+    # Otherwise log it.
     
-    if ( $Web::DataService::DEBUG )
+    if ( $Web::DataService::DEBUG && $error_output )
     {
 	$ds->debug_line($error_output);
     }
 
-    else
+    elsif ( $error_output )
     {
 	$Web::DataService::FOUNDATION->error_line($error_output);
     }
