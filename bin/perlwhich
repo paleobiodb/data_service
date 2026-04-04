@@ -1,0 +1,233 @@
+#!/usr/bin/env perl
+# -*- mode: cperl; -*-
+# 
+# NAME
+#
+#   perlwhich - locate a Perl module
+# 
+# USAGE
+#
+#   perlwhich [-adv] module...
+# 
+# The perlwhich command prints the full path to the specified Perl module or
+# modules, if it is found in @INC. Each module may be specified as either a
+# package name (My::Package) or a file name (My/Package.pm). Each name is tried
+# both with and without the .pm suffix. By default, the first path name found
+# for each argument is printed.
+# 
+# OPTIONS
+# 
+#   -a    Print all matching path names.
+# 
+#   -d    Do not add a .pm suffix, look for a matching directory
+# 
+#   -v    Print out the version of each module, if that information can be
+#         retrieved from the module file.
+# 
+
+
+use strict;
+
+use feature 'say';
+
+use Pod::Usage;
+
+our ($VERSION) = '0.8';
+
+# Look for options, with bundling.
+
+my @names;
+my $found;
+
+my $flags = '';
+my $OPT_ALL;
+my $OPT_DIR;
+my $OPT_VER;
+
+while ( @ARGV )
+{
+    if ( $ARGV[0] =~ / - ([adv]+) $ /x )
+    {
+	shift @ARGV;
+	$flags .= $1;
+    }
+    
+    elsif ( $ARGV[0] =~ /^-h$|^--help$/ )
+    {
+	pod2usage(-exitval => 0, -verbose => 1);
+	exit;
+    }
+    
+    elsif ( $ARGV[0] eq '-' )
+    {
+	shift @ARGV;
+	last;
+    }
+    
+    elsif ( $ARGV[0] =~ / ^ - /x )
+    {
+	die "Invalid option '$ARGV[0]'\n";
+    }
+    
+    else
+    {
+	last;
+    }
+}
+
+$OPT_ALL = 1 if $flags =~ /a/;
+$OPT_DIR = 1 if $flags =~ /d/;
+$OPT_VER = 1 if $flags =~ /v/;
+
+
+# Remaining arguments are names to look up.
+
+foreach my $arg ( @ARGV )
+{
+    # An argument that contains '::' is taken to be the name of a Perl module.
+    # Look for the equivalent .pm or .pod file. If neither one is found, look
+    # for a matching directory. With the -d option, only the directory is
+    # searched for.
+    
+    if ( $arg =~ /::/ )
+    {
+	$arg =~ s{::}{/}g;
+	
+	push @names, "$arg.pm" unless $OPT_DIR;
+	push @names, "$arg.pod" unless $OPT_DIR;
+	push @names, $arg;
+    }
+    
+    # An argument that does not contain '::' and ends in .pm or some other
+    # extension is searched for unchanged.
+    
+    elsif ( $arg =~ / [.] \w+ $ /x )
+    {
+	push @names, $arg;
+    }
+    
+    # Any other argument is assumed to be a file name with the extension left
+    # off. Search for the argument with a .pm or .pod ending. If neither one
+    # is found, or if -d is given, search for a matching directory.
+    
+    else
+    {
+	push @names, "$arg.pm" unless $OPT_DIR;
+	push @names, "$arg.pod" unless $OPT_DIR;
+	push @names, $arg;
+    }
+    
+    # Mark the end of the equivalent names for this argument.
+    
+    push @names, '-*-';
+}
+
+
+# Now look up the name(s) corresponding to each argument in each element of
+# @INC. Stop when we find a match for any variant from a given argument.
+
+while ( defined(my $name = shift @names) )
+{
+    next if $name eq '-*-';
+    
+  DIR:
+    foreach my $dir ( @INC )
+    {
+	if ( -e "$dir/$name" )
+	{
+	    if ( $OPT_VER && -r "$dir/$name" )
+	    {
+		&DisplayVersion("$dir/$name");
+	    }
+	    
+	    else
+	    {
+		say "$dir/$name";
+	    }
+	    
+	    $found = 1;
+	    
+	    unless ( $OPT_ALL )
+	    {
+		shift @names while @names && $names [0] ne '-*-';
+		last DIR;
+	    }
+	}
+    }
+}
+
+# If not found, exit 1. Otherwise, exit 0.
+
+exit 1 unless $found;
+
+
+# DisplayVersion ( filepath )
+# 
+# If the file can be read, look for a 
+
+sub DisplayVersion {
+    
+    my ($filepath) = @_;
+    
+    if ( open(my $fh, '<', $filepath) )
+    {
+	my $content;
+	
+	read($fh, $content, 8192);
+	
+	if ( $content =~ / [$] [\w:']* \bVERSION\b .*? = [\s'"]* ( \d [\d.]+ ) /x )
+	{
+	    say "$filepath version=$1";
+	    return;
+	}
+    }
+    
+    say $filepath;
+}
+
+__END__
+
+=head1 NAME
+
+perlwhich - locate a Perl module
+
+=head1 USAGE
+
+  perlwhich [options] module...
+
+=head1 OPTIONS
+
+=over 4
+
+=item -a
+
+Print all matching path names.
+
+=item -d
+
+Do not add a .pm suffix, look for a matching directory.
+
+=item -v
+
+Print out the version of each module after its name, if that information can
+be retrieved from the module file.
+
+=item -h
+
+Print out this usage information.
+
+=back
+
+=head1 DESCRIPTION
+
+The perlwhich command is the equivalent of 'which' for Perl modules. It prints
+the full path to each specified Perl module, if it is found in @INC. A module
+may be specified as either a package name (Some::Module) or a file name
+(Some/Module.pm). By default, the first path name found for each argument is
+printed.
+
+=head1 RESULT CODE
+
+This command returns 0 if a matching file or directory is found, 1 if not.
+
+=cut
