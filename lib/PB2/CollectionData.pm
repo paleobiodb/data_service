@@ -4342,8 +4342,10 @@ sub generateMainFilters {
     
     if ( my $loc = $request->clean_param('loc') )
     {
-	die "400 the value of parameter 'loc' is too large\n"
+	die $request->exception(400, "the value of 'loc' must be no more than 5000 characters")
 	    if length($loc) > 5000;
+	die $request->exception(400, "the value of 'loc' must be a geometry in WKT format")
+	    unless $loc =~ /^[a-zA-Z]+\s*[(]/;
 	my $quoted = $dbh->quote($loc);
 	push @filters, "st_contains(geomfromtext($quoted), $mt.loc)";
     }
