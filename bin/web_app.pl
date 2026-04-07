@@ -11,7 +11,6 @@ use lib './lib';
 
 use Dancer;
 use Dancer::Plugin::Database;
-use Dancer::Plugin::StreamData;
 use Template;
 use TableDefs qw(init_table_names);
 use Web::DataService;

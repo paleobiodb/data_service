@@ -8,7 +8,7 @@
 # configuration file and other local content. You can build this preload image
 # using the command 'pbdb build preload api'.
 
-FROM perl:5.38-threaded AS paleomacro_pbapi_preload
+FROM perl:5.42-threaded AS paleomacro_pbapi_preload
 
 RUN apt-get update && \
     apt-get -y install mariadb-client && \
@@ -23,7 +23,6 @@ RUN apt-get update && \
     cpanm Template && \
     cpanm Dancer::Template::Tiny && \
     cpanm Dancer::Plugin::Database && \
-    cpanm Dancer::Plugin::StreamData && \
     cpanm Starman
     
 RUN cpanm HTTP::Validate && \

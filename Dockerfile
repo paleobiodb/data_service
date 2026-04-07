@@ -29,8 +29,6 @@ RUN echo $TZ > /etc/timezone && \
 
 CMD ["perl", "bin/data_service.pl"]
 
-COPY pbapi /var/paleomacro/pbapi/
-
 LABEL maintainer="mmcclenn@geology.wisc.edu"
 LABEL version="1.0"
 LABEL description="Paleobiology Database Main API"
