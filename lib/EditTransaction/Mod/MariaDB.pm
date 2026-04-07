@@ -10,7 +10,7 @@ package EditTransaction::Mod::MariaDB;
 
 use strict;
 
-use EditTransaction::TableInfo qw(%DB_CONSTANTS);
+use EditTransaction::TableInfo;
 
 use TableDefs qw(%TABLE);
 use Carp qw(croak);

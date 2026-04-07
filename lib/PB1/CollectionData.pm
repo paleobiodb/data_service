@@ -11,9 +11,6 @@ package PB1::CollectionData;
 
 use HTTP::Validate qw(:validators);
 
-use PB1::CommonData qw(generateAttribution);
-use PB1::ReferenceData qw(format_reference);
-
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use TaxonomyOld;
@@ -26,7 +23,7 @@ use Moo::Role;
 no warnings 'numeric';
 
 
-our (@REQUIRES_ROLE) = qw(PB1::CommonData PB1::ConfigData PB1::ReferenceData);
+our (@REQUIRES_ROLE) = qw(PB1::CommonData PB1::ReferenceData PB1::ConfigData PB1::ReferenceData);
 
 our ($MAX_BIN_LEVEL) = 0;
 our (%COUNTRY_NAME, %CONTINENT_NAME);

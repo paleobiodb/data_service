@@ -15,7 +15,6 @@ use HTTP::Validate qw(:validators);
 use TableDefs qw(%TABLE $REF_SUMMARY);
 use CoreTableDefs;
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier %IDP);
-use PB2::CommonData qw(generateAttribution);
 use ReferenceMatch qw(split_authorlist parse_authorname);
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
