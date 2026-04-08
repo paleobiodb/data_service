@@ -48,13 +48,14 @@ sub initialize {
     
     $ds->define_output_map('1.2:occs:basic_map' =>
 	{ value => 'full', maps_to => '1.2:occs:full_info' },
-	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
+	    "This is a shortcut for including all of the information that defines this record.",
+	    "Currently, this",
 	    "includes the following blocks: B<attr>, B<class>, B<plant>, B<abund>, B<coords>, B<coll>",
 	    "B<loc>, B<paleoloc>, B<prot>, B<stratext>, B<lithext>,",
 	    "B<geo>, B<comps>, B<methods>, B<ctaph>, B<ecospace>, B<ttaph>, B<refattr>.",
 	    "If we subsequently add new data fields to this record",
 	    "then B<full> will include those as well.  So if you are publishing a URL,",
-	    "it might be a good idea to include C<show=full>.",
+	    "it might be a good idea to include B<C<show=full>>.",
 	{ value => 'acconly' },
 	    "Suppress the exact taxonomic identification of each occurrence,",
 	    "and show only the accepted name.",
@@ -209,9 +210,9 @@ sub initialize {
 	{ set => '*', code => \&process_occ_com, if_vocab => 'com' },
 	{ set => '*', code => \&process_occ_ids },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
-	    "A positive integer that uniquely identifies the occurrence",
+	    "A unique identifier for this occurrence",
 	{ output => 'record_type', com_name => 'typ', value => $IDP{OCC}, dwc_value => 'Occurrence' },
-	    "The type of this object: C<$IDP{OCC}> for an occurrence.",
+	    "The type of this object: C<B<$IDP{OCC}>> for an occurrence.",
 	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
 	    "If this occurrence was reidentified, a unique identifier for the reidentification.",
 	{ output => 'flags', com_name => 'flg' },
@@ -234,7 +235,8 @@ sub initialize {
 	    "members of the specified research group(s) only.",
 	    "=back",
 	{ set => 'permissions', from => '*', code => \&PB2::CollectionData::process_permissions },
-	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', not_block => 'acconly' },
+	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', 
+	  not_block => 'acconly' },
 	    "The taxonomic name by which this occurrence was identified.  This field will",
 	    "be omitted for responses in the compact voabulary if it is identical",
 	    "to the value of F<accepted_name>.",
@@ -245,13 +247,14 @@ sub initialize {
 	    "to the value of F<accepted_rank>.",
 	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', 
 	  not_block => 'acconly', data_type => 'mix' },
-	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly' },
+	{ output => 'identified_no', com_name => 'iid', not_block => 'acconly', 
+	  dedup => 'accepted_no' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
-	    "we have no further information about the classification of this occurrence.  In some cases,",
-	    "the genus has been entered into the taxonomic hierarchy but not the species.  This field will",
-	    "be omitted for responses in the compact voabulary if it is identical",
-	    "to the value of F<accepted_no>.",
+	    "we have no further information about the classification of this occurrence.  In",
+	    "some cases, the genus has been entered into the taxonomic hierarchy but not the",
+	    "species.  This field will be omitted for responses in the compact voabulary if",
+	    "it is identical to the value of F<accepted_no>.",
 	{ output => 'difference', com_name => 'tdf', not_block => 'acconly' },
 	    "If the identified name is different from the accepted name, this field gives",
 	    "the reason why.  This field will be present if, for example, the identified name",
@@ -263,26 +266,31 @@ sub initialize {
 	{ output => 'accepted_attr', if_block => '1.2:occs:attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of the accepted name",
-	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no', data_type => 'mix' },
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'accepted_no',
+	  data_type => 'mix' },
 	    "The taxonomic rank of the accepted name.  This may be different from the",
 	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
 	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
 	    "of this database.",
-	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb', data_type => 'mix' },
+	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb',
+	  data_type => 'mix' },
 	{ output => 'accepted_no', com_name => 'tid', if_field => 'accepted_no' },
 	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with this occurrence (not necessarily a",
-	    "standard interval), or the interval that begins the range if F<late_interval> is also given",
-	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
-	    "The interval that ends the specific geologic time range associated with this occurrence,",
-	    "if different from the value of F<early_interval>",
+	    "standard interval), or the interval that begins the range if C<B<late_interval>> is",
+	    "also given",
+	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', 
+	  dedup => 'early_interval' },
+	    "The interval that ends the specific geologic time range associated with this",
+	    "occurrence, if different from the value of C<B<<early_interval>>",
 	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma', data_type => 'dec' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma', data_type => 'dec' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
-	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut', if_block => '1.2:refs:attr' },
+	{ output => 'ref_author', dwc_name => 'recordedBy', com_name => 'aut',
+	  if_block => '1.2:refs:attr' },
 	    "The author(s) of the reference from which this data was entered.",
 	{ output => 'ref_pubyr', com_name => 'pby', if_block => '1.2:refs:attr' },
 	    "The year of publication of the reference from which this data was entered",
@@ -614,44 +622,7 @@ sub initialize {
 	    "parameter F<count>.",
 	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The total number of occurrences that are resolved to this interval");
-    
-    # The following block specifies the output for taxon records representing
-    # occurrence taxonomies.
-    
-    # $ds->define_block('1.2:occs:taxa' =>
-    # 	{ output => 'taxon_no', com_name => 'oid' },
-    # 	    "The identifier of the taxon represented by this record",
-    # 	{ output => 'parent_no', com_name => 'par' },
-    # 	    "The identifier of the parent taxon.  You can use this field to assemble",
-    # 	    "these records into one or more taxonomic trees.  A value of 0",
-    # 	    "indicates a root of one of these trees.  By default, records representing",
-    # 	    "classes have a value of 0 in this field.",
-    # 	{ output => 'taxon_rank', com_name => 'rnk' },
-    # 	    "The rank of the taxon represented by this record",
-    # 	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
-    # 	{ output => 'taxon_name', com_name => 'nam' },
-    # 	    "The name of the taxon represented by this record",
-    # 	{ output => 'taxon_attr', if_block => 'attr', com_name => 'att' },
-    # 	    "The attribution (author and year) of this taxonomic name",
-    # 	{ output => 'n_orders', com_name => 'odc' },
-    # 	    "The number of orders from within this taxon that appear in the set of",
-    # 	    "fossil occurrences being analyzed",
-    # 	{ output => 'n_families', com_name => 'fmc' },
-    # 	    "The number of families from within this taxon that appear in the set of",
-    # 	    "fossil occurrences being analyzed",
-    # 	{ output => 'n_genera', com_name => 'gnc' },
-    # 	    "The number of genera from within this taxon that appear in the set of",
-    # 	    "fossil occurrences being analyzed",
-    # 	{ output => 'n_species', com_name => 'spc' },
-    # 	    "The number of species from within this taxon that appear in the set of",
-    # 	    "fossil occurrences being analyzed",
-    # 	{ output => 'specific_occs', com_name => 'soc' },
-    # 	    "The number of occurrences that are identified to this specific taxon",
-    # 	    "in the set of fossil occurrences being analyzed",
-    # 	{ output => 'n_occs', com_name => 'noc' },
-    # 	    "The total number of occurrences of this taxon or any of its subtaxa in the",
-    # 	    "set of fossil occurrences being analyzed");
-    
+        
     $ds->define_output_map('1.2:occs:taxa_opt' =>
 	@PB2::TaxonData::BASIC_1,
 	{ value => 'occapp', maps_to => '1.2:taxa:occapp' },
@@ -2676,6 +2647,8 @@ sub prevalence {
 	
 	# Then prepare and execute the main query.
 	
+	$dbh->do("BEGIN");
+	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
 	$request->generate_prevalence($result, $limit, $detail);
@@ -2881,7 +2854,8 @@ sub list_occs_associated {
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_ref_filters($inner_tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r' }, $inner_tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r' },
+						      $inner_tables );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     # Figure out what information we need to determine access permissions.  We

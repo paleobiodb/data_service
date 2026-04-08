@@ -21,7 +21,7 @@ use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY
 		 $PALEOCOORDS $GEOPLATES $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP
 		 $INTERVAL_BUFFER $PVL_MATRIX $BIN_LOC);
 use CoreTableDefs;
-use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
+use ExternalIdent qw(generate_identifier %IDP %IDRE VALID_IDENTIFIER);
 use IntervalBase qw(ts_defined ts_record ts_boundary_list ts_boundary_name);
 use OccurrenceBase qw(parseIdentifiedName);
 use Taxonomy;
@@ -1461,31 +1461,38 @@ sub initialize {
 	{ param => 'cc', valid => \&valid_cc, alias => 'country', list => ',', bad_value => '_' },
 	    "Return only records whose location falls within the specified geographic regions.",
 	    "The value of this parameter should be one or more",
-	    "L<two-character country codes|http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2> and/or ",
-	    "L<three-character continent codes|op:config.txt?show=continents> as a comma-separated list.",
-	    "If the parameter value starts with C<!>, then records falling into these regions are excluded",
-	    "instead of included.  Any country codes starting with C<^> are",
-	    "subtracted from the filter.  For example:", "=over",
+	    "L<two-character country codes|http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
+	    "and/or L<three-character continent codes|op:config.txt?show=continents> as a",
+	    "comma-separated list. If the parameter value starts with C<!>, then records",
+	    "falling into these regions are excluded instead of included.  Any country codes",
+	    "starting with C<^> are subtracted from the filter.  For example:", "=over",
 	    "=item ATA,AU", "Select occurrences from Antarctica and Australia",
-	    "=item NOA,SOA,^AR,^BO", "Select occurrences from North and South America, but not Argentina or Bolivia",
-	    "=item !EUR,^IS", "Exclude occurrences from Europe, except those from Iceland", "=back",
+	    "=item NOA,SOA,^AR,^BO", "Select occurrences from North and South America, but",
+	    "not Argentina or Bolivia",
+	    "=item !EUR,^IS", "Exclude occurrences from Europe, except those from Iceland",
+	    "=back",
 	{ param => 'country_name', valid => ANY_VALUE, list => ',', bad_value => '_' },
 	    "Return only records from collections that are indicated as falling within the specified",
 	    "country. This parameter takes full country names, which may include the",
 	    "wildcards C<%> and C<_>.",
-	{ param => 'state', valid => ANY_VALUE, list => ',', bad_value => '_' },
+	{ param => 'state', valid => ANY_VALUE, list => ',', bad_value => '_',
+	  alias => 'province' },
 	    "Return only records from collections that are indicated as falling within the specified",
 	    "state or province. This information is not recorded for all collections, and has not",
 	    "been checked for accuracy. Given that state names are sometimes duplicated between",
 	    "countries, it is recommended to also specify the country using the B<C<cc>> parameter.",
-	{ param => 'county', valid => ANY_VALUE, list => ',', bad_value => '_' },
+	    "You can also use the alias B<C<province>> for this parameter.",
+	{ param => 'county', valid => ANY_VALUE, list => ',', bad_value => '_',
+	  alias => 'region' },
 	    "Return only records from collections that are indicated as falling within the specified",
 	    "county or other sub-state administrative division. This information is not recorded",
 	    "for all collections, and has not been checked for accuracy. Given that county names are",
 	    "often duplicated between states and countries, it is recommended that you also specify",
 	    "the state using the B<C<state>> parameter and the country using the B<C<cc>> parameter.",
+	    "You can also use the alias B<C<region>> for this parameter.",
 	{ param => 'continent', valid => \&valid_continent, list => qr{[\s,]+}, bad_value => '_' },
-	    "Return only records whose geographic location falls within the specified continent or continents.",
+	    "Return only records whose geographic location falls within the specified continent",
+	    "or continents.",
 	    "The value of this parameter should be a comma-separated list of ",
 	    "L<continent codes|op:config.txt?show=continents>.  This parameter is deprecated;",
 	    "use F<cc> instead.",
@@ -1571,24 +1578,18 @@ sub initialize {
 
     $ds->define_ruleset('1.2:colls:all_records' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
-	    "Select all collections entered in the database, subject to any other parameters you may specify.",
-	    "This parameter does not require any value.");
+	    "Select all collections entered in the database, subject to any other parameters",
+	    "you may specify. This parameter does not require any value.");
     
     $ds->define_ruleset('1.2:colls:show' =>
-	{ optional => 'show', list => q{,},
+	{ optional => 'show', list => ',',
 	  valid => '1.2:colls:basic_map' },
 	    "This parameter is used to select additional blocks of information to be returned",
 	    "along with the basic record for each collection.  Its value should be",
 	    "one or more of the following, separated by commas:");
     
-	# { optional => 'order', valid => $ds->valid_set('1.2:colls:order'), split => ',' },
-	#     "Specifies the order in which the results are returned.  You can specify multiple values",
-	#     "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
-	#     $ds->document_set('1.2:colls:order'),
-	#     "If no order is specified, results are returned as they appear in the C<collections> table.",
-		
     $ds->define_ruleset('1.2:summary_display' =>
-	{ param => 'show', list => q{,},
+	{ param => 'show', list => ',',
 	  valid => $ds->valid_set('1.2:colls:summary_map') },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each cluster.  Its value should be",
@@ -1598,10 +1599,10 @@ sub initialize {
     $ds->define_ruleset('1.2:colls:single' => 
 	"The following required parameter selects a record to retrieve:",
     	{ require => '1.2:colls:specifier', 
-	  error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" },
-	">>The following parameter specifies that additional blocks of data should be returned,",
-	"along with the basic collection record.",
-	">>You may also use the following parameters to specify what information you wish to retrieve:",
+	  error => "you must specify a collection identifier, either in the URL or with " . 
+	  "the 'id' parameter" },
+	">>You may also use the following parameters to specify what information you wish",
+	"to retrieve:",
 	{ optional => 'pgm', valid => '1.2:colls:pgmodel', list => "," },
 	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
 	    "You may specify one or more from the following list, separated by commas.",
@@ -1613,11 +1614,13 @@ sub initialize {
     $ds->define_ruleset('1.2:colls:list' => 
 	"You can use the following parameter if you wish to retrieve the entire set of",
 	"collection records stored in this database.  Please use this with care, since the",
-	"result set will contain more than 100,000 records and will be at least 20 megabytes in size.",
-	"You may also select subsets of this list by specifying some combination of the parameters listed below.",
+	"result set will contain more than 200,000 records and will be at least 30 megabytes",
+	"in size. You may also select subsets of this list by specifying some combination",
+	"of the parameters listed below.",
     	{ allow => '1.2:colls:all_records' },
         ">>The following parameters can be used to query for collections by a variety of criteria.",
-	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"Except as noted below, you may use these in any combination.  If you do not specify",
+	"B<C<all_records>>,",
 	"you must specify at least one selection parameter from the following list.",
 	"The parameters referring to taxonomy",
 	"select those collections that contain at least one matching occurrence.",
@@ -1648,10 +1651,10 @@ sub initialize {
 	"and the order in which you wish to get the records:",
     	{ allow => '1.2:colls:show' },
 	{ optional => 'order', valid => '1.2:colls:order', split => ',' },
-	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  If this",
-	    "parameter is not given, the returned collections are displayed in the order in which they",
-	    "were entered into the database.  Accepted values are:",
+	    "Specifies the order in which the results are returned.  You can specify multiple",
+	    "values separated by commas, and each value may be appended with C<.asc> or C<.desc>.",
+	    "If no order is specified, the returned collections are displayed in the order in which",
+	    "they were entered into the database.  Accepted values are:",
 	{ ignore => 'level' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -1688,12 +1691,20 @@ sub initialize {
 	    "along with the basic record for each collection.  Its value should be",
 	    "one or more of the following, separated by commas:",
 	{ optional => 'order', valid => '1.2:colls:order', split => ',' },
-	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  If this",
-	    "parameter is not given, the returned collections are displayed in the order in which they",
-	    "were entered into the database.  Accepted values are:",
+	    "Specifies the order in which the results are returned.  You can specify multiple",
+	    "values separated by commas, and each value may be appended with C<.asc> or C<.desc>.",
+	    "If no order is specified, the returned collections are displayed in the order in",
+	    "which they were entered into the database.  Accepted values are:",
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_set('1.2:colls:refselect' =>
+	{ value => 'primary' },
+	    "Return only primary references. This is the default.",
+	{ value => 'secondary' },
+	    "Return only secondary references.",
+	{ value => 'all' },
+	    "Return both primary and secondary references.");
     
     $ds->define_ruleset('1.2:colls:byref' => 
 	"You can use the following parameter if you wish to retrieve the entire set of",
@@ -1702,7 +1713,8 @@ sub initialize {
 	"You may also specify any of the parameters listed below.",
     	{ allow => '1.2:colls:all_records' },
         ">>The following parameters can be used to query for collections by a variety of criteria.",
-	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
+	"Except as noted below, you may use these in any combination.  If you do not specify",
+	"B<C<all_records>>,",
 	"you must specify at least one selection parameter from the following list.",
 	"The parameters referring to taxonomy",
 	"select those collections that contain at least one matching occurrence.",
@@ -1710,8 +1722,7 @@ sub initialize {
    	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:colls:metadata' },
 	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector',
-			  '1.2:colls:metadata',
-			  '1.2:interval_selector', '1.2:ma_selector' ] },
+			  '1.2:colls:metadata', '1.2:interval_selector', '1.2:ma_selector' ] },
 	{ ignore => [ 'level', 'ref_type', 'select' ] },
 	">>You can use the following parameters to filter the result set based on attributes",
 	"of the bibliographic references.  If you wish to use one of them and have not specified",
@@ -1749,16 +1760,21 @@ sub initialize {
 	"You can use the following parameter if you wish to retrieve all of the references",
 	"from which collections were entered into the database.",
 	{ allow => '1.2:colls:all_records' },
-        ">>The following parameters can be used to retrieve the references associated with collections",
-	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
-	"These parameters can all be used to select either occurrences, collections, or associated references.",
-	"The taxonomic parameters select all collections that contain at least one matching occurrence.",
+	">>The following parameter lets you select which type of reference you want.",
+	{ optional => 'ref_type', valid => '1.2:colls:refselect', alias => 'select' },
+	    "By default, only primary collection references are returned, so that the",
+	    "output of this operation can be matched with the B<C<colls/byref> operation.",
+	    "Accepted values include:",
+        ">>The following parameters can be used to retrieve the references associated with",
+	"collections elected by a variety of criteria.  Except as noted below, you may use",
+	"these in any combination. These parameters can all be used to select either occurrences,",
+	"collections, or associated references. The taxonomic parameters select all collections",
+	"that contain at least one matching occurrence.",
 	{ allow => '1.2:colls:selector' },
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:colls:metadata' },
 	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector',
-			  '1.2:colls:metadata',
-			  '1.2:interval_selector', '1.2:ma_selector'] },
+			  '1.2:colls:metadata', '1.2:interval_selector', '1.2:ma_selector'] },
 	">>You can use the following parameters to filter the result set based on attributes",
 	"of the bibliographic references.  If you wish to use one of them and have not specified",
 	"any of the selection parameters listed above, use B<C<all_records>>.",
@@ -1799,8 +1815,7 @@ sub initialize {
     	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:colls:metadata' },
 	{ require_any => ['1.2:colls:all_records', '1.2:colls:selector', '1.2:main_selector',
-			  '1.2:colls:metadata',
-			  '1.2:interval_selector', '1.2:ma_selector'] },
+			  '1.2:colls:metadata', '1.2:interval_selector', '1.2:ma_selector'] },
 	">>The following parameters filter the result set.  If you wish to use one of them and",
 	"have not specified any of the selection parameters listed above, use B<C<all_records>>.",
 	{ allow => '1.2:common:select_colls_crmod' },
@@ -1817,15 +1832,7 @@ sub initialize {
     	{ allow => '1.2:summary_display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
-    
-    # $ds->define_ruleset('1.2:toprank_selector' =>
-    # 	{ param => 'show', valid => ENUM_VALUE('formation', 'ref', 'author'), list => ',' });
-    
-    # $ds->define_ruleset('1.2:colls:toprank' => 
-    # 	{ require => '1.2:main_selector' },
-    # 	{ require => '1.2:toprank_selector' },
-    # 	{ allow => '1.2:special_params' });
-    
+        
     $ds->define_ruleset('1.2:strata:selector' =>
 	{ param => 'all_records', valid => FLAG_VALUE },
 	    "Return all stratum names known to the database.",
@@ -1837,8 +1844,10 @@ sub initialize {
 	{ param => 'lngmax', valid => COORD_VALUE('lng') },
 	{ param => 'latmin', valid => COORD_VALUE('lat') },
 	{ param => 'latmax', valid => COORD_VALUE('lat') },
-	    "Return only strata associated with at least one occurrence whose geographic location falls within the given bounding box.",
-	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
+	    "Return only strata associated with at least one collection whose geographic",
+	    "location falls within the given bounding box.",
+	    "The longitude boundaries will be normalized to fall between -180 and 180, and",
+	    "will generate",
 	    "two adjacent bounding boxes if the range crosses the antimeridian.",
 	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
 	{ together => ['lngmin', 'lngmax'],
@@ -2006,8 +2015,6 @@ sub list_colls {
     push @filters, $request->generate_refno_filter('c');
     push @filters, $request->generate_common_filters( { occs => 'oc', colls => 'cc', bare => 'cc' }, $tables );
     push @filters, '1=1' if $request->clean_param('all_records');
-    # push @filters, $request->generate_crmod_filters('cc', $tables);
-    # push @filters, $request->generate_ent_filters('cc', $tables);
     
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.
@@ -2364,11 +2371,8 @@ sub refs {
     my $inner_tables = { sr => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
-    # push @filters, $request->generateCollFilters($inner_tables);
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($inner_tables, 'o');
     push @filters, $request->generate_common_filters( { colls => 'cc' }, $inner_tables );
-    # push @filters, $request->generate_crmod_filters('cc', $inner_tables);
-    # push @filters, $request->generate_ent_filters('cc', $inner_tables);
     
     # Figure out the filter we need for determining access permissions.  We can ignore the extra
     # fields, since we are not returning records of type 'collection' or 'occurrence'.
@@ -2376,6 +2380,16 @@ sub refs {
     my ($access_filter, $access_fields) = $request->generateAccessFilter('c', $inner_tables);
     
     push @filters, $access_filter if $access_filter;
+    
+    # Figure out whether we are selecting primary references, secondary references, or
+    # both. The default is primary references only.
+    
+    my $refselect = $request->clean_param('ref_type') || 'primary';
+    
+    if ( $refselect eq 'secondary' )
+    {
+	push @filters, "sr.reference_no <> c.reference_no";
+    }
     
     # Then construct the inner filter string, for selecting collection records.
     
@@ -2395,7 +2409,7 @@ sub refs {
     # is selected by the options, sort by rank descending.
     
     my $order = PB2::ReferenceData::generate_order_clause($request, { rank_table => 's' }) ||
-	"r.author1last, r.author1init";
+	$request->default_ref_order;
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings. 
@@ -2423,15 +2437,23 @@ sub refs {
     my $inner_join_list = $request->generateJoinList('c', $inner_tables);
     my $outer_join_list = $request->PB2::ReferenceData::generate_join_list($outer_tables);
     
+    # Generate the inner field list and grouping expression.
+    
+    my $inner_fields = $refselect eq 'primary'
+	? "c.reference_no, count(*) as reference_rank, 1 as is_primary"
+	: "sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, " .
+	"1, 0) as is_primary";
+    my $inner_group = $refselect eq 'primary' ? 'c.reference_no' : 'sr.reference_no';
+    
     # Construct the main query.
     
     $request->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
-	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
+	FROM (SELECT $inner_fields
 	    FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc on cc.collection_no = c.collection_no
 		$inner_join_list
             WHERE $filter_string
-	    GROUP BY sr.reference_no) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
+	    GROUP BY $inner_group) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
 	$outer_join_list
 	WHERE $ref_filter_string
 	ORDER BY $order

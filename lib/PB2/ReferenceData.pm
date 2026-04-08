@@ -59,11 +59,12 @@ sub initialize {
 	    "This includes the blocks C<B<authorlist>>, C<B<comments>>, C<B<entname>>,",
 	    "C<B<crmod>>.",
 	{ value => 'counts', maps_to => '1.2:refs:counts' },
-	    "Report the number of taxonomic names, opinions, occurrences, specimens, and collections",
-	    "derived from this reference that have been entered into the database.",
+	    "Report the number of taxonomic names, opinions, occurrences, specimens, and",
+	    "collections derived from this reference that have been entered into the database.",
 	{ value => 'collcounts', maps_to => '1.2:refs:collcounts' },
 	    "If you include this output block, you must also specify the parameter",
-	    "C<B<count_id>>. This block reports the number of occurrences (including reidentifications)",
+	    "C<B<count_id>>. This block reports the number of occurrences (including",
+	    "reidentifications)",
 	    "and specimens entered from this reference that are associated with the",
 	    "collection specified by C<B<count_id>>. This is intended to be used",
 	    "by the collection editing app.",
@@ -90,7 +91,8 @@ sub initialize {
 	{ value => 'spec (S)' },
 	    "This reference is the source for at least one fossil specimen",
 	{ value => 'prim (P)' },
-	    "This reference is indicated to be the primary source for at least one fossil collection",
+	    "This reference is indicated to be the primary source for at least one fossil",
+	    "collection",
 	{ value => 'ref (R)' },
 	    "This reference has an unknown or unspecified role in the database");
     
@@ -176,7 +178,8 @@ sub initialize {
       { output => 'r_booktitle', bibjson_name => 'booktitle' },
 	  "This field appears in BibJSON responses in records of type 'incollection'.",
       { output => 'r_school', bibjson_name => 'school' },
-	  "This field appears in BibJSON responses in records of type 'mastersthesis' and 'phdthesis'.",
+	  "This field appears in BibJSON responses in records of type 'mastersthesis' and",
+	  "'phdthesis'.",
       { output => 'r_publisher', com_name => 'pbl', pbdb_name => 'publisher', 
 	bibjson_name => 'publisher', not_block => 'formatted' },
 	  "Name of the publisher, if this data has been entered",
@@ -198,8 +201,8 @@ sub initialize {
       { output => 'r_lp', com_name => 'pgl', pbdb_name => 'lastpage', 
 	not_block => 'formatted', not_vocab => 'bibjson', data_type => 'str' },
 	  "Last page number",
-      { output => 'r_language', com_name => 'lan', pbdb_name => 'language', bibjson_name => 'language',
-	not_block => 'formatted' },
+      { output => 'r_language', com_name => 'lan', pbdb_name => 'language', 
+	bibjson_name => 'language', not_block => 'formatted' },
 	  "The language in which the document is written.",
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi', bibjson_name => 'identifier' },
 	  "The DOI for this document, if known",
@@ -225,14 +228,16 @@ sub initialize {
 	{ set => '*', code => \&adjust_ref_counts },
 	{ output => 'n_taxa', com_name => 'rct', bibjson_name => '_n_taxa', data_type => 'pos' },
 	    "The number of taxonomic names for which this reference is the source",
-	{ output => 'n_opinions', com_name => 'rcp', bibjson_name => '_n_opinions', data_type => 'pos' },
+	{ output => 'n_opinions', com_name => 'rcp', bibjson_name => '_n_opinions', 
+	  data_type => 'pos' },
 	    "The number of taxonomic opinions for which this reference is the source",
 	{ output => 'n_class', com_name => 'rcl', bibjson_name => '_n_class', data_type => 'pos' },
 	    "The number of these opinions that are currently chosen for classification",
 	{ output => 'n_occs', com_name => 'rco', bibjson_name => '_n_colls', data_type => 'pos' },
 	    "The number of occurrences for which this reference is the source",
 	{ output => 'n_colls', com_name => 'rcc', bibjson_name => '_n_colls', data_type => 'pos' },
-	    "The number of collections for which this reference is a primary source or secondary source");
+	    "The number of collections for which this reference is a primary source",
+	    "or secondary source");
     
     $ds->define_block('1.2:refs:collcounts' => 
 	{ select => ['rcco.n_occs', 'rccs.n_specs'],
@@ -579,7 +584,8 @@ sub get {
 
     elsif ( $request->has_block('1.2:refs:collcounts') )
     {
-	die $request->exception(400, "You must specify the parameter 'count_id' with 'show=collcounts'");
+	die $request->exception(400, "You must specify the parameter 'count_id' with " .
+				"'show=collcounts'");
     }
     
     die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
@@ -647,7 +653,8 @@ sub list {
 
     elsif ( $request->has_block('1.2:refs:collcounts') )
     {
-	die $request->exception(400, "You must specify the parameter 'count_id' with 'show=collcounts'");
+	die $request->exception(400, "You must specify the parameter 'count_id' with " .
+				"'show=collcounts'");
     }
     
     # Check for strictness and external identifiers
@@ -723,7 +730,7 @@ sub list {
 	
 	unless ( $order )
 	{
-	    $order = $order_byscore || 'r.author1last, r.author1init, r.author2last, r.author2init, r.pubyr desc';
+	    $order = $order_byscore || $request->default_ref_order;
 	}
 	
 	$request->{main_sql} = "
@@ -743,7 +750,7 @@ sub list {
     {
 	unless ( $order )
 	{
-	    $order = $all_records ? 'NULL' : 'r.author1last, r.author1init, r.author2last, r.author2init, r.pubyr desc';
+	    $order = $all_records ? 'NULL' : $request->default_ref_order;
 	}
 	
 	$request->{main_sql} = "
@@ -816,6 +823,8 @@ sub auto_complete_ref {
     
     my $filter_string = join(' and ', @filters);
     
+    my $order_string = $request->default_ref_order;
+    
     my $sql = "
 	SELECT r.reference_no, r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2,
 		   r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, 
@@ -824,7 +833,7 @@ sub auto_complete_ref {
 		   r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype 
 	FROM $TABLE{REFERENCE_DATA} as r
 	WHERE $filter_string
-	ORDER BY author1last, author1init, author2last, author2init LIMIT $limit";
+	ORDER BY $order_string LIMIT $limit";
     
     print STDERR "$sql\n\n" if $request->debug;
     
@@ -1382,12 +1391,12 @@ sub generate_order_clause {
 	
 	if ( $term eq 'author' )
 	{
-	    push @exprs, "r.author1last $dir, r.author1init $dir, ifnull(r.author2last, '') $dir, ifnull(r.author2init, '') $dir, pubyr $dir";
+	    push @exprs, "r.author1last $dir, r.author1init $dir, ifnull(r.author2last, '') $dir, ifnull(r.author2init, '') $dir";
 	}
 	
 	elsif ( $term eq 'pubyr' )
 	{
-	    push @exprs, "r.pubyr $dir, r.author1last $dir, r.author1init $dir, ifnull(r.author2last, '') $dir, ifnull(r.author2init, '') $dir";
+	    push @exprs, "r.pubyr $dir";
 	}
 	
 	elsif ( $term eq 'reftitle' )
@@ -2231,6 +2240,18 @@ sub valid_pubyr {
     {
 	return { errmsg => "the value of {param} must be a 4-digit year or a range of years (was {value})" };
     }
+}
+
+
+# default_ref_order ()
+#
+# Return an SQL expression to sort references in the default order: author1 asc, author2
+# asc, pubyr desc.
+
+sub default_ref_order {
+
+    return "r.author1last, r.author1init, ifnull(r.author2last, ''), " .
+	"ifnull(r.author2init, ''), r.pubyr desc";
 }
 
 1;
