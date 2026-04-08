@@ -27,7 +27,7 @@ use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
 # use TimescaleTables qw(establishTimescaleTables);
-use TaxonPics qw(getPics);
+use TaxonPics qw(getPics loadPic);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
@@ -40,7 +40,7 @@ Getopt::Long::Configure("bundling");
 my ($opt_nightly, $opt_logfile, $opt_test, $opt_error, $opt_debug, $opt_all,
     $taxon_tables, $collection_tables, $occurrence_tables, $diversity_tables, $interval_map,
     $occurrence_int_maps, $stratigraphy_tables, $prevalence_tables, $country_map,
-    $phylopic_fetch,
+    $phylopic_fetch, $load_file, $uid,
     $old_taxon_tables, $taxon_steps);
 
 GetOptions( "nightly" => \$opt_nightly,
@@ -60,6 +60,8 @@ GetOptions( "nightly" => \$opt_nightly,
 	    "prevalence|p" => \$prevalence_tables,
 	    "diversity|d" => \$diversity_tables,
 	    "phylopics|P" => \$phylopic_fetch,
+	    "load-file=s" => \$load_file,
+	    "uid=s" => \$uid,
 	    "steps|T=s" => \$taxon_steps );
 
 my $cmd_line_db_name = shift;
@@ -85,8 +87,9 @@ if ( $opt_logfile )
 select(STDOUT);
 $|=1;
 
-# If the argument 'log' was specified, run the specified table builds inside an eval. If an error occurs,
-# print it to the log and then re-throw it so it gets printed to STDERR as well.
+# If the argument 'log' was specified, run the specified table builds inside an
+# eval. If an error occurs, print it to the log and then re-throw it so it gets
+# printed to STDERR as well.
 
 if ( $opt_logfile )
 {
@@ -348,16 +351,6 @@ sub BuildTables {
 	buildPrevalenceTables($dbh, 'taxon_trees', $options);
     }
     
-    # The option -p causes taxon pictures to be fetched from phylopic.org
-    
-    # if ( $taxon_pics )
-    # {
-    # 	getPics($dbh, 'taxon_trees', $force);
-    # 	selectPics($dbh, 'taxon_trees');
-    # }
-    
-    # temp
-    
     if ( $stratigraphy_tables )
     {
 	buildStrataTables($dbh);
@@ -370,7 +363,16 @@ sub BuildTables {
 
     if ( $phylopic_fetch )
     {
-	getPics($dbh, $opt_all);
+	if ( $load_file )
+	{
+	    die "You must specify a UID\n" unless $uid;
+	    loadPic($dbh, $uid, $load_file);
+	}
+
+	else
+	{
+	    getPics($dbh, { fetch_all => $opt_all, debug => $opt_debug });
+	}
     }
     
     logTimestamp();

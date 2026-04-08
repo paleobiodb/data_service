@@ -17,11 +17,11 @@ use Try::Tiny;
 use TableDefs qw($REF_SUMMARY);
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS $RANK_MAP
 	         $ALL_STATUS $VALID_STATUS $VARIANT_STATUS $JUNIOR_STATUS $SENIOR_STATUS $INVALID_STATUS);
-use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage logTimestamp);
-use TableDefs qw($OCC_MATRIX $OCC_TAXON);
+use TableDefs qw(%TABLE $OCC_MATRIX $OCC_TAXON);
+use CoreTableDefs;
 
 use base 'Exporter';
 
@@ -4325,10 +4325,6 @@ sub computeAttrsTable {
 				early_occ int unsigned,
 				late_occ int unsigned) ENGINE=InnoDB");
     
-    # Same for the image selection table.
-    
-    selectPics($dbh, $tree_table);
-    
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
     
@@ -4465,14 +4461,14 @@ sub computeAttrsTable {
     
     my ($taxon_pics) = eval {
 	local($dbh->{PrintError}) = 0;
-	$dbh->selectrow_array("SELECT count(*) FROM $TAXON_PICS");
+	$dbh->selectrow_array("SELECT count(*) FROM $TABLE{PHYLOPIC_CHOICE}");
     };
     
     if ( $taxon_pics > 0 )
     {
-	logMessage(2, "      adding taxon picture information from table '$TAXON_PICS'...");
+	logMessage(2, "      adding taxon picture information from table '$TABLE{PHYLOPIC_CHOICE}'...");
 	
-	$sql = "UPDATE $ATTRS_WORK as v JOIN $TAXON_PICS as pic using (orig_no)
+	$sql = "UPDATE $ATTRS_WORK as v JOIN $TABLE{PHYLOPIC_CHOICE} as pic using (orig_no)
 		SET v.image_no = pic.image_no";
 	
 	$result = $dbh->do($sql);	
@@ -4482,7 +4478,7 @@ sub computeAttrsTable {
     
     else
     {
-	logMessage(2, "      skipping taxon picture information: table '$TAXON_PICS'");
+	logMessage(2, "      skipping taxon picture information: table '$TABLE{PHYLOPIC_CHOICE}'");
 	logMessage(2, "          does not exist or does not contain any rows");
     }
     
