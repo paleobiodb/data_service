@@ -888,6 +888,51 @@ sub errors {
 }
 
 
+# max_age
+#
+# Return the max age (if any) specified for this operation for cache control.
+
+sub max_age {
+
+    my ($self) = @_;
+
+    return $self->{ds}->node_attr($self, 'max_age');
+}
+
+
+# set_max_age
+#
+# Set the Cache-Control header to the specified max-age value.
+
+sub set_max_age {
+
+    my ($self, $max_age) = @_;
+    
+    if ( $max_age eq '0' )
+    {
+	$Web::DataService::FOUNDATION->set_header(undef, 'Cache-Control',
+						  "max-age=0");
+    }
+    
+    elsif ( $max_age > 0 )
+    {
+	$max_age += 0;
+	$Web::DataService::FOUNDATION->set_header(undef, 'Cache-Control',
+						  "max-age=$max_age");
+    }
+    
+    elsif ( ! defined $max_age )
+    {
+	$Web::DataService::FOUNDATION->set_header(undef, 'Cache-Control', undef);
+    }
+    
+    else
+    {
+	croak("Invalid value '$max_age' for 'max_age'\n");
+    }
+}
+
+
 # display_header
 # 
 # Return true if we should display optional header material, false

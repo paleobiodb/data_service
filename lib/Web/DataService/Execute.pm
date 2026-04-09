@@ -192,7 +192,8 @@ sub execute_request {
     
     if ( $http_method eq 'OPTIONS' )
     {
-	my @methods = ref $allow_method eq 'HASH' ? keys %$allow_method : @Web::DataService::DEFAULT_METHODS;
+	my @methods = ref $allow_method eq 'HASH' ? keys %$allow_method :
+		@Web::DataService::DEFAULT_METHODS;
 	
 	$ds->_set_cors_header($request);
 	$ds->_set_response_header($request, 'Access-Control-Allow-Methods', join(',', @methods));
@@ -226,7 +227,8 @@ sub execute_request {
     }
     
     # If the request has been tagged as a "documentation path", then show the
-    # documentation. The only allowed methods for documentation are GET and HEAD.
+    # documentation. The only allowed methods for documentation are GET and
+    # HEAD. Set a max-age of 3600 for documentation pages.
     
     if ( $request->{is_node_path} && $request->{is_doc_request} &&
 	 $ds->has_feature('documentation') )
@@ -235,6 +237,8 @@ sub execute_request {
 	{
 	    die "405 Method Not Allowed\n";
 	}
+	
+	$Web::DataService::FOUNDATION->set_header($request->outer, 'Cache-Control', 'max-age=3600');
 	
 	return $ds->generate_doc($request);
     }
@@ -249,6 +253,8 @@ sub execute_request {
 	{
 	    die "405 Method Not Allowed\n";
 	}
+	
+	$ds->_set_max_age($path);
 	
 	return $ds->send_file($request);
     }
@@ -289,6 +295,7 @@ sub execute_request {
 	
 	else
 	{
+	    $ds->_set_max_age($path);
 	    return $ds->generate_result($request);
 	}
     }
@@ -873,6 +880,30 @@ sub _set_cors_header {
     if ( (defined $arg && $arg eq '*') || $ds->node_attr($request, 'public_access') )
     {
 	$Web::DataService::FOUNDATION->set_header($request->outer, "Access-Control-Allow-Origin", "*");
+    }
+}
+
+
+sub _set_max_age {
+
+    my ($ds, $path) = @_;
+    
+    # If the node has a max_age attribute, set the Cache-Control header.
+    
+    if ( my $max_age = $ds->node_attr($path, 'max_age') )
+    {
+	if ( $max_age eq '0' )
+	{
+	    $Web::DataService::FOUNDATION->set_header(undef, 'Cache-Control',
+						      "max-age=0");
+	}
+
+	elsif ( $max_age > 0 )
+	{
+	    $max_age += 0;
+	    $Web::DataService::FOUNDATION->set_header(undef, 'Cache-Control',
+						      "max-age=$max_age");
+	}
     }
 }
 
