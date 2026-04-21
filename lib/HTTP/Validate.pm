@@ -1451,7 +1451,7 @@ sub add_rules {
 	    
 	    $rr->{$type} = 1 if $type eq 'optional' || $type eq 'mandatory';
 	    
-	    if ( $type ne 'optional' )
+	    if ( $type eq 'param' )
 	    {
 		push @{$rs->{fulfill_order}}, $typevalue unless $rs->{params}{$typevalue};
 	    }
@@ -2170,14 +2170,14 @@ sub validate_ruleset {
 		$names_found{$name} = 1;
 		
 		my $v = $vr->{raw}{$name};
-
+		
 		foreach my $subv ( ref $v eq 'ARRAY' ? @$v : $v )
 		{
 		    if ( defined $subv && $subv ne '' )
 		    {
 			push @raw_values, $subv;
 		    }
-
+		    
 		    elsif ( defined $subv && $subv eq '' )
 		    {
 			$empty_string = 1;
@@ -2192,15 +2192,15 @@ sub validate_ruleset {
 	    
 	    # If more than one of the aliases for this parameter was specified, and the 'multiple'
 	    # option was not specified, then generate an error and go on to the next rule.  We
-	    # mark the parameter status as "error" (0), and we also mark the ruleset as fulfilled (2)
-	    # if this was a 'param' or 'mandatory' rule.  This last is done to avoid generating a
-	    # spurious error message if the ruleset is not fulfilled by any other parameters.
+	    # mark the parameter status as "error" (0), and we also mark the ruleset as fulfilled
+	    # (2) if this was a 'param' rule.  This last is done to avoid generating a spurious
+	    # error message if the ruleset is not fulfilled by any other parameters.
 	    
 	    if ( keys(%names_found) > 1 && ! $rr->{multiple} )
 	    {
 		add_error($vr, $rr, 'ERR_MULT_NAMES', { param => [ sort keys %names_found ] });
 		$vr->{ps}{$param} = 0;
-		$vr->{rs}{$ruleset_name} = 2 unless $rr->{optional};
+		$vr->{rs}{$ruleset_name} = 2 unless $rr->{optional} || $rr->{mandatory};
 		next RULE;
 	    }
 	    
@@ -2222,18 +2222,19 @@ sub validate_ruleset {
 		next RULE;
 	    }
 	    
-	    # If more than one value was given and the rule does not include the 'multiple'
-	    # directive, signal an error.  We mark the parameter status as "error" (0), and we
-	    # also mark the ruleset as fulfilled (2) if this was a 'param' or 'mandatory' rule.
-	    # This last is done to avoid generating a spurious error message if the ruleset is not
-	    # fulfilled by any other parameters.
+	    # If more than one value was given and the rule does not include any of the
+	    # directives 'multiple', 'split', or 'list', signal an error. We mark the
+	    # parameter status as "error" (0), and we also mark the ruleset as fulfilled
+	    # (2) if this was a 'param' rule. This last is done to avoid generating a
+	    # spurious error message if the ruleset is not fulfilled by any other
+	    # parameters.
 	    
-	    elsif ( @raw_values > 1 && ! $rr->{multiple} )
+	    elsif ( @raw_values > 1 && ! ($rr->{multiple} || $rr->{split} || $rr->{list}) )
 	    {
 		add_error($vr, $rr, 'ERR_MULT_VALUES',
 		      { param => [ sort keys %names_found ], value => \@raw_values });
 		$vr->{ps}{$param} = 0;
-		$vr->{rs}{$ruleset_name} = 2 unless $rr->{optional};
+		$vr->{rs}{$ruleset_name} = 2 unless $rr->{optional} || $rr->{mandatory};
 		next RULE;
 	    }
 	    
@@ -2242,9 +2243,10 @@ sub validate_ruleset {
 	    
 	    if ( $rr->{split} )
 	    {
-		# Split all of the raw values, and discard empty strings. If
-		# there are raw values but not any split values, we take the
-		# value to be the empty string.
+		# Split all of the raw string values, and discard empty strings.
+		# Unpack arrayrefs into individual values. If there are raw
+		# values but not any split values, we take the value to be the
+		# empty string.
 		
 		my @new_values = grep { defined $_ && $_ ne '' } 
 				    map { split $rr->{split}, $_ } @raw_values;
@@ -2271,7 +2273,6 @@ sub validate_ruleset {
 		{
 		    add_error($vr, $rr, 'ERR_MANDATORY', { param => $rr->{param} });
 		    $vr->{ps}{$param} = 0;
-		    $vr->{rs}{$ruleset_name} = 2 unless $rr->{optional};
 		}
 		
 		next RULE unless $rr->{allow_empty} && keys %names_found;
@@ -2334,15 +2335,15 @@ sub validate_ruleset {
 		
 		if ( ref $result and $result->{error} )
 		{
-		    # If the rule contains a 'warn' directive, then generate a
-		    # warning.  But the value is still bad, and will be
-		    # ignored.
+		    # If the rule contains a 'warn' directive, then generate a warning.
+		    # But the value is still bad, and will be ignored.
 		    
 		    if ( $rr->{warn} )
 		    {
 			my $msg = $rr->{warn} ne '1' ? $rr->{warn} :
 			    $rr->{ERR_INVALID} || $rr->{errmsg} || $result->{error};
-			add_warning($vr, $rr, $msg, { param => [ keys %names_found ], value => $raw_val });
+			add_warning($vr, $rr, $msg, { param => [ keys %names_found ],
+						      value => $raw_val });
 		    }
 		    
 		    # Otherwise, generate an error.
@@ -2350,25 +2351,26 @@ sub validate_ruleset {
 		    else
 		    {
 			my $msg = $rr->{ERR_INVALID} || $rr->{errmsg} || $result->{error};
-			add_error($vr, $rr, $msg, { param => [ sort keys %names_found ], value => $raw_val });
+			add_error($vr, $rr, $msg, { param => [ sort keys %names_found ],
+						    value => $raw_val });
 		    }
 		    
 		    $error_flag = 1;
 		    next VALUE;
 		}
 		
-		# If the result contains a 'warn' field, then generate a
-		# warning.  In this case, the value is still assumed to be
-		# good.
+		# If the result contains a 'warn' field, then generate a warning. In
+		# this case, the value is still assumed to be good.
 		
 		if ( ref $result and $result->{warn} )
 		{
-		    add_warning($vr, $rr, $result->{warn}, { param => [ sort keys %names_found ], value => $raw_val });
+		    add_warning($vr, $rr, $result->{warn}, { param => [ sort keys %names_found ],
+							     value => $raw_val });
 		}
 		
-		# If we get here, then the value is good.  If the result was a
-		# hash ref with a 'value' field, we use that for the clean
-		# value. Otherwise, we use the raw value.
+		# If we get here, then the value is good. If the result was a hash ref
+		# with a 'value' field, we use that for the clean value. Otherwise, we
+		# use the raw value.
 		
 		my $value = ref $result && exists $result->{value} ? $result->{value} : $raw_val;
 		
@@ -2439,26 +2441,23 @@ sub validate_ruleset {
 	    
 	    $vr->{ps}{$param} = $error_flag ? 0 : 1;
 	    
-	    # If this rule is not 'optional', then set the status of this
-	    # ruleset to 'fulfilled' (2).  That does not mean that the validation
-	    # passes, because the parameter value may still have generated an
-	    # error.
+	    # If this rule is not 'optional' or 'mandatory', then set the status of this
+	    # ruleset to 'fulfilled' (2). That does not mean that the validation passes,
+	    # because the parameter value may still have generated an error.
 	    
-	    unless ( $rr->{optional} )
+	    unless ( $rr->{optional} || $rr->{mandatory} )
 	    {
 		$vr->{rs}{$ruleset_name} = 2;
 	    }
 	}
 	
-	# An 'ignore' directive causes the parameter to be recognized, but no
-	# cleaned value is generated and the containing ruleset is not
-	# triggered.  No error messages will be generated for this parameter,
-	# either.
+	# An 'ignore' directive causes the parameter to be recognized, but no cleaned
+	# value is generated and the containing ruleset is not triggered. No error
+	# messages will be generated for this parameter, either.
 	
 	elsif ( $rr->{type} eq 'ignore' )
 	{
-	    # Make sure that the parameter is counted as having been
-	    # recognized.
+	    # Make sure that the parameter is counted as having been recognized.
 	    
 	    foreach my $param ( @{$rr->{param}} )
 	    {
