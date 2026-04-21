@@ -95,6 +95,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_BAD_DIRECTIVE => ["Field '&1': &2", "Field '&1': invalid handling directive"],
 		E_NOT_FOUND => { link => ["Linked record '&1' was not found",
 					  "Linked record was not found"],
+				 custom => '&1',
 				 default => ["No record was found with key '&1'", 
 					     "No record was found with this key"] },
 		E_LOCKED => { multiple => ["Found &2 locked record(s)",
