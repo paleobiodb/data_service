@@ -43,6 +43,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(PHYLOPIC_DATA => 'phylopics');
     set_table_name(PHYLOPIC_NAMES => 'phylopic_names');
     set_table_name(PHYLOPIC_CHOICE => 'phylopic_choice');
+    set_table_name(PHYLOPIC_SEEN => 'phylopic_seen');
     
     set_table_name(OCCURRENCE_DATA => 'occurrences');
     set_table_property('OCCURRENCE_DATA', AUTH_TABLE => 'COLLECTION_DATA');

@@ -15,6 +15,7 @@ use PB2::ReferenceEntry;
 use PB2::ReferenceAux;
 use PB2::CollectionEntry;
 use PB2::SpecimenEntry;
+use PB2::TaxonEntry;
 use PB2::ResourceEntry;
 use PB2::PublicationEntry;
 use PB2::ArchiveEntry;
@@ -332,6 +333,31 @@ sub initialize {
 			body_ruleset => '1.2:occs:checknames_body' },
 	"This operation displays an HTML form which you can use to generate",
 	"calls to the occs/checknames operation.");
+    
+    # Taxon images
+    
+    $ds2->define_node({ path => 'taxa/image_choices',
+			title => 'List taxon image choices',
+			place => 20,
+			allow_format => 'json',
+			role => 'PB2::TaxonEntry',
+			method => 'list_image_choices',
+			output => '1.2:taxa:image_choices' },
+	"This operation lists the available image choices for the specified",
+	"range of taxa. It is only available to logged-in database contributors");
+    
+    $ds2->define_node({ path => 'taxa/update_image_choices',
+		       place => 21,
+		       allow_format => 'json',
+		       allow_method => 'PUT,POST',
+		       tag => 'entry',
+		       doc_template => 'entry_operation.tt',
+		       body_ruleset => '1.2:taxa:image_choices_body',
+		       role => 'PB2::TaxonEntry',
+		       method => 'update_image_choices',
+		       output => '1.2:taxa:image_choices' },
+	"This operation allows you to choose among the available image choices",
+	"for specific taxa. It is only available to logged-in database contributors");
     
     # Educational Resources
     

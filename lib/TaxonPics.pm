@@ -298,6 +298,8 @@ sub getPics {
 	# Iterate through the image records we have collected. Skip any which don't have
 	# thumbnail data, because we can't use those.
 	
+	my %image_no_map;
+	
 	foreach my $image ( @images )
 	{
 	    next unless $image->{thumb};
@@ -333,12 +335,19 @@ sub getPics {
 			$created, $modified, $mod_file, $thumb)");
 	    }
 	    
+	    my ($image_no) = $dbh->selectrow_array("
+		SELECT image_no FROM $TABLE{PHYLOPIC_DATA} WHERE uid = $uid");
+	    
 	    # Then delete the old set of names corresponding to this image. The new ones
 	    # will be inserted immediately below. This is unnecessary if we are fetching
 	    # all images.
 	    
-	    $result = $dbh->do("DELETE FROM $TABLE{PHYLOPIC_NAMES} WHERE uid = $uid")
+	    my $img = $dbh->quote($image_no);
+	    
+	    $result = $dbh->do("DELETE FROM $TABLE{PHYLOPIC_NAMES} WHERE image_no = $img")
 		unless $options->{fetch_all};
+	    
+	    $image_no_map{$uid} = $img;
 	}
 	
 	logMessage(2, "    storing name data...");
@@ -354,8 +363,8 @@ sub getPics {
 	    my $common_name = $dbh->quote($name->{common_name});
 	    
 	    $dbh->do("REPLACE INTO $TABLE{PHYLOPIC_NAMES}
-			(uid, taxon_name, taxon_attr, common_name, orig_no)
-			VALUES ($uid, $taxon_name, $taxon_attr, $common_name, $orig_no)");
+			(image_no, taxon_name, taxon_attr, common_name, orig_no)
+		      VALUES ($image_no_map{$uid}, $taxon_name, $taxon_attr, $common_name, $orig_no)");
 	}
     }
     
@@ -778,19 +787,26 @@ sub ensureTables {
 	      VALUES ('LAST_FETCH', '2001-01-01')") if $force;
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PHYLOPIC_NAMES} (
-	`uid` varchar(80) NOT NULL,
+	`image_no` int unsigned NOT NULL,
 	`taxon_name` varchar(80) NOT NULL,
 	`taxon_attr` varchar(100) DEFAULT NULL,
 	`common_name` varchar(100) DEFAULT NULL,
 	`orig_no` int(11) unsigned DEFAULT NULL,
-	unique key (`uid`, `taxon_name`, `taxon_attr`),
-	key (`taxon_name`),
+	primary key (`image_no`, `taxon_name`, `taxon_attr`),
 	key (`orig_no`)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_general_ci");
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PHYLOPIC_CHOICE} (
 	`orig_no` int unsigned NOT NULL PRIMARY KEY,
 	`image_no` int unsigned NOT NULL,
+	`modifier_no` int unsigned NULL,
+	`modified` timestamp NULL,
 	key (`image_no`)) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_general_ci");
+    
+    $dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PHYLOPIC_SEEN} (
+	`person_no` int unsigned NOT NULL,
+	`image_no` int unsigned NOT NULL,
+	PRIMARY KEY (`person_no`, `image_no`)
+    ) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_general_ci");
     
     my $a = 1;	# we can stop here when debugging
 }
