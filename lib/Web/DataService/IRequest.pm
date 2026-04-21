@@ -527,10 +527,12 @@ sub decode_body {
 
 sub exception {
     
-    my ($request, $code, $message) = @_;
+    my ($request, $code, @message_strings) = @_;
     
     croak "Bad exception code '$code', must be an HTTP result code"
 	unless defined $code && $code =~ qr{^\d\d\d$};
+    
+    my $message = join ' ', @message_strings;
     
     unless ( $message )
     {
@@ -542,6 +544,11 @@ sub exception {
 	elsif ( $code eq '401' )
 	{
 	    $message = 'Permission denied';
+	}
+	
+	elsif ( $code eq '403' )
+	{
+	    $message = 'Forbidden';
 	}
 	
 	elsif ( $code eq '404' )
