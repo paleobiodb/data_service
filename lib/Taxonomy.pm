@@ -858,7 +858,7 @@ sub list_taxa {
 	my $filters = join( q{ and }, @filters);
 	
 	my $other_joins = $taxonomy->taxon_joins('t', $tables);
-	my $ref_joins = $taxonomy->ref_joins('a', $tables);
+	$other_joins .= $taxonomy->ref_joins('a', $tables);
 	
 	$order_expr ||= 'ORDER BY base_no, is_senior desc';
 	
@@ -2438,13 +2438,13 @@ sub execute_query {
     
     if ( $taxonomy->{test_mode} )
     {
-	print STDERR "$sql\n\n";
+	print STDERR "$taxonomy->{sql_string}\n\n";
 	return;
     }
     
     elsif ( ref $params->{debug_out} eq 'CODE' )
     {
-	&{$params->{debug_out}}($taxonomy->{sql_string});
+	&{$params->{debug_out}}("$taxonomy->{sql_string}\n");
     }
     
     no warnings 'experimental';
