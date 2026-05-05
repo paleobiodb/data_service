@@ -2753,6 +2753,8 @@ sub subst_error {
 	    $value = "''";
 	}
 	
+	no warnings 'uninitialized';
+	
 	$message = "$1$value$3" if defined $value and $value ne '';
     }
     

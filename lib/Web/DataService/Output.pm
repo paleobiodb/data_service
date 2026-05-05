@@ -613,7 +613,7 @@ sub add_output_block {
     
     else
     {
-	carp "undefined output block '$block_name' for path '$request->{path}'\n";
+	carp "undefined output block '$block_name' for path '$request->{path}'";
 	$request->add_warning("undefined output block '$block_name'");
     }
     
