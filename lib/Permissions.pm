@@ -78,7 +78,7 @@ sub new {
 	    my $sql = "
 		SELECT authorizer_no, enterer_no, user_id, superuser as is_superuser, 
 		       timestampdiff(day,s.record_date,now()) as days_old, expire_days,
-		       s.role, group_concat(p.permission)
+		       s.role, group_concat(p.permission) as get_table_perms
 		FROM $TABLE{SESSION_DATA} as s left join $TABLE{TABLE_PERMS} as p
 			on p.person_no = s.enterer_no and p.table_name = $quoted_table
 			and p.permission <> ''
@@ -142,14 +142,14 @@ sub new {
 	
 	if ( $table_specifier )
 	{
-	    if ( $perms->{permission} )
+	    if ( $perms->{get_table_perms} )
 	    {
-		my @list = grep $_, (split qr{,}, $perms->{permission});
+		my @list = grep $_, (split qr{,}, $perms->{get_table_perms});
 		
 		$perms->{table_permission}{$table_specifier}{$_} = 1 foreach @list;
 		$perms->{auth_diag}{$table_specifier} = 'TABLE_PERMS';
 		
-		delete $perms->{permission};
+		delete $perms->{get_table_perms};
 	    }
 	    
 	    else

@@ -280,7 +280,8 @@ sub parse_body_records {
 	
 	else
 	{
-	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body: no records found");
+	    die $request->exception(400, "E_REQUEST_BODY: Badly formatted request body:",
+				    "no records found");
 	}
     }
     
@@ -300,7 +301,8 @@ sub parse_body_records {
 	{
 	    my $val = ref $r ? uc reftype $r : "'$r'";
 	    
-	    push @records, { _errors => 1, _errwarn => ['E_BAD_RECORD', "record content cannot be decoded ($val)"] };
+	    push @records, { _errors => 1, _errwarn => ['E_BAD_RECORD',
+							"record content cannot be decoded ($val)"] };
 	}
 	
 	unless ( keys %$r )
