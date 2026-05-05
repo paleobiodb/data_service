@@ -804,8 +804,9 @@ sub ensureTables {
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PHYLOPIC_SEEN} (
 	`person_no` int unsigned NOT NULL,
+	`orig_no` int unsigned NOT NULL,
 	`image_no` int unsigned NOT NULL,
-	PRIMARY KEY (`person_no`, `image_no`)
+	PRIMARY KEY (`person_no`, `orig_no`, `image_no`)
     ) Engine=InnoDB CHARACTER SET utf8 COLLATE utf8_general_ci");
     
     my $a = 1;	# we can stop here when debugging
