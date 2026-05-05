@@ -191,11 +191,11 @@ elsif ( $ARGV[0] eq 'insert' && $ARGV[1] eq 'data' )
     InsertData();
 }
 
-elsif ( $ARGV[0] eq 'update' && $ARGV[1] eq 'data' && $ARGV[2] )
+elsif ( $ARGV[0] =~ /^check$|^update$/ && $ARGV[1] eq 'data' && $ARGV[2] )
 {
     shift @ARGV;
     shift @ARGV;
-    $EXECUTE_MODE = 1;
+    $EXECUTE_MODE = 1 if $ARGV[0] eq 'update';
     UpdateData(@ARGV);
 }
 
@@ -1814,6 +1814,23 @@ END_STMT
 UPDATE $TABLE{OCCURRENCE_DATA} as o
 	join macrostrat.$OCCURRENCES_TABLE as oo on o.upload_id = oo.id and o.upload = 'eODP'
 SET o.comments = oo.comments
+END_STMT
+    }
+    
+    if ( $selector{dextral} || $selector{occs} )
+    {
+	$updates++;
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{OCCURRENCE_DATA} as o
+	join macrostrat.$OCCURRENCES_TABLE as oo on o.upload_id = oo.id and o.upload = 'eODP'
+SET o.comments = if(o.comments <> '', concat('dextral; ', o.comments), 'dextral')
+WHERE name rlike '\\bdextral\\b'
+END_STMT
+	DBCommand($pbdb, <<END_STMT);
+UPDATE $TABLE{OCCURRENCE_DATA} as o
+	join macrostrat.$OCCURRENCES_TABLE as oo on o.upload_id = oo.id and o.upload = 'eODP'
+SET o.comments = if(o.comments <> '', concat('sinistral; ', o.comments), 'sinistral')
+WHERE name rlike '\\bsinistral\\b'
 END_STMT
     }
     
