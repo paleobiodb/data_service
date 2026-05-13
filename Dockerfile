@@ -10,6 +10,8 @@
 # Once you have the preload image, you can build the Main API container image using
 # the command 'pbdb build api'.
 
+ARG TZ=Etc/UTC
+
 FROM paleomacro_pbapi_preload
 
 EXPOSE 3000 3003 3999
@@ -21,7 +23,7 @@ WORKDIR /var/paleomacro/pbapi/
 # "America/Chicago". The 'pbdb build' command will do this automatically. Without
 # any argument the timezone will default to UTC, with no local time available. 
 
-ARG TZ=Etc/UTC
+ARG TZ
 
 RUN echo $TZ > /etc/timezone && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \

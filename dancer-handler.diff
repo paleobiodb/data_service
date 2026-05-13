@@ -1,0 +1,4 @@
+102c102
+<                 $request->method, $request->path_info, $exception
+---
+>                 $request->method, $request->uri, $exception

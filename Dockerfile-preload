@@ -49,3 +49,9 @@ ENV LANG=$LANG
 RUN echo "$LANG UTF-8" > "/etc/locale.gen" && \
     locale-gen
 
+COPY pbapi/dancer-handler.diff /tmp/dancer-handler.diff
+
+COPY pbapi/bin/perlwhich /tmp/perlwhich
+
+RUN patch `/tmp/perlwhich Dancer::Handler` /tmp/dancer-handler.diff
+
