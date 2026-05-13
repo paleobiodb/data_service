@@ -1,0 +1,9 @@
+
+<% DESCRIPTION_SECTION(opt_force=1) %>
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+<% NODELIST(opt_usage=1) %>
+
