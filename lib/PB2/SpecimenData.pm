@@ -15,7 +15,7 @@ package PB2::SpecimenData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw(%TABLE $COLL_BINS
-		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA $SPECELT_MAP
+		 $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES $COLL_STRATA $SPECELT_MAP $COLL_LITH
 		 $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use Taxonomy;
@@ -1785,8 +1785,11 @@ sub generateJoinList {
     $join_list .= "\t\tLEFT JOIN taxon_etbasis as etb on etb.orig_no = tv.orig_no\n"
 	if $tables->{etb};
     
-    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
-	if $tables->{ms};
+    $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
+	if $tables->{cl};
+    
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as msu on msu.collection_no = c.collection_no\n"
+	if $tables->{msu};
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
 	if $tables->{ccs};

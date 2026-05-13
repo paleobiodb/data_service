@@ -87,9 +87,9 @@ sub initialize {
 	    "The code used to indicate this continent when selecting fossil occurrences by continent");
     
     $ds->define_block('1.1:config:all',
-	{ include => 'clusters' },
-	{ include => 'ranks' },
-	{ include => 'continents' });
+	{ include => '1.1:config:geosum' },
+	{ include => '1.1:config:ranks' },
+	{ include => '1.1:config:continents' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.

@@ -3409,60 +3409,60 @@ sub get_image {
 # 
 # Return a list of images that meet the specified criteria.
 
-sub list_images {
+# sub list_images {
 
-    my ($request) = @_;
+#     my ($request) = @_;
     
-    my $dbh = $request->get_connection;
-    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
-    my ($sql, $result);
+#     my $dbh = $request->get_connection;
+#     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+#     my ($sql, $result);
     
-    my @filters;
+#     my @filters;
     
-    # If the parameter 'name' was given, then fetch all matching taxa.  Order
-    # them in descending order by size.
+#     # If the parameter 'name' was given, then fetch all matching taxa.  Order
+#     # them in descending order by size.
     
-    my @taxon_list;
+#     my @taxon_list;
     
-    if ( my $name = $request->clean_param('name') )
-    {
-	my $name_select = { spelling => 'exact', return => 'id' };
+#     if ( my $name = $request->clean_param('name') )
+#     {
+# 	my $name_select = { spelling => 'exact', return => 'id' };
 	
-	@taxon_list = $request->get_taxa_by_name($name, $name_select);
-	return unless @taxon_list;
-    }
+# 	@taxon_list = $taxonomy->resolve_names($name, $name_select);
+# 	return unless @taxon_list;
+#     }
     
-    else
-    {
-	@taxon_list = $request->clean_param_list('id');
-    }
+#     else
+#     {
+# 	@taxon_list = $request->clean_param_list('id');
+#     }
     
-    # Now add any other filters that were specified by the parameters.
+#     # Now add any other filters that were specified by the parameters.
     
-    if ( $request->clean_param('rel') eq 'all_children' )
-    {
-	push @filters, '';
-    }
+#     if ( $request->clean_param('rel') eq 'all_children' )
+#     {
+# 	push @filters, '';
+#     }
     
-    if ( my $depth = $request->clean_param('depth') )
-    {
-	push @filters, '';
-    }
+#     if ( my $depth = $request->clean_param('depth') )
+#     {
+# 	push @filters, '';
+#     }
     
-    # Construct a query. $$$
+#     # Construct a query. $$$
     
-    my $fields = $request->select_string();
+#     my $fields = $request->select_string();
     
-    $request->{main_sql} = "
-	SELECT $fields FROM $PHYLOPICS as p JOIN $PHYLOPIC_NAMES as n using (uid)
-		JOIN authorities as a using (taxon_name) #etc
-	WHERE image_no = image_no";
+#     $request->{main_sql} = "
+# 	SELECT $fields FROM $PHYLOPICS as p JOIN $PHYLOPIC_NAMES as n using (uid)
+# 		JOIN authorities as a using (taxon_name) #etc
+# 	WHERE image_no = image_no";
 	
-	$request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
+# 	$request->{main_record} = $dbh->selectrow_hashref($request->{main_sql});
 	
-	return;
+# 	return;
     
-}
+# }
 
 
 # Utility routines

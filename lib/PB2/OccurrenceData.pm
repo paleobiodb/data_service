@@ -1902,7 +1902,9 @@ sub diversity {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc',
+							bare => 'o' }, $tables );
+    
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -2051,7 +2053,9 @@ sub quickdiv {
     
     my @filters = $request->generateMainFilters('quickdiv', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc',
+							bare => 'o' }, $tables );
+    
     # If we need to use any tables other than the summary bins, use the full
     # diversity output instead.
     
@@ -2437,7 +2441,9 @@ sub list_occs_taxa {
     
     my @filters = $request->generateMainFilters('list', 'c', $tables);
     push @filters, $request->generateOccFilters($tables, 'o');
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'o' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', taxa => 'a',
+							bare => 'o' }, $tables );
+    
     # push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     # push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
@@ -2551,7 +2557,8 @@ sub prevalence {
     
     my @filters = $request->generateMainFilters('prevalence', 's', $tables);
     push @filters, $request->generateOccFilters($tables, 'o', 1);
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'oc' }, $tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc',
+							bare => 'oc' }, $tables );
     
     # If we need the occurrences table in order to fulfill this query, then
     # re-do the filters to use the collection matrix. Generate an SQL statement
@@ -2563,7 +2570,8 @@ sub prevalence {
 	
 	@filters = $request->generateMainFilters('prevalence', 'c', $tables);
 	push @filters, $request->generateOccFilters($tables, 'o', 1);
-	push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', bare => 'oc' }, $tables );
+	push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc',
+							    bare => 'oc' }, $tables );
 	
 	my $fields = "ph.phylum_no, ph.class_no, ph.order_no, count(*) as n_occs";
 	
@@ -2846,16 +2854,15 @@ sub list_occs_associated {
     $select{occs} = 1 unless %select;
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.  We must include table 'o', so
-    # that the proper identification filter (idtype) will be added to the query.
+    # in order to select the proper result set.
     
     my $inner_tables = { o => 1 };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->generate_ref_filters($inner_tables);
     push @filters, $request->generate_refno_filter('o');
-    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r' },
-						      $inner_tables );
+    push @filters, $request->generate_common_filters( { occs => 'o', colls => 'cc', refs => 'r',
+						        taxa => 'a' }, $inner_tables );
     push @filters, $request->generateOccFilters($inner_tables, 'o');
     
     # Figure out what information we need to determine access permissions.  We
@@ -4012,6 +4019,8 @@ sub generateJoinList {
 	if $tables->{nm};
     $join_list .= "LEFT JOIN taxon_names as ns on ns.taxon_no = t.spelling_no\n"
 	if $tables->{nm} && $tables->{t};
+    $join_list .= "LEFT JOIN authorities as a on a.taxon_no = t.orig_no\n"
+	if $tables->{a} && $tables->{t};
     
     $join_list .= "LEFT JOIN refs as r on r.reference_no = o.reference_no\n" 
 	if $tables->{r};
@@ -4041,8 +4050,8 @@ sub generateJoinList {
 
     $join_list .= "LEFT JOIN (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA} group by occurrence_no) as sc on sc.occurrence_no = o.occurrence_no\n" if $tables->{sc};
     
-    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
-	if $tables->{ms};
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as msu on ms.collection_no = c.collection_no\n"
+	if $tables->{msu};
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
 	if $tables->{ccs};

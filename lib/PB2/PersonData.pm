@@ -381,22 +381,27 @@ sub auto_complete_prs {
     
     my ($request, $name, $limit) = @_;
     
-    my $dbh = $request->get_connection();
+    # If the name contains any regexp-punctuation characters, return an empty result.
     
-    my $quoted_name = $dbh->quote("${name}%");
+    return if $name =~ qr{[(){}[\]*+|\\]};
+    
+    my $dbh = $request->get_connection();
     
     my $use_extids = $request->has_block('extids');
     
     $limit ||= 10;
     my @filters;
     
-    if ( $name =~ qr{ ^ ( \w ) [.]? \s+ ( [a-zA-Z_%] .* ) }xs )
+    if ( $name =~ qr{ ^ ( [[:alpha:]] ) [.]? \s+ ( [[:alpha:][:blank:],.'-]+ ) }xs )
     {
 	push @filters, "p.name like '$1% $2'";
     }
     
     else
     {
+	$name =~ s/[.]/%/;
+	$name .= '%' unless $name =~ /%$/;
+	my $quoted_name = $dbh->quote("${name}");
 	push @filters, "p.reversed_name like $quoted_name";
     }
     

@@ -3040,26 +3040,37 @@ sub generate_strata_auto_filters {
 	return $request->exception(400, "You must specify at least 3 characters to be matched against strata names");
     }
     
-    if ( $name =~ /(.*)\s+([fgm])\w*$/i )
+    if ( $name =~ /(.*)\s+(formation|fm|group|gp|member|mbr)\w*$/i )
     {
-	my $r = lc $2;
+	$rank = $2;
 	$name = $1;
+    }
+
+    if ( $rank )
+    {
+	if ( $rank =~ /^formation$|^fm$/i )
+	{
+	    push @filters, "rank = 'Fm'";
+	}
 	
-	if ( $r eq 'f' ) {
-	    $rank = 'formation';
-	} elsif ( $r eq 'g' ) {
-	    $rank = 'group';
-	} elsif ( $r eq 'm' ) {
-	    $rank = 'member';
+	elsif ( $rank =~ /^group$|^gp$/i )
+	{
+	    push @filters, "rank = 'Gp'";
+	}
+	
+	elsif ( $rank =~ /^member$|^mbr$/i )
+	{
+	    push @filters, "rank = 'Mbr'";
+	}
+	
+	else
+	{
+	    die $request->exception('400', "Unknown rank '$rank'");
 	}
     }
     
-    if ( $rank eq 'formation' || $rank eq 'group' || $rank eq 'member' )
-    {
-	push @filters, "type = '$rank'";
-    }
-    
     $name =~ s/\s+$//;
+    $name =~ s/^\s+//;
     
     my $quoted_name = $dbh->quote("${name}%");
     
@@ -4208,11 +4219,11 @@ sub generateMainFilters {
 	    $ms_columns[0] = $1;
 	}
 	
-	$tables->{ms} = 1;
+	$tables->{msu} = 1;
 	
 	my $column_list = join("','", @ms_columns);
 	
-	push @filters, "ms.col_id$invert in ('$column_list')";
+	push @filters, "msu.col_id$invert in ('$column_list')";
     }
     
     if ( my @ms_units = $request->clean_param_list('ms_unit') )
@@ -4225,11 +4236,11 @@ sub generateMainFilters {
 	    $ms_units[0] = $1;
 	}
 	
-	$tables->{ms} = 1;
+	$tables->{msu} = 1;
 	
 	my $unit_list = join("','", @ms_units);
 	
-	push @filters, "ms.unit_id$invert in ('$unit_list')";
+	push @filters, "msu.unit_id$invert in ('$unit_list')";
     }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
@@ -5874,8 +5885,8 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
     
-    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as ms on ms.collection_no = c.collection_no\n"
-	if $tables->{ms};
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as msu on ms.collection_no = c.collection_no\n"
+	if $tables->{msu};
 
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
 	if $tables->{ccs};

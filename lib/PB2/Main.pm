@@ -828,10 +828,10 @@ our ($DROP_TABLE);
     # 	"You can obtain image identifiers by including C<$show=img> with any taxonomic",
     # 	"name query.");
     
-    $ds2->define_node({ path => 'taxa/list_images',
-			title => 'List the available images of lifeforms',
-			output => '1.2:taxa:imagedata',
-			method => 'list_images' });
+    # $ds2->define_node({ path => 'taxa/list_images',
+    # 			title => 'List the available images of lifeforms',
+    # 			output => '1.2:taxa:imagedata',
+    # 			method => 'list_images' });
     
     # Opinions
     

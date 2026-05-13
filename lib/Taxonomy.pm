@@ -2195,7 +2195,9 @@ sub list_associated {
 	my $fieldspec = $options->{fields} || 'REFTAXA_DATA';	
 	my @fields = $taxonomy->generate_fields($fieldspec, $outer_tables);
 	my $query_fields = join ', ', @fields;
-		
+	
+	delete $outer_tables->{r};	# 'refs as r' is explicitly joined below
+	
 	croak "list_associated: the option { return => 'id' } is not compatible with 'list_reftaxa'\n"
 	    if $return_type eq 'id';
 	

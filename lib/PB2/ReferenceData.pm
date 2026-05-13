@@ -1192,16 +1192,32 @@ sub generate_auth_filter {
     # Then go through each name one by one.
     
     foreach my $name (@authnames)
-    {   
+    {
+	# Skip any name that has any of the characters {} () [] |*+
+	
+	if ( $name =~ qr{[{}()\[\]|*+]} )
+	{
+	    next;
+	}
+	
+	# If the name matches "xxx and yyy", then look for references with both authors.
+	
 	if ( $name =~ qr{ ^ (\w.*?) \s+ and (?: \s+ (.*) | $ ) }xsi )
 	{
 	    push @authfilters, $request->generate_two_auth_filter($dbh, $1, $2, $selector);
 	}
 	
+	# If the name matches "xxx et al.", then look for references where the first
+	# author is xxx.
+	
 	elsif ( $name =~ qr{ ^ (\w.*?) \s+ et \s+ al[.]? \s* $ }xsi )
 	{
 	    push @authfilters, $request->generate_one_auth_filter($dbh, $1, 'primary');
 	}
+	
+	# Otherwise, look for references where any author matches the name unless
+	# $selector is 'primary', in which case look for references where the first
+	# author matches the name.
 	
 	else
 	{

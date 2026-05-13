@@ -2,6 +2,7 @@
 
 *~
 .tramp_history
+.strat*
 .#*
 *.ttc
 dataservice.pid

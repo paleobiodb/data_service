@@ -375,25 +375,25 @@ unless ( Dancer::config->{no_old_versions} )
 	"You can get the image identifiers by including C<$show=img> with any taxonomic",
 	"name query.");
     
-    $ds1->define_node({ path => 'taxa/icon',
-			place => 7,
-			title => 'Icon images of lifeforms',
-			usage => [ 'taxa/icon.png?id=910', 
-				   'html:<img src="/data1.1/taxa/icon.png?id=910">' ],
-			method => 'get_image',
-			arg => 'icon',
-			allow_format => '+png',
-			default_save_filename => 'pbdb_image',
-			output => '1.1:taxa:imagedata' },
-	"This path returns an image to represent the specified taxon.",
-	"These 32x32 icon (blue silhouette) images are sourced from L<http://phylopic.org/>.",
-	"You can get the image identifiers by including C<$show=img> with any taxonomic",
-	"name query.");
+    # $ds1->define_node({ path => 'taxa/icon',
+    # 			place => 7,
+    # 			title => 'Icon images of lifeforms',
+    # 			usage => [ 'taxa/icon.png?id=910', 
+    # 				   'html:<img src="/data1.1/taxa/icon.png?id=910">' ],
+    # 			method => 'get_image',
+    # 			arg => 'icon',
+    # 			allow_format => '+png',
+    # 			default_save_filename => 'pbdb_image',
+    # 			output => '1.1:taxa:imagedata' },
+    # 	"This path returns an image to represent the specified taxon.",
+    # 	"These 32x32 icon (blue silhouette) images are sourced from L<http://phylopic.org/>.",
+    # 	"You can get the image identifiers by including C<$show=img> with any taxonomic",
+    # 	"name query.");
     
-    $ds1->define_node({ path => 'taxa/list_images',
-			title => 'List the available images of lifeforms',
-			output => '1.1:taxa:imagedata',
-			method => 'list_images' });
+    # $ds1->define_node({ path => 'taxa/list_images',
+    # 			title => 'List the available images of lifeforms',
+    # 			output => '1.1:taxa:imagedata',
+    # 			method => 'list_images' });
     
     
 # Time scales and intervals.  These paths are used to fetch information about
