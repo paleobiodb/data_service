@@ -288,6 +288,11 @@ sub _match_node {
     # If we got an empty path, turn it into the root node path '/'.
     
     $self->{node_path} = $node_path eq '' ? '/' : $node_path;
+
+    # If the node path is '.' or '..', or starts with one of these, then this is an
+    # invalid request.
+    
+    $self->{is_invalid_request} = 1 if $self->{node_path} =~ /^[.][.]?(?:\/|$)/;
     
     # If the node that we got has either the 'file_path' or 'file_dir'
     # attribute, then mark this request as 'is_file_path'.  If it has

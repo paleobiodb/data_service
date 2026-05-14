@@ -1193,16 +1193,17 @@ sub generate_auth_filter {
     
     foreach my $name (@authnames)
     {
-	# Skip any name that has any of the characters {} () [] |*+
+	# Skip any name that has any of the characters {} () [] | * +
 	
 	if ( $name =~ qr{[{}()\[\]|*+]} )
 	{
+	    $request->add_warning("Skipped author name '$name': bad characters");
 	    next;
 	}
 	
 	# If the name matches "xxx and yyy", then look for references with both authors.
 	
-	if ( $name =~ qr{ ^ (\w.*?) \s+ and (?: \s+ (.*) | $ ) }xsi )
+	if ( $name =~ qr{ ^ (\S.*?) \s+ and \s+ (\S.*) }xsi )
 	{
 	    push @authfilters, $request->generate_two_auth_filter($dbh, $1, $2, $selector);
 	}
@@ -1249,7 +1250,7 @@ sub generate_one_auth_filter {
     
     unless ( $name =~ qr{ \p{L} }xs )
     {
-	$request->add_warning("invalid author name '$name', must contain at least one letter");
+	$request->add_warning("Skipped author name '$name': must contain at least one letter");
 	return;
     }
     
