@@ -333,13 +333,15 @@ sub delete_cleanup {
 }
 
 
-# other_action ( method, [table_specifier], parameters )
+# record_action ( method, [table_specifier], parameters )
 # 
-# An action not defined by this module is to be carried out. The argument $method must be a method
-# name defined in a subclass of this module, which will be called to carry out the action. The
-# method name will be passed as the operation when calling subclass methods for authoriation and validation.
+# An action not defined by EditTransaction is to be carried out. The argument $method
+# must be a method name defined in a subclass of EditTransaction, which will be called
+# to carry out the action. The method name will be passed as the operation when calling
+# subclass methods for authoriation and validation. Authentication will be performed
+# against the specified record, as if it were being used to modify a table row.
 
-sub other_action {
+sub record_action {
     
     my ($edt, $method, @rest) = @_;
     
@@ -363,8 +365,8 @@ sub other_action {
     }
     
     # If we have a primary key value, we can authorize against that record. This may be a
-    # limitation in future, but for now the action is authorized if they have 'edit' permission
-    # on that record.
+    # limitation in future, but for now the action is authorized if they have 'modify' permission
+    # on the corresponding table row.
     
     if ( $edt->keyval )
     {
@@ -377,7 +379,7 @@ sub other_action {
 	    # Then call the 'validate_action' method, which can be overriden by subclasses to do
 	    # class-specific checks and substitutions.
 	    
-	    $edt->validate_action($action, 'other', $table_specifier);
+	    $edt->validate_action($action, $method, $table_specifier);
 	};
 	
 	if ( $@ )
@@ -389,17 +391,89 @@ sub other_action {
     
     # If no primary key value was specified for this record, add an error condition.
     
-    # $$$ At some point in the future, we may add the ability to carry out operations using table
-    # rather than record authentication.
-    
     else
     {
-	$edt->add_condition($action, 'E_NO_KEY', 'operation');
+	$edt->add_condition($action, 'E_NO_KEY', 'no key value was specified');
     }
     
     # Handle the action and return the action reference.
     
     return $edt->_handle_action($action, 'other');
+}
+
+
+# table_action ( method, [table_specifier], parameters )
+# 
+# An action not defined by EditTransaction is to be carried out. The argument $method
+# must be a method name defined in a subclass of EditTransaction, which will be called
+# to carry out the action. The method name will be passed as the operation when calling
+# subclass methods for authoriation and validation. No authentication will be performed,
+# but the 'validate_action' method will be called and it may check table permissions and
+# do other forms of authentication.
+
+sub table_action {
+    
+    my ($edt, $method, @rest) = @_;
+    
+    # Create a new object to represent this action.
+    
+    my ($table_specifier, $parameters) = $edt->_action_args('other', @rest);
+    
+    my $action = $edt->_new_action('other', $table_specifier, $parameters);
+    
+    $edt->{record_count}++;
+    
+    # Set the method according to the first argument.
+    
+    $action->set_method($method);
+    
+    # If the record includes any errors or warnings, import them as conditions.
+    
+    if ( ref $parameters eq 'HASH' && (my $ew = $action->record_value('_errwarn')) )
+    {
+	$edt->import_conditions($action, $ew);
+    }
+    
+    # Call validate_action, which can be overridden by subclasses of EditTransaction.
+    
+    eval {
+	$edt->validate_action($action, $method, $table_specifier);
+    };
+    
+    if ( $@ )
+    {
+	$edt->error_line($@);
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during validation');
+    };
+    
+    # Handle the action and return the action reference.
+    
+    return $edt->_handle_action($action);
+}
+
+
+sub null_action {
+
+    my ($edt, @rest) = @_;
+    
+    # Create a new object to represent this action.
+    
+    my ($table_specifier, $parameters) = $edt->_action_args('null', @rest);
+    
+    my $action = $edt->_new_action('null', $table_specifier, $parameters);
+    
+    $edt->{record_count}++;
+    
+    # If the record includes any errors or warnings, import them as conditions.
+    
+    if ( ref $parameters eq 'HASH' && (my $ew = $action->record_value('_errwarn')) )
+    {
+	$edt->import_conditions($action, $ew);
+    }
+    
+    # Handle the action and return the action reference.
+    
+    return $edt->_handle_action($action);
 }
 
 

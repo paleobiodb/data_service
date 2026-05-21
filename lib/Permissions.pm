@@ -248,11 +248,16 @@ sub is_superuser {
 sub table_permission {
 
     my ($perms, $table_specifier, $permission) = @_;
-
-    if ( $perms->{$table_specifier} && $permission ) {
+    
+    if ( $perms->{is_superuser} )
+    {
+	return 1;
+    }
+    
+    elsif ( $perms->{$table_specifier} && $permission ) {
 	return $perms->{$table_specifier}{$permission} || '';
     }
-
+    
     else {
 	return '';
     }

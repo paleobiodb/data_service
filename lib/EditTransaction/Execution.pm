@@ -101,6 +101,10 @@ sub execute_action_list {
 		$edt->pre_execution_check($action) && $edt->execute_other($action);
 	    }
 	    
+	    case 'null': {
+		# do nothing
+	    }
+	    
 	  default: {
 		$edt->add_condition($action, 'E_EXECUTE', "An error occurred while routing this action");
 		$edt->error_line("execute_action_list: bad operation '$_'");

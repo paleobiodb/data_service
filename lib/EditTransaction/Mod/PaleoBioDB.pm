@@ -118,9 +118,9 @@ sub finish_table_definition {
 	# columns, add the corresponding directive unless the column already has
 	# one. 
 	
-	if ( $COMMON_FIELD_SPECIAL{$colname} && ! $cr->{DIRECTIVE} )
+	if ( $COMMON_FIELD_SPECIAL{$colname} )
 	{
-	    $cr->{DIRECTIVE} = $COMMON_FIELD_SPECIAL{$colname};
+	    $cr->{DIRECTIVE} //= $COMMON_FIELD_SPECIAL{$colname};
 	}
 	
 	# Record a list of the authorization columns that we find.
@@ -855,6 +855,8 @@ sub _compute_table_permission {
 # view           view the rows selected from this table by the specified expression
 # 
 # modify         modify the rows selected from this table by the specified expression
+#
+# replace        replace the rows selected from this table by the specified expression
 # 
 # delete         delete the rows selected from this table by the specified expression
 # 
@@ -907,11 +909,16 @@ sub check_row_permission {
     my $dauth = $debug_mode && $perms->{auth_diag}{$table_specifier};
     
     # If the table has no authentication properties, all we need to know is whether there are any
-    # matching records.
+    # matching records. If the requested permission is 'replace', we don't even need that.
     
     if ( $tableinfo->{UNRESTRICTED} )
     {
-	if ( my $count = $edt->db_count_matching_rows($table_specifier, $where) )
+	if ( $requested eq 'replace' )
+	{
+	    return ('unrestricted', 1);
+	}
+	
+	elsif ( my $count = $edt->db_count_matching_rows($table_specifier, $where) )
 	{
 	    $edt->debug_line( "$dprefix unrestricted from NO AUTH PROPERTIES\n" ) if $debug_mode;
 	    return ('unrestricted', $count);
@@ -926,7 +933,7 @@ sub check_row_permission {
     
     # If the user has administrative or superuser privileges, resolve the request using
     # 'check_admin_permission'. Otherwise, if the requested permission is 'admin' then return
-    # either 'notfound' or 'none'.
+    # 'none'.
     
     if ( $perms->is_superuser || $tp->{admin} )
     {
@@ -987,12 +994,22 @@ sub check_row_permission {
     
     my $authinfo = $edt->select_authinfo($table_specifier, $auth_fields, $where);
     
-    # If no matching records were found, return 'notfound'.
+    # If no matching records were found, return 'notfound' unless the requested
+    # permission is 'replace', in which case return 'granted' if we have 'post' permission.
     
     unless ( $authinfo && $authinfo->@* )
     {
-	$edt->debug_line( "$dprefix NOT FOUND\n" ) if $debug_mode;
-	return 'notfound';
+	if ( $requested eq 'replace' && $tp->{post} )
+	{
+	    $edt->debug_line("$dprefix granted for 'post'");
+	    return ('granted', 1);
+	}
+
+	else
+	{
+	    $edt->debug_line( "$dprefix NOT FOUND\n" ) if $debug_mode;
+	    return 'notfound';
+	}
     }
     
     # Otherwise, go through the list and count up how many records the user has permission to
@@ -1263,17 +1280,23 @@ sub _check_admin_permission {
     
     # If deletion is not allowed for anybody, return 'none'.
     
-    if ( $requested eq 'delete' && $tableinfo->{CAN_DELETE} eq 'NONE' && ! $perms->is_superuser )
+    if ( $requested eq 'delete' && $tableinfo->{CAN_DELETE} eq 'NONE' )
     {
 	$edt->debug_line("$dprefix TABLE DELETE DENIED to ADMIN\n");
 	return ('none');
     }
     
-    # If the table has no lock fields or the requested permission is 'view', all we need to
-    # do is to check how many records match the key expression.
+    # If the table has no lock fields or the requested permission is 'view', all we need
+    # to do is to check how many records match the key expression. If the requested
+    # permission is 'replace', we don't even need to do that.
     
-    if ( $requested eq 'view' || $auth_fields !~ /_lock/ )
+    if ( $requested eq 'view' || !$auth_fields || $auth_fields !~ /_lock/ )
     {
+	if ( $requested eq 'replace' )
+	{
+	    return ('admin', 1);
+	}
+	
 	if ( my $count = $edt->db_count_matching_rows($table_specifier, $where) )
 	{
 	    $edt->debug_line("$dprefix admin $count from $which\n") if $debug_mode;

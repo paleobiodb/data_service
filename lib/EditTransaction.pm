@@ -26,6 +26,7 @@ with 'EditTransaction::Validation';
 with 'EditTransaction::IActions';
 with 'EditTransaction::Operations';
 with 'EditTransaction::Execution';
+with 'EditTransaction::DBStatements';
 with 'EditTransaction::TableInfo';
 
 no warnings 'uninitialized';
