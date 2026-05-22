@@ -564,7 +564,7 @@ sub initialize {
 	{ select => 'image_no' },
 	{ output => 'image_no', com_name => 'img' },
     	    "If this value is non-zero, you can use it to construct image URLs",
-	    "using L<taxa/thumb|node:taxa/thumb> and L<taxa/icon|node:taxa/icon>.");
+	    "using L<taxa/thumb|node:taxa/thumb>.");
     
     $ds->define_block('1.2:taxa:auto' =>
 	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
