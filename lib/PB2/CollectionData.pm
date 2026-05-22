@@ -455,9 +455,9 @@ sub initialize {
 	@bin_levels);
     
     $ds->define_block('1.2:colls:mslink' =>
-	{ select => ['group_concat(distinct ms.col_id order by ms.col_id) as column_id',
-		     'group_concat(distinct ms.unit_id order by ms.unit_id) as unit_id' ], 
-	  tables => ['ms'] },
+	{ select => ['group_concat(distinct msu.col_id order by msu.col_id) as column_id',
+		     'group_concat(distinct msu.unit_id order by msu.unit_id) as unit_id' ], 
+	  tables => ['msu'] },
 	{ output => 'column_id', com_name => 'msc' },
 	    "The macrostrat column identifier(s), if any, associated with this collection.",
 	{ output => 'unit_id', com_name => 'msu' },
@@ -5885,7 +5885,7 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN $COLL_LITH as cl on cl.collection_no = c.collection_no\n"
 	if $tables->{cl};
     
-    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as msu on ms.collection_no = c.collection_no\n"
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as msu on msu.collection_no = c.collection_no\n"
 	if $tables->{msu};
 
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
