@@ -69,6 +69,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    doc_defs => 'single',
 		    doc_header => 'single',
 		    doc_footer => 'single',
+		    doc_max_age => 'single',
 		  );
 
 

@@ -627,6 +627,8 @@ sub BUILD {
     $self->{format_list} = [];
     $self->{subservice} = {};
     $self->{subservice_list} = [];
+    
+    # $self->{start_time} = strftime("%a, %d %b %Y %T GMT", gmtime);
 }
 
 
