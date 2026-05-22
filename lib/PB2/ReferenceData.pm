@@ -213,7 +213,7 @@ sub initialize {
 	  "in the result of queries for occurrence, collection, or taxonomic references.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
-     { output => 'formatted', com_name => 'ref', bibjson_name => '_formatted',
+      { output => 'formatted', com_name => 'ref', bibjson_name => '_formatted',
 	if_block => 'formatted,both' },
 	  "Formatted reference",
       { output => 'r_relevance', com_name => 'rsc', pbdb_name => 'relevance', 

@@ -1,0 +1,74 @@
+
+=for wds_node title=Specifying Taxonomic Names
+
+=head2 DESCRIPTION
+
+This page lists the taxonomic ranks used in The Paleobiology Database, along with the
+numeric code corresponding to each one. The numeric codes are used by the C<B<compact>>
+vocabulary which is the default for JSON format responses, while the rank names are used
+by the C<B<pbdb>> vocabulary which is the default for CSV and TSV format responses.
+
+=head2 VALUES
+
+=for wds_table_header Rank* | Numeric code | Description
+
+=over
+
+=item subspecies | 2
+
+This is the lowest available taxonomic rank.
+
+=item species | 3
+
+=item subgenus | 4
+
+=item genus | 5
+
+=item subtribe | 6
+
+=item tribe | 7
+
+=item subfamily | 8
+
+=item family | 9
+
+=item superfamily | 10
+
+=item infraorder | 11
+
+=item suborder | 12
+
+=item order | 13
+
+=item superorder | 14
+
+=item infraclass | 15
+
+=item subclass | 16
+
+=item class | 17
+
+=item superclass | 18
+
+=item subphylum | 19
+
+=item phylum | 20
+
+=item superphylum | 21
+
+=item subkingdom | 22
+
+=item kingdom | 23
+
+This is the highest available taxonomic rank. All taxa higher than kingdom level
+are listed as I<unranked clade>.
+
+=item unranked clade | 25
+
+This rank is used for all taxonomic names whose rank is not otherwise specified, at every level.
+
+=item informal | 26
+
+=back
+
+

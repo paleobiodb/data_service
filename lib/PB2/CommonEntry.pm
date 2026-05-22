@@ -922,19 +922,27 @@ sub generate_sandbox {
     
     if ( ref $config eq 'HASH' )
     {
-	$ds_operation = $config->{operation} || '???';
-	$ruleset_name = $config->{ruleset} || '';
+	$ds_operation = $config->{operation} || croak "You must specify an operation";
+	$ruleset_name = $config->{ruleset} || croak "You must specify a ruleset";
 	$extra_params = $config->{extra_params} || '';
-	$allowances = $config->{allowances};
-	$multiplicity = $config->{multiplicity};
+	$allowances = $config->{allowances} || '';
+	$multiplicity = $config->{multiplicity} || 1;
     }
     
     else
     {
-	croak "You must provide a hashref to configure the sandbox.";
+	croak "You must provide a hashref to configure the sandbox";
     }
     
-    $multiplicity ||= 1;
+    unless ( $request->ds->node_defined($ds_operation) )
+    {
+	croak "Unknown operation '$ds_operation'";
+    }
+    
+    unless ( $request->ds->has_ruleset($ruleset_name) )
+    {
+	croak "Unknown ruleset '$ruleset_name'";
+    }
     
     @allow_list = $request->ds->list_set_values($allowances) if $allowances;
     
@@ -942,7 +950,8 @@ sub generate_sandbox {
 
     my $allow_stmt = '';
 
-    $allow_stmt = "If you wish to specify allowances, those available are: $allow_string.";
+    $allow_stmt = "If you wish to specify allowances, those available are: $allow_string."
+	if @allow_list;
     
     my $ds_params = 'rowcount';
     
@@ -1072,7 +1081,7 @@ sub generate_sandbox {
     
     $output .= "</form>\n";
     
-    $output .= "<hr/>\n";
+    # $output .= "<hr/>\n";
     
     $output .= "<p><input type=\"submit\" value=\"Submit\" onclick=\"sandbox_request()\"></p>\n\n";
     $output .= "</div>\n";

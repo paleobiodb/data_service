@@ -153,6 +153,7 @@ our ($DROP_TABLE);
 			allow_vocab => 'pbdb,com',
 			default_save_filename => 'pbdb_data',
 			stream_threshold => (1024 * 1024),
+			doc_max_age => 86400,
 			get_connection_hook => \&do_rollback,
 			before_operation_hook => \&PB2::ArchiveEntry::check_archive,
 			after_operation_hook => \&finish_request,
@@ -197,14 +198,15 @@ our ($DROP_TABLE);
     
     $ds2->define_node({ path => 'config',
 			place => 10,
-			title => 'Client configuration',
+			title => 'Client Configuration',
 			usage => [ "config.json?show=all",
 				   "config.txt?show=clusters" ],
 			max_age => 86400,
 			role => 'PB2::ConfigData',
 			method => 'get',
 			optional_output => '1.2:config:get_map' },
-	"This operation provides information about the structure, encoding and organization",
+	"The B<C<config>> operation provides information about the structure,",
+	"encoding and organization",
 	"of the information in the database. It is designed to enable the easy",
 	"configuration of client applications.");
     
@@ -212,9 +214,9 @@ our ($DROP_TABLE);
     
     $ds2->define_node({ path => 'combined',
 			place => 11,
-			title => 'Combined data',
+			title => 'Combined Data',
 			role => 'PB2::CombinedData' },
-	"The operations in this group provide access to multiple types of data records,",
+	"The operations in this category provide access to multiple types of data records,",
 	"including auto-completion for client applications.");
     
     $ds2->define_node({ path => 'combined/auto',
@@ -244,7 +246,7 @@ our ($DROP_TABLE);
     
     $ds2->define_node({ path => 'occs',
 			place => 1,
-			title => 'Fossil occurrences',
+			title => 'Fossil Occurrences',
 			role => 'PB2::OccurrenceData',
 			allow_format => '+xml' },
 	"A fossil occurence represents the occurrence of a particular organism at a particular",
@@ -261,7 +263,8 @@ our ($DROP_TABLE);
 			output => '1.2:occs:basic',
 			optional_output => '1.2:occs:basic_map',
 			title => 'Single fossil occurrence'},
-	"This operation returns information about a single occurrence, selected by its identifier.",
+	"The operation B<C<occs/single>> returns information about a single occurrence,",
+	"selected by its identifier.",
 	"Depending upon which output blocks you select, the response will contain some",
 	"fields describing the occurrence and some describing the collection to which it belongs.");
     
@@ -274,10 +277,11 @@ our ($DROP_TABLE);
 			output => '1.2:occs:basic',
 			optional_output => '1.2:occs:basic_map',
 			title => 'List of fossil occurrences' },
-	"This operation returns information about multiple occurrences, selected according to the parameters you provide.",
-	"You can select occurrences by taxonomy, geography, age, environment, and many other criteria.",
-	"If you select the C<csv> or C<tsv> output format, the output you get will be very similar to the Classic",
-	"occurrence download.");
+	"The operation B<C<occs/list>> returns information about one or more occurrences,",
+	"selected according to the parameters you provide.",
+	"You can select occurrences by taxonomy, geography, age, environment, and many",
+	"other criteria. If you select the C<csv> or C<tsv> output format, the output you get",
+	"will be very similar to the Classic occurrence download.");
     
     $ds2->define_node({ path => 'occs/geosum',
 			place => 2,
@@ -289,11 +293,12 @@ our ($DROP_TABLE);
 			output => '1.2:colls:summary',
 			optional_output => '1.2:colls:summary_map',
 			title => 'Geographic summary of fossil occurrences' },
-	"This operation summarizes the selected set of occurrences by mapping them onto geographic clusters.",
-	"Its purpose is to provide for the generation of maps displaying the geographic distribution of",
-	"fossil occurrences.  You can specify any of the parameters that are available for the",
-	"L<occs/list|node:occs/list> operation described above.  Multiple levels of geographic resolution",
-	"are available.");
+	"The operation B<C<occs/geosum>> summarizes the selected set of occurrences",
+	"by mapping them into geographic clusters. Its purpose is to provide for the",
+	"generation of maps displaying the geographic distribution of",
+	"Fossil Occurrences.  You can specify any of the parameters that are available for the",
+	"L<occs/list|node:occs/list> operation described above.  Multiple levels of",
+	"geographic resolution are available.");
     
     $ds2->define_node({ path => 'occs/diversity',
 			place => 5,
@@ -304,11 +309,12 @@ our ($DROP_TABLE);
 			max_age => 86400,
 			summary => '1.2:occs:diversity:summary',
 			title => 'Fossil diversity over time (full computation)' },
-	"This operation returns a tabulation of fossil diversity over time, based on a selected set of occurrences.",
-	"You can select the set of occurrences to be analyzed using any of the parameters that are",
-	"valid for the L<occs/list|node:occs/list> operation.  This operation can take up a lot of server time,",
-	"so if you just want to display a quick overview plot please use the L<occs/quickdiv|node:occs/quickdiv>",
-	"operation.");
+	"The operation B<C<occs/diversity>> returns a tabulation of fossil diversity over time,",
+	"based on a selected set of occurrences. You can select the set of occurrences to be",
+	"analyzed using any of the parameters that are",
+	"valid for the L<occs/list|node:occs/list> operation.  This operation can take up",
+	"a lot of server time, so if you just want to display a quick overview plot please",
+	"use the L<occs/quickdiv|node:occs/quickdiv> operation.");
     
     $ds2->extended_doc({ path => 'occs/diversity' },
 	"It is very important to note that the diversity statistics returned by this",
@@ -319,9 +325,9 @@ our ($DROP_TABLE);
 	"occurrences, we suggest that you use the L<occs/list|node:occs/list> operation",
 	"instead and apply your procedure directly to the returned list of occurrences.",
 	">The field names returned by this operation are derived from the following source:",
-	    "M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
-	    "I<Paleobiology>, Vol. 26(4). 2000.",
-	    "pp. 74-102. L<http://www.jstor.org/stable/1571654>.");
+	"M. Foote. Origination and Extinction Components of Taxonomic Diversity: General Problems.",
+	"I<Paleobiology>, Vol. 26(4). 2000.",
+	"pp. 74-102. L<http://www.jstor.org/stable/1571654>.");
     
     $ds2->define_node({ path => 'occs/quickdiv',
 			place => 6,
@@ -331,9 +337,9 @@ our ($DROP_TABLE);
 			default_limit => 1000,
 			max_age => 86400,
 			title => 'Fossil diversity over time (quick computation)' },
-	"This operation returns a tabulation of fossil diversity over time, similar to that",
-	"provided by L<occs/diversity|node:occs/diversity>.  It returns results much more quickly,",
-	"but returns",
+	"The operation B<C<occs/quickdiv>> returns a tabulation of fossil diversity over time,",
+	"similar to that provided by L<occs/diversity|node:occs/diversity>.  It returns",
+	"results much more quickly, but returns",
 	"only the basic counts of distinct taxa appearing in each time interval.",
 	"This operation is intended for quick overview plots; if you want to do",
 	"detailed diversity analyses, we suggest using the L<occs/diversity|node:occs/diversity>",
@@ -347,7 +353,7 @@ our ($DROP_TABLE);
     			arg => 'check',
     			output => '1.2:occs:checkdiv',
     			title => 'Fossil diversity over time (diagnostic)' },
-    	"This operation provides a means of checking the taxa counted by the",
+    	"The operation B<C<occs/quickdiv>> provides a means of checking the taxa counted by the",
     	"L<occs/diversity|node:occs/diversity> operation. You can pass the same",
     	"parameters to this operation as you pass to the latter, but add either the B<C<diag>>",
 	"or the B<C<list>> parameter. The former will show you how the relevant occurrences are",
@@ -363,7 +369,8 @@ our ($DROP_TABLE);
 			summary => '1.2:occs:taxa_summary',
 			default_limit => $taxa_limit,
 			title => 'Taxonomy of fossil occurrences', },
-	"This operation returns the taxonomic hierarchy of a selected set of fossil occurrences.",
+	"The operation B<C<occs/taxa>> returns the taxonomic hierarchy of a selected",
+	"set of fossil occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
 	"valid for the L<occs/list|node:occs/list> operation.  You can make requests using both",
 	"both operations with identical parameters, which will give you both a list of",
@@ -372,12 +379,14 @@ our ($DROP_TABLE);
 	"from the selected set of occurrences that are contained within that taxon.");
     
     $ds2->extended_doc({ path => 'occs/taxa' },
-	"The result of this operation reports every taxon appearing in the selected set of occurrences,",
-	"in hierarchical order.  It includes the number of occurrences specifically identified to each",
-	"listed taxon, along with the total number of occurrences of the taxon including all subtaxa.",
-	"It also includes the number of species, genera, families and orders within each taxon that",
-	"appear within the selected set of occurrences.  The parent taxon identifier is also reported",
-	"for each taxon, so that you are able to organize the result records into their proper hierarchy.");
+	"The result of this operation reports every taxon appearing in the selected set of",
+	"occurrences, in hierarchical order.  It includes the number of occurrences",
+	"specifically identified to each listed taxon, along with the total number of",
+	"occurrences of the taxon including all subtaxa.",
+	"It also includes the number of species, genera, families and orders within each",
+	"taxon that appear within the selected set of occurrences.  The parent taxon",
+	"identifier is also reported for each taxon, so that you are able to organize",
+	"the result records into their proper hierarchy.");
     
     $ds2->define_node({ path => 'occs/prevalence',
 			place => 8,
@@ -387,14 +396,16 @@ our ($DROP_TABLE);
 			max_age => 86400,
 			output => '1.2:occs:prevalence',
 			default_limit => 20},
-	"This operation returns a list of the most prevalent taxa (according to number of occurrences)",
-	"from among the selected set of fossil occurrences.  These taxa will be phyla and/or classes,",
+	"The operation B<C<occs/prevalence>> returns a list of the most prevalent taxa",
+	"(according to number of occurrences)",
+	"from among the selected set of fossil occurrences.  These taxa will be phyla, classes,",
+	"and/or orders, ",
 	"depending upon the size of the list and the requested number of entries.",
 	"Major taxa that are roughly at the level of classes may be included even if they are not",
 	"not formally ranked at that level.",
 	"Unlike most of the operations of this data service, the parameter C<limit> is",
 	"significant in determining the elements of the result.  A",
-	"larger limit will tend to show classes instead of phyla.");
+	"larger limit will tend to show more subtaxa.");
     
     $ds2->define_node({ path => 'occs/strata',
 			place => 9,
@@ -403,10 +414,10 @@ our ($DROP_TABLE);
 			output => '1.2:strata:occs',
 			optional_output => '1.2:strata:basic_map',
 			title => 'Stratigraphy of fossil occurrences' },
-	"This operation returns information about the geological strata in which fossil occurrences",
-	"were found.  You can pass identical filtering parameters to L<occs/list|node:occs/list> and",
-	"L<occs/strata|node:occs/strata> which will give you both a list of occurrences and a summary",
-	"by stratum.");
+	"The operation B<C<occs/strata>> returns information about the Geological Strata in",
+	"which the selected set of fossil occurrences",
+	"were found.  You can use the any of the parameters available with",
+	"L<occs/list|node:occs/list>.");
     
     $ds2->define_node({ path => 'occs/refs',
 			place => 10,
@@ -417,9 +428,9 @@ our ($DROP_TABLE);
 			allow_format => '+ris,-xml',
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
-	"This operation returns information about the bibliographic references associated with fossil occurrences.",
-	"You can pass identical filtering parameters to L<occs/list|node:occs/list> and to L<occs/refs|node:occs/refs>,",
-	"which will give you both a list of occurrences and a list of the associated references.");
+	"The operation B<C<occs/refs>> returns information about the Bibliographic References",
+	"associated with fossil occurrences. You can use any of the parameters available with",
+	"L<occs/list|node:occs/list>.");
     
     $ds2->define_node({ path => 'occs/byref',
 			place => 10,
@@ -429,11 +440,12 @@ our ($DROP_TABLE);
 			arg => 'byref',
 			output => '1.2:occs:basic',
 			optional_output => '1.2:occs:basic_map' },
-	"This operation returns information about multiple occurrences, selected with respect to some combination of",
-	"the attributes of the occurrences and the attributes of the bibliographic reference(s) from which",
-	"they were entered.  You can use this operation in",
-	"conjunction with L<occs/refs|node:occs/refs> to show, for each selected reference, all of the occurrences",
-	"entered from it, or all which meet certain criteria.");
+	"The operation B<C<occs/byref>> returns information about multiple occurrences,",
+	"selected with respect to some combination of",
+	"the attributes of the occurrences and the attributes of the Bibliographic Reference(s)",
+	"from which they were entered.  You can use this operation in",
+	"conjunction with L<occs/refs|node:occs/refs> to show, for each selected reference,",
+	"all of the occurrences entered from it, or all which meet certain criteria.");
    
     $ds2->define_node({ path => 'occs/taxabyref',
 			place => 11,
@@ -443,7 +455,8 @@ our ($DROP_TABLE);
 			arg => 'taxa',
 			output => '1.2:taxa:reftaxa',
 			optional_output => '1.2:taxa:mult_output_map' },
-	"This operation returns information about taxonomic names associated with fossil occurrences,",
+	"The operation B<C<occs/taxabyref>> returns information about the Taxonomic Names",
+	"associated with the selected set of fossil occurrences,",
 	"grouped according to the bibliographic",
 	"reference in which they are mentioned.  You can use this operation in conjunction with",
 	"L<node:occs/refs> to show, for each reference, all of the taxa entered from it that",
@@ -458,9 +471,9 @@ our ($DROP_TABLE);
 			default_limit => $ref_limit,
 			output => '1.2:opinions:basic',
 			optional_output => '1.2:opinions:output_map' },
-	"This operation returns information about taxonomic opinions associated with",
-	"fossil occurrences. You can use this to retrieve just the opinions relevant",
-	"to any selected set of occurrences.");
+	"The operation B<C<occs/opinions>> returns information about the Taxonomic Opinions",
+	"associated with the selected set of Fossil Occurrences. You can use this operation",
+	"to retrieve just the opinions relevant to any selected set of occurrences.");
     
     $ds2->define_node({ path => 'occs/display',
 			place => 12,
@@ -471,8 +484,8 @@ our ($DROP_TABLE);
 			output => '1.2:occs:display',
 			optional_output => '1.2:occs:display_map',
 		        ruleset => '1.2:occs:for_display' },
-	"This operation returns information about fossil occurrences in the format",
-	"necessary for display on a per-collection basis. It is intended",
+	"The operation B<C<occs/display>> returns information about Fossil Occurrences",
+	"in the format necessary for display on a per-collection basis. It is intended",
 	"to enable a frontend application to perform this activity.");
     
     # Collections.  These paths are used to fetch information about fossil
@@ -480,7 +493,7 @@ our ($DROP_TABLE);
     
     $ds2->define_node({ path => 'colls',
 			place => 1,
-			title => 'Fossil collections',
+			title => 'Fossil Collections',
 			role => 'PB2::CollectionData',
 			use_cache => '1.2:colls' },
 	"A fossil collection is somewhat loosely defined as a set of fossil occurrences that are",
@@ -495,7 +508,8 @@ our ($DROP_TABLE);
 			method => 'get_coll',
 			output => '1.2:colls:basic',
 			optional_output => '1.2:colls:basic_map' },
-	"This operation returns information about a single collection, selected by its identifier.");
+	"The operation B<C<colls/single>> returns information about a single collection,",
+	"selected by its identifier.");
     
     $ds2->define_node({ path => 'colls/list',
 			place => 2,
@@ -505,8 +519,9 @@ our ($DROP_TABLE);
 			method => 'list_colls',
 			output => '1.2:colls:basic',
 			optional_output => '1.2:colls:basic_map' },
-	"This operation returns information about multiple collections, selected according",
-	"to the parameters you provide. You can select collections by taxonomy, geography,",
+	"The operation B<C<colls/list>> returns information about one or more collections,",
+	"selected according to the parameters you provide. You can select collections by",
+	"taxonomy, geography,",
 	"age, environment, and many other criteria. If you select the C<csv> or C<tsv>",
 	"output format, the output you get will be very similar to the Classic",
 	"collection download.");
@@ -514,13 +529,15 @@ our ($DROP_TABLE);
     $ds2->define_node({ path => 'colls/matchlocal',
 			place => 3,
 			title => 'Search results for fossil collections',
+			usage => [ "colls/list.txt?base_name=Cetacea&interval=Miocene&show=ref,loc,stratext" ],
 			method => 'list_colls',
 			arg => 'match',
 			output => '1.2:colls:match',
 			optional_output => '1.2:colls:match_map' },
-	"This operation returns information about multiple collections, selected according",
-	"to the parameters you provide. The output is tailored toward generating a list of",
-	"search results.");
+	"The operation B<C<colls/matchlocal>> returns information about one or more",
+	"collections, selected according",
+	"to the parameters you provide. The parameters and output are tailored toward",
+	"generating a list of search results.");
     
     $ds2->define_node({ path => 'colls/summary',
 			place => 4,
@@ -531,12 +548,14 @@ our ($DROP_TABLE);
 			method => 'summary',
 			output => '1.2:colls:summary',
 			optional_output => '1.2:colls:summary_map' },
-	"This operation is essentially the same as L<occs/geosum|node:occs/geosum>.  It summarizes the selected set",
-	"of collections by mapping them onto geographic clusters.",
-	"Its purpose is to provide for the generation of maps displaying the geographic distribution of",
+	"The operation B<C<colls/summary>> is essentially the same as",
+	"L<occs/geosum|node:occs/geosum>.  It summarizes the selected set",
+	"of collections by mapping them into geographic clusters.",
+	"Its purpose is to provide for the generation of maps displaying the geographic",
+	"distribution of",
 	"fossil collections.  You can specify any of the parameters that are available for the",
-	"L<occs/list|node:occs/list> operation described above.  Multiple levels of geographic resolution",
-	"are available.");
+	"L<colls/list|node:colls/list> operation described above.  Multiple levels of",
+	"geographic resolution are available.");
     
     $ds2->define_node({ path => 'colls/refs',
 			place => 5,
@@ -546,12 +565,15 @@ our ($DROP_TABLE);
 			allow_format => '+ris',
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
-	"This operation returns information about the bibliographic references associated with fossil",
-	"collections.  You can pass identical filtering parameters to L<colls/byref|node:colls/byref>",
-	"and L<colls/refs|node:colls/refs>, which will give you both a list of collections and a list",
+	"The operation B<C<colls/refs>> returns information about the Bibliographic References",
+	"associated with the selected set of Fossil Collections.",
+	"You can pass identical filtering parameters to this operation",
+	"and L<colls/byref|node:colls/byref>, which will give you both a list of collections",
+	"and a list",
 	"of the associated references.  However, the operation L<occs/refs|node:occs/refs> is",
-	"much more flexible.  It allows you to retrieve taxonomy and specimen references as well as",
-	"collection and occurrence references, and can report the number of taxa, occurrences, specimens,",
+	"much more flexible.  It allows you to retrieve taxonomy and specimen references",
+	"as well as collection and occurrence references, and can report the number of taxa,",
+	"occurrences, specimens,",
 	"etc. entered from each record.  If you are looking for any of this information, you should",
 	"use that operation instead.");
     
@@ -562,18 +584,19 @@ our ($DROP_TABLE);
 			method => 'list_colls',
 			output => '1.2:colls:basic',
 			optional_output => '1.2:colls:basic_map' },
-	"This operation returns information about multiple collections, selected with respect to some combination of",
-	"the attributes of the collections and the attributes of the bibliographic reference(s) from which",
-	"they were entered.  You can use this operation in",
-	"conjunction with L<colls/refs|node:colls/refs> to show, for each selected reference, all of the collections",
-	"entered from it, or all which meet certain criteria.");
+	"The operation B<C<colls/byref>> returns information about one or more collections,",
+	"selected with respect to some combination of",
+	"the attributes of the collections and the attributes of the Bibliographic Reference(s)",
+	"from which they were entered.  You can use this operation in",
+	"conjunction with L<colls/refs|node:colls/refs> to show, for each selected reference,",
+	"all of the collections entered from it, or all which meet certain criteria.");
     
     # Strata.  These paths are used to fetch information about geological strata
     # known to the database.
     
     $ds2->define_node({ path => 'strata',
 			place => 4,
-			title => 'Geological strata',
+			title => 'Geological Strata',
 			role => 'PB2::CollectionData' },
 	"Most of the fossil collections in the database are categorized by the formation",
 	"from which each was collected, and many by group and member.");
@@ -605,7 +628,7 @@ our ($DROP_TABLE);
     
     $ds2->define_node({ path => 'specs',
 			place => 1,
-			title => 'Specimens and measurements',
+			title => 'Specimens and Measurements',
 			role => 'PB2::SpecimenData' },
 	"Many of the fossil occurrences in the database are based on specimens that can",
 	"be examined and measured.  There are also specimens entered into the database",
@@ -619,8 +642,8 @@ our ($DROP_TABLE);
 			method => 'get_specimen',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
-	"This operation returns information about a single fossil specimen, identified either",
-	"by name or by identifier.");
+	"The operation B<C<specs/single>> returns information about a single fossil specimen,",
+	"identified either by name or by identifier.");
     
     $ds2->define_node({ path => 'specs/list',
 			place => 2,
@@ -629,7 +652,8 @@ our ($DROP_TABLE);
 			method => 'list_specimens',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
-	"This operation returns information about multiple specimens, selected according to the parameters you provide.",
+	"The operation B<C<specs/list>> returns information about multiple specimens,",
+	"selected according to the parameters you provide.",
 	"Depending upon which output blocks you select, the response will contain some",
 	"fields describing the specimens and some describing the occurrences and collections (if any)",
 	"with which they are associated.");
@@ -642,8 +666,10 @@ our ($DROP_TABLE);
 			allow_format => '+ris,-xml',
 			output => '1.2:refs:basic',
 			optional_output => '1.2:refs:output_map' },
-	"This operation returns information about the bibliographic references associated with fossil specimens.",
-	"You can pass identical filtering parameters to L<specs/byref|node:specs/byref> and to L<specs/refs|node:specs/refs>,",
+	"The operation B<C<specs/refs>> returns information about the bibliographic references",
+	"associated with fossil specimens.",
+	"You can pass identical filtering parameters to L<specs/byref|node:specs/byref> and to",
+	"L<specs/refs|node:specs/refs>,",
 	"which will give you both a list of occurrences and a list of the associated references.");
     
     $ds2->define_node({ path => 'specs/byref',
@@ -653,11 +679,12 @@ our ($DROP_TABLE);
 			arg => 'byref',
 			output => '1.2:specs:basic',
 			optional_output => '1.2:specs:basic_map' },
-	"This operation returns information about multiple specimens, selected with respect to some combination of",
-	"the attributes of the occurrences and the attributes of the bibliographic reference(s) from which",
-	"they were entered.  You can use this operation in",
-	"conjunction with L<specs/refs|node:specs/refs> to show, for each selected reference, all of the specimens",
-	"entered from it, or all which meet certain criteria.");
+	"The operation B<C<specs/byref>> returns information about multiple specimens, selected",
+	"with respect to some combination of",
+	"the attributes of the occurrences and the attributes of the bibliographic reference(s)",
+	"from which they were entered.  You can use this operation in",
+	"conjunction with L<specs/refs|node:specs/refs> to show, for each selected reference,",
+	"all of the specimens entered from it, or all which meet certain criteria.");
     
     $ds2->define_node({ path => 'specs/measurements',
 			place => 5,
@@ -665,8 +692,8 @@ our ($DROP_TABLE);
 			method => 'list_measurements',
 			output => '1.2:measure:basic',
 		        optional_output => '1.2:measure:output_map' },
-	"This operation returns information about the measurements associated with selected",
-	"specimens.");
+	"The operation B<C<specs/measurements>> returns information about the measurements",
+	"associated with selected specimens.");
     
     $ds2->define_node({ path => 'specs/elements',
 			place => 6,
@@ -674,8 +701,8 @@ our ($DROP_TABLE);
 			method => 'list_elements',
 			output => '1.2:specs:element',
 			optional_output => '1.2:specs:element_map' },
-	"This operation returns lists of elements that can be used to describe specimens,",
-	"for example 'bone', 'tooth', 'valve'.");
+	"The operation B<C<specs/elements>> returns lists of elements that can be used to",
+	"describe specimens, for example 'bone', 'tooth', 'valve'.");
     
     # Taxa.  These paths are used to fetch information about biological taxa known
     # to the database.
@@ -684,7 +711,7 @@ our ($DROP_TABLE);
     
     $ds2->define_node({ path => 'taxa',
 			place => 2,
-			title => 'Taxonomic names',
+			title => 'Taxonomic Names',
 			role => 'PB2::TaxonData',
 			output => '1.2:taxa:basic' },
 	"The taxonomic names stored in the database are arranged hierarchically.",
@@ -833,11 +860,11 @@ our ($DROP_TABLE);
     # 			output => '1.2:taxa:imagedata',
     # 			method => 'list_images' });
     
-    # Opinions
+    # opinions
     
     $ds2->define_node({ path => 'opinions',
 			place => 2,
-			title => 'Taxonomic opinions',
+			title => 'Taxonomic Opinions',
 			role => 'PB2::TaxonData',
 			output => '1.2:opinions:basic' },
 	"The taxonomic hierarchy in our database is computed algorithmically based on a",
@@ -881,7 +908,7 @@ our ($DROP_TABLE);
 			role => 'PB2::IntervalData',
 			output => '1.2:intervals:basic',
 			default_limit => undef,
-			title => 'Geological time intervals and time scales' },
+			title => 'Geological Time Intervals and Time Scales' },
 	"The database lists almost every geologic time interval in current use, including the",
 	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
 	"(L<2013-01|http://www.stratigraphy.org/ICSchart/ChronostratChart2013-01.jpg>).");
@@ -955,11 +982,13 @@ our ($DROP_TABLE);
 
     $ds2->define_node({ path => 'people',
 			place => 11,
-			title => 'Database contributors',
+			title => 'Database Contributors',
 			role => 'PB2::PersonData',
 			default_limit => undef,
 			output => '1.2:people:basic',
-		        optional_output => '1.2:people:basic_map' });
+		        optional_output => '1.2:people:basic_map' },
+	"The operations in this category list the names of people who contributed",
+	"data to the database.");
     
     $ds2->define_node({ path => 'people/single', 
 			place => 1,
@@ -997,7 +1026,7 @@ our ($DROP_TABLE);
 
     $ds2->define_node({ path => 'refs',
 			place => 5,
-			title => 'Bibliographic references',
+			title => 'Bibliographic References',
 			role => 'PB2::ReferenceData',
 			allow_format => '+ris',
 			allow_vocab => '+bibjson',
@@ -1010,80 +1039,81 @@ our ($DROP_TABLE);
     
     $ds2->define_node({ path => 'refs/single',
 			place => 1,
-			title => 'Single bibliographic reference',
+			title => 'Single Bibliographic Reference',
 			usage => "refs/single.json?id=6930&show=both",
 			method => 'get' },
-	"This operation returns information about a single bibliographic reference,",
-	"selected by its identifier");
+	"The operation B<C<refs/single>> returns information about a single",
+	"Bibliographic Reference, selected by its identifier");
     
     $ds2->define_node({ path => 'refs/list',
 			place => 2,
-			title => 'List of bibliographic references',
+			title => 'List of Bibliographic References',
 			usage => "refs/list.txt?ref_author=Sepkoski",
 			method => 'list' },
-	"This operation returns information about lists of bibliographic references,",
-	"selected according to the parameters you provide");
+	"The operation B<C<refs/list>>returns information about lists of",
+	"Bibliographic References, selected according to the parameters you provide");
     
     $ds2->list_node({ path => 'occs/refs',
 		      list => 'refs',
 		      place => 3,
-		      title => 'References for fossil occurrences',
+		      title => 'References for Fossil Occurrences',
 		      usage => "occs/refs.ris?base_name=Cetacea&interval=Eocene&textresult" },
-	"This operation returns information about the references from which the",
-	"selected occurrence data were entered.");
+	"The operation B<C<occs/refs>> returns information about the references from which the",
+	"selected occurrences were entered.");
+    
+    $ds2->list_node({ path => 'colls/refs',
+		      list => 'refs',
+		      place => 3,
+		      title => 'References for Fossil Collections' },
+	"The operation B<C<colls/refs>> returns information about the references from which",
+	"the selected collections were entered.");
     
     $ds2->list_node({ path => 'specs/refs',
 		      list => 'refs',
 		      place => 3,
-		      title => 'References for fossil specimens',
+		      title => 'References for Fossil Specimens',
 		      usage => "specs/refs.ris?base_name=Cetacea&interval=Eocene&textresult" },
-	"This operation returns information about the references from which the",
-	"selected occurrence data were entered.");
-    
-    $ds2->list_node({ path => 'colls/refs',
-		      list => 'refs',
-		      place => 4,
-		      title => 'References for fossil collections' },
-	"This operation returns information about the references from which",
-	"the selected collections were entered.");
+	"The operation B<C<specs/refs>> returns information about the references from which the",
+	"selected specimens were entered.");
     
     $ds2->list_node({ path => 'taxa/refs',
 		      list => 'refs',
 		      place => 5,
 		      title => 'References for taxonomic names' },
-	"This operation returns information about the references from which",
+	"The operation B<C<taxa/refs>> returns information about the references from which",
 	"the selected taxonomic names were entered.");    
     
     # Geographic places
     
-    $ds2->define_node({ path => 'places',
-			title => 'Geographic places',
-			place => 3,
-			role => 'PB2::PlaceData' },
-	"The collections and specimens in the database are associated with specific geographic locations,",
-	"which can be queried separately from other operations.");
+    # $ds2->define_node({ path => 'places',
+    # 			title => 'Geographic places',
+    # 			place => 3,
+    # 			role => 'PB2::PlaceData' },
+    # 	"The collections and specimens in the database are associated with specific geographic locations,",
+    # 	"which can be queried separately from other operations.");
     
-    $ds2->define_node({ path => 'places/single',
-			title => 'Single geographic place',
-			place => 1,
-			method => 'get_place',
-			output => '1.2:places:basic' },
-	"This operation returns information about a single geographic place, either",
-	"a collection record, a locality record, or a geographic name record, specified",
-	"by its unique identifier.");
+    # $ds2->define_node({ path => 'places/single',
+    # 			title => 'Single geographic place',
+    # 			place => 1,
+    # 			method => 'get_place',
+    # 			output => '1.2:places:basic' },
+    # 	"This operation returns information about a single geographic place, either",
+    # 	"a collection record, a locality record, or a geographic name record, specified",
+    # 	"by its unique identifier.");
     
-    $ds2->define_node({ path => 'places/list',
-			title => 'List of geographic places',
-			place => 2,
-			method => 'list_places',
-			output => '1.2:places:basic' },
-	"This operation returns a list of geographic place records matching the",
-	"parameters you specify.");
+    # $ds2->define_node({ path => 'places/list',
+    # 			title => 'List of geographic places',
+    # 			place => 2,
+    # 			method => 'list_places',
+    # 			output => '1.2:places:basic' },
+    # 	"This operation returns a list of geographic place records matching the",
+    # 	"parameters you specify.");
     
     # Educational resources
     
     $ds2->define_node({ path => 'eduresources',
     			title => 'Educational resources',
+			place => 9,
     			role => 'PB2::ResourceData' },
     	"The database also includes information about educational resources",
     	"that are relevant to its mission. These are used to populate a",
@@ -1096,8 +1126,8 @@ our ($DROP_TABLE);
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
     			method => 'get_resource' },
-    	"This operation returns information about a single educational resource record",
-    	"specified by identifier.");
+    	"The operation B<C<eduresources/single>> returns information about a single",
+	"educational resource record, specified by identifier.");
     
     $ds2->define_node({ path => 'eduresources/list',
     			title => "List of educational resources",
@@ -1106,8 +1136,13 @@ our ($DROP_TABLE);
     			output => '1.2:eduresources:basic',
     			optional_output => '1.2:eduresources:optional_output',
     			method => 'list_resources' },
-    	"This operation returns information about a list of educational resource",
-    	"records, selected according to the query parameters.");
+    	"The operation B<C<eduresources/list>> returns information about one or more",
+	"educational resource records, selected according to the query parameters.",
+	"Unless you are logged in to the database, the results will only include",
+	"active resources. If you are logged in, you will additionally be able to",
+	"see inactive resources that you originally submitted. If you have the",
+	"B<Educational Resources> special permission, you will be able to see",
+	"all active and inactive resource records.");
     
     $ds2->define_node({ path => 'eduresources/active',
     			title => "Active educational resources",
@@ -1119,8 +1154,8 @@ our ($DROP_TABLE);
 			allow_format => '+larkin',
     			method => 'list_resources',
     		        arg => 'active' },
-    	"This operation returns a list of active educational resource records,",
-	"selected according to the query parameters.");
+    	"The operation B<C<eduresources/active>> returns a list of active educational",
+	"resource records, selected according to the query parameters.");
     
     $ds2->define_node({ path => 'eduresources/inactive',
 			title => "Inactive educational resources",
@@ -1130,14 +1165,17 @@ our ($DROP_TABLE);
 			optional_output => '1.2:eduresources:optional_output',
 			method => 'list_resources',
 			arg => 'inactive' },
-	"This operation returns a list of inactive educational resource records,",
-		      "selected according to the query parameters.");
+	"The operation B<C<eduresources/inactive>> returns a list of inactive educational",
+	"resource records, selected according to the query parameters.",
+	"This operation requires you to be logged in to the database. Unless",
+	"you have the B<Educational Resources> special permission, you will only",
+	"be able to see records that you originally submitted.");
     
     # Functions that used to be carried out by the larkin data service and the archiver data
     # service.
     
     $ds2->define_node({ path => 'stats',
-			title => 'Database statistics',
+			title => 'Database Statistics',
 			place => 13,
 			role => 'PB2::Statistics' },
 	"Statistical summaries of database information");
@@ -1163,10 +1201,10 @@ our ($DROP_TABLE);
 	"educational resources.");
 
     $ds2->define_node({ path => 'frontend',
-			title => 'Support for frontend application',
+			title => 'Support for Frontend Applications',
 			place => 12,
 			role => 'PB2::Statistics' },
-	"Auxiliary operations to support the frontend B<Navigator> application.");
+	"Auxiliary operations to support the frontend B<Navigator> application and others.");
 
     $ds2->define_node({ path => 'frontend/app-state',
 			title => 'Save or retrieve Navigator application state',
@@ -1277,6 +1315,12 @@ our ($DROP_TABLE);
 	"The data service accepts taxonomic names using several different parameters,",
 	"and there are modifiers that you can add in order to precisely specify",
 	"which taxa you are interested in.");
+    
+    $ds2->define_node({ path => 'general/taxon_ranks',
+			title => 'List of taxonomic ranks',
+			place => 1 },
+	"The data service accepts and displays taxonomic ranks in either of two forms: text and",
+	"numeric.");
     
     $ds2->define_node({ path => 'general/ecotaph',
 			title => 'Ecological and taphonomic vocabulary',

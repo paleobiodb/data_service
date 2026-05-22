@@ -16,12 +16,12 @@ service, so that anyone can write client software that interacts with it.
 =head2 SYNOPSIS
 
 This service currently provides access to the following classes of information, by means of the
-indicated URLs. The following links will take you to pages which document the individual URL
+indicated operations. The following links will take you to pages which document the individual URL
 paths, listing the parameters accepted and the data fields returned by each.
 
 <% NODELIST %>
 
-This is a TEST VERSION of the data service which provides data entry operations:
+The following categories of operations allow for data entry:
 
 <% NODELIST(opt_list='entry') %>
 

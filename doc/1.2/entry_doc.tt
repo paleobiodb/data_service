@@ -1,7 +1,5 @@
-=head2 DESCRIPTION
 
-The URL paths documented in this section provide for data entry. Ultimately, there
-will be one section for each different kind of data.
+<% DESCRIPTION_SECTION(opt_force=1) %>
 
 =head2 SYNOPSIS
 
