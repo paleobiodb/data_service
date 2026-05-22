@@ -17,6 +17,8 @@ use TaxonDefs qw(%TAXON_RANK %RANK_STRING);
 
 use ExternalIdent qw(generate_identifier %IDP VALID_IDENTIFIER);
 
+use PhylopicEdit;
+
 use Moo::Role;
 
 our (@REQUIRES_ROLE) = qw(PB2::Authentication PB2::CommonData PB2::CommonEntry PB2::TaxonData);
@@ -85,12 +87,16 @@ sub initialize {
     $ds->define_ruleset('1.2:taxa:image_choice_body' =>
 	{ mandatory => 'orig_no', valid => VALID_IDENTIFIER('TXN') },
 	    "The identifier of a taxon whose representative image is being selected",
-	{ mandatory => 'selected', valid => VALID_IDENTIFIER('PHP') },
+	{ optional => 'selected', valid => VALID_IDENTIFIER('PHP') },
 	    "The identifier of the selected image, which must be chosen from the",
 	    "choices presented.",
 	{ optional => 'considered', valid => VALID_IDENTIFIER('PHP'), list => ',' },
 	    "A list of images to mark as having been considered as part of the",
 	    "choice.");
+
+    $ds->define_ruleset('1.2:taxa:update_image_choices' =>
+	{ allow => '1.2:special_params' },
+	"^You can use any of the L<special parameters|node:special> with this request.");
     
     # Output blocks for data entry operations
     
@@ -113,10 +119,13 @@ sub initialize {
 	    "of the accepted name to be used in its place",
 	{ output => 'accepted_name', com_name => 'acn', dedup => 'taxon_name' },
 	    "If this taxon is invalid or a junior synonym, the accepted name",
-	{ output => 'choices', com_name => 'imch' },
-	    "A list of image identifiers which are available to choose",
 	{ output => 'selected', com_name => 'sel' },
 	    "The currently selected image identifier for this taxon",
+	{ output => 'choices', com_name => 'imch' },
+	    "A list of image identifiers which are available to choose",
+	{ output => 'considered', com_name => 'imco' },
+	    "A list of image identifiers which have been previously considered by the",
+	    "logged-in user making this request",
 	{ output => 'modifier_no', com_name => 'mdi' },
 	    "A unique identifier for the database contributor who made the",
 	    "current selection, if any",
@@ -468,24 +477,31 @@ sub list_image_choices {
     
     else
     {
-	$choice_sql = "SELECT $fields, group_concat(pn.image_no) as choices
-		FROM $TABLE{PHYLOPIC_CHOICE} as pc
-		    join $TABLE{TAXON_TREES} as t using (orig_no)
-		    join $TABLE{PHYLOPIC_NAMES} as pn using (orig_no)
-		    left join $TABLE{PERSON_DATA} as p1 on p1.person_no = pc.modifier_no
-		    left join $TABLE{TAXON_TREES} as t2 on t2.orig_no = t.accepted_no
-		WHERE $filter_string
-		GROUP BY orig_no $having
-		ORDER BY t.lft
-		$limit_string";
+	$choice_sql = <<~END_SQL;
+	    SELECT $fields, group_concat(pn.image_no) as choices,
+	        group_concat(ps.image_no) as considered
+	    FROM $TABLE{PHYLOPIC_CHOICE} as pc
+	        join $TABLE{TAXON_TREES} as t using (orig_no)
+	        join $TABLE{PHYLOPIC_NAMES} as pn using (orig_no)
+	        left join $TABLE{PHYLOPIC_SEEN} as ps on ps.image_no = pn.image_no
+	            and ps.orig_no = pn.orig_no and ps.person_no = '$perms->{enterer_no}'
+	        left join $TABLE{PERSON_DATA} as p1 on p1.person_no = pc.modifier_no
+	        left join $TABLE{TAXON_TREES} as t2 on t2.orig_no = t.accepted_no
+	    WHERE $filter_string
+	    GROUP BY orig_no $having
+	    ORDER BY t.lft
+	    $limit_string
+	    END_SQL
 	
-	$image_sql = "SELECT pp.image_no, pp.uid, pp.credit, pp.attribution, created, modified
-		FROM $TABLE{TAXON_TREES} as t
-		    join $TABLE{PHYLOPIC_NAMES} as pn using (orig_no)
-		    join $TABLE{PHYLOPIC_DATA} as pp using (image_no)
-		WHERE $filter_string
-		GROUP BY pp.image_no
-		$limit_string";
+	$image_sql = <<~END_SQL;
+	    SELECT pp.image_no, pp.uid, pp.credit, pp.attribution, created, modified
+	    FROM $TABLE{TAXON_TREES} as t
+	        join $TABLE{PHYLOPIC_NAMES} as pn using (orig_no)
+	        join $TABLE{PHYLOPIC_DATA} as pp using (image_no)
+	    WHERE $filter_string
+	    GROUP BY pp.image_no
+	    $limit_string
+	    END_SQL
     }
     
     # Execute the two queries.
@@ -532,15 +548,30 @@ sub process_image_choices {
 	
 	$record->{selected} = generate_identifier('PHP', $record->{selected})
 	    if $record->{selected};
-	
-	my @choices = split /,/, $record->{choices};
-	
-	foreach my $c ( @choices )
+
+	if ( $record->{choices} )
 	{
-	    $c = generate_identifier('PHP', $c) if $c;
+	    my @choices = split /,/, $record->{choices};
+	    
+	    foreach my $c ( @choices )
+	    {
+		$c = generate_identifier('PHP', $c) if $c;
+	    }
+	    
+	    $record->{choices} = \@choices;
 	}
 	
-	$record->{choices} = \@choices;
+	if ( $record->{considered} )
+	{
+	    my @considered = split /,/, $record->{considered};
+	    
+	    foreach my $c ( @considered )
+	    {
+		$c = generate_identifier('PHP', $c) if $c;
+	    }
+	    
+	    $record->{considered} = \@considered;
+	}
     }
     
     $record->{taxon_rank} = $RANK_STRING{$record->{taxon_rank}} if $record->{taxon_rank};
@@ -564,6 +595,9 @@ sub update_image_choices {
 	die $request->exception("401", "You must have administrative permission on ",
 				"the PHYLOPIC_CHOICE table");
     }
+
+    $request->strict_check;
+    $request->extid_check;
     
     my $allowances = { };
     
@@ -574,54 +608,36 @@ sub update_image_choices {
 	die $request->exception("400", "Bad data");
     }
     
-    my $edt = EditTransaction->new($request, { permission => $perms, 
-					       table => 'PHYLOPIC_CHOICE', 
-					       allows => $allowances } );
-
+    my $edt = PhylopicEdit->new($request, { permission => $perms, 
+					    table => 'PHYLOPIC_CHOICE', 
+					    allows => $allowances } );
+    
+    $edt->debug_mode(1) if $request->debug;
+    
     my @result;
     
-    # Iterate through the posted records. We need multiple actions for each one. First,
-    # recording the selection in PHYLOPIC_CHOICE. Second, recording all of the
-    # considered images in PHYLOPIC_SEEN.
-
+    # Iterate through the posted records. For each one, if a value for 'selected' is
+    # given then we replace a record in PHYLOPIC_CHOICE. If a value for 'considered' is
+    # given, then we update records in PHYLOPIC_SEEN whether or not 'selected' was
+    # given. See 'after_action' in PhylopicEdit.pm for this mechanism.
+    
   RECORD:
     foreach my $r (@records)
     {
-	# Create a record for insertion or update into PHYLOPIC_CHOICE.
-	
-	my $r1 = { orig_no => $r->{orig_no}, image_no => $r->{selected} };
-	
-	$edt->insert_update_record($r1);
-	
-	# Make sure that the selected image is actually an available choice. If it is,
-	# add the insertion record to the result list. Otherwise, add an error condition
-	# to the action initiated above and go on to the next record. We use
-	# 'E_NOT_FOUND' so that the user has the option to specify the 'NOT_FOUND'
-	# allowance which causes this to be a warning instead of an error.
-	
-	my ($check) = $dbh->selectrow_array("
-		SELECT image_no FROM $TABLE{PHYLOPIC_NAMES}
-		WHERE orig_no = '$r->{orig_no}' and image_no = '$r->{selected}'");
-	
-	if ( $check )
+	if ( $r->{selected} )
 	{
-	    push @result, $r1;
+	    $edt->replace_record('PHYLOPIC_CHOICE', $r);
+	}
+	
+	elsif ( $r->{considered} )
+	{
+	    $edt->table_action('op_update_considered', 'PHYLOPIC_SEEN', $r);
 	}
 	
 	else
 	{
-	    $edt->add_condition('E_NOT_FOUND', 'custom', "Image '$r->{selected}' is not " .
-				"an available choice for taxon '$r->{orig_no}'");
-	    next RECORD;
-	}
-	
-	# Record all of the 'considered' images in the table PHYLOPIC_SEEN.
-	
-	my $considered = ref $r->{considered} eq 'ARRAY' ? $r->{considered} : [ $r->{considered} ];
-	
-	foreach my $image_no ( $considered->@* )
-	{
-	    $edt->replace_record({ image_no => $image_no, person_no => $perms->enterer_no });
+	    $edt->null_action($r);
+	    $edt->add_condition('E_PARAM', "you must specify either 'selected' or 'considered'");
 	}
     }
     
@@ -645,8 +661,46 @@ sub update_image_choices {
     
     else
     {
-	return $request->list_result(@result);
+	my $fields = $request->select_string;
+	
+	my @result_keys = $edt->replaced_keys('PHYLOPIC_CHOICE');
+	push @result_keys, $edt->other_keys('PHYLOPIC_SEEN');
+
+	if ( @result_keys )
+	{
+	    my $key_string = join("','", @result_keys);
+	    
+	    my $result_sql = <<~END_SQL;
+		SELECT $fields, group_concat(ps.image_no) as considered
+		FROM $TABLE{PHYLOPIC_CHOICE} as pc
+		    join $TABLE{TAXON_TREES} as t using (orig_no)
+		    join $TABLE{PHYLOPIC_NAMES} as pn using (orig_no)
+		    left join $TABLE{PHYLOPIC_SEEN} as ps on ps.image_no = pn.image_no
+			and ps.orig_no = pn.orig_no and ps.person_no = '$perms->{enterer_no}'
+		    left join $TABLE{PERSON_DATA} as p1 on p1.person_no = pc.modifier_no
+		    left join $TABLE{TAXON_TREES} as t2 on t2.orig_no = t.accepted_no
+		WHERE pc.orig_no in ('$key_string')
+		GROUP BY orig_no
+		END_SQL
+	    
+	    $request->debug_line($result_sql) if $request->debug;
+	    
+	    my $result = $dbh->selectall_arrayref($result_sql, { Slice => { } });
+	    
+	    $request->list_result($result);
+	}
     }
+}
+
+
+sub update_image_choices_sandbox {
+
+    my ($request) = @_;
+    
+    $request->generate_sandbox({ operation => 'taxa/update_image_choices',
+				 ruleset => '1.2:taxa:image_choice_body',
+				 multiplicity => 1,
+			         extra_params => 'vocab=pbdb&extids' });
 }
 
 1;
