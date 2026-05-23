@@ -4053,7 +4053,7 @@ sub generateJoinList {
 
     $join_list .= "LEFT JOIN (SELECT occurrence_no, count(*) as n_specs FROM $TABLE{SPECIMEN_DATA} group by occurrence_no) as sc on sc.occurrence_no = o.occurrence_no\n" if $tables->{sc};
     
-    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as msu on ms.collection_no = c.collection_no\n"
+    $join_list .= "LEFT JOIN $TABLE{COLLECTION_UNITS} as msu on msu.collection_no = c.collection_no\n"
 	if $tables->{msu};
     
     $join_list .= "LEFT JOIN $TABLE{COLLECTION_DATA} as ccs on ccs.collection_no = cc.collection_subset\n"
