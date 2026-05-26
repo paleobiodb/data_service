@@ -14,7 +14,7 @@ automatically. If the user is already logged in, then the variable C<$$is_logged
 will have a true value. If the user is a database contributor (as opposed to a guest),
 then the variable C<$$is_contributor$$> will have a true value. You can use these
 variables to provide an appropriate response to unauthenticated users, which may include
-redirecting the user to C</login>. As with most websites, we handle authentication via a
+redirecting to C</login>. As with most websites, we handle authentication via a
 cookie-based mechanism, so the user's web browser will automatically include the session
 cookie with any API requests made to the same server that the application came from.
 This means that API requests will automatically be executed using the credentials
@@ -34,16 +34,18 @@ Ask the user in some manner for their PBDB user name (or email address) and pass
 
 =item 2.
 
-Send a POST request to the URL C<https://paleobiodb.org/login>, whose content includes the
-fields "login" (user name or email address) and "password". If these credentials are
-correct, the response will include a session cookie which can then be passed along with
-each subsequent API request. In fact, the user's web browser will in almost all cases
-automatically include the cookie with subsequent API requests.
+Send a POST request to the URL C<https://paleobiodb.org/api/login>, whose content
+includes the fields "username" (user name or email address) and "password". If these
+credentials are correct, the response will include a session cookie which can then be
+included with each subsequent API request. In most cases, whichever framework you are
+using to make the API requests will automatically save and include the cookie. If that
+does not happen, you can do it explicitly.
 
 =item 3.
 
 When the application terminates, send a GET request to the URL
-https://paleobiodb.org/logout. That will safely end the login session.
+https://paleobiodb.org/api/logout, and make sure that the session cookie is included
+with the request. That will safely end the login session.
 
 =back
 
