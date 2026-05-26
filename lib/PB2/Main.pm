@@ -1308,6 +1308,11 @@ our ($DROP_TABLE);
 	"Records retrieved from the data service can be identified either by using the",
 	"numeric identifiers from the underlying database records (i.e. 'occurrence_no'),",
 	"or using an extended identifier syntax.");
+
+    $ds2->define_node({ path => 'general/authentication',
+			title => 'Authentication to the Database',
+			place => 1 },
+	"Use of the data entry operations requires prior authentication to the database.");
     
     $ds2->define_node({ path => 'general/taxon_names',
 			title => 'Specifying taxonomic names',

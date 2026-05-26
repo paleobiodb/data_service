@@ -1,0 +1,52 @@
+
+=for wds_node title=Authentication to the Database
+
+=head2 DESCRIPTION
+
+This page describes the process for authenticating to the database, which is required in
+order to use data entry operations.
+
+=head2 INTERNAL APPLICATIONS
+
+If you are using this API in the context of an internal web application (i.e. one
+provided through the main database server), then authentication is handled
+automatically. If the user is already logged in, then the variable C<$$is_logged_in$$>
+will have a true value. If the user is a database contributor (as opposed to a guest),
+then the variable C<$$is_contributor$$> will have a true value. You can use these
+variables to provide an appropriate response to unauthenticated users, which may include
+redirecting the user to C</login>. As with most websites, we handle authentication via a
+cookie-based mechanism, so the user's web browser will automatically include the session
+cookie with any API requests made to the same server that the application came from.
+This means that API requests will automatically be executed using the credentials
+supplied by the user when they originally logged in.
+
+=head2 EXTERNAL APPLICATIONS
+
+If you are writing an external application that uses the API, you will need to
+authenticate to the database explicitly in order to obtain a session cookie. This can be
+done using the following steps:
+
+=over
+
+=item 1.
+
+Ask the user in some manner for their PBDB user name (or email address) and password.
+
+=item 2.
+
+Send a POST request to the URL C<https://paleobiodb.org/login>, whose content includes the
+fields "login" (user name or email address) and "password". If these credentials are
+correct, the response will include a session cookie which can then be passed along with
+each subsequent API request. In fact, the user's web browser will in almost all cases
+automatically include the cookie with subsequent API requests.
+
+=item 3.
+
+When the application terminates, send a GET request to the URL
+https://paleobiodb.org/logout. That will safely end the login session.
+
+=back
+
+While you are developing your application, please use our development server
+C<dev.paleobiodb.org> instead of our main server for authentication and API calls. You
+can switch to the main server when your application is ready for actual use.
