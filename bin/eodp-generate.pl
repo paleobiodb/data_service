@@ -20,7 +20,7 @@ use feature 'say';
 
 
 my ($opt_quiet, $opt_verbose,  $opt_force, $opt_debug, $opt_help);
-my ($opt_config, $opt_filter, $opt_match, $opt_age, $opt_depth);
+my ($opt_config, $opt_filter, $opt_match, $opt_age, $opt_depth, $opt_datafile);
 
 GetOptions("quiet|q" => \$opt_quiet,
 	   "verbose|v" => \$opt_verbose,
@@ -28,11 +28,12 @@ GetOptions("quiet|q" => \$opt_quiet,
 	   "filter|F=s" => \$opt_filter,
 	   "matchdepth=f" => \$opt_match,
 	   "intage=f" => \$opt_age,
+	   "file=s" => \$opt_datafile,
 	   "force" => \$opt_force,
 	   "help|h" => \$opt_help,
 	   "debug|D" => \$opt_debug) or die;
 
-our ($mstr, $pbdb, $EXECUTE_MODE);
+our ($mstr, $pbdb, $EXECUTE_MODE, $ERRORS, $UPDATES);
 our ($MATCH_DIST_LIMIT) = 0.25;
 our ($INTP_AGE_LIMIT) = 2.0;
 our ($COLLECTIONS_TABLE) = 'offshore_collections';
@@ -193,9 +194,9 @@ elsif ( $ARGV[0] eq 'insert' && $ARGV[1] eq 'data' )
 
 elsif ( $ARGV[0] =~ /^check$|^update$/ && $ARGV[1] eq 'data' && $ARGV[2] )
 {
-    shift @ARGV;
-    shift @ARGV;
     $EXECUTE_MODE = 1 if $ARGV[0] eq 'update';
+    shift @ARGV;
+    shift @ARGV;
     UpdateData(@ARGV);
 }
 
@@ -1644,10 +1645,13 @@ sub UpdateData {
     my %selector = map { $_ => 1 } grep { $_ } @sections;
     
     my $updates = 0;
-    
-    say "Starting transaction...";
-    
-    $pbdb->begin_work or die $pbdb->errstr;
+
+    if ( $EXECUTE_MODE )
+    {
+	say "Starting transaction...";
+	
+	$pbdb->begin_work or die $pbdb->errstr;
+    }
     
     # Update the collections
     
@@ -1833,15 +1837,124 @@ SET o.comments = if(o.comments <> '', concat('sinistral; ', o.comments), 'sinist
 WHERE name rlike '\\bsinistral\\b'
 END_STMT
     }
+
+    if ( $selector{qmark} )
+    {
+	$updates++;
+	
+	if ( $opt_datafile )
+	{
+	    my @records = ReadDatafile($opt_datafile);
+	    my $line_no = 1;
+	    
+	    foreach my $r ( @records )
+	    {
+		$line_no++;
+		UpdateQmark($pbdb, $r, $line_no);
+	    }
+	}
+
+	if ( $ERRORS )
+	{
+	    print STDERR "Could not match $ERRORS rows\n";
+	}
+	
+	if ( $UPDATES )
+	{
+	    print STDERR "Performed $UPDATES updates\n";
+	}
+    }
     
     if ( $updates )
     {
-	$pbdb->commit;
+	$pbdb->commit if $EXECUTE_MODE;
     }
 
     else
     {
 	say "You did not specify a valid section to update";
+    }
+}
+
+
+sub UpdateQmark {
+
+    my ($dbh, $r, $line_no) = @_;
+    
+    # First make sure we have all of the necessary information.
+    
+    print STDERR "Missing occurrence_id on line $line_no\n" unless $r->{id};
+    print STDERR "Missing genus_name on line $line_no\n" unless $r->{genus_name};
+    print STDERR "Missing species_name on line $line_no\n" unless $r->{species_name};
+    
+    return unless $r->{id} && $r->{genus_name} && $r->{species_name};
+    
+    my $qid = $dbh->quote($r->{id});
+    
+    # Then make sure that we have exactly one matching record.
+    
+    my $sql = <<~END_SQL;
+	SELECT count(*), genus_reso, abund_value, abund_unit, comments
+	FROM $TABLE{OCCURRENCE_DATA} as o
+	WHERE o.upload = 'eODP' and o.upload_id = $qid
+	END_SQL
+    
+    my ($count, $genus_reso, $abund_value, $abund_unit, $comments) = $dbh->selectrow_array($sql);
+    
+    unless ( $count == 1 )
+    {
+	$ERRORS++;
+	# print STDERR $sql;
+	# print STDERR "Could not match $r->{id} ($count)\n";
+	return;
+    }
+    
+    if ( $EXECUTE_MODE )
+    {
+	unless ( $abund_value eq $r->{cleaned_code} )
+	{
+	    my $qvalue = $dbh->quote($r->{cleaned_code});
+	    my $qunit = $dbh->quote($r->{pbdb_unit});
+	    
+	    $sql = <<~END_SQL;
+		UPDATE $TABLE{OCCURRENCE_DATA} SET
+		    abund_value = $qvalue, abund_unit = $qunit
+		WHERE upload = 'eODP' and upload_id = $qid;
+		END_SQL
+	
+	    my $result = $dbh->do($sql);
+	    
+	    $UPDATES++;
+	}
+	
+	unless ( $genus_reso )
+	{
+	    $sql = <<~END_SQL;
+		UPDATE $TABLE{OCCURRENCE_DATA} SET
+		    genus_reso = '?'
+		WHERE upload = 'eODP' and upload_id = $qid;
+		END_SQL
+	    
+	    my $result = $dbh->do($sql);
+	    
+	    $UPDATES++;
+	}
+	
+	if ( index($comments, $r->{def}) < 0 )
+	{
+	    my $new = $comments ? "$comments; $r->{def}" : $r->{def};
+	    my $qnew = $dbh->quote($new);
+	    
+	    $sql = <<~END_SQL;
+		UPDATE $TABLE{OCCURRENCE_DATA} SET
+		    comments = $qnew
+		WHERE upload = 'eODP' and upload_id = $qid;
+		END_SQL
+	    
+	    my $result = $dbh->do($sql);
+	    
+	    $UPDATES++;
+	}
     }
 }
 
@@ -2106,4 +2219,90 @@ sub FormatCells {
     }
     
     return "$output\n";
+}
+
+
+sub ReadDatafile {
+
+    my ($filename) = @_;
+    
+    # Read the contents of the specified file.
+    
+    open(my $infile, '<', $filename) or die "Could not open $filename: $!\n";
+    
+    my @lines = <$infile>;
+    
+    close $infile;
+    
+    die "File $filename was empty\n" unless @lines;
+    
+    # Parse the header line to determine the format and field list.
+    
+    my $header = shift @lines;
+    
+    my ($format, $parser, @fields, @values, @records);
+    
+    my $commas = $header =~ tr/,//;
+    my $tabs = $header =~ tr/\t//;
+    
+    if ( $commas > $tabs )
+    {
+	$format = 'csv';
+	require "Text/CSV.pm";
+	$parser = Text::CSV->new;
+	
+	if ( $parser->parse($header) )
+	{
+	    @fields = $parser->fields;
+	}
+	
+	else
+	{
+	    $parser->error_diag;
+	    exit 2;
+	}
+    }
+    
+    else
+    {
+	$format = 'tsv';
+	chomp $header;
+	@fields = split /\t/, $header;
+    }
+    
+    # Parse the remainder of the lines to generate a list of records.
+    
+    while ( my $line = shift @lines )
+    {
+	if ( $format eq 'csv' )
+	{
+	    if ( $parser->parse($line) )
+	    {
+		@values = $parser->fields;
+	    }
+	    
+	    else
+	    {
+		$parser->error_diag;
+		exit 2;
+	    }
+	}
+	
+	else
+	{
+	    chomp $line;
+	    @values = split /\t/, $line;
+	}
+	
+	my $new_record = { };
+	
+	foreach my $i ( 0..$#fields )
+	{
+	    $new_record->{$fields[$i]} = $values[$i];
+	}
+	
+	push @records, $new_record;
+    }
+    
+    return @records;
 }
