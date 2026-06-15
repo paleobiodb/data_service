@@ -38,6 +38,7 @@ our ($MATCH_DIST_LIMIT) = 0.25;
 our ($INTP_AGE_LIMIT) = 2.0;
 our ($COLLECTIONS_TABLE) = 'offshore_collections';
 our ($OCCURRENCES_TABLE) = 'offshore_occs';
+our (%CROSSREF_CACHE);
 
 $MATCH_DIST_LIMIT = $opt_match if defined $opt_match;
 $INTP_AGE_LIMIT = $opt_age if defined $opt_age;
@@ -162,6 +163,14 @@ elsif ( $ARGV[0] =~ /^check$|^update$/ && $ARGV[1] eq 'genera' )
     shift @ARGV;
     $EXECUTE_MODE = 1 if $subcommand eq 'update';
     UpdateGeneraReport(@ARGV);
+}
+
+elsif ( $ARGV[0] =~ /^check$|^update$/ && $ARGV[1] eq 'refs' )
+{
+    my $subcommand = shift @ARGV;
+    shift @ARGV;
+    $EXECUTE_MODE = 1 if $subcommand eq 'update';
+    UpdateRefs(@ARGV);
 }
 
 # elsif ( $ARGV[0] eq 'constraints' )
@@ -1959,6 +1968,599 @@ sub UpdateQmark {
 }
 
 
+sub UpdateRefs {
+
+    # Incorporate the necessary libraries.
+
+    require ReferenceManagement;
+    require ReferenceMatch;
+    ReferenceMatch->import('split_authorlist');
+    # require DB_File;
+    # require Storable;
+    # Storable->import('freeze', 'thaw');
+    # require Encode;
+    # Encode->import('encode_utf8');
+    
+    # Retrieve all macrostrat column numbers from the PBDB that correspond to
+    # collections in the eODP upload.
+    
+    my (%pbdb_column, %pbdb_missing);
+    
+    my $result = $pbdb->selectcol_arrayref(<<~END_SQL);
+	SELECT distinct col_id FROM coll_units join collections using (collection_no)
+	WHERE upload = 'eODP'
+	END_SQL
+    
+    foreach my $col_id ( @$result )
+    {
+	$pbdb_column{$col_id} = 1;
+	$pbdb_missing{$col_id} = 1;
+    }
+    
+    # Read the specified data file, and extract one record per row. The file must be in
+    # CSV format, with a header row specifying column names.
+    
+    die "You must specify a data file with --file\n" unless $opt_datafile;
+    
+    my @records = ReadDatafile($opt_datafile, { remove_bom => 1, eol => "\r\r\n" });
+    
+    my $line_no = 1;
+    
+    my (%found_ref, $good_records);
+    my (%found_author, %found_pubyr, %found_reftitle, %found_pubtitle,
+	%found_volume, %found_pages, %found_pubcity, %found_publisher);
+    
+    # my $crossref_queries = 0;
+    
+    # # Create a ReferenceManagement object with which we can query the Crossref database,
+    # # and either create or connect to a cache file to store the results.
+    
+    # my $rm = ReferenceManagement->new($pbdb);
+    
+    # $rm->debug_mode(1) if $opt_debug;
+    
+    # tie %CROSSREF_CACHE, 'DB_File', 'crossref_cache.dbf';
+    
+    # All output we generate should be in UTF-8.
+    
+    binmode(STDOUT, ":utf8");
+    binmode(STDERR, ":utf8");
+    
+    # Iterate through the records (rows) read from the data file, skipping those which
+    # are empty. Also skip those that don't correspond to a PBDB column.
+    
+    foreach my $r ( @records )
+    {
+	$line_no++;
+	
+	# Skip empty records.
+	
+	next unless $r->{col_id};
+	
+	# Skip records where col_id is not in the PBDB.
+	
+	next unless $pbdb_column{$r->{col_id}};
+	delete $pbdb_missing{$r->{col_id}};
+	
+	# Make sure we have the necessary fields.
+	
+	die "Invalid reference on line $line_no\n"
+	    unless $r->{pub_year} && $r->{author} && $r->{ref} && $r->{doi};
+	
+	# Generate a new reference record for each distinct value in the 'ref' column.
+	
+	unless ( $found_ref{$r->{ref}} )
+	{
+	    # Parse the value of the 'ref' column.
+	    
+	    my ($reftitle, $pubtitle, $volume, $pages, $editor_list, $pubcity, $publisher) =
+		ParseRefText($r->{ref}, $line_no);
+	    
+	    my @editors;
+	    
+	    if ( $editor_list )
+	    {
+		@editors = split_authorlist($editor_list);
+	    }
+	    
+	    # Remove zero-width spaces from DOIs (why are these here in some entries?)
+	    # and dots at the end, and 'doi:' from the beginning.
+	    
+	    $r->{doi} =~ s/\x{200B}//g;
+	    $r->{doi} =~ s/[.]$//;
+	    $r->{doi} =~ s/^doi://;
+	    
+	    # If the URL contains the DOI, then it is redundant. Remove trailing dots
+	    # from URLs (why are these here in some entries?)
+	    
+	    if ( index($r->{url}, $r->{doi}) >= 0 )
+	    {
+		delete $r->{url};
+	    }
+	    
+	    else
+	    {
+		$r->{url} =~ s/[.]$//;
+	    }
+	    
+	    # Remove unnecessary cruft from the beginning and end of the author field.
+	    
+	    $r->{author} =~ s/[^a-z]+$//i;
+	    $r->{author} =~ s/^The\s+//;
+	    
+	    # # If we don't have a cached response, query Crossref using the DOI.
+	    
+	    # my @crossref;
+	    
+	    # if ( my $serialized = %CROSSREF_CACHE{$r->{doi}} )
+	    # {
+	    # 	@crossref = @{ thaw($serialized) };
+	    # }
+	    
+	    # if ( ! @crossref || $crossref[0]{status} =~ /^404/ )
+	    # {
+	    # 	@crossref = $rm->external_query('crossref', { doi => $r->{doi} });
+		
+	    # 	if ( my $abort = $crossref[0]{status} )
+	    # 	{
+	    # 	    if ( $abort =~ /^404/ )
+	    # 	    {
+	    # 		say STDERR "No results from Crossref for DOI $r->{doi}";
+	    # 	    }
+
+	    # 	    else
+	    # 	    {
+	    # 		say STDERR $r->{ref};
+	    # 		die "Got $abort response from Crossref for '$r->{doi}' at line $line_no\n";
+	    # 	    }
+	    # 	}
+		
+	    # 	$CROSSREF_CACHE{$r->{doi}} = freeze(\@crossref);
+	    # 	$crossref_queries++;
+	    # }
+	    
+	    # my ($reftitle_xref, $pubtitle_xref, $volume_xref, $pages_xref, $publisher_xref) =
+	    # 	ParseRefXref($crossref[0], $line_no);
+	    
+	    # # Substitute any values from Crossref that are longer (and thus more likely
+	    # # to be correct) than the corresponding values from the 'ref' column.
+	    
+	    # if ( $reftitle_xref && length($reftitle_xref) > length($reftitle) )
+	    # {
+	    # 	say STDERR "Substituted XREF reftitle";
+	    # 	$reftitle = $reftitle_xref;
+	    # }
+	    
+	    # if ( $pubtitle_xref && length($pubtitle_xref) > length($pubtitle) )
+	    # {
+	    # 	say STDERR "Substituted XREF pubtitle";
+	    # 	$pubtitle = $pubtitle_xref;
+	    # }
+
+	    # if ( $publisher_xref && length($publisher_xref) > length($publisher) )
+	    # {
+	    # 	say STDERR "Substituted XREF publisher";
+	    # 	$publisher = $publisher_xref;
+	    # }
+	    
+	    # if ( $volume && $volume_xref && $volume ne $volume_xref )
+	    # {
+	    # 	die "Inconsistent volume at line $line_no: '$volume' and '$volume_xref'\n";
+	    # }
+	    
+	    # elsif ( $volume_xref && ! $volume )
+	    # {
+	    # 	say STDERR "Substituted XREF volume";
+	    # 	$volume = $volume_xref;
+	    # }
+	    
+	    # if ( $pages && $pages_xref && $pages ne $pages_xref )
+	    # {
+	    # 	die "Inconsistent pages at line $line_no: '$pages' and '$pages_xref'\n";
+	    # }
+	    
+	    # elsif ( $pages_xref && ! $pages )
+	    # {
+	    # 	say STDERR "Substituted XREF pages";
+	    # 	$pages = $pages_xref;
+	    # }
+	    
+	    # If the authorlist contains names, substitute a generic string like most of
+	    # the references use.
+	    
+	    if ( $r->{author} =~ qr{ , \s \w [.] }xs )
+	    {
+		if ( $r->{ref} =~ qr{ ( Expedition \s \d+[a-z]? (?: / \d+[a-z]?)?
+					  \s Scientists ) }xsi )
+		{
+		    $r->{author} = $1;
+		}
+
+		else
+		{
+		    $r->{author} = 'Shipboard Scientific Party';
+		}
+	    }
+	    
+	    # Construct a record that will be used to import this reference into the PBDB.
+	    
+	    my $new_ref = { authors => [ "$r->{author} *" ],
+			    editors => \@editors,
+			    pubyr => $r->{pub_year},
+			    publication_type => 'book chapter',
+			    reftitle => $reftitle,
+			    pubtitle => $pubtitle,
+			    pubvol => $volume,
+			    pages => $pages,
+			    pubcity => $pubcity,
+			    publisher => $publisher,
+			    language => 'English',
+			    doi => $r->{doi},
+			    url => $r->{url},
+			    project_name => 'eODP',
+			  };
+	    
+	    delete $new_ref->{editors} unless @editors;
+	    delete $new_ref->{pages} unless $pages;
+	    delete $new_ref->{pubcity} unless $pubcity;
+	    delete $new_ref->{publisher} unless $publisher;
+	    delete $new_ref->{volume} unless $volume;
+	    delete $new_ref->{url} unless $r->{url};
+	    
+	    $found_ref{$r->{ref}} = $new_ref;
+
+	    if ( $opt_verbose )
+	    {
+		$reftitle ||= 'xxx';
+		$pubtitle ||= 'xxx';
+		$volume ||= 'xxx';
+		$pages ||= 'xxx';
+		$pubcity ||= 'xxx';
+		$publisher ||= 'xxx';
+	    
+		$found_author{$r->{author}} = 1;
+		$found_pubyr{$r->{pub_year}} = 1;
+		$found_reftitle{$reftitle} = 1;
+		$found_pubtitle{$pubtitle} = 1;
+		$found_volume{$volume} = 1;
+		$found_pages{$pages} = 1;
+		$found_pubcity{$pubcity} = 1;
+		$found_publisher{$publisher} = 1;
+		
+		no warnings 'uninitialized';
+		
+		say "Author:    $new_ref->{authors}[0]";
+		say "Pub year:  $new_ref->{pubyr}";
+		say "Pub type:  $new_ref->{publication_type}";
+		say "Title:     $new_ref->{reftitle}";
+		say "Pubtitle:  $new_ref->{pubtitle}";
+		say "Volume:    $new_ref->{pubvol}";
+		say "Editors:   " . join('; ', @editors);
+		say "Pub city:  $new_ref->{pubcity}";
+		say "Publisher: $new_ref->{publisher}";
+		say "Language:  $new_ref->{language}";
+		say "DOI:       $new_ref->{doi}";
+		say "URL:       $new_ref->{url}";
+		say "";
+	    }
+	}
+	
+	$good_records++;
+    }
+
+    if ( $opt_verbose )
+    {
+	no strict 'refs';
+	
+	foreach my $word ( qw(author pubyr reftitle pubtitle volume pages pubcity publisher) )
+	{
+	    say "Found $word:";
+	    
+	    my $hashref = eval "\\\%found_$word";
+	    
+	    foreach my $k ( sort keys %$hashref )
+	    {
+		say $k;
+	    }
+	    
+	    say "";
+	}
+    }
+    
+    my $ref_count = scalar(keys %found_ref);
+    
+    say STDERR "Generated $ref_count references from $good_records records";
+    # say STDERR "Made $crossref_queries queries to Crossref";
+    
+    if ( %pbdb_missing )
+    {
+	say STDERR "The following columns do not have a reference:";
+	foreach my $k ( sort { $a <=> $b } keys %pbdb_missing )
+	{
+	    say STDERR $k;
+	}
+    }
+    
+    else
+    {
+	say STDERR "All eODP columns in the PBDB are accounted for.";
+    }
+}
+
+
+sub ParseRefText {
+
+    my ($ref_text, $line_no) = @_;
+
+    my ($reftitle, $pubtitle, $volume, $pages, $editor_list, $pubcity, $publisher, $rest);
+    
+    # Take out quotes around the title, which shouldn't be there.
+    
+    if ( $ref_text =~ qr{ ^ “ (.*?) ” (.*) }xs )
+    {
+	$ref_text = "$1$2";
+    }
+    
+    # Turn various unicode dashes into hyphens
+    
+    $ref_text =~ tr/\N{U+2010}-\N{U+2014}/-/;
+    
+    # Take out a space after a hyphen.
+    
+    $ref_text =~ s/-\s/-/g;
+    
+    # Extract the title if possible.
+    
+    if ( $ref_text =~ qr{ ^ \s* (\S.+?\S) [.] }xs )
+    {
+	$reftitle = $1;
+    }
+    
+    else
+    {
+	say STDERR $ref_text;
+	die "Invalid title on line $line_no\n";
+    }
+    
+    # If the reference ends in a numeric range, assume it is the page range.
+    
+    if ( $ref_text =~ qr{ (\d+-\d+) [.]? $ }xs )
+    {
+	$pages = $1;
+    }
+    
+    # There are two patterns for these references, plus one special case.
+    
+    if ( $ref_text =~ qr{ [.] \s In \s
+			  (.+?) , \s and \s the \s Expedition \s 309/312 \s Scientists [.] \s
+			  ([^:]+)
+			  : \s (.*) $ }xs )
+    {
+	$editor_list = $1;
+	$pubtitle = $2;
+	$rest = $3;
+    }
+    
+    elsif ( $ref_text =~ qr{ [.] \s In \s
+			  (.+?) , \s 
+			  (?: and \s the \s [^,]+ |
+			      et \s al[.] ) , \s
+			  ([^:]+)
+			  (?: : \s (.*) )? $ }xs )
+    {
+	$editor_list = $1;
+	$pubtitle = $2;
+	$rest = $3;
+    }
+    
+    elsif ( $ref_text =~ qr{ [.] \s ( Init [^:]+ ) (?: : \s (.*) )? $ }xs )
+    {
+	$pubtitle = $1;
+	$rest = $2;
+    }
+    
+    else
+    {
+	say STDERR $ref_text;
+	die "Invalid data on line $line_no\n";
+    }
+    
+    # If the pubtitle ends in a number, it may be a volume (expedition) number.
+    
+    if ( $pubtitle =~ qr{ (.*) , \s ( \d+ [A-Z]? (?: / \d+ )? ) $ }xsi )
+    {
+	my $possible_title = $1;
+	my $final_number = $2;
+	
+	# Confirm by looking for 'Expedition nnn' or 'Leg nnn' in the reference text.
+	# The row with 'remediation operations' in the title is a special case. So are
+	# '372B/372' ad '303/306'.
+	
+	if ( $ref_text =~ qr{ remediation \s operations }xs )
+	{
+	    $pubtitle = $possible_title;
+	    $volume = $final_number;
+	}
+	
+	elsif ( $ref_text =~ qr{ 372B/375 }xs )
+	{
+	    $pubtitle = $possible_title;
+	    $volume = '372B/375';
+	}
+	
+	elsif ( $ref_text =~ qr{ (?: Expedition | Leg ) \s ( \d+ [A-Z]? (?: / \d+)? ) }xsi &&
+		$1 eq $final_number )
+	{
+	    $pubtitle = $possible_title;
+	    $volume = $final_number;
+	}
+	
+	elsif ( $ref_text =~ qr{ 303/306 \s Scientists }xs &&
+		($final_number eq '306' || $final_number eq '303') )
+	{
+	    $pubtitle = $possible_title;
+	    $volume = $final_number;
+	}
+	
+	# Otherwise, if the publication title ends in 'Init. Repts.', and the reference
+	# text ends in a page range, then the number at the end of the publication title
+	# is a volume number.
+	
+	elsif ( $possible_title =~ qr{ Init[.] \s Repts[.] $ }xs &&
+		$ref_text =~ qr{ \s ( \d+ - \d+ ) [.]? $ }xs )
+	{
+	    $pubtitle = $possible_title;
+	    $volume = $final_number;
+	    $pages = $1;
+	}
+	
+	else
+	{
+	    say STDERR $ref_text;
+	    say STDERR "Did not match possible title pattern";
+	    $pubtitle = $possible_title;
+	}
+    }
+    
+    elsif ( $pubtitle =~ qr{ (.*) , \s Expedition \s ( \d+ ) $ }xsi )
+    {
+	$pubtitle = $1;
+	$volume = $2;
+    }
+    
+    elsif ( $pubtitle =~ qr{ ^ ( Initial \s Reports .* Leg .* \s \d\d\d\d ) \s ( \d+ ) $ }xs )
+    {
+	$pubtitle = $1;
+    }
+    
+    elsif ( $pubtitle =~ qr{ ^ ( .* \s \d\d\d\d ) , \s (\d+) [.] $ }xs )
+    {
+	$pubtitle = $1;
+	$pages = $2;
+    }
+    
+    # Remove senseless cruft from the beginning of the publication title.
+    
+    if ( $pubtitle =~ qr{ ^ .*? [.] \s ( Proceedings .* ) }xs )
+    {
+	$pubtitle = $1;
+    }
+
+    elsif ( $pubtitle =~ qr{ ^ 2006 [.] \s ( Proc [.] .* ) }xs )
+    {
+	$pubtitle = $1;
+    }
+    
+    # If it ends in a number followed by a numeric range, then it has both.
+    
+    elsif ( $pubtitle =~ qr{ (.*) , \s ( \d+ [A-Z]? ) , \s ( \d+ - \d+ ) [.]? $ }xsi )
+    {
+	$pubtitle = $1;
+	$volume = $2;
+	$pages = $3;
+    }
+    
+    # Extract what information we can from the text after the colon (if any). Sometimes
+    # it contains a city of publication followed by the publisher name in parentheses.
+    # Sometimes it consists of a page number sometimes followed by a period.
+    
+    if ( $rest =~ qr{ ( [^(]+ ) \s [(] ( Int [^)]+ ) }xsi )
+    {
+	$pubcity = $1;
+	$publisher = $2;
+	
+	# Remove senseless cruft from the publication city, and fix a typo
+	
+	if ( $pubcity =~ qr{ ^ .* : \s (.*) }xs )
+	{
+	    $pubcity = $1;
+	}
+	
+	elsif ( $pubcity eq 'College Station TX' )
+	{
+	    $pubcity = 'College Station, TX';
+	}
+    }
+    
+    elsif ( $rest =~ qr{ ^ ( \d+ ) [.]? $ }xs && ! $pages )
+    {
+	$pages = $1;
+    }
+    
+    # Return the information we have gotten.
+    
+    return ($reftitle, $pubtitle, $volume, $pages, $editor_list, $pubcity, $publisher);
+}
+
+
+sub ParseRefXref {
+
+    my ($xrefdata, $line_no) = @_;
+    
+    my ($reftitle, $pubtitle, $volume, $publisher);
+    
+    if ( $xrefdata->{publisher} )
+    {
+	$publisher = ExtractLongest($xrefdata->{publisher}, $line_no);
+    }
+    
+    if ( $xrefdata->{title} )
+    {
+	$reftitle = ExtractLongest($xrefdata->{title}, $line_no);
+    }
+    
+    if ( $xrefdata->{'container-title'} )
+    {
+	$pubtitle = ExtractLongest($xrefdata->{'container-title'}, $line_no);
+	
+	if ( $pubtitle =~ qr{ ^ (.*) , \s (\d+) $ }xs )
+	{
+	    $pubtitle = $1;
+	    $volume = $2;
+	}
+	
+	elsif ( $pubtitle =~ qr{ ^ ( .* \s Leg \s (\d+) \s .* \d\d\d\d ) \s ( \d+ ) $ }xsi )
+	{
+	    if ( $2 eq $3 )
+	    {
+		$pubtitle = $1;
+		$volume = $3;
+	    }
+	}
+    }
+    
+    return ($reftitle, $pubtitle, $publisher);
+}
+
+
+sub ExtractLongest {
+
+    my ($arg, $line_no) = @_;
+
+    if ( ref $arg eq 'ARRAY' )
+    {
+	my $longest = $arg->[0];
+	
+	foreach my $n ( $arg->@* )
+	{
+	    $longest = $n if length($n) > length($longest);
+	}
+	
+	return $longest;
+    }
+    
+    elsif ( my $ref = ref $arg )
+    {
+	die "Invalid reference '$ref' at line $line_no\n";
+    }
+    
+    else
+    {
+	return $arg;
+    }
+}
+
+
 sub RemoveData {
     
     say "Removing eODP data from the PBDB...";
@@ -2224,7 +2826,9 @@ sub FormatCells {
 
 sub ReadDatafile {
 
-    my ($filename) = @_;
+    my ($filename, $options) = @_;
+    
+    $options ||= { };
     
     # Read the contents of the specified file.
     
@@ -2245,11 +2849,25 @@ sub ReadDatafile {
     my $commas = $header =~ tr/,//;
     my $tabs = $header =~ tr/\t//;
     
+    # while ( ord(substr($header, 0, 1)) > 127 )
+    # {
+    # 	substr($header, 0, 1) = '';
+    # }
+
+    if ( $options->{remove_bom} )
+    {
+	substr($header, 0, 3) = '';
+    }
+    
     if ( $commas > $tabs )
     {
 	$format = 'csv';
 	require "Text/CSV.pm";
-	$parser = Text::CSV->new;
+	
+	my $csv_options = { decode_utf8 => 1, binary => 1 };
+	$csv_options->{eol} = $options->{eol} if $options->{eol};
+	
+	$parser = Text::CSV->new($csv_options);
 	
 	if ( $parser->parse($header) )
 	{
@@ -2284,6 +2902,7 @@ sub ReadDatafile {
 	    else
 	    {
 		$parser->error_diag;
+		say $line;
 		exit 2;
 	    }
 	}

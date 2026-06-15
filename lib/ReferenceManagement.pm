@@ -718,7 +718,7 @@ sub generate_crossref_request {
     {
 	$progress->{try_doi} = 1;
 	
-	if ( my $doi = get_doi($attrs) )
+	if ( my ($doi) = get_doi($attrs) )
 	{
 	    $progress->{query_text} = "doi: $doi";
 	    

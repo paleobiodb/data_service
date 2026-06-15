@@ -489,7 +489,9 @@ sub ref_match {
 	
 	foreach my $mdoi ( @m_list )
 	{
-	    if ( $mdoi && $rdoi eq $mdoi )
+	    # Apparently, DOIs are supposed to be case insensitive. Who knew?
+	    
+	    if ( $mdoi && fc($rdoi) eq fc($mdoi) )
 	    {
 		return { complete_s => 500, complete_c => 0,
 			 sum_s => 500, sum_c => 0,
@@ -1634,13 +1636,15 @@ sub get_doi {
     
     my $doi = $r->{doi} || $r->{DOI};
     
+    my @results;
+    
     # If there is a field called 'doi' or 'DOI', and the value either starts
     # with "10." or contains a slash or colon followed by "10.", then we have a
     # good value.
     
     if ( $doi && $doi =~ $recognize_doi )
     {
-	return clean_doi($doi);
+	push @results, clean_doi($doi);
     }
     
     # If there is a field called 'URL' which contains a dx.doi.org URL, use
@@ -1648,33 +1652,39 @@ sub get_doi {
     
     elsif ( $r->{URL} && $r->{URL} =~ /dx.doi.org\/(10.*)/ )
     {
-	return clean_doi($1);
+	push @results, clean_doi($1);
     }
     
     # Otherwise, look for a field called 'identifier' that is an array.
     
     elsif ( ref $r->{identifier} && reftype $r->{identifier} eq 'ARRAY' )
     {
-	my @doi_list;
-	
 	foreach my $id ( $r->{identifier}->@* )
 	{
 	    if ( $id->{type} && lc $id->{type} eq 'doi' && $id->{id} &&
 		 $id->{id} =~ $recognize_doi )
 	    {
-		push @doi_list, clean_doi($id->{id});
+		push @results, clean_doi($id->{id});
 	    }
 	}
-	
-	return @doi_list;
     }
     
-    # Otherwise, no doi was found.
+    # If we have a field called 'aliases', look for DOIs in the value list.
     
-    else
+    if ( ref $r->{aliases} && reftype $r->{aliases} eq 'ARRAY' )
     {
-	return;
+	foreach my $alias ( $r->{aliases}->@* )
+	{
+	    if ( $alias =~ $recognize_doi )
+	    {
+		push @results, clean_doi($alias);
+	    }
+	}
     }
+    
+    # Return any DOIs that we found, or the empty list if none were found.
+    
+    return @results;
 }
 
 
