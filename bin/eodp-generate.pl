@@ -8,8 +8,9 @@ use utf8;
 use CoreFunction qw(loadConfig configData connectDB);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
-use Carp qw(carp croak);
+use Permissions;
 
+use Carp qw(carp croak);
 use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use YAML;
 use feature 'say';
@@ -20,13 +21,14 @@ use feature 'say';
 
 
 my ($opt_quiet, $opt_verbose,  $opt_force, $opt_debug, $opt_help);
-my ($opt_config, $opt_filter, $opt_match, $opt_age, $opt_depth, $opt_datafile);
+my ($opt_config, $opt_filter, $opt_match, $opt_age, $opt_depth, $opt_user, $opt_datafile);
 
 GetOptions("quiet|q" => \$opt_quiet,
 	   "verbose|v" => \$opt_verbose,
 	   "config|f" => \$opt_config,
 	   "filter|F=s" => \$opt_filter,
 	   "matchdepth=f" => \$opt_match,
+	   "authorizer|A=i" => \$opt_user,
 	   "intage=f" => \$opt_age,
 	   "file=s" => \$opt_datafile,
 	   "force" => \$opt_force,
@@ -34,6 +36,7 @@ GetOptions("quiet|q" => \$opt_quiet,
 	   "debug|D" => \$opt_debug) or die;
 
 our ($mstr, $pbdb, $EXECUTE_MODE, $ERRORS, $UPDATES);
+our ($session_id, $perms);
 our ($MATCH_DIST_LIMIT) = 0.25;
 our ($INTP_AGE_LIMIT) = 2.0;
 our ($COLLECTIONS_TABLE) = 'offshore_collections';
@@ -59,6 +62,21 @@ die "Could not connect to database: $DBI::errstr" unless $mstr && $pbdb;
 
 my $coll_table = configData('offshore-collections');
 $COLLECTIONS_TABLE = $coll_table if $coll_table;
+
+if ( $opt_user )
+{
+    die "Invalid user '$opt_user'\n" unless $opt_user =~ /^\d+$/;
+    
+    ($session_id) = DBRowQuery($pbdb, <<~END_SQL);
+	SELECT session_id FROM $TABLE{SESSION_DATA}
+	WHERE authorizer_no = '$opt_user' ORDER BY record_date desc LIMIT 1
+	END_SQL
+    
+    die "You must log in to the PBDB before running this command\n" unless $session_id;
+
+    $perms = Permissions->new($pbdb, $session_id) or
+	die "Could not establish permissions: $!\n";
+}
 
 # my ($occs) = DBRowQuery($mstr, "SELECT count(*) from offshore_occs");
 
@@ -1970,16 +1988,26 @@ sub UpdateQmark {
 
 sub UpdateRefs {
 
-    # Incorporate the necessary libraries.
-
-    require ReferenceManagement;
+    # Incorporate the necessary libraries. Call log_filename to make sure that we log
+    # the changes to the references table.
+    
     require ReferenceMatch;
     ReferenceMatch->import('split_authorlist');
+    
+    no warnings 'experimental';
+    
+    require ReferenceEdit;
+    ReferenceEdit->log_filename('./datalogs/datalog-DATE.sql');
+    
+    # Check that we have a Permissions object.
+
+    die "You must run this command with -A and be logged in to the PBDB\n"
+	unless $perms;
+    
+    # require ReferenceManagement;
     # require DB_File;
     # require Storable;
     # Storable->import('freeze', 'thaw');
-    # require Encode;
-    # Encode->import('encode_utf8');
     
     # Retrieve all macrostrat column numbers from the PBDB that correspond to
     # collections in the eODP upload.
@@ -2006,7 +2034,7 @@ sub UpdateRefs {
     
     my $line_no = 1;
     
-    my (%found_ref, $good_records);
+    my (%found_ref, $good_records, %column_by_doi, %reference_by_doi);
     my (%found_author, %found_pubyr, %found_reftitle, %found_pubtitle,
 	%found_volume, %found_pages, %found_pubcity, %found_publisher);
     
@@ -2042,6 +2070,19 @@ sub UpdateRefs {
 	next unless $pbdb_column{$r->{col_id}};
 	delete $pbdb_missing{$r->{col_id}};
 	
+	# Remove zero-width spaces from DOIs (why are these here in some entries?)
+	# and dots at the end, and 'doi:' from the beginning.
+	
+	$r->{doi} =~ s/\x{200B}//g;
+	$r->{doi} =~ s/[.]$//;
+	$r->{doi} =~ s/^doi://;
+	
+	# Record the column numbers corresponding to each DOI. We will use this
+	# information later to assign new reference numbers to collections.
+	
+	$column_by_doi{$r->{doi}} ||= [ ];
+	push $column_by_doi{$r->{doi}}->@*, $r->{col_id};
+	
 	# Make sure we have the necessary fields.
 	
 	die "Invalid reference on line $line_no\n"
@@ -2062,13 +2103,6 @@ sub UpdateRefs {
 	    {
 		@editors = split_authorlist($editor_list);
 	    }
-	    
-	    # Remove zero-width spaces from DOIs (why are these here in some entries?)
-	    # and dots at the end, and 'doi:' from the beginning.
-	    
-	    $r->{doi} =~ s/\x{200B}//g;
-	    $r->{doi} =~ s/[.]$//;
-	    $r->{doi} =~ s/^doi://;
 	    
 	    # If the URL contains the DOI, then it is redundant. Remove trailing dots
 	    # from URLs (why are these here in some entries?)
@@ -2196,7 +2230,6 @@ sub UpdateRefs {
 			    publisher => $publisher,
 			    language => 'English',
 			    doi => $r->{doi},
-			    url => $r->{url},
 			    project_name => 'eODP',
 			  };
 	    
@@ -2205,7 +2238,7 @@ sub UpdateRefs {
 	    delete $new_ref->{pubcity} unless $pubcity;
 	    delete $new_ref->{publisher} unless $publisher;
 	    delete $new_ref->{volume} unless $volume;
-	    delete $new_ref->{url} unless $r->{url};
+	    # delete $new_ref->{url} unless $r->{url};
 	    
 	    $found_ref{$r->{ref}} = $new_ref;
 
@@ -2234,13 +2267,12 @@ sub UpdateRefs {
 		say "Pub type:  $new_ref->{publication_type}";
 		say "Title:     $new_ref->{reftitle}";
 		say "Pubtitle:  $new_ref->{pubtitle}";
-		say "Volume:    $new_ref->{pubvol}";
 		say "Editors:   " . join('; ', @editors);
 		say "Pub city:  $new_ref->{pubcity}";
 		say "Publisher: $new_ref->{publisher}";
+		say "Pages:     $new_ref->{pages}" if $new_ref->{pages};
 		say "Language:  $new_ref->{language}";
 		say "DOI:       $new_ref->{doi}";
-		say "URL:       $new_ref->{url}";
 		say "";
 	    }
 	}
@@ -2284,6 +2316,155 @@ sub UpdateRefs {
     else
     {
 	say STDERR "All eODP columns in the PBDB are accounted for.";
+    }
+    
+    # If we are running in execute mode (subcommand was 'update') then get ready to add
+    # the new references. Sort the list by reftitle, so that they will appear in order
+    # (except for those which duplicate references that are already in the PBDB).
+
+    exit unless $EXECUTE_MODE;
+    
+    my ($new_refs, $dup_refs);
+    
+    my @new_refs = sort { $a->{reftitle} cmp $b->{reftitle} } values %found_ref;
+    
+    # Create an EditTransaction object, and use it to add the references. We need to
+    # call 'start_execution' first so that the insertions will be executed immediately
+    # instead of being queued for later execution.
+    
+    my $edt = ReferenceEdit->new($pbdb, { permission => $perms,
+					  table => 'REFERENCE_DATA',
+					  allows => 'IGNORE-DUPLICATE'} );
+    
+    $edt->debug_mode(1) if $opt_debug;
+    
+    $edt->start_execution;
+
+    # Copy the primary references into the secondary_refs table.
+    
+    my $sql = <<~END_SQL;
+	REPLACE INTO $TABLE{COLLECTION_REFS} (collection_no, reference_no)
+	SELECT collection_no, reference_no FROM $TABLE{COLLECTION_DATA}
+	WHERE upload = 'eODP'
+	END_SQL
+    
+    my $result = $edt->do_logged_stmt('replace', 'COLLECTION_REFS', $sql, "upload = 'eODP'");
+    
+    # Insert each of the references, and set the primary reference for all corresponding
+    # collections.
+    
+    foreach my $r ( @new_refs )
+    {
+	# Insert the new reference
+	
+	$edt->insert_record($r);
+	
+	# Determine the columns to update, and the reference number to add to the
+	# corresponding collections. If the action status is 'skipped', it means the new
+	# reference duplicates an existing one. In those cases, the action result will
+	# be a list of existing reference_no values. Use the first one, which will in
+	# fact be the only one.
+	
+	my $reference_no = $edt->action_keyval;
+	my $col_ids = join("','", $column_by_doi{$r->{doi}}->@*);
+	
+	if ( $edt->action_status eq 'skipped' )
+	{
+	    my $values = $edt->action_result;
+	    ($reference_no) = $values->@* if ref $values eq 'ARRAY';
+	    $dup_refs++;
+	}
+	
+	else
+	{
+	    $new_refs++;
+	}
+	
+	if ( $reference_no && $edt->can_proceed )
+	{
+	    $sql = <<~END_SQL;
+		UPDATE $TABLE{COLLECTION_DATA} as cc
+		    join $TABLE{COLLECTION_UNITS} as cu using (collection_no)
+		SET cc.reference_no = '$reference_no', cc.updater_no = '$opt_user',
+		    cc.updated = now(), cc.modified = cc.modified
+		WHERE cc.upload = 'eODP' and cu.col_id in ('$col_ids')
+		END_SQL
+	    
+	    $result = $edt->do_logged_stmt('update', 'COLLECTION_DATA', $sql,
+					   "upload = 'eODP' and col_id in ('$col_ids')");
+	}
+	
+	elsif ( ! $reference_no )
+	{
+	    say STDERR "No reference found for column(s) '$col_ids'";
+	}
+    }
+    
+    $DB::single = 1;
+    
+    # If no errors have occurred, execute some additional database operations to
+    # complete the procedure.
+
+    if ( $edt->can_proceed )
+    {
+	# Insert the new reference_no values into the secondary_refs table. Use REPLACE
+	# to make this operation idempotent.
+	
+	$sql = <<~END_SQL;
+	    REPLACE INTO $TABLE{COLLECTION_REFS} (collection_no, reference_no)
+	    SELECT collection_no, reference_no FROM $TABLE{COLLECTION_DATA}
+	    WHERE upload = 'eODP'
+	    END_SQL
+	
+	$result = $edt->do_logged_stmt('replace', 'COLLECTION_REFS', $sql,
+				       "upload = 'eODP'");
+	
+	# Copy the new collection references to the collection matrix, so they will
+	# immediately display properly. This statement is not logged, because it doesn't
+	# affect the core data tables.
+	
+	$edt->do_stmt(<<~END_SQL);
+	    UPDATE $TABLE{COLLECTION_DATA} as cc
+	        join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+	    SET c.reference_no = cc.reference_no
+	    WHERE cc.upload = 'eODP'
+	    END_SQL
+
+	# Copy the new collection references to all associated occurrences, and to
+	# the occurrence matrix as well.
+	
+	$sql = <<~END_SQL;
+	    UPDATE $TABLE{COLLECTION_DATA} as cc
+	        join $TABLE{OCCURRENCE_DATA} as oc using (collection_no)
+	        join $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+	    SET oc.reference_no = cc.reference_no, oc.updater_no = '$opt_user',
+	        oc.updated = now(), oc.modified = oc.modified,
+	        o.reference_no = cc.reference_no
+	    WHERE cc.upload = 'eODP' and o.reid_no = 0
+	    END_SQL
+	
+	$edt->do_logged_stmt('update', 'OCCURRENCE_DATA', $sql,
+			      "upload = 'eODP' and reid_no = 0");
+    }    
+    
+    # Commit the transaction. If it succeeds, let the user know. Print out any warnings
+    # which may have been generated.
+    
+    if ( $edt->commit )
+    {
+	say STDERR $_ foreach $edt->warnings;
+	say STDERR "Database update succeeded";
+	say STDERR "Inserted $new_refs new references" if $new_refs;
+	say STDERR "Found $dup_refs duplicate references" if $dup_refs;
+    }
+    
+    # If it fails, print out all generated errors and warnings.
+    
+    else
+    {
+	say STDERR $_ foreach $edt->warnings;
+	say STDERR $_ foreach $edt->errors;
+	die "Database update failed\n";
     }
 }
 
@@ -2458,6 +2639,19 @@ sub ParseRefText {
 	$pubtitle = $1;
 	$volume = $2;
 	$pages = $3;
+    }
+    
+    # Expand the acronym IODP and reattach the volume.
+    
+    if ( $pubtitle =~ /IODP/ )
+    {
+	$pubtitle = "Proceedings of the Integrated Ocean Drilling Program";
+    }
+    
+    if ( $volume )
+    {
+	$pubtitle = "$pubtitle, Volume $volume";
+	$volume = undef;
     }
     
     # Extract what information we can from the text after the colon (if any). Sometimes
