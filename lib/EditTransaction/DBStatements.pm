@@ -16,6 +16,8 @@ use Role::Tiny;
 
 use feature 'try';
 
+no warnings 'experimental';
+
 
 sub selectrow_array {
 
@@ -56,7 +58,35 @@ sub do_stmt {
     shift @_;
     
     try {
-	$edt->dbh->do(@_);
+	my $result = $edt->dbh->do(@_);
+	
+	$edt->debug_line("This statement affected $result rows\n\n")
+	    if $edt->debug_mode && defined $result && $result ne '';
+
+	return $result;
+    }
+    
+    catch ($e) {
+	croak($e);
+    }
+}
+
+
+sub do_logged_stmt {
+
+    my ($edt, $op, $table_specifier, $sql, $keyexpr, $rev) = @_;
+
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    try {
+	my $result = $edt->dbh->do($sql);
+	
+	$edt->debug_line("This statement affected $result rows\n\n")
+	    if $edt->debug_mode && defined $result && $result ne '';
+	
+	$edt->log_aux_event($op, $table_specifier, $sql, $keyexpr, $rev);
+	
+	return $result;
     }
     
     catch ($e) {

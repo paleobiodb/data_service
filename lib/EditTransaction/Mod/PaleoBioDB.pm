@@ -9,7 +9,7 @@ package EditTransaction::Mod::PaleoBioDB;
 
 use strict;
 
-use TableDefs qw(%TABLE set_table_property_name set_column_property_name);
+use TableDefs qw(%TABLE get_table_property set_table_property_name set_column_property_name);
 use PBDBFields qw(%COMMON_FIELD_SPECIAL %COMMON_FIELD_IDTYPE %FOREIGN_KEY_TABLE %FOREIGN_KEY_COL);
 use Permissions;
 use ExternalIdent qw(%IDP %IDRE);
@@ -1679,6 +1679,7 @@ sub log_event {
     my ($edt, $action, $op, $table_specifier, $sql, $keyval) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
+    return unless get_table_property($table_specifier, 'LOG_CHANGES');
     return if $edt->allows('NO_LOG_MODE');
     
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
@@ -1746,6 +1747,7 @@ sub before_log_event {
     my ($edt, $action, $op, $table_specifier) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
+    return unless get_table_property($table_specifier, 'LOG_CHANGES');
     return if $edt->allows('NO_LOG_MODE');
     
     if ( $op ne 'insert' )
@@ -1762,28 +1764,23 @@ sub before_log_event {
 
 sub log_aux_event {
     
-    my ($edt, $op, $table_specifier, $sql, $keycol, $keyval, $rev) = @_;
+    my ($edt, $op, $table_specifier, $sql, $keyexpr, $rev) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
+    return unless get_table_property($table_specifier, 'LOG_CHANGES');
     return if $edt->allows('NO_LOG_MODE');
     
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
     my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
-    $keyval //= '';
+    $keyexpr //= '';
     
     my $dbh = $edt->dbh;
     my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no : 0;
     my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no : 0;
-        
-    if ( $op eq 'insert' && ! defined $rev )
-    {
-	my $qkeyval = $dbh->quote($keyval);
-	$rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol = $qkeyval";
-    }
     
-    elsif ( ref $rev eq 'ARRAY' )
+    if ( ref $rev eq 'ARRAY' )
     {
 	my @fields = $edt->table_column_list($table_specifier);
 	my $fieldlist = join(',', @fields);
@@ -1813,10 +1810,10 @@ sub log_aux_event {
     
     $edt->{log_lines} .= "# ";
     $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $TABLE{$table_specifier}, 
-			      $keyval, $auth_no, $ent_no);
+			      $keyexpr, $auth_no, $ent_no);
     $edt->{log_lines} .= "\n";
     $edt->{log_lines} .= "# $rev\n" if $rev && ! ref $rev;
-    $edt->{log_lines} .= "$sql;\n";
+    $edt->{log_lines} .= "$sql\n";
     $edt->{log_date} = $datestr;
 }
 

@@ -1626,7 +1626,7 @@ sub before_log_event {
 
 sub log_aux_event {
     
-    my ($edt, $op, $table_specifier, $sql, $key_col, $key_value) = @_;
+    my ($edt, $op, $table_specifier, $sql, $key_expr) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
     return if $edt->allows('NO_LOG_MODE');
@@ -1635,12 +1635,12 @@ sub log_aux_event {
     my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
-    $key_value //= '?';
+    $key_expr //= '?';
     
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
     
-    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, $key_value) 
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, $key_expr) 
 	. "\n";
     my $line2 = "$sql;\n";
     
