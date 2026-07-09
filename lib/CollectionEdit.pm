@@ -72,12 +72,16 @@ my (%OCC_RESO, %OCC_RESO_RE);
     set_table_property('COLLECTION_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('COLLECTION_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('COLLECTION_DATA', CAN_DELETE => 'OWNER');
+    set_table_property('COLLECTION_DATA', LOG_CHANGES => 1);
     set_table_property('COLLECTION_DATA', REQUIRED_COLS =>
 		       ['access_level', 'release_date', 'collection_name', 'collection_type',
 			'reference_no', 'country', 'latdeg', 'lngdeg', 'latlng_basis',
 			'lithology1', 'environment', 'assembl_comps']);
     set_column_property('COLLECTION_DATA', 'collection_no', EXTID_TYPE => 'COL');
     set_column_property('COLLECTION_DATA', 'reference_no', EXTID_TYPE => 'REF');
+    
+    set_table_property('COLLECTION_REFS', LOG_CHANGES => 1 );
+    set_table_property('COLLECTION_UNITS', LOG_CHANGES => 1 );
     
     set_table_property('OCCURRENCE_DATA', REQUIRED_COLS => ['reference_no']);
     
@@ -1141,10 +1145,10 @@ sub after_coll_action {
 	    
 	    $dbh->do($sql);
 	    
-	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' )
+	    if ( $tableinfo->{LOG_CHANGES} )
 	    {
-		$edt->log_aux_event('delete', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
-				    $result);
+		$edt->log_aux_event('delete', 'COLLECTION_REFS', $sql,
+				    "collection_no = '$coll_id'", $result);
 	    }
 
 	    next;
@@ -1166,10 +1170,10 @@ sub after_coll_action {
 	    
 	    $dbh->do($sql);
 	    
-	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' )
+	    if ( $tableinfo->{LOG_CHANGES} )
 	    {
-		$edt->log_aux_event('insert', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
-				    $result);
+		$edt->log_aux_event('insert', 'COLLECTION_REFS', $sql,
+				    "collection_no = '$coll_id'", $result);
 	    }
 	}
 	
@@ -1215,10 +1219,10 @@ sub after_coll_action {
 		
 		$dbh->do($sql);
 		
-		if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
+		if ( $tableinfo->{LOG_CHANGES} )
 		{
-		    $edt->log_aux_event('delete', 'COLLECTION_REFS', $sql, 'collection_no', $coll_id,
-					$result);
+		    $edt->log_aux_event('delete', 'COLLECTION_REFS', $sql,
+					"collection_no = '$coll_id'", $result);
 		}
 	    }
 	}

@@ -45,7 +45,7 @@ our (@CARP_NOT) = qw(EditTransaction);
        E_NAME_WIDTH => "&1 &2 exceeds column width of 100",
        E_CANNOT_DELETE => "This reference is used by other records in the database");
     
-    ReferenceEdit->register_allowances('DUPLICATE', 'CAPITAL');
+    ReferenceEdit->register_allowances('DUPLICATE', 'IGNORE-DUPLICATE', 'CAPITAL');
     
     set_table_name(REFERENCE_DATA => 'refs');
     set_table_name(REFERENCE_AUTHORS => 'ref_authors');
@@ -81,6 +81,10 @@ our (@CARP_NOT) = qw(EditTransaction);
 sub validate_action {
     
     my ($edt, $action, $operation, $table) = @_;
+    
+    # Ignore operations on tables other than REFERENCE_DATA.
+    
+    return unless $table eq 'REFERENCE_DATA';
     
     # If the operation is 'delete', we check to see if any other records use
     # this reference. If so, it cannot be deleted. If there is no bar to
@@ -460,8 +464,7 @@ sub validate_action {
     }
     
     # If the operation is 'insert' and this transaction does not allow
-    # duplicates, check to see if the new record duplicates an existing one. If
-    # so, throw a caution.
+    # duplicates, check to see if the new record duplicates an existing one.
     
     if ( $operation eq 'insert' && $action->can_proceed && ! $edt->allows('DUPLICATE') )
     {
@@ -471,9 +474,25 @@ sub validate_action {
 	
 	if ( @duplicate_nos )
 	{
-	    my $dup_string = join(',', map { generate_identifier('REF', $_) } @duplicate_nos);
+	    # If this transaction allows ignoring duplicates, then abort this action and
+	    # set the action result to the duplicate list.
 	    
-	    $edt->add_condition($action, 'C_DUPLICATE', $dup_string);
+	    if ( $edt->allows('IGNORE-DUPLICATE') )
+	    {
+		$action->set_result(\@duplicate_nos);
+		$edt->abort_action();
+	    }
+	    
+	    # Otherwise, add a C_DUPLICATE caution to the transaction. The caution
+	    # message will contain external identifiers, because it is intended to be
+	    # sent back to the client whose request initiated this transaction.
+	    
+	    else
+	    {
+		my $dup_string = join(',', map { generate_identifier('REF', $_) } @duplicate_nos);
+		$edt->add_condition($action, 'C_DUPLICATE', $dup_string);
+	    }
+	    
 	    return;
 	}
     }
@@ -484,6 +503,10 @@ sub validate_action {
 sub after_action {
     
     my ($edt, $action, $operation, $table_specifier) = @_;
+    
+    # Ignore actions on tables other than REFERENCE_DATA.
+    
+    return unless $table_specifier eq 'REFERENCE_DATA';
     
     my $keyval = $action->keyval;
     my $keyexpr = $action->keyexpr;
@@ -509,8 +532,8 @@ sub after_action {
 	
 	    if ( ref $result eq 'ARRAY' && @$result )
 	    {
-		$edt->log_aux_event('delete', 'REFERENCE_AUTHORS', $sql, 'reference_no', $keyval, 
-				    $result);
+		$edt->log_aux_event('delete', 'REFERENCE_AUTHORS', $sql,
+				    "reference_no = '$keyval'", $result);
 	    }
 	}
     }
@@ -531,8 +554,8 @@ sub after_action {
 	
 	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
 	    {
-		$edt->log_aux_event('delete', 'REFERENCE_EDITORS', $sql, 'reference_no', $keyval, 
-				    $result);
+		$edt->log_aux_event('delete', 'REFERENCE_EDITORS', $sql,
+				    "reference_no = '$keyval'", $result);
 	    }
 	}
     }
@@ -564,7 +587,8 @@ sub after_action {
 	    
 	    if ( $tableinfo->{LOG_CHANGES} )
 	    {
-		$edt->log_aux_event('insert', 'REFERENCE_AUTHORS', $sql, 'reference_no', $keyval);
+		$edt->log_aux_event('insert', 'REFERENCE_AUTHORS', $sql,
+				    "reference_no = '$keyval'");
 	    }
 	}
 	
@@ -591,7 +615,8 @@ sub after_action {
 	    
 	    if ( $tableinfo->{LOG_CHANGES} )
 	    {
-		$edt->log_aux_event('insert', 'REFERENCE_EDITORS', $sql, 'reference_no', $keyval);
+		$edt->log_aux_event('insert', 'REFERENCE_EDITORS', $sql,
+				    "reference_no = '$keyval'");
 	    }
 	}
     }
@@ -614,6 +639,7 @@ sub able_to_delete {
     my $idstring = join(',', @quoted);
     
     return () if $edt->ref_has_dependency($dbh, $TABLE{COLLECTION_DATA}, $idstring);
+    return () if $edt->ref_has_dependency($dbh, $TABLE{COLLECTION_REFS}, $idstring);
     return () if $edt->ref_has_dependency($dbh, $TABLE{OCCURRENCE_DATA}, $idstring);
     return () if $edt->ref_has_dependency($dbh, $TABLE{SPECIMEN_DATA}, $idstring);
     return () if $edt->ref_has_dependency($dbh, $TABLE{AUTHORITY_DATA}, $idstring);
@@ -671,9 +697,9 @@ sub my_duplicate_check {
     {
 	my $quoted = $dbh->quote($attrs->{doi});
 	
-	my $sql = "SELECT * FROM refs WHERE doi=$quoted";
+	my $sql = "SELECT reference_no FROM refs WHERE doi=$quoted";
 	
-	@matches = $edt->my_sql_query($dbh, $sql);
+	@matches = grep { $_ } map { $_->{reference_no} } $edt->my_sql_query($dbh, $sql);
     }
     
     # If we haven't found any matches at this point, we can stop.
@@ -759,7 +785,7 @@ sub my_sql_query {
     
     my ($edt, $dbh, $sql) = @_;
     
-    $edt->debug_line($sql) if $edt->debug_mode;
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
     
     my $result = $dbh->selectall_arrayref($sql, { Slice => { } });
     

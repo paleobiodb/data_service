@@ -76,6 +76,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
     
     set_table_name(COLLECTION_REFS => 'secondary_refs');
+    set_table_property('COLLECTION_REFS', LOG_CHANGES => 1);
     
     set_table_name(COLLECTION_LOC => 'coll_loc');
     set_table_name(COLLECTION_INTS => 'coll_ints');
@@ -89,7 +90,9 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(STRAT_CONCEPTS => 'strat_concepts');
     set_table_name(STRAT_OPINIONS => 'strat_opinions');
     set_table_name(STRAT_MS_NAMES => 'strat_ms_names');
+    
     set_table_name(COLLECTION_UNITS => 'coll_units');
+    set_table_property('COLLECTION_UNITS', LOG_CHANGES => 1);
     
     set_table_group('collection_data' => 'COLLECTION_DATA', 'COLLECTION_MATRIX',
 		    'COLLECTION_LOC', 'COLLECTION_INTS', 'COLLECTION_STRATA',
@@ -142,6 +145,9 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('REFERENCE_DATA', CAN_DELETE => 'OWNER');
     set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle');
     set_table_property('REFERENCE_DATA', LOG_CHANGES => 1);
+    
+    set_table_property('REFERENCE_AUTHORS', LOG_CHANGES => 1);
+    set_table_property('REFERENCE_EDITORS', LOG_CHANGES => 1);
     
     set_table_name(INTERVAL_DATA => 'interval_data');
     set_table_name(CLASSIC_INTERVALS => 'intervals');
