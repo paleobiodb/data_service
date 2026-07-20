@@ -1,9 +1,8 @@
 #!/usr/bin/env perl
 # 
-# gplates_update.pl
+# paleocoords.pl
 # 
-# Update paleocoordinates in the paleobiology database using the GPlates
-# service.
+# Update paleocoordinates in the paleobiology database using a remote service.
 
 use strict;
 

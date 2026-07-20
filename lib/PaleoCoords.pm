@@ -4,8 +4,8 @@
 #   PaleoCoords.pm
 # 
 # This module is responsible for updating the paleocoordinates of collections
-# in the Paleobiology Database, by querying the PaleoCoords service at
-# caltech.edu.
+# in the Paleobiology Database, by querying the PaleoCoordinate service specified
+# by the entry 'paleocoord_point_uri' in the file 'config.yml'.
 # 
 # Author: Michael McClennen
 # 
@@ -261,7 +261,7 @@ sub updateNew {
     
     $count = $self->doSQL($sql);
     
-    logMessage(2, "    updating pcoords for $count collections with modified locations")
+    logMessage(2, "    updating pcoords for $count $word with modified locations")
 	if $count && $count > 0;
     
     # Mark for update any rows in PCOORD_STATIC corresponding to collections
@@ -292,7 +292,7 @@ sub updateNew {
     
     $count = $self->doSQL($sql);
     
-    logMessage(2, "    updating pcoords for $count collections with modified ages")
+    logMessage(2, "    updating pcoords for $count $word with modified ages")
 	if $count && $count > 0;
     
     # If the option 'all' was specified, check all entries to see if any need to
@@ -367,7 +367,7 @@ sub updateNew {
 	
 	$result = $self->doSQL($sql);
 	
-	logMessage(2, "    cleared paleocoords from $count collections with invalid locations");
+	logMessage(2, "    cleared paleocoords from $count $word with invalid locations");
     }
     
     # For every entry in PCOORD_STATIC marked for update, mark all of the
