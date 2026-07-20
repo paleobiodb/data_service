@@ -102,6 +102,11 @@ if ( $ARGV[0] eq 'update' )
 	$CMD = 'update-existing';
     }
     
+    elsif ( $ARGV[1] eq 'columns' )
+    {
+	$CMD = 'update-columns';
+    }
+    
     elsif ( $ARGV[1] eq 'new' || ! $ARGV[1] )
     {
 	$CMD = 'update-new';
@@ -254,6 +259,10 @@ sub DoTask {
     
     $DB::single = 1;
     
+    # Set up an interrupt handler for the Quit signal.
+    
+    $SIG{INT} = sub { $MacrostratMatch::QUIT_NOW = 1 };
+    
     # Execute the specified command.
     
     if ( $CMD eq 'update-new' )
@@ -264,6 +273,11 @@ sub DoTask {
     elsif ( $CMD eq 'update-existing' )
     {
 	$msmatch->updateExisting($options);
+    }
+    
+    elsif ( $CMD eq 'update-columns' )
+    {
+	$msmatch->updateColumns($options);
     }
     
     elsif ( $CMD eq 'cancel-existing' )

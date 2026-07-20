@@ -94,6 +94,8 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(COLLECTION_UNITS => 'coll_units');
     set_table_property('COLLECTION_UNITS', LOG_CHANGES => 1);
     
+    set_table_name(COLLECTION_UNITS_STATIC => 'coll_units_static');
+    
     set_table_group('collection_data' => 'COLLECTION_DATA', 'COLLECTION_MATRIX',
 		    'COLLECTION_LOC', 'COLLECTION_INTS', 'COLLECTION_STRATA',
 		    'STRATA_NAMES', 'STRAT_RAW', 'STRAT_NAMES', 'STRAT_CONCEPTS',

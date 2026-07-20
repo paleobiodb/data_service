@@ -38,6 +38,7 @@ our ($DEFAULT_FAIL_LIMIT) = 3;
 our ($DEFAULT_BAD_RESPONSE_LIMIT) = 5;
 our ($DEFAULT_MAX_ENTRIES) = 500;
 
+our ($QUIT_NOW);
 
 # CLASS CONSTRUCTOR
 # -----------------
@@ -245,6 +246,68 @@ sub updateExisting {
 }
 
 
+# updateColumns ( options )
+#
+# Do a one-off step to add columns with empty units for any collection that doesn't have
+# a more specific Macrostrat match.
+
+sub updateColumns {
+
+    my ($self, $options) = @_;
+    
+    # Check if there is already a process doing this step. If so, print a message and
+    # exit.
+
+    my $dbh = $self->{dbh};
+
+    my ($lock) = $dbh->selectrow_array("SELECT GET_LOCK('msmatch existing', 1)");
+    
+    unless ( $lock )
+    {
+	logMessage(1, "Another process is already updating existing Macrostrat matches");
+	exit;
+    }
+        
+    # Start by loading the relevant configuration settings from the
+    # paleobiology database configuration file.
+    
+    $self->getConfig();
+    
+    # Generate a filter expression according to the specified options. If no
+    # filtering options were given, the filter expression will be "1". The
+    # remaining returned values provide a text description of which records will
+    # be updated.
+    
+    my ($filter, $desc, @rest) = $self->generateFilter($options);
+    
+    if ( $options->{resume} )
+    {
+	logMessage(1, "Resuming interrupted execution");
+    }
+
+    else
+    {
+	logMessage(1, "Adding columns to existing collections $desc");
+	logMessage(1, $_) foreach @rest;
+	
+	my $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC} as cs
+		    join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+		    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+		SET cs.update_existing = true
+		WHERE $filter and not(cs.known_match)";
+	
+	my $count = $self->doSQL($sql);
+	
+	logMessage(2, "    flagged $count existing records to update");
+    }
+    
+    # Now update all of the records that have been flagged, including
+    # any flags that were already set when this subroutine was called.
+    
+    $self->updateFlaggedColumns($filter, $options);
+}
+
+
 # updateFlagged ( selector, filter, options )
 # 
 # Update all column/unit match records that have been flagged. The first parameter
@@ -267,11 +330,6 @@ sub updateFlagged {
     
     my $flag_column = $selector eq 'new' ? 'update_new' : 'update_existing';
     
-    # Prepare the SQL statements that will be used to update entries in the
-    # table, and generate a user agent object with which to make requests.
-    
-    # $self->prepareStatements($options);
-    
     my $ua = LWP::UserAgent->new();
     $ua->agent("Paleobiology Database Updater/0.2");
     
@@ -293,13 +351,15 @@ sub updateFlagged {
     
     # Fetch the basic information about the records that need updating, in chunks.
     
-    my $CHUNK_SIZE = 10000;
+    my $CHUNK_SIZE = $update_total >= 30000 ? 10000 : 1000;
     my $REQUEST_SIZE = 50;
     
     my @request_records;
     my $colls_found = 0;
     my $last_found = 0;
     my $colls_matched = 0;
+
+    die "Quitting...\n" if $QUIT_NOW;
     
     $DB::single = 1;
     
@@ -331,12 +391,9 @@ sub updateFlagged {
 	
 	my $updates = $dbh->selectall_arrayref($sql, { Slice => {} });
 	
-	# Stop if we have nothing to update.
-	
-	last CHUNK unless ref $updates eq 'ARRAY' && $updates->@*;
-	
 	my %points;
 	my %matched;
+	my %column_cache;
 	
 	# Group the results by bin_id, because records in the same bin are almost
 	# certainly in the same Macrostrat column. Further group them by space/time
@@ -389,10 +446,24 @@ sub updateFlagged {
 	  POINT:
 	    foreach my $point_key ( keys $points{$bin_id}->%* )
 	    {
+		last CHUNK if $QUIT_NOW;
+		
 		my ($lat, $lng, $max_interval, $min_interval, $b_age, $t_age, $max_age, $min_age,
 		    $strat_name, $bad_coordinates) = split /[|]/, $point_key;
 		
 		$colls_found += scalar($points{$bin_id}{$point_key}->@*);
+		
+		unless ( exists $column_cache{$lat}{$lng} )
+		{
+		    $column_cache{$lat}{$lng} = $self->lookupContainingColumn($ua, $lat, $lng);
+		    
+		    if ( $self->{fail_count} >= $self->{fail_limit} )
+		    {
+			logMessage(1, "ABORTING due to service error count: $self->{fail_count}");
+			print STDERR "Aborting due to service error count: $self->{fail_count}\n";
+			last CHUNK;
+		    }
+		}
 		
 		next POINT unless $strat_name;
 		
@@ -443,7 +514,8 @@ sub updateFlagged {
 		    
 		    if ( $response )
 		    {
-			$self->processResponse($response, $points{$bin_id}, \%matched);
+			$self->processMatchResponse($response, $points{$bin_id},
+						    \%matched, \%column_cache);
 		    }
 		    
 		    if ( $self->{fail_count} >= $self->{fail_limit} )
@@ -472,7 +544,8 @@ sub updateFlagged {
 		
 		if ( $response )
 		{
-		    $self->processResponse($response, $points{$bin_id}, \%matched);
+		    $self->processMatchResponse($response, $points{$bin_id},
+						\%matched, \%column_cache);
 		}
 		
 		if ( $self->{fail_count} >= $self->{fail_limit} )
@@ -493,7 +566,7 @@ sub updateFlagged {
 	    # Now mark all of the collections that didn't get matched as 'invalid' but
 	    # updated.
 	    
-	    my @unmatched;
+	    my (@unmatched_null, %unmatched_col);
 	    
 	    foreach my $point_key ( $points{$bin_id}->%* )
 	    {
@@ -506,23 +579,49 @@ sub updateFlagged {
 		    
 		    else
 		    {
-			push @unmatched, $points{$bin_id}{$point_key}->@*;
+			my ($lat, $lng) = split /[|]/, $point_key;
+			
+			my $containing_col = exists $column_cache{$lat}{$lng} ?
+			    $column_cache{$lat}{$lng} : undef;
+			
+			if ( $containing_col )
+			{
+			    $unmatched_col{$containing_col} ||= [ ];
+			    push $unmatched_col{$containing_col}->@*,
+				$points{$bin_id}{$point_key}->@*;
+			}
+			
+			else
+			{
+			    push @unmatched_null, $points{$bin_id}{$point_key}->@*;
+			}
 		    }
 		}
 	    }
 	    
-	    if ( @unmatched )
+	    if ( @unmatched_null )
 	    {
-		my $unmatched_list = join "','", @unmatched;
+		my $unmatched_list = join "','", @unmatched_null;
 		
-		my $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC}
-		SET invalid = true, update_new = false, update_existing = false,
-		    updated = now()
-		WHERE collection_no in ('$unmatched_list')";
+		my $result = $self->doSQL(<<~END_SQL);
+		    UPDATE $TABLE{COLLECTION_UNITS_STATIC}
+		    SET update_new = false, update_existing = false, containing_col = NULL,
+		        updated = now()
+		    WHERE collection_no in ('$unmatched_list');
+		    END_SQL
+	    }
+
+	    foreach my $col ( keys %unmatched_col )
+	    {
+		my $unmatched_list = join "','", $unmatched_col{$col}->@*;
+		my $qcol = $dbh->quote($col);
 		
-		print STDERR "$sql\n\n" if $self->{debug};
-		
-		my $result = $dbh->do($sql);
+		my $result = $self->doSQL(<<~END_SQL);
+		    UPDATE $TABLE{COLLECTION_UNITS_STATIC}
+		    SET update_new = false, update_existing = false, containing_col = $qcol,
+		        updated = now()
+		    WHERE collection_no in ('$unmatched_list');
+		    END_SQL
 	    }
 	    
 	    my $a = 1;	# we can stop here while debugging
@@ -541,10 +640,166 @@ sub updateFlagged {
 	logMessage(2, "    processed $colls_found collections (matched $colls_matched) " .
 		   "out of $update_total");
     }
+
+    die "Quitting...\n" if $QUIT_NOW;
     
     my $time = localtime;
     
     logMessage(2, "    finished at $time");
+}
+
+
+# updateFlaggedColumns ( filter, options )
+
+sub updateFlaggedColumns {
+
+    my ($self, $filter, $options) = @_;
+
+    my $dbh = $self->{dbh};
+    
+    my $column_uri = $self->{column_uri};
+    
+    my $opt_verbose = $options->{verbose};
+    
+    # Generate a user agent object with which to make requests.
+    
+    my $ua = LWP::UserAgent->new();
+    $ua->agent("Paleobiology Database Updater/0.2");
+    
+    # Count the number of records to be updated.
+    
+    my $sql = "SELECT count(*) FROM $TABLE{COLLECTION_UNITS_STATIC} as cs
+		    join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+		    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+		WHERE cs.update_existing and not(cs.known_match) and $filter";
+    
+    print STDERR "> $sql\n\n" if $self->{debug};
+    
+    my ($update_total) = $dbh->selectrow_array($sql);
+    
+    logMessage(2, "    updating $update_total column entries...");
+    
+    # Fetch the basic information about the records that need updating, in chunks.
+    
+    my $CHUNK_SIZE = $update_total >= 30000 ? 10000 : 1000;
+    
+    my $colls_found = 0;
+    my $last_found = 0;
+    my $colls_matched = 0;
+    
+    die "Quitting...\n" if $QUIT_NOW;
+    
+    $DB::single = 1;
+    
+  CHUNK:
+    while ($update_total)
+    {
+	# Fetch up to 10,000 collections that need to be updated.
+	
+	$sql = "SELECT cs.collection_no, c.lat, c.lng
+		FROM $TABLE{COLLECTION_UNITS_STATIC} as cs
+		    join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+		    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+		WHERE cs.update_existing and not(cs.known_match) and $filter
+		    and cc.latlng_basis <> 'based on political unit'
+		ORDER By c.bin_id_2
+		LIMIT $CHUNK_SIZE";
+	
+	print STDERR "> $sql\n\n" if $self->{debug};
+	
+	my $updates = $dbh->selectall_arrayref($sql, { Slice => {} });
+	
+	my %points;
+	
+	# Group the results by bin_id, because records in the same bin are almost
+	# certainly in the same Macrostrat column. Further group them by space/time
+	# coordinates, since there will often be multiple collections with the same
+	# lat/lng/intervals. For each distinct coordinate key, collect a list of
+	# collection_no values.
+	
+	if ( ref $updates eq 'ARRAY' && @$updates )
+	{    
+	    foreach my $record ( @$updates )
+	    {
+		if ( ! $record->{bad_coordinates} )
+		{
+		    my $point_key = "$record->{lat}|$record->{lng}";
+		    
+		    $points{$point_key} ||= [ ];
+		    
+		    push $points{$point_key}->@*, $record->{collection_no};
+		}
+	    }
+	}
+	
+	else
+	{
+	    last CHUNK;
+	}
+	
+      POINT:
+	foreach my $point_key ( keys %points )
+	{
+	    my ($lat, $lng) = split /[|]/, $point_key;
+	    
+	    $colls_found += scalar($points{$point_key}->@*);
+	    
+	    my $response = $self->makeColumnRequest($ua, $lat, $lng);
+	    
+	    if ( $response )
+	    {
+		my $matched = $self->processColumnResponse($response, $points{$point_key});
+		
+		if ( $matched )
+		{
+		    $colls_matched += scalar($points{$point_key}->@*);
+		}
+		
+		my $colls = join "','", $points{$point_key}->@*;
+		
+		$self->doSQL(<<~END_SQL);
+			UPDATE $TABLE{COLLECTION_UNITS_STATIC}
+			SET update_existing = false
+			WHERE collection_no in ('$colls')
+			END_SQL
+	    }
+	    
+	    if ( $self->{fail_count} >= $self->{fail_limit} )
+	    {
+		logMessage(1, "ABORTING due to service error count: $self->{fail_count}");
+		print STDERR "Aborting due to service error count: $self->{fail_count}\n";
+		last CHUNK;
+	    }
+	    
+	    if ( $self->{bad_count} >= $self->{bad_limit} )
+	    {
+		logMessage(1, "ABORTING due to database error count: $self->{bad_count}");
+		print STDERR "Aborting due to database error count: $self->{bad_count}\n";
+		last CHUNK;
+	    }
+	    
+	    last CHUNK if $QUIT_NOW;
+	}
+	
+	logMessage(2, "    processed $colls_found collections (matched $colls_matched) " .
+		   "out of $update_total");
+	
+	$last_found = $colls_found;
+	
+	last CHUNK if $colls_found == $update_total || $QUIT_NOW;
+    }
+    
+    if ( $colls_found > $last_found )
+    {
+	logMessage(2, "    processed $colls_found collections (matched $colls_matched) " .
+		   "out of $update_total");
+    }
+    
+    die "Quitting...\n" if $QUIT_NOW;
+    
+    my $time = localtime;
+    
+    logMessage(2, "    finished at $time");    
 }
 
 
@@ -561,13 +816,201 @@ sub makeMatchRequest {
     my $body = encode_json($record_list);
     my $pretty_body = JSON->new->pretty->utf8->encode($record_list);
     
-    # Generate a match request.  The actual request is wrapped inside a
-    # while loop so that we can retry it if something goes wrong.
-    
     print STDERR "POST $uri\n" if $self->{debug};
     print STDERR "$pretty_body\n" if $self->{debug};
     
     my $request = HTTP::Request->new(POST => $uri, undef, $body);
+    
+    return $self->makeRequest($ua, $request);
+}
+
+
+# processMatchResponse ( response_data, point_hash )
+#
+# Process a response received back from the match API service.
+
+sub processMatchResponse {
+
+    my ($self, $response, $point_hash, $matched_hash, $column_cache) = @_;
+    
+    if ( ref $response->{results} eq 'ARRAY' && $response->{results}->@* )
+    {
+	my $dbh = $self->{dbh};
+	my ($sql, $result);
+	
+      RECORD:
+	foreach my $record ( $response->{results}->@* )
+	{
+	    my $point_key = $record->{id};
+	    
+	    unless ( $point_key )
+	    {
+		logMessage(2, "    ERROR: identifier was not returned");
+		next RECORD;
+	    }
+	    
+	    unless ( $point_hash->{$point_key} )
+	    {
+		logMessage(2, "    ERROR: could not match key '$point_key'");
+		next RECORD;
+	    }
+	    
+	    my @collections = $point_hash->{$point_key}->@*;
+	    my $coll_list = join "','", @collections;
+	    my @matches = $record->{unit_matches}->@*;
+	    my @messages = $record->{messages}->@*;
+	    
+	    foreach my $m ( @messages )
+	    {
+		next if $m->{message} eq 'Multiple columns';
+		
+		my $msg = $m->{details} || $m->{message};
+		
+		if ( $m->{type} eq 'warning' )
+		{
+		    logMessage(2, "    WARNING: $msg for collection(s) '$coll_list'");
+		}
+		
+		else
+		{
+		    logMessage(2, "    ERROR: $msg for collection(s) '$coll_list'");
+		}
+	    }
+	    
+	    $sql = "DELETE FROM $TABLE{COLLECTION_UNITS}
+		    WHERE collection_no in ('$coll_list')";
+
+	    $result = $self->doSQL($sql);
+	    
+	    if ( @matches > 1 )
+	    {
+		@matches = $self->filterMatches($point_key, @matches);
+	    }
+	    
+	    my $insertions = '';
+	    
+	    foreach my $collection_no ( @collections )
+	    {
+		$self->{update_count}++;
+		
+		foreach my $match ( @matches )
+		{
+		    my $unit_id = $dbh->quote($match->{unit_id} || '0');
+		    my $col_id = $dbh->quote($match->{col_id} || '0');
+		    my $spatial_basis = $dbh->quote($match->{spatial_basis});
+		    my $concept_id = $dbh->quote($match->{concept_id} || '0');
+		    my $concept_name = $dbh->quote($match->{concept_name});
+		    my $strat_name_id = $dbh->quote($match->{strat_name_id});
+		    my $strat_name = $dbh->quote($match->{strat_name});
+		    my $strat_rank = $dbh->quote($match->{strat_rank});
+		    my $strat_parent_id = $dbh->quote($match->{parent_id});
+		    my $name_basis = $dbh->quote($match->{name_basis});
+		    my $t_age = $dbh->quote($match->{t_age});
+		    my $b_age = $dbh->quote($match->{b_age});
+		    
+		    $insertions .= ',' if $insertions;
+		    $insertions .= "($collection_no, $unit_id, $col_id, $spatial_basis, $concept_id, $concept_name, $strat_name_id, $strat_name, $strat_rank, $strat_parent_id, $name_basis, $t_age, $b_age)\n";
+		}
+	    }
+	    
+	    if ( $insertions )
+	    {
+		$sql = "INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, unit_id, col_id, spatial_basis, concept_id, concept_name, strat_name_id, strat_name, strat_rank, strat_parent_id, name_basis, t_age, b_age) VALUES\n$insertions";
+
+		$result = $self->doSQL($sql);
+	    }
+
+	    my $matched_list = join "','", @collections;
+	    
+	    my ($lat, $lng) = split /[|]/, $point_key;
+	    
+	    my $containing_col = exists $column_cache->{$lat}{$lng} ?
+		$column_cache->{$lat}{$lng} : undef;
+	    
+	    my $qcol = $dbh->quote($containing_col);
+	    
+	    $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC}
+		SET update_new = false, update_existing = false, containing_col = $qcol,
+		    updated = now()
+		WHERE collection_no in ('$matched_list')";
+	    
+	    $result = $self->doSQL($sql);
+	    
+	    $matched_hash->{$point_key} = 1;
+	}
+    }
+    
+    else
+    {
+	logMessage(2, "    ERROR: no results from API call");
+    }
+}
+
+
+sub filterMatches {
+
+    my ($self, $point_key, @matches) = @_;
+    
+    # For now, we automatically accept the first match. Reject all subsequent matches
+    # with the same combination of unit_id, col_id, concept_id.
+
+    my @filtered;
+    my %unique_key;
+
+    foreach my $r ( @matches )
+    {
+	my $unit_id = $r->{unit_id} || '0';
+	my $col_id = $r->{col_id} || '0';
+	my $concept_id = $r->{concept_id} || '0';
+	my $key = "$unit_id|$col_id|$concept_id";
+	
+	unless ( $unique_key{$key} )
+	{
+	    $unique_key{$key} = 1;
+	    push @filtered, $r;
+	}
+    }
+    
+    return @filtered;
+}
+
+
+# lookupContainingColumn ( user_agent, lat, lng )
+#
+# Make a column API request, to determine which Macrostrat column covers the specified
+# lat/lng point.
+
+sub lookupContainingColumn {
+
+    my ($self, $ua, $lat, $lng) = @_;
+    
+    my $uri = $self->{column_uri} . "?lat=$lat&lng=$lng";
+    
+    # Generate a column request.  The actual request is wrapped inside a
+    # while loop so that we can retry it if something goes wrong.
+    
+    print STDERR "GET $uri\n" if $self->{debug};
+    
+    my $request = HTTP::Request->new(GET => $uri);
+    
+    my $response = $self->makeRequest($ua, $request);
+    
+    if ( $response && ref $response->{success}{data} eq 'ARRAY' &&
+	 $response->{success}{data}->@* )
+    {
+	return $response->{success}{data}[0]{col_id};
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+sub makeRequest {
+
+    my ($self, $ua, $request) = @_;
     
     my ($response, $content_ref, $data);
     my $retry_count = $self->{retry_limit};
@@ -576,11 +1019,6 @@ sub makeMatchRequest {
  RETRY:
     while ( $retry_count )
     {
-	# $DB::single = 1;
-	
-	my $start = time;
-	my $time1;
-	
 	$response = $ua->request($request);
 	$content_ref = $response->content_ref;
 	
@@ -665,153 +1103,6 @@ sub makeMatchRequest {
     print STDERR "ABORTING REQUEST\n";
     $self->{fail_count}++;
     return;
-}
-
-
-# processResponse ( response_data, point_hash )
-#
-# Process a response received back from the match API service.
-
-sub processResponse {
-
-    my ($self, $response, $point_hash, $matched_hash) = @_;
-    
-    if ( ref $response->{results} eq 'ARRAY' && $response->{results}->@* )
-    {
-	my $dbh = $self->{dbh};
-	my ($sql, $result);
-	
-      RECORD:
-	foreach my $record ( $response->{results}->@* )
-	{
-	    my $point_key = $record->{id};
-	    
-	    unless ( $point_key )
-	    {
-		logMessage(2, "    ERROR: identifier was not returned");
-		next RECORD;
-	    }
-	    
-	    unless ( $point_hash->{$point_key} )
-	    {
-		logMessage(2, "    ERROR: could not match key '$point_key'");
-		next RECORD;
-	    }
-	    
-	    my @collections = $point_hash->{$point_key}->@*;
-	    my $coll_list = join "','", @collections;
-	    my @matches = $record->{unit_matches}->@*;
-	    my @messages = $record->{messages}->@*;
-	    
-	    foreach my $m ( @messages )
-	    {
-		next if $m->{message} eq 'Multiple columns';
-		
-		my $msg = $m->{details} || $m->{message};
-		
-		if ( $m->{type} eq 'warning' )
-		{
-		    logMessage(2, "    WARNING: $msg for collection(s) '$coll_list'");
-		}
-		
-		else
-		{
-		    logMessage(2, "    ERROR: $msg for collection(s) '$coll_list'");
-		}
-	    }
-	    
-	    $sql = "DELETE FROM $TABLE{COLLECTION_UNITS}
-		    WHERE collection_no in ('$coll_list')";
-	    
-	    print STDERR "$sql\n\n" if $self->{debug};
-	    
-	    $result = $dbh->do($sql);
-	    
-	    if ( @matches > 1 )
-	    {
-		@matches = $self->filterMatches($point_key, @matches);
-	    }
-	    
-	    my $insertions = '';
-	    
-	    foreach my $collection_no ( @collections )
-	    {
-		$self->{update_count}++;
-		
-		foreach my $match ( @matches )
-		{
-		    my $unit_id = $dbh->quote($match->{unit_id} || '0');
-		    my $col_id = $dbh->quote($match->{col_id} || '0');
-		    my $concept_id = $dbh->quote($match->{concept_id} || '0');
-		    my $concept_name = $dbh->quote($match->{concept_name});
-		    my $strat_name_id = $dbh->quote($match->{strat_name_id});
-		    my $strat_name = $dbh->quote($match->{strat_name});
-		    my $strat_rank = $dbh->quote($match->{strat_rank});
-		    my $strat_parent_id = $dbh->quote($match->{parent_id});
-		    my $t_age = $dbh->quote($match->{t_age});
-		    my $b_age = $dbh->quote($match->{b_age});
-		    
-		    $insertions .= ',' if $insertions;
-		    $insertions .= "($collection_no, $unit_id, $col_id, $concept_id, $concept_name, $strat_name_id, $strat_name, $strat_rank, $strat_parent_id, $t_age, $b_age)\n";
-		}
-	    }
-	    
-	    if ( $insertions )
-	    {
-		$sql = "INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, unit_id, col_id, concept_id, concept_name, strat_name_id, strat_name, strat_rank, strat_parent_id, t_age, b_age) VALUES\n$insertions";
-		
-		print STDERR "$sql\n\n" if $self->{debug};
-		
-		$result = $dbh->do($sql);
-	    }
-
-	    my $matched_list = join "','", @collections;
-
-	    $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC}
-		SET invalid = false, update_new = false, update_existing = false,
-		    updated = now()
-		WHERE collection_no in ('$matched_list')";
-	    
-	    print STDERR "$sql\n\n" if $self->{debug};
-	    
-	    $result = $dbh->do($sql);
-	    
-	    $matched_hash->{$point_key} = 1;
-	}
-    }
-    
-    else
-    {
-	logMessage(2, "    ERROR: no results from API call");
-    }
-}
-
-
-sub filterMatches {
-
-    my ($self, $point_key, @matches) = @_;
-    
-    # For now, we automatically accept the first match. Reject all subsequent matches
-    # with the same combination of unit_id, col_id, concept_id.
-
-    my @filtered;
-    my %unique_key;
-
-    foreach my $r ( @matches )
-    {
-	my $unit_id = $r->{unit_id} || '0';
-	my $col_id = $r->{col_id} || '0';
-	my $concept_id = $r->{concept_id} || '0';
-	my $key = "$unit_id|$col_id|$concept_id";
-	
-	unless ( $unique_key{$key} )
-	{
-	    $unique_key{$key} = 1;
-	    push @filtered, $r;
-	}
-    }
-    
-    return @filtered;
 }
 
 
@@ -988,6 +1279,9 @@ sub getConfig {
     $self->{service_uri} = configData('macrostrat_unit_match_uri') ||
 	croak "You must specify 'macrostrat_unit_match_uri' in config.yml";
     
+    $self->{column_uri} = configData('macrostrat_col_match_uri') ||
+	croak "You must specify 'macrostrat_col_match_uri' in config.yml";
+    
     $self->{update_count} = 0;
     $self->{fail_count} = 0;
     $self->{bad_count} = 0;
@@ -999,50 +1293,6 @@ sub getConfig {
     $self->{retry_interval} = configData('macrostrat_match_retry_interval') || $DEFAULT_RETRY_INTERVAL;
     
     $self->{max_points} = configData('macrostrat_match_limit') || $DEFAULT_MAX_ENTRIES;
-}
-
-
-# prepareStatements ( options )
-# 
-# Prepare the SQL statements that will be used to store paleocoordinate data
-# into the database.
-
-sub prepareStatements {
-    
-    my ($self, $options) = @_;
-    
-    my $dbh = $self->{dbh};
-    
-    my $sql = "DELETE FROM $TABLE{COLLECTION_UNITS} WHERE collection_no = ?";
-    
-    print STDERR "PREPARED> $sql\n\n" if $self->{debug};
-    
-    $self->{delete_matches_sth} = $dbh->prepare($sql);
-    
-    $sql = "INSERT IGNORE INTO $TABLE{COLLECTION_UNITS} (collection_no, unit_id, col_id, certainty)
-	    VALUES (?, ?, ?, ?)";
-    
-    print STDERR "PREPARED> $sql\n\n" if $self->{debug};
-    
-    $self->{insert_match_sth} = $dbh->prepare($sql);
-    
-    $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC}
-	    SET update_new = false, updated = now()
-	    WHERE collection_no = ?";
-    
-    print STDERR "PREPARED> $sql\n\n" if $self->{debug};
-    
-    $self->{updated_new_sth} = $dbh->prepare($sql);
-    
-    $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC}
-	    SET update_existing = false, updated = now()
-	    WHERE collection_no = ?";
-    
-    print STDERR "PREPARED> $sql\n\n" if $self->{debug};
-    
-    $self->{updated_existing_sth} = $dbh->prepare($sql);
-    
-    return;
 }
 
 
@@ -1069,6 +1319,8 @@ sub doSQL {
 	$msg =~ s/ at \S+ line \d.*//s;
 	$msg .= " at $filename line $line.";
 	
+	print STDERR "$sql\n\n" unless $self->{debug};
+	
 	die "$msg\n";
     }
     
@@ -1078,3 +1330,4 @@ sub doSQL {
 }
 
 
+1;
