@@ -1,12 +1,12 @@
 # 
 # The Paleobiology Database
 # 
-#   MacrostratMatch.pm
+# MacrostratMatch.pm
 # 
 # This module is responsible for generating and updating matches between collections in
-# The Paleobiology Database and units/columns in Macrostrat. It does this by querying
-# the matching service specified by the entry 'macrostrat_unit_match_uri' in the file
-# 'config.yml'.
+# The Paleobiology Database and units/strata/columns in Macrostrat. It does this by
+# querying the matching services specified by the entry 'macrostrat_unit_match_uri' and
+# 'macrostrat_col_match_uri' in the file 'config.yml'.
 # 
 # Author: Michael McClennen
 # 
@@ -15,11 +15,7 @@ package MacrostratMatch;
 
 use strict;
 
-use base 'Exporter';
-
 no warnings 'experimental';
-
-our (@EXPORT_OK) = qw(updateMacrostratMatch ensureTables);
 
 use Carp qw(carp croak);
 use JSON;
@@ -38,7 +34,7 @@ our ($DEFAULT_FAIL_LIMIT) = 3;
 our ($DEFAULT_BAD_RESPONSE_LIMIT) = 5;
 our ($DEFAULT_MAX_ENTRIES) = 500;
 
-our ($QUIT_NOW);
+our ($QUIT_NOW, $EXECUTE_MODE);
 
 # CLASS CONSTRUCTOR
 # -----------------
@@ -84,7 +80,7 @@ sub cancelUpdate {
 	croak "Invalid value '$selector' for first argument";
     }
     
-    logMessage(1, "Canceling update of existing entries $desc");
+    logMessage(1, "Canceling update of $selector entries $desc");
     logMessage(1, $_) foreach @rest;
     
     my $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC} as cs
@@ -115,8 +111,8 @@ sub updateNew {
     # exit.
 
     my $dbh = $self->{dbh};
-
-    my ($lock) = $dbh->selectrow_array("SELECT GET_LOCK('msmatch new', 1)");
+    
+    my ($lock) = $dbh->selectrow_array("SELECT GET_LOCK('msmatch new', 0)");
     
     unless ( $lock )
     {
@@ -197,8 +193,8 @@ sub updateExisting {
     # exit.
 
     my $dbh = $self->{dbh};
-
-    my ($lock) = $dbh->selectrow_array("SELECT GET_LOCK('msmatch existing', 1)");
+    
+    my ($lock) = $dbh->selectrow_array("SELECT get_lock('msmatch existing', 0)");
     
     unless ( $lock )
     {
@@ -232,7 +228,7 @@ sub updateExisting {
 		    join $TABLE{COLLECTION_DATA} as cc using (collection_no)
 		    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 		SET cs.update_existing = true
-		WHERE $filter";
+		WHERE not(cs.known_match) and $filter";
 	
 	my $count = $self->doSQL($sql);
 	
@@ -243,68 +239,6 @@ sub updateExisting {
     # any flags that were already set when this subroutine was called.
     
     $self->updateFlagged('existing', $filter, $options);
-}
-
-
-# updateColumns ( options )
-#
-# Do a one-off step to add columns with empty units for any collection that doesn't have
-# a more specific Macrostrat match.
-
-sub updateColumns {
-
-    my ($self, $options) = @_;
-    
-    # Check if there is already a process doing this step. If so, print a message and
-    # exit.
-
-    my $dbh = $self->{dbh};
-
-    my ($lock) = $dbh->selectrow_array("SELECT GET_LOCK('msmatch existing', 1)");
-    
-    unless ( $lock )
-    {
-	logMessage(1, "Another process is already updating existing Macrostrat matches");
-	exit;
-    }
-        
-    # Start by loading the relevant configuration settings from the
-    # paleobiology database configuration file.
-    
-    $self->getConfig();
-    
-    # Generate a filter expression according to the specified options. If no
-    # filtering options were given, the filter expression will be "1". The
-    # remaining returned values provide a text description of which records will
-    # be updated.
-    
-    my ($filter, $desc, @rest) = $self->generateFilter($options);
-    
-    if ( $options->{resume} )
-    {
-	logMessage(1, "Resuming interrupted execution");
-    }
-
-    else
-    {
-	logMessage(1, "Adding columns to existing collections $desc");
-	logMessage(1, $_) foreach @rest;
-	
-	my $sql = "UPDATE $TABLE{COLLECTION_UNITS_STATIC} as cs
-		    join $TABLE{COLLECTION_DATA} as cc using (collection_no)
-		    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
-		SET cs.update_existing = true
-		WHERE $filter and not(cs.known_match)";
-	
-	my $count = $self->doSQL($sql);
-	
-	logMessage(2, "    flagged $count existing records to update");
-    }
-    
-    # Now update all of the records that have been flagged, including
-    # any flags that were already set when this subroutine was called.
-    
-    $self->updateFlaggedColumns($filter, $options);
 }
 
 
@@ -366,6 +300,8 @@ sub updateFlagged {
   CHUNK:
     while ($update_total)
     {
+	$SIG{INT} = undef;
+	
 	# Fetch up to 10,000 collections that need to be updated.
 	
 	$sql = "SELECT cs.collection_no, c.lat, c.lng, c.bin_id_2 as bin_id,
@@ -394,6 +330,8 @@ sub updateFlagged {
 	my %points;
 	my %matched;
 	my %column_cache;
+	
+	$SIG{INT} = \&handleInterrupt;
 	
 	# Group the results by bin_id, because records in the same bin are almost
 	# certainly in the same Macrostrat column. Further group them by space/time
@@ -649,160 +587,6 @@ sub updateFlagged {
 }
 
 
-# updateFlaggedColumns ( filter, options )
-
-sub updateFlaggedColumns {
-
-    my ($self, $filter, $options) = @_;
-
-    my $dbh = $self->{dbh};
-    
-    my $column_uri = $self->{column_uri};
-    
-    my $opt_verbose = $options->{verbose};
-    
-    # Generate a user agent object with which to make requests.
-    
-    my $ua = LWP::UserAgent->new();
-    $ua->agent("Paleobiology Database Updater/0.2");
-    
-    # Count the number of records to be updated.
-    
-    my $sql = "SELECT count(*) FROM $TABLE{COLLECTION_UNITS_STATIC} as cs
-		    join $TABLE{COLLECTION_DATA} as cc using (collection_no)
-		    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
-		WHERE cs.update_existing and not(cs.known_match) and $filter";
-    
-    print STDERR "> $sql\n\n" if $self->{debug};
-    
-    my ($update_total) = $dbh->selectrow_array($sql);
-    
-    logMessage(2, "    updating $update_total column entries...");
-    
-    # Fetch the basic information about the records that need updating, in chunks.
-    
-    my $CHUNK_SIZE = $update_total >= 30000 ? 10000 : 1000;
-    
-    my $colls_found = 0;
-    my $last_found = 0;
-    my $colls_matched = 0;
-    
-    die "Quitting...\n" if $QUIT_NOW;
-    
-    $DB::single = 1;
-    
-  CHUNK:
-    while ($update_total)
-    {
-	# Fetch up to 10,000 collections that need to be updated.
-	
-	$sql = "SELECT cs.collection_no, c.lat, c.lng
-		FROM $TABLE{COLLECTION_UNITS_STATIC} as cs
-		    join $TABLE{COLLECTION_DATA} as cc using (collection_no)
-		    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
-		WHERE cs.update_existing and not(cs.known_match) and $filter
-		    and cc.latlng_basis <> 'based on political unit'
-		ORDER By c.bin_id_2
-		LIMIT $CHUNK_SIZE";
-	
-	print STDERR "> $sql\n\n" if $self->{debug};
-	
-	my $updates = $dbh->selectall_arrayref($sql, { Slice => {} });
-	
-	my %points;
-	
-	# Group the results by bin_id, because records in the same bin are almost
-	# certainly in the same Macrostrat column. Further group them by space/time
-	# coordinates, since there will often be multiple collections with the same
-	# lat/lng/intervals. For each distinct coordinate key, collect a list of
-	# collection_no values.
-	
-	if ( ref $updates eq 'ARRAY' && @$updates )
-	{    
-	    foreach my $record ( @$updates )
-	    {
-		if ( ! $record->{bad_coordinates} )
-		{
-		    my $point_key = "$record->{lat}|$record->{lng}";
-		    
-		    $points{$point_key} ||= [ ];
-		    
-		    push $points{$point_key}->@*, $record->{collection_no};
-		}
-	    }
-	}
-	
-	else
-	{
-	    last CHUNK;
-	}
-	
-      POINT:
-	foreach my $point_key ( keys %points )
-	{
-	    my ($lat, $lng) = split /[|]/, $point_key;
-	    
-	    $colls_found += scalar($points{$point_key}->@*);
-	    
-	    my $response = $self->makeColumnRequest($ua, $lat, $lng);
-	    
-	    if ( $response )
-	    {
-		my $matched = $self->processColumnResponse($response, $points{$point_key});
-		
-		if ( $matched )
-		{
-		    $colls_matched += scalar($points{$point_key}->@*);
-		}
-		
-		my $colls = join "','", $points{$point_key}->@*;
-		
-		$self->doSQL(<<~END_SQL);
-			UPDATE $TABLE{COLLECTION_UNITS_STATIC}
-			SET update_existing = false
-			WHERE collection_no in ('$colls')
-			END_SQL
-	    }
-	    
-	    if ( $self->{fail_count} >= $self->{fail_limit} )
-	    {
-		logMessage(1, "ABORTING due to service error count: $self->{fail_count}");
-		print STDERR "Aborting due to service error count: $self->{fail_count}\n";
-		last CHUNK;
-	    }
-	    
-	    if ( $self->{bad_count} >= $self->{bad_limit} )
-	    {
-		logMessage(1, "ABORTING due to database error count: $self->{bad_count}");
-		print STDERR "Aborting due to database error count: $self->{bad_count}\n";
-		last CHUNK;
-	    }
-	    
-	    last CHUNK if $QUIT_NOW;
-	}
-	
-	logMessage(2, "    processed $colls_found collections (matched $colls_matched) " .
-		   "out of $update_total");
-	
-	$last_found = $colls_found;
-	
-	last CHUNK if $colls_found == $update_total || $QUIT_NOW;
-    }
-    
-    if ( $colls_found > $last_found )
-    {
-	logMessage(2, "    processed $colls_found collections (matched $colls_matched) " .
-		   "out of $update_total");
-    }
-    
-    die "Quitting...\n" if $QUIT_NOW;
-    
-    my $time = localtime;
-    
-    logMessage(2, "    finished at $time");    
-}
-
-
 # makeMatchRequest ( user_agent, record_list )
 #
 # Make a match API request whose body is the specified list of records. 
@@ -823,6 +607,14 @@ sub makeMatchRequest {
     
     return $self->makeRequest($ua, $request);
 }
+
+
+# enumerated values
+
+our (%SPATIAL_BASIS) = ('containing column' => 1, 'adjacent column' => 1, 'other' => 1);
+our (%NAME_BASIS) = ('exact' => 1, 'concept' => 1, 'rank-up', => 1, 'rank-down' => 1,
+		     'synonym' => 1, 'other' => 1);
+our (%AGE_BASIS) = ('containing interval' => 1, 'adjacent interval' => 1, 'other' => 1);
 
 
 # processMatchResponse ( response_data, point_hash )
@@ -881,8 +673,13 @@ sub processMatchResponse {
 		    WHERE collection_no in ('$coll_list')";
 
 	    $result = $self->doSQL($sql);
+
+	    if ( @matches == 1 )
+	    {
+		$matches[0]{certainty} = 1;
+	    }
 	    
-	    if ( @matches > 1 )
+	    elsif ( @matches > 1 )
 	    {
 		@matches = $self->filterMatches($point_key, @matches);
 	    }
@@ -895,6 +692,21 @@ sub processMatchResponse {
 		
 		foreach my $match ( @matches )
 		{
+		    if ( $match->{spatial_basis} && !$SPATIAL_BASIS{$match->{spatial_basis}} )
+		    {
+			$match->{spatial_basis} = 'other';
+		    }
+		    
+		    if ( $match->{name_basis} && !$NAME_BASIS{$match->{name_basis}} )
+		    {
+			$match->{name_basis} = 'other';
+		    }
+		    
+		    if ( $match->{age_basis} && !$AGE_BASIS{$match->{age_basis}} )
+		    {
+			$match->{age_basis} = 'other';
+		    }
+		    
 		    my $unit_id = $dbh->quote($match->{unit_id} || '0');
 		    my $col_id = $dbh->quote($match->{col_id} || '0');
 		    my $spatial_basis = $dbh->quote($match->{spatial_basis});
@@ -907,16 +719,18 @@ sub processMatchResponse {
 		    my $name_basis = $dbh->quote($match->{name_basis});
 		    my $t_age = $dbh->quote($match->{t_age});
 		    my $b_age = $dbh->quote($match->{b_age});
+		    my $age_basis = $dbh->quote($match->{age_basis});
+		    my $certainty = $dbh->quote($match->{certainty});
 		    
 		    $insertions .= ',' if $insertions;
-		    $insertions .= "($collection_no, $unit_id, $col_id, $spatial_basis, $concept_id, $concept_name, $strat_name_id, $strat_name, $strat_rank, $strat_parent_id, $name_basis, $t_age, $b_age)\n";
+		    $insertions .= "($collection_no, $unit_id, $col_id, $spatial_basis, $concept_id, $concept_name, $strat_name_id, $strat_name, $strat_rank, $strat_parent_id, $name_basis, $t_age, $b_age, $age_basis, $certainty)\n";
 		}
 	    }
 	    
 	    if ( $insertions )
 	    {
-		$sql = "INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, unit_id, col_id, spatial_basis, concept_id, concept_name, strat_name_id, strat_name, strat_rank, strat_parent_id, name_basis, t_age, b_age) VALUES\n$insertions";
-
+		$sql = "INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, unit_id, col_id, spatial_basis, concept_id, concept_name, strat_name_id, strat_name, strat_rank, strat_parent_id, name_basis, t_age, b_age, age_basis, certainty) VALUES\n$insertions";
+		
 		$result = $self->doSQL($sql);
 	    }
 
@@ -956,7 +770,7 @@ sub filterMatches {
 
     my @filtered;
     my %unique_key;
-
+    
     foreach my $r ( @matches )
     {
 	my $unit_id = $r->{unit_id} || '0';
@@ -969,6 +783,13 @@ sub filterMatches {
 	    $unique_key{$key} = 1;
 	    push @filtered, $r;
 	}
+    }
+    
+    if ( @filtered )
+    {
+	my $certainty = int(1000 / scalar(@filtered)) / 1000;
+	
+	foreach my $r ( @filtered ) { $r->{certainty} = $certainty }
     }
     
     return @filtered;
@@ -1265,6 +1086,30 @@ sub generateFilter {
 }
 
 
+
+# handleInterrupt ( )
+#
+# Handle an INT signal by setting a global variable indicating that we should quit as
+# soon as possible.
+
+sub handleInterrupt {
+
+    # If we are running under the debugger, stop and drop into the debugger.
+    
+    if ( $DB::VERSION )
+    {
+	$DB::single = 1;
+    }
+    
+    # Otherwise, set the global variable.
+    
+    else
+    {
+	$QUIT_NOW = 1;
+    }
+}
+
+
 # getConfig ( )
 # 
 # Load the configuration settings that will be used in the process of making and
@@ -1296,12 +1141,140 @@ sub getConfig {
 }
 
 
+# initializeTables ( )
+#
+# Ensure that the proper tables are present in the database to which we have connected.
+# If they are not present, create them. If an earlier version of the 'coll_units' table
+# is present, preserve its content.
+
+sub initializeTables {
+
+    my ($self) = @_;
+    
+    my $dbh = $self->{dbh};
+    
+    unless ( $EXECUTE_MODE )
+    {
+	print "The following statements would be executed if the 'initialize tables'\n";
+	print "subcommand is given:\n\n";
+    }
+    
+    my $changes = 0;
+    
+    # First establish 'coll_units_static'.
+    
+    my ($check_table) = $dbh->selectrow_array(<<~END_SQL);
+	SHOW TABLES LIKE '$TABLE{COLLECTION_UNITS_STATIC}'
+	END_SQL
+    
+    unless ( $check_table && $check_table eq $TABLE{COLLECTION_UNITS_STATIC} )
+    {
+	$self->doStmtPrint(<<~END_SQL);
+		CREATE TABLE IF NOT EXISTS `$TABLE{COLLECTION_UNITS_STATIC}` (
+		  `collection_no` int(10) unsigned NOT NULL,
+		  `containing_col` int(10) unsigned DEFAULT NULL,
+		  `known_match` tinyint(1) NOT NULL DEFAULT 0,
+		  `update_new` tinyint(1) unsigned NOT NULL DEFAULT 0,
+		  `update_existing` tinyint(1) unsigned NOT NULL DEFAULT 0,
+		  `updated` timestamp NULL DEFAULT NULL,
+		  PRIMARY KEY (`collection_no`),
+		  KEY `update_new` (`update_new`),
+		  KEY `update_existing` (`update_existing`),
+		  KEY `containing_col` (`containing_col`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci		    
+		END_SQL
+	
+	$changes++;
+    }
+    
+    # Then check for the existence of 'coll_units';
+    
+    ($check_table) = $dbh->selectrow_array(<<~END_SQL);
+	SHOW TABLES LIKE '$TABLE{COLLECTION_UNITS}'
+	END_SQL
+    
+    # If it exists, check for the column 'concept_id'. If it doesn't exist, rename the
+    # table and then create a new one and insert the old contents.
+    
+    my $check_column;
+    
+    my $coll_units_create = <<~END_SQL;
+	CREATE TABLE `$TABLE{COLLECTION_UNITS}` (
+	  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+	  `collection_no` int(10) unsigned NOT NULL,
+	  `unit_id` int(10) unsigned NOT NULL DEFAULT 0,
+	  `col_id` int(10) unsigned NOT NULL DEFAULT 0,
+	  `spatial_basis` enum('containing column','adjacent column','other') DEFAULT NULL,
+	  `concept_id` int(10) unsigned NOT NULL DEFAULT 0,
+	  `concept_name` varchar(255) DEFAULT NULL,
+	  `strat_name_id` int(10) unsigned DEFAULT NULL,
+	  `strat_name` varchar(255) DEFAULT NULL,
+	  `strat_rank` enum('','SGp','Gp','SubGp','Fm','Mbr','Bed') DEFAULT NULL,
+	  `strat_parent_id` int(10) unsigned DEFAULT NULL,
+	  `name_basis` enum('exact','concept','rank-up','rank-down','synonym','other') DEFAULT NULL,
+	  `t_age` decimal(9,6) DEFAULT NULL,
+	  `b_age` decimal(9,6) DEFAULT NULL,
+	  `age_basis` enum('containing interval','adjacent interval','other') DEFAULT NULL,
+	  `certainty` tinyint(3) unsigned DEFAULT NULL,
+	  PRIMARY KEY (`id`),
+	  KEY `collection_no` (`collection_no`),
+	  KEY `unit_id` (`unit_id`),
+	  KEY `col_id` (`col_id`),
+	  KEY `concept_id` (`concept_id`),
+	  KEY `strat_name_id` (`strat_name_id`)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+	END_SQL
+    
+    if ( $check_table && $check_table eq $TABLE{COLLECTION_UNITS} )
+    {
+	($check_column) = $dbh->selectrow_array(<<~END_SQL);
+		SHOW COLUMNS FROM `$TABLE{COLLECTION_UNITS}` LIKE 'concept_id'
+		END_SQL
+	
+	unless ( $check_column )
+	{
+	    $self->doStmtPrint(<<~END_SQL);
+		RENAME TABLE `$TABLE{COLLECTION_UNITS}` to `$TABLE{COLLECTION_UNITS}_bak`
+		END_SQL
+	    
+	    $self->doSQL($coll_units_create, 1);
+
+	    $self->doStmtPrint(<<~END_SQL);
+		INSERT INTO `$TABLE{COLLECTION_UNITS}` (collection_no, unit_id, col_id, certainty)
+		SELECT collection_no, unit_id, col_id, 1 as certainty
+		FROM `$TABLE{COLLECTION_UNITS}_bak`
+		END_SQL
+	    
+	    $changes++;
+	}
+    }
+    
+    else
+    {
+	$self->doStmtPrint($coll_units_create, 1);
+	$changes++;
+    }
+    
+    unless ( $changes )
+    {
+	print "All tables are up to date.\n\n";
+    }
+}
+
+
+# doSQL ( sql )
+#
+# Execute the specified SQL statement using the database handle that was established
+# when the referenced object was initialized. If we are running in debug mode, print the
+# statement to STDERR first. If an error occurs, throw an exception indicating the line
+# from which this method was called. Otherwise, return the result.
+
 sub doSQL {
     
     my ($self, $sql) = @_;
     
     my $dbh = $self->{dbh};
-    
+
     print STDERR "> $sql\n\n" if $self->{debug};
     
     my $result;
@@ -1329,5 +1302,26 @@ sub doSQL {
     return $result;
 }
 
+
+# doStmtPrint ( sql )
+#
+# Print the specified SQL statement. If the variable $EXECUTE_MODE has a true value,
+# execute it as well.
+
+sub doStmtPrint {
+
+    my ($self, $sql) = @_;
+
+    my $dbh = $self->{dbh};
+
+    print "> $sql\n\n";
+
+    if ( $EXECUTE_MODE )
+    {
+	my $result = $dbh->do($sql);
+	
+	print "Result: $result\n\n";
+    }
+}
 
 1;

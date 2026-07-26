@@ -138,7 +138,22 @@ elsif ( $ARGV[0] eq 'cancel' )
 
 elsif ( $ARGV[0] eq 'initialize' )
 {
-    if ( $ARGV[1] eq 'tables' || $ARGV[1] =~ /^COLLECTION_UNITS/ )
+    if ( $ARGV[1] eq 'tables' )
+    {
+	$CMD = 'init-tables';
+	push @PARAMS, $ARGV[1];
+	$MacrostratMatch::EXECUTE_MODE = 1;
+    }
+    
+    else
+    {
+	die "Invalid argument '$ARGV[1]'\n";
+    }
+}
+
+elsif ( $ARGV[0] eq 'check' )
+{
+    if ( $ARGV[1] eq 'tables' )
     {
 	$CMD = 'init-tables';
 	push @PARAMS, $ARGV[1];
@@ -258,10 +273,6 @@ sub DoTask {
     # If we are debugging, stop here.
     
     $DB::single = 1;
-    
-    # Set up an interrupt handler for the Quit signal.
-    
-    $SIG{INT} = sub { $MacrostratMatch::QUIT_NOW = 1 };
     
     # Execute the specified command.
     
