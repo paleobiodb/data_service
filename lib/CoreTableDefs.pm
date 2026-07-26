@@ -90,6 +90,7 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(STRAT_CONCEPTS => 'strat_concepts');
     set_table_name(STRAT_OPINIONS => 'strat_opinions');
     set_table_name(STRAT_MS_NAMES => 'strat_ms_names');
+    set_table_name(STRAT_MS_MATCHES => 'strat_ms_matches');
     
     set_table_name(COLLECTION_UNITS => 'coll_units');
     set_table_property('COLLECTION_UNITS', LOG_CHANGES => 1);

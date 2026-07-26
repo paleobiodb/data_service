@@ -20,7 +20,7 @@ use List::Util qw(max min);
 
 use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use YAML;
-use Encode qw(encode_utf8);
+use Encode qw(encode_utf8 decode_utf8);
 use Term::ReadLine;
 
 use utf8;
@@ -28,13 +28,14 @@ use utf8;
 
 # Read the configuration file, and open database connections.
 
-my ($opt_quiet, $opt_verbose,  $opt_force, $opt_debug, $opt_help);
+my ($opt_quiet, $opt_verbose,  $opt_force, $opt_debug, $opt_check, $opt_help);
 my ($opt_config, $opt_test);
 
 GetOptions("quiet|q" => \$opt_quiet,
 	   "verbose|v" => \$opt_verbose,
 	   "config|f" => \$opt_config,
 	   "force" => \$opt_force,
+	   "check=s" => \$opt_check,
 	   "help|h" => \$opt_help,
 	   "test|t" => \$opt_test,
 	   "debug|D" => \$opt_debug) or die;
@@ -54,6 +55,9 @@ our ($pbdb) = connectDB($opt_config, 'pbdb');
 our ($chunk_size) = 20000;
 
 die "Could not connect to database: $DBI::errstr\n" unless $mstr && $pbdb;
+
+our ($opt_name1, $opt_name2) = split /[:]/, fc decode_utf8($opt_check);
+our ($check_name1, $check_name2) = split /[:]/, decode_utf8($opt_check);
 
 our (%second_words);
 
@@ -105,7 +109,7 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			rouge => 1, rouges => 1, sableuse => 1, sableuses => 1,
 			schiste => 1, schistes => 1, vert => 1, verts => 1, );
 
-our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, top => 1, bottom => 1,
+our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
 		   first => 1, second => 1, third => 1, fourth => 1, alpha => 1, beta => 1,
 		   part => 1, sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
@@ -695,6 +699,7 @@ sub GenerateConcepts {
     my $progress_rank = '';
     my $preliminary_concept_no = 0;
     
+  KEY:
     foreach my $nkey ( (sort { fc($a) cmp fc($b) } keys %gp_keys),
 		       (sort { fc($a) cmp fc($b) } keys %fm_keys),
 		       (sort { fc($a) cmp fc($b) } keys %sfm_keys),
@@ -708,6 +713,11 @@ sub GenerateConcepts {
 	{
 	    say "  Processing names of rank '$rank'...";
 	    $progress_rank = $rank;
+	}
+	
+	if ( $opt_check )
+	{
+	    next KEY unless $name eq $check_name1 || $name eq $check_name2;
 	}
 	
 	# If there are multiple stratigraphic name records for a given key, start by
@@ -871,6 +881,7 @@ sub GenerateConcepts {
     
     say "Found $parent_matches parent matches.";
     
+    exit if $opt_check;
     
     # Step IV: generate the set of final stratigraphic concepts from the set of
     # preliminary concepts. This involves consolidating the information from concepts
@@ -1822,7 +1833,12 @@ sub NamesAreCompatible {
     my $differences = 0;
     
     my ($same_prefix, $same_parents, $same_rank,
-	$ages_overlap, $ages_identical, $locations_close, $locations_overlap);
+	$ages_overlap, $ages_identical, $same_country, $locations_close, $locations_overlap);
+    
+    my $debug_this;
+
+    $debug_this = 1 if $opt_check && ($name eq $opt_name1 && $alt_name eq $opt_name2 ||
+				      $name eq $opt_name2 && $alt_name eq $opt_name1);
     
     # If the age ranges overlap, the two names are potentially compatible.
 
@@ -1866,7 +1882,7 @@ sub NamesAreCompatible {
     if ( $nr->{cc} && $nr->{cc} eq $alt_nr->{cc} )
     {
 	$similarities++;
-	$locations_close = 1;
+	$same_country = 1;
     }
     
     # Then check the lat/lng range if that is defined for both name records.
@@ -1879,7 +1895,7 @@ sub NamesAreCompatible {
 	     $nr->{lng_min} <= $alt_nr->{lng_max} + 5 &&
 	     $nr->{lng_max} >= $alt_nr->{lng_min} - 5 )
 	{
-	    $similarities++ unless $locations_close;
+	    $similarities++ unless $same_country;
 	    $locations_close = 1;
 	}
 	
@@ -1933,7 +1949,8 @@ sub NamesAreCompatible {
     # If the two names have identical stratigraphic parents, they are potentially
     # compatible.
     
-    if ( $contained_in{$nr->{rkey}} && $contained_in{$alt_nr->{rkey}} )
+    if ( $nr->{rkey} && $alt_nr->{rkey} &&
+	 $contained_in{$nr->{rkey}} && $contained_in{$alt_nr->{rkey}} )
     {
 	my (@parents, @alt_parents);
 	
@@ -1986,13 +2003,20 @@ sub NamesAreCompatible {
     # At this point, reject the match unless we have at least two geographic,
     # stratigraphic, or temporal similarities and no differences.
     
-    return 0 unless $similarities > 1 && $differences == 0;
+    unless ( $similarities > 1 && $differences == 0 )
+    {
+	print "similarities = $similarities\ndifferences = $differences\nreturn 0\n\n"
+	    if $debug_this;
+	return 0;
+    }
     
     # If the two names are the same, return the number of similarities plus 2 for
     # lexical equality.
     
     if ( $name eq $alt_name )
     {
+	print "similarities = $similarities\nnames are equal\nreturn $similarities + 2\n\n"
+	    if $debug_this;
 	return $similarities + 2;
     }
     
@@ -2005,6 +2029,12 @@ sub NamesAreCompatible {
     
     if ( @sequence != @alt_sequence )
     {
+	if ( $debug_this )
+	{
+	    print "sequence     = " . join(' ', @sequence) . "\n";
+	    print "alt sequence = " . join(' ', @alt_sequence) . "\n";
+	    print "sequences differ in length\nreturn 0\n\n";
+	}
 	return 0;
     }
 
@@ -2014,40 +2044,71 @@ sub NamesAreCompatible {
 	{
 	    if ( $sequence[$i] ne $alt_sequence[$i] )
 	    {
+		if ( $debug_this )
+		{
+		    print "sequence     = " . join(' ', @sequence) . "\n";
+		    print "alt sequence = " . join(' ', @alt_sequence) . "\n";
+		    print "sequences differ\nreturn 0\n\n";
+		}
 		return 0;
 	    }
 	}
     }
     
     # If the initial words have an edit distance of 2 or less, the names are
-    # potentially compatible. If either word is 4 characters or less, or if the name
-    # records are both in New Zealand, the maximum allowed edit distance is 1.
+    # potentially compatible. If either word is 5 characters or less, or if the
+    # name records are both in New Zealand, or if it is not the case that both
+    # the ages and locations overlap, then the maximum allowed edit distance is
+    # 1.
     
     my ($first) = $name =~ /(\S+)/;
     my ($alt_first) = $alt_name =~ /(\S+)/;
     
+    my $edistance = edistance($first, $alt_first, 2);
+    
     if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
     {
-	if ( edistance($first, $alt_first, 1) >= 0 )
+	if ( $edistance == 0 || $edistance == 1 )
 	{
 	    $same_prefix = 1;
 	    $similarities++;
 	}
     }
     
-    elsif ( length($first) <= 4 || length($alt_first) <= 4 )
+    elsif ( length($first) <= 5 || length($alt_first) <= 5 )
     {
-	if ( edistance($first, $alt_first, 1) >= 0 )
+	if ( $edistance == 0 || $edistance == 1 )
 	{
 	    $same_prefix = 1;
 	    $similarities++;
 	}
     }
     
-    elsif ( edistance($first, $alt_first, 2) >= 0 )
+    elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
     {
-	$same_prefix = 1;
-	$similarities++;
+	if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
+	{
+	    $same_prefix = 1;
+	    $similarities++;
+	}
+    }
+    
+    else
+    {
+	if ( $edistance == 0 || $edistance == 1 )
+	{
+	    $same_prefix = 1;
+	    $similarities++;
+	}
+    }
+    
+    if ( $debug_this )
+    {
+	print "ages_overlap = $ages_overlap\nages_identical = $ages_identical\n";
+	print "same_country = $same_country\nlocations_close = $locations_close\n";
+	print "locations_overlap = $locations_overlap\nsame_parents = $same_parents\n";
+	print "same_rank = $same_rank\nsame_prefix = $same_prefix\n";
+	$DB::single = 1;
     }
     
     # If the two names are of the form "X" and "X Y" where Y is a rock type, then the
@@ -2079,23 +2140,27 @@ sub NamesAreCompatible {
 	    
 	    if ( @smaller == 0 && $same_parents && $ages_overlap )
 	    {
+		print "same_parents && ages_overlap: return $similarities\n\n" if $debug_this;
 		return $similarities;
 	    }
 	    
 	    elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
 	    {
+		print "is_rock_type: return $similarities\n\n" if $debug_this;
 		return $similarities;
 	    }
 	    
 	    elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} )
 	    {
+		print "allowed_suffix: return $similarities\n\n" if $debug_this;
 		return $similarities;
 	    }
 	    
-	    elsif ( @smaller && @larger && $same_rank &&
+	    elsif ( @smaller && @larger && ($same_rank || $ages_identical && $locations_overlap) &&
 		    (@smaller == grep { IsRockType($_) } @smaller) &&
 		    (@larger == grep { IsRockType($_) } @larger) )
 	    {
+		print "same_rank && is_rock_type: return $similarities\n\n" if $debug_this;
 		return $similarities;
 	    }
 	}
@@ -2109,24 +2174,39 @@ sub NamesAreCompatible {
 	 ($ages_overlap && $locations_overlap) ||
 	 ($ages_overlap && $locations_close && $same_rank) )
     {
+	my $edistance = edistance($name, $alt_name, 2);
+	
 	if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
 	{
-	    if ( edistance($name, $alt_name, 1) >= 0 )
+	    if ( $edistance == 0 || $edistance == 1 )
 	    {
+		print "cc = NZ && edistance = $edistance: return $similarities + 1\n\n"
+		    if $debug_this;
 		return $similarities + 1;
 	    }
 	}
 	
-	elsif ( length($name) <= 4 || length($alt_name) <= 4 )
+	elsif ( length($name) <= 5 || length($alt_name) <= 5 )
 	{
-	    if ( edistance($name, $alt_name, 1) >= 0 )
+	    if ( $edistance == 0 || $edistance == 1 )
 	    {
+		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
 		return $similarities + 1;
 	    }
 	}
 	
-	elsif ( edistance($name, $alt_name, 2) >= 0 )
+	elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
 	{
+	    if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
+	    {
+		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
+		return $similarities + 1;
+	    }
+	}
+	
+	elsif ( $edistance == 0 || $edistance == 1 )
+	{
+	    print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
 	    return $similarities + 1;
 	}
 	
@@ -2134,33 +2214,32 @@ sub NamesAreCompatible {
 	{
 	    if ( $name eq "${alt_name}ian" || $alt_name eq "${name}ian" )
 	    {
+		print "suffix -ian: return $similarities + 1\n\n" if $debug_this;
 		return $similarities + 1;
 	    }
 
-	    if ( $name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
-	    {
-		if ( $alt_name eq $1 )
-		{
-		    return $similarities + 1;
-		}
-	    }
+	    # if ( $name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
+	    # {
+	    # 	if ( $alt_name eq $1 )
+	    # 	{
+	    # 	    return $similarities + 1;
+	    # 	}
+	    # }
 	    
-	    elsif ( $alt_name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
-	    {
-		if ( $name eq $1 )
-		{
-		    return $similarities + 1;
-		}
-	    }
+	    # elsif ( $alt_name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
+	    # {
+	    # 	if ( $name eq $1 )
+	    # 	{
+	    # 	    return $similarities + 1;
+	    # 	}
+	    # }
 	}
     }
     
     # If none of the criteria are satisfied, return false.
     
-    else
-    {
-	return 0;
-    }
+    print "no criteria satisfied: return 0\n\n" if $debug_this;
+    return 0;
 }
 
 
@@ -2515,13 +2594,38 @@ sub ImportMacrostrat {
 	    $row->{cc} = $infer_from_ref{$row->{ref_id}};
 	}
 	
+	# Exclude names that are ineligible for matching. Start by excluding duplicates.
+	# The name with the lower id tends to be the valid one, so we exclude the later
+	# one. The exclusion code is 'D' for dupicate.
+	
+	my $import_key = "$row->{strat_name}|$row->{rank}|$row->{cc}|" .
+	    "$row->{early_age}|$row->{late_age}";
+	
+	if ( $uniq{$import_key} )
+	{
+	    $row->{exclude} = 'D';
+	}
+	
+	else
+	{
+	    $uniq{$import_key} = 1;
+	}
+	
+	# Exclude names whose rank is 'bed', because the PBDB doesn't consistently store
+	# bed names. The exclusion code is 'R' for rank.
+	
+	if ( $row->{rank} eq 'Bed' )
+	{
+	    $row->{exclude} = $row->{exclude} ? "$row->{exclude}R" : 'R';
+	}
+	
 	# Exclude names with no location information. If we don't know where in the
 	# world the name applies to, we cannot match it. The exclusion code is 'L' for
 	# location.
 
-	if ( ! $row->{exclude} && ! defined $row->{cc} && ! defined $row->{lat_min} )
+	if ( ! defined $row->{cc} && ! defined $row->{lat_min} )
 	{
-	    $row->{exclude} = 'L';
+	    $row->{exclude} = $row->{exclude} ? "$row->{exclude}L" : 'L';
 	}
 	
 	# Now generate a row in the STRAT_MS_NAMES table for this name.
@@ -2565,7 +2669,7 @@ sub ImportMacrostrat {
 # Execute the subcommand 'match macrostrat'.
 #
 # This command matches names in the STRAT_NAMES table to names in the STRAT_MS_NAMES
-# table. The matches are stored in the `stratn_id` and `stratc_id` columns in STRAT_NAMES.
+# table. The matches are stored in the STRAT_MS_MATCHES table.
 
 sub MatchMacrostrat {
 
@@ -2612,7 +2716,7 @@ sub MatchMacrostrat {
     {
 	say "Clearing any previous matches...";
 	
-	DBCommand($pbdb, "TRUNCATE `strat_name_matches`");
+	DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_MATCHES}`");
     }
     
     say "Reading from table `$TABLE{STRAT_NAMES}`...";
@@ -2762,7 +2866,7 @@ sub MatchMacrostrat {
 
 	if ( $best_match )
 	{
-	    my @good_matches = $best_match->{stratn_id};
+	    my @good_matches = $best_match;
 	    $good_matches++;
 	    $matched_names++;
 	    
@@ -2775,19 +2879,20 @@ sub MatchMacrostrat {
 		    if ( $msnr->{score} == $best_match->{score} ||
 			 $msnr->{stratc_id} == $best_match->{stratc_id} )
 		    {
-			push @good_matches, $stratn_id;
+			push @good_matches, $msnr;
 			$good_matches++;
 		    }
 		}
 	    }
 	    
-	    foreach my $stratn_id ( @good_matches )
+	    foreach my $match ( @good_matches )
 	    {
 		my $qno = $pbdb->quote($stratn_no);
-		my $qid = $pbdb->quote($stratn_id);
+		my $qid = $pbdb->quote($match->{stratn_id});
+		my $qsc = $pbdb->quote($match->{score});
 		
 		$match_values .= ', ' if $match_values;
-		$match_values .= "($qno, $qid)";
+		$match_values .= "($qno, $qid, $qsc)";
 	    }
 	    
 	    if ( length($match_values > $chunk_size) )
@@ -2995,9 +3100,10 @@ sub UpdateTables {
     {
 	$activity = 1;
 
-	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_name_matches` (
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_ms_matches` (
 	  `stratn_no` int(10) unsigned NOT NULL,
 	  `stratn_id` int(10) unsigned NOT NULL,
+	  `score` mediumint(8) unsigned NULL,
 	  PRIMARY KEY (`stratn_no`, `stratn_id`),
 	  KEY (`stratn_id`)
 	) ENGINE=InnoDB", 1);
@@ -3130,7 +3236,7 @@ sub InsertNameMatches {
 
     my ($dbh, $match_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `strat_name_matches` (stratn_no, stratn_id) VALUES $match_values");
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, score) VALUES $match_values");
 }
 
 
@@ -3138,6 +3244,6 @@ sub InsertCollNames {
 
     my ($dbh, $name_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `coll_strat_names` (collection_no, stratn_no) VALUES $name_values");
+    DBCommand($dbh, "INSERT IGNORE INTO `coll_strat_names` (collection_no, stratn_no) VALUES $name_values");
 }
 
