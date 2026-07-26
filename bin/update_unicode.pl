@@ -53,7 +53,7 @@ die "Could not connect to database: $DBI::errstr\n" unless $pbdb;
 
 # Determine which tables to update based on @ARGV.
 
-our (%core_table) = (collections => 1, colls => 1,
+our (%core_table) = (collections => 1, colls => 1, strata => 1,
 		     occurrences => 1, occs => 1,
 		     reidentifications => 1, reids => 1,
 		     specimens => 1, specs => 1,
@@ -130,6 +130,11 @@ sub UpdateTables {
 	UpdateCollections();
     }
     
+    if ( $update_table{strata} || $update_table{all} )
+    {
+	UpdateStrata();
+    }
+    
     if ( $update_table{occurrences} || $update_table{occs} || $update_table{all} )
     {
 	UpdateOccurrences();
@@ -178,6 +183,43 @@ sub UpdateCollections {
 			    localsection localbed regionalsection regionalbed stratcomments
 			    lithdescript geology_comments preservation_comments
 			    component_comments collection_comments taxonomy_comments);
+    
+    foreach my $field ( @convert_fields )
+    {
+	my $rows = DBHashQuery($pbdb, "SELECT collection_no, $field FROM $TABLE{COLLECTION_DATA}
+			WHERE $field like '%&#%'");
+	
+	$update_count += UpdateRecords(\%update_record, $rows, 'collection_no', $field);
+    }
+        
+    my $record_count = scalar(%update_record);
+    
+    say "Generated $record_count update records for $update_count updates.";
+    
+    foreach my $key_no ( sort { $a <=> $b } keys %update_record )
+    {
+	$edt->update_record($update_record{$key_no});
+    }
+    
+    $DB::single = 1;
+    
+    FinishUpdate($edt);
+}
+
+
+sub UpdateStrata {
+
+    say "\nUpdating escaped unicode characters in the stratigraphic fields of 'pbdb.collections'...";
+    
+    my $edt = PBDBEdit->new($pbdb, { permission => $perms, 
+				     table => 'COLLECTION_DATA',
+				     allows => ['FIXUP_MODE'] } );
+    
+    my %update_record;
+    
+    my $update_count = 0;
+    
+    my @convert_fields = qw(formation member);
     
     foreach my $field ( @convert_fields )
     {
@@ -325,6 +367,7 @@ sub UpdateRecords {
 	if ( $r->{$update_field} =~ /&#/ )
 	{
 	    $update_hash->{$r->{$key_field}} ||= { $key_field => $r->{$key_field} };
+	    $r->{$update_field} =~ s/&\#120573;/&#946/;
 	    $r->{$update_field} =~ s/&\#(\d+);*/chr($1)/eg;
 	    $r->{$update_field} =~ s/&\#[xX](\w+)(?:;+|$)/chr(hex($1))/eg;
 	    $update_hash->{$r->{$key_field}}{$update_field} = $r->{$update_field};
