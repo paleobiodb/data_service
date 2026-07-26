@@ -15,6 +15,7 @@ use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use DBQuery qw(DBHashQuery DBRowQuery DBSingleHashQuery DBTextQuery DBCommand DBInsert CheckMode);
 
+use Unicode::Collate;
 use Text::Levenshtein::Damerau qw(edistance);
 use List::Util qw(max min);
 
@@ -24,6 +25,11 @@ use Encode qw(encode_utf8 decode_utf8);
 use Term::ReadLine;
 
 use utf8;
+
+
+our $IgnoreCaseAccents = Unicode::Collate->new(
+     level         => 1,
+     normalization => undef);
 
 
 # Read the configuration file, and open database connections.
@@ -103,7 +109,7 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
 			waterstone => 1, waterstones => 1, yellow => 1, zone => 1,
 			arenal => 1, argile => 1, argiles => 1, bleu => 1, bleues => 1,
-			calcaire => 1, calcaires => 1, 
+			calcaire => 1, calcaires => 1, congeria => 1,
 		        gres => 1, 'grès' => 1, grigi => 1, gris => 1, jaune => 1, jaunes => 1,
 			marne => 1, marnes => 1, niveau => 1, niveaux => 1,
 			rouge => 1, rouges => 1, sableuse => 1, sableuses => 1,
@@ -120,6 +126,8 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
 			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
+
+our (%is_particle) = ( 'des ' => 1, 'de ' => 1, 'du ' => 1 );
 
 our (%rank_comparison) = ( SGp => 'Gp', Gp => 'Gp', SubGp => 'Gp', Fm => 'Fm', Mbr => 'Mbr',
 			   Bed => 'Bed' );
@@ -551,6 +559,36 @@ sub GenerateConcepts {
 		$c = $1;
 	    }
 	    
+	    # Ignore any component that doesn't contain at least one upper-case letter.
+
+	    next unless $c =~ /[A-Z]/;
+	    
+	    # If the initial word is 'lower|middle|upper' in all lower-case followed by
+	    # a name starting with upper-case, remove the adjective. If the remainder is
+	    # the same as the enclosing formation, skip this name entirely.
+	    
+	    if ( $c =~ / ^ (lower|middle|upper|base \s of) \s+ ( \p{Lu}.* ) /xs )
+	    {
+		if ( $nr->{formation} && $2 eq $nr->{formation} )
+		{
+		    next;
+		}
+		
+		else
+		{
+		    $c = $2;
+		}
+	    }
+	    
+	    # Otherwise, if the component begins with one or more all-lowercase words,
+	    # remove them. If the component is all lowercase words, skip it entirely.
+	    
+	    elsif ( $c =~ / ^ ( \p{Ll}+ \s+ )+ (.+) /xs )
+	    {
+		next if $1 eq 'below' || $1 eq 'above';
+		$c = $is_particle{$1} ? "$1$2" : $2;
+	    }
+	    
 	    # Put the component into fold-case so that we can do case-insensitive
 	    # comparisons.
 	    
@@ -718,6 +756,8 @@ sub GenerateConcepts {
 	if ( $opt_check )
 	{
 	    next KEY unless $name eq $check_name1 || $name eq $check_name2;
+	    print "Found $check_name1\n" if $name eq $check_name1;
+	    print "Found $check_name2\n" if $name eq $check_name2;
 	}
 	
 	# If there are multiple stratigraphic name records for a given key, start by
@@ -832,6 +872,8 @@ sub GenerateConcepts {
 
 		foreach my $alt_nr ( $strat_name{$alt_key}->@* )
 		{
+		    next if $nr eq $alt_nr && $name eq $alt_name;
+		    
 		    if ( NamesAreCompatible($name, $nr, $alt_name, $alt_nr) )
 		    {
 			if ( my $alt_preliminary_no = $alt_nr->{preliminary_no}{$alt_key} )
@@ -1391,6 +1433,21 @@ sub UpdateStratRaw {
 	# The 'coll_nos' field is an aggregate set of collection numbers, as a hash.
 	
 	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
+	
+	# If the field is 'member' and we are also given a formation, store it.
+	
+	if ( $field eq 'member' && $source->{formation} )
+	{
+	    if ( $record->{formation} )
+	    {
+		$record->{formation} .= ",$source->{formation}";
+	    }
+	    
+	    else
+	    {
+		$record->{formation} = $source->{formation};
+	    }
+	}
     }
     
     else
@@ -1411,6 +1468,13 @@ sub UpdateStratRaw {
 		  lng_min => $source->{lng_min}, lng_max => $source->{lng_max},
 		  n_colls => $source->{n_colls}, n_occs => $source->{n_occs},
 		  reference_no => { }, lithology1 => { }, lithology2 => { } };
+	
+	# If the field is 'member' and we are also given a formation, store it.
+	
+	if ( $field eq 'member' && $source->{formation} )
+	{
+	    $record->{formation} = $source->{formation};
+	}
     }
     
     # The 'reference_no', 'lithology1', and 'lithology2' fields are the union of the
@@ -1823,7 +1887,18 @@ sub ParseParentheses {
 sub NamesAreCompatible {
 
     my ($name, $nr, $alt_name, $alt_nr) = @_;
-
+    
+    # If we are doing a debugging run, see if this is the comparison we need to debug.
+    
+    my $debug_this; $debug_this = 1 if $opt_check &&
+	($name eq $check_name1 && $alt_name eq $check_name2 ||
+	 $name eq $check_name2 && $alt_name eq $check_name1);
+    
+    if ( $debug_this )
+    {
+	print "Comparing '$name' with '$alt_name':\n";
+    }
+    
     # Convert both names to foldcase, to make this comparison case-insensitive.
 
     $name = fc $name;
@@ -1833,34 +1908,42 @@ sub NamesAreCompatible {
     my $differences = 0;
     
     my ($same_prefix, $same_parents, $same_rank,
-	$ages_overlap, $ages_identical, $same_country, $locations_close, $locations_overlap);
+	$ages_overlap, $ages_identical, $same_country,
+	$locations_close, $locations_overlap);
     
-    my $debug_this;
-
-    $debug_this = 1 if $opt_check && ($name eq $opt_name1 && $alt_name eq $opt_name2 ||
-				      $name eq $opt_name2 && $alt_name eq $opt_name1);
+    my (@words, @alt_words);
     
     # If the age ranges overlap, the two names are potentially compatible.
 
     if ( defined $nr->{early_age} && $nr->{early_age} ne '' &&
 	 defined $alt_nr->{early_age} && $alt_nr->{early_age} ne '' )
     {
-	if ( $nr->{early_age} >= $alt_nr->{late_age} &&
-	     $nr->{late_age} <= $alt_nr->{early_age} )
+	if ( $nr->{early_age} > $alt_nr->{late_age} &&
+	     $nr->{late_age} < $alt_nr->{early_age} )
 	{
 	    $ages_overlap = 1;
 	    $similarities++;
 	}
 	
-	# If the age ranges are separated by at least 20 million years, the two names are
-	# not compatible.
+	# If the age ranges are separated by at least 5 million years in the Cenozoic,
+	# 10 million in the Mesozoic, and 20 million in the Paleozoic, the two names are not
+	# compatible.
 	
-	elsif ( $nr->{early_age} < $alt_nr->{late_age} - 20 &&
-		$nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
-		$nr->{late_age} > $alt_nr->{early_age} + 20 &&
-		$alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
+	else
 	{
-	    $differences++;
+	    my $threshold = ($rank_comparison{$nr->{rank}} eq 'Grp' &&
+			     $rank_comparison{$alt_nr->{rank}} eq 'Grp') ? 20
+		: $nr->{early_age} <= 66 ? 5
+		: $nr->{early_age} <= 252 ? 10 : 20;
+	    
+	    if ( $nr->{early_age} < $alt_nr->{late_age} - $threshold &&
+		 $nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
+		 $nr->{late_age} > $alt_nr->{early_age} + $threshold &&
+		 $alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
+	    {
+		print "ages differ past threshold: return 0\n\n" if $debug_this;
+		return 0;
+	    }
 	}
 	
 	# If the age ranges are exactly the same or very close, the two names are even more
@@ -1879,7 +1962,7 @@ sub NamesAreCompatible {
     # If the geographic ranges overlap or are very close to each other, the two names are
     # potentially compatible. Start by checking the country codes.
     
-    if ( $nr->{cc} && $nr->{cc} eq $alt_nr->{cc} )
+    if ( $nr->{cc} && $alt_nr->{cc} && $nr->{cc} eq $alt_nr->{cc} )
     {
 	$similarities++;
 	$same_country = 1;
@@ -1907,7 +1990,8 @@ sub NamesAreCompatible {
 		$nr->{lng_min} > $alt_nr->{lng_max} + 20 ||
 		$nr->{lng_max} < $alt_nr->{lng_min} - 20 )
 	{
-	    $differences++;
+	    print "geographic ranges differ past threshold: return 0\n\n" if $debug_this;
+	    return 0;
 	}
 	
 	# If the geographic ranges are very close to each other, the two names are even
@@ -1924,9 +2008,13 @@ sub NamesAreCompatible {
     }
     
     # At this point, reject the match unless we have at least one geographic or
-    # temporal similarity and no differences.
+    # temporal similarity.
     
-    return 0 unless $similarities > 0 && $differences == 0;
+    unless ( $similarities > 0 )
+    {
+	print "no geographic or temporal similarity: return 0\n\n" if $debug_this;
+	return 0;
+    }
     
     # If the two names have the same rank, they are potentially compatible. For this
     # purpose, we rank supergroups, groups, and subgroups together because the
@@ -1943,7 +2031,8 @@ sub NamesAreCompatible {
     elsif ( $rank_comparison{$nr->{rank}} eq 'Gp' && $rank_comparison{$alt_nr->{rank}} eq 'Mbr' ||
 	    $rank_comparison{$alt_nr->{rank}} eq 'Gp' && $rank_comparison{$nr->{rank}} eq 'Mbr' )
     {
-	$differences++;
+	print "Gp vs. Mbr: return 0\n\n" if $debug_this;
+	return 0;
     }
     
     # If the two names have identical stratigraphic parents, they are potentially
@@ -2000,24 +2089,44 @@ sub NamesAreCompatible {
 	}
     }
     
-    # At this point, reject the match unless we have at least two geographic,
-    # stratigraphic, or temporal similarities and no differences.
-    
-    unless ( $similarities > 1 && $differences == 0 )
+    if ( $debug_this )
     {
-	print "similarities = $similarities\ndifferences = $differences\nreturn 0\n\n"
-	    if $debug_this;
+	print "ages_overlap = $ages_overlap\nages_identical = $ages_identical\n";
+	print "same_country = $same_country\nlocations_close = $locations_close\n";
+	print "locations_overlap = $locations_overlap\nsame_parents = $same_parents\n";
+	print "same_rank = $same_rank\n";
+	$DB::single = 1;
+    }
+    
+    # At this point, reject the match unless we have at least two geographic,
+    # stratigraphic, or temporal similarities.
+    
+    unless ( $similarities > 1 )
+    {
+	print "less than two similarities: return 0\n\n" if $debug_this;
 	return 0;
     }
     
-    # If the two names are the same, return the number of similarities plus 2 for
-    # lexical equality.
+    # If the two names are the same when compared without case or accents, return the number of
+    # similarities plus 2 for lexical equality.
     
-    if ( $name eq $alt_name )
+    if ( $IgnoreCaseAccents->eq($name, $alt_name) )
     {
-	print "similarities = $similarities\nnames are equal\nreturn $similarities + 2\n\n"
-	    if $debug_this;
-	return $similarities + 2;
+	$similarities += 2;
+	print "names are equal: return $similarities\n\n" if $debug_this;
+	return $similarities;
+    }
+    
+    # Otherwise, we require that the names have one of the following combinations of
+    # similarities:
+    
+    unless ( $same_parents ||
+	     ($ages_identical && ($same_country || $locations_close)) ||
+	     ($ages_overlap && $locations_overlap) ||
+	     ($ages_overlap && $locations_close && $same_rank) )
+    {
+	print "doesn't match any similarity pattern: return 0\n\n" if $debug_this;
+	return 0;
     }
     
     # If the names differ in a sequence that includes numbers (including roman numerals)
@@ -2033,7 +2142,7 @@ sub NamesAreCompatible {
 	{
 	    print "sequence     = " . join(' ', @sequence) . "\n";
 	    print "alt sequence = " . join(' ', @alt_sequence) . "\n";
-	    print "sequences differ in length\nreturn 0\n\n";
+	    print "incidental sequences differ in length\nreturn 0\n\n";
 	}
 	return 0;
     }
@@ -2048,191 +2157,174 @@ sub NamesAreCompatible {
 		{
 		    print "sequence     = " . join(' ', @sequence) . "\n";
 		    print "alt sequence = " . join(' ', @alt_sequence) . "\n";
-		    print "sequences differ\nreturn 0\n\n";
+		    print "incidental sequences differ\nreturn 0\n\n";
 		}
 		return 0;
 	    }
 	}
     }
     
-    # If the initial words have an edit distance of 2 or less, the names are
-    # potentially compatible. If either word is 5 characters or less, or if the
-    # name records are both in New Zealand, or if it is not the case that both
-    # the ages and locations overlap, then the maximum allowed edit distance is
-    # 1.
+    # # If the initial words have an edit distance of 2 or less, the names are
+    # # potentially compatible. If either word is 5 characters or less, or if the
+    # # name records are both in New Zealand, or if it is not the case that both
+    # # the ages and locations overlap, then the maximum allowed edit distance is
+    # # 1.
     
-    my ($first) = $name =~ /(\S+)/;
-    my ($alt_first) = $alt_name =~ /(\S+)/;
+    # my ($first) = $name =~ /(\S+)/;
+    # my ($alt_first) = $alt_name =~ /(\S+)/;
     
-    my $edistance = edistance($first, $alt_first, 2);
+    # my $edistance = edistance($first, $alt_first, 2);
+    
+    # if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
+    # {
+    # 	if ( $edistance == 0 || $edistance == 1 )
+    # 	{
+    # 	    $same_prefix = 1;
+    # 	    $similarities++;
+    # 	}
+    # }
+    
+    # elsif ( length($first) <= 5 || length($alt_first) <= 5 )
+    # {
+    # 	if ( $edistance == 0 || $edistance == 1 )
+    # 	{
+    # 	    $same_prefix = 1;
+    # 	    $similarities++;
+    # 	}
+    # }
+    
+    # elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
+    # {
+    # 	if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
+    # 	{
+    # 	    $same_prefix = 1;
+    # 	    $similarities++;
+    # 	}
+    # }
+    
+    # else
+    # {
+    # 	if ( $edistance == 0 || $edistance == 1 )
+    # 	{
+    # 	    $same_prefix = 1;
+    # 	    $similarities++;
+    # 	}
+    # }
+    
+    # If the two names are of the form "X" and "X Y" where Y is a rock type, then the
+    # two names are compatible. If the two names are of the form "X Y" and "X Z" where Y
+    # and Z are rock types, then the two names are compatible. So remove all rock-type
+    # words from the end of each name.
+    
+    my @words = $name =~ /(\S+)/g;
+    my @alt_words = $alt_name =~ /(\S+)/g;
+    
+    while ( IsRockType($words[-1]) )
+    {
+	pop @words;
+    }
+    
+    while ( IsRockType($alt_words[-1]) )
+    {
+	pop @alt_words;
+    }
+    
+    # If one (but not both) of the names ends in one of a small list of words including
+    # 'fjord' and 'mountain', remove it. If the remainder of the name is equal (or
+    # nearly equal) to the other one, and there are other sufficient similarities, then
+    # the names are compatible.
+    
+    if ( @words > 1 && $allowed_suffix{$words[-1]} )
+    {
+	pop @words;
+    }
+    
+    elsif ( @alt_words > 1 && $allowed_suffix{$alt_words[-1]} )
+    {
+	pop @alt_words;
+    }
+    
+    # If the remainder of the names are equal or nearly so, then return the number of
+    # similarities plus one for near equality. We use the Levenshtein-Damerau edit
+    # distance to measure near-equality, and we reject any comparison where the distance
+    # is greater than 2.
+
+    my $shortened = join(' ', @words);
+    my $alt_shortened = join(' ', @alt_words);
+    
+    my $edistance = edistance( $shortened, $alt_shortened, 2 );
+    
+    print "comparing '$shortened' to '$alt_shortened'\n" if $debug_this;
+    
+    # If the remainder of either name is made up of null words, reject the match unless
+    # the ages and ranks are identical and the locations overlap.
+    
+    if ( IsNullWords(@words) || IsNullWords(@alt_words) )
+    {
+	unless ( $ages_identical && $same_rank && $locations_overlap )
+	{
+	    print "null name '$shortened' or '$alt_shortened': return 0\n\n" if $debug_this;
+	    return 0;
+	}
+    }
+    
+    # For names in New Zealand, we allow an edit distance of at most 1. This is because
+    # some distinct strata in New Zealand have very similar names.
     
     if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
     {
 	if ( $edistance == 0 || $edistance == 1 )
 	{
-	    $same_prefix = 1;
 	    $similarities++;
+	    print "cc = NZ && edistance = $edistance: return $similarities\n\n"	if $debug_this;
+	    return $similarities;
 	}
     }
     
-    elsif ( length($first) <= 5 || length($alt_first) <= 5 )
+    # For names of 5 or fewer characters, we allow an edit distance of at most 1.
+    
+    elsif ( length($shortened) <= 5 || length($alt_shortened) <= 5 )
     {
 	if ( $edistance == 0 || $edistance == 1 )
 	{
-	    $same_prefix = 1;
 	    $similarities++;
+	    print "short word edistance = $edistance: return $similarities\n\n" if $debug_this;
+	    return $similarities;
 	}
     }
+
+    # If both the ages and locations overlap (or nearly so) and we have at least 3
+    # similarities, then we allow an edit distance up to 2.
     
     elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
     {
 	if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
 	{
-	    $same_prefix = 1;
 	    $similarities++;
+	    print "long word edistance = $edistance: return $similarities\n\n" if $debug_this;
+	    return $similarities;
 	}
     }
     
-    else
+    # Otherwise, we allow an edit distance of at most 1.
+    
+    elsif ( $edistance == 0 || $edistance == 1 )
     {
-	if ( $edistance == 0 || $edistance == 1 )
+	$similarities++;
+	print "few similarities edistance = $edistance: return $similarities\n\n" if $debug_this;
+	return $similarities;
+    }
+    
+    # As a special case, if the two names have the same rank and one name is equal to
+    # the other plus -ian, the two names are compatible.
+    
+    if ( $same_rank )
+    {
+	if ( $name eq "${alt_name}ian" || $alt_name eq "${name}ian" )
 	{
-	    $same_prefix = 1;
 	    $similarities++;
-	}
-    }
-    
-    if ( $debug_this )
-    {
-	print "ages_overlap = $ages_overlap\nages_identical = $ages_identical\n";
-	print "same_country = $same_country\nlocations_close = $locations_close\n";
-	print "locations_overlap = $locations_overlap\nsame_parents = $same_parents\n";
-	print "same_rank = $same_rank\nsame_prefix = $same_prefix\n";
-	$DB::single = 1;
-    }
-    
-    # If the two names are of the form "X" and "X Y" where Y is a rock type, then the
-    # two names are compatible. If the two names are of the form "X Y" and "X Z" where Y
-    # and Z are rock types, then the two names are compatible. But this test is only
-    # done if the two names have either identical parents or else overlapping ages.
-
-    if ( $same_prefix && ($same_parents || $ages_overlap) )
-    {
-	my @smaller = $name =~ /(\S+)/g;
-	my @larger = $alt_name =~ /(\S+)/g;
-	my @prefix;
-	
-	if ( @smaller > @larger )
-	{
-	    my @temp = @smaller;
-	    @smaller = @larger;
-	    @larger = @temp;
-	}
-
-	if ( ! IsRockType(@smaller) )
-	{
-	    while ( $smaller[0] eq $larger[0] || edistance($smaller[0], $larger[0], 2) >= 0 )
-	    {
-		push @prefix, shift @smaller;
-		shift @larger;
-		last unless @smaller;
-	    }
-	    
-	    if ( @smaller == 0 && $same_parents && $ages_overlap )
-	    {
-		print "same_parents && ages_overlap: return $similarities\n\n" if $debug_this;
-		return $similarities;
-	    }
-	    
-	    elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
-	    {
-		print "is_rock_type: return $similarities\n\n" if $debug_this;
-		return $similarities;
-	    }
-	    
-	    elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} )
-	    {
-		print "allowed_suffix: return $similarities\n\n" if $debug_this;
-		return $similarities;
-	    }
-	    
-	    elsif ( @smaller && @larger && ($same_rank || $ages_identical && $locations_overlap) &&
-		    (@smaller == grep { IsRockType($_) } @smaller) &&
-		    (@larger == grep { IsRockType($_) } @larger) )
-	    {
-		print "same_rank && is_rock_type: return $similarities\n\n" if $debug_this;
-		return $similarities;
-	    }
-	}
-    }
-    
-    # If the names have a Levenshtein-Damerau edit distance of 1 or 2, then the two
-    # names are compatible. But only if they either have the same parents or else their
-    # ages and locations both overlap.
-    
-    if ( $same_parents || $ages_identical ||
-	 ($ages_overlap && $locations_overlap) ||
-	 ($ages_overlap && $locations_close && $same_rank) )
-    {
-	my $edistance = edistance($name, $alt_name, 2);
-	
-	if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
-	{
-	    if ( $edistance == 0 || $edistance == 1 )
-	    {
-		print "cc = NZ && edistance = $edistance: return $similarities + 1\n\n"
-		    if $debug_this;
-		return $similarities + 1;
-	    }
-	}
-	
-	elsif ( length($name) <= 5 || length($alt_name) <= 5 )
-	{
-	    if ( $edistance == 0 || $edistance == 1 )
-	    {
-		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
-		return $similarities + 1;
-	    }
-	}
-	
-	elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
-	{
-	    if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
-	    {
-		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
-		return $similarities + 1;
-	    }
-	}
-	
-	elsif ( $edistance == 0 || $edistance == 1 )
-	{
-	    print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
-	    return $similarities + 1;
-	}
-	
-	if ( $same_rank )
-	{
-	    if ( $name eq "${alt_name}ian" || $alt_name eq "${name}ian" )
-	    {
-		print "suffix -ian: return $similarities + 1\n\n" if $debug_this;
-		return $similarities + 1;
-	    }
-
-	    # if ( $name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
-	    # {
-	    # 	if ( $alt_name eq $1 )
-	    # 	{
-	    # 	    return $similarities + 1;
-	    # 	}
-	    # }
-	    
-	    # elsif ( $alt_name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
-	    # {
-	    # 	if ( $name eq $1 )
-	    # 	{
-	    # 	    return $similarities + 1;
-	    # 	}
-	    # }
+	    print "suffix -ian: return $similarities\n\n" if $debug_this;
+	    return $similarities;
 	}
     }
     
@@ -2240,6 +2332,131 @@ sub NamesAreCompatible {
     
     print "no criteria satisfied: return 0\n\n" if $debug_this;
     return 0;
+    
+    # if ( $same_prefix && ($same_parents || $ages_overlap) )
+    # {
+    # 	my @smaller = $name =~ /(\S+)/g;
+    # 	my @larger = $alt_name =~ /(\S+)/g;
+    # 	my @prefix;
+	
+    # 	if ( @smaller > @larger )
+    # 	{
+    # 	    my @temp = @smaller;
+    # 	    @smaller = @larger;
+    # 	    @larger = @temp;
+    # 	}
+
+    # 	if ( ! IsRockType(@smaller) )
+    # 	{
+    # 	    while ( $smaller[0] eq $larger[0] || edistance($smaller[0], $larger[0], 2) >= 0 )
+    # 	    {
+    # 		push @prefix, shift @smaller;
+    # 		shift @larger;
+    # 		last unless @smaller;
+    # 	    }
+	    
+    # 	    if ( @smaller == 0 && $same_parents && $ages_overlap )
+    # 	    {
+    # 		print "same_parents && ages_overlap: return $similarities\n\n" if $debug_this;
+    # 		return $similarities;
+    # 	    }
+	    
+    # 	    elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
+    # 	    {
+    # 		print "is_rock_type: return $similarities\n\n" if $debug_this;
+    # 		return $similarities;
+    # 	    }
+	    
+    # 	    elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} )
+    # 	    {
+    # 		print "allowed_suffix: return $similarities\n\n" if $debug_this;
+    # 		return $similarities;
+    # 	    }
+	    
+    # 	    elsif ( @smaller && @larger && ($same_rank || $ages_identical && $locations_overlap) &&
+    # 		    (@smaller == grep { IsRockType($_) } @smaller) &&
+    # 		    (@larger == grep { IsRockType($_) } @larger) )
+    # 	    {
+    # 		print "same_rank && is_rock_type: return $similarities\n\n" if $debug_this;
+    # 		return $similarities;
+    # 	    }
+    # 	}
+    # }
+    
+    # # If the names have a Levenshtein-Damerau edit distance of 1 or 2, then the two
+    # # names are compatible. But only if they either have the same parents or else their
+    # # ages and locations both overlap.
+    
+    # if ( $same_parents || $ages_identical ||
+    # 	 ($ages_overlap && $locations_overlap) ||
+    # 	 ($ages_overlap && $locations_close && $same_rank) )
+    # {
+    # 	my $edistance = edistance($name, $alt_name, 2);
+	
+    # 	if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
+    # 	{
+    # 	    if ( $edistance == 0 || $edistance == 1 )
+    # 	    {
+    # 		print "cc = NZ && edistance = $edistance: return $similarities + 1\n\n"
+    # 		    if $debug_this;
+    # 		return $similarities + 1;
+    # 	    }
+    # 	}
+	
+    # 	elsif ( length($name) <= 5 || length($alt_name) <= 5 )
+    # 	{
+    # 	    if ( $edistance == 0 || $edistance == 1 )
+    # 	    {
+    # 		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
+    # 		return $similarities + 1;
+    # 	    }
+    # 	}
+	
+    # 	elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
+    # 	{
+    # 	    if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
+    # 	    {
+    # 		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
+    # 		return $similarities + 1;
+    # 	    }
+    # 	}
+	
+    # 	elsif ( $edistance == 0 || $edistance == 1 )
+    # 	{
+    # 	    print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
+    # 	    return $similarities + 1;
+    # 	}
+	
+    # 	if ( $same_rank )
+    # 	{
+    # 	    if ( $name eq "${alt_name}ian" || $alt_name eq "${name}ian" )
+    # 	    {
+    # 		print "suffix -ian: return $similarities + 1\n\n" if $debug_this;
+    # 		return $similarities + 1;
+    # 	    }
+
+    # 	    # if ( $name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
+    # 	    # {
+    # 	    # 	if ( $alt_name eq $1 )
+    # 	    # 	{
+    # 	    # 	    return $similarities + 1;
+    # 	    # 	}
+    # 	    # }
+	    
+    # 	    # elsif ( $alt_name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
+    # 	    # {
+    # 	    # 	if ( $name eq $1 )
+    # 	    # 	{
+    # 	    # 	    return $similarities + 1;
+    # 	    # 	}
+    # 	    # }
+    # 	}
+    # }
+    
+    # # If none of the criteria are satisfied, return false.
+    
+    # print "no criteria satisfied: return 0\n\n" if $debug_this;
+    # return 0;
 }
 
 
@@ -2252,6 +2469,14 @@ sub IsNullName {
 	grep { $is_null{$_} || $_ =~ /^[xvi]+[a-z]?$|^[a-z]$|^[a-z]-[a-z]$/ } @words;
     
     return ( @words && @words == @null_words ) ? 1 : '';
+}
+
+
+sub IsNullWords {
+
+    my (@words) = @_;
+    
+    return @words == grep { $is_null{$_} } @words;
 }
 
 
@@ -2712,20 +2937,13 @@ sub MatchMacrostrat {
 
     say "  Read $msnames names.";
 
-    unless ( $opt_test )
-    {
-	say "Clearing any previous matches...";
-	
-	DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_MATCHES}`");
-    }
-    
     say "Reading from table `$TABLE{STRAT_NAMES}`...";
     
     my $pbdb_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_NAMES}");
 
     my $good_matches = 0;
     my $matched_names = 0;
-    my $match_values = '';
+    my @match_records;
     my %msnames;
     
     foreach my $pbnr ( $pbdb_names->@* )
@@ -2890,19 +3108,34 @@ sub MatchMacrostrat {
 		my $qno = $pbdb->quote($stratn_no);
 		my $qid = $pbdb->quote($match->{stratn_id});
 		my $qsc = $pbdb->quote($match->{score});
-		
-		$match_values .= ', ' if $match_values;
-		$match_values .= "($qno, $qid, $qsc)";
-	    }
-	    
-	    if ( length($match_values > $chunk_size) )
-	    {
-		InsertNameMatches($pbdb, $match_values);
-		$match_values = '';
+
+		push @match_records, [$qno, $qid, $qsc];
 	    }
 	}
 	
 	$pbnames++;
+    }
+
+    # Now truncate the table and regenerate it.
+
+    say "Emptying tables: '$TABLE{STRAT_MS_MATCHES}'...";
+    
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_MATCHES}`");
+    
+    say "Generating the STRAT_MS_MATCHES ($TABLE{STRAT_MS_MATCHES}) table...";
+    
+    my $match_values = '';
+    
+    foreach my $r ( @match_records )
+    {
+	$match_values .= ', ' if $match_values;
+	$match_values .= "($r->[0], $r->[1], $r->[2])";
+	
+	if ( length($match_values > $chunk_size) )
+	{
+	    InsertNameMatches($pbdb, $match_values);
+	    $match_values = '';
+	}
     }
     
     InsertNameMatches($pbdb, $match_values) if $match_values;
