@@ -13,7 +13,8 @@ use feature qw(say fc);
 use CoreFunction qw(loadConfig configData connectDB);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
-use DBQuery qw(DBHashQuery DBRowQuery DBSingleHashQuery DBTextQuery DBCommand DBInsert CheckMode);
+use DBQuery qw(DBHashQuery DBRowQuery DBSingleHashQuery DBColumnQuery DBTextQuery
+	       DBCommand DBInsert CheckMode);
 
 use Unicode::Collate;
 use Text::Levenshtein::Damerau qw(edistance);
@@ -62,7 +63,6 @@ our ($chunk_size) = 20000;
 
 die "Could not connect to database: $DBI::errstr\n" unless $mstr && $pbdb;
 
-our ($opt_name1, $opt_name2) = split /[:]/, fc decode_utf8($opt_check);
 our ($check_name1, $check_name2) = split /[:]/, decode_utf8($opt_check);
 
 our (%second_words);
@@ -82,6 +82,7 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			dolostone => 1, dolostones => 1, 
 			equivalent => 1, equivalents => 1, facie => 1, facies => 1,
 			flag => 1, flags => 1, flagstone => 1, flagstones => 1, formtation => 1,
+			fossiliferous => 1, 
 			gravel => 1, gravels => 1, greensand => 1, greensands => 1,
 			greywacke => 1, greywackes => 1, 
 			grey => 1, grit => 1, grits => 1, gypsum => 1, gypsums => 1,
@@ -89,9 +90,10 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			iron => 1, ironstone => 1, ironstones => 1, lignite => 1, lignites => 1, 
 			limesetone => 1, limestone => 1, limstone => 1, ls => 1, 'ls.' => 1,
 			limestones => 1, lutite => 1, lutites => 1, 
-			marble => 1, marbles => 1, marine => 1, marl => 1, marls => 1,
-			marlstone => 1, marly => 1,
-			measure => 1, measures => 1, mudstone => 1, mudstones => 1,
+			massive => 1, marble => 1, marbles => 1, marine => 1,
+			marl => 1, marls => 1, marlstone => 1, marly => 1,
+			measure => 1, measures => 1, mollusc => 1, mollusk => 1,
+			mudstone => 1, mudstones => 1,
 			oolite => 1, oolites => 1, ore => 1, ores => 1,
 			pebble => 1, pebbles => 1, pebbly => 1, phonolite => 1, phonolites => 1,
 			phosphatic => 1, platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
@@ -100,13 +102,14 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			red => 1, reef => 1, reefs => 1, sand => 1, sands => 1,
 			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1,
 			schichten => 1, sequence => 1, sequences => 1, series => 1,
-			succession => 1, successions => 1,
+			succession => 1, successions => 1, seam => 1, seams => 1,
 			shale => 1, shales => 1, sh => 1, 'sh.' => 1, shellbed => 1, shellbeds => 1,
-			silt => 1, silts => 1, silty => 1, siltsone => 1, siltstone => 1, siltstones => 1,
+			silt => 1, silts => 1, silty => 1, siltsone => 1,
+			siltstone => 1, siltstones => 1,
 			slate => 1, slates => 1, stage => 1, stages => 1, stone => 1, stones => 1,
 			suite => 1, suites => 1, subsuite => 1, subsuites => 1, svita => 1, sub => 1,
 			tuff => 1, tuffs => 1, tuffaceous => 1, unit => 1, units => 1, volcanic => 1,
-			volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
+			variegated => 1, volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
 			waterstone => 1, waterstones => 1, yellow => 1, zone => 1,
 			arenal => 1, argile => 1, argiles => 1, bleu => 1, bleues => 1,
 			calcaire => 1, calcaires => 1, congeria => 1,
@@ -116,13 +119,21 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			schiste => 1, schistes => 1, vert => 1, verts => 1, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
-		   first => 1, second => 1, third => 1, fourth => 1, alpha => 1, beta => 1,
-		   part => 1, sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
+		   uppermost => 1, lowermost => 1, st => 1, nd => 1, rd => 1, th => 1,
+		   first => 1, second => 1, third => 1, fourth => 1, fifth => 1, sixth => 1,
+		   seventh => 1, eighth => 1, ninth => 1, tenth => 1, no => 1, alpha => 1, beta => 1,
+		   division => 1, divisions => 1, local => 1, part => 1, parts => 1,
+		   sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
+		   section => 1, sections => 1, seam => 1, seams => 1,
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
-		   schicht => 1, unit => 1, units => 1, zone => 1, zones => 1,
+		   schicht => 1, unit => 1, units => 1, subunit => 1, subunits => 1,
+		   unknown => 1, unnamed => 1,
+		   zone => 1, zones => 1,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
 		   'inférieurs' => 1, 'supérieurs' => 1, inferieurs => 1, superieurs => 1,
 		   'moitié' => 1, moitie => 1, les => 1 );
+
+our (%is_interval_name);
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
 			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
@@ -219,7 +230,7 @@ exit;
 # suffixes like 'Fm.' or 'Gp.'. This subroutine completely rebuilds the
 # STRAT_NAMES and STRAT_CONCEPTS tables.
 
-our (%strat_raw, %strat_name, %strat_name_fc);
+our (%strat_raw, %strat_name, %strat_name_fc, %macrostrat_name);
 our (%strat_prelim, %strat_concept, %contained_in, %prelim_to_real);
 our (%country_map);
 
@@ -229,6 +240,33 @@ our $parent_matches = 0;
 
 sub GenerateConcepts {
 
+    # Start by reading interval names, so we can ignore names that contain them.
+    
+    say "Reading from table `$TABLE{INTERVAL_DATA}`...";
+    
+    foreach my $name ( DBColumnQuery($pbdb, "SELECT interval_name FROM $TABLE{INTERVAL_DATA}") )
+    {
+	$is_interval_name{$name} = 1;
+    }
+    
+    # Then read macrostrat names, so we can keep any name which is in Macrostrat.
+    
+    say "Reading from table `$TABLE{STRAT_MS_NAMES}`...";
+    
+    my $macrostrat_names = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT * FROM $TABLE{STRAT_MS_NAMES}
+	WHERE exclude is null
+	END_SQL
+    
+    foreach my $row ( $macrostrat_names->@* )
+    {
+	my $fcname = fc $row->{name};
+	my $rank = $rank_comparison{$row->{rank}};
+	my $mskey = "$fcname|$rank|$row->{cc}";
+	
+	$macrostrat_name{$mskey} = $row;
+    }
+    
     # Step I: iterate through the rows of the COLLECTION_STRATA table. Create a set of
     # stratigraphic name records in %strat_raw, and record the relationships between
     # them in %contained_in. The SQL query below returns information from
@@ -236,9 +274,9 @@ sub GenerateConcepts {
     # these tables use collection_no as their primary key, so they have a 1-1
     # correspondence.
     
-    say "Reading from table '$TABLE{COLLECTION_STRATA}'...";
+    say "Reading from table `$TABLE{COLLECTION_STRATA}`...";
     
-    my $stratigraphy_data = DBHashQuery($pbdb, "
+    my $stratigraphy_data = DBHashQuery($pbdb, <<~END_SQL);
 	SELECT cs.grp, cs.formation, cs.member, c.cc, group_concat(distinct collection_no) as coll_nos,
 		count(*) as n_colls, sum(c.n_occs) as n_occs,
 		max(c.early_age) as early_age, min(c.late_age) as late_age,
@@ -250,7 +288,8 @@ sub GenerateConcepts {
 	FROM $TABLE{COLLECTION_STRATA} as cs
 		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 		join $TABLE{COLLECTION_DATA} as cc using (collection_no)
-	GROUP BY grp, formation, member, cc");
+	GROUP BY grp, formation, member, cc
+	END_SQL
     
     foreach my $row ( $stratigraphy_data->@* )
     {
@@ -342,7 +381,7 @@ sub GenerateConcepts {
     say "Decomposing names...";
     
     my (%gp_keys, %fm_keys, %sfm_keys, %mbr_keys);
-    my (%first_two, %first_last, %alias_of);
+    my (%first_two, %first_last, %alias_of, %alias_reversed);
     my @deferred;
     
     # Make a first pass through the raw name records, processing as many as possible. A
@@ -351,7 +390,6 @@ sub GenerateConcepts {
     # before and after the conjunction are stratigraphic names in their own right, or
     # whether the conjunction is a part of the name.
     
-  RKEY:
     foreach my $rkey ( sort { fc($a) cmp fc($b) } keys %strat_raw )
     {
 	&processRawName($rkey, 1);
@@ -397,9 +435,9 @@ sub GenerateConcepts {
 	    $raw_name = "$1 or $2";
 	}
 	
-	# Remove any other question marks, including those surrounded by parentheses.
+	# Remove any parenthesized expressions with question marks.
 	
-	while ( $raw_name =~ qr{ (.*?) \s* (?: [?] | [(][?][)] ) \s* (.*) }xs )
+	while ( $raw_name =~ qr{ (.*?) \s* [(] [^)]* [?] [^)]* [)] \s* (.*) }xs )
 	{
 	    if ( $1 ne '' && $2 ne '' )
 	    {
@@ -412,11 +450,19 @@ sub GenerateConcepts {
 	    }
 	}
 	
-	# Remove a parenthesized expression with a question mark.
+	# Remove all other question marks.
 	
-	if ( $raw_name =~ qr{ (.*?) \s* [(] [^)]* [?] [^)]* [)] $ }xs )
+	while ( $raw_name =~ qr{ (.*) \s* [?] \s* (.*) }xs )
 	{
-	    $raw_name = $1;
+	    if ( $1 ne '' && $2 ne '' )
+	    {
+		$raw_name = "$1 $2";
+	    }
+	    
+	    else
+	    {
+		$raw_name = ($1 ne '' ? $1 : $2);
+	    }
 	}
 	
 	# Now split the name into individual components. In some cases, processing will
@@ -437,22 +483,14 @@ sub GenerateConcepts {
 	# determine which is the case, because we will be able to check whether each
 	# part has been found separately in the dataset as a stratigraphic name.
 	
-	elsif ( $raw_name =~ qr{ [-,&(/] | \s (and|et|y) \s }xs )
+	elsif ( $raw_name =~ qr{ [-,&/] | \s (and|et|y) \s }xs )
 	{
 	    my $extra;
 	    
 	    if ( $pass == 1 )
 	    {
 		push @deferred, $rkey;
-		next RKEY;
-	    }
-	    
-	    if ( $raw_name =~ /[(]/ )
-	    {
-		my $parsed = ParseParentheses($raw_name, $nr);
-		say "ParseParentheses: $raw_name -> $parsed" if $opt_debug;
-		
-		$raw_name = $parsed;
+		return;
 	    }
 	    
 	    if ( $raw_name =~ /,/ )
@@ -502,6 +540,11 @@ sub GenerateConcepts {
 		    say "ParseConjunctionES: $raw_name -> " . join(' | ', @components) if $opt_debug;
 		}
 	    }
+	    
+	    else
+	    {
+		@components = $raw_name;
+	    }
 	}
 	
 	# Otherwise, treat the name as a single component.
@@ -523,11 +566,17 @@ sub GenerateConcepts {
 	    
 	    # Separate out any alias that is specified in the component.
 	    
-	    if ( $c =~ /^(.*?)\s*[(](?:=|also|also called)?\s*(.*?)\s*[)]\s*$/ )
+	    if ( $c =~ /[(]/ )
 	    {
-		$c = $1;
-		$alias = $2;
+		($c, $alias) = ParseParentheses($c, $nr);
 	    }
+	    
+	    # if ( $c =~ / ^ (.*?) \s* [(] (?: = \s* | also \s+ | also \s called \s+ )?
+	    # 		 (.*?) \s* [)] \s* $ /xs )
+	    # {
+	    # 	$c = $1;
+	    # 	$alias = $2;
+	    # }
 	    
 	    # Remove paired single quotes, but leave unpaired ones. The latter
 	    # are part of the name, i.e. the 'Arqov formation in Israel.
@@ -550,7 +599,7 @@ sub GenerateConcepts {
 	    # Ignore any name component that doesn't contain at least three
 	    # letters in a row.
 	    
-	    next unless $c =~ /[[:alpha:]]{3}/;
+	    next unless $c =~ /(?:\p{L}\p{M}*){3}/;
 	    
 	    # Remove any mention of cyclothem.
 	    
@@ -561,20 +610,47 @@ sub GenerateConcepts {
 	    
 	    # Ignore any component that doesn't contain at least one upper-case letter.
 
-	    next unless $c =~ /[A-Z]/;
+	    next unless $c =~ /\p{Lu}/;
+	    
+	    # If the component starts with a digit, remove that.
+	    
+	    if ( $c =~ / ^ \#? \d+ [.]? \s* (.*) /xs )
+	    {
+		$c = $1;
+	    }
 	    
 	    # If the initial word is 'lower|middle|upper' in all lower-case followed by
 	    # a name starting with upper-case, remove the adjective. If the remainder is
-	    # the same as the enclosing formation, skip this name entirely.
+	    # the same as the enclosing formation or group, skip this name entirely.
 	    
 	    if ( $c =~ / ^ (lower|middle|upper|base \s of) \s+ ( \p{Lu}.* ) /xs )
 	    {
-		if ( $nr->{formation} && $2 eq $nr->{formation} )
+		if ( $nr->{formation} && $2 eq $nr->{formation} ||
+		     $nr->{grp}  && $2 eq $nr->{grp} )
 		{
 		    next;
 		}
 		
 		else
+		{
+		    $c = $2;
+		}
+	    }
+	    
+	    # If the initial word is 'Lower|Middle|Upper', the situation is trickier.
+	    # Some formal stratigraphic names do begin with those words. So we remove
+	    # the first word only if this is a stratum we have already encountered or
+	    # one known to Macrostrat.
+	    
+	    elsif ( $c =~ / ^ (Lower|Middle|Upper) \s+ ( \p{Lu}.* ) /xs )
+	    {
+		if ( $nr->{formation} && $2 eq $nr->{formation} ||
+		     $nr->{grp}  && $2 eq $nr->{grp} )
+		{
+		    next;
+		}
+		
+		elsif ( IsKnownStratum($2, $nr) )
 		{
 		    $c = $2;
 		}
@@ -587,6 +663,7 @@ sub GenerateConcepts {
 	    {
 		next if $1 eq 'below' || $1 eq 'above';
 		$c = $is_particle{$1} ? "$1$2" : $2;
+		next unless $c =~ /\p{Lu}/;
 	    }
 	    
 	    # Put the component into fold-case so that we can do case-insensitive
@@ -595,9 +672,24 @@ sub GenerateConcepts {
 	    my $fc = fc $c;
 	    
 	    # Ignore any name that consists solely of words like "upper", "lower",
-	    # "unit", "bed", "i", "ii", etc. with no descriptive words.
+	    # "unit", "bed", "i", "ii", etc. and geological descriptive words. These are
+	    # informal names, not formal stratum names. But keep the name if it appears
+	    # as-is in Macrostrat and the two names are compatible.
 	    
-	    next if IsNullName($fc);
+	    if ( IsInformalName($fc) )
+	    {
+		my $mskey = "$fc|$rank|$nr->{cc}";
+		
+		if ( $macrostrat_name{$mskey} )
+		{
+		    next unless NamesAreCompatible($fc, $nr, $fc, $macrostrat_name{$mskey});
+		}
+		
+		else
+		{
+		    next;
+		}
+	    }
 	    
 	    # Increment the component count for the name record.
 	    
@@ -629,7 +721,7 @@ sub GenerateConcepts {
 	    $first_two{$ft} ||= [];
 	    push $first_two{$ft}->@*, $nkey;
 	    
-	    my @fl = ($fc =~ /^([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/);
+	    my @fl = ($fc =~ /^(\p{L})\S*(\p{L})/);
 	    
 	    if ( @fl )
 	    {
@@ -662,12 +754,15 @@ sub GenerateConcepts {
 		
 		if ( fc($nkey) lt fc($alias_key) )
 		{
-		    $alias_of{$alias_key} = $nkey;
+		    $alias_of{$alias_key}{$nkey} = { };
+		    $alias_of{$alias_key}{$nkey}{$_} = 1 foreach keys $nr->{reference_no}->%*;
 		}
 
 		else
 		{
-		    $alias_of{$nkey} = $alias_key;
+		    $alias_of{$nkey}{$alias_key} = { };
+		    $alias_of{$nkey}{$alias_key}{$_} = 1 foreach keys $nr->{reference_no}->%*;
+		    $alias_reversed{$nkey}{$alias_key} = 1;
 		}
 		
 		# Put the alias into the %first_two and %first_last hashes as well.
@@ -831,19 +926,22 @@ sub GenerateConcepts {
 	    
 	    my (%matching_concepts);
 	    
-	    # If this component name key is an alias for another key that has already
-	    # been assigned to a concept, then add that concept to the list.
+	    # # If this component name key is an alias for another key that has already
+	    # # been assigned to a concept, then add that concept to the list.
 	    
-	    if ( my $orig_key = $alias_of{$nkey} )
-	    {
-		foreach my $orig_rn ( $strat_name{$orig_key}->@* )
-		{
-		    if ( my $orig_preliminary_no = $orig_rn->{preliminary_no}{$orig_key} )
-		    {
-			$matching_concepts{$orig_preliminary_no} = 1;
-		    }
-		}
-	    }
+	    # if ( $alias_of{$nkey} )
+	    # {
+	    # 	foreach my $alias_key ( keys $alias_of{$nkey}->%* )
+	    # 	{
+	    # 	    foreach my $orig_nr ( $strat_name{$alias_key}->@* )
+	    # 	    {
+	    # 		if ( my $orig_preliminary_no = $orig_nr->{preliminary_no}{$alias_key} )
+	    # 		{
+	    # 		    $matching_concepts{$orig_preliminary_no} = 1;
+	    # 		}
+	    # 	    }
+	    # 	}
+	    # }
 	    
 	    # Check for other name records that could represent the same name or a
 	    # spelling variant, possibly at a different rank.
@@ -1015,88 +1113,88 @@ sub GenerateConcepts {
     # Step V: link up the consolidated stratigraphic concepts into hierarchical
     # relationships, using the containment relation that was generated in step I above.
     
-    say "Computing concept relationships...";
+    # say "Computing concept relationships...";
     
-    # Iterate through the final stratigraphic name concepts. For each one, generate all
-    # possible relationships based on the list of raw name keys associated with it along
-    # with the %contained_in relation on those keys.
+    # # Iterate through the final stratigraphic name concepts. For each one, generate all
+    # # possible relationships based on the list of raw name keys associated with it along
+    # # with the %contained_in relation on those keys.
 
-    foreach my $cr ( @consolidated_concepts )
-    {
-	my @child_name_keys = $cr->{rkeys}->@*;
+    # foreach my $cr ( @consolidated_concepts )
+    # {
+    # 	my @child_name_keys = $cr->{rkeys}->@*;
 	
-	foreach my $child_key ( @child_name_keys )
-	{
-	    my (undef, $child_rank, $child_cc) = split /[|]/, $child_key;
+    # 	foreach my $child_key ( @child_name_keys )
+    # 	{
+    # 	    my (undef, $child_rank, $child_cc) = split /[|]/, $child_key;
 	    
-	    if ( $contained_in{$child_key} )
-	    {
-		my @parent_keys = keys $contained_in{$child_key}->%*;
-		my @canonical_parent_keys;
+    # 	    if ( $contained_in{$child_key} )
+    # 	    {
+    # 		my @parent_keys = keys $contained_in{$child_key}->%*;
+    # 		my @canonical_parent_keys;
 		
-		foreach my $parent_key ( @parent_keys )
-		{
-		    my $nr = $strat_raw{$parent_key};
+    # 		foreach my $parent_key ( @parent_keys )
+    # 		{
+    # 		    my $nr = $strat_raw{$parent_key};
 		    
-		    next unless $nr->{n_names} == 1;
+    # 		    next unless $nr->{n_names} == 1;
 
-		    if ( $nr->{consolidated_with} )
-		    {
-			push @canonical_parent_keys, $nr->{consolidated_with}->@*;
-		    }
+    # 		    if ( $nr->{consolidated_with} )
+    # 		    {
+    # 			push @canonical_parent_keys, $nr->{consolidated_with}->@*;
+    # 		    }
 
-		    else
-		    {
-			push @canonical_parent_keys, $parent_key;
-		    }
-		}
+    # 		    else
+    # 		    {
+    # 			push @canonical_parent_keys, $parent_key;
+    # 		    }
+    # 		}
 		
-		foreach my $parent_key ( @canonical_parent_keys )
-		{
-		    my (undef, $parent_rank, $parent_cc) = split /[|]/, $parent_key;
-		    my ($preliminary_no, @rest) = values $strat_raw{$parent_key}{preliminary_no}->%*;
+    # 		foreach my $parent_key ( @canonical_parent_keys )
+    # 		{
+    # 		    my (undef, $parent_rank, $parent_cc) = split /[|]/, $parent_key;
+    # 		    my ($preliminary_no, @rest) = values $strat_raw{$parent_key}{preliminary_no}->%*;
 		    
-		    while ( @rest && $rest[0] eq $preliminary_no )
-		    {
-			shift @rest;
-		    }
+    # 		    while ( @rest && $rest[0] eq $preliminary_no )
+    # 		    {
+    # 			shift @rest;
+    # 		    }
 		    
-		    if ( @rest )
-		    {
-			say "Ambiguous concept for '$parent_key'";
-		    }
+    # 		    if ( @rest )
+    # 		    {
+    # 			say "Ambiguous concept for '$parent_key'";
+    # 		    }
 		    
-		    unless ( $preliminary_no )
-		    {
-			say "No preliminary_no found for '$parent_key'";
-			next;
-		    }
+    # 		    unless ( $preliminary_no )
+    # 		    {
+    # 			say "No preliminary_no found for '$parent_key'";
+    # 			next;
+    # 		    }
 		    
-		    my $parent_no = $prelim_to_concept{$preliminary_no}{concept_no};
-		    my @reference_nos = keys $contained_in{$child_key}{$parent_key}->%*;
+    # 		    my $parent_no = $prelim_to_concept{$preliminary_no}{concept_no};
+    # 		    my @reference_nos = keys $contained_in{$child_key}{$parent_key}->%*;
 		    
-		    if ( $child_cc ne $parent_cc )
-		    {
-			say "Bad cc match for '$child_key' and '$parent_key'";
-			next;
-		    }
+    # 		    if ( $child_cc ne $parent_cc )
+    # 		    {
+    # 			say "Bad cc match for '$child_key' and '$parent_key'";
+    # 			next;
+    # 		    }
 
-		    unless ( $parent_no )
-		    {
-			say "No parent_no found for '$parent_key'";
-			next;
-		    }
+    # 		    unless ( $parent_no )
+    # 		    {
+    # 			say "No parent_no found for '$parent_key'";
+    # 			next;
+    # 		    }
 		    
-		    next if $parent_no == $cr->{concept_no};
+    # 		    next if $parent_no == $cr->{concept_no};
 		    
-		    my $relationship_key = "$child_rank|$child_cc|$parent_rank|$parent_no";
+    # 		    my $relationship_key = "$child_rank|$child_cc|$parent_rank|$parent_no";
 		    
-		    $cr->{parent_concept}{$relationship_key} = 1;
-		    $cr->{parent_refs}{$relationship_key}{$_} = 1 foreach @reference_nos;
-		}
-	    }
-	}
-    }
+    # 		    $cr->{parent_concept}{$relationship_key} = 1;
+    # 		    $cr->{parent_refs}{$relationship_key}{$_} = 1 foreach @reference_nos;
+    # 		}
+    # 	    }
+    # 	}
+    # }
     
     
     # Step VI: (re)generate the STRAT_NAMES, STRAT_CONCEPTS, and STRAT_OPINIONS tables.
@@ -1106,14 +1204,16 @@ sub GenerateConcepts {
     $DB::single = 1;
     
     say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRAT_NREFS}', '$TABLE{STRAT_CONCEPTS}', " .
-	"`strat_concept_ccs`, '$TABLE{STRAT_OPINIONS}', '$TABLE{STRAT_OREFS}'...";
+	"`strat_concept_ccs`, '$TABLE{STRAT_OPINIONS}', '$TABLE{STRAT_OREFS}', " .
+	"`coll_strat_names`...";
     
-    DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_NAMES}");
-    DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_NREFS}");
-    DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_CONCEPTS}");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NAMES}`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NREFS}`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_CONCEPTS}`");
     DBCommand($pbdb, "TRUNCATE `strat_concept_ccs`");
-    DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_OPINIONS}");
-    DBCommand($pbdb, "TRUNCATE $TABLE{STRAT_OREFS}");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_OPINIONS}`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_OREFS}`");
+    DBCommand($pbdb, "TRUNCATE `coll_strat_names`");
     
     # Then go through the list of concepts, and add one row to the STRAT_CONCEPTS table
     # per concept. For efficiency, these rows are added in blocks of roughly $chunk_size
@@ -1187,7 +1287,8 @@ sub GenerateConcepts {
     
     say "Generating the STRAT_NAMES ($TABLE{STRAT_NAMES}) and " .
 	"STRATN_REFS ($TABLE{STRAT_NREFS}) tables...";
-    
+
+    my %strat_name_no;
     my $name_values = '';
     my $name_ref_values = '';
     my $name_coll_values = '';
@@ -1207,6 +1308,8 @@ sub GenerateConcepts {
 	    
 	    $name_colls += $nr->{n_colls};
 	    $name_occs += $nr->{n_occs};
+	    
+	    $strat_name_no{$key} = $name_no;
 	    
 	    unless ( $concept_no )
 	    {
@@ -1272,8 +1375,8 @@ sub GenerateConcepts {
     InsertNameRefs($pbdb, $name_ref_values) if $name_ref_values;
     InsertCollNames($pbdb, $name_coll_values) if $name_coll_values;
     
-    # Now run through the concepts again and add an opinion for every child-parent
-    # relationship.
+    # Now run through the names again and add an opinion for every child-parent
+    # relationship and every alias relationship.
     
     say "Generating the STRAT_OPINIONS ($TABLE{STRAT_OPINIONS}) and " .
 	"STRAT_OREFS ($TABLE{STRAT_OREFS}) tables...";
@@ -1281,27 +1384,61 @@ sub GenerateConcepts {
     my $opinion_values = '';
     my $opinion_ref_values = '';
     my $new_opinions = 0;
-    
-    foreach my $child_no ( sort { $a <=> $b } keys %strat_concept )
+
+    foreach my $child_key ( sort keys %strat_name )
     {
-	my $cr = $strat_concept{$child_no};
+	my (undef, $child_rank, $child_cc) = split /\|/, $child_key;
 	
-	foreach my $relationship ( keys $cr->{parent_concept}->%* )
+	foreach my $parent_key ( sort keys $contained_in{$child_key}->%* )
 	{
-	    my ($child_rank, $cc, $parent_rank, $parent_no) = split /[|]/, $relationship;
+	    my (undef, $parent_rank, $parent_cc) = split /\|/, $parent_key;
 	    
 	    my $qopno = $pbdb->quote(++$new_opinions);
-	    my $qchildno = $pbdb->quote($child_no);
+	    my $qchildno = $pbdb->quote($strat_name_no{$child_key});
 	    my $qchildrank = $pbdb->quote($child_rank);
-	    my $qcc = $pbdb->quote($cc);
-	    my $qparno = $pbdb->quote($parent_no);
+	    my $qcc = $pbdb->quote($child_cc);
+	    my $qparno = $pbdb->quote($strat_name_no{$parent_key});
 	    my $qparrank = $pbdb->quote($parent_rank);
 	    
 	    $opinion_values .= ', ' if $opinion_values;
 	    $opinion_values .= "($qopno, $qchildno, $qchildrank, $qcc, 'belongs to', " .
 		"$qparno, $qparrank)";
 	    
-	    foreach my $reference_no ( sort { $a <=> $b } keys $cr->{parent_refs}{$relationship}->%* )
+	    foreach my $reference_no ( sort { $a <=> $b }
+				       keys $contained_in{$child_key}{$parent_key}->%* )
+	    {
+		my $qrefno = $pbdb->quote($reference_no);
+		$opinion_ref_values .= ', ' if $opinion_ref_values;
+		$opinion_ref_values .= "($qopno, $qrefno)";
+	    }
+	}
+	
+	foreach my $other_key ( sort keys $alias_of{$child_key}->%* )
+	{
+	    my ($other_name, $other_rank, $other_cc) = split /\|/, $other_key;
+	    
+	    my $qopno = $pbdb->quote(++$new_opinions);
+	    my $qchildno = $pbdb->quote($strat_name_no{$child_key});
+	    my $qchildrank = $pbdb->quote($child_rank);
+	    my $qcc = $pbdb->quote($child_cc);
+	    my $qotherno = $pbdb->quote($strat_name_no{$other_key});
+	    
+	    $opinion_values .= ', ' if $opinion_values;
+	    
+	    if ( $alias_reversed{$child_key}{$other_key} )
+	    {
+		$opinion_values .= "($qopno, $qotherno, $qchildrank, $qcc, 'synonym of', " .
+		    "$qchildno, $qchildrank)";
+	    }
+
+	    else
+	    {
+		$opinion_values .= "($qopno, $qchildno, $qchildrank, $qcc, 'synonym of', " .
+		    "$qotherno, $qchildrank)";
+	    }	
+
+	    foreach my $reference_no ( sort { $a <=> $b }
+				       keys $alias_of{$child_key}{$other_key}->%* )
 	    {
 		my $qrefno = $pbdb->quote($reference_no);
 		$opinion_ref_values .= ', ' if $opinion_ref_values;
@@ -1372,7 +1509,7 @@ sub GenerateConcepts {
     say "WARNING: $missing_concept names had no concept" if $missing_concept > 0;
     say "Created $new_names names";
     say "Created $new_concepts concepts";
-    say "Created $new_opinions concept relationships";
+    say "Created $new_opinions name relationships";
     
     # my $words_fh;
     
@@ -1468,6 +1605,8 @@ sub UpdateStratRaw {
 		  lng_min => $source->{lng_min}, lng_max => $source->{lng_max},
 		  n_colls => $source->{n_colls}, n_occs => $source->{n_occs},
 		  reference_no => { }, lithology1 => { }, lithology2 => { } };
+	
+	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
 	
 	# If the field is 'member' and we are also given a formation, store it.
 	
@@ -1827,56 +1966,109 @@ sub ParseParentheses {
 
     my ($raw_name, $nr) = @_;
     
-    if ( $raw_name =~ qr{ [(] \s* = \s* [^)] }xs )
+    if ( $raw_name =~ qr{ (.*?) \s* [(] \s* ([^)]+?) \s* [)]? $ }xs )
     {
-	return $raw_name;
-    }
-
-    if ( $raw_name =~ qr{ (\S.*?) \s+ [(] \s* (?: also | also \s called ) \s* (.*) [)] $ }xs )
-    {
-	return "$1 (= $2)";
-    }
-    
-    if ( $raw_name =~ qr{ ^ (\S.*) \s+ [(] ([^)]+) [)] $ }xs )
-    {
-	my $a = $1;
-	my $b = $2;
-
-	if ( $b =~ /[?]| only$/ )
+	my $main = $1;
+	my $alias = $2;
+	
+	if ( $alias =~ qr{ ^ (?: = \s* | also \s+ | also \s called \s+ | reg[.]? \s* : \s* ) (.*) }xs )
 	{
-	    return ($a);
+	    $alias = $1;
 	}
 	
-	elsif ( IsNullName(fc $b) )
+	if ( $alias =~ / only$/ )
 	{
-	    return ($a);
+	    return $main;
 	}
-
-	elsif ( IsNullName(fc $a) )
+	
+	elsif ( IsInformalName($alias) )
 	{
-	    return ($b);
+	    return $main;
+	}
+	
+	elsif ( IsInformalName($main) )
+	{
+	    return $alias;
 	}
 	
 	else
 	{
-	    return "$a (= $b)";
+	    return ($main, $alias);
 	}
     }
-
-    elsif ( $raw_name =~ qr{ ^ (\S.*?) \s* [(] ([^)]+) [)] \s* (\S.*) $ }xs )
+    
+    elsif ( $raw_name =~ qr{ (.*?) \s* [(] \s* ([^)]+?) \s* [)] \s* (.+) $ }xs )
     {
-	return "$1 $3";
-    }
-
-    elsif ( $raw_name =~ qr{ ^ [(] (.*) [)] $ }xs )
-    {
-	return $1;
+	my $first = $1;
+	my $middle = $2;
+	my $last = $3;
+	
+	if ( IsNullName($middle) )
+	{
+	    return '$first $last';
+	}
+	
+	else
+	{
+	    return $raw_name;
+	}
     }
     
     else
     {
 	return $raw_name;
     }
+    
+    # if ( $raw_name =~ qr{ [(] \s* = \s* [^)] }xs )
+    # {
+    # 	return $raw_name;
+    # }
+
+    # if ( $raw_name =~ qr{ (\S.*?) \s+ [(] \s* (?: also | also \s called ) \s* (.*) [)] $ }xs )
+    # {
+    # 	return "$1 (= $2)";
+    # }
+    
+    # if ( $raw_name =~ qr{ ^ (\S.*) \s+ [(] ([^)]+) [)] $ }xs )
+    # {
+    # 	my $a = $1;
+    # 	my $b = $2;
+
+    # 	if ( $b =~ /[?]| only$/ )
+    # 	{
+    # 	    return ($a);
+    # 	}
+	
+    # 	elsif ( IsNullName(fc $b) )
+    # 	{
+    # 	    return ($a);
+    # 	}
+
+    # 	elsif ( IsNullName(fc $a) )
+    # 	{
+    # 	    return ($b);
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    return "$a (= $b)";
+    # 	}
+    # }
+
+    # elsif ( $raw_name =~ qr{ ^ (\S.*?) \s* [(] ([^)]+) [)] \s* (\S.*) $ }xs )
+    # {
+    # 	return "$1 $3";
+    # }
+
+    # elsif ( $raw_name =~ qr{ ^ [(] (.*) [)] $ }xs )
+    # {
+    # 	return $1;
+    # }
+    
+    # else
+    # {
+    # 	return $raw_name;
+    # }
 }	
 
 
@@ -2464,11 +2656,26 @@ sub IsNullName {
 
     my ($string) = @_;
     
-    my @words = $string =~ /([[:alpha:]]+)/g;
+    my @words = $string =~ /([\p{L}\p{M}]+)/g;
     my @null_words =
 	grep { $is_null{$_} || $_ =~ /^[xvi]+[a-z]?$|^[a-z]$|^[a-z]-[a-z]$/ } @words;
     
-    return ( @words && @words == @null_words ) ? 1 : '';
+    return ( @words == @null_words ) ? 1 : '';
+}
+
+
+sub IsInformalName {
+
+    my ($string) = @_;
+    
+    return 1 unless $string =~ /(?:\p{L}\p{M}*){3}/;
+    
+    my @words = $string =~ /([\p{L}\p{M}]+)/g;
+    my @null_words =
+	grep { $is_null{$_} || $is_rock_type{$_} || $is_interval_name{$_} ||
+	       $_ =~ /^[xvi]+[a-z]?$|^[a-z]$/ } @words;
+    
+    return ( @words == @null_words ) ? 1 : '';
 }
 
 
@@ -2506,9 +2713,10 @@ sub IsRockDescription {
 sub IsKnownStratum {
 
     my ($string, $nr) = @_;
-
+    
     my $test_key = join('|', fc($string), $nr->{rank}, $nr->{cc});
-    return $strat_name_fc{$test_key} ? 1 : '';
+    
+    return ( $strat_name_fc{$test_key} || $macrostrat_name{$test_key} ) ? 1 : '';
 }
 
 
@@ -2874,7 +3082,7 @@ sub ImportMacrostrat {
 	$strat_ms_values .= ', ' if $strat_ms_values;
 	$strat_ms_values .= "($qstratn, $qstratc, $qexclude, $qname, $qrank, $qcc, $qearly, $qlate, " .
 	    "$qlatmin, $qlatmax, $qlngmin, $qlngmax)";
-
+	
 	if ( length($strat_ms_values) > $chunk_size )
 	{
 	    InsertMSNames($pbdb, $strat_ms_values);
@@ -2898,7 +3106,7 @@ sub ImportMacrostrat {
 
 sub MatchMacrostrat {
 
-    my $ms_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_MS_NAMES}");
+    my $ms_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_MS_NAMES} WHERE exclude is null");
     
     my (%strat_ms_names, %first_two, %first_last);
 
@@ -2913,25 +3121,17 @@ sub MatchMacrostrat {
 	
 	my $fcname = fc $nr->{name};
 	
-	if ( $fcname =~ qr{ ^ (?:lower|lowermost|middle|upper|uppermost) \s+ (.*) }xs )
+	my $ft = substr($fcname, 0, 2);
+	$first_two{$ft} ||= [ ];
+	push $first_two{$ft}->@*, $nr;
+	
+	if ( my @fl = ($fcname =~ /^(\p{L})\S*(\p{L})/) )
 	{
-	    $fcname = $1;
+	    my $fl = $fl[0] . $fl[1];
+	    $first_last{$fl} ||= [ ];
+	    push $first_last{$fl}->@*, $nr;
 	}
 	
-	if ( my @ft = ($fcname =~ /([[:alpha:]]{2})\S*[[:alpha:]]/) )
-	{
-	    my $ftchars = $ft[0];
-	    $first_two{$ftchars} ||= [ ];
-	    push $first_two{$ftchars}->@*, $nr;
-	}
-	
-	if ( my @fl = ($fcname =~ /([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/) )
-	{
-	    my $flchars = $fl[0] . $fl[1];
-	    $first_last{$flchars} ||= [ ];
-	    push $first_last{$flchars}->@*, $nr;
-	}
-
 	$msnames++;
     }
 
@@ -2945,25 +3145,23 @@ sub MatchMacrostrat {
     my $matched_names = 0;
     my @match_records;
     my %msnames;
-    
+
+  ROW:
     foreach my $pbnr ( $pbdb_names->@* )
     {
 	my $pbname = fc $pbnr->{name};
 	my $stratn_no = $pbnr->{stratn_no};
 	my (@candidates);
 	
-	if ( $pbname =~ qr{ ^ (?:lower|lowermost|middle|upper|uppermost) \s+ (.*) }xs )
+	if ( $opt_check )
 	{
-	    $pbname = $1;
+	    next ROW unless $pbnr->{name} eq $check_name1 || $pbnr->{name} eq $check_name2;
 	}
 	
-	if ( my @ft = ($pbname =~ /([[:alpha:]]{2})\S*[[:alpha:]]/) )
-	{
-	    my $ftchars = $ft[0];
-	    push @candidates, $first_two{$ftchars}->@* if $first_two{$ftchars};
-	}
+	my $ft = substr($pbname, 0, 2);
+	push @candidates, $first_two{$ft}->@* if $first_two{$ft};
 	
-	if ( my @fl = ($pbname =~ /([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/) )
+	if ( my @fl = ($pbname =~ /^(\p{L})\S*(\p{L})/) )
 	{
 	    my $flchars = $fl[0] . $fl[1];
 	    push @candidates, $first_last{$flchars}->@* if $first_last{$flchars};
@@ -3107,15 +3305,22 @@ sub MatchMacrostrat {
 	    {
 		my $qno = $pbdb->quote($stratn_no);
 		my $qid = $pbdb->quote($match->{stratn_id});
+		my $qco = $pbdb->quote($match->{stratc_id} > 0 ? $match->{stratc_id} : undef);
 		my $qsc = $pbdb->quote($match->{score});
 
-		push @match_records, [$qno, $qid, $qsc];
+		push @match_records, [$qno, $qid, $qco, $qsc];
 	    }
 	}
 	
 	$pbnames++;
     }
 
+    say "  Read $pbnames names.";
+    say "  Matched $matched_names names.";
+    say "  There were $good_matches total matches.";
+
+    return if $opt_check;
+    
     # Now truncate the table and regenerate it.
 
     say "Emptying tables: '$TABLE{STRAT_MS_MATCHES}'...";
@@ -3123,13 +3328,15 @@ sub MatchMacrostrat {
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_MATCHES}`");
     
     say "Generating the STRAT_MS_MATCHES ($TABLE{STRAT_MS_MATCHES}) table...";
-    
+
+    my $match_count = 0;
     my $match_values = '';
     
     foreach my $r ( @match_records )
     {
 	$match_values .= ', ' if $match_values;
-	$match_values .= "($r->[0], $r->[1], $r->[2])";
+	$match_values .= "($r->[0], $r->[1], $r->[2], $r->[3])";
+	$match_count++;
 	
 	if ( length($match_values > $chunk_size) )
 	{
@@ -3140,11 +3347,7 @@ sub MatchMacrostrat {
     
     InsertNameMatches($pbdb, $match_values) if $match_values;
 
-    say "  Read $pbnames names.";
-    say "  Matched $matched_names names.";
-    say "  There were $good_matches total matches.";
-    
-    say "";
+    say "Created $match_count match recoreds";
     
     # foreach my $pbnr ( $pbdb_names->@* )
     # {
@@ -3447,8 +3650,8 @@ sub InsertOpinions {
 
     my ($dbh, $opinion_values) = @_;
 
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_OPINIONS}` (strato_no, child_no, child_rank, cc, " .
-	      "relationship, parent_no, parent_rank) VALUES " .
+    DBCommand($dbh, "INSERT IGNORE INTO `$TABLE{STRAT_OPINIONS}` (strato_no, child_no, child_rank, " .
+	      "cc, relationship, parent_no, parent_rank) VALUES " .
 	      $opinion_values);
     
     # DBCommand($dbh, "INSERT INTO $TABLE{STRAT_OPINIONS} (strato_no, child_no, child_rank, " .
@@ -3469,7 +3672,7 @@ sub InsertNameMatches {
 
     my ($dbh, $match_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, score) VALUES $match_values");
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, stratc_id, score) VALUES $match_values");
 }
 
 
