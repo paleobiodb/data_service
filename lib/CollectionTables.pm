@@ -1375,7 +1375,7 @@ sub createCountryMap {
 	('EE', 'EUR', 'Estonia'),
 	('SZ', 'AFR', 'Eswatini'),
 	('ET', 'AFR', 'Ethiopia'),
-	('FA', 'SOA', 'Falkland Islands (Malvinas)'),
+	('FK', 'SOA', 'Falkland Islands (Malvinas)'),
 	('FO', 'EUR', 'Faroe Islands'),
 	('FJ', 'OCE', 'Fiji'),
 	('FI', 'EUR', 'Finland'),
