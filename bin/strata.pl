@@ -67,7 +67,7 @@ our ($check_name1, $check_name2) = split /[:]/, decode_utf8($opt_check);
 
 our (%second_words);
 
-our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
+our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			bed => 1, beds => 1, band => 1, bands => 1, 'bänderschiefer' => 1,
 			black => 1, breccia => 1, breccias => 1,
 			calcarenite => 1, calcarenites => 1,
@@ -78,8 +78,8 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			coal => 1, coals => 1, 'coal-bearing' => 1, complex => 1, complexes => 1,
 			conglomerate => 1, conglomerates => 1, conglomeratic => 1,
 			coquina => 1, coquinas => 1, crag => 1, crags => 1, cyclothem => 1,
-			diatomite => 1, diatomites => 1, dolomite => 1, dolomites => 1,
-			dolostone => 1, dolostones => 1, 
+			diatomite => 1, diatomites => 1, disrupted => 1,
+			dolomite => 1, dolomites => 1, dolostone => 1, dolostones => 1, 
 			equivalent => 1, equivalents => 1, facie => 1, facies => 1,
 			flag => 1, flags => 1, flagstone => 1, flagstones => 1, formtation => 1,
 			fossiliferous => 1, 
@@ -99,7 +99,7 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			phosphatic => 1, platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
 			quarry => 1, quarries => 1, quartzite => 1, quartzites => 1, 'q-sand' => 1,
 			radiolaridic => 1, radiolarite => 1, radiolarites => 1, rag => 1, rags => 1,
-			red => 1, reef => 1, reefs => 1, sand => 1, sands => 1,
+			range => 1, red => 1, reef => 1, reefs => 1, sand => 1, sands => 1,
 			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1,
 			schichten => 1, sequence => 1, sequences => 1, series => 1,
 			succession => 1, successions => 1, seam => 1, seams => 1,
@@ -119,21 +119,21 @@ our (%is_rock_type) = ( arkose => 1, ash => 1, ashes => 1,
 			schiste => 1, schistes => 1, vert => 1, verts => 1, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
-		   uppermost => 1, lowermost => 1, st => 1, nd => 1, rd => 1, th => 1,
-		   first => 1, second => 1, third => 1, fourth => 1, fifth => 1, sixth => 1,
-		   seventh => 1, eighth => 1, ninth => 1, tenth => 1, no => 1, alpha => 1, beta => 1,
+		   uppermost => 1, lowermost => 1, all => 1,
+		   first => 1, second => 1, third => 1, fourth => 1, fifth => 1,
+		   sixth => 1, seventh => 1, eighth => 1, ninth => 1, tenth => 1,
+		   st => 1, nd => 1, rd => 1, th => 1, no => 1, re => 1,
+		   alpha => 1, beta => 1,
 		   division => 1, divisions => 1, local => 1, part => 1, parts => 1,
 		   sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
-		   section => 1, sections => 1, seam => 1, seams => 1,
+		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, 
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
 		   schicht => 1, unit => 1, units => 1, subunit => 1, subunits => 1,
-		   unknown => 1, unnamed => 1,
+		   unknown => 1, unnamed => 1, indeterminate => 1,
 		   zone => 1, zones => 1,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
 		   'inférieurs' => 1, 'supérieurs' => 1, inferieurs => 1, superieurs => 1,
 		   'moitié' => 1, moitie => 1, les => 1 );
-
-our (%is_interval_name);
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
 			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
@@ -230,9 +230,9 @@ exit;
 # suffixes like 'Fm.' or 'Gp.'. This subroutine completely rebuilds the
 # STRAT_NAMES and STRAT_CONCEPTS tables.
 
-our (%strat_raw, %strat_name, %strat_name_fc, %macrostrat_name);
-our (%strat_prelim, %strat_concept, %contained_in, %prelim_to_real);
-our (%country_map);
+our (%strat_raw, %strat_name, %strat_name_fc, %name_components, %is_multiple, %macrostrat_name);
+our (%strat_prelim, %strat_concept, %prelim_to_real, %contained_in);
+our (%country_map, %is_interval_name);
 
 our $raw_colls = 0;
 our $raw_occs = 0;
@@ -240,7 +240,13 @@ our $parent_matches = 0;
 
 sub GenerateConcepts {
 
-    # Start by reading interval names, so we can ignore names that contain them.
+    # Clear the hashes we will be using.
+    
+    %strat_raw = (); %strat_name = (); %strat_name_fc = (); %name_components = (); %is_multiple = ();
+    %strat_prelim = (); %strat_concept = (); %prelim_to_real = (); %contained_in = ();
+    %country_map = (); %is_interval_name = (); %macrostrat_name = ();
+    
+    # Read all known interval names, so we can ignore names that contain them.
     
     say "Reading from table `$TABLE{INTERVAL_DATA}`...";
     
@@ -485,7 +491,7 @@ sub GenerateConcepts {
 	
 	elsif ( $raw_name =~ qr{ [-,&/] | \s (and|et|y) \s }xs )
 	{
-	    my $extra;
+	    my $conjunction = $1;
 	    
 	    if ( $pass == 1 )
 	    {
@@ -511,19 +517,19 @@ sub GenerateConcepts {
 		say "ParseHyphenated: $raw_name -> " . join(' | ', @components) if $opt_debug;
 	    }
 
-	    elsif ( $2 eq 'and' || $raw_name =~ /&/ )
+	    elsif ( $conjunction eq 'and' || $raw_name =~ /&/ )
 	    {
 		@components = ParseConjunction($raw_name, $nr);
 		say "ParseConjunction: $raw_name -> " . join(' | ', @components) if $opt_debug;
 	    }
 	    
-	    elsif ( $2 eq 'et' )
+	    elsif ( $conjunction eq 'et' )
 	    {
 		@components = ParseConjunctionFR($raw_name, $nr);
 		say "ParseConjunctionFR: $raw_name -> " . join(' | ', @components) if $opt_debug;
 	    }
 	    
-	    elsif ( $2 eq 'y' )
+	    elsif ( $conjunction eq 'y' )
 	    {
 		# The particle 'y' in Welsh does not indicate a conjunction.
 		
@@ -553,6 +559,13 @@ sub GenerateConcepts {
 	{
 	    @components = $raw_name;
 	}
+	
+	# Record whether we have multiple components at this point, because that affects
+	# 'belongs to' relationships. If the raw containing name has multiple
+	# components, we have no way to know which one the contained name is in, so we
+	# shouldn't record a relationship in that situation.
+	
+	$is_multiple{$rkey} = 1 if @components > 1;
 	
 	# Iterate through the individual components, assuming that each represents a
 	# separate stratum name. For each one that appears to be a valid stratigraphic
@@ -730,6 +743,11 @@ sub GenerateConcepts {
 		push $first_last{$fl}->@*, $nkey;
 	    }
 	    
+	    # List this name as a component under $rkey.
+
+	    $name_components{$rkey} ||= [ ];
+	    push $name_components{$rkey}->@*, $nkey;
+	    
 	    # If an alias was specified, generate a second key and store it in the same
 	    # way. Also store the relationship between the two keys in %alias_of. This
 	    # will enable us to ensure later that the two names are associated with the
@@ -778,8 +796,12 @@ sub GenerateConcepts {
 		{
 		    my $afl = $afl[0] . $afl[1];
 		    $first_last{$afl} ||= [];
-		    push $first_last{$afl}->@*, $nkey;
+		    push $first_last{$afl}->@*, $alias_key;
 		}
+		
+		# Also add it to the list of name components for $rkey.
+
+		push $name_components{$rkey}->@*, $alias_key;
 	    }
 	    
 	    # Store the name key (and the alias key if there is one) under either
@@ -1385,33 +1407,52 @@ sub GenerateConcepts {
     my $opinion_ref_values = '';
     my $new_opinions = 0;
 
-    foreach my $child_key ( sort keys %strat_name )
+    foreach my $child_raw_key ( sort keys %contained_in )
     {
-	my (undef, $child_rank, $child_cc) = split /\|/, $child_key;
+	next unless $name_components{$child_raw_key};
 	
-	foreach my $parent_key ( sort keys $contained_in{$child_key}->%* )
+	my (undef, $child_rank, $child_cc) = split /\|/, $child_raw_key;
+	
+	my @child_keys = $name_components{$child_raw_key}->@*;
+	
+	foreach my $parent_raw_key ( sort keys $contained_in{$child_raw_key}->%* )
 	{
-	    my (undef, $parent_rank, $parent_cc) = split /\|/, $parent_key;
+	    next unless $name_components{$parent_raw_key} && ! $is_multiple{$parent_raw_key};
 	    
-	    my $qopno = $pbdb->quote(++$new_opinions);
-	    my $qchildno = $pbdb->quote($strat_name_no{$child_key});
-	    my $qchildrank = $pbdb->quote($child_rank);
-	    my $qcc = $pbdb->quote($child_cc);
-	    my $qparno = $pbdb->quote($strat_name_no{$parent_key});
-	    my $qparrank = $pbdb->quote($parent_rank);
+	    my (undef, $parent_rank) = split /\|/, $parent_raw_key;
 	    
-	    $opinion_values .= ', ' if $opinion_values;
-	    $opinion_values .= "($qopno, $qchildno, $qchildrank, $qcc, 'belongs to', " .
-		"$qparno, $qparrank)";
+	    my @parent_keys = $name_components{$parent_raw_key}->@*;
 	    
-	    foreach my $reference_no ( sort { $a <=> $b }
-				       keys $contained_in{$child_key}{$parent_key}->%* )
+	    foreach my $child_key ( @child_keys )
 	    {
-		my $qrefno = $pbdb->quote($reference_no);
-		$opinion_ref_values .= ', ' if $opinion_ref_values;
-		$opinion_ref_values .= "($qopno, $qrefno)";
+		foreach my $parent_key( @parent_keys )
+		{
+		    my $qopno = $pbdb->quote(++$new_opinions);
+		    my $qchildno = $pbdb->quote($strat_name_no{$child_key});
+		    my $qchildrank = $pbdb->quote($child_rank);
+		    my $qcc = $pbdb->quote($child_cc);
+		    my $qparno = $pbdb->quote($strat_name_no{$parent_key});
+		    my $qparrank = $pbdb->quote($parent_rank);
+		    
+		    $opinion_values .= ', ' if $opinion_values;
+		    $opinion_values .= "($qopno, $qchildno, $qchildrank, $qcc, 'belongs to', " .
+			"$qparno, $qparrank)";
+		    
+		    foreach my $reference_no ( sort { $a <=> $b }
+					       keys $contained_in{$child_key}{$parent_key}->%* )
+		    {
+			my $qrefno = $pbdb->quote($reference_no);
+			$opinion_ref_values .= ', ' if $opinion_ref_values;
+			$opinion_ref_values .= "($qopno, $qrefno)";
+		    }
+		}
 	    }
 	}
+    }
+    
+    foreach my $child_key ( sort keys %alias_of )
+    {
+	my (undef, $child_rank, $child_cc) = split /\|/, $child_key;
 	
 	foreach my $other_key ( sort keys $alias_of{$child_key}->%* )
 	{
@@ -1644,17 +1685,17 @@ sub UpdateContainedIn {
 
     my ($contained_key, $container_key, $source) = @_;
     
+    # Create a new record for the combination of $contained_key and $container_key, if
+    # there isn't already one.
+    
     my $record = ( $contained_in{$contained_key}{$container_key} ||= { } );
+    
+    # Add the reference numbers for this relationship to the record.
     
     if ( $source->{reference_no} )
     {
 	$record->{$_} = 1 foreach grep { $_ } split /,/, $source->{reference_no};
     }
-    
-    # if ( $strat_raw{$contained_key} )
-    # {
-    # 	$strat_raw{$contained_key}{parent_name}{$container_key} = 1;
-    # }
 }
 
 
@@ -1910,7 +1951,7 @@ sub ParseConjunction {
 	return (ParseConjunction($a), ParseConjunction($b));
     }
     
-    elsif ( $raw_name =~ qr{ ^ (\S.*?) (?: \s+ and \s+ | \s* & \s*) (.*) $ }xs )
+    elsif ( $raw_name =~ qr{ ^ (\S.*?) \s+ and \s+ (.*) $ }xs )
     {
 	my $a = $1;
 	my $b = $2;
@@ -1971,7 +2012,7 @@ sub ParseParentheses {
 	my $main = $1;
 	my $alias = $2;
 	
-	if ( $alias =~ qr{ ^ (?: = \s* | also \s+ | also \s called \s+ | reg[.]? \s* : \s* ) (.*) }xs )
+	if ( $alias =~ qr{ ^ (?: = \s* | also \s+ called \s+ | also \s+ | reg[.]? \s* : \s* ) (.*) }xs )
 	{
 	    $alias = $1;
 	}
