@@ -208,7 +208,7 @@ any qr{.*} => sub {
 
 # If an error occurs, we want to generate a Web::DataService response rather
 # than the default Dancer response.  In order for this to happen, we need the
-# following two hooks:
+# following two hooks.
 
 hook on_handler_exception => sub {
 
@@ -222,7 +222,29 @@ hook on_route_exception => sub {
     $logger->log_event(Dancer::request, 'ROUTE EXCEPTION', $starttime)
 	if $logger && !$main::TEST_MODE;
     var(error => $_[0]);
+    
+    # If there is an active statement handle, free it and then execute a rollback on the
+    # current transaction if any. This will prevent MariaDB from holding metadata locks
+    # on whatever transaction was in progress when this exception occurred.
+    
+    if ( my $request = var('wds_request') )
+    {
+	if ( $request->{main_sth} )
+	{
+	    delete $request->{main_sth};
+	}
+	
+	if ( $request->{dbh} )
+	{
+	    $request->{dbh}->do("ROLLBACK");
+	}
+    }
+
+    my $a = 1;
 };
+
+# The following hook generates the proper response to an error, using the variable
+# 'error' that was set by one of the above hooks.
 
 hook after_error_render => sub {
 
