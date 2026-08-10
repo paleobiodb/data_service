@@ -1383,9 +1383,10 @@ sub _check_coll_access {
     
     my ($edt, $authinfo, $perms) = @_;
     
-    # Access is granted trivially to collections available to 'the public'.
+    # Access is granted trivially to collections available to 'the public', and to those
+    # whose release date has passed.
     
-    if ( $authinfo->{access_level} eq 'the public' )
+    if ( $authinfo->{access_level} eq 'the public' || $authinfo->{date_passed} )
     {
 	return 1;
     }
@@ -1466,7 +1467,11 @@ sub authorize_insert_key {
 # Fetch the specified authorization information for all records that are selected by the specified
 # expression.
 
-my ($coll_auth) = "cc.authorizer_no, cc.enterer_no, cc.access_level, cc.research_group";
+my ($coll_auth) = "cc.authorizer_no, cc.enterer_no, cc.access_level, cc.research_group, " .
+    "(cc.release_date < now()) as date_passed";
+
+my ($coll_auth_grouping) = "cc.authorizer_no, cc.enterer_no, cc.access_level, cc.research_group, " .
+    "date_passed";
 
 sub select_authinfo {
     
@@ -1478,7 +1483,7 @@ sub select_authinfo {
     {
 	$sql = "SELECT $coll_auth, count(*) as `count`
 		FROM $TABLE{COLLECTION_DATA} as cc 
-		WHERE $key_expr GROUP BY $coll_auth";
+		WHERE $key_expr GROUP BY $coll_auth_grouping";
     }
     
     elsif ( $table_specifier eq 'OCCURRENCE_DATA' )
@@ -1486,7 +1491,7 @@ sub select_authinfo {
 	$sql = "SELECT $coll_auth, count(*) as `count`
 		FROM $TABLE{COLLECTION_DATA} as cc 
 		JOIN $TABLE{OCCURRENCE_DATA} as oc using (collection_no)
-		WHERE $key_expr GROUP BY $coll_auth";
+		WHERE $key_expr GROUP BY $coll_auth_grouping";
     }
     
     elsif ( $table_specifier eq 'REID_DATA' )
@@ -1494,7 +1499,7 @@ sub select_authinfo {
 	$sql = "SELECT $coll_auth, count(*) as `count`
 		FROM $TABLE{COLLECTION_DATA} as cc
 		JOIN $TABLE{REID_DATA} as rc using (collection_no)
-		WHERE $key_expr GROUP BY $coll_auth";
+		WHERE $key_expr GROUP BY $coll_auth_grouping";
     }
     
     else
