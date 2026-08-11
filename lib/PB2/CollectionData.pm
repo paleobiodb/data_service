@@ -3268,11 +3268,11 @@ sub generateAccessFilter {
 	}
     }
     
-    # Otherwise, we need to filter by authorizer_no and/or research group.
+    # Otherwise, we need to filter by release date, authorizer_no, and/or research group.
     
     else
     {
-	my @clauses;
+	my @clauses = "cc.release_date < now()";
 	
 	if ( $tables_ref->{c} )
 	{
