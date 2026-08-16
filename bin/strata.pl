@@ -231,7 +231,7 @@ exit;
 # STRAT_NAMES and STRAT_CONCEPTS tables.
 
 our (%strat_raw, %strat_name, %strat_name_fc, %name_components, %is_multiple, %macrostrat_name);
-our (%strat_prelim, %strat_concept, %prelim_to_real, %contained_in);
+our (%strat_prelim, %strat_concept, %prelim_to_real, %contained_in, %contains);
 our (%country_map, %is_interval_name);
 
 our $raw_colls = 0;
@@ -1696,6 +1696,11 @@ sub UpdateContainedIn {
     {
 	$record->{$_} = 1 foreach grep { $_ } split /,/, $source->{reference_no};
     }
+    
+    # Create the opposite relation as well. We don't need reference numbers for this
+    # one.
+
+    $contains{$container_key}{$contained_key} = 1;
 }
 
 
@@ -2268,8 +2273,8 @@ sub NamesAreCompatible {
 	return 0;
     }
     
-    # If the two names have identical stratigraphic parents, they are potentially
-    # compatible.
+    # If the two names have identical stratigraphic parents or identical stratigraphic children,
+    # they are potentially compatible.
     
     if ( $nr->{rkey} && $alt_nr->{rkey} &&
 	 $contained_in{$nr->{rkey}} && $contained_in{$alt_nr->{rkey}} )
@@ -2356,7 +2361,7 @@ sub NamesAreCompatible {
     unless ( $same_parents ||
 	     ($ages_identical && ($same_country || $locations_close)) ||
 	     ($ages_overlap && $locations_overlap) ||
-	     ($ages_overlap && $locations_close && $same_rank) )
+	     ($ages_overlap && ($locations_close || $same_country) && $same_rank) )
     {
 	print "doesn't match any similarity pattern: return 0\n\n" if $debug_this;
 	return 0;
@@ -2926,17 +2931,11 @@ sub ChooseConceptName {
 # This command imports stratigraphic names from `macrostrat`.`strat_names` and
 # associated tables, and puts the processed names into `pbdb`.`strat_ms_names`.
 
-our (%place, %uniq);
+our (%place, %column_box, %uniq);
 
 sub ImportMacrostrat {
 
-    # Step I: Truncate the STRAT_MS_NAMES table.
-    
-    say "Truncating tables: STRAT_MS_NAMES (strat_ms_names)...";
-    
-    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_NAMES}`");
-    
-    # Step II: Extract all of the relevant information from Macrostrat.
+    # Step I: Extract all of the relevant information from Macrostrat.
 
     # Start with the `places` table.
     
@@ -2982,6 +2981,27 @@ sub ImportMacrostrat {
     
     $place{'New Zealand'} = $place{NZ} = { name => 'New Zealand', postal => 'NZ', cc => 'NZ' };
     
+    # Fetch the `macrostrat`.`cols` table, which holds information about the columns.
+    
+    say "Reading from `macrostrat`.`col_areas`...";
+    
+    my $columns = DBHashQuery($mstr, <<~END_SQL);
+	SELECT col_id,
+	    min(round(y(st_pointn(st_exteriorring(envelope(ca.col_area)), 1)), 2)) as lat_min,
+	    max(round(y(st_pointn(st_exteriorring(envelope(ca.col_area)), 3)), 2)) as lat_max,
+	    min(round(x(st_pointn(st_exteriorring(envelope(ca.col_area)), 1)), 2)) as lng_min,
+	    max(round(x(st_pointn(st_exteriorring(envelope(ca.col_area)), 3)), 2)) as lng_max
+	FROM col_areas as ca join cols as c on c.id = ca.col_id
+	WHERE status_code = 'active' or status_code is null
+	GROUP BY c.id
+	END_SQL
+    
+    foreach my $row ( @$columns )
+    {
+	$column_box{$row->{col_id}} = [ $row->{lat_min}, $row->{lat_max},
+					$row->{lng_min}, $row->{lng_max} ];
+    }
+    
     # Now fetch the `macrostrat`.`strat_names` table and associated information.
     
     say "Reading from `macrostrat`.`strat_names` and associated tables...";
@@ -2989,51 +3009,217 @@ sub ImportMacrostrat {
     my $imported_names = 0;
     my $good_names = 0;
     
-    my $strat_names = DBHashQuery($mstr, "
-	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places,
-	    max(iub.age_bottom) as early_unit_age,
-	    min(iut.age_top) as late_unit_age,
-	    max(icb.age_bottom) as early_concept_age,
-	    min(ict.age_top) as late_concept_age,
-	    max(lsn.early_age) as early_lookup_age,
-	    min(lsn.late_age) as late_lookup_age,	
-	    min(round(y(st_pointn(st_exteriorring(envelope(ca.col_area)), 1)), 2)) as lat_min,
-	    max(round(y(st_pointn(st_exteriorring(envelope(ca.col_area)), 3)), 2)) as lat_max,
-	    min(round(x(st_pointn(st_exteriorring(envelope(ca.col_area)), 1)), 2)) as lng_min,
-	    max(round(x(st_pointn(st_exteriorring(envelope(ca.col_area)), 3)), 2)) as lng_max,
-	    sn.ref_id
+    my $strat_names = DBHashQuery($mstr, <<~END_SQL);
+	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
+	  lsn.early_age, lsn.late_age,
+	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
+	  group_concat(distinct bedu.col_id) as bed_cols,
+	  group_concat(distinct mbru.col_id) as mbr_cols,
+	  group_concat(distinct fmu.col_id) as fm_cols,
+	  group_concat(distinct subgpu.col_id) as subgp_cols,
+	  group_concat(distinct gpu.col_id) as gp_cols,
+	  group_concat(distinct sgpu.col_id) as sgp_cols
 	FROM strat_names as sn
 	  left join strat_names_meta as sc using (concept_id)
-	  left join lookup_strat_names as lsn on lsn.strat_name_id = sn.id
-	  left join unit_strat_names as usn on usn.strat_name_id = sn.id
-	  left join units as u on u.id = usn.unit_id
-	  left join cols as c on c.id = u.col_id
-	  left join col_areas as ca on ca.col_id = u.col_id
-	  left join intervals as iub on iub.id = u.FO
-	  left join intervals as iut on iut.id = u.LO
 	  left join intervals as icb on icb.id = sc.b_int
 	  left join intervals as ict on ict.id = sc.t_int
-	WHERE (c.status_code = 'active' or c.status_code is null)
+	  join lookup_strat_names as lsn on lsn.strat_name_id = sn.id
+	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
+	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
+	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
+	  left join unit_strat_names as subgpusn on subgpusn.strat_name_id = lsn.subgp_id
+	  left join unit_strat_names as gpusn on gpusn.strat_name_id = lsn.gp_id
+	  left join unit_strat_names as sgpusn on sgpusn.strat_name_id = lsn.sgp_id
+	  left join units as bedu on bedu.id = bedusn.unit_id
+	  left join units as mbru on mbru.id = mbrusn.unit_id
+	  left join units as fmu on fmu.id = fmusn.unit_id
+	  left join units as subgpu on subgpu.id = subgpusn.unit_id
+	  left join units as gpu on gpu.id = gpusn.unit_id
+	  left join units as sgpu on sgpu.id = sgpusn.unit_id
 	GROUP BY sn.id
-	HAVING (early_unit_age is not null or early_concept_age is not null or
-		early_lookup_age is not null)");
+	END_SQL
     
-    # Iterate through the rows of the result, processing them to generate all of the
+    say "  read " . scalar(@$strat_names) . " stratigraphic names names";
+    
+    # my $mbr_names = DBHashQuery($mstr, <<~END_SQL);
+    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
+    # 	  lsn.early_age, lsn.late_age,
+    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
+    # 	  group_concat(distinct bedu.col_id) as bed_cols,
+    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
+    # 	  group_concat(distinct fmu.col_id) as fm_cols
+    # 	FROM strat_names as sn
+    # 	  left join strat_names_meta as sc using (concept_id)
+    # 	  left join intervals as icb on icb.id = sc.b_int
+    # 	  left join intervals as ict on ict.id = sc.t_int
+    # 	  join lookup_strat_names as lsn on lsn.mbr_id = sn.id
+    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
+    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
+    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
+    # 	  left join units as bedu on bedu.id = bedusn.unit_id
+    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
+    # 	  left join units as fmu on fmu.id = fmusn.unit_id
+    # 	WHERE sn.rank = 'Mbr'
+    # 	GROUP BY sn.id
+    # 	END_SQL
+    
+    # say "  read " . scalar(@$mbr_names) . " member names";
+    
+    # my $fm_names = DBHashQuery($mstr, <<~END_SQL);
+    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
+    # 	  lsn.early_age, lsn.late_age,
+    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
+    # 	  group_concat(distinct bedu.col_id) as bed_cols,
+    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
+    # 	  group_concat(distinct fmu.col_id) as fm_cols,
+    # 	  group_concat(distinct subgpu.col_id) as subgp_cols,
+    # 	  group_concat(distinct gpu.col_id) as gp_cols,
+    # 	  group_concat(distinct sgpu.col_id) as sgp_cols
+    # 	FROM strat_names as sn
+    # 	  left join strat_names_meta as sc using (concept_id)
+    # 	  left join intervals as icb on icb.id = sc.b_int
+    # 	  left join intervals as ict on ict.id = sc.t_int
+    # 	  join lookup_strat_names as lsn on lsn.fm_id = sn.id
+    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
+    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
+    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
+    # 	  left join unit_strat_names as subgpusn on subgpusn.strat_name_id = lsn.subgp_id
+    # 	  left join unit_strat_names as gpusn on gpusn.strat_name_id = lsn.gp_id
+    # 	  left join unit_strat_names as sgpusn on sgpusn.strat_name_id = lsn.sgp_id
+    # 	  left join units as bedu on bedu.id = bedusn.unit_id
+    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
+    # 	  left join units as fmu on fmu.id = fmusn.unit_id
+    # 	  left join units as subgpu on subgpu.id = subgpusn.unit_id
+    # 	  left join units as gpu on gpu.id = gpusn.unit_id
+    # 	  left join units as sgpu on sgpu.id = sgpusn.unit_id
+    # 	WHERE sn.rank = 'Fm'
+    # 	GROUP BY sn.id
+    # 	END_SQL
+    
+    # say "  read " . scalar(@$fm_names) . " formation names";
+    
+    # my $subgp_names = DBHashQuery($mstr, <<~END_SQL);
+    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
+    # 	  lsn.early_age, lsn.late_age,
+    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
+    # 	  group_concat(distinct bedu.col_id) as bed_cols,
+    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
+    # 	  group_concat(distinct fmu.col_id) as fm_cols,
+    # 	  group_concat(distinct subgpu.col_id) as subgp_cols,
+    # 	  group_concat(distinct gpu.col_id) as gp_cols,
+    # 	  group_concat(distinct sgpu.col_id) as sgp_cols
+    # 	FROM strat_names as sn
+    # 	  left join strat_names_meta as sc using (concept_id)
+    # 	  left join intervals as icb on icb.id = sc.b_int
+    # 	  left join intervals as ict on ict.id = sc.t_int
+    # 	  join lookup_strat_names as lsn on lsn.subgp_id = sn.id
+    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
+    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
+    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
+    # 	  left join unit_strat_names as subgpusn on subgpusn.strat_name_id = lsn.subgp_id
+    # 	  left join unit_strat_names as gpusn on gpusn.strat_name_id = lsn.gp_id
+    # 	  left join unit_strat_names as sgpusn on sgpusn.strat_name_id = lsn.sgp_id
+    # 	  left join units as bedu on bedu.id = bedusn.unit_id
+    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
+    # 	  left join units as fmu on fmu.id = fmusn.unit_id
+    # 	  left join units as subgpu on subgpu.id = subgpusn.unit_id
+    # 	  left join units as gpu on gpu.id = gpusn.unit_id
+    # 	  left join units as sgpu on sgpu.id = sgpusn.unit_id
+    # 	WHERE sn.rank = 'SubGp'
+    # 	GROUP BY sn.id
+    # 	END_SQL
+    
+    # say "  read " . scalar(@$subgp_names) . " subgroup names";
+    
+    # my $gp_names = DBHashQuery($mstr, <<~END_SQL);
+    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
+    # 	  lsn.early_age, lsn.late_age,
+    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
+    # 	  group_concat(distinct bedu.col_id) as bed_cols,
+    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
+    # 	  group_concat(distinct fmu.col_id) as fm_cols,
+    # 	  group_concat(distinct subgpu.col_id) as subgp_cols,
+    # 	  group_concat(distinct gpu.col_id) as gp_cols,
+    # 	  group_concat(distinct sgpu.col_id) as sgp_cols
+    # 	FROM strat_names as sn
+    # 	  left join strat_names_meta as sc using (concept_id)
+    # 	  left join intervals as icb on icb.id = sc.b_int
+    # 	  left join intervals as ict on ict.id = sc.t_int
+    # 	  join lookup_strat_names as lsn on lsn.gp_id = sn.id
+    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
+    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
+    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
+    # 	  left join unit_strat_names as subgpusn on subgpusn.strat_name_id = lsn.subgp_id
+    # 	  left join unit_strat_names as gpusn on gpusn.strat_name_id = lsn.gp_id
+    # 	  left join unit_strat_names as sgpusn on sgpusn.strat_name_id = lsn.sgp_id
+    # 	  left join units as bedu on bedu.id = bedusn.unit_id
+    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
+    # 	  left join units as fmu on fmu.id = fmusn.unit_id
+    # 	  left join units as subgpu on subgpu.id = subgpusn.unit_id
+    # 	  left join units as gpu on gpu.id = gpusn.unit_id
+    # 	  left join units as sgpu on sgpu.id = sgpusn.unit_id
+    # 	WHERE sn.rank = 'Gp'
+    # 	GROUP BY sn.id
+    # 	END_SQL
+    
+    # say "  read " . scalar(@$gp_names) . " group names";
+    
+    # say "  read " . scalar(@$sgp_names) . " supergroup names";
+    
+    # my $other_names = DBHashQuery($mstr, <<~END_SQL)
+    
+    # my ($n_qualified_names) = @$bed_names + @$mbr_names + @$fm_names +
+    # 	@$subgp_names + @$gp_names + @$sgp_names;
+    
+    # say "    found $n_qualified_names total names (out of $strat_names_count)";
+    
+    # Iterate through the rows of these results, processing them to generate all of the
     # necessary fields for the STRAT_MS_NAMES table.
-    
-    my $strat_ms_values = '';
     
     foreach my $row ( @$strat_names )
     {
-	# Compute 'early_age' and 'late_age', using the broadest of the age definitions
+	# Compute 'early_age' and 'late_age', using the narrowest of the age definitions
 	# if more than one is found.
 	
-	$row->{early_age} = max grep { defined $_ } ($row->{early_unit_age},
-						     $row->{early_concept_age},
-						     $row->{early_lookup_age});
-	$row->{late_age} = min grep { defined $_ } ($row->{late_unit_age},
-						    $row->{late_concept_age},
-						    $row->{late_lookup_age});
+	$row->{early_age} = $row->{early_concept_age}
+	    if !defined $row->{early_age} || $row->{early_concept_age} < $row->{early_age};
+
+	$row->{late_age} = $row->{late_concept_age}
+	    if !defined $row->{late_age} || $row->{late_concept_age} > $row->{late_age};
+	
+	# Get a single list of all Macrostrat columns into which the named stratum or
+	# one of its containing or contained strata falls.
+	
+	my @col_ids = split /,/, $row->{bed_cols};
+	push @col_ids, split /,/, $row->{mbr_cols};
+	push @col_ids, split /,/, $row->{fm_cols};
+	
+	if ( $row->{rank} ne 'Bed' && $row->{rank} ne 'Mbr' )
+	{
+	    push @col_ids, split /,/, $row->{subgp_cols};
+	    push @col_ids, split /,/, $row->{gp_cols};
+	    push @col_ids, split /,/, $row->{sgp_cols};
+	}
+	
+	# Generate lat/lng bounds from the list of columns.
+	
+	foreach my $col_id ( @col_ids )
+	{
+	    if ( $column_box{$col_id} )
+	    {
+		$row->{lat_min} = $column_box{$col_id}[0]
+		    if !defined $row->{lat_min} || $column_box{$col_id}[0] < $row->{lat_min};
+		
+		$row->{lat_max} = $column_box{$col_id}[1]
+		    if !defined $row->{lat_max} || $column_box{$col_id}[1] > $row->{lat_max};
+		
+		$row->{lng_min} = $column_box{$col_id}[2]
+		    if !defined $row->{lng_min} || $column_box{$col_id}[0] < $row->{lng_min};
+		
+		$row->{lng_max} = $column_box{$col_id}[3]
+		    if !defined $row->{lng_max} || $column_box{$col_id}[1] > $row->{lng_max};
+	    }
+	}
 	
 	# Determine the country code for this name. Codes that are enclosed in braces
 	# are from the US, Canada, and countries other than Australia.
@@ -3096,14 +3282,24 @@ sub ImportMacrostrat {
 	# Exclude names with no location information. If we don't know where in the
 	# world the name applies to, we cannot match it. The exclusion code is 'L' for
 	# location.
-
+	
 	if ( ! defined $row->{cc} && ! defined $row->{lat_min} )
 	{
 	    $row->{exclude} = $row->{exclude} ? "$row->{exclude}L" : 'L';
 	}
-	
-	# Now generate a row in the STRAT_MS_NAMES table for this name.
-	
+    }
+    
+    
+    # Step II: Generate a row in the STRAT_MS_NAMES table for each name.
+    
+    say "Truncating tables: `$TABLE{STRAT_MS_NAMES}`...";
+    
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_NAMES}`");
+
+    my $strat_ms_values = '';
+
+    foreach my $row ( @$strat_names )
+    {
 	$imported_names++;
 	$good_names++ unless $row->{exclude};
 	
@@ -3388,7 +3584,7 @@ sub MatchMacrostrat {
     
     InsertNameMatches($pbdb, $match_values) if $match_values;
 
-    say "Created $match_count match recoreds";
+    say "Created $match_count match records";
     
     # foreach my $pbnr ( $pbdb_names->@* )
     # {
