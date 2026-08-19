@@ -427,26 +427,10 @@ sub addupdate_sandbox {
     
     my ($request, $operation) = @_;
 
-    if ( $operation eq 'insert' )
-    {
-	$request->generate_sandbox({ operation => 'refs/add',
-				     ruleset => '1.2:refs:addupdate_body',
-				     allowances => '1.2:refs:allowances',
-				     extra_params => 'vocab=pbdb&show=both,edit' });
-    }
-    
-    elsif ( $operation eq 'update' )
-    {
-	$request->generate_sandbox({ operation => 'refs/update',
-				     ruleset => '1.2:refs:addupdate_body',
-				     allowances => '1.2:refs:allowances',
-				     extra_params => 'vocab=pbdb&show=both,edit' });
-    }
-    
-    else
-    {
-	$request->generate_sandbox('unknown');
-    }
+    $request->generate_sandbox({ operation => 'refs/addupdate',
+				 ruleset => '1.2:refs:addupdate_body',
+				 allowances => '1.2:refs:allowances',
+				 extra_params => 'vocab=pbdb&show=both,edit' });
 }
 
 1;

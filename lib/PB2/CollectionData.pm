@@ -2135,7 +2135,8 @@ sub list_colls {
 	$dbh->do("BEGIN");
 	
 	$request->{main_sth} = $dbh->prepare($request->{main_sql});
-	$request->{main_sth}{mariadb_use_result} = 1 unless $request->display_counts;
+	$request->{main_sth}{mariadb_use_result} = 1
+	    unless $request->display_counts || $request->has_block('edit');
 	$request->{main_sth}->execute();
 	
 	# If we were asked to get the count, then do so
@@ -2162,6 +2163,11 @@ sub summary {
     # Figure out which bin level we are being asked for.  The default is 1.
     
     my $bin_level = $request->clean_param('level') || 1;
+    
+    if ( $bin_level > $MAX_BIN_LEVEL )
+    {
+	die $request->exception(400, "Invalid value for 'level': maximum value is 3");
+    }
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -2368,7 +2374,7 @@ sub refs {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my $inner_tables = { sr => 1 };
+    my $inner_tables = { };
     
     my @filters = $request->generateMainFilters('list', 'c', $inner_tables);
     push @filters, $request->PB2::OccurrenceData::generateOccFilters($inner_tables, 'o');
@@ -2386,10 +2392,7 @@ sub refs {
     
     my $refselect = $request->clean_param('ref_type') || 'primary';
     
-    if ( $refselect eq 'secondary' )
-    {
-	push @filters, "sr.reference_no <> c.reference_no";
-    }
+    push @filters, "1=1" unless @filters;
     
     # Then construct the inner filter string, for selecting collection records.
     
@@ -2447,17 +2450,60 @@ sub refs {
     
     # Construct the main query.
     
-    $request->{main_sql} = "
+    if ( $refselect eq 'primary' )
+    {
+	$request->{main_sql} = <<~END_SQL;
 	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
-	FROM (SELECT $inner_fields
-	    FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc on cc.collection_no = c.collection_no
-		$inner_join_list
-            WHERE $filter_string
-	    GROUP BY $inner_group) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
+	FROM (SELECT c.reference_no, count(*) as reference_rank, 1 as is_primary
+	    FROM $COLL_MATRIX as c straight_join collections as cc using (collection_no)
+	        $inner_join_list
+	    WHERE $filter_string
+	    GROUP BY c.reference_no) as s straight_join refs as r on r.reference_no = s.reference_no
 	$outer_join_list
 	WHERE $ref_filter_string
 	ORDER BY $order
-	$limit";
+	$limit
+	END_SQL
+    }
+    
+    elsif ( $refselect eq 'secondary' )
+    {
+	$request->{main_sql} = <<~END_SQL;
+	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
+	FROM (SELECT sr.reference_no, count(*) as reference_rank, 0 as is_primary
+	    FROM $COLL_MATRIX as c straight_join collections as cc using (collection_no)
+	        join secondary_refs as sr using (collection_no)
+	        $inner_join_list
+	    WHERE $filter_string and sr.reference_no <> c.reference_no
+	    GROUP BY sr.reference_no) as s straight_join refs as r on r.reference_no = s.reference_no
+	$outer_join_list
+	WHERE $ref_filter_string
+	ORDER BY $order
+	$limit
+	END_SQL
+    }
+    
+    else
+    {
+	$request->{main_sql} = <<~END_SQL;
+	SELECT $calc $fields, s.reference_rank, is_primary, if(s.is_primary, 'P', 'S') as ref_type
+	FROM (SELECT c.reference_no, count(*) as reference_rank, 1 as is_primary
+	    FROM $COLL_MATRIX as c straight_join collections as cc using (collection_no)
+	        $inner_join_list
+	    WHERE $filter_string
+	    GROUP BY c.reference_no
+	    UNION SELECT sr.reference_no, count(*) as reference_rank, 0 as is_primary
+	    FROM $COLL_MATRIX as c straight_join collections as cc using (collection_no)
+	        join secondary_refs as sr using (collection_no)
+	        $inner_join_list
+	    WHERE $filter_string and sr.reference_no <> c.reference_no
+	    GROUP BY sr.reference_no) as s straight_join refs as r on r.reference_no = s.reference_no
+	$outer_join_list
+	WHERE $ref_filter_string
+	ORDER BY $order
+	$limit
+	END_SQL
+    }
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
     

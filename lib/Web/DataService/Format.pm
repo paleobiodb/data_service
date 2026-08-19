@@ -151,6 +151,18 @@ sub define_format {
 }
 
 
+# is_valid_format ( format_name )
+#
+# Return true if the specified format is valid for this data service, false otherwise.
+
+sub is_valid_format {
+
+    my ($ds, $format_name) = @_;
+    
+    return $ds->{format}{$format_name} && ! $ds->{format}{$format_name}{disabled};
+}
+
+
 # list_formats ( )
 # 
 # Return the list of names of all the formats that have been defined for this

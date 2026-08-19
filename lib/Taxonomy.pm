@@ -2150,7 +2150,8 @@ sub list_associated {
 	if ( $rel eq 'all_taxa' )
 	{
 	    $query_core = "$refs_table as r
-			JOIN $COLL_MATRIX as c using (reference_no)";
+			JOIN $COLL_MATRIX as c using (reference_no)
+			JOIN $OCC_MATRIX as m using (collection_no)";
 	}
 	elsif ( $rel eq 'occs' )
 	{

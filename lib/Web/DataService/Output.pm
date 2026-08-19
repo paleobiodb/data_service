@@ -2145,6 +2145,11 @@ sub _generate_compound_result {
     $request->{result_count} = scalar(@{$request->{main_result}})
 	if ref $request->{main_result};
     
+    # Determing if PSGI streaming is supported.
+    
+    my $env = Dancer::SharedData->request->env;
+    my $can_stream = $env->{'psgi.streaming'};
+    
     # If we are supposed to preprocess the result set, do so now.
     
     my (@results, $processing_complete);
@@ -2335,7 +2340,7 @@ sub _generate_compound_result {
 	# far and abort this subroutine in such a way that the PSGI framework will call
 	# the proper subroutine to initiate streaming.
 	
-	if ( defined $streaming_threshold && length($output) > $streaming_threshold )
+	if ( $can_stream && defined $streaming_threshold && length($output) > $streaming_threshold )
 	{
 	    $request->{stashed_output} = $output;
 	    $request->{processing_complete} = $processing_complete;

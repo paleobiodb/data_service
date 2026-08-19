@@ -894,6 +894,7 @@ sub generate_ref_filters {
 	
 	$reftitle =~ s/\./\\./g;
 	$reftitle =~ s/\?/\\?/g;
+	$reftitle =~ s/\*/.*/g;
 	$reftitle =~ s/%/.*/g;
 	$reftitle =~ s/_/./g;
 	$reftitle =~ s/\s+/\\s+/g;

@@ -513,6 +513,14 @@ sub configure_request {
 	$request->output_format($format) if $format;
     }
     
+    # Make sure that the specified format is defined for this data service and is not
+    # disabled.
+    
+    unless ( $ds->is_valid_format($request->output_format) )
+    {
+	die "415\n";
+    }
+    
     # Next, determine the result limit and offset, if any.  If the special
     # parameter 'limit' is active, then see if this request included it.
     # If we couldn't get a parameter value, see if a default limit was
