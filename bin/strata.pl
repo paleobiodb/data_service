@@ -237,6 +237,7 @@ our (%country_map, %is_interval_name);
 our $raw_colls = 0;
 our $raw_occs = 0;
 our $parent_matches = 0;
+our $child_matches = 0;
 
 sub GenerateConcepts {
 
@@ -973,7 +974,7 @@ sub GenerateConcepts {
 	    my $ft = fc(substr($name, 0, 2));
 	    push @candidates, $first_two{$ft}->@* if $first_two{$ft};
 	    
-	    my @fl = ($ft =~ /^([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/);
+	    my @fl = ($name =~ /^([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/);
 	    
 	    if ( @fl )
 	    {
@@ -1042,6 +1043,7 @@ sub GenerateConcepts {
     }
     
     say "Found $parent_matches parent matches.";
+    say "Found $child_matches child matches.";
     
     exit if $opt_check;
     
@@ -2145,7 +2147,7 @@ sub NamesAreCompatible {
     my $similarities = 0;
     my $differences = 0;
     
-    my ($same_prefix, $same_parents, $same_rank,
+    my ($same_prefix, $same_parents, $same_children, $same_rank,
 	$ages_overlap, $ages_identical, $same_country,
 	$locations_close, $locations_overlap);
     
@@ -2325,6 +2327,24 @@ sub NamesAreCompatible {
 		}
 	    }
 	}
+	
+	my @children = keys $contains{$nr->{rkey}}->%*;
+	my @alt_children = keys $contains{$alt_nr->{rkey}}->%*;
+	
+      CHILD_KEY:
+	foreach my $a ( @children )
+	{
+	    foreach my $b ( @alt_children )
+	    {
+		if ( $a eq $b )
+		{
+		    $same_children = 1;
+		    $similarities++;
+		    $child_matches++;
+		    last CHILD_KEY;
+		}
+	    }
+	}
     }
     
     if ( $debug_this )
@@ -2332,7 +2352,7 @@ sub NamesAreCompatible {
 	print "ages_overlap = $ages_overlap\nages_identical = $ages_identical\n";
 	print "same_country = $same_country\nlocations_close = $locations_close\n";
 	print "locations_overlap = $locations_overlap\nsame_parents = $same_parents\n";
-	print "same_rank = $same_rank\n";
+	print "same_children = $same_children\nsame_rank = $same_rank\n";
 	$DB::single = 1;
     }
     
@@ -2358,10 +2378,11 @@ sub NamesAreCompatible {
     # Otherwise, we require that the names have one of the following combinations of
     # similarities:
     
-    unless ( $same_parents ||
+    unless ( $same_parents || $same_children || 
 	     ($ages_identical && ($same_country || $locations_close)) ||
 	     ($ages_overlap && $locations_overlap) ||
-	     ($ages_overlap && ($locations_close || $same_country) && $same_rank) )
+	     ($ages_overlap && ($locations_close || $same_country) && $same_rank) ||
+	     ($locations_overlap && $same_rank) )
     {
 	print "doesn't match any similarity pattern: return 0\n\n" if $debug_this;
 	return 0;
@@ -3346,7 +3367,7 @@ sub MatchMacrostrat {
     my $ms_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_MS_NAMES} WHERE exclude is null");
     
     my (%strat_ms_names, %first_two, %first_last);
-
+    
     my $msnames = 0;
     my $pbnames = 0;
     
@@ -3371,13 +3392,13 @@ sub MatchMacrostrat {
 	
 	$msnames++;
     }
-
+    
     say "  Read $msnames names.";
-
+    
     say "Reading from table `$TABLE{STRAT_NAMES}`...";
     
     my $pbdb_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_NAMES}");
-
+    
     my $good_matches = 0;
     my $matched_names = 0;
     my @match_records;
