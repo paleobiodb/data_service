@@ -2132,6 +2132,8 @@ sub list_colls {
 	ORDER BY $order_clause
 	$limit";
 	
+	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	
 	$dbh->do("BEGIN");
 	
 	$request->{main_sth} = $dbh->prepare($request->{main_sql});
