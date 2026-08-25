@@ -406,7 +406,7 @@ sub updateFlagged {
 		next POINT unless $strat_name;
 		
 		my $record = { lat => $lat, lng => $lng, identifier => $point_key,
-			       strat_name => $strat_name, all => 1 };
+			       strat_name => $strat_name, age_tolerance => 2, all => 1 };
 		
 		if ( $min_interval && $max_interval )
 		{
@@ -611,7 +611,7 @@ sub makeMatchRequest {
 
 # enumerated values
 
-our (%SPATIAL_BASIS) = ('containing column' => 1, 'adjacent column' => 1, 'other' => 1);
+our (%LOCATION_BASIS) = ('containing column' => 1, 'adjacent column' => 1, 'other' => 1);
 our (%NAME_BASIS) = ('exact' => 1, 'concept' => 1, 'rank-up', => 1, 'rank-down' => 1,
 		     'synonym' => 1, 'other' => 1);
 our (%AGE_BASIS) = ('containing interval' => 1, 'adjacent interval' => 1, 'other' => 1);
@@ -692,9 +692,9 @@ sub processMatchResponse {
 		
 		foreach my $match ( @matches )
 		{
-		    if ( $match->{spatial_basis} && !$SPATIAL_BASIS{$match->{spatial_basis}} )
+		    if ( $match->{location_basis} && !$LOCATION_BASIS{$match->{location_basis}} )
 		    {
-			$match->{spatial_basis} = 'other';
+			$match->{location_basis} = 'other';
 		    }
 		    
 		    if ( $match->{name_basis} && !$NAME_BASIS{$match->{name_basis}} )
@@ -709,7 +709,7 @@ sub processMatchResponse {
 		    
 		    my $unit_id = $dbh->quote($match->{unit_id} || '0');
 		    my $col_id = $dbh->quote($match->{col_id} || '0');
-		    my $spatial_basis = $dbh->quote($match->{spatial_basis});
+		    my $location_basis = $dbh->quote($match->{location_basis});
 		    my $concept_id = $dbh->quote($match->{concept_id} || '0');
 		    my $concept_name = $dbh->quote($match->{concept_name});
 		    my $strat_name_id = $dbh->quote($match->{strat_name_id});
@@ -723,13 +723,13 @@ sub processMatchResponse {
 		    my $certainty = $dbh->quote($match->{certainty});
 		    
 		    $insertions .= ',' if $insertions;
-		    $insertions .= "($collection_no, $unit_id, $col_id, $spatial_basis, $concept_id, $concept_name, $strat_name_id, $strat_name, $strat_rank, $strat_parent_id, $name_basis, $t_age, $b_age, $age_basis, $certainty)\n";
+		    $insertions .= "($collection_no, $unit_id, $col_id, $location_basis, $concept_id, $concept_name, $strat_name_id, $strat_name, $strat_rank, $strat_parent_id, $name_basis, $t_age, $b_age, $age_basis, $certainty)\n";
 		}
 	    }
 	    
 	    if ( $insertions )
 	    {
-		$sql = "INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, unit_id, col_id, spatial_basis, concept_id, concept_name, strat_name_id, strat_name, strat_rank, strat_parent_id, name_basis, t_age, b_age, age_basis, certainty) VALUES\n$insertions";
+		$sql = "INSERT INTO $TABLE{COLLECTION_UNITS} (collection_no, unit_id, col_id, location_basis, concept_id, concept_name, strat_name_id, strat_name, strat_rank, strat_parent_id, name_basis, t_age, b_age, age_basis, certainty) VALUES\n$insertions";
 		
 		$result = $self->doSQL($sql);
 	    }
@@ -765,9 +765,10 @@ sub filterMatches {
 
     my ($self, $point_key, @matches) = @_;
     
-    # For now, we automatically accept the first match. Reject all subsequent matches
-    # with the same combination of unit_id, col_id, concept_id.
-
+    # Scan through the returned matches. If we can find one with a unit id and a strat
+    # name id where the location_basis is 'containing column', then ignore all the
+    # others.
+    
     my @filtered;
     my %unique_key;
     
@@ -777,6 +778,12 @@ sub filterMatches {
 	my $col_id = $r->{col_id} || '0';
 	my $concept_id = $r->{concept_id} || '0';
 	my $key = "$unit_id|$col_id|$concept_id";
+	
+	if ( $r->{unit_id} && $r->{strat_name_id} &&
+	     $r->{location_basis} && $r->{location_basis} eq 'containing column' )
+	{
+	    return ($r);
+	}
 	
 	unless ( $unique_key{$key} )
 	{
@@ -1204,7 +1211,7 @@ sub initializeTables {
 	  `collection_no` int(10) unsigned NOT NULL,
 	  `unit_id` int(10) unsigned NOT NULL DEFAULT 0,
 	  `col_id` int(10) unsigned NOT NULL DEFAULT 0,
-	  `spatial_basis` enum('containing column','adjacent column','other') DEFAULT NULL,
+	  `location_basis` enum('containing column','adjacent column','other') DEFAULT NULL,
 	  `concept_id` int(10) unsigned NOT NULL DEFAULT 0,
 	  `concept_name` varchar(255) DEFAULT NULL,
 	  `strat_name_id` int(10) unsigned DEFAULT NULL,
