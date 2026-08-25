@@ -192,6 +192,21 @@ elsif ( $ARGV[0] eq 'import' || $ARGV[0] eq 'match' )
 	}
     }
     
+    elsif ( $ARGV[0] eq 'candidates' )
+    {
+	shift @ARGV;
+	
+	if ( $cmd eq 'match' )
+	{
+	    &MatchCandidates();
+	}
+	
+	else
+	{
+	    die "Bad command 'import candidates'\n";
+	}
+    }
+    
     else
     {
 	die "Unknown argument '$ARGV[0]'\n";
@@ -233,6 +248,7 @@ exit;
 our (%strat_raw, %strat_name, %strat_name_fc, %name_components, %is_multiple, %macrostrat_name);
 our (%strat_prelim, %strat_concept, %prelim_to_real, %contained_in, %contains);
 our (%country_map, %is_interval_name);
+our (%match, %ms_contained_in, %ms_contains, %pb_contained_in, %pb_contains);
 
 our $raw_colls = 0;
 our $raw_occs = 0;
@@ -2136,7 +2152,7 @@ sub NamesAreCompatible {
     
     if ( $debug_this )
     {
-	print "Comparing '$name' with '$alt_name':\n";
+	say "Comparing '$name' with '$alt_name':";
     }
     
     # Convert both names to foldcase, to make this comparison case-insensitive.
@@ -2181,7 +2197,7 @@ sub NamesAreCompatible {
 		 $nr->{late_age} > $alt_nr->{early_age} + $threshold &&
 		 $alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
 	    {
-		print "ages differ past threshold: return 0\n\n" if $debug_this;
+		say "ages differ past threshold: return 0\n" if $debug_this;
 		return 0;
 	    }
 	}
@@ -3625,6 +3641,491 @@ sub MatchMacrostrat {
 }
 
 
+# MatchCandidates ( )
+#
+# Execute the subcommand 'match candidates'.
+#
+# This command matches names in the STRAT_NAMES table to names in the STRAT_MS_NAMES
+# table, based on spatial and temporal bounds rather than lexical similarity. The goal
+# is to determine candidate matches between old names and currently used names.
+
+sub MatchCandidates {
+
+    my (%bin, %checked, %candidate_match);
+    
+    my $msnames = 0;
+    my $msinstances = 0;
+    
+    say "Reading from table `$TABLE{STRAT_MS_NAMES}`...";
+    
+    my $ms_names = DBHashQuery($pbdb, "SELECT * FROM `$TABLE{STRAT_MS_NAMES}` WHERE exclude is null");
+    
+    foreach my $nr ( $ms_names->@* )
+    {
+	next if $nr->{exclude};
+	
+	my $lat_min = LatitudeBin($nr->{lat_min});
+	my $lat_max = LatitudeBin($nr->{lat_max});
+	my $lng_min = LongitudeBin($nr->{lng_min});
+	my $lng_max = LongitudeBin($nr->{lng_max});
+	my $late_age = AgeBin($nr->{late_age});
+	my $early_age = AgeBin($nr->{early_age});
+	
+	foreach my $lat ( $lat_min .. $lat_max )
+	{
+	    foreach my $lng ( $lng_min .. $lng_max )
+	    {
+		foreach my $age ( $late_age .. $early_age )
+		{
+		    my $bin_key = "$lat|$lng|$age";
+		    
+		    $bin{$bin_key} ||= [ ];
+		    push $bin{$bin_key}->@*, $nr;
+		    $msinstances++;
+		}
+	    }
+	}
+	
+	$msnames++;
+    }
+    
+    my $bin_count = scalar(keys %bin);
+    my $bin_avg = int($msinstances / $bin_count);
+    
+    say "  Read $msnames names.";
+    say "  Populated $bin_count bins with an average of $bin_avg entries.";
+    
+    say "Reading from table `lookup_strat_names`...";
+    
+    my $ms_lookup = DBHashQuery($mstr, "SELECT * FROM `lookup_strat_names`");
+    
+    my $ms_relationships = 0;
+    %ms_contained_in = ();
+    %ms_contains = ();
+    
+    foreach my $lr ( $ms_lookup->@* )
+    {
+	if ( $lr->{mbr_id} && $lr->{fm_id} )
+	{
+	    $ms_contains{$lr->{fm_id}}{$lr->{mbr_id}} = 1;
+	    $ms_contained_in{$lr->{mbr_id}}{$lr->{fm_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{mbr_id} && $lr->{subgp_id} )
+	{
+	    $ms_contains{$lr->{subgp_id}}{$lr->{mbr_id}} = 1;
+	    $ms_contained_in{$lr->{mbr_id}}{$lr->{subgp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{mbr_id} && $lr->{gp_id} )
+	{
+	    $ms_contains{$lr->{gp_id}}{$lr->{mbr_id}} = 1;
+	    $ms_contained_in{$lr->{mbr_id}}{$lr->{gp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{mbr_id} && $lr->{sgp_id} )
+	{
+	    $ms_contains{$lr->{sgp_id}}{$lr->{mbr_id}} = 1;
+	    $ms_contained_in{$lr->{mbr_id}}{$lr->{sgp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{fm_id} && $lr->{subgp_id} )
+	{
+	    $ms_contains{$lr->{subgp_id}}{$lr->{fm_id}} = 1;
+	    $ms_contained_in{$lr->{fm_id}}{$lr->{subgp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{fm_id} && $lr->{gp_id} )
+	{
+	    $ms_contains{$lr->{gp_id}}{$lr->{fm_id}} = 1;
+	    $ms_contained_in{$lr->{fm_id}}{$lr->{gp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{fm_id} && $lr->{sgp_id} )
+	{
+	    $ms_contains{$lr->{sgp_id}}{$lr->{fm_id}} = 1;
+	    $ms_contained_in{$lr->{fm_id}}{$lr->{sgp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{subgp_id} && $lr->{gp_id} )
+	{
+	    $ms_contains{$lr->{gp_id}}{$lr->{subgp_id}} = 1;
+	    $ms_contained_in{$lr->{subgp_id}}{$lr->{gp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{subgp_id} && $lr->{sgp_id} )
+	{
+	    $ms_contains{$lr->{sgp_id}}{$lr->{subgp_id}} = 1;
+	    $ms_contained_in{$lr->{subgp_id}}{$lr->{sgp_id}};
+	    $ms_relationships++;
+	}
+	
+	if ( $lr->{gp_id} && $lr->{sgp_id} )
+	{
+	    $ms_contains{$lr->{sgp_id}}{$lr->{gp_id}} = 1;
+	    $ms_contained_in{$lr->{gp_id}}{$lr->{sgp_id}};
+	    $ms_relationships++;
+	}
+    }
+    
+    say "  Read $ms_relationships stratigraphic relationships.";
+    
+    say "Reading from table `$TABLE{STRAT_OPINIONS}`...";
+    
+    my $pb_opinions = DBHashQuery($pbdb, "SELECT * FROM `$TABLE{STRAT_OPINIONS}`");
+    
+    my $pb_relationships = 0;
+    %pb_contained_in = ();
+    %pb_contains = ();
+    
+    foreach my $or ( $pb_opinions->@* )
+    {
+	if ( $or->{relationship} eq 'belongs to' )
+	{
+	    $pb_contains{$or->{parent_no}}{$or->{child_no}} = 1;
+	    $pb_contained_in{$or->{child_no}}{$or->{parent_no}} = 1;
+	    $pb_relationships++;
+	}
+    }
+    
+    say "  Read $pb_relationships stratigraphic relationships.";
+    
+    say "Reading from table `$TABLE{STRAT_MS_MATCHES}`...";
+
+    my $ms_matches = DBHashQuery($pbdb, "SELECT * FROM `$TABLE{STRAT_MS_MATCHES}`");
+    
+    my $pbnames = 0;
+    my $existing_matches = 0;
+    my $candidate_matches = 0;
+    %match = ();
+    
+    foreach my $mr ( $ms_matches->@* )
+    {
+	my $match_key = "$mr->{stratn_no}|$mr->{stratn_id}";
+	$match{$match_key} = 1;
+    }
+    
+    say "Reading from table `$TABLE{STRAT_NAMES}`...";
+    
+    my $pb_names = DBHashQuery($pbdb, "SELECT * FROM `$TABLE{STRAT_NAMES}`");
+    
+    foreach my $nr ( $pb_names->@* )
+    {
+	my $lat_min = LatitudeBin($nr->{lat_min});
+	my $lat_max = LatitudeBin($nr->{lat_max});
+	my $lng_min = LongitudeBin($nr->{lng_min});
+	my $lng_max = LongitudeBin($nr->{lng_max});
+	my $late_age = AgeBin($nr->{late_age});
+	my $early_age = AgeBin($nr->{early_age});
+	
+	foreach my $lat ( $lat_min .. $lat_max )
+	{
+	    foreach my $lng ( $lng_min .. $lng_max )
+	    {
+		foreach my $age ( $late_age .. $early_age )
+		{
+		    my $bin_key = "$lat|$lng|$age";
+		    
+		    next unless exists $bin{$bin_key};
+		    
+		    my @candidates = $bin{$bin_key}->@*;
+		    
+		    foreach my $cr ( @candidates )
+		    {
+			my $match_key = "$nr->{stratn_no}|$cr->{stratn_id}";
+			
+			next if $checked{$match_key};
+
+			$checked{$match_key} = 1;
+			
+			if ( $match{$match_key} )
+			{
+			    $existing_matches++;
+			    next;
+			}
+			
+			my ($score, $same_parents, $same_children) = CandidateMatch($nr, $cr);
+			
+			if ( $score )
+			{
+			    $candidate_match{$match_key} = $score;
+			    $candidate_matches++;
+			}
+		    }
+		}
+	    }
+	}
+	
+	$pbnames++;
+    }
+
+    say "  Read $pbnames names.";
+    say "  Found $existing_matches existing matches.";
+    say "  Found $candidate_matches candidate matches.";
+    
+    say "Emptying table: `$TABLE{STRAT_C_MATCHES}`...";
+    
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_C_MATCHES}`");
+    
+    say "Generating the STRAT_C_MATCHES (`$TABLE{STRAT_C_MATCHES}`) table...";
+    
+    my $candidate_count = 0;
+    my $candidate_values = '';
+    
+    foreach my $match_key ( sort { $a <=> $b } keys %candidate_match )
+    {
+	my ($stratn_no, $stratn_id) = split /[|]/, $match_key;
+	
+	my $qno = $pbdb->quote($stratn_no);
+	my $qid = $pbdb->quote($stratn_id);
+	my $qscore = $pbdb->quote($candidate_match{$match_key});
+	
+	$candidate_values .= ', ' if $candidate_values;
+	$candidate_values .= "($qno, $qid, $qscore)";
+	$candidate_count++;
+	
+	if ( length($candidate_values > $chunk_size) )
+	{
+	    InsertCandidateMatches($pbdb, $candidate_values);
+	    $candidate_values = '';
+	}
+    }
+    
+    InsertCandidateMatches($pbdb, $candidate_values) if $candidate_values;
+
+    say "  Generated $candidate_count rows.";
+}
+
+
+sub LatitudeBin {
+
+    my ($latitude) = @_;
+
+    return int(($latitude + 90.0) / 6.0);
+}
+
+
+sub LongitudeBin {
+
+    my ($longitude) = @_;
+
+    return int(($longitude + 180.0) / 6.0 );
+}
+
+
+sub AgeBin {
+
+    my ($age) = @_;
+
+    if ( $age < 100.0 )
+    {
+	return int($age / 10.0);
+    }
+
+    elsif ( $age < 500.0 )
+    {
+	return int(($age - 100.0) / 20.0) + 100;
+    }
+
+    else
+    {
+	return int(($age - 500.0) / 100.0) + 500;
+    }
+}
+
+
+sub CandidateMatch {
+
+    my ($pbnr, $msnr) = @_;
+
+    my $debug_this; $debug_this = 1 if $opt_check &&
+	($pbnr->{name} eq $check_name1 && $msnr->{name} eq $check_name2 ||
+	 $pbnr->{name} eq $check_name2 && $msnr->{name} eq $check_name1);
+    
+    if ( $debug_this )
+    {
+	say "Comparing '$pbnr->{name}' with '$msnr->{name}':";
+    }
+
+    my $similarities = 0;
+    
+    my ($ages_overlap, $ages_identical, $locations_overlap, $same_parents, $same_children);
+    
+    # If the ranks are compatible, then the two names might be a match. Otherwise, they
+    # are definitely not.
+
+    if ( $rank_comparison{$pbnr->{rank}} eq $rank_comparison{$msnr->{rank}} )
+    {
+	$similarities++;
+    }
+
+    else
+    {
+	say "ranks are different: return 0\n" if $debug_this;
+	return 0;
+    }
+    
+    # If the age ranges overlap, then the two names might be a match. Otherwise, we
+    # assume they are not.
+    
+    if ( defined $pbnr->{early_age} && $pbnr->{early_age} ne '' &&
+	 defined $msnr->{early_age} && $msnr->{early_age} ne '' )
+    {
+	if ( $pbnr->{early_age} > $msnr->{late_age} &&
+	     $pbnr->{late_age} < $msnr->{early_age} )
+	{
+	    $ages_overlap = 1;
+	    $similarities++;
+	}
+	
+	else
+	{
+	    say "ages do not overlap: return 0\n" if $debug_this;
+	    return 0;
+	}
+
+	# # If the age ranges are exactly the same or very close, the two names are even
+	# # more likely to be a match.
+	
+	# if ( $pbnr->{early_age} == $msnr->{early_age} &&
+	#      abs($pbnr->{late_age} - $msnr->{late_age}) < 5 ||
+	#      $pbnr->{late_age} == $msnr->{late_age} &&
+	#      abs($pbnr->{early_age} - $msnr->{early_age}) < 5 )
+	# {
+	#     $ages_identical = 1;
+	#     $similarities++;
+	# }
+    }
+    
+    else
+    {
+	say "one or the other age was undefined: return 0\n" if $debug_this;
+	return 0;
+    }
+    
+    # If the geographic ranges of the two names overlap, then they might be a match.
+    # Otherwise, we assume they are not.
+    
+    if ( defined $pbnr->{lat_min} && defined $msnr->{lat_min} &&
+	 $pbnr->{lat_min} <= $msnr->{lat_max} &&
+	 $pbnr->{lat_max} >= $msnr->{lat_min} &&
+	 $pbnr->{lng_min} <= $msnr->{lng_max} &&
+	 $pbnr->{lng_max} >= $msnr->{lng_min} )
+    {
+	$locations_overlap = 1;
+	$similarities++;
+    }
+    
+    else
+    {
+	say "locations do not overlap: return 0\n" if $debug_this;
+	return 0;
+    }
+    
+    # If the two stratigraphic names have at least one matching parent or child, they
+    # might be a match. Otherwise, we assume they are not.
+    
+    my $stratn_no = $pbnr->{stratn_no};
+    my $stratn_id = $msnr->{stratn_id};
+    
+    if ( $pb_contained_in{$stratn_no} && $ms_contained_in{$stratn_id} )
+    {
+	my @pb_parents = keys $pb_contained_in{$stratn_no}->%*;
+	my @ms_parents = keys $ms_contained_in{$stratn_id}->%*;
+	
+	foreach my $pbp ( @pb_parents )
+	{
+	    foreach my $msp ( @ms_parents )
+	    {
+		if ( $match{"$pbp|$msp"} )
+		{
+		    $same_parents++;
+		    $similarities++;
+		}
+	    }
+	}
+    }
+    
+    if ( $pb_contains{$stratn_no} && $ms_contains{$stratn_id} )
+    {
+	my @pb_children = keys $pb_contains{$stratn_no}->%*;
+	my @ms_children = keys $ms_contains{$stratn_id}->%*;
+	
+	foreach my $pbc ( @pb_children )
+	{
+	    foreach my $msc ( @ms_children )
+	    {
+		if ( $match{"$pbc|$msc"} )
+		{
+		    $same_children++;
+		    $similarities++;
+		}
+	    }
+	}
+    }
+
+    unless ( $same_parents || $same_children )
+    {
+	say "no matching parents or children: return 0\n" if $debug_this;
+	return 0;
+    }
+    
+    # However, if the PBDB name matches either a child or a parent of the Macrostrat
+    # name, then reject the match.
+    
+    if ( $ms_contained_in{$stratn_id} )
+    {
+	my @ms_parents = keys $ms_contained_in{$stratn_id}->%*;
+	
+	foreach my $msp ( @ms_parents )
+	{
+	    if ( $match{"$stratn_no|$msp"} )
+	    {
+		say "the PBDB name matches a parent of the Macrostrat name: return 0\n"
+		    if $debug_this;
+		return 0;
+	    }
+	}
+    }
+
+    if ( $ms_contains{$stratn_id} )
+    {
+	my @ms_children = keys $ms_contains{$stratn_id}->%*;
+	
+	foreach my $msc ( @ms_children )
+	{
+	    if ( $match{"$stratn_no|$msc"} )
+	    {
+		say "the PBDB name matches a child of the Macrostrat name: return 0\n"
+		    if $debug_this;
+		return 0;
+	    }
+	}
+    }
+    
+    # If we get here, then the PBDB name shares at least one parent or child with the
+    # Macrostrat name and doesn't match any parent or child. Return the number of
+    # similarities, which functions as the candidate match score.
+    
+    if ( $debug_this )
+    {
+	say "the strata have $same_parents matching parents" if $same_parents;
+	say "the strata have $same_children matching children" if $same_children;
+	say "return $similarities.\n";
+    }
+    
+    return $similarities;
+}
+
+
 # UpdateTables ( )
 # 
 # Execute the subcommand 'update tables' or 'check tables'.
@@ -3931,6 +4432,14 @@ sub InsertNameMatches {
     my ($dbh, $match_values) = @_;
     
     DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, stratc_id, score) VALUES $match_values");
+}
+
+
+sub InsertCandidateMatches {
+
+    my ($dbh, $values) = @_;
+    
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_C_MATCHES}` (stratn_no, stratn_id, score) VALUES $values");
 }
 
 
