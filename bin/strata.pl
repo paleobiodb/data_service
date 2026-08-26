@@ -1243,17 +1243,17 @@ sub GenerateConcepts {
     
     $DB::single = 1;
     
-    say "Emptying tables: '$TABLE{STRAT_NAMES}', '$TABLE{STRAT_NREFS}', '$TABLE{STRAT_CONCEPTS}', " .
-	"`strat_concept_ccs`, '$TABLE{STRAT_OPINIONS}', '$TABLE{STRAT_OREFS}', " .
-	"`coll_strat_names`...";
+    say "Emptying tables: `$TABLE{STRAT_NAMES}`, `$TABLE{STRAT_NREFS}`, `$TABLE{STRAT_CONCEPTS}`, " .
+	"`$TABLE{STRAT_CONCEPT_CCS}`, `$TABLE{STRAT_OPINIONS}`, `$TABLE{STRAT_OREFS}`, " .
+	"`$TABLE{COLLECTION_STRATA_NAMES}`...";
     
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NAMES}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NREFS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_CONCEPTS}`");
-    DBCommand($pbdb, "TRUNCATE `strat_concept_ccs`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_CONCEPT_CCS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_OPINIONS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_OREFS}`");
-    DBCommand($pbdb, "TRUNCATE `coll_strat_names`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{COLLECTION_STRAT_NAMES}`");
     
     # Then go through the list of concepts, and add one row to the STRAT_CONCEPTS table
     # per concept. For efficiency, these rows are added in blocks of roughly $chunk_size
