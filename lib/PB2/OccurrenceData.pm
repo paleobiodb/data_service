@@ -1692,15 +1692,38 @@ sub list_occs {
     
     my $join_list = $request->generateJoinList('c', $tables);
     
-    $request->{main_sql} = "
+    my $idtype = $request->clean_param('idtype');
+    
+    if ( $idtype && $idtype eq 'any' )
+    {
+	$request->{main_sql} = <<~END_SQL;
+	SELECT $calc $fields
+	FROM (
+	SELECT o.occurrence_no
+	FROM $TABLE{OCCURRENCE_MATRIX} as o
+	    $join_op $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+	    $join_list
+	WHERE $filter_string
+	GROUP BY o.occurrence_no
+	ORDER BY $order_clause
+	$limit) as `inner` straight_join $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+	    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+	    $join_list
+	END_SQL
+    }
+    
+    else {
+	$request->{main_sql} = <<~END_SQL;
 	SELECT $calc $fields
 	FROM $TABLE{OCCURRENCE_MATRIX} as o
-	    $join_op $COLL_MATRIX as c on o.collection_no = c.collection_no
+	    $join_op $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	    $join_list
-        WHERE $filter_string
+	WHERE $filter_string
 	GROUP BY $group_expr
 	ORDER BY $order_clause
-	$limit";
+	$limit
+	END_SQL
+    }
     
     $request->{ds}->debug_line("$request->{main_sql}\n") if $request->debug;
     
@@ -3320,6 +3343,13 @@ sub generateOccFilters {
     elsif ( $idtype eq 'orig' )
     {
 	push @filters, "$tn.reid_no = 0";
+	$tables_ref->{non_summary} = 1;
+	$tables_ref->{$tn} = 1;
+    }
+    
+    elsif ( $idtype eq 'any' )
+    {
+	# no filter is needed, just select all occurrences
 	$tables_ref->{non_summary} = 1;
 	$tables_ref->{$tn} = 1;
     }
