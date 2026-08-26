@@ -744,7 +744,7 @@ sub quickParseIdentifiedName {
     # Check the name against the overall pattern.
     
     if ( $name =~  / ^ \s* ([A-Z%_][a-z%_]+) (?: \s+ [(]([A-Z%_][a-z%_]+)[)] )?
-		     \s+ ([a-z%_]+|indet[.]|spp?[.]) (?: \s+ ([a-z%_]+) )? \s* $ /xs )
+		     (?: \s+ ([a-z%_]+|indet[.]|spp?[.]) )? (?: \s+ ([a-z%_]+) )? \s* $ /xs )
     {
 	my $genus = $1;
 	my $subgenus = $2;
@@ -762,6 +762,11 @@ sub quickParseIdentifiedName {
 	}
 	
 	# If we get here, then the name has been parsed correctly.
+	
+	if ( $species =~ /^indet[.]$|^spp?[.]$/ )
+	{
+	    $species = '';
+	}
 	
 	return ($genus, '', $subgenus, '', $species, '', $subspecies, '');
     }

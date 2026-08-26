@@ -2846,7 +2846,7 @@ sub resolve_names {
 	    }
 	    
 	    push @clauses, "($range_clause)" if $range_clause;
-	    push @clauses, "common = ''";
+	    # push @clauses, "common = ''";
 	    
 	    my $sql = $sql_base . join(' and ', @clauses) . "\n" . $sql_order . " " . $sql_limit;
 	    
@@ -4696,6 +4696,7 @@ sub extra_filters {
 
 
 my $IDENT_UNCERTAIN = "'aff.', 'cf.', '?', '\"', 'sensu lato', 'informal'";
+my $SUBSP_UNCERTAIN = "'var', 'morph', 'format', 'mut'";
 
 sub occ_filters {
     
@@ -4730,17 +4731,21 @@ sub occ_filters {
 	    push @filters, "$tn.genus_reso not in ($IDENT_UNCERTAIN)";
 	    push @filters, "$tn.subgenus_reso not in ($IDENT_UNCERTAIN)";
 	    push @filters, "$tn.species_reso not in ($IDENT_UNCERTAIN)" if $idqual eq 'certain';
+	    push @filters, "$tn.subspecies_reso not in ($IDENT_UNCERTAIN, $SUBSP_UNCERTAIN)"
+		if $idqual eq 'certain';
 	}
 	
 	elsif ( $idqual eq 'uncertain' )
 	{
 	    push @filters, "($tn.genus_reso in ($IDENT_UNCERTAIN) or " .
-		"$tn.subgenus_reso in ($IDENT_UNCERTAIN) or $tn.species_reso in ($IDENT_UNCERTAIN))";
+		"$tn.subgenus_reso in ($IDENT_UNCERTAIN) or " .
+		"$tn.species_reso in ($IDENT_UNCERTAIN) or " .
+		"$tn.subspecies_reso in ($IDENT_UNCERTAIN, $SUBSP_UNCERTAIN))";
 	}
 	
 	elsif ( $idqual eq 'new' )
 	{
-	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or $tn.species_reso = 'n. sp.')";
+	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or $tn.species_reso = 'n. sp.' or $tn.subspecies_reso = 'n. subsp.')";
 	}
 	
 	else # idqual eq 'any'

@@ -3630,7 +3630,7 @@ sub generateMainFilters {
 	    
 	    @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
 							    all_names => 1,
-							    current => $current,
+							    # current => $current,
 							    debug_out => $debug_out });
 	    
 	    push @taxon_warnings, $taxonomy->list_warnings;
@@ -3752,6 +3752,24 @@ sub generateMainFilters {
 	$tables->{non_geo_filter} = 1;
 	$tables->{non_summary} = 1;
 	$request->{my_taxa} = [ @include_taxa, @exclude_taxa ];
+	
+	my $min_rank;
+	
+	foreach my $t ( @include_taxa )
+	{
+	    $min_rank = $t->{taxon_rank} if ! defined($min_rank) || $t->{taxon_rank} < $min_rank;
+	}
+	
+	if ( $min_rank >= 4 )
+	{
+	    push @filters, "o.species_name in ('sp.', 'spp.', 'indet.')";
+	    push @filters, "o.subgenus_name = ''" if $min_rank >= 5;
+	}
+	
+	elsif ( $min_rank == 3 )
+	{
+	    push @filters, "o.subspecies_name in ('subsp.', '')";
+	}
     }
     
     # If a name was given and no matching taxa were found, we need to query by
@@ -3815,49 +3833,64 @@ sub generateMainFilters {
 		if ( $genus_name !~ /^[%_]+$/ )
 		{
 		    my $quoted_genus = $dbh->quote($genus_name);
-		    push @name_filters, "oc.genus_name like $quoted_genus"
+		    push @name_filters, "o.genus_name like $quoted_genus"
 		}
 		
 		if ( $genus_reso )
 		{
 		    my $quoted_reso = $dbh->quote($genus_reso);
-		    push @name_filters, "oc.genus_reso = $quoted_reso";
+		    push @name_filters, "o.genus_reso = $quoted_reso";
 		}
 		
 		if ( $subgenus_name && $subgenus_name !~ /^[%_]+$/ )
 		{
 		    my $quoted_subgenus = $dbh->quote($subgenus_name);
-		    push @name_filters, "oc.subgenus_name like $quoted_subgenus";
+		    push @name_filters, "o.subgenus_name like $quoted_subgenus";
+		}
+		
+		elsif ( ! $subgenus_name && ! $all_children )
+		{
+		    push @name_filters, "o.subgenus_name = ''";
 		}
 		
 		if ( $subgenus_reso )
 		{
 		    my $quoted_reso = $dbh->quote($subgenus_reso);
-		    push @name_filters, "oc.subgenus_reso = $quoted_reso";
+		    push @name_filters, "o.subgenus_reso = $quoted_reso";
 		}
 		
 		if ( $species_name && $species_name !~ /^[%_]+$/ )
 		{
 		    my $quoted_species = $dbh->quote($species_name);
-		    push @name_filters, "oc.species_name like $quoted_species";
+		    push @name_filters, "o.species_name like $quoted_species";
+		}
+		
+		elsif ( ! $species_name && ! $all_children )
+		{
+		    push @name_filters, "o.species_name in ('sp.', 'spp.', 'indet.')";
 		}
 		
 		if ( $species_reso )
 		{
 		    my $quoted_reso = $dbh->quote($species_reso);
-		    push @name_filters, "oc.species_reso = $quoted_reso";
+		    push @name_filters, "o.species_reso = $quoted_reso";
 		}
 		
 		if ( $subspecies_name && $subspecies_name !~ /^[%_]$/ )
 		{
 		    my $quoted_subspecies = $dbh->quote($subspecies_name);
-		    push @name_filters, "oc.subspecies_name like $quoted_subspecies";
+		    push @name_filters, "o.subspecies_name like $quoted_subspecies";
+		}
+		
+		elsif ( ! $subspecies_name && ! $all_children )
+		{
+		    push @name_filters, "o.subspecies_name in ('subsp.', '')";
 		}
 		
 		if ( $subspecies_reso )
 		{
 		    my $quoted_reso = $dbh->quote($subspecies_reso);
-		    push @name_filters, "oc.subspecies_reso = $quoted_reso";
+		    push @name_filters, "o.subspecies_reso = $quoted_reso";
 		}
 		
 		if ( @name_filters > 1 )
