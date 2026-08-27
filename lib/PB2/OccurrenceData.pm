@@ -3487,9 +3487,11 @@ sub generateIdentFilters {
 
 our (%IDENT_MODIFIER) = ( af => 'aff.', cf => 'cf.', eg => 'ex gr.',
 			  ss => 'sensu stricto', sl => 'sensu lato', if => 'informal',
-			  qm => '?', qu => '"' );
+			  qm => '?', qu => '"',
+			  va => 'var', fo => 'forma', mo => 'morph', mu => 'mut' );
 
-our ($IDENT_MOD_LIST) = "'ns', 'ng', 'af', 'cf', 'eg', 'ss', 'sl', 'if', 'qm', 'qu', 'nm'";
+our ($IDENT_MOD_LIST) = "'ns', 'ng', 'af', 'cf', 'eg', 'ss', 'sl', 'if', 'qm', 'qu', " .
+    "'va', 'fo', 'mo', 'mut', 'nm'";
 
 sub id_mod_filter {
 

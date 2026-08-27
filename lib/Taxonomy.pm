@@ -4696,7 +4696,7 @@ sub extra_filters {
 
 
 my $IDENT_UNCERTAIN = "'aff.', 'cf.', '?', '\"', 'sensu lato', 'informal'";
-my $SUBSP_UNCERTAIN = "'var', 'morph', 'format', 'mut'";
+my $SUBSP_UNCERTAIN = "'var', 'morph', 'forma', 'mut'";
 
 sub occ_filters {
     
@@ -4745,7 +4745,7 @@ sub occ_filters {
 	
 	elsif ( $idqual eq 'new' )
 	{
-	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or $tn.species_reso = 'n. sp.' or $tn.subspecies_reso = 'n. subsp.')";
+	    push @filters, "($tn.genus_reso = 'n. gen.' or $tn.subgenus_reso = 'n. subgen.' or $tn.species_reso = 'n. sp.' or $tn.subspecies_reso = 'n. ssp.')";
 	}
 	
 	else # idqual eq 'any'
