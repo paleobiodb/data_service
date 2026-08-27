@@ -90,6 +90,8 @@ sub initialize {
 	    "will be empty unless the occurrence is a plant fossil.",
 	{ value => 'abund', maps_to => '1.2:occs:abund' },
 	    "Information about the abundance of this occurrence in the collection",
+	{ value => 'typeloc', maps_to => '1.2:occs:type_locality' },
+	    "The type locality of this taxon",
 	{ value => 'ecospace', maps_to => '1.2:taxa:ecospace' },
 	    "Information about ecological space that this organism occupies or occupied.",
 	    "This has only been filled in for a relatively few taxa.  Here is a",
@@ -510,7 +512,12 @@ sub initialize {
     $ds->define_block('1.2:occs:rem' =>
 	{ select => ['oc.comments'], tables => ['oc'] },
 	{ output => 'comments', pbdb_name => 'occurrence_comments', com_name => 'ocm' },
-	    "Additional comments about this occurrence, if any.");
+		      "Additional comments about this occurrence, if any.");
+    
+    $ds->define_block('1.2:occs:type_locality' =>
+	{ select => ['at.type_locality'], tables => ['at'] },
+	{ output => 'type_locality', pbdb_name => 'type_locality', com_name => 'tlc' },
+	    "The type locality of this taxon, if any.");
     
     $ds->define_block( '1.2:occs:full_info' =>
 	{ include => '1.2:occs:attr' },
@@ -4019,6 +4026,8 @@ sub generateJoinList {
 	if $tables->{oc};
     $join_list .= "JOIN coll_strata as cs on cs.collection_no = c.collection_no\n"
 	if $tables->{cs};
+    $join_list .= "JOIN authorities as at on at.taxon_no = o.taxon_no\n"
+	if $tables->{at};
     
     if ( $tables->{lump} )
     {
