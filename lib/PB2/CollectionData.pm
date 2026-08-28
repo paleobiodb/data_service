@@ -1140,7 +1140,7 @@ sub initialize {
 	{ value => 'country.asc', undocumented => 1 },
 	{ value => 'country.desc', undocumented => 1 },
 	{ value => 'country' },
-	    "Results are ordered by country, state, and county, sorted alphabetically.",
+	    "Results are ordered by country, state/province, county/region, sorted alphabetically.",
 	{ value => 'distance.asc', undocumented => 1 },
 	{ value => 'distance.desc', undocumented => 1 },
 	{ value => 'distance' },
@@ -5607,7 +5607,7 @@ sub generate_order_clause {
 	    
 	    if ( $bt eq 'o' )
 	    {
-		push @exprs, "o.occurrence_no $dir";
+		push @exprs, "o.occurrence_no $dir, o.reid_no asc";
 	    }
 	    
 	    elsif ( $bt eq 'ss' )
@@ -5615,27 +5615,47 @@ sub generate_order_clause {
 		push @exprs, "ss.specimen_no $dir";
 	    }
 
-	    elsif ( $bt eq 'c' || $bt eq 'cc' )
+	    else
 	    {
-		push @exprs, "$bt.collection_no $dir";
+		push @exprs, "c.collection_no $dir";
 	    }
+	}
 
-	    $tables->{$bt} = 1;
+	elsif ( $term eq 'coll_id' )
+	{
+	    $dir ||= 'asc';
+	    
+	    if ( $bt eq 'o' )
+	    {
+		push @exprs, "o.collection_no $dir, o.occurrence_no asc, o.reid_no asc";
+	    }
+	    
+	    elsif ( $bt eq 'ss' )
+	    {
+		push @exprs, "o.collection_no $dir, o.occurrence_no asc, ss.specimen_no asc";
+		$tables->{o} = 1;
+	    }
+	    
+	    else
+	    {
+		push @exprs, "c.collection_no $dir";
+	    }
 	}
 	
 	elsif ( $term eq 'name' )
 	{
-	    push @exprs, "cc.collection_name $dir";
+	    $dir ||= 'asc';
+	    push @exprs, "cc.collection_name $dir, cc.collection_no asc";
 	    $tables->{cc} = 1;
 	}
-
+	
 	elsif ( $term eq 'ref' )
 	{
 	    $dir ||= 'asc';
 	    
 	    push @exprs, "$bt.reference_no $dir";
 	}
-
+	
 	elsif ( $term eq 'hierarchy' )
 	{
 	    if ( defined $dir && $dir eq 'desc' )
@@ -5655,8 +5675,7 @@ sub generate_order_clause {
 	{
 	    $dir ||= 'asc';
 
-	    push @exprs, "ifnull($tt.name, concat($bt.genus_name, ' ', $bt.species_name)) $dir";
-	    $tables->{$tt} = 1;
+	    push @exprs, "$bt.genus_name $dir, $bt.subgenus_name $dir, $bt.species_name $dir, $bt.subspecies_name $dir";
 	    $tables->{$bt} = 1;
 	}
 	
@@ -5676,14 +5695,9 @@ sub generate_order_clause {
 	
 	elsif ( $term eq 'agespan' )
 	{
+	    $dir ||= 'desc';
 	    push @exprs, "($at.early_age - $at.late_age) $dir",
 	    $tables->{$at} = 1;
-	}
-	
-	elsif ( $term eq 'taxon' && $tt )
-	{
-	    push @exprs, "$tt.lft $dir";
-	    $tables->{$tt} = 1;
 	}
 	
 	elsif ( $term eq 'reso' && $tt )
@@ -5695,19 +5709,29 @@ sub generate_order_clause {
 	
 	elsif ( $term eq 'formation' )
 	{
+	    $dir ||= 'asc';
 	    push @exprs, "cc.formation $dir";
 	    $tables->{cc} = 1;
 	}
 	
 	elsif ( $term eq 'stratgroup' )
 	{
+	    $dir ||= 'asc';
 	    push @exprs, "cc.geological_group $dir";
 	    $tables->{cc} = 1;
 	}
 	
 	elsif ( $term eq 'member' )
 	{
+	    $dir ||= 'asc';
 	    push @exprs, "cc.member $dir";
+	    $tables->{cc} = 1;
+	}
+
+	elsif ( $term eq 'stratigraphy' )
+	{
+	    $dir ||= 'asc';
+	    push @exprs, "cc.geological_group $dir, cc.formation $dir, cc.member $dir";
 	    $tables->{cc} = 1;
 	}
 	
@@ -5732,79 +5756,24 @@ sub generate_order_clause {
 	elsif ( $term eq 'country' )
 	{
 	    $dir ||= 'asc';
-	    push @exprs, "$bt.country $dir, $bt.state $dir, $bt.county $dir";
+	    push @exprs, "cc.country $dir, cc.state $dir, cc.county $dir";
+	    $tables->{cc} = 1;
 	}
 
 	elsif ( $term eq 'distance' )
 	{
 	    $dir ||= 'asc';
 	    
-	    # my $x1 = $request->clean_param('lngmin');
-	    # my $x2 = $request->clean_param('lngmax');
-	    # my $y1 = $request->clean_param('latmin');
-	    # my $y2 = $request->clean_param('latmax');
-	    
-	    # unless ( defined $x1 && $x1 ne '' && defined $x2 && $x2 ne '' &&
-	    # 	     defined $y1 && $y1 ne '' && defined $y2 && $y2 ne '' )
-	    # {
-	    # 	$request->add_error("Error with 'order=distance': you must also specify a bounding box with 'latmin', 'lastmax', 'lngmin', 'lngmax'");
-	    # 	die $request->exception(400);
-	    # }
-	    
-	    # # Find the center latitude and longitude value.
-	    
-	    # my $center_y = ($y1 + $y2) / 2;
-	    # my $center_x;
-	    # my $distance_expr;
-	    
-	    # # If the longitude coordinates do not fall between -180 and 180,
-	    # # adjust them so that they do.
-	    
-	    # if ( $x1 < -180.0 )
-	    # {
-	    # 	$x1 = $x1 + ( POSIX::floor( (180.0 - $x1) / 360.0) * 360.0);
-	    # }
-	    
-	    # if ( $x2 < -180.0 )
-	    # {
-	    # 	$x2 = $x2 + ( POSIX::floor( (180.0 - $x2) / 360.0) * 360.0);
-	    # }
-	    
-	    # if ( $x1 > 180.0 )
-	    # {
-	    # 	$x1 = $x1 - ( POSIX::floor( ($x1 + 180.0) / 360.0 ) * 360.0);
-	    # }
-	    
-	    # if ( $x2 > 180.0 )
-	    # {
-	    # 	$x2 = $x2 - ( POSIX::floor( ($x2 + 180.0) / 360.0 ) * 360.0);
-	    # }
-	    
-	    # # If $x1 < $x2, then the center computation is simple.
-	    
-	    # if ( $x1 <= $x2 )
-	    # {
-	    # 	$center_x = ($x1 + $x2) / 2;
-	    # }
-	    
-	    # # Otherwise, our range crosses the antimeridian
-	    
-	    # elsif ( $x1 + $x2 > 0 )
-	    # {
-	    # 	$center_x = ($x1 + $x2) / 2 - 180;
-	    # }
-
-	    # else
-	    # {
-	    # 	$center_x = ($x1 + $x2) / 2 + 180;
-	    # }
-	    
-	    # my $center = "'point($center_x,$center_y)'";
-
 	    if ( defined $request->{my_center_x} && defined $request->{my_center_y} )
 	    {
 		my $center = "'point($request->{my_center_x} $request->{my_center_y})'";
 		push @exprs, "st_distance_sphere(geomfromtext($center),c.loc) $dir";
+		$tables->{c} = 1;
+	    }
+	    
+	    else
+	    {
+		die $request->exception(400, "If you specify 'order=distance' then you must also specify a center point");
 	    }
 	}
 	
@@ -5812,6 +5781,7 @@ sub generate_order_clause {
 	{
 	    $dir ||= 'desc';
 	    push @exprs, "n_occs $dir";
+	    $tables->{c} = 1;
 	}
 	
 	elsif ( $term eq 'created' )
@@ -5830,7 +5800,7 @@ sub generate_order_clause {
 	
 	else
 	{
-	    die "400 bad value for parameter 'order' (was '$term')\n";
+	    die $request->exception(400, "Bad value for parameter 'order' (was '$term')");
 	}
     }
     

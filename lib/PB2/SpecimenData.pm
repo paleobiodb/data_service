@@ -1120,7 +1120,7 @@ sub list_specimens {
     
     if ( $order_clause )
     {
-	$order_clause .= ", ss.specimen_no";
+	$order_clause .= ", ss.specimen_no" unless $order_clause =~ /ss[.]specimen_no/;
     }
     
     elsif ( defined $arg && $arg eq 'byref' )

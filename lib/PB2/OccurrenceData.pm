@@ -757,71 +757,92 @@ sub initialize {
 	    "Count by ten million year bin");
     
     $ds->define_set('1.2:occs:order' =>
+	{ value => 'id.asc', undocumented => 1 },
+	{ value => 'id.desc', undocumented => 1 },
 	{ value => 'id' },
 	    "Results are ordered by identifier, so they are reported in the order",
 	    "in which they were entered into the database.  This is the default",
 	    "if you select B<C<all_records>>.",
-	{ value => 'id.asc', undocumented => 1 },
-	{ value => 'id.desc', undocumented => 1 },
+	{ value => 'coll_id.asc', undocumented => 1 },
+	{ value => 'coll_id.desc', undocumented => 1 },
+	{ value => 'coll_id' },
+	    "Results are ordered by collection identifier. Within a collection, they",
+	    "are ordered by occurrence identifier.",
+	{ value => 'name.asc', undocumented => 1 },
+	{ value => 'name.desc', undocumented => 1 },
+	{ value => 'name' },
+	    "Results are ordered by collection name, so that occurrences from",
+	    "the same collection are listed together. Within a collection, they are",
+	    "ordered by occurrence identifier.",
+	{ value => 'ref.asc', undocumented => 1 },
+	{ value => 'ref.desc', undocumented => 1 },
+	{ value => 'ref' },
+	    "Results are ordered by reference id so that occurrences entered from",
+	    "the same reference are listed together.",
+	{ value => 'hierarchy.asc', undocumented => 1 },
+	{ value => 'hierarchy.desc', undocumented => 1 },
 	{ value => 'hierarchy' },
 	    "Results are ordered hierarchically by taxonomic identification.",
 	    "The order of sibling taxa is arbitrary, but children will always",
 	    "follow after parents.",
-	{ value => 'hierarchy.asc', undocumented => 1 },
-	{ value => 'hierarchy.desc', undocumented => 1 },
-	{ value => 'identification' },
-	    "Results are ordered alphabetically by taxonomic identification.",
 	{ value => 'identification.asc', undocumented => 1 },
 	{ value => 'identification.desc', undocumented => 1 },
-	{ value => 'ref' },
-	    "Results are ordered by reference id so that occurrences entered from",
-	    "the same reference are listed together.",
-	{ value => 'ref.asc', undocumented => 1 },
-	{ value => 'ref.desc', undocumented => 1 },
-	{ value => 'max_ma' },
-	    "Results are ordered chronologically by early age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'identification' },
+	    "Results are ordered alphabetically by taxonomic identification.",
 	{ value => 'max_ma.asc', undocumented => 1 },
 	{ value => 'max_ma.desc', undocumented => 1 },
-	{ value => 'min_ma' },
-	    "Results are ordered chronologically by late age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'max_ma' },
+	    "Results are ordered chronologically by early age bound, oldest to youngest",
+	    "unless you add C<.asc>",
 	{ value => 'min_ma.asc', undocumented => 1 },
 	{ value => 'min_ma.desc', undocumented => 1 },
-	{ value => 'agespan' },
-	    "Results are ordered based on the difference between the early and late age bounds, starting",
-	    "with occurrences with the smallest spread (most precise temporal resolution) unless you add C<.desc>",
+	{ value => 'min_ma' },
+	    "Results are ordered chronologically by late age bound, oldest to youngest",
+	    "unless you add C<.asc>",
 	{ value => 'agespan.asc', undocumented => 1 },
 	{ value => 'agespan.desc', undocumented => 1 },
+	{ value => 'agespan' },
+	    "Results are ordered based on the difference between the early and late age bounds,",
+	    "starting with occurrences with the smallest spread (most precise temporal resolution)",
+	    "unless you add C<.desc>",
+	{ value => 'reso.asc', undocumented => 1 },
+	{ value => 'reso.desc', undocumented => 1 },
 	{ value => 'reso' },
 	    "Results are ordered according to the taxonomic rank to which they are resolved.  Unless",
 	    "you add C<.desc>, this would start with subspecies, species, genus, ...",
-	{ value => 'reso.asc', undocumented => 1 },
-	{ value => 'reso.desc', undocumented => 1 },
-	{ value => 'formation' },
-	    "Results are ordered by the geological formation in which they were found, sorted alphabetically.",
 	{ value => 'formation.asc', undocumented => 1 },
 	{ value => 'formation.desc', undocumented => 1 },
-	{ value => 'geogroup' },
-	    "Results are ordered by the geological group in which they were found, sorted alphabetically.",
+	{ value => 'formation' },
+	    "Results are ordered by the geological formation in which they were found,",
+	    "sorted alphabetically.",
 	{ value => 'geogroup.asc', undocumented => 1 },
 	{ value => 'geogroup.desc', undocumented => 1 },
-	{ value => 'member' },
-	    "Results are ordered by the geological member in which they were found, sorted alphabetically.",
+	{ value => 'geogroup' },
+	    "Results are ordered by the geological group in which they were found,",
+	    "sorted alphabetically.",
 	{ value => 'member.asc', undocumented => 1 },
 	{ value => 'member.desc', undocumented => 1 },
-	{ value => 'plate' },
-	    "Results are ordered by the geological plate on which they are located, sorted numerically by identifier.",
-	{ value => 'plate.asc', undocumented => 1 },
-	{ value => 'plate.desc', undocumented => 1 },
+	{ value => 'member' },
+	    "Results are ordered by the geological member in which they were found,",
+	    "sorted alphabetically.",
+	{ value => 'country.asc', undocumented => 1 },
+	{ value => 'country.desc', undocumented => 1 },
+	{ value => 'country' },
+	    "Results are ordered by country, state/province, county/region, sorted alphabetically.",
+	# { value => 'plate.asc', undocumented => 1 },
+	# { value => 'plate.desc', undocumented => 1 },
+	# { value => 'plate' },
+	#     "Results are ordered by the geological plate on which they are located, sorted numerically by identifier.",
+	{ value => 'created.asc', undocumented => 1 },
+	{ value => 'created.desc', undocumented => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
-	{ value => 'created.asc', undocumented => 1 },
-	{ value => 'created.desc', undocumented => 1 },
+	{ value => 'modified.asc', undocumented => 1 },
+	{ value => 'modified.desc', undocumented => 1 },
 	{ value => 'modified' },
 	    "Results are ordered by the date the record was last modified",
-	    "most recent first unless you add C<.asc>",
-	{ value => 'modified.asc', undocumented => 1 },
-	{ value => 'modified.desc', undocumented => 1 });
+	    "most recent first unless you add C<.asc>");
     
     $ds->define_ruleset('1.2:occs:specifier' =>
 	{ param => 'occ_id', valid => VALID_IDENTIFIER('OID'), alias => 'id' },
@@ -1674,20 +1695,31 @@ sub list_occs {
     
     my $tt = $tables->{tv} ? 'tv' : 't';
     
-    my $order_clause = $request->PB2::CollectionData::generate_order_clause($tables, { at => 'c', bt => 'o', tt => $tt });
+    my $order_clause = $request->PB2::CollectionData::generate_order_clause($tables,
+						    { at => 'c', bt => 'o', tt => $tt });
     
-    unless ( $order_clause )
+    if ( $order_clause )
     {
-	$order_clause = defined $arg && $arg eq 'byref' ? 
-	    "r.reference_no, o.occurrence_no" : 
-		'o.occurrence_no';
+	$order_clause .= ", o.occurrence_no"
+	    unless $order_clause =~ /o[.]occurrence_no|t[.]lft|o[.]genus_name/;
+	$order_clause .= ", o.reid_no" unless $order_clause =~ /o[.]reid_no/;
+    }
+    
+    elsif ( $arg && $arg eq 'byref' )
+    {
+	$order_clause = "r.reference_no, o.occurrence_no, o.reid_no";
+    }
+    
+    else
+    {
+	$order_clause = "o.occurrence_no, o.reid_no";
     }
     
     # Debug
     
-    my ($in_transaction) = $dbh->selectrow_array("SELECT \@\@in_transaction");
+    # my ($in_transaction) = $dbh->selectrow_array("SELECT \@\@in_transaction");
     
-    $request->debug_line("In transaction: $in_transaction") if $request->debug;
+    # $request->debug_line("In transaction: $in_transaction") if $request->debug;
     
     # Determine which extra tables, if any, must be joined to the query. Then
     # construct the query. We don't need a union query for occurrences and reids
@@ -1706,16 +1738,17 @@ sub list_occs {
 	$request->{main_sql} = <<~END_SQL;
 	SELECT $calc $fields
 	FROM (
-	SELECT o.occurrence_no
+	SELECT DISTINCT o.occurrence_no
 	FROM $TABLE{OCCURRENCE_MATRIX} as o
 	    $join_op $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	    $join_list
 	WHERE $filter_string
-	GROUP BY o.occurrence_no
-	ORDER BY $order_clause
-	$limit) as `inner` straight_join $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+	GROUP BY o.occurrence_no) as innerq
+	    straight_join $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
 	    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	    $join_list
+	ORDER BY $order_clause
+	$limit
 	END_SQL
     }
     
