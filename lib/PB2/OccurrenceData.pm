@@ -4585,6 +4585,7 @@ my %ID_TYPE = ( orig_no => 'TXN',
 		specimen_no => 'SPM',
 		collection_no => 'COL',
 		type_locality => 'COL',
+		cx_int_no => 'INT',
 		reid_no => 'REI',
 		reference_no => 'REF',
 		name_reference_no => 'REF',
@@ -4669,7 +4670,7 @@ sub process_occ_ids {
     
     foreach my $f ( qw(orig_no taxon_no accepted_no phylum_no
 		       class_no order_no family_no genus_no subgenus_no
-		       interval_no specimen_no occurrence_no collection_no type_locality
+		       interval_no specimen_no occurrence_no collection_no type_locality cx_int_no
 		       reid_no reference_no name_reference_no bin_id_1 bin_id_2 bin_id_3 bin_id_4) )
     {
 	$record->{$f} = generate_identifier($ID_TYPE{$f}, $record->{$f})
