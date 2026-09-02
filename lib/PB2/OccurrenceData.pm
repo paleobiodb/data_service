@@ -917,6 +917,14 @@ sub initialize {
 	"Except as noted below, you may use these in any combination.  If you do not specify B<C<all_records>>,",
 	"you must specify at least one selection parameter from the following list.",
 	{ allow => '1.2:occs:selector' },
+	{ optional => 'all_idents', valid => FLAG_VALUE },
+	    "If this optional parameter is specified, all identifications of the selected occurrences",
+	    "are returned as separate rows. This includes the original identification plus any",
+	    "reidentifications there may be. With this parameter, the parameters B<C<rowcount>>",
+	    "and B<C<limit>> are evaluated with respect to the number of distinct occurrences",
+	    "returned instead of the number of rows, so the actual number",
+	    "of rows returned may be higher than the specified limit and higher than the reported",
+	    "count. This parameter does not require a value",
 	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:interval_selector' },
 	{ allow => '1.2:ma_selector' },
@@ -1591,10 +1599,10 @@ sub list_occs {
     # Do a final check to make sure that all records are only returned if
     # 'all_records' was specified.
     
-    if ( @filters == 0 )
+    if ( @filters == 0 && ! $request->clean_param('all_records') )
     {
-	die "400 You must specify 'all_records' if you want to retrieve the entire set of records.\n"
-	    unless $request->clean_param('all_records');
+	die $request->exception(400, "You must specify 'all_records' if you want to retrieve " .
+				"the entire set of records.");
     }
     
     # If the 'strict' parameter was given, make sure we haven't generated any
@@ -1715,7 +1723,10 @@ sub list_occs {
 	$order_clause = "o.occurrence_no, o.reid_no";
     }
     
-    # Debug
+    # Determine if we are returning the full history of each selected occurrence, or
+    # only the selected identification.
+    
+    my $all_idents = $request->clean_param('all_idents');
     
     # my ($in_transaction) = $dbh->selectrow_array("SELECT \@\@in_transaction");
     
@@ -1731,24 +1742,55 @@ sub list_occs {
     
     my $join_list = $request->generateJoinList('c', $tables);
     
-    my $idtype = $request->clean_param('idtype');
+    # If we are returning all identifications, we need a temporary table to list the
+    # selected occurrences and then a second query to return the full history of each
+    # occurrence. We tried using a subquery to accomplish this, but the MariaDB query
+    # optimizer (as of version 12.2) produced an extremely inefficient plan.
     
-    if ( $idtype && $idtype eq 'any' )
+    if ( $all_idents )
     {
+	if ( $tables->{lump} )
+	{
+	    die $request->exception(400, "You may not use 'idreso=lump*' with 'all_idents");
+	}
+	
+	my $temp_name = 'occ_list_for_history';
+	my $temp = $ENV{KEEP_TEMPS} ? '' : 'TEMPORARY';
+	$PBData::DROP_TABLE = $temp_name unless $ENV{KEEP_TEMPS};
+	
+	$dbh->do("DROP TABLE IF EXISTS `$temp_name`");
+	
+	$dbh->do(<<~END_SQL);
+	    CREATE $temp TABLE `$temp_name` (
+	        temp_primary int unsigned not null primary key auto_increment,
+	        occurrence_no int unsigned not null) engine=memory;
+	    END_SQL
+
+	my $inner = <<~END_SQL;
+	    INSERT IGNORE INTO `$temp_name` (occurrence_no)
+	    SELECT $calc DISTINCT o.occurrence_no
+	    FROM $TABLE{OCCURRENCE_MATRIX} as o
+	        $join_op $TABLE{COLLECTION_MATRIX} as c using (collection_no)
+	        $join_list
+	    WHERE $filter_string
+	    ORDER BY $order_clause
+	    $limit
+	    END_SQL
+	
+	print STDERR "$inner\n" if $request->debug;
+	
+	$dbh->do($inner);
+	
+	$request->sql_count_rows;
+	
+	$join_list =~ s/use index [(].*?[)]//;
+	
 	$request->{main_sql} = <<~END_SQL;
-	SELECT $calc $fields
-	FROM (
-	SELECT DISTINCT o.occurrence_no
-	FROM $TABLE{OCCURRENCE_MATRIX} as o
-	    $join_op $TABLE{COLLECTION_MATRIX} as c using (collection_no)
-	    $join_list
-	WHERE $filter_string
-	GROUP BY o.occurrence_no) as innerq
-	    straight_join $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
+	SELECT $fields
+	FROM `$temp_name` join $TABLE{OCCURRENCE_MATRIX} as o using (occurrence_no)
 	    join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 	    $join_list
-	ORDER BY $order_clause
-	$limit
+	GROUP BY temp_primary, o.reid_no
 	END_SQL
     }
     
@@ -1777,9 +1819,10 @@ sub list_occs {
     $request->{main_sth}{mariadb_use_result} = 1 unless $request->display_counts;
     $request->{main_sth}->execute();
     
-    # If we were asked to get the count, then do so
+    # If we were asked to get the result count, then do so unless we already did it
+    # above.
     
-    $request->sql_count_rows;
+    $request->sql_count_rows unless $all_idents;
 }
 
 
@@ -3383,13 +3426,6 @@ sub generateOccFilters {
     elsif ( $idtype eq 'orig' )
     {
 	push @filters, "$tn.reid_no = 0";
-	$tables_ref->{non_summary} = 1;
-	$tables_ref->{$tn} = 1;
-    }
-    
-    elsif ( $idtype eq 'any' )
-    {
-	# no filter is needed, just select all occurrences
 	$tables_ref->{non_summary} = 1;
 	$tables_ref->{$tn} = 1;
     }
