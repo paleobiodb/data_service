@@ -4346,17 +4346,16 @@ sub process_identification {
     my $ident_name = combine_modifier($record->{genus_name},
 				      $record->{genus_reso}, $end_mods) || '';
     my $taxon_name = '';
-    my $taxon_rank = '';
+    my $identified_rank = '';
     my $stop_name;
-
+    
     $stop_name = 1 if $record->{genus_reso} eq 'informal';
     
     if ( $record->{genus_name} && ! $stop_name ) {
 	$taxon_name = $record->{genus_name};
-	$taxon_rank = 5;
     }
     
-    if ( $record->{subgenus_name} )
+    if ( $record->{subgenus_name} && ! $stop_name )
     {
 	$ident_name .= " (" . combine_modifier($record->{subgenus_name},
 					       $record->{subgenus_reso}, $end_mods) . ")";
@@ -4365,11 +4364,11 @@ sub process_identification {
 	
 	unless ( $stop_name ) {
 	    $taxon_name .= " ($record->{subgenus_name})";
-	    $taxon_rank = 4;
+	    $identified_rank = 4;
 	}
     }
     
-    if ( $record->{species_name} )
+    if ( $record->{species_name} && ! $stop_name )
     {
 	$ident_name .= " " . combine_modifier($record->{species_name},
 					      $record->{species_reso}, $end_mods);
@@ -4379,11 +4378,11 @@ sub process_identification {
 	
 	unless ( $stop_name ) {
 	    $taxon_name .= " $record->{species_name}";
-	    $taxon_rank = 3;
+	    $identified_rank = 3;
 	}
     }
     
-    if ( $record->{subspecies_name} )
+    if ( $record->{subspecies_name} && ! $stop_name )
     {
 	$ident_name .= " " . combine_modifier($record->{subspecies_name},
 					      $record->{subspecies_reso}, $end_mods);
@@ -4393,7 +4392,7 @@ sub process_identification {
 	
 	unless ( $stop_name ) {
 	    $taxon_name .= " $record->{subspecies_name}";
-	    $taxon_rank = 2;
+	    $identified_rank = 2;
 	}
     }
     
@@ -4409,7 +4408,7 @@ sub process_identification {
     
     $record->{identified_name} ||= $ident_name || $taxon_name || 'UNKNOWN';
     $record->{taxon_name} ||= $taxon_name || $record->{identified_name} || 'UNKNOWN';
-    $record->{taxon_rank} = $taxon_rank;
+    $record->{identified_rank} = $identified_rank if $identified_rank;
     
     my $a = 1;	# we can stop here when debugging
 }
