@@ -2230,7 +2230,17 @@ sub list_taxa {
     # Then determine any other filters to be applied, and also figure what
     # fields are necessary to show the requested info.
     
-    my $options = $request->generate_query_options('taxa');
+    my $options = $request->generate_query_options('taxa', $rel);
+    
+    # If debug mode is turned on, generate a closure which will be able to output debug
+    # messages. 
+    
+    if ( $request->debug )
+    {
+	$options->{debug_out} = sub {
+	    $request->{ds}->debug_line($_[0]);
+	};
+    }
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings.
@@ -2424,7 +2434,7 @@ sub list_opinions {
 
 sub generate_query_options {
     
-    my ($request, $record_type) = @_;
+    my ($request, $record_type, $rel) = @_;
     
     # Start with an empty hash
     
@@ -2491,9 +2501,13 @@ sub generate_query_options {
     
     if ( my $depth = $request->clean_param('depth') )
     {
+	die $request->exception(400, "If you specify 'depth', you must also specify either " .
+				"'base_name' or 'rel=all_children'")
+	    unless $rel && $rel eq 'all_children';
+	
 	$options->{depth} = $depth;
     }
-
+    
     if ( my $idtype = $request->clean_param('idtype') )
     {
 	$options->{ident_select} = $idtype;
