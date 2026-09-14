@@ -77,19 +77,23 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			chert => 1, cherts => 1, chine => 1, clay => 1, clays => 1,
 			coal => 1, coals => 1, 'coal-bearing' => 1, complex => 1, complexes => 1,
 			conglomerate => 1, conglomerates => 1, conglomeratic => 1,
+			construit => 1, construits => 1, 
 			coquina => 1, coquinas => 1, crag => 1, crags => 1, cyclothem => 1,
 			diatomite => 1, diatomites => 1, disrupted => 1,
-			dolomite => 1, dolomites => 1, dolostone => 1, dolostones => 1, 
+			dolomite => 1, dolomites => 1, dolomitic => 1, 
+			dolostone => 1, dolostones => 1, 
 			equivalent => 1, equivalents => 1, facie => 1, facies => 1,
 			flag => 1, flags => 1, flagstone => 1, flagstones => 1, formtation => 1,
 			fossiliferous => 1, 
 			gravel => 1, gravels => 1, greensand => 1, greensands => 1,
 			greywacke => 1, greywackes => 1, 
-			grey => 1, grit => 1, grits => 1, gypsum => 1, gypsums => 1,
+			grey => 1, grit => 1, grits => 1, gypsum => 3, gypsums => 3,
 			hoj => 1, 'høj' => 1, horizon => 1, horizons => 1, 
-			iron => 1, ironstone => 1, ironstones => 1, lignite => 1, lignites => 1, 
+			iron => 1, ironstone => 1, ironstones => 1,
+			kalk => 1, kalkschiefer => 1, liaskalk => 1, 
+			lignite => 3, lignites => 3, 
 			limesetone => 1, limestone => 1, limstone => 1, ls => 1, 'ls.' => 1,
-			limestones => 1, lutite => 1, lutites => 1, 
+			limestones => 1, lutite => 1, lutites => 1,
 			massive => 1, marble => 1, marbles => 1, marine => 1,
 			marl => 1, marls => 1, marlstone => 1, marly => 1,
 			measure => 1, measures => 1, mollusc => 1, mollusk => 1,
@@ -97,27 +101,47 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			oolite => 1, oolites => 1, ore => 1, ores => 1,
 			park => 1,
 			pebble => 1, pebbles => 1, pebbly => 1, phonolite => 1, phonolites => 1,
-			phosphatic => 1, platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
+			phosphatic => 1, phosphorite => 3, phosphorites => 3,
+			platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
 			quarry => 1, quarries => 1, quartzite => 1, quartzites => 1, 'q-sand' => 1,
 			radiolaridic => 1, radiolarite => 1, radiolarites => 1, rag => 1, rags => 1,
 			range => 1, red => 1, reef => 1, reefs => 1, sand => 1, sands => 1,
-			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1,
-			schichten => 1, sequence => 1, sequences => 1, series => 1,
+			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1, sandstein => 1, 
+			schichten => 1, schiefer => 1, 
+			sequence => 1, sequences => 1, series => 1,
 			succession => 1, successions => 1, seam => 1, seams => 1,
 			shale => 1, shales => 1, sh => 1, 'sh.' => 1, shellbed => 1, shellbeds => 1,
 			silt => 1, silts => 1, silty => 1, siltsone => 1,
-			siltstone => 1, siltstones => 1,
+			siltstone => 1, siltstones => 1, spathic => 1,
 			slate => 1, slates => 1, stage => 1, stages => 1, stone => 1, stones => 1,
 			suite => 1, suites => 1, subsuite => 1, subsuites => 1, svita => 1, sub => 1,
+			tonschiefer => 1, 
 			tuff => 1, tuffs => 1, tuffaceous => 1, unit => 1, units => 1, volcanic => 1,
 			variegated => 1, volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
 			waterstone => 1, waterstones => 1, yellow => 1, zone => 1,
-			arenal => 1, argile => 1, argiles => 1, bleu => 1, bleues => 1,
-			calcaire => 1, calcaires => 1, congeria => 1,
-		        gres => 1, 'grès' => 1, grigi => 1, gris => 1, jaune => 1, jaunes => 1,
-			marne => 1, marnes => 1, niveau => 1, niveaux => 1,
-			rouge => 1, rouges => 1, sableuse => 1, sableuses => 1,
-			schiste => 1, schistes => 1, vert => 1, verts => 1, );
+			arenal => 2, arenales => 2, argile => 2, argiles => 2, argileux => 2, 
+			assise => 2, assises => 2, barre => 2, blanc => 2, blancs => 2, 
+			bleu => 2, bleues => 2,
+			calcaire => 2, calcaires => 2,
+			caillasse => 2, caillasses => 2, congeria => 2, couche => 2, couches => 2,
+			craie => 2, craies => 2,
+			dolomie => 2, dolomies => 2,
+			faisceau => 2, faisceaux => 2, falun => 2, faluns => 2,
+		        gres => 2, 'grès' => 2, grigi => 2, gris => 2, jaune => 2, jaunes => 2,
+			lité => 2, lités => 2, lite => 2, lites => 2, 
+			marin => 2, marins => 2, marne => 2, marnes => 2,
+			'marno-calcaire' => 2, 'marno-calcaires' => 2, 'marno-crayeux' => 2,
+			melière => 2, melières => 2, meliere => 2, melieres => 2,
+			meulière => 2, meulières => 2, meuliere => 2, meulieres => 2,
+			noire => 2, noires => 2, 
+			niveau => 2, niveaux => 2,
+			pierre => 2, pierres => 2, 'pierre-meliere' => 2, 'pierre-melière' => 2, 
+			rouge => 2, rouges => 2,
+			sable => 2, sables => 2, sableuse => 2, sableuses => 2,
+			schiste => 2, schistes => 2, schicht => 1, schichten => 1, 
+			spathique => 2, spathiques => 2,
+			terre => 2, terres => 2, tuffeau => 2, tuffeaux => 2, tufs => 2, 
+			vert => 2, verts => 2, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
 		   uppermost => 1, lowermost => 1, all => 1,
@@ -125,7 +149,8 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   sixth => 1, seventh => 1, eighth => 1, ninth => 1, tenth => 1,
 		   st => 1, nd => 1, rd => 1, th => 1, no => 1, re => 1,
 		   alpha => 1, beta => 1,
-		   division => 1, divisions => 1, local => 1, part => 1, parts => 1,
+		   division => 1, divisions => 1, local => 1, level => 1, levels => 1,
+		   part => 1, parts => 1,
 		   sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
 		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, 
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
@@ -133,13 +158,17 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   unknown => 1, unnamed => 1, indeterminate => 1,
 		   zone => 1, zones => 1,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
-		   'inférieurs' => 1, 'supérieurs' => 1, inferieurs => 1, superieurs => 1,
-		   'moitié' => 1, moitie => 1, les => 1 );
+		   grosse => 2, grosses => 2, grossier => 2, grossiers => 2,
+		   moyen => 2, moyens => 2, 
+		   nivel => 2, niveles => 2, niveau => 2, niveaux => 2, 
+		   inférieur => 2, supérieur => 2, inferieur => 2, superieur => 2,		   
+		   inférieurs => 2, supérieurs => 2, inferieurs => 2, superieurs => 2,
+		   moitié => 2, moitie => 2, les => 2, et => 2 );
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
 			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
 
-our (%is_preposition) = ( 'des ' => 1, 'de ' => 1, 'du ' => 1, 'of' => 1 );
+our (%is_preposition) = ( 'des ' => 1, 'de ' => 1, 'du ' => 1, 'of ' => 1 );
 
 our (%rank_comparison) = ( SGp => 'Gp', Gp => 'Gp', SubGp => 'Gp', Fm => 'Fm', Mbr => 'Mbr',
 			   Bed => 'Bed' );
@@ -321,8 +350,9 @@ sub GenerateConcepts {
 		group_concat(distinct cc.reference_no) as reference_no,
 		group_concat(distinct cc.lithology1) as lithology1,
 		group_concat(distinct cc.lithology2) as lithology2,
-		group_concat(authorizer_no order by created limit 1) as authorizer_no,
-		group_concat(enterer_no order by created limit 1) as enterer_no
+		group_concat(cc.authorizer_no order by cc.created limit 1) as authorizer_no,
+		group_concat(cc.enterer_no order by cc.created limit 1) as enterer_no,
+		group_concat(cc.created order by cc.created limit 1) as created
 	FROM $TABLE{COLLECTION_STRATA} as cs
 		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 		join $TABLE{COLLECTION_DATA} as cc using (collection_no)
@@ -1393,9 +1423,11 @@ sub GenerateConcepts {
 	    my $qlngmax = $pbdb->quote($nr->{lng_max});
 	    my $qauth = $pbdb->quote($nr->{authorizer_no} || 1262);
 	    my $qenter = $pbdb->quote($nr->{enterer_no} || 1262);
+	    my $qcreated = $pbdb->quote($nr->{created});
 	    
 	    $name_values .= ', ' if $name_values;
-	    $name_values .= "($qstratn, $qname, $qrank, $qcc, $qsearch, $qauth, $qenter)";
+	    $name_values .= "($qstratn, $qname, $qrank, $qcc, $qsearch, $qauth, $qenter, " .
+		"$qcreated, $qcreated)";
 	    
 	    $name_attr_values .= ', ' if $name_attr_values;
 	    $name_attr_values .= "($qstratn, $qstratc, $qlith1, $qlith2, $qncolls, $qnoccs, " .
@@ -1650,6 +1682,16 @@ sub UpdateStratRaw {
 	$record->{n_colls} += $source->{n_colls};
 	$record->{n_occs} += $source->{n_occs};
 	
+	# If the 'created' date is earlier, use that and the accompanying authorizer_no
+	# and enterer_no values.
+	
+	if ( $source->{created} lt $record->{created} )
+	{
+	    $record->{created} = $source->{created};
+	    $record->{authorizer_no} = $source->{authorizer_no};
+	    $record->{enterer_no} = $source->{enterer_no};
+	}
+	
 	# The 'coll_nos' field is an aggregate set of collection numbers, as a hash.
 	
 	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
@@ -1687,6 +1729,8 @@ sub UpdateStratRaw {
 		  lat_min => $source->{lat_min}, lat_max => $source->{lat_max},
 		  lng_min => $source->{lng_min}, lng_max => $source->{lng_max},
 		  n_colls => $source->{n_colls}, n_occs => $source->{n_occs},
+		  authorizer_no => $source->{authorizer_no},
+		  enterer_no => $source->{enterer_no}, created => $source->{created},
 		  reference_no => { }, lithology1 => { }, lithology2 => { } };
 	
 	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
@@ -2169,37 +2213,15 @@ sub ExtractSearchName {
 
     my ($raw_name) = @_;
     
-    my @words = split /\s+/, $raw_name;
-    my $found_preposition;
-
-    if ( $is_rock_type{$words[0]} || $is_null{$words[0]} )
+    if ( $raw_name =~ qr{ ^ (.*? \S\s .*?) ( des\s | de\s | du\s | d'\s? ) (\S.*) }xsi )
     {
-	shift @words;
-	
-	while ( $is_rock_type{$words[0]} || $is_null{$words[0]} || $is_preposition{$words[0]} )
-	{
-	    $found_preposition = 1 if $is_preposition{$words[0]};
-	    shift @words;
-	}
-	
-	if ( $words[0] =~ /^d'(.*)/ )
-	{
-	    $found_preposition = 1;
-	    $words[0] = $1;
-	}
-	
-	if ( $found_preposition )
-	{
-	    return join(' ', @words);
-	}
-	
-	else
-	{
-	    return $raw_name;
-	}
+	return $3;
     }
     
-    return $raw_name;
+    else
+    {
+	return $raw_name;
+    }
 }
 
 
@@ -2219,7 +2241,15 @@ sub NamesAreCompatible {
     
     if ( $debug_this )
     {
-	say "Comparing '$name' with '$alt_name':";
+	if ( $nr->{stratn_no} )
+	{
+	    say "Comparing '$name' ($nr->{stratn_no}) with '$alt_name' ($alt_nr->{stratn_id})";
+	}
+	
+	else
+	{
+	    say "Comparing '$name' with '$alt_name':";
+	}
     }
     
     # Convert both names to foldcase, to make this comparison case-insensitive.
@@ -3456,12 +3486,13 @@ sub MatchMacrostrat {
     
     say "Reading from table `$TABLE{STRAT_NAMES}`...";
     
-    my $pbdb_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_NAMES}");
+    my $pbdb_names = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT * FROM $TABLE{STRAT_NAMES} join $TABLE{STRAT_NATTRS} using (stratn_no)
+	END_SQL
     
     my $good_matches = 0;
     my $matched_names = 0;
-    my @match_records;
-    my %msnames;
+    my (@match_records, %checked);
 
   ROW:
     foreach my $pbnr ( $pbdb_names->@* )
@@ -3484,158 +3515,81 @@ sub MatchMacrostrat {
 	    push @candidates, $first_last{$flchars}->@* if $first_last{$flchars};
 	}
 	
-	my (%matches, $best_match, $mismatches);
+	my (%matches, %ms_names, %ms_ranks, %pb_ranks, %ms_concepts, %ms_scores, @good_matches);
 	
 	foreach my $msnr ( @candidates )
 	{
+	    next if $checked{"$pbnr$msnr"};
+
+	    $checked{"$pbnr$msnr"} = 1;
+	    
 	    my $score = NamesAreCompatible($pbnr->{name}, $pbnr, $msnr->{name}, $msnr);
 	    
 	    if ( $score )
 	    {
 		$matches{$msnr->{stratn_id}} = $msnr;
+		# $ms_concepts{$msnr->{stratc_id}} = 1;
+		# $ms_names{$msnr->{name}} = 1;
+		$pb_ranks{$rank_comparison{$msnr->{rank}}} = 1;
+		# $ms_scores{$score} = 1;
 		$msnr->{score} = $score;
 	    }
+	}
+	
+	# If at least one of the Macrotrat names matches the rank of the PBDB name, then
+	# accept all matches with that rank. For this purpose, we use the
+	# %rank_comparison hash so that the Macrostrat ranks 'Subgp', 'Gp', and 'SGp'
+	# all match the PBDB rank 'Gp'.
+	
+	if ( $pb_ranks{$pbnr->{rank}} )
+	{
+	    foreach my $msnr ( values %matches )
+	    {
+		if ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} )
+		{
+		    push @good_matches, $msnr;
+		}
+	    }
+	}
+	
+	# # Otherwise, if at least one of the Macrostrat names exactly matches the PBDB
+	# # name, then accept all matches with that name.
+	
+	# elsif ( $ms_names{$pbnr->{name}} )
+	# {
+	#     foreach my $msnr ( values %matches )
+	#     {
+	# 	if ( $msnr->{name} eq $pbnr->{name} )
+	# 	{
+	# 	    push @good_matches, $msnr;
+	# 	}
+	#     }
+	# }
+	
+	# # Otherwise, if we have found exactly one Macrostrat rank, then accept all
+	# # matches.
+	
+	# elsif ( keys %ms_ranks == 1 )
+	# {
+	#     push @good_matches, values %matches;
+	# }
+	
+	foreach my $match ( @good_matches )
+	{
+	    my $qno = $pbdb->quote($stratn_no);
+	    my $qid = $pbdb->quote($match->{stratn_id});
+	    my $qsc = $pbdb->quote($match->{score});
 	    
-	    else
-	    {
-		$mismatches++;
-	    }
-	}
-
-	if ( keys %matches == 1 )
-	{
-	    $best_match = (values %matches)[0];
-	}
-
-	elsif ( keys %matches > 1 )
-	{
-	    foreach my $stratn_id ( sort { $a <=> $b } keys %matches )
-	    {
-		my $msnr = $matches{$stratn_id};
-		
-		if ( ! $best_match )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( $msnr->{score} > $best_match->{score} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( $msnr->{score} < $best_match->{score} )
-		{
-		    next;
-		}
-		
-		elsif ( fc $best_match->{name} eq fc $pbnr->{name} &&
-			$best_match->{rank} eq $pbnr->{rank} &&
-			$best_match->{cc} eq $pbnr->{cc} )
-		{
-		    next;
-		}
-		
-		elsif ( $msnr->{stratc_id} eq $best_match->{stratc_id} )
-		{
-		    next;
-		}
-		
-		elsif ( $msnr->{cc} eq $pbnr->{cc} &&
-			$best_match->{cc} ne $pbnr->{cc} )
-		{
-		    $best_match = $msnr;
-		}
-
-		elsif ( $msnr->{cc} ne $pbnr->{cc} )
-		{
-		    next;
-		}
-		
-		elsif ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} &&
-			$rank_comparison{$best_match->{rank}} ne $pbnr->{rank} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( $msnr->{rank} eq $pbnr->{rank} &&
-			$best_match->{rank} ne $pbnr->{rank} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( fc $msnr->{name} eq fc $pbnr->{name} &&
-			fc $best_match->{name} ne fc $pbnr->{name} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		else
-		{
-		    my ($best_first) = $best_match->{name} =~ /(\S+)/;
-		    my ($msnr_first) = $msnr->{name} =~ /(\S+)/;
-		    my ($pbnr_first) = $pbnr->{name} =~ /(\S+)/;
-
-		    if ( fc $msnr_first eq fc $pbnr_first &&
-			 fc $best_first ne fc $pbnr_first )
-		    {
-			$best_match = $msnr;
-		    }
-
-		    elsif ( fc $best_first eq fc $pbnr_first &&
-			    fc $msnr_first ne fc $pbnr_first )
-		    {
-			next;
-		    }
-		    
-		    elsif ( fc $best_first eq fc $pbnr_first &&
-			    fc $msnr_first eq fc $pbnr_first &&
-			    $msnr->{stratc_id} && ! $pbnr->{stratc_id} )
-		    {
-			$best_match = $msnr;
-		    }
-		}
-	    }
-	}
-
-	if ( $best_match )
-	{
-	    my @good_matches = $best_match;
-	    $good_matches++;
+	    push @match_records, [$qno, $qid, $qsc];
 	    $matched_names++;
-	    
-	    foreach my $stratn_id ( keys %matches )
-	    {
-		my $msnr = $matches{$stratn_id};
-		
-		if ( $msnr ne $best_match )
-		{
-		    if ( $msnr->{score} == $best_match->{score} ||
-			 $msnr->{stratc_id} == $best_match->{stratc_id} )
-		    {
-			push @good_matches, $msnr;
-			$good_matches++;
-		    }
-		}
-	    }
-	    
-	    foreach my $match ( @good_matches )
-	    {
-		my $qno = $pbdb->quote($stratn_no);
-		my $qid = $pbdb->quote($match->{stratn_id});
-		my $qco = $pbdb->quote($match->{stratc_id} > 0 ? $match->{stratc_id} : undef);
-		my $qsc = $pbdb->quote($match->{score});
-
-		push @match_records, [$qno, $qid, $qco, $qsc];
-	    }
 	}
 	
 	$pbnames++;
     }
 
-    say "  Read $pbnames names.";
-    say "  Matched $matched_names names.";
-    say "  There were $good_matches total matches.";
-
+    say "  Read $pbnames PBDB names.";
+    say "  Matched $matched_names Macrostrat names.";
+    
     return if $opt_check;
     
     # Now truncate the table and regenerate it.
@@ -3652,7 +3606,7 @@ sub MatchMacrostrat {
     foreach my $r ( @match_records )
     {
 	$match_values .= ', ' if $match_values;
-	$match_values .= "($r->[0], $r->[1], $r->[2], $r->[3])";
+	$match_values .= "($r->[0], $r->[1], $r->[2])";
 	$match_count++;
 	
 	if ( length($match_values > $chunk_size) )
@@ -4271,13 +4225,14 @@ sub UpdateTables {
 	    if $check =~ /\bstrat_names_view\b/;
 	
 	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_names_view` AS
-	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `early_age`, `late_age`,
+	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `search`,
+	    `early_age`, `late_age`,
 	    `n_colls`, `n_occs`, `lat_min`, `lat_max`, `lng_min`, `lng_max`,
 	    `lithology1`, `lithology2`, count(*) as `n_refs`,
 	    `authorizer_no`, `enterer_no`, `modifier_no`, `created`, `modified`
 	  FROM `strat_names` join `strat_name_attrs` using (`stratn_no`)
 		left join `strat_name_refs` using (`stratn_no`)
-	  GROUP BY `stratn_no`");
+	  GROUP BY `stratn_no`", 1);
     }
     
     if ( $selected{strat_concepts} || $selected{all} )
@@ -4477,7 +4432,7 @@ sub InsertNames {
     my ($dbh, $name_values) = @_;
 
     DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, name, rank, cc, search, " .
-	      "authorizer_no, enterer_no) VALUES " .
+	      "authorizer_no, enterer_no, created, modified) VALUES " .
 	      $name_values);
 }
 
@@ -4555,7 +4510,7 @@ sub InsertNameMatches {
 
     my ($dbh, $match_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, stratc_id, score) VALUES $match_values");
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, score) VALUES $match_values");
 }
 
 
