@@ -77,46 +77,71 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			chert => 1, cherts => 1, chine => 1, clay => 1, clays => 1,
 			coal => 1, coals => 1, 'coal-bearing' => 1, complex => 1, complexes => 1,
 			conglomerate => 1, conglomerates => 1, conglomeratic => 1,
+			construit => 1, construits => 1, 
 			coquina => 1, coquinas => 1, crag => 1, crags => 1, cyclothem => 1,
 			diatomite => 1, diatomites => 1, disrupted => 1,
-			dolomite => 1, dolomites => 1, dolostone => 1, dolostones => 1, 
+			dolomite => 1, dolomites => 1, dolomitic => 1, 
+			dolostone => 1, dolostones => 1, 
 			equivalent => 1, equivalents => 1, facie => 1, facies => 1,
 			flag => 1, flags => 1, flagstone => 1, flagstones => 1, formtation => 1,
 			fossiliferous => 1, 
 			gravel => 1, gravels => 1, greensand => 1, greensands => 1,
 			greywacke => 1, greywackes => 1, 
-			grey => 1, grit => 1, grits => 1, gypsum => 1, gypsums => 1,
+			grey => 1, grit => 1, grits => 1, gypsum => 3, gypsums => 3,
 			hoj => 1, 'høj' => 1, horizon => 1, horizons => 1, 
-			iron => 1, ironstone => 1, ironstones => 1, lignite => 1, lignites => 1, 
+			iron => 1, ironstone => 1, ironstones => 1,
+			kalk => 1, kalkschiefer => 1, liaskalk => 1, 
+			lignite => 3, lignites => 3, 
 			limesetone => 1, limestone => 1, limstone => 1, ls => 1, 'ls.' => 1,
-			limestones => 1, lutite => 1, lutites => 1, 
+			limestones => 1, lutite => 1, lutites => 1,
 			massive => 1, marble => 1, marbles => 1, marine => 1,
 			marl => 1, marls => 1, marlstone => 1, marly => 1,
 			measure => 1, measures => 1, mollusc => 1, mollusk => 1,
 			mudstone => 1, mudstones => 1,
 			oolite => 1, oolites => 1, ore => 1, ores => 1,
+			park => 1,
 			pebble => 1, pebbles => 1, pebbly => 1, phonolite => 1, phonolites => 1,
-			phosphatic => 1, platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
+			phosphatic => 1, phosphorite => 3, phosphorites => 3,
+			platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
 			quarry => 1, quarries => 1, quartzite => 1, quartzites => 1, 'q-sand' => 1,
 			radiolaridic => 1, radiolarite => 1, radiolarites => 1, rag => 1, rags => 1,
 			range => 1, red => 1, reef => 1, reefs => 1, sand => 1, sands => 1,
-			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1,
-			schichten => 1, sequence => 1, sequences => 1, series => 1,
+			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1, sandstein => 1, 
+			schichten => 1, schiefer => 1, 
+			sequence => 1, sequences => 1, series => 1,
 			succession => 1, successions => 1, seam => 1, seams => 1,
 			shale => 1, shales => 1, sh => 1, 'sh.' => 1, shellbed => 1, shellbeds => 1,
 			silt => 1, silts => 1, silty => 1, siltsone => 1,
-			siltstone => 1, siltstones => 1,
+			siltstone => 1, siltstones => 1, spathic => 1,
 			slate => 1, slates => 1, stage => 1, stages => 1, stone => 1, stones => 1,
 			suite => 1, suites => 1, subsuite => 1, subsuites => 1, svita => 1, sub => 1,
+			tonschiefer => 1, 
 			tuff => 1, tuffs => 1, tuffaceous => 1, unit => 1, units => 1, volcanic => 1,
 			variegated => 1, volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
 			waterstone => 1, waterstones => 1, yellow => 1, zone => 1,
-			arenal => 1, argile => 1, argiles => 1, bleu => 1, bleues => 1,
-			calcaire => 1, calcaires => 1, congeria => 1,
-		        gres => 1, 'grès' => 1, grigi => 1, gris => 1, jaune => 1, jaunes => 1,
-			marne => 1, marnes => 1, niveau => 1, niveaux => 1,
-			rouge => 1, rouges => 1, sableuse => 1, sableuses => 1,
-			schiste => 1, schistes => 1, vert => 1, verts => 1, );
+			arenal => 2, arenales => 2, argile => 2, argiles => 2, argileux => 2, 
+			assise => 2, assises => 2, barre => 2, blanc => 2, blancs => 2, 
+			bleu => 2, bleues => 2,
+			calcaire => 2, calcaires => 2,
+			caillasse => 2, caillasses => 2, congeria => 2, couche => 2, couches => 2,
+			craie => 2, craies => 2,
+			dolomie => 2, dolomies => 2,
+			faisceau => 2, faisceaux => 2, falun => 2, faluns => 2,
+		        gres => 2, 'grès' => 2, grigi => 2, gris => 2, jaune => 2, jaunes => 2,
+			lité => 2, lités => 2, lite => 2, lites => 2, 
+			marin => 2, marins => 2, marne => 2, marnes => 2,
+			'marno-calcaire' => 2, 'marno-calcaires' => 2, 'marno-crayeux' => 2,
+			melière => 2, melières => 2, meliere => 2, melieres => 2,
+			meulière => 2, meulières => 2, meuliere => 2, meulieres => 2,
+			noire => 2, noires => 2, 
+			niveau => 2, niveaux => 2,
+			pierre => 2, pierres => 2, 'pierre-meliere' => 2, 'pierre-melière' => 2, 
+			rouge => 2, rouges => 2,
+			sable => 2, sables => 2, sableuse => 2, sableuses => 2,
+			schiste => 2, schistes => 2, schicht => 1, schichten => 1, 
+			spathique => 2, spathiques => 2,
+			terre => 2, terres => 2, tuffeau => 2, tuffeaux => 2, tufs => 2, 
+			vert => 2, verts => 2, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
 		   uppermost => 1, lowermost => 1, all => 1,
@@ -124,7 +149,8 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   sixth => 1, seventh => 1, eighth => 1, ninth => 1, tenth => 1,
 		   st => 1, nd => 1, rd => 1, th => 1, no => 1, re => 1,
 		   alpha => 1, beta => 1,
-		   division => 1, divisions => 1, local => 1, part => 1, parts => 1,
+		   division => 1, divisions => 1, local => 1, level => 1, levels => 1,
+		   part => 1, parts => 1,
 		   sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
 		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, 
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
@@ -132,29 +158,44 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   unknown => 1, unnamed => 1, indeterminate => 1,
 		   zone => 1, zones => 1,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
-		   'inférieurs' => 1, 'supérieurs' => 1, inferieurs => 1, superieurs => 1,
-		   'moitié' => 1, moitie => 1, les => 1 );
+		   grosse => 2, grosses => 2, grossier => 2, grossiers => 2,
+		   moyen => 2, moyens => 2, 
+		   nivel => 2, niveles => 2, niveau => 2, niveaux => 2, 
+		   inférieur => 2, supérieur => 2, inferieur => 2, superieur => 2,		   
+		   inférieurs => 2, supérieurs => 2, inferieurs => 2, superieurs => 2,
+		   moitié => 2, moitie => 2, les => 2, et => 2 );
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
 			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
 
-our (%is_particle) = ( 'des ' => 1, 'de ' => 1, 'du ' => 1 );
+our (%is_preposition) = ( 'des ' => 1, 'de ' => 1, 'du ' => 1, 'of ' => 1 );
 
 our (%rank_comparison) = ( SGp => 'Gp', Gp => 'Gp', SubGp => 'Gp', Fm => 'Fm', Mbr => 'Mbr',
 			   Bed => 'Bed' );
 
-our (%infer_from_ref) = ( 1 => 'US', 2 => 'CA', 5 => 'NZ', 10 => 'CA', 11 => 'CA', 12 => 'CA',
-			  19 => 'US', 21 => 'CA', 22 => 'AU', 29 => 'BR', 31 => 'BR', 32 => 'CL',
-			  34 => 'BR', 38 => 'BR', 39 => 'CL', 40 => 'BO', 41 => 'BR',
+our (%infer_from_ref) = ( 1 => 'US', 2 => 'CA', 3 => 'US', 4 => 'US', 5 => 'NZ',
+			  10 => 'CA', 11 => 'CA', 12 => 'CA', 17 => 'US', 
+			  19 => 'US', 21 => 'CA', 22 => 'AU', 29 => 'BR', 30 => 'PA',
+			  31 => 'BR', 32 => 'CL', 34 => 'BR', 35 => 'BR',
+			  38 => 'BR', 39 => 'CL', 40 => 'BO', 41 => 'BR', 42 => 'BR',
 			  48 => 'NZ', 73 => 'CA', 74 => 'CA', 75 => 'CA', 77 => 'CA', 78 => 'CA',
 			  100 => 'MX', 105 => 'US', 109 => 'US', 115 => 'CA', 116 => 'CA',
 			  118 => 'CA', 121 => 'CA', 122 => 'CA', 125 => 'CA', 131 => 'CA',
-			  134 => 'GL', 135 => 'SJ', 156 => 'MX', 159 => 'GL',
-			  163 => 'MY', 164 => 'MY', 165 => 'VN', 166 => 'VN', 167 => 'VN',
+			  134 => 'GL', 135 => 'SJ', 136 => 'SJ', 156 => 'MX', 159 => 'GL',
+			  161 => 'MY', 163 => 'MY', 164 => 'MY',
+			  165 => 'VN', 166 => 'VN', 167 => 'VN',
 			  168 => 'ID', 169 => 'ID', 170 => 'ID', 171 => 'ID', 172 => 'MY',
 			  173 => 'TH', 174 => 'LA', 175 => 'ID', 176 => 'ID', 177 => 'ID',
 			  178 => 'ID', 188 => 'NZ', 218 => 'SJ', 225 => 'CA' );
 			  
+our (%is_table_name) = ( all => 1,
+			 strat_names => 1, strat_name_attrs => 1, strat_name_refs => 1,
+			 strat_names_view => 1,
+			 strat_concepts => 1, strat_concept_ccs => 1, strat_concepts_view => 1,
+			 strat_opinions => 1, strat_opinion_refs => 1, strat_opinions_view => 1,
+			 strat_ms_names => 1, strat_ms_matches => 1, strat_ms_matches_view => 1,
+			 collection_strat_names => 1 );
+
 # Check the command arguments, and execute the specified function.
 
 if ( $ARGV[0] eq 'generate' )
@@ -300,14 +341,18 @@ sub GenerateConcepts {
     say "Reading from table `$TABLE{COLLECTION_STRATA}`...";
     
     my $stratigraphy_data = DBHashQuery($pbdb, <<~END_SQL);
-	SELECT cs.grp, cs.formation, cs.member, c.cc, group_concat(distinct collection_no) as coll_nos,
+	SELECT cs.grp, cs.formation, cs.member, c.cc,
+		group_concat(distinct collection_no) as coll_nos,
 		count(*) as n_colls, sum(c.n_occs) as n_occs,
 		max(c.early_age) as early_age, min(c.late_age) as late_age,
 		min(c.lat) as lat_min, max(c.lat) as lat_max,
 		min(c.lng) as lng_min, max(c.lng) as lng_max,
 		group_concat(distinct cc.reference_no) as reference_no,
 		group_concat(distinct cc.lithology1) as lithology1,
-		group_concat(distinct cc.lithology2) as lithology2
+		group_concat(distinct cc.lithology2) as lithology2,
+		group_concat(cc.authorizer_no order by cc.created limit 1) as authorizer_no,
+		group_concat(cc.enterer_no order by cc.created limit 1) as enterer_no,
+		group_concat(cc.created order by cc.created limit 1) as created
 	FROM $TABLE{COLLECTION_STRATA} as cs
 		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 		join $TABLE{COLLECTION_DATA} as cc using (collection_no)
@@ -692,7 +737,7 @@ sub GenerateConcepts {
 	    elsif ( $c =~ / ^ ( \p{Ll}+ \s+ )+ (.+) /xs )
 	    {
 		next if $1 eq 'below' || $1 eq 'above';
-		$c = $is_particle{$1} ? "$1$2" : $2;
+		$c = $is_preposition{$1} ? "$1$2" : $2;
 		next unless $c =~ /\p{Lu}/;
 	    }
 	    
@@ -1243,11 +1288,13 @@ sub GenerateConcepts {
     
     $DB::single = 1;
     
-    say "Emptying tables: `$TABLE{STRAT_NAMES}`, `$TABLE{STRAT_NREFS}`, `$TABLE{STRAT_CONCEPTS}`, " .
-	"`$TABLE{STRAT_CONCEPT_CCS}`, `$TABLE{STRAT_OPINIONS}`, `$TABLE{STRAT_OREFS}`, " .
-	"`$TABLE{COLLECTION_STRATA_NAMES}`...";
+    say "Emptying tables: `$TABLE{STRAT_NAMES}`, `$TABLE{STRAT_NATTRS}`, `$TABLE{STRAT_NREFS}`, " .
+	"`$TABLE{STRAT_CONCEPTS}`, `$TABLE{STRAT_CONCEPT_CCS}`, " .
+	"`$TABLE{STRAT_OPINIONS}`, `$TABLE{STRAT_OREFS}`, " .
+	"`$TABLE{COLLECTION_STRAT_NAMES}`...";
     
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NAMES}`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NATTRS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NREFS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_CONCEPTS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_CONCEPT_CCS}`");
@@ -1260,7 +1307,7 @@ sub GenerateConcepts {
     # characters instead of one at a time. The last call to InsertConcepts adds any
     # remaining rows after the last block.
     
-    say "Generating the STRAT_CONCEPTS ($TABLE{STRAT_CONCEPTS}) and strat_concept_ccs tables...";
+    say "Generating the STRAT_CONCEPTS (`$TABLE{STRAT_CONCEPTS}`) and strat_concept_ccs tables...";
     
     my $concept_values = '';
     my $cc_values = '';
@@ -1330,6 +1377,7 @@ sub GenerateConcepts {
 
     my %strat_name_no;
     my $name_values = '';
+    my $name_attr_values = '';
     my $name_ref_values = '';
     my $name_coll_values = '';
     my $new_names = 0;
@@ -1362,6 +1410,7 @@ sub GenerateConcepts {
 	    my $qname = $pbdb->quote($name);
 	    my $qrank = $pbdb->quote($rank);
 	    my $qcc = $pbdb->quote($nr->{cc});
+	    my $qsearch = $pbdb->quote(ExtractSearchName($name));
 	    my $qlith1 = $pbdb->quote(join ',', keys $nr->{lithology1}->%*);
 	    my $qlith2 = $pbdb->quote(join ',', keys $nr->{lithology2}->%*);
 	    my $qncolls = $pbdb->quote($nr->{n_colls} || 0);
@@ -1372,15 +1421,24 @@ sub GenerateConcepts {
 	    my $qlatmax = $pbdb->quote($nr->{lat_max});
 	    my $qlngmin = $pbdb->quote($nr->{lng_min});
 	    my $qlngmax = $pbdb->quote($nr->{lng_max});
+	    my $qauth = $pbdb->quote($nr->{authorizer_no} || 1262);
+	    my $qenter = $pbdb->quote($nr->{enterer_no} || 1262);
+	    my $qcreated = $pbdb->quote($nr->{created});
 	    
 	    $name_values .= ', ' if $name_values;
-	    $name_values .= "($qstratn, $qstratc, $qname, $qrank, $qcc, $qlith1, $qlith2, " .
-		"$qncolls, $qnoccs, $qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax)";
+	    $name_values .= "($qstratn, $qname, $qrank, $qcc, $qsearch, $qauth, $qenter, " .
+		"$qcreated, $qcreated)";
+	    
+	    $name_attr_values .= ', ' if $name_attr_values;
+	    $name_attr_values .= "($qstratn, $qstratc, $qlith1, $qlith2, $qncolls, $qnoccs, " .
+		"$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax)";
 	    
 	    if ( length($name_values) > $chunk_size )
 	    {
 		InsertNames($pbdb, $name_values);
+		InsertNameAttrs($pbdb, $name_attr_values);
 		$name_values = '';
+		$name_attr_values = '';
 	    }
 
 	    foreach my $reference_no ( sort { $a <=> $b } keys $nr->{reference_no}->%* )
@@ -1412,6 +1470,7 @@ sub GenerateConcepts {
     }
     
     InsertNames($pbdb, $name_values) if $name_values;
+    InsertNameAttrs($pbdb, $name_attr_values) if $name_attr_values;
     InsertNameRefs($pbdb, $name_ref_values) if $name_ref_values;
     InsertCollNames($pbdb, $name_coll_values) if $name_coll_values;
     
@@ -1453,8 +1512,7 @@ sub GenerateConcepts {
 		    my $qparrank = $pbdb->quote($parent_rank);
 		    
 		    $opinion_values .= ', ' if $opinion_values;
-		    $opinion_values .= "($qopno, $qchildno, $qchildrank, $qcc, 'belongs to', " .
-			"$qparno, $qparrank)";
+		    $opinion_values .= "($qopno, $qchildno, 'belongs to', $qparno)";
 		    
 		    foreach my $reference_no ( sort { $a <=> $b }
 					       keys $contained_in{$child_key}{$parent_key}->%* )
@@ -1486,14 +1544,12 @@ sub GenerateConcepts {
 	    
 	    if ( $alias_reversed{$child_key}{$other_key} )
 	    {
-		$opinion_values .= "($qopno, $qotherno, $qchildrank, $qcc, 'synonym of', " .
-		    "$qchildno, $qchildrank)";
+		$opinion_values .= "($qopno, $qotherno, 'synonym of', $qchildno)";
 	    }
 
 	    else
 	    {
-		$opinion_values .= "($qopno, $qchildno, $qchildrank, $qcc, 'synonym of', " .
-		    "$qotherno, $qchildrank)";
+		$opinion_values .= "($qopno, $qchildno, 'synonym of', $qotherno)";
 	    }	
 
 	    foreach my $reference_no ( sort { $a <=> $b }
@@ -1626,6 +1682,16 @@ sub UpdateStratRaw {
 	$record->{n_colls} += $source->{n_colls};
 	$record->{n_occs} += $source->{n_occs};
 	
+	# If the 'created' date is earlier, use that and the accompanying authorizer_no
+	# and enterer_no values.
+	
+	if ( $source->{created} lt $record->{created} )
+	{
+	    $record->{created} = $source->{created};
+	    $record->{authorizer_no} = $source->{authorizer_no};
+	    $record->{enterer_no} = $source->{enterer_no};
+	}
+	
 	# The 'coll_nos' field is an aggregate set of collection numbers, as a hash.
 	
 	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
@@ -1663,6 +1729,8 @@ sub UpdateStratRaw {
 		  lat_min => $source->{lat_min}, lat_max => $source->{lat_max},
 		  lng_min => $source->{lng_min}, lng_max => $source->{lng_max},
 		  n_colls => $source->{n_colls}, n_occs => $source->{n_occs},
+		  authorizer_no => $source->{authorizer_no},
+		  enterer_no => $source->{enterer_no}, created => $source->{created},
 		  reference_no => { }, lithology1 => { }, lithology2 => { } };
 	
 	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
@@ -2136,6 +2204,27 @@ sub ParseParentheses {
 }	
 
 
+# ExtractSearchName ( name )
+#
+# Parse a name into one of two patterns: "search_name auxiliary_term(s)" or
+# "auxiliary_term(s) preposition search_name". Return the search name.
+
+sub ExtractSearchName {
+
+    my ($raw_name) = @_;
+    
+    if ( $raw_name =~ qr{ ^ (.*? \S\s .*?) ( des\s | de\s | du\s | d'\s? ) (\S.*) }xsi )
+    {
+	return $3;
+    }
+    
+    else
+    {
+	return $raw_name;
+    }
+}
+
+
 # NamesAreCompatible ( name, key, name_context, alt_name, alt_key, alt_name_context )
 #
 # Return true if name and alt_name are likely to be variants of each other.
@@ -2152,7 +2241,15 @@ sub NamesAreCompatible {
     
     if ( $debug_this )
     {
-	say "Comparing '$name' with '$alt_name':";
+	if ( $nr->{stratn_no} )
+	{
+	    say "Comparing '$name' ($nr->{stratn_no}) with '$alt_name' ($alt_nr->{stratn_id})";
+	}
+	
+	else
+	{
+	    say "Comparing '$name' with '$alt_name':";
+	}
     }
     
     # Convert both names to foldcase, to make this comparison case-insensitive.
@@ -2976,7 +3073,7 @@ sub ImportMacrostrat {
 
     # Start with the `places` table.
     
-    say "Reading from the `macrostrat`.`places` table...";
+    say "Reading from `macrostrat`.`places`...";
     
     my $places = DBHashQuery($mstr, "
 	SELECT p.name, p.postal, p.country_abbrev, 
@@ -3049,6 +3146,7 @@ sub ImportMacrostrat {
     my $strat_names = DBHashQuery($mstr, <<~END_SQL);
 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
 	  lsn.early_age, lsn.late_age,
+	  lsn.bed_id, lsn.mbr_id, lsn.fm_id, lsn.subgp_id, lsn.gp_id, lsn.sgp_id,
 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
 	  group_concat(distinct bedu.col_id) as bed_cols,
 	  group_concat(distinct mbru.col_id) as mbr_cols,
@@ -3076,145 +3174,17 @@ sub ImportMacrostrat {
 	GROUP BY sn.id
 	END_SQL
     
-    say "  read " . scalar(@$strat_names) . " stratigraphic names names";
-    
-    # my $mbr_names = DBHashQuery($mstr, <<~END_SQL);
-    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
-    # 	  lsn.early_age, lsn.late_age,
-    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
-    # 	  group_concat(distinct bedu.col_id) as bed_cols,
-    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
-    # 	  group_concat(distinct fmu.col_id) as fm_cols
-    # 	FROM strat_names as sn
-    # 	  left join strat_names_meta as sc using (concept_id)
-    # 	  left join intervals as icb on icb.id = sc.b_int
-    # 	  left join intervals as ict on ict.id = sc.t_int
-    # 	  join lookup_strat_names as lsn on lsn.mbr_id = sn.id
-    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
-    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
-    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
-    # 	  left join units as bedu on bedu.id = bedusn.unit_id
-    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
-    # 	  left join units as fmu on fmu.id = fmusn.unit_id
-    # 	WHERE sn.rank = 'Mbr'
-    # 	GROUP BY sn.id
-    # 	END_SQL
-    
-    # say "  read " . scalar(@$mbr_names) . " member names";
-    
-    # my $fm_names = DBHashQuery($mstr, <<~END_SQL);
-    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
-    # 	  lsn.early_age, lsn.late_age,
-    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
-    # 	  group_concat(distinct bedu.col_id) as bed_cols,
-    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
-    # 	  group_concat(distinct fmu.col_id) as fm_cols,
-    # 	  group_concat(distinct subgpu.col_id) as subgp_cols,
-    # 	  group_concat(distinct gpu.col_id) as gp_cols,
-    # 	  group_concat(distinct sgpu.col_id) as sgp_cols
-    # 	FROM strat_names as sn
-    # 	  left join strat_names_meta as sc using (concept_id)
-    # 	  left join intervals as icb on icb.id = sc.b_int
-    # 	  left join intervals as ict on ict.id = sc.t_int
-    # 	  join lookup_strat_names as lsn on lsn.fm_id = sn.id
-    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
-    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
-    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
-    # 	  left join unit_strat_names as subgpusn on subgpusn.strat_name_id = lsn.subgp_id
-    # 	  left join unit_strat_names as gpusn on gpusn.strat_name_id = lsn.gp_id
-    # 	  left join unit_strat_names as sgpusn on sgpusn.strat_name_id = lsn.sgp_id
-    # 	  left join units as bedu on bedu.id = bedusn.unit_id
-    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
-    # 	  left join units as fmu on fmu.id = fmusn.unit_id
-    # 	  left join units as subgpu on subgpu.id = subgpusn.unit_id
-    # 	  left join units as gpu on gpu.id = gpusn.unit_id
-    # 	  left join units as sgpu on sgpu.id = sgpusn.unit_id
-    # 	WHERE sn.rank = 'Fm'
-    # 	GROUP BY sn.id
-    # 	END_SQL
-    
-    # say "  read " . scalar(@$fm_names) . " formation names";
-    
-    # my $subgp_names = DBHashQuery($mstr, <<~END_SQL);
-    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
-    # 	  lsn.early_age, lsn.late_age,
-    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
-    # 	  group_concat(distinct bedu.col_id) as bed_cols,
-    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
-    # 	  group_concat(distinct fmu.col_id) as fm_cols,
-    # 	  group_concat(distinct subgpu.col_id) as subgp_cols,
-    # 	  group_concat(distinct gpu.col_id) as gp_cols,
-    # 	  group_concat(distinct sgpu.col_id) as sgp_cols
-    # 	FROM strat_names as sn
-    # 	  left join strat_names_meta as sc using (concept_id)
-    # 	  left join intervals as icb on icb.id = sc.b_int
-    # 	  left join intervals as ict on ict.id = sc.t_int
-    # 	  join lookup_strat_names as lsn on lsn.subgp_id = sn.id
-    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
-    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
-    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
-    # 	  left join unit_strat_names as subgpusn on subgpusn.strat_name_id = lsn.subgp_id
-    # 	  left join unit_strat_names as gpusn on gpusn.strat_name_id = lsn.gp_id
-    # 	  left join unit_strat_names as sgpusn on sgpusn.strat_name_id = lsn.sgp_id
-    # 	  left join units as bedu on bedu.id = bedusn.unit_id
-    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
-    # 	  left join units as fmu on fmu.id = fmusn.unit_id
-    # 	  left join units as subgpu on subgpu.id = subgpusn.unit_id
-    # 	  left join units as gpu on gpu.id = gpusn.unit_id
-    # 	  left join units as sgpu on sgpu.id = sgpusn.unit_id
-    # 	WHERE sn.rank = 'SubGp'
-    # 	GROUP BY sn.id
-    # 	END_SQL
-    
-    # say "  read " . scalar(@$subgp_names) . " subgroup names";
-    
-    # my $gp_names = DBHashQuery($mstr, <<~END_SQL);
-    # 	SELECT sn.id, sn.concept_id, sn.strat_name, sn.rank, sn.places, sn.ref_id,
-    # 	  lsn.early_age, lsn.late_age,
-    # 	  ict.age_bottom as early_concept_age, ict.age_top as late_concept_age,
-    # 	  group_concat(distinct bedu.col_id) as bed_cols,
-    # 	  group_concat(distinct mbru.col_id) as mbr_cols,
-    # 	  group_concat(distinct fmu.col_id) as fm_cols,
-    # 	  group_concat(distinct subgpu.col_id) as subgp_cols,
-    # 	  group_concat(distinct gpu.col_id) as gp_cols,
-    # 	  group_concat(distinct sgpu.col_id) as sgp_cols
-    # 	FROM strat_names as sn
-    # 	  left join strat_names_meta as sc using (concept_id)
-    # 	  left join intervals as icb on icb.id = sc.b_int
-    # 	  left join intervals as ict on ict.id = sc.t_int
-    # 	  join lookup_strat_names as lsn on lsn.gp_id = sn.id
-    # 	  left join unit_strat_names as bedusn on bedusn.strat_name_id = lsn.bed_id
-    # 	  left join unit_strat_names as mbrusn on mbrusn.strat_name_id = lsn.mbr_id
-    # 	  left join unit_strat_names as fmusn on fmusn.strat_name_id = lsn.fm_id
-    # 	  left join unit_strat_names as subgpusn on subgpusn.strat_name_id = lsn.subgp_id
-    # 	  left join unit_strat_names as gpusn on gpusn.strat_name_id = lsn.gp_id
-    # 	  left join unit_strat_names as sgpusn on sgpusn.strat_name_id = lsn.sgp_id
-    # 	  left join units as bedu on bedu.id = bedusn.unit_id
-    # 	  left join units as mbru on mbru.id = mbrusn.unit_id
-    # 	  left join units as fmu on fmu.id = fmusn.unit_id
-    # 	  left join units as subgpu on subgpu.id = subgpusn.unit_id
-    # 	  left join units as gpu on gpu.id = gpusn.unit_id
-    # 	  left join units as sgpu on sgpu.id = sgpusn.unit_id
-    # 	WHERE sn.rank = 'Gp'
-    # 	GROUP BY sn.id
-    # 	END_SQL
-    
-    # say "  read " . scalar(@$gp_names) . " group names";
-    
-    # say "  read " . scalar(@$sgp_names) . " supergroup names";
-    
-    # my $other_names = DBHashQuery($mstr, <<~END_SQL)
-    
-    # my ($n_qualified_names) = @$bed_names + @$mbr_names + @$fm_names +
-    # 	@$subgp_names + @$gp_names + @$sgp_names;
-    
-    # say "    found $n_qualified_names total names (out of $strat_names_count)";
+    say "  processing " . scalar(@$strat_names) . " stratigraphic names...";
     
     # Iterate through the rows of these results, processing them to generate all of the
     # necessary fields for the STRAT_MS_NAMES table.
     
+    my %row_by_id;
+    
     foreach my $row ( @$strat_names )
     {
+	$row_by_id{$row->{id}} = $row;
+	
 	# Compute 'early_age' and 'late_age', using the narrowest of the age definitions
 	# if more than one is found.
 	
@@ -3282,6 +3252,82 @@ sub ImportMacrostrat {
 	    
 	    $row->{cc} = $place{"AU-" . substr($codes[0],0,2)}{cc};
 	}
+    }
+    
+    # Iterate through the results again, using the fields from `lookup_strat_names` to
+    # fill in location data.
+    
+    say "  filling in location data...";
+    
+    foreach my $row ( @$strat_names )
+    {
+	if ( exists $row->{lat_min} )
+	{
+	    if ( $row->{rank} eq 'Bed' || $row->{rank} eq 'Mbr' )
+	    {
+		if ( $row->{mbr_id} && exists $row_by_id{$row->{mbr_id}}{lat_min} )
+		{
+		    SetLocation($row, \%row_by_id, $row->{mbr_id});
+		}
+		
+		elsif ( $row->{fm_id} && exists $row_by_id{$row->{fm_id}}{lat_min} )
+		{
+		    SetLocation($row, \%row_by_id, $row->{fm_id});
+		}
+	    }
+	    
+	    else
+	    {
+		if ( $row->{subgp_id} && exists $row_by_id{$row->{subgp_id}}{lat_min} )
+		{
+		    SetLocation($row, \%row_by_id, $row->{subgp_id});
+		}
+		
+		elsif ( $row->{gp_id} && exists $row_by_id{$row->{gp_id}}{lat_min} )
+		{
+		    SetLocation($row, \%row_by_id, $row->{gp_id});
+		}
+		
+		elsif ( $row->{sgp_id} && exists $row_by_id{$row->{sgp_id}}{lat_min} )
+		{
+		    SetLocation($row, \%row_by_id, $row->{sgp_id});
+		}
+	    }
+	}
+	
+	elsif ( ! $row->{cc} )
+	{
+	    if ( $row->{rank} eq 'Bed' || $row->{rank} eq 'Mbr' )
+	    {
+		if ( $row->{mbr_id} && $row_by_id{$row->{mbr_id}}{cc} )
+		{
+		    SetCountry($row, \%row_by_id, $row->{mbr_id});
+		}
+		
+		elsif ( $row->{fm_id} && $row_by_id{$row->{fm_id}}{cc} )
+		{
+		    SetCountry($row, \%row_by_id, $row->{fm_id});
+		}
+	    }
+	    
+	    else
+	    {
+		if ( $row->{subgp_id} && $row_by_id{$row->{subgp_id}}{cc} )
+		{
+		    SetCountry($row, \%row_by_id, $row->{subgp_id});
+		}
+		
+		elsif ( $row->{gp_id} && $row_by_id{$row->{gp_id}}{cc} )
+		{
+		    SetCountry($row, \%row_by_id, $row->{gp_id});
+		}
+		
+		elsif ( $row->{sgp_id} && $row_by_id{$row->{sgp_id}}{cc} )
+		{
+		    SetCountry($row, \%row_by_id, $row->{sgp_id});
+		}
+	    }
+	}
 	
 	# If no places were given, or if the given place doesn't correspond to any entry
 	# in %places, try to infer the country code from the reference.
@@ -3291,22 +3337,22 @@ sub ImportMacrostrat {
 	    $row->{cc} = $infer_from_ref{$row->{ref_id}};
 	}
 	
-	# Exclude names that are ineligible for matching. Start by excluding duplicates.
-	# The name with the lower id tends to be the valid one, so we exclude the later
-	# one. The exclusion code is 'D' for dupicate.
+	# # Exclude names that are ineligible for matching. Start by excluding duplicates.
+	# # The name with the lower id tends to be the valid one, so we exclude the later
+	# # one. The exclusion code is 'D' for dupicate.
 	
-	my $import_key = "$row->{strat_name}|$row->{rank}|$row->{cc}|" .
-	    "$row->{early_age}|$row->{late_age}";
+	# my $import_key = "$row->{strat_name}|$row->{rank}|$row->{cc}|" .
+	#     "$row->{early_age}|$row->{late_age}";
 	
-	if ( $uniq{$import_key} )
-	{
-	    $row->{exclude} = 'D';
-	}
+	# if ( $uniq{$import_key} )
+	# {
+	#     $row->{exclude} = 'D';
+	# }
 	
-	else
-	{
-	    $uniq{$import_key} = 1;
-	}
+	# else
+	# {
+	#     $uniq{$import_key} = 1;
+	# }
 	
 	# Exclude names whose rank is 'bed', because the PBDB doesn't consistently store
 	# bed names. The exclusion code is 'R' for rank.
@@ -3329,10 +3375,12 @@ sub ImportMacrostrat {
     
     # Step II: Generate a row in the STRAT_MS_NAMES table for each name.
     
-    say "Truncating tables: `$TABLE{STRAT_MS_NAMES}`...";
+    say "Truncating table `$TABLE{STRAT_MS_NAMES}`...";
     
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_NAMES}`");
-
+    
+    say "Inserting into `$TABLE{STRAT_MS_NAMES}`...";
+    
     my $strat_ms_values = '';
 
     foreach my $row ( @$strat_names )
@@ -3352,10 +3400,11 @@ sub ImportMacrostrat {
 	my $qlatmax = $pbdb->quote($row->{lat_max});
 	my $qlngmin = $pbdb->quote($row->{lng_min});
 	my $qlngmax = $pbdb->quote($row->{lng_max});
+	my $qrefid = $pbdb->quote($row->{ref_id});
 	
 	$strat_ms_values .= ', ' if $strat_ms_values;
-	$strat_ms_values .= "($qstratn, $qstratc, $qexclude, $qname, $qrank, $qcc, $qearly, $qlate, " .
-	    "$qlatmin, $qlatmax, $qlngmin, $qlngmax)";
+	$strat_ms_values .= "($qstratn, $qstratc, $qexclude, $qname, $qrank, $qcc, " .
+	    "$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax, $qrefid)";
 	
 	if ( length($strat_ms_values) > $chunk_size )
 	{
@@ -3368,6 +3417,30 @@ sub ImportMacrostrat {
     
     say "Imported $imported_names names.";
     say "Of these, $good_names were eligible for matching.";
+}
+
+
+sub SetLocation {
+
+    my ($row, $row_by_id, $other_id) = @_;
+    
+    $row->{lat_min} = $row_by_id->{$other_id}{lat_min};
+    $row->{lat_max} = $row_by_id->{$other_id}{lat_max};
+    $row->{lng_min} = $row_by_id->{$other_id}{lng_min};
+    $row->{lng_max} = $row_by_id->{$other_id}{lng_max};
+    
+    if ( ! $row->{cc} && $row_by_id->{$other_id}{cc} )
+    {
+	$row->{cc} = $row_by_id->{$other_id}{cc};
+    }
+}
+
+
+sub SetCountry {
+
+    my ($row, $row_by_id, $other_id) = @_;
+    
+    $row->{cc} = $row_by_id->{$other_id}{cc};
 }
 
 
@@ -3413,12 +3486,13 @@ sub MatchMacrostrat {
     
     say "Reading from table `$TABLE{STRAT_NAMES}`...";
     
-    my $pbdb_names = DBHashQuery($pbdb, "SELECT * FROM $TABLE{STRAT_NAMES}");
+    my $pbdb_names = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT * FROM $TABLE{STRAT_NAMES} join $TABLE{STRAT_NATTRS} using (stratn_no)
+	END_SQL
     
     my $good_matches = 0;
     my $matched_names = 0;
-    my @match_records;
-    my %msnames;
+    my (@match_records, %checked);
 
   ROW:
     foreach my $pbnr ( $pbdb_names->@* )
@@ -3441,158 +3515,81 @@ sub MatchMacrostrat {
 	    push @candidates, $first_last{$flchars}->@* if $first_last{$flchars};
 	}
 	
-	my (%matches, $best_match, $mismatches);
+	my (%matches, %ms_names, %ms_ranks, %pb_ranks, %ms_concepts, %ms_scores, @good_matches);
 	
 	foreach my $msnr ( @candidates )
 	{
+	    next if $checked{"$pbnr$msnr"};
+
+	    $checked{"$pbnr$msnr"} = 1;
+	    
 	    my $score = NamesAreCompatible($pbnr->{name}, $pbnr, $msnr->{name}, $msnr);
 	    
 	    if ( $score )
 	    {
 		$matches{$msnr->{stratn_id}} = $msnr;
+		# $ms_concepts{$msnr->{stratc_id}} = 1;
+		# $ms_names{$msnr->{name}} = 1;
+		$pb_ranks{$rank_comparison{$msnr->{rank}}} = 1;
+		# $ms_scores{$score} = 1;
 		$msnr->{score} = $score;
 	    }
+	}
+	
+	# If at least one of the Macrotrat names matches the rank of the PBDB name, then
+	# accept all matches with that rank. For this purpose, we use the
+	# %rank_comparison hash so that the Macrostrat ranks 'Subgp', 'Gp', and 'SGp'
+	# all match the PBDB rank 'Gp'.
+	
+	if ( $pb_ranks{$pbnr->{rank}} )
+	{
+	    foreach my $msnr ( values %matches )
+	    {
+		if ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} )
+		{
+		    push @good_matches, $msnr;
+		}
+	    }
+	}
+	
+	# # Otherwise, if at least one of the Macrostrat names exactly matches the PBDB
+	# # name, then accept all matches with that name.
+	
+	# elsif ( $ms_names{$pbnr->{name}} )
+	# {
+	#     foreach my $msnr ( values %matches )
+	#     {
+	# 	if ( $msnr->{name} eq $pbnr->{name} )
+	# 	{
+	# 	    push @good_matches, $msnr;
+	# 	}
+	#     }
+	# }
+	
+	# # Otherwise, if we have found exactly one Macrostrat rank, then accept all
+	# # matches.
+	
+	# elsif ( keys %ms_ranks == 1 )
+	# {
+	#     push @good_matches, values %matches;
+	# }
+	
+	foreach my $match ( @good_matches )
+	{
+	    my $qno = $pbdb->quote($stratn_no);
+	    my $qid = $pbdb->quote($match->{stratn_id});
+	    my $qsc = $pbdb->quote($match->{score});
 	    
-	    else
-	    {
-		$mismatches++;
-	    }
-	}
-
-	if ( keys %matches == 1 )
-	{
-	    $best_match = (values %matches)[0];
-	}
-
-	elsif ( keys %matches > 1 )
-	{
-	    foreach my $stratn_id ( sort { $a <=> $b } keys %matches )
-	    {
-		my $msnr = $matches{$stratn_id};
-		
-		if ( ! $best_match )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( $msnr->{score} > $best_match->{score} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( $msnr->{score} < $best_match->{score} )
-		{
-		    next;
-		}
-		
-		elsif ( fc $best_match->{name} eq fc $pbnr->{name} &&
-			$best_match->{rank} eq $pbnr->{rank} &&
-			$best_match->{cc} eq $pbnr->{cc} )
-		{
-		    next;
-		}
-		
-		elsif ( $msnr->{stratc_id} eq $best_match->{stratc_id} )
-		{
-		    next;
-		}
-		
-		elsif ( $msnr->{cc} eq $pbnr->{cc} &&
-			$best_match->{cc} ne $pbnr->{cc} )
-		{
-		    $best_match = $msnr;
-		}
-
-		elsif ( $msnr->{cc} ne $pbnr->{cc} )
-		{
-		    next;
-		}
-		
-		elsif ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} &&
-			$rank_comparison{$best_match->{rank}} ne $pbnr->{rank} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( $msnr->{rank} eq $pbnr->{rank} &&
-			$best_match->{rank} ne $pbnr->{rank} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		elsif ( fc $msnr->{name} eq fc $pbnr->{name} &&
-			fc $best_match->{name} ne fc $pbnr->{name} )
-		{
-		    $best_match = $msnr;
-		}
-		
-		else
-		{
-		    my ($best_first) = $best_match->{name} =~ /(\S+)/;
-		    my ($msnr_first) = $msnr->{name} =~ /(\S+)/;
-		    my ($pbnr_first) = $pbnr->{name} =~ /(\S+)/;
-
-		    if ( fc $msnr_first eq fc $pbnr_first &&
-			 fc $best_first ne fc $pbnr_first )
-		    {
-			$best_match = $msnr;
-		    }
-
-		    elsif ( fc $best_first eq fc $pbnr_first &&
-			    fc $msnr_first ne fc $pbnr_first )
-		    {
-			next;
-		    }
-		    
-		    elsif ( fc $best_first eq fc $pbnr_first &&
-			    fc $msnr_first eq fc $pbnr_first &&
-			    $msnr->{stratc_id} && ! $pbnr->{stratc_id} )
-		    {
-			$best_match = $msnr;
-		    }
-		}
-	    }
-	}
-
-	if ( $best_match )
-	{
-	    my @good_matches = $best_match;
-	    $good_matches++;
+	    push @match_records, [$qno, $qid, $qsc];
 	    $matched_names++;
-	    
-	    foreach my $stratn_id ( keys %matches )
-	    {
-		my $msnr = $matches{$stratn_id};
-		
-		if ( $msnr ne $best_match )
-		{
-		    if ( $msnr->{score} == $best_match->{score} ||
-			 $msnr->{stratc_id} == $best_match->{stratc_id} )
-		    {
-			push @good_matches, $msnr;
-			$good_matches++;
-		    }
-		}
-	    }
-	    
-	    foreach my $match ( @good_matches )
-	    {
-		my $qno = $pbdb->quote($stratn_no);
-		my $qid = $pbdb->quote($match->{stratn_id});
-		my $qco = $pbdb->quote($match->{stratc_id} > 0 ? $match->{stratc_id} : undef);
-		my $qsc = $pbdb->quote($match->{score});
-
-		push @match_records, [$qno, $qid, $qco, $qsc];
-	    }
 	}
 	
 	$pbnames++;
     }
 
-    say "  Read $pbnames names.";
-    say "  Matched $matched_names names.";
-    say "  There were $good_matches total matches.";
-
+    say "  Read $pbnames PBDB names.";
+    say "  Matched $matched_names Macrostrat names.";
+    
     return if $opt_check;
     
     # Now truncate the table and regenerate it.
@@ -3609,7 +3606,7 @@ sub MatchMacrostrat {
     foreach my $r ( @match_records )
     {
 	$match_values .= ', ' if $match_values;
-	$match_values .= "($r->[0], $r->[1], $r->[2], $r->[3])";
+	$match_values .= "($r->[0], $r->[1], $r->[2])";
 	$match_count++;
 	
 	if ( length($match_values > $chunk_size) )
@@ -4136,23 +4133,58 @@ sub CandidateMatch {
 
 sub UpdateTables {
     
-    my ($cmd) = @_;
+    my ($cmd, @table_names) = @_;
 
     CheckMode(1) if $cmd eq 'check';
+    
+    my %selected;
+    
+    foreach my $name ( @table_names )
+    {
+	$selected{lc $name} = $is_table_name{lc $name} or die "Unknown table name '$name'\n";
+    }
+
+    unless ( %selected )
+    {
+	die "You must specify one or more table names, or 'all'\n";
+    }
     
     my $check = DBTextQuery($pbdb, "SHOW TABLES LIKE 'strat%'");
     my $activity;
     
-    if ( $check !~ /\bstrat_names\b/ )
+    if ( $selected{strat_names} || $selected{all} )
     {
 	$activity = 1;
 	
+	DBCommand($pbdb, "RENAME TABLE IF EXISTS `strat_names` TO `strat_names_bak`", 1)
+	    if $check =~ /\bstrat_names\b/;
+	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_names` (
-	  `stratn_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
-	  `stratc_no` int(10) unsigned NOT NULL,
-	  `rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
+	  `stratn_no` int(10) unsigned NOT NULL PRIMARY KEY AUTO_INCREMENT,
 	  `name` varchar(255) NOT NULL,
-	  `cc` varchar(255) NOT NULL DEFAULT '',
+	  `rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
+	  `cc` varchar(2) NOT NULL DEFAULT '',
+	  `search` varchar(255) NOT NULL,
+	  `authorizer_no` int(10) unsigned NOT NULL,
+	  `enterer_no` int(10) unsigned NOT NULL,
+	  `modifier_no` int(10) unsigned NOT NULL DEFAULT '0',
+	  `created` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	  `modified` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	  KEY `name` (`name`,`rank`),
+	  KEY (`cc`)
+	) ENGINE=InnoDB", 1);
+    }
+    
+    if ( $selected{strat_name_attrs} || $selected{all} )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_name_attrs`", 1)
+	    if $check =~ /\bstrat_name_attrs\b/;
+	
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_name_attrs` (
+	  `stratn_no` int(10) unsigned NOT NULL PRIMARY KEY,
+	  `stratc_no` int(10) unsigned NOT NULL,
 	  `lithology1` varchar(255) NOT NULL DEFAULT '',
 	  `lithology2` varchar(255) NOT NULL DEFAULT '',
 	  `n_colls` smallint(6) NOT NULL DEFAULT 0,
@@ -4163,17 +4195,21 @@ sub UpdateTables {
 	  `lat_max` decimal(9,6) DEFAULT NULL,
 	  `lng_min` decimal(9,6) DEFAULT NULL,
 	  `lng_max` decimal(9,6) DEFAULT NULL,
-	  PRIMARY KEY (`stratn_no`),
-	  KEY `name` (`name`,`rank`),
-	  KEY `cc` (`cc`)
+	  `bbox` polygon DEFAULT NULL,
+	KEY (`stratc_no`),
+	KEY (`early_age`),
+	KEY (`late_age`)
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $check !~ /\bstrat_nrefs\b/ )
+    if ( $selected{strat_name_refs} || $selected{all} )
     {
 	$activity = 1;
 	
-	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_nrefs` (
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_name_refs`", 1)
+	    if $check =~ /\bstrat_name_refs\b/;
+	
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_name_refs` (
 	  `stratn_no` int(10) unsigned NOT NULL,
 	  `reference_no` int(10) unsigned NOT NULL,
 	  PRIMARY KEY (`stratn_no`, `reference_no`),
@@ -4181,9 +4217,30 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $check !~ /\bstrat_concepts\b/ )
+    if ( $selected{strat_names_view} || $selected{all} )
     {
 	$activity = 1;
+	
+	DBCommand($pbdb, "DROP VIEW IF EXISTS `strat_names_view`", 1)
+	    if $check =~ /\bstrat_names_view\b/;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_names_view` AS
+	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `search`,
+	    `early_age`, `late_age`,
+	    `n_colls`, `n_occs`, `lat_min`, `lat_max`, `lng_min`, `lng_max`,
+	    `lithology1`, `lithology2`, count(*) as `n_refs`,
+	    `authorizer_no`, `enterer_no`, `modifier_no`, `created`, `modified`
+	  FROM `strat_names` join `strat_name_attrs` using (`stratn_no`)
+		left join `strat_name_refs` using (`stratn_no`)
+	  GROUP BY `stratn_no`", 1);
+    }
+    
+    if ( $selected{strat_concepts} || $selected{all} )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_concepts`", 1)
+	    if $check =~ /\bstrat_concepts\b/;
 	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_concepts` (
 	  `stratc_no` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -4203,9 +4260,12 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $check !~ /\bstrat_concept_ccs\b/ )
+    if ( $selected{strat_concept_ccs} || $selected{all} )
     {
 	$activity = 1;
+	
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_concept_ccs`", 1)
+	    if $check =~ /\bstrat_concept_ccs\b/;
 	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_concept_ccs` (
 	  `stratc_no` int(11) unsigned NOT NULL,
@@ -4216,53 +4276,46 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $check !~ /\bstrat_cons\b/ )
+    if ( $selected{strat_concepts_view} || $selected{all} )
     {
 	$activity = 1;
 	
-	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_cons` AS
-	  SELECT stratc_no, sc.name, group_concat(cm.country) as countries,
-		sc.lithology1, sc.lithology2, sc.n_colls, sc.n_occs, sc.early_age, sc.late_age,
-		sc.lat_min, sc.lat_max, sc.lng_min, sc.lng_max
-	  FROM strat_concepts as sc join strat_concept_ccs as cm using (stratc_no)
-	  GROUP BY stratc_no", 1);
+	DBCommand($pbdb, "DROP VIEW IF EXISTS `strat_concepts_view`", 1)
+	    if $check =~ /\bstrat_concepts_view\b/;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_concepts_view` AS
+	  SELECT `stratc_no`, `name`, group_concat(`country`) as countries,
+		`early_age`, `late_age`, `n_colls`, `n_occs`, 
+		`lat_min`, `lat_max`, `lng_min`, `lng_max`, `lithology1`, `lithology2`
+	  FROM `strat_concepts` join `strat_concept_ccs` using (stratc_no)
+	  GROUP BY `stratc_no`", 1);
     }
     
-    if ( $check !~ /\bstrat_opinions\b/ )
+    if ( $selected{strat_opinions} || $selected{all} )
     {
 	$activity = 1;
 	
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_opinions`", 1)
+	    if $check =~ /\bstrat_opinions\b/;
+	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_opinions` (
-	  `strato_no` int(11) unsigned NOT NULL AUTO_INCREMENT,
+	  `strato_no` int(11) unsigned NOT NULL PRIMARY KEY AUTO_INCREMENT,
 	  `child_no` int(10) unsigned NOT NULL,
-	  `child_rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
-	  `cc` varchar(10) NOT NULL,
-	  `relationship` enum('belongs to','synonym of') DEFAULT NULL,
+	  `type` enum('belongs to','synonym of') NOT NULL,
 	  `parent_no` int(10) unsigned NOT NULL,
-	  `parent_rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
-	  PRIMARY KEY (`strato_no`),
-	  UNIQUE KEY `child_no` (`child_no`,`child_rank`,`cc`,`parent_rank`,`parent_no`),
-	  KEY `parent_no` (`parent_no`,`parent_rank`)
+	  UNIQUE KEY `child_no` (`child_no`,`parent_no`),
+	  KEY (`parent_no`)
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $check !~ /\bstrat_ops\b/ )
+    if ( $selected{strat_opinion_refs} || $selected{all} )
     {
 	$activity = 1;
 	
-	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_ops` AS
-	  SELECT o.strato_no, o.child_no, cc.name as child_name, o.child_rank, o.cc,
-		 o.relationship, o.parent_no, pc.name as parent_name, o.parent_rank as parent_rank
-	  FROM strat_opinions as o
-	    left join strat_concepts as cc on cc.stratc_no = o.child_no
-	    left join strat_concepts as pc on pc.stratc_no = o.parent_no", 1);
-    }
-    
-    if ( $check !~ /\bstrat_orefs\b/ )
-    {
-	$activity = 1;
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_opinion_refs`", 1) if
+	    $check =~ /\bstrat_opinion_refs\b/;
 	
-	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_orefs` (
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_opinion_refs` (
 	  `strato_no` int(10) unsigned NOT NULL,
 	  `reference_no` int(10) unsigned NOT NULL,
 	  PRIMARY KEY (`strato_no`,`reference_no`),
@@ -4270,9 +4323,30 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $check !~ /\bstrat_ms_names\b/ )
+    if ( $selected{strat_opinions_view} || $selected{all} )
     {
 	$activity = 1;
+	
+	DBCommand($pbdb, "DROP VIEW IF EXISTS `strat_opinions_view`", 1)
+	    if $check =~ /\bstrat_opinions_view\b/;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_opinions_view` AS
+	  SELECT `strato_no`, `child_no`, `ch`.`name` as `child_name`,
+		`ch`.`rank` as `child_rank`, `ch`.`cc` as `child_cc`, `type`,
+		`parent_no`, `pa`.`name` as `parent_name`, `pa`.`rank` as `parent_rank`
+	  FROM `strat_opinions` as `o`
+	    left join `strat_names` as `ch` on `ch`.`stratn_no` = `o`.`child_no`
+	    left join `strat_names` as `pa` on `pa`.`stratn_no` = `o`.`parent_no`
+	    left join `strat_opinion_refs` using (`strato_no`)
+	  GROUP BY `strato_no`", 1);
+    }
+    
+    if ( $selected{strat_ms_names} || $selected{all} )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_ms_names`", 1)
+	    if $check =~ /\bstrat_ms_names\b/;
 	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_ms_names` (
 	  `stratn_id` int(10) unsigned NOT NULL PRIMARY KEY,
@@ -4287,62 +4361,58 @@ sub UpdateTables {
 	  `lat_max` decimal(9,6) DEFAULT NULL,
 	  `lng_min` decimal(9,6) DEFAULT NULL,
 	  `lng_max` decimal(9,6) DEFAULT NULL,
-	  KEY (`name`, `rank`)
+	  `ref_id` mediumint(8) unsigned NOT NULL default '0',
+	  KEY (`name`, `rank`),
+	  KEY (`stratc_id`)
 	) ENGINE=InnoDB", 1);
     }
 
-    if ( $check !~ /\bstrat_name_matches\b/ )
+    if ( $selected{strat_ms_matches} || $selected{all} )
     {
 	$activity = 1;
-
+	
+	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_ms_matches`", 1)
+	    if $check =~ /\bstrat_ms_matches\b/;
+	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_ms_matches` (
 	  `stratn_no` int(10) unsigned NOT NULL,
 	  `stratn_id` int(10) unsigned NOT NULL,
 	  `score` mediumint(8) unsigned NULL,
-	  PRIMARY KEY (`stratn_no`, `stratn_id`),
+	  KEY (`stratn_no`, `stratn_id`),
 	  KEY (`stratn_id`)
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $check !~ /\bstrat_nm\b/ )
+    if ( $selected{strat_ms_matches_view} || $selected{all} )
     {
 	$activity = 1;
 	
-	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_nm` AS
-	  SELECT stratn_no, pb.name as pb_name, pb.rank as pb_rank, pb.cc as pb_cc,
-		stratn_id, ms.name as ms_name, ms.rank as ms_rank, ms.cc as ms_cc,
-		pb.early_age as pb_early, pb.late_age as pb_late,
-		ms.early_age as ms_early, ms.late_age as ms_late
-	  FROM strat_name_matches as nm
-	    left join strat_names as pb using (stratn_no)
-	    left join strat_ms_names as ms using (stratn_id)", 1);
+	DBCommand($pbdb, "DROP VIEW IF EXISTS `strat_ms_matches_view`", 1)
+	    if $check =~ /\bstrat_ms_matches_view\b/;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_ms_matches_view` AS
+	  SELECT `stratn_no`, `pb`.`name` as `pb_name`, `pb`.`rank` as `pb_rank`,
+		`pb`.`cc` as `pb_cc`, `score`, `stratn_id`, `ms`.`name` as `ms_name`,
+		`ms`.`rank` as `ms_rank`, `ms`.`cc` as `ms_cc`,
+		`pba`.`early_age` as `pb_early`, `pba`.`late_age` as `pb_late`,
+		`ms`.`early_age` as `ms_early`, `ms`.`late_age` as `ms_late`
+	  FROM `strat_ms_matches`
+	    left join `strat_names` as `pb` using (`stratn_no`)
+	    left join `strat_name_attrs` as `pba` using (`stratn_no`)
+	    left join `strat_ms_names` as `ms` using (`stratn_id`)", 1);
     }
     
-    if ( $check !~ /\bstrat_cm\b/ )
+    $check = DBTextQuery($pbdb, "SHOW TABLES LIKE 'collection_strat_names'");
+    
+    if ( $selected{collection_strat_names} || $selected{all} )
     {
 	$activity = 1;
 	
-	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_cm` AS
-	  SELECT stratc_no, pb.name as pb_name, group_concat(distinct pbn.rank) as pb_rank,
-		group_concat(distinct pbn.cc) as pb_cc,	if(msn.stratc_id > 0, 'C', 'N') as type,
-		if(msn.stratc_id > 0, msn.stratc_id, msn.stratn_id) as stratx_id,
-		if(msn.stratc_id > 0, ms.name, msn.name) as ms_name,
-		group_concat(distinct msn.rank) as ms_rank, group_concat(distinct msn.cc) as ms_cc
-	  FROM strat_name_matches as nm
-	    left join strat_names as pbn using (stratn_no)
-	    left join strat_concepts as pb using (stratc_no)
-	    left join strat_ms_names as msn using (stratn_id)
-	    left join macrostrat.strat_names_meta as ms on ms.concept_id = msn.stratc_id
-	  GROUP BY stratc_no, stratx_id", 1);
-    }
-    
-    $check = DBTextQuery($pbdb, "SHOW TABLES LIKE 'coll_strat_names'");
-    
-    if ( $check !~ /\bcoll_strat_names\b/ )
-    {
-	$activity = 1;
-
-	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `coll_strat_names` (
+	DBCommand($pbdb, "RENAME TABLE IF EXISTS `collection_strat_names` TO " .
+		  "`collection_strat_names_bak`", 1)
+	    if $check =~ /\bcollection_strat_names\b/;
+	
+	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `collection_strat_names` (
 	  `collection_no` int unsigned not null,
 	  `stratn_no` int unsigned not null,
 	  PRIMARY KEY (`collection_no`, `stratn_no`),
@@ -4361,20 +4431,20 @@ sub InsertNames {
 
     my ($dbh, $name_values) = @_;
 
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, stratc_no, name, rank, cc, " .
-	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
-	      "lat_min, lat_max, lng_min, lng_max) VALUES " .
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, name, rank, cc, search, " .
+	      "authorizer_no, enterer_no, created, modified) VALUES " .
 	      $name_values);
 }
 
 
-sub InsertMSNames {
+sub InsertNameAttrs {
 
-    my ($dbh, $name_values) = @_;
+    my ($dbh, $name_attr_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_NAMES}` (stratn_id, stratc_id, exclude, name, " .
-	      "rank, cc, early_age, late_age, lat_min, lat_max, lng_min, lng_max) VALUES " .
-	      $name_values);
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NATTRS}` (stratn_no, stratc_no, " .
+	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
+	      "lat_min, lat_max, lng_min, lng_max) VALUES " .
+	      $name_attr_values);
 }
 
 
@@ -4401,7 +4471,7 @@ sub InsertConceptCCs {
 
     my ($dbh, $cc_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `strat_concept_ccs` (stratc_no, cc, country) VALUES " . $cc_values);
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_CONCEPT_CCS}` (stratc_no, cc, country) VALUES " . $cc_values);
 }
 	
 
@@ -4409,9 +4479,8 @@ sub InsertOpinions {
 
     my ($dbh, $opinion_values) = @_;
 
-    DBCommand($dbh, "INSERT IGNORE INTO `$TABLE{STRAT_OPINIONS}` (strato_no, child_no, child_rank, " .
-	      "cc, relationship, parent_no, parent_rank) VALUES " .
-	      $opinion_values);
+    DBCommand($dbh, "INSERT IGNORE INTO `$TABLE{STRAT_OPINIONS}` (strato_no, child_no, " .
+	      "type, parent_no) VALUES $opinion_values");
     
     # DBCommand($dbh, "INSERT INTO $TABLE{STRAT_OPINIONS} (strato_no, child_no, child_rank, " .
     # 	      "relationship, parent_no, parent_rank, reference_no) VALUES " .
@@ -4427,11 +4496,21 @@ sub InsertOpinionRefs {
 }
 
 
+sub InsertMSNames {
+
+    my ($dbh, $name_values) = @_;
+    
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_NAMES}` (stratn_id, stratc_id, exclude, name, " .
+	      "rank, cc, early_age, late_age, lat_min, lat_max, lng_min, lng_max, ref_id) VALUES " .
+	      $name_values);
+}
+
+
 sub InsertNameMatches {
 
     my ($dbh, $match_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, stratc_id, score) VALUES $match_values");
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, score) VALUES $match_values");
 }
 
 
@@ -4447,6 +4526,6 @@ sub InsertCollNames {
 
     my ($dbh, $name_values) = @_;
     
-    DBCommand($dbh, "INSERT IGNORE INTO `coll_strat_names` (collection_no, stratn_no) VALUES $name_values");
+    DBCommand($dbh, "INSERT IGNORE INTO `$TABLE{COLLECTION_STRAT_NAMES}` (collection_no, stratn_no) VALUES $name_values");
 }
 

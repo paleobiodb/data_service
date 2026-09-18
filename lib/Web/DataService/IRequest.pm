@@ -734,7 +734,7 @@ sub sql_limit_clause {
     if ( $offset > 0 )
     {
 	$offset += 0;
-	$limit = $limit eq 'all' ? 100000000 : $limit + 0;
+	$limit = (! defined $limit || $limit eq '' || $limit eq 'all') ? 100000000 : $limit + 0;
 	return "LIMIT $offset,$limit";
     }
     
