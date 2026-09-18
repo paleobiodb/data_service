@@ -13,6 +13,7 @@ use feature qw(say fc);
 use CoreFunction qw(loadConfig configData connectDB);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
+use GeologicalNeighbors qw(%neighbor);
 use DBQuery qw(DBHashQuery DBRowQuery DBSingleHashQuery DBColumnQuery DBTextQuery
 	       DBCommand DBInsert CheckMode);
 
@@ -99,7 +100,6 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			measure => 1, measures => 1, mollusc => 1, mollusk => 1,
 			mudstone => 1, mudstones => 1,
 			oolite => 1, oolites => 1, ore => 1, ores => 1,
-			park => 1,
 			pebble => 1, pebbles => 1, pebbly => 1, phonolite => 1, phonolites => 1,
 			phosphatic => 1, phosphorite => 3, phosphorites => 3,
 			platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
@@ -166,7 +166,7 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   moitié => 2, moitie => 2, les => 2, et => 2 );
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
-			  mountain => 1, mountains => 1, peak => 1, peaks => 1 );
+			  peak => 1, peaks => 1 );
 
 our (%is_preposition) = ( 'des ' => 1, 'de ' => 1, 'du ' => 1, 'of ' => 1 );
 
@@ -176,7 +176,7 @@ our (%rank_comparison) = ( SGp => 'Gp', Gp => 'Gp', SubGp => 'Gp', Fm => 'Fm', M
 our (%infer_from_ref) = ( 1 => 'US', 2 => 'CA', 3 => 'US', 4 => 'US', 5 => 'NZ',
 			  10 => 'CA', 11 => 'CA', 12 => 'CA', 17 => 'US', 
 			  19 => 'US', 21 => 'CA', 22 => 'AU', 29 => 'BR', 30 => 'PA',
-			  31 => 'BR', 32 => 'CL', 34 => 'BR', 35 => 'BR',
+			  31 => 'BR', 32 => 'CL', 33 => 'AR', 34 => 'BR', 35 => 'BR', 37 => 'UY',
 			  38 => 'BR', 39 => 'CL', 40 => 'BO', 41 => 'BR', 42 => 'BR',
 			  48 => 'NZ', 73 => 'CA', 74 => 'CA', 75 => 'CA', 77 => 'CA', 78 => 'CA',
 			  100 => 'MX', 105 => 'US', 109 => 'US', 115 => 'CA', 116 => 'CA',
@@ -2312,8 +2312,7 @@ sub NamesAreCompatible {
 	}
     }
     
-    # If the geographic ranges overlap or are very close to each other, the two names are
-    # potentially compatible. Start by checking the country codes.
+    # If the country codes are identical, then the names are potentially compatible.
     
     if ( $nr->{cc} && $alt_nr->{cc} && $nr->{cc} eq $alt_nr->{cc} )
     {
@@ -2321,7 +2320,17 @@ sub NamesAreCompatible {
 	$same_country = 1;
     }
     
-    # Then check the lat/lng range if that is defined for both name records.
+    # If the country codes are different and the countries are not neighbors, the two
+    # names are not compatible.
+    
+    elsif ( $nr->{cc} && $alt_nr->{cc} && ! $neighbor{$nr->{cc}}{$alt_nr->{cc}} )
+    {
+	say "countries are not neighbors: return 0\n" if $debug_this;
+	return 0;
+    }
+    
+    # Then check the lat/lng range if that is defined for both name records. If the two
+    # ranges are near each other, the two names are potentially compatible.
     
     if ( defined $nr->{lat_min} && $nr->{lat_min} ne '' &&
 	 defined $alt_nr->{lat_min} && $nr->{lat_min} ne '' )
@@ -2670,6 +2679,35 @@ sub NamesAreCompatible {
     
     elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
     {
+	# If the names are both multiple words, make sure that no word less than 6
+	# characters has an edit distance of more than 1.
+	
+	if ( $shortened =~ / / && $alt_shortened =~ / / )
+	{
+	    my @words = split /\s+/, $shortened;
+	    my @alt_words = split /\s+/, $alt_shortened;
+	    
+	    # If the number of words is the same, then check each word in turn. If the
+	    # number of words is different, that in itself takes up one of the allowable
+	    # differences, leaving only one in one of the words.
+	    
+	    if ( @words == @alt_words )
+	    {
+		foreach my $i ( 0..$#words )
+		{
+		    my $wdistance = edistance( $words[$i], $alt_words[$i], 2 );
+		    
+		    unless ( $wdistance == 0 || $wdistance == 1 || length($words[$i]) > 5 )
+		    {
+			say "too many differences in one word: return 0\n" if $debug_this;
+			return 0;
+		    }
+		}
+	    }
+	}
+	
+	# Otherwise, an edit distance of 2 is acceptable.
+	
 	if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
 	{
 	    $similarities++;
@@ -3185,14 +3223,14 @@ sub ImportMacrostrat {
     {
 	$row_by_id{$row->{id}} = $row;
 	
-	# Compute 'early_age' and 'late_age', using the narrowest of the age definitions
+	# Compute 'early_age' and 'late_age', using the union of the age definitions
 	# if more than one is found.
 	
 	$row->{early_age} = $row->{early_concept_age}
-	    if !defined $row->{early_age} || $row->{early_concept_age} < $row->{early_age};
+	    if !defined $row->{early_age} || $row->{early_concept_age} > $row->{early_age};
 
 	$row->{late_age} = $row->{late_concept_age}
-	    if !defined $row->{late_age} || $row->{late_concept_age} > $row->{late_age};
+	    if !defined $row->{late_age} || $row->{late_concept_age} < $row->{late_age};
 	
 	# Get a single list of all Macrostrat columns into which the named stratum or
 	# one of its containing or contained strata falls.
