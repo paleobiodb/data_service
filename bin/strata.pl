@@ -119,13 +119,19 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			tuff => 1, tuffs => 1, tuffaceous => 1, unit => 1, units => 1, volcanic => 1,
 			variegated => 1, volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
 			waterstone => 1, waterstones => 1, yellow => 1, zone => 1,
-			arenal => 2, arenales => 2, argile => 2, argiles => 2, argileux => 2, 
-			assise => 2, assises => 2, barre => 2, blanc => 2, blancs => 2, 
+			arcilla => 2, arcillas => 2, 
+			arena => 2, arenas => 2, 
+			arenal => 2, arenales => 2, arenisca => 2, areniscas => 2,
+			arenaria => 2, arenarie => 2, 
+			argile => 2, argiles => 2, argileux => 2, argille => 2, argilles => 2,
+			assise => 2, assises => 2,
+			banco => 2, bancos => 2, barre => 2, blanc => 2, blancs => 2, 
 			bleu => 2, bleues => 2,
-			calcaire => 2, calcaires => 2,
+			calcaire => 2, calcaires => 2, calcàries => 2,
+			calcare => 2, calcares => 2, calcari => 2, calcaris => 2, 
 			caillasse => 2, caillasses => 2, congeria => 2, couche => 2, couches => 2,
 			craie => 2, craies => 2,
-			dolomie => 2, dolomies => 2,
+			dolomie => 2, dolomies => 2, et => 2,
 			faisceau => 2, faisceaux => 2, falun => 2, faluns => 2,
 		        gres => 2, 'grès' => 2, grigi => 2, gris => 2, jaune => 2, jaunes => 2,
 			lité => 2, lités => 2, lite => 2, lites => 2, 
@@ -135,7 +141,8 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			meulière => 2, meulières => 2, meuliere => 2, meulieres => 2,
 			noire => 2, noires => 2, 
 			niveau => 2, niveaux => 2,
-			pierre => 2, pierres => 2, 'pierre-meliere' => 2, 'pierre-melière' => 2, 
+			pierre => 2, pierres => 2, 'pierre-meliere' => 2, 'pierre-melière' => 2,
+			pizarra => 2, pizarras => 2, 
 			rouge => 2, rouges => 2,
 			sable => 2, sables => 2, sableuse => 2, sableuses => 2,
 			schiste => 2, schistes => 2, schicht => 1, schichten => 1, 
@@ -144,13 +151,13 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			vert => 2, verts => 2, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
-		   uppermost => 1, lowermost => 1, all => 1,
+		   uppermost => 1, lowermost => 1, all => 1, and => 1,
 		   first => 1, second => 1, third => 1, fourth => 1, fifth => 1,
 		   sixth => 1, seventh => 1, eighth => 1, ninth => 1, tenth => 1,
 		   st => 1, nd => 1, rd => 1, th => 1, no => 1, re => 1,
 		   alpha => 1, beta => 1,
 		   division => 1, divisions => 1, local => 1, level => 1, levels => 1,
-		   part => 1, parts => 1,
+		   layer => 1, layers => 1, part => 1, parts => 1,
 		   sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
 		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, 
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
@@ -158,6 +165,7 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   unknown => 1, unnamed => 1, indeterminate => 1,
 		   zone => 1, zones => 1,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
+		   capa => 2, capas => 2, 
 		   grosse => 2, grosses => 2, grossier => 2, grossiers => 2,
 		   moyen => 2, moyens => 2, 
 		   nivel => 2, niveles => 2, niveau => 2, niveaux => 2, 
@@ -671,10 +679,10 @@ sub GenerateConcepts {
 		$rank = 'Fm';
 	    }
 	    
-	    # Ignore any name component that doesn't contain at least three
-	    # letters in a row.
+	    # Ignore any name component that doesn't contain a word with at least three
+	    # letters in a row, starting with an upper-case letter.
 	    
-	    next unless $c =~ /(?:\p{L}\p{M}*){3}/;
+	    next unless $c =~ /\b\p{Lu}\p{M}*\p{L}\p{M}*\p{L}\p{M}*/;
 	    
 	    # Remove any mention of cyclothem.
 	    
@@ -682,10 +690,6 @@ sub GenerateConcepts {
 	    {
 		$c = $1;
 	    }
-	    
-	    # Ignore any component that doesn't contain at least one upper-case letter.
-
-	    next unless $c =~ /\p{Lu}/;
 	    
 	    # If the component starts with a digit, remove that.
 	    
@@ -732,14 +736,15 @@ sub GenerateConcepts {
 	    }
 	    
 	    # Otherwise, if the component begins with one or more all-lowercase words,
-	    # remove them. If the component is all lowercase words, skip it entirely.
+	    # remove them.
 	    
 	    elsif ( $c =~ / ^ ( \p{Ll}+ \s+ )+ (.+) /xs )
 	    {
 		next if $1 eq 'below' || $1 eq 'above';
 		$c = $is_preposition{$1} ? "$1$2" : $2;
-		next unless $c =~ /\p{Lu}/;
 	    }
+	    
+	    # If the component ends in one or more 
 	    
 	    # Put the component into fold-case so that we can do case-insensitive
 	    # comparisons.
@@ -2269,46 +2274,119 @@ sub NamesAreCompatible {
     # If the age ranges overlap, the two names are potentially compatible.
 
     if ( defined $nr->{early_age} && $nr->{early_age} ne '' &&
-	 defined $alt_nr->{early_age} && $alt_nr->{early_age} ne '' )
+	 defined $nr->{late_age} && $nr->{late_age} ne '' )
     {
-	if ( $nr->{early_age} > $alt_nr->{late_age} &&
-	     $nr->{late_age} < $alt_nr->{early_age} )
+	if ( defined $alt_nr->{early_age} && $alt_nr->{early_age} ne '' &&
+	     defined $alt_nr->{late_age} && $alt_nr->{late_age} ne '' )
 	{
-	    $ages_overlap = 1;
-	    $similarities++;
-	}
-	
-	# If the age ranges are separated by at least 5 million years in the Cenozoic,
-	# 10 million in the Mesozoic, and 20 million in the Paleozoic, the two names are not
-	# compatible.
-	
-	else
-	{
-	    my $threshold = ($rank_comparison{$nr->{rank}} eq 'Grp' &&
-			     $rank_comparison{$alt_nr->{rank}} eq 'Grp') ? 20
-		: $nr->{early_age} <= 66 ? 5
-		: $nr->{early_age} <= 252 ? 10 : 20;
-	    
-	    if ( $nr->{early_age} < $alt_nr->{late_age} - $threshold &&
-		 $nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
-		 $nr->{late_age} > $alt_nr->{early_age} + $threshold &&
-		 $alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
+	    if ( $nr->{early_age} > $alt_nr->{late_age} &&
+		 $nr->{late_age} < $alt_nr->{early_age} )
 	    {
-		say "ages differ past threshold: return 0\n" if $debug_this;
-		return 0;
+		$ages_overlap = 1;
+		$similarities++;
+	    }
+	    
+	    # If the age ranges are separated by at least 5 million years in the
+	    # Cenozoic, 10 million in the Mesozoic, and 20 million in the Paleozoic, the
+	    # two names are not compatible.
+	    
+	    else
+	    {
+		my $threshold = ($rank_comparison{$nr->{rank}} eq 'Grp' &&
+				 $rank_comparison{$alt_nr->{rank}} eq 'Grp') ? 20
+				     : $nr->{early_age} <= 66 ? 5
+				     : $nr->{early_age} <= 252 ? 10 : 20;
+		
+		if ( $nr->{early_age} < $alt_nr->{late_age} - $threshold &&
+		     $nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
+		     $nr->{late_age} > $alt_nr->{early_age} + $threshold &&
+		     $alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
+		{
+		    say "ages differ past threshold: return 0\n" if $debug_this;
+		    return 0;
+		}
+	    }
+	    
+	    # If the age ranges are exactly the same or very close, the two names are
+	    # even more likely to be compatible.
+	    
+	    if ( $nr->{early_age} == $alt_nr->{early_age} &&
+		 abs($nr->{late_age} - $alt_nr->{late_age}) < 5 ||
+		 $nr->{late_age} == $alt_nr->{late_age} &&
+		 abs($nr->{early_age} - $alt_nr->{early_age}) < 5 )
+	    {
+		$ages_identical = 1;
+		$similarities++;
 	    }
 	}
 	
-	# If the age ranges are exactly the same or very close, the two names are even more
-	# likely to be compatible.
+	# If the alt_nr age range is only partially given, check to see if it overlaps the
+	# nr age range.
 	
-	if ( $nr->{early_age} == $alt_nr->{early_age} &&
-	     abs($nr->{late_age} - $alt_nr->{late_age}) < 5 ||
-	     $nr->{late_age} == $alt_nr->{late_age} &&
-	     abs($nr->{early_age} - $alt_nr->{early_age}) < 5 )
+	elsif ( defined $alt_nr->{early_age} && $alt_nr->{early_age} ne '' )
 	{
-	    $ages_identical = 1;
-	    $similarities++;
+	    if ( $nr->{early_age} >= $alt_nr->{early_age} &&
+		 $nr->{late_age} < $alt_nr->{early_age} )
+	    {
+		$ages_overlap = 1;
+		$similarities++;
+	    }
+	    
+	    else
+	    {
+		my $threshold = ($rank_comparison{$nr->{rank}} eq 'Grp' &&
+				 $rank_comparison{$alt_nr->{rank}} eq 'Grp') ? 20
+				     : $nr->{early_age} <= 66 ? 5
+				     : $nr->{early_age} <= 252 ? 10 : 20;
+		
+		if ( $nr->{early_age} < $alt_nr->{early_age} - ($threshold+5) &&
+		     $nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
+		     $nr->{late_age} > $alt_nr->{early_age} + $threshold &&
+		     $alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
+		{
+		    say "ages differ past threshold: return 0\n" if $debug_this;
+		    return 0;
+		}
+	    }
+	    
+	    if ( $nr->{early_age} == $alt_nr->{early_age} )
+	    {
+		$ages_identical = 1;
+		$similarities++;
+	    }
+	}
+	
+	elsif ( defined $alt_nr->{late_age} && $alt_nr->{late_age} ne '' )
+	{
+	    if ( $nr->{early_age} > $alt_nr->{late_age} &&
+		 $nr->{late_age} <= $alt_nr->{late_age} )
+	    {
+		$ages_overlap = 1;
+		$similarities++;
+	    }
+	    
+	    else
+	    {
+		my $threshold = ($rank_comparison{$nr->{rank}} eq 'Grp' &&
+				 $rank_comparison{$alt_nr->{rank}} eq 'Grp') ? 20
+				     : $nr->{early_age} <= 66 ? 5
+				     : $nr->{early_age} <= 252 ? 10 : 20;
+		
+		if ( $nr->{early_age} < $alt_nr->{late_age} - ($threshold) &&
+		     $nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
+		     $nr->{late_age} > $alt_nr->{late_age} + ($threshold+5) &&
+		     $alt_nr->{early_age} ne '999.999999' && $nr->{late_age} ne '999.999999' )
+		{
+		    say "ages differ past threshold: return 0\n" if $debug_this;
+		    return 0;
+		}
+	    }
+	    
+	    if ( $nr->{late_age} == $alt_nr->{late_age} )
+	    {
+		$ages_identical = 1;
+		$similarities++;
+	    }
 	}
     }
     
@@ -4202,14 +4280,16 @@ sub UpdateTables {
 	  `name` varchar(255) NOT NULL,
 	  `rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
 	  `cc` varchar(2) NOT NULL DEFAULT '',
-	  `search` varchar(255) NOT NULL,
+	  `canonical` varchar(255) NOT NULL,
+	  `reference_no` int(10) unsigned NOT NULL DEFAULT '0',
 	  `authorizer_no` int(10) unsigned NOT NULL,
 	  `enterer_no` int(10) unsigned NOT NULL,
 	  `modifier_no` int(10) unsigned NOT NULL DEFAULT '0',
 	  `created` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	  `modified` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	  KEY `name` (`name`,`rank`),
-	  KEY (`cc`)
+	  KEY (`cc`),
+	  KEY (`reference_no`)
 	) ENGINE=InnoDB", 1);
     }
     
@@ -4233,7 +4313,7 @@ sub UpdateTables {
 	  `lat_max` decimal(9,6) DEFAULT NULL,
 	  `lng_min` decimal(9,6) DEFAULT NULL,
 	  `lng_max` decimal(9,6) DEFAULT NULL,
-	  `bbox` polygon DEFAULT NULL,
+	  `bbox` geometry DEFAULT NULL,
 	KEY (`stratc_no`),
 	KEY (`early_age`),
 	KEY (`late_age`)
@@ -4263,7 +4343,7 @@ sub UpdateTables {
 	    if $check =~ /\bstrat_names_view\b/;
 	
 	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_names_view` AS
-	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `search`,
+	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `canonical`,
 	    `early_age`, `late_age`,
 	    `n_colls`, `n_occs`, `lat_min`, `lat_max`, `lng_min`, `lng_max`,
 	    `lithology1`, `lithology2`, count(*) as `n_refs`,
@@ -4469,7 +4549,7 @@ sub InsertNames {
 
     my ($dbh, $name_values) = @_;
 
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, name, rank, cc, search, " .
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, name, rank, cc, canonical, " .
 	      "authorizer_no, enterer_no, created, modified) VALUES " .
 	      $name_values);
 }
