@@ -62,6 +62,8 @@ our ($pbdb) = connectDB($opt_config, 'pbdb');
 
 our ($chunk_size) = 20000;
 
+our ($lng_bound) = 140;
+
 die "Could not connect to database: $DBI::errstr\n" unless $mstr && $pbdb;
 
 our ($check_name1, $check_name2) = split /[:]/, decode_utf8($opt_check);
@@ -186,7 +188,8 @@ our (%infer_from_ref) = ( 1 => 'US', 2 => 'CA', 3 => 'US', 4 => 'US', 5 => 'NZ',
 			  19 => 'US', 21 => 'CA', 22 => 'AU', 29 => 'BR', 30 => 'PA',
 			  31 => 'BR', 32 => 'CL', 33 => 'AR', 34 => 'BR', 35 => 'BR', 37 => 'UY',
 			  38 => 'BR', 39 => 'CL', 40 => 'BO', 41 => 'BR', 42 => 'BR',
-			  48 => 'NZ', 73 => 'CA', 74 => 'CA', 75 => 'CA', 77 => 'CA', 78 => 'CA',
+			  43 => 'NZ', 44 => 'NZ', 48 => 'NZ', 49 => 'NA',
+			  73 => 'CA', 74 => 'CA', 75 => 'CA', 77 => 'CA', 78 => 'CA',
 			  100 => 'MX', 105 => 'US', 109 => 'US', 115 => 'CA', 116 => 'CA',
 			  118 => 'CA', 121 => 'CA', 122 => 'CA', 125 => 'CA', 131 => 'CA',
 			  134 => 'GL', 135 => 'SJ', 136 => 'SJ', 156 => 'MX', 159 => 'GL',
@@ -195,7 +198,14 @@ our (%infer_from_ref) = ( 1 => 'US', 2 => 'CA', 3 => 'US', 4 => 'US', 5 => 'NZ',
 			  168 => 'ID', 169 => 'ID', 170 => 'ID', 171 => 'ID', 172 => 'MY',
 			  173 => 'TH', 174 => 'LA', 175 => 'ID', 176 => 'ID', 177 => 'ID',
 			  178 => 'ID', 188 => 'NZ', 218 => 'SJ', 225 => 'CA' );
-			  
+
+our (%places_cc_correction) = ( 'Puerto Rico' => 'PR', Guam => 'GU', Palau => 'PW',
+				'Northern Mariana Islands' => 'MP', 'American Samoa' => 'AS' );
+
+our (%no_bracket_code) = ( 'Australian Capital Territory' => 'ACT', 'New South Wales' => 'NSW',
+			   'Queensland' => 'QLD', 'Tasmania' => 'TAS', 'Victoria' => 'VIC',
+			   'Antarctica' => 'ATA' );
+
 our (%is_table_name) = ( all => 1,
 			 strat_names => 1, strat_name_attrs => 1, strat_name_refs => 1,
 			 strat_names_view => 1,
@@ -355,15 +365,19 @@ sub GenerateConcepts {
 		max(c.early_age) as early_age, min(c.late_age) as late_age,
 		min(c.lat) as lat_min, max(c.lat) as lat_max,
 		min(c.lng) as lng_min, max(c.lng) as lng_max,
-		group_concat(distinct cc.reference_no) as reference_no,
+		min(if(c.lng > $lng_bound, c.lng, null)) as pos_lng_min,
+		max(if(c.lng < -$lng_bound, c.lng, null)) as neg_lng_max,
+		group_concat(distinct r.doi) as doi,
 		group_concat(distinct cc.lithology1) as lithology1,
 		group_concat(distinct cc.lithology2) as lithology2,
+		group_concat(cc.reference_no order by cc.created limit 1) as reference_no,
 		group_concat(cc.authorizer_no order by cc.created limit 1) as authorizer_no,
 		group_concat(cc.enterer_no order by cc.created limit 1) as enterer_no,
 		group_concat(cc.created order by cc.created limit 1) as created
 	FROM $TABLE{COLLECTION_STRATA} as cs
 		join $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 		join $TABLE{COLLECTION_DATA} as cc using (collection_no)
+		join $TABLE{REFERENCE_DATA} as r on r.reference_no = c.reference_no
 	GROUP BY grp, formation, member, cc
 	END_SQL
     
@@ -840,13 +854,13 @@ sub GenerateConcepts {
 		if ( fc($nkey) lt fc($alias_key) )
 		{
 		    $alias_of{$alias_key}{$nkey} = { };
-		    $alias_of{$alias_key}{$nkey}{$_} = 1 foreach keys $nr->{reference_no}->%*;
+		    $alias_of{$alias_key}{$nkey}{$nr->{reference_no}} = 1;
 		}
 
 		else
 		{
 		    $alias_of{$nkey}{$alias_key} = { };
-		    $alias_of{$nkey}{$alias_key}{$_} = 1 foreach keys $nr->{reference_no}->%*;
+		    $alias_of{$nkey}{$alias_key}{$nr->{reference_no}} = 1;
 		    $alias_reversed{$nkey}{$alias_key} = 1;
 		}
 		
@@ -980,7 +994,7 @@ sub GenerateConcepts {
 	    {
 		$single = { name => $name, rank => $rank, n_names => 1, cc => $cc,
 			    n_colls => 0, n_occs => 0, lithology1 => { }, lithology2 => { },
-			    reference_no => { } };
+			    reference_no => undef };
 	    }
 	    
 	    # Consolidate all the other records with the first one, or else keep them
@@ -993,7 +1007,7 @@ sub GenerateConcepts {
 		{
 		    ConsolidateNames($single, $other);
 		}
-
+		
 		else
 		{
 		    push @separate, $other;
@@ -1293,19 +1307,19 @@ sub GenerateConcepts {
     
     $DB::single = 1;
     
-    say "Emptying tables: `$TABLE{STRAT_NAMES}`, `$TABLE{STRAT_NATTRS}`, `$TABLE{STRAT_NREFS}`, " .
+    say "Emptying tables: `$TABLE{STRAT_NAMES}`, `$TABLE{STRAT_NATTRS}`, " .
 	"`$TABLE{STRAT_CONCEPTS}`, `$TABLE{STRAT_CONCEPT_CCS}`, " .
 	"`$TABLE{STRAT_OPINIONS}`, `$TABLE{STRAT_OREFS}`, " .
-	"`$TABLE{COLLECTION_STRAT_NAMES}`...";
+	"`$TABLE{COLLECTION_STRAT_NAMES}`, `$TABLE{STRAT_MS_MATCHES}`...";
     
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NAMES}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NATTRS}`");
-    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_NREFS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_CONCEPTS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_CONCEPT_CCS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_OPINIONS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_OREFS}`");
     DBCommand($pbdb, "TRUNCATE `$TABLE{COLLECTION_STRAT_NAMES}`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_MATCHES}`");
     
     # Then go through the list of concepts, and add one row to the STRAT_CONCEPTS table
     # per concept. For efficiency, these rows are added in blocks of roughly $chunk_size
@@ -1342,10 +1356,12 @@ sub GenerateConcepts {
 	my $qlatmax = $pbdb->quote($cr->{lat_max});
 	my $qlngmin = $pbdb->quote($cr->{lng_min});
 	my $qlngmax = $pbdb->quote($cr->{lng_max});
+	my $qposmin = $pbdb->quote($cr->{pos_lng_min});
+	my $qnegmax = $pbdb->quote($cr->{neg_lng_max});
 	
 	$concept_values .= ', ' if $concept_values;
 	$concept_values .= "($qstratc, $qname, $qlith1, $qlith2, $qncolls, $qnoccs, " .
-	    "$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax)";
+	    "$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax, $qposmin, $qnegmax)";
 
 	if ( length($concept_values) > $chunk_size )
 	{
@@ -1378,7 +1394,7 @@ sub GenerateConcepts {
     # table.
     
     say "Generating the STRAT_NAMES ($TABLE{STRAT_NAMES}) and " .
-	"STRATN_REFS ($TABLE{STRAT_NREFS}) tables...";
+	"STRAT_NATTRS ($TABLE{STRAT_NATTRS}) tables...";
 
     my %strat_name_no;
     my $name_values = '';
@@ -1418,6 +1434,7 @@ sub GenerateConcepts {
 	    my $qsearch = $pbdb->quote(ExtractSearchName($name));
 	    my $qlith1 = $pbdb->quote(join ',', keys $nr->{lithology1}->%*);
 	    my $qlith2 = $pbdb->quote(join ',', keys $nr->{lithology2}->%*);
+	    my $doi = $pbdb->quote(join ',', keys $nr->{doi}->%*);
 	    my $qncolls = $pbdb->quote($nr->{n_colls} || 0);
 	    my $qnoccs = $pbdb->quote($nr->{n_occs} || 0);
 	    my $qearly = $pbdb->quote($nr->{early_age} || '');
@@ -1426,17 +1443,26 @@ sub GenerateConcepts {
 	    my $qlatmax = $pbdb->quote($nr->{lat_max});
 	    my $qlngmin = $pbdb->quote($nr->{lng_min});
 	    my $qlngmax = $pbdb->quote($nr->{lng_max});
+	    my $qposmin = $pbdb->quote($nr->{pos_lng_min});
+	    my $qnegmax = $pbdb->quote($nr->{neg_lng_max});
+	    my $qrefno = $pbdb->quote($nr->{reference_no} || 0);
 	    my $qauth = $pbdb->quote($nr->{authorizer_no} || 1262);
 	    my $qenter = $pbdb->quote($nr->{enterer_no} || 1262);
 	    my $qcreated = $pbdb->quote($nr->{created});
 	    
+	    unless ( $nr->{pos_lng_min} && $nr->{neg_lng_max} )
+	    {
+		$qposmin = 'NULL';
+		$qnegmax = 'NULL';
+	    }
+	    
 	    $name_values .= ', ' if $name_values;
-	    $name_values .= "($qstratn, $qname, $qrank, $qcc, $qsearch, $qauth, $qenter, " .
+	    $name_values .= "($qstratn, $qname, $qrank, $qcc, $qsearch, $qrefno, $qauth, $qenter, " .
 		"$qcreated, $qcreated)";
 	    
 	    $name_attr_values .= ', ' if $name_attr_values;
 	    $name_attr_values .= "($qstratn, $qstratc, $qlith1, $qlith2, $qncolls, $qnoccs, " .
-		"$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax)";
+		"$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax, $qposmin, $qnegmax, $doi)";
 	    
 	    if ( length($name_values) > $chunk_size )
 	    {
@@ -1445,19 +1471,19 @@ sub GenerateConcepts {
 		$name_values = '';
 		$name_attr_values = '';
 	    }
-
-	    foreach my $reference_no ( sort { $a <=> $b } keys $nr->{reference_no}->%* )
-	    {
-		my $qrefno = $pbdb->quote($reference_no);
-		$name_ref_values .= ', ' if $name_ref_values;
-		$name_ref_values .= "($qstratn, $qrefno)";
-	    }
 	    
-	    if ( length($name_ref_values) > $chunk_size )
-	    {
-		InsertNameRefs($pbdb, $name_ref_values);
-		$name_ref_values = '';
-	    }
+	    # foreach my $reference_no ( sort { $a <=> $b } keys $nr->{reference_no}->%* )
+	    # {
+	    # 	my $qrefno = $pbdb->quote($reference_no);
+	    # 	$name_ref_values .= ', ' if $name_ref_values;
+	    # 	$name_ref_values .= "($qstratn, $qrefno)";
+	    # }
+	    
+	    # if ( length($name_ref_values) > $chunk_size )
+	    # {
+	    # 	InsertNameRefs($pbdb, $name_ref_values);
+	    # 	$name_ref_values = '';
+	    # }
 	    
 	    foreach my $collection_no ( sort { $a <=> $b } keys $nr->{collection_no}->%* )
 	    {
@@ -1476,7 +1502,6 @@ sub GenerateConcepts {
     
     InsertNames($pbdb, $name_values) if $name_values;
     InsertNameAttrs($pbdb, $name_attr_values) if $name_attr_values;
-    InsertNameRefs($pbdb, $name_ref_values) if $name_ref_values;
     InsertCollNames($pbdb, $name_coll_values) if $name_coll_values;
     
     # Now run through the names again and add an opinion for every child-parent
@@ -1625,7 +1650,9 @@ sub GenerateConcepts {
     # }
     
     # InsertOpinions($pbdb, $opinion_values);
-        
+    
+    SetBBoxField($pbdb);
+    
     say "WARNING: $missing_concept names had no concept" if $missing_concept > 0;
     say "Created $new_names names";
     say "Created $new_concepts concepts";
@@ -1682,24 +1709,35 @@ sub UpdateStratRaw {
 	$record->{lng_max} = $source->{lng_max}
 	    if ! defined $record->{lng_max} || $source->{lng_max} > $record->{lng_max};
 	
+	# If the fields 'pos_lng_min' and 'neg_lng_max' are set, take the min/max
+	# respectively. This accounts for the case where a stratum stretches across the
+	# 180º meridian.
+	
+	$record->{pos_lng_min} = $source->{pos_lng_min}
+	    if ! defined $record->{pos_lng_min} && defined $source->{pos_lng_min} ||
+	    defined $record->{pos_lng_min} && defined $source->{pos_lng_min} &&
+	    $source->{pos_lng_min} < $record->{pos_lng_min};
+	$record->{neg_lng_max} = $source->{neg_lng_max}
+	    if ! defined $record->{neg_lng_max} && defined $source->{neg_lng_max} ||
+	    defined $record->{neg_lng_max} && defined $source->{neg_lng_max} &&
+	    $source->{neg_lng_max} > $record->{neg_lng_max};
+	
 	# The 'n_colls' and 'n_occs' fields are the sum of the aggregate values.
 	
 	$record->{n_colls} += $source->{n_colls};
 	$record->{n_occs} += $source->{n_occs};
 	
-	# If the 'created' date is earlier, use that and the accompanying authorizer_no
-	# and enterer_no values.
+	# If the 'created' date of the source is earlier, use that and the accompanying
+	# authorizer_no, enterer_no, and reference_no values. We want each of these
+	# fields to reflect the value from the earliest of the aggregated sources.
 	
 	if ( $source->{created} lt $record->{created} )
 	{
 	    $record->{created} = $source->{created};
+	    $record->{reference_no} = $source->{reference_no};
 	    $record->{authorizer_no} = $source->{authorizer_no};
 	    $record->{enterer_no} = $source->{enterer_no};
 	}
-	
-	# The 'coll_nos' field is an aggregate set of collection numbers, as a hash.
-	
-	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
 	
 	# If the field is 'member' and we are also given a formation, store it.
 	
@@ -1736,9 +1774,7 @@ sub UpdateStratRaw {
 		  n_colls => $source->{n_colls}, n_occs => $source->{n_occs},
 		  authorizer_no => $source->{authorizer_no},
 		  enterer_no => $source->{enterer_no}, created => $source->{created},
-		  reference_no => { }, lithology1 => { }, lithology2 => { } };
-	
-	$record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
+		  reference_no => $source->{reference_no}, lithology1 => { }, lithology2 => { } };
 	
 	# If the field is 'member' and we are also given a formation, store it.
 	
@@ -1746,18 +1782,42 @@ sub UpdateStratRaw {
 	{
 	    $record->{formation} = $source->{formation};
 	}
+
+	# If the fields 'pos_lng_min' and 'neg_lng_max' are not null, set them.
+	
+	$record->{pos_lng_min} = $source->{pos_lng_min} if defined $source->{pos_lng_min};
+	$record->{neg_lng_max} = $source->{neg_lng_max} if defined $source->{neg_lng_max};
     }
     
-    # The 'reference_no', 'lithology1', and 'lithology2' fields are the union of the
+    # The 'collection_no' field is an aggregate set of collection numbers, as a hash.
+    
+    $record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
+    
+    # The 'lithology1', and 'lithology2' fields are the union of the
     # respective aggregate values, expressed as a hash.
     
-    $record->{reference_no}{$_} = 1 foreach grep { $_ } split /,/, $source->{reference_no};
     $record->{lithology1}{$_} = 1 foreach grep { $_ && $_ ne 'not reported' }
 	split /,/, $source->{lithology1};
     $record->{lithology2}{$_} = 1 foreach grep { $_ } split /,/, $source->{lithology2};
     
+    # The 'doi' field is an aggregate set of DOIs.
+    
+    $record->{doi}{$_} = 1 foreach grep { $_ =~ /^10[.]\d/ } split /,/, $source->{doi};
+    
     return 1;
 }
+
+
+sub min_threshold {
+    my ($threshold, @args) = @_;
+    return min( grep { $_ > $threshold } @args );
+}
+
+
+sub max_threshold {
+    my ($threshold, @args) = @_;
+    return max( grep { $_ < $threshold } @args );
+}	
 
 
 # UpdateContainedIn ( contained_key, container_key, source )
@@ -1805,6 +1865,33 @@ sub ConsolidateNames {
 
     my ($remaining, $other) = @_;
     
+    # if ( defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} )
+    # {
+    # 	$remaining->{neg_lng_max} = $other->{neg_lng_max}
+    # 	    if $other->{neg_lng_max} > $remaining->{neg_lng_max};
+    # 	$remaining->{pos_lng_min} = $other->{pos_lng_min}
+    # 	    if $other->{pos_lng_min} < $remaining->{pos_lng_min};
+    # }
+
+    # elsif ( defined $remaining->{neg_lng_max} )
+    # {
+    # 	consolidate_range($remaining, $remaining, $other);
+    # }
+    
+    # elsif ( defined $other->{neg_lng_max} )
+    # {
+    # 	consolidate_range($remaining, $other, $remaining);
+    # }
+    
+    # elsif ( $remaining->{lng_min} < -$lng_bound && $other->{lng_max} > $lng_bound ||
+    # 	    $other->{lng_min} < -$lng_bound && $remaining->{lng_max} > $lng_bound )
+    # {
+    # 	$remaining->{neg_lng_max} = max_threshold(-$lng_bound, $remaining->{lng_min}, $remaining->{lng_max},
+    # 						  $other->{lng_min}, $other->{lng_max});
+    # 	$remaining->{pos_lng_min} = min_threshold($lng_bound, $remaining->{lng_min}, $remaining->{lng_max},
+    # 						  $other->{lng_min}, $other->{lng_max});
+    # }
+    
     $remaining->{lat_min} = $other->{lat_min}
 	if ! defined $remaining->{lat_min} || $other->{lat_min} < $remaining->{lat_min};
     $remaining->{lat_max} = $other->{lat_max}
@@ -1813,7 +1900,16 @@ sub ConsolidateNames {
 	if ! defined $remaining->{lng_min} || $other->{lng_min} < $remaining->{lng_min};
     $remaining->{lng_max} = $other->{lng_max}
 	if ! defined $remaining->{lng_max} || $other->{lng_max} > $remaining->{lng_max};
-
+    
+    $remaining->{pos_lng_min} = $other->{pos_lng_min}
+	if ! defined $remaining->{pos_lng_min} && defined $other->{pos_lng_min} ||
+	defined $remaining->{pos_lng_min} && defined $other->{pos_lng_min} &&
+	$other->{pos_lng_min} < $remaining->{pos_lng_min};
+    $remaining->{neg_lng_max} = $other->{neg_lng_max}
+	if ! defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} ||
+	defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} &&
+	$other->{neg_lng_max} > $remaining->{neg_lng_max};
+    
     $remaining->{early_age} = $other->{early_age}
 	if ! defined $remaining->{early_age} || $other->{early_age} > $remaining->{early_age};
     $remaining->{late_age} = $other->{late_age}
@@ -1827,9 +1923,16 @@ sub ConsolidateNames {
     # 	$remaining->{parent_name}{$_} = 1 foreach keys $other->{parent_name}->%*;
     # }
 
-    if ( $other->{reference_no} )
+    if ( $other->{created} && $remaining->{created} && $other->{created} lt $remaining->{created} )
     {
-	$remaining->{reference_no}{$_} = 1 foreach keys $other->{reference_no}->%*;
+	$remaining->{created} = $other->{created};
+	$remaining->{reference_no} = $other->{reference_no};
+	
+	if ( $other->{authorizer_no} && $other->{enterer_no} )
+	{
+	    $remaining->{authorizer_no} = $other->{authorizer_no};
+	    $remaining->{enterer_no} = $other->{enterer_no};
+	}
     }
     
     if ( $other->{collection_no} )
@@ -1847,9 +1950,25 @@ sub ConsolidateNames {
 	$remaining->{lithology2}{$_} = 1 foreach keys $other->{lithology2}->%*;
     }
     
+    if ( $other->{doi} )
+    {
+	$remaining->{doi}{$_} = 1 foreach keys $other->{doi}->%*;
+    }
+    
     $other->{consolidated_with} ||= [ ];
     push $other->{consolidated_with}->@*, $remaining->{rkey};
 }
+
+
+# sub consolidate_range {
+    
+#     my ($remaining, $record, $other) = @_;
+    
+#     $remaining->{neg_lng_max} = $other->{lng_max} > $record->{neg_lng_max} &&
+# 	$other->{lng_max} < -$lng_bound ? $other->{lng_max} : $record->{neg_lng_max};
+#     $remaining->{pos_lng_min} = $other->{lng_min} < $record->{pos_lng_min} &&
+# 	$other->{lng_min} > $lng_bound ? $other->{lng_min} : $record->{pos_lng_min};
+# }
 
 
 # ParseDisjunction ( raw_name, nr )
@@ -1991,7 +2110,7 @@ sub ParseHyphenated {
 	    }
 	}
 	
-	if ( IsKnownStratum($left, $nr) || IsKnownStratum($right, $nr) )
+	if ( IsKnownStratum($left, $nr) && IsKnownStratum($right, $nr) )
 	{
 	    return ($left, $right);
 	}
@@ -2407,43 +2526,140 @@ sub NamesAreCompatible {
 	return 0;
     }
     
-    # Then check the lat/lng range if that is defined for both name records. If the two
-    # ranges are near each other, the two names are potentially compatible.
+    # Then check the lat/lng range if that is defined for both name records.
     
     if ( defined $nr->{lat_min} && $nr->{lat_min} ne '' &&
 	 defined $alt_nr->{lat_min} && $nr->{lat_min} ne '' )
     {
-	if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 5 &&
-	     $nr->{lat_max} >= $alt_nr->{lat_min} - 5 &&
-	     $nr->{lng_min} <= $alt_nr->{lng_max} + 5 &&
-	     $nr->{lng_max} >= $alt_nr->{lng_min} - 5 )
+	# If both ranges cross the 180º meridian, then evaluate them by latitude only.
+	
+	if ( $nr->{lng_min} < -$lng_bound && $nr->{lng_max} > $lng_bound &&
+	     $alt_nr->{lng_min} < -$lng_bound && $alt_nr->{lng_max} > $lng_bound )
 	{
-	    $similarities++ unless $same_country;
-	    $locations_close = 1;
+	    # If the two ranges are near each other, the two names are potentially
+	    # compatible.
+	    
+	    if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 5 &&
+		 $nr->{lat_max} >= $alt_nr->{lat_min} - 5 )
+	    {
+		$similarities++ unless $same_country;
+		$locations_close = 1;
+	    }
+	    
+	    # If the geographic ranges are separated by at least 20º, the two names are not
+	    # compatible.
+	    
+	    elsif ( $nr->{lat_min} > $alt_nr->{lat_max} + 20 ||
+		    $nr->{lat_max} < $alt_nr->{lat_min} - 20 )
+	    {
+		print "geographic ranges differ past threshold: return 0\n\n" if $debug_this;
+		return 0;
+	    }
+	    
+	    # If the geographic ranges are very close to each other, the two names are even
+	    # more likely to be compatible.
+	    
+	    if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 1 &&
+		 $nr->{lat_max} >= $alt_nr->{lat_min} - 1 )
+	    {
+		$locations_overlap = 1;
+		$similarities++;
+	    }
 	}
 	
-	# If the geographic ranges are separated by at least 20º, the two names are not
-	# compatible.
+	# If just one crosses the meridian, we need a more complicated rule.
 	
-	elsif ( $nr->{lat_min} > $alt_nr->{lat_max} + 20 ||
-		$nr->{lat_max} < $alt_nr->{lat_min} - 20 ||
-		$nr->{lng_min} > $alt_nr->{lng_max} + 20 ||
-		$nr->{lng_max} < $alt_nr->{lng_min} - 20 )
+	elsif ( $nr->{lng_min} < -$lng_bound && $nr->{lng_max} > $lng_bound ||
+		$alt_nr->{lng_min} < -$lng_bound && $alt_nr->{lng_max} > $lng_bound )
 	{
-	    print "geographic ranges differ past threshold: return 0\n\n" if $debug_this;
-	    return 0;
+	    my ($simple, $complex);
+	    
+	    if ( $nr->{lng_min} < -$lng_bound && $nr->{lng_max} > $lng_bound )
+	    {
+		$simple = $alt_nr; $complex = $nr;
+	    }
+	    
+	    else
+	    {
+		$simple = $nr; $complex = $alt_nr;
+	    }
+	    
+	    # If the two ranges are near each other, the two names are potentially
+	    # compatible.
+	    
+	    if ( $simple->{lat_min} <= $complex->{lat_max} + 5 &&
+		 $simple->{lat_max} >= $complex->{lat_min} - 5 &&
+		 ( $simple->{lng_min} <= $complex->{neg_lng_max} + 5 ||
+		   $simple->{lng_max} >= $complex->{pos_lng_min} - 5 ))
+	    {
+		$similarities++ unless $same_country;
+		$locations_close = 1;
+	    }
+	    
+	    # If the geographic ranges are separated by at least 20º, the two names are not
+	    # compatible.
+	    
+	    elsif ( $simple->{lat_min} > $complex->{lat_max} + 20 ||
+		    $simple->{lat_max} < $complex->{lat_min} - 20 ||
+		    ( $simple->{lng_min} > $complex->{neg_lng_max} + 20 &&
+		      $simple->{lng_max} < $complex->{pos_lng_min} - 20 ))
+	    {
+		print "geographic ranges differ past threshold: return 0\n\n" if $debug_this;
+		return 0;
+	    }
+	    
+	    # If the geographic ranges are very close to each other, the two names are even
+	    # more likely to be compatible.
+	    
+	    if ( $simple->{lat_min} <= $complex->{lat_max} + 1 &&
+		 $simple->{lat_max} >= $complex->{lat_min} - 1 &&
+		 ( $simple->{lng_min} <= $complex->{neg_lng_max} + 1 ||
+		   $simple->{lng_max} >= $complex->{pos_lng_min} - 1 ))
+	    {
+		$locations_overlap = 1;
+		$similarities++;
+	    }
 	}
 	
-	# If the geographic ranges are very close to each other, the two names are even
-	# more likely to be compatible.
+	# If neither range crosses the meridian, then do a simple latitude/longitude check.
 	
-	if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 1 &&
-	     $nr->{lat_max} >= $alt_nr->{lat_min} - 1 &&
-	     $nr->{lng_min} <= $alt_nr->{lng_max} + 1 &&
-	     $nr->{lng_max} >= $alt_nr->{lng_min} - 1 )
+	else
 	{
-	    $locations_overlap = 1;
-	    $similarities++;
+	    # If the two ranges are near each other, the two names are potentially
+	    # compatible.
+	    
+	    if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 5 &&
+		 $nr->{lat_max} >= $alt_nr->{lat_min} - 5 &&
+		 $nr->{lng_min} <= $alt_nr->{lng_max} + 5 &&
+		 $nr->{lng_max} >= $alt_nr->{lng_min} - 5 )
+	    {
+		$similarities++ unless $same_country;
+		$locations_close = 1;
+	    }
+	    
+	    # If the geographic ranges are separated by at least 20º, the two names are not
+	    # compatible.
+	    
+	    elsif ( $nr->{lat_min} > $alt_nr->{lat_max} + 20 ||
+		    $nr->{lat_max} < $alt_nr->{lat_min} - 20 ||
+		    $nr->{lng_min} > $alt_nr->{lng_max} + 20 ||
+		    $nr->{lng_max} < $alt_nr->{lng_min} - 20 )
+	    {
+		print "geographic ranges differ past threshold: return 0\n\n" if $debug_this;
+		return 0;
+	    }
+	    
+	    # If the geographic ranges are very close to each other, the two names are even
+	    # more likely to be compatible.
+	    
+	    if ( $nr->{lat_min} <= $alt_nr->{lat_max} + 1 &&
+		 $nr->{lat_max} >= $alt_nr->{lat_min} - 1 &&
+		 $nr->{lng_min} <= $alt_nr->{lng_max} + 1 &&
+		 $nr->{lng_max} >= $alt_nr->{lng_min} - 1 )
+	    {
+		$locations_overlap = 1;
+		$similarities++;
+	    }
 	}
     }
     
@@ -3029,10 +3245,12 @@ sub CreateConcept {
 	       lng_min => $nr->{lng_min}, lng_max => $nr->{lng_max},
 	       early_age => $nr->{early_age}, late_age => $nr->{late_age},
 	       n_colls => $nr->{n_colls}, n_occs => $nr->{n_occs}, cc => { },
-	       reference_no => { }, lithology1 => { }, lithology2 => { } };
+	       lithology1 => { }, lithology2 => { } };
+    
+    $cr->{pos_lng_min} = $nr->{pos_lng_min} if defined $nr->{pos_lng_min};
+    $cr->{neg_lng_max} = $nr->{neg_lng_max} if defined $nr->{neg_lng_max};
     
     $cr->{cc}{$nr->{cc}} = 1 if $nr->{cc};
-    $cr->{reference_no}{$_} = 1 foreach keys $nr->{reference_no}->%*;
     $cr->{lithology1}{$_} = 1 foreach keys $nr->{lithology1}->%*;
     $cr->{lithology2}{$_} = 1 foreach keys $nr->{lithology2}->%*;
     
@@ -3087,7 +3305,16 @@ sub AddToConcept {
     $cr->{lat_max} = $nr->{lat_max} if $nr->{lat_max} > $cr->{lat_max};
     $cr->{lng_min} = $nr->{lng_min} if $nr->{lng_min} < $cr->{lng_min};
     $cr->{lng_max} = $nr->{lng_max} if $nr->{lng_max} > $cr->{lng_max};
-
+    
+    $cr->{pos_lng_min} = $nr->{pos_lng_min}
+	if ! defined $cr->{pos_lng_min} && defined $nr->{pos_lng_min} ||
+	defined $cr->{pos_lng_min} && defined $nr->{pos_lng_min} &&
+	$nr->{pos_lng_min} < $cr->{pos_lng_min};
+    $cr->{neg_lng_max} = $nr->{neg_lng_max}
+	if ! defined $cr->{neg_lng_max} && defined $nr->{neg_lng_max} ||
+	defined $cr->{neg_lng_max} && defined $nr->{neg_lng_max} &&
+	$nr->{neg_lng_max} > $cr->{neg_lng_max};
+    
     $cr->{early_age} = $nr->{early_age} if $nr->{early_age} > $cr->{early_age};
     $cr->{late_age} = $nr->{late_age} if $nr->{late_age} < $cr->{late_age};
     
@@ -3095,7 +3322,7 @@ sub AddToConcept {
     $cr->{n_occs} += $nr->{n_occs};
     
     $cr->{cc}{$nr->{cc}} = 1 if $nr->{cc};
-    $cr->{reference_no}{$_} = 1 foreach keys $nr->{reference_no}->%*;
+    # $cr->{reference_no}{$_} = 1 foreach keys $nr->{reference_no}->%*;
     $cr->{lithology1}{$_} = 1 foreach keys $nr->{lithology1}->%*;
     $cr->{lithology2}{$_} = 1 foreach keys $nr->{lithology2}->%*;
 }
@@ -3113,6 +3340,15 @@ sub ConsolidateConcepts {
     $remaining->{lng_min} = $other->{lng_min} if $other->{lng_min} < $remaining->{lng_min};
     $remaining->{lng_max} = $other->{lng_max} if $other->{lng_max} > $remaining->{lng_max};
     
+    $remaining->{pos_lng_min} = $other->{pos_lng_min}
+	if ! defined $remaining->{pos_lng_min} && defined $other->{pos_lng_min} ||
+	defined $remaining->{pos_lng_min} && defined $other->{pos_lng_min} &&
+	$other->{pos_lng_min} < $remaining->{pos_lng_min};
+    $remaining->{neg_lng_max} = $other->{neg_lng_max}
+	if ! defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} ||
+	defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} &&
+	$other->{neg_lng_max} > $remaining->{neg_lng_max};
+    
     $remaining->{early_age} = $other->{early_age} if $other->{early_age} > $remaining->{early_age};
     $remaining->{late_age} = $other->{late_age} if $other->{late_age} < $remaining->{late_age};
     
@@ -3120,7 +3356,7 @@ sub ConsolidateConcepts {
     $remaining->{n_occs} += $other->{n_occs};
 
     $remaining->{cc}{$_} = 1 foreach keys $other->{cc}->%*;
-    $remaining->{reference_no}{$_} = 1 foreach keys $other->{reference_no}->%*;
+    # $remaining->{reference_no}{$_} = 1 foreach keys $other->{reference_no}->%*;
     $remaining->{lithology1}{$_} = 1 foreach keys $other->{lithology1}->%*;
     $remaining->{lithology2}{$_} = 1 foreach keys $other->{lithology2}->%*;
 }
@@ -3174,6 +3410,37 @@ sub ChooseConceptName {
 }
 
 
+sub SetBBoxField {
+
+    say "Setting the bbox field...";
+    
+    DBCommand($pbdb, <<~END_SQL);
+	UPDATE strat_name_attrs
+	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(lng_min,lat_min),
+							Point(lng_max, lat_min),
+							Point(lng_max, lat_max),
+							Point(lng_min, lat_max),
+							Point(lng_min, lat_min)))))
+	WHERE not(lng_min < -$lng_bound and lng_max > $lng_bound);
+	END_SQL
+    
+    DBCommand($pbdb, <<~END_SQL);
+	UPDATE strat_name_attrs
+	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(pos_lng_min, lat_min),
+							Point(180, lat_min),
+							Point(180, lat_max),
+							Point(pos_lng_min, lat_max),
+							Point(pos_lng_min, lat_min)),
+					     Linestring(Point(180, lat_min),
+							Point(neg_lng_max, lat_min),
+							Point(neg_lng_max, lat_max),
+							Point(180, lat_max),
+							Point(180, lat_min)))))
+	WHERE lng_min < -$lng_bound and lng_max > $lng_bound;
+	END_SQL
+}
+
+
 # ImportMacrostrat ( )
 #
 # Execute the command 'import macrostrat'.
@@ -3205,31 +3472,34 @@ sub ImportMacrostrat {
     {
 	# Generate the correct country code.
 	
-	$row->{cc} = $row->{country_abbrev} eq 'USA' ? 'US' : $row->{country_abbrev};
-	$row->{cc} = 'PW' if $row->{name} eq 'Palau';
+	$row->{cc} = $places_cc_correction{$row->{name}} || $row->{country_abbrev};
 	
 	# Add the place record under the key 'name'.
 	
 	$place{$row->{name}} = $row;
 	
-	# The Australian provinces are added with the prefix 'AU-' to distinguish them
-	# from similarly named American states. Everything else is added under the key
-	# 'postal'.
+	# The Australian provinces and Antarctica are added with the prefix 'NB-' (no
+	# bracket) to distinguish them from similarly named American states. Everything
+	# else is added under the key 'postal', except for Argentina which inexplicably
+	# has 'AR' listed as its postal.
 	
-	if ( $row->{cc} eq 'AU' )
+	if ( $row->{cc} eq 'AU' || $row->{cc} eq 'AQ' )
 	{
-	    $place{"AU-$row->{postal}"} = $row;
+	    my $code = $no_bracket_code{$row->{name}} || $row->{postal};
+	    $place{"NB-$code"} = $row;
 	}
-
-	else
+	
+	elsif ( $row->{name} ne 'Argentina' )
 	{
 	    $place{$row->{postal}} = $row;
 	}
     }
     
-    # Add New Zealand, which is inexplicably missing.
+    # Add New Zealand, which is inexplicably missing. Also Norfolk Island and the Virgin Islands.
     
-    $place{'New Zealand'} = $place{NZ} = { name => 'New Zealand', postal => 'NZ', cc => 'NZ' };
+    $place{'New Zealand'} = $place{NZ} = { name => 'New Zealand', cc => 'NZ' };
+    $place{'Norfolk Island'} = $place{NFK} = { name => 'Norfolk Island', cc => 'NF' };
+    $place{'U.S. Virgin Islands'} = $place{VI} = { name => 'U.S. Virgin Islands', cc => 'VI' };
     
     # Fetch the `macrostrat`.`cols` table, which holds information about the columns.
     
@@ -3257,6 +3527,7 @@ sub ImportMacrostrat {
     say "Reading from `macrostrat`.`strat_names` and associated tables...";
     
     my $imported_names = 0;
+    my $wrote_rows = 0;
     my $good_names = 0;
     
     my $strat_names = DBHashQuery($mstr, <<~END_SQL);
@@ -3345,13 +3616,16 @@ sub ImportMacrostrat {
 	}
 	
 	# Determine the country code for this name. Codes that are enclosed in braces
-	# are from the US, Canada, and countries other than Australia.
+	# are from the US, Canada, and countries other than Australia. Except for a few
+	# that are from Australia :-(
 	
 	if ( $row->{places} =~ qr{ ^ [{] (.*) [}] \s* $ }xs )
 	{
-	    my @codes = split /,/, $1;
+	    my @ccs = map { $place{$_}{cc} || $place{"NB-$_"}{cc} } split /,/, $1;
 	    
-	    $row->{cc} = $place{$codes[0]}{cc};
+	    my %found_cc = map { $_ => 1 } grep { $_ } @ccs;
+	    
+	    $row->{cc} = [ sort keys %found_cc ];
 	}
 	
 	# Places whose codes are not enclosed in braces are either provinces in
@@ -3359,98 +3633,134 @@ sub ImportMacrostrat {
 
 	elsif ( $row->{places} eq 'ATA' )
 	{
-	    $row->{cc} = 'AQ';
+	    $row->{cc} = [ 'AQ' ];
 	}
 	
 	elsif ( $row->{places} )
 	{
-	    my @codes = split /,/, $row->{places};
+	    my @ccs = map { $place{"NB-$_"}{cc} || $place{$_}{cc} } split /,/, $1;
 	    
-	    $row->{cc} = $place{"AU-" . substr($codes[0],0,2)}{cc};
-	}
-    }
-    
-    # Iterate through the results again, using the fields from `lookup_strat_names` to
-    # fill in location data.
-    
-    say "  filling in location data...";
-    
-    foreach my $row ( @$strat_names )
-    {
-	if ( exists $row->{lat_min} )
-	{
-	    if ( $row->{rank} eq 'Bed' || $row->{rank} eq 'Mbr' )
-	    {
-		if ( $row->{mbr_id} && exists $row_by_id{$row->{mbr_id}}{lat_min} )
-		{
-		    SetLocation($row, \%row_by_id, $row->{mbr_id});
-		}
-		
-		elsif ( $row->{fm_id} && exists $row_by_id{$row->{fm_id}}{lat_min} )
-		{
-		    SetLocation($row, \%row_by_id, $row->{fm_id});
-		}
-	    }
+	    my %found_cc = map { $_ => 1 } grep { $_ } @ccs;
 	    
-	    else
-	    {
-		if ( $row->{subgp_id} && exists $row_by_id{$row->{subgp_id}}{lat_min} )
-		{
-		    SetLocation($row, \%row_by_id, $row->{subgp_id});
-		}
-		
-		elsif ( $row->{gp_id} && exists $row_by_id{$row->{gp_id}}{lat_min} )
-		{
-		    SetLocation($row, \%row_by_id, $row->{gp_id});
-		}
-		
-		elsif ( $row->{sgp_id} && exists $row_by_id{$row->{sgp_id}}{lat_min} )
-		{
-		    SetLocation($row, \%row_by_id, $row->{sgp_id});
-		}
-	    }
-	}
-	
-	elsif ( ! $row->{cc} )
-	{
-	    if ( $row->{rank} eq 'Bed' || $row->{rank} eq 'Mbr' )
-	    {
-		if ( $row->{mbr_id} && $row_by_id{$row->{mbr_id}}{cc} )
-		{
-		    SetCountry($row, \%row_by_id, $row->{mbr_id});
-		}
-		
-		elsif ( $row->{fm_id} && $row_by_id{$row->{fm_id}}{cc} )
-		{
-		    SetCountry($row, \%row_by_id, $row->{fm_id});
-		}
-	    }
-	    
-	    else
-	    {
-		if ( $row->{subgp_id} && $row_by_id{$row->{subgp_id}}{cc} )
-		{
-		    SetCountry($row, \%row_by_id, $row->{subgp_id});
-		}
-		
-		elsif ( $row->{gp_id} && $row_by_id{$row->{gp_id}}{cc} )
-		{
-		    SetCountry($row, \%row_by_id, $row->{gp_id});
-		}
-		
-		elsif ( $row->{sgp_id} && $row_by_id{$row->{sgp_id}}{cc} )
-		{
-		    SetCountry($row, \%row_by_id, $row->{sgp_id});
-		}
-	    }
+	    $row->{cc} = [ sort keys %found_cc ];
 	}
 	
 	# If no places were given, or if the given place doesn't correspond to any entry
 	# in %places, try to infer the country code from the reference.
 	
-	unless ( $row->{cc} )
+	unless ( $row->{cc} && $row->{cc}->@* )
 	{
-	    $row->{cc} = $infer_from_ref{$row->{ref_id}};
+	    $row->{cc} = [ $infer_from_ref{$row->{ref_id}} ]
+		if $infer_from_ref{$row->{ref_id}};
+	}
+    }
+    
+    # Iterate through the results again, using the fields from `lookup_strat_names` to
+    # fill in location data for names that are not listed in any column but whose
+    # parent(s) or child(ren) are.
+    
+    say "  filling in location data...";
+    
+    foreach my $row ( @$strat_names )
+    {
+	if ( ! defined $row->{lat_min} )
+	{
+	    if ( $row->{sgp_id} && defined $row_by_id{$row->{sgp_id}}{lat_min} )
+	    {
+		SetLocation($row, \%row_by_id, $row->{sgp_id});
+	    }
+	    
+	    elsif ( $row->{gp_id} && defined $row_by_id{$row->{gp_id}}{lat_min} )
+	    {
+		SetLocation($row, \%row_by_id, $row->{gp_id});
+	    }
+	    
+	    elsif ( $row->{subgp_id} && defined $row_by_id{$row->{subgp_id}}{lat_min} )
+	    {
+		SetLocation($row, \%row_by_id, $row->{subgp_id});
+	    }
+	    
+	    elsif ( $row->{fm_id} && defined $row_by_id{$row->{fm_id}}{lat_min} )
+	    {
+		SetLocation($row, \%row_by_id, $row->{fm_id});
+	    }
+	    
+	    elsif ( $row->{mbr_id} && defined $row_by_id{$row->{mbr_id}}{lat_min} )
+	    {
+		SetLocation($row, \%row_by_id, $row->{mbr_id});
+	    }
+	    
+	    elsif ( $row->{bed_id} && defined $row_by_id{$row->{bed_id}}{lat_min} )
+	    {
+		SetLocation($row, \%row_by_id, $row->{bed_id});
+	    }
+	}
+		
+	# if ( exists $row->{lat_min} )
+	# {
+	#     if ( $row->{rank} eq 'Bed' || $row->{rank} eq 'Mbr' )
+	#     {
+	# 	if ( $row->{mbr_id} && exists $row_by_id{$row->{mbr_id}}{lat_min} )
+	# 	{
+	# 	    SetLocation($row, \%row_by_id, $row->{mbr_id});
+	# 	}
+		
+	# 	elsif ( $row->{fm_id} && exists $row_by_id{$row->{fm_id}}{lat_min} )
+	# 	{
+	# 	    SetLocation($row, \%row_by_id, $row->{fm_id});
+	# 	}
+	#     }
+	    
+	#     else
+	#     {
+	# 	if ( $row->{subgp_id} && exists $row_by_id{$row->{subgp_id}}{lat_min} )
+	# 	{
+	# 	    SetLocation($row, \%row_by_id, $row->{subgp_id});
+	# 	}
+		
+	# 	elsif ( $row->{gp_id} && exists $row_by_id{$row->{gp_id}}{lat_min} )
+	# 	{
+	# 	    SetLocation($row, \%row_by_id, $row->{gp_id});
+	# 	}
+		
+	# 	elsif ( $row->{sgp_id} && exists $row_by_id{$row->{sgp_id}}{lat_min} )
+	# 	{
+	# 	    SetLocation($row, \%row_by_id, $row->{sgp_id});
+	# 	}
+	#     }
+	# }
+	
+	if ( ! $row->{cc} )
+	{
+	    if ( $row->{sgp_id} && defined $row_by_id{$row->{sgp_id}}{cc} )
+	    {
+		SetCountry($row, \%row_by_id, $row->{sgp_id});
+	    }
+	    
+	    elsif ( $row->{gp_id} && defined $row_by_id{$row->{gp_id}}{cc} )
+	    {
+		SetCountry($row, \%row_by_id, $row->{gp_id});
+	    }
+	    
+	    elsif ( $row->{subgp_id} && defined $row_by_id{$row->{subgp_id}}{cc} )
+	    {
+		SetCountry($row, \%row_by_id, $row->{subgp_id});
+	    }
+	    
+	    elsif ( $row->{fm_id} && defined $row_by_id{$row->{fm_id}}{cc} )
+	    {
+		SetCountry($row, \%row_by_id, $row->{fm_id});
+	    }
+	    
+	    elsif ( $row->{mbr_id} && defined $row_by_id{$row->{mbr_id}}{cc} )
+	    {
+		SetCountry($row, \%row_by_id, $row->{mbr_id});
+	    }
+
+	    elsif ( $row->{bed_id} && defined $row_by_id{$row->{bed_id}}{cc} )
+	    {
+		SetCountry($row, \%row_by_id, $row->{bed_id});
+	    }
 	}
 	
 	# # Exclude names that are ineligible for matching. Start by excluding duplicates.
@@ -3491,9 +3801,10 @@ sub ImportMacrostrat {
     
     # Step II: Generate a row in the STRAT_MS_NAMES table for each name.
     
-    say "Truncating table `$TABLE{STRAT_MS_NAMES}`...";
+    say "Truncating tables `$TABLE{STRAT_MS_NAMES}`, `$TABLE{STRAT_MS_MATCHES}`...";
     
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_NAMES}`");
+    DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_MATCHES}`");
     
     say "Inserting into `$TABLE{STRAT_MS_NAMES}`...";
     
@@ -3502,25 +3813,42 @@ sub ImportMacrostrat {
     foreach my $row ( @$strat_names )
     {
 	$imported_names++;
-	$good_names++ unless $row->{exclude};
+
+	my @ccs = (undef);
+	@ccs = $row->{cc}->@* if $row->{cc} && $row->{cc}->@*;
 	
-	my $qstratn = $pbdb->quote($row->{id});
-	my $qstratc = $pbdb->quote($row->{concept_id});
-	my $qexclude = $pbdb->quote($row->{exclude});
-	my $qname = $pbdb->quote($row->{strat_name});
-	my $qrank = $pbdb->quote($row->{rank});
-	my $qcc = $pbdb->quote($row->{cc});
-	my $qearly = $pbdb->quote($row->{early_age});
-	my $qlate = $pbdb->quote($row->{late_age});
-	my $qlatmin = $pbdb->quote($row->{lat_min});
-	my $qlatmax = $pbdb->quote($row->{lat_max});
-	my $qlngmin = $pbdb->quote($row->{lng_min});
-	my $qlngmax = $pbdb->quote($row->{lng_max});
-	my $qrefid = $pbdb->quote($row->{ref_id});
-	
-	$strat_ms_values .= ', ' if $strat_ms_values;
-	$strat_ms_values .= "($qstratn, $qstratc, $qexclude, $qname, $qrank, $qcc, " .
-	    "$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax, $qrefid)";
+	foreach my $cc ( @ccs )
+	{
+	    $wrote_rows++;
+	    $good_names++ unless $row->{exclude};
+	    
+	    my $qstratn = $pbdb->quote($row->{id});
+	    my $qstratc = $pbdb->quote($row->{concept_id});
+	    my $qexclude = $pbdb->quote($row->{exclude});
+	    my $qname = $pbdb->quote($row->{strat_name});
+	    my $qrank = $pbdb->quote($row->{rank});
+	    my $qcc = $pbdb->quote($cc);
+	    my $qearly = $pbdb->quote($row->{early_age});
+	    my $qlate = $pbdb->quote($row->{late_age});
+	    my $qlatmin = $pbdb->quote($row->{lat_min});
+	    my $qlatmax = $pbdb->quote($row->{lat_max});
+	    my $qlngmin = $pbdb->quote($row->{lng_min});
+	    my $qlngmax = $pbdb->quote($row->{lng_max});
+	    my $qposmin = $pbdb->quote($row->{pos_lng_min});
+	    my $qnegmax = $pbdb->quote($row->{neg_lng_max});
+	    my $qrefid = $pbdb->quote($row->{ref_id});
+	    
+	    unless ( $row->{pos_lng_min} && $row->{neg_lng_max} )
+	    {
+		$qposmin = 'NULL';
+		$qnegmax = 'NULL';
+	    }
+	    
+	    $strat_ms_values .= ', ' if $strat_ms_values;
+	    $strat_ms_values .= "($qstratn, $qstratc, $qexclude, $qname, $qrank, $qcc, " .
+		"$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax, $qposmin, $qnegmax, " .
+		"$qrefid)";
+	}
 	
 	if ( length($strat_ms_values) > $chunk_size )
 	{
@@ -3532,6 +3860,7 @@ sub ImportMacrostrat {
     InsertMSNames($pbdb, $strat_ms_values) if $strat_ms_values;
     
     say "Imported $imported_names names.";
+    say "Wrote $wrote_rows rows.";
     say "Of these, $good_names were eligible for matching.";
 }
 
@@ -3631,12 +3960,12 @@ sub MatchMacrostrat {
 	    push @candidates, $first_last{$flchars}->@* if $first_last{$flchars};
 	}
 	
-	my (%matches, %ms_names, %ms_ranks, %pb_ranks, %ms_concepts, %ms_scores, @good_matches);
+	my (%matches, %ms_ccs, %pb_ranks, %ms_concepts, %ms_scores, @good_matches);
 	
 	foreach my $msnr ( @candidates )
 	{
 	    next if $checked{"$pbnr$msnr"};
-
+	    
 	    $checked{"$pbnr$msnr"} = 1;
 	    
 	    my $score = NamesAreCompatible($pbnr->{name}, $pbnr, $msnr->{name}, $msnr);
@@ -3647,21 +3976,24 @@ sub MatchMacrostrat {
 		# $ms_concepts{$msnr->{stratc_id}} = 1;
 		# $ms_names{$msnr->{name}} = 1;
 		$pb_ranks{$rank_comparison{$msnr->{rank}}} = 1;
+		$ms_ccs{$msnr->{cc}} = 1;
 		# $ms_scores{$score} = 1;
 		$msnr->{score} = $score;
 	    }
 	}
 	
-	# If at least one of the Macrotrat names matches the rank of the PBDB name, then
-	# accept all matches with that rank. For this purpose, we use the
+	# If at least one of the Macrotrat names matches the rank of the PBDB name, and
+	# at least one matches the country code of the PBDB name, then accept all
+	# matches with that rank and country code. For this purpose, we use the
 	# %rank_comparison hash so that the Macrostrat ranks 'Subgp', 'Gp', and 'SGp'
 	# all match the PBDB rank 'Gp'.
 	
-	if ( $pb_ranks{$pbnr->{rank}} )
+	if ( $pb_ranks{$pbnr->{rank}} && $ms_ccs{$pbnr->{cc}} )
 	{
 	    foreach my $msnr ( values %matches )
 	    {
-		if ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} )
+		if ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} &&
+		     $msnr->{cc} eq $pbnr->{cc} )
 		{
 		    push @good_matches, $msnr;
 		}
@@ -4305,6 +4637,7 @@ sub UpdateTables {
 	  `stratc_no` int(10) unsigned NOT NULL,
 	  `lithology1` varchar(255) NOT NULL DEFAULT '',
 	  `lithology2` varchar(255) NOT NULL DEFAULT '',
+	  `doi` varchar(255) DEFAULT NULL,
 	  `n_colls` smallint(6) NOT NULL DEFAULT 0,
 	  `n_occs` smallint(6) NOT NULL DEFAULT 0,
 	  `early_age` decimal(9,6) DEFAULT NULL,
@@ -4313,6 +4646,8 @@ sub UpdateTables {
 	  `lat_max` decimal(9,6) DEFAULT NULL,
 	  `lng_min` decimal(9,6) DEFAULT NULL,
 	  `lng_max` decimal(9,6) DEFAULT NULL,
+	  `pos_lng_min` decimal(9,6) DEFAULT NULL,
+	  `neg_lng_max` decimal(9,6) DEFAULT NULL,
 	  `bbox` geometry DEFAULT NULL,
 	KEY (`stratc_no`),
 	KEY (`early_age`),
@@ -4320,20 +4655,20 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $selected{strat_name_refs} || $selected{all} )
-    {
-	$activity = 1;
+    # if ( $selected{strat_name_refs} || $selected{all} )
+    # {
+    # 	$activity = 1;
 	
-	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_name_refs`", 1)
-	    if $check =~ /\bstrat_name_refs\b/;
+    # 	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_name_refs`", 1)
+    # 	    if $check =~ /\bstrat_name_refs\b/;
 	
-	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_name_refs` (
-	  `stratn_no` int(10) unsigned NOT NULL,
-	  `reference_no` int(10) unsigned NOT NULL,
-	  PRIMARY KEY (`stratn_no`, `reference_no`),
-	  KEY (`reference_no`)
-	) ENGINE=InnoDB", 1);
-    }
+    # 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_name_refs` (
+    # 	  `stratn_no` int(10) unsigned NOT NULL,
+    # 	  `reference_no` int(10) unsigned NOT NULL,
+    # 	  PRIMARY KEY (`stratn_no`, `reference_no`),
+    # 	  KEY (`reference_no`)
+    # 	) ENGINE=InnoDB", 1);
+    # }
     
     if ( $selected{strat_names_view} || $selected{all} )
     {
@@ -4346,10 +4681,9 @@ sub UpdateTables {
 	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `canonical`,
 	    `early_age`, `late_age`,
 	    `n_colls`, `n_occs`, `lat_min`, `lat_max`, `lng_min`, `lng_max`,
-	    `lithology1`, `lithology2`, count(*) as `n_refs`,
+	    `pos_lng_min`, `neg_lng_max`, `lithology1`, `lithology2`, `reference_no`, `doi`,
 	    `authorizer_no`, `enterer_no`, `modifier_no`, `created`, `modified`
 	  FROM `strat_names` join `strat_name_attrs` using (`stratn_no`)
-		left join `strat_name_refs` using (`stratn_no`)
 	  GROUP BY `stratn_no`", 1);
     }
     
@@ -4373,6 +4707,8 @@ sub UpdateTables {
 	  `lat_max` decimal(9,6) DEFAULT NULL,
 	  `lng_min` decimal(9,6) DEFAULT NULL,
 	  `lng_max` decimal(9,6) DEFAULT NULL,
+	  `pos_lng_min` decimal(9,6) DEFAULT NULL,
+	  `neg_lng_max` decimal(9,6) DEFAULT NULL,
 	  PRIMARY KEY (`stratc_no`),
 	  KEY `name` (`name`)
 	) ENGINE=InnoDB", 1);
@@ -4404,7 +4740,8 @@ sub UpdateTables {
 	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_concepts_view` AS
 	  SELECT `stratc_no`, `name`, group_concat(`country`) as countries,
 		`early_age`, `late_age`, `n_colls`, `n_occs`, 
-		`lat_min`, `lat_max`, `lng_min`, `lng_max`, `lithology1`, `lithology2`
+		`lat_min`, `lat_max`, `lng_min`, `lng_max`, `pos_lng_min`, `neg_lng_max`,
+		`lithology1`, `lithology2`
 	  FROM `strat_concepts` join `strat_concept_ccs` using (stratc_no)
 	  GROUP BY `stratc_no`", 1);
     }
@@ -4467,7 +4804,7 @@ sub UpdateTables {
 	    if $check =~ /\bstrat_ms_names\b/;
 	
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_ms_names` (
-	  `stratn_id` int(10) unsigned NOT NULL PRIMARY KEY,
+	  `stratn_id` int(10) unsigned NOT NULL,
 	  `stratc_id` int(10) unsigned NOT NULL default '0',
 	  `exclude` varchar(10) NULL,
 	  `name` varchar(255) NOT NULL,
@@ -4479,7 +4816,10 @@ sub UpdateTables {
 	  `lat_max` decimal(9,6) DEFAULT NULL,
 	  `lng_min` decimal(9,6) DEFAULT NULL,
 	  `lng_max` decimal(9,6) DEFAULT NULL,
+	  `pos_lng_min` decimal(9,6) DEFAULT NULL,
+	  `neg_lng_max` decimal(9,6) DEFAULT NULL,
 	  `ref_id` mediumint(8) unsigned NOT NULL default '0',
+	  PRIMARY KEY (`stratn_id`, `cc`),
 	  KEY (`name`, `rank`),
 	  KEY (`stratc_id`)
 	) ENGINE=InnoDB", 1);
@@ -4550,7 +4890,7 @@ sub InsertNames {
     my ($dbh, $name_values) = @_;
 
     DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, name, rank, cc, canonical, " .
-	      "authorizer_no, enterer_no, created, modified) VALUES " .
+	      "reference_no, authorizer_no, enterer_no, created, modified) VALUES " .
 	      $name_values);
 }
 
@@ -4561,16 +4901,8 @@ sub InsertNameAttrs {
     
     DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NATTRS}` (stratn_no, stratc_no, " .
 	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
-	      "lat_min, lat_max, lng_min, lng_max) VALUES " .
+	      "lat_min, lat_max, lng_min, lng_max, pos_lng_min, neg_lng_max, doi) VALUES " .
 	      $name_attr_values);
-}
-
-
-sub InsertNameRefs {
-
-    my ($dbh, $ref_values) = @_;
-    
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NREFS}` (stratn_no, reference_no) VALUES $ref_values");
 }
 
 
@@ -4580,7 +4912,7 @@ sub InsertConcepts {
 
     DBCommand($dbh, "INSERT INTO $TABLE{STRAT_CONCEPTS} (stratc_no, name, " .
 	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
-	      "lat_min, lat_max, lng_min, lng_max) VALUES " .
+	      "lat_min, lat_max, lng_min, lng_max, pos_lng_min, neg_lng_max) VALUES " .
 	      $concept_values);
 }
 
@@ -4619,7 +4951,8 @@ sub InsertMSNames {
     my ($dbh, $name_values) = @_;
     
     DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_NAMES}` (stratn_id, stratc_id, exclude, name, " .
-	      "rank, cc, early_age, late_age, lat_min, lat_max, lng_min, lng_max, ref_id) VALUES " .
+	      "rank, cc, early_age, late_age, lat_min, lat_max, lng_min, lng_max, " .
+	      "pos_lng_min, neg_lng_max, ref_id) VALUES " .
 	      $name_values);
 }
 
