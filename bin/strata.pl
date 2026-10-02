@@ -352,9 +352,7 @@ sub GenerateConcepts {
     # Step I: iterate through the rows of the COLLECTION_STRATA table. Create a set of
     # stratigraphic name records in %strat_raw, and record the relationships between
     # them in %contained_in. The SQL query below returns information from
-    # COLLECTION_STRATA, and also from COLLECTION_MATRIX and COLLECTION_DATA. All of
-    # these tables use collection_no as their primary key, so they have a 1-1
-    # correspondence.
+    # COLLECTION_STRATA, and also from COLLECTION_MATRIX and COLLECTION_DATA.
     
     say "Reading from table `$TABLE{COLLECTION_STRATA}`...";
     
@@ -1029,23 +1027,6 @@ sub GenerateConcepts {
 	    
 	    my (%matching_concepts);
 	    
-	    # # If this component name key is an alias for another key that has already
-	    # # been assigned to a concept, then add that concept to the list.
-	    
-	    # if ( $alias_of{$nkey} )
-	    # {
-	    # 	foreach my $alias_key ( keys $alias_of{$nkey}->%* )
-	    # 	{
-	    # 	    foreach my $orig_nr ( $strat_name{$alias_key}->@* )
-	    # 	    {
-	    # 		if ( my $orig_preliminary_no = $orig_nr->{preliminary_no}{$alias_key} )
-	    # 		{
-	    # 		    $matching_concepts{$orig_preliminary_no} = 1;
-	    # 		}
-	    # 	    }
-	    # 	}
-	    # }
-	    
 	    # Check for other name records that could represent the same name or a
 	    # spelling variant, possibly at a different rank.
 	    
@@ -1127,7 +1108,7 @@ sub GenerateConcepts {
     
     exit if $opt_check;
     
-    # Step IV: generate the set of final stratigraphic concepts from the set of
+    # Step V: generate the set of final stratigraphic concepts from the set of
     # preliminary concepts. This involves consolidating the information from concepts
     # that have been linked together in the previous step, and choosing a name for each
     # concept from among the stratigraphic name components associated with it.
@@ -1190,116 +1171,7 @@ sub GenerateConcepts {
 	    $cr->{concept_no} = ++$real_concept_no;
 	    $strat_concept{$real_concept_no} = $cr;
 	}
-    }
-    
-    # # For each stratigraphic concept record that has not been consolidated with another,
-    # # assign it a unique concept number and store it under this number in the
-    # # %strat_concept hash. Assign the concept numbers in the same order as the
-    # # preliminary concept numbers, and generate %prelim_to_real as a mapping from
-    # # preliminary concept numbers to real ones.
-    
-    # foreach my $preliminary_no ( sort { $a <=> $b } keys %strat_prelim )
-    # {
-    # 	my $cr = $strat_prelim{$preliminary_no};
-	
-    # 	unless ( $cr->{consolidated_with} )
-    # 	{
-    # 	    $cr->{concept_no} = ++$real_concept_no;
-    # 	    $strat_concept{$real_concept_no} = $cr;
-    # 	    $prelim_to_real{$preliminary_no} = $real_concept_no;
-    # 	}
-    # }
-    
-    # # Now go through the preliminary concepts again and actually consolidate the concept
-    # # information. Add the records being consolidated to the %prelim_to_real mapping.
-    
-    
-    # Step V: link up the consolidated stratigraphic concepts into hierarchical
-    # relationships, using the containment relation that was generated in step I above.
-    
-    # say "Computing concept relationships...";
-    
-    # # Iterate through the final stratigraphic name concepts. For each one, generate all
-    # # possible relationships based on the list of raw name keys associated with it along
-    # # with the %contained_in relation on those keys.
-
-    # foreach my $cr ( @consolidated_concepts )
-    # {
-    # 	my @child_name_keys = $cr->{rkeys}->@*;
-	
-    # 	foreach my $child_key ( @child_name_keys )
-    # 	{
-    # 	    my (undef, $child_rank, $child_cc) = split /[|]/, $child_key;
-	    
-    # 	    if ( $contained_in{$child_key} )
-    # 	    {
-    # 		my @parent_keys = keys $contained_in{$child_key}->%*;
-    # 		my @canonical_parent_keys;
-		
-    # 		foreach my $parent_key ( @parent_keys )
-    # 		{
-    # 		    my $nr = $strat_raw{$parent_key};
-		    
-    # 		    next unless $nr->{n_names} == 1;
-
-    # 		    if ( $nr->{consolidated_with} )
-    # 		    {
-    # 			push @canonical_parent_keys, $nr->{consolidated_with}->@*;
-    # 		    }
-
-    # 		    else
-    # 		    {
-    # 			push @canonical_parent_keys, $parent_key;
-    # 		    }
-    # 		}
-		
-    # 		foreach my $parent_key ( @canonical_parent_keys )
-    # 		{
-    # 		    my (undef, $parent_rank, $parent_cc) = split /[|]/, $parent_key;
-    # 		    my ($preliminary_no, @rest) = values $strat_raw{$parent_key}{preliminary_no}->%*;
-		    
-    # 		    while ( @rest && $rest[0] eq $preliminary_no )
-    # 		    {
-    # 			shift @rest;
-    # 		    }
-		    
-    # 		    if ( @rest )
-    # 		    {
-    # 			say "Ambiguous concept for '$parent_key'";
-    # 		    }
-		    
-    # 		    unless ( $preliminary_no )
-    # 		    {
-    # 			say "No preliminary_no found for '$parent_key'";
-    # 			next;
-    # 		    }
-		    
-    # 		    my $parent_no = $prelim_to_concept{$preliminary_no}{concept_no};
-    # 		    my @reference_nos = keys $contained_in{$child_key}{$parent_key}->%*;
-		    
-    # 		    if ( $child_cc ne $parent_cc )
-    # 		    {
-    # 			say "Bad cc match for '$child_key' and '$parent_key'";
-    # 			next;
-    # 		    }
-
-    # 		    unless ( $parent_no )
-    # 		    {
-    # 			say "No parent_no found for '$parent_key'";
-    # 			next;
-    # 		    }
-		    
-    # 		    next if $parent_no == $cr->{concept_no};
-		    
-    # 		    my $relationship_key = "$child_rank|$child_cc|$parent_rank|$parent_no";
-		    
-    # 		    $cr->{parent_concept}{$relationship_key} = 1;
-    # 		    $cr->{parent_refs}{$relationship_key}{$_} = 1 foreach @reference_nos;
-    # 		}
-    # 	    }
-    # 	}
-    # }
-    
+    }    
     
     # Step VI: (re)generate the STRAT_NAMES, STRAT_CONCEPTS, and STRAT_OPINIONS tables.
     
@@ -1472,19 +1344,6 @@ sub GenerateConcepts {
 		$name_attr_values = '';
 	    }
 	    
-	    # foreach my $reference_no ( sort { $a <=> $b } keys $nr->{reference_no}->%* )
-	    # {
-	    # 	my $qrefno = $pbdb->quote($reference_no);
-	    # 	$name_ref_values .= ', ' if $name_ref_values;
-	    # 	$name_ref_values .= "($qstratn, $qrefno)";
-	    # }
-	    
-	    # if ( length($name_ref_values) > $chunk_size )
-	    # {
-	    # 	InsertNameRefs($pbdb, $name_ref_values);
-	    # 	$name_ref_values = '';
-	    # }
-	    
 	    foreach my $collection_no ( sort { $a <=> $b } keys $nr->{collection_no}->%* )
 	    {
 		my $qcollno = $pbdb->quote($collection_no);
@@ -1503,6 +1362,8 @@ sub GenerateConcepts {
     InsertNames($pbdb, $name_values) if $name_values;
     InsertNameAttrs($pbdb, $name_attr_values) if $name_attr_values;
     InsertCollNames($pbdb, $name_coll_values) if $name_coll_values;
+    
+    SetBBoxField($pbdb);
     
     # Now run through the names again and add an opinion for every child-parent
     # relationship and every alias relationship.
@@ -1607,68 +1468,10 @@ sub GenerateConcepts {
     InsertOpinions($pbdb, $opinion_values) if $opinion_values;
     InsertOpinionRefs($pbdb, $opinion_ref_values) if $opinion_ref_values;
     
-    # foreach my $key ( sort keys %strat_name )
-    # {
-    # 	my ($name, $rank, $cc) = split /\|/, $key;
-	
-    # 	foreach my $rn ( $strat_name{$key}->@* )
-    # 	{
-    # 	    next unless $rn->{parent_rn};
-	    
-    # 	    foreach my $parent_rkey ( keys $rn->{parent_rn}{$key}->%* )
-    # 	    {
-    # 		my $qopno = $pbdb->quote(++$new_opinions);
-    # 		my $qchildno = $pbdb->quote($rn->{name_no}{$key});
-    # 		my $qchildrank = $pbdb->quote($rank);
-		
-    # 		my $parent_rn = $strat_raw{$parent_rkey};
-		
-    # 		my ($parent_key) = keys $parent_rn->{concept}->%*;
-		
-    # 		unless ( $parent_key && $parent_rn->{name_no}{$parent_key} )
-    # 		{
-    # 		    # say encode_utf8("No name key for parent $parent_rkey");
-    # 		    next;
-    # 		}
-		
-    # 		my ($parent_name, $parent_rank, $parent_cc) = split /\|/, $parent_key;
-    # 		my $qparno = $pbdb->quote($parent_rn->{name_no}{$parent_key});
-    # 		my $qparrank = $pbdb->quote($parent_rank);
-    # 		my $qrefno = $pbdb->quote(0);
-		
-    # 		$opinion_values .= ', ' if $opinion_values;
-    # 		$opinion_values .= "($qopno, $qchildno, $qchildrank, 'belongs to', " .
-    # 		    "$qparno, $qparrank, $qrefno)";
-    # 	    }
-	    
-    # 	    if ( length($opinion_values) > 50000 )
-    # 	    {
-    # 		InsertOpinions($pbdb, $opinion_values);
-    # 		$opinion_values = '';
-    # 	    }
-    # 	}
-    # }
-    
-    # InsertOpinions($pbdb, $opinion_values);
-    
-    SetBBoxField($pbdb);
-    
     say "WARNING: $missing_concept names had no concept" if $missing_concept > 0;
     say "Created $new_names names";
     say "Created $new_concepts concepts";
     say "Created $new_opinions name relationships";
-    
-    # my $words_fh;
-    
-    # if ( open($words_fh, '>', 'second_words.txt') )
-    # {
-    # 	say $words_fh encode_utf8($_) foreach sort keys %second_words;
-    # }
-    
-    # else
-    # {
-    # 	say "Could not open second_words.txt: $!";
-    # }
 }
 
 
@@ -1865,33 +1668,6 @@ sub ConsolidateNames {
 
     my ($remaining, $other) = @_;
     
-    # if ( defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} )
-    # {
-    # 	$remaining->{neg_lng_max} = $other->{neg_lng_max}
-    # 	    if $other->{neg_lng_max} > $remaining->{neg_lng_max};
-    # 	$remaining->{pos_lng_min} = $other->{pos_lng_min}
-    # 	    if $other->{pos_lng_min} < $remaining->{pos_lng_min};
-    # }
-
-    # elsif ( defined $remaining->{neg_lng_max} )
-    # {
-    # 	consolidate_range($remaining, $remaining, $other);
-    # }
-    
-    # elsif ( defined $other->{neg_lng_max} )
-    # {
-    # 	consolidate_range($remaining, $other, $remaining);
-    # }
-    
-    # elsif ( $remaining->{lng_min} < -$lng_bound && $other->{lng_max} > $lng_bound ||
-    # 	    $other->{lng_min} < -$lng_bound && $remaining->{lng_max} > $lng_bound )
-    # {
-    # 	$remaining->{neg_lng_max} = max_threshold(-$lng_bound, $remaining->{lng_min}, $remaining->{lng_max},
-    # 						  $other->{lng_min}, $other->{lng_max});
-    # 	$remaining->{pos_lng_min} = min_threshold($lng_bound, $remaining->{lng_min}, $remaining->{lng_max},
-    # 						  $other->{lng_min}, $other->{lng_max});
-    # }
-    
     $remaining->{lat_min} = $other->{lat_min}
 	if ! defined $remaining->{lat_min} || $other->{lat_min} < $remaining->{lat_min};
     $remaining->{lat_max} = $other->{lat_max}
@@ -1917,11 +1693,6 @@ sub ConsolidateNames {
     
     $remaining->{n_colls} += $other->{n_colls};
     $remaining->{n_occs} += $other->{n_occs};
-
-    # if ( $other->{parent_name} )
-    # {
-    # 	$remaining->{parent_name}{$_} = 1 foreach keys $other->{parent_name}->%*;
-    # }
 
     if ( $other->{created} && $remaining->{created} && $other->{created} lt $remaining->{created} )
     {
@@ -1958,17 +1729,6 @@ sub ConsolidateNames {
     $other->{consolidated_with} ||= [ ];
     push $other->{consolidated_with}->@*, $remaining->{rkey};
 }
-
-
-# sub consolidate_range {
-    
-#     my ($remaining, $record, $other) = @_;
-    
-#     $remaining->{neg_lng_max} = $other->{lng_max} > $record->{neg_lng_max} &&
-# 	$other->{lng_max} < -$lng_bound ? $other->{lng_max} : $record->{neg_lng_max};
-#     $remaining->{pos_lng_min} = $other->{lng_min} < $record->{pos_lng_min} &&
-# 	$other->{lng_min} > $lng_bound ? $other->{lng_min} : $record->{pos_lng_min};
-# }
 
 
 # ParseDisjunction ( raw_name, nr )
@@ -2274,57 +2034,6 @@ sub ParseParentheses {
     {
 	return $raw_name;
     }
-    
-    # if ( $raw_name =~ qr{ [(] \s* = \s* [^)] }xs )
-    # {
-    # 	return $raw_name;
-    # }
-
-    # if ( $raw_name =~ qr{ (\S.*?) \s+ [(] \s* (?: also | also \s called ) \s* (.*) [)] $ }xs )
-    # {
-    # 	return "$1 (= $2)";
-    # }
-    
-    # if ( $raw_name =~ qr{ ^ (\S.*) \s+ [(] ([^)]+) [)] $ }xs )
-    # {
-    # 	my $a = $1;
-    # 	my $b = $2;
-
-    # 	if ( $b =~ /[?]| only$/ )
-    # 	{
-    # 	    return ($a);
-    # 	}
-	
-    # 	elsif ( IsNullName(fc $b) )
-    # 	{
-    # 	    return ($a);
-    # 	}
-
-    # 	elsif ( IsNullName(fc $a) )
-    # 	{
-    # 	    return ($b);
-    # 	}
-	
-    # 	else
-    # 	{
-    # 	    return "$a (= $b)";
-    # 	}
-    # }
-
-    # elsif ( $raw_name =~ qr{ ^ (\S.*?) \s* [(] ([^)]+) [)] \s* (\S.*) $ }xs )
-    # {
-    # 	return "$1 $3";
-    # }
-
-    # elsif ( $raw_name =~ qr{ ^ [(] (.*) [)] $ }xs )
-    # {
-    # 	return $1;
-    # }
-    
-    # else
-    # {
-    # 	return $raw_name;
-    # }
 }	
 
 
@@ -2838,54 +2547,7 @@ sub NamesAreCompatible {
 	    }
 	}
     }
-    
-    # # If the initial words have an edit distance of 2 or less, the names are
-    # # potentially compatible. If either word is 5 characters or less, or if the
-    # # name records are both in New Zealand, or if it is not the case that both
-    # # the ages and locations overlap, then the maximum allowed edit distance is
-    # # 1.
-    
-    # my ($first) = $name =~ /(\S+)/;
-    # my ($alt_first) = $alt_name =~ /(\S+)/;
-    
-    # my $edistance = edistance($first, $alt_first, 2);
-    
-    # if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
-    # {
-    # 	if ( $edistance == 0 || $edistance == 1 )
-    # 	{
-    # 	    $same_prefix = 1;
-    # 	    $similarities++;
-    # 	}
-    # }
-    
-    # elsif ( length($first) <= 5 || length($alt_first) <= 5 )
-    # {
-    # 	if ( $edistance == 0 || $edistance == 1 )
-    # 	{
-    # 	    $same_prefix = 1;
-    # 	    $similarities++;
-    # 	}
-    # }
-    
-    # elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
-    # {
-    # 	if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
-    # 	{
-    # 	    $same_prefix = 1;
-    # 	    $similarities++;
-    # 	}
-    # }
-    
-    # else
-    # {
-    # 	if ( $edistance == 0 || $edistance == 1 )
-    # 	{
-    # 	    $same_prefix = 1;
-    # 	    $similarities++;
-    # 	}
-    # }
-    
+        
     # If the two names are of the form "X" and "X Y" where Y is a rock type, then the
     # two names are compatible. If the two names are of the form "X Y" and "X Z" where Y
     # and Z are rock types, then the two names are compatible. So remove all rock-type
@@ -3036,131 +2698,6 @@ sub NamesAreCompatible {
     
     print "no criteria satisfied: return 0\n\n" if $debug_this;
     return 0;
-    
-    # if ( $same_prefix && ($same_parents || $ages_overlap) )
-    # {
-    # 	my @smaller = $name =~ /(\S+)/g;
-    # 	my @larger = $alt_name =~ /(\S+)/g;
-    # 	my @prefix;
-	
-    # 	if ( @smaller > @larger )
-    # 	{
-    # 	    my @temp = @smaller;
-    # 	    @smaller = @larger;
-    # 	    @larger = @temp;
-    # 	}
-
-    # 	if ( ! IsRockType(@smaller) )
-    # 	{
-    # 	    while ( $smaller[0] eq $larger[0] || edistance($smaller[0], $larger[0], 2) >= 0 )
-    # 	    {
-    # 		push @prefix, shift @smaller;
-    # 		shift @larger;
-    # 		last unless @smaller;
-    # 	    }
-	    
-    # 	    if ( @smaller == 0 && $same_parents && $ages_overlap )
-    # 	    {
-    # 		print "same_parents && ages_overlap: return $similarities\n\n" if $debug_this;
-    # 		return $similarities;
-    # 	    }
-	    
-    # 	    elsif ( @smaller == 0 && @larger && @larger == grep { IsRockType($_) } @larger )
-    # 	    {
-    # 		print "is_rock_type: return $similarities\n\n" if $debug_this;
-    # 		return $similarities;
-    # 	    }
-	    
-    # 	    elsif ( @smaller == 0 && @larger == 1 && $allowed_suffix{$larger[0]} )
-    # 	    {
-    # 		print "allowed_suffix: return $similarities\n\n" if $debug_this;
-    # 		return $similarities;
-    # 	    }
-	    
-    # 	    elsif ( @smaller && @larger && ($same_rank || $ages_identical && $locations_overlap) &&
-    # 		    (@smaller == grep { IsRockType($_) } @smaller) &&
-    # 		    (@larger == grep { IsRockType($_) } @larger) )
-    # 	    {
-    # 		print "same_rank && is_rock_type: return $similarities\n\n" if $debug_this;
-    # 		return $similarities;
-    # 	    }
-    # 	}
-    # }
-    
-    # # If the names have a Levenshtein-Damerau edit distance of 1 or 2, then the two
-    # # names are compatible. But only if they either have the same parents or else their
-    # # ages and locations both overlap.
-    
-    # if ( $same_parents || $ages_identical ||
-    # 	 ($ages_overlap && $locations_overlap) ||
-    # 	 ($ages_overlap && $locations_close && $same_rank) )
-    # {
-    # 	my $edistance = edistance($name, $alt_name, 2);
-	
-    # 	if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
-    # 	{
-    # 	    if ( $edistance == 0 || $edistance == 1 )
-    # 	    {
-    # 		print "cc = NZ && edistance = $edistance: return $similarities + 1\n\n"
-    # 		    if $debug_this;
-    # 		return $similarities + 1;
-    # 	    }
-    # 	}
-	
-    # 	elsif ( length($name) <= 5 || length($alt_name) <= 5 )
-    # 	{
-    # 	    if ( $edistance == 0 || $edistance == 1 )
-    # 	    {
-    # 		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
-    # 		return $similarities + 1;
-    # 	    }
-    # 	}
-	
-    # 	elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
-    # 	{
-    # 	    if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
-    # 	    {
-    # 		print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
-    # 		return $similarities + 1;
-    # 	    }
-    # 	}
-	
-    # 	elsif ( $edistance == 0 || $edistance == 1 )
-    # 	{
-    # 	    print "edistance = $edistance: return $similarities + 1\n\n" if $debug_this;
-    # 	    return $similarities + 1;
-    # 	}
-	
-    # 	if ( $same_rank )
-    # 	{
-    # 	    if ( $name eq "${alt_name}ian" || $alt_name eq "${name}ian" )
-    # 	    {
-    # 		print "suffix -ian: return $similarities + 1\n\n" if $debug_this;
-    # 		return $similarities + 1;
-    # 	    }
-
-    # 	    # if ( $name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
-    # 	    # {
-    # 	    # 	if ( $alt_name eq $1 )
-    # 	    # 	{
-    # 	    # 	    return $similarities + 1;
-    # 	    # 	}
-    # 	    # }
-	    
-    # 	    # elsif ( $alt_name =~ qr{ ^ (?:lower|lowermost|upper|uppermost|middle) \s+ (.*) }xs )
-    # 	    # {
-    # 	    # 	if ( $name eq $1 )
-    # 	    # 	{
-    # 	    # 	    return $similarities + 1;
-    # 	    # 	}
-    # 	    # }
-    # 	}
-    # }
-    
-    # # If none of the criteria are satisfied, return false.
-    
-    # print "no criteria satisfied: return 0\n\n" if $debug_this;
-    # return 0;
 }
 
 
@@ -3696,40 +3233,6 @@ sub ImportMacrostrat {
 	    }
 	}
 		
-	# if ( exists $row->{lat_min} )
-	# {
-	#     if ( $row->{rank} eq 'Bed' || $row->{rank} eq 'Mbr' )
-	#     {
-	# 	if ( $row->{mbr_id} && exists $row_by_id{$row->{mbr_id}}{lat_min} )
-	# 	{
-	# 	    SetLocation($row, \%row_by_id, $row->{mbr_id});
-	# 	}
-		
-	# 	elsif ( $row->{fm_id} && exists $row_by_id{$row->{fm_id}}{lat_min} )
-	# 	{
-	# 	    SetLocation($row, \%row_by_id, $row->{fm_id});
-	# 	}
-	#     }
-	    
-	#     else
-	#     {
-	# 	if ( $row->{subgp_id} && exists $row_by_id{$row->{subgp_id}}{lat_min} )
-	# 	{
-	# 	    SetLocation($row, \%row_by_id, $row->{subgp_id});
-	# 	}
-		
-	# 	elsif ( $row->{gp_id} && exists $row_by_id{$row->{gp_id}}{lat_min} )
-	# 	{
-	# 	    SetLocation($row, \%row_by_id, $row->{gp_id});
-	# 	}
-		
-	# 	elsif ( $row->{sgp_id} && exists $row_by_id{$row->{sgp_id}}{lat_min} )
-	# 	{
-	# 	    SetLocation($row, \%row_by_id, $row->{sgp_id});
-	# 	}
-	#     }
-	# }
-	
 	if ( ! $row->{cc} )
 	{
 	    if ( $row->{sgp_id} && defined $row_by_id{$row->{sgp_id}}{cc} )
@@ -4000,28 +3503,6 @@ sub MatchMacrostrat {
 	    }
 	}
 	
-	# # Otherwise, if at least one of the Macrostrat names exactly matches the PBDB
-	# # name, then accept all matches with that name.
-	
-	# elsif ( $ms_names{$pbnr->{name}} )
-	# {
-	#     foreach my $msnr ( values %matches )
-	#     {
-	# 	if ( $msnr->{name} eq $pbnr->{name} )
-	# 	{
-	# 	    push @good_matches, $msnr;
-	# 	}
-	#     }
-	# }
-	
-	# # Otherwise, if we have found exactly one Macrostrat rank, then accept all
-	# # matches.
-	
-	# elsif ( keys %ms_ranks == 1 )
-	# {
-	#     push @good_matches, values %matches;
-	# }
-	
 	foreach my $match ( @good_matches )
 	{
 	    my $qno = $pbdb->quote($stratn_no);
@@ -4067,22 +3548,6 @@ sub MatchMacrostrat {
     InsertNameMatches($pbdb, $match_values) if $match_values;
 
     say "Created $match_count match records";
-    
-    # foreach my $pbnr ( $pbdb_names->@* )
-    # {
-    # 	if ( $pbnr->{matches} && $pbnr->{matches}->@* > 1 )
-    # 	{
-    # 	    say "$pbnr->{stratn_no}\t$pbnr->{name}\t$pbnr->{rank}\t$pbnr->{cc}";
-
-    # 	    foreach my $msnr ( $pbnr->{matches}->@* )
-    # 	    {
-    # 		say "    $msnr->{stratn_id}\t$msnr->{name}\t$msnr->{rank}\t$msnr->{cc}";
-    # 	    }
-	    
-    # 	    say "";
-    # 	    last if ++$output_count == 10;
-    # 	}
-    # }
 }
 
 
@@ -4655,21 +4120,6 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    # if ( $selected{strat_name_refs} || $selected{all} )
-    # {
-    # 	$activity = 1;
-	
-    # 	DBCommand($pbdb, "DROP TABLE IF EXISTS `strat_name_refs`", 1)
-    # 	    if $check =~ /\bstrat_name_refs\b/;
-	
-    # 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `strat_name_refs` (
-    # 	  `stratn_no` int(10) unsigned NOT NULL,
-    # 	  `reference_no` int(10) unsigned NOT NULL,
-    # 	  PRIMARY KEY (`stratn_no`, `reference_no`),
-    # 	  KEY (`reference_no`)
-    # 	) ENGINE=InnoDB", 1);
-    # }
-    
     if ( $selected{strat_names_view} || $selected{all} )
     {
 	$activity = 1;
@@ -4931,10 +4381,6 @@ sub InsertOpinions {
 
     DBCommand($dbh, "INSERT IGNORE INTO `$TABLE{STRAT_OPINIONS}` (strato_no, child_no, " .
 	      "type, parent_no) VALUES $opinion_values");
-    
-    # DBCommand($dbh, "INSERT INTO $TABLE{STRAT_OPINIONS} (strato_no, child_no, child_rank, " .
-    # 	      "relationship, parent_no, parent_rank, reference_no) VALUES " .
-    # 	      $opinion_values);
 }
 
 
