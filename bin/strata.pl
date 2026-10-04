@@ -1108,10 +1108,10 @@ sub GenerateConcepts {
     
     exit if $opt_check;
     
-    # Step V: generate the set of final stratigraphic concepts from the set of
+    # Step IV: generate the set of final stratigraphic concepts from the set of
     # preliminary concepts. This involves consolidating the information from concepts
-    # that have been linked together in the previous step, and choosing a name for each
-    # concept from among the stratigraphic name components associated with it.
+    # that have been linked together in step III, and choosing a name and concept number
+    # for each concept from among the stratigraphic name components associated with it.
     
     say "Generating final concepts...";
     
@@ -1125,53 +1125,66 @@ sub GenerateConcepts {
     
     foreach my $preliminary_no ( keys %strat_prelim )
     {
-	my $rc = $strat_prelim{$preliminary_no};
-	my $canonical = $rc;
+	my $pr = $strat_prelim{$preliminary_no};
 	
-	while ( $canonical->{consolidated_with} )
+	while ( $pr->{consolidated_with} && ! $pr->{is_consolidated} )
 	{
-	    $canonical = $strat_prelim{$canonical->{consolidated_with}};
+	    my $remaining = $strat_prelim{$pr->{consolidated_with}};
+	    ConsolidateConcepts($remaining, $pr) unless $pr->{is_consolidated};
+	    $pr = $remaining;
 	}
 	
-	if ( $canonical ne $rc )
-	{
-	    ConsolidateConcepts($canonical, $rc);
-	    $prelim_to_concept{$preliminary_no} = $canonical;
-	}
+	$prelim_to_concept{$preliminary_no} = $pr;
+	push @consolidated_concepts, $pr;
+    }
+    
+    # Step V: number the stratigraphic names sequentially, in alphabetical order. Each
+    # concept is assigned the alphabetically lowest of all the names in the concept,
+    # along with the corresponding name identifier as its concept identifier.
+    
+    say "Generating name and concept identifiers...";
+    
+    my (%strat_name_no, %strat_concept);
+    my $new_names = 0;
+    
+    foreach my $key ( sort keys %strat_name )
+    {
+	my ($name) = split /\|/, $key;
 	
-	else
+	foreach my $nr ( $strat_name{$key}->@* )
 	{
-	    $prelim_to_concept{$preliminary_no} = $rc;
-	    push @consolidated_concepts, $rc;
+	    my $name_no = $nr->{name_no}{$key} = ++$new_names;
+	    
+	    $strat_name_no{$key} = $name_no;
+	    
+	    my $cr = $prelim_to_concept{$nr->{preliminary_no}{$key}};
+	    
+	    $cr->{name_candidate}{$name} ||= $name_no;
 	}
     }
     
-    # Now iterate through the consolidated concept records and choose a name for each
-    # one. We do this before generating final concept numbers, because we want those to
-    # be assigned to the concepts in alphabetical order. Note that multiple concepts may
-    # end up with the same name, because the same name may be used differently in
-    # different parts of the world.
+    # Now iterate through the consolidated concept records and choose a name and
+    # identifier for each one.
     
     foreach my $cr ( @consolidated_concepts )
     {
-	$cr->{name} = ChooseConceptName($cr);
-	$concept_by_name{$cr->{name}} ||= [ ];
-	push $concept_by_name{$cr->{name}}->@*, $cr;
+	ChooseConceptNameId($cr);
+	$strat_concept{$cr->{concept_no}} = $cr;
     }
     
-    # Finally, iterate through the concept names and assign a final concept number to
-    # each consolidated concept record using the %strat_concept hash.
+    # # Finally, iterate through the concept names and assign a final concept number to
+    # # each consolidated concept record using the %strat_concept hash.
     
-    my $real_concept_no = 0;
+    # my $real_concept_no = 0;
     
-    foreach my $name ( sort { fc($a) cmp fc($b) } keys %concept_by_name )
-    {
-	foreach my $cr ( $concept_by_name{$name}->@* )
-	{
-	    $cr->{concept_no} = ++$real_concept_no;
-	    $strat_concept{$real_concept_no} = $cr;
-	}
-    }    
+    # foreach my $name ( sort { fc($a) cmp fc($b) } keys %concept_by_name )
+    # {
+    # 	foreach my $cr ( $concept_by_name{$name}->@* )
+    # 	{
+    # 	    $cr->{concept_no} = ++$real_concept_no;
+    # 	    $strat_concept{$real_concept_no} = $cr;
+    # 	}
+    # }    
     
     # Step VI: (re)generate the STRAT_NAMES, STRAT_CONCEPTS, and STRAT_OPINIONS tables.
     
@@ -1203,21 +1216,13 @@ sub GenerateConcepts {
     my $concept_values = '';
     my $cc_values = '';
     my $new_concepts = 0;
-    my $concept_colls = 0;
-    my $concept_occs = 0;
     
     foreach my $key ( sort { $a <=> $b } keys %strat_concept )
     {
 	my $cr = $strat_concept{$key};
 	
-	$new_concepts++;
-	
-	$concept_colls += $cr->{n_colls};
-	$concept_occs += $cr->{n_occs};
-	
 	my $qstratc = $pbdb->quote($cr->{concept_no});
-	my $qname = $pbdb->quote(ChooseConceptName($cr));
-	# my $qcc = $pbdb->quote(join ',', keys $cr->{cc}->%*);
+	my $qname = $pbdb->quote($cr->{name});
 	my $qlith1 = $pbdb->quote(join ',', keys $cr->{lithology1}->%*);
 	my $qlith2 = $pbdb->quote(join ',', keys $cr->{lithology2}->%*);
 	my $qncolls = $pbdb->quote($cr->{n_colls} || 0);
@@ -1268,14 +1273,10 @@ sub GenerateConcepts {
     say "Generating the STRAT_NAMES ($TABLE{STRAT_NAMES}) and " .
 	"STRAT_NATTRS ($TABLE{STRAT_NATTRS}) tables...";
 
-    my %strat_name_no;
     my $name_values = '';
     my $name_attr_values = '';
     my $name_ref_values = '';
     my $name_coll_values = '';
-    my $new_names = 0;
-    my $name_colls = 0;
-    my $name_occs = 0;
     my $missing_concept = 0;
     
     foreach my $key ( sort keys %strat_name )
@@ -1284,13 +1285,8 @@ sub GenerateConcepts {
 	
 	foreach my $nr ( $strat_name{$key}->@* )
 	{
+	    my $name_no = $nr->{name_no}{$key};
 	    my $concept_no = $prelim_to_concept{$nr->{preliminary_no}{$key}}{concept_no};
-	    my $name_no = ++$new_names;
-	    
-	    $name_colls += $nr->{n_colls};
-	    $name_occs += $nr->{n_occs};
-	    
-	    $strat_name_no{$key} = $name_no;
 	    
 	    unless ( $concept_no )
 	    {
@@ -2896,6 +2892,8 @@ sub ConsolidateConcepts {
     # $remaining->{reference_no}{$_} = 1 foreach keys $other->{reference_no}->%*;
     $remaining->{lithology1}{$_} = 1 foreach keys $other->{lithology1}->%*;
     $remaining->{lithology2}{$_} = 1 foreach keys $other->{lithology2}->%*;
+    
+    $other->{is_consolidated} = 1;
 }
 
 
@@ -2904,11 +2902,14 @@ sub ContextsAreCompatible {
     my ($context1, $context2) = @_;
     
     if ( ! defined $context1->{early_age} ) { return 1; }
-    
-    if ( $context2->{lat_min} > $context1->{lat_max} + 10 ) { return undef; }
-    if ( $context2->{lat_max} < $context1->{lat_min} - 10 ) { return undef; }
-    if ( $context2->{lng_min} > $context1->{lng_max} + 10 ) { return undef; }
-    if ( $context2->{lng_max} < $context1->{lng_min} - 10 ) { return undef; }
+
+    unless ( $context1->{cc} && $context2->{cc} && $context1->{cc} eq $context2->{cc} )
+    {
+	if ( $context2->{lat_min} > $context1->{lat_max} + 10 ) { return undef; }
+	if ( $context2->{lat_max} < $context1->{lat_min} - 10 ) { return undef; }
+	if ( $context2->{lng_min} > $context1->{lng_max} + 10 ) { return undef; }
+	if ( $context2->{lng_max} < $context1->{lng_min} - 10 ) { return undef; }
+    }
     
     if ( $context2->{early_age} < $context1->{late_age} - 5 ) { return undef; }
     if ( $context2->{late_age} > $context1->{early_age} + 5 ) { return undef; }
@@ -2917,11 +2918,13 @@ sub ContextsAreCompatible {
 }
 
 
-sub ChooseConceptName {
+sub ChooseConceptNameId {
 
     my ($cr) = @_;
     
-    my @candidates = keys $cr->{strat_name}->%*;
+    my @candidates = keys $cr->{name_candidate}->%*;
+    
+    my $choice;
     
     # Start by looking for names which have a character other than letters, numbers, and
     # punctuation. Since data enterers often leave out accent marks, the names with
@@ -2930,20 +2933,25 @@ sub ChooseConceptName {
 
     if ( my @with_accents = grep { /[!a-zA-Z0-9 .,:-]/ } @candidates )
     {
-	return (sort @with_accents)[0];
+	$cr->{name} = (sort @with_accents)[0];
     }
-
+    
     # Otherwise, choose the first name in alphabetical order.
-
+    
     elsif ( @candidates )
     {
-	return (sort @candidates)[0];
+	$cr->{name} = (sort @candidates)[0];
     }
-
+    
     else
     {
-	return $cr->{name};
+	$cr->{name} = 'missing name';
+	say "ERROR: missing name candidates";
     }
+    
+    $cr->{concept_no} = $cr->{name_candidate}{$cr->{name}};
+    
+    say "ERROR: missing concept number" unless $cr->{concept_no};
 }
 
 
@@ -4082,8 +4090,10 @@ sub UpdateTables {
 	  `authorizer_no` int(10) unsigned NOT NULL,
 	  `enterer_no` int(10) unsigned NOT NULL,
 	  `modifier_no` int(10) unsigned NOT NULL DEFAULT '0',
+	  `updater_no` int(10) unsigned NOT NULL DEFAULT '0',
 	  `created` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	  `modified` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	  `updated` timestamp NULL,
 	  KEY `name` (`name`,`rank`),
 	  KEY (`cc`),
 	  KEY (`reference_no`)
